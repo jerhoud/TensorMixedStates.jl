@@ -157,7 +157,7 @@ correlations(::Type{Pure}, p::MPS, ops::Union{Vector{String}, Tuple{Vararg{Strin
 
 correlations(::Type{Pure}, p::MPS, ops, prep::Nothing) =
     map(ops) do op
-        correlations(s, p, op, nothing)
+        correlations(Pure, p, op, nothing)
     end
 
 

@@ -35,7 +35,7 @@ ITensors.state(::StateName"Half", ::SiteType"MixedQubit") = [ 0.5 0 0 0.5 ]
 
 export graph_state
 
-function graph_state(tp, g::Vector{Tuple{Int, Int}}; output::Output = no_output, limits::Limits = no_limits)
+function graph_state(tp::Union{Type{Pure}, Type{Mixed}}, g::Vector{Tuple{Int, Int}}; output::Output = no_output, limits::Limits = no_limits)
     n = graph_base_size(g)
     (
         CreateState(
