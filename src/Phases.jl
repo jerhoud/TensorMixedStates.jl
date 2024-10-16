@@ -85,7 +85,7 @@ function run_phase(phase::Tdvp)
   log("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
   evolver = OpSum()
   if !isnothing(phase.hamiltonian)
-    evolver += Lit_to_OpSum(phase.hamiltonian, "oper")
+    evolver += Lit_to_OpSum(phase.hamiltonian, if sim_type == Pure "" else "oper" end)
   end
   if !isnothing(phase.dissipator)
     if sim_type == Pure
@@ -113,4 +113,34 @@ function run_phase(phase::Tdvp)
 end
 
 function run_phase(phase::Dmrg)
+  if sim_type == Mixed
+    die("Cannot perform dmrg on state with mixed representation")
+  end
+  log("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
+  hamiltonian = Lit_to_OpSum(phase.hamiltonian)
+  mpo = MPO(hamiltonian, siteinds(sim_state))
+  log("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
+  output_counter = 0
+  optimize_time = time()
+  dl = length(phase.maxdim) 
+  i = 1
+  while i <= phase.nsweep
+    global sim_state = dmrg(mpo, sim_state; nsweeps = 1, maxdim = phase.maxdim[if i <= dl i else dl end], cutoff=phase.cutoff)
+    i += 1
+    output_counter += 1
+    if output_counter == phase.output_periodicity
+      write_output(phase.data_output)
+      tm = time()
+      elapsed = round(tm - optimize_time; digits = 3)
+      log("$(phase.output_periodicity) steps took $elapsed seconds")
+      optimize_time = tm
+      output_counter = 0
+    end
+  end
+
+  hamiltonian::Union{ProdLit, SumLit}
+  cutoff::Float64
+  maxdim::Union{Int, Vector{Int}}
+  output_periodicity::Int = 1
+  data_output::Output = no_output
 end

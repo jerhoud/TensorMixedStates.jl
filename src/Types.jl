@@ -51,8 +51,12 @@ end
 @kwdef struct Dmrg
   name::String = "Dmrg optimization"
   output::Output = no_output
-  limits::Limits
   hamiltonian::Union{ProdLit, SumLit}
+  cutoff::Float64
+  maxdim::Vector{Int}
+  nsweep::Int
+  output_periodicity::Int = 1
+  data_output::Output = no_output
 end
 
 @kwdef struct ToMixed
