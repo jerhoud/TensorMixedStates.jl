@@ -15,8 +15,8 @@ HDF5 = "0.17.2"
 ITensorMPS = "0.2.6"
 ITensors = "0.6.21"
 MKL = "0.7.0"
-Printf = "1.6.0"
-julia = "1.6.7"
+Printf = "1.11.0"
+julia = "1.11.0"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
