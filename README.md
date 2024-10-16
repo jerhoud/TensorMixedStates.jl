@@ -1,2 +1,2 @@
 # TensorMixedStates.jl
-A julia library to simulate quantum mixed states and Linblad equation using matrix product states
+A julia library to simulate quantum mixed states and Lindblad equation using matrix product states
