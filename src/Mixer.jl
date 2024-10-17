@@ -41,8 +41,8 @@ function make_operator(withdim::Bool, tp::String, name::String, i::Index...; kwa
     j, k = make_indices(withdim, tp, i...)
     oj = op(name, j...; kwargs...)
     ok = op(name, k...; kwargs...)
-    r = *(oj, delta.(k, k')...) - *(dag(ok) * delta.(j, j')...)
-    return recombine(im * r, i, j, k)
+    r = *(oj, delta.(k, k')...) - *(dag(ok), delta.(j, j')...)
+    return recombine(r, i, j, k)
 end
 
 function make_gate(withdim::Bool, tp::String, name::String, i::Index...; kwargs...)

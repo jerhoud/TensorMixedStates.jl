@@ -85,7 +85,7 @@ function run_phase(phase::Tdvp)
   log("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
   evolver = OpSum()
   if !isnothing(phase.hamiltonian)
-    evolver += Lit_to_OpSum(phase.hamiltonian, if sim_type == Pure "" else "oper" end)
+    evolver += Lit_to_OpSum(-im * phase.hamiltonian, if sim_type == Pure "" else "oper" end)
   end
   if !isnothing(phase.dissipator)
     if sim_type == Pure
