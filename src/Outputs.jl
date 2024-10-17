@@ -34,9 +34,9 @@ function write_state_info(file::IO, tfmt::Printf.Format, dfmt::Printf.Format)
     else
         println(file, "Mixed state with $(length(p)) sites")
         print(file, "Trace is ")
-        Printf.format(file, dfmt, trace(sim_type, sim_state))
+        Printf.format(file, dfmt, real(trace(sim_type, sim_state)))
         print(file, " and squared trace is ")
-        Printf.format(file, dfmt, trace2(sim_type, sim_state))
+        Printf.format(file, dfmt, real(trace2(sim_type, sim_state)))
         println(file)
     end
     println(file, "maxdim is $(maxlinkdim(p)) and memory usage $(Base.format_bytes(Base.summarysize(p)))")
