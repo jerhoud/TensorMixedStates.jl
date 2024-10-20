@@ -125,7 +125,9 @@ function run_phase(phase::Dmrg)
   dl = length(phase.maxdim) 
   i = 1
   while i <= phase.nsweep
-    global sim_state = dmrg(mpo, sim_state; nsweeps = 1, maxdim = phase.maxdim[if i <= dl i else dl end], cutoff=phase.cutoff)
+    enrgy, st = dmrg(mpo, sim_state; nsweeps = 1, maxdim = phase.maxdim[if i <= dl i else dl end], cutoff=phase.cutoff)
+    global sim_state = st
+    log("after $i dmrg sweep(s) state energy is $enrgy")
     i += 1
     output_counter += 1
     if output_counter == phase.output_periodicity
@@ -137,10 +139,4 @@ function run_phase(phase::Dmrg)
       output_counter = 0
     end
   end
-
-  hamiltonian::Union{ProdLit, SumLit}
-  cutoff::Float64
-  maxdim::Union{Int, Vector{Int}}
-  output_periodicity::Int = 1
-  data_output::Output = no_output
 end

@@ -1,5 +1,5 @@
 export SimData, Pure, Mixed, Output, Limits, no_output, no_limits
-export Tdvp, Gates, Evolve, ToMixed, SaveState, LoadState, CreateState
+export Dmrg, Tdvp, Gates, Evolve, ToMixed, SaveState, LoadState, CreateState
 
 struct Pure{T} state::T end
 struct Mixed{T} state::T end
