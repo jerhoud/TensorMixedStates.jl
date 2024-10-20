@@ -39,18 +39,12 @@ function Pure2Mixed(st::MPS; maxdim, cutoff)
     return MPS(v)
 end
 
-
-
-trace(::Type{Pure}, ::MPS) = 1
-
 function trace(::Type{Mixed}, p::MPS)
     n = length(p)
     return prod(p[i] * op("obs", siteind(p, i)) for i in 1:n)[1]
 end
 
-trace2(::Type{Pure}, ::MPS) = 1
-
-trace2(::Type{Mixed}, p::MPS) = inner(p, p)
+trace2(::Type{Mixed}, p::MPS) = real(inner(p, p))
 
 struct Preprocess
     loc::Vector{ITensor}

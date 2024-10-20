@@ -30,13 +30,14 @@ function write_state_info(file::IO, tfmt::Printf.Format, dfmt::Printf.Format)
     Printf.format(file, tfmt, sim_time)
     println(file)
     if sim_type == Pure
-        println(file, "Pure state with $(length(p)) sites")
+        println(file, "Pure state with $(length(p)) sites and norm $(norm(p))")
     else
         println(file, "Mixed state with $(length(p)) sites")
-        print(file, "Trace is ")
-        Printf.format(file, dfmt, real(trace(sim_type, sim_state)))
-        print(file, " and squared trace is ")
-        Printf.format(file, dfmt, real(trace2(sim_type, sim_state)))
+        print(file, "Trace deviation to 1 is ")
+        t = abs(trace(sim_type, sim_state) - 1)
+        Printf.format(file, tfmt, t)
+        print(file, " and effective number of states is ")
+        Printf.format(file, tfmt, 1 / trace2(sim_type, sim_state))
         println(file)
     end
     println(file, "maxdim is $(maxlinkdim(p)) and memory usage $(Base.format_bytes(Base.summarysize(p)))")
@@ -48,12 +49,20 @@ function write_data(file::IO, header::Union{String, ProdLit}, data, tfmt::Printf
     for x in data
         print(file, "\t")
         Printf.format(file, dfmt, real(x))
-        if imag(x) ≠ 0
-            print(file, "+i*")
-            Printf.format(file, dfmt, imag(x))
+        if abs(imag(x) > 1e-8)
+            log("imaginary part of data $header at time $sim_time is large ($(imag(x)))")
         end
     end 
     println(file)
+end
+
+function write_data(file::IO, header::Union{String, ProdLit}, data::Matrix, tfmt::Printf.Format, dfmt::Printf.Format)
+    print(file, header, "\t")
+    Printf.format(file, tfmt, sim_time)
+    println(file)
+    for l in 1:size(data, 1)
+        write_data(file, "$header:$l", data[l,:], tfmt, dfmt)
+    end
 end
 
 function write_data(file::IO, header, data, tfmt, dfmt)
