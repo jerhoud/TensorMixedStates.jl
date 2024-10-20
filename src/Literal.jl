@@ -64,6 +64,7 @@ SumLit(a::SumLit) = a
 
 (a::SumLit - b) = a + (-1) * b
 (a - b::SumLit) = a + (-1) * b
+(a::SumLit - b::SumLit) = a + (-1) * b
 
 function (a::SumLit * b::SumLit)
     ps = ProdLit[]
