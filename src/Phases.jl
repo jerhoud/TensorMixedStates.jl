@@ -55,6 +55,8 @@ function run_phase(phase::CreateState)
       end
     end
     global sim_state = MPS(ComplexF64, sites, state)
+  elseif sim_type == Mixed
+    die("Do not know how to build a random mixed state")
   elseif isnothing(phase.state)
       global sim_state = random_mps(ComplexF64, sites; linkdims = phase.randomize)
     else
@@ -113,11 +115,8 @@ function run_phase(phase::Tdvp)
 end
 
 function run_phase(phase::Dmrg)
-  if sim_type == Mixed
-    die("Cannot perform dmrg on state with mixed representation")
-  end
   log("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
-  hamiltonian = Lit_to_OpSum(phase.hamiltonian)
+  hamiltonian = Lit_to_OpSum(phase.hamiltonian, if sim_type == Pure "" else "oper" end)
   mpo = MPO(hamiltonian, siteinds(sim_state))
   log("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
   output_counter = 0
