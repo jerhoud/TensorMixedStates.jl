@@ -66,7 +66,13 @@ function runNL(sim_data::SimData)
     end
   else
     if live
+      log("Closing data files and removing empty data files")
       foreach(close, values(files))
+      foreach(keys(files)) do filename
+        if filesize(filename) == 0
+          rm(filename)
+        end
+      end
       rm("running")
       cd(start_dir)
     else
