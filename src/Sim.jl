@@ -66,7 +66,7 @@ function runNL(sim_data::SimData)
     end
   else
     if live
-      foreach(close, files)
+      foreach(close, values(files))
       rm("running")
       cd(start_dir)
     else
