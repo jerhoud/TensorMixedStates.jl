@@ -8,8 +8,9 @@ function write_output(output::Output)
         fdata = files["data"]
         fexpect = files["expect"]
         fcorrel = files["correl"]
+        fee = files["entanglement_entropy"]
     else
-        flog = fdata = fexpect = fcorrel = open(output.file, "a")
+        flog = fdata = fexpect = fcorrel = fee = open(output.file, "a")
     end
     prep = preprocess(sim_type, sim_state)
     if (output.state_info)
@@ -18,6 +19,7 @@ function write_output(output::Output)
     write_observables(fdata, output.observables, prep, tfmt, dfmt)
     write_expect(fexpect, output.expect, prep, tfmt, dfmt)
     write_correl(fcorrel, output.correl, prep, tfmt, dfmt)
+    write_ee(fee, output.entanglement_entropy, output.show_ee_spectrum, tfmt, dfmt)
     if output.file ≠ ""
         close(flog)
     end
@@ -50,7 +52,7 @@ function write_data(file::IO, header::Union{String, ProdLit}, data, tfmt::Printf
         print(file, "\t")
         Printf.format(file, dfmt, real(x))
         if abs(imag(x) > 1e-8)
-            log("imaginary part of data $header at time $sim_time is large ($(imag(x)))")
+            log_msg("imaginary part of data $header at time $sim_time is large ($(imag(x)))")
         end
     end 
     println(file)
@@ -92,3 +94,18 @@ function write_observables(file::IO, obs::Vector{ProdLit}, prep, tfmt::Printf.Fo
     end
 end
 
+function write_ee(file::IO, ee, ss, tfmt, dfmt)
+    if ee ≠ []
+        for p in ee
+            e, s = entanglement_entropy(sim_state, p)
+            write_data(file, "EE-$p", e, tfmt, dfmt)
+            if ss > 0
+                if length(s) > ss
+                    s = s[1:ss]
+                end
+                write_data(file, "SP-$p", s, tfmt, dfmt)
+            end
+        end
+        flush(file)
+    end
+end

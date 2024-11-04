@@ -11,15 +11,15 @@ run_phases(phases::Union{Vector, Tuple}) =
   foreach(run_phases, phases)
 
 function run_phase(phase::SaveState)
-  log("saving state to file $(phase.file)")
+  log_msg("saving state to file $(phase.file)")
   file = h5open(phase.file, "cw")
   write(file, phase.object_name, sim_state)
   close(file)
-  log("done")
+  log_msg("done")
 end
 
 function run_phase(phase::LoadState)
-  log("loading state from file $(phase.file)")
+  log_msg("loading state from file $(phase.file)")
   cd(start_dir) do
     file = h5open(phase.file, "r")
     global sim_state = read(file, phase.object_name, MPS)
@@ -29,10 +29,10 @@ function run_phase(phase::LoadState)
     close(file)
   end
   if isnothing(findfirst("Mixed", string(tags(siteind(sim_state, 1)))))
-    log("loaded pure state with $(length(sim_state)) sites from file $(phase.file)")
+    log_msg("loaded pure state with $(length(sim_state)) sites from file $(phase.file)")
     global sim_type = Pure
   else
-    log("loaded mixed state with $(length(sim_state)) sites from file $(phase.file)")
+    log_msg("loaded mixed state with $(length(sim_state)) sites from file $(phase.file)")
     global sim_type = Mixed
   end
   clear_mpos()
@@ -67,24 +67,24 @@ end
 
 function run_phase(phase::ToMixed)
   if sim_type == Mixed 
-    log("State is already in mixed representation")
+    log_msg("State is already in mixed representation")
   else
-    log("Creating mixed representation with $(length(sim_state)) sites")
+    log_msg("Creating mixed representation with $(length(sim_state)) sites")
     global sim_state = Pure2Mixed(sim_state; phase.limits.cutoff, phase.limits.maxdim)
     global sim_type = Mixed 
     clear_mpos()
-    log("State is now in mixed representation")
+    log_msg("State is now in mixed representation")
   end
 end
 
 function run_phase(phase::Gates)
-  log("Applying $(length(phase.gates.ls)) gates")
+  log_msg("Applying $(length(phase.gates.ls)) gates")
   global sim_state = apply_gate(sim_type, sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
 end
 
 function run_phase(phase::Tdvp)
   stop_sim_time = sim_time + phase.duration
-  log("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
+  log_msg("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
   evolver = OpSum()
   if !isnothing(phase.hamiltonian)
     evolver += Lit_to_OpSum(-im * phase.hamiltonian, if sim_type == Pure "" else "oper" end)
@@ -96,7 +96,7 @@ function run_phase(phase::Tdvp)
     evolver += Lit_to_OpSum(phase.dissipator)
   end
   mpo = MPO(evolver, siteinds(sim_state))
-  log("MPO evolver has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
+  log_msg("MPO evolver has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
   output_counter = 0
   evolve_time = time()
   while sim_time < stop_sim_time
@@ -107,7 +107,7 @@ function run_phase(phase::Tdvp)
       write_output(phase.data_output)
       tm = time()
       elapsed = round(tm - evolve_time; digits = 3)
-      log("$(phase.output_periodicity) steps took $elapsed seconds")
+      log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
       evolve_time = tm
       output_counter = 0
     end
@@ -115,10 +115,10 @@ function run_phase(phase::Tdvp)
 end
 
 function run_phase(phase::Dmrg)
-  log("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
+  log_msg("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
   hamiltonian = Lit_to_OpSum(phase.hamiltonian, if sim_type == Pure "" else "oper" end)
   mpo = MPO(hamiltonian, siteinds(sim_state))
-  log("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
+  log_msg("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
   output_counter = 0
   optimize_time = time()
   dl = length(phase.maxdim) 
@@ -126,14 +126,14 @@ function run_phase(phase::Dmrg)
   while i <= phase.nsweep
     enrgy, st = dmrg(mpo, sim_state; nsweeps = 1, maxdim = phase.maxdim[if i <= dl i else dl end], cutoff=phase.cutoff)
     global sim_state = st
-    log("after $i dmrg sweep(s) state energy is $enrgy")
+    log_msg("after $i dmrg sweep(s) state energy is $enrgy")
     i += 1
     output_counter += 1
     if output_counter == phase.output_periodicity
       write_output(phase.data_output)
       tm = time()
       elapsed = round(tm - optimize_time; digits = 3)
-      log("$(phase.output_periodicity) steps took $elapsed seconds")
+      log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
       optimize_time = tm
       output_counter = 0
     end

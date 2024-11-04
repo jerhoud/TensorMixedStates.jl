@@ -30,12 +30,14 @@ function runNL(sim_data::SimData)
       files["data"] = open("data", "a")
       files["expect"] = open("expect", "a")
       files["correl"] = open("correl", "a")
+      files["entanglement_entropy"] = open("ee", "a")
     else
       println("start run")
       files["log"] = stdout
       files["data"] = stdout
       files["expect"] = stdout
       files["correl"] = stdout
+      files["entanglement_entropy"] = stdout
     end
 
     start_phase("Run $(sim_data.name)")
@@ -66,7 +68,7 @@ function runNL(sim_data::SimData)
     end
   else
     if live
-      log("Closing data files and removing empty data files")
+      log_msg("Closing data files and removing empty data files")
       foreach(close, values(files))
       foreach(keys(files)) do filename
         if filesize(filename) == 0
@@ -88,7 +90,7 @@ function die(msg::String)
   throw(Die)
 end
 
-function log(msg::String)
+function log_msg(msg::String)
   log_file = files["log"]
   println(log_file, msg)
   flush(log_file)

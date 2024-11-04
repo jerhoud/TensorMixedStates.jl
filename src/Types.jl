@@ -18,6 +18,8 @@ end
   observables::Vector{ProdLit} = []
   expect::Vector{String} = []
   correl::Vector{Tuple{String, String}} = []
+  entanglement_entropy = []
+  show_ee_spectrum = 0
 end
 
 const no_output = Output()

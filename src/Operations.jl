@@ -197,3 +197,11 @@ function apply_gate(::Type{Mixed}, p::MPS, g::ProdLit; kwargs...)
     ops = Lit_to_ops(g, siteinds(p), "gate")
     return apply(ops, p; move_sites_back_between_gates=false, kwargs...)
 end
+
+function entanglement_entropy(s::MPS, pos::Int)
+    s = orthogonalize(s, pos)
+    _,S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
+    sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]
+    ee = -sum(p * log(p) for p in sp)
+    return (ee, sp)
+end
