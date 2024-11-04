@@ -32,7 +32,10 @@ function write_state_info(file::IO, tfmt::Printf.Format, dfmt::Printf.Format)
     Printf.format(file, tfmt, sim_time)
     println(file)
     if sim_type == Pure
-        println(file, "Pure state with $(length(p)) sites and norm $(norm(p))")
+        print(file, "Pure state with $(length(p)) sites and norm deviation to 1 is ")
+        t = abs(norm(p) - 1)
+        Printf.format(file, tfmt, t)
+        println(file)
     else
         println(file, "Mixed state with $(length(p)) sites")
         print(file, "Trace deviation to 1 is ")
