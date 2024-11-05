@@ -16,6 +16,7 @@ function write_output(output::Output)
     if (output.state_info)
         write_state_info(flog, tfmt, dfmt)
     end
+    write_checks(flog, output.checks, prep, tfmt, dfmt)
     write_observables(fdata, output.observables, prep, tfmt, dfmt)
     write_expect(fexpect, output.expect, prep, tfmt, dfmt)
     write_correl(fcorrel, output.correl, prep, tfmt, dfmt)
@@ -73,6 +74,19 @@ end
 function write_data(file::IO, header, data, tfmt, dfmt)
     for (h, d) in zip(header, data)
         write_data(file, h, d, tfmt, dfmt)
+    end
+end
+
+function write_checks(file::IO, ck::Vector{Pair{ProdLit, Function}}, prep, tfmt::Printf.Format, dfmt::Printf.Format)
+    if ck ≠ []
+        obs = map(first, ck)
+        es = expect(sim_type, sim_state, obs, prep)
+        vs = [ f(sim_time) for (_, f) in ck]
+        d = [ abs(e - v) for (e, v) in zip(es, vs) ]
+        for i in 1:length(ck)
+            write_data(file, "Check($(obs[i]))", [d[i], es[i], vs[i]], tfmt, dfmt)
+        end
+        flush(file)
     end
 end
 

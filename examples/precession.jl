@@ -14,6 +14,10 @@ output = Output(
     state_info = true,
     # C style output format for data numbers
     data_format = "%7.3f",
+    # a list of checks that show the difference between an observable and an expected value depending on simulation time
+    # for each check it write the simulation time, the absolute difference and both the observable measured and the expected value
+    # here this will work for the first Tdvp but not the second
+    checks = [X(1)=>t->cos(2t)],
 )
 
 phases(n) = [

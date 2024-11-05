@@ -20,6 +20,7 @@ end
   correl::Vector{Tuple{String, String}} = []
   entanglement_entropy = []
   show_ee_spectrum = 0
+  checks::Vector{Pair{ProdLit, Function}} = []
 end
 
 const no_output = Output()
