@@ -111,7 +111,7 @@ function write_observables(file::IO, obs::Vector{ProdLit}, prep, tfmt::Printf.Fo
     end
 end
 
-function write_ee(file::IO, ee, ss, tfmt, dfmt)
+function write_ee(file::IO, ee::Vector{Int}, ss::Int, tfmt::Printf.Format, dfmt::Printf.Format)
     if ee ≠ []
         for p in ee
             e, s = entanglement_entropy(sim_state, p)

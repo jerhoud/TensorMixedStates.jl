@@ -8,7 +8,7 @@ limits = Limits(
 output(n) = Output(
     observables = [X(1), Y(1), Z(1), Y(1)*Y(2), Y(1)*Z(2)*Y(3)],
     state_info = true,
-    entanglement_entropy = n ÷ 2,
+    entanglement_entropy = [n ÷ 2],
     show_ee_spectrum = 4,
 )
 
