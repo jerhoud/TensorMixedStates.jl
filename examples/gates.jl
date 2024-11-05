@@ -56,4 +56,4 @@ sim_data(n) = SimData(
 )
 
 # do it with 5 sites
-runNL(sim_data(5))
+runTMS(sim_data(5))

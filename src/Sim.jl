@@ -6,9 +6,9 @@ sim_state::MPS = MPS()
 files::Dict{String, IO} = Dict()
 start_dir::String = ""
 
-export runNL
+export runTMS
 
-function runNL(sim_data::SimData)
+function runTMS(sim_data::SimData)
   live = !sim_data.debug
   global start_dir = pwd()
   global files = Dict()

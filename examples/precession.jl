@@ -62,4 +62,4 @@ simdata(n) = SimData(
     phases = phases(n),
 )
 
-runNL(simdata(10))
+runTMS(simdata(10))
