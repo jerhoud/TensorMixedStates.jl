@@ -97,19 +97,24 @@ function run_phase(phase::Tdvp)
   end
   mpo = MPO(evolver, siteinds(sim_state))
   log_msg("MPO evolver has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
-  output_counter = 0
+  step_counter = 0
   evolve_time = time()
   while sim_time < stop_sim_time
     global sim_state = tdvp(mpo, phase.tau, sim_state; nsteps = 1, time_step = phase.tau)
-    output_counter += 1
+    step_counter += 1
     global sim_time += phase.tau
-    if output_counter == phase.output_periodicity
+    if phase.expand ≠ 0 && mod(step_counter, phase.expand) == 0
+      tm = time()
+      global sim_state = expand(sim_state, mpo; alg="global_krylov")
+      elapsed = round(time() - tm; digits = 3)
+      log_msg("Krylov expand step took $elapsed seconds")
+    end
+    if phase.output_periodicity ≠ 0 && mod(step_counter, phase.output_periodicity) == 0
       write_output(phase.data_output)
       tm = time()
       elapsed = round(tm - evolve_time; digits = 3)
       log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
       evolve_time = tm
-      output_counter = 0
     end
   end
 end

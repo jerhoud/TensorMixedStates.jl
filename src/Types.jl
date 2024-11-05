@@ -49,6 +49,7 @@ end
   dissipator::Union{Nothing, ProdLit, SumLit} = nothing
   output_periodicity::Int = 1
   data_output::Output = no_output
+  expand::Int = 0
 end
 
 @kwdef struct Dmrg
