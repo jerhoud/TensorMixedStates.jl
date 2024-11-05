@@ -39,6 +39,19 @@ function Pure2Mixed(st::MPS; maxdim, cutoff)
     return MPS(v)
 end
 
+function random_mixed_state(sites, linkdims::Int)
+    n = length(sites)
+    super = vcat(sites, sites)
+    smps = random_mps(ComplexF64, super; linkdims = (linkdims + 1) ÷ 2)
+    smps = Pure2Mixed(smps; maxdim = linkdims, cutoff = 0)
+    t = ITensor(1)
+    for i in 2n:-1:n+1
+        t *= smps[i] * op("obs", siteind(smps, i))
+    end
+    smps[n] *= t
+    return MPS(smps[1:n])
+end
+
 function trace(::Type{Mixed}, p::MPS)
     n = length(p)
     return prod(p[i] * op("obs", siteind(p, i)) for i in 1:n)[1]

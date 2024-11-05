@@ -56,7 +56,7 @@ function run_phase(phase::CreateState)
     end
     global sim_state = MPS(ComplexF64, sites, state)
   elseif sim_type == Mixed
-    die("Do not know how to build a random mixed state")
+      global sim_state = random_mixed_state(sites, phase.randomize)
   elseif isnothing(phase.state)
       global sim_state = random_mps(ComplexF64, sites; linkdims = phase.randomize)
     else
