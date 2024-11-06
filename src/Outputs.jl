@@ -1,6 +1,8 @@
 using Printf
 
 function write_output(output::Output)
+    save_mode = sim_operator_mode
+    global sim_operator_mode = ObservableMode
     tfmt = Printf.Format(output.time_format)
     dfmt = Printf.Format(output.data_format)
     if output.file ==""
@@ -24,6 +26,7 @@ function write_output(output::Output)
     if output.file ≠ ""
         close(flog)
     end
+    global sim_operator_mode = save_mode
 end
 
 function write_state_info(file::IO, tfmt::Printf.Format, dfmt::Printf.Format)

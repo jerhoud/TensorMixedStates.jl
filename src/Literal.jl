@@ -88,14 +88,14 @@ macro opLit(name::String)
     end
 end
 
-function Lit_to_OpSum(a::SumLit, ext::String="")
-    return sum(p.coef * prod(Op(ext * l.name, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
+function Lit_to_OpSum(a::SumLit)
+    return sum(p.coef * prod(Op(l.name, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
 end
 
-Lit_to_OpSum(a::ProdLit, ext::String="") = Lit_to_OpSum(SumLit(a), ext)
+Lit_to_OpSum(a::ProdLit) = Lit_to_OpSum(SumLit(a))
 
-function Lit_to_ops(a::ProdLit, sites, ext::String="")
-    r = [op(sites, ext * l.name, l.index...; l.param...) for l in a.ls]
+function Lit_to_ops(a::ProdLit, sites)
+    r = [op(sites, l.name, l.index...; l.param...) for l in a.ls]
     r[1] *= a.coef
     return r
 end

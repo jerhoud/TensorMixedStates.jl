@@ -1,5 +1,11 @@
 export site
 
+struct ObservableMode end
+struct GateMode end
+struct EvolveMode end
+
+sim_operator_mode::Union{Type{ObservableMode}, Type{GateMode}, Type{EvolveMode}} = EvolveMode
+
 function combinerto(i1::Index, i2::Index, i3::Index)
     c = combiner(i1, i2)
     i = combinedind(c)
@@ -31,13 +37,13 @@ function make_state(withdim::Bool, tp::String, st::String, i::Index; kwargs...)
     return s * dag(s') * combinerto(j', j, i)
 end
 
-function make_observable(withdim::Bool, tp::String, name::String, i::Index...; kwargs...)
+function make_operator(::Type{ObservableMode}, withdim::Bool, tp::String, name::String, i::Index...; kwargs...)
     j, k = make_indices(withdim, tp, i...)
     o = op(name, j...; kwargs...)
     return recombine(*(o, delta.(k, k')...), i, j, k)
 end
 
-function make_operator(withdim::Bool, tp::String, name::String, i::Index...; kwargs...)
+function make_operator(::Type{EvolveMode}, withdim::Bool, tp::String, name::String, i::Index...; kwargs...)
     j, k = make_indices(withdim, tp, i...)
     oj = op(name, j...; kwargs...)
     ok = op(name, k...; kwargs...)
@@ -45,7 +51,7 @@ function make_operator(withdim::Bool, tp::String, name::String, i::Index...; kwa
     return recombine(r, i, j, k)
 end
 
-function make_gate(withdim::Bool, tp::String, name::String, i::Index...; kwargs...)
+function make_operator(::Type{GateMode}, withdim::Bool, tp::String, name::String, i::Index...; kwargs...)
     j, k = make_indices(withdim, tp, i...)
     oj = op(name, j...; kwargs...)
     ok = op(name, k...; kwargs...)
@@ -144,18 +150,11 @@ macro mixer(
                 end)
             end
         end
-        sobs = "obs" * so
-        soper = "oper" * so
-        sgate = "gate" * so
         push!(e.args,
         quote
-            ITensors.op(::(@OpName_str($sobs)), ::(@SiteType_str($mixed)), i::Index...; kwargs...) =
-            make_observable($withdim, $type, $bso, i...; kwargs...)
-            ITensors.op(::(@OpName_str($soper)), ::(@SiteType_str($mixed)), i::Index...; kwargs...) =
-            make_operator($withdim, $type, $bso, i...; kwargs...)
-            ITensors.op(::(@OpName_str($sgate)), ::(@SiteType_str($mixed)), i::Index...; kwargs...) =
-            make_gate($withdim, $type, $bso, i...; kwargs...)
-            @opLit($so)
+            ITensors.op(::(@OpName_str($so)), ::(@SiteType_str($mixed)), i::Index...; kwargs...) =
+            make_operator(sim_operator_mode, $withdim, $type, $bso, i...; kwargs...)
+           @opLit($so)
         end)
     end
 

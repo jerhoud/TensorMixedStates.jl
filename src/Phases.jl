@@ -78,16 +78,18 @@ function run_phase(phase::ToMixed)
 end
 
 function run_phase(phase::Gates)
+  global sim_operator_mode = GateMode
   log_msg("Applying $(length(phase.gates.ls)) gates")
-  global sim_state = apply_gate(sim_type, sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
+  global sim_state = apply_gate(sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
 end
 
 function run_phase(phase::Tdvp)
+  global sim_operator_mode = EvolveMode
   stop_sim_time = sim_time + phase.duration
   log_msg("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
   evolver = OpSum()
   if !isnothing(phase.hamiltonian)
-    evolver += Lit_to_OpSum(-im * phase.hamiltonian, if sim_type == Pure "" else "oper" end)
+    evolver += Lit_to_OpSum(-im * phase.hamiltonian)
   end
   if !isnothing(phase.dissipator)
     if sim_type == Pure
@@ -120,8 +122,9 @@ function run_phase(phase::Tdvp)
 end
 
 function run_phase(phase::Dmrg)
+  global sim_operator_mode = EvolveMode
   log_msg("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
-  hamiltonian = Lit_to_OpSum(phase.hamiltonian, if sim_type == Pure "" else "oper" end)
+  hamiltonian = Lit_to_OpSum(phase.hamiltonian)
   mpo = MPO(hamiltonian, siteinds(sim_state))
   log_msg("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
   output_counter = 0

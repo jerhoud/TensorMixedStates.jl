@@ -1,11 +1,11 @@
-mpos::Dict{Tuple{String, Lits}, MPO} = IdDict()
+mpos::Dict{Lits, MPO} = IdDict()
 
 clear_mpos() =
     global mpos = IdDict()
 
-function get_mpo(op::Lits, st::MPS, ext::String="")
-    get!(mpos, (ext, op)) do
-        MPO(Lit_to_OpSum(op, ext), siteinds(st))
+function get_mpo(op::Lits, st::MPS)
+    get!(mpos, op) do
+        MPO(Lit_to_OpSum(op), siteinds(st))
     end
 end
 
@@ -105,7 +105,7 @@ function expect(::Type{Mixed}, p::MPS, pl::ProdLit, prep::Preprocess)
             die("Multiple site observables are not supported")
         else
             i = l.index[1]
-            obs = op(sites, "obs" * l.name, i)
+            obs = op(sites, l.name, i)
             if isnothing(t[i])
                 t[i] = obs
             else
@@ -143,7 +143,7 @@ expect(tp, s, op::Union{Vector{ProdLit}}, prep) =
 
 
 expect_one(o::String, i::Index, t::ITensor) =
-    (op("obs", i') * op("obs" * o, i) * t)[1]
+    (op("obs", i') * op(o, i) * t)[1]
     
 expect_one(op::Union{Vector{String}}, i::Index, t::ITensor) =
     map(op) do o
@@ -170,11 +170,11 @@ correlations(::Type{Pure}, p::MPS, ops, prep::Nothing) =
 
 function correlations_one(ops::Union{Vector{String}, Tuple{Vararg{String}}}, i1::Index, i2::Index, t::ITensor)
     if i1 == i2
-        obs = op("obs", i1'') * op("obs" * ops[1], i1') * op("obs" * ops[2], i1)
+        obs = op("obs", i1'') * op(ops[1], i1') * op(ops[2], i1)
         return (obs * t)[1]
     else
-        obs1 = op("obs", i1') * op("obs" * ops[1], i1)
-        obs2 = op("obs", i2') * op("obs" * ops[2], i2)
+        obs1 = op("obs", i1') * op(ops[1], i1)
+        obs2 = op("obs", i2') * op(ops[2], i2)
         return (obs1 * t * obs2)[1]
     end
 end
@@ -201,13 +201,8 @@ function correlations(::Type{Mixed}, p::MPS, ops, prep::Preprocess)
     return unroll(r)
 end
 
-function apply_gate(::Type{Pure}, p::MPS, g::ProdLit; kwargs...)
+function apply_gate(p::MPS, g::ProdLit; kwargs...)
     ops = Lit_to_ops(g, siteinds(p))
-    return apply(ops, p; move_sites_back_between_gates=false, kwargs...)
-end
-
-function apply_gate(::Type{Mixed}, p::MPS, g::ProdLit; kwargs...)
-    ops = Lit_to_ops(g, siteinds(p), "gate")
     return apply(ops, p; move_sites_back_between_gates=false, kwargs...)
 end
 
