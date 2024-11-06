@@ -139,11 +139,13 @@ macro mixer(
         else
             so = o[1]
             bso = o[2]
-            push!(e.args,
-            quote
-                ITensors.op(::(@StateName_str($so)), ::(@SiteType_str($type)), i::Index; kwargs...) =
-                op((@StateName_str($bso))(), (@SiteType_str($type))(), i; kwargs...)
-            end)
+            if so ≠ bso
+                push!(e.args,
+                quote
+                    ITensors.op(::(@OpName_str($so)), ::(@SiteType_str($type)), i::Index; kwargs...) =
+                    op((@OpName_str($bso))(), (@SiteType_str($type))(), i; kwargs...)
+                end)
+            end
         end
         sobs = "obs" * so
         soper = "oper" * so
