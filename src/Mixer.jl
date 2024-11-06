@@ -83,13 +83,15 @@ macro mixer(
     withdim_exp,
     states_exp,
     obs_exp,
-    dissip_exp
+    dissip_exp,
+    has_fstring_exp
 )
     type = eval(type_exp)
     withdim = eval(withdim_exp)
     states = eval(states_exp)
     obs = eval(obs_exp)
     dissip = eval(dissip_exp)
+    has_fstring = eval(has_fstring_exp)
 
     mixed = "Mixed" * type
 
@@ -166,6 +168,13 @@ macro mixer(
             ITensors.op(::(@OpName_str($so)), ::(@SiteType_str($mixed)), i::Index...; kwargs...) =
             make_dissipator($withdim, $type, $bso, i...; kwargs...)
             @opLit($so)
+        end)
+    end
+
+    foreach(has_fstring) do hf
+        push!(e.args,
+        quote
+            ITensors.has_fermion_string(::(@OpName_str($hf)), ::(@SiteType_str($mixed))) = true
         end)
     end
 

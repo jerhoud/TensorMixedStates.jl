@@ -8,12 +8,14 @@
     # observables / operators to be converted (vector or tuple), names must be valid julia identifiers
     # change a name using "newname" => "basename" (newname must not be an existing name of the base type)
     [
-        "A", "Adag", "N",
+        "I", "Id", "A", "Adag", "N",
     ],
     # dissipators to be created (vector or tuple) "dissipator_name" => "base operator"
     # dissipator_name must be a valid julia identifier
     [
         "DA" => "A",
         "DAdag" => "Adag",
-    ]
+    ],
+    # list of operators having has_fermion_string set to true
+    []
 )

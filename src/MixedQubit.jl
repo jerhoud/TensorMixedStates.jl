@@ -12,7 +12,8 @@
     # observables / operators to be converted (vector or tuple), names must be valid julia identifiers
     # change a name using "newname" => "basename" (newname must not be an existing name of the base type)
     [
-        "X", "Y", "Z",
+        "I", "Id",
+        "X", "Y", "Z", "Sp", "Sm",
         "H", "P", "S", "T", "SqrtNOT" => "√NOT", "Rx", "Ry", "Rz",
         "CNOT", "CX", "CY", "CZ", "Swap", "CPhase", "CRx", "CRy", "CRz", "SqrtSwap" => "√SWAP",
         "Rxx", "Rxy", "Ryy", "Rzz",
@@ -28,7 +29,9 @@
         "DX" => "X",
         "DY" => "Y",
         "DZ" => "Z",
-    ]
+    ],
+    # list of operators having has_fermion_string set to true
+    []
 )
 
 ITensors.state(::StateName"Half", ::SiteType"MixedQubit") = [ 0.5 0 0 0.5 ]

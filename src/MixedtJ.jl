@@ -1,17 +1,18 @@
 @mixer(
-    "Electron",
+    "tJ",
     false,
     [
-        "Emp", "Up", "Dn", "UpDn", "0", "↑", "↓", "↑↓",
+        "Emp", "Up", "Dn", "0", "↑", "↓",                
     ],
     [
         "I", "Id", "F", "Fup", "Fdn",
-        "Nup", "Ndn", "Nupdn", "Ntot",
+        "Nup", "Ndn", "Ntot",
         "Cup", "Cdagup", "Cdn", "Cdagdn",
         "Aup", "Adagup", "Adn", "Adagdn",
+        "Sx", "Sz", "Sp", "Sm",
     ],
     [],
     [
         "Cup", "Cdagup", "Cdn", "Cdagdn",
-    ],
+    ]
 )
