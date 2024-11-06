@@ -86,7 +86,6 @@ macro mixer(
     dissip = eval(dissip_exp)
 
     mixed = "Mixed" * type
-    stype = Symbol(type)
 
     e = Expr(:block)
 
@@ -101,8 +100,6 @@ macro mixer(
             ITensors.space(::(@SiteType_str($mixed))) = 2 * space((@SiteType_str($type))())
         end)
     end
-
-    parse
 
     withdim = (withdim ≠ false)
 
