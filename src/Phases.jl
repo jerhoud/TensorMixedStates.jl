@@ -127,23 +127,24 @@ function run_phase(phase::Dmrg)
   hamiltonian = Lit_to_OpSum(phase.hamiltonian)
   mpo = MPO(hamiltonian, siteinds(sim_state))
   log_msg("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
-  output_counter = 0
+  step_counter = 0
   optimize_time = time()
-  dl = length(phase.maxdim) 
-  i = 1
-  while i <= phase.nsweep
-    enrgy, st = dmrg(mpo, sim_state; nsweeps = 1, maxdim = phase.maxdim[if i <= dl i else dl end], cutoff=phase.cutoff)
+  dl = length(phase.maxdim)
+  maxdim = 1
+  while step_counter < phase.nsweep
+    if step_counter < dl
+      maxdim = phase.maxdim[1 + step_counter]
+    end
+    enrgy, st = dmrg(mpo, sim_state; nsweeps = 1, maxdim, cutoff=phase.cutoff)
     global sim_state = st
-    log_msg("after $i dmrg sweep(s) state energy is $enrgy")
-    i += 1
-    output_counter += 1
-    if output_counter == phase.output_periodicity
+    step_counter += 1
+    log_msg("after $step_counter dmrg sweep(s) state energy is $enrgy")
+    if phase.output_periodicity ≠ 0 && mod(step_counter, phase.output_periodicity) == 0
       write_output(phase.data_output)
       tm = time()
       elapsed = round(tm - optimize_time; digits = 3)
       log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
       optimize_time = tm
-      output_counter = 0
     end
   end
 end
