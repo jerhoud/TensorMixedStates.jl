@@ -174,3 +174,29 @@ function reorder(a::SumLit)
     end
     return SumLit(pps)
 end
+
+litF(idx) = Lit("F", (idx,), (;), false)
+
+function insertFfactors(a::ProdLit)
+    nls = []
+    fermion_idx = 0
+    for l in reverse(a.ls)
+        idx = first(l.index)
+        if fermion_idx ≠ 0
+            append!(nls, (litF(i) for i in reverse(idx + 1:fermion_idx - 1)))
+            if l.fermionic
+                push!(nls, litF(idx))
+                fermion_idx = 0
+            else
+                fermion_idx = idx
+            end
+        elseif l.fermionic
+            fermion_idx = idx
+        end
+        push!(nls, l)
+    end
+    if fermion_idx ≠ 0
+        append!(nls, (litF(i) for i in reverse(1:fermion_idx - 1)))
+    end
+    return ProdLit(a.coef, reverse(nls))
+end
