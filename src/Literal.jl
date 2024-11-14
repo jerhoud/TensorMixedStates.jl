@@ -49,7 +49,12 @@ struct SumLit
     ps::Vector{ProdLit}
 end
 
-show(io::IO, a::SumLit) = join(io, a.ps, "+")
+show(io::IO, a::SumLit) =
+    if a.ps == []
+        print(io, 0)
+    else
+        join(io, a.ps, "+")
+    end
 
 SumLit() = SumLit([])
 SumLit(a::ProdLit) =
