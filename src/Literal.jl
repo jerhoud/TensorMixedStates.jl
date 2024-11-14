@@ -1,4 +1,4 @@
-import Base: +, *, -, /, show, isless, ==
+import Base: +, *, -, /, show, isless
 
 struct Lit
     name::String
@@ -14,10 +14,7 @@ function show(io::IO, a::Lit)
 end
 
 isless(a::Lit, b::Lit) =
-    isless((a.name, a.index), (b.name, b.index))
-
-(a::Lit == b::Lit) = 
-    (a.name, a.index) == (b.name, b.index)
+    isless((a.name, a.index, a.param, a.fermionic), (b.name, b.index, b.param, b.fermionic))
 
 struct ProdLit
     coef::Number
@@ -44,9 +41,6 @@ end
 
 isless(a::ProdLit, b::ProdLit) =
     isless((a.ls, a.coef), (b.ls, b.coef))
-
-(a::ProdLit == b::ProdLit) =
-    (a.ls, a.coef) == (b.ls, b.coef)
 
 (a::Number * b::ProdLit) =
     ProdLit(a * b.coef, b.ls)
