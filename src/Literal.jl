@@ -130,8 +130,28 @@ function Lit_to_ops(a::ProdLit, sites)
     return r
 end
 
-reorder(a::ProdLit) =
-    ProdLit(a.coef, sort(a.ls; by=l->l.index))
+function signature(p)
+    n = length(p)
+    t = fill(false, n)
+    r = 1
+    for i in 1:n
+        if t[i] continue end
+        j = p[i]
+        while j ≠ i
+            r = -r
+            t[j] = true
+            j = p[j]
+        end
+    end
+    return r
+end
+
+function reorder(a::ProdLit)
+    fs = filter(t->t.fermionic, a.ls)
+    p = sortperm(fs; by=l->l.index)
+    s = signature(p)
+    ProdLit(s * a.coef, sort(a.ls; by=l->l.index))
+end
 
 function reorder(a::SumLit)
     ps = sort(map(reorder, a.ps))
