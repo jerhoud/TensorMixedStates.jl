@@ -4,6 +4,7 @@ struct Lit
     name::String
     index::Tuple
     param::NamedTuple
+    fermionic::Bool
 end
 
 function show(io::IO, a::Lit)
@@ -90,13 +91,13 @@ end
 
 Lits = Union{ProdLit, SumLit}
 
-macro opLit(name::String)
+macro opLit(name::String, fermionic::Bool = false)
     sname = Symbol(name)
     if isdefined(TensorMixedStates, sname)
         return quote end
     else
         return quote
-            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs))])
+            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs), fermionic)])
             export $(esc(sname))
         end
     end
