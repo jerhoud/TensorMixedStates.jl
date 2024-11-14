@@ -1,4 +1,4 @@
-import Base: +, *, -, /, show
+import Base: +, *, -, /, show, isless, ==
 
 struct Lit
     name::String
@@ -12,6 +12,12 @@ function show(io::IO, a::Lit)
     join(io, a.index, ", ")
     print(io, ")")
 end
+
+isless(a::Lit, b::Lit) =
+    isless((a.name, a.index), (b.name, b.index))
+
+(a::Lit == b::Lit) = 
+    (a.name, a.index) == (b.name, b.index)
 
 struct ProdLit
     coef::Number
@@ -36,6 +42,11 @@ function show(io::IO, a::ProdLit)
     join(io, a.ls)
 end
 
+isless(a::ProdLit, b::ProdLit) =
+    isless((a.ls, a.coef), (b.ls, b.coef))
+
+(a::ProdLit == b::ProdLit) =
+    (a.ls, a.coef) == (b.ls, b.coef)
 
 (a::Number * b::ProdLit) =
     ProdLit(a * b.coef, b.ls)
@@ -117,4 +128,29 @@ function Lit_to_ops(a::ProdLit, sites)
     r = [op(sites, l.name, l.index...; l.param...) for l in a.ls]
     r[1] *= a.coef
     return r
+end
+
+reorder(a::ProdLit) =
+    ProdLit(a.coef, sort(a.ls; by=l->l.index))
+
+function reorder(a::SumLit)
+    ps = sort(map(reorder, a.ps))
+    pps = ProdLit[]
+    c = 0
+    l = Lit[]
+    for p in ps
+        if p.ls == l
+            c += p.coef
+        else
+            if c ≠ 0
+                push!(pps, ProdLit(c, l))
+            end
+            c = p.coef
+            l = p.ls
+        end
+    end
+    if c ≠ 0
+        push!(pps, ProdLit(c, l))
+    end
+    return SumLit(pps)
 end
