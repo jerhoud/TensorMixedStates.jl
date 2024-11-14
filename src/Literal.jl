@@ -97,7 +97,7 @@ macro opLit(name::String, fermionic::Bool = false)
         return quote end
     else
         return quote
-            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs), fermionic)])
+            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs), $fermionic)])
             export $(esc(sname))
         end
     end
