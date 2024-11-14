@@ -15,6 +15,13 @@ end
 struct ProdLit
     coef::Number
     ls::Vector{Lit}
+    ProdLit(c, l) =
+        if c == 0
+            new(0, [])
+        else
+            new(c, l)
+        end
+    ProdLit() = new(0, [])
 end
 
 function show(io::IO, a::ProdLit)
@@ -30,9 +37,10 @@ end
 
 
 (a::Number * b::ProdLit) =
-    if (a==0) 0 else ProdLit(a * b.coef, b.ls) end
+    ProdLit(a * b.coef, b.ls)
 (a::ProdLit * b::Number) = b * a
-(a::ProdLit * b::ProdLit) = ProdLit(a.coef * b.coef, vcat(a.ls, b.ls))
+(a::ProdLit * b::ProdLit) =
+    ProdLit(a.coef * b.coef, vcat(a.ls, b.ls))
 (a::ProdLit / b::Number) = (1 / b) * a
 -(a::ProdLit) = -1 * a
 
@@ -42,17 +50,23 @@ end
 
 show(io::IO, a::SumLit) = join(io, a.ps, "+")
 
-SumLit(a::ProdLit) = SumLit([a])
+SumLit() = SumLit([])
+SumLit(a::ProdLit) =
+    if a.coef == 0
+        SumLit()
+    else 
+        SumLit([a])
+    end
 SumLit(a::SumLit) = a
 
 (a::SumLit + b::SumLit) = SumLit(vcat(a.ps, b.ps))
 (a::SumLit + b::ProdLit) = a + SumLit(b)
 (a::ProdLit + b::SumLit) = SumLit(a) + b
-(a::ProdLit + b::ProdLit) = SumLit([a, b])
+(a::ProdLit + b::ProdLit) = SumLit(a) + SumLit(b)
 (a::ProdLit - b::ProdLit) = a + (-1) * b
 
 (a::Number * b::SumLit) =
-    if (a==0) 0
+    if (a==0) SumLit()
     else SumLit(map(pl->ProdLit(a * pl.coef, pl.ls), b.ps))
     end
 (a::SumLit * b::Number) = b * a
@@ -88,9 +102,8 @@ macro opLit(name::String)
     end
 end
 
-function Lit_to_OpSum(a::SumLit)
-    return sum(p.coef * prod(Op(l.name, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
-end
+Lit_to_OpSum(a::SumLit) =
+    sum(p.coef * prod(Op(l.name, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
 
 Lit_to_OpSum(a::ProdLit) = Lit_to_OpSum(SumLit(a))
 
