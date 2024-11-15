@@ -5,6 +5,7 @@ struct Lit
     index::Tuple
     param::NamedTuple
     fermionic::Bool
+    dissipator::Bool
 end
 
 function show(io::IO, a::Lit)
@@ -14,7 +15,7 @@ function show(io::IO, a::Lit)
 end
 
 isless(a::Lit, b::Lit) =
-    isless((a.name, a.index, a.param, a.fermionic), (b.name, b.index, b.param, b.fermionic))
+    isless((a.name, a.index, a.param, a.fermionic, a.dissipator), (b.name, b.index, b.param, b.fermionic, b.dissipator))
 
 struct ProdLit
     coef::Number
@@ -101,13 +102,13 @@ end
 
 Lits = Union{ProdLit, SumLit}
 
-macro opLit(name::String, fermionic::Bool = false)
+macro opLit(name::String, fermionic::Bool = false, dissipator::Bool = false)
     sname = Symbol(name)
     if isdefined(TensorMixedStates, sname)
         return quote end
     else
         return quote
-            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs), $fermionic)])
+            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
             export $(esc(sname))
         end
     end
@@ -129,6 +130,12 @@ simpleLit(a::Lit) = length(a.index) == 1
 simpleLit(a::ProdLit) = all(simpleLit, a.ls)
 
 simpleLit(a::SumLit) = all(simpleLit, a.ps)
+
+dissipLit(a::Lit) = a.dissipator
+
+dissipLit(a::ProdLit) = any(dissipLit, a.ls)
+
+disspLit(a::SumLit) = any(dissipLit, a.ps)
 
 function signature(p)
     n = length(p)
@@ -175,7 +182,7 @@ function reorder(a::SumLit)
     return SumLit(pps)
 end
 
-litF(idx) = Lit("F", (idx,), (;), false)
+litF(idx) = Lit("F", (idx,), (;), false, false)
 
 function insertFfactors(a::ProdLit)
     nls = []
