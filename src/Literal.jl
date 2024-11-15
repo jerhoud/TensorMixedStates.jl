@@ -124,6 +124,12 @@ function Lit_to_ops(a::ProdLit, sites)
     return r
 end
 
+simpleLit(a::Lit) = length(a.index) == 1
+
+simpleLit(a::ProdLit) = all(simpleLit, a.ls)
+
+simpleLit(a::SumLit) = all(simpleLit, a.ps)
+
 function signature(p)
     n = length(p)
     t = fill(false, n)
