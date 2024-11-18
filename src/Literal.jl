@@ -135,7 +135,7 @@ dissipLit(a::Lit) = a.dissipator
 
 dissipLit(a::ProdLit) = any(dissipLit, a.ls)
 
-disspLit(a::SumLit) = any(dissipLit, a.ps)
+dissipLit(a::SumLit) = any(dissipLit, a.ps)
 
 function signature(p)
     n = length(p)
