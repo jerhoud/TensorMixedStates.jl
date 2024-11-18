@@ -1,8 +1,8 @@
 export SimData, Pure, Mixed, Output, Limits, no_output, no_limits
 export Dmrg, Tdvp, Gates, Evolve, ToMixed, SaveState, LoadState, CreateState
 
-struct Pure{T} state::T end
-struct Mixed{T} state::T end
+struct Pure end
+struct Mixed end
 
 struct Trotter
   order::Int
