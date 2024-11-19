@@ -3,6 +3,10 @@ struct MixEvolve2 end
 struct MixGate end
 struct MixDissipator end
 
+function make_operator(::Type{Pure}, tj::ITensor, ::Index, ::Index)
+    return tj
+end
+
 function make_operator(::Type{MixEvolve}, tj::ITensor, i::Index, j::Index)
     k = sim(j)
     tk = replaceinds(tj, (j, j'), (k, k'))
@@ -37,15 +41,15 @@ struct PreMPO
     terms::Vector{Vector{Tuple{Int, Int, ITensor}}}
 end
 
-function create_one_mpo_term(tp, p::Prodlit, sites, pre::PreMPO)
+function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
     fst = p.ls[1].index[1]
     lst = p.ls[end].index[1]
     for k in fst:lst-1
-        pre.linkdims[i] += 1
+        pre.linkdims[k] += 1
     end
     i = 0
     t = ITensor()
-    idx = Index()
+    idx = nothing
     for l in p.ls
         j = l.index[1]
         if l.dissipator && tp ≠ MixDissipator
@@ -59,7 +63,7 @@ function create_one_mpo_term(tp, p::Prodlit, sites, pre::PreMPO)
                     push!(pre.terms[i], (pre.linkdims[i-1], pre.linkdims[i], make_operator(tp, t, sites[i], idx)))
                 end
                 for k in i+1:j-1
-                    push!(pre.terms[k],(pre.linkdims[k-1], pre.linkdims[k], delta(idx, idx')))
+                    push!(pre.terms[k],(pre.linkdims[k-1], pre.linkdims[k], delta(sites[k], sites[k]')))
                 end
             end
             idx = sites[j]
@@ -80,7 +84,7 @@ function create_one_mpo_term(tp, p::Prodlit, sites, pre::PreMPO)
 end
 
 function prepare_mpo(tp, a::SumLit, sites)
-    n = lenght(sites)
+    n = length(sites)
     pre = PreMPO(fill(1, n - 1), [ Tuple{Int, Int, ITensor}[] for _ in 1:n ])
     for p in a.ps
         if length(p.ls) == 1 && p.ls[1].dissipator
@@ -96,7 +100,7 @@ function prepare_mpo(tp, a::SumLit, sites)
 end
 
 
-function make_mpo(tp, a::Sumlit, sites)
+function make_mpo(tp, a::SumLit, sites)
     p = prepare_mpo(tp, a, sites)
     n = length(sites)
     ts = Vector{ITensor}(undef, n)
@@ -105,13 +109,13 @@ function make_mpo(tp, a::Sumlit, sites)
     for (i, idx) in enumerate(sites)
         ldim = rdim
         if i == n
-            rdim = 2
+            rdim = 1
         else
-            rdim = p.dimlinks[i]
+            rdim = p.linkdims[i]
         end
         llink = rlink
-        rlink = Index(rdim, "Link, l=$i")
-        w = ITensor(llink, rlink, idx, idx')
+        rlink = Index(1 + rdim, "Link, l=$i")
+        w = ITensor(ComplexF64, idx, idx', llink, rlink)
         id = delta(idx, idx')
         for j in eachindval(idx, idx')
             w[llink => 1, rlink => 1, j...] = id[j...]
@@ -136,7 +140,7 @@ function make_mpo(tp, a::Sumlit, sites)
     return MPO(ts)
 end
 
-function make_approx_W1(tp, a::Sumlit, tau::Float64, sites)
+function make_approx_W1(tp, a::SumLit, tau::Number, sites)
     p = prepare_mpo(tp, a, sites)
     n = length(sites)
     ts = Vector{ITensor}(undef, n)
@@ -175,7 +179,7 @@ function make_approx_W1(tp, a::Sumlit, tau::Float64, sites)
     return MPO(ts)
 end
 
-function make_approx_W2(tp, a::Sumlit, tau::Float64, sites)
+function make_approx_W2(tp, a::SumLit, tau::Number, sites)
     p = prepare_mpo(tp, a, sites)
     n = length(sites)
     ts = Vector{ITensor}(undef, n)
