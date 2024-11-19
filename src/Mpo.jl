@@ -1,130 +1,230 @@
-struct PreMPO
-    linkdims::Vector{Int}
-    links::Vector{Vector{Tuple{Int, Int, Int}}}
-    tensors::Dict{Tuple{Int, Int}, ITensor}
-end
-
-
-function prepare_mpo(tp, a::SumLit, sites)
-    n = lenght(sites)
-    linkdims = fill(0, n + 1)
-    links = [ Tuple{Int, Int, Int}[] for _ in 1:n ]
-    for (i, p) in enumerate(a.ps)
-        fst = p.ls[1].index[1]
-        lst = p.ls[end].index[1]
-        for j in fst + 1:lst
-            linkdims[j] += 1
-        end
-        for j in fst:lst
-            push!(links[j], (i, linkdims[j], linkdims[j+1]))
-        end
-    end
-    tensors = Dict{Tuple{Int, Int}, ITensor}()
-    for (nt, p) in enumerate(a.ps)
-        i = 0
-        dissip = false
-        t = ITensor()
-        idx = Index()
-        c = p.coef
-        for l in p.ls
-            j = l.index[1]
-            if i ≠ j
-                if i ≠ 0
-                    tensors[(nt, i)] = t
-                end
-                dissip = l.dissipator
-                idx = sites[j]
-                if tp == Mixed && !dissip 
-                    idx = Index(dim(idx)÷2, tags(idx))
-                end
-                t = c * op(l.name, idx; l.param...)
-                c = 1
-                i = j
-            elseif dissip || l.dissipator
-                die("It is not allowed to multiply a dissipator by another operator")
-            else
-                t = replaceprime(t' * op(l.name, idx; l.param...), 2 => 1)
-            end
-        end
-        if i ≠ 0
-            tensors[(nt, i)] = t
-        end
-    end
-    return PreMPO(linkdims, links, tensors)
-end
-
 struct MixEvolve end
+struct MixEvolve2 end
 struct MixGate end
+struct MixDissipator end
 
 function make_operator(::Type{MixEvolve}, tj::ITensor, i::Index, j::Index)
     k = sim(j)
     tk = replaceinds(tj, (j, j'), (k, k'))
-    return (*(tj, delta(k, k'), combinerto(k, j, i) * combinerto(k', j', i )),
-            *(tk, delta(j, j'), combinerto(k, j, i) * combinerto(k', j', i )))
+    return *(tj, delta(k, k'), combinerto(k, j, i), combinerto(k', j', i ))
 end
 
-function make_operator(::Type{GateEvolve}, tj::ITensor, i::Index, j::Index)
+function make_operator(::Type{MixEvolve2}, tj::ITensor, i::Index, j::Index)
+    k = sim(j)
+    tk = replaceinds(tj, (j, j'), (k, k'))
+    return *(tk, delta(j, j'), combinerto(k, j, i), combinerto(k', j', i ))
+end
+
+function make_operator(::Type{MixGate}, tj::ITensor, i::Index, j::Index)
     k = sim(j)
     tk = replaceinds(tj, (j, j'), (k, k'))
     return *(tj, dag(tk), combinerto(k, j, i), combinerto(k', j', i'))
 end
 
-function mpo_abcd(tp, sl::SumLit, i::Int, sites, pre::PreMPO)
-    idx = sites[i]
-    n = length(sites)
-    ldim = pre.linkdims[i]
-    rdim = pre.linkdims[i + 1]
-    ts = pre.tensors
-    if tp == MixEvolve
-        twice = true
-        ldim *= 2
-        rdim *= 2
-    else
-        twice = false
+function make_operator(::Type{MixDissipator}, tj::ITensor, i::Index, j::Index)
+    k = sim(j)
+    tk = replaceinds(tj, (j, j'), (k, k'))
+    atj = swapprime(dag(tj'), 1=>2)
+    atk = swapprime(dag(tk'), 1=>2)
+    r = tj * dag(tk) -
+        0.5 * *(replaceprime(atj * tj, 2 => 1), delta.(k, k')) -
+        0.5 * *(replaceprime(atk * tk, 2 => 1), delta.(j, j'))
+    return *(r, combinerto(k, j, i), combinerto(k', j', i'))
+end
+
+struct PreMPO
+    linkdims::Vector{Int}
+    terms::Vector{Vector{Tuple{Int, Int, ITensor}}}
+end
+
+function create_one_mpo_term(tp, p::Prodlit, sites, pre::PreMPO)
+    fst = p.ls[1].index[1]
+    lst = p.ls[end].index[1]
+    for k in fst:lst-1
+        pre.linkdims[i] += 1
     end
-    a = fill(ITensor(), (ldim, rdim))
-    b = fill(ITensor(), ldim)
-    c = fill(ITensor(), rdim)
-    d = ITensor()
-
-    for (term, rlink, llink) in pre.links[i]
-        t = ts[(term, i)]
-        tidx = noprime(t.inds[1])
-        samedim = dim(tidx) == dim(idx)
-        if samedim # for pure systems or dissipators
-            t = replaceinds(t, (tidx, tidx'), (idx, idx'))
-        else
-            t = make_operator(tp, t, idx, tidx)
+    i = 0
+    t = ITensor()
+    idx = Index()
+    for l in p.ls
+        j = l.index[1]
+        if l.dissipator && tp ≠ MixDissipator
+            die("Dissipators cannot be used in pure representation, as gates or multiplied by other operators")
         end
-        if rlink == 0
-            if llink == 0
-                d += t
-            else
-                if twice
-                    b[2 * llink - 1] += t[1]
-                    b[2 * llink] += t[2]
+        if i ≠ j
+            if i ≠ 0
+                if i == fst
+                    push!(pre.terms[i], (1, pre.linkdims[i], make_operator(tp, p.coef * t, sites[i], idx)))
                 else
-                    b[llink] += t
+                    push!(pre.terms[i], (pre.linkdims[i-1], pre.linkdims[i], make_operator(tp, t, sites[i], idx)))
+                end
+                for k in i+1:j-1
+                    push!(pre.terms[k],(pre.linkdims[k-1], pre.linkdims[k], delta(idx, idx')))
                 end
             end
+            idx = sites[j]
+            if tp ≠ Pure
+                idx = Index(dim(idx)÷2, tags(idx))
+            end
+            t = op(l.name, idx; l.param...)
+            i = j
         else
-            if llink == 0
-                if twice
-                    c[2 * rlink - 1] += t[1]
-                    c[2 * rlink] += t[2]      
-                else
-                    c[rlink] += t
-                end
-            else
-                if twice
-                    a[2 * llink - 1, 2 * rlink - 1] += t[1]
-                    a[2 * llink, 2 * rlink] += t[2]
-                else
-                    a[llink, rlink] += t
-                end
+            t = replaceprime(t' * op(l.name, idx; l.param...), 2 => 1)
+        end
+    end
+    if i == fst
+        push!(pre.terms[i], (1, 1, make_operator(tp, p.coef * t, sites[i], idx)))
+    else
+        push!(pre.terms[i], (pre.linkdims[i-1], 1, make_operator(tp, t, sites[i], idx)))
+    end
+end
+
+function prepare_mpo(tp, a::SumLit, sites)
+    n = lenght(sites)
+    pre = PreMPO(fill(1, n - 1), [ Tuple{Int, Int, ITensor}[] for _ in 1:n ])
+    for p in a.ps
+        if length(p.ls) == 1 && p.ls[1].dissipator
+            create_one_mpo_term(MixDissipator, p, sites, pre)
+        else
+            create_one_mpo_term(tp, p, sites, pre)
+            if tp == MixEvolve
+                create_one_mpo_term(MixEvolve2, -p, sites, pre)
             end
         end
-    end 
+    end
+    return pre
+end
 
-    return (a, b, c, d)
+
+function make_mpo(tp, a::Sumlit, sites)
+    p = prepare_mpo(tp, a, sites)
+    n = length(sites)
+    ts = Vector{ITensor}(undef, n)
+    rdim = 1
+    rlink = Index(2, "Link, l=0")
+    for (i, idx) in enumerate(sites)
+        ldim = rdim
+        if i == n
+            rdim = 2
+        else
+            rdim = p.dimlinks[i]
+        end
+        llink = rlink
+        rlink = Index(rdim, "Link, l=$i")
+        w = ITensor(llink, rlink, idx, idx')
+        id = delta(idx, idx')
+        for j in eachindval(idx, idx')
+            w[llink => 1, rlink => 1, j...] = id[j...]
+            w[llink => 1 + ldim, rlink => 1 + rdim, j...] = id[j...]
+        end
+        for (l, r, u) in p.terms[i]
+            if r == 1
+                r += rdim
+            end
+            for j in eachindval(idx, idx')
+                w[llink=>l, rlink=>r, j...] += u[j...]
+            end
+        end
+        if i == 1
+            w *= ITensor([1, 0], llink)
+        end
+        if i == n
+            w *= ITensor([0, 1], rlink)
+        end
+        ts[i] = w
+    end
+    return MPO(ts)
+end
+
+function make_approx_W1(tp, a::Sumlit, tau::Float64, sites)
+    p = prepare_mpo(tp, a, sites)
+    n = length(sites)
+    ts = Vector{ITensor}(undef, n)
+    rdim = 1
+    rlink = Index(1, "Link, l=0")
+    for (i, idx) in enumerate(sites)
+        ldim = rdim
+        if i == n
+            rdim = 1
+        else
+            rdim = p.dimlinks[i]
+        end
+        llink = rlink
+        rlink = Index(rdim, "Link, l=$i")
+        w = ITensor(llink, rlink, idx, idx')
+        id = delta(idx, idx')
+        for (l, r, u) in p.terms
+            if r == 1
+                u *= tau
+                if l == 1
+                    u += id
+                end
+            end
+            for j in eachindval(idx, idx')
+                w[llink=>l, rlink=>r, j...] += u[j...]
+            end
+        end
+        if i == 1
+            w *= ITensor([1], llink)
+        end
+        if i == n
+            w *= ITensor([1], rlink)
+        end
+        ts[i] = w
+    end
+    return MPO(ts)
+end
+
+function make_approx_W2(tp, a::Sumlit, tau::Float64, sites)
+    p = prepare_mpo(tp, a, sites)
+    n = length(sites)
+    ts = Vector{ITensor}(undef, n)
+    rdim = 1
+    rlink = Index(1, "Link, l=0")
+    for (i, idx) in enumerate(sites)
+        ldim = rdim
+        if i == n
+            rdim = 1
+        else
+            rdim = p.dimlinks[i]
+        end
+        llink = rlink
+        rlink = Index(rdim, "Link, l=$i")
+        dl = dim(llink)
+        dr = dim(rlink)
+        v = fill(ITensor(), (dl, dr))
+        for (l, r, u) in p.terms
+            if r == 1
+                u *= tau
+            end
+            v[l, r] += u
+        end
+        e = v[1, 1] = exp(v[1, 1])
+        for l in 2:dl, r in 2:dr
+            v[l, r] += replaceprime(v[l, 1]'' * e' * v[1, r], 3=>1)
+        end
+        for r in 2:dr
+            v[1, r] = replaceprime(e' * v[1, r], 2=>1)
+        end
+        for l in 2:dl
+            v[l, 1] = replaceprime(v[l, 1]' * e, 2=>1)
+        end
+        
+        w = ITensor(llink, rlink, idx, idx')
+        for l in 1:dl, r in 1:dr
+            u = v[l, r]
+            if isempty(u) continue end
+            for j in eachindval(idx, idx')
+                w[llink=>l, rlink=>r, j...] += u[j...]
+            end
+        end
+        if i == 1
+            w *= ITensor([1], llink)
+        end
+        if i == n
+            w *= ITensor([1], rlink)
+        end
+        ts[i] = w
+    end
+    return MPO(ts)
 end
