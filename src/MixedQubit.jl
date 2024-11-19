@@ -12,7 +12,6 @@
     # observables / operators to be converted (vector or tuple), names must be valid julia identifiers
     # change a name using "newname" => "basename" (newname must not be an existing name of the base type)
     [
-        "I", "Id",
         "X", "Y", "Z", "Sp", "Sm",
         "H", "P", "S", "T", "SqrtNOT" => "√NOT", "Rx", "Ry", "Rz",
         "CNOT", "CX", "CY", "CZ", "Swap", "CPhase", "CRx", "CRy", "CRz", "SqrtSwap" => "√SWAP",
