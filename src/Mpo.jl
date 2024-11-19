@@ -3,29 +3,33 @@ struct MixEvolve2 end
 struct MixGate end
 struct MixDissipator end
 
-function make_operator(::Type{Pure}, tj::ITensor, ::Index, ::Index)
+function make_operator(::Type{Pure}, tj::ITensor, ::Index)
     return tj
 end
 
-function make_operator(::Type{MixEvolve}, tj::ITensor, i::Index, j::Index)
+function make_operator(::Type{MixEvolve}, tj::ITensor, i::Index)
+    j = noprime(ind(tj, 1))
     k = sim(j)
     tk = replaceinds(tj, (j, j'), (k, k'))
     return *(tj, delta(k, k'), combinerto(k, j, i), combinerto(k', j', i ))
 end
 
-function make_operator(::Type{MixEvolve2}, tj::ITensor, i::Index, j::Index)
+function make_operator(::Type{MixEvolve2}, tj::ITensor, i::Index)
+    j = noprime(ind(tj, 1))
     k = sim(j)
     tk = replaceinds(tj, (j, j'), (k, k'))
     return *(tk, delta(j, j'), combinerto(k, j, i), combinerto(k', j', i ))
 end
 
-function make_operator(::Type{MixGate}, tj::ITensor, i::Index, j::Index)
+function make_operator(::Type{MixGate}, tj::ITensor, i::Index...)
+    j = filter(t->hasplev(t, 0), inds(tj))
     k = sim(j)
-    tk = replaceinds(tj, (j, j'), (k, k'))
-    return *(tj, dag(tk), combinerto(k, j, i), combinerto(k', j', i'))
+    tk = replaceinds(tj, (j..., j'...), (k..., k'...))
+    return *(tj, dag(tk), combinerto.(k, j, i)..., combinerto.(k', j', i')...)
 end
 
-function make_operator(::Type{MixDissipator}, tj::ITensor, i::Index, j::Index)
+function make_operator(::Type{MixDissipator}, tj::ITensor, i::Index)
+    j = noprime(ind(tj, 1))
     k = sim(j)
     tk = replaceinds(tj, (j, j'), (k, k'))
     atj = swapprime(dag(tj'), 1=>2)
@@ -49,7 +53,6 @@ function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
     end
     i = 0
     t = ITensor()
-    idx = nothing
     for l in p.ls
         j = l.index[1]
         if l.dissipator && tp ≠ MixDissipator
@@ -58,9 +61,9 @@ function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
         if i ≠ j
             if i ≠ 0
                 if i == fst
-                    push!(pre.terms[i], (1, pre.linkdims[i], make_operator(tp, p.coef * t, sites[i], idx)))
+                    push!(pre.terms[i], (1, pre.linkdims[i], make_operator(tp, p.coef * t, sites[i])))
                 else
-                    push!(pre.terms[i], (pre.linkdims[i-1], pre.linkdims[i], make_operator(tp, t, sites[i], idx)))
+                    push!(pre.terms[i], (pre.linkdims[i-1], pre.linkdims[i], make_operator(tp, t, sites[i])))
                 end
                 for k in i+1:j-1
                     push!(pre.terms[k],(pre.linkdims[k-1], pre.linkdims[k], delta(sites[k], sites[k]')))
@@ -73,13 +76,14 @@ function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
             t = op(l.name, idx; l.param...)
             i = j
         else
+            idx = noprime(ind(t, 1))
             t = replaceprime(t' * op(l.name, idx; l.param...), 2 => 1)
         end
     end
     if i == fst
-        push!(pre.terms[i], (1, 1, make_operator(tp, p.coef * t, sites[i], idx)))
+        push!(pre.terms[i], (1, 1, make_operator(tp, p.coef * t, sites[i])))
     else
-        push!(pre.terms[i], (pre.linkdims[i-1], 1, make_operator(tp, t, sites[i], idx)))
+        push!(pre.terms[i], (pre.linkdims[i-1], 1, make_operator(tp, t, sites[i])))
     end
 end
 
