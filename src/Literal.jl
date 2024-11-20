@@ -2,6 +2,7 @@ import Base: +, *, -, /, show, isless
 
 struct Lit
     name::String
+    opname::String
     index::Tuple
     param::NamedTuple
     fermionic::Bool
@@ -15,7 +16,7 @@ function show(io::IO, a::Lit)
 end
 
 isless(a::Lit, b::Lit) =
-    isless((a.name, a.index, a.param, a.fermionic, a.dissipator), (b.name, b.index, b.param, b.fermionic, b.dissipator))
+    isless((a.name, a.index, a.param), (b.name, b.index, b.param))
 
 struct ProdLit
     coef::Number
@@ -102,25 +103,33 @@ end
 
 Lits = Union{ProdLit, SumLit}
 
-macro opLit(name::String, fermionic::Bool = false, dissipator::Bool = false)
-    sname = Symbol(name)
-    if isdefined(TensorMixedStates, sname)
-        return quote end
-    else
-        return quote
-            $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
-            export $(esc(sname))
+macro opLit(fermionic, dissipator, name_exp...)
+    ns = eval(names_exp)
+    e = Expr(:block)
+    foreach(ns) do
+        if n isa String
+            name = opname = n
+        else
+            name = n[1]
+            opname = n[2]
         end
+        sname = Symbol(name)
+        push!(e.args,
+            quote
+                $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
+                export $(esc(sname))
+            end)
     end
+    return e
 end
 
 Lit_to_OpSum(a::SumLit) =
-    sum(p.coef * prod(Op(l.name, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
+    sum(p.coef * prod(Op(l.opname, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
 
 Lit_to_OpSum(a::ProdLit) = Lit_to_OpSum(SumLit(a))
 
 function Lit_to_ops(a::ProdLit, sites)
-    r = [op(sites, l.name, l.index...; l.param...) for l in a.ls]
+    r = [op(sites, l.opname, l.index...; l.param...) for l in a.ls]
     r[1] *= a.coef
     return r
 end
@@ -182,7 +191,7 @@ function reorder(a::SumLit)
     return SumLit(pps)
 end
 
-litF(idx) = Lit("F", (idx,), (;), false, false)
+litF(idx) = Lit("F", "F", (idx,), (;), false, false)
 
 function insertFfactors(a::ProdLit)
     nls = []

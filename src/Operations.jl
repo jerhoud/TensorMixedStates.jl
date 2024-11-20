@@ -10,21 +10,18 @@ function get_mpo(op::Lits, st::MPS)
 end
 
 function Pure2Mixed(st::MPS; maxdim, cutoff)
-    p = dense(st) # to remove eventual QNs
+    p = dense(st) # to remove QNs
     n = length(p)
     v = Vector{ITensor}(undef, n)
     leftlink = nothing
     r = nothing
-    for i in 1:n
-        t = p[i]
+    for (i, t) in enumerate(p)
         idx = siteind(p, i)
-        tp = "Mixed" * string(tags(idx)[1]) # hoping that is the tag with the type of the site
-        combsite = combiner(prime(idx), idx; tags="$tp,Site,n=$i")
-        siteidx = combinedind(combsite)
-        tt = t * dag(prime(t)) * combsite
+        midx = mixed_index(idx)
+        mt = t * t' * combinerto(idx', idx, midx)
         if (i > 1)
-            leftidx = (siteidx, leftlink)
-            tt *= r
+            leftidx = (midx, leftlink)
+            mt *= r
         else
             leftidx = (siteidx,)
         end
@@ -46,18 +43,16 @@ function random_mixed_state(sites, linkdims::Int)
     smps = Pure2Mixed(smps; maxdim = linkdims, cutoff = 0)
     t = ITensor(1)
     for i in 2n:-1:n+1
-        t *= smps[i] * op("obs", siteind(smps, i))
+        t *= smps[i] * make_operator(MixObservable, siteind(smps, i))
     end
     smps[n] *= t
     return MPS(smps[1:n])
 end
 
-function trace(::Type{Mixed}, p::MPS)
-    n = length(p)
-    return prod(p[i] * op("obs", siteind(p, i)) for i in 1:n)[1]
-end
+trace(p::MPS) =
+    prod(pi * make_opeartor(MixObservable, siteind(p, i)) for (i, pi) in enumerate(p))[1]
 
-trace2(::Type{Mixed}, p::MPS) = real(inner(p, p))
+trace2(p::MPS) = real(inner(p, p))
 
 struct Preprocess
     loc::Vector{ITensor}
