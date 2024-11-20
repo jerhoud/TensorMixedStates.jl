@@ -117,13 +117,8 @@ macro opLit(fermionic, dissipator, name_exp...)
         push!(e.args,
             quote
                 $(esc(sname))() = $name
-                $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
-                function $(esc(sname))(tp, index...; kwargs...)
-                    if $dissipator
-                        tp = MixDissipator
-                    end 
-                    make_operator(tp, $opname, index...; kwargs...)
-                end
+                $(esc(sname))(index::Int...; kwargs...) = ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
+                $(esc(sname))(index::Index...; kwargs...) = op($opname, index...; kwargs...)
                 export $(esc(sname))
             end)
     end

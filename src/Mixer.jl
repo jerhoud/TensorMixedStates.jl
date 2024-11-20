@@ -75,15 +75,6 @@ function make_operator(::Type{MixDissipator}, tj::ITensor, i::Index)
     return *(r, combinerto(k, j, i), combinerto(k', j', i'))
 end
 
-function make_operator(tp, name::String, idx...; kwargs...)
-    jdx = idx
-    if tp ≠ Pure
-        jdx = pure_index.(idx)
-    end
-    o = op(name, jdx...; kwargs...)
-    return make_operator(tp, o, idx...)
-end
-
 site(::Type{Pure}, type::String; kwargs...) =
     siteind(type; kwargs...)
 

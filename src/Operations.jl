@@ -168,17 +168,16 @@ expect(tp, s, op, prep) =
         expect(tp, s, o, prep)
     end
 
-expect1_one(::Type{Pure}, o::String, i::Index, t::ITensor) =
-    scalar(op(o, i) * t)
-
-expect1_one(::Type{Mixed}, o::String, i::Index, t::ITensor) =
-    scalar(t * make_operator(MixObservable, op(o, pure_index(i)), i))
+expect1_one(::Type{Pure}, o::Function, i::Index, t::ITensor) =
+    scalar(o(i) * t)
+    
+expect1_one(::Type{Mixed}, o::Function, i::Index, t::ITensor) =
+    scalar(make_operator(MixObservable, o(pure_index(i)), i) * t)
     
 expect1_one(tp, op, i::Index, t::ITensor) =
     map(op) do o
         expect1_one(tp, o, i, t)
     end
-
 
 function expect1(::Type{Pure}, st::MPS, op, ::Nothing)
     n = length(st)
@@ -206,37 +205,35 @@ function expect1(::Type{Mixed}, st::MPS, op, prep::Preprocess)
     return unroll(r)
 end
 
-function expect2_one(::Type{Pure}, ops::Tuple{String, String}, i1::Index, i2::Index, t::ITensor, rev::Bool)
+function expect2_one(::Type{Pure}, ops::Tuple{Function, Function}, i1::Index, i2::Index, t::ITensor, rev::Bool)
     if rev
-        o2, o1 = ops
+        op2, op1 = ops
     else
-        o1, o2 = ops
+        op1, op2 = ops
     end
     if i1 == i2
-        o = replaceprime(op(o1, i1') * op(o2, i1), 2=>1)
+        o = replaceprime(op1(i1') * op2(i1), 2=>1)
         return scalar(o * t)
     else
-        o1 = op(o1, idx1)
-        o2 = op(o2, idx2)
+        o1 = op1(idx1)
+        o2 = op2(idx2)
         return scalar(o1 * t * o2)
     end
 end
 
-function expect2_one(::Type{Mixed}, ops::Tuple{String, String}, i1::Index, i2::Index, t::ITensor, rev::Bool)
+function expect2_one(::Type{Mixed}, ops::Tuple{Function, Function}, i1::Index, i2::Index, t::ITensor, rev::Bool)
     if rev
-        o2, o1 = ops
+        op2, op1 = ops
     else
-        o1, o2 = ops
+        op1, op2 = ops
     end
     if i1 == i2
         idx = pure_index(i1)
-        o = make_operator(MixObservable, replaceprime(op(o1, idx') * op(o2, idx), 2=>1), i1) 
+        o = make_operator(MixObservable, replaceprime(op1(idx') * op2(idx), 2=>1), i1) 
         return scalar(o * t)
     else
-        idx1 = pure_index(i1)
-        o1 = make_operator(MixObservable, op(o1, idx1), i1)
-        idx2 = pure_index(i2)
-        o2 = make_operator(MixObservable, op(o2, idx2), i2)
+        o1 = make_operator(MixObservable, op1(pure_index(i1)), i1)
+        o2 = make_operator(MixObservable, op2(pure_index(i2)), i2)
         return scalar(o1 * t * o2)
     end
 end
