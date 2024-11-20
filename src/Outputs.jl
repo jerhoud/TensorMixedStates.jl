@@ -1,8 +1,6 @@
 using Printf
 
 function write_output(output::Output)
-    save_mode = sim_operator_mode
-    global sim_operator_mode = ObservableMode
     tfmt = Printf.Format(output.time_format)
     dfmt = Printf.Format(output.data_format)
     if output.file ==""
@@ -26,7 +24,6 @@ function write_output(output::Output)
     if output.file ≠ ""
         close(flog)
     end
-    global sim_operator_mode = save_mode
 end
 
 function write_state_info(file::IO, tfmt::Printf.Format, dfmt::Printf.Format)
@@ -43,10 +40,10 @@ function write_state_info(file::IO, tfmt::Printf.Format, dfmt::Printf.Format)
     else
         println(file, "Mixed state with $(length(p)) sites")
         print(file, "Trace deviation from 1 is ")
-        t = abs(trace(sim_type, sim_state) - 1)
+        t = abs(trace(sim_state) - 1)
         Printf.format(file, tfmt, t)
         print(file, " and effective number of states is ")
-        Printf.format(file, tfmt, 1 / trace2(sim_type, sim_state))
+        Printf.format(file, tfmt, 1 / trace2(sim_state))
         println(file)
     end
     println(file, "maxdim is $(maxlinkdim(p)) and memory usage $(Base.format_bytes(Base.summarysize(p)))")
@@ -93,16 +90,16 @@ function write_checks(file::IO, ck::Vector{Pair{ProdLit, Function}}, prep, tfmt:
     end
 end
 
-function write_expect(file::IO, op::Vector{String}, prep, tfmt::Printf.Format, dfmt::Printf.Format)
+function write_expect(file::IO, op::Vector{Function}, prep, tfmt::Printf.Format, dfmt::Printf.Format)
     if op ≠ []
-        write_data(file, op, expect(sim_type, sim_state, op, prep), tfmt, dfmt)
+        write_data(file, map(t->t(), op) , expect1(sim_type, sim_state, op, prep), tfmt, dfmt)
         flush(file)
     end
 end
 
-function write_correl(file::IO, op::Vector{Tuple{String, String}}, prep, tfmt::Printf.Format, dfmt::Printf.Format)
+function write_correl(file::IO, op::Vector{Tuple{Function, Function}}, prep, tfmt::Printf.Format, dfmt::Printf.Format)
     if op ≠ []
-        write_data(file, map(t->t[1]*t[2],op), correlations(sim_type, sim_state, op, prep), tfmt, dfmt)
+        write_data(file, map(t->t[1]()*t[2](),op), expect2(sim_type, sim_state, op, prep), tfmt, dfmt)
         flush(file)
     end
 end

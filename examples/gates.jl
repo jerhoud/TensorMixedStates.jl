@@ -9,9 +9,9 @@ limits = Limits(
 
 output = Output(
     # write expectation values of these observables for all sites to data file
-    expect = ["X", "Y", "Z"],
+    expect = [X, Y, Z],
     # write correlations values for each couple of observables to data file
-    correl = [("X", "X"), ("Y", "Y"), ("Z", "Z")],
+    correl = [(X, X), (Y, Y), (Z, Z)],
     # whether to write information on the state to log () (trace, bond dimension, memory usage...)
     state_info = true,
     # C style output format for data numbers

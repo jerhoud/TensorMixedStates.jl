@@ -9,7 +9,7 @@ limits = Limits(
 
 output = Output(
     # write expectation values of these observables for all sites to data file
-    expect = ["X", "Y", "Z"],
+    expect = [X, Y, Z],
     # whether to write information on the state to log () (trace, bond dimension, memory usage...)
     state_info = true,
     # C style output format for data numbers

@@ -16,8 +16,8 @@ end
   time_format::String = "%g"
   data_format::String = "%12.8f"
   observables::Vector{ProdLit} = []
-  expect::Vector{String} = []
-  correl::Vector{Tuple{String, String}} = []
+  expect::Vector{Function} = []
+  correl::Vector{Tuple{Function, Function}} = []
   entanglement_entropy::Vector{Int} = []
   show_ee_spectrum::Int = 0
   checks::Vector{Pair{ProdLit, Function}} = []

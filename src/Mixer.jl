@@ -7,7 +7,7 @@ struct MixGate end
 struct MixDissipator end
 
 mixed_index(i::Index) =
-    Index(2dim(i), tags(i))
+    addtags(Index(2dim(i), tags(i)), "Mixed")
 
 pure_index(i::Index) =
     Index(dim(i)÷2, tags(i))
@@ -37,7 +37,7 @@ function make_operator(::Type{MixObservable}, tj::ITensor, i::Index)
     return tj * combinerto(j', j, i)
 end
 
-function make_operator(::Type{MixObservable}, i::Index)
+function obs(i::Index)
     j = pure_index(i)
     return dense(delta(j, j')) * combinerto(j', j, i)
 end
@@ -73,6 +73,15 @@ function make_operator(::Type{MixDissipator}, tj::ITensor, i::Index)
         0.5 * *(replaceprime(atj * tj, 2 => 1), delta.(k, k')) -
         0.5 * *(replaceprime(atk * tk, 2 => 1), delta.(j, j'))
     return *(r, combinerto(k, j, i), combinerto(k', j', i'))
+end
+
+function make_operator(tp, name::String, idx...; kwargs...)
+    jdx = idx
+    if tp ≠ Pure
+        jdx = pure_index.(idx)
+    end
+    o = op(name, jdx...; kwargs...)
+    return make_operator(tp, o, idx...)
 end
 
 site(::Type{Pure}, type::String; kwargs...) =

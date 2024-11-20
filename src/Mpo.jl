@@ -31,11 +31,11 @@ function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
             if tp ≠ Pure
                 idx = Index(dim(idx)÷2, tags(idx))
             end
-            t = op(l.name, idx; l.param...)
+            t = op(l.opname, idx; l.param...)
             i = j
         else
             idx = noprime(ind(t, 1))
-            t = replaceprime(t' * op(l.name, idx; l.param...), 2 => 1)
+            t = replaceprime(t' * op(l.opname, idx; l.param...), 2 => 1)
         end
     end
     if i == fst

@@ -27,15 +27,14 @@ function run_phase(phase::LoadState)
       truncate!(mps; phase.limits.cutoff, phase.limits.maxdim)
     end
     close(file)
-  end
-  if isnothing(findfirst("Mixed", string(tags(siteind(sim_state, 1)))))
-    log_msg("loaded pure state with $(length(sim_state)) sites from file $(phase.file)")
-    global sim_type = Pure
-  else
+  end 
+  if hastags(siteind(sim_state, 1), "Mixed")
     log_msg("loaded mixed state with $(length(sim_state)) sites from file $(phase.file)")
     global sim_type = Mixed
+  else
+    log_msg("loaded pure state with $(length(sim_state)) sites from file $(phase.file)")
+    global sim_type = Pure
   end
-  clear_mpos()
 end
 
 
@@ -62,7 +61,6 @@ function run_phase(phase::CreateState)
     else
       global sim_state = random_mps(ComplexF64, sites, state; linkdims = phase.randomize)
   end
-  clear_mpos()
 end
 
 function run_phase(phase::ToMixed)
@@ -72,19 +70,16 @@ function run_phase(phase::ToMixed)
     log_msg("Creating mixed representation with $(length(sim_state)) sites")
     global sim_state = Pure2Mixed(sim_state; phase.limits.cutoff, phase.limits.maxdim)
     global sim_type = Mixed 
-    clear_mpos()
     log_msg("State is now in mixed representation")
   end
 end
 
 function run_phase(phase::Gates)
-  global sim_operator_mode = GateMode
   log_msg("Applying $(length(phase.gates.ls)) gates")
   global sim_state = apply_gate(sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
 end
 
 function run_phase(phase::Tdvp)
-  global sim_operator_mode = EvolveMode
   stop_sim_time = sim_time + phase.duration
   log_msg("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
   evolver = OpSum()
@@ -122,7 +117,6 @@ function run_phase(phase::Tdvp)
 end
 
 function run_phase(phase::Dmrg)
-  global sim_operator_mode = EvolveMode
   log_msg("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
   hamiltonian = Lit_to_OpSum(phase.hamiltonian)
   mpo = MPO(hamiltonian, siteinds(sim_state))

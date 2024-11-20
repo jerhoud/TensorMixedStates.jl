@@ -116,20 +116,38 @@ macro opLit(fermionic, dissipator, name_exp...)
         sname = Symbol(name)
         push!(e.args,
             quote
+                $(esc(sname))() = $name
                 $(esc(sname))(index...; kwargs...) = ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
+                function $(esc(sname))(tp, index...; kwargs...)
+                    if $dissipator
+                        tp = MixDissipator
+                    end 
+                    make_operator(tp, $opname, index...; kwargs...)
+                end
                 export $(esc(sname))
             end)
     end
     return e
 end
 
-Lit_to_OpSum(a::SumLit) =
-    sum(p.coef * prod(Op(l.opname, l.index...; l.param...) for l in p.ls) for p in a.ps; init=OpSum())
-
-Lit_to_OpSum(a::ProdLit) = Lit_to_OpSum(SumLit(a))
-
-function Lit_to_ops(a::ProdLit, sites)
-    r = [op(sites, l.opname, l.index...; l.param...) for l in a.ls]
+function Lit_to_ops(::Type{Pure}, a::ProdLit, sites)
+    if a.coef == 0
+        return []
+    end
+    r = [ op(sites, l.opname, l.index...; l.param...) for l in a.ls ]
+    r[1] *= a.coef
+    return r    
+end
+    
+function Lit_to_ops(::Type{Mixed}, a::ProdLit, sites)
+    if a.coef == 0
+        return []
+    end
+    r = map(a.ls) do l
+        idx = map(i->sites[i],l.index) 
+        jdx = pure_index.(idx)
+        o = make_operator(MixGate, op(l.opname, jdx...; l.param), idx...)
+    end
     r[1] *= a.coef
     return r
 end
@@ -194,7 +212,7 @@ end
 litF(idx) = Lit("F", "F", (idx,), (;), false, false)
 
 function insertFfactors(a::ProdLit)
-    nls = []
+    nls = Lit[]
     fermion_idx = 0
     for l in reverse(a.ls)
         idx = first(l.index)
