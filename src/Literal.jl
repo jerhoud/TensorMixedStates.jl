@@ -139,7 +139,7 @@ function Lit_to_ops(::Type{Mixed}, a::ProdLit, sites)
         return []
     end
     r = map(a.ls) do l
-        idx = map(i->sites[i],l.index) 
+        idx = map(i->sites[i], l.index) 
         jdx = pure_index.(idx)
         o = make_operator(MixGate, op(l.opname, jdx...; l.param), idx...)
     end
@@ -229,3 +229,6 @@ function insertFfactors(a::ProdLit)
     end
     return ProdLit(a.coef, reverse(nls))
 end
+
+insertFfactors(a::SumLit) =
+    SumLit(map(insertFfactors, a.ps))

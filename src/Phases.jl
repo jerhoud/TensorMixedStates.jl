@@ -76,23 +76,23 @@ end
 
 function run_phase(phase::Gates)
   log_msg("Applying $(length(phase.gates.ls)) gates")
-  global sim_state = apply_gate(sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
+  global sim_state = apply_gate(sim_type, sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
 end
 
 function run_phase(phase::Tdvp)
   stop_sim_time = sim_time + phase.duration
   log_msg("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
-  evolver = OpSum()
-  if !isnothing(phase.hamiltonian)
-    evolver += Lit_to_OpSum(-im * phase.hamiltonian)
+  tp = sim_type
+  if !simpleLit(phase.hamiltonian)
+      die("Tdvp hamiltonian cannot contain multiple site operators")
   end
-  if !isnothing(phase.dissipator)
-    if sim_type == Pure
-      die("Tdvp evolving error: state must be in mixed representation to use dissipators")
-    end
-    evolver += Lit_to_OpSum(phase.dissipator)
+  if phase.type == Pure && dissipLit(phase.hamiltonian)
+    die("Tdvp evolving error: state must be in mixed representation to use dissipators")
   end
-  mpo = MPO(evolver, siteinds(sim_state))
+  if tp == Mixed
+    tp = MixEvolve
+  end
+  mpo = make_mpo(tp, siteinds(sim_state), insertFfactors(reorder(phase.hamiltonian)))
   log_msg("MPO evolver has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
   step_counter = 0
   evolve_time = time()
@@ -118,8 +118,10 @@ end
 
 function run_phase(phase::Dmrg)
   log_msg("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
-  hamiltonian = Lit_to_OpSum(phase.hamiltonian)
-  mpo = MPO(hamiltonian, siteinds(sim_state))
+  if !simpleLit(phase.hamiltonian)
+    die("Dmrg hamiltonian cannot contain multiple site operators")
+  end
+  mpo = make_mpo(tp, siteinds(sim_state), insertFfactors(reorder(phase.hamiltonian)))
   log_msg("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
   step_counter = 0
   optimize_time = time()

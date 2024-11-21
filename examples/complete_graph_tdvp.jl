@@ -32,9 +32,8 @@ phases(n) = [
       data_output = output(n),
       # every 4 tdvp steps
       output_periodicity = 4,
-      # this the dissipator used
-      dissipator = sum(DUp(i) for i in 1:n),
-      # we could have add an hamiltonian = ...
+      # this the hamiltonian / dissipator used
+      hamiltonian = sum(DUp(i) for i in 1:n),
   ),
  ]
 

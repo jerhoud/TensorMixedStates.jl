@@ -45,8 +45,7 @@ end
   limits::Limits
   duration::Float64
   tau::Float64
-  hamiltonian::Union{Nothing, ProdLit, SumLit} = nothing
-  dissipator::Union{Nothing, ProdLit, SumLit} = nothing
+  hamiltonian::Lits
   output_periodicity::Int = 1
   data_output::Output = no_output
   expand::Int = 0
@@ -55,7 +54,7 @@ end
 @kwdef struct Dmrg
   name::String = "Dmrg optimization"
   output::Output = no_output
-  hamiltonian::Union{ProdLit, SumLit}
+  hamiltonian::Lits
   cutoff::Float64
   maxdim::Vector{Int}
   nsweep::Int
