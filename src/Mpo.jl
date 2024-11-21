@@ -1,9 +1,15 @@
 struct PreMPO
+    sites
     linkdims::Vector{Int}
-    terms::Vector{Vector{Tuple{Int, Int, ITensor}}}
+    terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
+    function PreMPO(sites)
+        n = length(sites)
+        return new(sites, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
+    end
 end
 
-function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
+function create_one_mpo_term(tp, p::ProdLit, pre::PreMPO, ref::Int)
+    sites = pre.sites
     fst = p.ls[1].index[1]
     lst = p.ls[end].index[1]
     for k in fst:lst-1
@@ -19,12 +25,12 @@ function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
         if i ≠ j
             if i ≠ 0
                 if i == fst
-                    push!(pre.terms[i], (1, pre.linkdims[i], make_operator(tp, p.coef * t, sites[i])))
+                    push!(pre.terms[i], (1, pre.linkdims[i], make_operator(tp, p.coef * t, sites[i], ref)))
                 else
-                    push!(pre.terms[i], (pre.linkdims[i-1], pre.linkdims[i], make_operator(tp, t, sites[i])))
+                    push!(pre.terms[i], (pre.linkdims[i-1], pre.linkdims[i], make_operator(tp, t, sites[i]), ref))
                 end
                 for k in i+1:j-1
-                    push!(pre.terms[k],(pre.linkdims[k-1], pre.linkdims[k], delta(sites[k], sites[k]')))
+                    push!(pre.terms[k],(pre.linkdims[k-1], pre.linkdims[k], delta(sites[k], sites[k]'), ref))
                 end
             end
             idx = sites[j]
@@ -39,31 +45,36 @@ function create_one_mpo_term(tp, p::ProdLit, sites, pre::PreMPO)
         end
     end
     if i == fst
-        push!(pre.terms[i], (1, 1, make_operator(tp, p.coef * t, sites[i])))
+        push!(pre.terms[i], (1, 1, make_operator(tp, p.coef * t, sites[i]), ref))
     else
-        push!(pre.terms[i], (pre.linkdims[i-1], 1, make_operator(tp, t, sites[i])))
+        push!(pre.terms[i], (pre.linkdims[i-1], 1, make_operator(tp, t, sites[i]), ref))
     end
 end
 
-function prepare_mpo(tp, a::SumLit, sites)
-    n = length(sites)
-    pre = PreMPO(fill(1, n - 1), [ Tuple{Int, Int, ITensor}[] for _ in 1:n ])
+function prepare_mpo(tp, sites, a::SumLit, pre::PreMPO=PreMPO(sites), ref::Int=1)
     for p in a.ps
         if length(p.ls) == 1 && p.ls[1].dissipator
-            create_one_mpo_term(MixDissipator, p, sites, pre)
+            create_one_mpo_term(tp, p, pre, ref)
         else
-            create_one_mpo_term(tp, p, sites, pre)
+            create_one_mpo_term(tp, p, pre, ref)
             if tp == MixEvolve
-                create_one_mpo_term(MixEvolve2, -p, sites, pre)
+                create_one_mpo_term(MixEvolve2, -p, pre, ref)
             end
         end
     end
     return pre
 end
 
+function prepare_mpo(tp, sites, as::Vector{SumLit})
+    pre = PreMPO(sites)
+    for (i, a) in enumerate(as)
+        prepare_mpo(tp, a, pre, i)
+    end
+    return pre
+end
 
-function make_mpo(tp, a::SumLit, sites)
-    p = prepare_mpo(tp, a, sites)
+function make_mpo(p::PreMPO, coefs=[1.0])
+    sites = p.sites
     n = length(sites)
     ts = Vector{ITensor}(undef, n)
     rdim = 1
@@ -83,9 +94,13 @@ function make_mpo(tp, a::SumLit, sites)
             w[llink => 1, rlink => 1, j...] = id[j...]
             w[llink => 1 + ldim, rlink => 1 + rdim, j...] = id[j...]
         end
-        for (l, r, u) in p.terms[i]
+        for (l, r, u, ref) in p.terms[i]
             if r == 1
                 r += rdim
+                c = coefs[ref]
+                if c ≠ 1
+                    u *= c
+                end
             end
             for j in eachindval(idx, idx')
                 w[llink=>l, rlink=>r, j...] += u[j...]
@@ -102,8 +117,11 @@ function make_mpo(tp, a::SumLit, sites)
     return MPO(ts)
 end
 
-function make_approx_W1(tp, a::SumLit, tau::Number, sites)
-    p = prepare_mpo(tp, a, sites)
+function make_mpo(tp, sites, a::SumLit)
+    make_mpo(prepare_mpo(tp, sites, a))
+end
+
+function make_approx_W1(p::PreMPO, tau::Number, coefs=[1.0])
     n = length(sites)
     ts = Vector{ITensor}(undef, n)
     rdim = 1
@@ -119,13 +137,15 @@ function make_approx_W1(tp, a::SumLit, tau::Number, sites)
         rlink = Index(rdim, "Link, l=$i")
         w = ITensor(llink, rlink, idx, idx')
         id = delta(idx, idx')
-        for (l, r, u) in p.terms
+        for (l, r, u, ref) in p.terms
             if r == 1
+                c = tau * coefs[ref]
                 u *= tau
                 if l == 1
                     u += id
                 end
             end
+            c = coefs[ref]
             for j in eachindval(idx, idx')
                 w[llink=>l, rlink=>r, j...] += u[j...]
             end
@@ -141,8 +161,7 @@ function make_approx_W1(tp, a::SumLit, tau::Number, sites)
     return MPO(ts)
 end
 
-function make_approx_W2(tp, a::SumLit, tau::Number, sites)
-    p = prepare_mpo(tp, a, sites)
+function make_approx_W2(p::PreMPO, tau::Number, coefs=[1.0])
     n = length(sites)
     ts = Vector{ITensor}(undef, n)
     rdim = 1
@@ -159,9 +178,10 @@ function make_approx_W2(tp, a::SumLit, tau::Number, sites)
         dl = dim(llink)
         dr = dim(rlink)
         v = fill(ITensor(), (dl, dr))
-        for (l, r, u) in p.terms
+        for (l, r, u, ref) in p.terms
             if r == 1
-                u *= tau
+                c = tau * coefs[ref]
+                u *= c
             end
             v[l, r] += u
         end
