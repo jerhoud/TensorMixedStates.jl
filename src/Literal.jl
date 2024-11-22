@@ -1,5 +1,12 @@
 import Base: +, *, -, /, show, isless
 
+export Lit, ProdLit, SumLit, Lits, @opLit, multipleLit, dissipLit
+
+"""
+    struct Lit
+
+    Represent a quantum operator
+"""
 struct Lit
     name::String
     opname::String
@@ -18,6 +25,17 @@ end
 isless(a::Lit, b::Lit) =
     isless((a.name, a.index, a.param), (b.name, b.index, b.param))
 
+"""
+    struct ProdLit
+    ProdLit()
+    ProdLit(::Number, ::Vector{Lit})
+
+Represent a product of quantum operators with a scalar factor
+
+# Fields
+- `coef::Number`: scalar factor
+- `ls::Vector{Lit}`: quantum operator factors
+"""
 struct ProdLit
     coef::Number
     ls::Vector{Lit}
@@ -52,6 +70,16 @@ isless(a::ProdLit, b::ProdLit) =
 (a::ProdLit / b::Number) = (1 / b) * a
 -(a::ProdLit) = -1 * a
 
+"""
+    struct SumLit
+    SumLit()
+    SumLit(::Vector{ProdLit})
+
+Represent a sum of products of quantum oprators
+
+# Fields
+- `ps::Vector{ProdLit}`: terms of the sum
+"""
 struct SumLit
     ps::Vector{ProdLit}
 end
@@ -103,10 +131,17 @@ end
 
 Lits = Union{ProdLit, SumLit}
 
-macro opLit(fermionic, dissipator, name_exp...)
-    ns = eval(names_exp)
+"""
+    @opLit(names, fermionic::Bool=false, dissipator::Bool=false)
+
+Define quantum operators with the given names (names should be iterable)
+
+These operators are callable on `Int...` or on `Index...` to produce Lit or ITensor
+"""
+macro opLit(names, fermionic::Bool=false, dissipator::Bool=false)
+    ns = eval(names)
     e = Expr(:block)
-    foreach(ns) do
+    for n in ns
         if n isa String
             name = opname = n
         else
@@ -115,120 +150,34 @@ macro opLit(fermionic, dissipator, name_exp...)
         end
         sname = Symbol(name)
         push!(e.args,
-            quote
-                $(esc(sname))() = $name
-                $(esc(sname))(index::Int...; kwargs...) = ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
-                $(esc(sname))(index::Index...; kwargs...) = op($opname, index...; kwargs...)
-                export $(esc(sname))
-            end)
+        quote
+            $(esc(sname))() = $name
+            $(esc(sname))(index::Int...; kwargs...) =
+                ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
+            $(esc(sname))(index::Index...; kwargs...) =
+                op($opname, index...; kwargs...)
+            export $(esc(sname))
+        end)
     end
     return e
 end
 
-function Lit_to_ops(::Type{Pure}, a::ProdLit, sites)
-    if a.coef == 0
-        return []
-    end
-    r = [ op(sites, l.opname, l.index...; l.param...) for l in a.ls ]
-    r[1] *= a.coef
-    return r    
-end
-    
-function Lit_to_ops(::Type{Mixed}, a::ProdLit, sites)
-    if a.coef == 0
-        return []
-    end
-    r = map(a.ls) do l
-        idx = map(i->sites[i], l.index) 
-        jdx = pure_index.(idx)
-        o = make_operator(MixGate, op(l.opname, jdx...; l.param), idx...)
-    end
-    r[1] *= a.coef
-    return r
-end
+"""
+    multipleLit(::ProdLit)
+    multipleLit(::SumLit)
 
-simpleLit(a::Lit) = length(a.index) == 1
+Return true if any contained Lit has multiple indices
+"""
+multipleLit(a::Lit) = length(a.index) ≠ 1
+multipleLit(a::ProdLit) = any(multipleLit, a.ls)
+multipleLit(a::SumLit) = any(multipleLit, a.ps)
 
-simpleLit(a::ProdLit) = all(simpleLit, a.ls)
+"""
+    dissipLit(a::ProdLit)
+    dissipLit(a::SumLit)
 
-simpleLit(a::SumLit) = all(simpleLit, a.ps)
-
+Return true if any contained Lit is a dissipator
+"""
 dissipLit(a::Lit) = a.dissipator
-
 dissipLit(a::ProdLit) = any(dissipLit, a.ls)
-
 dissipLit(a::SumLit) = any(dissipLit, a.ps)
-
-function signature(p)
-    n = length(p)
-    t = fill(false, n)
-    r = 1
-    for i in 1:n
-        if t[i] continue end
-        j = p[i]
-        while j ≠ i
-            r = -r
-            t[j] = true
-            j = p[j]
-        end
-    end
-    return r
-end
-
-function reorder(a::ProdLit)
-    fs = filter(t->t.fermionic, a.ls)
-    p = sortperm(fs; by=l->l.index)
-    s = signature(p)
-    ProdLit(s * a.coef, sort(a.ls; by=l->l.index))
-end
-
-function reorder(a::SumLit)
-    ps = sort(map(reorder, a.ps))
-    pps = ProdLit[]
-    c = 0
-    l = Lit[]
-    for p in ps
-        if p.ls == l
-            c += p.coef
-        else
-            if c ≠ 0
-                push!(pps, ProdLit(c, l))
-            end
-            c = p.coef
-            l = p.ls
-        end
-    end
-    if c ≠ 0
-        push!(pps, ProdLit(c, l))
-    end
-    return SumLit(pps)
-end
-
-litF(idx) = Lit("F", "F", (idx,), (;), false, false)
-
-function insertFfactors(a::ProdLit)
-    nls = Lit[]
-    fermion_idx = 0
-    for l in reverse(a.ls)
-        idx = first(l.index)
-        if fermion_idx ≠ 0
-            append!(nls, (litF(i) for i in reverse(idx + 1:fermion_idx - 1)))
-            if l.fermionic
-                push!(nls, litF(idx))
-                fermion_idx = 0
-            else
-                fermion_idx = idx
-            end
-        elseif l.fermionic
-            fermion_idx = idx
-        end
-        push!(nls, l)
-    end
-    if fermion_idx ≠ 0
-        append!(nls, (litF(i) for i in reverse(1:fermion_idx - 1)))
-    end
-    return ProdLit(a.coef, reverse(nls))
-end
-
-insertFfactors(a::SumLit) =
-    SumLit(map(insertFfactors, a.ps))

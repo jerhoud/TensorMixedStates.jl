@@ -1,298 +1,66 @@
-function Pure2Mixed(st::MPS; maxdim, cutoff)
-    s = dense(st) # to remove QNs
-    n = length(s)
-    v = Vector{ITensor}(undef, n)
-    leftlink = Index(0)
-    r = ITensor()
-    for (i, t) in enumerate(s)
-        idx = siteind(s, i)
-        midx = mixed_index(idx)
-        mt = t * t' * combinerto(idx', idx, midx)
-        if (i > 1)
-            leftidx = (midx, leftlink)
-            mt *= r
-        else
-            leftidx = (siteidx,)
-        end
-        if (i < n)
-            ut, st, vt = svd(mt, leftidx...; lefttags="Link,l=$i", maxdim, cutoff)
-            leftlink = commonind(ut, st)
-            mt = ut
-            r = st * vt
-        end
-        v[i] = mt
-    end
-    return MPS(v)
+
+struct MixObservable end
+struct MixEvolve end
+struct MixEvolve2 end
+struct MixGate end
+struct MixDissipator end
+
+function make_operator(::Type{MixEvolve}, tj::ITensor, i::Index)
+    j = noprime(ind(tj, 1))
+    k = sim(j)
+    tk = replaceinds(tj, (j, j'), (k, k'))
+    return *(tj, delta(k, k'), combinerto(k, j, i), combinerto(k', j', i ))
 end
 
-function random_mixed_state(sites, linkdims::Int)
-    n = length(sites)
-    super = vcat(sites, sites)
-    smps = random_mps(ComplexF64, super; linkdims = (linkdims + 1) ÷ 2)
-    smps = Pure2Mixed(smps; maxdim = linkdims, cutoff = 0)
-    t = ITensor(1)
-    for i in 2n:-1:n+1
-        t *= smps[i] * obs(siteind(smps, i))
-    end
-    smps[n] *= t
-    return MPS(smps[1:n])
+function make_operator(::Type{MixEvolve2}, tj::ITensor, i::Index)
+    j = noprime(ind(tj, 1))
+    k = sim(j)
+    tk = replaceinds(tj, (j, j'), (k, k'))
+    return *(tk, delta(j, j'), combinerto(k, j, i), combinerto(k', j', i ))
 end
 
-trace(p::MPS) =
-    scalar(prod(pi * obs(siteind(p, i)) for (i, pi) in enumerate(p)))
-
-trace2(p::MPS) = real(inner(p, p))
-
-struct Preprocess
-    loc::Vector{ITensor}
-    left::Vector{ITensor}
-    right::Vector{ITensor}
+function make_operator(::Type{MixGate}, tj::ITensor, i::Index...)
+    j = filter(t->hasplev(t, 0), inds(tj))
+    k = sim(j)
+    tk = replaceinds(tj, (j..., j'...), (k..., k'...))
+    return *(tj, dag(tk), combinerto.(k, j, i)..., combinerto.(k', j', i')...)
 end
 
-preprocess(::Type{Pure}, ::MPS) = nothing
-
-function preprocess(::Type{Mixed}, st::MPS)
-    n = length(st)
-    vloc = [st[i] * obs(siteind(st, i)) for i in 1:n]
-    v = ITensor(1)
-    vleft = vcat([st[1]], [(v *= vloc[i]; v * st[i+1]) for i in 1:n-1])
-    v = ITensor(1)
-    vright = reverse(vcat([ITensor(1)], [v *= vloc[i] for i in n:-1:2]))
-    return Preprocess(vloc, vleft, vright)
+function make_operator(::Type{MixDissipator}, tj::ITensor, i::Index)
+    j = noprime(ind(tj, 1))
+    k = sim(j)
+    tk = replaceinds(tj, (j, j'), (k, k'))
+    atj = swapprime(dag(tj'), 1=>2)
+    atk = swapprime(dag(tk'), 1=>2)
+    r = tj * dag(tk) -
+        0.5 * *(replaceprime(atj * tj, 2 => 1), delta.(k, k')) -
+        0.5 * *(replaceprime(atk * tk, 2 => 1), delta.(j, j'))
+    return *(r, combinerto(k, j, i), combinerto(k', j', i'))
 end
 
-unroll(x) =
-    if x[1] isa Number
-        x
-    else
-        v = [map(t->t[i], x) for i in 1:length(x[1])]
-        if x[1] isa Matrix
-            return reshape(v, size(x[1]))
-        else
-            return v
-        end
-    end
 
 
-function expect(::Type{Pure}, st::MPS, p::ProdLit, ::Nothing)
-    if p.coef == 0
-        return 0
-    end
-    imin = p.ls[1].index[1]
-    imax = p.ls[end].index[1]
-    if isortho(st)
-        c = orthocenter(st)
-        if c < imin
-            orthogonalize!(st, imin)
-        elseif c > imax
-            orthogonalize!(st, imax)
-        end
-    else
-        orthogonalize!(st, imin)
-    end
-    r = ITensor(1)
-    o = ITensor()
-    j = 0
-    foreach(p.ls) do l
-        i = l.index[1]
-        if j == i
-            idx = noprime(ind(o, 1))
-            o = replaceprime(o' * op(l.opname, idx; l.param...))
-        else
-            if j == 0
-                if i ≠ 1
-                    idx = commonind(st[i-1], st[i])
-                    r = delta(idx, idx')
-                end
-            else
-                r *= st[j]
-                r *= o
-                r *= dag(st[j]')
-                for k in j+1:i-1
-                    r *= st[k]
-                    r *= dag(st[k]')
-                end
-            end
-            j = i
-            o = op(l.opname, siteind(st, i); l.param...)
-        end
-    end
-    r *= st[j]
-    if j ≠ length(st)
-        idx = commonind(st[j], st[j+1])
-        r *= delta(idx, idx')
-    end
-    r *= o
-    r *= dag(st[j])
-    return p.coef * scalar(r)
-end
 
-function expect(::Type{Mixed}, st::MPS, p::ProdLit, prep::Preprocess)
-    r = ITensor(1)
-    o = ITensor()
-    j = 0
-    foreach(p.ls) do l
-        i = l.index[1]
-        if j == i
-            idx = noprime(ind(o, 1))
-            o = replaceprime(o' * op(l.opname, idx; l.param...))
-        else
-            if j == 0
-                r = prep.left[i]
-            else
-                r *= make_operator(MixObservable, o, siteind(st, j))
-                for k in j+1:i-1
-                    r *= prep.loc[k]
-                end
-                r *= st[i]
-            end
-            j = i
-            idx = pure_index(siteind(st, i))
-            o = op(l.opname, idx; l.param...)
-        end
+function Lit_to_ops(::Type{Pure}, a::ProdLit, sites)
+    if a.coef == 0
+        return []
     end
-    if j ≠ 0
-        r *= make_operator(MixObservable, o, siteind(st, j))
-        r *= prep.right[j]
-    end
-    return p.coef * scalar(r)
-end
-
-expect(tp, s, op::SumLit, prep) =
-    sum(op.ps; init=0) do p
-        expect(tp, s, p, prep)
-    end
-
-expect(tp, s, op, prep) =
-    map(op) do o
-        expect(tp, s, o, prep)
-    end
-
-expect1_one(::Type{Pure}, o::Function, i::Index, t::ITensor) =
-    scalar(o(i) * t)
-    
-expect1_one(::Type{Mixed}, o::Function, i::Index, t::ITensor) =
-    scalar(make_operator(MixObservable, o(pure_index(i)), i) * t)
-    
-expect1_one(tp, op, i::Index, t::ITensor) =
-    map(op) do o
-        expect1_one(tp, o, i, t)
-    end
-
-function expect1(::Type{Pure}, st::MPS, op, ::Nothing)
-    n = length(st)
-    r = Vector(undef, n)
-    for i in 1:n
-        orthogonalize!(st, i)
-        t = st[i]
-        if i > 1
-            idx = commonind(st[i-1], st[i])
-            t *= delta(idx, idx')
-        end
-        if i < n
-            idx = commonind(st[i], st[i+1])
-            t *= delta(idx, idx')
-        end
-        t *= dag(st[i]')
-        r[i] = expect1_one(Pure, op, siteind(st, i), t)
-    end
-    return unroll(r)
+    r = [ op(sites, l.opname, l.index...; l.param...) for l in a.ls ]
+    r[1] *= a.coef
+    return r    
 end
     
-function expect1(::Type{Mixed}, st::MPS, op, prep::Preprocess)
-    n = length(st)
-    r = [expect1_one(Mixed, op, siteind(st, i), prep.left[i] * prep.right[i]) for i in 1:n]
-    return unroll(r)
-end
-
-function expect2_one(::Type{Pure}, ops::Tuple{Function, Function}, i1::Index, i2::Index, t::ITensor, rev::Bool)
-    if rev
-        op2, op1 = ops
-    else
-        op1, op2 = ops
+function Lit_to_ops(::Type{Mixed}, a::ProdLit, sites)
+    if a.coef == 0
+        return []
     end
-    if i1 == i2
-        o = replaceprime(op1(i1') * op2(i1), 2=>1)
-        return scalar(o * t)
-    else
-        o1 = op1(idx1)
-        o2 = op2(idx2)
-        return scalar(o1 * t * o2)
+    r = map(a.ls) do l
+        idx = map(i->sites[i], l.index) 
+        jdx = pure_index.(idx)
+        o = make_operator(MixGate, op(l.opname, jdx...; l.param), idx...)
     end
-end
-
-function expect2_one(::Type{Mixed}, ops::Tuple{Function, Function}, i1::Index, i2::Index, t::ITensor, rev::Bool)
-    if rev
-        op2, op1 = ops
-    else
-        op1, op2 = ops
-    end
-    if i1 == i2
-        idx = pure_index(i1)
-        o = make_operator(MixObservable, replaceprime(op1(idx') * op2(idx), 2=>1), i1) 
-        return scalar(o * t)
-    else
-        o1 = make_operator(MixObservable, op1(pure_index(i1)), i1)
-        o2 = make_operator(MixObservable, op2(pure_index(i2)), i2)
-        return scalar(o1 * t * o2)
-    end
-end
-
-expect2_one(tp, ops, i1::Index, i2::Index, t::ITensor, rev::Bool) =
-    map(ops) do op
-        expect2_one(tp, op, i1, i2, t, rev)
-    end
-
-function expect2(::Type{Pure}, st::MPS, ops, prep::Nothing)
-    n = length(st)
-    sites = siteinds(st)
-    c = Matrix(undef, n, n)
-    for (i, idx) in enumerate(sites)
-        orthogonalize!(st, i)
-        l = st[i]
-        if i > 1
-            lidx = commonind(st[i-1], st[i])
-            l *= delta(lidx, lidx')
-        end
-        l *= dag(st[i]')
-        t = l
-        if i < n
-            ridx = commonind(st[i], st[i+1])
-            t *= delta(ridx, ridx')
-        end
-        c[i, i] = expect2_one(Pure, ops, idx, idx, t, false)
-        for j in i+1:n
-            l *= st[j]
-            t = l
-            if i < n
-                ridx = commonind(st[i], st[i+1])
-                t *= delta(ridx, ridx')
-            end
-            t *= dag(st[j]')
-            jdx = sites[j]
-            c[i, j] = expect2_one(Mixed, ops, idx, jdx, t, false)
-            c[j, i] = expect2_one(Mixed, ops, idx, jdx, t, true)
-            l *= delta(jdx, jdx') * dag(st[j]')
-        end
-    end
-    return unroll(c)
-end
-    
-function expect2(::Type{Mixed}, st::MPS, ops, prep::Preprocess)
-    n = length(st)
-    sites = siteinds(st)
-    r = Matrix(undef, n, n)
-    for (i, idx) in enumerate(sites)
-        l = prep.left[i]
-        r[i, i] = expect2_one(Mixed, ops, idx, idx, l * prep.right[i], false)
-        for j in i+1:n
-            t = l * (st[j] * prep.right[j])
-            r[i, j] = expect2_one(Mixed, ops, idx, sites[j], t, false)
-            r[j, i] = expect2_one(Mixed, ops, idx, sites[j], t, true)
-            l *= prep.loc[j]
-        end
-    end
-    return unroll(r)
+    r[1] *= a.coef
+    return r
 end
 
 function apply_gate(tp, p::MPS, g::ProdLit; kwargs...)
@@ -307,3 +75,77 @@ function entanglement_entropy(s::MPS, pos::Int)
     ee = -sum(p * log(p) for p in sp)
     return (ee, sp)
 end
+
+function signature(p)
+    n = length(p)
+    t = fill(false, n)
+    r = 1
+    for i in 1:n
+        if t[i] continue end
+        j = p[i]
+        while j ≠ i
+            r = -r
+            t[j] = true
+            j = p[j]
+        end
+    end
+    return r
+end
+
+function reorder(a::ProdLit)
+    fs = filter(t->t.fermionic, a.ls)
+    p = sortperm(fs; by=l->l.index)
+    s = signature(p)
+    ProdLit(s * a.coef, sort(a.ls; by=l->l.index))
+end
+
+function reorder(a::SumLit)
+    ps = sort(map(reorder, a.ps))
+    pps = ProdLit[]
+    c = 0
+    l = Lit[]
+    for p in ps
+        if p.ls == l
+            c += p.coef
+        else
+            if c ≠ 0
+                push!(pps, ProdLit(c, l))
+            end
+            c = p.coef
+            l = p.ls
+        end
+    end
+    if c ≠ 0
+        push!(pps, ProdLit(c, l))
+    end
+    return SumLit(pps)
+end
+
+litF(idx) = Lit("F", "F", (idx,), (;), false, false)
+
+function insertFfactors(a::ProdLit)
+    nls = Lit[]
+    fermion_idx = 0
+    for l in reverse(a.ls)
+        idx = first(l.index)
+        if fermion_idx ≠ 0
+            append!(nls, (litF(i) for i in reverse(idx + 1:fermion_idx - 1)))
+            if l.fermionic
+                push!(nls, litF(idx))
+                fermion_idx = 0
+            else
+                fermion_idx = idx
+            end
+        elseif l.fermionic
+            fermion_idx = idx
+        end
+        push!(nls, l)
+    end
+    if fermion_idx ≠ 0
+        append!(nls, (litF(i) for i in reverse(1:fermion_idx - 1)))
+    end
+    return ProdLit(a.coef, reverse(nls))
+end
+
+insertFfactors(a::SumLit) =
+    SumLit(map(insertFfactors, a.ps))
