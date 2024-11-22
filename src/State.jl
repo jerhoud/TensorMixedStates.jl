@@ -1,6 +1,8 @@
 import Base: length
+import ITensors: truncate
+import ITensorMPS: maxlinkdim
 
-export State, mix_state, truncate
+export State, mix_state, truncate, maxlinkdim
 
 """
     struct State
@@ -37,10 +39,14 @@ make_one_state(::TPure, system::System, i::Int, st::String) =
     state(system.pure_sites[i], st)
 
 function make_one_state(::TMixed, system::System, i::Int, st::String)
-    j = system.pure_sites[i]
     k = system.mixed_sites[i]
-    s = state(j, st)
-    return s * dag(s') * combinerto(j', j, k)
+    try
+        return state(k, st)
+    catch   
+        j = system.pure_sites[i]
+        s = state(j, st)
+        return s * dag(s') * combinerto(j', j, k)
+    end
 end
 
 function make_state(type::Union{TPure, TMixed}, system::System, states::Vector{String})
@@ -107,7 +113,7 @@ end
 
 Apply the truncation to the given state, in particular we get maxlinkdim(state)<=maxdim
 """
-function truncate(state::State; maxdim::Int, cutoff::Float64)
+function truncate(state::State; maxdim::Int, cutoff::Number)
     st = truncate(state.state; maxdim, cutoff)
     return State(state.type, state.system, st, state.time)
 end

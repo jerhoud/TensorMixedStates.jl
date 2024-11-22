@@ -26,7 +26,7 @@ site(::TPure, type::String; kwargs...) =
 
 function site(::TMixed, type::String; kwargs...)
     i = siteind(type; kwargs...)
-    return addtags(Index(2dim(i), tags(i)), "Mixed")
+    return addtags(Index(2dim(i), tags(i)), "Mixed" * type)
 end
 
 """

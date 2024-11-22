@@ -1,4 +1,7 @@
+import ITensors: norm
+import ITensorMPS: expect
 export random_pure_state, random_mixed_state, trace, trace2, norm
+export Preprocess, preprocess, expect, expect1, expect2
 
 function mixed_obs(state::State, t::ITensor, i::Int)
     j = state.system.pure_sites[i]
@@ -9,7 +12,7 @@ end
 function mixed_obs(state::State, i::Int)
     j = state.system.pure_sites[i]
     k = state.system.mixed_sites[i]
-    state.state[i] * (dense(delta(j', j)) * combinerto(j', j', k))
+    state.state[i] * (dense(delta(j', j)) * combinerto(j', j, k))
 end
 
 
@@ -29,13 +32,14 @@ function random_mixed_state(system::System, linkdims::Int; start_time::Float64=0
     msites = system.mixed_sites
     super = System(vcat(psites, sim.(psites)), vcat(msites, sim.(msites)))
     super_pure = random_pure_state(super, 1 + linkdims ÷ 2)
-    super_mixed = truncate_state(mix_state(super_pure), maxdim = linkdims, cutoff = 0)
+    super_mixed = truncate(mix_state(super_pure), maxdim = linkdims, cutoff = 0)
+    println("trace = $(trace(mix_state(super_pure)))")
     t = ITensor(1)
     for i in 2n:-1:n+1
-        t *= mixed_obs(super_mixed,i)
+        t *= mixed_obs(super_mixed, i)
     end
-    smps[n] *= t
-    return State(Mixed, system, MPS(smps[1:n]), start_time)
+    super_mixed.state[n] *= t
+    return State(Mixed, system, MPS(super_mixed.state[1:n]), start_time)
 end
 
 function trace(state::State)
@@ -47,22 +51,21 @@ function trace(state::State)
 end
 
 trace2(state::State) =
-    if state.type == pure
+    if state.type == Pure
         return 1.0
     else
-        return real(inner(state.state, state.state))
+        return norm(state.state)^2
     end
 
 norm(state::State) =
     norm(state.state)
 
-    struct Preprocess
-        loc::Vector{ITensor}
-        left::Vector{ITensor}
-        right::Vector{ITensor}
-    end
+struct Preprocess
+    loc::Vector{ITensor}
+    left::Vector{ITensor}
+    right::Vector{ITensor}
+end
 
-    
 
 preprocess(::TPure, ::State) = nothing
     
@@ -116,7 +119,7 @@ function expect(::TPure, state::State, p::ProdLit, ::Nothing)
         i = l.index[1]
         if j == i
             idx = sites[i]
-            o = replaceprime(o' * op(l.opname, idx; l.param...))
+            o = replaceprime(o' * op(l.opname, idx; l.param...), 2=>1)
         else
             if j == 0
                 if i ≠ 1
@@ -133,7 +136,7 @@ function expect(::TPure, state::State, p::ProdLit, ::Nothing)
                 end
             end
             j = i
-            o = op(l.opname, sites(i); l.param...)
+            o = op(l.opname, sites[i]; l.param...)
         end
     end
     r *= st[j]
@@ -142,7 +145,7 @@ function expect(::TPure, state::State, p::ProdLit, ::Nothing)
         r *= delta(idx, idx')
     end
     r *= o
-    r *= dag(st[j])
+    r *= dag(st[j]')
     return p.coef * scalar(r)
 end
 
@@ -156,7 +159,7 @@ function expect(::TMixed, state::State, p::ProdLit, prep::Preprocess)
     foreach(p.ls) do l
         i = l.index[1]
         if j == i
-            o = replaceprime(o' * op(l.opname, psites[i]; l.param...))
+            o = replaceprime(o' * op(l.opname, psites[i]; l.param...), 2=>1)
         else
             if j == 0
                 r = prep.left[i]
@@ -186,15 +189,15 @@ expect(state::State, op::SumLit, prep=preprocess(state)) =
         expect(state, p, prep)
     end
 
-expect(s::State, op, prep=preprocess(state)) =
+expect(state::State, op, prep=preprocess(state)) =
     map(op) do o
-        expect(s, o, prep)
+        expect(state, o, prep)
     end
 
 
 
 function expect1_one(state::State, o, i::Int, t::ITensor)
-    idx = state.system.pure_sites(i)
+    idx = state.system.pure_sites[i]
     op = o(idx)
     if state.type == Pure
         return scalar(op * t)
@@ -253,7 +256,7 @@ function expect2_one(state::State, ops::Tuple{Any, Any}, i1::Int, i2::Int, t::IT
         if state.type == Pure
             return scalar(o * t)
         else
-            return scalar(mixed_obs(state, o, 1) * t)
+            return scalar(mixed_obs(state, o, i1) * t)
         end
     else
         if state.type == Pure
@@ -321,4 +324,6 @@ function expect2(::TMixed, state::State, ops, prep::Preprocess)
     end
     return unroll(r)
 end
-    
+
+expect2(state::State, ops, prep=preprocess(state)) =
+    expect2(state.type, state, ops, prep)

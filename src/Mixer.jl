@@ -1,20 +1,21 @@
+import ITensors: state
 export @add_operators, @add_fermionic_operators, @add_dissipators
 
 macro add_operators(names)
     quote
-        @opLit(false, false, $names)
+        @opLit($names, false, false)
     end
 end
 
 macro add_fermionic_operators(names)
     quote
-        @opLit(true, false, $names)
+        @opLit($names, true, false)
     end
 end
 
 macro add_dissipators(names)
     quote
-        @opLit(false, true, $names)
+        @opLit($names, false, true)
     end
 end
 
@@ -51,3 +52,5 @@ end
     "DPhase" => "Z",
     ]
 )
+
+state(::StateName"Half", ::SiteType"MixedQubit") = [0.5 0 0 0.5]
