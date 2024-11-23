@@ -67,7 +67,7 @@ end
 
 function State(type::Union{TPure, TMixed}, system::System, states::Vector{String}; start_time::Float64=0.0)
     if length(system) ≠ length(states)
-        error("Incompatible sizes between system($(length(system))) and state($(length(states)))")
+        error("incompatible sizes between system($(length(system))) and state($(length(states)))")
     end
     return State(type, system, make_state(type, system, states), start_time)
 end
@@ -92,7 +92,7 @@ function mix_state(state::State)
     for (i, t) in enumerate(st)
         idx = system.pure_sites[i]
         midx = system.mixed_sites[i]
-        mt = t * t' * combinerto(idx', idx, midx)
+        mt = t * dag(t') * combinerto(idx', idx, midx)
         mt *= comb
         if (i < n)
             rlink = commonind(t, st[i+1])
