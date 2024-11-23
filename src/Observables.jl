@@ -1,6 +1,6 @@
 import ITensors: norm
 import ITensorMPS: expect
-export random_pure_state, random_mixed_state, trace, trace2, norm
+export random_state, trace, trace2, norm
 export Preprocess, preprocess, expect, expect1, expect2
 
 function mixed_obs(state::State, t::ITensor, i::Int)
@@ -16,24 +16,26 @@ function mixed_obs(state::State, i::Int)
 end
 
 
-function random_pure_state(system::System, linkdims::Int; start_time::Float64=0.0)
+function random_state(::TPure, system::System, linkdims::Int; start_time::Float64=0.0)
     st = random_mps(ComplexF64, system.pure_sites; linkdims)
     return State(Pure, system, st, start_time)
 end
 
-function random_pure_state(state::State, linkdims::Int; start_time::Float64=state.time)
+function random_state(::TPure, state::State, linkdims::Int; start_time::Float64=state.time)
+    if state.type ≠ Pure
+        error("cannot produce a random state from a mixed state")
+    end
     st = random_mps(ComplexF64, state.system.pure_sites, state.state; linkdims)
     return State(Pure, system, st, start_time)
 end
 
-function random_mixed_state(system::System, linkdims::Int; start_time::Float64=0.0)
+function random_state(::TMixed, system::System, linkdims::Int; start_time::Float64=0.0)
     n = length(system)
     psites = system.pure_sites
     msites = system.mixed_sites
     super = System(vcat(psites, sim.(psites)), vcat(msites, sim.(msites)))
-    super_pure = random_pure_state(super, 1 + linkdims ÷ 2)
+    super_pure = random_state(Pure, super, 1 + linkdims ÷ 2)
     super_mixed = truncate(mix_state(super_pure), maxdim = linkdims, cutoff = 0)
-    println("trace = $(trace(mix_state(super_pure)))")
     t = ITensor(1)
     for i in 2n:-1:n+1
         t *= mixed_obs(super_mixed, i)
