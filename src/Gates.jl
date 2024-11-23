@@ -6,6 +6,9 @@ function Lit_to_ops(state::State, a::ProdLit)
     end
     s = state.system
     r = map(a.ls) do l
+        if l.dissipator
+            error("Cannot apply a dissipator as a gate")
+        end
         idx = map(i->s.pure_sites[i], l.index)
         oi = op(l.opname, idx...; l.param)
         if state.type == Pure
@@ -32,6 +35,9 @@ It is much more efficient to apply all the gates in a single call to apply_gates
 
 """
 function apply_gates(state::State, a::ProdLit; kwargs...)
+    if !multipleLit(a)
+        a = insertFfactors(a)
+    end
     ops = Lit_to_ops(state, a)
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
     return State(state.type, state.system, st, state.time)

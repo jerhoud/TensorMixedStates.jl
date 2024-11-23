@@ -76,3 +76,11 @@ System(size::Int, sitename::String) =
 Return number of sites in the system
 """
 length(system::System) = length(system.pure_sites)
+
+"""
+    sites(Pure|Mixed, ::System)
+
+Return the corresponding site index vector from the system
+"""
+sites(::TPure, system::System) = system.pure_sites
+sites(::TMixed, system::System) = system.mixed_sites

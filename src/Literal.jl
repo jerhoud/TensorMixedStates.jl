@@ -207,6 +207,7 @@ end
 Put the operators in good order and simplifies for use in mpo creation.
 Take in account fermionic nature of the ops.
 Work only if `multipleLit(ops)==false``.
+Not to be used directly.
 
 # Examples
 ```julia-repl
@@ -278,7 +279,8 @@ insertFfactors(a::ProdLit) =
 """
     insertFfactors(ops)
 
-Reorder ops and Insert the needed F factors according to fermion string rule.
+Reorder ops and insert the needed F factors according to fermion string rule.
+Not to be used directly.
 
 # Examples
 ```julia-repl
