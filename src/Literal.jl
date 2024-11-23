@@ -1,6 +1,7 @@
 import Base: +, *, -, /, show, isless
 
-export Lit, ProdLit, SumLit, Lits, @opLit, multipleLit, dissipLit
+export Lit, ProdLit, SumLit, Lits, @opLit
+export multipleLit, dissipLit, reorder, insertFfactors
 
 """
     struct Lit
@@ -181,3 +182,112 @@ Return true if any contained Lit is a dissipator
 dissipLit(a::Lit) = a.dissipator
 dissipLit(a::ProdLit) = any(dissipLit, a.ls)
 dissipLit(a::SumLit) = any(dissipLit, a.ps)
+
+
+
+function signature(p)
+    n = length(p)
+    t = fill(false, n)
+    r = 1
+    for i in 1:n
+        if t[i] continue end
+        j = p[i]
+        while j ≠ i
+            r = -r
+            t[j] = true
+            j = p[j]
+        end
+    end
+    return r
+end
+
+"""
+    reorder(ops)
+
+Put the operators in good order and simplifies for use in mpo creation.
+Take in account fermionic nature of the ops.
+Work only if `multipleLit(ops)==false``.
+
+# Examples
+```julia-repl
+julia> reorder(X(3)Y(1) + X(1) + Y(5)Z(2)X(1) - X(1))
+X(1)Z(2)Y(5)+Y(1)X(3)
+
+julia> reorder(C(3)C(1)+Cdag(4)Cdag(1)+2C(1)C(3))
+C(1)C(3)+(-1)Cdag(1)Cdag(4)
+```
+"""
+function reorder(a::ProdLit)
+    fs = filter(t->t.fermionic, a.ls)
+    p = sortperm(fs; by=l->l.index)
+    s = signature(p)
+    ProdLit(s * a.coef, sort(a.ls; by=l->l.index))
+end
+
+function reorder(a::SumLit)
+    ps = sort(map(reorder, a.ps))
+    pps = ProdLit[]
+    c = 0
+    l = Lit[]
+    for p in ps
+        if p.ls == l
+            c += p.coef
+        else
+            if c ≠ 0
+                push!(pps, ProdLit(c, l))
+            end
+            c = p.coef
+            l = p.ls
+        end
+    end
+    if c ≠ 0
+        push!(pps, ProdLit(c, l))
+    end
+    return SumLit(pps)
+end
+
+litF(idx) = Lit("F", "F", (idx,), (;), false, false)
+
+function insertFfactorsCore(a::ProdLit)
+    nls = Lit[]
+    fermion_idx = 0
+    for l in reverse(a.ls)
+        idx = first(l.index)
+        if fermion_idx ≠ 0
+            append!(nls, (litF(i) for i in reverse(idx + 1:fermion_idx - 1)))
+            if l.fermionic
+                push!(nls, litF(idx))
+                fermion_idx = 0
+            else
+                fermion_idx = idx
+            end
+        elseif l.fermionic
+            fermion_idx = idx
+        end
+        push!(nls, l)
+    end
+    if fermion_idx ≠ 0
+        append!(nls, (litF(i) for i in reverse(1:fermion_idx - 1)))
+    end
+    return ProdLit(a.coef, reverse(nls))
+end
+
+insertFfactors(a::ProdLit) =
+    insertFfactorsCore(reorder(a))
+
+"""
+    insertFfactors(ops)
+
+Reorder ops and Insert the needed F factors according to fermion string rule.
+
+# Examples
+```julia-repl
+julia> insertFfactors(C(3)C(1))
+(-1)C(1)F(1)F(2)C(3)
+
+julia> insertFfactors(C(1)C(3)C(5)C(7))
+C(1)F(1)F(2)C(3)C(5)F(5)F(6)C(7)
+```
+"""
+insertFfactors(a::SumLit) =
+    SumLit(map(insertFfactorsCore, (reorder(a)).ps))

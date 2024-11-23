@@ -1,11 +1,23 @@
 import ITensors: state
 export @add_operators, @add_fermionic_operators, @add_dissipators
 
+"""
+    @add_operators(names::Vector)
+    @add_fermionic_operators(names::Vector)
+
+Defines the given names as operator functions
+
+# Examples
+    @add_operators(["Foo"])    #defines function Foo
+    Foo()          # return "Foo"
+    Foo(1, 3, 7)   # represent operator Foo applied on sites 1, 3, 7
+    Foo(i1, i2)    # return ITensor of operator Foo applied on ITensor indices i1, i2
+"""
 macro add_operators(names)
     quote
         @opLit($names, false, false)
     end
-end
+end,
 
 macro add_fermionic_operators(names)
     quote
@@ -13,6 +25,17 @@ macro add_fermionic_operators(names)
     end
 end
 
+"""
+    @add_dissipators(names::Vector{Pairs})
+
+Defines the given names as dissipator functions
+
+# Examples
+    @add_operators(["DFoo" => "Foo"])    #defines dissipator DFoo based on ITensor operator "Foo"
+    DFoo()       # return "DFoo"
+    DFoo(1)      # represent operator Foo applied on sites 1
+    DFoo(idx)    # return ITensor of operator DFoo applied on ITensor indices idx
+"""
 macro add_dissipators(names)
     quote
         @opLit($names, false, true)

@@ -30,9 +30,12 @@ function site(::TMixed, type::String; kwargs...)
 end
 
 """
-    site(::String)
+    site(::String; qns_info...)
 
-    Represent a quantum site of the given type
+Represent a quantum site of the given type
+
+# Examples
+    site("Qubit")
 """
 site(type::String; kwargs...) =
     tp -> site(tp, type; kwargs...)
@@ -67,4 +70,9 @@ System(sitenames::Vector{String}) =
 System(size::Int, sitename::String) =
     System(fill(sitename, size))
 
+"""
+    length(::System)
+
+Return number of sites in the system
+"""
 length(system::System) = length(system.pure_sites)

@@ -1,7 +1,9 @@
 import ITensors: norm
 import ITensorMPS: expect
-export random_state, trace, trace2, norm
-export Preprocess, preprocess, expect, expect1, expect2
+
+export trace, trace2, norm
+export PreObs, PreObs, expect, expect1, expect2
+export entanglement_entropy
 
 function mixed_obs(state::State, t::ITensor, i::Int)
     j = state.system.pure_sites[i]
@@ -16,34 +18,12 @@ function mixed_obs(state::State, i::Int)
 end
 
 
-function random_state(::TPure, system::System, linkdims::Int; start_time::Float64=0.0)
-    st = random_mps(ComplexF64, system.pure_sites; linkdims)
-    return State(Pure, system, st, start_time)
-end
+"""
+    trace(::State)
 
-function random_state(::TPure, state::State, linkdims::Int; start_time::Float64=state.time)
-    if state.type ≠ Pure
-        error("cannot produce a random state from a mixed state")
-    end
-    st = random_mps(ComplexF64, state.system.pure_sites, state.state; linkdims)
-    return State(Pure, system, st, start_time)
-end
-
-function random_state(::TMixed, system::System, linkdims::Int; start_time::Float64=0.0)
-    n = length(system)
-    psites = system.pure_sites
-    msites = system.mixed_sites
-    super = System(vcat(psites, sim.(psites)), vcat(msites, sim.(msites)))
-    super_pure = random_state(Pure, super, 1 + linkdims ÷ 2)
-    super_mixed = truncate(mix_state(super_pure), maxdim = linkdims, cutoff = 0)
-    t = ITensor(1)
-    for i in 2n:-1:n+1
-        t *= mixed_obs(super_mixed, i)
-    end
-    super_mixed.state[n] *= t
-    return State(Mixed, system, MPS(super_mixed.state[1:n]), start_time)
-end
-
+Return the trace of the system, mostly usefull for mixed representations.
+This should be one.
+"""
 function trace(state::State)
     if state.type == Pure
         return 1.0
@@ -52,6 +32,11 @@ function trace(state::State)
     end
 end
 
+"""
+    trace2(::State)
+
+Return the trace of the square density matrix, mostly usefull for mixed representations.
+"""
 trace2(state::State) =
     if state.type == Pure
         return 1.0
@@ -59,19 +44,32 @@ trace2(state::State) =
         return norm(state.state)^2
     end
 
+"""
+    norm(::State)
+
+Return the norm of the state, mostly usefull for pure representation.
+This should be one.
+"""
 norm(state::State) =
     norm(state.state)
 
-struct Preprocess
+
+
+"""
+    struct PreObs
+    PreObs(::State)
+
+A data structure to hold preprocessing data for observable expectation computations.
+"""
+struct PreObs
     loc::Vector{ITensor}
     left::Vector{ITensor}
     right::Vector{ITensor}
 end
 
-
-preprocess(::TPure, ::State) = nothing
+PreObs(::TPure, ::State) = nothing
     
-function preprocess(::TMixed, state::State)
+function PreObs(::TMixed, state::State)
     n = length(state)
     st = state.state
     vloc = [ mixed_obs(state, i) for i in 1:n]
@@ -79,10 +77,14 @@ function preprocess(::TMixed, state::State)
     vleft = vcat([st[1]], [(v *= vloc[i]; v * st[i+1]) for i in 1:n-1])
     v = ITensor(1)
     vright = reverse(vcat([ITensor(1)], [v *= vloc[i] for i in n:-1:2]))
-    return Preprocess(vloc, vleft, vright)
+    return PreObs(vloc, vleft, vright)
 end
 
-preprocess(state::State) = preprocess(state.type, state)
+PreObs(state::State) = PreObs(state.type, state)
+
+
+
+
 
 unroll(x) =
     if x[1] isa Number
@@ -151,7 +153,7 @@ function expect(::TPure, state::State, p::ProdLit, ::Nothing)
     return p.coef * scalar(r)
 end
 
-function expect(::TMixed, state::State, p::ProdLit, prep::Preprocess)
+function expect(::TMixed, state::State, p::ProdLit, pre::PreObs)
     st = state.state
     system = state.system
     psites = system.pure_sites
@@ -164,11 +166,11 @@ function expect(::TMixed, state::State, p::ProdLit, prep::Preprocess)
             o = replaceprime(o' * op(l.opname, psites[i]; l.param...), 2=>1)
         else
             if j == 0
-                r = prep.left[i]
+                r = pre.left[i]
             else
                 r *= mixed_obs(state, o, j)
                 for k in j+1:i-1
-                    r *= prep.loc[k]
+                    r *= pre.loc[k]
                 end
                 r *= st[i]
             end
@@ -178,23 +180,38 @@ function expect(::TMixed, state::State, p::ProdLit, prep::Preprocess)
     end
     if j ≠ 0
         r *= mixed_obs(state, o, j)
-        r *= prep.right[j]
+        r *= pre.right[j]
     end
     return p.coef * scalar(r)
 end
 
-expect(state::State, p::ProdLit, prep=preprocess(state)) =
-    expect(state.type, state, p, prep)
+"""
+    expect(::State, obs[, ::PreObs])
+
+Compute expectation values of `obs` on the given state.
+
+# Examples
+    expect(state, X(1)*Y(2) + Y(1)*Z(3))
+    expect(state, [X(1)*Y(2), X(3), Z(1)*X(2)])
+
+    pre = PreObs(state)
+    expect(state, X(1)*Z(3), pre)
+    expect...
+"""
+expect(state::State, p::ProdLit, pre=PreObs(state)) =
+    expect(state.type, state, p, pre)
     
-expect(state::State, op::SumLit, prep=preprocess(state)) =
+expect(state::State, op::SumLit, pre=PreObs(state)) =
     sum(op.ps; init=0) do p
-        expect(state, p, prep)
+        expect(state, p, pre)
     end
 
-expect(state::State, op, prep=preprocess(state)) =
+expect(state::State, op, pre=PreObs(state)) =
     map(op) do o
-        expect(state, o, prep)
+        expect(state, o, pre)
     end
+
+
 
 
 
@@ -234,14 +251,29 @@ function expect1(::TPure, state::State, op, ::Nothing)
     return unroll(r)
 end
     
-function expect1(::TMixed, state::State, op, prep::Preprocess)
+function expect1(::TMixed, state::State, op, pre::PreObs)
     n = length(state)
-    r = [ expect1_one(state, op, i, prep.left[i] * prep.right[i]) for i in 1:n ]
+    r = [ expect1_one(state, op, i, pre.left[i] * pre.right[i]) for i in 1:n ]
     return unroll(r)
 end
 
-expect1(state::State, op, prep=preprocess(state)) =
-    expect1(state.type, state, op, prep)
+"""
+    expect1(::State, op[, ::PreObs])
+
+Compute the expectation values of the given operators on all sites.
+
+# Examples
+    expect1(state, X)
+    expect1(state, [X, Y, Z])
+
+    pre = PreObs(state)
+    expect1(state, X, pre)
+    ...
+"""
+expect1(state::State, op, pre=PreObs(state)) =
+    expect1(state.type, state, op, pre)
+
+
 
 
 
@@ -274,7 +306,7 @@ expect2_one(state::State, ops, i1::Int, i2::Int, t::ITensor, rev::Bool) =
         expect2_one(tp, op, i1, i2, t, rev)
     end
 
-function expect2(::TPure, state::State, ops, prep::Nothing)
+function expect2(::TPure, state::State, ops, ::Nothing)
     n = length(state)
     st = state.state
     sites = state.system.pure_sites
@@ -310,22 +342,52 @@ function expect2(::TPure, state::State, ops, prep::Nothing)
     return unroll(c)
 end
     
-function expect2(::TMixed, state::State, ops, prep::Preprocess)
+function expect2(::TMixed, state::State, ops, pre::PreObs)
     n = length(state)
     st = state.state
     r = Matrix(undef, n, n)
     for i in 1:n
-        l = prep.left[i]
-        r[i, i] = expect2_one(state, ops, i, i, l * prep.right[i], false)
+        l = pre.left[i]
+        r[i, i] = expect2_one(state, ops, i, i, l * pre.right[i], false)
         for j in i+1:n
-            t = l * (st[j] * prep.right[j])
+            t = l * (st[j] * pre.right[j])
             r[i, j] = expect2_one(state, ops, i, j, t, false)
             r[j, i] = expect2_one(state, ops, i, j, t, true)
-            l *= prep.loc[j]
+            l *= pre.loc[j]
         end
     end
     return unroll(r)
 end
 
-expect2(state::State, ops, prep=preprocess(state)) =
-    expect2(state.type, state, ops, prep)
+"""
+    expect2(::State, op_pairs[, ::PreObs])
+
+Compute the expectation values of the given pairs of operators on all sites.
+
+# Examples
+    expect2(state, (X, X))
+    expect2(state, [(X, Y), (X, Z), (Y, Z)])
+
+    pre = PreObs(state)
+    expect2(state, (X, Y), pre)
+    ...
+"""
+expect2(state::State, ops, pre=PreObs(state)) =
+    expect2(state.type, state, ops, pre)
+
+
+
+"""
+    entanglement_entropy(::State, ::Int)
+
+Return the entanglement entropy of the given state at the given site.
+Also return the associated spectrum.
+"""
+function entanglement_entropy(state::State, pos::Int)
+    s = orthogonalize(state.state, pos)
+    _, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
+    sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]
+    ee = -sum(p * log(p) for p in sp)
+    return (ee, sp)
+end
+     

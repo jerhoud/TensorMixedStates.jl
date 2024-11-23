@@ -6,6 +6,7 @@ export State, mix_state, truncate, maxlinkdim
 
 """
     struct State
+    State(Pure|Mixed, system, states)
 
 Represent the complete state of the simulated quantum system
 
@@ -18,6 +19,7 @@ Represent the complete state of the simulated quantum system
 # Examples
     State(Pure, system, "Up")
     State(Mixed, system, ["Up", "Dn", "Up"])
+
 """
 @kwdef struct State
     type::Union{TPure, TMixed}
@@ -26,7 +28,18 @@ Represent the complete state of the simulated quantum system
     time::Float64
 end
 
+"""
+    length(::State)
+
+Return the number of sites in the state
+"""
 length(state::State) = length(state.system)
+
+"""
+    maxlinkdim(::State)
+
+Return the maximum link dimension in the state
+"""
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
 function combinerto(i1::Index, i2::Index, i3::Index)
@@ -109,7 +122,7 @@ end
 
 
 """
-    truncate(::State; maxdim::Int, cutoff::Float64)::State
+    truncate(::State; maxdim::Int, cutoff::Number)::State
 
 Apply the truncation to the given state, in particular we get maxlinkdim(state)<=maxdim
 """
