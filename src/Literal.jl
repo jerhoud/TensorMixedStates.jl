@@ -293,3 +293,5 @@ C(1)F(1)F(2)C(3)C(5)F(5)F(6)C(7)
 """
 insertFfactors(a::SumLit) =
     SumLit(map(insertFfactorsCore, (reorder(a)).ps))
+
+insertFfactors(a) = map(insertFfactors, a)

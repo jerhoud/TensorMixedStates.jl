@@ -40,9 +40,9 @@ struct PreMPO
     system::System
     linkdims::Vector{Int}
     terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
-    function PreMPO(type::Union{TPure, TMixed}, system::System)
-        n = length(system)
-        return new(type, system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
+    function PreMPO(state::State)
+        n = length(state)
+        return new(state.type, state.system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
     end
 end
 
@@ -89,10 +89,10 @@ function PreMPO(tp, pre::PreMPO, p::ProdLit, ref::Int)
     return pre
 end
 
-PreMPO(::TPure, system::System, p::ProdLit, pre::PreMPO=PreMPO(Mixed, system), ref::Int=1) =
+PreMPO(::TPure, p::ProdLit, pre::PreMPO, ref::Int=1) =
     PreMPO(Pure, pre, p, ref)
 
-function PreMPO(::TMixed, system::System, p::ProdLit, pre::PreMPO=PreMPO(Mixed, system), ref::Int=1)
+function PreMPO(::TMixed, p::ProdLit, pre::PreMPO, ref::Int=1)
     if length(p.ls) == 1 && p.ls[1].dissipator
         PreMPO(MixDissipator, pre, p, ref)
     else
@@ -102,20 +102,23 @@ function PreMPO(::TMixed, system::System, p::ProdLit, pre::PreMPO=PreMPO(Mixed, 
     return pre
 end
 
-function PreMPO(type::Union{TPure, TMixed}, system::System, a::SumLit, pre=PreMPO(Pure, system), ref::Int=1)
+function PreMPO(type::Union{TPure, TMixed}, a::SumLit, pre::PreMPO, ref::Int=1)
     for p in a.ps
-        PreMPO(type, system, p, pre, ref)
+        PreMPO(type, p, pre, ref)
     end
     return pre
 end
 
-function PreMPO(type::Union{TPure, TMixed}, system::System, as::Vector{SumLit})
-    pre = PreMPO(type, system)
+function PreMPO(type::Union{TPure, TMixed}, as, pre::PreMPO)
     for (i, a) in enumerate(as)
-        PreMPO(type, system, a, pre, i)
+        PreMPO(type, a, pre, i)
     end
     return pre
 end
+
+PreMPO(state::State, a) =
+    PreMPO(state.type, insertFfactors(a), PreMPO(state))
+
 
 function make_mpo(pre::PreMPO, coefs=(1.0,))
     sys = pre.system

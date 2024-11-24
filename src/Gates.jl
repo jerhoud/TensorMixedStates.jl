@@ -35,9 +35,6 @@ It is much more efficient to apply all the gates in a single call to apply_gates
 
 """
 function apply_gates(state::State, a::ProdLit; kwargs...)
-    if !multipleLit(a)
-        a = insertFfactors(a)
-    end
     ops = Lit_to_ops(state, a)
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
     return State(state.type, state.system, st, state.time)
