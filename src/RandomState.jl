@@ -25,7 +25,7 @@ function random_state(::TMixed, system::System, linkdims::Int; start_time::Float
     n = length(system)
     psites = system.pure_sites
     msites = system.mixed_sites
-    super = System(vcat(psites, sim.(psites)), vcat(msites, sim.(msites)))
+    super = System([psites; sim.(psites)], [msites, sim.(msites)])
     super_pure = random_state(Pure, super, 1 + linkdims ÷ 2)
     super_mixed = truncate(mix_state(super_pure), maxdim = linkdims, cutoff = 0)
     t = ITensor(1)

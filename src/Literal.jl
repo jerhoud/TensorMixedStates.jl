@@ -67,7 +67,7 @@ isless(a::ProdLit, b::ProdLit) =
     ProdLit(a * b.coef, b.ls)
 (a::ProdLit * b::Number) = b * a
 (a::ProdLit * b::ProdLit) =
-    ProdLit(a.coef * b.coef, vcat(a.ls, b.ls))
+    ProdLit(a.coef * b.coef, [a.ls; b.ls])
 (a::ProdLit / b::Number) = (1 / b) * a
 -(a::ProdLit) = -1 * a
 
@@ -101,7 +101,7 @@ SumLit(a::ProdLit) =
     end
 SumLit(a::SumLit) = a
 
-(a::SumLit + b::SumLit) = SumLit(vcat(a.ps, b.ps))
+(a::SumLit + b::SumLit) = SumLit([a.ps; b.ps])
 (a::SumLit + b::ProdLit) = a + SumLit(b)
 (a::ProdLit + b::SumLit) = SumLit(a) + b
 (a::ProdLit + b::ProdLit) = SumLit(a) + SumLit(b)
@@ -125,7 +125,7 @@ SumLit(a::SumLit) = a
 function (a::SumLit * b::SumLit)
     ps = ProdLit[]
     for ap in a.ps, bp in b.ps
-        push!(ps, ProdLit(ap.coef * bp.coef, vcat(ap.ls, bp.ls)))
+        push!(ps, ProdLit(ap.coef * bp.coef, [ap.ls; bp.ls]))
     end
     return SumLit(ps)
 end

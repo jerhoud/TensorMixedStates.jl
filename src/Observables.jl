@@ -2,7 +2,7 @@ import ITensors: norm
 import ITensorMPS: expect
 
 export trace, trace2, norm
-export PreObs, PreObs, expect, expect1, expect2
+export PreObs, expect, expect1, expect2
 export entanglement_entropy
 
 function mixed_obs(state::State, t::ITensor, i::Int)
@@ -26,7 +26,7 @@ This should be one.
 """
 function trace(state::State)
     if state.type == Pure
-        return 1.0
+        norm(state.state)^2
     else
         scalar(prod(mixed_obs(state, i) for i in 1:length(state)))
     end
@@ -36,19 +36,20 @@ end
     trace2(::State)
 
 Return the trace of the square density matrix, mostly usefull for mixed representations.
+Should be one for pure representation.
 """
 trace2(state::State) =
     if state.type == Pure
-        return 1.0
+        norm(state.state)^4
     else
-        return norm(state.state)^2
+        norm(state.state)^2
     end
 
 """
     norm(::State)
 
 Return the norm of the state, mostly usefull for pure representation.
-This should be one.
+This should be one for pure representation.
 """
 norm(state::State) =
     norm(state.state)
@@ -74,9 +75,9 @@ function PreObs(::TMixed, state::State)
     st = state.state
     vloc = [ mixed_obs(state, i) for i in 1:n]
     v = ITensor(1)
-    vleft = vcat([st[1]], [(v *= vloc[i]; v * st[i+1]) for i in 1:n-1])
+    vleft = [[st[1]]; [(v *= vloc[i]; v * st[i+1]) for i in 1:n-1]]
     v = ITensor(1)
-    vright = reverse(vcat([ITensor(1)], [v *= vloc[i] for i in n:-1:2]))
+    vright = reverse([[ITensor(1)]; [v *= vloc[i] for i in n:-1:2]])
     return PreObs(vloc, vleft, vright)
 end
 
