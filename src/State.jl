@@ -1,4 +1,4 @@
-import Base: length
+import Base: length, copy
 import ITensors: truncate
 import ITensorMPS: maxlinkdim
 
@@ -130,3 +130,5 @@ function truncate(state::State; maxdim::Int, cutoff::Number)
     st = truncate(state.state; maxdim, cutoff)
     return State(state.type, state.system, st, state.time)
 end
+
+copy(state::State) = State(state.type, state.system, copy(state.state), state.time)

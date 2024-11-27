@@ -46,7 +46,7 @@ struct PreMPO
     end
 end
 
-function PreMPO(tp, pre::PreMPO, p::ProdLit, ref::Int)
+function PreMPO!(tp, pre::PreMPO, p::ProdLit, ref::Int)
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -89,35 +89,35 @@ function PreMPO(tp, pre::PreMPO, p::ProdLit, ref::Int)
     return pre
 end
 
-PreMPO(::TPure, p::ProdLit, pre::PreMPO, ref::Int=1) =
-    PreMPO(Pure, pre, p, ref)
+PreMPO!(::TPure, p::ProdLit, pre::PreMPO, ref::Int=1) =
+    PreMPO!(Pure, pre, p, ref)
 
-function PreMPO(::TMixed, p::ProdLit, pre::PreMPO, ref::Int=1)
+function PreMPO!(::TMixed, p::ProdLit, pre::PreMPO, ref::Int=1)
     if length(p.ls) == 1 && p.ls[1].dissipator
-        PreMPO(MixDissipator, pre, p, ref)
+        PreMPO!(MixDissipator, pre, p, ref)
     else
-        PreMPO(MixEvolve, pre, p, ref)
-        PreMPO(MixEvolve2, pre, -p, ref)
+        PreMPO!(MixEvolve, pre, p, ref)
+        PreMPO!(MixEvolve2, pre, -p, ref)
     end
     return pre
 end
 
-function PreMPO(type::Union{TPure, TMixed}, a::SumLit, pre::PreMPO, ref::Int=1)
+function PreMPO!(type::Union{TPure, TMixed}, a::SumLit, pre::PreMPO, ref::Int=1)
     for p in a.ps
-        PreMPO(type, p, pre, ref)
+        PreMPO!(type, p, pre, ref)
     end
     return pre
 end
 
-function PreMPO(type::Union{TPure, TMixed}, as, pre::PreMPO)
+function PreMPO!(type::Union{TPure, TMixed}, as, pre::PreMPO)
     for (i, a) in enumerate(as)
-        PreMPO(type, a, pre, i)
+        PreMPO!(type, a, pre, i)
     end
     return pre
 end
 
 PreMPO(state::State, a) =
-    PreMPO(state.type, insertFfactors(a), PreMPO(state))
+    PreMPO!(state.type, insertFfactors(a), PreMPO(state))
 
 
 function make_mpo(pre::PreMPO, coefs=(1.0,))
@@ -167,8 +167,8 @@ function make_mpo(pre::PreMPO, coefs=(1.0,))
     return MPO(ts)
 end
 
-make_mpo(type::Union{TPure, TMixed}, system::System, a::SumLit) = 
-    make_mpo(PreMPO(type, system, a))
+make_mpo(state::State, a::SumLit) = 
+    make_mpo(PreMPO(state, a))
 
 function make_approx_W1(pre::PreMPO, tau::Number, coefs=(1.0,))
     sys = pre.system
@@ -211,6 +211,9 @@ function make_approx_W1(pre::PreMPO, tau::Number, coefs=(1.0,))
     end
     return MPO(ts)
 end
+
+make_approx_W1(state::State, a::SumLit, tau::Number) = 
+    make_approx_W1(PreMPO(state, a), tau)
 
 function make_approx_W2(pre::PreMPO, tau::Number, coefs=(1.0,))
     sys = pre.system
@@ -284,3 +287,7 @@ function make_approx_W2(pre::PreMPO, tau::Number, coefs=(1.0,))
     end
     return MPO(ts)
 end
+
+make_approx_W2(state::State, a::SumLit, tau::Number) = 
+    make_approx_W2(PreMPO(state, a), tau)
+    

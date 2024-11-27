@@ -19,7 +19,7 @@ end
 
 function show(io::IO, a::Lit)
     print(io, "$(a.name)(")
-    join(io, a.index, ", ")
+    join(io, a.index, ",")
     print(io, ")")
 end
 

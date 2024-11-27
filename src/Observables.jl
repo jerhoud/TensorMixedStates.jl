@@ -155,9 +155,7 @@ function expect(::TPure, state::State, p::ProdLit, ::Nothing)
 end
 
 function expect(::TMixed, state::State, p::ProdLit, pre::PreObs)
-    st = state.state
-    system = state.system
-    psites = system.pure_sites
+    psites = state.system.pure_sites
     r = ITensor(1)
     o = ITensor()
     j = 0
