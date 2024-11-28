@@ -99,7 +99,7 @@ unroll(x) =
         end
     end
 
-function expect(::TPure, state::State, p::ProdLit, ::Nothing)
+function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
     if p.coef == 0
         return 0
     end
@@ -154,7 +154,7 @@ function expect(::TPure, state::State, p::ProdLit, ::Nothing)
     return p.coef * scalar(r)
 end
 
-function expect(::TMixed, state::State, p::ProdLit, pre::PreObs)
+function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
     psites = state.system.pure_sites
     r = ITensor(1)
     o = ITensor()
@@ -197,17 +197,19 @@ Compute expectation values of `obs` on the given state.
     expect(state, X(1)*Z(3), pre)
     expect...
 """
-expect(state::State, p::ProdLit, pre=PreObs(state)) =
-    expect(state.type, state, p, pre)
+expect(state::State, args...) = expect!(copy(state), args...)
+
+expect!(state::State, p::ProdLit, pre=PreObs(state)) =
+    expect!(state.type, state, p, pre)
     
-expect(state::State, op::SumLit, pre=PreObs(state)) =
+expect!(state::State, op::SumLit, pre=PreObs(state)) =
     sum(op.ps; init=0) do p
-        expect(state, p, pre)
+        expect!(state, p, pre)
     end
 
-expect(state::State, op, pre=PreObs(state)) =
+expect!(state::State, op, pre=PreObs(state)) =
     map(op) do o
-        expect(state, o, pre)
+        expect!(state, o, pre)
     end
 
 
@@ -229,7 +231,7 @@ expect1_one(state::State, op::Vector, i::Int, t::ITensor) =
         expect1_one(state, o, i, t)
     end
 
-function expect1(::TPure, state::State, op, ::Nothing)
+function expect1!(::TPure, state::State, op, ::Nothing)
     n = length(state)
     st = state.state
     r = Vector(undef, n)
@@ -250,7 +252,7 @@ function expect1(::TPure, state::State, op, ::Nothing)
     return unroll(r)
 end
     
-function expect1(::TMixed, state::State, op, pre::PreObs)
+function expect1!(::TMixed, state::State, op, pre::PreObs)
     n = length(state)
     r = [ expect1_one(state, op, i, pre.left[i] * pre.right[i]) for i in 1:n ]
     return unroll(r)
@@ -269,8 +271,10 @@ Compute the expectation values of the given operators on all sites.
     expect1(state, X, pre)
     ...
 """
-expect1(state::State, op, pre=PreObs(state)) =
-    expect1(state.type, state, op, pre)
+expect1(state::State, args...) = expect1!(copy(state), args...)
+
+expect1!(state::State, op, pre=PreObs(state)) =
+    expect1!(state.type, state, op, pre)
 
 
 
@@ -302,10 +306,10 @@ end
 
 expect2_one(state::State, ops, i1::Int, i2::Int, t::ITensor, rev::Bool) =
     map(ops) do op
-        expect2_one(tp, op, i1, i2, t, rev)
+        expect2_one(state, op, i1, i2, t, rev)
     end
 
-function expect2(::TPure, state::State, ops, ::Nothing)
+function expect2!(::TPure, state::State, ops, ::Nothing)
     n = length(state)
     st = state.state
     sites = state.system.pure_sites
@@ -341,7 +345,7 @@ function expect2(::TPure, state::State, ops, ::Nothing)
     return unroll(c)
 end
     
-function expect2(::TMixed, state::State, ops, pre::PreObs)
+function expect2!(::TMixed, state::State, ops, pre::PreObs)
     n = length(state)
     st = state.state
     r = Matrix(undef, n, n)
@@ -371,8 +375,10 @@ Compute the expectation values of the given pairs of operators on all sites.
     expect2(state, (X, Y), pre)
     ...
 """
-expect2(state::State, ops, pre=PreObs(state)) =
-    expect2(state.type, state, ops, pre)
+expect2(state::State, args...) = expect2!(copy(state), args...)
+
+expect2!(state::State, ops, pre=PreObs(state)) =
+    expect2!(state.type, state, ops, pre)
 
 
 
@@ -382,7 +388,9 @@ expect2(state::State, ops, pre=PreObs(state)) =
 Return the entanglement entropy of the given state at the given site.
 Also return the associated spectrum.
 """
-function entanglement_entropy(state::State, pos::Int)
+entanglement_entropy(state::State, args...) = entanglement_entropy!(copy(state), args...)
+
+function entanglement_entropy!(state::State, pos::Int)
     s = orthogonalize(state.state, pos)
     _, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
     sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]

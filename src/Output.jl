@@ -1,4 +1,4 @@
-export Func, Check, Output, Trace, Trace2, Norm, EE
+export Func, Check, Output, Trace, Trace2, Norm, EE, measure
 
 struct Func
     name
@@ -20,20 +20,18 @@ struct ObsExp2
     obs
 end
 
+wrap_check(o::Number) = Func("$o", o)
+wrap_check(o::Function) = Func("func", o)
+wrap_check(o) = o
+
 struct Check
+    name
     obs1
     obs2
     tol
+    Check(name, o1, o2, tol=nothing) =
+        new(name, wrap_check(o1), wrap_check(o2), tol)
 end
-
-Check(o, v::Number; tol=nothing) =
-    Check(o, Func("$v", v), tol)
-
-Check(o, f::Function; tol=nothing) =
-    Check(o, Func("func", f), tol)
-
-Check(o1, o2; tol=nothing) =
-    Check(o1, o2, tol)
 
 make_obs(o::SumLit) =
     ObsLit(string(o), insertFfactors(o).ps)
@@ -52,11 +50,6 @@ struct Output
 end
 
 Output(args...) = Output!(Output(), args...)
-
-Output!(output::Output, out::Vector) = 
-    Output!(output, "" => out)
-
-Output!(output::Output, outs...) = Output!(output::Output, [outs...])
 
 function Output!(output::Output, outs::Vector{<:Pair})
     foreach(outs) do out
@@ -79,45 +72,83 @@ function Output!(output::Output, out::Pair)
     return output
 end
 
-get_prods(o::Output) = vcat(get_prods.(last.(o))...)
-get_prods(o::Vector) = vcat(getmap(get_prods, o)...)
+get_prods(o::Output) = vcat(get_prods.(values(o.outputs))...)
+get_prods(o::Vector) = vcat(map(get_prods, o)...)
 get_prods(o::ObsLit) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
 get_prods(_) = []
 
-get_exp1(o::Output) = vcat(get_exp1.(last.(o))...)
+get_exp1(o::Output) = vcat(get_exp1.(values(o.outputs))...)
 get_exp1(o::Vector) = vcat(map(get_exp1, o)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
-get_exp1(o) = []
+get_exp1(_) = []
 
-get_exp2(o::Output) = vcat(get_exp2.(last.(o))...)
+get_exp2(o::Output) = vcat(get_exp2.(values(o.outputs))...)
 get_exp2(o::Vector) = vcat(map(get_exp2, o)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
-get_exp2(o) = []
+get_exp2(_) = []
 
 Trace = Func("Trace", trace)
 Trace2 = Func("Trace2", trace2)
 Norm = Func("Norm", norm)
 EE(pos, spectre=0) = Func("EE($pos,$spectre)",
     st-> begin
-        ee, sp = entanglement_entropy(st, pos)
+        ee, sp = entanglement_entropy!(st, pos)
         return [[ee]; sp[1:spectre]]
     end)
 
-function get_observables(output::Output, state::State)
-    t = state.time
+get_val(o::Output, v::Dict, t::Number) =
+    Dict(k => get_val(x, v, t) for (k, x) in o.outputs)
+get_val(o, v::Dict,  t::Number) =
+    map(o) do out
+        get_val(out, v, t)
+    end
+get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::Number) = o.name => v[o.obs]
+get_val(o::ObsLit, v::Dict, ::Number) = o.name => sum(v[p] for p in o.obs)
+get_val(o::Func, ::Dict, t::Number) =
+    if o.obs isa Function
+        o.name => o.obs(t)
+    else
+        o.name => o.obs
+    end
+
+function get_val(o::Check, v::Dict, t::Number)
+    v1 = last(get_val(o.obs1, v, t))
+    v2 = last(get_val(o.obs2, v, t))
+    d = abs(v1 - v2)
+    if !isnothing(o.tol) && d > o.tol
+        error("Check $(o.name) failed with values $v1, $v2 and difference $d")
+    end
+    return o.name => [v1, v2, d]
+end
+
+function measure(state::State, args::Vector)
+    r = measure(state, Output("" => args))
+    return last.(r[""])
+end
+
+function measure(state::State, arg)
+    r = measure(state, Output("" => arg))
+    return last(r[""][1])
+end
+
+function measure(state::State, output::Output)
     st = copy(state)
     prep = PreObs(st)
-    prods = collect(Set(get_prods(output)))
-    exp1s = collect(Set(get_exp1(output)))
-    exp2s = collect(Set(get_exp2(output)))
-    prodvals = expect(st, prods, prep)
-    exp1vals = expect1(st, exp1s, prep)
-    exp2vals = expect2(st, exp2s, prep)
     vals = Dict()
-    push!(vals, (prods .=> prodvals)...)
-    push!(vals, (exp1s .=> exp1vals)...)
-    push!(vals, (exp2s .=> exp2vals)...)
+    prods = collect(Set(get_prods(output)))
+    if !isempty(prods)
+        push!(vals, (prods .=> expect!(st, prods, prep))...)
+    end
+    exp1s = collect(Set(get_exp1(output)))
+    if !isempty(exp1s)
+        push!(vals, (exp1s .=> expect1!(st, exp1s, prep))...)
+    end
+    exp2s = collect(Set(get_exp2(output)))
+    if !isempty(exp2s)
+        push!(vals, (exp2s .=> expect2!(st, exp2s, prep))...)
+    end
+    return get_val(output, vals, state.time)
 end
