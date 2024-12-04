@@ -1,27 +1,26 @@
 export random_state
 
 """
-    random_state(Pure|Mixed, ::System, linkdims::Int; start_time=0.0)
-    random_state(Pure|Mixed, ::State, linkdims::Int; start_time=0.0)
+    random_state(Pure|Mixed, ::System, linkdims::Int)
+    random_state(Pure|Mixed, ::State, linkdims::Int)
 
 Return a random state, with the specified link dimension.
 If a State is given, randomize the given state.
-The start_time argument sets the initial state simulation time.
 """
-function random_state(::TPure, system::System, linkdims::Int; start_time::Float64=0.0)
+function random_state(::TPure, system::System, linkdims::Int)
     st = random_mps(ComplexF64, system.pure_sites; linkdims)
-    return State(Pure, system, st, start_time)
+    return State(Pure, system, st)
 end
 
-function random_state(::TPure, state::State, linkdims::Int; start_time::Float64=state.time)
+function random_state(::TPure, state::State, linkdims::Int)
     if state.type ≠ Pure
         error("cannot randomize a mixed state into a pure state")
     end
     st = random_mps(ComplexF64, state.system.pure_sites, state.state; linkdims)
-    return State(Pure, system, st, start_time)
+    return State(Pure, system, st)
 end
 
-function random_state(::TMixed, system::System, linkdims::Int; start_time::Float64=0.0)
+function random_state(::TMixed, system::System, linkdims::Int)
     n = length(system)
     psites = system.pure_sites
     msites = system.mixed_sites
@@ -33,8 +32,8 @@ function random_state(::TMixed, system::System, linkdims::Int; start_time::Float
         t *= mixed_obs(super_mixed, i)
     end
     super_mixed.state[n] *= t
-    return State(Mixed, system, MPS(super_mixed.state[1:n]), start_time)
+    return State(Mixed, system, MPS(super_mixed.state[1:n]))
 end
 
-random_state(::TMixed, state::State, linkdims::Int; start_time::Float64=state.tim) =
+random_state(::TMixed, state::State, linkdims::Int) =
     error("randomizing a mixed state is not implemented")

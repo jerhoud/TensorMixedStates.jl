@@ -2,7 +2,7 @@ import Base: length, copy
 import ITensors: truncate
 import ITensorMPS: maxlinkdim
 
-export State, mix_state, truncate, maxlinkdim
+export State, mix_state, truncate, maxlinkdim, memory_usage
 
 """
     struct State
@@ -14,7 +14,6 @@ Represent the complete state of the simulated quantum system
 - `type::Union{Type{Pure}, Type{Mixed}}`: pure or mixed representation
 - `system::System`: system description
 - `state::MPS`: system state
-- `time::Float64`: simulation time
 
 # Examples
     State(Pure, system, "Up")
@@ -25,7 +24,6 @@ Represent the complete state of the simulated quantum system
     type::Union{TPure, TMixed}
     system::System
     state::MPS
-    time::Float64
 end
 
 """
@@ -78,15 +76,15 @@ function make_state(type::Union{TPure, TMixed}, system::System, states::Vector{S
     return st
 end
 
-function State(type::Union{TPure, TMixed}, system::System, states::Vector{String}; start_time::Float64=0.0)
+function State(type::Union{TPure, TMixed}, system::System, states::Vector{String})
     if length(system) ≠ length(states)
         error("incompatible sizes between system($(length(system))) and state($(length(states)))")
     end
-    return State(type, system, make_state(type, system, states), start_time)
+    return State(type, system, make_state(type, system, states))
 end
 
-State(type::Union{TPure, TMixed}, system::System, state::String; start_time::Float64=0.0) =
-    State(type, system, fill(state, length(system.pure_sites)); start_time)
+State(type::Union{TPure, TMixed}, system::System, state::String) =
+    State(type, system, fill(state, length(system.pure_sites)))
 
 """
     mix_state(::State)
@@ -117,7 +115,7 @@ function mix_state(state::State)
         mt *= comb
         v[i] = mt
     end
-    return State(Mixed, system, MPS(v), state.time)
+    return State(Mixed, system, MPS(v))
 end
 
 
@@ -126,9 +124,7 @@ end
 
 Apply the truncation to the given state, in particular we get maxlinkdim(state)<=maxdim
 """
-function truncate(state::State; maxdim::Int, cutoff::Number)
-    st = truncate(state.state; maxdim, cutoff)
-    return State(state.type, state.system, st, state.time)
-end
+truncate(state::State; maxdim::Int, cutoff::Number) =
+    State(state.type, state.system, truncate(state.state; maxdim, cutoff))
 
-copy(state::State) = State(state.type, state.system, copy(state.state), state.time)
+copy(state::State) = State(state.type, state.system, copy(state.state))

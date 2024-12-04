@@ -1,6 +1,11 @@
-export Func, Check, Measure, Trace, Trace2, Norm, EE, measure
+export StateFunc, TimeFunc, Check, Measure, Trace, Trace2, Purity, Norm, EE, Linkdim, MemoryUsage, measure
 
-struct Func
+struct StateFunc
+    name
+    obs
+end
+
+struct TimeFunc
     name
     obs
 end
@@ -30,9 +35,15 @@ make_obs(o::Function) =
     ObsExp1(o(), o)
 make_obs(o) = o
 
-wrap_check(o::Number) = Func("$o", o)
-wrap_check(o::Function) = Func("func", o)
 wrap_check(o) = make_obs(o)
+wrap_check(o::Number) = TimeFunc("$o", o)
+wrap_check(o::Vector) = TimeFunc("$o", o)
+wrap_check(o::Function) =
+    try
+        ObsExp1(o(), o)
+    catch
+        TimeFunc("func", o)
+    end
 
 struct Check
     name
@@ -89,51 +100,60 @@ get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
 get_exp2(_) = []
 
-Trace = Func("Trace", trace)
-Trace2 = Func("Trace2", trace2)
-Norm = Func("Norm", norm)
-EE(pos, spectre=0) = Func("EE($pos,$spectre)",
+Trace = StateFunc("Trace", trace)
+Trace2 = StateFunc("Trace2", trace2)
+Purity = StateFunc("Purity", trace2)
+Norm = StateFunc("Norm", norm)
+EE(pos) = StateFunc("EE($pos)",
+    st-> begin
+        ee, _ = entanglement_entropy!(st, pos)
+        return ee
+    end)
+EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
     st-> begin
         ee, sp = entanglement_entropy!(st, pos)
         return [[ee]; sp[1:spectre]]
     end)
+Linkdim = StateFunc("Linkdim", maxlinkdim)
+MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
-get_val(o::Measure, v::Dict, t::Number) =
-    Dict(k => get_val(x, v, t) for (k, x) in o.measures)
-get_val(o, v::Dict,  t::Number) =
+get_val(o::Measure, v::Dict, st::State, t::Number) =
+    Dict(k => get_val(x, v, st, t) for (k, x) in o.measures)
+get_val(o, v::Dict, st::State,  t::Number) =
     map(o) do out
-        get_val(out, v, t)
+        get_val(out, v, st, t)
     end
-get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::Number) = o.name => v[o.obs]
-get_val(o::ObsLit, v::Dict, ::Number) = o.name => sum(v[p] for p in o.obs)
-get_val(o::Func, ::Dict, t::Number) =
+get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number) = o.name => v[o.obs]
+get_val(o::ObsLit, v::Dict, ::State, ::Number) = o.name => sum(v[p] for p in o.obs)
+get_val(o::TimeFunc, ::Dict, ::State, t::Number) =
     if o.obs isa Function
         o.name => o.obs(t)
     else
         o.name => o.obs
     end
+get_val(o::StateFunc, ::Dict, st::State, ::Number) = o.name => o.obs(st)
 
-function get_val(o::Check, v::Dict, t::Number)
-    v1 = last(get_val(o.obs1, v, t))
-    v2 = last(get_val(o.obs2, v, t))
-    d = abs(v1 - v2)
+function get_val(o::Check, v::Dict, st::State, t::Number)
+    v1 = last(get_val(o.obs1, v, st, t))
+    v2 = last(get_val(o.obs2, v, st, t))
+    d = norm(v1 - v2)
     if !isnothing(o.tol) && d > o.tol
         error("Check $(o.name) failed with values $v1, $v2 and difference $d")
     end
     return o.name => [v1, v2, d]
 end
 
-function measure(state::State, args::Vector)
-    r = measure(state, Measure("" => args))
+function measure(state::State, args::Vector, t::Number = 0.)
+    r = measure(state, Measure("" => args), t)
     return last.(r[""])
 end
 
-function measure(state::State, arg)
-    r = measure(state, Measure("" => arg))
+function measure(state::State, arg, t::Number = 0)
+    r = measure(state, Measure("" => arg), t)
     return last(r[""][1])
 end
 
-function measure(state::State, m::Measure)
+function measure(state::State, m::Measure, t::Number = 0.)
     st = copy(state)
     prep = PreObs(st)
     vals = Dict()
@@ -149,5 +169,5 @@ function measure(state::State, m::Measure)
     if !isempty(exp2s)
         push!(vals, (exp2s .=> expect2!(st, exp2s, prep))...)
     end
-    return get_val(m, vals, state.time)
+    return get_val(m, vals, st, t)
 end
