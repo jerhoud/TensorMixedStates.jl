@@ -1,4 +1,4 @@
-export Func, Check, Output, Trace, Trace2, Norm, EE, measure
+export Func, Check, Measure, Trace, Trace2, Norm, EE, measure
 
 struct Func
     name
@@ -20,19 +20,6 @@ struct ObsExp2
     obs
 end
 
-wrap_check(o::Number) = Func("$o", o)
-wrap_check(o::Function) = Func("func", o)
-wrap_check(o) = o
-
-struct Check
-    name
-    obs1
-    obs2
-    tol
-    Check(name, o1, o2, tol=nothing) =
-        new(name, wrap_check(o1), wrap_check(o2), tol)
-end
-
 make_obs(o::SumLit) =
     ObsLit(string(o), insertFfactors(o).ps)
 make_obs(o::ProdLit) =
@@ -43,48 +30,60 @@ make_obs(o::Function) =
     ObsExp1(o(), o)
 make_obs(o) = o
 
+wrap_check(o::Number) = Func("$o", o)
+wrap_check(o::Function) = Func("func", o)
+wrap_check(o) = make_obs(o)
 
-struct Output
-    outputs::Dict
-    Output() = new(Dict())
+struct Check
+    name
+    obs1
+    obs2
+    tol
+    Check(name, o1, o2, tol=nothing) =
+        new(name, wrap_check(o1), wrap_check(o2), tol)
 end
 
-Output(args...) = Output!(Output(), args...)
+struct Measure
+    measures::Dict
+    Measure() = new(Dict())
+end
 
-function Output!(output::Output, outs::Vector{<:Pair})
+Measure(args...) = Measure!(Measure(), args...)
+
+function Measure!(output::Measure, outs::Vector{<:Pair})
     foreach(outs) do out
-        Output!(output, out)
+        Measure!(output, out)
     end
     return output
 end
 
-function Output!(output::Output, out::Pair{<:Any, <:Vector})
+function Measure!(output::Measure, out::Pair{<:Any, <:Vector})
     file = first(out)
     foreach(last(out)) do o
-        Output!(output, file => o)
+        Measure!(output, file => o)
     end
     return output
 end
     
-function Output!(output::Output, out::Pair)
-    file_ops = get!(output.outputs, first(out), [])
+function Measure!(output::Measure, out::Pair)
+    file_ops = get!(output.measures, first(out), [])
     push!(file_ops, make_obs(last(out)))
     return output
 end
 
-get_prods(o::Output) = vcat(get_prods.(values(o.outputs))...)
+get_prods(o::Measure) = vcat(get_prods.(values(o.measures))...)
 get_prods(o::Vector) = vcat(map(get_prods, o)...)
 get_prods(o::ObsLit) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
 get_prods(_) = []
 
-get_exp1(o::Output) = vcat(get_exp1.(values(o.outputs))...)
+get_exp1(o::Measure) = vcat(get_exp1.(values(o.measures))...)
 get_exp1(o::Vector) = vcat(map(get_exp1, o)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
 get_exp1(_) = []
 
-get_exp2(o::Output) = vcat(get_exp2.(values(o.outputs))...)
+get_exp2(o::Measure) = vcat(get_exp2.(values(o.measures))...)
 get_exp2(o::Vector) = vcat(map(get_exp2, o)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
@@ -99,8 +98,8 @@ EE(pos, spectre=0) = Func("EE($pos,$spectre)",
         return [[ee]; sp[1:spectre]]
     end)
 
-get_val(o::Output, v::Dict, t::Number) =
-    Dict(k => get_val(x, v, t) for (k, x) in o.outputs)
+get_val(o::Measure, v::Dict, t::Number) =
+    Dict(k => get_val(x, v, t) for (k, x) in o.measures)
 get_val(o, v::Dict,  t::Number) =
     map(o) do out
         get_val(out, v, t)
@@ -125,30 +124,30 @@ function get_val(o::Check, v::Dict, t::Number)
 end
 
 function measure(state::State, args::Vector)
-    r = measure(state, Output("" => args))
+    r = measure(state, Measure("" => args))
     return last.(r[""])
 end
 
 function measure(state::State, arg)
-    r = measure(state, Output("" => arg))
+    r = measure(state, Measure("" => arg))
     return last(r[""][1])
 end
 
-function measure(state::State, output::Output)
+function measure(state::State, m::Measure)
     st = copy(state)
     prep = PreObs(st)
     vals = Dict()
-    prods = collect(Set(get_prods(output)))
+    prods = collect(Set(get_prods(m)))
     if !isempty(prods)
         push!(vals, (prods .=> expect!(st, prods, prep))...)
     end
-    exp1s = collect(Set(get_exp1(output)))
+    exp1s = collect(Set(get_exp1(m)))
     if !isempty(exp1s)
         push!(vals, (exp1s .=> expect1!(st, exp1s, prep))...)
     end
-    exp2s = collect(Set(get_exp2(output)))
+    exp2s = collect(Set(get_exp2(m)))
     if !isempty(exp2s)
         push!(vals, (exp2s .=> expect2!(st, exp2s, prep))...)
     end
-    return get_val(output, vals, state.time)
+    return get_val(m, vals, state.time)
 end
