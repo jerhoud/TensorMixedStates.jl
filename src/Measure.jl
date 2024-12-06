@@ -55,47 +55,21 @@ struct Check
 end
 
 struct Measure
-    measures::Dict
-    Measure() = new(Dict())
+    measures::Vector
+    Measure(obs::Vector) = new(make_obs.(obs))
 end
 
-Measure(args...) = Measure!(Measure(), args...)
-
-function Measure!(output::Measure, outs::Vector{<:Pair})
-    foreach(outs) do out
-        Measure!(output, out)
-    end
-    return output
-end
-
-function Measure!(output::Measure, out::Pair{<:Any, <:Vector})
-    file = first(out)
-    foreach(last(out)) do o
-        Measure!(output, file => o)
-    end
-    return output
-end
-    
-function Measure!(output::Measure, out::Pair)
-    file_ops = get!(output.measures, first(out), [])
-    push!(file_ops, make_obs(last(out)))
-    return output
-end
-
-get_prods(o::Measure) = vcat(get_prods.(values(o.measures))...)
-get_prods(o::Vector) = vcat(map(get_prods, o)...)
+get_prods(o::Measure) = vcat(get_prods.(o.measures)...)
 get_prods(o::ObsLit) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
 get_prods(_) = []
 
-get_exp1(o::Measure) = vcat(get_exp1.(values(o.measures))...)
-get_exp1(o::Vector) = vcat(map(get_exp1, o)...)
+get_exp1(o::Measure) = vcat(get_exp1.(o.measures)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
 get_exp1(_) = []
 
-get_exp2(o::Measure) = vcat(get_exp2.(values(o.measures))...)
-get_exp2(o::Vector) = vcat(map(get_exp2, o)...)
+get_exp2(o::Measure) = vcat(get_exp2.(o.measures)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
 get_exp2(_) = []
@@ -118,11 +92,7 @@ Linkdim = StateFunc("Linkdim", maxlinkdim)
 MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
 get_val(o::Measure, v::Dict, st::State, t::Number) =
-    Dict(k => get_val(x, v, st, t) for (k, x) in o.measures)
-get_val(o, v::Dict, st::State,  t::Number) =
-    map(o) do out
-        get_val(out, v, st, t)
-    end
+    [get_val(x, v, st, t) for x in o.measures]
 get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number) = o.name => v[o.obs]
 get_val(o::ObsLit, v::Dict, ::State, ::Number) = o.name => sum(v[p] for p in o.obs)
 get_val(o::TimeFunc, ::Dict, ::State, t::Number) =
@@ -143,15 +113,8 @@ function get_val(o::Check, v::Dict, st::State, t::Number)
     return o.name => [v1, v2, d]
 end
 
-function measure(state::State, args::Vector, t::Number = 0.)
-    r = measure(state, Measure("" => args), t)
-    return last.(r[""])
-end
-
-function measure(state::State, arg, t::Number = 0)
-    r = measure(state, Measure("" => arg), t)
-    return last(r[""][1])
-end
+measure(state::State, args::Vector, t::Number = 0.) =
+    measure(state, Measure(args), t)
 
 function measure(state::State, m::Measure, t::Number = 0.)
     st = copy(state)
