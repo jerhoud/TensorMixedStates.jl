@@ -7,6 +7,8 @@ export State, mix_state, truncate, maxlinkdim, memory_usage
 """
     struct State
     State(Pure|Mixed, system, states)
+    State(::State, ::MPS)
+
 
 Represent the complete state of the simulated quantum system
 
@@ -20,7 +22,7 @@ Represent the complete state of the simulated quantum system
     State(Mixed, system, ["Up", "Dn", "Up"])
 
 """
-@kwdef struct State
+struct State
     type::Union{TPure, TMixed}
     system::System
     state::MPS
@@ -85,6 +87,10 @@ end
 
 State(type::Union{TPure, TMixed}, system::System, state::String) =
     State(type, system, fill(state, length(system.pure_sites)))
+
+State(state::State, st::MPS) =
+    State(state.type, state.system, st)
+
 
 """
     mix_state(::State)

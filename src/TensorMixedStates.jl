@@ -1,6 +1,6 @@
 module TensorMixedStates
 
-using ITensors, ITensorMPS, HDF5
+using ITensors, ITensorMPS, HDF5, Printf
 
 include("Literal.jl")
 include("Mixer.jl")
@@ -12,11 +12,11 @@ include("Gates.jl")
 include("Graphs.jl")
 include("Mpo.jl")
 include("Measure.jl")
+include("Simulation.jl")
 include("Output.jl")
+include("Solvers.jl")
 #include("Types.jl")
-#include("Operations.jl")
 #include("Sim.jl")
-#include("Outputs.jl")
 #include("Phases.jl")
 
 end

@@ -59,16 +59,21 @@ struct Measure
     Measure(obs::Vector) = new(make_obs.(obs))
 end
 
+Measure(args...) = Measure([args...])
+
+get_prods(o::Vector{Measure}) = vcat(get_prods.(o)...)
 get_prods(o::Measure) = vcat(get_prods.(o.measures)...)
 get_prods(o::ObsLit) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
 get_prods(_) = []
 
+get_exp1(o::Vector{Measure}) = vcat(get_exp1.(o)...)
 get_exp1(o::Measure) = vcat(get_exp1.(o.measures)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
 get_exp1(_) = []
 
+get_exp2(o::Vector{Measure}) = vcat(get_exp2.(o)...)
 get_exp2(o::Measure) = vcat(get_exp2.(o.measures)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
@@ -91,21 +96,24 @@ EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
 Linkdim = StateFunc("Linkdim", maxlinkdim)
 MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
-get_val(o::Measure, v::Dict, st::State, t::Number) =
-    [get_val(x, v, st, t) for x in o.measures]
-get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number) = o.name => v[o.obs]
-get_val(o::ObsLit, v::Dict, ::State, ::Number) = o.name => sum(v[p] for p in o.obs)
-get_val(o::TimeFunc, ::Dict, ::State, t::Number) =
+get_val(o::Vector{Measure}, v::Dict, st::State, t::Number; kwargs...) =
+    [get_val(x, v, st, t; kwargs...) for x in o]
+get_val(o::Measure, v::Dict, st::State, t::Number; kwargs...) =
+    [get_val(x, v, st, t; kwargs...) for x in o.measures]
+get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number; kwargs...) = o.name => v[o.obs]
+get_val(o::ObsLit, v::Dict, ::State, ::Number; kwargs...) = o.name => sum(v[p] for p in o.obs)
+get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
     if o.obs isa Function
         o.name => o.obs(t)
     else
         o.name => o.obs
     end
-get_val(o::StateFunc, ::Dict, st::State, ::Number) = o.name => o.obs(st)
+get_val(o::StateFunc, ::Dict, st::State, ::Number; kwargs...) = o.name => o.obs(st)
+get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) = string(o) => kwargs[o]
 
-function get_val(o::Check, v::Dict, st::State, t::Number)
-    v1 = last(get_val(o.obs1, v, st, t))
-    v2 = last(get_val(o.obs2, v, st, t))
+function get_val(o::Check, v::Dict, st::State, t::Number; kwargs...)
+    v1 = last(get_val(o.obs1, v, st, t; kwargs...))
+    v2 = last(get_val(o.obs2, v, st, t; kwargs...))
     d = norm(v1 - v2)
     if !isnothing(o.tol) && d > o.tol
         error("Check $(o.name) failed with values $v1, $v2 and difference $d")
@@ -113,10 +121,13 @@ function get_val(o::Check, v::Dict, st::State, t::Number)
     return o.name => [v1, v2, d]
 end
 
-measure(state::State, args::Vector, t::Number = 0.) =
-    measure(state, Measure(args), t)
+measure(state::State, args, t::Number = 0.; kwargs...) =
+    measure(state, Measure(args), t; kwargs...)
 
-function measure(state::State, m::Measure, t::Number = 0.)
+measure(state::State, m::Measure, t::Number = 0.; kwargs...) =
+    measure(state, [m], t; kwargs...)[1]
+
+function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
     st = copy(state)
     prep = PreObs(st)
     vals = Dict()
@@ -132,5 +143,5 @@ function measure(state::State, m::Measure, t::Number = 0.)
     if !isempty(exp2s)
         push!(vals, (exp2s .=> expect2!(st, exp2s, prep))...)
     end
-    return get_val(m, vals, st, t)
+    return get_val(m, vals, st, t; kwargs...)
 end

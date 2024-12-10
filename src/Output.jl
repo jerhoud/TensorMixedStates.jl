@@ -1,30 +1,4 @@
-export Simulation, output
-
-using Printf
-
-struct Simulation
-    state::State
-    time::Number
-    files::Dict{String, IO}
-    formats::Tuple{Printf.Format, Printf.Format}
-    Simulation(st::State, t::Number = 0, tfmt::String = "%8.4g", dfmt::String = "%12.6g") =
-        new(st, t, Dict(), (Printf.Format(tfmt), Printf.Format(dfmt)))
-    Simulation(s::Simulation, st::State, t::Number) =
-        new(st, t, s.files, s.formats)
-end
-
-get_sim_file(sim::Simulation, filename) =
-    get!(sim.files, filename) do
-        if filename == "stdout" || filename == "-"
-            stdout
-        elseif filename == ""
-            devnull
-        elseif filename == "stderr"
-            stderr
-        else
-            open(filename, "a")
-        end
-    end
+export output, log_msg
 
 function output_one(file, x::AbstractFloat, format)
     Printf.format(file, format, x)
@@ -54,11 +28,24 @@ function output(file, header, t, data::Matrix, formats)
     end
 end
 
-function output(sim::Simulation, filename, m::Measure)
-    file = get_sim_file(sim, filename)
-    v = measure(sim.state, m, sim.time)
-    foreach(v) do x
-        output(file, first(x), sim.time, last(x), sim.formats)
+output(sim::Simulation, m::Pair; kwargs...) =
+    output(sim, [m]; kwargs...)
+
+function output(sim::Simulation, measurements::Vector{<:Pair}; kwargs...)
+    vals = measure(sim.state, last.(measurements), sim.time; kwargs...)
+    files = [ get_sim_file(sim, filename) for filename in first.(measurements) ]
+    for (v, f) in zip(vals, files)
+        for x in v
+            output(f, first(x), sim.time, last(x), sim.formats)
+        end
+        flush(f)
     end
+end
+
+function output(sim::Simulation, text::Pair{<:Any, <:AbstractString})
+    file = get_sim_file(sim, first(text))
+    println(file, last(text))
     flush(file)
 end
+
+log_msg(sim::Simulation, text) = output(sim, "log" => text)

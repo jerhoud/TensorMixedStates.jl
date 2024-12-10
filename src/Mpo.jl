@@ -167,7 +167,7 @@ function make_mpo(pre::PreMPO, coefs=(1.0,))
     return MPO(ts)
 end
 
-make_mpo(state::State, a::SumLit) = 
+make_mpo(state::State, a) = 
     make_mpo(PreMPO(state, a))
 
 function make_approx_W1(pre::PreMPO, tau::Number, coefs=(1.0,))
