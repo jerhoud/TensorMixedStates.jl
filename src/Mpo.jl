@@ -120,7 +120,7 @@ PreMPO(state::State, a) =
     PreMPO!(state.type, insertFfactors(a), PreMPO(state))
 
 
-function make_mpo(pre::PreMPO, coefs=(1.0,))
+function make_mpo(pre::PreMPO, coefs=[1.])
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -145,15 +145,14 @@ function make_mpo(pre::PreMPO, coefs=(1.0,))
             w[llink => 1 + ldim, rlink => 1 + rdim, j...] = id[j...]
         end
         for (l, r, u, ref) in tm[i]
-            if r == 1
-                r += rdim
-                c = coefs[ref]
-                if c ≠ 1
-                    u *= c
+            c = coefs[ref]
+            if c ≠ 0
+                if r == 1
+                    r += rdim
                 end
-            end
-            for j in eachindval(idx, idx')
-                w[llink=>l, rlink=>r, j...] += u[j...]
+                for j in eachindval(idx, idx')
+                    w[llink=>l, rlink=>r, j...] += c * u[j...]
+                end
             end
         end
         if i == 1
@@ -170,7 +169,7 @@ end
 make_mpo(state::State, a) = 
     make_mpo(PreMPO(state, a))
 
-function make_approx_W1(pre::PreMPO, tau::Number, coefs=(1.0,))
+function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -193,12 +192,14 @@ function make_approx_W1(pre::PreMPO, tau::Number, coefs=(1.0,))
             w[llink=>1, rlink=>1, j...] = id[j...]
         end
         for (l, r, u, ref) in tm[i]
-            if r == 1
-                c = tau * coefs[ref]
-                u *= c
-            end
-            for j in eachindval(idx, idx')
-                w[llink=>l, rlink=>r, j...] += u[j...]
+            c = coefs[ref]
+            if c ≠ 0
+                if r == 1
+                    c *= tau
+                end
+                for j in eachindval(idx, idx')
+                    w[llink=>l, rlink=>r, j...] += c * u[j...]
+                end
             end
         end
         if i == 1
@@ -215,7 +216,7 @@ end
 make_approx_W1(state::State, a::SumLit, tau::Number) = 
     make_approx_W1(PreMPO(state, a), tau)
 
-function make_approx_W2(pre::PreMPO, tau::Number, coefs=(1.0,))
+function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -235,11 +236,13 @@ function make_approx_W2(pre::PreMPO, tau::Number, coefs=(1.0,))
         rlink = Index(rdim, "Link, l=$i")
         v = fill(ITensor(), (ldim, rdim))
         for (l, r, u, ref) in tm[i]
-            if r == 1
-                c = tau * coefs[ref]
-                u *= c
+            c = coefs[ref]
+            if c ≠ 0
+                if r == 1
+                    c *= tau
+                end
+                v[l, r] += c * u
             end
-            v[l, r] += u
         end
         d = v[1, 1]
         if isempty(d)

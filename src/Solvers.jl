@@ -39,7 +39,7 @@ function checkdone!(o::DmrgObserver; energy, sweep, state, kwargs...)
 end
 
 tdvp(state::State, mpo::MPO, t::Number, n::Int; kwargs...) =
-    State(state, tdvp(-im * mpo, n * t, state.state; time_step = t, nsteps = n, kwargs...))
+    State(state, tdvp(mpo, n * t, state.state; time_step = t, nsteps = n, kwargs...))
 
 tdvp(s::Simulation, mpo::MPO, t::Number, n::Int; kwargs...) =
     Simulation(s, tdvp(s.state, mpo, t, n; kwargs...), s.time + t)
@@ -55,4 +55,6 @@ function dmrg(s::Simulation, mpo::MPO, n::Int; kwargs...)
     return (e, Simulation(s, st))
 end
 
+function evolve(state::State, mpo::MPO, t::Number, n::Int; order, kwargs...)
 
+end
