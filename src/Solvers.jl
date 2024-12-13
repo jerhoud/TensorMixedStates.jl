@@ -1,28 +1,39 @@
 export tdvp, dmrg
-import ITensorMPS: tdvp, dmrg
+import ITensorMPS: tdvp, dmrg, approx_W
 
 function tdvp(pre::PreMPO, t::Number, state::State;
-    coefs=nothing, nsweeps = 1, observer = NoObserver(), observer! = observer, kwargs...)
-    if isnothing(coefs)
-        return State(state, tdvp(make_mpo(pre), t, state.state; observer!, kwargs...))
+    observer! = NoObserver(), coefs=nothing, n_expand = 0, nsweeps = 1, time_start = zero(t), kwargs...)
+    time_dep = !isnothing(coefs)
+    if n_expand == 0 && !time_dep
+        return State(state, tdvp(make_mpo(pre), t, state.state; observer!, nsweeps, time_start, kwargs...))
+    else
+        st = state.state
+        dt = t / nsweeps
+        if !time_dep
+            mpo = make_mpo(pre)
+        end
+        for sweep in 1:nsweeps
+            current_time = time_start + sweep * dt
+            if time_dep
+                tf = current_time - dt / 2
+                mpo = make_mpo(pre, map(f->f(tf), coefs))
+            end
+            st = tdvp(mpo, dt, st; nsweeps = 1, kwargs...)
+            if n_expand ≠ 0 && mod(sweep, n_expand) == 0
+                st = expand(st, mpo; alg="global_krylov")
+            end
+            measure!(observer!; sweep, st, current_time)
+        end
+        return State(state, st)    
     end
-    st = state.state
-    dt = t / nsweeps
-    for sweep in 1:nsweeps
-        tsweep = t + (sweep - 1) * dt
-        tf = tsweep + dt/2
-        cs = map(f->f(tf), coefs)
-        st = tdvp(make_mpo(pre, cs), dt, st; nsweeps = 1, time_start = tsweep, obsever!, kwargs...)
-    end
-    return State(state, st)
 end
 
 tdvp(op, t::Number, state::State; kwargs...) =
     tdvp(PreMPO(state, op), t, state; kwargs...)
 
 
-function dmrg(mpo::MPO, state::State; kwargs...)
-    e, st = dmrg(mpo, state.state; kwargs...)
+function dmrg(mpo::MPO, state::State; observer! = NoObserver(), kwargs...)
+    e, st = dmrg(mpo, state.state; observer = observer!, kwargs...)
     return (e, State(state, st)) 
 end
 
@@ -70,12 +81,13 @@ end
 make_approx_W(op, t::Number, state::State; order::Int, w::Int) =
     make_approx_W(PreMPO(state, op), t; order, w)
 
-function evolve(pre::PreMPO, t::Number, state::State; coefs = nothing,
-    nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer = NoObserver(), time_start = zero(t),  kwargs...)
+function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_correct::Int = 0,
+    nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),  kwargs...)
+    st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)
     if !time_dep
-        mpos = make_approx_W(pre, dt, state; order, w)
+        mpos = make_approx_W(pre, dt; order, w)
     end
     for sweep in 1:nsweeps
         current_time = time_start + sweep * dt
@@ -84,12 +96,15 @@ function evolve(pre::PreMPO, t::Number, state::State; coefs = nothing,
             mpos = make_approx_W(pre, dt; order, w, coefs = map(f->f(tf), coefs))
         end
         for mpo in mpos
-            state = apply(mpo, state; kwargs...)
+            st = apply(mpo, st; kwargs...)
         end
-        measure!(observer; sweep, current_time, state)
+        if n_correct ≠ 0 && mod(sweep, n_correct) == 0
+            st = correct_approx_w(st)
+        end
+        measure!(observer!; sweep, st, current_time)
     end
-    return state
+    return State(state, st)    
 end
 
-evolve(op, t::Number, state::State; kwargs...) =
-    evolve(PreMPO(state, op), t, state; kwargs...)
+approx_W(op, t::Number, state::State; kwargs...) =
+    approx_W(PreMPO(state, op), t, state; kwargs...)
