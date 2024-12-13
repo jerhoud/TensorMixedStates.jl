@@ -34,12 +34,16 @@ mix(sim::Simulation) = Simulation(sim, mix(sim.state))
 
 apply(op, sim::Simulation; kwargs...) = Simulation(sim, apply(op, sim.state; kwargs...))
 
-tdvp(s::Simulation, mpo::MPO, t::Number, n::Int; kwargs...) =
-    Simulation(s, tdvp(s.state, mpo, t, n; kwargs...), s.time + t)
+PreMPO(sim::Simulation, tp) = PreMPO(sim.state, tp)
 
-function dmrg(s::Simulation, mpo::MPO, n::Int; kwargs...)
-    e, st = dmrg(s.state, mpo, n; kwargs...)
+tdvp(op, t::Number, sim::Simulation; kwargs...) =
+    Simulation(sim, tdvp(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
+
+
+function dmrg(op, sim::Simulation; kwargs...)
+    e, st = dmrg(op, sim.state; kwargs...)
     return (e, Simulation(s, st))
 end
-        
-PreMPO(sim::Simulation, tp) = PreMPO(sim.state, tp)
+
+evolve(op, t::Number, sim::Simulation; kwargs...) =
+    Simulation(sim, evolve(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
