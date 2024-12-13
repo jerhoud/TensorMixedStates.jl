@@ -41,18 +41,9 @@ end
 tdvp(state::State, mpo::MPO, t::Number, n::Int; kwargs...) =
     State(state, tdvp(mpo, n * t, state.state; time_step = t, nsteps = n, kwargs...))
 
-tdvp(s::Simulation, mpo::MPO, t::Number, n::Int; kwargs...) =
-    Simulation(s, tdvp(s.state, mpo, t, n; kwargs...), s.time + t)
-
-
 function dmrg(state::State, mpo::MPO, n::Int; kwargs...)
     e, st = dmrg(mpo, state.state; nsweeps = n, kwargs...)
     return (e, State(state, st)) 
-end
-
-function dmrg(s::Simulation, mpo::MPO, n::Int; kwargs...)
-    e, st = dmrg(s.state, mpo, n; kwargs...)
-    return (e, Simulation(s, st))
 end
 
 function evolve(state::State, mpo::MPO, t::Number, n::Int; order, kwargs...)
