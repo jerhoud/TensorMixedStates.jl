@@ -1,120 +1,110 @@
-function run_phases(phase)
-  start_phase(phase.name)
-  time_data = @timed begin
-    run_phase(phase)
-    write_output(phase.output)
-  end
-  end_phase(phase.name, time_data)
-end
-
-run_phases(phases::Union{Vector, Tuple}) = 
-  foreach(run_phases, phases)
-
-function run_phase(phase::SaveState)
-  log_msg("saving state to file $(phase.file)")
-  file = h5open(phase.file, "cw")
-  write(file, phase.object_name, sim_state)
-  close(file)
-  log_msg("done")
-end
-
-function run_phase(phase::LoadState)
-  log_msg("loading state from file $(phase.file)")
-  cd(start_dir) do
-    file = h5open(phase.file, "r")
-    global sim_state = read(file, phase.object_name, MPS)
-    if phase.limits ≠ no_limits
-      truncate!(mps; phase.limits.cutoff, phase.limits.maxdim)
+function run_phase(sim::Simulation, sd::SimData)
+    for phase in sd.phases
+        sim = log_phase(sim, phase)
     end
-    close(file)
-  end 
-  if hastags(siteind(sim_state, 1), "Mixed")
-    log_msg("loaded mixed state with $(length(sim_state)) sites from file $(phase.file)")
-    global sim_type = Mixed
-  else
-    log_msg("loaded pure state with $(length(sim_state)) sites from file $(phase.file)")
-    global sim_type = Pure
-  end
+    return sim
 end
 
-
-function run_phase(phase::CreateState)
-  global sim_type = phase.type
-  sites = [ st(phase.type) for st in phase.system ]
-  if phase.randomize == 0
+function run_phase(sim::Simulation, phase::CreateState)
     if isnothing(phase.state)
-      die("CreateState without state nor randomize: no state created !")
+        if phase.randomize == 0
+            error("CreateState without state nor randomize: no state created !")
+        else
+            state = random_state(phase.type, phase.system, phase.randomize)
+        end
     else
-      state = phase.state
-      if phase.state isa String
-        state = fill(state, length(sites))
-      end
-      if length(sites) ≠ length(state)
-        die("Incompatible size between system($(length(sites))) and state($(length(state))) in CreateState")
-      end
+        state = State(phase.type, phase.system, phase.state)
+        if phase.randomize ≠ 0
+            state = random_state(phase.type, state, phase.randomize)
+        end
     end
-    global sim_state = MPS(ComplexF64, sites, state)
-  elseif sim_type == Mixed
-      global sim_state = random_mixed_state(sites, phase.randomize)
-  elseif isnothing(phase.state)
-      global sim_state = random_mps(ComplexF64, sites; linkdims = phase.randomize)
-    else
-      global sim_state = random_mps(ComplexF64, sites, state; linkdims = phase.randomize)
-  end
+    return Simulation(sim, state)
 end
 
-function run_phase(phase::ToMixed)
-  if sim_type == Mixed 
-    log_msg("State is already in mixed representation")
-  else
-    log_msg("Creating mixed representation with $(length(sim_state)) sites")
-    global sim_state = Pure2Mixed(sim_state; phase.limits.cutoff, phase.limits.maxdim)
-    global sim_type = Mixed 
-    log_msg("State is now in mixed representation")
-  end
+
+function run_phase(sim::Simulation, phase::ToMixed)
+    if sim.type == Mixed 
+        log_msg(sim, "State is already in mixed representation")
+    else
+        log_msg(sim, "Creating mixed representation with $(length(sim)) sites")
+        sim = mix(sim; phase.limits...)
+        log_msg(sim, "State is now in mixed representation")
+    end
+    return sim
 end
+
+
+function evolve_corrections(state::State, ::Tdvp)
+    
+end
+
+function run_phase(sim::Simulation, phase::Evolve)
+    time_start = phase.time_start
+    if isnothing(time_start)
+        time_start = sim.time
+    end
+    duration = phase.n_steps * phase.time_step
+    time_stop = time_start + duration
+    log_msg(sim, "Evolving state from simulation time $(time_start) to $(time_stop)")
+    time_dep = isa(phase.evolver, Pair)
+    if time_dep
+        evolver = first(phase.evolver)
+        coefs = last(phase.evolver)
+    else
+        evolver = phase.evolver
+    end
+    state = sim.state
+    tp = state.type
+    if multipleLit(evolver)
+        error("Evolver cannot contain multiple site operators")
+    end
+    if tp == Pure && dissipLit(evolver)
+        error("Evolving error: state must be in mixed representation to use dissipators")
+    end
+    pre = PreMPO(state, evolver)
+    if phase.corrections == 0
+
+    else
+    end
+
+
+    mpo = make_mpo(tp, siteinds(sim_state), insertFfactors(reorder(phase.hamiltonian)))
+    log_msg("MPO evolver has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
+    step_counter = 0
+    evolve_time = time()
+    while sim_time < stop_sim_time
+    global sim_state = tdvp(mpo, phase.tau, sim_state; nsteps = 1, time_step = phase.tau)
+    step_counter += 1
+    global sim_time += phase.tau
+    if phase.expand ≠ 0 && mod(step_counter, phase.expand) == 0
+        tm = time()
+        global sim_state = expand(sim_state, mpo; alg="global_krylov")
+        elapsed = round(time() - tm; digits = 3)
+        log_msg("Krylov expand step took $elapsed seconds")
+    end
+    if phase.output_periodicity ≠ 0 && mod(step_counter, phase.output_periodicity) == 0
+        write_output(phase.data_output)
+        tm = time()
+        elapsed = round(tm - evolve_time; digits = 3)
+        log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
+        evolve_time = tm
+    end
+    end
+end
+  
+
+
+
+
+
+
+
 
 function run_phase(phase::Gates)
   log_msg("Applying $(length(phase.gates.ls)) gates")
   global sim_state = apply_gate(sim_type, sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
 end
 
-function run_phase(phase::Tdvp)
-  stop_sim_time = sim_time + phase.duration
-  log_msg("Evolving state with Tdvp from simulation time $(sim_time) to $(stop_sim_time)")
-  tp = sim_type
-  if !simpleLit(phase.hamiltonian)
-      die("Tdvp hamiltonian cannot contain multiple site operators")
-  end
-  if phase.type == Pure && dissipLit(phase.hamiltonian)
-    die("Tdvp evolving error: state must be in mixed representation to use dissipators")
-  end
-  if tp == Mixed
-    tp = MixEvolve
-  end
-  mpo = make_mpo(tp, siteinds(sim_state), insertFfactors(reorder(phase.hamiltonian)))
-  log_msg("MPO evolver has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
-  step_counter = 0
-  evolve_time = time()
-  while sim_time < stop_sim_time
-    global sim_state = tdvp(mpo, phase.tau, sim_state; nsteps = 1, time_step = phase.tau)
-    step_counter += 1
-    global sim_time += phase.tau
-    if phase.expand ≠ 0 && mod(step_counter, phase.expand) == 0
-      tm = time()
-      global sim_state = expand(sim_state, mpo; alg="global_krylov")
-      elapsed = round(time() - tm; digits = 3)
-      log_msg("Krylov expand step took $elapsed seconds")
-    end
-    if phase.output_periodicity ≠ 0 && mod(step_counter, phase.output_periodicity) == 0
-      write_output(phase.data_output)
-      tm = time()
-      elapsed = round(tm - evolve_time; digits = 3)
-      log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
-      evolve_time = tm
-    end
-  end
-end
 
 function run_phase(phase::Dmrg)
   log_msg("Optimizing state with $(phase.nsweep) sweeps of Dmrg")

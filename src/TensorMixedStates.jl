@@ -15,8 +15,8 @@ include("Gates.jl")
 include("Simulation.jl")
 include("Output.jl")
 include("Graphs.jl")
-#include("Types.jl")
-#include("Sim.jl")
-#include("Phases.jl")
+include("Sim.jl")
+include("Types.jl")
+include("Phases.jl")
 
 end
