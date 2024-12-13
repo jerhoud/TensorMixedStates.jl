@@ -1,8 +1,8 @@
 import Base: length, copy
 import ITensors: truncate
-import ITensorMPS: maxlinkdim
+import ITensorMPS: maxlinkdim, apply
 
-export State, mix_state, truncate, maxlinkdim, memory_usage
+export State, mix, truncate, maxlinkdim, memory_usage, apply
 
 """
     struct State
@@ -93,11 +93,11 @@ State(state::State, st::MPS) =
 
 
 """
-    mix_state(::State)
+    mix(::State)
 
 Transform a pure representation into a mixed representation
 """
-function mix_state(state::State)
+function mix(state::State)
     if state.type == Mixed
         return state
     end
@@ -130,7 +130,10 @@ end
 
 Apply the truncation to the given state, in particular we get maxlinkdim(state)<=maxdim
 """
-truncate(state::State; maxdim::Int, cutoff::Number) =
-    State(state.type, state.system, truncate(state.state; maxdim, cutoff))
+truncate(state::State; kwargs...) =
+    State(state.type, state.system, truncate(state.state; kwargs...))
 
-copy(state::State) = State(state.type, state.system, copy(state.state))
+copy(state::State) = State(state, copy(state.state))
+
+apply(mpo::MPO, state::State; kwargs...) =
+    State(state, apply(mpo, state.state; kwargs...))

@@ -1,5 +1,7 @@
-export PreMPO, make_mpo, make_approx_W1, make_approx_W2
+export PreMPO, make_mpo, make_approx_W1, make_approx_W2, MixObservable, MixGate, MixEvolve
 
+struct MixObservable end
+struct MixGate end
 struct MixEvolve end
 struct MixEvolve2 end
 struct MixDissipator end
@@ -8,41 +10,61 @@ function make_operator(::TPure, ::System, t::ITensor, ::Int)
     return t
 end
     
+function make_operator(::Type{MixObservable}, system::System, t::ITensor, i::Int)
+    idx = system.pure_sites[i]
+    jdx = sim(idx)
+    kdx = system.mixed_sites[i]
+    return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
+end
+
+function make_operator(::Type{MixGate}, system::System, t::ITensor, i::Int)
+    idx = system.pure_sites[i]
+    jdx = sim(idx)
+    kdx = system.mixed_sites[i]
+    ti = t
+    tj = replaceinds(ti, (idx, idx'), (jdx, jdx'))
+    return ti * dag(tj) * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
+end
+
 function make_operator(::Type{MixEvolve}, system::System, t::ITensor, i::Int)
     idx = system.pure_index[i]
     jdx = sim(idx)
     kdx = system.mixed_sites[i]
-    return *(t, delta(jdx, jdx'), combinerto(jdx, idx, kdx), combinerto(jdx', idx', kdx'))
+    return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
 end
 
 function make_operator(::Type{MixEvolve2}, system::System, t::ITensor, i::Int)
     idx = system.pure_index[i]
     jdx = sim(idx)
     kdx = system.mixed_sites[i]
-    return *(dag(t), delta(jdx, jdx'), combinerto(idx, jdx, kdx), combinerto(idx', jdx', kdx'))
+    return dag(t) * delta(jdx, jdx') * combinerto(idx, jdx, kdx) * combinerto(idx', jdx', kdx')
 end
 
-function make_operator(::Type{MixDissipator}, system::System, ti::ITensor, i::Int)
+function make_operator(::Type{MixDissipator}, system::System, t::ITensor, i::Int)
     idx = system.pure_sites[i]
     jdx = sim(idx)
     kdx = system.mixed_sites[i]
+    ti = t
     tj = replaceinds(ti, (idx, idx'), (jdx, jdx'))
     ati = swapprime(dag(ti'), 1=>2)
     atj = swapprime(dag(tj'), 1=>2)
     r = ti * dag(tj) -
-        0.5 * *(replaceprime(ati * ti, 2 => 1), delta.(jdx, jdx')) -
-        0.5 * *(replaceprime(atj * tj, 2 => 1), delta.(idx, idx'))
-    return *(r, combinerto(jdx, idx, kdx), combinerto(jdx', idx', kdx'))
+        0.5 * replaceprime(ati * ti, 2 => 1) * delta.(jdx, jdx') -
+        0.5 * replaceprime(atj * tj, 2 => 1) * delta.(idx, idx')
+    return r * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
 end
 
 struct PreMPO
-    type::Union{TPure, TMixed}
+    type
     system::System
     linkdims::Vector{Int}
     terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
-    function PreMPO(state::State)
+    function PreMPO(state::State, type)
+        if state.type == Pure
+            type = Pure
+        end
         n = length(state)
-        return new(state.type, state.system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
+        return new(type, state.system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
     end
 end
 
@@ -89,36 +111,36 @@ function PreMPO!(tp, pre::PreMPO, p::ProdLit, ref::Int)
     return pre
 end
 
-PreMPO!(::TPure, p::ProdLit, pre::PreMPO, ref::Int=1) =
-    PreMPO!(Pure, pre, p, ref)
-
-function PreMPO!(::TMixed, p::ProdLit, pre::PreMPO, ref::Int=1)
-    if length(p.ls) == 1 && p.ls[1].dissipator
-        PreMPO!(MixDissipator, pre, p, ref)
+function PreMPO!(p::ProdLit, pre::PreMPO, ref::Int=1)
+    if pre.type == MixEvolve
+        if length(p.ls) == 1 && p.ls[1].dissipator
+            PreMPO!(MixDissipator, pre, p, ref)
+        else
+            PreMPO!(MixEvolve, pre, p, ref)
+            PreMPO!(MixEvolve2, pre, -p, ref)
+        end
     else
-        PreMPO!(MixEvolve, pre, p, ref)
-        PreMPO!(MixEvolve2, pre, -p, ref)
+        PreMPO!(pre.type, pre, p, ref)
     end
     return pre
 end
 
-function PreMPO!(type::Union{TPure, TMixed}, a::SumLit, pre::PreMPO, ref::Int=1)
+function PreMPO!(a::SumLit, pre::PreMPO, ref::Int=1)
     for p in a.ps
-        PreMPO!(type, p, pre, ref)
+        PreMPO!(p, pre, ref)
     end
     return pre
 end
 
-function PreMPO!(type::Union{TPure, TMixed}, as, pre::PreMPO)
+function PreMPO!(as, pre::PreMPO)
     for (i, a) in enumerate(as)
-        PreMPO!(type, a, pre, i)
+        PreMPO!(a, pre, i)
     end
     return pre
 end
 
-PreMPO(state::State, a) =
-    PreMPO!(state.type, insertFfactors(a), PreMPO(state))
-
+PreMPO(state, a, tp=MixEvolve) =
+    PreMPO!(insertFfactors(a), PreMPO(state, tp))
 
 function make_mpo(pre::PreMPO, coefs=[1.])
     sys = pre.system
@@ -166,8 +188,8 @@ function make_mpo(pre::PreMPO, coefs=[1.])
     return MPO(ts)
 end
 
-make_mpo(state::State, a) = 
-    make_mpo(PreMPO(state, a))
+make_mpo(state, a, tp = MixEvolve) = 
+    make_mpo(PreMPO(state, a, tp))
 
 function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
     sys = pre.system
@@ -213,8 +235,8 @@ function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
     return MPO(ts)
 end
 
-make_approx_W1(state::State, a::SumLit, tau::Number) = 
-    make_approx_W1(PreMPO(state, a), tau)
+make_approx_W1(state, a, tau::Number) = 
+    make_approx_W1(PreMPO(state, a, MixEvolve), tau)
 
 function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
     sys = pre.system
@@ -291,6 +313,6 @@ function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
     return MPO(ts)
 end
 
-make_approx_W2(state::State, a::SumLit, tau::Number) = 
-    make_approx_W2(PreMPO(state, a), tau)
+make_approx_W2(state, a, tau::Number) = 
+    make_approx_W2(PreMPO(state, a, MixEvolve), tau)
     

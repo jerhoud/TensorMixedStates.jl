@@ -1,4 +1,4 @@
-export Simulation
+export Simulation, get_sim_file
 
 struct Simulation
     state::State
@@ -23,3 +23,23 @@ get_sim_file(sim::Simulation, filename) =
             open(filename, "a")
         end
     end
+
+length(sim::Simulation) = length(sim.state)
+
+maxlinkdim(sim::Simulation) = maxlinkdim(sim.state)
+
+truncate(sim::Simulation; kwargs...) = Simulation(sim, truncate(sim.state; kwargs...))
+
+mix(sim::Simulation) = Simulation(sim, mix(sim.state))
+
+apply(op, sim::Simulation; kwargs...) = Simulation(sim, apply(op, sim.state; kwargs...))
+
+tdvp(s::Simulation, mpo::MPO, t::Number, n::Int; kwargs...) =
+    Simulation(s, tdvp(s.state, mpo, t, n; kwargs...), s.time + t)
+
+function dmrg(s::Simulation, mpo::MPO, n::Int; kwargs...)
+    e, st = dmrg(s.state, mpo, n; kwargs...)
+    return (e, Simulation(s, st))
+end
+        
+PreMPO(sim::Simulation, tp) = PreMPO(sim.state, tp)

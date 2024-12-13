@@ -83,4 +83,4 @@ length(system::System) = length(system.pure_sites)
 Return the corresponding site index vector from the system
 """
 sites(::TPure, system::System) = system.pure_sites
-sites(::TMixed, system::System) = system.mixed_sites
+sites(::Any, system::System) = system.mixed_sites
