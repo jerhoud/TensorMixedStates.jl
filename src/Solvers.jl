@@ -38,7 +38,7 @@ function dmrg(mpo::MPO, state::State; observer! = NoObserver(), kwargs...)
 end
 
 dmrg(op, state::State; kwargs...) =
-    dmrg(make_mpo(state, op), state; kwargs...)
+    dmrg(make_mpo(state, op, MixObservable), state; kwargs...)
 
 const w_approx_coefs = Vector{ComplexF64}[
     [
@@ -80,6 +80,8 @@ end
 
 make_approx_W(op, t::Number, state::State; order::Int, w::Int) =
     make_approx_W(PreMPO(state, op), t; order, w)
+
+correct_approx_w(state::State) = state
 
 function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_correct::Int = 0,
     nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),  kwargs...)

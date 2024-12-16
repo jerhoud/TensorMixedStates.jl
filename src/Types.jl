@@ -23,18 +23,18 @@ end
 end
 
 struct Tdvp end
+
 @kwdef struct ApproxW
     order
     w = 2
 end
-
 
 @kwdef struct Evolve
     name::String = "Time evolution"
     end_measures = []
     Limits::Limits = no_limits
     time_start = nothing
-    n_steps::Number
+    time::Number
     time_step::Number
     algo
     evolver

@@ -7,7 +7,7 @@ struct TdvpObserver <: AbstractObserver
     periodicity
 end
 
-struct EvolveObserver <: AbstractObserver
+struct ApproxWObserver <: AbstractObserver
     sim::Simulation
     measurements
     periodicity
@@ -31,7 +31,7 @@ function measure!(o::TdvpObserver; sweep, half_sweep_is_done, half_sweep, curren
     return nothing
 end
 
-function measure!(o::EvolveObserver; sweep, current_time, state, kwargs...)
+function measure!(o::ApproxWObserver; sweep, current_time, state, kwargs...)
     if mod(sweep, o.periodicity) == 0
         st = State(o.sim.state, state)
         sim = Simulation(o.sim, st, current_time)

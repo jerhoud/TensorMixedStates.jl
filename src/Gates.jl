@@ -35,7 +35,12 @@ It is much more efficient to apply all the gates in a single call to apply.
 
 """
 function apply(a::ProdLit, state::State; kwargs...)
-    ops = Lit_to_ops(state, a)
+    ops = Lit_to_ops(state, insertFfactors(a))
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
-    return State(state.type, state.system, st)
+    return State(state, st)
+end
+
+function apply(mpo::MPO, state::State; kwargs...)
+    st = apply(mpo, state.state; kwargs...)
+    return State(state, st)
 end
