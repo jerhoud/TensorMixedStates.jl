@@ -25,4 +25,7 @@ include("Run.jl")
 include("PhaseTypes.jl")
 include("Phases.jl")
 
+# Precompilation
+include("Precompile.jl")
+
 end
