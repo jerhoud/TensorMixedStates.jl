@@ -1,5 +1,5 @@
-export tdvp, dmrg
-import ITensorMPS: tdvp, dmrg, approx_W
+export tdvp, dmrg, approx_W
+import ITensorMPS: tdvp, dmrg
 
 function tdvp(pre::PreMPO, t::Number, state::State;
     observer! = NoObserver(), coefs=nothing, n_expand = 0, nsweeps = 1, time_start = zero(t), kwargs...)

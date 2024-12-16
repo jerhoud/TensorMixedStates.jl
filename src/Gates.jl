@@ -39,8 +39,3 @@ function apply(a::ProdLit, state::State; kwargs...)
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
     return State(state, st)
 end
-
-function apply(mpo::MPO, state::State; kwargs...)
-    st = apply(mpo, state.state; kwargs...)
-    return State(state, st)
-end

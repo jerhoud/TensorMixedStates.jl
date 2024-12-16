@@ -72,42 +72,31 @@ function run_phase(sim::Simulation, phase::Evolve)
             phase.limits.cutoff, phase.limits.maxdim,
             observer! = TdvpWObserver(sim, phase.measures, phase.measures_periodicity))
     end
+    return Simulation(sim, state, time_start + duration)
 end
 
 
-
-
-function run_phase(phase::Gates)
-  log_msg("Applying $(length(phase.gates.ls)) gates")
-  global sim_state = apply_gate(sim_type, sim_state, phase.gates; phase.limits.cutoff, phase.limits.maxdim)
+function run_phase(sim::Simulation, phase::Gates)
+  log_msg(sim, "Applying $(length(phase.gates.ls)) gates")
+  return apply(gates.gates, sim; phase.limits.cutoff, phase.limits.maxdim)
 end
 
 
-function run_phase(phase::Dmrg)
-  log_msg("Optimizing state with $(phase.nsweep) sweeps of Dmrg")
-  if !simpleLit(phase.hamiltonian)
-    die("Dmrg hamiltonian cannot contain multiple site operators")
-  end
-  mpo = make_mpo(tp, siteinds(sim_state), insertFfactors(reorder(phase.hamiltonian)))
-  log_msg("MPO optimizer has maxdim $(maxlinkdim(mpo)) and uses $(Base.format_bytes(Base.summarysize(mpo)))")
-  step_counter = 0
-  optimize_time = time()
-  dl = length(phase.maxdim)
-  maxdim = 1
-  while step_counter < phase.nsweep
-    if step_counter < dl
-      maxdim = phase.maxdim[1 + step_counter]
+function run_phase(sim::Simulation, phase::Dmrg)
+    log_msg(sim, "Optimizing state with $(phase.nsweeps) sweeps of Dmrg")
+
+    if multipleLit(phase.hamiltonian) || dissipLit(phase.hamiltonian)
+        error("Dmrg hamiltonian cannot contain multiple site operators nor dissipators")
     end
-    enrgy, st = dmrg(mpo, sim_state; nsweeps = 1, maxdim, cutoff=phase.cutoff)
-    global sim_state = st
-    step_counter += 1
-    log_msg("after $step_counter dmrg sweep(s) state energy is $enrgy")
-    if phase.output_periodicity ≠ 0 && mod(step_counter, phase.output_periodicity) == 0
-      write_output(phase.data_output)
-      tm = time()
-      elapsed = round(tm - optimize_time; digits = 3)
-      log_msg("$(phase.output_periodicity) steps took $elapsed seconds")
-      optimize_time = tm
-    end
-  end
+    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.maxdim, phase.cutoff,
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_periodicity, phase.tol))
+    log_msg(sim, "Done, dmrg final energy is $e")
+    return sim
 end
+
+run_phase(sim::Simulation, phase::LoadState) =
+    error("LoadState not implemented yet")
+
+run_phase(sim::Simulation, phase::SaveState) =
+    error("SaveState not implemented yet")
+

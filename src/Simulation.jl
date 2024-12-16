@@ -46,5 +46,5 @@ function dmrg(op, sim::Simulation; kwargs...)
     return (e, Simulation(s, st))
 end
 
-evolve(op, t::Number, sim::Simulation; kwargs...) =
-    Simulation(sim, evolve(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
+approx_W(op, t::Number, sim::Simulation; kwargs...) =
+    Simulation(sim, approx_W(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)

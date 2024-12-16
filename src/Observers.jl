@@ -19,7 +19,7 @@ mutable struct DmrgObserver <: AbstractObserver
     periodicity
     tol
     energy
-    DmrgObserver(s, m, p, t) = new(s, m, p, t, 0.)
+    DmrgObserver(sim, measurements, periodicity, tol) = new(sim, measurements, periodicity, tol, 0.)
 end
 
 function measure!(o::TdvpObserver; sweep, half_sweep_is_done, half_sweep, current_time, state, kwargs...)
