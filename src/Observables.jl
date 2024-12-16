@@ -136,7 +136,8 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
                 r *= o
                 r *= dag(st[j]')
                 for k in j+1:i-1
-                    r *= st[k]
+                    kdx = sites[k]
+                    r *= st[k] * delta(kdx, kdx')
                     r *= dag(st[k]')
                 end
             end
@@ -156,6 +157,7 @@ end
 
 function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
     psites = state.system.pure_sites
+    st = state.state
     r = ITensor(1)
     o = ITensor()
     j = 0
