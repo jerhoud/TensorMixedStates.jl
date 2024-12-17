@@ -27,14 +27,14 @@ function make_operator(::Type{MixGate}, system::System, t::ITensor, i::Int)
 end
 
 function make_operator(::Type{MixEvolve}, system::System, t::ITensor, i::Int)
-    idx = system.pure_index[i]
+    idx = system.pure_sites[i]
     jdx = sim(idx)
     kdx = system.mixed_sites[i]
     return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
 end
 
 function make_operator(::Type{MixEvolve2}, system::System, t::ITensor, i::Int)
-    idx = system.pure_index[i]
+    idx = system.pure_sites[i]
     jdx = sim(idx)
     kdx = system.mixed_sites[i]
     return dag(t) * delta(jdx, jdx') * combinerto(idx, jdx, kdx) * combinerto(idx', jdx', kdx')
@@ -59,7 +59,7 @@ struct PreMPO
     system::System
     linkdims::Vector{Int}
     terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
-    function PreMPO(state::State, type)
+    function PreMPO(type, state::State)
         if state.type == Pure
             type = Pure
         end
@@ -117,7 +117,7 @@ function PreMPO!(p::ProdLit, pre::PreMPO, ref::Int=1)
             PreMPO!(MixDissipator, pre, p, ref)
         else
             PreMPO!(MixEvolve, pre, p, ref)
-            PreMPO!(MixEvolve2, pre, -p, ref)
+            PreMPO!(MixEvolve2, pre, p, ref)
         end
     else
         PreMPO!(pre.type, pre, p, ref)
@@ -139,8 +139,9 @@ function PreMPO!(as, pre::PreMPO)
     return pre
 end
 
-PreMPO(state, a, tp=MixEvolve) =
-    PreMPO!(insertFfactors(a), PreMPO(state, tp))
+function PreMPO(state::State, a, tp=MixEvolve)
+    PreMPO!(insertFfactors(a), PreMPO(tp, state))
+end
 
 function make_mpo(pre::PreMPO, coefs=[1.])
     sys = pre.system
