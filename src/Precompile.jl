@@ -11,5 +11,5 @@ using PrecompileTools: @compile_workload
     mp = measure(stp, m)
     mm = measure(stm, m)
     tdvp(-im*(Y(2)+2Z(1)X(3)), 0.1, stp; maxdim = 3)
-    approx_W(-im*(Y(2)+2Z(1)X(3), 0.1, stp; maxdim = 3)
+    approx_W(-im*(Y(2)+2Z(1)X(3)), 0.1, stp; maxdim = 3)
 end
