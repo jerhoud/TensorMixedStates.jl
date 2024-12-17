@@ -13,9 +13,13 @@ function run_phase(sim::Simulation, phase::CreateState)
             state = random_state(phase.type, phase.system, phase.randomize)
         end
     else
-        state = State(phase.type, phase.system, phase.state)
+        if phase.state isa State
+            state = phase.state
+        else
+            state = State(phase.type, phase.system, phase.state)
+        end
         if phase.randomize ≠ 0
-            state = random_state(phase.type, state, phase.randomize)
+            state = random_state(state, phase.randomize)
         end
     end
     return Simulation(sim, state)

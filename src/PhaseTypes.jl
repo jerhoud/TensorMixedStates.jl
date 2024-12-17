@@ -10,9 +10,9 @@ const no_limits = Limits(cutoff = 0, maxdim = typemax(Int))
 @kwdef struct CreateState
     name::String = "Creating state"
     end_measures = []
-    type::Union{TPure, TMixed}
-    system
-    state::Union{Nothing, String, Vector{String}} = nothing
+    type::Union{Nothing, TPure, TMixed} = nothing
+    system::Union{Nothing, System} = nothing
+    state::Union{Nothing, String, Vector{String}, State} = nothing
     randomize::Int = 0
 end
 

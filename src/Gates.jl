@@ -10,12 +10,12 @@ function Lit_to_ops(state::State, a::ProdLit)
             error("Cannot apply a dissipator as a gate")
         end
         idx = map(i->s.pure_sites[i], l.index)
-        oi = op(l.opname, idx...; l.param)
+        oi = op(l.opname, idx...; l.param...)
         if state.type == Pure
             return oi
         else
             jdx = sim(idx)
-            oj = replaceinds(o, (idx..., idx'...), (jdx..., jdx'))
+            oj = replaceinds(oi, (idx..., idx'...), (jdx..., jdx'...))
             kdx = map(i->s.mixed_sites[i], l.index)
             return *(oi, dag(oj), combinerto.(jdx, idx, kdx)..., combinerto.(jdx', idx', kdx')...)
         end

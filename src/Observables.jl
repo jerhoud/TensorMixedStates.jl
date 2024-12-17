@@ -299,6 +299,7 @@ function expect2_one(state::State, ops::Tuple{Any, Any}, i1::Int, i2::Int, t::IT
         end
     else
         if state.type == Pure
+            println("$i1, $i2, $(inds(t)), $(inds(o1)), $(inds(o2))")
             return scalar(o1 * t * o2)
         else
             return scalar(mixed_obs(state, o1, i1) * t * mixed_obs(state, o2, i2))

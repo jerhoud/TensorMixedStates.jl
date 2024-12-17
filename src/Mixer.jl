@@ -1,4 +1,3 @@
-import ITensors: state
 export @add_operators, @add_fermionic_operators, @add_dissipators
 
 """
@@ -75,5 +74,3 @@ end
     "DPhase" => "Z",
     ]
 )
-
-state(::StateName"Half", ::SiteType"MixedQubit") = [0.5 0 0 0.5]

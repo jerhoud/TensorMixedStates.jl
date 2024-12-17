@@ -43,6 +43,19 @@ function check_mix(dims)
     return true
 end
 
+function check_complete_graph()
+    stp = graph_state(Pure, complete_graph(4))
+    stm = graph_state(Mixed, complete_graph(4))
+    m = Measure(X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y))
+    r = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], 1, [1 1 1 1; 1 1 1 1; 1 1 1 1; 1 1 1 1]]
+    mp = last.(measure(stp, m))
+    mm = last.(measure(stm, m))
+    if mp ≈ r && mm ≈ r
+        return true
+    end
+    error("complete graph check failed with $mp and $mm")
+end
+
 const single_evolve_vals = [
     (2, "Qubit", "X+", -im * Z(1), [X(1), Y(1)], t->[cos(2t), sin(2t)])
 ]
@@ -93,6 +106,9 @@ end
     end
     @testset "State mixing" begin
         @test check_mix([1, 3, 10, 25])
+    end
+    @testset "Complete Graph" begin
+        @test check_complete_graph()
     end
     @testset "Tdvp single evolution" begin
         @test check_evolve_vals(tdvp, single_evolve_vals; step = 0.1, atol = 1e-8)

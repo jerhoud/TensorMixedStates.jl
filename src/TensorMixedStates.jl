@@ -15,6 +15,7 @@ include("Observables.jl")
 include("Measure.jl")
 include("RandomState.jl")
 include("Gates.jl")
+include("SiteSpecifics.jl")
 
 # High level interface
 include("Simulation.jl")
@@ -26,6 +27,6 @@ include("PhaseTypes.jl")
 include("Phases.jl")
 
 # Precompilation
-include("Precompile.jl")
+#include("Precompile.jl")
 
 end
