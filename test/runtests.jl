@@ -27,6 +27,22 @@ function check_state_vals()
     return true
 end
 
+function check_mix(dims)
+    for d in dims
+        s = System(10, "Qubit")
+        stp = random_state(Pure, s, d)
+        stm = mix(stp)
+        m = Measure(X, Y, Z)
+        mp = last.(measure(stp, m))
+        mm = last.(measure(stm, m))
+        if mp ≈ mm
+            continue
+        end
+        error("mix check $d failes with $mp and $mm")
+    end
+    return true
+end
+
 const single_evolve_vals = [
     (2, "Qubit", "X+", -im * Z(1), [X(1), Y(1)], t->[cos(2t), sin(2t)])
 ]
@@ -75,11 +91,17 @@ end
     @testset "State measuring" begin
         @test check_state_vals()
     end
+    @testset "State mixing" begin
+        @test check_mix([1, 3, 10, 25])
+    end
     @testset "Tdvp single evolution" begin
         @test check_evolve_vals(tdvp, single_evolve_vals; step = 0.1, atol = 1e-8)
     end
     @testset "Tdvp multi evolution" begin
         @test check_evolve_vals(tdvp, multi_evolve_vals; step = 0.1, atol = 1e-8)
+    end
+    @testset "Tdvp complex evolution" begin
+        @test check_evolve_vals(tdvp, complex_evolve_vals; step = 0.1, atol = 1e-8)
     end
     @testset "approx_W1 single evolution" begin
         @test check_evolve_vals(approx_W, single_evolve_vals; step = 0.01, atol = 0.05, order=1, w=1)
