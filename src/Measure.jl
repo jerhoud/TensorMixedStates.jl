@@ -33,6 +33,8 @@ make_obs(o::Tuple{<:Function, <:Function}) =
     ObsExp2(first(o)()*last(o)(), o)
 make_obs(o::Function) =
     ObsExp1(o(), o)
+make_obs(o::Union{Number, String}) =
+    TimeFunc(string(o), [])
 make_obs(o) = o
 
 wrap_check(o) = make_obs(o)
