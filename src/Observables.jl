@@ -1,7 +1,7 @@
-import ITensors: norm
-import ITensorMPS: expect
+import ITensors: norm, dag
+import ITensorMPS: expect, normalize
 
-export trace, trace2, norm
+export trace, trace2, norm, normalize, dag, symmetrize, normsym
 export PreObs, expect, expect1, expect2
 export entanglement_entropy
 
@@ -17,6 +17,11 @@ function mixed_obs(state::State, i::Int)
     state.state[i] * (dense(delta(j', j)) * combinerto(j', j, k))
 end
 
+function mixed_dag(state::State, i::Int)
+    j = state.system.pure_sites[i]
+    k = state.system.mixed_sites[i]
+    return dag(state.state[i]) * combinerto(j', j, k) * combinerto(j, j', k)
+end
 
 """
     trace(::State)
@@ -55,6 +60,35 @@ norm(state::State) =
     norm(state.state)
 
 
+normalize(state::State) =
+    if state.type == Pure
+        return State(state, normalize(state.state))
+    else
+        return State(state, state.state * (1. / trace(state)))
+    end
+
+
+
+dag(state::State) =
+    if state.type == Pure
+        state
+    else
+        st = copy(state.state)
+        for i in 1:length(st)
+            st[i] = mixed_dag(state, i)
+        end
+        return State(state, st)
+    end
+
+
+symmetrize(state::State) =
+    if state.type == Pure
+        state
+    else
+        State(state, 0.5*(state.state + dag(state).state))
+    end
+
+normsym(state::State) = normalize(symmetrize(state))
 
 """
     struct PreObs
