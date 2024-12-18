@@ -27,11 +27,11 @@ end
 
 
 function run_phase(sim::Simulation, phase::ToMixed)
-    if sim.type == Mixed 
+    if sim.state.type == Mixed 
         log_msg(sim, "State is already in mixed representation")
     else
         log_msg(sim, "Creating mixed representation with $(length(sim)) sites")
-        sim = mix(sim; phase.limits...)
+        sim = truncate(mix(sim); phase.limits.cutoff, phase.limits.maxdim)
         log_msg(sim, "State is now in mixed representation")
     end
     return sim
@@ -43,7 +43,7 @@ function run_phase(sim::Simulation, phase::Evolve)
     if isnothing(time_start)
         time_start = sim.time
     end
-    nsweeps = round(phase.time / phase.time_step)
+    nsweeps = Int(round(phase.time / phase.time_step))
     duration = phase.time_step * nsweeps
     time_stop = time_start + duration
     log_msg(sim, "Evolving state from simulation time $(time_start) to $(time_stop)")
@@ -74,7 +74,7 @@ function run_phase(sim::Simulation, phase::Evolve)
         state = tdvp(pre, duration, state;
             coefs, n_expand = phase.corrections, nsweeps, time_start,
             phase.limits.cutoff, phase.limits.maxdim,
-            observer! = TdvpWObserver(sim, phase.measures, phase.measures_periodicity))
+            observer! = TdvpObserver(sim, phase.measures, phase.measures_periodicity))
     end
     return Simulation(sim, state, time_start + duration)
 end

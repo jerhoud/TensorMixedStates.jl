@@ -91,7 +91,7 @@ EE(pos) = StateFunc("EE($pos)",
 EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
     st-> begin
         ee, sp = entanglement_entropy!(st, pos)
-        return [[ee]; sp[1:spectre]]
+        return [[ee]; sp[1:min(length(sp), spectre)]]
     end)
 Linkdim = StateFunc("Linkdim", maxlinkdim)
 MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)

@@ -3,7 +3,7 @@ export runTMS, SimData
 @kwdef struct SimData
     description::String=""
     name::String=""
-    end_measures = []
+    final_measures = []
     tfmt::String = "%8.4g"
     dfmt::String = "%12.6g"
     phases
@@ -47,7 +47,7 @@ function log_phase(sim::Simulation, phase)
     log_msg(sim, "\n***** Starting phase \"$(phase.name)\" *****")
     _, elapsed, bytes = @timed begin
         sim = run_phase(sim, phase)
-        output(sim, phase.end_measures)
+        output(sim, phase.final_measures)
     end
     elapsed = round(elapsed; digits=3)
     log_msg(sim, "***** Ending phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(bytes)) allocated *****")

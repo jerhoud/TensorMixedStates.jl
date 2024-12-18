@@ -31,11 +31,11 @@ end
 output(sim::Simulation, m::Pair; kwargs...) =
     output(sim, [m]; kwargs...)
 
-function output(sim::Simulation, measurements::Vector{<:Pair}; debug = false, kwargs...)
+function output(sim::Simulation, measurements::Vector; debug = false, kwargs...)
     if isempty(measurements)
         return
     end
-    vals = measure(sim.state, last.(measurements), sim.time; kwargs...)
+    vals = measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
     files = [ get_sim_file(sim, filename) for filename in first.(measurements) ]
     for (v, f) in zip(vals, files)
         for x in v
