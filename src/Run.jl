@@ -17,8 +17,8 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, debug
     if clean 
         return
     end
+    start_dir = pwd()
     try
-        start_dir = pwd()
         if !debug
             mkpath(sim_data.name);
             cd(sim_data.name);
