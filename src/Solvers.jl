@@ -32,9 +32,9 @@ tdvp(op, t::Number, state::State; kwargs...) =
     tdvp(PreMPO(state, op), t, state; kwargs...)
 
 
-function dmrg(mpo::MPO, state::State; observer! = NoObserver(), kwargs...)
-    e, st = dmrg(mpo, state.state; observer = observer!, kwargs...)
-    return (e, State(state, st)) 
+function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), kwargs...)
+    e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, kwargs...)
+    return (e, State(state, st))
 end
 
 dmrg(op, state::State; kwargs...) =
