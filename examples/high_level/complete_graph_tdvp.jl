@@ -5,7 +5,10 @@ limits = Limits(
     maxdim = 100,
 )
 
-output(n) = "data" => [X, Y, Z, Y(1)Y(2), Z(1)Y(2)Y(3), EE(n ÷ 2, 4), Purity, Trace]
+output(n) = [
+    "data" => [X, Y, Z, Y(1)Y(2), Z(1)Y(2)Y(3), EE(n ÷ 2, 4), Purity, Trace],
+    "log" => "sim time",
+]
 
 sim_data(n) = SimData(
     name = "my simulation with $n qubits",
