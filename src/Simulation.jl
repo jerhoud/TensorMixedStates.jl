@@ -6,8 +6,8 @@ struct Simulation
     debug::Bool
     files::Dict{String, IO}
     formats::Tuple{Printf.Format, Printf.Format}
-    Simulation(state; t::Number = 0, debug = false, tfmt::String = "%8.4g", dfmt::String = "%12.6g") =
-        new(state, t, debug, Dict(), (Printf.Format(tfmt), Printf.Format(dfmt)))
+    Simulation(state; t::Number = 0, debug = false, time_format::String = "%8.4g", data_format::String = "%12.6g") =
+        new(state, t, debug, Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
     Simulation(s::Simulation, st::State, t::Number = s.time) =
         new(st, t, s.debug, s.files, s.formats)
 end

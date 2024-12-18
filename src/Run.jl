@@ -4,15 +4,15 @@ export runTMS, SimData
     description::String=""
     name::String=""
     final_measures = []
-    tfmt::String = "%8.4g"
-    dfmt::String = "%12.6g"
+    time_format::String = "%8.4g"
+    data_format::String = "%12.6g"
     phases
 end
 
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, debug::Bool=false)
     live = !debug
     if !debug && (restart || clean)
-        rm(sim_data.name; recursive = true)
+        rm(sim_data.name; recursive = true, force = true)
     end
     if clean 
         return
@@ -27,7 +27,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, debug
                 write("description", sim_data.description)
             end
         end
-        sim = Simulation(nothing; debug, sim_data.tfmt, sim_data.dfmt)
+        sim = Simulation(nothing; debug, sim_data.time_format, sim_data.data_format)
         log_phase(sim, sim_data)
         if !debug
             rm("running")

@@ -12,7 +12,10 @@ output(n) = [
 
 sim_data(n) = SimData(
     name = "my simulation with $n qubits",
-    description = "A simulation with $n qubits\nstarting from a complete graph state\nWith dissipation toward Up using tdvp",
+    description = """
+            A simulation with $n qubits
+            starting from a complete graph state
+            With dissipation toward Up using tdvp""",
     phases = [
         CreateState(
             name = "Creating complete graph state",
@@ -30,11 +33,11 @@ sim_data(n) = SimData(
             algo = Tdvp,
             evolver = sum(DUp(i) for i in 1:n),
             measures = output(n),
-            measures_periodicity = 4,
+            measures_period = 4,
         ),
     ],
 )
 
 
 # do it for 10 qubits
-runTMS(sim_data(4); debug = true)
+runTMS(sim_data(4))

@@ -53,7 +53,7 @@ end
     time_step::Number
     algo
     evolver
-    measures_periodicity::Int = 1
+    measures_period::Int = 1
     measures = []
     corrections::Int = 0
 end
@@ -73,6 +73,6 @@ end
     maxdim::Vector{Int}
     nsweeps::Int
     measures = []
-    measures_periodicity::Int = 1
+    measures_period::Int = 1
     tol::Number = 0.
 end

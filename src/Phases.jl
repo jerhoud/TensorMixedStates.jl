@@ -69,12 +69,12 @@ function run_phase(sim::Simulation, phase::Evolve)
         state = approx_W(pre, duration, state;
             coefs, n_correct = phase.corrections, nsweeps, algo.order, algo.w, time_start,
             phase.limits.cutoff, phase.limits.maxdim,
-            observer! = ApproxWObserver(sim, phase.measures, phase.measures_periodicity))
+            observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
         state = tdvp(pre, duration, state;
             coefs, n_expand = phase.corrections, nsweeps, time_start,
             phase.limits.cutoff, phase.limits.maxdim,
-            observer! = TdvpObserver(sim, phase.measures, phase.measures_periodicity))
+            observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
     return Simulation(sim, state, time_start + duration)
 end
@@ -93,7 +93,7 @@ function run_phase(sim::Simulation, phase::Dmrg)
         error("Dmrg hamiltonian cannot contain multiple site operators nor dissipators")
     end
     e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.maxdim, phase.cutoff,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_periodicity, phase.tol))
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tol))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim
 end

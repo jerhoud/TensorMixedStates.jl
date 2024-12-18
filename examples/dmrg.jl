@@ -35,7 +35,7 @@ phases(n) = [
         cutoff = 1e-10,
         maxdim = [5, 10, 25, 50, 100],
         nsweep = 10,
-        output_periodicity = 1,
+        output_period = 1,
         data_output = output,      
     ),
 ]
