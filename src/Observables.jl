@@ -299,8 +299,7 @@ function expect2_one(state::State, ops::Tuple{Any, Any}, i1::Int, i2::Int, t::IT
         end
     else
         if state.type == Pure
-            println("$i1, $i2, $(inds(t)), $(inds(o1)), $(inds(o2))")
-            return scalar(o1 * t * o2)
+             return scalar(o1 * t * o2)
         else
             return scalar(mixed_obs(state, o1, i1) * t * mixed_obs(state, o2, i2))
         end
@@ -334,9 +333,9 @@ function expect2!(::TPure, state::State, ops, ::Nothing)
         for j in i+1:n
             l *= st[j]
             t = l
-            if i < n
-                ridx = commonind(st[i], st[i+1])
-                t *= delta(ridx, ridx')
+            if j < n
+                rjdx = commonind(st[j], st[j+1])
+                t *= delta(rjdx, rjdx')
             end
             t *= dag(st[j]')
             c[i, j] = expect2_one(state, ops, i, j, t, false)
