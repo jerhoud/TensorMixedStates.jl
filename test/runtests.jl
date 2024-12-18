@@ -93,6 +93,25 @@ function check_evolve_vals(algo, vals; step, atol, kwargs...)
     return true
 end
 
+function check_truncate()
+    s = System(10, "Qubit")
+    st = random_state(Pure, s, 10)
+    stt = truncate(st; maxdim=3)
+    return maxlinkdim(stt) ≤ 3
+end
+
+function check_dmrg()
+    s = System(5, "Qubit")
+    st = random_state(Pure, s, 10)
+    e, std = dmrg(sum(-Z(i) for i in 1:5), st; nsweeps = 2)
+    m = Measure(X, Y, Z, Norm)
+    ms = last.(measure(std, m))
+    if ms ≈ [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1]
+        return true
+    end
+    error("check_dmrg failed with $ms")
+end
+
 @testset verbose=true "TensorMixedStates.jl" begin
     @testset "System building" begin
         @test (System(1, "Qubit"); true)
@@ -154,5 +173,9 @@ end
         @test check_evolve_vals(approx_W, complex_evolve_vals; step = 0.01, atol = 5e-3, order=2, w=2)
         @test check_evolve_vals(approx_W, complex_evolve_vals; step = 0.01, atol = 5e-5, order=3, w=2)
         @test check_evolve_vals(approx_W, complex_evolve_vals; step = 0.01, atol = 5e-7, order=4, w=2)
+    end
+    @testset "Miscellaneous" begin
+        @test check_truncate()
+        @test check_dmrg()
     end
 end
