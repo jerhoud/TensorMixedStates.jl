@@ -43,7 +43,7 @@ tdvp(op, t::Number, sim::Simulation; kwargs...) =
 
 function dmrg(op, sim::Simulation; kwargs...)
     e, st = dmrg(op, sim.state; kwargs...)
-    return (e, Simulation(s, st))
+    return (e, Simulation(sim, st))
 end
 
 approx_W(op, t::Number, sim::Simulation; kwargs...) =

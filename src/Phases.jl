@@ -93,7 +93,7 @@ function run_phase(sim::Simulation, phase::Dmrg)
         error("Dmrg hamiltonian cannot contain multiple site operators nor dissipators")
     end
     e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.maxdim, phase.cutoff,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tol))
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim
 end

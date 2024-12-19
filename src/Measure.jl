@@ -111,7 +111,12 @@ get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
         o.name => o.obs
     end
 get_val(o::StateFunc, ::Dict, st::State, ::Number; kwargs...) = o.name => o.obs(st)
-get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) = string(o) => kwargs[o]
+get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) =
+    if haskey(kwargs, o)
+        string(o) => kwargs[o]
+    else
+        string(0) => []
+    end
 
 function get_val(o::Check, v::Dict, st::State, t::Number; kwargs...)
     v1 = last(get_val(o.obs1, v, st, t; kwargs...))

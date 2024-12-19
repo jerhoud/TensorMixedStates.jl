@@ -34,11 +34,14 @@ tdvp(op, t::Number, state::State; kwargs...) =
 
 function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), kwargs...)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, kwargs...)
-    return (e, State(state, st))
+    if state.type == Mixed
+        e /= 2.
+    end
+    return (e, normalize(State(state, st)))
 end
 
 dmrg(op, state::State; kwargs...) =
-    dmrg(make_mpo(state, op, MixObservable), state; kwargs...)
+    dmrg(make_mpo(state, op), state; kwargs...)
 
 const w_approx_coefs = Vector{ComplexF64}[
     [

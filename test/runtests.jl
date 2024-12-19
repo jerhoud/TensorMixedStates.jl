@@ -106,7 +106,7 @@ function check_dmrg()
     e, std = dmrg(sum(-Z(i) for i in 1:5), st; nsweeps = 2)
     m = Measure(X, Y, Z, Norm)
     ms = last.(measure(std, m))
-    if ms ≈ [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1]
+    if ≈(ms, [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1]; atol = 1e-6)
         return true
     end
     error("check_dmrg failed with $ms")

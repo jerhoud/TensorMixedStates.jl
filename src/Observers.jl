@@ -40,14 +40,19 @@ function measure!(o::ApproxWObserver; sweep, current_time, state, kwargs...)
     return nothing
 end
 
-function checkdone!(o::DmrgObserver; energy, sweep, state, kwargs...)
+function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
+    if o.sim.state.type == Mixed
+        energy /= 2.
+    end
+    stop = false
     if sweep ≠ 1 && abs(o.energy - energy) < o.tol
-        return true
-    elseif mod(sweep, o.period) == 0
-        st = State(o.sim.state, state)
+        stop = true
+    end
+    if stop || mod(sweep, o.period) == 0
+        st = normalize(State(o.sim.state, psi))
         sim = Simulation(o.sim, st)
         output(sim, o.measurements; energy, sweep)
     end
     o.energy = energy
-    return false
+    return stop
 end

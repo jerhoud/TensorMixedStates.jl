@@ -74,5 +74,5 @@ end
     nsweeps::Int
     measures = []
     measures_period::Int = 1
-    tol::Number = 0.
+    tolerance::Number = 0.
 end

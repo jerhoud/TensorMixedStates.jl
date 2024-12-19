@@ -38,6 +38,4 @@ sim_data(n) = SimData(
     ],
 )
 
-
-# do it for 10 qubits
-runTMS(sim_data(4))
+runTMS(sim_data(10))
