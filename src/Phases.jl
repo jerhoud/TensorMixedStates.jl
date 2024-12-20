@@ -39,14 +39,10 @@ end
 
 
 function run_phase(sim::Simulation, phase::Evolve)
-    time_start = phase.time_start
-    if isnothing(time_start)
-        time_start = sim.time
-    end
-    nsweeps = Int(round(phase.time / phase.time_step))
+    nsweeps = Int(round(phase.duration / phase.time_step))
     duration = phase.time_step * nsweeps
-    time_stop = time_start + duration
-    log_msg(sim, "Evolving state from simulation time $(time_start) to $(time_stop)")
+    time_stop = sim.time + duration
+    log_msg(sim, "Evolving state from simulation time $(sim.time) to $(time_stop)")
     time_dep = isa(phase.evolver, Pair)
     if time_dep
         evolver = first(phase.evolver)
@@ -67,22 +63,22 @@ function run_phase(sim::Simulation, phase::Evolve)
     algo = phase.algo
     if algo isa ApproxW
         state = approx_W(pre, duration, state;
-            coefs, n_correct = phase.corrections, nsweeps, algo.order, algo.w, time_start,
+            coefs, n_correct = phase.corrections, nsweeps, algo.order, algo.w, time_start = sim.time,
             phase.limits.cutoff, phase.limits.maxdim,
             observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
         state = tdvp(pre, duration, state;
-            coefs, n_expand = phase.corrections, nsweeps, time_start,
+            coefs, n_expand = phase.corrections, nsweeps, time_start = sim.time,
             phase.limits.cutoff, phase.limits.maxdim,
             observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
-    return Simulation(sim, state, time_start + duration)
+    return Simulation(sim, state, time_stop)
 end
 
 
 function run_phase(sim::Simulation, phase::Gates)
   log_msg(sim, "Applying $(length(phase.gates.ls)) gates")
-  return apply(gates.gates, sim; phase.limits.cutoff, phase.limits.maxdim)
+  return apply(phase.gates, sim; phase.limits.cutoff, phase.limits.maxdim)
 end
 
 

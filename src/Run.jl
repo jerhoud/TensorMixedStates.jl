@@ -3,6 +3,7 @@ export runTMS, SimData
 @kwdef struct SimData
     description::String=""
     name::String=""
+    time_start = 0.
     final_measures = []
     time_format::String = "%8.4g"
     data_format::String = "%12.6g"
@@ -45,6 +46,9 @@ end
 
 function log_phase(sim::Simulation, phase)
     log_msg(sim, "\n***** Starting phase \"$(phase.name)\" *****")
+    if !isnothing(phase.time_start)
+        sim = Simulation(sim, sim.state, phase.time_start)
+    end
     _, elapsed, bytes = @timed begin
         sim = run_phase(sim, phase)
         output(sim, phase.final_measures)

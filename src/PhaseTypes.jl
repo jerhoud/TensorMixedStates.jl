@@ -9,6 +9,7 @@ const no_limits = Limits(cutoff = 0, maxdim = typemax(Int))
 
 @kwdef struct CreateState
     name::String = "Creating state"
+    time_start = 0.
     final_measures = []
     type::Union{Nothing, TPure, TMixed} = nothing
     system::Union{Nothing, System} = nothing
@@ -18,6 +19,7 @@ end
 
 @kwdef struct SaveState
     name::String = "Saving state"
+    time_start = nothing
     final_measures = []
     file::String
     group_name::String = "state"
@@ -25,6 +27,7 @@ end
   
 @kwdef struct LoadState
     name::String = "Loading state"
+    time_start = nothing
     final_measures = []
     file::String
     group_name::String = "state"
@@ -33,6 +36,7 @@ end
   
 @kwdef struct ToMixed
     name::String = "Switching to mixed state representation"
+    time_start = nothing
     final_measures = []
     limits::Limits = no_limits
 end
@@ -46,10 +50,10 @@ end
 
 @kwdef struct Evolve
     name::String = "Time evolution"
+    time_start = nothing
     final_measures = []
     limits::Limits = no_limits
-    time_start = nothing
-    time::Number
+    duration::Number
     time_step::Number
     algo
     evolver
@@ -60,6 +64,7 @@ end
 
 @kwdef struct Gates
     name::String = "Applying gates"
+    time_start = nothing
     final_measures = []
     gates::ProdLit
     limits::Limits
@@ -67,6 +72,7 @@ end
 
 @kwdef struct Dmrg
     name::String = "Dmrg optimization"
+    time_start = nothing
     final_measures = []
     hamiltonian::Lits
     cutoff::Float64

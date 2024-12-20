@@ -28,7 +28,7 @@ sim_data(n) = SimData(
         ),
         Evolve(
             limits = limits,
-            time = 3,
+            duration = 3,
             time_step = 0.025,
             algo = Tdvp,
             evolver = sum(DUp(i) for i in 1:n),

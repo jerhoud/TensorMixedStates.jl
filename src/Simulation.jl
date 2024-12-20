@@ -8,7 +8,7 @@ struct Simulation
     formats::Tuple{Printf.Format, Printf.Format}
     Simulation(state; t::Number = 0, debug = false, time_format::String = "%8.4g", data_format::String = "%12.6g") =
         new(state, t, debug, Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
-    Simulation(s::Simulation, st::State, t::Number = s.time) =
+    Simulation(s::Simulation, st, t::Number = s.time) =
         new(st, t, s.debug, s.files, s.formats)
 end
 
