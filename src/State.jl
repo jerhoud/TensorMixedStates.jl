@@ -30,6 +30,7 @@ end
 
 """
     length(::State)
+    length(::Simulation)
 
 Return the number of sites in the state
 """
@@ -37,6 +38,7 @@ length(state::State) = length(state.system)
 
 """
     maxlinkdim(::State)
+    maxlinkdim(::Simulation)
 
 Return the maximum link dimension in the state
 """
@@ -94,6 +96,7 @@ State(state::State, st::MPS) =
 
 """
     mix(::State)
+    mix(::Simulation)
 
 Transform a pure representation into a mixed representation
 """
@@ -126,7 +129,8 @@ end
 
 
 """
-    truncate(::State; maxdim::Int, cutoff::Number)::State
+    truncate(::State; maxdim::Int, cutoff::Number)
+    truncate(::Simulation; maxdim::Int, cutoff::Number)
 
 Apply the truncation to the given state, in particular we get maxlinkdim(state)<=maxdim
 """

@@ -26,6 +26,7 @@ end
 
 """
     apply(op, ::State; maxdim, cutoff)
+    apply(op, ::Simulation; maxdim, cutoff)
 
 Apply the given gates to the state and truncate the result according to maxdim and cutoff.
 It is much more efficient to apply all the gates in a single call to apply.

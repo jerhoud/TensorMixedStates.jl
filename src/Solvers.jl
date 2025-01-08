@@ -1,6 +1,18 @@
 export tdvp, dmrg, approx_W
 import ITensorMPS: tdvp, dmrg
 
+"""
+    tdvp(evolver, t, ::State; kwargs...)
+    tdvp(evolver, t, ::Simulation; kwargs...)
+
+do time evolution with tdvp algorithm on a state / sim for the given time t. Also see `TdvpObserver`
+
+# Kwargs
+- `nsweeps`: number sweeps to do (time step = t / nsweeps) 
+- `coefs`: coefficients for time dependent evolver
+- `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
+- others are identical to ITensorMPS.tdvp
+"""
 function tdvp(pre::PreMPO, t::Number, state::State;
     observer! = NoObserver(), coefs=nothing, n_expand = 0, nsweeps = 1, time_start = zero(t), kwargs...)
     time_dep = !isnothing(coefs)
@@ -31,7 +43,17 @@ end
 tdvp(op, t::Number, state::State; kwargs...) =
     tdvp(PreMPO(state, op), t, state; kwargs...)
 
+"""
+    dmrg(hamiltonian, ::State; kwargs...)
+    dmrg(hamiltonian, ::Simulation; kwargs...)
 
+optimize state / sim using dmrg. Also see `DmrgObserver`.
+
+# Kwargs
+- `nsweeps`: number of sweeps
+- `observer!`: observer (like observer for ITensorMPS.dmrg)
+- others identical to ITensorMPS.dmrg
+"""
 function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), kwargs...)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, kwargs...)
     if state.type == Mixed
@@ -86,6 +108,23 @@ make_approx_W(op, t::Number, state::State; order::Int, w::Int) =
 
 correct_approx_w(state::State) = state
 
+"""
+    approx_W(evolver, t, ::State; kwargs...)
+    approx_W(evolver, t, ::Simulation; kwargs...)
+
+time evolution using approximation WI or WII at a given order. Also see `ApproxWObserver`
+
+# Kwargs
+- `coefs`: coefficients for time dependent evolution
+- `n_correct`: symmetrize and normalize every n_correct steps (default 0 for no corrections)
+- `nsweeps`: number of steps (time step is t / nsweeps)
+- `order`: order of approximation
+- `w`: 1 or 2 for WI or WII
+- `observer!`: an observer like for tdvp
+- `time_start`: the simulation time at the beginning of evolution
+- `cutoff`: MPS cutoff
+- `maxdim`: MPS maxdim
+"""
 function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_correct::Int = 0,
     nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),  kwargs...)
     st = state.state

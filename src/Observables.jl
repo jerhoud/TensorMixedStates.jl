@@ -60,6 +60,11 @@ norm(state::State) =
     norm(state.state)
 
 
+"""
+    normalize(::State)
+
+normalize state so that norm = 1 for pure state and trace = 1 for mixed state
+"""
 normalize(state::State) =
     if state.type == Pure
         return State(state, normalize(state.state))
@@ -81,6 +86,11 @@ dag(state::State) =
     end
 
 
+"""
+    symmetrize(::State)
+
+symmetrize state so that it is hermitian (only for mixed state)
+"""
 symmetrize(state::State) =
     if state.type == Pure
         state
@@ -88,6 +98,11 @@ symmetrize(state::State) =
         State(state, 0.5*(state.state + dag(state).state))
     end
 
+"""
+    normsym(::State)
+
+equivalent to (normalyze(symmetrize(state)))
+"""
 normsym(state::State) = normalize(symmetrize(state))
 
 """

@@ -1,18 +1,36 @@
-export TdvpObserver, DmrgObserver, EvolveObserver
+export TdvpObserver, DmrgObserver, ApproxWObserver
 import ITensorMPS: measure!, checkdone!
 
+"""
+    struct TdvpObserver
+    TdvpObserver(sim, measurements, period)
+
+an observer for tdvp which make measurements every period steps
+"""
 struct TdvpObserver <: AbstractObserver
     sim::Simulation
     measurements
     period
 end
 
+"""
+    struct ApproxWObserver
+    ApproxWObserver(sim, measurements, period)
+
+an observer for approx_W which make measurements every period steps
+"""
 struct ApproxWObserver <: AbstractObserver
     sim::Simulation
     measurements
     period
 end
 
+"""
+    struct DmrgObserver
+    DmrgObserver(sim, measurements, period, tol)
+
+an observer for dmrg which makes measurements every period steps and stops it when enregy improvements are smaller than tol
+"""
 mutable struct DmrgObserver <: AbstractObserver
     sim::Simulation
     measurements
