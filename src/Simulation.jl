@@ -1,5 +1,16 @@
 export Simulation, get_sim_file
 
+"""
+    Simulation(state[, time = 0])
+    Simulation(sim, state[, time = sim.time])
+
+A type to represent simulation data ans store time and file data. It is used and returned by runTMS.
+The first form creates a simulation object. The second updates the state in the simulation object. (see also `get_sim_file`)
+
+# Fields
+- `state`
+- `time`
+"""
 struct Simulation
     state
     time::Number
@@ -12,6 +23,11 @@ struct Simulation
         new(st, t, s.output, s.files, s.formats)
 end
 
+"""
+    get_sim_file(::Simulation, filename)
+
+return the corresponding file of the given simulation
+"""
 get_sim_file(sim::Simulation, filename) =
     get!(sim.files, filename) do
         if !isnothing(sim.output)
