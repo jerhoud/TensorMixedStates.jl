@@ -10,9 +10,21 @@ export runTMS, SimData
     phases
 end
 
-function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, debug::Bool=false)
-    live = !debug
-    if !debug && (restart || clean)
+
+"""
+    runTMS(::SimData)
+    runTMS(::SimData; clean = true)
+    runTMS(::SimData; restart = true)
+    runTMS(::SimData; output = myoutput)
+
+run the given simulation (see SimData for details) and return a Simulation object containing the result.
+clean remove the simulation directory and exit,
+restart remove the simulation directory and run the simulation,
+output redirect all output to the given IO channel (no output directory created), usefull values are stdout or devnull (to suppress all output).
+"""
+function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
+    live = isnothing(output)
+    if live && (restart || clean)
         rm(sim_data.name; recursive = true, force = true)
     end
     if clean 
@@ -20,7 +32,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, debug
     end
     start_dir = pwd()
     try
-        if !debug
+        if live
             mkpath(sim_data.name);
             cd(sim_data.name);
             touch("running")
@@ -28,14 +40,15 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, debug
                 write("description", sim_data.description)
             end
         end
-        sim = Simulation(nothing; debug, sim_data.time_format, sim_data.data_format)
-        log_phase(sim, sim_data)
-        if !debug
+        sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format)
+        sim = log_phase(sim, sim_data)
+        if live
             rm("running")
             cd(start_dir)
         end
+        return sim
     catch
-        if !debug
+        if live
             touch("error")
             rm("running"; force = true)
             cd(start_dir)

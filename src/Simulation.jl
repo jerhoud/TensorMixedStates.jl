@@ -3,18 +3,20 @@ export Simulation, get_sim_file
 struct Simulation
     state
     time::Number
-    debug::Bool
+    output::Union{Nothing, IO}
     files::Dict{String, IO}
     formats::Tuple{Printf.Format, Printf.Format}
-    Simulation(state; t::Number = 0, debug = false, time_format::String = "%8.4g", data_format::String = "%12.6g") =
-        new(state, t, debug, Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
+    Simulation(state; t::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
+        new(state, t, output, Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
     Simulation(s::Simulation, st, t::Number = s.time) =
-        new(st, t, s.debug, s.files, s.formats)
+        new(st, t, s.output, s.files, s.formats)
 end
 
 get_sim_file(sim::Simulation, filename) =
     get!(sim.files, filename) do
-        if sim.debug || filename == "stdout" || filename == "-"
+        if !isnothing(sim.output)
+            sim.output
+        elseif filename == "stdout" || filename == "-"
             stdout
         elseif filename == ""
             devnull
