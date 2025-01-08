@@ -1,25 +1,55 @@
 export StateFunc, TimeFunc, Check, Measure, Trace, Trace2, Purity, Norm, EE, Linkdim, MemoryUsage, measure
 
+"""
+    struct StateFunc
+    StateFunc(name, obs)
+
+a data type to represent a function of `State`. This is used by `measure`.
+"""
 struct StateFunc
     name
     obs
 end
 
+"""
+    struct TimeFunc
+    TimeFunc(name, obs)
+
+a data type to represent a function of simulation time. This is used by `measure`.
+"""
 struct TimeFunc
     name
     obs
 end
 
+"""
+    struct ObsLit
+    ObsLit(name, obs)
+
+a data type to represent an observable defined by quantum operators. This is used by `measure`.
+"""
 struct ObsLit
     name
     obs
 end
 
+"""
+    struct ObsExp1
+    ObsExp1(name, obs)
+
+a data type to represent an observable applied on all sites. This is used by `measure`.
+"""
 struct ObsExp1
     name
     obs 
 end
 
+"""
+    struct ObsExp2
+    ObsExp2(name, obs)
+
+a data type to represent a correlation applied on all pairs of site. This is used by `measure`.
+"""
 struct ObsExp2
     name
     obs
@@ -47,6 +77,12 @@ wrap_check(o::Function) =
         TimeFunc("func", o)
     end
 
+"""
+    struct Check
+    Check(name, obs1, obs2[, tol])
+
+a measurement that checks the equality between two measurements. It throws an error if the difference is larger than tol.
+"""
 struct Check
     name
     obs1
@@ -56,6 +92,12 @@ struct Check
         new(name, wrap_check(o1), wrap_check(o2), tol)
 end
 
+"""
+    struct Measure
+    Measure(args...)
+
+a data type to hold a set of measurements
+"""
 struct Measure
     measures::Vector
     Measure(obs::Vector) = new(make_obs.(obs))
@@ -128,6 +170,19 @@ function get_val(o::Check, v::Dict, st::State, t::Number; kwargs...)
     return o.name => [v1, v2, d]
 end
 
+"""
+    measure(state, args[, t])
+    measure(state, measure[, t])
+    measure(state, [measures...][, t])
+
+compute the requested measurements on the given state and simulation time
+
+# Examples
+    measure(state, X(1))     # compute observable X(1)
+    measure(state, X)        # compute observable X on all sites
+    measure(state, (X, Y))   # compute correlations XY on all pairs of sites
+    measure(state, Check("check", X(1)X(2), sin(2t)), 0.8) # compute and check the given observable against a computed value
+"""
 measure(state::State, args, t::Number = 0.; kwargs...) =
     measure(state, Measure(args), t; kwargs...)
 

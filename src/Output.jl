@@ -28,6 +28,14 @@ function output(file, header, t, data::Matrix, formats)
     end
 end
 
+"""
+    output(sim, measurments)
+
+compute and output the given measurments on simultaion data sim
+
+# Examples
+    output(sim, [X, X(1)Y(2), (X, Y)])
+"""
 output(sim::Simulation, m::Pair; kwargs...) =
     output(sim, [m]; kwargs...)
 
@@ -51,4 +59,9 @@ function output(sim::Simulation, text::Pair{<:Any, <:AbstractString})
     flush(file)
 end
 
+"""
+    log_msg(sim, text)
+
+log the given message on the "log" file of the simulation
+"""
 log_msg(sim::Simulation, text) = output(sim, "log" => text)

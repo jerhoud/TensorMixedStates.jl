@@ -54,6 +54,12 @@ function make_operator(::Type{MixDissipator}, system::System, t::ITensor, i::Int
     return r * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
 end
 
+"""
+    struct PreMPO
+    PreMPO(state, operator)
+
+a data type to hold precomputations for building an MPO
+"""
 struct PreMPO
     type
     system::System
@@ -143,6 +149,12 @@ function PreMPO(state::State, a, tp=MixEvolve)
     PreMPO!(insertFfactors(a), PreMPO(tp, state))
 end
 
+"""
+    make_mpo(PreMPO[, coef])
+    make_mpo(state, operator)
+
+build an mpo representing an operator
+"""
 function make_mpo(pre::PreMPO, coefs=[1.])
     sys = pre.system
     ld = pre.linkdims
@@ -192,6 +204,12 @@ end
 make_mpo(state, a, tp = MixEvolve) = 
     make_mpo(PreMPO(state, a, tp))
 
+"""
+    make_approx_W1(PreMPO, tau[, coefs])
+    make_approx_W1(state, operator, tau)
+
+build MPO representing approximation WI of a given operator and time step
+"""
 function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
     sys = pre.system
     ld = pre.linkdims
@@ -239,6 +257,12 @@ end
 make_approx_W1(state, a, tau::Number) = 
     make_approx_W1(PreMPO(state, a, MixEvolve), tau)
 
+"""
+    make_approx_W2(PreMPO, tau[, coefs])
+    make_approx_W2(state, operator, tau)
+
+build MPO representing approximation WII of a given operator and time step
+"""
 function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
     sys = pre.system
     ld = pre.linkdims
