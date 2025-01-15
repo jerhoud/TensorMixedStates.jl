@@ -16,7 +16,7 @@ const no_limits = Limits(cutoff = 0, maxdim = typemax(Int))
 
 
 """
-A phase type to create the simulation step
+A phase type to create the simulation state
 
 # Fields
 
