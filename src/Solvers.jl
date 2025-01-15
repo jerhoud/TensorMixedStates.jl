@@ -48,6 +48,7 @@ tdvp(op, t::Number, state::State; kwargs...) =
     dmrg(hamiltonian, ::Simulation; kwargs...)
 
 optimize state / sim using dmrg. Also see `DmrgObserver`.
+Note Dmrg does not work properly for mixed representation.
 
 # Kwargs
 - `nsweeps`: number of sweeps
@@ -56,10 +57,7 @@ optimize state / sim using dmrg. Also see `DmrgObserver`.
 """
 function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), kwargs...)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, kwargs...)
-    if state.type == Mixed
-        e /= 2.
-    end
-    return (e, normalize(State(state, st)))
+    return (e, State(state, st))
 end
 
 dmrg(op, state::State; kwargs...) =
