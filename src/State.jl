@@ -2,7 +2,7 @@ import Base: length, copy
 import ITensors: truncate
 import ITensorMPS: maxlinkdim, apply
 
-export State, mix, truncate, maxlinkdim, memory_usage, apply
+export State, mix, truncate, maxlinkdim, apply
 
 """
     struct State
