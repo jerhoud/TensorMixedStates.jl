@@ -44,7 +44,7 @@ end
 @add_operators(
     [
     "F", "I", "Id",
-    "X", "Y", "Z", "Sp", "Sm",
+    "X", "Y", "Z", "Sp", "Sm", "ProjUp", "ProjDn",
     "H", "P", "S", "T", "SqrtNOT" => "√NOT", "Rx", "Ry", "Rz",
     "CNOT", "CX", "CY", "CZ", "Swap", "CPhase", "CRx", "CRy", "CRz", "SqrtSwap" => "√SWAP",
     "Rxx", "Rxy", "Ryy", "Rzz",
