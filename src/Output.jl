@@ -1,30 +1,37 @@
 export output, log_msg
 
-function output_one(file, x::AbstractFloat, format)
+function output_one(file, x::AbstractFloat, format, _)
     Printf.format(file, format, x)
 end
 
-function output_one(file, x, _)
+function output_one(file, x::Complex, format, log_file)
+    if imag(x) > 1e-14
+        println(log_file, "WARNING: large imaginary part ", x)
+    end
+    output_one(file, real(x), format, log_file)
+end
+
+function output_one(file, x, _, _)
     print(file, x)
 end
 
-output(file, header, t, data, formats) =
-    output(file, header, t, [data], formats)
+output(file, header, t, data, formats, log_file) =
+    output(file, header, t, [data], formats, log_file)
 
-function output(file, header, t, data::Vector, formats)
+function output(file, header, t, data::Vector, formats, log_file)
     print(file, header, "\t")
     Printf.format(file, first(formats), t)
     for x in data
         print(file, "\t")
-        output_one(file, x, last(formats))
+        output_one(file, x, last(formats), log_file)
     end 
     println(file)
 end
 
-function output(file, header, t, data::Matrix, formats)
+function output(file, header, t, data::Matrix, formats, log_file)
     println(file, header)
     for l in 1:size(data, 1)
-        output(file, "$header:$l", t, data[l,:], formats)
+        output(file, "$header:$l", t, data[l,:], formats, log_file)
     end
 end
 
@@ -45,9 +52,10 @@ function output(sim::Simulation, measurements::Vector; debug = false, kwargs...)
     end
     vals = measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
     files = [ get_sim_file(sim, filename) for filename in first.(measurements) ]
+    log_file = get_sim_file(sim, "log")
     for (v, f) in zip(vals, files)
         for x in v
-            output(f, first(x), sim.time, last(x), sim.formats)
+            output(f, first(x), sim.time, last(x), sim.formats, log_file)
         end
         flush(f)
     end
