@@ -72,5 +72,15 @@ end
     "DY" => "Y",
     "DZ" => "Z",
     "DPhase" => "Z",
+    "DN" => "N",
+    "DA" => "A",
+    "DAdag" => "Adag",
+    "DAup" => "Aup",
+    "DAdagup" => "Adagup",
+    "DAdn" => "Adn",
+    "DAdagdn" => "Adagdn",
+    "DNup" => "Nup",
+    "DNdn" => "Ndn",
+    "DNtot" => "Ntot",
     ]
 )
