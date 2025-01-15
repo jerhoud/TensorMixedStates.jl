@@ -445,6 +445,7 @@ function entanglement_entropy!(state::State, pos::Int)
     s = orthogonalize!(state.state, pos)
     _, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
     sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]
-    ee = -sum(p * log(p) for p in sp)
+    sump = sum(sp)
+    ee = -sum(p * log(p) for p in sp) / sump + log(sump)
     return (ee, sp)
 end
