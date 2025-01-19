@@ -34,7 +34,7 @@ function tdvp(pre::PreMPO, t::Number, state::State;
             if n_expand ≠ 0 && mod(sweep, n_expand) == 0
                 st = expand(st, mpo; alg="global_krylov")
             end
-            measure!(observer!; sweep, st, current_time)
+            measure!(observer!; sweep, state = st, current_time)
         end
         return State(state, st)    
     end
@@ -143,7 +143,7 @@ function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_corre
         if n_correct ≠ 0 && mod(sweep, n_correct) == 0
             st = correct_approx_w(st)
         end
-        measure!(observer!; sweep, st, current_time)
+        measure!(observer!; sweep, state = st, current_time)
     end
     return State(state, st)    
 end

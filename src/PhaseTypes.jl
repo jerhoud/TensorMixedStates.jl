@@ -1,4 +1,4 @@
-export Limits, no_limits, Phases, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproW, Evolve, Gates, Dmrg
+export Limits, no_limits, Phases, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
 
 """
 A type to hold MPS limits
