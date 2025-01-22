@@ -27,6 +27,6 @@ include("PhaseTypes.jl")
 include("Phases.jl")
 
 # Precompilation
-include("Precompile.jl")
+#include("Precompile.jl")
 
 end

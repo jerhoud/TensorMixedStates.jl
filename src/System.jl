@@ -1,4 +1,4 @@
-import Base: length
+import Base: length, show
 export Pure, Mixed, TPure, TMixed, System, site
 
 
@@ -56,19 +56,28 @@ Represent a quantum system
 @kwdef struct System
     pure_sites::Vector{Index}
     mixed_sites::Vector{Index}
+    create_string::String
 end
     
-System(sitetypes::Vector) =
-    System(map(s->s(Pure), sitetypes), map(s->s(Mixed), sitetypes))
+System(sitetypes::Vector; create_string::String="") =
+    System(map(s->s(Pure), sitetypes), map(s->s(Mixed), sitetypes), create_string)
 
-System(size::Int, sitetype) =
-    System(fill(sitetype, size))
+System(size::Int, sitetype; create_string::String="") =
+    System(fill(sitetype, size); create_string)
 
-System(sitenames::Vector{String}) =
-    System(map(site, sitenames))
+System(sitenames::Vector{String}; create_string::String="System($sitenames)") =
+    System(map(site, sitenames); create_string)
 
-System(size::Int, sitename::String) =
-    System(fill(sitename, size))
+System(size::Int, sitename::String; create_string::String="System($size, \"$sitename\")") =
+    System(fill(sitename, size); create_string)
+
+function show(io::IO, s::System)
+    if s.create_string ≠ ""
+        print(io, s.create_string)
+    else
+        print(io, "System($(s.pure_sites), $(s.mixed_sites))")
+    end
+end
 
 """
     length(::System)

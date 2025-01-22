@@ -25,6 +25,20 @@ A type for describing a simulation to use with `runTMS`
     phases
 end
 
+show(io::IO, s::SimData) =
+    print(io,
+    """
+    SimData(
+        description = $(repr(s.description)),
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        time_format = $(repr(s.time_format)),
+        data_format = $(repr(s.data_format)),
+        phases =
+    $(s.phases))"""
+    )
+
 
 """
     runTMS(::SimData)
@@ -54,6 +68,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             if sim_data.description ≠ ""
                 write("description", sim_data.description)
             end
+            write("replay.jl", sim_data)
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format)
         sim = log_phase(sim, sim_data)
@@ -84,4 +99,8 @@ function log_phase(sim::Simulation, phase)
     elapsed = round(elapsed; digits=3)
     log_msg(sim, "***** Ending phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(bytes)) allocated *****")
     return sim
+end
+
+function write_prog(filename, s::SimData)
+    
 end

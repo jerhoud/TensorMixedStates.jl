@@ -41,6 +41,18 @@ A phase type to create the simulation state
     randomize::Int = 0
 end
 
+show(io::IO, s::CreateState) = 
+    print(io,
+        """
+        CreateState(
+            name = $(repr(s.name)),
+            time_start = $(s.time_start),
+            final_measures = $(s.final_measures),
+            type = $(s.type),
+            system = $(s.system),
+            state = $(repr(s.state)),
+            randomize = $(s.randomize))""")
+
 """
 A phase type to save the state to disk
 
@@ -53,7 +65,19 @@ SaveState(file = "myfile")
     file::String
     group_name::String = "state"
 end
-  
+
+show(io::IO, s::SaveState) = 
+    print(io,
+    """
+    SaveState(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        file = $(repr(s.file)),
+        group_name = $(repr(s.group_name)))"""
+    )
+
+
 """
 A phase type to load the state from disk
 
@@ -68,6 +92,18 @@ LoadState(file = "myfile")
     limits::Limits = no_limits
 end
 
+show(io::IO, s::LoadState) = 
+    print(io,
+    """
+    LoadState(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        file = $(repr(s.file)),
+        group_name = $(repr(s.group_name)),
+        limits = $(s.limits))"""
+    )
+
 """
 A phase type to switch to mixed representation
 
@@ -81,6 +117,18 @@ A phase type to switch to mixed representation
     final_measures = []
     limits::Limits = no_limits
 end
+
+show(io::IO, s::ToMixed) = 
+    print(io,
+    """
+    ToMixed(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        limits = $(s.limits))"""
+    )
+
+
 
 """
 An algorithm type for `Evolve`
@@ -100,6 +148,9 @@ This corresponds to time evolution with exponential approximation WI or WII comb
     order
     w = 2
 end
+
+show(io::IO, s::ApproxW) =
+    print(io, "ApproxW(order = $(s.order), w = $(s.w))")
 
 """
 A phase type for time evolution
@@ -131,6 +182,23 @@ A phase type for time evolution
     corrections::Int = 0
 end
 
+show(io::IO, s::Evolve) = 
+    print(io,
+    """
+    Evolve(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        limits = $(s.limits),
+        duration = $(s.duration),
+        time_step = $(s.time_step),
+        algo = $(s.algo),
+        evolver = $(s.evolver),
+        measures_period = $(s.measures_period),
+        measures = $(s.measures),
+        corrections = $(s.corrections))"""
+    )
+
 """
 A phase type for applying gates
 
@@ -144,6 +212,17 @@ A phase type for applying gates
     gates::ProdLit
     limits::Limits
   end
+
+show(io::IO, s::Gates) = 
+    print(io,
+    """
+    Gates(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        limits = $(s.limits),
+        gates = $(s.gates))"""
+    )
 
 """
 A phase type for optimizing with Dmrg
@@ -163,6 +242,23 @@ A phase type for optimizing with Dmrg
     measures_period::Int = 1
     tolerance::Number = 0.
 end
+
+show(io::IO, s::Dmrg) = 
+    print(io,
+    """
+    Dmrg(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        nsweeps = $(s.nsweeps),
+        hamiltonian = $(s.hamiltonian),
+        cutoff = $(s.cutoff),
+        maxdim = $(s.maxdim),
+        measures_period = $(s.measures_period),
+        measures = $(s.measures),
+        tolerance = $(s.tolerance))"""
+    )
+
 
 """
     Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg}
