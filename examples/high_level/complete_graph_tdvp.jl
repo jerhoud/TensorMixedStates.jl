@@ -17,11 +17,7 @@ sim_data(n) = SimData(
             starting from a complete graph state
             With dissipation toward Up using tdvp""",
     phases = [
-        CreateState(
-            name = "Creating complete graph state",
-            state = graph_state(Pure, complete_graph(n)),
-            final_measures = output(n),
-        ),
+        create_graph_state(Pure, complete_graph(n); limits),
         ToMixed(
             final_measures = output(n),
             limits = limits,

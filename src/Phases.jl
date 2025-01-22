@@ -1,12 +1,5 @@
 run_phase(sim::Simulation, sd::SimData) =
-    run_phase(sim, sd.phases)
-
-function run_phase(sim::Simulation, phases::Vector)
-    for phase in phases
-        sim = log_phase(sim, phase)
-    end
-    return sim
-end
+    log_phase(sim, sd.phases)
 
 function run_phase(sim::Simulation, phase::CreateState)
     if isnothing(phase.state)

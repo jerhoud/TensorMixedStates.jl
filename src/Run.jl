@@ -68,7 +68,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             if sim_data.description ≠ ""
                 write("description", sim_data.description)
             end
-            write("replay.jl", sim_data)
+            write_prog("prog.jl", sim_data)
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format)
         sim = log_phase(sim, sim_data)
@@ -87,6 +87,13 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     end
 end
 
+function log_phase(sim::Simulation, phases::Vector)
+    for phase in phases
+        sim = log_phase(sim, phase)
+    end
+    return sim
+end
+
 function log_phase(sim::Simulation, phase)
     log_msg(sim, "\n***** Starting phase \"$(phase.name)\" *****")
     if !isnothing(phase.time_start)
@@ -101,6 +108,12 @@ function log_phase(sim::Simulation, phase)
     return sim
 end
 
-function write_prog(filename, s::SimData)
-    
-end
+write_prog(filename, s::SimData) =
+    write(filename,
+        """
+        using TensorMixedStates
+
+        simdata = $s
+
+        runTMS(simdata)
+        """)

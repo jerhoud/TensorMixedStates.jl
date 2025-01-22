@@ -44,6 +44,7 @@ end
 show(io::IO, s::CreateState) = 
     print(io,
         """
+
         CreateState(
             name = $(repr(s.name)),
             time_start = $(s.time_start),
@@ -69,6 +70,7 @@ end
 show(io::IO, s::SaveState) = 
     print(io,
     """
+
     SaveState(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
@@ -95,6 +97,7 @@ end
 show(io::IO, s::LoadState) = 
     print(io,
     """
+
     LoadState(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
@@ -121,6 +124,7 @@ end
 show(io::IO, s::ToMixed) = 
     print(io,
     """
+
     ToMixed(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
@@ -185,6 +189,7 @@ end
 show(io::IO, s::Evolve) = 
     print(io,
     """
+
     Evolve(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
@@ -216,6 +221,7 @@ A phase type for applying gates
 show(io::IO, s::Gates) = 
     print(io,
     """
+
     Gates(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
@@ -246,6 +252,7 @@ end
 show(io::IO, s::Dmrg) = 
     print(io,
     """
+    
     Dmrg(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
