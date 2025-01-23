@@ -1,5 +1,7 @@
-export tdvp, dmrg, approx_W
+export tdvp, dmrg, approx_W, block_tdvp
 import ITensorMPS: tdvp, dmrg
+
+block_tdvp = true
 
 """
     tdvp(evolver, t, ::State; kwargs...)
@@ -16,7 +18,7 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 function tdvp(pre::PreMPO, t::Number, state::State;
     observer! = NoObserver(), coefs=nothing, n_expand = 0, nsweeps = 1, time_start = zero(t), kwargs...)
     time_dep = !isnothing(coefs)
-    if n_expand == 0 && !time_dep
+    if block_tdvp && n_expand == 0 && !time_dep
         return State(state, tdvp(make_mpo(pre), t, state.state; observer!, nsweeps, time_start, kwargs...))
     else
         st = state.state
