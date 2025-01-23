@@ -11,6 +11,9 @@ struct StateFunc
     obs
 end
 
+show(io::IO, s::StateFunc) =
+    print(io, s.name)
+
 """
     struct TimeFunc
     TimeFunc(name, obs)
@@ -21,6 +24,9 @@ struct TimeFunc
     name
     obs
 end
+
+show(io::IO, s::TimeFunc) =
+    print(io, s.name)
 
 """
     struct ObsLit
