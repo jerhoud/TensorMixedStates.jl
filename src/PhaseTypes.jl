@@ -37,7 +37,7 @@ A phase type to create the simulation state
     final_measures = []
     type::Union{Nothing, TPure, TMixed} = nothing
     system::Union{Nothing, System} = nothing
-    state::Union{Nothing, String, Vector{String}, State} = nothing
+    state::Union{Nothing, String, Vector{String}} = nothing
     randomize::Int = 0
 end
 
