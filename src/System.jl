@@ -1,5 +1,5 @@
 import Base: length, show
-export Pure, Mixed, TPure, TMixed, System, site
+export Pure, Mixed, TPure, TMixed, Site, System, sites
 
 
 """
@@ -21,24 +21,41 @@ struct Mixed end
 TPure = Type{Pure}
 TMixed = Type{Mixed}
 
-site(::TPure, type::String; kwargs...) =
-    siteind(type; kwargs...)
-
-function site(::TMixed, type::String; kwargs...)
-    i = siteind(type; kwargs...)
-    return addtags(Index(2dim(i), tags(i)), "Mixed" * type)
+function show_kwargs(kwargs)
+    s = ""
+    for (sym, val) in pairs(kwargs)
+        s *= " $sym = $val,"
+    end
+    return s
 end
 
 """
-    site(::String; qns_info...)
+    struct Site
 
-Represent a quantum site of the given type
+Represent a qunatum site. Applied on Pure or Mixed return a corresponding ITensor index
 
 # Examples
-    site("Qubit")
+    Site("Qubit")
+    Site("Boson"; dim = 5)
 """
-site(type::String; kwargs...) =
-    tp -> site(tp, type; kwargs...)
+struct Site
+    type::String
+    kwargs
+    Site(type::String; kwargs...) = new(type, kwargs)
+end
+
+show(io::IO, s::Site) =
+    if isempty(s.kwargs)
+        print(io, "Site($(repr(s.type)))")
+    else
+        print(io, "Site($(repr(s.type));$(show_kwargs(s.kwargs)))")
+    end
+
+(s::Site)(::TPure) = siteind(type; kwargs...)
+function (s::Site)(::TMixed)
+    i = s(Pure)
+    return addtags(Index(2dim(i), tags(i)), "Mixed" * type)
+end    
 
 """
     struct System
@@ -52,30 +69,32 @@ Represent a quantum system
 # Examples
     System(10, "Qubit")
     System(["Qubit", "SpinOne", "Qubit"])
+    System(10, Site("Boson"; dim = 5))
+    System([Site(Qubit), Site("Boson"; dim = 5), Site("Qubit")])
 """
 @kwdef struct System
     pure_sites::Vector{Index}
     mixed_sites::Vector{Index}
-    create_string::String
+    show_data
 end
     
-System(sitetypes::Vector; create_string::String="") =
-    System(map(s->s(Pure), sitetypes), map(s->s(Mixed), sitetypes), create_string)
+System(sitetypes::Vector; show_data = sitetypes) =
+    System(map(s->s(Pure), sitetypes), map(s->s(Mixed), sitetypes), show_data)
 
-System(size::Int, sitetype; create_string::String="") =
-    System(fill(sitetype, size); create_string)
+System(size::Int, sitetype) =
+    System(fill(sitetype, size); show_data = size => sitetype)
 
-System(sitenames::Vector{String}; create_string::String="System($sitenames)") =
-    System(map(site, sitenames); create_string)
+System(sitenames::Vector{String}) =
+    System(map(Site, sitenames))
 
-System(size::Int, sitename::String; create_string::String="System($size, \"$sitename\")") =
-    System(fill(sitename, size); create_string)
+System(size::Int, sitename::String; kwargs...) =
+    System(size, Site(sitename; kwargs...))
 
 function show(io::IO, s::System)
-    if s.create_string ≠ ""
-        print(io, s.create_string)
+    if s.show_data isa Pair
+        print(io, "System($(first(s.show_data)), $(repr(last(s.show_data))))")
     else
-        print(io, "System($(s.pure_sites), $(s.mixed_sites))")
+        print(io, "System($(s.show_data))")
     end
 end
 
