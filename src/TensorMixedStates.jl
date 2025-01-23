@@ -29,6 +29,6 @@ include("Graphs.jl")
 include("SiteSpecifics.jl")
 
 # Precompilation
-#include("Precompile.jl")
+include("Precompile.jl")
 
 end
