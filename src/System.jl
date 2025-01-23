@@ -51,10 +51,11 @@ show(io::IO, s::Site) =
         print(io, "Site($(repr(s.type));$(show_kwargs(s.kwargs)))")
     end
 
-(s::Site)(::TPure) = siteind(type; kwargs...)
+(s::Site)(::TPure) = siteind(s.type; s.kwargs...)
 function (s::Site)(::TMixed)
     i = s(Pure)
-    return addtags(Index(2dim(i), tags(i)), "Mixed" * type)
+    c = combiner(i, i'; tags = tags(i))
+    return addtags(combinedind(c), "Mixed" * s.type)
 end    
 
 """
