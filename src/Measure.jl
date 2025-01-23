@@ -9,7 +9,10 @@ a data type to represent a function of `State`. This is used by `measure`.
 struct StateFunc
     name
     obs
+    use_prep
 end
+
+StateFunc(name, obs) = StateFunc(name, obs, false)
 
 show(io::IO, s::StateFunc) =
     print(io, s.name)
@@ -129,9 +132,9 @@ get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
 get_exp2(_) = []
 
-Trace = StateFunc("Trace", trace)
-Trace2 = StateFunc("Trace2", trace2)
-Purity = StateFunc("Purity", trace2)
+Trace = StateFunc("Trace", trace, true)
+Trace2 = StateFunc("Trace2", trace2, true)
+Purity = StateFunc("Purity", trace2, true)
 Norm = StateFunc("Norm", norm)
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
@@ -158,7 +161,12 @@ get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
     else
         o.name => o.obs
     end
-get_val(o::StateFunc, ::Dict, st::State, ::Number; kwargs...) = o.name => o.obs(st)
+get_val(o::StateFunc, ::Dict, st::State, ::Number; prep, kwargs...) =
+    if o.use_prep
+        return o.name => o.obs(st; prep)
+    else
+        return o.name => o.obs(st)
+    end
 get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) =
     if haskey(kwargs, o)
         string(o) => kwargs[o]
@@ -211,5 +219,5 @@ function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
     if !isempty(exp2s)
         push!(vals, (exp2s .=> expect2!(st, exp2s, prep))...)
     end
-    return get_val(m, vals, st, t; kwargs...)
+    return get_val(m, vals, st, t; prep, kwargs...)
 end

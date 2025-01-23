@@ -29,11 +29,13 @@ end
 Return the trace of the system, mostly usefull for mixed representations.
 This should be one.
 """
-function trace(state::State)
+function trace(state::State; prep = nothing)
     if state.type == Pure
         norm(state.state)^2
-    else
+    elseif isnothing(prep)
         scalar(prod(mixed_obs(state, i) for i in 1:length(state)))
+    else
+        prep.trace
     end
 end
 
@@ -43,11 +45,11 @@ end
 Return the trace of the square density matrix, mostly usefull for mixed representations.
 Should be one for pure representation.
 """
-trace2(state::State) =
+trace2(state::State; prep = nothing) =
     if state.type == Pure
-        norm(state.state)^4
+        1.
     else
-        norm(state.state)^2
+        (norm(state.state) / real(trace(state; prep))) ^ 2
     end
 
 """
@@ -69,7 +71,7 @@ normalize(state::State) =
     if state.type == Pure
         return State(state, normalize(state.state))
     else
-        return State(state, state.state * (1. / trace(state)))
+        return State(state, state.state * (1. / real(trace(state))))
     end
 
 
@@ -115,6 +117,7 @@ struct PreObs
     loc::Vector{ITensor}
     left::Vector{ITensor}
     right::Vector{ITensor}
+    trace::Number
 end
 
 PreObs(::TPure, ::State) = nothing
@@ -125,9 +128,10 @@ function PreObs(::TMixed, state::State)
     vloc = [ mixed_obs(state, i) for i in 1:n]
     v = ITensor(1)
     vleft = [[st[1]]; [(v *= vloc[i]; v * st[i+1]) for i in 1:n-1]]
-    v = ITensor(1)
-    vright = reverse([[ITensor(1)]; [v *= vloc[i] for i in n:-1:2]])
-    return PreObs(vloc, vleft, vright)
+    vtrace = scalar(v * vloc[n])
+    v = ITensor(1. / real(vtrace))
+    vright = reverse([[v]; [v *= vloc[i] for i in n:-1:2]])
+    return PreObs(vloc, vleft, vright, vtrace)
 end
 
 PreObs(state::State) = PreObs(state.type, state)
@@ -205,6 +209,9 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
 end
 
 function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
+    if p.coef == 0.
+        return 0.
+    end
     psites = state.system.pure_sites
     st = state.state
     r = ITensor(1)
@@ -228,10 +235,8 @@ function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
             o = op(l.opname, psites[i]; l.param...)
         end
     end
-    if j ≠ 0
-        r *= mixed_obs(state, o, j)
-        r *= pre.right[j]
-    end
+    r *= mixed_obs(state, o, j)
+    r *= pre.right[j]
     return p.coef * scalar(r)
 end
 
