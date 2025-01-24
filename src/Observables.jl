@@ -71,7 +71,7 @@ normalize(state::State) =
     if state.type == Pure
         return State(state, normalize(state.state))
     else
-        return State(state, state.state * (1. / real(trace(state))))
+        return State(state, state.state / real(trace(state)))
     end
 
 
