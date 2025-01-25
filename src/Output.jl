@@ -33,7 +33,7 @@ function output(sim::Simulation, file, header, data::Vector)
             if e isa LogWarn
                 log_msg(sim, "$(e.msg): $header $(sim.time) ($i)")
             else
-                rethrow(e)
+                rethrow()
             end
         end
     end 
