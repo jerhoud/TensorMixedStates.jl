@@ -21,7 +21,7 @@ A type for describing a simulation to use with `runTMS`
     time_start = 0.
     final_measures = []
     time_format::String = "%8.4g"
-    data_format::String = "%12.6g"
+    data_format::String = "%14.8g"
     phases
 end
 
