@@ -1,4 +1,4 @@
-export Limits, no_limits, Phases, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
+export Limits, no_limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
 
 """
 A type to hold MPS limits
@@ -156,6 +156,10 @@ end
 show(io::IO, s::ApproxW) =
     print(io, "ApproxW(order = $(s.order), w = $(s.w))")
 
+
+Algo = Union{Tdvp, ApproxW}
+
+
 """
 A phase type for time evolution
 
@@ -179,11 +183,12 @@ A phase type for time evolution
     limits::Limits = no_limits
     duration::Number
     time_step::Number
-    algo
+    algo::Algo
     evolver
     measures_period::Int = 1
     measures = []
-    corrections::Int = 0
+    expand::Int = 0
+    symmetrize::Int = 0
 end
 
 show(io::IO, s::Evolve) = 
@@ -201,7 +206,8 @@ show(io::IO, s::Evolve) =
         evolver = $(s.evolver),
         measures_period = $(s.measures_period),
         measures = $(s.measures),
-        corrections = $(s.corrections))"""
+        expand = $(s.expand),
+        symmetrize = $(s.symmetrize)))"""
     )
 
 """

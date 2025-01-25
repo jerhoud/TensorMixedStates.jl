@@ -16,9 +16,9 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 - others are identical to ITensorMPS.tdvp
 """
 function tdvp(pre::PreMPO, t::Number, state::State;
-    observer! = NoObserver(), coefs=nothing, n_expand = 0, nsweeps = 1, time_start = zero(t), kwargs...)
+    observer! = NoObserver(), coefs=nothing, n_expand = 0, n_symmetrize = 0, nsweeps = 1, time_start = zero(t), kwargs...)
     time_dep = !isnothing(coefs)
-    if block_tdvp && n_expand == 0 && !time_dep
+    if block_tdvp && n_expand == 0 && n_symmetrize == 0 && !time_dep
         return State(state, tdvp(make_mpo(pre), t, state.state; observer!, nsweeps, time_start, kwargs...))
     else
         st = state.state
@@ -33,10 +33,13 @@ function tdvp(pre::PreMPO, t::Number, state::State;
                 mpo = make_mpo(pre, map(f->f(tf), coefs))
             end
             st = tdvp(mpo, dt, st; nsweeps = 1, kwargs...)
+            if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
+                st = symmetrize(State(state, st)).state
+            end    
+            measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
             if n_expand ≠ 0 && mod(sweep, n_expand) == 0
                 st = expand(st, mpo; alg="global_krylov")
             end
-            measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
         end
         return State(state, st)    
     end
@@ -106,8 +109,6 @@ end
 make_approx_W(op, t::Number, state::State; order::Int, w::Int) =
     make_approx_W(PreMPO(state, op), t; order, w)
 
-correct_approx_w(state::State) = state
-
 """
     approx_W(evolver, t, ::State; kwargs...)
     approx_W(evolver, t, ::Simulation; kwargs...)
@@ -116,7 +117,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 
 # Kwargs
 - `coefs`: coefficients for time dependent evolution
-- `n_correct`: symmetrize and normalize every n_correct steps (default 0 for no corrections)
+- `n_symmetrize`: make hermitian (for mixed states) every n_symmetrize steps (default 0 for no corrections)
 - `nsweeps`: number of steps (time step is t / nsweeps)
 - `order`: order of approximation
 - `w`: 1 or 2 for WI or WII
@@ -125,7 +126,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `cutoff`: MPS cutoff
 - `maxdim`: MPS maxdim
 """
-function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_correct::Int = 0,
+function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symmetrize::Int = 0,
     nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),  kwargs...)
     st = state.state
     dt = t / nsweeps
@@ -142,8 +143,8 @@ function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_corre
         for mpo in mpos
             st = apply(mpo, st; kwargs...)
         end
-        if n_correct ≠ 0 && mod(sweep, n_correct) == 0
-            st = correct_approx_w(st)
+        if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
+            st = symmetrize(State(state, st)).state
         end
         measure!(observer!; sweep, state = st, current_time)
     end
