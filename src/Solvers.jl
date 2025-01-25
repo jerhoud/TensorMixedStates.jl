@@ -36,7 +36,7 @@ function tdvp(pre::PreMPO, t::Number, state::State;
             if n_expand ≠ 0 && mod(sweep, n_expand) == 0
                 st = expand(st, mpo; alg="global_krylov")
             end
-            measure!(observer!; sweep, state = st, current_time)
+            measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
         end
         return State(state, st)    
     end
