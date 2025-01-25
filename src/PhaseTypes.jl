@@ -64,7 +64,7 @@ SaveState(file = "myfile")
     time_start = nothing
     final_measures = []
     file::String
-    group_name::String = "state"
+    statename::String = "state"
 end
 
 show(io::IO, s::SaveState) = 
@@ -76,7 +76,7 @@ show(io::IO, s::SaveState) =
         time_start = $(s.time_start),
         final_measures = $(s.final_measures),
         file = $(repr(s.file)),
-        group_name = $(repr(s.group_name)))"""
+        statename = $(repr(s.statename)))"""
     )
 
 
@@ -90,7 +90,7 @@ LoadState(file = "myfile")
     time_start = nothing
     final_measures = []
     file::String
-    group_name::String = "state"
+    statename::String = "state"
     limits::Limits = no_limits
 end
 
@@ -103,7 +103,7 @@ show(io::IO, s::LoadState) =
         time_start = $(s.time_start),
         final_measures = $(s.final_measures),
         file = $(repr(s.file)),
-        group_name = $(repr(s.group_name)),
+        statename = $(repr(s.statename)),
         limits = $(s.limits))"""
     )
 

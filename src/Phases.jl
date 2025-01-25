@@ -86,9 +86,8 @@ function run_phase(sim::Simulation, phase::Dmrg)
     return sim
 end
 
-run_phase(sim::Simulation, phase::LoadState) =
-    error("LoadState not implemented yet")
-
 run_phase(sim::Simulation, phase::SaveState) =
-    error("SaveState not implemented yet")
-
+    save_state(phase.file, phase.statename, sim.state)
+    
+run_phase(sim::Simulation, phase::LoadState) =
+    Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits.cutoff, phase.limits.maxdim))
