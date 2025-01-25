@@ -2,7 +2,7 @@ using TensorMixedStates
 
 limits = Limits(
     cutoff = 1e-30,
-    maxdim = 100,
+    maxdim = 50,
 )
 
 output(n) = [
@@ -18,7 +18,7 @@ output(n) = [
     "X1X4.dat" => X(1)X(4),
     "X1X5.dat" => X(1)X(5),
     "OSEE.dat" => EE(n ÷ 2, 4),
-    "purity.dat" => [Purity, Trace],
+    "purity.dat" => [Purity, Trace, Linkdim],
     "log" => "sim time"
 ]
 
@@ -44,8 +44,8 @@ sim_data(J,h,n) = SimData(
             limits = limits,
         ), 
         Evolve(
-            #algo = tdvp,
-            algo =  ApproxW(order = 4, w = 2),
+            #algo = Tdvp(n_symmetrize = 5),
+            algo =  ApproxW(order = 4, n_symmetrize = 5),
             limits = limits,
             duration = 5,
             time_step = 0.04,

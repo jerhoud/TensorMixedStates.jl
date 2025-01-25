@@ -93,11 +93,11 @@ dag(state::State) =
 
 symmetrize state so that it is hermitian (only for mixed state)
 """
-symmetrize(state::State) =
+symmetrize(state::State; cutoff = 0., maxdim = typemax(Int)) =
     if state.type == Pure
         state
     else
-        State(state, 0.5*(state.state + dag(state).state))
+        State(state, 0.5*(+(state.state, dag(state).state; cutoff, maxdim)))
     end
 
 """

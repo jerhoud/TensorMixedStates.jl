@@ -136,8 +136,19 @@ show(io::IO, s::ToMixed) =
 
 """
 An algorithm type for `Evolve`
+
+# Examples
+    Tdvp()
+    Tdvp(n_expand = 5)     tdvp with expansion steps every 5 steps
+    Tdvp(n_symmetrize = 3) tdvp, make hermitian every 3 steps
 """
-struct Tdvp end
+@kwdef struct Tdvp
+    n_expand::Int = 0
+    n_symmetrize::Int = 0
+end
+
+show(io::IO, s::Tdvp) =
+    print(io, "Tdvp(n_expand = $(s.n_expand), n_symmetrize = $(s.n_symmetrize))")
 
 """
 An algorithm type for `Evolve`
@@ -145,16 +156,18 @@ An algorithm type for `Evolve`
 This corresponds to time evolution with exponential approximation WI or WII combined to obtained approximation of the given order
 
 # Examples
-    ApproxW(order = 2, w = 2)     order 2, WII
-    ApproxW(order = 4, w = 1)     order 4, WI
+    ApproxW(order = 2)                   order 2, WII
+    ApproxW(order = 4, w = 1)            order 4, WI
+    ApproxW(order = 4, n_symmetrize = 3) order 4, make hermitian every 3 steps
 """
 @kwdef struct ApproxW
-    order
-    w = 2
+    order::Int
+    w::Int = 2
+    n_symmetrize::Int = 0
 end
 
 show(io::IO, s::ApproxW) =
-    print(io, "ApproxW(order = $(s.order), w = $(s.w))")
+    print(io, "ApproxW(order = $(s.order), w = $(s.w), n_symmetrize = $(s.n_symmetrize))")
 
 
 Algo = Union{Tdvp, ApproxW}
@@ -187,8 +200,6 @@ A phase type for time evolution
     evolver
     measures_period::Int = 1
     measures = []
-    expand::Int = 0
-    symmetrize::Int = 0
 end
 
 show(io::IO, s::Evolve) = 
@@ -205,9 +216,7 @@ show(io::IO, s::Evolve) =
         algo = $(s.algo),
         evolver = $(s.evolver),
         measures_period = $(s.measures_period),
-        measures = $(s.measures),
-        expand = $(s.expand),
-        symmetrize = $(s.symmetrize)))"""
+        measures = $(s.measures))"""
     )
 
 """

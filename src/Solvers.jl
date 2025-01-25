@@ -34,7 +34,7 @@ function tdvp(pre::PreMPO, t::Number, state::State;
             end
             st = tdvp(mpo, dt, st; nsweeps = 1, kwargs...)
             if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-                st = symmetrize(State(state, st)).state
+                st = symmetrize(State(state, st); kwargs...).state
             end    
             measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
             if n_expand ≠ 0 && mod(sweep, n_expand) == 0
@@ -144,7 +144,7 @@ function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symme
             st = apply(mpo, st; kwargs...)
         end
         if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-            st = symmetrize(State(state, st)).state
+            st = symmetrize(State(state, st); kwargs...).state;
         end
         measure!(observer!; sweep, state = st, current_time)
     end

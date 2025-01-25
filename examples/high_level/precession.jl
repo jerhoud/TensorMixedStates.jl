@@ -19,7 +19,7 @@ phases(n) = [
     Evolve(
         name = "Evolve using tdvp with hamiltonian Z on all sites",
         measures = output,
-        algo = Tdvp,
+        algo = Tdvp(),
         duration = 7,
         time_step = 0.1,
         evolver = -im * sum(Z(i) for i in 1:n),

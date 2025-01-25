@@ -55,12 +55,12 @@ function run_phase(sim::Simulation, phase::Evolve)
     algo = phase.algo
     if algo isa ApproxW
         state = approx_W(pre, duration, state;
-            coefs, n_symmetrize = phase.symmetrize, nsweeps, algo.order, algo.w, time_start = sim.time,
+            coefs, algo.n_symmetrize, nsweeps, algo.order, algo.w, time_start = sim.time,
             phase.limits.cutoff, phase.limits.maxdim,
             observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
         state = tdvp(pre, duration, state;
-            coefs, n_expand = phase.exapnd, n_symmetrize = phase.symmetrize, nsweeps, time_start = sim.time,
+            coefs, algo.n_expand, algo.n_symmetrize, nsweeps, time_start = sim.time,
             phase.limits.cutoff, phase.limits.maxdim,
             observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
