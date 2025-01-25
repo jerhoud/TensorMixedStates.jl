@@ -76,14 +76,14 @@ Represent a quantum system
 @kwdef struct System
     pure_sites::Vector{Index}
     mixed_sites::Vector{Index}
-    show_data
+    show_data::String
 end
     
-System(sitetypes::Vector; show_data = sitetypes) =
+System(sitetypes::Vector; show_data = "System($sitetypes)") =
     System(map(s->s(Pure), sitetypes), map(s->s(Mixed), sitetypes), show_data)
 
 System(size::Int, sitetype) =
-    System(fill(sitetype, size); show_data = size => sitetype)
+    System(fill(sitetype, size); show_data = "System($size, $sitetype)")
 
 System(sitenames::Vector{String}) =
     System(map(Site, sitenames))
@@ -91,13 +91,8 @@ System(sitenames::Vector{String}) =
 System(size::Int, sitename::String; kwargs...) =
     System(size, Site(sitename; kwargs...))
 
-function show(io::IO, s::System)
-    if s.show_data isa Pair
-        print(io, "System($(first(s.show_data)), $(repr(last(s.show_data))))")
-    else
-        print(io, "System($(s.show_data))")
-    end
-end
+show(io::IO, s::System) =
+    print(io, s.show_data)
 
 """
     length(::System)
