@@ -1,7 +1,5 @@
-export tdvp, dmrg, approx_W, block_tdvp
+export tdvp, dmrg, approx_W
 import ITensorMPS: tdvp, dmrg
-
-block_tdvp = true
 
 """
     tdvp(evolver, t, ::State; kwargs...)
@@ -18,31 +16,27 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 function tdvp(pre::PreMPO, t::Number, state::State;
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_symmetrize = 0, nsweeps = 1, time_start = zero(t), kwargs...)
     time_dep = !isnothing(coefs)
-    if block_tdvp && n_expand == 0 && n_symmetrize == 0 && !time_dep
-        return State(state, tdvp(make_mpo(pre), t, state.state; observer!, nsweeps, time_start, kwargs...))
-    else
-        st = state.state
-        dt = t / nsweeps
-        if !time_dep
-            mpo = make_mpo(pre)
-        end
-        for sweep in 1:nsweeps
-            current_time = time_start + sweep * dt
-            if time_dep
-                tf = current_time - dt / 2
-                mpo = make_mpo(pre, map(f->f(tf), coefs))
-            end
-            st = tdvp(mpo, dt, st; nsweeps = 1, kwargs...)
-            if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-                st = symmetrize(State(state, st); kwargs...).state
-            end    
-            measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
-            if n_expand ≠ 0 && mod(sweep, n_expand) == 0
-                st = expand(st, mpo; alg="global_krylov")
-            end
-        end
-        return State(state, st)    
+    st = state.state
+    dt = t / nsweeps
+    if !time_dep
+        mpo = make_mpo(pre)
     end
+    for sweep in 1:nsweeps
+        current_time = time_start + sweep * dt
+        if time_dep
+            tf = current_time - dt / 2
+            mpo = make_mpo(pre, map(f->f(tf), coefs))
+        end
+        st = tdvp(mpo, dt, st; nsweeps = 1, kwargs...)
+        if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
+            st = symmetrize(State(state, st); kwargs...).state
+        end    
+        measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
+        if n_expand ≠ 0 && mod(sweep, n_expand) == 0
+            st = expand(st, mpo; alg="global_krylov")
+        end
+    end
+    return State(state, st)
 end
 
 tdvp(op, t::Number, state::State; kwargs...) =
