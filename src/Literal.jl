@@ -49,14 +49,26 @@ struct ProdLit
     ProdLit() = new(0, [])
 end
 
-function show(io::IO, a::ProdLit)
-    if a.coef ≠ 1
-        if isa(a.coef, Complex) || a.coef < 0
-            print(io, "($(a.coef))")
+print_coef(io::IO, a::Number) =
+    if a ≠ 1
+        if a == -1
+            print(io, "-")
+        elseif isa(a, Complex)
+            if imag(a) == 0
+                print(io, real(a))
+            elseif real(a) == 0
+                print_coef(io, imag(a))
+                print(io, "im*")
+            else
+                print(io, "(", a, ")")
+            end
         else
-            print(io, "$(a.coef)")
+            print(io, a)
         end
     end
+
+function show(io::IO, a::ProdLit)
+    print_coef(io, a.coef)
     join(io, a.ls)
 end
 
@@ -85,12 +97,34 @@ struct SumLit
     ps::Vector{ProdLit}
 end
 
-show(io::IO, a::SumLit) =
+function show(io::IO, a::SumLit)
     if a.ps == []
         print(io, 0)
-    else
-        join(io, a.ps, "+")
+        return
     end
+    n = length(a.ps)
+    i = 1
+    while (i <= n)
+        s = sprint(print, a.ps[i])
+        if i == 1
+            print(io, s)
+        else
+            if s[1] ≠ '-'
+                print(io, "+")
+            elseif i == 4 && n > 6
+                print(io, "-")
+            end
+            if i == 4 && n > 6
+                print(io, "...")
+                i = n - 1
+                continue
+            else
+                print(io, s)
+            end
+        end
+        i = i + 1
+    end
+end
 
 SumLit() = SumLit([])
 SumLit(a::ProdLit) =
