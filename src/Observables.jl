@@ -269,22 +269,22 @@ expect!(state::State, op, pre=PreObs(state)) =
     end
 
 
-
-
-
-function expect1_one(state::State, o, i::Int, t::ITensor)
+function expect1_core(::TPure, state::State, o, i::Int, t::ITensor)
     idx = state.system.pure_sites[i]
-    op = o(idx)
-    if state.type == Pure
-        return scalar(op * t)
-    else
-        return scalar(mixed_obs(state, op, i) * t)
-    end
+    return o(idx) * t
 end
-    
-expect1_one(state::State, op::Vector, i::Int, t::ITensor) =
+
+function expect1_core(::TMixed, state::State, o, i::Int, t::ITensor)
+    idx = state.system.pure_sites[i]
+    return mixed_obs(state, o(idx), i) * t
+end
+
+expect1_one(tp, state::State, o, i::Int, t::ITensor) = 
+    scalar(expect1_core(tp, state, o, i, t))
+
+expect1_one(tp, state::State, op::Vector, i::Int, t::ITensor) =
     map(op) do o
-        expect1_one(state, o, i, t)
+        expect1_one(tp, state, o, i, t)
     end
 
 function expect1!(::TPure, state::State, op, ::Nothing)
@@ -303,14 +303,14 @@ function expect1!(::TPure, state::State, op, ::Nothing)
             t *= delta(idx, idx')
         end
         t *= dag(st[i]')
-        r[i] = expect1_one(state, op, i, t)
+        r[i] = expect1_one(Pure, state, op, i, t)
     end
     return unroll(r)
 end
     
 function expect1!(::TMixed, state::State, op, pre::PreObs)
     n = length(state)
-    r = [ expect1_one(state, op, i, pre.left[i] * pre.right[i]) for i in 1:n ]
+    r = [ expect1_one(Mixed, state, op, i, pre.left[i] * pre.right[i]) for i in 1:n ]
     return unroll(r)
 end
 
@@ -331,8 +331,6 @@ expect1(state::State, args...) = expect1!(copy(state), args...)
 
 expect1!(state::State, op, pre=PreObs(state)) =
     expect1!(state.type, state, op, pre)
-
-
 
 
 
