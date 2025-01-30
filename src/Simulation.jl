@@ -39,7 +39,7 @@ get_sim_file(sim::Simulation, filename) =
         elseif filename == "stderr"
             stderr
         else
-            open(filename, "a")
+            open(filename, "w")
         end
     end
 
