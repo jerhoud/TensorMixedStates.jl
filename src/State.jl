@@ -20,6 +20,7 @@ Represent the complete state of the simulated quantum system
 # Examples
     State(Pure, system, "Up")
     State(Mixed, system, ["Up", "Dn", "Up"])
+    State(Mixed, system, "FullyMixed")
 
 """
 struct State
@@ -55,12 +56,17 @@ make_one_state(::TPure, system::System, i::Int, st::String) =
 
 function make_one_state(::TMixed, system::System, i::Int, st::String)
     k = system.mixed_sites[i]
-    try
-        return state(k, st)
-    catch   
+    if st == "FullyMixed"
         j = system.pure_sites[i]
-        s = state(j, st)
-        return s * dag(s') * combinerto(j', j, k)
+        return (dense(delta(j, j')) / dim(j) * combinerto(j', j, k))
+    else
+        try
+            return state(k, st)
+        catch   
+            j = system.pure_sites[i]
+            s = state(j, st)
+            return s * dag(s') * combinerto(j', j, k)
+        end
     end
 end
 

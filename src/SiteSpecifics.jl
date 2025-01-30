@@ -1,7 +1,8 @@
 import ITensors: state
 export graph_state, create_graph_state
 
-state(::StateName"Half", ::SiteType"MixedQubit") = [0.5 0 0 0.5]
+# example on how to defined a mixed state
+# state(::StateName"Half", ::SiteType"MixedQubit") = [0.5 0 0 0.5]
 
 function graph_state(tp::Union{TPure, TMixed}, g::Vector{Tuple{Int, Int}}; cutoff=1e-16, kwargs...)
     n = graph_base_size(g)
