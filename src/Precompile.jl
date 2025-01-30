@@ -4,7 +4,7 @@ using PrecompileTools: @compile_workload
     s = System(3, "Qubit")
     stp = random_state(Pure, s, 4)
     stpm = mix(stp)
-    stm = State(Mixed, s, ["Half", "Y+", "Z+"])
+    stm = State(Mixed, s, ["FullyMixed", "Y+", "Z+"])
     sstp = string(stp)
     sstm = string(stm)
     m = Measure(X, Y(1), Z(2)Y(1) + Z(3)Y(2), (X, Y), Y, (Z, Z))
