@@ -64,27 +64,6 @@ struct ObsExp2
     obs
 end
 
-make_obs(o::SumLit) =
-    ObsLit(string(o), insertFfactors(o).ps)
-make_obs(o::ProdLit) =
-    ObsLit(string(o), [insertFfactors(o)])
-make_obs(o::Tuple{<:Function, <:Function}) =
-    ObsExp2(first(o)()*last(o)(), o)
-make_obs(o::Function) =
-    ObsExp1(o(), o)
-make_obs(o::Union{Number, String}) =
-    TimeFunc(string(o), [])
-make_obs(o) = o
-
-wrap_check(o) = make_obs(o)
-wrap_check(o::Number) = TimeFunc("$o", o)
-wrap_check(o::Vector) = TimeFunc("$o", o)
-wrap_check(o::Function) =
-    try
-        ObsExp1(o(), o)
-    catch
-        TimeFunc("func", o)
-    end
 
 """
     struct Check
@@ -97,9 +76,26 @@ struct Check
     obs1
     obs2
     tol
-    Check(name, o1, o2, tol=nothing) =
-        new(name, wrap_check(o1), wrap_check(o2), tol)
+    Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
+
+make_obs(o::SumLit) =
+    ObsLit(string(o), insertFfactors(o).ps)
+make_obs(o::ProdLit) =
+    ObsLit(string(o), [insertFfactors(o)])
+make_obs(o::Tuple{Operator, Operator}) =
+    ObsExp2(first(o).name * last(o).name, o)
+make_obs(o::Operator) =
+    ObsExp1(o.name, o)
+make_obs(o::Union{Number, <:Vector}) =
+    TimeFunc(string(o), o)
+make_obs(o::String) =
+    TimeFunc(o, [])
+make_obs(o::Function) =
+    TimeFunc("func", o)
+make_obs(o::Check) =
+    Check(o.name, make_obs(o.obs1), make_obs(o.obs2), o.tol)
+make_obs(o) = o
 
 """
     struct Measure
@@ -171,7 +167,7 @@ get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) =
     if haskey(kwargs, o)
         string(o) => kwargs[o]
     else
-        string(0) => []
+        string(o) => []
     end
 
 function get_val(o::Check, v::Dict, st::State, t::Number; kwargs...)

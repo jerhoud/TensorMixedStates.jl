@@ -21,14 +21,6 @@ struct Mixed end
 TPure = Type{Pure}
 TMixed = Type{Mixed}
 
-function show_kwargs(kwargs)
-    s = ""
-    for (sym, val) in pairs(kwargs)
-        s *= " $sym = $val,"
-    end
-    return s
-end
-
 """
     struct Site
 
@@ -45,11 +37,7 @@ struct Site
 end
 
 show(io::IO, s::Site) =
-    if isempty(s.kwargs)
-        print(io, "Site($(repr(s.type)))")
-    else
-        print(io, "Site($(repr(s.type));$(show_kwargs(s.kwargs)))")
-    end
+    show_func(io, "Site", [s.type], s.kwargs)
 
 (s::Site)(::TPure) = siteind(s.type; s.kwargs...)
 function (s::Site)(::TMixed)

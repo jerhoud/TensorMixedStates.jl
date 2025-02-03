@@ -1,7 +1,18 @@
 import Base: +, *, -, /, show, isless
 
-export Lit, ProdLit, SumLit, Lits, @opLit
+export Operator, Lit, ProdLit, SumLit, Lits, @make_operators
 export multipleLit, dissipLit, reorder, insertFfactors
+
+struct Operator
+    name::String
+    opname::String
+    dim::Int
+    fermionic::Bool
+    dissipator::Bool 
+end
+
+show(io::IO, op::Operator) =
+    print(io, op.name)
 
 """
     struct Lit
@@ -9,22 +20,46 @@ export multipleLit, dissipLit, reorder, insertFfactors
     Represent a quantum operator
 """
 struct Lit
-    name::String
-    opname::String
+    op::Operator
     index::Tuple
     param::NamedTuple
-    fermionic::Bool
-    dissipator::Bool
 end
 
-function show(io::IO, a::Lit)
-    print(io, "$(a.name)(")
-    join(io, a.index, ",")
+function show_func(io::IO, name, args, kwargs)
+    print(io, name, "(")
+    join(io, (repr(a) for a in args), ",")
+    if !isempty(kwargs)
+        print(io, ";")
+        join(io, ("$sym=$(repr(val))" for (sym, val) in pairs(kwargs)), ",")
+    end
     print(io, ")")
 end
 
+show(io::IO, a::Lit) =
+    show_func(io, a.op.name, a.index, a.param)
+
 isless(a::Lit, b::Lit) =
-    isless((a.name, a.index, a.param), (b.name, b.index, b.param))
+    isless((a.op.name, a.index, a.param), (b.op.name, b.index, b.param))
+
+
+(oper::Operator)(index::Int...; kwargs...) =
+    if length(index) == oper.dim
+        ProdLit(1, [Lit(oper, Tuple(index), NamedTuple(kwargs))])
+    else
+        error("Operator $(oper.name) has dim = $(oper.dim) and was called with $(index)")
+    end
+
+(oper::Operator)(index::Index...; kwargs...) =   
+    if length(index) == oper.dim
+        op(oper.opname, index...; kwargs...)
+    else
+        error("Operator $(oper.name) has dim = $(oper.dim) and was called with $(index)")
+    end
+
+
+(l::Lit)(sites::Vector{Index}) =
+    l.op((sites[i] for i in l.index)...; l.param...)
+(l::Lit)(args...) = l.op(args...; l.param...)
 
 """
     struct ProdLit
@@ -167,13 +202,13 @@ end
 Lits = Union{ProdLit, SumLit}
 
 """
-    @opLit(names, fermionic::Bool=false, dissipator::Bool=false)
+    @make_operators(names, dim::Int, fermionic::Bool, dissipator::Bool)
 
 Define quantum operators with the given names (names should be iterable)
 
 These operators are callable on `Int...` or on `Index...` to produce Lit or ITensor
 """
-macro opLit(names, fermionic::Bool=false, dissipator::Bool=false)
+macro make_operators(names, dim::Int, fermionic::Bool, dissipator::Bool)
     ns = eval(names)
     e = Expr(:block)
     for n in ns
@@ -186,11 +221,7 @@ macro opLit(names, fermionic::Bool=false, dissipator::Bool=false)
         sname = Symbol(name)
         push!(e.args,
         quote
-            $(esc(sname))() = $name
-            $(esc(sname))(index::Int...; kwargs...) =
-                ProdLit(1, [Lit($name, $opname, Tuple(index), NamedTuple(kwargs), $fermionic, $dissipator)])
-            $(esc(sname))(index::Index...; kwargs...) =
-                op($opname, index...; kwargs...)
+            $(esc(sname)) = Operator($name, $opname, $dim, $fermionic, $dissipator)
             export $(esc(sname))
         end)
     end
@@ -213,7 +244,7 @@ multipleLit(a::SumLit) = any(multipleLit, a.ps)
 
 Return true if any contained Lit is a dissipator
 """
-dissipLit(a::Lit) = a.dissipator
+dissipLit(a::Lit) = a.op.dissipator
 dissipLit(a::ProdLit) = any(dissipLit, a.ls)
 dissipLit(a::SumLit) = any(dissipLit, a.ps)
 
@@ -253,7 +284,7 @@ C(1)C(3)+(-1)Cdag(1)Cdag(4)
 ```
 """
 function reorder(a::ProdLit)
-    fs = filter(t->t.fermionic, a.ls)
+    fs = filter(t->t.op.fermionic, a.ls)
     p = sortperm(fs; by=l->l.index)
     s = signature(p)
     ProdLit(s * a.coef, sort(a.ls; by=l->l.index))
@@ -281,7 +312,8 @@ function reorder(a::SumLit)
     return SumLit(pps)
 end
 
-litF(idx) = Lit("F", "F", (idx,), (;), false, false)
+const opF = Operator("F", "F", 1, false, false)
+litF(idx) = Lit(opF, (idx,), (;))
 
 function insertFfactorsCore(a::ProdLit)
     nls = Lit[]
@@ -290,13 +322,13 @@ function insertFfactorsCore(a::ProdLit)
         idx = first(l.index)
         if fermion_idx ≠ 0
             append!(nls, (litF(i) for i in reverse(idx + 1:fermion_idx - 1)))
-            if l.fermionic
+            if l.op.fermionic
                 push!(nls, litF(idx))
                 fermion_idx = 0
             else
                 fermion_idx = idx
             end
-        elseif l.fermionic
+        elseif l.op.fermionic && !l.op.dissipator
             fermion_idx = idx
         end
         push!(nls, l)

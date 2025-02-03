@@ -1,58 +1,4 @@
-export PreMPO, make_mpo, make_approx_W1, make_approx_W2, MixObservable, MixGate, MixEvolve
-
-struct MixObservable end
-struct MixGate end
-struct MixEvolve end
-struct MixEvolve2 end
-struct MixDissipator end
-
-function make_operator(::TPure, ::System, t::ITensor, ::Int)
-    return t
-end
-    
-function make_operator(::Type{MixObservable}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
-end
-
-function make_operator(::Type{MixGate}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    ti = t
-    tj = replaceinds(ti, (idx, idx'), (jdx, jdx'))
-    return ti * dag(tj) * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
-end
-
-function make_operator(::Type{MixEvolve}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
-end
-
-function make_operator(::Type{MixEvolve2}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    return dag(t) * delta(jdx, jdx') * combinerto(idx, jdx, kdx) * combinerto(idx', jdx', kdx')
-end
-
-function make_operator(::Type{MixDissipator}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    ti = t
-    tj = replaceinds(ti, (idx, idx'), (jdx, jdx'))
-    ati = swapprime(dag(ti'), 1=>2)
-    atj = swapprime(dag(tj'), 1=>2)
-    r = ti * dag(tj) -
-        0.5 * replaceprime(ati * ti, 2 => 1) * delta.(jdx, jdx') -
-        0.5 * replaceprime(atj * tj, 2 => 1) * delta.(idx, idx')
-    return r * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
-end
+export PreMPO, make_mpo, make_approx_W1, make_approx_W2
 
 """
     struct PreMPO
@@ -86,11 +32,8 @@ function PreMPO!(tp, pre::PreMPO, p::ProdLit, ref::Int)
     i = 0
     t = ITensor()
     for l in p.ls
-        if l.dissipator && tp ≠ MixDissipator
-            error("dissipators cannot be used in pure representations or multiplied by other operators")
-        end
         j = l.index[1]
-        o = op(l.opname, sys.pure_sites[j]; l.param...)
+        o = l(sys.pure_sites)
         if i ≠ j
             if i ≠ 0
                 if i == fst
@@ -118,9 +61,21 @@ function PreMPO!(tp, pre::PreMPO, p::ProdLit, ref::Int)
 end
 
 function PreMPO!(p::ProdLit, pre::PreMPO, ref::Int=1)
+    if p.coef == 0
+        return
+    end
+    if dissipLit(p) && (length(p.ls) ≠ 1 || pre.type ≠ MixEvolve)
+        error("dissipators cannot be used on pure representations or multiplied by other operators")
+    end
     if pre.type == MixEvolve
-        if length(p.ls) == 1 && p.ls[1].dissipator
-            PreMPO!(MixDissipator, pre, p, ref)
+        p1 = p.ls[1]
+        if p1.op.dissipator
+            if p1.op.fermionic
+                PreMPO!(MixGate, pre, ProdLit(p.coef, [[ litF(i) for i in 1:p1.index[1]-1 ]; p.ls]), ref)
+                PreMPO!(MixDissipatorF, pre, p, ref)
+            else
+                PreMPO!(MixDissipator, pre, p, ref)
+            end
         else
             PreMPO!(MixEvolve, pre, p, ref)
             PreMPO!(MixEvolve2, pre, p, ref)

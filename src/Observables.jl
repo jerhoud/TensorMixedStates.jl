@@ -176,8 +176,7 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
     foreach(p.ls) do l
         i = l.index[1]
         if j == i
-            idx = sites[i]
-            o = replaceprime(o' * op(l.opname, idx; l.param...), 2=>1)
+            o = replaceprime(o' * l(sites), 2=>1)
         else
             if j == 0
                 if i ≠ 1
@@ -195,7 +194,7 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
                 end
             end
             j = i
-            o = op(l.opname, sites[i]; l.param...)
+            o = l(sites)
         end
     end
     r *= st[j]
@@ -220,7 +219,7 @@ function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
     foreach(p.ls) do l
         i = l.index[1]
         if j == i
-            o = replaceprime(o' * op(l.opname, psites[i]; l.param...), 2=>1)
+            o = replaceprime(o' * l(psites), 2=>1)
         else
             if j == 0
                 r = pre.left[i]
@@ -232,7 +231,7 @@ function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
                 r *= st[i]
             end
             j = i
-            o = op(l.opname, psites[i]; l.param...)
+            o = l(psites)
         end
     end
     r *= mixed_obs(state, o, j)

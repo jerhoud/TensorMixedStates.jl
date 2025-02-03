@@ -1,25 +1,13 @@
 export apply_gates
 
-function Lit_to_ops(state::State, a::ProdLit)
-    if a.coef == 0
-        return []
-    end
-    s = state.system
-    r = map(a.ls) do l
-        if l.dissipator
-            error("Cannot apply a dissipator as a gate")
-        end
-        idx = map(i->s.pure_sites[i], l.index)
-        oi = op(l.opname, idx...; l.param...)
-        if state.type == Pure
-            return oi
-        else
-            jdx = sim(idx)
-            oj = replaceinds(oi, (idx..., idx'...), (jdx..., jdx'...))
-            kdx = map(i->s.mixed_sites[i], l.index)
-            return *(oi, dag(oj), combinerto.(jdx, idx, kdx)..., combinerto.(jdx', idx', kdx')...)
-        end
-    end
+function Lit_to_ops(::TPure, system::System, a::ProdLit)
+    r = [ l(system.pure_sites) for l in a.ls ]
+    r[1] *= a.coef
+    return r    
+end
+
+function Lit_to_ops(::TMixed, system::System, a::ProdLit)
+    r = [ make_operator(MixGate, system, l(system.pure_sites), l.index...) for l in a.ls ]
     r[1] *= a.coef
     return r    
 end
@@ -36,7 +24,13 @@ It is much more efficient to apply all the gates in a single call to apply.
 
 """
 function apply(a::ProdLit, state::State; kwargs...)
-    ops = Lit_to_ops(state, insertFfactors(a))
+    if a.coef == 0
+        error("Cannot apply a null gate")
+    end
+    if dissipLit(a)
+        error("Cannot apply a dissipator as a gate")
+    end
+    ops = Lit_to_ops(state.type, state.system, insertFfactors(a))
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
     return State(state, st)
 end

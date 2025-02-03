@@ -4,8 +4,8 @@ using ITensors, ITensorMPS, HDF5, Printf
 
 # Core
 include("Literal.jl")
-include("Mixer.jl")
 include("System.jl")
+include("Mixer.jl")
 include("State.jl")
 include("Io.jl")
 
