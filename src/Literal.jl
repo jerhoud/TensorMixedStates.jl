@@ -59,7 +59,6 @@ isless(a::Lit, b::Lit) =
 
 (l::Lit)(sites::Vector{Index}) =
     l.op((sites[i] for i in l.index)...; l.param...)
-(l::Lit)(args...) = l.op(args...; l.param...)
 
 """
     struct ProdLit

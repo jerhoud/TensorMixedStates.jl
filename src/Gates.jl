@@ -7,7 +7,13 @@ function Lit_to_ops(::TPure, system::System, a::ProdLit)
 end
 
 function Lit_to_ops(::TMixed, system::System, a::ProdLit)
-    r = [ make_operator(MixGate, system, l(system.pure_sites), l.index...) for l in a.ls ]
+    r = map(a.ls) do l
+        try
+            l(system.mixed_sites)
+        catch
+            make_operator(MixGate, system, l(system.pure_sites), l.index)
+        end
+    end
     r[1] *= a.coef
     return r    
 end
