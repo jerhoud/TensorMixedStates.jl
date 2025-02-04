@@ -35,7 +35,7 @@ function trace(state::State; prep = nothing)
     elseif isnothing(prep)
         scalar(prod(mixed_obs(state, i) for i in 1:length(state)))
     else
-        prep.trace
+        prep.norm
     end
 end
 
@@ -117,10 +117,42 @@ struct PreObs
     loc::Vector{ITensor}
     left::Vector{ITensor}
     right::Vector{ITensor}
-    trace::Number
+    norm::Number
 end
 
-PreObs(::TPure, ::State) = nothing
+function PreObs(::TPure, state::State)
+    n = length(state)
+    st = state.state
+    sites = state.system.pure_sites
+    vleft = Vector{ITensor}(undef, n)
+    vleft[1] = st[1]
+    ll = ITensorMPS.leftlim(st) + 1
+    for i in 2:n
+        llink = commonind(st[i-1], st[i])
+        v = if i <= ll
+            delta(llink, llink')
+        else
+            k = sites[i-1]
+            vleft[i-1] * delta(k, k') * dag(st[i-1]')
+        end
+        vleft[i] = v * st[i]
+    end
+    vnorm = scalar(vleft[n] * delta(sites[n], sites[n]') * dag(st[n]'))
+    vright = Vector{ITensor}(undef, n)
+    vright[n] = dag(st[n]') / real(vnorm)
+    rl = ITensorMPS.rightlim(st) - 1
+    for i in n-1:-1:1
+        rlink = commonind(st[i], st[i+1])
+        v = if i >= rl
+            delta(rlink, rlink') / real(vnorm)
+        else
+            k = sites[i+1]
+            vright[i+1] * delta(k, k') * st[i+1]
+        end
+        vright[i] = v * dag(st[i]')
+    end
+    return PreObs([], vleft, vright, vnorm)
+end
     
 function PreObs(::TMixed, state::State)
     n = length(state)
@@ -128,10 +160,10 @@ function PreObs(::TMixed, state::State)
     vloc = [ mixed_obs(state, i) for i in 1:n]
     v = ITensor(1)
     vleft = [[st[1]]; [(v *= vloc[i]; v * st[i+1]) for i in 1:n-1]]
-    vtrace = scalar(v * vloc[n])
-    v = ITensor(1. / real(vtrace))
+    vnorm = scalar(v * vloc[n])
+    v = ITensor(1. / real(vnorm))
     vright = reverse([[v]; [v *= vloc[i] for i in n:-1:2]])
-    return PreObs(vloc, vleft, vright, vtrace)
+    return PreObs(vloc, vleft, vright, vnorm)
 end
 
 PreObs(state::State) = PreObs(state.type, state)
@@ -152,25 +184,13 @@ unroll(x) =
         end
     end
 
-function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
-    if p.coef == 0
-        return 0
+function expect(::TPure, state::State, p::ProdLit, pre::PreObs)
+    if p.coef == 0.
+        return 0.
     end
     sys = state.system
     sites = sys.pure_sites
     st = state.state
-    imin = p.ls[1].index[1]
-    imax = p.ls[end].index[1]
-    if isortho(st)
-        c = orthocenter(st)
-        if c < imin
-            orthogonalize!(st, imin)
-        elseif c > imax
-            orthogonalize!(st, imax)
-        end
-    else
-        orthogonalize!(st, imin)
-    end
     r = ITensor(1)
     o = ITensor()
     j = 0
@@ -180,35 +200,25 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
             o = replaceprime(o' * l(Pure, sys), 2=>1)
         else
             if j == 0
-                if i ≠ 1
-                    idx = commonind(st[i-1], st[i])
-                    r = delta(idx, idx')
-                end
+                r = pre.left[i]
             else
-                r *= st[j]
-                r *= o
-                r *= dag(st[j]')
+                r *= o * dag(st[j]')
                 for k in j+1:i-1
-                    kdx = sites[k]
-                    r *= st[k] * delta(kdx, kdx')
+                    idk = sites[k]
+                    r *= st[k] * delta(idk, idk')
                     r *= dag(st[k]')
                 end
+                r *= st[i]
             end
             j = i
             o = l(Pure, sys)
         end
     end
-    r *= st[j]
-    if j ≠ length(st)
-        idx = commonind(st[j], st[j+1])
-        r *= delta(idx, idx')
-    end
-    r *= o
-    r *= dag(st[j]')
+    r *= o * pre.right[j]
     return p.coef * scalar(r)
 end
 
-function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
+function expect(::TMixed, state::State, p::ProdLit, pre::PreObs)
     if p.coef == 0.
         return 0.
     end
@@ -253,66 +263,35 @@ Compute expectation values of `obs` on the given state.
     expect(state, X(1)*Z(3), pre)
     expect...
 """
-expect(state::State, args...) = expect!(copy(state), args...)
-
-expect!(state::State, p::ProdLit, pre=PreObs(state)) =
-    expect!(state.type, state, p, pre)
+expect(state::State, p::ProdLit, pre=PreObs(state)) =
+    expect(state.type, state, p, pre)
     
-expect!(state::State, op::SumLit, pre=PreObs(state)) =
+expect(state::State, op::SumLit, pre=PreObs(state)) =
     sum(op.ps; init=0) do p
-        expect!(state, p, pre)
+        expect(state, p, pre)
     end
 
-expect!(state::State, op, pre=PreObs(state)) =
+expect(state::State, op, pre=PreObs(state)) =
     map(op) do o
-        expect!(state, o, pre)
+        expect(state, o, pre)
     end
 
 
-function expect1_core(::TPure, state::State, o, i::Int, t::ITensor)
+function expect1_one(::TPure, state::State, o::Operator, i::Int, t::ITensor)
     idx = state.system.pure_sites[i]
-    return o(idx) * t
+    return scalar(o(idx) * t)
 end
 
-function expect1_core(::TMixed, state::State, o, i::Int, t::ITensor)
+function expect1_one(::TMixed, state::State, o::Operator, i::Int, t::ITensor)
     idx = state.system.pure_sites[i]
-    return mixed_obs(state, o(idx), i) * t
+    return scalar(mixed_obs(state, o(idx), i) * t)
 end
 
-expect1_one(tp, state::State, o, i::Int, t::ITensor) = 
-    scalar(expect1_core(tp, state, o, i, t))
-
-expect1_one(tp, state::State, op::Vector, i::Int, t::ITensor) =
+expect1_one(tp, state::State, op, i::Int, t::ITensor) =
     map(op) do o
         expect1_one(tp, state, o, i, t)
     end
 
-function expect1!(::TPure, state::State, op, ::Nothing)
-    n = length(state)
-    st = state.state
-    r = Vector(undef, n)
-    for i in 1:n
-        orthogonalize!(st, i)
-        t = st[i]
-        if i > 1
-            idx = commonind(st[i-1], st[i])
-            t *= delta(idx, idx')
-        end
-        if i < n
-            idx = commonind(st[i], st[i+1])
-            t *= delta(idx, idx')
-        end
-        t *= dag(st[i]')
-        r[i] = expect1_one(Pure, state, op, i, t)
-    end
-    return unroll(r)
-end
-    
-function expect1!(::TMixed, state::State, op, pre::PreObs)
-    n = length(state)
-    r = [ expect1_one(Mixed, state, op, i, pre.left[i] * pre.right[i]) for i in 1:n ]
-    return unroll(r)
-end
 
 """
     expect1(::State, op[, ::PreObs])
@@ -327,90 +306,114 @@ Compute the expectation values of the given operators on all sites.
     expect1(state, X, pre)
     ...
 """
-expect1(state::State, args...) = expect1!(copy(state), args...)
-
-expect1!(state::State, op, pre=PreObs(state)) =
-    expect1!(state.type, state, op, pre)
-
-
-
-function expect2_one(state::State, ops::Tuple{Any, Any}, i1::Int, i2::Int, t::ITensor, rev::Bool)
-    if rev
-        op2, op1 = ops
-    else
-        op1, op2 = ops
-    end
-    o1 = op1(state.system.pure_sites[i1])
-    o2 = op2(state.system.pure_sites[i2])
-    if i1 == i2
-        o = replaceprime(o1' * o2, 2=>1)
-        if state.type == Pure
-            return scalar(o * t)
-        else
-            return scalar(mixed_obs(state, o, i1) * t)
-        end
-    else
-        if state.type == Pure
-             return scalar(o1 * t * o2)
-        else
-            return scalar(mixed_obs(state, o1, i1) * t * mixed_obs(state, o2, i2))
-        end
-    end
+function expect1(state::State, op, pre::PreObs=PreObs(state))
+    n = length(state)
+    r = [ expect1_one(state.type, state, op, i, pre.left[i] * pre.right[i]) for i in 1:n ]
+    return unroll(r)
 end
 
-expect2_one(state::State, ops, i1::Int, i2::Int, t::ITensor, rev::Bool) =
-    map(ops) do op
-        expect2_one(state, op, i1, i2, t, rev)
-    end
 
-function expect2!(::TPure, state::State, ops, ::Nothing)
+function expect2(::TPure, state::State, ops::Vector{Tuple{Operator, Operator}}, pre::PreObs)
+    oplist = collect(Set([first.(ops) ; last.(ops)]))
     n = length(state)
-    st = state.state
-    sites = state.system.pure_sites
-    c = Matrix(undef, n, n)
-    for i in 1:n
-        orthogonalize!(st, i)
-        l = st[i]
-        if i > 1
-            lidx = commonind(st[i-1], st[i])
-            l *= delta(lidx, lidx')
-        end
-        l *= dag(st[i]')
-        t = l
-        if i < n
-            ridx = commonind(st[i], st[i+1])
-            t *= delta(ridx, ridx')
-        end
-        c[i, i] = expect2_one(state, ops, i, i, t, false)
-        for j in i+1:n
-            l *= st[j]
-            t = l
-            if j < n
-                rjdx = commonind(st[j], st[j+1])
-                t *= delta(rjdx, rjdx')
-            end
-            t *= dag(st[j]')
-            c[i, j] = expect2_one(state, ops, i, j, t, false)
-            c[j, i] = expect2_one(state, ops, i, j, t, true)
-            jdx = sites[j]
-            l *= delta(jdx, jdx') * dag(st[j]')
-        end
-    end
-    return unroll(c)
-end
-    
-function expect2!(::TMixed, state::State, ops, pre::PreObs)
-    n = length(state)
+    sys = state.system
     st = state.state
     r = Matrix(undef, n, n)
     for i in 1:n
-        l = pre.left[i]
-        r[i, i] = expect2_one(state, ops, i, i, l * pre.right[i], false)
+        idx = sys.pure_sites[i]
+        ldict = Dict{Operator, ITensor}()
+        ti = pre.left[i] * pre.right[i]
+        r[i, i] = map(ops) do (o1, o2)
+            t = replaceprime(o1(idx) * o2(idx)' + o1(idx)' * o2(idx), 2 => 1)
+            scalar(ti * t) / 2
+        end
+        for op in oplist
+            t = op(idx)
+            if op.fermionic
+                t = replaceprime(t' * F(idx), 2 => 1)
+            end
+            ldict[op] = pre.left[i] * t * dag(st[i]')
+        end
+        rdict = Dict{Operator, ITensor}()
         for j in i+1:n
-            t = l * (st[j] * pre.right[j])
-            r[i, j] = expect2_one(state, ops, i, j, t, false)
-            r[j, i] = expect2_one(state, ops, i, j, t, true)
-            l *= pre.loc[j]
+            jdx = sys.pure_sites[j]
+            for op in oplist
+                rdict[op] = pre.right[j] * op(jdx) * st[j]
+            end
+            r[i, j] = map(ops) do (o1, o2)
+                scalar(ldict[o1] * rdict[o2])
+            end
+            r[j, i] = map(ops) do (o1, o2)
+                v = scalar(ldict[o2] * rdict[o1])
+                if o1.fermionic
+                    v *= -1
+                end
+                v
+            end
+            if j < n
+                for op in oplist
+                    p = if op.fermionic
+                        F(jdx)
+                    else
+                        delta(jdx, jdx')
+                    end
+                    ldict[op] *= st[j] * p
+                    ldict[op] *= dag(st[j]')
+                end
+            end    
+        end
+    end
+    return unroll(r)
+end
+
+function expect2(::TMixed, state::State, ops::Vector{Tuple{Operator, Operator}}, pre::PreObs)
+    oplist = collect(Set([first.(ops) ; last.(ops)]))
+    n = length(state)
+    st = state.state
+    sys = state.system
+    r = Matrix(undef, n, n)
+    for i in 1:n
+        idx = sys.pure_sites[i]
+        ldict = Dict{Operator, ITensor}()
+        ti = pre.left[i] * pre.right[i]
+        r[i, i] = map(ops) do (o1, o2)
+            t = replaceprime(o1(idx) * o2(idx)' + o1(idx)' * o2(idx), 2 => 1)
+            scalar(ti * mixed_obs(state, t, i)) / 2
+        end
+        for op in oplist
+            t = op(idx)
+            if op.fermionic
+                t = replaceprime(t' * F(idx), 2 => 1)
+            end
+            ldict[op] = pre.left[i] * mixed_obs(state, t, i)
+        end
+        rdict = Dict{Operator, ITensor}()
+        for j in i+1:n
+            jdx = sys.pure_sites[j]
+            q = st[j] * pre.right[j]
+            for op in oplist
+                rdict[op] = q * mixed_obs(state, op(jdx), j)
+            end
+            r[i, j] = map(ops) do (o1, o2)
+                scalar(ldict[o1] * rdict[o2])
+            end
+            r[j, i] = map(ops) do (o1, o2)
+                v = scalar(ldict[o2] * rdict[o1])
+                if o1.fermionic
+                    v *= -1
+                end
+                v
+            end
+            if j < n
+                for op in oplist
+                    p = if op.fermionic
+                        st[j] * mixed_obs(state, F(jdx), j)
+                    else
+                        pre.loc[j]
+                    end
+                    ldict[op] *= p
+                end    
+            end
         end
     end
     return unroll(r)
@@ -429,10 +432,11 @@ Compute the expectation values of the given pairs of operators on all sites.
     expect2(state, (X, Y), pre)
     ...
 """
-expect2(state::State, args...) = expect2!(copy(state), args...)
+expect2(state::State, ops::Tuple{Operator, Operator}, pre=PreObs(state)) =
+    expect2(state, [ops], pre)
 
-expect2!(state::State, ops, pre=PreObs(state)) =
-    expect2!(state.type, state, ops, pre)
+expect2(state::State, ops::Vector{Tuple{Operator, Operator}}, pre=PreObs(state)) =
+    expect2(state.type, state, ops, pre)
 
 
 

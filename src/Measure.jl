@@ -7,9 +7,9 @@ export StateFunc, TimeFunc, Check, Measure, Trace, Trace2, Purity, Norm, EE, Lin
 a data type to represent a function of `State`. This is used by `measure`.
 """
 struct StateFunc
-    name
-    obs
-    use_prep
+    name::String
+    obs::Function
+    use_prep::Bool
 end
 
 StateFunc(name, obs) = StateFunc(name, obs, false)
@@ -24,7 +24,7 @@ show(io::IO, s::StateFunc) =
 a data type to represent a function of simulation time. This is used by `measure`.
 """
 struct TimeFunc
-    name
+    name::String
     obs
 end
 
@@ -38,8 +38,8 @@ show(io::IO, s::TimeFunc) =
 a data type to represent an observable defined by quantum operators. This is used by `measure`.
 """
 struct ObsLit
-    name
-    obs
+    name::String
+    obs::Vector{ProdLit}
 end
 
 """
@@ -49,8 +49,8 @@ end
 a data type to represent an observable applied on all sites. This is used by `measure`.
 """
 struct ObsExp1
-    name
-    obs 
+    name::String
+    obs ::Operator
 end
 
 """
@@ -60,8 +60,8 @@ end
 a data type to represent a correlation applied on all pairs of site. This is used by `measure`.
 """
 struct ObsExp2
-    name
-    obs
+    name::String
+    obs::Tuple{Operator, Operator}
 end
 
 
@@ -72,7 +72,7 @@ end
 a measurement that checks the equality between two measurements. It throws an error if the difference is larger than tol.
 """
 struct Check
-    name
+    name::String
     obs1
     obs2
     tol
@@ -114,19 +114,19 @@ get_prods(o::Vector{Measure}) = vcat(get_prods.(o)...)
 get_prods(o::Measure) = vcat(get_prods.(o.measures)...)
 get_prods(o::ObsLit) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
-get_prods(_) = []
+get_prods(_) = ProdLit[]
 
 get_exp1(o::Vector{Measure}) = vcat(get_exp1.(o)...)
 get_exp1(o::Measure) = vcat(get_exp1.(o.measures)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
-get_exp1(_) = []
+get_exp1(_) = Operator[]
 
 get_exp2(o::Vector{Measure}) = vcat(get_exp2.(o)...)
 get_exp2(o::Measure) = vcat(get_exp2.(o.measures)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
-get_exp2(_) = []
+get_exp2(_) = Tuple{Operator, Operator}[]
 
 Trace = StateFunc("Trace", trace, true)
 Trace2 = StateFunc("Trace2", trace2, true)
@@ -200,20 +200,19 @@ measure(state::State, m::Measure, t::Number = 0.; kwargs...) =
     measure(state, [m], t; kwargs...)[1]
 
 function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
-    st = copy(state)
-    prep = PreObs(st)
+    prep = PreObs(state)
     vals = Dict()
     prods = collect(Set(get_prods(m)))
     if !isempty(prods)
-        push!(vals, (prods .=> expect!(st, prods, prep))...)
+        push!(vals, (prods .=> expect(state, prods, prep))...)
     end
     exp1s = collect(Set(get_exp1(m)))
     if !isempty(exp1s)
-        push!(vals, (exp1s .=> expect1!(st, exp1s, prep))...)
+        push!(vals, (exp1s .=> expect1(state, exp1s, prep))...)
     end
     exp2s = collect(Set(get_exp2(m)))
     if !isempty(exp2s)
-        push!(vals, (exp2s .=> expect2!(st, exp2s, prep))...)
+        push!(vals, (exp2s .=> expect2(state, exp2s, prep))...)
     end
-    return get_val(m, vals, st, t; prep, kwargs...)
+    return get_val(m, vals, state, t; prep, kwargs...)
 end
