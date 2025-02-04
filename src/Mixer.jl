@@ -90,7 +90,16 @@ function (oper::Operator)(site::Site; tp = Pure, kwargs...)
     end
 end
 
-create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{Float64}; fermionic = false, kwargs...) =
+function create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{<:Number}; kwargs...)
+    if any(o->o.dissipator, ops)
+        error("cannot create mixed gate from dissipators")
+    end
+    n = length(ops)
+    nf = count(o->o.fermionic, ops)
+    fermionic = (nf == n)
+    if nf < n && nf > 0
+        error("cannot create mixed gate from mixture of fermionic and non fermionic operators")
+    end
     Lit(
         Operator(name, name, 1, fermionic, false),
         system -> begin
@@ -103,6 +112,7 @@ create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{F
         (i,),
         NamedTuple(kwargs)
     )
+end
 
 """
     @add_operators(names::Vector)
