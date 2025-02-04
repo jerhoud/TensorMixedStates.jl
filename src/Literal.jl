@@ -21,6 +21,7 @@ show(io::IO, op::Operator) =
 """
 struct Lit
     op::Operator
+    mixer::Union{Nothing, <:Function}
     index::Tuple
     param::NamedTuple
 end
@@ -44,7 +45,7 @@ isless(a::Lit, b::Lit) =
 
 (oper::Operator)(index::Int...; kwargs...) =
     if length(index) == oper.dim
-        ProdLit(1, [Lit(oper, Tuple(index), NamedTuple(kwargs))])
+        ProdLit(1, [Lit(oper, nothing, Tuple(index), NamedTuple(kwargs))])
     else
         error("Operator $(oper.name) has dim = $(oper.dim) and was called with $(index)")
     end
@@ -57,8 +58,13 @@ isless(a::Lit, b::Lit) =
     end
 
 
-(l::Lit)(sites::Vector{Index}) =
-    l.op((sites[i] for i in l.index)...; l.param...)
+(l::Lit)(::TPure, system::System) =
+    l.op((system.pure_sites[i] for i in l.index)...; l.param...)
+
+(l::Lit)(::TMixed, system::System) =
+    l.mixer(system)
+
+
 
 """
     struct ProdLit
@@ -312,7 +318,7 @@ function reorder(a::SumLit)
 end
 
 const opF = Operator("F", "F", 1, false, false)
-litF(idx) = Lit(opF, (idx,), (;))
+litF(idx) = Lit(opF, nothing, (idx,), (;))
 
 function insertFfactorsCore(a::ProdLit)
     nls = Lit[]

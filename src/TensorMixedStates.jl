@@ -3,8 +3,8 @@ module TensorMixedStates
 using ITensors, ITensorMPS, HDF5, Printf
 
 # Core
-include("Literal.jl")
 include("System.jl")
+include("Literal.jl")
 include("Mixer.jl")
 include("State.jl")
 include("Io.jl")

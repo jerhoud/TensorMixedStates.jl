@@ -1,5 +1,5 @@
-export @add_operators, @add_fermionic_operators, @add_dissipators
-export make_operator, MixObservable, MixGate, MixEvolve, MixEvolve2, MixDissipator, MixDissipatorF1, MixDissipatorF2
+export @add_operators, @add_fermionic_operators, @add_dissipators, @add_fermionic_dissipators
+export make_operator, MixObservable, MixGate, MixEvolve, MixEvolve2, MixDissipator, MixDissipatorF, create_mixed_gate
 
 struct MixObservable end
 struct MixGate end
@@ -7,7 +7,6 @@ struct MixEvolve end
 struct MixEvolve2 end
 struct MixDissipator end
 struct MixDissipatorF end
-struct MixDissipatorF2 end
 
 
 function make_operator(::TPure, ::System, t::ITensor, ::Int...)
@@ -90,6 +89,20 @@ function (oper::Operator)(site::Site; tp = Pure, kwargs...)
         return Array(c' * o * c, j', j)
     end
 end
+
+create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{Float64}; kwargs...) =
+    Lit(
+        Operator(name, name, 1, false, false),
+        system -> begin
+            t = ITensor()
+            for (op, w) in zip(ops, weights)
+                t += w * make_operator(MixGate, system, op(system.pure_sites[i]), i)
+            end
+            return t
+        end,
+        (i,),
+        NamedTuple(kwargs)
+    )
 
 """
     @add_operators(names::Vector)

@@ -1,7 +1,7 @@
 export apply_gates
 
 function Lit_to_ops(::TPure, system::System, a::ProdLit)
-    r = [ l(system.pure_sites) for l in a.ls ]
+    r = [ l(Pure, system) for l in a.ls ]
     r[1] *= a.coef
     return r    
 end
@@ -9,9 +9,9 @@ end
 function Lit_to_ops(::TMixed, system::System, a::ProdLit)
     r = map(a.ls) do l
         try
-            l(system.mixed_sites)
+            l(Mixed, system)
         catch
-            make_operator(MixGate, system, l(system.pure_sites), l.index)
+            make_operator(MixGate, system, l(Pure, system), l.index...)
         end
     end
     r[1] *= a.coef

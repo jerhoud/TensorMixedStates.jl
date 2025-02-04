@@ -45,12 +45,6 @@ Return the maximum link dimension in the state
 """
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
-function combinerto(i1::Index, i2::Index, i3::Index)
-    c = combiner(i1, i2)
-    i = combinedind(c)
-    replaceind(c, i, i3)
-end
-
 make_one_state(::TPure, system::System, i::Int, st::String) =
     state(system.pure_sites[i], st)
 

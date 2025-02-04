@@ -46,6 +46,12 @@ function (s::Site)(::TMixed)
     return addtags(combinedind(c), "Mixed" * s.type)
 end    
 
+function combinerto(i1::Index, i2::Index, i3::Index)
+    c = combiner(i1, i2)
+    i = combinedind(c)
+    replaceind(c, i, i3)
+end
+
 """
     struct System
 

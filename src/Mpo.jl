@@ -33,7 +33,7 @@ function PreMPO!(tp, pre::PreMPO, p::ProdLit, ref::Int)
     t = ITensor()
     for l in p.ls
         j = l.index[1]
-        o = l(sys.pure_sites)
+        o = l(Pure, sys)
         if i ≠ j
             if i ≠ 0
                 if i == fst

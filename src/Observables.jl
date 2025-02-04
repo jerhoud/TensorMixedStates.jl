@@ -156,7 +156,8 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
     if p.coef == 0
         return 0
     end
-    sites = state.system.pure_sites
+    sys = state.system
+    sites = sys.pure_sites
     st = state.state
     imin = p.ls[1].index[1]
     imax = p.ls[end].index[1]
@@ -176,7 +177,7 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
     foreach(p.ls) do l
         i = l.index[1]
         if j == i
-            o = replaceprime(o' * l(sites), 2=>1)
+            o = replaceprime(o' * l(Pure, sys), 2=>1)
         else
             if j == 0
                 if i ≠ 1
@@ -194,7 +195,7 @@ function expect!(::TPure, state::State, p::ProdLit, ::Nothing)
                 end
             end
             j = i
-            o = l(sites)
+            o = l(Pure, sys)
         end
     end
     r *= st[j]
@@ -211,7 +212,7 @@ function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
     if p.coef == 0.
         return 0.
     end
-    psites = state.system.pure_sites
+    sys = state.system
     st = state.state
     r = ITensor(1)
     o = ITensor()
@@ -219,7 +220,7 @@ function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
     foreach(p.ls) do l
         i = l.index[1]
         if j == i
-            o = replaceprime(o' * l(psites), 2=>1)
+            o = replaceprime(o' * l(Pure, sys), 2=>1)
         else
             if j == 0
                 r = pre.left[i]
@@ -231,7 +232,7 @@ function expect!(::TMixed, state::State, p::ProdLit, pre::PreObs)
                 r *= st[i]
             end
             j = i
-            o = l(psites)
+            o = l(Pure, sys)
         end
     end
     r *= mixed_obs(state, o, j)
