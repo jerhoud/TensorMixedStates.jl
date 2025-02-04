@@ -90,9 +90,9 @@ function (oper::Operator)(site::Site; tp = Pure, kwargs...)
     end
 end
 
-create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{Float64}; kwargs...) =
+create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{Float64}; fermionic = false, kwargs...) =
     Lit(
-        Operator(name, name, 1, false, false),
+        Operator(name, name, 1, fermionic, false),
         system -> begin
             t = ITensor()
             for (op, w) in zip(ops, weights)
