@@ -110,12 +110,21 @@ function log_phase(sim::Simulation, phase)
     if !isnothing(phase.time_start)
         sim = Simulation(sim, sim.state, phase.time_start)
     end
-    _, elapsed, bytes = @timed begin
+    td = @timed begin
         sim = run_phase(sim, phase)
         output(sim, phase.final_measures)
     end
-    elapsed = round(elapsed; digits=3)
-    log_msg(sim, "***** Ending phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(bytes)) allocated *****")
+    elapsed = round(td.time; digits=3)
+    comp =
+        if haskey(td, :compile_time)
+            round(td.compile_time + td.recompile_time; digits=3)
+        else
+            nothing
+        end
+    log_msg(sim, "***** Ending phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(td.bytes)) allocated *****")
+    if !isnothing(comp)
+        log_msg(sim, "compilation time was $comp seconds")
+    end
     return sim
 end
 
