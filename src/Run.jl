@@ -69,7 +69,17 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             if sim_data.description ≠ ""
                 write("description", sim_data.description)
             end
-            write_prog("prog.jl", sim_data)
+            write("stamp", """
+                    Julia $VERSION
+                    TensorMixedStates $(pkgversion(TensorMixedStates))
+                    Date $(now())
+                    """)
+            src_path = Base.source_path()
+            if src_path ≠ ""
+                cp(src_path, "prog.jl")
+            else
+                write_prog("prog.jl", sim_data)
+            end
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format)
         sim = log_phase(sim, sim_data)
@@ -112,10 +122,6 @@ end
 write_prog(filename, s::SimData) =
     write(filename,
         """
-        #Julia $VERSION
-        #TensorMixedStates $(pkgversion(TensorMixedStates))
-        #Date $(now())
-
         using TensorMixedStates
 
         simdata = $s
