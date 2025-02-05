@@ -324,7 +324,7 @@ function expect2(::TPure, state::State, ops::Vector{Tuple{Operator, Operator}}, 
         ldict = Dict{Operator, ITensor}()
         ti = pre.left[i] * pre.right[i]
         r[i, i] = map(ops) do (o1, o2)
-            t = replaceprime(o1(idx) * o2(idx)' + o1(idx)' * o2(idx), 2 => 1)
+            t = replaceprime(o1(idx)' * o2(idx), 2 => 1)
             scalar(ti * t) / 2
         end
         for op in oplist
@@ -377,7 +377,7 @@ function expect2(::TMixed, state::State, ops::Vector{Tuple{Operator, Operator}},
         ldict = Dict{Operator, ITensor}()
         ti = pre.left[i] * pre.right[i]
         r[i, i] = map(ops) do (o1, o2)
-            t = replaceprime(o1(idx) * o2(idx)' + o1(idx)' * o2(idx), 2 => 1)
+            t = replaceprime(o1(idx)' * o2(idx), 2 => 1)
             scalar(ti * mixed_obs(state, t, i)) / 2
         end
         for op in oplist
