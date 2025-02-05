@@ -90,7 +90,7 @@ function (oper::Operator)(site::Site; tp = Pure, kwargs...)
     end
 end
 
-function create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights::Vector{<:Number}; kwargs...)
+function create_mixed_gate(name::String, ops::Vector{Operator}, weights::Vector{<:Number}, i::Int...; kwargs...)
     if any(o->o.dissipator, ops)
         error("cannot create mixed gate from dissipators")
     end
@@ -102,15 +102,15 @@ function create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights:
     end
     ProdLit(1,[
         Lit(
-            Operator(name, name, 1, fermionic, false),
+            Operator(name, name, length(i), fermionic, false),
             system -> begin
                 t = ITensor()
                 for (op, w) in zip(ops, weights)
-                    t += w * make_operator(MixGate, system, op(system.pure_sites[i]), i)
+                    t += w * make_operator(MixGate, system, op((system.pure_sites[j] for j in i)...), i...)
                 end
                 return t
             end,
-            (i,),
+            i,
             NamedTuple(kwargs)
         )])
 end
