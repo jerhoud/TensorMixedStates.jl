@@ -100,18 +100,19 @@ function create_mixed_gate(name::String, i::Int, ops::Vector{Operator}, weights:
     if nf < n && nf > 0
         error("cannot create mixed gate from mixture of fermionic and non fermionic operators")
     end
-    Lit(
-        Operator(name, name, 1, fermionic, false),
-        system -> begin
-            t = ITensor()
-            for (op, w) in zip(ops, weights)
-                t += w * make_operator(MixGate, system, op(system.pure_sites[i]), i)
-            end
-            return t
-        end,
-        (i,),
-        NamedTuple(kwargs)
-    )
+    ProdLit(1,[
+        Lit(
+            Operator(name, name, 1, fermionic, false),
+            system -> begin
+                t = ITensor()
+                for (op, w) in zip(ops, weights)
+                    t += w * make_operator(MixGate, system, op(system.pure_sites[i]), i)
+                end
+                return t
+            end,
+            (i,),
+            NamedTuple(kwargs)
+        )])
 end
 
 """
