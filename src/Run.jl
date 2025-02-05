@@ -1,3 +1,4 @@
+using Dates
 export runTMS, SimData
 
 """
@@ -111,6 +112,10 @@ end
 write_prog(filename, s::SimData) =
     write(filename,
         """
+        #Julia $VERSION
+        #TensorMixedStates $(pkgversion(TensorMixedStates))
+        #Date $(now())
+
         using TensorMixedStates
 
         simdata = $s

@@ -4,6 +4,7 @@ authors = ["Jérôme Houdayer <jerome.houdayer@polytechnique.org> and contributo
 version = "1.1.0"
 
 [deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 ITensorMPS = "0d1a4710-d33b-49a5-8f18-73bdf49b47e2"
 ITensors = "9136182c-28ba-11e9-034c-db9fb085ebd5"
@@ -12,12 +13,13 @@ PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [compat]
-HDF5 = "0.17.2"
-ITensorMPS = "0.3"
-ITensors = "0.8"
-MKL = ">=0.7.0"
-PrecompileTools = "1.2.1"
-Printf = "1"
+Dates = ">=1.10"
+HDF5 = ">=0.17"
+ITensorMPS = ">=0.3"
+ITensors = ">=0.7"
+MKL = ">=0.7"
+PrecompileTools = ">=1.2"
+Printf = ">=1.10"
 julia = ">=1.10.5"
 
 [extras]
