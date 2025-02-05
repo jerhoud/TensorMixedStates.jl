@@ -1,5 +1,7 @@
 export output, log_msg
 
+const thresh_warn_imag = 1e-6
+
 struct LogWarn <: Exception
     msg
 end
@@ -10,7 +12,7 @@ end
 
 function output_one(file, x::Complex, format)
     output_one(file, real(x), format)
-    if abs(imag(x)) > 1e-12
+    if abs(imag(x)) > thresh_warn_imag
         throw(LogWarn(@sprintf("WARNING: large imaginary part %8.1e (rel %8.1e)", imag(x), imag(x) / real(x))))
     end
 end
