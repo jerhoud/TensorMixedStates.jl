@@ -46,6 +46,7 @@ function measure!(o::TdvpObserver; sweep, half_sweep_is_done, half_sweep, curren
         sim = Simulation(o.sim, st, current_time)
         output(sim, o.measurements; sweep)
     end
+    log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
     return nothing
 end
 
@@ -55,6 +56,7 @@ function measure!(o::ApproxWObserver; sweep, current_time, state, kwargs...)
         sim = Simulation(o.sim, st, current_time)
         output(sim, o.measurements; sweep)
     end
+    log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
     return nothing
 end
 
@@ -72,5 +74,6 @@ function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
         output(sim, o.measurements; energy, sweep)
     end
     o.energy = energy
+    log_msg(o.sim, "sweep $sweep")
     return stop
 end
