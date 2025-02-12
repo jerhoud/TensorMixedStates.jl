@@ -1,4 +1,4 @@
-export StateFunc, TimeFunc, Check, Measure, Trace, Trace2, Purity, Norm, EE, Linkdim, MemoryUsage, measure
+export StateFunc, TimeFunc, Check, Measure, Trace, Trace2, TraceError, Purity, Norm, EE, Linkdim, MemoryUsage, measure
 
 """
     struct StateFunc
@@ -128,6 +128,7 @@ get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
 get_exp2(_) = Tuple{Operator, Operator}[]
 
+TraceError = StateFunc("TraceError", trace_error, false)
 Trace = StateFunc("Trace", trace, true)
 Trace2 = StateFunc("Trace2", trace2, true)
 Purity = StateFunc("Purity", trace2, true)

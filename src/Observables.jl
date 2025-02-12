@@ -40,6 +40,14 @@ function trace(state::State; prep = nothing)
 end
 
 """
+    trace_error(::State)
+
+Return the deviaton to 1 of the trace of the system, mostly usefull for mixed representations.
+This should be zero.
+"""
+trace_error(state::State; prep = nothing) = 1 - trace(state; prep) 
+
+"""
     trace2(::State)
 
 Return the trace of the square density matrix, mostly usefull for mixed representations.
