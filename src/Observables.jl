@@ -29,13 +29,13 @@ end
 Return the trace of the system, mostly usefull for mixed representations.
 This should be one.
 """
-function trace(state::State; prep = nothing)
+function trace(state::State; preobs = nothing)
     if state.type == Pure
         norm(state.state)^2
-    elseif isnothing(prep)
+    elseif isnothing(preobs)
         scalar(prod(mixed_obs(state, i) for i in 1:length(state)))
     else
-        prep.norm
+        preobs.norm
     end
 end
 
@@ -45,7 +45,7 @@ end
 Return the deviaton to 1 of the trace of the system, mostly usefull for mixed representations.
 This should be zero.
 """
-trace_error(state::State; prep = nothing) = 1 - trace(state; prep) 
+trace_error(state::State; preobs = nothing) = 1 - trace(state; preobs) 
 
 """
     trace2(::State)
@@ -53,11 +53,11 @@ trace_error(state::State; prep = nothing) = 1 - trace(state; prep)
 Return the trace of the square density matrix, mostly usefull for mixed representations.
 Should be one for pure representation.
 """
-trace2(state::State; prep = nothing) =
+trace2(state::State; preobs = nothing) =
     if state.type == Pure
         1.
     else
-        (norm(state.state) / real(trace(state; prep))) ^ 2
+        (norm(state.state) / real(trace(state; preobs))) ^ 2
     end
 
 """

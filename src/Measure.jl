@@ -9,7 +9,7 @@ a data type to represent a function of `State`. This is used by `measure`.
 struct StateFunc
     name::String
     obs::Function
-    use_prep::Bool
+    use_preobs::Bool
 end
 
 StateFunc(name, obs) = StateFunc(name, obs, false)
@@ -158,9 +158,9 @@ get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
     else
         o.name => o.obs
     end
-get_val(o::StateFunc, ::Dict, st::State, ::Number; prep, kwargs...) =
-    if o.use_prep
-        return o.name => o.obs(st; prep)
+get_val(o::StateFunc, ::Dict, st::State, ::Number; preobs, kwargs...) =
+    if o.use_preobs
+        return o.name => o.obs(st; preobs)
     else
         return o.name => o.obs(st)
     end
@@ -200,20 +200,19 @@ measure(state::State, args, t::Number = 0.; kwargs...) =
 measure(state::State, m::Measure, t::Number = 0.; kwargs...) =
     measure(state, [m], t; kwargs...)[1]
 
-function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
-    prep = PreObs(state)
+function measure(state::State, m::Vector{Measure}, t::Number = 0.; preobs = PreObs(state), kwargs...)
     vals = Dict()
     prods = collect(Set(get_prods(m)))
     if !isempty(prods)
-        push!(vals, (prods .=> expect(state, prods, prep))...)
+        push!(vals, (prods .=> expect(state, prods, preobs))...)
     end
     exp1s = collect(Set(get_exp1(m)))
     if !isempty(exp1s)
-        push!(vals, (exp1s .=> expect1(state, exp1s, prep))...)
+        push!(vals, (exp1s .=> expect1(state, exp1s, preobs))...)
     end
     exp2s = collect(Set(get_exp2(m)))
     if !isempty(exp2s)
-        push!(vals, (exp2s .=> expect2(state, exp2s, prep))...)
+        push!(vals, (exp2s .=> expect2(state, exp2s, preobs))...)
     end
-    return get_val(m, vals, state, t; prep, kwargs...)
+    return get_val(m, vals, state, t; preobs, kwargs...)
 end
