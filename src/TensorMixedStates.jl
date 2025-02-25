@@ -1,9 +1,13 @@
 module TensorMixedStates
 
-import Base: *, +, -, /, exp
-
+import Base: *, +, -, /, exp, show
+import ITensors: matrix
+using ITensors, ITensorMPS
 
 include("Operators.jl")
+include("Sites.jl")
+include("Mixing.jl")
+include("Qubits.jl")
 #=
 # Core
 include("System.jl")
