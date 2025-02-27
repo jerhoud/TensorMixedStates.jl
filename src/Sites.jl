@@ -70,7 +70,7 @@ macro def_operators(site, symbols)
     return e
 end
 
-macro def_operator(site, expr, doc)
+macro def_operator(site, expr, doc="")
     if !(expr isa Expr) || expr.head ≠ :(=)
         error("syntax error in @def_operator expression must be an assignment")
     end
@@ -79,17 +79,5 @@ macro def_operator(site, expr, doc)
     val = last(expr.args)
     quote
         $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(doc)))
-    end
-end
-
-macro def_operator(site, expr)
-    if !(expr isa Expr) || expr.head ≠ :(=)
-        error("syntax error in @def_operator expression must be an assignment")
-    end
-    sym = first(expr.args)
-    nsym = string(sym)
-    val = last(expr.args)
-    quote
-        $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)))
     end
 end
