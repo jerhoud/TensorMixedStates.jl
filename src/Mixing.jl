@@ -76,3 +76,5 @@ fermionic(a::Gate{1}) = fermionic(a.arg)
 fermionic(a::Dissipator{1}) = fermionic(a.arg)
 
 fermionic(a::Indexed{1}) = fermionic(a.op)
+
+fermionic(::Any) = false

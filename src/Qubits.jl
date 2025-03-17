@@ -3,7 +3,6 @@ export Qubits
 struct Qubit <: AbstractSite end
 
 site_dim(::Qubit) = 2
-site_name(::Qubit) = "Qubit"
 
 controlled(op::ExprOp{N}) where N =
     TensorOp{N+1}(ExprOp[ [PUp] ; [I for _ in 1:N]]) + (PDn ⊗ op)
@@ -17,8 +16,8 @@ controlled(op::ExprOp{N}) where N =
     (Z = [1. 0. ; 0. -1.], "Pauli operator Z"),
     (PUp = [1. 0. ; 0. 0.], "Projector on up"),
     (PDn = [0. 0. ; 0. 1.], "Projector on down"),
-    (Sp = [0. 1. ; 0. 0.], "S+"),
-    (Sm = [0. 0. ; 1. 0.], "S-"),
+    (Sp = [0. 1. ; 0. 0.], "S+ operator"),
+    (Sm = [0. 0. ; 1. 0.], "S- operator"),
     (NOT = X, "NOT gate, same as X"),
     (CX = controlled(X), "Controlled X gate, same as CNOT"),
     (CNOT = CX, "Controlled NOT gate, same as CX"),
