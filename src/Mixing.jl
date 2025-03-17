@@ -1,4 +1,4 @@
-export tensor, matrix
+export tensor, matrix, fermionic
 
 function matrix(a, site::AbstractSite...)
     t = tensor(a, site...)
@@ -14,6 +14,8 @@ function tensor(a, site::AbstractSite...)
 end
 
 matrix(a::Matrix, ::AbstractSite) = a
+
+matrix(a::Function, site::AbstractSite) = a(site)
 
 matrix(a::String, site::AbstractSite) =
     matrix(first(operator_info(site, a)), site)
@@ -52,3 +54,25 @@ function tensor(a::TensorOp{N}, site::AbstractSite...) where N
     c = combiner((getfirst(j->hasplev(j, 0), inds(t)) for t in reverse(ts))...)
     c * prod(ts) * c'
 end
+
+fermionic(a::Operator{1}) = a.fermionic
+
+function fermionic(a::SumOp{1})
+    n = length(a.subs)
+    nf = count(fermionic, a.subs)
+    if nf == n
+        return true
+    elseif n == 0
+        return false
+    else
+        error("cannot sum fermionic with non fermionic operators")
+    end
+end
+
+fermionic(a::ProdOp{1}) = isodd(count(fermionic, a.subs))
+
+fermionic(a::Gate{1}) = fermionic(a.arg)
+
+fermionic(a::Dissipator{1}) = fermionic(a.arg)
+
+fermionic(a::Indexed{1}) = fermionic(a.op)

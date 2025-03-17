@@ -154,11 +154,11 @@ show(io::IO, a::ExpOp) =
 struct Operator{N} <: ExprOp{N}
     name::String
     expr::Union{Nothing, Matrix, Function, ExprOp{N}}
+    fermionic::Bool
 end
 
-Operator{N}(name) where N = Operator{N}(name, nothing)
-Operator(name) = Operator{1}(name)
-Operator(name, expr) = Operator{1}(name, expr)
+Operator{N}(name, expr = nothing) where N = Operator{N}(name, expr, false)
+Operator(name, expr = nothing, fermionic = false) = Operator{1}(name, expr, fermionic)
 
 show(io::IO, op::Operator) =
     print(io, op.name)
