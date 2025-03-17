@@ -36,6 +36,12 @@ matrix(a::SumOp, site::AbstractSite...) =
 matrix(a::ExpOp, site::AbstractSite...) =
     exp(matrix(a.arg, site...))
 
+matrix(a::SqrtOp, site::AbstractSite...) =
+    sqrt(matrix(a.arg, site...))
+
+matrix(a::SqrtOp, site::AbstractSite...) =
+    matrix(a.arg, site...) ^ a.expo
+
 tensor_next(o::ExprOp{N}, site::Vararg{AbstractSite, M}) where {N, M} =
     (tensor(o, site[1:N]...), site[N+1:M])
 
