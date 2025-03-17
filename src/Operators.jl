@@ -41,11 +41,25 @@ tensorsubs(a::ExprOp) = [a]
 (a::ExprOp{N} ⊗ b::ExprOp{M}) where {N, M} =
     TensorOp{N + M}([tensorsubs(a) ; tensorsubs(b)])
 
+struct PowOp{N} <: ExprOp{N}
+    arg::ExprOp{N}
+    expo::Number
+end
+
+(a::ExprOp{N} ^ b::Number) where N =
+    PowOp{N}(a, b)
+
 struct ExpOp{N} <: ExprOp{N}
     arg::ExprOp{N}
 end
 
 exp(a::ExprOp{N}) where N = ExpOp{N}(a)
+
+struct SqrtOp{N} <: ExprOp{N}
+    arg::ExprOp{N}
+end
+
+sqrt(a::ExprOp{N}) where N = SqrtOp{N}(a)
 
 struct Gate{N} <: ExprOp{N}
     arg::ExprOp{N}
@@ -140,9 +154,20 @@ show(io::IO, a::TensorOp) =
         join(io, a.subs, "⊗")
     end
 
+show(io::IO, a::PowOp) =
+    paren(io, Base.operator_precedence(:^)) do io
+        print(io, a.arg, "^", a.expo)
+    end
+
+
 show(io::IO, a::ExpOp) =
     paren(io, 1000) do io
         show_func(io, "exp", a.arg)
+    end
+
+show(io::IO, a::SqrtOp) =
+    paren(io, 1000) do io
+        show_func(io, "sqrt", a.arg)
     end
 
 #show(io::IO, a::Gate) = show_func(io, "Gate", a.arg)
