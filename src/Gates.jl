@@ -1,19 +1,9 @@
-export apply_gates
+export apply
 
-function Lit_to_ops(::TPure, system::System, a::ProdLit)
-    r = [ l(Pure, system) for l in a.ls ]
-    r[1] *= a.coef
-    return r    
-end
+make_ops(type::PM, system::System, a::Indexed) = tensor(type; system, a)
 
-function Lit_to_ops(::TMixed, system::System, a::ProdLit)
-    r = map(a.ls) do l
-        try
-            l(Mixed, system)
-        catch
-            make_operator(MixGate, system, l(Pure, system), l.index...)
-        end
-    end
+function make_ops(type::PM, system::System, a::ProdOp{IndexOp})
+    r = [ make_ops(type, system, i) for i in a.subs ]
     r[1] *= a.coef
     return r    
 end
@@ -29,14 +19,8 @@ It is much more efficient to apply all the gates in a single call to apply.
     apply(CZ(1,3)*H(2)*CNOT(3,4), state; maxdim=10, cutoff=1e-10)
 
 """
-function apply(a::ProdLit, state::State; kwargs...)
-    if a.coef == 0
-        error("Cannot apply a null gate")
-    end
-    if dissipLit(a)
-        error("Cannot apply a dissipator as a gate")
-    end
-    ops = Lit_to_ops(state.type, state.system, insertFfactors(a))
+function apply(a::ExprIndexed, state::State; kwargs...)
+    ops = make_ops(state.type, state.system, gate(a))
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
     return State(state, st)
 end

@@ -1,14 +1,15 @@
-export AbstractSite, mix, site_dim, site_index, mix, @def_operator, @def_operators
+export AbstractSite, mix, dim, Index, identity_operator, @def_operator, @def_operators, @def_states, state
 
 abstract type AbstractSite end
 
-site_dim(site::AbstractSite) = error("site_dim not defined on site $site")
-site_index(site::AbstractSite) = Index(site_dim(site); tags="$(string(typeof(site))), Site")
+dim(site::AbstractSite) = error("dim not defined on site $site")
+Index(site::AbstractSite) = Index(dim(site); tags="$(string(typeof(site))), Site")
 
 mix(i::Index) =
     addtags(combinedind(combiner(i, i'; tags = tags(i))), "Mixed")
 
-operator_library::Dict{Tuple{DataType, String}, Tuple{Union{Nothing, Matrix, Function, ExprOp}, String}} = Dict()
+operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, ExprOp}} = Dict()
+state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
 
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
@@ -20,32 +21,27 @@ function operator_info(site::AbstractSite, op::String)
     end
 end
 
+identity_operator(dim::Int) = [ (i==j) ? 1. : 0. for i in 1:dim, j in 1:dim ]
+identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
-operator_doc(site::AbstractSite, op::String) =
-    last(operator_info(site, op))
-
-identity_operator(site::AbstractSite) = [ (i==j) ? 1. : 0. for i in 1:site_dim(site), j in 1:site_dim(site) ]
-
-function add_operator(site::AbstractSite, op::String, r::Union{Nothing, Matrix, Function},
-    fermionic::Bool=false, doc::String="", N::Int=1)
-
+function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}, fermionic::Bool=false, N::Int=1)
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
-        operator_library[t] = (r, doc)
+        operator_library[t] = r
         return Operator{N}(op, nothing, fermionic)
     end
 end
 
-function add_operator(site::AbstractSite, op::String, r::ExprOp{N}, fermionic::Bool=false, doc::String="", _::Int=1) where N
+function add_operator(site::AbstractSite, op::String, r::ExprOp{N}, fermionic::Bool=false, ::Int=1) where N
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
-        operator_library[t] = (r, doc)
+        operator_library[t] = r
         return Operator{N}(op, nothing, fermionic)
     end
 end
@@ -55,35 +51,79 @@ macro def_operators(site, symbols, fermionic=false)
     if !(symbols isa Expr) || symbols.head ≠ :vect
         error("syntax error in @def_operators second argument should be a vector")
     end
-    for p in symbols.args
-        if !(p isa Expr) || p.head ≠ :tuple || !(2 <= length(p.args) <= 3)
-            error("syntax error in @def_operators items should be 2-tuple")
-        end
-        expr = first(p.args)
-        doc = last(p.args)
-        n = length(p.args) == 3 ? p.args[2] : 1
+    for expr in symbols.args
         if !(expr isa Expr) || expr.head ≠ :(=)
-            error("syntax error in @def_operators item expression must be an assignment")
+            error("syntax error in @def_operators item expressions must be assignments (sym = val)")
         end
         sym = first(expr.args)
         nsym = string(sym)
         val = last(expr.args)
         push!(e.args,
             quote
-                $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(fermionic)), $(esc(doc)), $n)
+                $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(fermionic)))
             end)
     end
     return e
 end
 
-macro def_operator(site, expr, fermionic=false, doc="", N=1)
+macro def_operator(site, expr, N=1, fermionic=false)
     if !(expr isa Expr) || expr.head ≠ :(=)
-        error("syntax error in @def_operator expression must be an assignment")
+        error("syntax error in @def_operator expression must be an assignment (sym = val)")
     end
     sym = first(expr.args)
     nsym = string(sym)
     val = last(expr.args)
     quote
-        $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(fermionic)), $(esc(doc)), $(esc(N)))
+        $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(fermionic)), $(esc(N)))
     end
 end
+
+function add_state(site::AbstractSite, st::String, r::Union{String, Vector, Matrix, Function})
+    name = typeof(site)
+    t = (name, st)
+    if haskey(state_library, t)
+        error("state $st is already defined for site $name")
+    else
+        state_library[t] = r
+    end
+end
+
+add_state(site::AbstractSite, sts::Vector{String}, r::Union{String, Vector, Matrix, Function}) =
+    foreach(sts) do st
+        add_state(site, st, r)
+    end
+
+macro def_states(site, symbols)
+    e = Expr(:block)
+    if !(symbols isa Expr) || symbols.head ≠ :vect
+        error("syntax error in @def_states second argument should be a vector")
+    end
+    for expr in symbols.args
+        if !(expr isa Expr) || expr.head ≠ :call || expr.args[1] ≠ :(=>)
+            error("syntax error in @def_states item expressions must be pairs (\"sym\" => val or [\"sym1\", \"sym2\", ...] => val)")
+        end
+        sym = expr.args[2]
+        val = expr.args[3]
+        push!(e.args,
+            quote
+                add_state($(esc(site)), $(esc(sym)), $(esc(val)))
+            end)
+    end
+    return e
+end
+
+state(::AbstractSite, a::Union{Vector, Matrix}) = a
+state(site::AbstractSite, a::Function) = a(site)
+
+state(site::AbstractSite, st::String) =
+    if st == "FullyMixed"
+        identity_operator(site) / dim(site)
+    else
+        name = typeof(site)
+        t = (name, st)
+        if !haskey(state_library, t)
+            error("state $st is not defined for site $name")
+        else
+            state(site, state_library[t])
+        end
+    end

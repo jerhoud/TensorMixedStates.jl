@@ -1,20 +1,23 @@
 module TensorMixedStates
 
-import Base: *, +, -, /, exp, show
-import ITensors: matrix
+import Base: *, +, -, /, exp, sqrt, show, length, copy, getindex
+import ITensors: matrix, truncate, dim, Index, dag
+import ITensorMPS: maxlinkdim, apply, state
+
 using ITensors, ITensorMPS
 
 include("Operators.jl")
 include("Sites.jl")
 include("Mixing.jl")
 include("Qubits.jl")
-#=
+
 # Core
-include("System.jl")
-include("Literal.jl")
-include("Mixer.jl")
-include("State.jl")
-include("Io.jl")
+include("Systems.jl")
+include("States.jl")
+include("Gates.jl")
+
+
+#=
 
 # Low Level interface
 include("Mpo.jl")
@@ -22,7 +25,6 @@ include("Solvers.jl")
 include("Observables.jl")
 include("Measure.jl")
 include("RandomState.jl")
-include("Gates.jl")
 
 # High level interface
 include("Simulation.jl")

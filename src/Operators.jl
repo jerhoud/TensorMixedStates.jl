@@ -40,26 +40,28 @@ tensorsubs(a::ExprOp) = [a]
 
 (a::ExprOp{N} ⊗ b::ExprOp{M}) where {N, M} =
     TensorOp{N + M}([tensorsubs(a) ; tensorsubs(b)])
+⊗(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a ⊗ b, c...)
+
+tensor(a::ExprOp...) = ⊗(a...)
 
 struct PowOp{N} <: ExprOp{N}
     arg::ExprOp{N}
     expo::Number
 end
 
-(a::ExprOp{N} ^ b::Number) where N =
-    PowOp{N}(a, b)
+(a::ExprOp ^ b::Number) = PowOp(a, b)
 
 struct ExpOp{N} <: ExprOp{N}
     arg::ExprOp{N}
 end
 
-exp(a::ExprOp{N}) where N = ExpOp{N}(a)
+exp(a::ExprOp) = ExpOp(a)
 
 struct SqrtOp{N} <: ExprOp{N}
     arg::ExprOp{N}
 end
 
-sqrt(a::ExprOp{N}) where N = SqrtOp{N}(a)
+sqrt(a::ExprOp) = SqrtOp(a)
 
 struct Gate{N} <: ExprOp{N}
     arg::ExprOp{N}
@@ -69,6 +71,19 @@ struct Dissipator{N} <: ExprOp{N}
     arg::ExprOp{N}
 end
 
+struct Left{N} <: ExprOp{N}
+    arg::ExprOp{N}
+end
+
+struct Right{N} <: ExprOp{N}
+    arg::ExprOp{N}
+end
+
+struct DagOp{N} <: ExprOp{N}
+    arg::ExprOp{N}
+end
+
+dag(a::ExprOp) = DagOp(a)
 
 
 
@@ -159,7 +174,6 @@ show(io::IO, a::PowOp) =
         print(io, a.arg, "^", a.expo)
     end
 
-
 show(io::IO, a::ExpOp) =
     paren(io, 1000) do io
         show_func(io, "exp", a.arg)
@@ -170,10 +184,31 @@ show(io::IO, a::SqrtOp) =
         show_func(io, "sqrt", a.arg)
     end
 
-#show(io::IO, a::Gate) = show_func(io, "Gate", a.arg)
+show(io::IO, a::Gate) =
+    paren(io, 1000) do io
+        show_func(io, "Gate", a.arg)
+    end
 
-#show(io::IO, a::Dissipator) = show_func(io, "Dissipator", a.arg)
 
+show(io::IO, a::Dissipator) =
+    paren(io, 1000) do io
+        show_func(io, "Dissipator", a.arg)
+    end
+
+show(io::IO, a::Left) =
+    paren(io, 1000) do io
+        show_func(io, "Left", a.arg)
+    end
+
+show(io::IO, a::Right) =
+    paren(io, 1000) do io
+        show_func(io, "Right", a.arg)
+    end
+
+show(io::IO, a::DagOp) =
+    paren(io, 1000) do io
+        show_func(io, "dag", a.arg)
+    end
 
 
 struct Operator{N} <: ExprOp{N}
@@ -190,7 +225,9 @@ show(io::IO, op::Operator) =
 
 struct IndexOp end
 
-struct Indexed{N} <: ExprOp{IndexOp}
+ExprIndexed = ExprOp{IndexOp}
+
+struct Indexed{N} <: ExprIndexed
     op::ExprOp{N}
     index::NTuple{N, Int}
 end
