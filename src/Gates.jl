@@ -1,9 +1,9 @@
 export apply
 
-make_ops(type::PM, system::System, a::Indexed) = tensor(type; system, a)
+gate(type::PM, system::System, a::Indexed) = tensor(type, system, a)
 
-function make_ops(type::PM, system::System, a::ProdOp{IndexOp})
-    r = [ make_ops(type, system, i) for i in a.subs ]
+function gate(type::PM, system::System, a::ProdOp{IndexOp})
+    r = [ gate(type, system, i) for i in a.subs ]
     r[1] *= a.coef
     return r    
 end
@@ -20,7 +20,11 @@ It is much more efficient to apply all the gates in a single call to apply.
 
 """
 function apply(a::ExprIndexed, state::State; kwargs...)
-    ops = make_ops(state.type, state.system, gate(a))
+    ops = gate(state.type, state.system, a)
     st = apply(ops, state.state; move_sites_back_between_gates=false, kwargs...)
     return State(state, st)
 end
+
+gate(::SumOp{IndexOp}) = error("cannot apply sums as gate, use sums of operator instead")
+gate(a::ProdOp{IndexOp}) = ProdOp{IndexOp}(a.coef, map(gate, a.subs))
+gate(a::Indexed{N}) where N = Indexed{N}(gate(a.op), a.index)

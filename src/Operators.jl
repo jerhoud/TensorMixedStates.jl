@@ -1,91 +1,14 @@
 export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, Gate, Dissipator
 
-abstract type ExprOp{N} end
 
-struct ProdOp{N} <: ExprOp{N}
-    coef::Number
-    subs::Vector{<:ExprOp{N}}
-end
+############# Types ################
 
-prodsubs(a::ProdOp) = a.subs
-prodsubs(a::ExprOp) = [a]
-coefsubs(a::ProdOp) = a.coef
-coefsubs(a::ExprOp) = 1
+struct Pure end
+struct Mixed end
 
-(a::ExprOp{N} * b::ExprOp{N}) where N =
-    ProdOp{N}(coefsubs(a) * coefsubs(b), [prodsubs(a) ; prodsubs(b)])
-(a::Number * b::ExprOp{N}) where N =
-    ProdOp{N}(a * coefsubs(b), prodsubs(b))
-(a::ExprOp * b::Number) = b * a
-(a::ExprOp / b::Number) = inv(b) * a
--(a::ExprOp) = -1 * a
+abstract type ExprOp{T, N} end
 
-struct SumOp{N} <: ExprOp{N}
-    subs::Vector{<:ExprOp{N}}
-end
-
-sumsubs(a::SumOp) = a.subs
-sumsubs(a::ExprOp) = [a]
-
-(a::ExprOp{N} + b::ExprOp{N}) where N =
-    SumOp{N}([sumsubs(a) ; sumsubs(b)])
-(a::ExprOp - b::ExprOp) = a + (-b)
-
-struct TensorOp{N} <: ExprOp{N}
-    subs::Vector{<:ExprOp}
-end
-
-tensorsubs(a::TensorOp) = a.subs
-tensorsubs(a::ExprOp) = [a]
-
-(a::ExprOp{N} ⊗ b::ExprOp{M}) where {N, M} =
-    TensorOp{N + M}([tensorsubs(a) ; tensorsubs(b)])
-⊗(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a ⊗ b, c...)
-
-tensor(a::ExprOp...) = ⊗(a...)
-
-struct PowOp{N} <: ExprOp{N}
-    arg::ExprOp{N}
-    expo::Number
-end
-
-(a::ExprOp ^ b::Number) = PowOp(a, b)
-
-struct ExpOp{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-exp(a::ExprOp) = ExpOp(a)
-
-struct SqrtOp{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-sqrt(a::ExprOp) = SqrtOp(a)
-
-struct Gate{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-struct Dissipator{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-struct Left{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-struct Right{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-struct DagOp{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-dag(a::ExprOp) = DagOp(a)
-
-
+############## Showing ###############
 
 function show_func(io::IO, name, args, kwargs=(;))
     print(io, name, "(")
@@ -102,8 +25,8 @@ function show_func(io::IO, name, args, kwargs=(;))
 end
 
 print_coef(io::IO, a::Number) =
-    if a ≠ 1
-        if a == -1
+if a ≠ 1
+    if a == -1
             print(io, "-")
         elseif isa(a, Complex)
             if imag(a) == 0
@@ -130,11 +53,106 @@ function paren(f, io::IO, out_prec::Int, in_prec::Int = out_prec)
     end
 end
 
+############### Operator ###############
+
+struct Operator{T, N} <: ExprOp{T, N}
+    name::String
+    expr::Union{Nothing, Matrix, Function, ExprOp{T, N}}
+    fermionic::Bool
+    Operator{T, N}(name, expr = nothing, fermionic = false) where {T, N} =
+    new(name, expr, fermionic)
+end
+
+Operator(args...) = Operator{Pure, 1}(args...)
+Operator(name, expr::ExprOp{T, N}, fermionic=false) where {T, N} = Operator{T, N}(name, expr, fermionic)
+
+show(io::IO, op::Operator) =
+    print(io, op.name)
+
+############ Indexed ################
+
+struct IndexOp end
+
+ExprIndexed{T} = ExprOp{T, IndexOp}
+
+struct Indexed{T, N} <: ExprIndexed{T}
+    op::ExprOp{T, N}
+    index::NTuple{N, Int}
+end
+
+(op::ExprOp{T, N})(index::Vararg{Int, N}) where {T, N} =
+    Indexed{T, N}(op, index)
+
+show(io::IO, ind::Indexed) =
+    if ind.op isa Operator
+        show_func(io, ind.op.name, collect(ind.index))
+    else
+        show_func(io, repr(ind.op; context=:precedence=>500), collect(ind.index))
+    end
+
+############## Mixers ###############
+
+struct Mix{N} <: ExprOp{Mixed, N}
+    arg::ExprOp{Pure, N}
+end
+
+struct Gate{N} <: ExprOp{Mixed, N}
+    arg::ExprOp{Pure, N}
+end
+
+Gate(::ExprIndexed) = error{"Gate cannot be applied to indexed expressions"}
+
+struct Dissipator{N} <: ExprOp{Mixed, N}
+    arg::ExprOp{Pure, N}
+end
+
+Dissipator(::ExprIndexed) = error{"Dissipator cannot be applied to indexed expressions"}
+
+
+############### Operator Products ###############
+
+struct ProdOp{T, N} <: ExprOp{T, N}
+    coef::Number
+    subs::Vector{<:ExprOp{T, N}}
+end
+
+prodsubs(a::ProdOp) = a.subs
+prodsubs(a::ExprOp) = [a]
+coefsubs(a::ProdOp) = a.coef
+coefsubs(a::ExprOp) = 1
+
+(a::ExprOp{T, N}...) where {T, N} =
+    ProdOp{T, N}(prod(map(coefsubs, a)...), vcat(map(prodsubs, a)...))
+(a::ExprIndexed{Mixed} * b::ExprIndexed{Pure}) = a * Mix(b)
+(a::ExprIndexed{Pure} * b::ExprIndexed{Mixed}) = Mix(a) * b
+(a::Number * b::ExprOp{T, N}) where {T, N} = 
+    ProdOp{T, N}(a * coefsubs(b), prodsubs(b))
+(a::ExprOp * b::Number) = b * a
+(a::ExprOp / b::Number) = inv(b) * a
+-(a::ExprOp) = -1 * a
+
 show(io::IO, a::ProdOp) =
     paren(io, Base.operator_precedence(:*)) do io
         print_coef(io, a.coef)
         join(io, a.subs, "*")
     end
+
+
+
+################ Operator Sums ##############
+
+struct SumOp{T, N} <: ExprOp{T, N}
+    subs::Vector{<:ExprOp{T, N}}
+end
+
+sumsubs(a::SumOp) = a.subs
+sumsubs(a::ExprOp) = [a]
+
++(a::ExprOp{T, N}...) where {T, N} =
+    SumOp{T, N}(vcat(map(sumsubs, a)...))
+(a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Mix(b)
+(a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Mix(a) + b
+(a::ExprOp - b::ExprOp) = a + (-b)
 
 show(io::IO, a::SumOp) =
     paren(io, Base.operator_precedence(:+)) do io
@@ -164,25 +182,91 @@ show(io::IO, a::SumOp) =
     end
 
 
+############### Tensor products ############
+
+struct TensorOp{T, N} <: ExprOp{T, N}
+    subs::Vector{<:ExprOp{T, Any}}
+end
+
+tensorsubs(a::TensorOp) = a.subs
+tensorsubs(a::ExprOp) = [a]
+
+(a::ExprOp{T, N} ⊗ b::ExprOp{T, M}) where {T, N, M} =
+    TensorOp{T, N + M}([tensorsubs(a) ; tensorsubs(b)])
+⊗(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a ⊗ b, c...)
+
+tensor(a::ExprOp...) = ⊗(a...)
+
 show(io::IO, a::TensorOp) =
     paren(io, Base.operator_precedence(:⊗)) do io
         join(io, a.subs, "⊗")
     end
+
+
+############## Operator functions ###########
+
+
+struct PowOp{T, N} <: ExprOp{T, N}
+    arg::ExprOp{T, N}
+    expo::Number
+end
+
+(a::ExprOp ^ b::Number) = PowOp(a, b)
+(::ExprIndexed ^ ::Number) = error("cannot raise indexed expressions to a power, do it directly on operators")
 
 show(io::IO, a::PowOp) =
     paren(io, Base.operator_precedence(:^)) do io
         print(io, a.arg, "^", a.expo)
     end
 
+struct ExpOp{T, N} <: ExprOp{T, N}
+    arg::ExprOp{T, N}
+end
+
+exp(a::ExprOp) = ExpOp(a)
+exp(::ExprIndexed) = error("cannot use exp on indexed expressions, use it directly on operators") 
+
 show(io::IO, a::ExpOp) =
     paren(io, 1000) do io
         show_func(io, "exp", a.arg)
     end
 
+struct SqrtOp{T, N} <: ExprOp{T, N}
+    arg::ExprOp{T, N}
+end
+
+sqrt(a::ExprOp) = SqrtOp(a)
+sqrt(::ExprIndexed) = error("cannot use sqrt on indexed expressions, use it directly on operators")
+
 show(io::IO, a::SqrtOp) =
     paren(io, 1000) do io
         show_func(io, "sqrt", a.arg)
     end
+    
+    
+struct DagOp{N, T} <: ExprOp{N, T}
+    arg::ExprOp{N, T}
+end
+
+dag(a::ExprOp) = DagOp(a)
+
+show(io::IO, a::DagOp) =
+    paren(io, 1000) do io
+        show_func(io, "dag", a.arg)
+    end
+
+    #=
+struct Left{N} <: ExprOp{N}
+    arg::ExprOp{N}
+end
+
+struct Right{N} <: ExprOp{N}
+    arg::ExprOp{N}
+end
+
+
+
+
 
 show(io::IO, a::Gate) =
     paren(io, 1000) do io
@@ -210,34 +294,4 @@ show(io::IO, a::DagOp) =
         show_func(io, "dag", a.arg)
     end
 
-
-struct Operator{N} <: ExprOp{N}
-    name::String
-    expr::Union{Nothing, Matrix, Function, ExprOp{N}}
-    fermionic::Bool
-end
-
-Operator{N}(name, expr = nothing) where N = Operator{N}(name, expr, false)
-Operator(name, expr = nothing, fermionic = false) = Operator{1}(name, expr, fermionic)
-
-show(io::IO, op::Operator) =
-    print(io, op.name)
-
-struct IndexOp end
-
-ExprIndexed = ExprOp{IndexOp}
-
-struct Indexed{N} <: ExprIndexed
-    op::ExprOp{N}
-    index::NTuple{N, Int}
-end
-
-(op::ExprOp{N})(index::Vararg{Int, N}) where N =
-    Indexed{N}(op, index)
-
-show(io::IO, ind::Indexed) =
-    if ind.op isa Operator
-        show_func(io, ind.op.name, collect(ind.index))
-    else
-        show_func(io, repr(ind.op; context=:precedence=>500), collect(ind.index))
-    end
+=#
