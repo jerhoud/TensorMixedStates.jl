@@ -92,21 +92,34 @@ show(io::IO, ind::Indexed) =
 
 ############## Mixers ###############
 
-struct Mix{N} <: ExprOp{Mixed, N}
-    arg::ExprOp{Pure, N}
-end
-
 struct Gate{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
 end
 
-Gate(::ExprIndexed) = error{"Gate cannot be applied to indexed expressions"}
+show(io::IO, a::Gate) =
+    paren(io, 1000) do io
+        show_func(io, "Gate", a.arg)
+    end
 
 struct Dissipator{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
 end
 
 Dissipator(::ExprIndexed) = error{"Dissipator cannot be applied to indexed expressions"}
+
+show(io::IO, a::Dissipator) =
+    paren(io, 1000) do io
+        show_func(io, "Dissipator", a.arg)
+    end
+
+struct Evolve{N} <: ExprOp{Mixed, N}
+    arg::ExprOp{Pure, N}
+end
+
+show(io::IO, a::Evolve) =
+    paren(io, 1000) do io
+        show_func(io, "Evolve", a.arg)
+    end
 
 
 ############### Operator Products ###############
@@ -123,8 +136,8 @@ coefsubs(a::ExprOp) = 1
 
 (a::ExprOp{T, N}...) where {T, N} =
     ProdOp{T, N}(prod(map(coefsubs, a)...), vcat(map(prodsubs, a)...))
-(a::ExprIndexed{Mixed} * b::ExprIndexed{Pure}) = a * Mix(b)
-(a::ExprIndexed{Pure} * b::ExprIndexed{Mixed}) = Mix(a) * b
+(a::ExprIndexed{Mixed} * b::ExprIndexed{Pure}) = a * Gate(b)
+(a::ExprIndexed{Pure} * b::ExprIndexed{Mixed}) = Gate(a) * b
 (a::Number * b::ExprOp{T, N}) where {T, N} = 
     ProdOp{T, N}(a * coefsubs(b), prodsubs(b))
 (a::ExprOp * b::Number) = b * a
@@ -150,8 +163,8 @@ sumsubs(a::ExprOp) = [a]
 
 +(a::ExprOp{T, N}...) where {T, N} =
     SumOp{T, N}(vcat(map(sumsubs, a)...))
-(a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Mix(b)
-(a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Mix(a) + b
+(a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Evolve(b)
+(a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Evolve(a) + b
 (a::ExprOp - b::ExprOp) = a + (-b)
 
 show(io::IO, a::SumOp) =
@@ -268,17 +281,6 @@ end
 
 
 
-show(io::IO, a::Gate) =
-    paren(io, 1000) do io
-        show_func(io, "Gate", a.arg)
-    end
-
-
-show(io::IO, a::Dissipator) =
-    paren(io, 1000) do io
-        show_func(io, "Dissipator", a.arg)
-    end
-
 show(io::IO, a::Left) =
     paren(io, 1000) do io
         show_func(io, "Left", a.arg)
@@ -289,9 +291,5 @@ show(io::IO, a::Right) =
         show_func(io, "Right", a.arg)
     end
 
-show(io::IO, a::DagOp) =
-    paren(io, 1000) do io
-        show_func(io, "dag", a.arg)
-    end
 
 =#
