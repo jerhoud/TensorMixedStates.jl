@@ -1,22 +1,4 @@
-export System, Pure, Mixed
-
-"""
-    struct Pure end
-    Pure()
-
-    Correspond to pure quantum representation
-"""
-struct Pure end
-
-"""
-    Struct Mixed end
-    Mixed()
-
-    Correspond to mixed quantum representation
-"""
-struct Mixed end
-
-PM = Union{Pure, Mixed}
+export System
 
 """
     struct System
@@ -63,10 +45,10 @@ Return number of sites in the system
 """
 length(system::System) = length(system.sites)
 
-function tensor(type::PM, system::System, a::Indexed)
+function tensor(system::System, a::Indexed{T}) where T
     s = map(i->system[i], a.index)
     t = tensor(a.op, s...)
-    is = map(i->system[type, i], a.index)
+    is = map(i->system[T(), i], a.index)
     j = tensor_index(t)
     c = combinerto(j, reverse(is)...)
     return t * c * c'

@@ -1,12 +1,30 @@
-export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, Gate, Dissipator
+export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, Gate, Dissipator, Evolve, Left, Right, Pure, Mixed, PM
 
 
 ############# Types ################
 
+"""
+    struct Pure end
+    Pure()
+
+    Correspond to pure quantum representation
+"""
 struct Pure end
+
+
+"""
+    Struct Mixed end
+    Mixed()
+
+    Correspond to mixed quantum representation
+"""
 struct Mixed end
 
+PM = Union{Pure, Mixed}
+
 abstract type ExprOp{T, N} end
+
+isless(a::ExprOp, b::ExprOp) = isless((ranking(a), a), (ranking(b), b))
 
 ############## Showing ###############
 
@@ -69,6 +87,10 @@ Operator(name, expr::ExprOp{T, N}, fermionic=false) where {T, N} = Operator{T, N
 show(io::IO, op::Operator) =
     print(io, op.name)
 
+ranking(::Operator) = 1
+
+isless(a::Operator, b::Operator) = isless(a.name, b.name)
+
 ############ Indexed ################
 
 struct IndexOp end
@@ -90,7 +112,13 @@ show(io::IO, ind::Indexed) =
         show_func(io, repr(ind.op; context=:precedence=>500), collect(ind.index))
     end
 
+ranking(::Indexed) = 2
+
+isless(a::Indexed, b::Indexed) = isless(a.index, b.index)
+
 ############## Mixers ###############
+
+# Gate
 
 struct Gate{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
@@ -100,6 +128,12 @@ show(io::IO, a::Gate) =
     paren(io, 1000) do io
         show_func(io, "Gate", a.arg)
     end
+
+ranking(::Gate) = 10
+
+isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
+
+# Dissipator
 
 struct Dissipator{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
@@ -112,6 +146,12 @@ show(io::IO, a::Dissipator) =
         show_func(io, "Dissipator", a.arg)
     end
 
+ranking(::Dissipator) = 11
+
+isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
+
+# Evolve
+
 struct Evolve{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
 end
@@ -121,7 +161,41 @@ show(io::IO, a::Evolve) =
         show_func(io, "Evolve", a.arg)
     end
 
+ranking(::Evolve) = 12
 
+isless(a::Evolve, b::Evolve) = isless(a.arg, b.arg)
+
+# Left
+
+struct Left{N} <: ExprOp{Mixed, N}
+    arg::ExprOp{Pure, N}
+end
+
+show(io::IO, a::Left) =
+    paren(io, 1000) do io
+        show_func(io, "Left", a.arg)
+    end
+    
+ranking(::Left) = 13
+
+isless(a::Left, b::Left) = isless(a.arg, b.arg)
+
+# Right
+
+struct Right{N} <: ExprOp{Mixed, N}
+    arg::ExprOp{Pure, N}
+end
+
+show(io::IO, a::Right) =
+    paren(io, 1000) do io
+        show_func(io, "Right", a.arg)
+    end
+
+ranking(::Right) = 14
+
+isless(a::Right, b::Right) = isless(a.arg, b.arg)
+    
+    
 ############### Operator Products ###############
 
 struct ProdOp{T, N} <: ExprOp{T, N}
@@ -131,15 +205,15 @@ end
 
 prodsubs(a::ProdOp) = a.subs
 prodsubs(a::ExprOp) = [a]
-coefsubs(a::ProdOp) = a.coef
-coefsubs(a::ExprOp) = 1
+prodcoef(a::ProdOp) = a.coef
+prodcoef(a::ExprOp) = 1
 
-(a::ExprOp{T, N}...) where {T, N} =
-    ProdOp{T, N}(prod(map(coefsubs, a)...), vcat(map(prodsubs, a)...))
+*(a::ExprOp{T, N}...) where {T, N} =
+    ProdOp{T, N}(*(map(prodcoef, a)...), vcat(map(prodsubs, a)...))
 (a::ExprIndexed{Mixed} * b::ExprIndexed{Pure}) = a * Gate(b)
 (a::ExprIndexed{Pure} * b::ExprIndexed{Mixed}) = Gate(a) * b
 (a::Number * b::ExprOp{T, N}) where {T, N} = 
-    ProdOp{T, N}(a * coefsubs(b), prodsubs(b))
+    ProdOp{T, N}(a * prodcoef(b), prodsubs(b))
 (a::ExprOp * b::Number) = b * a
 (a::ExprOp / b::Number) = inv(b) * a
 -(a::ExprOp) = -1 * a
@@ -150,7 +224,10 @@ show(io::IO, a::ProdOp) =
         join(io, a.subs, "*")
     end
 
+ranking(::ProdOp) = 20
 
+isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
+    
 
 ################ Operator Sums ##############
 
@@ -194,11 +271,15 @@ show(io::IO, a::SumOp) =
         end
     end
 
+ranking(::SumOp) = 21
 
+isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
+        
+    
 ############### Tensor products ############
 
 struct TensorOp{T, N} <: ExprOp{T, N}
-    subs::Vector{<:ExprOp{T, Any}}
+    subs::Vector{ExprOp{T}}
 end
 
 tensorsubs(a::TensorOp) = a.subs
@@ -216,8 +297,14 @@ show(io::IO, a::TensorOp) =
     end
 
 
+ranking(::TensorOp) = 22
+
+isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
+
+
 ############## Operator functions ###########
 
+# PowOp
 
 struct PowOp{T, N} <: ExprOp{T, N}
     arg::ExprOp{T, N}
@@ -232,6 +319,12 @@ show(io::IO, a::PowOp) =
         print(io, a.arg, "^", a.expo)
     end
 
+ranking(::PowOp) = 30
+
+isless(a::PowOp, b::PowOp) = isless(a.arg, b.arg)
+
+# ExpOp
+
 struct ExpOp{T, N} <: ExprOp{T, N}
     arg::ExprOp{T, N}
 end
@@ -244,6 +337,12 @@ show(io::IO, a::ExpOp) =
         show_func(io, "exp", a.arg)
     end
 
+ranking(::ExpOp) = 31
+
+isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
+    
+# SqrtOp
+
 struct SqrtOp{T, N} <: ExprOp{T, N}
     arg::ExprOp{T, N}
 end
@@ -255,8 +354,14 @@ show(io::IO, a::SqrtOp) =
     paren(io, 1000) do io
         show_func(io, "sqrt", a.arg)
     end
-    
-    
+
+
+ranking(::SqrtOp) = 32
+
+isless(a::SqrtOp, b::SqrtOp) = isless(a.arg, b.arg)
+       
+# DagOp
+
 struct DagOp{N, T} <: ExprOp{N, T}
     arg::ExprOp{N, T}
 end
@@ -268,28 +373,6 @@ show(io::IO, a::DagOp) =
         show_func(io, "dag", a.arg)
     end
 
-    #=
-struct Left{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
+ranking(::DagOp) = 33
 
-struct Right{N} <: ExprOp{N}
-    arg::ExprOp{N}
-end
-
-
-
-
-
-show(io::IO, a::Left) =
-    paren(io, 1000) do io
-        show_func(io, "Left", a.arg)
-    end
-
-show(io::IO, a::Right) =
-    paren(io, 1000) do io
-        show_func(io, "Right", a.arg)
-    end
-
-
-=#
+isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)

@@ -1,19 +1,5 @@
 export Limits, no_limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
 
-"""
-A type to hold MPS limits
-
-# Fields
-- `cutoff`: the cutoff under which singular values are neglected
-- `maxdim`: the maximum bond dimension
-"""
-@kwdef struct Limits
-    cutoff::Float64
-    maxdim::Int
-end
-  
-const no_limits = Limits(cutoff = 0, maxdim = typemax(Int))
-
 
 """
 A phase type to create the simulation state

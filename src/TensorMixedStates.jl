@@ -1,13 +1,12 @@
 module TensorMixedStates
 
-import Base: *, +, -, /, exp, sqrt, show, length, copy, getindex
+import Base: *, +, -, /, exp, sqrt, show, length, copy, getindex, isless
 import ITensors: matrix, truncate, dim, Index, dag
 import ITensorMPS: maxlinkdim, apply, state
 
 using ITensors, ITensorMPS
 
 include("Operators.jl")
-#=
 include("Sites.jl")
 include("Mixing.jl")
 include("Qubits.jl")
@@ -16,6 +15,7 @@ include("Qubits.jl")
 include("Systems.jl")
 include("States.jl")
 include("Gates.jl")
+#=
 
 
 

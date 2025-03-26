@@ -1,5 +1,19 @@
-export State, maxlinkdim
+export State, maxlinkdim, Limits
 
+"""
+A type to hold MPS limits
+
+# Fields
+- `cutoff`: the cutoff under which singular values are neglected
+- `maxdim`: the maximum bond dimension
+- `mindim`: the minimum bond dimension
+"""
+@kwdef struct Limits
+    cutoff::Float64 = 0.
+    maxdim::Int = typemax(Int)
+    mindim::Int = 0
+end
+  
 """
     struct State
     State(Pure()|Mixed(), system, states)
@@ -90,8 +104,8 @@ State(state::State, st::MPS) =
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
-(a::State + b::State) = State(a, a.state + b.state)
-(a::State - b::State) = State(a, a.state - b.state)
++(a::State...; limits=Limits()) = State(a[1], +((i.state for i in a)...; limits.cutoff, limits.maxdim))
+-(a::State, b::State; limits=Limits()) = State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
 
 """
     mix(::State)
@@ -130,13 +144,13 @@ end
 
 
 """
-    truncate(::State; maxdim::Int, cutoff::Number)
-    truncate(::Simulation; maxdim::Int, cutoff::Number)
+    truncate(::State; limits::Limits)
+    truncate(::Simulation; limits::Limits)
 
-Apply the truncation to the given state, in particular we get maxlinkdim(state)<=maxdim
+Apply the truncation to the given state
 """
 truncate(state::State; kwargs...) =
-    State(state.type, state.system, truncate(state.state; kwargs...))
+    State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))
 
 copy(state::State) = State(state, copy(state.state))
 

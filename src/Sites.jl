@@ -31,18 +31,18 @@ function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{N}(op, nothing, fermionic)
+        return Operator{Pure, N}(op, nothing, fermionic)
     end
 end
 
-function add_operator(site::AbstractSite, op::String, r::ExprOp{N}, fermionic::Bool=false, ::Int=1) where N
+function add_operator(site::AbstractSite, op::String, r::ExprOp{T, N}, fermionic::Bool=false, ::Int=1) where {T, N}
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{N}(op, nothing, fermionic)
+        return Operator{T, N}(op, nothing, fermionic)
     end
 end
 

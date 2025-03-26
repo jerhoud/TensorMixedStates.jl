@@ -4,8 +4,8 @@ struct Qubit <: AbstractSite end
 
 dim(::Qubit) = 2
 
-controlled(op::ExprOp{N}) where N =
-    TensorOp{N+1}(ExprOp[[PUp] ; [I for _ in 1:N]]) + (PDn ⊗ op)
+controlled(op::ExprOp{Pure, N}) where N =
+    TensorOp{Pure, N+1}(ExprOp[[PUp] ; [I for _ in 1:N]]) + (PDn ⊗ op)
 
 @def_states(Qubit(),
 [
@@ -38,7 +38,7 @@ controlled(op::ExprOp{N}) where N =
 
 module Qubits
 
-import ..Qubit, ..controlled, ..I, ..F, ..X, ..Y, ..Z, ..PUp, ..PDn, ..Sp, ..Sm, ..CX, ..CNOT, ..CY, ..CZ
-export Qubit, controlled, I, F, X, Y, Z, PUp, PDn, Sp, Sm, CX, CNOT, CY, CZ
+import ..Qubit, ..controlled, ..I, ..F, ..X, ..Y, ..Z, ..PUp, ..PDn, ..Sp, ..Sm, ..NOT, ..CX, ..CNOT, ..CY, ..CZ
+export Qubit, controlled, I, F, X, Y, Z, PUp, PDn, Sp, Sm, NOT, CX, CNOT, CY, CZ
 
 end

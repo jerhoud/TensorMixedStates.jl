@@ -1,31 +1,33 @@
 export tensor, matrix, fermionic, has_fermionic, has_multiop
 
 function combinerto(i::Index, j::Index...)
-    c = combiner(j...)
+    c = combiner(j...; tags="")
     x = combinedind(c)
     replaceind(c, x, i)
 end
 
 tensor_index(t::ITensor) = getfirst(i->hasplev(i, 0), inds(t))
 
-function matrix(a, site::AbstractSite...)
+function matrix(a::ExprOp, site::AbstractSite...)
     t = tensor(a, site...)
     i = tensor_index(t)
     Matrix(t, i', i)
 end
 
-function tensor(a, site::AbstractSite...)
+function tensor(a::ExprOp, site::AbstractSite...)
     m = matrix(a, site...)
     n, _ = size(m)
     i = Index(n)
     ITensor(m, i', i)
 end
 
-matrix(a::Matrix, ::AbstractSite) = a
+matrix(::ExprIndexed, ::AbstractSite...) = error("cannot give matrix nor tensor for indexed expressions")
 
-matrix(a::Function, site::AbstractSite) = a(site)
+matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
 
-matrix(a::String, site::AbstractSite) =
+matrix(a::Function, site::AbstractSite, ::AbstractSite...) = a(site)
+
+matrix(a::String, site::AbstractSite, ::AbstractSite...) =
     matrix(operator_info(site, a), site)
 
 matrix(a::Operator, site::AbstractSite...) =
@@ -53,12 +55,14 @@ matrix(a::PowOp, site::AbstractSite...) =
 matrix(a::DagOp, site::AbstractSite...) =
     adjoint(matrix(a.arg, site...))
 
+matrix(::Union{Dissipator, Evolve}, ::AbstractSite...) = error("cannot give matrix nor tensor for Dissipator or Evolve")
+
 function tensor(a::Gate, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
-    tj = replaceind(ti, (i, i'), (j, j'))
-    c = combiner(j, i)
+    tj = replaceinds(ti, (i, i'), (j, j'))
+    c = combiner(j, i; tags="")
     return ti * dag(tj) * c * c'
 end
 
@@ -66,7 +70,7 @@ function tensor(a::Left, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
-    c = combiner(j, i)
+    c = combiner(j, i; tags="")
     return ti * delta(j, j') * c * c'
 end
 
@@ -74,14 +78,14 @@ function tensor(a::Right, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
-    c = combiner(i, j)
+    c = combiner(i, j; tags="")
     return dag(ti) * delta(j, j') * c * c'
 end
 
-tensor_next(o::ExprOp{N}, site::Vararg{AbstractSite, M}) where {N, M} =
+tensor_next(o::ExprOp{T,N}, site::Vararg{AbstractSite, M}) where {T, N, M} =
     (tensor(o, site[1:N]...), site[N+1:M])
 
-function tensor(a::TensorOp{N}, site::AbstractSite...) where N
+function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
     if length(site) == 1
         ts = [tensor(o, site...) for o in a.subs]
     elseif length(site) ≠ N
@@ -93,10 +97,11 @@ function tensor(a::TensorOp{N}, site::AbstractSite...) where N
             t
         end 
     end
-    c = combiner((tensor_index(t) for t in reverse(ts))...)
+    c = combiner((tensor_index(t) for t in reverse(ts))...; tags="")
     c * prod(ts) * c'
 end
 
+#=
 
 function fermionic(a::SumOp{1})
     n = length(a.subs)
@@ -140,3 +145,4 @@ function signature(p)
     end
     return r
 end
+=#
