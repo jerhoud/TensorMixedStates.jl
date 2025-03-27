@@ -15,6 +15,7 @@ include("Qubits.jl")
 include("Systems.jl")
 include("States.jl")
 include("Gates.jl")
+include("Simplify.jl")
 #=
 
 

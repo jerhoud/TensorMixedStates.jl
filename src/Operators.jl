@@ -201,6 +201,14 @@ isless(a::Right, b::Right) = isless(a.arg, b.arg)
 struct ProdOp{T, N} <: ExprOp{T, N}
     coef::Number
     subs::Vector{<:ExprOp{T, N}}
+    ProdOp{T, N}(c::Number, s::Vector{<:ExprOp{T, N}}) where {T, N} =
+        if c == 0 || isempty(s)
+            return new{T, N}(0, [])
+        elseif c == 1 && length(s) == 1
+            return s[1]
+        else
+            return new{T, N}(c, s)
+        end
 end
 
 prodsubs(a::ProdOp) = a.subs
@@ -209,7 +217,7 @@ prodcoef(a::ProdOp) = a.coef
 prodcoef(a::ExprOp) = 1
 
 *(a::ExprOp{T, N}...) where {T, N} =
-    ProdOp{T, N}(*(map(prodcoef, a)...), vcat(map(prodsubs, a)...))
+    ProdOp{T, N}(prod(map(prodcoef, a)), reduce(vcat, map(prodsubs, a)))
 (a::ExprIndexed{Mixed} * b::ExprIndexed{Pure}) = a * Gate(b)
 (a::ExprIndexed{Pure} * b::ExprIndexed{Mixed}) = Gate(a) * b
 (a::Number * b::ExprOp{T, N}) where {T, N} = 
@@ -233,13 +241,21 @@ isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
 
 struct SumOp{T, N} <: ExprOp{T, N}
     subs::Vector{<:ExprOp{T, N}}
+    SumOp{T, N}(s::Vector{<:ExprOp{T, N}}) where {T, N} =
+        if isempty(s)
+            return ProdOp{T, N}(0, [])
+        elseif length(s) == 1
+            return s[1]
+        else
+            return new{T, N}(s)
+        end
 end
 
 sumsubs(a::SumOp) = a.subs
 sumsubs(a::ExprOp) = [a]
 
 +(a::ExprOp{T, N}...) where {T, N} =
-    SumOp{T, N}(vcat(map(sumsubs, a)...))
+    SumOp{T, N}(reduce(vcat, map(sumsubs, a)))
 (a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Evolve(b)
 (a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Evolve(a) + b
 (a::ExprOp - b::ExprOp) = a + (-b)

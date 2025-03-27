@@ -1,4 +1,4 @@
-export tensor, matrix, fermionic, has_fermionic, has_multiop
+export tensor, matrix, fermionic
 
 function combinerto(i::Index, j::Index...)
     c = combiner(j...; tags="")
@@ -101,9 +101,8 @@ function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
     c * prod(ts) * c'
 end
 
-#=
 
-function fermionic(a::SumOp{1})
+function fermionic(a::SumOp)
     n = length(a.subs)
     nf = count(fermionic, a.subs)
     if nf == n
@@ -111,38 +110,17 @@ function fermionic(a::SumOp{1})
     elseif n == 0
         return false
     else
-        error("cannot sum fermionic with non fermionic operators")
+        error("cannot sum fermionic with non fermionic operators: $a")
     end
 end
 
-fermionic(a::Operator{1}) = a.fermionic
-fermionic(a::ProdOp{1}) = isodd(count(fermionic, a.subs))
-fermionic(a::Union{Gate{1}, Dissipator{1}, Indexed{1}}) = fermionic(a.arg)
-
-has_fermionic(a::Union{ProdOp, SumOp, TensorOp}) = any(has_fermionic, a.subs)
-has_fermionic(a::Union{ExpOp, SqrtOp, PowOp, Gate, Dissipator}) = has_fermionic(a.arg)
-has_fermionic(a::Indexed) = has_fermionic(a.op)
-has_fermionic(a::Operator) = a.fermionic
-
-has_multiop(a::Union{ProdOp, SumOp, TensorOp}) = any(has_multiop, a.subs)
-has_multiop(a::Union{ExpOp, SqrtOp, PowOp}) = has_multiop(a.arg)
-has_multiop(a::Indexed) = has_multiop(a.op)
-has_multiop(a::Union{Operator{1}, Dissipator{1}, Gate{1}}) = false
-has_multiop(a::Union{Operator, Dissipator, Gate}) = true
-
-function signature(p)
-    n = length(p)
-    t = fill(false, n)
-    r = 1
-    for i in 1:n
-        if t[i] continue end
-        j = p[i]
-        while j ≠ i
-            r = -r
-            t[j] = true
-            j = p[j]
-        end
+fermionic(a::Operator) = a.fermionic
+fermionic(a::ProdOp) = isodd(count(fermionic, a.subs))
+fermionic(a::Union{Gate, Left, Right, Indexed}) = fermionic(a.arg)
+fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
+    if fermionic(a.arg)
+        error("cannot take functionals of fermionic operators: $a")
+    else
+        false
     end
-    return r
-end
-=#
+fermionic(a) = error("bug: fermionic($a)")
