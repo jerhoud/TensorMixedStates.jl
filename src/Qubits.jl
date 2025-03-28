@@ -5,7 +5,7 @@ struct Qubit <: AbstractSite end
 dim(::Qubit) = 2
 
 controlled(op::ExprOp{Pure, N}) where N =
-    TensorOp{Pure, N+1}(ExprOp[[PUp] ; [I for _ in 1:N]]) + (PDn ⊗ op)
+    TensorOp{Pure, N+1}(ExprOp[[PUp] ; [Id for _ in 1:N]]) + (PDn ⊗ op)
 
 @def_states(Qubit(),
 [
@@ -20,7 +20,7 @@ controlled(op::ExprOp{Pure, N}) where N =
 
 @def_operators(Qubit(),
 [
-    I = [1. 0. ; 0. 1.],
+    Id = [1. 0. ; 0. 1.],
     F = [1. 0. ; 0. 1.],
     X = [0. 1. ; 1. 0.],
     Y = [0. -im; im 0.],
@@ -38,7 +38,7 @@ controlled(op::ExprOp{Pure, N}) where N =
 
 module Qubits
 
-import ..Qubit, ..controlled, ..I, ..F, ..X, ..Y, ..Z, ..PUp, ..PDn, ..Sp, ..Sm, ..NOT, ..CX, ..CNOT, ..CY, ..CZ
-export Qubit, controlled, I, F, X, Y, Z, PUp, PDn, Sp, Sm, NOT, CX, CNOT, CY, CZ
+import ..Qubit, ..controlled, ..Id, ..F, ..X, ..Y, ..Z, ..PUp, ..PDn, ..Sp, ..Sm, ..NOT, ..CX, ..CNOT, ..CY, ..CZ
+export Qubit, controlled, Id, F, X, Y, Z, PUp, PDn, Sp, Sm, NOT, CX, CNOT, CY, CZ
 
 end

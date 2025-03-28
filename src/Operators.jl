@@ -1,4 +1,5 @@
-export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, Gate, Dissipator, Evolve, Left, Right, Pure, Mixed, PM
+export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, dag, DagOp
+export Gate, Dissipator, Evolve, Left, Right, Pure, Mixed, PM
 
 
 ############# Types ################
@@ -116,6 +117,8 @@ ranking(::Indexed) = 2
 
 isless(a::Indexed, b::Indexed) = isless(a.index, b.index)
 
+apply_expr(f, a::Indexed) = Indexed(f(a.op), a.index)
+
 ############## Mixers ###############
 
 # Gate
@@ -132,6 +135,8 @@ show(io::IO, a::Gate) =
 ranking(::Gate) = 10
 
 isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
+
+apply_expr(f, a::Gate) = Gate(f(a.arg))
 
 # Dissipator
 
@@ -150,10 +155,12 @@ ranking(::Dissipator) = 11
 
 isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
 
+apply_expr(f, a::Dissipator) = Dissipator(f(a.arg))
+
 # Evolve
 
-struct Evolve{N} <: ExprOp{Mixed, N}
-    arg::ExprOp{Pure, N}
+struct Evolve <: ExprIndexed{Mixed}
+    arg::ExprIndexed{Pure}
 end
 
 show(io::IO, a::Evolve) =
@@ -180,6 +187,8 @@ ranking(::Left) = 13
 
 isless(a::Left, b::Left) = isless(a.arg, b.arg)
 
+apply_expr(f, a::Left) = Left(f(a.arg))
+
 # Right
 
 struct Right{N} <: ExprOp{Mixed, N}
@@ -195,6 +204,7 @@ ranking(::Right) = 14
 
 isless(a::Right, b::Right) = isless(a.arg, b.arg)
     
+apply_expr(f, a::Right) = Right(f(a.arg))
     
 ############### Operator Products ###############
 
@@ -235,7 +245,8 @@ show(io::IO, a::ProdOp) =
 ranking(::ProdOp) = 20
 
 isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
-    
+
+apply_expr(f, a::ProdOp) = a.coef * *(map(f, a.subs)...)
 
 ################ Operator Sums ##############
 
@@ -291,6 +302,8 @@ ranking(::SumOp) = 21
 
 isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
         
+apply_expr(f, a::SumOp) = +(map(f, a.subs)...)
+
     
 ############### Tensor products ############
 
@@ -317,6 +330,8 @@ ranking(::TensorOp) = 22
 
 isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
 
+apply_expr(f, a::TensorOp) = TensorOp(map(f, a.subs))
+
 
 ############## Operator functions ###########
 
@@ -339,6 +354,8 @@ ranking(::PowOp) = 30
 
 isless(a::PowOp, b::PowOp) = isless(a.arg, b.arg)
 
+apply_expr(f, a::PowOp) = PowOp(f(a.arg), a.expo)
+
 # ExpOp
 
 struct ExpOp{T, N} <: ExprOp{T, N}
@@ -357,6 +374,8 @@ ranking(::ExpOp) = 31
 
 isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
     
+apply_expr(f, a::ExpOp) = ExpOp(f(a.arg))
+
 # SqrtOp
 
 struct SqrtOp{T, N} <: ExprOp{T, N}
@@ -375,11 +394,13 @@ show(io::IO, a::SqrtOp) =
 ranking(::SqrtOp) = 32
 
 isless(a::SqrtOp, b::SqrtOp) = isless(a.arg, b.arg)
+
+apply_expr(f, a::SqrtOp) = SqrtOp(f(a.arg))
        
 # DagOp
 
-struct DagOp{N, T} <: ExprOp{N, T}
-    arg::ExprOp{N, T}
+struct DagOp{T, N} <: ExprOp{T, N}
+    arg::ExprOp{T, N}
 end
 
 dag(a::ExprOp) = DagOp(a)
@@ -392,3 +413,9 @@ show(io::IO, a::DagOp) =
 ranking(::DagOp) = 33
 
 isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
+
+apply_expr(f, a::DagOp) = DagOp(f(a.arg))
+
+eval_expr(f, a::Union{SumOp, ProdOp, TensorOp}) = any(f, a.subs)
+eval_expr(f, a::Union{Gate, Left, Right, Evolve, Dissipator, PowOp, ExpOp, SqrtOp, DagOp}) = f(a.arg)
+eval_expr(f, a::Indexed) = f(a.op)

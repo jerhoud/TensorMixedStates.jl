@@ -1,6 +1,6 @@
 module TensorMixedStates
 
-import Base: *, +, -, /, exp, sqrt, show, length, copy, getindex, isless
+import Base: *, +, -, /, ^, exp, sqrt, show, length, copy, getindex, isless
 import ITensors: matrix, truncate, dim, Index, dag
 import ITensorMPS: maxlinkdim, apply, state
 

@@ -82,8 +82,16 @@ function tensor(a::Right, site::AbstractSite...)
     return dag(ti) * delta(j, j') * c * c'
 end
 
-tensor_next(o::ExprOp{T,N}, site::Vararg{AbstractSite, M}) where {T, N, M} =
-    (tensor(o, site[1:N]...), site[N+1:M])
+tensor_next(f, o::ExprOp{T,N}, site::Vararg{U, M}) where {T, N, U, M} =
+    (f(o, site[1:N]...), site[N+1:M])
+
+function tensor_apply(f, a::TensorOp{T, N}, idx::Vararg{U, N}) where {T, U, N}
+    rest = idx
+    r = map(a.subs) do o 
+        t, rest = tensor_next(f, o, rest...)
+        t
+    end
+end
 
 function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
     if length(site) == 1
@@ -91,11 +99,7 @@ function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
     elseif length(site) ≠ N
         error("number of sites does not match operator")
     else
-        rest = site
-        ts = map(a.subs) do o
-            t, rest = tensor_next(o, rest...)
-            t
-        end 
+        ts = tensor_apply(tensor, a, site...)
     end
     c = combiner((tensor_index(t) for t in reverse(ts))...; tags="")
     c * prod(ts) * c'
@@ -116,7 +120,7 @@ end
 
 fermionic(a::Operator) = a.fermionic
 fermionic(a::ProdOp) = isodd(count(fermionic, a.subs))
-fermionic(a::Union{Gate, Left, Right, Indexed}) = fermionic(a.arg)
+fermionic(a::Union{Gate, Left, Right, Indexed, DagOp}) = fermionic(a.arg)
 fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
     if fermionic(a.arg)
         error("cannot take functionals of fermionic operators: $a")
@@ -124,3 +128,25 @@ fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
         false
     end
 fermionic(a) = error("bug: fermionic($a)")
+
+has_dissipator(a) = eval_expr(has_dissipator, a)
+function has_dissipator(a::Union{ProdOp, TensorOp})
+    d = any(has_dissipator, a.subs)
+    if d && length(a.subs) >= 2
+        error("cannot multiply dissipators with other operators ($a)")
+    end
+    return d
+end
+has_dissipator(a::Dissipator) = true
+has_dissipator(a::Operator) =
+    if a.expr isa ExprOp
+        has_dissipator(a.expr)
+    else
+        false
+    end
+has_dissipator(a::Union{ExpOp, SqrtOp, PowOp, DagOp}) =
+    if has_dissipator(a.arg)
+        error("cannot take functional of dissipators ($a)")
+    else
+        false
+    end
