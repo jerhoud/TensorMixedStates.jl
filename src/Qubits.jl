@@ -5,12 +5,12 @@ struct Qubit <: AbstractSite end
 dim(::Qubit) = 2
 
 controlled(op::ExprOp{Pure, N}) where N =
-    TensorOp{Pure, N+1}(ExprOp[[PUp] ; [Id for _ in 1:N]]) + (PDn ⊗ op)
+    TensorOp{Pure, N+1}(ExprOp[[Proj("Up")] ; [Id for _ in 1:N]]) + (Proj("Dn") ⊗ op)
 
 @def_states(Qubit(),
 [
-    ["Up", "0", "Z+"] => [1., 0.],
-    ["Dn", "1", "Z-"] => [0., 1.],
+    ["Up", "Z+"] => [1., 0.],
+    ["Dn", "Z-"] => [0., 1.],
     ["+", "X+"] => [1., 1.] / √2,
     ["-", "X-"] => [1., -1.] / √2,
     ["i", "Y+"] => [1., im] / √2,
@@ -20,25 +20,24 @@ controlled(op::ExprOp{Pure, N}) where N =
 
 @def_operators(Qubit(),
 [
-    Id = [1. 0. ; 0. 1.],
-    F = [1. 0. ; 0. 1.],
+    F = Id,
     X = [0. 1. ; 1. 0.],
     Y = [0. -im; im 0.],
     Z = [1. 0. ; 0. -1.],
-    PUp = [1. 0. ; 0. 0.],
-    PDn = [0. 0. ; 0. 1.],
     Sp = [0. 1. ; 0. 0.],
     Sm = [0. 0. ; 1. 0.],
-    NOT = X,
-    CX = controlled(X),
-    CNOT = CX,
-    CY = controlled(Y),
-    CZ = controlled(Z),
+    Sx = X / 2,
+    Sy = Y / 2,
+    Sz = Z / 2,
+    S2 = 0.75 * Id,
+    H = [1. 1. ; 1. -1] / √2,
+    S = [1. 0. ; 0. im],
+    Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
 ])
 
 module Qubits
 
-import ..Qubit, ..controlled, ..Id, ..F, ..X, ..Y, ..Z, ..PUp, ..PDn, ..Sp, ..Sm, ..NOT, ..CX, ..CNOT, ..CY, ..CZ
-export Qubit, controlled, Id, F, X, Y, Z, PUp, PDn, Sp, Sm, NOT, CX, CNOT, CY, CZ
+import ..Qubit, ..controlled, ..X, ..Y, ..Z, ..Sx, ..Sy, ..Sz, ..S2, ..Sp, ..Sm, ..H, ..S, ..Swap
+export Qubit, controlled, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, Swap
 
 end

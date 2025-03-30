@@ -17,7 +17,7 @@ inner_index(a::TensorOp, idx...) = prod(tensor_apply(inner_index, a, idx...))
 inner_index(::Union{ExpOp, PowOp, SqrtOp}, idx...) = error("cannot simplify multiple site functionals")
 function inner_index(a::Dissipator{1}, idx...)
     aa = dag(a.arg) * a.arg
-    if fermionic(a)
+    if fermionic(a.arg)
         return Gate(a.arg)(idx...) + (Left(aa) + Right(aa))(idx...)
     else
         return (Gate(a.arg) + Left(aa) + Right(aa))(idx...)
@@ -95,6 +95,9 @@ function simplify(a::SumOp{T, IndexOp}) where T
     if c ≠ 0
         push!(r, ProdOp{T, IndexOp}(c, p))
     end
+    ni = filter(t->!isa(t, Indexed), r)
+    f = filter(t->isa(t, Indexed) && fermionic(t.op), r)
+    nf = filter(t->isa(t, Indexed) && !fermionic(t.op), r)
     return SumOp{T, IndexOp}(r)
 end
 

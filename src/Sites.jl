@@ -1,9 +1,15 @@
-export AbstractSite, mix, dim, Index, identity_operator, @def_operator, @def_operators, @def_states, state
+export AbstractSite, mix, dim, Index, identity_operator, @def_operator, @def_operators, @def_states, state, Id, F
 
 abstract type AbstractSite end
 
 dim(site::AbstractSite) = error("dim not defined on site $site")
 Index(site::AbstractSite) = Index(dim(site); tags="$(string(typeof(site))), Site")
+function generic_state(::AbstractSite, st::String)
+    i = 1 + parse(Int, st)
+    v = zeros(Float64, dim(site))
+    v[i] = 1.0
+    return v
+end
 
 mix(i::Index) =
     addtags(combinedind(combiner(i, i'; tags = tags(i))), "Mixed")
@@ -18,6 +24,16 @@ function operator_info(site::AbstractSite, op::String)
         return operator_library[t]
     else
         error("operator $op is not defined for site $name")
+    end
+end
+
+function state_info(site::AbstractSite, st::String)
+    name = typeof(site)
+    t = (name, op)
+    if haskey(state_library, t)
+        return state_library[t]
+    else
+        error("state $st is not defined for site $name")
     end
 end
 
@@ -119,11 +135,12 @@ state(site::AbstractSite, st::String) =
     if st == "FullyMixed"
         identity_operator(site) / dim(site)
     else
-        name = typeof(site)
-        t = (name, st)
-        if !haskey(state_library, t)
-            error("state $st is not defined for site $name")
-        else
-            state(site, state_library[t])
+        try
+            generic_state(site, st)
+        catch
+            state(site, state_info(site, st))
         end
     end
+
+Id = Operator("Id", identity_operator)
+F = Operator("F")

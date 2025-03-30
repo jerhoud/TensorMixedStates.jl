@@ -92,6 +92,16 @@ ranking(::Operator) = 1
 
 isless(a::Operator, b::Operator) = isless(a.name, b.name)
 
+############ proj ################
+
+struct Proj <: ExprOp{Pure, 1}
+    state::String
+end
+
+ranking(::Proj) = 2
+
+isless(a::Proj, b::Proj) = isless(a.state, b.state)
+
 ############ Indexed ################
 
 struct IndexOp end
@@ -113,7 +123,7 @@ show(io::IO, ind::Indexed) =
         show_func(io, repr(ind.op; context=:precedence=>500), collect(ind.index))
     end
 
-ranking(::Indexed) = 2
+ranking(::Indexed) = 3
 
 isless(a::Indexed, b::Indexed) = isless(a.index, b.index)
 

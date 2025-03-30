@@ -37,6 +37,11 @@ matrix(a::Operator, site::AbstractSite...) =
         matrix(a.expr, site...)
     end
 
+function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
+    st = state(site, a.state)
+    return st * adjoint(st)
+end
+
 matrix(a::ProdOp, site::AbstractSite...) =
     a.coef * prod(matrix(o, site...) for o in a.subs)
 
@@ -127,6 +132,7 @@ fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
     else
         false
     end
+fermionic(::Proj) = false
 fermionic(a) = error("bug: fermionic($a)")
 
 has_dissipator(a) = eval_expr(has_dissipator, a)
@@ -144,6 +150,7 @@ has_dissipator(a::Operator) =
     else
         false
     end
+has_dissipator(::Proj) = false
 has_dissipator(a::Union{ExpOp, SqrtOp, PowOp, DagOp}) =
     if has_dissipator(a.arg)
         error("cannot take functional of dissipators ($a)")

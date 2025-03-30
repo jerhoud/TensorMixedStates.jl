@@ -10,6 +10,9 @@ include("Operators.jl")
 include("Sites.jl")
 include("Mixing.jl")
 include("Qubits.jl")
+include("Fermions.jl")
+include("Bosons.jl")
+include("Spins.jl")
 
 # Core
 include("Systems.jl")
