@@ -29,7 +29,7 @@ end
 
 function state_info(site::AbstractSite, st::String)
     name = typeof(site)
-    t = (name, op)
+    t = (name, st)
     if haskey(state_library, t)
         return state_library[t]
     else

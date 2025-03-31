@@ -1,4 +1,4 @@
-export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, dag, DagOp
+export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, dag, DagOp, Proj
 export Gate, Dissipator, Evolve, Left, Right, Pure, Mixed, PM
 
 
@@ -125,7 +125,7 @@ show(io::IO, ind::Indexed) =
 
 ranking(::Indexed) = 3
 
-isless(a::Indexed, b::Indexed) = isless(a.index, b.index)
+isless(a::Indexed, b::Indexed) = isless((a.index, fermionic(a.op), a.op), (b.index, fermionic(b.op), b.op))
 
 apply_expr(f, a::Indexed) = Indexed(f(a.op), a.index)
 
@@ -182,6 +182,8 @@ ranking(::Evolve) = 12
 
 isless(a::Evolve, b::Evolve) = isless(a.arg, b.arg)
 
+apply_expr(f, a::Evolve) = Evolve(f(a.arg))
+
 # Left
 
 struct Left{N} <: ExprOp{Mixed, N}
@@ -223,7 +225,7 @@ struct ProdOp{T, N} <: ExprOp{T, N}
     subs::Vector{<:ExprOp{T, N}}
     ProdOp{T, N}(c::Number, s::Vector{<:ExprOp{T, N}}) where {T, N} =
         if c == 0 || isempty(s)
-            return new{T, N}(0, [])
+            return new{T, N}(0, ExprOp{T, N}[])
         elseif c == 1 && length(s) == 1
             return s[1]
         else

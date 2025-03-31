@@ -116,7 +116,7 @@ function fermionic(a::SumOp)
     nf = count(fermionic, a.subs)
     if nf == n
         return true
-    elseif n == 0
+    elseif nf == 0
         return false
     else
         error("cannot sum fermionic with non fermionic operators: $a")
@@ -125,7 +125,8 @@ end
 
 fermionic(a::Operator) = a.fermionic
 fermionic(a::ProdOp) = isodd(count(fermionic, a.subs))
-fermionic(a::Union{Gate, Left, Right, Indexed, DagOp}) = fermionic(a.arg)
+fermionic(a::Indexed) = fermionic(a.op)
+fermionic(a::Union{Gate, Left, Right, DagOp}) = fermionic(a.arg)
 fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
     if fermionic(a.arg)
         error("cannot take functionals of fermionic operators: $a")

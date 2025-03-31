@@ -11,7 +11,7 @@ struct Spin <: AbstractSite
 end
 
 dim(a::Spin) = Int(2 * a.s + 1)
-function generic_state(::AbstractSite, st::String)
+function generic_state(::Spin, st::String)
     i = 1 + 2 * Int(parse(Float64, st) + a.s)
     v = zeros(Float64, dim(site))
     v[i] = 1.0
@@ -22,7 +22,7 @@ end
 [
     F = Id,
     Sz = s -> [ i==j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
-    Sp = s -> [ i==j-1 ? sqrt(s.s*(s.s+1) - (s.s - i + 1)*(s.s - i)) : 0. for i in 1:dim(s), j in 1:dim(s) ],
+    Sp = s -> [ i==j-1 ? sqrt(s.s*(s.s + 1) - (s.s - i + 1)*(s.s - i)) : 0. for i in 1:dim(s), j in 1:dim(s) ],
     Sm = dag(Sp),
     Sx = (Sp + Sm) / 2,
     Sy = (Sp - Sm) / (2im),
