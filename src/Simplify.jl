@@ -19,9 +19,9 @@ inner_index(::Union{ExpOp, PowOp, SqrtOp}, idx...) = error("cannot simplify mult
 function inner_index(a::Dissipator{1}, idx...)
     aa = dag(a.arg) * a.arg
     if fermionic(a.arg)
-        return Gate(a.arg)(idx...) + (Left(aa) + Right(aa))(idx...)
+        return Gate(a.arg)(idx...) - 0.5*(Left(aa) + Right(aa))(idx...)
     else
-        return (Gate(a.arg) + Left(aa) + Right(aa))(idx...)
+        return (Gate(a.arg) - 0.5*(Left(aa) + Right(aa)))(idx...)
     end
 end
 function inner_index(a::Dissipator, idx...)
