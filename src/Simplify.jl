@@ -16,14 +16,6 @@ inner_index(a::Union{ExpOp{T, 1}, PowOp{T, 1}, SqrtOp{T, 1}}, idx...) where T = 
 inner_index(a::Operator, idx...) = inner_index(a.expr, idx...)
 inner_index(a::TensorOp, idx...) = prod(tensor_apply(inner_index, a, idx...))
 inner_index(::Union{ExpOp, PowOp, SqrtOp}, idx...) = error("cannot simplify multiple site functionals")
-function inner_index(a::Dissipator{1}, idx...)
-    aa = dag(a.arg) * a.arg
-    if fermionic(a.arg)
-        return Gate(a.arg)(idx...) - 0.5*(Left(aa) + Right(aa))(idx...)
-    else
-        return (Gate(a.arg) - 0.5*(Left(aa) + Right(aa)))(idx...)
-    end
-end
 function inner_index(a::Dissipator, idx...)
     a = inner_index(a.arg, idx...)
     aa = dag(a) * a
@@ -131,7 +123,7 @@ function simplify(a::ProdOp{T, IndexOp}) where T
     args = map(simplify, a.subs)   # get the simplified factors
     c = a.coef * prod(map(prodcoef, args)) # gather all product coefs
     subs = reduce(vcat, map(prodsubs, args)) # gather all product factors
-    if c == 0 || length(subs) <= 1           # early bail if it is simple
+    if c == 0                                # early bail if it is simple
         return ProdOp{T, IndexOp}(c, subs)
     end
     r = map(distribute(map(sumsubs, subs)...)) do p # develop the inner sums and loop over all resulting products
@@ -150,7 +142,7 @@ function simplify(a::Evolve)
         c = prodcoef(p)
         s = prodsubs(p)
         push!(r, ProdOp{Mixed, IndexOp}(c, map(ind->Left(ind.op)(ind.index...), s)))
-        push!(r, ProdOp{Mixed, IndexOp}(c, map(ind->Right(ind.op)(ind.index...), s)))
+        push!(r, ProdOp{Mixed, IndexOp}(conj(c), map(ind->Right(ind.op)(ind.index...), s)))
     end
     return SumOp{Mixed, IndexOp}(r)
 end
@@ -165,13 +157,25 @@ function simplify(a::Gate{IndexOp})
     return ProdOp{Mixed, IndexOp}(c, s)
 end
 
+simplify(a::Left) = simplify_left(simplify(a.arg))
+simplify(a::Right) = simplify_right(simplify(a.arg))
+
+simplify_left(a) = apply_expr(simplify_left, a)
+simplify_left(a::Indexed) = Left(a.op)(a.index...)
+
+simplify_right(a) = apply_expr(simplify_right, a)
+simplify_right(a::Indexed) = Right(a.op)(a.index...)
+simplify_right(a::ProdOp) = ProdOp{Mixed, IndexOp}(conj(a.coef), map(simplify_right, a.subs))
+
+
 simplify(a::Indexed) = a
 
-simplify(a::DagOp) = simplify_dag(a.arg)
+simplify(a::DagOp) = simplify_dag(simplify(a.arg))
 
-simplify_dag(a::DagOp) = simplify(a.arg)
-simplify_dag(a::ProdOp) = simplify(ProdOp(conj(a.coef), reverse(map(dag, a.subs))))
-simplify_dag(a) = simplify(apply_expr(dag, a))
+simplify_dag(a::DagOp) = a.arg
+simplify_dag(a::ProdOp{T, IndexOp}) where T = ProdOp{T, IndexOp}(conj(a.coef), map(simplify_dag, a.subs))
+simplify_dag(a) = apply_expr(simplify_dag, a)
+simplify_dag(a::Indexed) = dag(a.op)(a.index...)
 
 Ffactor(::Indexed{Pure, 1}) = F
 Ffactor(a::Indexed{Mixed, 1}) = Ffactor(a.op)
