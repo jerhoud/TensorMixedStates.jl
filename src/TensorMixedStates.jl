@@ -18,13 +18,11 @@ include("Spins.jl")
 include("Systems.jl")
 include("States.jl")
 include("Gates.jl")
-include("Simplify.jl")
-#=
-
-
+include("Process.jl")
 
 # Low Level interface
 include("Mpo.jl")
+#=
 include("Solvers.jl")
 include("Observables.jl")
 include("Measure.jl")

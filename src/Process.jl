@@ -215,4 +215,5 @@ function insertFfactors(c::Number, v::Vector{<:ExprOp{T, IndexOp}}) where T
     return ProdOp{T, IndexOp}(c, reverse(r))
 end
 
-process(a::ExprOp) = insertFfactors(simplify(expand_index(a)))
+process(a::ExprIndexed) = insertFfactors(simplify(expand_index(a)))
+process(a) = map(process, a)
