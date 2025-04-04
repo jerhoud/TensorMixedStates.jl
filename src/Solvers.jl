@@ -14,7 +14,8 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 - others are identical to ITensorMPS.tdvp
 """
 function tdvp(pre::PreMPO, t::Number, state::State;
-    observer! = NoObserver(), coefs=nothing, n_expand = 0, n_symmetrize = 0, nsweeps = 1, time_start = zero(t), kwargs...)
+    observer! = NoObserver(), coefs=nothing, n_expand = 0, n_symmetrize = 0,
+    nsweeps = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...)
     time_dep = !isnothing(coefs)
     st = state.state
     dt = t / nsweeps
@@ -27,9 +28,9 @@ function tdvp(pre::PreMPO, t::Number, state::State;
             tf = current_time - dt / 2
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
-        st = tdvp(mpo, dt, st; nsweeps = 1, kwargs...)
+        st = tdvp(mpo, dt, st; nsweeps = 1, limits.cutoff, limits.maxdim, kwargs...)
         if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-            st = symmetrize(State(state, st); kwargs...).state
+            st = symmetrize(State(state, st); limits).state
         end    
         measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
         if n_expand ≠ 0 && mod(sweep, n_expand) == 0
@@ -54,8 +55,8 @@ Note Dmrg does not work properly for mixed representation.
 - `observer!`: observer (like observer for ITensorMPS.dmrg)
 - others identical to ITensorMPS.dmrg
 """
-function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), kwargs...)
-    e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, kwargs...)
+function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), limits::Limits=Limts(); kwargs...)
+    e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, limits.cutoff, limits.maxdim, kwargs...)
     return (e, State(state, st))
 end
 
@@ -121,7 +122,8 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `maxdim`: MPS maxdim
 """
 function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symmetrize::Int = 0,
-    nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),  kwargs...)
+    nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),
+    limits::Limits=Limits(), kwargs...)
     st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)
@@ -135,10 +137,10 @@ function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symme
             mpos = make_approx_W(pre, dt; order, w, coefs = map(f->f(tf), coefs))
         end
         for mpo in mpos
-            st = apply(mpo, st; kwargs...)
+            st = apply(mpo, st; limits.cutoff, limits.maxdim, kwargs...)
         end
         if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-            st = symmetrize(State(state, st); kwargs...).state;
+            st = symmetrize(State(state, st); limits).state;
         end
         measure!(observer!; sweep, state = st, current_time)
     end

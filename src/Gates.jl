@@ -8,12 +8,12 @@ Apply the given gates to the state and truncate the result according to maxdim a
 It is much more efficient to apply all the gates in a single call to apply.
 
 # Examples
-    apply(CZ(1,3)*H(2)*CNOT(3,4), state; limits)
+    apply(CZ(1,3)*H(2)*CNOT(3,4), state)
 
 """
 function apply(a::ExprIndexed, state::State; limits::Limits=Limits())
     ops = make_ops(state.type, state.system, a)
-    st = apply(ops, state.state; move_sites_back_between_gates=false, limits.cutoff, limits.maxdim, limits.mindim)
+    st = apply(ops, state.state; move_sites_back_between_gates=false, limits.cutoff, limits.maxdim)
     return State(state, st)
 end
 

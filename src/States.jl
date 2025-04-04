@@ -1,17 +1,29 @@
 export State, maxlinkdim, Limits
 
 """
+    struct PreObs
+    PreObs(::State)
+
+A data structure to hold preprocessing data for observable expectation computations.
+"""
+struct PreObs
+    loc::Vector{ITensor}
+    left::Vector{ITensor}
+    right::Vector{ITensor}
+    trace::Vector{Number}
+end
+PreObs() = PreObs([], [], [], [])
+
+"""
 A type to hold MPS limits
 
 # Fields
 - `cutoff`: the cutoff under which singular values are neglected
 - `maxdim`: the maximum bond dimension
-- `mindim`: the minimum bond dimension
 """
 @kwdef struct Limits
     cutoff::Float64 = 0.
     maxdim::Int = typemax(Int)
-    mindim::Int = 0
 end
   
 """
@@ -40,6 +52,9 @@ struct State
     type::PM
     system::System
     state::MPS
+    preops::PreOps
+    State(type::PM, system::System, state::MPS) =
+        new(type, system, state, PreObs())
 end
 
 """
@@ -151,8 +166,6 @@ Apply the truncation to the given state
 """
 truncate(state::State; kwargs...) =
     State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))
-
-copy(state::State) = State(state, copy(state.state))
 
 apply(mpo::MPO, state::State; kwargs...) =
     State(state, apply(mpo, state.state; kwargs...))

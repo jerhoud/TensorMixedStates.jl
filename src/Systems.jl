@@ -45,7 +45,7 @@ Return number of sites in the system
 """
 length(system::System) = length(system.sites)
 
-function tensor(system::System, a::Indexed{T}) where T
+function tensor(system::System, a::Indexed{T, N}) where {T, N}
     s = map(i->system[i], a.index)
     t = tensor(a.op, s...)
     is = map(i->system[T(), i], a.index)
