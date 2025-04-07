@@ -135,7 +135,7 @@ function simplify(a::ProdOp{T, IndexOp}) where T
     return SumOp{T, IndexOp}(collect_sum(r))
 end
 
-function simplify(a::Evolve)
+function simplify(a::Evolver)
     args = sumsubs(simplify(a.arg))
     r = ExprIndexed{Mixed}[]
     for p in args
@@ -186,7 +186,7 @@ Ffactor(a) = Gate(F)
 insertFfactors(a::SumOp) = apply_expr(insertFfactors, a)
 insertFfactors(a::ExprOp) = insertFfactors(prodcoef(a), prodsubs(a))
 
-function insertFfactors(c::Number, v::Vector{<:ExprOp{T, IndexOp}}) where T
+function insertFfactors(c::Number, v::Vector{<:ExprIndexed{T}}) where T
     local f::ExprOp{T, 1}
     r = ExprIndexed{T}[]
     fermion_idx = 0

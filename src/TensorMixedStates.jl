@@ -8,7 +8,7 @@ using ITensors, ITensorMPS
 
 include("Operators.jl")
 include("Sites.jl")
-include("Mixing.jl")
+include("Mixer.jl")
 include("Qubits.jl")
 include("Fermions.jl")
 include("Bosons.jl")
@@ -24,7 +24,6 @@ include("Process.jl")
 include("Mpo.jl")
 include("Observables.jl")
 include("Solvers.jl")
-#=
 include("Measure.jl")
 include("RandomState.jl")
 
@@ -37,6 +36,7 @@ include("PhaseTypes.jl")
 include("Phases.jl")
 
 # Utilities
+#=
 include("Graphs.jl")
 include("SiteSpecifics.jl")
 

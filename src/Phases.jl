@@ -9,7 +9,11 @@ function run_phase(sim::Simulation, phase::CreateState)
             state = random_state(phase.type, phase.system, phase.randomize)
         end
     else
-        state = State(phase.type, phase.system, phase.state)
+        if phase.state isa State
+            state = phase.state
+        else
+            state = State(phase.type, phase.system, phase.state)
+        end
         if phase.randomize ≠ 0
             state = random_state(state, phase.randomize)
         end
@@ -19,11 +23,11 @@ end
 
 
 function run_phase(sim::Simulation, phase::ToMixed)
-    if sim.state.type == Mixed 
+    if sim.state.type isa Mixed
         log_msg(sim, "State is already in mixed representation")
     else
         log_msg(sim, "Creating mixed representation with $(length(sim)) sites")
-        sim = truncate(mix(sim); phase.limits.cutoff, phase.limits.maxdim)
+        sim = truncate(mix(sim); phase.limits)
         log_msg(sim, "State is now in mixed representation")
     end
     return sim
@@ -45,23 +49,20 @@ function run_phase(sim::Simulation, phase::Evolve)
     end
     state = sim.state
     tp = state.type
-    if multipleLit(evolver)
-        error("Evolver cannot contain multiple site operators")
-    end
-    if tp == Pure && dissipLit(evolver)
-        error("Evolving error: state must be in mixed representation to use dissipators")
+    if tp isa Pure && evolver isa ExprIndexed{Mixed}
+        error("Evolving error: state must be in mixed representation to use this evolver")
+    elseif tp isa Mixed && evolver isa ExprIndexed{Pure}
+        evolver = Evolver(evolver)
     end
     pre = PreMPO(state, evolver)
     algo = phase.algo
     if algo isa ApproxW
         state = approx_W(pre, duration, state;
-            coefs, algo.n_symmetrize, nsweeps, algo.order, algo.w, time_start = sim.time,
-            phase.limits.cutoff, phase.limits.maxdim,
+            coefs, algo.n_symmetrize, nsweeps, algo.order, algo.w, time_start = sim.time, phase.limits,
             observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
         state = tdvp(pre, duration, state;
-            coefs, algo.n_expand, algo.n_symmetrize, nsweeps, time_start = sim.time,
-            phase.limits.cutoff, phase.limits.maxdim,
+            coefs, algo.n_expand, algo.n_symmetrize, nsweeps, time_start = sim.time, phase.limits,
             observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
     return Simulation(sim, state, time_stop)
@@ -69,8 +70,8 @@ end
 
 
 function run_phase(sim::Simulation, phase::Gates)
-  log_msg(sim, "Applying $(length(phase.gates.ls)) gates")
-  return apply(phase.gates, sim; phase.limits.cutoff, phase.limits.maxdim)
+  log_msg(sim, "Applying $(length(prodsubs(phase.gates))) gates")
+  return apply(phase.gates, sim; phase.limits)
 end
 
 
@@ -90,4 +91,4 @@ run_phase(sim::Simulation, phase::SaveState) =
     save_state(phase.file, phase.statename, sim.state)
     
 run_phase(sim::Simulation, phase::LoadState) =
-    Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits.cutoff, phase.limits.maxdim))
+    Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits, phase.limits))

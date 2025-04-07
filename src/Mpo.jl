@@ -67,7 +67,7 @@ function PreMPO!(pre::PreMPO, as)
     return pre
 end
 
-function PreMPO(state::State, a, f = Evolve)
+function PreMPO(state::State, a, f = Evolver)
     PreMPO!(PreMPO(state.type, state.system), process(a, state.type, f))
 end
 

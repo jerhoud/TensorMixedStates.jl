@@ -19,11 +19,11 @@ A phase type to create the simulation state
 """
 @kwdef struct CreateState
     name::String = "Creating state"
-    time_start = 0.
+    time_start::Number = 0.
     final_measures = []
-    type::Union{Nothing, TPure, TMixed} = nothing
+    type::Union{Nothing, Pure, Mixed} = nothing
     system::Union{Nothing, System} = nothing
-    state::Union{Nothing, String, Vector{String}} = nothing
+    state = nothing
     randomize::Int = 0
 end
 
@@ -47,7 +47,7 @@ SaveState(file = "myfile")
 """
 @kwdef struct SaveState
     name::String = "Saving state"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     file::String
     statename::String = "state"
@@ -73,7 +73,7 @@ LoadState(file = "myfile")
 """
 @kwdef struct LoadState
     name::String = "Loading state"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     file::String
     statename::String = "state"
@@ -177,13 +177,13 @@ A phase type for time evolution
 """
 @kwdef struct Evolve
     name::String = "Time evolution"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     limits::Limits = no_limits
     duration::Number
     time_step::Number
     algo::Algo
-    evolver
+    evolver::ExprIndexed
     measures_period::Int = 1
     measures = []
 end
@@ -213,9 +213,9 @@ A phase type for applying gates
 """
 @kwdef struct Gates
     name::String = "Applying gates"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    gates::ProdLit
+    gates::ExprIndexed
     limits::Limits
   end
 
@@ -239,9 +239,9 @@ A phase type for optimizing with Dmrg
 """
 @kwdef struct Dmrg
     name::String = "Dmrg optimization"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    hamiltonian::Lits
+    hamiltonian::ExprIndexed{Pure}
     cutoff::Float64
     maxdim::Vector{Int}
     nsweeps::Int

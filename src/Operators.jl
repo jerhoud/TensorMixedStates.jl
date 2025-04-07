@@ -1,5 +1,5 @@
-export ExprOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, dag, DagOp, Proj
-export Gate, Dissipator, Evolve, Left, Right, Pure, Mixed, PM
+export ExprOp, SimpleOp, ProdOp, SumOp, TensorOp, ExpOp, Operator, Indexed, IndexOp, ⊗, dag, DagOp, Proj
+export Gate, Dissipator, Evolver, Left, Right, Pure, Mixed, PM
 
 
 ############# Types ################
@@ -24,6 +24,7 @@ struct Mixed end
 PM = Union{Pure, Mixed}
 
 abstract type ExprOp{T, N} end
+SimpleOp = ExprOp{Pure, 1}
 
 isless(a::ExprOp, b::ExprOp) = isless((ranking(a), a), (ranking(b), b))
 
@@ -94,7 +95,7 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 
 ############ proj ################
 
-struct Proj <: ExprOp{Pure, 1}
+struct Proj <: SimpleOp
     state::String
 end
 
@@ -167,22 +168,22 @@ isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
 
 apply_expr(f, a::Dissipator) = Dissipator(f(a.arg))
 
-# Evolve
+# Evolver
 
-struct Evolve <: ExprIndexed{Mixed}
+struct Evolver <: ExprIndexed{Mixed}
     arg::ExprIndexed{Pure}
 end
 
-show(io::IO, a::Evolve) =
+show(io::IO, a::Evolver) =
     paren(io, 1000) do io
-        show_func(io, "Evolve", a.arg)
+        show_func(io, "Evolver", a.arg)
     end
 
-ranking(::Evolve) = 12
+ranking(::Evolver) = 12
 
-isless(a::Evolve, b::Evolve) = isless(a.arg, b.arg)
+isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 
-apply_expr(f, a::Evolve) = Evolve(f(a.arg))
+apply_expr(f, a::Evolver) = Evolver(f(a.arg))
 
 # Left
 
@@ -279,8 +280,8 @@ sumsubs(a::ExprOp) = [a]
 
 +(a::ExprOp{T, N}...) where {T, N} =
     SumOp{T, N}(reduce(vcat, map(sumsubs, a)))
-(a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Evolve(b)
-(a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Evolve(a) + b
+(a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Evolver(b)
+(a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Evolver(a) + b
 (a::ExprOp - b::ExprOp) = a + (-b)
 
 show(io::IO, a::SumOp) =
@@ -429,5 +430,5 @@ isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
 apply_expr(f, a::DagOp) = DagOp(f(a.arg))
 
 eval_expr(f, a::Union{SumOp, ProdOp, TensorOp}) = any(f, a.subs)
-eval_expr(f, a::Union{Gate, Left, Right, Evolve, Dissipator, PowOp, ExpOp, SqrtOp, DagOp}) = f(a.arg)
+eval_expr(f, a::Union{Gate, Left, Right, Evolver, Dissipator, PowOp, ExpOp, SqrtOp, DagOp}) = f(a.arg)
 eval_expr(f, a::Indexed) = f(a.op)

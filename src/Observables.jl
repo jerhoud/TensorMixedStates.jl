@@ -318,10 +318,10 @@ expect(state::State, op) =
     end
 
 
-expect1_one(::TPure, state::State, op::ExprOp{Pure, 1}, i::Int, t::ITensor) =
+expect1_one(::TPure, state::State, op::SimpleOp, i::Int, t::ITensor) =
     scalar(t * tensor(state.system, op(i)))
 
-expect1_one(::TMixed, state::State, op::ExprOp{Pure, 1}, i::Int, t::ITensor) =
+expect1_one(::TMixed, state::State, op::SimpleOp, i::Int, t::ITensor) =
     scalar(t * tensor_obs(state, op(i)))
 
 expect1_one(tp, state::State, ops, i::Int, t::ITensor) =
@@ -350,14 +350,14 @@ function expect1(state::State, op)
 end
 
 
-function expect2(::TPure, state::State, ops::Vector{Tuple{ExprOp{Pure, 1}, ExprOp{Pure, 1}}})
+function expect2(::TPure, state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}})
     oplist = collect(Set([first.(ops) ; last.(ops)]))
     n = length(state)
     sys = state.system
     st = state.state
     r = Matrix(undef, n, n)
     for i in 1:n
-        ldict = Dict{ExprOp{Pure, 1}, ITensor}()
+        ldict = Dict{SimpleOp, ITensor}()
         ti = get_left(state, i) * get_right(state, i)
         r[i, i] = map(ops) do (o1, o2)
             scalar(ti * tensor(sys, (o1 * o2)(i)))
@@ -366,7 +366,7 @@ function expect2(::TPure, state::State, ops::Vector{Tuple{ExprOp{Pure, 1}, ExprO
             opF = fermionic(op) ? op * F : op
             ldict[op] = get_left(state, i) * tensor(sys, opF(i)) * dag(st[i]')
         end
-        rdict = Dict{ExprOp{Pure, 1}, ITensor}()
+        rdict = Dict{SimpleOp, ITensor}()
         for j in i+1:n
             for op in oplist
                 rdict[op] = get_right(state, j) * tensor(sys, op(j)) * st[j]
@@ -398,14 +398,14 @@ function expect2(::TPure, state::State, ops::Vector{Tuple{ExprOp{Pure, 1}, ExprO
     return unroll(r)
 end
 
-function expect2(::TMixed, state::State, ops::Vector{Tuple{ExprOp{Pure, 1}, ExprOp{Pure, 1}}})
+function expect2(::TMixed, state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}})
     oplist = collect(Set([first.(ops) ; last.(ops)]))
     n = length(state)
     st = state.state
     sys = state.system
     r = Matrix(undef, n, n)
     for i in 1:n
-        ldict = Dict{ExprOp{Pure, 1}, ITensor}()
+        ldict = Dict{SimpleOp, ITensor}()
         ti = get_left(state, i) * get_right(state, i)
         r[i, i] = map(ops) do (o1, o2)
             scalar(ti * tensor_obs(state, (o1 * o2)(i)))
@@ -414,7 +414,7 @@ function expect2(::TMixed, state::State, ops::Vector{Tuple{ExprOp{Pure, 1}, Expr
             opF = fermionic(op) ? op * F : op
             ldict[op] = get_left(state, i) * tensor_obs(state, opF(i))
         end
-        rdict = Dict{ExprOp{Pure, 1}, ITensor}()
+        rdict = Dict{SimpleOp, ITensor}()
         for j in i+1:n
             q = st[j] * get_right(state, j)
             for op in oplist
@@ -455,10 +455,10 @@ Compute the expectation values of the given pairs of operators on all sites.
     expect2(state, [(X, Y), (X, Z), (Y, Z)])
     ...
 """
-expect2(state::State, ops::Tuple{ExprOp{Pure, 1}, ExprOp{Pure, 1}}) =
+expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
     expect2(state, [ops])
 
-expect2(state::State, ops::Vector{Tuple{ExprOp{Pure, 1}, ExprOp{Pure, 1}}}) =
+expect2(state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}}) =
     expect2(state.type, state, ops)
 
 

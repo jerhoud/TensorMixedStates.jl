@@ -108,7 +108,7 @@ end
 State(type::PM, system::System, state) =
     State(type, system, fill(state, length(system)))
 
-State(type::PM, system::System, state::Vector{<:Number}) =
+State(type::PM, system::System, state::Union{Vector{<:Number}, Matrix}) =
     State(type, system, fill(state, length(system)))
 
 State(state::State, st::MPS) =
