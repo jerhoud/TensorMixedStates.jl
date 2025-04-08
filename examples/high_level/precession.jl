@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Qubits
 
 limits = Limits(
     cutoff = 1e-16,
@@ -12,8 +12,8 @@ phases(n) = [
     CreateState(
         name = "Create $n qubits pointing in the 6 directions",
         final_measures = output,
-        type = Pure,
-        system = System(n, "Qubit"),
+        type = Pure(),
+        system = System(n, Qubit()),
         state = repeat(["X+", "Y+", "Z+", "X-", "Y-", "Z-"], (n + 5) ÷ 6)[1:n],
       ),
     Evolve(

@@ -1,13 +1,13 @@
-using TensorMixedStates
+using TensorMixedStates, .Qubits
 using Test
 
 const state_vals = [
-    (1, "Qubit", "Z+", [X(1), Y(1), Z(1)], [0, 0, 1]),
-    (6, "Qubit", ["X+", "Y+", "Z+", "X-", "Y-", "Z-"], [X, Y, Z],
+    (1, Qubit(), "Z+", [X(1), Y(1), Z(1)], [0, 0, 1]),
+    (6, Qubit(), ["X+", "Y+", "Z+", "X-", "Y-", "Z-"], [X, Y, Z],
         [[1, 0, 0, -1, 0, 0], [0, 1, 0, 0, -1, 0], [0, 0, 1, 0, 0, -1]]),
-    (3, "Qubit", ["X+", "Y-", "Z-"], [(X, Y), (Z, Z)],
+    (3, Qubit(), ["X+", "Y-", "Z-"], [(X, Y), (Z, Z)],
         [[0 -1 0; 0 0 0; 0 0 -im], [1 0 0; 0 1 0; 0 0 1]]),
-    (4, "Qubit", ["Z+", "X-", "Z-", "Y-"], [Z(1)Y(4), X(2)Z(3), Z(1)Z(3), X(2)Y(4)], [-1, 1, -1, 1])
+    (4, Qubit(), ["Z+", "X-", "Z-", "Y-"], [Z(1)Y(4), X(2)Z(3), Z(1)Z(3), X(2)Y(4)], [-1, 1, -1, 1])
 ]
 
 function check_state_vals()
@@ -15,8 +15,8 @@ function check_state_vals()
         n, s, st, m, v = sv
         sys = System(n, s)
         meas = Measure(m)
-        statep = State(Pure, sys, st)
-        statem = State(Mixed, sys, st)
+        statep = State(Pure(), sys, st)
+        statem = State(Mixed(), sys, st)
         mp = last.(measure(statep, meas))
         mm = last.(measure(statem, meas))
         if mp ≈ v && mm ≈ v
@@ -29,8 +29,8 @@ end
 
 function check_mix(dims)
     for d in dims
-        s = System(10, "Qubit")
-        stp = random_state(Pure, s, d)
+        s = System(10, Qubit())
+        stp = random_state(Pure(), s, d)
         stm = mix(stp)
         m = Measure(X, Y, Z)
         mp = last.(measure(stp, m))
@@ -44,8 +44,8 @@ function check_mix(dims)
 end
 
 function check_complete_graph()
-    stp = graph_state(Pure, complete_graph(4))
-    stm = graph_state(Mixed, complete_graph(4))
+    stp = graph_state(Pure(), complete_graph(4))
+    stm = graph_state(Mixed(), complete_graph(4))
     m = Measure(X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y))
     r = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], 1, [1 1 1 1; 1 1 1 1; 1 1 1 1; 1 1 1 1]]
     mp = last.(measure(stp, m))
@@ -57,15 +57,15 @@ function check_complete_graph()
 end
 
 const single_evolve_vals = [
-    (2, "Qubit", "X+", -im * Z(1), [X(1), Y(1)], t->[cos(2t), sin(2t)])
+    (2, Qubit(), "X+", -im * Z(1), [X(1), Y(1)], t->[cos(2t), sin(2t)])
 ]
 
 const multi_evolve_vals = [
-    (2, "Qubit", ["X+", "Z-"], -im*Z(1)Z(2), [X(1), Y(1), Z(2)], t->[cos(2t), -sin(2t), -1])
+    (2, Qubit(), ["X+", "Z-"], -im*Z(1)Z(2), [X(1), Y(1), Z(2)], t->[cos(2t), -sin(2t), -1])
 ]
 
 const complex_evolve_vals = [
-    (5, "Qubit", ["X+", "Z+", "Z-", "X+", "X+"],
+    (5, Qubit(), ["X+", "Z+", "Z-", "X+", "X+"],
     -im*(Z(2)Z(4)+Z(3)Z(1)+Z(3)Z(5)), [Y(1), Y(4), Y(5)], t->sin(2t) * [-1., 1., -1.])
 ]
 
@@ -74,9 +74,9 @@ function check_evolve_vals(algo, vals; step, atol, kwargs...)
         n, s, st, h, m, f = ev
         sys = System(n, s)
         meas = Measure(m)
-        statep = State(Pure, sys, st)
+        statep = State(Pure(), sys, st)
         prep = PreMPO(statep, h)
-        statem = State(Mixed, sys, st)
+        statem = State(Mixed(), sys, st)
         prem = PreMPO(statem, h)
         for t in step:step:1.0
             statep = algo(prep, step, statep; kwargs...)
@@ -94,15 +94,15 @@ function check_evolve_vals(algo, vals; step, atol, kwargs...)
 end
 
 function check_truncate()
-    s = System(10, "Qubit")
-    st = random_state(Pure, s, 10)
-    stt = truncate(st; maxdim=3)
+    s = System(10, Qubit())
+    st = random_state(Pure(), s, 10)
+    stt = truncate(st; limits=Limits(maxdim=3))
     return maxlinkdim(stt) ≤ 3
 end
 
 function check_dmrg()
-    s = System(5, "Qubit")
-    st = random_state(Pure, s, 10)
+    s = System(5, Qubit())
+    st = random_state(Pure(), s, 10)
     e, std = dmrg(sum(-Z(i) for i in 1:5), st; nsweeps = 2)
     m = Measure(X, Y, Z, Norm)
     ms = last.(measure(std, m))
@@ -114,11 +114,10 @@ end
 
 @testset verbose=true "TensorMixedStates.jl" begin
     @testset "System building" begin
-        @test (System(1, "Qubit"); true)
-        @test (System(3, "Qubit"); true)
-        @test (System([]); true)
-        @test (System(["Qubit"]); true)
-        @test (System(["Qubit", "Qubit", "Qubit"]); true)
+        @test (System(1, Qubit()); true)
+        @test (System(3, Qubit()); true)
+        @test (System([Qubit()]); true)
+        @test (System([Qubit(), Qubit(), Qubit()]); true)
     end
     @testset "State measuring" begin
         @test check_state_vals()

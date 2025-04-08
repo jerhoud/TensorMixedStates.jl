@@ -54,7 +54,7 @@ Note Dmrg does not work properly for mixed representation.
 - `observer!`: observer (like observer for ITensorMPS.dmrg)
 - others identical to ITensorMPS.dmrg
 """
-function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), limits::Limits=Limts(), kwargs...)
+function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), limits::Limits=Limits(), kwargs...)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, limits.cutoff, limits.maxdim, kwargs...)
     return (e, State(state, st))
 end

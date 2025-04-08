@@ -163,7 +163,7 @@ end
 
 Apply the truncation to the given state
 """
-truncate(state::State; kwargs...) =
+truncate(state::State; limits::Limits) =
     State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))
 
 apply(mpo::MPO, state::State; kwargs...) =

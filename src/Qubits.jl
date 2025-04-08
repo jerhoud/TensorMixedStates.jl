@@ -39,6 +39,7 @@ function graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(c
     n = graph_base_size(g)
     s = System(n, Qubit())
     state = State(tp, s, "+")
+    CZ = controlled(Z)
     gates = prod(CZ(i, j) for (i, j) in g)
     state = apply(gates, state; cutoff, kwargs...)
     return state
