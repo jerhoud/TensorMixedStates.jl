@@ -2,7 +2,6 @@ export State, maxlinkdim, Limits
 
 """
     struct PreObs
-    PreObs(::State)
 
 A data structure to hold preprocessing data for observable expectation computations.
 """
@@ -22,8 +21,8 @@ A type to hold MPS limits
 - `maxdim`: the maximum bond dimension
 """
 @kwdef struct Limits
-    cutoff::Float64 = 0.
-    maxdim::Int = typemax(Int)
+    cutoff::Union{Float64, Vector{Float64}} = 0.
+    maxdim::Union{Int, Vector{Int}} = typemax(Int)
 end
   
 """
@@ -52,7 +51,7 @@ struct State
     type::PM
     system::System
     state::MPS
-    preops::PreOps
+    preobs::PreObs
     State(type::PM, system::System, state::MPS) =
         new(type, system, state, PreObs())
 end
@@ -119,8 +118,8 @@ State(state::State, st::MPS) =
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
-+(a::State...; limits=Limits()) = State(a[1], +((i.state for i in a)...; limits.cutoff, limits.maxdim))
--(a::State, b::State; limits=Limits()) = State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
++(a::State...; limits::Limits=Limits()) = State(a[1], +((i.state for i in a)...; limits.cutoff, limits.maxdim))
+-(a::State, b::State; limits::Limits=Limits()) = State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
 
 """
     mix(::State)

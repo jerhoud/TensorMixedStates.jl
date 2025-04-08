@@ -1,4 +1,4 @@
-export Limits, no_limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
+export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
 
 
 """
@@ -77,7 +77,7 @@ LoadState(file = "myfile")
     final_measures = []
     file::String
     statename::String = "state"
-    limits::Limits = no_limits
+    limits::Limits = Limits()
 end
 
 show(io::IO, s::LoadState) = 
@@ -104,7 +104,7 @@ A phase type to switch to mixed representation
     name::String = "Switching to mixed state representation"
     time_start = nothing
     final_measures = []
-    limits::Limits = no_limits
+    limits::Limits = Limits()
 end
 
 show(io::IO, s::ToMixed) = 
@@ -179,7 +179,7 @@ A phase type for time evolution
     name::String = "Time evolution"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    limits::Limits = no_limits
+    limits::Limits = Limits()
     duration::Number
     time_step::Number
     algo::Algo

@@ -1,8 +1,5 @@
-import ITensors: norm, dag
-import ITensorMPS: expect, normalize
-
 export trace, trace2, norm, normalize, dag, symmetrize, normsym
-export PreObs, expect, expect1, expect2
+export expect, expect1, expect2
 export entanglement_entropy
 
 function tensor_trace(state::State, i::Int)
@@ -17,7 +14,7 @@ function tensor_obs(state::State, ind::Indexed{Pure, 1})
     t = tensor(s, ind)
     j = s[Pure(), ind.index...]
     k = s[Mixed(), ind.index...]
-    return t * combinerto(k, j', j')
+    return t * combinerto(k, j, j')
 end
 
 tensor_obs(state::State, i::Int) =
@@ -31,7 +28,7 @@ function tensor_dag(state::State, i::Int)
 end
 
 function get_loc(state::State, i::Int)
-    l = state.preops.loc
+    l = state.preobs.loc
     if isempty(l)
         create_loc!(l, state.type, state)
     end
@@ -39,7 +36,7 @@ function get_loc(state::State, i::Int)
 end
 
 function get_right(state::State, i::Int)
-    r = state.preops.right
+    r = state.preobs.right
     if isempty(r)
         create_right!(r, state.type, state)
     end
@@ -47,7 +44,7 @@ function get_right(state::State, i::Int)
 end
 
 function get_left(state::State, i::Int)
-    l = state.preops.left
+    l = state.preobs.left
     if length(l) < i
         create_left!(l, state.type, state, i)
     end
@@ -61,7 +58,7 @@ Return the trace of the system, mostly usefull for mixed representations.
 This should be one.
 """
 function trace(state::State)
-    t = state.preops.trace
+    t = state.preobs.trace
     if isempty(t)
         create_trace!(t, state.type, state)
     end
@@ -70,6 +67,7 @@ end
 
 create_loc!(_, ::Pure, ::State) = error("bug: get_loc on pure states")
 function create_loc!(l, ::Mixed, state::State)
+    n = length(state)
     resize!(l, n)
     for i in 1:n
         l[i] = tensor_obs(state, i)
@@ -102,14 +100,14 @@ function create_right!(r, ::Mixed, state::State)
     resize!(r, n)
     t = r[n] = ITensor(1.)
     for i in n-1:-1:1
-        r[i] = get_loc(state, i+1) * t
+        t = r[i] = get_loc(state, i+1) * t
     end
     return r
 end
 
 function create_trace!(t, ::Pure, state::State)
     resize!(t, 1)
-    k = s[Pure(), 1]
+    k = state.system[Pure(), 1]
     t[1] = scalar(get_right(state, 1) * delta(k, k') * state.state[1])
     return t
 end
@@ -148,10 +146,10 @@ function create_left!(l, ::Mixed, state::State, i::Int)
     j = length(l)
     resize!(l, i)
     if j == 0
-        l[1] = ITensor(1.) / real(trace(state))
+        l[1] = st[1] / real(trace(state))
         j = 1
     end
-    for k in j:i
+    for k in j+1:i
         l[k] = l[k-1] * tensor_trace(state, k-1) * st[k]
     end
     return l
@@ -241,15 +239,15 @@ unroll(x) =
         end
     end
 
-function expect(::TPure, state::State, p::ProdOp{Pure, IndexOp})
-    if p.coef == 0.
+function expect(::Pure, state::State, coef::Number, subs::Vector{<:ExprIndexed{Pure}})
+    if coef == 0.
         return 0.
     end
     sys = state.system
     st = state.state
-    r::ITensor
+    local r::ITensor
     j = 0
-    foreach(p.subs) do ind
+    foreach(subs) do ind
         i = ind.index[1]
         if j == 0
             r = get_left(state, i)
@@ -266,18 +264,17 @@ function expect(::TPure, state::State, p::ProdOp{Pure, IndexOp})
         j = i
     end
     r *= get_right(state, j)
-    return p.coef * scalar(r)
+    return coef * scalar(r)
 end
 
-function expect(::TMixed, state::State, p::ProdOp{Pure, IndexOp})
-    if p.coef == 0.
+function expect(::Mixed, state::State, coef::Number, subs::Vector{<:ExprIndexed{Pure}})
+    if coef == 0.
         return 0.
     end
-    sys = state.system
     st = state.state
-    r::ITensor
+    local r::ITensor
     j = 0
-    foreach(p.ls) do ind
+    foreach(subs) do ind
         i = ind.index[1]
         if j == 0
             r = get_left(state, i)
@@ -291,7 +288,7 @@ function expect(::TMixed, state::State, p::ProdOp{Pure, IndexOp})
         j = i
     end
     r *= get_right(state, j)
-    return p.coef * scalar(r)
+    return coef * scalar(r)
 end
 
 """
@@ -304,8 +301,8 @@ Compute expectation values of `obs` on the given state.
     expect(state, [X(1)*Y(2), X(3), Z(1)*X(2)])
 
 """
-expect(state::State, p::ProdOp{Pure, IndexOp}) =
-    expect(state.type, state, p)
+expect(state::State, p::ExprIndexed{Pure}) =
+    expect(state.type, state, prodcoef(p), prodsubs(p))
     
 expect(state::State, op::SumOp{Pure, IndexOp}) =
     sum(op.ps; init=0) do p
@@ -318,20 +315,20 @@ expect(state::State, op) =
     end
 
 
-expect1_one(::TPure, state::State, op::SimpleOp, i::Int, t::ITensor) =
+expect1_one(::Pure, state::State, op::SimpleOp, i::Int, t::ITensor) =
     scalar(t * tensor(state.system, op(i)))
 
-expect1_one(::TMixed, state::State, op::SimpleOp, i::Int, t::ITensor) =
+expect1_one(::Mixed, state::State, op::SimpleOp, i::Int, t::ITensor) =
     scalar(t * tensor_obs(state, op(i)))
 
 expect1_one(tp, state::State, ops, i::Int, t::ITensor) =
-    map(op) do o
+    map(ops) do o
         expect1_one(tp, state, o, i, t)
     end
 
 
 """
-    expect1(::State, op[, ::PreObs])
+    expect1(::State, op)
 
 Compute the expectation values of the given operators on all sites.
 
@@ -339,9 +336,6 @@ Compute the expectation values of the given operators on all sites.
     expect1(state, X)
     expect1(state, [X, Y, Z])
 
-    pre = PreObs(state)
-    expect1(state, X, pre)
-    ...
 """
 function expect1(state::State, op)
     n = length(state)
@@ -350,7 +344,7 @@ function expect1(state::State, op)
 end
 
 
-function expect2(::TPure, state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}})
+function expect2(::Pure, state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     oplist = collect(Set([first.(ops) ; last.(ops)]))
     n = length(state)
     sys = state.system
@@ -398,11 +392,10 @@ function expect2(::TPure, state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}})
     return unroll(r)
 end
 
-function expect2(::TMixed, state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}})
+function expect2(::Mixed, state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     oplist = collect(Set([first.(ops) ; last.(ops)]))
     n = length(state)
     st = state.state
-    sys = state.system
     r = Matrix(undef, n, n)
     for i in 1:n
         ldict = Dict{SimpleOp, ITensor}()
@@ -435,7 +428,7 @@ function expect2(::TMixed, state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}})
                     p = if fermionic(op)
                         st[j] * tensor_obs(state, F(j))
                     else
-                        get_loc[j]
+                        get_loc(state, j)
                     end
                     ldict[op] *= p
                 end    
@@ -456,9 +449,9 @@ Compute the expectation values of the given pairs of operators on all sites.
     ...
 """
 expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
-    expect2(state, [ops])
+    expect2(state, [ops])[1]
 
-expect2(state::State, ops::Vector{Tuple{SimpleOp, SimpleOp}}) =
+expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}}) =
     expect2(state.type, state, ops)
 
 

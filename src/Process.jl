@@ -218,6 +218,6 @@ end
 process(a::ExprIndexed) = insertFfactors(simplify(expand_index(a)))
 process(a) = map(process, a)
 
-process(a::ExprIndexed{T}, type::T, ::Any) where T = process(a)
-process(a::ExprIndexed{Pure}, type::Mixed, f) = process(f(a))
+process(a::ExprIndexed{T}, ::T, ::Any) where T = process(a)
+process(a::ExprIndexed{Pure}, ::Mixed, f) = process(f(a))
 process(a, type::PM, f) = map(t->process(a, type, f), a)

@@ -91,4 +91,4 @@ run_phase(sim::Simulation, phase::SaveState) =
     save_state(phase.file, phase.statename, sim.state)
     
 run_phase(sim::Simulation, phase::LoadState) =
-    Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits, phase.limits))
+    Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits))

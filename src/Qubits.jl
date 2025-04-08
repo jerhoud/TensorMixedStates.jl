@@ -35,9 +35,35 @@ controlled(op::ExprOp{Pure, N}) where N =
     Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
 ])
 
+function graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.e-16), kwargs...)
+    n = graph_base_size(g)
+    s = System(n, Qubit())
+    state = State(tp, s, "+")
+    gates = prod(CZ(i, j) for (i, j) in g)
+    state = apply(gates, state; cutoff, kwargs...)
+    return state
+end
+
+create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) = 
+    [
+        CreateState(
+            name = "Creating initial state |++...++> for graph state",
+            type = tp,
+            system = System(graph_base_size(g), Qubit()),
+            state = "+",
+        ),
+        Gates(
+            name = "Applying gates CZ for building graph state",
+            gates = prod(CZ(i, j) for (i, j) in g),
+            limits = limits
+        )
+    ]
+
 module Qubits
 
-import ..Qubit, ..controlled, ..X, ..Y, ..Z, ..Sx, ..Sy, ..Sz, ..S2, ..Sp, ..Sm, ..H, ..S, ..Swap
-export Qubit, controlled, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, Swap
+import ..Qubit, ..controlled, ..graph_state, ..create_graph_state, ..X, ..Y, ..Z, ..Sx, ..Sy, ..Sz, ..S2, ..Sp, ..Sm, ..H, ..S, ..Swap
+export Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, Swap
+
+export graph_state, create_graph_state
 
 end

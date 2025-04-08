@@ -1,5 +1,4 @@
 export TdvpObserver, DmrgObserver, ApproxWObserver
-import ITensorMPS: measure!, checkdone!
 
 """
     struct TdvpObserver

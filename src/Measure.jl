@@ -130,12 +130,12 @@ Purity = StateFunc("Purity", trace2)
 Norm = StateFunc("Norm", norm)
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
-        ee, _ = entanglement_entropy!(st, pos)
+        ee, _ = entanglement_entropy(st, pos)
         return ee
     end)
 EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
     st-> begin
-        ee, sp = entanglement_entropy!(st, pos)
+        ee, sp = entanglement_entropy(st, pos)
         return [[ee]; sp[1:min(length(sp), spectre)]]
     end)
 Linkdim = StateFunc("Linkdim", maxlinkdim)
