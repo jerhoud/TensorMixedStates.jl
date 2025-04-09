@@ -141,12 +141,12 @@ function mix(::Pure, state::State)
     for (i, t) in enumerate(st)
         idx = system[Pure(), i]
         midx = system[Mixed(), i]
-        mt = t * dag(t') * combinerto(idx', idx, midx)
+        mt = t * dag(t') * combinerto(midx, idx', idx)
         mt *= comb
         if i < n
             rlink = commonind(t, st[i+1])
             d = dim(rlink)
-            comb = combinerto(rlink', rlink, Index(d*d, "Link,l=$i"))
+            comb = combinerto(Index(d*d, "Link,l=$i"), rlink', rlink)
         else
             comb = ITensor(1)
         end
@@ -164,7 +164,7 @@ end
 Apply the truncation to the given state
 """
 truncate(state::State; limits::Limits) =
-    State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))
+    State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim))
 
 apply(mpo::MPO, state::State; kwargs...) =
     State(state, apply(mpo, state.state; kwargs...))

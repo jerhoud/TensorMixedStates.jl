@@ -14,7 +14,7 @@ function tensor_obs(state::State, ind::Indexed{Pure, 1})
     t = tensor(s, ind)
     j = s[Pure(), ind.index...]
     k = s[Mixed(), ind.index...]
-    return t * combinerto(k, j, j')
+    return t * combinerto(k, j', j)
 end
 
 tensor_obs(state::State, i::Int) =

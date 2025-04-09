@@ -41,7 +41,7 @@ function graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(c
     state = State(tp, s, "+")
     CZ = controlled(Z)
     gates = prod(CZ(i, j) for (i, j) in g)
-    state = apply(gates, state; cutoff, kwargs...)
+    state = apply(gates, state; limits, kwargs...)
     return state
 end
 

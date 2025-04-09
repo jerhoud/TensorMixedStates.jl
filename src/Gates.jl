@@ -19,7 +19,7 @@ end
 
 make_ops(::PM, ::System, ::SumOp{IndexOp}) = error("cannot apply sums as gates (sums of operator are possible)")
 
-function make_ops(tp::PM, s::System, a::ProdOp{IndexOp})
+function make_ops(tp::PM, s::System, a::ProdOp{T, IndexOp}) where T
     r = map(a.subs) do b
         make_ops(tp, s, b)
     end
@@ -31,5 +31,5 @@ function make_ops(tp::PM, s::System, a::ProdOp{IndexOp})
 end
 
 make_ops(::Mixed, s::System, a::Gate{IndexOp}) = make_ops(Mixed(), s, a.arg)
-make_ops(::T, s::System, a::Indexed{T, IndexOp}) where T = [ tensor(s, a) ]
-make_ops(::Mixed, s::System, a::Indexed{Pure, IndexOp}) = [ tensor(s, Gate(a)) ]
+make_ops(::T, s::System, a::Indexed{T, N}) where {T, N} = [ tensor(s, a) ]
+make_ops(::Mixed, s::System, a::Indexed{Pure}) = [ tensor(s, Gate(a.op)(a.index...)) ]
