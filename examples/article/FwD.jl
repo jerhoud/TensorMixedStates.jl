@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Fermions
 
 MAXDIM = 200
 
@@ -30,8 +30,8 @@ sim_data(gamma,n,step,alg) = SimData(
     phases = [
         CreateState(
             name = "Initialization in state |101010...>",
-            type = Pure,
-            system = System(n, "Fermion"),
+            type = Pure(),
+            system = System(n, Fermion()),
             state =  [i % 2 == 0 ? "Occ" : "Emp" for i in 1:n],
             final_measures = output(n),
         ),
@@ -48,9 +48,9 @@ sim_data(gamma,n,step,alg) = SimData(
             duration = 4,
             time_step = step,
             evolver =  -im*(
-                    -sum(Cdag(i)*C(i+1)+Cdag(i+1)*C(i) for i in 1:n-1)
+                    -sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:n-1)
                     )
-                    +sqrt(4*gamma)*sum(DN(i) for i in 1:n),
+                    +sum(Dissipator(sqrt(4*gamma)*N)(i) for i in 1:n),
             measures = output(n),
             measures_period = 2,
         ),
