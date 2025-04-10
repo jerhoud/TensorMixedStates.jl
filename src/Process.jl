@@ -19,7 +19,7 @@ inner_index(::Union{ExpOp, PowOp, SqrtOp}, idx...) = error("cannot simplify mult
 function inner_index(a::Dissipator, idx...)
     a = inner_index(a.arg, idx...)
     aa = dag(a) * a
-    Gate(a) + Left(aa) + Right(aa)
+    Gate(a) - 0.5 * Left(aa) - 0.5 * Right(aa)
 end
 
 function collect_sum(a::Vector{<:ExprIndexed{T}}) where T

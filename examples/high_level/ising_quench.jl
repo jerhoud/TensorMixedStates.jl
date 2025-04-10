@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Qubits
 
 limits = Limits(
     cutoff = 1e-30,
@@ -18,8 +18,7 @@ output(n) = [
     "X1X4.dat" => X(1)X(4),
     "X1X5.dat" => X(1)X(5),
     "OSEE.dat" => EE(n ÷ 2, 4),
-    "purity.dat" => [Purity, Trace, Linkdim],
-    "log" => "sim time"
+    "purity.dat" => [Purity, Trace, Linkdim]
 ]
 
 sim_data(J,h,n) = SimData(
@@ -34,8 +33,8 @@ sim_data(J,h,n) = SimData(
     phases = [
         CreateState(
             name = "Initialization in state |++...+>",
-            type = Pure,
-            system = System(n, "Qubit"),
+            type = Pure(),
+            system = System(n, Qubit()),
             state = "X+",
             final_measures = output(n),
         ),

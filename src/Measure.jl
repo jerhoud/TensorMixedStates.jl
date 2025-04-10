@@ -77,8 +77,13 @@ struct Check
     Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
 
-make_obs(o::ExprIndexed{Pure}) =
-    ObsOp(string(o), process(o))
+function make_obs(o::ExprIndexed{Pure})
+    io = IOBuffer()
+    print(IOContext(io, :compact => true), o)
+    seek(io, 0)
+    name = read(io, String)
+    ObsOp(name, process(o))
+end
 make_obs(o::Tuple{SimpleOp, SimpleOp}) =
     ObsExp2(first(o).name * last(o).name, o)
 make_obs(o::SimpleOp) =

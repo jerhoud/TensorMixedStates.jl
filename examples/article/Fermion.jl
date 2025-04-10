@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Fermions
 #Maximum bond dimension:
 MAXDIM = 100
 #SVD truncation level:
@@ -34,8 +34,8 @@ sim_data(n,step,duration,alg,Gamma) = SimData(
     phases = [
         CreateState(
             name = "Initialization - creating an empty (spinless) fermion chain",
-            type = Mixed,
-            system = System(n, "Fermion"),
+            type = Mixed(),
+            system = System(n, Fermion()),
             state =  "0",
             final_measures = output(n),
         ),
@@ -48,9 +48,8 @@ sim_data(n,step,duration,alg,Gamma) = SimData(
             duration = duration,
             time_step = step,
             evolver =  -im*(
-                    sum(Cdag(i)*C(i+1)+Cdag(i+1)*C(i) for i in 1:n-1)
-                    )
-                    +sqrt(2*Gamma)*DCdag(n ÷ 2), #dissipative term injecting fermions in the center of the chain
+                    sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:n-1)
+                    ) + Dissipator(sqrt(2*Gamma)*dag(C))(n ÷ 2), #dissipative term injecting fermions in the center of the chain
             measures = output(n),
             measures_period = 2,
         ),

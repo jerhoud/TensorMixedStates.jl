@@ -242,8 +242,7 @@ A phase type for optimizing with Dmrg
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
     hamiltonian::ExprIndexed{Pure}
-    cutoff::Float64
-    maxdim::Vector{Int}
+    limits::Limits
     nsweeps::Int
     measures = []
     measures_period::Int = 1

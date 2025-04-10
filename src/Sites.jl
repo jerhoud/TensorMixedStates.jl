@@ -4,7 +4,7 @@ abstract type AbstractSite end
 
 dim(site::AbstractSite) = error("dim not defined on site $site")
 Index(site::AbstractSite) = Index(dim(site); tags="$(string(typeof(site))), Site")
-function generic_state(::AbstractSite, st::String)
+function generic_state(site::AbstractSite, st::String)
     i = 1 + parse(Int, st)
     v = zeros(Float64, dim(site))
     v[i] = 1.0

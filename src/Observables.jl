@@ -198,7 +198,7 @@ dag(state::State) =
     else
         st = copy(state.state)
         for i in 1:length(st)
-            st[i] = mixed_dag(state, i)
+            st[i] = tensor_dag(state, i)
         end
         return State(state, st)
     end
@@ -213,7 +213,7 @@ symmetrize(state::State; limits::Limits=Limits()) =
     if state.type isa Pure
         state
     else
-        State(state, 0.5*(+(state.state, dag(state).state; limits)))
+        State(state, 0.5*(+(state.state, dag(state).state; limits.cutoff, limits.maxdim)))
     end
 
 """

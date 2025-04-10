@@ -77,11 +77,7 @@ end
 
 function run_phase(sim::Simulation, phase::Dmrg)
     log_msg(sim, "Optimizing state with $(phase.nsweeps) sweeps of Dmrg")
-
-    if multipleLit(phase.hamiltonian) || dissipLit(phase.hamiltonian)
-        error("Dmrg hamiltonian cannot contain multiple site operators nor dissipators")
-    end
-    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.maxdim, phase.cutoff,
+    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.limits,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim

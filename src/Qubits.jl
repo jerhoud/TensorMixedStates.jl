@@ -55,7 +55,7 @@ create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) =
         ),
         Gates(
             name = "Applying gates CZ for building graph state",
-            gates = prod(CZ(i, j) for (i, j) in g),
+            gates = prod(controlled(Z)(i, j) for (i, j) in g),
             limits = limits
         )
     ]
