@@ -417,6 +417,7 @@ struct DagOp{T, N} <: ExprOp{T, N}
 end
 
 dag(a::ExprOp) = DagOp(a)
+dag(a::DagOp) = a.arg
 
 show(io::IO, a::DagOp) =
     paren(io, 1000, 0) do io
