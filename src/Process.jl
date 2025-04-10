@@ -183,6 +183,12 @@ Ffactor(::Left) = Left(F)
 Ffactor(::Right) = Right(F)
 Ffactor(a) = Gate(F)
 
+insertF(op::Gate) = Gate(op.arg * F)
+insertF(op::Left) = Left(op.arg * F)
+insertF(op::Right) = Right(op.arg * F)
+insertF(op) = op * F
+
+
 insertFfactors(a::SumOp) = apply_expr(insertFfactors, a)
 insertFfactors(a::ExprOp) = insertFfactors(prodcoef(a), prodsubs(a))
 
@@ -194,7 +200,7 @@ function insertFfactors(c::Number, v::Vector{<:ExprIndexed{T}}) where T
         idx = first(l.index)
         if fermion_idx ≠ 0
             append!(r, (f(i) for i in reverse(idx + 1:fermion_idx - 1)))
-            push!(r, (l.op * f)(idx))
+            push!(r, insertF(l.op)(idx))
             if fermionic(l)
                 fermion_idx = 0
             else
