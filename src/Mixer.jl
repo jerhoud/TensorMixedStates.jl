@@ -65,17 +65,22 @@ matrix(::Union{Dissipator, Evolver}, ::AbstractSite...) = error("cannot give mat
 function tensor(a::Gate, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
+    is = map(Index, site)
     j = sim(i)
+    js = sim.(is)
     tj = replaceinds(ti, (i, i'), (j, j'))
-    c = combiner(j, i; tags="")
-    return ti * dag(tj) * c * c'
+    ci = combinerto(i, reverse(is)...)
+    cj = combinerto(j, reverse(js)...)
+    ijs = Iterators.flatten(zip(is, js))
+    c = combiner(ijs...; tags="")
+    return (ti * ci * ci') * (dag(tj) * cj * cj') * c * c'
 end
 
 function tensor(a::Left, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
-    c = combiner(j, i; tags="")
+    c = combiner(i, j; tags="")
     return ti * delta(j, j') * c * c'
 end
 
@@ -83,7 +88,7 @@ function tensor(a::Right, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
-    c = combiner(i, j; tags="")
+    c = combiner(j, i; tags="")
     return dag(ti) * delta(j, j') * c * c'
 end
 

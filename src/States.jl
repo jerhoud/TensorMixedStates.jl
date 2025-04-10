@@ -141,12 +141,12 @@ function mix(::Pure, state::State)
     for (i, t) in enumerate(st)
         idx = system[Pure(), i]
         midx = system[Mixed(), i]
-        mt = t * dag(t') * combinerto(midx, idx', idx)
+        mt = t * dag(t') * combinerto(midx, idx, idx')
         mt *= comb
         if i < n
             rlink = commonind(t, st[i+1])
             d = dim(rlink)
-            comb = combinerto(Index(d*d, "Link,l=$i"), rlink', rlink)
+            comb = combinerto(Index(d*d, "Link,l=$i"), rlink, rlink')
         else
             comb = ITensor(1)
         end
