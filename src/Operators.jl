@@ -139,7 +139,7 @@ struct Gate{N} <: ExprOp{Mixed, N}
 end
 
 show(io::IO, a::Gate) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "Gate", a.arg)
     end
 
@@ -158,7 +158,7 @@ end
 Dissipator(::ExprIndexed) = error{"Dissipator cannot be applied to indexed expressions"}
 
 show(io::IO, a::Dissipator) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "Dissipator", a.arg)
     end
 
@@ -175,7 +175,7 @@ struct Evolver <: ExprIndexed{Mixed}
 end
 
 show(io::IO, a::Evolver) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "Evolver", a.arg)
     end
 
@@ -192,7 +192,7 @@ struct Left{N} <: ExprOp{Mixed, N}
 end
 
 show(io::IO, a::Left) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "Left", a.arg)
     end
     
@@ -209,7 +209,7 @@ struct Right{N} <: ExprOp{Mixed, N}
 end
 
 show(io::IO, a::Right) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "Right", a.arg)
     end
 
@@ -379,7 +379,7 @@ exp(a::ExprOp) = ExpOp(a)
 exp(::ExprIndexed) = error("cannot use exp on indexed expressions, use it directly on operators") 
 
 show(io::IO, a::ExpOp) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "exp", a.arg)
     end
 
@@ -399,7 +399,7 @@ sqrt(a::ExprOp) = SqrtOp(a)
 sqrt(::ExprIndexed) = error("cannot use sqrt on indexed expressions, use it directly on operators")
 
 show(io::IO, a::SqrtOp) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "sqrt", a.arg)
     end
 
@@ -419,7 +419,7 @@ end
 dag(a::ExprOp) = DagOp(a)
 
 show(io::IO, a::DagOp) =
-    paren(io, 1000) do io
+    paren(io, 1000, 0) do io
         show_func(io, "dag", a.arg)
     end
 
