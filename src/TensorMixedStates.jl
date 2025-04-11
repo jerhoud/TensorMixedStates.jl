@@ -38,6 +38,8 @@ include("Qubits.jl")
 include("Fermions.jl")
 include("Bosons.jl")
 include("Spins.jl")
+include("Electrons.jl")
+include("Tjs.jl")
 
 # Precompilation
 include("Precompile.jl")

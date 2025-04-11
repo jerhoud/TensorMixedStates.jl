@@ -20,8 +20,8 @@ true)
 @def_operators(Fermion(),
 [
     F = [1. 0. ; 0. -1.],
-    A = [0. 1. ; 0. 0.],
-    N = [0. 0. ; 0. 1.],
+    A = C,
+    N = dag(C)*C
 ])
 
 module Fermions
