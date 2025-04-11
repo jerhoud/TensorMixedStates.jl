@@ -32,6 +32,7 @@ controlled(op::ExprOp{Pure, N}) where N =
     S2 = 0.75 * Id,
     H = [1. 1. ; 1. -1] / √2,
     S = [1. 0. ; 0. im],
+    T = [1. 0. ; 0. (1 + im)/√2],
     Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
 ])
 
@@ -60,10 +61,12 @@ create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) =
         )
     ]
 
+Phase(t) = Operator("Phase($t)", [1. 0 ; 0 exp(im * t)])
+
 module Qubits
 
-import ..Qubit, ..controlled, ..graph_state, ..create_graph_state, ..X, ..Y, ..Z, ..Sx, ..Sy, ..Sz, ..S2, ..Sp, ..Sm, ..H, ..S, ..Swap
-export Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, Swap
+import ..Qubit, ..controlled, ..graph_state, ..create_graph_state, ..X, ..Y, ..Z, ..Sx, ..Sy, ..Sz, ..S2, ..Sp, ..Sm, ..H, ..S, ..T, ..Swap, ..Phase
+export Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, T, Swap, Phase
 
 export graph_state, create_graph_state
 
