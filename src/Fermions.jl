@@ -13,14 +13,14 @@ dim(::Fermion) = 2
 
 @def_operators(Fermion(),
 [
-    C = [0. 0. ; 1. 0.],
+    C = [0. 1. ; 0. 0.],
 ],
 true)
 
 @def_operators(Fermion(),
 [
     F = [1. 0. ; 0. -1.],
-    A = [0. 0. ; 1. 0.],
+    A = [0. 1. ; 0. 0.],
     N = [0. 0. ; 0. 1.],
 ])
 
