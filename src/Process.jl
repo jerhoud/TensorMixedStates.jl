@@ -44,7 +44,7 @@ function collect_sum(a::Vector{<:ExprIndexed{T}}) where T
             p = ps
         end
     end
-    if c ≠ 0
+    if c ≠ 0 || isempty(r)
         push!(r, ProdOp{T, IndexOp}(c, p))
     end
     return r
@@ -117,15 +117,9 @@ function collect_product(a::Vector{<:ExprIndexed{T}}) where T
 end
 
 function simplify(a::ProdOp{T, IndexOp}) where T
-    if a.coef == 0
-        return a
-    end
     args = map(simplify, a.subs)   # get the simplified factors
     c = a.coef * prod(map(prodcoef, args)) # gather all product coefs
     subs = reduce(vcat, map(prodsubs, args)) # gather all product factors
-    if c == 0                                # early bail if it is simple
-        return ProdOp{T, IndexOp}(c, subs)
-    end
     r = map(distribute(map(sumsubs, subs)...)) do p # develop the inner sums and loop over all resulting products
         cp = c * prod(map(prodcoef, p))             # gather all product coefs for each
         sp = reduce(vcat, map(prodsubs, p))         # gather all product factors for each

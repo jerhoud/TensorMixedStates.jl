@@ -225,8 +225,8 @@ struct ProdOp{T, N} <: ExprOp{T, N}
     coef::Number
     subs::Vector{<:ExprOp{T, N}}
     ProdOp{T, N}(c::Number, s::Vector{<:ExprOp{T, N}}) where {T, N} =
-        if c == 0 || isempty(s)
-            return new{T, N}(0, ExprOp{T, N}[])
+        if isempty(s)
+            error("bug: empty operator product")
         elseif c == 1 && length(s) == 1
             return s[1]
         else
@@ -267,7 +267,7 @@ struct SumOp{T, N} <: ExprOp{T, N}
     subs::Vector{<:ExprOp{T, N}}
     SumOp{T, N}(s::Vector{<:ExprOp{T, N}}) where {T, N} =
         if isempty(s)
-            return ProdOp{T, N}(0, [])
+            error("bug: empty operator sum")
         elseif length(s) == 1
             return s[1]
         else

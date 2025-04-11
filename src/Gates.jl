@@ -21,7 +21,7 @@ make_ops(::PM, ::System, ::SumOp{IndexOp}) = error("cannot apply sums as gates (
 
 function make_ops(tp::PM, s::System, a::ProdOp{T, IndexOp}) where T
     r = reduce(vcat, (make_ops(tp, s, sub) for sub in a.subs))
-    if isempty(r)
+    if a.coef == 0 || isempty(r)
         error("cannot apply a nul gate")
     end
     r[1] *= a.coef
