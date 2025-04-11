@@ -1,18 +1,4 @@
-export Limits, no_limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
-
-"""
-A type to hold MPS limits
-
-# Fields
-- `cutoff`: the cutoff under which singular values are neglected
-- `maxdim`: the maximum bond dimension
-"""
-@kwdef struct Limits
-    cutoff::Float64
-    maxdim::Int
-end
-  
-const no_limits = Limits(cutoff = 0, maxdim = typemax(Int))
+export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg
 
 
 """
@@ -33,11 +19,11 @@ A phase type to create the simulation state
 """
 @kwdef struct CreateState
     name::String = "Creating state"
-    time_start = 0.
+    time_start::Number = 0.
     final_measures = []
-    type::Union{Nothing, TPure, TMixed} = nothing
+    type::Union{Nothing, Pure, Mixed} = nothing
     system::Union{Nothing, System} = nothing
-    state::Union{Nothing, String, Vector{String}} = nothing
+    state = nothing
     randomize::Int = 0
 end
 
@@ -61,7 +47,7 @@ SaveState(file = "myfile")
 """
 @kwdef struct SaveState
     name::String = "Saving state"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     file::String
     statename::String = "state"
@@ -87,11 +73,11 @@ LoadState(file = "myfile")
 """
 @kwdef struct LoadState
     name::String = "Loading state"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     file::String
     statename::String = "state"
-    limits::Limits = no_limits
+    limits::Limits = Limits()
 end
 
 show(io::IO, s::LoadState) = 
@@ -118,7 +104,7 @@ A phase type to switch to mixed representation
     name::String = "Switching to mixed state representation"
     time_start = nothing
     final_measures = []
-    limits::Limits = no_limits
+    limits::Limits = Limits()
 end
 
 show(io::IO, s::ToMixed) = 
@@ -191,13 +177,13 @@ A phase type for time evolution
 """
 @kwdef struct Evolve
     name::String = "Time evolution"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    limits::Limits = no_limits
+    limits::Limits = Limits()
     duration::Number
     time_step::Number
     algo::Algo
-    evolver
+    evolver::ExprIndexed
     measures_period::Int = 1
     measures = []
 end
@@ -227,9 +213,9 @@ A phase type for applying gates
 """
 @kwdef struct Gates
     name::String = "Applying gates"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    gates::ProdLit
+    gates::ExprIndexed
     limits::Limits
   end
 
@@ -253,11 +239,10 @@ A phase type for optimizing with Dmrg
 """
 @kwdef struct Dmrg
     name::String = "Dmrg optimization"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    hamiltonian::Lits
-    cutoff::Float64
-    maxdim::Vector{Int}
+    hamiltonian::ExprIndexed{Pure}
+    limits::Limits
     nsweeps::Int
     measures = []
     measures_period::Int = 1

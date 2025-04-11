@@ -53,7 +53,7 @@ mix(sim::Simulation) = Simulation(sim, mix(sim.state))
 
 apply(op, sim::Simulation; kwargs...) = Simulation(sim, apply(op, sim.state; kwargs...))
 
-PreMPO(sim::Simulation, tp) = PreMPO(sim.state, tp)
+PreMPO(sim::Simulation, args...) = PreMPO(sim.state, args...)
 
 tdvp(op, t::Number, sim::Simulation; kwargs...) =
     Simulation(sim, tdvp(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)

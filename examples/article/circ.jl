@@ -1,6 +1,4 @@
-using TensorMixedStates
-import ITensors: op, @OpName_str, @SiteType_str
-using ITensors
+using TensorMixedStates, .Qubits
 
 #Maximum bond dimension:
 MAXDIM = 600
@@ -12,8 +10,11 @@ limits = Limits(
     maxdim = MAXDIM,
 )
 
-#Depolarization channel
-DPL(i; p) = create_mixed_gate("DP", [I, X, Y, Z], [1-0.75*p, p*0.25, p*0.25, p*0.25],i; p)
+# Depolarization channel
+DPL(p) = (1 - 0.75p) * Gate(Id) + 0.25p * Gate(X) + 0.25p * Gate(Y) + 0.25p * Gate(Z)
+# Ising coupling gates
+Rxx(ϕ) = exp(-im * ϕ * X ⊗ X)
+Rzz(ϕ) = exp(-im * ϕ * Z ⊗ Z)
 
 
 output(n) = [
@@ -33,25 +34,25 @@ sim_data(n,ϕ,steps,noise) = SimData(
     phases = [
         CreateState(
             name = "Initialization",
-            type = Mixed,
-            system = System(n, "Qubit"),
+            type = Mixed(),
+            system = System(n, Qubit()),
             state =  "0",
             final_measures = output(n),
         ),
         [[Gates(
             name = "Applying exp(I*XX*ϕ) gates on qubits [1,2],[3,4],...",
-            gates = prod(Rxx(2*i-1,2*i;ϕ) for i in 1:n÷2),
+            gates = prod(Rxx(ϕ)(2*i-1,2*i) for i in 1:n÷2),
             limits = limits,
         ),
         Gates(
             name = "Applying exp(I*ZZ*ϕ) gates on qubits [N,1], [2,3],[4,5],...",
-            gates = Rzz(1,n;ϕ)*prod(Rzz(2*i,2*i+1;ϕ) for i in 1:(n÷2)-1),
+            gates = Rzz(ϕ)(1, n)*prod(Rzz(ϕ)(2*i, 2*i+1) for i in 1:(n÷2)-1),
             limits = limits,
         ),
         Gates(
             name = "Depolarization channel on all qubits",
             final_measures = output(n),
-            gates = prod(DPL(i;p=noise) for i in 1:n),
+            gates = prod(DPL(noise)(i) for i in 1:n),
             limits = limits,
         )
         ] for step in 1:steps]

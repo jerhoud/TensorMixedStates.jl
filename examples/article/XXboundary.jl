@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Qubits
 
 MAXDIM = 300
 
@@ -34,8 +34,8 @@ sim_data(n,step,duration,alg,eL,eR,muL,muR) = SimData(
     phases = [
         CreateState(
             name = "Initialization in the infinite temperature state (rho ~ identity)",
-            type = Mixed,
-            system = System(n, "Qubit"),
+            type = Mixed(),
+            system = System(n, Qubit()),
             state =  "FullyMixed",
             final_measures = output(n),
         ),
@@ -50,14 +50,13 @@ sim_data(n,step,duration,alg,eL,eR,muL,muR) = SimData(
             evolver =  -im*(
                     sum(X(i)*X(i+1)+Y(i)*Y(i+1) for i in 1:n-1)
                     )
-                    +sqrt(eL*(1+muL)*0.5)*DUp(1)
-                    +sqrt(eL*(1-muL)*0.5)*DDn(1)
-                    +sqrt(eR*(1+muR)*0.5)*DUp(n)
-                    +sqrt(eR*(1-muR)*0.5)*DDn(n),
+                    +Dissipator(sqrt(eL*(1+muL)*0.5)*Sp)(1)
+                    +Dissipator(sqrt(eL*(1-muL)*0.5)*Sm)(1)
+                    +Dissipator(sqrt(eR*(1+muR)*0.5)*Sp)(n)
+                    +Dissipator(sqrt(eR*(1-muR)*0.5)*Sm)(n),
             measures = output(n),
             measures_period = 2,
-        ),
- 
+        )
     ]
 )
 

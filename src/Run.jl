@@ -1,4 +1,3 @@
-using Dates
 export runTMS, SimData
 
 """
@@ -76,7 +75,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     """)
             src_path = Base.source_path()
             if src_path ≠ ""
-                cp(src_path, "prog.jl")
+                cp(src_path, "prog.jl"; force = true)
             else
                 write_prog("prog.jl", sim_data)
             end

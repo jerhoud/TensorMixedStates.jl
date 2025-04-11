@@ -1,21 +1,26 @@
 module TensorMixedStates
 
-using ITensors, ITensorMPS, HDF5, Printf
+import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless
+import ITensors: matrix, truncate, dim, Index, dag, norm
+import ITensorMPS: maxlinkdim, apply, state, expect, normalize, measure!, checkdone!, tdvp, dmrg
+
+using ITensors, ITensorMPS, Printf, Dates
 
 # Core
-include("System.jl")
-include("Literal.jl")
+include("Operators.jl")
+include("Sites.jl")
 include("Mixer.jl")
-include("State.jl")
-include("Io.jl")
+include("Systems.jl")
+include("States.jl")
+include("Process.jl")
 
 # Low Level interface
+include("Gates.jl")
 include("Mpo.jl")
-include("Solvers.jl")
 include("Observables.jl")
+include("Solvers.jl")
 include("Measure.jl")
 include("RandomState.jl")
-include("Gates.jl")
 
 # High level interface
 include("Simulation.jl")
@@ -27,7 +32,12 @@ include("Phases.jl")
 
 # Utilities
 include("Graphs.jl")
-include("SiteSpecifics.jl")
+
+# Sites
+include("Qubits.jl")
+include("Fermions.jl")
+include("Bosons.jl")
+include("Spins.jl")
 
 # Precompilation
 include("Precompile.jl")

@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Bosons
 #Maximum number of bosons per lattice site:
 MAXOCC = 4
 #Maximum bond dimension:
@@ -37,8 +37,8 @@ sim_data(n,step,duration,alg,gamma) = SimData(
     phases = [
         CreateState(
             name = "Initialization - creating an empty boson chain",
-            type = Mixed,
-            system = System(n, "Boson"; dim = MAXOCC),
+            type = Mixed(),
+            system = System(n, Boson(MAXOCC)),
             state =  "0",
             final_measures = output(n),
         ),
@@ -51,9 +51,9 @@ sim_data(n,step,duration,alg,gamma) = SimData(
             duration = duration,
             time_step = step,
             evolver =  -im*(
-                    sum(A(i)*Adag(i+1)+Adag(i)*A(i+1) for i in 1:n-1)
+                    sum(A(i)*dag(A)(i+1)+dag(A)(i)*A(i+1) for i in 1:n-1)
                     )
-                    +2*sqrt(gamma)*DAdag(n ÷ 2),
+                    +Dissipator(2*sqrt(gamma)*dag(A))(n ÷ 2),
             measures = output(n),
             measures_period = 2,
         ),
@@ -61,7 +61,7 @@ sim_data(n,step,duration,alg,gamma) = SimData(
     ]
 )
 
-n=50
+n=20
 step=0.1
 duration=15
 #alg=0 # TDVP

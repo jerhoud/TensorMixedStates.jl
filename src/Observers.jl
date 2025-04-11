@@ -1,5 +1,4 @@
 export TdvpObserver, DmrgObserver, ApproxWObserver
-import ITensorMPS: measure!, checkdone!
 
 """
     struct TdvpObserver
@@ -61,7 +60,7 @@ function measure!(o::ApproxWObserver; sweep, current_time, state, kwargs...)
 end
 
 function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
-    if o.sim.state.type == Mixed
+    if o.sim.state.type isa Mixed 
         energy /= 2.
     end
     stop = false

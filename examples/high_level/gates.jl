@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Qubits
 
 limits = Limits(
     cutoff = 1e-16,
@@ -11,8 +11,8 @@ phases(n) = [
   CreateState(
     name = "Building my very special state",
     final_measures = output,
-    type = Pure,
-    system = System(n, "Qubit"),
+    type = Pure(),
+    system = System(n, Qubit()),
     state = "Up",
   ),
   Gates(

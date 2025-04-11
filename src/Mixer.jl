@@ -1,228 +1,165 @@
-export @add_operators, @add_fermionic_operators, @add_dissipators, @add_fermionic_dissipators
-export make_operator, MixObservable, MixGate, MixEvolve, MixEvolve2, MixDissipator, MixDissipatorF, create_mixed_gate
+export tensor, matrix, fermionic
 
-struct MixObservable end
-struct MixGate end
-struct MixEvolve end
-struct MixEvolve2 end
-struct MixDissipator end
-struct MixDissipatorF end
-
-
-function make_operator(::TPure, ::System, t::ITensor, ::Int...)
-    return t
-end
-    
-function make_operator(::Type{MixObservable}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
+function combinerto(i::Index, j::Index...)
+    c = combiner(j...; tags="")
+    x = combinedind(c)
+    replaceind(c, x, i)
 end
 
-function make_operator(::Type{MixGate}, system::System, t::ITensor, i::Int...)
-    idx = map(k->system.pure_sites[k], i)
-    jdx = sim(idx)
-    kdx = map(k->system.mixed_sites[k], i)
-    ti = t
-    tj = replaceinds(ti, (idx..., idx'...), (jdx..., jdx'...))
-    return *(ti, dag(tj), combinerto.(jdx, idx, kdx)..., combinerto.(jdx', idx', kdx')...)
+tensor_index(t::ITensor) = getfirst(i->hasplev(i, 0), inds(t))
+
+function matrix(a::ExprOp, site::AbstractSite...)
+    t = tensor(a, site...)
+    i = tensor_index(t)
+    Matrix(t, i', i)
 end
 
-function make_operator(::Type{MixEvolve}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    return t * delta(jdx, jdx') * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
+function tensor(a::ExprOp, site::AbstractSite...)
+    m = matrix(a, site...)
+    n, _ = size(m)
+    i = Index(n)
+    ITensor(m, i', i)
 end
 
-function make_operator(::Type{MixEvolve2}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    return dag(t) * delta(jdx, jdx') * combinerto(idx, jdx, kdx) * combinerto(idx', jdx', kdx')
-end
+matrix(::ExprIndexed, ::AbstractSite...) = error("cannot give matrix nor tensor for indexed expressions")
 
-function make_operator(::Type{MixDissipator}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    ti = t
-    tj = replaceinds(ti, (idx, idx'), (jdx, jdx'))
-    ati = swapprime(dag(ti'), 1=>2)
-    atj = swapprime(dag(tj'), 1=>2)
-    r = ti * dag(tj) -
-        0.5 * replaceprime(ati * ti, 2 => 1) * delta.(jdx, jdx') -
-        0.5 * replaceprime(atj * tj, 2 => 1) * delta.(idx, idx')
-    return r * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
-end
+matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
 
-function make_operator(::Type{MixDissipatorF}, system::System, t::ITensor, i::Int)
-    idx = system.pure_sites[i]
-    jdx = sim(idx)
-    kdx = system.mixed_sites[i]
-    ti = t
-    tj = replaceinds(ti, (idx, idx'), (jdx, jdx'))
-    ati = swapprime(dag(ti'), 1=>2)
-    atj = swapprime(dag(tj'), 1=>2)
-    r = - 0.5 * replaceprime(ati * ti, 2 => 1) * delta.(jdx, jdx') -
-        0.5 * replaceprime(atj * tj, 2 => 1) * delta.(idx, idx')
-    return r * combinerto(jdx, idx, kdx) * combinerto(jdx', idx', kdx')
-end
+matrix(a::Function, site::AbstractSite, ::AbstractSite...) = a(site)
 
-(oper::Operator)(sitename::String; tp = Pure, kwargs...) =
-    oper(Site(sitename); tp, kwargs...)
+matrix(a::String, site::AbstractSite, ::AbstractSite...) =
+    matrix(operator_info(site, a), site)
 
-function (oper::Operator)(site::Site; tp = Pure, kwargs...)
-    if oper.dissipator
-        tp = MixDissipator
-    end
-    d = oper.dim
-    s = System(d, site)
-    o = make_operator(tp, s, oper(s.pure_sites...; kwargs...), (1:d)...)
-    idx = filter(i-> hasplev(i, 0), inds(o))
-    if d == 1
-        return Array(o, idx[1]', idx[1])
+matrix(a::Operator, site::AbstractSite...) =
+    if isnothing(a.expr)
+        matrix(a.name, site...)
     else
-        c = combiner(idx...)
-        j = combinedind(c)
-        return Array(c' * o * c, j', j)
+        matrix(a.expr, site...)
+    end
+
+function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
+    st = state(site, a.state)
+    return st * adjoint(st)
+end
+
+matrix(a::ProdOp, site::AbstractSite...) =
+    a.coef * prod(matrix(o, site...) for o in a.subs)
+
+matrix(a::SumOp, site::AbstractSite...) =
+    sum(matrix(o, site...) for o in a.subs)
+
+matrix(a::ExpOp, site::AbstractSite...) =
+    exp(matrix(a.arg, site...))
+
+matrix(a::SqrtOp, site::AbstractSite...) =
+    sqrt(matrix(a.arg, site...))
+
+matrix(a::PowOp, site::AbstractSite...) =
+    matrix(a.arg, site...) ^ a.expo
+
+matrix(a::DagOp, site::AbstractSite...) =
+    adjoint(matrix(a.arg, site...))
+
+matrix(::Union{Dissipator, Evolver}, ::AbstractSite...) = error("cannot give matrix nor tensor for Dissipator or Evolver")
+
+function tensor(a::Gate, site::AbstractSite...)
+    ti = tensor(a.arg, site...)
+    i = tensor_index(ti)
+    is = map(Index, site)
+    j = sim(i)
+    js = sim.(is)
+    tj = replaceinds(ti, (i, i'), (j, j'))
+    ci = combinerto(i, reverse(is)...)
+    cj = combinerto(j, reverse(js)...)
+    ijs = Iterators.flatten(zip(is, js))
+    c = combiner(ijs...; tags="")
+    return (ti * ci * ci') * (dag(tj) * cj * cj') * c * c'
+end
+
+function tensor(a::Left, site::AbstractSite...)
+    ti = tensor(a.arg, site...)
+    i = tensor_index(ti)
+    j = sim(i)
+    c = combiner(i, j; tags="")
+    return ti * delta(j, j') * c * c'
+end
+
+function tensor(a::Right, site::AbstractSite...)
+    ti = tensor(a.arg, site...)
+    i = tensor_index(ti)
+    j = sim(i)
+    c = combiner(j, i; tags="")
+    return dag(ti) * delta(j, j') * c * c'
+end
+
+tensor_next(f, o::ExprOp{T, N}, site::Vararg{U, M}) where {T, N, U, M} =
+    (f(o, site[1:N]...), site[N+1:M])
+
+function tensor_apply(f, a::TensorOp{T, N}, idx::Vararg{U, N}) where {T, U, N}
+    rest = idx
+    r = map(a.subs) do o 
+        t, rest = tensor_next(f, o, rest...)
+        t
     end
 end
 
-function create_mixed_gate(name::String, ops::Vector{Operator}, weights::Vector{<:Number}, i::Int...; kwargs...)
-    if any(o->o.dissipator, ops)
-        error("cannot create mixed gate from dissipators")
+function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
+    if length(site) == 1
+        ts = [tensor(o, site...) for o in a.subs]
+    elseif length(site) ≠ N
+        error("number of sites does not match operator")
+    else
+        ts = tensor_apply(tensor, a, site...)
     end
-    n = length(ops)
-    nf = count(o->o.fermionic, ops)
-    fermionic = (nf == n)
-    if nf < n && nf > 0
-        error("cannot create mixed gate from mixture of fermionic and non fermionic operators")
-    end
-    ProdLit(1,[
-        Lit(
-            Operator(name, name, length(i), fermionic, false),
-            system -> begin
-                t = ITensor()
-                for (op, w) in zip(ops, weights)
-                    t += w * make_operator(MixGate, system, op((system.pure_sites[j] for j in i)...), i...)
-                end
-                return t
-            end,
-            i,
-            NamedTuple(kwargs)
-        )])
+    c = combiner((tensor_index(t) for t in reverse(ts))...; tags="")
+    c * prod(ts) * c'
 end
 
-"""
-    @add_operators(names::Vector)
-    @add_fermionic_operators(names::Vector)
 
-Defines the given names as operators
-
-# Examples
-    @add_operators(["Foo"])    #defines operator Foo
-    Foo.name          # return "Foo"
-    Foo.dim           # return number of indices
-    Foo(1, 3, 7)      # represent operator Foo applied on sites 1, 3, 7
-    Foo(i1, i2, i3)   # return ITensor of operator Foo applied on ITensor indices i1, i2
-    Foo("Qubit")      # return matrix of operator Foo applied on Qubit
-"""
-macro add_operators(names, dim::Int = 1)
-    quote
-        @make_operators($names, $dim, false, false)
-    end
-end,
-
-macro add_fermionic_operators(names)
-    quote
-        @make_operators($names, 1, true, false)
+function fermionic(a::SumOp)
+    n = length(a.subs)
+    nf = count(fermionic, a.subs)
+    if nf == n
+        return true
+    elseif nf == 0
+        return false
+    else
+        error("cannot sum fermionic with non fermionic operators: $a")
     end
 end
 
-"""
-    @add_dissipators(names::Vector{Pairs})
-    @add_fermionic_dissipators(names::Vector{Pairs})
-
-Defines the given names as dissipators
-
-# Examples
-    @add_operators(["DFoo" => "Foo"])    #defines dissipator DFoo based on ITensor operator "Foo"
-    DFoo.opname  # return base operator name (here "Foo")
-    DFoo(1)      # represent operator Foo applied on sites 1
-    DFoo(idx)    # return ITensor of operator DFoo applied on ITensor indices idx
-"""
-macro add_dissipators(names)
-    quote
-        @make_operators($names, 1, false, true)
+fermionic(a::Operator) = a.fermionic
+fermionic(a::ProdOp) = isodd(count(fermionic, a.subs))
+fermionic(a::Indexed) = fermionic(a.op)
+fermionic(a::Union{Gate, Left, Right, DagOp}) = fermionic(a.arg)
+fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
+    if fermionic(a.arg)
+        error("cannot take functionals of fermionic operators: $a")
+    else
+        false
     end
-end
+fermionic(::Proj) = false
+fermionic(a) = error("bug: fermionic($a)")
 
-macro add_fermionic_dissipators(names)
-    quote
-        @make_operators($names, 1, true, true)
+has_dissipator(a) = eval_expr(has_dissipator, a)
+function has_dissipator(a::Union{ProdOp, TensorOp})
+    d = any(has_dissipator, a.subs)
+    if d && length(a.subs) >= 2
+        error("cannot multiply dissipators with other operators ($a)")
     end
+    return d
 end
-
-@add_operators(
-    [
-    "F", "I", "Id",
-    "X", "Y", "Z", "Sp" => "S+", "Sm" => "S-", "ProjUp", "ProjDn",
-    "H", "P", "S", "T", "SqrtNOT" => "√NOT", "Rx", "Ry", "Rz",
-    "A", "Adag", "N",
-    "Aup", "Adagup", "Adn", "Adagdn",
-    "Fup", "Fdn", "Nup", "Ndn", "Nupdn", "Ntot",
-    "Sx", "Sy", "Sz", "Sx2", "Sy2", "Sz2", "S2",
-    ]
-)
-
-@add_operators(
-    [
-    "CNOT", "CX", "CY", "CZ", "Swap", "CPhase", "CRx", "CRy", "CRz", "SqrtSwap" => "√SWAP",
-    "Rxx", "Rxy", "Ryy", "Rzz",
-    ],
-    2
-)
-
-@add_operators([ "CCNOT", "CSwap"], 3)
-@add_operators([ "CCCNOT" ], 4)
-
-@add_fermionic_operators(
-    [
-    "C", "Cdag",
-    "Cup", "Cdagup", "Cdn", "Cdagdn",
-    ]
-)
-
-@add_dissipators(
-    [
-    "DUp" => "S+",
-    "DDn" => "S-",
-    "DX" => "X",
-    "DY" => "Y",
-    "DZ" => "Z",
-    "DPhase" => "Z",
-    "DN" => "N",
-    "DA" => "A",
-    "DAdag" => "Adag",
-    "DAup" => "Aup",
-    "DAdagup" => "Adagup",
-    "DAdn" => "Adn",
-    "DAdagdn" => "Adagdn",
-    "DNup" => "Nup",
-    "DNdn" => "Ndn",
-    "DNtot" => "Ntot",
-    ]
-)
-
-@add_fermionic_dissipators(
-    [
-    "DC" => "C",
-    "DCdag" => "Cdag",
-    "DCup" => "Cup",
-    "DCdagup" => "Cdagup",
-    "DCdn" => "Cdn",
-    "DCdagdn" => "Cdagdn",
-    ]
-)
+has_dissipator(a::Dissipator) = true
+has_dissipator(a::Operator) =
+    if a.expr isa ExprOp
+        has_dissipator(a.expr)
+    else
+        false
+    end
+has_dissipator(::Proj) = false
+has_dissipator(a::Union{ExpOp, SqrtOp, PowOp, DagOp}) =
+    if has_dissipator(a.arg)
+        error("cannot take functional of dissipators ($a)")
+    else
+        false
+    end

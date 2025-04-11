@@ -1,4 +1,4 @@
-export StateFunc, TimeFunc, Check, Measure, Trace, Trace2, TraceError, Purity, Norm, EE, Linkdim, MemoryUsage, measure
+export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, EE, Linkdim, MemoryUsage, measure
 
 """
     struct StateFunc
@@ -9,10 +9,7 @@ a data type to represent a function of `State`. This is used by `measure`.
 struct StateFunc
     name::String
     obs::Function
-    use_preobs::Bool
 end
-
-StateFunc(name, obs) = StateFunc(name, obs, false)
 
 show(io::IO, s::StateFunc) =
     print(io, s.name)
@@ -37,10 +34,11 @@ show(io::IO, s::TimeFunc) =
 
 a data type to represent an observable defined by quantum operators. This is used by `measure`.
 """
-struct ObsLit
+struct ObsOp
     name::String
-    obs::Vector{ProdLit}
+    obs::Vector{ExprIndexed{Pure}}
 end
+ObsOp(name::String, o::ExprIndexed{Pure}) = ObsOp(name, sumsubs(o))
 
 """
     struct ObsExp1
@@ -50,7 +48,7 @@ a data type to represent an observable applied on all sites. This is used by `me
 """
 struct ObsExp1
     name::String
-    obs ::Operator
+    obs ::SimpleOp
 end
 
 """
@@ -61,7 +59,7 @@ a data type to represent a correlation applied on all pairs of site. This is use
 """
 struct ObsExp2
     name::String
-    obs::Tuple{Operator, Operator}
+    obs::Tuple{SimpleOp, SimpleOp}
 end
 
 
@@ -79,13 +77,16 @@ struct Check
     Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
 
-make_obs(o::SumLit) =
-    ObsLit(string(o), insertFfactors(o).ps)
-make_obs(o::ProdLit) =
-    ObsLit(string(o), [insertFfactors(o)])
-make_obs(o::Tuple{Operator, Operator}) =
+function make_obs(o::ExprIndexed{Pure})
+    io = IOBuffer()
+    print(IOContext(io, :compact => true), o)
+    seek(io, 0)
+    name = read(io, String)
+    ObsOp(name, process(o))
+end
+make_obs(o::Tuple{SimpleOp, SimpleOp}) =
     ObsExp2(first(o).name * last(o).name, o)
-make_obs(o::Operator) =
+make_obs(o::SimpleOp) =
     ObsExp1(o.name, o)
 make_obs(o::Union{Number, <:Vector}) =
     TimeFunc(string(o), o)
@@ -112,35 +113,35 @@ Measure(args...) = Measure([args...])
 
 get_prods(o::Vector{Measure}) = vcat(get_prods.(o)...)
 get_prods(o::Measure) = vcat(get_prods.(o.measures)...)
-get_prods(o::ObsLit) = o.obs
+get_prods(o::ObsOp) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
-get_prods(_) = ProdLit[]
+get_prods(_) = ExprIndexed{Pure}[]
 
 get_exp1(o::Vector{Measure}) = vcat(get_exp1.(o)...)
 get_exp1(o::Measure) = vcat(get_exp1.(o.measures)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
-get_exp1(_) = Operator[]
+get_exp1(_) = SimpleOp[]
 
 get_exp2(o::Vector{Measure}) = vcat(get_exp2.(o)...)
 get_exp2(o::Measure) = vcat(get_exp2.(o.measures)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
-get_exp2(_) = Tuple{Operator, Operator}[]
+get_exp2(_) = Tuple{SimpleOp, SimpleOp}[]
 
-TraceError = StateFunc("TraceError", trace_error, false)
-Trace = StateFunc("Trace", trace, true)
-Trace2 = StateFunc("Trace2", trace2, true)
-Purity = StateFunc("Purity", trace2, true)
+Trace = StateFunc("Trace", trace)
+TraceError = StateFunc("TraceError", st -> 1. - trace(st))
+Trace2 = StateFunc("Trace2", trace2)
+Purity = StateFunc("Purity", trace2)
 Norm = StateFunc("Norm", norm)
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
-        ee, _ = entanglement_entropy!(st, pos)
+        ee, _ = entanglement_entropy(st, pos)
         return ee
     end)
 EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
     st-> begin
-        ee, sp = entanglement_entropy!(st, pos)
+        ee, sp = entanglement_entropy(st, pos)
         return [[ee]; sp[1:min(length(sp), spectre)]]
     end)
 Linkdim = StateFunc("Linkdim", maxlinkdim)
@@ -151,19 +152,14 @@ get_val(o::Vector{Measure}, v::Dict, st::State, t::Number; kwargs...) =
 get_val(o::Measure, v::Dict, st::State, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o.measures]
 get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number; kwargs...) = o.name => v[o.obs]
-get_val(o::ObsLit, v::Dict, ::State, ::Number; kwargs...) = o.name => sum(v[p] for p in o.obs)
+get_val(o::ObsOp, v::Dict, ::State, ::Number; kwargs...) = o.name => sum(v[p] for p in o.obs)
 get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
     if o.obs isa Function
         o.name => o.obs(t)
     else
         o.name => o.obs
     end
-get_val(o::StateFunc, ::Dict, st::State, ::Number; preobs, kwargs...) =
-    if o.use_preobs
-        return o.name => o.obs(st; preobs)
-    else
-        return o.name => o.obs(st)
-    end
+get_val(o::StateFunc, ::Dict, st::State, ::Number; kwargs...) = o.name => o.obs(st)
 get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) =
     if haskey(kwargs, o)
         string(o) => kwargs[o]
@@ -200,19 +196,19 @@ measure(state::State, args, t::Number = 0.; kwargs...) =
 measure(state::State, m::Measure, t::Number = 0.; kwargs...) =
     measure(state, [m], t; kwargs...)[1]
 
-function measure(state::State, m::Vector{Measure}, t::Number = 0.; preobs = PreObs(state), kwargs...)
+function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
     vals = Dict()
     prods = collect(Set(get_prods(m)))
     if !isempty(prods)
-        push!(vals, (prods .=> expect(state, prods, preobs))...)
+        push!(vals, (prods .=> expect(state, prods))...)
     end
     exp1s = collect(Set(get_exp1(m)))
     if !isempty(exp1s)
-        push!(vals, (exp1s .=> expect1(state, exp1s, preobs))...)
+        push!(vals, (exp1s .=> expect1(state, exp1s))...)
     end
     exp2s = collect(Set(get_exp2(m)))
     if !isempty(exp2s)
-        push!(vals, (exp2s .=> expect2(state, exp2s, preobs))...)
+        push!(vals, (exp2s .=> expect2(state, exp2s))...)
     end
-    return get_val(m, vals, state, t; preobs, kwargs...)
+    return get_val(m, vals, state, t; kwargs...)
 end

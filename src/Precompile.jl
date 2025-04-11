@@ -1,10 +1,10 @@
 using PrecompileTools: @compile_workload
 
 @compile_workload begin
-    s = System(3, "Qubit")
-    stp = random_state(Pure, s, 4)
+    s = System(3, Qubit())
+    stp = random_state(Pure(), s, 4)
     stpm = mix(stp)
-    stm = State(Mixed, s, ["FullyMixed", "Y+", "Z+"])
+    stm = State(Mixed(), s, ["FullyMixed", "Y+", "Z+"])
     sstp = string(stp)
     sstm = string(stm)
     m = Measure(X, Y(1), Z(2)Y(1) + Z(3)Y(2), (X, Y), Y, (Z, Z))

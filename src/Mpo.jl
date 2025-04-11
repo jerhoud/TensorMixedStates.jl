@@ -7,101 +7,68 @@ export PreMPO, make_mpo, make_approx_W1, make_approx_W2
 a data type to hold precomputations for building an MPO
 """
 struct PreMPO
-    type
+    type::PM
     system::System
     linkdims::Vector{Int}
     terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
-    function PreMPO(type, state::State)
-        if state.type == Pure
-            type = Pure
-        end
-        n = length(state)
-        return new(type, state.system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
+    function PreMPO(type::PM, system::System)
+        n = length(system)
+        return new(type, system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
     end
 end
 
-function PreMPO!(tp, pre::PreMPO, p::ProdLit, ref::Int)
+function PreMPO!(pre::PreMPO, coef::Number, subs::Vector{<:ExprIndexed}, ref::Int=1)
+    type = pre.type
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
-    fst = p.ls[1].index[1]
-    lst = p.ls[end].index[1]
-    for k in fst:lst-1
-        ld[k] += 1
-    end
-    i = 0
-    t = ITensor()
-    for l in p.ls
-        j = l.index[1]
-        o = l(Pure, sys)
-        if i ≠ j
-            if i ≠ 0
-                if i == fst
-                    push!(tm[i], (1, ld[i], make_operator(tp, sys, p.coef * t, i), ref))
-                else
-                    push!(tm[i], (ld[i-1], ld[i], make_operator(tp, sys, t, i), ref))
-                end
-                for k in i+1:j-1
-                    kdx = sites(tp, sys)[k]
-                    push!(tm[k],(ld[k-1], ld[k], delta(kdx, kdx'), ref))
-                end
+    fst = subs[1].index[1]
+    lst = subs[end].index[1]
+    if fst == lst
+        push!(tm[fst], (1, 1, coef * tensor(sys, subs[1]), ref))
+    else
+        for k in fst:lst-1
+            ld[k] += 1
+        end    
+        push!(tm[fst], (1, ld[fst], coef * tensor(sys, subs[1]), ref))
+        i = fst
+        for ind in subs[2:end-1]
+            j = ind.index[1]
+            for k in i+1:j-1
+                kdx = sys[type, k]
+                push!(tm[k],(ld[k-1], ld[k], delta(kdx', kdx), ref))
             end
-            t = o
+            push!(tm[j], (ld[j-1], ld[j], tensor(sys, ind), ref))
             i = j
-        else
-            t = replaceprime(t' * o, 2 => 1)
         end
-    end
-    if i == fst
-        push!(tm[i], (1, 1, make_operator(tp, sys, p.coef * t, i), ref))
-    else
-        push!(tm[i], (ld[i-1], 1, make_operator(tp, sys, t, i), ref))
-    end
-    return pre
-end
-
-function PreMPO!(p::ProdLit, pre::PreMPO, ref::Int=1)
-    if p.coef == 0
-        return
-    end
-    if dissipLit(p) && (length(p.ls) ≠ 1 || pre.type ≠ MixEvolve)
-        error("dissipators cannot be used on pure representations or multiplied by other operators")
-    end
-    if pre.type == MixEvolve
-        p1 = p.ls[1]
-        if p1.op.dissipator
-            if p1.op.fermionic
-                PreMPO!(MixGate, pre, ProdLit(p.coef, [[ litF(i) for i in 1:p1.index[1]-1 ]; p.ls]), ref)
-                PreMPO!(MixDissipatorF, pre, p, ref)
-            else
-                PreMPO!(MixDissipator, pre, p, ref)
-            end
-        else
-            PreMPO!(MixEvolve, pre, p, ref)
-            PreMPO!(MixEvolve2, pre, p, ref)
+        for k in i+1:lst-1
+            kdx = sys[type, k]
+            push!(tm[k],(ld[k-1], ld[k], delta(kdx', kdx), ref))
         end
-    else
-        PreMPO!(pre.type, pre, p, ref)
+        push!(tm[lst], (ld[lst-1], 1, tensor(sys, subs[end]), ref))
     end
     return pre
 end
 
-function PreMPO!(a::SumLit, pre::PreMPO, ref::Int=1)
-    for p in a.ps
-        PreMPO!(p, pre, ref)
+PreMPO!(pre::PreMPO, a::ExprIndexed, ref::Int = 1) =
+    PreMPO!(pre, prodcoef(a), prodsubs(a), ref)
+
+function PreMPO!(pre::PreMPO, s::SumOp{<:Any, IndexOp}, ref::Int=1)
+    for p in s.subs
+        PreMPO!(pre, p, ref)
     end
     return pre
 end
 
-function PreMPO!(as, pre::PreMPO)
+function PreMPO!(pre::PreMPO, as)
     for (i, a) in enumerate(as)
         PreMPO!(a, pre, i)
     end
     return pre
 end
 
-function PreMPO(state::State, a, tp=MixEvolve)
-    PreMPO!(insertFfactors(a), PreMPO(tp, state))
+function PreMPO(state::State, a, f = Evolver)
+    PreMPO!(PreMPO(state.type, state.system), process(a, state.type, f))
 end
 
 """
@@ -111,15 +78,16 @@ end
 build an mpo representing an operator
 """
 function make_mpo(pre::PreMPO, coefs=[1.])
+    type = pre.type
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
-    sit = sites(pre.type, sys)
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     rdim = 1
     rlink = Index(2, "Link, l=0")
-    for (i, idx) in enumerate(sit)
+    for i in 1:n
+        idx = sys[type, i]
         ldim = rdim
         llink = rlink
         if i == n
@@ -156,8 +124,7 @@ function make_mpo(pre::PreMPO, coefs=[1.])
     return MPO(ts)
 end
 
-make_mpo(state, a, tp = MixEvolve) = 
-    make_mpo(PreMPO(state, a, tp))
+make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
 
 """
     make_approx_W1(PreMPO, tau[, coefs])
@@ -166,15 +133,16 @@ make_mpo(state, a, tp = MixEvolve) =
 build MPO representing approximation WI of a given operator and time step
 """
 function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
+    type = pre.type
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
-    sit = sites(pre.type, sys)
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     rdim = 1
     rlink = Index(1, "Link, l=0")
-    for (i, idx) in enumerate(sit)
+    for i in 1:n
+        idx = sys[type, i]
         llink = rlink
         if i == n
             rdim = 1
@@ -209,8 +177,7 @@ function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
     return MPO(ts)
 end
 
-make_approx_W1(state, a, tau::Number) = 
-    make_approx_W1(PreMPO(state, a, MixEvolve), tau)
+make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), tau)
 
 """
     make_approx_W2(PreMPO, tau[, coefs])
@@ -219,15 +186,16 @@ make_approx_W1(state, a, tau::Number) =
 build MPO representing approximation WII of a given operator and time step
 """
 function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
+    type = pre.type
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
-    sit = sites(pre.type, sys)
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     rdim = 1
     rlink = Index(1, "Link, l=0")
-    for (i, idx) in enumerate(sit)
+    for i in 1:n 
+        idx = sys[type, i]
         ldim = rdim
         if i == n
             rdim = 1
@@ -293,6 +261,5 @@ function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
     return MPO(ts)
 end
 
-make_approx_W2(state, a, tau::Number) = 
-    make_approx_W2(PreMPO(state, a, MixEvolve), tau)
+make_approx_W2(state::State, a, tau::Number) = make_approx_W2(PreMPO(state, a), tau)
     
