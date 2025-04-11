@@ -39,8 +39,7 @@ include("Fermions.jl")
 include("Bosons.jl")
 include("Spins.jl")
 
-#=
 # Precompilation
 include("Precompile.jl")
- =#
+
 end
