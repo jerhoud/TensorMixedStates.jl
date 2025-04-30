@@ -13,14 +13,14 @@ Most functions applicable to States can be applied to Simulations
 - `state`       : the state of the system
 - `time`        : the simulation time
 - `output`      : if not nothing an io where to redirect output
-- `files`       : a dictionary holding io where to write data
+- `files`       : a dictionary holding io or dict where to write data
 - `formats`     : format info for the output
 """
 struct Simulation
     state
     time::Number
     output::Union{Nothing, IO}
-    files::Dict{String, IO}
+    files::Dict{String, Union{IO, Dict}}
     formats::Tuple{Printf.Format, Printf.Format}
     Simulation(state; t::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
         new(state, t, output, Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
@@ -32,7 +32,10 @@ end
     get_sim_file(::Simulation, filename)
 
 return the corresponding file of the given simulation "stdout" (or "-"), "stderr" and "" respectively
-retirect to stdout, stderr and devnull, other names are interpreted as file names
+redirect to stdout, stderr and devnull, other names are interpreted as file names.
+
+Filename finishing by ".json" will return Dict
+where to store data and this data will be output in JSON format in the file by `runTMS` at the end.
 """
 get_sim_file(sim::Simulation, filename) =
     get!(sim.files, filename) do
@@ -44,6 +47,8 @@ get_sim_file(sim::Simulation, filename) =
             devnull
         elseif filename == "stderr"
             stderr
+        elseif last(splitext(filename)) == ".json"
+            Dict()
         else
             open(filename, "w")
         end
