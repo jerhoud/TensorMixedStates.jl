@@ -1,15 +1,17 @@
 export tdvp, dmrg, approx_W
 
 """
-    tdvp(evolver, t, ::State; kwargs...)
-    tdvp(evolver, t, ::Simulation; kwargs...)
+    tdvp(evolver, t, ::State; options...)
+    tdvp(evolver, t, ::Simulation; options...)
 
 do time evolution with tdvp algorithm on a state / sim for the given time t. Also see `TdvpObserver`
 
-# Kwargs
+# Options
+
 - `nsweeps`: number sweeps to do (time step = t / nsweeps) 
 - `coefs`: coefficients for time dependent evolver
 - `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
+- `n_symmetrize`: make hermitian (for mixed states) every n_symmetrize steps (default 0 for no corrections)
 - others are identical to ITensorMPS.tdvp
 """
 function tdvp(pre::PreMPO, t::Number, state::State;
@@ -43,15 +45,18 @@ tdvp(op, t::Number, state::State; kwargs...) =
     tdvp(PreMPO(state, op), t, state; kwargs...)
 
 """
-    dmrg(hamiltonian, ::State; kwargs...)
-    dmrg(hamiltonian, ::Simulation; kwargs...)
+    dmrg(hamiltonian, ::State; options...)
+    dmrg(hamiltonian, ::Simulation; options...)
 
-optimize state / sim using dmrg. Also see `DmrgObserver`.
-Note Dmrg does not work properly for mixed representation.
+optimize for ground state of the given Hamiltonian starting with state / simulation using dmrg.
 
-# Kwargs
+Note that Dmrg does not work for mixed representations.
+
+# Options
+
 - `nsweeps`: number of sweeps
-- `observer!`: observer (like observer for ITensorMPS.dmrg)
+- `observer!`: observer (see `DmrgObserver`)
+- `limits`: constraints on the mps (`cutoff` and `maxdim may be vectors with different values for each sweep)
 - others identical to ITensorMPS.dmrg
 """
 function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), limits::Limits=Limits(), kwargs...)
@@ -104,21 +109,21 @@ make_approx_W(op, t::Number, state::State; order::Int, w::Int) =
     make_approx_W(PreMPO(state, op), t; order, w)
 
 """
-    approx_W(evolver, t, ::State; kwargs...)
-    approx_W(evolver, t, ::Simulation; kwargs...)
+    approx_W(evolver, t, ::State; options...)
+    approx_W(evolver, t, ::Simulation; options...)
 
 time evolution using approximation WI or WII at a given order. Also see `ApproxWObserver`
 
-# Kwargs
+# Options
+
 - `coefs`: coefficients for time dependent evolution
 - `n_symmetrize`: make hermitian (for mixed states) every n_symmetrize steps (default 0 for no corrections)
 - `nsweeps`: number of steps (time step is t / nsweeps)
 - `order`: order of approximation
 - `w`: 1 or 2 for WI or WII
-- `observer!`: an observer like for tdvp
+- `observer!`: observer (see ApproxWObserver)
 - `time_start`: the simulation time at the beginning of evolution
-- `cutoff`: MPS cutoff
-- `maxdim`: MPS maxdim
+- `limits`: MPS constraints
 """
 function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symmetrize::Int = 0,
     nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),

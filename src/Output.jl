@@ -50,12 +50,16 @@ function output(sim::Simulation, file, header, data::Matrix)
 end
 
 """
-    output(sim, measurments)
+    output(::Simulation, [ filename => measure1, ... ])
 
-compute and output the given measurments on simultaion data sim
+compute the given measurements on a simultation and output them to the associated file
+
+filenames are interpreted by get_sim_file (see there for special values)
 
 # Examples
-    output(sim, [X, X(1)Y(2), (X, Y)])
+
+    output(sim, "file" => [X, X(1)Y(2), (X, Y)])
+    output(sim, [ "file1" => [X, Y(2)], "file2" => Trace])
 """
 output(sim::Simulation, m::Pair; kwargs...) =
     output(sim, [m]; kwargs...)
@@ -81,7 +85,7 @@ function output(sim::Simulation, text::Pair{<:Any, <:AbstractString})
 end
 
 """
-    log_msg(sim, text)
+    log_msg(::Simulation, text)
 
 log the given message on the "log" file of the simulation
 """

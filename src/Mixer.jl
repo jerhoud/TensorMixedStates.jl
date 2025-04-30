@@ -8,12 +8,34 @@ end
 
 tensor_index(t::ITensor) = getfirst(i->hasplev(i, 0), inds(t))
 
+"""
+    matrix(a::ExprOp, site::AbstractSite...)
+
+return the matrix of a generic operator for the given sites. If sites are all identical, you may give only one
+
+# Examples
+
+    matrix(X, Qubit())
+    matrix(Swap, Qubit())
+    matrix(X⊗A, Qubit(), Boson(2))
+"""
 function matrix(a::ExprOp, site::AbstractSite...)
     t = tensor(a, site...)
     i = tensor_index(t)
     Matrix(t, i', i)
 end
 
+"""
+    tensor(a::ExprOp, site::AbstractSite...)
+
+return the ITensor of a generic operator for the given sites. If sites are all identical, you may give only one
+
+# Examples
+
+    tensor(X, Qubit())
+    tensor(Swap, Qubit())
+    tensor(X⊗A, Qubit(), Boson(2))
+"""
 function tensor(a::ExprOp, site::AbstractSite...)
     m = matrix(a, site...)
     n, _ = size(m)
@@ -92,10 +114,21 @@ function tensor(a::Right, site::AbstractSite...)
     return dag(ti) * delta(j, j') * c * c'
 end
 
-tensor_next(f, o::ExprOp{T, N}, site::Vararg{U, M}) where {T, N, U, M} =
+tensor_next(f, o::ExprOp{T, N}, site::Vararg{AbstractSite, M}) where {T, N, M} =
     (f(o, site[1:N]...), site[N+1:M])
 
-function tensor_apply(f, a::TensorOp{T, N}, idx::Vararg{U, N}) where {T, U, N}
+function tensor_apply(f, a::TensorOp{T, N}, idx::Vararg{AbstractSite, N}) where {T, N}
+    rest = idx
+    r = map(a.subs) do o 
+        t, rest = tensor_next(f, o, rest...)
+        t
+    end
+end
+
+tensor_next(f, o::ExprOp{T, N}, site::Vararg{Int, M}) where {T, N, M} =
+    (f(o, site[1:N]...), site[N+1:M])
+
+function tensor_apply(f, a::TensorOp{T, N}, idx::Vararg{Int, N}) where {T, N}
     rest = idx
     r = map(a.subs) do o 
         t, rest = tensor_next(f, o, rest...)
@@ -115,7 +148,11 @@ function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
     c * prod(ts) * c'
 end
 
+"""
+    fermionic(a::ExprOp)
 
+return whether an operator is fermionic or not
+"""
 function fermionic(a::SumOp)
     n = length(a.subs)
     nf = count(fermionic, a.subs)

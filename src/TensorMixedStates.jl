@@ -1,3 +1,6 @@
+"""
+    A module to make numerical simulations of closed or open quantum systems using Matrix Product States 
+"""
 module TensorMixedStates
 
 import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless

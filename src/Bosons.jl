@@ -1,10 +1,30 @@
 export Bosons
 
+"""
+    Boson(dim)
+
+a site type to represent boson sites, it is parametred by the dimension of Hilbert space
+(maximum occupancy is `dim - 1`)
+
+# Examples
+
+    Boson(4)
+
+# States
+
+`"0", "1", ...`
+
+# Operators
+
+- `A` : the destruction operator
+- `N` : the number of bosons operator
+"""
 struct Boson <: AbstractSite
     dim::Int
 end
 
 dim(a::Boson) = a.dim
+
 
 @def_operators(Boson(2),
 [

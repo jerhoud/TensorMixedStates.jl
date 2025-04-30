@@ -1,20 +1,23 @@
 export System
 
 """
-    struct System
+    type System
 
-Represent a quantum system
+represent a quantum system
 
 # Fields
+
 - `sites::Vector{<:AbstractSite}`: sites of the system
 - `pure_indices::Vector{Index}`: Indices for pure representations
 - `mixed_indices::Vector{Index}`: Indices for mixed representations
 
 # Examples
+
     System(10, Qubit())
     System([Qubit(), SpinOne(), Qubit(), Boson(5)])
 
 # Indexation
+
     system[i]          gives site i
     system[Pure(), i]  gives pure index i
     system[Mixed(), i] gives mixed index i
@@ -41,10 +44,15 @@ getindex(s::System, ::Mixed, i...) = s.mixed_indices[i...]
 """
     length(::System)
 
-Return number of sites in the system
+return the number of sites in the system
 """
 length(system::System) = length(system.sites)
 
+"""
+    tensor(::System, ::Indexed)
+
+returns a tensor representing the given base indexed operator acting this system
+"""
 function tensor(system::System, a::Indexed{T, N}) where {T, N}
     s = map(i->system[i], a.index)
     t = tensor(a.op, s...)

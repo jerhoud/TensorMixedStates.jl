@@ -5,24 +5,34 @@ export Gate, Dissipator, Evolver, Left, Right, Pure, Mixed, PM
 ############# Types ################
 
 """
-    struct Pure end
+    type Pure
     Pure()
 
-    Correspond to pure quantum representation
+correspond to pure quantum representation
 """
 struct Pure end
 
 
 """
-    Struct Mixed end
+    type Mixed
     Mixed()
 
-    Correspond to mixed quantum representation
+correspond to mixed quantum representation
 """
 struct Mixed end
 
 PM = Union{Pure, Mixed}
 
+"""
+    abstract type ExprOp{T, N}
+
+the abstract type of operators, `T` is `Pure` or `Mixed` and `N` is an `Int`
+for generic operators (the number of sites on which the operator may apply)
+and `IndexOp` for indexed operators
+
+    SimpleOp = ExprOp{Pure, 1}
+    ExprIndexed{T} = ExprOp{T, IndexOp}
+"""
 abstract type ExprOp{T, N} end
 SimpleOp = ExprOp{Pure, 1}
 
@@ -75,6 +85,20 @@ end
 
 ############### Operator ###############
 
+"""
+    type Operator{T, N} <: ExprOp{T, N}
+
+the type of base operators (like `X`, `Swap`, `C` ...), `T` is `Pure` or `Mixed` and `N` is an Int.
+
+# Example
+
+    Operator("X")                      a base operator whose value is predefined by the sites
+    Operator("Z", [1 0 ; 0 -1])
+    Operator{Pure, 2}("Swap", [ 1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
+    Operator("CX", controlled(X))
+    Operator("Sx", (Sp + Sm) / 2)
+    Operator("C", [0 1 ; 0 0], true)   a fermionic operator
+"""
 struct Operator{T, N} <: ExprOp{T, N}
     name::String
     expr::Union{Nothing, Matrix, Function, ExprOp{T, N}}
@@ -95,8 +119,18 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 
 ############ proj ################
 
+"""
+    Proj(state)
+
+an operator to project on the given state
+
+# Examples
+
+    Proj("Up")
+    Proj([1, 0])
+"""
 struct Proj <: SimpleOp
-    state::String
+    state::Union{String, Vector}
 end
 
 ranking(::Proj) = 2
@@ -109,6 +143,11 @@ struct IndexOp end
 
 ExprIndexed{T} = ExprOp{T, IndexOp}
 
+"""
+    type Indexed{T, N} <: ExprIndexed{T}
+
+represent an base indexed operator (like `X(1)` or `Swap(2, 4)`)
+"""
 struct Indexed{T, N} <: ExprIndexed{T}
     op::ExprOp{T, N}
     index::NTuple{N, Int}
@@ -134,6 +173,15 @@ apply_expr(f, a::Indexed) = Indexed(f(a.op), a.index)
 
 # Gate
 
+"""
+    Gate(op)
+
+a generic operator acting as a gate on states in mixed representation. Usefull for building noisy gates
+
+# Examples
+
+    G = 0.9 * Gate(Id) + 0.1 Gate(X)
+"""
 struct Gate{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
 end
@@ -151,6 +199,11 @@ apply_expr(f, a::Gate) = Gate(f(a.arg))
 
 # Dissipator
 
+"""
+    Dissipator(op)
+
+a Lindbladian dissipator based on `op` to be used in evolver for time evolution
+"""
 struct Dissipator{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
 end
@@ -327,6 +380,17 @@ end
 tensorsubs(a::TensorOp) = a.subs
 tensorsubs(a::ExprOp) = [a]
 
+"""
+    op1 ⊗ op2
+
+tensor product for generic operators, alternative syntax: tensor(op1, op2)
+
+# Examples
+
+    controlled(op) = Proj("Up") ⊗ Id + Proj("Dn") ⊗ op
+    Rxy(t) = exp(im * t * (X ⊗ X + Y ⊗ Y) / 4)
+
+"""
 (a::ExprOp{T, N} ⊗ b::ExprOp{T, M}) where {T, N, M} =
     TensorOp{T, N + M}([tensorsubs(a) ; tensorsubs(b)])
 ⊗(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a ⊗ b, c...)
@@ -375,6 +439,11 @@ struct ExpOp{T, N} <: ExprOp{T, N}
     arg::ExprOp{T, N}
 end
 
+"""
+    exp(::ExprOp)
+
+exponential for generic tensors
+"""
 exp(a::ExprOp) = ExpOp(a)
 exp(::ExprIndexed) = error("cannot use exp on indexed expressions, use it directly on operators") 
 
@@ -391,6 +460,11 @@ apply_expr(f, a::ExpOp) = ExpOp(f(a.arg))
 
 # SqrtOp
 
+"""
+    sqrt(::ExprOp)
+
+square root for generic tensors
+"""
 struct SqrtOp{T, N} <: ExprOp{T, N}
     arg::ExprOp{T, N}
 end
@@ -416,6 +490,11 @@ struct DagOp{T, N} <: ExprOp{T, N}
     arg::ExprOp{T, N}
 end
 
+"""
+    dag(::ExprOp)
+
+adjoint for generic operators
+"""
 dag(a::ExprOp) = DagOp(a)
 dag(a::DagOp) = a.arg
 
@@ -433,3 +512,4 @@ apply_expr(f, a::DagOp) = DagOp(f(a.arg))
 eval_expr(f, a::Union{SumOp, ProdOp, TensorOp}) = any(f, a.subs)
 eval_expr(f, a::Union{Gate, Left, Right, Evolver, Dissipator, PowOp, ExpOp, SqrtOp, DagOp}) = f(a.arg)
 eval_expr(f, a::Indexed) = f(a.op)
+

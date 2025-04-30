@@ -1,5 +1,10 @@
 export expand_index, simplify, insertFfactors, process
 
+"""
+    expand_index(op)
+
+expand multiple site operators into simple site operators if possible.
+"""
 expand_index(a) = apply_expr(expand_index, a)
 expand_index(a::Indexed{T, 1}) where T =
     if has_dissipator(a)
@@ -50,6 +55,11 @@ function collect_sum(a::Vector{<:ExprIndexed{T}}) where T
     return r
 end
 
+"""
+    simplify(op)
+
+simplify indexed operator
+"""
 simplify(a::SumOp{T, IndexOp}) where T =
     SumOp{T, IndexOp}(collect_sum(reduce(vcat, map(t->sumsubs(simplify(t)), a.subs))))
 
@@ -182,7 +192,11 @@ insertF(op::Left) = Left(op.arg * F)
 insertF(op::Right) = Right(op.arg * F)
 insertF(op) = op * F
 
+"""
+    insertFfactors
 
+insert the Jordan-Wigner F operators where needed
+"""
 insertFfactors(a::SumOp) = apply_expr(insertFfactors, a)
 insertFfactors(a::ExprOp) = insertFfactors(prodcoef(a), prodsubs(a))
 
@@ -215,6 +229,11 @@ function insertFfactors(c::Number, v::Vector{<:ExprIndexed{T}}) where T
     return ProdOp{T, IndexOp}(c, reverse(r))
 end
 
+"""
+    process(op)
+
+simplify indexed operator and insert Jordan-Wigner F factors where needed
+"""
 process(a::ExprIndexed) = insertFfactors(simplify(expand_index(a)))
 process(a) = map(process, a)
 

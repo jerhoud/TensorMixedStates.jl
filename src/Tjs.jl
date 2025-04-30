@@ -1,5 +1,28 @@
 export Tjs
 
+"""
+    Tj()
+
+a site type to represent Tj sites (dim is 3)
+
+# Examples
+
+    Electron()
+
+# States
+
+- `"0", "Emp"`   : empty state
+- `"Up", "↑"`    : up state
+- `"Dn", "↓"`    : down state
+
+# Operators
+
+- `Cup, Cdn`              : the destruction operators
+- `Aup, Adn`              : the Jordan-Wigner transforms of Cup and Cdn (...C = FFFA)
+- `Nup, Ndn, Ntot`        : the numbers operator for up, down and total
+- `Sx, Sy, Sz, Sp, Sm`    : spin operators
+- `Fup, Fdn`              : partial Jordan-Wigner F operators
+"""
 struct Tj <: AbstractSite end
 
 dim(::Tj) = 3

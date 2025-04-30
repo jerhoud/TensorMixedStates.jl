@@ -1,5 +1,29 @@
 export Electrons
 
+"""
+    Eletron()
+
+a site type to represent electron sites (dim is 4)
+
+# Examples
+
+    Electron()
+
+# States
+
+- `"0", "Emp"`   : empty state
+- `"Up", "↑"`    : up state
+- `"Dn", "↓"`    : down state
+- `"UpDn", "↑↓"` : up and down state
+
+# Operators
+
+- `Cup, Cdn`              : the destruction operators
+- `Aup, Adn`              : the Jordan-Wigner transforms of Cup and Cdn (...C = FFFA)
+- `Nup, Ndn, Nupdn, Ntot` : the numbers operator for up, down, up and down, and total
+- `Sx, Sy, Sz, Sp, Sm`    : spin operators
+- `Fup, Fdn`              : partial Jordan-Wigner F operators
+"""
 struct Electron <: AbstractSite end
 
 dim(::Electron) = 4

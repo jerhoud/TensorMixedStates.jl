@@ -1,5 +1,25 @@
 export Spins
 
+"""
+    Spin(spin)
+
+A site type for representing spin sites (dim is `2 spin + 1`)
+
+# Example
+
+    Spin(3/2)
+    Spin(2)
+
+# States
+
+"0", "1", "-1"... for integer spins
+"1/2", "-1/2", "3/2", "-3/2"... for half integer spins
+
+# Operators
+
+- `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
+- `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators and ``S^2``
+"""
 struct Spin <: AbstractSite
     s::Float64
     Spin(s::Number) =
@@ -11,6 +31,7 @@ struct Spin <: AbstractSite
 end
 
 dim(a::Spin) = Int(2 * a.s + 1)
+
 function generic_state(::Spin, st::String)
     i = 1 + 2 * Int(parse(Float64, st) + a.s)
     v = zeros(Float64, dim(site))

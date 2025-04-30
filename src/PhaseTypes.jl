@@ -6,9 +6,12 @@ A phase type to create the simulation state
 
 # Fields
 
-- `type`: the type of state to create Pure or Mixed
-- `system`: a System object to describe the system (see `System`)
-- `state`: a description of the state (or a State object to randomize)
+- `name`: the name of the phase
+- `time_start`: the initial simulation time
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `type`: the type of state to create `Pure()` or `Mixed()`
+- `system`: a System object to describe the system (see `System`) (unused if a State object is given)
+- `state`: a description of the state (or a State object)
 - `randomize`: the link dimension for the random state to create (default 0 for no randomizing)
 
 # Examples
@@ -44,6 +47,8 @@ show(io::IO, s::CreateState) =
 A phase type to save the state to disk
 
 SaveState(file = "myfile")
+
+not implemented
 """
 @kwdef struct SaveState
     name::String = "Saving state"
@@ -70,6 +75,8 @@ show(io::IO, s::SaveState) =
 A phase type to load the state from disk
 
 LoadState(file = "myfile")
+
+not implemented
 """
 @kwdef struct LoadState
     name::String = "Loading state"
@@ -96,7 +103,15 @@ show(io::IO, s::LoadState) =
 """
 A phase type to switch to mixed representation
 
+# Fields
+
+- `name`: the name of the phase
+- `time_start`: the simulation time to use (no much use here)
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+' `limits` : constraints on the final state
+
 # Examples
+
     ToMixed()
     ToMixed(limits = Limits(cutoff = 1e-10, maxdim = 10))
 """
@@ -183,7 +198,7 @@ A phase type for time evolution
     duration::Number
     time_step::Number
     algo::Algo
-    evolver::ExprIndexed
+    evolver::Union{ExprIndexed, Pair{ExprIndexed, Vector}}
     measures_period::Int = 1
     measures = []
 end
@@ -208,7 +223,14 @@ show(io::IO, s::Evolve) =
 """
 A phase type for applying gates
 
+- `name`: the name of the phase
+- `time_start`: the simulation time to use at the start of the phase
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `limits`: constraints to enforce at each step of the computation
+- `gates`: the gates to apply
+
 # Examples
+
     Gates(gates = CNOT(1, 3)*CZ(2,4), limits = Limits(cutoff=1e-10, maxdim = 20))
 """
 @kwdef struct Gates
@@ -275,6 +297,6 @@ Each of the types contains at least the three following fields (like SimData).
 
 - `name`: the name of the phase
 - `time_start`: the simulation time to use at the start of the phase
-- `final_measures`: the measurements to make at the end of the phase see `Measure` and `output`
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
 Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg}

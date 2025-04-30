@@ -1,9 +1,45 @@
 export Qubits
 
+"""
+    type Qubit
+
+A site type for representing qubit sites, that is a two level system.
+
+# Example
+
+    Qubit()
+
+# States
+
+- `"Up", "Z+", "↑", "0"`  : the up state
+- `"Dn", "Z-", "↓", "1"`  : the down state
+- `"+", "X+"`             : the + state (+1 eigenvector of X)
+- `"-", "X-"`             : the - state (-1 eigenvector of X)
+- `"i", "Y+"`             : the i state (+1 eigenvector of Y)
+- `"-i", "Y-"`            : the -i state (-1 eigenvector of Y)
+
+# Operators
+
+- `X, Y, Z`          : the Pauli operators
+- `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
+- `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators (half the Pauli operators) and ``S^2``
+- `H, S, T, Swap`    : the Hadamard, S, T and Swap gates
+- `Phase(t)`         : the phase gate
+- `controlled(gate)` : controlled gate
+"""
 struct Qubit <: AbstractSite end
 
 dim(::Qubit) = 2
 
+"""
+    controlled(op)
+
+the controlled gate constructor
+
+# Examples
+    CZ = controlled(Z)
+    Toffoli = controlled(controlled(X))
+"""
 controlled(op::ExprOp{Pure, N}) where N =
     TensorOp{Pure, N+1}(ExprOp[[Proj("Up")] ; [Id for _ in 1:N]]) + (Proj("Dn") ⊗ op)
 
@@ -36,16 +72,30 @@ controlled(op::ExprOp{Pure, N}) where N =
     Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
 ])
 
-function graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.e-16), kwargs...)
+"""
+    graph_state(Pure()|Mixed(), graph::Vector{Tuple{Int, Int}}; limits)
+
+create a graph state corresponding to the given graph
+
+# Examples
+
+    graph_state(Pure(), complete_graph(10); limits = Limits(maxdim = 10))
+"""
+function graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.e-16))
     n = graph_base_size(g)
     s = System(n, Qubit())
     state = State(tp, s, "+")
     CZ = controlled(Z)
     gates = prod(CZ(i, j) for (i, j) in g)
-    state = apply(gates, state; limits, kwargs...)
+    state = apply(gates, state; limits)
     return state
 end
 
+"""
+    create_graph_state(Pure()|Mixed(), graph::Vector{Tuple{Int, Int}}; limits)
+
+create a phase for building a graph state to use in `SimData` and `runTMS`
+"""
 create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) = 
     [
         CreateState(
@@ -61,6 +111,11 @@ create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) =
         )
     ]
 
+"""
+    Phase(t)
+
+the phase gate for qubits
+"""
 Phase(t) = Operator("Phase($t)", [1. 0 ; 0 exp(im * t)])
 
 module Qubits

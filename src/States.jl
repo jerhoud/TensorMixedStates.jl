@@ -30,20 +30,25 @@ end
     State(Pure()|Mixed(), system, states)
     State(::State, ::MPS)
 
-
-Represent the complete state of the simulated quantum system
+represent the complete state of the simulated quantum system
 
 # Fields
+
 - `type::Union{Pure, Mixed}`: pure or mixed representation
 - `system::System`: system description
 - `state::MPS`: system state
+- `preobs::PreObs`: preprocessing data for computing observables
 
 # Examples
+
     State(Pure(), system, "Up")
     State(Mixed(), system, ["Up", "Dn", "Up"])
     State(Mixed(), system, "FullyMixed")
+    State(Pure(), system, [1, 0])
+    State(state, mps)        returns a new state with the same system but a new mps
 
 # Operations
+
 states can be added, substracted and multiplied by numbers
 
 """
@@ -58,17 +63,15 @@ end
 
 """
     length(::State)
-    length(::Simulation)
 
-Return the number of sites in the state
+return the number of sites in the state
 """
 length(state::State) = length(state.system)
 
 """
     maxlinkdim(::State)
-    maxlinkdim(::Simulation)
 
-Return the maximum link dimension in the state
+return the maximum link dimension in the state
 """
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
@@ -123,9 +126,8 @@ State(state::State, st::MPS) =
 
 """
     mix(::State)
-    mix(::Simulation)
 
-Transform a pure representation into a mixed representation
+transform a pure representation into a mixed representation
 """
 mix(state::State) =
     mix(state.type, state)
@@ -159,12 +161,8 @@ end
 
 """
     truncate(::State; limits::Limits)
-    truncate(::Simulation; limits::Limits)
 
-Apply the truncation to the given state
+apply the truncation to the given state
 """
 truncate(state::State; limits::Limits) =
     State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim))
-
-apply(mpo::MPO, state::State; kwargs...) =
-    State(state, apply(mpo, state.state; kwargs...))

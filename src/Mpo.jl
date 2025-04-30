@@ -1,11 +1,5 @@
 export PreMPO, make_mpo, make_approx_W1, make_approx_W2
 
-"""
-    struct PreMPO
-    PreMPO(state, operator)
-
-a data type to hold precomputations for building an MPO
-"""
 struct PreMPO
     type::PM
     system::System
@@ -67,13 +61,19 @@ function PreMPO!(pre::PreMPO, as)
     return pre
 end
 
+"""
+    PreMPO(::State, op)
+
+preprocess an operator (or vector of operators).
+The result can be passed wherever an operator that must be turned into an MPO is expected
+"""
 function PreMPO(state::State, a, f = Evolver)
     PreMPO!(PreMPO(state.type, state.system), process(a, state.type, f))
 end
 
 """
-    make_mpo(PreMPO[, coef])
-    make_mpo(state, operator)
+    make_mpo(::PreMPO[, coefs])
+    make_mpo(::State, operator)
 
 build an mpo representing an operator
 """
@@ -127,8 +127,8 @@ end
 make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
 
 """
-    make_approx_W1(PreMPO, tau[, coefs])
-    make_approx_W1(state, operator, tau)
+    make_approx_W1(::PreMPO, tau[, coefs])
+    make_approx_W1(::State, operator, tau)
 
 build MPO representing approximation WI of a given operator and time step
 """
@@ -180,8 +180,8 @@ end
 make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), tau)
 
 """
-    make_approx_W2(PreMPO, tau[, coefs])
-    make_approx_W2(state, operator, tau)
+    make_approx_W2(::PreMPO, tau[, coefs])
+    make_approx_W2(::State, operator, tau)
 
 build MPO representing approximation WII of a given operator and time step
 """

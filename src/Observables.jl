@@ -199,7 +199,11 @@ normalize(state::State) =
     end
 
 
+"""
+    dag(::State)
 
+adjoint of density matrix for mixed representation
+"""
 dag(state::State) =
     if state.type isa Pure
         state
@@ -227,7 +231,7 @@ symmetrize(state::State; limits::Limits=Limits()) =
 """
     normsym(::State)
 
-equivalent to (normalyze(symmetrize(state)))
+equivalent to normalyze(symmetrize(state))
 """
 normsym(state::State) = normalize(symmetrize(state))
 

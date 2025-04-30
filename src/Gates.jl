@@ -2,9 +2,10 @@ export apply
 
 """
     apply(op, ::State; limits::Limits)
+    apply(mps, ::State; limits::Limits)
     apply(op, ::Simulation; limits::Limits)
 
-Apply the given gates to the state and truncate the result according to maxdim and cutoff.
+Apply the given gates to the state and truncate the result according to limits.
 It is much more efficient to apply all the gates in a single call to apply.
 
 # Examples
@@ -17,6 +18,10 @@ function apply(a::ExprIndexed, state::State; limits::Limits=Limits())
     return State(state, st)
 end
 
+
+apply(mpo::MPO, state::State; limits::Limits=Limits()) =
+    State(state, apply(mpo, state.state; limits.cutoff, limist.maxdim))
+    
 make_ops(::PM, ::System, ::SumOp{IndexOp}) = error("cannot apply sums as gates (sums of operator are possible)")
 
 function make_ops(tp::PM, s::System, a::ProdOp{T, IndexOp}) where T
