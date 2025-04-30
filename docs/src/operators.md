@@ -2,7 +2,7 @@
 
 ## Usage
 
-There are two kinds of operators generic (like `X`) and indexed (like `X(3)`). Indexed operators are applied to specific site numbers.
+There are two kinds of operators: generic (like `X`) and indexed (like `X(3)`). Indexed operators are applied to specific site numbers.
 
 - Operators can be used to defined Hamiltonians, for example
 
@@ -48,7 +48,7 @@ Indexed
 Proj
 Dissipator
 Gate
-dag
+dag(::ExprOp)
 fermionic
 matrix
 tensor

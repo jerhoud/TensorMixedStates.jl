@@ -3,7 +3,7 @@ export Bosons
 """
     Boson(dim)
 
-a site type to represent boson sites, it is parametred by the dimension of Hilbert space
+a site type to represent boson sites, it is parametred by the dimension of the Hilbert space
 (maximum occupancy is `dim - 1`)
 
 # Examples

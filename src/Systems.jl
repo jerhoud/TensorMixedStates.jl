@@ -51,7 +51,7 @@ length(system::System) = length(system.sites)
 """
     tensor(::System, ::Indexed)
 
-returns a tensor representing the given base indexed operator acting this system
+returns a tensor representing the given base indexed operator acting on this system
 """
 function tensor(system::System, a::Indexed{T, N}) where {T, N}
     s = map(i->system[i], a.index)
