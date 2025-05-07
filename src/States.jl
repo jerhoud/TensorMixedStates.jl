@@ -27,7 +27,9 @@ end
   
 """
     struct State
-    State(Pure()|Mixed(), system, states)
+    State(Pure()|Mixed(), ::System, states)
+    State(Pure()|Mixed(), ::Int, ::AbstractSite, state)
+    State(Pure()|Mixed(), ::Vector{<:AbstractSite}, state)
     State(::State, ::MPS)
 
 represent the complete state of the simulated quantum system
@@ -45,6 +47,8 @@ represent the complete state of the simulated quantum system
     State(Mixed(), system, ["Up", "Dn", "Up"])
     State(Mixed(), system, "FullyMixed")
     State(Pure(), system, [1, 0])
+    State(Pure(), 10, Qubit(), "Up")
+    State(Mixed(), [Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])
     State(state, mps)        returns a new state with the same system but a new mps
 
 # Operations
@@ -115,6 +119,12 @@ State(type::PM, system::System, state::Union{Vector{<:Number}, Matrix}) =
 
 State(state::State, st::MPS) =
     State(state.type, state.system, st)
+
+State(type::PM, size::Int, site::AbstractSite, state) =
+    State(type, System(size, site), state)
+
+State(type::PM, sites::Vector{<:AbstractSite}, state) =
+    State(type, System(sites), state)
 
 (a::Number * b::State) = State(b, a * b.state)
 (a::State * b::Number) = b * a

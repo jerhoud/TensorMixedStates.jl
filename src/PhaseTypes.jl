@@ -15,10 +15,12 @@ A phase type to create the simulation state
 - `randomize`: the link dimension for the random state to create (default 0 for no randomizing)
 
 # Examples
-    CreateState(type = Pure, system = System(10, "Qubit"), state = "Up")
-    CreateState(type = Mixed, system = System(3, "Qubit"), state = ["Up", "Dn", "Up])
-    CreateState(type = Pure, system = System(10, "Qubit"), randomize = 50)
-    CreateState(type = Pure, system = System(10, "Qubit"), state = "Up", randomize = 50)
+    CreateState(type = Pure(), system = System(10, Qubit()), state = "Up")
+    CreateState(type = Mixed(), system = System(3, Qubit()), state = ["Up", "Dn", "Up])
+    CreateState(type = Pure(), system = System(10, Qubit()), randomize = 50)
+    CreateState(type = Pure(), system = System(10, Qubit()), state = "Up", randomize = 50)
+    CreateState(Pure(), 10, Qubit(), "Up")                                      # simple form
+    CreateState(Mixed(), [Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
 """
 @kwdef struct CreateState
     name::String = "Creating state"
@@ -29,6 +31,9 @@ A phase type to create the simulation state
     state = nothing
     randomize::Int = 0
 end
+
+CreateState(type, n, site, state; kwargs...) = CreateState(;type, system = System(n, site), state, kwargs...)
+CreateState(type, sites, state; kwargs...) = CreateState(;type, system = System(sites), state, kwargs...)
 
 show(io::IO, s::CreateState) = 
     print(io,
@@ -117,7 +122,7 @@ A phase type to switch to mixed representation
 """
 @kwdef struct ToMixed
     name::String = "Switching to mixed state representation"
-    time_start = nothing
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     limits::Limits = Limits()
 end
@@ -238,7 +243,7 @@ A phase type for applying gates
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
     gates::ExprIndexed
-    limits::Limits
+    limits::Limits = Limits()
   end
 
 show(io::IO, s::Gates) = 
@@ -287,7 +292,6 @@ show(io::IO, s::Dmrg) =
         measures = $(s.measures),
         tolerance = $(s.tolerance))"""
     )
-
 
 """
     Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg}

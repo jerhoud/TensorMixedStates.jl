@@ -2,6 +2,8 @@ export random_state
 
 """
     random_state(Pure()|Mixed(), ::System, linkdims::Int)
+    random_state(Pure()|Mixed(), ::Int, ::AbstractSite, linkdims::Int)
+    random_state(Pure()|Mixed(), ::Vector{<:AbstractSite}, linkdims::Int)
     random_state(Pure()|Mixed(), ::State, linkdims::Int)
 
 Return a random state, with the specified link dimension.
@@ -28,6 +30,12 @@ function random_state(::Mixed, system::System, linkdims::Int)
     super_mixed.state[n] *= t
     return State(Mixed(), system, MPS(super_mixed.state[1:n]))
 end
+
+random_state(type::PM, size::Int, site::AbstractSite, linkdims::Int) =
+    random_state(type, System(size, site), linkdims)
+
+random_state(type::PM, sites::Vector{<:AbstractSite}, linkdims::Int) =
+    random_state(type, System(sites), linkdims)
 
 function random_state(::Pure, state::State, linkdims::Int)
     st = random_mps(ComplexF64, state.system.pure_indices, state.state; linkdims)
