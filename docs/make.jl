@@ -1,5 +1,5 @@
 using Documenter
-using TensorMixedStates, .Qubits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs 
+using TensorMixedStates, .Qubits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons
 
 makedocs(
     sitename = "TensorMixedStates",
