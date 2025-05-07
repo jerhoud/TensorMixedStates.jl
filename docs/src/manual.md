@@ -210,6 +210,7 @@ The following phases are available:
 - `ToMixed` : go from pure representation to mixed representation
 - `Evolve` : do Hamiltonian or Lindbladian evolution
 - `Gates` : apply some gates
+- `Partial_trace` : trace the system over some sites (requires a mixed state)
 
 with these phases we define a `SimData` object that describes the simulation and finally, we call
 

@@ -77,3 +77,6 @@ end
 
 approx_W(op, t::Number, sim::Simulation; kwargs...) =
     Simulation(sim, approx_W(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
+
+partial_trace(sim::Simulation, pos; kwargs...) =
+    Simulation(sim, partial_trace(sim.state, pos; kwargs...))

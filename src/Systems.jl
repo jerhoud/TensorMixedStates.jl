@@ -49,6 +49,33 @@ return the number of sites in the system
 length(system::System) = length(system.sites)
 
 """
+    sim(::System)
+
+create a clone of the system: identical but with different indices
+"""
+sim(system::System) =
+    System(system.sites, sim.(system.pure_indices), sim.(system.mixed_indices))
+
+"""
+    ::System ⊗ ::System
+    tensor(::System, ::System)
+
+create the tensorial product of two systems
+"""
+function (sys1::System ⊗ sys2::System)
+    if sys2 == sys1
+        sys2 = sim(sys1)
+    end
+    return System(
+        [sys1.siste ; sys2.sites],
+        [sys1.pure_indices ; sys2.pure_indices],
+        [sys1.mixed_indices ; sys2.mixed_indices])
+end
+
+tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
+
+
+"""
     tensor(::System, ::Indexed)
 
 returns a tensor representing the given base indexed operator acting on this system

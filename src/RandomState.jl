@@ -16,19 +16,9 @@ end
 
 function random_state(::Mixed, system::System, linkdims::Int)
     n = length(system)
-    sites = system.sites
-    pind = system.pure_indices
-    mind = system.mixed_indices
-    super = Sytem([ sites ; sites], [pind ; sim.(pind)], [mind ; sim.(mind)])
-    super_pure = random_state(Pure(), super, floor(Int, sqrt(linkdims)))
-    super_mixed = mix(super_pure)
-    
-    t = ITensor(1)
-    for i in 2n:-1:n+1
-        t *= tensor_obs(super_mixed, i)
-    end
-    super_mixed.state[n] *= t
-    return State(Mixed(), system, MPS(super_mixed.state[1:n]))
+    super = system ⊗ system
+    super_rand = mix(random_state(Pure(), super, floor(Int, sqrt(linkdims))))
+    return partial_trace(super_rand, collect(1:n); keepers = true)
 end
 
 random_state(type::PM, size::Int, site::AbstractSite, linkdims::Int) =

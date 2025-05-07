@@ -1,6 +1,6 @@
 export trace, trace2, norm, normalize, dag, symmetrize, normsym
 export expect, expect1, expect2
-export entanglement_entropy
+export entanglement_entropy, partial_trace
 
 function tensor_trace(state::State, i::Int)
     s = state.system
@@ -481,4 +481,59 @@ function entanglement_entropy(state::State, pos::Int)
     sp /= sum(sp)
     ee = -sum(p * log(p) for p in sp)
     return (ee, sp)
+end
+
+"""
+    partial_trace(::State, ::Vector{Int} [; keepers = true])
+
+return the state partially traced at the given positions,
+alternatively one can give the positions to keep by setting `keepers = true`
+"""
+function partial_trace(state::State, pos::Vector{Int}; keepers::Bool = false)
+    if state.type isa Pure
+        error("cannot partial trace a pure representation")
+    end
+    n = length(state)
+    if keepers
+        keep = pos
+    else
+        keep = filter(e->e ∉ pos, 1:n)
+    end
+    kn = length(keep)
+    if kn == 0
+        error("partial_trace cannot trace all sites of a state")
+    end
+    mps = state.state
+    sys = state.system
+    j = 0
+    t = Vector{ITensor}(undef, kn)
+    s = Vector{AbstractSite}(undef, kn)
+    sp = Vector{Index}(undef, kn)
+    sm = Vector{Index}(undef, kn)
+    for (i, k) in enumerate(keep)
+        s[i] = sys[k] 
+        sp[i] = sys[Pure(), k]
+        sm[i] = sys[Mixed(), k]
+        if i == 1
+            t[1] = get_left(state, k)
+        else
+            for l in j+1:k-1
+                t[i-1] *= get_loc(state, l)
+            end 
+            t[i] = mps[k]
+        end
+        j = k
+    end
+    if j == 0
+        error("partial_trace cannot trace all sites of a state")
+    else
+        t[kn] *= get_right(state, keep[kn])
+    end
+    for i in 1:kn-1
+        idx = commonind(t[i], t[i+1])
+        jdx = settags(idx, "Link, l=$i")
+        replaceind!(t[i], idx, jdx)
+        replaceind!(t[i+1], idx, jdx)
+    end
+    return State(Mixed(), System(s, sp, sm), MPS(t))
 end

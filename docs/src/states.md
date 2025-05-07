@@ -5,6 +5,8 @@
 ```@docs
 System
 length(::System)
+sim(::System)
+⊗(::System, ::System)
 ```
 
 ## States
@@ -23,6 +25,7 @@ dag(::State)
 symmetrize(::State)
 normsym
 random_state
+partial_trace(::State)
 ```
 
 ## Simulations

@@ -11,6 +11,8 @@ function run_phase(sim::Simulation, phase::CreateState)
     else
         if phase.state isa State
             state = phase.state
+        elseif isnothing(phase.system)
+            error("CreateState needs a system or a State object")
         else
             state = State(phase.type, phase.system, phase.state)
         end
@@ -88,3 +90,16 @@ run_phase(sim::Simulation, phase::SaveState) =
     
 run_phase(sim::Simulation, phase::LoadState) =
     Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits))
+
+function run_phase(sim::Simulation, phase::Partial_Trace)
+    pos = phase.trace_positions
+    keep = phase.keep_positions
+    if isnothing(pos) == isnothing(keep)
+        error("Partial_Trace requires one and only one of trace_positions and keep_positions")
+    end
+    if isnothing(pos)
+        return partial_trace(sim, keep; keepers = true)
+    else
+        return partial_trace(sim, pos)
+    end
+end
