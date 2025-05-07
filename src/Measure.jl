@@ -84,11 +84,12 @@ function make_obs(o::ExprIndexed{Pure})
     name = read(io, String)
     ObsOp(name, process(o))
 end
+make_obs(o::Union{Vector, Matrix}) = make_obs.(o)
 make_obs(o::Tuple{SimpleOp, SimpleOp}) =
     ObsExp2(first(o).name * last(o).name, o)
 make_obs(o::SimpleOp) =
     ObsExp1(o.name, o)
-make_obs(o::Union{Number, <:Vector}) =
+make_obs(o::Number) =
     TimeFunc(string(o), o)
 make_obs(o::String) =
     TimeFunc(o, [])
@@ -111,19 +112,19 @@ end
 
 Measure(args...) = Measure([args...])
 
-get_prods(o::Vector{Measure}) = vcat(get_prods.(o)...)
+get_prods(o::Union{Vector, Matrix}) = vcat(get_prods.(o)...)
 get_prods(o::Measure) = vcat(get_prods.(o.measures)...)
 get_prods(o::ObsOp) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
 get_prods(_) = ExprIndexed{Pure}[]
 
-get_exp1(o::Vector{Measure}) = vcat(get_exp1.(o)...)
+get_exp1(o::Union{Vector, Matrix}) = vcat(get_exp1.(o)...)
 get_exp1(o::Measure) = vcat(get_exp1.(o.measures)...)
 get_exp1(o::ObsExp1) = [o.obs]
 get_exp1(o::Check) = [get_exp1(o.obs1); get_exp1(o.obs2)]
 get_exp1(_) = SimpleOp[]
 
-get_exp2(o::Vector{Measure}) = vcat(get_exp2.(o)...)
+get_exp2(o::Union{Vector, Matrix}) = vcat(get_exp2.(o)...)
 get_exp2(o::Measure) = vcat(get_exp2.(o.measures)...)
 get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
@@ -151,6 +152,10 @@ get_val(o::Vector{Measure}, v::Dict, st::State, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o]
 get_val(o::Measure, v::Dict, st::State, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o.measures]
+function get_val(o::Union{Vector, Matrix}, v::Dict, st::State, t::Number; kwargs...)
+    gvs = [get_val(x, v, st, t; kwargs...) for x in o]
+    return first.(gvs) => last.(gvs)
+end 
 get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number; kwargs...) = o.name => v[o.obs]
 get_val(o::ObsOp, v::Dict, ::State, ::Number; kwargs...) = o.name => sum(v[p] for p in o.obs)
 get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
