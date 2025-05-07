@@ -96,7 +96,7 @@ end
 
 create a phase for building a graph state to use in `SimData` and `runTMS`
 """
-create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) = 
+create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; kwargs...) = 
     [
         CreateState(
             name = "Creating initial state |++...++> for graph state",
@@ -104,10 +104,10 @@ create_graph_state(tp::PM, g::Vector{Tuple{Int, Int}}; limits = Limits()) =
             system = System(graph_base_size(g), Qubit()),
             state = "+",
         ),
-        Gates(
+        Gates(;
             name = "Applying gates CZ for building graph state",
             gates = prod(controlled(Z)(i, j) for (i, j) in g),
-            limits = limits
+            kwargs...
         )
     ]
 
