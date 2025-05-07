@@ -16,9 +16,9 @@ A type for describing a simulation to use with `runTMS`
 - `data_format`:     C like format for output of simulation data (default "%12.6g")
 """
 @kwdef struct SimData
-    description::String=""
-    name::String
-    time_start = 0.
+    description::String = ""
+    name::String = "simulation"
+    time_start::Number = 0.
     final_measures = []
     time_format::String = "%8.4g"
     data_format::String = "%14.8g"
