@@ -3,7 +3,7 @@ export Tjs
 """
     Tj()
 
-a site type to represent Tj sites (dim is 3)
+a site type to represent Tj sites (like Electron sites without the up and down state, dim is 3)
 
 # Examples
 
