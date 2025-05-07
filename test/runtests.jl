@@ -182,7 +182,7 @@ end
                 hamiltonian = sum(-Z(i) for i in 1:5),
                 limits = Limits(maxdim = 10),
                 nsweeps = 2,
-                final_measures = check([X, Y, Z, Norm], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1])
+                final_measures = check([X, Y, Z, Norm], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1], 1e-7)
             )
         ])
     end
