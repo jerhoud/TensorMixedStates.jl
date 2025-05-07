@@ -1,4 +1,4 @@
-export System
+export System, sim
 
 """
     type System

@@ -25,7 +25,7 @@ dag(::State)
 symmetrize(::State)
 normsym
 random_state
-partial_trace(::State)
+partial_trace(::State, ::Vector{Int})
 ```
 
 ## Simulations

@@ -293,6 +293,13 @@ show(io::IO, s::Dmrg) =
         tolerance = $(s.tolerance))"""
     )
 
+"""
+a phase type for applying a partial trace
+
+# Examples
+
+    Partial_Trace(trace_positions = [2, 3, 6])
+"""
 @kwdef struct Partial_Trace
     name::String = "Dmrg optimization"
     time_start::Union{Nothing, Number} = nothing
