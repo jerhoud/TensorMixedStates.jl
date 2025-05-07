@@ -17,6 +17,9 @@ end
 function make_real(sim::Simulation, header, data::Union{Vector, Matrix})
     map(keys(data)) do ij
         x = data[ij]
+        if !(x isa Number)
+            return X
+        end
         if abs(imag(x)) > thresh_warn_imag
             warn_imag(sim, "$header $(Tuple(ij))", x)
         end
