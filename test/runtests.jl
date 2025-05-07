@@ -1,4 +1,4 @@
-using TensorMixedStates, .Qubits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs
+using TensorMixedStates, .Qubits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
 using Test
 
 """
@@ -102,6 +102,10 @@ end
     @testset "Tj measuring" begin
         @test_pm test_phases(CreateState(type, 3, Tj(), ["Emp", "Up", "Dn"];
             final_measures = check([Nup, Ndn, Ntot], [[0, 1, 0], [0, 0, 1], [0, 1, 1]])))        
+    end
+    @testset "Qboson measuring" begin
+        @test_pm test_phases(CreateState(type, 4, Qboson(0.1, 4), ["0", "1", "2", "3"];
+            final_measures = check(N, [0, 1, 2, 3])))
     end
     @testset "State mixing" begin
         @test_ok check_mix(

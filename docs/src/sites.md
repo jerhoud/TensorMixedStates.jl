@@ -16,7 +16,7 @@ Id
 F
 ```
 
-There are six predefined site types `Qubit`, `Spin`, `Boson`, `Fermion`, `Electron` and `Tj`.
+There are seven predefined site types `Qubit`, `Spin`, `Boson`, `Fermion`, `Electron`, `Tj` and `Qboson`.
 
 ## Qubit
 
@@ -80,6 +80,16 @@ To use `Tj`, call
 
 ```@docs
 Tj
+```
+
+## Qboson
+
+To use `Qboson`, call
+
+    using .Qbosons
+
+```@docs
+Qboson
 ```
 
 ## Defining new site types

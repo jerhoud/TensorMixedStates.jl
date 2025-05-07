@@ -11,7 +11,7 @@ To use TMS, you must first import it with
 The first step in using TMS is the definition of your quantum system. In TMS, a system is composed of a finite
 number of sites numbered from 1 (1, 2, ..., N). These sites may be all identical or not.
 
-There are  sixdifferent predefined types of site: `Qubit`, `Fermion`, `Boson`, `Spin`, `Electron` and `Tj`.
+There are seven different predefined types of site: `Qubit`, `Fermion`, `Boson`, `Spin`, `Electron`, `Tj` and `Qboson`.
 
 To use each of these sites and the corresponding predefined operators you need first to import the corresponding module.
 For example to use qubits, you need to write
