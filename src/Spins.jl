@@ -32,9 +32,9 @@ end
 
 dim(a::Spin) = Int(2 * a.s + 1)
 
-function generic_state(::Spin, st::String)
-    i = 1 + 2 * Int(parse(Float64, st) + a.s)
-    v = zeros(Float64, dim(site))
+function generic_state(a::Spin, st::String)
+    i = 1 + Int(a.s - eval(Meta.parse(st)))
+    v = zeros(Float64, dim(a))
     v[i] = 1.0
     return v
 end
