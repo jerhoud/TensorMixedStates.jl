@@ -29,7 +29,7 @@ this is tried first before trying specifically defined states.
 
 The default implementation returns the first state for "0", the second for "1" and so on.
 
-This should be overloaded if necessary when defining new site types. 
+This should be overloaded if necessary when defining new site types. It may return an error when not needed.
 """
 function generic_state(site::AbstractSite, st::String)
     i = 1 + parse(Int, st)

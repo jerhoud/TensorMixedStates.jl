@@ -146,7 +146,7 @@ ExprIndexed{T} = ExprOp{T, IndexOp}
 """
     type Indexed{T, N} <: ExprIndexed{T}
 
-represent an base indexed operator (like `X(1)` or `Swap(2, 4)`)
+represent a base indexed operator (like `X(1)` or `Swap(2, 4)`)
 """
 struct Indexed{T, N} <: ExprIndexed{T}
     op::ExprOp{T, N}

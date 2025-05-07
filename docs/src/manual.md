@@ -41,7 +41,7 @@ gives you a three site system.
 
 ## States
 
-States may be in pure or mixed representation, these to possibilities are represented in TMS, by `Pure()` or `Mixed()` (note the parenthesis).
+States may be in pure or mixed representation, these two possibilities are represented in TMS, by `Pure()` or `Mixed()` (note the parenthesis).
 
 To create a state, we call the State creator
 
@@ -55,13 +55,13 @@ All sites need not be all in the same local states, in which case we give State 
 
 Here we chose a mixed representation.
 
-States may added or multiplied by a number (they need to be based on the same system). For example
+States may be added or multiplied by a number (they need to be based on the same system). For example
 
-   ghz = (State(Pure(), system1, "Up") + State(Pure(), system1, "Dn")) / 2
+    ghz = (State(Pure(), system1, "Up") + State(Pure(), system1, "Dn")) / 2
 
 We can transform a pure representation into a mixed representation by
 
-   mixedstate = mix(purestate)
+    mixedstate = mix(purestate)
 
 For mixed states there is a local mixed state `"FullyMixed"` which correspond to a density matrix proportional to the identity matrix.
 
@@ -71,7 +71,7 @@ If you need a local state which is not predefined, it is possible to pass its ve
 
 ## Limits
 
-TMS uses Matrix Product State to internally represent quantum states. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a Limit object as keyword argument containing those parameters. It is build thus
+TMS uses Matrix Product State to internally represent quantum states. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is build thus
 
     lim = Limits(cutoff = 1e-10, maxdim = 50)
 
