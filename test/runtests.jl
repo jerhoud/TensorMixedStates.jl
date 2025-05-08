@@ -203,4 +203,25 @@ end
             ])
         end
     end
+    @testset "Ising chain" begin
+        @test_ok test_phases([
+            CreateState(Pure(), 6, Qubit(), "X+"),
+            Evolve(
+                algo =  ApproxW(order = 4, w = 2, n_symmetrize = 5),
+                limits = Limits(maxdim = 8),
+                duration = 1.0,
+                time_step = 0.02,
+                evolver =
+                    -im*(sum(Z(i)*Z(i+1) for i in 1:5)+Z(6)*Z(1)-sum(X(i) for i in 1:6)),
+                final_measures = [
+                    check([X,Y,Z],[[0.48881258678,0.48881258678,0.48881258678,0.48881258678,0.48881258678,0.48881258678],[0.0,0,0,0,0,0],[0.0,0,0,0,0,0]],1e-7),
+                    check([Z(1)Z(2),Z(2)Z(3),Z(1)Z(6)],[-0.51118739903,-0.51118739903,-0.51118739903],1e-7),
+                    check([Y(1)Y(2),Y(2)Y(3),Y(1)Y(6)],[-0.25183410946,-0.25183410946,-0.25183410946],1e-7),
+                    check([X(1)X(2),X(2)X(3),X(1)X(6)],[0.11231262241,0.11231262241,0.11231262241],1e-7),
+                    check([X(1)X(2)X(3)X(4),X(2)X(3)X(4)X(5),X(4)X(5)X(6)X(1)],[0.11231262241,0.11231262241,0.11231262241],1e-7),
+                    check(EE(3), 1.15220908795, 1e-7),
+                    check(X(1)X(2)X(3)X(4)X(5)X(6),1.0,1e-8)
+                ]
+            )])
+    end
 end
