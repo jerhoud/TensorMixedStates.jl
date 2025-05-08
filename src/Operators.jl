@@ -208,7 +208,7 @@ struct Dissipator{N} <: ExprOp{Mixed, N}
     arg::ExprOp{Pure, N}
 end
 
-Dissipator(::ExprIndexed) = error{"Dissipator cannot be applied to indexed expressions"}
+Dissipator(::ExprIndexed{Pure}) = error("Dissipator cannot be applied to indexed expressions")
 
 show(io::IO, a::Dissipator) =
     paren(io, 1000, 0) do io
@@ -292,8 +292,8 @@ prodsubs(a::ExprOp) = [a]
 prodcoef(a::ProdOp) = a.coef
 prodcoef(a::ExprOp) = 1
 
-*(a::ExprOp{T, N}...) where {T, N} =
-    ProdOp{T, N}(prod(map(prodcoef, a)), reduce(vcat, map(prodsubs, a)))
+(a::ExprOp{T, N} * b::ExprOp{T, N}) where {T, N} =
+    ProdOp{T, N}(prodcoef(a) * prodcoef(b), [prodsubs(a) ; prodsubs(b)])
 (a::ExprIndexed{Mixed} * b::ExprIndexed{Pure}) = a * Gate(b)
 (a::ExprIndexed{Pure} * b::ExprIndexed{Mixed}) = Gate(a) * b
 (a::Number * b::ExprOp{T, N}) where {T, N} = 
@@ -312,7 +312,7 @@ ranking(::ProdOp) = 20
 
 isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
 
-apply_expr(f, a::ProdOp) = a.coef * *(map(f, a.subs)...)
+apply_expr(f, a::ProdOp) = a.coef * reduce(*, map(f, a.subs))
 
 ################ Operator Sums ##############
 
@@ -331,8 +331,7 @@ end
 sumsubs(a::SumOp) = a.subs
 sumsubs(a::ExprOp) = [a]
 
-+(a::ExprOp{T, N}...) where {T, N} =
-    SumOp{T, N}(reduce(vcat, map(sumsubs, a)))
+(a::ExprOp{T, N} + b::ExprOp{T, N}) where {T, N} = SumOp{T, N}([ sumsubs(a) ; sumsubs(b)])
 (a::ExprIndexed{Mixed} + b::ExprIndexed{Pure}) = a + Evolver(b)
 (a::ExprIndexed{Pure} + b::ExprIndexed{Mixed}) = Evolver(a) + b
 (a::ExprOp - b::ExprOp) = a + (-b)
@@ -368,7 +367,7 @@ ranking(::SumOp) = 21
 
 isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
         
-apply_expr(f, a::SumOp) = +(map(f, a.subs)...)
+apply_expr(f, a::SumOp) = reduce(+, map(f, a.subs))
 
     
 ############### Tensor products ############
@@ -393,9 +392,7 @@ tensor product for generic operators, alternative syntax: tensor(op1, op2)
 """
 (a::ExprOp{T, N} ⊗ b::ExprOp{T, M}) where {T, N, M} =
     TensorOp{T, N + M}([tensorsubs(a) ; tensorsubs(b)])
-⊗(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a ⊗ b, c...)
-
-tensor(a::ExprOp...) = ⊗(a...)
+tensor(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a, b, c...)
 
 show(io::IO, a::TensorOp) =
     paren(io, Base.operator_precedence(:⊗)) do io

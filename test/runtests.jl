@@ -1,5 +1,5 @@
 using TensorMixedStates, .Qubits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
-using Test
+using Test, Aqua
 
 """
 executes the given phases
@@ -52,6 +52,9 @@ function check_mix(dims, sites, measures)
 end
 
 @testset verbose=true "TensorMixedStates.jl" begin
+    @testset "Aqua" begin
+        Aqua.test_all(TensorMixedStates)
+    end
     @testset "System building" begin
         @test_ok System(1, Qubit())
         @test_ok System(3, Qubit())

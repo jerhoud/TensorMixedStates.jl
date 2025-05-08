@@ -148,6 +148,9 @@ function tensor(a::TensorOp{T, N}, site::AbstractSite...) where {T, N}
     c * prod(ts) * c'
 end
 
+tensor_apply(::Any, ::TensorOp) = error("bug: wrong tensor_apply call")
+tensor_next(::Any, ::ExprOp) = error("bug: wrong tensor_next call")
+
 """
     fermionic(a::ExprOp)
 

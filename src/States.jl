@@ -131,7 +131,7 @@ State(type::PM, sites::Vector{<:AbstractSite}, state) =
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
-+(a::State...; limits::Limits=Limits()) = State(a[1], +((i.state for i in a)...; limits.cutoff, limits.maxdim))
++(a::State, b::State; limits::Limits=Limits()) = State(a, +(a.state, b.state; limits.cutoff, limits.maxdim))
 -(a::State, b::State; limits::Limits=Limits()) = State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
 
 """
