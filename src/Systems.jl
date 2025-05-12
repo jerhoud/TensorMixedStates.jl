@@ -36,6 +36,8 @@ end
 
 System(size::Int, a::AbstractSite) = System(fill(a, size))
 
+show(io::IO, s::System) = print(io, "System($(s.sites))")
+    
 getindex(s::System, i...) = s.sites[i...]
 getindex(s::System, ::Pure, i...) = s.pure_indices[i...]
 getindex(s::System, ::Mixed, i...) = s.mixed_indices[i...]

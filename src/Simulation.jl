@@ -28,6 +28,8 @@ struct Simulation
         new(st, t, s.output, s.files, s.formats)
 end
 
+show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)")
+
 """
     get_sim_file(::Simulation, filename)
 

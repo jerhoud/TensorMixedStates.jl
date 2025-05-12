@@ -65,6 +65,8 @@ struct State
         new(type, system, state, PreObs())
 end
 
+show(io::IO, s::State) = print(io, "State($(s.type), $(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
+
 """
     length(::State)
 
