@@ -224,7 +224,24 @@ end
                     check([X(1)X(2)X(3)X(4),X(2)X(3)X(4)X(5),X(4)X(5)X(6)X(1)],[0.11231262241,0.11231262241,0.11231262241],1e-7),
                     check(EE(3), 1.15220908795, 1e-7),
                     check(X(1)X(2)X(3)X(4)X(5)X(6),1.0,1e-8)
-                ]
-            )])
+                ])
+        ])
+    end
+    @testset "Free fermion with source" begin
+        @test_ok test_phases([
+            CreateState(Mixed(), 5, Fermion(), "0"),
+            Evolve(
+                algo=Tdvp(),
+                limits = Limits(maxdim = 16),
+                duration = 1.0,
+                time_step = 0.05,
+                evolver = -im * sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:4) + Dissipator(sqrt(2*0.2)*dag(C))(3),
+                final_measures = [
+                    check(N, [0.125581972006622e-1,0.630086192053610e-1,.195018685802510,0.630086192053610e-1,0.125581972006622e-1], 1e-6),
+                    check([dag(C(3))*C(i) for i in 1:5],
+                    [-0.235293024730342e-1, -0.783683050686146e-1*im,.195018685802510,-0.783683050686146e-1*im,-0.235293024730342e-1],1e-6),
+                    check(Purity,.525664902939503,1e-6)
+                ])
+        ])
     end
 end
