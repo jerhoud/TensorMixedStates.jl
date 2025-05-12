@@ -240,7 +240,7 @@ end
                 ])
         ])
     end
-    @testset "Free fermion with source" begin
+    @testset "Free fermions with source" begin
         @test_ok test_phases([
             CreateState(Mixed(), 5, Fermion(), "0"),
             Evolve(
@@ -248,13 +248,31 @@ end
                 limits = Limits(maxdim = 16),
                 duration = 1.0,
                 time_step = 0.05,
-                evolver = -im * sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:4) + Dissipator(sqrt(2*0.2)*dag(C))(3),
+                evolver =
+                    -im * sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:4) + Dissipator(sqrt(2*0.2)*dag(C))(3),
                 final_measures = [
                     check(N, [0.125581972006622e-1,0.630086192053610e-1,.195018685802510,0.630086192053610e-1,0.125581972006622e-1], 1e-6),
                     check([dag(C(3))*C(i) for i in 1:5],
                     [-0.235293024730342e-1, -0.783683050686146e-1*im,.195018685802510,-0.783683050686146e-1*im,-0.235293024730342e-1],1e-6),
                     check(Purity,.525664902939503,1e-6)
                 ])
+        ])
+    end
+    @testset "Free bosons with source" begin
+        @test_ok test_phases([
+            CreateState(Mixed(), 4, Boson(7), "0"),
+            Evolve(
+                algo = ApproxW(order = 4, w = 2),
+                limits = Limits(maxdim = 10),
+                duration = 0.3,
+                time_step = 0.1,
+                evolver =
+                    -im*sum(A(i)*dag(A)(i+1)+dag(A)(i)*A(i+1) for i in 1:3) + Dissipator(2*sqrt(0.1)*dag(A))(2),
+                final_measures = [
+                        check(N,[0.363288753916464e-2,.120023637053104,0.356800815401577e-2,0.486649287358378e-4],1e-6),
+                        check([dag(A)(2)*A(i) for i in 1:4],[-0.180013492215079e-1*im,.120023637053104,-0.178675615179132e-1*im,-0.178658178615343e-2],1.5e-6),
+                        check(Purity,.7965328508313,1e-6)
+                    ])
         ])
     end
 end
