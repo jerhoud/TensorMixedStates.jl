@@ -73,7 +73,7 @@ end
 
 compute the given measurements on a simultation and output them to the associated file or dict
 
-filenames are interpreted by get_sim_file (see there for special values)
+filenames are interpreted by get\\_sim\\_file (see there for special values)
 
 # Examples
 
