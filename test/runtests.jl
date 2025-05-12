@@ -100,6 +100,16 @@ end
             final_measures = check([Sx, Sy, Sz], [[0, 0, 0, 0], [0, 0, 0, 0], [-3/2, -1/2, 1/2, 3/2]])))
         @test norm(matrix(Sx^2+Sy^2+Sz^2-S2,Spin(5/2)))≈0 atol=1e-12
         @test norm(matrix(Sx^2+Sy^2+Sz^2-S2,Spin(4)))≈0 atol=1e-12
+        @test_pm test_phases(CreateState(type, 9, Spin(1),
+                ["X-1", "X0", "X1", "Y-1", "Y0", "Y1", "Z-1", "Z0", "Z1"];
+            final_measures = check([Sx, Sy, Sz],
+                [[-1, 0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, -1, 0, 1]])))
+        @test_pm test_phases(CreateState(type, 12, Spin(3/2),
+                ["X-3/2", "X-1/2", "X1/2", "X3/2", "Y-3/2", "Y-1/2", "Y1/2", "Y3/2", "Z-3/2", "Z-1/2", "Z1/2", "Z3/2"];
+            final_measures = check([Sx, Sy, Sz],
+                [[-3/2, -1/2, 1/2, 3/2, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, -3/2, -1/2, 1/2, 3/2, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, -3/2, -1/2, 1/2, 3/2]])))
     end
     @testset "Electron measuring" begin
         @test_pm test_phases(CreateState(type, 4, Electron(), ["Emp", "Up", "Dn", "UpDn"];
