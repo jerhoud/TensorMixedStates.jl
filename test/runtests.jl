@@ -83,6 +83,7 @@ end
             final_measures = check([(X, Y), (Z, Z)], [[0 -1 0; 0 0 0; 0 0 -im], [1 0 0; 0 1 0; 0 0 1]])))
         @test_pm test_phases(CreateState(type, 4, Qubit(), ["Z+", "X-", "Z-", "Y-"];
             final_measures = check([Z(1)Y(4), X(2)Z(3), Z(1)Z(3), X(2)Y(4)], [-1, 1, -1, 1])))
+        @test norm(matrix(Sx^2+Sy^2+Sz^2-S2, Qubit()))≈0 atol=1e-12
     end
     @testset "Fermion measuring" begin
         @test_pm test_phases(CreateState(type, 1, Fermion(), "1";
@@ -96,7 +97,9 @@ end
     end
     @testset "Spin measuring" begin
         @test_pm test_phases(CreateState(type, 4, Spin(3/2), ["-3/2", "-1/2", "1/2", "3/2"];
-            final_measures = check([Sx, Sy, Sz], [[0, 0, 0, 0], [0, 0, 0, 0], [-3/2, -1/2, 1/2, 3/2]])))        
+            final_measures = check([Sx, Sy, Sz], [[0, 0, 0, 0], [0, 0, 0, 0], [-3/2, -1/2, 1/2, 3/2]])))
+        @test norm(matrix(Sx^2+Sy^2+Sz^2-S2,Spin(5/2)))≈0 atol=1e-12
+        @test norm(matrix(Sx^2+Sy^2+Sz^2-S2,Spin(4)))≈0 atol=1e-12
     end
     @testset "Electron measuring" begin
         @test_pm test_phases(CreateState(type, 4, Electron(), ["Emp", "Up", "Dn", "UpDn"];
