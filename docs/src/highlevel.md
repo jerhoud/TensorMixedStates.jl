@@ -13,5 +13,5 @@ ApproxW
 Evolve
 Gates
 Dmrg
-Partial_Trace
+PartialTrace
 ```

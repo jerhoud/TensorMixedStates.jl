@@ -1,4 +1,4 @@
-export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg, Partial_Trace
+export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg, PartialTrace
 
 
 """
@@ -286,8 +286,7 @@ show(io::IO, s::Dmrg) =
         final_measures = $(s.final_measures),
         nsweeps = $(s.nsweeps),
         hamiltonian = $(s.hamiltonian),
-        cutoff = $(s.cutoff),
-        maxdim = $(s.maxdim),
+        limits = $(s.limits),
         measures_period = $(s.measures_period),
         measures = $(s.measures),
         tolerance = $(s.tolerance))"""
@@ -298,9 +297,9 @@ a phase type for applying a partial trace
 
 # Examples
 
-    Partial_Trace(trace_positions = [2, 3, 6])
+    PartialTrace(trace_positions = [2, 3, 6])
 """
-@kwdef struct Partial_Trace
+@kwdef struct PartialTrace
     name::String = "Dmrg optimization"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
@@ -308,19 +307,32 @@ a phase type for applying a partial trace
     keep_positions::Union{Nothing, Vector{Int}} = nothing
 end
 
-show(io::IO, s::Partial_Trace) = 
+show(io::IO, s::PartialTrace) = 
     print(io,
     """
     
-    Partial_Trace(
+    PartialTrace(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
         final_measures = $(s.final_measures),
         trace_positions = $(s.trace_positions),
         keep_positions = $(s.keep_positions))""")
 
+
+@kwdef struct SteadyState
+    name::String = "Steady state optimization"
+    time_start::Union{Nothing, Number} = nothing
+    final_measures = []
+    lindbladian::ExprIndexed{Mixed}
+    limits::Limits
+    nsweeps::Int
+    measures = []
+    measures_period::Int = 1
+    tolerance::Number = 0.
+end
+
 """   
-    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, Partial_Trace}
+    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace, SteadyState}
 
 A type that contains all possible phase types for SimData and runTMS.
 Each of the types contains at least the three following fields (like SimData).
@@ -329,4 +341,4 @@ Each of the types contains at least the three following fields (like SimData).
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
-Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, Partial_Trace}
+Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace}

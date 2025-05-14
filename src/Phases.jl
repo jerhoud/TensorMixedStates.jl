@@ -91,11 +91,11 @@ run_phase(sim::Simulation, phase::SaveState) =
 run_phase(sim::Simulation, phase::LoadState) =
     Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits))
 
-function run_phase(sim::Simulation, phase::Partial_Trace)
+function run_phase(sim::Simulation, phase::PartialTrace)
     pos = phase.trace_positions
     keep = phase.keep_positions
     if isnothing(pos) == isnothing(keep)
-        error("Partial_Trace requires one and only one of trace_positions and keep_positions")
+        error("PartialTrace requires one and only one of trace_positions and keep_positions")
     end
     if isnothing(pos)
         return partial_trace(sim, keep; keepers = true)

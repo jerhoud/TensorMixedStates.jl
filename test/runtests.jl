@@ -212,7 +212,7 @@ end
             ghz = (State(Mixed(), sys, "Up") + State(Mixed(), sys, "Dn")) / 2
             test_phases([
                 CreateState(state = ghz),
-                Partial_Trace(
+                PartialTrace(
                     keep_positions = [2, 3, 5],
                     final_measures = check([X, Y, Z, (Z, Z)], [[0, 0, 0], [0, 0, 0], [0, 0, 0], [1 1 1 ; 1 1 1 ; 1 1 1]])
                 )
