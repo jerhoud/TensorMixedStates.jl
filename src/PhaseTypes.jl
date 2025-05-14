@@ -1,4 +1,4 @@
-export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg, PartialTrace
+export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg, PartialTrace, SteadyState
 
 
 """
@@ -318,7 +318,9 @@ show(io::IO, s::PartialTrace) =
         trace_positions = $(s.trace_positions),
         keep_positions = $(s.keep_positions))""")
 
-
+"""
+a phase to compute the steady state of a Lindbladian
+"""
 @kwdef struct SteadyState
     name::String = "Steady state optimization"
     time_start::Union{Nothing, Number} = nothing
@@ -331,6 +333,22 @@ show(io::IO, s::PartialTrace) =
     tolerance::Number = 0.
 end
 
+show(io::IO, s::SteadyState) = 
+    print(io,
+    """
+    
+    SteadyState(
+        name = $(repr(s.name)),
+        time_start = $(s.time_start),
+        final_measures = $(s.final_measures),
+        nsweeps = $(s.nsweeps),
+        lindbladian = $(s.lindbladian),
+        limits = $(s.limits),
+        measures_period = $(s.measures_period),
+        measures = $(s.measures),
+        tolerance = $(s.tolerance))"""
+    )
+
 """   
     Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace, SteadyState}
 
@@ -341,4 +359,4 @@ Each of the types contains at least the three following fields (like SimData).
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
-Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace}
+Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace, SteadyState}
