@@ -109,8 +109,8 @@ function run_phase(sim::Simulation, phase::SteadyState)
     if sim.state.type isa Pure
         error("state must be in mixed representation for computing steady state")
     end
-    l = make_mpo(sim.state, sim.lindbladian)
-    l2 = apply(dag(l), l; mpo_limits.cutoff, mpo_limits.maxdim)
+    l = make_mpo(sim.state, phase.lindbladian)
+    l2 = apply(dag(l), l; phase.mpo_limits.cutoff, phase.mpo_limits.maxdim)
     e, sim = dmrg(l2, sim; phase.nsweeps, phase.limits,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
     log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")

@@ -69,7 +69,7 @@ function (sys1::System ⊗ sys2::System)
         sys2 = sim(sys1)
     end
     return System(
-        [sys1.siste ; sys2.sites],
+        [sys1.sites ; sys2.sites],
         [sys1.pure_indices ; sys2.pure_indices],
         [sys1.mixed_indices ; sys2.mixed_indices])
 end
