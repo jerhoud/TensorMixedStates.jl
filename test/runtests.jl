@@ -275,4 +275,19 @@ end
                     ])
         ])
     end
+    @testset "Steady state" begin
+        @test_ok test_phases([
+            CreateState(
+                type = Mixed(),
+                system = System(5, Qubit()),
+                randomize = 10,
+            ),
+            SteadyState(
+                lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
+                limits = Limits(maxdim = 10, cutoff = 1e-10),
+                nsweeps = 10,
+                final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-6)
+            )
+        ])
+    end
 end
