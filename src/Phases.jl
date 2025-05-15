@@ -103,3 +103,16 @@ function run_phase(sim::Simulation, phase::PartialTrace)
         return partial_trace(sim, pos)
     end
 end
+
+function run_phase(sim::Simulation, phase::SteadyState)
+    log_msg(sim, "Searching for steady state with $(phase.nsweeps) sweeps of Dmrg")
+    if sim.state.type isa Pure
+        error("state must be in mixed representation for computing steady state")
+    end
+    l = make_mpo(sim.state, sim.lindbladian)
+    l2 = apply(dag(l), l; mpo_limits.cutoff, mpo_limits.maxdim)
+    e, sim = dmrg(l2, sim; phase.nsweeps, phase.limits,
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
+    log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
+    return sim
+end

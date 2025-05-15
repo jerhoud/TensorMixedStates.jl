@@ -184,13 +184,13 @@ A phase type for time evolution
 
 # Examples
 
-    Evolve(duration = 2., time_step = 0.1, algo = Tdvp, evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))), measures = [X, Y, Z])
+    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))), measures = [X, Y, Z])
 
 # Fields
 - `limits`: a Limits object to set cutoff and maxdim (see `Limits`)
 - `duration`: the duration of the time evolution
 - `time_step`: the time step
-- `algo`: the algorithm used (one of `Tdvp` or `ApproxW`)
+- `algo`: the algorithm used (one of `Tdvp()` or `ApproxW(...)`)
 - `evolver`: the hamiltonian (evolver = -im * H) with a possible dissipator (evolver = -im * H + D)
 - `measures`: the measurement to make (default [])
 - `measures_period`: number of time steps between measurments (default 1)
@@ -262,7 +262,7 @@ show(io::IO, s::Gates) =
 A phase type for optimizing with Dmrg
 
 # Examples
-    Dmrg(hamiltonian = X(1)X(2), nsweeps = 10, cutoff = 1e-10, maxim = [10, 20, 30], tolerance =1e-6)
+    Dmrg(hamiltonian = X(1)X(2), nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
 """
 @kwdef struct Dmrg
     name::String = "Dmrg optimization"
@@ -298,6 +298,7 @@ a phase type for applying a partial trace
 # Examples
 
     PartialTrace(trace_positions = [2, 3, 6])
+    PartialTrace(keep_positions = [1, 4, 5])
 """
 @kwdef struct PartialTrace
     name::String = "Dmrg optimization"
@@ -320,12 +321,22 @@ show(io::IO, s::PartialTrace) =
 
 """
 a phase to compute the steady state of a Lindbladian
+
+# Examples
+
+    SteadyState(
+        lindbladian = -im * hamiltonian + dissipators,
+        limits = Limits(cutoff = 1e-20, maxdim = [10, 20, 50]),
+        nsweeps = 10,
+        tolerance = 1e-5,
+    )
 """
 @kwdef struct SteadyState
     name::String = "Steady state optimization"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
     lindbladian::ExprIndexed{Mixed}
+    mpo_limits::Limits = Limits()
     limits::Limits
     nsweeps::Int
     measures = []
@@ -343,6 +354,7 @@ show(io::IO, s::SteadyState) =
         final_measures = $(s.final_measures),
         nsweeps = $(s.nsweeps),
         lindbladian = $(s.lindbladian),
+        mpo_limits = $(s.mpo_limits),
         limits = $(s.limits),
         measures_period = $(s.measures_period),
         measures = $(s.measures),
