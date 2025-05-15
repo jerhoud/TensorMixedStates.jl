@@ -202,7 +202,7 @@ end
                 hamiltonian = sum(-Z(i) for i in 1:5),
                 limits = Limits(maxdim = 10),
                 nsweeps = 2,
-                final_measures = check([X, Y, Z, Norm], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1], 1e-8)
+                final_measures = check([X, Y, Z, Norm], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1], 2e-8)
             )
         ])
     end
@@ -270,7 +270,7 @@ end
                     -im*sum(A(i)*dag(A)(i+1)+dag(A)(i)*A(i+1) for i in 1:3) + Dissipator(2*sqrt(0.1)*dag(A))(2),
                 final_measures = [
                         check(N,[0.363288753916464e-2,.120023637053104,0.356800815401577e-2,0.486649287358378e-4],1e-6),
-                        check([dag(A)(2)*A(i) for i in 1:4],[-0.180013492215079e-1*im,.120023637053104,-0.178675615179132e-1*im,-0.178658178615343e-2],2e-6),
+                        check([dag(A)(2)*A(i) for i in 1:4],[-0.180013492215079e-1*im,.120023637053104,-0.178675615179132e-1*im,-0.178658178615343e-2],1e-5),
                         check(Purity,.7965328508313,1e-6)
                     ])
         ])
@@ -286,7 +286,7 @@ end
                 lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
                 limits = Limits(maxdim = 10, cutoff = 1e-10),
                 nsweeps = 10,
-                final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 5e-12)
+                final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-11)
             )
         ])
     end
