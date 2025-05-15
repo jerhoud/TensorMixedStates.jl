@@ -17,7 +17,7 @@ To use TMS, you need to have Julia installed on your system. Installing julia is
 
 To install TMS in Julia, launch the Julia interface (by typing 'julia' on the command line) and type
 
-    ]add "https://github.com/jerhoud/TensorMixedStates.jl"
+    ]add TensorMixedStates
 
 Note the "]" required to enter julia package management system.
 
