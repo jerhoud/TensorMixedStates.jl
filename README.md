@@ -8,5 +8,9 @@
 
 A julia library to simulate quantum mixed states and Lindblad equation using matrix product states
 
+# Article of reference
+
+A preprint of the article describing this software is available at https://hal.science/hal-04945872
+
 # Documentation
 Documentation is available at https://jerhoud.github.io/TensorMixedStates.jl

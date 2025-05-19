@@ -11,6 +11,12 @@ Being based on ITensor, TMS delivers high performance computations and naturally
 
 The interface is user friendly. In particular, it features a very expressive syntax for operators allowing easy definitions of operators such as observables, gates, Hamiltonians or Lindbladians. Moreover the optional high level interface allows the writing of simple simulations in a few lines of code.
 
+## References
+
+To cite this software, please cite the following reference article
+
+[TensorMixedStates: A Julia library for simulating pure and mixed quantum states using matrix product states](https://hal.science/hal-04945872)
+
 ## Installation
 
 To use TMS, you need to have Julia installed on your system. Installing julia is usually esay and fast, see [The Julia Programming Language](https://julialang.org/) for instructions. TMS requires at least Julia version 1.10.5 to run.
