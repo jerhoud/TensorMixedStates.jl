@@ -41,7 +41,7 @@ sim_data(n,step,duration,alg,eL,eR,muL,muR) = SimData(
         ),
         Evolve(
             algo= (
-                (alg==0) ? tdvp : (
+                (alg==0) ? Tdvp() : (
                 (alg==1) ? ApproxW(order = 4, w = 1) : ApproxW(order = 4, w = 2)
                 )),
             limits = limits,
