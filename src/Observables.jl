@@ -1,4 +1,4 @@
-export trace, trace2, norm, normalize, dag, symmetrize, normsym
+export trace, trace2, norm, normalize, dag, symmetrize, normsym, hermitianity
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace
 
@@ -228,6 +228,8 @@ symmetrize(state::State; limits::Limits=Limits()) =
         State(state, 0.5*(+(state.state, dag(state).state; limits.cutoff, limits.maxdim)))
     end
 
+
+
 """
     normsym(::State)
 
@@ -235,8 +237,21 @@ equivalent to normalyze(symmetrize(state))
 """
 normsym(state::State) = normalize(symmetrize(state))
 
+"""
+    hermitianity(::State)
 
+hermitianity measure whether density matrix for mixed state is Hermitian as it should.
 
+return a value from 0 (anti Hermitian) to 1 (Hermitian)
+
+return 1 for pure state
+"""
+hermitianity(state::State) =
+    if State.type isa Pure
+        1.
+    else
+        0.5 + 0.5 * real(dot(state.state, dag(state.state))) / norm(state.state)
+    end
 
 
 unroll(x) =

@@ -1,4 +1,4 @@
-export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, EE, Linkdim, MemoryUsage, measure
+export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermitianity, HermitianityError, EE, Linkdim, MemoryUsage, measure
 
 """
     struct StateFunc
@@ -135,6 +135,8 @@ TraceError = StateFunc("TraceError", st -> 1. - trace(st))
 Trace2 = StateFunc("Trace2", trace2)
 Purity = StateFunc("Purity", trace2)
 Norm = StateFunc("Norm", norm)
+Hermitianity = StateFunc("Hermitianity", hermitianity)
+HermitianityError = StateFunc("HermitianityError", st -> 1. - hermitianity(st))
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
         ee, _ = entanglement_entropy(st, pos)
