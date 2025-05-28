@@ -31,11 +31,12 @@ With a couple of generic operators, we get the correlation matrix of those obser
 
 There are a some state functions predefined:
 
-    measure(state, Trace)           # returns the trace of the state
-    measure(state, Trace2)          # returns the trace of the square of the state (alternate name: Purity)
-    measure(state, TraceError)      # returns 1 - trace, usefull for monitoring trace deviations
-    measure(state, EE(l, n))        # returns entanglement entropy at site n and first n singular values
-    measure(state, Hermitianity)
+    measure(state, Trace)              # returns the trace of the state
+    measure(state, Trace2)             # returns the trace of the square of the state (alternate name: Purity)
+    measure(state, TraceError)         # returns 1 - trace, usefull for monitoring trace deviations
+    measure(state, EE(l, n))           # returns entanglement entropy at site n and first n singular values
+    measure(state, Hermitianity)       # returns 1 if density matrix is really Hermitian and down to 0 for anti Hermitian density matrix
+    measure(state, HermitianityError)  # return 1 - Hermitianity for monitoring hermitianity deviation
 
 New state functions may be defined by
 
