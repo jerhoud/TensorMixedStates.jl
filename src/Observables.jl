@@ -247,10 +247,10 @@ return a value from 0 (anti Hermitian) to 1 (Hermitian)
 return 1 for pure state
 """
 hermitianity(state::State) =
-    if State.type isa Pure
+    if state.type isa Pure
         1.
     else
-        0.5 + 0.5 * real(dot(state.state, dag(state.state))) / norm(state.state)
+        0.5 + 0.5 * real(dot(state.state, dag(state.state))) / norm(state.state)^2
     end
 
 
