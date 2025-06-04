@@ -33,7 +33,7 @@ function tdvp(pre::PreMPO, t::Number, state::State;
         if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
             st = symmetrize(State(state, st); limits).state
         end    
-        measure!(observer!; half_sweep_is_done = true, half_sweep = 2, sweep, state = st, current_time)
+        measure!(observer!; sweep, state = st, current_time, mpo)
         if n_expand ≠ 0 && mod(sweep, n_expand) == 0
             st = expand(st, mpo; alg="global_krylov")
         end
@@ -146,7 +146,7 @@ function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symme
         if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
             st = symmetrize(State(state, st); limits).state;
         end
-        measure!(observer!; sweep, state = st, current_time)
+        measure!(observer!; sweep, state = st, current_time, mpos)
     end
     return State(state, st)    
 end

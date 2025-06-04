@@ -39,23 +39,29 @@ mutable struct DmrgObserver <: AbstractObserver
     DmrgObserver(sim, measurements, period, tol) = new(sim, measurements, period, tol, 0.)
 end
 
-function measure!(o::TdvpObserver; sweep, half_sweep_is_done, half_sweep, current_time, state, kwargs...)
-    if half_sweep_is_done && half_sweep == 2 && mod(sweep, o.period) == 0
-        st = State(o.sim.state, state)
-        sim = Simulation(o.sim, st, current_time)
-        output(sim, o.measurements; sweep)
-    end
-    log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
-    return nothing
-end
-
-function measure!(o::ApproxWObserver; sweep, current_time, state, kwargs...)
+function measure!(o::TdvpObserver; sweep, current_time, state, mpo, kwargs...)
     if mod(sweep, o.period) == 0
         st = State(o.sim.state, state)
         sim = Simulation(o.sim, st, current_time)
         output(sim, o.measurements; sweep)
     end
+    if sweep == 1
+        log_msg(o.sim, "Tdvp MPO: maxlinkdim=$(maxlinkdim(mpo)), memory=$(Base.summarysize(mpo))")
+    end
     log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
+    return nothing
+end
+
+function measure!(o::ApproxWObserver; sweep, current_time, state, mpos, kwargs...)
+    if mod(sweep, o.period) == 0
+        st = State(o.sim.state, state)
+        sim = Simulation(o.sim, st, current_time)
+        output(sim, o.measurements; sweep)
+    end
+    if sweep == 1
+        log_msg(o.sim, "Approx_W MPOS: maxlinkdim=$(maxlinkdim(mpos[1])), memory=$(Base.summarysize(mpos))")
+    end
+   log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
     return nothing
 end
 
