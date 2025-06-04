@@ -234,7 +234,7 @@ symmetrize(state::State; limits::Limits=Limits()) =
 """
     normsym(::State)
 
-equivalent to normalyze(symmetrize(state))
+equivalent to normalize(symmetrize(state))
 """
 normsym(state::State) = normalize(symmetrize(state))
 
