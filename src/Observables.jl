@@ -208,8 +208,9 @@ dag(state::State) =
     if state.type isa Pure
         state
     else
-        st = copy(state.state)
-        for i in 1:length(st)
+        n = length(state)
+        st = MPS(n)
+        for i in 1:n
             st[i] = tensor_dag(state, i)
         end
         return State(state, st)
@@ -250,7 +251,7 @@ hermitianity(state::State) =
     if state.type isa Pure
         1.
     else
-        0.5 + 0.5 * real(dot(state.state, dag(state.state))) / norm(state.state)^2
+        0.5 + 0.5 * real(dot(state.state, dag(state).state)) / norm(state.state)^2
     end
 
 
