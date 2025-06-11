@@ -19,6 +19,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataFramesExt = "DataFrames"
 
 [compat]
+DataFrames = "1"
 Dates = "1.10 - 2"
 ITensorMPS = "0.3"
 ITensors = "0.7 - 0.9"
