@@ -76,10 +76,8 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     Date $(now())
                     """)
             src_path = Base.source_path()
-            if src_path ≠ ""
+            if src_path ≠ "" && src_path ≠ nothing
                 cp(src_path, "prog.jl"; force = true)
-            else
-                write_prog("prog.jl", sim_data)
             end
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format)
@@ -137,13 +135,3 @@ function log_phase(sim::Simulation, phase)
     end
     return sim
 end
-
-write_prog(filename, s::SimData) =
-    write(filename,
-        """
-        using TensorMixedStates
-
-        simdata = $s
-
-        runTMS(simdata)
-        """)
