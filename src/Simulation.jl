@@ -1,4 +1,15 @@
-export Simulation, get_sim_file
+export Simulation, get_sim_file, Data, DataToFrame
+
+"""
+    Data(name)
+
+represent a storage with the given name where to put measurement data
+"""
+struct Data
+    name::String
+end
+
+function DataToFrame end
 
 """
     Simulation(state[, time = 0])
@@ -21,11 +32,12 @@ struct Simulation
     time::Number
     output::Union{Nothing, IO}
     files::Dict{String, Union{IO, Dict}}
+    data::Dict{String, Dict}
     formats::Tuple{Printf.Format, Printf.Format}
     Simulation(state; t::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
-        new(state, t, output, Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
+        new(state, t, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
     Simulation(s::Simulation, st, t::Number = s.time) =
-        new(st, t, s.output, s.files, s.formats)
+        new(st, t, s.output, s.files, s.data, s.formats)
 end
 
 show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)")
@@ -38,22 +50,32 @@ redirect to stdout, stderr and devnull, other names are interpreted as file name
 
 Filename finishing by ".json" will return a Dict
 where to store data and this data will be output in JSON format in the file by `runTMS` at the end.
+
+Special filenames of the form `Data(name)` return a Dict where to store Data.
+Those Dict are gathered as a Dict in the `data` field of the Simulation
 """
-get_sim_file(sim::Simulation, filename) =
-    get!(sim.files, filename) do
-        if !isnothing(sim.output)
-            sim.output
-        elseif filename == "stdout" || filename == "-"
-            stdout
-        elseif filename == ""
-            devnull
-        elseif filename == "stderr"
-            stderr
-        elseif last(splitext(filename)) == ".json"
-            Dict()
-        else
-            open(filename, "w")
+get_sim_file(sim::Simulation, filename::AbstractString) =
+    if !isnothing(sim.output)
+        sim.output
+    else
+        get!(sim.files, filename) do
+            if filename == "stdout" || filename == "-"
+                stdout
+            elseif filename == ""
+                devnull
+            elseif filename == "stderr"
+                stderr
+            elseif last(splitext(filename)) == ".json"
+                Dict()
+            else
+                open(filename, "w")
+            end
         end
+    end
+
+get_sim_file(sim::Simulation, data::Data) =
+    get!(sim.data, data.name) do
+        Dict()
     end
 
 length(sim::Simulation) = length(sim.state)

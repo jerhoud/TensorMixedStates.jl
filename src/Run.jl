@@ -50,10 +50,9 @@ run the given simulation (see SimData for details), write the output to file and
 `clean` (default `false`) remove the simulation directory and exit,
 `restart` (default `false`) remove the simulation directory and run the simulation,
 `output` redirect all output to the given IO channel (no output directory created), usefull values are stdout or devnull (to suppress all output).
-`save_json` (default `true`) save the data accumulated in dicts in JSON format in the corresponding files
 
 """
-function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing, save_json::Bool = true)
+function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)
     if live && (restart || clean)
         rm(sim_data.name; recursive = true, force = true)
@@ -82,13 +81,13 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format)
         sim = log_phase(sim, sim_data)
-        if save_json
-            for (filename, data) in sim.files
-                if data isa Dict
-                    io = open(filename, "w")
-                    JSON.print(io, data)
-                    flush(io)
-                end
+        for (filename, data) in sim.files
+            if data isa Dict
+                io = open(filename, "w")
+                JSON.print(io, data)
+                close(io)
+            else
+                close(data)
             end
         end
         if live
