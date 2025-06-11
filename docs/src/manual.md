@@ -189,7 +189,7 @@ will give the array of the ``\langle \psi | \sigma_x^i | \psi \rangle``
 
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``
 
-We can also measure other properties like `Trace`, `TraceError`, `Trace2`, `Purity`, `Linkdim` and `MemoryUsage`.
+We can also measure other properties with `Trace`, `TraceError`, `Trace2`, `Purity`, `Hermitianity`, `HermitianityError`, `EE`, `Linkdim` and `MemoryUsage`.
 
 We can also ask for several measurements at the same time
 
@@ -198,6 +198,8 @@ We can also ask for several measurements at the same time
 For more details see the reference or the inline help.
 
 ## High Level Interface
+
+### Framework
 
 Most simulations follow the same pattern: start from some simple state, make some evolution and make measurements during or after the evolution and save the results to file. For these simple cases, TMS proposes a simpler interface.
 
@@ -210,13 +212,16 @@ The following phases are available:
 - `ToMixed` : go from pure representation to mixed representation
 - `Evolve` : do Hamiltonian or Lindbladian evolution
 - `Gates` : apply some gates
-- `Partial_trace` : trace the system over some sites (requires a mixed state)
+- `PartialTrace` : trace the system over some sites (requires a mixed state)
+- `SteadyState` : compute the steady state of a Lindblad equation (requires a mixed state)
 
 with these phases we define a `SimData` object that describes the simulation and finally, we call
 
     runTMS(simdata)
 
 which executes the simulation.
+
+### Example
 
 As an example, here is the complete code for such a simple simulation:
 
@@ -250,5 +255,35 @@ sim_data(n, gamma, step) = SimData(
 runTMS(sim_data(40, 1., 0.05))
 ```
 
-For more information, see the reference or inline help for each phase, SimData and runTMS.
+### Output
+
+`runTMS` creates a directory named after the `SimData` object `name` field and puts the output files there. In particular, it produces a `log` file showing the progression of the computation, a `prog.jl` file containing a copy of the script, a `description` file containing the content of the `SimData` `description` field, a `stamp` file containing version and date info, a `running` empty file is present during the computation, in case of error an empty `error` file is created.
+
+Three keyword arguments may be given `restart` (default `true`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files an redirect all output to the given io channel (useful values are stdout and devnull). 
+
+Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair
+
+    measures = destination => measurements
+
+or a list of pairs. The possible measurements are described in the measurements section of this manual. There are three types of destinations:
+
+- filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull)
+
+    "file.dat" => X
+
+- json filenames: filenames ending by ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
+
+    "file.json" => [Purity, X(2)Z(3), (X, Y)]
+
+- Data object: data is accumulated during the simulation and stored in the `data` field of the `Simulation` object returned by `runTMS`. This is useful for analyzing the data inside the program.
+
+    Data("mydata") => [TraceError, X(1), Y]
+
+The `DataToFrame` function can used on the result to get a `DataFrame` object (the user must import the `DataFrames` package himself before using this function)
+
+    sim = runTMS(simdata)
+    df = DataToFrame(sim.data["mydata"]) 
+
+
+For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
 

@@ -3,6 +3,8 @@
 ```@docs
 runTMS
 SimData
+Data
+DataToFrame
 Phases
 CreateState
 SaveState
@@ -14,4 +16,5 @@ Evolve
 Gates
 Dmrg
 PartialTrace
+SteadyState
 ```

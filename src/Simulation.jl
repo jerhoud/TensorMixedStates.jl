@@ -9,6 +9,12 @@ struct Data
     name::String
 end
 
+"""
+    DataToFrame(data)
+
+return a `DataFrame` object corresponding to the data. The `DataFrames` package must be imported
+before using this function.
+"""
 function DataToFrame end
 
 """
@@ -25,6 +31,7 @@ Most functions applicable to States can be applied to Simulations
 - `time`        : the simulation time
 - `output`      : if not nothing an io where to redirect output
 - `files`       : a dictionary holding io or dict where to write data
+- `data`        : a dictionary holding data collected for the `Data` objects
 - `formats`     : format info for the output
 """
 struct Simulation

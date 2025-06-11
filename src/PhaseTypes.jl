@@ -113,7 +113,7 @@ A phase type to switch to mixed representation
 - `name`: the name of the phase
 - `time_start`: the simulation time to use (no much use here)
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-' `limits` : constraints on the final state
+- `limits` : constraints on the final state
 
 # Examples
 
