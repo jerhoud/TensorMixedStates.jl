@@ -288,7 +288,7 @@ show(io::IO, s::GroundState) =
     print(io,
     """
     
-    Dmrg(
+    GroundState(
         name = $(repr(s.name)),
         time_start = $(s.time_start),
         final_measures = $(s.final_measures),
@@ -309,7 +309,7 @@ a phase type for applying a partial trace
     PartialTrace(keep_positions = [1, 4, 5])
 """
 @kwdef struct PartialTrace
-    name::String = "Dmrg optimization"
+    name::String = "Computing partial trace"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
     trace_positions::Union{Nothing, Vector{Int}} = nothing
