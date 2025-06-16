@@ -63,11 +63,11 @@ function run_phase(sim::Simulation, phase::Evolve)
     algo = phase.algo
     if algo isa ApproxW
         state = approx_W(pre, duration, state;
-            coefs, algo.n_symmetrize, nsweeps, algo.order, algo.w, time_start = sim.time, phase.limits,
+            coefs, algo.n_hermitianize, nsweeps, algo.order, algo.w, time_start = sim.time, phase.limits,
             observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
         state = tdvp(pre, duration, state;
-            coefs, algo.n_expand, algo.n_symmetrize, nsweeps, time_start = sim.time, phase.limits,
+            coefs, algo.n_expand, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
             observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
     return Simulation(sim, state, time_stop)
@@ -80,7 +80,7 @@ function run_phase(sim::Simulation, phase::Gates)
 end
 
 
-function run_phase(sim::Simulation, phase::Dmrg)
+function run_phase(sim::Simulation, phase::GroundState)
     log_msg(sim, "Optimizing state with $(phase.nsweeps) sweeps of Dmrg")
     e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.limits,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))

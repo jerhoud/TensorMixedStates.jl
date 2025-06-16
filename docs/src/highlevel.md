@@ -14,7 +14,7 @@ Tdvp
 ApproxW
 Evolve
 Gates
-Dmrg
+GroundState
 PartialTrace
 SteadyState
 ```

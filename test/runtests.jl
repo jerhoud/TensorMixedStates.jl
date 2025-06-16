@@ -198,7 +198,7 @@ end
                 system = System(5, Qubit()),
                 randomize = 10,
             ),
-            Dmrg(
+            GroundState(
                 hamiltonian = sum(-Z(i) for i in 1:5),
                 limits = Limits(maxdim = 10),
                 nsweeps = 2,
@@ -223,7 +223,7 @@ end
         @test_ok test_phases([
             CreateState(Pure(), 6, Qubit(), "X+"),
             Evolve(
-                algo =  ApproxW(order = 4, w = 2, n_symmetrize = 5),
+                algo =  ApproxW(order = 4, w = 2, n_hermitianize = 5),
                 limits = Limits(maxdim = 8),
                 duration = 1.0,
                 time_step = 0.02,

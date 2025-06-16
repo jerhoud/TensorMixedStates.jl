@@ -12,7 +12,7 @@ sim_data(n) = SimData(
             type = Pure(),
             randomize = 10,
         ),
-        Dmrg(
+        GroundState(
             hamiltonian = sum(-Z(i) for i in 1:n) + 0.5 * sum(Z(i)Z(i + 1) for i in 1:n-1),
             limits = Limits(cutoff = 1e-10, maxdim = [5, 10, 25, 50, 100]),
             nsweeps = 10,

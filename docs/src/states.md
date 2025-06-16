@@ -22,9 +22,8 @@ trace(::State)
 trace2(::State)
 norm(::State)
 dag(::State)
-symmetrize(::State)
+hermitianize(::State)
 hermitianity(::State)
-normsym
 random_state
 partial_trace(::State, ::Vector{Int})
 ```

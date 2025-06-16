@@ -45,7 +45,7 @@ sim_data(n,step,duration,alg,gamma) = SimData(
         Evolve(
             algo= (
                 (alg==0) ? Tdvp() : (
-                (alg==1) ? ApproxW(order = 4, w = 1,n_symmetrize = 5) : ApproxW(order = 4, w = 2,n_symmetrize = 5)
+                (alg==1) ? ApproxW(order = 4, w = 1,n_hermitianize = 5) : ApproxW(order = 4, w = 2,n_hermitianize = 5)
                 )),
             limits = limits,
             duration = duration,

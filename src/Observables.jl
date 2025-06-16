@@ -1,4 +1,4 @@
-export trace, trace2, norm, normalize, dag, symmetrize, normsym, hermitianity
+export trace, trace2, norm, normalize, dag, hermitianize, hermitianity
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace
 
@@ -218,11 +218,11 @@ dag(state::State) =
 
 
 """
-    symmetrize(::State)
+    hermitianize(::State)
 
-symmetrize state so that it is hermitian (only for mixed state)
+modify the state so that it is Hermitian (only useful for mixed state)
 """
-symmetrize(state::State; limits::Limits=Limits()) =
+hermitianize(state::State; limits::Limits=Limits()) =
     if state.type isa Pure
         state
     else
@@ -230,13 +230,6 @@ symmetrize(state::State; limits::Limits=Limits()) =
     end
 
 
-
-"""
-    normsym(::State)
-
-equivalent to normalize(symmetrize(state))
-"""
-normsym(state::State) = normalize(symmetrize(state))
 
 """
     hermitianity(::State)

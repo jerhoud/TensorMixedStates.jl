@@ -208,7 +208,7 @@ A simple simulation follows a single state through a certain number of phases wh
 The following phases are available:
 
 - `CreateState` : create a simple state
-- `DMRG` : compute the ground state (requires a pure state)
+- `GroundState` : compute the ground state using dmrg (requires a pure state)
 - `ToMixed` : go from pure representation to mixed representation
 - `Evolve` : do Hamiltonian or Lindbladian evolution
 - `Gates` : apply some gates

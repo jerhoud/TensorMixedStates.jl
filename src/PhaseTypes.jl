@@ -1,4 +1,4 @@
-export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, Dmrg, PartialTrace, SteadyState
+export Limits, Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, GroundState, Dmrg, PartialTrace, SteadyState
 
 
 """
@@ -149,15 +149,15 @@ An algorithm type for `Evolve`
 # Examples
     Tdvp()
     Tdvp(n_expand = 5)     tdvp with expansion steps every 5 steps
-    Tdvp(n_symmetrize = 3) tdvp, make hermitian every 3 steps
+    Tdvp(n_hermitianize = 3) tdvp, make hermitian every 3 steps
 """
 @kwdef struct Tdvp
     n_expand::Int = 0
-    n_symmetrize::Int = 0
+    n_hermitianize::Int = 0
 end
 
 show(io::IO, s::Tdvp) =
-    print(io, "Tdvp(n_expand = $(s.n_expand), n_symmetrize = $(s.n_symmetrize))")
+    print(io, "Tdvp(n_expand = $(s.n_expand), n_hermitianize = $(s.n_hermitianize))")
 
 """
 An algorithm type for `Evolve`
@@ -167,16 +167,16 @@ This corresponds to time evolution with exponential approximation WI or WII comb
 # Examples
     ApproxW(order = 2)                   order 2, WII
     ApproxW(order = 4, w = 1)            order 4, WI
-    ApproxW(order = 4, n_symmetrize = 3) order 4, make hermitian every 3 steps
+    ApproxW(order = 4, n_hermitianize = 3) order 4, make hermitian every 3 steps
 """
 @kwdef struct ApproxW
     order::Int
     w::Int = 2
-    n_symmetrize::Int = 0
+    n_hermitianize::Int = 0
 end
 
 show(io::IO, s::ApproxW) =
-    print(io, "ApproxW(order = $(s.order), w = $(s.w), n_symmetrize = $(s.n_symmetrize))")
+    print(io, "ApproxW(order = $(s.order), w = $(s.w), n_hermitianize = $(s.n_hermitianize))")
 
 
 Algo = Union{Tdvp, ApproxW}
@@ -262,13 +262,13 @@ show(io::IO, s::Gates) =
     )
 
 """
-A phase type for optimizing with Dmrg
+A phase type for computing the ground state using Dmrg
 
 # Examples
-    Dmrg(hamiltonian = X(1)X(2), nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
+    GroundState(hamiltonian = X(1)X(2), nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
 """
-@kwdef struct Dmrg
-    name::String = "Dmrg optimization"
+@kwdef struct GroundState
+    name::String = "Ground state computation using Dmrg"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
     hamiltonian::ExprIndexed{Pure}
@@ -279,7 +279,12 @@ A phase type for optimizing with Dmrg
     tolerance::Number = 0.
 end
 
-show(io::IO, s::Dmrg) = 
+"""
+Dmrg is deprecated use GroundState instead
+"""
+Dmrg = GroundState
+
+show(io::IO, s::GroundState) = 
     print(io,
     """
     
@@ -365,7 +370,7 @@ show(io::IO, s::SteadyState) =
     )
 
 """   
-    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace, SteadyState}
+    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}
 
 A type that contains all possible phase types for SimData and runTMS.
 Each of the types contains at least the three following fields (like SimData).
@@ -374,4 +379,4 @@ Each of the types contains at least the three following fields (like SimData).
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
-Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, Dmrg, PartialTrace, SteadyState}
+Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}

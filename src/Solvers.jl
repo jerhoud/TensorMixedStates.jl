@@ -11,11 +11,11 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 - `nsweeps`: number sweeps to do (time step = t / nsweeps) 
 - `coefs`: coefficients for time dependent evolver
 - `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
-- `n_symmetrize`: make hermitian (for mixed states) every n_symmetrize steps (default 0 for no corrections)
+- `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
 - others are identical to ITensorMPS.tdvp
 """
 function tdvp(pre::PreMPO, t::Number, state::State;
-    observer! = NoObserver(), coefs=nothing, n_expand = 0, n_symmetrize = 0,
+    observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
     nsweeps = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...)
     time_dep = !isnothing(coefs)
     st = state.state
@@ -30,8 +30,8 @@ function tdvp(pre::PreMPO, t::Number, state::State;
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
         st = tdvp(mpo, dt, st; nsweeps = 1, limits.cutoff, limits.maxdim, kwargs...)
-        if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-            st = symmetrize(State(state, st); limits).state
+        if n_hermitianize ≠ 0 && mod(sweep, n_hermitianize) == 0
+            st = hermitianize(State(state, st); limits).state
         end    
         measure!(observer!; sweep, state = st, current_time, mpo)
         if n_expand ≠ 0 && mod(sweep, n_expand) == 0
@@ -117,7 +117,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 # Options
 
 - `coefs`: coefficients for time dependent evolution
-- `n_symmetrize`: make hermitian (for mixed states) every n_symmetrize steps (default 0 for no corrections)
+- `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
 - `nsweeps`: number of steps (time step is t / nsweeps)
 - `order`: order of approximation
 - `w`: 1 or 2 for WI or WII
@@ -125,7 +125,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `time_start`: the simulation time at the beginning of evolution
 - `limits`: MPS constraints
 """
-function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symmetrize::Int = 0,
+function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),
     limits::Limits=Limits(), kwargs...)
     st = state.state
@@ -143,8 +143,8 @@ function approx_W(pre::PreMPO, t::Number, state::State; coefs = nothing, n_symme
         for mpo in mpos
             st = apply(mpo, st; limits.cutoff, limits.maxdim, kwargs...)
         end
-        if n_symmetrize ≠ 0 && mod(sweep, n_symmetrize) == 0
-            st = symmetrize(State(state, st); limits).state;
+        if n_hermitianize ≠ 0 && mod(sweep, n_hermitianize) == 0
+            st = hermitianize(State(state, st); limits).state;
         end
         measure!(observer!; sweep, state = st, current_time, mpos)
     end

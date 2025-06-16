@@ -43,8 +43,8 @@ sim_data(J,h,n) = SimData(
             limits = limits,
         ), 
         Evolve(
-            #algo = Tdvp(n_symmetrize = 5),
-            algo =  ApproxW(order = 4, n_symmetrize = 5),
+            #algo = Tdvp(n_hermitianize = 5),
+            algo =  ApproxW(order = 4, n_hermitianize = 5),
             limits = limits,
             duration = 5,
             time_step = 0.04,
