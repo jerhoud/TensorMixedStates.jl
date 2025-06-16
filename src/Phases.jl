@@ -2,6 +2,9 @@ run_phase(sim::Simulation, sd::SimData) =
     log_phase(sim, sd.phases)
 
 function run_phase(sim::Simulation, phase::CreateState)
+    if !isnothing(phase.seed)
+        Random.seed!(phase.seed)
+    end
     if isnothing(phase.state)
         if phase.randomize == 0
             error("CreateState without state nor randomize: no state created !")

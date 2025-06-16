@@ -13,6 +13,7 @@ A phase type to create the simulation state
 - `system`: a System object to describe the system (see `System`) (unused if a State object is given)
 - `state`: a description of the state (or a State object)
 - `randomize`: the link dimension for the random state to create (default 0 for no randomizing)
+- `seed`: set the random generator seed for randomize (default nothing)
 
 # Examples
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up")
@@ -30,6 +31,7 @@ A phase type to create the simulation state
     system::Union{Nothing, System} = nothing
     state = nothing
     randomize::Int = 0
+    seed::Union{Nothing, Int} = nothing
 end
 
 CreateState(type, n, site, state; kwargs...) = CreateState(;type, system = System(n, site), state, kwargs...)
@@ -46,7 +48,8 @@ show(io::IO, s::CreateState) =
             type = $(s.type),
             system = $(s.system),
             state = $(repr(s.state)),
-            randomize = $(s.randomize))""")
+            randomize = $(s.randomize),
+            seed = $(s.seed))""")
 
 """
 A phase type to save the state to disk
