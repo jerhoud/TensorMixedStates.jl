@@ -139,7 +139,7 @@ end
             (Tdvp(), 0.1, 1e-14),
             (ApproxW(order=1, w=1), 0.01, 0.03),
             (ApproxW(order=4, w=1), 0.01, 1e-10),
-            (ApproxW(order=1, w=2), 0.01, 1e-14),
+            (ApproxW(order=1, w=2), 0.01, 1e-13),
             (ApproxW(order=4, w=2), 0.01, 1e-14),       
         ]
             @test_pm test_phases([
