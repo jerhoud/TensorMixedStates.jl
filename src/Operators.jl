@@ -392,7 +392,8 @@ tensor product for generic operators, alternative syntax: tensor(op1, op2)
 """
 (a::ExprOp{T, N} ⊗ b::ExprOp{T, M}) where {T, N, M} =
     TensorOp{T, N + M}([tensorsubs(a) ; tensorsubs(b)])
-tensor(a::ExprOp, b::ExprOp, c::ExprOp...) = ⊗(a, b, c...)
+tensor(a::ExprOp, b::ExprOp) = a ⊗ b
+tensor(a::ExprOp, b::ExprOp, c::ExprOp, d::ExprOp...) = tensor(a ⊗ b, c, d...)
 
 show(io::IO, a::TensorOp) =
     paren(io, Base.operator_precedence(:⊗)) do io
