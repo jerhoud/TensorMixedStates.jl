@@ -3,35 +3,41 @@ export expand_index, simplify, insertFfactors, process
 """
     expand_index(op)
 
-expand multiple site operators into simple site operators if possible.
+expand multiple site operators into simple site operators if possible. Also expands Dissipator and Evolver.
 """
 expand_index(a) = apply_expr(expand_index, a)
-expand_index(a::Indexed{T, 1}) where T =
-    if has_dissipator(a)
-        inner_index(a.op, a.index...)
-    else
-        a
-    end
-expand_index(a::Indexed{T, N}) where {T, N} = inner_index(a.op, a.index...)
+expand_index(a::Indexed) = inner_index(a.op, a.index...)
+function expand_index(a::Evolver)
+    arg = expand_index(a.arg)
+    return Left(arg) + Right(arg)
+end
 
 inner_index(a, idx...) = apply_expr(o->inner_index(o, idx...), a)
 inner_index(a::Operator{T, 1}, idx...) where T = a(idx...)
 inner_index(a::Proj, idx...) = a(idx...)
 inner_index(a::Union{ExpOp{T, 1}, PowOp{T, 1}, SqrtOp{T, 1}}, idx...) where T = a(idx...)
-inner_index(a::Operator, idx...) = inner_index(a.expr, idx...)
+inner_index(a::Operator, idx...) =
+    if isnothing(a.expr)
+        error("Cannot simplify matrix multiple site operators ($a)")
+    else
+        inner_index(a.expr, idx...)
+    end
 inner_index(a::TensorOp, idx...) = prod(tensor_apply(inner_index, a, idx...))
-inner_index(::Union{ExpOp, PowOp, SqrtOp}, idx...) = error("cannot simplify multiple site functionals")
+inner_index(a::Union{ExpOp, PowOp, SqrtOp}, idx...) = error("cannot simplify multiple site functionals ($a)")
+inner_index(a::Gate) = error("Gate are not meant to be simplified ($a)")
 function inner_index(a::Dissipator, idx...)
     a = inner_index(a.arg, idx...)
     aa = dag(a) * a
-    Gate(a) - 0.5 * Left(aa) - 0.5 * Right(aa)
+    Left(a) * Right(a) - 0.5 * Left(aa) - 0.5 * Right(aa)
 end
+
+
 
 function collect_sum(a::Vector{<:ExprIndexed{T}}) where T
     subs = sort(a; by=prodsubs)
     r = ExprIndexed{T}[]
     c = 0
-    p = []
+    p = ExprIndexed{T}[]
     for s in subs
         ps = prodsubs(s)
         cs = prodcoef(s)
@@ -49,10 +55,10 @@ function collect_sum(a::Vector{<:ExprIndexed{T}}) where T
             p = ps
         end
     end
-    if c ≠ 0 || isempty(r)
+    if c ≠ 0
         push!(r, ProdOp{T, IndexOp}(c, p))
     end
-    return r
+    return SumOp{T, IndexOp}(r)
 end
 
 """
@@ -61,7 +67,7 @@ end
 simplify indexed operator
 """
 simplify(a::SumOp{T, IndexOp}) where T =
-    SumOp{T, IndexOp}(collect_sum(reduce(vcat, map(t->sumsubs(simplify(t)), a.subs))))
+    collect_sum(reduce(vcat, map(t->sumsubs(simplify(t)), a.subs)))
 
 distribute(a::Vector{<:Vector}) = a
 distribute(a::Vector{<:Vector}, b::Vector, c::Vector...) = 
@@ -106,9 +112,9 @@ function collect_product(a::Vector{<:ExprIndexed{T}}) where T
     r = ExprIndexed{T}[]
     for ind in a
         if !(ind isa Indexed{T, 1})
-            idx = 0
-            continue
+            error("Cannot simplify multiple site tensor ($ind)")
         end
+        if ind.op == Id continue end
         i = ind.index[1]
         if i == idx
             o *= ind.op
@@ -133,32 +139,15 @@ function simplify(a::ProdOp{T, IndexOp}) where T
     r = map(distribute(map(sumsubs, subs)...)) do p # develop the inner sums and loop over all resulting products
         cp = c * prod(map(prodcoef, p))             # gather all product coefs for each
         sp = reduce(vcat, map(prodsubs, p))         # gather all product factors for each
-        cp *= signature(sortperm(filter(fermionic, sp); by=t->t.index))  # get the fermionic order sign
-        ProdOp{T, IndexOp}(cp, collect_product(sort(sp; by=t->t.index)))    # return the final product ordered with operators on the same site collapsed
+        if T == Pure
+            cp *= signature(sortperm(filter(fermionic, sp); by=t->t.index))  # get the fermionic order sign
+        else
+            cp *= signature(sortperm(filter(fermionic_left, sp); by=t->t.index))
+            cp *= signature(sortperm(filter(fermionic_right, sp); by=t->t.index))
+        end
+        ProdOp{T, IndexOp}(cp, collect_product(sort(sp; by=t->t.index))) # return the final product ordered with operators on the same site collapsed
     end
-    return SumOp{T, IndexOp}(collect_sum(r))
-end
-
-function simplify(a::Evolver)
-    args = sumsubs(simplify(a.arg))
-    r = ExprIndexed{Mixed}[]
-    for p in args
-        c = prodcoef(p)
-        s = prodsubs(p)
-        push!(r, ProdOp{Mixed, IndexOp}(c, map(ind->Left(ind.op)(ind.index...), s)))
-        push!(r, ProdOp{Mixed, IndexOp}(conj(c), map(ind->Right(ind.op)(ind.index...), s)))
-    end
-    return SumOp{Mixed, IndexOp}(r)
-end
-
-function simplify(a::Gate{IndexOp})
-    arg = simplify(a.arg)
-    if arg isa SumOp
-        error("Gate of sums not implemented: Gate($arg)")
-    end
-    c = abs2(prodcoef(arg))
-    s = map(ind->Gate(ind.op)(ind.index...), prodsubs(arg))
-    return ProdOp{Mixed, IndexOp}(c, s)
+    return collect_sum(r)
 end
 
 simplify(a::Left) = simplify_left(simplify(a.arg))
@@ -171,7 +160,6 @@ simplify_right(a) = apply_expr(simplify_right, a)
 simplify_right(a::Indexed) = Right(a.op)(a.index...)
 simplify_right(a::ProdOp) = ProdOp{Mixed, IndexOp}(conj(a.coef), map(simplify_right, a.subs))
 
-
 simplify(a::Indexed) = a
 
 simplify(a::DagOp) = simplify_dag(simplify(a.arg))
@@ -180,6 +168,7 @@ simplify_dag(a::DagOp) = a.arg
 simplify_dag(a::ProdOp{T, IndexOp}) where T = ProdOp{T, IndexOp}(conj(a.coef), map(simplify_dag, a.subs))
 simplify_dag(a) = apply_expr(simplify_dag, a)
 simplify_dag(a::Indexed) = dag(a.op)(a.index...)
+
 
 Ffactor(::Indexed{Pure, 1}) = F
 Ffactor(a::Indexed{Mixed, 1}) = Ffactor(a.op)

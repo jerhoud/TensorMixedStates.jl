@@ -117,7 +117,7 @@ ranking(::Operator) = 1
 
 isless(a::Operator, b::Operator) = isless(a.name, b.name)
 
-############ proj ################
+############ Proj ################
 
 """
     Proj(state)
@@ -190,6 +190,8 @@ show(io::IO, a::Gate) =
     paren(io, 1000, 0) do io
         show_func(io, "Gate", a.arg)
     end
+
+Gate(a::ExprIndexed{Pure}) = error("Gate cannot be applied to indexed expressions")
 
 ranking(::Gate) = 10
 
@@ -274,17 +276,24 @@ apply_expr(f, a::Right) = Right(f(a.arg))
     
 ############### Operator Products ###############
 
+identity_build(::Type{Pure}, ::Type{IndexOp}) = Id(1)
+identify_build(::Type{Mixed}, ::Type{IndexOp}) = Left(Id)(1)
+identity_build(::Type{Pure}, ::Type{N}) where N = tensor(fill(Id, N)...)
+identity_build(::Type{Mixed}, ::Type{N}) where N = Left(tensor(fill(Id, N)...)) 
+
 struct ProdOp{T, N} <: ExprOp{T, N}
     coef::Number
     subs::Vector{<:ExprOp{T, N}}
-    ProdOp{T, N}(c::Number, s::Vector{<:ExprOp{T, N}}) where {T, N} =
+    function ProdOp{T, N}(c::Number, s::Vector{<:ExprOp{T, N}}) where {T, N}
         if isempty(s)
-            error("bug: empty operator product")
-        elseif c == 1 && length(s) == 1
-            return s[1]
-        else
-            return new{T, N}(c, s)
+            s = [identify_build(T, N)]
         end
+        if c == 1 && length(s) == 1
+            s[1]
+        else
+            new{T, N}(c, s)
+        end
+    end
 end
 
 prodsubs(a::ProdOp) = a.subs
@@ -320,11 +329,11 @@ struct SumOp{T, N} <: ExprOp{T, N}
     subs::Vector{<:ExprOp{T, N}}
     SumOp{T, N}(s::Vector{<:ExprOp{T, N}}) where {T, N} =
         if isempty(s)
-            error("bug: empty operator sum")
+            ProdOp{T, N}(0., [])
         elseif length(s) == 1
-            return s[1]
+            s[1]
         else
-            return new{T, N}(s)
+            new{T, N}(s)
         end
 end
 
@@ -392,6 +401,7 @@ tensor product for generic operators, alternative syntax: tensor(op1, op2)
 """
 (a::ExprOp{T, N} ⊗ b::ExprOp{T, M}) where {T, N, M} =
     TensorOp{T, N + M}([tensorsubs(a) ; tensorsubs(b)])
+tensor(a::ExprOp) = a
 tensor(a::ExprOp, b::ExprOp) = a ⊗ b
 tensor(a::ExprOp, b::ExprOp, c::ExprOp, d::ExprOp...) = tensor(a ⊗ b, c, d...)
 
