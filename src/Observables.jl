@@ -1,6 +1,6 @@
-export trace, trace2, norm, normalize, dag, hermitianize, hermitianity
+export trace, trace2, norm, normalize, dag, hermitianize, hermitianity, renyi2
 export expect, expect1, expect2
-export entanglement_entropy, partial_trace
+export entanglement_entropy, partial_trace, mutual_info_renyi2
 
 function tensor_trace(state::State, i::Int)
     s = state.system
@@ -156,14 +156,6 @@ function create_left!(l, ::Mixed, state::State, i::Int)
 end
 
 """
-    trace_error(::State)
-
-Return the deviaton to 1 of the trace of the system, mostly usefull for mixed representations.
-This should be zero.
-"""
-trace_error(state::State; preobs = nothing) = 1 - trace(state; preobs) 
-
-"""
     trace2(::State)
 
 Return the trace of the square density matrix, mostly usefull for mixed representations.
@@ -247,7 +239,18 @@ hermitianity(state::State) =
         0.5 + 0.5 * real(dot(state.state, dag(state).state)) / norm(state.state)^2
     end
 
+"""
+    renyi2(::State)
 
+renyi2 returns the Renyi entropy of order 2 of the state. This is 0. for pure representations.
+"""
+renyi2(state::State) =
+    if state.type isa Pure
+        0.
+    else
+        -log(trace2(state))
+    end
+ 
 unroll(x) =
     if x[1] isa Number
         x
@@ -546,3 +549,18 @@ function partial_trace(state::State, pos::Vector{Int}; keepers::Bool = false)
     end
     return State(Mixed(), System(s, sp, sm), MPS(t))
 end
+
+"""
+    mutual_info_renyi2(state::State, cut::Int)
+    mutual_info_renyi2(state::State, a::Vector{Int})
+
+return an approximation of the mutual information using renyi2 entropy.
+You define the two parts either by giving the position of the cut between the left and right parts or by giving the list of positions for one of the parts.
+"""
+mutual_info_renyi2(state::State, a::Vector{Int}) =
+    renyi2(partial_trace(state, a; keepers = true)) +
+    renyi2(partial_trace(state, a; keepers = false)) -
+    renyi2(state)
+
+mutual_info_renyi2(state::State, cut::Int) =
+    mutual_info_renyi2(state, collect(1:cut))

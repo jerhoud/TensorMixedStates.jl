@@ -1,4 +1,5 @@
-export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermitianity, HermitianityError, EE, Linkdim, MemoryUsage, measure
+export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermitianity, HermitianityError, Renyi2
+export EE, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
 
 """
     struct StateFunc
@@ -137,6 +138,7 @@ Purity = StateFunc("Purity", trace2)
 Norm = StateFunc("Norm", norm)
 Hermitianity = StateFunc("Hermitianity", hermitianity)
 HermitianityError = StateFunc("HermitianityError", st -> 1. - hermitianity(st))
+Renyi2 = StateFunc("Renyi2", renyi2)
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
         ee, _ = entanglement_entropy(st, pos)
@@ -147,6 +149,7 @@ EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
         ee, sp = entanglement_entropy(st, pos)
         return [[ee]; sp[1:min(length(sp), spectre)]]
     end)
+Mutual_Info_Renyi2(part) = StateFunc("Mutual_Info_Renyi2", st -> mutual_info_renyi2(st, part))
 Linkdim = StateFunc("Linkdim", maxlinkdim)
 MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
