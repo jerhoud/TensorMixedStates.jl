@@ -35,13 +35,22 @@ dim(::Fermion) = 2
 [
     C = [0. 1. ; 0. 0.],
 ],
-true)
+fermionic_op)
 
 @def_operators(Fermion(),
 [
     F = [1. 0. ; 0. -1.],
-    A = C,
+],
+involution_op)
+
+@def_operators(Fermion(),
+[
     N = dag(C)*C
+], selfadjoint_op)
+
+@def_operators(Fermion(),
+[
+    A = C,
 ])
 
 module Fermions

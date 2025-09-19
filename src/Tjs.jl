@@ -27,7 +27,7 @@ struct Tj <: AbstractSite end
 
 dim(::Tj) = 3
 
-generic_state(::Tj, ::String) = error("no generic state for Tj")
+string_state(::Tj, ::String) = error("no generic state for Tj")
 
 @def_states(Tj(),
 [
@@ -49,7 +49,7 @@ generic_state(::Tj, ::String) = error("no generic state for Tj")
         0 0 0
     ],
 ],
-true)
+fermionic_op)
 
 @def_operators(Tj(),
 [
@@ -68,8 +68,23 @@ true)
         0  1  0
         0  0 -1
     ],
+],
+involution_op)
+
+@def_operators(Tj(),
+[
     Aup = Cup,
     Adn = Cdn,
+    Sp = Float64[
+        0  0  0
+        0  0  1
+        0  0  0
+    ],
+    Sm = dag(Sp),
+])
+
+@def_operators(Tj(),
+[
     Nup = dag(Cup)*Cup,
     Ndn = dag(Cdn)*Cdn,
     Ntot = Nup + Ndn,
@@ -78,15 +93,10 @@ true)
         0  1  0
         0  0 -1
     ],
-    Sp = Float64[
-        0  0  0
-        0  0  1
-        0  0  0
-    ],
-    Sm = dag(Sp),
     Sx = (Sp + Sm) / 2,
     Sy = (Sp - Sm) / (2im)
-])
+],
+selfadjoint_op)
 
 module Tjs
 

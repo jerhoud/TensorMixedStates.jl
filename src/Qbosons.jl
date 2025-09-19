@@ -32,8 +32,16 @@ dim(a::Qboson) = a.dim
 @def_operators(Qboson(1., 2),
 [
     F = Id,
-    A = s -> [ i==j-1 ? sqrt(1-s.q^i) : 0. for i in 1:dim(s), j in 1:dim(s) ],
+], involution_op)
+
+@def_operators(Qboson(1., 2),
+[
     N = s -> [ i==j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ]
+], selfadjoint_op)
+
+@def_operators(Qboson(1., 2),
+[
+    A = s -> [ i==j-1 ? sqrt(1-s.q^i) : 0. for i in 1:dim(s), j in 1:dim(s) ],
 ])
 
 module Qbosons

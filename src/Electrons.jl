@@ -28,7 +28,7 @@ struct Electron <: AbstractSite end
 
 dim(::Electron) = 4
 
-generic_state(::Electron, ::String) = error("no generic state for Electron")
+string_state(::Electron, ::String) = error("no generic state for Electron")
 
 @def_states(Electron(),
 [
@@ -53,7 +53,7 @@ generic_state(::Electron, ::String) = error("no generic state for Electron")
         0 0 0 0
     ]
 ],
-true)
+fermionic_op)
 
 @def_operators(Electron(),
 [
@@ -75,6 +75,11 @@ true)
         0  0 -1  0
         0  0  0 -1
     ],
+],
+involution_op)
+
+@def_operators(Electron(),
+[
     Aup = Cup,
     Adn = Float64[
         0 0 1 0
@@ -82,6 +87,17 @@ true)
         0 0 0 0
         0 0 0 0
     ],
+    Sp = Float64[
+        0  0  0  0
+        0  0  1  0
+        0  0  0  0
+        0  0  0  0
+    ],
+    Sm = dag(Sp),
+])
+
+@def_operators(Electron(),
+[
     Nup = dag(Cup)*Cup,
     Ndn = dag(Cdn)*Cdn,
     Nupdn = Float64[
@@ -97,16 +113,10 @@ true)
         0  0 -1  0
         0  0  0  0
     ],
-    Sp = Float64[
-        0  0  0  0
-        0  0  1  0
-        0  0  0  0
-        0  0  0  0
-    ],
-    Sm = dag(Sp),
     Sx = (Sp + Sm) / 2,
     Sy = (Sp - Sm) / (2im)
-])
+],
+selfadjoint_op)
 
 module Electrons
 

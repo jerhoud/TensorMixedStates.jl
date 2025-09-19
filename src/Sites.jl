@@ -1,4 +1,4 @@
-export AbstractSite, mix, dim, Index, generic_state, identity_operator, @def_operators, @def_states, state, Id, F
+export AbstractSite, mix, dim, Index, string_state, identity_operator, @def_operators, @def_states, state, Id, F
 
 """
     abstract type AbstractSite
@@ -12,7 +12,7 @@ abstract type AbstractSite end
 
 return the dimension of the given site
 """
-dim(site::AbstractSite) = error("dim not defined on site $site")
+dim(site::AbstractSite) = error("dim not implemented on site $site")
 
 """
     Index(::AbstractSite)
@@ -22,16 +22,16 @@ return an ITensor.Index for the given site for pure representations
 Index(site::AbstractSite) = Index(dim(site); tags="$(string(typeof(site))), Site")
 
 """
-    generic_state(::AbstractSite, ::String)
+    string_state(::AbstractSite, ::String)
 
 Do not call directly. It returns a local state corresponding to the string,
 this is tried first before trying specifically defined states.
 
 The default implementation returns the first state for "0", the second for "1" and so on.
 
-This should be overloaded if necessary when defining new site types. It may return an error when not needed.
+This should be overloaded if necessary when defining new site types. It should return an error when not needed.
 """
-function generic_state(site::AbstractSite, st::String)
+function string_state(site::AbstractSite, st::String)
     i = 1 + parse(Int, st)
     v = zeros(Float64, dim(site))
     v[i] = 1.0
@@ -46,7 +46,7 @@ return an ITensor.Index for a mixed representation corresponding to the pure rep
 mix(i::Index) =
     addtags(combinedind(combiner(i, i'; tags = tags(i))), "Mixed")
 
-operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, ExprOp}} = Dict()
+operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
 state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
 
 function operator_info(site::AbstractSite, op::String)
@@ -77,30 +77,30 @@ return a matrix representing the identity operator for the given site
 identity_operator(dim::Int) = [ (i==j) ? 1. : 0. for i in 1:dim, j in 1:dim ]
 identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
-function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}, fermionic::Bool=false, N::Int=1)
+function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}, type::OpType=plain_op, N::Int=1)
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{Pure, N}(op, nothing, fermionic)
+        return Operator{Pure, N}(op, nothing, type)
     end
 end
 
-function add_operator(site::AbstractSite, op::String, r::ExprOp{T, N}, fermionic::Bool=false, ::Int=1) where {T, N}
+function add_operator(site::AbstractSite, op::String, r::GenericOp{R, N}, type::OpType=plain_op, ::Int=1) where {R, N}
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{T, N}(op, nothing, fermionic)
+        return Operator{R, N}(op, nothing, type)
     end
 end
 
 """
-    @def_operators(site, symbols, fermionic=false)
+    @def_operators(site, symbols, type=plain)
 
 define the given operator for the given site
 
@@ -110,7 +110,7 @@ define the given operator for the given site
     [
         C = [0. 1. ; 0. 0.],
     ],
-    true)
+    fermionic_op)
 
     @def_operators(Fermion(),
     [
@@ -120,7 +120,7 @@ define the given operator for the given site
     ])
 
 """
-macro def_operators(site, symbols, fermionic=false)
+macro def_operators(site, symbols, type=plain_op)
     e = Expr(:block)
     if !(symbols isa Expr) || symbols.head ≠ :vect
         error("syntax error in @def_operators second argument should be a vector")
@@ -134,7 +134,7 @@ macro def_operators(site, symbols, fermionic=false)
         val = last(expr.args)
         push!(e.args,
             quote
-                $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(fermionic)))
+                $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
             end)
     end
     return e
@@ -217,7 +217,7 @@ state(site::AbstractSite, st::String) =
         identity_operator(site) / dim(site)
     else
         try
-            generic_state(site, st)
+            string_state(site, st)
         catch
             state(site, state_info(site, st))
         end
@@ -228,7 +228,7 @@ state(site::AbstractSite, st::String) =
 
 the identity operator defined for all site types
 """
-const Id = Operator("Id", identity_operator)
+const Id = Operator("Id", identity_operator, involution_op)
 
 """
     F
@@ -236,4 +236,4 @@ const Id = Operator("Id", identity_operator)
 the Jordan-Wigner F operator for fermions, defined for all site types.
 It is the identity operator for non fermionic sites
 """
-F = Operator("F")
+F = Operator("F", nothing, involution_op)

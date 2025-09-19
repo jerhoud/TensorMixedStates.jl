@@ -94,11 +94,11 @@ Qboson
 
 ## Defining new site types
 
-To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly `generic_state` on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using `@def_states` and `@def_operators`.
+To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly `string_state` on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using `@def_states` and `@def_operators`.
 Don't forget to define the `F` operator for fermionic sites.
 
 ```@docs
-generic_state
+string_state
 @def_states
 @def_operators
 ```

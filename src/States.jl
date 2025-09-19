@@ -27,16 +27,16 @@ end
   
 """
     struct State
-    State(Pure()|Mixed(), ::System, states)
-    State(Pure()|Mixed(), ::Int, ::AbstractSite, state)
-    State(Pure()|Mixed(), ::Vector{<:AbstractSite}, state)
+    State(::Repr, ::System, states)
+    State(::Repr, ::Int, ::AbstractSite, state)
+    State(::Repr, ::Vector{<:AbstractSite}, state)
     State(::State, ::MPS)
 
 represent the complete state of the simulated quantum system
 
 # Fields
 
-- `type::Union{Pure, Mixed}`: pure or mixed representation
+- `type::Repr`: pure or mixed representation
 - `system::System`: system description
 - `state::MPS`: system state
 - `preobs::PreObs`: preprocessing data for computing observables
@@ -57,11 +57,11 @@ states can be added, substracted and multiplied by numbers
 
 """
 struct State
-    type::PM
+    type::Repr
     system::System
     state::MPS
     preobs::PreObs
-    State(type::PM, system::System, state::MPS) =
+    State(type::Repr, system::System, state::MPS) =
         new(type, system, state, PreObs())
 end
 
@@ -81,7 +81,7 @@ return the maximum link dimension in the state
 """
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
-make_one_state(type::PM, system::System, i::Int, st) = 
+make_one_state(type::Repr, system::System, i::Int, st) = 
     make_one_state(type, system[type, i], state(system[i], st))
 
 make_one_state(::Pure, i::Index, v::Vector) = ITensor(v, i)
@@ -90,7 +90,7 @@ make_one_state(::Mixed, i::Index, v::Vector) = ITensor(v * v', i)
 make_one_state(::Mixed, i::Index, m::Matrix) = ITensor(m, i)
 
 
-function make_state(type::PM, system::System, states::Vector)
+function make_state(type::Repr, system::System, states::Vector)
     n = length(system)
     st = MPS(n)
     if n == 1
@@ -106,26 +106,26 @@ function make_state(type::PM, system::System, states::Vector)
     return st
 end
 
-function State(type::PM, system::System, states::Vector)
+function State(type::Repr, system::System, states::Vector)
     if length(system) ≠ length(states)
         error("incompatible sizes between system ($(length(system))) and states ($(length(states)))")
     end
     return State(type, system, make_state(type, system, states))
 end
 
-State(type::PM, system::System, state) =
+State(type::Repr, system::System, state) =
     State(type, system, fill(state, length(system)))
 
-State(type::PM, system::System, state::Union{Vector{<:Number}, Matrix}) =
+State(type::Repr, system::System, state::Union{Vector{<:Number}, Matrix}) =
     State(type, system, fill(state, length(system)))
 
 State(state::State, st::MPS) =
     State(state.type, state.system, st)
 
-State(type::PM, size::Int, site::AbstractSite, state) =
+State(type::Repr, size::Int, site::AbstractSite, state) =
     State(type, System(size, site), state)
 
-State(type::PM, sites::Vector{<:AbstractSite}, state) =
+State(type::Repr, sites::Vector{<:AbstractSite}, state) =
     State(type, System(sites), state)
 
 (a::Number * b::State) = State(b, a * b.state)
