@@ -30,27 +30,20 @@ dim(::Fermion) = 2
     "Occ" => [0., 1.],
 ])
 
-
 @def_operators(Fermion(),
 [
-    C = [0. 1. ; 0. 0.],
-],
-fermionic_op)
-
-@def_operators(Fermion(),
-[
-    F = [1. 0. ; 0. -1.],
-],
-involution_op)
-
-@def_operators(Fermion(),
-[
-    N = dag(C)*C
-], selfadjoint_op)
-
-@def_operators(Fermion(),
-[
-    A = C,
+    fermionic_op => 
+    [
+        C = [0. 1. ; 0. 0.],
+    ],
+    selfadjoint_op =>
+    [
+        N = dag(C) * C,
+    ],
+    plain_op =>
+    [
+        A = C,
+    ]
 ])
 
 module Fermions

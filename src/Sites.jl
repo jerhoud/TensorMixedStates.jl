@@ -1,4 +1,4 @@
-export AbstractSite, mix, dim, Index, string_state, identity_operator, @def_operators, @def_states, state, Id, F
+export AbstractSite, mix, dim, Index, string_state, identity_operator, @def_operators, @def_states, state
 
 """
     abstract type AbstractSite
@@ -49,23 +49,31 @@ mix(i::Index) =
 operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
 state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
 
+function F_info(site::AbstractSite)
+    name = typeof(site)
+    t = (name, "F")
+    return get!(operator_library, t, Id)
+end
+
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
     t = (name, op)
-    if haskey(operator_library, t)
-        return operator_library[t]
-    else
+    r = getkey(operator_library, t, nothing)
+    if isnothing(r)
         error("operator $op is not defined for site $name")
+    else
+        return r
     end
 end
 
 function state_info(site::AbstractSite, st::String)
     name = typeof(site)
     t = (name, st)
-    if haskey(state_library, t)
-        return state_library[t]
-    else
+    r = getkey(state_library, t, nothing)
+    if isnothing(r)
         error("state $st is not defined for site $name")
+    else
+        return r
     end
 end
 
@@ -120,22 +128,36 @@ define the given operator for the given site
     ])
 
 """
-macro def_operators(site, symbols, type=plain_op)
+macro def_operators(site, symbols)
     e = Expr(:block)
     if !(symbols isa Expr) || symbols.head ≠ :vect
         error("syntax error in @def_operators second argument should be a vector")
     end
-    for expr in symbols.args
-        if !(expr isa Expr) || expr.head ≠ :(=)
-            error("syntax error in @def_operators item expressions must be assignments (sym = val)")
+    for types in symbols.args
+        if !(types isa Expr) || types.head ≠ :call || types.args[1] ≠ :(=>)
+            error("syntax error in @def_operators second argument should contain pairs : plain_op => [...]")
         end
-        sym = first(expr.args)
-        nsym = string(sym)
-        val = last(expr.args)
-        push!(e.args,
-            quote
-                $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
-            end)
+
+        type = types.args[2]
+        for expr in types.args[3].args
+            if !(expr isa Expr) || expr.head ≠ :(=)
+                error("syntax error in @def_operators item expressions must be assignments (sym = val)")
+            end
+            sym = first(expr.args)
+            nsym = string(sym)
+            val = last(expr.args)
+            if nsym == "F"
+                push!(e.args,
+                quote
+                    add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                end)
+            else
+                push!(e.args,
+                    quote
+                        $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                    end)
+            end
+        end
     end
     return e
 end
@@ -222,18 +244,3 @@ state(site::AbstractSite, st::String) =
             state(site, state_info(site, st))
         end
     end
-
-"""
-    Id
-
-the identity operator defined for all site types
-"""
-const Id = Operator("Id", identity_operator, involution_op)
-
-"""
-    F
-
-the Jordan-Wigner F operator for fermions, defined for all site types.
-It is the identity operator for non fermionic sites
-"""
-F = Operator("F", nothing, involution_op)

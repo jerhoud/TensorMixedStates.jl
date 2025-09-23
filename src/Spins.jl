@@ -57,21 +57,18 @@ end
 
 @def_operators(Spin(0),
 [
-    F = Id,
-], involution_op)
-
-@def_operators(Spin(0),
-[
-    Sz = s -> [ i==j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
-    Sx = (Sp + Sm) / 2,
-    Sy = (Sp - Sm) / (2im),
-    S2 = s -> s.s * (s.s + 1) * identity_operator(s),
-], selfadjoint_op)
-
-@def_operators(Spin(0),
-[
-    Sp = s -> [ i==j-1 ? sqrt(s.s*(s.s + 1) - (s.s - i + 1)*(s.s - i)) : 0. for i in 1:dim(s), j in 1:dim(s) ],
-    Sm = dag(Sp),
+    plain_op =>
+    [
+        Sp = s -> [ i==j-1 ? sqrt(s.s*(s.s + 1) - (s.s - i + 1)*(s.s - i)) : 0. for i in 1:dim(s), j in 1:dim(s) ],
+        Sm = dag(Sp),
+    ],
+    selfadjoint_op =>
+    [
+        Sz = s -> [ i==j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
+        Sx = (Sp + Sm) / 2,
+        Sy = (Sp - Sm) / (2im),
+        S2 = s -> s.s * (s.s + 1) * Id,
+    ],
 ])
 
 module Spins

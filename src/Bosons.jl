@@ -28,17 +28,14 @@ dim(a::Boson) = a.dim
 
 @def_operators(Boson(2),
 [
-    F = Id,
-], involution_op)
-
-@def_operators(Boson(2),
-[
-    N = s -> [ i==j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ]
-], selfadjoint_op)
-
-@def_operators(Boson(2),
-[
-    A = s -> [ i==j-1 ? sqrt(i) : 0. for i in 1:dim(s), j in 1:dim(s) ],
+    selfadjoint_op =>
+    [
+        N = s -> [ i==j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ]
+    ],
+    plain_op =>
+    [
+        A = s -> [ i==j-1 ? sqrt(i) : 0. for i in 1:dim(s), j in 1:dim(s) ]
+    ]
 ])
 
 module Bosons

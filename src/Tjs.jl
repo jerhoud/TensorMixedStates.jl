@@ -38,65 +38,58 @@ string_state(::Tj, ::String) = error("no generic state for Tj")
 
 @def_operators(Tj(),
 [
-    Cup = Float64[
-        0 1 0
-        0 0 0
-        0 0 0
+    fermionic_op =>
+    [
+        Cup = Float64[
+            0 1 0
+            0 0 0
+            0 0 0
+        ],
+        Cdn = Float64[
+            0 0 1
+            0 0 0
+            0 0 0
+        ]
     ],
-    Cdn = Float64[
-        0 0 1
-        0 0 0
-        0 0 0
+    involution_op =>
+    [
+        F = Float64[
+            1  0  0
+            0 -1  0
+            0  0 -1
+        ],
+        Fup = Float64[
+            1  0  0
+            0 -1  0
+            0  0  1
+        ],
+        Fdn = Fup * F,
     ],
-],
-fermionic_op)
-
-@def_operators(Tj(),
-[
-    F = Float64[
-        1  0  0
-        0 -1  0
-        0  0 -1
+    plain_op =>
+    [
+        Aup = Cup,
+        Adn = Cdn,
+        Sp = Float64[
+            0  0  0
+            0  0  1
+            0  0  0
+        ],
+        Sm = dag(Sp),
     ],
-    Fup = Float64[
-        1  0  0
-        0 -1  0
-        0  0  1
-    ],
-    Fdn = Float64[
-        1  0  0
-        0  1  0
-        0  0 -1
-    ],
-],
-involution_op)
-
-@def_operators(Tj(),
-[
-    Aup = Cup,
-    Adn = Cdn,
-    Sp = Float64[
-        0  0  0
-        0  0  1
-        0  0  0
-    ],
-    Sm = dag(Sp),
+    selfadjoint_op =>
+    [
+        Nup = dag(Cup) * Cup,
+        Ndn = dag(Cdn) * Cdn,
+        Ntot = Nup + Ndn,
+        Sz = 0.5 * [
+            0  0  0
+            0  1  0
+            0  0 -1
+        ],
+        Sx = (Sp + Sm) / 2,
+        Sy = (Sp - Sm) / (2im)
+    ]
 ])
-
-@def_operators(Tj(),
-[
-    Nup = dag(Cup)*Cup,
-    Ndn = dag(Cdn)*Cdn,
-    Ntot = Nup + Ndn,
-    Sz = 0.5 * [
-        0  0  0
-        0  1  0
-        0  0 -1
-    ],
-    Sx = (Sp + Sm) / 2,
-    Sy = (Sp - Sm) / (2im)
-],
-selfadjoint_op)
 
 module Tjs
 

@@ -40,8 +40,8 @@ the controlled gate constructor
     CZ = controlled(Z)
     Toffoli = controlled(controlled(X))
 """
-controlled(op::GenericOp{Pure, N}) where N =
-    TensorOp{Pure, N+1}(GenericOp[[Proj("Up")] ; [Id for _ in 1:N]]) + (Proj("Dn") ⊗ op)
+controlled(op::GenericOp{Pure, N}) where N = 
+    Proj("Up") ⊗ Identity(op) + Proj("Dn") ⊗ op
 
 @def_states(Qubit(),
 [
@@ -53,35 +53,41 @@ controlled(op::GenericOp{Pure, N}) where N =
     ["-i", "Y-"] => [1., -im] / √2,
 ])
 
-
 @def_operators(Qubit(),
 [
-    F = Id,
-    X = [0. 1. ; 1. 0.],
-    Y = [0. -im; im 0.],
-    Z = [1. 0. ; 0. -1.],
-    H = [1. 1. ; 1. -1] / √2,
-    Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
-], involution_op)
-
-@def_operators(Qubit(),
-[
-    Sx = X / 2,
-    Sy = Y / 2,
-    Sz = Z / 2,
-    S2 = 0.75 * Id,
-], selfadjoint_op)
-
-@def_operators(Qubit(),
-[
-    Sp = [0. 1. ; 0. 0.],
-    Sm = dag(Sp),
-    S = [1. 0. ; 0. im],
-    T = [1. 0. ; 0. (1 + im)/√2],
+    involution_op =>
+    [
+        X = [0. 1. ; 1. 0.],
+        Y = [0. -im; im 0.],
+        Z = [1. 0. ; 0. -1.],
+        H = [1. 1. ; 1. -1] / √2,
+        Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
+    ],
+    selfadjoint_op =>
+    [
+        Sx = X / 2,
+        Sy = Y / 2,
+        Sz = Z / 2,
+        S2 = 0.75 * Id,
+    ],
+    plain_op =>
+    [
+        Sp = [0. 1. ; 0. 0.],
+        Sm = dag(Sp),
+        S = [1. 0. ; 0. im],
+        T = [1. 0. ; 0. (1 + im)/√2],
+    ]
 ])
 
 
 """
+    Phase(t)
+
+the phase gate for qubits
+"""
+Phase(t) = Operator("Phase($t)", [1. 0 ; 0 exp(im * t)], plain_op)
+
+#= """
     graph_state(Pure()|Mixed(), graph::Vector{Tuple{Int, Int}}; limits)
 
 create a graph state corresponding to the given graph
@@ -119,13 +125,7 @@ create_graph_state(tp::Repr, g::Vector{Tuple{Int, Int}}; kwargs...) =
             kwargs...
         )
     ]
-
-"""
-    Phase(t)
-
-the phase gate for qubits
-"""
-Phase(t) = Operator("Phase($t)", [1. 0 ; 0 exp(im * t)])
+ =#
 
 module Qubits
 

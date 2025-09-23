@@ -1,6 +1,6 @@
 export Repr, Pure, Mixed, AnyOp, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Operator, Proj, Gate, Dissipator, Evolver, LeftRight
+export Operator, Identity, Id, JW, JW_F, F, IndexedId, Proj, Gate, Dissipator, Evolver, LeftRight
 export tensor, ⊗
 
 ############# Types ################
@@ -99,7 +99,7 @@ the type of base operators (like `X`, `Swap`, `C` ...), `R` is Pure or Mixed and
     Operator{Pure, 2}("Swap", [ 1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
     Operator("CX", controlled(X))
     Operator("Sx", (Sp + Sm) / 2)
-    Operator("C", [0 1 ; 0 0], fermionic)   a fermionic operator
+    Operator("C", [0 1 ; 0 0], fermionic_op)   a fermionic operator
 """
 struct Operator{R, N} <: GenericOp{R, N}
     name::String
@@ -117,7 +117,55 @@ show(io::IO, op::Operator) =
 
 isless(a::Operator, b::Operator) = isless(a.name, b.name)
 
-############ proj ################
+
+############ Identity ############
+
+struct Identity <: SimpleOp end
+
+"""
+    Id
+
+the identity operator defined for all site types
+"""
+const Id = Identity()
+
+Identity(::GenericOp{Pure, N}) where N = TensorOp{N}(fill(Id, N))
+Identity(::SimpleOp) = Id
+
+show(io::IO, ::Identity) =
+    print(io, "Id")
+
+isless(::Identity, ::Identity) = false
+
+############# Jordan_Wigner transformation ##############
+
+struct JW <: SimpleOp
+    arg::Operator{Pure, 1}
+end
+
+isless(a::JW, b::JW) = isless(a.arg, b.arg)
+
+struct JW_F <: SimpleOp end
+
+"""
+    The Jordan Wigner F factor. Defined for all site types
+"""
+const F = JW_F()
+
+show(io::IO, ::JW_F) =
+    print(io, "F")
+
+isless(::JW_F, ::JW_F) = false
+
+struct Multi_F <: IndexedOp{Pure}
+    start::Int
+    stop::Int
+end
+
+isless(a::Multi_F, b::Multi_F) =
+    isless((a.start, a.stop), (b.start, b.stop))
+
+############ Proj ################
 
 """
     Proj(state)
@@ -161,6 +209,8 @@ isless(a::Indexed, b::Indexed) =
     isless((a.index, fermionic(a.op), a.op), (b.index, fermionic(b.op), b.op))
 
 # Why sort on fermionic ?
+
+const IndexId = Id(1)
 
 ############## Mixers ###############
 
@@ -221,20 +271,35 @@ show(io::IO, a::Evolver) =
         show_func(io, "Evolver", a.arg)
     end
 
-# LeftRight
+# Left
 
-struct LeftRight <: IndexedOp{Mixed}
-    left::IndexedOp{Pure}
-    right::IndexedOp{Pure}
+struct Left{N} <: GenericOp{Mixed, N}
+    arg::GenericOp{Pure, N}
 end
 
-show(io::IO, a::LeftRight) =
+
+show(io::IO, a::Left) =
     paren(io, 1000, 0) do io
-        show_func(io, "LeftRight", [a.left, a.right])
+        show_func(io, "Left", a.arg)
     end
 
-isless(a::LeftRight, b::LeftRight) =
-    isless((a.left, a.right), (b.left, b.right))
+isless(a::Left, b::Left) =
+    isless(a.arg, b.arg)
+
+# Right
+
+struct Right{N} <: GenericOp{Mixed, N}
+    arg::GenericOp{Pure, N}
+end
+
+
+show(io::IO, a::Right) =
+    paren(io, 1000, 0) do io
+        show_func(io, "Right", a.arg)
+    end
+
+isless(a::Right, b::Right) =
+    isless(a.arg, b.arg)
 
 ############### Operator Products ###############
 
@@ -312,7 +377,7 @@ sumsubs(a::AnyOp) = [a]
 (a::IndexedOp{Mixed} + b::IndexedOp{Pure}) = a + Evolver(b)
 (a::IndexedOp{Pure} + b::IndexedOp{Mixed}) = Evolver(a) + b
 
-show(io::IO, a::AnyOp) =
+show(io::IO, a::AnySum) =
     paren(io, Base.operator_precedence(:+)) do io
         n = length(a.subs)
         compact = n > 6 && get(io, :compact, false)
@@ -345,8 +410,8 @@ isless(a::SumIndOp, b::SumIndOp) = isless(a.subs, b.subs)
 
 ############### Tensor products ############
 
-struct TensorOp{R, N} <: GenericOp{R, N}
-    subs::Vector{GenericOp{R}}
+struct TensorOp{N} <: GenericOp{Pure, N}
+    subs::Vector{GenericOp{Pure}}
 end
 
 tensorsubs(a::TensorOp) = a.subs
@@ -363,8 +428,8 @@ tensor product for generic operators, alternative syntax: tensor(op1, op2)
     Rxy(t) = exp(im * t * (X ⊗ X + Y ⊗ Y) / 4)
 
 """
-(a::GenericOp{R, N} ⊗ b::GenericOp{R, M}) where {R, N, M} =
-    TensorOp{R, N + M}([tensorsubs(a) ; tensorsubs(b)])
+(a::GenericOp{Pure, N} ⊗ b::GenericOp{Pure, M}) where {N, M} =
+    TensorOp{N + M}([tensorsubs(a) ; tensorsubs(b)])
 tensor(a::GenericOp, b::GenericOp) = a ⊗ b
 tensor(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = tensor(a ⊗ b, c, d...)
 
@@ -383,9 +448,26 @@ isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
 struct PowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
     expo::Number
+    PowOp{R, N}(arg::GenericOp{R, N}, expo::Number) where {R, N} =
+        if expo == 0
+            Identity(arg)
+        elseif expo == 1
+            arg
+        elseif expo < 0
+            error("cannot take negative powers of operators")
+        else
+            new(arg, expo)
+        end
 end
 
 (a::GenericOp ^ b::Number) = PowOp(a, b)
+
+"""
+    sqrt(::GenericOp)
+
+square root for generic tensors
+"""
+sqrt(a::GenericOp) = PowOp(a, 0.5)
 
 show(io::IO, a::PowOp) =
     paren(io, Base.operator_precedence(:^)) do io
@@ -415,26 +497,6 @@ show(io::IO, a::ExpOp) =
 
 isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
 
-# SqrtOp
-
-"""
-    sqrt(::GenericOp)
-
-square root for generic tensors
-"""
-struct SqrtOp{R, N} <: GenericOp{R, N}
-    arg::GenericOp{R, N}
-end
-
-sqrt(a::GenericOp) = SqrtOp(a)
-
-show(io::IO, a::SqrtOp) =
-    paren(io, 1000, 0) do io
-        show_func(io, "sqrt", a.arg)
-    end
-
-isless(a::SqrtOp, b::SqrtOp) = isless(a.arg, b.arg)
-
 # DagOp
 
 struct DagOp{R, N} <: GenericOp{R, N}
@@ -461,23 +523,27 @@ isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
 
 ranking(a) = error("ranking not defined for ($a)")
 
-# GenericOp
+# GenericOp (any order would do)
 isless(a::GenericOp, b::GenericOp) = isless((ranking(a), a), (ranking(b), b))
-ranking(::Operator) = 1
-ranking(::Proj) = 2
-ranking(::Gate) = 3
-ranking(::ProdGenOp) = 4
-ranking(::SumGenOp) = 5
-ranking(::TensorOp) = 6
-ranking(::PowOp) = 7
-ranking(::ExpOp) = 8
-ranking(::SqrtOp) = 9
-ranking(::DagOp) = 10
+ranking(::Identity) = 1
+ranking(::JW_F) = 2
+ranking(::Operator) = 3
+ranking(::JW) = 4
+ranking(::Proj) = 5
+ranking(::Gate) = 6
+ranking(::Left) = 7
+ranking(::Right) = 8
+ranking(::ProdGenOp) = 9
+ranking(::SumGenOp) = 10
+ranking(::TensorOp) = 11
+ranking(::PowOp) = 12
+ranking(::ExpOp) = 13
+ranking(::DagOp) = 14
 
-# IndexedOp
+# IndexedOp  (any order would do)
 isless(a::IndexedOp, b::IndexedOp) = isless((ranking(a), a), (ranking(b), b))
 ranking(::Indexed) = 1
-ranking(::LeftRight) = 2
-ranking(::ProdIndOp) = 3
-ranking(::SumIndOp) = 4
+ranking(::ProdIndOp) = 2
+ranking(::SumIndOp) = 3
+ranking(::Multi_F) = 4
 

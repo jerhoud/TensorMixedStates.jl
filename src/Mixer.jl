@@ -45,10 +45,17 @@ end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
 
-matrix(a::Function, site::AbstractSite, ::AbstractSite...) = a(site)
+matrix(a::Function, site::AbstractSite) =
+    matrix(a(site), site)
 
 matrix(a::String, site::AbstractSite, ::AbstractSite...) =
     matrix(operator_info(site, a), site)
+
+matrix(::Identity, site::AbstractSite) =
+    identity_operator(site)
+
+matrix(::JW_F, site::AbstractSite) =
+    matrix(F_info, site)    
 
 matrix(a::Operator, site::AbstractSite...) =
     if isnothing(a.expr)
@@ -70,9 +77,6 @@ matrix(a::SumGenOp, site::AbstractSite...) =
 
 matrix(a::ExpOp, site::AbstractSite...) =
     exp(matrix(a.arg, site...))
-
-matrix(a::SqrtOp, site::AbstractSite...) =
-    sqrt(matrix(a.arg, site...))
 
 matrix(a::PowOp, site::AbstractSite...) =
     matrix(a.arg, site...) ^ a.expo
@@ -112,10 +116,10 @@ function right_tensor(a::GenericOp, site::AbstractSite...)
     return dag(ti) * delta(j, j') * c * c'
 end
 
-tensor_next(f, o::GenericOp{R, N}, site::Vararg{AbstractSite, M}) where {R, N, M} =
+tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{AbstractSite, M}) where {N, M} =
     (f(o, site[1:N]...), site[N+1:M])
 
-function tensor_apply(f, a::TensorOp{R, N}, idx::Vararg{AbstractSite, N}) where {R, N}
+function tensor_apply(f, a::TensorOp{N}, idx::Vararg{AbstractSite, N}) where N
     rest = idx
     r = map(a.subs) do o 
         t, rest = tensor_next(f, o, rest...)
@@ -123,10 +127,10 @@ function tensor_apply(f, a::TensorOp{R, N}, idx::Vararg{AbstractSite, N}) where 
     end
 end
 
-tensor_next(f, o::GenericOp{R, N}, site::Vararg{Int, M}) where {R, N, M} =
+tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Int, M}) where {N, M} =
     (f(o, site[1:N]...), site[N+1:M])
 
-function tensor_apply(f, a::TensorOp{R, N}, idx::Vararg{Int, N}) where {R, N}
+function tensor_apply(f, a::TensorOp{N}, idx::Vararg{Int, N}) where N
     rest = idx
     r = map(a.subs) do o 
         t, rest = tensor_next(f, o, rest...)
@@ -134,7 +138,7 @@ function tensor_apply(f, a::TensorOp{R, N}, idx::Vararg{Int, N}) where {R, N}
     end
 end
 
-function tensor(a::TensorOp{R, N}, site::AbstractSite...) where {R, N}
+function tensor(a::TensorOp{N}, site::AbstractSite...) where N
     if length(site) == 1
         ts = [tensor(o, site...) for o in a.subs]
     elseif length(site) ≠ N
@@ -146,57 +150,3 @@ function tensor(a::TensorOp{R, N}, site::AbstractSite...) where {R, N}
     c * prod(ts) * c'
 end
 
-"""
-    fermionic(a::GenericOp)
-
-return whether an operator is fermionic or not
-"""
-function fermionic(a::AnySum)
-    n = length(a.subs)
-    nf = count(fermionic, a.subs)
-    if nf == n
-        return true
-    elseif nf == 0
-        return false
-    else
-        error("cannot sum fermionic with non fermionic operators: $a")
-    end
-end
-
-fermionic(a::Operator) = a.type == fermionic_op
-fermionic(a::Union{AnyProd, TensorOp}) = isodd(count(fermionic, a.subs))
-fermionic(a::Indexed) = fermionic(a.op)
-fermionic(a::Union{Gate, Evolver, Dissipator, DagOp}) = fermionic(a.arg)
-fermionic(a::Union{ExpOp, SqrtOp, PowOp}) =
-    if fermionic(a.arg)
-        error("cannot take functionals of fermionic operators: $a")
-    else
-        false
-    end
-fermionic(::Proj) = false
-fermionic(a::LeftRight) = (fermionic(a.left), fermionic(a.right))
-
-#=
-has_dissipator(a) = eval_expr(has_dissipator, a)
-function has_dissipator(a::Union{ProdOp, TensorOp})
-    d = any(has_dissipator, a.subs)
-    if d && length(a.subs) >= 2
-        error("cannot multiply dissipators with other operators ($a)")
-    end
-    return d
-end
-has_dissipator(a::Dissipator) = true
-has_dissipator(a::Operator) =
-    if a.expr isa GenericOp
-        has_dissipator(a.expr)
-    else
-        false
-    end
-has_dissipator(::Proj) = false
-has_dissipator(a::Union{ExpOp, SqrtOp, PowOp, DagOp}) =
-    if has_dissipator(a.arg)
-        error("cannot take functional of dissipators ($a)")
-    else
-        false
-    end
-=#

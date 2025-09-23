@@ -15,6 +15,8 @@ include("Sites.jl")
 include("Mixer.jl")
 include("Systems.jl")
 include("States.jl")
+include("Simplify.jl")
+
 
 # Sites
 include("Qubits.jl")
@@ -26,7 +28,6 @@ include("Tjs.jl")
 include("Qbosons.jl")
 
 #=
-include("Process.jl")
 
 # Low Level interface
 include("Gates.jl")

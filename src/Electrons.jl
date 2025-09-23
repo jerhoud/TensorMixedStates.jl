@@ -40,83 +40,70 @@ string_state(::Electron, ::String) = error("no generic state for Electron")
 
 @def_operators(Electron(),
 [
-    Cup = Float64[
-        0 1 0 0
-        0 0 0 0
-        0 0 0 1
-        0 0 0 0
+    fermionic_op =>
+    [
+        Cup = Float64[
+            0 1 0 0
+            0 0 0 0
+            0 0 0 1
+            0 0 0 0
+        ],
+        Cdn = Float64[
+            0 0 1 0
+            0 0 0 -1
+            0 0 0 0
+            0 0 0 0
+        ]
     ],
-    Cdn = Float64[
-        0 0 1 0
-        0 0 0 -1
-        0 0 0 0
-        0 0 0 0
+    involution_op =>
+    [
+        F = Float64[
+            1  0  0  0
+            0 -1  0  0
+            0  0 -1  0
+            0  0  0  1
+        ],
+        Fup = Float64[
+            1  0  0  0
+            0 -1  0  0
+            0  0  1  0
+            0  0  0 -1
+        ],
+        Fdn = Fup * F
+    ],
+    plain_op =>
+    [
+        Aup = Cup,
+        Adn = F * Cdn,
+        Sp = Float64[
+            0  0  0  0
+            0  0  1  0
+            0  0  0  0
+            0  0  0  0
+        ],
+        Sm = dag(Sp)
+    ],
+    selfadjoint_op =>
+    [
+        Nup = dag(Cup) * Cup,
+        Ndn = dag(Cdn) * Cdn,
+        Nupdn = Float64[
+            0 0 0 0
+            0 0 0 0
+            0 0 0 0
+            0 0 0 1
+        ],
+        Ntot = Nup + Ndn,
+        Sz = 0.5 * [
+            0  0  0  0
+            0  1  0  0
+            0  0 -1  0
+            0  0  0  0
+        ],
+        Sx = (Sp + Sm) / 2,
+        Sy = (Sp - Sm) / (2im)
     ]
-],
-fermionic_op)
-
-@def_operators(Electron(),
-[
-    F = Float64[
-        1  0  0  0
-        0 -1  0  0
-        0  0 -1  0
-        0  0  0  1
-    ],
-    Fup = Float64[
-        1  0  0  0
-        0 -1  0  0
-        0  0  1  0
-        0  0  0 -1
-    ],
-    Fdn = Float64[
-        1  0  0  0
-        0  1  0  0
-        0  0 -1  0
-        0  0  0 -1
-    ],
-],
-involution_op)
-
-@def_operators(Electron(),
-[
-    Aup = Cup,
-    Adn = Float64[
-        0 0 1 0
-        0 0 0 1
-        0 0 0 0
-        0 0 0 0
-    ],
-    Sp = Float64[
-        0  0  0  0
-        0  0  1  0
-        0  0  0  0
-        0  0  0  0
-    ],
-    Sm = dag(Sp),
 ])
-
-@def_operators(Electron(),
-[
-    Nup = dag(Cup)*Cup,
-    Ndn = dag(Cdn)*Cdn,
-    Nupdn = Float64[
-        0 0 0 0
-        0 0 0 0
-        0 0 0 0
-        0 0 0 1
-    ],
-    Ntot = Nup + Ndn,
-    Sz = 0.5 * [
-        0  0  0  0
-        0  1  0  0
-        0  0 -1  0
-        0  0  0  0
-    ],
-    Sx = (Sp + Sm) / 2,
-    Sy = (Sp - Sm) / (2im)
-],
-selfadjoint_op)
 
 module Electrons
 
