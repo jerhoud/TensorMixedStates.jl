@@ -130,7 +130,9 @@ the identity operator defined for all site types
 const Id = Identity()
 
 Identity(::GenericOp{Pure, N}) where N = TensorOp{N}(fill(Id, N))
-Identity(::SimpleOp) = Id
+Identity(::GenericOp{Mixed, N}) where N = Left(TensorOp{N}(fill(Id, N)))
+Identity(::IndexedOp{Pure}) = Id(1)
+Identity(::IndexedOp{Mixed}) = Left(Id)(1)
 
 show(io::IO, ::Identity) =
     print(io, "Id")
@@ -157,13 +159,16 @@ show(io::IO, ::JW_F) =
 
 isless(::JW_F, ::JW_F) = false
 
-struct Multi_F <: IndexedOp{Pure}
+struct Multi_F{R} <: IndexedOp{R}
     start::Int
     stop::Int
+    left::Bool
+    right::Bool
 end
 
 isless(a::Multi_F, b::Multi_F) =
-    isless((a.start, a.stop), (b.start, b.stop))
+    isless((a.start, a.stop, a.left, a.right), (b.start, b.stop, a.left, a.right))
+
 
 ############ Proj ################
 
@@ -206,11 +211,8 @@ show(io::IO, ind::Indexed) =
     end
 
 isless(a::Indexed, b::Indexed) =
-    isless((a.index, fermionic(a.op), a.op), (b.index, fermionic(b.op), b.op))
+    isless((a.index, a.op), (b.index, b.op))
 
-# Why sort on fermionic ?
-
-const IndexId = Id(1)
 
 ############## Mixers ###############
 
@@ -307,12 +309,24 @@ isless(a::Right, b::Right) =
 struct ProdGenOp{R, N} <: GenericOp{R, N}
     coef::Number
     subs::Vector{<:GenericOp{R, N}}
+    ProdGenOp{R, N}(coef::Number, subs::Vector{<:GenericOp{R, N}}) where {R, N} =
+        if coef == 1 && length(subs) == 1
+            return subs[1]
+        else
+            new{R, N}(coef, subs)
+        end
 end
 
 # ProdIndOp    product of indexed operators
 struct ProdIndOp{R} <: IndexedOp{R}
     coef::Number
     subs::Vector{<:IndexedOp{R}}
+    ProdIndOp{R}(coef::Number, subs::Vector{<:IndexedOp{R}}) where R =
+    if coef == 1 && length(subs) == 1
+        return subs[1]
+    else
+        new{R}(coef, subs)
+    end
 end
 
 AnyProd = Union{ProdGenOp, ProdIndOp}
@@ -411,7 +425,13 @@ isless(a::SumIndOp, b::SumIndOp) = isless(a.subs, b.subs)
 ############### Tensor products ############
 
 struct TensorOp{N} <: GenericOp{Pure, N}
-    subs::Vector{GenericOp{Pure}}
+    subs::Vector{<:GenericOp{Pure}}
+    TensorOp{N}(subs::Vector{<:GenericOp{Pure}}) where N =
+        if length(subs) == 1
+            subs[1]
+        else
+            new{N}(subs)
+        end
 end
 
 tensorsubs(a::TensorOp) = a.subs

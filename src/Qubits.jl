@@ -31,18 +31,6 @@ struct Qubit <: AbstractSite end
 
 dim(::Qubit) = 2
 
-"""
-    controlled(op)
-
-the controlled gate constructor
-
-# Examples
-    CZ = controlled(Z)
-    Toffoli = controlled(controlled(X))
-"""
-controlled(op::GenericOp{Pure, N}) where N = 
-    Proj("Up") ⊗ Identity(op) + Proj("Dn") ⊗ op
-
 @def_states(Qubit(),
 [
     ["Up", "Z+", "↑"] => [1., 0.],
@@ -79,6 +67,17 @@ controlled(op::GenericOp{Pure, N}) where N =
     ]
 ])
 
+"""
+    controlled(op)
+
+the controlled gate constructor
+
+# Examples
+    CZ = controlled(Z)
+    Toffoli = controlled(controlled(X))
+"""
+controlled(op::GenericOp{Pure, N}) where N = 
+    Proj("Up") ⊗ Identity(op) + Proj("Dn") ⊗ op
 
 """
     Phase(t)
