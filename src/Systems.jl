@@ -82,7 +82,7 @@ tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
 
 returns a tensor representing the given base indexed operator acting on this system
 """
-function tensor(system::System, a::Indexed{R, N}) where {R, N}
+function tensor(system::System, a::AtIndex{R, N}) where {R, N}
     s = map(i->system[i], a.index)
     t = tensor(a.op, s...)
     is = map(i->system[R(), i], a.index)

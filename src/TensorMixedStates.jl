@@ -3,7 +3,7 @@
 """
 module TensorMixedStates
 
-import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless
+import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless, ==
 import ITensors: matrix, truncate, dim, Index, dag, norm, sim
 import ITensorMPS: maxlinkdim, apply, state, expect, normalize, measure!, checkdone!, tdvp, dmrg
 
@@ -17,6 +17,14 @@ include("Systems.jl")
 include("States.jl")
 include("Simplify.jl")
 
+# Low Level interface
+include("Gates.jl")
+include("Mpo.jl")
+include("Observables.jl")
+include("Solvers.jl")
+include("Measure.jl")
+include("RandomState.jl")
+
 
 # Sites
 include("Qubits.jl")
@@ -29,13 +37,6 @@ include("Qbosons.jl")
 
 #=
 
-# Low Level interface
-include("Gates.jl")
-include("Mpo.jl")
-include("Observables.jl")
-include("Solvers.jl")
-include("Measure.jl")
-include("RandomState.jl")
 
 # High level interface
 include("Simulation.jl")

@@ -92,18 +92,18 @@ function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{Pure, N}(op, nothing, type)
+        return Operator{N}(op, nothing, type)
     end
 end
 
-function add_operator(site::AbstractSite, op::String, r::GenericOp{R, N}, type::OpType=plain_op, ::Int=1) where {R, N}
+function add_operator(site::AbstractSite, op::String, r::GenericOp{Pure, N}, type::OpType=plain_op, ::Int=1) where N
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{R, N}(op, nothing, type)
+        return Operator{N}(op, nothing, type)
     end
 end
 

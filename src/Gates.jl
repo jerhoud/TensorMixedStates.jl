@@ -12,7 +12,7 @@ It is much more efficient to apply all the gates in a single call to apply.
     apply(CZ(1,3)*H(2)*CNOT(3,4), state)
 
 """
-function apply(a::ExprIndexed, state::State; limits::Limits=Limits())
+function apply(a::IndexedOp, state::State; limits::Limits=Limits())
     ops = make_ops(state.type, state.system, a)
     st = apply(ops, state.state; move_sites_back_between_gates=false, limits.cutoff, limits.maxdim)
     return State(state, st)
@@ -24,7 +24,9 @@ apply(mpo::MPO, state::State; limits::Limits=Limits()) =
     
 make_ops(::PM, ::System, ::SumOp{IndexOp}) = error("cannot apply sums as gates (sums of operator are possible)")
 
-function make_ops(tp::PM, s::System, a::ProdOp{T, IndexOp}) where T
+make_ops()
+
+function make_ops(tp::R, s::System, a::ProdOp{R, Indexed}) where R
     r = reduce(vcat, (make_ops(tp, s, sub) for sub in a.subs))
     if a.coef == 0 || isempty(r)
         error("cannot apply a nul gate")
@@ -35,4 +37,4 @@ end
 
 make_ops(::Mixed, s::System, a::Gate{IndexOp}) = make_ops(Mixed(), s, a.arg)
 make_ops(::T, s::System, a::Indexed{T, N}) where {T, N} = [ tensor(s, a) ]
-make_ops(::Mixed, s::System, a::Indexed{Pure}) = [ tensor(s, Gate(a.op)(a.index...)) ]
+make_ops(::Mixed, s::System, a::IndexedOp{Pure}) = [ tensor(s, Gate(a.op)(a.index...)) ]

@@ -1,4 +1,4 @@
-export tensor, matrix, fermionic, left_tensor, right_tensor
+export tensor, matrix, fermionic
 
 function combinerto(i::Index, j::Index...)
     c = combiner(j...; tags="")
@@ -36,11 +36,13 @@ return the ITensor of a generic operator for the given sites. If sites are all i
     tensor(Swap, Qubit())
     tensor(X⊗A, Qubit(), Boson(2))
 """
-function tensor(a::GenericOp, site::AbstractSite...)
-    m = matrix(a, site...)
-    n, _ = size(m)
+tensor(a::GenericOp, site::AbstractSite...) =
+    tensor(matrix(a, site...), site...)
+
+function tensor(a::Matrix, ::AbstractSite, ::AbstractSite...)
+    n, _ = size(a)
     i = Index(n)
-    ITensor(m, i', i)
+    ITensor(a, i', i)   
 end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
@@ -69,10 +71,10 @@ function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     return st * adjoint(st)
 end
 
-matrix(a::ProdGenOp, site::AbstractSite...) =
+matrix(a::ProdOp, site::AbstractSite...) =
     a.coef * prod(matrix(o, site...) for o in a.subs)
 
-matrix(a::SumGenOp, site::AbstractSite...) =
+matrix(a::SumOp, site::AbstractSite...) =
     sum(matrix(o, site...) for o in a.subs)
 
 matrix(a::ExpOp, site::AbstractSite...) =
@@ -86,7 +88,11 @@ matrix(a::DagOp, site::AbstractSite...) =
 
 matrix(::Dissipator, ::AbstractSite...) = error("cannot give matrix nor tensor for Dissipator")
 
+
 function tensor(a::Gate, site::AbstractSite...)
+    if a.arg isa Matrix
+        return tensor(a.arg, site...)
+    end
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     is = map(Index, site)
@@ -100,16 +106,16 @@ function tensor(a::Gate, site::AbstractSite...)
     return (ti * ci * ci') * (dag(tj) * cj * cj') * c * c'
 end
 
-function left_tensor(a::GenericOp, site::AbstractSite...)
-    ti = tensor(a, site...)
+function tensor(a::Left, site::AbstractSite...)
+    ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
     c = combiner(i, j; tags="")
     return ti * delta(j, j') * c * c'
 end
 
-function right_tensor(a::GenericOp, site::AbstractSite...)
-    ti = tensor(a, site...)
+function tensor(a::Right, site::AbstractSite...)
+    ti = tensor(a.arg, site...)
     i = tensor_index(ti)
     j = sim(i)
     c = combiner(j, i; tags="")
