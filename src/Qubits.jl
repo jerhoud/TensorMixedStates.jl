@@ -49,7 +49,6 @@ dim(::Qubit) = 2
         Y = [0. -im; im 0.],
         Z = [1. 0. ; 0. -1.],
         H = [1. 1. ; 1. -1] / √2,
-        Swap = (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2
     ],
     selfadjoint_op =>
     [
@@ -67,6 +66,12 @@ dim(::Qubit) = 2
     ]
 ])
 
+controlled_name(a::Operator) = "C" * a.name
+controlled_name(a::Op) = "controlled($a)"
+
+controlled_type(a::Operator) = a.type
+contracted_type(a::Op) = plain_op
+
 """
     controlled(op)
 
@@ -76,15 +81,22 @@ the controlled gate constructor
     CZ = controlled(Z)
     Toffoli = controlled(controlled(X))
 """
-controlled(op::GenericOp{Pure, N}) where N = 
-    Proj("Up") ⊗ Identity(op) + Proj("Dn") ⊗ op
+controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = controlled_type(op)) where N =
+    Operator{N+1}(name, Proj("Up") ⊗ MakeIdentity(op) + Proj("Dn") ⊗ op, type)
+
+"""
+    Swap
+
+the qubit Swap operator
+"""
+Swap = Operator{2}("Swap", (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2, involution_op)
 
 """
     Phase(t)
 
 the phase gate for qubits
 """
-Phase(t) = Operator("Phase($t)", [1. 0 ; 0 exp(im * t)], plain_op)
+Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)], plain_op)
 
 #= """
     graph_state(Pure()|Mixed(), graph::Vector{Tuple{Int, Int}}; limits)

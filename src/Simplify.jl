@@ -2,19 +2,11 @@ export simplify
 
 # Simplification
 
-simplify(a::Union{Identity, JW_F, Proj, JW}) = a
+simplify(a::Union{Identity, JW_F, Proj, JW, Operator}) = a
 
-simplify(a::Operator{1}) = a
-simplify(a::Operator) =
-    if a.expr isa GenericOp
-        simplify(a.expr)
-    else
-        error("cannot simplify implicit multisite operator")
-    end
-
-simplify(a::ScalarOp) = a.coef * simplify(a.arg)
-simplify(a::ProdOp) = simplify_prod(simplify.(a.subs))
-simplify(a::SumOp) = simplify_sum(simplify.(a.subs))
+simplify(a::ScalarOp; kwargs...) = a.coef * simplify(a.arg; kwargs...)
+simplify(a::ProdOp; kwargs...) = simplify_prod(map(x->simplify(x; kwargs...), a.subs))
+simplify(a::SumOp; kwargs...) = simplify_sum(map(x->simplify(x; kwargs...), a.subs))
 simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
 
 simplify(a::PowOp) = simplify_pow(simplify(a.arg), a.expo)
@@ -43,22 +35,22 @@ function simplify(a::Evolver)
     simplify_sum([simplify_l(sarg), simplify_r(sarg)])
 end
 
-simplify(a::AtIndex) =
-    simplify_ind(simplify(a.op), a.index...)
+simplify(a::AtIndex; kwargs...) =
+    simplify_ind(simplify(a.op), a.index...; kwargs...)
 
 # Simplification with index
 
-simplify_ind(::Identity, ::Int) = Id(1)
-simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
-simplify_ind(a::Union{JW_F, Proj, JW, Left{1}, Right{1}}, index) = a(index)
-simplify_ind(a::Union{ExpOp, PowOp, DagOp}, index) = a(index)
-simplify_ind(a::Left, index...) = simplify_l(simplify_ind(a.arg, index...))
-simplify_ind(a::Right, index...) = simplify_r(simplify_ind(a.arg, index...))
+simplify_ind(::Identity, ::Int; kwargs...) = Id(1)
+simplify_ind(a::ScalarOp, index...; kwargs...) = a.coef * simplify_ind(a.arg, index...; kwargs...)
+simplify_ind(a::Union{JW_F, Proj, JW, Left{1}, Right{1}}, index; kwargs...) = a(index)
+simplify_ind(a::Union{ExpOp, PowOp, DagOp}, index; kwargs...) = a(index)
+simplify_ind(a::Left, index...; kwargs...) = simplify_l(simplify_ind(a.arg, index...; kwargs...))
+simplify_ind(a::Right, index...; kwargs...) = simplify_r(simplify_ind(a.arg, index...; kwargs...))
 
-simplify_ind(a::Operator, index) =
+simplify_ind(a::Operator{1}, index; kwargs...) =
     if a.type == fermionic_op
         if index > 1
-            prod(F(i) for i in 1:index-1) * JW(a)(index)
+            Multi_F{Pure}(1, index-1, false, false) * JW(a)(index)
         else
             JW(a)(index)
         end
@@ -66,9 +58,16 @@ simplify_ind(a::Operator, index) =
         a(index)
     end
 
-simplify_ind(a::SumOp, index...) = simplify_sum(map(x->simplify_ind(x, index...), a.subs))
-simplify_ind(a::ProdOp, index...) = simplify_prod(map(x->simplify_ind(x, index...), a.subs))
-simplify_ind(a::TensorOp, index...) = simplify_prod(tensor_apply(simplify_ind, a, index...))
+simplify_ind(a::Operator, index...; expand = false) =
+    if expand && a.expr isa Op
+        simplify(a.expr; expand)(index...)
+    else
+        a(index...)
+    end
+
+simplify_ind(a::SumOp, index...; kwargs...) = simplify_sum(map(x->simplify_ind(x, index...; kwargs...), a.subs))
+simplify_ind(a::ProdOp, index...; kwargs...) = simplify_prod(map(x->simplify_ind(x, index...; kwargs...), a.subs))
+simplify_ind(a::TensorOp, index...; kwargs...) = simplify_prod(tensor_apply(simplify_ind, a, index...; kwargs...))
 
 # helpers
 
@@ -125,14 +124,14 @@ simplify_l(a::GenericOp{Pure}) = Left(a)
 simplify_l(a::ScalarOp{Pure}) = a.coef * simplify_l(a.arg) 
 simplify_l(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_l.(a.subs)) 
 simplify_l(a::SumOp{Pure, Indexed}) = SumOp(simplify_l.(a.subs))
-simplify_l(a::AtIndex{Pure, 1}) = simplify_l(a.op)(a.index...)
+simplify_l(a::AtIndex{Pure}) = simplify_l(a.op)(a.index...)
 
 simplify_r(a::GenericOp{Pure}) = Right(a)
 simplify_r(a::Identity) = Left(a)
 simplify_r(a::ScalarOp{Pure}) = conj(a.coef) * simplify_r(a.arg) 
 simplify_r(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_r.(a.subs)) 
 simplify_r(a::SumOp{Pure, Indexed}) = SumOp(simplify_r.(a.subs))
-simplify_r(a::AtIndex{Pure, 1}) = simplify_r(a.op)(a.index...)
+simplify_r(a::AtIndex{Pure}) = simplify_r(a.op)(a.index...)
 
 simplify_sum(v::Vector) = simplify_core_sum(reduce(vcat, sumsubs.(v)))
 
@@ -261,6 +260,60 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
     return c * ProdOp(r)
 end
 
+orderprod(a::AtIndex, b::AtIndex) where R =
+    if a.index == b.index
+        [ simplify_core_prod(1, [a, b])(a.index...) ]
+    elseif min(a.index...) > max(b.index)
+        [b, a]
+    else
+        []
+    end
+
+function orderprod(a::AtIndex{R, N}, b::Multi_F{R}) where {R, N}
+    i = min(a.index...)
+    j = max(a.index...)
+    if i < b.start || (N > 1 && i == b.start)
+        []
+    elseif i > b.stop
+        [b, a]
+    elseif N == 1
+        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, i, b.left, b.right), Multi_F{R}(i + 1, b.stop, b.left, b.right)]
+    else
+        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, b.stop, b.left, b.right)]
+    end
+end
+
+function orderprod(b::Multi_F{R}, a::AtIndex{R, 1}) where R
+    i = min(a.index...)
+    j = max(a.index...)
+    if i < b.start || (N > 1 && i == b.start)
+        [a, b]
+    elseif i > b.stop
+        []
+    elseif N == 1
+        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, i, b.left, b.right), Multi_F{R}(i + 1, b.stop, b.left, b.right)]
+    else
+        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, b.stop, b.left, b.right)]
+    end
+end
+
+orderprod(a::Multi_F{R}, b::Multi_F{R}) where R = 
+    if a.left == b.left && a.right == b.right && (a.stop == b.start-1 || b.stop == a.start-1)
+        [ Multi_F{R}(min(a.start, b.start), max(a.stop, b.stop), a.left, a.right)]
+    elseif a.stop < b.start
+        []
+    elseif b.stop < a.start
+        [b, a]
+    else
+        i = min(a.stop, b.stop)
+        j = max(a.start, b.start)
+        [
+            Multi_F{R}(a.start, min(a.stop, i-1), a.left, a.right), Multi_F{R}(b.start, bmin(b.stop, i-1), b.left, b.right),
+            Multi_F{R}(i, j, a.left ⊻ b.left, a.right ⊻ b.right),
+            Multi_F{R}(max(b.start, j+1), b.stop, b.left, b.right), Multi_F{R}(max(a.start, j+1), a.stop, a.left, a.right)
+        ]
+    end
+
 function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
     id = MakeIdentity(v[1])
     if c == 0
@@ -271,36 +324,33 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
         if cp == 0
             return 0 * id
         end
-        sp = sort(reduce(vcat, prodsubs.(p)); by=x->x.index)
-        r = IndexedOp{R}[]
-        l = GenericOp{R, 1}[]
-        i = 0
-        for x in sp
-            j = x.index[1]
-            if j == i
-                if x.op ≠ id.op
-                    push!(l, x.op)
-                end
-            else
-                if !isempty(l)
-                    sp = simplify_core_prod(1, l)
-                    if sp ≠ id.op
-                        push!(r, sp(i))
+        r = reduce(vcat, prodsubs.(p))
+        change = true
+        while change
+            change = false
+            start = true
+            nr = IndexedOp{R}[]
+            left = id
+            for right in r
+                if left == id
+                    left = right
+                    if !start
+                        change = true
+                    end
+                else
+                    f, ll, rr  = orderprod(left, right)
+                    if f 
+                        change = true
+                        append!(nr, ll)
+                        left = rr
+                    else
+                        push!(nr, left)
+                        left = right
                     end
                 end
-                if x.op ≠ id.op
-                    l = GenericOp{R, 1}[ x.op ]
-                else
-                    l = GenericOp{R, 1}[]
-                end
-                i = j
+                start = false
             end
-        end
-        if !isempty(l)
-            sp = simplify_core_prod(1, l)
-            if sp ≠ id.op
-                push!(r, sp(i))
-            end
+            r = nr
         end
         return cp * ProdOp(r)
     end

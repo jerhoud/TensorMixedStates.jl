@@ -43,6 +43,10 @@ dim(::Fermion) = 2
     plain_op =>
     [
         A = C,
+    ],
+    involution_op =>
+    [
+        F = Float64[1 0 ; 0 -1]
     ]
 ])
 

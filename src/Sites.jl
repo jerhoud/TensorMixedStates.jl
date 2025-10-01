@@ -58,7 +58,7 @@ end
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
     t = (name, op)
-    r = getkey(operator_library, t, nothing)
+    r = get!(operator_library, t, nothing)
     if isnothing(r)
         error("operator $op is not defined for site $name")
     else
@@ -69,7 +69,7 @@ end
 function state_info(site::AbstractSite, st::String)
     name = typeof(site)
     t = (name, st)
-    r = getkey(state_library, t, nothing)
+    r = get!(state_library, t, nothing)
     if isnothing(r)
         error("state $st is not defined for site $name")
     else
@@ -85,25 +85,25 @@ return a matrix representing the identity operator for the given site
 identity_operator(dim::Int) = [ (i==j) ? 1. : 0. for i in 1:dim, j in 1:dim ]
 identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
-function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}, type::OpType=plain_op, N::Int=1)
+function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}, type::OpType=plain_op)
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{N}(op, nothing, type)
+        return Operator{1}(op, nothing, type)
     end
 end
 
-function add_operator(site::AbstractSite, op::String, r::GenericOp{Pure, N}, type::OpType=plain_op, ::Int=1) where N
+function add_operator(site::AbstractSite, op::String, r::GenericOp{Pure, 1}, type::OpType=plain_op, ::Int=1)
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
         error("operator $op is already defined for site $name")
     else
         operator_library[t] = r
-        return Operator{N}(op, nothing, type)
+        return Operator{1}(op, nothing, type)
     end
 end
 

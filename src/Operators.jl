@@ -108,9 +108,13 @@ struct Operator{N} <: GenericOp{Pure, N}
     name::String
     expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}}
     type::OpType
+    Operator{N}(name::String, expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}}, type::OpTypename) where N =
+        if N > 1 && type == fermionic_op
+            error("cannot deal with a fermionic multi site operator $name")
+        else
+            new{N}(name, expr, type)
+        end
 end
-
-Operator(args...) = Operator{1}(args...)
 
 show(io::IO, op::Operator) =
     print(io, op.name)
@@ -330,6 +334,30 @@ show(io::IO, ::JW_F) =
     print(io, "F")
 
 isless(::JW_F, ::JW_F) = false
+
+struct Multi_F{R} <: IndexedOp{R}
+    start::Int
+    stop::Int
+    left::Bool
+    right::Bool
+    Multi_F{R}(start::Int, stop::Int, left::Bool, right::Bool) =
+        if start > stop || (R == Mixed && !left && !right)
+            MakeIdentity{R, Indexed, 1}()
+        elseif start < stop
+            new{R}(start, stop, left, right)
+        elseif R == Pure
+            F(start)
+        elseif !left
+            Right(F)(start)
+        elseif right
+            (Left(F)*Right(F))(start)
+        else
+            Left(F)(start)
+        end
+end
+
+isless(a::Multi_F, b::Multi_F) =
+    isless((a.start, a.stop, a.left, a.right), (b.start, b.stop, b.left, b.right))
 
 ############ Proj ################
 

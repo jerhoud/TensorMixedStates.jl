@@ -122,24 +122,24 @@ function tensor(a::Right, site::AbstractSite...)
     return dag(ti) * delta(j, j') * c * c'
 end
 
-tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{AbstractSite, M}) where {N, M} =
-    (f(o, site[1:N]...), site[N+1:M])
+tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{AbstractSite, M}; kwargs...) where {N, M} =
+    (f(o, site[1:N]...; kwargs...), site[N+1:M])
 
-function tensor_apply(f, a::TensorOp{N}, idx::Vararg{AbstractSite, N}) where N
+function tensor_apply(f, a::TensorOp{N}, idx::Vararg{AbstractSite, N}; kwargs...) where N
     rest = idx
     r = map(a.subs) do o 
-        t, rest = tensor_next(f, o, rest...)
+        t, rest = tensor_next(f, o, rest...; kwargs...)
         t
     end
 end
 
-tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Int, M}) where {N, M} =
-    (f(o, site[1:N]...), site[N+1:M])
+tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Int, M}; kwargs...) where {N, M} =
+    (f(o, site[1:N]...; kwargs...), site[N+1:M])
 
-function tensor_apply(f, a::TensorOp{N}, idx::Vararg{Int, N}) where N
+function tensor_apply(f, a::TensorOp{N}, idx::Vararg{Int, N}; kwargs...) where N
     rest = idx
     r = map(a.subs) do o 
-        t, rest = tensor_next(f, o, rest...)
+        t, rest = tensor_next(f, o, rest...; kwargs...)
         t
     end
 end
