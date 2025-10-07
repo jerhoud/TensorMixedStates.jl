@@ -21,7 +21,7 @@ function DataToFrame end
     Simulation(state[, time = 0])
     Simulation(sim, state[, time = sim.time])
 
-A type to represent simulation data ans store time and file data. It is used and returned by runTMS.
+A type to represent simulation data and store time and file data. It is used and returned by runTMS.
 The first form creates a simulation object. The second updates the state in the simulation object. (see also `get_sim_file`)
 
 Most functions applicable to States can be applied to Simulations
@@ -35,15 +35,15 @@ Most functions applicable to States can be applied to Simulations
 - `formats`     : format info for the output
 """
 struct Simulation
-    state
+    state::Union{Nothing, State}
     time::Number
     output::Union{Nothing, IO}
     files::Dict{String, Union{IO, Dict}}
     data::Dict{String, Dict}
     formats::Tuple{Printf.Format, Printf.Format}
-    Simulation(state; t::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
+    Simulation(state::Union{Nothing, State}; t::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
         new(state, t, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
-    Simulation(s::Simulation, st, t::Number = s.time) =
+    Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
         new(st, t, s.output, s.files, s.data, s.formats)
 end
 

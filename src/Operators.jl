@@ -1,7 +1,7 @@
 export PM, Pure, Mixed, GI, Generic, Indexed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Operator, Identity, Id, JW, JW_F, F, Proj, Gate, Dissipator, Evolver, Left, Right, Multi_F
-export dag, tensor, ⊗
+export dag, tensor, ⊗, isfermionic
 
 ############# Types ################
 
@@ -108,7 +108,7 @@ struct Operator{N} <: GenericOp{Pure, N}
     name::String
     expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}}
     type::OpType
-    Operator{N}(name::String, expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}}, type::OpTypename) where N =
+    Operator{N}(name::String, expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}}, type::OpType) where N =
         if N > 1 && type == fermionic_op
             error("cannot deal with a fermionic multi site operator $name")
         else
@@ -340,7 +340,7 @@ struct Multi_F{R} <: IndexedOp{R}
     stop::Int
     left::Bool
     right::Bool
-    Multi_F{R}(start::Int, stop::Int, left::Bool, right::Bool) =
+    Multi_F{R}(start::Int, stop::Int, left::Bool, right::Bool) where R =
         if start > stop || (R == Mixed && !left && !right)
             MakeIdentity{R, Indexed, 1}()
         elseif start < stop
@@ -390,6 +390,7 @@ struct AtIndex{R, N} <: IndexedOp{R}
     index::NTuple{N, Int}
     AtIndex(op::GenericOp{R, N}, index::NTuple{N, Int}) where {R, N} =
         scalarcoef(op) * new{R, N}(scalararg(op), index)
+    AtIndex(::Identity, ::NTuple{1, Int}) = new{Pure, 1}(Id, (1,))
 end
 
 (op::GenericOp{R, N})(index::Vararg{Int, N}) where {R, N} =
@@ -411,11 +412,7 @@ isless(a::AtIndex, b::AtIndex) =
 
 # Gate
 
-"""show(io::IO, a::AnyProd) =
-    paren(io, Base.operator_precedence(:*)) do io
-        join(io, a.subs, "*")
-    end
-
+"""
     Gate(op)
 
 a generic operator acting as a gate on states in mixed representation. Usefull for building noisy gates
@@ -425,8 +422,7 @@ a generic operator acting as a gate on states in mixed representation. Usefull f
     G = 0.9 * Gate(Id) + 0.1 Gate(X)
 """
 struct Gate{N} <: GenericOp{Mixed, N}
-    arg::Union{GenericOp{Pure, N}, Matrix}
-    Gate{N}(arg::Matrix) where N = new{N}(arg)
+    arg::GenericOp{Pure, N}
     Gate(arg::GenericOp{Pure, N}) where N =
         abs2(scalarcoef(arg)) * new{N}(scalararg(arg))
 end
@@ -532,10 +528,10 @@ struct PowOp{R, N} <: GenericOp{R, N}
         else
             c = scalarcoef(arg)
             a = scalararg(arg)
-            if c >= 0
+            if c >= 0 || isinteger(expo)
                 c^expo * new{R, N}(a, expo)
             else
-                new{R, N}(arg, expo)
+                (-c)^expo * new{R, N}(-a, expo)
             end
         end
 end
@@ -601,6 +597,40 @@ show(io::IO, a::DagOp) =
     end
 
 isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
+
+
+################## isfermionic #################
+
+isfermionic(a::SimpleOp) = false
+isfermionic(a::Operator{1}) = a.type == fermionic_op
+isfermionic(a::Union{ScalarOp{Pure}, DagOp{Pure}}) = isfermionic(a.arg)
+isfermionic(a::ProdOp{Pure, Generic, 1}) = isodd(count(isfermionic, a.subs))
+isfermionic(a::Union{ExpOp}) =
+    if isfermionic(a.arg)
+        error("cannot take exp of fermionic operators ($a)")
+    else
+        false
+    end
+function isfermionic(a::SumOp{Pure, Generic, 1})
+    n = length(a.subs)
+    nf = count(isfermionic, a.subs)
+    if n == nf
+        return true
+    elseif nf == 0
+        return false
+    else
+        error("cannot sum fermionic and non fermionic operators ($a)")
+    end
+end
+
+isfermionic(a::PowOp) =
+    if !isfermionic(a.arg)
+        false
+    elseif isinteger(a.expo)
+        isodd(a.expo)
+    else
+        error("cannot determine fermionic nature of $a")
+    end
 
 
 ################## Global Ordering ###############

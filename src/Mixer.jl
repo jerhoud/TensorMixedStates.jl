@@ -1,4 +1,4 @@
-export tensor, matrix, fermionic
+export tensor, matrix, isfermionic
 
 function combinerto(i::Index, j::Index...)
     c = combiner(j...; tags="")
@@ -71,8 +71,14 @@ function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     return st * adjoint(st)
 end
 
+matrix(a::JW, site::AbstractSite) =
+    matrix(a.arg, site)
+
+matrix(a::ScalarOp, site::AbstractSite...) =
+    a.coef * matrix(a.arg, site...)
+
 matrix(a::ProdOp, site::AbstractSite...) =
-    a.coef * prod(matrix(o, site...) for o in a.subs)
+    prod(matrix(o, site...) for o in a.subs)
 
 matrix(a::SumOp, site::AbstractSite...) =
     sum(matrix(o, site...) for o in a.subs)
@@ -89,37 +95,33 @@ matrix(a::DagOp, site::AbstractSite...) =
 matrix(::Dissipator, ::AbstractSite...) = error("cannot give matrix nor tensor for Dissipator")
 
 
-function tensor(a::Gate, site::AbstractSite...)
-    if a.arg isa Matrix
-        return tensor(a.arg, site...)
-    end
-    ti = tensor(a.arg, site...)
-    i = tensor_index(ti)
-    is = map(Index, site)
-    j = sim(i)
-    js = sim.(is)
-    tj = replaceinds(ti, (i, i'), (j, j'))
-    ci = combinerto(i, reverse(is)...)
-    cj = combinerto(j, reverse(js)...)
-    ijs = Iterators.flatten(zip(is, js))
-    c = combiner(ijs...; tags="")
-    return (ti * ci * ci') * (dag(tj) * cj * cj') * c * c'
-end
+matrix(a::Gate, site::AbstractSite...) =
+    matrix(Left(a.arg), site...) * matrix(Right(a.arg), site...)
 
 function tensor(a::Left, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
+    is = Index.(site)
     j = sim(i)
-    c = combiner(i, j; tags="")
-    return ti * delta(j, j') * c * c'
+    js = sim.(is)
+    ci = combinerto(i, reverse(is)...)
+    cj = combinerto(j, reverse(js)...)
+    ijs = Iterators.flatten(zip(is, js))
+    c = combiner(ijs...; tags="")
+    return (ti * ci * ci') * (delta(j, j') * cj * cj') * c * c'
 end
 
 function tensor(a::Right, site::AbstractSite...)
     ti = tensor(a.arg, site...)
     i = tensor_index(ti)
+    is = Index.(site)
     j = sim(i)
-    c = combiner(j, i; tags="")
-    return dag(ti) * delta(j, j') * c * c'
+    js = sim.(is)
+    ci = combinerto(i, reverse(is)...)
+    cj = combinerto(j, reverse(js)...)
+    jis = Iterators.flatten(zip(js, is))
+    c = combiner(jis...; tags="")
+    return (delta(j, j') * cj * cj') * (dag(ti) * ci * ci') * c * c'
 end
 
 tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{AbstractSite, M}; kwargs...) where {N, M} =

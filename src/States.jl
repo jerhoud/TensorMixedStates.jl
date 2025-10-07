@@ -56,16 +56,16 @@ represent the complete state of the simulated quantum system
 states can be added, substracted and multiplied by numbers
 
 """
-struct State
-    type::PM
+struct State{R <: PM}
     system::System
     state::MPS
     preobs::PreObs
-    State(type::PM, system::System, state::MPS) =
-        new(type, system, state, PreObs())
+    State{R}(system::System, state::MPS) where {R <: PM} =
+        new{R}(system, state, PreObs())
 end
 
-show(io::IO, s::State) = print(io, "State($(s.type), $(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
+show(io::IO, s::State{R}) where R =
+    print(io, "State{$R}($(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
 
 """
     length(::State)
@@ -81,8 +81,8 @@ return the maximum link dimension in the state
 """
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
-make_one_state(type::PM, system::System, i::Int, st) = 
-    make_one_state(type, system[type, i], state(system[i], st))
+make_one_state(type::R, system::System, i::Int, st) where {R <: PM} = 
+    make_one_state(type, SysIndex{R}(system, i), state(system[i], st))
 
 make_one_state(::Pure, i::Index, v::Vector) = ITensor(v, i)
 make_one_state(::Pure, ::Index, ::Matrix) = error("cannot use a mixed local state to create a pure local state")
@@ -106,55 +106,54 @@ function make_state(type::PM, system::System, states::Vector)
     return st
 end
 
-function State(type::PM, system::System, states::Vector)
+function State{R}(system::System, states::Vector) where R
     if length(system) ≠ length(states)
         error("incompatible sizes between system ($(length(system))) and states ($(length(states)))")
     end
-    return State(type, system, make_state(type, system, states))
+    return State{R}(system, make_state(R(), system, states))
 end
 
-State(type::PM, system::System, state) =
-    State(type, system, fill(state, length(system)))
+State{R}(system::System, state) where R =
+    State{R}(system, fill(state, length(system)))
 
-State(type::PM, system::System, state::Union{Vector{<:Number}, Matrix}) =
-    State(type, system, fill(state, length(system)))
+State{R}(system::System, state::Union{Vector{<:Number}, Matrix}) where R =
+    State{R}(system, fill(state, length(system)))
 
-State(state::State, st::MPS) =
-    State(state.type, state.system, st)
+State{R}(state::State{R}, st::MPS) where R =
+    State{R}(state.system, st)
 
-State(type::PM, size::Int, site::AbstractSite, state) =
-    State(type, System(size, site), state)
+State{R}(size::Int, site::AbstractSite, state) where R =
+    State{R}(System(size, site), state)
 
-State(type::PM, sites::Vector{<:AbstractSite}, state) =
-    State(type, System(sites), state)
+State{R}(sites::Vector{<:AbstractSite}, state) where R =
+    State{R}(System(sites), state)
 
-(a::Number * b::State) = State(b, a * b.state)
+(a::Number * b::State{R}) where R = State{R}(b, a * b.state)
 (a::State * b::Number) = b * a
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
-+(a::State, b::State; limits::Limits=Limits()) = State(a, +(a.state, b.state; limits.cutoff, limits.maxdim))
--(a::State, b::State; limits::Limits=Limits()) = State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
++(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
+    State{R}(a, +(a.state, b.state; limits.cutoff, limits.maxdim))
+-(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
+    State{R}(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
 
 """
     mix(::State)
 
 transform a pure representation into a mixed representation
 """
-mix(state::State) =
-    mix(state.type, state)
+mix(state::State{Mixed}) = state
 
-mix(::Mixed, state::State) = state
-
-function mix(::Pure, state::State)
+function mix(state::State{Pure})
     n = length(state)
     system = state.system
     st = dense(state.state)
     v = Vector{ITensor}(undef, n)
     comb = ITensor(1)
     for (i, t) in enumerate(st)
-        idx = system[Pure(), i]
-        midx = system[Mixed(), i]
+        idx = SysIndex{Pure}(system, i)
+        midx = SysIndex{Mixed}(system, i)
         mt = t * dag(t') * combinerto(midx, idx, idx')
         mt *= comb
         if i < n
@@ -167,7 +166,7 @@ function mix(::Pure, state::State)
         mt *= comb
         v[i] = mt
     end
-    return State(Mixed(), system, MPS(v))
+    return State{Mixed}(system, MPS(v))
 end
 
 
@@ -176,5 +175,5 @@ end
 
 apply the truncation to the given state
 """
-truncate(state::State; limits::Limits) =
-    State(state.type, state.system, truncate(state.state; limits.cutoff, limits.maxdim))
+truncate(state::State{R}; limits::Limits) where R =
+    State{R}(state.system, truncate(state.state; limits.cutoff, limits.maxdim))

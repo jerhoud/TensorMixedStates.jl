@@ -2,35 +2,38 @@ export trace, trace2, norm, normalize, dag, hermitianize, hermitianity, renyi2
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace, mutual_info_renyi2
 
-function tensor_trace(state::State, i::Int)
+function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
-    j = s[Pure(), i]
-    k = s[Mixed(), i]
+    j = SysIndex{Pure}(s, i)
+    k = SysIndex{Mixed}(s, i)
     return dense(delta(j', j)) * combinerto(k, j', j)
 end
 
-function tensor_obs(state::State, ind::Indexed{Pure, 1})
+tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
+    tensor(state.system, ind)
+
+function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
     s = state.system
     t = tensor(s, ind)
-    j = s[Pure(), ind.index...]
-    k = s[Mixed(), ind.index...]
+    j = SysIndex{Pure}(s, ind.index...)
+    k = SysIndex{Mixed}(s, ind.index...)
     return t * combinerto(k, j, j')
 end
 
-tensor_obs(state::State, i::Int) =
+tensor_obs(state::State{Mixed}, i::Int) =
     tensor_trace(state, i) * state.state[i]
 
 function tensor_dag(state::State, i::Int)
     s = state.system
-    j = s[Pure(), i]
-    k = s[Mixed(), i]
+    j = SysIndex{Pure}(s, i)
+    k = SysIndex{Mixed}(s, i)
     return dag(state.state[i]) * combinerto(k, j', j) * combinerto(k, j, j')
 end
 
 function get_loc(state::State, i::Int)
     l = state.preobs.loc
     if isempty(l)
-        create_loc!(l, state.type, state)
+        create_loc!(l, state)
     end
     return l[i]
 end
@@ -38,7 +41,7 @@ end
 function get_right(state::State, i::Int)
     r = state.preobs.right
     if isempty(r)
-        create_right!(r, state.type, state)
+        create_right!(r, state)
     end
     return r[i]
 end
@@ -46,7 +49,7 @@ end
 function get_left(state::State, i::Int)
     l = state.preobs.left
     if length(l) < i
-        create_left!(l, state.type, state, i)
+        create_left!(l, state, i)
     end
     return l[i]
 end
@@ -60,13 +63,13 @@ This should be one.
 function trace(state::State)
     t = state.preobs.trace
     if isempty(t)
-        create_trace!(t, state.type, state)
+        create_trace!(t, state)
     end
     return t[1]
 end
 
-create_loc!(_, ::Pure, ::State) = error("bug: get_loc on pure states")
-function create_loc!(l, ::Mixed, state::State)
+create_loc!(_, ::State{Pure}) = error("bug: get_loc on pure states")
+function create_loc!(l, state::State{Mixed})
     n = length(state)
     resize!(l, n)
     for i in 1:n
@@ -75,7 +78,7 @@ function create_loc!(l, ::Mixed, state::State)
     return l
 end
 
-function create_right!(r, ::Pure, state::State)
+function create_right!(r, state::State{Pure})
     st = state.state
     s = state.system
     n = length(state)
@@ -87,7 +90,7 @@ function create_right!(r, ::Pure, state::State)
         v = if i >= rl
             delta(rlink, rlink')
         else
-            k = s[Pure(), i+1]
+            k = SysIndex{Pure}(s, i)
             r[i+1] * delta(k, k') * st[i+1]
         end
         r[i] = v * dag(st[i]')
@@ -95,7 +98,7 @@ function create_right!(r, ::Pure, state::State)
     return r
 end
 
-function create_right!(r, ::Mixed, state::State)
+function create_right!(r, state::State{Mixed})
     n = length(state)
     resize!(r, n)
     t = r[n] = ITensor(1.)
@@ -105,20 +108,20 @@ function create_right!(r, ::Mixed, state::State)
     return r
 end
 
-function create_trace!(t, ::Pure, state::State)
+function create_trace!(t, state::State{Pure})
     resize!(t, 1)
-    k = state.system[Pure(), 1]
+    k = SysIndex{Pure}(state.system, 1)
     t[1] = scalar(get_right(state, 1) * delta(k, k') * state.state[1])
     return t
 end
 
-function create_trace!(t, ::Mixed, state::State)
+function create_trace!(t, state::State{Mixed})
     resize!(t, 1)
     t[1] = scalar(get_loc(state, 1) * get_right(state, 1))
     return t
 end
 
-function create_left!(l, ::Pure, state::State, i::Int)
+function create_left!(l, state::State{Pure}, i::Int)
     st = state.state
     s = state.system
     ll = ITensorMPS.leftlim(st) + 1
@@ -133,7 +136,7 @@ function create_left!(l, ::Pure, state::State, i::Int)
         v = if k <= ll
             delta(llink, llink')
         else
-            idx = s[Pure(), k-1]
+            idx = SysIndex{Pure}(s, k-1)
             l[k-1] * delta(idx, idx') * dag(st[k-1]')
         end
         l[k] = v * st[k]
@@ -141,7 +144,7 @@ function create_left!(l, ::Pure, state::State, i::Int)
     return l
 end
 
-function create_left!(l, ::Mixed, state::State, i::Int)
+function create_left!(l, state::State{Mixed}, i::Int)
     st = state.state
     j = length(l)
     resize!(l, i)
@@ -161,12 +164,8 @@ end
 Return the trace of the square density matrix, mostly usefull for mixed representations.
 This is one for pure representations.
 """
-trace2(state::State) =
-    if state.type isa Pure
-        1.
-    else
-        (norm(state.state) / real(trace(state))) ^ 2
-    end
+trace2(::State{Pure}) = 1.
+trace2(state::State{Mixed}) = (norm(state.state) / real(trace(state))) ^ 2
 
 """
     norm(::State)
@@ -174,8 +173,7 @@ trace2(state::State) =
 Return the norm of the state, mostly usefull for pure representations.
 This should be one for pure representation.
 """
-norm(state::State) =
-    norm(state.state)
+norm(state::State) = norm(state.state)
 
 
 """
@@ -183,30 +181,26 @@ norm(state::State) =
 
 normalize state so that norm = 1 for pure state and trace = 1 for mixed state
 """
-normalize(state::State) =
-    if state.type isa Pure
-        return State(state, normalize(state.state))
-    else
-        return State(state, state.state / real(trace(state)))
-    end
-
+normalize(state::State{Pure}) =
+    State(state, normalize(state.state))
+normalize(state::State{Mixed}) =
+    State(state, state.state / real(trace(state)))
 
 """
     dag(::State)
 
 adjoint of density matrix for mixed representation
 """
-dag(state::State) =
-    if state.type isa Pure
-        state
-    else
-        n = length(state)
-        st = MPS(n)
-        for i in 1:n
-            st[i] = tensor_dag(state, i)
-        end
-        return State(state, st)
+dag(state::State{Pure}) =
+    error("dag is meaningless on pure representations")
+function dag(state::State{Mixed})
+    n = length(state)
+    st = MPS(n)
+    for i in 1:n
+        st[i] = tensor_dag(state, i)
     end
+    State(state, st)
+end
 
 
 """
@@ -214,13 +208,10 @@ dag(state::State) =
 
 modify the state so that it is Hermitian (only useful for mixed state)
 """
-hermitianize(state::State; limits::Limits=Limits()) =
-    if state.type isa Pure
-        state
-    else
-        State(state, 0.5*(+(state.state, dag(state).state; limits.cutoff, limits.maxdim)))
-    end
-
+hermitianize(state::State{Pure}; kwargs...) =
+    error("hermitianize meaningless for pure representation")
+hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
+    State(state, 0.5*(+(state.state, dag(state).state; limits.cutoff, limits.maxdim)))
 
 
 """
@@ -232,25 +223,21 @@ return a value from 0 (anti Hermitian) to 1 (Hermitian)
 
 return 1 for pure state
 """
-hermitianity(state::State) =
-    if state.type isa Pure
-        1.
-    else
-        0.5 + 0.5 * real(dot(state.state, dag(state).state)) / norm(state.state)^2
-    end
+hermitianity(::State{Pure}) = 1.
+hermitianity(state::State{Mixed}) =
+    0.5 + 0.5 * real(dot(state.state, dag(state).state)) / norm(state.state)^2
 
 """
     renyi2(::State)
 
 renyi2 returns the Renyi entropy of order 2 of the state. This is 0. for pure representations.
 """
-renyi2(state::State) =
-    if state.type isa Pure
-        0.
-    else
-        -log(trace2(state))
-    end
- 
+renyi2(::State{Pure}) = 0.
+renyi2(state::State{Mixed}) = -log(trace2(state))
+
+renyi2(state::State{Mixed}, a::Vector{Int}) =
+    renyi2(partial_trace(state, a; keepers = true))
+
 unroll(x) =
     if x[1] isa Number
         x
@@ -263,56 +250,71 @@ unroll(x) =
         end
     end
 
-function expect(::Pure, state::State, coef::Number, subs::Vector{<:ExprIndexed{Pure}})
-    if coef == 0.
-        return 0.
-    end
-    sys = state.system
-    st = state.state
-    local r::ITensor
-    j = 0
-    foreach(subs) do ind
-        i = ind.index[1]
-        if j == 0
-            r = get_left(state, i)
-        else
-            r *= dag(st[j]')
-            for k in j+1:i-1
-                idk = sys[Pure(), k]
-                r *= st[k] * delta(idk, idk')
-                r *= dag(st[k]')
-            end
-            r *= st[i]
-        end
-        r *= tensor(sys, ind)
-        j = i
-    end
-    r *= get_right(state, j)
-    return coef * scalar(r)
+
+struct Expector
+    pos::Int
+    t::ITensor
 end
 
-function expect(::Mixed, state::State, coef::Number, subs::Vector{<:ExprIndexed{Pure}})
+Expector() =
+    Expector(0, ITensor())
+
+
+zipto(state::State{Pure}, a::Expector, i::Int) = 
+    if a.pos == 0
+        Expector(i, get_left(state, i))
+    elseif a.pos == i
+        a
+    else
+        t = a.t * dag(state[a.pos]')
+        for k in a.pos+1:i-1
+            idk = SysIndex{Pure}(state.system, k)
+            t *= state[k] * delta(idk, idk')
+            t *= dag(state[k])
+        end
+        t *= state[i]
+        Expector(i, t)
+    end
+
+zipto(state::State{Mixed}, a::Expector, i::Int) =
+    if a.pos == 0
+        Expector(i, get_left(state, i))
+    elseif a.pos == i
+        a
+    else
+        t = a.t
+        for k in a.pos+1:i-1
+            t *= get_loc(state, k)
+        end
+        t *= state[i]
+        Expector(i, t)
+    end
+
+zipend(state::State, a::Expector) =
+    Expector(a.pos, a.t * get_right(state, a.pos))
+
+
+function expectfactor(state::State, a::Expector, o::AtIndex)
+    a = zipto(state, a, o.index...)
+    Expector(a.pos, a.t * tensor_obs(state, o))
+end
+
+expectfactor(state::State, a::Expector, o::Multi_F) =
+    for i in o.start:o.stop
+        a = expectfactor(state, a, F(i))
+    end
+
+
+function expect(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}})
     if coef == 0.
         return 0.
     end
-    st = state.state
-    local r::ITensor
-    j = 0
-    foreach(subs) do ind
-        i = ind.index[1]
-        if j == 0
-            r = get_left(state, i)
-        else
-            for k in j+1:i-1
-                r *= get_loc(state, k)
-            end
-            r *= st[i]
-        end
-        r *= tensor_obs(state, ind)
-        j = i
+    e = Expector()
+    for o in subs
+        e = expectfactor(state, e, o)
     end
-    r *= get_right(state, j)
-    return coef * scalar(r)
+    e = zipend(state, e)
+    return coef * scalar(e.t)
 end
 
 """
@@ -325,11 +327,11 @@ Compute expectation values of `obs` on the given state.
     expect(state, [X(1)*Y(2), X(3), Z(1)*X(2)])
 
 """
-expect(state::State, p::ExprIndexed{Pure}) =
-    expect(state.type, state, prodcoef(p), prodsubs(p))
+expect(state::State, p::IndexedOp{Pure}) =
+    expect(state, scalarcoef(p), prodsubs(p))
     
-expect(state::State, op::SumOp{Pure, IndexOp}) =
-    sum(op.ps; init=0) do p
+expect(state::State, op::SumOp{Pure, Indexed}) =
+    sum(op.subs) do p
         expect(state, p)
     end
 
@@ -338,16 +340,16 @@ expect(state::State, op) =
         expect(state, o)
     end
 
+expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =
+    if isfermionic(op)
+        error("expect1 is not implemented for fermionic operators")
+    else
+        scalar(t * tensor_obs(state, op(i)))
+    end
 
-expect1_one(::Pure, state::State, op::SimpleOp, i::Int, t::ITensor) =
-    scalar(t * tensor(state.system, op(i)))
-
-expect1_one(::Mixed, state::State, op::SimpleOp, i::Int, t::ITensor) =
-    scalar(t * tensor_obs(state, op(i)))
-
-expect1_one(tp, state::State, ops, i::Int, t::ITensor) =
+expect1_one(state::State, ops, i::Int, t::ITensor) =
     map(ops) do o
-        expect1_one(tp, state, o, i, t)
+        expect1_one(state, o, i, t)
     end
 
 
@@ -363,109 +365,64 @@ Compute the expectation values of the given operators on all sites.
 """
 function expect1(state::State, op)
     n = length(state)
-    r = [ expect1_one(state.type, state, op, i, get_left(state, i) * get_right(state, i)) for i in 1:n ]
+    r = [ expect1_one(state, op, i, zipend(state, zipto(state, Expector(), i)).t) for i in 1:n ]
     return unroll(r)
 end
 
 
-function expect2(::Pure, state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
-    oplist = collect(Set([first.(ops) ; last.(ops)]))
+function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
+    oplist = [first.(ops) ; last.(ops)]
+    need_fermionic = any(isfermionic, oplist)
+    need_non_fermionic = any(x->!isfermionic(x), oplist)
     n = length(state)
-    sys = state.system
-    st = state.state
     r = Matrix(undef, n, n)
     for i in 1:n
-        ldict = Dict{SimpleOp, ITensor}()
-        ti = get_left(state, i) * get_right(state, i)
+        t = zipend(state, zipto(state, Expector(), i)).t
         r[i, i] = map(ops) do (o1, o2)
-            scalar(ti * tensor(sys, (o1 * o2)(i)))
+            expect1_one(state, o1 * o2, i, t)
         end
-        for op in oplist
-            opF = fermionic(op) ? op * F : op
-            ldict[op] = get_left(state, i) * tensor(sys, opF(i)) * dag(st[i]')
-        end
-        rdict = Dict{SimpleOp, ITensor}()
+        lnf = zipto(state, Expector(), i)
+        lf = lnf
         for j in i+1:n
-            for op in oplist
-                rdict[op] = get_right(state, j) * tensor(sys, op(j)) * st[j]
+            enf = lnf
+            ef = lf
+            if need_non_fermionic
+                enf = zipend(state, zipto(state, lnf, j))
+            end
+            if need_fermionic
+                ef = zipend(state, zipto(state, lf, j))
             end
             r[i, j] = map(ops) do (o1, o2)
-                scalar(ldict[o1] * rdict[o2])
+                if isfermionic(o1)
+                    scalar(ef.t * tensor_obs(state, (o1 * F)(i)) * tensor_obs(state, o2(j)))
+                else
+                    scalar(enf.t * tensor_obs(state, o1(i)) * tensor_obs(state, o2(j)))
+                end
             end
             r[j, i] = map(ops) do (o1, o2)
-                v = scalar(ldict[o2] * rdict[o1])
-                if fermionic(o1)
-                    v *= -1
+                if isfermionic(o1)
+                    scalar(ef.t * tensor_obs(state, (o2 * F)(i) * tensor_obs(state, o1(j))))
+                else
+                    scalar(enf.t * tensor_obs(state, o2(i) * tensor_obs(state, o1(j))))
                 end
-                v
             end
             if j < n
-                for op in oplist
-                    p = if fermionic(op)
-                        tensor(sys, F(j))
-                    else
-                        jdx = sys[Pure(), j]
-                        delta(jdx', jdx)
-                    end
-                    ldict[op] *= st[j] * p
-                    ldict[op] *= dag(st[j]')
+                if need_non_fermionic
+                    lnf = zipto(state, expectfactor(state, lnf, Id(j)), j+1)
                 end
-            end    
-        end
-    end
-    return unroll(r)
-end
-
-function expect2(::Mixed, state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
-    oplist = collect(Set([first.(ops) ; last.(ops)]))
-    n = length(state)
-    st = state.state
-    r = Matrix(undef, n, n)
-    for i in 1:n
-        ldict = Dict{SimpleOp, ITensor}()
-        ti = get_left(state, i) * get_right(state, i)
-        r[i, i] = map(ops) do (o1, o2)
-            scalar(ti * tensor_obs(state, (o1 * o2)(i)))
-        end
-        for op in oplist
-            opF = fermionic(op) ? op * F : op
-            ldict[op] = get_left(state, i) * tensor_obs(state, opF(i))
-        end
-        rdict = Dict{SimpleOp, ITensor}()
-        for j in i+1:n
-            q = st[j] * get_right(state, j)
-            for op in oplist
-                rdict[op] = q * tensor_obs(state, op(j))
-            end
-            r[i, j] = map(ops) do (o1, o2)
-                scalar(ldict[o1] * rdict[o2])
-            end
-            r[j, i] = map(ops) do (o1, o2)
-                v = scalar(ldict[o2] * rdict[o1])
-                if fermionic(o1)
-                    v *= -1
+                if need_fermionic
+                    lf = zipto(state, expectfactor(state, lnf, F(j)), j+1)
                 end
-                v
-            end
-            if j < n
-                for op in oplist
-                    p = if fermionic(op)
-                        st[j] * tensor_obs(state, F(j))
-                    else
-                        get_loc(state, j)
-                    end
-                    ldict[op] *= p
-                end    
             end
         end
     end
-    return unroll(r)
+    unroll(r)
 end
 
 """
     expect2(::State, op_pairs)
 
-Compute the expectation values of the given pairs of operators on all sites.
+Compute the 2-point correlations of the given pairs of operators on all sites.
 
 # Examples
     expect2(state, (X, X))
@@ -474,10 +431,6 @@ Compute the expectation values of the given pairs of operators on all sites.
 """
 expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
     expect2(state, [ops])[1]
-
-expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}}) =
-    expect2(state.type, state, ops)
-
 
 
 """
@@ -501,10 +454,7 @@ end
 return the state partially traced at the given positions,
 alternatively one can give the positions to keep by setting `keepers = true`
 """
-function partial_trace(state::State, pos::Vector{Int}; keepers::Bool = false)
-    if state.type isa Pure
-        error("cannot partial trace a pure representation")
-    end
+function partial_trace(state::State{Mixed}, pos::Vector{Int}; keepers::Bool = false)
     n = length(state)
     if keepers
         keep = pos
@@ -523,9 +473,9 @@ function partial_trace(state::State, pos::Vector{Int}; keepers::Bool = false)
     sp = Vector{Index}(undef, kn)
     sm = Vector{Index}(undef, kn)
     for (i, k) in enumerate(keep)
-        s[i] = sys[k] 
-        sp[i] = sys[Pure(), k]
-        sm[i] = sys[Mixed(), k]
+        s[i] = sys[k]
+        sp[i] = SysIndex{Pure}(sys, k)
+        sm[i] = SysIndex{Mixed}(sys, k)
         if i == 1
             t[1] = get_left(state, k)
         else
@@ -547,7 +497,7 @@ function partial_trace(state::State, pos::Vector{Int}; keepers::Bool = false)
         replaceind!(t[i], idx, jdx)
         replaceind!(t[i+1], idx, jdx)
     end
-    return State(Mixed(), System(s, sp, sm), MPS(t))
+    return State{Mixed}(System(s, sp, sm), MPS(t))
 end
 
 """

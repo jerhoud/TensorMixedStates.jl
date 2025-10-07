@@ -23,29 +23,29 @@ A phase type to create the simulation state
     CreateState(Pure(), 10, Qubit(), "Up")                                      # simple form
     CreateState(Mixed(), [Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
 """
-@kwdef struct CreateState
+@kwdef struct CreateState{R<:PM}
     name::String = "Creating state"
     time_start::Number = 0.
     final_measures = []
-    type::Union{Nothing, Pure, Mixed} = nothing
     system::Union{Nothing, System} = nothing
-    state = nothing
+    state::Union{Nothing, State{R}} = nothing
     randomize::Int = 0
     seed::Union{Nothing, Int} = nothing
 end
 
-CreateState(type, n, site, state; kwargs...) = CreateState(;type, system = System(n, site), state, kwargs...)
-CreateState(type, sites, state; kwargs...) = CreateState(;type, system = System(sites), state, kwargs...)
+CreateState{R}(n, site, state; kwargs...) where R =
+    CreateState{R}(;system = System(n, site), state, kwargs...)
+CreateState{R}(sites, state; kwargs...) where R =
+    CreateState{R}(;system = System(sites), state, kwargs...)
 
-show(io::IO, s::CreateState) = 
+show(io::IO, s::CreateState{R}) where R = 
     print(io,
         """
 
-        CreateState(
+        CreateState{$R}(
             name = $(repr(s.name)),
             time_start = $(s.time_start),
             final_measures = $(s.final_measures),
-            type = $(s.type),
             system = $(s.system),
             state = $(repr(s.state)),
             randomize = $(s.randomize),
@@ -206,7 +206,7 @@ A phase type for time evolution
     duration::Number
     time_step::Number
     algo::Algo
-    evolver::Union{ExprIndexed, Pair{ExprIndexed, Vector}}
+    evolver::Union{IndexedOp, Pair{IndexedOp, Vector}}
     measures_period::Int = 1
     measures = []
 end
@@ -245,7 +245,7 @@ A phase type for applying gates
     name::String = "Applying gates"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    gates::ExprIndexed
+    gates::IndexedOp
     limits::Limits = Limits()
   end
 
@@ -271,7 +271,7 @@ A phase type for computing the ground state using Dmrg
     name::String = "Ground state computation using Dmrg"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    hamiltonian::ExprIndexed{Pure}
+    hamiltonian::IndexedOp{Pure}
     limits::Limits
     nsweeps::Int
     measures = []
@@ -343,7 +343,7 @@ a phase to compute the steady state of a Lindbladian
     name::String = "Steady state optimization"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []
-    lindbladian::ExprIndexed{Mixed}
+    lindbladian::IndexedOp{Mixed}
     mpo_limits::Limits = Limits()
     limits::Limits
     nsweeps::Int

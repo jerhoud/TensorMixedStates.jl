@@ -98,19 +98,19 @@ the phase gate for qubits
 """
 Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)], plain_op)
 
-#= """
-    graph_state(Pure()|Mixed(), graph::Vector{Tuple{Int, Int}}; limits)
+"""
+    graph_state(graph::Vector{Tuple{Int, Int}}; limits)
 
 create a graph state corresponding to the given graph
 
 # Examples
 
-    graph_state(Pure(), complete_graph(10); limits = Limits(maxdim = 10))
+    graph_state(complete_graph(10); limits = Limits(maxdim = 10))
 """
-function graph_state(tp::Repr, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.e-16))
+function graph_state(g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.e-16))
     n = graph_base_size(g)
     s = System(n, Qubit())
-    state = State(tp, s, "+")
+    state = State{Pure}(s, "+")
     CZ = controlled(Z)
     gates = prod(CZ(i, j) for (i, j) in g)
     state = apply(gates, state; limits)
@@ -118,15 +118,14 @@ function graph_state(tp::Repr, g::Vector{Tuple{Int, Int}}; limits::Limits=Limits
 end
 
 """
-    create_graph_state(Pure()|Mixed(), graph::Vector{Tuple{Int, Int}}; limits)
+    create_graph_state(graph::Vector{Tuple{Int, Int}}; limits)
 
 create a phase for building a graph state to use in `SimData` and `runTMS`
 """
-create_graph_state(tp::Repr, g::Vector{Tuple{Int, Int}}; kwargs...) = 
+create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) = 
     [
-        CreateState(
+        CreateState{Pure}(
             name = "Creating initial state |++...++> for graph state",
-            type = tp,
             system = System(graph_base_size(g), Qubit()),
             state = "+",
         ),
@@ -136,7 +135,6 @@ create_graph_state(tp::Repr, g::Vector{Tuple{Int, Int}}; kwargs...) =
             kwargs...
         )
     ]
- =#
 
 module Qubits
 

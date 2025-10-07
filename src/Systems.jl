@@ -36,12 +36,15 @@ end
 
 System(size::Int, a::AbstractSite) = System(fill(a, size))
 
-show(io::IO, s::System) = print(io, "System($(s.sites))")
-    
 getindex(s::System, i...) = s.sites[i...]
-getindex(s::System, ::Pure, i...) = s.pure_indices[i...]
-getindex(s::System, ::Mixed, i...) = s.mixed_indices[i...]
 
+show(io::IO, s::System) = print(io, "System($(s.sites))")
+
+struct SysIndex{R <: PM}
+    SysIndex{Pure}(s::System, i::Int...) = s.pure_indices[i...]
+    SysIndex{Mixed}(s::System, i::Int...) = s.mixed_indices[i...]
+    SysIndex{R}(s::System, is) where R = map(i->SysIndex{R}(system, i), is)
+ end
 
 """
     length(::System)
@@ -82,10 +85,10 @@ tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
 
 returns a tensor representing the given base indexed operator acting on this system
 """
-function tensor(system::System, a::AtIndex{R, N}) where {R, N}
+function tensor(system::System, a::AtIndex{R}) where R
     s = map(i->system[i], a.index)
     t = tensor(a.op, s...)
-    is = map(i->system[R(), i], a.index)
+    is = SysIndex{R}(system, a.index)
     j = tensor_index(t)
     c = combinerto(j, reverse(is)...)
     return t * c * c'

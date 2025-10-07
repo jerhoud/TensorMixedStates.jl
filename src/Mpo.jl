@@ -1,18 +1,16 @@
 export PreMPO, make_mpo, make_approx_W1, make_approx_W2
 
-struct PreMPO
-    type::PM
+struct PreMPO{R <: PM}
     system::System
     linkdims::Vector{Int}
     terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
-    function PreMPO(type::PM, system::System)
+    function PreMPO{R}(system::System) where R
         n = length(system)
-        return new(type, system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
+        return new{R}(system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
     end
 end
 
-function PreMPO!(pre::PreMPO, coef::Number, subs::Vector{<:ExprIndexed}, ref::Int=1)
-    type = pre.type
+function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -29,14 +27,14 @@ function PreMPO!(pre::PreMPO, coef::Number, subs::Vector{<:ExprIndexed}, ref::In
         for ind in subs[2:end-1]
             j = ind.index[1]
             for k in i+1:j-1
-                kdx = sys[type, k]
+                kdx = SysIndex{R}(sys, k)
                 push!(tm[k],(ld[k-1], ld[k], delta(kdx', kdx), ref))
             end
             push!(tm[j], (ld[j-1], ld[j], tensor(sys, ind), ref))
             i = j
         end
         for k in i+1:lst-1
-            kdx = sys[type, k]
+            kdx = SysIndex{R}(sys, k)
             push!(tm[k],(ld[k-1], ld[k], delta(kdx', kdx), ref))
         end
         push!(tm[lst], (ld[lst-1], 1, tensor(sys, subs[end]), ref))
@@ -44,10 +42,10 @@ function PreMPO!(pre::PreMPO, coef::Number, subs::Vector{<:ExprIndexed}, ref::In
     return pre
 end
 
-PreMPO!(pre::PreMPO, a::ExprIndexed, ref::Int = 1) =
-    PreMPO!(pre, prodcoef(a), prodsubs(a), ref)
+PreMPO!(pre::PreMPO{R}, a::IndexedOp{R}, ref::Int = 1) where R =
+    PreMPO!(pre, scalarcoef(a), prodsubs(a), ref)
 
-function PreMPO!(pre::PreMPO, s::SumOp{<:Any, IndexOp}, ref::Int=1)
+function PreMPO!(pre::PreMPO{R}, s::SumOp{R, Indexed}, ref::Int=1) where R
     for p in s.subs
         PreMPO!(pre, p, ref)
     end
@@ -67,9 +65,8 @@ end
 preprocess an operator (or vector of operators).
 The result can be passed wherever an operator that must be turned into an MPO is expected
 """
-function PreMPO(state::State, a, f = Evolver)
-    PreMPO!(PreMPO(state.type, state.system), process(a, state.type, f))
-end
+PreMPO(state::State{R}, a; kwargs...) where R =
+    PreMPO!(PreMPO{R}(state.system), simplify(a; kwargs...))
 
 """
     make_mpo(::PreMPO[, coefs])
@@ -77,8 +74,7 @@ end
 
 build an mpo representing an operator
 """
-function make_mpo(pre::PreMPO, coefs=[1.])
-    type = pre.type
+function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -87,7 +83,7 @@ function make_mpo(pre::PreMPO, coefs=[1.])
     rdim = 1
     rlink = Index(2, "Link, l=0")
     for i in 1:n
-        idx = sys[type, i]
+        idx = SysIndex{R}(sys, i)
         ldim = rdim
         llink = rlink
         if i == n
@@ -132,8 +128,7 @@ make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
 
 build MPO representing approximation WI of a given operator and time step
 """
-function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
-    type = pre.type
+function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -142,7 +137,7 @@ function make_approx_W1(pre::PreMPO, tau::Number, coefs=[1.])
     rdim = 1
     rlink = Index(1, "Link, l=0")
     for i in 1:n
-        idx = sys[type, i]
+        idx = SysIndex{R}(sys, i)
         llink = rlink
         if i == n
             rdim = 1
@@ -185,8 +180,7 @@ make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), 
 
 build MPO representing approximation WII of a given operator and time step
 """
-function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
-    type = pre.type
+function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -195,7 +189,7 @@ function make_approx_W2(pre::PreMPO, tau::Number, coefs=[1.])
     rdim = 1
     rlink = Index(1, "Link, l=0")
     for i in 1:n 
-        idx = sys[type, i]
+        idx = SysIndex{R}(sys, i)
         ldim = rdim
         if i == n
             rdim = 1

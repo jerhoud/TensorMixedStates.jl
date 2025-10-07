@@ -17,26 +17,13 @@ include("Systems.jl")
 include("States.jl")
 include("Simplify.jl")
 
-#= # Low Level interface
+# Low Level interface
 include("Gates.jl")
 include("Mpo.jl")
 include("Observables.jl")
 include("Solvers.jl")
 include("Measure.jl")
 include("RandomState.jl")
- =#
-
-# Sites
-include("Qubits.jl")
-include("Fermions.jl")
-include("Bosons.jl")
-include("Spins.jl")
-include("Electrons.jl")
-include("Tjs.jl")
-include("Qbosons.jl")
-
-#=
-
 
 # High level interface
 include("Simulation.jl")
@@ -49,7 +36,15 @@ include("Phases.jl")
 # Utilities
 include("Graphs.jl")
 
- =#
+# Sites
+include("Qubits.jl")
+include("Fermions.jl")
+include("Bosons.jl")
+include("Spins.jl")
+include("Electrons.jl")
+include("Tjs.jl")
+include("Qbosons.jl")
+
 # Precompilation
 #include("Precompile.jl")
 

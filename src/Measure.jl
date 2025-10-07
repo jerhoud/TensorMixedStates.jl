@@ -37,9 +37,9 @@ a data type to represent an observable defined by quantum operators. This is use
 """
 struct ObsOp
     name::String
-    obs::Vector{ExprIndexed{Pure}}
+    obs::Vector{IndexedOp{Pure}}
 end
-ObsOp(name::String, o::ExprIndexed{Pure}) = ObsOp(name, sumsubs(o))
+ObsOp(name::String, o::IndexedOp{Pure}) = ObsOp(name, sumsubs(o))
 
 """
     struct ObsExp1
@@ -78,12 +78,12 @@ struct Check
     Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
 
-function make_obs(o::ExprIndexed{Pure})
+function make_obs(o::IndexedOp{Pure})
     io = IOBuffer()
     print(IOContext(io, :compact => true), o)
     seek(io, 0)
     name = read(io, String)
-    ObsOp(name, process(o))
+    ObsOp(name, simplify(o))
 end
 make_obs(o::Union{Vector, Matrix}) = make_obs.(o)
 make_obs(o::Tuple{SimpleOp, SimpleOp}) =
@@ -117,7 +117,7 @@ get_prods(o::Union{Vector, Matrix}) = vcat(get_prods.(o)...)
 get_prods(o::Measure) = vcat(get_prods.(o.measures)...)
 get_prods(o::ObsOp) = o.obs
 get_prods(o::Check) = [get_prods(o.obs1); get_prods(o.obs2)]
-get_prods(_) = ExprIndexed{Pure}[]
+get_prods(_) = IndexedOp{Pure}[]
 
 get_exp1(o::Union{Vector, Matrix}) = vcat(get_exp1.(o)...)
 get_exp1(o::Measure) = vcat(get_exp1.(o.measures)...)
@@ -139,6 +139,7 @@ Norm = StateFunc("Norm", norm)
 Hermitianity = StateFunc("Hermitianity", hermitianity)
 HermitianityError = StateFunc("HermitianityError", st -> 1. - hermitianity(st))
 Renyi2 = StateFunc("Renyi2", renyi2)
+SubRenyi2(pos) = StateFunc("SubRenyi2($pos)", st -> renyi2(st, pos))
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
         ee, _ = entanglement_entropy(st, pos)

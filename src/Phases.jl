@@ -1,7 +1,7 @@
 run_phase(sim::Simulation, sd::SimData) =
     log_phase(sim, sd.phases)
 
-function run_phase(sim::Simulation, phase::CreateState)
+function run_phase(sim::Simulation, phase::CreateState{R}) where R
     if !isnothing(phase.seed)
         Random.seed!(phase.seed)
     end
@@ -9,7 +9,7 @@ function run_phase(sim::Simulation, phase::CreateState)
         if phase.randomize == 0
             error("CreateState without state nor randomize: no state created !")
         else
-            state = random_state(phase.type, phase.system, phase.randomize)
+            state = RandomState{R}(phase.system, phase.randomize)
         end
     else
         if phase.state isa State
@@ -17,10 +17,10 @@ function run_phase(sim::Simulation, phase::CreateState)
         elseif isnothing(phase.system)
             error("CreateState needs a system or a State object")
         else
-            state = State(phase.type, phase.system, phase.state)
+            state = State{R}(phase.system, phase.state)
         end
         if phase.randomize ≠ 0
-            state = random_state(state, phase.randomize)
+            state = RandomState(state, phase.randomize)
         end
     end
     return Simulation(sim, state)
@@ -28,7 +28,7 @@ end
 
 
 function run_phase(sim::Simulation, phase::ToMixed)
-    if sim.state.type isa Mixed
+    if sim.state isa State{Mixed}
         log_msg(sim, "State is already in mixed representation")
     else
         log_msg(sim, "Creating mixed representation with $(length(sim)) sites")
@@ -44,7 +44,7 @@ function run_phase(sim::Simulation, phase::Evolve)
     duration = phase.time_step * nsweeps
     time_stop = sim.time + duration
     log_msg(sim, "Evolving state from simulation time $(sim.time) to $(time_stop)")
-    time_dep = isa(phase.evolver, Pair)
+    time_dep = phase.evolver isa Pair
     if time_dep
         evolver = first(phase.evolver)
         coefs = last(phase.evolver)
@@ -53,10 +53,9 @@ function run_phase(sim::Simulation, phase::Evolve)
         coefs = nothing
     end
     state = sim.state
-    tp = state.type
-    if tp isa Pure && evolver isa ExprIndexed{Mixed}
+    if state isa State{Pure} && evolver isa IndexedOp{Mixed}
         error("Evolving error: state must be in mixed representation to use this evolver")
-    elseif tp isa Mixed && evolver isa ExprIndexed{Pure}
+    elseif state isa State{Mixed} && evolver isa IndexedOp{Pure}
         evolver = Evolver(evolver)
     end
     pre = PreMPO(state, evolver)
@@ -109,7 +108,7 @@ end
 
 function run_phase(sim::Simulation, phase::SteadyState)
     log_msg(sim, "Searching for steady state with $(phase.nsweeps) sweeps of Dmrg")
-    if sim.state.type isa Pure
+    if sim.state isa State{Pure}
         error("state must be in mixed representation for computing steady state")
     end
     l = make_mpo(sim.state, phase.lindbladian)

@@ -12,29 +12,51 @@ It is much more efficient to apply all the gates in a single call to apply.
     apply(CZ(1,3)*H(2)*CNOT(3,4), state)
 
 """
-function apply(a::IndexedOp, state::State; limits::Limits=Limits())
-    ops = make_ops(state.type, state.system, a)
-    st = apply(ops, state.state; move_sites_back_between_gates=false, limits.cutoff, limits.maxdim)
+apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =
+    apply(Gate(a), state; kwargs...)
+
+function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
+    ops = make_ops(state.system, simplify(a))
+    st = apply(ops, state.state; move_sites_back_between_gates=false,
+            limits.cutoff, limits.maxdim)
     return State(state, st)
 end
-
 
 apply(mpo::MPO, state::State; limits::Limits=Limits()) =
     State(state, apply(mpo, state.state; limits.cutoff, limist.maxdim))
     
-make_ops(::PM, ::System, ::SumOp{IndexOp}) = error("cannot apply sums as gates (sums of operator are possible)")
+make_ops(::System, ::SumOp) =
+    error("cannot apply sums as gates (use sums of operator if possible)")
 
-make_ops()
+make_ops(s::System, a::ScalarOp) =
+    if a.coef == 0
+        error("cannot apply null gate")
+    else
+        ops = make_ops(s, a.arg)
+        if !isempty(ops)
+            ops[1] *= a.coef
+        end
+        ops 
+    end    
 
-function make_ops(tp::R, s::System, a::ProdOp{R, Indexed}) where R
-    r = reduce(vcat, (make_ops(tp, s, sub) for sub in a.subs))
-    if a.coef == 0 || isempty(r)
-        error("cannot apply a nul gate")
+make_ops(s::System, a::ProdOp) =
+    reduce(vcat, map(x->make_ops(s, x), a.subs))
+
+make_ops(s::System, a::AtIndex{R, N}) where {R, N} =
+    if a == MakeIdentity{R, Indexed, N}
+        []
+    else
+        [ tensor(s, a) ]
     end
-    r[1] *= a.coef
-    return r
-end
 
-make_ops(::Mixed, s::System, a::Gate{IndexOp}) = make_ops(Mixed(), s, a.arg)
-make_ops(::T, s::System, a::Indexed{T, N}) where {T, N} = [ tensor(s, a) ]
-make_ops(::Mixed, s::System, a::IndexedOp{Pure}) = [ tensor(s, Gate(a.op)(a.index...)) ]
+function make_ops(s::System, a::Multi_F)
+    ops = []
+    for i in a.start:a.stop
+        f = F_info(s[i])
+        if f == Id
+            continue
+        end
+        push!(ops, tensor(f, s[i]))
+    end
+    ops
+end    

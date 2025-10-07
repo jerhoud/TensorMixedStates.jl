@@ -2,7 +2,7 @@ export output, log_msg
 
 const thresh_warn_imag = 1e-6
 
-make_real(sim::Simulation, header, data) = data
+make_real(::Simulation, _, data) = data
 
 warn_imag(sim::Simulation, header, x) =
     log_msg(sim, "WARNING: large imaginary part: time $(sim.time), $header " * @sprintf("%8.1e (rel %8.1e)", imag(x), imag(x) / real(x)))
