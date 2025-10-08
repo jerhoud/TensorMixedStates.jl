@@ -70,10 +70,9 @@ reindex(op::GenericOp, i::Int...) = op(i...)
 # to develop tensors, transform fermionic operators with JW, expand operators with expand = true
 
 
-simplify_ind(::Identity, ::Int; kwargs...) = Id(1)
 simplify_ind(a::ScalarOp, index...; kwargs...) = a.coef * simplify_ind(a.arg, index...; kwargs...)
-simplify_ind(a::Union{JW_F, Proj, JW}, index; kwargs...) = a(index)
-simplify_ind(a::ExpOp, index; kwargs...) = a(index)
+simplify_ind(a::Union{Identity, JW_F, Proj, JW}, index; kwargs...) = a(index)
+simplify_ind(a::ExpOp, index...; kwargs...) = a(index...)
 simplify_ind(a::PowOp, index...; kwargs...) = simplify_pow(simplify_ind(a.arg, index...; kwargs), a.expo)
 simplify_ind(a::DagOp, index...; kwargs...) = simplify_dag(simplify_ind(a.arg, index...; kwargs...))
 simplify_ind(a::Left, index...; kwargs...) = simplify_l(simplify_ind(a.arg, index...; kwargs...))
@@ -140,7 +139,7 @@ simplify_pow(a::IndexedOp, expo) =
     elseif isinteger(expo)
         simplify_prod(fill(a, Integer(expo)))
     else
-        error("cannot simplify non integer power")
+        a^expo
     end
 
 simplify_pow(a::AtIndex, expo) =
@@ -149,12 +148,10 @@ simplify_pow(a::AtIndex, expo) =
 
 # simplify exp : exp(0) => Id and exp(3X) => cosh(3)Id + sinh(3)X
 function simplify_exp(a::GenericOp{Pure, N}) where N
-    c = prodcoef(a)
+    c = scalarcoef(a)
     s = prodsubs(a)
     if length(s) == 1 && is_involution(s[1])
         simplify_sum([cosh(c) * MakeIdentity(s[1]), sinh(c) * s[1]])
-    elseif N > 1
-        error("cannot simplify exponential of multisite operator")
     else
         exp(a)
     end

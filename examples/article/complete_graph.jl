@@ -5,7 +5,7 @@ dissipators(n, c) = c * sum(Dissipator(Sp)(i) for i in 1:n)
 simdata(n, c) = SimData(
   name = "graph_$(n)_$c",
   phases = [
-    create_graph_state(Pure(), complete_graph(n); limits = Limits(cutoff=1e-14)),
+    create_graph_state(complete_graph(n); limits = Limits(cutoff=1e-14)),
     ToMixed(),
     Evolve(
       duration = 5,
@@ -21,4 +21,4 @@ simdata(n, c) = SimData(
   ]
 )
 
-runTMS(simdata(512, 1))
+runTMS(simdata(32, 1))

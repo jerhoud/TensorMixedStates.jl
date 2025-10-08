@@ -25,8 +25,8 @@ end
 apply(mpo::MPO, state::State; limits::Limits=Limits()) =
     State(state, apply(mpo, state.state; limits.cutoff, limist.maxdim))
     
-make_ops(::System, ::SumOp) =
-    error("cannot apply sums as gates (use sums of operator if possible)")
+make_ops(::System, a::SumOp) =
+    error("cannot apply sums as gates ($a)")
 
 make_ops(s::System, a::ScalarOp) =
     if a.coef == 0
