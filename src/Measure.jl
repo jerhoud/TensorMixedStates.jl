@@ -88,6 +88,10 @@ end
 make_obs(o::Union{Vector, Matrix}) = make_obs.(o)
 make_obs(o::Tuple{SimpleOp, SimpleOp}) =
     ObsExp2(first(o).name * last(o).name, o)
+make_obs(o::Identity) =
+    ObsExp1("Id", o)
+make_obs(o::JW_F) =
+    ObsExp1("F", o)   
 make_obs(o::SimpleOp) =
     ObsExp1(o.name, o)
 make_obs(o::Number) =

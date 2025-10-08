@@ -42,10 +42,10 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref
     return pre
 end
 
-PreMPO!(pre::PreMPO{R}, a::IndexedOp{R}, ref::Int = 1) where R =
+PreMPO!(pre::PreMPO{R}, a::IndexedOp{R}, ref::Int = 1) where {R <: PM} =
     PreMPO!(pre, scalarcoef(a), prodsubs(a), ref)
 
-function PreMPO!(pre::PreMPO{R}, s::SumOp{R, Indexed}, ref::Int=1) where R
+function PreMPO!(pre::PreMPO{R}, s::SumOp{R, Indexed}, ref::Int=1) where {R <: PM}
     for p in s.subs
         PreMPO!(pre, p, ref)
     end
@@ -66,7 +66,7 @@ preprocess an operator (or vector of operators).
 The result can be passed wherever an operator that must be turned into an MPO is expected
 """
 PreMPO(state::State{R}, a; kwargs...) where R =
-    PreMPO!(PreMPO{R}(state.system), simplify(a; kwargs...))
+    PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(a; kwargs...)))
 
 """
     make_mpo(::PreMPO[, coefs])

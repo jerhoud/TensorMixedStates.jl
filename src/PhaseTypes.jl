@@ -23,20 +23,21 @@ A phase type to create the simulation state
     CreateState(Pure(), 10, Qubit(), "Up")                                      # simple form
     CreateState(Mixed(), [Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
 """
-@kwdef struct CreateState{R<:PM}
+@kwdef struct CreateState{R <: PM}
     name::String = "Creating state"
     time_start::Number = 0.
     final_measures = []
+    type::R
     system::Union{Nothing, System} = nothing
-    state::Union{Nothing, State{R}} = nothing
+    state = nothing
     randomize::Int = 0
     seed::Union{Nothing, Int} = nothing
 end
 
 CreateState{R}(n, site, state; kwargs...) where R =
-    CreateState{R}(;system = System(n, site), state, kwargs...)
+    CreateState(;type = R(), system = System(n, site), state, kwargs...)
 CreateState{R}(sites, state; kwargs...) where R =
-    CreateState{R}(;system = System(sites), state, kwargs...)
+    CreateState(;type = R(), system = System(sites), state, kwargs...)
 
 show(io::IO, s::CreateState{R}) where R = 
     print(io,

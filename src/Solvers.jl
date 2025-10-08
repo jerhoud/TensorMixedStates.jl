@@ -16,7 +16,7 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
-    nsweeps = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...) where R
+    nsweeps = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
     time_dep = !isnothing(coefs)
     st = state.state
     dt = t / nsweeps
@@ -127,7 +127,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),
-    limits::Limits=Limits(), kwargs...) where R
+    limits::Limits=Limits(), kwargs...) where {R <: PM}
     st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)

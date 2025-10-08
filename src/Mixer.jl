@@ -90,7 +90,7 @@ matrix(a::PowOp, site::AbstractSite...) =
     matrix(a.arg, site...) ^ a.expo
 
 matrix(a::DagOp, site::AbstractSite...) =
-    adjoint(matrix(a.arg, site...))
+    collect(adjoint(matrix(a.arg, site...)))
 
 matrix(::Dissipator, ::AbstractSite...) = error("cannot give matrix nor tensor for Dissipator")
 
@@ -145,6 +145,9 @@ function tensor_apply(f, a::TensorOp{N}, idx::Vararg{Int, N}; kwargs...) where N
         t
     end
 end
+
+tensor_apply(::Any, ::TensorOp; kwargs...) = error("bug: tensor_apply")
+tensor_next(::Any, ::GenericOp{Pure, N}; kwargs...) where N = error("bug: tensor_next")
 
 function tensor(a::TensorOp{N}, site::AbstractSite...) where N
     if length(site) == 1

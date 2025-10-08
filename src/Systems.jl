@@ -1,4 +1,4 @@
-export System, sim
+export System, sim, SysIndex
 
 """
     type System
@@ -43,7 +43,7 @@ show(io::IO, s::System) = print(io, "System($(s.sites))")
 struct SysIndex{R <: PM}
     SysIndex{Pure}(s::System, i::Int...) = s.pure_indices[i...]
     SysIndex{Mixed}(s::System, i::Int...) = s.mixed_indices[i...]
-    SysIndex{R}(s::System, is) where R = map(i->SysIndex{R}(system, i), is)
+    SysIndex{R}(s::System, is) where R = map(i->SysIndex{R}(s, i), is)
  end
 
 """

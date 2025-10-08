@@ -119,7 +119,7 @@ State{R}(system::System, state) where R =
 State{R}(system::System, state::Union{Vector{<:Number}, Matrix}) where R =
     State{R}(system, fill(state, length(system)))
 
-State{R}(state::State{R}, st::MPS) where R =
+State(state::State{R}, st::MPS) where R =
     State{R}(state.system, st)
 
 State{R}(size::Int, site::AbstractSite, state) where R =
@@ -128,15 +128,15 @@ State{R}(size::Int, site::AbstractSite, state) where R =
 State{R}(sites::Vector{<:AbstractSite}, state) where R =
     State{R}(System(sites), state)
 
-(a::Number * b::State{R}) where R = State{R}(b, a * b.state)
+(a::Number * b::State) = State(b, a * b.state)
 (a::State * b::Number) = b * a
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
 +(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State{R}(a, +(a.state, b.state; limits.cutoff, limits.maxdim))
+    State(a, +(a.state, b.state; limits.cutoff, limits.maxdim))
 -(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State{R}(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
+    State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
 
 """
     mix(::State)

@@ -90,7 +90,7 @@ function create_right!(r, state::State{Pure})
         v = if i >= rl
             delta(rlink, rlink')
         else
-            k = SysIndex{Pure}(s, i)
+            k = SysIndex{Pure}(s, i+1)
             r[i+1] * delta(k, k') * st[i+1]
         end
         r[i] = v * dag(st[i]')
@@ -209,7 +209,7 @@ end
 modify the state so that it is Hermitian (only useful for mixed state)
 """
 hermitianize(state::State{Pure}; kwargs...) =
-    error("hermitianize meaningless for pure representation")
+    state
 hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
     State(state, 0.5*(+(state.state, dag(state).state; limits.cutoff, limits.maxdim)))
 
@@ -266,13 +266,14 @@ zipto(state::State{Pure}, a::Expector, i::Int) =
     elseif a.pos == i
         a
     else
-        t = a.t * dag(state[a.pos]')
+        st = state.state
+        t = a.t * dag(st[a.pos]')
         for k in a.pos+1:i-1
             idk = SysIndex{Pure}(state.system, k)
-            t *= state[k] * delta(idk, idk')
-            t *= dag(state[k])
+            t *= st[k] * delta(idk, idk')
+            t *= dag(st[k]')
         end
-        t *= state[i]
+        t *= st[i]
         Expector(i, t)
     end
 
@@ -286,7 +287,7 @@ zipto(state::State{Mixed}, a::Expector, i::Int) =
         for k in a.pos+1:i-1
             t *= get_loc(state, k)
         end
-        t *= state[i]
+        t *= state.state[i]
         Expector(i, t)
     end
 
@@ -401,9 +402,9 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
             end
             r[j, i] = map(ops) do (o1, o2)
                 if isfermionic(o1)
-                    scalar(ef.t * tensor_obs(state, (o2 * F)(i) * tensor_obs(state, o1(j))))
+                    scalar(ef.t * tensor_obs(state, (o2 * F)(i)) * tensor_obs(state, o1(j)))
                 else
-                    scalar(enf.t * tensor_obs(state, o2(i) * tensor_obs(state, o1(j))))
+                    scalar(enf.t * tensor_obs(state, o2(i)) * tensor_obs(state, o1(j)))
                 end
             end
             if j < n

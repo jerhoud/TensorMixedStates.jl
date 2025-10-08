@@ -390,7 +390,6 @@ struct AtIndex{R, N} <: IndexedOp{R}
     index::NTuple{N, Int}
     AtIndex(op::GenericOp{R, N}, index::NTuple{N, Int}) where {R, N} =
         scalarcoef(op) * new{R, N}(scalararg(op), index)
-    AtIndex(::Identity, ::NTuple{1, Int}) = new{Pure, 1}(Id, (1,))
 end
 
 (op::GenericOp{R, N})(index::Vararg{Int, N}) where {R, N} =
@@ -644,6 +643,7 @@ ranking(::JW_F) = 2
 ranking(::Operator) = 3
 ranking(::JW) = 4
 ranking(::Proj) = 5
+ranking(::Multi_F) = 6
 
 ranking(::AtIndex) = 10
 ranking(::Gate) = 11

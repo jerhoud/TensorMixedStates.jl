@@ -1,4 +1,4 @@
-export simplify
+export simplify, removeMulti
 
 # Simplifications for collections of Operators
 
@@ -62,6 +62,8 @@ end
 simplify(a::AtIndex; kwargs...) =
     simplify_ind(simplify(a.op), a.index...; kwargs...)
 
+reindex(::Identity, ::Int) = Id(1)
+reindex(op::GenericOp, i::Int...) = op(i...)
 
 # Simplification with index
 # transmit indexation as deep as possible
@@ -145,12 +147,12 @@ simplify_pow(a::AtIndex, expo) =
     simplify_pow(a.op, expo)(a.index...)
 
 
-# simplify exp : exp(3X) => cosh(3)Id + sinh(3)X
+# simplify exp : exp(0) => Id and exp(3X) => cosh(3)Id + sinh(3)X
 function simplify_exp(a::GenericOp{Pure, N}) where N
     c = prodcoef(a)
     s = prodsubs(a)
     if length(s) == 1 && is_involution(s[1])
-        cosh(c) * MakeIdentity(s[1]) + sinh(c) * s[1]
+        simplify_sum([cosh(c) * MakeIdentity(s[1]), sinh(c) * s[1]])
     elseif N > 1
         error("cannot simplify exponential of multisite operator")
     else
@@ -181,7 +183,7 @@ simplify_dag(a::SumOp) = simplify_sum(simplify_dag.(a.subs))
 simplify_dag(a::TensorOp{N}) where N = TensorOp{N}(simplify_dag.(a.subs))
 
 
-simplify_dag(a::AtIndex) = simplify_dag(a.op)(a.index...)
+simplify_dag(a::AtIndex) = reindex(simplify_dag(a.op), a.index...)
 simplify_dag(a::Multi_F) = a
 
 
@@ -194,7 +196,7 @@ simplify_l(a::ScalarOp{Pure}) = a.coef * simplify_l(a.arg)
 
 simplify_l(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_l.(a.subs)) 
 simplify_l(a::SumOp{Pure, Indexed}) = SumOp(simplify_l.(a.subs))
-simplify_l(a::AtIndex{Pure}) = simplify_l(a.op)(a.index...)
+simplify_l(a::AtIndex{Pure}) = reindex(simplify_l(a.op), a.index...)
 simplify_l(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
 
 
@@ -208,7 +210,7 @@ simplify_r(a::ScalarOp{Pure}) = conj(a.coef) * simplify_r(a.arg)
 
 simplify_r(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_r.(a.subs)) 
 simplify_r(a::SumOp{Pure, Indexed}) = SumOp(simplify_r.(a.subs))
-simplify_r(a::AtIndex{Pure}) = simplify_r(a.op)(a.index...)
+simplify_r(a::AtIndex{Pure}) = reindex(simplify_r(a.op), a.index...)
 simplify_r(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
 
 
@@ -233,7 +235,7 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
             c = nc 
             o = no
         elseif T == Indexed && o isa AtIndex && no isa AtIndex && o.index == no.index
-            o = AtIndex(simplify_sum([c * o.op, nc * no.op]), o.index)
+            o = reindex(simplify_sum([c * o.op, nc * no.op]), o.index...)
             c = 1
             if o isa ScalarOp
                 c = o.coef
@@ -368,7 +370,7 @@ distribute(a::Vector...) = distribute([[]], a...)
 
 orderprod(a::AtIndex, b::AtIndex) =
     if a.index == b.index
-        [ simplify_prod([a.op, b.op])(a.index...) ]
+        [ reindex(simplify_prod([a.op, b.op]), a.index...) ]
     elseif min(a.index...) > max(b.index...)
         [b, a]
     else
@@ -466,3 +468,12 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
     end
     return simplify_sum(s)
 end
+
+
+################### removeMulti ###################
+
+removeMulti(a::SumOp) = SumOp(removeMulti.(a.subs))
+removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))
+removeMulti(a::ScalarOp) = a.coef * removeMulti(a.arg)
+removeMulti(a::AtIndex) = a
+removeMulti(a::Multi_F{R}) where R = ProdOp([Multi_F{R}(i, i, a.left, a.right) for i in a.start:a.stop])

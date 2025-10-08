@@ -124,7 +124,8 @@ create a phase for building a graph state to use in `SimData` and `runTMS`
 """
 create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) = 
     [
-        CreateState{Pure}(
+        CreateState(
+            type = Pure(),
             name = "Creating initial state |++...++> for graph state",
             system = System(graph_base_size(g), Qubit()),
             state = "+",
