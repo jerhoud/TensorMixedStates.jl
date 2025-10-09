@@ -20,8 +20,8 @@ A phase type to create the simulation state
     CreateState(type = Mixed(), system = System(3, Qubit()), state = ["Up", "Dn", "Up])
     CreateState(type = Pure(), system = System(10, Qubit()), randomize = 50)
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up", randomize = 50)
-    CreateState(Pure(), 10, Qubit(), "Up")                                      # simple form
-    CreateState(Mixed(), [Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
+    CreateState{Pure}(10, Qubit(), "Up")                                      # simple form
+    CreateState{Mixed}([Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
 """
 @kwdef struct CreateState{R <: PM}
     name::String = "Creating state"

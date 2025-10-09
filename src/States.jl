@@ -4,6 +4,7 @@ export State, maxlinkdim, Limits
     struct PreObs
 
 A data structure to hold preprocessing data for observable expectation computations.
+Used by `State`
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -26,29 +27,32 @@ A type to hold MPS limits
 end
   
 """
-    struct State
-    State(::PM, ::System, states)
-    State(::PM, ::Int, ::AbstractSite, state)
-    State(::PM, ::Vector{<:AbstractSite}, state)
+    struct State{R <: PM}
+    State{R}(::System, states)
+    State{R}(::Int, ::AbstractSite, state)
+    State{R}(::Vector{<:AbstractSite}, state)
     State(::State, ::MPS)
 
 represent the complete state of the simulated quantum system
 
+# Type parameter
+
+- `R` is `Pure` or `Mixed` and represent the type of representation used
+
 # Fields
 
-- `type::PM`: pure or mixed representation
 - `system::System`: system description
 - `state::MPS`: system state
 - `preobs::PreObs`: preprocessing data for computing observables
 
 # Examples
 
-    State(Pure(), system, "Up")
-    State(Mixed(), system, ["Up", "Dn", "Up"])
-    State(Mixed(), system, "FullyMixed")
-    State(Pure(), system, [1, 0])
-    State(Pure(), 10, Qubit(), "Up")
-    State(Mixed(), [Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])
+    State{Pure}(system, "Up")
+    State{Mixed}(system, ["Up", "Dn", "Up"])
+    State{Mixed}(system, "FullyMixed")
+    State{Pure}(system, [1, 0])
+    State{Pure}(10, Qubit(), "Up")
+    State{Mixed}([Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])
     State(state, mps)        returns a new state with the same system but a new mps
 
 # Operations
@@ -173,7 +177,7 @@ end
 """
     truncate(::State; limits::Limits)
 
-apply the truncation to the given state
+apply the truncations to the given state
 """
 truncate(state::State{R}; limits::Limits) where R =
     State{R}(state.system, truncate(state.state; limits.cutoff, limits.maxdim))

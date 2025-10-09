@@ -18,9 +18,9 @@ represent a quantum system
 
 # Indexation
 
-    system[i]          gives site i
-    system[Pure(), i]  gives pure index i
-    system[Mixed(), i] gives mixed index i
+    system[i]                  gives site i
+    SysIndex{Pure}(system, i)  gives pure index i
+    SysIndex{Mixed}(system, i) gives mixed index i
 """
 struct System
     sites::Vector{<:AbstractSite}
@@ -40,6 +40,11 @@ getindex(s::System, i...) = s.sites[i...]
 
 show(io::IO, s::System) = print(io, "System($(s.sites))")
 
+"""
+    SysIndex{Pure|Mixed}(system, i)
+
+returns the pure or mixed ITensor.Index for site i
+"""
 struct SysIndex{R <: PM}
     SysIndex{Pure}(s::System, i::Int...) = s.pure_indices[i...]
     SysIndex{Mixed}(s::System, i::Int...) = s.mixed_indices[i...]
@@ -81,9 +86,9 @@ tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
 
 
 """
-    tensor(::System, ::Indexed)
+    tensor(::System, ::AtIndex)
 
-returns a tensor representing the given base indexed operator acting on this system
+returns a tensor representing the given simple indexed operator acting on this system
 """
 function tensor(system::System, a::AtIndex{R}) where R
     s = map(i->system[i], a.index)

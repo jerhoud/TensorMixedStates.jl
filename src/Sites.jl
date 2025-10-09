@@ -46,15 +46,38 @@ return an ITensor.Index for a mixed representation corresponding to the pure rep
 mix(i::Index) =
     addtags(combinedind(combiner(i, i'; tags = tags(i))), "Mixed")
 
+"""
+    operator_library::Dict
+
+a global variable containing the site dependent definitions
+of implicit operators as defined by `@def_operators`
+"""
 operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
+
+"""
+    state_library::Dict
+
+a global variable containing the definitions of local states as defined by `@def_states`
+"""
 state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
 
+"""
+    F_info(site)
+
+return the matrix value of `F`` for the `site`` as stored in `operator_library`
+"""
 function F_info(site::AbstractSite)
     name = typeof(site)
     t = (name, "F")
     return get!(operator_library, t, Id)
 end
 
+"""
+    operator_info(site, op)
+
+return the definition of `op` for the given `site` as stored in `operator_library`,
+it may be an `Op` a matrix or a site function
+"""
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
     t = (name, op)
@@ -66,6 +89,12 @@ function operator_info(site::AbstractSite, op::String)
     end
 end
 
+"""
+    state_info(site, statename)
+
+return the state definition for `site` as stored in `state_library`,
+it may be a `Vector` (for pure state), a `Matrix` for mixed states or a site function
+"""
 function state_info(site::AbstractSite, st::String)
     name = typeof(site)
     t = (name, st)
@@ -108,25 +137,31 @@ function add_operator(site::AbstractSite, op::String, r::GenericOp{Pure, 1}, typ
 end
 
 """
-    @def_operators(site, symbols, type=plain)
+    @def_operators(site, symbols)
 
-define the given operator for the given site
+define the given operators for the given site, see also `OpType`
 
 # Examples
 
     @def_operators(Fermion(),
     [
-        C = [0. 1. ; 0. 0.],
-    ],
-    fermionic_op)
-
-    @def_operators(Fermion(),
-    [
-        F = [1. 0. ; 0. -1.],
-        A = C,
-        N = dag(C)*C
+        fermionic_op => 
+        [
+            C = [0. 1. ; 0. 0.],
+        ],
+        selfadjoint_op =>
+        [
+            N = dag(C) * C,
+        ],
+        plain_op =>
+        [
+            A = C,
+        ],
+        involution_op =>
+        [
+            F = Float64[1 0 ; 0 -1]
+        ]
     ])
-
 """
 macro def_operators(site, symbols)
     e = Expr(:block)
@@ -217,6 +252,7 @@ state(site::AbstractSite, a::Function) = a(site)
     state(::AbstractSite, ::String)
 
 return the local state (as a vector or matrix) corresponding to the site and name given
+the special name "FullyMixed" gives the infinite temperature state
 
 # Examples
 

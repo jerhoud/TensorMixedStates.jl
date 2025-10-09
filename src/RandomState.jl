@@ -1,10 +1,10 @@
 export RandomState
 
 """
-    random_state(Pure()|Mixed(), ::System, linkdims::Int)
-    random_state(Pure()|Mixed(), ::Int, ::AbstractSite, linkdims::Int)
-    random_state(Pure()|Mixed(), ::Vector{<:AbstractSite}, linkdims::Int)
-    random_state(Pure()|Mixed(), ::State, linkdims::Int)
+    RandomState{Pure|Mixed}(::System, linkdims::Int)
+    RandomState{Pure|Mixed}(::Int, ::AbstractSite, linkdims::Int)
+    RandomState{Pure|Mixed}(::Vector{<:AbstractSite}, linkdims::Int)
+    RandomState(::State, linkdims::Int)
 
 Return a random state, with the specified link dimension.
 If a State is given, randomize the given state.

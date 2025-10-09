@@ -8,7 +8,7 @@ export dag, tensor, ⊗, isfermionic
 """
     abstract type PM
 
-PM is a supertype for Pure and Mixed (i.e. Pure() and Mixed() are of type PM)
+`PM` is a supertype for `Pure` and `Mixed` (i.e. `Pure()` and `Mixed()` are of type `PM`)
 """
 abstract type PM end
 
@@ -29,11 +29,38 @@ correspond to mixed quantum representation
 """
 struct Mixed <: PM end
 
+"""
+    abstract type GI end
+    
+`GI` is a supertype for `Generic` and `Indexed`
+"""
 abstract type GI end
 
+"""
+    Generic
+
+a type representing generic operators (without site indices) to parametrize `Op`
+"""
 struct Generic <: GI end
+
+"""
+    Indexed
+
+a type representing indexed operators (with site indices) to parametrize `Op`
+"""
 struct Indexed <: GI end
 
+"""
+    Op{R <: PM, T <: GI, N}
+
+the type of all operators.
+
+# Type parameters
+
+- `R`: is `Pure` or `Mixed` (the type of the representations on which the operator may be applied)
+- `T`: ig `Generic` or `Indexed`
+- `N`: the number of sites on which the operator must be applied (set to 1 for indexed operators)
+"""
 abstract type Op{R <: PM, T <: GI, N} end
 
 GenericOp{R, N} = Op{R, Generic, N}
@@ -88,21 +115,32 @@ end
 
 ############### Operator ###############
 
+"""
+    @enum OpType
+
+the possible operator types for `Operator`
+
+# Enumeration values
+
+- `plain_op`: an operator with no particular properties
+- `fermionic_op`: a fermionic operator for which Jordan-Wigner transform must be used
+- `selfadjoint_op`: an operator invariant under `dag`
+- `involution_op`: an operator invariant under `dag` and whose square is the identity 
+"""
 @enum OpType plain_op fermionic_op selfadjoint_op involution_op
 
 """
-    type Operator{N} <: GenericOp{N}
+    type Operator{N} <: GenericOp{Pure, N}
 
-the type of base operators (like `X`, `Swap`, `C` ...), `N` is an Int.
+the type of base operators (like `X`, `Swap`, `C` ...),
+`N` is the number of sites on which it may be applied.
 
 # Example
-
-    Operator("X")                      a base operator whose value is predefined by the sites
-    Operator("Z", [1 0 ; 0 -1])
-    Operator{2}("Swap", [ 1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
-    Operator("CX", controlled(X))
-    Operator("Sx", (Sp + Sm) / 2)
-    Operator("C", [0 1 ; 0 0], fermionic_op)   a fermionic operator
+    Operator{1}("X", Nothing, involution_op)     a base operator whose value is predefined by the sites
+    Operator{1}("Z", [1 0 ; 0 -1], involution_op)
+    Operator{2}("Swap", [ 1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
+    Operator{1}("Sx", (Sp + Sm) / 2, selfadjoint_op)
+    Operator{1}("C", [0 1 ; 0 0], fermionic_op)
 """
 struct Operator{N} <: GenericOp{Pure, N}
     name::String
@@ -124,6 +162,11 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 
 ############ Identity ############
 
+"""
+    type Identity
+
+the type of the Id operator
+"""
 struct Identity <: SimpleOp end
 
 """
@@ -149,6 +192,11 @@ isless(::Identity, ::Identity) = false
 
 ################ Sums ##############
 
+"""
+    type SumOp{R, T, N} <: Op{R, T, N}
+
+internal type for sum of operators
+"""
 struct SumOp{R, T, N} <: Op{R, T, N}
     subs::Vector{<:Op{R, T, N}}
     function SumOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
@@ -203,6 +251,11 @@ isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
 
 ################ Product by a number #############
 
+"""
+    type ScalarOp{R, T, N} <: Op{R, T, N}
+
+internal type for product of number and operators
+"""
 struct ScalarOp{R, T, N} <: Op{R, T, N}
     coef::Number
     arg::Op{R, T, N}
@@ -241,6 +294,11 @@ isless(a::ScalarOp, b::ScalarOp) = isless((a.coef, a.arg), (b.coef, b.arg))
 
 ############### Products ###############
 
+"""
+    type ProdOp{R, T, N} <: Op{R, T, N}
+
+internal type for product of operators
+"""
 struct ProdOp{R, T, N} <: Op{R, T, N}
     subs::Vector{<:Op{R, T, N}}
     function ProdOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
@@ -275,6 +333,11 @@ isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
 
 ############### Tensor products ############
 
+"""
+    type TensorOp{N} <: GenericOp{Pure, N}
+
+internal type for tensor product of generic operators
+"""
 struct TensorOp{N} <: GenericOp{Pure, N}
     subs::Vector{<:GenericOp{Pure}}
     TensorOp{N}(subs::Vector{<:GenericOp{Pure}}) where N =
@@ -317,16 +380,30 @@ isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
 
 ############# Jordan_Wigner transformation ##############
 
+"""
+    type JW <: SimpleOp
+
+type for operators transformed by the Jordan-Wigner transform.
+for example C(5) is tranformed into Multi_F(1,4)JW(C). 
+JW operators anticommute with F
+"""
 struct JW <: SimpleOp
     arg::Operator{1}
 end
 
 isless(a::JW, b::JW) = isless(a.arg, b.arg)
 
+"""
+    type JW_F
+
+the type of the F operator
+"""
 struct JW_F <: SimpleOp end
 
 """
-    The Jordan Wigner F factor. Defined for all site types
+    F
+
+the Jordan Wigner F factor. Defined for all site types
 """
 const F = JW_F()
 
@@ -335,6 +412,12 @@ show(io::IO, ::JW_F) =
 
 isless(::JW_F, ::JW_F) = false
 
+"""
+    Multi_F
+
+a type for representing the F factors in the Jordan-Wigner transform.
+for example C(5) is tranformed into Multi_F(1,4)JW(C). 
+"""
 struct Multi_F{R} <: IndexedOp{R}
     start::Int
     stop::Int
@@ -383,7 +466,7 @@ isless(a::Proj, b::Proj) = isless(a.state, b.state)
 """
     struct AtIndex{R, N} <: IndexedOp{R}
 
-represent a base indexed operator (like `X(1)` or `Swap(2, 4)`)
+represent an indexed operator (like `X(1)` or `Swap(2, 4)`)
 """
 struct AtIndex{R, N} <: IndexedOp{R}
     op::GenericOp{R, N}
@@ -445,6 +528,12 @@ isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
     Dissipator(op)
 
 a Lindbladian dissipator based on `op` to be used in evolver for time evolution
+
+# Examples
+    Dissipator(Sp)
+    Dissipator(0.1 * C)
+    Dissipator(Z ⊗ Z)
+    Dissipator(0.9X⊗Sm⊗X + 0.1Y⊗Sm⊗Y)
 """
 struct Dissipator{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
@@ -479,6 +568,11 @@ show(io::IO, a::Evolver) =
 
 # Left
 
+"""
+    type Left <: GenericOp{Mixed, N}
+
+an internal type to represent operators acting on the left of the density matrix
+"""
 struct Left{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
     Left(arg::GenericOp{Pure, N}) where N =
@@ -495,6 +589,11 @@ isless(a::Left, b::Left) =
 
 # Right
 
+"""
+    type Right <: GenericOp{Mixed, N}
+
+an internal type to represent operators acting on the right of the density matrix
+"""
 struct Right{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
     Right(arg::GenericOp{Pure, N}) where N =
@@ -514,6 +613,11 @@ isless(a::Right, b::Right) =
 
 # PowOp
 
+"""
+    type PowOp{R, N} <: GenericOp{R, N}
+
+internal type to reprensent powers of operators
+"""
 struct PowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
     expo::Number
@@ -540,7 +644,7 @@ end
 """
     sqrt(::GenericOp)
 
-square root for generic tensors
+square root for generic operators
 """
 sqrt(a::GenericOp) = a ^ 0.5 
 
@@ -554,6 +658,11 @@ isless(a::PowOp, b::PowOp) =
 
 # ExpOp
 
+"""
+    type ExpOp{N} <: GenericOp{Pure, N}
+
+an internal type to represent exponential of operators
+"""
 struct ExpOp{N} <: GenericOp{Pure, N}
     arg::GenericOp{Pure, N}
 end
@@ -574,6 +683,11 @@ isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
 
 # DagOp
 
+"""
+    type DagOp{N} <: GenericOp{Pure, N}
+
+internal type to represent the `dag` operator
+"""
 struct DagOp{N} <: GenericOp{Pure, N}
     arg::GenericOp{Pure, N}
     DagOp(arg::DagOp) = arg
@@ -600,6 +714,11 @@ isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
 
 ################## isfermionic #################
 
+"""
+    isfermionic(::GenericOp)
+
+return whether a generic operator is fermionic 
+"""
 isfermionic(a::SimpleOp) = false
 isfermionic(a::Operator{1}) = a.type == fermionic_op
 isfermionic(a::Union{ScalarOp{Pure}, DagOp{Pure}}) = isfermionic(a.arg)

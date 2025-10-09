@@ -229,8 +229,10 @@ hermitianity(state::State{Mixed}) =
 
 """
     renyi2(::State)
+    renyi2(::State, ::Vector{Int})
 
 renyi2 returns the Renyi entropy of order 2 of the state. This is 0. for pure representations.
+When given an array of positions give the Renyi entropy of corresponding substate.
 """
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))

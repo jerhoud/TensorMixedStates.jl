@@ -1,5 +1,13 @@
 export simplify, removeMulti
 
+"""
+    simplify(op::Op; expand=false)
+
+simplifies an operator, this is used internally by `apply`` and functions creating MPOs.
+expand tells wheteher to expand explicit operators with their definition
+"""
+function simplify end
+
 # Simplifications for collections of Operators
 
 simplify(a; kwargs...) = map(x->simplify(x; kwargs...), a)
@@ -469,6 +477,12 @@ end
 
 ################### removeMulti ###################
 
+"""
+    removeMulti(::Op)
+
+transform Multi_F operators into their F equivalent
+Multi_F(3, 5) => F(3)F(4)F(5)
+"""
 removeMulti(a::SumOp) = SumOp(removeMulti.(a.subs))
 removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))
 removeMulti(a::ScalarOp) = a.coef * removeMulti(a.arg)

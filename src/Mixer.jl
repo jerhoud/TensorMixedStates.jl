@@ -92,7 +92,8 @@ matrix(a::PowOp, site::AbstractSite...) =
 matrix(a::DagOp, site::AbstractSite...) =
     collect(adjoint(matrix(a.arg, site...)))
 
-matrix(::Dissipator, ::AbstractSite...) = error("cannot give matrix nor tensor for Dissipator")
+matrix(::Dissipator, ::AbstractSite...) =
+    error("cannot give matrix nor tensor for Dissipator")
 
 
 matrix(a::Gate, site::AbstractSite...) =
