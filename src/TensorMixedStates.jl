@@ -46,6 +46,6 @@ include("Tjs.jl")
 include("Qbosons.jl")
 
 # Precompilation
-#include("Precompile.jl")
+include("Precompile.jl")
 
 end
