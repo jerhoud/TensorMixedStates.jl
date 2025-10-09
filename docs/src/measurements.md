@@ -36,7 +36,9 @@ There are a some state functions predefined:
     measure(state, Trace)              # returns the trace of the state
     measure(state, Trace2)             # returns the trace of the square of the state (alternate name: Purity)
     measure(state, TraceError)         # returns 1 - trace, usefull for monitoring trace deviations
-    measure(state, EE(l, n))           # returns entanglement entropy at site n and first n singular values
+    measure(state, Renyi2)             # returns the Renyi entropy of order 2 of the state
+    measure(state, SubRenyi2([1, 3]))  # returns the Renyi entropy of order 2 of the subsystem (here sites 1 and 3)
+    measure(state, EE(l, n))           # returns entanglement entropy at site l and first n singular values
     measure(state, Hermitianity)       # returns 1 if density matrix is really Hermitian and down to 0 for anti Hermitian density matrix
     measure(state, HermitianityError)  # return 1 - Hermitianity for monitoring hermitianity deviation
 

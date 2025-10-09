@@ -24,7 +24,7 @@ To define a site just call the corresponding creator for example
 
     s = Qubit()
 
-Some site creators need arguments: `Boson` (for the maximum occupancy) and `Spin`, for example
+Some site creators need arguments: `Boson` (for the maximum dimension) and `Spin`, for example
 
     s = Boson(4)
     s = Spin(3/2)
@@ -41,33 +41,33 @@ gives you a three site system.
 
 ## States
 
-States may be in pure or mixed representation, these two possibilities are represented in TMS, by `Pure()` or `Mixed()` (note the parenthesis).
+States may be in pure or mixed representation, these two possibilities are represented in TMS, by `Pure` or `Mixed`.
 
 To create a state, we call the State creator
 
-    state1 = State(Pure(), system1, "Up")
+    state1 = State{Pure}(system1, "Up")
 
-returns a pure up state in a 10 qubit system. Predefined local states are designated by there name. Here `"Up"` is a predefined state of site `Qubit`.
+returns a pure up state in a 10 qubit system. Predefined local states are designated by their name. Here `"Up"` is a predefined state of site `Qubit`.
 
 All sites need not be all in the same local states, in which case we give State an array of local states
 
-    state2 = State(Mixed(), system2, ["+", "2", "Occ"])
+    state2 = State{Mixed}(system2, ["+", "2", "Occ"])
 
-Here we chose a mixed representation.
+Here we choose a mixed representation.
 
 States may be added or multiplied by a number (they need to be based on the same system). For example
 
-    ghz = (State(Pure(), system1, "Up") + State(Pure(), system1, "Dn")) / 2
+    ghz = (State{Pure}(system1, "Up") + State{Pure}(system1, "Dn")) / 2
 
 We can transform a pure representation into a mixed representation by
 
     mixedstate = mix(purestate)
 
-For mixed states there is a local mixed state `"FullyMixed"` which correspond to a density matrix proportional to the identity matrix.
+For mixed states there is a local mixed state `"FullyMixed"` which correspond to a density matrix proportional to the identity matrix (that is the infinite temperature state).
 
 If you need a local state which is not predefined, it is possible to pass its vector (or matrix for mixed states) directly, For example, we could also define `state1` by
 
-    state1 = State(Pure(), system1, [1., 0.])
+    state1 = State{Pure}(system1, [1., 0.])
 
 ## Limits
 
@@ -116,7 +116,7 @@ you will simply write
 Many operations are defined on generic operators:
 
 - addition, multiplication and power by a number
-- tensor product: `X⊗X` is a two site operator (one can also write `tensor(X, X)`)
+- tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`)
 - `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``.
 - `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the jump operator that may flip a qubit toward up (`Sp` is the ``S^+`` operator)
 - `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9 Gate(Id) + 0.1 Gate(X)` is a noisy gate operator that will apply an ``\sigma_x`` gate 10 percent of the time.
@@ -128,13 +128,12 @@ For example one can define the Rxy 2-site operator by
 
     Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
 
-If this is not enough to define your favorite operator you can create new ones by specifying their matrix
+If this is not enough to define your favorite operator you can create new ones by specifying their matrix.
+The number in braces is the number of sites on which the operator must be applied.
 
-    myop = Operator("MyOp", [1 1 ; 1 -1] / √2)
+    myop = Operator{1}("MyOp", [1 1 ; 1 -1] / √2, involution_op)
 
-For multiple site or mixed operators you must specify the type
-
-    Swap = Operator{Pure, 2}("Swap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
+    Swap = Operator{2}("Swap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
 
 Finally from generic operators, we define indexed operators by simply applying them to the corresponding sites
 
@@ -156,7 +155,7 @@ We can apply gates with `apply`
 
 the `gates` argument is an indexed operator representing the gates to apply
 
-the keyword argument limits fixes the constraints to apply
+the keyword argument `limits` fixes the constraints to apply
 
 We can compute ground states with `dmrg`
 
@@ -189,7 +188,18 @@ will give the array of the ``\langle \psi | \sigma_x^i | \psi \rangle``
 
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``
 
-We can also measure other properties with `Trace`, `TraceError`, `Trace2`, `Purity`, `Hermitianity`, `HermitianityError`, `EE`, `Linkdim` and `MemoryUsage`.
+We can also measure other properties with
+- `Trace` : the trace of the density matrix, this should be one, so it is a good indicator for accumulated error
+- `TraceError`: measure the deviation from trace 1
+- `Trace2`, `Purity`: measure the trace of the square of the density matrix
+- `Hermitianity`: measure how well the density matrix is Hermitian, return 1 if Hermitian, 0 if antihermitian
+or any value in between
+- `HermitianityError` measure the deviation from hermitianity 1
+- `Renyi2`: measure the Renyi entropy of order 2 of the system
+- `SubRenyi2`: measure the Renyi entropy of order 2 of a subsystem
+- `EE`: entanglement entropy for pure representation, OSEE for mixed
+- `Linkdim`: the maximum bond dimension of the representation
+- `MemoryUsage`: the memory used to store the representation
 
 We can also ask for several measurements at the same time
 
@@ -201,7 +211,7 @@ For more details see the reference or the inline help.
 
 ### Framework
 
-Most simulations follow the same pattern: start from some simple state, make some evolution and make measurements during or after the evolution and save the results to file. For these simple cases, TMS proposes a simpler interface.
+Most simulations follow the same pattern: start from some simple state, make some evolution and make measurements during or after the evolution and save the results to file. For these simple cases, TMS presents a simpler interface.
 
 A simple simulation follows a single state through a certain number of phases which act in a simple way on the state and make measurements during and/or after the evolution and save the results to file.
 
@@ -213,7 +223,7 @@ The following phases are available:
 - `Evolve` : do Hamiltonian or Lindbladian evolution
 - `Gates` : apply some gates
 - `PartialTrace` : trace the system over some sites (requires a mixed state)
-- `SteadyState` : compute the steady state of a Lindblad equation (requires a mixed state)
+- `SteadyState` : compute the steady state of a Lindblad equation (still experimental, requires a mixed state)
 
 with these phases we define a `SimData` object that describes the simulation and finally, we call
 
@@ -261,11 +271,12 @@ runTMS(sim_data(40, 1., 0.05))
 
 Three keyword arguments may be given `restart` (default `true`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files an redirect all output to the given io channel (useful values are stdout and devnull). 
 
-Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair
+Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair or list of pairs.
 
     measures = destination => measurements
+    measures = [ dest1 => meas1, dest2 => meas 2, ...]
 
-or a list of pairs. The possible measurements are described in the measurements section of this manual. There are three types of destinations:
+The possible measurements are described in the measurements section of this manual. There are three types of destinations:
 
 - filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull)
 

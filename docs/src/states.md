@@ -16,16 +16,15 @@ Limits
 State
 length(::State)
 maxlinkdim(::State)
-mix(::State)
+mix
 truncate(::State)
 trace(::State)
-trace2(::State)
+trace2
 norm(::State)
-dag(::State)
-hermitianize(::State)
-hermitianity(::State)
-random_state
-partial_trace(::State, ::Vector{Int})
+hermitianize
+hermitianity
+RandomState
+partial_trace
 ```
 
 ## Simulations

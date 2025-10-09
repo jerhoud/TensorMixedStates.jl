@@ -1,6 +1,6 @@
 export PM, Pure, Mixed, GI, Generic, Indexed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Operator, Identity, Id, JW, JW_F, F, Proj, Gate, Dissipator, Evolver, Left, Right, Multi_F
+export Op, Operator, Identity, Id, JW, JW_F, F, Proj, AtIndex, Gate, Dissipator, Evolver, Left, Right, Multi_F
 export dag, tensor, ⊗, isfermionic
 
 ############# Types ################

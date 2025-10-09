@@ -27,7 +27,7 @@ To install TMS in Julia, launch the Julia interface (by typing 'julia' on the co
 
 Note the "]" required to enter julia package management system.
 
-After downloading TMS, Julia will automatically compile and install it. This process usually takes a couple of minutes and does not require interactions on your part.
+After downloading TMS, Julia will automatically compile and install it. This process usually takes a couple of minutes and does not require interactions on the user part.
 
 ## Using TMS
 
@@ -69,4 +69,4 @@ For this to work you must have first imported TMS with
 
 ## Examples
 
-Examples of working scripts are presented in the folder `examples` in the repository. 
+Working examples are presented in the folder `examples` in the repository. 

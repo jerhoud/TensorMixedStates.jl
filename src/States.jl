@@ -1,4 +1,4 @@
-export State, maxlinkdim, Limits
+export State, maxlinkdim, Limits, mix
 
 """
     struct PreObs
