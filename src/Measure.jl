@@ -166,6 +166,8 @@ TraceError = StateFunc("TraceError", st -> 1. - trace(st))
 state functions to measure the trace of the square of the density matrix. See also `StateFunc` and `trace2`.
 """
 Trace2 = StateFunc("Trace2", trace2)
+
+@doc (@doc Trace2)
 Purity = StateFunc("Purity", trace2)
 
 """

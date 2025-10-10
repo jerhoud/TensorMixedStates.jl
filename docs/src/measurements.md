@@ -12,7 +12,7 @@ expect1
 expect2
 entanglement_entropy
 renyi2
-mutual_info_renyi2,
+mutual_info_renyi2
 Trace
 TraceError
 Trace2
