@@ -480,20 +480,16 @@ function partial_trace(state::State{Mixed}, pos::Vector{Int}; keepers::Bool = fa
         sp[i] = SysIndex{Pure}(sys, k)
         sm[i] = SysIndex{Mixed}(sys, k)
         if i == 1
-            t[1] = get_left(state, k)
+            t[1] = copy(get_left(state, k))
         else
             for l in j+1:k-1
                 t[i-1] *= get_loc(state, l)
             end 
-            t[i] = mps[k]
+            t[i] = copy(mps[k])
         end
         j = k
     end
-    if j == 0
-        error("partial_trace cannot trace all sites of a state")
-    else
-        t[kn] *= get_right(state, keep[kn])
-    end
+    t[kn] *= get_right(state, keep[kn])
     for i in 1:kn-1
         idx = commonind(t[i], t[i+1])
         jdx = settags(idx, "Link, l=$i")
