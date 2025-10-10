@@ -1,11 +1,18 @@
-export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermitianity, HermitianityError, Renyi2
+export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermitianity, HermitianityError, Renyi2, SubRenyi2
 export EE, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
 
 """
     struct StateFunc
-    StateFunc(name, obs)
+    StateFunc(name, func)
 
 a data type to represent a function of `State`. This is used by `measure`.
+This how `Trace`, `Purity` ... are implemented.
+
+# Examples
+
+    Trace = StateFunc("Trace", trace)
+    measure(state, Trace)
+    measures = "data.dat" => Trace
 """
 struct StateFunc
     name::String
@@ -19,7 +26,7 @@ show(io::IO, s::StateFunc) =
     struct TimeFunc
     TimeFunc(name, obs)
 
-a data type to represent a function of simulation time. This is used by `measure`.
+a data type to represent a function of simulation time. This is used internally by `measure`.
 """
 struct TimeFunc
     name::String
@@ -135,27 +142,112 @@ get_exp2(o::ObsExp2) = [o.obs]
 get_exp2(o::Check) = [get_exp2(o.obs1); get_exp2(o.obs2)]
 get_exp2(_) = Tuple{SimpleOp, SimpleOp}[]
 
+"""
+    Trace
+
+a state function to measure the trace of the system (density matrix). See also `StateFunc` and `trace`.
+"""
 Trace = StateFunc("Trace", trace)
+
+"""
+    TraceError
+
+a state function to measure the deviation to trace 1 of the system (density matrix).
+See also `StateFunc` and `Trace`.
+This is good way to measure the coherence of a simulation as numerical
+inaccuracies tend to change the trace of the density matrix (which should stay 1)
+"""
 TraceError = StateFunc("TraceError", st -> 1. - trace(st))
+
+"""
+    Trace2
+    Purity
+
+state functions to measure the trace of the square of the density matrix. See also `StateFunc` and `trace2`.
+"""
 Trace2 = StateFunc("Trace2", trace2)
 Purity = StateFunc("Purity", trace2)
+
+"""
+    Norm
+
+a state function to measure the norm of the state. See also `StateFunc` and `norm`.
+"""
 Norm = StateFunc("Norm", norm)
+
+"""
+    Hermitianity
+
+a state function to measure the degree of hermitianity of the density matrix.
+Return 1 if density matrix is Hermitian, 0 for anti Hermitian, in beyween otherwise.
+Sea also `StateFunc` and `hermitianity`
+"""
 Hermitianity = StateFunc("Hermitianity", hermitianity)
+
+"""
+    HermitianityError
+
+a state function to measure the deviation of the Hermitianity from 1.
+See `StateFunc`, `Hermitianity` and `hermitianity`.
+"""
 HermitianityError = StateFunc("HermitianityError", st -> 1. - hermitianity(st))
+
+"""
+    Renyi2
+
+a state function to measure the Renyi-2 entropy of the system.
+See also `StateFunc` and `renyi2`.
+"""
 Renyi2 = StateFunc("Renyi2", renyi2)
+
+"""
+    SubRenyi2([positions...])
+
+a state function to measure the Renyi-2 entropy of a subsystem describe by the positions given.
+See also `StateFunc`, `Renyi2` and `renyi2`.
+"""
 SubRenyi2(pos) = StateFunc("SubRenyi2($pos)", st -> renyi2(st, pos))
+
+"""
+    EE(pos)
+    EE(pos, spectrum)
+
+a state function to measure entanglement entropy / OSEE and associated spectrum. 
+See also `StateFunc` and `entanglement_entropy`.
+"""
 EE(pos) = StateFunc("EE($pos)",
     st-> begin
         ee, _ = entanglement_entropy(st, pos)
         return ee
     end)
-EE(pos, spectre) = StateFunc("EE($pos,$spectre)",
+EE(pos, spectrum) = StateFunc("EE($pos,$spectrum)",
     st-> begin
         ee, sp = entanglement_entropy(st, pos)
-        return [[ee]; sp[1:min(length(sp), spectre)]]
+        return [[ee]; sp[1:min(length(sp), spectrum)]]
     end)
+
+"""
+    Mutual_Info_Renyi2(link)
+    Mutual_Info_Renyi2([positions...])
+
+a state function to measure the Renyi-2 mutual information of the given subsystems.
+See also `StateFunc` and `mutual_info_renyi2`.
+"""
 Mutual_Info_Renyi2(part) = StateFunc("Mutual_Info_Renyi2", st -> mutual_info_renyi2(st, part))
+
+"""
+    Linkdim
+
+a state function to measure the maximum bond dimension.
+See also `StateFunc` and `maxlinkdim`.
+"""
 Linkdim = StateFunc("Linkdim", maxlinkdim)
+
+"""
+    MemoryUsage
+
+a state function to measure the memory used by the state. See also `StateFunc`.
+"""
 MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
 get_val(o::Vector{Measure}, v::Dict, st::State, t::Number; kwargs...) =
