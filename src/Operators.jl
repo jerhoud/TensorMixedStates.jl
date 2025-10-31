@@ -289,7 +289,8 @@ show(io::IO, a::ScalarOp) =
         print(io, a.arg)
     end
 
-isless(a::ScalarOp, b::ScalarOp) = isless((a.coef, a.arg), (b.coef, b.arg))
+isless(a::ScalarOp, b::ScalarOp) =
+    isless((a.arg, real(a.coef), imag(a.coef)), (b.arg, real(b.coef), imag(b.coef)))
 
 
 ############### Products ###############
