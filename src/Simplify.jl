@@ -3,7 +3,7 @@ export simplify, removeMulti
 """
     simplify(op::Op; expand=false)
 
-simplifies an operator, this is used internally by `apply`` and functions creating MPOs.
+simplifies an operator, this is used internally by functions creating MPOs.
 expand tells wheteher to expand explicit operators with their definition
 """
 function simplify end
@@ -320,7 +320,8 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     return c * ProdOp(r)
 end
 
-# Generic Mixed products (that is only Left and Right factors)
+# Generic Mixed products
+# (that is only Left and Right factors)
 # Gather Left and Right together
 # Left(X)*Right(Y)*Left(Z) => Left(X*Z)*Right(Y)
 
@@ -329,15 +330,19 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
     if c == 0
         return 0 * id
     end
-    r = GenericOp{Mixed, N}[]
     larg = map(x -> x.arg, filter(x -> x isa Left, v))
+    rarg = map(x -> x.arg, filter(x -> x isa Right, v))
+    # test whether factors other than Left and Right are present (like sums)
+    if length(larg) + length(rarg) ≠ length(v)
+        return c * ProdOp(v)
+    end
+    r = GenericOp{Mixed, N}[]
     if !isempty(larg)
         left = simplify_l(simplify_prod(larg))
         if left ≠ id
             push!(r, left)
         end
     end
-    rarg = map(x -> x.arg, filter(x -> x isa Right, v))
     if !isempty(rarg)
         right = simplify_r(simplify_prod(rarg))
         if right ≠ id
