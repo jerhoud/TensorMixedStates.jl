@@ -280,6 +280,29 @@ end
                     ])
         ])
     end
+    @testset "Noisy gates" begin
+        @test_ok test_phases([
+            CreateState{Mixed}(1, Qubit(),"Up")
+            Gates(
+                gates = (0.5*Gate(Id)+0.5*Gate(X))(1),
+                final_measures = [
+                    check([X(1), Y(1), Z(1)], [0, 0, 0], 1e-12),
+                    check(Trace2, 0.5, 1e-12)
+                ]
+            )
+        ])
+        @test_ok test_phases([
+            CreateState{Mixed}(2, Qubit(),"Up")
+            Gates(
+                gates = (0.5*Gate(Id⊗Id)+0.5*Gate(X⊗X))(1, 2),
+                final_measures = [
+                    check([X, Y, Z], [[0, 0], [0, 0], [0, 0]], 1e-12),
+                    check(Trace2, 0.5, 1e-12),
+                    check(Z(1)Z(2), 1, 1e-12)
+                ]
+            )
+        ])
+    end
 #=
     @testset "Steady state" begin
         @test_ok test_phases([
