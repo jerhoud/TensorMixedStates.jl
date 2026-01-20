@@ -1,1 +1,5 @@
-The examples in this directory are those presented in an article in preparation
+The examples in this directory are those presented in the companion article
+
+TensorMixedStates: A Julia library for simulating pure and mixed quantum states using matrix product states
+
+https://hal.science/hal-04945872
