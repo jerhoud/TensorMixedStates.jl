@@ -81,7 +81,7 @@ end
 
 function run_phase(sim::Simulation, phase::GroundState)
     log_msg(sim, "Optimizing state with $(phase.nsweeps) sweeps of Dmrg")
-    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.limits,
+    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.limits, phase.noise,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim

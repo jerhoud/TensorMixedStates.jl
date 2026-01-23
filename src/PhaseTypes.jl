@@ -191,6 +191,10 @@ A phase type for time evolution
     Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))), measures = [X, Y, Z])
 
 # Fields
+
+- `name`: the name of the phase
+- `time_start`: the initial simulation time
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 - `limits`: a Limits object to set cutoff and maxdim (see `Limits`)
 - `duration`: the duration of the time evolution
 - `time_step`: the time step
@@ -232,6 +236,7 @@ show(io::IO, s::Evolve) =
 """
 A phase type for applying gates
 
+# Fields
 - `name`: the name of the phase
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
@@ -267,6 +272,18 @@ A phase type for computing the ground state using Dmrg
 
 # Examples
     GroundState(hamiltonian = X(1)X(2), nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
+
+# Fields
+- `name`: the name of the phase
+- `time_start`: the initial simulation time
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `hamiltonian`: the Hamiltonian whose ground state is requested
+- `limits`: the limits on the state
+- `nsweeps`: the maximum number of sweeps
+- `noise`: the noise to apply (either a number or a vector of numbers, ITensor dmrg documentation)
+- `measures`: measurements to make during the computation
+- `measures_period`: the interval at which the measurements are made
+- `tolerance`: computation is stopped if the progression in the energy between sweeps is lower than this number
 """
 @kwdef struct GroundState
     name::String = "Ground state computation using Dmrg"
@@ -275,6 +292,7 @@ A phase type for computing the ground state using Dmrg
     hamiltonian::IndexedOp{Pure}
     limits::Limits
     nsweeps::Int
+    noise::Union{Float64, Vector{Float64}} = 0.
     measures = []
     measures_period::Int = 1
     tolerance::Number = 0.
@@ -296,13 +314,22 @@ show(io::IO, s::GroundState) =
         nsweeps = $(s.nsweeps),
         hamiltonian = $(s.hamiltonian),
         limits = $(s.limits),
+        noise = $(s.noise),
         measures_period = $(s.measures_period),
         measures = $(s.measures),
         tolerance = $(s.tolerance))"""
     )
 
+
 """
 a phase type for applying a partial trace
+
+# Fields
+- `name`: the name of the phase
+- `time_start`: the initial simulation time
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `trace_positions`: an array of site numbers on which to trace
+- `keep_positions`: an array of site numbers which are not traced (all the others are)
 
 # Examples
 
@@ -330,6 +357,19 @@ show(io::IO, s::PartialTrace) =
 
 """
 a phase to compute the steady state of a Lindbladian
+
+# Fields
+
+- `name`: the name of the phase
+- `time_start`: the initial simulation time
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `lindbladian`: the Lindbladian whose steady state is requested (should be of the form -im * hamiltonian + dissipators)
+- `mpo_limits`: limits on the resulting MPO
+- `limits`: limits on the state MPS
+- `nsweeps`: maximum number of sweeps
+- `measures`: measurements to be made during the computation
+- `measures_period`: the interval at which the measurements are made
+- `tolerance`: computation is stopped if the progression in the energy between sweeps is lower than this number
 
 # Examples
 
