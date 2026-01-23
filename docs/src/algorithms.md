@@ -9,6 +9,14 @@ dmrg
 DmrgObserver
 ```
 
+## Steady state computation
+
+Using DMRG on the square Lindbladian we can compute steady states for mixed States and Simulations
+
+```@docs
+steady_state
+```
+
 ## Time evolution
 
 Using TDVP or ApproxW, we can do time evolution (Hamiltonian or Lindbladian)

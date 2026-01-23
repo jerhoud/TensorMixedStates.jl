@@ -1,4 +1,4 @@
-export tdvp, dmrg, approx_W
+export tdvp, dmrg, approx_W, steady_state
 
 """
     tdvp(evolver, t, ::State; options...)
@@ -56,7 +56,7 @@ Note that Dmrg does not work for mixed representations.
 
 - `nsweeps`: number of sweeps
 - `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff` and `maxdim may be vectors with different values for each sweep)
+- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with different values for each sweep)
 - others identical to ITensorMPS.dmrg
 """
 function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), limits::Limits=Limits(), kwargs...)
@@ -153,3 +153,28 @@ end
 
 approx_W(op, t::Number, state::State; kwargs...) =
     approx_W(PreMPO(state, op), t, state; kwargs...)
+
+"""
+    steady_state(lindbladian, state; kwargs...)
+
+compute the steady state of the given Lindbladian starting on the given mixed state using DMRG on (L+)L
+
+return achieved "energy" (which should be zero) and computed steady state
+
+# Options
+- `nsweeps`: number of sweeps
+- `observer!`: observer (see `DmrgObserver`)
+- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with different values for each sweep)
+- `mpo_limits`: sets the limit on the MPO of (L+)L (default is no truncation)
+- `alg`: is "naive"(default) or "zipup": alorithm to compute (L+)L 
+- others identical to ITensorMPS.dmrg
+
+"""
+function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
+    limits::Limits = Limits(), sweeps::Int = 1,
+    observer! = NoObserver, mpo_limits::Limits = Limits(), alg::String = "naive", kwargs...)
+    truncate = (mpo_limits != Limits())
+    l = make_mpo(state, op)
+    l2 = apply(dag(l), l; mpo_limits.cutoff, mpo_limits.maxdim, alg, truncate)
+    return dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
+end

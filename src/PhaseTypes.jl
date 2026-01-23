@@ -364,7 +364,8 @@ a phase to compute the steady state of a Lindbladian
 - `time_start`: the initial simulation time
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 - `lindbladian`: the Lindbladian whose steady state is requested (should be of the form -im * hamiltonian + dissipators)
-- `mpo_limits`: limits on the resulting MPO
+- `mpo_limits`: limits on the resulting MPO (nothing for no truncation)
+- `mpo_algo`: algorithm for computing (L+)L: "naive" (default) or "zipup"
 - `limits`: limits on the state MPS
 - `nsweeps`: maximum number of sweeps
 - `measures`: measurements to be made during the computation
@@ -386,6 +387,7 @@ a phase to compute the steady state of a Lindbladian
     final_measures = []
     lindbladian::IndexedOp{Mixed}
     mpo_limits::Limits = Limits()
+    mpo_algo::String = "naive"
     limits::Limits
     nsweeps::Int
     measures = []

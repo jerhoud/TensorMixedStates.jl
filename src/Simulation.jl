@@ -109,5 +109,10 @@ end
 approx_W(op, t::Number, sim::Simulation; kwargs...) =
     Simulation(sim, approx_W(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
 
+function steady_state(op, sim::Simulation; kwargs...)
+    e, st = steady_state(op, sim.state; kwargs...)
+    return (e, Simulation(sim, st))
+end
+
 partial_trace(sim::Simulation, pos; kwargs...) =
     Simulation(sim, partial_trace(sim.state, pos; kwargs...))
