@@ -17,7 +17,7 @@ A phase type to create the simulation state
 
 # Examples
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up")
-    CreateState(type = Mixed(), system = System(3, Qubit()), state = ["Up", "Dn", "Up])
+    CreateState(type = Mixed(), system = System(3, Qubit()), state = ["Up", "Dn", "Up"])
     CreateState(type = Pure(), system = System(10, Qubit()), randomize = 50)
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up", randomize = 50)
     CreateState{Pure}(10, Qubit(), "Up")                                      # simple form
