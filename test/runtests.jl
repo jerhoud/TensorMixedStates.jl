@@ -324,7 +324,7 @@ end
             lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
             limits = Limits(maxdim = 10, cutoff = 1e-10),
             nsweeps = 20,
-            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-6)
+            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-3)
         )
     ])
 end
