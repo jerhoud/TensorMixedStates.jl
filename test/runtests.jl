@@ -282,7 +282,7 @@ end
     end
     @testset "Noisy gates" begin
         @test_ok test_phases([
-            CreateState{Mixed}(1, Qubit(),"Up")
+            CreateState{Mixed}(1, Qubit(),"Up"),
             Gates(
                 gates = (0.5*Gate(Id)+0.5*Gate(X))(1),
                 final_measures = [
@@ -292,7 +292,7 @@ end
             )
         ])
         @test_ok test_phases([
-            CreateState{Mixed}(2, Qubit(),"Up")
+            CreateState{Mixed}(2, Qubit(),"Up"),
             Gates(
                 gates = (0.5*Gate(Id⊗Id)+0.5*Gate(X⊗X))(1, 2),
                 final_measures = [
@@ -303,21 +303,28 @@ end
             )
         ])
     end
-#=
     @testset "Steady state" begin
         @test_ok test_phases([
-            CreateState(
-                type = Mixed(),
-                system = System(5, Qubit()),
-                randomize = 10,
-            ),
+            CreateState{Mixed}(2, Qubit(), "+"),
             SteadyState(
-                lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
-                limits = Limits(maxdim = 10, cutoff = 1e-10),
+                lindbladian = Dissipator(Sp)(1) + Dissipator(Sm)(2),
                 nsweeps = 20,
-                final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-6)
+                limits = Limits(cutoff = 1e-10, maxdim = 10),
+                final_measures = check([X, Y, Z], [[0, 0], [0, 0], [1, -1]], 1e-2)
             )
         ])
     end
-=#
+    @test_ok test_phases([
+        CreateState(
+            type = Mixed(),
+            system = System(5, Qubit()),
+            randomize = 10,
+        ),
+        SteadyState(
+            lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
+            limits = Limits(maxdim = 10, cutoff = 1e-10),
+            nsweeps = 20,
+            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-6)
+        )
+    ])
 end

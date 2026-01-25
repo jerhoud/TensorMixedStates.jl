@@ -171,10 +171,10 @@ return achieved "energy" (which should be zero) and computed steady state
 
 """
 function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
-    limits::Limits = Limits(), sweeps::Int = 1,
-    observer! = NoObserver, mpo_limits::Limits = Limits(), alg::String = "naive", kwargs...)
+    limits::Limits = Limits(), nsweeps::Int = 1,
+    observer! = NoObserver(), mpo_limits::Limits = Limits(), alg::String = "naive", kwargs...)
     truncate = (mpo_limits != Limits())
     l = make_mpo(state, op)
-    l2 = apply(dag(l), l; mpo_limits.cutoff, mpo_limits.maxdim, alg, truncate)
+    l2 = apply(replaceprime(dag(l)', 2=>0), l; mpo_limits.cutoff, mpo_limits.maxdim, alg, truncate)
     return dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
 end

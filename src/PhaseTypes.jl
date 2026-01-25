@@ -406,6 +406,7 @@ show(io::IO, s::SteadyState) =
         nsweeps = $(s.nsweeps),
         lindbladian = $(s.lindbladian),
         mpo_limits = $(s.mpo_limits),
+        mpo_algo = $(repr(s.mpo_algo)),
         limits = $(s.limits),
         measures_period = $(s.measures_period),
         measures = $(s.measures),
