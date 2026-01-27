@@ -1,4 +1,4 @@
-export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermitianity, HermitianityError, Renyi2, SubRenyi2
+export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
 export EE, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
 
 """
@@ -178,21 +178,21 @@ a state function to measure the norm of the state. See also `StateFunc` and `nor
 Norm = StateFunc("Norm", norm)
 
 """
-    Hermitianity
+    Hermiticity
 
-a state function to measure the degree of hermitianity of the density matrix.
+a state function to measure the degree of hermiticity of the density matrix.
 Return 1 if density matrix is Hermitian, 0 for anti Hermitian, in beyween otherwise.
-Sea also `StateFunc` and `hermitianity`
+Sea also `StateFunc` and `hermiticity`
 """
-Hermitianity = StateFunc("Hermitianity", hermitianity)
+Hermiticity = StateFunc("Hermiticity", hermiticity)
 
 """
-    HermitianityError
+    HermiticityError
 
-a state function to measure the deviation of the Hermitianity from 1.
-See `StateFunc`, `Hermitianity` and `hermitianity`.
+a state function to measure the deviation of the Hermiticity from 1.
+See `StateFunc`, `Hermiticity` and `hermiticity`.
 """
-HermitianityError = StateFunc("HermitianityError", st -> 1. - hermitianity(st))
+HermiticityError = StateFunc("HermiticityError", st -> 1. - hermiticity(st))
 
 """
     Renyi2

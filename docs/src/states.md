@@ -22,7 +22,7 @@ trace(::State)
 trace2
 norm(::State)
 hermitianize
-hermitianity
+hermiticity
 RandomState
 partial_trace
 ```

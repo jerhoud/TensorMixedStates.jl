@@ -1,4 +1,4 @@
-export trace, trace2, norm, normalize, dag, hermitianize, hermitianity, renyi2
+export trace, trace2, norm, normalize, dag, hermitianize, hermiticity, renyi2
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace, mutual_info_renyi2
 
@@ -215,16 +215,16 @@ hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
 
 
 """
-    hermitianity(::State)
+    hermiticity(::State)
 
-hermitianity measure whether density matrix for mixed state is Hermitian as it should.
+hermiticity measure whether density matrix for mixed state is Hermitian as it should.
 
 return a value from 0 (anti Hermitian) to 1 (Hermitian)
 
 return 1 for pure state
 """
-hermitianity(::State{Pure}) = 1.
-hermitianity(state::State{Mixed}) =
+hermiticity(::State{Pure}) = 1.
+hermiticity(state::State{Mixed}) =
     0.5 + 0.5 * real(dot(state.state, dag(state).state)) / norm(state.state)^2
 
 """

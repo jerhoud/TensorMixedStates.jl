@@ -192,9 +192,9 @@ We can also measure other properties with
 - `Trace` : the trace of the density matrix, this should be one, so it is a good indicator for accumulated error
 - `TraceError`: measure the deviation from trace 1
 - `Trace2`, `Purity`: measure the trace of the square of the density matrix
-- `Hermitianity`: measure how well the density matrix is Hermitian, return 1 if Hermitian, 0 if antihermitian
+- `Hermiticity`: measure how well the density matrix is Hermitian, return 1 if Hermitian, 0 if antihermitian
 or any value in between
-- `HermitianityError` measure the deviation from hermitianity 1
+- `HermiticityError` measure the deviation from Hermiticity 1
 - `Renyi2`: measure the Renyi entropy of order 2 of the system
 - `SubRenyi2`: measure the Renyi entropy of order 2 of a subsystem
 - `EE`: entanglement entropy for pure representation, OSEE for mixed
