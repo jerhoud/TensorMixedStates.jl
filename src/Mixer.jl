@@ -163,3 +163,16 @@ function tensor(a::TensorOp{N}, site::AbstractSite...) where N
     c * prod(ts) * c'
 end
 
+function tensor(a::SetState, site::AbstractSite)
+    i = Index(site)
+    j = mix(i)
+    c = combinerto(j, i, i')
+    v = state(site, a.state)
+    if v isa Matrix
+        m = v
+    else
+        m = v * v'
+    end
+    return dense(delta(i, i')) * c * ITensor(m, j')
+end
+
