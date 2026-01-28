@@ -1,6 +1,6 @@
 export PM, Pure, Mixed, GI, Generic, Indexed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Op, Operator, Identity, Id, JW, JW_F, F, Proj, AtIndex, Gate, Dissipator, Evolver, Left, Right, Multi_F
+export Op, Operator, Identity, Id, JW, JW_F, F, Proj, AtIndex, Gate, Dissipator, Evolver, Left, Right, SetState, Multi_F
 export dag, tensor, ⊗, isfermionic
 
 ############# Types ################
@@ -502,7 +502,7 @@ a generic operator acting as a gate on states in mixed representation. Usefull f
 
 # Examples
 
-    G = 0.9 * Gate(Id) + 0.1 Gate(X)
+    G = 0.9 * Gate(Id) + 0.1 * Gate(X)
 """
 struct Gate{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
@@ -608,6 +608,24 @@ show(io::IO, a::Right) =
 
 isless(a::Right, b::Right) =
     isless(a.arg, b.arg)
+
+
+# SetState
+
+"""
+    SetState(state)
+
+an operator to Set the local state to the one given, can only be used on mixed representations 
+
+# Examples
+
+    SetState("Up")(3)
+"""
+struct SetState <: GenericOp{Mixed, 1}
+    state::Union{String, Vector}
+end
+
+isless(a::SetState, b::SetState) = isless(a.arg, b.arg)
 
 
 ############## Operator functions ###########
@@ -771,6 +789,7 @@ ranking(::Dissipator) = 12
 ranking(::Evolver) = 13
 ranking(::Left) = 14
 ranking(::Right) = 15
+ranking(::SetState) = 16
 
 ranking(::ScalarOp) = 20
 ranking(::ProdOp) = 21

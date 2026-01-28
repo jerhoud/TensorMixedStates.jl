@@ -33,7 +33,7 @@ simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
 
 # Simplification of Generic Operators
 
-simplify(a::Union{Identity, JW_F, Proj, JW, Operator, Multi_F}) = a
+simplify(a::Union{Identity, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
 
 simplify(a::PowOp) = simplify_pow(simplify(a.arg), a.expo)
 simplify(a::ExpOp) = simplify_exp(simplify(a.arg))
@@ -79,7 +79,7 @@ reindex(op::GenericOp, i::Int...) = op(i...)
 
 
 simplify_ind(a::ScalarOp, index...; kwargs...) = a.coef * simplify_ind(a.arg, index...; kwargs...)
-simplify_ind(a::Union{Identity, JW_F, Proj, JW}, index; kwargs...) = a(index)
+simplify_ind(a::Union{Identity, JW_F, Proj, JW, SetState}, index; kwargs...) = a(index)
 simplify_ind(a::ExpOp, index...; kwargs...) = a(index...)
 simplify_ind(a::PowOp, index...; kwargs...) = simplify_pow(simplify_ind(a.arg, index...; kwargs), a.expo)
 simplify_ind(a::DagOp, index...; kwargs...) = simplify_dag(simplify_ind(a.arg, index...; kwargs...))
