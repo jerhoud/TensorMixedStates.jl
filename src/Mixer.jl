@@ -92,9 +92,10 @@ matrix(a::PowOp, site::AbstractSite...) =
 matrix(a::DagOp, site::AbstractSite...) =
     collect(adjoint(matrix(a.arg, site...)))
 
-matrix(::Dissipator, ::AbstractSite...) =
-    error("cannot give matrix nor tensor for Dissipator")
-
+function matrix(a::Dissipator, site::AbstractSite...)
+    aa = dag(a.arg) * a.arg
+    return matrix(Gate(a.arg), site...) - 0.5 * (matrix(Left(aa), site...) + matrix(Right(aa), site...))
+end
 
 matrix(a::Gate, site::AbstractSite...) =
     matrix(Left(a.arg), site...) * matrix(Right(a.arg), site...)
