@@ -314,6 +314,21 @@ end
             )
         ])
     end
+    @testset "Correlated Steady state on 4 qubits" begin
+        @test_ok test_phases([
+            CreateState{Mixed}(4, Qubit(), "FullyMixed"),
+            SteadyState(
+                lindbladian = -im*(sum(X(i)*X(i+1)+Y(i)*Y(i+1) for i in 1:3))
+                    + Dissipator(1. *Sp)(1)
+                    + Dissipator(1. *Sm)(4),
+                nsweeps = 200,
+                limits = Limits(cutoff = 1e-10, maxdim = 10),
+                final_measures = [ check(Z, [0.05882352941176472, 0.0, 0.0,-0.05882352941176472], 5e-6),
+                check([2(X(i)Y(i+1)-Y(i)X(i+1)) for i in 1:3], [j=0.9411764705882353 for i in 1:3], 5e-6),
+                ]
+            )
+        ])
+    end
     @test_ok test_phases([
         CreateState(
             type = Mixed(),
