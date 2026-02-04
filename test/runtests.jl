@@ -313,18 +313,32 @@ end
                 final_measures = check([X, Y, Z], [[0, 0], [0, 0], [1, -1]], 1e-2)
             )
         ])
+        @test_ok test_phases([
+            CreateState(
+                type = Mixed(),
+                system = System(5, Qubit()),
+                randomize = 10,
+            ),
+            SteadyState(
+                lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
+                limits = Limits(maxdim = 10, cutoff = 1e-10),
+                nsweeps = 20,
+                final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-2)
+            )
+        ])
+        @test_ok test_phases([
+            CreateState{Mixed}(4, Qubit(), "FullyMixed"),
+            SteadyState(
+                lindbladian =
+                    -im * (sum(X(i)X(i+1)+Y(i)Y(i+1) for i in 1:3))
+                    + Dissipator(Sp)(1) + Dissipator(Sm)(4),
+                nsweeps = 200,
+                limits = Limits(cutoff = 1e-10, maxdim = 10),
+                final_measures = [
+                    check(Z, [0.05882352941176472, 0.0, 0.0,-0.05882352941176472], 5e-6),
+                    check([2(X(i)Y(i+1)-Y(i)X(i+1)) for i in 1:3], fill(0.9411764705882353, 3), 5e-6),
+                ]
+            )
+        ])
     end
-    @test_ok test_phases([
-        CreateState(
-            type = Mixed(),
-            system = System(5, Qubit()),
-            randomize = 10,
-        ),
-        SteadyState(
-            lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
-            limits = Limits(maxdim = 10, cutoff = 1e-10),
-            nsweeps = 20,
-            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-2)
-        )
-    ])
 end
