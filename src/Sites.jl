@@ -31,12 +31,8 @@ The default implementation returns the first state for "0", the second for "1" a
 
 This should be overloaded if necessary when defining new site types. It should return an error when not needed.
 """
-function string_state(site::AbstractSite, st::String)
-    i = 1 + parse(Int, st)
-    v = zeros(Float64, dim(site))
-    v[i] = 1.0
-    return v
-end
+string_state(site::AbstractSite, st::String) =
+    state(site, parse(Int, st))
 
 """
     mix(::Index)
@@ -247,6 +243,14 @@ end
 
 state(::AbstractSite, a::Union{Vector, Matrix}) = a
 state(site::AbstractSite, a::Function) = a(site)
+function state(site::AbstractSite, a::Int)
+    if a < 0 || a >= dim(site)
+        error("invalid state number")
+    end
+    v = fill(0., dim(site))
+    v[a + 1] = 1.0
+    return v
+end
 
 """
     state(::AbstractSite, ::String)

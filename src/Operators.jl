@@ -454,9 +454,10 @@ an operator to project on the given state
 
     Proj("Up")
     Proj([1, 0])
+    Proj(1)   # project on the nth state (starting at 0)
 """
 struct Proj <: SimpleOp
-    state::Union{String, Vector}
+    state::Union{Int, String, Vector}
 end
 
 isless(a::Proj, b::Proj) = isless(a.state, b.state)
