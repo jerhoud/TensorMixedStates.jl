@@ -82,7 +82,7 @@ the controlled gate constructor
     Toffoli = controlled(controlled(X))
 """
 controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = controlled_type(op)) where N =
-    Operator{N+1}(name, Proj("Up") ⊗ MakeIdentity(op) + Proj("Dn") ⊗ op, type)
+    Operator{N+1}(name, Proj(0) ⊗ MakeIdentity(op) + Proj(1) ⊗ op, type)
 
 """
     Swap
