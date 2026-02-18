@@ -1,6 +1,6 @@
 export trace, trace2, norm, normalize, dag, hermitianize, hermiticity, renyi2
 export expect, expect1, expect2
-export entanglement_entropy, partial_trace, mutual_info_renyi2
+export entanglement_entropy, partial_trace, mutual_info_renyi2, sample
 
 function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
@@ -454,13 +454,13 @@ end
 """
     partial_trace(::State, ::Vector{Int} [; keepers = true])
 
-return the state partially traced at the given positions,
+return the state partially traced at the given positions
 alternatively one can give the positions to keep by setting `keepers = true`
 """
 function partial_trace(state::State{Mixed}, pos::Vector{Int}; keepers::Bool = false)
     n = length(state)
     if keepers
-        keep = pos
+        keep = sort(unique(pos))
     else
         keep = filter(e->e ∉ pos, 1:n)
     end
@@ -513,3 +513,44 @@ mutual_info_renyi2(state::State, a::Vector{Int}) =
 
 mutual_info_renyi2(state::State, cut::Int) =
     mutual_info_renyi2(state, collect(1:cut))
+
+
+
+function sample(state::State{Pure}; rng = Random.default_rng())
+    st = orthogonalize(state.state, 1)
+    st[1] /= norm(st[1])
+    return sample(rng, st) .- 1
+end
+
+function sample(state::State{Mixed}; rng = Random.default_rng())
+    tr = trace(state)
+    for i in 1:d - 1
+        ti = t * onehot(ind => i)
+        ptot += real(scalar(ti * dag(ti)))
+        if r < ptot
+            return i - 1
+        end
+    end
+    return d - 1
+end
+
+function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
+    st = orthogonalize(state.state, pos)
+    t = st[pos] / norm(st[pos])
+    r = rand(rng)
+    ptot = 0.
+    ind = siteind(st, pos)
+    d = dim(ind)
+    for i in 1:d - 1
+        ti = t * onehot(ind => i)
+        ptot += real(scalar(ti * dag(ti)))
+        if r < ptot
+            return i - 1
+        end
+    end
+    return d - 1
+end
+
+
+function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
+end
