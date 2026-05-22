@@ -302,6 +302,25 @@ end
                 ]
             )
         ])
+        @test_ok begin
+            sys = System(2, Qubit())
+            ux2 = Operator{2}(
+                "UX2",
+                [
+                    0. 1. 0. 0.;
+                    1. 0. 0. 0.;
+                    0. 0. 0. 1.;
+                    0. 0. 1. 0.;
+                ],
+                plain_op,
+            )
+            psi = State{Pure}(sys, "0")
+            rho_from_pure = mix(apply(ux2(1, 2), psi))
+            rho_direct = apply(ux2(1, 2), mix(psi))
+
+            @test expect(rho_from_pure, Z(1)) ≈ expect(rho_direct, Z(1))
+            @test expect(rho_from_pure, Z(2)) ≈ expect(rho_direct, Z(2))
+        end
     end
     @testset "Steady state" begin
         @test_ok test_phases([

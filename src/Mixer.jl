@@ -107,7 +107,7 @@ function tensor(a::Left, site::AbstractSite...)
     js = sim.(is)
     ci = combinerto(i, reverse(is)...)
     cj = combinerto(j, reverse(js)...)
-    ijs = Iterators.flatten(zip(is, js))
+    ijs = Iterators.flatten(zip(reverse(is), reverse(js)))
     c = combiner(ijs...; tags="")
     return (ti * ci * ci') * (delta(j, j') * cj * cj') * c * c'
 end
@@ -120,7 +120,7 @@ function tensor(a::Right, site::AbstractSite...)
     js = sim.(is)
     ci = combinerto(i, reverse(is)...)
     cj = combinerto(j, reverse(js)...)
-    jis = Iterators.flatten(zip(js, is))
+    jis = Iterators.flatten(zip(reverse(js), reverse(is)))
     c = combiner(jis...; tags="")
     return (delta(j, j') * cj * cj') * (dag(ti) * ci * ci') * c * c'
 end
