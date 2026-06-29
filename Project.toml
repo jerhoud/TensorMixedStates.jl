@@ -1,7 +1,7 @@
 name = "TensorMixedStates"
 uuid = "4ce20acf-6baa-4876-9668-f7596d62e73f"
-authors = ["Jérôme Houdayer <jerome.houdayer@polytechnique.org> and contributors"]
 version = "1.2.8"
+authors = ["Jérôme Houdayer <jerome.houdayer@polytechnique.org> and contributors"]
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -22,7 +22,7 @@ DataFramesExt = "DataFrames"
 [compat]
 DataFrames = "1"
 Dates = "1"
-ITensorMPS = "0.3"
+ITensorMPS = "0.3, 0.4"
 ITensors = "0.7 - 0.9"
 JSON = "0.21, 1"
 MKL = "0.7 - 0.9"
