@@ -22,7 +22,7 @@ DataFramesExt = "DataFrames"
 [compat]
 DataFrames = "1"
 Dates = "1"
-ITensorMPS = "0.3"
+ITensorMPS = "0.3 - 0.4"
 ITensors = "0.7 - 0.9"
 JSON = "0.21, 1"
 MKL = "0.7 - 0.9"
