@@ -341,4 +341,16 @@ end
             )
         ])
     end
+    @testset "Mix ordering" begin
+        sys = System(2, Qubit())
+        ux2 = Id ⊗ X
+        psi = State{Pure}(sys, "0")
+        rho_from_pure = mix(apply(ux2(1, 2), psi))
+        rho_direct = apply(ux2(1, 2), mix(psi))
+
+        @test expect(rho_from_pure, Z(1)) ≈ 1
+        @test expect(rho_direct, Z(1)) ≈ 1
+        @test expect(rho_from_pure, Z(2)) ≈ -1
+        @test expect(rho_direct, Z(2)) ≈ -1
+    end
 end
