@@ -68,7 +68,7 @@ matrix(a::Operator, site::AbstractSite...) =
 
 function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     st = state(site, a.state)
-    if st isa Vector
+    if !(st isa Vector)
         error("Proj can only project on a pure state, \"$(a.state)\" is a mixed state")
     end
     return st * adjoint(st)
