@@ -616,14 +616,15 @@ isless(a::Right, b::Right) =
 """
     SetState(state)
 
-an operator to Set the local state to the one given, can only be used on mixed representations 
+an operator to Set the local state to the one given, can only be used on mixed representations
 
 # Examples
 
     SetState("Up")(3)
+    SetState([0.3 0. ; 0. 0.7])(3)
 """
 struct SetState <: GenericOp{Mixed, 1}
-    state::Union{String, Vector}
+    state::Union{String, Vector, Matrix}
 end
 
 isless(a::SetState, b::SetState) = isless(a.arg, b.arg)

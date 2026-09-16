@@ -119,6 +119,33 @@ end
         samples_full = [sample(stm)[1] for _ in 1:nm]
         @test isapprox(count(==(0), samples_full) / nm, p0; atol = 0.03)
     end
+    @testset "SetState" begin
+        sys = System(3, Qubit())
+        st = State{Mixed}(sys, ["Dn", "FullyMixed", "+"])  # arbitrary starting local states
+
+        # SetState overwrites the site regardless of its previous (mixed) content
+        st2 = apply(SetState("Up")(1), st)
+        @test expect1(st2, Z)[1] ≈ 1
+
+        st3 = apply(SetState("Dn")(2), st)
+        @test expect1(st3, Z)[2] ≈ -1
+
+        # other sites are left untouched
+        @test expect1(st3, Z)[[1, 3]] ≈ expect1(st, Z)[[1, 3]]
+
+        # SetState also accepts a named mixed state ("FullyMixed" resolves to a density matrix)
+        st4 = apply(SetState("FullyMixed")(1), st)
+        @test expect1(st4, Z)[1] ≈ 0 atol=1e-12
+
+        # SetState is trace-preserving
+        @test trace(st4) ≈ 1
+
+        # SetState also accepts an explicit (mixed) density matrix, not just a named state
+        p0 = 0.3
+        st5 = apply(SetState([p0 0. ; 0. 1 - p0])(1), st)
+        @test expect1(st5, Z)[1] ≈ 2p0 - 1
+        @test trace(st5) ≈ 1
+    end
     @testset "Fermion measuring" begin
         @test_pm test_phases(CreateState{type}(1, Fermion(), "1";
             final_measures = check(N(1), 1)))
