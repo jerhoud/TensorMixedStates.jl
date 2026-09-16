@@ -53,11 +53,21 @@ show(io::IO, s::CreateState{R}) where R =
             seed = $(s.seed))""")
 
 """
-A phase type to save the state to disk
+A phase type to save the state to disk in a hdf5 file (see `save_state`)
 
-SaveState(file = "myfile")
+SaveState(file = "myfile.h5")
+SaveState(file = "myfile.h5", statename = "after_evolution")
 
-not implemented
+several states can be saved in the same file under different `statename`,
+saving under a name already present in the file replaces it
+
+# Fields
+
+- `name`: the name of the phase
+- `time_start`: the simulation time at the start of the phase (`nothing` keeps the current time)
+- `final_measures`: the measurements to make at the end of the phase
+- `file`: the name of the hdf5 file to write to
+- `statename`: the name under which the state is stored in the file
 """
 @kwdef struct SaveState
     name::String = "Saving state"
@@ -81,11 +91,19 @@ show(io::IO, s::SaveState) =
 
 
 """
-A phase type to load the state from disk
+A phase type to load the state from a hdf5 file written by `SaveState` (see `load_state`)
 
-LoadState(file = "myfile")
+LoadState(file = "myfile.h5")
+LoadState(file = "myfile.h5", statename = "after_evolution")
 
-not implemented
+# Fields
+
+- `name`: the name of the phase
+- `time_start`: the simulation time at the start of the phase (`nothing` keeps the current time)
+- `final_measures`: the measurements to make at the end of the phase
+- `file`: the name of the hdf5 file to read from
+- `statename`: the name under which the state is stored in the file
+- `limits`: the truncation applied to the state after loading
 """
 @kwdef struct LoadState
     name::String = "Loading state"
