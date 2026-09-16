@@ -522,18 +522,6 @@ function sample(state::State{Pure}; rng = Random.default_rng())
     return sample(rng, st) .- 1
 end
 
-function sample(state::State{Mixed}; rng = Random.default_rng())
-    tr = trace(state)
-    for i in 1:d - 1
-        ti = t * onehot(ind => i)
-        ptot += real(scalar(ti * dag(ti)))
-        if r < ptot
-            return i - 1
-        end
-    end
-    return d - 1
-end
-
 function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
     st = orthogonalize(state.state, pos)
     t = st[pos] / norm(st[pos])
@@ -551,6 +539,47 @@ function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
     return d - 1
 end
 
-
 function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
+    sys = state.system
+    l = get_left(state, pos)
+    r = get_right(state, pos)
+    d = dim(SysIndex{Pure}(sys, pos))
+    rnd = rand(rng)
+    ptot = 0.
+    for x in 0:d - 2
+        ptot += real(scalar(l * tensor_obs(state, Proj(x)(pos)) * r))
+        if rnd < ptot
+            return x
+        end
+    end
+    return d - 1
+end
+
+function sample(state::State{Mixed}; rng = Random.default_rng())
+    sys = state.system
+    n = length(state)
+    result = Vector{Int}(undef, n)
+    l = ITensor(1.)
+    for pos in 1:n
+        a = l * state.state[pos]
+        r = get_right(state, pos)
+        d = dim(SysIndex{Pure}(sys, pos))
+        tot = real(scalar(a * tensor_trace(state, pos) * r))
+        rnd = rand(rng) * tot
+        ptot = 0.
+        x = d - 1
+        al = a * tensor_obs(state, Proj(x)(pos))
+        for i in 0:d - 2
+            candidate = a * tensor_obs(state, Proj(i)(pos))
+            ptot += real(scalar(candidate * r))
+            if rnd < ptot
+                x = i
+                al = candidate
+                break
+            end
+        end
+        result[pos] = x
+        l = al
+    end
+    return result
 end
