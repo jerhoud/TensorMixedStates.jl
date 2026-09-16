@@ -7,6 +7,7 @@ AbstractSite
 dim(::AbstractSite)
 Index(::AbstractSite)
 state(::AbstractSite, ::String)
+identity_operator
 ```
 
 The state `"FullyMixed"` represents the infinite temperature mixed state, that is a density matrix proportional to the identity matrix.
@@ -25,6 +26,7 @@ To use `Qubit`, call
     using .Qubits
 
 ```@docs
+TensorMixedStates.Qubits
 Qubit
 Phase
 controlled
@@ -39,6 +41,7 @@ To use `Spin`, call
     using .Spins
 
 ```@docs
+TensorMixedStates.Spins
 Spin
 ```
 
@@ -49,6 +52,7 @@ To use `Boson`, call
     using .Bosons
 
 ```@docs
+TensorMixedStates.Bosons
 Boson
 ```
 
@@ -59,6 +63,7 @@ To use `Fermion`, call
     using .Fermions
 
 ```@docs
+TensorMixedStates.Fermions
 Fermion
 ```
 
@@ -69,6 +74,7 @@ To use `Electron`, call
     using .Electrons
 
 ```@docs
+TensorMixedStates.Electrons
 Electron
 ```
 
@@ -79,6 +85,7 @@ To use `Tj`, call
     using .Tjs
 
 ```@docs
+TensorMixedStates.Tjs
 Tj
 ```
 
@@ -89,6 +96,7 @@ To use `Qboson`, call
     using .Qbosons
 
 ```@docs
+TensorMixedStates.Qbosons
 Qboson
 ```
 
@@ -101,4 +109,5 @@ Don't forget to define the `F` operator for fermionic sites.
 string_state
 @def_states
 @def_operators
+@create_site_module
 ```

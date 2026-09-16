@@ -18,7 +18,7 @@ makedocs(
             "others.md"
         ]
     ],
-    checkdocs=:none,
+    checkdocs=:exports,
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.

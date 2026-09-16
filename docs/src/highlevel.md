@@ -12,9 +12,11 @@ LoadState
 ToMixed
 Tdvp
 ApproxW
+Algo
 Evolve
 Gates
 GroundState
+Dmrg
 PartialTrace
 SteadyState
 ```

@@ -49,7 +49,7 @@ show(io::IO, s::SimData) =
 run the given simulation (see SimData for details), write the output to file and return a Simulation object containing the result.
 `clean` (default `false`) remove the simulation directory and exit,
 `restart` (default `false`) remove the simulation directory and run the simulation,
-`output` redirect all output to the given IO channel (no output directory created), usefull values are stdout or devnull (to suppress all output).
+`output` redirect all output to the given IO channel (no output directory created), useful values are stdout or devnull (to suppress all output).
 
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)

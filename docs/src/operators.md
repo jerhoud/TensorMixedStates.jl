@@ -4,7 +4,7 @@
 
 There are two kinds of operators: generic (like `X`) and indexed (like `X(3)`). Indexed operators are applied to specific site numbers.
 
-- Operators can be used to defined Hamiltonians, for example
+- Operators can be used to define Hamiltonians, for example
 
     hamiltonian = - j * sum(X(i)X(i+1) + Y(i)Y(i+1) for i in 1:n-1) - h * sum(Z(i) for i in 1:n)
 
@@ -32,25 +32,54 @@ Noisy gates can be defined using the `Gate` constructor, for example
 
 ## Reference
 
-Complex operators can be build from a rich set of functions, for example
+Complex operators can be built from a rich set of functions, for example
 
     Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
 
 Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`, `^`).
 
 ```@docs
-Pure
-Mixed
-Op
 Operator
 AtIndex
 ⊗
 Proj
 Dissipator
 Gate
+SetState
+Left
+Right
+Evolver
+Identity
+JW
+JW_F
+Multi_F
 dag(::GenericOp{Pure})
 isfermionic
 matrix
 tensor
 simplify
+removeMulti
+```
+
+## Operator types
+
+These types describe the operators themselves, they are mostly useful when writing functions
+operating on operators.
+
+```@docs
+PM
+Pure
+Mixed
+GI
+Generic
+Indexed
+Op
+GenericOp
+IndexedOp
+SimpleOp
+OpType
+plain_op
+fermionic_op
+selfadjoint_op
+involution_op
 ```

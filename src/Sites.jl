@@ -247,7 +247,10 @@ macro create_site_module(name, symbols)
     block = Expr(:block,
         Expr(:import, imports...),
         Expr(:export, symbols.args...))
-    return esc(Expr(:module, true, name, block))
+    doc = "    using .$name\n\nmodule giving access to the `$(symbols.args[1])` site type " *
+        "and its operators: " * join(map(s -> "`$s`", symbols.args[2:end]), ", ")
+    mod = Expr(:module, true, name, block)
+    return esc(Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), __source__, doc, mod))
 end
 
 state(::AbstractSite, a::Union{Vector, Matrix}) = a

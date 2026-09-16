@@ -19,7 +19,7 @@ To cite this software, please cite the following reference article
 
 ## Installation
 
-To use TMS, you need to have Julia installed on your system. Installing julia is usually esay and fast, see [The Julia Programming Language](https://julialang.org/) for instructions. TMS requires at least Julia version 1.10.5 to run.
+To use TMS, you need to have Julia installed on your system. Installing julia is usually easy and fast, see [The Julia Programming Language](https://julialang.org/) for instructions. TMS requires at least Julia version 1.10.5 to run.
 
 To install TMS in Julia, launch the Julia interface (by typing 'julia' on the command line) and type
 
@@ -57,7 +57,7 @@ Features requests may also be sent on the [Github page](https://github.com/jerho
 
 ## Documentation
 
-Your are currently reading it!
+You are currently reading it!
 
 You can have access to inline documentation on TMS at the julia prompt simply by typing "?" followed by the function name or type name you are interested in. For example
 
@@ -70,3 +70,9 @@ For this to work you must have first imported TMS with
 ## Examples
 
 Working examples are presented in the folder `examples` in the repository. 
+
+## Module
+
+```@docs
+TensorMixedStates
+```

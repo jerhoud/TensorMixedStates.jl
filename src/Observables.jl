@@ -57,7 +57,7 @@ end
 """
     trace(::State)
 
-Return the trace of the system, mostly usefull for mixed representations.
+Return the trace of the system, mostly useful for mixed representations.
 This should be one.
 """
 function trace(state::State)
@@ -161,7 +161,7 @@ end
 """
     trace2(::State)
 
-Return the trace of the square density matrix, mostly usefull for mixed representations.
+Return the trace of the square density matrix, mostly useful for mixed representations.
 This is one for pure representations.
 """
 trace2(::State{Pure}) = 1.
@@ -170,7 +170,7 @@ trace2(state::State{Mixed}) = (norm(state.state) / real(trace(state))) ^ 2
 """
     norm(::State)
 
-Return the norm of the state, mostly usefull for pure representations.
+Return the norm of the state, mostly useful for pure representations.
 This should be one for pure representation.
 """
 norm(state::State) = norm(state.state)
@@ -516,6 +516,23 @@ mutual_info_renyi2(state::State, cut::Int) =
 
 
 
+"""
+    sample(::State [; rng])
+    sample(::State, pos::Int [; rng])
+
+randomly sample the state in the computational basis, the outcomes are numbered from 0
+
+Without a position, a complete configuration is sampled (one outcome per site), taking
+the correlations between sites into account. With a position, only that site is sampled,
+the other sites being traced out.
+
+`rng` is the random number generator to use, it defaults to the global one.
+
+# Examples
+
+    sample(state)
+    sample(state, 3)
+"""
 function sample(state::State{Pure}; rng = Random.default_rng())
     st = orthogonalize(state.state, 1)
     st[1] /= norm(st[1])

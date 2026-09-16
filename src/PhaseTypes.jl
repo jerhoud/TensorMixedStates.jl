@@ -198,6 +198,11 @@ show(io::IO, s::ApproxW) =
     print(io, "ApproxW(order = $(s.order), w = $(s.w), n_hermitianize = $(s.n_hermitianize))")
 
 
+"""
+    Algo = Union{Tdvp, ApproxW}
+
+the type of the time evolution algorithms accepted by the `algo` field of the `Evolve` phase
+"""
 const Algo = Union{Tdvp, ApproxW}
 
 

@@ -71,7 +71,7 @@ If you need a local state which is not predefined, it is possible to pass its ve
 
 ## Limits
 
-TMS uses Matrix Product State to internally represent quantum states. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is build thus
+TMS uses Matrix Product State to internally represent quantum states. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
 
     lim = Limits(cutoff = 1e-10, maxdim = 50)
 
@@ -133,7 +133,7 @@ The number in braces is the number of sites on which the operator must be applie
 
     myop = Operator{1}("MyOp", [1 1 ; 1 -1] / √2, involution_op)
 
-    Swap = Operator{2}("Swap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
+    Swap = Operator{2}("Swap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
 
 Finally from generic operators, we define indexed operators by simply applying them to the corresponding sites
 
@@ -168,7 +168,7 @@ We can do time evolution with `tdvp` and `approx_W`
     newstate = tdvp(evolver, time, oldstate; options...)
     newstate = approx_W(evolver, time, oldstate; options...)
 
-the options are `limits` for the constraints, `nsweeps` for the number of step to do and for `approx_W`, `order` and `w` for the parameters of the algorithm (`order = 4, w = 2` are usually good)
+the options are `limits` for the constraints, `nsweeps` for the number of steps to do and for `approx_W`, `order` and `w` for the parameters of the algorithm (`order = 4, w = 2` are usually good)
 
 For more details, see the reference or the inline help.
 
@@ -224,6 +224,8 @@ The following phases are available:
 - `Gates` : apply some gates
 - `PartialTrace` : trace the system over some sites (requires a mixed state)
 - `SteadyState` : compute the steady state of a Lindblad equation (still experimental, requires a mixed state)
+- `SaveState` : write the state to disk in a hdf5 file
+- `LoadState` : read back a state written by `SaveState`
 
 with these phases we define a `SimData` object that describes the simulation and finally, we call
 
@@ -246,7 +248,7 @@ sim_data(n, gamma, step) = SimData(
     phases = [
         CreateState(
             type = Mixed(),
-            sytem = System(n, Fermion()),
+            system = System(n, Fermion()),
             state = [ iseven(i) ? "Occ" : "Emp" for i in 1:n ]),
         Evolve(
             duration = 4,
@@ -269,7 +271,7 @@ runTMS(sim_data(40, 1., 0.05))
 
 `runTMS` creates a directory named after the `SimData` object `name` field and puts the output files there. In particular, it produces a `log` file showing the progression of the computation, a `prog.jl` file containing a copy of the script, a `description` file containing the content of the `SimData` `description` field, a `stamp` file containing version and date info, a `running` empty file is present during the computation, in case of error an empty `error` file is created.
 
-Three keyword arguments may be given `restart` (default `true`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files an redirect all output to the given io channel (useful values are stdout and devnull). 
+Three keyword arguments may be given `restart` (default `true`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files and redirect all output to the given io channel (useful values are stdout and devnull). 
 
 Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair or list of pairs.
 
@@ -290,7 +292,7 @@ The possible measurements are described in the measurements section of this manu
 
     Data("mydata") => [TraceError, X(1), Y]
 
-The `DataToFrame` function can used on the result to get a `DataFrame` object (the user must import the `DataFrames` package himself before using this function)
+The `DataToFrame` function can be used on the result to get a `DataFrame` object (the user must import the `DataFrames` package himself before using this function)
 
     sim = runTMS(simdata)
     df = DataToFrame(sim.data["mydata"]) 

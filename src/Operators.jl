@@ -63,8 +63,20 @@ the type of all operators.
 """
 abstract type Op{R <: PM, T <: GI, N} end
 
+"""
+    GenericOp{R, N}
+
+the type of generic operators (without site indices), that is `Op{R, Generic, N}`
+"""
 GenericOp{R, N} = Op{R, Generic, N}
+
+"""
+    IndexedOp{R}
+
+the type of indexed operators (with site indices), that is `Op{R, Indexed, 1}`
+"""
 IndexedOp{R} = Op{R, Indexed, 1}
+
 SimpleOp = GenericOp{Pure, 1}
 
 ############## Showing ###############
@@ -128,6 +140,34 @@ the possible operator types for `Operator`
 - `involution_op`: an operator invariant under `dag` and whose square is the identity 
 """
 @enum OpType plain_op fermionic_op selfadjoint_op involution_op
+
+"""
+    plain_op
+
+the `OpType` of an operator with no particular properties
+"""
+plain_op
+
+"""
+    fermionic_op
+
+the `OpType` of a fermionic operator, for which the Jordan-Wigner transform must be used
+"""
+fermionic_op
+
+"""
+    selfadjoint_op
+
+the `OpType` of an operator invariant under `dag`
+"""
+selfadjoint_op
+
+"""
+    involution_op
+
+the `OpType` of an operator invariant under `dag` and whose square is the identity
+"""
+involution_op
 
 """
     type Operator{N} <: GenericOp{Pure, N}
@@ -499,7 +539,7 @@ isless(a::AtIndex, b::AtIndex) =
 """
     Gate(op)
 
-a generic operator acting as a gate on states in mixed representation. Usefull for building noisy gates
+a generic operator acting as a gate on states in mixed representation. Useful for building noisy gates
 
 # Examples
 
