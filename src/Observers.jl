@@ -8,8 +8,8 @@ an observer for tdvp which make measurements every period steps
 """
 struct TdvpObserver <: AbstractObserver
     sim::Simulation
-    measurements
-    period
+    measurements::Union{Vector, Pair}
+    period::Int
 end
 
 """
@@ -20,8 +20,8 @@ an observer for approx_W which make measurements every period steps
 """
 struct ApproxWObserver <: AbstractObserver
     sim::Simulation
-    measurements
-    period
+    measurements::Union{Vector, Pair}
+    period::Int
 end
 
 """
@@ -32,10 +32,10 @@ an observer for dmrg which makes and outputs measurements every period steps and
 """
 mutable struct DmrgObserver <: AbstractObserver
     sim::Simulation
-    measurements
-    period
-    tol
-    energy
+    measurements::Union{Vector, Pair}
+    period::Int
+    tol::Number
+    energy::Float64
     DmrgObserver(sim, measurements, period, tol) = new(sim, measurements, period, tol, 0.)
 end
 

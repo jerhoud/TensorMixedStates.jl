@@ -50,9 +50,4 @@ dim(::Fermion) = 2
     ]
 ])
 
-module Fermions
-
-import ..Fermion, ..C, ..N, ..A
-export Fermion, C, N, A
-
-end
+@create_site_module(Fermions, [Fermion, C, N, A])

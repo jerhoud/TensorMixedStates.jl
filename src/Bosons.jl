@@ -38,9 +38,4 @@ dim(a::Boson) = a.dim
     ]
 ])
 
-module Bosons
-
-import ..Boson, ..N, ..A
-export Boson, N, A
-
-end
+@create_site_module(Bosons, [Boson, N, A])

@@ -134,20 +134,20 @@ simplify_pow(a::ScalarOp{Pure}, expo) =
     if isinteger(expo) || a.coef > 0
         a.coef^expo * simplify_pow(a.arg, expo)
     else
-        (-a.coef)^expo * PowOp(-arg, expo)
+        (-a.coef)^expo * PowOp(-a.arg, expo)
     end
 
 
 # power of Indexed: replace with a product if possible X(1)^2 => X(1) * X(1)
 simplify_pow(a::IndexedOp, expo) =
     if expo == 0
-        return 0 * MakeIdentity(a)
+        return MakeIdentity(a)
     elseif expo == 1
         return a
     elseif isinteger(expo)
         simplify_prod(fill(a, Integer(expo)))
     else
-        a^expo
+        error("cannot compute a non integer power of indexed operator $a")
     end
 
 simplify_pow(a::AtIndex, expo) =
@@ -389,7 +389,6 @@ orderprod(a::AtIndex, b::AtIndex) =
 
 function orderprod(a::AtIndex{R, N}, b::Multi_F{R}) where {R, N}
     i = min(a.index...)
-    j = max(a.index...)
     if i < b.start || (N > 1 && i == b.start)
         []
     elseif i > b.stop
@@ -403,7 +402,6 @@ end
 
 function orderprod(b::Multi_F{R}, a::AtIndex{R, N}) where {R, N}
     i = min(a.index...)
-    j = max(a.index...)
     if i < b.start || (N > 1 && i == b.start)
         [a, b]
     elseif i > b.stop

@@ -91,9 +91,4 @@ string_state(::Tj, ::String) = error("no generic state for Tj")
     ]
 ])
 
-module Tjs
-
-import ..Tj, ..Cup, ..Cdn, ..Fup, ..Fdn, ..Aup, ..Adn, ..Nup, ..Ndn, ..Nupdn, ..Ntot, ..Sx, ..Sy, ..Sz, ..Sp, ..Sm
-export Tj, Cup, Cdn, Fup, Fdn, Aup, Adn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm
-
-end
+@create_site_module(Tjs, [Tj, Cup, Cdn, Fup, Fdn, Aup, Adn, Nup, Ndn, Ntot, Sx, Sy, Sz, Sp, Sm])

@@ -30,15 +30,15 @@ a data type to represent a function of simulation time. This is used internally 
 """
 struct TimeFunc
     name::String
-    obs
+    obs::Union{Number, Vector, Function}
 end
 
 show(io::IO, s::TimeFunc) =
     print(io, s.name)
 
 """
-    struct ObsLit
-    ObsLit(name, obs)
+    struct ObsOp
+    ObsOp(name, obs)
 
 a data type to represent an observable defined by quantum operators. This is used by `measure`.
 """
@@ -81,7 +81,7 @@ struct Check
     name::String
     obs1
     obs2
-    tol
+    tol::Union{Nothing, Number}
     Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
 

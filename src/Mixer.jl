@@ -1,4 +1,4 @@
-export tensor, matrix, isfermionic
+export tensor, matrix
 
 function combinerto(i::Index, j::Index...)
     c = combiner(j...; tags="")
@@ -68,6 +68,9 @@ matrix(a::Operator, site::AbstractSite...) =
 
 function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     st = state(site, a.state)
+    if st isa Vector
+        error("Proj can only project on a pure state, \"$(a.state)\" is a mixed state")
+    end
     return st * adjoint(st)
 end
 
@@ -125,23 +128,12 @@ function tensor(a::Right, site::AbstractSite...)
     return (delta(j, j') * cj * cj') * (dag(ti) * ci * ci') * c * c'
 end
 
-tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{AbstractSite, M}; kwargs...) where {N, M} =
+tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Union{AbstractSite, Int}, M}; kwargs...) where {N, M} =
     (f(o, site[1:N]...; kwargs...), site[N+1:M])
 
-function tensor_apply(f, a::TensorOp{N}, idx::Vararg{AbstractSite, N}; kwargs...) where N
+function tensor_apply(f, a::TensorOp{N}, idx::Vararg{Union{AbstractSite, Int}, N}; kwargs...) where N
     rest = idx
-    r = map(a.subs) do o 
-        t, rest = tensor_next(f, o, rest...; kwargs...)
-        t
-    end
-end
-
-tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Int, M}; kwargs...) where {N, M} =
-    (f(o, site[1:N]...; kwargs...), site[N+1:M])
-
-function tensor_apply(f, a::TensorOp{N}, idx::Vararg{Int, N}; kwargs...) where N
-    rest = idx
-    r = map(a.subs) do o 
+    r = map(a.subs) do o
         t, rest = tensor_next(f, o, rest...; kwargs...)
         t
     end

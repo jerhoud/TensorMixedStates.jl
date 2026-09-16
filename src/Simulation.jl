@@ -18,7 +18,7 @@ before using this function.
 function DataToFrame end
 
 """
-    Simulation(state[, time = 0])
+    Simulation(state[; time = 0])
     Simulation(sim, state[, time = sim.time])
 
 A type to represent simulation data and store time and file data. It is used and returned by runTMS.
@@ -41,8 +41,8 @@ struct Simulation
     files::Dict{String, Union{IO, Dict}}
     data::Dict{String, Dict}
     formats::Tuple{Printf.Format, Printf.Format}
-    Simulation(state::Union{Nothing, State}; t::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
-        new(state, t, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
+    Simulation(state::Union{Nothing, State}; time::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
+        new(state, time, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
     Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
         new(st, t, s.output, s.files, s.data, s.formats)
 end

@@ -1,4 +1,4 @@
-export AbstractSite, mix, dim, Index, string_state, identity_operator, @def_operators, @def_states, state
+export AbstractSite, mix, dim, Index, string_state, identity_operator, @def_operators, @def_states, @create_site_module, state
 
 """
     abstract type AbstractSite
@@ -52,14 +52,14 @@ mix(i::Index) =
 a global variable containing the site dependent definitions
 of implicit operators as defined by `@def_operators`
 """
-operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
+const operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
 
 """
     state_library::Dict
 
 a global variable containing the definitions of local states as defined by `@def_states`
 """
-state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
+const state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
 
 """
     F_info(site)
@@ -111,21 +111,10 @@ end
 
 return a matrix representing the identity operator for the given site
 """
-identity_operator(dim::Int) = [ (i==j) ? 1. : 0. for i in 1:dim, j in 1:dim ]
+identity_operator(dim::Int) = Matrix{Float64}(I, dim, dim)
 identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
-function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function}, type::OpType=plain_op)
-    name = typeof(site)
-    t = (name, op)
-    if haskey(operator_library, t)
-        error("operator $op is already defined for site $name")
-    else
-        operator_library[t] = r
-        return Operator{1}(op, nothing, type)
-    end
-end
-
-function add_operator(site::AbstractSite, op::String, r::GenericOp{Pure, 1}, type::OpType=plain_op, ::Int=1)
+function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function, GenericOp{Pure, 1}}, type::OpType=plain_op)
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
@@ -243,6 +232,26 @@ macro def_states(site, symbols)
             end)
     end
     return e
+end
+
+"""
+    @create_site_module(name, symbols)
+
+define a submodule named `name` which imports and re-exports the given symbols from the parent module
+
+# Example
+
+    @create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2])
+"""
+macro create_site_module(name, symbols)
+    if !(symbols isa Expr) || symbols.head ≠ :vect
+        error("syntax error in @create_site_module second argument should be a vector of symbols")
+    end
+    imports = [ Expr(:., :., :., s) for s in symbols.args ]
+    block = Expr(:block,
+        Expr(:import, imports...),
+        Expr(:export, symbols.args...))
+    return esc(Expr(:module, true, name, block))
 end
 
 state(::AbstractSite, a::Union{Vector, Matrix}) = a

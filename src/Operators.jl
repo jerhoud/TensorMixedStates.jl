@@ -632,7 +632,7 @@ struct PowOp{R, N} <: GenericOp{R, N}
         else
             c = scalarcoef(arg)
             a = scalararg(arg)
-            if c >= 0 || isinteger(expo)
+            if !(c isa Real) || c >= 0 || isinteger(expo)
                 c^expo * new{R, N}(a, expo)
             else
                 (-c)^expo * new{R, N}(-a, expo)
@@ -693,7 +693,7 @@ struct DagOp{N} <: GenericOp{Pure, N}
     arg::GenericOp{Pure, N}
     DagOp(arg::DagOp) = arg
     DagOp(arg::ScalarOp{Pure, Generic}) =
-        conj(a.coef) * DagOp(arg.arg)
+        conj(arg.coef) * DagOp(arg.arg)
     DagOp(arg::GenericOp{Pure, N}) where N =
         new{N}(arg)
 end

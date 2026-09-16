@@ -43,7 +43,7 @@ function string_state(a::Spin, st::String)
     else
         c = 'Z'
     end
-    i = 1 + Int(a.s - eval(Meta.parse(st)))
+    i = 1 + Int(a.s - parse(Rational{Int}, st))
     v = zeros(Float64, dim(a))
     v[i] = 1.0
     if c == 'Z'
@@ -71,9 +71,4 @@ end
     ],
 ])
 
-module Spins
-
-import ..Spin, ..Sp, ..Sm, ..Sx, ..Sy, ..Sz, ..S2
-export Spin, Sp, Sm, Sx, Sy, Sz, S2
-
-end
+@create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2])

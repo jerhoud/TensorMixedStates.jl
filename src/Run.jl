@@ -75,7 +75,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     Date $(now())
                     """)
             src_path = Base.source_path()
-            if src_path ≠ "" && src_path ≠ nothing
+            if !isnothing(src_path) && src_path ≠ ""
                 cp(src_path, "prog.jl"; force = true)
             end
         end

@@ -31,7 +31,7 @@ RandomState{R}(sites::Vector{<:AbstractSite}, linkdims::Int) where R =
 
 function RandomState(state::State{Pure}, linkdims::Int)
     st = random_mps(ComplexF64, state.system.pure_indices, state.state; linkdims)
-    return State{Pure}(system, st)
+    return State{Pure}(state.system, st)
 end
 
 RandomState(::State{Mixed}, ::Int) =

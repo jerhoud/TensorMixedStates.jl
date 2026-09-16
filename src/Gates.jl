@@ -23,7 +23,7 @@ function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where 
 end
 
 apply(mpo::MPO, state::State; limits::Limits=Limits()) =
-    State(state, apply(mpo, state.state; limits.cutoff, limist.maxdim))
+    State(state, apply(mpo, state.state; limits.cutoff, limits.maxdim))
     
 make_ops(::System, a::SumOp) =
     error("cannot apply sums as gates ($a)")
@@ -43,7 +43,7 @@ make_ops(s::System, a::ProdOp) =
     reduce(vcat, map(x->make_ops(s, x), a.subs))
 
 make_ops(s::System, a::AtIndex{R, N}) where {R, N} =
-    if a == MakeIdentity{R, Indexed, N}
+    if a == MakeIdentity{R, Indexed, 1}()
         []
     else
         [ tensor(s, a) ]

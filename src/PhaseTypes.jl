@@ -7,7 +7,7 @@ A phase type to create the simulation state
 # Fields
 
 - `name`: the name of the phase
-- `time_start`: the initial simulation time
+- `time_start`: the initial simulation time (default 0., use `nothing` to keep the current simulation time)
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 - `type`: the type of state to create `Pure()` or `Mixed()`
 - `system`: a System object to describe the system (see `System`) (unused if a State object is given)
@@ -25,7 +25,7 @@ A phase type to create the simulation state
 """
 @kwdef struct CreateState{R <: PM}
     name::String = "Creating state"
-    time_start::Number = 0.
+    time_start::Union{Nothing, Number} = 0.
     final_measures = []
     type::R
     system::Union{Nothing, System} = nothing
@@ -180,7 +180,7 @@ show(io::IO, s::ApproxW) =
     print(io, "ApproxW(order = $(s.order), w = $(s.w), n_hermitianize = $(s.n_hermitianize))")
 
 
-Algo = Union{Tdvp, ApproxW}
+const Algo = Union{Tdvp, ApproxW}
 
 
 """
@@ -253,7 +253,7 @@ A phase type for applying gates
     final_measures = []
     gates::IndexedOp
     limits::Limits = Limits()
-  end
+end
 
 show(io::IO, s::Gates) = 
     print(io,
@@ -301,7 +301,7 @@ end
 """
 Dmrg is deprecated use GroundState instead
 """
-Dmrg = GroundState
+const Dmrg = GroundState
 
 show(io::IO, s::GroundState) = 
     print(io,
@@ -423,4 +423,4 @@ Each of the types contains at least the three following fields (like SimData).
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
-Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}
+const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}

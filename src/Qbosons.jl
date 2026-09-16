@@ -41,9 +41,4 @@ dim(a::Qboson) = a.dim
     ]
 ])
 
-module Qbosons
-
-import ..Qboson, ..N, ..A
-export Qboson, N, A
-
-end
+@create_site_module(Qbosons, [Qboson, N, A])

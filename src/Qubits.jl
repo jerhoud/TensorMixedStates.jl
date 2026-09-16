@@ -70,7 +70,7 @@ controlled_name(a::Operator) = "C" * a.name
 controlled_name(a::Op) = "controlled($a)"
 
 controlled_type(a::Operator) = a.type
-contracted_type(a::Op) = plain_op
+controlled_type(a::Op) = plain_op
 
 """
     controlled(op)
@@ -137,11 +137,4 @@ create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) =
         )
     ]
 
-module Qubits
-
-import ..Qubit, ..controlled, ..graph_state, ..create_graph_state, ..X, ..Y, ..Z, ..Sx, ..Sy, ..Sz, ..S2, ..Sp, ..Sm, ..H, ..S, ..T, ..Swap, ..Phase
-export Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, T, Swap, Phase
-
-export graph_state, create_graph_state
-
-end
+@create_site_module(Qubits, [Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, T, Swap, Phase])

@@ -1,7 +1,7 @@
 export Electrons
 
 """
-    Eletron()
+    Electron()
 
 a site type to represent electron sites (dim is 4)
 
@@ -105,9 +105,4 @@ string_state(::Electron, ::String) = error("no generic state for Electron")
     ]
 ])
 
-module Electrons
-
-import ..Electron, ..Cup, ..Cdn, ..Fup, ..Fdn, ..Aup, ..Adn, ..Nup, ..Ndn, ..Nupdn, ..Ntot, ..Sx, ..Sy, ..Sz, ..Sp, ..Sm
-export Electron, Cup, Cdn, Fup, Fdn, Aup, Adn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm
-
-end
+@create_site_module(Electrons, [Electron, Cup, Cdn, Fup, Fdn, Aup, Adn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm])

@@ -29,9 +29,9 @@ struct System
 end
 
 function System(sites::Vector{<:AbstractSite})
-    pi = map(Index, sites)
-    mi = map(mix, pi)
-    return System(sites, pi, mi)
+    pidx = map(Index, sites)
+    midx = map(mix, pidx)
+    return System(sites, pidx, midx)
 end
 
 System(size::Int, a::AbstractSite) = System(fill(a, size))
@@ -73,7 +73,7 @@ sim(system::System) =
 create the tensorial product of two systems
 """
 function (sys1::System ⊗ sys2::System)
-    if sys2 == sys1
+    if sys2 === sys1
         sys2 = sim(sys1)
     end
     return System(

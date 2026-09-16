@@ -100,7 +100,7 @@ function make_state(type::PM, system::System, states::Vector)
     if n == 1
         st[1] = make_one_state(type, system, 1, states[1])
     else
-        l = [ Index(1; tags="Link,l=$n") for n in 1:n-1 ]
+        l = [ Index(1; tags="Link,l=$k") for k in 1:n-1 ]
         st[1] =  make_one_state(type, system, 1, states[1]) * ITensor(1, l[1]) 
         for i in 2:n - 1
         st[i] = make_one_state(type, system, i, states[i]) * ITensor(1, l[i-1]) * ITensor(1, l[i])

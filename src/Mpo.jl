@@ -54,7 +54,7 @@ end
 
 function PreMPO!(pre::PreMPO, as)
     for (i, a) in enumerate(as)
-        PreMPO!(a, pre, i)
+        PreMPO!(pre, a, i)
     end
     return pre
 end
