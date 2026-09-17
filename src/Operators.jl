@@ -751,7 +751,7 @@ internal type to represent the `dag` operator
 """
 struct DagOp{N} <: GenericOp{Pure, N}
     arg::GenericOp{Pure, N}
-    DagOp(arg::DagOp) = arg
+    DagOp(arg::DagOp) = arg.arg          # dag is an involution
     DagOp(arg::ScalarOp{Pure, Generic}) =
         conj(arg.coef) * DagOp(arg.arg)
     DagOp(arg::GenericOp{Pure, N}) where N =
