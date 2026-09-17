@@ -39,18 +39,6 @@ CreateState{R}(n, site, state; kwargs...) where R =
 CreateState{R}(sites, state; kwargs...) where R =
     CreateState(;type = R(), system = System(sites), state, kwargs...)
 
-show(io::IO, s::CreateState{R}) where R = 
-    print(io,
-        """
-
-        CreateState{$R}(
-            name = $(repr(s.name)),
-            time_start = $(s.time_start),
-            final_measures = $(s.final_measures),
-            system = $(s.system),
-            state = $(repr(s.state)),
-            randomize = $(s.randomize),
-            seed = $(s.seed))""")
 
 """
 A phase type to save the state to disk in a hdf5 file (see `save_state`)
@@ -77,17 +65,6 @@ saving under a name already present in the file replaces it
     statename::String = "state"
 end
 
-show(io::IO, s::SaveState) = 
-    print(io,
-    """
-
-    SaveState(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        file = $(repr(s.file)),
-        statename = $(repr(s.statename)))"""
-    )
 
 
 """
@@ -114,18 +91,6 @@ LoadState(file = "myfile.h5", statename = "after_evolution")
     limits::Limits = Limits()
 end
 
-show(io::IO, s::LoadState) = 
-    print(io,
-    """
-
-    LoadState(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        file = $(repr(s.file)),
-        statename = $(repr(s.statename)),
-        limits = $(s.limits))"""
-    )
 
 """
 A phase type to switch to mixed representation
@@ -149,16 +114,6 @@ A phase type to switch to mixed representation
     limits::Limits = Limits()
 end
 
-show(io::IO, s::ToMixed) = 
-    print(io,
-    """
-
-    ToMixed(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        limits = $(s.limits))"""
-    )
 
 
 
@@ -239,22 +194,6 @@ A phase type for time evolution
     measures = []
 end
 
-show(io::IO, s::Evolve) = 
-    print(io,
-    """
-
-    Evolve(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        limits = $(s.limits),
-        duration = $(s.duration),
-        time_step = $(s.time_step),
-        algo = $(s.algo),
-        evolver = $(s.evolver),
-        measures_period = $(s.measures_period),
-        measures = $(s.measures))"""
-    )
 
 """
 A phase type for applying gates
@@ -278,17 +217,6 @@ A phase type for applying gates
     limits::Limits = Limits()
 end
 
-show(io::IO, s::Gates) = 
-    print(io,
-    """
-
-    Gates(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        limits = $(s.limits),
-        gates = $(s.gates))"""
-    )
 
 """
 A phase type for computing the ground state using Dmrg
@@ -326,22 +254,6 @@ Dmrg is deprecated use GroundState instead
 """
 const Dmrg = GroundState
 
-show(io::IO, s::GroundState) = 
-    print(io,
-    """
-    
-    GroundState(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        nsweeps = $(s.nsweeps),
-        hamiltonian = $(s.hamiltonian),
-        limits = $(s.limits),
-        noise = $(s.noise),
-        measures_period = $(s.measures_period),
-        measures = $(s.measures),
-        tolerance = $(s.tolerance))"""
-    )
 
 
 """
@@ -367,16 +279,6 @@ a phase type for applying a partial trace
     keep_positions::Union{Nothing, Vector{Int}} = nothing
 end
 
-show(io::IO, s::PartialTrace) = 
-    print(io,
-    """
-    
-    PartialTrace(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        trace_positions = $(s.trace_positions),
-        keep_positions = $(s.keep_positions))""")
 
 """
 a phase to compute the steady state of a Lindbladian
@@ -418,23 +320,6 @@ a phase to compute the steady state of a Lindbladian
     tolerance::Number = 0.
 end
 
-show(io::IO, s::SteadyState) = 
-    print(io,
-    """
-    
-    SteadyState(
-        name = $(repr(s.name)),
-        time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
-        nsweeps = $(s.nsweeps),
-        lindbladian = $(s.lindbladian),
-        mpo_limits = $(s.mpo_limits),
-        mpo_algo = $(repr(s.mpo_algo)),
-        limits = $(s.limits),
-        measures_period = $(s.measures_period),
-        measures = $(s.measures),
-        tolerance = $(s.tolerance))"""
-    )
 
 """   
     Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}
@@ -447,3 +332,17 @@ Each of the types contains at least the three following fields (like SimData).
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
 const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}
+
+# The phases are printed field by field, read from the type rather than written out one by
+# one, so that a field added to a phase shows up in the log and in `prog.jl` without
+# anything else to change.
+function show(io::IO, s::Phases)
+    t = typeof(s)
+    print(io, "\n", nameof(t))
+    isempty(t.parameters) || print(io, "{", join(nameof.(t.parameters), ", "), "}")
+    print(io, "(")
+    fs = fieldnames(t)
+    for (i, f) in enumerate(fs)
+        print(io, "\n    ", f, " = ", repr(getfield(s, f)), i < length(fs) ? "," : ")")
+    end
+end
