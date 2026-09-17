@@ -1,9 +1,17 @@
-# Per site type behaviour.
-#
-# Goes here: for each site type (Qubit, Fermion, Boson, Spin, Electron, Tj, Qboson),
-# that its named local states and local operators have the expected values, and that
-# the mixed representation of a state agrees with the pure one. One testset per site
-# type, so a new site type gets a new testset here.
+# Defining a site type from outside the package, which is what a user does and what the
+# built in types cannot check: they are declared inside TensorMixedStates, where dim is
+# local and the operator names are not imported. The site below is deliberately as
+# trivial as possible; everything else about sites is covered by the seven real types.
+
+struct Dummit <: AbstractSite end
+
+TensorMixedStates.dim(::Dummit) = 2
+
+@def_states(Dummit(), [ "1" => [0., 1.] ])
+
+@def_operators(Dummit(), [ selfadjoint_op => [ N = [0. 0. ; 0. 1.] ] ])
+
+@create_site_module(Dummits, [Dummit, N])
 
 @testset "Qubit measuring" begin
     @test_pm test_phases(CreateState{type}(1, Qubit(), "Z+"; 
@@ -79,4 +87,63 @@ end
     @test expect(rho_direct, Z(1)) ≈ 1
     @test expect(rho_from_pure, Z(2)) ≈ -1
     @test expect(rho_direct, Z(2)) ≈ -1
+end
+
+@testset "Qudit measuring" begin
+    # the clock and shift operators are unitary, of order d, and obey the Weyl relation
+    for d in (2, 3, 5)
+        s = Qudit(d)
+        ω = exp(2im * π / d)
+        z = matrix(Zd, s)
+        x = matrix(Xd, s)
+        id = matrix(Id, s)
+        @test z^d ≈ id
+        @test x^d ≈ id
+        @test z * z' ≈ id
+        @test x * x' ≈ id
+        @test z * x ≈ ω * (x * z)
+        # the level operator, and the Fourier operator that exchanges the two bases
+        @test matrix(N, s) ≈ [ i == j ? i - 1. : 0. for i in 1:d, j in 1:d ]
+        h = matrix(Hd, s)
+        @test h * h' ≈ id
+        @test h^4 ≈ id
+        @test h * x * inv(h) ≈ z
+        @test h * z * inv(h) ≈ inv(x)
+        # the phase operator is Clifford: it maps Xd onto Xd Zd up to a phase
+        p = matrix(S, s)
+        @test p * p' ≈ id
+        a = p * x * inv(p)
+        b = x * z
+        @test a ≈ (a[findfirst(!=(0), a)] / b[findfirst(!=(0), a)]) * b
+        # its order is d for odd d and 2d for even d, which is intrinsic
+        @test p^(isodd(d) ? d : 2d) ≈ id
+    end
+    # a qudit of dimension 2 is a qubit
+    @test matrix(Zd, Qudit(2)) ≈ matrix(Z, Qubit())
+    @test matrix(Xd, Qudit(2)) ≈ matrix(X, Qubit())
+    @test matrix(Hd, Qudit(2)) ≈ matrix(H, Qubit())
+    @test matrix(S, Qudit(2)) ≈ matrix(Qubits.S, Qubit())
+    @test matrix(Sumd(2), Qudit(2), Qudit(2)) ≈ matrix(controlled(X), Qubit(), Qubit())
+    # Sum adds the level of the first qudit to the second, modulo d
+    st = State{Pure}(System(3, Qudit(3)), ["1", "1", "0"])
+    @test real(expect1(st, N)) ≈ [1, 1, 0]
+    @test real(expect1(apply(Sumd(3)(1, 2), st), N)) ≈ [1, 2, 0]
+    @test real(expect1(apply(Sumd(3)(1, 3), st), N)) ≈ [1, 1, 1]
+    # being an expression rather than a matrix, Sum also goes into an MPO
+    @test maxlinkdim(make_mpo(st, Sumd(3)(1, 2))) == 4
+    # the states are named by their level, and Zd reads that level back as a phase
+    sys = System(3, Qudit(3))
+    @test expect1(State{Pure}(sys, ["0", "1", "2"]), Zd) ≈ [exp(2im * π * n / 3) for n in 0:2]
+    @test_pm test_phases(CreateState{type}(3, Qudit(3), ["0", "1", "2"];
+        final_measures = check(Zd, [exp(2im * π * n / 3) for n in 0:2])))
+end
+
+@testset "Custom site type" begin
+    @test dim(Dummit()) == 2
+    @test real(expect1(State{Pure}(System(2, Dummit()), "1"), N)) ≈ [1, 1]
+    # N arrives here by `using` from another site module: declaring it again for a new
+    # site must neither fail nor disturb the site it came from
+    @test real(expect1(State{Pure}(System(2, Boson(4)), ["1", "3"]), N)) ≈ [1, 3]
+    @test Dummits.Dummit === Dummit
+    @test Dummits.N === N
 end

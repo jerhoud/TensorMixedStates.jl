@@ -1,7 +1,8 @@
-# Getting states in and out.
+# Getting data in and out.
 #
 # Goes here: setting a state or part of a state, saving it to a file and reading it
-# back, and any other serialisation, with a round trip check whenever possible.
+# back, any other serialisation, and the output side of a simulation, with a round trip
+# check whenever possible.
 
 @testset "SetState" begin
     sys = System(3, Qubit())
@@ -81,4 +82,37 @@ end
         LoadState(file = file2, statename = "st",
             final_measures = check(Z, [1, -1, 1])),
     ])
+end
+
+@testset "DataFrames extension" begin
+    # a Data target gathers its measurements in the data field of the simulation,
+    # one entry per name, and it works even when the output is redirected
+    sim = runTMS(SimData(name = "datatoframe", phases = [
+        CreateState{Pure}(2, Qubit(), ["Z+", "Z-"]),
+        Evolve(algo = Tdvp(), duration = 0.2, time_step = 0.1, evolver = -im * X(1),
+               measures = Data("obs") => [Norm, Trace]),
+    ]); output = devnull)
+    @test collect(keys(sim.data)) == ["obs"]
+    @test sort(collect(keys(sim.data["obs"]))) == ["Norm", "Trace"]
+
+    # DataToFrame lives in the DataFrames extension, so this also checks that the
+    # extension loads at all. Several measures are joined on the time column.
+    df = DataToFrame(sim.data["obs"])
+    @test df isa DataFrame
+    @test sort(names(df)) == ["Norm", "Trace", "time"]      # the order is not stable
+    @test size(df) == (2, 3)
+    @test df.time ≈ [0.1, 0.2]
+    @test df.Norm ≈ [1, 1]
+    @test df.Trace ≈ [1, 1]
+
+    # a single measure needs no join and comes back as it is
+    sim1 = runTMS(SimData(name = "datatoframe", phases = [
+        CreateState{Pure}(2, Qubit(), ["Z+", "Z-"]),
+        Evolve(algo = Tdvp(), duration = 0.2, time_step = 0.1, evolver = -im * X(1),
+               measures = Data("one") => Norm),
+    ]); output = devnull)
+    df1 = DataToFrame(sim1.data["one"])
+    @test df1 isa DataFrame
+    @test sort(names(df1)) == ["Norm", "time"]
+    @test size(df1) == (2, 2)
 end

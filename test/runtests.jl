@@ -1,5 +1,5 @@
-using TensorMixedStates, .Qubits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
-using Test, Aqua
+using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
+using Test, Aqua, DataFrames
 
 include("utils.jl")
 

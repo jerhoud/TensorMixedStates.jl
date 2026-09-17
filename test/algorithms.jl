@@ -4,6 +4,25 @@
 # search, steady state, and the graph helpers used to build them. These are the slowest
 # tests of the suite; keep the systems small.
 
+@testset "Graph utilities" begin
+    @test line_graph(4) == [(1, 2), (2, 3), (3, 4)]
+    @test circle_graph(4) == [(1, 2), (2, 3), (3, 4), (4, 1)]
+    @test complete_graph(4) == [(1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]
+    @test graph_base_size(circle_graph(7)) == 7
+    # the snake runs down the columns: 1 4 5 on the first row, 2 3 6 on the second
+    @test square_lattice(3, 2) == [(1, 2), (3, 4), (5, 6), (1, 4), (2, 3), (4, 5), (3, 6)]
+    @test square_lattice(3) == square_lattice(3, 3)
+    for (nx, ny) in [(2, 2), (3, 2), (4, 3), (10, 3), (1, 5), (5, 1)]
+        g = square_lattice(nx, ny)
+        @test graph_base_size(g) == nx * ny
+        @test length(g) == ny * (nx - 1) + nx * (ny - 1)
+        @test allunique(g)
+        # this is what the snake buys: no bond spans more than 2ny - 1 sites, whatever
+        # the length of the lattice along x
+        @test maximum(abs(b - a) for (a, b) in g) ≤ max(1, 2ny - 1)
+    end
+end
+
 @testset "Complete graphs" begin
     @test_ok test_phases(create_graph_state(complete_graph(4);
         final_measures = check([X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y)],
