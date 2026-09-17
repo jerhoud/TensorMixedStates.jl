@@ -33,6 +33,7 @@ Most functions applicable to States can be applied to Simulations
 - `files`       : a dictionary holding io or dict where to write data
 - `data`        : a dictionary holding data collected for the `Data` objects
 - `formats`     : format info for the output
+- `checkpoint`  : the checkpointing machinery, see `Checkpointer`
 """
 struct Simulation
     state::Union{Nothing, State}
@@ -41,10 +42,11 @@ struct Simulation
     files::Dict{String, Union{IO, Dict}}
     data::Dict{String, Dict}
     formats::Tuple{Printf.Format, Printf.Format}
-    Simulation(state::Union{Nothing, State}; time::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g") =
-        new(state, time, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)))
+    checkpoint::Checkpointer
+    Simulation(state::Union{Nothing, State}; time::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g", checkpoint::Checkpointer = Checkpointer()) =
+        new(state, time, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)), checkpoint)
     Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
-        new(st, t, s.output, s.files, s.data, s.formats)
+        new(st, t, s.output, s.files, s.data, s.formats, s.checkpoint)
 end
 
 show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)")
@@ -75,7 +77,7 @@ get_sim_file(sim::Simulation, filename::AbstractString) =
             elseif last(splitext(filename)) == ".json"
                 Dict()
             else
-                open(filename, "w")
+                open(filename, sim.checkpoint.appending ? "a" : "w")
             end
         end
     end

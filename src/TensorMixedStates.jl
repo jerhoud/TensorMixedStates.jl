@@ -27,6 +27,7 @@ include("RandomState.jl")
 include("Io.jl")
 
 # High level interface
+include("Checkpoint.jl")
 include("Simulation.jl")
 include("Observers.jl")
 include("Output.jl")

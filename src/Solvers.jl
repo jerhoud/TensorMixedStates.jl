@@ -9,6 +9,7 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 # Options
 
 - `nsweeps`: number sweeps to do (time step = t / nsweeps) 
+- `first_sweep`: sweep to start from (default 1), to continue an evolution left unfinished
 - `coefs`: coefficients for time dependent evolver
 - `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
 - `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
@@ -16,14 +17,14 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
-    nsweeps = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
+    nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
     time_dep = !isnothing(coefs)
     st = state.state
     dt = t / nsweeps
     if !time_dep
         mpo = make_mpo(pre)
     end
-    for sweep in 1:nsweeps
+    for sweep in first_sweep:nsweeps
         current_time = time_start + sweep * dt
         if time_dep
             tf = current_time - dt / 2
@@ -36,6 +37,9 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
         measure!(observer!; sweep, state = st, current_time, mpo)
         if n_expand ≠ 0 && mod(sweep, n_expand) == 0
             st = expand(st, mpo; alg="global_krylov")
+        end
+        if checkdone!(observer!; sweep, state = st, current_time)
+            break
         end
     end
     return State(state, st)
@@ -119,6 +123,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `coefs`: coefficients for time dependent evolution
 - `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
 - `nsweeps`: number of steps (time step is t / nsweeps)
+- `first_sweep`: sweep to start from (default 1), to continue an evolution left unfinished
 - `order`: order of approximation
 - `w`: 1 or 2 for WI or WII
 - `observer!`: observer (see ApproxWObserver)
@@ -126,15 +131,15 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `limits`: MPS constraints
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
-    nsweeps::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(), time_start = zero(t),
-    limits::Limits=Limits(), kwargs...) where {R <: PM}
+    nsweeps::Int = 1, first_sweep::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(),
+    time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
     st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)
     if !time_dep
         mpos = make_approx_W(pre, dt; order, w)
     end
-    for sweep in 1:nsweeps
+    for sweep in first_sweep:nsweeps
         current_time = time_start + sweep * dt
         if time_dep
             tf = current_time - dt / 2
@@ -147,6 +152,9 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
             st = hermitianize(State(state, st); limits).state;
         end
         measure!(observer!; sweep, state = st, current_time, mpos)
+        if checkdone!(observer!; sweep, state = st, current_time)
+            break
+        end
     end
     return State(state, st)    
 end

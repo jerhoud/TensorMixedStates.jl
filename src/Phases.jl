@@ -63,13 +63,16 @@ function run_phase(sim::Simulation, phase::Evolve)
     if algo isa ApproxW
         state = approx_W(pre, duration, state;
             coefs, algo.n_hermitianize, nsweeps, algo.order, algo.w, time_start = sim.time, phase.limits,
-            observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
+            observer! = ApproxWObserver(sim, phase.measures, phase.measures_period),
+            first_sweep = first_sweep!(sim.checkpoint))
     else
         state = tdvp(pre, duration, state;
             coefs, algo.n_expand, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
-            observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
+            observer! = TdvpObserver(sim, phase.measures, phase.measures_period),
+            first_sweep = first_sweep!(sim.checkpoint))
     end
-    return Simulation(sim, state, time_stop)
+    # a phase cut short by a checkpoint stops at the time it actually reached
+    return Simulation(sim, state, sim.checkpoint.stopping ? sim.checkpoint.simtime : time_stop)
 end
 
 
@@ -80,9 +83,12 @@ end
 
 
 function run_phase(sim::Simulation, phase::GroundState)
-    log_msg(sim, "Optimizing state with $(phase.nsweeps) sweeps of Dmrg")
-    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, phase.limits, phase.noise,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
+    done = first_sweep!(sim.checkpoint) - 1
+    nsweeps = phase.nsweeps - done
+    log_msg(sim, "Optimizing state with $nsweeps sweeps of Dmrg")
+    nsweeps ≤ 0 && return sim
+    e, sim = dmrg(phase.hamiltonian, sim; nsweeps, phase.limits, phase.noise,
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim
 end
@@ -109,13 +115,16 @@ function run_phase(sim::Simulation, phase::PartialTrace)
 end
 
 function run_phase(sim::Simulation, phase::SteadyState)
-    log_msg(sim, "Searching for steady state with $(phase.nsweeps) sweeps of Dmrg")
     if sim.state isa State{Pure}
         error("state must be in mixed representation for computing steady state")
     end
+    done = first_sweep!(sim.checkpoint) - 1
+    nsweeps = phase.nsweeps - done
+    log_msg(sim, "Searching for steady state with $nsweeps sweeps of Dmrg")
+    nsweeps ≤ 0 && return sim
     e, sim = steady_state(phase.lindbladian, sim;
-        phase.nsweeps, phase.limits, phase.mpo_limits, alg = phase.mpo_algo,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance))
+        nsweeps, phase.limits, phase.mpo_limits, alg = phase.mpo_algo,
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
     log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
     return sim
 end

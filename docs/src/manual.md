@@ -271,7 +271,84 @@ runTMS(sim_data(40, 1., 0.05))
 
 `runTMS` creates a directory named after the `SimData` object `name` field and puts the output files there. In particular, it produces a `log` file showing the progression of the computation, a `prog.jl` file containing a copy of the script, a `description` file containing the content of the `SimData` `description` field, a `stamp` file containing version and date info, a `running` empty file is present during the computation, in case of error an empty `error` file is created.
 
-Three keyword arguments may be given `restart` (default `true`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files and redirect all output to the given io channel (useful values are stdout and devnull). 
+Three keyword arguments may be given `restart` (default `false`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files and redirect all output to the given io channel (useful values are stdout and devnull). 
+
+### Long runs, checkpoints and stopping
+
+A simulation meant to run for hours or days can save its progress, so that a crash, a
+batch system killing the job, or a deliberate stop does not throw the computation away.
+Two fields of `SimData` control it.
+
+    SimData(
+        name = "my_simulation",
+        checkpoint_interval = 600,       # seconds between two checkpoints
+        max_time = 3.5 * 3600,           # stop cleanly after this long
+        phases = [...],
+    )
+
+`checkpoint_interval` is the time between two saves, `0` (the default) disables
+checkpointing entirely. `max_time` is a wall clock budget: once it is past, the simulation
+writes a checkpoint and returns instead of carrying on. Set it comfortably below the limit
+of your batch job, since a checkpoint is only taken between two sweeps: a sweep that lasts
+ten minutes delays the stop by up to ten minutes.
+
+A checkpoint is written to `checkpoint.h5` and `checkpoint.json` in the simulation
+directory. Both are written to temporary files and moved into place, so an interruption
+during the save leaves the previous checkpoint intact.
+
+#### Resuming
+
+`runTMS` resumes on its own: run the same program again and it picks up where it left off,
+skipping the phases that were finished and restarting the interrupted one at the sweep it
+had reached. There is nothing to pass and nothing to change in the program. Running it
+once more after the simulation completed does nothing.
+
+Output files are cut back to the length they had at the checkpoint before the simulation
+continues, so the measurements written between the last checkpoint and the interruption
+are not duplicated. The result is the same file as an uninterrupted run would have
+produced.
+
+Use `restart = true` to ignore an existing checkpoint and start over, as it erases the
+directory.
+
+A checkpoint records which phases it belongs to, and `runTMS` refuses to resume one that
+was written by a different simulation rather than mixing the two. So editing the phases of
+a program and running it again under the same name reports an error instead of quietly
+continuing something else, which matters when trying things out interactively. Give the
+simulation another name, or pass `restart = true`.
+
+Functions are the blind spot of that check: changing the coefficients of a time dependent
+evolver, or the body of a `StateFunc`, leaves the phases looking the same, and the
+simulation resumes from a checkpoint computed with the old ones. Restart such a run rather
+than resume it.
+
+#### Stopping on purpose
+
+Three things ask a running simulation to stop, and all three write a checkpoint first:
+
+- `max_time` running out,
+- the file `stop` appearing in the simulation directory, typically with `touch
+  my_simulation/stop`, from the shell or from the epilogue of a batch job,
+- an interrupt, that is `Ctrl-C`.
+
+The `stop` file is the one to reach for in batch, since it does not depend on how the
+queueing system signals its jobs. It is removed when the simulation next starts, so it
+never blocks a later run.
+
+Note that a simulation writing to a directory turns `Ctrl-C` into a clean stop rather than
+an immediate exit, for the whole program.
+
+#### What can be resumed inside a phase
+
+`Evolve`, `GroundState` and `SteadyState` are resumed at the sweep they reached. The other
+phases are short enough to be replayed, and a checkpoint is taken between phases whenever
+one is due.
+
+The exception is `Gates`, which hands its whole list of gates to the tensor network library
+in one go and therefore cannot be cut in the middle. A deep circuit is better written as
+several `Gates` phases, which gives resume points at no cost.
+
+### Measurements
 
 Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair or list of pairs.
 
