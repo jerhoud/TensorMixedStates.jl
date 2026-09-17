@@ -69,6 +69,21 @@ PreMPO(state::State{R}, a; kwargs...) where R =
     PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(a; kwargs...)))
 
 """
+    mpo_eltype(::PreMPO, coefs)
+
+return the element type needed for the tensors of the MPO built from `pre` and `coefs`.
+The approximations WI and WII promote this further with the type of their time step.
+Real operators (built only from real matrices with real coefficients) give a real MPO,
+which makes all subsequent ITensor contractions about twice as fast.
+`Float64` is used as a floor so that integer or boolean data never reaches the tensors.
+"""
+mpo_eltype(pre::PreMPO, coefs) =
+    promote_type(
+        Float64,
+        mapreduce(typeof, promote_type, coefs; init = Bool),
+        mapreduce(t -> eltype(t[3]), promote_type, Iterators.flatten(pre.terms); init = Bool))
+
+"""
     make_mpo(::PreMPO[, coefs])
     make_mpo(::State, operator)
 
@@ -80,6 +95,7 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     tm = pre.terms
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
+    elt = mpo_eltype(pre, coefs)
     rdim = 1
     rlink = Index(2, "Link, l=0")
     for i in 1:n
@@ -92,7 +108,7 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
             rdim = ld[i]
         end
         rlink = Index(1 + rdim, "Link, l=$i")
-        w = ITensor(ComplexF64, idx', idx, llink, rlink)
+        w = ITensor(elt, idx', idx, llink, rlink)
         id = delta(idx, idx')
         for j in eachindval(idx, idx')
             w[llink => 1, rlink => 1, j...] = id[j...]
@@ -134,6 +150,7 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     tm = pre.terms
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
+    elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
     rdim = 1
     rlink = Index(1, "Link, l=0")
     for i in 1:n
@@ -145,7 +162,7 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             rdim = ld[i]
         end
         rlink = Index(rdim, "Link, l=$i")
-        w = ITensor(ComplexF64, idx', idx, llink, rlink)
+        w = ITensor(elt, idx', idx, llink, rlink)
         id = delta(idx, idx')
         for j in eachindval(idx, idx')
             w[llink=>1, rlink=>1, j...] = id[j...]
@@ -186,6 +203,7 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     tm = pre.terms
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
+    elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
     rdim = 1
     rlink = Index(1, "Link, l=0")
     for i in 1:n 
@@ -235,7 +253,7 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             end
         end
         
-        w = ITensor(ComplexF64, idx', idx, llink, rlink)
+        w = ITensor(elt, idx', idx, llink, rlink)
         for l in 1:ldim, r in 1:rdim
             u = v[l, r]
             if !isempty(u)
