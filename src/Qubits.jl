@@ -120,7 +120,8 @@ end
 """
     create_graph_state(graph::Vector{Tuple{Int, Int}}; limits)
 
-create a phase for building a graph state to use in `SimData` and `runTMS`
+create the phases for building a graph state, to use in `SimData` and `runTMS`. They
+come as a list, which `SimData` accepts anywhere a phase is expected.
 """
 create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) = 
     [

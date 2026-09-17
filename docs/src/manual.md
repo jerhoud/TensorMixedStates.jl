@@ -233,6 +233,11 @@ with these phases we define a `SimData` object that describes the simulation and
 
 which executes the simulation.
 
+The `phases` field is a list, but that list may contain lists, to any depth, and is
+flattened before the simulation starts. This is meant for programs that build their phases
+in pieces, a helper returning the several phases it needs rather than a single one, as
+`create_graph_state` does.
+
 ### Example
 
 As an example, here is the complete code for such a simple simulation:
