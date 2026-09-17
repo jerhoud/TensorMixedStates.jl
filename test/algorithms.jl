@@ -51,9 +51,14 @@ end
             @testset "GHZ" begin
                 @test_ok begin
                     sys = System(6, Qubit())
-                    ghz = (State{Mixed}(sys, "Up") + State{Mixed}(sys, "Dn")) / 2
+                    # adding mixed states adds density matrices, so summing the two mixed
+                    # product states gives their classical mixture and not a GHZ state.
+                    # The superposition has to be made in pure representation, where the
+                    # addition is on amplitudes.
+                    ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))
                     test_phases([
-        CreateState(type = Mixed(), state = ghz),
+        CreateState(type = Mixed(), state = ghz,
+            final_measures = check([Purity, prod(X(i) for i in 1:6)], [1, 1], 1e-10)),
         PartialTrace(
             keep_positions = [2, 3, 5],
             final_measures = check([X, Y, Z, (Z, Z)], [[0, 0, 0], [0, 0, 0], [0, 0, 0], [1 1 1 ; 1 1 1 ; 1 1 1]])
