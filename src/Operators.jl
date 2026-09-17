@@ -782,7 +782,8 @@ return whether a generic operator is fermionic
 """
 isfermionic(a::SimpleOp) = false
 isfermionic(a::Operator{1}) = a.type == fermionic_op
-isfermionic(a::Union{ScalarOp{Pure}, DagOp{Pure}}) = isfermionic(a.arg)
+isfermionic(a::ScalarOp{Pure}) = isfermionic(a.arg)
+isfermionic(a::DagOp) = isfermionic(a.arg)
 isfermionic(a::ProdOp{Pure, Generic, 1}) = isodd(count(isfermionic, a.subs))
 isfermionic(a::Union{ExpOp}) =
     if isfermionic(a.arg)
