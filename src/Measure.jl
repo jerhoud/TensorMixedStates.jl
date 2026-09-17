@@ -37,6 +37,36 @@ show(io::IO, s::TimeFunc) =
     print(io, s.name)
 
 """
+    compact_positions(positions)
+
+write a set of site positions in a short form, contiguous runs becoming ranges, so that a
+measurement made on many sites still has a readable name. Names are used as column headers
+and as keys, so two different sets must keep two different names.
+
+# Examples
+
+    compact_positions(1:20)        # "1:20"
+    compact_positions([1,2,3,7,8]) # "1:3,7:8"
+"""
+compact_positions(p::Int) = string(p)
+
+function compact_positions(p)
+    v = sort(unique(collect(p)))
+    isempty(v) && return "[]"
+    parts = String[]
+    i = 1
+    while i ≤ length(v)
+        j = i
+        while j < length(v) && v[j + 1] == v[j] + 1
+            j += 1
+        end
+        push!(parts, j > i + 1 ? "$(v[i]):$(v[j])" : join(v[i:j], ","))
+        i = j + 1
+    end
+    return join(parts, ",")
+end
+
+"""
     struct ObsOp
     ObsOp(name, obs)
 
@@ -119,8 +149,27 @@ a data type to hold a set of measurements, used internally
 """
 struct Measure
     measures::Vector
-    Measure(obs::Vector) = new(make_obs.(obs))
+    function Measure(obs::Vector)
+        m = new(make_obs.(obs))
+        # names become column headers and keys, so two measurements sharing one would be
+        # written on top of each other. It takes a long operator, abbreviated to the same
+        # text as another, to get there, so the way out is left to the caller: name the
+        # measurements apart or put them in different destinations.
+        ns = measure_names(m)
+        dup = unique([n for n in ns if count(==(n), ns) > 1])
+        isempty(dup) ||
+            error("several measurements of the same set are named $(join(repr.(dup), ", ")). " *
+                  "Names are used as column headers, so they must differ: split them between " *
+                  "destinations, or name them explicitly.")
+        return m
+    end
 end
+
+measure_names(o::Measure) = reduce(vcat, measure_names.(o.measures); init = String[])
+measure_names(o::Union{Vector, Matrix}) = reduce(vcat, measure_names.(o); init = String[])
+measure_names(o::Union{ObsOp, ObsExp1, ObsExp2, StateFunc, TimeFunc, Check}) = [o.name]
+measure_names(o::Symbol) = [string(o)]
+measure_names(_) = String[]
 
 Measure(args...) = Measure([args...])
 
@@ -208,7 +257,7 @@ const Renyi2 = StateFunc("Renyi2", renyi2)
 a state function to measure the Renyi-2 entropy of a subsystem describe by the positions given.
 See also `StateFunc`, `Renyi2` and `renyi2`.
 """
-SubRenyi2(pos) = StateFunc("SubRenyi2($pos)", st -> renyi2(st, pos))
+SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))
 
 """
     EE(pos)
@@ -235,7 +284,7 @@ EE(pos, spectrum) = StateFunc("EE($pos,$spectrum)",
 a state function to measure the Renyi-2 mutual information of the given subsystems.
 See also `StateFunc` and `mutual_info_renyi2`.
 """
-Mutual_Info_Renyi2(part) = StateFunc("Mutual_Info_Renyi2", st -> mutual_info_renyi2(st, part))
+Mutual_Info_Renyi2(part) = StateFunc("Mutual_Info_Renyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
 
 """
     Linkdim
