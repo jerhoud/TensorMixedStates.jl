@@ -8,6 +8,7 @@ graphs are useful to describe interactions or gates to apply
 line_graph
 circle_graph
 complete_graph
+square_lattice
 graph_base_size
 ```
 
