@@ -302,10 +302,12 @@ function expectfactor(state::State, a::Expector, o::AtIndex)
     Expector(a.pos, a.t * tensor_obs(state, o))
 end
 
-expectfactor(state::State, a::Expector, o::Multi_F) =
+function expectfactor(state::State, a::Expector, o::Multi_F)
     for i in o.start:o.stop
         a = expectfactor(state, a, F(i))
     end
+    return a
+end
 
 
 function expect(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}})
