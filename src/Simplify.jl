@@ -1,16 +1,17 @@
 export simplify, removeMulti
 
 """
-    simplify(op::Op; expand=false)
+    simplify(op::Op)
 
 simplifies an operator, this is used internally by functions creating MPOs.
-expand tells wheteher to expand explicit operators with their definition
+Multi site operators defined by an expression are replaced by that expression, so that
+the result is a sum of products of one site operators, which is what `PreMPO` expects.
 """
 function simplify end
 
 # Simplifications for collections of Operators
 
-simplify(a; kwargs...) = map(x->simplify(x; kwargs...), a)
+simplify(a) = map(simplify, a)
 
 
 # Simplification principles
@@ -25,9 +26,9 @@ simplify(a; kwargs...) = map(x->simplify(x; kwargs...), a)
 
 # Simplifications for both Generic and Indexed operators
 
-simplify(a::ScalarOp; kwargs...) = a.coef * simplify(a.arg; kwargs...)
-simplify(a::ProdOp; kwargs...) = simplify_prod(map(x->simplify(x; kwargs...), a.subs))
-simplify(a::SumOp; kwargs...) = simplify_sum(map(x->simplify(x; kwargs...), a.subs))
+simplify(a::ScalarOp) = a.coef * simplify(a.arg)
+simplify(a::ProdOp) = simplify_prod(map(simplify, a.subs))
+simplify(a::SumOp) = simplify_sum(map(simplify, a.subs))
 simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
 
 
@@ -67,26 +68,26 @@ function simplify(a::Evolver)
     simplify_sum([simplify_l(sarg), simplify_r(sarg)])
 end
 
-simplify(a::AtIndex; kwargs...) =
-    simplify_ind(simplify(a.op), a.index...; kwargs...)
+simplify(a::AtIndex) =
+    simplify_ind(simplify(a.op), a.index...)
 
 reindex(::Identity, ::Int) = Id(1)
 reindex(op::GenericOp, i::Int...) = op(i...)
 
 # Simplification with index
 # transmit indexation as deep as possible
-# to develop tensors, transform fermionic operators with JW, expand operators with expand = true
+# to develop tensors, transform fermionic operators with JW, replace multi site operators by their definition
 
 
-simplify_ind(a::ScalarOp, index...; kwargs...) = a.coef * simplify_ind(a.arg, index...; kwargs...)
-simplify_ind(a::Union{Identity, JW_F, Proj, JW, SetState}, index; kwargs...) = a(index)
-simplify_ind(a::ExpOp, index...; kwargs...) = a(index...)
-simplify_ind(a::PowOp, index...; kwargs...) = simplify_pow(simplify_ind(a.arg, index...; kwargs), a.expo)
-simplify_ind(a::DagOp, index...; kwargs...) = simplify_dag(simplify_ind(a.arg, index...; kwargs...))
-simplify_ind(a::Left, index...; kwargs...) = simplify_l(simplify_ind(a.arg, index...; kwargs...))
-simplify_ind(a::Right, index...; kwargs...) = simplify_r(simplify_ind(a.arg, index...; kwargs...))
+simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
+simplify_ind(a::Union{Identity, JW_F, Proj, JW, SetState}, index) = a(index)
+simplify_ind(a::ExpOp, index...) = a(index...)
+simplify_ind(a::PowOp, index...) = simplify_pow(simplify_ind(a.arg, index...), a.expo)
+simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
+simplify_ind(a::Left, index...) = simplify_l(simplify_ind(a.arg, index...))
+simplify_ind(a::Right, index...) = simplify_r(simplify_ind(a.arg, index...))
 
-simplify_ind(a::Operator{1}, index; kwargs...) =
+simplify_ind(a::Operator{1}, index) =
     if a.type == fermionic_op
         if index > 1
             Multi_F{Pure}(1, index-1, false, false) * JW(a)(index)
@@ -97,16 +98,19 @@ simplify_ind(a::Operator{1}, index; kwargs...) =
         a(index)
     end
 
-simplify_ind(a::Operator, index...; expand = false) =
-    if expand && a.expr isa Op
-        simplify_ind(a.expr, index...; expand)
+# a multi site operator has to be replaced by its definition, PreMPO only knows how to
+# place one site factors. One site operators are handled by the method above and keep
+# their name, their definition is read from the site when the tensor is needed.
+simplify_ind(a::Operator, index...) =
+    if a.expr isa Op
+        simplify_ind(a.expr, index...)
     else
         a(index...)
     end
 
-simplify_ind(a::SumOp, index...; kwargs...) = simplify_sum(map(x->simplify_ind(x, index...; kwargs...), a.subs))
-simplify_ind(a::ProdOp, index...; kwargs...) = simplify_prod(map(x->simplify_ind(x, index...; kwargs...), a.subs))
-simplify_ind(a::TensorOp, index...; kwargs...) = simplify_prod(tensor_apply(simplify_ind, a, index...; kwargs...))
+simplify_ind(a::SumOp, index...) = simplify_sum(map(x->simplify_ind(x, index...), a.subs))
+simplify_ind(a::ProdOp, index...) = simplify_prod(map(x->simplify_ind(x, index...), a.subs))
+simplify_ind(a::TensorOp, index...) = simplify_prod(tensor_apply(simplify_ind, a, index...))
 
 
 # helpers for Generic Operators
@@ -435,6 +439,11 @@ orderprod(a::Multi_F{R}, b::Multi_F{R}) where R =
         ]
     end
 
+# an identity factor can be dropped from a product whatever site it sits on, but the
+# simplifier only ever built the one on site 1, so it could not recognise the others
+is_identity(a::AtIndex) = a.op isa Identity || (a.op isa Left && a.op.arg isa Identity)
+is_identity(a) = false
+
 function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
     id = MakeIdentity(v[1])
     if c == 0
@@ -451,7 +460,7 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
             change = false
             nr = IndexedOp{R}[]
             for right in r
-                if right == id
+                if is_identity(right)
                     continue
                 elseif isempty(nr)
                     push!(nr, right)
@@ -464,7 +473,7 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
                     else
                         change = true
                         pop!(nr)
-                        filter!(x->x ≠ id, t)
+                        filter!(x -> !is_identity(x), t)
                         cp *= prod(scalarcoef.(t))
                         append!(nr, scalararg.(t))
                     end

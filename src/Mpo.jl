@@ -65,8 +65,8 @@ end
 preprocess an operator (or vector of operators).
 The result can be passed wherever an operator that must be turned into an MPO is expected
 """
-PreMPO(state::State{R}, a; kwargs...) where R =
-    PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(a; kwargs...)))
+PreMPO(state::State{R}, a) where R =
+    PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(a)))
 
 """
     mpo_eltype(::PreMPO, coefs)
