@@ -404,7 +404,8 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
             end
             r[j, i] = map(ops) do (o1, o2)
                 if isfermionic(o1)
-                    scalar(ef.t * tensor_obs(state, (o2 * F)(i)) * tensor_obs(state, o1(j)))
+                    # swapping the two fermionic operators costs a sign
+                    -scalar(ef.t * tensor_obs(state, (o2 * F)(i)) * tensor_obs(state, o1(j)))
                 else
                     scalar(enf.t * tensor_obs(state, o2(i)) * tensor_obs(state, o1(j)))
                 end
@@ -414,7 +415,7 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
                     lnf = zipto(state, expectfactor(state, lnf, Id(j)), j+1)
                 end
                 if need_fermionic
-                    lf = zipto(state, expectfactor(state, lnf, F(j)), j+1)
+                    lf = zipto(state, expectfactor(state, lf, F(j)), j+1)
                 end
             end
         end
