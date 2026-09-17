@@ -36,7 +36,11 @@ function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
     measures = ["data" => [X(1), Y(1), Z(2), stopper, breaker]]
     evolve(op) = Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * op,
                         limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
-    return [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)), evolve(Z(2))]
+    # a dmrg phase resumes on its sweep count rather than on a simulation time, which is a
+    # path of its own through `DmrgObserver`
+    ground = GroundState(; hamiltonian = sum(-Z(i) for i in 1:3), nsweeps = 3,
+                         limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
+    return [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)), evolve(Z(2)), ground]
 end
 
 @testset "Resuming reproduces an uninterrupted run" begin
@@ -53,7 +57,7 @@ end
             # only has to be large enough.
             stop_in[] = -1
             sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
-            for _ in 1:10
+            for _ in 1:14
                 runTMS(sim_data)
             end
             @test read("chk/data", String) == reference
@@ -87,6 +91,39 @@ end
         end
     end
     Base.exit_on_sigint(true)   # runTMS turned it off, leave the process as it was found
+end
+
+@testset "Per sweep schedules" begin
+    rs = TensorMixedStates.resume_schedule
+    @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep
+    @test rs([1, 2, 3, 4], 2) == [3, 4]
+    @test rs([1, 2, 3], 5) == [3]                   # a schedule that ran out keeps its last
+    @test rs(Limits(cutoff = 1e-14, maxdim = [2, 4, 8]), 1).maxdim == [4, 8]
+
+    # a ground state resuming half way has to go on with the maxdim its sweep was due, not
+    # start the schedule over, which would truncate a state the uninterrupted run kept
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            stopper = StateFunc("Stopper", _ -> (stop_in[] > 0 && (stop_in[] -= 1) == 0 &&
+                                                 touch("stop"); 0.))
+            phases = [
+                CreateState{Pure}(6, Qubit(), "Z+"),
+                GroundState(; hamiltonian = sum(-Z(i) * Z(i + 1) for i in 1:5) -
+                                            sum(1. * X(i) for i in 1:6),
+                            nsweeps = 4, limits = Limits(maxdim = [2, 2, 8, 8], cutoff = 1e-14),
+                            noise = [1e-2, 1e-3, 0., 0.],
+                            measures = ["data" => [Linkdim, X(1), Z(1)Z(2), stopper]]),
+            ]
+            runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 1
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+        end
+    end
+    Base.exit_on_sigint(true)
 end
 
 @testset "Phase fingerprint" begin
@@ -139,7 +176,7 @@ end
         cd(dir) do
             phases = resume_phases(Ref(0), Ref(0), Ref(0))
             runTMS(SimData(; name = "flat", phases))
-            runTMS(SimData(; name = "nested", phases = [[phases[1]], [phases[2:3]]],
+            runTMS(SimData(; name = "nested", phases = [[phases[1]], [phases[2:end]]],
                            checkpoint_interval = 1e-9))
             @test read("nested/data", String) == read("flat/data", String)
         end
