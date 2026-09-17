@@ -17,7 +17,7 @@ Id
 F
 ```
 
-There are seven predefined site types `Qubit`, `Spin`, `Boson`, `Fermion`, `Electron`, `Tj` and `Qboson`.
+There are eight predefined site types `Qubit`, `Qudit`, `Spin`, `Boson`, `Fermion`, `Electron`, `Tj` and `Qboson`.
 
 ## Qubit
 
@@ -98,6 +98,17 @@ To use `Qboson`, call
 ```@docs
 TensorMixedStates.Qbosons
 Qboson
+```
+
+## Qudit
+
+To use `Qudit`, call
+
+    using .Qudits
+
+```@docs
+TensorMixedStates.Qudits
+Qudit
 ```
 
 ## Defining new site types

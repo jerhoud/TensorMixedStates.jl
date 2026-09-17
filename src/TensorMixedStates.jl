@@ -45,6 +45,7 @@ include("Spins.jl")
 include("Electrons.jl")
 include("Tjs.jl")
 include("Qbosons.jl")
+include("Qudits.jl")
 
 # Precompilation
 include("Precompile.jl")
