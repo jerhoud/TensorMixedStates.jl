@@ -508,6 +508,10 @@ end
 
 return an approximation of the mutual information using renyi2 entropy.
 You define the two parts either by giving the position of the cut between the left and right parts or by giving the list of positions for one of the parts.
+
+On a pure state and for a cut, this is read directly from the entanglement spectrum and
+costs nothing more than the entanglement entropy. For a list of positions the pure state
+is first turned into its mixed representation, which is much more expensive.
 """
 mutual_info_renyi2(state::State, a::Vector{Int}) =
     renyi2(partial_trace(state, a; keepers = true)) +
@@ -516,6 +520,15 @@ mutual_info_renyi2(state::State, a::Vector{Int}) =
 
 mutual_info_renyi2(state::State, cut::Int) =
     mutual_info_renyi2(state, collect(1:cut))
+
+# a pure state has no entropy of its own, and the two sides of a cut share their Schmidt
+# spectrum, so the mutual information is just twice the renyi2 entropy of either side
+mutual_info_renyi2(state::State{Pure}, cut::Int) =
+    -2 * log(sum(abs2, last(entanglement_entropy(state, cut))))
+
+# partial_trace needs a density matrix, there is no cheap route for an arbitrary subset
+mutual_info_renyi2(state::State{Pure}, a::Vector{Int}) =
+    mutual_info_renyi2(mix(state), a)
 
 
 
