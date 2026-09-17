@@ -90,7 +90,8 @@ end
 end
 
 @testset "Phase fingerprint" begin
-    id(phases) = TensorMixedStates.phases_id(TensorMixedStates.flatten_phases(phases))
+    # the phases of a simulation are what `SimData` made of them, flattened
+    id(phases) = TensorMixedStates.phases_id(SimData(; phases).phases)
     base = [CreateState{Pure}(3, Qubit(), "X+"),
             Evolve(duration = 1., time_step = 0.1, algo = Tdvp(), evolver = -im * Z(1))]
 
@@ -129,6 +130,7 @@ end
     @test flatten([1, [2, [3, 4]], 5]) == [1, 2, 3, 4, 5]
     @test flatten([[], [1], []]) == [1]
     @test flatten(1) == [1]
+    @test SimData(phases = [1, [2, [3, 4]], 5]).phases == [1, 2, 3, 4, 5]
 
     # phases built in pieces, as `create_graph_state` does, must run like a flat list. A
     # checkpoint numbers the phases, and numbering them without flattening first would

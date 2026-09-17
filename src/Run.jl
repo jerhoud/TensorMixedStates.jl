@@ -8,7 +8,8 @@ A type for describing a simulation to use with `runTMS`
 # Fields
 
 - `name`:            the name of the simulation used as the name of the directory to store the results
-- `phases`:          the list of phases of the simulation (see Phases for a list of possible values)
+- `phases`:          the list of phases of the simulation (see Phases for a list of possible values),
+  which may itself contain lists, to any depth, and is flattened on construction
 - `descritpion`:     text put in the description file of the simulation (default "")
 - `time_start`:      initial simulation time (default 0.)
 - `final_measures`:  measures to make at the end of simulation (default []) see `measure` and `output`
@@ -32,7 +33,25 @@ interrupt.
     checkpoint_interval::Real = 0
     max_time::Real = Inf
     phases
+    # the phases are flattened once, here, so that everything downstream works on a single
+    # list: the phase loop, the position a checkpoint records, the fingerprint that tells
+    # one simulation from another. None of them has to remember to do it, and none of them
+    # can disagree on what the phases of a simulation are.
+    SimData(description, name, time_start, final_measures, time_format, data_format,
+            checkpoint_interval, max_time, phases) =
+        new(description, name, time_start, final_measures, time_format, data_format,
+            checkpoint_interval, max_time, flatten_phases(phases))
 end
+
+"""
+    flatten_phases(phases)
+
+phases may be given as nested vectors, for convenience when a program builds its phases in
+pieces, and `SimData` flattens them into a single list. A phase then has one well defined
+position, which is what a checkpoint records.
+"""
+flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
+flatten_phases(p) = [p]
 
 show(io::IO, s::SimData) =
     print(io,
@@ -99,7 +118,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 cp(src_path, "prog.jl"; force = true)
             end
         end
-        c = Checkpointer(live ? "." : "", phases_id(flatten_phases(sim_data.phases));
+        c = Checkpointer(live ? "." : "", phases_id(sim_data.phases);
                          interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
         if live && has_checkpoint(".")
@@ -156,18 +175,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     end
 end
 
-"""
-    flatten_phases(phases)
-
-phases may be given as nested vectors, for convenience when a program builds its phases in
-pieces. They are flattened into a single list so that a phase has one well defined position,
-which is what a checkpoint records.
-"""
-flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
-flatten_phases(p) = [p]
-
-function log_phase(sim::Simulation, nested::Vector)
-    phases = flatten_phases(nested)
+function log_phase(sim::Simulation, phases::Vector)
     c = sim.checkpoint
     for (i, phase) in enumerate(phases)
         # phases already completed before the checkpoint are not replayed
