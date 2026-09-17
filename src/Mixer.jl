@@ -47,8 +47,10 @@ end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
 
-matrix(a::Function, site::AbstractSite) =
-    matrix(a(site), site)
+# a multi site operator may be defined by a function of its sites, which lets it adapt to
+# them, as in a gate whose dimension is read from the site it acts on
+matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
+    matrix(a(site, sites...), site, sites...)
 
 matrix(a::String, site::AbstractSite, ::AbstractSite...) =
     matrix(operator_info(site, a), site)
