@@ -174,7 +174,7 @@ macro def_operators(site, symbols)
             else
                 push!(e.args,
                     quote
-                        $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                        const $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
                     end)
             end
         end

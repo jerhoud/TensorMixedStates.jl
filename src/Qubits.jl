@@ -89,7 +89,7 @@ controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = co
 
 the qubit Swap operator
 """
-Swap = Operator{2}("Swap", (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2, involution_op)
+const Swap = Operator{2}("Swap", (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2, involution_op)
 
 """
     Phase(t)

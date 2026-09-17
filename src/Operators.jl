@@ -68,16 +68,16 @@ abstract type Op{R <: PM, T <: GI, N} end
 
 the type of generic operators (without site indices), that is `Op{R, Generic, N}`
 """
-GenericOp{R, N} = Op{R, Generic, N}
+const GenericOp{R, N} = Op{R, Generic, N}
 
 """
     IndexedOp{R}
 
 the type of indexed operators (with site indices), that is `Op{R, Indexed, 1}`
 """
-IndexedOp{R} = Op{R, Indexed, 1}
+const IndexedOp{R} = Op{R, Indexed, 1}
 
-SimpleOp = GenericOp{Pure, 1}
+const SimpleOp = GenericOp{Pure, 1}
 
 ############## Showing ###############
 

@@ -147,7 +147,7 @@ get_exp2(_) = Tuple{SimpleOp, SimpleOp}[]
 
 a state function to measure the trace of the system (density matrix). See also `StateFunc` and `trace`.
 """
-Trace = StateFunc("Trace", trace)
+const Trace = StateFunc("Trace", trace)
 
 """
     TraceError
@@ -157,7 +157,7 @@ See also `StateFunc` and `Trace`.
 This is good way to measure the coherence of a simulation as numerical
 inaccuracies tend to change the trace of the density matrix (which should stay 1)
 """
-TraceError = StateFunc("TraceError", st -> 1. - trace(st))
+const TraceError = StateFunc("TraceError", st -> 1. - trace(st))
 
 """
     Trace2
@@ -165,17 +165,17 @@ TraceError = StateFunc("TraceError", st -> 1. - trace(st))
 
 state functions to measure the trace of the square of the density matrix. See also `StateFunc` and `trace2`.
 """
-Trace2 = StateFunc("Trace2", trace2)
+const Trace2 = StateFunc("Trace2", trace2)
 
 @doc (@doc Trace2)
-Purity = StateFunc("Purity", trace2)
+const Purity = StateFunc("Purity", trace2)
 
 """
     Norm
 
 a state function to measure the norm of the state. See also `StateFunc` and `norm`.
 """
-Norm = StateFunc("Norm", norm)
+const Norm = StateFunc("Norm", norm)
 
 """
     Hermiticity
@@ -184,7 +184,7 @@ a state function to measure the degree of hermiticity of the density matrix.
 Return 1 if density matrix is Hermitian, 0 for anti Hermitian, in beyween otherwise.
 Sea also `StateFunc` and `hermiticity`
 """
-Hermiticity = StateFunc("Hermiticity", hermiticity)
+const Hermiticity = StateFunc("Hermiticity", hermiticity)
 
 """
     HermiticityError
@@ -192,7 +192,7 @@ Hermiticity = StateFunc("Hermiticity", hermiticity)
 a state function to measure the deviation of the Hermiticity from 1.
 See `StateFunc`, `Hermiticity` and `hermiticity`.
 """
-HermiticityError = StateFunc("HermiticityError", st -> 1. - hermiticity(st))
+const HermiticityError = StateFunc("HermiticityError", st -> 1. - hermiticity(st))
 
 """
     Renyi2
@@ -200,7 +200,7 @@ HermiticityError = StateFunc("HermiticityError", st -> 1. - hermiticity(st))
 a state function to measure the Renyi-2 entropy of the system.
 See also `StateFunc` and `renyi2`.
 """
-Renyi2 = StateFunc("Renyi2", renyi2)
+const Renyi2 = StateFunc("Renyi2", renyi2)
 
 """
     SubRenyi2([positions...])
@@ -243,14 +243,14 @@ Mutual_Info_Renyi2(part) = StateFunc("Mutual_Info_Renyi2", st -> mutual_info_ren
 a state function to measure the maximum bond dimension.
 See also `StateFunc` and `maxlinkdim`.
 """
-Linkdim = StateFunc("Linkdim", maxlinkdim)
+const Linkdim = StateFunc("Linkdim", maxlinkdim)
 
 """
     MemoryUsage
 
 a state function to measure the memory used by the state. See also `StateFunc`.
 """
-MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
+const MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
 get_val(o::Vector{Measure}, v::Dict, st::State, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o]
