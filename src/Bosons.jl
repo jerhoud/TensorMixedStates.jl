@@ -18,6 +18,7 @@ a site type to represent boson sites, it is parametred by the dimension of the H
 
 - `A` : the destruction operator
 - `N` : the number of bosons operator
+- `Q`, `P` : the position and momentum quadratures
 """
 struct Boson <: AbstractSite
     dim::Int
@@ -35,7 +36,12 @@ dim(a::Boson) = a.dim
     plain_op =>
     [
         A = s -> [ i==j-1 ? sqrt(i) : 0. for i in 1:dim(s), j in 1:dim(s) ]
+    ],
+    selfadjoint_op =>
+    [
+        Q = (A + dag(A)) / √2,
+        P = (A - dag(A)) / (im * √2),
     ]
 ])
 
-@create_site_module(Bosons, [Boson, N, A])
+@create_site_module(Bosons, [Boson, N, A, Q, P])

@@ -21,6 +21,7 @@ a site type to represent q-boson sites, it is parametred by `q` and the dimensio
 
 - `A` : the destruction operator
 - `N` : the number of q-bosons operator
+- `Q`, `P` : the position and momentum quadratures
 """
 struct Qboson <: AbstractSite
     q::Float64
@@ -38,7 +39,12 @@ dim(a::Qboson) = a.dim
     plain_op =>
     [
         A = s -> [ i==j-1 ? sqrt(1-s.q^i) : 0. for i in 1:dim(s), j in 1:dim(s) ]
+    ],
+    selfadjoint_op =>
+    [
+        Q = (A + dag(A)) / √2,
+        P = (A - dag(A)) / (im * √2),
     ]
 ])
 
-@create_site_module(Qbosons, [Qboson, N, A])
+@create_site_module(Qbosons, [Qboson, N, A, Q, P])
