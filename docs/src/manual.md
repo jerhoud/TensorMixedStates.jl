@@ -57,7 +57,7 @@ Here we choose a mixed representation.
 
 States may be added or multiplied by a number (they need to be based on the same system). For example
 
-    ghz = (State{Pure}(system1, "Up") + State{Pure}(system1, "Dn")) / 2
+    ghz = (State{Pure}(system1, "Up") + State{Pure}(system1, "Dn")) / sqrt(2)
 
 We can transform a pure representation into a mixed representation by
 
