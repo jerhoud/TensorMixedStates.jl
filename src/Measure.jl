@@ -115,22 +115,29 @@ struct Check
     Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
 
-function make_obs(o::IndexedOp{Pure})
+"""
+    obs_name(op)
+
+the name a measurement is given when the caller did not choose one: how the operator
+prints, compactly. Only `Operator` carries a name of its own; everything else a
+measurement may be asked for is a composition, whose printed form is its only description.
+`SimpleOp` is abstract, so reading a `name` field would work for a bare `X` and fail for
+`X * Y`, `2X` or `X + Y`.
+"""
+function obs_name(op)
     io = IOBuffer()
-    print(IOContext(io, :compact => true), o)
+    print(IOContext(io, :compact => true), op)
     seek(io, 0)
-    name = read(io, String)
-    ObsOp(name, simplify(o))
+    return read(io, String)
 end
+
+make_obs(o::IndexedOp{Pure}) =
+    ObsOp(obs_name(o), simplify(o))
 make_obs(o::Union{Vector, Matrix}) = make_obs.(o)
 make_obs(o::Tuple{SimpleOp, SimpleOp}) =
-    ObsExp2(first(o).name * last(o).name, o)
-make_obs(o::Identity) =
-    ObsExp1("Id", o)
-make_obs(o::JW_F) =
-    ObsExp1("F", o)   
+    ObsExp2(obs_name(first(o)) * obs_name(last(o)), o)
 make_obs(o::SimpleOp) =
-    ObsExp1(o.name, o)
+    ObsExp1(obs_name(o), o)
 make_obs(o::Number) =
     TimeFunc(string(o), o)
 make_obs(o::String) =

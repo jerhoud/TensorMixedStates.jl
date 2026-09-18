@@ -156,3 +156,27 @@ end
     @test m(ghz, Mutual_Info_Renyi2(2)) ≈ 2L2
     @test m(mix(ghz), Mutual_Info_Renyi2(2)) ≈ 2L2
 end
+
+@testset "Composed operators as measurements" begin
+    # `SimpleOp` is abstract, so a measurement may be any pure one site operator and not
+    # just a named one. Only `Operator` has a name of its own; every other form is a
+    # composition and is named by how it prints
+    sys = System(3, Qubit())
+    st = State{Pure}(sys, ["X+", "Y+", "Z+"])
+    colnames(o) = first.(measure(st, Measure([o]), 0.))
+    @test colnames(X) == ["X"]
+    @test colnames(X * Y) == ["X*Y"]
+    @test colnames(2X) == ["2X"]
+    @test colnames(X + Y) == ["X+Y"]
+    @test colnames(dag(S)) == ["dag(S)"]
+    # these two used to need a method of their own, for want of a name field
+    @test colnames(Id) == ["Id"]
+    @test colnames((Id, X)) == ["IdX"]
+    @test colnames((X, Y)) == ["XY"]
+    # a coefficient rides outside the AtIndex that `(c * A)(i)` builds, so it has to come
+    # off where the one site tensor is made and not only where the name is
+    @test expect1(st, 2X) ≈ 2 * expect1(st, X)
+    @test expect1(mix(st), 2X) ≈ 2 * expect1(mix(st), X)
+    @test expect1(st, 0.5 * (X + Y)) ≈ 0.5 * (expect1(st, X) + expect1(st, Y))
+    @test expect2(st, (2X, 3Y)) ≈ 6 * expect2(st, (X, Y))
+end

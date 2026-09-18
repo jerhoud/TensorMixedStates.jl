@@ -20,6 +20,11 @@ function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
     return t * combinerto(k, j, j')
 end
 
+# `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
+# everything downstream of `tensor_obs` works on the one site tensor alone
+tensor_obs(state::State, a::ScalarOp{Pure, Indexed, 1}) =
+    a.coef * tensor_obs(state, a.arg)
+
 tensor_obs(state::State{Mixed}, i::Int) =
     tensor_trace(state, i) * state.state[i]
 
