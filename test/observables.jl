@@ -65,13 +65,20 @@ end
     @test m[2] ≈ ref atol=1e-10
     # the mixed representation must agree with the pure one
     @test expect2(mix(st), (dag(C), C)) ≈ ref atol=1e-8
-    # expect works on indexed operators, but only once they went through simplify,
-    # which is what inserts the Jordan-Wigner strings (Multi_F for two sites or more)
+    # expect normalises its argument itself, so an operator already put through simplify
+    # and the same product written directly must agree, and both must match the reference.
+    # What simplify inserts here is the Jordan-Wigner strings (Multi_F for two sites or
+    # more), which is exactly what a bare product would otherwise be missing.
     stm = mix(st)
     for d in 1:n - 1
         op = simplify(dag(C)(1) * C(1 + d))
         @test expect(st, op) ≈ ref[1, 1 + d] atol=1e-10
         @test expect(stm, op) ≈ ref[1, 1 + d] atol=1e-8
+        @test expect(st, dag(C)(1) * C(1 + d)) ≈ ref[1, 1 + d] atol=1e-10
+        @test expect(stm, dag(C)(1) * C(1 + d)) ≈ ref[1, 1 + d] atol=1e-8
+        # factors in descending order used to recontract a tensor already consumed, and
+        # swapping two fermionic operators costs the anticommutation sign
+        @test expect(st, C(1 + d) * dag(C)(1)) ≈ -ref[1, 1 + d] atol=1e-10
     end
 end
 

@@ -262,12 +262,24 @@ Expector() =
     Expector(0, ITensor())
 
 
+"""
+    check_ascending(::Expector, i)
+
+the zipper only ever moves forward, so a product whose factors are not in ascending site
+order would silently recontract a tensor it has already consumed. `simplify` puts them in
+order, this guards the internal callers that skip it.
+"""
+check_ascending(a::Expector, i::Int) =
+    i < a.pos && error("expect needs its operator in the form simplify produces, " *
+                       "with one factor per site in ascending order")
+
 zipto(state::State{Pure}, a::Expector, i::Int) = 
     if a.pos == 0
         Expector(i, get_left(state, i))
     elseif a.pos == i
         a
     else
+        check_ascending(a, i)
         st = state.state
         t = a.t * dag(st[a.pos]')
         for k in a.pos+1:i-1
@@ -285,6 +297,7 @@ zipto(state::State{Mixed}, a::Expector, i::Int) =
     elseif a.pos == i
         a
     else
+        check_ascending(a, i)
         t = a.t
         for k in a.pos+1:i-1
             t *= get_loc(state, k)
@@ -310,7 +323,13 @@ function expectfactor(state::State, a::Expector, o::Multi_F)
 end
 
 
-function expect(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}})
+"""
+    expect_norm(::State, obs)
+
+expectation values of an operator already in the form `simplify` produces. This is what
+`measure` uses, its operators having been normalised once and for all by `make_obs`.
+"""
+function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}})
     if coef == 0.
         return 0.
     end
@@ -327,22 +346,28 @@ end
 
 Compute expectation values of `obs` on the given state.
 
+`obs` is simplified first, so its factors may be given in any order and the Jordan-Wigner
+strings of fermionic operators are inserted for you.
+
 # Examples
     expect(state, X(1)*Y(2) + Y(1)*Z(3))
     expect(state, [X(1)*Y(2), X(3), Z(1)*X(2)])
+    expect(state, C(3)*dag(C)(1))
 
 """
-expect(state::State, p::IndexedOp{Pure}) =
-    expect(state, scalarcoef(p), prodsubs(p))
-    
-expect(state::State, op::SumOp{Pure, Indexed}) =
+expect(state::State, op) = expect_norm(state, simplify(op))
+
+expect_norm(state::State, p::IndexedOp{Pure}) =
+    expect_norm(state, scalarcoef(p), prodsubs(p))
+
+expect_norm(state::State, op::SumOp{Pure, Indexed}) =
     sum(op.subs) do p
-        expect(state, p)
+        expect_norm(state, p)
     end
 
-expect(state::State, op) =
+expect_norm(state::State, op) =
     map(op) do o
-        expect(state, o)
+        expect_norm(state, o)
     end
 
 expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =

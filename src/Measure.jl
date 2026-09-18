@@ -361,7 +361,8 @@ function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
     vals = Dict()
     prods = collect(Set(get_prods(m)))
     if !isempty(prods)
-        push!(vals, (prods .=> expect(state, prods))...)
+        # make_obs simplified them once, there is nothing left for expect to normalise
+        push!(vals, (prods .=> expect_norm(state, prods))...)
     end
     exp1s = collect(Set(get_exp1(m)))
     if !isempty(exp1s)
