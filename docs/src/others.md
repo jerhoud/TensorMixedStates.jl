@@ -41,7 +41,7 @@ and
 
     coefs = [ t -> exp(-t), t -> sin(t) ]
 
-`h` is passed as usual to `tdvp` or `approx_W` and `coefs` is passed as a keyword argument called `coefs`.
+`hs` is passed as usual to `tdvp` or `approx_W` and `coefs` is passed as a keyword argument called `coefs`.
 When using `Simulation` the simulation time is used for `t`, for `State` the initial simulation time is passed as a keyword argument called `time_start` (which default to 0)
 
     tdvp(hs, duration, initial_state; coefs, time_start)

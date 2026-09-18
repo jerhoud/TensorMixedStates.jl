@@ -119,7 +119,7 @@ Many operations are defined on generic operators:
 - tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`)
 - `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``.
 - `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the jump operator that may flip a qubit toward up (`Sp` is the ``S^+`` operator)
-- `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9 Gate(Id) + 0.1 Gate(X)` is a noisy gate operator that will apply an ``\sigma_x`` gate 10 percent of the time.
+- `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply an ``\sigma_x`` gate 10 percent of the time.
 - `Proj` represents an operator that projects on the given state, for example `Proj("Up")` projects qubits on the up state.
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`
 - `controlled` for qubits makes controlled gates: `CX = controlled(X)`
@@ -159,7 +159,7 @@ the keyword argument `limits` fixes the constraints to apply
 
 We can compute ground states with `dmrg`
 
-    groundstate, energy = dmrg(hamiltonian, startstate; options...)
+    energy, groundstate = dmrg(hamiltonian, startstate; options...)
 
 the options are `limits` to set constraints and `nsweeps` to fix the number of sweeps among others.
 
@@ -358,7 +358,7 @@ several `Gates` phases, which gives resume points at no cost.
 Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair or list of pairs.
 
     measures = destination => measurements
-    measures = [ dest1 => meas1, dest2 => meas 2, ...]
+    measures = [ dest1 => meas1, dest2 => meas2, ...]
 
 The possible measurements are described in the measurements section of this manual. There are three types of destinations:
 

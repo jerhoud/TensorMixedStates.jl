@@ -176,7 +176,7 @@ the type of base operators (like `X`, `Swap`, `C` ...),
 `N` is the number of sites on which it may be applied.
 
 # Example
-    Operator{1}("X", Nothing, involution_op)     a base operator whose value is predefined by the sites
+    Operator{1}("X", nothing, involution_op)  # value predefined by the sites
     Operator{1}("Z", [1 0 ; 0 -1], involution_op)
     Operator{2}("Swap", [ 1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
     Operator{1}("Sx", (Sp + Sm) / 2, selfadjoint_op)
@@ -408,7 +408,7 @@ tensor product for generic operators, alternative syntax: tensor(op1, op2)
 # Examples
 
     controlled(op) = Proj("Up") ⊗ Id + Proj("Dn") ⊗ op
-    Rxy(t) = exp(im * t * (X ⊗ X + Y ⊗ Y) / 4)
+    Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
 
 """
 (a::GenericOp{Pure, N} ⊗ b::GenericOp{Pure, M}) where {N, M} =

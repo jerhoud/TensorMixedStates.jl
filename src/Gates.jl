@@ -9,7 +9,7 @@ Apply the given gates to the state and truncate the result according to limits.
 It is much more efficient to apply all the gates in a single call to apply.
 
 # Examples
-    apply(CZ(1,3)*H(2)*CNOT(3,4), state)
+    apply(controlled(Z)(1, 3)*H(2)*controlled(X)(3, 4), state)
 
 """
 apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =

@@ -56,7 +56,8 @@ tdvp(op, t::Number, state::State; kwargs...) =
 
 optimize for ground state of the given Hamiltonian starting with state / simulation using dmrg.
 
-Note that Dmrg does not work for mixed representations.
+return `(energy, state)`, the energy first, and note that Dmrg does not work for mixed
+representations.
 
 # Options
 

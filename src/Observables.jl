@@ -517,7 +517,7 @@ function entanglement_entropy(state::State, pos::Int)
 end
 
 """
-    partial_trace(::State, ::Vector{Int} [; keepers = true])
+    partial_trace(::State, ::Vector{Int} [; keepers = false])
 
 return the state partially traced at the given positions
 alternatively one can give the positions to keep by setting `keepers = true`

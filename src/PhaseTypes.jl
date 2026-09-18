@@ -122,8 +122,8 @@ An algorithm type for `Evolve`
 
 # Examples
     Tdvp()
-    Tdvp(n_expand = 5)     tdvp with expansion steps every 5 steps
-    Tdvp(n_hermitianize = 3) tdvp, make hermitian every 3 steps
+    Tdvp(n_expand = 5)        # tdvp with expansion steps every 5 steps
+    Tdvp(n_hermitianize = 3)  # tdvp, make hermitian every 3 steps
 """
 @kwdef struct Tdvp
     n_expand::Int = 0
@@ -139,9 +139,9 @@ An algorithm type for `Evolve`
 This corresponds to time evolution with exponential approximation WI or WII combined to obtained approximation of the given order
 
 # Examples
-    ApproxW(order = 2)                   order 2, WII
-    ApproxW(order = 4, w = 1)            order 4, WI
-    ApproxW(order = 4, n_hermitianize = 3) order 4, make hermitian every 3 steps
+    ApproxW(order = 2)                     # order 2, WII
+    ApproxW(order = 4, w = 1)              # order 4, WI
+    ApproxW(order = 4, n_hermitianize = 3) # order 4, make hermitian every 3 steps
 """
 @kwdef struct ApproxW
     order::Int
@@ -207,7 +207,7 @@ A phase type for applying gates
 
 # Examples
 
-    Gates(gates = CNOT(1, 3)*CZ(2,4), limits = Limits(cutoff=1e-10, maxdim = 20))
+    Gates(gates = controlled(X)(1, 3)*controlled(Z)(2, 4), limits = Limits(cutoff=1e-10, maxdim = 20))
 """
 @kwdef struct Gates
     name::String = "Applying gates"

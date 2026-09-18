@@ -14,13 +14,13 @@ represent a quantum system
 # Examples
 
     System(10, Qubit())
-    System([Qubit(), SpinOne(), Qubit(), Boson(5)])
+    System([Qubit(), Spin(1), Qubit(), Boson(5)])
 
 # Indexation
 
-    system[i]                  gives site i
-    SysIndex{Pure}(system, i)  gives pure index i
-    SysIndex{Mixed}(system, i) gives mixed index i
+    system[i]                  # gives site i
+    SysIndex{Pure}(system, i)  # gives pure index i
+    SysIndex{Mixed}(system, i) # gives mixed index i
 """
 struct System
     sites::Vector{<:AbstractSite}

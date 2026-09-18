@@ -81,7 +81,7 @@ represent the complete state of the simulated quantum system
     State{Pure}(system, [1, 0])
     State{Pure}(10, Qubit(), "Up")
     State{Mixed}([Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])
-    State(state, mps)        returns a new state with the same system but a new mps
+    State(state, mps)        # a new state with the same system but a new mps
 
 # Operations
 

@@ -7,7 +7,7 @@ a site type to represent Tj sites (like Electron sites without the up and down s
 
 # Examples
 
-    Electron()
+    Tj()
 
 # States
 
