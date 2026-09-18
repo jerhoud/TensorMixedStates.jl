@@ -287,6 +287,11 @@ show(io::IO, a::SumOp) =
 
 isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
 (a::SumOp == b::SumOp) = a.subs == b.subs
+# `Set` and `Dict` pick their bucket by `hash` and only then compare, so a type with an
+# `==` of its own needs a matching `hash` or two equal operators land apart. `subs` is a
+# Vector, whose identity the default hash follows rather than its contents. `Measure`
+# relies on this to ask for a measurement shared by two observables only once.
+hash(a::SumOp, h::UInt) = hash(a.subs, hash(:SumOp, h))
 
 
 ################ Product by a number #############
@@ -370,6 +375,7 @@ show(io::IO, a::ProdOp) =
 
 isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
 (a::ProdOp == b::ProdOp) = a.subs == b.subs
+hash(a::ProdOp, h::UInt) = hash(a.subs, hash(:ProdOp, h))
 
 
 ############### Tensor products ############
@@ -417,6 +423,7 @@ show(io::IO, a::TensorOp) =
 
 isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
 (a::TensorOp == b::TensorOp) = a.subs == b.subs
+hash(a::TensorOp, h::UInt) = hash(a.subs, hash(:TensorOp, h))
 
 
 ############# Jordan_Wigner transformation ##############
@@ -530,6 +537,7 @@ show(io::IO, ind::AtIndex) =
 isless(a::AtIndex, b::AtIndex) =
     isless((a.index, a.op), (b.index, b.op))
 (a::AtIndex == b::AtIndex) = a.op == b.op && a.index == b.index
+hash(a::AtIndex, h::UInt) = hash(a.index, hash(a.op, hash(:AtIndex, h)))
 
 
 ############## Mixers ###############

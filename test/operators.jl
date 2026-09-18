@@ -111,3 +111,24 @@ end
     # an integer exponent needs none of this care
     @test simplify((-X - X)^2) == 4Id
 end
+
+@testset "Operators as dictionary keys" begin
+    # a type with an `==` of its own needs a matching `hash`: `Set` and `Dict` pick their
+    # bucket by hash and only compare within it, so two equal operators would otherwise
+    # land apart. The default hash follows the identity of the `subs` vector rather than
+    # its contents, so it does not do
+    for (a, b) in [(X(1) * Y(2), X(1) * Y(2)),                          # ProdOp
+                   (X(1) + Y(2), X(1) + Y(2)),                          # SumOp
+                   (X ⊗ Y, X ⊗ Y),                                      # TensorOp
+                   ((X * Y)(3), (X * Y)(3)),                            # AtIndex of a product
+                   (X(1) * Y(2) + (X * Y)(3), X(1) * Y(2) + (X * Y)(3))]
+        @test a == b
+        @test hash(a) == hash(b)
+        @test length(Set([a, b])) == 1
+    end
+    # and operators that differ must keep differing
+    @test length(Set([X(1) * Y(2), X(1) * Z(2)])) == 2
+    # what it is for: a product shared by two measurements is asked for only once
+    m = Measure([X(1) * Y(2) + Z(1), X(1) * Y(2) + Z(3)])
+    @test length(Set(TensorMixedStates.get_prods(m))) == 3
+end
