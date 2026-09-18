@@ -87,6 +87,26 @@ get_sim_file(sim::Simulation, data::Data) =
         Dict()
     end
 
+"""
+    close_sim_files(::Simulation)
+
+write the dictionaries collected for the json destinations and close the files opened for
+the simulation. The standard streams are destinations like any other but they belong to
+the process, so they are left alone, the same way `save_checkpoint` leaves them alone.
+"""
+function close_sim_files(sim::Simulation)
+    for (filename, data) in sim.files
+        if data isa Dict
+            open(filename, "w") do io
+                JSON.print(io, data)
+            end
+        elseif data ∉ (stdout, stderr, devnull)
+            close(data)
+        end
+    end
+    return nothing
+end
+
 length(sim::Simulation) = length(sim.state)
 
 maxlinkdim(sim::Simulation) = maxlinkdim(sim.state)

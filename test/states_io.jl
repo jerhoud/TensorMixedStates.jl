@@ -116,3 +116,47 @@ end
     @test sort(names(df1)) == ["Norm", "time"]
     @test size(df1) == (2, 2)
 end
+
+@testset "Standard streams are not closed" begin
+    # "stdout", "stderr" and "" are output destinations like any other, but the streams
+    # they name belong to the process and a simulation must leave them open on its way
+    # out. The run is redirected so that a regression cannot take the output of the test
+    # run down with it.
+    mktempdir() do dir
+        cd(dir) do
+            phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Gates(gates = X(1),
+                      final_measures = ["stdout" => Z, "stderr" => Norm, "" => Linkdim]),
+            ]
+            still_open = open("captured", "w") do io
+                redirect_stdout(io) do
+                    redirect_stderr(io) do
+                        runTMS(SimData(; name = "streams", phases))
+                        (isopen(stdout), isopen(stderr))
+                    end
+                end
+            end
+            @test still_open == (true, true)
+        end
+    end
+end
+
+@testset "Output survives a failing phase" begin
+    # a phase that fails must not take away what was collected before it: a json
+    # destination is only written when the simulation closes its files, so that has to
+    # happen on the way out of an exception too
+    mktempdir() do dir
+        cd(dir) do
+            boom = StateFunc("boom", _ -> error("phase failure on purpose"))
+            phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Gates(gates = X(1), final_measures = ["data.json" => Norm]),
+                Gates(gates = X(1), final_measures = ["data.json" => boom]),
+            ]
+            @test_throws ErrorException runTMS(SimData(; name = "failing", phases))
+            @test isfile(joinpath("failing", "data.json"))
+            @test occursin("Norm", read(joinpath("failing", "data.json"), String))
+        end
+    end
+end

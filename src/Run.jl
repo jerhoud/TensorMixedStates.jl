@@ -121,44 +121,42 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         c = Checkpointer(live ? "." : "", phases_id(sim_data.phases);
                          interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
-        if live && has_checkpoint(".")
-            state, phase_time, phase, sweep, positions, data, id = load_checkpoint(".")
-            if id ≠ c.id
-                error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
-                      "its phases are not the ones being run. Use restart = true to start over " *
-                      "and erase it, or choose another name.")
-            end
-            truncate_outputs(".", positions)
-            merge!(sim.data, data)
-            c.phase, c.skip, c.phase_time = phase, sweep, phase_time
-            c.appending = c.resuming = true
-            sim = Simulation(sim, state, phase_time)
-            log_msg(sim, "Resuming from checkpoint: phase $phase, sweep $sweep, simulation time $phase_time")
-        end
         try
-            sim = log_phase(sim, sim_data)
-        catch e
-            # an interrupt is a request to stop cleanly, anything else is a real failure
-            e isa InterruptException || rethrow()
-            log_msg(sim, "\n***** Interrupted, writing a checkpoint *****")
-            # the state of the interrupted sweep, the one the phase never got to return
-            st = c.state isa State ? c.state : sim.state
-            if st isa State
-                save_checkpoint(c, sim, st, c.simtime, c.sweep)
-                # the returned simulation must carry what was reached, not what the phase
-                # was handed when it started
-                sim = Simulation(sim, st, c.simtime)
+            if live && has_checkpoint(".")
+                state, phase_time, phase, sweep, positions, data, id = load_checkpoint(".")
+                if id ≠ c.id
+                    error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
+                          "its phases are not the ones being run. Use restart = true to start over " *
+                          "and erase it, or choose another name.")
+                end
+                truncate_outputs(".", positions)
+                merge!(sim.data, data)
+                c.phase, c.skip, c.phase_time = phase, sweep, phase_time
+                c.appending = c.resuming = true
+                sim = Simulation(sim, state, phase_time)
+                log_msg(sim, "Resuming from checkpoint: phase $phase, sweep $sweep, simulation time $phase_time")
             end
-            c.stopping = true
-        end
-        for (filename, data) in sim.files
-            if data isa Dict
-                io = open(filename, "w")
-                JSON.print(io, data)
-                close(io)
-            else
-                close(data)
+            try
+                sim = log_phase(sim, sim_data)
+            catch e
+                # an interrupt is a request to stop cleanly, anything else is a real failure
+                e isa InterruptException || rethrow()
+                log_msg(sim, "\n***** Interrupted, writing a checkpoint *****")
+                # the state of the interrupted sweep, the one the phase never got to return
+                st = c.state isa State ? c.state : sim.state
+                if st isa State
+                    save_checkpoint(c, sim, st, c.simtime, c.sweep)
+                    # the returned simulation must carry what was reached, not what the phase
+                    # was handed when it started
+                    sim = Simulation(sim, st, c.simtime)
+                end
+                c.stopping = true
             end
+        finally
+            # a failing phase must not take away what was collected before it: the json
+            # destinations are only written when the files are closed, so that has to
+            # happen on the way out of an exception too
+            close_sim_files(sim)
         end
         if live
             rm("running")
