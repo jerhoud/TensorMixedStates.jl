@@ -20,11 +20,39 @@ A type to hold MPS limits
 # Fields
 - `cutoff`: the cutoff under which singular values are neglected
 - `maxdim`: the maximum bond dimension
+
+Either field may be given one value per sweep, as a vector, for a phase that sweeps:
+`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A
+schedule shorter than the number of sweeps is continued with its last value, which is
+what ITensor does too.
+
+# Examples
+
+    Limits(cutoff = 1e-14, maxdim = 100)
+    Limits(cutoff = 1e-14, maxdim = [10, 20, 50, 100])
 """
 @kwdef struct Limits
     cutoff::Union{Float64, Vector{Float64}} = 0.
     maxdim::Union{Int, Vector{Int}} = typemax(Int)
 end
+
+"""
+    sweep_value(x, sweep)
+    sweep_limits(::Limits, sweep)
+
+the value a per sweep schedule takes on the given sweep, and the `Limits` holding those
+values. A plain value covers every sweep, and a schedule shorter than the number of sweeps
+is continued with its last value, as ITensor does with its own.
+
+`dmrg` is handed the whole schedule and walks it itself, so it needs none of this; the
+evolution solvers drive their sweeps one at a time and have to pick the value out for each
+one. Sweeps are counted from the start of the phase there, `first_sweep` included, so an
+evolution resumed from a checkpoint lands back on the value its sweep was due.
+"""
+sweep_value(x, ::Int) = x
+sweep_value(x::Vector, sweep::Int) = x[min(sweep, length(x))]
+sweep_limits(l::Limits, sweep::Int) =
+    Limits(sweep_value(l.cutoff, sweep), sweep_value(l.maxdim, sweep))
   
 """
     struct State{R <: PM}

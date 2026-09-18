@@ -97,6 +97,35 @@ end
     @test expect(st, X(2)) ≈ cos(1.0) atol = 1e-13
 end
 
+@testset "Per sweep limits in an evolution" begin
+    # `cutoff` and `maxdim` may be given one value per sweep. dmrg is handed the whole
+    # schedule, but the evolution solvers drive their sweeps themselves and have to pick
+    # the value out for each one, so what is checked is that a schedule does sweep by
+    # sweep exactly what the same limits do one sweep at a time
+    n = 6
+    sys = System(n, Qubit())
+    h = sum(-Z(i) * Z(i + 1) for i in 1:n - 1) - sum(1. * X(i) for i in 1:n)
+    st0 = State{Pure}(sys, "X+")
+    sched = [2, 4, 4, 8]
+    for solver in [tdvp, approx_W]
+        chained = foldl(sched; init = st0) do st, m
+            solver(-im * h, 0.1, st; nsweeps = 1, limits = Limits(cutoff = 1e-14, maxdim = m))
+        end
+        scheduled = solver(-im * h, 0.4, st0;
+                           nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = sched))
+        @test maxlinkdim(scheduled) == maxlinkdim(chained)
+        @test expect1(scheduled, Z) ≈ expect1(chained, Z)
+        # a constant schedule is the plain value, and one shorter than the sweeps keeps
+        # its last value for the rest of them
+        flat = solver(-im * h, 0.4, st0; nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = 4))
+        for m in [[4, 4, 4, 4], [4]]
+            st = solver(-im * h, 0.4, st0;
+                        nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = m))
+            @test expect1(st, Z) ≈ expect1(flat, Z)
+        end
+    end
+end
+
 @testset "Noisy gates" begin
     @test_ok test_phases([
         CreateState{Mixed}(1, Qubit(),"Up"),

@@ -81,11 +81,10 @@ end
 
 function run_phase(sim::Simulation, phase::GroundState)
     done = first_sweep!(sim.checkpoint) - 1
-    nsweeps = phase.nsweeps - done
-    log_msg(sim, "Optimizing state with $nsweeps sweeps of Dmrg")
-    nsweeps ≤ 0 && return sim
-    e, sim = dmrg(phase.hamiltonian, sim; nsweeps,
-        limits = resume_schedule(phase.limits, done), noise = resume_schedule(phase.noise, done),
+    log_msg(sim, "Optimizing state with $(phase.nsweeps - done) sweeps of Dmrg")
+    done ≥ phase.nsweeps && return sim
+    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, first_sweep = done + 1,
+        phase.limits, phase.noise,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim
@@ -117,11 +116,10 @@ function run_phase(sim::Simulation, phase::SteadyState)
         error("state must be in mixed representation for computing steady state")
     end
     done = first_sweep!(sim.checkpoint) - 1
-    nsweeps = phase.nsweeps - done
-    log_msg(sim, "Searching for steady state with $nsweeps sweeps of Dmrg")
-    nsweeps ≤ 0 && return sim
+    log_msg(sim, "Searching for steady state with $(phase.nsweeps - done) sweeps of Dmrg")
+    done ≥ phase.nsweeps && return sim
     e, sim = steady_state(phase.lindbladian, sim;
-        nsweeps, limits = resume_schedule(phase.limits, done), phase.mpo_limits, alg = phase.mpo_algo,
+        phase.nsweeps, first_sweep = done + 1, phase.limits, phase.mpo_limits, alg = phase.mpo_algo,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
     log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
     return sim

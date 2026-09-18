@@ -163,6 +163,28 @@ end
     @test rs([1, 2, 3], 5) == [3]                   # a schedule that ran out keeps its last
     @test rs(Limits(cutoff = 1e-14, maxdim = [2, 4, 8]), 1).maxdim == [4, 8]
 
+    # the evolution solvers pick their value out sweep by sweep instead, so that the
+    # sweep numbers of the phase, which a resume keeps, land on the right one
+    sv, sl = TensorMixedStates.sweep_value, TensorMixedStates.sweep_limits
+    @test sv(1e-8, 3) == 1e-8                       # one value covers every sweep
+    @test sv([2, 4, 8], 2) == 4
+    @test sv([2, 4, 8], 7) == 8                     # a schedule that ran out keeps its last
+    @test sl(Limits(cutoff = 1e-14, maxdim = [2, 4, 8]), 3) ==
+          Limits(cutoff = 1e-14, maxdim = 8)
+
+    # `first_sweep` is what hides that difference from the phases: dmrg is asked for the
+    # sweeps that are left and handed the tail of its schedules, so resuming at sweep 3 of
+    # 4 has to be the same run as asking for 2 sweeps with that tail written out by hand
+    sys = System(6, Qubit())
+    ham = sum(-Z(i) * Z(i + 1) for i in 1:5) - sum(1. * X(i) for i in 1:6)
+    st = State{Pure}(sys, "Z+")
+    e1, _ = dmrg(ham, st; nsweeps = 4, first_sweep = 3,
+                 limits = Limits(cutoff = 1e-14, maxdim = [2, 2, 8, 8]),
+                 noise = [1e-2, 1e-3, 0., 0.])
+    e2, _ = dmrg(ham, st; nsweeps = 2,
+                 limits = Limits(cutoff = 1e-14, maxdim = [8, 8]), noise = [0., 0.])
+    @test e1 == e2
+
     # a ground state resuming half way has to go on with the maxdim its sweep was due, not
     # start the schedule over, which would truncate a state the uninterrupted run kept
     mktempdir() do dir
@@ -180,6 +202,34 @@ end
             ]
             runTMS(SimData(; name = "ref", phases))
             stop_in[] = 1
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+        end
+    end
+
+    # an evolution counts its sweeps from the start of the phase and resumes on that
+    # count, so its schedule has to be read at the sweep being run, not restarted
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            stopper = StateFunc("Stopper", _ -> (stop_in[] > 0 && (stop_in[] -= 1) == 0 &&
+                                                 touch("stop"); 0.))
+            phases = [
+                CreateState{Pure}(6, Qubit(), "X+"),
+                Evolve(duration = 0.4, time_step = 0.1, algo = Tdvp(),
+                       evolver = -im * (sum(-Z(i) * Z(i + 1) for i in 1:5) -
+                                        sum(1. * X(i) for i in 1:6)),
+                       limits = Limits(maxdim = [2, 2, 8, 8], cutoff = 1e-14),
+                       measures = ["data" => [Linkdim, X(1), Z(1)Z(2), stopper]]),
+            ]
+            runTMS(SimData(; name = "ref", phases))
+            # the link dimension really does follow the schedule, otherwise the run below
+            # would agree with the reference for want of anything to disagree about
+            @test length(unique(l -> split(l)[1] == "Linkdim" ? split(l)[3] : "",
+                                readlines("ref/data"))) > 2
+            stop_in[] = 2
             sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
             runTMS(sim_data)
             runTMS(sim_data)

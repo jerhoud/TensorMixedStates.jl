@@ -251,6 +251,11 @@ end
 `done + 1` has to be handed the tail of those schedules, otherwise it would start them over
 and run the remaining sweeps with the wrong ones. A schedule that runs out is continued
 with its last value, which is what ITensor does with a schedule shorter than its sweeps.
+
+This is for `dmrg` alone, which is handed the whole schedule and counts its sweeps from 1
+on every call. The evolution solvers keep the sweep numbers of the phase across a resume
+and pick their value out sweep by sweep with `sweep_limits`, so handing them a tail would
+skip part of the schedule twice.
 """
 resume_schedule(x, ::Int) = x
 resume_schedule(x::Vector, done::Int) =

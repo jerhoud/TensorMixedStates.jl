@@ -13,6 +13,7 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 - `coefs`: coefficients for time dependent evolver
 - `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
 - `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
+- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
 - others are identical to ITensorMPS.tdvp
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
@@ -30,9 +31,10 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             tf = current_time - dt / 2
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
-        st = tdvp(mpo, dt, st; nsweeps = 1, limits.cutoff, limits.maxdim, kwargs...)
+        lim = sweep_limits(limits, sweep)
+        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, kwargs...)
         if n_hermitianize ≠ 0 && mod(sweep, n_hermitianize) == 0
-            st = hermitianize(State(state, st); limits).state
+            st = hermitianize(State(state, st); limits = lim).state
         end    
         measure!(observer!; sweep, state = st, current_time, mpo)
         if n_expand ≠ 0 && mod(sweep, n_expand) == 0
@@ -58,13 +60,24 @@ Note that Dmrg does not work for mixed representations.
 
 # Options
 
-- `nsweeps`: number of sweeps
+- `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run
+- `first_sweep`: sweep to start from (default 1), to continue an optimization left unfinished
 - `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with different values for each sweep)
+- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
+- `noise`: the noise to apply, a number or one value per sweep
 - others identical to ITensorMPS.dmrg
 """
-function dmrg(mpo::MPO, state::State; nsweeps = 1, observer! = NoObserver(), limits::Limits=Limits(), kwargs...)
-    e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps, observer = observer!, limits.cutoff, limits.maxdim, kwargs...)
+function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = NoObserver(),
+              limits::Limits = Limits(), noise = 0., kwargs...)
+    # ITensorMPS counts its sweeps from 1 and offers no way to start elsewhere, so a run
+    # resuming at `first_sweep` asks for the sweeps it has left and is handed the tail of
+    # its per sweep schedules. `tdvp` and `approx_W` drive their own loop and keep the
+    # sweep numbers of the run instead, which is why only this one has to adapt.
+    done = first_sweep - 1
+    lim = resume_schedule(limits, done)
+    e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps = nsweeps - done,
+                 observer = observer!, lim.cutoff, lim.maxdim,
+                 noise = resume_schedule(noise, done), kwargs...)
     return (e, State(state, st))
 end
 
@@ -128,7 +141,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `w`: 1 or 2 for WI or WII
 - `observer!`: observer (see ApproxWObserver)
 - `time_start`: the simulation time at the beginning of evolution
-- `limits`: MPS constraints
+- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(),
@@ -145,11 +158,12 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
             tf = current_time - dt / 2
             mpos = make_approx_W(pre, dt; order, w, coefs = map(f->f(tf), coefs))
         end
+        lim = sweep_limits(limits, sweep)
         for mpo in mpos
-            st = apply(mpo, st; limits.cutoff, limits.maxdim, kwargs...)
+            st = apply(mpo, st; lim.cutoff, lim.maxdim, kwargs...)
         end
         if n_hermitianize ≠ 0 && mod(sweep, n_hermitianize) == 0
-            st = hermitianize(State(state, st); limits).state;
+            st = hermitianize(State(state, st); limits = lim).state;
         end
         measure!(observer!; sweep, state = st, current_time, mpos)
         if checkdone!(observer!; sweep, state = st, current_time)
@@ -170,9 +184,10 @@ compute the steady state of the given Lindbladian starting on the given mixed st
 return achieved "energy" (which should be zero) and computed steady state
 
 # Options
-- `nsweeps`: number of sweeps
+- `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run
+- `first_sweep`: sweep to start from (default 1), to continue a search left unfinished
 - `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with different values for each sweep)
+- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
 - `mpo_limits`: sets the limit on the MPO of (L+)L (default is no truncation)
 - `alg`: is "naive"(default) or "zipup": alorithm to compute (L+)L 
 - others identical to ITensorMPS.dmrg
