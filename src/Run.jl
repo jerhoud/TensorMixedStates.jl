@@ -13,8 +13,8 @@ A type for describing a simulation to use with `runTMS`
 - `descritpion`:     text put in the description file of the simulation (default "")
 - `time_start`:      initial simulation time (default 0.)
 - `final_measures`:  measures to make at the end of simulation (default []) see `measure` and `output`
-- `time_format`:     C like format for output of simulation time (default "%8.4g")
-- `data_format`:     C like format for output of simulation data (default "%12.6g")
+- `time_format`:     C like format for output of simulation time (default `$default_time_format`)
+- `data_format`:     C like format for output of simulation data (default `$default_data_format`)
 - `checkpoint_interval`: seconds between two checkpoints (default 0, no checkpointing)
 - `max_time`:        seconds after which the simulation stops cleanly (default `Inf`)
 
@@ -28,8 +28,8 @@ interrupt.
     name::String = "simulation"
     time_start::Number = 0.
     final_measures = []
-    time_format::String = "%8.4g"
-    data_format::String = "%14.8g"
+    time_format::String = default_time_format
+    data_format::String = default_data_format
     checkpoint_interval::Real = 0
     max_time::Real = Inf
     phases

@@ -18,6 +18,17 @@ before using this function.
 function DataToFrame end
 
 """
+    default_time_format
+    default_data_format
+
+the C like formats used to write simulation times and measured values. `Simulation` and
+`SimData` both default to them, and have to agree: a `Simulation` built by `runTMS` is
+given the formats of the `SimData`, one built directly falls back to these.
+"""
+const default_time_format = "%8.4g"
+const default_data_format = "%14.8g"
+
+"""
     Simulation(state[; time = 0])
     Simulation(sim, state[, time = sim.time])
 
@@ -43,7 +54,9 @@ struct Simulation
     data::Dict{String, Dict}
     formats::Tuple{Printf.Format, Printf.Format}
     checkpoint::Checkpointer
-    Simulation(state::Union{Nothing, State}; time::Number = 0, output = nothing, time_format::String = "%8.4g", data_format::String = "%12.6g", checkpoint::Checkpointer = Checkpointer()) =
+    Simulation(state::Union{Nothing, State}; time::Number = 0, output = nothing,
+               time_format::String = default_time_format, data_format::String = default_data_format,
+               checkpoint::Checkpointer = Checkpointer()) =
         new(state, time, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)), checkpoint)
     Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
         new(st, t, s.output, s.files, s.data, s.formats, s.checkpoint)
