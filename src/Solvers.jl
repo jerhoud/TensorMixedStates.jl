@@ -122,9 +122,6 @@ function make_approx_W(pre::PreMPO, t::Number; order::Int, w::Int, coefs = [1.])
     end
 end
 
-make_approx_W(op, t::Number, state::State; order::Int, w::Int) =
-    make_approx_W(PreMPO(state, op), t; order, w)
-
 """
     approx_W(evolver, t, ::State; options...)
     approx_W(evolver, t, ::Simulation; options...)
@@ -198,8 +195,11 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
     observer! = NoObserver(), mpo_limits::Limits = Limits(), alg::String = "naive", kwargs...)
     l = make_mpo(state, op)
     if alg == "naive"
-        truncate = (mpo_limits != Limits())
-        l2 = apply(replaceprime(dag(l)', 2=>0), l; mpo_limits.cutoff, mpo_limits.maxdim, alg, truncate)
+        # named apart from `truncate`, which is imported and has a method for States: a
+        # local binding of that name would shadow it for the whole function body
+        do_truncate = (mpo_limits != Limits())
+        l2 = apply(replaceprime(dag(l)', 2=>0), l;
+                   mpo_limits.cutoff, mpo_limits.maxdim, alg, truncate = do_truncate)
     else
         l2 = apply(replaceprime(dag(l)', 2=>0), l; mpo_limits.cutoff, mpo_limits.maxdim, alg)
     end

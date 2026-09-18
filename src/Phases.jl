@@ -1,6 +1,22 @@
 run_phase(sim::Simulation, sd::SimData) =
     log_phase(sim, sd.phases)
 
+"""
+    as_representation(sim, R, ::State)
+
+the given state in representation `R`, for a `CreateState` handed a `State` object rather
+than a description of one. A pure state is mixed on the way in, which is what `type` asked
+for; the other direction does not exist, a mixed state holds no purification to go back to.
+"""
+as_representation(::Simulation, ::Type{R}, state::State{R}) where R = state
+as_representation(sim::Simulation, ::Type{Mixed}, state::State{Pure}) = begin
+    log_msg(sim, "Creating mixed representation with $(length(state)) sites")
+    mix(state)
+end
+as_representation(::Simulation, ::Type{Pure}, ::State{Mixed}) =
+    error("CreateState was asked for a pure state but given a mixed one, which cannot be " *
+          "turned back into a pure state")
+
 function run_phase(sim::Simulation, phase::CreateState{R}) where R
     if !isnothing(phase.seed)
         Random.seed!(phase.seed)
@@ -8,12 +24,16 @@ function run_phase(sim::Simulation, phase::CreateState{R}) where R
     if isnothing(phase.state)
         if phase.randomize == 0
             error("CreateState without state nor randomize: no state created !")
+        elseif isnothing(phase.system)
+            error("CreateState needs a system to create a random state")
         else
             state = RandomState{R}(phase.system, phase.randomize)
         end
     else
         if phase.state isa State
-            state = phase.state
+            # `type` is what the phase was asked for, so a State given in the other
+            # representation is converted rather than silently kept as it is
+            state = as_representation(sim, R, phase.state)
         elseif isnothing(phase.system)
             error("CreateState needs a system or a State object")
         else

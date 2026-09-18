@@ -29,7 +29,7 @@ const default_time_format = "%8.4g"
 const default_data_format = "%14.8g"
 
 """
-    Simulation(state[; time = 0])
+    Simulation(state[; time = 0.])
     Simulation(sim, state[, time = sim.time])
 
 A type to represent simulation data and store time and file data. It is used and returned by runTMS.
@@ -54,7 +54,7 @@ struct Simulation
     data::Dict{String, Dict}
     formats::Tuple{Printf.Format, Printf.Format}
     checkpoint::Checkpointer
-    Simulation(state::Union{Nothing, State}; time::Number = 0, output = nothing,
+    Simulation(state::Union{Nothing, State}; time::Number = 0., output = nothing,
                time_format::String = default_time_format, data_format::String = default_data_format,
                checkpoint::Checkpointer = Checkpointer()) =
         new(state, time, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)), checkpoint)

@@ -28,7 +28,11 @@ end
 @testset "Random states" begin
     sys = System(6, Qubit())
     @test maxlinkdim(RandomState{Pure}(sys, 8)) == 8
-    @test maxlinkdim(RandomState{Mixed}(sys, 8)) ≤ 8
+    # the mixed one goes through a purification, whose link dimension it squares, and has
+    # to land on the dimension that was asked for and not on the square below it
+    for d in [1, 5, 8, 17, 50]
+        @test maxlinkdim(RandomState{Mixed}(sys, d)) == d
+    end
     # randomizing an existing state must reach the requested link dimension
     # and must leave the state it was given untouched
     st = State{Pure}(sys, "Up")

@@ -117,6 +117,37 @@ end
     @test size(df1) == (2, 2)
 end
 
+@testset "Output of a complex simulation time" begin
+    # a complex time reaches the output through the function level interface, and the
+    # checkpoint stores its two parts, so it has to be writable. `Printf` refuses it, and
+    # the columns a complex measurement takes are the form to follow
+    st = State{Pure}(System(2, Qubit()), "Up")
+    line(t) = (io = IOBuffer(); output(Simulation(st; time = t), io, "h", [1.0]);
+               String(take!(io)))
+    @test line(0.3 + 0.2im) == "h\t     0.3\t     0.2\t             1\n"
+    # and a real time keeps exactly the format it had. The default is a float, but an
+    # integer given explicitly must still be written with the time format, unlike a
+    # measured value, which keeps its own form when it is not a float
+    @test line(0.) == "h\t       0\t             1\n"
+    @test line(0) == "h\t       0\t             1\n"
+    @test line(0.25) == "h\t    0.25\t             1\n"
+end
+
+@testset "CreateState with a State object" begin
+    # `type` is what the phase was asked for, so a State handed to it in the other
+    # representation must be converted and not silently kept
+    sys = System(3, Qubit())
+    pure = State{Pure}(sys, "Up")
+    run1(phase) = runTMS(SimData(; phases = [phase]); output = devnull).state
+    @test run1(CreateState(type = Pure(), state = pure)) isa State{Pure}
+    @test run1(CreateState(type = Mixed(), state = pure)) isa State{Mixed}
+    @test_throws "cannot be turned back into a pure state" run1(
+        CreateState(type = Pure(), state = mix(pure)))
+    # and randomizing needs a system to randomize over
+    @test_throws "needs a system to create a random state" run1(
+        CreateState(type = Pure(), randomize = 10))
+end
+
 @testset "Standard streams are not closed" begin
     # "stdout", "stderr" and "" are output destinations like any other, but the streams
     # they name belong to the process and a simulation must leave them open on its way

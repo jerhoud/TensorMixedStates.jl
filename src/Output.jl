@@ -41,12 +41,26 @@ function output_one(file, x, _)
     print(file, x)
 end
 
+# the time column always takes the time format, unlike a measured value, which keeps its
+# own printed form when it is not a float: `Linkdim` is meant to read as 8, not as 8.000
+function output_time(file, t::Number, format)
+    Printf.format(file, format, t)
+end
+
+# `Printf` refuses a complex number outright, so a complex simulation time is written as
+# the two columns a complex measurement takes, real then imaginary
+function output_time(file, t::Complex, format)
+    output_time(file, real(t), format)
+    print(file, "\t")
+    output_time(file, imag(t), format)
+end
+
 output(sim::Simulation, file::IO, header, data) =
     output(sim, file, header, [data])
 
 function output(sim::Simulation, file::IO, header, data::Vector)
     print(file, header, "\t")
-    Printf.format(file, first(sim.formats), sim.time)
+    output_time(file, sim.time, first(sim.formats))
     for x in data
         print(file, "\t")
         output_one(file, x, last(sim.formats))

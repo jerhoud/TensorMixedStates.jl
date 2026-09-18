@@ -9,6 +9,10 @@ export RandomState
 Return a random state, with the specified link dimension.
 If a State is given, randomize the given state.
 
+A mixed one is built as a purification on twice the system, whose mixed representation
+squares the link dimension, so the pure state it starts from is built one size up and the
+result truncated back to what was asked for.
+
 `eltype` is the element type of the tensors and defaults to `ComplexF64`.
 Passing `Float64` gives a real state, which makes every later contraction
 significantly cheaper, but is only correct when the whole computation stays real.
@@ -23,8 +27,11 @@ end
 function RandomState{Mixed}(elt::Type{<:Number}, system::System, linkdims::Int)
     n = length(system)
     super = system ⊗ system
-    super_rand = mix(RandomState{Pure}(elt, super, floor(Int, sqrt(linkdims))))
-    return partial_trace(super_rand, collect(1:n); keepers = true)
+    # rounding up rather than down: `floor` would land on the square below, so asking for
+    # 50 gave 49 and asking for 10 gave 9
+    super_rand = mix(RandomState{Pure}(elt, super, ceil(Int, sqrt(linkdims))))
+    return truncate(partial_trace(super_rand, collect(1:n); keepers = true);
+                    limits = Limits(maxdim = linkdims))
 end
 
 RandomState{R}(system::System, linkdims::Int) where R =
