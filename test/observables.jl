@@ -59,7 +59,17 @@ end
     @test real([ref[i, i] for i in 1:n]) ≈ real(expect1(st, N))
     @test expect2(st, (dag(C), C)) ≈ ref atol=1e-10
     @test expect2(st, (C, dag(C))) ≈ [ i == j ? 1 - ref[i, i] : -ref[j, i] for i in 1:n, j in 1:n ] atol=1e-10
-    # mixing fermionic and non fermionic pairs in one call must not disturb either
+    # a single fermionic operator is odd, so its expectation value is 0 on any physical
+    # state; expect1 says so rather than computing a column of zeros
+    @test_throws "vanishes on any state of definite fermion parity" expect1(st, C)
+    @test expect(st, C(2)) ≈ 0 atol=1e-10          # the route the message points to
+    # a pair mixing the two parities is not a correlation anyone can ask for: its product
+    # is odd, and the branch that inserts the Jordan-Wigner string is chosen on the first
+    # operator alone, so it has to be refused by name rather than by accident
+    @test_throws "one is fermionic and the other is not" expect2(st, (dag(C), N))
+    @test_throws "one is fermionic and the other is not" expect2(st, (N, dag(C)))
+    @test_throws "one is fermionic and the other is not" expect2(st, [(N, N), (C, Id)])
+    # but mixing fermionic and non fermionic pairs in one call must not disturb either
     m = expect2(st, [(N, N), (dag(C), C)])
     @test m[1] ≈ expect2(st, (N, N)) atol=1e-10
     @test m[2] ≈ ref atol=1e-10

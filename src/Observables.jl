@@ -376,7 +376,13 @@ expect_norm(state::State, op) =
 
 expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =
     if isfermionic(op)
-        error("expect1 is not implemented for fermionic operators")
+        # this is a refusal, not a gap to fill: implementing it would add a path whose
+        # only correct answer is zero, and would silently open the branch `expect2` picks
+        # on the parity of its first operator
+        error("expect1 does not take a fermionic operator: its expectation value is odd, " *
+              "so it vanishes on any state of definite fermion parity. If you really " *
+              "want it on a state that superposes parities, ask for it site by site " *
+              "with expect(state, op(i))")
     else
         scalar(t * tensor_obs(state, op(i)))
     end
@@ -405,6 +411,16 @@ end
 
 
 function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
+    # the cross terms below pick their branch on the parity of the first operator alone,
+    # and the sign a swap costs takes the second to have the same one. A pair mixing the
+    # two is refused here rather than left to the diagonal, which rejects it today only
+    # because `expect1_one` has no fermionic case of its own.
+    for (o1, o2) in ops
+        isfermionic(o1) == isfermionic(o2) ||
+            error("cannot correlate $o1 and $o2: one is fermionic and the other is not, " *
+                  "so their product is odd and has no expectation value. Both operators " *
+                  "of a pair must have the same fermionic parity")
+    end
     oplist = [first.(ops) ; last.(ops)]
     need_fermionic = any(isfermionic, oplist)
     need_non_fermionic = any(x->!isfermionic(x), oplist)
