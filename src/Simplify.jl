@@ -500,3 +500,7 @@ removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))
 removeMulti(a::ScalarOp) = a.coef * removeMulti(a.arg)
 removeMulti(a::AtIndex) = a
 removeMulti(a::Multi_F{R}) where R = ProdOp([Multi_F{R}(i, i, a.left, a.right) for i in a.start:a.stop])
+
+# removeMulti is always applied to the output of simplify and must accept the same inputs,
+# collections included: a time dependent evolver is a vector of operators
+removeMulti(a) = map(removeMulti, a)

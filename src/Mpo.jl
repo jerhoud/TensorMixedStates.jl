@@ -60,13 +60,30 @@ function PreMPO!(pre::PreMPO, as)
 end
 
 """
+    adapt_representation(::Type{R}, op)
+
+adapt an operator to the representation the MPO is built in. A pure operator given for a
+mixed state is an evolver (`-im * hamiltonian`) and is lifted with `Evolver`, which is what
+makes `-im * H` work on a mixed state. A time dependent evolver is a vector of terms and
+each term is lifted on its own.
+"""
+adapt_representation(::Type{Pure}, a::IndexedOp{Mixed}) =
+    error("cannot build a pure MPO from the mixed operator $a, " *
+          "the state must be in mixed representation (see ToMixed)")
+adapt_representation(::Type{Mixed}, a::IndexedOp{Pure}) = Evolver(a)
+adapt_representation(::Type{R}, a::Vector) where R = map(x -> adapt_representation(R, x), a)
+adapt_representation(::Type{R}, a) where R = a
+
+"""
     PreMPO(::State, op)
 
-preprocess an operator (or vector of operators).
-The result can be passed wherever an operator that must be turned into an MPO is expected
+preprocess an operator, or a vector of operators for a time dependent evolver, in which
+case each one is a term whose coefficient is given by the matching time function.
+The result can be passed wherever an operator that must be turned into an MPO is expected.
+The operator is first adapted to the representation of the state, see `adapt_representation`.
 """
 PreMPO(state::State{R}, a) where R =
-    PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(a)))
+    PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(adapt_representation(R, a))))
 
 """
     mpo_eltype(::PreMPO, coefs)

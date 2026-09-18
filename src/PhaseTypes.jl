@@ -189,7 +189,7 @@ A phase type for time evolution
     duration::Number
     time_step::Number
     algo::Algo
-    evolver::Union{IndexedOp, Pair{IndexedOp, Vector}}
+    evolver::Union{IndexedOp, Pair}
     measures_period::Int = 1
     measures = []
 end

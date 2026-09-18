@@ -53,11 +53,8 @@ function run_phase(sim::Simulation, phase::Evolve)
         coefs = nothing
     end
     state = sim.state
-    if state isa State{Pure} && evolver isa IndexedOp{Mixed}
-        error("Evolving error: state must be in mixed representation to use this evolver")
-    elseif state isa State{Mixed} && evolver isa IndexedOp{Pure}
-        evolver = Evolver(evolver)
-    end
+    # PreMPO adapts the evolver to the representation of the state, and handles the vector
+    # form of a time dependent evolver
     pre = PreMPO(state, evolver)
     algo = phase.algo
     if algo isa ApproxW
