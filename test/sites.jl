@@ -138,6 +138,18 @@ end
         final_measures = check(Zd, [exp(2im * π * n / 3) for n in 0:2])))
 end
 
+@testset "Unknown operator and state names" begin
+    # a mistyped name is the most ordinary mistake there is with these libraries, so it
+    # has to name what was not found rather than surface as a dictionary error. X is a
+    # perfectly good name, just not one a boson has
+    @test_throws "operator X is not defined for site Boson" matrix(X, Boson(3))
+    @test_throws "state Zorglub is not defined for site Qubit" State{Pure}(
+        System(2, Qubit()), "Zorglub")
+    # a site type declared outside the package goes through the same library
+    @test_throws "state Zorglub is not defined for site Dummit" State{Pure}(
+        System(2, Dummit()), "Zorglub")
+end
+
 @testset "Custom site type" begin
     @test dim(Dummit()) == 2
     @test real(expect1(State{Pure}(System(2, Dummit()), "1"), N)) ≈ [1, 1]

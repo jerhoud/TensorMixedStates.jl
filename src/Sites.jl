@@ -61,6 +61,10 @@ const state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix,
     F_info(site)
 
 return the matrix value of `F`` for the `site`` as stored in `operator_library`
+
+`get!` here is a cache rather than a lookup: a site with no `F` of its own is not
+fermionic, and the `Id` it falls back to is written into the library so that the next call
+finds it.
 """
 function F_info(site::AbstractSite)
     name = typeof(site)
@@ -77,7 +81,9 @@ it may be an `Op` a matrix or a site function
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
     t = (name, op)
-    r = get!(operator_library, t, nothing)
+    # `get`, not `get!`: the library cannot hold a `nothing`, so writing the default back
+    # would raise a `convert` error instead of reaching the message below
+    r = get(operator_library, t, nothing)
     if isnothing(r)
         error("operator $op is not defined for site $name")
     else
@@ -94,7 +100,8 @@ it may be a `Vector` (for pure state), a `Matrix` for mixed states or a site fun
 function state_info(site::AbstractSite, st::String)
     name = typeof(site)
     t = (name, st)
-    r = get!(state_library, t, nothing)
+    # see `operator_info` on why this is `get` and not `get!`
+    r = get(state_library, t, nothing)
     if isnothing(r)
         error("state $st is not defined for site $name")
     else
