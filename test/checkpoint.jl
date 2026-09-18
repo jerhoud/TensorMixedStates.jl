@@ -93,6 +93,72 @@ end
     Base.exit_on_sigint(true)   # runTMS turned it off, leave the process as it was found
 end
 
+@testset "Interrupting a phase without a solver" begin
+    mktempdir() do dir
+        cd(dir) do
+            fail_in = Ref(0)
+            breaker = StateFunc("Breaker", _ -> (fail_in[] > 0 && (fail_in[] -= 1) == 0 &&
+                                                 throw(InterruptException()); 0.))
+            measures = ["data" => [X(1), Y(1)]]
+            evolve(op) = Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(),
+                                evolver = -im * op,
+                                limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
+            # a `Gates` phase runs no sweep, so nothing records its progress while it runs.
+            # An interrupt in the second one has to resume from the state the first one
+            # produced and from sweep 0, not from the state and the sweep count the
+            # evolution before them left behind. `measure` computes every measurement
+            # before writing any of them, so the breaker throws without a partial line.
+            phases = [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)),
+                      Gates(; gates = Z(1)),
+                      Gates(; gates = X(1), final_measures = ["data" => [breaker]]),
+                      evolve(Z(2))]
+            runTMS(SimData(; name = "ref", phases))
+            reference = read("ref/data", String)
+
+            # no checkpoint is due at the phase boundaries, so the only one written is the
+            # one the interrupt asks for
+            fail_in[] = 1
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e9)
+            runTMS(sim_data)
+            @test fail_in[] == 0                  # the interrupt did happen
+            runTMS(sim_data)
+            @test read("chk/data", String) == reference
+        end
+    end
+    Base.exit_on_sigint(true)
+end
+
+@testset "Accumulating destinations survive a resume" begin
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            stopper = StateFunc("Stopper", _ -> (stop_in[] > 0 && (stop_in[] -= 1) == 0 &&
+                                                 touch("stop"); 0.))
+            # a text destination is continued from the position the checkpoint recorded,
+            # but a json one and a `Data` one accumulate in memory and are only handed over
+            # at the end, so the checkpoint has to carry what they hold
+            measures = ["data" => [X(1), stopper], "out.json" => [X(1)], Data("d") => [X(1)]]
+            phases = [CreateState{Pure}(3, Qubit(), "X+"),
+                      Evolve(duration = 0.6, time_step = 0.1, algo = Tdvp(),
+                             evolver = -im * Z(1),
+                             limits = Limits(maxdim = 10, cutoff = 1e-15); measures)]
+            ref = runTMS(SimData(; name = "ref", phases))
+            reference = read("ref/data", String)
+            ref_json = TensorMixedStates.JSON.parsefile("ref/out.json")
+
+            stop_in[] = 3                                  # stop half way through the six
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            @test stop_in[] == 0                           # the stop did happen
+            sim = runTMS(sim_data)
+            @test read("chk/data", String) == reference
+            @test TensorMixedStates.JSON.parsefile("chk/out.json") == ref_json
+            @test sim.data["d"]["X(1)"]["times"] == ref.data["d"]["X(1)"]["times"]
+        end
+    end
+    Base.exit_on_sigint(true)
+end
+
 @testset "Per sweep schedules" begin
     rs = TensorMixedStates.resume_schedule
     @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep

@@ -123,7 +123,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
         try
             if live && has_checkpoint(".")
-                state, phase_time, phase, sweep, positions, data, id = load_checkpoint(".")
+                state, phase_time, phase, sweep, positions, data, json, id = load_checkpoint(".")
                 if id ≠ c.id
                     error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
                           "its phases are not the ones being run. Use restart = true to start over " *
@@ -131,6 +131,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 end
                 truncate_outputs(".", positions)
                 merge!(sim.data, data)
+                # put back before any measurement asks for them: `get_sim_file` creates a
+                # json destination on first use and would otherwise start an empty one
+                merge!(sim.files, json)
                 c.phase, c.skip, c.phase_time = phase, sweep, phase_time
                 c.appending = c.resuming = true
                 sim = Simulation(sim, state, phase_time)
@@ -145,7 +148,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 # the state of the interrupted sweep, the one the phase never got to return
                 st = c.state isa State ? c.state : sim.state
                 if st isa State
-                    save_checkpoint(c, sim, st, c.simtime, c.sweep)
+                    save_checkpoint(c, sim, st, c.sweep)
                     # the returned simulation must carry what was reached, not what the phase
                     # was handed when it started
                     sim = Simulation(sim, st, c.simtime)
@@ -187,6 +190,7 @@ function log_phase(sim::Simulation, phases::Vector)
         else
             c.phase_time = sim.time
         end
+        phase_start!(c, sim)
         sim = log_phase(sim, phase)
         if c.stopping
             log_msg(sim, "***** Stopping after phase $i, the simulation can be resumed *****")
@@ -195,6 +199,12 @@ function log_phase(sim::Simulation, phases::Vector)
         # the next phase is the one to resume from, record it at a clean boundary
         c.phase = i + 1
         c.phase_time = sim.time
+        # a resume point belongs to the phase it was written for: a phase with no sweeps of
+        # its own must not inherit the ones the previous phase was told to skip
+        c.skip = 0
+        # marked again here so that an interrupt falling after the last phase, in the final
+        # measurements, still checkpoints what the simulation reached
+        phase_start!(c, sim)
         if sim.state isa State && (checkpoint_due(c) || stop_requested(c))
             if checkpoint_step!(c, sim, sim.state, sim.time, 0) 
                 log_msg(sim, "***** Stopping after phase $i, the simulation can be resumed *****")

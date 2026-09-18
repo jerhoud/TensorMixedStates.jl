@@ -121,13 +121,15 @@ whether enough time has passed since the last checkpoint
 checkpoint_due(c::Checkpointer) = c.interval ≠ 0 && time() ≥ c.next
 
 """
-    save_checkpoint(::Checkpointer, ::Simulation, state, time, sweep)
+    save_checkpoint(::Checkpointer, ::Simulation, state, sweep)
 
-write a checkpoint recording the given state, simulation time and number of sweeps done in
-the current phase. The state and the metadata are written to temporary files and moved into
-place afterwards, so that a crash during the write leaves the previous checkpoint intact.
+write a checkpoint recording the given state and the number of sweeps done in the current
+phase. The simulation time it records is `phase_time`, the time the phase started from,
+since that is what a resumed phase is handed back and what its solver counts sweeps from.
+The state and the metadata are written to temporary files and moved into place afterwards,
+so that a crash during the write leaves the previous checkpoint intact.
 """
-function save_checkpoint(c::Checkpointer, sim, state::State, t::Number, sweep::Int)
+function save_checkpoint(c::Checkpointer, sim, state::State, sweep::Int)
     isempty(c.dir) && return nothing
     positions = Dict{String, Int}()
     for (name, f) in sim.files
@@ -149,6 +151,11 @@ function save_checkpoint(c::Checkpointer, sim, state::State, t::Number, sweep::I
             "time" => [real(c.phase_time), imag(c.phase_time)],
             "positions" => positions,
             "data" => sim.data,
+            # a json destination accumulates in memory and is written once, when the
+            # files are closed. A position is enough to continue a text file, but a
+            # resumed run would write back a json holding only what it computed itself,
+            # so what was collected before has to travel in the checkpoint
+            "json" => Dict(name => d for (name, d) in sim.files if d isa Dict),
         ))
     end
     mv(th5, h5; force = true)
@@ -161,8 +168,9 @@ end
     load_checkpoint(dir)
 
 read the checkpoint of the given directory and return `(state, phase_time, phase, sweep,
-positions, data, id)`. `phase_time` is the simulation time at the start of the interrupted
-phase, which is what the solvers count their sweeps from.
+positions, data, json, id)`. `phase_time` is the simulation time at the start of the
+interrupted phase, which is what the solvers count their sweeps from. `data` and `json` are
+the accumulating destinations, `Data(name)` ones and json files respectively.
 """
 function load_checkpoint(dir::String)
     meta = JSON.parsefile(checkpoint_json(dir))
@@ -175,7 +183,8 @@ function load_checkpoint(dir::String)
     t = im == 0 ? re : complex(re, im)
     positions = Dict{String, Int}(k => Int(v) for (k, v) in meta["positions"])
     data = Dict{String, Dict}(k => Dict(v) for (k, v) in meta["data"])
-    return (state, t, Int(meta["phase"]), Int(meta["sweep"]), positions, data, id)
+    json = Dict{String, Dict}(k => Dict(v) for (k, v) in meta["json"])
+    return (state, t, Int(meta["phase"]), Int(meta["sweep"]), positions, data, json, id)
 end
 
 """
@@ -211,10 +220,28 @@ function checkpoint_step!(c::Checkpointer, sim, state::State, t::Number, sweep::
     c.state = state
     stop = stop_requested(c)
     if stop || checkpoint_due(c)
-        save_checkpoint(c, sim, state, t, sweep)
+        save_checkpoint(c, sim, state, sweep)
     end
     c.stopping = stop
     return stop
+end
+
+"""
+    phase_start!(::Checkpointer, sim)
+
+record where a checkpoint written during the phase about to run must resume from. A solver
+keeps this up to date sweep by sweep through `checkpoint_step!`, but a phase without one
+never does: without this, an interrupt in a `Gates` or a `LoadState` would checkpoint the
+state, the time and the sweep count left by the last solver, several phases back and
+possibly in the other representation. A phase is replayed from its input, so its resume
+point is the state it was handed, and `skip`, the sweeps it is already allowed to skip, so
+that a resumed phase interrupted again before its first sweep keeps the point it had.
+"""
+function phase_start!(c::Checkpointer, sim)
+    c.state = sim.state
+    c.simtime = sim.time
+    c.sweep = c.skip
+    return nothing
 end
 
 """
