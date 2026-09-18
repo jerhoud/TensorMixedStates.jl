@@ -1,7 +1,7 @@
 export PM, Pure, Mixed, GI, Generic, Indexed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Identity, Id, JW, JW_F, F, Proj, AtIndex, Gate, Dissipator, Evolver, Left, Right, SetState, Multi_F
-export dag, tensor, ⊗, isfermionic
+export dag, tensor, ⊗, isfermionic, has_fermionic
 
 ############# Types ################
 
@@ -556,6 +556,14 @@ end
 
 Gate(a::ProdOp{Pure, Indexed, 1}) = ProdOp(Gate.(a.subs))
 Gate(ind::AtIndex{Pure}) = AtIndex(Gate(ind.op), ind.index)
+# the same hoisting the inner constructor does, for an indexed operator: a gate built
+# from c*A is rho -> (c A) rho (c A)' , that is abs2(c) times the gate built from A
+Gate(a::ScalarOp{Pure, Indexed, 1}) = abs2(a.coef) * Gate(a.arg)
+# a gate built from a sum does not distribute: (A + B) rho (A + B)' has cross terms, so
+# there is nothing to hand down to the terms
+Gate(a::SumOp{Pure, Indexed, 1}) =
+    error("cannot make a gate out of the sum $a, (A + B)ρ(A + B)† has cross terms and " *
+          "does not distribute over the terms. Build the gate from a single operator")
 
 show(io::IO, a::Gate) =
     paren(io, 1000, 0) do io
@@ -811,6 +819,24 @@ isfermionic(a::PowOp) =
     else
         error("cannot determine fermionic nature of $a")
     end
+
+"""
+    has_fermionic(::Op)
+
+whether an indexed operator still has a factor whose Jordan-Wigner string has not been
+inserted. `simplify` is what inserts them: it wraps such a factor in `JW` and adds the
+matching `Multi_F`, so this answers false on an operator that went through it.
+
+This is not the question `isfermionic` answers, which is the parity of a single generic
+operator: a product of two fermionic operators is not fermionic, but both of its factors
+are and both still need their strings.
+"""
+# a multi site operator is never fermionic, its construction refuses it, so only the
+# one site case has a question to ask
+has_fermionic(a::AtIndex{Pure, 1}) = isfermionic(a.op)
+has_fermionic(a::ScalarOp) = has_fermionic(a.arg)
+has_fermionic(a::Union{ProdOp, SumOp}) = any(has_fermionic, a.subs)
+has_fermionic(::Op) = false
 
 
 ################## Global Ordering ###############

@@ -120,3 +120,33 @@ end
         )
     ])
 end
+
+@testset "Fermionic gates" begin
+    # apply places one local tensor per factor and has no way to build a Jordan-Wigner
+    # string, so an operator that still needs one is simplified first, which is what
+    # inserts it. Only a fermionic operator is simplified, so a gate defined by an
+    # expression, such as Swap, is never expanded into a sum apply could not place.
+    # The two branches below differ in the parity of sites 1 and 2, which is what makes
+    # the string acting further right observable instead of a global phase.
+    sys = System(4, Fermion())
+    st = normalize(State{Pure}(sys, ["1", "0", "1", "0"]) +
+                   State{Pure}(sys, ["0", "0", "1", "0"]))
+    for a in [C(3), dag(C)(4), dag(C)(4) * C(3)]
+        @test norm(apply(a, st) - apply(make_mpo(st, a), st)) < 1e-12
+    end
+    # the mixed representation takes the same path: the one site factors removeMulti
+    # leaves behind are built by the Multi_F constructor, which is where the knowledge of
+    # which side of the density matrix the string acts on already lives. Mixing the result
+    # of the pure application must give what applying it to the mixed state gives.
+    for a in [C(3), dag(C)(4) * C(3)]
+        @test norm(mix(apply(a, st)) - apply(a, mix(st))) < 1e-12
+    end
+    # a factor contributing no tensor, an identity or a Jordan-Wigner string, must not
+    # leave the gate list untyped: ITensorMPS.product has no method for a Vector{Any}
+    @test_ok apply(Id(1) * X(2), State{Pure}(System(2, Qubit()), "Up"))
+    # a gate built from a sum does not distribute and must say so rather than guess
+    @test_throws ErrorException Gate(X(1) + Y(2))
+    # a non fermionic gate must not be simplified: Swap is defined by an expression and
+    # simplifying a product of them would make a sum, which apply cannot place
+    @test_ok apply(Swap(1, 2) * Swap(3, 4), State{Pure}(System(4, Qubit()), "Up"))
+end

@@ -12,11 +12,13 @@ It is much more efficient to apply all the gates in a single call to apply.
     apply(CZ(1,3)*H(2)*CNOT(3,4), state)
 
 """
+# prepared before the Gate wrapping: Gate distributes over the product removeMulti leaves
+# behind, down to the one site factors it knows how to lift
 apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =
-    apply(Gate(a), state; kwargs...)
+    apply(Gate(prepare_gate(a)), state; kwargs...)
 
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
-    ops = make_ops(state.system, a)
+    ops = make_ops(state.system, prepare_gate(a))
     st = apply(ops, state.state; move_sites_back_between_gates=false,
             limits.cutoff, limits.maxdim)
     return State(state, st)
@@ -25,6 +27,33 @@ end
 apply(mpo::MPO, state::State; limits::Limits=Limits()) =
     State(state, apply(mpo, state.state; limits.cutoff, limits.maxdim))
     
+"""
+    prepare_gate(op)
+
+`apply` places one local tensor per factor and has no way to build the Jordan-Wigner
+string a fermionic operator needs: only `simplify` inserts those. Simplifying every gate
+is not an option, since it replaces a gate defined by an expression, such as `Swap`, with
+that expression, and a product of those becomes a sum `apply` cannot place. So only an
+operator that still has a fermionic factor is simplified, which leaves every other gate
+untouched, and the result is refused if it came out as a sum.
+
+`removeMulti` then spells the string out as one factor per site, which is what `PreMPO`
+does too. Those one site factors are built by the `Multi_F` constructor, which is where
+the knowledge of whether the string acts on the left of the density matrix, on its right,
+or on both, already lives.
+"""
+prepare_gate(a) =
+    if has_fermionic(a)
+        b = removeMulti(simplify(a))
+        if scalararg(b) isa SumOp
+            error("cannot apply $a as a gate: inserting its Jordan-Wigner strings makes " *
+                  "it a sum, which apply cannot place. Use make_mpo to build an MPO instead")
+        end
+        b
+    else
+        a
+    end
+
 make_ops(::System, a::SumOp) =
     error("cannot apply sums as gates ($a)")
 
@@ -44,19 +73,10 @@ make_ops(s::System, a::ProdOp) =
 
 make_ops(s::System, a::AtIndex{R, N}) where {R, N} =
     if a == MakeIdentity{R, Indexed, 1}()
-        []
+        # a factor that contributes no tensor must not leave the gate list untyped:
+        # ITensorMPS.product has no method for a Vector{Any}
+        ITensor[]
     else
         [ tensor(s, a) ]
     end
-
-function make_ops(s::System, a::Multi_F)
-    ops = []
-    for i in a.start:a.stop
-        f = F_info(s[i])
-        if f == Id
-            continue
-        end
-        push!(ops, tensor(f, s[i]))
-    end
-    ops
-end    
+    

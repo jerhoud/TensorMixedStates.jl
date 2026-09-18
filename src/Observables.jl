@@ -262,24 +262,12 @@ Expector() =
     Expector(0, ITensor())
 
 
-"""
-    check_ascending(::Expector, i)
-
-the zipper only ever moves forward, so a product whose factors are not in ascending site
-order would silently recontract a tensor it has already consumed. `simplify` puts them in
-order, this guards the internal callers that skip it.
-"""
-check_ascending(a::Expector, i::Int) =
-    i < a.pos && error("expect needs its operator in the form simplify produces, " *
-                       "with one factor per site in ascending order")
-
 zipto(state::State{Pure}, a::Expector, i::Int) = 
     if a.pos == 0
         Expector(i, get_left(state, i))
     elseif a.pos == i
         a
     else
-        check_ascending(a, i)
         st = state.state
         t = a.t * dag(st[a.pos]')
         for k in a.pos+1:i-1
@@ -297,7 +285,6 @@ zipto(state::State{Mixed}, a::Expector, i::Int) =
     elseif a.pos == i
         a
     else
-        check_ascending(a, i)
         t = a.t
         for k in a.pos+1:i-1
             t *= get_loc(state, k)

@@ -43,6 +43,18 @@ end
     # these combinations have no defined fermionic nature and must be rejected
     @test_throws ErrorException isfermionic(C + N)
     @test_throws ErrorException isfermionic(exp(C))
+    # has_fermionic asks the other question: whether a factor still needs its
+    # Jordan-Wigner string. A product of two fermionic operators is not fermionic, but
+    # both of its factors are, so it does.
+    @test has_fermionic(dag(C)(1))
+    @test has_fermionic(dag(C)(1) * C(3))
+    @test has_fermionic(2 * C(2) + C(4))
+    @test !has_fermionic(N(1))
+    @test !has_fermionic(N(1) * N(2))
+    @test !has_fermionic(Id(1))
+    # simplify is what inserts the strings, and so what makes the answer false
+    @test !has_fermionic(simplify(dag(C)(3)))
+    @test !has_fermionic(simplify(dag(C)(1) * C(3)))
 end
 
 @testset "Multi_F removal" begin

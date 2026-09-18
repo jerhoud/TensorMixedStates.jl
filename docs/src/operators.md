@@ -55,6 +55,7 @@ JW_F
 Multi_F
 dag(::GenericOp{Pure})
 isfermionic
+has_fermionic
 matrix
 tensor
 simplify
