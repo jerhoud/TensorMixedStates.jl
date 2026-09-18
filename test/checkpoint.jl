@@ -90,7 +90,6 @@ end
             @test read("kill/data", String) == reference
         end
     end
-    Base.exit_on_sigint(true)   # runTMS turned it off, leave the process as it was found
 end
 
 @testset "Interrupting a phase without a solver" begin
@@ -125,7 +124,6 @@ end
             @test read("chk/data", String) == reference
         end
     end
-    Base.exit_on_sigint(true)
 end
 
 @testset "Accumulating destinations survive a resume" begin
@@ -156,7 +154,6 @@ end
             @test sim.data["d"]["X(1)"]["times"] == ref.data["d"]["X(1)"]["times"]
         end
     end
-    Base.exit_on_sigint(true)
 end
 
 @testset "Per sweep schedules" begin
@@ -189,7 +186,6 @@ end
             @test read("chk/data", String) == read("ref/data", String)
         end
     end
-    Base.exit_on_sigint(true)
 end
 
 @testset "Phase fingerprint" begin

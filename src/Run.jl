@@ -83,7 +83,8 @@ run the given simulation (see SimData for details), write the output to file and
 
 A simulation writing to a directory turns an interrupt into a clean stop: it writes a
 checkpoint and returns, instead of killing the program. See `SimData` for the checkpointing
-options.
+options. This asks the runtime to raise `InterruptException` on Ctrl-C, a process wide
+setting that is put back when `runTMS` returns.
 
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
@@ -173,6 +174,14 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             cd(start_dir)
         end
         rethrow()
+    finally
+        if live
+            # the flag is process wide and would otherwise change how Ctrl-C behaves for
+            # everything the caller runs afterwards. There is no way to read it back, so
+            # what goes back is the default Julia itself applies: on in a script, off in
+            # the REPL and in a session started with `-i`
+            Base.exit_on_sigint(!isinteractive())
+        end
     end
 end
 
