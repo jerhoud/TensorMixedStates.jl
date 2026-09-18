@@ -596,6 +596,8 @@ show(io::IO, a::Dissipator) =
         show_func(io, "Dissipator", a.arg)
     end
 
+isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
+
 # Evolver
 
 """
@@ -612,6 +614,8 @@ show(io::IO, a::Evolver) =
     paren(io, 1000, 0) do io
         show_func(io, "Evolver", a.arg)
     end
+
+isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 
 (a::IndexedOp{Mixed} + b::IndexedOp{Pure}) = a + Evolver(b)
 (a::IndexedOp{Pure} + b::IndexedOp{Mixed}) = Evolver(a) + b
@@ -675,10 +679,23 @@ struct SetState <: GenericOp{Mixed, 1}
     state::Union{String, Vector, Matrix}
 end
 
-isless(a::SetState, b::SetState) = isless(a.arg, b.arg)
+# the state is a name, a vector or a matrix. There is no order between those, and none
+# at all between two matrices, so what is compared is how they print: the global ordering
+# of operators needs a total order, not a meaningful one
+isless(a::SetState, b::SetState) = isless(repr(a.state), repr(b.state))
 
 
 ############## Operator functions ###########
+
+"""
+    flips_sign(coef, expo)
+
+whether `coef ^ expo` has to be taken on `-coef` instead, the sign going to the operator.
+A negative real coefficient raised to a non integer power would otherwise land on the
+wrong side of the branch cut. Any other coefficient, complex ones included, goes through
+as it is. `PowOp` and `simplify_pow` both decide this, and have to decide it the same way.
+"""
+flips_sign(coef::Number, expo::Number) = coef isa Real && coef < 0 && !isinteger(expo)
 
 # PowOp
 
@@ -700,10 +717,10 @@ struct PowOp{R, N} <: GenericOp{R, N}
         else
             c = scalarcoef(arg)
             a = scalararg(arg)
-            if !(c isa Real) || c >= 0 || isinteger(expo)
-                c^expo * new{R, N}(a, expo)
-            else
+            if flips_sign(c, expo)
                 (-c)^expo * new{R, N}(-a, expo)
+            else
+                c^expo * new{R, N}(a, expo)
             end
         end
 end

@@ -75,3 +75,39 @@ end
         @test expect(st, a) ≈ expect(st, removeMulti(a))
     end
 end
+
+@testset "Global ordering of operators" begin
+    # `isless(::Op, ::Op)` ranks the types first and, for two of the same rank, asks
+    # `isless` again on the pair. A type with a ranking but no `isless` of its own
+    # therefore recurses on itself instead of comparing anything
+    @test isless(Dissipator(X), Dissipator(Y))
+    @test !isless(Dissipator(Y), Dissipator(X))
+    @test isless(Evolver(X(1)), Evolver(Y(1)))
+    @test !isless(Evolver(Y(1)), Evolver(X(1)))
+    # a SetState holds a name, a vector or a matrix, and two of them have to be ordered
+    # whatever they hold: there is no order between those types, nor between two matrices
+    @test isless(SetState("Dn"), SetState("Up"))
+    @test length(sort([SetState("Up"), SetState([1., 0.]), SetState("Dn"),
+                       SetState([1. 0. ; 0. 0.])])) == 4
+    # the ranking puts the types in the order it declares
+    @test isless(Id, X)                     # Identity before Operator
+    @test isless(X(1), Gate(X)(1))          # AtIndex before Gate
+    @test isless(Gate(X)(1), Dissipator(X)(1))
+    @test isless(Dissipator(X)(1), Evolver(X(1)))
+end
+
+@testset "Non integer powers of a scaled operator" begin
+    # a negative real coefficient has to come out as its opposite, the sign going to the
+    # operator, or the power would land on the wrong side of the branch cut. Every other
+    # coefficient is taken out as it is, complex ones included. `PowOp` decides this when
+    # the power is built and `simplify_pow` when a sum collapses into a scaled operator
+    # afterwards, and the two have to reach the same form
+    for (c, a) in [(-1., -X - X), (im, im * X + im * X), (2., 2X + 2X),
+                   (1. + im, (1 + im) * X + (1 + im) * X)]
+        @test simplify(a^0.5) == (2c * X)^0.5
+    end
+    # the sign really does leave the coefficient for the operator
+    @test string(simplify((-X - X)^0.5)) == string(sqrt(2.) * (-X)^0.5)
+    # an integer exponent needs none of this care
+    @test simplify((-X - X)^2) == 4Id
+end

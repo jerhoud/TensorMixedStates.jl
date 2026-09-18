@@ -135,10 +135,10 @@ simplify_pow(a::GenericOp{Pure}, expo) =
     end
 
 simplify_pow(a::ScalarOp{Pure}, expo) =
-    if isinteger(expo) || a.coef > 0
-        a.coef^expo * simplify_pow(a.arg, expo)
-    else
+    if flips_sign(a.coef, expo)
         (-a.coef)^expo * PowOp(-a.arg, expo)
+    else
+        a.coef^expo * simplify_pow(a.arg, expo)
     end
 
 
