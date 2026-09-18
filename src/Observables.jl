@@ -459,10 +459,27 @@ expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
 """
     entanglement_entropy(::State, ::Int)
 
-Return the entanglement entropy of the given state at the given site.
-Also return the associated spectrum.
+Return the entanglement entropy of the given state across the cut on the right of the
+given site, that is between `pos` and `pos + 1`, together with the spectrum it is computed
+from.
+
+`pos` runs from 1 to the number of sites. The last one cuts the whole state from nothing,
+so it is always 0 and the cuts that say something are 1 to n-1.
+
+The spectrum returned is the squared singular values of that cut, normalized to sum to
+one, which are the eigenvalues of the reduced density matrix of the sites up to `pos`.
+
+On a mixed representation the same quantity is computed on the vectorized density matrix,
+which makes it the operator space entanglement entropy (OSEE) rather than an entanglement.
+
+# Examples
+    ee, spectrum = entanglement_entropy(state, 3)   # cut between sites 3 and 4
 """
 function entanglement_entropy(state::State, pos::Int)
+    n = length(state)
+    1 ≤ pos ≤ n ||
+        error("cannot compute the entanglement entropy at site $pos of a $n site state, " *
+              "the cut is on the right of a site so pos must be between 1 and $n")
     s = orthogonalize(state.state, pos)
     _, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
     sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]

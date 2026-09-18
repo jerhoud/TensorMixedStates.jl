@@ -54,7 +54,8 @@ There are some state functions predefined:
     Renyi2                  # returns the Renyi entropy of order 2 of the state
     SubRenyi2(sub)          # returns the Renyi entropy of order 2 of the subsystem (sub is a vector containing the indices of the sites of the subsystem)
     Mutual_Info_Renyi2(sub) # returns the Renyi2 mutual information of the two subsystem (you either give one subsystem as a vector of indices or a splitting link)
-    EE(l, n)                # returns entanglement entropy at site l and first n singular values
+    EE(l)                   # returns entanglement entropy for the cut on the right of site l, between l and l+1
+    EE(l, n)                # the same, followed by the first n eigenvalues of the reduced density matrix of sites 1 to l
     Hermiticity             # returns 1 if density matrix is really Hermitian and down to 0 for anti Hermitian density matrix
     HermiticityError        # returns 1 - Hermiticity for monitoring hermiticity deviation
     Linkdim                 # returns the maximum bond dimension of the representation

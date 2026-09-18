@@ -270,7 +270,10 @@ SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(
     EE(pos)
     EE(pos, spectrum)
 
-a state function to measure entanglement entropy / OSEE and associated spectrum. 
+a state function to measure entanglement entropy / OSEE and associated spectrum. The cut
+is on the right of `pos`, between sites `pos` and `pos + 1`, and the spectrum is that of
+the reduced density matrix of the sites up to `pos`, so it is made of squared singular
+values summing to one. `spectrum` is how many of them to write out.
 See also `StateFunc` and `entanglement_entropy`.
 """
 EE(pos) = StateFunc("EE($pos)",

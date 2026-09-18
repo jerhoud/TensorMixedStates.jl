@@ -99,6 +99,11 @@ end
     for cut in 1:3
         @test entanglement_entropy(ghz, cut)[1] ≈ L2
     end
+    # the cut is on the right of the site, so the last site separates the whole state from
+    # nothing, and a position outside the chain is no cut at all
+    @test entanglement_entropy(ghz, 4)[1] ≈ 0 atol=1e-12
+    @test_throws "entanglement entropy at site 0 of a 4 site state" entanglement_entropy(ghz, 0)
+    @test_throws "entanglement entropy at site 5 of a 4 site state" entanglement_entropy(ghz, 5)
     # a product state carries none
     e, spectrum = entanglement_entropy(prod, 2)
     @test e ≈ 0 atol=1e-12
