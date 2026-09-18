@@ -117,6 +117,14 @@ end
     # but one of its sites, seen alone, is maximally mixed
     @test renyi2(mix(ghz), [1]) ≈ L2
     @test renyi2(mix(ghz), [1, 2]) ≈ L2
+    # and the pure representation must answer the same: a subsystem of a pure state is not
+    # pure, so this is an entanglement measure and not the 0. the whole state gives
+    @test renyi2(ghz, [1]) ≈ L2
+    @test renyi2(ghz, [1, 2]) ≈ L2
+    @test renyi2(ghz, [1, 3]) ≈ L2                  # the sites need not be contiguous
+    @test renyi2(prod, [1, 2]) ≈ 0 atol=1e-12
+    # across a cut the mutual information is twice it, which is how it is computed there
+    @test mutual_info_renyi2(bell, 1) ≈ 2 * renyi2(bell, [1])
 
     # the infinite temperature state of n qubits has purity 2^-n and entropy n log 2
     @test trace2(fullymixed) ≈ 1 / 16

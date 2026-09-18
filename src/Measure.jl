@@ -261,7 +261,10 @@ const Renyi2 = StateFunc("Renyi2", renyi2)
 """
     SubRenyi2([positions...])
 
-a state function to measure the Renyi-2 entropy of a subsystem describe by the positions given.
+a state function to measure the Renyi-2 entropy of a subsystem described by the positions
+given. On a pure representation this measures how much that subsystem is entangled with
+the rest, and the state is first turned into its mixed representation to do it, which is
+much more expensive than the other state functions.
 See also `StateFunc`, `Renyi2` and `renyi2`.
 """
 SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))

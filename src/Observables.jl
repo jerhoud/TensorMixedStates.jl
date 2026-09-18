@@ -236,14 +236,26 @@ hermiticity(state::State{Mixed}) =
     renyi2(::State)
     renyi2(::State, ::Vector{Int})
 
-renyi2 returns the Renyi entropy of order 2 of the state. This is 0. for pure representations.
-When given an array of positions give the Renyi entropy of corresponding substate.
+renyi2 returns the Renyi entropy of order 2 of the state. It is 0. for a pure
+representation, whose density matrix has a single non zero eigenvalue.
+
+When given an array of positions it returns the Renyi entropy of the corresponding
+substate, that is `-log(tr(ρ²))` of the state reduced to those sites. On a pure state this
+is a measure of how much those sites are entangled with the rest, and is not 0.: the state
+is first turned into its mixed representation, which is much more expensive, because a
+partial trace needs a density matrix.
 """
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))
 
 renyi2(state::State{Mixed}, a::Vector{Int}) =
     renyi2(partial_trace(state, a; keepers = true))
+
+# a subsystem of a pure state is not pure, so this is an entanglement measure rather than
+# 0. There is no cheap route for an arbitrary subset, the same way mutual_info_renyi2 has
+# none: a partial trace needs a density matrix.
+renyi2(state::State{Pure}, a::Vector{Int}) =
+    renyi2(mix(state), a)
 
 unroll(x) =
     if x[1] isa Number
