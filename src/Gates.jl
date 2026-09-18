@@ -12,9 +12,9 @@ It is much more efficient to apply all the gates in a single call to apply.
     apply(CZ(1,3)*H(2)*CNOT(3,4), state)
 
 """
-# prepared before the Gate wrapping: Gate distributes over the product removeMulti leaves
-# behind, down to the one site factors it knows how to lift
 apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =
+    # prepared before the Gate wrapping: Gate distributes over the product removeMulti
+    # leaves behind, down to the one site factors it knows how to lift
     apply(Gate(prepare_gate(a)), state; kwargs...)
 
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R

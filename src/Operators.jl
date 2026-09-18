@@ -820,6 +820,8 @@ isfermionic(a::PowOp) =
         error("cannot determine fermionic nature of $a")
     end
 
+# a multi site operator is never fermionic, its construction refuses it, so only the
+# one site case has a question to ask
 """
     has_fermionic(::Op)
 
@@ -831,8 +833,6 @@ This is not the question `isfermionic` answers, which is the parity of a single 
 operator: a product of two fermionic operators is not fermionic, but both of its factors
 are and both still need their strings.
 """
-# a multi site operator is never fermionic, its construction refuses it, so only the
-# one site case has a question to ask
 has_fermionic(a::AtIndex{Pure, 1}) = isfermionic(a.op)
 has_fermionic(a::ScalarOp) = has_fermionic(a.arg)
 has_fermionic(a::Union{ProdOp, SumOp}) = any(has_fermionic, a.subs)
