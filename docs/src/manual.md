@@ -1,41 +1,69 @@
 # Manual
 
+```@contents
+Pages = ["manual.md"]
+Depth = 3
+```
+
 ## Import
 
 To use TMS, you must first import it with
 
-    using TensorMixedStates
+```@example manual
+using TensorMixedStates
+```
 
 ## Sites and Systems
 
 The first step in using TMS is the definition of your quantum system. In TMS, a system is composed of a finite
 number of sites numbered from 1 (1, 2, ..., N). These sites may be all identical or not.
 
-There are seven different predefined types of site: `Qubit`, `Fermion`, `Boson`, `Spin`, `Electron`, `Tj` and `Qboson`.
+There are eight different predefined types of site: `Qubit`, `Qudit`, `Fermion`, `Boson`, `Spin`, `Electron`, `Tj` and `Qboson`.
 
 To use each of these sites and the corresponding predefined operators you need first to import the corresponding module.
 For example to use qubits, you need to write
 
-    using .Qubits
+```@example manual
+using .Qubits
+```
 
 Note the "." before the name and the "s" at the end.
 
 To define a site just call the corresponding creator for example
 
-    s = Qubit()
+```@example manual
+s = Qubit()
+```
 
-Some site creators need arguments: `Boson` (for the maximum dimension) and `Spin`, for example
+Four site creators need an argument: `Qudit(dim)` and `Boson(dim)` for the dimension of
+the local Hilbert space, `Spin(s)` for the spin, and `Qboson(q, dim)` for the deformation
+parameter and the dimension. For example
 
-    s = Boson(4)
-    s = Spin(3/2)
+```@example manual
+using .Bosons, .Spins
+
+s = Boson(4)
+```
+
+```@example manual
+s = Spin(3/2)
+```
 
 You can now define a quantum system by declaring the sites it contains:
 
-    system1 = System(10, Qubit())
+```@example manual
+system1 = System(10, Qubit())
+nothing # hide
+```
 
 gives you a system with 10 qubits. Systems may have different types of site, in this case you must feed `System` with an array of sites
 
-    system2 = System([Qubit(), Boson(4), Fermion()])
+```@example manual
+using .Fermions
+
+system2 = System([Qubit(), Boson(4), Fermion()])
+nothing # hide
+```
 
 gives you a three site system.
 
@@ -45,59 +73,89 @@ States may be in pure or mixed representation, these two possibilities are repre
 
 To create a state, we call the State creator
 
-    state1 = State{Pure}(system1, "Up")
+```@example manual
+state1 = State{Pure}(system1, "Up")
+nothing # hide
+```
 
 returns a pure up state in a 10 qubit system. Predefined local states are designated by their name. Here `"Up"` is a predefined state of site `Qubit`.
 
-All sites need not be all in the same local states, in which case we give State an array of local states
+Sites need not be all in the same local state, in which case we give State an array of local states
 
-    state2 = State{Mixed}(system2, ["+", "2", "Occ"])
+```@example manual
+state2 = State{Mixed}(system2, ["+", "2", "Occ"])
+nothing # hide
+```
 
 Here we choose a mixed representation.
 
 States may be added or multiplied by a number (they need to be based on the same system). For example
 
-    ghz = (State{Pure}(system1, "Up") + State{Pure}(system1, "Dn")) / sqrt(2)
+```@example manual
+ghz = (State{Pure}(system1, "Up") + State{Pure}(system1, "Dn")) / sqrt(2)
+nothing # hide
+```
 
 We can transform a pure representation into a mixed representation by
 
-    mixedstate = mix(purestate)
+```@example manual
+mixedstate = mix(state1)
+nothing # hide
+```
 
 For mixed states there is a local mixed state `"FullyMixed"` which correspond to a density matrix proportional to the identity matrix (that is the infinite temperature state).
 
 If you need a local state which is not predefined, it is possible to pass its vector (or matrix for mixed states) directly, For example, we could also define `state1` by
 
-    state1 = State{Pure}(system1, [1., 0.])
+```@example manual
+state1 = State{Pure}(system1, [1., 0.])
+nothing # hide
+```
 
 ## Limits
 
 TMS uses Matrix Product State to internally represent quantum states. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
 
-    lim = Limits(cutoff = 1e-10, maxdim = 50)
+```@example manual
+lim = Limits(cutoff = 1e-10, maxdim = 50)
+```
 
 each (or both) of the arguments may be omitted in which case it corresponds to an absence of constraint for this parameter. In particular, `Limits()` represents no constraint.
 
 To apply the constraints on a state, one uses
 
-    newstate = truncate(oldstate; limits = lim)
+```@example manual
+newstate = truncate(ghz; limits = lim)
+nothing # hide
+```
 
 Many functions accept such an argument. For example, when adding states instead of
 
-    state = (state1 + state2) / 2
+```@example manual
+state = (state1 + ghz) / 2
+nothing # hide
+```
 
 One can write
 
-    state = +(state1, state2; limits = lim) / 2
+```@example manual
+state = +(state1, ghz; limits = lim) / 2
+nothing # hide
+```
 
 ## Operators
 
 In TMS, there are two kinds of operators: generic operators and indexed operators. For example,
 
-    X
+```@example manual
+X
+```
 
 represents the ``\sigma_x`` Pauli operator for qubits. This is a *generic operator*, it is not applied to a specific site.
 
-    X(3)
+```@example manual
+X(3)
+```
 
 represents the ``\sigma_x`` Pauli operator applied to the system site number 3. This is an *indexed operator*.
  
@@ -111,7 +169,10 @@ H = \sum_{i=1}^{n-1} \sigma_x(i) \sigma_x(i+1)
 
 you will simply write
 
-    h = sum(X(i)X(i+1) for i in 1:n-1)
+```@example manual
+n = 10
+h = sum(X(i)X(i+1) for i in 1:n-1)
+```
 
 Many operations are defined on generic operators:
 
@@ -126,24 +187,40 @@ Many operations are defined on generic operators:
 
 For example one can define the Rxy 2-site operator by
 
-    Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
+```@example manual
+Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
+```
 
 If this is not enough to define your favorite operator you can create new ones by specifying their matrix.
 The number in braces is the number of sites on which the operator must be applied.
 
-    myop = Operator{1}("MyOp", [1 1 ; 1 -1] / √2, involution_op)
+```@example manual
+myop = Operator{1}("MyOp", [1 1 ; 1 -1] / √2, involution_op)
+```
 
-    Swap = Operator{2}("Swap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
+```@example manual
+myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
+```
 
 Finally from generic operators, we define indexed operators by simply applying them to the corresponding sites
 
-    Rxy(0.2)(2, 5)
-    myop(3)
-    Swap(4, 7)
+```@example manual
+Rxy(0.2)(2, 5)
+```
+
+```@example manual
+myop(3)
+```
+
+```@example manual
+myswap(4, 7)
+```
 
 In the case of Hamiltonian or Lindbladian evolution the Hamiltonian part is to be multiplied by -im:
 
-    evolver = -im * hamiltonian + dissipators
+```julia
+evolver = -im * hamiltonian + dissipators
+```
 
 ## Algorithms
 
@@ -151,7 +228,9 @@ We can now work with states and operators.
 
 We can apply gates with `apply`
 
-    newstate = apply(gates, oldstate; limits)
+```julia
+newstate = apply(gates, oldstate; limits)
+```
 
 the `gates` argument is an indexed operator representing the gates to apply
 
@@ -159,14 +238,18 @@ the keyword argument `limits` fixes the constraints to apply
 
 We can compute ground states with `dmrg`
 
-    energy, groundstate = dmrg(hamiltonian, startstate; options...)
+```julia
+energy, groundstate = dmrg(hamiltonian, startstate; options...)
+```
 
 the options are `limits` to set constraints and `nsweeps` to fix the number of sweeps among others.
 
 We can do time evolution with `tdvp` and `approx_W`
 
-    newstate = tdvp(evolver, time, oldstate; options...)
-    newstate = approx_W(evolver, time, oldstate; options...)
+```julia
+newstate = tdvp(evolver, time, oldstate; options...)
+newstate = approx_W(evolver, time, oldstate; options...)
+```
 
 the options are `limits` for the constraints, `nsweeps` for the number of steps to do and for `approx_W`, `order` and `w` for the parameters of the algorithm (`order = 4, w = 2` are usually good)
 
@@ -174,17 +257,28 @@ For more details, see the reference or the inline help.
 
 ## Measurements
 
-Once we have created a state, we may want to measure it.
+Once we have created a state, we may want to measure it. Take for example a three qubit state
 
-    result = measure(state, X(1)X(3))
+```@example manual
+state = State{Pure}(System(3, Qubit()), "Up")
+nothing # hide
+```
+
+```@example manual
+result = measure(state, X(1)X(3))
+```
 
 will give ``\langle \psi | \sigma_x^1 \sigma_x^3 | \psi \rangle``
 
-    result = measure(state, X)
+```@example manual
+result = measure(state, X)
+```
 
 will give the array of the ``\langle \psi | \sigma_x^i | \psi \rangle``
 
-    result = measure(state, (X, Y))
+```@example manual
+result = measure(state, (X, Y))
+```
 
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``
 
@@ -192,7 +286,7 @@ We can also measure other properties with
 - `Trace` : the trace of the density matrix, this should be one, so it is a good indicator for accumulated error
 - `TraceError`: measure the deviation from trace 1
 - `Trace2`, `Purity`: measure the trace of the square of the density matrix
-- `Hermiticity`: measure how well the density matrix is Hermitian, return 1 if Hermitian, 0 if antihermitian
+- `Hermiticity`: measure how well the density matrix is Hermitian, return 1 if Hermitian, 0 if anti-Hermitian
 or any value in between
 - `HermiticityError` measure the deviation from Hermiticity 1
 - `Renyi2`: measure the Renyi entropy of order 2 of the system
@@ -203,7 +297,9 @@ or any value in between
 
 We can also ask for several measurements at the same time
 
-    results = measure(state, [X, X(2)Z(3), (X, Y), Trace, MemoryUsage])
+```@example manual
+results = measure(state, [X, X(2)Z(3), (X, Y), Trace, MemoryUsage])
+```
 
 For more details see the reference or the inline help.
 
@@ -229,9 +325,15 @@ The following phases are available:
 
 with these phases we define a `SimData` object that describes the simulation and finally, we call
 
-    runTMS(simdata)
+```julia
+runTMS(simdata)
+```
 
 which executes the simulation.
+
+Phases that sweep take their measurements at every step by default. The
+`measures_period` field of `Evolve`, `GroundState` and `SteadyState` raises that interval:
+`measures_period = 10` measures one step out of ten, which is what long runs usually want.
 
 The `phases` field is a list, but that list may contain lists, to any depth, and is
 flattened before the simulation starts. This is meant for programs that build their phases
@@ -242,7 +344,7 @@ in pieces, a helper returning the several phases it needs rather than a single o
 
 As an example, here is the complete code for such a simple simulation:
 
-```
+```julia
 using TensorMixedStates, .Fermions
 
 hamiltonian(n) = -sum(dag(C)(i)C(i+1)+dag(C)(i+1)C(i) for i in 1:n-1)
@@ -284,12 +386,14 @@ A simulation meant to run for hours or days can save its progress, so that a cra
 batch system killing the job, or a deliberate stop does not throw the computation away.
 Two fields of `SimData` control it.
 
-    SimData(
-        name = "my_simulation",
-        checkpoint_interval = 600,       # seconds between two checkpoints
-        max_time = 3.5 * 3600,           # stop cleanly after this long
-        phases = [...],
-    )
+```julia
+SimData(
+    name = "my_simulation",
+    checkpoint_interval = 600,       # seconds between two checkpoints
+    max_time = 3.5 * 3600,           # stop cleanly after this long
+    phases = [...],
+)
+```
 
 `checkpoint_interval` is the time between two saves, `0` (the default) disables
 checkpointing entirely. `max_time` is a wall clock budget: once it is past, the simulation
@@ -357,28 +461,37 @@ several `Gates` phases, which gives resume points at no cost.
 
 Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair or list of pairs.
 
-    measures = destination => measurements
-    measures = [ dest1 => meas1, dest2 => meas2, ...]
+```julia
+measures = destination => measurements
+measures = [ dest1 => meas1, dest2 => meas2, ...]
+```
 
 The possible measurements are described in the measurements section of this manual. There are three types of destinations:
 
 - filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull)
 
-    "file.dat" => X
+  ```julia
+  "file.dat" => X
+  ```
 
 - json filenames: filenames ending by ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
 
-    "file.json" => [Purity, X(2)Z(3), (X, Y)]
+  ```julia
+  "file.json" => [Purity, X(2)Z(3), (X, Y)]
+  ```
 
 - Data object: data is accumulated during the simulation and stored in the `data` field of the `Simulation` object returned by `runTMS`. This is useful for analyzing the data inside the program.
 
-    Data("mydata") => [TraceError, X(1), Y]
+  ```julia
+  Data("mydata") => [TraceError, X(1), Y]
+  ```
 
-The `DataToFrame` function can be used on the result to get a `DataFrame` object (the user must import the `DataFrames` package himself before using this function)
+The `DataToFrame` function can be used on the result to get a `DataFrame` object (the `DataFrames` package must be imported first)
 
-    sim = runTMS(simdata)
-    df = DataToFrame(sim.data["mydata"]) 
+```julia
+sim = runTMS(simdata)
+df = DataToFrame(sim.data["mydata"])
+```
 
 
 For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
-

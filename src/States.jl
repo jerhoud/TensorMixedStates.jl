@@ -85,7 +85,7 @@ represent the complete state of the simulated quantum system
 
 # Operations
 
-states can be added, substracted and multiplied by numbers
+states can be added, subtracted and multiplied by numbers
 
 """
 struct State{R <: PM}

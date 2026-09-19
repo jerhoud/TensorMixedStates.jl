@@ -1,6 +1,17 @@
 using Documenter
 using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons
 
+# context in which the doctests of the docstrings are run
+DocMeta.setdocmeta!(
+    TensorMixedStates,
+    :DocTestSetup,
+    quote
+        using TensorMixedStates
+        using .Qubits, .Qudits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons
+    end;
+    recursive = true,
+)
+
 makedocs(
     sitename = "TensorMixedStates",
     format = Documenter.HTML(prettyurls = get(ENV, "CI", nothing) == "true", repolink = "https://github.com/jerhoud/TensorMixedStates.jl"),

@@ -187,7 +187,7 @@ return achieved "energy" (which should be zero) and computed steady state
 - `observer!`: observer (see `DmrgObserver`)
 - `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
 - `mpo_limits`: sets the limit on the MPO of (L+)L (default is no truncation)
-- `alg`: is "naive"(default) or "zipup": alorithm to compute (L+)L 
+- `alg`: is "naive"(default) or "zipup": algorithm to compute (L+)L 
 - others identical to ITensorMPS.dmrg
 
 """

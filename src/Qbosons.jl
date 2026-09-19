@@ -3,7 +3,7 @@ export Qbosons
 """
     Qboson(q, dim)
 
-a site type to represent q-boson sites, it is parametred by `q` and the dimension of the Hilbert space
+a site type to represent q-boson sites, it is parametrised by `q` and the dimension of the Hilbert space
 (maximum occupancy is `dim - 1`).
 
 ``a|n\\rangle = \\sqrt{1-q^n} |n-1\\rangle`` and ``a^\\dagger |n\\rangle = \\sqrt{1 - q^{n+1}} |n+1\\rangle``

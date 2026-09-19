@@ -4,7 +4,7 @@ export Qudits
     Qudit(dim)
 
 a site type to represent qudit sites, that is `dim` level systems carrying the
-generalized Pauli operators rather than spin operators. It is parametred by the dimension
+generalized Pauli operators rather than spin operators. It is parametrised by the dimension
 of the Hilbert space.
 
 Writing ``d`` for that dimension and ``\\omega = e^{2i\\pi/d}`` for the corresponding

@@ -23,12 +23,15 @@ There are eight predefined site types `Qubit`, `Qudit`, `Spin`, `Boson`, `Fermio
 
 To use `Qubit`, call
 
-    using .Qubits
+```julia
+using .Qubits
+```
 
 ```@docs
 TensorMixedStates.Qubits
 Qubit
 Phase
+Swap
 controlled
 graph_state
 create_graph_state
@@ -38,7 +41,9 @@ create_graph_state
 
 To use `Spin`, call
 
-    using .Spins
+```julia
+using .Spins
+```
 
 ```@docs
 TensorMixedStates.Spins
@@ -49,7 +54,9 @@ Spin
 
 To use `Boson`, call
 
-    using .Bosons
+```julia
+using .Bosons
+```
 
 ```@docs
 TensorMixedStates.Bosons
@@ -60,7 +67,9 @@ Boson
 
 To use `Fermion`, call
 
-    using .Fermions
+```julia
+using .Fermions
+```
 
 ```@docs
 TensorMixedStates.Fermions
@@ -71,7 +80,9 @@ Fermion
 
 To use `Electron`, call
 
-    using .Electrons
+```julia
+using .Electrons
+```
 
 ```@docs
 TensorMixedStates.Electrons
@@ -82,7 +93,9 @@ Electron
 
 To use `Tj`, call
 
-    using .Tjs
+```julia
+using .Tjs
+```
 
 ```@docs
 TensorMixedStates.Tjs
@@ -93,7 +106,9 @@ Tj
 
 To use `Qboson`, call
 
-    using .Qbosons
+```julia
+using .Qbosons
+```
 
 ```@docs
 TensorMixedStates.Qbosons
@@ -104,11 +119,14 @@ Qboson
 
 To use `Qudit`, call
 
-    using .Qudits
+```julia
+using .Qudits
+```
 
 ```@docs
 TensorMixedStates.Qudits
 Qudit
+Sumd
 ```
 
 ## Defining new site types

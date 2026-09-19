@@ -35,17 +35,31 @@ to describe
 ```
 we use
 
-    hs = -im * [ -sum(X(i)X(i+1) for i in 1:n-1), -sum(Z(i) for i in 1:n)]
+```@setup others
+using TensorMixedStates
+using .Qubits
+n = 6
+```
+
+```@example others
+hs = -im * [ -sum(X(i)X(i+1) for i in 1:n-1), -sum(Z(i) for i in 1:n)]
+```
 
 and
 
-    coefs = [ t -> exp(-t), t -> sin(t) ]
+```@example others
+coefs = [ t -> exp(-t), t -> sin(t) ]
+```
 
 `hs` is passed as usual to `tdvp` or `approx_W` and `coefs` is passed as a keyword argument called `coefs`.
 When using `Simulation` the simulation time is used for `t`, for `State` the initial simulation time is passed as a keyword argument called `time_start` (which default to 0)
 
-    tdvp(hs, duration, initial_state; coefs, time_start)
+```julia
+tdvp(hs, duration, initial_state; coefs, time_start)
+```
 
 With the high level interface, one can use time dependent evolver for the Evolve phase with the following syntax
 
-    evolver = hs => coefs
+```julia
+evolver = hs => coefs
+```

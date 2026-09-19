@@ -179,7 +179,7 @@ A phase type for time evolution
 - `algo`: the algorithm used (one of `Tdvp()` or `ApproxW(...)`)
 - `evolver`: the hamiltonian (evolver = -im * H) with a possible dissipator (evolver = -im * H + D)
 - `measures`: the measurement to make (default [])
-- `measures_period`: number of time steps between measurments (default 1)
+- `measures_period`: number of time steps between measurements (default 1)
 """
 @kwdef struct Evolve
     name::String = "Time evolution"

@@ -1,40 +1,81 @@
 # Operators
 
+```@contents
+Pages = ["operators.md"]
+Depth = 2
+```
+
 ## Usage
+
+The examples of this page use qubits on a six site system, that is
+
+```@setup operators
+using TensorMixedStates
+using .Qubits
+n = 6
+j = 1.0
+h = 0.5
+```
+
+```julia
+using TensorMixedStates, .Qubits
+
+n = 6
+j = 1.0
+h = 0.5
+```
 
 There are two kinds of operators: generic (like `X`) and indexed (like `X(3)`). Indexed operators are applied to specific site numbers.
 
 - Operators can be used to define Hamiltonians, for example
 
-    hamiltonian = - j * sum(X(i)X(i+1) + Y(i)Y(i+1) for i in 1:n-1) - h * sum(Z(i) for i in 1:n)
+```@example operators
+hamiltonian = - j * sum(X(i)X(i+1) + Y(i)Y(i+1) for i in 1:n-1) - h * sum(Z(i) for i in 1:n)
+```
 
 or Lindbladian dissipators like
 
-    dissipators = sum(Dissipator(Sp)(i) for i in 1:n)
+```@example operators
+dissipators = sum(Dissipator(Sp)(i) for i in 1:n)
+```
 
 to build Lindbladian
 
-    lindbladian = -im * hamiltonian + dissipators
+```@example operators
+lindbladian = -im * hamiltonian + dissipators
+```
 
 Note the factor `-im` for the Hamiltonian.
 
 - Operators can be used to define quantum gates like
 
-    gates = H(1)Swap(1, 2)H(1)
+```@example operators
+gates = H(1)Swap(1, 2)H(1)
+```
 
 Noisy gates can be defined using the `Gate` constructor, for example
 
-    noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
+```@example operators
+noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
+```
 
 - Operators can be used to define observables
 
-    obs = X(1)X(2)Z(3)
+```@example operators
+obs = X(1)X(2)Z(3)
+```
 
 ## Reference
 
 Complex operators can be built from a rich set of functions, for example
 
-    Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
+```@example operators
+Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
+```
+
+```@example operators
+Rxy(0.2)(2, 5)
+```
 
 Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`, `^`).
 

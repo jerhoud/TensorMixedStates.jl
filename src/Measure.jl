@@ -237,7 +237,7 @@ const Norm = StateFunc("Norm", norm)
     Hermiticity
 
 a state function to measure the degree of hermiticity of the density matrix.
-Return 1 if density matrix is Hermitian, 0 for anti Hermitian, in beyween otherwise.
+Return 1 if density matrix is Hermitian, 0 for anti Hermitian, in between otherwise.
 Sea also `StateFunc` and `hermiticity`
 """
 const Hermiticity = StateFunc("Hermiticity", hermiticity)

@@ -58,7 +58,7 @@ the type of all operators.
 # Type parameters
 
 - `R`: is `Pure` or `Mixed` (the type of the representations on which the operator may be applied)
-- `T`: ig `Generic` or `Indexed`
+- `T`: is `Generic` or `Indexed`
 - `N`: the number of sites on which the operator must be applied (set to 1 for indexed operators)
 """
 abstract type Op{R <: PM, T <: GI, N} end
@@ -77,6 +77,14 @@ the type of indexed operators (with site indices), that is `Op{R, Indexed, 1}`
 """
 const IndexedOp{R} = Op{R, Indexed, 1}
 
+"""
+    SimpleOp
+
+the type of generic pure operators acting on one site, that is `GenericOp{Pure, 1}`
+
+Note that it is abstract: `X` is a `SimpleOp`, but so is any one site combination such as
+`2X`, `X * Y` or `exp(X)`.
+"""
 const SimpleOp = GenericOp{Pure, 1}
 
 ############## Showing ###############
@@ -432,7 +440,7 @@ hash(a::TensorOp, h::UInt) = hash(a.subs, hash(:TensorOp, h))
     type JW <: SimpleOp
 
 type for operators transformed by the Jordan-Wigner transform.
-for example C(5) is tranformed into Multi_F(1,4)JW(C). 
+for example C(5) is transformed into Multi_F(1,4)JW(C). 
 JW operators anticommute with F
 """
 struct JW <: SimpleOp
@@ -464,7 +472,7 @@ isless(::JW_F, ::JW_F) = false
     Multi_F
 
 a type for representing the F factors in the Jordan-Wigner transform.
-for example C(5) is tranformed into Multi_F(1,4)JW(C). 
+for example C(5) is transformed into Multi_F(1,4)JW(C). 
 """
 struct Multi_F{R} <: IndexedOp{R}
     start::Int
@@ -710,7 +718,7 @@ flips_sign(coef::Number, expo::Number) = coef isa Real && coef < 0 && !isinteger
 """
     type PowOp{R, N} <: GenericOp{R, N}
 
-internal type to reprensent powers of operators
+internal type to represent powers of operators
 """
 struct PowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
