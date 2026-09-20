@@ -260,25 +260,60 @@ These need decisions, not patches.
   `Bosons.N === Fermions.N === Qudits.N === Qbosons.N` — and by `test/sites.jl`, which
   declares `N` for a site of its own and checks that the mismatching declaration is
   refused. Documented in the `Defining new site types` section of `sites.md`.
-- **`Simulation` is immutable on the surface only**: the copy constructor shares `files`,
-  `data` and `checkpoint` by reference. State is threaded functionally, but the whole
-  checkpoint bookkeeping is a mutable channel shared between every copy. That was the root
-  cause of the interrupted-phase checkpoint bug.
-- **`runTMS` is neither reentrant nor usable in parallel**: `cd`, `Base.exit_on_sigint`, a
-  global `Random.seed!`. Defensible for a script driver, but written nowhere.
-- **`Dmrg` is declared deprecated** (`src/PhaseTypes.jl`) yet is still exported and
-  documented without a deprecation warning.
-- **Divergent defaults** between phase structs and solver signatures: `ApproxW.w = 2`
-  against `approx_W(...; w = 1)`; `order` with no default on the phase side and `= 1` on the
-  solver side. Divergent naming: `alg` on the function, `mpo_algo` on the phase.
-- **`run_phase` has no fallback method**, so an unsupported object in `phases` gives a raw
-  `MethodError`. It is also a clean user extension point — define a struct with
-  `name`/`time_start`/`final_measures` plus a `run_phase` method — but this is documented
-  nowhere and `run_phase` has no docstring.
-- **`const Phases` does not include `SimData`**, although `SimData` *is* a phase, and
-  `flatten_phases` does not flatten a nested `SimData`, which would therefore be accepted
-  and would silently break the phase numbering a checkpoint records.
-- Minor: duplicated exports (`Limits`, `mix`, `dag`, `tensor`); `removeMulti` in camelCase
+- **`Simulation` sharing — documented.** The copy constructor hands the new object the very
+  `files`, `data` and `checkpoint` of the old one. That is deliberate: those are the parts
+  that must not fork, and sharing them is what lets a copy made inside a phase advance the
+  same checkpoint. It was also the root cause of the interrupted-phase bug, which is reason
+  enough to say it out loud, and the docstring of `Simulation` now does.
+- **`runTMS` is neither reentrant nor usable in parallel — documented.** It changes the
+  working directory, sets `Base.exit_on_sigint`, and reseeds the global generator for a
+  `CreateState` carrying a `seed`. Defensible for a script driver, but it was written
+  nowhere; the docstring now says to use separate processes or `output`, and that
+  parallelism inside one simulation is a different matter and works as usual.
+- **`Dmrg` is really deprecated now**, through `Base.@deprecate_binding`, which is Julia's
+  tool for a binding as opposed to `Base.@deprecate` for a function. `Mutual_Info_Renyi2`
+  was renamed `MutualInfoRenyi2` in the same movement and its old spelling deprecated with
+  `Base.@deprecate`, the label it writes to the output files following the new name.
+
+  Three things worth remembering, all measured rather than assumed. Both macros export the
+  old name themselves unless told not to, so `false` is passed and the export lists stay the
+  single source of truth. A docstring cannot sit above either macro, since they expand to a
+  toplevel block, so it is attached with `@doc` afterwards. And the warnings are invisible to
+  ordinary users: `--depwarn` defaults to `no`, and only a test run turns it on.
+
+  **Left open**: a deprecated *binding* warns only on a qualified access,
+  `TensorMixedStates.Dmrg`. After `using TensorMixedStates`, which is how everyone writes it,
+  `Dmrg` is silent even with `--depwarn=yes`. The function deprecation of
+  `Mutual_Info_Renyi2` does not have this problem and warns as expected. Making `Dmrg` warn
+  on use would mean turning it from a type alias into a function forwarding to the
+  `GroundState` constructor, which would break `x isa Dmrg` and any use in type position.
+- **Divergent defaults — aligned on the phase.** `approx_W` takes `order` with no default
+  and `w = 2`, which is what the docstring of `ApproxW` described all along, so the
+  documentation stops contradicting the code. The call in `Precompile.jl` and one test
+  called `approx_W` without `order` and were fixed; no phase is affected, since `ApproxW`
+  passes both explicitly. The change is in the CHANGELOG, being a break for direct callers.
+
+  The divergent naming, `alg` on the function against `mpo_algo` on the phase, is left as it
+  is on purpose: renaming a keyword is an API change, and the API is not changed for a
+  naming blemish.
+- **`run_phase` — done.** It has a docstring saying that it is the extension point, and two
+  failures now say what is wrong instead of surfacing as a `MethodError` or a `FieldError`
+  from the middle of a run: `check_is_phase` in `log_phase` catches an object that has none
+  of the three fields a phase is read through, and the fallback `run_phase` catches one that
+  has them but no method. Both messages name what to define.
+- **A `SimData` is not a phase — refused.** It has the shape of one, with `name`,
+  `time_start` and `final_measures`, only because `runTMS` runs the top level one through
+  `log_phase` like any phase, which is where the first line of the log comes from. That made
+  `run_phase(::Simulation, ::SimData)` reachable for a `SimData` sitting inside `phases`, and
+  there it was worse than the numbering problem the review suspected: the loop it opened
+  shared the phase counter of the loop around it, so it skipped every inner phase whose index
+  was below the outer one. Reproduced without any checkpoint involved — the same two
+  evolutions wrote twelve lines flat and six lines nested, the log showing one `Time
+  evolution` where there should have been two. `flatten_phases` now refuses it and points at
+  vector nesting, which is the documented way and works. `const Phases` was right all along.
+- Minor: duplicated exports are gone, each of `Limits`, `mix`, `dag` and `tensor` being
+  exported once now, from where it is defined or from the file included first. Left alone on
+  purpose, because the API is not changed for a naming blemish: `removeMulti` in camelCase
   among `make_mpo`, `partial_trace`, `graph_base_size`; `trace2` and `Purity` are the same
   function under two names; no `show` for `JW`, `Multi_F`, `Proj`, `SetState`, and
   `test/operators.jl` depends on the default struct display.
