@@ -1,4 +1,4 @@
-export trace, trace2, norm, normalize, dag, hermitianize, hermiticity, renyi2
+export trace, trace2, norm, normalize, hermitianize, hermiticity, renyi2
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace, mutual_info_renyi2, sample
 
