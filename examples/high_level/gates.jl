@@ -24,7 +24,7 @@ phases(n) = [
 ]
 
 sim_data(n) = SimData(
-    name = "my amazing simulation with $n qubits",
+    name = "my_amazing_simulation_with_$(n)_qubits",
     description = "A simulation with $n qubits",
     phases = phases(n)
 )

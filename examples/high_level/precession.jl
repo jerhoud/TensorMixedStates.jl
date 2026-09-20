@@ -28,7 +28,7 @@ phases(n) = [
 ]
 
 simdata(n) = SimData(
-    name = "A simulation showing precession",
+    name = "precession",
     description = "no description",
     phases = phases(n),
 )

@@ -63,7 +63,9 @@ sim_data(gamma, n, step, alg) = SimData(
             duration = 4,
             # time step
             time_step = step,
-            # evolver must be -im * hamiltonian + dissipators
+            # the evolver is -im * hamiltonian + dissipators. The hamiltonian of a tight
+            # binding chain is minus its hopping sum, H = -sum(dag(C)(i)C(i+1) + h.c.), so
+            # -im * H is +im times that sum, which is what is written below
             evolver = 
                 im*sum(dag(C)(i)C(i+1)+dag(C)(i+1)C(i) for i in 1:n-1)
                 + sum(Dissipator(sqrt(4 * gamma)N)(i) for i in 1:n),

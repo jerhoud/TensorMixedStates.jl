@@ -5,6 +5,13 @@ limits = Limits(
     maxdim = 50,
 )
 
+# the algorithm and the time step live here rather than inside the phase, so that the
+# description below can be built from the values actually used. A description that restates
+# them by hand drifts, and what it writes to the run directory is then a false record of
+# what was computed
+algo = ApproxW(order = 4, n_hermitianize = 5)
+time_step = 0.04
+
 output(n) = [
     "X.dat" => X,
     "Y.dat" => Y,
@@ -24,11 +31,11 @@ output(n) = [
 sim_data(J,h,n) = SimData(
     name = "Q1",
     description = """
-        Ising chain (1D) quench with $n spins and periodic boundary conditions 
-        cutoff = 1e-30
-        maxdim = 100
-        algo = W2 order 4
-        time_step = 0.04
+        Ising chain (1D) quench with $n spins and periodic boundary conditions
+        cutoff = $(limits.cutoff)
+        maxdim = $(limits.maxdim)
+        algo = $algo
+        time_step = $time_step
     """,
     phases = [
         CreateState(
@@ -44,10 +51,10 @@ sim_data(J,h,n) = SimData(
         ), 
         Evolve(
             #algo = Tdvp(n_hermitianize = 5),
-            algo =  ApproxW(order = 4, n_hermitianize = 5),
+            algo = algo,
             limits = limits,
             duration = 5,
-            time_step = 0.04,
+            time_step = time_step,
             evolver =  -im*(
                     J*(sum(Z(i)*Z(i+1) for i in 1:n-1)+Z(n)*Z(1))
                     -h*sum(X(i) for i in 1:n)

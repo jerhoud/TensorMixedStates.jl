@@ -354,15 +354,21 @@ date with the current API and abundantly commented, but:
 
 - **none is run by CI**, and none uses the recent features (`checkpoint_interval`,
   `max_time`, `square_lattice`, `Qudit`, time dependent evolvers);
-- **`examples/high_level/ising_quench.jl` writes a description that lies**: `limits` sets
-  `maxdim = 50` and the description text says `maxdim = 100`. That text is written to the
-  run's `description` file, so the simulation records a false parameter;
-- `examples/article/4_Free_fermions_with source.jl` **has a space in its filename**, unlike
-  its five siblings; simulation names with spaces appear in three more scripts, and `name`
-  becomes a directory name;
-- `examples/article/1_Fermion_chain_with_dephasing.jl` has a comment saying the evolver
-  must be `-im * hamiltonian + dissipators` immediately above a line writing `im*sum(...)`.
-  The code is right and the comment contradicts it;
+- ~~`ising_quench.jl` writes a description that lies~~ — **done**. It said `maxdim = 100`
+  where `limits` set 50, and that text goes to the run's `description` file, so the
+  simulation recorded a false parameter. Rather than correct the number, the description is
+  now built from the values themselves, `$(limits.maxdim)` and the like, with the algorithm
+  and the time step hoisted into variables so they have one definition. It cannot drift
+  again, and it gained what it used to omit: the rendered algorithm reads
+  `ApproxW(order = 4, w = 2, n_hermitianize = 5)`;
+- ~~a space in a filename, and simulation names with spaces~~ — **done**.
+  `4_Free_fermions_with_source.jl` matches its five siblings, and the three `SimData` names
+  carrying spaces, in `gates.jl`, `complete_graph_tdvp.jl` and `precession.jl`, no longer
+  do, since that name becomes a directory. The `name` of a phase is only a log label and
+  was left as it reads;
+- ~~a comment contradicting the evolver~~ — **done**, by explaining rather than by changing
+  the code, which was right: the hamiltonian of a tight binding chain is minus its hopping
+  sum, so `-im * H` is `+im` times that sum, which is what the line writes;
 - there is no README in `examples/high_level/`, and `examples/article/README` should be
   `README.md` to be rendered by GitHub;
 - no indication of running time anywhere, and these are publication sizes;
