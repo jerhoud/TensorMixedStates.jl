@@ -4,3 +4,6 @@ TensorMixedStates = "4ce20acf-6baa-4876-9668-f7596d62e73f"
 
 [sources]
 TensorMixedStates = {path = ".."}
+
+[compat]
+Documenter = "1"

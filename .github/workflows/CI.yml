@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - dev
     tags: ['*']
   pull_request:
   workflow_dispatch:
@@ -22,13 +23,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1.11'
-          - 'pre'
-        os:
-          - ubuntu-latest
-        arch:
-          - x64
+        include:
+          # the minimum [compat] promises, the current stable, the upcoming release
+          - {os: ubuntu-latest, arch: x64, version: '1.10'}
+          - {os: ubuntu-latest, arch: x64, version: '1'}
+          - {os: ubuntu-latest, arch: x64, version: 'pre'}
+          # Apple Silicon: reachable since MKL stopped being a hard dependency
+          - {os: macos-latest, arch: aarch64, version: '1'}
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
