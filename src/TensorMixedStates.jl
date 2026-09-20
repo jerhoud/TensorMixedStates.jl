@@ -7,7 +7,7 @@ import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless, ==, hash
 import ITensors: matrix, truncate, dim, Index, dag, norm, sim
 import ITensorMPS: maxlinkdim, apply, state, expect, normalize, measure!, checkdone!, tdvp, dmrg, sample
 
-using MKL, ITensors, ITensorMPS, Printf, Dates, JSON, Random, LinearAlgebra, HDF5
+using ITensors, ITensorMPS, Printf, Dates, JSON, Random, LinearAlgebra, HDF5
 
 # Core
 include("Operators.jl")

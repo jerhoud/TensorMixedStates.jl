@@ -102,41 +102,65 @@ published manual. To be written there.
 
 ## 2. Packaging and release
 
-### 2.1 Versioned documentation has never been published
+### 2.1 Versioned documentation — **done**
 
-`origin/gh-pages` contains only `dev/`: `versions.js` reads `DOC_VERSIONS = ["dev"]` and
-`DOCUMENTER_STABLE = "dev"`, despite tags up to `v1.2.9`. The README's Documentation link
-therefore points at the development docs. `documentation.yml` does trigger on tags, so the
-cause has to be looked for in the Actions logs.
+The cause was in the Actions logs: no run had ever been triggered by a tag. TagBot pushed
+every tag with the default `GITHUB_TOKEN`, and GitHub does not trigger workflows on pushes
+made with that token, so the `tags: '*'` of `documentation.yml` never fired. The repository
+had no secret and no deploy key at all, so the `ssh: ${{ secrets.DOCUMENTER_KEY }}` of
+`TagBot.yml` was empty and silently fell back to the token.
 
-### 2.2 Continuous integration
+A `Documenter` deploy key with write access and the `DOCUMENTER_KEY` secret are now in
+place, so future tags deploy on their own. `v1.2.9` itself was built from the tag and
+assembled with Documenter's own `expand_versions`, `generate_version_file`,
+`generate_redirect_file` and `rm_and_add_symlink`, because the workflow file at that commit
+carried no `workflow_dispatch` trigger to dispatch on. `gh-pages` now holds `v1.2.9/` with
+the `stable`, `v1.2` and `v1` symlinks, and the root redirects to `stable` instead of
+`dev`. `workflow_dispatch` was added to `documentation.yml` so any later tag can be rebuilt
+by hand with `gh workflow run documentation.yml --ref vX.Y.Z`.
 
-- **1.10 is never tested.** The matrix is `['1.11', 'pre']` while `[compat]` promises
-  `1.10.5` and `docs/src/index.md` promises it to the user.
-- **CI only triggers on pushes to `main`** (`CI.yml:4-6`), while development happens on
-  `dev`. Fifty commits have just landed there without CI running once.
-- **No coverage measurement and no badge.** For a package this size it is the cheapest
-  thing left to add.
-- Neither macOS nor Windows. `test/checkpoint.jl` changes the working directory and
-  manipulates files, which is precisely what breaks on Windows.
-- **`test/Project.toml` and `docs/Project.toml` have no `[compat]` section**, so a future
-  release of Aqua or Documenter can redden CI for reasons unrelated to the package.
-- `documentation.yml` uses `julia-actions/cache@v2` where `CI.yml` uses `@v3`, has no
-  `concurrency` block and no `timeout-minutes`, and still carries the PkgTemplates
-  boilerplate comment.
+### 2.2 Continuous integration — **done except coverage**
 
-### 2.3 Two decisions
+- CI and the documentation build now trigger on `dev` as well as `main`, so work stops
+  landing untested.
+- The matrix is `['1.10', '1', 'pre']`: the minimum `[compat]` promises, the current
+  stable, and the upcoming release. The pinned `'1.11'` was dropped, being neither.
+- `test/Project.toml` and `docs/Project.toml` have `[compat]` sections, so a future release
+  of Aqua, DataFrames or Documenter can no longer redden CI on its own.
+- `documentation.yml` was aligned with `CI.yml`: `cache@v3`, a `concurrency` block,
+  `timeout-minutes`, and the PkgTemplates boilerplate comment removed.
 
-- **MKL is a hard dependency**, used once, in `src/TensorMixedStates.jl`, to switch the
-  BLAS backend. `MKL_jll` ships x86 binaries only, so the package is **not installable on
-  Apple Silicon**, and this is also what keeps macOS out of the CI matrix. Moving it to an
-  extension behind a platform test, or at least documenting the fallback to
-  `LinearAlgebra.BLAS`, would be a real portability gain. The Installation section of
-  `docs/src/index.md` mentions no platform restriction.
-- **`julia = "1.10.5 - 1.13"` is inclusive**, so `[1.10.5, 1.14.0)`. The package becomes
-  uninstallable the day 1.14 is released, until a new release is cut, and the bound has
-  already had to be raised once. Unless a 1.14 incompatibility is known, `julia = "1.10.5"`
-  is the convention and removes the recurring maintenance.
+- macOS is in the matrix, on Apple Silicon, now that 2.3 has removed the MKL dependency
+  that made the package unavailable there. The matrix is written as an explicit `include`
+  list, so each row pairs its own architecture.
+
+**Left open on purpose**: no coverage measurement and no badge, deferred because it needs
+an account on an external service. Windows either: `test/checkpoint.jl` changes the working
+directory and manipulates files, which is precisely what would break there, so adding it
+means fixing the test first.
+
+### 2.3 Two decisions — **both taken**
+
+- **MKL was dropped as a dependency.** Its whole use was the `using MKL` of
+  `src/TensorMixedStates.jl:10`, which switches the BLAS backend of the entire Julia
+  session. The situation was worse than the review stated: the `MKL = "0.7 - 0.9"` bound
+  resolves to MKL.jl 0.9, which requires MKL_jll 2025, and that generation ships `x86_64`
+  Linux and Windows only. Intel dropped macOS from oneMKL, so the package was installable
+  on no macOS at all, Intel included, and on no ARM machine.
+
+  The weak dependency route of the review was examined and rejected: an extension only
+  fires when the user loads MKL themselves, and at that point MKL has already switched the
+  backend on its own, so the extension would be empty.
+
+  What replaces it is a `BLAS backend` subsection in the Installation section of
+  `docs/src/index.md`: OpenBLAS is used as it comes, and an `x86_64` user who wants MKL
+  loads it before TMS. This is a user visible performance change for those users and
+  belongs in the CHANGELOG of 2.4. Verified after the removal: the package loads, BLAS
+  reports `libopenblas64_`, and `expect1` returns exact values on a two qubit state.
+
+- **`julia = "1.10.5"`**, which Pkg reads as `[1.10.5, 2.0.0)`. The package no longer
+  becomes uninstallable the day 1.14 ships, and the bound no longer has to be raised at
+  every Julia release.
 
 ### 2.4 What a published package is missing
 

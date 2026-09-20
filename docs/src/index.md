@@ -31,6 +31,23 @@ Note the "]" required to enter julia package management system.
 
 After downloading TMS, Julia will automatically compile and install it. This process usually takes a couple of minutes and does not require interactions on the user part.
 
+### BLAS backend
+
+Most of the running time of TMS is spent in the tensor contractions of ITensors, which
+themselves call BLAS. Julia ships with OpenBLAS and TMS uses it as it comes: switching the
+BLAS backend affects the whole Julia session, so that choice is left to you rather than
+made by a library you load.
+
+On `x86_64` machines running Linux or Windows, Intel's MKL is often noticeably faster on
+these contractions. To use it, add `MKL` to your project and load it before TMS:
+
+```julia
+using MKL
+using TensorMixedStates
+```
+
+MKL is not distributed for macOS nor for ARM machines, where OpenBLAS is the only option.
+
 ## Using TMS
 
 To use TMS in your code you need to write
