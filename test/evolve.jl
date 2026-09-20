@@ -5,12 +5,17 @@
 # an evolution belongs to algorithms.jl instead.
 
 @testset "Simple evolve" begin
+    # the tolerances say how accurate each algorithm is on this problem, so they are as
+    # tight as the method allows. They must not be set at the floating point floor though:
+    # the two that were at 1e-14 failed on Julia 1.10 by 1.3e-14, pure rounding noise that
+    # differs with the BLAS build. An error of the algorithm would be orders of magnitude
+    # larger than these bounds, so 1e-13 loses nothing
     for (algo, time_step, tol) in [
-        (Tdvp(), 0.1, 1e-14),
+        (Tdvp(), 0.1, 1e-13),
         (ApproxW(order=1, w=1), 0.01, 0.03),
         (ApproxW(order=4, w=1), 0.01, 1e-10),
         (ApproxW(order=1, w=2), 0.01, 1e-13),
-        (ApproxW(order=4, w=2), 0.01, 1e-14),       
+        (ApproxW(order=4, w=2), 0.01, 1e-13),
         ]
         @test_pm test_phases([
             CreateState{type}(2, Qubit(), "X+"),
