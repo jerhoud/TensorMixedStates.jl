@@ -1,11 +1,21 @@
 export tensor, matrix
 
+"""
+    combinerto(i::Index, j::Index...)
+
+return a combiner that combines the indices `j` into the index `i`
+"""
 function combinerto(i::Index, j::Index...)
     c = combiner(j...; tags="")
     x = combinedind(c)
     replaceind(c, x, i)
 end
 
+"""
+    tensor_index(t::ITensor)
+
+return the first index of an ITensor that is not primed
+"""
 tensor_index(t::ITensor) = getfirst(i->hasplev(i, 0), inds(t))
 
 """
@@ -47,8 +57,6 @@ end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
 
-# a multi site operator may be defined by a function of its sites, which lets it adapt to
-# them, as in a gate whose dimension is read from the site it acts on
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
     matrix(a(site, sites...), site, sites...)
 

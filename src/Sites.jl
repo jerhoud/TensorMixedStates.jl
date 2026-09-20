@@ -1,4 +1,5 @@
-export AbstractSite, mix, dim, Index, string_state, identity_operator, @def_operators, @def_states, @create_site_module, state
+export AbstractSite, mix, dim, Index, string_state, identity_operator, state
+export @def_operators, @def_states, @create_site_module
 
 """
     abstract type AbstractSite
@@ -81,8 +82,6 @@ it may be an `Op` a matrix or a site function
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
     t = (name, op)
-    # `get`, not `get!`: the library cannot hold a `nothing`, so writing the default back
-    # would raise a `convert` error instead of reaching the message below
     r = get(operator_library, t, nothing)
     if isnothing(r)
         error("operator $op is not defined for site $name")
@@ -100,7 +99,6 @@ it may be a `Vector` (for pure state), a `Matrix` for mixed states or a site fun
 function state_info(site::AbstractSite, st::String)
     name = typeof(site)
     t = (name, st)
-    # see `operator_info` on why this is `get` and not `get!`
     r = get(state_library, t, nothing)
     if isnothing(r)
         error("state $st is not defined for site $name")
@@ -117,6 +115,15 @@ return a matrix representing the identity operator for the given site
 identity_operator(dim::Int) = Matrix{Float64}(I, dim, dim)
 identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
+"""
+    add_operator(site, op, r, type = plain_op)
+
+register the definition `r` of the operator named `op` for the given `site`, and return the
+`Operator{1}` standing for that name
+
+Do not call directly, use `@def_operators`, which is what keeps the operator name, its
+`OpType` and the definitions made for the other site types consistent.
+"""
 function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function, GenericOp{Pure, 1}}, type::OpType=plain_op)
     name = typeof(site)
     t = (name, op)
@@ -132,16 +139,6 @@ end
     check_shared_operator(existing, name, type, site)
 
 check that a name already in scope can stand for the operator about to be registered
-
-`@def_operators` binds an operator name as a `const` of the calling module the first time it
-sees it, and leaves it alone afterwards: several site types are meant to share one name, and
-the operator a name stands for carries no site of its own. What must then hold is that the
-name already stands for the same operator, which is what this checks. A name bound to
-something else, or to an operator declared with another `OpType`, is an error rather than a
-silent rebinding that would change the meaning of the name for every site already using it.
-
-The check runs before `add_operator`, so a declaration that is refused leaves the operator
-library untouched.
 """
 function check_shared_operator(existing, name::String, type::OpType, site::AbstractSite)
     if !(existing isa Operator{1})
@@ -167,9 +164,7 @@ define the given operators for the given site, see also `OpType`
 
 Each operator name becomes a `const` of the module the macro is called from, but only the
 first time that name is seen: a name already in scope is registered for the new site and
-checked against what it already stands for, not bound again. This is what lets several site
-types share a name, `N` for `Fermion`, `Boson`, `Qboson` and `Qudit` for instance, and it is
-also why declaring an operator whose name is already used for something else, or declared
+checked against what it already stands for, not bound again. Declaring an operator whose name is already used for something else, or declared
 with another `OpType`, is an error rather than a silent redefinition.
 
 # Examples
@@ -242,6 +237,15 @@ macro def_operators(site, symbols)
     return e
 end
 
+"""
+    add_state(site, st, r)
+    add_state(site, sts, r)
+
+register the definition `r` of the state named `st` for the given `site`, or the same
+definition for every name of the vector `sts`
+
+Do not call directly, use `@def_states`.
+"""
 function add_state(site::AbstractSite, st::String, r::Union{String, Vector, Matrix, Function})
     name = typeof(site)
     t = (name, st)

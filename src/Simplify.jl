@@ -318,12 +318,6 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     if sp ≠ id
         push!(r, sp)
     end
-    # The pass above only ever holds one current base, so dropping a run that collapsed to
-    # the identity leaves its two neighbours adjacent without anyone noticing: X*Y*Y*X came
-    # out as X*X. What follows merges again, comparing each factor with the last one kept
-    # rather than with a running base, so a removal immediately exposes what preceded it.
-    # This is the shape the indexed products already use, minus the reordering, which has no
-    # meaning here: two generic factors sit on the same site and do not commute.
     change = true
     while change
         change = false
@@ -529,7 +523,4 @@ removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))
 removeMulti(a::ScalarOp) = a.coef * removeMulti(a.arg)
 removeMulti(a::AtIndex) = a
 removeMulti(a::Multi_F{R}) where R = ProdOp([Multi_F{R}(i, i, a.left, a.right) for i in a.start:a.stop])
-
-# removeMulti is always applied to the output of simplify and must accept the same inputs,
-# collections included: a time dependent evolver is a vector of operators
 removeMulti(a) = map(removeMulti, a)

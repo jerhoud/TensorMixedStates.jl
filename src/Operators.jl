@@ -706,12 +706,11 @@ isless(a::SetState, b::SetState) = isless(repr(a.state), repr(b.state))
 """
     flips_sign(coef, expo)
 
-whether `coef ^ expo` has to be taken on `-coef` instead, the sign going to the operator.
-A negative real coefficient raised to a non integer power would otherwise land on the
-wrong side of the branch cut. Any other coefficient, complex ones included, goes through
-as it is. `PowOp` and `simplify_pow` both decide this, and have to decide it the same way.
+whether `(coef * A)^expo` has to be rewritten (-coef)^expo * (-A)^expo
+instead of coef^expo * A^expo
 """
-flips_sign(coef::Number, expo::Number) = coef isa Real && coef < 0 && !isinteger(expo)
+flips_sign(coef::Number, expo::Number) =
+    coef isa Real && coef < 0 && !isinteger(expo)
 
 # PowOp
 
@@ -859,12 +858,7 @@ isfermionic(a::PowOp) =
     has_fermionic(::Op)
 
 whether an indexed operator still has a factor whose Jordan-Wigner string has not been
-inserted. `simplify` is what inserts them: it wraps such a factor in `JW` and adds the
-matching `Multi_F`, so this answers false on an operator that went through it.
-
-This is not the question `isfermionic` answers, which is the parity of a single generic
-operator: a product of two fermionic operators is not fermionic, but both of its factors
-are and both still need their strings.
+inserted by `simplify`.
 """
 has_fermionic(a::AtIndex{Pure, 1}) = isfermionic(a.op)
 has_fermionic(a::ScalarOp) = has_fermionic(a.arg)

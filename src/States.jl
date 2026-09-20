@@ -43,11 +43,6 @@ end
 the value a per sweep schedule takes on the given sweep, and the `Limits` holding those
 values. A plain value covers every sweep, and a schedule shorter than the number of sweeps
 is continued with its last value, as ITensor does with its own.
-
-`dmrg` is handed the whole schedule and walks it itself, so it needs none of this; the
-evolution solvers drive their sweeps one at a time and have to pick the value out for each
-one. Sweeps are counted from the start of the phase there, `first_sweep` included, so an
-evolution resumed from a checkpoint lands back on the value its sweep was due.
 """
 sweep_value(x, ::Int) = x
 sweep_value(x::Vector, sweep::Int) = x[min(sweep, length(x))]
@@ -113,6 +108,12 @@ return the maximum link dimension in the state
 """
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
+
+"""
+    make_one_state(type::R, system::System, i::Int, st) where {R <: PM}
+
+return the ITensor of the local state `st` at site `i` of the system
+"""
 make_one_state(type::R, system::System, i::Int, st) where {R <: PM} = 
     make_one_state(type, SysIndex{R}(system, i), state(system[i], st))
 
@@ -121,7 +122,11 @@ make_one_state(::Pure, ::Index, ::Matrix) = error("cannot use a mixed local stat
 make_one_state(::Mixed, i::Index, v::Vector) = ITensor(v * v', i)
 make_one_state(::Mixed, i::Index, m::Matrix) = ITensor(m, i)
 
+"""
+    make_state(type::R, system::System, states::Vector) where {R <: PM}
 
+return the MPS of the local states `states` for the system
+"""
 function make_state(type::PM, system::System, states::Vector)
     n = length(system)
     st = MPS(n)
