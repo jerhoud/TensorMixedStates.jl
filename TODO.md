@@ -199,12 +199,28 @@ issue and PR templates.
 
 These need decisions, not patches.
 
-- **The implicit invariant on site operator names is the one to worry about.** Every site
-  module defines its operator constants in the same module (`src/Sites.jl`), so `Sp`, `Sz`,
-  `N`, `A`, `S` are defined two to four times. It works only because the returned
-  `Operator{1}(name, nothing, type)` happens to be identical. The day a new site type
-  registers one of those names with a different `OpType`, the last definition silently wins
-  for every site type. `add_operator` only checks for duplicates within one site type.
+- **The implicit invariant on site operator names — fixed.** Every site module declared its
+  operator constants in the same module, so `Sp`, `Sz`, `N`, `A`, `S` were bound two to four
+  times, and it worked only because the returned `Operator{1}(name, nothing, type)` happened
+  to be identical each time. A new site type registering one of those names with a different
+  `OpType` would have silently won for every site type.
+
+  The Julia 1.10 job of the new CI matrix showed the other face of the same design:
+  `@def_operators` expanded to a `const NAME = add_operator(...)` in the calling module, so
+  a user declaring an operator whose name a loaded site module exports hit
+  `cannot assign a value to imported variable`, a hard error of the language up to Julia
+  1.11. Julia 1.12 changed the binding rules and hid the problem on recent versions only.
+
+  `@def_operators` now binds a name once. The decision is taken at expansion time, from
+  `isdefined(__module__, sym)`: a name already in scope yields no binding at all, only a
+  registration for the new site preceded by `check_shared_operator`, which refuses a name
+  bound to something else or declared with another `OpType`. The check runs before
+  `add_operator`, so a refused declaration leaves the operator library untouched. Both
+  faces go away: the invariant is enforced instead of hoped for, and nothing is ever
+  rebound, so the Julia 1.10 error cannot occur. Verified by loading the package —
+  `Bosons.N === Fermions.N === Qudits.N === Qbosons.N` — and by `test/sites.jl`, which
+  declares `N` for a site of its own and checks that the mismatching declaration is
+  refused. Documented in the `Defining new site types` section of `sites.md`.
 - **`Simulation` is immutable on the surface only**: the copy constructor shares `files`,
   `data` and `checkpoint` by reference. State is threaded functionally, but the whole
   checkpoint bookkeeping is a mutable channel shared between every copy. That was the root

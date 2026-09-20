@@ -9,9 +9,16 @@ TensorMixedStates.dim(::Dummit) = 2
 
 @def_states(Dummit(), [ "1" => [0., 1.] ])
 
+# `N` reaches this module through the `using` of runtests.jl, which is the interesting case:
+# `@def_operators` must register N for Dummit without binding the name again
 @def_operators(Dummit(), [ selfadjoint_op => [ N = [0. 0. ; 0. 1.] ] ])
 
 @create_site_module(Dummits, [Dummit, N])
+
+# a second site, to check that the same name declared with another OpType is refused
+struct Dummit2 <: AbstractSite end
+
+TensorMixedStates.dim(::Dummit2) = 2
 
 @testset "Qubit measuring" begin
     @test_pm test_phases(CreateState{type}(1, Qubit(), "Z+"; 
@@ -152,10 +159,17 @@ end
 
 @testset "Custom site type" begin
     @test dim(Dummit()) == 2
+    # N arrives here by `using` from another site module: declaring it again for a new site
+    # must neither fail nor disturb the site it came from, and the name must go on standing
+    # for one and the same operator
     @test real(expect1(State{Pure}(System(2, Dummit()), "1"), N)) ≈ [1, 1]
-    # N arrives here by `using` from another site module: declaring it again for a new
-    # site must neither fail nor disturb the site it came from
     @test real(expect1(State{Pure}(System(2, Boson(4)), ["1", "3"]), N)) ≈ [1, 3]
     @test Dummits.Dummit === Dummit
     @test Dummits.N === N
+    @test N === Bosons.N
+    # the same name with another OpType would change the meaning of N for every site
+    # already using it, so it is refused, and the refusal leaves the library untouched
+    @test_throws "must agree on the OpType" @def_operators(Dummit2(),
+        [ plain_op => [ N = [0. 0. ; 0. 1.] ] ])
+    @test_throws "operator N is not defined for site Dummit2" matrix(N, Dummit2())
 end

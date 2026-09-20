@@ -129,9 +129,48 @@ function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function,
 end
 
 """
+    check_shared_operator(existing, name, type, site)
+
+check that a name already in scope can stand for the operator about to be registered
+
+`@def_operators` binds an operator name as a `const` of the calling module the first time it
+sees it, and leaves it alone afterwards: several site types are meant to share one name, and
+the operator a name stands for carries no site of its own. What must then hold is that the
+name already stands for the same operator, which is what this checks. A name bound to
+something else, or to an operator declared with another `OpType`, is an error rather than a
+silent rebinding that would change the meaning of the name for every site already using it.
+
+The check runs before `add_operator`, so a declaration that is refused leaves the operator
+library untouched.
+"""
+function check_shared_operator(existing, name::String, type::OpType, site::AbstractSite)
+    if !(existing isa Operator{1})
+        error("cannot declare operator $name for site $(typeof(site)): the name $name is " *
+              "already used in this module for something else, of type $(typeof(existing)). " *
+              "Give your operator another name, or make sure $name is not brought into scope")
+    elseif existing.name ≠ name
+        error("cannot declare operator $name for site $(typeof(site)): in this module the " *
+              "name $name already stands for the operator $(existing.name)")
+    elseif existing.type ≠ type
+        error("operator $name is declared as $(existing.type) by a site type already in " *
+              "scope, and as $type for site $(typeof(site)). A name stands for one " *
+              "operator, shared by every site type that declares it, so the two " *
+              "declarations must agree on the OpType")
+    end
+    return existing
+end
+
+"""
     @def_operators(site, symbols)
 
 define the given operators for the given site, see also `OpType`
+
+Each operator name becomes a `const` of the module the macro is called from, but only the
+first time that name is seen: a name already in scope is registered for the new site and
+checked against what it already stands for, not bound again. This is what lets several site
+types share a name, `N` for `Fermion`, `Boson`, `Qboson` and `Qudit` for instance, and it is
+also why declaring an operator whose name is already used for something else, or declared
+with another `OpType`, is an error rather than a silent redefinition.
 
 # Examples
 
@@ -174,10 +213,24 @@ macro def_operators(site, symbols)
             nsym = string(sym)
             val = last(expr.args)
             if nsym == "F"
+                # `F` is the Jordan-Wigner operator of `Operators.jl`, shared by every
+                # fermionic site and not an `Operator{1}`: the site is registered and the
+                # name is left alone
                 push!(e.args,
                 quote
                     add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
                 end)
+            elseif isdefined(__module__, sym)
+                # the name is already in scope, so it is registered for this site and
+                # checked, but not bound again. Binding it again would rebind it for every
+                # site already using it, and up to Julia 1.11 rebinding a name brought in by
+                # `using` is a hard error of the language. The decision is taken here, at
+                # expansion time, so that no binding is emitted at all in that case
+                push!(e.args,
+                    quote
+                        check_shared_operator($(esc(sym)), $nsym, $(esc(type)), $(esc(site)))
+                        add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                    end)
             else
                 push!(e.args,
                     quote
