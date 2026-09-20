@@ -54,6 +54,10 @@ expected to be 1.3.0 rather than a patch.
 - `julia = "1.10.5"` in `[compat]`, which reads as `[1.10.5, 2.0.0)`. The package no longer
   becomes uninstallable on the day a new Julia minor version is released.
 - `simplify` always expands multi site operators, which makes its result predictable.
+- `simplify` now merges the factors of a generic product until nothing moves, instead of
+  making a single pass. `X*Y*Y*X` gives `Id` where it gave `X*X`, and the result no longer
+  depends on how many times `simplify` is called. Indexed operators, and therefore every
+  MPO, were already reduced fully and are unchanged.
 - Global identifiers are `const`.
 - Tensors are kept real instead of complex whenever possible.
 - Error messages name what was not found and what was expected.

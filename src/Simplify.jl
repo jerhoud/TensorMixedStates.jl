@@ -318,6 +318,35 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     if sp ≠ id
         push!(r, sp)
     end
+    # The pass above only ever holds one current base, so dropping a run that collapsed to
+    # the identity leaves its two neighbours adjacent without anyone noticing: X*Y*Y*X came
+    # out as X*X. What follows merges again, comparing each factor with the last one kept
+    # rather than with a running base, so a removal immediately exposes what preceded it.
+    # This is the shape the indexed products already use, minus the reordering, which has no
+    # meaning here: two generic factors sit on the same site and do not commute.
+    change = true
+    while change
+        change = false
+        nr = GenericOp{Pure, N}[]
+        for x in r
+            if isempty(nr)
+                push!(nr, x)
+                continue
+            end
+            y = nr[end]
+            if pow_base(y) ≠ pow_base(x)
+                push!(nr, x)
+                continue
+            end
+            change = true
+            pop!(nr)
+            sp = simplify_pow(pow_base(x), pow_expo(y) + pow_expo(x))
+            if sp ≠ id
+                push!(nr, sp)
+            end
+        end
+        r = nr
+    end
     if f
         push!(r, F)
     end

@@ -358,10 +358,25 @@ contractions in the same loop, and typing it ahead would mean computing a cell f
 going through `promote_op`, for no measurable gain. All that was changed is that
 `Matrix{Any}(undef, n, n)` now says what it is.
 
+The single pass simplification of generic products is **done**, and the review had it
+wrong about why it mattered. `simplify(X*Y*Y*X)` did give `X*X`: `simplify_core_prod` kept
+one current base and pushed each finished run into its result, so a run collapsing to the
+identity left its two neighbours adjacent without anyone looking back. Each call peeled one
+layer, `X*Y*Z*Z*Y*X` giving `X*Y*Y*X`.
+
+The claimed cost in MPO bond dimension does **not** reproduce, though. An MPO is built from
+indexed operators, and the indexed path already merged to a fixed point: it compares each
+factor with the last one kept, in a `while change` loop, which is the bubble sort its
+comments mention. Measured on four operators, including one spanning three sites,
+`maxlinkdim` was the minimum in every case. What was real was that `simplify` was not
+idempotent on generic expressions, its result depending on how many times it was called.
+
+The fix takes the shape of the indexed loop, minus the reordering, which has no meaning
+between two factors on one site since they do not commute.
+
 Lesser points, all measurable but small: scalar `setindex` filling of the MPO tensors,
-single pass simplification of generic products (`simplify(X*Y*Y*X)` gives `ProdOp([X,X])` rather than
-`Id`, which costs MPO bond dimension), abstract field types in the hot symbolic layer, and
-`stop_requested` doing an `isfile` on every sweep.
+abstract field types in the hot symbolic layer, and `stop_requested` doing an `isfile` on
+every sweep.
 
 ---
 

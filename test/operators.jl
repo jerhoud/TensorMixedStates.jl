@@ -22,6 +22,15 @@
     @test simplify(X * X) == Id
     @test simplify(X^2) == Id
     @test simplify(X * Id) == X
+    # a run collapsing to the identity leaves its two neighbours adjacent, and they have to
+    # be merged in their turn. The simplifier used to make a single pass over the factors
+    # and stopped at X*X here, which also made it depend on how many times it was called
+    @test simplify(X * Y * Y * X) == Id
+    @test simplify(X * Y * Z * Z * Y * X) == Id
+    @test simplify(Z * X * X * Z * Y) == Y
+    @test simplify(simplify(H * X * Y * Y * X * H)) == simplify(H * X * Y * Y * X * H)
+    # what must not move: two different bases on one site do not commute
+    @test simplify(X * Y * X) == X * Y * X
     @test matrix(simplify(X - X), q) ≈ zeros(2, 2)
     @test matrix(simplify(0 * X), q) ≈ zeros(2, 2)
     # dag is an involution, which only shows on non hermitian operators
