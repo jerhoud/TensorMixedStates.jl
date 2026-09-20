@@ -96,6 +96,11 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   five errors that indented code blocks had been hiding.
 - Versioned documentation is published: `stable` now points at the latest release instead of
   the development branch.
+- A new section on how the MPO is built and what it costs: TMS gives each term of a sum a
+  channel of its own and does not compress, so a long ranged operator gets a much larger MPO
+  than `ITensorMPS`' `OpSum` would give, while a short ranged one costs exactly the same.
+  The reason is that the form obtained is what WI and WII need and what makes time dependent
+  evolvers free.
 - New sections on the choice of the BLAS backend and on reusing an operator name across
   site types, and a word asking authors who use TMS to acknowledge it and to get in touch.
 

@@ -336,14 +336,19 @@ One target is left, on the contraction side, where the time actually goes.
    remove O(n²·|ops|) constructions, but those are dictionary lookups and small matrix work
    sitting next to ITensor contractions in the same loop, so the gain would not show in a
    measurement. Left undone deliberately rather than forgotten.
-2. **The MPO is never compressed.** `PreMPO!` (`src/Mpo.jl`) allocates one private channel
-   per term, so the MPO bond dimension is `2 + #(terms crossing the link)`, where
-   ITensorMPS' `OpSum` construction applies an SVD compression. For a long range
-   Hamiltonian with O(n²) terms this gives a bond dimension in O(n²) instead of O(n). It is
-   *the* major algorithmic difference with ITensorMPS and it is not documented. The
-   counterpart is real: the resulting triangular structure is exactly what WI/WII need, and
-   the coefficients can be changed from sweep to sweep without rebuilding the term list.
-   Whatever is decided, the cost belongs in the documentation.
+2. **The MPO is never compressed — kept as it is, and now documented.** `PreMPO!` gives
+   each term a channel of its own, so the bond dimension on a link is
+   `2 + #(terms crossing it)`. Measured on `sum(Z(i)Z(j))` over all pairs: 27, 102 and 402
+   for 10, 20 and 40 sites, against 3 in every case for `ITensorMPS`' `OpSum`, which
+   compresses with an SVD. On a short ranged operator there is no difference at all, the
+   Ising chain giving 3 on both sides whatever the length.
+
+   Compressing was set aside: the triangular form the construction leaves is exactly what
+   WI and WII need, and keeping each term separate is what lets a coefficient change from
+   sweep to sweep, which is what makes time dependent evolvers free. What was missing was
+   that none of this was written anywhere, so a user coming from `ITensorMPS` met the
+   difference without an explanation. The `MPO` section of `others.md` now carries it, with
+   the formula, the measured table and the reason.
 
 The `Matrix{Any}` of `expect2` was looked at and closed. It never reaches the caller:
 `expect2` returns `Matrix{Float64}` for one pair of operators and `Vector{Matrix{Float64}}`
