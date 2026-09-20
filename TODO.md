@@ -141,7 +141,11 @@ by hand with `gh workflow run documentation.yml --ref vX.Y.Z`.
   is in the README. Read the list of uncovered lines rather than the percentage: a covered
   line was executed, which does not mean its result was checked.
 
-**Left open on purpose**: Windows: `test/checkpoint.jl` changes the working
+**Windows is in the matrix now, to find out.** The claim that `test/checkpoint.jl` would
+break there was never tried, and the two Julia 1.10 failures showed that a job nobody runs
+is a job that hides things. The group is the only one touching the disk, so if anything
+goes wrong it will be there, and what actually fails will be fixed rather than what was
+imagined. The old wording, kept for the record: `test/checkpoint.jl` changes the working
 directory and manipulates files, which is precisely what would break there, so adding it
 means fixing the test first.
 
