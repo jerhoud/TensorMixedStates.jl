@@ -183,20 +183,18 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             # happen on the way out of an exception too
             close_sim_files(sim)
         end
-        if live
-            rm("running")
-            cd(start_dir)
-        end
         return sim
     catch
-        if live
-            touch("error")
-            rm("running"; force = true)
-            cd(start_dir)
-        end
+        # all the catch has of its own: the marker is written while the working directory
+        # is still the simulation's, the finally below leaving it just afterwards
+        live && touch("error")
         rethrow()
     finally
+        # leaving the simulation, by whichever way, is described here and nowhere else, so
+        # that a step added later cannot be put on one path and forgotten on the other
         if live
+            rm("running"; force = true)
+            cd(start_dir)
             # the flag is process wide and would otherwise change how Ctrl-C behaves for
             # everything the caller runs afterwards. There is no way to read it back, so
             # what goes back is the default Julia itself applies: on in a script, off in
