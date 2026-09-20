@@ -98,6 +98,15 @@ checkpoint and returns, instead of killing the program. See `SimData` for the ch
 options. This asks the runtime to raise `InterruptException` on Ctrl-C, a process wide
 setting that is put back when `runTMS` returns.
 
+`runTMS` drives a whole process and is meant to be called once at a time. Writing to a
+directory, it changes the working directory of the process for the duration of the run, and
+it sets the Ctrl-C behaviour; a `CreateState` phase given a `seed` also reseeds the global
+random generator. Two simulations running at once in the same process, whether in parallel
+or through one calling the other, would fight over all three. Run them in separate
+processes, or pass `output` so that nothing touches the working directory. Parallelism
+inside a single simulation is a different matter and works as usual: it comes from the
+threads ITensor uses for its contractions.
+
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)

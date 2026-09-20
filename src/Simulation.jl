@@ -45,6 +45,14 @@ Most functions applicable to States can be applied to Simulations
 - `data`        : a dictionary holding data collected for the `Data` objects
 - `formats`     : format info for the output
 - `checkpoint`  : the checkpointing machinery, see `Checkpointer`
+
+A `Simulation` is immutable, and the state is threaded through a run by building a new one
+at each step rather than by assigning to a field. Three of the fields are shared rather than
+copied, on purpose: the second form above hands the new object the very `files`, `data` and
+`checkpoint` of the old one. They are the parts that must not fork — the open output files,
+the accumulated data, and the bookkeeping that says where the run has got to. A copy made
+while a phase is running therefore sees, and can advance, the same checkpoint as the
+simulation it was made from.
 """
 struct Simulation
     state::Union{Nothing, State}
