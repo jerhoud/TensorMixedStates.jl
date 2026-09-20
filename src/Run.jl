@@ -53,6 +53,18 @@ position, which is what a checkpoint records.
 flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
 flatten_phases(p) = [p]
 
+# A `SimData` has the shape of a phase — `name`, `time_start`, `final_measures` — because
+# `runTMS` runs the top level one through `log_phase` like any other phase, which is where
+# the first line of the log comes from. That makes `run_phase(::Simulation, ::SimData)`
+# reachable for a `SimData` sitting inside `phases`, and there it silently misbehaves: the
+# loop it opens shares the phase counter of the loop around it, so it skips every phase
+# whose index is below the one the outer loop had reached. Phases are grouped with plain
+# vectors, which flatten properly, so this is refused rather than half supported.
+flatten_phases(sd::SimData) =
+    error("a SimData cannot be used as a phase of another simulation, and \"$(sd.name)\" " *
+          "was found inside the phases of one. To build a list of phases in pieces, nest " *
+          "plain vectors instead: they are flattened on construction, to any depth")
+
 show(io::IO, s::SimData) =
     print(io,
     """

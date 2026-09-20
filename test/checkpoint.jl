@@ -43,6 +43,18 @@ function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
     return [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)), evolve(Z(2)), ground]
 end
 
+@testset "A SimData is not a phase" begin
+    # A SimData inside `phases` used to be accepted and to silently skip phases: the loop it
+    # opened shared the phase counter of the loop around it. It cost the first inner phase
+    # on the very first run, with no checkpoint involved and no message. Grouping is done
+    # with vectors.
+    p = CreateState{Pure}(2, Qubit(), "Up")
+    inner = SimData(name = "inner", phases = [p, p])
+    @test_throws "cannot be used as a phase" SimData(name = "outer", phases = [p, inner])
+    # what grouping is for, and it still flattens to any depth
+    @test length(SimData(name = "flat", phases = [p, [p, [p, p]]]).phases) == 4
+end
+
 @testset "Resuming reproduces an uninterrupted run" begin
     mktempdir() do dir
         cd(dir) do

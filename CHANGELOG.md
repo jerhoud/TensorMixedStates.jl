@@ -43,6 +43,10 @@ expected to be 1.3.0 rather than a patch.
   enforced instead of accidental, refuses a declaration whose `OpType` disagrees, and
   removes an error that made the package unusable from Julia 1.10 and 1.11 as soon as a
   user declared an operator whose name a loaded site module exported.
+- **A `SimData` can no longer be used as a phase of another simulation.** It has the shape
+  of a phase only because `runTMS` runs the top level one through the same machinery. Use
+  nested vectors to build a list of phases in pieces, which is the documented way and is
+  flattened on construction.
 - `julia = "1.10.5"` in `[compat]`, which reads as `[1.10.5, 2.0.0)`. The package no longer
   becomes uninstallable on the day a new Julia minor version is released.
 - `simplify` always expands multi site operators, which makes its result predictable.
@@ -56,6 +60,10 @@ expected to be 1.3.0 rather than a patch.
 
 ### Fixed
 
+- **A `SimData` nested inside the phases of another silently skipped its inner phases.**
+  The loop it opened shared the phase counter of the loop around it, so every inner phase
+  whose index was below the outer one was passed over, on the very first run and with no
+  checkpoint involved. It is now refused outright.
 - `renyi2` and `mutual_info_renyi2`.
 - `dag` and `expect2` on fermionic operators, and `expect` in the presence of `Multi_F`.
 - Time dependent evolution, which was broken.
