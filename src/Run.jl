@@ -236,7 +236,23 @@ function log_phase(sim::Simulation, phases::Vector)
     return sim
 end
 
+# The three fields every phase is read through, here rather than at the first `phase.name`
+# so that something which is not a phase says so instead of surfacing as a `FieldError` from
+# the middle of a run. What is missing afterwards is a `run_phase` method, and its fallback
+# in `Phases.jl` says that in its turn.
+function check_is_phase(phase)
+    for f in (:name, :time_start, :final_measures)
+        hasfield(typeof(phase), f) && continue
+        error("$(typeof(phase)) is not a phase: runTMS reads every element of `phases` " *
+              "through the fields name, time_start and final_measures, and this one has " *
+              "no `$f`. The phases of the library are the types listed in `Phases`. To " *
+              "run one of your own, give it those three fields and define a method of " *
+              "TensorMixedStates.run_phase for it")
+    end
+end
+
 function log_phase(sim::Simulation, phase)
+    check_is_phase(phase)
     log_msg(sim, "\n***** Starting phase \"$(phase.name)\" *****")
     if !isnothing(phase.time_start)
         sim = Simulation(sim, sim.state, phase.time_start)

@@ -64,6 +64,9 @@ expected to be 1.3.0 rather than a patch.
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no
   checkpoint involved. It is now refused outright.
+- An object that is not a phase, or one that has the fields of a phase but no `run_phase`
+  method, now says so instead of surfacing as a `MethodError` or a `FieldError` from the
+  middle of a run.
 - `renyi2` and `mutual_info_renyi2`.
 - `dag` and `expect2` on fermionic operators, and `expect` in the presence of `Multi_F`.
 - Time dependent evolution, which was broken.

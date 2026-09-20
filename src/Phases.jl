@@ -1,3 +1,24 @@
+"""
+    run_phase(sim::Simulation, phase)
+
+run one phase on the given simulation and return the simulation it leaves behind.
+
+This is where a phase of your own plugs in. Define a struct carrying the three fields the
+machinery around a phase reads — `name`, `time_start` and `final_measures` — and a method of
+`TensorMixedStates.run_phase` for it. `runTMS` then logs it, applies its `time_start`, calls
+your method and takes its final measurements, exactly as for a phase of the library. Note
+the full name: `run_phase` is not exported, so it has to be written out to add a method to
+it rather than shadowed by one of your own.
+
+The fallback method below exists so that an object that is not a phase says so, instead of
+surfacing as a bare `MethodError` from somewhere inside a run.
+"""
+run_phase(sim::Simulation, phase) =
+    error("there is no run_phase method for $(typeof(phase)), so runTMS does not know " *
+          "how to run it. It has the fields of a phase, so what is missing is the method " *
+          "itself: define TensorMixedStates.run_phase(::Simulation, ::$(typeof(phase))), " *
+          "returning the simulation the phase leaves behind")
+
 run_phase(sim::Simulation, sd::SimData) =
     log_phase(sim, sd.phases)
 
