@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://jerhoud.github.io/TensorMixedStates.jl
+    about: The manual, the reference pages and the examples. Often faster than an issue.
+  - name: Contributing
+    url: https://github.com/jerhoud/TensorMixedStates.jl/blob/main/CONTRIBUTING.md
+    about: How to run the tests, build the documentation and send a change.

@@ -94,9 +94,9 @@ docs/make.jl` works without the `Pkg.develop` step that only CI performed.
   docstring spells it the way the code does; correcting the word would mean renaming the
   field, and the API is not changed for a spelling mistake.
 
-**Deferred**: documenting `TMS_SKIP_PRECOMPILE_WORKLOAD`. It is a development shortcut,
-not a user facing option, so its place is the `CONTRIBUTING.md` of 2.4 rather than the
-published manual. To be written there.
+The one deferred point, documenting `TMS_SKIP_PRECOMPILE_WORKLOAD`, is **done**: it is a
+development shortcut rather than a user facing option, so it went into the `CONTRIBUTING.md`
+of 2.4, with the warning not to rely on it anywhere a user could end up.
 
 ---
 
@@ -162,18 +162,33 @@ means fixing the test first.
   becomes uninstallable the day 1.14 ships, and the bound no longer has to be raised at
   every Julia release.
 
-### 2.4 What a published package is missing
+### 2.4 What a published package was missing — **done, except the coverage badge**
 
-By value: `CITATION.cff` (the README and `index.md` both ask for the HAL preprint to be
-cited, but without a machine readable file GitHub's "Cite this repository" button never
-appears); `CHANGELOG.md`; coverage badge; `CONTRIBUTING.md` — non-trivial process
-knowledge already exists in the wrong place, namely the test group convention in
-`test/runtests.jl:6-13`, the selective run via `Pkg.test(test_args = [...])`, the
-"what belongs here" file headers and the `TMS_SKIP_PRECOMPILE_WORKLOAD=true` shortcut;
-a fuller README (a ten line runnable quick start, the installation line, **the licence** —
-GPL-3.0 appears nowhere in the README, and it is a strong copyleft choice next to ITensors
-under Apache-2.0, which deserves to be visible — and the logo that already exists);
-issue and PR templates.
+- **`CITATION.cff`** carries the SciPost DOI rather than the HAL preprint, with the codebase
+  release `72-r1.28` as a second reference, so that GitHub's "Cite this repository" button
+  appears and offers the right thing. Grégoire Misguich's ORCID comes from the Crossref
+  record of the article; Jérôme Houdayer has none registered there, so the field is absent
+  rather than invented. No email address, by choice.
+- **`CHANGELOG.md`** starts at the release in preparation, which collects the fifty six
+  commits made since v1.2.9 under Added, Changed, Fixed, Documentation and Development.
+  Earlier versions are left to the tags: their commit messages were not written to be turned
+  into a changelog, and reconstructing them would have produced plausible fiction.
+- **`CONTRIBUTING.md`** gathers the process knowledge that lived in the wrong places: the
+  test group convention and the selective run, the "what belongs here" file headers, the
+  `TMS_SKIP_PRECOMPILE_WORKLOAD=true` shortcut deferred from 1.2, the documentation build
+  and why a broken `@example` turns CI red, the `checkdocs = :exports` choice, the rule that
+  site operators go through `@def_operators` and never `add_operator`, and two paragraphs
+  saying where performance actually lies — the contractions, and the term count of the MPO
+  rather than the time simplification takes.
+- **The README** has the logo that already existed, a quick start that was run before being
+  pasted, with its real output, the installation line, links to the two example folders, the
+  published article, and the licence: GPL-3.0-or-later, which was the deliberate choice
+  between the two readings, next to ITensor under Apache 2.0.
+- **Issue forms** for bugs and for feature requests, links to the documentation and to
+  `CONTRIBUTING.md`, and a pull request template whose checklist names the four things a
+  change has to have done.
+
+**Left open**: the coverage badge, which waits on the coverage decision of 2.2.
 
 ---
 
@@ -187,6 +202,12 @@ issue and PR templates.
 - **Restoring `exit_on_sigint` has no test.** It can only be checked by sending a real
   SIGINT from a child process, which was judged not worth its cost. It is the one fix of
   the correctness pass with no coverage.
+- **Tolerances set at the floating point floor.** `test/evolve.jl` compared a `Tdvp` and an
+  `ApproxW(order = 4, w = 2)` evolution to `cos(2t)` and `sin(2t)` with `1e-14`, which the
+  Julia 1.10 job missed by `1.3e-14` — rounding noise that differs with the BLAS build, not
+  an error of the algorithm. Both are now `1e-13`, which is still far tighter than any real
+  error would be. Worth a look at the other bounds before adding one: a tolerance should say
+  how accurate the method is, not how the machine happened to round that day.
 - **Recorded reference values** in `test/algorithms.jl:81-87`, `:103-106` and `:122-124`
   are compared to 11–15 significant digits with no comment saying where the numbers come
   from. If they come from a previous run, they freeze the implementation's behaviour at

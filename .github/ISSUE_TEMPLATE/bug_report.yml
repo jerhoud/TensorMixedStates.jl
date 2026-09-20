@@ -1,0 +1,38 @@
+name: Bug report
+description: TMS does not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report this. The smaller the piece of code that
+        reproduces the problem, the sooner it gets fixed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Code that reproduces it
+      description: The smallest self contained script you can manage.
+      render: julia
+    validations:
+      required: true
+  - type: input
+    id: tms
+    attributes:
+      label: TensorMixedStates version
+      placeholder: "1.2.9"
+    validations:
+      required: true
+  - type: input
+    id: julia
+    attributes:
+      label: Julia version and platform
+      placeholder: "1.11.3, macOS aarch64"
+    validations:
+      required: true

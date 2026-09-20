@@ -1,0 +1,18 @@
+name: Feature request
+description: Something TMS does not do yet
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you are trying to do
+      description: >-
+        The physics or the workflow behind the request, not only the interface you have in
+        mind. Knowing what you are simulating often changes the answer.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How you would expect it to look
+      description: Optional.
