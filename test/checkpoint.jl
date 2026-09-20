@@ -26,11 +26,28 @@ The measurements return the same constant whether armed or not, so that every ru
 same columns and the outputs can be compared as they are.
 """
 function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
-    fire!(r) = r[] < 0 || (r[] > 0 && (r[] -= 1) == 0)
-    stopper = StateFunc("Stopper", _ -> (fire!(stop_in) && touch("stop"); 0.))
+    function fire!(r)
+        if r[] < 0
+            return true
+        elseif r[] == 0
+            return false
+        end
+        r[] -= 1
+        return r[] == 0
+    end
+    stopper = StateFunc("Stopper", _ -> begin
+        if fire!(stop_in)
+            touch("stop")
+        end
+        0.
+    end)
     breaker = StateFunc("Breaker", _ -> begin
-        fire!(fail_in) && throw(InterruptException())
-        fire!(crash_in) && error("simulated kill")
+        if fire!(fail_in)
+            throw(InterruptException())
+        end
+        if fire!(crash_in)
+            error("simulated kill")
+        end
         0.
     end)
     measures = ["data" => [X(1), Y(1), Z(2), stopper, breaker]]
@@ -108,8 +125,15 @@ end
     mktempdir() do dir
         cd(dir) do
             fail_in = Ref(0)
-            breaker = StateFunc("Breaker", _ -> (fail_in[] > 0 && (fail_in[] -= 1) == 0 &&
-                                                 throw(InterruptException()); 0.))
+            breaker = StateFunc("Breaker", _ -> begin
+                if fail_in[] > 0
+                    fail_in[] -= 1
+                    if fail_in[] == 0
+                        throw(InterruptException())
+                    end
+                end
+                0.
+            end)
             measures = ["data" => [X(1), Y(1)]]
             evolve(op) = Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(),
                                 evolver = -im * op,
@@ -142,8 +166,15 @@ end
     mktempdir() do dir
         cd(dir) do
             stop_in = Ref(0)
-            stopper = StateFunc("Stopper", _ -> (stop_in[] > 0 && (stop_in[] -= 1) == 0 &&
-                                                 touch("stop"); 0.))
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop_in[] > 0
+                    stop_in[] -= 1
+                    if stop_in[] == 0
+                        touch("stop")
+                    end
+                end
+                0.
+            end)
             # a text destination is continued from the position the checkpoint recorded,
             # but a json one and a `Data` one accumulate in memory and are only handed over
             # at the end, so the checkpoint has to carry what they hold
@@ -202,8 +233,15 @@ end
     mktempdir() do dir
         cd(dir) do
             stop_in = Ref(0)
-            stopper = StateFunc("Stopper", _ -> (stop_in[] > 0 && (stop_in[] -= 1) == 0 &&
-                                                 touch("stop"); 0.))
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop_in[] > 0
+                    stop_in[] -= 1
+                    if stop_in[] == 0
+                        touch("stop")
+                    end
+                end
+                0.
+            end)
             phases = [
                 CreateState{Pure}(6, Qubit(), "Z+"),
                 GroundState(; hamiltonian = sum(-Z(i) * Z(i + 1) for i in 1:5) -
@@ -226,8 +264,15 @@ end
     mktempdir() do dir
         cd(dir) do
             stop_in = Ref(0)
-            stopper = StateFunc("Stopper", _ -> (stop_in[] > 0 && (stop_in[] -= 1) == 0 &&
-                                                 touch("stop"); 0.))
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop_in[] > 0
+                    stop_in[] -= 1
+                    if stop_in[] == 0
+                        touch("stop")
+                    end
+                end
+                0.
+            end)
             phases = [
                 CreateState{Pure}(6, Qubit(), "X+"),
                 Evolve(duration = 0.4, time_step = 0.1, algo = Tdvp(),

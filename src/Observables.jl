@@ -416,10 +416,11 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     # two is refused here rather than left to the diagonal, which rejects it today only
     # because `expect1_one` has no fermionic case of its own.
     for (o1, o2) in ops
-        isfermionic(o1) == isfermionic(o2) ||
+        if isfermionic(o1) ≠ isfermionic(o2)
             error("cannot correlate $o1 and $o2: one is fermionic and the other is not, " *
                   "so their product is odd and has no expectation value. Both operators " *
                   "of a pair must have the same fermionic parity")
+        end
     end
     oplist = [first.(ops) ; last.(ops)]
     need_fermionic = any(isfermionic, oplist)
@@ -509,9 +510,10 @@ which makes it the operator space entanglement entropy (OSEE) rather than an ent
 """
 function entanglement_entropy(state::State, pos::Int)
     n = length(state)
-    1 ≤ pos ≤ n ||
+    if !(1 ≤ pos ≤ n)
         error("cannot compute the entanglement entropy at site $pos of a $n site state, " *
               "the cut is on the right of a site so pos must be between 1 and $n")
+    end
     s = orthogonalize(state.state, pos)
     _, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
     sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]

@@ -20,7 +20,9 @@ const GROUPS = ["building", "operators", "sites", "observables", "states_io", "e
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`
 selected = isempty(ARGS) ? GROUPS : ARGS
 for g in selected
-    g in GROUPS || error("unknown test group \"$g\", expected one of $(join(GROUPS, ", "))")
+    if !(g in GROUPS)
+        error("unknown test group \"$g\", expected one of $(join(GROUPS, ", "))")
+    end
 end
 
 @testset verbose=true "TensorMixedStates.jl" begin

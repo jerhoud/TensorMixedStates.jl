@@ -52,7 +52,9 @@ compact_positions(p::Int) = string(p)
 
 function compact_positions(p)
     v = sort(unique(collect(p)))
-    isempty(v) && return "[]"
+    if isempty(v)
+        return "[]"
+    end
     parts = String[]
     i = 1
     while i ≤ length(v)
@@ -164,10 +166,11 @@ struct Measure
         # measurements apart or put them in different destinations.
         ns = measure_names(m)
         dup = unique([n for n in ns if count(==(n), ns) > 1])
-        isempty(dup) ||
+        if !isempty(dup)
             error("several measurements of the same set are named $(join(repr.(dup), ", ")). " *
                   "Names are used as column headers, so they must differ: split them between " *
                   "destinations, or name them explicitly.")
+        end
         return m
     end
 end

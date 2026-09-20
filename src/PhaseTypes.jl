@@ -349,7 +349,9 @@ const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, 
 function show(io::IO, s::Phases)
     t = typeof(s)
     print(io, "\n", nameof(t))
-    isempty(t.parameters) || print(io, "{", join(nameof.(t.parameters), ", "), "}")
+    if !isempty(t.parameters)
+        print(io, "{", join(nameof.(t.parameters), ", "), "}")
+    end
     print(io, "(")
     fs = fieldnames(t)
     for (i, f) in enumerate(fs)

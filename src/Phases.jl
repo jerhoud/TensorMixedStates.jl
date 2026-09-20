@@ -123,7 +123,9 @@ end
 function run_phase(sim::Simulation, phase::GroundState)
     done = first_sweep!(sim.checkpoint) - 1
     log_msg(sim, "Optimizing state with $(phase.nsweeps - done) sweeps of Dmrg")
-    done ≥ phase.nsweeps && return sim
+    if done ≥ phase.nsweeps
+        return sim
+    end
     e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, first_sweep = done + 1,
         phase.limits, phase.noise,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
@@ -158,7 +160,9 @@ function run_phase(sim::Simulation, phase::SteadyState)
     end
     done = first_sweep!(sim.checkpoint) - 1
     log_msg(sim, "Searching for steady state with $(phase.nsweeps - done) sweeps of Dmrg")
-    done ≥ phase.nsweeps && return sim
+    if done ≥ phase.nsweeps
+        return sim
+    end
     e, sim = steady_state(phase.lindbladian, sim;
         phase.nsweeps, first_sweep = done + 1, phase.limits, phase.mpo_limits, alg = phase.mpo_algo,
         observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))

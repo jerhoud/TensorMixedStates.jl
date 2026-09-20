@@ -82,6 +82,11 @@ same holds for `@def_states` and `@create_site_module`.
 
 Global identifiers are `const`.
 
+Control flow is written with `if`, never with the short-circuit operators. `cond && return`,
+`x isa T || error(…)` and `flag && do_something()` are out, and so is every other use of
+`&&` or `||` for its side effect. Inside a boolean expression, as in `if a && b`, they are
+ordinary and welcome.
+
 ## Performance work
 
 Two things are worth knowing before optimising anything.

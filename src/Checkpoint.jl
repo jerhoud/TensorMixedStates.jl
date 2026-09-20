@@ -130,7 +130,9 @@ The state and the metadata are written to temporary files and moved into place a
 so that a crash during the write leaves the previous checkpoint intact.
 """
 function save_checkpoint(c::Checkpointer, sim, state::State, sweep::Int)
-    isempty(c.dir) && return nothing
+    if isempty(c.dir)
+        return nothing
+    end
     positions = Dict{String, Int}()
     for (name, f) in sim.files
         if f isa IO && f ∉ (stdout, stderr, devnull)
@@ -196,7 +198,9 @@ the lines produced after it are not duplicated when the simulation resumes
 function truncate_outputs(dir::String, positions::Dict{String, Int})
     for (name, pos) in positions
         path = joinpath(dir, name)
-        isfile(path) || continue
+        if !isfile(path)
+            continue
+        end
         if filesize(path) > pos
             open(path, "a") do io
                 Base.truncate(io, pos)

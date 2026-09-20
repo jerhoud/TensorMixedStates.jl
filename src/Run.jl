@@ -165,7 +165,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 sim = log_phase(sim, sim_data)
             catch e
                 # an interrupt is a request to stop cleanly, anything else is a real failure
-                e isa InterruptException || rethrow()
+                if !(e isa InterruptException)
+                    rethrow()
+                end
                 log_msg(sim, "\n***** Interrupted, writing a checkpoint *****")
                 # the state of the interrupted sweep, the one the phase never got to return
                 st = c.state isa State ? c.state : sim.state
@@ -187,7 +189,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     catch
         # all the catch has of its own: the marker is written while the working directory
         # is still the simulation's, the finally below leaving it just afterwards
-        live && touch("error")
+        if live
+            touch("error")
+        end
         rethrow()
     finally
         # leaving the simulation, by whichever way, is described here and nowhere else, so
@@ -208,7 +212,9 @@ function log_phase(sim::Simulation, phases::Vector)
     c = sim.checkpoint
     for (i, phase) in enumerate(phases)
         # phases already completed before the checkpoint are not replayed
-        i < c.phase && continue
+        if i < c.phase
+            continue
+        end
         c.phase = i
         if c.resuming
             # the interrupted phase restarts from the time it began with, its solver
@@ -249,7 +255,9 @@ end
 # in `Phases.jl` says that in its turn.
 function check_is_phase(phase)
     for f in (:name, :time_start, :final_measures)
-        hasfield(typeof(phase), f) && continue
+        if hasfield(typeof(phase), f)
+            continue
+        end
         error("$(typeof(phase)) is not a phase: runTMS reads every element of `phases` " *
               "through the fields name, time_start and final_measures, and this one has " *
               "no `$f`. The phases of the library are the types listed in `Phases`. To " *
