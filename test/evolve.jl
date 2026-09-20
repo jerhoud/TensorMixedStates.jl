@@ -112,20 +112,24 @@ end
     h = sum(-Z(i) * Z(i + 1) for i in 1:n - 1) - sum(1. * X(i) for i in 1:n)
     st0 = State{Pure}(sys, "X+")
     sched = [2, 4, 4, 8]
-    for solver in [tdvp, approx_W]
+    # `approx_W` takes the order of the approximation, with no default, the same way the
+    # `ApproxW` phase does; `tdvp` has nothing of the sort, hence the per solver arguments
+    for (solver, opts) in [(tdvp, (;)), (approx_W, (; order = 1))]
         chained = foldl(sched; init = st0) do st, m
-            solver(-im * h, 0.1, st; nsweeps = 1, limits = Limits(cutoff = 1e-14, maxdim = m))
+            solver(-im * h, 0.1, st; nsweeps = 1, limits = Limits(cutoff = 1e-14, maxdim = m),
+                   opts...)
         end
         scheduled = solver(-im * h, 0.4, st0;
-                           nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = sched))
+                           nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = sched), opts...)
         @test maxlinkdim(scheduled) == maxlinkdim(chained)
         @test expect1(scheduled, Z) ≈ expect1(chained, Z)
         # a constant schedule is the plain value, and one shorter than the sweeps keeps
         # its last value for the rest of them
-        flat = solver(-im * h, 0.4, st0; nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = 4))
+        flat = solver(-im * h, 0.4, st0; nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = 4),
+                      opts...)
         for m in [[4, 4, 4, 4], [4]]
             st = solver(-im * h, 0.4, st0;
-                        nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = m))
+                        nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = m), opts...)
             @test expect1(st, Z) ≈ expect1(flat, Z)
         end
     end

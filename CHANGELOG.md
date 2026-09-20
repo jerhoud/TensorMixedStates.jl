@@ -43,6 +43,10 @@ expected to be 1.3.0 rather than a patch.
   enforced instead of accidental, refuses a declaration whose `OpType` disagrees, and
   removes an error that made the package unusable from Julia 1.10 and 1.11 as soon as a
   user declared an operator whose name a loaded site module exported.
+- **`approx_W` now takes `order` with no default and defaults `w` to 2**, which aligns it
+  with the `ApproxW` phase whose docstring already described that behaviour. Code calling
+  `approx_W` directly without `order` no longer runs, and code that left `w` out now gets
+  WII where it got WI. Phases are unaffected: `ApproxW` passes both explicitly.
 - **A `SimData` can no longer be used as a phase of another simulation.** It has the shape
   of a phase only because `runTMS` runs the top level one through the same machinery. Use
   nested vectors to build a list of phases in pieces, which is the documented way and is

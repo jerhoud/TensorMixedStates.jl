@@ -135,14 +135,14 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
 - `nsweeps`: number of steps (time step is t / nsweeps)
 - `first_sweep`: sweep to start from (default 1), to continue an evolution left unfinished
-- `order`: order of approximation
-- `w`: 1 or 2 for WI or WII
+- `order`: order of approximation, required
+- `w`: 1 or 2 for WI or WII (default 2, WII, as in `ApproxW`)
 - `observer!`: observer (see ApproxWObserver)
 - `time_start`: the simulation time at the beginning of evolution
 - `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
-    nsweeps::Int = 1, first_sweep::Int = 1, order::Int = 1, w::Int = 1, observer! = NoObserver(),
+    nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
     time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
     st = state.state
     dt = t / nsweeps
