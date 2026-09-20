@@ -425,7 +425,11 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     need_fermionic = any(isfermionic, oplist)
     need_non_fermionic = any(x->!isfermionic(x), oplist)
     n = length(state)
-    r = Matrix(undef, n, n)
+    # `Matrix{Any}` is said out loud rather than left to the bare `Matrix(undef, ...)`,
+    # which means the same thing without showing it. The element type is not known before a
+    # cell is computed, since it follows what `scalar` returns for this state, and `unroll`
+    # rebuilds a concretely typed result at the end, so the untyped container stays internal
+    r = Matrix{Any}(undef, n, n)
     for i in 1:n
         t = zipend(state, zipto(state, Expector(), i)).t
         r[i, i] = map(ops) do (o1, o2)

@@ -322,14 +322,20 @@ These need decisions, not patches.
 
 ## 5. Performance
 
-Only two targets are worth the effort, and both are on the contraction side rather than in
-Julia-level micro-optimisation.
+One target is left, on the contraction side, where the time actually goes.
 
-1. **Memoise the local tensors in `expect2`** (`src/Observables.jl`). For each pair `(i,j)`
-   it rebuilds the one site tensors from scratch: library lookup, the matrix product
-   `o1*F`, a new `Index`, an `ITensor`, a `combiner` and two contractions. That is
-   O(n²·|ops|) tensor constructions that depend only on `(site, operator)`. This is the
-   most profitable single change in the file.
+1. ~~**Memoise the local tensors in `expect2`**~~ — **set aside for now.** The item was
+   ambiguous and the ambiguity is what mattered. Memoising the *environments*, or the
+   transfer matrices per site, which is the usual way to speed up all-pairs correlators,
+   costs χ⁴ per site for a transfer matrix carrying four link indices: out of the question
+   at publication sizes. What the item actually pointed at is narrower, the
+   `tensor_obs(state, o(i))` calls inside the `map(ops)` of the inner loop. Those tensors
+   are built by `tensor(system, ::AtIndex)` in `src/Systems.jl`, whose indices are the site
+   indices and their primes — no link index enters, so a `(site, operator)` cache would hold
+   n·|ops| tensors of d² entries, a few hundred bytes on a chain of forty qubits. It would
+   remove O(n²·|ops|) constructions, but those are dictionary lookups and small matrix work
+   sitting next to ITensor contractions in the same loop, so the gain would not show in a
+   measurement. Left undone deliberately rather than forgotten.
 2. **The MPO is never compressed.** `PreMPO!` (`src/Mpo.jl`) allocates one private channel
    per term, so the MPO bond dimension is `2 + #(terms crossing the link)`, where
    ITensorMPS' `OpSum` construction applies an SVD compression. For a long range
@@ -339,9 +345,16 @@ Julia-level micro-optimisation.
    the coefficients can be changed from sweep to sweep without rebuilding the term list.
    Whatever is decided, the cost belongs in the documentation.
 
+The `Matrix{Any}` of `expect2` was looked at and closed. It never reaches the caller:
+`expect2` returns `Matrix{Float64}` for one pair of operators and `Vector{Matrix{Float64}}`
+for several, because `unroll` rebuilds a concretely typed array from the values. The
+container is an internal intermediate whose cost is n² boxed stores against n² ITensor
+contractions in the same loop, and typing it ahead would mean computing a cell first or
+going through `promote_op`, for no measurable gain. All that was changed is that
+`Matrix{Any}(undef, n, n)` now says what it is.
+
 Lesser points, all measurable but small: scalar `setindex` filling of the MPO tensors,
-`Matrix(undef, n, n)` giving a `Matrix{Any}` for the `expect2` result, single pass
-simplification of generic products (`simplify(X*Y*Y*X)` gives `ProdOp([X,X])` rather than
+single pass simplification of generic products (`simplify(X*Y*Y*X)` gives `ProdOp([X,X])` rather than
 `Id`, which costs MPO bond dimension), abstract field types in the hot symbolic layer, and
 `stop_requested` doing an `isfile` on every sweep.
 
