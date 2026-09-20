@@ -124,6 +124,13 @@ end
     # reference out of reach. A reference built from the Gaussian moments of this quadratic
     # Lindbladian would close the gap and has not been written. Until then, read this
     # testset as a regression check on the behaviour of the day it was recorded.
+    #
+    # Which is why the tolerances here are looser than those of the two testsets above. A
+    # recorded value gives no difference at all on the machine that recorded it and shows
+    # the whole spread between BLAS implementations anywhere else: the Windows job missed
+    # `1e-6` by `1.16e-6` on the first run it ever made, while Linux and macOS passed. An
+    # exact reference would let these go back to measuring the accuracy of the method
+    # instead of the arithmetic of one machine.
     @test_ok test_phases([
         CreateState{Mixed}(4, Boson(7), "0"),
         Evolve(
@@ -134,9 +141,9 @@ end
             evolver =
                 -im*sum(A(i)*dag(A)(i+1)+dag(A)(i)*A(i+1) for i in 1:3) + Dissipator(2*sqrt(0.1)*dag(A))(2),
             final_measures = [
-                    check(N,[0.363288753916464e-2,.120023637053104,0.356800815401577e-2,0.486649287358378e-4],1e-6),
+                    check(N,[0.363288753916464e-2,.120023637053104,0.356800815401577e-2,0.486649287358378e-4],1e-5),
                     check([dag(A)(2)*A(i) for i in 1:4],[-0.180013492215079e-1*im,.120023637053104,-0.178675615179132e-1*im,-0.178658178615343e-2],1e-5),
-                    check(Purity,.7965328508313,1e-6)
+                    check(Purity,.7965328508313,1e-5)
                 ])
     ])
 end
