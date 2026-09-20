@@ -249,10 +249,20 @@ A phase type for computing the ground state using Dmrg
     tolerance::Number = 0.
 end
 
-"""
-Dmrg is deprecated use GroundState instead
-"""
-const Dmrg = GroundState
+# the docstring goes through `@doc` rather than sitting above the call, because the macro
+# expands to a toplevel block and a docstring cannot be attached to one
+Base.@deprecate_binding Dmrg GroundState false ", use GroundState instead."
+
+@doc """
+    Dmrg
+
+deprecated, use [`GroundState`](@ref) instead.
+
+`Dmrg` is an alias of `GroundState` and goes on working, but it is marked deprecated in the
+runtime and will be removed in a future version. The deprecation warning only shows with
+`--depwarn=yes`, which is what running the tests does; an ordinary run stays silent, so this
+line is the notice.
+""" Dmrg
 
 
 

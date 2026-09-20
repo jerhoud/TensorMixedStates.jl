@@ -62,6 +62,18 @@ expected to be 1.3.0 rather than a patch.
   [SciPost Phys. Codebases 72 (2026)](https://doi.org/10.21468/SciPostPhysCodeb.72), and the
   README and manual cite it instead of the preprint.
 
+### Deprecated
+
+- **`Mutual_Info_Renyi2` is renamed `MutualInfoRenyi2`**, which matches the naming of every
+  other measurement. The old spelling goes on working and forwards to the new one, but it is
+  marked deprecated and the label written to the output files is the new name, so a script
+  reading a column by its header has to follow.
+- **`Dmrg` is marked deprecated**, use `GroundState`. It has carried the word in its
+  docstring for several versions without telling anyone; it is now a deprecated binding.
+
+Both warnings only show with `--depwarn=yes`, which is what running a test suite does. An
+ordinary run stays silent, so this file and the docstrings are the notice.
+
 ### Fixed
 
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**

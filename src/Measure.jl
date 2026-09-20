@@ -1,5 +1,5 @@
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
-export EE, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
+export EE, MutualInfoRenyi2, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
 
 """
     struct StateFunc
@@ -291,13 +291,28 @@ EE(pos, spectrum) = StateFunc("EE($pos,$spectrum)",
     end)
 
 """
-    Mutual_Info_Renyi2(link)
-    Mutual_Info_Renyi2([positions...])
+    MutualInfoRenyi2(link)
+    MutualInfoRenyi2([positions...])
 
 a state function to measure the Renyi-2 mutual information of the given subsystems.
 See also `StateFunc` and `mutual_info_renyi2`.
 """
-Mutual_Info_Renyi2(part) = StateFunc("Mutual_Info_Renyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
+MutualInfoRenyi2(part) = StateFunc("MutualInfoRenyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
+
+# the docstring goes through `@doc` rather than sitting above the call, because the macro
+# expands to a toplevel block and a docstring cannot be attached to one
+Base.@deprecate Mutual_Info_Renyi2(part) MutualInfoRenyi2(part) false
+
+@doc """
+    Mutual_Info_Renyi2(part)
+
+deprecated, use [`MutualInfoRenyi2`](@ref) instead.
+
+It forwards to `MutualInfoRenyi2`, so the measurement is the same one, but the label written
+to the output files is the new name. The deprecation warning only shows with
+`--depwarn=yes`, which is what running the tests does; an ordinary run stays silent, so this
+line is the notice.
+""" Mutual_Info_Renyi2
 
 """
     Linkdim

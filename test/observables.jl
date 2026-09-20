@@ -182,8 +182,11 @@ end
     @test m(fullymixed, Purity) ≈ 1 / 16
     @test m(fullymixed, Renyi2) ≈ 4L2
     @test m(mix(ghz), SubRenyi2([1])) ≈ L2
-    @test m(ghz, Mutual_Info_Renyi2(2)) ≈ 2L2
-    @test m(mix(ghz), Mutual_Info_Renyi2(2)) ≈ 2L2
+    @test m(ghz, MutualInfoRenyi2(2)) ≈ 2L2
+    @test m(mix(ghz), MutualInfoRenyi2(2)) ≈ 2L2
+    # the deprecated spelling forwards to the new one, label included
+    @test MutualInfoRenyi2(2).name == "MutualInfoRenyi2(2)"
+    @test Mutual_Info_Renyi2(2).name == MutualInfoRenyi2(2).name
 end
 
 @testset "Composed operators as measurements" begin
