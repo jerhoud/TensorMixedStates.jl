@@ -5,24 +5,30 @@
 # here should compare against that answer rather than against a recorded output.
 
 @testset "Qubit sampling" begin
+    # `sample` takes the generator to draw from, and these tests pass one of their own
+    # rather than leaning on the global one: the frequencies below then come out the same
+    # whether the whole suite runs or only this group, so the tolerances are met or missed
+    # once and for all instead of now and then
+    rng = Xoshiro(20260920)
+
     sys = System(3, Qubit())
     st = State{Pure}(sys, ["Up", "Dn", "+"])  # site 3 is a 50/50 superposition
 
     # deterministic sites always give the same outcome
     for _ in 1:20
-        @test sample(st, 1) == 0
-        @test sample(st, 2) == 1
+        @test sample(st, 1; rng) == 0
+        @test sample(st, 2; rng) == 1
     end
 
     # superposed site: frequency should be close to 1/2
     n = 2000
-    s3 = [sample(st, 3) for _ in 1:n]
+    s3 = [sample(st, 3; rng) for _ in 1:n]
     @test all(x -> x in (0, 1), s3)
     @test isapprox(sum(s3) / n, 0.5; atol = 0.05)
 
     # sampling the whole state is consistent with per-site sampling
     for _ in 1:20
-        r = sample(st)
+        r = sample(st; rng)
         @test r[1] == 0 && r[2] == 1 && r[3] in (0, 1)
     end
 
@@ -31,11 +37,11 @@
     stm = State{Mixed}(System(1, Qubit()), [p0 0. ; 0. 1 - p0])
 
     nm = 4000
-    samples = [sample(stm, 1) for _ in 1:nm]
+    samples = [sample(stm, 1; rng) for _ in 1:nm]
     @test all(x -> x in (0, 1), samples)
     @test isapprox(count(==(0), samples) / nm, p0; atol = 0.03)
 
-    samples_full = [sample(stm)[1] for _ in 1:nm]
+    samples_full = [sample(stm; rng)[1] for _ in 1:nm]
     @test isapprox(count(==(0), samples_full) / nm, p0; atol = 0.03)
 end
 

@@ -68,6 +68,11 @@ end
     end
 
 @testset "Ising chain" begin
+    # The reference values are exact, computed by diagonalizing the 64 dimensional Hilbert
+    # space in test/reference/ising_ed.jl, which shares no code with what is tested here.
+    # The tolerance is therefore the error of the evolution below, about 2e-8, and not the
+    # precision of the references. The last one is analytic rather than computed: the
+    # product of all X commutes with the hamiltonian and starts at 1, so it stays at 1.
     @test_ok test_phases([
         CreateState{Pure}(6, Qubit(), "X+"),
         Evolve(
@@ -78,18 +83,22 @@ end
     evolver =
         -im*(sum(Z(i)*Z(i+1) for i in 1:5)+Z(6)*Z(1)-sum(X(i) for i in 1:6)),
     final_measures = [
-        check([X,Y,Z],[[0.48881258678,0.48881258678,0.48881258678,0.48881258678,0.48881258678,0.48881258678],[0.0,0,0,0,0,0],[0.0,0,0,0,0,0]],1e-7),
-        check([Z(1)Z(2),Z(2)Z(3),Z(1)Z(6)],[-0.51118739903,-0.51118739903,-0.51118739903],1e-7),
-        check([Y(1)Y(2),Y(2)Y(3),Y(1)Y(6)],[-0.25183410946,-0.25183410946,-0.25183410946],1e-7),
-        check([X(1)X(2),X(2)X(3),X(1)X(6)],[0.11231262241,0.11231262241,0.11231262241],1e-7),
-        check([X(1)X(2)X(3)X(4),X(2)X(3)X(4)X(5),X(4)X(5)X(6)X(1)],[0.11231262241,0.11231262241,0.11231262241],1e-7),
-        check(EE(3), 1.15220908795, 1e-7),
+        check([X,Y,Z],[[0.48881258418,0.48881258418,0.48881258418,0.48881258418,0.48881258418,0.48881258418],[0.0,0,0,0,0,0],[0.0,0,0,0,0,0]],1e-7),
+        check([Z(1)Z(2),Z(2)Z(3),Z(1)Z(6)],[-0.51118741582,-0.51118741582,-0.51118741582],1e-7),
+        check([Y(1)Y(2),Y(2)Y(3),Y(1)Y(6)],[-0.2518341076,-0.2518341076,-0.2518341076],1e-7),
+        check([X(1)X(2),X(2)X(3),X(1)X(6)],[0.1123126174,0.1123126174,0.1123126174],1e-7),
+        check([X(1)X(2)X(3)X(4),X(2)X(3)X(4)X(5),X(4)X(5)X(6)X(1)],[0.1123126174,0.1123126174,0.1123126174],1e-7),
+        check(EE(3), 1.15220908566, 1e-7),
         check(X(1)X(2)X(3)X(4)X(5)X(6),1.0,1e-8)
         ])
         ])
     end
 
 @testset "Free fermions with source" begin
+    # The reference values are exact, from the dense Lindblad evolution of the 32
+    # dimensional Fock space in test/reference/fermion_lindblad.jl, which shares no code
+    # with what is tested here. The tolerance is the error of the evolution below, about
+    # 8e-8.
     @test_ok test_phases([
         CreateState{Mixed}(5, Fermion(), "0"),
         Evolve(
@@ -100,15 +109,21 @@ end
             evolver =
                 -im * sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:4) + Dissipator(sqrt(2*0.2)*dag(C))(3),
             final_measures = [
-                check(N, [0.125581972006622e-1,0.630086192053610e-1,.195018685802510,0.630086192053610e-1,0.125581972006622e-1], 1e-6),
+                check(N, [0.0125582080327,0.063008590052,0.1950187333854,0.063008590052,0.0125582080327], 1e-6),
                 check([dag(C)(3)*C(i) for i in 1:5],
-                [-0.235293024730342e-1, -0.783683050686146e-1*im,.195018685802510,-0.783683050686146e-1*im,-0.235293024730342e-1],1e-6),
-                check(Purity,.525664902939503,1e-6)
+                [-0.023529279887, -0.0783682258151im,0.1950187333854,-0.0783682258151im,-0.023529279887],1e-6),
+                check(Purity,0.5256648672193,1e-6)
             ])
     ])
 end
 
 @testset "Free bosons with source" begin
+    # Unlike the two testsets above, these reference values are recorded from a run of the
+    # library rather than computed independently: with four sites of dimension 7 the Fock
+    # space has 2401 states and the vectorized Liouvillian 2401^2, which puts a dense
+    # reference out of reach. A reference built from the Gaussian moments of this quadratic
+    # Lindbladian would close the gap and has not been written. Until then, read this
+    # testset as a regression check on the behaviour of the day it was recorded.
     @test_ok test_phases([
         CreateState{Mixed}(4, Boson(7), "0"),
         Evolve(

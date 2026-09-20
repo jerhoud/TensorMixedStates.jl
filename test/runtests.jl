@@ -1,5 +1,12 @@
 using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
-using Test, Aqua, DataFrames
+using Test, Aqua, DataFrames, Random
+
+# Every source of randomness in the suite is pinned, so that a run can be reproduced and a
+# failure cannot come and go. This covers `RandomState`, which draws from the global
+# generator. The statistical tests of `observables.jl` use a generator of their own on top
+# of this, so that they do not depend on how much randomness the groups before them drew.
+# Note that a fixed seed pins the stream for one Julia version, not across versions.
+Random.seed!(20260920)
 
 include("utils.jl")
 

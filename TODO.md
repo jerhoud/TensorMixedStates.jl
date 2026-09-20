@@ -194,11 +194,14 @@ means fixing the test first.
 
 ## 3. Tests
 
-- **No RNG seed is fixed anywhere** in `test/`. `test/observables.jl:7-40` samples 2000 and
-  4000 times with `atol = 0.05` and `0.03`, about 4.5σ and 4.7σ, so a false failure roughly
-  once in 10^5 runs. `sample` already accepts an `rng` that the tests never pass, so this
-  is free to fix. `test/checkpoint.jl` is already deliberately deterministic, triggering on
-  a measurement counter rather than a clock; the same reflex belongs on the RNG.
+- **The RNG is pinned — done.** `test/runtests.jl` seeds the global generator once, which
+  covers `RandomState`, and the sampling tests of `test/observables.jl` pass a generator of
+  their own to `sample`. That second part matters as much as the first: leaning on the
+  global generator would have made the frequencies depend on how much randomness the groups
+  before them drew, so running one group alone gave a different answer from running the
+  suite. The tolerances of 4.5σ and 4.7σ were left as they are, since with a fixed seed the
+  outcome is no longer a lottery. Note that a seed pins the stream for one Julia version,
+  not across versions.
 - **Restoring `exit_on_sigint` has no test.** It can only be checked by sending a real
   SIGINT from a child process, which was judged not worth its cost. It is the one fix of
   the correctness pass with no coverage.
@@ -208,11 +211,26 @@ means fixing the test first.
   an error of the algorithm. Both are now `1e-13`, which is still far tighter than any real
   error would be. Worth a look at the other bounds before adding one: a tolerance should say
   how accurate the method is, not how the machine happened to round that day.
-- **Recorded reference values** in `test/algorithms.jl:81-87`, `:103-106` and `:122-124`
-  are compared to 11–15 significant digits with no comment saying where the numbers come
-  from. If they come from a previous run, they freeze the implementation's behaviour at
-  that date rather than checking it. The steady state values nearby are visibly exact
-  fractions and do not have this problem.
+- **Recorded reference values — two of the three replaced by exact ones.** They were
+  compared to 11–15 significant digits with no word on where they came from, which froze the
+  behaviour of the day they were recorded instead of checking it.
+
+  `test/reference/` now holds two scripts that compute the references from first principles,
+  in `LinearAlgebra` alone, sharing no code with what they check: `ising_ed.jl` diagonalizes
+  the 64 dimensional Hilbert space of the 6 qubit ring, and `fermion_lindblad.jl` does the
+  dense Lindblad evolution of the 32 dimensional Fock space of the 5 site chain, by hand
+  Jordan-Wigner then the exponential of the vectorized Liouvillian. Neither is run by the
+  suite; they exist so the numbers can be regenerated and argued with. The old recorded
+  values turned out to be right, agreeing with the exact ones to 2e-8 and 8e-8, which is the
+  error of the algorithms themselves and sits well inside the 1e-7 and 1e-6 tolerances. The
+  testsets now carry the exact values and a comment saying where they come from, so the
+  tolerance means what it should: the accuracy of the method, not the reproducibility of a
+  past run.
+
+  **Left open**: the free boson testset. Four sites of dimension 7 give 2401 Fock states and
+  a vectorized Liouvillian of 2401², so a dense reference is out of reach. A reference built
+  from the Gaussian moments of that quadratic Lindbladian would close it; until then the
+  testset says in a comment that it is a regression check, which is at least honest.
 
 ---
 

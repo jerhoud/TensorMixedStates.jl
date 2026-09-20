@@ -41,8 +41,17 @@ It is a development shortcut only: do not set it in CI and do not rely on it any
 could end up.
 
 Compare against an exact value whenever an exact value exists. A number recorded from a
-previous run freezes the behaviour of the day it was recorded rather than checking anything,
-so if you have no choice but to record one, say in a comment where it comes from.
+previous run freezes the behaviour of the day it was recorded rather than checking anything.
+When no closed form is available, an independent computation often still is:
+`test/reference/` holds scripts that produce the reference values of `algorithms.jl` by
+exact diagonalization and by dense Lindblad evolution, in `LinearAlgebra` alone. They share
+no code with what they check, which is the whole point, and the suite does not run them —
+they are there so the numbers in the tests can be regenerated and argued with. If you must
+record a number, say in a comment where it comes from and that it is a regression check.
+
+Randomness is pinned: `runtests.jl` seeds the global generator, and a test that draws should
+pass a generator of its own rather than lean on that seed, so that running one group alone
+gives the same answer as running the whole suite.
 
 ## Building the documentation
 
