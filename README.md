@@ -45,7 +45,7 @@ runTMS(SimData(
     name = "dissipative_ising",
     description = "six qubits under a transverse field Ising hamiltonian, each decaying at rate 0.2",
     phases = [
-        CreateState(type = Mixed(), system = System(6, Qubit()), state = "Up"),
+        CreateState{Mixed}(6, Qubit(), "Up"),
         Evolve(
             duration = 2.0,
             time_step = 0.1,
@@ -59,8 +59,8 @@ runTMS(SimData(
 ))
 ```
 
-`type = Mixed()` is what makes the state a density matrix, and the `Dissipator` terms added
-to the hamiltonian are what turn the evolution into a Lindblad equation. The run writes a
+The `Mixed` of `CreateState{Mixed}` is what makes the state a density matrix, and the
+`Dissipator` terms added to the hamiltonian are what turn the evolution into a Lindblad equation. The run writes a
 `dissipative_ising` directory: `log` for what happened, `data` for the measurements,
 `description` and `stamp` for what was asked and when, and `prog.jl`, a copy of the script
 that produced it. The magnetization on the six sites and the purity, at the start and at the

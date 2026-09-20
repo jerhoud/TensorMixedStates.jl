@@ -342,7 +342,46 @@ in pieces, a helper returning the several phases it needs rather than a single o
 
 ### Example
 
-As an example, here is the complete code for such a simple simulation:
+What TMS is for is open systems, so here is one: six qubits evolving under a transverse
+field Ising hamiltonian while each of them decays. `CreateState{Mixed}` is what makes the
+state a density matrix, and the `Dissipator` terms added to the hamiltonian are what turn
+the evolution into a Lindblad equation.
+
+```julia
+using TensorMixedStates, .Qubits
+
+runTMS(SimData(
+    name = "dissipative_ising",
+    description = "six qubits under a transverse field Ising hamiltonian, each decaying at rate 0.2",
+    phases = [
+        CreateState{Mixed}(6, Qubit(), "Up"),
+        Evolve(
+            duration = 2.0,
+            time_step = 0.1,
+            algo = Tdvp(),
+            limits = Limits(maxdim = 64),
+            evolver = -im * (-sum(Z(i)Z(i + 1) for i in 1:5) - sum(X(i) for i in 1:6))
+                      + sum(Dissipator(sqrt(0.2) * Sm)(i) for i in 1:6),
+            measures = "data" => [Z, Purity],
+        ),
+    ],
+))
+```
+
+The magnetization on the six sites and the purity, at the start and at the end of the run:
+
+```
+Z        0.1    0.94098941    0.94117682   0.94117682   0.94117682   0.94117682    0.94098941
+Purity   0.1    0.78980701
+...
+Z        2     -0.095182096  -0.19011196  -0.14498043  -0.14498043  -0.19011196   -0.095182096
+Purity   2      0.1086794
+```
+
+The qubits start pure and pointing up; by the end the magnetization has reversed and the
+purity has fallen to 0.11, which is a state no pure state code could have represented.
+
+A longer one, the tight binding chain of fermions with dephasing noise:
 
 ```julia
 using TensorMixedStates, .Fermions
@@ -351,12 +390,9 @@ hamiltonian(n) = -sum(dag(C)(i)C(i+1)+dag(C)(i+1)C(i) for i in 1:n-1)
 dissipators(n, gamma) = sum(Dissipator(sqrt(4gamma) * N)(i) for i in 1:n)
 
 sim_data(n, gamma, step) = SimData(
-    name = "Fermion tight-binding chain with dephasing noise",
+    name = "fermion_chain_with_dephasing",
     phases = [
-        CreateState(
-            type = Mixed(),
-            system = System(n, Fermion()),
-            state = [ iseven(i) ? "Occ" : "Emp" for i in 1:n ]),
+        CreateState{Mixed}(n, Fermion(), [ iseven(i) ? "Occ" : "Emp" for i in 1:n ]),
         Evolve(
             duration = 4,
             time_step = step,
