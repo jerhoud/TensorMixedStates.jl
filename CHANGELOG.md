@@ -113,5 +113,8 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 - Continuous integration runs on the development branch, not only on `main`, and the matrix
   covers the minimum Julia version that `[compat]` promises, the current stable one and the
   upcoming release, on Linux and on Apple Silicon.
+- Coverage is measured on every CI run and published to Codecov, with a badge in the
+  README. The tests already ran instrumented, so this only gathers and sends what was
+  produced and thrown away before.
 - The test suite went from about 190 assertions to more than 600, organised in groups that
   can be run selectively.

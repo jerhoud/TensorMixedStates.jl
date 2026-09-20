@@ -7,6 +7,7 @@
 [![CI](https://github.com/jerhoud/TensorMixedStates.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/jerhoud/TensorMixedStates.jl/actions/workflows/CI.yml)
 [![Documentation](https://github.com/jerhoud/TensorMixedStates.jl/actions/workflows/documentation.yml/badge.svg)](https://github.com/jerhoud/TensorMixedStates.jl/actions/workflows/documentation.yml)
 [![pages-build-deployment](https://github.com/jerhoud/TensorMixedStates.jl/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/jerhoud/TensorMixedStates.jl/actions/workflows/pages/pages-build-deployment)
+[![codecov](https://codecov.io/gh/jerhoud/TensorMixedStates.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jerhoud/TensorMixedStates.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 

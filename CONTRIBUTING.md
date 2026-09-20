@@ -40,6 +40,11 @@ and it costs a great deal of time when you are loading or testing the package ov
 It is a development shortcut only: do not set it in CI and do not rely on it anywhere a user
 could end up.
 
+Coverage is measured on every CI run and sent to Codecov, which shows the lines of `src/`
+that no test reaches. A pull request that adds code without tests will show up there. Note
+that a covered line only means it was executed, not that its result was checked, so read the
+list of uncovered lines rather than the percentage.
+
 Compare against an exact value whenever an exact value exists. A number recorded from a
 previous run freezes the behaviour of the day it was recorded rather than checking anything.
 When no closed form is available, an independent computation often still is:

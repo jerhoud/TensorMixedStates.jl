@@ -134,8 +134,14 @@ by hand with `gh workflow run documentation.yml --ref vX.Y.Z`.
   that made the package unavailable there. The matrix is written as an explicit `include`
   list, so each row pairs its own architecture.
 
-**Left open on purpose**: no coverage measurement and no badge, deferred because it needs
-an account on an external service. Windows either: `test/checkpoint.jl` changes the working
+- **Coverage is collected and published.** The tests already ran instrumented, since
+  `coverage` defaults to true in `julia-runtest`, so all that was missing was gathering the
+  `.cov` files and sending them: `julia-actions/julia-processcoverage` then
+  `codecov/codecov-action`, on each of the four matrix jobs, which Codecov merges. The badge
+  is in the README. Read the list of uncovered lines rather than the percentage: a covered
+  line was executed, which does not mean its result was checked.
+
+**Left open on purpose**: Windows: `test/checkpoint.jl` changes the working
 directory and manipulates files, which is precisely what would break there, so adding it
 means fixing the test first.
 
@@ -188,7 +194,7 @@ means fixing the test first.
   `CONTRIBUTING.md`, and a pull request template whose checklist names the four things a
   change has to have done.
 
-**Left open**: the coverage badge, which waits on the coverage decision of 2.2.
+The coverage badge, which was waiting on the decision of 2.2, is there too.
 
 ---
 
