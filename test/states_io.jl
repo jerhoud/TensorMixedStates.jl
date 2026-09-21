@@ -191,3 +191,34 @@ end
         end
     end
 end
+
+@testset "Loading a state onto a system" begin
+    dir = mktempdir()
+    file = joinpath(dir, "onto.h5")
+    sys = System(3, Qubit())
+    a = RandomState{Pure}(sys, 4)
+    save_state(file, "a", a)
+
+    # read back as it comes, the state lands on a system built from the file and cannot be
+    # compared with the one it was saved from
+    b = load_state(file, "a")
+    @test b.system !== sys
+    @test_throws "do not share their System" inner(a, b)
+
+    # read onto an existing system, it lands where it can be compared and is the same state
+    c = load_state(file, "a"; system = sys)
+    @test c.system === sys
+    @test fidelity(a, c) ≈ 1
+    @test inner(a, c) ≈ norm(a)^2
+    @test expect1(c, Z) ≈ expect1(a, Z)
+
+    # the sites of the system given must be the ones of the state
+    @test_throws "system of other sites" load_state(file, "a"; system = System(2, Qubit()))
+
+    # and the same for a mixed state
+    m = mix(a)
+    save_state(file, "m", m)
+    lm = load_state(file, "m"; system = sys)
+    @test lm.system === sys
+    @test hs_fidelity(m, lm) ≈ 1
+end

@@ -15,6 +15,7 @@ SysIndex
 ```@docs
 Limits
 State
+State(::System, ::State)
 length(::State)
 maxlinkdim(::State)
 mix

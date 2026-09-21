@@ -175,6 +175,32 @@ State{R}(system::System, state::Union{Vector{<:Number}, Matrix}) where R =
 State(state::State{R}, st::MPS) where R =
     State{R}(state.system, st)
 
+# a `System` draws ITensor indices of its own, so two states built on two systems cannot be
+# contracted together even when they describe the very same sites. This is what puts one on
+# the system of the other, and what `inner` and the fidelities point at when they refuse a
+# pair of states
+"""
+    State(::System, ::State)
+
+the same state on the given system, whose sites must be the ones the state was built on.
+
+This is the mirror of `State(state, mps)`: that one keeps the system and takes a new mps,
+this one keeps the mps and takes a new system. It is what makes a state read from disk, or
+built before a run, comparable with the state of that run, since `inner` and the fidelities
+require their two arguments to share a system.
+
+# Examples
+
+    ref = State(sim.state.system, load_state("ground.h5", "gs"))
+"""
+function State(system::System, st::State{R}) where R
+    if system.sites ≠ st.system.sites
+        error("cannot put a state on a system of other sites: the state was built on " *
+              "$(st.system.sites) and the system given has $(system.sites)")
+    end
+    return State{R}(system, replace_siteinds(st.state, SysIndex{R}(system, 1:length(system))))
+end
+
 State{R}(size::Int, site::AbstractSite, state) where R =
     State{R}(System(size, site), state)
 

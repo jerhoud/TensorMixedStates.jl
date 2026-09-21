@@ -55,19 +55,25 @@ function build_site(modname::String, typename::String, params::Vector{Float64})
 end
 
 """
-    load_state(filename, statename)
+    load_state(filename, statename[; system])
 
 load a state previously saved by `save_state`
 
 The site types of the state are rebuilt by name, so the modules defining them
 must be loaded (this is automatic for the site types of this package)
 
+`system` reads the state onto an existing `System` rather than onto one built from the
+file. The sites must match, and this is what makes the state comparable with one already
+in hand, `inner` and the fidelities requiring their arguments to share a system.
+
 # Examples
 
     load_state("myfile.h5", "ground_state")
+    load_state("myfile.h5", "ground_state"; system = sim.state.system)
 """
-function load_state(filename::String, statename::String)
-    h5open(filename, "r") do f
+function load_state(filename::String, statename::String;
+                    system::Union{Nothing, System} = nothing)
+    st = h5open(filename, "r") do f
         g = open_group(f, statename)
         version = read(attributes(g)["version"])
         if version ≠ state_file_version
@@ -97,5 +103,13 @@ function load_state(filename::String, statename::String)
         else
             error("state \"$statename\" has unknown type \"$type\"")
         end
+    end
+    # without a system the state comes back on one built from the file, whose indices are
+    # its own. `system` puts it on an existing one instead, which is what comparing it with
+    # a state already in hand requires
+    if isnothing(system)
+        return st
+    else
+        return State(system, st)
     end
 end

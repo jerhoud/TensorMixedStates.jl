@@ -50,3 +50,32 @@ end
    @test_ok Simulation(nothing)
    @test_pm Simulation(State{type}(System(3, Qubit()), "Up"))
 end
+
+@testset "Putting a state on another system" begin
+    # a System draws indices of its own, so the same sites twice give two systems whose
+    # states cannot be contracted together. This is what makes them comparable
+    for R in (Pure, Mixed)
+        sys1 = System(3, Qubit())
+        sys2 = System(3, Qubit())
+        a = RandomState{R}(sys1, 4)
+        b = State(sys2, a)
+        @test b.system === sys2
+        # the state itself is untouched
+        @test expect1(a, Z) ≈ expect1(b, Z)
+        @test trace(a) ≈ trace(b)
+        @test first(entanglement_entropy(a, 2)) ≈ first(entanglement_entropy(b, 2))
+        # and it is comparable with a state of sys2, which a was not
+        @test_throws "do not share their System" inner(a, State{R}(sys2, "Up"))
+        @test_ok inner(b, State{R}(sys2, "Up"))
+    end
+    # the sites must match, and a parametric site must match on its parameter too
+    sys = System([Qubit(), Boson(4), Qubit()])
+    @test_ok State(System([Qubit(), Boson(4), Qubit()]), State{Pure}(sys, "0"))
+    @test_throws "system of other sites" State(System(3, Qubit()), State{Pure}(sys, "0"))
+    @test_throws "system of other sites" State(System([Qubit(), Boson(5), Qubit()]),
+                                               State{Pure}(sys, "0"))
+    @test_throws "system of other sites" State(System(2, Qubit()),
+                                               State{Pure}(System(3, Qubit()), "Up"))
+    # the very same system is a no-op rather than an error
+    @test_ok State(sys, State{Pure}(sys, "0"))
+end
