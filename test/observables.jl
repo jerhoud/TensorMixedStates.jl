@@ -212,3 +212,26 @@ end
     @test expect1(st, 0.5 * (X + Y)) ≈ 0.5 * (expect1(st, X) + expect1(st, Y))
     @test expect2(st, (2X, 3Y)) ≈ 6 * expect2(st, (X, Y))
 end
+
+@testset "Expectation values on an unnormalised state" begin
+    # The left environments carry the 1/trace normalisation of `expect`, injected once in
+    # l[1] and riding along the recursion. The shortcut taken when the mps is already left
+    # orthogonal writes the environment from scratch and has to carry it too. Two non
+    # unitary gates produce both conditions at once: a norm that is not one, and an
+    # orthogonality centre pushed to the right.
+    sys = System(6, Qubit())
+    st = apply(Sp(1) * Sp(3), State{Pure}(sys, "+"))
+    # the test only means anything while the shortcut is actually taken, and that depends
+    # on where ITensor leaves the orthogonality centre, so it is asserted rather than hoped
+    @test TensorMixedStates.ITensorMPS.leftlim(st.state) ≥ 1
+    @test trace(st) ≈ 0.25
+    # Sp|+> = |0>/sqrt(2), so sites 1 and 3 are up and the other four are still |+>
+    @test expect1(st, Z) ≈ [1., 0., 1., 0., 0., 0.] atol = 1e-12
+    @test expect1(st, X) ≈ [0., 1., 0., 1., 1., 1.] atol = 1e-12
+    # the answer must not depend on whether the caller normalised first. Only a term whose
+    # leftmost factor sits on site 1 reads l[1], which is why the bug showed on expect1 and
+    # expect2 while a product starting at site 1 stayed right
+    @test expect1(st, X) ≈ expect1(normalize(st), X)
+    @test expect(st, Z(1) * Z(3)) ≈ expect(normalize(st), Z(1) * Z(3))
+    @test expect2(st, (X, X)) ≈ expect2(normalize(st), (X, X))
+end

@@ -80,6 +80,7 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 
 ### Fixed
 
+- **`expect`, `expect1` and `expect2` returned unnormalised values on a pure state in certain corner cases.
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no

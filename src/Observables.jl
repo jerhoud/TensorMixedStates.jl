@@ -139,7 +139,7 @@ function create_left!(l, state::State{Pure}, i::Int)
     for k in j+1:i
         llink = commonind(st[k-1], st[k])
         v = if k <= ll
-            delta(llink, llink')
+            delta(llink, llink') / real(trace(state))
         else
             idx = SysIndex{Pure}(s, k-1)
             l[k-1] * delta(idx, idx') * dag(st[k-1]')
