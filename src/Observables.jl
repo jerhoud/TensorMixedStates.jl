@@ -202,10 +202,8 @@ position and warns.
 """
 function check_same_system(a::State, b::State)
     if a.system !== b.system
-        error("the two states do not share their System, so the indices they carry " *
-              "differ and they cannot be contracted together. Put one on the system of " *
-              "the other with State(system, state), or read it there in the first place " *
-              "with load_state(file, name; system)")
+        error("the two states do not share their System, so their indices differ. " *
+              "Use State(system, state)")
     end
     return nothing
 end
@@ -239,9 +237,8 @@ end
 # on purpose: a catch-all `inner(::State, ::State)` is what Julia picks over the diagonal
 # method above, so it would capture the matching pairs as well.
 different_representations() =
-    error("cannot take the inner product of a pure and a mixed representation: they are " *
-          "vectors of different spaces. Mix the pure one first, or use fidelity, which " *
-          "takes the two as they are")
+    error("no inner product between a pure and a mixed representation. Mix the pure " *
+          "one, or use fidelity")
 
 inner(::State{Pure}, ::State{Mixed}) = different_representations()
 inner(::State{Mixed}, ::State{Pure}) = different_representations()
@@ -647,10 +644,8 @@ variance(h, state::State{Pure}) = variance(make_mpo(state, h), state)
 # plays the part is already there: `steady_state` optimises on ``L^\\dagger L`` and returns
 # ``\\|L\\rho\\|^2``, which is zero exactly when the state is stationary
 variance(_, ::State{Mixed}) =
-    error("the variance of a hamiltonian is meant for a pure representation. On a mixed " *
-          "one, the quantity that says the same thing for a Lindbladian is the value " *
-          "steady_state returns, which is the norm of L applied to the state and should " *
-          "be zero")
+    error("variance needs a pure representation. On a mixed one steady_state returns " *
+          "the equivalent for a Lindbladian")
 
 
 """
@@ -739,9 +734,7 @@ end
 # `mutual_info_renyi2` mix on their own because they return a number; this one returns a
 # state, and changing its representation behind the caller's back would be a surprise
 partial_trace(::State{Pure}, ::AbstractVector{<:Integer}; kwargs...) =
-    error("partial_trace needs a mixed representation: the reduced state of a subsystem " *
-          "is not pure in general. Turn the state into its mixed representation first, " *
-          "with mix(state) or a ToMixed phase")
+    error("partial_trace needs a mixed representation, use mix(state) first")
 
 """
     mutual_info_renyi2(state::State, cut::Int)

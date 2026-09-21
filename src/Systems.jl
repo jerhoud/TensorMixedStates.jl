@@ -100,8 +100,7 @@ fault rather than the array.
 function check_index(system::System, i::Int, a)
     n = length(system)
     if i < 1 || i > n
-        error("$a acts on site $i, which the system does not have: it has $n sites, " *
-              "numbered 1 to $n")
+        error("$a acts on site $i, which the system does not have: it has $n sites")
     end
     return nothing
 end

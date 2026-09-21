@@ -293,8 +293,8 @@ end
     @test hs_fidelity(2 * mix(up), 3 * fm) ≈ hs_fidelity(mix(up), fm)
 
     # a pure and a mixed representation are vectors of different spaces
-    @test_throws "vectors of different spaces" inner(plus, fm)
-    @test_throws "vectors of different spaces" inner(fm, plus)
+    @test_throws "pure and a mixed representation" inner(plus, fm)
+    @test_throws "pure and a mixed representation" inner(fm, plus)
 
     # and two mixed ones have no fidelity to speak of, the Uhlmann one needing a spectrum.
     # The refusal names what to reach for instead
@@ -353,5 +353,5 @@ end
     @test last(only(measure(gs, Variance(h)))) ≈ variance(h, gs)
 
     # a hamiltonian on a density matrix has no variance in this sense
-    @test_throws "meant for a pure representation" variance(h, mix(r))
+    @test_throws "needs a pure representation" variance(h, mix(r))
 end
