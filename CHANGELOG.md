@@ -183,6 +183,10 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   produced and thrown away before.
 - The test suite went from about 190 assertions to more than 600, organised in groups that
   can be run selectively.
+- The examples of `examples/high_level` are run by a step of their own in CI, on one job
+  of the matrix, so that one of them breaking is noticed. They were shortened to make that
+  affordable, three and a half minutes for the five. The examples of `examples/article`
+  stay at the sizes the article published and are not run.
 - The free boson testset no longer measures the arithmetic of the machine it runs on. It
   evolved at a bond dimension where the truncation is unstable, so the result followed the
   BLAS thread count of the runner: the same code gave a green Windows job one hour and a

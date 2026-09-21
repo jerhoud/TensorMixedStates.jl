@@ -52,3 +52,10 @@ jobs:
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
+      # The examples cost minutes rather than seconds, so they are not a test group and
+      # the suite does not run them. One job of the matrix does, which is enough to catch
+      # the day one of them stops working, and it runs last so that a failure there does
+      # not cost the coverage of a run whose tests passed.
+      - name: Run the examples
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
+        run: julia --project=. test/run_examples.jl
