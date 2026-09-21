@@ -20,7 +20,10 @@ dim(site::AbstractSite) = error("dim not implemented on site $site")
 
 return an ITensor.Index for the given site for pure representations
 """
-Index(site::AbstractSite) = Index(dim(site); tags="$(string(typeof(site))), Site")
+# `nameof` rather than `string(typeof(site))`: the latter prints the module prefix when
+# the site module is not in scope, and ITensors silently cuts a tag at 16 characters, so
+# every site type ended up tagged "TensorMixedState" depending on what the user imported
+Index(site::AbstractSite) = Index(dim(site); tags="$(nameof(typeof(site))), Site")
 
 """
     string_state(::AbstractSite, ::String)

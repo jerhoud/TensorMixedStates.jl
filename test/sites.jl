@@ -173,3 +173,16 @@ end
         [ plain_op => [ N = [0. 0. ; 0. 1.] ] ])
     @test_throws "operator N is not defined for site Dummit2" matrix(N, Dummit2())
 end
+
+@testset "Index tags" begin
+    # the tag says which site type the index belongs to, and must not depend on which site
+    # modules the user has imported: `string(typeof(site))` printed the module prefix when
+    # the module was not in scope, and ITensors cuts a tag at 16 characters, so every site
+    # type came out tagged "TensorMixedState"
+    for site in [Qubit(), Fermion(), Boson(4), Spin(3/2), Electron(), Tj(), Qboson(0.1, 3),
+                 Qudit(3), Dummit()]
+        # `hastags` belongs to ITensors, which the test environment does not import
+        @test TensorMixedStates.ITensors.hastags(Index(site), string(nameof(typeof(site))))
+        @test TensorMixedStates.ITensors.hastags(Index(site), "Site")
+    end
+end

@@ -93,6 +93,9 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   whole state to disk on every sweep. A period below one now means never, everywhere:
   `sweep_due` carries the rule for the three sweep counters and `checkpoint_due` applies
   it to the interval in seconds.
+- **Site index tags no longer depend on what the user imported.** The type name was
+  printed with its module prefix when the site module was not in scope, and ITensors cuts
+  a tag at 16 characters, so every site type came out tagged `TensorMixedState`.
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no
