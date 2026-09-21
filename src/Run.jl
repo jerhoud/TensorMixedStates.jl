@@ -61,9 +61,8 @@ flatten_phases(p) = [p]
 # whose index is below the one the outer loop had reached. Phases are grouped with plain
 # vectors, which flatten properly, so this is refused rather than half supported.
 flatten_phases(sd::SimData) =
-    error("a SimData cannot be used as a phase of another simulation, and \"$(sd.name)\" " *
-          "was found inside the phases of one. To build a list of phases in pieces, nest " *
-          "plain vectors instead: they are flattened on construction, to any depth")
+    error("the SimData \"$(sd.name)\" cannot be a phase of another simulation, " *
+          "nest plain vectors instead")
 
 show(io::IO, s::SimData) =
     print(io,
@@ -258,11 +257,8 @@ function check_is_phase(phase)
         if hasfield(typeof(phase), f)
             continue
         end
-        error("$(typeof(phase)) is not a phase: runTMS reads every element of `phases` " *
-              "through the fields name, time_start and final_measures, and this one has " *
-              "no `$f`. The phases of the library are the types listed in `Phases`. To " *
-              "run one of your own, give it those three fields and define a method of " *
-              "TensorMixedStates.run_phase for it")
+        error("$(typeof(phase)) is not a phase, it has no `$f`. A phase needs name, " *
+              "time_start, final_measures and a run_phase method")
     end
 end
 

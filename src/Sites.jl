@@ -145,17 +145,14 @@ check that a name already in scope can stand for the operator about to be regist
 """
 function check_shared_operator(existing, name::String, type::OpType, site::AbstractSite)
     if !(existing isa Operator{1})
-        error("cannot declare operator $name for site $(typeof(site)): the name $name is " *
-              "already used in this module for something else, of type $(typeof(existing)). " *
-              "Give your operator another name, or make sure $name is not brought into scope")
+        error("cannot declare operator $name for site $(typeof(site)): the name already " *
+              "stands for a $(typeof(existing)). Choose another one")
     elseif existing.name ≠ name
-        error("cannot declare operator $name for site $(typeof(site)): in this module the " *
-              "name $name already stands for the operator $(existing.name)")
+        error("cannot declare operator $name for site $(typeof(site)): the name already " *
+              "stands for the operator $(existing.name)")
     elseif existing.type ≠ type
-        error("operator $name is declared as $(existing.type) by a site type already in " *
-              "scope, and as $type for site $(typeof(site)). A name stands for one " *
-              "operator, shared by every site type that declares it, so the two " *
-              "declarations must agree on the OpType")
+        error("operator $name is $(existing.type) for a site already in scope and $type " *
+              "for site $(typeof(site)): a shared name must agree on the OpType")
     end
     return existing
 end

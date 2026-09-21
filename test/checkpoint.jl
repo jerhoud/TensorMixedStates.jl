@@ -67,7 +67,7 @@ end
     # with vectors.
     p = CreateState{Pure}(2, Qubit(), "Up")
     inner = SimData(name = "inner", phases = [p, p])
-    @test_throws "cannot be used as a phase" SimData(name = "outer", phases = [p, inner])
+    @test_throws "cannot be a phase" SimData(name = "outer", phases = [p, inner])
     # what grouping is for, and it still flattens to any depth
     @test length(SimData(name = "flat", phases = [p, [p, [p, p]]]).phases) == 4
 end
