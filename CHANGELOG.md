@@ -34,6 +34,11 @@ expected to be 1.3.0 rather than a patch.
   `system` keyword of `load_state`, which reads one straight onto an existing system. A
   `System` carries ITensor indices of its own, so this is what makes two states built
   apart comparable at all.
+- `variance(hamiltonian, state)` and the `Variance(hamiltonian)` measurement, the
+  convergence check of a ground state search and what gives it an error bar. `H^2` is
+  never formed, which matters here more than elsewhere: TMS does not compress its MPOs, so
+  squaring a hamiltonian squares the bond dimension of its MPO, 3 becoming 1603 on a forty
+  site Ising chain.
 - `Fidelity(ref)` and `Overlap(ref)`, to follow either against a reference state while a
   simulation runs, a Loschmidt echo or the distance to a ground state among others.
 - `CITATION.cff`, `CONTRIBUTING.md` and this changelog.

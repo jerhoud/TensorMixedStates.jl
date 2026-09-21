@@ -11,6 +11,7 @@ Measure
 expect
 expect1
 expect2
+variance
 sample(::State{Pure})
 entanglement_entropy
 renyi2
@@ -26,6 +27,7 @@ Renyi2
 SubRenyi2
 Fidelity
 Overlap
+Variance
 MutualInfoRenyi2
 Mutual_Info_Renyi2
 EE

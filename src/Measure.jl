@@ -1,6 +1,6 @@
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
 export EE, MutualInfoRenyi2, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
-export Fidelity, Overlap
+export Fidelity, Overlap, Variance
 
 """
     struct StateFunc
@@ -347,6 +347,24 @@ See also `StateFunc` and `inner`.
     measures = "data" => Overlap(initial_state)
 """
 Overlap(ref::State) = StateFunc("Overlap", st -> inner(State(st.system, ref), st))
+
+"""
+    Variance(hamiltonian)
+
+a state function to measure the variance of the energy of `hamiltonian`, which is zero
+exactly when the state is one of its eigenstates.
+See also `StateFunc` and `variance`.
+
+The MPO is built at every measurement, since the system the simulation runs on does not
+exist when the measurement is written. That is cheap next to the two contractions the
+variance itself costs, which are those of a `dmrg` sweep: ask for this in `final_measures`
+or under a large `measures_period`, not at every sweep.
+
+# Examples
+
+    final_measures = "data" => Variance(hamiltonian)
+"""
+Variance(h) = StateFunc("Variance", st -> variance(h, st))
 
 """
     Linkdim
