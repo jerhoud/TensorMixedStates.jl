@@ -34,6 +34,8 @@ expected to be 1.3.0 rather than a patch.
   `system` keyword of `load_state`, which reads one straight onto an existing system. A
   `System` carries ITensor indices of its own, so this is what makes two states built
   apart comparable at all.
+- `Fidelity(ref)` and `Overlap(ref)`, to follow either against a reference state while a
+  simulation runs, a Loschmidt echo or the distance to a ground state among others.
 - `CITATION.cff`, `CONTRIBUTING.md` and this changelog.
 
 ### Changed

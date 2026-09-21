@@ -24,6 +24,8 @@ Hermiticity
 HermiticityError
 Renyi2
 SubRenyi2
+Fidelity
+Overlap
 MutualInfoRenyi2
 Mutual_Info_Renyi2
 EE

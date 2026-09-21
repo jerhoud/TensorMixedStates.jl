@@ -296,3 +296,20 @@ end
     @test_throws "vectors of different spaces" inner(plus, fm)
     @test_throws "vectors of different spaces" inner(fm, plus)
 end
+
+@testset "Fidelity and Overlap as measurements" begin
+    # the reference is written when the simulation is described, so it lives on a system
+    # of its own; the state functions are the ones putting it where it can be contracted
+    ref = State{Pure}(System(3, Qubit()), "+")
+    st = State{Pure}(System(3, Qubit()), ["+", "+", "Up"])
+    @test first(only(measure(st, Fidelity(ref)))) == "Fidelity"
+    @test last(only(measure(st, Fidelity(ref)))) ≈ 0.5
+    @test last(only(measure(st, Overlap(ref)))) ≈ 1/√2
+    # and through a run, where the system does not exist until the phase creates it
+    sim = runTMS(SimData(phases = [
+            CreateState{Pure}(3, Qubit(), ["+", "+", "Up"];
+                final_measures = Data("d") => [Fidelity(ref), Overlap(ref)])]);
+        output = devnull)
+    @test only(sim.data["d"]["Fidelity"]["data"]) ≈ 0.5
+    @test only(sim.data["d"]["Overlap"]["data"]) ≈ 1/√2
+end

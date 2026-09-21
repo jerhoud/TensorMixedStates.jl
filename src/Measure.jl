@@ -1,5 +1,6 @@
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
 export EE, MutualInfoRenyi2, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
+export Fidelity, Overlap
 
 """
     struct StateFunc
@@ -316,6 +317,36 @@ to the output files is the new name. The deprecation warning only shows with
 `--depwarn=yes`, which is what running the tests does; an ordinary run stays silent, so this
 line is the notice.
 """ Mutual_Info_Renyi2
+
+"""
+    Fidelity(ref)
+
+a state function to measure the fidelity with the reference state `ref`.
+See also `StateFunc` and `fidelity`.
+
+`ref` is put on the system of the state being measured, which the strictness of `fidelity`
+would otherwise refuse: a measurement is written when the simulation is described, before
+the system it will run on exists.
+
+# Examples
+
+    measures = "data" => [Fidelity(ground_state), Purity]
+"""
+Fidelity(ref::State) = StateFunc("Fidelity", st -> fidelity(st, State(st.system, ref)))
+
+"""
+    Overlap(ref)
+
+a state function to measure the inner product with the reference state `ref`, that is
+``\\langle ref | \\psi \\rangle`` on a pure representation. Unlike `Fidelity` it is not
+normalised and it is complex, so it is written as two columns.
+See also `StateFunc` and `inner`.
+
+# Examples
+
+    measures = "data" => Overlap(initial_state)
+"""
+Overlap(ref::State) = StateFunc("Overlap", st -> inner(State(st.system, ref), st))
 
 """
     Linkdim
