@@ -1,0 +1,10 @@
+# The patch status marks a commit red when the lines it changes are less covered than the
+# project as a whole. That is the wrong measure here: a commit that rewrites an error
+# message, or any other line a test never reaches, is counted as new untested code even
+# though it adds none and leaves the total coverage untouched. Made informational, the
+# status still reports the figure on the commit and in pull requests, but never fails.
+coverage:
+  status:
+    patch:
+      default:
+        informational: true
