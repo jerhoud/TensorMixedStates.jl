@@ -234,7 +234,7 @@ hermiticity(state::State{Mixed}) =
 
 """
     renyi2(::State)
-    renyi2(::State, ::Vector{Int})
+    renyi2(::State, ::AbstractVector{<:Integer})
 
 renyi2 returns the Renyi entropy of order 2 of the state. It is 0. for a pure
 representation, whose density matrix has a single non zero eigenvalue.
@@ -248,13 +248,13 @@ partial trace needs a density matrix.
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))
 
-renyi2(state::State{Mixed}, a::Vector{Int}) =
+renyi2(state::State{Mixed}, a::AbstractVector{<:Integer}) =
     renyi2(partial_trace(state, a; keepers = true))
 
 # a subsystem of a pure state is not pure, so this is an entanglement measure rather than
 # 0. There is no cheap route for an arbitrary subset, the same way mutual_info_renyi2 has
 # none: a partial trace needs a density matrix.
-renyi2(state::State{Pure}, a::Vector{Int}) =
+renyi2(state::State{Pure}, a::AbstractVector{<:Integer}) =
     renyi2(mix(state), a)
 
 unroll(x) =
@@ -523,12 +523,12 @@ function entanglement_entropy(state::State, pos::Int)
 end
 
 """
-    partial_trace(::State, ::Vector{Int} [; keepers = false])
+    partial_trace(::State, ::AbstractVector{<:Integer} [; keepers = false])
 
 return the state partially traced at the given positions
 alternatively one can give the positions to keep by setting `keepers = true`
 """
-function partial_trace(state::State{Mixed}, pos::Vector{Int}; keepers::Bool = false)
+function partial_trace(state::State{Mixed}, pos::AbstractVector{<:Integer}; keepers::Bool = false)
     n = length(state)
     if keepers
         keep = sort(unique(pos))
@@ -570,9 +570,18 @@ function partial_trace(state::State{Mixed}, pos::Vector{Int}; keepers::Bool = fa
     return State{Mixed}(System(s, sp, sm), MPS(t))
 end
 
+# a partial trace needs a density matrix: the reduced state of a subsystem is mixed in
+# general, so there is nothing to hand back in pure representation. `renyi2` and
+# `mutual_info_renyi2` mix on their own because they return a number; this one returns a
+# state, and changing its representation behind the caller's back would be a surprise
+partial_trace(::State{Pure}, ::AbstractVector{<:Integer}; kwargs...) =
+    error("partial_trace needs a mixed representation: the reduced state of a subsystem " *
+          "is not pure in general. Turn the state into its mixed representation first, " *
+          "with mix(state) or a ToMixed phase")
+
 """
     mutual_info_renyi2(state::State, cut::Int)
-    mutual_info_renyi2(state::State, a::Vector{Int})
+    mutual_info_renyi2(state::State, a::AbstractVector{<:Integer})
 
 return an approximation of the mutual information using renyi2 entropy.
 You define the two parts either by giving the position of the cut between the left and right parts or by giving the list of positions for one of the parts.
@@ -581,7 +590,7 @@ On a pure state and for a cut, this is read directly from the entanglement spect
 costs nothing more than the entanglement entropy. For a list of positions the pure state
 is first turned into its mixed representation, which is much more expensive.
 """
-mutual_info_renyi2(state::State, a::Vector{Int}) =
+mutual_info_renyi2(state::State, a::AbstractVector{<:Integer}) =
     renyi2(partial_trace(state, a; keepers = true)) +
     renyi2(partial_trace(state, a; keepers = false)) -
     renyi2(state)
@@ -595,7 +604,7 @@ mutual_info_renyi2(state::State{Pure}, cut::Int) =
     -2 * log(sum(abs2, last(entanglement_entropy(state, cut))))
 
 # partial_trace needs a density matrix, there is no cheap route for an arbitrary subset
-mutual_info_renyi2(state::State{Pure}, a::Vector{Int}) =
+mutual_info_renyi2(state::State{Pure}, a::AbstractVector{<:Integer}) =
     mutual_info_renyi2(mix(state), a)
 
 

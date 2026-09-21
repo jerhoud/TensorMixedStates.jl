@@ -235,3 +235,21 @@ end
     @test expect(st, Z(1) * Z(3)) ≈ expect(normalize(st), Z(1) * Z(3))
     @test expect2(st, (X, X)) ≈ expect2(normalize(st), (X, X))
 end
+
+@testset "Positions given as a range" begin
+    # the position arguments took a `Vector{Int}` and nothing else, so a range was refused
+    # by a `MethodError`. The name of the measurement was built happily by
+    # `compact_positions`, so the failure came only when the measurement was taken
+    sys = System(6, Qubit())
+    stp = RandomState{Pure}(sys, 4)
+    stm = mix(stp)
+    @test renyi2(stm, 1:3) ≈ renyi2(stm, [1, 2, 3])
+    @test renyi2(stp, 1:3) ≈ renyi2(stp, [1, 2, 3])
+    @test mutual_info_renyi2(stm, 1:3) ≈ mutual_info_renyi2(stm, [1, 2, 3])
+    @test length(partial_trace(stm, 1:3; keepers = true)) == 3
+    # `measure` hands back a vector of name => value pairs, one per measurement
+    @test last(only(measure(stm, SubRenyi2(1:3)))) ≈ renyi2(stm, [1, 2, 3])
+    @test last(only(measure(stm, MutualInfoRenyi2(1:3)))) ≈ mutual_info_renyi2(stm, [1, 2, 3])
+    # a partial trace needs a density matrix, and says so rather than raising a MethodError
+    @test_throws "mixed representation" partial_trace(stp, [1, 2])
+end

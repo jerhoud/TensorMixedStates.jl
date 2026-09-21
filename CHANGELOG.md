@@ -96,6 +96,9 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 - **Site index tags no longer depend on what the user imported.** The type name was
   printed with its module prefix when the site module was not in scope, and ITensors cuts
   a tag at 16 characters, so every site type came out tagged `TensorMixedState`.
+- `renyi2`, `mutual_info_renyi2` and `partial_trace` take any vector of integers, a range
+  included, where they demanded a `Vector{Int}` and refused `1:3` with a `MethodError`.
+  `partial_trace` on a pure representation now says what to do instead of raising one.
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no
