@@ -21,12 +21,12 @@ function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where 
     check_indices(state.system, a)
     ops = make_ops(state.system, prepare_gate(a))
     st = apply(ops, state.state; move_sites_back_between_gates=false,
-            limits.cutoff, limits.maxdim)
+            limits.cutoff, limits.maxdim, limits.mindim)
     return State(state, st)
 end
 
 apply(mpo::MPO, state::State; limits::Limits=Limits()) =
-    State(state, apply(mpo, state.state; limits.cutoff, limits.maxdim))
+    State(state, apply(mpo, state.state; limits.cutoff, limits.maxdim, limits.mindim))
     
 """
     prepare_gate(op)

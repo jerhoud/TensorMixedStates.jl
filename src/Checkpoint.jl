@@ -255,10 +255,11 @@ end
 """
     resume_schedule(x, done)
 
-`maxdim`, `cutoff` and `noise` may be given one value per sweep. A phase resuming at sweep
-`done + 1` has to be handed the tail of those schedules, otherwise it would start them over
-and run the remaining sweeps with the wrong ones. A schedule that runs out is continued
-with its last value, which is what ITensor does with a schedule shorter than its sweeps.
+`maxdim`, `mindim`, `cutoff` and `noise` may be given one value per sweep. A phase
+resuming at sweep `done + 1` has to be handed the tail of those schedules, otherwise it
+would start them over and run the remaining sweeps with the wrong ones. A schedule that
+runs out is continued with its last value, which is what ITensor does with a schedule
+shorter than its sweeps.
 
 This is for `dmrg` alone, which is handed the whole schedule and counts its sweeps from 1
 on every call. The evolution solvers keep the sweep numbers of the phase across a resume
@@ -269,7 +270,8 @@ resume_schedule(x, ::Int) = x
 resume_schedule(x::Vector, done::Int) =
     isempty(x) || done < length(x) ? x[done + 1:end] : x[end:end]
 resume_schedule(l::Limits, done::Int) =
-    Limits(resume_schedule(l.cutoff, done), resume_schedule(l.maxdim, done))
+    Limits(resume_schedule(l.cutoff, done), resume_schedule(l.maxdim, done),
+           resume_schedule(l.mindim, done))
 
 """
     first_sweep!(::Checkpointer)

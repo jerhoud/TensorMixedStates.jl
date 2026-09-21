@@ -173,7 +173,7 @@ A phase type for time evolution
 - `name`: the name of the phase
 - `time_start`: the initial simulation time
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `limits`: a Limits object to set cutoff and maxdim (see `Limits`)
+- `limits`: a Limits object to set cutoff, maxdim and mindim (see `Limits`)
 - `duration`: the duration of the time evolution
 - `time_step`: the time step
 - `algo`: the algorithm used (one of `Tdvp()` or `ApproxW(...)`)

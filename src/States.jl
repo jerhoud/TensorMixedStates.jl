@@ -20,8 +20,9 @@ A type to hold MPS limits
 # Fields
 - `cutoff`: the cutoff under which singular values are neglected
 - `maxdim`: the maximum bond dimension
+- `mindim`: the minimum bond dimension, `0` meaning no minimum
 
-Either field may be given one value per sweep, as a vector, for a phase that sweeps:
+Any field may be given one value per sweep, as a vector, for a phase that sweeps:
 `Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A
 schedule shorter than the number of sweeps is continued with its last value, which is
 what ITensor does too.
@@ -30,10 +31,12 @@ what ITensor does too.
 
     Limits(cutoff = 1e-14, maxdim = 100)
     Limits(cutoff = 1e-14, maxdim = [10, 20, 50, 100])
+    Limits(cutoff = 1e-14, maxdim = 100, mindim = 10)
 """
 @kwdef struct Limits
     cutoff::Union{Float64, Vector{Float64}} = 0.
     maxdim::Union{Int, Vector{Int}} = typemax(Int)
+    mindim::Union{Int, Vector{Int}} = 0
 end
 
 """
@@ -47,7 +50,8 @@ is continued with its last value, as ITensor does with its own.
 sweep_value(x, ::Int) = x
 sweep_value(x::Vector, sweep::Int) = x[min(sweep, length(x))]
 sweep_limits(l::Limits, sweep::Int) =
-    Limits(sweep_value(l.cutoff, sweep), sweep_value(l.maxdim, sweep))
+    Limits(sweep_value(l.cutoff, sweep), sweep_value(l.maxdim, sweep),
+           sweep_value(l.mindim, sweep))
 
 """
     sweep_due(period, sweep)
@@ -213,9 +217,9 @@ State{R}(sites::Vector{<:AbstractSite}, state) where R =
 (-a::State) = -1 * a
 
 +(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State(a, +(a.state, b.state; limits.cutoff, limits.maxdim))
+    State(a, +(a.state, b.state; limits.cutoff, limits.maxdim, limits.mindim))
 -(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State(a, -(a.state, b.state; limits.cutoff, limits.maxdim))
+    State(a, -(a.state, b.state; limits.cutoff, limits.maxdim, limits.mindim))
 
 """
     mix(::State)
@@ -255,4 +259,4 @@ end
 apply the truncations to the given state
 """
 truncate(state::State{R}; limits::Limits) where R =
-    State{R}(state.system, truncate(state.state; limits.cutoff, limits.maxdim))
+    State{R}(state.system, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))

@@ -13,7 +13,7 @@ do time evolution with tdvp algorithm on a state / sim for the given time t. Als
 - `coefs`: coefficients for time dependent evolver
 - `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
 - `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
-- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
+- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
 - others are identical to ITensorMPS.tdvp
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
@@ -32,7 +32,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
         lim = sweep_limits(limits, sweep)
-        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, kwargs...)
+        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end    
@@ -64,7 +64,7 @@ representations.
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run
 - `first_sweep`: sweep to start from (default 1), to continue an optimization left unfinished
 - `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
+- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
 - `noise`: the noise to apply, a number or one value per sweep
 - others identical to ITensorMPS.dmrg
 """
@@ -77,7 +77,7 @@ function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = 
     done = first_sweep - 1
     lim = resume_schedule(limits, done)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps = nsweeps - done,
-                 observer = observer!, lim.cutoff, lim.maxdim,
+                 observer = observer!, lim.cutoff, lim.maxdim, lim.mindim,
                  noise = resume_schedule(noise, done), kwargs...)
     return (e, State(state, st))
 end
@@ -139,7 +139,7 @@ time evolution using approximation WI or WII at a given order. Also see `ApproxW
 - `w`: 1 or 2 for WI or WII (default 2, WII, as in `ApproxW`)
 - `observer!`: observer (see ApproxWObserver)
 - `time_start`: the simulation time at the beginning of evolution
-- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
+- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
@@ -158,7 +158,7 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
         end
         lim = sweep_limits(limits, sweep)
         for mpo in mpos
-            st = apply(mpo, st; lim.cutoff, lim.maxdim, kwargs...)
+            st = apply(mpo, st; lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
         end
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state;
@@ -185,7 +185,7 @@ return achieved "energy" (which should be zero) and computed steady state
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run
 - `first_sweep`: sweep to start from (default 1), to continue a search left unfinished
 - `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
+- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
 - `mpo_limits`: sets the limit on the MPO of (L+)L (default is no truncation)
 - `mpo_algo`: is "naive"(default) or "zipup": algorithm to compute (L+)L
 - others identical to ITensorMPS.dmrg
@@ -206,10 +206,11 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
         # local binding of that name would shadow it for the whole function body
         do_truncate = (mpo_limits != Limits())
         l2 = apply(replaceprime(dag(l)', 2=>0), l;
-                   mpo_limits.cutoff, mpo_limits.maxdim, alg = mpo_algo, truncate = do_truncate)
+                   mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim,
+                   alg = mpo_algo, truncate = do_truncate)
     else
         l2 = apply(replaceprime(dag(l)', 2=>0), l;
-                   mpo_limits.cutoff, mpo_limits.maxdim, alg = mpo_algo)
+                   mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim, alg = mpo_algo)
     end
     return dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
 end

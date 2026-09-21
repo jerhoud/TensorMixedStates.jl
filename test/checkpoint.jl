@@ -204,7 +204,9 @@ end
     @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep
     @test rs([1, 2, 3, 4], 2) == [3, 4]
     @test rs([1, 2, 3], 5) == [3]                   # a schedule that ran out keeps its last
-    @test rs(Limits(cutoff = 1e-14, maxdim = [2, 4, 8]), 1).maxdim == [4, 8]
+    resumed = rs(Limits(cutoff = 1e-14, maxdim = [2, 4, 8], mindim = [1, 2, 3]), 1)
+    @test resumed.maxdim == [4, 8]
+    @test resumed.mindim == [2, 3]
 
     # the evolution solvers pick their value out sweep by sweep instead, so that the
     # sweep numbers of the phase, which a resume keeps, land on the right one
@@ -212,8 +214,8 @@ end
     @test sv(1e-8, 3) == 1e-8                       # one value covers every sweep
     @test sv([2, 4, 8], 2) == 4
     @test sv([2, 4, 8], 7) == 8                     # a schedule that ran out keeps its last
-    @test sl(Limits(cutoff = 1e-14, maxdim = [2, 4, 8]), 3) ==
-          Limits(cutoff = 1e-14, maxdim = 8)
+    @test sl(Limits(cutoff = 1e-14, maxdim = [2, 4, 8], mindim = [1, 2, 3]), 3) ==
+          Limits(cutoff = 1e-14, maxdim = 8, mindim = 3)
 
     # `first_sweep` is what hides that difference from the phases: dmrg is asked for the
     # sweeps that are left and handed the tail of its schedules, so resuming at sweep 3 of

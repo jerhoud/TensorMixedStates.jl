@@ -47,6 +47,18 @@ end
     @test eltype(RandomState(Float64, st, 4).state[1]) == Float64
 end
 
+@testset "Limits" begin
+    sys = System(6, Qubit())
+    st = RandomState{Pure}(sys, 8)
+    # `mindim` is the floor the cutoff is not allowed to cross, and `maxdim` keeps the
+    # last word when the two ask for opposite things
+    @test maxlinkdim(truncate(st; limits = Limits(cutoff = 1e-1))) < 4
+    @test maxlinkdim(truncate(st; limits = Limits(cutoff = 1e-1, mindim = 4))) == 4
+    @test maxlinkdim(truncate(st; limits = Limits(maxdim = 2, mindim = 4))) == 2
+    # the sum of two states goes through the same truncation
+    @test maxlinkdim(+(st, st; limits = Limits(cutoff = 1e-1, mindim = 4))) == 4
+end
+
 @testset "Simulation building" begin
    @test_ok Simulation(nothing)
    @test_pm Simulation(State{type}(System(3, Qubit()), "Up"))

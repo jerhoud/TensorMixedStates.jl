@@ -319,7 +319,8 @@ modify the state so that it is Hermitian (only useful for mixed state)
 hermitianize(state::State{Pure}; kwargs...) =
     state
 hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
-    State(state, 0.5*(+(state.state, dag(state).state; limits.cutoff, limits.maxdim)))
+    State(state, 0.5*(+(state.state, dag(state).state;
+                        limits.cutoff, limits.maxdim, limits.mindim)))
 
 
 """
