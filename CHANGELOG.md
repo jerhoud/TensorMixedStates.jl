@@ -43,12 +43,9 @@ it is a minor version rather than a patch.
   `System` carries ITensor indices of its own, so this is what makes two states built
   apart comparable at all.
 - `variance(hamiltonian, state)` and the `Variance(hamiltonian)` measurement, the
-  convergence check of a ground state search and what gives it an error bar. `H^2` is
-  never formed, which matters here more than elsewhere: TMS does not compress its MPOs, so
-  squaring a hamiltonian squares the bond dimension of its MPO, 3 becoming 1603 on a forty
-  site Ising chain.
+  convergence check of a ground state search and what gives it an error bar.
 - `Fidelity(ref)` and `Overlap(ref)`, to follow either against a reference state while a
-  simulation runs, a Loschmidt echo or the distance to a ground state among others.
+  simulation runs.
 - `CITATION.cff`, `CONTRIBUTING.md` and this changelog.
 
 ### Changed
@@ -57,11 +54,7 @@ it is a minor version rather than a patch.
   operator algebra builds (`Identity`, `AtIndex`, `JW`, `JW_F`, `Multi_F`), the type
   parameters (`PM`, `GI`, `Generic`, `Indexed`), `sim`, which is `System(system.sites)`
   under another name and was called once in the whole package, and `removeMulti`. All of
-  them remain reachable as `TensorMixedStates.name`, and none is a name a program writes:
-  `string_state` was on that list and stays exported, being one of the two functions a new
-  site type overloads, next to `dim`. `Left`, `Right`, `TimeFunc` and `Measure`
-  were on that list and stay exported: their docstrings called them internal, which was
-  wrong, and those have been rewritten to say what they are for.
+  them remain reachable as `TensorMixedStates.name`, and none is a name a program writes.
 - **The `alg` keyword of `steady_state` is now `mpo_algo`**, the name the `SteadyState`
   phase already gave the same thing. The old one goes on working for this cycle and warns.
 - **MKL is no longer a dependency.** It was used for the single purpose of switching the
@@ -88,13 +81,8 @@ it is a minor version rather than a patch.
 - `julia = "1.10.5"` in `[compat]`, which reads as `[1.10.5, 2.0.0)`. The package no longer
   becomes uninstallable on the day a new Julia minor version is released.
 - `simplify` always expands multi site operators, which makes its result predictable.
-- `simplify` now merges the factors of a generic product until nothing moves, instead of
-  making a single pass. `X*Y*Y*X` gives `Id` where it gave `X*X`, and the result no longer
-  depends on how many times `simplify` is called. Indexed operators, and therefore every
-  MPO, were already reduced fully and are unchanged.
 - Global identifiers are `const`.
 - Tensors are kept real instead of complex whenever possible.
-- Error messages name what was not found and what was expected.
 - Measurement names, the display of phases and the were made more regular.
 - The reference article is published: it is
   [SciPost Phys. Codebases 72 (2026)](https://doi.org/10.21468/SciPostPhysCodeb.72), and the
@@ -120,39 +108,16 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 
 ### Fixed
 
-- **A site index outside the system was reported as a `BoundsError` on an internal
-  vector.** The three paths an indexed operator can take reach a different array first, so
-  the same typo gave three different messages, none naming the operator or the site. A
-  failed measurement also left the cache of the state longer than the state, with
-  undefined entries, so a second call on it met an `UndefRefError` rather than the error it
-  deserved. The three entries check their operator now: `X(10) acts on site 10, which the
-  system does not have: it has 4 sites, numbered 1 to 4`.
+Many bugs have been fixed, in particular:
 - **`expect`, `expect1` and `expect2` returned unnormalised values on a pure state in certain corner cases.**
 - **Operator equality was structural for some forms and identity based for others**, so
   `2X(1)*Y(2)`, `dag(X*Y)`, `Left(X*Y)`, `Phase(0.3)` and `controlled(Z)` never compared
   equal to themselves. `==` and `hash` are now read from the type, once, for the whole
   hierarchy. No result was wrong, the two being false together, but a measurement shared
   by two observables was computed twice and terms that could have merged did not.
-- **A period of zero behaved differently in each of the four places the library has one.**
-  `measures_period = 0` raised a division by zero on the first sweep, a negative
-  `n_expand` or `n_hermitianize` was read as one sweep out of two, and a negative
-  `checkpoint_interval` put the next checkpoint in the past and kept it there, writing the
-  whole state to disk on every sweep. A period below one now means never, everywhere:
-  `sweep_due` carries the rule for the three sweep counters and `checkpoint_due` applies
-  it to the interval in seconds.
-- **Site index tags no longer depend on what the user imported.** The type name was
-  printed with its module prefix when the site module was not in scope, and ITensors cuts
-  a tag at 16 characters, so every site type came out tagged `TensorMixedState`.
 - `renyi2`, `mutual_info_renyi2` and `partial_trace` take any vector of integers, a range
   included, where they demanded a `Vector{Int}` and refused `1:3` with a `MethodError`.
   `partial_trace` on a pure representation now says what to do instead of raising one.
-- **A `SimData` nested inside the phases of another silently skipped its inner phases.**
-  The loop it opened shared the phase counter of the loop around it, so every inner phase
-  whose index was below the outer one was passed over, on the very first run and with no
-  checkpoint involved. It is now refused outright.
-- An object that is not a phase, or one that has the fields of a phase but no `run_phase`
-  method, now says so instead of surfacing as a `MethodError` or a `FieldError` from the
-  middle of a run.
 - `renyi2` and `mutual_info_renyi2`.
 - `dag` and `expect2` on fermionic operators, and `expect` in the presence of `Multi_F`.
 - Time dependent evolution, which was broken.
@@ -202,8 +167,3 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   changes are less covered than the project as a whole, which counts a rewritten error
   message as new untested code although it adds none. The figure is still reported on the
   commit and in pull requests, it just no longer fails.
-- The free boson testset no longer measures the arithmetic of the machine it runs on. It
-  evolved at a bond dimension where the truncation is unstable, so the result followed the
-  BLAS thread count of the runner: the same code gave a green Windows job one hour and a
-  red one the next, missing its tolerance by one percent. Raising the bond dimension from
-  10 to 16 removes the dependence, and the recorded references hold to 8.6e-7.
