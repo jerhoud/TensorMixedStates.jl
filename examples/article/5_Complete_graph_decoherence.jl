@@ -28,7 +28,7 @@ simdata(n, c) = SimData(
             evolver = c * sum(Dissipator(Sp)(i) for i in 1:n),
             # save measurements each step
             measures = [
-                "sanity.dat" => [Trace, Purity, Linkdim],
+                "sanity.dat" => [Trace, Purity, MaxLinkdim],
                 "data.dat" => Y(1)Y(2)Z(3)
             ]
         )

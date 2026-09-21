@@ -22,10 +22,10 @@ Rzz(ϕ) = exp(-im * ϕ * Z ⊗ Z)
 # A function depending on the system size producing a vector of output specifications file => data
 # each entry in the data file have the format: data_name simulation_time data1 data2 ... 
 output(n) = [
-    "OSEE.dat" => EE(n ÷ 2, 4), # OSEE at mid point and first 4 eigenvalues
+    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at mid point and first 4 eigenvalues
     "purity.dat" => Purity, # purity of the density matrix
     "trace.dat" => Trace, # trace to observe eventual deviations from 1
-    "bond_dim.dat" => Linkdim # maximum bon dimension
+    "bond_dim.dat" => MaxLinkdim # maximum bon dimension
 ]
 
 # A function depending on the simulation parameters

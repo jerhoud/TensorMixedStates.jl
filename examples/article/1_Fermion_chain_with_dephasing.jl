@@ -17,10 +17,10 @@ limits = Limits(
 # each entry in the data files have the format: data_name simulation_time data1 data2 ... 
 output(n) = [
     "density.dat" => N, # occupation number for all sites
-    "OSEE.dat" => EE(n ÷ 2, 4), # OSEE at midpoint and 4 eignevalues 
+    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at midpoint and 4 eignevalues 
     "purity.dat" => Purity, # purity of the density matrix
     "trace.dat" => Trace, # trace of the density matrix to check
-    "bond_dim.dat" => Linkdim, # maximum bond dimension
+    "bond_dim.dat" => MaxLinkdim, # maximum bond dimension
 ]
 
 # A function depending on the simulation parameters

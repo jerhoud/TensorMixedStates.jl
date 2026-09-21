@@ -33,4 +33,4 @@ simdata(n) = SimData(
     phases = phases(n),
 )
 
-runTMS(simdata(10))
+runTMS(simdata(8))

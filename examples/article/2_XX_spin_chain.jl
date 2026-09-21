@@ -17,10 +17,10 @@ limits = Limits(
 output(n) = [
     "mag.dat" => Sz, # magnetization for all sites
     "current.dat" => 2(X(1)Y(2)-Y(1)X(2)), # measure of "current" between site 1 and 2
-    "OSEE.dat" => EE(n ÷ 2, 4), # OSEE at midpoint and 4 eignevalues 
+    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at midpoint and 4 eignevalues 
     "purity.dat" => Purity, # purity of the density matrix
     "trace.dat" => Trace, # trace of the density matrix to check
-    "bond_dim.dat" => Linkdim, # maximum bond dimension
+    "bond_dim.dat" => MaxLinkdim, # maximum bond dimension
 ]
 
 # A function depending on the simulation parameters

@@ -18,10 +18,10 @@ limits = Limits(
 output(n) = [
     "density.dat" => N, # occupation number for all sites
     "total_number.dat" => sum(N(i) for i in 1:n), # the total occupation number
-    "OSEE.dat" => EE(n ÷ 2, 4), # OSEE at mid point and first 4 eigenvalues
+    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at mid point and first 4 eigenvalues
     "purity.dat" => Purity, # purity of the density matrix
     "trace.dat" => Trace, # trace to observe eventuals deviation from 1
-    "bond_dim.dat" => Linkdim, # maximum bond dimension
+    "bond_dim.dat" => MaxLinkdim, # maximum bond dimension
 ]
 
 # A function depending on the simulation parameters

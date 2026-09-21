@@ -32,4 +32,4 @@ sim_data(n) = SimData(
     ],
 )
 
-runTMS(sim_data(10))
+runTMS(sim_data(8))

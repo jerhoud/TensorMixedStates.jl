@@ -15,11 +15,11 @@ sim_data(n) = SimData(
         GroundState(
             hamiltonian = sum(-Z(i) for i in 1:n) + 0.5 * sum(Z(i)Z(i + 1) for i in 1:n-1),
             limits = Limits(cutoff = 1e-10, maxdim = [5, 10, 25, 50, 100]),
-            nsweeps = 10,
+            nsweeps = 6,
             measures = output,
             tolerance = 1e-8,       
         ),
     ]
 )
 
-runTMS(sim_data(10))
+runTMS(sim_data(8))

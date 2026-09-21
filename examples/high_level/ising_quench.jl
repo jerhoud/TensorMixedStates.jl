@@ -24,8 +24,8 @@ output(n) = [
     "X1X3.dat" => X(1)X(3),
     "X1X4.dat" => X(1)X(4),
     "X1X5.dat" => X(1)X(5),
-    "OSEE.dat" => EE(n ÷ 2, 4),
-    "purity.dat" => [Purity, Trace, Linkdim]
+    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4),
+    "purity.dat" => [Purity, Trace, MaxLinkdim]
 ]
 
 sim_data(J,h,n) = SimData(
@@ -53,7 +53,7 @@ sim_data(J,h,n) = SimData(
             #algo = Tdvp(n_hermitianize = 5),
             algo = algo,
             limits = limits,
-            duration = 5,
+            duration = 1,
             time_step = time_step,
             evolver =  -im*(
                     J*(sum(Z(i)*Z(i+1) for i in 1:n-1)+Z(n)*Z(1))
@@ -66,7 +66,7 @@ sim_data(J,h,n) = SimData(
     ]
 )
 
-n=10
+n=8
 J=1.0
 h=-1.0
 runTMS(sim_data(J,h,n),restart=true)
