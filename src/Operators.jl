@@ -294,12 +294,6 @@ show(io::IO, a::SumOp) =
     end
 
 isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
-(a::SumOp == b::SumOp) = a.subs == b.subs
-# `Set` and `Dict` pick their bucket by `hash` and only then compare, so a type with an
-# `==` of its own needs a matching `hash` or two equal operators land apart. `subs` is a
-# Vector, whose identity the default hash follows rather than its contents. `Measure`
-# relies on this to ask for a measurement shared by two observables only once.
-hash(a::SumOp, h::UInt) = hash(a.subs, hash(:SumOp, h))
 
 
 ################ Product by a number #############
@@ -382,8 +376,6 @@ show(io::IO, a::ProdOp) =
     end
 
 isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
-(a::ProdOp == b::ProdOp) = a.subs == b.subs
-hash(a::ProdOp, h::UInt) = hash(a.subs, hash(:ProdOp, h))
 
 
 ############### Tensor products ############
@@ -430,8 +422,6 @@ show(io::IO, a::TensorOp) =
     end
 
 isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
-(a::TensorOp == b::TensorOp) = a.subs == b.subs
-hash(a::TensorOp, h::UInt) = hash(a.subs, hash(:TensorOp, h))
 
 
 ############# Jordan_Wigner transformation ##############
@@ -544,8 +534,6 @@ show(io::IO, ind::AtIndex) =
 
 isless(a::AtIndex, b::AtIndex) =
     isless((a.index, a.op), (b.index, b.op))
-(a::AtIndex == b::AtIndex) = a.op == b.op && a.index == b.index
-hash(a::AtIndex, h::UInt) = hash(a.index, hash(a.op, hash(:AtIndex, h)))
 
 
 ############## Mixers ###############
@@ -864,6 +852,29 @@ has_fermionic(a::AtIndex{Pure, 1}) = isfermionic(a.op)
 has_fermionic(a::ScalarOp) = has_fermionic(a.arg)
 has_fermionic(a::Union{ProdOp, SumOp}) = any(has_fermionic, a.subs)
 has_fermionic(::Op) = false
+
+
+################## Equality #################
+
+# An operator is compared by what it is made of, never by the identity of the object that
+# holds it. The default `==` of an immutable struct falls back to `===`, which walks the
+# fields but compares a `Vector` field by identity, so the types carrying `subs` need a
+# definition of their own — and so does every type that may hold one of them, since a
+# `ScalarOp` wrapping a `ProdOp` is `===` only to itself. Picking those types one by one
+# is what let `2X(1)*Y(2)`, `dag(X*Y)`, `Left(X*Y)`, `Phase(0.3)`, `controlled(Z)` and
+# half the hierarchy fall through, so it is read from the type instead, once, the way
+# `phase_hash` reads a phase.
+#
+# `Set` and `Dict` pick their bucket by `hash` and only then compare, so the two have to
+# be defined together or two equal operators land apart. `Measure` relies on this to ask
+# for a measurement shared by two observables only once.
+
+(a::Op == b::Op) =
+    typeof(a) == typeof(b) &&
+    all(f -> getfield(a, f) == getfield(b, f), fieldnames(typeof(a)))
+
+hash(a::Op, h::UInt) =
+    foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
 
 
 ################## Global Ordering ###############

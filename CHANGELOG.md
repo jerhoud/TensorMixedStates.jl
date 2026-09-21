@@ -81,6 +81,11 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 ### Fixed
 
 - **`expect`, `expect1` and `expect2` returned unnormalised values on a pure state in certain corner cases.**
+- **Operator equality was structural for some forms and identity based for others**, so
+  `2X(1)*Y(2)`, `dag(X*Y)`, `Left(X*Y)`, `Phase(0.3)` and `controlled(Z)` never compared
+  equal to themselves. `==` and `hash` are now read from the type, once, for the whole
+  hierarchy. No result was wrong, the two being false together, but a measurement shared
+  by two observables was computed twice and terms that could have merged did not.
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no

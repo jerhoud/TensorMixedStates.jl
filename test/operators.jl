@@ -125,12 +125,30 @@ end
     # a type with an `==` of its own needs a matching `hash`: `Set` and `Dict` pick their
     # bucket by hash and only compare within it, so two equal operators would otherwise
     # land apart. The default hash follows the identity of the `subs` vector rather than
-    # its contents, so it does not do
+    # its contents, so it does not do. What matters as much is that every form is covered,
+    # including the wrappers that merely hold one of those vectors: they used to fall back
+    # to `===` and never compared equal to themselves
     for (a, b) in [(X(1) * Y(2), X(1) * Y(2)),                          # ProdOp
                    (X(1) + Y(2), X(1) + Y(2)),                          # SumOp
                    (X ⊗ Y, X ⊗ Y),                                      # TensorOp
                    ((X * Y)(3), (X * Y)(3)),                            # AtIndex of a product
-                   (X(1) * Y(2) + (X * Y)(3), X(1) * Y(2) + (X * Y)(3))]
+                   (X(1) * Y(2) + (X * Y)(3), X(1) * Y(2) + (X * Y)(3)),
+                   (2 * X(1) * Y(2), 2 * X(1) * Y(2)),                  # ScalarOp
+                   (dag(X * Y), dag(X * Y)),                            # DagOp
+                   ((X * Y)^2, (X * Y)^2),                              # PowOp
+                   (exp(X * Y), exp(X * Y)),                            # ExpOp
+                   (Left(X * Y), Left(X * Y)),                          # Left
+                   (Right(X * Y), Right(X * Y)),                        # Right
+                   (Gate(X * Y), Gate(X * Y)),                          # Gate
+                   (Dissipator(X * Y), Dissipator(X * Y)),              # Dissipator
+                   (Evolver(X(1) * Y(2)), Evolver(X(1) * Y(2))),        # Evolver
+                   (Multi_F{Pure}(2, 4, false, false),                  # Multi_F
+                    Multi_F{Pure}(2, 4, false, false)),
+                   # an Operator built afresh each call, whose expr is a matrix for one
+                   # and a whole expression for the other
+                   (Phase(0.3), Phase(0.3)),
+                   (controlled(Z), controlled(Z)),
+                   (simplify(C(3) * dag(C)(1)), simplify(C(3) * dag(C)(1)))]
         @test a == b
         @test hash(a) == hash(b)
         @test length(Set([a, b])) == 1
