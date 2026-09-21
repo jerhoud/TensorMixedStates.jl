@@ -143,3 +143,8 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   produced and thrown away before.
 - The test suite went from about 190 assertions to more than 600, organised in groups that
   can be run selectively.
+- The free boson testset no longer measures the arithmetic of the machine it runs on. It
+  evolved at a bond dimension where the truncation is unstable, so the result followed the
+  BLAS thread count of the runner: the same code gave a green Windows job one hour and a
+  red one the next, missing its tolerance by one percent. Raising the bond dimension from
+  10 to 16 removes the dependence, and the recorded references hold to 8.6e-7.

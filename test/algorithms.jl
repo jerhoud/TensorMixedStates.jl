@@ -125,17 +125,21 @@ end
     # Lindbladian would close the gap and has not been written. Until then, read this
     # testset as a regression check on the behaviour of the day it was recorded.
     #
-    # Which is why the tolerances here are looser than those of the two testsets above. A
-    # recorded value gives no difference at all on the machine that recorded it and shows
-    # the whole spread between BLAS implementations anywhere else: the Windows job missed
-    # `1e-6` by `1.16e-6` on the first run it ever made, while Linux and macOS passed. An
-    # exact reference would let these go back to measuring the accuracy of the method
-    # instead of the arithmetic of one machine.
+    # The bond dimension is 16 rather than the 10 first used, and that is not a detail. At
+    # 10 the truncation itself is unstable: which singular values survive depends on the
+    # rounding, so the answer follows the order the sums happen to be taken in. Changing
+    # nothing but the BLAS thread count on one machine moved this correlation by 4.4e-4
+    # relative, an overall deviation swinging between 8.8e-7 and 8.0e-6, and the Windows
+    # job, landing on a different thread count from the Linux and macOS ones, missed the
+    # 1e-5 tolerance by one percent. At 16 the dependence is gone, the deviation being
+    # 8.6e-7 whatever the thread count, so the tolerance measures the accuracy of the
+    # method again rather than the arithmetic of the runner. It is left at 1e-5 and not
+    # tightened, since 8.6e-7 leaves too little margin under 1e-6.
     @test_ok test_phases([
         CreateState{Mixed}(4, Boson(7), "0"),
         Evolve(
             algo = ApproxW(order = 4, w = 2),
-            limits = Limits(maxdim = 10),
+            limits = Limits(maxdim = 16),
             duration = 0.3,
             time_step = 0.1,
             evolver =
