@@ -1,4 +1,4 @@
-export Simulation, get_sim_file, Data, DataToFrame
+export Simulation, get_sim_file, Data, DataToFrame, data_to_frame
 
 """
     Data(name)
@@ -10,12 +10,23 @@ struct Data
 end
 
 """
-    DataToFrame(data)
+    data_to_frame(data)
 
 return a `DataFrame` object corresponding to the data. The `DataFrames` package must be imported
 before using this function.
 """
-function DataToFrame end
+function data_to_frame end
+
+# the docstring goes through `@doc` rather than sitting above the call, because the macro
+# expands to a toplevel block and a docstring cannot be attached to one
+Base.@deprecate DataToFrame(data) data_to_frame(data) false
+
+@doc """
+    DataToFrame(data)
+
+deprecated, use [`data_to_frame`](@ref) instead, which spells it the way the other
+functions of the package are spelled.
+""" DataToFrame
 
 """
     default_time_format

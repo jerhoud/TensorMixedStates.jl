@@ -1,4 +1,4 @@
-export simplify, removeMulti
+export simplify
 
 """
     simplify(op::Op)

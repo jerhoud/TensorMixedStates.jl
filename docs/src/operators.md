@@ -81,7 +81,6 @@ Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`,
 
 ```@docs
 Operator
-AtIndex
 ⊗
 Proj
 Dissipator
@@ -90,17 +89,12 @@ SetState
 Left
 Right
 Evolver
-Identity
-JW
-JW_F
-Multi_F
 dag(::GenericOp{Pure})
 isfermionic
 has_fermionic
 matrix
 tensor
 simplify
-removeMulti
 ```
 
 ## Operator types
@@ -109,12 +103,8 @@ These types describe the operators themselves, they are mostly useful when writi
 operating on operators.
 
 ```@docs
-PM
 Pure
 Mixed
-GI
-Generic
-Indexed
 Op
 GenericOp
 IndexedOp

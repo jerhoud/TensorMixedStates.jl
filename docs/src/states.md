@@ -5,7 +5,6 @@
 ```@docs
 System
 length(::System)
-sim(::System)
 ⊗(::System, ::System)
 SysIndex
 ```

@@ -70,10 +70,10 @@ end
     # simplify represents a Jordan-Wigner string of two sites or more by a single
     # Multi_F, removeMulti spells it out as one F per site
     op = simplify(dag(C)(1) * C(4))
-    rm = removeMulti(op)
+    rm = TensorMixedStates.removeMulti(op)
     @test occursin("Multi_F", string(op))
     @test !occursin("Multi_F", string(rm))
-    @test removeMulti(rm) == rm
+    @test TensorMixedStates.removeMulti(rm) == rm
     # both forms must measure the same thing
     n = 5
     sys = System(n, Fermion())
@@ -81,7 +81,7 @@ end
               State{Pure}(sys, ["1", "0", "1", "0", "1"]); limits = Limits(maxdim = 32))
     for j in 2:n
         a = simplify(dag(C)(1) * C(j))
-        @test expect(st, a) ≈ expect(st, removeMulti(a))
+        @test expect(st, a) ≈ expect(st, TensorMixedStates.removeMulti(a))
     end
 end
 
@@ -142,8 +142,8 @@ end
                    (Gate(X * Y), Gate(X * Y)),                          # Gate
                    (Dissipator(X * Y), Dissipator(X * Y)),              # Dissipator
                    (Evolver(X(1) * Y(2)), Evolver(X(1) * Y(2))),        # Evolver
-                   (Multi_F{Pure}(2, 4, false, false),                  # Multi_F
-                    Multi_F{Pure}(2, 4, false, false)),
+                   (TensorMixedStates.Multi_F{Pure}(2, 4, false, false),   # Multi_F
+                    TensorMixedStates.Multi_F{Pure}(2, 4, false, false)),
                    # an Operator built afresh each call, whose expr is a matrix for one
                    # and a whole expression for the other
                    (Phase(0.3), Phase(0.3)),

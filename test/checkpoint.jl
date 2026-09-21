@@ -248,7 +248,7 @@ end
                                             sum(1. * X(i) for i in 1:6),
                             nsweeps = 4, limits = Limits(maxdim = [2, 2, 8, 8], cutoff = 1e-14),
                             noise = [1e-2, 1e-3, 0., 0.],
-                            measures = ["data" => [Linkdim, X(1), Z(1)Z(2), stopper]]),
+                            measures = ["data" => [MaxLinkdim, X(1), Z(1)Z(2), stopper]]),
             ]
             runTMS(SimData(; name = "ref", phases))
             stop_in[] = 1
@@ -279,12 +279,12 @@ end
                        evolver = -im * (sum(-Z(i) * Z(i + 1) for i in 1:5) -
                                         sum(1. * X(i) for i in 1:6)),
                        limits = Limits(maxdim = [2, 2, 8, 8], cutoff = 1e-14),
-                       measures = ["data" => [Linkdim, X(1), Z(1)Z(2), stopper]]),
+                       measures = ["data" => [MaxLinkdim, X(1), Z(1)Z(2), stopper]]),
             ]
             runTMS(SimData(; name = "ref", phases))
             # the link dimension really does follow the schedule, otherwise the run below
             # would agree with the reference for want of anything to disagree about
-            @test length(unique(l -> split(l)[1] == "Linkdim" ? split(l)[3] : "",
+            @test length(unique(l -> split(l)[1] == "MaxLinkdim" ? split(l)[3] : "",
                                 readlines("ref/data"))) > 2
             stop_in[] = 2
             sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)

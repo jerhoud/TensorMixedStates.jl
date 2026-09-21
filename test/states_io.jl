@@ -95,9 +95,9 @@ end
     @test collect(keys(sim.data)) == ["obs"]
     @test sort(collect(keys(sim.data["obs"]))) == ["Norm", "Trace"]
 
-    # DataToFrame lives in the DataFrames extension, so this also checks that the
+    # data_to_frame lives in the DataFrames extension, so this also checks that the
     # extension loads at all. Several measures are joined on the time column.
-    df = DataToFrame(sim.data["obs"])
+    df = data_to_frame(sim.data["obs"])
     @test df isa DataFrame
     @test sort(names(df)) == ["Norm", "Trace", "time"]      # the order is not stable
     @test size(df) == (2, 3)
@@ -111,7 +111,7 @@ end
         Evolve(algo = Tdvp(), duration = 0.2, time_step = 0.1, evolver = -im * X(1),
                measures = Data("one") => Norm),
     ]); output = devnull)
-    df1 = DataToFrame(sim1.data["one"])
+    df1 = data_to_frame(sim1.data["one"])
     @test df1 isa DataFrame
     @test sort(names(df1)) == ["Norm", "time"]
     @test size(df1) == (2, 2)
@@ -158,7 +158,7 @@ end
             phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
                 Gates(gates = X(1),
-                      final_measures = ["stdout" => Z, "stderr" => Norm, "" => Linkdim]),
+                      final_measures = ["stdout" => Z, "stderr" => Norm, "" => MaxLinkdim]),
             ]
             still_open = open("captured", "w") do io
                 redirect_stdout(io) do

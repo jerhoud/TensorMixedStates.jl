@@ -1,5 +1,6 @@
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
-export EE, MutualInfoRenyi2, Mutual_Info_Renyi2, Linkdim, MemoryUsage, measure
+export EE, EntanglementEntropy, MutualInfoRenyi2, Mutual_Info_Renyi2, measure
+export Linkdim, MaxLinkdim, MemoryUsage
 export Fidelity, Overlap, Variance
 
 """
@@ -27,7 +28,16 @@ show(io::IO, s::StateFunc) =
     struct TimeFunc
     TimeFunc(name, obs)
 
-a data type to represent a function of simulation time. This is used internally by `measure`.
+a data type to represent a function of simulation time, the sibling of `StateFunc`. This
+is what `measure` builds for a number, a string or a function given as a measurement.
+
+Giving the name matters as soon as there are two of them: an anonymous function is named
+`"func"`, and two measurements of one set may not share a name, so `t -> sin(t)` and
+`t -> cos(t)` together are refused. Naming them here is the way out.
+
+# Examples
+
+    measures = "data" => [TimeFunc("sinus", t -> sin(t)), TimeFunc("cosinus", t -> cos(t))]
 """
 struct TimeFunc
     name::String
@@ -155,7 +165,12 @@ make_obs(o) = o
     struct Measure
     Measure(args...)
 
-a data type to hold a set of measurements, used internally
+a data type to hold a set of measurements, which is what a destination is given.
+
+Building one by hand is only needed to measure several sets at once, `measure(state,
+[Measure(...), Measure(...)])`, which returns one group of results per set and computes a
+product shared by two of them only once. A single set is written as a plain vector, and
+`output` builds these for you, one per destination.
 """
 struct Measure
     measures::Vector
@@ -274,8 +289,8 @@ See also `StateFunc`, `Renyi2` and `renyi2`.
 SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))
 
 """
-    EE(pos)
-    EE(pos, spectrum)
+    EntanglementEntropy(pos)
+    EntanglementEntropy(pos, spectrum)
 
 a state function to measure entanglement entropy / OSEE and associated spectrum. The cut
 is on the right of `pos`, between sites `pos` and `pos + 1`, and the spectrum is that of
@@ -283,16 +298,30 @@ the reduced density matrix of the sites up to `pos`, so it is made of squared si
 values summing to one. `spectrum` is how many of them to write out.
 See also `StateFunc` and `entanglement_entropy`.
 """
-EE(pos) = StateFunc("EE($pos)",
+EntanglementEntropy(pos) = StateFunc("EntanglementEntropy($pos)",
     st-> begin
         ee, _ = entanglement_entropy(st, pos)
         return ee
     end)
-EE(pos, spectrum) = StateFunc("EE($pos,$spectrum)",
+EntanglementEntropy(pos, spectrum) = StateFunc("EntanglementEntropy($pos,$spectrum)",
     st-> begin
         ee, sp = entanglement_entropy(st, pos)
         return [[ee]; sp[1:min(length(sp), spectrum)]]
     end)
+
+# the docstring goes through `@doc` rather than sitting above the call, because the macro
+# expands to a toplevel block and a docstring cannot be attached to one
+Base.@deprecate EE(pos) EntanglementEntropy(pos) false
+Base.@deprecate EE(pos, spectrum) EntanglementEntropy(pos, spectrum) false
+
+@doc """
+    EE(pos)
+    EE(pos, spectrum)
+
+deprecated, use [`EntanglementEntropy`](@ref) instead. The label written to the output
+files follows the new name, so a column that read `EE(3)` now reads
+`EntanglementEntropy(3)`.
+""" EE
 
 """
     MutualInfoRenyi2(link)
@@ -367,12 +396,28 @@ or under a large `measures_period`, not at every sweep.
 Variance(h) = StateFunc("Variance", st -> variance(h, st))
 
 """
-    Linkdim
+    MaxLinkdim
 
-a state function to measure the maximum bond dimension.
+a state function to measure the maximum bond dimension, named after the `maxlinkdim` it
+measures, as the other state functions are after theirs.
 See also `StateFunc` and `maxlinkdim`.
 """
-const Linkdim = StateFunc("Linkdim", maxlinkdim)
+const MaxLinkdim = StateFunc("MaxLinkdim", maxlinkdim)
+
+# the docstring goes through `@doc` rather than sitting above the call, because the macro
+# expands to a toplevel block and a docstring cannot be attached to one
+Base.@deprecate_binding Linkdim MaxLinkdim false ", use MaxLinkdim instead."
+
+@doc """
+    Linkdim
+
+deprecated, use [`MaxLinkdim`](@ref) instead. The label written to the output files follows
+the new name.
+
+Note that a deprecated *binding* only warns on a qualified access,
+`TensorMixedStates.Linkdim`; after `using TensorMixedStates` it is silent, so this line and
+the changelog are the notice.
+""" Linkdim
 
 """
     MemoryUsage

@@ -177,8 +177,8 @@ end
     @test m(ghz, Hermiticity) ≈ 1
     @test m(ghz, TraceError) ≈ 0 atol=1e-12
     @test m(ghz, HermiticityError) ≈ 0 atol=1e-12
-    @test m(ghz, Linkdim) == 2
-    @test m(ghz, EE(2)) ≈ L2
+    @test m(ghz, MaxLinkdim) == 2
+    @test m(ghz, EntanglementEntropy(2)) ≈ L2
     @test m(fullymixed, Purity) ≈ 1 / 16
     @test m(fullymixed, Renyi2) ≈ 4L2
     @test m(mix(ghz), SubRenyi2([1])) ≈ L2

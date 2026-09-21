@@ -1,9 +1,9 @@
 module DataFramesExt
 
-import TensorMixedStates: DataToFrame
+import TensorMixedStates: data_to_frame
 using DataFrames
 
-function DataToFrame(data::Dict)
+function data_to_frame(data::Dict)
     dfs = [DataFrame("time" => identity.(val["times"]), key => identity.(val["data"])) for (key, val) in data]
     if length(dfs) == 1
       dfs[1]

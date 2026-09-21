@@ -187,22 +187,29 @@ return achieved "energy" (which should be zero) and computed steady state
 - `observer!`: observer (see `DmrgObserver`)
 - `limits`: constraints on the mps (`cutoff` and `maxdim` may be vectors with one value per sweep)
 - `mpo_limits`: sets the limit on the MPO of (L+)L (default is no truncation)
-- `alg`: is "naive"(default) or "zipup": algorithm to compute (L+)L 
+- `mpo_algo`: is "naive"(default) or "zipup": algorithm to compute (L+)L
 - others identical to ITensorMPS.dmrg
 
 """
 function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
     limits::Limits = Limits(), nsweeps::Int = 1,
-    observer! = NoObserver(), mpo_limits::Limits = Limits(), alg::String = "naive", kwargs...)
+    observer! = NoObserver(), mpo_limits::Limits = Limits(), mpo_algo::String = "naive",
+    alg = nothing, kwargs...)
+    if !isnothing(alg)
+        @warn "the `alg` keyword of steady_state is now `mpo_algo`, matching the field of " *
+              "the SteadyState phase. The old name still works and will be removed." maxlog = 1
+        mpo_algo = alg
+    end
     l = make_mpo(state, op)
-    if alg == "naive"
+    if mpo_algo == "naive"
         # named apart from `truncate`, which is imported and has a method for States: a
         # local binding of that name would shadow it for the whole function body
         do_truncate = (mpo_limits != Limits())
         l2 = apply(replaceprime(dag(l)', 2=>0), l;
-                   mpo_limits.cutoff, mpo_limits.maxdim, alg, truncate = do_truncate)
+                   mpo_limits.cutoff, mpo_limits.maxdim, alg = mpo_algo, truncate = do_truncate)
     else
-        l2 = apply(replaceprime(dag(l)', 2=>0), l; mpo_limits.cutoff, mpo_limits.maxdim, alg)
+        l2 = apply(replaceprime(dag(l)', 2=>0), l;
+                   mpo_limits.cutoff, mpo_limits.maxdim, alg = mpo_algo)
     end
     return dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
 end

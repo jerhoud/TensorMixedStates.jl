@@ -1,4 +1,4 @@
-export System, sim, SysIndex
+export System, SysIndex
 
 """
     type System

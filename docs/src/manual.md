@@ -300,8 +300,8 @@ or any value in between
 - `HermiticityError` measure the deviation from Hermiticity 1
 - `Renyi2`: measure the Renyi entropy of order 2 of the system
 - `SubRenyi2`: measure the Renyi entropy of order 2 of a subsystem
-- `EE`: entanglement entropy for pure representation, OSEE for mixed
-- `Linkdim`: the maximum bond dimension of the representation
+- `EntanglementEntropy`: entanglement entropy for pure representation, OSEE for mixed
+- `MaxLinkdim`: the maximum bond dimension of the representation
 - `MemoryUsage`: the memory used to store the representation
 
 We can also ask for several measurements at the same time
@@ -410,7 +410,7 @@ sim_data(n, gamma, step) = SimData(
             limits = Limits(cutoff = 1e-30, maxdim = 100),
             measures = [
                 "density.dat" => N,
-                "OSEE.dat" => EE(div(n, 2))
+                "OSEE.dat" => EntanglementEntropy(div(n, 2))
             ]
         )
     ]
@@ -531,11 +531,11 @@ The possible measurements are described in the measurements section of this manu
   Data("mydata") => [TraceError, X(1), Y]
   ```
 
-The `DataToFrame` function can be used on the result to get a `DataFrame` object (the `DataFrames` package must be imported first)
+The `data_to_frame` function can be used on the result to get a `DataFrame` object (the `DataFrames` package must be imported first)
 
 ```julia
 mysim = runTMS(simdata)
-df = DataToFrame(mysim.data["mydata"])
+df = data_to_frame(mysim.data["mydata"])
 ```
 
 

@@ -3,7 +3,10 @@ export graph_base_size, line_graph, circle_graph, complete_graph, square_lattice
 """
     graph_base_size(::Vector{Tuple{Int, Int}})
 
-return the maximum vertex number in a graph
+return the largest vertex number of a graph, that is the number of sites a system needs to
+host it. Note that this is neither the size of the graph, which is its number of edges, nor
+its order, which is its number of vertices: a graph may leave a vertex out of every edge,
+and the system still has to hold that site.
 """
 graph_base_size(g::Vector{Tuple{Int, Int}}) = maximum(maximum, g)
 

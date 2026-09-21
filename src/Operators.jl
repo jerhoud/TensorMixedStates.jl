@@ -1,6 +1,6 @@
-export PM, Pure, Mixed, GI, Generic, Indexed, GenericOp, IndexedOp, SimpleOp
+export Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Op, Operator, Identity, Id, JW, JW_F, F, Proj, AtIndex, Gate, Dissipator, Evolver, Left, Right, SetState, Multi_F
+export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
 export dag, ⊗, isfermionic, has_fermionic
 
 ############# Types ################
@@ -627,9 +627,20 @@ isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 # Left
 
 """
-    type Left <: GenericOp{Mixed, N}
+    Left(op)
 
-an internal type to represent operators acting on the left of the density matrix
+the superoperator acting on the left of the density matrix, ``\\rho \\mapsto A\\rho``.
+
+`Gate`, `Dissipator` and `Evolver` are the usual ways of acting on a mixed representation,
+and they all act on both sides at once: ``A\\rho A^\\dagger`` and ``-i[H, \\rho]``. This
+one, and `Right`, are what is left for a term acting on a single side, which is not trace
+preserving. They can be evolved with and applied as gates, but they are not observables:
+`expect` has nothing to say about them.
+
+# Examples
+
+    apply(Left(X)(1), rho)          # rho -> X rho
+    make_mpo(rho, Left(X)(1))
 """
 struct Left{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
@@ -648,9 +659,14 @@ isless(a::Left, b::Left) =
 # Right
 
 """
-    type Right <: GenericOp{Mixed, N}
+    Right(op)
 
-an internal type to represent operators acting on the right of the density matrix
+the superoperator acting on the right of the density matrix, ``\\rho \\mapsto \\rho A``.
+See `Left`, of which this is the mirror.
+
+# Examples
+
+    apply(Right(X)(1), rho)         # rho -> rho X
 """
 struct Right{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}

@@ -10,7 +10,7 @@ A type for describing a simulation to use with `runTMS`
 - `name`:            the name of the simulation used as the name of the directory to store the results
 - `phases`:          the list of phases of the simulation (see Phases for a list of possible values),
   which may itself contain lists, to any depth, and is flattened on construction
-- `descritpion`:     text put in the description file of the simulation (default "")
+- `description`:     text put in the description file of the simulation (default "")
 - `time_start`:      initial simulation time (default 0.)
 - `final_measures`:  measures to make at the end of simulation (default []) see `measure` and `output`
 - `time_format`:     C like format for output of simulation time (default `$default_time_format`)

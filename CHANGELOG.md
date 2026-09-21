@@ -45,6 +45,17 @@ expected to be 1.3.0 rather than a patch.
 
 ### Changed
 
+- **Eleven names are no longer exported**, being machinery no program writes: the types the
+  operator algebra builds (`Identity`, `AtIndex`, `JW`, `JW_F`, `Multi_F`), the type
+  parameters (`PM`, `GI`, `Generic`, `Indexed`), `sim`, which is `System(system.sites)`
+  under another name and was called once in the whole package, and `removeMulti`. All of
+  them remain reachable as `TensorMixedStates.name`, and none is a name a program writes:
+  `string_state` was on that list and stays exported, being one of the two functions a new
+  site type overloads, next to `dim`. `Left`, `Right`, `TimeFunc` and `Measure`
+  were on that list and stay exported: their docstrings called them internal, which was
+  wrong, and those have been rewritten to say what they are for.
+- **The `alg` keyword of `steady_state` is now `mpo_algo`**, the name the `SteadyState`
+  phase already gave the same thing. The old one goes on working for this cycle and warns.
 - **MKL is no longer a dependency.** It was used for the single purpose of switching the
   BLAS backend of the whole Julia session, which is a decision that belongs to the
   application rather than to a library, and `MKL_jll` ships `x86_64` Linux and Windows
@@ -83,6 +94,12 @@ expected to be 1.3.0 rather than a patch.
 
 ### Deprecated
 
+- **`EE` is now `EntanglementEntropy` and `Linkdim` is now `MaxLinkdim`**, each named after
+  the function it measures, as the other state functions are after theirs. The labels
+  written to the output files follow the new names, so a column that read `EE(3)` now reads
+  `EntanglementEntropy(3)`. `Linkdim` is a binding rather than a function, and a deprecated
+  binding only warns on a qualified access, so this line is its notice.
+- **`DataToFrame` is now `data_to_frame`**, spelled like the other functions of the package.
 - **`Mutual_Info_Renyi2` is renamed `MutualInfoRenyi2`**, which matches the naming of every
   other measurement. The old spelling goes on working and forwards to the new one, but it is
   marked deprecated and the label written to the output files is the new name, so a script
