@@ -26,6 +26,9 @@ normalize(::State{Pure})
 dag(::State{Pure})
 hermitianize
 hermiticity
+inner
+fidelity
+hs_fidelity
 RandomState
 partial_trace
 ```

@@ -26,6 +26,10 @@ expected to be 1.3.0 rather than a patch.
 - Multi site function operators.
 - `matrix` and `tensor` for `Dissipator`.
 - `Evolve` accepts vectors in `Limits`.
+- `inner` and `dot` between two states, and the fidelities that follow: `fidelity` for two
+  pure representations and for a pure one against a mixed one, `hs_fidelity` for the
+  normalised Hilbert-Schmidt overlap of two mixed ones. The Uhlmann fidelity of two mixed
+  states is deliberately absent, needing the spectrum of a density operator.
 - `CITATION.cff`, `CONTRIBUTING.md` and this changelog.
 
 ### Changed

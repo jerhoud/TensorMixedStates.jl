@@ -4,7 +4,8 @@
 module TensorMixedStates
 
 import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless, ==, hash
-import ITensors: matrix, truncate, dim, Index, dag, norm, sim
+import ITensors: matrix, truncate, dim, Index, dag, norm, sim, inner
+import LinearAlgebra: dot
 import ITensorMPS: maxlinkdim, apply, state, expect, normalize, measure!, checkdone!, tdvp, dmrg, sample
 
 using ITensors, ITensorMPS, Printf, Dates, JSON, Random, LinearAlgebra, HDF5

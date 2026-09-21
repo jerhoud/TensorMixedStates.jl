@@ -253,3 +253,46 @@ end
     # a partial trace needs a density matrix, and says so rather than raising a MethodError
     @test_throws "mixed representation" partial_trace(stp, [1, 2])
 end
+
+@testset "Inner products and fidelities" begin
+    sys = System(3, Qubit())
+    up    = State{Pure}(sys, "Up")
+    dn    = State{Pure}(sys, "Dn")
+    plus  = State{Pure}(sys, "+")
+    mixup = State{Pure}(sys, ["+", "+", "Up"])
+    icplx = State{Pure}(sys, ["i", "+", "+"])
+
+    # <+++|++Up> = 1 * 1 * <+|Up> = 1/sqrt(2)
+    @test inner(plus, mixup) ≈ 1/√2
+    @test dot(plus, mixup) == inner(plus, mixup)          # dot is an alias
+    @test inner(plus, plus) ≈ 1
+    @test inner(up, dn) ≈ 0 atol = 1e-14
+    # the first argument is the one conjugated
+    @test inner(icplx, plus) ≈ conj(inner(plus, icplx))
+    @test imag(inner(icplx, plus)) ≉ 0                    # the test would be empty otherwise
+
+    # fidelity is normalised, so neither the norm nor the trace of its arguments matters
+    @test fidelity(plus, mixup) ≈ 0.5
+    @test fidelity(plus, plus) ≈ 1
+    @test fidelity(up, dn) ≈ 0 atol = 1e-14
+    @test fidelity(3 * plus, 2 * mixup) ≈ fidelity(plus, mixup)
+
+    # against a mixed representation, in either order. Mixing a pure state must not change
+    # the answer, which is what makes the two methods one quantity
+    fm = State{Mixed}(sys, "FullyMixed")
+    @test fidelity(plus, mix(mixup)) ≈ fidelity(plus, mixup)
+    @test fidelity(mix(mixup), plus) ≈ fidelity(plus, mixup)
+    @test fidelity(up, fm) ≈ 1/8                          # <psi| I/2^3 |psi>
+    @test fidelity(2 * up, fm) ≈ 1/8
+
+    # the normalised Hilbert-Schmidt overlap of two mixed states. On two mixed pure states
+    # it coincides with the fidelity, the traces of the squares being one
+    @test hs_fidelity(mix(plus), mix(plus)) ≈ 1
+    @test hs_fidelity(mix(plus), mix(mixup)) ≈ fidelity(plus, mixup)
+    @test hs_fidelity(mix(up), fm) ≈ √2/4
+    @test hs_fidelity(2 * mix(up), 3 * fm) ≈ hs_fidelity(mix(up), fm)
+
+    # a pure and a mixed representation are vectors of different spaces
+    @test_throws "vectors of different spaces" inner(plus, fm)
+    @test_throws "vectors of different spaces" inner(fm, plus)
+end

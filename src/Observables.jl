@@ -1,4 +1,5 @@
 export trace, trace2, norm, normalize, hermitianize, hermiticity, renyi2
+export inner, dot, fidelity, hs_fidelity
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace, mutual_info_renyi2, sample
 
@@ -190,6 +191,105 @@ normalize(state::State{Pure}) =
     State(state, normalize(state.state))
 normalize(state::State{Mixed}) =
     State(state, state.state / real(trace(state)))
+
+"""
+    check_same_system(a, b)
+
+refuse two states that cannot be contracted together. The indices of a `System` are drawn
+afresh, so two states of two systems have nothing in common even when their sites match,
+and `ITensorMPS` would contract them anyway, on a deprecated fallback that matches by
+position and warns.
+"""
+function check_same_system(a::State, b::State)
+    if a.system !== b.system
+        error("the two states do not share their System, so the indices they carry " *
+              "differ and they cannot be contracted together. Put one on the system of " *
+              "the other with State(system, state), or read it there in the first place " *
+              "with load_state(file, name; system)")
+    end
+    return nothing
+end
+
+"""
+    inner(a::State, b::State)
+    dot(a::State, b::State)
+
+the inner product of two states of the same system, `dot` being an alias of `inner`.
+
+On pure representations this is the overlap ``\\langle a | b \\rangle``, conjugating the
+first argument. On mixed ones it is the Hilbert-Schmidt product ``\\mathrm{tr}(a^\\dagger b)``,
+the two density matrices being contracted as the vectors they are stored as. Neither is
+normalised: divide by the norms, or use `fidelity`.
+
+The two states must share their `System`, see `State(::System, ::State)`.
+
+# Examples
+
+    inner(state, ground_state)
+    abs2(inner(a, b))              # the Loschmidt echo of a pure state
+"""
+function inner(a::State{R}, b::State{R}) where R
+    check_same_system(a, b)
+    return dot(a.state, b.state)
+end
+
+# A pure state is a vector of the Hilbert space and a mixed one a vector of the space of
+# operators on it, so there is no product of the two to take. Said here rather than left to
+# the method above, which would only report that none matches. Both orders are spelled out
+# on purpose: a catch-all `inner(::State, ::State)` is what Julia picks over the diagonal
+# method above, so it would capture the matching pairs as well.
+different_representations() =
+    error("cannot take the inner product of a pure and a mixed representation: they are " *
+          "vectors of different spaces. Mix the pure one first, or use fidelity, which " *
+          "takes the two as they are")
+
+inner(::State{Pure}, ::State{Mixed}) = different_representations()
+inner(::State{Mixed}, ::State{Pure}) = different_representations()
+
+dot(a::State, b::State) = inner(a, b)
+
+"""
+    fidelity(a, b)
+
+the fidelity of two states of the same system, a number between 0 and 1, normalised so
+that the norm and the trace of its arguments do not matter.
+
+On two pure representations this is ``|\\langle a | b \\rangle|^2``. On a pure and a mixed
+one, in either order, it is ``\\langle \\psi | \\rho | \\psi \\rangle``, which is the
+fidelity of a mixed state with a pure target and costs no more than an overlap.
+
+Two mixed representations have no method here on purpose: the Uhlmann fidelity
+``(\\mathrm{tr}\\sqrt{\\sqrt{\\rho}\\sigma\\sqrt{\\rho}})^2`` needs the square root of a
+density operator, hence its spectrum, which is out of reach for a matrix product state.
+See `hs_fidelity` for what can be computed instead.
+
+# Examples
+
+    fidelity(state, ground_state)
+    measures = "data" => Fidelity(ground_state)
+"""
+fidelity(a::State{Pure}, b::State{Pure}) =
+    abs2(inner(a, b)) / (norm(a)^2 * norm(b)^2)
+
+fidelity(p::State{Pure}, r::State{Mixed}) =
+    real(inner(mix(p), r)) / (norm(p)^2 * real(trace(r)))
+
+fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
+
+"""
+    hs_fidelity(a::State{Mixed}, b::State{Mixed})
+
+the normalised Hilbert-Schmidt overlap of two mixed states of the same system, that is
+``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``. It is 1 exactly when the two
+density matrices are proportional, and the normalisation by the traces cancels out, which
+leaves it the cosine between the two states seen as vectors.
+
+This is **not** the Uhlmann fidelity, which is out of reach for a matrix product state, see
+`fidelity`. It is a cheaper indicator of how close two mixed states are, and it is what to
+reach for when comparing an evolution with a reference density matrix.
+"""
+hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
+    real(inner(a, b)) / (norm(a) * norm(b))
 
 """
     dag(::State)
