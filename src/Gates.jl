@@ -18,6 +18,7 @@ apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =
     apply(Gate(prepare_gate(a)), state; kwargs...)
 
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
+    check_indices(state.system, a)
     ops = make_ops(state.system, prepare_gate(a))
     st = apply(ops, state.state; move_sites_back_between_gates=false,
             limits.cutoff, limits.maxdim)

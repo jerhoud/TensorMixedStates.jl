@@ -86,6 +86,45 @@ tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
 
 
 """
+    check_indices(system, op)
+
+check that every site an indexed operator acts on is a site of the system.
+
+Nothing between writing `X(10)` and contracting its tensor compares that number with the
+size of the system, and the three paths an indexed operator can take reach a different
+array first: `expect_norm` indexes the mps, `PreMPO` its own link dimensions and `apply`
+the sites. Each used to report a `BoundsError` on an internal vector the caller has no
+reason to know. The check is made at those three entries instead, and names the factor at
+fault rather than the array.
+"""
+function check_index(system::System, i::Int, a)
+    n = length(system)
+    if i < 1 || i > n
+        error("$a acts on site $i, which the system does not have: it has $n sites, " *
+              "numbered 1 to $n")
+    end
+    return nothing
+end
+
+function check_indices(system::System, a::AtIndex)
+    for i in a.index
+        check_index(system, i, a)
+    end
+    return nothing
+end
+
+check_indices(system::System, a::Multi_F) =
+    (check_index(system, a.start, a); check_index(system, a.stop, a))
+check_indices(system::System, a::Union{SumOp, ProdOp}) =
+    foreach(x -> check_indices(system, x), a.subs)
+check_indices(system::System, a::ScalarOp) = check_indices(system, a.arg)
+check_indices(system::System, a::Evolver) = check_indices(system, a.arg)
+# a vector is a time dependent evolver, one term per coefficient
+check_indices(system::System, a::Vector) = foreach(x -> check_indices(system, x), a)
+# a generic operator carries no index, and neither does anything else that may be passed
+check_indices(::System, _) = nothing
+
+"""
     tensor(::System, ::AtIndex)
 
 returns a tensor representing the given simple indexed operator acting on this system

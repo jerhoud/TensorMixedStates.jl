@@ -95,6 +95,13 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 
 ### Fixed
 
+- **A site index outside the system was reported as a `BoundsError` on an internal
+  vector.** The three paths an indexed operator can take reach a different array first, so
+  the same typo gave three different messages, none naming the operator or the site. A
+  failed measurement also left the cache of the state longer than the state, with
+  undefined entries, so a second call on it met an `UndefRefError` rather than the error it
+  deserved. The three entries check their operator now: `X(10) acts on site 10, which the
+  system does not have: it has 4 sites, numbered 1 to 4`.
 - **`expect`, `expect1` and `expect2` returned unnormalised values on a pure state in certain corner cases.**
 - **Operator equality was structural for some forms and identity based for others**, so
   `2X(1)*Y(2)`, `dag(X*Y)`, `Left(X*Y)`, `Phase(0.3)` and `controlled(Z)` never compared

@@ -82,8 +82,12 @@ case each one is a term whose coefficient is given by the matching time function
 The result can be passed wherever an operator that must be turned into an MPO is expected.
 The operator is first adapted to the representation of the state, see `adapt_representation`.
 """
-PreMPO(state::State{R}, a) where R =
-    PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(adapt_representation(R, a))))
+function PreMPO(state::State{R}, a) where R
+    # on the operator as it was written, so that the message names what the caller wrote
+    # and not what `simplify` made of it
+    check_indices(state.system, a)
+    return PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(adapt_representation(R, a))))
+end
 
 """
     mpo_eltype(::PreMPO, coefs)

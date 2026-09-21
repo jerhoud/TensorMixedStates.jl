@@ -1,8 +1,9 @@
 # Building the basic objects, and package wide quality checks.
 #
 # Goes here: anything that only checks that an object can be constructed and has the
-# announced shape, for System, State, Simulation and RandomState, plus Aqua. What a
-# state *measures* belongs to sites.jl, not here.
+# announced shape, for System, State, Simulation and RandomState, plus Aqua, and the
+# arguments that are refused when an operator meets a system. What a state *measures*
+# belongs to sites.jl, not here.
 
 @testset "Aqua" begin
     Aqua.test_all(TensorMixedStates)
@@ -78,4 +79,48 @@ end
                                                State{Pure}(System(3, Qubit()), "Up"))
     # the very same system is a no-op rather than an error
     @test_ok State(sys, State{Pure}(sys, "0"))
+end
+
+@testset "Site indices out of the system" begin
+    # nothing between writing X(10) and contracting its tensor compares that number with
+    # the size of the system, and the three paths an indexed operator can take each reach
+    # a different array first, so each used to report a BoundsError on an internal vector
+    sys = System(4, Qubit())
+    st = State{Pure}(sys, "Up")
+    stm = mix(st)
+
+    # the three entries, and both bounds
+    for op in (X(5), X(0), X(-1))
+        @test_throws "does not have" expect(st, op)
+        @test_throws "does not have" measure(st, op)
+        @test_throws "does not have" make_mpo(st, op)
+        @test_throws "does not have" apply(op, st)
+    end
+    # the message names the factor at fault and the size of the system
+    @test_throws "X(5) acts on site 5" expect(st, X(5))
+    @test_throws "it has 4 sites" expect(st, X(5))
+    # inside a product and inside a sum, the offending factor is the one named
+    @test_throws "Z(9) acts on site 9" expect(st, Z(1) * Z(9))
+    @test_throws "Z(7) acts on site 7" make_mpo(st, Z(1) * Z(2) + Z(3) * Z(7))
+    # a multi site operator is checked on each of its sites
+    @test_throws "Swap(1,9) acts on site 9" apply(Swap(1, 9), st)
+    # a time dependent evolver is a vector of terms, each one checked
+    @test_throws "acts on site 6" PreMPO(st, [-im * X(1), -im * X(6)])
+    # and a mixed representation goes through the same entries
+    @test_throws "acts on site 8" expect(stm, X(8))
+    @test_throws "acts on site 8" make_mpo(stm, Dissipator(Sm)(8))
+
+    # what is inside the system is untouched
+    @test_ok expect(st, X(4) * Z(1))
+    @test_ok make_mpo(st, sum(Z(i) * Z(i+1) for i in 1:3))
+    @test_ok apply(Swap(1, 4), st)
+
+    # a failed measurement used to leave the preobs cache longer than the state, with
+    # undefined entries, so a second call on the same state met an UndefRefError rather
+    # than the error it deserved. Refusing before the cache is touched settles it
+    s2 = State{Pure}(sys, "+")
+    @test_throws "does not have" expect(s2, X(9))
+    @test length(s2.preobs.left) ≤ length(s2)
+    @test_throws "does not have" expect(s2, X(9))
+    @test expect(s2, X(3)) ≈ 1
 end

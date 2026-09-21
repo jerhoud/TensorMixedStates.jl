@@ -437,6 +437,10 @@ function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}}
     if coef == 0.
         return 0.
     end
+    # every expectation value reaches this leaf, `measure` included, which calls
+    # `expect_norm` rather than `expect`. Checking here covers them all at the cost of a
+    # few integer comparisons per term, nothing next to the contractions below
+    foreach(o -> check_indices(state.system, o), subs)
     e = Expector()
     for o in subs
         e = expectfactor(state, e, o)
