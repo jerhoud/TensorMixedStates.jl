@@ -86,6 +86,13 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   equal to themselves. `==` and `hash` are now read from the type, once, for the whole
   hierarchy. No result was wrong, the two being false together, but a measurement shared
   by two observables was computed twice and terms that could have merged did not.
+- **A period of zero behaved differently in each of the four places the library has one.**
+  `measures_period = 0` raised a division by zero on the first sweep, a negative
+  `n_expand` or `n_hermitianize` was read as one sweep out of two, and a negative
+  `checkpoint_interval` put the next checkpoint in the past and kept it there, writing the
+  whole state to disk on every sweep. A period below one now means never, everywhere:
+  `sweep_due` carries the rule for the three sweep counters and `checkpoint_due` applies
+  it to the interval in seconds.
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no

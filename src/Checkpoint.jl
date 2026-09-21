@@ -52,7 +52,7 @@ appears, or on an interrupt. In all three cases a checkpoint is written first.
 
 - `dir`:       the simulation directory, where the checkpoint is written
 - `id`:        a fingerprint of the phases, a checkpoint of another simulation is refused
-- `interval`:  seconds between two checkpoints, `0` disables checkpointing
+- `interval`:  seconds between two checkpoints, zero or less disables checkpointing
 - `deadline`:  time after which the simulation stops cleanly, `Inf` for no limit
 - `next`:      time of the next checkpoint
 - `phase`:     index of the phase being run
@@ -85,7 +85,7 @@ end
 Checkpointer(dir::String = "", id::String = ""; interval::Real = 0, max_time::Real = Inf) =
     Checkpointer(dir, id, interval,
                  max_time == Inf ? Inf : time() + max_time,
-                 interval == 0 ? Inf : time() + interval,
+                 interval ≤ 0 ? Inf : time() + interval,
                  1, 0, 0., 0., nothing, false, 0, false, false)
 
 """
@@ -117,8 +117,12 @@ stop_requested(c::Checkpointer) =
     checkpoint_due(::Checkpointer)
 
 whether enough time has passed since the last checkpoint
+
+An interval of zero or less means no checkpointing, the same rule `sweep_due` applies to
+the sweep counters. A negative interval used to put the next checkpoint in the past and
+keep it there, writing the whole state to disk on every sweep.
 """
-checkpoint_due(c::Checkpointer) = c.interval ≠ 0 && time() ≥ c.next
+checkpoint_due(c::Checkpointer) = c.interval > 0 && time() ≥ c.next
 
 """
     save_checkpoint(::Checkpointer, ::Simulation, state, sweep)

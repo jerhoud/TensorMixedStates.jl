@@ -43,7 +43,7 @@ mutable struct DmrgObserver <: AbstractObserver
 end
 
 function measure!(o::TdvpObserver; sweep, current_time, state, mpo, kwargs...)
-    if mod(sweep, o.period) == 0
+    if sweep_due(o.period, sweep)
         st = State(o.sim.state, state)
         sim = Simulation(o.sim, st, current_time)
         output(sim, o.measurements; sweep)
@@ -56,7 +56,7 @@ function measure!(o::TdvpObserver; sweep, current_time, state, mpo, kwargs...)
 end
 
 function measure!(o::ApproxWObserver; sweep, current_time, state, mpos, kwargs...)
-    if mod(sweep, o.period) == 0
+    if sweep_due(o.period, sweep)
         st = State(o.sim.state, state)
         sim = Simulation(o.sim, st, current_time)
         output(sim, o.measurements; sweep)
@@ -75,7 +75,7 @@ function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
     # output files go, so that resuming at the next sweep does not cut them away. This is
     # the order tdvp and approx_W have by construction, their observer being asked to
     # measure before it is asked whether to stop.
-    if stop || stop_requested(c) || mod(sweep, o.period) == 0
+    if stop || stop_requested(c) || sweep_due(o.period, sweep)
         st = normalize(State(o.sim.state, psi))
         sim = Simulation(o.sim, st)
         output(sim, o.measurements; energy, sweep)

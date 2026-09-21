@@ -33,11 +33,11 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
         end
         lim = sweep_limits(limits, sweep)
         st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, kwargs...)
-        if n_hermitianize ≠ 0 && mod(sweep, n_hermitianize) == 0
+        if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end    
         measure!(observer!; sweep, state = st, current_time, mpo)
-        if n_expand ≠ 0 && mod(sweep, n_expand) == 0
+        if sweep_due(n_expand, sweep)
             st = expand(st, mpo; alg="global_krylov")
         end
         if checkdone!(observer!; sweep, state = st, current_time)
@@ -160,7 +160,7 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
         for mpo in mpos
             st = apply(mpo, st; lim.cutoff, lim.maxdim, kwargs...)
         end
-        if n_hermitianize ≠ 0 && mod(sweep, n_hermitianize) == 0
+        if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state;
         end
         measure!(observer!; sweep, state = st, current_time, mpos)

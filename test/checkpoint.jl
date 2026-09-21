@@ -355,6 +355,7 @@ end
 @testset "Checkpointer" begin
     C = TensorMixedStates.Checkpointer
     @test !TensorMixedStates.checkpoint_due(C())                     # 0 disables it
+    @test !TensorMixedStates.checkpoint_due(C(interval = -1))        # and so does any value below
     @test TensorMixedStates.checkpoint_due(C(interval = 1e-9))
     @test !TensorMixedStates.stop_requested(C())
     @test TensorMixedStates.stop_requested(C(max_time = -1))         # deadline already past

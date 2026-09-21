@@ -188,3 +188,32 @@ end
     # simplifying a product of them would make a sum, which apply cannot place
     @test_ok apply(Swap(1, 2) * Swap(3, 4), State{Pure}(System(4, Qubit()), "Up"))
 end
+
+@testset "Periods below one mean never" begin
+    # one rule for every period of the library: `measures_period`, `n_expand`,
+    # `n_hermitianize`, and the `checkpoint_interval` covered in checkpoint.jl.
+    # `mod(sweep, 0)` raised a division by zero and `mod(sweep, -2)` is zero on every
+    # second sweep, so anything below one is read as never rather than as one of those
+    due = TensorMixedStates.sweep_due
+    for period in (0, -1, -2, -3)
+        @test !any(sweep -> due(period, sweep), 1:12)
+    end
+    @test filter(sweep -> due(1, sweep), 1:4) == [1, 2, 3, 4]
+    @test filter(sweep -> due(3, sweep), 1:10) == [3, 6, 9]
+
+    # end to end, counted in a Data destination, which collects whatever the output of the
+    # run is redirected to
+    function count_measures(period)
+        sim = runTMS(SimData(phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Evolve(duration = 0.4, time_step = 0.1, algo = Tdvp(),
+                       evolver = -im * Z(1), measures = Data("m") => Z,
+                       measures_period = period)]);
+            output = devnull)
+        return haskey(sim.data, "m") ? length(sim.data["m"]["Z"]["times"]) : 0
+    end
+    @test count_measures(1) == 4
+    @test count_measures(2) == 2
+    @test count_measures(0) == 0
+    @test count_measures(-2) == 0
+end

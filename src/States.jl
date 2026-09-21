@@ -48,6 +48,22 @@ sweep_value(x, ::Int) = x
 sweep_value(x::Vector, sweep::Int) = x[min(sweep, length(x))]
 sweep_limits(l::Limits, sweep::Int) =
     Limits(sweep_value(l.cutoff, sweep), sweep_value(l.maxdim, sweep))
+
+"""
+    sweep_due(period, sweep)
+
+whether something asked for every `period` sweeps is due on this one.
+
+A period below one means never. That is what `0` was already taken to mean for `n_expand`,
+`n_hermitianize` and `checkpoint_interval`, and the rule is extended to any value below
+one so that a negative period is not silently read as `mod(sweep, -2)`, which is zero on
+every second sweep. `mod(sweep, 0)` would raise a division by zero outright, which is what
+`measures_period = 0` used to do.
+
+The three sweep counters of the library go through this, and `checkpoint_due` applies the
+same rule to the interval in seconds of the checkpointer.
+"""
+sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
   
 """
     struct State{R <: PM}
