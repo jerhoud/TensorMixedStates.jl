@@ -183,6 +183,10 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   produced and thrown away before.
 - The test suite went from about 190 assertions to more than 600, organised in groups that
   can be run selectively.
+- The precompilation workload covers `dmrg` and `apply`, which it did not, so a first call
+  to either takes about a second instead of five to eight. Measured on the whole of a first
+  session: 100 seconds with no workload, 44 with the old one, 28 with this one, for six
+  seconds more of precompilation.
 - The examples of `examples/high_level` are run by a step of their own in CI, on one job
   of the matrix, so that one of them breaking is noticed. They were shortened to make that
   affordable, three and a half minutes for the five. The examples of `examples/article`
