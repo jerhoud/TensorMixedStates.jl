@@ -120,7 +120,9 @@ TMS uses Matrix Product State to internally represent quantum states. It is impo
 lim = Limits(cutoff = 1e-10, maxdim = 50)
 ```
 
-each (or both) of the arguments may be omitted in which case it corresponds to an absence of constraint for this parameter. In particular, `Limits()` represents no constraint.
+any of the arguments may be omitted in which case it corresponds to an absence of constraint for this parameter. In particular, `Limits()` represents no constraint.
+
+A third parameter, `mindim`, sets the bond dimension the truncation is not allowed to go below, as in `Limits(cutoff = 1e-10, maxdim = 50, mindim = 4)`. `maxdim` keeps the last word when the two ask for opposite things.
 
 To apply the constraints on a state, one uses
 

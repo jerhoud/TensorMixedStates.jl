@@ -11,8 +11,12 @@ the reference article.
 
 ## [Unreleased]
 
-The next release carries a user visible change of behaviour, the removal of MKL, so it is
-expected to be 1.3.0 rather than a patch.
+Nothing yet.
+
+## [1.3.0] - 2026-09-21
+
+This release carries a user visible change of behaviour, the removal of MKL, which is why
+it is a minor version rather than a patch.
 
 ### Added
 
@@ -26,6 +30,9 @@ expected to be 1.3.0 rather than a patch.
 - Multi site function operators.
 - `matrix` and `tensor` for `Dissipator`.
 - `Evolve` accepts vectors in `Limits`.
+- `mindim` in `Limits`, the bond dimension a truncation is not allowed to go below. It is
+  passed on to every ITensor call that takes one, and defaults to zero, which is no
+  minimum. `maxdim` keeps the last word when the two ask for opposite things.
 - `inner` and `dot` between two states, and the fidelities that follow: `fidelity` for two
   pure representations and for a pure one against a mixed one, `hs_fidelity` for the
   normalised Hilbert-Schmidt overlap of two mixed ones. The Uhlmann fidelity of two mixed
@@ -191,6 +198,10 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   of the matrix, so that one of them breaking is noticed. They were shortened to make that
   affordable, three and a half minutes for the five. The examples of `examples/article`
   stay at the sizes the article published and are not run.
+- The Codecov patch status is informational. It marks a commit red when the lines it
+  changes are less covered than the project as a whole, which counts a rewritten error
+  message as new untested code although it adds none. The figure is still reported on the
+  commit and in pull requests, it just no longer fails.
 - The free boson testset no longer measures the arithmetic of the machine it runs on. It
   evolved at a bond dimension where the truncation is unstable, so the result followed the
   BLAS thread count of the runner: the same code gave a green Windows job one hour and a
