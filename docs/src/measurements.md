@@ -39,31 +39,31 @@ qubit state
 ```@setup measurements
 using TensorMixedStates
 using .Qubits
-state = State{Mixed}(System(4, Qubit()), "Up")
+mystate = State{Mixed}(System(4, Qubit()), "Up")
 ```
 
 ```julia
 using TensorMixedStates, .Qubits
 
-state = State{Mixed}(System(4, Qubit()), "Up")
+mystate = State{Mixed}(System(4, Qubit()), "Up")
 ```
 
 With an indexed operator, we get the expectation of the corresponding observable
 
 ```@example measurements
-measure(state, X(1)X(2)Z(4))
+measure(mystate, X(1)X(2)Z(4))
 ```
 
 With a generic operator (acting on one site only), we get the expectation of the operator on each site
 
 ```@example measurements
-measure(state, X)
+measure(mystate, X)
 ```
 
 With a couple of generic operators, we get the correlation matrix of those observables
 
 ```@example measurements
-measure(state, (X, Y))
+measure(mystate, (X, Y))
 ```
 
 There are some state functions predefined:
@@ -85,7 +85,7 @@ Linkdim                 # returns the maximum bond dimension of the representati
 They are used like this
 
 ```@example measurements
-measure(state, TraceError)
+measure(mystate, TraceError)
 ```
 
 New state functions may be defined by
@@ -110,9 +110,9 @@ phase writes nothing.
 Checks can be performed (useful for coherence tests)
 
 ```julia
-measure(state, Check(name, obs1, obs2))      # returns 3 values obs1, obs2 and |obs2 - obs1|
-measure(state, Check(name, obs1, obs2, tol)) # if |obs2 - obs1|>tol throw an error
-measure(state, Check(name, obs1, obs2), t)
+measure(mystate, Check(name, obs1, obs2))      # returns 3 values obs1, obs2 and |obs2 - obs1|
+measure(mystate, Check(name, obs1, obs2, tol)) # if |obs2 - obs1|>tol throw an error
+measure(mystate, Check(name, obs1, obs2), t)
 ```
 
 In `Check`, obs may also be constants, vectors and function of time (like `t -> sin(t)`), in this case the simulation

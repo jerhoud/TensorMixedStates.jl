@@ -5,20 +5,20 @@ limits = Limits(
     maxdim = 100,
 )
 
-output = "data" => [ X, Y, Z, Check("check_cos", X(1), t->cos(2t))]
+measurements = "data" => [ X, Y, Z, Check("check_cos", X(1), t->cos(2t))]
     
 
 phases(n) = [
     CreateState(
         name = "Create $n qubits pointing in the 6 directions",
-        final_measures = output,
+        final_measures = measurements,
         type = Pure(),
         system = System(n, Qubit()),
         state = repeat(["X+", "Y+", "Z+", "X-", "Y-", "Z-"], (n + 5) ÷ 6)[1:n],
       ),
     Evolve(
         name = "Evolve using tdvp with hamiltonian Z on all sites",
-        measures = output,
+        measures = measurements,
         algo = Tdvp(),
         duration = 7,
         time_step = 0.1,

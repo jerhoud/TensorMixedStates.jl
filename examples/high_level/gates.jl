@@ -5,19 +5,19 @@ limits = Limits(
     maxdim = 100,
 )
 
-output = "data" => [X, Y, Z, (X, X), (Y, Y), (Z, Z), Purity]
+measurements = "data" => [X, Y, Z, (X, X), (Y, Y), (Z, Z), Purity]
 
 phases(n) = [
   CreateState(
     name = "Building my very special state",
-    final_measures = output,
+    final_measures = measurements,
     type = Pure(),
     system = System(n, Qubit()),
     state = "Up",
   ),
   Gates(
     name = "Applying gate X to all qubits",
-    final_measures = output,
+    final_measures = measurements,
     gates = prod(X(i) for i in 1:n),
     limits = limits,
   ),

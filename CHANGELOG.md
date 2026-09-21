@@ -80,7 +80,7 @@ ordinary run stays silent, so this file and the docstrings are the notice.
 
 ### Fixed
 
-- **`expect`, `expect1` and `expect2` returned unnormalised values on a pure state in certain corner cases.
+- **`expect`, `expect1` and `expect2` returned unnormalised values on a pure state in certain corner cases.**
 - **A `SimData` nested inside the phases of another silently skipped its inner phases.**
   The loop it opened shared the phase counter of the loop around it, so every inner phase
   whose index was below the outer one was passed over, on the very first run and with no
@@ -108,6 +108,12 @@ ordinary run stays silent, so this file and the docstrings are the notice.
   evolvers free.
 - New sections on the choice of the BLAS backend and on reusing an operator name across
   site types, and a word asking authors who use TMS to acknowledge it and to get in touch.
+- A word on the lowercase names the package brings into scope. The manual advised keeping
+  one's own identifiers lowercase, which avoids the capitalised operator names but points
+  straight at the fifty lowercase function names of the package, `state`, `sim`, `output`
+  and the like. Assigning to one of them shadows it, and Julia 1.10 and 1.11 refuse the
+  assignment outright when the name has already been used. The manual now says so, and
+  neither the manual nor the examples shadow one any more.
 
 ### Development
 

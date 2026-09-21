@@ -132,14 +132,14 @@ nothing # hide
 Many functions accept such an argument. For example, when adding states instead of
 
 ```@example manual
-state = (state1 + ghz) / 2
+state3 = (state1 + ghz) / 2
 nothing # hide
 ```
 
 One can write
 
 ```@example manual
-state = +(state1, ghz; limits = lim) / 2
+state3 = +(state1, ghz; limits = lim) / 2
 nothing # hide
 ```
 
@@ -159,7 +159,16 @@ X(3)
 
 represents the ``\sigma_x`` Pauli operator applied to the system site number 3. This is an *indexed operator*.
  
-Note that all predefined operator names start with a capital letter, so it is better to keep your own identifiers lowercase to prevent name collisions.
+Note that all predefined operator names start with a capital letter, so it is better to keep your own identifiers lowercase to prevent name collisions with them.
+
+Lowercase is not a safe harbour by itself, though. `using TensorMixedStates` also brings in
+some fifty lowercase names, among them `state`, `sim`, `output`, `measure`, `trace`, `dim`,
+`matrix`, `tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
+of your program shadows the function for the rest of the file, and if you happen to have
+used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
+`cannot assign a value to imported variable`. Inside a function there is no such issue,
+where `state = ...` is an ordinary local variable. This manual prefixes its own variables
+with `my`, as in `mystate` and `myop`, which is one way of staying clear.
 
 The operator system is very rich and flexible. For example, if you want to use this Hamiltonian
 
@@ -260,24 +269,24 @@ For more details, see the reference or the inline help.
 Once we have created a state, we may want to measure it. Take for example a three qubit state
 
 ```@example manual
-state = State{Pure}(System(3, Qubit()), "Up")
+mystate = State{Pure}(System(3, Qubit()), "Up")
 nothing # hide
 ```
 
 ```@example manual
-result = measure(state, X(1)X(3))
+result = measure(mystate, X(1)X(3))
 ```
 
 will give ``\langle \psi | \sigma_x^1 \sigma_x^3 | \psi \rangle``
 
 ```@example manual
-result = measure(state, X)
+result = measure(mystate, X)
 ```
 
 will give the array of the ``\langle \psi | \sigma_x^i | \psi \rangle``
 
 ```@example manual
-result = measure(state, (X, Y))
+result = measure(mystate, (X, Y))
 ```
 
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``
@@ -298,7 +307,7 @@ or any value in between
 We can also ask for several measurements at the same time
 
 ```@example manual
-results = measure(state, [X, X(2)Z(3), (X, Y), Trace, MemoryUsage])
+results = measure(mystate, [X, X(2)Z(3), (X, Y), Trace, MemoryUsage])
 ```
 
 For more details see the reference or the inline help.
@@ -525,8 +534,8 @@ The possible measurements are described in the measurements section of this manu
 The `DataToFrame` function can be used on the result to get a `DataFrame` object (the `DataFrames` package must be imported first)
 
 ```julia
-sim = runTMS(simdata)
-df = DataToFrame(sim.data["mydata"])
+mysim = runTMS(simdata)
+df = DataToFrame(mysim.data["mydata"])
 ```
 
 
