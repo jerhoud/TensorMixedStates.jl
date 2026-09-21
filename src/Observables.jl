@@ -258,10 +258,10 @@ On two pure representations this is ``|\\langle a | b \\rangle|^2``. On a pure a
 one, in either order, it is ``\\langle \\psi | \\rho | \\psi \\rangle``, which is the
 fidelity of a mixed state with a pure target and costs no more than an overlap.
 
-Two mixed representations have no method here on purpose: the Uhlmann fidelity
-``(\\mathrm{tr}\\sqrt{\\sqrt{\\rho}\\sigma\\sqrt{\\rho}})^2`` needs the square root of a
-density operator, hence its spectrum, which is out of reach for a matrix product state.
-See `hs_fidelity` for what can be computed instead.
+Two mixed representations are refused, with a message saying what to reach for instead:
+the Uhlmann fidelity ``(\\mathrm{tr}\\sqrt{\\sqrt{\\rho}\\sigma\\sqrt{\\rho}})^2`` needs the
+square root of a density operator, hence its spectrum, which is out of reach for a matrix
+product state. See `hs_fidelity` for what can be computed.
 
 # Examples
 
@@ -275,6 +275,12 @@ fidelity(p::State{Pure}, r::State{Mixed}) =
     real(inner(mix(p), r)) / (norm(p)^2 * real(trace(r)))
 
 fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
+
+# said here rather than left to a `MethodError`, which names no way out. The docstring
+# above carries the reasoning, the message only has to point at it
+fidelity(::State{Mixed}, ::State{Mixed}) =
+    error("no fidelity between two mixed representations, it needs the spectrum of a " *
+          "density operator. Use hs_fidelity")
 
 """
     hs_fidelity(a::State{Mixed}, b::State{Mixed})

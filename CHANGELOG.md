@@ -29,7 +29,8 @@ expected to be 1.3.0 rather than a patch.
 - `inner` and `dot` between two states, and the fidelities that follow: `fidelity` for two
   pure representations and for a pure one against a mixed one, `hs_fidelity` for the
   normalised Hilbert-Schmidt overlap of two mixed ones. The Uhlmann fidelity of two mixed
-  states is deliberately absent, needing the spectrum of a density operator.
+  states is deliberately absent, needing the spectrum of a density operator, and asking
+  for it says so and points at `hs_fidelity`.
 - `State(system, state)`, which puts a state on another system of the same sites, and the
   `system` keyword of `load_state`, which reads one straight onto an existing system. A
   `System` carries ITensor indices of its own, so this is what makes two states built

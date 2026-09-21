@@ -295,6 +295,11 @@ end
     # a pure and a mixed representation are vectors of different spaces
     @test_throws "vectors of different spaces" inner(plus, fm)
     @test_throws "vectors of different spaces" inner(fm, plus)
+
+    # and two mixed ones have no fidelity to speak of, the Uhlmann one needing a spectrum.
+    # The refusal names what to reach for instead
+    @test_throws "no fidelity between two mixed" fidelity(fm, mix(plus))
+    @test_throws "hs_fidelity" fidelity(fm, mix(plus))
 end
 
 @testset "Fidelity and Overlap as measurements" begin
