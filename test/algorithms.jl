@@ -190,3 +190,25 @@ end
         )
     ])
 end
+
+@testset "Ground and steady states on a charged system" begin
+    strong = TensorMixedStates.strong
+    h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)
+    lind = -im * h + sum(Dissipator(sqrt(0.3) * N)(i) for i in 1:4)
+    lim = Limits(cutoff = 1e-12, maxdim = 32)
+    start(site) = begin
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        return (p(["Occ", "Emp", "Occ", "Emp"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
+    end
+
+    # dmrg searches inside the sector its starting state lives in, and steady_state builds
+    # the MPO of `(L+)L`, whose flux is zero whenever that of `L` is. Both must land where
+    # the dense computation does
+    e = first(dmrg(h, start(Fermion()); nsweeps = 3, limits = lim))
+    z = real(first(steady_state(lind, mix(start(Fermion())); nsweeps = 2, limits = lim)))
+    for site in (Fermion(conserve = N), Fermion(conserve = strong(N)))
+        @test first(dmrg(h, start(site); nsweeps = 3, limits = lim)) ≈ e
+        @test real(first(steady_state(lind, mix(start(site)); nsweeps = 2, limits = lim))) ≈ z atol = 1e-10
+    end
+end

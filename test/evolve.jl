@@ -217,3 +217,35 @@ end
     @test count_measures(0) == 0
     @test count_measures(-2) == 0
 end
+
+@testset "Evolving a state that carries charges" begin
+    strong = TensorMixedStates.strong
+    h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)
+    lind = -im * h + sum(Dissipator(sqrt(0.3) * N)(i) for i in 1:4)
+    lim = Limits(cutoff = 1e-14, maxdim = 32)
+    start(site, mixed) = begin
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        s = (p(["Occ", "Emp", "Occ", "Emp"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
+        return mixed ? mix(s) : s
+    end
+    charged = [Fermion(conserve = N), Fermion(conserve = strong(N))]
+
+    # the links of the MPO of the generator carry the charge each of its channels has
+    # accumulated, and the answer must not notice. The mixed case uses dephasing, whose jump
+    # commutes with the charge, so that it is a strong symmetry as well as a weak one
+    for (op, mixed) in ((-im * h, false), (lind, true))
+        ref_t = real.(expect1(tdvp(op, 0.2, start(Fermion(), mixed); nsweeps = 1, limits = lim), N))
+        ref_w = real.(expect1(approx_W(op, 0.2, start(Fermion(), mixed); limits = lim, order = 2), N))
+        for site in charged
+            @test real.(expect1(tdvp(op, 0.2, start(site, mixed); nsweeps = 1, limits = lim), N)) ≈ ref_t
+            @test real.(expect1(approx_W(op, 0.2, start(site, mixed); limits = lim, order = 2), N)) ≈ ref_w
+        end
+    end
+
+    # WI and WII share one channel between the term not begun and the term finished, so they
+    # need a generator of zero flux. One that moved the charge would not keep the state in
+    # its sector, which is why this is a refusal and not a gap
+    @test_throws "need an operator of zero flux" approx_W(
+        dag(C)(1), 0.1, start(Fermion(conserve = N), false); limits = lim, order = 2)
+end

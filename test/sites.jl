@@ -395,3 +395,75 @@ end
     @test_throws "X on site Qubit connects charges" ten(q, X(1))
     @test_throws "no definite flux" ten(q, Left(X)(1))
 end
+
+@testset "Declaring a strong symmetry" begin
+    Q = TensorMixedStates.ITensors
+    strong = TensorMixedStates.strong
+    mixed(s) = Q.space(mix(Index(s), s))
+
+    # the strength is recorded on the quantity and not on the site, so one site may hold
+    # both kinds, and it travels in the string the site keeps
+    @test Fermion(conserve = strong(N)).conserve == "N!:0,1"
+    @test Electron(conserve = (strong(Ntot), 2Sz)).conserve ==
+        "Ntot!:0,1,1,2;2Sz:0,1,-1,0"
+    @test TensorMixedStates.decode_conserve("N!:0,1") == [("N", 1, [0, 1], true)]
+
+    # and a site goes on printing as the call that built it
+    @test repr(Fermion(conserve = strong(N))) == "Fermion(conserve = strong(N))"
+    @test repr(Electron(conserve = (strong(Ntot), 2Sz))) ==
+        "Electron(conserve = (strong(Ntot), 2Sz))"
+
+    # nothing changes on the pure side: only the bra of the mixed index takes another name
+    @test Q.space(Index(Fermion(conserve = strong(N)))) ==
+        Q.space(Index(Fermion(conserve = N)))
+    @test flux(N, Fermion(conserve = strong(N))) == Q.QN("N", 0)
+
+    # keeping the two sides apart gives one block per pair of charges instead of one per
+    # difference, which is the whole gain of a strong symmetry
+    @test length(mixed(Fermion(conserve = N))) == 3
+    @test length(mixed(Fermion(conserve = strong(N)))) == 4
+    @test length(mixed(Boson(4, conserve = N))) == 7
+    @test length(mixed(Boson(4, conserve = strong(N)))) == 16
+
+    # a name ending in ! could not be told from the mark a site puts on a strong symmetry
+    @test_throws "cannot be told from the mark" Fermion(conserve = named(N, "N!"))
+end
+
+@testset "Charges that cannot live together" begin
+    strong = TensorMixedStates.strong
+
+    # the same name would stand for the charge of the ket on one site and for a difference
+    # on the other, and the flux of a state would add the two
+    @test_throws "strongly on one site and weakly on another" System(
+        [Fermion(conserve = N), Fermion(conserve = strong(N))])
+
+    # a strong quantity takes two of the four components ITensors allows, so two of them
+    # fit exactly and anything more does not
+    @test_ok System(2, Electron(conserve = (strong(Ntot), strong(2Sz))))
+    @test_throws "of the four components" System(
+        [Electron(conserve = (strong(Ntot), strong(2Sz))), Fermion(conserve = N)])
+
+    # while sites that agree, or say nothing, live together
+    @test_ok System(2, Fermion(conserve = strong(N)))
+    @test_ok System([Fermion(conserve = strong(N)), Qubit(), Fermion(conserve = strong(N))])
+end
+
+@testset "Superoperators under a strong symmetry" begin
+    Q = TensorMixedStates.ITensors
+    strong = TensorMixedStates.strong
+    ten(sys, op) = TensorMixedStates.tensor(sys, op)
+    sys = System(2, Fermion(conserve = strong(N)))
+
+    # a jump commuting with the charge is what a strong symmetry asks for, and it passes
+    @test flux(ten(sys, Dissipator(N)(1))) == Q.QN(("N", 0), ("N*", 0))
+    @test flux(ten(sys, Gate(F)(1))) == Q.QN(("N", 0), ("N*", 0))
+
+    # one that moves the charge does not, and the refusal names it and the way out rather
+    # than leaving the `Fluxes not all equal` of ITensors through
+    @test_throws "changes N between its two sides" ten(sys, Dissipator(C)(1))
+    @test_throws "drop `strong`" ten(sys, Dissipator(C)(1))
+
+    # the very same jump is fine when the quantity is conserved weakly, which is the whole
+    # difference between the two: a weak symmetry lets the charge move, a strong one does not
+    @test flux(ten(System(2, Fermion(conserve = N)), Dissipator(C)(1))) == Q.QN("N", 0)
+end

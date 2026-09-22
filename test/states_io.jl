@@ -308,3 +308,30 @@ end
     end
     @test_throws "expected one of 1, 2" load_state(future, "s")
 end
+
+@testset "Saving a state that carries charges" begin
+    strong = TensorMixedStates.strong
+    dir = mktempdir()
+    file = joinpath(dir, "charged.h5")
+
+    # the quantities a site conserves travel in the string it keeps, the strength included,
+    # so a state read back draws the same indices and measures the same numbers
+    for (name, site) in (("weak", Fermion(conserve = N)), ("strong", Fermion(conserve = strong(N))))
+        sys = System(3, site)
+        stp = State{Pure}(sys, ["Occ", "Emp", "Occ"])
+        save_state(file, name, stp)
+        lp = load_state(file, name)
+        @test lp isa State{Pure}
+        @test lp.system.sites == sys.sites
+        @test flux(lp.state) == flux(stp.state)
+        @test expect1(lp, N) ≈ expect1(stp, N)
+
+        stm = mix(stp)
+        save_state(file, name * "-mixed", stm)
+        lm = load_state(file, name * "-mixed")
+        @test lm isa State{Mixed}
+        @test flux(lm.state) == flux(stm.state)
+        @test trace(lm) ≈ 1
+        @test expect1(lm, N) ≈ expect1(stm, N)
+    end
+end

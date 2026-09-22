@@ -169,3 +169,34 @@ end
     @test_ok State{Mixed}(m, ["Up", "+", "Dn"])
     @test_throws "spreads over several charges" State{Pure}(m, ["+", "Up", "Dn"])
 end
+
+@testset "States under a strong symmetry" begin
+    Q = TensorMixedStates.ITensors
+    strong = TensorMixedStates.strong
+    sys = System(3, Fermion(conserve = strong(N)))
+    conf = ["Occ", "Emp", "Occ"]
+
+    # the state lives in one sector on the ket side and in the same one on the bra side.
+    # This is the rule a pure state already obeys, transposed to a density matrix
+    @test flux(State{Mixed}(sys, conf).state) == Q.QN(("N", 2), ("N*", -2))
+    @test flux(mix(State{Pure}(sys, conf)).state) == Q.QN(("N", 2), ("N*", -2))
+
+    # a mixture over two sectors has no charge of its own and is refused, where the same
+    # state is representable when the quantity is conserved weakly
+    @test_throws "spreads over several charges" State{Mixed}(sys, [0.3 0.; 0. 0.7])
+    @test_ok State{Mixed}(System(3, Fermion(conserve = N)), [0.3 0.; 0. 0.7])
+end
+
+@testset "A random state needs a sector" begin
+    sys = System(4, Fermion(conserve = N))
+
+    # there is no sector to draw a state in, so the forms taking a system are refused by a
+    # message naming the one that works
+    @test_throws "no sector to draw it in" RandomState{Pure}(sys, 4)
+    @test_throws "RandomState(state, 4)" RandomState{Pure}(sys, 4)
+    @test_throws "no sector to draw it in" RandomState{Mixed}(sys, 4)
+
+    # randomising a state one already has keeps it in the sector it was in
+    p = State{Pure}(sys, ["Occ", "Emp", "Occ", "Emp"])
+    @test flux(RandomState(p, 4).state) == flux(p.state)
+end

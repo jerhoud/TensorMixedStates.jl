@@ -11,6 +11,58 @@ the charges an index carries, one per block
 qn_list(i::Index) = [ first(p) for p in space(i) ]
 
 """
+    charge_links(gs, total, tag)
+
+the links a chain runs along, given the charges `gs[i]` its pieces may carry at each site and
+the `total` they have to add up to.
+
+Only what the sites on the left can have accumulated and what the ones on the right can still
+bring is kept. That intersection is what makes a link small: most running totals cannot be
+completed into the one the chain has to reach.
+"""
+function charge_links(gs, total::QN, tag::String)
+    n = length(gs)
+    forward = [[QN()]]
+    for i in 1:n
+        push!(forward, unique([ u - g for u in forward[i] for g in gs[i] ]))
+    end
+    backward = Vector{Vector{QN}}(undef, n + 1)
+    backward[n+1] = [total]
+    for i in n:-1:1
+        backward[i] = unique([ v + g for v in backward[i+1] for g in gs[i] ])
+    end
+    return [ Index([ u => 1 for u in forward[i+1] if u in backward[i+1] ]...;
+                   tags = "$tag,l=$i") for i in 1:n-1 ]
+end
+
+"""
+    chain_at(links, ts, i, n, total)
+
+the element at site `i` of a chain of `n` sites running along `links`, built from the pieces
+`ts` and the charge each one carries. The last site closes the chain on `total`.
+"""
+function chain_at(links, ts, i::Int, n::Int, total::QN)
+    ins = i == 1 ? [QN()] : qn_list(links[i-1])
+    parts = ITensor[]
+    for (t, g) in ts, (p, u) in enumerate(ins)
+        left = i == 1 ? ITensor(1.) : onehot(dag(links[i-1]) => p)
+        if i == n
+            if u - g ≠ total
+                continue
+            end
+            push!(parts, t * left)
+        else
+            r = findfirst(==(u - g), qn_list(links[i]))
+            if isnothing(r)
+                continue
+            end
+            push!(parts, t * left * onehot(links[i] => r))
+        end
+    end
+    return sum(parts)
+end
+
+"""
     create_qlinks!(q, state)
 
 the charge links the trace of a strongly conserving state runs along, one between each pair
@@ -25,26 +77,7 @@ strong symmetry, and its dimension is the number of totals the sites can reach.
 function create_qlinks!(q, state::State{Mixed})
     n = length(state)
     sys = state.system
-    gs = [ site_qns(sys, i) for i in 1:n ]
-    f = flux(state.state)
-    # what the sites on the left can have accumulated, and what the sites on the right can
-    # still bring to the charge of the whole state. A link keeps only what both allow, which
-    # is what makes it small: most totals cannot be completed into the one sector the state
-    # lives in
-    forward = [[QN()]]
-    for i in 1:n
-        push!(forward, unique([ u - g for u in forward[i] for g in gs[i] ]))
-    end
-    backward = Vector{Vector{QN}}(undef, n + 1)
-    backward[n+1] = [f]
-    for i in n:-1:1
-        backward[i] = unique([ v + g for v in backward[i+1] for g in gs[i] ])
-    end
-    resize!(q, n - 1)
-    for i in 1:n-1
-        keep = [ u for u in forward[i+1] if u in backward[i+1] ]
-        q[i] = Index([ u => 1 for u in keep ]...; tags = "Charge,l=$i")
-    end
+    append!(q, charge_links([ site_qns(sys, i) for i in 1:n ], flux(state.state), "Charge"))
     return q
 end
 
@@ -59,37 +92,10 @@ function get_qlinks(state::State{Mixed})
     return q
 end
 
-"""
-    trace_chain(state, ts, i)
-
-the element of the trace chain at site `i`, built from the local tensors `ts` and the charge
-each of them carries. See `create_qlinks!`.
-"""
-function trace_chain(state::State{Mixed}, ts, i::Int)
-    n = length(state)
-    q = get_qlinks(state)
-    ins = i == 1 ? [QN()] : qn_list(q[i-1])
-    f = flux(state.state)
-    parts = ITensor[]
-    for (t, g) in ts, (p, u) in enumerate(ins)
-        left = i == 1 ? ITensor(1.) : onehot(dag(q[i-1]) => p)
-        if i == n
-            # the last site closes the chain on the charge of the whole state, which is what
-            # picks out of the trace the one sector the state lives in
-            if u ≠ f + g
-                continue
-            end
-            push!(parts, t * left)
-        else
-            r = findfirst(==(u - g), qn_list(q[i]))
-            if isnothing(r)
-                continue
-            end
-            push!(parts, t * left * onehot(q[i] => r))
-        end
-    end
-    return sum(parts)
-end
+# the trace closes on the charge of the whole state, which is what picks out of it the one
+# sector the state lives in
+trace_chain(state::State{Mixed}, ts, i::Int) =
+    chain_at(get_qlinks(state), ts, i, length(state), flux(state.state))
 
 function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
@@ -408,11 +414,21 @@ dag(state::State{Pure}) =
     error("dag is meaningless on pure representations")
 function dag(state::State{Mixed})
     n = length(state)
-    st = MPS(n)
-    for i in 1:n
-        st[i] = tensor_dag(state, i)
+    s = state.system
+    if isempty(strong_names(s))
+        return State(state, MPS([ tensor_dag(state, i) for i in 1:n ]))
     end
-    State(state, st)
+    ps = [ adj_pieces(s, i) for i in 1:n ]
+    links = charge_links([ [ g for (_, g) in p ] for p in ps ], QN(), "Adjoint")
+    ts = [ noprime(chain_at(links, ps[i], i, n, QN()) * conj(state.state[i])) for i in 1:n ]
+    # the chain leaves a second index between neighbours, which an MPS reads as a bond of
+    # its own: the two are combined so that the result has the one link it expects
+    for i in 1:n-1
+        cb = combiner(commoninds(ts[i], ts[i+1])...; tags = "Link,l=$i")
+        ts[i] = ts[i] * cb
+        ts[i+1] = ts[i+1] * dag(cb)
+    end
+    return State(state, MPS(ts))
 end
 
 
@@ -798,6 +814,11 @@ return the state partially traced at the given positions
 alternatively one can give the positions to keep by setting `keepers = true`
 """
 function partial_trace(state::State{Mixed}, pos::AbstractVector{<:Integer}; keepers::Bool = false)
+    if !isempty(strong_names(state.system))
+        error("cannot trace out part of a state whose sites conserve something strongly: " *
+              "what is left of it spreads over several sectors, which keeping the charge " *
+              "of the ket apart from that of the bra cannot hold")
+    end
     n = length(state)
     if keepers
         keep = sort(unique(pos))

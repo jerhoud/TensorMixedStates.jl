@@ -418,3 +418,41 @@ end
     @test expect(mq, N(1)) ≈ 2
     @test expect(mq, N(1)) ≈ expect(md, N(1))
 end
+
+@testset "Observables do not depend on the kind of symmetry" begin
+    strong = TensorMixedStates.strong
+    # the same physics conserved weakly and strongly. The two label the tensors differently,
+    # one keeping the difference of the ket and bra charges and the other keeping them
+    # apart, and neither changes a measured number. Under a strong symmetry the trace stops
+    # being a product of one vector per site, so this covers the chain it then runs along
+    function chain(site)
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        s = p(["Occ", "Emp", "Occ", "Emp"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])
+        return mix(s / norm(s))
+    end
+    w, s = chain(Fermion(conserve = N)), chain(Fermion(conserve = strong(N)))
+    both(f) = @test isapprox(f(w), f(s); atol = 1e-12)
+
+    @test trace(s) ≈ 1
+    both(trace)
+    both(trace2)
+    both(x -> expect(x, N(2)))
+    both(x -> expect1(x, N))
+    both(hermiticity)
+    # a correlation whose two ends do not conserve the charge rides the same chain, the two
+    # shifts it brings cancelling along the way
+    both(x -> [ expect(x, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    both(x -> trace(apply(Dissipator(N)(2), x)))
+
+    # the adjoint exchanges ket and bra, which swaps the two charges a strong symmetry keeps
+    # apart. It rides a chain of its own, along the running difference of the two
+    @test hermiticity(s) ≈ 1
+    @test trace(hermitianize(s)) ≈ 1
+    @test flux(dag(s).state) == flux(s.state)
+
+    # tracing part of the sites out is the one thing that cannot be done: what is left is a
+    # mixture over several sectors, and a state keeping the two charges apart has only one
+    @test_ok partial_trace(w, [1, 3])
+    @test_throws "spreads over several sectors" partial_trace(s, [1, 3])
+end

@@ -82,6 +82,37 @@ diag_elements(system, i::Int) =
     vec_pieces(system, i, Matrix(1.0I, dim(system[i]), dim(system[i])))
 
 """
+    adj_pieces(system, i)
+
+the map sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on site `i`, cut into
+pieces of definite charge, each with the charge it carries.
+
+Taking the adjoint of a density matrix exchanges its ket and its bra, which on a site that
+keeps their charges apart swaps the two. That is a permutation of the blocks, and no single
+tensor does it at a definite flux: the piece exchanging a pair whose charges differ by `d`
+carries `d` on both sides. A chain along the running difference does, and since that
+difference is zero over the whole state, it closes on nothing.
+"""
+function adj_pieces(system, i::Int)
+    j = SysIndex{Pure}(system, i)
+    k = SysIndex{Mixed}(system, i)
+    b, c = mixer(j, k, system[i])
+    d = dim(j)
+    ket_bra(x, y) = begin
+        e = zeros(d, d)
+        e[x, y] = 1.
+        return op_on_sites(e, [j], [dag(b')]) * c
+    end
+    acc = Dict{QN, ITensor}()
+    for x in 1:d, y in 1:d
+        t = prime(ket_bra(y, x)) * dag(ket_bra(x, y))
+        g = flux(t)
+        acc[g] = haskey(acc, g) ? acc[g] + t : t
+    end
+    return [ (t, g) for (g, t) in acc ]
+end
+
+"""
     site_qns(system, i)
 
 every charge the mixed index of site `i` can put on a vectorised one site tensor, as the
