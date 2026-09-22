@@ -35,11 +35,11 @@ version. Only a release does that.
 | Kind of change | Branch | Changelog | Version |
 |---|---|---|---|
 | A typo or a docstring | `dev` | no | — |
-| A documentation rework | topic branch | yes, *Changed* | patch |
+| A documentation rework | topic branch off `dev` | yes, *Changed* | patch |
 | A bug fix | `dev` | yes, *Fixed* | patch |
 | An urgent fix of a serious bug | see below | yes, *Fixed* | patch, released at once |
 | A small improvement | `dev` | yes, *Added* or *Changed* | patch, minor if it adds an exported name |
-| A large feature | topic branch | yes, *Added*, written at the end | minor |
+| A large feature | topic branch off `dev` | yes, *Added*, written at the end | minor |
 
 Documentation alone does not earn a changelog entry, which is what the "user visible" of the
 [pull request template](.github/pull_request_template.md) comes to in practice. Without push
@@ -49,9 +49,10 @@ what to check before opening one.
 Some of those lines need more than a row.
 
 **A long lived branch stays off `dev`**, whether it carries a documentation rework or a
-feature. `dev` has to remain mergeable into `main` at any moment, because that is what makes
-an urgent release possible; a half finished rewrite sitting there takes it away. Mark the
-states worth returning to with a branch rather than trusting the reflog — `git branch
+feature. Cut it from `dev` and merge it back there. Only an urgent fix ever branches from
+the tag. `dev` has to remain mergeable into `main` at any moment, because that is what
+makes an urgent release possible; a half finished rewrite sitting there takes it away. Mark
+the states worth returning to with a branch rather than trusting the reflog — `git branch
 approach-a` before trying something else — and rebase on `dev` now and then so that the
 final merge stays small.
 
