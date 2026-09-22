@@ -271,21 +271,31 @@ function mix(state::State{Pure})
     # densified so that a tensor left diagonal by a decomposition becomes an ordinary one,
     # which a charged state must not be: `dense` would throw its sectors away
     st = hasqns(state.state) ? state.state : dense(state.state)
+    # the bra is a starred copy of the whole tensor, links included: a link carries the same
+    # charges as the sites, and starring one half of a tensor while leaving the other alone
+    # would have the two count in different ways. One copy per index, kept here, so that the
+    # link starred on the right of a site is the same index on the left of the next
+    names = strong_names(system)
+    seen = Dict{Tuple{ITensors.IDType, Int}, Index}()
+    # keyed on identity and prime level rather than on the index, because a link appears
+    # daggered on one of the two sites it joins and the two must star to the same index
+    function starred(i)
+        s = get!(() -> star(i, names), seen, (id(i), plev(i)))
+        return dir(s) == dir(i) ? s : dag(s)
+    end
+    bra(t) = ITensors.setinds(t, map(starred, inds(t)))
     v = Vector{ITensor}(undef, n)
     left = ITensor(1)
     for (i, t) in enumerate(st)
         idx = SysIndex{Pure}(system, i)
         midx = SysIndex{Mixed}(system, i)
-        b, c = mixer(idx, midx, system[i])
-        # the bra moves to its own index before being daggered, which is a no operation
-        # unless the site conserves something strongly
-        mt = t * dag(to_bra(t', idx', b')) * c * left
+        mt = t * dag(bra(t')) * combinerto(midx, idx, dag(starred(idx'))) * left
         if i < n
             rlink = commonind(t, st[i+1])
             # the combined link is taken from the combiner rather than named in advance:
             # combining charged indices merges and sorts their sectors, and only the
             # combiner knows which ones come out and in what order
-            right = combiner(rlink, dag(rlink'); tags = "Link,l=$i")
+            right = combiner(rlink, dag(starred(rlink')); tags = "Link,l=$i")
             mt *= right
             # the two ends of a link point in opposite directions, so the site on its right
             # gets the daggered combiner. Without charges this is the same tensor

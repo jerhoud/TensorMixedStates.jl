@@ -38,7 +38,7 @@ The sectors come one per basis state rather than merged by charge, because mergi
 reorder the basis whenever equal charges are not contiguous, as `parity(N)` on a boson gives
 0, 1, 0, 1.
 """
-function site_index(site::AbstractSite, charged::Bool; bra::Bool = false)
+function site_index(site::AbstractSite, charged::Bool)
     n = dim(site)
     tg = "$(nameof(typeof(site))), Site"
     qs = decode_conserve(conserved(site))
@@ -51,27 +51,94 @@ function site_index(site::AbstractSite, charged::Bool; bra::Bool = false)
                   "has $n basis states")
         end
     end
-    # the bra of a strong quantity carries its charge under another name, so that combining
-    # the two keeps them apart instead of subtracting them. A weak one keeps its name and
-    # subtracts, which is the whole difference between the two symmetries
-    qn(name, st) = bra && st ? name * "*" : name
-    return Index([ QN([(qn(name, st), charges[k], modulus)
-                       for (name, modulus, charges, st) in qs]...) => 1
+    return Index([ QN([(name, charges[k], modulus)
+                       for (name, modulus, charges, _) in qs]...) => 1
                    for k in 1:n ]...; tags = tg)
+end
+
+"""
+    check_charges(sites)
+
+refuse a list of sites whose conserved quantities cannot live together on one system.
+
+Three things would otherwise go wrong without a word. A name conserved strongly on one site
+and weakly on another would stand for the charge of the ket on the first and for a difference
+on the second, and the flux of a state would add the two. The star a strong quantity gives
+its bra may be the name of another quantity, which would merge two charges into one. And the
+links of a state carry every component of every site, which ITensors limits to four, a strong
+quantity costing two of them.
+"""
+function check_charges(sites::Vector{<:AbstractSite})
+    kind = Dict{String, Bool}()
+    for site in sites, (name, _, _, st) in decode_conserve(conserved(site))
+        if get(kind, name, st) ≠ st
+            error("$name is conserved strongly on one site and weakly on another, so its " *
+                  "name would stand for two different charges on the same system")
+        end
+        kind[name] = st
+    end
+    for (name, st) in kind
+        if st && haskey(kind, name * "*")
+            error("$name is conserved strongly, so its bra goes under $(name)*, which is " *
+                  "already the name of another conserved quantity")
+        end
+    end
+    n = sum(st -> st ? 2 : 1, values(kind); init = 0)
+    if n > 4
+        error("these sites conserve $(length(kind)) quantities, which take $n of the four " *
+              "components ITensors allows, a strong one costing two")
+    end
+    return nothing
+end
+
+"""
+    strong_names(site)
+
+the names of the quantities the site conserves strongly, empty when it conserves none that
+way. See `strong`.
+"""
+strong_names(site::AbstractSite) =
+    [ q[1] for q in decode_conserve(conserved(site)) if q[4] ]
+
+"""
+    star(q::QN, names)
+    star(i::Index, names)
+
+the charge, or the index, with every component named in `names` renamed to carry a star.
+
+This is what separates the bra from the ket: a strong symmetry conserves the two sides
+apart, so the bra holds its charges under other names and combining the pair keeps them
+rather than subtracting them. It applies to a whole index and not only to a site one,
+because the links of a state carry the same charges and must be renamed with it, or the
+two halves of the same tensor would count in two different ways. Renaming nothing gives the
+index back as it is, which is every case without a strong symmetry.
+"""
+function star(q::QN, names)
+    vs = Tuple{String, Int, Int}[]
+    for v in q.data
+        n = String(ITensors.name(v))
+        if !isempty(n)
+            push!(vs, (n in names ? n * "*" : n, ITensors.val(v), ITensors.modulus(v)))
+        end
+    end
+    return isempty(vs) ? QN() : QN(vs...)
+end
+
+function star(i::Index, names)
+    if isempty(names) || !hasqns(i)
+        return i
+    end
+    return Index([ star(q, names) => d for (q, d) in space(i) ]...;
+                 tags = tags(i), plev = plev(i), dir = dir(i))
 end
 
 """
     bra_index(i, site)
 
 the index the bra of `i` is carried by, which is `i` itself unless the site declares a
-strong symmetry. See `strong`.
+strong symmetry. See `strong` and `star`.
 """
-function bra_index(i::Index, site::AbstractSite)
-    if !hasqns(i) || !any(q -> q[4], decode_conserve(conserved(site)))
-        return i
-    end
-    return site_index(site, true; bra = true)
-end
+bra_index(i::Index, site::AbstractSite) = star(i, strong_names(site))
 
 """
     Index(::AbstractSite)
@@ -652,7 +719,12 @@ function conserve_string(site::AbstractSite, spec)
     parts = map(ops) do spec
         op = spec isa Strong ? spec.arg : spec
         modulus, q = site_charges(op, site)
-        head = modulus == 1 ? obs_name(op) : "$(obs_name(op))%$modulus"
+        name = obs_name(op)
+        if endswith(name, '!')
+            error("cannot conserve $name: a name ending in ! cannot be told from the mark " *
+                  "a site puts on a strong symmetry")
+        end
+        head = modulus == 1 ? name : "$name%$modulus"
         # a strong symmetry is marked on the quantity and not on the site, so that one site
         # may hold both kinds, and at the end of the head so that the name and the modulus
         # are read exactly as before

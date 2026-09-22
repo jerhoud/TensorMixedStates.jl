@@ -43,6 +43,7 @@ is_charged(sites) = any(s -> !isempty(conserved(s)), sites)
 is_charged(system::System) = hasqns(first(system.pure_indices))
 
 function System(sites::Vector{<:AbstractSite})
+    check_charges(sites)
     charged = is_charged(sites)
     pidx = [ site_index(s, charged) for s in sites ]
     midx = [ mix(pidx[k], sites[k]) for k in eachindex(sites) ]
@@ -50,6 +51,14 @@ function System(sites::Vector{<:AbstractSite})
 end
 
 System(size::Int, a::AbstractSite) = System(fill(a, size))
+
+"""
+    strong_names(::System)
+
+the names of every quantity the sites of the system conserve strongly. See `strong`.
+"""
+strong_names(system::System) =
+    unique(reduce(vcat, map(strong_names, system.sites); init = String[]))
 
 getindex(s::System, i...) = s.sites[i...]
 
