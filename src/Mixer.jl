@@ -145,36 +145,17 @@ matrix(a::Gate, site::AbstractSite...) =
     matrix(Left(a.arg), site...) * matrix(Right(a.arg), site...)
 
 """
-    mix_map(is)
+    op_on_sites(m, outs, ins)
 
-`P[k, b]`, the component of the mixed index a density matrix element carries when its ket is
-the component `k` of the combined pure index and its bra the component `b`.
+a matrix of the combined space of several sites, put back on their indices one by one.
 
-It is read off the combiners themselves rather than assumed: combining charged indices merges
-and sorts their sectors, so the mixed basis is in no simple order and its ordering is not the
-one it has without charges. Asking the combiners what they do is what makes a superoperator
-computed here fit the index a system builds.
-
-Returned with the mixed index it describes.
+The shape of the array is read off the indices themselves rather than from the dimensions of
+the sites, which is the only way the two cannot disagree, and the order is the reversed one
+the package uses everywhere it combines sites.
 """
-function mix_map(is::Vector{<:Index})
-    cp = combiner(reverse(is)...; tags = "")
-    ip = combinedind(cp)
-    ms = [ mix(i) for i in is ]
-    cs = [ combinerto(ms[k], is[k], dag(is[k]')) for k in eachindex(is) ]
-    c  = combiner(reverse(ms)...; tags = "")
-    j  = combinedind(c)
-    n  = dim(ip)
-    p  = Matrix{Int}(undef, n, n)
-    for k in 1:n, b in 1:n
-        t = (onehot(ip => k) * dag(cp)) * dag(onehot(ip' => b) * dag(cp'))
-        for x in cs
-            t *= x
-        end
-        t *= c
-        p[k, b] = findfirst(x -> abs(t[j => x]) > 0.5, 1:dim(j))
-    end
-    return p, j
+function op_on_sites(m::Matrix, outs, ins)
+    idx = [ reverse(outs) ; reverse(ins) ]
+    return ITensor(reshape(m, ntuple(k -> dim(idx[k]), length(idx))), idx...)
 end
 
 """
@@ -183,23 +164,35 @@ end
 the tensor of the superoperator acting on one side of the density matrix by the matrix `m`,
 on the left when `left` and on the right otherwise.
 
-``\\rho \\mapsto A\\rho`` sends the element of ket `ki` and bra `b` onto the one of ket
-`ko` and the same bra, with the weight `A[ko, ki]`, and the mirror sends ``\\rho`` onto
-``\\rho A^\\dagger``, which conjugates. Everything else is the bookkeeping of where those
-elements sit, which `mix_map` answers.
+The density matrix carries a ket and a bra, and the mixed index of a site pairs them, so a
+superoperator needs four slots while a mixed index and its primed form offer only three
+distinct ones. The bra therefore lives on indices of its own, drawn with `sim`, which leaves
+room for the operator on one side and the identity on the other. ``\\rho \\mapsto A\\rho``
+acts on the ket and leaves the bra alone, and its mirror ``\\rho \\mapsto \\rho
+A^\\dagger`` does the reverse and conjugates.
+
+Nothing here combines the sites into one index before splitting them again: a charged index
+carries a direction, and going through a combined index is what no arrangement of `dag` could
+be made to survive.
 """
 function super_tensor(m::Matrix, is::Vector{<:Index}, left::Bool)
-    p, j = mix_map(is)
-    n = size(m, 1)
-    r = zeros(promote_type(eltype(m), Float64), n * n, n * n)
-    for o in 1:n, i in 1:n, b in 1:n
-        if left
-            r[p[o, b], p[i, b]] += m[o, i]
-        else
-            r[p[b, o], p[b, i]] += conj(m[o, i])
-        end
+    bs = [ sim(i) for i in is ]
+    if left
+        tk = op_on_sites(m, [ i' for i in is ], [ dag(i) for i in is ])
+        tb = prod(delta(b', dag(b'')) for b in bs)
+    else
+        tk = prod(delta(i', dag(i)) for i in is)
+        tb = op_on_sites(conj(m), [ dag(b'') for b in bs ], [ b' for b in bs ])
     end
-    return ITensor(r, j', dag(j))
+    # the mixed index of a site pairs its ket with its bra, and the sites are combined
+    # afterwards, which is the order a system builds its own indices in
+    cs = [ combiner(is[k], dag(bs[k]'); tags = "") for k in eachindex(is) ]
+    c = combiner(reverse(combinedind.(cs))...; tags = "")
+    t = tk * tb
+    for x in cs
+        t = t * dag(x) * x'
+    end
+    return t * dag(c) * c'
 end
 
 """
@@ -210,9 +203,9 @@ the tensor of a superoperator whose matrix is already known, such as a `Gate` or
 lives on has to be found, and that is the mixed one of its sites.
 """
 function tensor(a::GenericOp{Mixed}, site::AbstractSite...; charged::Bool = false)
-    m = matrix(a, site...)
-    _, j = mix_map([ site_index(s, charged) for s in site ])
-    return ITensor(m, j', dag(j))
+    is = [ site_index(s, charged) for s in site ]
+    j = combinedind(combiner(reverse([ mix(i) for i in is ])...; tags = ""))
+    return ITensor(matrix(a, site...), j', dag(j))
 end
 
 """

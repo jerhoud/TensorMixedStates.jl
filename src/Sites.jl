@@ -506,7 +506,8 @@ site conserves, and `QN()` for a site conserving nothing.
 
 An operator connecting states whose charges differ in more than one way has no flux at all
 and cannot be used where that quantity is conserved. `X` raises and lowers `2Sz` at once and
-is refused, while under `parity(N)` it carries the single flux 1.
+is refused, while under `parity(2Sz)` it has one, the two differences becoming the same one
+modulo 2.
 
 The difference is taken modulo the charge, without which `Xd` would be refused although it
 generates the very symmetry `Zd` records: its wrap around connects the last state to the
