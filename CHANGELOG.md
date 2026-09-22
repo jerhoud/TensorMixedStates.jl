@@ -13,6 +13,29 @@ the reference article.
 
 ### Added
 
+- Conserved quantities. A site declares one with `conserve`, naming it by one of its own
+  operators: `Fermion(conserve = N)`, `Electron(conserve = (Ntot, 2Sz))`,
+  `Boson(4, conserve = parity(N))`. Its indices then carry that charge and its tensors become
+  block sparse, throughout states, operators, MPOs, evolution, ground and steady states and
+  the state files. A state is confined to the sector it was built in, and an operator carrying
+  no definite charge is refused by a message naming it.
+
+- `strong`, which declares a conserved quantity a strong symmetry rather than the weak one
+  assumed otherwise. Weak asks that the density matrix commute with the charge, which any jump
+  operator of definite charge preserves, particle loss included; strong asks that every jump
+  commute with it, which keeps the charge of the ket apart from that of the bra and cuts the
+  blocks finer, in exchange for a state living in a single sector. Dephasing is the usual
+  strong case, and `partial_trace` is unavailable there.
+
+- `RandomState{Mixed}(system, states, linkdims)`, which draws a random density matrix from
+  the states its purification starts from. A system that conserves something has no sector to
+  draw one in otherwise, and what tracing half of the purification leaves is a mixture over
+  the sectors around the one named.
+
+- `flux`, the charge an operator carries on a site, `parity` and `mod`, which reduce a
+  quantity modulo an integer, and `named`, which renames an operator so that two quantities
+  conserved separately do not go under one name.
+
 - `N`, the number of excitations, on `Qubit` and on `Spin`, where the other site types
   already had it. On a qubit it is `1/2 - Sz`, that is the projector on `"Dn"`, and on a spin
   it is `s - Sz`, the counting of the Holstein-Primakoff mapping. Its eigenvalues are integers

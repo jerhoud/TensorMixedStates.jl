@@ -188,15 +188,31 @@ end
 end
 
 @testset "A random state needs a sector" begin
+    strong = TensorMixedStates.strong
     sys = System(4, Fermion(conserve = N))
+    conf = ["Occ", "Emp", "Occ", "Emp"]
 
-    # there is no sector to draw a state in, so the forms taking a system are refused by a
-    # message naming the one that works
+    # there is no sector to draw a pure state in, so the form taking a system alone is
+    # refused by a message naming the one that works
     @test_throws "no sector to draw it in" RandomState{Pure}(sys, 4)
-    @test_throws "RandomState(state, 4)" RandomState{Pure}(sys, 4)
-    @test_throws "no sector to draw it in" RandomState{Mixed}(sys, 4)
+    @test_throws "RandomState(state, linkdims)" RandomState{Pure}(sys, 4)
 
     # randomising a state one already has keeps it in the sector it was in
-    p = State{Pure}(sys, ["Occ", "Emp", "Occ", "Emp"])
+    p = State{Pure}(sys, conf)
     @test flux(RandomState(p, 4).state) == flux(p.state)
+
+    # a mixed one is drawn from the states its purification starts from. Tracing half of
+    # that purification leaves a genuine mixture over the sectors around the one named,
+    # which is what a weak symmetry allows and a pure state cannot be
+    @test_throws "name the states its purification starts from" RandomState{Mixed}(sys, 4)
+    m = RandomState{Mixed}(sys, conf, 16)
+    @test trace(m) ≈ 1
+    @test hermiticity(m) ≈ 1
+    @test real(trace2(m)) < 1
+    @test flux(m.state) == flux(mix(p).state)
+
+    # conserving strongly leaves no room for it, what the partial trace leaves spreading
+    # over several sectors
+    @test_throws "cannot hold" RandomState{Mixed}(System(4, Fermion(conserve = strong(N))),
+                                                  conf, 16)
 end
