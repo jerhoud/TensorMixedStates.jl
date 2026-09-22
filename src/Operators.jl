@@ -661,12 +661,12 @@ isless(a::Left, b::Left) =
 """
     Right(op)
 
-the superoperator acting on the right of the density matrix, ``\\rho \\mapsto \\rho A``.
+the superoperator acting on the right of the density matrix, ``\\rho \\mapsto \\rho A†``.
 See `Left`, of which this is the mirror.
 
 # Examples
 
-    apply(Right(X)(1), rho)         # rho -> rho X
+    apply(Right(X)(1), rho)         # rho -> rho X†
 """
 struct Right{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
