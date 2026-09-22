@@ -166,6 +166,24 @@ function mpo_charges(pre::PreMPO{R}, coefs) where R
 end
 
 """
+    w_charges(pre, coefs)
+
+the charges of the links of the approximations WI and WII, which share one channel between
+the term not yet begun and the term finished. That only makes sense when the two carry the
+same charge, so the operator has to have a flux of zero, which an evolution generator has
+anyway: one that moved the charge would not keep the state in its sector.
+"""
+function w_charges(pre::PreMPO, coefs)
+    q = mpo_charges(pre, coefs)
+    total = q[1][end]
+    if total ≠ QN()
+        error("the approximations WI and WII need an operator of zero flux, and this one " *
+              "carries $total, so it would move the charge its system conserves")
+    end
+    return q
+end
+
+"""
     make_mpo(::PreMPO[, coefs])
     make_mpo(::State, operator)
 
@@ -248,8 +266,12 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
+    charged = is_charged(sys)
+    q = charged ? w_charges(pre, coefs) : nothing
+    mklink(i, d) = charged ? Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i") :
+                             Index(d, "Link, l=$i")
     rdim = 1
-    rlink = Index(1, "Link, l=0")
+    rlink = mklink(0, 1)
     for i in 1:n
         idx = SysIndex{R}(sys, i)
         llink = rlink
@@ -258,11 +280,14 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         else
             rdim = ld[i]
         end
-        rlink = Index(rdim, "Link, l=$i")
-        w = ITensor(elt, idx', idx, llink, rlink)
-        id = delta(idx, idx')
+        rlink = mklink(i, rdim)
+        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
+        id = delta(dag(idx), idx')
         for j in eachindval(idx, idx')
-            w[llink=>1, rlink=>1, j...] = id[j...]
+            v = id[j...]
+            if !iszero(v)
+                w[llink=>1, rlink=>1, j...] = v
+            end
         end
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
@@ -271,15 +296,18 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
                     c *= tau
                 end
                 for j in eachindval(idx, idx')
-                    w[llink=>l, rlink=>r, j...] += c * u[j...]
+                    v = c * u[j...]
+                    if !iszero(v)
+                        w[llink=>l, rlink=>r, j...] += v
+                    end
                 end
             end
         end
         if i == 1
-            w *= ITensor([1], llink)
+            w *= charged ? onehot(llink => 1) : ITensor([1], llink)
         end
         if i == n
-            w *= ITensor([1], rlink)
+            w *= charged ? onehot(dag(rlink) => 1) : ITensor([1], rlink)
         end
         ts[i] = w
     end
@@ -301,8 +329,12 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
+    charged = is_charged(sys)
+    q = charged ? w_charges(pre, coefs) : nothing
+    mklink(i, d) = charged ? Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i") :
+                             Index(d, "Link, l=$i")
     rdim = 1
-    rlink = Index(1, "Link, l=0")
+    rlink = mklink(0, 1)
     for i in 1:n 
         idx = SysIndex{R}(sys, i)
         ldim = rdim
@@ -312,7 +344,7 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             rdim = ld[i]
         end
         llink = rlink
-        rlink = Index(rdim, "Link, l=$i")
+        rlink = mklink(i, rdim)
         v = fill(ITensor(), (ldim, rdim))
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
@@ -325,7 +357,7 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         end
         d = v[1, 1]
         if isempty(d)
-            e = delta(idx, idx')
+            e = delta(dag(idx), idx')
         else
             e = exp(d)
         end
@@ -350,20 +382,23 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             end
         end
         
-        w = ITensor(elt, idx', idx, llink, rlink)
+        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
         for l in 1:ldim, r in 1:rdim
             u = v[l, r]
             if !isempty(u)
                 for j in eachindval(idx, idx')
-                    w[llink=>l, rlink=>r, j...] += u[j...]
+                    x = u[j...]
+                    if !iszero(x)
+                        w[llink=>l, rlink=>r, j...] += x
+                    end
                 end
             end
         end
         if i == 1
-            w *= ITensor([1], llink)
+            w *= charged ? onehot(llink => 1) : ITensor([1], llink)
         end
         if i == n
-            w *= ITensor([1], rlink)
+            w *= charged ? onehot(dag(rlink) => 1) : ITensor([1], rlink)
         end
         ts[i] = w
     end
