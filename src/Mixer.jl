@@ -197,7 +197,7 @@ on the left when `left` and on the right otherwise.
 
 The density matrix carries a ket and a bra, and the mixed index of a site pairs them, so a
 superoperator needs four slots while a mixed index and its primed form offer only three
-distinct ones. The bra therefore lives on indices of its own, drawn with `sim`, which leaves
+distinct ones. The bra therefore lives on indices of its own, starred and drawn with `sim`, which leaves
 room for the operator on one side and the identity on the other. ``\\rho \\mapsto A\\rho``
 acts on the ket and leaves the bra alone, and its mirror ``\\rho \\mapsto \\rho
 A^\\dagger`` does the reverse and conjugates.
@@ -206,8 +206,11 @@ Nothing here combines the sites into one index before splitting them again: a ch
 carries a direction, and going through a combined index is what no arrangement of `dag` could
 be made to survive.
 """
-function super_tensor(m::Matrix, is::Vector{<:Index}, left::Bool)
-    bs = [ sim(i) for i in is ]
+function super_tensor(m::Matrix, is::Vector{<:Index}, sites, left::Bool)
+    # starred first, so that a site conserving something strongly keeps its bra apart from
+    # its ket, and `sim` then makes the fresh copy the four slots need. Starring nothing
+    # gives the index back, and this is the `sim` it always was
+    bs = [ sim(star(is[k], strong_names(sites[k]))) for k in eachindex(is) ]
     if left
         tk = op_on_sites(m, [ i' for i in is ], [ dag(i) for i in is ])
         tb = prod(delta(b', dag(b'')) for b in bs)
@@ -235,8 +238,24 @@ lives on has to be found, and that is the mixed one of its sites.
 """
 function tensor(a::GenericOp{Mixed}, site::AbstractSite...; charged::Bool = false)
     is = [ site_index(s, charged) for s in site ]
-    j = combinedind(combiner(reverse([ mix(i) for i in is ])...; tags = ""))
-    return ITensor(matrix(a, site...), j', dag(j))
+    ms = [ mix(is[k], site[k]) for k in eachindex(is) ]
+    j = combinedind(combiner(reverse(ms)...; tags = ""))
+    m = matrix(a, site...)
+    if !hasqns(j) || all(s -> isempty(strong_names(s)), site)
+        return ITensor(m, j', dag(j))
+    end
+    try
+        return ITensor(m, j', dag(j))
+    catch e
+        if !(e isa ErrorException)
+            rethrow()
+        end
+        # a superoperator of definite flux on the weak pairing may have none on the strong
+        # one, which is exactly the case of a jump operator that moves the charge
+        error("$a changes $(join(strong_names(site[1]), ", ")) between its two sides, which " *
+              "conserving it strongly forbids: drop `strong` to allow a jump that moves " *
+              "the charge")
+    end
 end
 
 """
@@ -254,10 +273,12 @@ function side_matrix(a, site::AbstractSite...)
 end
 
 tensor(a::Left, site::AbstractSite...; charged::Bool = false) =
-    super_tensor(side_matrix(a.arg, site...), [ site_index(s, charged) for s in site ], true)
+    super_tensor(side_matrix(a.arg, site...), [ site_index(s, charged) for s in site ],
+                 site, true)
 
 tensor(a::Right, site::AbstractSite...; charged::Bool = false) =
-    super_tensor(side_matrix(a.arg, site...), [ site_index(s, charged) for s in site ], false)
+    super_tensor(side_matrix(a.arg, site...), [ site_index(s, charged) for s in site ],
+                 site, false)
 
 tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Union{AbstractSite, Int}, M}; kwargs...) where {N, M} =
     (f(o, site[1:N]...; kwargs...), site[N+1:M])
@@ -287,7 +308,7 @@ end
 
 function tensor(a::SetState, site::AbstractSite; charged::Bool = false)
     i = site_index(site, charged)
-    j = mix(i)
+    j = mix(i, site)
     v = state(site, a.state)
     if v isa Matrix
         m = v
