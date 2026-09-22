@@ -371,7 +371,11 @@ end
         return s / norm(s)
     end
     d, q = chain(Fermion()), chain(Fermion(conserve = N))
-    both(f) = @test f(d) ≈ f(q)
+    # compared with an absolute tolerance, because several of these are exactly zero: the
+    # Renyi 2 entropy of a pure state seen as mixed, and the trace of a dissipator applied
+    # to a state, a dissipator being traceless. `≈` alone has no tolerance against zero, so
+    # the two paths rounding to 0.0 and 4e-16 would count as a difference, which they are not
+    both(f) = @test isapprox(f(d), f(q); atol = 1e-12)
 
     both(s -> expect(s, N(2)))
     both(s -> expect2(s, (N, N)))
