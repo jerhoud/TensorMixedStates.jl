@@ -11,8 +11,78 @@ cd TensorMixedStates.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-Development happens on the `dev` branch, `main` carries the released state, and continuous
-integration runs on both.
+Development happens on the `dev` branch and `main` carries the released state. Which branch
+a given change belongs on, and what else it needs, is the subject of the next section.
+
+## Where a change goes
+
+`dev` is where work lands and `main` carries the released state, together with the tag that
+names it. Three facts about this repository decide the rest.
+
+The documentation is published from `main` and from tags only. A push to `dev` builds it and
+runs its doctests and `@example` blocks, which is the check that matters, but publishes
+nothing: `main` deploys the `dev` documentation and a tag deploys `vX.Y.Z` and moves
+`stable` onto it. A documentation fix is therefore verified as soon as it reaches `dev`, and
+visible only once it reaches `main`.
+
+Continuous integration runs on `main`, on `dev`, on tags and on pull requests, and otherwise
+only when dispatched by hand. A topic branch pushed on its own runs nothing, so open a pull
+request against `dev`, a draft one if the work is unfinished, to have the tests run on it.
+
+`main` carrying the tag means that any commit put on it moves the branch past the released
+version. Only a release does that.
+
+| Kind of change | Branch | Changelog | Version |
+|---|---|---|---|
+| A typo or a docstring | `dev` | no | — |
+| A documentation rework | topic branch | yes, *Changed* | patch |
+| A bug fix | `dev` | yes, *Fixed* | patch |
+| An urgent fix of a serious bug | see below | yes, *Fixed* | patch, released at once |
+| A small improvement | `dev` | yes, *Added* or *Changed* | patch, minor if it adds an exported name |
+| A large feature | topic branch | yes, *Added*, written at the end | minor |
+
+Documentation alone does not earn a changelog entry, which is what the "user visible" of the
+[pull request template](.github/pull_request_template.md) comes to in practice. Without push
+rights, every line of that table is a pull request against `dev`, and that template lists
+what to check before opening one.
+
+Some of those lines need more than a row.
+
+**A long lived branch stays off `dev`**, whether it carries a documentation rework or a
+feature. `dev` has to remain mergeable into `main` at any moment, because that is what makes
+an urgent release possible; a half finished rewrite sitting there takes it away. Mark the
+states worth returning to with a branch rather than trusting the reflog — `git branch
+approach-a` before trying something else — and rebase on `dev` now and then so that the
+final merge stays small.
+
+**An urgent fix** depends on what `dev` holds. If it holds nothing you would refuse to
+publish, fix it there and fast forward `main` onto it. If it holds unfinished work, branch
+from the tag instead, merge into `main`, release, and merge `main` back into `dev`:
+
+```
+git switch -c hotfix/short-name vX.Y.Z     # the released tag
+# the fix, plus the regression test that would have caught it
+git switch main && git merge hotfix/short-name
+# bump the version in Project.toml, commit, push, release
+git switch dev && git merge main
+```
+
+The last line is the one that is easy to forget. Without it `dev` loses the fix and stops
+being a fast forward of `main`, which complicates every merge afterwards.
+
+### Releasing
+
+This is the maintainer's part, and it is the same for every version.
+
+1. `main` is fast forwarded onto `dev`.
+2. The `version` field of `Project.toml` is bumped on `main`, committed and pushed, which
+   publishes the `dev` documentation.
+3. That commit is registered in the General registry through JuliaRegistrator.
+4. TagBot creates the `vX.Y.Z` tag once the registry pull request is merged.
+5. The tag deploys `vX.Y.Z` and moves `stable` onto it.
+
+Tags and `gh-pages` do not refresh on their own in a clone, so `git fetch --tags` before
+judging what is released.
 
 ## Running the tests
 
