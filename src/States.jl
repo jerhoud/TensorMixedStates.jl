@@ -11,8 +11,9 @@ struct PreObs
     left::Vector{ITensor}
     right::Vector{ITensor}
     trace::Vector{Number}
+    qlinks::Vector{Index}
 end
-PreObs() = PreObs([], [], [], [])
+PreObs() = PreObs([], [], [], [], [])
 
 """
 A type to hold MPS limits

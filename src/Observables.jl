@@ -3,18 +3,104 @@ export inner, dot, fidelity, hs_fidelity
 export expect, expect1, expect2
 export entanglement_entropy, partial_trace, mutual_info_renyi2, sample, variance
 
+"""
+    qn_list(i::Index)
+
+the charges an index carries, one per block
+"""
+qn_list(i::Index) = [ first(p) for p in space(i) ]
+
+"""
+    create_qlinks!(q, state)
+
+the charge links the trace of a strongly conserving state runs along, one between each pair
+of neighbouring sites, carrying the charge accumulated so far.
+
+The trace is the sum of the diagonal of the density matrix, and keeping ket and bra apart
+gives each diagonal element a charge of its own, so no single vector per site can hold the
+sum. A chain can: a link says how much charge the sites to its left have contributed, and
+the last site closes it on the charge of the whole state. This is what a trace costs under a
+strong symmetry, and its dimension is the number of totals the sites can reach.
+"""
+function create_qlinks!(q, state::State{Mixed})
+    n = length(state)
+    sys = state.system
+    gs = [ site_qns(sys, i) for i in 1:n ]
+    f = flux(state.state)
+    # what the sites on the left can have accumulated, and what the sites on the right can
+    # still bring to the charge of the whole state. A link keeps only what both allow, which
+    # is what makes it small: most totals cannot be completed into the one sector the state
+    # lives in
+    forward = [[QN()]]
+    for i in 1:n
+        push!(forward, unique([ u - g for u in forward[i] for g in gs[i] ]))
+    end
+    backward = Vector{Vector{QN}}(undef, n + 1)
+    backward[n+1] = [f]
+    for i in n:-1:1
+        backward[i] = unique([ v + g for v in backward[i+1] for g in gs[i] ])
+    end
+    resize!(q, n - 1)
+    for i in 1:n-1
+        keep = [ u for u in forward[i+1] if u in backward[i+1] ]
+        q[i] = Index([ u => 1 for u in keep ]...; tags = "Charge,l=$i")
+    end
+    return q
+end
+
+function get_qlinks(state::State{Mixed})
+    q = state.preobs.qlinks
+    if isempty(strong_names(state.system)) || length(state) == 1
+        return q
+    end
+    if isempty(q)
+        create_qlinks!(q, state)
+    end
+    return q
+end
+
+"""
+    trace_chain(state, ts, i)
+
+the element of the trace chain at site `i`, built from the local tensors `ts` and the charge
+each of them carries. See `create_qlinks!`.
+"""
+function trace_chain(state::State{Mixed}, ts, i::Int)
+    n = length(state)
+    q = get_qlinks(state)
+    ins = i == 1 ? [QN()] : qn_list(q[i-1])
+    f = flux(state.state)
+    parts = ITensor[]
+    for (t, g) in ts, (p, u) in enumerate(ins)
+        left = i == 1 ? ITensor(1.) : onehot(dag(q[i-1]) => p)
+        if i == n
+            # the last site closes the chain on the charge of the whole state, which is what
+            # picks out of the trace the one sector the state lives in
+            if u ≠ f + g
+                continue
+            end
+            push!(parts, t * left)
+        else
+            r = findfirst(==(u - g), qn_list(q[i]))
+            if isnothing(r)
+                continue
+            end
+            push!(parts, t * left * onehot(q[i] => r))
+        end
+    end
+    return sum(parts)
+end
+
 function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
     b, c = mixer(j, k, s[i])
-    if b !== j
-        error("measuring a state whose site $(typeof(s[i])) conserves something strongly " *
-              "is not implemented yet: the trace of such a state is not a product of one " *
-              "vector per site")
+    if b === j
+        # daggered so that the result meets the `k` of the state and not another copy of it
+        return denseblocks(delta(dag(j), b')) * dag(c)
     end
-    # daggered so that the result meets the `k` of the state and not another copy of it
-    return denseblocks(delta(dag(j), b')) * dag(c)
+    return trace_chain(state, diag_elements(s, i), i)
 end
 
 tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
@@ -22,10 +108,17 @@ tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
 
 function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
     s = state.system
-    t = tensor(s, ind)
-    j = SysIndex{Pure}(s, ind.index...)
-    k = SysIndex{Mixed}(s, ind.index...)
-    return t * dag(last(mixer(j, k, s[ind.index...])))
+    i = only(ind.index)
+    j = SysIndex{Pure}(s, i)
+    k = SysIndex{Mixed}(s, i)
+    b, c = mixer(j, k, s[i])
+    if b === j
+        return tensor(s, ind) * dag(c)
+    end
+    # an observable rides the same chain as the trace, bringing its own charge to it: this
+    # is what lets a correlation whose two ends do not conserve the charge be measured all
+    # the same, the two shifts cancelling along the way
+    return trace_chain(state, vec_pieces(s, i, matrix(ind.op, s[i])), i)
 end
 
 # `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
