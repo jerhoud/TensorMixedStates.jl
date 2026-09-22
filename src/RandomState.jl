@@ -16,10 +16,19 @@ result truncated back to what was asked for.
 `eltype` is the element type of the tensors and defaults to `ComplexF64`.
 Passing `Float64` gives a real state, which makes every later contraction
 significantly cheaper, but is only correct when the whole computation stays real.
+
+On a system whose sites conserve something there is no sector to draw a state in, so only
+the form taking a `State` works: it randomises the tensors of a state you already have and
+leaves it in the sector it was in.
 """
 struct RandomState{R <: PM} end
 
 function RandomState{Pure}(elt::Type{<:Number}, system::System, linkdims::Int)
+    if is_charged(system)
+        error("cannot draw a random state on a system that conserves something, there " *
+              "being no sector to draw it in: randomise a state you have with " *
+              "RandomState(state, $linkdims), which keeps the sector that one lives in")
+    end
     st = random_mps(elt, system.pure_indices; linkdims)
     return State{Pure}(system, st)
 end
