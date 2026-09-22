@@ -288,8 +288,8 @@ end
     # the recorded form is read back as it was written
     c = Electron(conserve = (Ntot, 2Sz)).conserve
     @test TensorMixedStates.decode_conserve(c) ==
-        [("Ntot", 1, [0, 1, 1, 2]), ("2Sz", 1, [0, 1, -1, 0])]
-    @test TensorMixedStates.decode_conserve("") == Tuple{String, Int, Vector{Int}}[]
+        [("Ntot", 1, [0, 1, 1, 2], false), ("2Sz", 1, [0, 1, -1, 0], false)]
+    @test TensorMixedStates.decode_conserve("") == Tuple{String, Int, Vector{Int}, Bool}[]
 
     # a site conserving nothing prints as it always did, and one that conserves prints
     # under the name of its charges rather than under the charges themselves

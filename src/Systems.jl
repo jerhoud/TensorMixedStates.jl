@@ -45,7 +45,7 @@ is_charged(system::System) = hasqns(first(system.pure_indices))
 function System(sites::Vector{<:AbstractSite})
     charged = is_charged(sites)
     pidx = [ site_index(s, charged) for s in sites ]
-    midx = map(mix, pidx)
+    midx = [ mix(pidx[k], sites[k]) for k in eachindex(sites) ]
     return System(sites, pidx, midx)
 end
 

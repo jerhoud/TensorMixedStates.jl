@@ -38,21 +38,39 @@ The sectors come one per basis state rather than merged by charge, because mergi
 reorder the basis whenever equal charges are not contiguous, as `parity(N)` on a boson gives
 0, 1, 0, 1.
 """
-function site_index(site::AbstractSite, charged::Bool)
+function site_index(site::AbstractSite, charged::Bool; bra::Bool = false)
     n = dim(site)
     tg = "$(nameof(typeof(site))), Site"
     qs = decode_conserve(conserved(site))
     if isempty(qs)
         return charged ? Index(QN() => n; tags = tg) : Index(n; tags = tg)
     end
-    for (name, _, charges) in qs
+    for (name, _, charges, _) in qs
         if length(charges) ≠ n
             error("site $(typeof(site)) records $(length(charges)) charges for $name but " *
                   "has $n basis states")
         end
     end
-    return Index([ QN([(name, charges[k], modulus) for (name, modulus, charges) in qs]...) => 1
+    # the bra of a strong quantity carries its charge under another name, so that combining
+    # the two keeps them apart instead of subtracting them. A weak one keeps its name and
+    # subtracts, which is the whole difference between the two symmetries
+    qn(name, st) = bra && st ? name * "*" : name
+    return Index([ QN([(qn(name, st), charges[k], modulus)
+                       for (name, modulus, charges, st) in qs]...) => 1
                    for k in 1:n ]...; tags = tg)
+end
+
+"""
+    bra_index(i, site)
+
+the index the bra of `i` is carried by, which is `i` itself unless the site declares a
+strong symmetry. See `strong`.
+"""
+function bra_index(i::Index, site::AbstractSite)
+    if !hasqns(i) || !any(q -> q[4], decode_conserve(conserved(site)))
+        return i
+    end
+    return site_index(site, true; bra = true)
 end
 
 """
@@ -91,6 +109,15 @@ without charges the dag is a no operation.
 """
 mix(i::Index) =
     addtags(combinedind(combiner(i, dag(i'); tags = tags(i))), "Mixed")
+
+"""
+    mix(::Index, ::AbstractSite)
+
+the same, for an index drawn by that site, which is what says whether a quantity is
+conserved strongly. Without a strong one this is `mix(::Index)` exactly.
+"""
+mix(i::Index, site::AbstractSite) =
+    addtags(combinedind(combiner(i, dag(bra_index(i, site)'); tags = tags(i))), "Mixed")
 
 """
     operator_library::Dict
@@ -542,7 +569,7 @@ function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = charge_
             continue
         end
         d = [ (name, modulus == 1 ? ch[i] - ch[j] : mod(ch[i] - ch[j], modulus), modulus)
-              for (name, modulus, ch) in qs ]
+              for (name, modulus, ch, _) in qs ]
         if isnothing(found)
             found = d
         elseif d ≠ found
@@ -556,6 +583,43 @@ end
 
 flux(op::GenericOp{Pure}, site::AbstractSite) =
     error("flux is only defined for one site operators, and $op acts on several")
+
+"""
+    strong(op)
+
+declare a conserved quantity as a strong symmetry rather than the weak one `conserve`
+assumes by default.
+
+A weak symmetry only asks that the density matrix commute with the charge, which is what
+the mixed index records when it holds the difference of the two charges of
+``|m\\rangle\\langle n|``. Every jump operator of definite charge preserves it, particle
+loss and gain included, and a state may mix several sectors.
+
+A strong symmetry asks more: that every jump operator commute with the charge. The ket and
+the bra are then conserved separately, the mixed index keeps them apart instead of holding
+their difference, and the blocks are finer. In exchange a state lives in a single sector, as
+a pure one does, and a jump of non zero charge is refused: it is not a strong symmetry.
+
+Use it when every dissipator commutes with the quantity, as dephasing does, and leave it out
+otherwise.
+
+# Examples
+
+    Fermion(conserve = strong(N))          # dephasing, `L = N`
+    Electron(conserve = (strong(Ntot), 2Sz))
+
+!!! warning
+    Not exported yet: the declaration, its encoding and the index it draws are in place, but
+    the mixed representation does not honour it. `Mixer.jl`, `States.jl` and `Observables.jl`
+    still pair the ket with the plain bra. Export this once they do.
+"""
+struct Strong
+    arg::SimpleOp
+end
+
+strong(a::SimpleOp) = Strong(a)
+strong(a::Strong) = a
+strong(a) = error("a conserved quantity is one operator acting on one site, and $a is not")
 
 """
     conserve_string(site, spec)
@@ -585,10 +649,14 @@ function conserve_string(site::AbstractSite, spec)
     if isempty(ops)
         return ""
     end
-    parts = map(ops) do op
+    parts = map(ops) do spec
+        op = spec isa Strong ? spec.arg : spec
         modulus, q = site_charges(op, site)
         head = modulus == 1 ? obs_name(op) : "$(obs_name(op))%$modulus"
-        return head * ":" * join(q, ",")
+        # a strong symmetry is marked on the quantity and not on the site, so that one site
+        # may hold both kinds, and at the end of the head so that the name and the modulus
+        # are read exactly as before
+        return (spec isa Strong ? head * "!" : head) * ":" * join(q, ",")
     end
     return join(parts, ";")
 end
@@ -601,7 +669,7 @@ See `conserve_string`.
 """
 function decode_conserve(s::AbstractString)
     if isempty(s)
-        return Tuple{String, Int, Vector{Int}}[]
+        return Tuple{String, Int, Vector{Int}, Bool}[]
     end
     map(split(s, ';')) do part
         i = findfirst(==(':'), part)
@@ -609,10 +677,14 @@ function decode_conserve(s::AbstractString)
             error("a site records \"$part\" as a conserved quantity, which has no charges")
         end
         head, tail = part[1:i-1], part[i+1:end]
+        st = endswith(head, '!')
+        if st
+            head = head[1:end-1]
+        end
         j = findlast(==('%'), head)
         name, modulus = isnothing(j) ? (String(head), 1) :
                         (String(head[1:j-1]), parse(Int, head[j+1:end]))
-        return (name, modulus, parse.(Int, split(tail, ',')))
+        return (name, modulus, parse.(Int, split(tail, ',')), st)
     end
 end
 
@@ -648,8 +720,13 @@ function conserve_names(s::AbstractString)
             return String(s)
         end
         head = part[1:i-1]
+        st = endswith(head, '!')
+        if st
+            head = head[1:end-1]
+        end
         j = findlast(==('%'), head)
-        push!(ns, isnothing(j) ? String(head) : String(head[1:j-1]))
+        name = isnothing(j) ? String(head) : String(head[1:j-1])
+        push!(ns, st ? "strong($name)" : name)
     end
     return length(ns) == 1 ? ns[1] : "(" * join(ns, ", ") * ")"
 end
