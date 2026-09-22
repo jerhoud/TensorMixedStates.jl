@@ -275,6 +275,21 @@ end
     @test load_state(file, "kinds").system.sites == st.system.sites
 end
 
+@testset "A state on sites that conserve" begin
+    dir = mktempdir()
+    file = joinpath(dir, "conserve.h5")
+
+    # the conserved quantities travel as the charges they produce, which is what makes the
+    # site come back identical: the operator itself could not be written to a file
+    sites = [Fermion(conserve = N), Boson(4, conserve = parity(N)), Spin(1, conserve = Sz)]
+    st = State{Pure}(System(sites), ["1", "2", "0"])
+    save_state(file, "c", st)
+    l = load_state(file, "c")
+    @test l.system.sites == sites
+    @test l.system.sites[2].conserve == "parity(N)%2:0,1,0,1"
+    @test expect(l, N(1)) ≈ expect(st, N(1))
+end
+
 @testset "Reading a version 1 state file" begin
     # written by the released 1.3.0, see reference/make_state_v1.jl. Version 1 wrote every
     # site field as a Float64, and `load_state` has to go on reading it: a checkpoint left by

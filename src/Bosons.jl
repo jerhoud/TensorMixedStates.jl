@@ -9,6 +9,7 @@ a site type to represent boson sites, it is parametrised by the dimension of the
 # Examples
 
     Boson(4)
+    Boson(4, conserve = N)
 
 # States
 
@@ -22,7 +23,10 @@ a site type to represent boson sites, it is parametrised by the dimension of the
 """
 struct Boson <: AbstractSite
     dim::Int
+    conserve::String
 end
+
+Boson(dim::Int; conserve = ()) = Boson(dim, conserve_string(Boson(dim, ""), conserve))
 
 dim(a::Boson) = a.dim
 

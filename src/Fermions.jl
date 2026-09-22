@@ -8,6 +8,8 @@ a site type to represent fermion sites (dim is 2)
 # Examples
 
     Fermion()
+    Fermion(conserve = N)
+    Fermion(conserve = parity(N))
 
 # States
 
@@ -20,7 +22,11 @@ a site type to represent fermion sites (dim is 2)
 - `A` : the Jordan-Wigner transform of C (...C = FFFA)
 - `N` : the number of fermions operator
 """
-struct Fermion <: AbstractSite end
+struct Fermion <: AbstractSite
+    conserve::String
+end
+
+Fermion(; conserve = ()) = Fermion(conserve_string(Fermion(""), conserve))
 
 dim(::Fermion) = 2
 

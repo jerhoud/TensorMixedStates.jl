@@ -8,6 +8,7 @@ a site type to represent Tj sites (like Electron sites without the up and down s
 # Examples
 
     Tj()
+    Tj(conserve = (Ntot, 2Sz))
 
 # States
 
@@ -25,7 +26,11 @@ a site type to represent Tj sites (like Electron sites without the up and down s
                             three quarters of the projector on the singly occupied states
 - `Fup, Fdn`              : partial Jordan-Wigner F operators
 """
-struct Tj <: AbstractSite end
+struct Tj <: AbstractSite
+    conserve::String
+end
+
+Tj(; conserve = ()) = Tj(conserve_string(Tj(""), conserve))
 
 dim(::Tj) = 3
 

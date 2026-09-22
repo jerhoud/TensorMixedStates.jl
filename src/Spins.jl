@@ -9,6 +9,8 @@ A site type for representing spin sites (dim is `2 spin + 1`)
 
     Spin(3/2)
     Spin(2)
+    Spin(1, conserve = Sz)       # integer eigenvalues
+    Spin(1/2, conserve = 2Sz)    # half integer ones are written doubled
 
 # States
 
@@ -26,13 +28,16 @@ A site type for representing spin sites (dim is `2 spin + 1`)
 """
 struct Spin <: AbstractSite
     s::Float64
-    Spin(s::Number) =
+    conserve::String
+    Spin(s::Number, conserve::AbstractString) =
         if isinteger(2 * s)
-            new(s)
+            new(s, conserve)
         else
             error("Spin requires an half integer as argument")
         end
 end
+
+Spin(s::Number; conserve = ()) = Spin(s, conserve_string(Spin(s, ""), conserve))
 
 dim(a::Spin) = Int(2 * a.s + 1)
 

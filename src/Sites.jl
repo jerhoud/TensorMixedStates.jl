@@ -1,10 +1,15 @@
 export AbstractSite, mix, dim, Index, string_state, identity_operator, state
-export @def_operators, @def_states, @create_site_module
+export @def_operators, @def_states, @create_site_module, conserve_string
 
 """
     abstract type AbstractSite
 
-An abstract type which is the super type of all site types
+An abstract type which is the super type of all site types.
+
+A site type defines `dim`, possibly `string_state`, and its states and operators through
+`@def_states` and `@def_operators`. It may also carry a field `conserve::String` recording
+what it conserves, which its constructor fills. That field is optional: declare it only if
+your site can have conserved quantities, a site without it conserving nothing.
 """
 abstract type AbstractSite end
 
@@ -360,3 +365,209 @@ state(site::AbstractSite, st::String) =
             state(site, state_info(site, st))
         end
     end
+
+
+################ Conserved quantities ################
+
+"""
+    charge_tol
+
+how far the eigenvalues of a conserved quantity may sit from the charges they stand for.
+Every quantity the built in sites carry lands exactly on an integer, and the roots of unity
+of `Zd` miss the unit circle by at most five `eps`, so this is a rounding tolerance and
+nothing wider. It is not a setting: a quantity that misses it by more is genuinely
+approximate, and the answer is to define it exactly rather than to let it through.
+"""
+const charge_tol = 1e-14
+
+"""
+    site_charges(op, site)
+
+the modulus and the charge each basis state of `site` carries for the conserved quantity
+`op`, as `(modulus, charges)`. A modulus of `1` is an ordinary additive charge over the
+integers, a modulus of `m` a charge of the cyclic group of order `m`.
+
+A conserved quantity has to be diagonal in the basis the site is written in, and its
+eigenvalues have to be readable as charges, which leaves exactly two cases. Integer
+eigenvalues are the charge itself. Eigenvalues on the unit circle are roots of unity, the
+charge is the exponent and the modulus is read from the denominators — which is what makes
+`Zd` work on a `Qudit` with no modulus written anywhere.
+
+The two cases overlap on ±1, which is as much a pair of integers as a pair of square roots
+of unity, and they are different conservations: two sites carrying -1 make -2 over the
+integers and 0 modulo 2. The integer reading wins, and `parity` is how the other one is
+asked for.
+"""
+function site_charges(op, site::AbstractSite; tol::Float64 = charge_tol)
+    m = matrix(op, site)
+    d = diag(m)
+    off = norm(m - Diagonal(d))
+    if off > tol
+        error("$op is not diagonal on site $(typeof(site)), off by $(short(off)), so it " *
+              "cannot be a conserved quantity: a charge is carried by each basis state")
+    end
+    to_int = maximum(max(abs(imag(x)), abs(real(x) - round(real(x)))) for x in d)
+    if to_int ≤ tol
+        return (1, Int.(round.(real.(d))))
+    end
+    to_circle = maximum(abs(abs(x) - 1) for x in d)
+    if to_circle ≤ tol
+        θ = angle.(d) ./ (2π)
+        modulus = reduce(lcm, denominator.(rationalize.(Int, θ; tol = 1e-8)))
+        q = Int.(round.(θ .* modulus))
+        to_root = maximum(abs.([exp(2im * π * k / modulus) for k in q] .- d))
+        if to_root > tol
+            error("the eigenvalues of $op on site $(typeof(site)) are on the unit circle " *
+                  "but miss the roots of unity by $(short(to_root)), so they are not charges")
+        end
+        return (modulus, mod.(q, modulus))
+    end
+    error("the eigenvalues of $op on site $(typeof(site)) miss the integers by " *
+          "$(short(to_int)) and the unit circle by $(short(to_circle)), so they are not " *
+          "charges. Half integer ones are written doubled, 2Sz rather than Sz")
+end
+
+"""
+    short(x)
+
+a number as an error message shows it, two significant digits being all one reads of a
+deviation
+"""
+short(x::Real) = round(x; sigdigits = 2)
+
+# the modulus of a ModOp is carried rather than read back, ±1 being unreadable, and the
+# charges are those of its argument taken modulo it
+function site_charges(a::ModOp, site::AbstractSite; tol::Float64 = charge_tol)
+    m, q = site_charges(a.arg, site; tol)
+    if m ≠ 1
+        error("cannot take $(a.arg) modulo $(a.modulus) on site $(typeof(site)): it " *
+              "already carries a charge modulo $m")
+    end
+    return (a.modulus, mod.(q, a.modulus))
+end
+
+"""
+    conserve_string(site, spec)
+
+the form in which a site records what it conserves: for each quantity, its name, its
+modulus when that is not 1, and the charge of every basis state.
+
+`spec` is what the user wrote, one operator or a tuple of them, and it is read here rather
+than kept, because an operator cannot be written to a state file: the name a conserved
+quantity prints under is an expression, `2Sz` or `parity(N)`, and not a key of the operator
+library, so it could not be looked up again. What the operator is needed for is the charges,
+and those are what travel.
+
+This is what a site type of your own calls to fill its `conserve` field, the site being
+built bare first since the charges depend on its type and not on that field.
+
+# Examples
+
+    MySite(; conserve = ()) = MySite(conserve_string(MySite(""), conserve))
+
+    conserve_string(Fermion(""), N)              # "N:0,1"
+    conserve_string(Fermion(""), parity(N))      # "parity(N)%2:0,1"
+    conserve_string(Electron(""), (Ntot, 2Sz))   # "Ntot:0,1,1,2;2Sz:0,1,-1,0"
+"""
+function conserve_string(site::AbstractSite, spec)
+    ops = spec isa Tuple ? collect(spec) : [spec]
+    if isempty(ops)
+        return ""
+    end
+    parts = map(ops) do op
+        modulus, q = site_charges(op, site)
+        head = modulus == 1 ? obs_name(op) : "$(obs_name(op))%$modulus"
+        return head * ":" * join(q, ",")
+    end
+    return join(parts, ";")
+end
+
+"""
+    decode_conserve(s)
+
+the conserved quantities a site records, as a vector of `(name, modulus, charges)`.
+See `conserve_string`.
+"""
+function decode_conserve(s::AbstractString)
+    if isempty(s)
+        return Tuple{String, Int, Vector{Int}}[]
+    end
+    map(split(s, ';')) do part
+        i = findfirst(==(':'), part)
+        if isnothing(i)
+            error("a site records \"$part\" as a conserved quantity, which has no charges")
+        end
+        head, tail = part[1:i-1], part[i+1:end]
+        j = findlast(==('%'), head)
+        name, modulus = isnothing(j) ? (String(head), 1) :
+                        (String(head[1:j-1]), parse(Int, head[j+1:end]))
+        return (name, modulus, parse.(Int, split(tail, ',')))
+    end
+end
+
+"""
+    conserved(site)
+
+what a site conserves, in the form `conserve_string` produces, and the empty string when it
+conserves nothing.
+
+The `conserve` field is optional, a site type that can have no conserved quantity simply not
+declaring it, so this is what everything else reads rather than the field itself.
+"""
+conserved(site::AbstractSite) =
+    hasfield(typeof(site), :conserve) ? site.conserve : ""
+
+"""
+    conserve_names(s)
+
+the names of the conserved quantities a site records, as they are written back when the site
+is printed. A string it cannot read is given back as it is, `show` having to print something
+whatever a site put in its field.
+"""
+function conserve_names(s::AbstractString)
+    ns = String[]
+    for part in split(s, ';')
+        i = findfirst(==(':'), part)
+        if isnothing(i)
+            return String(s)
+        end
+        head = part[1:i-1]
+        j = findlast(==('%'), head)
+        push!(ns, isnothing(j) ? String(head) : String(head[1:j-1]))
+    end
+    return length(ns) == 1 ? ns[1] : "(" * join(ns, ", ") * ")"
+end
+
+"""
+    show(io, ::AbstractSite)
+
+print a site as the call that builds it, leaving out the trailing fields that carry nothing,
+that is an empty string or `nothing`.
+
+A site conserving nothing therefore goes on printing as it always did, `Qubit()` rather than
+`Qubit("")`. Only the trailing ones are left out: dropping a field in the middle would print
+a call whose arguments no longer line up with the fields, `Site(nothing, 3)` coming out as
+`Site(3)` and reading as something else. The conserved quantities print under their names,
+`Fermion(conserve = N)`, the charges they record being an implementation detail.
+"""
+function show(io::IO, site::AbstractSite)
+    t = typeof(site)
+    c = conserved(site)
+    args = String[]
+    nothings = Bool[]
+    for f in fieldnames(t)
+        v = getfield(site, f)
+        if f === :conserve && !isempty(c)
+            push!(args, "conserve = " * conserve_names(c))
+            push!(nothings, false)
+        else
+            push!(args, repr(v))
+            push!(nothings, isnothing(v) || (v isa AbstractString && isempty(v)))
+        end
+    end
+    n = length(args)
+    while n > 0 && nothings[n]
+        n -= 1
+    end
+    print(io, nameof(t), "(", join(args[1:n], ", "), ")")
+end

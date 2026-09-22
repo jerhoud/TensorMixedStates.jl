@@ -3,7 +3,7 @@
 """
 module TensorMixedStates
 
-import Base: *, +, -, /, ^, exp, sqrt, show, length, getindex, isless, ==, hash
+import Base: *, +, -, /, ^, exp, sqrt, mod, show, length, getindex, isless, ==, hash
 import ITensors: matrix, truncate, dim, Index, dag, norm, sim, inner
 import LinearAlgebra: dot
 import ITensorMPS: maxlinkdim, apply, state, expect, normalize, measure!, checkdone!, tdvp, dmrg, sample

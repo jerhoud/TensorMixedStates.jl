@@ -123,7 +123,15 @@ function build_site(modname::String, typename::String, params::Vector)
     if !(t isa Type && t <: AbstractSite)
         error("$modname.$typename is not a site type")
     end
-    return t(params...)
+    ft = fieldtypes(t)
+    if length(params) > length(ft)
+        error("state file gives $(length(params)) parameters for site $typename, which has " *
+              "$(length(ft)) fields")
+    end
+    # version 1 wrote every field as a `Float64`, so the reader converts back to what the
+    # site declares. Widening the constructors to take a `Real` dimension would put the
+    # conversion in the wrong place and state something looser than the truth
+    return t([ convert(ft[i], p) for (i, p) in enumerate(params) ]...)
 end
 
 """

@@ -20,6 +20,23 @@ struct Dummit2 <: AbstractSite end
 
 TensorMixedStates.dim(::Dummit2) = 2
 
+# a site carrying nothing in a field that is not the last one, to check that printing does
+# not drop it: the call would no longer line up with the fields
+struct Middling <: AbstractSite
+    a::Union{Nothing, Int}
+    b::Int
+end
+
+TensorMixedStates.dim(::Middling) = 2
+
+# a site whose field happens to be named conserve without being one. The field being
+# optional, nothing declares this wrong, and printing must not raise on it
+struct Pretender <: AbstractSite
+    conserve::String
+end
+
+TensorMixedStates.dim(::Pretender) = 2
+
 @testset "Qubit measuring" begin
     @test_pm test_phases(CreateState{type}(1, Qubit(), "Z+"; 
         final_measures = check([X(1), Y(1), Z(1)], [0, 0, 1])))
@@ -185,4 +202,72 @@ end
         @test TensorMixedStates.ITensors.hastags(Index(site), string(nameof(typeof(site))))
         @test TensorMixedStates.ITensors.hastags(Index(site), "Site")
     end
+end
+
+@testset "Declaring a conserved quantity" begin
+    # a site records the name of each conserved quantity, its modulus when that is not 1,
+    # and the charge of every basis state: an operator cannot be written to a state file,
+    # and the charges are all that is needed afterwards
+    @test Fermion(conserve = N).conserve == "N:0,1"
+    @test Fermion(conserve = parity(N)).conserve == "parity(N)%2:0,1"
+    @test Fermion(conserve = named(N, "Nf")).conserve == "Nf:0,1"
+    @test Boson(6, conserve = mod(N, 3)).conserve == "mod(N,3)%3:0,1,2,0,1,2"
+    @test Spin(1, conserve = Sz).conserve == "Sz:1,0,-1"
+    @test Spin(1/2, conserve = 2Sz).conserve == "2Sz:1,-1"
+    @test Electron(conserve = (Ntot, 2Sz)).conserve == "Ntot:0,1,1,2;2Sz:0,1,-1,0"
+    @test Qubit().conserve == ""
+
+    # the modulus of Zd is read off its spectrum, the eigenvalues being genuine roots of
+    # unity, so a clock operator needs no modulus written anywhere
+    for d in (3, 5, 8)
+        @test Qudit(d, conserve = Zd).conserve == "Zd%$d:" * join(0:d-1, ",")
+    end
+
+    # what cannot be a charge, and the message says how far it is from being one
+    @test_throws "is not diagonal" Spin(1, conserve = Sx)
+    @test_throws "2Sz rather than Sz" Spin(1/2, conserve = Sz)
+    @test_throws "already carries a charge modulo" Qudit(3, conserve = mod(Zd, 2))
+
+    # the four cases, read directly
+    @test TensorMixedStates.site_charges(N, Fermion()) == (1, [0, 1])
+    @test TensorMixedStates.site_charges(parity(N), Boson(4)) == (2, [0, 1, 0, 1])
+    @test TensorMixedStates.site_charges(Zd, Qudit(3)) == (3, [0, 1, 2])
+
+    # the recorded form is read back as it was written
+    c = Electron(conserve = (Ntot, 2Sz)).conserve
+    @test TensorMixedStates.decode_conserve(c) ==
+        [("Ntot", 1, [0, 1, 1, 2]), ("2Sz", 1, [0, 1, -1, 0])]
+    @test TensorMixedStates.decode_conserve("") == Tuple{String, Int, Vector{Int}}[]
+
+    # a site conserving nothing prints as it always did, and one that conserves prints
+    # under the name of its charges rather than under the charges themselves
+    @test repr(Qubit()) == "Qubit()"
+    @test repr(Boson(4)) == "Boson(4)"
+    @test repr(Spin(3/2)) == "Spin(1.5)"
+    @test repr(Fermion(conserve = N)) == "Fermion(conserve = N)"
+    @test repr(Boson(4, conserve = N)) == "Boson(4, conserve = N)"
+    @test repr(Electron(conserve = (Ntot, 2Sz))) == "Electron(conserve = (Ntot, 2Sz))"
+    @test repr(Fermion(conserve = parity(N))) == "Fermion(conserve = parity(N))"
+
+    # declaring a conservation makes a different site, and two declarations agree
+    @test Fermion(conserve = N) == Fermion(conserve = N)
+    @test Fermion(conserve = N) ≠ Fermion()
+end
+
+
+@testset "Printing a site" begin
+    # a site declaring no conservation prints as it always did, and one declaring none
+    # either because it has no such field at all
+    @test repr(Dummit()) == "Dummit()"
+    @test TensorMixedStates.conserved(Dummit()) == ""
+    @test TensorMixedStates.conserved(Fermion(conserve = N)) == "N:0,1"
+
+    # only the trailing fields carrying nothing are left out
+    @test repr(Middling(nothing, 3)) == "Middling(nothing, 3)"
+    @test repr(Middling(7, 3)) == "Middling(7, 3)"
+
+    # show has to print something whatever a site put in a field named conserve, an error
+    # raised while printing being far worse than an odd looking site
+    @test repr(Pretender("hello")) == "Pretender(conserve = hello)"
+    @test repr(Pretender("")) == "Pretender()"
 end

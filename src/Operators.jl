@@ -1,6 +1,7 @@
 export Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
+export named, parity
 export dag, ⊗, isfermionic, has_fermionic
 
 ############# Types ################
@@ -816,6 +817,102 @@ show(io::IO, a::DagOp) =
 
 isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
 
+# ModOp
+
+"""
+    type ModOp{N} <: GenericOp{Pure, N}
+
+internal type to represent an operator taken modulo an integer, that is
+``e^{2i\\pi A/m}``. Its eigenvalues are the `m`-th roots of unity of those of `A`, so a
+conserved quantity written this way is conserved modulo `m` rather than as an integer.
+"""
+struct ModOp{N} <: GenericOp{Pure, N}
+    arg::GenericOp{Pure, N}
+    modulus::Int
+    ModOp(arg::GenericOp{Pure, N}, modulus::Int) where N =
+        if modulus < 2
+            error("a modulus is at least 2, got \$modulus")
+        else
+            new{N}(arg, modulus)
+        end
+end
+
+"""
+    mod(op, m)
+
+the operator ``e^{2i\\pi A/m}``, whose eigenvalues are the `m`-th roots of unity of those
+of `A`. It is a genuine operator, which may be measured like any other, and it is what a
+conserved quantity of ``\\mathbb{Z}_m`` is written with.
+
+The modulus cannot be read back from the eigenvalues when it is 2, since ``\\pm 1`` is as
+much a pair of integers as a pair of square roots of unity, and the two readings are
+different conservations. That is why it is carried here rather than rediscovered.
+
+# Examples
+
+    mod(N, 3)                       # a Z3 charge
+    Boson(6, conserve = mod(N, 3))
+"""
+mod(a::GenericOp{Pure}, m::Integer) = ModOp(a, Int(m))
+
+"""
+    parity(op)
+
+the parity operator ``(-1)^A``, that is `mod(op, 2)`. Its expectation value is the usual
+one, and as a conserved quantity it gives a charge of ``\\mathbb{Z}_2``.
+
+# Examples
+
+    parity(N)
+    Fermion(conserve = parity(N))
+"""
+parity(a::GenericOp{Pure}) = ModOp(a, 2)
+
+show(io::IO, a::ModOp) =
+    paren(io, 1000, 0) do io
+        if a.modulus == 2
+            show_func(io, "parity", a.arg)
+        else
+            show_func(io, "mod", [a.arg, a.modulus])
+        end
+    end
+
+isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
+
+# named
+
+"""
+    named_type(op)
+
+the `OpType` a renamed operator keeps: its own when it has one, and nothing assumed
+otherwise. This is the rule `controlled_type` applies for the same reason.
+"""
+named_type(a::Operator) = a.type
+named_type(::Op) = plain_op
+
+"""
+    named(op, name)
+
+the same operator under another name.
+
+The definition is kept and only the label changes, which is what makes this usable at all:
+an `Operator` whose expression is `nothing` is looked up in the site library by its name, so
+relabelling one would send the lookup after a name no site defines. Here the original
+operator becomes the expression of the new one, and the lookup goes through it.
+
+Its use is to keep two conserved quantities apart. Two sites declaring the same operator name
+the same charge and share one conserved total, which is usually what is wanted; this is how
+one asks for the other thing.
+
+# Examples
+
+    named(N, "Nf")
+    Fermion(conserve = named(N, "Nf"))    # these two numbers are
+    Boson(4, conserve = named(N, "Nb"))   # conserved separately
+"""
+named(op::GenericOp{Pure, N}, name::String) where N =
+    Operator{N}(name, op, named_type(op))
+
 
 ################## isfermionic #################
 
@@ -829,9 +926,16 @@ isfermionic(a::Operator{1}) = a.type == fermionic_op
 isfermionic(a::ScalarOp{Pure}) = isfermionic(a.arg)
 isfermionic(a::DagOp) = isfermionic(a.arg)
 isfermionic(a::ProdOp{Pure, Generic, 1}) = isodd(count(isfermionic, a.subs))
-isfermionic(a::Union{ExpOp}) =
+isfermionic(a::ExpOp) =
     if isfermionic(a.arg)
-        error("cannot take exp of fermionic operators ($a)")
+        error("cannot take the exponential of the fermionic operator $(a.arg)")
+    else
+        false
+    end
+
+isfermionic(a::ModOp) =
+    if isfermionic(a.arg)
+        error("cannot compute $a, which exponentiates the fermionic operator $(a.arg)")
     else
         false
     end
@@ -922,3 +1026,4 @@ ranking(::TensorOp) = 23
 ranking(::PowOp) = 30
 ranking(::ExpOp) = 31
 ranking(::DagOp) = 32
+ranking(::ModOp) = 33

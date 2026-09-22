@@ -39,6 +39,7 @@ simplify(a::Union{Identity, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
 simplify(a::PowOp) = simplify_pow(simplify(a.arg), a.expo)
 simplify(a::ExpOp) = simplify_exp(simplify(a.arg))
 simplify(a::DagOp) = simplify_dag(simplify(a.arg))
+simplify(a::ModOp) = ModOp(simplify(a.arg), a.modulus)
 
 function simplify(a::Dissipator)
     sarg = simplify(a.arg)
@@ -82,6 +83,7 @@ reindex(op::GenericOp, i::Int...) = op(i...)
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
 simplify_ind(a::Union{Identity, JW_F, Proj, JW, SetState}, index) = a(index)
 simplify_ind(a::ExpOp, index...) = a(index...)
+simplify_ind(a::ModOp, index...) = a(index...)
 simplify_ind(a::PowOp, index...) = simplify_pow(simplify_ind(a.arg, index...), a.expo)
 simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
 simplify_ind(a::Left, index...) = simplify_l(simplify_ind(a.arg, index...))
@@ -183,6 +185,7 @@ simplify_dag(a::Operator) =
     end
 simplify_dag(a::PowOp) = PowOp(simplify_dag(a.arg), conj(a.expo))
 simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
+simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
 simplify_dag(a::Union{Identity, JW_F}) = a
 simplify_dag(a::Union{Proj, JW}) = dag(a)
 

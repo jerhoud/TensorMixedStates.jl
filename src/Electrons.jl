@@ -8,6 +8,7 @@ a site type to represent electron sites (dim is 4)
 # Examples
 
     Electron()
+    Electron(conserve = (Ntot, 2Sz))
 
 # States
 
@@ -26,7 +27,11 @@ a site type to represent electron sites (dim is 4)
                             three quarters of the projector on the singly occupied states
 - `Fup, Fdn`              : partial Jordan-Wigner F operators
 """
-struct Electron <: AbstractSite end
+struct Electron <: AbstractSite
+    conserve::String
+end
+
+Electron(; conserve = ()) = Electron(conserve_string(Electron(""), conserve))
 
 dim(::Electron) = 4
 

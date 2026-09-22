@@ -99,6 +99,9 @@ matrix(a::SumOp, site::AbstractSite...) =
 matrix(a::ExpOp, site::AbstractSite...) =
     exp(matrix(a.arg, site...))
 
+matrix(a::ModOp, site::AbstractSite...) =
+    exp(2im * π * matrix(a.arg, site...) / a.modulus)
+
 matrix(a::PowOp, site::AbstractSite...) =
     matrix(a.arg, site...) ^ a.expo
 

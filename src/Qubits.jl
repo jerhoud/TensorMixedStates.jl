@@ -8,6 +8,7 @@ A site type for representing qubit sites, that is a two level system.
 # Example
 
     Qubit()
+    Qubit(conserve = 2Sz)
 
 # States
 
@@ -27,7 +28,11 @@ A site type for representing qubit sites, that is a two level system.
 - `Phase(t)`         : the phase gate
 - `controlled(gate)` : controlled gate
 """
-struct Qubit <: AbstractSite end
+struct Qubit <: AbstractSite
+    conserve::String
+end
+
+Qubit(; conserve = ()) = Qubit(conserve_string(Qubit(""), conserve))
 
 dim(::Qubit) = 2
 

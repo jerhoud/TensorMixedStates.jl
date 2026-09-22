@@ -12,6 +12,7 @@ a site type to represent q-boson sites, it is parametrised by `q` and the dimens
 # Examples
 
     Qboson(0.1, 4)
+    Qboson(0.1, 4, conserve = N)
 
 # States
 
@@ -26,7 +27,11 @@ a site type to represent q-boson sites, it is parametrised by `q` and the dimens
 struct Qboson <: AbstractSite
     q::Float64
     dim::Int
+    conserve::String
 end
+
+Qboson(q::Real, dim::Int; conserve = ()) =
+    Qboson(q, dim, conserve_string(Qboson(q, dim, ""), conserve))
 
 dim(a::Qboson) = a.dim
 

@@ -89,6 +89,9 @@ SetState
 Left
 Right
 Evolver
+named
+parity
+mod(::GenericOp{Pure}, ::Integer)
 dag(::GenericOp{Pure})
 isfermionic
 has_fermionic

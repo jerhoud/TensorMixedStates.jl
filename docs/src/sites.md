@@ -134,6 +134,29 @@ Sumd
 To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly `string_state` on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using `@def_states` and `@def_operators`.
 Don't forget to define the `F` operator for fermionic sites.
 
+### Conserved quantities
+
+A site type may carry a field named `conserve`, of type `String`, recording the quantities it
+conserves. Declare it only if your site can have some: a site type that cannot simply leaves
+it out and conserves nothing, which is why the field is optional rather than part of the
+interface.
+
+You do not fill it by hand. Give your site a keyword constructor in the manner of the ones of
+this package, which reads the operators the user names and records the charges they give on
+each basis state:
+
+```julia
+struct MySite <: AbstractSite
+    conserve::String
+end
+
+MySite(; conserve = ()) = MySite(conserve_string(MySite(""), conserve))
+```
+
+A conserved quantity is an operator of your site, diagonal, whose eigenvalues are either all
+integers or all roots of unity. `MySite(conserve = N)` and `MySite(conserve = (N, 2Sz))` are
+then written the same way as for the site types of this package.
+
 ### Reusing an operator name
 
 Site types are meant to share operator names: `N` means the same thing for a `Fermion`, a
@@ -161,6 +184,7 @@ operator at all is refused in the same way.
 
 ```@docs
 string_state
+conserve_string
 @def_states
 @def_operators
 @create_site_module

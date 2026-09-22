@@ -137,6 +137,7 @@ end
                    (dag(X * Y), dag(X * Y)),                            # DagOp
                    ((X * Y)^2, (X * Y)^2),                              # PowOp
                    (exp(X * Y), exp(X * Y)),                            # ExpOp
+                   (parity(X * Y), parity(X * Y)),                      # ModOp
                    (Left(X * Y), Left(X * Y)),                          # Left
                    (Right(X * Y), Right(X * Y)),                        # Right
                    (Gate(X * Y), Gate(X * Y)),                          # Gate
@@ -158,4 +159,42 @@ end
     # what it is for: a product shared by two measurements is asked for only once
     m = Measure([X(1) * Y(2) + Z(1), X(1) * Y(2) + Z(3)])
     @test length(Set(TensorMixedStates.get_prods(m))) == 3
+end
+
+@testset "Modulo and parity operators" begin
+    f, b = Fermion(), Boson(6)
+
+    # mod(A, m) is exp(2iπA/m), so its eigenvalues are the m-th roots of unity of those of A
+    @test matrix(parity(N), f) ≈ [1 0 ; 0 -1]
+    @test matrix(parity(N), b) ≈ [i == j ? (-1.)^(i - 1) : 0. for i in 1:6, j in 1:6]
+    @test matrix(mod(N, 3), b) ≈
+        [i == j ? exp(2im * π * mod(i - 1, 3) / 3) : 0im for i in 1:6, j in 1:6]
+    @test matrix(parity(N), b) ≈ matrix(mod(N, 2), b)
+
+    # simplify must never change the operator it stands for
+    for a in [parity(N), mod(N, 3), dag(parity(N)), dag(mod(N, 3)), parity(2N), parity(N)^2]
+        @test matrix(simplify(a), b) ≈ matrix(a, b)
+    end
+
+    # the adjoint puts the sign into the operator instead of leaving a dag outside
+    @test matrix(simplify(dag(mod(N, 3))), b) ≈ adjoint(matrix(mod(N, 3), b))
+    @test matrix(dag(dag(mod(N, 3))), b) ≈ matrix(mod(N, 3), b)
+
+    # (-1)^N is hermitian, whatever form simplify settles on
+    @test matrix(parity(N), b) ≈ adjoint(matrix(parity(N), b))
+
+    @test_throws "a modulus is at least 2" mod(N, 1)
+    @test_throws "exponentiates the fermionic operator" isfermionic(parity(C))
+end
+
+@testset "Renaming an operator" begin
+    f = Fermion()
+    # the definition is kept and only the label changes: a plain relabelling would send the
+    # lookup after a name no site defines
+    @test matrix(named(N, "Nf"), f) ≈ matrix(N, f)
+    @test repr(named(N, "Nf")) == "Nf"
+    @test repr(named(N, "Nf")(3)) == "Nf(3)"
+    @test matrix(simplify(named(N, "Nf")), f) ≈ matrix(N, f)
+    # an expression has no name of its own and can be renamed too
+    @test matrix(named(2Sz, "SzA"), Spin(1/2)) ≈ matrix(2Sz, Spin(1/2))
 end
