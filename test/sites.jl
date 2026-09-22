@@ -322,3 +322,30 @@ end
     @test !Q.hasqns(Index(Qubit()))
     @test Q.hasqns(Index(Fermion(conserve = N)))
 end
+
+@testset "Operator tensors on a charged system" begin
+    Q = TensorMixedStates.ITensors
+    ten(sys, op) = TensorMixedStates.tensor(sys, op)
+
+    # the flux of an operator placed on a charged system is the charge it carries
+    sys = System(3, Fermion(conserve = N))
+    @test flux(ten(sys, N(1))) == Q.QN("N", 0)
+    @test flux(ten(sys, Left(N)(1))) == Q.QN("N", 0)
+    @test flux(ten(sys, Left(C)(1))) == Q.QN("N", -1)
+    @test flux(ten(sys, Right(C)(1))) == Q.QN("N", 1)
+    @test flux(ten(sys, Gate(C)(1))) == Q.QN("N", 0)
+    @test flux(ten(sys, Dissipator(C)(1))) == Q.QN("N", 0)
+
+    # a site conserving nothing, inside a system where another one does, takes a trivial
+    # index, on which the whole vocabulary of operators remains available
+    mixed = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N)])
+    @test flux(ten(mixed, X(2))) == Q.QN()
+    @test flux(ten(mixed, Left(X)(2))) == Q.QN()
+    @test flux(ten(mixed, N(1))) == Q.QN("N", 0)
+
+    # an operator carrying no flux is refused by a message naming it, rather than by the
+    # `Fluxes not all equal` of ITensors, raised where neither operator nor site is in sight
+    q = System(2, Qubit(conserve = 2Sz))
+    @test_throws "X on site Qubit connects charges" ten(q, X(1))
+    @test_throws "no definite flux" ten(q, Left(X)(1))
+end

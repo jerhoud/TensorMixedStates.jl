@@ -38,6 +38,10 @@ MPS cannot mix the two kinds.
 """
 is_charged(sites) = any(s -> !isempty(conserved(s)), sites)
 
+# read off an index rather than walked over the sites again: it is asked once per operator
+# placed on the system, which an MPO does for every factor of every term
+is_charged(system::System) = hasqns(first(system.pure_indices))
+
 function System(sites::Vector{<:AbstractSite})
     charged = is_charged(sites)
     pidx = [ site_index(s, charged) for s in sites ]
@@ -141,10 +145,12 @@ returns a tensor representing the given simple indexed operator acting on this s
 """
 function tensor(system::System, a::AtIndex{R}) where R
     s = map(i->system[i], a.index)
-    t = tensor(a.op, s...)
+    t = tensor(a.op, s...; charged = is_charged(system))
     is = SysIndex{R}(system, a.index)
     j = tensor_index(t)
     c = combinerto(j, reverse(is)...)
-    return t * c * c'
+    # the primed combiner is daggered so that the two sides of the operator carry opposite
+    # directions, which is what a charged index requires and what a dense one ignores
+    return t * c * dag(c')
 end
 

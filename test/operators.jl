@@ -233,3 +233,29 @@ end
 
     @test_throws "only defined for one site operators" flux(Swap, Qubit(conserve = 2Sz))
 end
+
+@testset "Superoperators in the dense basis" begin
+    # without charges the mixed basis orders the ket fastest, which gives a superoperator an
+    # exact form owing nothing to the way TMS assembles it
+    q, f = Qubit(), Fermion()
+    i2 = identity_operator(2)
+    for op in [Sp, Sm, S, T, X, Z, H]
+        mat = matrix(op, q)
+        @test matrix(Left(op), q) ≈ kron(i2, mat)
+        @test matrix(Right(op), q) ≈ kron(conj(mat), i2)
+        @test matrix(Gate(op), q) ≈ kron(conj(mat), mat)
+    end
+
+    # a dissipator is what its definition says, AρA† - (A†Aρ + ρA†A)/2
+    mat = matrix(C, f)
+    aa = adjoint(mat) * mat
+    @test matrix(Dissipator(C), f) ≈
+        kron(conj(mat), mat) - 0.5 * (kron(i2, aa) + kron(conj(aa), i2))
+
+    # and on a site of another dimension
+    b = Boson(3)
+    i3 = identity_operator(3)
+    mb = matrix(A, b)
+    @test matrix(Left(A), b) ≈ kron(i3, mb)
+    @test matrix(Right(A), b) ≈ kron(conj(mb), i3)
+end

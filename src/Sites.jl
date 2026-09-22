@@ -518,12 +518,23 @@ first, a difference of `1 - d` rather than of 1.
     flux(Sp, Qubit(conserve = 2Sz))       # QN("2Sz",2), in units of the declared charge
     flux(Xd, Qudit(3, conserve = Zd))     # QN("Zd",1,3)
 """
-function flux(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
+flux(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol) =
+    charge_flux(matrix(op, site), op, site; tol)
+
+"""
+    charge_flux(m, what, site)
+
+the flux of a matrix already computed, `what` being what to name if it has none. This is what
+`flux` answers and what the tensor of an operator is checked with, so that a matrix which does
+not fit the charges of its site is refused by a message naming the operator rather than by the
+`Fluxes not all equal` of ITensors, raised from somewhere neither the operator nor the site is
+in sight.
+"""
+function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = charge_tol)
     qs = decode_conserve(conserved(site))
     if isempty(qs)
         return QN()
     end
-    m = matrix(op, site)
     found = nothing
     for i in axes(m, 1), j in axes(m, 2)
         if abs(m[i, j]) ≤ tol
@@ -534,7 +545,7 @@ function flux(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
         if isnothing(found)
             found = d
         elseif d ≠ found
-            error("$op on site $(typeof(site)) connects charges differing by " *
+            error("$what on site $(typeof(site)) connects charges differing by " *
                   "$(show_charges(found)) and by $(show_charges(d)), so it has no definite flux")
         end
     end
