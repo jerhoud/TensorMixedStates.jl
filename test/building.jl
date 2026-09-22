@@ -136,3 +136,36 @@ end
     @test_throws "does not have" expect(s2, X(9))
     @test expect(s2, X(3)) ≈ 1
 end
+
+@testset "States on a charged system" begin
+    Q = TensorMixedStates.ITensors
+    sys = System(3, Qubit(conserve = 2Sz))
+
+    # a configuration belongs to one sector, so it builds in either representation
+    @test_ok State{Pure}(sys, ["Up", "Dn", "Up"])
+    @test_ok State{Mixed}(sys, ["Up", "Dn", "Up"])
+
+    # a density matrix carries no charge whatever sector it lives in, the two ends of
+    # |m><m| cancelling in the difference the mixed index holds. This is what lets a state
+    # of any particle number be represented, and what forbids a coherence between two
+    @test iszero(flux(State{Mixed}(sys, ["Up", "Dn", "Up"]).state))
+    @test iszero(flux(State{Mixed}(sys, ["Dn", "Dn", "Dn"]).state))
+    @test !iszero(flux(State{Pure}(sys, ["Dn", "Dn", "Dn"]).state))
+
+    # a state spread over two sectors has no charge of its own, and is told so by a message
+    # naming it rather than by the `Fluxes not all equal` of ITensors
+    @test_throws "spreads over several charges of 2Sz" State{Pure}(sys, "+")
+    @test_throws "spreads over several charges of 2Sz" State{Mixed}(sys, "+")
+    @test_throws "spreads over several charges" State{Mixed}(sys, [0.5 0.5; 0.5 0.5])
+
+    # a mixture over sectors is representable although a coherence is not: the first is
+    # block diagonal, the second is exactly what the charges forbid
+    @test_ok State{Mixed}(sys, [0.3 0.; 0. 0.7])
+
+    # a site declaring nothing, among sites that do, takes a trivial charge, and every one
+    # of its states stays available, `"+"` included
+    m = System([Qubit(conserve = 2Sz), Qubit(), Qubit(conserve = 2Sz)])
+    @test_ok State{Pure}(m, ["Up", "+", "Dn"])
+    @test_ok State{Mixed}(m, ["Up", "+", "Dn"])
+    @test_throws "spreads over several charges" State{Pure}(m, ["+", "Up", "Dn"])
+end

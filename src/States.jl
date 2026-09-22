@@ -135,12 +135,44 @@ maxlinkdim(state::State) = maxlinkdim(state.state)
 return the ITensor of the local state `st` at site `i` of the system
 """
 make_one_state(type::R, system::System, i::Int, st) where {R <: PM} = 
-    make_one_state(type, SysIndex{R}(system, i), state(system[i], st))
+    make_one_state(type, SysIndex{Pure}(system, i), SysIndex{Mixed}(system, i),
+                   state(system[i], st), st, system[i])
 
-make_one_state(::Pure, i::Index, v::Vector) = ITensor(v, i)
-make_one_state(::Pure, ::Index, ::Matrix) = error("cannot use a mixed local state to create a pure local state")
-make_one_state(::Mixed, i::Index, v::Vector) = ITensor(v * v', i)
-make_one_state(::Mixed, i::Index, m::Matrix) = ITensor(m, i)
+make_one_state(::Pure, i::Index, ::Index, v::Vector, what, site::AbstractSite) =
+    charged_state(() -> ITensor(v, i), i, what, site)
+make_one_state(::Pure, ::Index, ::Index, ::Matrix, _, _) =
+    error("cannot use a mixed local state to create a pure local state")
+make_one_state(::Mixed, i::Index, k::Index, v::Vector, what, site::AbstractSite) =
+    make_one_state(Mixed(), i, k, v * v', what, site)
+# the density matrix is laid on the ket and the bra and only then gathered, never written
+# straight onto the mixed index: combining charged indices merges and sorts their sectors,
+# so the flat order of the mixed basis is not the order of the matrix
+make_one_state(::Mixed, i::Index, k::Index, m::Matrix, what, site::AbstractSite) =
+    charged_state(() -> op_on_sites(m, [i], [dag(i')]), i, what, site) * mixer(i, k)
+
+"""
+    state_links(ts)
+
+the link indices of the product state made of the tensors `ts`.
+
+Each one carries the charge of everything to its left, so that the flux of the whole state
+is its sector. They are built from the right and daggered, which is the arrangement
+ITensorMPS uses for its own product states and what makes the pieces contract. Without
+charges they are the indices of dimension one they always were.
+"""
+function state_links(ts::Vector{ITensor})
+    n = length(ts)
+    if !hasqns(ts[1])
+        return [ Index(1; tags = "Link,l=$k") for k in 1:n-1 ]
+    end
+    l = Vector{Index}(undef, n - 1)
+    q = sum(flux, ts[1:n-1])
+    for k in n-1:-1:1
+        l[k] = dag(Index(q => 1; tags = "Link,l=$k"))
+        q -= flux(ts[k])
+    end
+    return l
+end
 
 """
     make_state(type::R, system::System, states::Vector) where {R <: PM}
@@ -149,16 +181,19 @@ return the MPS of the local states `states` for the system
 """
 function make_state(type::PM, system::System, states::Vector)
     n = length(system)
+    ts = [ make_one_state(type, system, i, states[i]) for i in 1:n ]
     st = MPS(n)
     if n == 1
-        st[1] = make_one_state(type, system, 1, states[1])
+        st[1] = ts[1]
     else
-        l = [ Index(1; tags="Link,l=$k") for k in 1:n-1 ]
-        st[1] =  make_one_state(type, system, 1, states[1]) * ITensor(1, l[1]) 
-        for i in 2:n - 1
-        st[i] = make_one_state(type, system, i, states[i]) * ITensor(1, l[i-1]) * ITensor(1, l[i])
+        l = state_links(ts)
+        # `onehot` rather than `ITensor(1, l)`: the latter asks for a tensor of zero flux,
+        # which a link carrying a charge has no block for
+        st[1] = ts[1] * onehot(l[1] => 1)
+        for i in 2:n-1
+            st[i] = ts[i] * onehot(dag(l[i-1]) => 1) * onehot(l[i] => 1)
         end
-        st[n] = make_one_state(type, system, n, states[n]) * ITensor(1, l[n-1])
+        st[n] = ts[n] * onehot(dag(l[n-1]) => 1)
     end
     return st
 end
@@ -231,22 +266,26 @@ mix(state::State{Mixed}) = state
 function mix(state::State{Pure})
     n = length(state)
     system = state.system
-    st = dense(state.state)
+    # densified so that a tensor left diagonal by a decomposition becomes an ordinary one,
+    # which a charged state must not be: `dense` would throw its sectors away
+    st = hasqns(state.state) ? state.state : dense(state.state)
     v = Vector{ITensor}(undef, n)
-    comb = ITensor(1)
+    left = ITensor(1)
     for (i, t) in enumerate(st)
         idx = SysIndex{Pure}(system, i)
         midx = SysIndex{Mixed}(system, i)
-        mt = t * dag(t') * combinerto(midx, idx, idx')
-        mt *= comb
+        mt = t * dag(t') * mixer(idx, midx) * left
         if i < n
             rlink = commonind(t, st[i+1])
-            d = dim(rlink)
-            comb = combinerto(Index(d*d, "Link,l=$i"), rlink, rlink')
-        else
-            comb = ITensor(1)
+            # the combined link is taken from the combiner rather than named in advance:
+            # combining charged indices merges and sorts their sectors, and only the
+            # combiner knows which ones come out and in what order
+            right = combiner(rlink, dag(rlink'); tags = "Link,l=$i")
+            mt *= right
+            # the two ends of a link point in opposite directions, so the site on its right
+            # gets the daggered combiner. Without charges this is the same tensor
+            left = dag(right)
         end
-        mt *= comb
         v[i] = mt
     end
     return State{Mixed}(system, MPS(v))

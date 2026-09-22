@@ -12,6 +12,20 @@ function combinerto(i::Index, j::Index...)
 end
 
 """
+    mixer(j::Index, k::Index)
+
+return the combiner that turns the ket index `j` and the bra index `j'` into the mixed
+index `k`.
+
+The bra is daggered, so that the charge `k` carries is the difference of the two and not
+their sum. This is what makes a density matrix a tensor of zero flux, and it is the reason
+everything that crosses between the two representations goes through this one combiner:
+the pairs are then flattened in the same order everywhere. Without charges `dag` is the
+identity and this is the plain combiner it always was.
+"""
+mixer(j::Index, k::Index) = combinerto(k, j, dag(j'))
+
+"""
     tensor_index(t::ITensor)
 
 return the first index of an ITensor that is not primed
@@ -257,13 +271,17 @@ end
 function tensor(a::SetState, site::AbstractSite; charged::Bool = false)
     i = site_index(site, charged)
     j = mix(i)
-    c = combinerto(j, i, i')
     v = state(site, a.state)
     if v isa Matrix
         m = v
     else
         m = v * v'
     end
-    return dense(delta(i, i')) * c * ITensor(m, j')
+    # the target is laid on the two site indices and only then gathered, never written
+    # straight onto the mixed one: combining charged indices merges and sorts their
+    # sectors, so the flat order of the mixed basis is not the order of the matrix
+    tr = denseblocks(delta(dag(i), i')) * dag(mixer(i, j))
+    t = charged_state(() -> op_on_sites(m, [i'], [dag(i'')]), i, a.state, site)
+    return tr * t * mixer(i', j')
 end
 

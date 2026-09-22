@@ -7,7 +7,8 @@ function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
-    return dense(delta(j', j)) * combinerto(k, j', j)
+    # daggered so that the result meets the `k` of the state and not another copy of it
+    return denseblocks(delta(dag(j), j')) * dag(mixer(j, k))
 end
 
 tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
@@ -18,7 +19,7 @@ function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
     t = tensor(s, ind)
     j = SysIndex{Pure}(s, ind.index...)
     k = SysIndex{Mixed}(s, ind.index...)
-    return t * combinerto(k, j, j')
+    return t * dag(mixer(j, k))
 end
 
 # `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
@@ -33,7 +34,12 @@ function tensor_dag(state::State, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
-    return dag(state.state[i]) * combinerto(k, j', j) * combinerto(k, j, j')
+    c = mixer(j, k)
+    # the conjugate is spread back over the two indices, the ket and the bra are exchanged,
+    # and the pair is gathered again: that transposition is what turns a conjugate into an
+    # adjoint. The exchange is a renaming rather than a second combiner in the other order,
+    # which would ask for a mixed index of the opposite charge
+    return replaceinds(dag(state.state[i]) * c, (dag(j), j'), (dag(j'), j)) * c
 end
 
 function get_loc(state::State, i::Int)
@@ -94,10 +100,10 @@ function create_right!(r, state::State{Pure})
     for i in n-1:-1:1
         rlink = commonind(st[i], st[i+1])
         v = if i >= rl
-            delta(rlink, rlink')
+            delta(dag(rlink), rlink')
         else
             k = SysIndex{Pure}(s, i+1)
-            r[i+1] * delta(k, k') * st[i+1]
+            r[i+1] * delta(dag(k), k') * st[i+1]
         end
         r[i] = v * dag(st[i]')
     end
@@ -117,7 +123,7 @@ end
 function create_trace!(t, state::State{Pure})
     resize!(t, 1)
     k = SysIndex{Pure}(state.system, 1)
-    t[1] = scalar(get_right(state, 1) * delta(k, k') * state.state[1])
+    t[1] = scalar(get_right(state, 1) * delta(dag(k), k') * state.state[1])
     return t
 end
 
@@ -140,10 +146,10 @@ function create_left!(l, state::State{Pure}, i::Int)
     for k in j+1:i
         llink = commonind(st[k-1], st[k])
         v = if k <= ll
-            delta(llink, llink') / real(trace(state))
+            delta(dag(llink), llink') / real(trace(state))
         else
             idx = SysIndex{Pure}(s, k-1)
-            l[k-1] * delta(idx, idx') * dag(st[k-1]')
+            l[k-1] * delta(dag(idx), idx') * dag(st[k-1]')
         end
         l[k] = v * st[k]
     end
@@ -393,7 +399,7 @@ zipto(state::State{Pure}, a::Expector, i::Int) =
         t = a.t * dag(st[a.pos]')
         for k in a.pos+1:i-1
             idk = SysIndex{Pure}(state.system, k)
-            t *= st[k] * delta(idk, idk')
+            t *= st[k] * delta(dag(idk), idk')
             t *= dag(st[k]')
         end
         t *= st[i]
@@ -660,7 +666,8 @@ from.
 so it is always 0 and the cuts that say something are 1 to n-1.
 
 The spectrum returned is the squared singular values of that cut, normalized to sum to
-one, which are the eigenvalues of the reduced density matrix of the sites up to `pos`.
+one and given in decreasing order, which are the eigenvalues of the reduced density matrix
+of the sites up to `pos`.
 
 On a mixed representation the same quantity is computed on the vectorized density matrix,
 which makes it the operator space entanglement entropy (OSEE) rather than an entanglement.
@@ -676,7 +683,10 @@ function entanglement_entropy(state::State, pos::Int)
     end
     s = orthogonalize(state.state, pos)
     _, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
-    sp = [ S[i,i]^2 for i in 1:dim(S, 1) ]
+    # sorted, because ITensors reads the singular values off the diagonal, and on the block
+    # sparse tensor of a state that conserves something that diagonal runs block by block:
+    # the spectrum would come out grouped by sector rather than decreasing
+    sp = sort([ S[i,i]^2 for i in 1:dim(S, 1) ]; rev = true)
     sp /= sum(sp)
     ee = -sum(p * log(p) for p in sp)
     return (ee, sp)

@@ -655,6 +655,35 @@ function conserve_names(s::AbstractString)
 end
 
 """
+    charged_state(f, i::Index, what, site)
+
+the tensor `f` builds for the local state `what` on the site index `i`, refused by a message
+naming the state and its site when the charges of the site cannot carry it.
+
+A state of a charged site belongs to one sector: `"Up"` and `"Dn"` do, `"+"` does not, being
+their sum, and no amount of bookkeeping gives a superposition of two charges a charge of its
+own. ITensors says `Fluxes not all equal` from a place where neither the state nor the site
+is in sight, so it is said here instead. The tensor comes from a function rather than being
+passed in because a state vector, a density matrix and the target of a `SetState` are laid
+on their indices in three different ways, and one message covers them all.
+"""
+function charged_state(f, i::Index, what, site::AbstractSite)
+    if !hasqns(i)
+        return f()
+    end
+    try
+        return f()
+    catch e
+        if !(e isa ErrorException)
+            rethrow()
+        end
+        error("the state $(repr(what)) of site $(typeof(site)) spreads over several charges " *
+              "of $(conserve_names(conserved(site))), so it has none of its own and cannot " *
+              "be used where that is conserved")
+    end
+end
+
+"""
     show(io, ::AbstractSite)
 
 print a site as the call that builds it, leaving out the trailing fields that carry nothing,

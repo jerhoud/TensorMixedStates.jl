@@ -355,3 +355,62 @@ end
     # a hamiltonian on a density matrix has no variance in this sense
     @test_throws "needs a pure representation" variance(h, mix(r))
 end
+
+@testset "Observables do not depend on the charges" begin
+    # the same physics twice, on sites that declare a conserved quantity and on sites that
+    # do not. Declaring one splits the tensors into blocks, it does not change what is
+    # measured, so every number below has to come out the same both times. This says
+    # nothing about which values are right, which the rest of this file covers, and
+    # everything about the charges leaving them alone
+    function chain(site)
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        # three configurations of the same particle number, so their sum has a charge
+        s = p(["Occ", "Emp", "Occ", "Emp"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"]) -
+            0.3 * p(["Occ", "Occ", "Emp", "Emp"])
+        return s / norm(s)
+    end
+    d, q = chain(Fermion()), chain(Fermion(conserve = N))
+    both(f) = @test f(d) ≈ f(q)
+
+    both(s -> expect(s, N(2)))
+    both(s -> expect2(s, (N, N)))
+    both(s -> [ expect(s, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    both(s -> norm(s))
+    both(s -> entanglement_entropy(s, 2)[1])
+    both(s -> collect(entanglement_entropy(s, 2)[2]))
+
+    both(s -> trace(mix(s)))
+    both(s -> trace2(mix(s)))
+    both(s -> renyi2(mix(s)))
+    both(s -> hermiticity(mix(s)))
+    both(s -> expect(mix(s), N(2)))
+    both(s -> trace(partial_trace(mix(s), [1, 3])))
+    both(s -> mutual_info_renyi2(mix(s), 2))
+    both(s -> trace(apply(Gate(F)(1), mix(s))))
+    both(s -> trace(apply(Dissipator(A)(2), mix(s))))
+    both(s -> expect(apply(SetState("Occ")(2), mix(s)), N(2)))
+end
+
+@testset "A mixed state built without going through mix" begin
+    # its local matrix used to be written straight onto the mixed index. That index is a
+    # combination, and combining charged indices merges and sorts their sectors, so the
+    # flat order of its basis is not the order of the matrix: the diagonal landed off the
+    # diagonal, where the charges annihilate it, and the state came out with a trace of
+    # zero and no complaint
+    direct(site) = State{Mixed}(System(3, site), ["2", "0", "1"])
+    bd, bq = direct(Boson(4)), direct(Boson(4, conserve = N))
+    @test trace(bd) ≈ 1
+    @test trace(bq) ≈ 1
+    @test [ expect(bq, N(k)) for k in 1:3 ] ≈ [2, 0, 1]
+    @test [ expect(bq, N(k)) for k in 1:3 ] ≈ [ expect(bd, N(k)) for k in 1:3 ]
+
+    # a density matrix given as a matrix goes the same way, and a diagonal one is a
+    # mixture over sectors, which the charges allow
+    rho = [0.1 0. 0. 0.; 0. 0.2 0. 0.; 0. 0. 0.3 0.; 0. 0. 0. 0.4]
+    md = State{Mixed}(System(2, Boson(4)), rho)
+    mq = State{Mixed}(System(2, Boson(4, conserve = N)), rho)
+    @test trace(mq) ≈ 1
+    @test expect(mq, N(1)) ≈ 2
+    @test expect(mq, N(1)) ≈ expect(md, N(1))
+end
