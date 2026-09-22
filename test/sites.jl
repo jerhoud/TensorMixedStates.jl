@@ -271,3 +271,48 @@ end
     @test repr(Pretender("hello")) == "Pretender(conserve = hello)"
     @test repr(Pretender("")) == "Pretender()"
 end
+
+@testset "Charged indices" begin
+    Q = TensorMixedStates.ITensors
+    sec(i) = Q.space(i)
+    pure(sys, k) = TensorMixedStates.SysIndex{Pure}(sys, k)
+    mixed(sys, k) = TensorMixedStates.SysIndex{Mixed}(sys, k)
+
+    # a system whose sites declare nothing is dense, exactly as before
+    s0 = System(3, Qubit())
+    @test !Q.hasqns(pure(s0, 1))
+    @test !Q.hasqns(mixed(s0, 1))
+    @test dim(pure(s0, 1)) == 2 && dim(mixed(s0, 1)) == 4
+
+    # the sectors are those the site recorded, one block per basis state
+    s1 = System(2, Fermion(conserve = N))
+    @test sec(pure(s1, 1)) == [Q.QN("N", 0) => 1, Q.QN("N", 1) => 1]
+
+    # the mixed index carries differences of charges, not sums: |m><n| has q(m) - q(n)
+    @test sec(mixed(s1, 1)) == [Q.QN("N", -1) => 1, Q.QN("N", 0) => 2, Q.QN("N", 1) => 1]
+
+    # blocks are not merged, or a basis whose equal charges are not contiguous would be
+    # reordered: parity on a boson gives 0, 1, 0, 1
+    s2 = System(2, Boson(4, conserve = parity(N)))
+    @test sec(pure(s2, 1)) == [Q.QN("parity(N)", c, 2) => 1 for c in (0, 1, 0, 1)]
+
+    # a modulus read off the spectrum, and charges with two components
+    s3 = System(2, Qudit(3, conserve = Zd))
+    @test sec(pure(s3, 1)) == [Q.QN("Zd", c, 3) => 1 for c in 0:2]
+    s4 = System(2, Electron(conserve = (Ntot, 2Sz)))
+    @test length(sec(pure(s4, 1))) == 4
+    @test dim(pure(s4, 1)) == 4
+
+    # the mode is a property of the whole list: one site declaring something makes every
+    # index charged, a site declaring nothing taking a trivial charge rather than staying
+    # dense, since an MPS cannot mix the two kinds
+    s5 = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N)])
+    @test Q.hasqns(pure(s5, 2))
+    @test sec(pure(s5, 2)) == [Q.QN() => 2]
+    @test TensorMixedStates.is_charged(s5.sites)
+    @test !TensorMixedStates.is_charged(s0.sites)
+
+    # a site on its own says what it declares and nothing more
+    @test !Q.hasqns(Index(Qubit()))
+    @test Q.hasqns(Index(Fermion(conserve = N)))
+end

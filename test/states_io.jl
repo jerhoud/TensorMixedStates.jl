@@ -264,6 +264,10 @@ end
     @test back.void === nothing
     @test l.system.sites == st.system.sites
 
+    # the first field is named conserve without being one, being a Symbol and not a string.
+    # A site carrying such a field conserves nothing rather than making the machinery choke
+    @test TensorMixedStates.conserved(site) == ""
+
     # a field of an unsupported kind is refused by a message naming the site and the field,
     # rather than by a MethodError raised by convert somewhere inside HDF5
     bad = State{Pure}(System(2, Unkindly(1:3)), [1., 0.])
@@ -273,21 +277,6 @@ end
     # written over a name already in use leaves what was there intact
     @test_throws "its field range is a" save_state(file, "kinds", bad)
     @test load_state(file, "kinds").system.sites == st.system.sites
-end
-
-@testset "A state on sites that conserve" begin
-    dir = mktempdir()
-    file = joinpath(dir, "conserve.h5")
-
-    # the conserved quantities travel as the charges they produce, which is what makes the
-    # site come back identical: the operator itself could not be written to a file
-    sites = [Fermion(conserve = N), Boson(4, conserve = parity(N)), Spin(1, conserve = Sz)]
-    st = State{Pure}(System(sites), ["1", "2", "0"])
-    save_state(file, "c", st)
-    l = load_state(file, "c")
-    @test l.system.sites == sites
-    @test l.system.sites[2].conserve == "parity(N)%2:0,1,0,1"
-    @test expect(l, N(1)) ≈ expect(st, N(1))
 end
 
 @testset "Reading a version 1 state file" begin

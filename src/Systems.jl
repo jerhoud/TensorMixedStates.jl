@@ -28,8 +28,19 @@ struct System
     mixed_indices::Vector{Index}
 end
 
+"""
+    is_charged(sites)
+
+whether a system of those sites carries quantum numbers, that is whether any of them
+declares something conserved. It is a property of the whole list: one site declaring a charge
+makes every index of the system a charged one, the others taking a trivial charge, since an
+MPS cannot mix the two kinds.
+"""
+is_charged(sites) = any(s -> !isempty(conserved(s)), sites)
+
 function System(sites::Vector{<:AbstractSite})
-    pidx = map(Index, sites)
+    charged = is_charged(sites)
+    pidx = [ site_index(s, charged) for s in sites ]
     midx = map(mix, pidx)
     return System(sites, pidx, midx)
 end

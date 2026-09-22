@@ -186,7 +186,11 @@ function load_state(filename::String, statename::String;
         if type == "Pure"
             return State{Pure}(System(sites, idx, map(mix, idx)), st)
         elseif type == "Mixed"
-            return State{Mixed}(System(sites, map(Index, sites), idx), st)
+            # the pure indices are rebuilt rather than read, only the mixed ones being in the
+            # file, so they need the mode of the system the sites make up
+            charged = is_charged(sites)
+            return State{Mixed}(
+                System(sites, [ site_index(s, charged) for s in sites ], idx), st)
         else
             error("state \"$statename\" has unknown type \"$type\"")
         end

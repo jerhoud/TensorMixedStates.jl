@@ -24,11 +24,47 @@ dim(site::AbstractSite) = error("dim not implemented on site $site")
 # the site module is not in scope, and ITensors silently cuts a tag at 16 characters, so
 # every site type ended up tagged "TensorMixedState" depending on what the user imported
 """
+    site_index(site, charged)
+
+the ITensor index of a site for pure representations.
+
+`charged` says whether the system the site belongs to carries quantum numbers, which a site
+conserving nothing cannot know on its own: in such a system it takes a trivial index, a
+single sector of charge zero holding the whole space. An MPS cannot mix indices that carry
+charges with indices that do not, and every operator remains available on a trivial index,
+every matrix element sitting in the one block.
+
+The sectors come one per basis state rather than merged by charge, because merging would
+reorder the basis whenever equal charges are not contiguous, as `parity(N)` on a boson gives
+0, 1, 0, 1.
+"""
+function site_index(site::AbstractSite, charged::Bool)
+    n = dim(site)
+    tg = "$(nameof(typeof(site))), Site"
+    qs = decode_conserve(conserved(site))
+    if isempty(qs)
+        return charged ? Index(QN() => n; tags = tg) : Index(n; tags = tg)
+    end
+    for (name, _, charges) in qs
+        if length(charges) ≠ n
+            error("site $(typeof(site)) records $(length(charges)) charges for $name but " *
+                  "has $n basis states")
+        end
+    end
+    return Index([ QN([(name, charges[k], modulus) for (name, modulus, charges) in qs]...) => 1
+                   for k in 1:n ]...; tags = tg)
+end
+
+"""
     Index(::AbstractSite)
 
-return an ITensor.Index for the given site for pure representations
+return an ITensor.Index for the given site for pure representations.
+
+It carries the quantum numbers the site declares, and none when it declares none. A site
+conserving nothing inside a system where another one does takes a trivial index instead, see
+`site_index`, which is a property of the system rather than of the site.
 """
-Index(site::AbstractSite) = Index(dim(site); tags="$(nameof(typeof(site))), Site")
+Index(site::AbstractSite) = site_index(site, !isempty(conserved(site)))
 
 """
     string_state(::AbstractSite, ::String)
@@ -47,9 +83,14 @@ string_state(site::AbstractSite, st::String) =
     mix(::Index)
 
 return an ITensor.Index for a mixed representation corresponding to the pure representation Index given
+
+The bra index is daggered, so that the charge of ``|m\\rangle\\langle n|`` is the
+difference of those of ``m`` and ``n`` rather than their sum. This is the pairing
+`mix(::State)` produces, its tensors being contracted as `t * dag(t')`, and on an index
+without charges the dag is a no operation.
 """
 mix(i::Index) =
-    addtags(combinedind(combiner(i, i'; tags = tags(i))), "Mixed")
+    addtags(combinedind(combiner(i, dag(i'); tags = tags(i))), "Mixed")
 
 """
     operator_library::Dict
@@ -512,10 +553,15 @@ what a site conserves, in the form `conserve_string` produces, and the empty str
 conserves nothing.
 
 The `conserve` field is optional, a site type that can have no conserved quantity simply not
-declaring it, so this is what everything else reads rather than the field itself.
+declaring it, so this is what everything else reads rather than the field itself. A field of
+that name holding something other than a string is not one, and the site conserves nothing.
 """
 conserved(site::AbstractSite) =
-    hasfield(typeof(site), :conserve) ? site.conserve : ""
+    if hasfield(typeof(site), :conserve) && getfield(site, :conserve) isa AbstractString
+        site.conserve
+    else
+        ""
+    end
 
 """
     conserve_names(s)
