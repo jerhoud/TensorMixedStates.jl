@@ -28,14 +28,14 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref
             j = ind.index[1]
             for k in i+1:j-1
                 kdx = SysIndex{R}(sys, k)
-                push!(tm[k],(ld[k-1], ld[k], delta(kdx', kdx), ref))
+                push!(tm[k],(ld[k-1], ld[k], delta(kdx', dag(kdx)), ref))
             end
             push!(tm[j], (ld[j-1], ld[j], tensor(sys, ind), ref))
             i = j
         end
         for k in i+1:lst-1
             kdx = SysIndex{R}(sys, k)
-            push!(tm[k],(ld[k-1], ld[k], delta(kdx', kdx), ref))
+            push!(tm[k],(ld[k-1], ld[k], delta(kdx', dag(kdx)), ref))
         end
         push!(tm[lst], (ld[lst-1], 1, tensor(sys, subs[end]), ref))
     end
@@ -105,6 +105,67 @@ mpo_eltype(pre::PreMPO, coefs) =
         mapreduce(t -> eltype(t[3]), promote_type, Iterators.flatten(pre.terms); init = Bool))
 
 """
+    mpo_charges(pre, coefs)
+
+the charge of every channel of every link of the MPO, or `nothing` on a system without
+charges.
+
+A channel stands for a term of the operator partly placed: the sites on its left have
+contributed their factors and the ones on its right have not. Its charge is therefore what
+those factors carry, accumulated from the left, and that is what the link has to record for
+the MPO to be a tensor of definite flux. Channel one is the term not yet begun and carries
+nothing; the last one is the term finished and carries the flux of the whole operator, which
+every term must agree on.
+"""
+function mpo_charges(pre::PreMPO{R}, coefs) where R
+    n = length(pre.system)
+    ld = pre.linkdims
+    tm = pre.terms
+    rdims = [ i == n ? 1 : ld[i] for i in 1:n ]
+    q = [ Vector{Union{Nothing, QN}}(nothing, 1 + (i == 0 ? 1 : rdims[i])) for i in 0:n ]
+    q[1][1] = QN()
+    total = nothing
+    for i in 1:n
+        q[i+1][1] = QN()
+        for (l, r, u, ref) in tm[i]
+            if coefs[ref] == 0
+                continue
+            end
+            left = q[i][l]
+            if isnothing(left)
+                error("bug: channel $l of link $(i-1) has no charge")
+            end
+            # the link loses what the operator carries, which is the sign that makes the
+            # tensor of the site a flux of zero once its two ends are oriented
+            c = left - flux(u)
+            if r == 1
+                if !isnothing(total) && total ≠ c
+                    error("the terms of this operator do not all carry the same charge, " *
+                          "$(total) and $(c), so it has no definite flux and cannot be " *
+                          "put on a system that conserves it")
+                end
+                total = c
+            else
+                q[i+1][r] = c
+            end
+        end
+    end
+    if isnothing(total)
+        total = QN()
+    end
+    for i in 0:n
+        q[i+1][end] = total
+        for k in eachindex(q[i+1])
+            if isnothing(q[i+1][k])
+                # a channel no term goes through, kept so that the numbering does not move
+                q[i+1][k] = total
+            end
+        end
+    end
+    return q
+end
+
+"""
     make_mpo(::PreMPO[, coefs])
     make_mpo(::State, operator)
 
@@ -117,8 +178,15 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     elt = mpo_eltype(pre, coefs)
+    charged = is_charged(sys)
+    q = charged ? mpo_charges(pre, coefs) : nothing
+    # the links of a charged MPO carry the charge each channel has accumulated, without
+    # which the tensor of a site would hold several fluxes. Without charges they are the
+    # plain indices they always were
+    mklink(i, d) = charged ? Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i") :
+                             Index(d, "Link, l=$i")
     rdim = 1
-    rlink = Index(2, "Link, l=0")
+    rlink = mklink(0, 2)
     for i in 1:n
         idx = SysIndex{R}(sys, i)
         ldim = rdim
@@ -128,12 +196,17 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
         else
             rdim = ld[i]
         end
-        rlink = Index(1 + rdim, "Link, l=$i")
-        w = ITensor(elt, idx', idx, llink, rlink)
-        id = delta(idx, idx')
+        rlink = mklink(i, 1 + rdim)
+        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
+        id = delta(dag(idx), idx')
+        # zeros are skipped rather than written: a block sparse tensor refuses an element
+        # outside its flux even when what is written there is nothing
         for j in eachindval(idx, idx')
-            w[llink => 1, rlink => 1, j...] = id[j...]
-            w[llink => 1 + ldim, rlink => 1 + rdim, j...] = id[j...]
+            v = id[j...]
+            if !iszero(v)
+                w[llink => 1, rlink => 1, j...] = v
+                w[llink => 1 + ldim, rlink => 1 + rdim, j...] = v
+            end
         end
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
@@ -142,15 +215,18 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
                     r += rdim
                 end
                 for j in eachindval(idx, idx')
-                    w[llink=>l, rlink=>r, j...] += c * u[j...]
+                    v = c * u[j...]
+                    if !iszero(v)
+                        w[llink=>l, rlink=>r, j...] += v
+                    end
                 end
             end
         end
         if i == 1
-            w *= ITensor([1, 0], llink)
+            w *= charged ? onehot(llink => 1) : ITensor([1, 0], llink)
         end
         if i == n
-            w *= ITensor([0, 1], rlink)
+            w *= charged ? onehot(dag(rlink) => 2) : ITensor([0, 1], rlink)
         end
         ts[i] = w
     end
