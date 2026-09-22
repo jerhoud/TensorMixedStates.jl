@@ -11,7 +11,21 @@ the reference article.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The state file format is now version 2. The fields of a site are written as a string each,
+  together with the kind of value they hold, so that a site whose field is not a number can
+  be saved at all — a symbol naming what the site conserves, for instance. Version 1 files
+  are still read, which matters beyond old files: a checkpoint left by an earlier version
+  holds a state in that format, so resuming one depends on it.
+
+### Fixed
+
+- `save_state` no longer destroys the state already saved under a name when it cannot write
+  the new one. It deleted the old group before reading the fields of the sites, so a state it
+  was going to refuse took the previous one with it and put nothing in its place. The fields
+  are read before the file is opened now, and a refusal names the site and the field it
+  cannot carry instead of surfacing as a `MethodError` raised by `convert` inside HDF5.
 
 ## [1.3.0] - 2026-09-21
 

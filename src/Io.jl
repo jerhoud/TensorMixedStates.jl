@@ -1,9 +1,75 @@
 export save_state, load_state
 
-const state_file_version = 1
+const state_file_version = 2
+const readable_state_file_versions = (1, 2)
 
-site_params(site::AbstractSite) =
-    Float64[ getfield(site, f) for f in fieldnames(typeof(site)) ]
+"""
+    param_kind(x)
+
+the name a state file gives to the kind of value a site field holds, or `nothing` when a
+state file cannot carry it.
+
+Version 1 of the format wrote every field as a `Float64`, so a site carrying a `Symbol`, a
+name or a flag could not be saved at all: `save_state` failed on a `convert` raised deep
+inside HDF5, naming neither the site nor the field. Since a site has to be able to declare
+what it conserves, the fields now travel as a string each, together with the name of what
+they are, which also means reading them back does not depend on the field types of the site
+being declared concretely.
+
+`Bool` comes first on purpose, being an `Integer` as far as dispatch is concerned.
+"""
+param_kind(::Bool) = "Bool"
+param_kind(::Integer) = "Int"
+param_kind(::AbstractFloat) = "Float"
+param_kind(::Symbol) = "Symbol"
+param_kind(::AbstractString) = "String"
+param_kind(::Nothing) = "Nothing"
+param_kind(_) = nothing
+
+"""
+    param_value(kind, s)
+
+the value a site field had, read back from the kind and the string `save_state` wrote
+"""
+param_value(kind::AbstractString, s::AbstractString) =
+    if kind == "Bool"
+        parse(Bool, s)
+    elseif kind == "Int"
+        parse(Int, s)
+    elseif kind == "Float"
+        parse(Float64, s)
+    elseif kind == "Symbol"
+        Symbol(s)
+    elseif kind == "String"
+        String(s)
+    elseif kind == "Nothing"
+        nothing
+    else
+        error("state file describes a site field as \"$kind\", which this version does not know")
+    end
+
+"""
+    site_params(site)
+
+the fields of a site, as the kinds of value they hold and those values written as strings,
+which is what a state file carries. See `param_kind`.
+"""
+function site_params(site::AbstractSite)
+    kinds = String[]
+    values = String[]
+    for f in fieldnames(typeof(site))
+        x = getfield(site, f)
+        k = param_kind(x)
+        if isnothing(k)
+            error("cannot save a state on site $(typeof(site)): its field $f is a " *
+                  "$(typeof(x)), which a state file cannot carry. A site field must be a " *
+                  "number, a boolean, a symbol, a string or nothing")
+        end
+        push!(kinds, k)
+        push!(values, string(x))
+    end
+    return (kinds, values)
+end
 
 """
     save_state(filename, statename, state)
@@ -18,6 +84,11 @@ saving under a name already present in the file replaces it
 """
 function save_state(filename::String, statename::String, state::State{R}) where R
     sites = state.system.sites
+    # read before the file is opened. A site field a state file cannot carry must not leave a
+    # half written group behind, and above all must not reach `delete_object` first: saving a
+    # state that cannot be written over a name already in the file would then destroy what was
+    # there and put nothing in its place
+    ps = map(site_params, sites)
     h5open(filename, "cw") do f
         if haskey(f, statename)
             delete_object(f, statename)
@@ -28,7 +99,8 @@ function save_state(filename::String, statename::String, state::State{R}) where 
         g["modules"] = [ string(nameof(parentmodule(typeof(s)))) for s in sites ]
         g["types"] = [ string(nameof(typeof(s))) for s in sites ]
         g["nparams"] = [ length(fieldnames(typeof(s))) for s in sites ]
-        g["params"] = reduce(vcat, map(site_params, sites); init = Float64[])
+        g["pkinds"] = reduce(vcat, first.(ps); init = String[])
+        g["params"] = reduce(vcat, last.(ps); init = String[])
         g["state"] = state.state
     end
     return nothing
@@ -46,7 +118,7 @@ function site_module(name::String)
     error("cannot find module $name needed to rebuild sites, is it loaded ?")
 end
 
-function build_site(modname::String, typename::String, params::Vector{Float64})
+function build_site(modname::String, typename::String, params::Vector)
     t = getfield(site_module(modname), Symbol(typename))
     if !(t isa Type && t <: AbstractSite)
         error("$modname.$typename is not a site type")
@@ -76,14 +148,21 @@ function load_state(filename::String, statename::String;
     st = h5open(filename, "r") do f
         g = open_group(f, statename)
         version = read(attributes(g)["version"])
-        if version ≠ state_file_version
-            error("state \"$statename\" has file version $version, expected $state_file_version")
+        if !(version in readable_state_file_versions)
+            error("state \"$statename\" has file version $version, expected one of " *
+                  join(readable_state_file_versions, ", "))
         end
         type = read(attributes(g)["type"])
         modules = read(g, "modules")
         types = read(g, "types")
         nparams = read(g, "nparams")
-        params = read(g, "params")
+        # version 1 wrote every field as a Float64, which is what a checkpoint or a state
+        # saved by an earlier version still holds
+        if version == 1
+            params = collect(read(g, "params"))
+        else
+            params = map(param_value, read(g, "pkinds"), read(g, "params"))
+        end
         st = read(g, "state", MPS)
         if length(types) ≠ length(st)
             error("state \"$statename\" has $(length(types)) sites but a state of length $(length(st))")

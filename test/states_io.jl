@@ -4,6 +4,28 @@
 # back, any other serialisation, and the output side of a simulation, with a round trip
 # check whenever possible.
 
+# Sites whose fields are not all numbers. Version 1 of the state file format wrote every
+# field as a `Float64` and could carry none of these; a site declaring which quantum numbers
+# it conserves needs exactly that, so the round trip is checked below. The fields cover every
+# kind a state file accepts.
+struct Kindly <: AbstractSite
+    conserve::Symbol
+    on::Bool
+    label::String
+    n::Int
+    x::Float64
+    void::Nothing
+end
+
+TensorMixedStates.dim(::Kindly) = 2
+
+# a field of a kind no state file can carry, to check that the refusal names it
+struct Unkindly <: AbstractSite
+    range::UnitRange{Int}
+end
+
+TensorMixedStates.dim(::Unkindly) = 2
+
 @testset "SetState" begin
     sys = System(3, Qubit())
     st = State{Mixed}(sys, ["Dn", "FullyMixed", "+"])  # arbitrary starting local states
@@ -221,4 +243,64 @@ end
     lm = load_state(file, "m"; system = sys)
     @test lm.system === sys
     @test hs_fidelity(m, lm) ≈ 1
+end
+
+@testset "Site fields of every kind" begin
+    dir = mktempdir()
+    file = joinpath(dir, "fields.h5")
+
+    site = Kindly(:sz, true, "a label", 3, 1.5, nothing)
+    st = State{Pure}(System(2, site), [1., 0.])
+    save_state(file, "kinds", st)
+    l = load_state(file, "kinds")
+
+    # each field comes back as what it was, not as the Float64 version 1 would have made of it
+    back = l.system.sites[1]
+    @test back.conserve === :sz
+    @test back.on === true
+    @test back.label == "a label"
+    @test back.n === 3
+    @test back.x === 1.5
+    @test back.void === nothing
+    @test l.system.sites == st.system.sites
+
+    # a field of an unsupported kind is refused by a message naming the site and the field,
+    # rather than by a MethodError raised by convert somewhere inside HDF5
+    bad = State{Pure}(System(2, Unkindly(1:3)), [1., 0.])
+    @test_throws "its field range is a" save_state(file, "bad", bad)
+
+    # and the refusal comes before the file is touched, so saving a state that cannot be
+    # written over a name already in use leaves what was there intact
+    @test_throws "its field range is a" save_state(file, "kinds", bad)
+    @test load_state(file, "kinds").system.sites == st.system.sites
+end
+
+@testset "Reading a version 1 state file" begin
+    # written by the released 1.3.0, see reference/make_state_v1.jl. Version 1 wrote every
+    # site field as a Float64, and `load_state` has to go on reading it: a checkpoint left by
+    # such a version holds a state in that format, so a resume depends on it
+    file = joinpath(@__DIR__, "reference", "state_v1.h5")
+
+    p = load_state(file, "pure")
+    @test p isa State{Pure}
+    @test length(p) == 4
+    @test p.system.sites == [Qubit(), Boson(4), Spin(3/2), Qboson(0.1, 3)]
+    @test expect(p, Z(1)) ≈ 1
+    @test expect(p, N(2)) ≈ 2
+    @test expect(p, Sz(3)) ≈ 0.5
+
+    m = load_state(file, "mixed")
+    @test m isa State{Mixed}
+    @test m.system.sites == p.system.sites
+    @test trace(m) ≈ 1
+    @test expect(m, Z(1)) ≈ 1
+
+    # a file of an unknown version is still refused, by a message naming what is accepted.
+    # The group needs nothing but its version attribute, the check coming first
+    future = joinpath(mktempdir(), "future.h5")
+    TensorMixedStates.HDF5.h5open(future, "cw") do h
+        g = TensorMixedStates.HDF5.create_group(h, "s")
+        TensorMixedStates.HDF5.attributes(g)["version"] = 99
+    end
+    @test_throws "expected one of 1, 2" load_state(future, "s")
 end
