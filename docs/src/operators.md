@@ -95,6 +95,7 @@ mod(::GenericOp{Pure}, ::Integer)
 dag(::GenericOp{Pure})
 isfermionic
 has_fermionic
+flux(::SimpleOp, ::AbstractSite)
 matrix
 tensor
 simplify

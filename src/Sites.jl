@@ -1,4 +1,4 @@
-export AbstractSite, mix, dim, Index, string_state, identity_operator, state
+export AbstractSite, mix, dim, Index, string_state, identity_operator, state, flux
 export @def_operators, @def_states, @create_site_module, conserve_string
 
 """
@@ -173,7 +173,7 @@ register the definition `r` of the operator named `op` for the given `site`, and
 Do not call directly, use `@def_operators`, which is what keeps the operator name, its
 `OpType` and the definitions made for the other site types consistent.
 """
-function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function, GenericOp{Pure, 1}}, type::OpType=plain_op)
+function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function, SimpleOp}, type::OpType=plain_op)
     name = typeof(site)
     t = (name, op)
     if haskey(operator_library, t)
@@ -439,7 +439,7 @@ of unity, and they are different conservations: two sites carrying -1 make -2 ov
 integers and 0 modulo 2. The integer reading wins, and `parity` is how the other one is
 asked for.
 """
-function site_charges(op, site::AbstractSite; tol::Float64 = charge_tol)
+function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
     m = matrix(op, site)
     d = diag(m)
     off = norm(m - Diagonal(d))
@@ -476,9 +476,12 @@ deviation
 """
 short(x::Real) = round(x; sigdigits = 2)
 
+site_charges(op::GenericOp{Pure}, ::AbstractSite) =
+    error("a conserved quantity acts on one site, and $op acts on several")
+
 # the modulus of a ModOp is carried rather than read back, ±1 being unreadable, and the
 # charges are those of its argument taken modulo it
-function site_charges(a::ModOp, site::AbstractSite; tol::Float64 = charge_tol)
+function site_charges(a::ModOp{1}, site::AbstractSite; tol::Float64 = charge_tol)
     m, q = site_charges(a.arg, site; tol)
     if m ≠ 1
         error("cannot take $(a.arg) modulo $(a.modulus) on site $(typeof(site)): it " *
@@ -486,6 +489,61 @@ function site_charges(a::ModOp, site::AbstractSite; tol::Float64 = charge_tol)
     end
     return (a.modulus, mod.(q, a.modulus))
 end
+
+"""
+    show_charges(d)
+
+a list of charge differences as an error message shows it, `2Sz=2` or `Ntot=-1,2Sz=-1`
+"""
+show_charges(d) = join(["$name=$val" for (name, val, _) in d], ",")
+
+"""
+    flux(op, site)
+
+the charge an operator carries on a site, as a `QN`: the difference between the charges of
+the states it connects. It is the zero charge for an operator commuting with everything the
+site conserves, and `QN()` for a site conserving nothing.
+
+An operator connecting states whose charges differ in more than one way has no flux at all
+and cannot be used where that quantity is conserved. `X` raises and lowers `2Sz` at once and
+is refused, while under `parity(N)` it carries the single flux 1.
+
+The difference is taken modulo the charge, without which `Xd` would be refused although it
+generates the very symmetry `Zd` records: its wrap around connects the last state to the
+first, a difference of `1 - d` rather than of 1.
+
+# Examples
+
+    flux(N, Fermion(conserve = N))        # QN("N",0)
+    flux(Sp, Qubit(conserve = 2Sz))       # QN("2Sz",2), in units of the declared charge
+    flux(Xd, Qudit(3, conserve = Zd))     # QN("Zd",1,3)
+"""
+function flux(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
+    qs = decode_conserve(conserved(site))
+    if isempty(qs)
+        return QN()
+    end
+    m = matrix(op, site)
+    found = nothing
+    for i in axes(m, 1), j in axes(m, 2)
+        if abs(m[i, j]) ≤ tol
+            continue
+        end
+        d = [ (name, modulus == 1 ? ch[i] - ch[j] : mod(ch[i] - ch[j], modulus), modulus)
+              for (name, modulus, ch) in qs ]
+        if isnothing(found)
+            found = d
+        elseif d ≠ found
+            error("$op on site $(typeof(site)) connects charges differing by " *
+                  "$(show_charges(found)) and by $(show_charges(d)), so it has no definite flux")
+        end
+    end
+    # an operator with no element at all carries no charge
+    return isnothing(found) ? QN() : QN(found...)
+end
+
+flux(op::GenericOp{Pure}, site::AbstractSite) =
+    error("flux is only defined for one site operators, and $op acts on several")
 
 """
     conserve_string(site, spec)

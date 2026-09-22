@@ -228,6 +228,12 @@ end
     @test_throws "2Sz rather than Sz" Spin(1/2, conserve = Sz)
     @test_throws "already carries a charge modulo" Qudit(3, conserve = mod(Zd, 2))
 
+    # a conserved quantity is carried by one site. Without this the multi site operator went
+    # into matrix, which expanded its definition and complained about an operator of another
+    # site type, naming nothing the caller had written
+    @test_throws "acts on one site" Fermion(conserve = Swap)
+    @test_throws "acts on one site" Qubit(conserve = mod(Swap, 2))
+
     # the four cases, read directly
     @test TensorMixedStates.site_charges(N, Fermion()) == (1, [0, 1])
     @test TensorMixedStates.site_charges(parity(N), Boson(4)) == (2, [0, 1, 0, 1])
