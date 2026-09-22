@@ -129,6 +129,83 @@ Qudit
 Sumd
 ```
 
+## Conserving a quantity
+
+A site can be told that a quantity is conserved. The indices it draws then carry that charge,
+the tensors become block sparse, and a contraction only pairs blocks whose charges agree,
+which makes the computation both smaller and faster. In exchange a state is confined to the
+sector it was built in.
+
+The quantity is named by one of the site's own operators, which has to be diagonal with
+eigenvalues that are either all integers or all roots of unity:
+
+```julia
+Fermion(conserve = N)                  # the number of particles
+Qubit(conserve = 2Sz)                  # twice the magnetisation, so that it is an integer
+Electron(conserve = (Ntot, 2Sz))       # two quantities at once
+Boson(4, conserve = parity(N))         # only the parity of the number, a charge modulo 2
+```
+
+Half integer quantities are written doubled, `2Sz` rather than `Sz`, so that the charges they
+give are integers.
+
+Sites that declare nothing may sit in a system beside sites that do. They take a trivial
+charge and keep their whole vocabulary, so a `Qubit()` next to conserving fermions still
+accepts `X` and the state `"+"`.
+
+### What it forbids
+
+Conserving is a promise about the whole computation, and what breaks it is refused with a
+message naming the culprit rather than discovered in the middle of a run.
+
+A **state** lives in one sector. `Fermion(conserve = N)` takes `"Occ"` and `"Emp"` and refuses
+`"+"`, which superposes two numbers of particles and so has no number of its own.
+
+An **operator** must carry a definite charge, its flux, which is the difference between the
+charges of the states it connects. [`flux`](@ref) gives it:
+
+```julia
+flux(N, Fermion(conserve = N))          # QN("N", 0)
+flux(dag(C), Fermion(conserve = N))     # QN("N", 1)
+flux(C, Fermion(conserve = N))          # QN("N", -1)
+```
+
+`X` connects the two states of a qubit in both directions at once, so under
+`Qubit(conserve = N)` it has no flux and is refused. Under `Qubit(conserve = parity(N))` it
+has one, `QN("parity(N)", 1, 2)`, the two differences becoming the same one modulo 2.
+
+### Weak and strong symmetries
+
+For a **mixed** representation there are two ways of conserving a quantity, and they are not
+the same promise.
+
+By default the symmetry is **weak**: what is asked is that the density matrix commute with the
+charge. Every jump operator of definite charge preserves that, particle loss and gain
+included, and the state may spread over several sectors, as a thermal state does.
+
+[`strong`](@ref) asks more: that every jump operator commute with the charge. The charge of
+the ket and that of the bra are then conserved separately, which cuts the blocks finer, and in
+exchange the state lives in a single sector, exactly as a pure one does.
+
+|  | `conserve = N` | `conserve = strong(N)` |
+|---|---|---|
+| jump operators | any of definite charge, `C`, `dag(C)`, `N` | only those of zero flux, `N`, `dag(C) * C` |
+| states | may mix sectors | one sector only |
+| blocks of the mixed index of a fermion | 3 | 4 |
+| `partial_trace` | yes | no, what is left spreads over sectors |
+
+Dephasing, whose jump operator is `N` itself, is the usual strong case; particle loss, whose
+jump is `C`, is not. Declaring `strong` and then using a jump that moves the charge is refused
+by a message naming the operator and pointing at the weak form.
+
+A strong quantity takes two of the four charge components ITensors allows, where a weak one
+takes a single one, so at most two quantities can be declared strong.
+
+```@docs
+strong
+flux
+```
+
 ## Defining new site types
 
 To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly `string_state` on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using `@def_states` and `@def_operators`.

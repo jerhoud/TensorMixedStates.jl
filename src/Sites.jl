@@ -1,5 +1,5 @@
 export AbstractSite, mix, dim, Index, string_state, identity_operator, state, flux
-export @def_operators, @def_states, @create_site_module, conserve_string
+export @def_operators, @def_states, @create_site_module, conserve_string, strong
 
 """
     abstract type AbstractSite
@@ -599,8 +599,8 @@ the states it connects. It is the zero charge for an operator commuting with eve
 site conserves, and `QN()` for a site conserving nothing.
 
 An operator connecting states whose charges differ in more than one way has no flux at all
-and cannot be used where that quantity is conserved. `X` raises and lowers `2Sz` at once and
-is refused, while under `parity(2Sz)` it has one, the two differences becoming the same one
+and cannot be used where that quantity is conserved. `X` raises and lowers `N` at once and is
+refused, while under `parity(N)` it carries `1`, the two differences becoming the same one
 modulo 2.
 
 The difference is taken modulo the charge, without which `Xd` would be refused although it
@@ -651,6 +651,10 @@ end
 flux(op::GenericOp{Pure}, site::AbstractSite) =
     error("flux is only defined for one site operators, and $op acts on several")
 
+struct Strong
+    arg::SimpleOp
+end
+
 """
     strong(op)
 
@@ -674,16 +678,7 @@ otherwise.
 
     Fermion(conserve = strong(N))          # dephasing, `L = N`
     Electron(conserve = (strong(Ntot), 2Sz))
-
-!!! warning
-    Not exported yet: the declaration, its encoding and the index it draws are in place, but
-    the mixed representation does not honour it. `Mixer.jl`, `States.jl` and `Observables.jl`
-    still pair the ket with the plain bra. Export this once they do.
 """
-struct Strong
-    arg::SimpleOp
-end
-
 strong(a::SimpleOp) = Strong(a)
 strong(a::Strong) = a
 strong(a) = error("a conserved quantity is one operator acting on one site, and $a is not")
