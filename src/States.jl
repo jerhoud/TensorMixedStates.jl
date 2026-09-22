@@ -147,8 +147,10 @@ make_one_state(::Mixed, i::Index, k::Index, v::Vector, what, site::AbstractSite)
 # the density matrix is laid on the ket and the bra and only then gathered, never written
 # straight onto the mixed index: combining charged indices merges and sorts their sectors,
 # so the flat order of the mixed basis is not the order of the matrix
-make_one_state(::Mixed, i::Index, k::Index, m::Matrix, what, site::AbstractSite) =
-    charged_state(() -> op_on_sites(m, [i], [dag(i')]), i, what, site) * mixer(i, k)
+function make_one_state(::Mixed, i::Index, k::Index, m::Matrix, what, site::AbstractSite)
+    b, c = mixer(i, k, site)
+    return charged_state(() -> op_on_sites(m, [i], [dag(b')]), i, what, site) * c
+end
 
 """
     state_links(ts)
@@ -274,7 +276,10 @@ function mix(state::State{Pure})
     for (i, t) in enumerate(st)
         idx = SysIndex{Pure}(system, i)
         midx = SysIndex{Mixed}(system, i)
-        mt = t * dag(t') * mixer(idx, midx) * left
+        b, c = mixer(idx, midx, system[i])
+        # the bra moves to its own index before being daggered, which is a no operation
+        # unless the site conserves something strongly
+        mt = t * dag(to_bra(t', idx', b')) * c * left
         if i < n
             rlink = commonind(t, st[i+1])
             # the combined link is taken from the combiner rather than named in advance:

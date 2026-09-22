@@ -23,7 +23,24 @@ everything that crosses between the two representations goes through this one co
 the pairs are then flattened in the same order everywhere. Without charges `dag` is the
 identity and this is the plain combiner it always was.
 """
-mixer(j::Index, k::Index) = combinerto(k, j, dag(j'))
+function mixer(j::Index, k::Index, site::AbstractSite)
+    b = bra_index(j, site)
+    return b, combinerto(k, j, dag(b'))
+end
+
+"""
+    to_bra(t, from, to)
+
+the tensor `t` with its index `from` carried by `to` instead.
+
+The two indices hold the same blocks in the same order and differ only in the names their
+charges go under, so the storage is valid as it stands and only the index set is swapped.
+This leans on `ITensors.setinds`, which is not part of the public ITensors interface: an
+upgrade that moves it breaks here. Nothing to do when the site conserves nothing strongly,
+the bra being the ket index itself.
+"""
+to_bra(t::ITensor, from::Index, to::Index) =
+    from === to ? t : ITensors.setinds(t, map(i -> i == from ? to : i, inds(t)))
 
 """
     tensor_index(t::ITensor)
@@ -280,8 +297,9 @@ function tensor(a::SetState, site::AbstractSite; charged::Bool = false)
     # the target is laid on the two site indices and only then gathered, never written
     # straight onto the mixed one: combining charged indices merges and sorts their
     # sectors, so the flat order of the mixed basis is not the order of the matrix
-    tr = denseblocks(delta(dag(i), i')) * dag(mixer(i, j))
-    t = charged_state(() -> op_on_sites(m, [i'], [dag(i'')]), i, a.state, site)
-    return tr * t * mixer(i', j')
+    b, c = mixer(i, j, site)
+    tr = denseblocks(delta(dag(i), b')) * dag(c)
+    t = charged_state(() -> op_on_sites(m, [i'], [dag(b'')]), i, a.state, site)
+    return tr * t * last(mixer(i', j', site))
 end
 

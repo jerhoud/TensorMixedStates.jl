@@ -7,8 +7,14 @@ function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
+    b, c = mixer(j, k, s[i])
+    if b !== j
+        error("measuring a state whose site $(typeof(s[i])) conserves something strongly " *
+              "is not implemented yet: the trace of such a state is not a product of one " *
+              "vector per site")
+    end
     # daggered so that the result meets the `k` of the state and not another copy of it
-    return denseblocks(delta(dag(j), j')) * dag(mixer(j, k))
+    return denseblocks(delta(dag(j), b')) * dag(c)
 end
 
 tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
@@ -19,7 +25,7 @@ function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
     t = tensor(s, ind)
     j = SysIndex{Pure}(s, ind.index...)
     k = SysIndex{Mixed}(s, ind.index...)
-    return t * dag(mixer(j, k))
+    return t * dag(last(mixer(j, k, s[ind.index...])))
 end
 
 # `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
@@ -34,7 +40,7 @@ function tensor_dag(state::State, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
-    c = mixer(j, k)
+    c = last(mixer(j, k, s[i]))
     # the conjugate is spread back over the two indices, the ket and the bra are exchanged,
     # and the pair is gathered again: that transposition is what turns a conjugate into an
     # adjoint. The exchange is a renaming rather than a second combiner in the other order,
