@@ -51,10 +51,14 @@ Some of those lines need more than a row.
 **A long lived branch stays off `dev`**, whether it carries a documentation rework or a
 feature. Cut it from `dev` and merge it back there. Only an urgent fix ever branches from
 the tag. `dev` has to remain mergeable into `main` at any moment, because that is what
-makes an urgent release possible; a half finished rewrite sitting there takes it away. Mark
-the states worth returning to with a branch rather than trusting the reflog — `git branch
-approach-a` before trying something else — and rebase on `dev` now and then so that the
-final merge stays small.
+makes an urgent release possible; a half finished rewrite sitting there takes it away.
+
+Commit often on it; a commit is already a state you can return to. A branch of its own is
+for what a commit does not protect: `git branch before-rebase` ahead of a rebase or a
+reset, which leave the old commits reachable only from the reflog, and a second branch when
+two approaches have to live side by side. Rebase on `dev` now and then so that the final
+merge stays small, bearing in mind that rebasing a branch already pushed rewrites it and
+needs `--force-with-lease`.
 
 **An urgent fix** depends on what `dev` holds. If it holds nothing you would refuse to
 publish, fix it there and fast forward `main` onto it. If it holds unfinished work, branch
