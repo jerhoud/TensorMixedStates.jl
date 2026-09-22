@@ -49,6 +49,52 @@ TensorMixedStates.dim(::Pretender) = 2
     @test norm(matrix(Sx^2+Sy^2+Sz^2-S2, Qubit()))≈0 atol=1e-12
 end
 
+@testset "Qubit excitation number" begin
+    q = Qubit()
+    # N counts "Dn" as the occupied state, so that it agrees with Sz rather than against it
+    @test matrix(N, q) ≈ [0. 0. ; 0. 1.]
+    @test matrix(N, q) ≈ matrix(Proj(1), q)
+    @test matrix(N, q) ≈ matrix((Id - Z) / 2, q)
+    @test matrix(N, q) ≈ matrix(0.5 * Id - Sz, q)
+
+    # the name is shared with the sites that already had it, as the whole scheme intends
+    @test Qubits.N === Bosons.N === Fermions.N
+
+    # conserving it is the same conservation as conserving Sz, said in the language of
+    # excitations and with integer charges rather than the doubled ones of a half integer spin
+    @test Qubit(conserve = N).conserve == "N:0,1"
+    @test Qubit(conserve = 2Sz).conserve == "2Sz:1,-1"
+
+    # "Up" being empty, it is Sm that creates an excitation
+    @test flux(Sm, Qubit(conserve = N)) == TensorMixedStates.ITensors.QN("N", 1)
+    @test flux(Sp, Qubit(conserve = N)) == TensorMixedStates.ITensors.QN("N", -1)
+    @test_throws "no definite flux" flux(X, Qubit(conserve = N))
+end
+
+@testset "Spin excitation number" begin
+    # N counts the excitations above the state of maximal Sz, which is the Holstein-Primakoff
+    # counting and the same convention as for a qubit
+    for x in (1/2, 1, 3/2, 2)
+        site = Spin(x)
+        @test matrix(N, site) ≈ matrix(x * Id - Sz, site)
+        # integer for every spin, half integer ones included, which is what spares the
+        # doubling that 2Sz needs
+        @test all(k -> matrix(N, site)[k, k] ≈ k - 1, 1:dim(site))
+    end
+
+    # a qubit and a spin one half are the same system, and now say so
+    @test matrix(N, Spin(1/2)) ≈ matrix(N, Qubit())
+    @test Spins.N === Qubits.N === Bosons.N
+
+    @test Spin(1/2, conserve = N).conserve == "N:0,1"
+    @test Spin(3/2, conserve = N).conserve == "N:0,1,2,3"
+    # the same conservation as 2Sz, counted from the other end
+    @test Spin(3/2, conserve = 2Sz).conserve == "2Sz:3,1,-1,-3"
+
+    @test flux(Sm, Spin(1, conserve = N)) == TensorMixedStates.ITensors.QN("N", 1)
+    @test flux(Sp, Spin(1, conserve = N)) == TensorMixedStates.ITensors.QN("N", -1)
+end
+
 @testset "Fermion measuring" begin
     @test_pm test_phases(CreateState{type}(1, Fermion(), "1";
         final_measures = check(N(1), 1)))

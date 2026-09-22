@@ -11,6 +11,7 @@ A site type for representing spin sites (dim is `2 spin + 1`)
     Spin(2)
     Spin(1, conserve = Sz)       # integer eigenvalues
     Spin(1/2, conserve = 2Sz)    # half integer ones are written doubled
+    Spin(1/2, conserve = N)      # or counted from the top, which is integer for any spin
 
 # States
 
@@ -25,6 +26,12 @@ A site type for representing spin sites (dim is `2 spin + 1`)
 
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
 - `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators and ``S^2``
+- `N`                : the number of excitations above the state of maximal ``S_z``, that is
+                       ``s - S_z``, which is the counting of the Holstein-Primakoff mapping.
+                       Its eigenvalues are integers for every spin, half integer ones
+                       included, so `Spin(3/2, conserve = N)` conserves the same quantity as
+                       `Spin(3/2, conserve = 2Sz)` without the doubling. As for a qubit, it is
+                       `Sm` that raises it
 """
 struct Spin <: AbstractSite
     s::Float64
@@ -70,10 +77,11 @@ end
     selfadjoint_op =>
     [
         Sz = s -> [ i==j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
+        N = s -> [ i==j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
         Sx = (Sp + Sm) / 2,
         Sy = (Sp - Sm) / (2im),
         S2 = s -> s.s * (s.s + 1) * Id,
     ],
 ])
 
-@create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2])
+@create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2, N])

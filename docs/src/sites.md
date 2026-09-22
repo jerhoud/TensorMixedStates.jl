@@ -170,6 +170,12 @@ site module exporting it or because you declared it for an earlier site of your 
 registered for the new site and left bound as it is. So the name goes on standing for one
 single operator, and the sites already using it are undisturbed.
 
+Which name to share is a question of how many there are to count. A site with a single
+number of particles calls it `N`, as `Fermion`, `Boson`, `Qboson`, `Qudit`, `Qubit` and
+`Spin` all do; a site holding several species names them apart, as `Electron` and `Tj` do
+with `Nup`, `Ndn` and `Ntot`, where a bare `N` would leave the reader guessing which one it
+meant.
+
 The counterpart is that the declarations have to agree. Declaring `N` as `plain_op` when a
 site already in scope declared it `selfadjoint_op` is refused, with a message saying so,
 rather than quietly changing what `N` means for every site using it. If you want different

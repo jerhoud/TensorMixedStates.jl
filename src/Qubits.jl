@@ -8,7 +8,8 @@ A site type for representing qubit sites, that is a two level system.
 # Example
 
     Qubit()
-    Qubit(conserve = 2Sz)
+    Qubit(conserve = N)      # the number of excitations
+    Qubit(conserve = 2Sz)    # the same conservation, in spin language
 
 # States
 
@@ -24,6 +25,13 @@ A site type for representing qubit sites, that is a two level system.
 - `X, Y, Z`          : the Pauli operators
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
 - `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators (half the Pauli operators) and ``S^2``
+- `N`                : the number of excitations, ``1/2 - S_z``, which counts `"Dn"` as the
+                       occupied state. It is the same operator as `Proj(1)` and as
+                       ``(1 - Z)/2``, and it is what a qubit standing for a hard core boson
+                       conserves: `Qubit(conserve = N)` says in one word what
+                       `Qubit(conserve = 2Sz)` says in two, and its charges are the integers
+                       0 and 1 rather than ±1. Note that `Sm` is then what creates an
+                       excitation and `Sp` what destroys one, `"Up"` being the empty state
 - `H, S, T, Swap`    : the Hadamard, S, T and Swap gates
 - `Phase(t)`         : the phase gate
 - `controlled(gate)` : controlled gate
@@ -61,6 +69,7 @@ dim(::Qubit) = 2
         Sy = Y / 2,
         Sz = Z / 2,
         S2 = 0.75 * Id,
+        N = [0. 0. ; 0. 1.],
     ],
     plain_op =>
     [
@@ -143,4 +152,4 @@ create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) =
         )
     ]
 
-@create_site_module(Qubits, [Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, Sp, Sm, H, S, T, Swap, Phase])
+@create_site_module(Qubits, [Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm, H, S, T, Swap, Phase])

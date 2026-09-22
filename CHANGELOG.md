@@ -11,6 +11,14 @@ the reference article.
 
 ## [Unreleased]
 
+### Added
+
+- `N`, the number of excitations, on `Qubit` and on `Spin`, where the other site types
+  already had it. On a qubit it is `1/2 - Sz`, that is the projector on `"Dn"`, and on a spin
+  it is `s - Sz`, the counting of the Holstein-Primakoff mapping. Its eigenvalues are integers
+  for every spin, half integer ones included. Note that `Sm` is then what raises it, `"Up"`
+  being the empty state.
+
 ### Changed
 
 - The state file format is now version 2. The fields of a site are written as a string each,
