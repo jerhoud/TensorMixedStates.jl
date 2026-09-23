@@ -31,6 +31,16 @@ phase_hash(h::UInt, x::Function) = hash(string(typeof(x)), h)
 phase_hash(h::UInt, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = hash("()", h))
 phase_hash(h::UInt, x::AbstractArray) = foldl(phase_hash, x; init = hash(size(x), h))
 
+# a Limits hashes as it did when `mindim` defaulted to 0, now that it is 1 at least, so that
+# the checkpoint of a simulation with the default limits goes on being resumed. The two mean
+# no minimum. A schedule was always written by hand, and is left alone
+function phase_hash(h::UInt, l::Limits)
+    h = hash(string(typeof(l)), h)
+    h = phase_hash(h, l.cutoff)
+    h = phase_hash(h, l.maxdim)
+    return phase_hash(h, l.mindim == 1 ? 0 : l.mindim)
+end
+
 function phase_hash(h::UInt, x)
     h = hash(string(typeof(x)), h)
     for f in fieldnames(typeof(x))

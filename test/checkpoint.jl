@@ -308,6 +308,12 @@ end
     @test id(base) == id([[[first(base)]], last(base)])
     # and it does not depend on the indices a session happens to draw
     @test id(base) == id(deepcopy(base))
+    # the default limits hash as they did when mindim defaulted to 0, which is the fields of a
+    # Limits walked in order, so that a checkpoint written then goes on being resumed
+    ph = TensorMixedStates.phase_hash
+    old(mindim) = foldl(ph, (0.0, typemax(Int), mindim); init = hash(string(Limits), UInt(0)))
+    @test ph(UInt(0), Limits()) == old(0)
+    @test ph(UInt(0), Limits(mindim = 3)) == old(3)
 
     # a checkpoint of another simulation must be refused, so anything a phase says has to
     # count. Resuming into the wrong simulation is silent, which is what makes it serious.

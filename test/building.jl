@@ -58,6 +58,14 @@ end
     # a cutoff is a real number, an integer included, which a field of union type refused
     @test Limits(cutoff = 0).cutoff === 0.0
     @test Limits(cutoff = [0, 1e-10]).cutoff == [0.0, 1e-10]
+    # a state taken to zero can still be truncated: a gate of several sites and the sum of two
+    # zero states used to fail inside ITensors
+    @test Limits(mindim = 0).mindim == 1
+    @test Limits(mindim = [0, 2]).mindim == [1, 2]
+    q = State{Pure}(System(3, Qubit()), "Up")
+    z = apply(Sp(2), q)
+    @test norm(z - z) == 0
+    @test norm(apply((Sp ⊗ Sp)(1, 2), q)) == 0
     sys = System(6, Qubit())
     st = RandomState{Pure}(sys, 8)
     # `mindim` is the floor the cutoff is not allowed to cross, and `maxdim` keeps the

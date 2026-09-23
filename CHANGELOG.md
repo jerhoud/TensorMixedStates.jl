@@ -123,6 +123,12 @@ the reference article.
   has a negative entry raised a `DomainError`, so that `Sz^0.5` could not be used at all.
   Its matrix is computed complex, as later versions of Julia do.
 
+- A gate of several sites taking a state to zero, and the sum or difference of two zero
+  states, raised a `BoundsError` inside ITensors. `mindim` defaulted to 0, which ITensors
+  does not expect and which made it truncate a spectrum of zeros past its first value. It
+  defaults to 1, the least a bond can have, and a smaller value is taken as 1; a checkpoint
+  written with the former default is still resumed.
+
 ## [1.3.0] - 2026-09-21
 
 This release carries a user visible change of behaviour, the removal of MKL, which is why

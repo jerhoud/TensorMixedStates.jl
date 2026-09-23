@@ -21,7 +21,8 @@ A type to hold MPS limits
 # Fields
 - `cutoff`: the cutoff under which singular values are neglected
 - `maxdim`: the maximum bond dimension
-- `mindim`: the minimum bond dimension, `0` meaning no minimum
+- `mindim`: the minimum bond dimension, `1`, the least a bond can have, meaning no minimum,
+  and a smaller value being taken as `1`
 
 Any field may be given one value per sweep, as a vector, for a phase that sweeps:
 `Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A
@@ -38,15 +39,22 @@ struct Limits
     cutoff::Union{Float64, Vector{Float64}}
     maxdim::Union{Int, Vector{Int}}
     mindim::Union{Int, Vector{Int}}
+    # a bond has a dimension of one at least, which is what ITensors takes for no minimum:
+    # told less, it truncates a spectrum of zeros past its first value, so that a gate of
+    # several sites taking a state to zero, or the sum of two zero states, raised a BoundsError
+    Limits(cutoff, maxdim, mindim) = new(cutoff, maxdim, at_least_one(mindim))
 end
 
 # a cutoff is a real number, and `cutoff = 0` has to be accepted as one: a field whose type
 # is a union is not converted to, so `@kwdef` refused it
-Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 0) =
+Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 1) =
     Limits(float_cutoff(cutoff), maxdim, mindim)
 
 float_cutoff(x::Real) = Float64(x)
 float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
+
+at_least_one(m::Int) = max(m, 1)
+at_least_one(m::Vector{Int}) = max.(m, 1)
 
 """
     sweep_value(x, sweep)
