@@ -324,6 +324,8 @@ than the state has is refused.
 The system it builds is a new one, so two states weakened apart live on two systems and have
 to be put on one another before `inner` will compare them.
 
+A `Simulation` is weakened the same way, through its state.
+
 # Examples
 
     weaken(state)                          # one rung down

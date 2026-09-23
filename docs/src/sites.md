@@ -192,7 +192,7 @@ exchange the state lives in a single sector, exactly as a pure one does.
 | jump operators | any of definite charge, `C`, `dag(C)`, `N` | only those of zero flux, `N`, `dag(C) * C` |
 | states | may mix sectors | one sector only |
 | blocks of the mixed index of a fermion | 3 | 4 |
-| `partial_trace` | yes | no, what is left spreads over sectors |
+| `partial_trace` | yes | no, what is left spreads over sectors; [`weaken`](@ref) first |
 
 Dephasing, whose jump operator is `N` itself, is the usual strong case; particle loss, whose
 jump is `C`, is not. Declaring `strong` and then using a jump that moves the charge is refused
@@ -201,9 +201,33 @@ by a message naming the operator and pointing at the weak form.
 A strong quantity takes two of the four charge components ITensors allows, where a weak one
 takes a single one, so at most two quantities can be declared strong.
 
+### Moving between the levels
+
+A quantity is thus conserved at one of three levels: strongly, weakly, or not at all.
+[`symmetries`](@ref) tells which, in the form a declaration takes, and [`weaken`](@ref) takes a
+state, a system or a simulation down to a lower level, building the system it lands on:
+
+```julia
+symmetries(system)                     # (strong(Ntot), 2Sz)
+weaken(state)                          # one level down: strong becomes weak, weak is dropped
+weaken(state, (strong(Ntot), 2Sz))     # exactly these
+weaken(state, ())                      # no charges at all
+weaken(state, symmetries(system))      # the identity
+```
+
+This is a step of a simulation in its own right. A phase may evolve under a strong symmetry,
+which dephasing allows, and the next one continue under a weak one, where particle loss
+becomes possible. There is no way back: the finer blocks of a strong symmetry cannot be
+recovered from the coarser ones, and a target asking for more than the state has is refused.
+
+Weakening a state costs one local tensor per site, and it is also how a strongly conserving
+state gets a `partial_trace`.
+
 ```@docs
 strong
 flux
+symmetries
+weaken
 ```
 
 ## Defining new site types

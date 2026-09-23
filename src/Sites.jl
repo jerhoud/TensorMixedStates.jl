@@ -647,6 +647,8 @@ struct Strong
     arg::SimpleOp
 end
 
+show(io::IO, a::Strong) = print(io, "strong(", a.arg, ")")
+
 """
     strong(op)
 
@@ -671,8 +673,6 @@ otherwise.
     Fermion(conserve = strong(N))          # dephasing, `L = N`
     Electron(conserve = (strong(Ntot), 2Sz))
 """
-show(io::IO, a::Strong) = print(io, "strong(", a.arg, ")")
-
 strong(a::SimpleOp) = Strong(a)
 strong(a::Strong) = a
 strong(a) = error("a conserved quantity is one operator acting on one site, and $a is not")
@@ -731,7 +731,13 @@ spec_names(a) = error("$a does not name a conserved quantity")
     symmetries(::AbstractSite)
     symmetries(::System)
 
-what is conserved, and how, in the form `weaken` takes. See `Conserved`.
+what is conserved, and how. It prints as the value `conserve` would be given to declare it,
+and it can be given back to `weaken` as a target.
+
+# Examples
+
+    symmetries(System(4, Electron(conserve = (strong(Ntot), 2Sz))))   # (strong(Ntot), 2Sz)
+    symmetries(System(4, Fermion()))                                  # ()
 """
 symmetries(site::AbstractSite) =
     Conserved([ (q[1], q[4]) for q in decode_conserve(conserved(site)) ])

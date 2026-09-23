@@ -27,6 +27,12 @@ the reference article.
   blocks finer, in exchange for a state living in a single sector. Dephasing is the usual
   strong case, and `partial_trace` is unavailable there.
 
+- `weaken`, which takes a state, a system or a simulation down to a lower level of
+  conservation, strong to weak or weak to none, or to exactly the quantities a target names,
+  building the system it lands on. A phase may thus evolve under a strong symmetry and the
+  next one under a weak one, where a jump moving the charge becomes possible; there is no way
+  back. `symmetries` reports what a system conserves, and how, in the form `weaken` takes.
+
 - `RandomState{Mixed}(system, states, linkdims)`, which draws a random density matrix from
   the states its purification starts from. A system that conserves something has no sector to
   draw one in otherwise, and what tracing half of the purification leaves is a mixture over

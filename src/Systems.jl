@@ -60,14 +60,15 @@ the names of every quantity the sites of the system conserve strongly. See `stro
 strong_names(system::System) =
     unique(reduce(vcat, map(strong_names, system.sites); init = String[]))
 
-"""
-    weaken(::System)
-
-the same system with every strong symmetry asked for weakly, or the system itself when it
-has none. See `strong` and `weaken(::State)`.
-"""
 symmetries(system::System) = symmetries(system.sites[1])
 
+"""
+    weaken(::System)
+    weaken(::System, target)
+
+the system a state lands on when `weaken(::State)` is given the same target: the same sites,
+conserving less. Without a target, one level down.
+"""
 weaken(system::System, target::Conserved) = System([ weaken(s, target) for s in system.sites ])
 
 weaken(system::System, spec) = weaken(system, Conserved(spec_names(spec)))
