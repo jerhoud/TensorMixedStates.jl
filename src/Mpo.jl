@@ -140,9 +140,16 @@ function mpo_charges(pre::PreMPO{R}, coefs) where R
             c = left - flux(u)
             if r == 1
                 if !isnothing(total) && total ≠ c
+                    st = strong_names(pre.system)
+                    only_strong = !isempty(st) &&
+                        weak_qn(total, st, String[]) == weak_qn(c, st, String[])
                     error("the terms of this operator do not all carry the same charge, " *
-                          "$(total) and $(c), so it has no definite flux and cannot be " *
-                          "put on a system that conserves it")
+                          "$(total) and $(c), " *
+                          (only_strong ?
+                              "which only a strong symmetry tells apart: drop `strong` or " *
+                              "weaken the state" :
+                              "so it has no definite flux and cannot be put on a system " *
+                              "that conserves it"))
                 end
                 total = c
             else

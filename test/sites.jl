@@ -466,6 +466,13 @@ end
     # the very same jump is fine when the quantity is conserved weakly, which is the whole
     # difference between the two: a weak symmetry lets the charge move, a strong one does not
     @test flux(ten(System(2, Fermion(conserve = N)), Dissipator(C)(1))) == Q.QN("N", 0)
+
+    # an MPO refuses the same jump on its own path, where it shows as two terms of different
+    # charges, and points at the same way out
+    lind = -im * (dag(C)(1) * C(2) + dag(C)(2) * C(1)) + Dissipator(C)(1)
+    mixed(site) = mix(State{Pure}(System(2, site), ["Occ", "Emp"]))
+    @test_throws "drop `strong`" make_mpo(mixed(Fermion(conserve = strong(N))), lind)
+    @test_ok make_mpo(mixed(Fermion(conserve = N)), lind)
 end
 
 @testset "Measuring on every kind of charged site" begin
