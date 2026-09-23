@@ -117,6 +117,13 @@ sim(system::System) =
 create the tensorial product of two systems
 """
 function (sys1::System ⊗ sys2::System)
+    # the indices are kept as they are, so they must be of one kind already, and what the
+    # sites conserve must be able to live on one system, as `System(sites)` checks
+    if is_charged(sys1) ≠ is_charged(sys2)
+        error("cannot take the tensor product of a system carrying charges and one carrying " *
+              "none, build it from its sites with System instead")
+    end
+    check_charges([sys1.sites; sys2.sites])
     if sys2 === sys1
         sys2 = sim(sys1)
     end

@@ -260,6 +260,11 @@ end
     @test Fermion(conserve = N).conserve == "N:0,1"
     @test Fermion(conserve = parity(N)).conserve == "parity(N)%2:0,1"
     @test Fermion(conserve = named(N, "Nf")).conserve == "Nf:0,1"
+    # a renamed quantity keeps the modulus of what it renames, which its eigenvalues ±1
+    # cannot give back: it used to become an integer charge and to refuse a pairing term
+    @test Fermion(conserve = named(parity(N), "P")).conserve == "P%2:0,1"
+    paired = State{Pure}(System(4, Fermion(conserve = named(parity(N), "P"))), "Emp")
+    @test_ok make_mpo(paired, sum(C(i) * C(i + 1) + dag(C)(i + 1) * dag(C)(i) for i in 1:3))
     @test Boson(6, conserve = mod(N, 3)).conserve == "mod(N,3)%3:0,1,2,0,1,2"
     @test Spin(1, conserve = Sz).conserve == "Sz:1,0,-1"
     @test Spin(1/2, conserve = 2Sz).conserve == "2Sz:1,-1"

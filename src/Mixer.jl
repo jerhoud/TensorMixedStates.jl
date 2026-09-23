@@ -467,6 +467,12 @@ integers and 0 modulo 2. The integer reading wins, and `parity` is how the other
 asked for.
 """
 function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
+    # a renamed operator reads its charges off what it renames, which is where a modulus is
+    # carried: named(parity(N), "P") read its ±1 as integers and conserved their sum instead
+    # of a parity
+    if op isa Operator && op.expr isa GenericOp
+        return site_charges(op.expr, site; tol)
+    end
     m = matrix(op, site)
     d = diag(m)
     off = norm(m - Diagonal(d))

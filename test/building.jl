@@ -14,6 +14,13 @@ end
     @test_ok System(3, Qubit())
     @test_ok System([Qubit()])
     @test_ok System([Qubit(), Qubit(), Qubit()])
+    # a product keeps the indices of its factors, so a charged system and a plain one cannot
+    # be put together, nor two whose quantities could not live on one system
+    weak = System(2, Fermion(conserve = N))
+    strong_one = System(2, Fermion(conserve = strong(N)))
+    @test_throws "carrying charges and one carrying none" weak ⊗ System(2, Qubit())
+    @test_throws "strongly on one site and weakly on another" strong_one ⊗ weak
+    @test_ok weak ⊗ System(2, Fermion(conserve = N))
 end
 
 @testset "State building" begin
@@ -121,6 +128,11 @@ end
     # and a mixed representation goes through the same entries
     @test_throws "acts on site 8" expect(stm, X(8))
     @test_throws "acts on site 8" make_mpo(stm, Dissipator(Sm)(8))
+    # partial_trace used to skip a position it did not find when tracing, leaving the state
+    # whole, and to raise a BoundsError when keeping it
+    @test_throws "given site 5, which the state does not have" partial_trace(stm, [5])
+    @test_throws "given site 0" partial_trace(stm, [0, 1]; keepers = true)
+    @test_throws "does not have" renyi2(stm, [2, 7])
 
     # what is inside the system is untouched
     @test_ok expect(st, X(4) * Z(1))

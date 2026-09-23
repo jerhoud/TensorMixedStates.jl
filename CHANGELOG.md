@@ -101,6 +101,14 @@ the reference article.
   of a fermionic operator, which turns into a sum, and a function of a fermionic operator
   acting on several sites, such as its exponential, which leaves no room for a string.
 
+- `partial_trace` refuses a position the state does not have, and names it. Tracing out a
+  site beyond the last one left the state whole without a word, and keeping one raised a
+  `BoundsError`. `renyi2` and `mutual_info_renyi2` given positions, and the `PartialTrace`
+  phase, go through it.
+
+- `entanglement_entropy` returned `NaN` when a singular value was exactly zero, which a
+  `mindim` above the Schmidt rank keeps: a zero now adds nothing to the entropy.
+
 ## [1.3.0] - 2026-09-21
 
 This release carries a user visible change of behaviour, the removal of MKL, which is why

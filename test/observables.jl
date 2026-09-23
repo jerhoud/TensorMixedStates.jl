@@ -109,6 +109,11 @@ end
     L2 = log(2)
     s2 = System(2, Qubit())
     s4 = System(4, Qubit())
+    # a mindim above the Schmidt rank keeps singular values of exactly zero, whose 0 * log(0)
+    # made the entropy NaN
+    _, g = dmrg(sum(Z(i) for i in 1:4), State{Pure}(s4, "Up"); nsweeps = 2,
+                limits = Limits(mindim = 3, maxdim = 3))
+    @test entanglement_entropy(g, 2)[1] ≈ 0 atol=1e-12
     bell = (State{Pure}(s2, "Up") + State{Pure}(s2, "Dn")) / sqrt(2)
     ghz = (State{Pure}(s4, "Up") + State{Pure}(s4, "Dn")) / sqrt(2)
     prod = State{Pure}(s4, "Up")

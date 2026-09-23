@@ -735,7 +735,9 @@ function entanglement_entropy(state::State, pos::Int)
     # the spectrum would come out grouped by sector rather than decreasing
     sp = sort([ S[i,i]^2 for i in 1:dim(S, 1) ]; rev = true)
     sp /= sum(sp)
-    ee = -sum(p * log(p) for p in sp)
+    # a singular value of exactly zero, which a `mindim` above the Schmidt rank keeps, adds
+    # nothing to the entropy, while 0 * log(0) would make it NaN
+    ee = -sum(p * log(p) for p in sp if p > 0)
     return (ee, sp)
 end
 
@@ -814,6 +816,14 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{<:Integer}; keep
               "spreads over several sectors: weaken it first, giving up the strong symmetry")
     end
     n = length(state)
+    # a position the state does not have would be silently ignored when tracing, the filter
+    # below never meeting it, and would raise a BoundsError when keeping
+    for p in pos
+        if p < 1 || p > n
+            error("partial_trace was given site $p, which the state does not have: it has " *
+                  "$n sites")
+        end
+    end
     if keepers
         keep = sort(unique(pos))
     else
