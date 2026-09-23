@@ -107,20 +107,20 @@ end
 print_coef(io::IO, a::Number) =
 if a ≠ 1
     if a == -1
-            print(io, "-")
-        elseif isa(a, Complex)
-            if imag(a) == 0
-                print(io, real(a))
-            elseif real(a) == 0
-                print_coef(io, imag(a))
-                print(io, "im*")
-            else
-                print(io, "(", a, ")")
-            end
+        print(io, "-")
+    elseif isa(a, Complex)
+        if imag(a) == 0
+            print(io, real(a))
+        elseif real(a) == 0
+            print_coef(io, imag(a))
+            print(io, "im*")
         else
-            print(io, a)
+            print(io, "(", a, ")")
         end
+    else
+        print(io, a)
     end
+end
 
 function paren(f, io::IO, out_prec::Int, in_prec::Int = out_prec)
     ext_prec = get(io, :precedence, 0)
