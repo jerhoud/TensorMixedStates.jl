@@ -46,7 +46,7 @@ function System(sites::Vector{<:AbstractSite})
     check_charges(sites)
     charged = is_charged(sites)
     pidx = [ site_index(s, charged) for s in sites ]
-    midx = [ mix(pidx[k], sites[k]) for k in eachindex(sites) ]
+    midx = [ mixed_index(pidx[k], sites[k]) for k in eachindex(sites) ]
     return System(sites, pidx, midx)
 end
 

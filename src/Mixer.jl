@@ -363,7 +363,7 @@ lives on has to be found, and that is the mixed one of its sites.
 """
 function tensor(a::GenericOp{Mixed}, site::AbstractSite...; charged::Bool = false)
     is = [ site_index(s, charged) for s in site ]
-    ms = [ mix(is[k], site[k]) for k in eachindex(is) ]
+    ms = [ mixed_index(is[k], site[k]) for k in eachindex(is) ]
     j = combinedind(combiner(reverse(ms)...; tags = ""))
     m = matrix(a, site...)
     if !hasqns(j) || all(s -> isempty(strong_names(s)), site)
@@ -433,7 +433,7 @@ end
 
 function tensor(a::SetState, site::AbstractSite; charged::Bool = false)
     i = site_index(site, charged)
-    j = mix(i, site)
+    j = mixed_index(i, site)
     v = state(site, a.state)
     if v isa Matrix
         m = v

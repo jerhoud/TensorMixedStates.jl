@@ -399,7 +399,7 @@ end
 @testset "Declaring a strong symmetry" begin
     Q = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
-    mixed(s) = Q.space(mix(Index(s), s))
+    mixed(s) = Q.space(TensorMixedStates.mixed_index(Index(s), s))
 
     # the strength is recorded on the quantity and not on the site, so one site may hold
     # both kinds, and it travels in the string the site keeps

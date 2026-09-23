@@ -1,4 +1,4 @@
-export AbstractSite, mix, dim, Index, string_state, identity_operator, state, flux
+export AbstractSite, dim, Index, string_state, identity_operator, state, flux
 export @def_operators, @def_states, @create_site_module, conserve_string, strong
 
 """
@@ -165,25 +165,21 @@ string_state(site::AbstractSite, st::String) =
     state(site, parse(Int, st))
 
 """
-    mix(::Index)
+    mixed_index(i, site)
 
-return an ITensor.Index for a mixed representation corresponding to the pure representation Index given
+the index of the mixed representation pairing the ket `i` with the bra of the same site.
 
-The bra index is daggered, so that the charge of ``|m\\rangle\\langle n|`` is the
-difference of those of ``m`` and ``n`` rather than their sum. This is the pairing
-`mix(::State)` produces, its tensors being contracted as `t * dag(t')`, and on an index
-without charges the dag is a no operation.
+The bra is daggered, so that the charge of ``|m\\rangle\\langle n|`` is the difference of
+those of ``m`` and ``n`` rather than their sum. This is the pairing `mix(::State)` produces,
+its tensors being contracted as `t * dag(t')`, and on an index without charges the dag is a
+no operation. A site conserving something strongly stars its bra instead, which keeps the two
+charges apart; see `strong`.
+
+This is internal: the index it draws is a fresh one, of the right space but of an identity of
+its own, so it contracts with nothing. What a caller wants is the index the system drew,
+`SysIndex{Mixed}(system, i)`.
 """
-mix(i::Index) =
-    addtags(combinedind(combiner(i, dag(i'); tags = tags(i))), "Mixed")
-
-"""
-    mix(::Index, ::AbstractSite)
-
-the same, for an index drawn by that site, which is what says whether a quantity is
-conserved strongly. Without a strong one this is `mix(::Index)` exactly.
-"""
-mix(i::Index, site::AbstractSite) =
+mixed_index(i::Index, site::AbstractSite) =
     addtags(combinedind(combiner(i, dag(bra_index(i, site)'); tags = tags(i))), "Mixed")
 
 """
