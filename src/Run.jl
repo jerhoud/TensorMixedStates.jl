@@ -285,3 +285,6 @@ function log_phase(sim::Simulation, phase)
     end
     return sim
 end
+
+run_phase(sim::Simulation, sd::SimData) =
+    log_phase(sim, sd.phases)

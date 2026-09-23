@@ -128,22 +128,6 @@ struct Check
     Check(name, o1, o2, tol=nothing) = new(name, o1, o2, tol)
 end
 
-"""
-    obs_name(op)
-
-the name a measurement is given when the caller did not choose one: how the operator
-prints, compactly. Only `Operator` carries a name of its own; everything else a
-measurement may be asked for is a composition, whose printed form is its only description.
-`SimpleOp` is abstract, so reading a `name` field would work for a bare `X` and fail for
-`X * Y`, `2X` or `X + Y`.
-"""
-function obs_name(op)
-    io = IOBuffer()
-    print(IOContext(io, :compact => true), op)
-    seek(io, 0)
-    return read(io, String)
-end
-
 make_obs(o::IndexedOp{Pure}) =
     ObsOp(obs_name(o), simplify(o))
 make_obs(o::Union{Vector, Matrix}) = make_obs.(o)

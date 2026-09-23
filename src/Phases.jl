@@ -19,9 +19,6 @@ run_phase(sim::Simulation, phase) =
           "itself: define TensorMixedStates.run_phase(::Simulation, ::$(typeof(phase))), " *
           "returning the simulation the phase leaves behind")
 
-run_phase(sim::Simulation, sd::SimData) =
-    log_phase(sim, sd.phases)
-
 """
     as_representation(sim, R, ::State)
 

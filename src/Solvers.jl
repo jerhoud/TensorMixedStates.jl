@@ -214,3 +214,20 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
     end
     return dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
 end
+
+tdvp(op, t::Number, sim::Simulation; kwargs...) =
+    Simulation(sim, tdvp(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
+
+
+function dmrg(op, sim::Simulation; kwargs...)
+    e, st = dmrg(op, sim.state; kwargs...)
+    return (e, Simulation(sim, st))
+end
+
+approx_W(op, t::Number, sim::Simulation; kwargs...) =
+    Simulation(sim, approx_W(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
+
+function steady_state(op, sim::Simulation; kwargs...)
+    e, st = steady_state(op, sim.state; kwargs...)
+    return (e, Simulation(sim, st))
+end

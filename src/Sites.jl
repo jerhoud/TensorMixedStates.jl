@@ -485,53 +485,6 @@ approximate, and the answer is to define it exactly rather than to let it throug
 const charge_tol = 1e-14
 
 """
-    site_charges(op, site)
-
-the modulus and the charge each basis state of `site` carries for the conserved quantity
-`op`, as `(modulus, charges)`. A modulus of `1` is an ordinary additive charge over the
-integers, a modulus of `m` a charge of the cyclic group of order `m`.
-
-A conserved quantity has to be diagonal in the basis the site is written in, and its
-eigenvalues have to be readable as charges, which leaves exactly two cases. Integer
-eigenvalues are the charge itself. Eigenvalues on the unit circle are roots of unity, the
-charge is the exponent and the modulus is read from the denominators — which is what makes
-`Zd` work on a `Qudit` with no modulus written anywhere.
-
-The two cases overlap on ±1, which is as much a pair of integers as a pair of square roots
-of unity, and they are different conservations: two sites carrying -1 make -2 over the
-integers and 0 modulo 2. The integer reading wins, and `parity` is how the other one is
-asked for.
-"""
-function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
-    m = matrix(op, site)
-    d = diag(m)
-    off = norm(m - Diagonal(d))
-    if off > tol
-        error("$op is not diagonal on site $(typeof(site)), off by $(short(off)), so it " *
-              "cannot be a conserved quantity: a charge is carried by each basis state")
-    end
-    to_int = maximum(max(abs(imag(x)), abs(real(x) - round(real(x)))) for x in d)
-    if to_int ≤ tol
-        return (1, Int.(round.(real.(d))))
-    end
-    to_circle = maximum(abs(abs(x) - 1) for x in d)
-    if to_circle ≤ tol
-        θ = angle.(d) ./ (2π)
-        modulus = reduce(lcm, denominator.(rationalize.(Int, θ; tol = 1e-8)))
-        q = Int.(round.(θ .* modulus))
-        to_root = maximum(abs.([exp(2im * π * k / modulus) for k in q] .- d))
-        if to_root > tol
-            error("the eigenvalues of $op on site $(typeof(site)) are on the unit circle " *
-                  "but miss the roots of unity by $(short(to_root)), so they are not charges")
-        end
-        return (modulus, mod.(q, modulus))
-    end
-    error("the eigenvalues of $op on site $(typeof(site)) miss the integers by " *
-          "$(short(to_int)) and the unit circle by $(short(to_circle)), so they are not " *
-          "charges. Half integer ones are written doubled, 2Sz rather than Sz")
-end
-
-"""
     short(x)
 
 a number as an error message shows it, two significant digits being all one reads of a
@@ -539,51 +492,12 @@ deviation
 """
 short(x::Real) = round(x; sigdigits = 2)
 
-site_charges(op::GenericOp{Pure}, ::AbstractSite) =
-    error("a conserved quantity acts on one site, and $op acts on several")
-
-# the modulus of a ModOp is carried rather than read back, ±1 being unreadable, and the
-# charges are those of its argument taken modulo it
-function site_charges(a::ModOp{1}, site::AbstractSite; tol::Float64 = charge_tol)
-    m, q = site_charges(a.arg, site; tol)
-    if m ≠ 1
-        error("cannot take $(a.arg) modulo $(a.modulus) on site $(typeof(site)): it " *
-              "already carries a charge modulo $m")
-    end
-    return (a.modulus, mod.(q, a.modulus))
-end
-
 """
     show_charges(d)
 
 a list of charge differences as an error message shows it, `2Sz=2` or `Ntot=-1,2Sz=-1`
 """
 show_charges(d) = join(["$name=$val" for (name, val, _) in d], ",")
-
-"""
-    flux(op, site)
-
-the charge an operator carries on a site, as a `QN`: the difference between the charges of
-the states it connects. It is the zero charge for an operator commuting with everything the
-site conserves, and `QN()` for a site conserving nothing.
-
-An operator connecting states whose charges differ in more than one way has no flux at all
-and cannot be used where that quantity is conserved. `X` raises and lowers `N` at once and is
-refused, while under `parity(N)` it carries `1`, the two differences becoming the same one
-modulo 2.
-
-The difference is taken modulo the charge, without which `Xd` would be refused although it
-generates the very symmetry `Zd` records: its wrap around connects the last state to the
-first, a difference of `1 - d` rather than of 1.
-
-# Examples
-
-    flux(N, Fermion(conserve = N))        # QN("N",0)
-    flux(Sp, Qubit(conserve = 2Sz))       # QN("2Sz",2), in units of the declared charge
-    flux(Xd, Qudit(3, conserve = Zd))     # QN("Zd",1,3)
-"""
-flux(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol) =
-    charge_flux(matrix(op, site), op, site; tol)
 
 """
     charge_flux(m, what, site)
@@ -616,9 +530,6 @@ function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = charge_
     # an operator with no element at all carries no charge
     return isnothing(found) ? QN() : QN(found...)
 end
-
-flux(op::GenericOp{Pure}, site::AbstractSite) =
-    error("flux is only defined for one site operators, and $op acts on several")
 
 struct Strong
     arg::SimpleOp
@@ -920,51 +831,6 @@ adjoint_index(i::Index, names) =
         Index([ adjoint_qn(q, names) => d for (q, d) in space(i) ]...;
               tags = tags(i), plev = plev(i), dir = dir(i))
     end
-
-"""
-    conserve_string(site, spec)
-
-the form in which a site records what it conserves: for each quantity, its name, its
-modulus when that is not 1, and the charge of every basis state.
-
-`spec` is what the user wrote, one operator or a tuple of them, and it is read here rather
-than kept, because an operator cannot be written to a state file: the name a conserved
-quantity prints under is an expression, `2Sz` or `parity(N)`, and not a key of the operator
-library, so it could not be looked up again. What the operator is needed for is the charges,
-and those are what travel.
-
-This is what a site type of your own calls to fill its `conserve` field, the site being
-built bare first since the charges depend on its type and not on that field.
-
-# Examples
-
-    MySite(; conserve = ()) = MySite(conserve_string(MySite(""), conserve))
-
-    conserve_string(Fermion(""), N)              # "N:0,1"
-    conserve_string(Fermion(""), parity(N))      # "parity(N)%2:0,1"
-    conserve_string(Electron(""), (Ntot, 2Sz))   # "Ntot:0,1,1,2;2Sz:0,1,-1,0"
-"""
-function conserve_string(site::AbstractSite, spec)
-    ops = spec isa Tuple ? collect(spec) : [spec]
-    if isempty(ops)
-        return ""
-    end
-    parts = map(ops) do spec
-        op = spec isa Strong ? spec.arg : spec
-        modulus, q = site_charges(op, site)
-        name = obs_name(op)
-        if endswith(name, '!')
-            error("cannot conserve $name: a name ending in ! cannot be told from the mark " *
-                  "a site puts on a strong symmetry")
-        end
-        head = modulus == 1 ? name : "$name%$modulus"
-        # a strong symmetry is marked on the quantity and not on the site, so that one site
-        # may hold both kinds, and at the end of the head so that the name and the modulus
-        # are read exactly as before
-        return (spec isa Strong ? head * "!" : head) * ":" * join(q, ",")
-    end
-    return join(parts, ";")
-end
 
 """
     decode_conserve(s)
