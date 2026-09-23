@@ -139,6 +139,14 @@ For this to work you must have first imported TMS with
 using TensorMixedStates
 ```
 
+### Learning about matrix product states
+
+For an introduction to matrix product states and tensor networks, see the lecture notes of the
+course Grégoire Misguich gave at the 9th Les Houches summer school on Computational Physics:
+Open Quantum Systems, in June 2026, available on [arXiv:2606.24803](https://arxiv.org/abs/2606.24803).
+Their [repository](https://github.com/gregoire-misguich/Introduction-to-matrix-product-states-and-tensor-networks)
+holds the sixteen Julia examples the notes use, some of them written with TMS.
+
 ## Examples
 
 Working examples are presented in the folder `examples` in the repository. 
