@@ -184,6 +184,30 @@ function w_charges(pre::PreMPO, coefs)
 end
 
 """
+    link_maker(pre, coefs, charges)
+
+a function giving the link on the right of site `i` with `d` channels.
+
+The three builders draw their links the same way and differed only in which charges they
+ask for, `mpo_charges` or `w_charges`, so they share this. Without charges it is the plain
+index it always was.
+"""
+function link_maker(pre::PreMPO, coefs, charges)
+    if !is_charged(pre.system)
+        return (i, d) -> Index(d, "Link,l=$i")
+    end
+    q = charges(pre, coefs)
+    return (i, d) -> Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i")
+end
+
+"""
+    close_end(w, link, k)
+
+the tensor of the first or last site, with its dangling link fixed on channel `k`
+"""
+close_end(w::ITensor, link::Index, k::Int) = w * onehot(link => k)
+
+"""
     make_mpo(::PreMPO[, coefs])
     make_mpo(::State, operator)
 
@@ -196,13 +220,9 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     elt = mpo_eltype(pre, coefs)
-    charged = is_charged(sys)
-    q = charged ? mpo_charges(pre, coefs) : nothing
-    # the links of a charged MPO carry the charge each channel has accumulated, without
-    # which the tensor of a site would hold several fluxes. Without charges they are the
-    # plain indices they always were
-    mklink(i, d) = charged ? Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i") :
-                             Index(d, "Link, l=$i")
+    # the links of a charged MPO carry the charge each channel has accumulated, without which
+    # the tensor of a site would hold several fluxes
+    mklink = link_maker(pre, coefs, mpo_charges)
     rdim = 1
     rlink = mklink(0, 2)
     for i in 1:n
@@ -241,10 +261,10 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
             end
         end
         if i == 1
-            w *= charged ? onehot(llink => 1) : ITensor([1, 0], llink)
+            w = close_end(w, llink, 1)
         end
         if i == n
-            w *= charged ? onehot(dag(rlink) => 2) : ITensor([0, 1], rlink)
+            w = close_end(w, dag(rlink), 2)
         end
         ts[i] = w
     end
@@ -266,10 +286,7 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
-    charged = is_charged(sys)
-    q = charged ? w_charges(pre, coefs) : nothing
-    mklink(i, d) = charged ? Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i") :
-                             Index(d, "Link, l=$i")
+    mklink = link_maker(pre, coefs, w_charges)
     rdim = 1
     rlink = mklink(0, 1)
     for i in 1:n
@@ -304,10 +321,10 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             end
         end
         if i == 1
-            w *= charged ? onehot(llink => 1) : ITensor([1], llink)
+            w = close_end(w, llink, 1)
         end
         if i == n
-            w *= charged ? onehot(dag(rlink) => 1) : ITensor([1], rlink)
+            w = close_end(w, dag(rlink), 1)
         end
         ts[i] = w
     end
@@ -329,10 +346,7 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     n = length(sys)
     ts = Vector{ITensor}(undef, n)
     elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
-    charged = is_charged(sys)
-    q = charged ? w_charges(pre, coefs) : nothing
-    mklink(i, d) = charged ? Index([ q[i+1][k] => 1 for k in 1:d ]...; tags = "Link,l=$i") :
-                             Index(d, "Link, l=$i")
+    mklink = link_maker(pre, coefs, w_charges)
     rdim = 1
     rlink = mklink(0, 1)
     for i in 1:n 
@@ -395,10 +409,10 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             end
         end
         if i == 1
-            w *= charged ? onehot(llink => 1) : ITensor([1], llink)
+            w = close_end(w, llink, 1)
         end
         if i == n
-            w *= charged ? onehot(dag(rlink) => 1) : ITensor([1], rlink)
+            w = close_end(w, dag(rlink), 1)
         end
         ts[i] = w
     end
