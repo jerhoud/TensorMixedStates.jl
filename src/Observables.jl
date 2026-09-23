@@ -4,50 +4,45 @@ export expect, expect1, expect2
 export entanglement_entropy, partial_trace, mutual_info_renyi2, sample, variance
 
 """
-    create_qlinks!(q, state)
+    weak_form(state)
 
-the charge links the trace of a strongly conserving state runs along, one between each pair
-of neighbouring sites, carrying the charge accumulated so far.
+the state measurements run on: the state itself, or, when it conserves something strongly,
+the same state weakened, computed once and kept with it.
 
-The trace is the sum of the diagonal of the density matrix, and keeping ket and bra apart
-gives each diagonal element a charge of its own, so no single vector per site can hold the
-sum. A chain can: a link says how much charge the sites to its left have contributed, and
-the last site closes it on the charge of the whole state. This is what a trace costs under a
-strong symmetry, and its dimension is the number of totals the sites can reach.
+Keeping the charge of the ket apart from that of the bra gives each diagonal element a charge
+of its own, so the trace is no longer a product of one vector per site; weakly, it is again.
+Weakening is exact, so every expectation value is the same, and an operator measurable under
+the strong symmetry is measurable under the weak one, the map between the two carrying a flux
+to a flux.
 """
-function create_qlinks!(q, state::State{Mixed})
-    n = length(state)
-    sys = state.system
-    append!(q, charge_links([ site_qns(sys, i) for i in 1:n ], flux(state.state), "Charge"))
-    return q
+weak_form(state::State{Pure}) = state
+
+function weak_form(state::State{Mixed})
+    if isempty(strong_names(state.system))
+        return state
+    end
+    w = state.preobs.weak
+    if isempty(w)
+        push!(w, weaken(state))
+    end
+    return only(w)
 end
 
-function get_qlinks(state::State{Mixed})
-    q = state.preobs.qlinks
-    if isempty(strong_names(state.system)) || length(state) == 1
-        return q
-    end
-    if isempty(q)
-        create_qlinks!(q, state)
-    end
-    return q
-end
-
-# the trace closes on the charge of the whole state, which is what picks out of it the one
-# sector the state lives in
-trace_chain(state::State{Mixed}, ts, i::Int) =
-    chain_at(get_qlinks(state), ts, i, length(state), flux(state.state))
+# what reaches here has been through `weak_form`, which is the only thing standing between a
+# strong state and a trace with no single vector per site
+strong_measured(i::Int) =
+    error("bug: site $i of a strongly conserving state measured without going through weak_form")
 
 function tensor_trace(state::State{Mixed}, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
     b, c = mixer(j, k, s[i])
-    if b === j
-        # daggered so that the result meets the `k` of the state and not another copy of it
-        return denseblocks(delta(dag(j), b')) * dag(c)
+    if b !== j
+        strong_measured(i)
     end
-    return trace_chain(state, diag_elements(s, i), i)
+    # daggered so that the result meets the `k` of the state and not another copy of it
+    return denseblocks(delta(dag(j), b')) * dag(c)
 end
 
 tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
@@ -59,13 +54,10 @@ function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
     b, c = mixer(j, k, s[i])
-    if b === j
-        return tensor(s, ind) * dag(c)
+    if b !== j
+        strong_measured(i)
     end
-    # an observable rides the same chain as the trace, bringing its own charge to it: this
-    # is what lets a correlation whose two ends do not conserve the charge be measured all
-    # the same, the two shifts cancelling along the way
-    return trace_chain(state, vec_pieces(s, i, matrix(ind.op, s[i])), i)
+    return tensor(s, ind) * dag(c)
 end
 
 # `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
@@ -119,6 +111,7 @@ Return the trace of the system, mostly useful for mixed representations.
 This should be one.
 """
 function trace(state::State)
+    state = weak_form(state)
     t = state.preobs.trace
     if isempty(t)
         create_trace!(t, state)
@@ -503,6 +496,7 @@ function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}}
     if coef == 0.
         return 0.
     end
+    state = weak_form(state)
     # every expectation value reaches this leaf, `measure` included, which calls
     # `expect_norm` rather than `expect`. Checking here covers them all at the cost of a
     # few integer comparisons per term, nothing next to the contractions below
@@ -574,6 +568,7 @@ Compute the expectation values of the given operators on all sites.
 
 """
 function expect1(state::State, op)
+    state = weak_form(state)
     n = length(state)
     r = [ expect1_one(state, op, i, zipend(state, zipto(state, Expector(), i)).t) for i in 1:n ]
     return unroll(r)
@@ -592,6 +587,7 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
                   "of a pair must have the same fermionic parity")
         end
     end
+    state = weak_form(state)
     oplist = [first.(ops) ; last.(ops)]
     need_fermionic = any(isfermionic, oplist)
     need_non_fermionic = any(x->!isfermionic(x), oplist)
@@ -756,9 +752,8 @@ alternatively one can give the positions to keep by setting `keepers = true`
 """
 function partial_trace(state::State{Mixed}, pos::AbstractVector{<:Integer}; keepers::Bool = false)
     if !isempty(strong_names(state.system))
-        error("cannot trace out part of a state whose sites conserve something strongly: " *
-              "what is left of it spreads over several sectors, which keeping the charge " *
-              "of the ket apart from that of the bra cannot hold")
+        error("cannot trace out part of a state conserving something strongly, what is left " *
+              "spreads over several sectors: weaken it first, giving up the strong symmetry")
     end
     n = length(state)
     if keepers
@@ -879,6 +874,7 @@ function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
 end
 
 function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
+    state = weak_form(state)
     sys = state.system
     l = get_left(state, pos)
     r = get_right(state, pos)
@@ -895,6 +891,7 @@ function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
 end
 
 function sample(state::State{Mixed}; rng = Random.default_rng())
+    state = weak_form(state)
     sys = state.system
     n = length(state)
     result = Vector{Int}(undef, n)

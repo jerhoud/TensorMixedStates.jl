@@ -41,45 +41,6 @@ end
 
 
 """
-    vec_pieces(system, i, m)
-    diag_elements(system, i)
-
-the vectorised form of the one site matrix `m`, cut into pieces of definite charge, each
-with the charge it carries. `diag_elements` is the identity, whose pieces are the diagonal
-elements ``|x\\rangle\\langle x|`` and whose charges are all zero unless the site conserves
-something strongly.
-
-These are what a trace is made of, the trace of a density matrix being the sum of its
-diagonal. When the site keeps its ket and its bra apart, each of them carries a charge of
-its own and the sum has no single flux, which is why a trace then needs a chain rather than
-one vector per site.
-"""
-function vec_pieces(system, i::Int, m::AbstractMatrix)
-    j = SysIndex{Pure}(system, i)
-    k = SysIndex{Mixed}(system, i)
-    b, c = mixer(j, k, system[i])
-    d = dim(j)
-    # transposed, because the mixed index pairs the ket with the bra while a matrix is read
-    # row by column: this is the convention `tensor_obs` has always used
-    mt = transpose(m)
-    acc = Dict{QN, ITensor}()
-    for x in 1:d, y in 1:d
-        if iszero(mt[x, y])
-            continue
-        end
-        e = zeros(eltype(mt), d, d)
-        e[x, y] = mt[x, y]
-        t = dag(op_on_sites(e, [j], [dag(b')]) * c)
-        g = flux(t)
-        acc[g] = haskey(acc, g) ? acc[g] + t : t
-    end
-    return [ (t, g) for (g, t) in acc ]
-end
-
-diag_elements(system, i::Int) =
-    vec_pieces(system, i, Matrix(1.0I, dim(system[i]), dim(system[i])))
-
-"""
     adj_pieces(system, i)
 
 the map sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on site `i`, cut into
@@ -184,7 +145,7 @@ end
 the tensor carrying site `i` of a strongly conserving system onto the same site of its
 weakened one, `relab` being the relabelling of `weak_index`.
 
-Unlike the trace and the adjoint, this one is a plain local tensor and needs no chain. It
+Unlike the adjoint, this one is a plain local tensor and needs no chain. It
 pairs the element ``|m\\rangle\\langle n|`` of one index with the same element of the other,
 and the relabelling has already put the two under the same charge, so every term has a flux
 of zero and their sum has one too. What it does beyond renaming is to gather the blocks the
@@ -241,15 +202,6 @@ function relabeller(f)
         return dir(x) == dir(i) ? x : dag(x)
     end
 end
-
-"""
-    site_qns(system, i)
-
-every charge the mixed index of site `i` can put on a vectorised one site tensor, as the
-pieces of `vec_pieces` carry them. This is what the charge links of a trace have to be wide
-enough for, an observable of non zero flux moving the running charge as it passes.
-"""
-site_qns(system, i::Int) = [ -first(p) for p in space(SysIndex{Mixed}(system, i)) ]
 
 """
     tensor_index(t::ITensor)

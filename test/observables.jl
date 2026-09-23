@@ -424,7 +424,8 @@ end
     # the same physics conserved weakly and strongly. The two label the tensors differently,
     # one keeping the difference of the ket and bra charges and the other keeping them
     # apart, and neither changes a measured number. Under a strong symmetry the trace stops
-    # being a product of one vector per site, so this covers the chain it then runs along
+    # being a product of one vector per site, so a strong state is measured through its weak
+    # form, and this covers that detour
     function chain(site)
         sys = System(4, site)
         p(v) = State{Pure}(sys, v)
@@ -440,8 +441,8 @@ end
     both(x -> expect(x, N(2)))
     both(x -> expect1(x, N))
     both(hermiticity)
-    # a correlation whose two ends do not conserve the charge rides the same chain, the two
-    # shifts it brings cancelling along the way
+    # a correlation whose two ends do not conserve the charge is measured all the same, the
+    # two shifts it brings cancelling
     both(x -> [ expect(x, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
     both(x -> trace(apply(Dissipator(N)(2), x)))
 
@@ -452,7 +453,10 @@ end
     @test flux(dag(s).state) == flux(s.state)
 
     # tracing part of the sites out is the one thing that cannot be done: what is left is a
-    # mixture over several sectors, and a state keeping the two charges apart has only one
+    # mixture over several sectors, and a state keeping the two charges apart has only one.
+    # It is refused rather than weakened behind the user's back, who is to see the strong
+    # symmetry go
     @test_ok partial_trace(w, [1, 3])
-    @test_throws "spreads over several sectors" partial_trace(s, [1, 3])
+    @test_throws "weaken it first" partial_trace(s, [1, 3])
+    @test_ok partial_trace(weaken(s), [1, 3])
 end

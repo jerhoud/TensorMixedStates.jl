@@ -11,7 +11,7 @@ struct PreObs
     left::Vector{ITensor}
     right::Vector{ITensor}
     trace::Vector{Number}
-    qlinks::Vector{Index}
+    weak::Vector{Any}
 end
 PreObs() = PreObs([], [], [], [], [])
 
