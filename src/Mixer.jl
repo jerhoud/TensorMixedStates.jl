@@ -41,91 +41,6 @@ end
 
 
 """
-    adj_pieces(system, i)
-
-the map sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on site `i`, cut into
-pieces of definite charge, each with the charge it carries.
-
-Taking the adjoint of a density matrix exchanges its ket and its bra, which on a site that
-keeps their charges apart swaps the two. That is a permutation of the blocks, and no single
-tensor does it at a definite flux: the piece exchanging a pair whose charges differ by `d`
-carries `d` on both sides. A chain along the running difference does, and since that
-difference is zero over the whole state, it closes on nothing.
-"""
-function adj_pieces(system, i::Int)
-    j = SysIndex{Pure}(system, i)
-    k = SysIndex{Mixed}(system, i)
-    b, c = mixer(j, k, system[i])
-    d = dim(j)
-    acc = Dict{QN, ITensor}()
-    for x in 1:d, y in 1:d
-        t = prime(ket_bra(system, i, y, x)) * dag(ket_bra(system, i, x, y))
-        g = flux(t)
-        acc[g] = haskey(acc, g) ? acc[g] + t : t
-    end
-    return [ (t, g) for (g, t) in acc ]
-end
-
-"""
-    qn_list(i::Index)
-
-the charges an index carries, one per block
-"""
-qn_list(i::Index) = [ first(p) for p in space(i) ]
-
-"""
-    charge_links(gs, total, tag)
-
-the links a chain runs along, given the charges `gs[i]` its pieces may carry at each site and
-the `total` they have to add up to.
-
-Only what the sites on the left can have accumulated and what the ones on the right can still
-bring is kept. That intersection is what makes a link small: most running totals cannot be
-completed into the one the chain has to reach.
-"""
-function charge_links(gs, total::QN, tag::String)
-    n = length(gs)
-    forward = [[QN()]]
-    for i in 1:n
-        push!(forward, unique([ u - g for u in forward[i] for g in gs[i] ]))
-    end
-    backward = Vector{Vector{QN}}(undef, n + 1)
-    backward[n+1] = [total]
-    for i in n:-1:1
-        backward[i] = unique([ v + g for v in backward[i+1] for g in gs[i] ])
-    end
-    return [ Index([ u => 1 for u in forward[i+1] if u in backward[i+1] ]...;
-                   tags = "$tag,l=$i") for i in 1:n-1 ]
-end
-
-"""
-    chain_at(links, ts, i, n, total)
-
-the element at site `i` of a chain of `n` sites running along `links`, built from the pieces
-`ts` and the charge each one carries. The last site closes the chain on `total`.
-"""
-function chain_at(links, ts, i::Int, n::Int, total::QN)
-    ins = i == 1 ? [QN()] : qn_list(links[i-1])
-    parts = ITensor[]
-    for (t, g) in ts, (p, u) in enumerate(ins)
-        left = i == 1 ? ITensor(1.) : onehot(dag(links[i-1]) => p)
-        if i == n
-            if u - g ≠ total
-                continue
-            end
-            push!(parts, t * left)
-        else
-            r = findfirst(==(u - g), qn_list(links[i]))
-            if isnothing(r)
-                continue
-            end
-            push!(parts, t * left * onehot(links[i] => r))
-        end
-    end
-    return sum(parts)
-end
-
-"""
     ket_bra(system, i, m, n)
 
 the element ``|m\\rangle\\langle n|`` of site `i`, vectorised on its mixed index
@@ -145,8 +60,7 @@ end
 the tensor carrying site `i` of a strongly conserving system onto the same site of its
 weakened one, `relab` being the relabelling of `weak_index`.
 
-Unlike the adjoint, this one is a plain local tensor and needs no chain. It
-pairs the element ``|m\\rangle\\langle n|`` of one index with the same element of the other,
+It pairs the element ``|m\\rangle\\langle n|`` of one index with the same element of the other,
 and the relabelling has already put the two under the same charge, so every term has a flux
 of zero and their sum has one too. What it does beyond renaming is to gather the blocks the
 relabelling left apart, which the two indices order differently.
@@ -157,6 +71,28 @@ function weak_map(strong, weak, i::Int, relab)
     return sum( ket_bra(weak, i, m, n) *
                 dag(relabel(ket_bra(strong, i, m, n), relab))
                 for m in 1:d, n in 1:d )
+end
+
+"""
+    adj_map(system, i, relab)
+
+the tensor sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on site `i`, from
+the index relabelled by `adjoint_index` to the index of the system, `relab` being that
+relabelling.
+
+On its own the exchange has no definite flux under a strong symmetry, the two charges it
+swaps being different ones. The relabelling has already given each element the charge of the
+one it is sent to, so every term here has a flux of zero, as in `weak_map`.
+
+This relies on the relabelled index being a new one. It always is on a charged system, but
+on a plain one there is nothing to relabel and the two sides would contract into a scalar,
+which is one reason, besides the cost, why a system without a strong symmetry keeps
+`tensor_dag`.
+"""
+function adj_map(system, i::Int, relab)
+    d = dim(SysIndex{Pure}(system, i))
+    return sum( ket_bra(system, i, y, x) * dag(relabel(ket_bra(system, i, x, y), relab))
+                for x in 1:d, y in 1:d )
 end
 
 """

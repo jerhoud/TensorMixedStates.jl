@@ -886,6 +886,42 @@ function star(i::Index, names)
 end
 
 """
+    adjoint_qn(q::QN, names)
+    adjoint_index(i::Index, names)
+
+the charge, or the index, relabelled so that the element ``|x\\rangle\\langle y|`` of a
+mixed index takes the charge ``|y\\rangle\\langle x|`` had, `names` being the quantities
+conserved strongly.
+
+Under a strong symmetry ``|x\\rangle\\langle y|`` carries `X` as the charge of `x` and `X*`
+as minus that of `y`, so the exchange sends `(X, X*)` to `(-X*, -X)`; a weak quantity holds
+the difference of the two and is only negated. Either way this is an automorphism of the
+charge group, so relabelling every index of a state with it, links included, keeps each
+tensor consistent with no data moved, and what is left of the adjoint is a permutation of
+zero flux. See `adj_map`.
+"""
+function adjoint_qn(q::QN, names)
+    vs = Tuple{String, Int, Int}[]
+    for v in q.data
+        n = String(ITensors.name(v))
+        if isempty(n)
+            continue
+        end
+        m = endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n
+        push!(vs, (m, -ITensors.val(v), ITensors.modulus(v)))
+    end
+    return isempty(vs) ? QN() : QN(vs...)
+end
+
+adjoint_index(i::Index, names) =
+    if !hasqns(i)
+        i
+    else
+        Index([ adjoint_qn(q, names) => d for (q, d) in space(i) ]...;
+              tags = tags(i), plev = plev(i), dir = dir(i))
+    end
+
+"""
     conserve_string(site, spec)
 
 the form in which a site records what it conserves: for each quantity, its name, its

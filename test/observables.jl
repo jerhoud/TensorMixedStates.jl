@@ -447,10 +447,27 @@ end
     both(x -> trace(apply(Dissipator(N)(2), x)))
 
     # the adjoint exchanges ket and bra, which swaps the two charges a strong symmetry keeps
-    # apart. It rides a chain of its own, along the running difference of the two
+    # apart. It relabels the charges so that the exchange becomes a permutation of zero flux
     @test hermiticity(s) ≈ 1
     @test trace(hermitianize(s)) ≈ 1
     @test flux(dag(s).state) == flux(s.state)
+
+    # on a Hermitian state the adjoint is invisible, so it is checked on one that is not,
+    # holding a coherence between sites 1 and 3 that an off diagonal observable reads
+    function skew(site)
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        c1, c2 = ["Occ", "Emp", "Emp", "Occ"], ["Emp", "Emp", "Occ", "Occ"]
+        a, b = p(c1) + 0.7im * p(c2), p(c2) - 0.4 * p(c1)
+        return State(mix(a), mix(a).state + 0.6im * mix(b).state)
+    end
+    ws, ss = skew(Fermion(conserve = N)), skew(Fermion(conserve = strong(N)))
+    adjoint_numbers(x) = [ expect(dag(x), dag(C)(1) * C(3)), expect(dag(x), N(3)),
+                           inner(dag(x), x) ]
+    @test isapprox(adjoint_numbers(ws), adjoint_numbers(ss); atol = 1e-12)
+    @test abs(expect(dag(ss), dag(C)(1) * C(3))) > 0.1
+    @test expect(dag(ss), dag(C)(1) * C(3)) ≈ conj(expect(ss, dag(C)(3) * C(1)))
+    @test hermiticity(ss) < 0.99
 
     # tracing part of the sites out is the one thing that cannot be done: what is left is a
     # mixture over several sectors, and a state keeping the two charges apart has only one.

@@ -352,17 +352,10 @@ function dag(state::State{Mixed})
     if isempty(strong_names(s))
         return State(state, MPS([ tensor_dag(state, i) for i in 1:n ]))
     end
-    ps = [ adj_pieces(s, i) for i in 1:n ]
-    links = charge_links([ [ g for (_, g) in p ] for p in ps ], QN(), "Adjoint")
-    ts = [ noprime(chain_at(links, ps[i], i, n, QN()) * conj(state.state[i])) for i in 1:n ]
-    # the chain leaves a second index between neighbours, which an MPS reads as a bond of
-    # its own: the two are combined so that the result has the one link it expects
-    for i in 1:n-1
-        cb = combiner(commoninds(ts[i], ts[i+1])...; tags = "Link,l=$i")
-        ts[i] = ts[i] * cb
-        ts[i+1] = ts[i+1] * dag(cb)
-    end
-    return State(state, MPS(ts))
+    # `conj` rather than `dag`: the directions stay, only the charges are relabelled
+    relab = relabeller(i -> adjoint_index(i, strong_names(s)))
+    return State(state, MPS([ relabel(conj(state.state[i]), relab) * adj_map(s, i, relab)
+                              for i in 1:n ]))
 end
 
 
