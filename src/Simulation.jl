@@ -147,6 +147,8 @@ truncate(sim::Simulation; kwargs...) = Simulation(sim, truncate(sim.state; kwarg
 
 mix(sim::Simulation) = Simulation(sim, mix(sim.state))
 
+weaken(sim::Simulation) = Simulation(sim, weaken(sim.state))
+
 apply(op, sim::Simulation; kwargs...) = Simulation(sim, apply(op, sim.state; kwargs...))
 
 PreMPO(sim::Simulation, args...) = PreMPO(sim.state, args...)

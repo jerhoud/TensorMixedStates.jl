@@ -60,6 +60,15 @@ the names of every quantity the sites of the system conserve strongly. See `stro
 strong_names(system::System) =
     unique(reduce(vcat, map(strong_names, system.sites); init = String[]))
 
+"""
+    weaken(::System)
+
+the same system with every strong symmetry asked for weakly, or the system itself when it
+has none. See `strong` and `weaken(::State)`.
+"""
+weaken(system::System) =
+    isempty(strong_names(system)) ? system : System(map(weaken, system.sites))
+
 getindex(s::System, i...) = s.sites[i...]
 
 show(io::IO, s::System) = print(io, "System($(s.sites))")

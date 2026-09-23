@@ -85,14 +85,9 @@ function adj_pieces(system, i::Int)
     k = SysIndex{Mixed}(system, i)
     b, c = mixer(j, k, system[i])
     d = dim(j)
-    ket_bra(x, y) = begin
-        e = zeros(d, d)
-        e[x, y] = 1.
-        return op_on_sites(e, [j], [dag(b')]) * c
-    end
     acc = Dict{QN, ITensor}()
     for x in 1:d, y in 1:d
-        t = prime(ket_bra(y, x)) * dag(ket_bra(x, y))
+        t = prime(ket_bra(system, i, y, x)) * dag(ket_bra(system, i, x, y))
         g = flux(t)
         acc[g] = haskey(acc, g) ? acc[g] + t : t
     end
@@ -156,6 +151,66 @@ function chain_at(links, ts, i::Int, n::Int, total::QN)
         end
     end
     return sum(parts)
+end
+
+"""
+    ket_bra(system, i, m, n)
+
+the element ``|m\\rangle\\langle n|`` of site `i`, vectorised on its mixed index
+"""
+function ket_bra(system, i::Int, m::Int, n::Int)
+    j = SysIndex{Pure}(system, i)
+    k = SysIndex{Mixed}(system, i)
+    b, c = mixer(j, k, system[i])
+    e = zeros(dim(j), dim(j))
+    e[m, n] = 1.
+    return op_on_sites(e, [j], [dag(b')]) * c
+end
+
+"""
+    weak_map(strong, weak, i, relab)
+
+the tensor carrying site `i` of a strongly conserving system onto the same site of its
+weakened one, `relab` being the relabelling of `weak_index`.
+
+Unlike the trace and the adjoint, this one is a plain local tensor and needs no chain. It
+pairs the element ``|m\\rangle\\langle n|`` of one index with the same element of the other,
+and the relabelling has already put the two under the same charge, so every term has a flux
+of zero and their sum has one too. What it does beyond renaming is to gather the blocks the
+relabelling left apart, which the two indices order differently.
+"""
+# the systems are left unannotated because this file is read before the one defining them
+function weak_map(strong, weak, i::Int, relab)
+    d = dim(SysIndex{Pure}(strong, i))
+    return sum( ket_bra(weak, i, m, n) *
+                dag(relabel(ket_bra(strong, i, m, n), relab))
+                for m in 1:d, n in 1:d )
+end
+
+"""
+    relabel(t, f)
+
+the tensor `t` with each of its indices passed through `f`, the storage left as it is. This
+leans on `ITensors.setinds`, which is not part of the public ITensors interface.
+"""
+relabel(t::ITensor, f) = ITensors.setinds(t, map(f, inds(t)))
+
+"""
+    relabeller(f)
+
+a function relabelling an index by `f`, giving the same one back for the same identity and
+prime level, and in the direction asked for.
+
+Keyed on identity and prime level rather than on the index itself, because a link appears
+daggered on one of the two sites it joins, and the two have to relabel to the same index or
+the tensors stop contracting.
+"""
+function relabeller(f)
+    seen = Dict{Tuple{ITensors.IDType, Int}, Index}()
+    return function (i::Index)
+        x = get!(() -> f(i), seen, (id(i), plev(i)))
+        return dir(x) == dir(i) ? x : dag(x)
+    end
 end
 
 """

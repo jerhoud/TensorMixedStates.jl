@@ -276,15 +276,8 @@ function mix(state::State{Pure})
     # charges as the sites, and starring one half of a tensor while leaving the other alone
     # would have the two count in different ways. One copy per index, kept here, so that the
     # link starred on the right of a site is the same index on the left of the next
-    names = strong_names(system)
-    seen = Dict{Tuple{ITensors.IDType, Int}, Index}()
-    # keyed on identity and prime level rather than on the index, because a link appears
-    # daggered on one of the two sites it joins and the two must star to the same index
-    function starred(i)
-        s = get!(() -> star(i, names), seen, (id(i), plev(i)))
-        return dir(s) == dir(i) ? s : dag(s)
-    end
-    bra(t) = ITensors.setinds(t, map(starred, inds(t)))
+    starred = relabeller(i -> star(i, strong_names(system)))
+    bra(t) = relabel(t, starred)
     v = Vector{ITensor}(undef, n)
     left = ITensor(1)
     for (i, t) in enumerate(st)
@@ -307,6 +300,54 @@ function mix(state::State{Pure})
     return State{Mixed}(system, MPS(v))
 end
 
+
+"""
+    weaken(::State)
+
+the same state on the weakened system, a quantity conserved strongly being conserved weakly
+instead. A state on a system conserving nothing strongly is given back as it is.
+
+The two hold the same physics and differ in how the tensors are cut into blocks. Keeping the
+charge of the ket apart from that of the bra cuts them finer and confines the state to a
+single sector; keeping only the difference of the two lets it spread over several sectors,
+and makes the trace a product of one vector per site again.
+
+Weakening is a step of a simulation in its own right: a phase may evolve under a strong
+symmetry, which every dissipator commuting with the charge allows, and the next one continue
+under a weak one, where a jump that moves the charge becomes possible. There is no way back,
+the finer blocks not being recoverable from the coarser ones.
+
+The system it builds is a new one, so two states weakened apart live on two systems and have
+to be put on one another before `inner` will compare them.
+
+# Examples
+
+    weaken(state)
+"""
+function weaken(state::State{Pure})
+    system = state.system
+    if isempty(strong_names(system))
+        return state
+    end
+    # the pure index does not depend on the strength: only the bra of the mixed one does, so
+    # the tensors are the ones they were and only the indices are replaced
+    weak = weaken(system)
+    return State{Pure}(weak,
+        replace_siteinds(state.state, SysIndex{Pure}(weak, 1:length(system))))
+end
+
+function weaken(state::State{Mixed})
+    system = state.system
+    names = strong_names(system)
+    if isempty(names)
+        return state
+    end
+    weak = weaken(system)
+    relab = relabeller(i -> weak_index(i, names))
+    return State{Mixed}(weak,
+        MPS([ relabel(state.state[i], relab) * weak_map(system, weak, i, relab)
+              for i in 1:length(state) ]))
+end
 
 """
     truncate(::State; limits::Limits)

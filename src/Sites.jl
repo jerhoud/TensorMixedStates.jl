@@ -1,4 +1,4 @@
-export AbstractSite, dim, Index, string_state, identity_operator, state, flux
+export AbstractSite, dim, Index, string_state, identity_operator, state, flux, weaken
 export @def_operators, @def_states, @create_site_module, conserve_string, strong
 
 """
@@ -55,6 +55,74 @@ function site_index(site::AbstractSite, charged::Bool)
                        for (name, modulus, charges, _) in qs]...) => 1
                    for k in 1:n ]...; tags = tg)
 end
+
+"""
+    weak_conserve(s)
+    weaken(::AbstractSite)
+
+what a site records once its strong symmetries are asked for weakly, and the site itself
+rebuilt with it.
+
+A strong quantity is marked by a `!` at the end of its head, so dropping the mark is all
+there is to it: the name, the modulus and the charges of the basis states are the same either
+way, only the pairing of the ket with the bra changes. A site conserving nothing strongly is
+given back as it is.
+"""
+weak_conserve(s::AbstractString) = replace(s, "!:" => ":")
+
+function weaken(site::AbstractSite)
+    if isempty(strong_names(site))
+        return site
+    end
+    t = typeof(site)
+    return t(( f === :conserve ? weak_conserve(getfield(site, f)) : getfield(site, f)
+               for f in fieldnames(t) )...)
+end
+
+"""
+    weak_qn(q, names)
+    weak_index(i, names)
+
+the charge, or the index, with each strong quantity in `names` collapsed onto its weak form.
+
+Keeping the ket and the bra apart records `X` and `X*`; asking for the same quantity weakly
+records their difference, which is what the sum of the two components is, the bra having been
+daggered. This map is a homomorphism of the charge group, so it carries a flux to a flux and
+a relation between blocks to the same relation: an index may be relabelled with it and every
+tensor built on it stays consistent, with no data moved.
+
+The blocks are not merged. Several may end up under one charge, which an index allows, and
+that is what lets the relabelling cost nothing.
+"""
+function weak_qn(q::QN, names)
+    vals = Tuple{String, Int, Int}[]
+    for v in q.data
+        nm = String(ITensors.name(v))
+        if isempty(nm)
+            continue
+        end
+        base = endswith(nm, "*") ? nm[1:end-1] : nm
+        if !(base in names)
+            push!(vals, (nm, ITensors.val(v), ITensors.modulus(v)))
+            continue
+        end
+        k = findfirst(x -> x[1] == base, vals)
+        if isnothing(k)
+            push!(vals, (base, ITensors.val(v), ITensors.modulus(v)))
+        else
+            vals[k] = (base, vals[k][2] + ITensors.val(v), vals[k][3])
+        end
+    end
+    return isempty(vals) ? QN() : QN(vals...)
+end
+
+weak_index(i::Index, names) =
+    if isempty(names) || !hasqns(i)
+        i
+    else
+        Index([ weak_qn(q, names) => d for (q, d) in space(i) ]...;
+              tags = tags(i), plev = plev(i), dir = dir(i))
+    end
 
 """
     check_charges(sites)
