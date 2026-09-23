@@ -179,6 +179,20 @@ end
     for a in [C(3), dag(C)(4) * C(3)]
         @test norm(mix(apply(a, st)) - apply(a, mix(st))) < 1e-12
     end
+    # a fermionic operator inside a superoperator or a tensor product takes its string as
+    # well, (C ⊗ dag(C))(3, 4) being C(3) * dag(C)(4) by definition. Both used to be built
+    # from the bare matrices
+    ρ = mix(st)
+    for a in [Gate(C)(3), Left(C)(3), Right(C)(3), Gate(dag(C)(4) * C(3))]
+        @test norm(apply(a, ρ) - apply(make_mpo(ρ, a), ρ)) < 1e-12
+    end
+    for a in [(dag(C) ⊗ Id ⊗ C)(1, 2, 3), (C ⊗ dag(C))(3, 4)]
+        @test norm(apply(a, st) - apply(make_mpo(st, a), st)) < 1e-12
+    end
+    # what has no gate to become is refused: a dissipator of a fermionic operator turns into
+    # a sum, and a function of one on several sites has no room for a string
+    @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
+    @test_throws "cannot be inserted" apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
     # a factor contributing no tensor, an identity or a Jordan-Wigner string, must not
     # leave the gate list untyped: ITensorMPS.product has no method for a Vector{Any}
     @test_ok apply(Id(1) * X(2), State{Pure}(System(2, Qubit()), "Up"))

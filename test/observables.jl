@@ -449,7 +449,7 @@ end
     both(s -> trace(partial_trace(mix(s), [1, 3])))
     both(s -> mutual_info_renyi2(mix(s), 2))
     both(s -> trace(apply(Gate(F)(1), mix(s))))
-    both(s -> trace(apply(Dissipator(C)(2), mix(s))))
+    both(s -> trace(apply(Dissipator(N)(2), mix(s))))
     both(s -> expect(apply(SetState("Occ")(2), mix(s)), N(2)))
 end
 

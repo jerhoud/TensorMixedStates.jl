@@ -93,6 +93,14 @@ the reference article.
   has no negative eigenvalue: `dag(sqrt(X))` simplified to `sqrt(X)`, so `expect` returned
   the conjugate of the right value and the MPO of `Dissipator(sqrt(X))` was wrong.
 
+- **A fermionic operator inside a superoperator or a tensor product was applied as a gate
+  without its Jordan-Wigner string.** `apply` only looked for one on a one site factor, so
+  `Gate(C)(2)`, `Left(C)(3)` and `(C ⊗ dag(C))(1, 2)` were built from bare matrices, the last
+  one coming out as the opposite of `C(1) * dag(C)(2)`, which it is by definition. The whole
+  operator is now looked into, and what cannot be placed as a gate is refused: a dissipator
+  of a fermionic operator, which turns into a sum, and a function of a fermionic operator
+  acting on several sites, such as its exponential, which leaves no room for a string.
+
 ## [1.3.0] - 2026-09-21
 
 This release carries a user visible change of behaviour, the removal of MKL, which is why

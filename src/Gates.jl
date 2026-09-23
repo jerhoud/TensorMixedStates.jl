@@ -39,7 +39,9 @@ string a fermionic operator needs: only `simplify` inserts those. Simplifying ev
 is not an option, since it replaces a gate defined by an expression, such as `Swap`, with
 that expression, and a product of those becomes a sum `apply` cannot place. So only an
 operator that still has a fermionic factor is simplified, which leaves every other gate
-untouched, and the result is refused if it came out as a sum.
+untouched, and the result is refused if it came out as a sum. It is refused as well if a
+fermionic factor survived, which happens inside an exponential or a power of several sites:
+`simplify` keeps those whole and has no string to put into them.
 
 `removeMulti` then spells the string out as one factor per site, which is what `PreMPO`
 does too. Those one site factors are built by the `Multi_F` constructor, which is where
@@ -52,6 +54,10 @@ prepare_gate(a) =
         if scalararg(b) isa SumOp
             error("cannot apply $a as a gate: inserting its Jordan-Wigner strings makes " *
                   "it a sum, which apply cannot place. Use make_mpo to build an MPO instead")
+        end
+        if has_fermionic(b)
+            error("cannot apply $a as a gate: its Jordan-Wigner strings cannot be inserted " *
+                  "into a function of a fermionic operator acting on several sites")
         end
         b
     else

@@ -965,18 +965,32 @@ isfermionic(a::PowOp) =
         error("cannot determine fermionic nature of $a")
     end
 
-# a multi site operator is never fermionic, its construction refuses it, so only the
-# one site case has a question to ask
 """
     has_fermionic(::Op)
 
-whether an indexed operator still has a factor whose Jordan-Wigner string has not been
-inserted by `simplify`.
+whether an operator still holds a factor whose Jordan-Wigner string `simplify` has not
+inserted: an odd operator of one site, wherever it sits. A tensor product, an operator of
+several sites defined by an expression and the argument of a superoperator are all looked
+into, since their matrix is built from the bare matrices of their factors, with neither the
+strings nor the signs `(C ⊗ dag(C))(1, 2) = C(1) * dag(C)(2)` asks for.
+
+The structure is read from the fields, the way `==` is, so that no wrapper can be forgotten.
+Once `simplify` has run, the factors are `JW` transforms, which are not fermionic, and the
+answer is false unless a factor was left whole, as an exponential of several sites is.
 """
-has_fermionic(a::AtIndex{Pure, 1}) = isfermionic(a.op)
-has_fermionic(a::ScalarOp) = has_fermionic(a.arg)
-has_fermionic(a::Union{ProdOp, SumOp}) = any(has_fermionic, a.subs)
-has_fermionic(::Op) = false
+has_fermionic(a::GenericOp{Pure, 1}) = isfermionic(a)
+
+function has_fermionic(a::Op)
+    for f in fieldnames(typeof(a))
+        x = getfield(a, f)
+        if x isa Op && has_fermionic(x)
+            return true
+        elseif x isa Vector && any(y -> y isa Op && has_fermionic(y), x)
+            return true
+        end
+    end
+    return false
+end
 
 
 ################## Equality #################
