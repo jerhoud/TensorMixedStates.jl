@@ -66,6 +66,10 @@ the reference article.
   are read before the file is opened now, and a refusal names the site and the field it
   cannot carry instead of surfacing as a `MethodError` raised by `convert` inside HDF5.
 
+- `matrix` and `tensor` accept a single site for a superoperator acting on several identical
+  ones, as their documentation says and as they already did for other operators:
+  `matrix(Left(Swap), Qubit())` raised a `DimensionMismatch`.
+
 ## [1.3.0] - 2026-09-21
 
 This release carries a user visible change of behaviour, the removal of MKL, which is why
