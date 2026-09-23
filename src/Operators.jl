@@ -506,7 +506,10 @@ struct Proj <: SimpleOp
     state::Union{Int, String, Vector}
 end
 
-isless(a::Proj, b::Proj) = isless(a.state, b.state)
+# the state is a number, a name or a vector, which have no order between them, and a vector
+# may hold complex numbers, which have none either: what is compared is how they print, as
+# for SetState, the global ordering of operators needing a total order, not a meaningful one
+isless(a::Proj, b::Proj) = isless(repr(a.state), repr(b.state))
 
 
 ############ AtIndex ################

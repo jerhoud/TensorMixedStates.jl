@@ -55,6 +55,9 @@ end
 end
 
 @testset "Limits" begin
+    # a cutoff is a real number, an integer included, which a field of union type refused
+    @test Limits(cutoff = 0).cutoff === 0.0
+    @test Limits(cutoff = [0, 1e-10]).cutoff == [0.0, 1e-10]
     sys = System(6, Qubit())
     st = RandomState{Pure}(sys, 8)
     # `mindim` is the floor the cutoff is not allowed to cross, and `maxdim` keeps the
@@ -150,7 +153,7 @@ end
 end
 
 @testset "States on a charged system" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     sys = System(3, Qubit(conserve = 2Sz))
 
     # a configuration belongs to one sector, so it builds in either representation
@@ -183,15 +186,15 @@ end
 end
 
 @testset "States under a strong symmetry" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
     sys = System(3, Fermion(conserve = strong(N)))
     conf = ["Occ", "Emp", "Occ"]
 
     # the state lives in one sector on the ket side and in the same one on the bra side.
     # This is the rule a pure state already obeys, transposed to a density matrix
-    @test flux(State{Mixed}(sys, conf).state) == Q.QN(("N", 2), ("N*", -2))
-    @test flux(mix(State{Pure}(sys, conf)).state) == Q.QN(("N", 2), ("N*", -2))
+    @test flux(State{Mixed}(sys, conf).state) == IT.QN(("N", 2), ("N*", -2))
+    @test flux(mix(State{Pure}(sys, conf)).state) == IT.QN(("N", 2), ("N*", -2))
 
     # a mixture over two sectors has no charge of its own and is refused, where the same
     # state is representable when the quantity is conserved weakly

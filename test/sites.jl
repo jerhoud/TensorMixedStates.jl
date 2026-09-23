@@ -333,32 +333,32 @@ end
 end
 
 @testset "Charged indices" begin
-    Q = TensorMixedStates.ITensors
-    sec(i) = Q.space(i)
+    IT = TensorMixedStates.ITensors
+    sec(i) = IT.space(i)
     pure(sys, k) = TensorMixedStates.SysIndex{Pure}(sys, k)
     mixed(sys, k) = TensorMixedStates.SysIndex{Mixed}(sys, k)
 
     # a system whose sites declare nothing is dense, exactly as before
     s0 = System(3, Qubit())
-    @test !Q.hasqns(pure(s0, 1))
-    @test !Q.hasqns(mixed(s0, 1))
+    @test !IT.hasqns(pure(s0, 1))
+    @test !IT.hasqns(mixed(s0, 1))
     @test dim(pure(s0, 1)) == 2 && dim(mixed(s0, 1)) == 4
 
     # the sectors are those the site recorded, one block per basis state
     s1 = System(2, Fermion(conserve = N))
-    @test sec(pure(s1, 1)) == [Q.QN("N", 0) => 1, Q.QN("N", 1) => 1]
+    @test sec(pure(s1, 1)) == [IT.QN("N", 0) => 1, IT.QN("N", 1) => 1]
 
     # the mixed index carries differences of charges, not sums: |m><n| has q(m) - q(n)
-    @test sec(mixed(s1, 1)) == [Q.QN("N", -1) => 1, Q.QN("N", 0) => 2, Q.QN("N", 1) => 1]
+    @test sec(mixed(s1, 1)) == [IT.QN("N", -1) => 1, IT.QN("N", 0) => 2, IT.QN("N", 1) => 1]
 
     # blocks are not merged, or a basis whose equal charges are not contiguous would be
     # reordered: parity on a boson gives 0, 1, 0, 1
     s2 = System(2, Boson(4, conserve = parity(N)))
-    @test sec(pure(s2, 1)) == [Q.QN("parity(N)", c, 2) => 1 for c in (0, 1, 0, 1)]
+    @test sec(pure(s2, 1)) == [IT.QN("parity(N)", c, 2) => 1 for c in (0, 1, 0, 1)]
 
     # a modulus read off the spectrum, and charges with two components
     s3 = System(2, Qudit(3, conserve = Zd))
-    @test sec(pure(s3, 1)) == [Q.QN("Zd", c, 3) => 1 for c in 0:2]
+    @test sec(pure(s3, 1)) == [IT.QN("Zd", c, 3) => 1 for c in 0:2]
     s4 = System(2, Electron(conserve = (Ntot, 2Sz)))
     @test length(sec(pure(s4, 1))) == 4
     @test dim(pure(s4, 1)) == 4
@@ -367,35 +367,35 @@ end
     # index charged, a site declaring nothing taking a trivial charge rather than staying
     # dense, since an MPS cannot mix the two kinds
     s5 = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N)])
-    @test Q.hasqns(pure(s5, 2))
-    @test sec(pure(s5, 2)) == [Q.QN() => 2]
+    @test IT.hasqns(pure(s5, 2))
+    @test sec(pure(s5, 2)) == [IT.QN() => 2]
     @test TensorMixedStates.is_charged(s5.sites)
     @test !TensorMixedStates.is_charged(s0.sites)
 
     # a site on its own says what it declares and nothing more
-    @test !Q.hasqns(Index(Qubit()))
-    @test Q.hasqns(Index(Fermion(conserve = N)))
+    @test !IT.hasqns(Index(Qubit()))
+    @test IT.hasqns(Index(Fermion(conserve = N)))
 end
 
 @testset "Operator tensors on a charged system" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     ten(sys, op) = TensorMixedStates.tensor(sys, op)
 
     # the flux of an operator placed on a charged system is the charge it carries
     sys = System(3, Fermion(conserve = N))
-    @test flux(ten(sys, N(1))) == Q.QN("N", 0)
-    @test flux(ten(sys, Left(N)(1))) == Q.QN("N", 0)
-    @test flux(ten(sys, Left(C)(1))) == Q.QN("N", -1)
-    @test flux(ten(sys, Right(C)(1))) == Q.QN("N", 1)
-    @test flux(ten(sys, Gate(C)(1))) == Q.QN("N", 0)
-    @test flux(ten(sys, Dissipator(C)(1))) == Q.QN("N", 0)
+    @test flux(ten(sys, N(1))) == IT.QN("N", 0)
+    @test flux(ten(sys, Left(N)(1))) == IT.QN("N", 0)
+    @test flux(ten(sys, Left(C)(1))) == IT.QN("N", -1)
+    @test flux(ten(sys, Right(C)(1))) == IT.QN("N", 1)
+    @test flux(ten(sys, Gate(C)(1))) == IT.QN("N", 0)
+    @test flux(ten(sys, Dissipator(C)(1))) == IT.QN("N", 0)
 
     # a site conserving nothing, inside a system where another one does, takes a trivial
     # index, on which the whole vocabulary of operators remains available
     mixed = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N)])
-    @test flux(ten(mixed, X(2))) == Q.QN()
-    @test flux(ten(mixed, Left(X)(2))) == Q.QN()
-    @test flux(ten(mixed, N(1))) == Q.QN("N", 0)
+    @test flux(ten(mixed, X(2))) == IT.QN()
+    @test flux(ten(mixed, Left(X)(2))) == IT.QN()
+    @test flux(ten(mixed, N(1))) == IT.QN("N", 0)
 
     # an operator carrying no flux is refused by a message naming it, rather than by the
     # `Fluxes not all equal` of ITensors, raised where neither operator nor site is in sight
@@ -405,9 +405,9 @@ end
 end
 
 @testset "Declaring a strong symmetry" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
-    mixed(s) = Q.space(TensorMixedStates.mixed_index(Index(s), s))
+    mixed(s) = IT.space(TensorMixedStates.mixed_index(Index(s), s))
 
     # the strength is recorded on the quantity and not on the site, so one site may hold
     # both kinds, and it travels in the string the site keeps
@@ -422,9 +422,9 @@ end
         "Electron(conserve = (strong(Ntot), 2Sz))"
 
     # nothing changes on the pure side: only the bra of the mixed index takes another name
-    @test Q.space(Index(Fermion(conserve = strong(N)))) ==
-        Q.space(Index(Fermion(conserve = N)))
-    @test flux(N, Fermion(conserve = strong(N))) == Q.QN("N", 0)
+    @test IT.space(Index(Fermion(conserve = strong(N)))) ==
+        IT.space(Index(Fermion(conserve = N)))
+    @test flux(N, Fermion(conserve = strong(N))) == IT.QN("N", 0)
 
     # keeping the two sides apart gives one block per pair of charges instead of one per
     # difference, which is the whole gain of a strong symmetry
@@ -435,6 +435,11 @@ end
 
     # a name ending in ! could not be told from the mark a site puts on a strong symmetry
     @test_throws "cannot be told from the mark" Fermion(conserve = named(N, "N!"))
+    # ITensors takes charge names of sixteen characters at most, and the bra of a strong one
+    # takes a star, which leaves it fifteen. A longer name is refused here, where it is
+    # declared, rather than deep inside ITensors when an index is built
+    @test_ok Fermion(conserve = parity(dag(C) * C))
+    @test_throws "at most 15 characters" Fermion(conserve = strong(parity(dag(C) * C)))
 end
 
 @testset "Charges that cannot live together" begin
@@ -457,23 +462,34 @@ end
 end
 
 @testset "Superoperators under a strong symmetry" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
     ten(sys, op) = TensorMixedStates.tensor(sys, op)
     sys = System(2, Fermion(conserve = strong(N)))
 
     # a jump commuting with the charge is what a strong symmetry asks for, and it passes
-    @test flux(ten(sys, Dissipator(N)(1))) == Q.QN(("N", 0), ("N*", 0))
-    @test flux(ten(sys, Gate(F)(1))) == Q.QN(("N", 0), ("N*", 0))
+    @test flux(ten(sys, Dissipator(N)(1))) == IT.QN(("N", 0), ("N*", 0))
+    @test flux(ten(sys, Gate(F)(1))) == IT.QN(("N", 0), ("N*", 0))
 
     # one that moves the charge does not, and the refusal names it and the way out rather
     # than leaving the `Fluxes not all equal` of ITensors through
     @test_throws "changes N between its two sides" ten(sys, Dissipator(C)(1))
     @test_throws "drop `strong`" ten(sys, Dissipator(C)(1))
 
+    # a jump carrying no definite charge at all is refused for what it lacks, under a weak
+    # symmetry as under a strong one, where dropping `strong` would not help it
+    for site in (Boson(3, conserve = N), Boson(3, conserve = strong(N)))
+        ρ = mix(State{Pure}(System(2, site), "1"))
+        @test_throws "carries no definite charge of N" apply(Gate(Q)(1), ρ)
+        @test_throws "no definite" make_mpo(ρ, Dissipator(Q)(1))
+    end
+    # and so is an operator on several sites, which no one site check sees
+    @test_throws "carries no definite charge of N" apply(exp(-0.3im * (X ⊗ X))(1, 2),
+        State{Pure}(System(2, Qubit(conserve = N)), "Up"))
+
     # the very same jump is fine when the quantity is conserved weakly, which is the whole
     # difference between the two: a weak symmetry lets the charge move, a strong one does not
-    @test flux(ten(System(2, Fermion(conserve = N)), Dissipator(C)(1))) == Q.QN("N", 0)
+    @test flux(ten(System(2, Fermion(conserve = N)), Dissipator(C)(1))) == IT.QN("N", 0)
 
     # an MPO refuses the same jump on its own path, where it shows as two terms of different
     # charges, and points at the same way out
@@ -489,7 +505,7 @@ end
     # where charged indices went wrong, no such operator being built at all. Each case is
     # compared with the same sites conserving nothing, on a quantity that reads a relative
     # phase or a population, which a tensor laid in a permuted basis would change
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
     same(f, charged, dense) = @test f(charged) ≈ f(dense)
 
@@ -559,10 +575,10 @@ end
 
     # given only its sites, an operator on several of them keeps a single index for all
     t = tensor(N ⊗ N, Fermion(conserve = N), Fermion(conserve = N))
-    @test length(Q.inds(t)) == 2
-    @test flux(t) == Q.QN("N", 0)
+    @test length(IT.inds(t)) == 2
+    @test flux(t) == IT.QN("N", 0)
     b = Boson(4, conserve = parity(N))
-    @test flux(tensor(Left(N ⊗ N), b, b)) == Q.QN("parity(N)", 0, 2)
+    @test flux(tensor(Left(N ⊗ N), b, b)) == IT.QN("parity(N)", 0, 2)
 end
 
 @testset "Measuring on every kind of charged site" begin

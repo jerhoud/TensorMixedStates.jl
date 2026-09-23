@@ -202,7 +202,7 @@ end
 end
 
 @testset "Entanglement resolved by sector" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
     # the sectors add up to the entanglement entropy, the charge fluctuating between the two
     # sides bringing the number entropy on top of what each sector holds
     total(d) = sum(v.weight * v.entropy for v in values(d)) -
@@ -216,35 +216,35 @@ end
 
     # cut after one site, the charge on the left is either one particle or none
     d = entanglement_by_sector(st, 1)
-    @test sort(collect(keys(d)); by = string) == [Q.QN("N", 0), Q.QN("N", 1)]
-    @test d[Q.QN("N", 1)].weight ≈ 0.8
-    @test d[Q.QN("N", 0)].weight ≈ 0.2
+    @test sort(collect(keys(d)); by = string) == [IT.QN("N", 0), IT.QN("N", 1)]
+    @test d[IT.QN("N", 1)].weight ≈ 0.8
+    @test d[IT.QN("N", 0)].weight ≈ 0.2
     # cut after two, it is one particle in both terms, and the entanglement lives inside it
     d = entanglement_by_sector(st, 2)
-    @test collect(keys(d)) == [Q.QN("N", 1)]
-    @test d[Q.QN("N", 1)].weight ≈ 1
-    @test d[Q.QN("N", 1)].spectrum ≈ [0.8, 0.2]
-    @test d[Q.QN("N", 1)].entropy ≈ first(entanglement_entropy(st, 2))
+    @test collect(keys(d)) == [IT.QN("N", 1)]
+    @test d[IT.QN("N", 1)].weight ≈ 1
+    @test d[IT.QN("N", 1)].spectrum ≈ [0.8, 0.2]
+    @test d[IT.QN("N", 1)].entropy ≈ first(entanglement_entropy(st, 2))
 
     # several quantities at once, and a charge modulo 2 over a basis whose charges repeat
     e = System(3, Electron(conserve = (Ntot, 2Sz)))
     q(v) = State{Pure}(e, v)
     d = entanglement_by_sector((q(["Up", "Dn", "Emp"]) + 0.5 * q(["UpDn", "Emp", "Emp"])) / sqrt(1.25), 1)
-    @test d[Q.QN(("Ntot", 1), ("2Sz", 1))].weight ≈ 0.8
-    @test d[Q.QN(("Ntot", 2), ("2Sz", 0))].weight ≈ 0.2
+    @test d[IT.QN(("Ntot", 1), ("2Sz", 1))].weight ≈ 0.8
+    @test d[IT.QN(("Ntot", 2), ("2Sz", 0))].weight ≈ 0.2
     b = System(3, Boson(4, conserve = parity(N)))
     r(v) = State{Pure}(b, v)
     d = entanglement_by_sector((r(["1", "2", "0"]) + 0.5 * r(["0", "3", "0"])) / sqrt(1.25), 1)
-    @test d[Q.QN("parity(N)", 1, 2)].weight ≈ 0.8
-    @test d[Q.QN("parity(N)", 0, 2)].weight ≈ 0.2
+    @test d[IT.QN("parity(N)", 1, 2)].weight ≈ 0.8
+    @test d[IT.QN("parity(N)", 0, 2)].weight ≈ 0.2
 
     # without charges there is a single sector holding the whole spectrum
     fd = System(4, Fermion())
     pd(v) = State{Pure}(fd, v)
     sd = (pd(["Occ", "Emp", "Emp", "Occ"]) + 0.5 * pd(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
     d = entanglement_by_sector(sd, 2)
-    @test collect(keys(d)) == [Q.QN()]
-    @test d[Q.QN()].spectrum ≈ last(entanglement_entropy(sd, 2))
+    @test collect(keys(d)) == [IT.QN()]
+    @test d[IT.QN()].spectrum ≈ last(entanglement_entropy(sd, 2))
 
     # a mixed representation is refused, its links pairing the charge of a ket with a bra
     @test_throws "takes a pure state" entanglement_by_sector(mix(st), 1)
@@ -258,6 +258,8 @@ end
     sys = System(3, Qubit())
     st = State{Pure}(sys, ["X+", "Y+", "Z+"])
     colnames(o) = first.(measure(st, Measure([o]), 0.))
+    # a superoperator is not an observable, and expect says so
+    @test_throws "is a superoperator" expect(mix(st), Left(X)(1))
     @test colnames(X) == ["X"]
     @test colnames(X * Y) == ["X*Y"]
     @test colnames(2X) == ["2X"]

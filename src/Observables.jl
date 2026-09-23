@@ -528,6 +528,10 @@ expect_norm(state::State, op::SumOp{Pure, Indexed}) =
         expect_norm(state, p)
     end
 
+# said here rather than left to the method below, which would try to iterate the operator
+expect_norm(::State, a::IndexedOp{Mixed}) =
+    error("expect takes an observable, and $a is a superoperator acting on a density matrix")
+
 expect_norm(state::State, op) =
     map(op) do o
         expect_norm(state, o)

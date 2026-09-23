@@ -109,6 +109,20 @@ the reference article.
 - `entanglement_entropy` returned `NaN` when a singular value was exactly zero, which a
   `mindim` above the Schmidt rank keeps: a zero now adds nothing to the entropy.
 
+- `expect` of a superoperator, `Left(X)(1)` for instance, says that it takes an observable,
+  where it raised a `MethodError` on `length`.
+
+- A sum mixing a `Proj` given by a number with one given by a name, `Proj(1) + Proj("Up")`,
+  raised a `MethodError` on `isless` when simplified. `Proj` is ordered by how its state
+  prints, as `SetState` already was.
+
+- `Limits(cutoff = 0)` is accepted, the cutoff being converted to a float, where a field of
+  union type refused an integer with a `MethodError` on `convert`.
+
+- Under Julia 1.10, a non integer power of an operator whose matrix is real, diagonal and
+  has a negative entry raised a `DomainError`, so that `Sz^0.5` could not be used at all.
+  Its matrix is computed complex, as later versions of Julia do.
+
 ## [1.3.0] - 2026-09-21
 
 This release carries a user visible change of behaviour, the removal of MKL, which is why

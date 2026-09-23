@@ -103,6 +103,9 @@ end
     # therefore recurses on itself instead of comparing anything
     @test isless(Dissipator(X), Dissipator(Y))
     @test !isless(Dissipator(Y), Dissipator(X))
+    # a Proj holds a number, a name or a vector, which have no order between them either
+    @test length(sort([Proj(1), Proj("Up"), Proj([1., 0.]), Proj(0)])) == 4
+    @test matrix(simplify(Proj(1) + Proj("Up")), Qubit()) ≈ identity_operator(2)
     @test isless(Evolver(X(1)), Evolver(Y(1)))
     @test !isless(Evolver(Y(1)), Evolver(X(1)))
     # a SetState holds a name, a vector or a matrix, and two of them have to be ordered
@@ -218,36 +221,36 @@ end
 end
 
 @testset "Flux of an operator" begin
-    Q = TensorMixedStates.ITensors
+    IT = TensorMixedStates.ITensors
 
     # the flux is the charge an operator carries, read off the charges of the states it
     # connects. A site conserving nothing puts no constraint on anything
-    @test flux(X, Qubit()) == Q.QN()
-    @test flux(N, Fermion(conserve = N)) == Q.QN("N", 0)
-    @test flux(C, Fermion(conserve = N)) == Q.QN("N", -1)
-    @test flux(dag(C), Fermion(conserve = N)) == Q.QN("N", 1)
+    @test flux(X, Qubit()) == IT.QN()
+    @test flux(N, Fermion(conserve = N)) == IT.QN("N", 0)
+    @test flux(C, Fermion(conserve = N)) == IT.QN("N", -1)
+    @test flux(dag(C), Fermion(conserve = N)) == IT.QN("N", 1)
 
     # in units of the declared charge, which is why a half integer one is written doubled
-    @test flux(Sp, Qubit(conserve = 2Sz)) == Q.QN("2Sz", 2)
-    @test flux(Sm, Qubit(conserve = 2Sz)) == Q.QN("2Sz", -2)
+    @test flux(Sp, Qubit(conserve = 2Sz)) == IT.QN("2Sz", 2)
+    @test flux(Sm, Qubit(conserve = 2Sz)) == IT.QN("2Sz", -2)
 
     # the difference is taken modulo the charge, without which the shift operator, which
     # generates the very symmetry Zd records, would be refused on its wrap around
-    @test flux(Zd, Qudit(3, conserve = Zd)) == Q.QN("Zd", 0, 3)
-    @test flux(Xd, Qudit(3, conserve = Zd)) == Q.QN("Zd", 1, 3)
-    @test flux(Xd^2, Qudit(3, conserve = Zd)) == Q.QN("Zd", 2, 3)
-    @test flux(A, Boson(4, conserve = parity(N))) == Q.QN("parity(N)", 1, 2)
+    @test flux(Zd, Qudit(3, conserve = Zd)) == IT.QN("Zd", 0, 3)
+    @test flux(Xd, Qudit(3, conserve = Zd)) == IT.QN("Zd", 1, 3)
+    @test flux(Xd^2, Qudit(3, conserve = Zd)) == IT.QN("Zd", 2, 3)
+    @test flux(A, Boson(4, conserve = parity(N))) == IT.QN("parity(N)", 1, 2)
 
     # several charges at once
-    @test flux(Cup, Electron(conserve = (Ntot, 2Sz))) == Q.QN(("Ntot", -1), ("2Sz", -1))
-    @test flux(Ntot, Electron(conserve = (Ntot, 2Sz))) == Q.QN(("Ntot", 0), ("2Sz", 0))
+    @test flux(Cup, Electron(conserve = (Ntot, 2Sz))) == IT.QN(("Ntot", -1), ("2Sz", -1))
+    @test flux(Ntot, Electron(conserve = (Ntot, 2Sz))) == IT.QN(("Ntot", 0), ("2Sz", 0))
 
     # an operator raising and lowering at once carries no flux, and the message says which
     # two differences it found
     @test_throws "differing by 2Sz=2 and by 2Sz=-2" flux(X, Qubit(conserve = 2Sz))
     @test_throws "no definite flux" flux(Hd, Qudit(3, conserve = Zd))
     # under parity the same X is fine, the two differences becoming one modulo 2
-    @test flux(X, Qubit(conserve = parity(2Sz))) == Q.QN("parity(2Sz)", 0, 2)
+    @test flux(X, Qubit(conserve = parity(2Sz))) == IT.QN("parity(2Sz)", 0, 2)
 
     @test_throws "only defined for one site operators" flux(Swap, Qubit(conserve = 2Sz))
 end

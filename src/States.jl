@@ -34,11 +34,19 @@ what ITensor does too.
     Limits(cutoff = 1e-14, maxdim = [10, 20, 50, 100])
     Limits(cutoff = 1e-14, maxdim = 100, mindim = 10)
 """
-@kwdef struct Limits
-    cutoff::Union{Float64, Vector{Float64}} = 0.
-    maxdim::Union{Int, Vector{Int}} = typemax(Int)
-    mindim::Union{Int, Vector{Int}} = 0
+struct Limits
+    cutoff::Union{Float64, Vector{Float64}}
+    maxdim::Union{Int, Vector{Int}}
+    mindim::Union{Int, Vector{Int}}
 end
+
+# a cutoff is a real number, and `cutoff = 0` has to be accepted as one: a field whose type
+# is a union is not converted to, so `@kwdef` refused it
+Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 0) =
+    Limits(float_cutoff(cutoff), maxdim, mindim)
+
+float_cutoff(x::Real) = Float64(x)
+float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
 
 """
     sweep_value(x, sweep)

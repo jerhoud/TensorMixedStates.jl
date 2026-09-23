@@ -279,8 +279,15 @@ matrix(a::ExpOp, site::AbstractSite...) =
 matrix(a::ModOp, site::AbstractSite...) =
     exp(2im * π * matrix(a.arg, site...) / a.modulus)
 
-matrix(a::PowOp, site::AbstractSite...) =
-    matrix(a.arg, site...) ^ a.expo
+function matrix(a::PowOp, site::AbstractSite...)
+    m = matrix(a.arg, site...)
+    # Julia 1.10 takes a non integer power of a real diagonal matrix entry by entry and
+    # refuses a negative entry, where later versions go complex
+    if !isinteger(a.expo) && eltype(m) <: Real && isdiag(m) && any(<(0), diag(m))
+        return complex(m) ^ a.expo
+    end
+    return m ^ a.expo
+end
 
 matrix(a::DagOp, site::AbstractSite...) =
     collect(adjoint(matrix(a.arg, site...)))
@@ -324,8 +331,13 @@ and the index of a site keeps one block per basis state in the order of the basi
 reorders anything. The one thing that knows how charged sectors are sorted is the combiner of
 `mixer`, and it is only ever handed a ket and its bra.
 """
-legs(a::GenericOp{Pure}, sites, js) =
-    op_on_sites(checked_matrix(a, sites, js), [ j' for j in js ], [ dag(j) for j in js ])
+function legs(a::GenericOp{Pure}, sites, js)
+    t = lay(checked_matrix(a, sites, js), [ j' for j in js ], [ dag(j) for j in js ])
+    if isnothing(t)
+        no_definite_charge(a, sites)
+    end
+    return t
+end
 
 legs(a::TensorOp{N}, sites, js) where N =
     prod(tensor_apply((o, p...) -> legs(o, sites[[p...]], js[[p...]]), a, (1:N)...))
@@ -348,23 +360,44 @@ end
 
 function legs(a::GenericOp{Mixed}, sites, js, bs)
     m = matrix(a, sites...)
-    outs, ins = mixed_sides(js, bs)
-    st = unique(reduce(vcat, [ strong_names(s) for s in sites ]))
-    if isempty(st)
-        return op_on_sites(m, outs, ins)
+    t = lay(m, mixed_sides(js, bs)...)
+    if !isnothing(t)
+        return t
     end
+    # the weak pairing, whose bra carries the charges of the ket, tells a jump that only the
+    # strong symmetry forbids, one moving the charge, from one no conservation allows
+    st = unique(reduce(vcat, [ strong_names(s) for s in sites ]))
+    if !isempty(st) && !isnothing(lay(m, mixed_sides(js, [ sim(j) for j in js ])...))
+        error("$a changes $(join(st, ", ")) between its two sides, which conserving it " *
+              "strongly forbids: drop `strong` to allow a jump that moves the charge")
+    end
+    no_definite_charge(a, sites)
+end
+
+"""
+    lay(m, outs, ins)
+    no_definite_charge(a, sites)
+
+the matrix `m` laid on the given legs, or `nothing` when their charges cannot carry it, and
+the refusal of the operator it came from. ITensors refuses such a matrix with `Fluxes not
+all equal`, from a place where neither the operator nor its sites are in sight, so the
+question is asked here and the answer given in terms of the operator.
+"""
+function lay(m::Matrix, outs, ins)
     try
         return op_on_sites(m, outs, ins)
     catch e
         if !(e isa ErrorException)
             rethrow()
         end
-        # a superoperator of definite flux on the weak pairing may have none on the strong
-        # one, which is exactly the case of a jump operator that moves the charge
-        error("$a changes $(join(st, ", ")) between its two sides, which conserving it " *
-              "strongly forbids: drop `strong` to allow a jump that moves the charge")
+        return nothing
     end
 end
+
+no_definite_charge(a, sites) =
+    error("$a carries no definite charge of " *
+          "$(join(unique(q[1] for s in sites for q in decode_conserve(conserved(s))), ", ")), " *
+          "so it cannot act on sites that conserve it")
 
 """
     checked_matrix(a, sites, js)
@@ -578,6 +611,13 @@ function conserve_string(site::AbstractSite, spec)
         if endswith(name, '!')
             error("cannot conserve $name: a name ending in ! cannot be told from the mark " *
                   "a site puts on a strong symmetry")
+        end
+        # ITensors refuses a longer charge name when the index is built, far from here, and
+        # the bra of a strong one takes a star (`ITensors.SmallStrings.smallLength`, internal)
+        limit = ITensors.SmallStrings.smallLength - (spec isa Strong ? 1 : 0)
+        if length(name) > limit
+            error("cannot conserve $name: ITensors takes names of at most $limit characters " *
+                  "here, give it a shorter one with named")
         end
         head = modulus == 1 ? name : "$name%$modulus"
         # a strong symmetry is marked on the quantity and not on the site, so that one site
