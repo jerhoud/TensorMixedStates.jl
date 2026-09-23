@@ -330,6 +330,7 @@ The following phases are available:
 - `Evolve` : do Hamiltonian or Lindbladian evolution
 - `Gates` : apply some gates
 - `PartialTrace` : trace the system over some sites (requires a mixed state)
+- `Weaken` : conserve less, for instance a strong symmetry asked for weakly (see `weaken`)
 - `SteadyState` : compute the steady state of a Lindblad equation (still experimental, requires a mixed state)
 - `SaveState` : write the state to disk in a hdf5 file
 - `LoadState` : read back a state written by `SaveState`

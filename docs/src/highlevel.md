@@ -19,5 +19,6 @@ Gates
 GroundState
 Dmrg
 PartialTrace
+Weaken
 SteadyState
 ```

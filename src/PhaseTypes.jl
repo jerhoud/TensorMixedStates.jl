@@ -1,4 +1,4 @@
-export Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, GroundState, Dmrg, PartialTrace, SteadyState
+export Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, GroundState, Dmrg, PartialTrace, SteadyState, Weaken
 
 
 """
@@ -289,6 +289,34 @@ a phase type for applying a partial trace
     keep_positions::Union{Nothing, Vector{Int}} = nothing
 end
 
+"""
+A phase type to take the state down to a lower level of conservation, see `weaken`
+
+A phase may evolve under a strong symmetry, which every dissipator commuting with the charge
+allows, and the next one continue under a weak one, where a jump that moves the charge
+becomes possible.
+
+# Fields
+
+- `name`: the name of the phase
+- `time_start`: the simulation time to use (no much use here)
+- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `target`: what the state must still conserve, as `weaken` takes it (default `nothing`, one
+  level down: strong becomes weak, weak is dropped)
+
+# Examples
+
+    Weaken()
+    Weaken(target = (strong(Ntot), 2Sz))
+    Weaken(target = ())                     # no charges at all
+"""
+@kwdef struct Weaken
+    name::String = "Weakening the symmetries"
+    time_start::Union{Nothing, Number} = nothing
+    final_measures = []
+    target = nothing
+end
+
 
 """
 a phase to compute the steady state of a Lindbladian
@@ -332,7 +360,7 @@ end
 
 
 """   
-    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}
+    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState, Weaken}
 
 A type that contains all possible phase types for SimData and runTMS.
 Each of the types contains at least the three following fields (like SimData).
@@ -341,7 +369,7 @@ Each of the types contains at least the three following fields (like SimData).
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 """
-const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState}
+const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState, Weaken}
 
 # The phases are printed field by field, read from the type rather than written out one by
 # one, so that a field added to a phase shows up in the log and in `prog.jl` without

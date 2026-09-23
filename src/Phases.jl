@@ -154,6 +154,13 @@ function run_phase(sim::Simulation, phase::PartialTrace)
     end
 end
 
+function run_phase(sim::Simulation, phase::Weaken)
+    from = symmetries(sim.state.system)
+    sim = isnothing(phase.target) ? weaken(sim) : weaken(sim, phase.target)
+    log_msg(sim, "Symmetries weakened from $from to $(symmetries(sim.state.system))")
+    return sim
+end
+
 function run_phase(sim::Simulation, phase::SteadyState)
     if sim.state isa State{Pure}
         error("state must be in mixed representation for computing steady state")

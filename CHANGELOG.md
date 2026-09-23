@@ -33,6 +33,8 @@ the reference article.
   next one under a weak one, where a jump moving the charge becomes possible; there is no way
   back. `symmetries` reports what a system conserves, and how, in the form `weaken` takes.
 
+- `Weaken`, the phase doing the same within a simulation.
+
 - `RandomState{Mixed}(system, states, linkdims)`, which draws a random density matrix from
   the states its purification starts from. A system that conserves something has no sector to
   draw one in otherwise, and what tracing half of the purification leaves is a mixture over

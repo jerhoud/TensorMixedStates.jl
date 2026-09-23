@@ -212,3 +212,28 @@ end
         @test real(first(steady_state(lind, mix(start(site)); nsweeps = 2, limits = lim))) ≈ z atol = 1e-10
     end
 end
+
+@testset "Weakening between two phases" begin
+    strong = TensorMixedStates.strong
+    # dephasing commutes with the number of particles and allows a strong symmetry, loss does
+    # not. Weakening in between must give what a weak symmetry gives from the start
+    h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)
+    dephasing = -im * h + sum(Dissipator(sqrt(0.3) * N)(i) for i in 1:4)
+    loss = -im * h + Dissipator(sqrt(0.2) * C)(2)
+    evolve(ev) = Evolve(algo = Tdvp(), limits = Limits(cutoff = 1e-12, maxdim = 32),
+                        duration = 0.5, time_step = 0.05, evolver = ev)
+    run(site, middle) = runTMS(SimData(phases = [
+            CreateState{Mixed}(4, site, ["Occ", "Emp", "Occ", "Emp"]),
+            evolve(dephasing), middle..., evolve(loss) ]); output = devnull).state
+    numbers(s) = [ real(trace(s)); real.(expect1(s, N)); expect(s, dag(C)(1) * C(3)) ]
+    reference = numbers(run(Fermion(conserve = N), []))
+
+    s = run(Fermion(conserve = strong(N)), [Weaken()])
+    @test repr(symmetries(s.system)) == "N"
+    @test numbers(s) ≈ reference
+    s = run(Fermion(conserve = strong(N)), [Weaken(target = ())])
+    @test !TensorMixedStates.is_charged(s.system)
+    @test numbers(s) ≈ reference
+
+    @test_throws "drop `strong`" run(Fermion(conserve = strong(N)), [])
+end
