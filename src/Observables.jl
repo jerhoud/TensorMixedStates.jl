@@ -400,8 +400,10 @@ partial trace needs a density matrix.
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))
 
+# a number read off a partial trace gives nothing away, so unlike `partial_trace` itself this
+# goes through the weak form of a strongly conserving state
 renyi2(state::State{Mixed}, a::AbstractVector{<:Integer}) =
-    renyi2(partial_trace(state, a; keepers = true))
+    renyi2(partial_trace(weak_form(state), a; keepers = true))
 
 # a subsystem of a pure state is not pure, so this is an entanglement measure rather than
 # 0. There is no cheap route for an arbitrary subset, the same way mutual_info_renyi2 has
@@ -807,10 +809,12 @@ On a pure state and for a cut, this is read directly from the entanglement spect
 costs nothing more than the entanglement entropy. For a list of positions the pure state
 is first turned into its mixed representation, which is much more expensive.
 """
-mutual_info_renyi2(state::State, a::AbstractVector{<:Integer}) =
-    renyi2(partial_trace(state, a; keepers = true)) +
-    renyi2(partial_trace(state, a; keepers = false)) -
-    renyi2(state)
+function mutual_info_renyi2(state::State, a::AbstractVector{<:Integer})
+    w = weak_form(state)
+    return renyi2(partial_trace(w, a; keepers = true)) +
+           renyi2(partial_trace(w, a; keepers = false)) -
+           renyi2(w)
+end
 
 mutual_info_renyi2(state::State, cut::Int) =
     mutual_info_renyi2(state, collect(1:cut))

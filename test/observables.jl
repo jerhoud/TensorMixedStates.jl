@@ -476,4 +476,9 @@ end
     @test_ok partial_trace(w, [1, 3])
     @test_throws "weaken it first" partial_trace(s, [1, 3])
     @test_ok partial_trace(weaken(s), [1, 3])
+
+    # a number read off a partial trace is measured all the same, through the weak form
+    both(x -> renyi2(x, [1, 2]))
+    both(x -> mutual_info_renyi2(x, [1, 2]))
+    both(x -> mutual_info_renyi2(x, 2))
 end
