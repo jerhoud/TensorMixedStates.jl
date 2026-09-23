@@ -1,8 +1,7 @@
 # Changelog
 
 Notable changes to TensorMixedStates are recorded here, in the format of
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The package should follows
-[semantic versioning](https://semver.org/spec/v2.0.0.html).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 This file starts with the release in preparation. For what came before, see the
 [tags](https://github.com/jerhoud/TensorMixedStates.jl/tags); version 1.2.8 is the one
@@ -62,6 +61,15 @@ the reference article.
   are still read, which matters beyond old files: a checkpoint left by an earlier version
   holds a state in that format, so resuming one depends on it.
 
+### Removed
+
+- **`A` on `Fermion`, and `Aup` and `Adn` on `Electron` and `Tj`.** They were the bare local
+  operators, without their Jordan-Wigner string, which serve to write the strings by hand as
+  one does with ITensor. `simplify` inserts the strings itself, and being declared as plain
+  operators they were taken to commute with `F`, so a string crossing one of them on its site
+  gave the wrong sign: `C(3) * A(1)` came out as the opposite of `C(3) * C(1)`. `A` remains
+  the destruction operator of `Boson` and `Qboson`.
+
 ### Fixed
 
 - `save_state` no longer destroys the state already saved under a name when it cannot write
@@ -73,6 +81,17 @@ the reference article.
 - `matrix` and `tensor` accept a single site for a superoperator acting on several identical
   ones, as their documentation says and as they already did for other operators:
   `matrix(Left(Swap), Qubit())` raised a `DimensionMismatch`.
+
+- **A sum of fermionic operators on one site had the wrong sign when the Jordan-Wigner string
+  of a later operator crossed it.** `simplify` gathers the terms of one site into a single
+  factor and took that factor to commute with `F`: `C(3) * (C + dag(C))(1)` came out as the
+  opposite of `C(3) * C(1) + C(3) * dag(C)(1)`, and a hamiltonian written with the later site
+  first, `sum(γ(i+1) * γ(i))` with `γ = C + dag(C)`, had its first bond with the wrong sign.
+  The parity of every factor is now read, and a factor that has none stops the string.
+
+- **`dag` of a non integer power was the power of `dag`**, which only holds when the operator
+  has no negative eigenvalue: `dag(sqrt(X))` simplified to `sqrt(X)`, so `expect` returned
+  the conjugate of the right value and the MPO of `Dissipator(sqrt(X))` was wrong.
 
 ## [1.3.0] - 2026-09-21
 

@@ -19,7 +19,6 @@ a site type to represent Tj sites (like Electron sites without the up and down s
 # Operators
 
 - `Cup, Cdn`              : the destruction operators
-- `Aup, Adn`              : the Jordan-Wigner transforms of Cup and Cdn (...C = FFFA)
 - `Nup, Ndn, Ntot`        : the numbers operator for up, down and total
 - `Sx, Sy, Sz, Sp, Sm`    : spin operators
 - `S2`                    : the total spin squared of the site, that is `3/4 Ntot`,
@@ -74,8 +73,6 @@ string_state(::Tj, ::String) = error("no generic state for Tj")
     ],
     plain_op =>
     [
-        Aup = Cup,
-        Adn = Cdn,
         Sp = Float64[
             0  0  0
             0  0  1
@@ -99,4 +96,4 @@ string_state(::Tj, ::String) = error("no generic state for Tj")
     ]
 ])
 
-@create_site_module(Tjs, [Tj, Cup, Cdn, Fup, Fdn, Aup, Adn, Nup, Ndn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])
+@create_site_module(Tjs, [Tj, Cup, Cdn, Fup, Fdn, Nup, Ndn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])

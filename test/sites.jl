@@ -213,6 +213,9 @@ end
     # has to name what was not found rather than surface as a dictionary error. X is a
     # perfectly good name, just not one a boson has
     @test_throws "operator X is not defined for site Boson" matrix(X, Boson(3))
+    # A is the destruction operator of a boson and no longer anything on a fermion, where it
+    # stood for C without its string and took a string crossing it with the wrong sign
+    @test_throws "operator A is not defined for site Fermion" matrix(A, Fermion())
     @test_throws "state Zorglub is not defined for site Qubit" State{Pure}(
         System(2, Qubit()), "Zorglub")
     # a site type declared outside the package goes through the same library

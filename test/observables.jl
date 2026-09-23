@@ -95,6 +95,13 @@ end
         # factors in descending order used to recontract a tensor already consumed, and
         # swapping two fermionic operators costs the anticommutation sign
         @test expect(st, C(1 + d) * dag(C)(1)) ≈ -ref[1, 1 + d] atol=1e-10
+        # a sum on the first site is gathered into one factor, which the string of the
+        # later operator crosses. <c_j c_1> vanishes, the number of particles being fixed
+        @test expect(st, C(1 + d) * (C + dag(C))(1)) ≈ -ref[1, 1 + d] atol=1e-10
+        @test expect(stm, C(1 + d) * (C + dag(C))(1)) ≈ -ref[1, 1 + d] atol=1e-8
+        # a renamed fermionic operator keeps its string, on either side of the product
+        @test expect(st, C(1 + d) * named(dag(C), "Cd")(1)) ≈ -ref[1, 1 + d] atol=1e-10
+        @test expect(st, dag(C)(1) * named(2C, "C2")(1 + d)) ≈ 2ref[1, 1 + d] atol=1e-10
     end
 end
 
@@ -442,7 +449,7 @@ end
     both(s -> trace(partial_trace(mix(s), [1, 3])))
     both(s -> mutual_info_renyi2(mix(s), 2))
     both(s -> trace(apply(Gate(F)(1), mix(s))))
-    both(s -> trace(apply(Dissipator(A)(2), mix(s))))
+    both(s -> trace(apply(Dissipator(C)(2), mix(s))))
     both(s -> expect(apply(SetState("Occ")(2), mix(s)), N(2)))
 end
 

@@ -884,11 +884,16 @@ isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
 """
     named_type(op)
 
-the `OpType` a renamed operator keeps: its own when it has one, and nothing assumed
-otherwise. This is the rule `controlled_type` applies for the same reason.
+the `OpType` a renamed operator keeps: its own when it has one, `fermionic_op` for a fermionic
+expression, and nothing assumed otherwise.
+
+A renamed operator of one site keeps its name through `simplify`, so its type is all that
+tells it to take a Jordan-Wigner string, and `named(2C, "C2")` lost it. `controlled_type`
+needs no such case: a controlled operator acts on several sites, and `simplify` replaces it
+by its expression.
 """
 named_type(a::Operator) = a.type
-named_type(::Op) = plain_op
+named_type(a::Op) = a isa SimpleOp && isfermionic(a) ? fermionic_op : plain_op
 
 """
     named(op, name)

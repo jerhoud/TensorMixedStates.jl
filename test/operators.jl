@@ -18,6 +18,18 @@
     for a in [X ⊗ Y, Swap, Swap * Swap, (X ⊗ Y) * (Y ⊗ X), controlled(X), X ⊗ Id + Id ⊗ X]
         @test matrix(simplify(a), q, q) ≈ matrix(a, q, q)
     end
+    # an F crossing a factor takes the sign of its parity, a sum of odd operators included,
+    # and stops before a factor that has none
+    f = Fermion()
+    for a in [F * C, F * dag(C), F * (C + dag(C)), (C + dag(C)) * F, F * (2C + im * dag(C)),
+              F * C * F, F * (C * N), F * (C + N), F * exp(N), F * C^3]
+        @test matrix(simplify(a), f) ≈ matrix(a, f)
+    end
+    # the adjoint of a non integer power, which is not the power of the adjoint as soon as
+    # the operator has a negative eigenvalue
+    for a in [dag(sqrt(X)), dag(Sz^0.5), dag((X + Y)^0.3), dag(sqrt(N)), dag(X^3)]
+        @test matrix(simplify(a), q) ≈ matrix(a, q)
+    end
     # a few normal forms that the simplifier is expected to reach
     @test simplify(X * X) == Id
     @test simplify(X^2) == Id
@@ -197,6 +209,12 @@ end
     @test matrix(simplify(named(N, "Nf")), f) ≈ matrix(N, f)
     # an expression has no name of its own and can be renamed too
     @test matrix(named(2Sz, "SzA"), Spin(1/2)) ≈ matrix(2Sz, Spin(1/2))
+    # a fermionic expression stays fermionic, which is what gives it its Jordan-Wigner string,
+    # and one of no definite fermionic nature cannot be named at all
+    @test named(2C, "C2").type == fermionic_op
+    @test named(dag(C), "Cd").type == fermionic_op
+    @test named(dag(C) * C, "n").type == plain_op
+    @test_throws "cannot sum fermionic and non fermionic operators" named(C + N, "x")
 end
 
 @testset "Flux of an operator" begin

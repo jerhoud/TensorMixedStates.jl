@@ -183,7 +183,14 @@ simplify_dag(a::Operator) =
     else
         dag(a)
     end
-simplify_dag(a::PowOp) = PowOp(simplify_dag(a.arg), conj(a.expo))
+# only an integer power lets the adjoint in: a non integer one goes through a logarithm, whose
+# branch cut the adjoint does not respect, and dag(sqrt(X)) came out as sqrt(X)
+simplify_dag(a::PowOp) =
+    if isinteger(a.expo)
+        PowOp(simplify_dag(a.arg), a.expo)
+    else
+        DagOp(a)
+    end
 simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
 simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
 simplify_dag(a::Union{Identity, JW_F}) = a
@@ -275,7 +282,7 @@ simplify_prod(v::Vector) =
 # Generic Pure product
 # gather identical factors X * X => X^2
 # simplify powers using operator types Id^2 => Id, F^2 => Id, X^2 => Id
-# simplify F and put them at the end with the correct sign (anticommut with JW, commut with the others)
+# carry F to the right end with the sign the parity of each factor crossed gives, see jw_parity
 # F*X = X*F, F*JW(C) => -JW(C)*F, F*F = Id
 
 pow_base(a::Op) = a
@@ -283,29 +290,78 @@ pow_base(a::PowOp) = a.arg
 pow_expo(a::Op) = 1
 pow_expo(a::PowOp) = a.expo
 
-commut(::Op) = true
-commut(::JW) = false
-commut(a::DagOp) = commut(a.arg)
+"""
+    jw_parity(a)
+
+how a factor of a one site product behaves when the `F` of that site crosses it: `0` when it
+commutes with `F`, `1` when it anticommutes, `nothing` when it does neither.
+
+A fermionic operator, and the Jordan-Wigner transform `simplify` makes of it, is odd, and any
+other operator is taken to be even, the convention the strings themselves rest on. A composite
+factor has the parity its pieces give it. Sums have to be read as well, since `simplify`
+gathers the terms of one site into a single factor: `(C + dag(C))(1)` was taken to be even,
+and `C(3) * (C + dag(C))(1)` came out with the wrong sign.
+"""
+jw_parity(::Op) = 0
+jw_parity(::JW) = 1
+jw_parity(a::Operator) = a.type == fermionic_op ? 1 : 0
+jw_parity(a::Union{ScalarOp, DagOp}) = jw_parity(a.arg)
+
+function jw_parity(a::ProdOp)
+    ps = map(jw_parity, a.subs)
+    return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
+end
+
+function jw_parity(a::SumOp)
+    ps = unique(map(jw_parity, a.subs))
+    return length(ps) == 1 ? only(ps) : nothing
+end
+
+function jw_parity(a::PowOp)
+    p = jw_parity(a.arg)
+    if p == 0
+        return 0
+    elseif p == 1 && isinteger(a.expo)
+        return mod(Int(a.expo), 2)
+    else
+        return nothing
+    end
+end
+
+# the exponential of an odd operator mixes the two parities
+jw_parity(a::Union{ExpOp, ModOp}) = jw_parity(a.arg) == 0 ? 0 : nothing
 
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     id = MakeIdentity(v[1])
     if c == 0
         return 0 * id
     end
-    r = GenericOp{Pure, N}[]
-    b = id
-    e = 1
+    w = GenericOp{Pure, N}[]
     f = false
     for x in v
-        bx = pow_base(x)
-        ex = pow_expo(x)
-        if bx isa JW_F
+        if x isa JW_F
             f = !f
             continue
         end
-        if f && !commut(bx) && isodd(ex)
+        p = jw_parity(x)
+        if f && isnothing(p)
+            # a factor of no definite parity stops the F, which are laid down just before it
+            push!(w, F)
+            f = false
+        elseif f && p == 1
             c = -c
         end
+        push!(w, x)
+    end
+    if f
+        push!(w, F)
+    end
+    r = GenericOp{Pure, N}[]
+    b = id
+    e = 1
+    for x in w
+        bx = pow_base(x)
+        ex = pow_expo(x)
         if bx == b
             e += ex
         else
@@ -343,9 +399,6 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
             end
         end
         r = nr
-    end
-    if f
-        push!(r, F)
     end
     return c * ProdOp(r)
 end

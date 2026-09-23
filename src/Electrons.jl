@@ -20,7 +20,6 @@ a site type to represent electron sites (dim is 4)
 # Operators
 
 - `Cup, Cdn`              : the destruction operators
-- `Aup, Adn`              : the Jordan-Wigner transforms of Cup and Cdn (...C = FFFA)
 - `Nup, Ndn, Nupdn, Ntot` : the numbers operator for up, down, up and down, and total
 - `Sx, Sy, Sz, Sp, Sm`    : spin operators
 - `S2`                    : the total spin squared of the site, that is `3/4 (Ntot - 2 Nupdn)`,
@@ -80,8 +79,6 @@ string_state(::Electron, ::String) = error("no generic state for Electron")
     ],
     plain_op =>
     [
-        Aup = Cup,
-        Adn = F * Cdn,
         Sp = Float64[
             0  0  0  0
             0  0  1  0
@@ -113,4 +110,4 @@ string_state(::Electron, ::String) = error("no generic state for Electron")
     ]
 ])
 
-@create_site_module(Electrons, [Electron, Cup, Cdn, Fup, Fdn, Aup, Adn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])
+@create_site_module(Electrons, [Electron, Cup, Cdn, Fup, Fdn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])

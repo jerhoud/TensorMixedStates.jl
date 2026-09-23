@@ -19,7 +19,6 @@ a site type to represent fermion sites (dim is 2)
 # Operators
 
 - `C` : the destruction operator
-- `A` : the Jordan-Wigner transform of C (...C = FFFA)
 - `N` : the number of fermions operator
 """
 struct Fermion <: AbstractSite
@@ -46,14 +45,10 @@ dim(::Fermion) = 2
     [
         N = dag(C) * C,
     ],
-    plain_op =>
-    [
-        A = C,
-    ],
     involution_op =>
     [
         F = Float64[1 0 ; 0 -1]
     ]
 ])
 
-@create_site_module(Fermions, [Fermion, C, N, A])
+@create_site_module(Fermions, [Fermion, C, N])
