@@ -475,6 +475,88 @@ end
     @test_ok make_mpo(mixed(Fermion(conserve = N)), lind)
 end
 
+@testset "Operators on several sites of a charged system" begin
+    # an operator on several sites is laid on the index of each of them, and a superoperator
+    # gathered onto the mixed index of each, never onto one index combining several: that is
+    # where charged indices went wrong, no such operator being built at all. Each case is
+    # compared with the same sites conserving nothing, on a quantity that reads a relative
+    # phase or a population, which a tensor laid in a permuted basis would change
+    Q = TensorMixedStates.ITensors
+    strong = TensorMixedStates.strong
+    same(f, charged, dense) = @test f(charged) ≈ f(dense)
+
+    # a gate written as an expression, and one written as an exponential
+    same(Qubit(conserve = N), Qubit()) do site
+        sys = System(3, site)
+        s = State{Pure}(sys, ["Up", "Dn", "Up"]) + 0.5 * State{Pure}(sys, ["Dn", "Up", "Up"])
+        s = s / norm(s)
+        a = apply(Swap(1, 2), s)
+        b = apply(exp(-0.3im * (Z ⊗ Z))(2, 3), s)
+        m = apply(Swap(2, 3), mix(s))
+        [expect(a, N(1)), expect(b, Sp(1) * Sm(2) + Sm(1) * Sp(2)), expect(m, N(3))]
+    end
+
+    # charges that do not increase along the basis, with every kind of superoperator. The
+    # dissipator is added to the state rather than applied alone, what it gives on its own
+    # having no trace
+    same(Boson(4, conserve = parity(N)), Boson(4)) do site
+        sys = System(3, site)
+        p(v) = State{Pure}(sys, v)
+        ρ = mix((p(["1", "2", "3"]) + 0.5 * p(["3", "0", "1"])) / sqrt(1.25))
+        ρ = ρ + 0.1 * apply(Dissipator(0.3 * (A ⊗ A))(1, 2), ρ)
+        ρ = apply(Gate(exp(-0.2im * (N ⊗ N)))(2, 3), ρ)
+        ρ = apply(Left(exp(-0.1im * (N ⊗ N)))(1, 2), ρ)
+        ρ = apply(Right(exp(0.1im * (N ⊗ N)))(2, 3), ρ)
+        [trace(ρ); [expect(ρ, N(i)) for i in 1:3];
+         expect(ρ, (dag(A) * dag(A))(1) * (A * A)(2) * (A * A)(3))]
+    end
+    same(Electron(conserve = (Ntot, 2Sz)), Electron()) do site
+        sys = System(2, site)
+        s = State{Pure}(sys, ["Up", "Dn"]) + 0.5 * State{Pure}(sys, ["Dn", "Up"])
+        s = s / norm(s)
+        g = exp(-0.3im * (Sz ⊗ Ntot + Ntot ⊗ Ntot))
+        exchange = Sp(1) * Sm(2) + Sm(1) * Sp(2)
+        [expect(apply(Gate(g)(1, 2), mix(s)), exchange), expect(apply(g(1, 2), s), exchange)]
+    end
+
+    # a site conserving nothing beside one that conserves, which used to put a plain index
+    # and a charged one in the same tensor
+    same([Qubit(), Fermion(conserve = N)], [Qubit(), Fermion()]) do sites
+        s = State{Pure}(System(sites), ["Up", "Occ"])
+        g = exp(-0.4im * (X ⊗ N))
+        [expect(apply(Gate(g)(1, 2), mix(s)), Z(1)), expect(apply(g(1, 2), s), Y(1))]
+    end
+
+    same(Fermion(conserve = N), Fermion()) do site
+        sys = System(3, site)
+        p(v) = State{Pure}(sys, v)
+        ρ = mix((p(["Occ", "Emp", "Occ"]) + 0.5 * p(["Emp", "Occ", "Occ"])) / sqrt(1.25))
+        ρ = apply(SetState("Emp")(3), ρ)
+        [expect(ρ, N(i)) for i in 1:3]
+    end
+
+    # under a strong symmetry, where the bra of each site lives apart from its ket
+    same(Fermion(conserve = strong(N)), Fermion()) do site
+        sys = System(3, site)
+        p(v) = State{Pure}(sys, v)
+        ρ = mix((p(["Occ", "Occ", "Emp"]) + 0.5 * p(["Occ", "Emp", "Occ"])) / sqrt(1.25))
+        ρ = ρ + 0.1 * apply(Dissipator(0.3 * (N ⊗ N))(1, 2), ρ)
+        ρ = apply(Gate(exp(-0.2im * (N ⊗ N)))(2, 3), ρ)
+        [trace(ρ); [expect(ρ, N(i)) for i in 1:3]; expect(ρ, dag(C)(2) * C(3))]
+    end
+
+    # the refusal names the quantity even when the first site of the operator conserves nothing
+    hyb = System([Qubit(), Fermion(conserve = strong(N))])
+    @test_throws "changes N between its two sides" TensorMixedStates.tensor(hyb, Dissipator(X ⊗ C)(1, 2))
+
+    # given only its sites, an operator on several of them keeps a single index for all
+    t = tensor(N ⊗ N, Fermion(conserve = N), Fermion(conserve = N))
+    @test length(Q.inds(t)) == 2
+    @test flux(t) == Q.QN("N", 0)
+    b = Boson(4, conserve = parity(N))
+    @test flux(tensor(Left(N ⊗ N), b, b)) == Q.QN("parity(N)", 0, 2)
+end
+
 @testset "Measuring on every kind of charged site" begin
     # conserving a quantity must not change a single measured number, whatever the site and
     # whatever the shape of the charge. This is deliberately spread over the eight site types
@@ -505,18 +587,18 @@ end
         end
     end
 
-    # a genuine two site operator, which is not the same path as a product of one site ones:
-    # its matrix is laid on the indices of its sites and only then combined, never written
-    # straight onto the combination, whose basis a charged combiner reorders
-    # the counting operator is named apart on a site holding several species, so each row
-    # brings its own
+    # a genuine two site operator, which `expect` never builds: `simplify` splits a tensor
+    # product into its factors. Applied as a gate it is laid on the indices of both sites at
+    # once, and the norm of the result reads off the eigenvalue it picks, which a permuted
+    # basis would change. The counting operator is named apart on a site holding several
+    # species, so each row brings its own
     for (charged, dense, st, count) in
             ((Fermion(conserve = N), Fermion(), "Occ", N),
              (Boson(4, conserve = parity(N)), Boson(4), "2", N),
              (Electron(conserve = (Ntot, 2Sz)), Electron(), "Up", Ntot))
         for op in (count ⊗ count, Id ⊗ count)
             two(site) = State{Pure}(System(3, site), fill(st, 3))
-            @test expect(two(charged), op(1, 2)) ≈ expect(two(dense), op(1, 2))
+            @test norm(apply(op(1, 2), two(charged))) ≈ norm(apply(op(1, 2), two(dense)))
         end
     end
 end

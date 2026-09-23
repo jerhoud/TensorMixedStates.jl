@@ -166,20 +166,3 @@ check_indices(system::System, a::Evolver) = check_indices(system, a.arg)
 check_indices(system::System, a::Vector) = foreach(x -> check_indices(system, x), a)
 # a generic operator carries no index, and neither does anything else that may be passed
 check_indices(::System, _) = nothing
-
-"""
-    tensor(::System, ::AtIndex)
-
-returns a tensor representing the given simple indexed operator acting on this system
-"""
-function tensor(system::System, a::AtIndex{R}) where R
-    s = map(i->system[i], a.index)
-    t = tensor(a.op, s...; charged = is_charged(system))
-    is = SysIndex{R}(system, a.index)
-    j = tensor_index(t)
-    c = combinerto(j, reverse(is)...)
-    # the primed combiner is daggered so that the two sides of the operator carry opposite
-    # directions, which is what a charged index requires and what a dense one ignores
-    return t * c * dag(c')
-end
-

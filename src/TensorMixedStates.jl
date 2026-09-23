@@ -13,8 +13,8 @@ using ITensors, ITensorMPS, Printf, Dates, JSON, Random, LinearAlgebra, HDF5
 # Core
 include("Operators.jl")
 include("Sites.jl")
-include("Mixer.jl")
 include("Systems.jl")
+include("Mixer.jl")
 include("States.jl")
 include("Simplify.jl")
 

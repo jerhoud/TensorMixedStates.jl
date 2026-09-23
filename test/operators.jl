@@ -259,3 +259,28 @@ end
     @test matrix(Left(A), b) ≈ kron(i3, mb)
     @test matrix(Right(A), b) ≈ kron(conj(mb), i3)
 end
+
+@testset "A matrix knows no charge" begin
+    # the matrix of an operator is written in the basis of its sites whatever they conserve.
+    # A superoperator read off the mixed index of a charged site came out in the order the
+    # charges sort its sectors, and an operator on several charged sites not at all
+    strong = TensorMixedStates.strong
+    f, fq, fs = Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N))
+    for op in (Left(C), Right(C), Gate(C), Dissipator(C), SetState("Occ"))
+        @test matrix(op, fq) == matrix(op, f)
+        @test matrix(op, fs) == matrix(op, f)
+    end
+    e, eq = Electron(), Electron(conserve = (Ntot, 2Sz))
+    @test matrix(Ntot ⊗ Sz, eq, eq) == matrix(Ntot ⊗ Sz, e, e)
+    b, bq = Boson(4), Boson(4, conserve = parity(N))
+    @test matrix(Left(N ⊗ N), bq, bq) == matrix(Left(N ⊗ N), b, b)
+
+    # an operator carrying no definite flux on a site still has a matrix: what is refused is
+    # placing it on a system that conserves
+    @test matrix(Left(X), Qubit(conserve = N)) == matrix(Left(X), Qubit())
+
+    # a single site stands for as many identical ones as the operator needs
+    q = Qubit()
+    @test matrix(Left(Swap), q) == matrix(Left(Swap), q, q)
+    @test matrix(Gate(Swap), q) == matrix(Gate(Swap), q, q)
+end

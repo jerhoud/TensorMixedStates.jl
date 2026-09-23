@@ -11,17 +11,6 @@ function combinerto(i::Index, j::Index...)
     replaceind(c, x, i)
 end
 
-# with a single index there is nothing to combine, and going through a combiner would not be
-# harmless: it sorts the sectors it is given, while a site index keeps them in the order of
-# the basis, one block per state. The two orders agree only when the charges of the basis
-# happen to increase, which is why this was invisible until a site whose charges do not, an
-# electron or a t-J, was asked for an observable.
-#
-# both are daggered because a combiner carries the indices it combines daggered and its own
-# the other way, and `from` reaches here as it appears in the operator, which is already
-# daggered
-combinerto(to::Index, from::Index) = delta(dag(from), dag(to))
-
 """
     mixer(j::Index, k::Index)
 
@@ -45,7 +34,7 @@ end
 
 the element ``|m\\rangle\\langle n|`` of site `i`, vectorised on its mixed index
 """
-function ket_bra(system, i::Int, m::Int, n::Int)
+function ket_bra(system::System, i::Int, m::Int, n::Int)
     j = SysIndex{Pure}(system, i)
     k = SysIndex{Mixed}(system, i)
     b, c = mixer(j, k, system[i])
@@ -65,8 +54,7 @@ and the relabelling has already put the two under the same charge, so every term
 of zero and their sum has one too. What it does beyond renaming is to gather the blocks the
 relabelling left apart, which the two indices order differently.
 """
-# the systems are left unannotated because this file is read before the one defining them
-function weak_map(strong, weak, i::Int, relab)
+function weak_map(strong::System, weak::System, i::Int, relab)
     d = dim(SysIndex{Pure}(strong, i))
     return sum( ket_bra(weak, i, m, n) *
                 dag(relabel(ket_bra(strong, i, m, n), relab))
@@ -89,7 +77,7 @@ on a plain one there is nothing to relabel and the two sides would contract into
 which is one reason, besides the cost, why a system without a strong symmetry keeps
 `tensor_dag`.
 """
-function adj_map(system, i::Int, relab)
+function adj_map(system::System, i::Int, relab)
     d = dim(SysIndex{Pure}(system, i))
     return sum( ket_bra(system, i, y, x) * dag(relabel(ket_bra(system, i, x, y), relab))
                 for x in 1:d, y in 1:d )
@@ -107,7 +95,7 @@ the order the charges put them, which is not the order a plain combiner gives �
 a single basis element of a mixed index lands in the same place. This tensor is the
 permutation between the two, and having no charges it has no flux to respect.
 """
-function dense_map(charged, plain, i::Int)
+function dense_map(charged::System, plain::System, i::Int)
     d = dim(SysIndex{Pure}(charged, i))
     return sum( ket_bra(plain, i, m, n) * dag(dense(ket_bra(charged, i, m, n)))
                 for m in 1:d, n in 1:d )
@@ -140,27 +128,50 @@ function relabeller(f)
 end
 
 """
-    tensor_index(t::ITensor)
+    all_sites(a, site)
 
-return the first index of an ITensor that is not primed
+the sites an operator acts on, a single site standing for as many identical ones as the
+operator needs.
 """
-tensor_index(t::ITensor) = getfirst(i->hasplev(i, 0), inds(t))
+function all_sites(a::GenericOp{R, N}, site) where {R, N}
+    sites = length(site) == 1 ? fill(site[1], N) : collect(site)
+    if length(sites) ≠ N
+        error("$a acts on $N sites and was given $(length(site))")
+    end
+    return sites
+end
 
 """
     matrix(a::GenericOp, site::AbstractSite...)
 
 return the matrix of a generic operator for the given sites. If sites are all identical, you may give only one
 
+The basis is the one of the sites, whatever they conserve: a matrix knows no charge. The last
+site varies fastest and, for an operator acting on a density matrix, the ket of a site varies
+faster than its bra.
+
 # Examples
 
     matrix(X, Qubit())
     matrix(Swap, Qubit())
     matrix(X⊗A, Qubit(), Boson(2))
+    matrix(Left(X), Qubit())
 """
-function matrix(a::GenericOp, site::AbstractSite...)
-    t = tensor(a, site...)
-    i = tensor_index(t)
-    Matrix(t, i', i)
+function matrix(a::Union{TensorOp, Left, Right, SetState}, site::AbstractSite...)
+    sites = all_sites(a, site)
+    # plain indices: nothing is there to reorder the basis, and no charge to check
+    js = [ Index(dim(s)) for s in sites ]
+    if a isa GenericOp{Pure}
+        t = legs(a, sites, js)
+        outs, ins = [ j' for j in js ], js
+    else
+        bs = [ sim(j) for j in js ]
+        t = legs(a, sites, js, bs)
+        outs, ins = mixed_sides(js, bs)
+    end
+    d = prod(dim, outs)
+    # the reverse of `op_on_sites`
+    return reshape(Array(t, reverse(outs)..., reverse(ins)...), d, d)
 end
 
 """
@@ -168,38 +179,46 @@ end
 
 return the ITensor of a generic operator for the given sites. If sites are all identical, you may give only one
 
+For several sites it lives on a single index combining theirs.
+
 # Examples
 
     tensor(X, Qubit())
     tensor(Swap, Qubit())
     tensor(X⊗A, Qubit(), Boson(2))
 """
-function tensor(a::GenericOp, site::AbstractSite...; charged::Bool = false)
-    m = matrix(a, site...)
-    if length(site) == 1
-        charge_flux(m, a, site[1])
+function tensor(a::GenericOp, site::AbstractSite...)
+    sites = all_sites(a, site)
+    # a site conserving nothing takes a trivial charge when another one conserves, as it does
+    # in a system
+    charged = any(s -> !isempty(conserved(s)), sites)
+    js = [ site_index(s, charged) for s in sites ]
+    if a isa GenericOp{Pure}
+        return combine_sites(legs(a, sites, js), js)
     end
-    return tensor(m, site...; charged)
+    bs = fresh_bras(js, sites)
+    ks = [ mixed_index(j, s) for (j, s) in zip(js, sites) ]
+    return combine_sites(onto_mixed(legs(a, sites, js, bs), js, bs, ks), ks)
 end
 
 """
-    op_index(sites, charged)
+    combine_sites(t, is)
 
-the index an operator of those sites lives on: theirs when there is one, the combination of
-theirs otherwise.
-
-Every index of the package comes from a site, so that two of them built for the same site are
-interchangeable and a tensor computed here can be put on a system without a translation.
-`charged` is the system's, a site conserving nothing taking a trivial index inside a system
-where another one conserves. A matrix given for several identical sites at once, which is a
-convenience of `matrix`, has no system behind it and stays dense.
+the operator `t`, laid on one pair of indices per site, gathered on a single pair combining
+them, which is the form `tensor` gives for several sites. An operator placed on a system never
+goes through this: it keeps one pair per site.
 """
-function op_index(sites, charged::Bool)
-    is = [ site_index(s, charged) for s in sites ]
-    return length(is) == 1 ? is[1] : combinedind(combiner(reverse(is)...; tags = ""))
+function combine_sites(t::ITensor, is)
+    if length(is) == 1
+        return t
+    end
+    # built on the daggered indices, the ones the operator takes in, so that the combiner
+    # carries them the other way and meets them; its primed dagger meets the outputs
+    c = combiner(reverse([ dag(i) for i in is ])...; tags = "")
+    return t * c * dag(c')
 end
 
-function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...; charged::Bool = false)
+function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...)
     n, _ = size(a)
     if n ≠ dim(site) ^ (1 + length(sites))
         # the shorthand of one site standing for several identical ones, which names no
@@ -207,16 +226,10 @@ function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...; charged::
         i = Index(n)
         return ITensor(a, i', dag(i))
     end
-    # laid on the indices of the sites and only then combined, never written straight onto
-    # the combination: combining charged indices sorts and merges their sectors, so the flat
-    # order of the combined basis is not the order of the matrix
-    is = [ site_index(s, charged) for s in (site, sites...) ]
-    t = op_on_sites(a, [ i' for i in is ], [ dag(i) for i in is ])
-    if length(is) == 1
-        return t
-    end
-    c = combiner(reverse(is)...; tags = "")
-    return t * c * dag(c')
+    ss = [site, sites...]
+    charged = any(s -> !isempty(conserved(s)), ss)
+    js = [ site_index(s, charged) for s in ss ]
+    return combine_sites(op_on_sites(a, [ j' for j in js ], [ dag(j) for j in js ]), js)
 end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
@@ -295,95 +308,131 @@ function op_on_sites(m::Matrix, outs, ins)
 end
 
 """
-    super_tensor(m, is, left)
+    legs(a, sites, js)
+    legs(a, sites, js, bs)
 
-the tensor of the superoperator acting on one side of the density matrix by the matrix `m`,
-on the left when `left` and on the right otherwise.
+the tensor of an operator on the given sites, with one pair of legs per site: `j'` and
+`dag(j)` for an operator acting on a pure state, `js` being the indices of the sites.
 
-The density matrix carries a ket and a bra, and the mixed index of a site pairs them, so a
-superoperator needs four slots while a mixed index and its primed form offer only three
-distinct ones. The bra therefore lives on indices of its own, starred and drawn with `sim`, which leaves
-room for the operator on one side and the identity on the other. ``\\rho \\mapsto A\\rho``
-acts on the ket and leaves the bra alone, and its mirror ``\\rho \\mapsto \\rho
-A^\\dagger`` does the reverse and conjugates.
+An operator acting on a density matrix needs four legs per site, while a mixed index and its
+primed form offer only three distinct ones, so its bra lives on indices of its own, `bs`, drawn
+by `fresh_bras`. Its legs are `j'` and `dag(b'')` on the way out, `dag(j)` and `b'` on the way
+in, and `onto_mixed` gathers each pair onto the mixed index of its site.
 
-Nothing here combines the sites into one index before splitting them again: a charged index
-carries a direction, and going through a combined index is what no arrangement of `dag` could
-be made to survive.
+Nothing here combines two sites. Every matrix is laid on the indices of the sites one by one,
+and the index of a site keeps one block per basis state in the order of the basis, so no charge
+reorders anything. The one thing that knows how charged sectors are sorted is the combiner of
+`mixer`, and it is only ever handed a ket and its bra.
 """
-function super_tensor(m::Matrix, is::Vector{<:Index}, sites, left::Bool)
-    # starred first, so that a site conserving something strongly keeps its bra apart from
-    # its ket, and `sim` then makes the fresh copy the four slots need. Starring nothing
-    # gives the index back, and this is the `sim` it always was
-    bs = [ sim(star(is[k], strong_names(sites[k]))) for k in eachindex(is) ]
-    if left
-        tk = op_on_sites(m, [ i' for i in is ], [ dag(i) for i in is ])
-        tb = prod(delta(b', dag(b'')) for b in bs)
-    else
-        tk = prod(delta(i', dag(i)) for i in is)
-        tb = op_on_sites(conj(m), [ dag(b'') for b in bs ], [ b' for b in bs ])
-    end
-    # the mixed index of a site pairs its ket with its bra, and the sites are combined
-    # afterwards, which is the order a system builds its own indices in
-    cs = [ combiner(is[k], dag(bs[k]'); tags = "") for k in eachindex(is) ]
-    c = combiner(reverse(combinedind.(cs))...; tags = "")
-    t = tk * tb
-    for x in cs
-        t = t * dag(x) * x'
-    end
-    return t * dag(c) * c'
+legs(a::GenericOp{Pure}, sites, js) =
+    op_on_sites(checked_matrix(a, sites, js), [ j' for j in js ], [ dag(j) for j in js ])
+
+legs(a::TensorOp{N}, sites, js) where N =
+    prod(tensor_apply((o, p...) -> legs(o, sites[[p...]], js[[p...]]), a, (1:N)...))
+
+# the identities are dense blocked because ITensors has no outer product of two charged deltas
+legs(a::Left, sites, js, bs) =
+    legs(a.arg, sites, js) * prod(denseblocks(delta(b', dag(b''))) for b in bs)
+
+legs(a::Right, sites, js, bs) =
+    prod(denseblocks(delta(j', dag(j))) for j in js) *
+    op_on_sites(conj(checked_matrix(a.arg, sites, js)), [ dag(b'') for b in bs ], [ b' for b in bs ])
+
+function legs(a::SetState, sites, js, bs)
+    site, j, b = only(sites), only(js), only(bs)
+    v = state(site, a.state)
+    m = v isa Matrix ? v : v * v'
+    return denseblocks(delta(dag(j), b')) *
+           charged_state(() -> op_on_sites(m, [j'], [dag(b'')]), j, a.state, site)
 end
 
-"""
-    tensor(a::GenericOp{Mixed}, site...)
-
-the tensor of a superoperator whose matrix is already known, such as a `Gate` or a
-`Dissipator`, both of which are written in terms of `Left` and `Right`. Only the index it
-lives on has to be found, and that is the mixed one of its sites.
-"""
-function tensor(a::GenericOp{Mixed}, site::AbstractSite...; charged::Bool = false)
-    is = [ site_index(s, charged) for s in site ]
-    ms = [ mixed_index(is[k], site[k]) for k in eachindex(is) ]
-    j = combinedind(combiner(reverse(ms)...; tags = ""))
-    m = matrix(a, site...)
-    if !hasqns(j) || all(s -> isempty(strong_names(s)), site)
-        return ITensor(m, j', dag(j))
+function legs(a::GenericOp{Mixed}, sites, js, bs)
+    m = matrix(a, sites...)
+    outs, ins = mixed_sides(js, bs)
+    st = unique(reduce(vcat, [ strong_names(s) for s in sites ]))
+    if isempty(st)
+        return op_on_sites(m, outs, ins)
     end
     try
-        return ITensor(m, j', dag(j))
+        return op_on_sites(m, outs, ins)
     catch e
         if !(e isa ErrorException)
             rethrow()
         end
         # a superoperator of definite flux on the weak pairing may have none on the strong
         # one, which is exactly the case of a jump operator that moves the charge
-        error("$a changes $(join(strong_names(site[1]), ", ")) between its two sides, which " *
-              "conserving it strongly forbids: drop `strong` to allow a jump that moves " *
-              "the charge")
+        error("$a changes $(join(st, ", ")) between its two sides, which conserving it " *
+              "strongly forbids: drop `strong` to allow a jump that moves the charge")
     end
 end
 
 """
-    side_matrix(a, site)
+    checked_matrix(a, sites, js)
 
-the matrix of the operator a superoperator acts by, checked against the charges of its site
-so that one carrying no flux is named here rather than deep inside ITensors
+the matrix of an operator, refused by a message naming it when it carries no definite flux on
+a single site whose index is charged, rather than deep inside ITensors. The check is made only
+there: a matrix knows no charge, and `matrix` lays it on plain indices.
 """
-function side_matrix(a, site::AbstractSite...)
-    m = matrix(a, site...)
-    if length(site) == 1
-        charge_flux(m, a, site[1])
+function checked_matrix(a, sites, js)
+    m = matrix(a, sites...)
+    if length(sites) == 1 && hasqns(only(js))
+        charge_flux(m, a, only(sites))
     end
     return m
 end
 
-tensor(a::Left, site::AbstractSite...; charged::Bool = false) =
-    super_tensor(side_matrix(a.arg, site...), [ site_index(s, charged) for s in site ],
-                 site, true)
+"""
+    fresh_bras(js, sites)
 
-tensor(a::Right, site::AbstractSite...; charged::Bool = false) =
-    super_tensor(side_matrix(a.arg, site...), [ site_index(s, charged) for s in site ],
-                 site, false)
+the indices the bra of an operator on a density matrix lives on, one per site: starred, so that
+a site conserving something strongly keeps its bra apart from its ket, and drawn with `sim` for
+the fourth slot. Starring nothing gives the index back, and this is the `sim` it always was.
+"""
+fresh_bras(js, sites) = [ sim(star(j, strong_names(s))) for (j, s) in zip(js, sites) ]
+
+"""
+    mixed_sides(js, bs)
+
+the outgoing and the incoming legs of an operator on a density matrix, in the order a matrix of
+the mixed space reads them: the last site varying fastest and, inside a site, the ket faster
+than the bra, which is how `mixer` pairs them.
+"""
+mixed_sides(js, bs) =
+    (reduce(vcat, [ [dag(b''), j'] for (j, b) in zip(js, bs) ]),
+     reduce(vcat, [ [b', dag(j)] for (j, b) in zip(js, bs) ]))
+
+"""
+    onto_mixed(t, js, bs, ks)
+
+the operator `t`, laid on the ket and bra legs of each site, carried onto `ks`, the mixed
+indices of the sites, through the combiner of `mixer`.
+"""
+function onto_mixed(t::ITensor, js, bs, ks)
+    for (j, b, k) in zip(js, bs, ks)
+        x = combinerto(k, j, dag(b'))
+        t = t * dag(x) * x'
+    end
+    return t
+end
+
+"""
+    tensor(::System, ::AtIndex)
+
+returns a tensor representing the given simple indexed operator acting on this system
+
+It is built on the indices of the system, one pair per site, so there is nothing to carry over
+afterwards. See `legs`.
+"""
+function tensor(system::System, a::AtIndex{R}) where R
+    sites = [ system[i] for i in a.index ]
+    js = [ SysIndex{Pure}(system, i) for i in a.index ]
+    if R === Pure
+        return legs(a.op, sites, js)
+    end
+    bs = fresh_bras(js, sites)
+    return onto_mixed(legs(a.op, sites, js, bs), js, bs,
+                      [ SysIndex{Mixed}(system, i) for i in a.index ])
+end
 
 tensor_next(f, o::GenericOp{Pure, N}, site::Vararg{Union{AbstractSite, Int}, M}; kwargs...) where {N, M} =
     (f(o, site[1:N]...; kwargs...), site[N+1:M])
@@ -398,34 +447,3 @@ end
 
 tensor_apply(::Any, ::TensorOp; kwargs...) = error("bug: tensor_apply")
 tensor_next(::Any, ::GenericOp{Pure, N}; kwargs...) where N = error("bug: tensor_next")
-
-function tensor(a::TensorOp{N}, site::AbstractSite...; charged::Bool = false) where N
-    if length(site) == 1
-        ts = [tensor(o, site...; charged) for o in a.subs]
-    elseif length(site) ≠ N
-        error("number of sites does not match operator")
-    else
-        ts = tensor_apply(tensor, a, site...; charged)
-    end
-    c = combiner((tensor_index(t) for t in reverse(ts))...; tags="")
-    c * prod(ts) * c'
-end
-
-function tensor(a::SetState, site::AbstractSite; charged::Bool = false)
-    i = site_index(site, charged)
-    j = mixed_index(i, site)
-    v = state(site, a.state)
-    if v isa Matrix
-        m = v
-    else
-        m = v * v'
-    end
-    # the target is laid on the two site indices and only then gathered, never written
-    # straight onto the mixed one: combining charged indices merges and sorts their
-    # sectors, so the flat order of the mixed basis is not the order of the matrix
-    b, c = mixer(i, j, site)
-    tr = denseblocks(delta(dag(i), b')) * dag(c)
-    t = charged_state(() -> op_on_sites(m, [i'], [dag(b'')]), i, a.state, site)
-    return tr * t * last(mixer(i', j', site))
-end
-
