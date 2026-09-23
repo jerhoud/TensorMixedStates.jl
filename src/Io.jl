@@ -184,7 +184,8 @@ function load_state(filename::String, statename::String;
         sites = identity.(sites)
         idx = Index[ siteind(st, i) for i in 1:length(st) ]
         if type == "Pure"
-            return State{Pure}(System(sites, idx, map(mix, idx)), st)
+            return State{Pure}(System(sites,
+                idx, [ mixed_index(idx[k], sites[k]) for k in eachindex(sites) ]), st)
         elseif type == "Mixed"
             # the pure indices are rebuilt rather than read, only the mixed ones being in the
             # file, so they need the mode of the system the sites make up
