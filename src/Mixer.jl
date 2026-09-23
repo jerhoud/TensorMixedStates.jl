@@ -28,19 +28,6 @@ function mixer(j::Index, k::Index, site::AbstractSite)
     return b, combinerto(k, j, dag(b'))
 end
 
-"""
-    to_bra(t, from, to)
-
-the tensor `t` with its index `from` carried by `to` instead.
-
-The two indices hold the same blocks in the same order and differ only in the names their
-charges go under, so the storage is valid as it stands and only the index set is swapped.
-This leans on `ITensors.setinds`, which is not part of the public ITensors interface: an
-upgrade that moves it breaks here. Nothing to do when the site conserves nothing strongly,
-the bra being the ket index itself.
-"""
-to_bra(t::ITensor, from::Index, to::Index) =
-    from === to ? t : ITensors.setinds(t, map(i -> i == from ? to : i, inds(t)))
 
 """
     vec_pieces(system, i, m)
@@ -110,6 +97,65 @@ function adj_pieces(system, i::Int)
         acc[g] = haskey(acc, g) ? acc[g] + t : t
     end
     return [ (t, g) for (g, t) in acc ]
+end
+
+"""
+    qn_list(i::Index)
+
+the charges an index carries, one per block
+"""
+qn_list(i::Index) = [ first(p) for p in space(i) ]
+
+"""
+    charge_links(gs, total, tag)
+
+the links a chain runs along, given the charges `gs[i]` its pieces may carry at each site and
+the `total` they have to add up to.
+
+Only what the sites on the left can have accumulated and what the ones on the right can still
+bring is kept. That intersection is what makes a link small: most running totals cannot be
+completed into the one the chain has to reach.
+"""
+function charge_links(gs, total::QN, tag::String)
+    n = length(gs)
+    forward = [[QN()]]
+    for i in 1:n
+        push!(forward, unique([ u - g for u in forward[i] for g in gs[i] ]))
+    end
+    backward = Vector{Vector{QN}}(undef, n + 1)
+    backward[n+1] = [total]
+    for i in n:-1:1
+        backward[i] = unique([ v + g for v in backward[i+1] for g in gs[i] ])
+    end
+    return [ Index([ u => 1 for u in forward[i+1] if u in backward[i+1] ]...;
+                   tags = "$tag,l=$i") for i in 1:n-1 ]
+end
+
+"""
+    chain_at(links, ts, i, n, total)
+
+the element at site `i` of a chain of `n` sites running along `links`, built from the pieces
+`ts` and the charge each one carries. The last site closes the chain on `total`.
+"""
+function chain_at(links, ts, i::Int, n::Int, total::QN)
+    ins = i == 1 ? [QN()] : qn_list(links[i-1])
+    parts = ITensor[]
+    for (t, g) in ts, (p, u) in enumerate(ins)
+        left = i == 1 ? ITensor(1.) : onehot(dag(links[i-1]) => p)
+        if i == n
+            if u - g ≠ total
+                continue
+            end
+            push!(parts, t * left)
+        else
+            r = findfirst(==(u - g), qn_list(links[i]))
+            if isnothing(r)
+                continue
+            end
+            push!(parts, t * left * onehot(links[i] => r))
+        end
+    end
+    return sum(parts)
 end
 
 """
