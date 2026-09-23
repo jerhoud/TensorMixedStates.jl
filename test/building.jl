@@ -258,6 +258,8 @@ end
     w = build(Fermion(conserve = N))
     @test_throws "cannot make it strong" weaken(w, strong(N))
     @test_throws "cannot start conserving" weaken(w, Ntot)
+    @test_throws "cannot make it strong" weaken(w.system, strong(N))
+    @test_throws "cannot start conserving" weaken(w.system, Ntot)
 
     # and a system reports what it conserves in the form the target takes
     @test repr(symmetries(System(2, Electron(conserve = (strong(Ntot), 2Sz))))) ==

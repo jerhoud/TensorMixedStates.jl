@@ -336,7 +336,6 @@ A `Simulation` is weakened the same way, through its state.
 function weaken(state::State{R}, target::Conserved) where R
     system = state.system
     source = symmetries(system)
-    check_target(source, target, "this system")
     if target.names == source.names
         return state
     end

@@ -69,7 +69,10 @@ symmetries(system::System) = symmetries(system.sites[1])
 the system a state lands on when `weaken(::State)` is given the same target: the same sites,
 conserving less. Without a target, one level down.
 """
-weaken(system::System, target::Conserved) = System([ weaken(s, target) for s in system.sites ])
+function weaken(system::System, target::Conserved)
+    check_target(symmetries(system), target, "this system")
+    return System([ weaken(s, target) for s in system.sites ])
+end
 
 weaken(system::System, spec) = weaken(system, Conserved(spec_names(spec)))
 

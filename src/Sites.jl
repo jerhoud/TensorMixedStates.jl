@@ -58,29 +58,6 @@ function site_index(site::AbstractSite, charged::Bool)
 end
 
 """
-    weak_conserve(s)
-    weaken(::AbstractSite)
-
-what a site records once its strong symmetries are asked for weakly, and the site itself
-rebuilt with it.
-
-A strong quantity is marked by a `!` at the end of its head, so dropping the mark is all
-there is to it: the name, the modulus and the charges of the basis states are the same either
-way, only the pairing of the ket with the bra changes. A site conserving nothing strongly is
-given back as it is.
-"""
-weak_conserve(s::AbstractString) = replace(s, "!:" => ":")
-
-function weaken(site::AbstractSite)
-    if isempty(strong_names(site))
-        return site
-    end
-    t = typeof(site)
-    return t(( f === :conserve ? weak_conserve(getfield(site, f)) : getfield(site, f)
-               for f in fieldnames(t) )...)
-end
-
-"""
     weak_qn(q, names)
     weak_index(i, names)
 
