@@ -467,3 +467,50 @@ end
     # difference between the two: a weak symmetry lets the charge move, a strong one does not
     @test flux(ten(System(2, Fermion(conserve = N)), Dissipator(C)(1))) == Q.QN("N", 0)
 end
+
+@testset "Measuring on every kind of charged site" begin
+    # conserving a quantity must not change a single measured number, whatever the site and
+    # whatever the shape of the charge. This is deliberately spread over the eight site types
+    # and over `N`, `2Sz`, `parity` and `Zd`, because sampling it narrowly is what let two
+    # defects through: an index of a site keeps its blocks in the order of the basis, one per
+    # state, while a combiner sorts and merges them, and the two orders agree only when the
+    # charges of the basis happen to increase and never repeat. Fermions, qubits and bosons
+    # conserving `N` all have that property; electrons and t-J do not, and neither does
+    # anything under `parity`
+    cases = (
+        ("Qubit N",       Qubit(conserve = N),              Qubit(),        "Dn",  N),
+        ("Qubit 2Sz",     Qubit(conserve = 2Sz),            Qubit(),        "Dn",  Z),
+        ("Qubit parity",  Qubit(conserve = parity(N)),      Qubit(),        "Dn",  N),
+        ("Spin 2Sz",      Spin(3/2, conserve = 2Sz),        Spin(3/2),      "1/2", Sz),
+        ("Boson N",       Boson(4, conserve = N),           Boson(4),       "2",   N),
+        ("Boson parity",  Boson(4, conserve = parity(N)),   Boson(4),       "2",   N),
+        ("Fermion N",     Fermion(conserve = N),            Fermion(),      "Occ", N),
+        ("Electron Ntot", Electron(conserve = Ntot),        Electron(),     "Up",  Ntot),
+        ("Electron both", Electron(conserve = (Ntot, 2Sz)), Electron(),     "Up",  Ntot),
+        ("Tj both",       Tj(conserve = (Ntot, 2Sz)),       Tj(),           "Up",  Ntot),
+        ("Qboson N",      Qboson(0.1, 4, conserve = N),     Qboson(0.1, 4), "2",   N),
+        ("Qudit Zd",      Qudit(4, conserve = Zd),          Qudit(4),       "1",   Zd),
+    )
+    for (_, charged, dense, st, op) in cases
+        for rep in (identity, mix)
+            state(site) = rep(State{Pure}(System(3, site), fill(st, 3)))
+            @test expect(state(charged), op(2)) ≈ expect(state(dense), op(2))
+        end
+    end
+
+    # a genuine two site operator, which is not the same path as a product of one site ones:
+    # its matrix is laid on the indices of its sites and only then combined, never written
+    # straight onto the combination, whose basis a charged combiner reorders
+    # the counting operator is named apart on a site holding several species, so each row
+    # brings its own
+    for (charged, dense, st, count) in
+            ((Fermion(conserve = N), Fermion(), "Occ", N),
+             (Boson(4, conserve = parity(N)), Boson(4), "2", N),
+             (Electron(conserve = (Ntot, 2Sz)), Electron(), "Up", Ntot))
+        for op in (count ⊗ count, Id ⊗ count)
+            two(site) = State{Pure}(System(3, site), fill(st, 3))
+            @test expect(two(charged), op(1, 2)) ≈ expect(two(dense), op(1, 2))
+        end
+    end
+end
+

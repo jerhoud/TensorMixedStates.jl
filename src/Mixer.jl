@@ -11,6 +11,17 @@ function combinerto(i::Index, j::Index...)
     replaceind(c, x, i)
 end
 
+# with a single index there is nothing to combine, and going through a combiner would not be
+# harmless: it sorts the sectors it is given, while a site index keeps them in the order of
+# the basis, one block per state. The two orders agree only when the charges of the basis
+# happen to increase, which is why this was invisible until a site whose charges do not, an
+# electron or a t-J, was asked for an observable.
+#
+# both are daggered because a combiner carries the indices it combines daggered and its own
+# the other way, and `from` reaches here as it appears in the operator, which is already
+# daggered
+combinerto(to::Index, from::Index) = delta(dag(from), dag(to))
+
 """
     mixer(j::Index, k::Index)
 
@@ -284,14 +295,22 @@ end
 
 function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...; charged::Bool = false)
     n, _ = size(a)
-    if n == dim(site) ^ (1 + length(sites))
-        i = op_index((site, sites...), charged)
-    else
+    if n ≠ dim(site) ^ (1 + length(sites))
         # the shorthand of one site standing for several identical ones, which names no
         # system and therefore carries no charge
         i = Index(n)
+        return ITensor(a, i', dag(i))
     end
-    ITensor(a, i', dag(i))
+    # laid on the indices of the sites and only then combined, never written straight onto
+    # the combination: combining charged indices sorts and merges their sectors, so the flat
+    # order of the combined basis is not the order of the matrix
+    is = [ site_index(s, charged) for s in (site, sites...) ]
+    t = op_on_sites(a, [ i' for i in is ], [ dag(i) for i in is ])
+    if length(is) == 1
+        return t
+    end
+    c = combiner(reverse(is)...; tags = "")
+    return t * c * dag(c')
 end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
