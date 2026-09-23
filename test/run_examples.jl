@@ -11,13 +11,14 @@
 #
 # Each example is included in a module of its own, so that two of them binding the same
 # name do not collide, and all of them share one session, which pays the compilation once
-# instead of five times. They write output directories and `runTMS` changes the working
+# instead of once per example. They write output directories and `runTMS` changes the working
 # directory while it runs, so the whole thing happens in a temporary directory.
 
 using TensorMixedStates
 using Test
 
-const EXAMPLES = ["dmrg", "gates", "precession", "ising_quench", "complete_graph_tdvp"]
+const EXAMPLES = ["dmrg", "gates", "precession", "ising_quench", "complete_graph_tdvp",
+                  "fermion_chain_conserved"]
 const EXAMPLE_DIR = normpath(joinpath(@__DIR__, "..", "examples", "high_level"))
 
 cd(mktempdir()) do

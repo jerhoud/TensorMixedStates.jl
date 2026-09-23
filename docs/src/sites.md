@@ -133,8 +133,8 @@ Sumd
 
 A site can be told that a quantity is conserved. The indices it draws then carry that charge,
 the tensors become block sparse, and a contraction only pairs blocks whose charges agree,
-which makes the computation both smaller and faster. In exchange a state is confined to the
-sector it was built in.
+which makes a large computation smaller and faster, see [What it saves](@ref). In exchange a
+state is confined to the sector it was built in.
 
 The quantity is named by one of the site's own operators, which has to be diagonal with
 eigenvalues that are either all integers or all roots of unity:
@@ -222,6 +222,20 @@ recovered from the coarser ones, and a target asking for more than the state has
 
 Weakening a state costs one local tensor per site, and it is also how a strongly conserving
 state gets a `partial_trace`.
+
+### What it saves
+
+Ten steps of `Tdvp` on the fermion chain with dephasing of the example
+`examples/high_level/fermion_chain_conserved.jl`, measured on one machine:
+
+|  | no charge | `conserve = N` | `conserve = strong(N)` |
+|---|---|---|---|
+| 8 sites, `maxdim = 32` | 21.7 s | 23.0 s | 40.5 s |
+| 12 sites, `maxdim = 64` | 208.9 s | 80.8 s | 121.8 s |
+
+At 8 sites the charges bring nothing; at 12 the weak form is 2.6 times faster than no charge
+at all. The strong form is the slower of the two here: what it offers is physical rather than
+speed, a state confined to one sector and a jump moving the charge refused.
 
 ```@docs
 strong
