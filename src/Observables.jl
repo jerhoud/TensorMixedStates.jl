@@ -1,7 +1,7 @@
 export trace, trace2, norm, normalize, hermitianize, hermiticity, renyi2
 export inner, dot, fidelity, hs_fidelity
 export expect, expect1, expect2
-export entanglement_entropy, partial_trace, mutual_info_renyi2, sample, variance
+export entanglement_entropy, entanglement_by_sector, partial_trace, mutual_info_renyi2, sample, variance
 
 """
     weak_form(state)
@@ -738,6 +738,69 @@ function entanglement_entropy(state::State, pos::Int)
     ee = -sum(p * log(p) for p in sp)
     return (ee, sp)
 end
+
+"""
+    entanglement_by_sector(::State{Pure}, ::Int)
+
+the entanglement across the cut on the right of `pos`, resolved by the charge the sites up to
+`pos` carry. For each charge, a `QN` as `flux` gives it, it gives the probability `weight` of
+finding it, and the `entropy` and the `spectrum` of the reduced density matrix restricted to
+that charge and normalized to one, the spectrum in decreasing order.
+
+They add up to the entanglement entropy as `Σ weight * entropy - Σ weight * log(weight)`, the
+second sum being the part due to the charge fluctuating between the two sides, called the
+number entropy. A state whose sites conserve nothing has a single sector, `QN()`. `QN` is the
+type of ITensors, which `using ITensors: QN` brings into scope.
+
+# Examples
+
+    using ITensors: QN
+    sectors = entanglement_by_sector(state, 3)   # cut between sites 3 and 4
+    sectors[QN("N", 2)].weight
+"""
+function entanglement_by_sector(state::State{Pure}, pos::Int)
+    n = length(state)
+    if !(1 ≤ pos ≤ n)
+        error("cannot cut a $n site state on the right of site $pos: pos must be between 1 " *
+              "and $n")
+    end
+    s = orthogonalize(state.state, pos)
+    U, S = svd(s[pos], (linkinds(s, pos-1)..., siteinds(s, pos)...))
+    u = commonind(U, S)
+    if !hasqns(u)
+        ee, sp = entanglement_entropy(state, pos)
+        return Dict(QN() => (weight = 1.0, entropy = ee, spectrum = sp))
+    end
+    # U carries no flux, so what flows into it through `u` is what the sites up to `pos` hold
+    if flux(U) ≠ QN()
+        error("bug: the left factor of a cut carries $(flux(U)), so its sectors cannot be read")
+    end
+    squares = Dict{QN, Vector{Float64}}()
+    k = 0
+    for (q, d) in space(u)
+        append!(get!(squares, dir(u) == ITensors.In ? q : -q, Float64[]),
+                [ S[k + i, k + i]^2 for i in 1:d ])
+        k += d
+    end
+    total = sum(sum, values(squares))
+    sectors = Dict{QN, NamedTuple{(:weight, :entropy, :spectrum),
+                                  Tuple{Float64, Float64, Vector{Float64}}}}()
+    for (q, sq) in squares
+        w = sum(sq)
+        # a sector the decomposition kept with nothing in it has no probability of occurring
+        if w == 0
+            continue
+        end
+        sp = sort(sq / w; rev = true)
+        sectors[q] = (weight = w / total, entropy = -sum(p * log(p) for p in sp if p > 0),
+                      spectrum = sp)
+    end
+    return sectors
+end
+
+entanglement_by_sector(::State{Mixed}, ::Int) =
+    error("entanglement_by_sector takes a pure state: on a mixed one the sectors of a link are " *
+          "differences between the charges of the ket and of the bra")
 
 """
     partial_trace(::State, ::AbstractVector{<:Integer} [; keepers = false])

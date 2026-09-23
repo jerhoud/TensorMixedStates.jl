@@ -14,6 +14,7 @@ expect2
 variance
 sample(::State{Pure})
 entanglement_entropy
+entanglement_by_sector
 renyi2
 mutual_info_renyi2
 Trace

@@ -40,6 +40,10 @@ the reference article.
   draw one in otherwise, and what tracing half of the purification leaves is a mixture over
   the sectors around the one named.
 
+- `entanglement_by_sector`, the entanglement across a cut of a pure state resolved by the
+  charge the left part carries: for each charge, its probability and the entropy and spectrum
+  held inside it, which add up to the entanglement entropy with the number entropy on top.
+
 - `flux`, the charge an operator carries on a site, `parity` and `mod`, which reduce a
   quantity modulo an integer, and `named`, which renames an operator so that two quantities
   conserved separately do not go under one name.
