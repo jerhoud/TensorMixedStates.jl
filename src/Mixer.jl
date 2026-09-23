@@ -199,6 +199,24 @@ function weak_map(strong, weak, i::Int, relab)
 end
 
 """
+    dense_map(charged, dense, i)
+
+the tensor carrying site `i` of a charged system onto the same site of one conserving
+nothing.
+
+The last rung of the ladder cannot be a relabelling: an ITensor holds either charged indices
+or plain ones, never both, so the state is densified first. Densifying lays the blocks out in
+the order the charges put them, which is not the order a plain combiner gives — measured, not
+a single basis element of a mixed index lands in the same place. This tensor is the
+permutation between the two, and having no charges it has no flux to respect.
+"""
+function dense_map(charged, plain, i::Int)
+    d = dim(SysIndex{Pure}(charged, i))
+    return sum( ket_bra(plain, i, m, n) * dag(dense(ket_bra(charged, i, m, n)))
+                for m in 1:d, n in 1:d )
+end
+
+"""
     relabel(t, f)
 
 the tensor `t` with each of its indices passed through `f`, the storage left as it is. This

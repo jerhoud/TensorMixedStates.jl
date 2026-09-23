@@ -66,8 +66,13 @@ strong_names(system::System) =
 the same system with every strong symmetry asked for weakly, or the system itself when it
 has none. See `strong` and `weaken(::State)`.
 """
-weaken(system::System) =
-    isempty(strong_names(system)) ? system : System(map(weaken, system.sites))
+symmetries(system::System) = symmetries(system.sites[1])
+
+weaken(system::System, target::Conserved) = System([ weaken(s, target) for s in system.sites ])
+
+weaken(system::System, spec) = weaken(system, Conserved(spec_names(spec)))
+
+weaken(system::System) = weaken(system, one_step_down(symmetries(system)))
 
 getindex(s::System, i...) = s.sites[i...]
 

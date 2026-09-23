@@ -216,3 +216,52 @@ end
     @test_throws "cannot hold" RandomState{Mixed}(System(4, Fermion(conserve = strong(N))),
                                                   conf, 16)
 end
+
+@testset "The ladder of symmetries" begin
+    # weakening walks strong, then weak, then nothing, and stops there. Every rung holds the
+    # same physics, so every rung must give the numbers a system conserving nothing gives —
+    # including a four point correlator, which is what a chain sized on a guess got wrong
+    conf = ["Occ", "Emp", "Occ", "Emp"]
+    build(site) = begin
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        s = p(conf) + 0.5 * p(reverse(conf))
+        return mix(s / norm(s))
+    end
+    numbers(s) = [ real(trace(s)), real(expect(s, N(2))), real(trace2(s)),
+                   real(hermiticity(s)),
+                   real(expect(s, dag(C)(1) * dag(C)(2) * C(3) * C(4))) ]
+    reference = numbers(build(Fermion()))
+
+    x = build(Fermion(conserve = strong(N)))
+    @test symmetries(x.system) == TensorMixedStates.Conserved([("N", true)])
+    @test numbers(x) ≈ reference
+
+    x = weaken(x)
+    @test symmetries(x.system) == TensorMixedStates.Conserved([("N", false)])
+    @test numbers(x) ≈ reference
+
+    x = weaken(x)
+    @test !TensorMixedStates.is_charged(x.system)
+    @test numbers(x) ≈ reference
+
+    # nothing left to weaken gives the state back, so it is always safe to call
+    @test weaken(x) === x
+
+    # a target says what must still be conserved, in the vocabulary `conserve` takes
+    y = build(Fermion(conserve = strong(N)))
+    @test weaken(y, symmetries(y.system)) === y
+    @test numbers(weaken(y, ())) ≈ reference
+    @test numbers(weaken(y, N)) ≈ reference
+
+    # a quantity may be dropped or asked for less strongly, never invented nor strengthened
+    w = build(Fermion(conserve = N))
+    @test_throws "cannot make it strong" weaken(w, strong(N))
+    @test_throws "cannot start conserving" weaken(w, Ntot)
+
+    # and a system reports what it conserves in the form the target takes
+    @test repr(symmetries(System(2, Electron(conserve = (strong(Ntot), 2Sz))))) ==
+        "(strong(Ntot), 2Sz)"
+    @test repr(symmetries(System(2, Fermion()))) == "()"
+end
+

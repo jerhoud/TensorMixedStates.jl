@@ -303,51 +303,68 @@ end
 
 """
     weaken(::State)
+    weaken(::State, target)
 
-the same state on the weakened system, a quantity conserved strongly being conserved weakly
-instead. A state on a system conserving nothing strongly is given back as it is.
+the same state on a system conserving less, `target` naming what it must still conserve in
+the vocabulary `conserve` takes. Without a target every strong quantity is asked for weakly,
+or, when none is strong, every quantity is dropped: repeating it walks strong, then weak,
+then nothing, and stops there.
 
-The two hold the same physics and differ in how the tensors are cut into blocks. Keeping the
-charge of the ket apart from that of the bra cuts them finer and confines the state to a
-single sector; keeping only the difference of the two lets it spread over several sectors,
-and makes the trace a product of one vector per site again.
+The levels hold the same physics and differ in how the tensors are cut into blocks. Keeping
+the charge of the ket apart from that of the bra cuts them finest and confines the state to a
+single sector; keeping only the difference lets it spread over sectors and makes the trace a
+product of one vector per site again; keeping nothing gives plain tensors.
 
 Weakening is a step of a simulation in its own right: a phase may evolve under a strong
 symmetry, which every dissipator commuting with the charge allows, and the next one continue
 under a weak one, where a jump that moves the charge becomes possible. There is no way back,
-the finer blocks not being recoverable from the coarser ones.
+the finer blocks not being recoverable from the coarser ones, and a target asking for more
+than the state has is refused.
 
 The system it builds is a new one, so two states weakened apart live on two systems and have
 to be put on one another before `inner` will compare them.
 
 # Examples
 
-    weaken(state)
+    weaken(state)                          # one rung down
+    weaken(state, (strong(Ntot), 2Sz))     # exactly these
+    weaken(state, ())                      # no charges at all
+    weaken(state, symmetries(system))      # the identity
 """
-function weaken(state::State{Pure})
+function weaken(state::State{R}, target::Conserved) where R
     system = state.system
-    if isempty(strong_names(system))
+    source = symmetries(system)
+    check_target(source, target, "this system")
+    if target.names == source.names
         return state
     end
-    # the pure index does not depend on the strength: only the bra of the mixed one does, so
-    # the tensors are the ones they were and only the indices are replaced
-    weak = weaken(system)
-    return State{Pure}(weak,
-        replace_siteinds(state.state, SysIndex{Pure}(weak, 1:length(system))))
-end
-
-function weaken(state::State{Mixed})
-    system = state.system
-    names = strong_names(system)
-    if isempty(names)
-        return state
+    weak = weaken(system, target)
+    n = length(state)
+    collapse, drop = transitions(source, target)
+    if R === Pure
+        # the pure index keeps one block per basis state, in the order of the basis, so its
+        # flat order survives both the relabelling and the densifying and the tensors only
+        # have to be put on the indices of the new system
+        st = is_charged(weak) ?
+            MPS([ relabel(t, relabeller(i -> weak_index(i, collapse, drop))) for t in state.state ]) :
+            dense(state.state)
+        return State{Pure}(weak, replace_siteinds(st, SysIndex{Pure}(weak, 1:n)))
     end
-    weak = weaken(system)
-    relab = relabeller(i -> weak_index(i, names))
+    if !is_charged(weak)
+        # an ITensor holds either charged indices or plain ones, so the last rung densifies
+        # first and then permutes, the two orders having nothing in common
+        return State{Mixed}(weak,
+            MPS([ dense(state.state[i]) * dense_map(system, weak, i) for i in 1:n ]))
+    end
+    relab = relabeller(i -> weak_index(i, collapse, drop))
     return State{Mixed}(weak,
         MPS([ relabel(state.state[i], relab) * weak_map(system, weak, i, relab)
-              for i in 1:length(state) ]))
+              for i in 1:n ]))
 end
+
+weaken(state::State{R}, spec) where R = weaken(state, Conserved(spec_names(spec)))
+
+weaken(state::State) = weaken(state, one_step_down(symmetries(state.system)))
 
 """
     truncate(::State; limits::Limits)

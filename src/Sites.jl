@@ -1,4 +1,5 @@
-export AbstractSite, dim, Index, string_state, identity_operator, state, flux, weaken
+export AbstractSite, dim, Index, string_state, identity_operator, state, flux, weaken,
+       symmetries
 export @def_operators, @def_states, @create_site_module, conserve_string, strong
 
 """
@@ -94,7 +95,7 @@ tensor built on it stays consistent, with no data moved.
 The blocks are not merged. Several may end up under one charge, which an index allows, and
 that is what lets the relabelling cost nothing.
 """
-function weak_qn(q::QN, names)
+function weak_qn(q::QN, collapse, drop)
     vals = Tuple{String, Int, Int}[]
     for v in q.data
         nm = String(ITensors.name(v))
@@ -102,7 +103,10 @@ function weak_qn(q::QN, names)
             continue
         end
         base = endswith(nm, "*") ? nm[1:end-1] : nm
-        if !(base in names)
+        if base in drop
+            continue
+        end
+        if !(base in collapse)
             push!(vals, (nm, ITensors.val(v), ITensors.modulus(v)))
             continue
         end
@@ -116,89 +120,13 @@ function weak_qn(q::QN, names)
     return isempty(vals) ? QN() : QN(vals...)
 end
 
-weak_index(i::Index, names) =
-    if isempty(names) || !hasqns(i)
+weak_index(i::Index, collapse, drop) =
+    if (isempty(collapse) && isempty(drop)) || !hasqns(i)
         i
     else
-        Index([ weak_qn(q, names) => d for (q, d) in space(i) ]...;
+        Index([ weak_qn(q, collapse, drop) => d for (q, d) in space(i) ]...;
               tags = tags(i), plev = plev(i), dir = dir(i))
     end
-
-"""
-    check_charges(sites)
-
-refuse a list of sites whose conserved quantities cannot live together on one system.
-
-Three things would otherwise go wrong without a word. A name conserved strongly on one site
-and weakly on another would stand for the charge of the ket on the first and for a difference
-on the second, and the flux of a state would add the two. The star a strong quantity gives
-its bra may be the name of another quantity, which would merge two charges into one. And the
-links of a state carry every component of every site, which ITensors limits to four, a strong
-quantity costing two of them.
-"""
-function check_charges(sites::Vector{<:AbstractSite})
-    kind = Dict{String, Bool}()
-    for site in sites, (name, _, _, st) in decode_conserve(conserved(site))
-        if get(kind, name, st) ≠ st
-            error("$name is conserved strongly on one site and weakly on another, so its " *
-                  "name would stand for two different charges on the same system")
-        end
-        kind[name] = st
-    end
-    for (name, st) in kind
-        if st && haskey(kind, name * "*")
-            error("$name is conserved strongly, so its bra goes under $(name)*, which is " *
-                  "already the name of another conserved quantity")
-        end
-    end
-    n = sum(st -> st ? 2 : 1, values(kind); init = 0)
-    if n > 4
-        error("these sites conserve $(length(kind)) quantities, which take $n of the four " *
-              "components ITensors allows, a strong one costing two")
-    end
-    return nothing
-end
-
-"""
-    strong_names(site)
-
-the names of the quantities the site conserves strongly, empty when it conserves none that
-way. See `strong`.
-"""
-strong_names(site::AbstractSite) =
-    [ q[1] for q in decode_conserve(conserved(site)) if q[4] ]
-
-"""
-    star(q::QN, names)
-    star(i::Index, names)
-
-the charge, or the index, with every component named in `names` renamed to carry a star.
-
-This is what separates the bra from the ket: a strong symmetry conserves the two sides
-apart, so the bra holds its charges under other names and combining the pair keeps them
-rather than subtracting them. It applies to a whole index and not only to a site one,
-because the links of a state carry the same charges and must be renamed with it, or the
-two halves of the same tensor would count in two different ways. Renaming nothing gives the
-index back as it is, which is every case without a strong symmetry.
-"""
-function star(q::QN, names)
-    vs = Tuple{String, Int, Int}[]
-    for v in q.data
-        n = String(ITensors.name(v))
-        if !isempty(n)
-            push!(vs, (n in names ? n * "*" : n, ITensors.val(v), ITensors.modulus(v)))
-        end
-    end
-    return isempty(vs) ? QN() : QN(vs...)
-end
-
-function star(i::Index, names)
-    if isempty(names) || !hasqns(i)
-        return i
-    end
-    return Index([ star(q, names) => d for (q, d) in space(i) ]...;
-                 tags = tags(i), plev = plev(i), dir = dir(i))
-end
 
 """
     bra_index(i, site)
@@ -743,9 +671,232 @@ otherwise.
     Fermion(conserve = strong(N))          # dephasing, `L = N`
     Electron(conserve = (strong(Ntot), 2Sz))
 """
+show(io::IO, a::Strong) = print(io, "strong(", a.arg, ")")
+
 strong(a::SimpleOp) = Strong(a)
 strong(a::Strong) = a
 strong(a) = error("a conserved quantity is one operator acting on one site, and $a is not")
+
+"""
+    struct Conserved
+
+what a site or a system conserves, as a list of names each marked strong or weak.
+
+It prints as the expression that would declare it, so that what a system reports can be read
+back and given to `weaken`. The charges themselves are left out: they belong to the site and
+never change, only the way the ket is paired with the bra does.
+
+# Examples
+
+    symmetries(system)                     # (strong(Ntot), 2Sz)
+    weaken(state, symmetries(system))      # the identity, by construction
+"""
+struct Conserved
+    names::Vector{Tuple{String, Bool}}
+end
+
+# defined together, as `Op` does: a `Set` or a `Dict` picks its bucket by `hash` and only
+# then compares, so two equal values that hash apart would sit in different buckets. The
+# field being a vector, the fallback would compare identities and call two equal lists
+# different
+==(a::Conserved, b::Conserved) = a.names == b.names
+hash(a::Conserved, h::UInt) = hash(a.names, hash(Conserved, h))
+
+show(io::IO, c::Conserved) =
+    if isempty(c.names)
+        print(io, "()")
+    else
+        one(n, st) = st ? "strong($n)" : n
+        print(io, length(c.names) == 1 ? one(c.names[1]...) :
+                  "(" * join([ one(n, st) for (n, st) in c.names ], ", ") * ")")
+    end
+
+"""
+    spec_names(spec)
+
+the quantities a target names, as `Conserved` holds them.
+
+Both vocabularies are accepted: the operators one writes by hand, as `conserve` takes them,
+and what `symmetries` reports. `weaken` needs no more than the names, since it recomputes no
+charge; only a declaration does, which is why `conserve` asks for the operators themselves.
+"""
+spec_names(c::Conserved) = c.names
+spec_names(::Tuple{}) = Tuple{String, Bool}[]
+spec_names(spec::Tuple) = reduce(vcat, map(spec_names, spec))
+spec_names(a::Strong) = [ (obs_name(a.arg), true) ]
+spec_names(a::SimpleOp) = [ (obs_name(a), false) ]
+spec_names(a) = error("$a does not name a conserved quantity")
+
+"""
+    symmetries(::AbstractSite)
+    symmetries(::System)
+
+what is conserved, and how, in the form `weaken` takes. See `Conserved`.
+"""
+symmetries(site::AbstractSite) =
+    Conserved([ (q[1], q[4]) for q in decode_conserve(conserved(site)) ])
+
+"""
+    one_step_down(c::Conserved)
+
+the target `weaken` aims at when none is given: every strong quantity asked for weakly, or,
+when none is strong, every quantity dropped.
+
+The level of a system is the strongest of its quantities, and this takes it down one notch.
+Repeating it walks strong, then weak, then nothing, and stops there.
+"""
+one_step_down(c::Conserved) =
+    any(last, c.names) ? Conserved([ (n, false) for (n, _) in c.names ]) :
+                         Conserved(Tuple{String, Bool}[])
+
+"""
+    check_target(source, target, what)
+
+refuse a target that is not a weakening of `source`.
+
+A quantity may be dropped or asked for less strongly; it may not be invented, nor made
+stronger, the finer blocks of a strong symmetry not being recoverable from the coarser ones
+once they have been merged.
+"""
+function check_target(source::Conserved, target::Conserved, what)
+    for (name, strong) in target.names
+        k = findfirst(q -> q[1] == name, source.names)
+        if isnothing(k)
+            error("$what does not conserve $name, and weakening cannot start conserving " *
+                  "what was not conserved")
+        end
+        if strong && !source.names[k][2]
+            error("$name is conserved weakly, and weakening cannot make it strong: the finer " *
+                  "blocks of a strong symmetry are not recoverable from the coarser ones")
+        end
+    end
+    return nothing
+end
+
+"""
+    retarget(site, target)
+
+what a site records once it conserves what `target` names, and only that.
+
+The charges are the ones the site already holds: weakening never recomputes them, which is
+why it needs no operator where a declaration does.
+"""
+function retarget(site::AbstractSite, target::Conserved)
+    qs = decode_conserve(conserved(site))
+    parts = String[]
+    for (name, strong) in target.names
+        k = findfirst(q -> q[1] == name, qs)
+        if isnothing(k)
+            continue
+        end
+        (_, modulus, charges, _) = qs[k]
+        head = modulus == 1 ? name : "$name%$modulus"
+        push!(parts, (strong ? head * "!" : head) * ":" * join(charges, ","))
+    end
+    return join(parts, ";")
+end
+
+"""
+    transitions(source, target)
+
+the names to collapse onto their weak form and the names to drop, going from `source` to
+`target`. See `weak_qn`.
+"""
+function transitions(source::Conserved, target::Conserved)
+    collapse = String[]
+    drop = String[]
+    for (name, strong) in source.names
+        k = findfirst(q -> q[1] == name, target.names)
+        if isnothing(k)
+            push!(drop, name)
+        elseif strong && !target.names[k][2]
+            push!(collapse, name)
+        end
+    end
+    return collapse, drop
+end
+
+weaken(site::AbstractSite, target::Conserved) =
+    let t = typeof(site)
+        t(( f === :conserve ? retarget(site, target) : getfield(site, f)
+            for f in fieldnames(t) )...)
+    end
+
+"""
+    check_charges(sites)
+
+refuse a list of sites whose conserved quantities cannot live together on one system.
+
+Three things would otherwise go wrong without a word. A name conserved strongly on one site
+and weakly on another would stand for the charge of the ket on the first and for a difference
+on the second, and the flux of a state would add the two. The star a strong quantity gives
+its bra may be the name of another quantity, which would merge two charges into one. And the
+links of a state carry every component of every site, which ITensors limits to four, a strong
+quantity costing two of them.
+"""
+function check_charges(sites::Vector{<:AbstractSite})
+    kind = Dict{String, Bool}()
+    for site in sites, (name, _, _, st) in decode_conserve(conserved(site))
+        if get(kind, name, st) ≠ st
+            error("$name is conserved strongly on one site and weakly on another, so its " *
+                  "name would stand for two different charges on the same system")
+        end
+        kind[name] = st
+    end
+    for (name, st) in kind
+        if st && haskey(kind, name * "*")
+            error("$name is conserved strongly, so its bra goes under $(name)*, which is " *
+                  "already the name of another conserved quantity")
+        end
+    end
+    n = sum(st -> st ? 2 : 1, values(kind); init = 0)
+    if n > 4
+        error("these sites conserve $(length(kind)) quantities, which take $n of the four " *
+              "components ITensors allows, a strong one costing two")
+    end
+    return nothing
+end
+
+"""
+    strong_names(site)
+
+the names of the quantities the site conserves strongly, empty when it conserves none that
+way. See `strong`.
+"""
+strong_names(site::AbstractSite) =
+    [ q[1] for q in decode_conserve(conserved(site)) if q[4] ]
+
+"""
+    star(q::QN, names)
+    star(i::Index, names)
+
+the charge, or the index, with every component named in `names` renamed to carry a star.
+
+This is what separates the bra from the ket: a strong symmetry conserves the two sides
+apart, so the bra holds its charges under other names and combining the pair keeps them
+rather than subtracting them. It applies to a whole index and not only to a site one,
+because the links of a state carry the same charges and must be renamed with it, or the
+two halves of the same tensor would count in two different ways. Renaming nothing gives the
+index back as it is, which is every case without a strong symmetry.
+"""
+function star(q::QN, names)
+    vs = Tuple{String, Int, Int}[]
+    for v in q.data
+        n = String(ITensors.name(v))
+        if !isempty(n)
+            push!(vs, (n in names ? n * "*" : n, ITensors.val(v), ITensors.modulus(v)))
+        end
+    end
+    return isempty(vs) ? QN() : QN(vs...)
+end
+
+function star(i::Index, names)
+    if isempty(names) || !hasqns(i)
+        return i
+    end
+    return Index([ star(q, names) => d for (q, d) in space(i) ]...;
+                 tags = tags(i), plev = plev(i), dir = dir(i))
+end
 
 """
     conserve_string(site, spec)

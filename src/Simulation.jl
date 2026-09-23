@@ -149,6 +149,8 @@ mix(sim::Simulation) = Simulation(sim, mix(sim.state))
 
 weaken(sim::Simulation) = Simulation(sim, weaken(sim.state))
 
+weaken(sim::Simulation, spec) = Simulation(sim, weaken(sim.state, spec))
+
 apply(op, sim::Simulation; kwargs...) = Simulation(sim, apply(op, sim.state; kwargs...))
 
 PreMPO(sim::Simulation, args...) = PreMPO(sim.state, args...)
