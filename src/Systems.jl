@@ -60,7 +60,9 @@ the names of every quantity the sites of the system conserve strongly. See `stro
 strong_names(system::System) =
     unique(reduce(vcat, map(strong_names, system.sites); init = String[]))
 
-symmetries(system::System) = symmetries(system.sites[1])
+symmetries(system::System) =
+    Conserved(unique(reduce(vcat, [ symmetries(s).names for s in system.sites ];
+                            init = Tuple{String, Bool}[])))
 
 """
     weaken(::System)

@@ -265,5 +265,27 @@ end
     @test repr(symmetries(System(2, Electron(conserve = (strong(Ntot), 2Sz))))) ==
         "(strong(Ntot), 2Sz)"
     @test repr(symmetries(System(2, Fermion()))) == "()"
+
+    # a site conserving nothing, put first, used to hide what the others conserve: weakening
+    # then gave the state back untouched, still charged, and refused `N` as a target
+    mixed_sites(site) = begin
+        sys = System([Qubit(); fill(site, 4)])
+        p(v) = State{Pure}(sys, ["Up"; v])
+        s = p(conf) + 0.5 * p(reverse(conf))
+        return mix(s / norm(s))
+    end
+    shifted(s) = [ real(trace(s)), real(expect(s, N(3))), real(trace2(s)),
+                   real(expect(s, dag(C)(2) * dag(C)(3) * C(4) * C(5))) ]
+    reference = shifted(mixed_sites(Fermion()))
+
+    z = mixed_sites(Fermion(conserve = strong(N)))
+    @test repr(symmetries(z.system)) == "strong(N)"
+    @test shifted(weaken(z, N)) ≈ reference
+    z = weaken(z)
+    @test repr(symmetries(z.system)) == "N"
+    @test shifted(z) ≈ reference
+    z = weaken(z)
+    @test !TensorMixedStates.is_charged(z.system)
+    @test shifted(z) ≈ reference
 end
 

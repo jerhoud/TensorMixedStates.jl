@@ -711,10 +711,14 @@ spec_names(a) = error("$a does not name a conserved quantity")
 what is conserved, and how. It prints as the value `conserve` would be given to declare it,
 and it can be given back to `weaken` as a target.
 
+For a system, it gathers what its sites conserve: a site that does not conserve a quantity
+does not keep the others from conserving it.
+
 # Examples
 
     symmetries(System(4, Electron(conserve = (strong(Ntot), 2Sz))))   # (strong(Ntot), 2Sz)
     symmetries(System(4, Fermion()))                                  # ()
+    symmetries(System([Qubit(), Fermion(conserve = N)]))              # N
 """
 symmetries(site::AbstractSite) =
     Conserved([ (q[1], q[4]) for q in decode_conserve(conserved(site)) ])
