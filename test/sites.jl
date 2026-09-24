@@ -20,6 +20,12 @@ struct Dummit2 <: AbstractSite end
 
 TensorMixedStates.dim(::Dummit2) = 2
 
+# a site whose F is declared only after one has been asked for, which used to write the
+# identity into the library and refuse the declaration as a redefinition
+struct Latecomer <: AbstractSite end
+
+TensorMixedStates.dim(::Latecomer) = 2
+
 # a site carrying nothing in a field that is not the last one, to check that printing does
 # not drop it: the call would no longer line up with the fields
 struct Middling <: AbstractSite
@@ -225,6 +231,9 @@ end
 
 @testset "Custom site type" begin
     @test dim(Dummit()) == 2
+    @test matrix(F, Latecomer()) == identity_operator(2)
+    @def_operators(Latecomer(), [involution_op => [F = [1. 0. ; 0. -1.]]])
+    @test matrix(F, Latecomer()) == [1. 0. ; 0. -1.]
     # N arrives here by `using` from another site module: declaring it again for a new site
     # must neither fail nor disturb the site it came from, and the name must go on standing
     # for one and the same operator
@@ -384,6 +393,9 @@ end
     # the flux of an operator placed on a charged system is the charge it carries
     sys = System(3, Fermion(conserve = N))
     @test flux(ten(sys, N(1))) == IT.QN("N", 0)
+    # a matrix given for two different sites is laid on their charged indices, where the
+    # size used to be compared with the dimension of the first one squared
+    @test IT.hasqns(tensor(identity_operator(6), Qubit(conserve = N), Boson(3, conserve = N)))
     @test flux(ten(sys, Left(N)(1))) == IT.QN("N", 0)
     @test flux(ten(sys, Left(C)(1))) == IT.QN("N", -1)
     @test flux(ten(sys, Right(C)(1))) == IT.QN("N", 1)

@@ -59,3 +59,25 @@ jobs:
       - name: Run the examples
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         run: julia --project=. test/run_examples.jl
+  downgrade:
+    # the jobs above resolve the latest versions [compat] allows, so its lower bounds are never
+    # met there. This one resolves the lowest ones, on the lowest Julia, which matters all the
+    # more as the package leans on functions ITensors and ITensorMPS do not export
+    name: Julia 1.10 - lowest compatible versions - ${{ github.event_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-downgrade-compat@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          allow_reresolve: false
+          force_latest_compatible_version: false

@@ -220,7 +220,7 @@ end
 
 function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...)
     n, _ = size(a)
-    if n ≠ dim(site) ^ (1 + length(sites))
+    if n ≠ prod(dim, (site, sites...))
         # the shorthand of one site standing for several identical ones, which names no
         # system and therefore carries no charge
         i = Index(n)

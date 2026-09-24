@@ -358,13 +358,15 @@ function weaken(state::State{R}, target::Conserved) where R
     weak = weaken(system, target)
     n = length(state)
     collapse, drop = transitions(source, target)
+    relab = relabeller(i -> weak_index(i, collapse, drop))
     if R === Pure
         # the pure index keeps one block per basis state, in the order of the basis, so its
         # flat order survives both the relabelling and the densifying and the tensors only
-        # have to be put on the indices of the new system
-        st = is_charged(weak) ?
-            MPS([ relabel(t, relabeller(i -> weak_index(i, collapse, drop))) for t in state.state ]) :
-            dense(state.state)
+        # have to be put on the indices of the new system. One relabeller for all the
+        # tensors, or the two ends of a link would each get a new index of their own and the
+        # state would come apart
+        st = is_charged(weak) ? MPS([ relabel(t, relab) for t in state.state ]) :
+                                dense(state.state)
         return State{Pure}(weak, replace_siteinds(st, SysIndex{Pure}(weak, 1:n)))
     end
     if !is_charged(weak)
@@ -373,7 +375,6 @@ function weaken(state::State{R}, target::Conserved) where R
         return State{Mixed}(weak,
             MPS([ dense(state.state[i]) * dense_map(system, weak, i) for i in 1:n ]))
     end
-    relab = relabeller(i -> weak_index(i, collapse, drop))
     return State{Mixed}(weak,
         MPS([ relabel(state.state[i], relab) * weak_map(system, weak, i, relab)
               for i in 1:n ]))

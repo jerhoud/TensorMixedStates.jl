@@ -496,6 +496,7 @@ function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}}
     # `expect_norm` rather than `expect`. Checking here covers them all at the cost of a
     # few integer comparisons per term, nothing next to the contractions below
     foreach(o -> check_indices(state.system, o), subs)
+    foreach(o -> check_one_site(o, "expect"), subs)
     e = Expector()
     for o in subs
         e = expectfactor(state, e, o)

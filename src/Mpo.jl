@@ -11,6 +11,7 @@ struct PreMPO{R <: PM}
 end
 
 function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
+    foreach(o -> check_one_site(o, "an MPO"), subs)
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms

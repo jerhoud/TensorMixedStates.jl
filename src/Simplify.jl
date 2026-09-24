@@ -136,9 +136,13 @@ simplify_pow(a::GenericOp{Pure}, expo) =
         return PowOp(a, expo)
     end
 
-simplify_pow(a::ScalarOp{Pure}, expo) =
-    if flips_sign(a.coef, expo)
-        (-a.coef)^expo * PowOp(-a.arg, expo)
+# generic only: the phase has to go into a PowOp, which an indexed operator cannot enter, and
+# an indexed power goes to the method below, whose message says why a non integer one fails
+simplify_pow(a::ScalarOp{Pure, Generic}, expo) =
+    if phase_inside(a.coef, expo)
+        # handed whole to the constructor, which takes the modulus out itself: dividing by it
+        # here too, the phase came out a rounding away from the one the constructor gives
+        PowOp(a, expo)
     else
         a.coef^expo * simplify_pow(a.arg, expo)
     end

@@ -381,6 +381,20 @@ end
         output = devnull)
     @test only(sim.data["d"]["Fidelity"]["data"]) ≈ 0.5
     @test only(sim.data["d"]["Overlap"]["data"]) ≈ 1/√2
+
+    # a reference built before the state was weakened is weakened in its turn to what the
+    # state conserves, on a system mixing sites that conserve and sites that do not as well
+    for sites in ([Fermion(conserve = strong(N)) for _ in 1:3],
+                  [Fermion(conserve = strong(N)), Qubit(), Fermion(conserve = strong(N))])
+        p = State{Pure}(System(sites), ["Occ", sites[2] isa Qubit ? "Up" : "Emp", "Occ"])
+        @test last(only(measure(weaken(mix(p)), Fidelity(p)))) ≈ 1
+        @test last(only(measure(weaken(mix(p), ()), Fidelity(p)))) ≈ 1
+        @test last(only(measure(weaken(p), Overlap(p)))) ≈ 1
+    end
+    # but a reference conserving less than the state cannot be made to conserve more
+    strong_state = State{Pure}(System(2, Fermion(conserve = strong(N))), "Occ")
+    weak_ref = State{Pure}(System(2, Fermion(conserve = N)), "Occ")
+    @test_throws "cannot make it strong" measure(mix(strong_state), Fidelity(weak_ref))
 end
 
 @testset "Energy variance" begin

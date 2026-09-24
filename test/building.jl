@@ -139,6 +139,15 @@ end
     # and a mixed representation goes through the same entries
     @test_throws "acts on site 8" expect(stm, X(8))
     @test_throws "acts on site 8" make_mpo(stm, Dissipator(Sm)(8))
+    # an operator acting on several sites at once, defined by a matrix or a function of one,
+    # has no one site factors to place, and says so rather than failing inside
+    m2 = Operator{2}("M2", [1. 0. 0. 0. ; 0. 0. 1. 0. ; 0. 1. 0. 0. ; 0. 0. 0. 1.],
+                     involution_op)
+    for op in (m2(1, 2), exp(-0.3im * (X ⊗ X))(2, 3))
+        @test_throws "acts on several sites at once" expect(st, op)
+        @test_throws "acts on several sites at once" make_mpo(st, op)
+        @test_ok apply(op, st)
+    end
     # partial_trace used to skip a position it did not find when tracing, leaving the state
     # whole, and to raise a BoundsError when keeping it
     @test_throws "given site 5, which the state does not have" partial_trace(stm, [5])
@@ -214,6 +223,13 @@ end
     strong = TensorMixedStates.strong
     sys = System(4, Fermion(conserve = N))
     conf = ["Occ", "Emp", "Occ", "Emp"]
+
+    # CreateState draws a mixed one from its purification, the only form a charged system
+    # allows, where it used to refuse any random mixed state given a `state`
+    sim = runTMS(SimData(phases = [CreateState{Mixed}(4, Fermion(conserve = N), conf;
+                                                      randomize = 4)]); output = devnull)
+    @test sim.state isa State{Mixed}
+    @test maxlinkdim(sim.state) ≤ 4
 
     # there is no sector to draw a pure state in, so the form taking a system alone is
     # refused by a message naming the one that works

@@ -12,7 +12,7 @@ limits = Limits(
 algo = ApproxW(order = 4, n_hermitianize = 5)
 time_step = 0.04
 
-output(n) = [
+measurements(n) = [
     "X.dat" => X,
     "Y.dat" => Y,
     "Z.dat"=> Z,
@@ -43,10 +43,10 @@ sim_data(J,h,n) = SimData(
             type = Pure(),
             system = System(n, Qubit()),
             state = "X+",
-            final_measures = output(n),
+            final_measures = measurements(n),
         ),
         ToMixed(
-            final_measures=output(n),
+            final_measures=measurements(n),
             limits = limits,
         ), 
         Evolve(
@@ -59,7 +59,7 @@ sim_data(J,h,n) = SimData(
                     J*(sum(Z(i)*Z(i+1) for i in 1:n-1)+Z(n)*Z(1))
                     -h*sum(X(i) for i in 1:n)
                     ),
-            measures = output(n),
+            measures = measurements(n),
             measures_period = 5,
         ),
  

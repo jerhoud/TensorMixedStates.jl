@@ -1,6 +1,6 @@
 using TensorMixedStates, .Qubits
 
-output =
+measurements =
     "data" => [X, Y, Z, Trace, Purity, :sweep, :energy]
 
 sim_data(n) = SimData(
@@ -16,7 +16,7 @@ sim_data(n) = SimData(
             hamiltonian = sum(-Z(i) for i in 1:n) + 0.5 * sum(Z(i)Z(i + 1) for i in 1:n-1),
             limits = Limits(cutoff = 1e-10, maxdim = [5, 10, 25, 50, 100]),
             nsweeps = 6,
-            measures = output,
+            measures = measurements,
             tolerance = 1e-8,       
         ),
     ]

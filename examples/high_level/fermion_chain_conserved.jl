@@ -22,7 +22,7 @@ gamma = 0.75        # dephasing
 kappa = 0.2         # loss, in the second phase only
 time_step = 0.05
 
-output(n) = [
+measurements(n) = [
     "density.dat" => N,
     # constant while the symmetry is strong, then decaying as exp(-kappa t)
     "particles.dat" => sum(N(i) for i in 1:n),
@@ -41,7 +41,7 @@ evolve(evolver) = Evolve(
     duration = 0.25,
     time_step = time_step,
     evolver = evolver,
-    measures = output(n),
+    measures = measurements(n),
     measures_period = 2,
 )
 
@@ -61,7 +61,7 @@ sim_data(n) = SimData(
             type = Mixed(),
             system = System(n, Fermion(conserve = strong(N))),
             state = [i % 2 == 0 ? "Occ" : "Emp" for i in 1:n],
-            final_measures = output(n),
+            final_measures = measurements(n),
         ),
         evolve(hopping(n) + dephasing(n)),
         Weaken(),

@@ -712,13 +712,19 @@ isless(a::SetState, b::SetState) = isless(repr(a.state), repr(b.state))
 ############## Operator functions ###########
 
 """
-    flips_sign(coef, expo)
+    phase_inside(coef, expo)
 
-whether `(coef * A)^expo` has to be rewritten (-coef)^expo * (-A)^expo
-instead of coef^expo * A^expo
+whether `(coef * A)^expo` has to keep the phase of `coef` inside the power, as
+`abs(coef)^expo * (coef / abs(coef) * A)^expo`, rather than be written `coef^expo * A^expo`.
+
+The power is the principal one, taken through the logarithm of the operator. An integer
+exponent or a positive coefficient comes out of it unchanged, but any other phase turns the
+eigenvalues, possibly across the cut of the logarithm, and `coef^expo * A^expo` is then
+another determination of the power: `(im * X)^0.5` came out that way. A negative
+coefficient is the phase -1, and `-1.0 + 0im` is one as well.
 """
-flips_sign(coef::Number, expo::Number) =
-    coef isa Real && coef < 0 && !isinteger(expo)
+phase_inside(coef::Number, expo::Number) =
+    !isinteger(expo) && !iszero(coef) && !(isreal(coef) && real(coef) > 0)
 
 # PowOp
 
@@ -740,8 +746,8 @@ struct PowOp{R, N} <: GenericOp{R, N}
         else
             c = scalarcoef(arg)
             a = scalararg(arg)
-            if flips_sign(c, expo)
-                (-c)^expo * new{R, N}(-a, expo)
+            if phase_inside(c, expo)
+                abs(c)^expo * new{R, N}((c / abs(c)) * a, expo)
             else
                 c^expo * new{R, N}(a, expo)
             end
@@ -834,7 +840,7 @@ struct ModOp{N} <: GenericOp{Pure, N}
     modulus::Int
     ModOp(arg::GenericOp{Pure, N}, modulus::Int) where N =
         if modulus < 2
-            error("a modulus is at least 2, got \$modulus")
+            error("a modulus is at least 2, got $modulus")
         else
             new{N}(arg, modulus)
         end

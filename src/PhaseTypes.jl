@@ -12,7 +12,9 @@ A phase type to create the simulation state
 - `type`: the type of state to create `Pure()` or `Mixed()`
 - `system`: a System object to describe the system (see `System`) (unused if a State object is given)
 - `state`: a description of the state (or a State object)
-- `randomize`: the link dimension for the random state to create (default 0 for no randomizing)
+- `randomize`: the link dimension for the random state to create (default 0 for no randomizing).
+  With a `state` given, a pure state is randomised from it and a mixed one drawn from the
+  purification starting from it, see `RandomState`
 - `seed`: set the random generator seed for randomize (default nothing)
 
 # Examples
@@ -20,6 +22,7 @@ A phase type to create the simulation state
     CreateState(type = Mixed(), system = System(3, Qubit()), state = ["Up", "Dn", "Up"])
     CreateState(type = Pure(), system = System(10, Qubit()), randomize = 50)
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up", randomize = 50)
+    CreateState{Mixed}(4, Fermion(conserve = N), ["Occ", "Emp", "Occ", "Emp"]; randomize = 16)
     CreateState{Pure}(10, Qubit(), "Up")                                      # simple form
     CreateState{Mixed}([Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
 """

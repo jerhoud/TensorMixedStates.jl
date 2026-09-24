@@ -121,14 +121,17 @@ end
 end
 
 @testset "Non integer powers of a scaled operator" begin
-    # a negative real coefficient has to come out as its opposite, the sign going to the
-    # operator, or the power would land on the wrong side of the branch cut. Every other
-    # coefficient is taken out as it is, complex ones included. `PowOp` decides this when
-    # the power is built and `simplify_pow` when a sum collapses into a scaled operator
-    # afterwards, and the two have to reach the same form
+    # the power is the principal one. A positive coefficient comes out of it unchanged, any
+    # other phase does not and stays inside, only the modulus coming out: a negative one is
+    # the phase -1, and so is -1 + 0im. `PowOp` decides this when the power is built and
+    # `simplify_pow` when a sum collapses into a scaled operator afterwards, and the two have
+    # to reach the same form
+    q = Qubit()
     for (c, a) in [(-1., -X - X), (im, im * X + im * X), (2., 2X + 2X),
-                   (1. + im, (1 + im) * X + (1 + im) * X)]
+                   (1. + im, (1 + im) * X + (1 + im) * X),
+                   (-1. + 0im, (-1. + 0im) * X + (-1. + 0im) * X)]
         @test simplify(a^0.5) == (2c * X)^0.5
+        @test matrix((2c * X)^0.5, q) ≈ sqrt(2c * matrix(X, q))
     end
     # the sign really does leave the coefficient for the operator
     @test string(simplify((-X - X)^0.5)) == string(sqrt(2.) * (-X)^0.5)
@@ -198,7 +201,7 @@ end
     # (-1)^N is hermitian, whatever form simplify settles on
     @test matrix(parity(N), b) ≈ adjoint(matrix(parity(N), b))
 
-    @test_throws "a modulus is at least 2" mod(N, 1)
+    @test_throws "a modulus is at least 2, got 1" mod(N, 1)
     @test_throws "exponentiates the fermionic operator" isfermionic(parity(C))
 end
 

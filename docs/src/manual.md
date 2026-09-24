@@ -164,7 +164,7 @@ represents the ``\sigma_x`` Pauli operator applied to the system site number 3. 
 Note that all predefined operator names start with a capital letter, so it is better to keep your own identifiers lowercase to prevent name collisions with them.
 
 Lowercase is not a safe harbour by itself, though. `using TensorMixedStates` also brings in
-some fifty lowercase names, among them `state`, `sim`, `output`, `measure`, `trace`, `dim`,
+some sixty lowercase names, among them `state`, `output`, `measure`, `trace`, `dim`,
 `matrix`, `tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
 of your program shadows the function for the rest of the file, and if you happen to have
 used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
@@ -226,6 +226,10 @@ myop(3)
 ```@example manual
 myswap(4, 7)
 ```
+
+An operator of several sites defined by a matrix, as `myswap` is, or a function of one, as
+`Rxy` is, can only be applied as a gate. To measure it or to put it in a hamiltonian, write
+it as an expression of one site operators, the way `Swap` is defined.
 
 In the case of Hamiltonian or Lindbladian evolution the Hamiltonian part is to be multiplied by -im:
 

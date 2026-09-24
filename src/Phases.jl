@@ -47,19 +47,23 @@ function run_phase(sim::Simulation, phase::CreateState{R}) where R
         else
             state = RandomState{R}(phase.system, phase.randomize)
         end
-    else
-        if phase.state isa State
-            # `type` is what the phase was asked for, so a State given in the other
-            # representation is converted rather than silently kept as it is
-            state = as_representation(sim, R, phase.state)
-        elseif isnothing(phase.system)
-            error("CreateState needs a system or a State object")
-        else
-            state = State{R}(phase.system, phase.state)
-        end
+    elseif phase.state isa State
+        # `type` is what the phase was asked for, so a State given in the other
+        # representation is converted rather than silently kept as it is
+        state = as_representation(sim, R, phase.state)
         if phase.randomize ≠ 0
             state = RandomState(state, phase.randomize)
         end
+    elseif isnothing(phase.system)
+        error("CreateState needs a system or a State object")
+    elseif phase.randomize == 0
+        state = State{R}(phase.system, phase.state)
+    elseif R === Mixed
+        # a mixed state is drawn from the states its purification starts from, the only way
+        # there is on a system that conserves something
+        state = RandomState{Mixed}(phase.system, phase.state, phase.randomize)
+    else
+        state = RandomState(State{Pure}(phase.system, phase.state), phase.randomize)
     end
     return Simulation(sim, state)
 end

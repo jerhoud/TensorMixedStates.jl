@@ -37,7 +37,8 @@ the reference article.
 - `RandomState{Mixed}(system, states, linkdims)`, which draws a random density matrix from
   the states its purification starts from. A system that conserves something has no sector to
   draw one in otherwise, and what tracing half of the purification leaves is a mixture over
-  the sectors around the one named.
+  the sectors around the one named. `CreateState` uses it for a mixed state given with a
+  `state` and `randomize`, which it used to refuse.
 
 - `entanglement_by_sector`, the entanglement across a cut of a pure state resolved by the
   charge the left part carries: for each charge, its probability and the entropy and spectrum
@@ -128,6 +129,19 @@ the reference article.
   does not expect and which made it truncate a spectrum of zeros past its first value. It
   defaults to 1, the least a bond can have, and a smaller value is taken as 1; a checkpoint
   written with the former default is still resumed.
+
+- Asking for the `F` of a site type that has none, the identity, wrote it into the operator
+  library, so that declaring `F` for that type afterwards was refused as a redefinition.
+
+- A non integer power of an operator with a complex coefficient, `(im * X)^0.5` for
+  instance, took the coefficient out whole and was another determination of the power than
+  the principal one its matrix has. Only the modulus of the coefficient comes out now, its
+  phase staying inside the power, as the sign of a negative one already did.
+
+- An operator acting on several sites at once with no expression to be replaced by, one
+  defined by a matrix or a function of one such as `exp(X ⊗ X)`, failed inside `expect` and
+  `make_mpo` on a `MethodError` or a `BoundsError`. It is refused by a message saying that
+  it can only be applied as a gate, and the manual says so where it shows one.
 
 ## [1.3.0] - 2026-09-21
 

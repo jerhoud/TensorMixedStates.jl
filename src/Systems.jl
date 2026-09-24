@@ -173,3 +173,19 @@ check_indices(system::System, a::Evolver) = check_indices(system, a.arg)
 check_indices(system::System, a::Vector) = foreach(x -> check_indices(system, x), a)
 # a generic operator carries no index, and neither does anything else that may be passed
 check_indices(::System, _) = nothing
+
+"""
+    check_one_site(a, what)
+
+refuse a factor acting on several sites at once, which is what `simplify` leaves of an
+operator of several sites with no expression to be replaced by: one defined by a matrix, or a
+function such as `exp(X ⊗ X)`. An MPO and `expect` place one site factors only, and they used
+to fail on a `BoundsError` or a `MethodError` naming neither the operator nor the way out.
+"""
+function check_one_site(a, what)
+    if a isa AtIndex && length(a.index) > 1
+        error("$a acts on several sites at once, which $what cannot place: apply it as a gate, " *
+              "or write it as an expression of one site operators")
+    end
+    return nothing
+end

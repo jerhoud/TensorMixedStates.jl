@@ -332,6 +332,16 @@ line is the notice.
 """ Mutual_Info_Renyi2
 
 """
+    reference_on(st, ref)
+
+the reference state `ref` put on the system of the measured state `st`, weakened first to
+what `st` conserves: a simulation may weaken its state after the reference was built, and
+the two would no longer have the same sites. Weakening is exact, so nothing measured
+changes, and it costs nothing when the two already conserve the same.
+"""
+reference_on(st::State, ref::State) = State(st.system, weaken(ref, symmetries(st.system)))
+
+"""
     Fidelity(ref)
 
 a state function to measure the fidelity with the reference state `ref`.
@@ -339,13 +349,14 @@ See also `StateFunc` and `fidelity`.
 
 `ref` is put on the system of the state being measured, which the strictness of `fidelity`
 would otherwise refuse: a measurement is written when the simulation is described, before
-the system it will run on exists.
+the system it will run on exists. It is weakened first to what that state conserves, so that
+it goes on being measured after a `Weaken` phase.
 
 # Examples
 
     measures = "data" => [Fidelity(ground_state), Purity]
 """
-Fidelity(ref::State) = StateFunc("Fidelity", st -> fidelity(st, State(st.system, ref)))
+Fidelity(ref::State) = StateFunc("Fidelity", st -> fidelity(st, reference_on(st, ref)))
 
 """
     Overlap(ref)
@@ -355,11 +366,13 @@ a state function to measure the inner product with the reference state `ref`, th
 normalised and it is complex, so it is written as two columns.
 See also `StateFunc` and `inner`.
 
+`ref` is put on the system of the state being measured, as for `Fidelity`.
+
 # Examples
 
     measures = "data" => Overlap(initial_state)
 """
-Overlap(ref::State) = StateFunc("Overlap", st -> inner(State(st.system, ref), st))
+Overlap(ref::State) = StateFunc("Overlap", st -> inner(reference_on(st, ref), st))
 
 """
     Variance(hamiltonian)

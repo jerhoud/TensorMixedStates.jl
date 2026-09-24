@@ -173,16 +173,16 @@ const state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix,
 """
     F_info(site)
 
-return the matrix value of `F`` for the `site`` as stored in `operator_library`
+return the matrix value of `F` for the `site` as stored in `operator_library`, the
+identity for a site with no `F` of its own, which is not fermionic.
 
-`get!` here is a cache rather than a lookup: a site with no `F` of its own is not
-fermionic, and the `Id` it falls back to is written into the library so that the next call
-finds it.
+Read with `get` and not `get!`: writing the identity into the library, as a cache that saved
+nothing, made a later declaration of `F` for that site type fail as a redefinition.
 """
 function F_info(site::AbstractSite)
     name = typeof(site)
     t = (name, "F")
-    return get!(operator_library, t, Id)
+    return get(operator_library, t, Id)
 end
 
 """
