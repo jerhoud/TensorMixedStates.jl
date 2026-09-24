@@ -9,7 +9,8 @@ A type for describing a simulation to use with `runTMS`
 
 - `name`:            the name of the simulation used as the name of the directory to store the results
 - `phases`:          the list of phases of the simulation (see Phases for a list of possible values),
-  which may itself contain lists, to any depth, and is flattened on construction
+  which may itself contain lists, to any depth, and is flattened on construction. The first
+  one must be `CreateState` or `LoadState`, since the simulation has no state before it
 - `description`:     text put in the description file of the simulation (default "")
 - `time_start`:      initial simulation time (default 0.)
 - `final_measures`:  measures to make at the end of simulation (default []) see `measure` and `output`
@@ -40,7 +41,7 @@ interrupt.
     SimData(description, name, time_start, final_measures, time_format, data_format,
             checkpoint_interval, max_time, phases) =
         new(description, name, time_start, final_measures, time_format, data_format,
-            checkpoint_interval, max_time, flatten_phases(phases))
+            checkpoint_interval, max_time, check_first_phase(flatten_phases(phases)))
 end
 
 """
@@ -52,6 +53,15 @@ position, which is what a checkpoint records.
 """
 flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
 flatten_phases(p) = [p]
+
+# a simulation starts without a state: every phase but these two transforms the one it is
+# handed, so a first phase of another kind would fail on `nothing` deep inside its solver
+function check_first_phase(phases::Vector)
+    if isempty(phases) || !(first(phases) isa Union{CreateState, LoadState})
+        error("the first phase must be CreateState or LoadState, which give the simulation its state")
+    end
+    return phases
+end
 
 # A `SimData` has the shape of a phase — `name`, `time_start`, `final_measures` — because
 # `runTMS` runs the top level one through `log_phase` like any other phase, which is where

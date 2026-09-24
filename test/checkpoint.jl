@@ -72,6 +72,13 @@ end
     @test length(SimData(name = "flat", phases = [p, [p, [p, p]]]).phases) == 4
 end
 
+@testset "A simulation starts with its state" begin
+    # it has none before its first phase, which used to fail on `nothing` inside its solver
+    @test_throws "first phase must be" SimData(phases = [Gates(gates = X(1))])
+    @test_throws "first phase must be" SimData(phases = [[], [Gates(gates = X(1))]])
+    @test_throws "first phase must be" SimData(phases = [])
+end
+
 @testset "Resuming reproduces an uninterrupted run" begin
     mktempdir() do dir
         cd(dir) do
@@ -329,7 +336,8 @@ end
                                              algo = ApproxW(order = 2), evolver = -im * Z(1))])
     @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
                                              evolver = -im * Z(1), measures = ["f" => X])])
-    @test id(base) ≠ id(reverse(base))
+    @test id([base; Gates(gates = X(1)); Gates(gates = Z(1))]) ≠
+          id([base; Gates(gates = Z(1)); Gates(gates = X(1))])
     @test id(base) ≠ id(base[1:1])
 
     # a State given as is, rather than described, is part of what the simulation computes
@@ -344,7 +352,6 @@ end
     @test flatten([1, [2, [3, 4]], 5]) == [1, 2, 3, 4, 5]
     @test flatten([[], [1], []]) == [1]
     @test flatten(1) == [1]
-    @test SimData(phases = [1, [2, [3, 4]], 5]).phases == [1, 2, 3, 4, 5]
 
     # phases built in pieces, as `create_graph_state` does, must run like a flat list. A
     # checkpoint numbers the phases, and numbering them without flattening first would

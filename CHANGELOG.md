@@ -10,7 +10,11 @@ the reference article.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- A simulation whose first phase is neither `CreateState` nor `LoadState` is refused when
+  its `SimData` is built. It started without a state and failed in its first phase on a
+  `MethodError` about `nothing`, after `runTMS` had created its directory.
 
 ## [1.4.0] - 2026-09-24
 
