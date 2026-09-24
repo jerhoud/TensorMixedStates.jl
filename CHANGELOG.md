@@ -10,6 +10,13 @@ the reference article.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.4.0] - 2026-09-24
+
+This release adds conserved quantities and the exported names that go with them, which is
+why it is a minor version rather than a patch.
+
 ### Added
 
 - Conserved quantities. A site declares one with `conserve`, naming it by one of its own
