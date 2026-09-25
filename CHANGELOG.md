@@ -10,7 +10,26 @@ the reference article.
 
 ## [Unreleased]
 
+### Added
+
+- An operator of several sites defined by a matrix, by a function of its sites or by an
+  expression `simplify` cannot develop, such as `exp(X ⊗ X)`, can be given the sites it acts
+  on: `Operator{2}("P2", m, selfadjoint_op, Spin(1))`, or `Operator{2}("K", m, plain_op,
+  Spin(1), Qubit())` for sites that differ. It is split into a sum of products of one site
+  operators, `P2¹₁ ⊗ P2²₁ + …`, which `simplify` replaces it with as it does for `Swap`, so
+  that it can be put in a hamiltonian or a lindbladian and measured, where it could only be
+  applied as a gate (#14). The identity is taken out on each site before the singular value
+  decompositions, which gives the fewest channels: the projector of the AKLT chain makes an
+  MPO of bond dimension 10, where its expression makes 14. Each factor carries a definite
+  charge of what its site conserves, and a matrix that does not commute with `F` on a
+  fermionic site is refused, since it is taken as it is, with no Jordan-Wigner string. On a
+  single site the definition is only replaced by its matrix there, computed once.
+
 ### Fixed
+
+- A matrix whose size is not the dimension of the sites it is placed on is refused by a
+  message naming the operator and the sites. It failed on a `DimensionMismatch` from
+  `reshape`.
 
 - A simulation whose first phase is neither `CreateState` nor `LoadState` is refused when
   its `SimData` is built. It started without a state and failed in its first phase on a

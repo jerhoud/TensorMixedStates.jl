@@ -308,3 +308,124 @@ end
     @test matrix(Left(Swap), q) == matrix(Left(Swap), q, q)
     @test matrix(Gate(Swap), q) == matrix(Gate(Swap), q, q)
 end
+
+@testset "Operators of several sites split on their sites" begin
+    # an operator of several sites that simplify cannot develop, given with its sites, is
+    # split into a sum of products of one site operators, which becomes its definition.
+    # Splitting must not change the matrix it stands for, whatever it was given by
+    TMS = TensorMixedStates
+    q, s1 = Qubit(), Spin(1)
+    msw = [1. 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1]
+    sw = Operator{2}("Sw", msw, involution_op, q)
+    @test matrix(sw, q) ≈ msw
+    ss = Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz
+    p2e = Operator{2}("P2e", ss / 2 + ss * ss / 6 + (Id ⊗ Id) / 3, selfadjoint_op)
+    mp2 = matrix(p2e, s1)
+    p2m = Operator{2}("P2m", mp2, selfadjoint_op)
+    p2 = Operator{2}("P2", mp2, selfadjoint_op, s1)
+    @test matrix(p2, s1) ≈ mp2
+    # sites that differ, given in the order of the indices, and more than two of them
+    mk = matrix(Sz ⊗ X + Sp ⊗ Z + 0.3 * Sx ⊗ Id, s1, q)
+    @test matrix(Operator{2}("K", mk, plain_op, s1, q), s1, q) ≈ mk
+    m3 = matrix(X ⊗ Z ⊗ Y + Z ⊗ Id ⊗ Z + 0.5 * Id ⊗ X ⊗ Id + 0.2 * Id ⊗ Id ⊗ Id, q)
+    @test matrix(Operator{3}("T3", m3, plain_op, q), q) ≈ m3
+    # a function of the sites, an expression simplify keeps whole, and a complex matrix
+    zx = Operator{2}("ZX", (a, b) -> kron(matrix(Z, a), matrix(X, b)), plain_op, q)
+    @test matrix(zx, q) ≈ kron(matrix(Z, q), matrix(X, q))
+    rxx = exp(-0.3im * (X ⊗ X))
+    @test matrix(Operator{2}("R", rxx, plain_op, q), q) ≈ matrix(rxx, q)
+    @test matrix(Operator{2}("Y2", matrix(Y ⊗ Sp, q), plain_op, q), q) ≈ matrix(Y ⊗ Sp, q)
+
+    # simplify develops it into factors of one site. They are named after the operator, the
+    # index 0 being the part acting on a site alone, the others pairing across the sites
+    one_site(a) = all(t -> all(f -> f isa TMS.AtIndex{Pure, 1}, TMS.prodsubs(t)),
+                      TMS.sumsubs(a))
+    @test one_site(simplify(sw(1, 2)))
+    @test one_site(simplify(p2(3, 1)))
+    terms(a) = [ TMS.scalararg(t).subs for t in TMS.sumsubs(a.expr) ]
+    factor_names(a) = Set(f.name for t in terms(a) for f in t if f isa Operator)
+    fe = Fermion()
+    nn = Operator{2}("NN", matrix(N ⊗ N, fe), plain_op, fe)
+    @test factor_names(nn) == Set(["NN¹₀", "NN²₀", "NN¹₁", "NN²₁"])
+    @test all(t -> t[1].name[end] == t[2].name[end],
+              filter(t -> all(f -> f isa Operator, t), terms(sw)))
+    # the identity is taken out on each site before the split, so that the fewest terms
+    # cross the link: three for Swap, as its expression has, and eight for the projector
+    # of the AKLT chain, where its expression takes twelve
+    crossing(a) = count(t -> count(f -> f isa Operator, t) == 2, terms(a))
+    @test crossing(sw) == 3
+    @test crossing(p2) == 8
+
+    # it then goes into an MPO or expect as an operator given by an expression does, and
+    # the MPO acts as the matrix it was split from
+    chain(op) = sum(op(i, i + 1) for i in 1:3)
+    st = RandomState{Pure}(System(4, q), 4)
+    @test maxlinkdim(make_mpo(st, chain(sw))) == maxlinkdim(make_mpo(st, chain(Swap)))
+    @test norm(apply(make_mpo(st, chain(sw)), st) - apply(make_mpo(st, chain(Swap)), st)) < 1e-12
+    st1 = RandomState{Pure}(System(4, s1), 4)
+    @test maxlinkdim(make_mpo(st1, chain(p2))) == 10
+    @test maxlinkdim(make_mpo(st1, chain(p2e))) == 14
+    @test norm(apply(make_mpo(st1, chain(p2)), st1) - apply(make_mpo(st1, chain(p2e)), st1)) < 1e-12
+    # on sites that are not neighbours, or given in the other order
+    for (i, j) in [(1, 3), (4, 2), (2, 1)]
+        @test expect(st1, p2(i, j)) ≈ expect(st1, p2e(i, j))
+        @test norm(apply(p2m(i, j), st1) - apply(make_mpo(st1, p2(i, j)), st1)) < 1e-12
+    end
+    # sites that differ, placed on a system that mixes them
+    k = Operator{2}("K", mk, plain_op, s1, q)
+    km = Operator{2}("Km", mk, plain_op)
+    sk = RandomState{Pure}(System([s1, q, s1, q]), 4)
+    for (i, j) in [(1, 2), (3, 2), (1, 4)]
+        @test norm(apply(km(i, j), sk) - apply(make_mpo(sk, k(i, j)), sk)) < 1e-12
+    end
+    # a density matrix, with the operator in a gate, a dissipator and a hamiltonian. The MPOs
+    # are compared whole on three sites: their links are near a hundred channels wide, and
+    # applying them to a random density matrix takes gigabytes
+    ρ = mix(State{Pure}(System(3, s1), "0"))
+    for p in (x -> Gate(x)(1, 3), x -> Dissipator(x)(2, 3), x -> -im * x(1, 2))
+        @test norm(prod(make_mpo(ρ, p(p2))) - prod(make_mpo(ρ, p(p2e)))) < 1e-12
+    end
+
+    # on sites that conserve, every factor carries a definite charge, which the expression
+    # written with Sx and Sy does not, and the operator acts on the same sites weakened
+    s1q = Spin(1, conserve = Sz)
+    p2q = Operator{2}("P2q", mp2, selfadjoint_op, s1q)
+    conf(sys) = normalize(State{Pure}(sys, ["1", "0", "-1", "0"]) +
+                          0.5 * State{Pure}(sys, ["0", "1", "0", "-1"]))
+    stq, std = conf(System(4, s1q)), conf(System(4, s1))
+    @test expect(stq, chain(p2q)) ≈ expect(std, chain(p2e))
+    @test expect(weaken(stq, ()), chain(p2q)) ≈ expect(std, chain(p2e))
+    @test maxlinkdim(make_mpo(stq, chain(p2q))) == 10
+    # the factors split charge by charge recombine into the matrix they came from, a charge
+    # taken modulo included
+    @test matrix(p2q, s1q) ≈ mp2
+    bp = Boson(4, conserve = parity(N))
+    mb = matrix(A ⊗ dag(A) + dag(A) ⊗ A + 0.5 * (A * A) ⊗ N, Boson(4))
+    @test matrix(Operator{2}("Bp", mb, plain_op, bp), bp) ≈ mb
+    @test_throws "no definite flux" make_mpo(stq, chain(p2e))
+    @test_throws "no definite charge of N" Operator{2}("XX", matrix(X ⊗ X, q), plain_op,
+                                                       Qubit(conserve = N))
+
+    # a matrix is taken as it is, with no Jordan-Wigner string, so on a fermionic site it has
+    # to be even: its factors are then crossed by the strings of other operators with no sign
+    nne = Operator{2}("NNe", N ⊗ N, plain_op)
+    sf = RandomState{Pure}(System(4, fe), 4)
+    for p in (x -> x(1, 3), x -> C(4) * x(1, 3) * dag(C)(2), x -> dag(C)(1) * x(4, 2) * C(3))
+        @test expect(sf, p(nn)) ≈ expect(sf, p(nne))
+    end
+    hop = matrix(C ⊗ dag(C), fe)
+    @test_throws "does not commute with F on its site 1" Operator{2}("H", hop, plain_op, fe)
+
+    # a single site has nothing to split, its definition is only computed on it once, and
+    # its type is kept, fermionic included
+    ex = Operator{1}("Ex", exp(0.3im * X), plain_op, q)
+    @test ex.expr isa Matrix && ex.expr ≈ matrix(exp(0.3im * X), q)
+    @test Operator{1}("Fs", s -> matrix(Sz, s), selfadjoint_op, s1).expr ≈ matrix(Sz, s1)
+    cf = Operator{1}("Cf", C, fermionic_op, fe)
+    @test isfermionic(cf) && matrix(cf, fe) ≈ matrix(C, fe)
+    @test_throws "has dimension 3" Operator{1}("A", [1. 0 ; 0 1], plain_op, s1)
+
+    # what cannot be split
+    @test_throws "acts on 2 sites and was given 3" Operator{2}("A", msw, plain_op, q, q, q)
+    @test_throws "has dimension 6" Operator{2}("A", msw, plain_op, s1, q)
+end

@@ -179,13 +179,15 @@ check_indices(::System, _) = nothing
 
 refuse a factor acting on several sites at once, which is what `simplify` leaves of an
 operator of several sites with no expression to be replaced by: one defined by a matrix, or a
-function such as `exp(X ⊗ X)`. An MPO and `expect` place one site factors only, and they used
-to fail on a `BoundsError` or a `MethodError` naming neither the operator nor the way out.
+function such as `exp(X ⊗ X)`, and created without its sites. An MPO and `expect` place one
+site factors only, and they used to fail on a `BoundsError` or a `MethodError` naming neither
+the operator nor the way out.
 """
 function check_one_site(a, what)
     if a isa AtIndex && length(a.index) > 1
         error("$a acts on several sites at once, which $what cannot place: apply it as a gate, " *
-              "or write it as an expression of one site operators")
+              "write it as an expression of one site operators, or create it with the sites " *
+              "it acts on, Operator{N}(name, m, type, sites...), which splits it into one")
     end
     return nothing
 end

@@ -228,8 +228,23 @@ myswap(4, 7)
 ```
 
 An operator of several sites defined by a matrix, as `myswap` is, or a function of one, as
-`Rxy` is, can only be applied as a gate. To measure it or to put it in a hamiltonian, write
-it as an expression of one site operators, the way `Swap` is defined.
+`Rxy` is, can only be applied as a gate. To measure it or to put it in a hamiltonian, give
+the sites it acts on when creating it, one per index or a single one for identical sites:
+
+```@example manual
+myswap2 = Operator{2}("MySwap2", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op, Qubit())
+```
+
+It is then split into a sum of products of one site operators, which becomes its
+definition, the way `Swap` is defined by an expression:
+
+```@example manual
+myswap2.expr
+```
+
+The factors carry a definite charge of what their sites conserve. On a fermionic site the
+matrix has to commute with `F`, since it is taken as it is, with no Jordan-Wigner string:
+an operator moving fermions between sites is written with `C` and `dag(C)` instead.
 
 In the case of Hamiltonian or Lindbladian evolution the Hamiltonian part is to be multiplied by -im:
 

@@ -148,6 +148,15 @@ end
         @test_throws "acts on several sites at once" make_mpo(st, op)
         @test_ok apply(op, st)
     end
+    # and it points to the constructor that splits it, given its sites
+    @test_throws "create it with the sites it acts on" make_mpo(st, m2(1, 2))
+    # a matrix of the wrong size for its site is refused by a message naming the operator and
+    # the site, on the three paths. It failed on a DimensionMismatch from reshape
+    b3 = Operator{1}("B3", [1. 0. 0. ; 0. 1. 0. ; 0. 0. 1.], plain_op)
+    @test_throws "B3 is given by a 3×3 matrix and cannot act on Qubit()" expect(st, b3(1))
+    @test_throws "whose dimension is 2" make_mpo(st, b3(1))
+    @test_throws "whose dimension is 2" apply(b3(1), st)
+    @test_throws "whose dimension is 4" apply(Operator{2}("B9", ones(9, 9), plain_op)(1, 2), st)
     # partial_trace used to skip a position it did not find when tracing, leaving the state
     # whole, and to raise a BoundsError when keeping it
     @test_throws "given site 5, which the state does not have" partial_trace(stm, [5])

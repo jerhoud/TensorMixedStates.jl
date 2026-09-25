@@ -300,6 +300,283 @@ end
 matrix(a::Gate, site::AbstractSite...) =
     matrix(Left(a.arg), site...) * matrix(Right(a.arg), site...)
 
+
+############### Operators of several sites split into one site factors ###############
+
+"""
+    split_tol
+
+the part of an operator, relative to its norm, below which `Operator{N}(name, def, type,
+sites...)` takes it to be zero: a singular value, an element or a whole term that small is
+what rounding leaves where the exact matrix has nothing. It is a rounding tolerance and nothing
+wider, so that splitting an operator does not change it. It is not a setting either: an
+operator is compressed by the algorithms truncating the states it acts on, not here.
+"""
+const split_tol = 1e-13
+
+"""
+    Operator{N}(name, def, type, sites...)
+
+an operator of several sites whose definition `simplify` cannot develop, a matrix, a function
+of its sites or an expression such as `exp(X ⊗ X)`, split once and for all into a sum of
+products of one site operators. That sum becomes its definition, which `simplify` replaces it
+with as it does for `Swap`, and this is what lets it into a hamiltonian, a lindbladian or
+`expect`. Given without its sites, such an operator can only be applied as a gate.
+
+On a single site there is nothing to split, and the definition is only replaced by its
+matrix on that site, computed once rather than each time a tensor is built.
+
+The sites come in the order of the indices, a single one standing for as many identical ones,
+and a matrix is written in their basis with the last site varying fastest, as `matrix` gives
+it. The factors are computed from them:
+
+- the dimension of each site, which the size of a matrix does not give when the sites differ;
+- what each site conserves: every factor carries a definite charge, so that the operator acts
+  on these sites, and on the same sites once weakened;
+- whether a site is fermionic. A matrix is taken as it is, with no Jordan-Wigner string, and
+  that is only right for an operator commuting with `F` on each of its sites. One that does
+  not is refused, and is to be written as an expression of `C` and `dag(C)`, into which
+  `simplify` inserts the strings.
+
+The factors are named after the operator, `P2¹₂` being its second factor on its first site
+and the index 0 the part acting on that site alone. What acts as the identity on a site is
+taken out first, so that a term acting on a single site takes no channel of an MPO, and the
+rest is split by singular value decompositions, which give the fewest terms across each link.
+
+# Examples
+
+    P2 = Operator{2}("P2", m, selfadjoint_op, Spin(1))
+    K = Operator{2}("K", mk, plain_op, Spin(1, conserve = 2Sz), Qubit(conserve = 2Sz))
+    R = Operator{2}("R", exp(-0.3im * (X ⊗ X)), plain_op, Qubit())
+"""
+function Operator{N}(name::String, def::Union{Matrix, Function, GenericOp{Pure, N}},
+                     type::OpType, site::AbstractSite, sites::AbstractSite...) where N
+    ss = isempty(sites) ? fill(site, N) : AbstractSite[site, sites...]
+    if length(ss) ≠ N
+        error("$name acts on $N sites and was given $(length(ss))")
+    end
+    m = matrix(def, ss...)
+    if N > 1
+        return Operator{N}(name, split_matrix(name, m, ss), type)
+    end
+    # one site has nothing to be split: its matrix is only computed once and for all, and
+    # its type, fermionic included, says what simplify does with it
+    d = dim(only(ss))
+    if size(m) ≠ (d, d)
+        error("$name is given by a $(size(m, 1))×$(size(m, 2)) matrix, but $(only(ss)) " *
+              "has dimension $d")
+    end
+    return Operator{1}(name, m, type)
+end
+
+const superscripts = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
+const subscripts = collect("₀₁₂₃₄₅₆₇₈₉")
+
+# a number written with the given digits
+script(digits, n::Int) = join(digits[c - '0' + 1] for c in string(n))
+
+"""
+    split_matrix(name, m, sites)
+
+the definition `Operator{N}(name, def, type, sites...)` gives its operator, `m` being the
+matrix of `def` on `sites`: a sum of tensor products of one site operators, each of a definite
+charge.
+
+Every part acting on some of the sites and as the identity on the others is split on its own,
+which is what keeps a term from spanning more sites than it acts on.
+"""
+function split_matrix(name::String, m::AbstractMatrix, sites::Vector)
+    n = length(sites)
+    d = [ dim(s) for s in sites ]
+    D = prod(d)
+    if size(m) ≠ (D, D)
+        error("$name is given by a $(size(m, 1))×$(size(m, 2)) matrix, but " *
+              "$(join(sites, " ⊗ ")) has dimension $D")
+    end
+    # a real operator keeps real factors, which gives a real MPO and halves the cost of
+    # every contraction with it
+    if eltype(m) <: Complex && all(x -> iszero(imag(x)), m)
+        m = real(m)
+    end
+    m = float(m)
+    tol = split_tol * norm(m)
+    check_even(name, m, sites, tol)
+    # one axis per site, holding the vectorised matrix of a one site operator. The axes of a
+    # matrix reshaped put the last site first and every output before every input, so each
+    # site has its two brought together, the output varying faster
+    x = reshape(permutedims(reshape(m, (reverse(d)..., reverse(d)...)),
+                            [ k for j in 1:n for k in (n - j + 1, 2n - j + 1) ]),
+                Tuple(d .^ 2))
+    charges = [ pair_charges(s) for s in sites ]
+    q = total_charge(name, x, charges, sites, tol)
+    counts = zeros(Int, n)
+    factor(j, v, k) = Operator{1}(name * script(superscripts, j) * script(subscripts, k),
+                                  reshape(v, d[j], d[j]), plain_op)
+    terms = GenericOp{Pure, n}[]
+    for on in Iterators.product(fill((false, true), n)...)
+        y = part_on(x, d, on)
+        js = findall(collect(on))
+        if isempty(js)
+            if abs(y[]) > tol
+                push!(terms, y[] * TensorOp{n}(fill(Id, n)))
+            end
+            continue
+        end
+        # a part acting on a single site is the one of index 0 there, the others are
+        # numbered site by site in the order they come
+        make = length(js) == 1 ? (l, v) -> factor(js[l], v, 0) :
+                                 (l, v) -> factor(js[l], v, counts[js[l]] += 1)
+        for (c, fs) in svd_terms(y, charges[js], q, tol, make)
+            ops = GenericOp{Pure, 1}[ Id for _ in 1:n ]
+            ops[js] = fs
+            push!(terms, c * TensorOp{n}(ops))
+        end
+    end
+    return SumOp(terms)
+end
+
+"""
+    check_even(name, m, sites, tol)
+
+refuse a matrix that does not commute with `F` on each of its sites. A matrix is taken as it
+is, with no Jordan-Wigner string between its sites, and the strings of the other factors of a
+product cross its factors as if they were even: that is right for a density, a spin or a pair,
+all even on each site, and not for an operator moving a fermion from one site to another.
+"""
+function check_even(name, m, sites, tol)
+    d = [ dim(s) for s in sites ]
+    for (j, s) in enumerate(sites)
+        f = matrix(F, s)
+        if f == I
+            continue
+        end
+        fj = kron(identity_operator(prod(d[1:j-1])), f, identity_operator(prod(d[j+1:end])))
+        if norm(fj * m * fj - m) > tol
+            error("$name does not commute with F on its site $j, $s, so it moves a fermion " *
+                  "there. A matrix is taken as it is, with no Jordan-Wigner string, which " *
+                  "is only right for an operator even on each of its sites: write it as an " *
+                  "expression of C and dag(C) instead, into which simplify inserts the strings")
+        end
+    end
+    return nothing
+end
+
+"""
+    pair_charges(site)
+
+the charge of each element ``|a\\rangle\\langle b|`` of a site, in the order of a vectorised
+matrix: the flux of a one site operator made of that element alone
+"""
+function pair_charges(site::AbstractSite)
+    qs = decode_conserve(conserved(site))
+    c = [ QN([ (name, ch[k], modulus) for (name, modulus, ch, _) in qs ]...) for k in 1:dim(site) ]
+    return vec([ c[a] - c[b] for a in eachindex(c), b in eachindex(c) ])
+end
+
+"""
+    total_charge(name, x, charges, sites, tol)
+
+the charge an operator carries, read off its elements, refused when they do not agree: such an
+operator could act on these sites neither whole nor split
+"""
+function total_charge(name, x, charges, sites, tol)
+    q = nothing
+    for i in CartesianIndices(x)
+        if abs(x[i]) ≤ tol
+            continue
+        end
+        c = sum(charges[j][i[j]] for j in eachindex(charges))
+        if isnothing(q)
+            q = c
+        elseif c ≠ q
+            no_definite_charge(name, sites)
+        end
+    end
+    return isnothing(q) ? QN() : q
+end
+
+"""
+    part_on(x, d, on)
+
+the part of an operator acting on the sites where `on` is true and as the identity on the
+others, with an axis for each of the former: what acts as the identity is taken out on each of
+them, and the others are traced out, divided by their dimension so that what the part stands
+for there is the identity itself.
+"""
+function part_on(x::AbstractArray, d, on)
+    y = x
+    # from the last site, so that dropping an axis leaves those still to come in place
+    for j in length(d):-1:1
+        e = vec(identity_operator(d[j]))
+        if on[j]
+            y = along(I - e * transpose(e) / d[j], y, j)
+        else
+            y = dropdims(along(transpose(e) / d[j], y, j); dims = j)
+        end
+    end
+    return y
+end
+
+# the linear map f applied along axis j of y
+function along(f::AbstractMatrix, y::AbstractArray, j::Int)
+    p = [j; setdiff(1:ndims(y), j)]
+    z = permutedims(y, p)
+    w = reshape(f * reshape(z, size(z, 1), :), size(f, 1), size(z)[2:end]...)
+    return permutedims(w, invperm(p))
+end
+
+"""
+    svd_terms(y, charges, q, tol, make)
+
+the terms of an operator acting on each of its sites, as pairs of a coefficient and of one
+factor per site: `y` has an axis per site, `q` is its charge and `make(k, v)` builds the factor
+of its `k`-th site from a vectorised matrix.
+
+The first site is split from the others by a singular value decomposition, made charge by
+charge so that every factor has a definite one, and what it leaves on the others is split in
+the same way.
+"""
+function svd_terms(y::AbstractArray, charges, q, tol, make)
+    if ndims(y) == 1
+        # what rounding left outside the charge of the operator is dropped, so that the
+        # factor carries exactly that charge
+        v = [ charges[1][p] == q ? y[p] : zero(eltype(y)) for p in eachindex(y) ]
+        c = norm(v)
+        return c ≤ tol ? [] : [ (c, [ make(1, v / c) ]) ]
+    end
+    rest = size(y)[2:end]
+    rq = vec([ sum(charges[l + 1][i[l]] for l in eachindex(rest)) for i in CartesianIndices(rest) ])
+    ym = reshape(y, size(y, 1), :)
+    terms = []
+    for c1 in unique(charges[1])
+        rows = findall(==(c1), charges[1])
+        cols = findall(==(q - c1), rq)
+        if isempty(cols)
+            continue
+        end
+        f = svd(ym[rows, cols])
+        for k in eachindex(f.S)
+            if f.S[k] ≤ tol
+                break
+            end
+            v = zeros(eltype(f.Vt), length(rq))
+            v[cols] = f.Vt[k, :]
+            sub = svd_terms(reshape(v, rest), charges[2:end], q - c1, tol / f.S[k],
+                            (l, w) -> make(l + 1, w))
+            if isempty(sub)
+                continue
+            end
+            u = zeros(eltype(f.U), size(y, 1))
+            u[rows] = f.U[:, k]
+            lead = make(1, u)
+            for (c, fs) in sub
+                push!(terms, (f.S[k] * c, [ lead; fs ]))
+            end
+        end
+    end
+    return terms
+end
+
 """
     op_on_sites(m, outs, ins)
 
@@ -405,9 +682,18 @@ no_definite_charge(a, sites) =
 the matrix of an operator, refused by a message naming it when it carries no definite flux on
 a single site whose index is charged, rather than deep inside ITensors. The check is made only
 there: a matrix knows no charge, and `matrix` lays it on plain indices.
+
+A matrix whose size is not the dimension of its sites is refused here as well. A matrix knows
+no site either, and it failed on a `DimensionMismatch` from `reshape`, which named neither the
+operator nor the site.
 """
 function checked_matrix(a, sites, js)
     m = matrix(a, sites...)
+    n = prod(dim, sites)
+    if size(m) ≠ (n, n)
+        error("$a is given by a $(size(m, 1))×$(size(m, 2)) matrix and cannot act on " *
+              "$(join(sites, " ⊗ ")), whose dimension is $n")
+    end
     if length(sites) == 1 && hasqns(only(js))
         charge_flux(m, a, only(sites))
     end
