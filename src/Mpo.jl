@@ -13,6 +13,13 @@ end
 function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
     foreach(o -> check_one_site(o, "an MPO"), subs)
     sys = pre.system
+    # a term whose factor vanishes on its site, as C(1)*C(1) or Sp(1)*Sp(1) on a spin 1/2, is
+    # dropped here, where the sites are known: simplify cannot tell, one name standing for
+    # operators of different algebras on different sites. Kept, it took a channel on every
+    # link it spans, and on a charged system its tensor has no block, hence no flux
+    if any(o -> iszero(tensor(sys, o)), subs)
+        return pre
+    end
     ld = pre.linkdims
     tm = pre.terms
     fst = subs[1].index[1]

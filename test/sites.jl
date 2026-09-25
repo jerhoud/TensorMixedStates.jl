@@ -593,6 +593,49 @@ end
     @test flux(tensor(Left(N ⊗ N), b, b)) == IT.QN("parity(N)", 0, 2)
 end
 
+@testset "A term vanishing on its site" begin
+    # a product whose factor is zero on its site, as C(1)*C(1), is a term equal to zero that
+    # simplify leaves, whether a square vanishes depending on the site. On a charged system
+    # its tensor had no block, hence no flux, and building the MPO failed on an ArgumentError
+    # from ITensors. Each operator is compared with the same one written without that term,
+    # which must act alike and take no more channels
+    conf = ["Occ", "Emp", "Occ", "Emp"]
+    for site in (Fermion(conserve = N), Fermion())
+        s = RandomState(State{Pure}(System(4, site), conf), 4)
+        same(st, a, b) = @test norm(apply(make_mpo(st, a), st) - apply(make_mpo(st, b), st)) < 1e-12
+        same(s, C(1) * C(1) + N(2), N(2))
+        same(s, C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
+        same(mix(s), C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
+        @test norm(make_mpo(s, C(1) * C(1))) == 0
+        @test maxlinkdim(make_mpo(s, C(1) * C(1) * N(3) + N(1) * N(3))) ==
+              maxlinkdim(make_mpo(s, N(1) * N(3)))
+        # the approximations WI and WII are built from the same terms
+        for w in (make_approx_W1, make_approx_W2)
+            ev(a) = apply(w(s, -im * a, 0.1), s)
+            @test norm(ev(C(1) * C(1) * N(3) + N(1) * N(3)) - ev(N(1) * N(3))) < 1e-12
+        end
+        # the square of a hopping hamiltonian, which the naive route to a variance forms,
+        # holds such terms: each hopping term squared puts C twice on one site
+        hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)
+        @test inner(s.state', make_mpo(s, hop * hop), s.state) ≈ expect(s, hop * hop)
+        # on a density matrix it is lifted with Evolver, H ρ + ρ H, whose trace is twice <H>
+        @test trace(apply(make_mpo(mix(s), hop * hop), mix(s))) ≈ 2 * expect(s, hop * hop)
+    end
+
+    # what is dropped is what vanishes on the site at hand: the square of a fermionic
+    # operator is not zero when it is a Majorana one, and the same Sp squares to zero on a
+    # spin 1/2 and not on a spin 1
+    G = named(C + dag(C), "G")
+    s = RandomState(State{Pure}(System(4, Fermion()), conf), 4)
+    @test norm(apply(make_mpo(s, G(1) * G(1) * N(3)), s) - apply(make_mpo(s, N(3)), s)) < 1e-12
+    for site in (Spin(1/2, conserve = 2Sz), Spin(1/2))
+        @test norm(make_mpo(State{Pure}(System(3, site), "1/2"), Sp(1) * Sp(1) * Sz(2))) == 0
+    end
+    for site in (Spin(1, conserve = 2Sz), Spin(1))
+        @test norm(make_mpo(State{Pure}(System(3, site), "0"), Sp(1) * Sp(1) * Sz(2))) > 0
+    end
+end
+
 @testset "Measuring on every kind of charged site" begin
     # conserving a quantity must not change a single measured number, whatever the site and
     # whatever the shape of the charge. This is deliberately spread over the eight site types

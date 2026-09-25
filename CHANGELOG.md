@@ -27,6 +27,12 @@ the reference article.
 
 ### Fixed
 
+- A term whose factor vanishes on its site, such as `C(1) * C(1)`, or `Sp(1) * Sp(1)` on a
+  spin 1/2, is left out of the MPO. On a system conserving a charge, building the MPO failed
+  on an `ArgumentError` from ITensors, `collection must be non-empty`, which the square of a
+  hopping hamiltonian ran into (#13). Elsewhere the term took a channel on every link it
+  spans.
+
 - A matrix whose size is not the dimension of the sites it is placed on is refused by a
   message naming the operator and the sites. It failed on a `DimensionMismatch` from
   `reshape`.
