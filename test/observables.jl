@@ -298,6 +298,14 @@ end
     @test expect1(st, X) ≈ expect1(normalize(st), X)
     @test expect(st, Z(1) * Z(3)) ≈ expect(normalize(st), Z(1) * Z(3))
     @test expect2(st, (X, X)) ≈ expect2(normalize(st), (X, X))
+
+    # on a charged state the shortcut has arrows to respect, and it had them the other way
+    # round: an ordinary gate pushing the orthogonality centre to the right was enough to make
+    # every measurement starting past site 1 fail
+    a = apply(Swap(2, 3), State{Pure}(System(4, Qubit(conserve = N)), ["Up", "Dn", "Up", "Dn"]))
+    @test TensorMixedStates.ITensorMPS.leftlim(a.state) ≥ 1
+    @test expect1(a, N) ≈ [0., 0., 1., 1.] atol = 1e-12
+    @test expect(a, N(3) * N(4)) ≈ 1
 end
 
 @testset "Positions given as a range" begin

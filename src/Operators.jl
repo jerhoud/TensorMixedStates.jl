@@ -249,14 +249,15 @@ internal type for sum of operators
 struct SumOp{R, T, N} <: Op{R, T, N}
     subs::Vector{<:Op{R, T, N}}
     function SumOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
-        if isempty(subs)
+        # a term of coefficient zero is left out: the zero operator has every parity, and
+        # kept, it made `0C + dag(C)` a sum of fermionic and non fermionic operators
+        s = filter(x -> scalarcoef(x) ≠ 0, reduce(vcat, sumsubs.(subs); init = Op{R, T, N}[]))
+        if isempty(s)
             return 0 * MakeIdentity{R, T, N}()
-        end
-        s = reduce(vcat, sumsubs.(subs))
-        if length(s) == 1
-            s[1]
+        elseif length(s) == 1
+            return s[1]
         else
-            new{R, T, N}(s)
+            return new{R, T, N}(s)
         end
     end
 end
@@ -1065,9 +1066,4 @@ measurement may be asked for is a composition, whose printed form is its only de
 `SimpleOp` is abstract, so reading a `name` field would work for a bare `X` and fail for
 `X * Y`, `2X` or `X + Y`.
 """
-function obs_name(op)
-    io = IOBuffer()
-    print(IOContext(io, :compact => true), op)
-    seek(io, 0)
-    return read(io, String)
-end
+obs_name(op) = sprint(print, op; context = :compact => true)

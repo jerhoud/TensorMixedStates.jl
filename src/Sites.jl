@@ -58,51 +58,73 @@ function site_index(site::AbstractSite, charged::Bool)
 end
 
 """
-    weak_qn(q, names)
-    weak_index(i, names)
+    qn_components(q)
+    make_qn(components)
+    map_charges(f, i)
 
-the charge, or the index, with each strong quantity in `names` collapsed onto its weak form.
+the components of a charge as `(name, value, modulus)`, the empty slots ITensors pads it with
+left out, the charge made of such components, and the index `i` with the charge of each of its
+blocks passed through `f`, everything else kept. The relabellings of the charges, `weak_qn`,
+`star` and `adjoint_qn`, are written with them.
+"""
+function qn_components(q::QN)
+    cs = Tuple{String, Int, Int}[]
+    for v in q.data
+        n = String(ITensors.name(v))
+        if !isempty(n)
+            push!(cs, (n, ITensors.val(v), ITensors.modulus(v)))
+        end
+    end
+    return cs
+end
+
+make_qn(cs) = isempty(cs) ? QN() : QN(cs...)
+
+map_charges(f, i::Index) =
+    Index([ f(q) => d for (q, d) in space(i) ]...; tags = tags(i), plev = plev(i), dir = dir(i))
+
+"""
+    weak_qn(q, collapse, drop)
+    weak_index(i, collapse, drop)
+
+the charge, or the index, with each strong quantity of `collapse` collapsed onto its weak form
+and each quantity of `drop` left out.
 
 Keeping the ket and the bra apart records `X` and `X*`; asking for the same quantity weakly
 records their difference, which is what the sum of the two components is, the bra having been
-daggered. This map is a homomorphism of the charge group, so it carries a flux to a flux and
-a relation between blocks to the same relation: an index may be relabelled with it and every
-tensor built on it stays consistent, with no data moved.
+daggered. This map, and leaving a component out, are homomorphisms of the charge group, so
+they carry a flux to a flux and a relation between blocks to the same relation: an index may be
+relabelled with them and every tensor built on it stays consistent, with no data moved.
 
 The blocks are not merged. Several may end up under one charge, which an index allows, and
 that is what lets the relabelling cost nothing.
 """
 function weak_qn(q::QN, collapse, drop)
     vals = Tuple{String, Int, Int}[]
-    for v in q.data
-        nm = String(ITensors.name(v))
-        if isempty(nm)
-            continue
-        end
+    for (nm, v, m) in qn_components(q)
         base = endswith(nm, "*") ? nm[1:end-1] : nm
         if base in drop
             continue
         end
         if !(base in collapse)
-            push!(vals, (nm, ITensors.val(v), ITensors.modulus(v)))
+            push!(vals, (nm, v, m))
             continue
         end
         k = findfirst(x -> x[1] == base, vals)
         if isnothing(k)
-            push!(vals, (base, ITensors.val(v), ITensors.modulus(v)))
+            push!(vals, (base, v, m))
         else
-            vals[k] = (base, vals[k][2] + ITensors.val(v), vals[k][3])
+            vals[k] = (base, vals[k][2] + v, vals[k][3])
         end
     end
-    return isempty(vals) ? QN() : QN(vals...)
+    return make_qn(vals)
 end
 
 weak_index(i::Index, collapse, drop) =
     if (isempty(collapse) && isempty(drop)) || !hasqns(i)
         i
     else
-        Index([ weak_qn(q, collapse, drop) => d for (q, d) in space(i) ]...;
-              tags = tags(i), plev = plev(i), dir = dir(i))
+        map_charges(q -> weak_qn(q, collapse, drop), i)
     end
 
 """
@@ -485,6 +507,20 @@ approximate, and the answer is to define it exactly rather than to let it throug
 const charge_tol = 1e-14
 
 """
+    rounding_tol
+
+the part of a matrix, relative to its norm, below which it is taken to be zero: an element, a
+singular value or a whole term that small is what rounding leaves where the exact matrix has
+nothing. Three things go by it and have to agree: the flux of a matrix, see `charge_flux`, the
+tensor it is laid as on charged indices, see `charged_itensor`, and the one site factors
+`Operator{N}(name, def, type, sites...)` splits an operator into, which must not change it.
+
+It is a rounding tolerance and nothing wider, and not a setting either: an operator is
+compressed by the algorithms truncating the states it acts on, not here.
+"""
+const rounding_tol = 1e-13
+
+"""
     short(x)
 
 a number as an error message shows it, two significant digits being all one reads of a
@@ -507,15 +543,19 @@ the flux of a matrix already computed, `what` being what to name if it has none.
 not fit the charges of its site is refused by a message naming the operator rather than by the
 `Fluxes not all equal` of ITensors, raised from somewhere neither the operator nor the site is
 in sight.
+
+An element below `tol` relative to the norm of the matrix is rounding and carries nothing, the
+rule `charged_itensor` then builds the tensor with, so that the two agree.
 """
-function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = charge_tol)
+function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = rounding_tol)
     qs = decode_conserve(conserved(site))
     if isempty(qs)
         return QN()
     end
+    small = tol * norm(m)
     found = nothing
     for i in axes(m, 1), j in axes(m, 2)
-        if abs(m[i, j]) ≤ tol
+        if abs(m[i, j]) ≤ small
             continue
         end
         d = [ (name, modulus == 1 ? ch[i] - ch[j] : mod(ch[i] - ch[j], modulus), modulus)
@@ -530,6 +570,26 @@ function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = charge_
     # an operator with no element at all carries no charge
     return isnothing(found) ? QN() : QN(found...)
 end
+
+"""
+    charged_itensor(a, inds)
+
+the ITensor of the array `a` on the indices `inds`, what rounding left outside the blocks of
+charged indices being dropped, see `rounding_tol`.
+
+A matrix computed through an eigendecomposition, as the exponential of a hermitian matrix or a
+non integer power is, holds elements of the order of the rounding between charges the exact
+one keeps apart. ITensors drops nothing by default, so it made a block of each and refused the
+tensor for its fluxes: `exp(-τ * (A ⊗ dag(A) + dag(A) ⊗ A))` on two bosons conserving `N` was
+said to carry no definite charge. A tensor that has none is still refused by its flux. Plain
+indices have no blocks, and keep everything.
+"""
+charged_itensor(a::AbstractArray, inds) =
+    if any(hasqns, inds)
+        ITensor(a, inds...; tol = rounding_tol * norm(a))
+    else
+        ITensor(a, inds...)
+    end
 
 struct Strong
     arg::SimpleOp
@@ -777,23 +837,14 @@ because the links of a state carry the same charges and must be renamed with it,
 two halves of the same tensor would count in two different ways. Renaming nothing gives the
 index back as it is, which is every case without a strong symmetry.
 """
-function star(q::QN, names)
-    vs = Tuple{String, Int, Int}[]
-    for v in q.data
-        n = String(ITensors.name(v))
-        if !isempty(n)
-            push!(vs, (n in names ? n * "*" : n, ITensors.val(v), ITensors.modulus(v)))
-        end
-    end
-    return isempty(vs) ? QN() : QN(vs...)
-end
+star(q::QN, names) =
+    make_qn([ (n in names ? n * "*" : n, v, m) for (n, v, m) in qn_components(q) ])
 
 function star(i::Index, names)
     if isempty(names) || !hasqns(i)
         return i
     end
-    return Index([ star(q, names) => d for (q, d) in space(i) ]...;
-                 tags = tags(i), plev = plev(i), dir = dir(i))
+    return map_charges(q -> star(q, names), i)
 end
 
 """
@@ -811,32 +862,22 @@ charge group, so relabelling every index of a state with it, links included, kee
 tensor consistent with no data moved, and what is left of the adjoint is a permutation of
 zero flux. See `adj_map`.
 """
-function adjoint_qn(q::QN, names)
-    vs = Tuple{String, Int, Int}[]
-    for v in q.data
-        n = String(ITensors.name(v))
-        if isempty(n)
-            continue
-        end
-        m = endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n
-        push!(vs, (m, -ITensors.val(v), ITensors.modulus(v)))
-    end
-    return isempty(vs) ? QN() : QN(vs...)
-end
+adjoint_qn(q::QN, names) =
+    make_qn([ (endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n, -v, m)
+              for (n, v, m) in qn_components(q) ])
 
 adjoint_index(i::Index, names) =
     if !hasqns(i)
         i
     else
-        Index([ adjoint_qn(q, names) => d for (q, d) in space(i) ]...;
-              tags = tags(i), plev = plev(i), dir = dir(i))
+        map_charges(q -> adjoint_qn(q, names), i)
     end
 
 """
     decode_conserve(s)
 
-the conserved quantities a site records, as a vector of `(name, modulus, charges)`.
-See `conserve_string`.
+the conserved quantities a site records, as a vector of `(name, modulus, charges, strong)`,
+`strong` telling whether the quantity is conserved strongly. See `conserve_string`.
 """
 function decode_conserve(s::AbstractString)
     if isempty(s)
@@ -880,26 +921,15 @@ conserved(site::AbstractSite) =
     conserve_names(s)
 
 the names of the conserved quantities a site records, as they are written back when the site
-is printed. A string it cannot read is given back as it is, `show` having to print something
-whatever a site put in its field.
+is printed, which is the way `Conserved` prints them. A string `decode_conserve` cannot read is
+given back as it is, `show` having to print something whatever a site put in its field.
 """
 function conserve_names(s::AbstractString)
-    ns = String[]
-    for part in split(s, ';')
-        i = findfirst(==(':'), part)
-        if isnothing(i)
-            return String(s)
-        end
-        head = part[1:i-1]
-        st = endswith(head, '!')
-        if st
-            head = head[1:end-1]
-        end
-        j = findlast(==('%'), head)
-        name = isnothing(j) ? String(head) : String(head[1:j-1])
-        push!(ns, st ? "strong($name)" : name)
+    try
+        return sprint(show, Conserved([ (q[1], q[4]) for q in decode_conserve(s) ]))
+    catch
+        return String(s)
     end
-    return length(ns) == 1 ? ns[1] : "(" * join(ns, ", ") * ")"
 end
 
 """

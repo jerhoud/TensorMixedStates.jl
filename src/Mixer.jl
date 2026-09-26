@@ -244,7 +244,7 @@ matrix(::Identity, site::AbstractSite) =
     identity_operator(site)
 
 matrix(::JW_F, site::AbstractSite) =
-    matrix(F_info, site)    
+    matrix(F_info(site), site)
 
 matrix(a::Operator, site::AbstractSite...) =
     if isnothing(a.expr)
@@ -302,17 +302,6 @@ matrix(a::Gate, site::AbstractSite...) =
 
 
 ############### Operators of several sites split into one site factors ###############
-
-"""
-    split_tol
-
-the part of an operator, relative to its norm, below which `Operator{N}(name, def, type,
-sites...)` takes it to be zero: a singular value, an element or a whole term that small is
-what rounding leaves where the exact matrix has nothing. It is a rounding tolerance and nothing
-wider, so that splitting an operator does not change it. It is not a setting either: an
-operator is compressed by the algorithms truncating the states it acts on, not here.
-"""
-const split_tol = 1e-13
 
 """
     Operator{N}(name, def, type, sites...)
@@ -399,7 +388,7 @@ function split_matrix(name::String, m::AbstractMatrix, sites::Vector)
         m = real(m)
     end
     m = float(m)
-    tol = split_tol * norm(m)
+    tol = rounding_tol * norm(m)
     check_even(name, m, sites, tol)
     # one axis per site, holding the vectorised matrix of a one site operator. The axes of a
     # matrix reshaped put the last site first and every output before every input, so each
@@ -588,7 +577,7 @@ the package uses everywhere it combines sites.
 """
 function op_on_sites(m::Matrix, outs, ins)
     idx = [ reverse(outs) ; reverse(ins) ]
-    return ITensor(reshape(m, ntuple(k -> dim(idx[k]), length(idx))), idx...)
+    return charged_itensor(reshape(m, ntuple(k -> dim(idx[k]), length(idx))), idx)
 end
 
 """
@@ -623,9 +612,11 @@ legs(a::TensorOp{N}, sites, js) where N =
 legs(a::Left, sites, js, bs) =
     legs(a.arg, sites, js) * prod(denseblocks(delta(b', dag(b''))) for b in bs)
 
+# the operator laid on the bras, `b'` out and `dag(b)` in, daggered and primed: its conjugate,
+# `dag(b'')` out and `b'` in. It goes through `legs` as the one of `Left` does, so that a
+# factor of no definite charge is refused by name rather than by ITensors
 legs(a::Right, sites, js, bs) =
-    prod(denseblocks(delta(j', dag(j))) for j in js) *
-    op_on_sites(conj(checked_matrix(a.arg, sites, js)), [ dag(b'') for b in bs ], [ b' for b in bs ])
+    prod(denseblocks(delta(j', dag(j))) for j in js) * dag(legs(a.arg, sites, bs))'
 
 function legs(a::SetState, sites, js, bs)
     site, j, b = only(sites), only(js), only(bs)
@@ -856,7 +847,7 @@ first, a difference of `1 - d` rather than of 1.
     flux(Sp, Qubit(conserve = 2Sz))       # QN("2Sz",2), in units of the declared charge
     flux(Xd, Qudit(3, conserve = Zd))     # QN("Zd",1,3)
 """
-flux(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol) =
+flux(op::SimpleOp, site::AbstractSite; tol::Float64 = rounding_tol) =
     charge_flux(matrix(op, site), op, site; tol)
 
 flux(op::GenericOp{Pure}, site::AbstractSite) =

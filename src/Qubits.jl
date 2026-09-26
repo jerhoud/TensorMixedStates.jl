@@ -98,12 +98,15 @@ the controlled gate constructor
 controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = controlled_type(op)) where N =
     Operator{N+1}(name, Proj(0) ⊗ MakeIdentity(op) + Proj(1) ⊗ op, type)
 
+# written with factors of a definite charge, which an MPO places one by one: X ⊗ X + Y ⊗ Y is
+# the same operator, but X and Y carry no charge of their own. dag(Sp) rather than Sm, which
+# the test of `measure` for a real value does not know to be the adjoint of Sp
 """
     Swap
 
 the qubit Swap operator
 """
-const Swap = Operator{2}("Swap", (Id ⊗ Id + X ⊗ X + Y ⊗ Y + Z ⊗ Z) / 2, involution_op)
+const Swap = Operator{2}("Swap", (Id ⊗ Id + Z ⊗ Z) / 2 + Sp ⊗ dag(Sp) + dag(Sp) ⊗ Sp, involution_op)
 
 """
     Phase(t)

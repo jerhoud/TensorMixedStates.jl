@@ -156,7 +156,7 @@ make_one_state(type::R, system::System, i::Int, st) where {R <: PM} =
                    state(system[i], st), st, system[i])
 
 make_one_state(::Pure, i::Index, ::Index, v::Vector, what, site::AbstractSite) =
-    charged_state(() -> ITensor(v, i), i, what, site)
+    charged_state(() -> charged_itensor(v, [i]), i, what, site)
 make_one_state(::Pure, ::Index, ::Index, ::Matrix, _, _) =
     error("cannot use a mixed local state to create a pure local state")
 make_one_state(::Mixed, i::Index, k::Index, v::Vector, what, site::AbstractSite) =

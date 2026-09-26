@@ -24,6 +24,14 @@ struct Unkindly <: AbstractSite
     range::UnitRange{Int}
 end
 
+# a site type of a module inside another one, which a state file named by the last name of its
+# module alone and could not find again
+module Enclosing
+    using TensorMixedStates
+    struct Enclosed <: AbstractSite end
+    TensorMixedStates.dim(::Enclosed) = 2
+end
+
 TensorMixedStates.dim(::Unkindly) = 2
 
 @testset "SetState" begin
@@ -94,6 +102,12 @@ end
 
     # a loaded state can still be used for further computations
     @test trace(mix(lq)) ≈ 1
+
+    # a site type of a module inside another one is rebuilt as well, its module being found
+    # from the root one
+    nested = State{Pure}(System(2, Enclosing.Enclosed()), ["0", "1"])
+    save_state(file, "nested", nested)
+    @test load_state(file, "nested").system.sites == nested.system.sites
 
     # SaveState and LoadState phases, the check fails if the state is not restored
     file2 = joinpath(dir, "phases.h5")

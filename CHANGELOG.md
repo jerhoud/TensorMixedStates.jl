@@ -98,6 +98,49 @@ the reference article.
   its `SimData` is built. It started without a state and failed in its first phase on a
   `MethodError` about `nothing`, after `runTMS` had created its directory.
 
+- `Swap` goes into an MPO, `expect` and `measure` on qubits that conserve something, and so
+  does `controlled(Swap)`. It was written with `X ⊗ X + Y ⊗ Y`, whose factors, placed one by
+  one, carry no charge of their own. It is written with `Sp ⊗ dag(Sp) + dag(Sp) ⊗ Sp`, the
+  same operator, and its MPO is real, where `Y` made it complex.
+
+- An operator whose matrix goes through an eigendecomposition, as the exponential of a
+  hermitian matrix or a non integer power does, is no longer refused on sites conserving a
+  charge for the rounding it holds between charges. The imaginary time step
+  `exp(-τ * (A ⊗ dag(A) + dag(A) ⊗ A + U * N ⊗ N))` of the Bose-Hubbard chain was said to
+  carry no definite charge on `Boson(d, conserve = N)`, and `flux` gave one to
+  `exp(0.2 * (A^2 + dag(A)^2) + 0.1 * N)` that `expect` then refused. An element below `1e-13`
+  relative to the norm of its matrix is rounding, for `flux` and for the tensors alike, where
+  `flux` took an absolute `1e-14` and the tensors nothing.
+
+- A power of a superoperator, `(Gate(X)^2)(1)` or `(Left(A)^2)(1)`, goes into an MPO. It
+  failed on a `MethodError` from `simplify`, while it could be applied as a gate. An integer
+  power is the composition repeated, and a non integer one is taken whole on its site.
+
+- A `GroundState` or a `SteadyState` resumed from a checkpoint numbers its sweeps as the
+  phase does, in the `sweep` of its measurements, in the log and in the schedule of
+  `measures_period`. It numbered them from 1 again.
+
+- A term of coefficient zero is left out of a sum, so that `0 * C + dag(C)` is fermionic.
+  `apply` and `expect1` refused it as a sum of fermionic and non fermionic operators.
+
+- A state whose sites are of a type defined in a module inside another one, as a
+  `module MySites` of a script, is loaded back, and a simulation on such sites resumes from its
+  checkpoint. The state file named the innermost module alone, which could not be found again;
+  it holds the whole path, and files written before read as they did.
+
+- `Right` of an operator of several sites carrying no definite charge is refused by a message
+  naming it, as `Left` is, where ITensors said `Fluxes not all equal`.
+
+- `expect` refuses an operator placed on no site, `X` rather than `X(1)`, and a superoperator
+  given without its sites, by a message saying what it takes. Both failed on a `MethodError`
+  about iterating the operator.
+
+- A measurement on a pure state carrying charges no longer fails once the orthogonality centre
+  of the state has moved past its first site, as an ordinary gate such as `Swap(2, 3)` or a
+  call to `orthogonalize` moves it. The left environment written for sites already orthogonal
+  had its arrows the other way round, which the contraction of charged tensors refused, and a
+  second measurement of the same state then met an `UndefRefError`.
+
 ## [1.4.0] - 2026-09-24
 
 This release adds conserved quantities and the exported names that go with them, which is

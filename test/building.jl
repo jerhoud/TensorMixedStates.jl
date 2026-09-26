@@ -162,6 +162,11 @@ end
     @test_throws "given site 5, which the state does not have" partial_trace(stm, [5])
     @test_throws "given site 0" partial_trace(stm, [0, 1]; keepers = true)
     @test_throws "does not have" renyi2(stm, [2, 7])
+    # an operator placed on no site, or a superoperator, is refused by expect by name rather
+    # than by a MethodError about iterating it
+    @test_throws "such as X(1) rather than X" expect(st, X)
+    @test_throws "such as Swap(1,2) rather than Swap" expect(st, Swap)
+    @test_throws "is a superoperator" expect(stm, Gate(X))
 
     # what is inside the system is untouched
     @test_ok expect(st, X(4) * Z(1))

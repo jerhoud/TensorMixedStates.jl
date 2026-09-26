@@ -45,9 +45,8 @@ function simplify(a::Dissipator)
     sarg = simplify(a.arg)
     darg = simplify_dag(sarg)
     daga = simplify_prod([darg, sarg])
-    simplify_sum([simplify_prod([simplify_l(sarg), simplify_r(sarg)]), -
-        0.5 * simplify_l(daga), -
-        0.5 * simplify_r(daga)])
+    simplify_sum([simplify_prod([simplify_l(sarg), simplify_r(sarg)]),
+                  -0.5 * simplify_l(daga), -0.5 * simplify_r(daga)])
 end
 
 
@@ -56,8 +55,6 @@ simplify(a::Right) = simplify_r(simplify(a.arg))
 
 
 # Simplifications of Indexed Operators
-
-simplify(a::Multi_F) = a
 
 function simplify(a::Gate)
     sarg = simplify(a.arg)
@@ -145,6 +142,19 @@ simplify_pow(a::ScalarOp{Pure, Generic}, expo) =
         PowOp(a, expo)
     else
         a.coef^expo * simplify_pow(a.arg, expo)
+    end
+
+# power of a superoperator: an integer one is the composition repeated, which the product
+# gathers, and a non integer one is kept whole, to be placed on one site through its matrix
+simplify_pow(a::GenericOp{Mixed}, expo) =
+    if expo == 0
+        return MakeIdentity(a)
+    elseif expo == 1
+        return a
+    elseif isinteger(expo)
+        return simplify_prod(fill(a, Integer(expo)))
+    else
+        return PowOp(a, expo)
     end
 
 
@@ -450,20 +460,17 @@ end
 # so that C(3)C(5) => Multi_F(1,2)JW(C)(3)Multi_F(1,4)JW(C)(5) => (JW(C)*F)(3)*F(4)*JW(C)(5)
 
 distribute(a::Vector{<:Vector}) = a
-distribute(a::Vector{<:Vector}, b::Vector, c::Vector...) = 
-    if isempty(b)
-        [[]]
-    else
-        r = Vector{Vector}(undef, length(a) * length(b))
-        n = 1
-        for i in a
-            for j in b
-                r[n] = vcat(i, [j])
-                n += 1
-            end
+function distribute(a::Vector{<:Vector}, b::Vector, c::Vector...)
+    r = Vector{Vector}(undef, length(a) * length(b))
+    n = 1
+    for i in a
+        for j in b
+            r[n] = vcat(i, [j])
+            n += 1
         end
-        distribute(r, c...)
     end
+    return distribute(r, c...)
+end
 distribute(a::Vector...) = distribute([[]], a...)
 
 orderprod(a::AtIndex, b::AtIndex) =

@@ -157,6 +157,13 @@ end
             ]
         )
     ])
+    # a power of a noisy gate goes into an MPO as well, which simplifies it where applying it
+    # does not, and the two must agree
+    ρ = mix(State{Pure}(System(2, Qubit()), ["Up", "+"]))
+    for a in [(Gate(X)^2)(1), (Left(X)^2)(2), ((0.9 * Gate(Id) + 0.1 * Gate(X))^3)(1),
+              (Gate(H)^0.5)(2)]
+        @test norm(apply(a, ρ) - apply(make_mpo(ρ, a), ρ)) < 1e-12
+    end
 end
 
 @testset "Fermionic gates" begin
@@ -193,6 +200,11 @@ end
     # a sum, and a function of one on several sites has no room for a string
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
     @test_throws "cannot be inserted" apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
+    # a term of coefficient zero leaves the parity of a gate alone, where it made one a sum of
+    # fermionic and non fermionic operators, and a gate whose terms all vanish is null
+    g = 0.0
+    @test norm(apply((g * C + dag(C))(4), st) - apply(dag(C)(4), st)) < 1e-12
+    @test_throws "null gate" apply((g * C + g * dag(C))(4), st)
     # a factor contributing no tensor, an identity or a Jordan-Wigner string, must not
     # leave the gate list untyped: ITensorMPS.product has no method for a Vector{Any}
     @test_ok apply(Id(1) * X(2), State{Pure}(System(2, Qubit()), "Up"))

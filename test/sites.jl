@@ -414,6 +414,18 @@ end
     q = System(2, Qubit(conserve = 2Sz))
     @test_throws "X on site Qubit connects charges" ten(q, X(1))
     @test_throws "no definite flux" ten(q, Left(X)(1))
+    # on the bra side and on several sites as well, where Right handed its matrix to ITensors
+    @test_throws "X on site Qubit connects charges" ten(q, Right(X ⊗ X)(1, 2))
+
+    # rounding between charges, which an eigendecomposition leaves behind, is not a charge, and
+    # the flux of an operator and its tensor agree on it: flux accepted this one while its
+    # tensor refused it. What counts as rounding is relative to the operator, so that a very
+    # small one is not taken for the zero operator, which carries no charge
+    b = Boson(5, conserve = parity(N))
+    g = exp(0.2 * (A^2 + dag(A)^2) + 0.1 * N)
+    @test flux(g, b) == IT.QN("parity(N)", 0, 2)
+    @test flux(ten(System(3, b), g(2))) == IT.QN("parity(N)", 0, 2)
+    @test_throws "no definite flux" flux(1e-20 * X, Qubit(conserve = N))
 end
 
 @testset "Declaring a strong symmetry" begin
@@ -532,6 +544,37 @@ end
         [expect(a, N(1)), expect(b, Sp(1) * Sm(2) + Sm(1) * Sp(2)), expect(m, N(3))]
     end
 
+    # Swap in expect and in MPOs, which place its factors one by one: written with X and Y,
+    # which carry no charge of their own, it was refused on qubits that conserve something
+    swaps = sum(Swap(i, i + 1) for i in 1:3)
+    function swapped(site)
+        sys = System(4, site)
+        s = State{Pure}(sys, ["Up", "Dn", "Up", "Dn"]) + 0.5 * State{Pure}(sys, ["Dn", "Up", "Up", "Dn"])
+        return s / norm(s)
+    end
+    same(Qubit(conserve = N), Qubit()) do site
+        s = swapped(site)
+        [expect(s, Swap(2, 3)); last(only(measure(s, Swap(1, 2))));
+         inner(s.state', make_mpo(s, swaps), s.state); expect(s, controlled(Swap)(1, 2, 3));
+         trace(apply(make_mpo(mix(s), swaps), mix(s)))]
+    end
+    same(Qubit(conserve = strong(N)), Qubit()) do site
+        ρ = mix(swapped(site))
+        trace(apply(make_mpo(ρ, swaps), ρ))
+    end
+    # and its factors being real, so is its MPO, which Y made complex
+    @test eltype(make_mpo(swapped(Qubit()), swaps)[2]) == Float64
+
+    # a matrix obtained through an eigendecomposition, as the exponential of a hermitian one
+    # is, keeps between charges the rounding the exact matrix does not have: the imaginary time
+    # step of the Bose-Hubbard chain was refused on bosons conserving their number
+    same(Boson(4, conserve = N), Boson(4)) do site
+        s = State{Pure}(System(3, site), ["1", "2", "0"])
+        g = exp(-0.1 * (A ⊗ dag(A) + dag(A) ⊗ A + 0.3 * N ⊗ N))(1, 2)
+        a, m = apply(g, s), apply(g, mix(s))
+        [norm(a); [expect(a, N(i)) for i in 1:3]; trace(m); [expect(m, N(i)) for i in 1:3]]
+    end
+
     # charges that do not increase along the basis, with every kind of superoperator. The
     # dissipator is added to the state rather than applied alone, what it gives on its own
     # having no trace
@@ -607,6 +650,9 @@ end
         same(s, C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
         same(mix(s), C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
         @test norm(make_mpo(s, C(1) * C(1))) == 0
+        # and so does a sum whose terms all have a coefficient zero, which leaves none
+        g = 0.0
+        @test norm(make_mpo(s, g * C(1) + g * dag(C)(2))) == 0
         @test maxlinkdim(make_mpo(s, C(1) * C(1) * N(3) + N(1) * N(3))) ==
               maxlinkdim(make_mpo(s, N(1) * N(3)))
         # the approximations WI and WII are built from the same terms

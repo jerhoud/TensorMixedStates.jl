@@ -136,6 +136,14 @@ end
 tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
 
 
+function check_index(system::System, i::Int, a)
+    n = length(system)
+    if i < 1 || i > n
+        error("$a acts on site $i, which the system does not have: it has $n sites")
+    end
+    return nothing
+end
+
 """
     check_indices(system, op)
 
@@ -148,14 +156,6 @@ the sites. Each used to report a `BoundsError` on an internal vector the caller 
 reason to know. The check is made at those three entries instead, and names the factor at
 fault rather than the array.
 """
-function check_index(system::System, i::Int, a)
-    n = length(system)
-    if i < 1 || i > n
-        error("$a acts on site $i, which the system does not have: it has $n sites")
-    end
-    return nothing
-end
-
 function check_indices(system::System, a::AtIndex)
     for i in a.index
         check_index(system, i, a)

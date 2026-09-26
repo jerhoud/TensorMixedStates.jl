@@ -96,7 +96,8 @@ function save_state(filename::String, statename::String, state::State{R}) where 
         g = create_group(f, statename)
         attributes(g)["version"] = state_file_version
         attributes(g)["type"] = string(nameof(R))
-        g["modules"] = [ string(nameof(parentmodule(typeof(s)))) for s in sites ]
+        # the whole path, so that a site type of a module inside another one is found again
+        g["modules"] = [ join(fullname(parentmodule(typeof(s))), ".") for s in sites ]
         g["types"] = [ string(nameof(typeof(s))) for s in sites ]
         g["nparams"] = [ length(fieldnames(typeof(s))) for s in sites ]
         g["pkinds"] = reduce(vcat, first.(ps); init = String[])
@@ -106,16 +107,37 @@ function save_state(filename::String, statename::String, state::State{R}) where 
     return nothing
 end
 
+"""
+    site_module(name)
+
+the module a state file names for a site type: the path from a root module down, as
+`save_state` writes it, `Main.MySites` for a module defined in a script. Files written before
+carried the last name only, which is the whole path of a root module, so they read as they did.
+"""
 function site_module(name::String)
-    if name == string(nameof(@__MODULE__))
-        return @__MODULE__
-    end
-    for m in values(Base.loaded_modules)
-        if string(nameof(m)) == name
-            return m
+    root, path... = split(name, '.')
+    m = nothing
+    if root == string(nameof(@__MODULE__))
+        m = @__MODULE__
+    else
+        for r in values(Base.loaded_modules)
+            if string(nameof(r)) == root
+                m = r
+                break
+            end
         end
     end
-    error("cannot find module $name needed to rebuild sites, is it loaded ?")
+    for p in path
+        if !(m isa Module && isdefined(m, Symbol(p)))
+            m = nothing
+            break
+        end
+        m = getfield(m, Symbol(p))
+    end
+    if !(m isa Module)
+        error("cannot find module $name needed to rebuild sites, is it loaded ?")
+    end
+    return m
 end
 
 function build_site(modname::String, typename::String, params::Vector)

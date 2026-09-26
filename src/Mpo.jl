@@ -223,6 +223,24 @@ the tensor of the first or last site, with its dangling link fixed on channel `k
 close_end(w::ITensor, link::Index, k::Int) = w * onehot(link => k)
 
 """
+    add_block!(w, llink, l, rlink, r, u, idx[, c])
+
+add `c` times the one site operator `u` to the channels `l` and `r` of `w`, the tensor of the
+site of index `idx`. Zeros are skipped rather than written: a block sparse tensor refuses an
+element outside its flux even when what is written there is nothing.
+"""
+function add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::ITensor,
+                    idx::Index, c::Number = 1)
+    for j in eachindval(idx, idx')
+        v = c * u[j...]
+        if !iszero(v)
+            w[llink => l, rlink => r, j...] += v
+        end
+    end
+    return w
+end
+
+"""
     make_mpo(::PreMPO[, coefs])
     make_mpo(::State, operator)
 
@@ -252,27 +270,15 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
         rlink = mklink(i, 1 + rdim)
         w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
         id = delta(dag(idx), idx')
-        # zeros are skipped rather than written: a block sparse tensor refuses an element
-        # outside its flux even when what is written there is nothing
-        for j in eachindval(idx, idx')
-            v = id[j...]
-            if !iszero(v)
-                w[llink => 1, rlink => 1, j...] = v
-                w[llink => 1 + ldim, rlink => 1 + rdim, j...] = v
-            end
-        end
+        add_block!(w, llink, 1, rlink, 1, id, idx)
+        add_block!(w, llink, 1 + ldim, rlink, 1 + rdim, id, idx)
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
             if c ≠ 0
                 if r == 1
                     r += rdim
                 end
-                for j in eachindval(idx, idx')
-                    v = c * u[j...]
-                    if !iszero(v)
-                        w[llink=>l, rlink=>r, j...] += v
-                    end
-                end
+                add_block!(w, llink, l, rlink, r, u, idx, c)
             end
         end
         if i == 1
@@ -314,25 +320,14 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         end
         rlink = mklink(i, rdim)
         w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
-        id = delta(dag(idx), idx')
-        for j in eachindval(idx, idx')
-            v = id[j...]
-            if !iszero(v)
-                w[llink=>1, rlink=>1, j...] = v
-            end
-        end
+        add_block!(w, llink, 1, rlink, 1, delta(dag(idx), idx'), idx)
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
             if c ≠ 0
                 if r == 1
                     c *= tau
                 end
-                for j in eachindval(idx, idx')
-                    v = c * u[j...]
-                    if !iszero(v)
-                        w[llink=>l, rlink=>r, j...] += v
-                    end
-                end
+                add_block!(w, llink, l, rlink, r, u, idx, c)
             end
         end
         if i == 1
@@ -413,14 +408,8 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         
         w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
         for l in 1:ldim, r in 1:rdim
-            u = v[l, r]
-            if !isempty(u)
-                for j in eachindval(idx, idx')
-                    x = u[j...]
-                    if !iszero(x)
-                        w[llink=>l, rlink=>r, j...] += x
-                    end
-                end
+            if !isempty(v[l, r])
+                add_block!(w, llink, l, rlink, r, v[l, r], idx)
             end
         end
         if i == 1

@@ -50,7 +50,9 @@ function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
         end
         0.
     end)
-    measures = ["data" => [X(1), Y(1), Z(2), stopper, breaker]]
+    # the sweep of each measurement is written too: a resumed dmrg phase numbered its own from
+    # 1 again, ITensorMPS counting afresh the sweeps it is asked for
+    measures = ["data" => [X(1), Y(1), Z(2), :sweep, stopper, breaker]]
     evolve(op) = Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * op,
                         limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
     # a dmrg phase resumes on its sweep count rather than on a simulation time, which is a

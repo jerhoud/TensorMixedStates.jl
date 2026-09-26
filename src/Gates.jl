@@ -94,8 +94,8 @@ function make_ops(s::System, a::ProdOp)
     return (coef, ops)
 end
 
-make_ops(s::System, a::AtIndex{R, N}) where {R, N} =
-    if a == MakeIdentity{R, Indexed, 1}()
+make_ops(s::System, a::AtIndex) =
+    if is_identity(a)
         # a factor that contributes no tensor must not leave the gate list untyped:
         # ITensorMPS.product has no method for a Vector{Any}
         (1, ITensor[])

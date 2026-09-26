@@ -18,6 +18,12 @@
     for a in [X ⊗ Y, Swap, Swap * Swap, (X ⊗ Y) * (Y ⊗ X), controlled(X), X ⊗ Id + Id ⊗ X]
         @test matrix(simplify(a), q, q) ≈ matrix(a, q, q)
     end
+    # and a power of a superoperator, for which simplify had no method: an integer one is the
+    # composition repeated, a non integer one is kept whole
+    for a in [Left(X)^2, Right(S)^3, Gate(X)^2, Gate(H)^0.5, Dissipator(Sp)^2,
+              (0.9 * Gate(Id) + 0.1 * Gate(X))^3]
+        @test matrix(simplify(a), q) ≈ matrix(a, q)
+    end
     # an F crossing a factor takes the sign of its parity, a sum of odd operators included,
     # and stops before a factor that has none
     f = Fermion()
@@ -64,6 +70,15 @@ end
     # these combinations have no defined fermionic nature and must be rejected
     @test_throws ErrorException isfermionic(C + N)
     @test_throws ErrorException isfermionic(exp(C))
+    # a term of coefficient zero, the zero operator, has every parity: it is left out of a sum
+    # rather than making `0C + dag(C)` a mix of the two. A sum left with no term at all, as an
+    # empty one, is the zero operator
+    g = 0.0
+    @test isfermionic(g * C + dag(C))
+    @test !isfermionic(g * C + g * dag(C))
+    @test matrix(g * C + g * dag(C), Fermion()) == zeros(2, 2)
+    @test matrix(TensorMixedStates.SumOp(TensorMixedStates.Op{Pure, TensorMixedStates.Generic, 1}[]),
+                 Fermion()) == zeros(2, 2)
     # has_fermionic asks the other question: whether a factor still needs its
     # Jordan-Wigner string. A product of two fermionic operators is not fermionic, but
     # both of its factors are, so it does.

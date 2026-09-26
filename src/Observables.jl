@@ -185,7 +185,10 @@ function create_left!(l, state::State{Pure}, i::Int)
     for k in j+1:i
         llink = commonind(st[k-1], st[k])
         v = if k <= ll
-            delta(dag(llink), llink') / real(trace(state))
+            # what the branch below leaves: the link of the ket as st[k-1] holds it, and that
+            # of the bra daggered and primed. The other way round, which only charges tell
+            # apart, it did not contract with st[k]
+            delta(llink, dag(llink)') / real(trace(state))
         else
             idx = SysIndex{Pure}(s, k-1)
             l[k-1] * delta(dag(idx), idx') * dag(st[k-1]')
@@ -530,8 +533,12 @@ expect_norm(state::State, op::SumOp{Pure, Indexed}) =
     end
 
 # said here rather than left to the method below, which would try to iterate the operator
-expect_norm(::State, a::IndexedOp{Mixed}) =
+expect_norm(::State, a::Op{Mixed}) =
     error("expect takes an observable, and $a is a superoperator acting on a density matrix")
+
+expect_norm(::State, a::GenericOp{Pure, N}) where N =
+    error("expect takes an operator placed on sites, such as $(a((1:N)...)) rather than $a, " *
+          "and expect1 measures a one site operator on every site")
 
 expect_norm(state::State, op) =
     map(op) do o
