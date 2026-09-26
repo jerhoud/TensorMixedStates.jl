@@ -197,8 +197,9 @@ simplify_dag(a::PowOp) =
     end
 simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
 simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
-simplify_dag(a::Union{Identity, JW_F}) = a
-simplify_dag(a::Union{Proj, JW}) = dag(a)
+# a projector is on a pure state, `matrix` refusing a mixed one, and so self adjoint
+simplify_dag(a::Union{Identity, JW_F, Proj}) = a
+simplify_dag(a::JW) = dag(a)
 
 
 simplify_dag(a::ProdOp) = simplify_prod(reverse(simplify_dag.(a.subs)))

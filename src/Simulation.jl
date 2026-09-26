@@ -130,7 +130,7 @@ function close_sim_files(sim::Simulation)
     for (filename, data) in sim.files
         if data isa Dict
             open(filename, "w") do io
-                JSON.print(io, data)
+                JSON.print(io, json_value(data))
             end
         elseif data ∉ (stdout, stderr, devnull)
             close(data)

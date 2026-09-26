@@ -1,32 +1,5 @@
 export output, log_msg
 
-const thresh_warn_imag = 1e-6
-
-make_real(::Simulation, _, data) = data
-
-warn_imag(sim::Simulation, header, x) =
-    log_msg(sim, "WARNING: large imaginary part: time $(sim.time), $header " * @sprintf("%8.1e (rel %8.1e)", imag(x), imag(x) / real(x)))
-
-function make_real(sim::Simulation, header, data::Number)
-    if abs(imag(data)) > thresh_warn_imag
-        warn_imag(sim, header, data)
-    end
-    return real(data)
-end
-
-function make_real(sim::Simulation, header, data::Union{Vector, Matrix})
-    map(keys(data)) do ij
-        x = data[ij]
-        if !(x isa Number)
-            return x
-        end
-        if abs(imag(x)) > thresh_warn_imag
-            warn_imag(sim, "$header $(Tuple(ij))", x)
-        end
-        return real(x)
-    end
-end
-
 function output_one(file, x::AbstractFloat, format)
     Printf.format(file, format, x)
 end
@@ -35,6 +8,18 @@ function output_one(file, x::Complex, format)
     output_one(file, real(x), format)
     print(file, "\t")
     output_one(file, imag(x), format)
+end
+
+# a value holding several, the part of a `Check` made on a vector observable for instance,
+# is written number by number, a matrix row by row as the lines of a matrix are, rather than
+# as the literal Julia prints
+function output_one(file, x::AbstractArray, format)
+    for (k, y) in enumerate(row_major(x))
+        if k > 1
+            print(file, "\t")
+        end
+        output_one(file, y, format)
+    end
 end
 
 function output_one(file, x, _)
@@ -89,6 +74,9 @@ compute the given measurements on a simulation and output them to the associated
 
 filenames are interpreted by get\\_sim\\_file (see there for special values)
 
+A complex value takes two columns, its real part then its imaginary part, and a json file
+writes it as `{"re": …, "im": …}`: see `RealValue` for which values are complex.
+
 # Examples
 
     output(sim, "file" => [X, X(1)Y(2), (X, Y)])
@@ -101,13 +89,13 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
     if isempty(measurements)
         return
     end
-    vals = measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
+    vals = Logging.with_logger(SimLogger(sim, Logging.current_logger())) do
+        measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
+    end
     files = [ get_sim_file(sim, filename) for filename in first.(measurements) ]
     for (v, f) in zip(vals, files)
         for x in v
-            header = first(x)
-            data = make_real(sim, header, last(x))
-            output(sim, f, header, data)
+            output(sim, f, first(x), last(x))
         end
         if f isa IO
             flush(f)
@@ -127,3 +115,37 @@ end
 log the given message on the "log" file of the simulation
 """
 log_msg(sim::Simulation, text) = output(sim, "log" => text)
+
+"""
+    SimLogger(sim, parent)
+
+the logger `output` measures under. The warnings of this package, `measure` dropping a part
+of a value that is more than rounding, go to the log of the simulation with the rest of what
+it reports, and everything else goes on to `parent`, the logger in place, as it would outside
+a measurement. `measure` itself only warns, so that a direct call shows its warnings as any
+other would.
+"""
+struct SimLogger <: Logging.AbstractLogger
+    sim::Simulation
+    parent::Logging.AbstractLogger
+end
+
+simulation_warning(level, _module) = level >= Logging.Warn && _module === @__MODULE__
+
+Logging.min_enabled_level(l::SimLogger) = min(Logging.Warn, Logging.min_enabled_level(l.parent))
+
+Logging.shouldlog(l::SimLogger, level, _module, group, id) =
+    simulation_warning(level, _module) || Logging.shouldlog(l.parent, level, _module, group, id)
+
+Logging.catch_exceptions(l::SimLogger) = Logging.catch_exceptions(l.parent)
+
+function Logging.handle_message(l::SimLogger, level, message, _module, group, id, file, line; kwargs...)
+    if simulation_warning(level, _module)
+        log_msg(l.sim, "WARNING: $message")
+    elseif level >= Logging.min_enabled_level(l.parent)
+        # the level of this logger is the lower of the two, so the parent's has to be
+        # checked again here
+        Logging.handle_message(l.parent, level, message, _module, group, id, file, line; kwargs...)
+    end
+    return nothing
+end

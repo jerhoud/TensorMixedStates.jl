@@ -120,6 +120,16 @@ end
     @test isless(Dissipator(X)(1), Evolver(X(1)))
 end
 
+@testset "A projector is self adjoint" begin
+    # `matrix` refuses a projector on a mixed state, so every one is self adjoint, and its
+    # adjoint simplifies to it whatever it projects on. `measure` relies on this to find
+    # that a projector gives real values
+    for p in (Proj("Up"), Proj(1), Proj([1, im] / √2))
+        @test simplify(dag(p)) == p
+        @test matrix(dag(p), Qubit()) ≈ matrix(p, Qubit())
+    end
+end
+
 @testset "Non integer powers of a scaled operator" begin
     # the power is the principal one. A positive coefficient comes out of it unchanged, any
     # other phase does not and stays inside, only the modulus coming out: a negative one is

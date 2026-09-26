@@ -397,6 +397,128 @@ end
     @test_throws "cannot make it strong" measure(mix(strong_state), Fidelity(weak_ref))
 end
 
+@testset "Real, imaginary and complex values" begin
+    # the kind of a measurement is decided on the measurement, never on a value: an operator
+    # is real when `dag` gives it back, imaginary when it gives its opposite, complex when
+    # the symbolic test proves neither
+    rk, ik, ck = TensorMixedStates.real_kind, TensorMixedStates.imaginary_kind,
+                 TensorMixedStates.complex_kind
+    kind(o) = TensorMixedStates.make_obs(o).kind
+    hop = dag(C)(1) * C(2)
+    @test kind(X(1)) == rk
+    @test kind(Z(1)Z(2) + X(1)) == rk
+    @test kind(Proj("Up")(1)) == rk
+    @test kind(hop + dag(C)(2) * C(1)) == rk
+    @test kind(im * X(1) * Y(2)) == ik
+    @test kind(hop - dag(C)(2) * C(1)) == ik
+    @test kind(Sp(1)) == ck
+    @test kind(hop) == ck
+    # a miss of the test comes out complex, never real: `Sm` is a name whose relation to
+    # `Sp` it does not know
+    @test kind(Sp(1)Sm(2) + Sm(1)Sp(2)) == ck
+    @test kind(X) == rk
+    @test kind(Sp) == ck
+    # a correlation matrix takes one kind, complex when its entries differ: the diagonal of
+    # (X, Y) is <XY> = i<Z> and the rest is real
+    @test kind((X, X)) == rk
+    @test kind((X, Y)) == ck
+    @test kind((Sp, Sm)) == ck
+    @test kind((dag(C), C)) == ck
+    @test kind((N, N)) == rk
+    # a function is real unless declared otherwise, a number takes the kind of its type
+    @test kind(Purity) == rk
+    @test kind(t -> exp(im * t)) == rk
+    @test kind(0.5) == rk
+    @test kind(0.5im) == ck
+    @test kind(Overlap(State{Pure}(System(2, Qubit()), "+"))) == ck
+
+    # whatever the test says real or imaginary is: on states with complex amplitudes the
+    # part it drops is rounding
+    for (st, ops) in ((RandomState{Pure}(System(3, Qubit()), 4),
+                       [X(1), Z(1)Z(2) + X(3), Proj("Dn")(2), exp(0.3X)(1), im * X(1) * Y(2),
+                        (im * Z)(3), im * (X(1)Y(2) - Y(1)X(2))]),
+                      (RandomState{Pure}(System(3, Fermion()), 4),
+                       [hop + dag(C)(2) * C(1), hop - dag(C)(2) * C(1),
+                        im * (dag(C)(1) * C(3) - dag(C)(3) * C(1)),
+                        (C + dag(C))(1) * (C + dag(C))(2)]))
+        for o in ops
+            k = kind(o)
+            v = expect(st, o)
+            @test k ≠ ck
+            @test abs(k == rk ? imag(v) : real(v)) < 1e-12
+        end
+    end
+
+    # measure gives each value the kind of its measurement whatever the element type of the
+    # state: a real value is a Float64 on a complex state, a complex one a ComplexF64 on a
+    # real state
+    value(st, m) = last(only(measure(st, m)))
+    up = State{Pure}(System(2, Qubit()), "Up")
+    ph = apply(Phase(0.7)(1), State{Pure}(System(2, Qubit()), "+"))
+    plus_i = State{Pure}(System(2, Qubit()), ["+", "i"])
+    @test value(ph, X(1)) isa Float64
+    @test value(ph, X(1)) ≈ cos(0.7)
+    @test value(up, Sp(1)) isa ComplexF64
+    @test value(ph, Sp(1)) ≈ exp(0.7im) / 2
+    @test value(up, Overlap(up)) isa ComplexF64
+    # an imaginary value is its imaginary part, under a name saying so
+    iv = only(measure(plus_i, im * X(1) * Y(2)))
+    @test first(iv) == "Im(im*X(1)*Y(2))"
+    @test last(iv) ≈ 1
+    # the diagonal of (X, Y), which used to be written as zero
+    @test value(up, (X, Y)) isa Matrix{ComplexF64}
+    @test value(up, (X, Y)) ≈ [im 0; 0 im]
+
+    # a declaration overrides the kind found by the test, holds for each part of a vector,
+    # and the innermost one holds
+    xy = Sp(1)Sm(2) + Sm(1)Sp(2)
+    @test value(ph, xy) isa ComplexF64
+    @test value(ph, RealValue(xy)) isa Float64
+    @test value(ph, ComplexValue(X(1))) isa ComplexF64
+    @test value(ph, RealValue(ComplexValue(X(1)))) isa ComplexF64
+    vs = @test_logs (:warn, r"large imaginary part: time 0.0, Sp\(1\)") measure(
+        ph, RealValue([Sp(1), ComplexValue(Sp(2))]))
+    @test first.(vs) == ["Sp(1)", "Sp(2)"]
+    @test last(vs[1]) ≈ cos(0.7) / 2
+    @test last(vs[2]) isa ComplexF64
+    iv = @test_logs (:warn, r"large real part: time 0.0, X\(1\)") only(
+        measure(ph, ImaginaryValue(X(1))))
+    @test first(iv) == "Im(X(1))"
+
+    # the part dropped is reported relative to the modulus, which a zero real part leaves
+    # finite, and a function is told how to keep it; a complex value drops nothing
+    @test_logs (:warn, r"rel  1.0e\+00") measure(plus_i, RealValue(im * X(1) * Y(2)))
+    @test_logs (:warn, r"sp .*ComplexValue keeps it") measure(ph,
+        StateFunc("sp", st -> expect(st, Sp(1))))
+    @test_logs measure(ph, Sp(1))
+
+    # a Check compares the values as computed: a complex reference given as a function of
+    # time, real unless declared otherwise, is written as its real part but compared whole
+    c = @test_logs (:warn, r"func .*ComplexValue keeps it") value(ph,
+        Check("c", Sp(1), _ -> exp(0.7im) / 2, 1e-10))
+    @test c[1] ≈ exp(0.7im) / 2
+    @test c[2] ≈ cos(0.7) / 2
+    @test c[3] < 1e-10
+    # each part keeps its own type, rather than all three becoming complex
+    @test c[2] isa Float64
+    @test c[3] isa Float64
+    # a constant reference keeps its kind, and an imaginary part stays a complex number on
+    # the line of a check, where no name could say what it is
+    c = @test_logs value(ph, Check("c", Sp(1), exp(0.7im) / 2, 1e-10))
+    @test c[2] isa ComplexF64
+    c = value(plus_i, Check("c", im * X(1) * Y(2), 1im, 1e-10))
+    @test c[1] isa ComplexF64
+    @test c[1] ≈ 1im
+    c = value(State{Pure}(System(2, Qubit()), "+"), Check("c", Sp, [0.5, 0.5], 1e-10))
+    @test c[1] isa Vector{ComplexF64}
+    @test c[2] == [0.5, 0.5]
+
+    # a vector in a set stands for its measurements, each under its own name, and the names
+    # are then checked for duplicates
+    @test first.(measure(ph, [[X(1), Z(2)]])) == ["X(1)", "Z(2)"]
+    @test_throws "named \"X(1)\"" Measure([X(1), [X(1)]])
+end
+
 @testset "Energy variance" begin
     sys = System(6, Qubit())
     ising = -sum(Z(i) * Z(i+1) for i in 1:5)

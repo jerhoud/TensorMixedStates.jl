@@ -206,6 +206,66 @@ end
     end
 end
 
+@testset "Complex values and matrices survive a resume" begin
+    # json holds neither complex numbers nor matrices, so the checkpoint marks them in a
+    # `Data` destination and rebuilds them: the resumed run hands back the values, element
+    # types included, that an uninterrupted one gives
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop_in[] > 0
+                    stop_in[] -= 1
+                    if stop_in[] == 0
+                        touch("stop")
+                    end
+                end
+                0.
+            end)
+            ms = [Sp(1), (X, Z), (Sp, Sm)]
+            measures = ["data" => [ms; stopper], "out.json" => ms, Data("d") => ms]
+            phases = [CreateState{Pure}(2, Qubit(), "X+"),
+                      Evolve(duration = 0.6, time_step = 0.1, algo = Tdvp(),
+                             evolver = -im * (Z(1) + X(1)X(2)),
+                             limits = Limits(maxdim = 10, cutoff = 1e-15); measures)]
+            ref = runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 3
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            sim = runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+            @test TensorMixedStates.JSON.parsefile("chk/out.json") ==
+                  TensorMixedStates.JSON.parsefile("ref/out.json")
+            for name in ["Sp(1)", "XZ", "SpSm"]
+                resumed, whole = sim.data["d"][name]["data"], ref.data["d"][name]["data"]
+                @test map(typeof, resumed) == map(typeof, whole)
+                @test all(resumed .≈ whole)
+            end
+        end
+    end
+end
+
+@testset "A complex time and an older checkpoint" begin
+    mktempdir() do dir
+        cd(dir) do
+            # a complex simulation time is marked in the checkpoint as well
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Gates(gates = X(1), time_start = 0.5im, final_measures = Data("d") => Z(1)),
+                      Gates(gates = X(1))]
+            sim_data = SimData(; name = "ctime", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            data = TensorMixedStates.load_checkpoint("ctime")[6]
+            @test only(data["d"]["Z(1)"]["times"]) == 0.5im
+            # and a checkpoint of version 1 is refused: a measurement become complex would
+            # continue its file in another layout
+            meta = "ctime/checkpoint.json"
+            write(meta, replace(read(meta, String), "\"version\":2" => "\"version\":1"))
+            @test_throws "has version 1" runTMS(sim_data)
+        end
+    end
+end
+
 @testset "Per sweep schedules" begin
     rs = TensorMixedStates.resume_schedule
     @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep

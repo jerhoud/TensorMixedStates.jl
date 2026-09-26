@@ -1,4 +1,7 @@
-const checkpoint_file_version = 1
+# 2: the complex numbers and matrices of `Data` destinations are marked, see
+# `checkpoint_value`, and a measurement becoming complex would continue a file of version 1
+# in another layout
+const checkpoint_file_version = 2
 
 """
     phases_id(phases)
@@ -166,12 +169,12 @@ function save_checkpoint(c::Checkpointer, sim, state::State, sweep::Int)
             "sweep" => sweep,
             "time" => [real(c.phase_time), imag(c.phase_time)],
             "positions" => positions,
-            "data" => sim.data,
+            "data" => checkpoint_value(sim.data),
             # a json destination accumulates in memory and is written once, when the
             # files are closed. A position is enough to continue a text file, but a
             # resumed run would write back a json holding only what it computed itself,
             # so what was collected before has to travel in the checkpoint
-            "json" => Dict(name => d for (name, d) in sim.files if d isa Dict),
+            "json" => Dict(name => json_value(d) for (name, d) in sim.files if d isa Dict),
         ))
     end
     mv(th5, h5; force = true)
@@ -198,10 +201,57 @@ function load_checkpoint(dir::String)
     re, im = meta["time"]
     t = im == 0 ? re : complex(re, im)
     positions = Dict{String, Int}(k => Int(v) for (k, v) in meta["positions"])
-    data = Dict{String, Dict}(k => Dict(v) for (k, v) in meta["data"])
+    data = Dict{String, Dict}(k => restored_destination(v) for (k, v) in meta["data"])
     json = Dict{String, Dict}(k => Dict(v) for (k, v) in meta["json"])
     return (state, t, Int(meta["phase"]), Int(meta["sweep"]), positions, data, json, id)
 end
+
+"""
+    json_value(x)
+
+a value of a json destination as it is written: a complex number becomes
+`{"re": …, "im": …}`, wherever it is, which JSON.jl writes that way or refuses depending on
+its version. A matrix is left to JSON.jl, which writes the vector of its columns. Given what
+it gave, it gives it back, so that the values a resumed run read from its checkpoint go
+through it again unchanged.
+"""
+json_value(x::Complex) = Dict("re" => real(x), "im" => imag(x))
+json_value(x::AbstractArray) = map(json_value, x)
+json_value(x::AbstractDict) = Dict(k => json_value(v) for (k, v) in x)
+json_value(x) = x
+
+"""
+    checkpoint_value(x)
+    restored_value(x)
+
+a value of a `Data` destination written into the checkpoint, and read back from it. Json
+holds neither complex numbers nor matrices, a matrix coming back as the vector of its
+columns, so both are marked and rebuilt, and an array read back is given its element type
+again: a resumed run hands back the values an uninterrupted one would.
+"""
+checkpoint_value(x::Complex) = Dict("complex" => [real(x), imag(x)])
+checkpoint_value(x::AbstractMatrix) = Dict("matrix" => [ checkpoint_value(x[i, :]) for i in axes(x, 1) ])
+checkpoint_value(x::AbstractArray) = map(checkpoint_value, x)
+checkpoint_value(x::AbstractDict) = Dict(k => checkpoint_value(v) for (k, v) in x)
+checkpoint_value(x) = x
+
+function restored_value(x::AbstractDict)
+    if haskey(x, "complex")
+        r, i = x["complex"]
+        return complex(r, i)
+    elseif haskey(x, "matrix")
+        return stack(restored_value.(x["matrix"]); dims = 1)
+    end
+    return Dict(k => restored_value(v) for (k, v) in x)
+end
+restored_value(x::AbstractVector) = map(restored_value, x)
+restored_value(x) = x
+
+# the series of a destination are pushed onto by the measurements to come, so they stay
+# vectors of any element type, whatever the values read back
+restored_destination(d) =
+    Dict(h => Dict("times" => Any[ restored_value(x) for x in s["times"] ],
+                   "data" => Any[ restored_value(x) for x in s["data"] ]) for (h, s) in d)
 
 """
     truncate_outputs(dir, positions)

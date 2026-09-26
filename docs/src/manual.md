@@ -553,6 +553,10 @@ The possible measurements are described in the measurements section of this manu
   Data("mydata") => [TraceError, X(1), Y]
   ```
 
+A complex value takes two columns in a file, its real part then its imaginary part, a json
+file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
+values are complex is described in the measurements section.
+
 The `data_to_frame` function can be used on the result to get a `DataFrame` object (the `DataFrames` package must be imported first)
 
 ```julia

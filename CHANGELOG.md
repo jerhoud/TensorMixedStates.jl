@@ -25,7 +25,64 @@ the reference article.
   fermionic site is refused, since it is taken as it is, with no Jordan-Wigner string. On a
   single site the definition is only replaced by its matrix there, computed once.
 
+- `RealValue`, `ImaginaryValue` and `ComplexValue`, which declare the values of a measurement
+  real, purely imaginary or complex (#19), the part a declaration drops being checked.
+  Without them `measure` finds the kind of an operator by a symbolic test, real when it is
+  self adjoint, imaginary when its adjoint is its opposite, complex when it can prove
+  neither. A state function or a function of time is real, and a number takes the kind of
+  its type.
+
+### Changed
+
+- `measure` gives each value the kind of its measurement: its real part for a real one, its
+  imaginary part under the name `Im(name)` for an imaginary one, and a complex number for a
+  complex one, even on a real state. `Overlap` is complex, and so is a correlation matrix as
+  soon as one of its entries is, `(X, Y)` for instance. `expect`, `expect1` and `expect2`
+  still give the values as they are computed. A `Data` destination holds what `measure`
+  gives, so a complex value is a `ComplexF64` there, where it was its real part, and each
+  measurement keeps one type through a run.
+
+- A `Check` writes each of its two values according to its kind, an imaginary one as a
+  complex number, its line having no name of its own to mark it. It compares them as they
+  are computed, as before.
+
+- The warning about a large imaginary part goes through `@warn`, which `output` sends to the
+  log of the simulation as before and which a direct call of `measure` shows on the console.
+  It also reports a large real part dropped from an imaginary value, and gives the part
+  dropped relative to the modulus, where it was relative to the real part and read `Inf`
+  when that was zero. For a state function or a function of time, it names `ComplexValue`,
+  which keeps the part.
+
+- `simplify` takes the adjoint of a projector to be the projector, which lets `measure` find
+  that a projector gives real values.
+
+- A json destination writes a complex number as `{"re": …, "im": …}`.
+
+- The checkpoint file is at version 2, and one written by an earlier version is refused: a
+  measurement becoming complex would continue its file in another layout.
+
 ### Fixed
+
+- Complex measurements lost their imaginary part when written by `output`, which kept the
+  real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
+  as two columns, the expectation value of an operator that is not self adjoint such as
+  `Sp(1)`, and correlation matrices such as `(Sp, Sm)`, or `(X, Y)`, whose diagonal
+  `⟨XY⟩ = i⟨Z⟩` came out as zero. A complex value is written as two columns, its real part
+  then its imaginary part.
+
+- The part of a `Check` made on a vector observable is written number by number. It was
+  written as the literal Julia prints, `[0.0, 0.0]` in a single column, and JSON.jl 1.5
+  refused a complex number inside it when writing a json destination.
+
+- A vector of measurements inside a set, `"data" => [[Z(1), X(2)]]`, stands for its
+  measurements. Its name was the vector of theirs, written as a literal in a file, taken as a
+  vector key in `Data`, and refused by JSON.jl 1.5 as the key of a json destination.
+
+- A `Data` destination resumed from a checkpoint gives its matrices back as matrices. They
+  came back as the vector of their columns.
+
+- A complex simulation time no longer makes JSON.jl 1.5 fail on an `InexactError` when it
+  writes a json destination, or the checkpoint of a simulation with a `Data` destination.
 
 - A term whose factor vanishes on its site, such as `C(1) * C(1)`, or `Sp(1) * Sp(1)` on a
   spin 1/2, is left out of the MPO. On a system conserving a charge, building the MPO failed

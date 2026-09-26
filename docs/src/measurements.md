@@ -8,6 +8,9 @@ StateFunc
 TimeFunc
 Check
 Measure
+RealValue
+ImaginaryValue
+ComplexValue
 expect
 expect1
 expect2
@@ -124,6 +127,29 @@ measure(mystate, Check(name, obs1, obs2), t)
 
 In `Check`, obs may also be constants, vectors and function of time (like `t -> sin(t)`), in this case the simulation
 time must be fed to `measure` as 3rd argument.
+
+## Real, imaginary and complex values
+
+Each value is given the kind its measurement calls for. An operator is real when it is self
+adjoint, like `X(1)` or `Z(1)Z(2) + X(1)`, purely imaginary when its adjoint is its opposite,
+like `dag(C)(1)C(2) - dag(C)(2)C(1)`, and complex otherwise, like `Sp(1)`. A correlation
+matrix takes one kind for all its entries, so `(X, Y)`, whose diagonal is
+``\langle XY \rangle = i \langle Z \rangle``, is complex. A state function or a function of
+time is real, except `Overlap`, and a number takes the kind of its type.
+
+A real value is written in one column, its imaginary part, which is rounding, being dropped.
+An imaginary one is written in one column too, as its imaginary part, under the name
+`Im(name)`, and a complex one in two, its real part then its imaginary part. A part dropped
+that is more than rounding is reported in the log.
+
+The test giving the kind of an operator is symbolic and only says real or imaginary when it
+can prove it, so what it misses comes out complex: `Sp(1)Sm(2) + Sm(1)Sp(2)`, for instance,
+which is real. `RealValue`, `ImaginaryValue` and `ComplexValue` declare the kind by hand, as
+they do for a state function whose values are complex
+
+```julia
+measures = "data" => [RealValue(Sp(1)Sm(2) + Sm(1)Sp(2)), ComplexValue(stfunc)]
+```
 
 ## Output
 

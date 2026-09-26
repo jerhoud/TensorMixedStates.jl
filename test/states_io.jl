@@ -155,6 +155,68 @@ end
     @test line(0.25) == "h\t    0.25\t             1\n"
 end
 
+@testset "Output of complex values" begin
+    # a complex value takes two columns, its real part then its imaginary part, an imaginary
+    # one a single column under the name Im(...), and a value holding several is written
+    # number by number
+    lines(st, m) = (io = IOBuffer(); output(Simulation(st; output = io), "data" => m);
+                    split(String(take!(io)), '\n'; keepempty = false))
+    fields(line) = split(line, '\t')
+    ph = apply(Phase(0.7)(1), State{Pure}(System(2, Qubit()), "+"))
+    l = only(lines(ph, Sp(1)))
+    @test fields(l)[1] == "Sp(1)"
+    @test parse.(Float64, fields(l)[3:end]) ≈ [cos(0.7), sin(0.7)] / 2 atol = 1e-7
+    ls = lines(ph, (Sp, Sm))
+    @test ls[1] == "SpSm"
+    @test length.(fields.(ls[2:3])) == [6, 6]
+    l = only(lines(State{Pure}(System(2, Qubit()), ["+", "i"]), im * X(1) * Y(2)))
+    @test fields(l)[1] == "Im(im*X(1)*Y(2))"
+    @test length(fields(l)) == 3
+    # the header, the time, the two complex values of Sp, the reference and the distance
+    l = only(lines(State{Pure}(System(2, Qubit()), "+"), Check("c", Sp, [0.5, 0.5])))
+    @test length(fields(l)) == 2 + 4 + 2 + 1
+    @test !occursin('[', l)
+    # a real reference and the distance keep one column each next to a complex value
+    l = only(lines(State{Pure}(System(2, Qubit()), "+"), Check("c", Sp(1), 0.5)))
+    @test length(fields(l)) == 2 + 2 + 1 + 1
+    @test first.(fields.(lines(ph, [[X(1), Z(2)]]))) == ["X(1)", "Z(2)"]
+
+    # a warning of `measure` goes to the log of the simulation, the same stream here, and
+    # none reaches the logger of the caller, which still gets the warnings of anything else
+    ls = @test_logs lines(ph, RealValue(Sp(1)))
+    @test startswith(ls[1], "WARNING: large imaginary part: time 0.0, Sp(1)")
+    @test_logs (:warn, "from the user") lines(ph, StateFunc("user", _ -> (@warn "from the user"; 1.0)))
+
+    # a Data destination holds a complex value as it is, and a json file writes it as
+    # {"re": …, "im": …} whatever JSON.jl would make of it, a matrix staying the vector of
+    # its columns there. A complex simulation time is written the same way
+    mktempdir() do dir
+        cd(dir) do
+            ms = [X(1), Sp(1), (Sp, Sm)]
+            sim = runTMS(SimData(name = "cplx", phases = [
+                CreateState{Pure}(2, Qubit(), "+"),
+                Gates(gates = Phase(0.7)(1), final_measures = [Data("d") => ms, "out.json" => ms])]))
+            d = sim.data["d"]
+            @test only(d["X(1)"]["data"]) isa Float64
+            @test only(d["Sp(1)"]["data"]) ≈ exp(0.7im) / 2
+            m = only(d["SpSm"]["data"])
+            @test m isa Matrix{ComplexF64}
+            @test nonmissingtype(eltype(data_to_frame(d)[!, "Sp(1)"])) == ComplexF64
+            js = TensorMixedStates.JSON.parsefile("cplx/out.json")
+            sp = only(js["Sp(1)"]["data"])
+            @test complex(sp["re"], sp["im"]) ≈ exp(0.7im) / 2
+            e = only(js["SpSm"]["data"])[1][2]
+            @test complex(e["re"], e["im"]) ≈ m[2, 1]
+
+            runTMS(SimData(name = "ctime", phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Gates(gates = X(1), time_start = 0.5im, final_measures = "out.json" => Z(1))]))
+            t = only(TensorMixedStates.JSON.parsefile("ctime/out.json")["Z(1)"]["times"])
+            @test complex(t["re"], t["im"]) == 0.5im
+        end
+    end
+end
+
 @testset "CreateState with a State object" begin
     # `type` is what the phase was asked for, so a State handed to it in the other
     # representation must be converted and not silently kept
