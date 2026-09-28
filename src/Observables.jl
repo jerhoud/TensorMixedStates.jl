@@ -522,7 +522,13 @@ strings of fermionic operators are inserted for you.
     expect(state, C(3)*dag(C)(1))
 
 """
-expect(state::State, op) = expect_norm(state, simplify(op))
+function expect(state::State, op)
+    # on the operator as it was written, as make_mpo and apply do: simplify places an identity
+    # on the first site whatever site it was given, and its Jordan-Wigner strings would be
+    # named in the message rather than what the caller wrote
+    check_indices(state.system, op)
+    return expect_norm(state, simplify(op))
+end
 
 expect_norm(state::State, p::IndexedOp{Pure}) =
     expect_norm(state, scalarcoef(p), prodsubs(p))

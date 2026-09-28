@@ -721,65 +721,119 @@ isless(a::SetState, b::SetState) = isless(repr(a.state), repr(b.state))
 
 ############## Operator functions ###########
 
-"""
-    phase_inside(coef, expo)
-
-whether `(coef * A)^expo` has to keep the phase of `coef` inside the power, as
-`abs(coef)^expo * (coef / abs(coef) * A)^expo`, rather than be written `coef^expo * A^expo`.
-
-The power is the principal one, taken through the logarithm of the operator. An integer
-exponent or a positive coefficient comes out of it unchanged, but any other phase turns the
-eigenvalues, possibly across the cut of the logarithm, and `coef^expo * A^expo` is then
-another determination of the power: `(im * X)^0.5` came out that way. A negative
-coefficient is the phase -1, and `-1.0 + 0im` is one as well.
-"""
-phase_inside(coef::Number, expo::Number) =
-    !isinteger(expo) && !iszero(coef) && !(isreal(coef) && real(coef) > 0)
-
-# PowOp
+# powers
 
 """
-    type PowOp{R, N} <: GenericOp{R, N}
+    is_involution(op)
 
-internal type to represent powers of operators
+whether an operator is its own inverse, which its integer powers reduce to
 """
-struct PowOp{R, N} <: GenericOp{R, N}
+is_involution(::Identity) = true
+is_involution(::JW_F) = true
+is_involution(a::Operator) = a.type == involution_op
+is_involution(::Op) = false
+
+# an exponent that makes a power a product: an integer of zero or above, whatever its type
+is_natural(p::Number) = isreal(p) && isinteger(real(p)) && real(p) ≥ 0
+
+"""
+    type IntPowOp{R, N} <: GenericOp{R, N}
+    type GenPowOp{R, N} <: GenericOp{R, N}
+
+internal types for the powers of operators. An integer power of zero or above is a product,
+`A^3` being `A * A * A`, kept whole only to be written that way: it has the adjoint, the
+parity and the Jordan-Wigner strings of that product, and an involution is reduced at once,
+`X^10000` being `Id`. Any other power, of an exponent that is not an integer, negative or
+complex, is a function of the operator, the principal power taken through its logarithm, as
+`exp` is: it cannot be split between factors, and of a coefficient of the operator only the
+modulus comes out, which the logarithm takes apart exactly, the phase staying inside. Both merge,
+`A^p * A^q` being `A^(p + q)`, the two powers being functions of the same logarithm.
+"""
+struct IntPowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
-    expo::Number
-    PowOp(arg::GenericOp{R, N}, expo::Number) where {R, N} =
-        if expo == 0
-            MakeIdentity{R, Generic, N}()
-        elseif expo == 1
-            arg
-        elseif expo < 0
-            error("cannot take negative powers of operators")
-        else
-            c = scalarcoef(arg)
-            a = scalararg(arg)
-            if phase_inside(c, expo)
-                abs(c)^expo * new{R, N}((c / abs(c)) * a, expo)
-            else
-                c^expo * new{R, N}(a, expo)
-            end
+    expo::Int
+    function IntPowOp(arg::GenericOp{R, N}, n::Integer) where {R, N}
+        c = scalarcoef(arg)
+        a = scalararg(arg)
+        # the identity recognised by what it is and not by its type: on several sites it is
+        # Id ⊗ Id, and on a density matrix Left(Id)
+        if n == 0 || a == MakeIdentity(a)
+            return c^n * MakeIdentity{R, Generic, N}()
+        elseif is_involution(a)
+            return c^n * (iseven(n) ? MakeIdentity{R, Generic, N}() : a)
+        elseif n == 1
+            return arg
+        elseif a isa IntPowOp
+            return c^n * IntPowOp(a.arg, a.expo * n)
         end
+        return c^n * new{R, N}(a, n)
+    end
 end
 
-(a::GenericOp ^ b::Number) = PowOp(a, b)
+struct GenPowOp{R, N} <: GenericOp{R, N}
+    arg::GenericOp{R, N}
+    expo::Number
+    function GenPowOp(arg::GenericOp{R, N}, p::Number) where {R, N}
+        c = scalarcoef(arg)
+        a = scalararg(arg)
+        m = abs(c)
+        if a == MakeIdentity(a)
+            return complex(c)^p * a
+        elseif !iszero(m) && !isone(m)
+            # the modulus commutes with everything and leaves the logarithm exactly, the
+            # phase would turn the eigenvalues across its cut and stays inside
+            return m^p * GenPowOp((c / m) * a, p)
+        elseif is_involution(a) && isreal(p) && isone(c)
+            # A² = 1 leaves the power modulo 2, which the principal logarithm agrees with
+            q = mod(real(p), 2)
+            return is_natural(q) ? IntPowOp(a, Int(q)) : new{R, N}(a, q)
+        end
+        return new{R, N}(arg, p)
+    end
+end
+
+# the power a merge of two powers of the same operator gives, either kind
+power(a::GenericOp, p::Number) = is_natural(p) ? IntPowOp(a, Int(real(p))) : GenPowOp(a, p)
+
+(a::GenericOp ^ p::Number) = power(a, p)
+
+# a placed operator is its operator on its sites, which takes any power, and an integer power of
+# anything placed is its product; a function of a placed sum or product has nowhere to go
+function (a::AtIndex ^ p::Number)
+    g = power(a.op, p)
+    # the identity has one form once placed, on the first site, whatever site it came from
+    if scalararg(g) == MakeIdentity(scalararg(g))
+        return scalarcoef(g) * MakeIdentity(a)
+    end
+    return g(a.index...)
+end
+
+(a::IndexedOp ^ p::Number) =
+    if !is_natural(p)
+        error("$a has no power $p once placed: take the power of the operator before placing it")
+    elseif iszero(p)
+        MakeIdentity(a)
+    else
+        prod(fill(a, Int(real(p))))
+    end
 
 """
     sqrt(::GenericOp)
 
 square root for generic operators
 """
-sqrt(a::GenericOp) = a ^ 0.5 
+sqrt(a::GenericOp) = a ^ 0.5
 
-show(io::IO, a::PowOp) =
+show(io::IO, a::Union{IntPowOp, GenPowOp}) =
     paren(io, Base.operator_precedence(:^)) do io
-        print(io, a.arg, "^", a.expo)
+        # a complex exponent in parentheses, X^(0.0 + 0.5im) and not X^0.0 + 0.5im
+        print(io, a.arg, "^", a.expo isa Complex ? "($(a.expo))" : a.expo)
     end
 
-isless(a::PowOp, b::PowOp) =
-    isless((a.arg, a.expo), (b.arg, b.expo))
+isless(a::IntPowOp, b::IntPowOp) = isless((a.arg, a.expo), (b.arg, b.expo))
+# an exponent may be complex, which has no order: its two parts are compared
+isless(a::GenPowOp, b::GenPowOp) =
+    isless((a.arg, real(a.expo), imag(a.expo)), (b.arg, real(b.expo), imag(b.expo)))
 
 # ExpOp
 
@@ -975,13 +1029,13 @@ function isfermionic(a::SumOp{Pure, Generic, 1})
     end
 end
 
-isfermionic(a::PowOp) =
-    if !isfermionic(a.arg)
-        false
-    elseif isinteger(a.expo)
-        isodd(a.expo)
+isfermionic(a::IntPowOp) = isfermionic(a.arg) && isodd(a.expo)
+
+isfermionic(a::GenPowOp) =
+    if isfermionic(a.arg)
+        error("cannot take the non integer power $(a.expo) of the fermionic operator $(a.arg)")
     else
-        error("cannot determine fermionic nature of $a")
+        false
     end
 
 """
@@ -1044,19 +1098,13 @@ function jw_parity(a::SumOp)
     return length(ps) == 1 ? only(ps) : nothing
 end
 
-function jw_parity(a::PowOp)
+function jw_parity(a::IntPowOp)
     p = jw_parity(a.arg)
-    if p == 0
-        return 0
-    elseif p == 1 && isinteger(a.expo)
-        return mod(Int(a.expo), 2)
-    else
-        return nothing
-    end
+    return isnothing(p) ? nothing : mod(p * a.expo, 2)
 end
 
-# the exponential of an odd operator mixes the two parities
-jw_parity(a::Union{ExpOp, ModOp}) = jw_parity(a.arg) == 0 ? 0 : nothing
+# a function of an odd operator, its exponential or a non integer power, mixes the two parities
+jw_parity(a::Union{ExpOp, ModOp, GenPowOp}) = jw_parity(a.arg) == 0 ? 0 : nothing
 
 ################## Equality #################
 
@@ -1107,7 +1155,8 @@ ranking(::ProdOp) = 21
 ranking(::SumOp) = 22
 ranking(::TensorOp) = 23
 
-ranking(::PowOp) = 30
+ranking(::IntPowOp) = 30
+ranking(::GenPowOp) = 34
 ranking(::ExpOp) = 31
 ranking(::DagOp) = 32
 ranking(::ModOp) = 33

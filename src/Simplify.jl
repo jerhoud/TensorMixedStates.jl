@@ -36,7 +36,8 @@ simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
 
 simplify(a::Union{Identity, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
 
-simplify(a::PowOp) = simplify_pow(simplify(a.arg), a.expo)
+simplify(a::IntPowOp) = power(simplify(a.arg), a.expo)
+simplify(a::GenPowOp) = power(simplify(a.arg), a.expo)
 simplify(a::ExpOp) = simplify_exp(simplify(a.arg))
 simplify(a::DagOp) = simplify_dag(simplify(a.arg))
 simplify(a::ModOp) = ModOp(simplify(a.arg), a.modulus)
@@ -78,7 +79,11 @@ reindex(op::GenericOp, i::Int...) = op(i...)
 
 
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
-simplify_ind(a::Union{Identity, JW_F, Proj, JW, SetState}, index) = a(index)
+# the identity has one form once placed, on the first site, the one reindex and MakeIdentity
+# give: Id(2) and Id(1) were two, so that Id(2) - X(2) * X(2) did not cancel and Id(2) was
+# not recognised as its own adjoint
+simplify_ind(::Identity, index) = MakeIdentity{Pure, Indexed, 1}()
+simplify_ind(a::Union{JW_F, Proj, JW, SetState}, index) = a(index)
 simplify_ind(a::ExpOp, index...) = place_function(a, index...)
 simplify_ind(a::ModOp, index...) = place_function(a, index...)
 
@@ -96,7 +101,21 @@ place_function(a, index...) =
     else
         a(index...)
     end
-simplify_ind(a::PowOp, index...) = simplify_pow(simplify_ind(a.arg, index...), a.expo)
+# an integer power is its product, placed factor by factor with their strings, and any other is
+# a function of the operator, placed as exp is: on one site through its matrix, split in the
+# parts that commute and anticommute with F, and whole on several
+simplify_ind(a::IntPowOp, index...) = simplify_prod(fill(simplify_ind(a.arg, index...), a.expo))
+
+function simplify_ind(a::GenPowOp{Pure}, index...)
+    g = simplify(a)
+    p = scalararg(g)
+    if !(p isa GenPowOp)
+        return simplify_ind(g, index...)
+    end
+    return scalarcoef(g) * place_function(p, index...)
+end
+
+simplify_ind(a::GenPowOp{Mixed}, index...) = simplify(a)(index...)
 simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
 simplify_ind(a::Left, index...) = simplify_l(simplify_ind(a.arg, index...))
 simplify_ind(a::Right, index...) = simplify_r(simplify_ind(a.arg, index...))
@@ -127,68 +146,6 @@ simplify_ind(a::ProdOp, index...) = simplify_prod(map(x->simplify_ind(x, index..
 simplify_ind(a::TensorOp, index...) = simplify_prod(tensor_apply(simplify_ind, a, index...))
 
 
-# helpers for Generic Operators
-
-is_involution(::Identity) = true
-is_involution(::JW_F) = true
-is_involution(a::Operator) = a.type == involution_op
-is_involution(::Op) = false
-
-
-# power simplification
-# power of Generic:  X^0 => Id, X^1=> X, X^2 => Id
-simplify_pow(a::GenericOp{Pure}, expo) =
-    if expo == 0
-        return MakeIdentity(a)
-    elseif expo == 1
-        return a
-    elseif is_involution(a) && expo ≥ 2
-        simplify_pow(a, expo - 2 * floor(expo / 2))
-    else
-        return PowOp(a, expo)
-    end
-
-# generic only: the phase has to go into a PowOp, which an indexed operator cannot enter, and
-# an indexed power goes to the method below, whose message says why a non integer one fails
-simplify_pow(a::ScalarOp{Pure, Generic}, expo) =
-    if phase_inside(a.coef, expo)
-        # handed whole to the constructor, which takes the modulus out itself: dividing by it
-        # here too, the phase came out a rounding away from the one the constructor gives
-        PowOp(a, expo)
-    else
-        a.coef^expo * simplify_pow(a.arg, expo)
-    end
-
-# power of a superoperator: an integer one is the composition repeated, which the product
-# gathers, and a non integer one is kept whole, to be placed on one site through its matrix
-simplify_pow(a::GenericOp{Mixed}, expo) =
-    if expo == 0
-        return MakeIdentity(a)
-    elseif expo == 1
-        return a
-    elseif isinteger(expo)
-        return simplify_prod(fill(a, Integer(expo)))
-    else
-        return PowOp(a, expo)
-    end
-
-
-# power of Indexed: replace with a product if possible X(1)^2 => X(1) * X(1)
-simplify_pow(a::IndexedOp, expo) =
-    if expo == 0
-        return MakeIdentity(a)
-    elseif expo == 1
-        return a
-    elseif isinteger(expo)
-        simplify_prod(fill(a, Integer(expo)))
-    else
-        error("cannot compute a non integer power of indexed operator $a")
-    end
-
-simplify_pow(a::AtIndex, expo) =
-    simplify_pow(a.op, expo)(a.index...)
-
-
 # simplify exp : exp(0) => Id and exp(3X) => cosh(3)Id + sinh(3)X
 function simplify_exp(a::GenericOp{Pure, N}) where N
     c = scalarcoef(a)
@@ -212,14 +169,11 @@ simplify_dag(a::Operator) =
     else
         dag(a)
     end
-# only an integer power lets the adjoint in: a non integer one goes through a logarithm, whose
-# branch cut the adjoint does not respect, and dag(sqrt(X)) came out as sqrt(X)
-simplify_dag(a::PowOp) =
-    if isinteger(a.expo)
-        PowOp(simplify_dag(a.arg), a.expo)
-    else
-        DagOp(a)
-    end
+# the adjoint of a product repeated is the adjoint repeated, but a non integer power goes
+# through a logarithm, whose branch cut the adjoint does not respect: dag(sqrt(X)) came out
+# as sqrt(X)
+simplify_dag(a::IntPowOp) = power(simplify_dag(a.arg), a.expo)
+simplify_dag(a::GenPowOp) = DagOp(a)
 simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
 simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
 # a projector is on a pure state, `matrix` refusing a mixed one, and so self adjoint
@@ -340,9 +294,9 @@ simplify_prod(v::Vector) =
 # F*X = X*F, F*JW(C) => -JW(C)*F, F*F = Id
 
 pow_base(a::Op) = a
-pow_base(a::PowOp) = a.arg
+pow_base(a::Union{IntPowOp, GenPowOp}) = a.arg
 pow_expo(a::Op) = 1
-pow_expo(a::PowOp) = a.expo
+pow_expo(a::Union{IntPowOp, GenPowOp}) = a.expo
 
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     id = MakeIdentity(v[1])
@@ -369,49 +323,28 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     if f
         push!(w, F)
     end
+    # neighbours of one base merge, A^p * A^q being A^(p + q), and what a merge gives has its
+    # coefficient taken out of the product: (-X)^0.5 * (-X)^0.5 is -X, whose -1 left as a
+    # factor kept the product from its normal form. A merge that gives F, as F^0.5 * F^0.5
+    # does, has to go through the crossing of the F again
     r = GenericOp{Pure, N}[]
-    b = id
-    e = 1
+    again = false
     for x in w
-        bx = pow_base(x)
-        ex = pow_expo(x)
-        if bx == b
-            e += ex
+        if !isempty(r) && pow_base(r[end]) == pow_base(x)
+            y = pop!(r)
+            m = power(pow_base(x), pow_expo(y) + pow_expo(x))
+            c *= scalarcoef(m)
+            m = scalararg(m)
+            again = again || m isa JW_F
         else
-            sp = simplify_pow(b, e)
-            if sp ≠ id
-                push!(r, sp)
-            end
-            b = bx
-            e = ex
+            m = x
+        end
+        if m ≠ id
+            push!(r, m)
         end
     end
-    sp = simplify_pow(b, e)
-    if sp ≠ id
-        push!(r, sp)
-    end
-    change = true
-    while change
-        change = false
-        nr = GenericOp{Pure, N}[]
-        for x in r
-            if isempty(nr)
-                push!(nr, x)
-                continue
-            end
-            y = nr[end]
-            if pow_base(y) ≠ pow_base(x)
-                push!(nr, x)
-                continue
-            end
-            change = true
-            pop!(nr)
-            sp = simplify_pow(pow_base(x), pow_expo(y) + pow_expo(x))
-            if sp ≠ id
-                push!(nr, sp)
-            end
-        end
-        r = nr
+    if again
+        return simplify_core_prod(c, r)
     end
     return c * ProdOp(r)
 end

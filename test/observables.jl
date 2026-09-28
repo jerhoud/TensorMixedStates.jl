@@ -149,6 +149,8 @@ end
         @test expect(st, mod(g, 3)(i)) ≈ ev(exp(2im * π * b / 3))
         @test expect(st, exp(C)(i)) ≈ ev(kron(id, id, id) + cs[i])
         @test expect(mix(st), exp(g)(i)) ≈ ev(exp(b))
+        # a non integer power is a function of the operator too
+        @test expect(st, (g^0.5)(i)) ≈ ev(b^0.5)
         # simplifying the result again leaves it as it is
         @test simplify(simplify(exp(g)(i))) == simplify(exp(g)(i))
     end

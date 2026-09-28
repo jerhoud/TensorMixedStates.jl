@@ -66,6 +66,35 @@ the reference article.
 
 ### Fixed
 
+- The powers of operators are rewritten on two rules. An integer power of zero or above is
+  a product, with the adjoint, the parity and the Jordan-Wigner strings of that product, and
+  an involution is reduced when the power is written, `X^10000` being `Id`. Any other power,
+  of an exponent that is not an integer, negative or complex, is a function of the operator,
+  the principal power, placed as `exp` is. This fixes the following:
+  - a non integer power of an operator of one site with a coefficient that is not positive,
+    `sqrt(-Z)(1)` or `((im * X)^0.5)(1)`, was refused by `expect` and `make_mpo`;
+  - a non integer power of an odd operator placed after a fermionic site was refused; its
+    odd part takes the string;
+  - a complex exponent failed with a `MethodError`;
+  - a non integer power of an operator of several sites defined by an expression, as
+    `sqrt(Swap)`, was expanded and then refused; it is kept whole, as an exponential is;
+  - a power that does not exist, `sqrt(C)`, gave zero; it is refused, and so is a negative
+    power of an operator that is not invertible;
+  - the product of powers of one operator, `(-X)^0.5 * (-X)^0.5`, could leave a coefficient
+    or an `F` among its factors, and `simplify` was not idempotent on it;
+  - `^` had no method for a placed operator: `X(1)^2` and `(X(1) + Z(2))^2` are products,
+    and `X(1)^0.5` is `(X^0.5)(1)`;
+  - a power of the identity on several sites, `(Id ⊗ Id)^3`, or on a density matrix,
+    `Left(Id)^2`, was not reduced.
+
+- The identity placed on a site had two forms, `Id(1)` and `Id(k)` on the site it was given,
+  so that `Id(2) - X(2) * X(2)` did not cancel and `Id(2)` was measured as complex. It has
+  one, `Id(1)`.
+
+- `expect` checked the sites of an operator after simplifying it, so that a site out of the
+  system was reported as an internal factor of the Jordan-Wigner string, sometimes at another
+  site. It checks the operator as it was written, as `make_mpo` and `apply` do.
+
 - The coefficients of a time dependent evolver were laid on every site a term spans, so that
   a term of k sites was multiplied by its coefficient to the power k, in `make_mpo`,
   `make_approx_W1` and `make_approx_W2`: an evolution with a time dependent term of several

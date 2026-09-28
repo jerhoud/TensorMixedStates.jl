@@ -279,13 +279,24 @@ matrix(a::ExpOp, site::AbstractSite...) =
 matrix(a::ModOp, site::AbstractSite...) =
     exp(2im * π * matrix(a.arg, site...) / a.modulus)
 
-function matrix(a::PowOp, site::AbstractSite...)
+matrix(a::IntPowOp, site::AbstractSite...) =
+    matrix(a.arg, site...) ^ a.expo
+
+function matrix(a::GenPowOp, site::AbstractSite...)
     m = matrix(a.arg, site...)
+    # Julia hands back zero for C^0.5 and an infinity for a negative power of a singular
+    # matrix, where the principal power does not exist
+    r = rank(m)
+    if real(a.expo) ≤ 0 && r < size(m, 1)
+        error("$a does not exist: $(a.arg) is not invertible")
+    elseif real(a.expo) > 0 && r ≠ rank(m * m)
+        error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
+    end
     # Julia 1.10 takes a non integer power of a real diagonal matrix entry by entry and
     # refuses a negative entry, where later versions go complex; it also returns a
     # Symmetric or Hermitian wrapper for a non integer power of such a matrix, which the
     # rest of the package, laying matrices on indices, does not take
-    if !isinteger(a.expo) && eltype(m) <: Real && isdiag(m) && any(<(0), diag(m))
+    if eltype(m) <: Real && isdiag(m) && any(<(0), diag(m))
         return Matrix(complex(m) ^ a.expo)
     end
     return Matrix(m ^ a.expo)

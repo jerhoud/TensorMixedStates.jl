@@ -502,3 +502,68 @@ end
     @test norm(apply(make_mpo(q, a), q) - apply(make_mpo(q, X(1) * Z(2)), q) -
                apply(make_mpo(q, X(1) * Y(2)), q)) < 1e-12
 end
+
+@testset "Powers" begin
+    # an integer power is a product, with the adjoint, the parity and the strings of that
+    # product, an involution reduced at once; any other is the principal power, a function of
+    # the operator as exp is, of which only the modulus of a coefficient comes out
+    q, fe, s1 = Qubit(), Fermion(), Spin(1)
+    @test X^10000 == Id
+    @test X^10001 == X
+    @test (2X)^3 == 8X
+    @test simplify(Sz^2 * Sz) == Sz^3
+    for (a, s) in [(X^3, q), ((X + Y)^3, q), (Sz^2, s1), ((Sp + Sm)^3, s1),
+                   ((C + dag(C))^2, fe), (C^3, fe), (dag((X + im * Y)^2), q)]
+        @test matrix(simplify(a), s) ≈ matrix(a, s)
+    end
+    @test matrix(dag((X + im * Y)^2), q) ≈ matrix((X + im * Y)^2, q)'
+    @test isfermionic(C^3)
+    @test !isfermionic(C^2)
+
+    # a phase stays inside: the principal square root of -Z has i on its eigenvalue -1
+    @test matrix(sqrt(-Z), q) ≈ [im 0 ; 0 1]
+    up = State{Pure}(System(2, q), "Up")
+    @test expect(up, sqrt(-Z)(1)) ≈ im
+    @test expect(up, ((im * X)^0.5)(1)) ≈ matrix((im * X)^0.5, q)[1, 1]
+    @test matrix(X^(0.5im), q) ≈ matrix(X, q)^(0.5im)
+    # a power that does not exist is refused, where Julia gives zero for C^0.5
+    @test_throws "does not exist" matrix(sqrt(C), fe)
+    @test_throws "does not exist" matrix(Proj(0)^(-0.5), q)
+
+    # powers of the same operator merge, and what they give leaves no coefficient inside the
+    # product nor an F out of its place
+    @test simplify((-X)^0.5 * (-X)^0.5) == -X
+    @test simplify(X^0.5 * X^0.5) == X
+    @test simplify(F^0.5 * F^0.5 * C) == simplify(F * C)
+
+    # a placed operator takes powers, an integer one of anything placed and any one of an
+    # operator on its sites
+    st = RandomState{Pure}(System(3, q), 4)
+    @test expect(st, X(1)^2) ≈ 1
+    @test expect(st, (X(1) + Z(2))^2) ≈ expect(st, (X(1) + Z(2)) * (X(1) + Z(2)))
+    @test expect(st, X(1)^0.5) ≈ expect(st, (X^0.5)(1))
+    @test_throws "has no power 0.5 once placed" (X(1) + Z(2))^0.5
+
+    # a non integer power of several sites is kept whole, as exp is: it is refused where it
+    # would have to be split, and applied as a gate, a fermion beside it included
+    @test_throws "acts on several sites" expect(st, sqrt(Swap)(1, 2))
+    sf = State{Pure}(System([q, q, fe]), ["Up", "Dn", "Emp"])
+    @test_ok apply(sqrt(Swap)(1, 2) * dag(C)(3), sf)
+end
+
+@testset "The identity once placed" begin
+    # it has one form, on the first site, whatever site it came from, and its powers reduce
+    # whatever form it takes: on several sites, and on a density matrix
+    q = Qubit()
+    @test (Id ⊗ Id)^3 == Id ⊗ Id
+    @test Left(Id)^2 == Left(Id)
+    @test matrix((-(Id ⊗ Id))^0.5, q, q) ≈ matrix(im * (Id ⊗ Id), q, q)
+    @test X(3)^0 == Id(1)
+    @test simplify(Id(2)) == Id(1)
+    st = RandomState{Pure}(System(3, q), 2)
+    @test expect(st, Id(2) - X(2) * X(2)) ≈ 0 atol = 1e-12
+    # it is its own adjoint, and so measured as real
+    @test last(only(measure(st, Id(2)))) isa Real
+    # and a site the system does not have is still refused
+    @test_throws "does not have" expect(st, Id(5))
+end
