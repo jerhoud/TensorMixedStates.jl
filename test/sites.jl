@@ -51,6 +51,22 @@ end
 
 TensorMixedStates.dim(::Pretender) = 2
 
+# a site declaring a state spelt as a generic form, and one of its own for FullyMixed: a
+# generic form came first and shadowed the first, and a special case the second
+struct Declarer <: AbstractSite end
+
+TensorMixedStates.dim(::Declarer) = 2
+
+@def_states(Declarer(), [ "0" => [0., 1.], "FullyMixed" => [0.9 0. ; 0. 0.1] ])
+
+# a site whose generic forms are interrupted, to check that the interrupt is not taken for a
+# name the site does not read
+struct Interrupter <: AbstractSite end
+
+TensorMixedStates.dim(::Interrupter) = 2
+
+TensorMixedStates.string_state(::Interrupter, ::String) = throw(InterruptException())
+
 @testset "Qubit measuring" begin
     @test_pm test_phases(CreateState{type}(1, Qubit(), "Z+"; 
         final_measures = check([X(1), Y(1), Z(1)], [0, 0, 1])))
@@ -148,6 +164,20 @@ end
         final_measures = check([Nup, Ndn, Ntot], [[0, 1, 0], [0, 0, 1], [0, 1, 1]])))        
 end
 
+@testset "One electron of fully mixed spin" begin
+    # the mixed state (|↑⟩⟨↑| + |↓⟩⟨↓|)/2, which a strong conservation of Ntot allows where
+    # FullyMixed, spread over several numbers of electrons, is refused
+    strong = TensorMixedStates.strong
+    for site in (Electron(conserve = strong(Ntot)), Tj(conserve = strong(Ntot)))
+        st = State{Mixed}(System(2, site), ["MixedSpin", "↑|↓"])
+        @test real(expect(st, Ntot(1))) ≈ 1
+        @test real(expect(st, Nup(2))) ≈ 0.5
+        @test abs(expect(st, Sz(1))) < 1e-14
+        @test real(trace2(st)) ≈ 1 / 4
+        @test_throws "spreads over several charges" State{Mixed}(System(2, site), "FullyMixed")
+    end
+end
+
 @testset "Qboson measuring" begin
     @test_pm test_phases(CreateState{type}(4, Qboson(0.1, 4), ["0", "1", "2", "3"];
         final_measures = check(N, [0, 1, 2, 3])))
@@ -238,6 +268,16 @@ end
     # a site type declared outside the package goes through the same library
     @test_throws "state Zorglub is not defined for site Dummit" State{Pure}(
         System(2, Dummit()), "Zorglub")
+end
+
+@testset "A state a site declares is the one used" begin
+    @test state(Declarer(), "0") == [0., 1.]
+    @test state(Declarer(), "FullyMixed") == [0.9 0. ; 0. 0.1]
+    # its generic forms are still there, and FullyMixed for a site that declares none
+    @test state(Declarer(), "1") == [0., 1.]
+    @test state(Qubit(), "FullyMixed") == [0.5 0. ; 0. 0.5]
+    @test_throws "state Zorglub is not defined for site Declarer" state(Declarer(), "Zorglub")
+    @test_throws InterruptException state(Interrupter(), "Up")
 end
 
 @testset "Custom site type" begin

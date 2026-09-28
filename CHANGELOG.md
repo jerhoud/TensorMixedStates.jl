@@ -12,6 +12,11 @@ the reference article.
 
 ### Added
 
+- `Electron` and `Tj` have the mixed state `"MixedSpin"`, or `"↑|↓"`: one electron of fully
+  mixed spin, `(|↑⟩⟨↑| + |↓⟩⟨↓|)/2`. It is the infinite spin temperature state of a Mott
+  insulator, and the one fully mixed state a strong conservation of `Ntot` allows, where
+  `"FullyMixed"` spreads over several numbers of electrons and is refused.
+
 - `named` defines an operator from a matrix or a function of the sites as well as from an
   expression, and is the way the manual now gives. Its type is read off the matrix,
   `involution_op`, `selfadjoint_op` or `plain_op`, and `fermionic_op` when it anticommutes
@@ -486,6 +491,12 @@ the reference article.
 
 - A state file reads back a site field of a floating point type other than `Float64`, which
   it wrote as `0.1f0` and could not parse, and an integer beyond `Int`, which overflowed.
+
+- A state a site declares is the one its name gives. A generic form of the same spelling,
+  `"0"` or a spin state such as `"Z1/2"`, came first and shadowed it, and so did
+  `"FullyMixed"`, which is now one of the states every site has, looked for after those it
+  declares and its generic forms. An interrupt while a state is looked for goes on to where
+  the simulation stops, instead of turning into `state … is not defined`.
 
 ## [1.4.0] - 2026-09-24
 

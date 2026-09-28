@@ -15,6 +15,9 @@ a site type to represent Tj sites (like Electron sites without the up and down s
 - `"0", "Emp"`   : empty state
 - `"Up", "↑"`    : up state
 - `"Dn", "↓"`    : down state
+- `"MixedSpin", "↑|↓"` : one electron of fully mixed spin, the mixed state
+  ``(|↑⟩⟨↑| + |↓⟩⟨↓|)/2``, which a strong conservation of `Ntot` allows where `"FullyMixed"`
+  spreads over several numbers of electrons
 
 # Operators
 
@@ -40,6 +43,7 @@ string_state(::Tj, ::String) = error("no generic state for Tj")
     ["Emp", "0"] => [1., 0., 0.],
     ["Up", "↑"] => [0., 1., 0.],
     ["Dn", "↓"] => [0., 0., 1.],
+    ["MixedSpin", "↑|↓"] => [0. 0. 0. ; 0. 0.5 0. ; 0. 0. 0.5],
 ])
 
 @def_operators(Tj(),

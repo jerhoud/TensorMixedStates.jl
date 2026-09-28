@@ -149,8 +149,9 @@ Index(site::AbstractSite) = site_index(site, !isempty(conserved(site)))
 """
     string_state(::AbstractSite, ::String)
 
-Do not call directly. It returns a local state corresponding to the string,
-this is tried first before trying specifically defined states.
+Do not call directly. It returns a local state corresponding to the string, a generic form
+the site reads, which is tried after the states the site declares and before the states
+every site has, see `state`.
 
 The default implementation returns the first state for "0", the second for "1" and so on.
 
@@ -227,19 +228,11 @@ end
 """
     state_info(site, statename)
 
-return the state definition for `site` as stored in `state_library`,
-it may be a `Vector` (for pure state), a `Matrix` for mixed states or a site function
+return the state definition for `site` as stored in `state_library`, `nothing` when the site
+declares no state of that name. It may be a `Vector` (for pure state), a `Matrix` for mixed
+states, a site function or the name of another state
 """
-function state_info(site::AbstractSite, st::String)
-    name = typeof(site)
-    t = (name, st)
-    r = get(state_library, t, nothing)
-    if isnothing(r)
-        error("state $st is not defined for site $name")
-    else
-        return r
-    end
-end
+state_info(site::AbstractSite, st::String) = get(state_library, (typeof(site), st), nothing)
 
 """
     identity_operator(::AbstractSite)
@@ -385,10 +378,25 @@ function state(site::AbstractSite, a::Int)
 end
 
 """
+    common_states
+
+the states every site has, whatever its type, as functions of the site: `"FullyMixed"`, the
+infinite temperature state, a density matrix proportional to the identity. They are found as
+the states a site declares are, after them, so that a site may declare one of its own.
+"""
+const common_states = Dict{String, Function}(
+    "FullyMixed" => s -> identity_operator(s) / dim(s),
+)
+
+"""
     state(::AbstractSite, ::String)
 
-return the local state (as a vector or matrix) corresponding to the site and name given
-the special name "FullyMixed" gives the infinite temperature state
+return the local state (as a vector or matrix) corresponding to the site and name given.
+
+The name is looked for among the states the site declares, see `@def_states`, then among its
+generic forms, see `string_state`, then among the states every site has, see `common_states`:
+the name "FullyMixed" gives the infinite temperature state. A name the site declares is the
+one used, whatever else it could be read as.
 
 # Examples
 
@@ -406,16 +414,30 @@ julia> state(Fermion(), "FullyMixed")
  0.0  0.5
 ```
 """
-state(site::AbstractSite, st::String) =
-    if st == "FullyMixed"
-        identity_operator(site) / dim(site)
-    else
-        try
-            string_state(site, st)
-        catch
-            state(site, state_info(site, st))
-        end
+function state(site::AbstractSite, st::String)
+    declared = state_info(site, st)
+    if !isnothing(declared)
+        return state(site, declared)
     end
+    generic = try
+        string_state(site, st)
+    catch e
+        # an error is how `string_state` says the name is not one of its forms. An interrupt
+        # is not one, and has to go on to where a simulation stops on it
+        if e isa InterruptException
+            rethrow()
+        end
+        nothing
+    end
+    if !isnothing(generic)
+        return generic
+    end
+    common = get(common_states, st, nothing)
+    if !isnothing(common)
+        return state(site, common)
+    end
+    error("state $st is not defined for site $(typeof(site))")
+end
 
 
 ################ Conserved quantities ################

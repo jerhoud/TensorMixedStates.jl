@@ -16,6 +16,9 @@ a site type to represent electron sites (dim is 4)
 - `"Up", "↑"`    : up state
 - `"Dn", "↓"`    : down state
 - `"UpDn", "↑↓"` : up and down state
+- `"MixedSpin", "↑|↓"` : one electron of fully mixed spin, the mixed state
+  ``(|↑⟩⟨↑| + |↓⟩⟨↓|)/2``, which a strong conservation of `Ntot` allows where `"FullyMixed"`
+  spreads over several numbers of electrons
 
 # Operators
 
@@ -42,6 +45,7 @@ string_state(::Electron, ::String) = error("no generic state for Electron")
     ["Up", "↑"] => [0., 1., 0., 0.],
     ["Dn", "↓"] => [0., 0., 1., 0.],
     ["UpDn", "↑↓"] => [0., 0., 0., 1.],
+    ["MixedSpin", "↑|↓"] => [0. 0. 0. 0. ; 0. 0.5 0. 0. ; 0. 0. 0.5 0. ; 0. 0. 0. 0.],
 ])
 
 @def_operators(Electron(),
