@@ -157,7 +157,7 @@ faster than its bra.
     matrix(X⊗A, Qubit(), Boson(2))
     matrix(Left(X), Qubit())
 """
-function matrix(a::Union{TensorOp, Left, Right, SetState}, site::AbstractSite...)
+function matrix(a::Union{TensorOp, Left, Right}, site::AbstractSite...)
     sites = all_sites(a, site)
     # plain indices: nothing is there to reorder the basis, and no charge to check
     js = [ Index(dim(s)) for s in sites ]
@@ -297,6 +297,16 @@ matrix(a::DagOp, site::AbstractSite...) =
 function matrix(a::Dissipator, site::AbstractSite...)
     aa = dag(a.arg) * a.arg
     return matrix(Gate(a.arg), site...) - 0.5 * (matrix(Left(aa), site...) + matrix(Right(aa), site...))
+end
+
+# the density matrix of the state times the trace: ρ ↦ m tr(ρ), the ket varying fastest. It is
+# laid through `lay` as any operator of a density matrix, so that under a strong symmetry, where
+# resetting a site moves the charge of one side only, it is refused rather than left with the
+# block of charge zero alone, which gave a state of trace zero
+function matrix(a::SetState, site::AbstractSite)
+    v = state(site, a.state)
+    m = v isa Matrix ? v : v * v'
+    return vec(m) * transpose(vec(identity_operator(site)))
 end
 
 matrix(a::Gate, site::AbstractSite...) =
@@ -642,14 +652,6 @@ legs(a::Left, sites, js, bs) =
 # factor of no definite charge is refused by name rather than by ITensors
 legs(a::Right, sites, js, bs) =
     prod(denseblocks(delta(j', dag(j))) for j in js) * dag(legs(a.arg, sites, bs))'
-
-function legs(a::SetState, sites, js, bs)
-    site, j, b = only(sites), only(js), only(bs)
-    v = state(site, a.state)
-    m = v isa Matrix ? v : v * v'
-    return denseblocks(delta(dag(j), b')) *
-           charged_state(() -> op_on_sites(m, [j'], [dag(b'')]), j, a.state, site)
-end
 
 function legs(a::GenericOp{Mixed}, sites, js, bs)
     m = matrix(a, sites...)

@@ -125,6 +125,10 @@ the reference article.
 - A mixed state saved from a partial trace of a charged system, which keeps charged indices on
   the sites that conserve nothing, could not be used once loaded.
 
+- `SetState` under a strong symmetry kept only the part of charge zero of the site it reset,
+  which gave a state of trace zero or below one. Resetting a site moves the charge of one side
+  of the density matrix alone, and is refused, as other jumps that move the charge are.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

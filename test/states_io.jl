@@ -62,6 +62,20 @@ TensorMixedStates.dim(::Unkindly) = 2
     @test trace(st5) ≈ 1
 end
 
+@testset "SetState under a strong symmetry" begin
+    # resetting a site moves the charge of one side of the density matrix only, which a strong
+    # symmetry forbids: it kept the block of charge zero alone, a state of trace zero
+    ss = System(2, Fermion(conserve = strong(N)))
+    ρs = mix(State{Pure}(ss, ["Occ", "Emp"]))
+    @test_throws "strongly forbids" apply(SetState("Emp")(1), ρs)
+    @test_throws "strongly forbids" make_mpo(ρs, SetState("Emp")(1))
+    # conserved weakly, it resets the site as it does without charges
+    ρw = mix(State{Pure}(System(2, Fermion(conserve = N)), ["Occ", "Emp"]))
+    r = apply(SetState("Emp")(1), ρw)
+    @test trace(r) ≈ 1
+    @test expect(r, N(1)) ≈ 0 atol = 1e-12
+end
+
 @testset "Loading a partial trace of a charged system" begin
     # it keeps charged indices on the sites that conserve nothing, and loading has to rebuild
     # the pure ones in that mode
