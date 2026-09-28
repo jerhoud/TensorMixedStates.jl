@@ -15,7 +15,7 @@
 using LinearAlgebra
 
 const I2 = ComplexF64[1 0; 0 1]
-const Cm = ComplexF64[0 1; 0 0]     # annihilation, same basis order as Fermions.jl
+const Cm = ComplexF64[0 1; 0 0]     # annihilation, same basis order as sites/Fermions.jl
 const Fm = ComplexF64[1 0; 0 -1]    # Jordan-Wigner string
 
 n = 5

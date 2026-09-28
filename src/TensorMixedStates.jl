@@ -42,14 +42,14 @@ include("Run.jl")
 include("Graphs.jl")
 
 # Sites
-include("Qubits.jl")
-include("Fermions.jl")
-include("Bosons.jl")
-include("Spins.jl")
-include("Electrons.jl")
-include("Tjs.jl")
-include("Qbosons.jl")
-include("Qudits.jl")
+include("sites/Qubits.jl")
+include("sites/Fermions.jl")
+include("sites/Bosons.jl")
+include("sites/Spins.jl")
+include("sites/Electrons.jl")
+include("sites/Tjs.jl")
+include("sites/Qbosons.jl")
+include("sites/Qudits.jl")
 
 # Precompilation
 include("Precompile.jl")
