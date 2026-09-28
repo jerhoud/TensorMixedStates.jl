@@ -93,6 +93,10 @@ the reference article.
   failed inside ITensors, and its adjoint came out with its factors in the wrong order. The
   product on one site is written `X(1) * Y(1)`.
 
+- `exp` and `mod` of an operator of one site that is not even, as `exp(0.7 * (C + dag(C)))`,
+  placed after a fermionic site, lost the Jordan-Wigner string, in `expect`, `make_mpo` and
+  `measure`. Its part anticommuting with `F` takes the string, as `C` does.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

@@ -79,8 +79,23 @@ reindex(op::GenericOp, i::Int...) = op(i...)
 
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
 simplify_ind(a::Union{Identity, JW_F, Proj, JW, SetState}, index) = a(index)
-simplify_ind(a::ExpOp, index...) = a(index...)
-simplify_ind(a::ModOp, index...) = a(index...)
+simplify_ind(a::ExpOp, index...) = place_function(a, index...)
+simplify_ind(a::ModOp, index...) = place_function(a, index...)
+
+# a function of an operator of one site that is not even is kept whole, and placed after other
+# sites it is its part commuting with F, placed bare, plus its part anticommuting with F, which
+# takes the string as C does: placed whole, it had no string at all. Each part is an operator
+# of its own, the odd one fermionic, so that simplifying the result again leaves it as it is
+# rather than cutting the function inside the even part once more
+place_function(a, index...) =
+    if length(index) == 1 && only(index) > 1 && jw_parity(a.arg) ≠ 0
+        i = only(index)
+        even = Operator{1}("even($a)", 0.5 * (a + F * a * F), plain_op)
+        odd = Operator{1}("odd($a)", 0.5 * (a - F * a * F), fermionic_op)
+        simplify_sum([simplify_ind(even, i), simplify_ind(odd, i)])
+    else
+        a(index...)
+    end
 simplify_ind(a::PowOp, index...) = simplify_pow(simplify_ind(a.arg, index...), a.expo)
 simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
 simplify_ind(a::Left, index...) = simplify_l(simplify_ind(a.arg, index...))

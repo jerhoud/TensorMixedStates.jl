@@ -123,6 +123,29 @@ end
     end
 end
 
+@testset "Functions of a fermionic operator" begin
+    # exp and mod of an operator that is not even, placed after a fermionic site, take the
+    # string on their odd part, which is checked against the dense matrices of the explicit
+    # c₁ = c ⊗ 1 ⊗ 1, c₂ = F ⊗ c ⊗ 1 and c₃ = F ⊗ F ⊗ c
+    fe = Fermion()
+    st = RandomState{Pure}(System(3, fe), 4)
+    idx = [ SysIndex{Pure}(st.system, k) for k in 1:3 ]
+    psi = reshape(Array(reduce(*, [st.state[k] for k in 1:3]), reverse(idx)...), 8)
+    ev(m) = psi' * m * psi / (psi' * psi)
+    c, f, id = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
+    cs = [kron(c, id, id), kron(f, c, id), kron(f, f, c)]
+    g = 0.7 * (C + dag(C))
+    for i in 1:3
+        b = 0.7 * (cs[i] + cs[i]')
+        @test expect(st, exp(g)(i)) ≈ ev(exp(b))
+        @test expect(st, mod(g, 3)(i)) ≈ ev(exp(2im * π * b / 3))
+        @test expect(st, exp(C)(i)) ≈ ev(kron(id, id, id) + cs[i])
+        @test expect(mix(st), exp(g)(i)) ≈ ev(exp(b))
+        # simplifying the result again leaves it as it is
+        @test simplify(simplify(exp(g)(i))) == simplify(exp(g)(i))
+    end
+end
+
 @testset "Entanglement and entropies" begin
     L2 = log(2)
     s2 = System(2, Qubit())
