@@ -725,3 +725,21 @@ end
     @test TensorMixedStates.obs_name((X^0.5)^0.5) == "(X^0.5)^0.5"
 end
 
+@testset "Long sums and products print compactly" begin
+    # the terms left out take the sign of the first of them
+    s = X(1) + X(2) + X(3) - X(4) + sum(X(i) for i in 5:9) - X(10)
+    @test TensorMixedStates.obs_name(s) == "X(1)+X(2)+X(3)-...+X(9)-X(10)"
+    @test eval(Meta.parse(repr(s))) == s
+    @test TensorMixedStates.obs_name(sum(X(i) for i in 1:10)) == "X(1)+X(2)+X(3)+...+X(9)+X(10)"
+    @test TensorMixedStates.obs_name(sum(X(i) for i in 1:6)) == "X(1)+X(2)+X(3)+X(4)+X(5)+X(6)"
+
+    p = prod(Z(i) for i in 1:10)
+    @test TensorMixedStates.obs_name(p) == "Z(1)*Z(2)*Z(3)*...*Z(9)*Z(10)"
+    @test eval(Meta.parse(repr(p))) == p
+    @test TensorMixedStates.obs_name(prod(Z(i) for i in 1:6)) == "Z(1)*Z(2)*Z(3)*Z(4)*Z(5)*Z(6)"
+    # the factors kept are parenthesized as in the full form
+    @test TensorMixedStates.obs_name(prod(Z(i) for i in 1:6) * (X(1) + X(2))) ==
+        "Z(1)*Z(2)*Z(3)*...*Z(6)*(X(1)+X(2))"
+    @test TensorMixedStates.obs_name(X(1) + 2p) == "X(1)+2Z(1)*Z(2)*Z(3)*...*Z(9)*Z(10)"
+end
+

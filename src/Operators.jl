@@ -318,27 +318,18 @@ sumsubs(a::Op) = [a]
 show(io::IO, a::SumOp) =
     paren(io, Base.operator_precedence(:+)) do io
         n = length(a.subs)
-        compact = n > 6 && get(io, :compact, false)
-        i = 1
-        while (i <= n)
-            s = sprint(show, a.subs[i]; context = io)
-            if i == 1
-                print(io, s)
-            else
-                if s[1] ≠ '-'
-                    print(io, "+")
-                elseif compact && i == 4
-                    print(io, "-")
-                end
-                if compact && i == 4
-                    print(io, "...")
-                    i = n - 1
-                    continue
-                else
-                    print(io, s)
-                end
+        subs = if n > 6 && get(io, :compact, false)
+            dots = startswith(sprint(print, a.subs[4]; context = io), '-') ? "-..." : "..."
+            [a.subs[1:3]; dots; a.subs[n-1:n]]
+        else
+            a.subs
+        end
+        for (k, x) in enumerate(subs)
+            s = sprint(print, x; context = io)
+            if k > 1 && s[1] ≠ '-'
+                print(io, "+")
             end
-            i = i + 1
+            print(io, s)
         end
     end
 
@@ -421,7 +412,12 @@ prodsubs(a::Op) = [a]
 
 show(io::IO, a::ProdOp) =
     paren(io, Base.operator_precedence(:*)) do io
-        infix(io, a.subs, "*")
+        n = length(a.subs)
+        if n > 6 && get(io, :compact, false)
+            infix(io, [a.subs[1:3]; "..."; a.subs[n-1:n]], "*")
+        else
+            infix(io, a.subs, "*")
+        end
     end
 
 isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
