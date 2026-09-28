@@ -12,6 +12,14 @@ the reference article.
 
 ### Added
 
+- `named` defines an operator from a matrix or a function of the sites as well as from an
+  expression, and is the way the manual now gives. Its type is read off the matrix,
+  `involution_op`, `selfadjoint_op` or `plain_op`, and `fermionic_op` when it anticommutes
+  with the `F` of the sites it is given. Given its sites, it builds the operator on them as
+  `Operator{N}(name, def, type, sites...)` does, a single site standing for as many as the
+  size of a matrix asks for: `named(m, "MySwap", Qubit())` acts on two qubits. `type` sets the
+  type instead.
+
 - An operator of several sites defined by a matrix, by a function of its sites or by an
   expression `simplify` cannot develop, such as `exp(X ⊗ X)`, can be given the sites it acts
   on: `Operator{2}("P2", m, selfadjoint_op, Spin(1))`, or `Operator{2}("K", m, plain_op,
@@ -381,6 +389,13 @@ the reference article.
   `DataFrame` refused it, its name clashing with the column of the rows.
 
 - `Xd` on `Qudit(1)` is the identity. It was zero.
+
+- The type of an operator is checked against its matrix each time it is placed on a site, and
+  refused when the matrix belies it: an involution or a self adjoint operator that is not
+  one, a fermionic operator that does not anticommute with `F`, or another that does not
+  commute with it. `simplify` reasons with the type, and `Operator{1}("Bad", [0 1; 0 0],
+  involution_op)` squared to `Id`, where its square is zero. `@def_operators` checks the
+  operators it declares on the site it is given, and `F` is checked to be an involution.
 
 ## [1.4.0] - 2026-09-24
 

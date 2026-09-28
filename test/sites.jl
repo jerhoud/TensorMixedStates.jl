@@ -260,6 +260,14 @@ end
     @test_throws "operator N is not defined for site Dummit2" matrix(N, Dummit2())
     @test_throws "definition of its own" @def_operators(Dummit2(),
         [ plain_op => [ Renamed = [0. 0. ; 0. 1.] ] ])
+    # the types, and F, are checked on the site given, and a refusal leaves the library as it was
+    lib = TensorMixedStates.operator_library
+    @test_throws "X is declared involution_op but is not self adjoint on Dummit2()" @def_operators(
+        Dummit2(), [ involution_op => [ X = [0. 1. ; 0. 0.] ] ])
+    @test !haskey(lib, (Dummit2, "X"))
+    @test_throws "F is not an involution on Dummit2()" @def_operators(Dummit2(),
+        [ involution_op => [ F = [1. 0. ; 0. 2.] ] ])
+    @test !haskey(lib, (Dummit2, "F"))
 end
 
 @testset "Index tags" begin

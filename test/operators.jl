@@ -614,3 +614,75 @@ end
     @test_throws "whose dimension is 4" tensor(rand(3, 3), q)
     @test_throws "whose dimension is 4" tensor(rand(2, 2), q, q)
 end
+
+@testset "The type of an operator is checked against its matrix" begin
+    # simplify reasons with the type, so a type the matrix belies gave a wrong result with no
+    # message: this involution squared to Id where its square is zero
+    q, f = Qubit(), Fermion()
+    @test_throws "declared involution_op but is not self adjoint on Qubit()" matrix(
+        Operator{1}("Bad", [0. 1.; 0. 0.], involution_op), q)
+    @test_throws "its square is not the identity" matrix(
+        Operator{1}("TwoX", [0. 2.; 2. 0.], involution_op), q)
+    @test_throws "declared selfadjoint_op but is not self adjoint" matrix(
+        Operator{1}("A", [0. 1.; 0. 0.], selfadjoint_op), q)
+    # an odd operator declared plain crosses F with no sign, and a fermionic one on a site
+    # with no F with one
+    k = Operator{1}("K", [0. 1.; 0. 0.], plain_op)
+    @test_throws "declared plain_op but does not commute with F on Fermion()" expect(
+        State{Pure}(System(2, f), "Emp"), k(2))
+    @test_throws "declared fermionic_op but does not anticommute with F on Qubit()" matrix(
+        Operator{1}("Cq", [0. 1.; 0. 0.], fermionic_op), q)
+    # F is what every parity is read against, and what simplify squares to Id
+    for s in (q, f, Electron(), Tj(), Boson(3))
+        @test matrix(F, s)^2 ≈ matrix(Id, s)
+    end
+    # checked when the operator is built on its sites as well
+    @test_throws "declared selfadjoint_op but is not self adjoint" Operator{2}("P",
+        kron([0. 1.; 0. 0.], [1. 0.; 0. 1.]), selfadjoint_op, q)
+    # every operator of the libraries has the type its matrices say, on sites of every size
+    lib = TensorMixedStates.operator_library
+    for s in [Qubit(), Fermion(), Electron(), Tj(), Spin(0), Spin(1/2), Spin(1), Qudit(1),
+              Qudit(2), Qudit(3), Boson(2), Boson(4), Qboson(1., 2), Qboson(0.5, 4)]
+        for (t, name) in keys(lib)
+            if t == typeof(s) && name ≠ "F" && isdefined(TensorMixedStates, Symbol(name))
+                o = getfield(TensorMixedStates, Symbol(name))
+                if o isa Operator
+                    @test_ok matrix(o, s)
+                end
+            end
+        end
+    end
+end
+
+@testset "named defines an operator" begin
+    # without sites, a matrix is read on its own
+    @test named([1 1; 1 -1] / √2, "MyH").type == involution_op
+    @test named([0. 2.; 2. 0.], "TwoX").type == selfadjoint_op
+    @test named([0. 1.; 0. 0.], "Up").type == plain_op
+    @test named(s -> [0. 1.; 1. 0.], "Fx").type == plain_op
+    # an expression keeps the type of what it renames
+    @test named(N, "Nf").type == selfadjoint_op
+    @test named(C, "D").type == fermionic_op
+    # given its sites, the type is read off the matrix there, F included
+    @test named(Sp + Sm, "Sx2", Spin(1)).type == selfadjoint_op
+    @test matrix(named(Sp + Sm, "Sx2", Spin(1)), Spin(1)) ≈ 2 * matrix(Sx, Spin(1))
+    @test named(s -> [0. 1.; 1. 0.], "Fx", Qubit()).type == involution_op
+    @test named([0. 1.; 1. 0.], "Xf", Fermion()).type == fermionic_op
+    @test_throws "M has no definite fermionic parity on Fermion()" named([1. 1.; 1. 1.], "M",
+                                                                           Fermion())
+    # a single site stands for as many as the size of the matrix asks for, and the operator
+    # can then be measured
+    sw = matrix(Swap, Qubit())
+    s1 = named(sw, "MySwap", Qubit())
+    @test s1 isa Operator{2}
+    @test s1.type == involution_op
+    @test matrix(s1, Qubit()) ≈ sw
+    st = State{Pure}(System(2, Qubit()), ["Up", "X+"])
+    @test expect(st, s1(1, 2)) ≈ 0.5
+    @test_throws "a 3×3 matrix acts on no number of Qubit()" named(rand(3, 3), "R", Qubit())
+    # a type given is kept, and checked
+    @test named(X, "X2", Qubit(); type = plain_op).type == plain_op
+    @test_throws "declared selfadjoint_op but is not self adjoint" named(Sp, "Sp2", Qubit();
+                                                                          type = selfadjoint_op)
+end
+

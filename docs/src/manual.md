@@ -202,16 +202,27 @@ For example one can define the Rxy 2-site operator by
 Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
 ```
 
-If this is not enough to define your favorite operator you can create new ones by specifying their matrix.
-The number in braces is the number of sites on which the operator must be applied.
+If this is not enough to define your favorite operator you can create new ones with `named`,
+from an expression, a matrix or a function of the sites. The type of the operator, which
+`simplify` reasons with (see `OpType`), is read off its matrix: here an involution.
 
 ```@example manual
-myop = Operator{1}("MyOp", [1 1 ; 1 -1] / √2, involution_op)
+myop = named([1 1 ; 1 -1] / √2, "MyOp")
 ```
+
+```@example manual
+myop.type
+```
+
+A matrix of several sites given alone does not say how many sites it acts on, which is then
+given in braces, with the type:
 
 ```@example manual
 myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
 ```
+
+Whichever way it is given, the type is checked against the matrix each time the operator is
+placed on a site.
 
 Finally from generic operators, we define indexed operators by simply applying them to the corresponding sites
 
@@ -229,10 +240,11 @@ myswap(4, 7)
 
 An operator of several sites defined by a matrix, as `myswap` is, or a function of one, as
 `Rxy` is, can only be applied as a gate. To measure it or to put it in a hamiltonian, give
-the sites it acts on when creating it, one per index or a single one for identical sites:
+the sites it acts on when creating it, one per index or a single one for identical sites,
+whose number is then read off the size of the matrix:
 
 ```@example manual
-myswap2 = Operator{2}("MySwap2", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op, Qubit())
+myswap2 = named([1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], "MySwap2", Qubit())
 ```
 
 It is then split into a sum of products of one site operators, which becomes its

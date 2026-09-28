@@ -1,4 +1,4 @@
-export tensor, matrix
+export tensor, matrix, flux, conserve_string, @def_operators
 
 """
     combinerto(i::Index, j::Index...)
@@ -257,16 +257,69 @@ matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite...) =
 matrix(a::IdentityOp{Mixed, Generic}, site::AbstractSite...) =
     identity_operator(prod(s -> dim(s)^2, all_sites(a, site)))
 
-matrix(::JW_F, site::AbstractSite) =
-    matrix(F_info(site), site)
+# equal up to rounding, relative to the larger of the two, see `rounding_tol`
+nearly(a, b) = norm(a - b) ≤ rounding_tol * max(norm(a), norm(b))
 
-matrix(a::Operator, site::AbstractSite...) =
-    if isnothing(a.expr)
-        matrix(a.name, site...)
+"""
+    violation(type, m, f)
+
+what the matrix `m` belies of `type`, see `OpType`, or `nothing` when it has it all. `f` is
+the `F` of its site, or `nothing` when no parity is to be read.
+"""
+function violation(type::OpType, m::AbstractMatrix, f)
+    if type in (selfadjoint_op, involution_op) && !nearly(m', m)
+        return "is not self adjoint"
+    elseif type == involution_op && !nearly(m * m, Matrix(I, size(m)...))
+        return "its square is not the identity"
+    elseif isnothing(f)
+        return nothing
+    elseif type == fermionic_op
+        return nearly(f * m, -m * f) ? nothing : "does not anticommute with F"
     else
-        # one site given for identical ones, which a function of the sites cannot take
-        matrix(a.expr, all_sites(a, site)...)
+        return nearly(f * m, m * f) ? nothing : "does not commute with F"
     end
+end
+
+# checked on its own, without the parity every other type is read against: that parity is F
+function matrix(::JW_F, site::AbstractSite)
+    m = matrix(F_info(site), site)
+    if !isnothing(violation(involution_op, m, nothing))
+        error("F is not an involution on $site: it has to be self adjoint and square to the identity")
+    end
+    return m
+end
+
+# the F of a lone site, the only one a parity is read against, see `checked_type`
+site_F(sites) = length(sites) == 1 ? matrix(F, only(sites)) : nothing
+
+"""
+    checked_type(what, type, m, sites)
+
+the matrix `m` of an operator declared of `type`, refused when the matrix belies what the type
+says, see `OpType`. The parity is checked on a single site only, the one an operator of several
+sites can have being checked where it is split, see `split_matrix`.
+"""
+function checked_type(what, type::OpType, m::AbstractMatrix, sites)
+    n = prod(dim, sites)
+    # a size the sites do not fit is refused by whoever lays the matrix, naming the operator
+    if size(m) ≠ (n, n)
+        return m
+    end
+    v = violation(type, m, site_F(sites))
+    if !isnothing(v)
+        hint = v == "does not commute with F" ?
+            ": declare it fermionic_op, or write it with C and dag(C)" : ""
+        error("$what is declared $type but $v on $(join(sites, " ⊗ "))$hint")
+    end
+    return m
+end
+
+function matrix(a::Operator, site::AbstractSite...)
+    # one site given for identical ones, which a function of the sites cannot take
+    sites = all_sites(a, site)
+    m = isnothing(a.expr) ? matrix(a.name, site...) : matrix(a.expr, sites...)
+    return checked_type(a, a.type, m, sites)
+end
 
 function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     st = state(site, a.state)
@@ -382,7 +435,7 @@ function Operator{N}(name::String, def::Union{Matrix, Function, GenericOp{Pure, 
     if length(ss) ≠ N
         error("$name acts on $N sites and was given $(length(ss))")
     end
-    m = matrix(def, ss...)
+    m = checked_type(name, type, matrix(def, ss...), ss)
     if N > 1
         return Operator{N}(name, split_matrix(name, m, ss), type)
     end
@@ -395,6 +448,166 @@ function Operator{N}(name::String, def::Union{Matrix, Function, GenericOp{Pure, 
     end
     return Operator{1}(name, m, type)
 end
+
+"""
+    check_declared(site, declared)
+
+the operators `@def_operators` has just declared for `site`, as `(name, type)` pairs, checked
+on it against their types, and `F` against being an involution. It is the only site of its type
+at hand, and the others are checked where they are used, see `checked_type`. A refusal takes
+the declarations out of the library, so that they can be made again once corrected.
+"""
+function check_declared(site::AbstractSite, declared)
+    try
+        for (name, type) in declared
+            matrix(name == "F" ? F : Operator{1}(name, nothing, type), site)
+        end
+    catch
+        for (name, _) in declared
+            delete!(operator_library, (typeof(site), name))
+        end
+        rethrow()
+    end
+end
+
+"""
+    @def_operators(site, symbols)
+
+define the given operators for the given site, see also `OpType`
+
+Each operator name becomes a `const` of the module the macro is called from, but only the
+first time that name is seen: a name already in scope is registered for the new site and
+checked against what it already stands for, not bound again. Declaring an operator whose name is already used for something else, or declared
+with another `OpType`, is an error rather than a silent redefinition.
+
+An operator that is neither fermionic nor self adjoint is declared `plain_op`. On a fermionic
+site it has to commute with `F`, being placed with no Jordan-Wigner string: an operator that
+moves a fermion is `fermionic_op`. The types, and `F` being an involution, are checked on the
+site given, and again on each site an operator is placed on.
+
+# Examples
+
+    @def_operators(Fermion(),
+    [
+        fermionic_op => 
+        [
+            C = [0. 1. ; 0. 0.],
+        ],
+        selfadjoint_op =>
+        [
+            N = dag(C) * C,
+        ],
+        involution_op =>
+        [
+            F = Float64[1 0 ; 0 -1]
+        ]
+    ])
+"""
+macro def_operators(site, symbols)
+    e = Expr(:block)
+    declared = []
+    if !(symbols isa Expr) || symbols.head ≠ :vect
+        error("syntax error in @def_operators second argument should be a vector")
+    end
+    for types in symbols.args
+        if !(types isa Expr) || types.head ≠ :call || types.args[1] ≠ :(=>)
+            error("syntax error in @def_operators second argument should contain pairs : plain_op => [...]")
+        end
+
+        type = types.args[2]
+        for expr in types.args[3].args
+            if !(expr isa Expr) || expr.head ≠ :(=)
+                error("syntax error in @def_operators item expressions must be assignments (sym = val)")
+            end
+            sym = first(expr.args)
+            nsym = string(sym)
+            val = last(expr.args)
+            push!(declared, :(($nsym, $(esc(type)))))
+            if nsym == "F"
+                # `F` is the Jordan-Wigner operator of `Operators.jl`, shared by every
+                # fermionic site and not an `Operator{1}`: the site is registered and the
+                # name is left alone
+                push!(e.args,
+                quote
+                    add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                end)
+            elseif isdefined(__module__, sym)
+                # the name is already in scope, so it is registered for this site and
+                # checked, but not bound again. Binding it again would rebind it for every
+                # site already using it, and up to Julia 1.11 rebinding a name brought in by
+                # `using` is a hard error of the language. The decision is taken here, at
+                # expansion time, so that no binding is emitted at all in that case
+                push!(e.args,
+                    quote
+                        check_shared_operator($(esc(sym)), $nsym, $(esc(type)), $(esc(site)))
+                        add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                    end)
+            else
+                push!(e.args,
+                    quote
+                        const $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                    end)
+            end
+        end
+    end
+    # once they are all declared, since a function of the site may use one declared after it
+    push!(e.args, :(check_declared($(esc(site)), [$(declared...)])))
+    return e
+end
+
+"""
+    matrix_type(m[, sites, what])
+
+the strongest `OpType` the matrix `m` has, see `violation`: an involution, self adjoint, plain,
+or fermionic when it anticommutes with the `F` of its site.
+"""
+function matrix_type(m::AbstractMatrix, sites = AbstractSite[], what = "the matrix")
+    n = isempty(sites) ? size(m, 1) : prod(dim, sites)
+    # a size the sites do not fit is refused where the operator is built, naming it
+    if size(m) ≠ (n, n)
+        return plain_op
+    end
+    f = site_F(sites)
+    for t in (involution_op, selfadjoint_op, plain_op, fermionic_op)
+        if isnothing(violation(t, m, f))
+            return t
+        end
+    end
+    error("$what has no definite fermionic parity on $(only(sites)): write it with C and dag(C)")
+end
+
+# the number of sites of a definition given with its sites: an expression has its own, a
+# matrix given one site acts on as many as its size asks for, and a function on those given
+named_sites(::GenericOp{Pure, N}, _, _) where N = N
+named_sites(::Function, _, sites) = 1 + length(sites)
+function named_sites(m::Matrix, site, sites)
+    if !isempty(sites)
+        return 1 + length(sites)
+    end
+    d, n, k = dim(site), size(m, 1), 1
+    while d > 1 && d^k < n
+        k += 1
+    end
+    if d^k ≠ n
+        error("a $(size(m, 1))×$(size(m, 2)) matrix acts on no number of $site")
+    end
+    return k
+end
+
+named(m::Matrix, name::String; type::OpType = matrix_type(m)) =
+    Operator{1}(name, m, type)
+
+named(f::Function, name::String; type::OpType = plain_op) =
+    Operator{1}(name, f, type)
+
+function named(def::Union{Matrix, Function, GenericOp{Pure}}, name::String,
+               site::AbstractSite, sites::AbstractSite...; type::Union{Nothing, OpType} = nothing)
+    n = named_sites(def, site, sites)
+    ss = isempty(sites) ? fill(site, n) : AbstractSite[site, sites...]
+    t = isnothing(type) ? matrix_type(matrix(def, ss...), ss, name) : type
+    return Operator{n}(name, def, t, ss...)
+end
+
 
 const superscripts = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
 const subscripts = collect("₀₁₂₃₄₅₆₇₈₉")

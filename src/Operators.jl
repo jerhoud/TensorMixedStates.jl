@@ -147,6 +147,11 @@ the possible operator types for `Operator`
 - `fermionic_op`: a fermionic operator for which Jordan-Wigner transform must be used
 - `selfadjoint_op`: an operator invariant under `dag`
 - `involution_op`: an operator invariant under `dag` and whose square is the identity 
+
+`simplify` reasons with the type, taking `dag(X)` to be `X` or `X * X` to be `Id`, and moving
+the `F` of a site across an operator with a sign for a fermionic one and without for any other.
+The type is therefore checked against the matrix each time the operator is placed on a site,
+and a type the matrix belies is refused rather than giving a wrong result.
 """
 @enum OpType plain_op fermionic_op selfadjoint_op involution_op
 
@@ -990,27 +995,42 @@ named_type(a::Operator) = a.type
 named_type(a::Op) = a isa SimpleOp && isfermionic(a) ? fermionic_op : plain_op
 
 """
-    named(op, name)
+    named(def, name[, sites...]; type)
 
-the same operator under another name.
+the operator `name` defined by `def`, an expression, a matrix or a function of the sites: the
+way to define an operator of one's own.
 
-The definition is kept and only the label changes, which is what makes this usable at all:
-an `Operator` whose expression is `nothing` is looked up in the site library by its name, so
-relabelling one would send the lookup after a name no site defines. Here the original
-operator becomes the expression of the new one, and the lookup goes through it.
+Its sites:
+- none given: an expression acts on as many sites as it does, a matrix or a function on one;
+- given: the operator is computed on them once and for all, which lets an operator of several
+  sites into a hamiltonian, see `Operator{N}(name, def, type, sites...)`. A single site
+  stands for as many identical ones as the size of a matrix asks for. A function then serves
+  these sites only: to keep it for every site, give it without sites and with its `type`.
 
-Its use is to keep two conserved quantities apart. Two sites declaring the same operator name
-the same charge and share one conserved total, which is usually what is wanted; this is how
-one asks for the other thing.
+Its type, see `OpType`, unless `type` gives it:
+- an expression without sites: the type of the operator when it is a single one, else
+  `fermionic_op` when it is fermionic and `plain_op` otherwise;
+- a matrix, or anything given with its sites, takes the strongest type its matrix satisfies:
+  `involution_op`, `selfadjoint_op` or `plain_op`, or `fermionic_op` when, on one site, it
+  anticommutes with `F`;
+- a function without sites is `plain_op`.
+
+The type is checked against the matrix each time the operator is placed on a site.
+
+Renaming also keeps two conserved quantities apart: two sites declaring the same operator
+name the same charge, and another name makes another charge.
 
 # Examples
 
-    named(N, "Nf")
+    named([1 1 ; 1 -1] / √2, "MyH")             # involution_op
+    named(Sp + Sm, "Sx2", Spin(1))               # selfadjoint_op, read on Spin(1)
+    named(swap_matrix, "MySwap", Qubit())        # two qubits, from the size of the matrix
+    named(s -> ..., "K"; type = selfadjoint_op)
     Fermion(conserve = named(N, "Nf"))    # these two numbers are
     Boson(4, conserve = named(N, "Nb"))   # conserved separately
 """
-named(op::GenericOp{Pure, N}, name::String) where N =
-    Operator{N}(name, op, named_type(op))
+named(op::GenericOp{Pure, N}, name::String; type::OpType = named_type(op)) where N =
+    Operator{N}(name, op, type)
 
 
 ################## isfermionic #################

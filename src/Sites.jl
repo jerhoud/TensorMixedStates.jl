@@ -1,6 +1,6 @@
-export AbstractSite, dim, Index, string_state, identity_operator, state, flux, weaken,
+export AbstractSite, dim, Index, string_state, identity_operator, state, weaken,
        symmetries
-export @def_operators, @def_states, @create_site_module, conserve_string, strong
+export @def_states, @create_site_module, strong
 
 """
     abstract type AbstractSite
@@ -291,86 +291,6 @@ function check_shared_operator(existing, name::String, type::OpType, site::Abstr
               "for site $(typeof(site)): a shared name must agree on the OpType")
     end
     return existing
-end
-
-"""
-    @def_operators(site, symbols)
-
-define the given operators for the given site, see also `OpType`
-
-Each operator name becomes a `const` of the module the macro is called from, but only the
-first time that name is seen: a name already in scope is registered for the new site and
-checked against what it already stands for, not bound again. Declaring an operator whose name is already used for something else, or declared
-with another `OpType`, is an error rather than a silent redefinition.
-
-An operator that is neither fermionic nor self adjoint is declared `plain_op`. On a fermionic
-site it has to commute with `F`, being placed with no Jordan-Wigner string: an operator that
-moves a fermion is `fermionic_op`.
-
-# Examples
-
-    @def_operators(Fermion(),
-    [
-        fermionic_op => 
-        [
-            C = [0. 1. ; 0. 0.],
-        ],
-        selfadjoint_op =>
-        [
-            N = dag(C) * C,
-        ],
-        involution_op =>
-        [
-            F = Float64[1 0 ; 0 -1]
-        ]
-    ])
-"""
-macro def_operators(site, symbols)
-    e = Expr(:block)
-    if !(symbols isa Expr) || symbols.head ≠ :vect
-        error("syntax error in @def_operators second argument should be a vector")
-    end
-    for types in symbols.args
-        if !(types isa Expr) || types.head ≠ :call || types.args[1] ≠ :(=>)
-            error("syntax error in @def_operators second argument should contain pairs : plain_op => [...]")
-        end
-
-        type = types.args[2]
-        for expr in types.args[3].args
-            if !(expr isa Expr) || expr.head ≠ :(=)
-                error("syntax error in @def_operators item expressions must be assignments (sym = val)")
-            end
-            sym = first(expr.args)
-            nsym = string(sym)
-            val = last(expr.args)
-            if nsym == "F"
-                # `F` is the Jordan-Wigner operator of `Operators.jl`, shared by every
-                # fermionic site and not an `Operator{1}`: the site is registered and the
-                # name is left alone
-                push!(e.args,
-                quote
-                    add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
-                end)
-            elseif isdefined(__module__, sym)
-                # the name is already in scope, so it is registered for this site and
-                # checked, but not bound again. Binding it again would rebind it for every
-                # site already using it, and up to Julia 1.11 rebinding a name brought in by
-                # `using` is a hard error of the language. The decision is taken here, at
-                # expansion time, so that no binding is emitted at all in that case
-                push!(e.args,
-                    quote
-                        check_shared_operator($(esc(sym)), $nsym, $(esc(type)), $(esc(site)))
-                        add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
-                    end)
-            else
-                push!(e.args,
-                    quote
-                        const $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
-                    end)
-            end
-        end
-    end
-    return e
 end
 
 """
