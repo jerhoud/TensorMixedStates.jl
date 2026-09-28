@@ -282,11 +282,13 @@ matrix(a::ModOp, site::AbstractSite...) =
 function matrix(a::PowOp, site::AbstractSite...)
     m = matrix(a.arg, site...)
     # Julia 1.10 takes a non integer power of a real diagonal matrix entry by entry and
-    # refuses a negative entry, where later versions go complex
+    # refuses a negative entry, where later versions go complex; it also returns a
+    # Symmetric or Hermitian wrapper for a non integer power of such a matrix, which the
+    # rest of the package, laying matrices on indices, does not take
     if !isinteger(a.expo) && eltype(m) <: Real && isdiag(m) && any(<(0), diag(m))
-        return complex(m) ^ a.expo
+        return Matrix(complex(m) ^ a.expo)
     end
-    return m ^ a.expo
+    return Matrix(m ^ a.expo)
 end
 
 matrix(a::DagOp, site::AbstractSite...) =
