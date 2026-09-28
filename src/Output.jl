@@ -118,8 +118,8 @@ end
 
 log the given message on the "log" file of the simulation
 """
-# written here rather than through `output`, where `dest => "text"` is a measurement
 function log_msg(sim::Simulation, text)
+    # written here rather than through `output`, where `dest => "text"` is a measurement
     file = get_sim_file(sim, "log")
     println(file, text)
     flush(file)
