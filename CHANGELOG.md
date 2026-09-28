@@ -460,6 +460,17 @@ the reference article.
 - The `error` marker of a failed run is removed when the simulation is run again, instead of
   describing a resumed run that succeeded.
 
+- A phase of one's own driving a solver with `TdvpObserver`, `ApproxWObserver` or
+  `DmrgObserver` resumes correctly. Its sweeps were checkpointed, and the resume handed it the
+  state it had reached, on which it ran all its sweeps again: stopped after two of four sweeps,
+  an evolution of `-im * X(1)` ended at ⟨Z(1)⟩ = 0.362 instead of 0.697. The sweeps of a phase
+  are now committed only once it has read its resume point with `resume_sweeps!`, which the
+  phases of the library do; any other is resumed from its start. A stopped run hands back the
+  state and the time it resumes from.
+
+- A dmrg search stopped for a checkpoint no longer logs `Done, dmrg final energy`, which its
+  resume writes.
+
 ## [1.4.0] - 2026-09-24
 
 This release adds conserved quantities and the exported names that go with them, which is

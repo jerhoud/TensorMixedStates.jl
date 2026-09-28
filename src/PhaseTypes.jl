@@ -17,7 +17,8 @@ A phase type to create the simulation state
   With a `state` given, a pure state is randomised from it and a mixed one drawn from the
   purification starting from it, see `RandomState`: a mixed one needs a description, a State
   object being randomised into a pure state only
-- `seed`: set the random generator seed for randomize (default nothing)
+- `seed`: set the random generator seed for randomize (default nothing). A checkpoint does not
+  save the generator, so a run resumed after this phase does not apply it again
 
 # Examples
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up")

@@ -507,6 +507,13 @@ produced.
 Use `restart = true` to ignore an existing checkpoint and start over, as it erases the
 directory.
 
+The random number generator is not part of a checkpoint. What draws random numbers after the
+point a run resumes from, a `CreateState` with `randomize` or a measurement calling `sample`,
+draws other numbers than the uninterrupted run, and the `seed` of a `CreateState` finished
+before that point is not applied again. The results are as valid, but they are not the same
+numbers. A `CreateState` that draws its state after its own `seed` is reproduced, since it is
+replayed whole; samples measured during an evolution are not.
+
 A checkpoint records which phases it belongs to, and `runTMS` refuses to resume one that
 was written by a different simulation rather than mixing the two. So editing the phases of
 a program and running it again under the same name reports an error instead of quietly

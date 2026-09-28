@@ -62,6 +62,33 @@ function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
     return [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)), evolve(Z(2)), ground]
 end
 
+# phases of one's own driving tdvp with the observer of the package, as the docstring of
+# `run_phase` describes: the first does not read its resume point, the second does
+Base.@kwdef struct PlainEvolve
+    name::String = "plain evolution"
+    time_start = nothing
+    final_measures = []
+    measures = []
+end
+
+TensorMixedStates.run_phase(sim::Simulation, p::PlainEvolve) =
+    tdvp(-im * X(1), 0.4, sim; nsweeps = 4, limits = Limits(maxdim = 4, cutoff = 1e-15),
+         observer! = TdvpObserver(sim, p.measures, 1))
+
+Base.@kwdef struct ResumingEvolve
+    name::String = "resuming evolution"
+    time_start = nothing
+    final_measures = []
+    measures = []
+end
+
+function TensorMixedStates.run_phase(sim::Simulation, p::ResumingEvolve)
+    done, _ = TensorMixedStates.resume_sweeps!(sim.checkpoint)
+    return tdvp(-im * X(1), 0.4, sim; nsweeps = 4, first_sweep = done + 1,
+                limits = Limits(maxdim = 4, cutoff = 1e-15),
+                observer! = TdvpObserver(sim, p.measures, 1))
+end
+
 @testset "A SimData is not a phase" begin
     # A SimData inside `phases` used to be accepted and to silently skip phases: the loop it
     # opened shared the phase counter of the loop around it. It cost the first inner phase
@@ -512,12 +539,41 @@ end
                                   measures = "data" => [Z(1), :sweep], measures_period = 2)]
             runTMS(SimData(; name = "ref", phases))
             sim_data = SimData(; name = "chk", phases, max_time = -1)
-            for _ in 1:10
+            runTMS(sim_data)
+            runTMS(sim_data)
+            # stopped after its first sweep, the search is not done
+            @test !occursin("Done, dmrg", read("chk/log", String))
+            for _ in 1:8
                 runTMS(sim_data)
             end
             @test read("chk/data", String) == read("ref/data", String)
             lines(f) = filter(l -> startswith(l, "sweep") || startswith(l, "Done"), readlines(f))
             @test lines("chk/log") == lines("ref/log")
+        end
+    end
+end
+
+@testset "A phase of one's own resumes correctly" begin
+    # its sweeps were checkpointed, and the resume handed it the state it had reached, on
+    # which it ran all its sweeps again: it ended at <Z(1)> = 0.362 instead of 0.697
+    mktempdir() do dir
+        cd(dir) do
+            for (name, P) in (("plain", PlainEvolve), ("resuming", ResumingEvolve))
+                stop_in = Ref(0)
+                phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                          P(measures = "data" => [Z(1), stopper_at(stop_in)])]
+                ref = runTMS(SimData(; name = "ref$name", phases))
+                stop_in[] = 2
+                sim_data = SimData(; name = "chk$name", phases, checkpoint_interval = 1e-9)
+                stopped = runTMS(sim_data)
+                @test stop_in[] == 0
+                # a stopped run hands back what it resumes from
+                @test stopped.time ≈ (name == "plain" ? 0 : 0.2)
+                sim = runTMS(sim_data)
+                @test read("chk$name/data", String) == read("ref$name/data", String)
+                @test real(expect(sim.state, Z(1))) ≈ real(expect(ref.state, Z(1)))
+                @test sim.time ≈ ref.time
+            end
         end
     end
 end
@@ -657,7 +713,7 @@ end
     # the resume point belongs to the phase it was written in, and is read once
     c = C()
     sim = Simulation(nothing; checkpoint = c)
-    TensorMixedStates.commit!(c, sim, 2, 0, 0., 0., nothing)
+    TensorMixedStates.commit!(c, sim.outputs, 2, 0, 0., 0., nothing)
     c.resume = TensorMixedStates.Commit(2, 4, 0., 0., nothing, -1.5, (files = Dict(), data = Dict()))
     @test TensorMixedStates.resume_sweeps!(c) == (4, -1.5)
     @test TensorMixedStates.resume_sweeps!(c) == (0, nothing)

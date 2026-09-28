@@ -128,6 +128,9 @@ appears, or on an interrupt. With a directory, a checkpoint is written first.
 - `next`:       time of the next checkpoint
 - `last`:       the last commit, which a checkpoint writes
 - `resume`:     the commit a resumed run starts from, until the phase it belongs to has run
+- `sweeps`:     whether the phase being run has read its resume point, which is what lets its
+                sweeps be committed, see `resume_sweeps!`
+- `written`:    the commit the checkpoint on the disk holds, which is not written again
 - `generation`: which of the two state files the checkpoint on the disk names
 - `stopping`:   set once a stop has been requested, so that every loop unwinds
 """
@@ -139,6 +142,8 @@ mutable struct Checkpointer
     next::Float64
     last::Union{Nothing, Commit}
     resume::Union{Nothing, Commit}
+    sweeps::Bool
+    written::Union{Nothing, Commit}
     generation::Int
     stopping::Bool
 end
@@ -147,7 +152,7 @@ Checkpointer(dir::String = "", id::String = ""; interval::Real = 0, max_time::Re
     Checkpointer(dir, id, interval,
                  max_time == Inf ? Inf : time() + max_time,
                  interval ≤ 0 ? Inf : time() + interval,
-                 nothing, nothing, 0, false)
+                 nothing, nothing, false, nothing, 0, false)
 
 """
     stop_file(::Checkpointer)
@@ -176,19 +181,19 @@ keep it there, writing the whole state to disk on every sweep.
 checkpoint_due(c::Checkpointer) = c.interval > 0 && time() ≥ c.next
 
 """
-    commit!(::Checkpointer, sim, phase, sweep, phase_time, time, state; energy)
+    commit!(::Checkpointer, ::Outputs, phase, sweep, phase_time, time, state; energy)
 
 record a point the simulation can be resumed from, see `Commit`. The destinations are read
 here, at the same moment as the rest.
 """
-commit!(c::Checkpointer, sim, phase::Int, sweep::Int, phase_time::Number, t::Number,
+commit!(c::Checkpointer, o::Outputs, phase::Int, sweep::Int, phase_time::Number, t::Number,
         state::Union{Nothing, State}; energy = nothing) =
-    c.last = Commit(phase, sweep, phase_time, t, state, energy, output_marks(sim.outputs))
+    c.last = Commit(phase, sweep, phase_time, t, state, energy, output_marks(o))
 
 checkpoint_json(dir::String) = joinpath(dir, "checkpoint.json")
 
 """
-    write_checkpoint(::Checkpointer, sim)
+    write_checkpoint(::Checkpointer, ::Outputs)
 
 write the last commit down. The state goes to one of two files, `checkpoint-1.h5` and
 `checkpoint-2.h5`, the one the checkpoint on the disk does not name, and the metadata, which
@@ -198,11 +203,17 @@ this one, whole: renaming the state and then the metadata used to pair, after a 
 the two, the new state with the previous counts, and the resume ran again the sweeps the state
 already held.
 
-Nothing is written without a directory, nor before the first phase has made a state.
+Nothing is written without a directory, nor before the first phase has made a state, and a
+commit already on the disk is not written again: a phase that commits none of its sweeps is
+checkpointed at its start however long it runs, see `resume_sweeps!`.
 """
-function write_checkpoint(c::Checkpointer, sim)
+function write_checkpoint(c::Checkpointer, o::Outputs)
     k = c.last
     if isempty(c.dir) || isnothing(k) || !(k.state isa State)
+        return nothing
+    end
+    if k === c.written
+        c.next = time() + c.interval
         return nothing
     end
     g = c.generation == 1 ? 2 : 1
@@ -224,12 +235,13 @@ function write_checkpoint(c::Checkpointer, sim)
             "phase_time" => checkpoint_value(k.phase_time),
             "time" => checkpoint_value(k.time),
             "state" => file,
-            "outputs" => persist_outputs(sim.outputs, k.reached),
+            "outputs" => persist_outputs(o, k.reached),
         ))
     end
     mv(tjs, js; force = true)
     rm(joinpath(c.dir, "checkpoint-$(3 - g).h5"); force = true)
     c.generation = g
+    c.written = k
     c.next = time() + c.interval
     return nothing
 end
@@ -266,38 +278,20 @@ function load_checkpoint(dir::String)
 end
 
 """
-    sweep_commit!(sim, state, time, sweep; energy)
-
-the end of a sweep of the phase being run, once its measurements and its log are written:
-commit it, write the commit if a checkpoint is due or a stop is asked for, and return whether
-the solver has to stop.
-
-The order is what keeps a checkpoint and the outputs in step, so it is here, once, rather than
-in each observer: what is written after the commit is written again by the resumed run, and
-what is written before it is kept.
-"""
-function sweep_commit!(sim, state::State, t::Number, sweep::Int; energy = nothing)
-    c = sim.checkpoint
-    k = c.last
-    # a solver run on a simulation of one's own, outside `runTMS`, has no phase around it
-    phase, phase_time = isnothing(k) ? (1, t) : (k.phase, k.phase_time)
-    commit!(c, sim, phase, sweep, phase_time, t, state; energy)
-    stop = stop_requested(c)
-    if stop || checkpoint_due(c)
-        write_checkpoint(c, sim)
-    end
-    c.stopping = stop
-    return stop
-end
-
-"""
     resume_sweeps!(::Checkpointer)
 
 the sweeps the phase being run has done already and the energy dmrg had reached at the last
 of them, `(0, nothing)` unless it is the phase a resumed run starts from. The resume point is
 consumed, so that it is read once.
+
+Reading it is also what lets the sweeps of the phase be committed, see `sweep_commit!`. A
+resume hands the phase the state reached at the sweep committed, and only a phase that reads
+the sweeps done and starts its solver after them continues correctly from there: any other
+would run all its sweeps again on that state. So the sweeps of a phase that never calls this
+are not committed, and a checkpoint written while it runs resumes it from its start.
 """
 function resume_sweeps!(c::Checkpointer)
+    c.sweeps = true
     r = c.resume
     if isnothing(r) || isnothing(c.last) || r.phase ≠ c.last.phase
         return (0, nothing)

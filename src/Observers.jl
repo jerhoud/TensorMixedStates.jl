@@ -47,6 +47,35 @@ mutable struct DmrgObserver <: AbstractObserver
 end
 
 """
+    sweep_commit!(sim, state, time, sweep; energy)
+
+the end of a sweep of the phase being run, once its measurements and its log are written:
+commit it, write the commit if a checkpoint is due or a stop is asked for, and return whether
+the solver has to stop.
+
+The order is what keeps a checkpoint and the outputs in step, so it is here, once, rather than
+in each observer: what is written after the commit is written again by the resumed run, and
+what is written before it is kept. The sweep is committed only in a phase that has read its
+resume point, see `resume_sweeps!`; in any other, the commit stays the start of the phase,
+while a stop and an interrupt are honoured all the same.
+"""
+function sweep_commit!(sim::Simulation, state::State, t::Number, sweep::Int; energy = nothing)
+    c = sim.checkpoint
+    if c.sweeps
+        k = c.last
+        # a solver run on a simulation of one's own, outside `runTMS`, has no phase around it
+        phase, phase_time = isnothing(k) ? (1, t) : (k.phase, k.phase_time)
+        commit!(c, sim.outputs, phase, sweep, phase_time, t, state; energy)
+    end
+    stop = stop_requested(c)
+    if stop || checkpoint_due(c)
+        write_checkpoint(c, sim.outputs)
+    end
+    c.stopping = stop
+    return stop
+end
+
+"""
     sweep_done!(observer; sweep, state, current_time, kwargs...)
 
 the end of a sweep of `tdvp` or `approx_W`, once all its work is done, expansion and
@@ -60,29 +89,25 @@ function sweep_done!(o; kwargs...)
     return checkdone!(o; kwargs...)
 end
 
-function sweep_done!(o::TdvpObserver; sweep, current_time, state, mpo, kwargs...)
+# the two evolutions differ only in the operators they apply, which the first sweep logs
+function evolution_sweep_done!(o::Union{TdvpObserver, ApproxWObserver}, sweep, current_time,
+                               state, label, mpo, operators)
     st = State(o.sim.state, state)
     if sweep_due(o.period, sweep)
         output(Simulation(o.sim, st, current_time), o.measurements; sweep)
     end
     if sweep == 1
-        log_msg(o.sim, "Tdvp MPO: maxlinkdim=$(maxlinkdim(mpo)), memory=$(Base.summarysize(mpo))")
+        log_msg(o.sim, "$label: maxlinkdim=$(maxlinkdim(mpo)), memory=$(Base.summarysize(operators))")
     end
     log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
     return sweep_commit!(o.sim, st, current_time, sweep)
 end
 
-function sweep_done!(o::ApproxWObserver; sweep, current_time, state, mpos, kwargs...)
-    st = State(o.sim.state, state)
-    if sweep_due(o.period, sweep)
-        output(Simulation(o.sim, st, current_time), o.measurements; sweep)
-    end
-    if sweep == 1
-        log_msg(o.sim, "Approx_W MPOS: maxlinkdim=$(maxlinkdim(mpos[1])), memory=$(Base.summarysize(mpos))")
-    end
-    log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
-    return sweep_commit!(o.sim, st, current_time, sweep)
-end
+sweep_done!(o::TdvpObserver; sweep, current_time, state, mpo, kwargs...) =
+    evolution_sweep_done!(o, sweep, current_time, state, "Tdvp MPO", mpo, mpo)
+
+sweep_done!(o::ApproxWObserver; sweep, current_time, state, mpos, kwargs...) =
+    evolution_sweep_done!(o, sweep, current_time, state, "Approx_W MPOS", mpos[1], mpos)
 
 function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
     # ITensorMPS counts the sweeps of a resumed run from 1 again, and what is measured, logged

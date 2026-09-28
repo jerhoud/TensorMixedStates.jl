@@ -10,6 +10,14 @@ your method and takes its final measurements, exactly as for a phase of the libr
 the full name: `run_phase` is not exported, so it has to be written out to add a method to
 it rather than shadowed by one of your own.
 
+A phase of your own that drives a solver with the observers of the package, `TdvpObserver`,
+`ApproxWObserver` or `DmrgObserver`, is stopped and checkpointed as the phases of the library
+are. A checkpoint written while it runs resumes it from its start, since a resume hands it the
+state it had reached and it would run all its sweeps again on it. To resume it at the sweep
+it had reached instead, read `done, energy = TensorMixedStates.resume_sweeps!(sim.checkpoint)`
+before starting the solver and start it at `first_sweep = done + 1`, handing `done` and
+`energy` to a `DmrgObserver` as well.
+
 The fallback method below exists so that an object that is not a phase says so, instead of
 surfacing as a bare `MethodError` from somewhere inside a run.
 """
@@ -150,7 +158,10 @@ function run_phase(sim::Simulation, phase::GroundState)
             observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
                                      done; phase.nsweeps, energy = e))
     end
-    log_msg(sim, "Done, dmrg final energy is $e")
+    # a search stopped for a checkpoint is not done, and its resume writes the line
+    if !sim.checkpoint.stopping
+        log_msg(sim, "Done, dmrg final energy is $e")
+    end
     return sim
 end
 
@@ -196,6 +207,8 @@ function run_phase(sim::Simulation, phase::SteadyState)
             observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
                                      done; phase.nsweeps, energy = e))
     end
-    log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
+    if !sim.checkpoint.stopping
+        log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
+    end
     return sim
 end

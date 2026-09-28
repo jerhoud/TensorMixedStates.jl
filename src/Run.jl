@@ -187,7 +187,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 log_msg(sim, "\n***** Interrupted, writing a checkpoint *****")
                 # the last commit, whatever was written since: the checkpoint and the outputs
                 # it resumes are those of one moment
-                write_checkpoint(c, sim)
+                write_checkpoint(c, sim.outputs)
                 k = c.last
                 if !isnothing(k) && k.state isa State
                     # the returned simulation must carry what was reached, not what the phase
@@ -234,28 +234,33 @@ function log_phase(sim::Simulation, phases::Vector)
     # last phase resumes none, the final measurements then still having to be taken at the
     # time the simulation reached
     if isnothing(r)
-        commit!(c, sim, 1, 0, sim.time, sim.time, sim.state)
+        commit!(c, sim.outputs, 1, 0, sim.time, sim.time, sim.state)
     else
         sim = Simulation(sim, r.state, r.phase_time)
         c.last = r
     end
     for i in c.last.phase:length(phases)
+        # a phase commits its sweeps only once it has read its resume point
+        c.sweeps = false
         sim = log_phase(sim, phases[i])
         # consumed by the phase it belongs to, whether it read it or not
         c.resume = nothing
         if c.stopping
+            # what a stopped run hands back is what it resumes from: the state and the time
+            # of its last commit, the start of the phase when that one commits no sweep
+            sim = Simulation(sim, c.last.state, c.last.time)
             log_stop(sim, i)
             break
         end
         # the next phase is the one to resume from, committed at a clean boundary. Marked here
         # also so that an interrupt falling after the last phase, in the final measurements,
         # still checkpoints what the simulation reached
-        commit!(c, sim, i + 1, 0, sim.time, sim.time, sim.state)
+        commit!(c, sim.outputs, i + 1, 0, sim.time, sim.time, sim.state)
         stop = stop_requested(c)
         if stop || checkpoint_due(c) || (i == length(phases) && c.interval > 0)
             # the last phase done, a checkpoint records it whether one is due or not, so that
             # running the simulation again resumes past every phase and does nothing
-            write_checkpoint(c, sim)
+            write_checkpoint(c, sim.outputs)
         end
         if stop
             c.stopping = true
