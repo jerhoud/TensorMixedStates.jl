@@ -807,8 +807,16 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
     # a renamed operator reads its charges off what it renames, which is where a modulus is
     # carried: named(parity(N), "P") read its ±1 as integers and conserved their sum instead
     # of a parity
-    if op isa Operator && op.expr isa GenericOp
-        return site_charges(op.expr, site; tol)
+    # and so does one declared for the site, whose definition is in the library rather than
+    # in the operator: parity(N) given to @def_operators was read as a U(1) charge
+    if op isa Operator
+        def = isnothing(op.expr) ? operator_info(site, op.name) : op.expr
+        if def isa Function
+            def = def(site)
+        end
+        if def isa GenericOp
+            return site_charges(def, site; tol)
+        end
     end
     m = matrix(op, site)
     d = diag(m)

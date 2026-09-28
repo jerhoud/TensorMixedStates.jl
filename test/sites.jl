@@ -13,6 +13,10 @@ TensorMixedStates.dim(::Dummit) = 2
 # `@def_operators` must register N for Dummit without binding the name again
 @def_operators(Dummit(), [ selfadjoint_op => [ N = [0. 0. ; 0. 1.] ] ])
 
+# a charge modulo 2 declared for the site, whose definition lives in the library and not in the
+# operator: its eigenvalues ±1 were read as an integer charge
+@def_operators(Dummit(), [ involution_op => [ Pd = parity(N) ] ])
+
 @create_site_module(Dummits, [Dummit, N])
 
 # a second site, to check that the same name declared with another OpType is refused
@@ -301,6 +305,7 @@ end
     @test TensorMixedStates.site_charges(N, Fermion()) == (1, [0, 1])
     @test TensorMixedStates.site_charges(parity(N), Boson(4)) == (2, [0, 1, 0, 1])
     @test TensorMixedStates.site_charges(Zd, Qudit(3)) == (3, [0, 1, 2])
+    @test TensorMixedStates.site_charges(Pd, Dummit()) == (2, [0, 1])
 
     # the recorded form is read back as it was written
     c = Electron(conserve = (Ntot, 2Sz)).conserve

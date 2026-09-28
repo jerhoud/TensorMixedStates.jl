@@ -139,6 +139,10 @@ the reference article.
   something strongly on a system holding such a site. A site conserving nothing is left as
   it is.
 
+- A quantity taken modulo, `parity(N)` or `mod(N, 3)`, declared for a site with
+  `@def_operators` and conserved, was conserved as an integer charge: the modulus was read
+  only from an operator holding its definition, and not from the library of the site.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as
