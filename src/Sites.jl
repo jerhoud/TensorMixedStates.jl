@@ -136,17 +136,13 @@ map_charges(f, i::Index) =
     weak_qn(q, collapse, drop)
     weak_index(i, collapse, drop)
 
-the charge, or the index, with each strong quantity of `collapse` collapsed onto its weak form
-and each quantity of `drop` left out.
+the charge, or the index, with the quantities of `drop` left out and the strong quantities of
+`collapse` made weak: their components `X` and `X*`, for the ket and the daggered bra, are
+summed into `X`, which gives the difference of the two charges, what a weak symmetry records.
 
-Keeping the ket and the bra apart records `X` and `X*`; asking for the same quantity weakly
-records their difference, which is what the sum of the two components is, the bra having been
-daggered. This map, and leaving a component out, are homomorphisms of the charge group, so
-they carry a flux to a flux and a relation between blocks to the same relation: an index may be
-relabelled with them and every tensor built on it stays consistent, with no data moved.
-
-The blocks are not merged. Several may end up under one charge, which an index allows, and
-that is what lets the relabelling cost nothing.
+Both operations are homomorphisms of the charge group: they map a flux to a flux, so every
+tensor on a relabelled index stays consistent, with no data moved. The blocks are not merged,
+several may share a charge, which keeps the relabelling free.
 """
 function weak_qn(q::QN, collapse, drop)
     vals = Tuple{String, Int, Int}[]
@@ -180,14 +176,11 @@ weak_index(i::Index, collapse, drop) =
     star(q::QN, names)
     star(i::Index, names)
 
-the charge, or the index, with every component named in `names` renamed to carry a star.
+the charge, or the index, with each component `X` named in `names` renamed `X*`.
 
-This is what separates the bra from the ket: a strong symmetry conserves the two sides
-apart, so the bra holds its charges under other names and combining the pair keeps them
-rather than subtracting them. It applies to a whole index and not only to a site one,
-because the links of a state carry the same charges and must be renamed with it, or the
-two halves of the same tensor would count in two different ways. Renaming nothing gives the
-index back as it is, which is every case without a strong symmetry.
+Under a strong symmetry the bra carries its charges under the starred names, so that pairing
+it with the ket keeps both charges rather than their difference. The links of a state carry
+the same charges and are renamed with the sites. With no name, the index is unchanged.
 """
 star(q::QN, names) =
     QN([ (n in names ? n * "*" : n, v, m) for (n, v, m) in qn_components(q) ]...)
@@ -203,16 +196,15 @@ end
     adjoint_qn(q::QN, names)
     adjoint_index(i::Index, names)
 
-the charge, or the index, relabelled so that the element ``|x\\rangle\\langle y|`` of a
-mixed index takes the charge ``|y\\rangle\\langle x|`` had, `names` being the quantities
+the charge, or the index, relabelled for the adjoint: the element ``|x\\rangle\\langle y|``
+of a mixed index takes the charge ``|y\\rangle\\langle x|`` had, `names` being the quantities
 conserved strongly.
 
-Under a strong symmetry ``|x\\rangle\\langle y|`` carries `X` as the charge of `x` and `X*`
-as minus that of `y`, so the exchange sends `(X, X*)` to `(-X*, -X)`; a weak quantity holds
-the difference of the two and is only negated. Either way this is an automorphism of the
-charge group, so relabelling every index of a state with it, links included, keeps each
-tensor consistent with no data moved, and what is left of the adjoint is a permutation of
-zero flux. See `adj_map`.
+A strong quantity carries `X`, the charge of `x`, and `X*`, minus that of `y`, so `(X, X*)`
+becomes `(-X*, -X)`; a weak one holds their difference and is only negated. This is an
+automorphism of the charge group: relabelling every index of a state, links included, keeps
+each tensor consistent with no data moved, and what remains of the adjoint is a permutation of
+zero flux, see `adj_map`.
 """
 adjoint_qn(q::QN, names) =
     QN([ (endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n, -v, m)
@@ -282,9 +274,6 @@ const state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix,
 
 return the matrix value of `F` for the `site` as stored in `operator_library`, the
 identity for a site with no `F` of its own, which is not fermionic.
-
-Read with `get` and not `get!`: writing the identity into the library, as a cache that saved
-nothing, made a later declaration of `F` for that site type fail as a redefinition.
 """
 function F_info(site::AbstractSite)
     name = typeof(site)
@@ -505,9 +494,7 @@ const common_states = Dict{String, Function}(
 return the local state (as a vector or matrix) corresponding to the site and name given.
 
 The name is looked for among the states the site declares, see `@def_states`, then among its
-generic forms, see `string_state`, then among the states every site has, see `common_states`:
-the name "FullyMixed" gives the infinite temperature state. A name the site declares is the
-one used, whatever else it could be read as.
+generic forms, see `string_state`, then among the states every site has, see `common_states`.
 
 # Examples
 
@@ -596,14 +583,11 @@ show_charges(d) = join(["$name=$val" for (name, val, _) in d], ",")
 """
     charge_flux(m, what, site)
 
-the flux of a matrix already computed, `what` being what to name if it has none. This is what
-`flux` answers and what the tensor of an operator is checked with, so that a matrix which does
-not fit the charges of its site is refused by a message naming the operator rather than by the
-`Fluxes not all equal` of ITensors, raised from somewhere neither the operator nor the site is
-in sight.
-
-An element below `tol` relative to the norm of the matrix is rounding and carries nothing, the
-rule `charged_itensor` then builds the tensor with, so that the two agree.
+the flux of the matrix `m` of `what` on `site`, and an error naming `what` when it has none.
+`flux` answers with it and the tensor of an operator is checked with it, so that a matrix not
+fitting the charges of its site is refused by name rather than by the `Fluxes not all equal` of
+ITensors. Elements below `tol` relative to the norm are rounding and ignored, as
+`charged_itensor` does.
 """
 function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = rounding_tol)
     qs = decode_conserve(conserved(site))
@@ -632,15 +616,13 @@ end
 """
     charged_itensor(a, inds)
 
-the ITensor of the array `a` on the indices `inds`, what rounding left outside the blocks of
-charged indices being dropped, see `rounding_tol`.
+the ITensor of the array `a` on the indices `inds`, dropping what rounding leaves outside the
+blocks of charged indices, see `rounding_tol`. Plain indices keep everything.
 
-A matrix computed through an eigendecomposition, as the exponential of a hermitian matrix or a
-non integer power is, holds elements of the order of the rounding between charges the exact
-one keeps apart. ITensors drops nothing by default, so it made a block of each and refused the
-tensor for its fluxes: `exp(-τ * (A ⊗ dag(A) + dag(A) ⊗ A))` on two bosons conserving `N` was
-said to carry no definite charge. A tensor that has none is still refused by its flux. Plain
-indices have no blocks, and keep everything.
+A matrix computed through an eigendecomposition, as an exponential or a non integer power,
+holds elements of the size of rounding between charges the exact one keeps apart. ITensors,
+which drops nothing by default, would make a block of each and refuse the tensor for its
+fluxes. A tensor that genuinely has no definite charge is still refused.
 """
 charged_itensor(a::AbstractArray, inds) =
     if any(hasqns, inds)
@@ -657,12 +639,11 @@ index_charges(i::Index) =
 """
     has_definite_flux(a, inds)
 
-whether the array `a`, laid on the indices `inds`, carries a definite charge: every element
-above rounding, the rule `charged_itensor` builds the tensor with, connects states whose
-charges differ by the same amount. It is the question ITensors answers with `Fluxes not all
-equal` when the tensor is built, asked beforehand, so that a refusal names what it refuses and
-no error of ITensors has to be caught and taken for this one. An array on plain indices has
-one, there being no charge to carry.
+whether the array `a` on the indices `inds` carries a definite charge: every element above
+rounding, by the rule of `charged_itensor`, connects states whose charges differ by the same
+amount. An array on plain indices always does. It asks beforehand what ITensors answers with
+`Fluxes not all equal`, so that a refusal can name what it refuses without catching an error
+of ITensors.
 """
 function has_definite_flux(a::AbstractArray, inds)
     if !any(hasqns, inds)
@@ -697,18 +678,15 @@ show(io::IO, a::Strong) = print(io, "strong(", a.arg, ")")
 declare a conserved quantity as a strong symmetry rather than the weak one `conserve`
 assumes by default.
 
-A weak symmetry only asks that the density matrix commute with the charge, which is what
-the mixed index records when it holds the difference of the two charges of
-``|m\\rangle\\langle n|``. Every jump operator of definite charge preserves it, particle
-loss and gain included, and a state may mix several sectors.
+A weak symmetry asks only that the density matrix commute with the charge: the mixed index
+holds the difference of the charges of ket and bra, every jump operator of definite charge
+preserves it, particle loss and gain included, and a state may mix several sectors.
 
-A strong symmetry asks more: that every jump operator commute with the charge. The ket and
-the bra are then conserved separately, the mixed index keeps them apart instead of holding
-their difference, and the blocks are finer. In exchange a state lives in a single sector, as
-a pure one does, and a jump of non zero charge is refused: it is not a strong symmetry.
+A strong symmetry asks that every jump operator commute with the charge. Ket and bra are then
+conserved separately, which gives finer blocks, but a state lives in a single sector, as a
+pure one does, and a jump of non zero charge is refused.
 
-Use it when every dissipator commutes with the quantity, as dephasing does, and leave it out
-otherwise.
+Use it when every dissipator commutes with the quantity, as dephasing does.
 
 # Examples
 
@@ -722,11 +700,9 @@ strong(a) = error("a conserved quantity is one operator acting on one site, and 
 """
     struct Conserved
 
-what a site or a system conserves, as a list of names each marked strong or weak.
-
-It prints as the expression that would declare it, so that what a system reports can be read
-back and given to `weaken`. The charges themselves are left out: they belong to the site and
-never change, only the way the ket is paired with the bra does.
+what a site or a system conserves: a list of names, each marked strong or weak, without the
+charges, which belong to the site and never change. It prints as the value `conserve` would
+be given, so that what `symmetries` reports can be given back to `weaken`.
 
 # Examples
 
@@ -804,11 +780,9 @@ one_step_down(c::Conserved) =
 """
     check_target(source, target, what)
 
-refuse a target that is not a weakening of `source`.
-
-A quantity may be dropped or asked for less strongly; it may not be invented, nor made
-stronger, the finer blocks of a strong symmetry not being recoverable from the coarser ones
-once they have been merged.
+refuse a target that is not a weakening of `source`: a quantity may be dropped or made weak,
+not added or made strong, since the finer blocks of a strong symmetry cannot be recovered once
+merged.
 """
 function check_target(source::Conserved, target::Conserved, what)
     for (name, strong) in target.names
@@ -881,14 +855,12 @@ end
 """
     check_charges(sites)
 
-refuse a list of sites whose conserved quantities cannot live together on one system.
-
-Three things would otherwise go wrong without a word. A name conserved strongly on one site
-and weakly on another would stand for the charge of the ket on the first and for a difference
-on the second, and the flux of a state would add the two. The star a strong quantity gives
-its bra may be the name of another quantity, which would merge two charges into one. And the
-links of a state carry every component of every site, which ITensors limits to four, a strong
-quantity costing two of them.
+refuse sites whose conserved quantities cannot live together on one system, which would
+otherwise go wrong without a word:
+- a name conserved strongly on one site and weakly on another, or with two different moduli,
+  would stand for two different charges, which the flux of a state would add;
+- the starred name of a strong quantity may already name another quantity, merging two charges;
+- ITensors allows four components to a charge, and a strong quantity takes two.
 """
 function check_charges(sites::Vector{<:AbstractSite})
     kind = Dict{String, Bool}()
@@ -922,9 +894,9 @@ end
 """
     conserve_names(s)
 
-the names of the conserved quantities a site records, as they are written back when the site
-is printed, which is the way `Conserved` prints them. A string `decode_conserve` cannot read is
-given back as it is, `show` having to print something whatever a site put in its field.
+the conserved quantities a site records, as `Conserved` prints them, which is how the site
+prints them. A string `decode_conserve` cannot read is given back unchanged, since `show` must
+print whatever a site holds.
 """
 function conserve_names(s::AbstractString)
     try
@@ -941,14 +913,11 @@ end
 """
     charged_state(a, inds, what, site)
 
-the tensor of the array `a` of the local state `what`, laid on the indices `inds` of its site,
-refused by a message naming the state and its site when the charges of the site cannot carry
-it.
-
-A state of a charged site belongs to one sector: `"Up"` and `"Dn"` do, `"+"` does not, being
-their sum, and no amount of bookkeeping gives a superposition of two charges a charge of its
-own. ITensors says `Fluxes not all equal` from a place where neither the state nor the site
-is in sight, so the question is asked here instead, see `has_definite_flux`.
+the tensor of the local state `what`, of array `a`, on the indices `inds` of `site`, refused
+by a message naming the state and the site when it has no definite charge. A state of a
+charged site must lie in one sector: `"Up"` and `"Dn"` do, `"+"`, their sum, does not. The
+question is asked here, see `has_definite_flux`, rather than left to the `Fluxes not all
+equal` of ITensors, raised where neither the state nor the site is in sight.
 """
 function charged_state(a::AbstractArray, inds, what, site::AbstractSite)
     if !has_definite_flux(a, inds)
