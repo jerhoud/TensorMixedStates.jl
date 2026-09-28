@@ -110,7 +110,9 @@ get_sim_file(sim::Simulation, filename::AbstractString) =
             elseif last(splitext(filename)) == ".json"
                 Dict()
             else
-                open(filename, sim.checkpoint.appending ? "a" : "w")
+                # continued where the checkpoint cut it back, or created as the uninterrupted
+                # run creates it when the checkpoint did not know it yet
+                open(filename, filename in sim.checkpoint.recorded ? "a" : "w")
             end
         end
     end
@@ -130,8 +132,11 @@ the process, so they are left alone, the same way `save_checkpoint` leaves them 
 function close_sim_files(sim::Simulation)
     for (filename, data) in sim.files
         if data isa Dict
+            # written out before the file is opened, which empties it: a value json cannot
+            # hold then leaves the file of the last run rather than nothing
+            text = JSON.json(json_value(data))
             open(filename, "w") do io
-                JSON.print(io, json_value(data))
+                print(io, text)
             end
         elseif data ∉ (stdout, stderr, devnull)
             close(data)

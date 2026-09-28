@@ -164,6 +164,22 @@ the reference article.
 - A matrix was written in a json file as the list of its columns, where a file writes it row
   by row and a reader of json takes a nested list for its rows. It is the list of its rows.
 
+- A resumed simulation did not always write what the uninterrupted one writes. An interrupt
+  during a sweep of dmrg checkpointed the state half way through the next one. A resumed
+  `GroundState` or `SteadyState` could not stop on its tolerance at its first sweep, and a
+  checkpoint written on the sweep where it stopped had it run again: the checkpoint holds the
+  energy of the last sweep, and a stop on the tolerance records the phase as done. A phase
+  stopped for a checkpoint took its final measurements, which stayed in the files after the
+  resume. A resume from a checkpoint written after the last phase took the final
+  measurements at the starting time of the simulation. An output file first opened after
+  the checkpoint was continued from what a killed attempt had left in it, and is created
+  anew.
+
+- A value that is not finite made the checkpoint fail and left a json file empty: the
+  checkpoint marks it, and a json file writes it as `"Inf"`, `"-Inf"` or `"NaN"`.
+
+- The fingerprint of the phases failed on a phase holding a dictionary or a set.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

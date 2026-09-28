@@ -268,6 +268,112 @@ end
     end
 end
 
+# a measurement that creates the stop file when it has been taken `stop_in[]` times
+function stopper_at(stop_in::Ref{Int})
+    return StateFunc("Stopper", _ -> begin
+        if stop_in[] > 0
+            stop_in[] -= 1
+            if stop_in[] == 0
+                touch("stop")
+            end
+        end
+        0.
+    end)
+end
+
+@testset "A resumed ground state search stops where it would have" begin
+    # the tolerance is checked against the energy of the sweep before, which the checkpoint
+    # carries, a stop on it records the phase as done, and the state checkpointed is the one
+    # of the sweep it is labelled with: a resume, wherever it falls, runs the same sweeps
+    # and writes the same lines as the uninterrupted search
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            h = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.8 * sum(X(i) for i in 1:4)
+            phases = [CreateState{Pure}(4, Qubit(), "Up"),
+                      GroundState(hamiltonian = h, nsweeps = 30, tolerance = 1e-10,
+                                  limits = Limits(maxdim = 8, cutoff = 1e-14),
+                                  measures = "data" => [stopper_at(stop_in), Z(1)],
+                                  final_measures = "final" => [Z(1)])]
+            runTMS(SimData(; name = "ref", phases))
+            reference = read("ref/data", String)
+            sweeps = count(l -> startswith(l, "Z(1)"), split(reference, '\n'))
+            @test 1 < sweeps < 30                  # the tolerance stops the search
+            for k in 1:sweeps
+                stop_in[] = k
+                sim_data = SimData(; name = "chk$k", phases, checkpoint_interval = 1e-9)
+                runTMS(sim_data)
+                @test stop_in[] == 0
+                runTMS(sim_data)
+                @test read("chk$k/data", String) == reference
+                @test read("chk$k/final", String) == read("ref/final", String)
+            end
+        end
+    end
+end
+
+@testset "A resume after the last phase" begin
+    # a stop asked for in the final measurements of the last phase checkpoints past it: the
+    # resume runs no phase, and the final measurements of the simulation, which the stopped
+    # run leaves to it, are taken at the time the simulation reached
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                             limits = Limits(maxdim = 4, cutoff = 1e-15),
+                             final_measures = "data" => [stopper_at(stop_in)])]
+            ref = runTMS(SimData(; name = "ref", phases, final_measures = "fin" => Z(1)))
+            stop_in[] = 1
+            sim_data = SimData(; name = "chk", phases, final_measures = "fin" => Z(1),
+                               checkpoint_interval = 1e9)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            sim = runTMS(sim_data)
+            @test sim.time ≈ ref.time
+            @test read("chk/fin", String) == read("ref/fin", String)
+            @test read("chk/data", String) == read("ref/data", String)
+        end
+    end
+end
+
+@testset "An output the checkpoint does not know is created anew" begin
+    # a file opened after the checkpoint a run resumes from holds what a killed attempt left:
+    # the uninterrupted run creates it, so the resumed one does too, where a file the
+    # checkpoint knows is continued from where it was cut back
+    mktempdir() do dir
+        cd(dir) do
+            write("late", "left by a killed attempt\n")
+            write("known", "kept\n")
+            c = TensorMixedStates.Checkpointer()
+            c.recorded = Set(["known"])
+            sim = Simulation(nothing; checkpoint = c)
+            println(get_sim_file(sim, "late"), "new")
+            println(get_sim_file(sim, "known"), "more")
+            TensorMixedStates.close_sim_files(sim)
+            @test read("late", String) == "new\n"
+            @test read("known", String) == "kept\nmore\n"
+        end
+    end
+end
+
+@testset "Values that are not finite" begin
+    # json has no number for them: the checkpoint marks them and gives them back, and a json
+    # file writes them as Julia prints them
+    mktempdir() do dir
+        cd(dir) do
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Gates(gates = X(1), final_measures = [Data("d") => [NaN, -Inf], "out.json" => [Inf]]),
+                      Gates(gates = X(1))]
+            runTMS(SimData(; name = "nonfinite", phases, checkpoint_interval = 1e-9))
+            @test only(TensorMixedStates.JSON.parsefile("nonfinite/out.json")["Inf"]["data"]) == "Inf"
+            data = TensorMixedStates.load_checkpoint("nonfinite")[6]
+            @test isnan(only(data["d"]["NaN"]["data"]))
+            @test only(data["d"]["-Inf"]["data"]) == -Inf
+        end
+    end
+end
+
 @testset "Per sweep schedules" begin
     rs = TensorMixedStates.resume_schedule
     @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep
@@ -377,6 +483,11 @@ end
     @test id(base) == id([[[first(base)]], last(base)])
     # and it does not depend on the indices a session happens to draw
     @test id(base) == id(deepcopy(base))
+    # a dictionary or a set is what it holds, in no order, and no longer raises
+    ph = TensorMixedStates.phase_hash
+    @test ph(UInt(0), Dict("a" => 1, "b" => 2)) == ph(UInt(0), Dict("b" => 2, "a" => 1))
+    @test ph(UInt(0), Dict("a" => 1)) ≠ ph(UInt(0), Dict("a" => 2))
+    @test ph(UInt(0), Set([1, 2])) == ph(UInt(0), Set([2, 1]))
 
     # a checkpoint of another simulation must be refused, so anything a phase says has to
     # count. Resuming into the wrong simulation is silent, which is what makes it serious.

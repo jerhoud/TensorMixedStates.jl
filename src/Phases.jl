@@ -129,7 +129,8 @@ function run_phase(sim::Simulation, phase::GroundState)
     end
     e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, first_sweep = done + 1,
         phase.limits, phase.noise,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done;
+                                 phase.nsweeps, energy = resumed_energy!(sim.checkpoint, done)))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim
 end
@@ -173,7 +174,8 @@ function run_phase(sim::Simulation, phase::SteadyState)
     end
     e, sim = steady_state(phase.lindbladian, sim;
         phase.nsweeps, first_sweep = done + 1, phase.limits, phase.mpo_limits, phase.mpo_algo,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done))
+        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done;
+                                 phase.nsweeps, energy = resumed_energy!(sim.checkpoint, done)))
     log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
     return sim
 end

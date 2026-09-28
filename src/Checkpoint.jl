@@ -36,10 +36,22 @@ phase_hash(h::UInt, x::Function) = hash(string(typeof(x)), h)
 phase_hash(h::UInt, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = hash("()", h))
 phase_hash(h::UInt, x::AbstractArray) = foldl(phase_hash, x; init = hash(size(x), h))
 
+# what a dictionary or a set holds, in no order: its storage order is not part of it, and its
+# fields are the internals of a hash table, some of them undefined
+function phase_hash(h::UInt, x::Union{AbstractDict, AbstractSet})
+    s = zero(UInt)
+    for y in x
+        s += phase_hash(zero(UInt), y)
+    end
+    return hash(s, hash(string(typeof(x)), h))
+end
+
 function phase_hash(h::UInt, x)
     h = hash(string(typeof(x)), h)
     for f in fieldnames(typeof(x))
-        h = phase_hash(h, getfield(x, f))
+        if isdefined(x, f)
+            h = phase_hash(h, getfield(x, f))
+        end
     end
     return h
 end
@@ -67,7 +79,10 @@ appears, or on an interrupt. In all three cases a checkpoint is written first.
 - `state`:     the state as of the last sweep, so that an interrupt can still save it
 - `resuming`:  set while the first phase of a resumed run has not started yet
 - `skip`:      sweeps to skip when resuming the current phase, `0` when not resuming
-- `appending`: whether output files are being continued rather than created
+- `recorded`:  the output files the checkpoint resumed from knows, which are continued; any
+               other is created, as the uninterrupted run creates it
+- `energy`:    the energy of the last dmrg sweep, which a resumed dmrg phase compares its
+               first sweep with
 - `stopping`:  set once a stop has been requested, so that every loop unwinds
 """
 mutable struct Checkpointer
@@ -83,7 +98,8 @@ mutable struct Checkpointer
     state::Union{Nothing, State}
     resuming::Bool
     skip::Int
-    appending::Bool
+    recorded::Set{String}
+    energy::Union{Nothing, Float64}
     stopping::Bool
 end
 
@@ -91,7 +107,7 @@ Checkpointer(dir::String = "", id::String = ""; interval::Real = 0, max_time::Re
     Checkpointer(dir, id, interval,
                  max_time == Inf ? Inf : time() + max_time,
                  interval ≤ 0 ? Inf : time() + interval,
-                 1, 0, 0., 0., nothing, false, 0, false, false)
+                 1, 0, 0., 0., nothing, false, 0, Set{String}(), nothing, false)
 
 """
     stop_file(::Checkpointer)
@@ -159,6 +175,7 @@ function save_checkpoint(c::Checkpointer, sim, state::State, sweep::Int)
             "id" => c.id,
             "phase" => c.phase,
             "sweep" => sweep,
+            "energy" => checkpoint_value(c.energy),
             "time" => [real(c.phase_time), imag(c.phase_time)],
             "positions" => positions,
             "data" => checkpoint_value(sim.data),
@@ -179,7 +196,7 @@ end
     load_checkpoint(dir)
 
 read the checkpoint of the given directory and return `(state, phase_time, phase, sweep,
-positions, data, json, id)`. `phase_time` is the simulation time at the start of the
+positions, data, json, id, energy)`. `phase_time` is the simulation time at the start of the
 interrupted phase, which is what the solvers count their sweeps from. `data` and `json` are
 the accumulating destinations, `Data(name)` ones and json files respectively.
 """
@@ -195,7 +212,8 @@ function load_checkpoint(dir::String)
     positions = Dict{String, Int}(k => Int(v) for (k, v) in meta["positions"])
     data = Dict{String, Dict}(k => restored_destination(v) for (k, v) in meta["data"])
     json = Dict{String, Dict}(k => Dict(v) for (k, v) in meta["json"])
-    return (state, t, Int(meta["phase"]), Int(meta["sweep"]), positions, data, json, id)
+    energy = restored_value(meta["energy"])
+    return (state, t, Int(meta["phase"]), Int(meta["sweep"]), positions, data, json, id, energy)
 end
 
 """
@@ -203,11 +221,13 @@ end
 
 a value of a json destination as it is written: a complex number becomes
 `{"re": …, "im": …}`, wherever it is, which JSON.jl writes that way or refuses depending on
-its version. A matrix is left to JSON.jl, which writes the vector of its columns. Given what
-it gave, it gives it back, so that the values a resumed run read from its checkpoint go
-through it again unchanged.
+its version, a matrix the list of its rows, as a file writes it, and a value that is not
+finite the string Julia prints it as, `"Inf"`, `"-Inf"` or `"NaN"`, json having no number for
+it. Given what it gave, it gives it back, so that the values a resumed run read from its
+checkpoint go through it again unchanged.
 """
-json_value(x::Complex) = Dict("re" => real(x), "im" => imag(x))
+json_value(x::AbstractFloat) = isfinite(x) ? x : string(x)
+json_value(x::Complex) = Dict("re" => json_value(real(x)), "im" => json_value(imag(x)))
 json_value(x::AbstractMatrix) = [ json_value.(x[i, :]) for i in axes(x, 1) ]
 json_value(x::AbstractArray) = map(json_value, x)
 json_value(x::AbstractDict) = Dict(k => json_value(v) for (k, v) in x)
@@ -219,10 +239,12 @@ json_value(x) = x
 
 a value of a `Data` destination written into the checkpoint, and read back from it. Json
 holds neither complex numbers nor matrices, a matrix coming back as the vector of its
-columns, so both are marked and rebuilt, and an array read back is given its element type
-again: a resumed run hands back the values an uninterrupted one would.
+columns, nor a number that is not finite, so all three are marked and rebuilt, and an array
+read back is given its element type again: a resumed run hands back the values an
+uninterrupted one would.
 """
-checkpoint_value(x::Complex) = Dict("complex" => [real(x), imag(x)])
+checkpoint_value(x::AbstractFloat) = isfinite(x) ? x : Dict("float" => string(x))
+checkpoint_value(x::Complex) = Dict("complex" => [checkpoint_value(real(x)), checkpoint_value(imag(x))])
 checkpoint_value(x::AbstractMatrix) = Dict("matrix" => [ checkpoint_value(x[i, :]) for i in axes(x, 1) ])
 checkpoint_value(x::AbstractArray) = map(checkpoint_value, x)
 checkpoint_value(x::AbstractDict) = Dict(k => checkpoint_value(v) for (k, v) in x)
@@ -230,8 +252,10 @@ checkpoint_value(x) = x
 
 function restored_value(x::AbstractDict)
     if haskey(x, "complex")
-        r, i = x["complex"]
+        r, i = restored_value.(x["complex"])
         return complex(r, i)
+    elseif haskey(x, "float")
+        return parse(Float64, x["float"])
     elseif haskey(x, "matrix")
         return stack(restored_value.(x["matrix"]); dims = 1)
     end
@@ -337,4 +361,17 @@ function first_sweep!(c::Checkpointer)
     s = c.skip
     c.skip = 0
     return s + 1
+end
+
+"""
+    resumed_energy!(::Checkpointer, done)
+
+the energy of the sweep a dmrg phase resumes after, which its first sweep is compared with to
+decide whether to stop, consumed as the resume point is. A phase starting from its beginning,
+`done` being zero, has none: what the checkpointer holds is then left by another phase.
+"""
+function resumed_energy!(c::Checkpointer, done::Int)
+    e = c.energy
+    c.energy = nothing
+    return done > 0 ? e : nothing
 end

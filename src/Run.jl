@@ -154,7 +154,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
         try
             if live && has_checkpoint(".")
-                state, phase_time, phase, sweep, positions, data, json, id = load_checkpoint(".")
+                state, phase_time, phase, sweep, positions, data, json, id, energy = load_checkpoint(".")
                 if id ≠ c.id
                     error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
                           "its phases are not the ones being run. Use restart = true to start over " *
@@ -165,8 +165,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 # put back before any measurement asks for them: `get_sim_file` creates a
                 # json destination on first use and would otherwise start an empty one
                 merge!(sim.files, json)
-                c.phase, c.skip, c.phase_time = phase, sweep, phase_time
-                c.appending = c.resuming = true
+                c.phase, c.skip, c.phase_time, c.energy = phase, sweep, phase_time, energy
+                c.recorded = Set(keys(positions))
+                c.resuming = true
                 sim = Simulation(sim, state, phase_time)
                 log_msg(sim, "Resuming from checkpoint: phase $phase, sweep $sweep, simulation time $phase_time")
             end
@@ -219,20 +220,21 @@ end
 
 function log_phase(sim::Simulation, phases::Vector)
     c = sim.checkpoint
+    # the interrupted phase restarts from the time it began with, its solver counts sweeps
+    # from there and skips the ones already done. Put back before the loop, since a
+    # checkpoint written after the last phase resumes none, and the final measurements then
+    # still have to be taken at the time the simulation reached
+    if c.resuming
+        sim = Simulation(sim, sim.state, c.phase_time)
+        c.resuming = false
+    end
     for (i, phase) in enumerate(phases)
         # phases already completed before the checkpoint are not replayed
         if i < c.phase
             continue
         end
         c.phase = i
-        if c.resuming
-            # the interrupted phase restarts from the time it began with, its solver
-            # counts sweeps from there and skips the ones already done
-            sim = Simulation(sim, sim.state, c.phase_time)
-            c.resuming = false
-        else
-            c.phase_time = sim.time
-        end
+        c.phase_time = sim.time
         phase_start!(c, sim)
         sim = log_phase(sim, phase)
         if c.stopping
@@ -280,7 +282,11 @@ function log_phase(sim::Simulation, phase)
     end
     td = @timed begin
         sim = run_phase(sim, phase)
-        output(sim, phase.final_measures)
+        # a phase stopped for a checkpoint takes its final measurements when it is resumed and
+        # finished, from the state an uninterrupted run takes them from
+        if !sim.checkpoint.stopping
+            output(sim, phase.final_measures)
+        end
     end
     elapsed = round(td.time; digits=3)
     comp =
