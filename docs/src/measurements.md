@@ -113,9 +113,10 @@ measures = "sweeps.dat" => :sweep
 
 `:sweep` is the sweep number and is available in every phase that sweeps, that is `Evolve`,
 `GroundState` and `SteadyState`. `:energy` is the current energy and is available in
-`GroundState` only. Asking for a symbol that the running algorithm does not provide is not
-an error: the measurement silently produces an empty value, so `:energy` in an `Evolve`
-phase writes nothing.
+`GroundState` and `SteadyState`, where it is the value dmrg minimises, zero at the steady
+state. Asking for a symbol that the running algorithm does not provide is not an error: the
+measurement produces an empty value, so `:energy` in an `Evolve` phase writes its name and
+the time with no value in a file, and empty values in a json file or a `Data` object.
 
 Checks can be performed (useful for coherence tests)
 

@@ -7,14 +7,16 @@ A phase type to create the simulation state
 # Fields
 
 - `name`: the name of the phase
-- `time_start`: the initial simulation time (default 0., use `nothing` to keep the current simulation time)
+- `time_start`: the simulation time from this phase on (default `nothing`, keeping the current
+  time, which the `time_start` of `SimData` sets at the start)
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 - `type`: the type of state to create `Pure()` or `Mixed()`
 - `system`: a System object to describe the system (see `System`) (unused if a State object is given)
 - `state`: a description of the state (or a State object)
 - `randomize`: the link dimension for the random state to create (default 0 for no randomizing).
   With a `state` given, a pure state is randomised from it and a mixed one drawn from the
-  purification starting from it, see `RandomState`
+  purification starting from it, see `RandomState`: a mixed one needs a description, a State
+  object being randomised into a pure state only
 - `seed`: set the random generator seed for randomize (default nothing)
 
 # Examples
@@ -28,7 +30,7 @@ A phase type to create the simulation state
 """
 @kwdef struct CreateState{R <: PM}
     name::String = "Creating state"
-    time_start::Union{Nothing, Number} = 0.
+    time_start::Union{Nothing, Number} = nothing
     final_measures = []
     type::R
     system::Union{Nothing, System} = nothing
@@ -169,7 +171,7 @@ A phase type for time evolution
 
 # Examples
 
-    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))), measures = [X, Y, Z])
+    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))), measures = "data" => [X, Y, Z])
 
 # Fields
 
@@ -205,7 +207,7 @@ A phase type for applying gates
 - `name`: the name of the phase
 - `time_start`: the simulation time to use at the start of the phase
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `limits`: constraints to enforce at each step of the computation
+- `limits`: the truncations made while applying a gate of several sites, see `apply`
 - `gates`: the gates to apply
 
 # Examples
@@ -330,7 +332,7 @@ a phase to compute the steady state of a Lindbladian
 - `time_start`: the initial simulation time
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 - `lindbladian`: the Lindbladian whose steady state is requested (should be of the form -im * hamiltonian + dissipators)
-- `mpo_limits`: limits on the resulting MPO (nothing for no truncation)
+- `mpo_limits`: limits on the resulting MPO (default `Limits()`, no truncation)
 - `mpo_algo`: algorithm for computing (L+)L: "naive" (default) or "zipup"
 - `limits`: limits on the state MPS
 - `nsweeps`: maximum number of sweeps

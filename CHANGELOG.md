@@ -34,6 +34,20 @@ the reference article.
 
 ### Changed
 
+- `CreateState` keeps the time of the simulation unless given its `time_start`, where it set
+  it to 0, which undid the `time_start` of `SimData`. A `CreateState` in the middle of a
+  simulation keeps the running time.
+
+- With periodic checkpoints on, a checkpoint is written after the last phase, so that running
+  a completed simulation again does nothing, as the manual says, where it resumed from the
+  last checkpoint written during the run and computed its tail again.
+
+- `EntanglementEntropy(pos, n)` writes `n` eigenvalues, the ones beyond the bond dimension at
+  the cut being zeros, where it wrote at most `n`, so that the rows of a file changed width.
+
+- `CreateState` refuses to randomize a `State` object into a mixed state, which has no
+  purification to draw from, with a message saying so, where the docstring promised it.
+
 - `measure` gives each value the kind of its measurement: its real part for a real one, its
   imaginary part under the name `Im(name)` for an imaginary one, and a complex number for a
   complex one, even on a real state. `Overlap` is complex, and so is a correlation matrix as
@@ -220,6 +234,19 @@ the reference article.
 - `steady_state`, and so `SteadyState`, returned the eigenvector of `(L+)L` as dmrg finds it,
   with a trace of arbitrary size and sign, which `Trace` and the phases after it read. It is
   normalised to a trace of one.
+
+- The error messages on the charge of an MPO printed the opposite of the flux of the
+  operator.
+
+- `RandomState{Mixed}` on a system conserving something strongly sent the user to another
+  form, which refused as well.
+
+- `ToMixed` ignored its limits when the state was already mixed.
+
+- Docstrings and pages of the manual that the code contradicted: `isfermionic`, `exp` and
+  `dag`, `mixer`, `apply` and its limits, `SteadyState`, the example of `Evolve`, the
+  symbols `:energy` and those a phase does not provide, and `checkpoint_interval = 0`, which
+  disables periodic checkpoints only.
 
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written

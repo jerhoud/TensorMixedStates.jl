@@ -2,11 +2,13 @@ export apply
 
 """
     apply(op, ::State; limits::Limits)
-    apply(mps, ::State; limits::Limits)
+    apply(mpo, ::State; limits::Limits)
     apply(op, ::Simulation; limits::Limits)
 
-Apply the given gates to the state and truncate the result according to limits.
-It is much more efficient to apply all the gates in a single call to apply.
+Apply the given gates to the state. `limits` constrain the truncations made while a gate of
+several sites is applied, on the bond it spans and on those crossed to bring its sites
+together: a gate of one site, and the other bonds, are not truncated. An MPO truncates the
+whole result. It is much more efficient to apply all the gates in a single call to apply.
 A product of gates is the operator it denotes, its rightmost factor acting first.
 
 # Examples

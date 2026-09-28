@@ -374,6 +374,27 @@ end
     end
 end
 
+@testset "Running a completed simulation again" begin
+    # with periodic checkpoints on, one is written after the last phase, so that the run
+    # resumes past every phase: nothing is computed again and the files stay as they were
+    mktempdir() do dir
+        cd(dir) do
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                             limits = Limits(maxdim = 4, cutoff = 1e-15), measures = "data" => [Z(1)])]
+            sim_data = SimData(; name = "done", phases, checkpoint_interval = 1e9,
+                               final_measures = "fin" => Z(1))
+            first = runTMS(sim_data)
+            data, fin = read("done/data", String), read("done/fin", String)
+            again = runTMS(sim_data)
+            @test again.time ≈ first.time
+            @test read("done/data", String) == data
+            @test read("done/fin", String) == fin
+            @test occursin("Resuming from checkpoint: phase 3", read("done/log", String))
+        end
+    end
+end
+
 @testset "Per sweep schedules" begin
     rs = TensorMixedStates.resume_schedule
     @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep

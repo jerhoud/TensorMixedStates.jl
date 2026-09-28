@@ -58,7 +58,7 @@ and as keys, so two different sets must keep two different names.
 # Examples
 
     compact_positions(1:20)        # "1:20"
-    compact_positions([1,2,3,7,8]) # "1:3,7:8"
+    compact_positions([1,2,3,7,8]) # "1:3,7,8"
 """
 compact_positions(p::Int) = string(p)
 
@@ -431,7 +431,8 @@ SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(
 a state function to measure entanglement entropy / OSEE and associated spectrum. The cut
 is on the right of `pos`, between sites `pos` and `pos + 1`, and the spectrum is that of
 the reduced density matrix of the sites up to `pos`, so it is made of squared singular
-values summing to one. `spectrum` is how many of them to write out.
+values summing to one. `spectrum` is how many of them to write out, the ones beyond the
+bond dimension at the cut being zeros, so that every row has the same width.
 See also `StateFunc` and `entanglement_entropy`.
 """
 EntanglementEntropy(pos) = StateFunc("EntanglementEntropy($pos)",
@@ -442,7 +443,7 @@ EntanglementEntropy(pos) = StateFunc("EntanglementEntropy($pos)",
 EntanglementEntropy(pos, spectrum) = StateFunc("EntanglementEntropy($pos,$spectrum)",
     st-> begin
         ee, sp = entanglement_entropy(st, pos)
-        return [[ee]; sp[1:min(length(sp), spectrum)]]
+        return [[ee]; sp[1:min(length(sp), spectrum)]; zeros(max(0, spectrum - length(sp)))]
     end)
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro

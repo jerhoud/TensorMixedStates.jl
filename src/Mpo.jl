@@ -126,11 +126,11 @@ the charge of every channel of every link of the MPO, or `nothing` on a system w
 charges.
 
 A channel stands for a term of the operator partly placed: the sites on its left have
-contributed their factors and the ones on its right have not. Its charge is therefore what
-those factors carry, accumulated from the left, and that is what the link has to record for
-the MPO to be a tensor of definite flux. Channel one is the term not yet begun and carries
-nothing; the last one is the term finished and carries the flux of the whole operator, which
-every term must agree on.
+contributed their factors and the ones on its right have not. Its charge is therefore the
+opposite of what those factors carry, accumulated from the left, and that is what the link
+has to record for the MPO to be a tensor of definite flux. Channel one is the term not yet
+begun and holds nothing; the last one is the term finished and holds the opposite of the flux
+of the whole operator, which every term must agree on.
 """
 function mpo_charges(pre::PreMPO{R}, coefs) where R
     n = length(pre.system)
@@ -159,7 +159,7 @@ function mpo_charges(pre::PreMPO{R}, coefs) where R
                     only_strong = !isempty(st) &&
                         weak_qn(total, st, String[]) == weak_qn(c, st, String[])
                     error("the terms of this operator do not all carry the same charge, " *
-                          "$(total) and $(c), " *
+                          "$(-total) and $(-c), " *
                           (only_strong ?
                               "which only a strong symmetry tells apart: drop `strong` or " *
                               "weaken the state" :
@@ -200,7 +200,7 @@ function w_charges(pre::PreMPO, coefs)
     total = q[1][end]
     if total ≠ QN()
         error("the approximations WI and WII need an operator of zero flux, and this one " *
-              "carries $total, so it would move the charge its system conserves")
+              "carries $(-total), so it would move the charge its system conserves")
     end
     return q
 end

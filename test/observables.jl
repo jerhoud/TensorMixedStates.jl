@@ -266,6 +266,11 @@ end
     # the deprecated spelling forwards to the new one, label included
     @test MutualInfoRenyi2(2).name == "MutualInfoRenyi2(2)"
     @test Mutual_Info_Renyi2(2).name == MutualInfoRenyi2(2).name
+    # the spectrum asked for is written whole, the eigenvalues beyond the bond dimension at the
+    # cut being zeros, so that the rows of a file keep their width
+    v = last(only(measure(State{Pure}(System(3, Qubit()), "Up"), EntanglementEntropy(1, 4))))
+    @test length(v) == 5
+    @test v[3:5] == zeros(3)
 end
 
 @testset "Entanglement resolved by sector" begin

@@ -852,9 +852,9 @@ struct ExpOp{N} <: GenericOp{Pure, N}
 end
 
 """
-    exp(::GenericOp)
+    exp(::GenericOp{Pure})
 
-exponential for generic operators
+exponential of a generic operator on pure states
 """
 exp(a::GenericOp{Pure}) = ExpOp(a)
 
@@ -882,9 +882,9 @@ struct DagOp{N} <: GenericOp{Pure, N}
 end
 
 """
-    dag(::GenericOp)
+    dag(::GenericOp{Pure})
 
-adjoint for generic operators
+adjoint of a generic operator on pure states
 """
 dag(a::GenericOp{Pure}) = DagOp(a)
 
@@ -1000,9 +1000,12 @@ named(op::GenericOp{Pure, N}, name::String) where N =
 ################## isfermionic #################
 
 """
-    isfermionic(::GenericOp)
+    isfermionic(::SimpleOp)
 
-return whether a generic operator is fermionic 
+whether an operator of one site on pure states is odd under the fermion parity. A sum mixing
+fermionic and non fermionic operators, and an exponential, a `mod` or a non integer power of
+a fermionic operator, have no such parity and raise an error. For an operator of several
+sites or a superoperator, see `has_fermionic`.
 """
 isfermionic(a::SimpleOp) = false
 isfermionic(a::Operator{1}) = a.type == fermionic_op

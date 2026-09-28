@@ -24,8 +24,9 @@ already have, which leaves it in the sector it was in; a mixed one is drawn by n
 `states` its purification starts from, written as for `State`, since what is left after
 tracing half of that purification is a mixture over the sectors around the one named.
 
-A quantity conserved strongly leaves no room for either: the purification would have to be
-traced in half, and what that leaves spreads over several sectors.
+A quantity conserved strongly leaves no room for a random mixed state: the purification
+would have to be traced in half, and what that leaves spreads over several sectors. A pure one
+is still drawn by randomising a state you have.
 """
 struct RandomState{R <: PM} end
 
@@ -53,7 +54,18 @@ function purify(elt::Type{<:Number}, start::State{Pure}, system::System, linkdim
     return State{Mixed}(system, ρ.state)
 end
 
+# refused first, so that a system conserving something strongly is not sent to the form taking
+# states, which refuses it as well
+function refuse_strong(system::System)
+    if !isempty(strong_names(system))
+        error("cannot draw a random mixed state on a system conserving something strongly: " *
+              "tracing half of its purification leaves a mixture over several sectors, " *
+              "which such a system cannot hold")
+    end
+end
+
 function RandomState{Mixed}(elt::Type{<:Number}, system::System, linkdims::Int)
+    refuse_strong(system)
     if is_charged(system)
         error("cannot draw a random mixed state on a system that conserves something " *
               "without a sector to start from: name the states its purification starts " *
@@ -75,11 +87,7 @@ double(states, n::Int) = Any[ states for _ in 1:2n ]
 double(states::Vector{<:Number}, n::Int) = Any[ states for _ in 1:2n ]
 
 function RandomState{Mixed}(elt::Type{<:Number}, system::System, states, linkdims::Int)
-    if !isempty(strong_names(system))
-        error("cannot draw a random mixed state on a system conserving something strongly: " *
-              "tracing half of its purification leaves a mixture over several sectors, " *
-              "which such a system cannot hold")
-    end
+    refuse_strong(system)
     n = length(system)
     super = system ⊗ system
     return purify(elt, State{Pure}(super, double(states, n)), system, linkdims)

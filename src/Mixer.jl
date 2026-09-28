@@ -12,13 +12,15 @@ function combinerto(i::Index, j::Index...)
 end
 
 """
-    mixer(j::Index, k::Index)
+    mixer(j::Index, k::Index, site::AbstractSite)
 
-return the combiner that turns the ket index `j` and the bra index `j'` into the mixed
-index `k`.
+return the pair `(b, c)`: `b` the index carrying the bra of the ket index `j` on `site`, see
+`bra_index`, and `c` the combiner that turns `j` and `dag(b')` into the mixed index `k`. The
+bra is `j` itself unless the site conserves something strongly, where it carries its charges
+under starred names, so that `k` keeps the charges of the ket and of the bra apart.
 
-The bra is daggered, so that the charge `k` carries is the difference of the two and not
-their sum. This is what makes a density matrix a tensor of zero flux, and it is the reason
+The bra is daggered, so that the charge `k` carries, without a strong symmetry, is the
+difference of the two and not their sum. This is what makes a density matrix a tensor of zero flux, and it is the reason
 everything that crosses between the two representations goes through this one combiner:
 the pairs are then flattened in the same order everywhere. Without charges `dag` is the
 identity and this is the plain combiner it always was.

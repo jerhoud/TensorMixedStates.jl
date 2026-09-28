@@ -48,6 +48,11 @@ function run_phase(sim::Simulation, phase::CreateState{R}) where R
             state = RandomState{R}(phase.system, phase.randomize)
         end
     elseif phase.state isa State
+        # a random mixed state is drawn from a purification, which a State does not give
+        if R === Mixed && phase.randomize ≠ 0
+            error("CreateState cannot randomize a State into a mixed state: give a description " *
+                  "of the state, whose purification it is drawn from")
+        end
         # `type` is what the phase was asked for, so a State given in the other
         # representation is converted rather than silently kept as it is
         state = as_representation(sim, R, phase.state)
@@ -72,6 +77,7 @@ end
 function run_phase(sim::Simulation, phase::ToMixed)
     if sim.state isa State{Mixed}
         log_msg(sim, "State is already in mixed representation")
+        sim = truncate(sim; phase.limits)
     else
         log_msg(sim, "Creating mixed representation with $(length(sim)) sites")
         sim = truncate(mix(sim); phase.limits)

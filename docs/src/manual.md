@@ -462,8 +462,9 @@ SimData(
 )
 ```
 
-`checkpoint_interval` is the time between two saves, `0` (the default) disables
-checkpointing entirely. `max_time` is a wall clock budget: once it is past, the simulation
+`checkpoint_interval` is the time between two saves, `0` (the default) disables the periodic
+checkpoints: a stop, from `max_time` or the `stop` file, or an interrupt, still writes one, so
+that the simulation can be resumed. `max_time` is a wall clock budget: once it is past, the simulation
 writes a checkpoint and returns instead of carrying on. Set it comfortably below the limit
 of your batch job, since a checkpoint is only taken between two sweeps: a sweep that lasts
 ten minutes delays the stop by up to ten minutes.
@@ -476,8 +477,9 @@ during the save leaves the previous checkpoint intact.
 
 `runTMS` resumes on its own: run the same program again and it picks up where it left off,
 skipping the phases that were finished and restarting the interrupted one at the sweep it
-had reached. There is nothing to pass and nothing to change in the program. Running it
-once more after the simulation completed does nothing.
+had reached. There is nothing to pass and nothing to change in the program. With periodic
+checkpoints on, one is written after the last phase, so that running it once more after the
+simulation completed does nothing.
 
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption

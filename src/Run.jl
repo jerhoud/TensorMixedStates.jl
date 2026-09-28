@@ -16,7 +16,8 @@ A type for describing a simulation to use with `runTMS`
 - `final_measures`:  measures to make at the end of simulation (default []) see `measure` and `output`
 - `time_format`:     C like format for output of simulation time (default `$default_time_format`)
 - `data_format`:     C like format for output of simulation data (default `$default_data_format`)
-- `checkpoint_interval`: seconds between two checkpoints (default 0, no checkpointing)
+- `checkpoint_interval`: seconds between two checkpoints (default 0, no periodic checkpoint;
+  a stop or an interrupt still writes one, so that the simulation can be resumed)
 - `max_time`:        seconds after which the simulation stops cleanly (default `Inf`)
 
 A simulation with a checkpoint interval writes its state to `<name>/checkpoint.h5` and
@@ -255,6 +256,10 @@ function log_phase(sim::Simulation, phases::Vector)
                 log_msg(sim, "***** Stopping after phase $i, the simulation can be resumed *****")
                 break
             end
+        elseif sim.state isa State && i == length(phases) && c.interval > 0
+            # the last phase done, a checkpoint records it whether one is due or not, so
+            # that running the simulation again resumes past every phase and does nothing
+            save_checkpoint(c, sim, sim.state, 0)
         end
     end
     return sim

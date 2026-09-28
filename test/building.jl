@@ -147,6 +147,29 @@ end
    @test_pm Simulation(State{type}(System(3, Qubit()), "Up"))
 end
 
+@testset "The phases that make the state" begin
+    # the time_start of SimData is the time of the simulation from its start, which CreateState
+    # keeps unless given one of its own
+    sim = runTMS(SimData(time_start = 2.5, phases = [CreateState{Pure}(2, Qubit(), "Up")]);
+                 output = devnull)
+    @test sim.time == 2.5
+    sim = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "Up"; time_start = 1.)]);
+                 output = devnull)
+    @test sim.time == 1.
+    # a State cannot be randomised into a mixed state, having no purification to draw from
+    st = State{Pure}(System(2, Qubit()), "Up")
+    @test_throws "cannot randomize a State into a mixed state" runTMS(SimData(phases = [
+        CreateState(type = Mixed(), state = st, randomize = 4)]); output = devnull)
+    # ToMixed holds a state already mixed to its limits as well
+    ρ = mix(RandomState{Pure}(System(4, Qubit()), 4))
+    sim = runTMS(SimData(phases = [CreateState(type = Mixed(), state = ρ),
+                                   ToMixed(limits = Limits(maxdim = 2))]); output = devnull)
+    @test maxlinkdim(sim.state) ≤ 2
+    # a system conserving something strongly is refused a random mixed state by the message
+    # that says why, and not sent to another form that refuses it too
+    @test_throws "conserving something strongly" RandomState{Mixed}(System(2, Fermion(conserve = strong(N))), 4)
+end
+
 @testset "Putting a state on another system" begin
     # a System draws indices of its own, so the same sites twice give two systems whose
     # states cannot be contracted together. This is what makes them comparable
