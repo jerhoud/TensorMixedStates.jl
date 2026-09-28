@@ -59,7 +59,9 @@ the reference article.
 - A json destination writes a complex number as `{"re": …, "im": …}`.
 
 - The checkpoint file is at version 2, and one written by an earlier version is refused: a
-  measurement becoming complex would continue its file in another layout.
+  measurement becoming complex would continue its file in another layout. The fingerprint
+  of the phases no longer takes `mindim = 1` for the former default of 0, which only served
+  checkpoints of version 1.
 
 ### Fixed
 
