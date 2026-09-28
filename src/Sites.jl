@@ -21,6 +21,59 @@ return the dimension of the given site
 """
 dim(site::AbstractSite) = error("dim not implemented on site $site")
 
+"""
+    conserved(site)
+
+what a site conserves, in the form `conserve_string` produces, and the empty string when it
+conserves nothing.
+
+The `conserve` field is optional, a site type that can have no conserved quantity simply not
+declaring it, so this is what everything else reads rather than the field itself. A field of
+that name holding something other than a string is not one, and the site conserves nothing.
+"""
+conserved(site::AbstractSite) =
+    if hasfield(typeof(site), :conserve) && getfield(site, :conserve) isa AbstractString
+        site.conserve
+    else
+        ""
+    end
+
+"""
+    decode_conserve(s)
+
+the conserved quantities a site records, as a vector of `(name, modulus, charges, strong)`,
+`strong` telling whether the quantity is conserved strongly. See `conserve_string`.
+"""
+function decode_conserve(s::AbstractString)
+    if isempty(s)
+        return Tuple{String, Int, Vector{Int}, Bool}[]
+    end
+    map(split(s, ';')) do part
+        i = findfirst(==(':'), part)
+        if isnothing(i)
+            error("a site records \"$part\" as a conserved quantity, which has no charges")
+        end
+        head, tail = part[1:i-1], part[i+1:end]
+        st = endswith(head, '!')
+        if st
+            head = head[1:end-1]
+        end
+        j = findlast(==('%'), head)
+        name, modulus = isnothing(j) ? (String(head), 1) :
+                        (String(head[1:j-1]), parse(Int, head[j+1:end]))
+        return (name, modulus, parse.(Int, split(tail, ',')), st)
+    end
+end
+
+"""
+    strong_names(site)
+
+the names of the quantities the site conserves strongly, empty when it conserves none that
+way. See `strong`.
+"""
+strong_names(site::AbstractSite) =
+    [ q[1] for q in decode_conserve(conserved(site)) if q[4] ]
+
 # `nameof` rather than `string(typeof(site))`: the latter prints the module prefix when
 # the site module is not in scope, and ITensors silently cuts a tag at 16 characters, so
 # every site type ended up tagged "TensorMixedState" depending on what the user imported
@@ -59,13 +112,10 @@ end
 
 """
     qn_components(q)
-    make_qn(components)
-    map_charges(f, i)
 
 the components of a charge as `(name, value, modulus)`, the empty slots ITensors pads it with
-left out, the charge made of such components, and the index `i` with the charge of each of its
-blocks passed through `f`, everything else kept. The relabellings of the charges, `weak_qn`,
-`star` and `adjoint_qn`, are written with them.
+left out. The relabellings of the charges, `weak_qn`, `star` and `adjoint_qn`, are written
+with it and `map_charges`.
 """
 function qn_components(q::QN)
     cs = Tuple{String, Int, Int}[]
@@ -78,8 +128,7 @@ function qn_components(q::QN)
     return cs
 end
 
-make_qn(cs) = isempty(cs) ? QN() : QN(cs...)
-
+# the index with the charge of each block passed through `f`, everything else kept
 map_charges(f, i::Index) =
     Index([ f(q) => d for (q, d) in space(i) ]...; tags = tags(i), plev = plev(i), dir = dir(i))
 
@@ -117,7 +166,7 @@ function weak_qn(q::QN, collapse, drop)
             vals[k] = (base, vals[k][2] + v, vals[k][3])
         end
     end
-    return make_qn(vals)
+    return QN(vals...)
 end
 
 weak_index(i::Index, collapse, drop) =
@@ -125,6 +174,55 @@ weak_index(i::Index, collapse, drop) =
         i
     else
         map_charges(q -> weak_qn(q, collapse, drop), i)
+    end
+
+"""
+    star(q::QN, names)
+    star(i::Index, names)
+
+the charge, or the index, with every component named in `names` renamed to carry a star.
+
+This is what separates the bra from the ket: a strong symmetry conserves the two sides
+apart, so the bra holds its charges under other names and combining the pair keeps them
+rather than subtracting them. It applies to a whole index and not only to a site one,
+because the links of a state carry the same charges and must be renamed with it, or the
+two halves of the same tensor would count in two different ways. Renaming nothing gives the
+index back as it is, which is every case without a strong symmetry.
+"""
+star(q::QN, names) =
+    QN([ (n in names ? n * "*" : n, v, m) for (n, v, m) in qn_components(q) ]...)
+
+function star(i::Index, names)
+    if isempty(names) || !hasqns(i)
+        return i
+    end
+    return map_charges(q -> star(q, names), i)
+end
+
+"""
+    adjoint_qn(q::QN, names)
+    adjoint_index(i::Index, names)
+
+the charge, or the index, relabelled so that the element ``|x\\rangle\\langle y|`` of a
+mixed index takes the charge ``|y\\rangle\\langle x|`` had, `names` being the quantities
+conserved strongly.
+
+Under a strong symmetry ``|x\\rangle\\langle y|`` carries `X` as the charge of `x` and `X*`
+as minus that of `y`, so the exchange sends `(X, X*)` to `(-X*, -X)`; a weak quantity holds
+the difference of the two and is only negated. Either way this is an automorphism of the
+charge group, so relabelling every index of a state with it, links included, keeps each
+tensor consistent with no data moved, and what is left of the adjoint is a permutation of
+zero flux. See `adj_map`.
+"""
+adjoint_qn(q::QN, names) =
+    QN([ (endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n, -v, m)
+         for (n, v, m) in qn_components(q) ]...)
+
+adjoint_index(i::Index, names) =
+    if !hasqns(i)
+        i
+    else
+        map_charges(q -> adjoint_qn(q, names), i)
     end
 
 """
@@ -145,20 +243,6 @@ conserving nothing inside a system where another one does takes a trivial index 
 `site_index`, which is a property of the system rather than of the site.
 """
 Index(site::AbstractSite) = site_index(site, !isempty(conserved(site)))
-
-"""
-    string_state(::AbstractSite, ::String)
-
-Do not call directly. It returns a local state corresponding to the string, a generic form
-the site reads, which is tried after the states the site declares and before the states
-every site has, see `state`.
-
-The default implementation returns the first state for "0", the second for "1" and so on.
-
-This should be overloaded if necessary when defining new site types. It should return an error when not needed.
-"""
-string_state(site::AbstractSite, st::String) =
-    state(site, parse(Int, st))
 
 """
     mixed_index(i, site)
@@ -389,6 +473,20 @@ function state(site::AbstractSite, a::Int)
     v[a + 1] = 1.0
     return v
 end
+
+"""
+    string_state(::AbstractSite, ::String)
+
+Do not call directly. It returns a local state corresponding to the string, a generic form
+the site reads, which is tried after the states the site declares and before the states
+every site has, see `state`.
+
+The default implementation returns the first state for "0", the second for "1" and so on.
+
+This should be overloaded if necessary when defining new site types. It should return an error when not needed.
+"""
+string_state(site::AbstractSite, st::String) =
+    state(site, parse(Int, st))
 
 """
     common_states
@@ -820,108 +918,6 @@ function check_charges(sites::Vector{<:AbstractSite})
     end
     return nothing
 end
-
-"""
-    strong_names(site)
-
-the names of the quantities the site conserves strongly, empty when it conserves none that
-way. See `strong`.
-"""
-strong_names(site::AbstractSite) =
-    [ q[1] for q in decode_conserve(conserved(site)) if q[4] ]
-
-"""
-    star(q::QN, names)
-    star(i::Index, names)
-
-the charge, or the index, with every component named in `names` renamed to carry a star.
-
-This is what separates the bra from the ket: a strong symmetry conserves the two sides
-apart, so the bra holds its charges under other names and combining the pair keeps them
-rather than subtracting them. It applies to a whole index and not only to a site one,
-because the links of a state carry the same charges and must be renamed with it, or the
-two halves of the same tensor would count in two different ways. Renaming nothing gives the
-index back as it is, which is every case without a strong symmetry.
-"""
-star(q::QN, names) =
-    make_qn([ (n in names ? n * "*" : n, v, m) for (n, v, m) in qn_components(q) ])
-
-function star(i::Index, names)
-    if isempty(names) || !hasqns(i)
-        return i
-    end
-    return map_charges(q -> star(q, names), i)
-end
-
-"""
-    adjoint_qn(q::QN, names)
-    adjoint_index(i::Index, names)
-
-the charge, or the index, relabelled so that the element ``|x\\rangle\\langle y|`` of a
-mixed index takes the charge ``|y\\rangle\\langle x|`` had, `names` being the quantities
-conserved strongly.
-
-Under a strong symmetry ``|x\\rangle\\langle y|`` carries `X` as the charge of `x` and `X*`
-as minus that of `y`, so the exchange sends `(X, X*)` to `(-X*, -X)`; a weak quantity holds
-the difference of the two and is only negated. Either way this is an automorphism of the
-charge group, so relabelling every index of a state with it, links included, keeps each
-tensor consistent with no data moved, and what is left of the adjoint is a permutation of
-zero flux. See `adj_map`.
-"""
-adjoint_qn(q::QN, names) =
-    make_qn([ (endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n, -v, m)
-              for (n, v, m) in qn_components(q) ])
-
-adjoint_index(i::Index, names) =
-    if !hasqns(i)
-        i
-    else
-        map_charges(q -> adjoint_qn(q, names), i)
-    end
-
-"""
-    decode_conserve(s)
-
-the conserved quantities a site records, as a vector of `(name, modulus, charges, strong)`,
-`strong` telling whether the quantity is conserved strongly. See `conserve_string`.
-"""
-function decode_conserve(s::AbstractString)
-    if isempty(s)
-        return Tuple{String, Int, Vector{Int}, Bool}[]
-    end
-    map(split(s, ';')) do part
-        i = findfirst(==(':'), part)
-        if isnothing(i)
-            error("a site records \"$part\" as a conserved quantity, which has no charges")
-        end
-        head, tail = part[1:i-1], part[i+1:end]
-        st = endswith(head, '!')
-        if st
-            head = head[1:end-1]
-        end
-        j = findlast(==('%'), head)
-        name, modulus = isnothing(j) ? (String(head), 1) :
-                        (String(head[1:j-1]), parse(Int, head[j+1:end]))
-        return (name, modulus, parse.(Int, split(tail, ',')), st)
-    end
-end
-
-"""
-    conserved(site)
-
-what a site conserves, in the form `conserve_string` produces, and the empty string when it
-conserves nothing.
-
-The `conserve` field is optional, a site type that can have no conserved quantity simply not
-declaring it, so this is what everything else reads rather than the field itself. A field of
-that name holding something other than a string is not one, and the site conserves nothing.
-"""
-conserved(site::AbstractSite) =
-    if hasfield(typeof(site), :conserve) && getfield(site, :conserve) isa AbstractString
-        site.conserve
-    else
-        ""
-    end
 
 """
     conserve_names(s)
