@@ -443,10 +443,9 @@ function check_even(name, m, sites, tol)
         end
         fj = kron(identity_operator(prod(d[1:j-1])), f, identity_operator(prod(d[j+1:end])))
         if norm(fj * m * fj - m) > tol
-            error("$name does not commute with F on its site $j, $s, so it moves a fermion " *
-                  "there. A matrix is taken as it is, with no Jordan-Wigner string, which " *
-                  "is only right for an operator even on each of its sites: write it as an " *
-                  "expression of C and dag(C) instead, into which simplify inserts the strings")
+            error("$name does not commute with F on its site $j, $s: it moves a fermion " *
+                  "there, which its one site factors, placed with no Jordan-Wigner string, " *
+                  "cannot do. Give it without its sites, or develop it")
         end
     end
     return nothing
@@ -607,8 +606,32 @@ function legs(a::GenericOp{Pure}, sites, js)
     return t
 end
 
-legs(a::TensorOp{N}, sites, js) where N =
-    prod(tensor_apply((o, p...) -> legs(o, sites[[p...]], js[[p...]]), a, (1:N)...))
+# (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): the string of each odd factor, moved left
+# through those before it, leaves on each of them an F per odd factor that follows, and a factor
+# of no definite parity after a fermionic site makes the product a sum, which is refused rather
+# than laid without its string. Sites apart, as a gate places it, still miss the strings of the
+# sites in between, which is why `has_fermionic` sends such an operator through `simplify`
+function legs(a::TensorOp{N}, sites, js) where N
+    pos = tensor_apply((o, p...) -> collect(p), a, (1:N)...)
+    ps = map(jw_parity, a.subs)
+    fs = GenericOp{Pure}[]
+    for (k, o) in enumerate(a.subs)
+        rest = ps[k+1:end]
+        j = findfirst(isnothing, rest)
+        if all(i -> matrix(F, sites[i]) == I, pos[k])
+            push!(fs, o)
+        elseif !isnothing(j)
+            error("$a has a factor of no definite fermionic parity, $(a.subs[k+j]), after a " *
+                  "fermionic site: write it as a sum of tensor products")
+        elseif isodd(sum(rest; init = 0))
+            push!(fs, o * reduce(⊗, fill(F, length(pos[k]))))
+        else
+            push!(fs, o)
+        end
+    end
+    return prod(tensor_apply((o, p...) -> legs(o, sites[[p...]], js[[p...]]), TensorOp{N}(fs),
+                             (1:N)...))
+end
 
 # the identities are dense blocked because ITensors has no outer product of two charged deltas
 legs(a::Left, sites, js, bs) =

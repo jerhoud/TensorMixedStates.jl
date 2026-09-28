@@ -454,3 +454,32 @@ end
     @test_throws "acts on 2 sites and was given 3" Operator{2}("A", msw, plain_op, q, q, q)
     @test_throws "has dimension 6" Operator{2}("A", msw, plain_op, s1, q)
 end
+
+@testset "The matrix of a tensor product of fermions" begin
+    # (A ⊗ B) on consecutive sites is A(1) * B(2), Jordan-Wigner strings included: its matrix
+    # is checked against the explicit c₁ = c ⊗ 1, c₂ = F ⊗ c and c₃ = F ⊗ F ⊗ c
+    fe = Fermion()
+    c, f, id = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
+    c1, c2 = kron(c, id), kron(f, c)
+    @test matrix(C ⊗ dag(C), fe) ≈ c1 * c2'
+    @test matrix(dag(C) ⊗ C, fe) ≈ c1' * c2
+    @test matrix(C ⊗ C, fe) ≈ c1 * c2
+    @test matrix(N ⊗ C, fe) ≈ c1' * c1 * c2
+    @test matrix((C + N) ⊗ C, fe) ≈ kron(c + c' * c, id) * c2
+    @test matrix(C ⊗ Id ⊗ dag(C), fe) ≈ kron(c, id, id) * kron(f, f, c)'
+    @test matrix(dag(C ⊗ C), fe) ≈ -matrix(dag(C) ⊗ dag(C), fe)
+    # a factor of no definite parity after a fermionic site makes the product a sum
+    @test_throws "no definite fermionic parity" matrix(C ⊗ (C + N), fe)
+
+    # an operator of several sites given by such an expression and its sites is the operator
+    # the expression stands for
+    h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
+    hm = c1' * c2 + c2' * c1
+    @test matrix(h, fe) ≈ hm
+    @test matrix(Operator{2}("H2", h * h, selfadjoint_op, fe), fe) ≈ hm^2
+    e = Operator{2}("E", exp(-0.3 * (h * h)), plain_op, fe)
+    @test matrix(e, fe) ≈ exp(-0.3 * hm^2)
+    st = State{Pure}(System(3, fe), ["Occ", "Emp", "Emp"])
+    @test expect(st, e(1, 2)) ≈ exp(-0.3)
+    @test expect(st, e(1, 3)) ≈ exp(-0.3)
+end

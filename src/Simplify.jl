@@ -313,47 +313,6 @@ pow_base(a::PowOp) = a.arg
 pow_expo(a::Op) = 1
 pow_expo(a::PowOp) = a.expo
 
-"""
-    jw_parity(a)
-
-how a factor of a one site product behaves when the `F` of that site crosses it: `0` when it
-commutes with `F`, `1` when it anticommutes, `nothing` when it does neither.
-
-A fermionic operator, and the Jordan-Wigner transform `simplify` makes of it, is odd, and any
-other operator is taken to be even, the convention the strings themselves rest on. A composite
-factor has the parity its pieces give it. Sums have to be read as well, since `simplify`
-gathers the terms of one site into a single factor: `(C + dag(C))(1)` was taken to be even,
-and `C(3) * (C + dag(C))(1)` came out with the wrong sign.
-"""
-jw_parity(::Op) = 0
-jw_parity(::JW) = 1
-jw_parity(a::Operator) = a.type == fermionic_op ? 1 : 0
-jw_parity(a::Union{ScalarOp, DagOp}) = jw_parity(a.arg)
-
-function jw_parity(a::ProdOp)
-    ps = map(jw_parity, a.subs)
-    return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
-end
-
-function jw_parity(a::SumOp)
-    ps = unique(map(jw_parity, a.subs))
-    return length(ps) == 1 ? only(ps) : nothing
-end
-
-function jw_parity(a::PowOp)
-    p = jw_parity(a.arg)
-    if p == 0
-        return 0
-    elseif p == 1 && isinteger(a.expo)
-        return mod(Int(a.expo), 2)
-    else
-        return nothing
-    end
-end
-
-# the exponential of an odd operator mixes the two parities
-jw_parity(a::Union{ExpOp, ModOp}) = jw_parity(a.arg) == 0 ? 0 : nothing
-
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     id = MakeIdentity(v[1])
     if c == 0

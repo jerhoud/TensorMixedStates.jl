@@ -81,6 +81,13 @@ the reference article.
   not preserve the trace. A tensor product with a factor of odd or undefined parity keeps its
   adjoint until it is placed, where the product of its placed factors gives the sign.
 
+- The matrix and the tensor of a tensor product left out the Jordan-Wigner strings between its
+  factors, `matrix(C ⊗ dag(C), Fermion())` being the bare `kron` of the two matrices where
+  `C(1) * dag(C)(2)` is its opposite. An operator of several sites given by such an
+  expression and its sites, `Operator{2}(name, exp(-0.3 * (h * h)), plain_op, Fermion())`,
+  was silently the wrong operator, `exp(+0.3 * h * h)` there. A factor of no definite parity
+  after a fermionic site, as in `C ⊗ (C + N)`, is refused.
+
 - An operator of several sites placed on a repeated site, as `Swap(1, 1)` or
   `(X ⊗ Y)(1, 1)`, is refused. Applied as a gate it put one index into its tensor twice and
   failed inside ITensors, and its adjoint came out with its factors in the wrong order. The

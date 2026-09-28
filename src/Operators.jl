@@ -990,8 +990,9 @@ isfermionic(a::PowOp) =
 whether an operator still holds a factor whose Jordan-Wigner string `simplify` has not
 inserted: an odd operator of one site, wherever it sits. A tensor product, an operator of
 several sites defined by an expression and the argument of a superoperator are all looked
-into, since their matrix is built from the bare matrices of their factors, with neither the
-strings nor the signs `(C ⊗ dag(C))(1, 2) = C(1) * dag(C)(2)` asks for.
+into, since their tensor carries the strings between consecutive sites only: placed on sites
+apart, it misses those of the sites in between, which `(C ⊗ dag(C))(1, 3) = C(1) * dag(C)(3)`
+asks for.
 
 The structure is read from the fields, the way `==` is, so that no wrapper can be forgotten.
 Once `simplify` has run, the factors are `JW` transforms, which are not fermionic, and the
@@ -1011,6 +1012,47 @@ function has_fermionic(a::Op)
     return false
 end
 
+
+"""
+    jw_parity(a)
+
+how a factor of a one site product behaves when the `F` of that site crosses it: `0` when it
+commutes with `F`, `1` when it anticommutes, `nothing` when it does neither.
+
+A fermionic operator, and the Jordan-Wigner transform `simplify` makes of it, is odd, and any
+other operator is taken to be even, the convention the strings themselves rest on. A composite
+factor has the parity its pieces give it. Sums have to be read as well, since `simplify`
+gathers the terms of one site into a single factor: `(C + dag(C))(1)` was taken to be even,
+and `C(3) * (C + dag(C))(1)` came out with the wrong sign.
+"""
+jw_parity(::Op) = 0
+jw_parity(::JW) = 1
+jw_parity(a::Operator) = a.type == fermionic_op ? 1 : 0
+jw_parity(a::Union{ScalarOp, DagOp}) = jw_parity(a.arg)
+
+function jw_parity(a::ProdOp)
+    ps = map(jw_parity, a.subs)
+    return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
+end
+
+function jw_parity(a::SumOp)
+    ps = unique(map(jw_parity, a.subs))
+    return length(ps) == 1 ? only(ps) : nothing
+end
+
+function jw_parity(a::PowOp)
+    p = jw_parity(a.arg)
+    if p == 0
+        return 0
+    elseif p == 1 && isinteger(a.expo)
+        return mod(Int(a.expo), 2)
+    else
+        return nothing
+    end
+end
+
+# the exponential of an odd operator mixes the two parities
+jw_parity(a::Union{ExpOp, ModOp}) = jw_parity(a.arg) == 0 ? 0 : nothing
 
 ################## Equality #################
 
