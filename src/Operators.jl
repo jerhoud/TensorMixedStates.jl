@@ -149,6 +149,33 @@ function paren(f, io::IO, out_prec::Int, in_prec::Int = out_prec)
 end
 
 
+"""
+    no_signed_zero(x)
+
+`x` with its signed zeros made positive, `-0.0 + 1.0im` becoming `0.0 + 1.0im`, and every
+other value as it is. Every operator that stores numbers stores them through this, so that no
+operator holds a signed zero: `==` holds `-0.0` and `0.0` equal but `isless` and `hash` do not,
+and simplify, which sorts the terms before merging the equal ones, left two equal terms apart
+when a third sorted between them, while `measure`, which gathers the operators it evaluates by
+their hash, computed the same one twice.
+"""
+no_signed_zero(x::Union{AbstractFloat, Complex{<:AbstractFloat}}) = x + zero(x)
+no_signed_zero(x::AbstractArray) = map(no_signed_zero, x)
+no_signed_zero(x) = x
+
+"""
+    state_key(state)
+
+what the state of a `Proj` or a `SetState` is ordered by: its kind, an index, a name or an
+array, then its size and its elements, by their real and their imaginary parts. It is a total
+order, complex numbers included, and ties exactly where `==` holds: their printed forms,
+compared before, told apart `[1, 0]` and `[1.0, 0.0]`, which are equal, and simplify could leave
+two such terms unmerged.
+"""
+state_key(x::Int) = (1, x)
+state_key(x::AbstractString) = (2, x)
+state_key(x::AbstractArray) = (3, size(x), [ (real(y), imag(y)) for y in vec(x) ])
+
 ############### Operator ###############
 
 """
@@ -219,7 +246,7 @@ struct Operator{N} <: GenericOp{Pure, N}
         if N > 1 && type == fermionic_op
             error("cannot deal with a fermionic multi site operator $name")
         else
-            new{N}(name, expr, type)
+            new{N}(name, no_signed_zero(expr), type)
         end
 end
 
@@ -336,11 +363,7 @@ struct ScalarOp{R, T, N} <: Op{R, T, N}
         elseif arg isa SumOp
             SumOp(map(x -> coef * x, arg.subs))
         else
-            # a signed zero taken out, -0.0 + 1.0im becoming 0.0 + 1.0im: `==` holds them
-            # equal but `isless` and `hash` do not, and simplify, which sorts the terms before
-            # merging the equal ones, left an interleaved pair unmerged
-            c = coef * scalarcoef(arg)
-            new{R, T, N}(c + zero(c), scalararg(arg))
+            new{R, T, N}(no_signed_zero(coef * scalarcoef(arg)), scalararg(arg))
         end
 end
 
@@ -532,12 +555,10 @@ an operator to project on the given state
 """
 struct Proj <: SimpleOp
     state::Union{Int, String, Vector}
+    Proj(state::Union{Int, String, Vector}) = new(no_signed_zero(state))
 end
 
-# the state is a number, a name or a vector, which have no order between them, and a vector
-# may hold complex numbers, which have none either: what is compared is how they print, as
-# for SetState, the global ordering of operators needing a total order, not a meaningful one
-isless(a::Proj, b::Proj) = isless(repr(a.state), repr(b.state))
+isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
 
 
 ############ AtIndex ################
@@ -762,12 +783,10 @@ an operator to Set the local state to the one given, can only be used on mixed r
 """
 struct SetState <: GenericOp{Mixed, 1}
     state::Union{String, Vector, Matrix}
+    SetState(state::Union{String, Vector, Matrix}) = new(no_signed_zero(state))
 end
 
-# the state is a name, a vector or a matrix. There is no order between those, and none
-# at all between two matrices, so what is compared is how they print: the global ordering
-# of operators needs a total order, not a meaningful one
-isless(a::SetState, b::SetState) = isless(repr(a.state), repr(b.state))
+isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state))
 
 
 ############## Operator functions ###########
@@ -835,10 +854,9 @@ struct GenPowOp{R, N} <: GenericOp{R, N}
         elseif is_involution(a) && isreal(p) && isone(c)
             # A² = 1 leaves the power modulo 2, which the principal logarithm agrees with
             q = mod(real(p), 2)
-            return is_natural(q) ? IntPowOp(a, Int(q)) : new{R, N}(a, q)
+            return is_natural(q) ? IntPowOp(a, Int(q)) : new{R, N}(a, no_signed_zero(q))
         end
-        # a signed zero taken out, as in the coefficient of a ScalarOp
-        return new{R, N}(arg, p + zero(p))
+        return new{R, N}(arg, no_signed_zero(p))
     end
 end
 

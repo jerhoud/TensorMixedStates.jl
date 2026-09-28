@@ -699,6 +699,19 @@ end
     @test hash(a) == hash(b)
     @test length(Set([a, b])) == 1
     @test isequal(((X + Z)^complex(-0.0, 0.5)).expo, 0.5im)
+    # and so in every number an operator stores: the matrix of an Operator, the state of a
+    # Proj or of a SetState
+    m(x) = Operator{1}("M", [1.0 x; 0.0 1.0], plain_op)
+    @test hash(m(-0.0)) == hash(m(0.0))
+    p, q = Proj([1.0, -0.0]), Proj([1.0, 0.0])
+    @test hash(p) == hash(q)
+    @test !(isless(p, q) || isless(q, p))
+    @test hash(SetState([1.0 -0.0; 0.0 0.0])) == hash(SetState([1.0 0.0; 0.0 0.0]))
+    # a projector is ordered by its values, which tie where `==` holds: its printed form told
+    # [1, 0] and [1.0, 0.0] apart, and [1, 1] sorted between the two
+    g(v) = exp(im * Proj(v) ⊗ X)(1, 2)
+    @test simplify(g([1, 0]) - g([1.0, 0.0]) + g([1, 1])) == simplify(g([1, 1]))
+    @test isless(Proj(1), Proj("Up")) && isless(Proj("Up"), Proj([1, 0]))
 end
 
 @testset "Printing reads back as the operator" begin

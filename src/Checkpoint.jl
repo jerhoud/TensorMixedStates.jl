@@ -18,7 +18,8 @@ fnv(h::UInt64, bytes) = foldl((h, b) -> (h ⊻ b) * fnv_prime, bytes; init = h)
 mix(h::UInt64, x::UInt64) = fnv(h, reinterpret(UInt8, [x]))
 mix(h::UInt64, x::Integer) =
     typemin(Int64) ≤ x ≤ typemax(Int64) ? fnv(h, reinterpret(UInt8, [Int64(x)])) : mix(h, string(x))
-mix(h::UInt64, x::AbstractFloat) = fnv(h, reinterpret(UInt8, [Float64(x)]))
+# a signed zero mixes in as the zero it is equal to, `==` holding the two phases equal
+mix(h::UInt64, x::AbstractFloat) = fnv(h, reinterpret(UInt8, [no_signed_zero(Float64(x))]))
 mix(h::UInt64, x::Rational) = mix(mix(h, numerator(x)), denominator(x))
 mix(h::UInt64, x::Complex) = mix(mix(h, real(x)), imag(x))
 mix(h::UInt64, x::AbstractString) = fnv(mix(h, ncodeunits(x)), codeunits(x))

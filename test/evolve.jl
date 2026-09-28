@@ -277,10 +277,12 @@ end
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
     @test_throws "cannot be inserted" apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
     # a term of coefficient zero leaves the parity of a gate alone, where it made one a sum of
-    # fermionic and non fermionic operators, and a gate whose terms all vanish is null
+    # fermionic and non fermionic operators, and a gate whose terms all vanish makes the state
+    # null, as a gate that annihilates it does, where it was refused
     g = 0.0
     @test norm(apply((g * C + dag(C))(4), st) - apply(dag(C)(4), st)) < 1e-12
-    @test_throws "null gate" apply((g * C + g * dag(C))(4), st)
+    @test norm(apply((g * C + g * dag(C))(4), st)) == 0
+    @test trace(apply(0 * X(1), mix(State{Pure}(System(2, Qubit()), "Up")))) == 0
     # a factor contributing no tensor, an identity or a Jordan-Wigner string, must not
     # leave the gate list untyped: ITensorMPS.product has no method for a Vector{Any}
     @test_ok apply(Id(1) * X(2), State{Pure}(System(2, Qubit()), "Up"))

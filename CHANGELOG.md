@@ -409,12 +409,20 @@ the reference article.
   involution_op)` squared to `Id`, where its square is zero. `@def_operators` checks the
   operators it declares on the site it is given, and `F` is checked to be an involution.
 
-- A signed zero is taken out of the coefficient of an operator and of a non integer exponent,
-  `-0.0 + 1.0im` becoming `0.0 + 1.0im`. The two are equal to `==` but not to `isless` or
-  `hash`: `simplify`, which sorts the terms before merging the equal ones, could leave two
-  equal terms unmerged when a third sorted between them, as in
-  `exp(c1 * X ⊗ X) - exp(im * X ⊗ X) + exp(c3 * X ⊗ X)` with `c1 = -1 * -1im`, and `measure`
-  computed the expectation value of two such operators twice.
+- No operator stores a signed zero: `-0.0 + 1.0im` becomes `0.0 + 1.0im` in the coefficient
+  of an operator, a non integer exponent, the matrix defining an `Operator` and the state of a
+  `Proj` or a `SetState`. The two are equal to `==` but not to `isless` or `hash`: `simplify`,
+  which sorts the terms before merging the equal ones, could leave two equal terms unmerged
+  when a third sorted between them, as in `exp(c1 * X ⊗ X) - exp(im * X ⊗ X) + exp(c3 * X ⊗ X)`
+  with `c1 = -1 * -1im`, and `measure` computed the expectation value of two such operators
+  twice. The fingerprint of the phases takes the two zeros alike too.
+
+- `Proj` and `SetState` are ordered by the values of their state rather than by its printed
+  form, which told apart states equal to `==`: `[1, 0]` and `[1.0, 0.0]` sorted apart and
+  `[1, 1]` between them, so that `simplify` left two equal terms unmerged.
+
+- `apply` takes a null gate, which makes the state null as a gate that annihilates it does.
+  It was refused.
 
 - An operator prints so that it reads back as itself, which matters for the names of the
   measurements: `X ⊗ (Y*Z)` printed `X⊗Y*Z`, `(X^0.5)^0.5` printed `X^0.5^0.5`, `(1//2)X`

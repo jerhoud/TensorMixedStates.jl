@@ -88,13 +88,12 @@ make_ops(::System, a::SumOp) =
 make_ops(::System, a::Evolver) =
     error("cannot apply sums as gates ($a is Left + Right of its argument)")
 
-make_ops(s::System, a::ScalarOp) =
-    if a.coef == 0
-        error("cannot apply null gate")
-    else
-        coef, ops = make_ops(s, a.arg)
-        (coef * a.coef, ops)
-    end
+# a null gate is `0Id`, which places no tensor and makes the state null, as a gate that
+# annihilates it does
+function make_ops(s::System, a::ScalarOp)
+    coef, ops = make_ops(s, a.arg)
+    return (coef * a.coef, ops)
+end
 
 function make_ops(s::System, a::ProdOp)
     coef = 1
