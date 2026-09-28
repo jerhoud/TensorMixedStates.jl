@@ -83,6 +83,25 @@ Base.propertynames(::Simulation) = (fieldnames(Simulation)..., :data)
 show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)")
 
 """
+    simulation_files
+
+the files `runTMS`, the log and the checkpoints write in the directory of a simulation, which
+no destination may be named after: a destination called `stop` stopped the simulation at its
+first sweep and was erased by the next run, and one called `checkpoint.json` overwrote the
+checkpoint.
+"""
+const simulation_files = Set(["log", "stop", "error", "running", "stamp", "description",
+    "prog.jl", "checkpoint.json", "checkpoint.json.tmp", "checkpoint-1.h5", "checkpoint-2.h5"])
+
+# a simulation with a directory, the one `runTMS` writes in, keeps its files for itself
+function check_destination(sim::Simulation, name::AbstractString)
+    if !isempty(sim.checkpoint.dir) && normpath(name) in simulation_files
+        error("cannot write to $name, a file of the simulation directory: choose another name")
+    end
+end
+check_destination(::Simulation, ::Data) = nothing
+
+"""
     get_sim_file(::Simulation, filename)
 
 return the corresponding file of the given simulation "stdout" (or "-"), "stderr" and "" respectively
@@ -93,9 +112,14 @@ where to store data and this data will be output in JSON format in the file by `
 
 Special filenames of the form `Data(name)` return a Dict where to store Data.
 Those Dict are gathered as a Dict in the `data` field of the Simulation
+
+In a simulation run by `runTMS` in its directory, a file of that directory, the log, the
+checkpoint and the markers, see `simulation_files`, cannot be asked for.
 """
-get_sim_file(sim::Simulation, name::Union{AbstractString, Data}) =
-    handle(destination(sim.outputs, name))
+function get_sim_file(sim::Simulation, name::Union{AbstractString, Data})
+    check_destination(sim, name)
+    return handle(destination(sim.outputs, name))
+end
 
 """
     close_sim_files(::Simulation)

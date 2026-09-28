@@ -30,6 +30,7 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
         measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
     end
     for (v, name) in zip(vals, first.(measurements))
+        check_destination(sim, name)
         emit!(destination(sim.outputs, name), sim.outputs.formats, sim.time, v)
     end
 end

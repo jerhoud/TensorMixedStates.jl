@@ -578,6 +578,28 @@ end
     end
 end
 
+@testset "A destination is not a file of the simulation" begin
+    # a destination called stop stopped the simulation at its first sweep and was erased by
+    # the next run, one called checkpoint.json overwrote the checkpoint, and so on
+    mktempdir() do dir
+        cd(dir) do
+            p = CreateState{Pure}(2, Qubit(), "Up")
+            for name in ("stop", "log", "checkpoint.json", "./running")
+                @test_throws "a file of the simulation directory" runTMS(SimData(name = "s",
+                    phases = [p, Gates(gates = X(1), final_measures = name => [Z(1)])]))
+            end
+            # every file a run and its checkpoints leave in the directory is one of those
+            runTMS(SimData(name = "all", description = "d", checkpoint_interval = 1e-9,
+                           phases = [p, Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(),
+                                               evolver = -im * X(1), measures = "data" => Z(1))]))
+            @test issubset(setdiff(readdir("all"), ["data"]), TensorMixedStates.simulation_files)
+            # without a directory nothing is written there, and any name goes
+            @test_ok runTMS(SimData(phases = [p, Gates(gates = X(1), final_measures = "stop" => Z(1))]);
+                            output = devnull)
+        end
+    end
+end
+
 @testset "An interrupt with no directory reaches the caller" begin
     # nothing can be saved, so nothing can be resumed: the interrupt was taken for a
     # checkpoint that was never written, and the run returned as if it had completed

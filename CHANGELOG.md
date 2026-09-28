@@ -506,6 +506,12 @@ the reference article.
   is built, rather than read from the error ITensors raises: any other error ITensors raised at
   that point was reported as a missing charge.
 
+- A destination named as a file `runTMS` writes in the simulation directory is refused: `log`,
+  `stop`, `error`, `running`, `stamp`, `description`, `prog.jl` and the checkpoint files. A
+  destination called `stop` stopped the simulation at its first sweep and was erased by the
+  next run, one called `checkpoint.json` overwrote the checkpoint, and the others were erased
+  or overwritten in the same way.
+
 ## [1.4.0] - 2026-09-24
 
 This release adds conserved quantities and the exported names that go with them, which is

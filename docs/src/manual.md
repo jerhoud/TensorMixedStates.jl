@@ -562,7 +562,7 @@ measures = [ dest1 => meas1, dest2 => meas2, ...]
 
 The possible measurements are described in the measurements section of this manual. There are three types of destinations:
 
-- filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull)
+- filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull). The files `runTMS` writes itself in the simulation directory cannot be destinations: `log`, `stop`, `error`, `running`, `stamp`, `description`, `prog.jl` and the checkpoint files
 
   ```julia
   "file.dat" => X
