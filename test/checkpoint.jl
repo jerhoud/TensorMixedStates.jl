@@ -656,6 +656,14 @@ end
     @test ph(o, "abc") == 0xc11ab6d2519bc2b2
     @test ph(o, 3) == 0xc7c2bf3b330983e6
     @test ph(o, 1 + 2im) == 0x7717980363c8e066
+    # a type is written by its full path, not as the program happens to see it: `Qubit` or
+    # `TensorMixedStates.Qubit`, depending on the `using`, gave the same simulation two
+    # fingerprints
+    tk = TensorMixedStates.type_key
+    @test tk(Qubit) == "TensorMixedStates.Qubit"
+    @test tk(State{Pure}) == "TensorMixedStates.State{TensorMixedStates.Pure}"
+    @test tk(Vector{Float64}) == "Core.Array{Core.Float64,1}"
+    @test tk(Union{Int, Nothing}) == "Union{Core.Int64,Core.Nothing}"
 
     # a checkpoint of another simulation must be refused, so anything a phase says has to
     # count. Resuming into the wrong simulation is silent, which is what makes it serious.

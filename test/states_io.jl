@@ -34,6 +34,15 @@ end
 
 TensorMixedStates.dim(::Unkindly) = 2
 
+# fields a state file wrote as their printed form and could not read back: a float of another
+# width prints as "0.1f0", and an integer beyond `Int` overflowed
+struct Widely <: AbstractSite
+    y::Float32
+    big::UInt64
+end
+
+TensorMixedStates.dim(::Widely) = 2
+
 @testset "SetState" begin
     sys = System(3, Qubit())
     st = State{Mixed}(sys, ["Dn", "FullyMixed", "+"])  # arbitrary starting local states
@@ -432,6 +441,10 @@ end
     # written over a name already in use leaves what was there intact
     @test_throws "its field range is a" save_state(file, "kinds", bad)
     @test load_state(file, "kinds").system.sites == st.system.sites
+
+    wide = Widely(0.1f0, typemax(UInt64))
+    save_state(file, "wide", State{Pure}(System(2, wide), [1., 0.]))
+    @test load_state(file, "wide").system.sites[1] === wide
 end
 
 @testset "Reading a version 1 state file" begin

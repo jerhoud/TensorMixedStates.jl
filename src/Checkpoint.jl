@@ -26,6 +26,32 @@ mix(h::UInt64, x::Union{Number, Symbol, Char}) = mix(h, string(x))
 mix(h::UInt64, ::Nothing) = mix(h, "nothing")
 
 """
+    type_key(T)
+
+a type written by the full path of its module, its name and its parameters, which does not
+depend on the names visible where it is written: `string(typeof(Qubit()))` gives `Qubit` or
+`TensorMixedStates.Qubit` depending on the `using` of the program, so the same simulation took
+two fingerprints and its checkpoint was refused as belonging to another one.
+"""
+function type_key(T::DataType)
+    name = join((fullname(parentmodule(T))..., nameof(T)), ".")
+    if isempty(T.parameters)
+        return name
+    end
+    return name * "{" * join(map(type_parameter_key, T.parameters), ",") * "}"
+end
+type_key(T::UnionAll) = type_key(Base.unwrap_unionall(T))
+type_key(T::Union) = "Union{" * join(sort(map(type_key, Base.uniontypes(T))), ",") * "}"
+type_key(T::TypeVar) = string(T.name)
+# `Union{}`, the one type of none of the kinds above
+type_key(T::Type) = string(T)
+
+# a parameter is a type, a type variable, or a value such as the dimension of an array or the
+# names of a named tuple, which is written as it reads
+type_parameter_key(p::Union{Type, TypeVar}) = type_key(p)
+type_parameter_key(p) = repr(p)
+
+"""
     phases_id(phases)
 
 a fingerprint of the phases of a simulation, so that a checkpoint can tell whether it
@@ -43,16 +69,16 @@ and say nothing about the simulation: a `System` is what its sites are.
 phases_id(phases) = string(phase_hash(fnv_offset, phases))
 
 phase_hash(h::UInt64, x::Union{Number, AbstractString, Symbol, Char, Nothing}) = mix(h, x)
-phase_hash(h::UInt64, x::Type) = mix(h, string(x))
+phase_hash(h::UInt64, x::Type) = mix(h, type_key(x))
 # an enumeration value has no field to walk into, its name is what it is
-phase_hash(h::UInt64, x::Enum) = mix(h, string(typeof(x), ".", x))
+phase_hash(h::UInt64, x::Enum) = mix(h, type_key(typeof(x)) * "." * string(x))
 phase_hash(h::UInt64, ::Index) = h
 phase_hash(h::UInt64, x::System) = phase_hash(mix(h, "System"), x.sites)
 # a State is its system and its tensors: `preobs` is a cache filled as measurements are
 # made, so the same state would hash differently once it has been measured
 phase_hash(h::UInt64, x::State{R}) where R =
     phase_hash(phase_hash(mix(h, "State{$R}"), x.system), x.state)
-phase_hash(h::UInt64, x::Function) = mix(h, string(typeof(x)))
+phase_hash(h::UInt64, x::Function) = mix(h, type_key(typeof(x)))
 phase_hash(h::UInt64, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = mix(h, "()"))
 phase_hash(h::UInt64, x::AbstractArray) = foldl(phase_hash, x; init = foldl(mix, size(x); init = h))
 
@@ -63,11 +89,11 @@ function phase_hash(h::UInt64, x::Union{AbstractDict, AbstractSet})
     for y in x
         s += phase_hash(zero(UInt64), y)
     end
-    return mix(mix(h, string(typeof(x))), s)
+    return mix(mix(h, type_key(typeof(x))), s)
 end
 
 function phase_hash(h::UInt64, x)
-    h = mix(h, string(typeof(x)))
+    h = mix(h, type_key(typeof(x)))
     for f in fieldnames(typeof(x))
         if isdefined(x, f)
             h = phase_hash(h, getfield(x, f))

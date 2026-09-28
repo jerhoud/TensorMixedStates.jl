@@ -471,6 +471,14 @@ the reference article.
 - A dmrg search stopped for a checkpoint no longer logs `Done, dmrg final energy`, which its
   resume writes.
 
+- The fingerprint of the phases writes a type by the full path of its module, whatever the
+  program imports. `string(typeof(Qubit()))` gives `Qubit` or `TensorMixedStates.Qubit`
+  depending on the `using` of the program, so reorganising them gave the same simulation
+  another fingerprint, and its checkpoint was refused as belonging to another simulation.
+
+- A state file reads back a site field of a floating point type other than `Float64`, which
+  it wrote as `0.1f0` and could not parse, and an integer beyond `Int`, which overflowed.
+
 ## [1.4.0] - 2026-09-24
 
 This release adds conserved quantities and the exported names that go with them, which is

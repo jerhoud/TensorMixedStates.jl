@@ -35,7 +35,11 @@ param_value(kind::AbstractString, s::AbstractString) =
     if kind == "Bool"
         parse(Bool, s)
     elseif kind == "Int"
-        parse(Int, s)
+        # an integer beyond `Int` is read as the integer it is, and converted to the type of
+        # its field by whoever rebuilds the site
+        let n = tryparse(Int, s)
+            isnothing(n) ? parse(BigInt, s) : n
+        end
     elseif kind == "Float"
         parse(Float64, s)
     elseif kind == "Symbol"
@@ -47,6 +51,11 @@ param_value(kind::AbstractString, s::AbstractString) =
     else
         error("state file describes a site field as \"$kind\", which this version does not know")
     end
+
+# a float is written as the `Float64` it widens to exactly, which the reader converts back to
+# the type of its field: `string(0.1f0)` is "0.1f0", which `parse(Float64, …)` refuses
+param_string(x::AbstractFloat) = string(Float64(x))
+param_string(x) = string(x)
 
 """
     site_params(site)
@@ -66,7 +75,7 @@ function site_params(site::AbstractSite)
                   "number, a boolean, a symbol, a string or nothing")
         end
         push!(kinds, k)
-        push!(values, string(x))
+        push!(values, param_string(x))
     end
     return (kinds, values)
 end
