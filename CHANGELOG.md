@@ -134,6 +134,11 @@ the reference article.
   one index on several sites, and a gate then failed or never returned. The right operand is
   renewed whenever it shares an index with the left one.
 
+- `weaken` rebuilt a site whose `conserve` field is not a string, which conserves nothing, with
+  a string in that field, and failed; so did every measurement of a state conserving
+  something strongly on a system holding such a site. A site conserving nothing is left as
+  it is.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

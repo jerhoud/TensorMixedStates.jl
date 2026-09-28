@@ -774,11 +774,15 @@ function transitions(source::Conserved, target::Conserved)
     return collapse, drop
 end
 
-weaken(site::AbstractSite, target::Conserved) =
-    let t = typeof(site)
-        t(( f === :conserve ? retarget(site, target) : getfield(site, f)
-            for f in fieldnames(t) )...)
+function weaken(site::AbstractSite, target::Conserved)
+    # a site conserving nothing has nothing to weaken, whatever its conserve field holds
+    if isempty(conserved(site))
+        return site
     end
+    t = typeof(site)
+    return t(( f === :conserve ? retarget(site, target) : getfield(site, f)
+               for f in fieldnames(t) )...)
+end
 
 """
     check_charges(sites)

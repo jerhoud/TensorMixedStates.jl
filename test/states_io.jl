@@ -62,6 +62,16 @@ TensorMixedStates.dim(::Unkindly) = 2
     @test trace(st5) ≈ 1
 end
 
+@testset "Weakening beside a site whose conserve field is not a string" begin
+    # such a site conserves nothing, and weakening, which every measurement of a state
+    # conserving something strongly goes through, leaves it as it is
+    sys = System([Kindly(:sz, true, "a label", 3, 1.5, nothing), Fermion(conserve = strong(N))])
+    ρ = mix(State{Pure}(sys, Any[[1., 0.], "Occ"]))
+    @test trace(ρ) ≈ 1
+    @test expect(ρ, N(2)) ≈ 1
+    @test_ok weaken(ρ, ())
+end
+
 @testset "SetState under a strong symmetry" begin
     # resetting a site moves the charge of one side of the density matrix only, which a strong
     # symmetry forbids: it kept the block of charge zero alone, a state of trace zero
