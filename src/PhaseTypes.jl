@@ -251,7 +251,7 @@ A phase type for computing the ground state using Dmrg
     noise::Union{Float64, Vector{Float64}} = 0.
     measures = []
     measures_period::Int = 1
-    tolerance::Number = 0.
+    tolerance::Real = 0.
 end
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
@@ -360,7 +360,7 @@ a phase to compute the steady state of a Lindbladian
     nsweeps::Int
     measures = []
     measures_period::Int = 1
-    tolerance::Number = 0.
+    tolerance::Real = 0.
 end
 
 

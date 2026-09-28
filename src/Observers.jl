@@ -38,7 +38,7 @@ mutable struct DmrgObserver <: AbstractObserver
     sim::Simulation
     measurements::Union{Vector, Pair}
     period::Int
-    tol::Number
+    tol::Real
     energy::Union{Nothing, Float64}
     done::Int
     nsweeps::Int
