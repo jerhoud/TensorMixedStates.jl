@@ -71,11 +71,12 @@ the tensor of the identity on site i, and of an operator of one site on site i, 
 included. Placed, the identity has no site, and `expect1` and `expect2`, which close an
 environment on a given site, need its tensor there: the site comes from them.
 """
-function identity_at(state::State, i::Int)
-    s = state.system
-    t = legs(Id, [s[i]], [SysIndex{Pure}(s, i)])
-    return state isa State{Pure} ? t : on_trace(state, t, i)
+function identity_at(state::State{Pure}, i::Int)
+    j = SysIndex{Pure}(state.system, i)
+    return delta(dag(j), j')
 end
+
+identity_at(state::State{Mixed}, i::Int) = tensor_trace(state, i)
 
 obs_at(state::State, op::SimpleOp, i::Int) =
     op isa IdentityOp ? identity_at(state, i) : tensor_obs(state, op(i))

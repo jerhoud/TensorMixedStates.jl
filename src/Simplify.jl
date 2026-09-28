@@ -70,7 +70,6 @@ end
 simplify(a::AtIndex) =
     simplify_ind(simplify(a.op), a.index...)
 
-reindex(op::GenericOp, i::Int...) = op(i...)
 
 # Simplification with index
 # transmit indexation as deep as possible
@@ -191,7 +190,7 @@ simplify_dag(a::TensorOp{N}) where N =
     end
 
 
-simplify_dag(a::AtIndex) = reindex(simplify_dag(a.op), a.index...)
+simplify_dag(a::AtIndex) = simplify_dag(a.op)(a.index...)
 simplify_dag(a::Multi_F) = a
 
 
@@ -204,7 +203,7 @@ simplify_l(a::ScalarOp{Pure}) = a.coef * simplify_l(a.arg)
 
 simplify_l(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_l.(a.subs)) 
 simplify_l(a::SumOp{Pure, Indexed}) = SumOp(simplify_l.(a.subs))
-simplify_l(a::AtIndex{Pure}) = reindex(simplify_l(a.op), a.index...)
+simplify_l(a::AtIndex{Pure}) = simplify_l(a.op)(a.index...)
 simplify_l(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
 simplify_l(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 
@@ -218,7 +217,7 @@ simplify_r(a::ScalarOp{Pure}) = conj(a.coef) * simplify_r(a.arg)
 
 simplify_r(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_r.(a.subs)) 
 simplify_r(a::SumOp{Pure, Indexed}) = SumOp(simplify_r.(a.subs))
-simplify_r(a::AtIndex{Pure}) = reindex(simplify_r(a.op), a.index...)
+simplify_r(a::AtIndex{Pure}) = simplify_r(a.op)(a.index...)
 simplify_r(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
 simplify_r(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 
@@ -252,7 +251,7 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
             c = nc 
             o = no
         elseif T == Indexed && o isa AtIndex && no isa AtIndex && o.index == no.index
-            o = reindex(simplify_sum([c * o.op, nc * no.op]), o.index...)
+            o = simplify_sum([c * o.op, nc * no.op])(o.index...)
             c = 1
             if o isa ScalarOp
                 c = o.coef
@@ -260,7 +259,7 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
             end
         elseif T == Indexed && same_but_last(o, no)
             l, nl = o.subs[end], no.subs[end]
-            o = simplify_prod([o.subs[1:end-1]..., reindex(simplify_sum([c * l.op, nc * nl.op]), l.index...)])
+            o = simplify_prod([o.subs[1:end-1]..., simplify_sum([c * l.op, nc * nl.op])(l.index...)])
             c = 1
             if o isa ScalarOp
                 c = o.coef
@@ -409,7 +408,7 @@ distribute(a::Vector...) = distribute([[]], a...)
 
 orderprod(a::AtIndex, b::AtIndex) =
     if a.index == b.index
-        [ reindex(simplify_prod([a.op, b.op]), a.index...) ]
+        [ simplify_prod([a.op, b.op])(a.index...) ]
     elseif min(a.index...) > max(b.index...)
         [b, a]
     else
