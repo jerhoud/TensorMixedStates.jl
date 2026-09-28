@@ -253,7 +253,8 @@ make_leaf(o::Function) =
     TimeFunc("func", o)
 make_leaf(o) = o
 
-make_obs(o::Union{Vector, Matrix}) = make_obs.(o)
+# any array, a range as well as the equal vector, as a Vector or a Matrix, which the rest takes
+make_obs(o::AbstractArray) = make_obs.(collect(o))
 make_obs(o::Check) =
     Check(o.name, make_obs(o.obs1), make_obs(o.obs2), o.tol)
 make_obs(o::Declared) = declare(o.obs, o.kind)
@@ -492,7 +493,21 @@ what `st` conserves: a simulation may weaken its state after the reference was b
 the two would no longer have the same sites. Weakening is exact, so nothing measured
 changes, and it costs nothing when the two already conserve the same.
 """
-reference_on(st::State, ref::State) = State(st.system, weaken(ref, symmetries(st.system)))
+function reference_on(st::State, ref::State)
+    target = symmetries(st.system)
+    source = symmetries(ref.system)
+    # weakening the measured state instead would convert the whole state of the simulation at
+    # every measurement
+    for (name, strong) in target.names
+        k = findfirst(q -> q[1] == name, source.names)
+        if isnothing(k) || (strong && !source.names[k][2])
+            error("the reference of Fidelity or Overlap conserves less than the measured state, " *
+                  "which conserves $target: give a reference that conserves as much, or weaken " *
+                  "the state with a Weaken phase")
+        end
+    end
+    return State(st.system, weaken(ref, target))
+end
 
 """
     Fidelity(ref)

@@ -80,6 +80,10 @@ and a gate made of nothing else leaves an empty list, which no coefficient can r
 make_ops(::System, a::SumOp) =
     error("cannot apply sums as gates ($a)")
 
+# Left(H) + Right(H), a sum
+make_ops(::System, a::Evolver) =
+    error("cannot apply sums as gates ($a is Left + Right of its argument)")
+
 make_ops(s::System, a::ScalarOp) =
     if a.coef == 0
         error("cannot apply null gate")

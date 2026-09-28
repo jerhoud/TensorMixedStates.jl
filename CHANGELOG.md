@@ -248,6 +248,17 @@ the reference article.
   symbols `:energy` and those a phase does not provide, and `checkpoint_interval = 0`, which
   disables periodic checkpoints only.
 
+- Operations that are well defined were refused: `Gate` of a placed sum, which is
+  `Left(K) * Right(K)`, the gate of a factor of no definite parity on the first site,
+  `(C + N)(1)`, a renamed operator of several sites such as `named(exp(-0.3im * Swap), "R")`,
+  the matrix of an operator of several sites defined by a function when given one site for
+  identical ones, `controlled(C)`, `mutual_info_renyi2` of a part that is the whole system or
+  nothing, which is 0, a range as a measurement, and an integer `noise` in `GroundState`.
+  `has_fermionic` answers on a factor of no definite parity, where it raised.
+
+- `apply` of an `Evolver` and `Fidelity` or `Overlap` of a reference conserving less than the
+  measured state are refused with a message saying why, where they failed inside the library.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

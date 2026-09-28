@@ -256,7 +256,8 @@ matrix(a::Operator, site::AbstractSite...) =
     if isnothing(a.expr)
         matrix(a.name, site...)
     else
-        matrix(a.expr, site...)
+        # one site given for identical ones, which a function of the sites cannot take
+        matrix(a.expr, all_sites(a, site)...)
     end
 
 function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)

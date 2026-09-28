@@ -249,11 +249,31 @@ end
     # a factor contributing no tensor, an identity or a Jordan-Wigner string, must not
     # leave the gate list untyped: ITensorMPS.product has no method for a Vector{Any}
     @test_ok apply(Id(1) * X(2), State{Pure}(System(2, Qubit()), "Up"))
-    # a gate built from a sum does not distribute and must say so rather than guess
-    @test_throws ErrorException Gate(X(1) + Y(2))
     # a non fermionic gate must not be simplified: Swap is defined by an expression and
     # simplifying a product of them would make a sum, which apply cannot place
     @test_ok apply(Swap(1, 2) * Swap(3, 4), State{Pure}(System(4, Qubit()), "Up"))
+end
+
+@testset "Gates of sums and of mixed parities" begin
+    # the gate of a placed sum K is Left(K) Right(K), what K does to the pure state, strings
+    # included, and on one site it is the gate of the operator of that site
+    @test Gate(X(1) + Z(1)) == Gate(X + Z)(1)
+    for (sys, K, obs) in [(System(3, Qubit()), (X(1) + Z(2)) / sqrt(2), [X(1), Z(2), X(1) * Y(3)]),
+                          (System(3, Fermion()), (C(1) + dag(C)(3)) / sqrt(2),
+                           [N(1), N(3), dag(C)(1) * C(3)])]
+        ψ = RandomState{Pure}(sys, 2)
+        kψ = apply(make_mpo(ψ, K), ψ)
+        ρk = apply(make_mpo(mix(ψ), Gate(K)), mix(ψ))
+        @test [expect(ρk, o) for o in obs] ≈ [expect(kψ, o) for o in obs]
+    end
+    # a factor of no definite parity holds an odd part: on site 1 it needs no string and is
+    # applied, further on it becomes a sum, which is refused for that reason
+    sys = System(3, Fermion())
+    ψ = normalize(State{Pure}(sys, ["Occ", "Emp", "Occ"]) + State{Pure}(sys, ["Emp", "Emp", "Occ"]))
+    @test norm(apply((C + N)(1), ψ) - apply(make_mpo(ψ, (C + N)(1)), ψ)) < 1e-12
+    @test_throws "makes it a sum" apply((C + N)(3), ψ)
+    # an Evolver is Left + Right of its argument, a sum, which a gate cannot be
+    @test_throws "cannot apply sums as gates" apply(Evolver(Z(1)), mix(ψ))
 end
 
 @testset "Periods below one mean never" begin

@@ -132,7 +132,9 @@ simplify_ind(a::Operator{1}, index) =
 # their name, their definition is read from the site when the tensor is needed.
 simplify_ind(a::Operator, index...) =
     if a.expr isa Op
-        simplify_ind(a.expr, index...)
+        # simplified first, as an operator placed as it is written would be: a renamed
+        # exp(c * Swap) has to be developed as exp(c * Swap) itself is
+        simplify_ind(simplify(a.expr), index...)
     else
         a(index...)
     end

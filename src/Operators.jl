@@ -586,11 +586,6 @@ Gate(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 # the same hoisting the inner constructor does, for an indexed operator: a gate built
 # from c*A is rho -> (c A) rho (c A)' , that is abs2(c) times the gate built from A
 Gate(a::ScalarOp{Pure, Indexed, 1}) = abs2(a.coef) * Gate(a.arg)
-# a gate built from a sum does not distribute: (A + B) rho (A + B)' has cross terms, so
-# there is nothing to hand down to the terms
-Gate(a::SumOp{Pure, Indexed, 1}) =
-    error("cannot make a gate out of the sum $a, (A + B)ρ(A + B)† has cross terms and " *
-          "does not distribute over the terms. Build the gate from a single operator")
 
 show(io::IO, a::Gate) =
     paren(io, 1000, 0) do io
@@ -703,6 +698,27 @@ show(io::IO, a::Right) =
     paren(io, 1000, 0) do io
         show_func(io, "Right", a.arg)
     end
+
+# a gate built from a sum does not distribute: (A + B) rho (A + B)' has cross terms. On one
+# site the sum is an operator of that site, whose gate is placed whole; otherwise the gate of K
+# is Left(K) Right(K), which the placed factors of K give one by one
+function Gate(a::SumOp{Pure, Indexed, 1})
+    s = scalararg.(a.subs)
+    if all(x -> x isa AtIndex && length(x.index) == 1, s) && allequal(x -> x.index, s)
+        return Gate(sum(scalarcoef(x) * scalararg(x).op for x in a.subs))(only(first(s).index))
+    end
+    return ProdOp([sided(Left, a), sided(Right, a)])
+end
+
+# Left is linear and Right conjugates the coefficients, and both are multiplicative in the order
+# of the factors, Right(A) Right(B) ρ being ρ B† A† = Right(A B) ρ. No fallback: a placed form
+# with no method raises rather than being dropped
+sided(S, a::AtIndex{Pure}) = AtIndex(S(a.op), a.index)
+sided(S, a::SumOp{Pure, Indexed, 1}) = SumOp(map(x -> sided(S, x), a.subs))
+sided(S, a::ProdOp{Pure, Indexed, 1}) = ProdOp(map(x -> sided(S, x), a.subs))
+sided(::Type{Left}, a::ScalarOp{Pure, Indexed, 1}) = a.coef * sided(Left, a.arg)
+sided(::Type{Right}, a::ScalarOp{Pure, Indexed, 1}) = conj(a.coef) * sided(Right, a.arg)
+sided(_, ::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 
 isless(a::Right, b::Right) =
     isless(a.arg, b.arg)
@@ -967,8 +983,8 @@ expression, and nothing assumed otherwise.
 
 A renamed operator of one site keeps its name through `simplify`, so its type is all that
 tells it to take a Jordan-Wigner string, and `named(2C, "C2")` lost it. `controlled_type`
-needs no such case: a controlled operator acts on several sites, and `simplify` replaces it
-by its expression.
+makes the opposite choice for a fermionic target: a controlled operator acts on several
+sites, which no fermionic `Operator` can, and `simplify` replaces it by its expression.
 """
 named_type(a::Operator) = a.type
 named_type(a::Op) = a isa SimpleOp && isfermionic(a) ? fermionic_op : plain_op
@@ -1058,9 +1074,10 @@ asks for.
 
 The structure is read from the fields, the way `==` is, so that no wrapper can be forgotten.
 Once `simplify` has run, the factors are `JW` transforms, which are not fermionic, and the
-answer is false unless a factor was left whole, as an exponential of several sites is.
+answer is false unless a factor was left whole, as an exponential of several sites is. A
+factor of no definite parity, as `C + N`, holds an odd part and answers true, where it raised.
 """
-has_fermionic(a::GenericOp{Pure, 1}) = isfermionic(a)
+has_fermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
 
 function has_fermionic(a::Op)
     for f in fieldnames(typeof(a))
@@ -1087,32 +1104,39 @@ factor has the parity its pieces give it. Sums have to be read as well, since `s
 gathers the terms of one site into a single factor: `(C + dag(C))(1)` was taken to be even,
 and `C(3) * (C + dag(C))(1)` came out with the wrong sign.
 """
-jw_parity(::Op) = 0
-jw_parity(::JW) = 1
-jw_parity(a::Operator) = a.type == fermionic_op ? 1 : 0
-jw_parity(a::Union{ScalarOp, DagOp}) = jw_parity(a.arg)
+jw_parity(a) = fermion_parity(a, true)
+
+# the reading shared by jw_parity and has_fermionic. `strung` is whether the Jordan-Wigner
+# transforms simplify inserts count: odd for jw_parity, which carries F across them, even for
+# has_fermionic, which asks for a string not yet inserted. A projector on a vector may mix the
+# two parities, which matters to the F crossing it and not to a string, which it never takes
+fermion_parity(::Op, ::Bool) = 0
+fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
+fermion_parity(a::Operator, ::Bool) = a.type == fermionic_op ? 1 : 0
+fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
 # a projector on a basis state, given by its index or by a name, is even: the named states of
 # the fermionic sites are all basis states, which a site defined outside the package is taken
-# to follow. One on a vector may mix the two parities, and F is not commuted across it
-jw_parity(a::Proj) = a.state isa Vector ? nothing : 0
+# to follow
+fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
 
-function jw_parity(a::ProdOp)
-    ps = map(jw_parity, a.subs)
+function fermion_parity(a::ProdOp, strung::Bool)
+    ps = map(x -> fermion_parity(x, strung), a.subs)
     return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
 end
 
-function jw_parity(a::SumOp)
-    ps = unique(map(jw_parity, a.subs))
+function fermion_parity(a::SumOp, strung::Bool)
+    ps = unique(map(x -> fermion_parity(x, strung), a.subs))
     return length(ps) == 1 ? only(ps) : nothing
 end
 
-function jw_parity(a::IntPowOp)
-    p = jw_parity(a.arg)
+function fermion_parity(a::IntPowOp, strung::Bool)
+    p = fermion_parity(a.arg, strung)
     return isnothing(p) ? nothing : mod(p * a.expo, 2)
 end
 
 # a function of an odd operator, its exponential or a non integer power, mixes the two parities
-jw_parity(a::Union{ExpOp, ModOp, GenPowOp}) = jw_parity(a.arg) == 0 ? 0 : nothing
+fermion_parity(a::Union{ExpOp, ModOp, GenPowOp}, strung::Bool) =
+    fermion_parity(a.arg, strung) == 0 ? 0 : nothing
 
 ################## Equality #################
 

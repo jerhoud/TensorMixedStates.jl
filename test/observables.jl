@@ -398,6 +398,21 @@ end
     @test_throws "mixed representation" partial_trace(stp, [1, 2])
 end
 
+@testset "Measurements that were refused" begin
+    # a part that is all the system or nothing shares nothing with the rest
+    ρ = mix(RandomState{Pure}(System(3, Qubit()), 2))
+    @test mutual_info_renyi2(ρ, [1, 2, 3]) == 0
+    @test mutual_info_renyi2(ρ, Int[]) == 0
+    @test_throws "does not have" mutual_info_renyi2(ρ, [4])
+    # a range stands for the equal vector
+    st = State{Pure}(System(2, Qubit()), "Up")
+    @test measure(st, [1:2]) == measure(st, [[1, 2]])
+    # a reference conserving less than the measured state is refused by the message that says
+    # what to do, weakening the state at every measurement costing a whole conversion of it
+    sq = State{Pure}(System(2, Qubit(conserve = N)), "Up")
+    @test_throws "conserves less than the measured state" measure(sq, Fidelity(State{Pure}(System(2, Qubit()), "Up")))
+end
+
 @testset "Inner products and fidelities" begin
     sys = System(3, Qubit())
     up    = State{Pure}(sys, "Up")
@@ -471,10 +486,11 @@ end
         @test last(only(measure(weaken(mix(p), ()), Fidelity(p)))) ≈ 1
         @test last(only(measure(weaken(p), Overlap(p)))) ≈ 1
     end
-    # but a reference conserving less than the state cannot be made to conserve more
+    # but a reference conserving less than the state is refused, weakening the state at every
+    # measurement costing a whole conversion of it
     strong_state = State{Pure}(System(2, Fermion(conserve = strong(N))), "Occ")
     weak_ref = State{Pure}(System(2, Fermion(conserve = N)), "Occ")
-    @test_throws "cannot make it strong" measure(mix(strong_state), Fidelity(weak_ref))
+    @test_throws "conserves less than the measured state" measure(mix(strong_state), Fidelity(weak_ref))
 end
 
 @testset "Real, imaginary and complex values" begin

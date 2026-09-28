@@ -147,6 +147,12 @@ end
    @test_pm Simulation(State{type}(System(3, Qubit()), "Up"))
 end
 
+@testset "A noise given as an integer" begin
+    # a noise is a real number, an integer one included, stored as the Float64 dmrg takes
+    @test GroundState(hamiltonian = Z(1), limits = Limits(), nsweeps = 2, noise = 0).noise === 0.
+    @test GroundState(hamiltonian = Z(1), limits = Limits(), nsweeps = 2, noise = [1, 0]).noise == [1., 0.]
+end
+
 @testset "The phases that make the state" begin
     # the time_start of SimData is the time of the simulation from its start, which CreateState
     # keeps unless given one of its own

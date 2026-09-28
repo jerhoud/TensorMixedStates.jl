@@ -174,6 +174,12 @@ flux(C, Fermion(conserve = N))          # QN("N", -1)
 `Qubit(conserve = N)` it has no flux and is refused. Under `Qubit(conserve = parity(N))` it
 has one, `QN("parity(N)", 1, 2)`, the two differences becoming the same one modulo 2.
 
+The flux is asked of every factor of one site, and not only of the whole operator: each
+factor becomes a tensor of its own. `Sx(1) * Sx(2) + Sy(1) * Sy(2)` conserves the
+magnetisation as a whole, but under `Spin(1, conserve = 2Sz)` its factors have none, and it is
+refused. Written with factors of a definite flux, as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 2`, it
+is accepted.
+
 ### Weak and strong symmetries
 
 For a **mixed** representation there are two ways of conserving a quantity, and they are not

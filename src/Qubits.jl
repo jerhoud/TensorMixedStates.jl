@@ -83,7 +83,9 @@ dim(::Qubit) = 2
 controlled_name(a::Operator) = "C" * a.name
 controlled_name(a::Op) = "controlled($a)"
 
-controlled_type(a::Operator) = a.type
+# a fermionic operator controlled acts on several sites, which no fermionic Operator can: it
+# is plain, simplify replacing it by its expression, where its string is inserted
+controlled_type(a::Operator) = a.type == fermionic_op ? plain_op : a.type
 controlled_type(a::Op) = plain_op
 
 """

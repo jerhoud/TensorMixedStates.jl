@@ -932,6 +932,18 @@ costs nothing more than the entanglement entropy. For a list of positions the pu
 is first turned into its mixed representation, which is much more expensive.
 """
 function mutual_info_renyi2(state::State, a::AbstractVector{Int})
+    n = length(state)
+    for i in a
+        if !(1 ≤ i ≤ n)
+            error("mutual_info_renyi2 was given site $i, which the state does not have: it has $n sites")
+        end
+    end
+    # a part that is all the system or nothing shares nothing with the rest, which has no site
+    # for partial_trace to keep
+    k = length(unique(a))
+    if k == 0 || k == n
+        return 0.0
+    end
     w = weak_form(state)
     return renyi2(partial_trace(w, a; keepers = true)) +
            renyi2(partial_trace(w, a; keepers = false)) -

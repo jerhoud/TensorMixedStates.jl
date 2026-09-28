@@ -585,3 +585,17 @@ end
     # having no site, the identity is the identity of any system, whatever site it was given
     @test expect(st, Id(5)) ≈ 1
 end
+
+
+@testset "Operators of several sites that were refused" begin
+    # a renamed operator is its definition, developed as the definition itself is
+    q = Qubit()
+    st = State{Pure}(System(2, q), ["Up", "Dn"])
+    @test expect(st, named(exp(-0.3im * Swap), "R")(1, 2)) ≈ expect(st, exp(-0.3im * Swap)(1, 2))
+    # one site given for identical ones, a function of the sites included
+    zx = Operator{2}("ZX", (a, b) -> kron(matrix(Z, a), matrix(X, b)), plain_op)
+    @test matrix(zx, q) ≈ kron(matrix(Z, q), matrix(X, q))
+    # a fermionic operator controlled is plain, and is its expression
+    fe = Fermion()
+    @test matrix(controlled(C), q, fe) ≈ matrix(Proj(0) ⊗ Id + Proj(1) ⊗ C, q, fe)
+end

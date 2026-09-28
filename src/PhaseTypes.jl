@@ -252,6 +252,12 @@ A phase type for computing the ground state using Dmrg
     measures = []
     measures_period::Int = 1
     tolerance::Real = 0.
+    # a noise is a real number, an integer one included, stored as the Float64 dmrg takes
+    GroundState(name, time_start, final_measures, hamiltonian, limits, nsweeps,
+                noise::Union{Real, AbstractVector{<:Real}}, measures, measures_period, tolerance) =
+        new(name, time_start, final_measures, hamiltonian, limits, nsweeps,
+            noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
+            measures, measures_period, tolerance)
 end
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
