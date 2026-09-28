@@ -97,6 +97,10 @@ the reference article.
   placed after a fermionic site, lost the Jordan-Wigner string, in `expect`, `make_mpo` and
   `measure`. Its part anticommuting with `F` takes the string, as `C` does.
 
+- A Jordan-Wigner string was commuted across a projector on a vector, `Proj([1, 1] / √2)`,
+  as if the state had a definite parity. It no longer is; a projector on a state given by
+  its name or its index is still taken to be even.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

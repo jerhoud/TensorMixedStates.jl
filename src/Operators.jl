@@ -1029,6 +1029,10 @@ jw_parity(::Op) = 0
 jw_parity(::JW) = 1
 jw_parity(a::Operator) = a.type == fermionic_op ? 1 : 0
 jw_parity(a::Union{ScalarOp, DagOp}) = jw_parity(a.arg)
+# a projector on a basis state, given by its index or by a name, is even: the named states of
+# the fermionic sites are all basis states, which a site defined outside the package is taken
+# to follow. One on a vector may mix the two parities, and F is not commuted across it
+jw_parity(a::Proj) = a.state isa Vector ? nothing : 0
 
 function jw_parity(a::ProdOp)
     ps = map(jw_parity, a.subs)

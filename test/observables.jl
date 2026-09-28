@@ -146,6 +146,22 @@ end
     end
 end
 
+@testset "A projector on a state of mixed fermionic parity" begin
+    # the F of a string is not commuted across it, which would drop a sign
+    fe = Fermion()
+    st = RandomState{Pure}(System(3, fe), 4)
+    idx = [ SysIndex{Pure}(st.system, k) for k in 1:3 ]
+    psi = reshape(Array(reduce(*, [st.state[k] for k in 1:3]), reverse(idx)...), 8)
+    ev(m) = psi' * m * psi / (psi' * psi)
+    c, f, id = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
+    p = Proj([1., 1.] / sqrt(2))
+    @test matrix(simplify(F * p), fe) ≈ matrix(F * p, fe)
+    pm = kron([0.5 0.5 ; 0.5 0.5], id, id)
+    c3 = kron(f, f, c)
+    @test expect(st, C(3) * p(1)) ≈ ev(c3 * pm)
+    @test expect(st, p(1) * C(3)) ≈ ev(pm * c3)
+end
+
 @testset "Entanglement and entropies" begin
     L2 = log(2)
     s2 = System(2, Qubit())
