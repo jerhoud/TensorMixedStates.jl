@@ -518,13 +518,22 @@ isless(a::Proj, b::Proj) = isless(repr(a.state), repr(b.state))
 """
     struct AtIndex{R, N} <: IndexedOp{R}
 
-represent an indexed operator (like `X(1)` or `Swap(2, 4)`)
+represent an indexed operator (like `X(1)` or `Swap(2, 4)`). An operator of several sites is
+placed on distinct sites: `Swap(1, 1)` or `(X ⊗ Y)(1, 1)` is refused, write `X(1) * Y(1)`
+for the product on one site.
 """
 struct AtIndex{R, N} <: IndexedOp{R}
     op::GenericOp{R, N}
     index::NTuple{N, Int}
-    AtIndex(op::GenericOp{R, N}, index::NTuple{N, Int}) where {R, N} =
-        scalarcoef(op) * new{R, N}(scalararg(op), index)
+    # the matrix of an operator of several sites acts on distinct sites and says nothing of one
+    # site taken twice: a gate then put one index into its tensor twice, and the adjoint of a
+    # tensor product, developed factor by factor, relies on its sites being distinct
+    function AtIndex(op::GenericOp{R, N}, index::NTuple{N, Int}) where {R, N}
+        if !allunique(index)
+            error("$op acts on $N sites and cannot be placed on $index, which repeats a site")
+        end
+        return scalarcoef(op) * new{R, N}(scalararg(op), index)
+    end
 end
 
 (op::GenericOp{R, N})(index::Vararg{Int, N}) where {R, N} =

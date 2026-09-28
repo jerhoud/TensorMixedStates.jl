@@ -75,6 +75,17 @@ the reference article.
   fermionic factor was present. A product is now the operator it denotes, its rightmost
   factor acting first: a script that wrote a circuit from left to right must reverse it.
 
+- The adjoint of a tensor product of fermionic operators lost its sign, `dag(C ⊗ C)` being
+  taken for `dag(C) ⊗ dag(C)` where it is its opposite, so that a hamiltonian written with
+  the adjoint of a hopping term was not self adjoint and the dissipator of such a jump did
+  not preserve the trace. A tensor product with a factor of odd or undefined parity keeps its
+  adjoint until it is placed, where the product of its placed factors gives the sign.
+
+- An operator of several sites placed on a repeated site, as `Swap(1, 1)` or
+  `(X ⊗ Y)(1, 1)`, is refused. Applied as a gate it put one index into its tensor twice and
+  failed inside ITensors, and its adjoint came out with its factors in the wrong order. The
+  product on one site is written `X(1) * Y(1)`.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

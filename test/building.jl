@@ -183,6 +183,16 @@ end
     @test expect(s2, X(3)) ≈ 1
 end
 
+@testset "An operator of several sites on a repeated site" begin
+    # its matrix acts on distinct sites and says nothing of a site taken twice: a gate put one
+    # index into its tensor twice. The product on one site is written as a product
+    for op in (() -> Swap(1, 1), () -> (X ⊗ Y)(2, 2), () -> controlled(X)(3, 3),
+               () -> (X ⊗ Id ⊗ Z)(1, 2, 1))
+        @test_throws "repeats a site" op()
+    end
+    @test_ok (X ⊗ Y)(1, 2)
+end
+
 @testset "States on a charged system" begin
     IT = TensorMixedStates.ITensors
     sys = System(3, Qubit(conserve = 2Sz))

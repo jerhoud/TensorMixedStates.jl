@@ -214,7 +214,15 @@ simplify_dag(a::JW) = dag(a)
 
 simplify_dag(a::ProdOp) = simplify_prod(reverse(simplify_dag.(a.subs)))
 simplify_dag(a::SumOp) = simplify_sum(simplify_dag.(a.subs))
-simplify_dag(a::TensorOp{N}) where N = TensorOp{N}(simplify_dag.(a.subs))
+# the adjoint of a tensor product reverses its factors once placed, which shows only when two
+# of them anticommute, its sites being distinct: with a factor of odd or undefined parity it
+# waits for the sites, where the product of the placed factors takes the sign
+simplify_dag(a::TensorOp{N}) where N =
+    if all(o -> jw_parity(o) == 0, a.subs)
+        TensorOp{N}(simplify_dag.(a.subs))
+    else
+        DagOp(a)
+    end
 
 
 simplify_dag(a::AtIndex) = reindex(simplify_dag(a.op), a.index...)

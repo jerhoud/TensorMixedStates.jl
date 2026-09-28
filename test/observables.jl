@@ -105,6 +105,24 @@ end
     end
 end
 
+@testset "The adjoint of a tensor product of fermions" begin
+    # (A ⊗ B)(i, j) is A(i) * B(j), whose adjoint reverses the factors: two fermions
+    # anticommute, so dag(C ⊗ C) is the opposite of dag(C) ⊗ dag(C)
+    st = RandomState{Pure}(System(3, Fermion()), 4)
+    for (i, j) in [(1, 2), (1, 3), (3, 1)]
+        @test expect(st, dag(C ⊗ C)(i, j)) ≈ conj(expect(st, C(i) * C(j)))
+        @test expect(st, dag(dag(C) ⊗ C)(i, j)) ≈ conj(expect(st, dag(C)(i) * C(j)))
+    end
+    # a hopping term written with its adjoint is self adjoint, and the dissipator of a
+    # fermionic jump preserves the trace
+    h = dag(C) ⊗ C
+    @test abs(imag(expect(st, sum((h + dag(h))(i, i + 1) for i in 1:2)))) < 1e-12
+    ρ = mix(st)
+    for l in (C ⊗ C, dag(C) ⊗ C, C ⊗ dag(C))
+        @test abs(trace(apply(make_mpo(ρ, Dissipator(l)(1, 2)), ρ))) < 1e-12
+    end
+end
+
 @testset "Entanglement and entropies" begin
     L2 = log(2)
     s2 = System(2, Qubit())
