@@ -319,6 +319,9 @@ struct Measure
     end
 end
 
+# a set inside a set stands for its measurements, which are already made
+make_obs(o::Measure) = o.measures
+
 written_name(kind::ValueKind, name) = kind == imaginary_kind ? "Im($name)" : name
 
 measure_names(o::Measure) = reduce(vcat, measure_names.(o.measures); init = String[])

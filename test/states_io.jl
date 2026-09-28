@@ -72,6 +72,40 @@ end
     @test_ok weaken(ρ, ())
 end
 
+@testset "Measurement sets and their rows" begin
+    mktempdir() do dir
+        cd(dir) do
+            # a Measure among the measurements stands for its measurements, and a string is a
+            # measurement in final_measures too, a line with its label and the time
+            sim = runTMS(SimData(name = "sets", phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Gates(gates = X(1), final_measures = [Data("d") => [Measure(X(1), Z(1)), Z(2)],
+                                                      "out.dat" => "label", Data("s") => "label"])]))
+            d = sim.data["d"]
+            @test sort(collect(keys(d))) == ["X(1)", "Z(1)", "Z(2)"]
+            @test only(d["Z(1)"]["data"]) ≈ -1
+            @test only(d["Z(2)"]["data"]) ≈ 1
+            @test startswith(readline("sets/out.dat"), "label\t")
+            @test haskey(sim.data["s"], "label")
+
+            # a frame has a row per measurement set: the time repeats over a circuit or once it
+            # is set back, and joining on it paired Z(1), measured in the first phase, with
+            # X(1), measured in the second
+            sim = runTMS(SimData(name = "rows", phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Gates(gates = X(1), final_measures = Data("d") => [Z(1), Z(2)]),
+                Gates(gates = X(2), final_measures = Data("d") => [X(1), Z(2)])]))
+            d = sim.data["d"]
+            @test d["Z(2)"]["events"] == [1, 2]
+            df = data_to_frame(d)
+            @test size(df, 1) == 2
+            @test all(df[!, "Z(2)"] .≈ [1, -1])
+            @test ismissing(df[2, "Z(1)"])
+            @test ismissing(df[1, "X(1)"])
+        end
+    end
+end
+
 @testset "SetState under a strong symmetry" begin
     # resetting a site moves the charge of one side of the density matrix only, which a strong
     # symmetry forbids: it kept the block of charge zero alone, a state of trace zero
@@ -238,8 +272,8 @@ end
     @test_logs (:warn, "from the user") lines(ph, StateFunc("user", _ -> (@warn "from the user"; 1.0)))
 
     # a Data destination holds a complex value as it is, and a json file writes it as
-    # {"re": …, "im": …} whatever JSON.jl would make of it, a matrix staying the vector of
-    # its columns there. A complex simulation time is written the same way
+    # {"re": …, "im": …} whatever JSON.jl would make of it, and a matrix as the list of its
+    # rows, as the text file writes it. A complex simulation time is written the same way
     mktempdir() do dir
         cd(dir) do
             ms = [X(1), Sp(1), (Sp, Sm)]
@@ -256,7 +290,7 @@ end
             sp = only(js["Sp(1)"]["data"])
             @test complex(sp["re"], sp["im"]) ≈ exp(0.7im) / 2
             e = only(js["SpSm"]["data"])[1][2]
-            @test complex(e["re"], e["im"]) ≈ m[2, 1]
+            @test complex(e["re"], e["im"]) ≈ m[1, 2]
 
             runTMS(SimData(name = "ctime", phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),

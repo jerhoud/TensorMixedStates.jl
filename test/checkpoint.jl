@@ -259,11 +259,11 @@ end
             runTMS(sim_data)
             data = TensorMixedStates.load_checkpoint("ctime")[6]
             @test only(data["d"]["Z(1)"]["times"]) == 0.5im
-            # and a checkpoint of version 1 is refused: a measurement become complex would
-            # continue its file in another layout
+            # and a checkpoint of an earlier version is refused: its values do not say which
+            # call of output they came from
             meta = "ctime/checkpoint.json"
-            write(meta, replace(read(meta, String), "\"version\":2" => "\"version\":1"))
-            @test_throws "has version 1" runTMS(sim_data)
+            write(meta, replace(read(meta, String), "\"version\":3" => "\"version\":2"))
+            @test_throws "has version 2" runTMS(sim_data)
         end
     end
 end

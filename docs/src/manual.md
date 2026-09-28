@@ -557,7 +557,14 @@ A complex value takes two columns in a file, its real part then its imaginary pa
 file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
 values are complex is described in the measurements section.
 
-The `data_to_frame` function can be used on the result to get a `DataFrame` object (the `DataFrames` package must be imported first)
+A json file and a `Data` object hold, for each measurement, the lists `"times"`, `"data"` and
+`"events"`: the time of each value, the value, and the number of the measurement set it
+belongs to, counted for each destination, one per time the destination was written. Values
+measured together share their event, where their time alone repeats over the sweeps of a
+ground state search, over a circuit, or once the time is set back. A matrix is written in a
+json file as the list of its rows, as a file writes it row by row.
+
+The `data_to_frame` function can be used on the result to get a `DataFrame` object, with one row per event (the `DataFrames` package must be imported first)
 
 ```julia
 mysim = runTMS(simdata)

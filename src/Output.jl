@@ -60,12 +60,17 @@ function output(sim::Simulation, file::IO, header, data::Matrix)
     end
 end
 
-function output(sim::Simulation, dict::Dict, header, data)
-    t = sim.time
-    d = get!(dict, header, Dict("times"=>[], "data"=>[]))
-    push!(d["times"], t)
+# a dictionary destination numbers its calls of `output`, and each value records the one it
+# came from, so that what was measured together can be told apart from what only shares its
+# time: the time repeats over the sweeps of dmrg, a circuit, or once it is set back
+function output(sim::Simulation, dict::Dict, header, data, event::Int)
+    d = get!(dict, header, Dict("times" => [], "data" => [], "events" => Int[]))
+    push!(d["times"], sim.time)
     push!(d["data"], data)
+    push!(d["events"], event)
 end
+
+next_event(dict::Dict) = 1 + maximum((last(d["events"]) for d in values(dict)); init = 0)
 
 """
     output(::Simulation, [ filename => measure1, ... ])
@@ -94,19 +99,18 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
     end
     files = [ get_sim_file(sim, filename) for filename in first.(measurements) ]
     for (v, f) in zip(vals, files)
-        for x in v
-            output(sim, f, first(x), last(x))
-        end
-        if f isa IO
+        if f isa Dict
+            event = next_event(f)
+            for x in v
+                output(sim, f, first(x), last(x), event)
+            end
+        else
+            for x in v
+                output(sim, f, first(x), last(x))
+            end
             flush(f)
         end
     end
-end
-
-function output(sim::Simulation, text::Pair{<:Any, <:AbstractString})
-    file = get_sim_file(sim, first(text))
-    println(file, last(text))
-    flush(file)
 end
 
 """
@@ -114,7 +118,12 @@ end
 
 log the given message on the "log" file of the simulation
 """
-log_msg(sim::Simulation, text) = output(sim, "log" => text)
+# written here rather than through `output`, where `dest => "text"` is a measurement
+function log_msg(sim::Simulation, text)
+    file = get_sim_file(sim, "log")
+    println(file, text)
+    flush(file)
+end
 
 """
     SimLogger(sim, parent)

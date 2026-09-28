@@ -12,7 +12,8 @@ end
 """
     data_to_frame(data)
 
-return a `DataFrame` object corresponding to the data. The `DataFrames` package must be imported
+return a `DataFrame` object corresponding to the data, with a row for each set of values
+measured together, in the order they were measured. The `DataFrames` package must be imported
 before using this function.
 """
 function data_to_frame end

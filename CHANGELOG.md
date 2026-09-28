@@ -58,10 +58,11 @@ the reference article.
 
 - A json destination writes a complex number as `{"re": …, "im": …}`.
 
-- The checkpoint file is at version 2, and one written by an earlier version is refused: a
-  measurement becoming complex would continue its file in another layout. The fingerprint
-  of the phases no longer takes `mindim = 1` for the former default of 0, which only served
-  checkpoints of version 1.
+- The checkpoint file is at version 3, and one written by an earlier version is refused: a
+  measurement becoming complex would continue its file in another layout, and the values of
+  a dictionary destination record the measurement set they belong to (see below). The
+  fingerprint of the phases no longer takes `mindim = 1` for the former default of 0, which
+  only served checkpoints of version 1.
 
 ### Fixed
 
@@ -146,6 +147,22 @@ the reference article.
 - The example of `@def_operators` declared `A = C` as a `plain_op`, which is placed without a
   Jordan-Wigner string and gives wrong signs. It is the definition of `Fermion`, and the
   docstring says that a `plain_op` must commute with `F` on a fermionic site.
+
+- A `Measure` given among other measurements, or to `output` as the measurements of a
+  destination, was taken for a single measurement: the names and values came out garbled and
+  the measurements after it were dropped. It stands for its measurements.
+
+- `dest => "text"`, the measurement of a string, was written as a message of the log in
+  `final_measures`, and failed on a `Data` or json destination.
+
+- `data_to_frame` joined the measurements on their time, which repeats over the sweeps of a
+  ground state search, over a circuit, or once the time is set back, and then paired values
+  that were never measured together. Each value of a json file or of a `Data` object records
+  under `"events"` the measurement set it belongs to, and `data_to_frame` gives one row per
+  set, in the order they were measured.
+
+- A matrix was written in a json file as the list of its columns, where a file writes it row
+  by row and a reader of json takes a nested list for its rows. It is the list of its rows.
 
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written

@@ -1,7 +1,9 @@
 # 2: the complex numbers and matrices of `Data` destinations are marked, see
 # `checkpoint_value`, and a measurement becoming complex would continue a file of version 1
 # in another layout
-const checkpoint_file_version = 2
+# 3: each value of a dictionary destination records the call of `output` it came from, see
+# `next_event`
+const checkpoint_file_version = 3
 
 """
     phases_id(phases)
@@ -206,6 +208,7 @@ it gave, it gives it back, so that the values a resumed run read from its checkp
 through it again unchanged.
 """
 json_value(x::Complex) = Dict("re" => real(x), "im" => imag(x))
+json_value(x::AbstractMatrix) = [ json_value.(x[i, :]) for i in axes(x, 1) ]
 json_value(x::AbstractArray) = map(json_value, x)
 json_value(x::AbstractDict) = Dict(k => json_value(v) for (k, v) in x)
 json_value(x) = x
@@ -241,7 +244,8 @@ restored_value(x) = x
 # vectors of any element type, whatever the values read back
 restored_destination(d) =
     Dict(h => Dict("times" => Any[ restored_value(x) for x in s["times"] ],
-                   "data" => Any[ restored_value(x) for x in s["data"] ]) for (h, s) in d)
+                   "data" => Any[ restored_value(x) for x in s["data"] ],
+                   "events" => Int[ x for x in s["events"] ]) for (h, s) in d)
 
 """
     truncate_outputs(dir, positions)
