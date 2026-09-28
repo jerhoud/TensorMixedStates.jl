@@ -82,8 +82,14 @@ function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = 
     return (e, State(state, st))
 end
 
-dmrg(op, state::State; kwargs...) =
-    dmrg(make_mpo(state, op), state; kwargs...)
+function dmrg(op, state::State; kwargs...)
+    # a hamiltonian on a mixed state becomes the superoperator ρ ↦ Hρ + ρH, whose lowest
+    # eigenvector is neither the ground state nor a density matrix
+    if state isa State{Mixed} && op isa IndexedOp{Pure}
+        error("dmrg finds the ground state of a pure state: search it pure and mix it")
+    end
+    return dmrg(make_mpo(state, op), state; kwargs...)
+end
 
 const w_approx_coefs = Vector{ComplexF64}[
     [
@@ -212,7 +218,10 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
         l2 = apply(replaceprime(dag(l)', 2=>0), l;
                    mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim, alg = mpo_algo)
     end
-    return dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
+    # an eigenvector of (L+)L has norm one and a sign of its own, the trace set to one makes it
+    # the density matrix it stands for
+    e, st = dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
+    return (e, normalize(st))
 end
 
 tdvp(op, t::Number, sim::Simulation; kwargs...) =

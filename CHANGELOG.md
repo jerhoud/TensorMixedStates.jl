@@ -180,6 +180,15 @@ the reference article.
 
 - The fingerprint of the phases failed on a phase holding a dictionary or a set.
 
+- `dmrg` with a hamiltonian on a mixed state, and so `GroundState`, minimised the superoperator
+  `ρ ↦ Hρ + ρH`, which gave twice the ground energy and a state that is not a density matrix,
+  as the manual says mixed states are not supported. It is refused; a superoperator given as
+  such is still accepted.
+
+- `steady_state`, and so `SteadyState`, returned the eigenvector of `(L+)L` as dmrg finds it,
+  with a trace of arbitrary size and sign, which `Trace` and the phases after it read. It is
+  normalised to a trace of one.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

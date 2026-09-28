@@ -192,6 +192,25 @@ end
             ]
         )
     ])
+    # the state found is a density matrix, of trace one, where the eigenvector of (L+)L has
+    # norm one and a sign of its own
+    ρ0 = mix(State{Pure}(System(2, Qubit()), "+"))
+    _, ρ = steady_state(Dissipator(Sp)(1) + Dissipator(Sm)(2), ρ0;
+                        nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = 10))
+    @test trace(ρ) ≈ 1
+end
+
+@testset "Dmrg of a hamiltonian on a mixed state" begin
+    # it would minimise ρ ↦ Hρ + ρH, whose lowest eigenvector is neither the ground state nor a
+    # density matrix, and is refused. A superoperator given as such is left to the caller
+    h = -Z(1) * Z(2) - 0.5 * (X(1) + X(2))
+    ρ = mix(RandomState{Pure}(System(2, Qubit()), 2))
+    lim = Limits(maxdim = 4)
+    @test_throws "ground state of a pure state" dmrg(h, ρ; nsweeps = 2, limits = lim)
+    @test_throws "ground state of a pure state" runTMS(SimData(phases = [
+        CreateState{Mixed}(2, Qubit(), "+"),
+        GroundState(hamiltonian = h, nsweeps = 2, limits = lim)]); output = devnull)
+    @test_ok dmrg(sum(Left(Z)(i) + Right(Z)(i) for i in 1:2), ρ; nsweeps = 2, limits = lim)
 end
 
 @testset "Ground and steady states on a charged system" begin
