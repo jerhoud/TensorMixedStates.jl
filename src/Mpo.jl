@@ -275,10 +275,13 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
             if c ≠ 0
+                # the coefficient of a term goes on its closing piece alone, the only one
+                # with r == 1: laid on every piece, a term of k sites took it to the power k
                 if r == 1
-                    r += rdim
+                    add_block!(w, llink, l, rlink, r + rdim, u, idx, c)
+                else
+                    add_block!(w, llink, l, rlink, r, u, idx)
                 end
-                add_block!(w, llink, l, rlink, r, u, idx, c)
             end
         end
         if i == 1
@@ -324,10 +327,9 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
             if c ≠ 0
-                if r == 1
-                    c *= tau
-                end
-                add_block!(w, llink, l, rlink, r, u, idx, c)
+                # the coefficient and the time step go on the closing piece of a term alone,
+                # as in make_mpo
+                add_block!(w, llink, l, rlink, r, u, idx, r == 1 ? c * tau : one(c))
             end
         end
         if i == 1
@@ -373,10 +375,9 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         for (l, r, u, ref) in tm[i]
             c = coefs[ref]
             if c ≠ 0
-                if r == 1
-                    c *= tau
-                end
-                v[l, r] += c * u
+                # the coefficient and the time step go on the closing piece of a term alone,
+                # as in make_mpo
+                v[l, r] += (r == 1 ? c * tau : one(c)) * u
             end
         end
         d = v[1, 1]

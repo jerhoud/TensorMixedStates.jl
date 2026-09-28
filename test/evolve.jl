@@ -102,6 +102,28 @@ end
     @test expect(st, X(2)) ≈ cos(1.0) atol = 1e-13
 end
 
+@testset "Time dependent terms of several sites" begin
+    # the coefficient of a term goes once into the MPO, whatever the number of sites it spans:
+    # laid on each of its pieces, a term of k sites took it to the power k, which the one site
+    # terms above cannot show. Folding the coefficients into the terms gives the MPO the time
+    # functions must give
+    for R in (Pure, Mixed)
+        ψ = RandomState{Pure}(System(4, Qubit()), 4)
+        st = R == Pure ? ψ : mix(ψ)
+        hs = [-im * X(1) * Z(2), -im * Z(1) * Y(2) * X(4), -im * Z(3)]
+        c = [0.5, 0.3, 0.7]
+        pre = PreMPO(st, hs)
+        folded = PreMPO(st, sum(c .* hs))
+        @test norm(prod(make_mpo(pre, c)) - prod(make_mpo(folded))) < 1e-12
+        @test norm(prod(make_approx_W1(pre, 0.1, c)) - prod(make_approx_W1(folded, 0.1))) < 1e-12
+        @test norm(prod(make_approx_W2(pre, 0.1, c)) - prod(make_approx_W2(folded, 0.1))) < 1e-12
+    end
+    # and through an evolution: -i X(1)X(2)/2 over a time 1 turns Z(1) by an angle 1
+    st = tdvp([-im * X(1) * X(2)], 1.0, State{Pure}(System(2, Qubit()), "Up");
+              coefs = [t -> 0.5], nsweeps = 10, limits = Limits(maxdim = 4, cutoff = 1e-14))
+    @test expect(st, Z(1)) ≈ cos(1.0) atol = 1e-12
+end
+
 @testset "Per sweep limits in an evolution" begin
     # `cutoff` and `maxdim` may be given one value per sweep. dmrg is handed the whole
     # schedule, but the evolution solvers drive their sweeps themselves and have to pick

@@ -65,6 +65,11 @@ the reference article.
 
 ### Fixed
 
+- The coefficients of a time dependent evolver were laid on every site a term spans, so that
+  a term of k sites was multiplied by its coefficient to the power k, in `make_mpo`,
+  `make_approx_W1` and `make_approx_W2`: an evolution with a time dependent term of several
+  sites was silently wrong. The coefficient goes on the last site of the term alone.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as
