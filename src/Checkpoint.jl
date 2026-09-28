@@ -2,8 +2,28 @@
 # `checkpoint_value`, and a measurement becoming complex would continue a file of version 1
 # in another layout
 # 3: each value of a dictionary destination records the call of `output` it came from, see
-# `next_event`
+# `next_event`; the state is in a file the metadata names, see `write_checkpoint`
 const checkpoint_file_version = 3
+
+############### the fingerprint of the phases ###############
+
+# FNV-1a, whose definition is fixed: `Base.hash` is not, and changes between versions of
+# Julia, which refused a checkpoint after an upgrade as belonging to another simulation
+const fnv_offset = 0xcbf29ce484222325
+const fnv_prime = 0x00000100000001b3
+
+fnv(h::UInt64, bytes) = foldl((h, b) -> (h ⊻ b) * fnv_prime, bytes; init = h)
+
+# the bytes a value is mixed in by, none of which depends on the version of Julia
+mix(h::UInt64, x::UInt64) = fnv(h, reinterpret(UInt8, [x]))
+mix(h::UInt64, x::Integer) =
+    typemin(Int64) ≤ x ≤ typemax(Int64) ? fnv(h, reinterpret(UInt8, [Int64(x)])) : mix(h, string(x))
+mix(h::UInt64, x::AbstractFloat) = fnv(h, reinterpret(UInt8, [Float64(x)]))
+mix(h::UInt64, x::Rational) = mix(mix(h, numerator(x)), denominator(x))
+mix(h::UInt64, x::Complex) = mix(mix(h, real(x)), imag(x))
+mix(h::UInt64, x::AbstractString) = fnv(mix(h, ncodeunits(x)), codeunits(x))
+mix(h::UInt64, x::Union{Number, Symbol, Char}) = mix(h, string(x))
+mix(h::UInt64, ::Nothing) = mix(h, "nothing")
 
 """
     phases_id(phases)
@@ -20,40 +40,74 @@ function reflects where it sits in the source.
 ITensor indices are left out, since they carry an identity drawn afresh in every session
 and say nothing about the simulation: a `System` is what its sites are.
 """
-phases_id(phases) = string(phase_hash(zero(UInt), phases))
+phases_id(phases) = string(phase_hash(fnv_offset, phases))
 
-phase_hash(h::UInt, x::Union{Number, AbstractString, Symbol, Char, Nothing}) = hash(x, h)
-phase_hash(h::UInt, x::Type) = hash(string(x), h)
+phase_hash(h::UInt64, x::Union{Number, AbstractString, Symbol, Char, Nothing}) = mix(h, x)
+phase_hash(h::UInt64, x::Type) = mix(h, string(x))
 # an enumeration value has no field to walk into, its name is what it is
-phase_hash(h::UInt, x::Enum) = hash(string(typeof(x), ".", x), h)
-phase_hash(h::UInt, ::Index) = h
-phase_hash(h::UInt, x::System) = phase_hash(hash("System", h), x.sites)
+phase_hash(h::UInt64, x::Enum) = mix(h, string(typeof(x), ".", x))
+phase_hash(h::UInt64, ::Index) = h
+phase_hash(h::UInt64, x::System) = phase_hash(mix(h, "System"), x.sites)
 # a State is its system and its tensors: `preobs` is a cache filled as measurements are
 # made, so the same state would hash differently once it has been measured
-phase_hash(h::UInt, x::State{R}) where R =
-    phase_hash(phase_hash(hash("State{$R}", h), x.system), x.state)
-phase_hash(h::UInt, x::Function) = hash(string(typeof(x)), h)
-phase_hash(h::UInt, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = hash("()", h))
-phase_hash(h::UInt, x::AbstractArray) = foldl(phase_hash, x; init = hash(size(x), h))
+phase_hash(h::UInt64, x::State{R}) where R =
+    phase_hash(phase_hash(mix(h, "State{$R}"), x.system), x.state)
+phase_hash(h::UInt64, x::Function) = mix(h, string(typeof(x)))
+phase_hash(h::UInt64, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = mix(h, "()"))
+phase_hash(h::UInt64, x::AbstractArray) = foldl(phase_hash, x; init = foldl(mix, size(x); init = h))
 
 # what a dictionary or a set holds, in no order: its storage order is not part of it, and its
 # fields are the internals of a hash table, some of them undefined
-function phase_hash(h::UInt, x::Union{AbstractDict, AbstractSet})
-    s = zero(UInt)
+function phase_hash(h::UInt64, x::Union{AbstractDict, AbstractSet})
+    s = zero(UInt64)
     for y in x
-        s += phase_hash(zero(UInt), y)
+        s += phase_hash(zero(UInt64), y)
     end
-    return hash(s, hash(string(typeof(x)), h))
+    return mix(mix(h, string(typeof(x))), s)
 end
 
-function phase_hash(h::UInt, x)
-    h = hash(string(typeof(x)), h)
+function phase_hash(h::UInt64, x)
+    h = mix(h, string(typeof(x)))
     for f in fieldnames(typeof(x))
         if isdefined(x, f)
             h = phase_hash(h, getfield(x, f))
         end
     end
     return h
+end
+
+############### commits ###############
+
+"""
+    Commit
+
+a point a simulation can be resumed from: the phase it is in, the sweeps of it done, the time
+the phase started from, the time reached, the state, what dmrg compares its next sweep with,
+and how far every destination had got. It is taken at once, in `commit!`, at the end of a
+sweep or at a phase boundary, once everything the uninterrupted run writes before that point
+is written.
+
+A checkpoint is a commit written down, and nothing else: whatever happens between a commit
+and the writing of it, an interrupt included, the checkpoint holds the state, the counts and
+the outputs of one and the same moment.
+
+- `phase`:      index of the phase to resume, one past the last when the run is over
+- `sweep`:      sweeps of that phase done
+- `phase_time`: simulation time the phase started from, which its solver counts sweeps from
+- `time`:       simulation time reached
+- `state`:      the state reached, `nothing` before the first phase has made one
+- `energy`:     the energy of the last dmrg sweep, which a resumed search compares its first
+                sweep with
+- `reached`:    how far every destination had got, see `output_marks`
+"""
+struct Commit
+    phase::Int
+    sweep::Int
+    phase_time::Number
+    time::Number
+    state::Union{Nothing, State}
+    energy::Union{Nothing, Float64}
+    reached::NamedTuple
 end
 
 """
@@ -63,27 +117,19 @@ holds the checkpointing machinery of a simulation. One is created by `runTMS` an
 by the `Simulation`, so that the solvers can reach it through their observers.
 
 A simulation stops cleanly when its deadline is past, when the file `<simulation>/stop`
-appears, or on an interrupt. In all three cases a checkpoint is written first.
+appears, or on an interrupt. With a directory, a checkpoint is written first.
 
 # Fields
 
-- `dir`:       the simulation directory, where the checkpoint is written
-- `id`:        a fingerprint of the phases, a checkpoint of another simulation is refused
-- `interval`:  seconds between two checkpoints, zero or less disables checkpointing
-- `deadline`:  time after which the simulation stops cleanly, `Inf` for no limit
-- `next`:      time of the next checkpoint
-- `phase`:     index of the phase being run
-- `sweep`:     sweeps done so far in that phase
-- `phase_time`: simulation time at the start of that phase, what a resume restores
-- `simtime`:   simulation time reached, used when a phase is cut short
-- `state`:     the state as of the last sweep, so that an interrupt can still save it
-- `resuming`:  set while the first phase of a resumed run has not started yet
-- `skip`:      sweeps to skip when resuming the current phase, `0` when not resuming
-- `recorded`:  the output files the checkpoint resumed from knows, which are continued; any
-               other is created, as the uninterrupted run creates it
-- `energy`:    the energy of the last dmrg sweep, which a resumed dmrg phase compares its
-               first sweep with
-- `stopping`:  set once a stop has been requested, so that every loop unwinds
+- `dir`:        the simulation directory, where the checkpoint is written, empty for none
+- `id`:         a fingerprint of the phases, a checkpoint of another simulation is refused
+- `interval`:   seconds between two checkpoints, zero or less disables checkpointing
+- `deadline`:   time after which the simulation stops cleanly, `Inf` for no limit
+- `next`:       time of the next checkpoint
+- `last`:       the last commit, which a checkpoint writes
+- `resume`:     the commit a resumed run starts from, until the phase it belongs to has run
+- `generation`: which of the two state files the checkpoint on the disk names
+- `stopping`:   set once a stop has been requested, so that every loop unwinds
 """
 mutable struct Checkpointer
     dir::String
@@ -91,15 +137,9 @@ mutable struct Checkpointer
     interval::Float64
     deadline::Float64
     next::Float64
-    phase::Int
-    sweep::Int
-    phase_time::Number
-    simtime::Number
-    state::Union{Nothing, State}
-    resuming::Bool
-    skip::Int
-    recorded::Set{String}
-    energy::Union{Nothing, Float64}
+    last::Union{Nothing, Commit}
+    resume::Union{Nothing, Commit}
+    generation::Int
     stopping::Bool
 end
 
@@ -107,7 +147,7 @@ Checkpointer(dir::String = "", id::String = ""; interval::Real = 0, max_time::Re
     Checkpointer(dir, id, interval,
                  max_time == Inf ? Inf : time() + max_time,
                  interval ≤ 0 ? Inf : time() + interval,
-                 1, 0, 0., 0., nothing, false, 0, Set{String}(), nothing, false)
+                 nothing, nothing, 0, false)
 
 """
     stop_file(::Checkpointer)
@@ -115,16 +155,6 @@ Checkpointer(dir::String = "", id::String = ""; interval::Real = 0, max_time::Re
 the file whose presence asks the simulation to stop cleanly
 """
 stop_file(c::Checkpointer) = joinpath(c.dir, "stop")
-
-checkpoint_h5(dir::String) = joinpath(dir, "checkpoint.h5")
-checkpoint_json(dir::String) = joinpath(dir, "checkpoint.json")
-
-"""
-    has_checkpoint(dir)
-
-whether a complete checkpoint is present in the given directory
-"""
-has_checkpoint(dir::String) = isfile(checkpoint_h5(dir)) && isfile(checkpoint_json(dir))
 
 """
     stop_requested(::Checkpointer)
@@ -146,188 +176,134 @@ keep it there, writing the whole state to disk on every sweep.
 checkpoint_due(c::Checkpointer) = c.interval > 0 && time() ≥ c.next
 
 """
-    save_checkpoint(::Checkpointer, ::Simulation, state, sweep)
+    commit!(::Checkpointer, sim, phase, sweep, phase_time, time, state; energy)
 
-write a checkpoint recording the given state and the number of sweeps done in the current
-phase. The simulation time it records is `phase_time`, the time the phase started from,
-since that is what a resumed phase is handed back and what its solver counts sweeps from.
-The state and the metadata are written to temporary files and moved into place afterwards,
-so that a crash during the write leaves the previous checkpoint intact.
+record a point the simulation can be resumed from, see `Commit`. The destinations are read
+here, at the same moment as the rest.
 """
-function save_checkpoint(c::Checkpointer, sim, state::State, sweep::Int)
-    if isempty(c.dir)
+commit!(c::Checkpointer, sim, phase::Int, sweep::Int, phase_time::Number, t::Number,
+        state::Union{Nothing, State}; energy = nothing) =
+    c.last = Commit(phase, sweep, phase_time, t, state, energy, output_marks(sim.outputs))
+
+checkpoint_json(dir::String) = joinpath(dir, "checkpoint.json")
+
+"""
+    write_checkpoint(::Checkpointer, sim)
+
+write the last commit down. The state goes to one of two files, `checkpoint-1.h5` and
+`checkpoint-2.h5`, the one the checkpoint on the disk does not name, and the metadata, which
+names it, is renamed into place last. That rename is the only step that changes which
+checkpoint is on the disk, so a crash at any point leaves either the previous checkpoint or
+this one, whole: renaming the state and then the metadata used to pair, after a kill between
+the two, the new state with the previous counts, and the resume ran again the sweeps the state
+already held.
+
+Nothing is written without a directory, nor before the first phase has made a state.
+"""
+function write_checkpoint(c::Checkpointer, sim)
+    k = c.last
+    if isempty(c.dir) || isnothing(k) || !(k.state isa State)
         return nothing
     end
-    positions = Dict{String, Int}()
-    for (name, f) in sim.files
-        if f isa IO && f ∉ (stdout, stderr, devnull)
-            flush(f)
-            positions[name] = position(f)
-        end
-    end
-    h5, js = checkpoint_h5(c.dir), checkpoint_json(c.dir)
-    th5, tjs = h5 * ".tmp", js * ".tmp"
-    rm(th5; force = true)
-    save_state(th5, "checkpoint", state)
+    g = c.generation == 1 ? 2 : 1
+    file = "checkpoint-$g.h5"
+    h5 = joinpath(c.dir, file)
+    rm(h5; force = true)
+    save_state(h5, "checkpoint", k.state)
+    js = checkpoint_json(c.dir)
+    tjs = js * ".tmp"
     open(tjs, "w") do io
         JSON.print(io, Dict(
             "version" => checkpoint_file_version,
             "id" => c.id,
-            "phase" => c.phase,
-            "sweep" => sweep,
-            "energy" => checkpoint_value(c.energy),
-            "time" => [real(c.phase_time), imag(c.phase_time)],
-            "positions" => positions,
-            "data" => checkpoint_value(sim.data),
-            # a json destination accumulates in memory and is written once, when the
-            # files are closed. A position is enough to continue a text file, but a
-            # resumed run would write back a json holding only what it computed itself,
-            # so what was collected before has to travel in the checkpoint
-            "json" => Dict(name => json_value(d) for (name, d) in sim.files if d isa Dict),
+            "phase" => k.phase,
+            "sweep" => k.sweep,
+            "energy" => checkpoint_value(k.energy),
+            # through `checkpoint_value`, as the times of the destinations, so that a complex
+            # time with no imaginary part stays complex and keeps its two columns
+            "phase_time" => checkpoint_value(k.phase_time),
+            "time" => checkpoint_value(k.time),
+            "state" => file,
+            "outputs" => persist_outputs(sim.outputs, k.reached),
         ))
     end
-    mv(th5, h5; force = true)
     mv(tjs, js; force = true)
+    rm(joinpath(c.dir, "checkpoint-$(3 - g).h5"); force = true)
+    c.generation = g
     c.next = time() + c.interval
     return nothing
 end
 
 """
+    has_checkpoint(dir)
+
+whether a checkpoint is present in the given directory
+"""
+has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
+
+"""
     load_checkpoint(dir)
 
-read the checkpoint of the given directory and return `(state, phase_time, phase, sweep,
-positions, data, json, id, energy)`. `phase_time` is the simulation time at the start of the
-interrupted phase, which is what the solvers count their sweeps from. `data` and `json` are
-the accumulating destinations, `Data(name)` ones and json files respectively.
+read the checkpoint of the given directory, as a named tuple of the fields of the commit it
+records (`phase`, `sweep`, `phase_time`, `time`, `state`, `energy`), the fingerprint `id` of
+its phases, the `outputs` to put back with `restore_outputs!`, and the `generation` of its
+state file.
 """
 function load_checkpoint(dir::String)
     meta = JSON.parsefile(checkpoint_json(dir))
     if meta["version"] ≠ checkpoint_file_version
         error("checkpoint of $dir has version $(meta["version"]), expected $checkpoint_file_version")
     end
-    id = meta["id"]
-    state = load_state(checkpoint_h5(dir), "checkpoint")
-    re, im = meta["time"]
-    t = im == 0 ? re : complex(re, im)
-    positions = Dict{String, Int}(k => Int(v) for (k, v) in meta["positions"])
-    data = Dict{String, Dict}(k => restored_destination(v) for (k, v) in meta["data"])
-    json = Dict{String, Dict}(k => Dict(v) for (k, v) in meta["json"])
-    energy = restored_value(meta["energy"])
-    return (state, t, Int(meta["phase"]), Int(meta["sweep"]), positions, data, json, id, energy)
-end
-
-"""
-    json_value(x)
-
-a value of a json destination as it is written: a complex number becomes
-`{"re": …, "im": …}`, wherever it is, which JSON.jl writes that way or refuses depending on
-its version, a matrix the list of its rows, as a file writes it, and a value that is not
-finite the string Julia prints it as, `"Inf"`, `"-Inf"` or `"NaN"`, json having no number for
-it. Given what it gave, it gives it back, so that the values a resumed run read from its
-checkpoint go through it again unchanged.
-"""
-json_value(x::AbstractFloat) = isfinite(x) ? x : string(x)
-json_value(x::Complex) = Dict("re" => json_value(real(x)), "im" => json_value(imag(x)))
-json_value(x::AbstractMatrix) = [ json_value.(x[i, :]) for i in axes(x, 1) ]
-json_value(x::AbstractArray) = map(json_value, x)
-json_value(x::AbstractDict) = Dict(k => json_value(v) for (k, v) in x)
-json_value(x) = x
-
-"""
-    checkpoint_value(x)
-    restored_value(x)
-
-a value of a `Data` destination written into the checkpoint, and read back from it. Json
-holds neither complex numbers nor matrices, a matrix coming back as the vector of its
-columns, nor a number that is not finite, so all three are marked and rebuilt, and an array
-read back is given its element type again: a resumed run hands back the values an
-uninterrupted one would.
-"""
-checkpoint_value(x::AbstractFloat) = isfinite(x) ? x : Dict("float" => string(x))
-checkpoint_value(x::Complex) = Dict("complex" => [checkpoint_value(real(x)), checkpoint_value(imag(x))])
-checkpoint_value(x::AbstractMatrix) = Dict("matrix" => [ checkpoint_value(x[i, :]) for i in axes(x, 1) ])
-checkpoint_value(x::AbstractArray) = map(checkpoint_value, x)
-checkpoint_value(x::AbstractDict) = Dict(k => checkpoint_value(v) for (k, v) in x)
-checkpoint_value(x) = x
-
-function restored_value(x::AbstractDict)
-    if haskey(x, "complex")
-        r, i = restored_value.(x["complex"])
-        return complex(r, i)
-    elseif haskey(x, "float")
-        return parse(Float64, x["float"])
-    elseif haskey(x, "matrix")
-        return stack(restored_value.(x["matrix"]); dims = 1)
+    file = meta["state"]
+    if !isfile(joinpath(dir, file))
+        error("the checkpoint of $dir names the state file $file, which is missing")
     end
-    return Dict(k => restored_value(v) for (k, v) in x)
-end
-restored_value(x::AbstractVector) = map(restored_value, x)
-restored_value(x) = x
-
-# the series of a destination are pushed onto by the measurements to come, so they stay
-# vectors of any element type, whatever the values read back
-restored_destination(d) =
-    Dict(h => Dict("times" => Any[ restored_value(x) for x in s["times"] ],
-                   "data" => Any[ restored_value(x) for x in s["data"] ],
-                   "events" => Int[ x for x in s["events"] ]) for (h, s) in d)
-
-"""
-    truncate_outputs(dir, positions)
-
-cut the output files back to the length they had when the checkpoint was written, so that
-the lines produced after it are not duplicated when the simulation resumes
-"""
-function truncate_outputs(dir::String, positions::Dict{String, Int})
-    for (name, pos) in positions
-        path = joinpath(dir, name)
-        if !isfile(path)
-            continue
-        end
-        if filesize(path) > pos
-            open(path, "a") do io
-                Base.truncate(io, pos)
-            end
-        end
-    end
-    return nothing
+    return (phase = Int(meta["phase"]), sweep = Int(meta["sweep"]),
+            phase_time = restored_value(meta["phase_time"]), time = restored_value(meta["time"]),
+            state = load_state(joinpath(dir, file), "checkpoint"),
+            energy = restored_value(meta["energy"]), id = meta["id"], outputs = meta["outputs"],
+            generation = file == "checkpoint-2.h5" ? 2 : 1)
 end
 
 """
-    checkpoint_step!(::Checkpointer, sim, state, time, sweep)
+    sweep_commit!(sim, state, time, sweep; energy)
 
-record the progress of a solver, write a checkpoint if one is due or if the simulation is
-about to stop, and return whether the loop should break out
+the end of a sweep of the phase being run, once its measurements and its log are written:
+commit it, write the commit if a checkpoint is due or a stop is asked for, and return whether
+the solver has to stop.
+
+The order is what keeps a checkpoint and the outputs in step, so it is here, once, rather than
+in each observer: what is written after the commit is written again by the resumed run, and
+what is written before it is kept.
 """
-function checkpoint_step!(c::Checkpointer, sim, state::State, t::Number, sweep::Int)
-    c.sweep = sweep
-    c.simtime = t
-    # kept so that an interrupt, which unwinds before the phase returns its state, still
-    # has something to checkpoint
-    c.state = state
+function sweep_commit!(sim, state::State, t::Number, sweep::Int; energy = nothing)
+    c = sim.checkpoint
+    k = c.last
+    # a solver run on a simulation of one's own, outside `runTMS`, has no phase around it
+    phase, phase_time = isnothing(k) ? (1, t) : (k.phase, k.phase_time)
+    commit!(c, sim, phase, sweep, phase_time, t, state; energy)
     stop = stop_requested(c)
     if stop || checkpoint_due(c)
-        save_checkpoint(c, sim, state, sweep)
+        write_checkpoint(c, sim)
     end
     c.stopping = stop
     return stop
 end
 
 """
-    phase_start!(::Checkpointer, sim)
+    resume_sweeps!(::Checkpointer)
 
-record where a checkpoint written during the phase about to run must resume from. A solver
-keeps this up to date sweep by sweep through `checkpoint_step!`, but a phase without one
-never does: without this, an interrupt in a `Gates` or a `LoadState` would checkpoint the
-state, the time and the sweep count left by the last solver, several phases back and
-possibly in the other representation. A phase is replayed from its input, so its resume
-point is the state it was handed, and `skip`, the sweeps it is already allowed to skip, so
-that a resumed phase interrupted again before its first sweep keeps the point it had.
+the sweeps the phase being run has done already and the energy dmrg had reached at the last
+of them, `(0, nothing)` unless it is the phase a resumed run starts from. The resume point is
+consumed, so that it is read once.
 """
-function phase_start!(c::Checkpointer, sim)
-    c.state = sim.state
-    c.simtime = sim.time
-    c.sweep = c.skip
-    return nothing
+function resume_sweeps!(c::Checkpointer)
+    r = c.resume
+    if isnothing(r) || isnothing(c.last) || r.phase ≠ c.last.phase
+        return (0, nothing)
+    end
+    c.resume = nothing
+    return (r.sweep, r.energy)
 end
 
 """
@@ -350,28 +326,3 @@ resume_schedule(x::Vector, done::Int) =
 resume_schedule(l::Limits, done::Int) =
     Limits(resume_schedule(l.cutoff, done), resume_schedule(l.maxdim, done),
            resume_schedule(l.mindim, done))
-
-"""
-    first_sweep!(::Checkpointer)
-
-the sweep a solver must start from, consuming the resume point so that the next phase
-starts from the beginning
-"""
-function first_sweep!(c::Checkpointer)
-    s = c.skip
-    c.skip = 0
-    return s + 1
-end
-
-"""
-    resumed_energy!(::Checkpointer, done)
-
-the energy of the sweep a dmrg phase resumes after, which its first sweep is compared with to
-decide whether to stop, consumed as the resume point is. A phase starting from its beginning,
-`done` being zero, has none: what the checkpointer holds is then left by another phase.
-"""
-function resumed_energy!(c::Checkpointer, done::Int)
-    e = c.energy
-    c.energy = nothing
-    return done > 0 ? e : nothing
-end

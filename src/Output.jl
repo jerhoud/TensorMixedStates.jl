@@ -1,76 +1,8 @@
 export output, log_msg
 
-function output_one(file, x::AbstractFloat, format)
-    Printf.format(file, format, x)
-end
-
-function output_one(file, x::Complex, format)
-    output_one(file, real(x), format)
-    print(file, "\t")
-    output_one(file, imag(x), format)
-end
-
-# a value holding several, the part of a `Check` made on a vector observable for instance,
-# is written number by number, a matrix row by row as the lines of a matrix are, rather than
-# as the literal Julia prints
-function output_one(file, x::AbstractArray, format)
-    for (k, y) in enumerate(row_major(x))
-        if k > 1
-            print(file, "\t")
-        end
-        output_one(file, y, format)
-    end
-end
-
-function output_one(file, x, _)
-    print(file, x)
-end
-
-# the time column always takes the time format, unlike a measured value, which keeps its
-# own printed form when it is not a float: `Linkdim` is meant to read as 8, not as 8.000
-function output_time(file, t::Number, format)
-    Printf.format(file, format, t)
-end
-
-# `Printf` refuses a complex number outright, so a complex simulation time is written as
-# the two columns a complex measurement takes, real then imaginary
-function output_time(file, t::Complex, format)
-    output_time(file, real(t), format)
-    print(file, "\t")
-    output_time(file, imag(t), format)
-end
-
+# a row of a text file, written the way `output` writes a measurement
 output(sim::Simulation, file::IO, header, data) =
-    output(sim, file, header, [data])
-
-function output(sim::Simulation, file::IO, header, data::Vector)
-    print(file, header, "\t")
-    output_time(file, sim.time, first(sim.formats))
-    for x in data
-        print(file, "\t")
-        output_one(file, x, last(sim.formats))
-    end
-    println(file)
-end
-
-function output(sim::Simulation, file::IO, header, data::Matrix)
-    println(file, header)
-    for l in 1:size(data, 1)
-        output(sim, file, "$header:$l", data[l,:])
-    end
-end
-
-# a dictionary destination numbers its calls of `output`, and each value records the one it
-# came from, so that what was measured together can be told apart from what only shares its
-# time: the time repeats over the sweeps of dmrg, a circuit, or once it is set back
-function output(sim::Simulation, dict::Dict, header, data, event::Int)
-    d = get!(dict, header, Dict("times" => [], "data" => [], "events" => Int[]))
-    push!(d["times"], sim.time)
-    push!(d["data"], data)
-    push!(d["events"], event)
-end
-
-next_event(dict::Dict) = 1 + maximum((last(d["events"]) for d in values(dict)); init = 0)
+    write_row(file, sim.outputs.formats, sim.time, header, data)
 
 """
     output(::Simulation, [ filename => measure1, ... ])
@@ -97,19 +29,8 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
     vals = Logging.with_logger(SimLogger(sim, Logging.current_logger())) do
         measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
     end
-    files = [ get_sim_file(sim, filename) for filename in first.(measurements) ]
-    for (v, f) in zip(vals, files)
-        if f isa Dict
-            event = next_event(f)
-            for x in v
-                output(sim, f, first(x), last(x), event)
-            end
-        else
-            for x in v
-                output(sim, f, first(x), last(x))
-            end
-            flush(f)
-        end
+    for (v, name) in zip(vals, first.(measurements))
+        emit!(destination(sim.outputs, name), sim.outputs.formats, sim.time, v)
     end
 end
 
@@ -118,12 +39,8 @@ end
 
 log the given message on the "log" file of the simulation
 """
-function log_msg(sim::Simulation, text)
-    # written here rather than through `output`, where `dest => "text"` is a measurement
-    file = get_sim_file(sim, "log")
-    println(file, text)
-    flush(file)
-end
+# written here rather than through `output`, where `dest => "text"` is a measurement
+log_msg(sim::Simulation, text) = emit_line!(destination(sim.outputs, "log"), text)
 
 """
     SimLogger(sim, parent)

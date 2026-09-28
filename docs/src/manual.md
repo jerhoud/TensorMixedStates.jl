@@ -481,9 +481,15 @@ writes a checkpoint and returns instead of carrying on. Set it comfortably below
 of your batch job, since a checkpoint is only taken between two sweeps: a sweep that lasts
 ten minutes delays the stop by up to ten minutes.
 
-A checkpoint is written to `checkpoint.h5` and `checkpoint.json` in the simulation
-directory. Both are written to temporary files and moved into place, so an interruption
-during the save leaves the previous checkpoint intact.
+A checkpoint is written in the simulation directory, the state to `checkpoint-1.h5` or
+`checkpoint-2.h5` and the rest to `checkpoint.json`, which names the state file. The state
+goes to the file the previous checkpoint does not use, and `checkpoint.json` is moved into
+place last, so an interruption at any point of the save leaves the previous checkpoint
+intact.
+
+Without a directory, when `runTMS` is given `output`, nothing is saved: an interrupt goes on
+to the caller, and `max_time` stops the simulation with a message saying that it cannot be
+resumed.
 
 #### Resuming
 

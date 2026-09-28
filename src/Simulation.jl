@@ -1,13 +1,4 @@
-export Simulation, get_sim_file, Data, DataToFrame, data_to_frame
-
-"""
-    Data(name)
-
-represent a storage with the given name where to put measurement data
-"""
-struct Data
-    name::String
-end
+export Simulation, get_sim_file, DataToFrame, data_to_frame
 
 """
     data_to_frame(data)
@@ -52,35 +43,42 @@ Most functions applicable to States can be applied to Simulations
 # Fields
 - `state`       : the state of the system
 - `time`        : the simulation time
-- `output`      : if not nothing an io where to redirect output
-- `files`       : a dictionary holding io or dict where to write data
-- `data`        : a dictionary holding data collected for the `Data` objects
-- `formats`     : format info for the output
+- `outputs`     : the destinations of the measurements and the formats they are written in,
+                  see `Outputs`
 - `checkpoint`  : the checkpointing machinery, see `Checkpointer`
 
+`sim.data` is the dictionary of the `Data` destinations, each a `Dict` of the series measured
+into it, as `data_to_frame` reads them.
+
 A `Simulation` is immutable, and the state is threaded through a run by building a new one
-at each step rather than by assigning to a field. Three of the fields are shared rather than
-copied, on purpose: the second form above hands the new object the very `files`, `data` and
-`checkpoint` of the old one. They are the parts that must not fork — the open output files,
-the accumulated data, and the bookkeeping that says where the run has got to. A copy made
-while a phase is running therefore sees, and can advance, the same checkpoint as the
-simulation it was made from.
+at each step rather than by assigning to a field. The other two fields are shared rather than
+copied, on purpose: the second form above hands the new object the very `outputs` and
+`checkpoint` of the old one. They are the parts that must not fork — the destinations and
+what they hold, and the bookkeeping that says where the run has got to. A copy made while a
+phase is running therefore sees, and can advance, the same checkpoint as the simulation it
+was made from.
 """
 struct Simulation
     state::Union{Nothing, State}
     time::Number
-    output::Union{Nothing, IO}
-    files::Dict{String, Union{IO, Dict}}
-    data::Dict{String, Dict}
-    formats::Tuple{Printf.Format, Printf.Format}
+    outputs::Outputs
     checkpoint::Checkpointer
     Simulation(state::Union{Nothing, State}; time::Number = 0., output = nothing,
                time_format::String = default_time_format, data_format::String = default_data_format,
                checkpoint::Checkpointer = Checkpointer()) =
-        new(state, time, output, Dict(), Dict(), (Printf.Format(time_format), Printf.Format(data_format)), checkpoint)
+        new(state, time, Outputs(output, time_format, data_format), checkpoint)
     Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
-        new(st, t, s.output, s.files, s.data, s.formats, s.checkpoint)
+        new(st, t, s.outputs, s.checkpoint)
 end
+
+function Base.getproperty(s::Simulation, f::Symbol)
+    if f === :data
+        return getfield(s, :outputs).data
+    end
+    return getfield(s, f)
+end
+
+Base.propertynames(::Simulation) = (fieldnames(Simulation)..., :data)
 
 show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)")
 
@@ -96,54 +94,17 @@ where to store data and this data will be output in JSON format in the file by `
 Special filenames of the form `Data(name)` return a Dict where to store Data.
 Those Dict are gathered as a Dict in the `data` field of the Simulation
 """
-get_sim_file(sim::Simulation, filename::AbstractString) =
-    if !isnothing(sim.output)
-        sim.output
-    else
-        get!(sim.files, filename) do
-            if filename == "stdout" || filename == "-"
-                stdout
-            elseif filename == ""
-                devnull
-            elseif filename == "stderr"
-                stderr
-            elseif last(splitext(filename)) == ".json"
-                Dict()
-            else
-                # continued where the checkpoint cut it back, or created as the uninterrupted
-                # run creates it when the checkpoint did not know it yet
-                open(filename, filename in sim.checkpoint.recorded ? "a" : "w")
-            end
-        end
-    end
-
-get_sim_file(sim::Simulation, data::Data) =
-    get!(sim.data, data.name) do
-        Dict()
-    end
+get_sim_file(sim::Simulation, name::Union{AbstractString, Data}) =
+    handle(destination(sim.outputs, name))
 
 """
     close_sim_files(::Simulation)
 
 write the dictionaries collected for the json destinations and close the files opened for
 the simulation. The standard streams are destinations like any other but they belong to
-the process, so they are left alone, the same way `save_checkpoint` leaves them alone.
+the process, so they are left alone.
 """
-function close_sim_files(sim::Simulation)
-    for (filename, data) in sim.files
-        if data isa Dict
-            # written out before the file is opened, which empties it: a value json cannot
-            # hold then leaves the file of the last run rather than nothing
-            text = JSON.json(json_value(data))
-            open(filename, "w") do io
-                print(io, text)
-            end
-        elseif data ∉ (stdout, stderr, devnull)
-            close(data)
-        end
-    end
-    return nothing
-end
+close_sim_files(sim::Simulation) = close_outputs!(sim.outputs)
 
 length(sim::Simulation) = length(sim.state)
 

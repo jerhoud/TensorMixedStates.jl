@@ -36,11 +36,12 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end    
-        measure!(observer!; sweep, state = st, current_time, mpo)
         if sweep_due(n_expand, sweep)
             st = expand(st, mpo; alg="global_krylov")
         end
-        if checkdone!(observer!; sweep, state = st, current_time)
+        # once the whole sweep is done, the expansion included: the sweep is committed right
+        # after its measurements, and a checkpoint cannot fall between them
+        if sweep_done!(observer!; sweep, state = st, current_time, mpo)
             break
         end
     end
@@ -169,8 +170,7 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state;
         end
-        measure!(observer!; sweep, state = st, current_time, mpos)
-        if checkdone!(observer!; sweep, state = st, current_time)
+        if sweep_done!(observer!; sweep, state = st, current_time, mpos)
             break
         end
     end

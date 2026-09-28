@@ -90,7 +90,6 @@ end
 function run_phase(sim::Simulation, phase::Evolve)
     nsweeps = Int(round(phase.duration / phase.time_step))
     if nsweeps == 0
-        first_sweep!(sim.checkpoint)
         log_msg(sim, "Skipping an evolution of $(phase.duration), shorter than half a time step")
         return sim
     end
@@ -115,20 +114,22 @@ function run_phase(sim::Simulation, phase::Evolve)
     # PreMPO adapts the evolver to the representation of the state, and handles the vector
     # form of a time dependent evolver
     pre = PreMPO(state, evolver)
+    done, _ = resume_sweeps!(sim.checkpoint)
     algo = phase.algo
     if algo isa ApproxW
         state = approx_W(pre, duration, state;
             coefs, algo.n_hermitianize, nsweeps, algo.order, algo.w, time_start = sim.time, phase.limits,
             observer! = ApproxWObserver(sim, phase.measures, phase.measures_period),
-            first_sweep = first_sweep!(sim.checkpoint))
+            first_sweep = done + 1)
     else
         state = tdvp(pre, duration, state;
             coefs, algo.n_expand, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
             observer! = TdvpObserver(sim, phase.measures, phase.measures_period),
-            first_sweep = first_sweep!(sim.checkpoint))
+            first_sweep = done + 1)
     end
     # a phase cut short by a checkpoint stops at the time it actually reached
-    return Simulation(sim, state, sim.checkpoint.stopping ? sim.checkpoint.simtime : time_stop)
+    c = sim.checkpoint
+    return Simulation(sim, state, c.stopping ? c.last.time : time_stop)
 end
 
 
@@ -139,15 +140,16 @@ end
 
 
 function run_phase(sim::Simulation, phase::GroundState)
-    done = first_sweep!(sim.checkpoint) - 1
-    log_msg(sim, "Optimizing state with $(phase.nsweeps - done) sweeps of Dmrg")
-    if done ≥ phase.nsweeps
-        return sim
+    done, e = resume_sweeps!(sim.checkpoint)
+    # a search whose checkpoint fell on its last sweep has only its last line left to write,
+    # with the energy the checkpoint recorded
+    if done < phase.nsweeps
+        log_msg(sim, "Optimizing state with $(phase.nsweeps - done) sweeps of Dmrg")
+        e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, first_sweep = done + 1,
+            phase.limits, phase.noise,
+            observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
+                                     done; phase.nsweeps, energy = e))
     end
-    e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, first_sweep = done + 1,
-        phase.limits, phase.noise,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done;
-                                 phase.nsweeps, energy = resumed_energy!(sim.checkpoint, done)))
     log_msg(sim, "Done, dmrg final energy is $e")
     return sim
 end
@@ -184,15 +186,16 @@ function run_phase(sim::Simulation, phase::SteadyState)
     if sim.state isa State{Pure}
         error("state must be in mixed representation for computing steady state")
     end
-    done = first_sweep!(sim.checkpoint) - 1
-    log_msg(sim, "Searching for steady state with $(phase.nsweeps - done) sweeps of Dmrg")
-    if done ≥ phase.nsweeps
-        return sim
+    done, e = resume_sweeps!(sim.checkpoint)
+    # as for GroundState, a search whose checkpoint fell on its last sweep only writes its
+    # last line
+    if done < phase.nsweeps
+        log_msg(sim, "Searching for steady state with $(phase.nsweeps - done) sweeps of Dmrg")
+        e, sim = steady_state(phase.lindbladian, sim;
+            phase.nsweeps, first_sweep = done + 1, phase.limits, phase.mpo_limits, phase.mpo_algo,
+            observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
+                                     done; phase.nsweeps, energy = e))
     end
-    e, sim = steady_state(phase.lindbladian, sim;
-        phase.nsweeps, first_sweep = done + 1, phase.limits, phase.mpo_limits, phase.mpo_algo,
-        observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance, done;
-                                 phase.nsweeps, energy = resumed_energy!(sim.checkpoint, done)))
     log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
     return sim
 end

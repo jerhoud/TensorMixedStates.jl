@@ -42,6 +42,18 @@ the reference article.
 
 ### Changed
 
+- The checkpoint and output machinery is rebuilt on two foundations. The destinations of the
+  measurements are objects of four kinds, text files, streams, json files and `Data` stores,
+  each saying what a checkpoint has to carry of it, and a checkpoint is a commit: the state,
+  the counts and how far every destination had got, taken at one moment at the end of a sweep
+  or at a phase boundary, and written down as it is. The solvers end every sweep through one
+  call, which writes the measurements and the log of the sweep before committing it. What a
+  program sees does not change: the destination names, `output = io`, the files written,
+  `sim.data`, `get_sim_file` and the checkpoint options are the same.
+
+- The state of a checkpoint is written to `checkpoint-1.h5` or `checkpoint-2.h5`, which
+  `checkpoint.json` names, instead of `checkpoint.h5`.
+
 - `CreateState` keeps the time of the simulation unless given its `time_start`, where it set
   it to 0, which undid the `time_start` of `SimData`. A `CreateState` in the middle of a
   simulation keeps the running time.
@@ -415,6 +427,38 @@ the reference article.
 - `MutualInfoRenyi2(k)`, the mutual information across the link `k`, is named after the
   sites it stands for, `MutualInfoRenyi2(1:k)`. It was named `MutualInfoRenyi2(k)`, as the one
   site part `[k]`, a different quantity, and the two could not be measured together.
+
+- A checkpoint is replaced whole or not at all: the state goes to the file the previous
+  checkpoint does not use, and the metadata naming it is renamed into place last. The state
+  and the metadata were renamed one after the other, and a kill between the two paired the new
+  state with the previous counts, so that the resume ran again sweeps the state already held.
+
+- An interrupt no longer leaves a checkpoint whose outputs are ahead of its state. It wrote
+  the state of the last recorded sweep with the output files as they stood at the interrupt,
+  so that measurements taken since, those of a sweep of tdvp before its expansion for
+  instance, were written twice after the resume. An interrupt between a resume and the start
+  of the resumed phase wrote the evolved state as the start of that phase, which the next
+  resume evolved again.
+
+- A resumed dmrg writes what the uninterrupted one writes: a stop asked for no longer
+  measures a sweep that `measures_period` skips, the line of the sweep a checkpoint falls on
+  stays in the log, and a search whose checkpoint fell on its last sweep writes its
+  `Done, dmrg final energy` line, instead of `Optimizing state with 0 sweeps`.
+
+- A complex simulation time with no imaginary part stays complex through a checkpoint, and
+  keeps its two columns after a resume.
+
+- The fingerprint that tells a checkpoint of another simulation is computed with FNV-1a, whose
+  definition is fixed, rather than with `Base.hash`, which changes between versions of Julia:
+  a checkpoint was refused after an upgrade of Julia as belonging to another simulation.
+
+- Without a directory, when `runTMS` is given `output`, an interrupt goes on to the caller.
+  It was taken for a checkpoint that was never written, and the run returned as if it had
+  completed. `max_time` stops such a run with a message saying that it cannot be resumed,
+  instead of one saying that it can.
+
+- The `error` marker of a failed run is removed when the simulation is run again, instead of
+  describing a resumed run that succeeded.
 
 ## [1.4.0] - 2026-09-24
 

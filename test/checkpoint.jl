@@ -121,11 +121,14 @@ end
             crash_in[] = 3
             @test_throws ErrorException runTMS(sim_data)
             @test crash_in[] == 0                         # the kill did happen
+            @test isfile("kill/error")
             # measurements were written past the last checkpoint, which is what the resume
             # has to cut back before running them again
             @test length(readlines("kill/data")) > checkpointed
             runTMS(sim_data)
             @test read("kill/data", String) == reference
+            # the marker describes the last run, which succeeded
+            @test !isfile("kill/error")
         end
     end
 end
@@ -257,8 +260,10 @@ end
                       Gates(gates = X(1))]
             sim_data = SimData(; name = "ctime", phases, checkpoint_interval = 1e-9)
             runTMS(sim_data)
-            data = TensorMixedStates.load_checkpoint("ctime")[6]
-            @test only(data["d"]["Z(1)"]["times"]) == 0.5im
+            k = TensorMixedStates.load_checkpoint("ctime")
+            data = TensorMixedStates.restore_series(k.outputs["data"]["d"])
+            @test only(data["Z(1)"]["times"]) == 0.5im
+            @test k.phase_time == 0.5im
             # and a checkpoint of an earlier version is refused: its values do not say which
             # call of output they came from
             meta = "ctime/checkpoint.json"
@@ -344,10 +349,10 @@ end
     mktempdir() do dir
         cd(dir) do
             write("late", "left by a killed attempt\n")
-            write("known", "kept\n")
-            c = TensorMixedStates.Checkpointer()
-            c.recorded = Set(["known"])
-            sim = Simulation(nothing; checkpoint = c)
+            write("known", "kept\ncut back\n")
+            sim = Simulation(nothing)
+            TensorMixedStates.restore_outputs!(sim.outputs,
+                Dict("files" => Dict("known" => Dict("text" => 5)), "data" => Dict()))
             println(get_sim_file(sim, "late"), "new")
             println(get_sim_file(sim, "known"), "more")
             TensorMixedStates.close_sim_files(sim)
@@ -367,9 +372,10 @@ end
                       Gates(gates = X(1))]
             runTMS(SimData(; name = "nonfinite", phases, checkpoint_interval = 1e-9))
             @test only(TensorMixedStates.JSON.parsefile("nonfinite/out.json")["Inf"]["data"]) == "Inf"
-            data = TensorMixedStates.load_checkpoint("nonfinite")[6]
-            @test isnan(only(data["d"]["NaN"]["data"]))
-            @test only(data["d"]["-Inf"]["data"]) == -Inf
+            k = TensorMixedStates.load_checkpoint("nonfinite")
+            data = TensorMixedStates.restore_series(k.outputs["data"]["d"])
+            @test isnan(only(data["NaN"]["data"]))
+            @test only(data["-Inf"]["data"]) == -Inf
         end
     end
 end
@@ -493,6 +499,83 @@ end
     end
 end
 
+@testset "A resumed dmrg with a measurement period" begin
+    # a deadline already past stops every run after one sweep or one phase. A stop measured a
+    # sweep its period skips, the line of a checkpointed sweep was cut from the log, and a
+    # search checkpointed on its last sweep lost the line it ends with
+    mktempdir() do dir
+        cd(dir) do
+            h = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.8 * sum(X(i) for i in 1:4)
+            phases = [CreateState{Pure}(4, Qubit(), "Up"),
+                      GroundState(hamiltonian = h, nsweeps = 5,
+                                  limits = Limits(maxdim = 8, cutoff = 1e-14),
+                                  measures = "data" => [Z(1), :sweep], measures_period = 2)]
+            runTMS(SimData(; name = "ref", phases))
+            sim_data = SimData(; name = "chk", phases, max_time = -1)
+            for _ in 1:10
+                runTMS(sim_data)
+            end
+            @test read("chk/data", String) == read("ref/data", String)
+            lines(f) = filter(l -> startswith(l, "sweep") || startswith(l, "Done"), readlines(f))
+            @test lines("chk/log") == lines("ref/log")
+        end
+    end
+end
+
+@testset "An interrupt with no directory reaches the caller" begin
+    # nothing can be saved, so nothing can be resumed: the interrupt was taken for a
+    # checkpoint that was never written, and the run returned as if it had completed
+    breaker = StateFunc("Breaker", _ -> throw(InterruptException()))
+    phases = [CreateState{Pure}(2, Qubit(), "Up"),
+              Gates(gates = X(1), final_measures = "data" => [breaker])]
+    @test_throws InterruptException runTMS(SimData(; phases); output = devnull)
+end
+
+@testset "A checkpoint is replaced whole" begin
+    # the state file the metadata names is the one read, whatever a crash left beside it: the
+    # state and the metadata were renamed one after the other, and a kill between the two paired
+    # the new state with the previous counts
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(3, Qubit(), "X+"),
+                      Evolve(duration = 0.4, time_step = 0.1, algo = Tdvp(), evolver = -im * Z(1),
+                             limits = Limits(maxdim = 10, cutoff = 1e-15),
+                             measures = "data" => [X(1), stopper_at(stop_in)])]
+            runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 2
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            h5 = filter(endswith(".h5"), readdir("chk"))
+            @test length(h5) == 1
+            other = only(h5) == "checkpoint-1.h5" ? "checkpoint-2.h5" : "checkpoint-1.h5"
+            write(joinpath("chk", other), "left half written")
+            runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+        end
+    end
+end
+
+@testset "A complex time with no imaginary part" begin
+    # it came back real, and the time took one column instead of two after the resume
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Gates(gates = X(1), time_start = complex(0.5),
+                            final_measures = "data" => [Z(1), stopper_at(stop_in)]),
+                      Gates(gates = X(1), final_measures = "data" => [Z(1)])]
+            runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 1
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e9)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+        end
+    end
+end
+
 @testset "Phase fingerprint" begin
     # the phases of a simulation are what `SimData` made of them, flattened
     id(phases) = TensorMixedStates.phases_id(SimData(; phases).phases)
@@ -509,6 +592,14 @@ end
     @test ph(UInt(0), Dict("a" => 1, "b" => 2)) == ph(UInt(0), Dict("b" => 2, "a" => 1))
     @test ph(UInt(0), Dict("a" => 1)) ≠ ph(UInt(0), Dict("a" => 2))
     @test ph(UInt(0), Set([1, 2])) == ph(UInt(0), Set([2, 1]))
+    # FNV-1a, whose definition is fixed, where `Base.hash` changes between versions of Julia
+    # and refused a checkpoint after an upgrade as belonging to another simulation
+    o = TensorMixedStates.fnv_offset
+    @test TensorMixedStates.fnv(o, codeunits("a")) == 0xaf63dc4c8601ec8c   # its published value
+    @test ph(o, 1.5) == 0xaa95e93229a27c80
+    @test ph(o, "abc") == 0xc11ab6d2519bc2b2
+    @test ph(o, 3) == 0xc7c2bf3b330983e6
+    @test ph(o, 1 + 2im) == 0x7717980363c8e066
 
     # a checkpoint of another simulation must be refused, so anything a phase says has to
     # count. Resuming into the wrong simulation is silent, which is what makes it serious.
@@ -563,8 +654,13 @@ end
     @test !TensorMixedStates.stop_requested(C())
     @test TensorMixedStates.stop_requested(C(max_time = -1))         # deadline already past
 
+    # the resume point belongs to the phase it was written in, and is read once
     c = C()
-    c.skip = 4
-    @test TensorMixedStates.first_sweep!(c) == 5
-    @test TensorMixedStates.first_sweep!(c) == 1                     # consumed by the first phase
+    sim = Simulation(nothing; checkpoint = c)
+    TensorMixedStates.commit!(c, sim, 2, 0, 0., 0., nothing)
+    c.resume = TensorMixedStates.Commit(2, 4, 0., 0., nothing, -1.5, (files = Dict(), data = Dict()))
+    @test TensorMixedStates.resume_sweeps!(c) == (4, -1.5)
+    @test TensorMixedStates.resume_sweeps!(c) == (0, nothing)
+    c.resume = TensorMixedStates.Commit(3, 4, 0., 0., nothing, nothing, (files = Dict(), data = Dict()))
+    @test TensorMixedStates.resume_sweeps!(c) == (0, nothing)        # another phase
 end

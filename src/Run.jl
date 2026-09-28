@@ -20,7 +20,7 @@ A type for describing a simulation to use with `runTMS`
   a stop or an interrupt still writes one, so that the simulation can be resumed)
 - `max_time`:        seconds after which the simulation stops cleanly (default `Inf`)
 
-A simulation with a checkpoint interval writes its state to `<name>/checkpoint.h5` and
+A simulation with a checkpoint interval writes a checkpoint to `<name>/checkpoint.json` and
 `runTMS` resumes from it on its own if it finds one. It stops cleanly, after writing a
 checkpoint, when `max_time` is past, when the file `<name>/stop` appears, or on an
 interrupt.
@@ -132,8 +132,10 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             mkpath(sim_data.name);
             cd(sim_data.name);
             touch("running")
-            # a stop left over from the previous run would stop this one immediately
+            # a stop left over from the previous run would stop this one immediately, and the
+            # marker of a failed run would go on describing this one once it has succeeded
             rm("stop"; force = true)
+            rm("error"; force = true)
             # scripts exit straight away on an interrupt, which would lose the state.
             # asking for an exception instead lets the simulation checkpoint and quit.
             Base.exit_on_sigint(false)
@@ -155,38 +157,42 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
         try
             if live && has_checkpoint(".")
-                state, phase_time, phase, sweep, positions, data, json, id, energy = load_checkpoint(".")
-                if id ≠ c.id
+                k = load_checkpoint(".")
+                if k.id ≠ c.id
                     error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
                           "its phases are not the ones being run. Use restart = true to start over " *
                           "and erase it, or choose another name.")
                 end
-                truncate_outputs(".", positions)
-                merge!(sim.data, data)
-                # put back before any measurement asks for them: `get_sim_file` creates a
-                # json destination on first use and would otherwise start an empty one
-                merge!(sim.files, json)
-                c.phase, c.skip, c.phase_time, c.energy = phase, sweep, phase_time, energy
-                c.recorded = Set(keys(positions))
-                c.resuming = true
-                sim = Simulation(sim, state, phase_time)
-                log_msg(sim, "Resuming from checkpoint: phase $phase, sweep $sweep, simulation time $phase_time")
+                # put back before anything is written: a destination is created on first use,
+                # which would empty a file the checkpoint continues
+                restore_outputs!(sim.outputs, k.outputs)
+                c.generation = k.generation
+                log_msg(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.phase_time)")
+                # the resume point is the last commit from the start, so that an interrupt
+                # before the phase it belongs to has begun writes it back as it was, rather
+                # than the state it holds as the start of that phase
+                c.resume = Commit(k.phase, k.sweep, k.phase_time, k.time, k.state, k.energy,
+                                  output_marks(sim.outputs))
+                c.last = c.resume
             end
             try
                 sim = log_phase(sim, sim_data)
             catch e
-                # an interrupt is a request to stop cleanly, anything else is a real failure
-                if !(e isa InterruptException)
+                # an interrupt is a request to stop cleanly, anything else is a real failure.
+                # Without a directory nothing can be saved and nothing resumed, so the
+                # interrupt goes on to the caller, as it would outside `runTMS`
+                if !(e isa InterruptException) || isempty(c.dir)
                     rethrow()
                 end
                 log_msg(sim, "\n***** Interrupted, writing a checkpoint *****")
-                # the state of the interrupted sweep, the one the phase never got to return
-                st = c.state isa State ? c.state : sim.state
-                if st isa State
-                    save_checkpoint(c, sim, st, c.sweep)
+                # the last commit, whatever was written since: the checkpoint and the outputs
+                # it resumes are those of one moment
+                write_checkpoint(c, sim)
+                k = c.last
+                if !isnothing(k) && k.state isa State
                     # the returned simulation must carry what was reached, not what the phase
                     # was handed when it started
-                    sim = Simulation(sim, st, c.simtime)
+                    sim = Simulation(sim, k.state, k.time)
                 end
                 c.stopping = true
             end
@@ -221,49 +227,49 @@ end
 
 function log_phase(sim::Simulation, phases::Vector)
     c = sim.checkpoint
-    # the interrupted phase restarts from the time it began with, its solver counts sweeps
-    # from there and skips the ones already done. Put back before the loop, since a
-    # checkpoint written after the last phase resumes none, and the final measurements then
-    # still have to be taken at the time the simulation reached
-    if c.resuming
-        sim = Simulation(sim, sim.state, c.phase_time)
-        c.resuming = false
+    r = c.resume
+    # a resumed run starts again from the state and the time of its checkpoint, past the phases
+    # it had completed. Put back here rather than where the checkpoint is read, since the
+    # `time_start` of the simulation is applied in between, and a checkpoint written after the
+    # last phase resumes none, the final measurements then still having to be taken at the
+    # time the simulation reached
+    if isnothing(r)
+        commit!(c, sim, 1, 0, sim.time, sim.time, sim.state)
+    else
+        sim = Simulation(sim, r.state, r.phase_time)
+        c.last = r
     end
-    for (i, phase) in enumerate(phases)
-        # phases already completed before the checkpoint are not replayed
-        if i < c.phase
-            continue
-        end
-        c.phase = i
-        c.phase_time = sim.time
-        phase_start!(c, sim)
-        sim = log_phase(sim, phase)
+    for i in c.last.phase:length(phases)
+        sim = log_phase(sim, phases[i])
+        # consumed by the phase it belongs to, whether it read it or not
+        c.resume = nothing
         if c.stopping
-            log_msg(sim, "***** Stopping after phase $i, the simulation can be resumed *****")
+            log_stop(sim, i)
             break
         end
-        # the next phase is the one to resume from, record it at a clean boundary
-        c.phase = i + 1
-        c.phase_time = sim.time
-        # a resume point belongs to the phase it was written for: a phase with no sweeps of
-        # its own must not inherit the ones the previous phase was told to skip
-        c.skip = 0
-        # marked again here so that an interrupt falling after the last phase, in the final
-        # measurements, still checkpoints what the simulation reached
-        phase_start!(c, sim)
-        if sim.state isa State && (checkpoint_due(c) || stop_requested(c))
-            if checkpoint_step!(c, sim, sim.state, sim.time, 0) 
-                log_msg(sim, "***** Stopping after phase $i, the simulation can be resumed *****")
-                break
-            end
-        elseif sim.state isa State && i == length(phases) && c.interval > 0
-            # the last phase done, a checkpoint records it whether one is due or not, so
-            # that running the simulation again resumes past every phase and does nothing
-            save_checkpoint(c, sim, sim.state, 0)
+        # the next phase is the one to resume from, committed at a clean boundary. Marked here
+        # also so that an interrupt falling after the last phase, in the final measurements,
+        # still checkpoints what the simulation reached
+        commit!(c, sim, i + 1, 0, sim.time, sim.time, sim.state)
+        stop = stop_requested(c)
+        if stop || checkpoint_due(c) || (i == length(phases) && c.interval > 0)
+            # the last phase done, a checkpoint records it whether one is due or not, so that
+            # running the simulation again resumes past every phase and does nothing
+            write_checkpoint(c, sim)
+        end
+        if stop
+            c.stopping = true
+            log_stop(sim, i)
+            break
         end
     end
     return sim
 end
+
+log_stop(sim::Simulation, i::Int) =
+    log_msg(sim, isempty(sim.checkpoint.dir) ?
+        "***** Stopping after phase $i, with no directory to save it in: it cannot be resumed *****" :
+        "***** Stopping after phase $i, the simulation can be resumed *****")
 
 # The three fields every phase is read through, here rather than at the first `phase.name`
 # so that something which is not a phase says so instead of surfacing as a `FieldError` from
