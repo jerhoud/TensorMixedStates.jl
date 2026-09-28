@@ -152,12 +152,10 @@ end
 """
     no_signed_zero(x)
 
-`x` with its signed zeros made positive, `-0.0 + 1.0im` becoming `0.0 + 1.0im`, and every
-other value as it is. Every operator that stores numbers stores them through this, so that no
-operator holds a signed zero: `==` holds `-0.0` and `0.0` equal but `isless` and `hash` do not,
-and simplify, which sorts the terms before merging the equal ones, left two equal terms apart
-when a third sorted between them, while `measure`, which gathers the operators it evaluates by
-their hash, computed the same one twice.
+`x` with its signed zeros made positive (`-0.0 + 1.0im` becomes `0.0 + 1.0im`), any other
+value unchanged. Operators store their numbers through it: `-0.0 == 0.0`, but `isless` and
+`hash` tell them apart, so `simplify` could leave two equal terms unmerged and `measure` could
+compute the same operator twice.
 """
 no_signed_zero(x::Union{AbstractFloat, Complex{<:AbstractFloat}}) = x + zero(x)
 no_signed_zero(x::AbstractArray) = map(no_signed_zero, x)
@@ -166,11 +164,10 @@ no_signed_zero(x) = x
 """
     state_key(state)
 
-what the state of a `Proj` or a `SetState` is ordered by: its kind, an index, a name or an
-array, then its size and its elements, by their real and their imaginary parts. It is a total
-order, complex numbers included, and ties exactly where `==` holds: their printed forms,
-compared before, told apart `[1, 0]` and `[1.0, 0.0]`, which are equal, and simplify could leave
-two such terms unmerged.
+the key a `Proj` or a `SetState` is ordered by: the kind of its state (an index, a name or an
+array), then its value, an array by its size and by the real and imaginary parts of its
+elements. The order is total, complex numbers included, and two keys tie exactly when the
+states are `==`, so that `simplify` merges the projectors on `[1, 0]` and on `[1.0, 0.0]`.
 """
 state_key(x::Int) = (1, x)
 state_key(x::AbstractString) = (2, x)
@@ -181,19 +178,19 @@ state_key(x::AbstractArray) = (3, size(x), [ (real(y), imag(y)) for y in vec(x) 
 """
     @enum OpType
 
-the possible operator types for `Operator`
+the possible types of an `Operator`
 
 # Enumeration values
 
-- `plain_op`: an operator with no particular properties
-- `fermionic_op`: a fermionic operator for which Jordan-Wigner transform must be used
-- `selfadjoint_op`: an operator invariant under `dag`
-- `involution_op`: an operator invariant under `dag` and whose square is the identity 
+- `plain_op`: no particular property
+- `fermionic_op`: fermionic, the Jordan-Wigner transform applies to it
+- `selfadjoint_op`: invariant under `dag`
+- `involution_op`: invariant under `dag`, and its square is the identity
 
-`simplify` reasons with the type, taking `dag(X)` to be `X` or `X * X` to be `Id`, and moving
-the `F` of a site across an operator with a sign for a fermionic one and without for any other.
-The type is therefore checked against the matrix each time the operator is placed on a site,
-and a type the matrix belies is refused rather than giving a wrong result.
+`simplify` relies on the type: `dag(A)` is `A` for a self-adjoint `A`, `A * A` is `Id` for an
+involution, and the `F` of a site crosses a fermionic operator with a sign, any other without.
+The type is therefore checked against the matrix whenever the operator is placed on a site,
+and a wrong type is refused.
 """
 @enum OpType plain_op fermionic_op selfadjoint_op involution_op
 
@@ -261,11 +258,11 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 """
     type IdentityOp{R, T, N}
 
-the identity, a single value for each kind of operator: pure or on a density matrix, generic
-on `N` sites, or placed. It is what every construction of an identity gives, `Id ⊗ Id`,
-`Left(Id)`, `Right(Id)`, `Gate(Id)` and `Id(3)` included, so that an identity is told by its
-type alone. Placed, it has no site: it is the identity of the whole system, and a tensor of it
-on a given site is laid by the code that needs one, which knows the site.
+the identity, one value for each kind of operator (pure or mixed, generic on `N` sites or
+placed). Every way of writing an identity gives it, `Id ⊗ Id`, `Left(Id)`, `Right(Id)`,
+`Gate(Id)` and `Id(3)` included, so an identity is recognized by its type alone. Placed, it is
+the identity of the whole system and has no site: the code that needs its tensor on a site
+builds it there.
 """
 struct IdentityOp{R, T, N} <: Op{R, T, N} end
 
@@ -562,9 +559,8 @@ isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
 """
     struct AtIndex{R, N} <: IndexedOp{R}
 
-represent an indexed operator (like `X(1)` or `Swap(2, 4)`). An operator of several sites is
-placed on distinct sites: `Swap(1, 1)` or `(X ⊗ Y)(1, 1)` is refused, write `X(1) * Y(1)`
-for the product on one site.
+an operator placed on sites, as `X(1)` or `Swap(2, 4)`. The sites must be distinct:
+`Swap(1, 1)` and `(X ⊗ Y)(1, 1)` are refused, the product on one site is `X(1) * Y(1)`.
 """
 struct AtIndex{R, N} <: IndexedOp{R}
     op::GenericOp{R, N}
@@ -688,13 +684,11 @@ isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 """
     Left(op)
 
-the superoperator acting on the left of the density matrix, ``\\rho \\mapsto A\\rho``.
+the superoperator ``\\rho \\mapsto A\\rho``, acting on the left of the density matrix.
 
-`Gate`, `Dissipator` and `Evolver` are the usual ways of acting on a mixed representation,
-and they all act on both sides at once: ``A\\rho A^\\dagger`` and ``-i[H, \\rho]``. This
-one, and `Right`, are what is left for a term acting on a single side, which is not trace
-preserving. They can be evolved with and applied as gates, but they are not observables:
-`expect` has nothing to say about them.
+`Gate`, `Dissipator` and `Evolver` act on both sides at once, as ``A\\rho A^\\dagger`` or
+``-i[H, \\rho]``. `Left` and `Right` act on a single side, which is not trace preserving. They
+can be used in an evolution or applied as gates, but they are not observables.
 
 # Examples
 
@@ -806,14 +800,16 @@ is_natural(p::Number) = isreal(p) && isinteger(real(p)) && real(p) ≥ 0
     type IntPowOp{R, N} <: GenericOp{R, N}
     type GenPowOp{R, N} <: GenericOp{R, N}
 
-internal types for the powers of operators. An integer power of zero or above is a product,
-`A^3` being `A * A * A`, kept whole only to be written that way: it has the adjoint, the
-parity and the Jordan-Wigner strings of that product, and an involution is reduced at once,
-`X^10000` being `Id`. Any other power, of an exponent that is not an integer, negative or
-complex, is a function of the operator, the principal power taken through its logarithm, as
-`exp` is: it cannot be split between factors, and of a coefficient of the operator only the
-modulus comes out, which the logarithm takes apart exactly, the phase staying inside. Both merge,
-`A^p * A^q` being `A^(p + q)`, the two powers being functions of the same logarithm.
+internal types for the powers of an operator.
+
+- `IntPowOp`, an integer exponent of zero or above: `A^3` is the product `A * A * A`, kept
+  whole only to print that way, with the adjoint, parity and Jordan-Wigner strings of that
+  product. A power of an involution is reduced at once, `X^10000` is `Id`.
+- `GenPowOp`, any other exponent (not an integer, negative or complex): a function of the
+  operator, the principal power taken through its logarithm, as `exp` is. It does not split
+  over factors, and of a coefficient only the modulus comes out, the phase staying inside.
+
+Both merge, `A^p * A^q` being `A^(p + q)`.
 """
 struct IntPowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
@@ -974,15 +970,14 @@ struct ModOp{N} <: GenericOp{Pure, N}
 end
 
 """
-    mod(op, m)
+    mod(A, m)
 
-the operator ``e^{2i\\pi A/m}``, whose eigenvalues are the `m`-th roots of unity of those
-of `A`. It is a genuine operator, which may be measured like any other, and it is what a
-conserved quantity of ``\\mathbb{Z}_m`` is written with.
+the operator ``e^{2i\\pi A/m}``, of eigenvalues ``e^{2i\\pi a/m}`` for the eigenvalues ``a``
+of `A`. It can be measured like any other, and it is how a conserved quantity of
+``\\mathbb{Z}_m`` is written.
 
-The modulus cannot be read back from the eigenvalues when it is 2, since ``\\pm 1`` is as
-much a pair of integers as a pair of square roots of unity, and the two readings are
-different conservations. That is why it is carried here rather than rediscovered.
+The modulus is carried by the operator rather than read from its eigenvalues, which cannot
+tell it for ``m = 2``: ``\\pm 1`` could as well be integer charges.
 
 # Examples
 
@@ -1020,13 +1015,13 @@ isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
 """
     named_type(op)
 
-the `OpType` a renamed operator keeps: its own when it has one, `fermionic_op` for a fermionic
-expression, and nothing assumed otherwise.
+the `OpType` `named` gives by default: the type of `op` for an `Operator`, `fermionic_op` for
+a fermionic expression of one site, `plain_op` otherwise.
 
-A renamed operator of one site keeps its name through `simplify`, so its type is all that
-tells it to take a Jordan-Wigner string, and `named(2C, "C2")` lost it. `controlled_type`
-makes the opposite choice for a fermionic target: a controlled operator acts on several
-sites, which no fermionic `Operator` can, and `simplify` replaces it by its expression.
+A renamed operator of one site keeps its name through `simplify`, so its type is the only thing
+that gives it a Jordan-Wigner string. `controlled_type` does the opposite for a fermionic
+target: a controlled operator acts on several sites, and `simplify` replaces it by its
+expression.
 """
 named_type(a::Operator) = a.type
 named_type(a::Op) = a isa SimpleOp && isfermionic(a) ? fermionic_op : plain_op
@@ -1075,10 +1070,10 @@ named(op::GenericOp{Pure, N}, name::String; type::OpType = named_type(op)) where
 """
     isfermionic(::SimpleOp)
 
-whether an operator of one site on pure states is odd under the fermion parity. A sum mixing
-fermionic and non fermionic operators, and an exponential, a `mod` or a non integer power of
-a fermionic operator, have no such parity and raise an error. For an operator of several
-sites or a superoperator, see `has_fermionic`.
+whether an operator of one site on pure states is odd under the fermion parity. An operator
+of no definite parity raises an error: a sum of fermionic and non fermionic terms, or the
+exponential, `mod` or non integer power of a fermionic operator. For operators of several
+sites and superoperators, see `has_fermionic`.
 """
 isfermionic(a::SimpleOp) = false
 isfermionic(a::Operator{1}) = a.type == fermionic_op
@@ -1122,17 +1117,16 @@ isfermionic(a::GenPowOp) =
 """
     has_fermionic(::Op)
 
-whether an operator still holds a factor whose Jordan-Wigner string `simplify` has not
-inserted: an odd operator of one site, wherever it sits. A tensor product, an operator of
-several sites defined by an expression and the argument of a superoperator are all looked
-into, since their tensor carries the strings between consecutive sites only: placed on sites
-apart, it misses those of the sites in between, which `(C ⊗ dag(C))(1, 3) = C(1) * dag(C)(3)`
-asks for.
+whether an operator still holds an odd operator of one site whose Jordan-Wigner string
+`simplify` has not inserted, wherever it sits: in a tensor product, in the expression of an
+operator of several sites, or inside a superoperator. Their tensor carries the strings
+between consecutive sites only, so `(C ⊗ dag(C))(1, 3)`, which is `C(1) * dag(C)(3)`, would
+miss the string on site 2.
 
-The structure is read from the fields, the way `==` is, so that no wrapper can be forgotten.
-Once `simplify` has run, the factors are `JW` transforms, which are not fermionic, and the
-answer is false unless a factor was left whole, as an exponential of several sites is. A
-factor of no definite parity, as `C + N`, holds an odd part and answers true, where it raised.
+After `simplify` the factors are `JW` transforms, which are not fermionic, and the answer is
+false unless a factor was kept whole, as an exponential of several sites is. A factor of no
+definite parity, as `C + N`, answers true instead of raising. The operator is explored through
+its fields, as `==` does, so that no wrapper is forgotten.
 """
 has_fermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
 
@@ -1152,14 +1146,13 @@ end
 """
     jw_parity(a)
 
-how a factor of a one site product behaves when the `F` of that site crosses it: `0` when it
-commutes with `F`, `1` when it anticommutes, `nothing` when it does neither.
+how a factor of a product on one site behaves when the `F` of that site crosses it: `0` if it
+commutes with `F`, `1` if it anticommutes, `nothing` if neither.
 
-A fermionic operator, and the Jordan-Wigner transform `simplify` makes of it, is odd, and any
-other operator is taken to be even, the convention the strings themselves rest on. A composite
-factor has the parity its pieces give it. Sums have to be read as well, since `simplify`
-gathers the terms of one site into a single factor: `(C + dag(C))(1)` was taken to be even,
-and `C(3) * (C + dag(C))(1)` came out with the wrong sign.
+A fermionic operator and its Jordan-Wigner transform are odd, any other operator is taken as
+even, the convention the strings rest on, and a composite factor gets the parity of its pieces.
+Sums count too, since `simplify` gathers the terms of one site into one factor: taking
+`(C + dag(C))(1)` as even gave `C(3) * (C + dag(C))(1)` the wrong sign.
 """
 jw_parity(a) = fermion_parity(a, true)
 
@@ -1253,10 +1246,8 @@ ranking(::ModOp) = 33
 """
     obs_name(op)
 
-the name a measurement is given when the caller did not choose one: how the operator
-prints, compactly. Only `Operator` carries a name of its own; everything else a
-measurement may be asked for is a composition, whose printed form is its only description.
-`SimpleOp` is abstract, so reading a `name` field would work for a bare `X` and fail for
-`X * Y`, `2X` or `X + Y`.
+the default name of a measurement: the compact printed form of the operator, in which long
+sums and products are abbreviated. Only an `Operator` has a `name` field; `X * Y`, `2X` or
+`X + Y` have no other description than their printed form.
 """
 obs_name(op) = sprint(print, op; context = :compact => true)
