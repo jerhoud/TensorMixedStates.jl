@@ -120,6 +120,8 @@ the reference article.
 - A local state given by its index for every site, `State{Pure}(system, 1)`, was taken for
   the amplitudes `[1, …, 1]` of a single site.
 
+- `sample(state, pos)` failed on a system conserving something.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

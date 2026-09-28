@@ -45,6 +45,14 @@
     @test isapprox(count(==(0), samples_full) / nm, p0; atol = 0.03)
 end
 
+@testset "Sampling a site of a charged state" begin
+    # the site legs of a charged state have a direction, which the projector on a basis state
+    # has to take
+    sq = State{Pure}(System(3, Fermion(conserve = N)), ["Occ", "Emp", "Occ"])
+    @test sample(sq, 1) == 1
+    @test sample(sq, 2) == 0
+end
+
 @testset "Fermionic correlations" begin
     # dag(C) must be recognized as fermionic, and a product of two
     # fermionic operators must not be

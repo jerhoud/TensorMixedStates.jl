@@ -946,7 +946,8 @@ function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
     ind = siteind(st, pos)
     d = dim(ind)
     for i in 1:d - 1
-        ti = t * onehot(ind => i)
+        # the conjugate leg, which on a charged site is the direction the tensor takes
+        ti = t * onehot(dag(ind) => i)
         ptot += real(scalar(ti * dag(ti)))
         if r < ptot
             return i - 1
