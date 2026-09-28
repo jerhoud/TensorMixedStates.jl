@@ -96,7 +96,7 @@ the controlled gate constructor
     Toffoli = controlled(controlled(X))
 """
 controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = controlled_type(op)) where N =
-    Operator{N+1}(name, Proj(0) ⊗ MakeIdentity(op) + Proj(1) ⊗ op, type)
+    Operator{N+1}(name, Proj(0) ⊗ IdentityOp(op) + Proj(1) ⊗ op, type)
 
 # written with factors of a definite charge, which an MPO places one by one: X ⊗ X + Y ⊗ Y is
 # the same operator, but X and Y carry no charge of their own. dag(Sp) rather than Sm, which

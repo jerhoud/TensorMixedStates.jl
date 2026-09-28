@@ -240,8 +240,12 @@ matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
 matrix(a::String, site::AbstractSite, ::AbstractSite...) =
     matrix(operator_info(site, a), site)
 
-matrix(::Identity, site::AbstractSite) =
-    identity_operator(site)
+matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite...) =
+    identity_operator(prod(dim, all_sites(a, site)))
+
+# on a density matrix, the identity of the ket and the bra of each site
+matrix(a::IdentityOp{Mixed, Generic}, site::AbstractSite...) =
+    identity_operator(prod(s -> dim(s)^2, all_sites(a, site)))
 
 matrix(::JW_F, site::AbstractSite) =
     matrix(F_info(site), site)

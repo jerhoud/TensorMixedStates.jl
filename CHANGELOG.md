@@ -87,9 +87,12 @@ the reference article.
   - a power of the identity on several sites, `(Id ⊗ Id)^3`, or on a density matrix,
     `Left(Id)^2`, was not reduced.
 
-- The identity placed on a site had two forms, `Id(1)` and `Id(k)` on the site it was given,
-  so that `Id(2) - X(2) * X(2)` did not cancel and `Id(2)` was measured as complex. It has
-  one, `Id(1)`.
+- The identity had several forms, `Id ⊗ Id` on several sites, `Left(Id)`, `Right(Id)` and
+  `Gate(Id)` on a density matrix, `Id(1)` and `Id(k)` placed, each recognised in some places
+  and not in others: `Id(2) - X(2) * X(2)` did not cancel, `Id(2)` was measured as complex,
+  and a power of `Left(Id)` was not reduced. There is one identity of each kind, which every
+  construction of one gives. Placed, it has no site, being the identity of the whole system:
+  `Id(3) == Id(1)`, it prints as `Id`, and a site out of the system is not refused for it.
 
 - `expect` checked the sites of an operator after simplifying it, so that a site out of the
   system was reported as an internal factor of the Jordan-Wigner string, sometimes at another

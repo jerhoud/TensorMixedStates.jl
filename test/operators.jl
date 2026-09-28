@@ -363,11 +363,13 @@ end
 
     # simplify develops it into factors of one site. They are named after the operator, the
     # index 0 being the part acting on a site alone, the others pairing across the sites
-    one_site(a) = all(t -> all(f -> f isa TMS.AtIndex{Pure, 1}, TMS.prodsubs(t)),
-                      TMS.sumsubs(a))
+    # the identity, which has no site, counts as one site
+    one_site(a) = all(t -> all(f -> f isa TMS.AtIndex{Pure, 1} || f isa TMS.IdentityOp,
+                               TMS.prodsubs(t)), TMS.sumsubs(a))
     @test one_site(simplify(sw(1, 2)))
     @test one_site(simplify(p2(3, 1)))
-    terms(a) = [ TMS.scalararg(t).subs for t in TMS.sumsubs(a.expr) ]
+    terms(a) = [ TMS.scalararg(t).subs for t in TMS.sumsubs(a.expr)
+                 if !(TMS.scalararg(t) isa TMS.IdentityOp) ]
     factor_names(a) = Set(f.name for t in terms(a) for f in t if f isa Operator)
     fe = Fermion()
     nn = Operator{2}("NN", matrix(N ⊗ N, fe), plain_op, fe)
@@ -551,19 +553,35 @@ end
     @test_ok apply(sqrt(Swap)(1, 2) * dag(C)(3), sf)
 end
 
-@testset "The identity once placed" begin
-    # it has one form, on the first site, whatever site it came from, and its powers reduce
-    # whatever form it takes: on several sites, and on a density matrix
+@testset "The identity is one value of each kind" begin
+    # every construction of an identity gives the same value, told by its type alone: on
+    # several sites, on a density matrix, and placed, where it has no site, being the identity
+    # of the whole system
     q = Qubit()
+    @test Id ⊗ Id isa TensorMixedStates.IdentityOp
+    @test Left(Id) == Right(Id) == Gate(Id)
+    @test Id(3) == Id(1)
+    @test (Id ⊗ Id)(1, 3) == Id(2)
     @test (Id ⊗ Id)^3 == Id ⊗ Id
     @test Left(Id)^2 == Left(Id)
     @test matrix((-(Id ⊗ Id))^0.5, q, q) ≈ matrix(im * (Id ⊗ Id), q, q)
     @test X(3)^0 == Id(1)
-    @test simplify(Id(2)) == Id(1)
+    @test Id(2)^0.5 == Id(1)
+    @test iszero(TensorMixedStates.scalarcoef(simplify(Dissipator(Id)(1))))
+    @test iszero(TensorMixedStates.scalarcoef(simplify(Evolver(-im * Id(1)))))
     st = RandomState{Pure}(System(3, q), 2)
+    ρ = mix(st)
     @test expect(st, Id(2) - X(2) * X(2)) ≈ 0 atol = 1e-12
-    # it is its own adjoint, and so measured as real
-    @test last(only(measure(st, Id(2)))) isa Real
-    # and a site the system does not have is still refused
-    @test_throws "does not have" expect(st, Id(5))
+    # it is its own adjoint, and so measured as real, a number as any expectation value is
+    @test last(only(measure(st, Id(2)))) === 1.0
+    # its tensor, where one is needed, goes on the site the caller names
+    @test expect1(st, Id) ≈ ones(3)
+    @test expect1(ρ, Id) ≈ ones(3)
+    @test expect2(st, (Id, X))[1, 3] ≈ expect(st, X(3))
+    h = X(1) * X(2) + 0.5 * Id(3)
+    @test real(inner(st.state', make_mpo(st, h), st.state)) / real(inner(st.state, st.state)) ≈ real(expect(st, h))
+    @test norm(apply(2Id(2) * X(1), st) - 2 * apply(X(1), st)) < 1e-12
+    @test trace(apply(Gate(Id)(2), ρ)) ≈ 1
+    # having no site, the identity is the identity of any system, whatever site it was given
+    @test expect(st, Id(5)) ≈ 1
 end

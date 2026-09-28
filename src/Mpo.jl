@@ -13,6 +13,13 @@ end
 function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
     foreach(o -> check_one_site(o, "an MPO"), subs)
     sys = pre.system
+    # the identity has no site, and a term made of it alone is laid on the first one
+    subs = filter(o -> !(o isa IdentityOp), subs)
+    if isempty(subs)
+        kdx = SysIndex{R}(sys, 1)
+        push!(pre.terms[1], (1, 1, coef * delta(kdx', dag(kdx)), ref))
+        return pre
+    end
     # a term whose factor vanishes on its site, as C(1)*C(1) or Sp(1)*Sp(1) on a spin 1/2, is
     # dropped here, where the sites are known: simplify cannot tell, one name standing for
     # operators of different algebras on different sites. Kept, it took a channel on every

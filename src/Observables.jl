@@ -48,17 +48,37 @@ end
 tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
     tensor(state.system, ind)
 
-function tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1})
+tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1}) =
+    on_trace(state, tensor(state.system, ind), only(ind.index))
+
+# a pure operator on site i, `t`, carried onto the trace of the density matrix there
+function on_trace(state::State{Mixed}, t::ITensor, i::Int)
     s = state.system
-    i = only(ind.index)
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
     b, c = mixer(j, k, s[i])
     if b !== j
         strong_measured(i)
     end
-    return tensor(s, ind) * dag(c)
+    return t * dag(c)
 end
+
+"""
+    identity_at(state, i)
+    obs_at(state, op, i)
+
+the tensor of the identity on site i, and of an operator of one site on site i, the identity
+included. Placed, the identity has no site, and `expect1` and `expect2`, which close an
+environment on a given site, need its tensor there: the site comes from them.
+"""
+function identity_at(state::State, i::Int)
+    s = state.system
+    t = legs(Id, [s[i]], [SysIndex{Pure}(s, i)])
+    return state isa State{Pure} ? t : on_trace(state, t, i)
+end
+
+obs_at(state::State, op::SimpleOp, i::Int) =
+    op isa IdentityOp ? identity_at(state, i) : tensor_obs(state, op(i))
 
 # `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
 # everything downstream of `tensor_obs` works on the one site tensor alone
@@ -471,9 +491,12 @@ zipend(state::State, a::Expector) =
     Expector(a.pos, a.t * get_right(state, a.pos))
 
 
-function expectfactor(state::State, a::Expector, o::AtIndex)
-    a = zipto(state, a, o.index...)
-    Expector(a.pos, a.t * tensor_obs(state, o))
+expectfactor(state::State, a::Expector, o::AtIndex) =
+    expectfactor(state, a, tensor_obs(state, o), only(o.index))
+
+function expectfactor(state::State, a::Expector, t::ITensor, i::Int)
+    a = zipto(state, a, i)
+    Expector(a.pos, a.t * t)
 end
 
 function expectfactor(state::State, a::Expector, o::Multi_F)
@@ -500,6 +523,13 @@ function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}}
     # few integer comparisons per term, nothing next to the contractions below
     foreach(o -> check_indices(state.system, o), subs)
     foreach(o -> check_one_site(o, "expect"), subs)
+    # the identity has no site and is one on any state, expect dividing by the norm or the
+    # trace: a term made of it alone is its coefficient, of the type a contraction of the
+    # state would give
+    subs = filter(o -> !(o isa IdentityOp), subs)
+    if isempty(subs)
+        return coef * one(eltype(state.state[1]))
+    end
     e = Expector()
     for o in subs
         e = expectfactor(state, e, o)
@@ -561,7 +591,7 @@ expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =
               "want it on a state that superposes parities, ask for it site by site " *
               "with expect(state, op(i))")
     else
-        scalar(t * tensor_obs(state, op(i)))
+        scalar(t * obs_at(state, op, i))
     end
 
 expect1_one(state::State, ops, i::Int, t::ITensor) =
@@ -628,22 +658,22 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
             end
             r[i, j] = map(ops) do (o1, o2)
                 if isfermionic(o1)
-                    scalar(ef.t * tensor_obs(state, (o1 * F)(i)) * tensor_obs(state, o2(j)))
+                    scalar(ef.t * tensor_obs(state, (o1 * F)(i)) * obs_at(state, o2, j))
                 else
-                    scalar(enf.t * tensor_obs(state, o1(i)) * tensor_obs(state, o2(j)))
+                    scalar(enf.t * obs_at(state, o1, i) * obs_at(state, o2, j))
                 end
             end
             r[j, i] = map(ops) do (o1, o2)
                 if isfermionic(o1)
                     # swapping the two fermionic operators costs a sign
-                    -scalar(ef.t * tensor_obs(state, (o2 * F)(i)) * tensor_obs(state, o1(j)))
+                    -scalar(ef.t * tensor_obs(state, (o2 * F)(i)) * obs_at(state, o1, j))
                 else
-                    scalar(enf.t * tensor_obs(state, o2(i)) * tensor_obs(state, o1(j)))
+                    scalar(enf.t * obs_at(state, o2, i) * obs_at(state, o1, j))
                 end
             end
             if j < n
                 if need_non_fermionic
-                    lnf = zipto(state, expectfactor(state, lnf, Id(j)), j+1)
+                    lnf = zipto(state, expectfactor(state, lnf, identity_at(state, j), j), j+1)
                 end
                 if need_fermionic
                     lf = zipto(state, expectfactor(state, lf, F(j)), j+1)

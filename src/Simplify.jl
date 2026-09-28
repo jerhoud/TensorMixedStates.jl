@@ -34,7 +34,7 @@ simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
 
 # Simplification of Generic Operators
 
-simplify(a::Union{Identity, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
+simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
 
 simplify(a::IntPowOp) = power(simplify(a.arg), a.expo)
 simplify(a::GenPowOp) = power(simplify(a.arg), a.expo)
@@ -70,7 +70,6 @@ end
 simplify(a::AtIndex) =
     simplify_ind(simplify(a.op), a.index...)
 
-reindex(::Identity, ::Int) = Id(1)
 reindex(op::GenericOp, i::Int...) = op(i...)
 
 # Simplification with index
@@ -79,10 +78,8 @@ reindex(op::GenericOp, i::Int...) = op(i...)
 
 
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
-# the identity has one form once placed, on the first site, the one reindex and MakeIdentity
-# give: Id(2) and Id(1) were two, so that Id(2) - X(2) * X(2) did not cancel and Id(2) was
-# not recognised as its own adjoint
-simplify_ind(::Identity, index) = MakeIdentity{Pure, Indexed, 1}()
+# placed, the identity has no site, AtIndex giving the one of the whole system
+simplify_ind(a::IdentityOp, index...) = a(index...)
 simplify_ind(a::Union{JW_F, Proj, JW, SetState}, index) = a(index)
 simplify_ind(a::ExpOp, index...) = place_function(a, index...)
 simplify_ind(a::ModOp, index...) = place_function(a, index...)
@@ -151,7 +148,7 @@ function simplify_exp(a::GenericOp{Pure, N}) where N
     c = scalarcoef(a)
     s = prodsubs(a)
     if length(s) == 1 && is_involution(s[1])
-        simplify_sum([cosh(c) * MakeIdentity(s[1]), sinh(c) * s[1]])
+        simplify_sum([cosh(c) * IdentityOp(s[1]), sinh(c) * s[1]])
     else
         exp(a)
     end
@@ -177,7 +174,7 @@ simplify_dag(a::GenPowOp) = DagOp(a)
 simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
 simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
 # a projector is on a pure state, `matrix` refusing a mixed one, and so self adjoint
-simplify_dag(a::Union{Identity, JW_F, Proj}) = a
+simplify_dag(a::Union{IdentityOp, JW_F, Proj}) = a
 simplify_dag(a::JW) = dag(a)
 
 
@@ -209,6 +206,7 @@ simplify_l(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_l.(a.subs))
 simplify_l(a::SumOp{Pure, Indexed}) = SumOp(simplify_l.(a.subs))
 simplify_l(a::AtIndex{Pure}) = reindex(simplify_l(a.op), a.index...)
 simplify_l(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
+simplify_l(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 
 
 # Right simplification
@@ -216,13 +214,13 @@ simplify_l(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
 # Indexed => go as deep as possible
 
 simplify_r(a::GenericOp{Pure}) = Right(a)
-simplify_r(a::Identity) = Left(a)
 simplify_r(a::ScalarOp{Pure}) = conj(a.coef) * simplify_r(a.arg) 
 
 simplify_r(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_r.(a.subs)) 
 simplify_r(a::SumOp{Pure, Indexed}) = SumOp(simplify_r.(a.subs))
 simplify_r(a::AtIndex{Pure}) = reindex(simplify_r(a.op), a.index...)
 simplify_r(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
+simplify_r(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 
 
 # sum simplification
@@ -244,7 +242,7 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
     subs = sort(v; by=scalararg)
     r = Op{R, T, N}[]
     c = 0
-    o = MakeIdentity{R, T, N}()
+    o = IdentityOp{R, T, N}()
     for s in subs
         nc = scalarcoef(s)
         no = scalararg(s)
@@ -299,7 +297,7 @@ pow_expo(a::Op) = 1
 pow_expo(a::Union{IntPowOp, GenPowOp}) = a.expo
 
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
-    id = MakeIdentity(v[1])
+    id = IdentityOp(v[1])
     if c == 0
         return 0 * id
     end
@@ -355,9 +353,14 @@ end
 # Left(X)*Right(Y)*Left(Z) => Left(X*Z)*Right(Y)
 
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
-    id = MakeIdentity(v[1])
+    id = IdentityOp(v[1])
     if c == 0
         return 0 * id
+    end
+    # the identity is neither a Left nor a Right, and would keep the others from gathering
+    v = filter(x -> !(x isa IdentityOp), v)
+    if isempty(v)
+        return c * id
     end
     larg = map(x -> x.arg, filter(x -> x isa Left, v))
     rarg = map(x -> x.arg, filter(x -> x isa Right, v))
@@ -450,7 +453,7 @@ orderprod(a::Multi_F{R}, b::Multi_F{R}) where R =
         i = max(a.start, b.start)
         j = min(a.stop, b.stop)
         if a.left == b.left && a.right == b.right
-            m = MakeIdentity(a)
+            m = IdentityOp(a)
         else
             m = Multi_F{R}(i, j, a.left ⊻ b.left, a.right ⊻ b.right)
         end
@@ -461,13 +464,9 @@ orderprod(a::Multi_F{R}, b::Multi_F{R}) where R =
         ]
     end
 
-# an identity factor can be dropped from a product whatever site it sits on, but the
-# simplifier only ever built the one on site 1, so it could not recognise the others
-is_identity(a::AtIndex) = a.op isa Identity || (a.op isa Left && a.op.arg isa Identity)
-is_identity(a) = false
 
 function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
-    id = MakeIdentity(v[1])
+    id = IdentityOp(v[1])
     if c == 0
         return 0 * id
     end
@@ -482,7 +481,7 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
             change = false
             nr = IndexedOp{R}[]
             for right in r
-                if is_identity(right)
+                if right isa IdentityOp
                     continue
                 elseif isempty(nr)
                     push!(nr, right)
@@ -495,7 +494,7 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
                     else
                         change = true
                         pop!(nr)
-                        filter!(x -> !is_identity(x), t)
+                        filter!(x -> !(x isa IdentityOp), t)
                         cp *= prod(scalarcoef.(t))
                         append!(nr, scalararg.(t))
                     end
@@ -520,6 +519,6 @@ Multi_F(3, 5) => F(3)F(4)F(5)
 removeMulti(a::SumOp) = SumOp(removeMulti.(a.subs))
 removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))
 removeMulti(a::ScalarOp) = a.coef * removeMulti(a.arg)
-removeMulti(a::AtIndex) = a
+removeMulti(a::Union{AtIndex, IdentityOp}) = a
 removeMulti(a::Multi_F{R}) where R = ProdOp([Multi_F{R}(i, i, a.left, a.right) for i in a.start:a.stop])
 removeMulti(a) = map(removeMulti, a)

@@ -212,31 +212,31 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 ############ Identity ############
 
 """
-    type Identity
+    type IdentityOp{R, T, N}
 
-the type of the Id operator
+the identity, a single value for each kind of operator: pure or on a density matrix, generic
+on `N` sites, or placed. It is what every construction of an identity gives, `Id ⊗ Id`,
+`Left(Id)`, `Right(Id)`, `Gate(Id)` and `Id(3)` included, so that an identity is told by its
+type alone. Placed, it has no site: it is the identity of the whole system, and a tensor of it
+on a given site is laid by the code that needs one, which knows the site.
 """
-struct Identity <: SimpleOp end
+struct IdentityOp{R, T, N} <: Op{R, T, N} end
+
+IdentityOp(::Op{R, T, N}) where {R, T, N} = IdentityOp{R, T, N}()
 
 """
     Id
 
 the identity operator defined for all site types
 """
-const Id = Identity()
+const Id = IdentityOp{Pure, Generic, 1}()
 
-struct MakeIdentity{R, T, N} <: Op{R, T, N}
-    MakeIdentity{Pure, Generic, N}() where N = TensorOp{N}(fill(Id, N))
-    MakeIdentity{Mixed, Generic, N}() where N = Left(TensorOp{N}(fill(Id, N)))
-    MakeIdentity{Pure, Indexed, 1}() = Id(1)
-    MakeIdentity{Mixed, Indexed, 1}() = Left(Id)(1)
-    MakeIdentity(::Op{R, T, N}) where {R, T, N} = MakeIdentity{R, T, N}()
-end
+show(io::IO, ::IdentityOp{Pure, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
+show(io::IO, ::IdentityOp{Mixed, Generic, N}) where N = print(io, "Left(", join(fill("Id", N), "⊗"), ")")
+show(io::IO, ::IdentityOp{Pure, Indexed}) = print(io, "Id")
+show(io::IO, ::IdentityOp{Mixed, Indexed}) = print(io, "Left(Id)")
 
-show(io::IO, ::Identity) =
-    print(io, "Id")
-
-isless(::Identity, ::Identity) = false
+isless(::IdentityOp, ::IdentityOp) = false
 
 
 ################ Sums ##############
@@ -253,7 +253,7 @@ struct SumOp{R, T, N} <: Op{R, T, N}
         # kept, it made `0C + dag(C)` a sum of fermionic and non fermionic operators
         s = filter(x -> scalarcoef(x) ≠ 0, reduce(vcat, sumsubs.(subs); init = Op{R, T, N}[]))
         if isempty(s)
-            return 0 * MakeIdentity{R, T, N}()
+            return 0 * IdentityOp{R, T, N}()
         elseif length(s) == 1
             return s[1]
         else
@@ -310,7 +310,7 @@ struct ScalarOp{R, T, N} <: Op{R, T, N}
     arg::Op{R, T, N}
     ScalarOp(coef::Number, arg::Op{R, T, N}) where {R, T, N} =
         if coef == 0
-            new{R, T, N}(0, MakeIdentity{R, T, N}())
+            new{R, T, N}(0, IdentityOp{R, T, N}())
         elseif coef == 1
             arg
         elseif arg isa SumOp
@@ -354,7 +354,7 @@ struct ProdOp{R, T, N} <: Op{R, T, N}
     function ProdOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
         c = prod(scalarcoef.(subs))
         if isempty(subs)
-            return c * MakeIdentity{R, T, N}()
+            return c * IdentityOp{R, T, N}()
         end
         s = reduce(vcat, prodsubs.(subs))
         if length(s) == 1
@@ -395,6 +395,9 @@ struct TensorOp{N} <: GenericOp{Pure, N}
         else
             c = prod(scalarcoef.(subs))
             s = scalararg.(subs)
+            if all(x -> x isa IdentityOp, s)
+                return c * IdentityOp{Pure, Generic, N}()
+            end
             c * new{N}(s)
         end
 end
@@ -473,7 +476,7 @@ struct Multi_F{R} <: IndexedOp{R}
     right::Bool
     Multi_F{R}(start::Int, stop::Int, left::Bool, right::Bool) where R =
         if start > stop || (R == Mixed && !left && !right)
-            MakeIdentity{R, Indexed, 1}()
+            IdentityOp{R, Indexed, 1}()
         elseif start < stop
             new{R}(start, stop, left, right)
         elseif R == Pure
@@ -532,6 +535,10 @@ struct AtIndex{R, N} <: IndexedOp{R}
         if !allunique(index)
             error("$op acts on $N sites and cannot be placed on $index, which repeats a site")
         end
+        # the identity of the whole system, whatever sites it was placed on
+        if scalararg(op) isa IdentityOp
+            return scalarcoef(op) * IdentityOp{R, Indexed, 1}()
+        end
         return scalarcoef(op) * new{R, N}(scalararg(op), index)
     end
 end
@@ -566,7 +573,8 @@ a generic operator acting as a gate on states in mixed representation. Useful fo
 struct Gate{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
     Gate(arg::GenericOp{Pure, N}) where N =
-        abs2(scalarcoef(arg)) * new{N}(scalararg(arg))
+        abs2(scalarcoef(arg)) *
+        (scalararg(arg) isa IdentityOp ? IdentityOp{Mixed, Generic, N}() : new{N}(scalararg(arg)))
 end
 
 (a::IndexedOp{Mixed} * b::IndexedOp{Pure}) = a * Gate(b)
@@ -574,6 +582,7 @@ end
 
 Gate(a::ProdOp{Pure, Indexed, 1}) = ProdOp(Gate.(a.subs))
 Gate(ind::AtIndex{Pure}) = AtIndex(Gate(ind.op), ind.index)
+Gate(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 # the same hoisting the inner constructor does, for an indexed operator: a gate built
 # from c*A is rho -> (c A) rho (c A)' , that is abs2(c) times the gate built from A
 Gate(a::ScalarOp{Pure, Indexed, 1}) = abs2(a.coef) * Gate(a.arg)
@@ -659,7 +668,8 @@ preserving. They can be evolved with and applied as gates, but they are not obse
 struct Left{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
     Left(arg::GenericOp{Pure, N}) where N =
-        scalarcoef(arg) * new{N}(scalararg(arg))
+        scalarcoef(arg) *
+        (scalararg(arg) isa IdentityOp ? IdentityOp{Mixed, Generic, N}() : new{N}(scalararg(arg)))
 end
 
 show(io::IO, a::Left) =
@@ -685,7 +695,8 @@ See `Left`, of which this is the mirror.
 struct Right{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
     Right(arg::GenericOp{Pure, N}) where N =
-        conj(scalarcoef(arg)) * new{N}(scalararg(arg))
+        conj(scalarcoef(arg)) *
+        (scalararg(arg) isa IdentityOp ? IdentityOp{Mixed, Generic, N}() : new{N}(scalararg(arg)))
 end
 
 show(io::IO, a::Right) =
@@ -728,7 +739,7 @@ isless(a::SetState, b::SetState) = isless(repr(a.state), repr(b.state))
 
 whether an operator is its own inverse, which its integer powers reduce to
 """
-is_involution(::Identity) = true
+is_involution(::IdentityOp) = true
 is_involution(::JW_F) = true
 is_involution(a::Operator) = a.type == involution_op
 is_involution(::Op) = false
@@ -755,12 +766,10 @@ struct IntPowOp{R, N} <: GenericOp{R, N}
     function IntPowOp(arg::GenericOp{R, N}, n::Integer) where {R, N}
         c = scalarcoef(arg)
         a = scalararg(arg)
-        # the identity recognised by what it is and not by its type: on several sites it is
-        # Id ⊗ Id, and on a density matrix Left(Id)
-        if n == 0 || a == MakeIdentity(a)
-            return c^n * MakeIdentity{R, Generic, N}()
+        if n == 0 || a isa IdentityOp
+            return c^n * IdentityOp{R, Generic, N}()
         elseif is_involution(a)
-            return c^n * (iseven(n) ? MakeIdentity{R, Generic, N}() : a)
+            return c^n * (iseven(n) ? IdentityOp{R, Generic, N}() : a)
         elseif n == 1
             return arg
         elseif a isa IntPowOp
@@ -777,7 +786,7 @@ struct GenPowOp{R, N} <: GenericOp{R, N}
         c = scalarcoef(arg)
         a = scalararg(arg)
         m = abs(c)
-        if a == MakeIdentity(a)
+        if a isa IdentityOp
             return complex(c)^p * a
         elseif !iszero(m) && !isone(m)
             # the modulus commutes with everything and leaves the logarithm exactly, the
@@ -799,20 +808,16 @@ power(a::GenericOp, p::Number) = is_natural(p) ? IntPowOp(a, Int(real(p))) : Gen
 
 # a placed operator is its operator on its sites, which takes any power, and an integer power of
 # anything placed is its product; a function of a placed sum or product has nowhere to go
-function (a::AtIndex ^ p::Number)
-    g = power(a.op, p)
-    # the identity has one form once placed, on the first site, whatever site it came from
-    if scalararg(g) == MakeIdentity(scalararg(g))
-        return scalarcoef(g) * MakeIdentity(a)
-    end
-    return g(a.index...)
-end
+(a::AtIndex ^ p::Number) = power(a.op, p)(a.index...)
+
+# the identity to any power, the principal one of 1 being 1
+(a::IdentityOp{R, Indexed} ^ ::Number) where R = a
 
 (a::IndexedOp ^ p::Number) =
     if !is_natural(p)
         error("$a has no power $p once placed: take the power of the operator before placing it")
     elseif iszero(p)
-        MakeIdentity(a)
+        IdentityOp(a)
     else
         prod(fill(a, Int(real(p))))
     end
@@ -1135,7 +1140,7 @@ ranking(a) = error("ranking not defined for ($a)")
 
 isless(a::Op, b::Op) = isless((ranking(a), a), (ranking(b), b))
 
-ranking(::Identity) = 1
+ranking(::IdentityOp) = 1
 ranking(::JW_F) = 2
 ranking(::Operator) = 3
 ranking(::JW) = 4

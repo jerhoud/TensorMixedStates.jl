@@ -97,12 +97,9 @@ function make_ops(s::System, a::ProdOp)
     return (coef, ops)
 end
 
-make_ops(s::System, a::AtIndex) =
-    if is_identity(a)
-        # a factor that contributes no tensor must not leave the gate list untyped:
-        # ITensorMPS.product has no method for a Vector{Any}
-        (1, ITensor[])
-    else
-        (1, [ tensor(s, a) ])
-    end
+make_ops(s::System, a::AtIndex) = (1, [ tensor(s, a) ])
+
+# a factor that contributes no tensor must not leave the gate list untyped: ITensorMPS.product
+# has no method for a Vector{Any}
+make_ops(::System, ::IdentityOp) = (1, ITensor[])
     
