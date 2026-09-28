@@ -23,6 +23,19 @@ end
     @test_ok weak ⊗ System(2, Fermion(conserve = N))
 end
 
+@testset "A product of systems has an index per site" begin
+    # S ⊗ U ⊗ S shares indices with its left part without being the same object, and the right
+    # operand is then renewed as in S ⊗ S: a gate could not find its site otherwise
+    S, U = System(2, Qubit()), System(1, Qubit())
+    for sys in (S ⊗ S ⊗ S, S ⊗ U ⊗ S, S ⊗ (S ⊗ S))
+        @test allunique(sys.pure_indices)
+        @test allunique(sys.mixed_indices)
+        @test expect(apply(X(3), State{Pure}(sys, "Up")), Z(3)) ≈ -1
+    end
+    # disjoint systems keep their indices
+    @test (S ⊗ U).pure_indices == [S.pure_indices; U.pure_indices]
+end
+
 @testset "State building" begin
     @test_pm State{type}(System(1, Qubit()), "Up")
     @test_pm State{type}(3, Qubit(), "Up")

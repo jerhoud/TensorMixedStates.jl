@@ -124,8 +124,11 @@ function (sys1::System ⊗ sys2::System)
               "none, build it from its sites with System instead")
     end
     check_charges([sys1.sites; sys2.sites])
-    if sys2 === sys1
-        sys2 = sim(sys1)
+    # the same site indices on both sides, as in S ⊗ U ⊗ S or two loads of one file, and not
+    # only S ⊗ S: each site of the product needs one of its own
+    if !isdisjoint(sys1.pure_indices, sys2.pure_indices) ||
+       !isdisjoint(sys1.mixed_indices, sys2.mixed_indices)
+        sys2 = sim(sys2)
     end
     return System(
         [sys1.sites ; sys2.sites],

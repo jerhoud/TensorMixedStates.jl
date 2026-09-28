@@ -129,6 +129,11 @@ the reference article.
   which gave a state of trace zero or below one. Resetting a site moves the charge of one side
   of the density matrix alone, and is refused, as other jumps that move the charge are.
 
+- The tensor product of two systems renewed the indices of its right operand only when both
+  were the same object, so that `S ⊗ U ⊗ S`, `(S ⊗ S) ⊗ S` or two loads of one file held
+  one index on several sites, and a gate then failed or never returned. The right operand is
+  renewed whenever it shares an index with the left one.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as
