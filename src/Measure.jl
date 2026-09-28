@@ -466,9 +466,15 @@ files follows the new name, so a column that read `EE(3)` now reads
     MutualInfoRenyi2([positions...])
 
 a state function to measure the Renyi-2 mutual information of the given subsystems.
+A link `k` stands for the sites `1:k` and is named after them, `MutualInfoRenyi2(1:k)`.
 See also `StateFunc` and `mutual_info_renyi2`.
 """
 MutualInfoRenyi2(part) = StateFunc("MutualInfoRenyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
+
+# named after the sites on the left of the link: MutualInfoRenyi2(3) was named as the one site
+# part [3], a different quantity
+MutualInfoRenyi2(link::Int) =
+    StateFunc("MutualInfoRenyi2($(compact_positions(1:link)))", st -> mutual_info_renyi2(st, link))
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
 # expands to a toplevel block and a docstring cannot be attached to one
@@ -588,7 +594,8 @@ the changelog are the notice.
 """
     MemoryUsage
 
-a state function to measure the memory used by the state. See also `StateFunc`.
+a state function to measure the memory the state occupies, the caches filled by the
+measurements already made on it included, so that it depends on them. See also `StateFunc`.
 """
 const MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 

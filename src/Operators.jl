@@ -110,15 +110,30 @@ if a ≠ 1
         print(io, "-")
     elseif isa(a, Complex)
         if imag(a) == 0
-            print(io, real(a))
+            print_coef(io, real(a))
         elseif real(a) == 0
             print_coef(io, imag(a))
             print(io, "im*")
         else
             print(io, "(", a, ")")
         end
+    elseif isa(a, Rational)
+        # (1//2)X and not 1//2X, which reads 1//(2X)
+        print(io, "(", a, ")")
     else
         print(io, a)
+    end
+end
+
+# the operands after the first a precedence higher, * and ⊗ being left associative: X ⊗ (Y*Z)
+# printed X⊗Y*Z, which reads (X⊗Y)*Z
+function infix(io::IO, subs, op::String)
+    p = get(io, :precedence, 0)
+    for (k, s) in enumerate(subs)
+        if k > 1
+            print(io, op)
+        end
+        print(k == 1 ? io : IOContext(io, :precedence => p + 1), s)
     end
 end
 
@@ -321,7 +336,11 @@ struct ScalarOp{R, T, N} <: Op{R, T, N}
         elseif arg isa SumOp
             SumOp(map(x -> coef * x, arg.subs))
         else
-            new{R, T, N}(coef * scalarcoef(arg), scalararg(arg))
+            # a signed zero taken out, -0.0 + 1.0im becoming 0.0 + 1.0im: `==` holds them
+            # equal but `isless` and `hash` do not, and simplify, which sorts the terms before
+            # merging the equal ones, left an interleaved pair unmerged
+            c = coef * scalarcoef(arg)
+            new{R, T, N}(c + zero(c), scalararg(arg))
         end
 end
 
@@ -379,7 +398,7 @@ prodsubs(a::Op) = [a]
 
 show(io::IO, a::ProdOp) =
     paren(io, Base.operator_precedence(:*)) do io
-        join(io, a.subs, "*")
+        infix(io, a.subs, "*")
     end
 
 isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
@@ -428,7 +447,7 @@ tensor(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = tensor(a ⊗
 
 show(io::IO, a::TensorOp) =
     paren(io, Base.operator_precedence(:⊗)) do io
-        join(io, a.subs, "⊗")
+        infix(io, a.subs, "⊗")
     end
 
 isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
@@ -818,7 +837,8 @@ struct GenPowOp{R, N} <: GenericOp{R, N}
             q = mod(real(p), 2)
             return is_natural(q) ? IntPowOp(a, Int(q)) : new{R, N}(a, q)
         end
-        return new{R, N}(arg, p)
+        # a signed zero taken out, as in the coefficient of a ScalarOp
+        return new{R, N}(arg, p + zero(p))
     end
 end
 
@@ -852,8 +872,11 @@ sqrt(a::GenericOp) = a ^ 0.5
 
 show(io::IO, a::Union{IntPowOp, GenPowOp}) =
     paren(io, Base.operator_precedence(:^)) do io
-        # a complex exponent in parentheses, X^(0.0 + 0.5im) and not X^0.0 + 0.5im
-        print(io, a.arg, "^", a.expo isa Complex ? "($(a.expo))" : a.expo)
+        # the base a precedence higher, ^ being right associative: (X^0.5)^0.5 printed
+        # X^0.5^0.5, which reads X^(0.5^0.5). A complex or rational exponent in parentheses,
+        # X^(0.0 + 0.5im) and X^(1//2), not X^0.0 + 0.5im and X^1//2
+        print(IOContext(io, :precedence => Base.operator_precedence(:^) + 1), a.arg)
+        print(io, "^", a.expo isa Union{Complex, Rational} ? "($(a.expo))" : a.expo)
     end
 
 isless(a::IntPowOp, b::IntPowOp) = isless((a.arg, a.expo), (b.arg, b.expo))

@@ -73,6 +73,11 @@ conserving less. Without a target, one level down.
 """
 function weaken(system::System, target::Conserved)
     check_target(symmetries(system), target, "this system")
+    # the identity, as weaken(::State) takes it: rewriting each site in the order of the
+    # target reordered the sites that declare the same quantities in another order
+    if target.names == symmetries(system).names
+        return system
+    end
     return System([ weaken(s, target) for s in system.sites ])
 end
 

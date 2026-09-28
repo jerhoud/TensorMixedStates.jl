@@ -267,8 +267,14 @@ end
     @test m(ghz, MutualInfoRenyi2(2)) ≈ 2L2
     @test m(mix(ghz), MutualInfoRenyi2(2)) ≈ 2L2
     # the deprecated spelling forwards to the new one, label included
-    @test MutualInfoRenyi2(2).name == "MutualInfoRenyi2(2)"
+    @test MutualInfoRenyi2(2).name == "MutualInfoRenyi2(1,2)"
     @test Mutual_Info_Renyi2(2).name == MutualInfoRenyi2(2).name
+    # a link is named after the sites on its left, which it stands for: MutualInfoRenyi2(3)
+    # was named as the one site part [3], so that the two could not be measured together
+    st4 = RandomState{Pure}(System(4, Qubit()), 3)
+    r = Dict(measure(st4, [MutualInfoRenyi2(3), MutualInfoRenyi2([3])]))
+    @test r["MutualInfoRenyi2(1:3)"] ≈ mutual_info_renyi2(st4, [1, 2, 3])
+    @test r["MutualInfoRenyi2(3)"] ≈ mutual_info_renyi2(st4, [3])
     # the spectrum asked for is written whole, the eigenvalues beyond the bond dimension at the
     # cut being zeros, so that the rows of a file keep their width
     v = last(only(measure(State{Pure}(System(3, Qubit()), "Up"), EntanglementEntropy(1, 4))))

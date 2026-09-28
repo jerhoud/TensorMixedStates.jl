@@ -335,7 +335,7 @@ or any value in between
 - `SubRenyi2`: measure the Renyi entropy of order 2 of a subsystem
 - `EntanglementEntropy`: entanglement entropy for pure representation, OSEE for mixed
 - `MaxLinkdim`: the maximum bond dimension of the representation
-- `MemoryUsage`: the memory used to store the representation
+- `MemoryUsage`: the memory the state occupies, including the caches of the measurements already made on it
 
 We can also ask for several measurements at the same time
 

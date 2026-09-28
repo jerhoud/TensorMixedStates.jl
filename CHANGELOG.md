@@ -397,6 +397,25 @@ the reference article.
   involution_op)` squared to `Id`, where its square is zero. `@def_operators` checks the
   operators it declares on the site it is given, and `F` is checked to be an involution.
 
+- A signed zero is taken out of the coefficient of an operator and of a non integer exponent,
+  `-0.0 + 1.0im` becoming `0.0 + 1.0im`. The two are equal to `==` but not to `isless` or
+  `hash`: `simplify`, which sorts the terms before merging the equal ones, could leave two
+  equal terms unmerged when a third sorted between them, as in
+  `exp(c1 * X ⊗ X) - exp(im * X ⊗ X) + exp(c3 * X ⊗ X)` with `c1 = -1 * -1im`, and `measure`
+  computed the expectation value of two such operators twice.
+
+- An operator prints so that it reads back as itself, which matters for the names of the
+  measurements: `X ⊗ (Y*Z)` printed `X⊗Y*Z`, `(X^0.5)^0.5` printed `X^0.5^0.5`, `(1//2)X`
+  printed `1//2X` and `X^(1//2)` printed `X^1//2`.
+
+- `weaken(system, symmetries(system))` is the system itself, as it already was for a state.
+  Sites declaring the same quantities in different orders were rewritten in the order of the
+  target, and the state weakened the same way no longer fitted the system.
+
+- `MutualInfoRenyi2(k)`, the mutual information across the link `k`, is named after the
+  sites it stands for, `MutualInfoRenyi2(1:k)`. It was named `MutualInfoRenyi2(k)`, as the one
+  site part `[k]`, a different quantity, and the two could not be measured together.
+
 ## [1.4.0] - 2026-09-24
 
 This release adds conserved quantities and the exported names that go with them, which is

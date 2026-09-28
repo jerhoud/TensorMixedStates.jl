@@ -686,3 +686,29 @@ end
                                                                           type = selfadjoint_op)
 end
 
+@testset "Signed zeros" begin
+    # -0.0 and 0.0 are equal to `==` but not to `isless` or `hash`: simplify, which sorts the
+    # terms before merging the equal ones, left a pair apart when a third term sorted between
+    # them, and measure computed an expectation value twice
+    c1 = -1 * (0.0 - 1.0im)       # -0.0 + 1.0im
+    c3 = -1 * (0.0 - 2.0im)       # -0.0 + 2.0im
+    f(c) = exp(c * X ⊗ X)(1, 2)
+    @test simplify(f(c1) - f(1.0im) + f(c3)) == simplify(f(c3))
+    a = simplify((-0.5im * X(1)) * (0.5im * Y(2)))
+    b = simplify(0.25 * X(1) * Y(2))
+    @test hash(a) == hash(b)
+    @test length(Set([a, b])) == 1
+    @test isequal(((X + Z)^complex(-0.0, 0.5)).expo, 0.5im)
+end
+
+@testset "Printing reads back as the operator" begin
+    # a name is a column header: it has to denote the operator measured. The right operand of
+    # * and ⊗ and the base of ^ lost their parentheses, and so did rational numbers
+    for op in (X ⊗ (Y * Z), (Y * Z) ⊗ X, (X ⊗ Y) * (Z ⊗ Z), (X^0.5)^0.5, (1//2) * X,
+               X^(1//2), (-1.0 + 0im) * X, 0.5im * X, (X + Z)^0.5, X(1) * Y(2))
+        @test eval(Meta.parse(TensorMixedStates.obs_name(op))) == op
+    end
+    @test TensorMixedStates.obs_name(X ⊗ (Y * Z)) == "X⊗(Y*Z)"
+    @test TensorMixedStates.obs_name((X^0.5)^0.5) == "(X^0.5)^0.5"
+end
+

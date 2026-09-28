@@ -464,6 +464,17 @@ end
     @test_throws "no definite flux" flux(1e-20 * X, Qubit(conserve = N))
 end
 
+@testset "Weakening to the same symmetries" begin
+    # the identity for a state and for its system alike: the system rewrote each site in the
+    # order of the target, and the state it was given no longer fitted it
+    sys = System([Electron(conserve = (Ntot, 2Sz)), Electron(conserve = (2Sz, Ntot))])
+    st = State{Pure}(sys, ["Up", "Dn"])
+    t = symmetries(sys)
+    @test weaken(sys, t) === sys
+    @test weaken(st, t) === st
+    @test_ok State(weaken(sys, t), weaken(st, t))
+end
+
 @testset "Declaring a strong symmetry" begin
     IT = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
