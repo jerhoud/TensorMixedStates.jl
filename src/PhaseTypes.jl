@@ -180,7 +180,7 @@ A phase type for time evolution
 - `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
 - `limits`: a Limits object to set cutoff, maxdim and mindim (see `Limits`)
 - `duration`: the duration of the time evolution
-- `time_step`: the time step
+- `time_step`: the time step, adjusted to the nearest one that divides the duration into a whole number of steps (the phase is skipped when that number is zero)
 - `algo`: the algorithm used (one of `Tdvp()` or `ApproxW(...)`)
 - `evolver`: the hamiltonian (evolver = -im * H) with a possible dissipator (evolver = -im * H + D)
 - `measures`: the measurement to make (default [])

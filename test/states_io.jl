@@ -221,6 +221,15 @@ end
     @test df1 isa DataFrame
     @test sort(names(df1)) == ["Norm", "time"]
     @test size(df1) == (2, 2)
+
+    # a measurement named time or event keeps its column, renamed, beside the time of its rows
+    rows(v) = Dict("events" => [1, 2], "times" => [0.1, 0.2], "data" => v)
+    dfc = data_to_frame(Dict("time" => rows([5., 6.]), "event" => rows([7., 8.]), "Norm" => rows([1., 1.])))
+    @test sort(names(dfc)) == ["Norm", "event_1", "time", "time_1"]
+    @test dfc.time ≈ [0.1, 0.2]
+    @test dfc.time_1 ≈ [5, 6]
+    @test dfc.event_1 ≈ [7, 8]
+    @test sort(names(data_to_frame(Dict("time" => rows([5., 6.]))))) == ["time", "time_1"]
 end
 
 @testset "Output of a complex simulation time" begin

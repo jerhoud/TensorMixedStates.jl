@@ -281,6 +281,11 @@ function check_shared_operator(existing, name::String, type::OpType, site::Abstr
     elseif existing.name ≠ name
         error("cannot declare operator $name for site $(typeof(site)): the name already " *
               "stands for the operator $(existing.name)")
+    elseif !isnothing(existing.expr)
+        # an operator with a definition of its own never reads the library of the sites, so
+        # the declaration would be recorded and never used
+        error("cannot declare operator $name for site $(typeof(site)): the name already " *
+              "stands for an operator with a definition of its own. Choose another one")
     elseif existing.type ≠ type
         error("operator $name is $(existing.type) for a site already in scope and $type " *
               "for site $(typeof(site)): a shared name must agree on the OpType")
@@ -798,12 +803,18 @@ quantity costing two of them.
 """
 function check_charges(sites::Vector{<:AbstractSite})
     kind = Dict{String, Bool}()
-    for site in sites, (name, _, _, st) in decode_conserve(conserved(site))
+    modulus = Dict{String, Int}()
+    for site in sites, (name, m, _, st) in decode_conserve(conserved(site))
         if get(kind, name, st) ≠ st
             error("$name is conserved strongly on one site and weakly on another, so its " *
                   "name would stand for two different charges on the same system")
         end
+        if get(modulus, name, m) ≠ m
+            error("$name is conserved modulo $(modulus[name]) on one site and modulo $m on " *
+                  "another: give the two quantities different names with named")
+        end
         kind[name] = st
+        modulus[name] = m
     end
     for (name, st) in kind
         if st && haskey(kind, name * "*")

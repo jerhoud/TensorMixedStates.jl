@@ -599,3 +599,18 @@ end
     fe = Fermion()
     @test matrix(controlled(C), q, fe) ≈ matrix(Proj(0) ⊗ Id + Proj(1) ⊗ C, q, fe)
 end
+
+@testset "The tensor of a matrix" begin
+    IT = TensorMixedStates.ITensors
+    # one site given for several identical ones is laid on as many indices of that site,
+    # charges included: it was laid on a bare index, which a system that conserves refused
+    q, qn = Qubit(), Qubit(conserve = N)
+    m = matrix(Sp ⊗ Sm, q, q)
+    @test IT.dims(tensor(m, q)) == (4, 4)
+    @test IT.flux(tensor(m, qn)) == IT.QN("N", 0)
+    @test IT.array(IT.dense(tensor(m, qn))) ≈ IT.array(IT.dense(tensor(Sp ⊗ Sm, qn, qn)))
+    @test_throws "no definite charge" tensor(matrix(X, q), qn)
+    # a size matching no number of sites was taken for as many basis states of a new index
+    @test_throws "whose dimension is 4" tensor(rand(3, 3), q)
+    @test_throws "whose dimension is 4" tensor(rand(2, 2), q, q)
+end

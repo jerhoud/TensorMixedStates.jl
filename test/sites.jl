@@ -30,6 +30,10 @@ struct Latecomer <: AbstractSite end
 
 TensorMixedStates.dim(::Latecomer) = 2
 
+# an operator with a definition of its own, whose name a site declaration must not take: the
+# definition is what the operator stands for, and the library of the site was never read
+const Renamed = named(parity(N), "Renamed")
+
 # a site carrying nothing in a field that is not the last one, to check that printing does
 # not drop it: the call would no longer line up with the fields
 struct Middling <: AbstractSite
@@ -203,6 +207,9 @@ end
     @test matrix(Xd, Qudit(2)) ≈ matrix(X, Qubit())
     @test matrix(Hd, Qudit(2)) ≈ matrix(H, Qubit())
     @test matrix(S, Qudit(2)) ≈ matrix(Qubits.S, Qubit())
+    # a qudit of dimension 1 has only the identity, which the shift operator was not
+    @test matrix(Xd, Qudit(1)) == ones(1, 1)
+    @test matrix(Zd, Qudit(1)) == ones(1, 1)
     @test matrix(Sumd(2), Qudit(2), Qudit(2)) ≈ matrix(controlled(X), Qubit(), Qubit())
     # Sum adds the level of the first qudit to the second, modulo d
     st = State{Pure}(System(3, Qudit(3)), ["1", "1", "0"])
@@ -251,6 +258,8 @@ end
     @test_throws "must agree on the OpType" @def_operators(Dummit2(),
         [ plain_op => [ N = [0. 0. ; 0. 1.] ] ])
     @test_throws "operator N is not defined for site Dummit2" matrix(N, Dummit2())
+    @test_throws "definition of its own" @def_operators(Dummit2(),
+        [ plain_op => [ Renamed = [0. 0. ; 0. 1.] ] ])
 end
 
 @testset "Index tags" begin
@@ -289,11 +298,25 @@ end
     for d in (3, 5, 8)
         @test Qudit(d, conserve = Zd).conserve == "Zd%$d:" * join(0:d-1, ",")
     end
+    # on a qubit the eigenvalues ±1 were read as integers, and their sum conserved instead of
+    # a charge modulo 2: Zd is mod(N, d), which carries its modulus
+    @test Qudit(2, conserve = Zd).conserve == "Zd%2:0,1"
+    @test TensorMixedStates.site_charges(Zd, Qudit(2)) == (2, [0, 1])
 
     # what cannot be a charge, and the message says how far it is from being one
     @test_throws "is not diagonal" Spin(1, conserve = Sx)
     @test_throws "2Sz rather than Sz" Spin(1/2, conserve = Sz)
     @test_throws "already carries a charge modulo" Qudit(3, conserve = mod(Zd, 2))
+
+    # the characters the recorded form is read back with, which a name must not hold: a name
+    # ending in %2 came back as a charge modulo 2
+    for name in ("a%2", "a:b", "a;b", "a*", "a!")
+        @test_throws "cannot be told from how a site records" Boson(3, conserve = named(N, name))
+    end
+
+    # one name for two moduli on the same system: the two charges were added as one
+    @test_throws "modulo 2 on one site and modulo 3" System([Qudit(2, conserve = Zd),
+                                                             Qudit(3, conserve = Zd)])
 
     # a conserved quantity is carried by one site. Without this the multi site operator went
     # into matrix, which expanded its definition and complained about an operator of another
@@ -463,7 +486,7 @@ end
     @test length(mixed(Boson(4, conserve = strong(N)))) == 16
 
     # a name ending in ! could not be told from the mark a site puts on a strong symmetry
-    @test_throws "cannot be told from the mark" Fermion(conserve = named(N, "N!"))
+    @test_throws "cannot be told from how a site records" Fermion(conserve = named(N, "N!"))
     # ITensors takes charge names of sixteen characters at most, and the bra of a strong one
     # takes a star, which leaves it fifteen. A longer name is refused here, where it is
     # declared, rather than deep inside ITensors when an index is built

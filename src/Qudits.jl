@@ -55,9 +55,10 @@ dim(a::Qudit) = a.dim
     ],
     plain_op =>
     [
-        Zd = s -> [ i == j ? exp(2im * π * (i - 1) / dim(s)) : 0.0im
-                    for i in 1:dim(s), j in 1:dim(s) ],
-        Xd = s -> [ mod(i - j, dim(s)) == 1 ? 1.0 + 0im : 0.0im
+        # a function of N rather than its matrix, so that as a conserved quantity it carries its
+        # modulus: on a qubit the eigenvalues ±1 were read as integers, and their sum conserved
+        Zd = s -> dim(s) == 1 ? ones(ComplexF64, 1, 1) : mod(N, dim(s)),
+        Xd = s -> [ mod(i - j - 1, dim(s)) == 0 ? 1.0 + 0im : 0.0im
                     for i in 1:dim(s), j in 1:dim(s) ],
         Hd = s -> [ exp(2im * π * (i - 1) * (j - 1) / dim(s)) / √dim(s)
                     for i in 1:dim(s), j in 1:dim(s) ],

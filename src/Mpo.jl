@@ -4,9 +4,18 @@ struct PreMPO{R <: PM}
     system::System
     linkdims::Vector{Int}
     terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
-    function PreMPO{R}(system::System) where R
+    # the number of time functions the terms take, one per element of a time dependent
+    # evolver: it cannot be counted from `terms`, a whole element vanishing on its sites
+    nterms::Int
+    function PreMPO{R}(system::System, nterms::Int = 1) where R
         n = length(system)
-        return new{R}(system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ])
+        return new{R}(system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ], nterms)
+    end
+end
+
+function check_coefs(pre::PreMPO, coefs)
+    if length(coefs) ≠ pre.nterms
+        error("an evolver of $(pre.nterms) terms takes as many time functions, got $(length(coefs))")
     end
 end
 
@@ -101,7 +110,8 @@ function PreMPO(state::State{R}, a) where R
     # on the operator as it was written, so that the message names what the caller wrote
     # and not what `simplify` made of it
     check_indices(state.system, a)
-    return PreMPO!(PreMPO{R}(state.system), removeMulti(simplify(adapt_representation(R, a))))
+    n = a isa Vector ? length(a) : 1
+    return PreMPO!(PreMPO{R}(state.system, n), removeMulti(simplify(adapt_representation(R, a))))
 end
 
 """
@@ -254,6 +264,7 @@ end
 build an mpo representing an operator
 """
 function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
+    check_coefs(pre, coefs)
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -311,6 +322,7 @@ make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
 build MPO representing approximation WI of a given operator and time step
 """
 function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
+    check_coefs(pre, coefs)
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms
@@ -359,6 +371,7 @@ make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), 
 build MPO representing approximation WII of a given operator and time step
 """
 function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
+    check_coefs(pre, coefs)
     sys = pre.system
     ld = pre.linkdims
     tm = pre.terms

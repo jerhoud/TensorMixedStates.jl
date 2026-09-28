@@ -221,17 +221,25 @@ function combine_sites(t::ITensor, is)
 end
 
 function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...)
-    n, _ = size(a)
-    if n ≠ prod(dim, (site, sites...))
-        # the shorthand of one site standing for several identical ones, which names no
-        # system and therefore carries no charge
-        i = Index(n)
-        return ITensor(a, i', dag(i))
+    n = size(a, 1)
+    ss = AbstractSite[site, sites...]
+    # one site standing for as many identical ones as the size of the matrix asks for, laid on
+    # the indices, charges included, the explicit form would have
+    if isempty(sites) && dim(site) > 1 && n ≠ dim(site)
+        ss = fill(site, max(1, round(Int, log(dim(site), n))))
     end
-    ss = [site, sites...]
+    d = prod(dim, ss)
+    if size(a) ≠ (d, d)
+        error("a $(size(a, 1))×$(size(a, 2)) matrix cannot act on $(join(ss, " ⊗ ")), whose " *
+              "dimension is $d")
+    end
     charged = any(s -> !isempty(conserved(s)), ss)
     js = [ site_index(s, charged) for s in ss ]
-    return combine_sites(op_on_sites(a, [ j' for j in js ], [ dag(j) for j in js ]), js)
+    t = lay(a, [ j' for j in js ], [ dag(j) for j in js ])
+    if isnothing(t)
+        no_definite_charge("the matrix", ss)
+    end
+    return combine_sites(t, js)
 end
 
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
@@ -938,9 +946,11 @@ function conserve_string(site::AbstractSite, spec)
         op = spec isa Strong ? spec.arg : spec
         modulus, q = site_charges(op, site)
         name = obs_name(op)
-        if endswith(name, '!')
-            error("cannot conserve $name: a name ending in ! cannot be told from the mark " *
-                  "a site puts on a strong symmetry")
+        # the characters the recorded form and the relabelling of a strong symmetry read: a
+        # name ending in %2 was read back as a charge modulo 2
+        if endswith(name, '!') || endswith(name, '*') || any(in(name), (':', ';', '%'))
+            error("cannot conserve $name: a name holding :, ; or %, or ending in ! or *, " *
+                  "cannot be told from how a site records its charges")
         end
         # ITensors refuses a longer charge name when the index is built, far from here, and
         # the bra of a strong one takes a star (`ITensors.SmallStrings.smallLength`, internal)

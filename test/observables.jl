@@ -60,6 +60,9 @@ end
     @test isfermionic(dag(C))
     @test !isfermionic(dag(C) * C)
     @test !isfermionic(N)
+    # the function of ITensors, extended rather than shadowed: after `using ITensors` the
+    # two exported names clashed and isfermionic was not defined at all
+    @test isfermionic === TensorMixedStates.ITensors.isfermionic
     # expect2 inserts the Jordan-Wigner strings itself: check the whole
     # correlation matrix, at every distance, against an exact computation
     # a deterministic state with non zero correlations at every distance:
@@ -396,6 +399,16 @@ end
     @test last(only(measure(stm, MutualInfoRenyi2(1:3)))) ≈ mutual_info_renyi2(stm, [1, 2, 3])
     # a partial trace needs a density matrix, and says so rather than raising a MethodError
     @test_throws "mixed representation" partial_trace(stp, [1, 2])
+end
+
+@testset "A partial trace keeps the trace" begin
+    # the first site was taken from the left environment of expect, normalised by the trace:
+    # the result had trace 1 whatever the state, and a traceless state gave NaN
+    stm = mix(RandomState{Pure}(System(4, Qubit()), 4))
+    for k in ([1], [2], [4], [1, 3])
+        @test trace(partial_trace(2 * stm, k)) ≈ 2 * trace(stm)
+    end
+    @test abs(trace(partial_trace(stm - stm, [1]))) < 1e-12
 end
 
 @testset "Measurements that were refused" begin

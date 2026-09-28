@@ -89,7 +89,18 @@ end
 
 function run_phase(sim::Simulation, phase::Evolve)
     nsweeps = Int(round(phase.duration / phase.time_step))
-    duration = phase.time_step * nsweeps
+    if nsweeps == 0
+        first_sweep!(sim.checkpoint)
+        log_msg(sim, "Skipping an evolution of $(phase.duration), shorter than half a time step")
+        return sim
+    end
+    # the step is adjusted rather than the duration, so that the phase ends where it was asked
+    # to: a duration of 1 in steps of 0.3 stopped at 0.9
+    duration = phase.duration
+    if !(duration / nsweeps ≈ phase.time_step)
+        log_msg(sim, "Taking a time step of $(duration / nsweeps) rather than $(phase.time_step) " *
+                     "to cover the duration $duration in $nsweeps steps")
+    end
     time_stop = sim.time + duration
     log_msg(sim, "Evolving state from simulation time $(sim.time) to $(time_stop)")
     time_dep = phase.evolver isa Pair

@@ -15,10 +15,14 @@ A product of gates is the operator it denotes, its rightmost factor acting first
     apply(controlled(Z)(1, 3)*H(2)*controlled(X)(3, 4), state)
 
 """
-apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =
+function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
+    # on the operator as it was written, as the pure path does, so that a site out of the
+    # system is named as the caller wrote it and not as a factor of its string
+    check_indices(state.system, a)
     # prepared before the Gate wrapping: Gate distributes over the product removeMulti
     # leaves behind, down to the one site factors it knows how to lift
-    apply(Gate(prepare_gate(a)), state; kwargs...)
+    return apply(Gate(prepare_gate(a)), state; kwargs...)
+end
 
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
     check_indices(state.system, a)

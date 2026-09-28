@@ -894,7 +894,13 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keepers::B
         sp[i] = SysIndex{Pure}(sys, k)
         sm[i] = SysIndex{Mixed}(sys, k)
         if i == 1
-            t[1] = copy(get_left(state, k))
+            # without the 1/trace the left environment of expect carries: a partial trace keeps
+            # the trace of the state, and a traceless state gave NaN
+            x = copy(mps[1])
+            for l in 1:k-1
+                x = x * tensor_trace(state, l) * mps[l+1]
+            end
+            t[1] = x
         else
             for l in j+1:k-1
                 t[i-1] *= get_loc(state, l)

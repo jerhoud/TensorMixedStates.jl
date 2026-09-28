@@ -38,6 +38,15 @@ the reference article.
   it to 0, which undid the `time_start` of `SimData`. A `CreateState` in the middle of a
   simulation keeps the running time.
 
+- An `Evolve` phase covers the duration it is given, its time step being adjusted to the
+  nearest one dividing it into a whole number of steps, which the log reports. The duration
+  was adjusted instead, so that a duration of 1 in steps of 0.3 stopped at 0.9. A duration
+  shorter than half a step is skipped with a message.
+
+- `Zd` on a `Qudit` is defined as `mod(N, d)`, the same matrix, so that as a conserved
+  quantity it carries its modulus: on `Qudit(2)` its eigenvalues ±1 were read as integers,
+  and their sum was conserved instead of a charge modulo 2.
+
 - With periodic checkpoints on, a checkpoint is written after the last phase, so that running
   a completed simulation again does nothing, as the manual says, where it resumed from the
   last checkpoint written during the run and computed its tail again.
@@ -336,6 +345,42 @@ the reference article.
   call to `orthogonalize` moves it. The left environment written for sites already orthogonal
   had its arrows the other way round, which the contraction of charged tensors refused, and a
   second measurement of the same state then met an `UndefRefError`.
+
+- `isfermionic` extends the function of ITensors instead of shadowing it: after `using
+  TensorMixedStates, ITensors` the two exported names clashed and `isfermionic(C)` raised an
+  `UndefVarError`.
+
+- `tensor` of a matrix given one site for several identical ones lays it on as many indices of
+  that site, charges included, and refuses a size that matches no number of sites. It was laid
+  on a bare index, which a charged system refused, and a matrix of the wrong size was accepted.
+  A matrix carrying no definite charge is refused by a message.
+
+- A conserved quantity whose name holds `:`, `;` or `%`, or ends in `*`, is refused, as one
+  ending in `!` was: those are the characters a site records its charges with, and
+  `named(N, "a%2")` came back as a charge modulo 2.
+
+- A system whose sites conserve a quantity of the same name modulo different numbers, as
+  `Qudit(2, conserve = Zd)` beside `Qudit(3, conserve = Zd)`, is refused. The two charges were
+  added as one.
+
+- `@def_operators` refuses a name that already stands for an operator with a definition of
+  its own, `named(parity(N), "P")`, which never reads the library of the sites: the
+  declaration was recorded and never used.
+
+- Applying a fermionic pure operator to a mixed state checks its positions as written:
+  `apply(C(9), ρ)` on four sites named `Gate(F)(5)`, a factor of its string.
+
+- A time dependent evolver is refused unless it is given one time function per term. Too
+  few raised a `BoundsError` on an internal vector, and too many were ignored.
+
+- `partial_trace` keeps the trace of the state. The first site came from the left environment
+  of `expect`, divided by the trace, so the result had trace 1 whatever the state and a
+  traceless one gave NaN.
+
+- `data_to_frame` keeps a measurement named `time` or `event`, renamed `time_1` or `event_1`.
+  `DataFrame` refused it, its name clashing with the column of the rows.
+
+- `Xd` on `Qudit(1)` is the identity. It was zero.
 
 ## [1.4.0] - 2026-09-24
 

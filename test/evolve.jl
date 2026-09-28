@@ -102,6 +102,41 @@ end
     @test expect(st, X(2)) ≈ cos(1.0) atol = 1e-13
 end
 
+@testset "One time function per term" begin
+    # too few raised a BoundsError on an internal vector, and too many were ignored
+    hs = [-im * Z(1), -im * Z(2)]
+    st = State{Pure}(System(2, Qubit()), "X+")
+    @test_throws "takes as many time functions, got 1" tdvp(hs, 0.1, st; coefs = [t -> 1.0])
+    @test_throws "takes as many time functions, got 3" tdvp(hs, 0.1, st;
+        coefs = [t -> 1.0, t -> 1.0, t -> 1.0])
+end
+
+@testset "An evolution ends where it was asked to" begin
+    # the step is adjusted to divide the duration: a duration of 1 in steps of 0.3 stopped at
+    # 0.9, and one shorter than half a step ran no step at all
+    function evolve(duration, time_step)
+        return runTMS(SimData(phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Evolve(; duration, time_step, algo = Tdvp(), evolver = -im * X(1),
+                       measures = Data("m") => Z(1))]);
+            output = devnull)
+    end
+    sim = evolve(1.0, 0.3)
+    @test sim.time ≈ 1.0
+    @test sim.data["m"]["Z(1)"]["times"] ≈ [1/3, 2/3, 1]
+    @test expect(sim.state, Z(1)) ≈ cos(2.0) atol = 1e-12
+    sim = evolve(0.1, 0.3)
+    @test sim.time == 0
+    @test !haskey(sim.data, "m")
+end
+
+@testset "Positions checked before a gate on a mixed state" begin
+    # the operator is checked as it was written, not as the factors its string is prepared
+    # into, which named Gate(F)(5) for C(9)
+    st = mix(State{Pure}(System(4, Fermion()), "Emp"))
+    @test_throws "C(9) acts on site 9, which the system does not have" apply(C(9), st)
+end
+
 @testset "Time dependent terms of several sites" begin
     # the coefficient of a term goes once into the MPO, whatever the number of sites it spans:
     # laid on each of its pieces, a term of k sites took it to the power k, which the one site
