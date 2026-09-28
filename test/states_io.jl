@@ -62,6 +62,18 @@ TensorMixedStates.dim(::Unkindly) = 2
     @test trace(st5) ≈ 1
 end
 
+@testset "Loading a partial trace of a charged system" begin
+    # it keeps charged indices on the sites that conserve nothing, and loading has to rebuild
+    # the pure ones in that mode
+    file = joinpath(mktempdir(), "traced.h5")
+    sq = System([Qubit(), Fermion(conserve = N)])
+    ρ = partial_trace(mix(State{Pure}(sq, ["+", "Occ"])), [1]; keepers = true)
+    save_state(file, "traced", ρ)
+    lt = load_state(file, "traced")
+    @test trace(lt) ≈ 1
+    @test expect(lt, X(1)) ≈ expect(ρ, X(1))
+end
+
 @testset "Saving and loading states" begin
     dir = mktempdir()
     file = joinpath(dir, "states.h5")

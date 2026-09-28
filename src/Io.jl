@@ -210,8 +210,9 @@ function load_state(filename::String, statename::String;
                 idx, [ mixed_index(idx[k], sites[k]) for k in eachindex(sites) ]), st)
         elseif type == "Mixed"
             # the pure indices are rebuilt rather than read, only the mixed ones being in the
-            # file, so they need the mode of the system the sites make up
-            charged = is_charged(sites)
+            # file, so they take the mode of the stored ones: a partial trace of a charged
+            # system keeps charged indices on sites that conserve nothing
+            charged = hasqns(first(idx))
             return State{Mixed}(
                 System(sites, [ site_index(s, charged) for s in sites ], idx), st)
         else

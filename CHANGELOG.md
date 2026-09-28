@@ -122,6 +122,9 @@ the reference article.
 
 - `sample(state, pos)` failed on a system conserving something.
 
+- A mixed state saved from a partial trace of a charged system, which keeps charged indices on
+  the sites that conserve nothing, could not be used once loaded.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as
