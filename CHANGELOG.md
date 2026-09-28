@@ -108,6 +108,18 @@ the reference article.
   `P*(X+Y)(i)`, which also shrinks MPOs of operators that are not fermionic: a sum of
   `Dissipator(C + dag(C))` on four sites went from 40 terms to 13.
 
+- `RandomState{Mixed}` truncated the density matrix it drew to the link dimension asked for,
+  which for one that is not a square cut into a spectrum with no small tail and left a trace
+  off one and negative eigenvalues. Nothing is truncated: its link dimension is the largest
+  square not above the one asked for, `isqrt(linkdims)^2`, which the first truncation of an
+  evolution or of dmrg to that dimension keeps whole. It came back on a system of its own,
+  which `inner` and the fidelities refused against states of the system it was drawn for, and
+  its `states` given once as an amplitude vector failed. `RandomState(state, linkdims)` on a
+  state of one site overwrote the state it was given.
+
+- A local state given by its index for every site, `State{Pure}(system, 1)`, was taken for
+  the amplitudes `[1, …, 1]` of a single site.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

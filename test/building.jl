@@ -36,10 +36,11 @@ end
 @testset "Random states" begin
     sys = System(6, Qubit())
     @test maxlinkdim(RandomState{Pure}(sys, 8)) == 8
-    # the mixed one goes through a purification, whose link dimension it squares, and has
-    # to land on the dimension that was asked for and not on the square below it
+    # the mixed one goes through a purification, whose link dimension it squares, and nothing
+    # is truncated: it lands on the square not above the dimension asked for, a state the
+    # first truncation of an evolution to that dimension keeps whole
     for d in [1, 5, 8, 17, 50]
-        @test maxlinkdim(RandomState{Mixed}(sys, d)) == d
+        @test maxlinkdim(RandomState{Mixed}(sys, d)) == isqrt(d)^2
     end
     # randomizing an existing state must reach the requested link dimension
     # and must leave the state it was given untouched
@@ -52,6 +53,57 @@ end
     @test eltype(RandomState{Pure}(sys, 4).state[1]) == ComplexF64
     @test eltype(RandomState{Pure}(Float64, sys, 4).state[1]) == Float64
     @test eltype(RandomState(Float64, st, 4).state[1]) == Float64
+end
+
+@testset "A random mixed state is a state of its system" begin
+    # traced from its purification with nothing truncated, it has a trace of one and no
+    # negative eigenvalue, where truncating to a dimension that is not a square cut into a
+    # spectrum with no small tail. It lives on the system it was drawn for, which inner and
+    # the fidelities require
+    LA = TensorMixedStates.LinearAlgebra
+    function dense(ρ)
+        n = length(ρ.system)
+        v = Array(prod(ρ.state), reverse(ρ.system.mixed_indices)...)
+        perm = vcat([2k - 1 for k in 1:n], [2k for k in 1:n])
+        return reshape(permutedims(reshape(v, ntuple(_ -> 2, 2n)...), perm), 2^n, 2^n)
+    end
+    sys = System(4, Qubit())
+    for d in [4, 10, 12]
+        ρ = RandomState{Mixed}(sys, d)
+        @test ρ.system === sys
+        m = dense(ρ)
+        @test LA.tr(m) ≈ 1
+        @test minimum(LA.eigvals(LA.Hermitian((m + m') / 2))) > -1e-12
+        @test_ok fidelity(ρ, State{Pure}(sys, "Up"))
+    end
+    sq = System(4, Fermion(conserve = N))
+    conf = ["Occ", "Emp", "Occ", "Emp"]
+    ρq = RandomState{Mixed}(sq, conf, 4)
+    @test ρq.system === sq
+    @test_ok fidelity(ρq, State{Pure}(sq, conf))
+    # the local state of the purification may be given once, as an amplitude vector or by its
+    # index, as for State
+    @test trace(RandomState{Mixed}(System(3, Qubit()), [1., 0.], 4)) ≈ 1
+    @test trace(RandomState{Mixed}(System(3, Qubit()), 1, 4)) ≈ 1
+
+    # randomizing a state of one site leaves the one it was given alone: its tensor was
+    # written in place when the element type already matched, and its cache went stale
+    for (elt, s) in [(Float64, State{Pure}(System(1, Qubit()), "Up")),
+                     (ComplexF64, RandomState{Pure}(System(1, Qubit()), 1))]
+        t = copy(s.state[1])
+        z = expect(s, Z(1))
+        RandomState(elt, s, 2)
+        @test norm(s.state[1] - t) < 1e-14
+        @test expect(s, Z(1)) ≈ z
+    end
+end
+
+@testset "A local state given by its index" begin
+    # repeated on every site, it is that basis state: fill(1, n) is a Vector{Int}, which was
+    # taken for the amplitudes of a single site
+    sys = System(3, Qubit())
+    @test norm(State{Pure}(sys, 1) - State{Pure}(sys, [0., 1.])) < 1e-12
+    @test norm(State{Mixed}(sys, 1) - State{Mixed}(sys, [0., 1.])) < 1e-12
 end
 
 @testset "Limits" begin

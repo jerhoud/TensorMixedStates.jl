@@ -11,8 +11,8 @@ Return a random state, with the specified link dimension.
 If a State is given, randomize the given state.
 
 A mixed one is built as a purification on twice the system, whose mixed representation
-squares the link dimension, so the pure state it starts from is built one size up and the
-result truncated back to what was asked for.
+squares the link dimension: its link dimension is the largest square not above the one asked
+for, `isqrt(linkdims)^2`, 9 for 10.
 
 `eltype` is the element type of the tensors and defaults to `ComplexF64`.
 Passing `Float64` gives a real state, which makes every later contraction
@@ -40,13 +40,17 @@ function RandomState{Pure}(elt::Type{<:Number}, system::System, linkdims::Int)
 end
 
 # the purification lives on twice the system, whose mixed representation squares the link
-# dimension, so the pure state it starts from is drawn one size up and the result truncated
-# back to what was asked for. Rounding up rather than down: `floor` would land on the square
-# below, so asking for 50 gave 49 and asking for 10 gave 9
-function purify(elt::Type{<:Number}, start::State{Pure}, n::Int, linkdims::Int)
-    super_rand = mix(RandomState(elt, start, ceil(Int, sqrt(linkdims))))
-    return truncate(partial_trace(super_rand, collect(1:n); keepers = true);
-                    limits = Limits(maxdim = linkdims))
+# dimension, so the pure state it starts from is drawn at the square root of what was asked,
+# rounded down, and nothing is truncated. Truncating the density matrix to a size in between
+# cut into a spectrum with no small tail, which left a trace off one and negative eigenvalues,
+# and a state a little below the size asked for is what the first step of an evolution or of
+# dmrg, truncating to that size, keeps whole, where one above it gets truncated at once.
+# The traced state is put back on `system`: the first half of `system ⊗ system` keeps its
+# indices, and those are what the partial trace leaves
+function purify(elt::Type{<:Number}, start::State{Pure}, system::System, linkdims::Int)
+    super_rand = mix(RandomState(elt, start, isqrt(linkdims)))
+    ρ = partial_trace(super_rand, collect(1:length(system)); keepers = true)
+    return State{Mixed}(system, ρ.state)
 end
 
 function RandomState{Mixed}(elt::Type{<:Number}, system::System, linkdims::Int)
@@ -55,9 +59,8 @@ function RandomState{Mixed}(elt::Type{<:Number}, system::System, linkdims::Int)
               "without a sector to start from: name the states its purification starts " *
               "from, with RandomState{Mixed}(system, states, linkdims)")
     end
-    n = length(system)
     super = system ⊗ system
-    return purify(elt, RandomState{Pure}(elt, super, ceil(Int, sqrt(linkdims))), n, linkdims)
+    return purify(elt, RandomState{Pure}(elt, super, isqrt(linkdims)), system, linkdims)
 end
 
 """
@@ -66,7 +69,10 @@ end
 the local states of a purification, the same on each half of the doubled system
 """
 double(states::Vector, ::Int) = [ states ; states ]
-double(states, n::Int) = fill(states, 2n)
+# one local state for every site, in a list of type Any as `State` builds it, so that an index or
+# an amplitude vector repeated is not itself taken for the amplitudes of a single site
+double(states, n::Int) = Any[ states for _ in 1:2n ]
+double(states::Vector{<:Number}, n::Int) = Any[ states for _ in 1:2n ]
 
 function RandomState{Mixed}(elt::Type{<:Number}, system::System, states, linkdims::Int)
     if !isempty(strong_names(system))
@@ -76,7 +82,7 @@ function RandomState{Mixed}(elt::Type{<:Number}, system::System, states, linkdim
     end
     n = length(system)
     super = system ⊗ system
-    return purify(elt, State{Pure}(super, double(states, n)), n, linkdims)
+    return purify(elt, State{Pure}(super, double(states, n)), system, linkdims)
 end
 
 RandomState{Mixed}(system::System, states, linkdims::Int) =
@@ -100,7 +106,9 @@ RandomState{R}(sites::Vector{<:AbstractSite}, linkdims::Int) where R =
 function RandomState(elt::Type{<:Number}, state::State{Pure}, linkdims::Int)
     st = copy(state.state)
     for i in eachindex(st)
-        st[i] = ITensors.convert_eltype(elt, st[i])
+        # a tensor of its own: convert_eltype hands back the same one when the type already
+        # matches, and randomizeMPS! writes into a single site in place
+        st[i] = ITensors.convert_eltype(elt, copy(st[i]))
     end
     ITensorMPS.randomizeMPS!(elt, st, state.system.pure_indices, linkdims)
     return State{Pure}(state.system, st)

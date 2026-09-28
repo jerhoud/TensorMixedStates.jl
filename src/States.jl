@@ -224,11 +224,13 @@ function State{R}(system::System, states::Vector) where R
     return State{R}(system, make_state(R(), system, states))
 end
 
+# the local state repeated on every site, in a list of type Any: `fill(3, n)` is a Vector{Int},
+# which the method below took for the amplitudes of a single site
 State{R}(system::System, state) where R =
-    State{R}(system, fill(state, length(system)))
+    State{R}(system, Any[ state for _ in 1:length(system) ])
 
 State{R}(system::System, state::Union{Vector{<:Number}, Matrix}) where R =
-    State{R}(system, fill(state, length(system)))
+    State{R}(system, Any[ state for _ in 1:length(system) ])
 
 State(state::State{R}, st::MPS) where R =
     State{R}(state.system, st)
