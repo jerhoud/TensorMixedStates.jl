@@ -39,8 +39,11 @@ end
 
 log the given message on the "log" file of the simulation
 """
-# written here rather than through `output`, where `dest => "text"` is a measurement
-log_msg(sim::Simulation, text) = emit_line!(destination(sim.outputs, "log"), text)
+function log_msg(sim::Simulation, text)
+    # written here rather than through `output`, where `dest => "text"` is a measurement. A
+    # comment between a docstring and what it documents detaches it, so this one is inside
+    emit_line!(destination(sim.outputs, "log"), text)
+end
 
 """
     SimLogger(sim, parent)
