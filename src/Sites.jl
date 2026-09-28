@@ -366,8 +366,21 @@ macro create_site_module(name, symbols)
     return esc(Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), __source__, doc, mod))
 end
 
-state(::AbstractSite, a::Union{Vector, Matrix}) = a
-state(site::AbstractSite, a::Function) = a(site)
+# a state is written in the basis of its site, whose dimension it has to have: a wrong size
+# failed on a `DimensionMismatch` from `reshape`, which named neither the state nor the site
+function state(site::AbstractSite, a::Union{Vector, Matrix})
+    d = dim(site)
+    if a isa Vector && length(a) ≠ d
+        error("a state of $(length(a)) components cannot be one of $site, whose dimension is $d")
+    elseif a isa Matrix && size(a) ≠ (d, d)
+        error("a $(size(a, 1))×$(size(a, 2)) density matrix cannot be one of $site, whose " *
+              "dimension is $d")
+    end
+    return a
+end
+
+# through the checks above, whatever the function gives
+state(site::AbstractSite, a::Function) = state(site, a(site))
 function state(site::AbstractSite, a::Int)
     if a < 0 || a >= dim(site)
         error("invalid state number")
@@ -537,6 +550,42 @@ charged_itensor(a::AbstractArray, inds) =
     else
         ITensor(a, inds...)
     end
+
+# the charge each value of an index brings to the flux of a tensor, the charge of its block,
+# taken negatively on an incoming index
+index_charges(i::Index) =
+    reduce(vcat, [ fill(dir(i) == ITensors.In ? -q : q, n) for (q, n) in space(i) ]; init = QN[])
+
+"""
+    has_definite_flux(a, inds)
+
+whether the array `a`, laid on the indices `inds`, carries a definite charge: every element
+above rounding, the rule `charged_itensor` builds the tensor with, connects states whose
+charges differ by the same amount. It is the question ITensors answers with `Fluxes not all
+equal` when the tensor is built, asked beforehand, so that a refusal names what it refuses and
+no error of ITensors has to be caught and taken for this one. An array on plain indices has
+one, there being no charge to carry.
+"""
+function has_definite_flux(a::AbstractArray, inds)
+    if !any(hasqns, inds)
+        return true
+    end
+    charges = map(index_charges, inds)
+    small = rounding_tol * norm(a)
+    found = nothing
+    for c in CartesianIndices(a)
+        if abs(a[c]) ≤ small
+            continue
+        end
+        q = sum(charges[k][c[k]] for k in eachindex(charges))
+        if isnothing(found)
+            found = q
+        elseif q ≠ found
+            return false
+        end
+    end
+    return true
+end
 
 struct Strong
     arg::SimpleOp
@@ -884,38 +933,34 @@ given back as it is, `show` having to print something whatever a site put in its
 function conserve_names(s::AbstractString)
     try
         return sprint(show, Conserved([ (q[1], q[4]) for q in decode_conserve(s) ]))
-    catch
+    catch e
+        # what `decode_conserve` raises on a string it cannot read, and nothing else
+        if !(e isa Union{ErrorException, ArgumentError})
+            rethrow()
+        end
         return String(s)
     end
 end
 
 """
-    charged_state(f, i::Index, what, site)
+    charged_state(a, inds, what, site)
 
-the tensor `f` builds for the local state `what` on the site index `i`, refused by a message
-naming the state and its site when the charges of the site cannot carry it.
+the tensor of the array `a` of the local state `what`, laid on the indices `inds` of its site,
+refused by a message naming the state and its site when the charges of the site cannot carry
+it.
 
 A state of a charged site belongs to one sector: `"Up"` and `"Dn"` do, `"+"` does not, being
 their sum, and no amount of bookkeeping gives a superposition of two charges a charge of its
 own. ITensors says `Fluxes not all equal` from a place where neither the state nor the site
-is in sight, so it is said here instead. The tensor comes from a function rather than being
-passed in because a state vector, a density matrix and the target of a `SetState` are laid
-on their indices in three different ways, and one message covers them all.
+is in sight, so the question is asked here instead, see `has_definite_flux`.
 """
-function charged_state(f, i::Index, what, site::AbstractSite)
-    if !hasqns(i)
-        return f()
-    end
-    try
-        return f()
-    catch e
-        if !(e isa ErrorException)
-            rethrow()
-        end
+function charged_state(a::AbstractArray, inds, what, site::AbstractSite)
+    if !has_definite_flux(a, inds)
         error("the state $(repr(what)) of site $(typeof(site)) spreads over several charges " *
               "of $(conserve_names(conserved(site))), so it has none of its own and cannot " *
               "be used where that is conserved")
     end
+    return charged_itensor(a, inds)
 end
 
 """

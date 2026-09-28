@@ -156,7 +156,7 @@ make_one_state(type::R, system::System, i::Int, st) where {R <: PM} =
                    state(system[i], st), st, system[i])
 
 make_one_state(::Pure, i::Index, ::Index, v::Vector, what, site::AbstractSite) =
-    charged_state(() -> charged_itensor(v, [i]), i, what, site)
+    charged_state(v, [i], what, site)
 make_one_state(::Pure, ::Index, ::Index, ::Matrix, _, _) =
     error("cannot use a mixed local state to create a pure local state")
 make_one_state(::Mixed, i::Index, k::Index, v::Vector, what, site::AbstractSite) =
@@ -166,7 +166,7 @@ make_one_state(::Mixed, i::Index, k::Index, v::Vector, what, site::AbstractSite)
 # so the flat order of the mixed basis is not the order of the matrix
 function make_one_state(::Mixed, i::Index, k::Index, m::Matrix, what, site::AbstractSite)
     b, c = mixer(i, k, site)
-    return charged_state(() -> op_on_sites(m, [i], [dag(b')]), i, what, site) * c
+    return charged_state(on_legs(m, [i], [dag(b')])..., what, site) * c
 end
 
 """

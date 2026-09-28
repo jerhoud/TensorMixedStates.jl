@@ -268,6 +268,14 @@ end
     # a site type declared outside the package goes through the same library
     @test_throws "state Zorglub is not defined for site Dummit" State{Pure}(
         System(2, Dummit()), "Zorglub")
+    # a state of the wrong size is refused by a message naming the site, where `reshape`
+    # raised a DimensionMismatch naming neither the state nor the site
+    @test_throws "a state of 3 components cannot be one of Qubit()" State{Pure}(
+        System(2, Qubit()), [1., 0., 0.])
+    @test_throws "a 3×3 density matrix cannot be one of Qubit()" State{Mixed}(
+        System(2, Qubit()), [1. 0. 0. ; 0. 0. 0. ; 0. 0. 0.])
+    @test_throws "a state of 3 components" apply(SetState([1., 0., 0.])(1),
+                                                 State{Mixed}(System(2, Qubit()), "Up"))
 end
 
 @testset "A state a site declares is the one used" begin
@@ -418,6 +426,15 @@ end
 end
 
 @testset "Charged indices" begin
+    # a definite charge is computed, rather than read from an error of ITensors which any other
+    # error it raised would have passed for
+    hf = TensorMixedStates.has_definite_flux
+    i = TensorMixedStates.site_index(Qubit(conserve = N), true)
+    @test hf([1., 0.], [i])
+    @test hf([0., 1.], [i])
+    @test !hf([1., 1.] / √2, [i])
+    @test hf([1e-15, 1.], [i])                  # rounding carries no charge
+    @test hf([1., 1.], [Index(2)])              # nor does a plain index
     IT = TensorMixedStates.ITensors
     sec(i) = IT.space(i)
     pure(sys, k) = TensorMixedStates.SysIndex{Pure}(sys, k)

@@ -816,6 +816,13 @@ function svd_terms(y::AbstractArray, charges, q, tol, make)
     return terms
 end
 
+# the array of a matrix of the combined space of several sites, shaped for their indices one by
+# one, and those indices, in the order `op_on_sites` lays it in
+function on_legs(m::Matrix, outs, ins)
+    idx = [ reverse(outs) ; reverse(ins) ]
+    return (reshape(m, ntuple(k -> dim(idx[k]), length(idx))), idx)
+end
+
 """
     op_on_sites(m, outs, ins)
 
@@ -825,10 +832,7 @@ The shape of the array is read off the indices themselves rather than from the d
 the sites, which is the only way the two cannot disagree, and the order is the reversed one
 the package uses everywhere it combines sites.
 """
-function op_on_sites(m::Matrix, outs, ins)
-    idx = [ reverse(outs) ; reverse(ins) ]
-    return charged_itensor(reshape(m, ntuple(k -> dim(idx[k]), length(idx))), idx)
-end
+op_on_sites(m::Matrix, outs, ins) = charged_itensor(on_legs(m, outs, ins)...)
 
 """
     legs(a, sites, js)
@@ -915,17 +919,11 @@ end
 the matrix `m` laid on the given legs, or `nothing` when their charges cannot carry it, and
 the refusal of the operator it came from. ITensors refuses such a matrix with `Fluxes not
 all equal`, from a place where neither the operator nor its sites are in sight, so the
-question is asked here and the answer given in terms of the operator.
+question is asked here, see `has_definite_flux`, and the answer given in terms of the operator.
 """
 function lay(m::Matrix, outs, ins)
-    try
-        return op_on_sites(m, outs, ins)
-    catch e
-        if !(e isa ErrorException)
-            rethrow()
-        end
-        return nothing
-    end
+    a, idx = on_legs(m, outs, ins)
+    return has_definite_flux(a, idx) ? charged_itensor(a, idx) : nothing
 end
 
 no_definite_charge(a, sites) =

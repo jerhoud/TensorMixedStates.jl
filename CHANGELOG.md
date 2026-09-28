@@ -498,6 +498,14 @@ the reference article.
   declares and its generic forms. An interrupt while a state is looked for goes on to where
   the simulation stops, instead of turning into `state … is not defined`.
 
+- A local state of the wrong size, given to `CreateState`, `SetState` or `Proj`, is refused by
+  a message naming the site, instead of a `DimensionMismatch` from `reshape` naming neither
+  the state nor the site.
+
+- Whether an operator or a local state carries a definite charge is computed before its tensor
+  is built, rather than read from the error ITensors raises: any other error ITensors raised at
+  that point was reported as a missing charge.
+
 ## [1.4.0] - 2026-09-24
 
 This release adds conserved quantities and the exported names that go with them, which is
