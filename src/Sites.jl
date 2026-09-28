@@ -298,6 +298,10 @@ first time that name is seen: a name already in scope is registered for the new 
 checked against what it already stands for, not bound again. Declaring an operator whose name is already used for something else, or declared
 with another `OpType`, is an error rather than a silent redefinition.
 
+An operator that is neither fermionic nor self adjoint is declared `plain_op`. On a fermionic
+site it has to commute with `F`, being placed with no Jordan-Wigner string: an operator that
+moves a fermion is `fermionic_op`.
+
 # Examples
 
     @def_operators(Fermion(),
@@ -309,10 +313,6 @@ with another `OpType`, is an error rather than a silent redefinition.
         selfadjoint_op =>
         [
             N = dag(C) * C,
-        ],
-        plain_op =>
-        [
-            A = C,
         ],
         involution_op =>
         [

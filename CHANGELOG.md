@@ -143,6 +143,10 @@ the reference article.
   `@def_operators` and conserved, was conserved as an integer charge: the modulus was read
   only from an operator holding its definition, and not from the library of the site.
 
+- The example of `@def_operators` declared `A = C` as a `plain_op`, which is placed without a
+  Jordan-Wigner string and gives wrong signs. It is the definition of `Fermion`, and the
+  docstring says that a `plain_op` must commute with `F` on a fermionic site.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as
