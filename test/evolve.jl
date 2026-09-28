@@ -231,6 +231,12 @@ end
     for a in [(dag(C) ⊗ Id ⊗ C)(1, 2, 3), (C ⊗ dag(C))(3, 4)]
         @test norm(apply(a, st) - apply(make_mpo(st, a), st)) < 1e-12
     end
+    # the terms of an odd sum of one site share their string, so that it is a single product
+    # and can be applied, however it is written and wherever it sits
+    for a in [(C + dag(C))(3), C(3) + dag(C)(3), (2C + im * dag(C))(4), C(3) * (C + dag(C))(2)]
+        @test norm(apply(a, st) - apply(make_mpo(st, a), st)) < 1e-12
+    end
+    @test norm(apply(Gate(C + dag(C))(3), ρ) - apply(make_mpo(ρ, Gate(C + dag(C))(3)), ρ)) < 1e-12
     # what has no gate to become is refused: a dissipator of a fermionic operator turns into
     # a sum, and a function of one on several sites has no room for a string
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)

@@ -483,3 +483,22 @@ end
     @test expect(st, e(1, 2)) ≈ exp(-0.3)
     @test expect(st, e(1, 3)) ≈ exp(-0.3)
 end
+
+@testset "Products differing by their last factor are gathered" begin
+    # P*X(i) + P*Y(i) is P*(X+Y)(i): the terms of an odd sum of one site share their
+    # Jordan-Wigner string, and the MPO carries each product once. The metric is the number
+    # of terms, measured on sums written both ways, and the operator must not change
+    fe = Fermion()
+    st = RandomState{Pure}(System(5, fe), 2)
+    terms(s, a) = sum(length.(PreMPO(s, a).terms))
+    @test terms(st, sum((C + dag(C))(i) for i in 1:5)) == 15
+    @test terms(st, sum(C(i) + dag(C)(i) for i in 1:5)) == 15
+    @test maxlinkdim(make_mpo(st, sum((C + dag(C))(i) for i in 1:5))) == 6
+    ρ = mix(RandomState{Pure}(System(4, fe), 2))
+    @test terms(ρ, sum(Dissipator(C + dag(C))(i) for i in 1:4)) == 13
+    q = RandomState{Pure}(System(3, Qubit()), 2)
+    a = X(1) * Z(2) + X(1) * Y(2)
+    @test terms(q, a) == 2
+    @test norm(apply(make_mpo(q, a), q) - apply(make_mpo(q, X(1) * Z(2)), q) -
+               apply(make_mpo(q, X(1) * Y(2)), q)) < 1e-12
+end

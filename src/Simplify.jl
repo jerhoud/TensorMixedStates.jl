@@ -275,8 +275,16 @@ simplify_r(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
 # flatten out inner sums, order terms, collect identical terms and remove nuls
 # X + (Y + Z) => X + Y + Z, X + Y + X => 2X + Y, X - X => 0
 # in Indexed sums gather terms with same indices : X(1) + Y(1) => (X+Y)(1)
+# and products that differ only by their last factor, on one site: P*X(2) + P*Y(2) => P*(X+Y)(2).
+# The Jordan-Wigner string of an odd term being a factor of its own, the terms of an odd sum of
+# one site share it: kept apart, they were a sum a gate refuses and an MPO carries one by one
 
 simplify_sum(v::Vector) = simplify_core_sum(reduce(vcat, sumsubs.(v)))
+
+same_but_last(a, b) =
+    a isa ProdOp && b isa ProdOp && length(a.subs) == length(b.subs) &&
+    a.subs[end] isa AtIndex && b.subs[end] isa AtIndex &&
+    a.subs[end].index == b.subs[end].index && a.subs[1:end-1] == b.subs[1:end-1]
 
 function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
     subs = sort(v; by=scalararg)
@@ -293,6 +301,14 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
             o = no
         elseif T == Indexed && o isa AtIndex && no isa AtIndex && o.index == no.index
             o = reindex(simplify_sum([c * o.op, nc * no.op]), o.index...)
+            c = 1
+            if o isa ScalarOp
+                c = o.coef
+                o = o.arg
+            end
+        elseif T == Indexed && same_but_last(o, no)
+            l, nl = o.subs[end], no.subs[end]
+            o = simplify_prod([o.subs[1:end-1]..., reindex(simplify_sum([c * l.op, nc * nl.op]), l.index...)])
             c = 1
             if o isa ScalarOp
                 c = o.coef

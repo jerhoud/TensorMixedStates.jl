@@ -101,6 +101,13 @@ the reference article.
   as if the state had a definite parity. It no longer is; a projector on a state given by
   its name or its index is still taken to be even.
 
+- The terms of an odd sum of one site placed after other sites, `(C + dag(C))(3)` or
+  `C(3) + dag(C)(3)`, each took the Jordan-Wigner string on its own, so that `apply` refused
+  it as a sum, which it accepted on site 1, and an MPO carried every term apart. Products
+  that differ only by their last factor, on one site, are gathered, `P*X(i) + P*Y(i)` into
+  `P*(X+Y)(i)`, which also shrinks MPOs of operators that are not fermionic: a sum of
+  `Dissipator(C + dag(C))` on four sites went from 40 terms to 13.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as
