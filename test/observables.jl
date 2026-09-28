@@ -282,9 +282,9 @@ end
     # l[1] and riding along the recursion. The shortcut taken when the mps is already left
     # orthogonal writes the environment from scratch and has to carry it too. Two non
     # unitary gates produce both conditions at once: a norm that is not one, and an
-    # orthogonality centre pushed to the right.
+    # orthogonality centre pushed to the right, Sp(1) acting first and Sp(3) after it.
     sys = System(6, Qubit())
-    st = apply(Sp(1) * Sp(3), State{Pure}(sys, "+"))
+    st = apply(Sp(3) * Sp(1), State{Pure}(sys, "+"))
     # the test only means anything while the shortcut is actually taken, and that depends
     # on where ITensor leaves the orthogonality centre, so it is asserted rather than hoped
     @test TensorMixedStates.ITensorMPS.leftlim(st.state) ≥ 1

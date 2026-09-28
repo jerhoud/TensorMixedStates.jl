@@ -188,6 +188,19 @@ end
     end
 end
 
+@testset "A product of gates is the operator it denotes" begin
+    # its rightmost factor acts first, as in make_mpo and expect: ITensorMPS applies a list of
+    # tensors first to last, which is the product read backwards. On a density matrix a gate
+    # g acts as g ρ g†, what mixing the pure result gives
+    q = State{Pure}(System(2, Qubit()), ["Up", "X+"])
+    qf = State{Pure}(System([Qubit(), Fermion()]), ["X+", "Emp"])
+    for (st, g) in [(q, Swap(1, 2) * X(1)), (q, X(1) * Swap(1, 2)), (q, Sp(2) * Sm(2)),
+                    (qf, Sp(1) * Sm(1) * dag(C)(2)), (qf, dag(C)(2) * Sm(1) * Sp(1))]
+        @test norm(apply(g, st) - apply(make_mpo(st, g), st)) < 1e-12
+        @test norm(apply(g, mix(st)) - mix(apply(g, st))) < 1e-12
+    end
+end
+
 @testset "Fermionic gates" begin
     # apply places one local tensor per factor and has no way to build a Jordan-Wigner
     # string, so an operator that still needs one is simplified first, which is what

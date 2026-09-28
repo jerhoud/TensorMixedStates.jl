@@ -70,6 +70,11 @@ the reference article.
   `make_approx_W1` and `make_approx_W2`: an evolution with a time dependent term of several
   sites was silently wrong. The coefficient goes on the last site of the term alone.
 
+- `apply` applied a product of gates in the order it is written, so that `apply(A*B, state)`
+  computed `B*A`, unlike `make_mpo` and `expect`, and the order changed as soon as a
+  fermionic factor was present. A product is now the operator it denotes, its rightmost
+  factor acting first: a script that wrote a circuit from left to right must reverse it.
+
 - Complex measurements lost their imaginary part when written by `output`, which kept the
   real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
   as two columns, the expectation value of an operator that is not self adjoint such as

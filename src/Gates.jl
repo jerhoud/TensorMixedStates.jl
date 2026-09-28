@@ -7,6 +7,7 @@ export apply
 
 Apply the given gates to the state and truncate the result according to limits.
 It is much more efficient to apply all the gates in a single call to apply.
+A product of gates is the operator it denotes, its rightmost factor acting first.
 
 # Examples
     apply(controlled(Z)(1, 3)*H(2)*controlled(X)(3, 4), state)
@@ -20,7 +21,9 @@ apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...) =
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
     check_indices(state.system, a)
     coef, ops = make_ops(state.system, prepare_gate(a))
-    st = apply(ops, state.state; move_sites_back_between_gates=false,
+    # ITensorMPS applies a list of gates first to last, and the factors of a product act
+    # right to left: A*B is B applied first
+    st = apply(reverse(ops), state.state; move_sites_back_between_gates=false,
             limits.cutoff, limits.maxdim, limits.mindim)
     # the coefficient is carried here rather than laid on the first tensor, because a gate
     # whose factors are all identities places no tensor at all and there would be nothing
