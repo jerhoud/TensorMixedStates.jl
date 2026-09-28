@@ -763,7 +763,7 @@ modulus comes out, which the logarithm takes apart exactly, the phase staying in
 struct IntPowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
     expo::Int
-    function IntPowOp(arg::GenericOp{R, N}, n::Integer) where {R, N}
+    function IntPowOp(arg::GenericOp{R, N}, n::Int) where {R, N}
         c = scalarcoef(arg)
         a = scalararg(arg)
         if n == 0 || a isa IdentityOp
@@ -931,7 +931,7 @@ different conservations. That is why it is carried here rather than rediscovered
     mod(N, 3)                       # a Z3 charge
     Boson(6, conserve = mod(N, 3))
 """
-mod(a::GenericOp{Pure}, m::Integer) = ModOp(a, Int(m))
+mod(a::GenericOp{Pure}, m::Int) = ModOp(a, m)
 
 """
     parity(op)

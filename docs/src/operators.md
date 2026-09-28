@@ -91,7 +91,7 @@ Right
 Evolver
 named
 parity
-mod(::GenericOp{Pure}, ::Integer)
+mod(::GenericOp{Pure}, ::Int)
 dag(::GenericOp{Pure})
 isfermionic
 has_fermionic
