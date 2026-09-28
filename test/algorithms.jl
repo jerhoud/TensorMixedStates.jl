@@ -168,10 +168,13 @@ end
             system = System(5, Qubit()),
             randomize = 10,
         ),
+        # from a random start dmrg is left about 1e-6 away after 20 sweeps, but a start in a
+        # few percent of the draws leaves it at 1e-2, the tolerance below: 40 sweeps take
+        # the typical error to 1e-10, and those starts well within it
         SteadyState(
             lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
             limits = Limits(maxdim = 10, cutoff = 1e-10),
-            nsweeps = 20,
+            nsweeps = 40,
             final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-2)
         )
     ])
