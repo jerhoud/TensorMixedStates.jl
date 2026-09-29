@@ -599,6 +599,14 @@ end
     iv = @test_logs (:warn, r"large real part: time 0.0, X\(1\)") only(
         measure(ph, ImaginaryValue(X(1))))
     @test first(iv) == "Im(X(1))"
+    # a declaration holds for each element of any array, as a measurement without one is
+    # taken element by element: a range or a view was made a single measurement, which no
+    # method could compute
+    @test measure(ph, RealValue(1:3)) == measure(ph, 1:3)
+    vs = measure(ph, ComplexValue(view([X(1), X(2), Z(1)], 1:2)))
+    @test first.(vs) == ["X(1)", "X(2)"]
+    @test all(v -> last(v) isa ComplexF64, vs)
+    @test value(ph, Check("c", RealValue(1:3), [1, 2, 3], 1e-10))[3] == 0
 
     # the part dropped is reported relative to the modulus, which a zero real part leaves
     # finite, and a function is told how to keep it; a complex value drops nothing

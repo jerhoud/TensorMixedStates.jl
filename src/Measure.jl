@@ -323,7 +323,7 @@ the measurement `o` made ready as by `make_obs`, but with the given kind, which 
 each measurement of an array or a `Check`, while a declaration inside `o` keeps its own.
 """
 declare(o::Declared, ::ValueKind) = make_obs(o)
-declare(o::Union{Vector, Matrix}, kind::ValueKind) = map(x -> declare(x, kind), o)
+declare(o::AbstractArray, kind::ValueKind) = map(x -> declare(x, kind), collect(o))
 declare(o::Check, kind::ValueKind) =
     Check(o.name, declare(o.obs1, kind), declare(o.obs2, kind), o.tol)
 declare(o, kind::ValueKind) = Declared(make_leaf(o), kind)
