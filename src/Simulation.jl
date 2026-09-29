@@ -1,11 +1,20 @@
+# Simulation, a state with its simulation time and the destinations of its measurements, as
+# runTMS runs it, and data_to_frame, which turns the values gathered in a Data into a table.
+
 export Simulation, get_sim_file, DataToFrame, data_to_frame
 
 """
     data_to_frame(data)
 
-return a `DataFrame` object corresponding to the data, with a row for each set of values
-measured together, in the order they were measured. The `DataFrames` package must be imported
-before using this function.
+a `DataFrame` of the values gathered in a `Data` destination, `sim.data[name]`: a `time`
+column and a column for each measurement, with a row for each call of `output`, in the order
+of the calls. The `DataFrames` package must be loaded.
+
+# Examples
+
+    using DataFrames
+    sim = runTMS(sim_data)
+    df = data_to_frame(sim.data["magnetization"])
 """
 function data_to_frame end
 
@@ -16,47 +25,53 @@ Base.@deprecate DataToFrame(data) data_to_frame(data) false
 @doc """
     DataToFrame(data)
 
-deprecated, use [`data_to_frame`](@ref) instead, which spells it the way the other
-functions of the package are spelled.
+deprecated, use [`data_to_frame`](@ref) instead.
 """ DataToFrame
 
 """
     default_time_format
-    default_data_format
 
-the C like formats used to write simulation times and measured values. `Simulation` and
-`SimData` both default to them, and have to agree: a `Simulation` built by `runTMS` is
-given the formats of the `SimData`, one built directly falls back to these.
+the C like format simulation times are written in by default. `Simulation` and `SimData` both
+default to it and to `default_data_format`, and have to agree: a `Simulation` built by
+`runTMS` is given the formats of the `SimData`, one built directly falls back to these.
 """
 const default_time_format = "%8.4g"
+
+"""
+    default_data_format
+
+the C like format measured values are written in by default, see `default_time_format`.
+"""
 const default_data_format = "%14.8g"
 
 """
-    Simulation(state[; time = 0.])
+    Simulation(state; time = 0., output = nothing, time_format, data_format)
     Simulation(sim, state[, time = sim.time])
 
-A type to represent simulation data and store time and file data. It is used and returned by runTMS.
-The first form creates a simulation object. The second updates the state in the simulation object. (see also `get_sim_file`)
-
-Most functions applicable to States can be applied to Simulations
+a state with its simulation time and the destinations of its measurements, which `runTMS`
+returns. The first form builds one, `output` being a stream every destination is redirected
+to, as for `runTMS`. The second gives `sim` another state, and possibly another time. Most
+functions that apply to a `State` apply to a `Simulation` too.
 
 # Fields
-- `state`       : the state of the system
-- `time`        : the simulation time
-- `outputs`     : the destinations of the measurements and the formats they are written in,
-                  see `Outputs`
-- `checkpoint`  : the checkpointing machinery, see `Checkpointer`
 
-`sim.data` is the dictionary of the `Data` destinations, each a `Dict` of the series measured
-into it, as `data_to_frame` reads them.
+- `state`: the state of the system
+- `time`: the simulation time
+- `outputs`: the destinations of the measurements and the formats they are written in
+- `checkpoint`: the checkpointing machinery
 
-A `Simulation` is immutable, and the state is threaded through a run by building a new one
-at each step rather than by assigning to a field. The other two fields are shared rather than
-copied, on purpose: the second form above hands the new object the very `outputs` and
-`checkpoint` of the old one. They are the parts that must not fork — the destinations and
-what they hold, and the bookkeeping that says where the run has got to. A copy made while a
-phase is running therefore sees, and can advance, the same checkpoint as the simulation it
-was made from.
+`sim.data` is the dictionary of the `Data` destinations, see `Data`.
+
+A `Simulation` is immutable: a run threads the state through by building a new one at each
+step. The second form hands the new object the very `outputs` and `checkpoint` of `sim`, not
+copies, since the destinations and the record of where the run has got must not fork: a copy
+made while a phase runs sees, and can advance, the same checkpoint.
+
+# Examples
+
+    sim = Simulation(state)
+    sim = tdvp(-im * H, 1., sim; nsweeps = 10)
+    output(sim, "data.dat" => [X, Z(1)])
 """
 struct Simulation
     state::Union{Nothing, State}
@@ -64,7 +79,8 @@ struct Simulation
     outputs::Outputs
     checkpoint::Checkpointer
     Simulation(state::Union{Nothing, State}; time::Number = 0., output = nothing,
-               time_format::String = default_time_format, data_format::String = default_data_format,
+               time_format::String = default_time_format,
+               data_format::String = default_data_format,
                checkpoint::Checkpointer = Checkpointer()) =
         new(state, time, Outputs(output, time_format, data_format), checkpoint)
     Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
@@ -86,14 +102,19 @@ show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)"
     simulation_files
 
 the files `runTMS`, the log and the checkpoints write in the directory of a simulation, which
-no destination may be named after: a destination called `stop` stopped the simulation at its
-first sweep and was erased by the next run, and one called `checkpoint.json` overwrote the
-checkpoint.
+no destination may be named after: a destination called `stop` would stop the simulation, and
+one called `checkpoint.json` would overwrite the checkpoint.
 """
 const simulation_files = Set(["log", "stop", "error", "running", "stamp", "description",
-    "prog.jl", "checkpoint.json", "checkpoint.json.tmp", "checkpoint-1.h5", "checkpoint-2.h5"])
+    "prog.jl", basename(checkpoint_json("")), basename(checkpoint_json("")) * ".tmp",
+    state_file(1), state_file(2)])
 
-# a simulation with a directory, the one `runTMS` writes in, keeps its files for itself
+"""
+    check_destination(::Simulation, name)
+
+refuse a destination named after one of the `simulation_files`, in a simulation with a
+directory, the one `runTMS` writes in, which keeps its files for itself.
+"""
 function check_destination(sim::Simulation, name::AbstractString)
     if !isempty(sim.checkpoint.dir) && normpath(name) in simulation_files
         error("cannot write to $name, a file of the simulation directory: choose another name")
@@ -102,19 +123,22 @@ end
 check_destination(::Simulation, ::Data) = nothing
 
 """
-    get_sim_file(::Simulation, filename)
+    get_sim_file(::Simulation, name)
 
-return the corresponding file of the given simulation "stdout" (or "-"), "stderr" and "" respectively
-redirect to stdout, stderr and devnull, other names are interpreted as file names.
+the destination `output` writes to under this name, to write to it directly. `"stdout"` (or
+`"-"`), `"stderr"` and `""` give `stdout`, `stderr` and `devnull`, any other name the stream
+of a file of that name. A name ending in `.json` gives instead a `Dict` gathering the data,
+written to the file as json at the end of `runTMS`, and `Data(name)` the `Dict` of
+`sim.data[name]`. When the output of the simulation is redirected, every name but a `Data`
+one gives that stream.
 
-Filename finishing by ".json" will return a Dict
-where to store data and this data will be output in JSON format in the file by `runTMS` at the end.
+In a simulation run by `runTMS` in its directory, the files `runTMS` writes there itself, the
+log, the checkpoint and the markers, cannot be asked for.
 
-Special filenames of the form `Data(name)` return a Dict where to store Data.
-Those Dict are gathered as a Dict in the `data` field of the Simulation
+# Examples
 
-In a simulation run by `runTMS` in its directory, a file of that directory, the log, the
-checkpoint and the markers, see `simulation_files`, cannot be asked for.
+    io = get_sim_file(sim, "notes.txt")
+    println(io, "converged")
 """
 function get_sim_file(sim::Simulation, name::Union{AbstractString, Data})
     check_destination(sim, name)
@@ -124,9 +148,8 @@ end
 """
     close_sim_files(::Simulation)
 
-write the dictionaries collected for the json destinations and close the files opened for
-the simulation. The standard streams are destinations like any other but they belong to
-the process, so they are left alone.
+write the json destinations and close the files opened for the simulation. The standard
+streams belong to the process and are left open.
 """
 close_sim_files(sim::Simulation) = close_outputs!(sim.outputs)
 

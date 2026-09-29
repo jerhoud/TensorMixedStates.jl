@@ -1,25 +1,30 @@
+# The Boson site type, a boson mode truncated to a given number of levels, with its states and
+# operators, gathered in the module Bosons.
+
 export Bosons
 
 """
-    Boson(dim)
+    Boson(dim; conserve = ())
 
-a site type to represent boson sites, it is parametrised by the dimension of the Hilbert space
-(maximum occupancy is `dim - 1`)
+the site type of a boson mode truncated to `dim` levels, the occupation going from 0 to
+`dim - 1`.
 
 # Examples
 
     Boson(4)
     Boson(4, conserve = N)
+    Boson(4, conserve = parity(N))
 
 # States
 
-`"0", "1", ...`
+`"0", "1", ..., "dim-1"` : the state of that occupation
 
 # Operators
 
 - `A` : the destruction operator
-- `N` : the number of bosons operator
-- `Q`, `P` : the position and momentum quadratures
+- `N` : the number of bosons
+- `Q`, `P` : the position and momentum quadratures, ``(A + A^\\dagger)/\\sqrt{2}`` and
+  ``(A - A^\\dagger)/(i\\sqrt{2})``
 """
 struct Boson <: AbstractSite
     dim::Int

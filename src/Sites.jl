@@ -1,3 +1,7 @@
+# Site types: what every site provides (its dimension, its ITensor index, its local states and
+# the library of its operators), and the conserved quantities a site records, strong or weak,
+# with the relabellings of the charges they need.
+
 export AbstractSite, dim, Index, string_state, identity_operator, state, weaken,
        symmetries
 export @def_states, @create_site_module, strong
@@ -5,31 +9,41 @@ export @def_states, @create_site_module, strong
 """
     abstract type AbstractSite
 
-An abstract type which is the super type of all site types.
+the supertype of all site types.
 
-A site type defines `dim`, possibly `string_state`, and its states and operators through
-`@def_states` and `@def_operators`. It may also carry a field `conserve::String` recording
-what it conserves, which its constructor fills. That field is optional: declare it only if
-your site can have conserved quantities, a site without it conserving nothing.
+A site type defines `dim`, possibly `string_state`, and its states and operators with
+`@def_states` and `@def_operators`. It may carry a field `conserve::String`, which its
+constructor fills through `conserve_string` with what the site conserves. The field is
+optional: a site type that can conserve nothing leaves it out.
+
+# Examples
+
+    struct MySite <: AbstractSite
+        conserve::String
+    end
+
+    MySite(; conserve = ()) = MySite(conserve_string(MySite(""), conserve))
+    TensorMixedStates.dim(::MySite) = 2
 """
 abstract type AbstractSite end
 
 """
-    dim(::AbstractSite)
+    dim(site)
 
-return the dimension of the given site
+the dimension of the Hilbert space of a site, which every site type must define.
+
+# Examples
+
+    dim(Spin(1))    # 3
 """
 dim(site::AbstractSite) = error("dim not implemented on site $site")
 
 """
     conserved(site)
 
-what a site conserves, in the form `conserve_string` produces, and the empty string when it
-conserves nothing.
-
-The `conserve` field is optional, a site type that can have no conserved quantity simply not
-declaring it, so this is what everything else reads rather than the field itself. A field of
-that name holding something other than a string is not one, and the site conserves nothing.
+what a site conserves, as `conserve_string` records it, or `""` when it conserves nothing.
+Everything reads this rather than the optional field `conserve`: a site type without that
+field, or with one that is not a string, conserves nothing.
 """
 conserved(site::AbstractSite) =
     if hasfield(typeof(site), :conserve) && getfield(site, :conserve) isa AbstractString
@@ -41,8 +55,9 @@ conserved(site::AbstractSite) =
 """
     decode_conserve(s)
 
-the conserved quantities a site records, as a vector of `(name, modulus, charges, strong)`,
-`strong` telling whether the quantity is conserved strongly. See `conserve_string`.
+the quantities recorded in the string `s` of `conserve_string`, as a vector of
+`(name, modulus, charges, strong)`: `charges` holds the charge of each basis state, `modulus`
+is 1 for a charge taken modulo nothing, and `strong` tells whether it is conserved strongly.
 """
 function decode_conserve(s::AbstractString)
     if isempty(s)
@@ -68,54 +83,61 @@ end
 """
     strong_names(site)
 
-the names of the quantities the site conserves strongly, empty when it conserves none that
-way. See `strong`.
+the names of the quantities the site conserves strongly. See `strong`.
 """
 strong_names(site::AbstractSite) =
     [ q[1] for q in decode_conserve(conserved(site)) if q[4] ]
 
-# `nameof` rather than `string(typeof(site))`: the latter prints the module prefix when
-# the site module is not in scope, and ITensors silently cuts a tag at 16 characters, so
-# every site type ended up tagged "TensorMixedState" depending on what the user imported
 """
-    site_index(site, charged)
+    basis_charges(site)
 
-the ITensor index of a site for pure representations.
-
-`charged` says whether the system the site belongs to carries quantum numbers, which a site
-conserving nothing cannot know on its own: in such a system it takes a trivial index, a
-single sector of charge zero holding the whole space. An MPS cannot mix indices that carry
-charges with indices that do not, and every operator remains available on a trivial index,
-every matrix element sitting in the one block.
-
-The sectors come one per basis state rather than merged by charge, because merging would
-reorder the basis whenever equal charges are not contiguous, as `parity(N)` on a boson gives
-0, 1, 0, 1.
+the charge of each basis state of `site`, as a `QN` holding every quantity it conserves, and
+`QN()` for each when it conserves nothing
 """
-function site_index(site::AbstractSite, charged::Bool)
+function basis_charges(site::AbstractSite)
     n = dim(site)
-    tg = "$(nameof(typeof(site))), Site"
     qs = decode_conserve(conserved(site))
-    if isempty(qs)
-        return charged ? Index(QN() => n; tags = tg) : Index(n; tags = tg)
-    end
     for (name, _, charges, _) in qs
         if length(charges) ≠ n
             error("site $(typeof(site)) records $(length(charges)) charges for $name but " *
                   "has $n basis states")
         end
     end
-    return Index([ QN([(name, charges[k], modulus)
-                       for (name, modulus, charges, _) in qs]...) => 1
-                   for k in 1:n ]...; tags = tg)
+    return [ QN([ (name, charges[k], modulus) for (name, modulus, charges, _) in qs ]...)
+             for k in 1:n ]
 end
 
 """
-    qn_components(q)
+    site_index(site, charged)
 
-the components of a charge as `(name, value, modulus)`, the empty slots ITensors pads it with
-left out. The relabellings of the charges, `weak_qn`, `star` and `adjoint_qn`, are written
-with it and `map_charges`.
+the ITensor index of a site in the pure representation, `charged` telling whether its system
+carries quantum numbers.
+
+A site conserving nothing in a charged system takes a trivial index, one sector of charge zero
+holding the whole space, since an MPS cannot mix indices with and without charges; every
+operator keeps its matrix, in that one block. The sectors come one per basis state rather than
+merged by charge: merging would reorder the basis whenever equal charges are not contiguous,
+as those of `parity(N)` on a boson, 0, 1, 0, 1.
+"""
+function site_index(site::AbstractSite, charged::Bool)
+    n = dim(site)
+    # `nameof` rather than `string(typeof(site))`: the latter prints the module prefix when
+    # the site module is not in scope, and ITensors silently cuts a tag at 16 characters, so
+    # every site type ended up tagged "TensorMixedState" depending on what the user imported
+    tg = "$(nameof(typeof(site))), Site"
+    if isempty(conserved(site))
+        return charged ? Index(QN() => n; tags = tg) : Index(n; tags = tg)
+    end
+    return Index([ q => 1 for q in basis_charges(site) ]...; tags = tg)
+end
+
+"""
+    qn_components(q::QN)
+
+the components of the charge `q`, as a vector of `(name, value, modulus)`, a modulus of 1
+meaning an integer charge. A `QN` always has four slots, the unused ones having an empty
+name: they are left out. `QN(components...)` gives the charge back, which is how `weak_qn`,
+`star` and `adjoint_qn` rebuild a charge after changing its components.
 """
 function qn_components(q::QN)
     cs = Tuple{String, Int, Int}[]
@@ -128,7 +150,12 @@ function qn_components(q::QN)
     return cs
 end
 
-# the index with the charge of each block passed through `f`, everything else kept
+"""
+    map_charges(f, i)
+
+the index `i` with the charge `q` of each block replaced by `f(q)`, the dimensions of the
+blocks, the tags, the prime level and the direction kept.
+"""
 map_charges(f, i::Index) =
     Index([ f(q) => d for (q, d) in space(i) ]...; tags = tags(i), plev = plev(i), dir = dir(i))
 
@@ -220,52 +247,53 @@ adjoint_index(i::Index, names) =
 """
     bra_index(i, site)
 
-the index the bra of `i` is carried by, which is `i` itself unless the site declares a
-strong symmetry. See `strong` and `star`.
+the index carrying the bra of `i`: `i` with the quantities `site` conserves strongly starred,
+which is `i` itself when there are none. See `strong` and `star`.
 """
 bra_index(i::Index, site::AbstractSite) = star(i, strong_names(site))
 
 """
-    Index(::AbstractSite)
+    Index(site)
 
-return an ITensor.Index for the given site for pure representations.
+the ITensor index of a site in the pure representation, carrying the quantum numbers of what
+the site conserves, and none when it conserves nothing.
 
-It carries the quantum numbers the site declares, and none when it declares none. A site
-conserving nothing inside a system where another one does takes a trivial index instead, see
-`site_index`, which is a property of the system rather than of the site.
+In a system where another site conserves something, a site conserving nothing takes instead
+an index of a single sector of charge zero, which depends on the system and not on the site.
 """
 Index(site::AbstractSite) = site_index(site, !isempty(conserved(site)))
 
 """
     mixed_index(i, site)
 
-the index of the mixed representation pairing the ket `i` with the bra of the same site.
+a new index of the mixed representation, combining the ket index `i` with the bra of the same
+site.
 
 The bra is daggered, so that the charge of ``|m\\rangle\\langle n|`` is the difference of
-those of ``m`` and ``n`` rather than their sum. This is the pairing `mix(::State)` produces,
-its tensors being contracted as `t * dag(t')`, and on an index without charges the dag is a
-no operation. A site conserving something strongly stars its bra instead, which keeps the two
-charges apart; see `strong`.
+those of ``m`` and ``n``: this is the pairing `mix(::State)` produces, contracting `t` with
+`dag(t')`. Under a strong symmetry the bra is also starred, which keeps the two charges
+apart, see `strong`.
 
-This is internal: the index it draws is a fresh one, of the right space but of an identity of
-its own, so it contracts with nothing. What a caller wants is the index the system drew,
-`SysIndex{Mixed}(system, i)`.
+The index is fresh, so it contracts with nothing already built: a caller wants the one its
+system drew, `SysIndex{Mixed}(system, i)`.
 """
 mixed_index(i::Index, site::AbstractSite) =
     addtags(combinedind(combiner(i, dag(bra_index(i, site)'); tags = tags(i))), "Mixed")
 
 """
-    operator_library::Dict
+    operator_library
 
-a global variable containing the site dependent definitions
-of implicit operators as defined by `@def_operators`
+the definitions of the operators declared by `@def_operators`, keyed by site type and
+operator name: a matrix, a function of the site returning one, or an operator expression.
 """
 const operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
 
 """
-    state_library::Dict
+    state_library
 
-a global variable containing the definitions of local states as defined by `@def_states`
+the definitions of the states declared by `@def_states`, keyed by site type and state name:
+a vector, a density matrix, a function of the site returning either, or the name of another
+state.
 """
 const state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
 
@@ -284,8 +312,8 @@ end
 """
     operator_info(site, op)
 
-return the definition of `op` for the given `site` as stored in `operator_library`,
-it may be an `Op` a matrix or a site function
+the definition of the operator named `op` for the type of `site`, as `operator_library` holds
+it, and an error when there is none.
 """
 function operator_info(site::AbstractSite, op::String)
     name = typeof(site)
@@ -301,16 +329,16 @@ end
 """
     state_info(site, statename)
 
-return the state definition for `site` as stored in `state_library`, `nothing` when the site
-declares no state of that name. It may be a `Vector` (for pure state), a `Matrix` for mixed
-states, a site function or the name of another state
+the definition of the state `statename` for the type of `site`, as `state_library` holds it,
+and `nothing` when the site declares no state of that name.
 """
 state_info(site::AbstractSite, st::String) = get(state_library, (typeof(site), st), nothing)
 
 """
-    identity_operator(::AbstractSite)
+    identity_operator(site)
+    identity_operator(dim::Int)
 
-return a matrix representing the identity operator for the given site
+the identity matrix of a site, or of dimension `dim`, as a `Matrix{Float64}`.
 """
 identity_operator(dim::Int) = Matrix{Float64}(I, dim, dim)
 identity_operator(site::AbstractSite) = identity_operator(dim(site))
@@ -318,11 +346,11 @@ identity_operator(site::AbstractSite) = identity_operator(dim(site))
 """
     add_operator(site, op, r, type = plain_op)
 
-register the definition `r` of the operator named `op` for the given `site`, and return the
-`Operator{1}` standing for that name
+register `r` as the definition of the operator named `op` for the type of `site`, refusing a
+second one, and return the `Operator{1}` standing for that name.
 
-Do not call directly, use `@def_operators`, which is what keeps the operator name, its
-`OpType` and the definitions made for the other site types consistent.
+Only `@def_operators` calls it, which keeps the name, its `OpType` and the definitions made
+for the other site types consistent.
 """
 function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function, SimpleOp}, type::OpType=plain_op)
     name = typeof(site)
@@ -338,7 +366,9 @@ end
 """
     check_shared_operator(existing, name, type, site)
 
-check that a name already in scope can stand for the operator about to be registered
+check that `existing`, the value already bound to `name`, can stand for the operator about to
+be registered for `site`, and return it. It must be an `Operator{1}` of that name and `type`,
+with no definition of its own, since such an operator never reads the library of the sites.
 """
 function check_shared_operator(existing, name::String, type::OpType, site::AbstractSite)
     if !(existing isa Operator{1})
@@ -363,10 +393,8 @@ end
     add_state(site, st, r)
     add_state(site, sts, r)
 
-register the definition `r` of the state named `st` for the given `site`, or the same
-definition for every name of the vector `sts`
-
-Do not call directly, use `@def_states`.
+register `r` as the definition of the state named `st`, or of every name of `sts`, for the
+type of `site`, refusing a second one. Only `@def_states` calls it.
 """
 function add_state(site::AbstractSite, st::String, r::Union{String, Vector, Matrix, Function})
     name = typeof(site)
@@ -384,11 +412,14 @@ add_state(site::AbstractSite, sts::Vector{String}, r::Union{String, Vector, Matr
     end
 
 """
-    @def_states(site, symbols)
+    @def_states(site, [name => def, ...])
 
-define the given states for the given site
+declare states for the type of `site`. A name is a string, or a vector of strings naming the
+same state. A definition is a vector (a pure state in the basis of the site), a matrix (a
+density matrix), a function of the site returning either, or the name of another state.
+Declaring a name twice for a site type is an error.
 
-# Example
+# Examples
 
     @def_states(Fermion(),
     [
@@ -419,11 +450,13 @@ end
 """
     @create_site_module(name, symbols)
 
-define a submodule named `name` which imports and re-exports the given symbols from the parent module
+define a submodule `name` importing the given symbols from the module the macro is called in
+and exporting them, so that `using .name` brings a site type and its operators into scope. The
+submodule gets a docstring naming them, the first symbol as the site type.
 
-# Example
+# Examples
 
-    @create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2])
+    @create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2, N])
 """
 macro create_site_module(name, symbols)
     if !(symbols isa Expr) || symbols.head ≠ :vect
@@ -439,8 +472,6 @@ macro create_site_module(name, symbols)
     return esc(Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), __source__, doc, mod))
 end
 
-# a state is written in the basis of its site, whose dimension it has to have: a wrong size
-# failed on a `DimensionMismatch` from `reshape`, which named neither the state nor the site
 function state(site::AbstractSite, a::Union{Vector, Matrix})
     d = dim(site)
     if a isa Vector && length(a) ≠ d
@@ -452,7 +483,6 @@ function state(site::AbstractSite, a::Union{Vector, Matrix})
     return a
 end
 
-# through the checks above, whatever the function gives
 state(site::AbstractSite, a::Function) = state(site, a(site))
 function state(site::AbstractSite, a::Int)
     if a < 0 || a >= dim(site)
@@ -464,15 +494,19 @@ function state(site::AbstractSite, a::Int)
 end
 
 """
-    string_state(::AbstractSite, ::String)
+    string_state(site, name)
 
-Do not call directly. It returns a local state corresponding to the string, a generic form
-the site reads, which is tried after the states the site declares and before the states
-every site has, see `state`.
+the state a name gives by a rule of the site rather than by a declaration, tried by `state`
+after the states the site declares and before those every site has. It is not called
+directly.
 
-The default implementation returns the first state for "0", the second for "1" and so on.
+By default `"0"` gives the first basis state, `"1"` the second, and so on. A site type
+overloads it to read names of its own, as `Spin` reads `"1/2"` or `"X1/2"`, or to read none
+by raising an error, which `state` takes to mean that the name is not one of its forms.
 
-This should be overloaded if necessary when defining new site types. It should return an error when not needed.
+# Examples
+
+    TensorMixedStates.string_state(::MySite, ::String) = error("no generic state for MySite")
 """
 string_state(site::AbstractSite, st::String) =
     state(site, parse(Int, st))
@@ -480,9 +514,9 @@ string_state(site::AbstractSite, st::String) =
 """
     common_states
 
-the states every site has, whatever its type, as functions of the site: `"FullyMixed"`, the
-infinite temperature state, a density matrix proportional to the identity. They are found as
-the states a site declares are, after them, so that a site may declare one of its own.
+the states every site has, as functions of the site: `"FullyMixed"`, the density matrix
+proportional to the identity, that is the infinite temperature state. `state` looks them up
+last, so that a site may declare its own under the same name.
 """
 const common_states = Dict{String, Function}(
     "FullyMixed" => s -> identity_operator(s) / dim(s),
@@ -543,40 +577,36 @@ end
 """
     charge_tol
 
-how far the eigenvalues of a conserved quantity may sit from the charges they stand for.
-Every quantity the built in sites carry lands exactly on an integer, and the roots of unity
-of `Zd` miss the unit circle by at most five `eps`, so this is a rounding tolerance and
-nothing wider. It is not a setting: a quantity that misses it by more is genuinely
-approximate, and the answer is to define it exactly rather than to let it through.
+how far the eigenvalues of a conserved quantity may lie from the charges they stand for. It is
+a rounding tolerance and not a setting: a quantity missing its charges by more is
+approximate, and has to be defined exactly rather than let through.
 """
 const charge_tol = 1e-14
 
 """
     rounding_tol
 
-the part of a matrix, relative to its norm, below which it is taken to be zero: an element, a
-singular value or a whole term that small is what rounding leaves where the exact matrix has
-nothing. Three things go by it and have to agree: the flux of a matrix, see `charge_flux`, the
-tensor it is laid as on charged indices, see `charged_itensor`, and the one site factors
-`Operator{N}(name, def, type, sites...)` splits an operator into, which must not change it.
+the size, relative to the norm of a matrix, below which an element, a singular value or a
+whole term is taken as rounding and treated as zero. The flux of a matrix (`charge_flux`),
+its tensor on charged indices (`charged_itensor`) and the splitting of an operator into one
+site factors (`Operator{N}(name, def, type, sites...)`) all go by it and have to agree.
 
-It is a rounding tolerance and nothing wider, and not a setting either: an operator is
-compressed by the algorithms truncating the states it acts on, not here.
+It is a rounding tolerance and not a setting: operators are not compressed here, the states
+they act on are truncated by the algorithms.
 """
 const rounding_tol = 1e-13
 
 """
     short(x)
 
-a number as an error message shows it, two significant digits being all one reads of a
-deviation
+a number rounded to two significant digits, as an error message shows a deviation.
 """
 short(x::Real) = round(x; sigdigits = 2)
 
 """
     show_charges(d)
 
-a list of charge differences as an error message shows it, `2Sz=2` or `Ntot=-1,2Sz=-1`
+a list of `(name, value, modulus)` charges as an error message shows it, `Ntot=-1,2Sz=-1`.
 """
 show_charges(d) = join(["$name=$val" for (name, val, _) in d], ",")
 
@@ -631,10 +661,37 @@ charged_itensor(a::AbstractArray, inds) =
         ITensor(a, inds...)
     end
 
-# the charge each value of an index brings to the flux of a tensor, the charge of its block,
-# taken negatively on an incoming index
+"""
+    index_charges(i)
+
+the charge each value of the index `i` brings to the flux of a tensor: the charge of its
+block, negated on an incoming index.
+"""
 index_charges(i::Index) =
     reduce(vcat, [ fill(dir(i) == ITensors.In ? -q : q, n) for (q, n) in space(i) ]; init = QN[])
+
+"""
+    common_charge(a, charges, tol)
+
+the charge every element of the array `a` above `tol` carries, `charges[k][v]` being the
+charge the value `v` of axis `k` brings: `QN()` when no element is above `tol`, and `nothing`
+when two of them carry different charges
+"""
+function common_charge(a::AbstractArray, charges, tol)
+    found = nothing
+    for c in CartesianIndices(a)
+        if abs(a[c]) ≤ tol
+            continue
+        end
+        q = sum(charges[k][c[k]] for k in eachindex(charges))
+        if isnothing(found)
+            found = q
+        elseif q ≠ found
+            return nothing
+        end
+    end
+    return isnothing(found) ? QN() : found
+end
 
 """
     has_definite_flux(a, inds)
@@ -649,23 +706,14 @@ function has_definite_flux(a::AbstractArray, inds)
     if !any(hasqns, inds)
         return true
     end
-    charges = map(index_charges, inds)
-    small = rounding_tol * norm(a)
-    found = nothing
-    for c in CartesianIndices(a)
-        if abs(a[c]) ≤ small
-            continue
-        end
-        q = sum(charges[k][c[k]] for k in eachindex(charges))
-        if isnothing(found)
-            found = q
-        elseif q ≠ found
-            return false
-        end
-    end
-    return true
+    return !isnothing(common_charge(a, map(index_charges, inds), rounding_tol * norm(a)))
 end
 
+"""
+    struct Strong
+
+a conserved quantity declared strong, as `strong` returns it, wrapping its operator.
+"""
 struct Strong
     arg::SimpleOp
 end
@@ -732,11 +780,11 @@ show(io::IO, c::Conserved) =
 """
     spec_names(spec)
 
-the quantities a target names, as `Conserved` holds them.
+the quantities a target names, as the `(name, strong)` pairs `Conserved` holds.
 
-Both vocabularies are accepted: the operators one writes by hand, as `conserve` takes them,
-and what `symmetries` reports. `weaken` needs no more than the names, since it recomputes no
-charge; only a declaration does, which is why `conserve` asks for the operators themselves.
+It reads both the operators `conserve` takes and what `symmetries` returns. The names are all
+`weaken` needs, since it recomputes no charge; a declaration does, which is why `conserve`
+asks for the operators themselves.
 """
 spec_names(c::Conserved) = c.names
 spec_names(::Tuple{}) = Tuple{String, Bool}[]
@@ -749,11 +797,11 @@ spec_names(a) = error("$a does not name a conserved quantity")
     symmetries(::AbstractSite)
     symmetries(::System)
 
-what is conserved, and how. It prints as the value `conserve` would be given to declare it,
-and it can be given back to `weaken` as a target.
+what a site or a system conserves, and whether strongly or weakly, as a `Conserved`. It prints
+as the value `conserve` is given to declare it, and can be given back to `weaken` as a target.
 
-For a system, it gathers what its sites conserve: a site that does not conserve a quantity
-does not keep the others from conserving it.
+A system conserves what its sites conserve: a site that does not conserve a quantity does not
+keep the others from conserving it.
 
 # Examples
 
@@ -767,11 +815,9 @@ symmetries(site::AbstractSite) =
 """
     one_step_down(c::Conserved)
 
-the target `weaken` aims at when none is given: every strong quantity asked for weakly, or,
-when none is strong, every quantity dropped.
-
-The level of a system is the strongest of its quantities, and this takes it down one notch.
-Repeating it walks strong, then weak, then nothing, and stops there.
+the target of `weaken` when none is given: every strong quantity made weak, or, when none is
+strong, every quantity dropped. Repeating it walks strong, then weak, then nothing, and stops
+there.
 """
 one_step_down(c::Conserved) =
     any(last, c.names) ? Conserved([ (n, false) for (n, _) in c.names ]) :
@@ -802,10 +848,9 @@ end
 """
     retarget(site, target)
 
-what a site records once it conserves what `target` names, and only that.
-
-The charges are the ones the site already holds: weakening never recomputes them, which is
-why it needs no operator where a declaration does.
+the `conserve` string of `site` once it conserves only what `target` names, a name the site
+does not conserve being ignored. The charges are those the site already holds: weakening
+recomputes none, which is why it needs no operator where a declaration does.
 """
 function retarget(site::AbstractSite, target::Conserved)
     qs = decode_conserve(conserved(site))
@@ -931,14 +976,12 @@ end
 """
     show(io, ::AbstractSite)
 
-print a site as the call that builds it, leaving out the trailing fields that carry nothing,
-that is an empty string or `nothing`.
+print a site as the call that builds it, `Qubit()` or `Fermion(conserve = N)`, the conserved
+quantities under their names rather than as the charges recorded.
 
-A site conserving nothing therefore goes on printing as it always did, `Qubit()` rather than
-`Qubit("")`. Only the trailing ones are left out: dropping a field in the middle would print
-a call whose arguments no longer line up with the fields, `Site(nothing, 3)` coming out as
-`Site(3)` and reading as something else. The conserved quantities print under their names,
-`Fermion(conserve = N)`, the charges they record being an implementation detail.
+The trailing fields holding `""` or `nothing` are left out, and only those: dropping one in
+the middle would misalign the arguments with the fields, `Site(nothing, 3)` printing as
+`Site(3)`.
 """
 function show(io::IO, site::AbstractSite)
     t = typeof(site)

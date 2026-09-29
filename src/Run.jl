@@ -1,29 +1,47 @@
+# runTMS, which runs a simulation described by a SimData phase after phase, in a directory of its
+# own, with its log, its checkpoints and the resumption of an interrupted run.
+
 export runTMS, SimData
 
 """
-    SimData(name = "my_simulation", phases::Vector{Phases} = [phase1, phase2...])
+    SimData(; name = "simulation", phases, options...)
 
-A type for describing a simulation to use with `runTMS`
+the description of a simulation, which `runTMS` runs.
 
 # Fields
 
-- `name`:            the name of the simulation used as the name of the directory to store the results
-- `phases`:          the list of phases of the simulation (see Phases for a list of possible values),
-  which may itself contain lists, to any depth, and is flattened on construction. The first
-  one must be `CreateState` or `LoadState`, since the simulation has no state before it
-- `description`:     text put in the description file of the simulation (default "")
-- `time_start`:      initial simulation time (default 0.)
-- `final_measures`:  measures to make at the end of simulation (default []) see `measure` and `output`
-- `time_format`:     C like format for output of simulation time (default `$default_time_format`)
-- `data_format`:     C like format for output of simulation data (default `$default_data_format`)
+- `name`: the name of the simulation, and of the directory its results are written to
+- `phases`: the phases of the simulation, see `Phases`, as a vector which may contain vectors
+  to any depth and is flattened. The first phase must be `CreateState` or `LoadState`, the
+  simulation having no state before it
+- `description`: the text of the `description` file of the simulation (default `""`)
+- `time_start`: the initial simulation time (default 0.)
+- `final_measures`: the measurements to make at the end of the simulation, see `output`
+  (default `[]`)
+- `time_format`: the C like format of the simulation times written (default
+  `$default_time_format`)
+- `data_format`: the C like format of the measured values written (default
+  `$default_data_format`)
 - `checkpoint_interval`: seconds between two checkpoints (default 0, no periodic checkpoint;
   a stop or an interrupt still writes one, so that the simulation can be resumed)
-- `max_time`:        seconds after which the simulation stops cleanly (default `Inf`)
+- `max_time`: seconds after which the simulation stops cleanly (default `Inf`)
 
-A simulation with a checkpoint interval writes a checkpoint to `<name>/checkpoint.json` and
-`runTMS` resumes from it on its own if it finds one. It stops cleanly, after writing a
-checkpoint, when `max_time` is past, when the file `<name>/stop` appears, or on an
-interrupt.
+A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
+its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
+`max_time` is past, when the file `<name>/stop` appears, or on an interrupt.
+
+# Examples
+
+    SimData(
+        name = "ising",
+        phases = [
+            CreateState{Pure}(10, Qubit(), "Up"),
+            GroundState(
+                hamiltonian = -sum(Z(i)Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10),
+                limits = Limits(maxdim = [10, 20, 50]), nsweeps = 10),
+        ],
+        final_measures = "data" => [X, Z],
+    )
 """
 @kwdef struct SimData
     description::String = ""
@@ -48,15 +66,19 @@ end
 """
     flatten_phases(phases)
 
-phases may be given as nested vectors, for convenience when a program builds its phases in
-pieces, and `SimData` flattens them into a single list. A phase then has one well defined
-position, which is what a checkpoint records.
+the phases given as nested vectors, as is convenient when a program builds them in pieces,
+flattened into a single list by `SimData`. A phase then has one well defined position, which
+is what a checkpoint records.
 """
 flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
 flatten_phases(p) = [p]
 
-# a simulation starts without a state: every phase but these two transforms the one it is
-# handed, so a first phase of another kind would fail on `nothing` deep inside its solver
+"""
+    check_first_phase(phases)
+
+refuse a first phase other than `CreateState` or `LoadState`. A simulation starts without a
+state, which every other phase transforms: it would fail on `nothing` deep inside its solver.
+"""
 function check_first_phase(phases::Vector)
     if isempty(phases) || !(first(phases) isa Union{CreateState, LoadState})
         error("the first phase must be CreateState or LoadState, which give the simulation its state")
@@ -98,25 +120,25 @@ show(io::IO, s::SimData) =
     runTMS(::SimData; restart = true)
     runTMS(::SimData; output = myoutput)
 
-run the given simulation (see SimData for details), write the output to file and return a Simulation object containing the result.
-`clean` (default `false`) remove the simulation directory and exit,
-`restart` (default `false`) remove the simulation directory and run the simulation,
-`output` redirect all output to the given IO channel (no output directory created), useful values are stdout or devnull (to suppress all output).
+run the given simulation, see `SimData`, in a directory named after it, and return the
+`Simulation` it ends with. A checkpoint found in the directory is resumed from, and refused
+if it belongs to a simulation with other phases.
 
-A simulation writing to a directory turns an interrupt into a clean stop: it writes a
-checkpoint and returns, instead of killing the program. See `SimData` for the checkpointing
-options. This asks the runtime to raise `InterruptException` on Ctrl-C, a process wide
-setting that is put back when `runTMS` returns.
+- `restart` (default `false`): remove the simulation directory first
+- `clean` (default `false`): remove the simulation directory and return without running
+- `output`: a stream to redirect everything to, `stdout` or `devnull` for instance, instead of
+  writing a directory
 
-`runTMS` drives a whole process and is meant to be called once at a time. Writing to a
-directory, it changes the working directory of the process for the duration of the run, and
-it sets the Ctrl-C behaviour; a `CreateState` phase given a `seed` also reseeds the global
-random generator. Two simulations running at once in the same process, whether in parallel
-or through one calling the other, would fight over all three. Run them in separate
-processes, or pass `output` so that nothing touches the working directory. Parallelism
-inside a single simulation is a different matter and works as usual: it comes from the
-threads ITensor uses for its contractions.
+With a directory, an interrupt is a clean stop: a checkpoint is written and `runTMS` returns
+instead of killing the program. For that, Ctrl-C raises `InterruptException` during the run,
+a process wide setting put back when `runTMS` returns.
 
+`runTMS` is meant to be called once at a time in a process. With a directory, it changes the
+working directory of the process for the duration of the run and sets the Ctrl-C behaviour,
+and a `CreateState` with a `seed` reseeds the global random generator: two simulations run at
+once in the same process, in parallel or one calling the other, would fight over all three.
+Run them in separate processes, or pass `output`. The threads ITensor uses for its
+contractions are not concerned.
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)
@@ -225,6 +247,15 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     end
 end
 
+"""
+    log_phase(sim, phases::Vector)
+    log_phase(sim, phase)
+
+run a list of phases, from the one a resumed run starts at, committing each boundary and
+writing a checkpoint when one is due or a stop is asked for, which ends the loop. A single
+phase is logged, given its `time_start`, run by `run_phase` and measured by its
+`final_measures`, unless it stopped for a checkpoint.
+"""
 function log_phase(sim::Simulation, phases::Vector)
     c = sim.checkpoint
     r = c.resume
@@ -271,15 +302,23 @@ function log_phase(sim::Simulation, phases::Vector)
     return sim
 end
 
+"""
+    log_stop(sim, i)
+
+log that the simulation stops after phase `i`, and whether it can be resumed.
+"""
 log_stop(sim::Simulation, i::Int) =
     log_msg(sim, isempty(sim.checkpoint.dir) ?
         "***** Stopping after phase $i, with no directory to save it in: it cannot be resumed *****" :
         "***** Stopping after phase $i, the simulation can be resumed *****")
 
-# The three fields every phase is read through, here rather than at the first `phase.name`
-# so that something which is not a phase says so instead of surfacing as a `FieldError` from
-# the middle of a run. What is missing afterwards is a `run_phase` method, and its fallback
-# in `Phases.jl` says that in its turn.
+"""
+    check_is_phase(phase)
+
+refuse an object without the three fields every phase is read through, `name`, `time_start`
+and `final_measures`, so that it says so instead of failing with a `FieldError` in the middle
+of a run. A missing `run_phase` method is then reported by the fallback of `run_phase`.
+"""
 function check_is_phase(phase)
     for f in (:name, :time_start, :final_measures)
         if hasfield(typeof(phase), f)

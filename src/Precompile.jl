@@ -1,3 +1,6 @@
+# The precompilation workload, a small simulation run when the package is precompiled; set
+# TMS_SKIP_PRECOMPILE_WORKLOAD=true to skip it during development.
+
 using PrecompileTools: @compile_workload
 
 # skip this workload during development (set TMS_SKIP_PRECOMPILE_WORKLOAD=true)

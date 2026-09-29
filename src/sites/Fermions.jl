@@ -1,25 +1,30 @@
+# The Fermion site type, a spinless fermion mode, with its states and operators, gathered in the
+# module Fermions.
+
 export Fermions
 
 """
-    Fermion()
+    Fermion(; conserve = ())
 
-a site type to represent fermion sites (dim is 2)
+the site type of a spinless fermion mode, of dimension 2.
 
 # Examples
 
     Fermion()
     Fermion(conserve = N)
     Fermion(conserve = parity(N))
+    Fermion(conserve = strong(N))
 
 # States
 
-- `"0", "Emp"` : empty state
-- `"1", "Occ"` : occupied state
+- `"Emp", "0"` : the empty state
+- `"Occ", "1"` : the occupied state
 
 # Operators
 
-- `C` : the destruction operator
-- `N` : the number of fermions operator
+- `C` : the destruction operator, fermionic
+- `N` : the number of fermions
+- `F` : the Jordan-Wigner operator, ``(-1)^N``
 """
 struct Fermion <: AbstractSite
     conserve::String

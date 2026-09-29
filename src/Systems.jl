@@ -1,15 +1,24 @@
+# Systems, the sites a state lives on, with the indices of each site in the pure and the mixed
+# representations, and the weakening of what a system conserves.
+
 export System, SysIndex
 
 """
-    type System
+    System(sites::Vector{<:AbstractSite})
+    System(n::Int, site::AbstractSite)
 
-represent a quantum system
+a quantum system: its sites, and the ITensor index of each site for pure and for mixed
+representations. `System(n, site)` is made of `n` copies of `site`.
+
+When any site conserves something, every index carries charges, a site conserving nothing
+taking a trivial one. Sites whose conserved quantities cannot live together on one system are
+refused.
 
 # Fields
 
-- `sites::Vector{<:AbstractSite}`: sites of the system
-- `pure_indices::Vector{Index}`: Indices for pure representations
-- `mixed_indices::Vector{Index}`: Indices for mixed representations
+- `sites::Vector{<:AbstractSite}`: the sites
+- `pure_indices::Vector{Index}`: the indices for pure representations
+- `mixed_indices::Vector{Index}`: the indices for mixed representations
 
 # Examples
 
@@ -18,9 +27,9 @@ represent a quantum system
 
 # Indexation
 
-    system[i]                  # gives site i
-    SysIndex{Pure}(system, i)  # gives pure index i
-    SysIndex{Mixed}(system, i) # gives mixed index i
+    system[i]                  # site i
+    SysIndex{Pure}(system, i)  # pure index of site i
+    SysIndex{Mixed}(system, i) # mixed index of site i
 """
 struct System
     sites::Vector{<:AbstractSite}
@@ -30,11 +39,11 @@ end
 
 """
     is_charged(sites)
+    is_charged(system)
 
-whether a system of those sites carries quantum numbers, that is whether any of them
-declares something conserved. It is a property of the whole list: one site declaring a charge
-makes every index of the system a charged one, the others taking a trivial charge, since an
-MPS cannot mix the two kinds.
+whether a system of those sites carries quantum numbers, that is whether any of them conserves
+something. One such site makes every index of the system charged, the others taking a trivial
+charge, since an MPS cannot mix the two kinds.
 """
 is_charged(sites) = any(s -> !isempty(conserved(s)), sites)
 
@@ -55,7 +64,7 @@ System(size::Int, a::AbstractSite) = System(fill(a, size))
 """
     strong_names(::System)
 
-the names of every quantity the sites of the system conserve strongly. See `strong`.
+the names of the quantities the sites of the system conserve strongly, see `strong`
 """
 strong_names(system::System) =
     unique(reduce(vcat, map(strong_names, system.sites); init = String[]))
@@ -68,13 +77,24 @@ symmetries(system::System) =
     weaken(::System)
     weaken(::System, target)
 
-the system a state lands on when `weaken(::State)` is given the same target: the same sites,
-conserving less. Without a target, one level down.
+the same sites, each keeping of what it conserves only what `target` names, and as strongly as
+`target` asks. `target` is written as `conserve` is given, or as `symmetries` returns it.
+Without a target, the system goes one level down: every strong quantity becomes weak or, when
+none is strong, every quantity is dropped.
+
+A quantity can be dropped or made weak, but a target asking for a quantity the system does not
+conserve, or for a weak one strongly, is refused. A target equal to what the system conserves
+gives it back unchanged. This is the system `weaken(::State)` puts a state on.
+
+# Examples
+
+    s = System(4, Electron(conserve = (strong(Ntot), 2Sz)))
+    weaken(s)          # conserves (Ntot, 2Sz)
+    weaken(s, 2Sz)     # conserves 2Sz only
+    weaken(s, ())      # conserves nothing
 """
 function weaken(system::System, target::Conserved)
     check_target(symmetries(system), target, "this system")
-    # the identity, as weaken(::State) takes it: rewriting each site in the order of the
-    # target reordered the sites that declare the same quantities in another order
     if target.names == symmetries(system).names
         return system
     end
@@ -90,9 +110,16 @@ getindex(s::System, i...) = s.sites[i...]
 show(io::IO, s::System) = print(io, "System($(s.sites))")
 
 """
-    SysIndex{Pure|Mixed}(system, i)
+    SysIndex{Pure}(system, i)
+    SysIndex{Mixed}(system, i)
 
-returns the pure or mixed ITensor.Index for site i
+the ITensor index of site `i` of `system`, for pure or for mixed representations. Given a
+collection of sites, as `1:n`, it gives their indices.
+
+# Examples
+
+    SysIndex{Pure}(system, 1)
+    SysIndex{Mixed}(system, 1:length(system))
 """
 struct SysIndex{R <: PM}
     SysIndex{Pure}(s::System, i::Int...) = s.pure_indices[i...]
@@ -103,14 +130,14 @@ struct SysIndex{R <: PM}
 """
     length(::System)
 
-return the number of sites in the system
+the number of sites of the system
 """
 length(system::System) = length(system.sites)
 
 """
     sim(::System)
 
-create a clone of the system: identical but with different indices
+a copy of the system with the same sites and new indices
 """
 sim(system::System) =
     System(system.sites, sim.(system.pure_indices), sim.(system.mixed_indices))
@@ -119,18 +146,17 @@ sim(system::System) =
     ::System ⊗ ::System
     tensor(::System, ::System)
 
-create the tensorial product of two systems
+the tensor product of two systems: the sites of the first followed by those of the second,
+with their indices. When the two share an index, as in `S ⊗ S`, the second is given new ones.
+Both must carry charges or neither, a mixed product being built from its sites with `System`,
+and sites whose conserved quantities cannot live together on one system are refused.
 """
 function (sys1::System ⊗ sys2::System)
-    # the indices are kept as they are, so they must be of one kind already, and what the
-    # sites conserve must be able to live on one system, as `System(sites)` checks
     if is_charged(sys1) ≠ is_charged(sys2)
         error("cannot take the tensor product of a system carrying charges and one carrying " *
               "none, build it from its sites with System instead")
     end
     check_charges([sys1.sites; sys2.sites])
-    # the same site indices on both sides, as in S ⊗ U ⊗ S or two loads of one file, and not
-    # only S ⊗ S: each site of the product needs one of its own
     if !isdisjoint(sys1.pure_indices, sys2.pure_indices) ||
        !isdisjoint(sys1.mixed_indices, sys2.mixed_indices)
         sys2 = sim(sys2)
@@ -144,6 +170,11 @@ end
 tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
 
 
+"""
+    check_index(system, i, a)
+
+refuse the site `i` of the operator `a` when `system` has no such site
+"""
 function check_index(system::System, i::Int, a)
     n = length(system)
     if i < 1 || i > n
@@ -155,14 +186,10 @@ end
 """
     check_indices(system, op)
 
-check that every site an indexed operator acts on is a site of the system.
-
-Nothing between writing `X(10)` and contracting its tensor compares that number with the
-size of the system, and the three paths an indexed operator can take reach a different
-array first: `expect_norm` indexes the mps, `PreMPO` its own link dimensions and `apply`
-the sites. Each used to report a `BoundsError` on an internal vector the caller has no
-reason to know. The check is made at those three entries instead, and names the factor at
-fault rather than the array.
+check that every site the indexed operator `op` acts on is a site of `system`, naming the
+factor at fault. Nothing else compares `X(10)` with the size of the system: without this check,
+made where an operator enters `expect_norm`, `PreMPO` or `apply`, each would fail on a
+`BoundsError` of an internal array.
 """
 function check_indices(system::System, a::AtIndex)
     for i in a.index
@@ -177,19 +204,16 @@ check_indices(system::System, a::Union{SumOp, ProdOp}) =
     foreach(x -> check_indices(system, x), a.subs)
 check_indices(system::System, a::ScalarOp) = check_indices(system, a.arg)
 check_indices(system::System, a::Evolver) = check_indices(system, a.arg)
-# a vector is a time dependent evolver, one term per coefficient
 check_indices(system::System, a::Vector) = foreach(x -> check_indices(system, x), a)
-# a generic operator carries no index, and neither does anything else that may be passed
 check_indices(::System, _) = nothing
 
 """
     check_one_site(a, what)
 
-refuse a factor acting on several sites at once, which is what `simplify` leaves of an
-operator of several sites with no expression to be replaced by: one defined by a matrix, or a
-function such as `exp(X ⊗ X)`, and created without its sites. An MPO and `expect` place one
-site factors only, and they used to fail on a `BoundsError` or a `MethodError` naming neither
-the operator nor the way out.
+refuse a factor acting on several sites at once, which `what`, an MPO or `expect`, cannot
+place, since both place one site factors only. Such a factor is what `simplify` leaves of an
+operator of several sites with no expression to be replaced by, one defined by a matrix or a
+function and created without its sites.
 """
 function check_one_site(a, what)
     if a isa AtIndex && length(a.index) > 1

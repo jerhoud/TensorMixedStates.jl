@@ -1,9 +1,18 @@
+# The destinations of measurements: text files, streams, json files and Data, kept in memory,
+# how values are written to each, and how they are persisted and restored with a checkpoint.
+
 export Data
 
 """
     Data(name)
 
-represent a storage with the given name where to put measurement data
+a destination of measurements kept in memory rather than written to a file: what is measured
+into `Data(name)` is gathered in `sim.data[name]`, which `data_to_frame` turns into a table.
+
+# Examples
+
+    output(sim, Data("magnetization") => [X, Z(1)])
+    data_to_frame(sim.data["magnetization"])
 """
 struct Data
     name::String
@@ -14,11 +23,10 @@ end
 """
     json_value(x)
 
-a value of a json destination as it is written: a complex number becomes
-`{"re": …, "im": …}`, wherever it is, which JSON.jl writes that way or refuses depending on
-its version, a matrix the list of its rows, as a file writes it, and a value that is not
-finite the string Julia prints it as, `"Inf"`, `"-Inf"` or `"NaN"`, json having no number for
-it.
+`x` as a json destination writes it: a complex number as `{"re": …, "im": …}` at any depth,
+rather than as JSON.jl would, which depends on its version; a matrix as the list of its rows,
+as a text file writes it; a float that is not finite as the string Julia prints, `"Inf"`,
+`"-Inf"` or `"NaN"`, json having no number for it.
 """
 json_value(x::AbstractFloat) = isfinite(x) ? x : string(x)
 json_value(x::Complex) = Dict("re" => json_value(real(x)), "im" => json_value(imag(x)))
@@ -29,12 +37,11 @@ json_value(x) = x
 
 """
     checkpoint_value(x)
-    restored_value(x)
 
-a value written into a checkpoint, and read back from it. Json holds neither complex numbers
-nor matrices, a matrix coming back as the vector of its columns, nor a number that is not
-finite, so all three are marked and rebuilt, and an array read back is given its element type
-again: a resumed run hands back the values an uninterrupted one would.
+`x` encoded for a checkpoint, which `restored_value` decodes. Json holds neither complex
+numbers, nor matrices (one comes back as the vector of its columns), nor floats that are not
+finite, so these are wrapped in a dictionary saying what they are: a resumed run then hands
+back the values an uninterrupted one would.
 """
 checkpoint_value(x::AbstractFloat) = isfinite(x) ? x : Dict("float" => string(x))
 checkpoint_value(x::Complex) = Dict("complex" => [checkpoint_value(real(x)), checkpoint_value(imag(x))])
@@ -43,6 +50,12 @@ checkpoint_value(x::AbstractArray) = map(checkpoint_value, x)
 checkpoint_value(x::AbstractDict) = Dict(k => checkpoint_value(v) for (k, v) in x)
 checkpoint_value(x) = x
 
+"""
+    restored_value(x)
+
+a value read back from a checkpoint, decoded from what `checkpoint_value` wrote. An array is
+given back the element type of its values, which reading json loses.
+"""
 function restored_value(x::AbstractDict)
     if haskey(x, "complex")
         r, i = restored_value.(x["complex"])
@@ -60,21 +73,31 @@ restored_value(x) = x
 """
     Series
 
-what an accumulating destination holds, a json file or a `Data` one: for each header, the
+what an accumulating destination, a json file or a `Data` one, holds: for each header, the
 times, the values and the calls of `output` they came from, as
-`Dict("times" => [...], "data" => [...], "events" => [...])`. It is the form `sim.data`
-hands a `Data` destination over in, and the one `data_to_frame` reads.
+`Dict("times" => [...], "data" => [...], "events" => [...])`. It is what `sim.data` holds for
+each `Data` destination, and what `data_to_frame` reads.
 
-A series only ever grows, which is what lets a checkpoint record it by its lengths and write
-back, later, exactly the part it held then.
+A series only grows, so a checkpoint records it by its lengths and can later write back
+exactly the part it held then.
 """
 const Series = Dict{String, Dict}
 
-# a series numbers the calls of `output` it takes part in, and each value records the one it
-# came from, so that what was measured together can be told apart from what only shares its
-# time: the time repeats over the sweeps of dmrg, a circuit, or once it is set back
+"""
+    next_event(::Series)
+
+the number of the next call of `output` on a series. Each value records the call it came
+from, so that values measured together can be told from values that only share a time: the
+time repeats over the sweeps of dmrg, in a circuit, or when a phase sets it back.
+"""
 next_event(s::Series) = 1 + maximum((last(d["events"]) for d in values(s)); init = 0)
 
+"""
+    push_value!(::Series, header, time, value, event)
+
+append to the series of `header`, opened if needed, a value measured at `time` by the call
+`event` of `output`.
+"""
 function push_value!(s::Series, header, time, value, event::Int)
     d = get!(s, header, Dict("times" => [], "data" => [], "events" => Int[]))
     push!(d["times"], time)
@@ -83,16 +106,29 @@ function push_value!(s::Series, header, time, value, event::Int)
     return nothing
 end
 
+"""
+    series_lengths(::Series)
+
+the number of values held under each header, which is how a checkpoint marks a series.
+"""
 series_lengths(s::Series) = Dict{String, Int}(h => length(d["times"]) for (h, d) in s)
 
-# the part of a series its lengths cover, encoded for a checkpoint: a header opened since is
-# left out, as the uninterrupted run had not opened it at that point either
+"""
+    persist_series(::Series, lengths)
+
+the part of a series that `lengths` covers, encoded for a checkpoint. A header opened since is
+left out, the uninterrupted run not having opened it at that point either.
+"""
 persist_series(s::Series, mark::Dict{String, Int}) =
     Dict(h => Dict(k => checkpoint_value(s[h][k][1:n]) for k in ("times", "data", "events"))
          for (h, n) in mark)
 
-# the series are pushed onto by the measurements to come, so they stay vectors of any element
-# type, whatever the values read back
+"""
+    restore_series(d)
+
+the series a checkpoint carried, decoded. The times and values stay vectors of element type
+`Any`, whatever the values read back, since the measurements to come are pushed onto them.
+"""
 restore_series(d) =
     Series(h => Dict("times" => Any[ restored_value(x) for x in s["times"] ],
                      "data" => Any[ restored_value(x) for x in s["data"] ],
@@ -100,19 +136,31 @@ restore_series(d) =
 
 ############### the rows of a text destination ###############
 
+"""
+    complex_columns(put, io, z, format)
+
+write the complex number `z` as two columns of a text destination, its real part then its
+imaginary part, each written by `put(io, part, format)`
+"""
+function complex_columns(put, file, z, format)
+    put(file, real(z), format)
+    print(file, "\t")
+    put(file, imag(z), format)
+end
+
+"""
+    output_one(io, x, format)
+
+write a measured value in a row of a text destination: a float with `format`, a complex
+number as two columns, real part then imaginary part, a vector or a matrix number by number,
+a matrix row by row, rather than as the literal Julia prints, anything else as `print` does.
+"""
 function output_one(file, x::AbstractFloat, format)
     Printf.format(file, format, x)
 end
 
-function output_one(file, x::Complex, format)
-    output_one(file, real(x), format)
-    print(file, "\t")
-    output_one(file, imag(x), format)
-end
+output_one(file, x::Complex, format) = complex_columns(output_one, file, x, format)
 
-# a value holding several, the part of a `Check` made on a vector observable for instance,
-# is written number by number, a matrix row by row as the lines of a matrix are, rather than
-# as the literal Julia prints
 function output_one(file, x::AbstractArray, format)
     for (k, y) in enumerate(row_major(x))
         if k > 1
@@ -126,20 +174,27 @@ function output_one(file, x, _)
     print(file, x)
 end
 
-# the time column always takes the time format, unlike a measured value, which keeps its
-# own printed form when it is not a float: `Linkdim` is meant to read as 8, not as 8.000
+"""
+    output_time(io, t, format)
+
+write the time column of a row. It always takes the time format, unlike a measured value,
+which keeps its own printed form when it is not a float: `Linkdim` reads 8, not 8.000.
+"""
 function output_time(file, t::Number, format)
     Printf.format(file, format, t)
 end
 
 # `Printf` refuses a complex number outright, so a complex simulation time is written as
 # the two columns a complex measurement takes, real then imaginary
-function output_time(file, t::Complex, format)
-    output_time(file, real(t), format)
-    print(file, "\t")
-    output_time(file, imag(t), format)
-end
+output_time(file, t::Complex, format) = complex_columns(output_time, file, t, format)
 
+"""
+    write_row(io, formats, time, header, data)
+
+write a value as rows of a text destination, `formats` being the time and data formats: the
+header, the time and the numbers of the value, separated by tabs. A matrix takes a line with
+the header alone, then one row per line of the matrix, headed `header:l`.
+"""
 write_row(file::IO, formats, time, header, data) =
     write_row(file, formats, time, header, [data])
 
@@ -165,39 +220,64 @@ end
 """
     Destination
 
-where the measurements of an `output` go. There are four kinds, and each says for itself what
-it takes, how far it has got and what a checkpoint has to carry of it:
+where the measurements of an `output` go, of four kinds:
 
 - `TextFile`: a file of the simulation, written line by line as the measurements are made;
-- `Stream`: a stream of the process, `stdout`, `stderr` or `devnull`, or the one `runTMS` was
-  asked to redirect everything to; the process owns it, so it is neither closed nor resumed;
+- `Stream`: `stdout`, `stderr`, `devnull` or the stream `runTMS` was told to redirect
+  everything to; it belongs to the process, so it is neither closed nor resumed;
 - `JsonFile`: a `.json` file, accumulated in memory and written when the files are closed;
 - `DataStore`: a `Data(name)` destination, accumulated in memory and handed over in
   `sim.data`.
 
-A destination answers `emit!` (a call of `output`), `emit_line!` (a line of the log),
-`reached` (how far it has got), `persist` (what a checkpoint carries of it up to there) and
-`close!`.
+Each kind answers those of `emit!`, `emit_line!`, `reached`, `persist` and `close!` that
+apply to it.
 """
 abstract type Destination end
 
+"""
+    TextFile(io)
+
+a text file of the simulation, see `Destination`.
+"""
 struct TextFile <: Destination
     io::IO
 end
 
+"""
+    Stream(io)
+
+a stream of the process, see `Destination`.
+"""
 struct Stream <: Destination
     io::IO
 end
 
+"""
+    JsonFile(path, series)
+
+a `.json` file, whose series are written to `path` when it is closed, see `Destination`.
+"""
 struct JsonFile <: Destination
     path::String
     series::Series
 end
 
+"""
+    DataStore(series)
+
+a `Data` destination, whose series is the one `sim.data` holds, see `Destination`.
+"""
 struct DataStore <: Destination
     series::Series
 end
 
+"""
+    emit!(::Destination, formats, time, values)
+
+take the values of one call of `output`, pairs `header => value`: a text file or a stream
+writes them as rows and flushes, an accumulating destination appends them to its series as
+one new event.
+"""
 function emit!(d::Union{TextFile, Stream}, formats, time, values)
     for (header, value) in values
         write_row(d.io, formats, time, header, value)
@@ -214,19 +294,40 @@ function emit!(d::Union{JsonFile, DataStore}, _, time, values)
     end
 end
 
+"""
+    emit_line!(::Destination, text)
+
+write a line of the log to a text file or a stream, flushed at once.
+"""
 function emit_line!(d::Union{TextFile, Stream}, text)
     println(d.io, text)
     flush(d.io)
 end
 
+"""
+    reached(::Destination)
+
+how far a text file or an accumulating destination has got: the position of the file, once
+flushed, or the lengths of the series.
+"""
 reached(d::TextFile) = (flush(d.io); position(d.io))
 reached(d::Union{JsonFile, DataStore}) = series_lengths(d.series)
 
-# a text file is on the disk up to where it had got already, and a resume cuts it back there;
-# what a series held has to travel in the checkpoint, since it is only written at the end
+"""
+    persist(::Destination, reached)
+
+what a checkpoint carries of a file up to `reached`. A text file is on the disk up to there
+already, so only its position, which a resume cuts it back to; a json file is only written
+at the end, so the part of its series.
+"""
 persist(::TextFile, pos::Int) = Dict("text" => pos)
 persist(d::JsonFile, lengths) = Dict("json" => persist_series(d.series, lengths))
 
+"""
+    close!(::Destination)
+
+close a text file, or write a json file; a stream or a `Data` destination is left as it is.
+"""
 close!(d::TextFile) = close(d.io)
 close!(::Union{Stream, DataStore}) = nothing
 
@@ -239,20 +340,23 @@ function close!(d::JsonFile)
     end
 end
 
-# the handle a destination was given out as before destinations were objects, which
-# `get_sim_file` still gives
+"""
+    handle(::Destination)
+
+what `get_sim_file` returns for a destination: the stream of a text file or a stream, the
+series of an accumulating destination.
+"""
 handle(d::Union{TextFile, Stream}) = d.io
 handle(d::Union{JsonFile, DataStore}) = d.series
 
 """
-    Outputs
+    Outputs(redirect, time_format, data_format)
 
-the destinations of a simulation, found by name the first time they are asked for and the
-same object afterwards, the `Data` ones apart, and the formats of what is written. This is the
-only place that reads a destination name: `"stdout"` (or `"-"`), `"stderr"` and `""` are the
-streams of the process, a name ending in `.json` an accumulating file, and any other a text
-file. When `redirect` is given, every name is that stream, a `Data` destination excepted,
-which is not written anywhere.
+the destinations of a simulation and the formats of what is written. A destination is opened
+the first time its name is asked for and is the same afterwards. This is the only place that
+reads a destination name: `"stdout"` (or `"-"`), `"stderr"` and `""` (`devnull`) are the
+streams of the process, a name ending in `.json` an accumulating file, any other a text file.
+With `redirect`, every name is that stream, and a `Data` destination is still kept in memory.
 """
 struct Outputs
     redirect::Union{Nothing, IO}
@@ -264,6 +368,12 @@ struct Outputs
             (Printf.Format(time_format), Printf.Format(data_format)))
 end
 
+"""
+    open_destination(name)
+
+the destination a name stands for, see `Outputs`. A text file is created, emptied if it
+exists.
+"""
 function open_destination(name::AbstractString)
     if name == "stdout" || name == "-"
         return Stream(stdout)
@@ -277,6 +387,13 @@ function open_destination(name::AbstractString)
     return TextFile(open(name, "w"))
 end
 
+"""
+    destination(::Outputs, name)
+    destination(::Outputs, ::Data)
+
+the destination of the given name, opened on first use, or the redirect stream if there is
+one. A `Data` destination holds the series of that name in `sim.data`, created if needed.
+"""
 destination(o::Outputs, name::AbstractString) =
     isnothing(o.redirect) ? get!(() -> open_destination(name), o.files, name) : Stream(o.redirect)
 
@@ -285,15 +402,19 @@ destination(o::Outputs, d::Data) = DataStore(get!(Series, o.data, d.name))
 """
     output_marks(::Outputs)
 
-how far every destination has got, the part a checkpoint records so that it can write back
-later exactly what they held now: the position of each text file and the lengths of each
-series. The streams of the process have no position to keep.
+how far every destination has got, which a checkpoint records so as to write back later
+exactly what they hold now: the position of each text file and the lengths of each series.
+The streams of the process are left out, having no position to keep.
 """
 output_marks(o::Outputs) =
     (files = Dict{String, Any}(name => reached(d) for (name, d) in o.files if !(d isa Stream)),
      data = Dict{String, Dict{String, Int}}(name => series_lengths(s) for (name, s) in o.data))
 
-# what a checkpoint carries of the destinations, up to where they had got
+"""
+    persist_outputs(::Outputs, marks)
+
+what a checkpoint carries of the destinations, up to the `marks` of `output_marks`.
+"""
 persist_outputs(o::Outputs, marks) =
     Dict("files" => Dict(name => persist(o.files[name], m) for (name, m) in marks.files),
          "data" => Dict(name => persist_series(o.data[name], m) for (name, m) in marks.data))
@@ -301,10 +422,9 @@ persist_outputs(o::Outputs, marks) =
 """
     restore_outputs!(::Outputs, persisted)
 
-put back the destinations a checkpoint carries: a text file is cut back to where it was and
-continued, a series holds again what it held. A file the checkpoint does not know is not
-touched here, and it is created, emptying it, the first time it is asked for, as the
-uninterrupted run creates it.
+put back the destinations a checkpoint carries: a text file is cut back to its recorded
+position and continued, a series holds again what it held. A file the checkpoint does not
+know is left alone here, and is created, emptied, on first use, as in the uninterrupted run.
 """
 function restore_outputs!(o::Outputs, persisted)
     for (name, p) in persisted["files"]
@@ -325,4 +445,9 @@ function restore_outputs!(o::Outputs, persisted)
     return o
 end
 
+"""
+    close_outputs!(::Outputs)
+
+close every destination opened by name, which writes the json files, see `close!`.
+"""
 close_outputs!(o::Outputs) = foreach(close!, values(o.files))

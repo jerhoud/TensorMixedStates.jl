@@ -1,25 +1,27 @@
+# run_phase, which runs each type of phase on a simulation and returns the simulation it leaves
+# behind; a phase type of one's own gets a method of it.
+
 """
     run_phase(sim::Simulation, phase)
 
-run one phase on the given simulation and return the simulation it leaves behind.
+run one phase on a simulation and return the simulation it leaves behind.
 
-This is where a phase of your own plugs in. Define a struct carrying the three fields the
-machinery around a phase reads — `name`, `time_start` and `final_measures` — and a method of
-`TensorMixedStates.run_phase` for it. `runTMS` then logs it, applies its `time_start`, calls
-your method and takes its final measurements, exactly as for a phase of the library. Note
-the full name: `run_phase` is not exported, so it has to be written out to add a method to
-it rather than shadowed by one of your own.
+This is where a phase of your own plugs in: define a struct with the three fields every phase
+has, `name`, `time_start` and `final_measures`, and a method of `TensorMixedStates.run_phase`
+for it. The full name is needed: `run_phase` is not exported, and a function of your own
+of that name would shadow it rather than extend it. `runTMS` then logs the phase, applies its
+`time_start`, calls the method and takes the final measurements, as for a phase of the
+library.
 
-A phase of your own that drives a solver with the observers of the package, `TdvpObserver`,
-`ApproxWObserver` or `DmrgObserver`, is stopped and checkpointed as the phases of the library
-are. A checkpoint written while it runs resumes it from its start, since a resume hands it the
-state it had reached and it would run all its sweeps again on it. To resume it at the sweep
-it had reached instead, read `done, energy = TensorMixedStates.resume_sweeps!(sim.checkpoint)`
-before starting the solver and start it at `first_sweep = done + 1`, handing `done` and
-`energy` to a `DmrgObserver` as well.
+A phase of your own that drives a solver with `TdvpObserver`, `ApproxWObserver` or
+`DmrgObserver` is stopped and checkpointed as those of the library are, but a checkpoint
+written while it runs resumes it from its start. To resume it at the sweep it had reached,
+read `done, energy = TensorMixedStates.resume_sweeps!(sim.checkpoint)` before starting the
+solver, start it at `first_sweep = done + 1`, and hand `done` and `energy` to a
+`DmrgObserver`.
 
-The fallback method below exists so that an object that is not a phase says so, instead of
-surfacing as a bare `MethodError` from somewhere inside a run.
+The method documented here is the fallback: it makes an object with no method of its own
+say so, rather than fail with a bare `MethodError` inside a run.
 """
 run_phase(sim::Simulation, phase) =
     error("there is no run_phase method for $(typeof(phase)), so runTMS does not know " *
@@ -30,18 +32,42 @@ run_phase(sim::Simulation, phase) =
 """
     as_representation(sim, R, ::State)
 
-the given state in representation `R`, for a `CreateState` handed a `State` object rather
-than a description of one. A pure state is mixed on the way in, which is what `type` asked
-for; the other direction does not exist, a mixed state holds no purification to go back to.
+the given state in representation `R`, for a `CreateState` handed a `State` rather than a
+description. A pure state is mixed if `R` is `Mixed`; a mixed state is refused if `R` is
+`Pure`, since it holds no purification to go back to.
 """
 as_representation(::Simulation, ::Type{R}, state::State{R}) where R = state
-as_representation(sim::Simulation, ::Type{Mixed}, state::State{Pure}) = begin
+function as_representation(sim::Simulation, ::Type{Mixed}, state::State{Pure})
     log_msg(sim, "Creating mixed representation with $(length(state)) sites")
-    mix(state)
+    return mix(state)
 end
 as_representation(::Simulation, ::Type{Pure}, ::State{Mixed}) =
     error("CreateState was asked for a pure state but given a mixed one, which cannot be " *
           "turned back into a pure state")
+
+"""
+    run_search(solve, sim, phase, what, final_line)
+
+run a phase that searches a state by dmrg, `GroundState` or `SteadyState`, `solve(sim;
+options...)` calling its solver: from the sweep a resumed run had reached, with a
+`DmrgObserver`, the log saying `what` is being done and, unless the run stops for a
+checkpoint, the line `final_line(e)` with the value reached. A search whose checkpoint fell on
+its last sweep has only that line left to write, with the value the checkpoint recorded.
+"""
+function run_search(solve, sim::Simulation, phase, what::String, final_line)
+    done, e = resume_sweeps!(sim.checkpoint)
+    if done < phase.nsweeps
+        log_msg(sim, "$what with $(phase.nsweeps - done) sweeps of Dmrg")
+        e, sim = solve(sim; phase.nsweeps, first_sweep = done + 1, phase.limits,
+            observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
+                                     done; phase.nsweeps, energy = e))
+    end
+    # a search stopped for a checkpoint is not done, and its resume writes the line
+    if !sim.checkpoint.stopping
+        log_msg(sim, final_line(e))
+    end
+    return sim
+end
 
 function run_phase(sim::Simulation, phase::CreateState{R}) where R
     if !isnothing(phase.seed)
@@ -81,7 +107,6 @@ function run_phase(sim::Simulation, phase::CreateState{R}) where R
     return Simulation(sim, state)
 end
 
-
 function run_phase(sim::Simulation, phase::ToMixed)
     if sim.state isa State{Mixed}
         log_msg(sim, "State is already in mixed representation")
@@ -94,9 +119,8 @@ function run_phase(sim::Simulation, phase::ToMixed)
     return sim
 end
 
-
 function run_phase(sim::Simulation, phase::Evolve)
-    nsweeps = Int(round(phase.duration / phase.time_step))
+    nsweeps = round(Int, phase.duration / phase.time_step)
     if nsweeps == 0
         log_msg(sim, "Skipping an evolution of $(phase.duration), shorter than half a time step")
         return sim
@@ -110,66 +134,42 @@ function run_phase(sim::Simulation, phase::Evolve)
     end
     time_stop = sim.time + duration
     log_msg(sim, "Evolving state from simulation time $(sim.time) to $(time_stop)")
-    time_dep = phase.evolver isa Pair
-    if time_dep
-        evolver = first(phase.evolver)
-        coefs = last(phase.evolver)
-    else
-        evolver = phase.evolver
-        coefs = nothing
-    end
+    evolver, coefs = phase.evolver isa Pair ? (first(phase.evolver), last(phase.evolver)) :
+                                              (phase.evolver, nothing)
     state = sim.state
     # PreMPO adapts the evolver to the representation of the state, and handles the vector
     # form of a time dependent evolver
     pre = PreMPO(state, evolver)
     done, _ = resume_sweeps!(sim.checkpoint)
     algo = phase.algo
+    common = (; coefs, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
+              first_sweep = done + 1)
     if algo isa ApproxW
-        state = approx_W(pre, duration, state;
-            coefs, algo.n_hermitianize, nsweeps, algo.order, algo.w, time_start = sim.time, phase.limits,
-            observer! = ApproxWObserver(sim, phase.measures, phase.measures_period),
-            first_sweep = done + 1)
+        state = approx_W(pre, duration, state; common..., algo.order, algo.w,
+            observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
-        state = tdvp(pre, duration, state;
-            coefs, algo.n_expand, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
-            observer! = TdvpObserver(sim, phase.measures, phase.measures_period),
-            first_sweep = done + 1)
+        state = tdvp(pre, duration, state; common..., algo.n_expand,
+            observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
     # a phase cut short by a checkpoint stops at the time it actually reached
     c = sim.checkpoint
     return Simulation(sim, state, c.stopping ? c.last.time : time_stop)
 end
 
-
 function run_phase(sim::Simulation, phase::Gates)
-  log_msg(sim, "Applying $(length(prodsubs(phase.gates))) gates")
-  return apply(phase.gates, sim; phase.limits)
+    log_msg(sim, "Applying $(length(prodsubs(phase.gates))) gates")
+    return apply(phase.gates, sim; phase.limits)
 end
 
-
-function run_phase(sim::Simulation, phase::GroundState)
-    done, e = resume_sweeps!(sim.checkpoint)
-    # a search whose checkpoint fell on its last sweep has only its last line left to write,
-    # with the energy the checkpoint recorded
-    if done < phase.nsweeps
-        log_msg(sim, "Optimizing state with $(phase.nsweeps - done) sweeps of Dmrg")
-        e, sim = dmrg(phase.hamiltonian, sim; phase.nsweeps, first_sweep = done + 1,
-            phase.limits, phase.noise,
-            observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
-                                     done; phase.nsweeps, energy = e))
-    end
-    # a search stopped for a checkpoint is not done, and its resume writes the line
-    if !sim.checkpoint.stopping
-        log_msg(sim, "Done, dmrg final energy is $e")
-    end
-    return sim
-end
+run_phase(sim::Simulation, phase::GroundState) =
+    run_search((sim; kwargs...) -> dmrg(phase.hamiltonian, sim; phase.noise, kwargs...),
+               sim, phase, "Optimizing state", e -> "Done, dmrg final energy is $e")
 
 function run_phase(sim::Simulation, phase::SaveState)
     save_state(phase.file, phase.statename, sim.state)
     return sim
 end
-    
+
 run_phase(sim::Simulation, phase::LoadState) =
     Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits))
 
@@ -179,11 +179,7 @@ function run_phase(sim::Simulation, phase::PartialTrace)
     if isnothing(pos) == isnothing(keep)
         error("PartialTrace requires one and only one of trace_positions and keep_positions")
     end
-    if isnothing(pos)
-        return partial_trace(sim, keep; keepers = true)
-    else
-        return partial_trace(sim, pos)
-    end
+    return isnothing(pos) ? partial_trace(sim, keep; keepers = true) : partial_trace(sim, pos)
 end
 
 function run_phase(sim::Simulation, phase::Weaken)
@@ -197,18 +193,9 @@ function run_phase(sim::Simulation, phase::SteadyState)
     if sim.state isa State{Pure}
         error("state must be in mixed representation for computing steady state")
     end
-    done, e = resume_sweeps!(sim.checkpoint)
-    # as for GroundState, a search whose checkpoint fell on its last sweep only writes its
-    # last line
-    if done < phase.nsweeps
-        log_msg(sim, "Searching for steady state with $(phase.nsweeps - done) sweeps of Dmrg")
-        e, sim = steady_state(phase.lindbladian, sim;
-            phase.nsweeps, first_sweep = done + 1, phase.limits, phase.mpo_limits, phase.mpo_algo,
-            observer! = DmrgObserver(sim, phase.measures, phase.measures_period, phase.tolerance,
-                                     done; phase.nsweeps, energy = e))
-    end
-    if !sim.checkpoint.stopping
-        log_msg(sim, "Done, dmrg final value is $e (0 for steady state)")
-    end
-    return sim
+    return run_search(
+        (sim; kwargs...) -> steady_state(phase.lindbladian, sim; phase.mpo_limits,
+                                         phase.mpo_algo, kwargs...),
+        sim, phase, "Searching for steady state",
+        e -> "Done, dmrg final value is $e (0 for steady state)")
 end

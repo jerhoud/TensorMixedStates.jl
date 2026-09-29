@@ -246,15 +246,15 @@ end
     # checkpoint stores its two parts, so it has to be writable. `Printf` refuses it, and
     # the columns a complex measurement takes are the form to follow
     st = State{Pure}(System(2, Qubit()), "Up")
-    line(t) = (io = IOBuffer(); output(Simulation(st; time = t), io, "h", [1.0]);
+    line(t) = (io = IOBuffer(); output(Simulation(st; time = t, output = io), "data" => Trace);
                String(take!(io)))
-    @test line(0.3 + 0.2im) == "h\t     0.3\t     0.2\t             1\n"
+    @test line(0.3 + 0.2im) == "Trace\t     0.3\t     0.2\t             1\n"
     # and a real time keeps exactly the format it had. The default is a float, but an
     # integer given explicitly must still be written with the time format, unlike a
     # measured value, which keeps its own form when it is not a float
-    @test line(0.) == "h\t       0\t             1\n"
-    @test line(0) == "h\t       0\t             1\n"
-    @test line(0.25) == "h\t    0.25\t             1\n"
+    @test line(0.) == "Trace\t       0\t             1\n"
+    @test line(0) == "Trace\t       0\t             1\n"
+    @test line(0.25) == "Trace\t    0.25\t             1\n"
 end
 
 @testset "Output of complex values" begin

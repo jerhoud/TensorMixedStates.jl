@@ -1,10 +1,14 @@
+# States, MPS on a system in the pure or the mixed representation: product states built from
+# local states, the truncation limits, mixing a pure state and weakening a state.
+
 export State, mix, maxlinkdim, Limits
 
 """
     struct PreObs
 
-A data structure to hold preprocessing data for observable expectation computations.
-Used by `State`
+the caches a `State` keeps for measurements, each filled on first use: the local tensors,
+the environments from the left and from the right, the trace, and the weakened form of a
+state conserving something strongly.
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -16,18 +20,19 @@ end
 PreObs() = PreObs([], [], [], [], [])
 
 """
-A type to hold MPS limits
+    Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 1)
+
+the truncation limits of an MPS.
 
 # Fields
 - `cutoff`: the cutoff under which singular values are neglected
 - `maxdim`: the maximum bond dimension
-- `mindim`: the minimum bond dimension, `1`, the least a bond can have, meaning no minimum,
-  and a smaller value being taken as `1`
+- `mindim`: the minimum bond dimension; the default `1` means no minimum, and a smaller value
+  is taken as `1`
 
-Any field may be given one value per sweep, as a vector, for a phase that sweeps:
-`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A
-schedule shorter than the number of sweeps is continued with its last value, which is
-what ITensor does too.
+For a phase that sweeps, any field may be a vector, one value per sweep:
+`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A vector
+shorter than the number of sweeps is continued with its last value, as in ITensor.
 
 # Examples
 
@@ -50,9 +55,19 @@ end
 Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 1) =
     Limits(float_cutoff(cutoff), maxdim, mindim)
 
+"""
+    float_cutoff(x)
+
+the cutoff `x`, a real number or a vector of them, as `Float64`.
+"""
 float_cutoff(x::Real) = Float64(x)
 float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
 
+"""
+    at_least_one(m)
+
+the minimum bond dimension `m`, or each value of a vector of them, raised to `1` if below.
+"""
 at_least_one(m::Int) = max(m, 1)
 at_least_one(m::Vector{Int}) = max.(m, 1)
 
@@ -60,9 +75,9 @@ at_least_one(m::Vector{Int}) = max.(m, 1)
     sweep_value(x, sweep)
     sweep_limits(::Limits, sweep)
 
-the value a per sweep schedule takes on the given sweep, and the `Limits` holding those
-values. A plain value covers every sweep, and a schedule shorter than the number of sweeps
-is continued with its last value, as ITensor does with its own.
+the value of the per sweep schedule `x` on the given sweep, and the `Limits` holding those
+values. A plain value covers every sweep; a vector shorter than the number of sweeps is
+continued with its last value, as in ITensor.
 """
 sweep_value(x, ::Int) = x
 sweep_value(x::Vector, sweep::Int) = x[min(sweep, length(x))]
@@ -73,16 +88,9 @@ sweep_limits(l::Limits, sweep::Int) =
 """
     sweep_due(period, sweep)
 
-whether something asked for every `period` sweeps is due on this one.
-
-A period below one means never. That is what `0` was already taken to mean for `n_expand`,
-`n_hermitianize` and `checkpoint_interval`, and the rule is extended to any value below
-one so that a negative period is not silently read as `mod(sweep, -2)`, which is zero on
-every second sweep. `mod(sweep, 0)` would raise a division by zero outright, which is what
-`measures_period = 0` used to do.
-
-The three sweep counters of the library go through this, and `checkpoint_due` applies the
-same rule to the interval in seconds of the checkpointer.
+whether something asked for every `period` sweeps is due on this one. A period below one
+means never: `mod(sweep, 0)` would raise a division by zero, and a negative period would make
+it due every `-period` sweeps. `checkpoint_due` applies the same rule.
 """
 sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
   
@@ -93,17 +101,18 @@ sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
     State{R}(::Vector{<:AbstractSite}, state)
     State(::State, ::MPS)
 
-represent the complete state of the simulated quantum system
+the state of a quantum system, as an MPS: a wave function for `R = Pure`, a density matrix
+for `R = Mixed`.
 
-# Type parameter
-
-- `R` is `Pure` or `Mixed` and represent the type of representation used
+The local states are given as a vector, one per site, or as a single one for every site. A
+local state is a name, the number of a basis state counted from 0, a vector of amplitudes, a
+function of the site giving one of those, or, in mixed representation only, a density matrix.
 
 # Fields
 
-- `system::System`: system description
-- `state::MPS`: system state
-- `preobs::PreObs`: preprocessing data for computing observables
+- `system::System`: the system
+- `state::MPS`: the MPS
+- `preobs::PreObs`: caches filled by measurements
 
 # Examples
 
@@ -117,8 +126,8 @@ represent the complete state of the simulated quantum system
 
 # Operations
 
-states can be added, subtracted and multiplied by numbers
-
+States can be added, subtracted, multiplied and divided by numbers. A sum or difference
+takes truncation limits as `+(a, b; limits = Limits(maxdim = 100))`.
 """
 struct State{R <: PM}
     system::System
@@ -134,22 +143,24 @@ show(io::IO, s::State{R}) where R =
 """
     length(::State)
 
-return the number of sites in the state
+the number of sites of the state.
 """
 length(state::State) = length(state.system)
 
 """
     maxlinkdim(::State)
 
-return the maximum link dimension in the state
+the largest link dimension of the MPS of the state.
 """
 maxlinkdim(state::State) = maxlinkdim(state.state)
 
 
 """
-    make_one_state(type::R, system::System, i::Int, st) where {R <: PM}
+    make_one_state(type, system, i, st)
 
-return the ITensor of the local state `st` at site `i` of the system
+the ITensor of the local state `st` on site `i` of `system`, in the representation `type`,
+`Pure()` or `Mixed()`. A vector gives a density matrix in mixed representation, and a density
+matrix is refused in pure representation.
 """
 make_one_state(type::R, system::System, i::Int, st) where {R <: PM} = 
     make_one_state(type, SysIndex{Pure}(system, i), SysIndex{Mixed}(system, i),
@@ -172,12 +183,9 @@ end
 """
     state_links(ts)
 
-the link indices of the product state made of the tensors `ts`.
-
-Each one carries the charge of everything to its left, so that the flux of the whole state
-is its sector. They are built from the right and daggered, which is the arrangement
-ITensorMPS uses for its own product states and what makes the pieces contract. Without
-charges they are the indices of dimension one they always were.
+the link indices, of dimension one, of the product state of the tensors `ts`. With charges,
+each carries the charge of the sites on its left, so that the flux of the state is its sector;
+they are daggered, as ITensorMPS does for its own product states, so that the pieces contract.
 """
 function state_links(ts::Vector{ITensor})
     n = length(ts)
@@ -194,9 +202,10 @@ function state_links(ts::Vector{ITensor})
 end
 
 """
-    make_state(type::R, system::System, states::Vector) where {R <: PM}
+    make_state(type, system, states)
 
-return the MPS of the local states `states` for the system
+the product state MPS of the local states `states`, one per site of `system`, in the
+representation `type`, `Pure()` or `Mixed()`.
 """
 function make_state(type::PM, system::System, states::Vector)
     n = length(system)
@@ -235,19 +244,15 @@ State{R}(system::System, state::Union{Vector{<:Number}, Matrix}) where R =
 State(state::State{R}, st::MPS) where R =
     State{R}(state.system, st)
 
-# a `System` draws ITensor indices of its own, so two states built on two systems cannot be
-# contracted together even when they describe the very same sites. This is what puts one on
-# the system of the other, and what `inner` and the fidelities point at when they refuse a
-# pair of states
 """
     State(::System, ::State)
 
-the same state on the given system, whose sites must be the ones the state was built on.
+the same state on the given system, whose sites must be those of the state.
 
-This is the mirror of `State(state, mps)`: that one keeps the system and takes a new mps,
-this one keeps the mps and takes a new system. It is what makes a state read from disk, or
-built before a run, comparable with the state of that run, since `inner` and the fidelities
-require their two arguments to share a system.
+Every `System` has ITensor indices of its own, so states built on two systems cannot be
+contracted together even when their sites are the same, and `inner` and the fidelities refuse
+them. This puts a state, read from disk or built before a run for instance, on the system of
+another. It mirrors `State(state, mps)`, which keeps the system and takes a new MPS.
 
 # Examples
 
@@ -280,7 +285,12 @@ State{R}(sites::Vector{<:AbstractSite}, state) where R =
 """
     mix(::State)
 
-transform a pure representation into a mixed representation
+the state in mixed representation: the density matrix ``|\\psi\\rangle\\langle\\psi|`` of a
+pure state ``|\\psi\\rangle``, or a mixed state unchanged.
+
+# Examples
+
+    mix(State{Pure}(10, Qubit(), "Up"))
 """
 mix(state::State{Mixed}) = state
 
@@ -323,26 +333,24 @@ end
     weaken(::State)
     weaken(::State, target)
 
-the same state on a system conserving less, `target` naming what it must still conserve in
-the vocabulary `conserve` takes. Without a target every strong quantity is asked for weakly,
-or, when none is strong, every quantity is dropped: repeating it walks strong, then weak,
-then nothing, and stops there.
+the same state on a system conserving less, `target` naming what it must still conserve, as
+`conserve` is given. Without a target, every strong quantity becomes weak or, when none is
+strong, every quantity is dropped: repeated, it goes from strong to weak to nothing.
 
-The levels hold the same physics and differ in how the tensors are cut into blocks. Keeping
-the charge of the ket apart from that of the bra cuts them finest and confines the state to a
-single sector; keeping only the difference lets it spread over sectors and makes the trace a
-product of one vector per site again; keeping nothing gives plain tensors.
+The levels hold the same physics and differ in how the tensors are cut into blocks. Strong
+keeps the charges of ket and bra apart: the blocks are finest and the state lies in a single
+sector. Weak keeps their difference: the state may spread over sectors. Nothing gives plain
+tensors.
 
-Weakening is a step of a simulation in its own right: a phase may evolve under a strong
-symmetry, which every dissipator commuting with the charge allows, and the next one continue
-under a weak one, where a jump that moves the charge becomes possible. There is no way back,
-the finer blocks not being recoverable from the coarser ones, and a target asking for more
+Weakening is a step of a simulation: a phase may evolve under a strong symmetry, which every
+dissipator commuting with the charge allows, and the next one under a weak one, where a jump
+moving the charge is possible.
+There is no way back, since the finer blocks cannot be recovered, and a target asking for more
 than the state has is refused.
 
-The system it builds is a new one, so two states weakened apart live on two systems and have
-to be put on one another before `inner` will compare them.
-
-A `Simulation` is weakened the same way, through its state.
+The system built is a new one, so two states weakened separately must be put on one system,
+see `State(::System, ::State)`, before `inner` compares them. A `Simulation` is weakened the
+same way, through its state.
 
 # Examples
 
@@ -389,7 +397,11 @@ weaken(state::State) = weaken(state, one_step_down(symmetries(state.system)))
 """
     truncate(::State; limits::Limits)
 
-apply the truncations to the given state
+the state with its MPS truncated to `limits`.
+
+# Examples
+
+    truncate(state; limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
 truncate(state::State{R}; limits::Limits) where R =
     State{R}(state.system, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))

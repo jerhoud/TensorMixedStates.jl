@@ -450,11 +450,11 @@ end
     @test Operator{1}("Fs", s -> matrix(Sz, s), selfadjoint_op, s1).expr ≈ matrix(Sz, s1)
     cf = Operator{1}("Cf", C, fermionic_op, fe)
     @test isfermionic(cf) && matrix(cf, fe) ≈ matrix(C, fe)
-    @test_throws "has dimension 3" Operator{1}("A", [1. 0 ; 0 1], plain_op, s1)
+    @test_throws "whose dimension is 3" Operator{1}("A", [1. 0 ; 0 1], plain_op, s1)
 
     # what cannot be split
     @test_throws "acts on 2 sites and was given 3" Operator{2}("A", msw, plain_op, q, q, q)
-    @test_throws "has dimension 6" Operator{2}("A", msw, plain_op, s1, q)
+    @test_throws "whose dimension is 6" Operator{2}("A", msw, plain_op, s1, q)
 end
 
 @testset "The matrix of a tensor product of fermions" begin
@@ -611,7 +611,7 @@ end
     @test IT.array(IT.dense(tensor(m, qn))) ≈ IT.array(IT.dense(tensor(Sp ⊗ Sm, qn, qn)))
     @test_throws "no definite charge" tensor(matrix(X, q), qn)
     # a size matching no number of sites was taken for as many basis states of a new index
-    @test_throws "whose dimension is 4" tensor(rand(3, 3), q)
+    @test_throws "acts on no number of Qubit()" tensor(rand(3, 3), q)
     @test_throws "whose dimension is 4" tensor(rand(2, 2), q, q)
 end
 

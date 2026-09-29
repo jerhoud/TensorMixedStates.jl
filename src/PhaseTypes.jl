@@ -1,26 +1,34 @@
-export Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates, GroundState, Dmrg, PartialTrace, SteadyState, Weaken
+# The phase types a simulation is made of, as runTMS takes them: CreateState, LoadState,
+# SaveState, ToMixed, the evolutions Tdvp, ApproxW, Evolve and Gates, GroundState, SteadyState,
+# PartialTrace and Weaken.
 
+export Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates
+export GroundState, Dmrg, PartialTrace, SteadyState, Weaken
 
 """
-A phase type to create the simulation state
+    CreateState(; type, system, state, randomize, seed, name, time_start, final_measures)
+    CreateState{Pure|Mixed}(n, site, state; options...)
+    CreateState{Pure|Mixed}(sites, state; options...)
+
+a phase that creates the state of the simulation. The first phase of a simulation is this one
+or `LoadState`.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the simulation time from this phase on (default `nothing`, keeping the current
-  time, which the `time_start` of `SimData` sets at the start)
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `type`: the type of state to create `Pure()` or `Mixed()`
-- `system`: a System object to describe the system (see `System`) (unused if a State object is given)
-- `state`: a description of the state (or a State object)
-- `randomize`: the link dimension for the random state to create (default 0 for no randomizing).
-  With a `state` given, a pure state is randomised from it and a mixed one drawn from the
-  purification starting from it, see `RandomState`: a mixed one needs a description, a State
-  object being randomised into a pure state only
-- `seed`: set the random generator seed for randomize (default nothing). A checkpoint does not
-  save the generator, so a run resumed after this phase does not apply it again
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `type`: the representation of the state, `Pure()` or `Mixed()`
+- `system`: the `System` of the state, unused when `state` is a `State`
+- `state`: a description of the state, or a `State`, which is mixed if `type` asks for it (a
+  mixed one cannot be made pure)
+- `randomize`: the link dimension of a random state to create (default 0, none). With a
+  `state`, a pure state is randomized from it and a mixed one drawn from a purification
+  starting from it, see `RandomState`; a `State` can only be randomized into a pure state
+- `seed`: the seed the global random generator is given at the start of the phase (default
+  `nothing`, none). A checkpoint does not save the generator, so a run resumed after this
+  phase does not set it again
 
 # Examples
+
     CreateState(type = Pure(), system = System(10, Qubit()), state = "Up")
     CreateState(type = Mixed(), system = System(3, Qubit()), state = ["Up", "Dn", "Up"])
     CreateState(type = Pure(), system = System(10, Qubit()), randomize = 50)
@@ -45,23 +53,22 @@ CreateState{R}(n, site, state; kwargs...) where R =
 CreateState{R}(sites, state; kwargs...) where R =
     CreateState(;type = R(), system = System(sites), state, kwargs...)
 
-
 """
-A phase type to save the state to disk in a hdf5 file (see `save_state`)
+    SaveState(; file, statename = "state", name, time_start, final_measures)
 
-SaveState(file = "myfile.h5")
-SaveState(file = "myfile.h5", statename = "after_evolution")
-
-several states can be saved in the same file under different `statename`,
-saving under a name already present in the file replaces it
+a phase that saves the state in a hdf5 file, see `save_state`. Several states can be saved in
+one file under different `statename`; saving under a name already in the file replaces it.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the simulation time at the start of the phase (`nothing` keeps the current time)
-- `final_measures`: the measurements to make at the end of the phase
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `file`: the name of the hdf5 file to write to
 - `statename`: the name under which the state is stored in the file
+
+# Examples
+
+    SaveState(file = "myfile.h5")
+    SaveState(file = "myfile.h5", statename = "after_evolution")
 """
 @kwdef struct SaveState
     name::String = "Saving state"
@@ -71,22 +78,23 @@ saving under a name already present in the file replaces it
     statename::String = "state"
 end
 
-
-
 """
-A phase type to load the state from a hdf5 file written by `SaveState` (see `load_state`)
+    LoadState(; file, statename = "state", limits, name, time_start, final_measures)
 
-LoadState(file = "myfile.h5")
-LoadState(file = "myfile.h5", statename = "after_evolution")
+a phase that loads the state from a hdf5 file written by `SaveState` or `save_state`, see
+`load_state`, and truncates it to `limits`.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the simulation time at the start of the phase (`nothing` keeps the current time)
-- `final_measures`: the measurements to make at the end of the phase
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `file`: the name of the hdf5 file to read from
 - `statename`: the name under which the state is stored in the file
-- `limits`: the truncation applied to the state after loading
+- `limits`: the truncation applied to the state once loaded, see `Limits`
+
+# Examples
+
+    LoadState(file = "myfile.h5")
+    LoadState(file = "myfile.h5", statename = "after_evolution")
 """
 @kwdef struct LoadState
     name::String = "Loading state"
@@ -97,16 +105,16 @@ LoadState(file = "myfile.h5", statename = "after_evolution")
     limits::Limits = Limits()
 end
 
-
 """
-A phase type to switch to mixed representation
+    ToMixed(; limits, name, time_start, final_measures)
+
+a phase that switches the state to the mixed representation and truncates it to `limits`; a
+state already mixed is only truncated.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the simulation time to use (no much use here)
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `limits` : constraints on the final state
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `limits`: constraints on the mixed state, see `Limits`
 
 # Examples
 
@@ -120,13 +128,17 @@ A phase type to switch to mixed representation
     limits::Limits = Limits()
 end
 
-
-
-
 """
-An algorithm type for `Evolve`
+    Tdvp(; n_expand = 0, n_hermitianize = 0)
+
+the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
+
+- `n_expand`: expand the state every `n_expand` steps (default 0, never)
+- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+  never)
 
 # Examples
+
     Tdvp()
     Tdvp(n_expand = 5)        # tdvp with expansion steps every 5 steps
     Tdvp(n_hermitianize = 3)  # tdvp, make hermitian every 3 steps
@@ -136,15 +148,19 @@ An algorithm type for `Evolve`
     n_hermitianize::Int = 0
 end
 
-show(io::IO, s::Tdvp) =
-    print(io, "Tdvp(n_expand = $(s.n_expand), n_hermitianize = $(s.n_hermitianize))")
-
 """
-An algorithm type for `Evolve`
+    ApproxW(; order, w = 2, n_hermitianize = 0)
 
-This corresponds to time evolution with exponential approximation WI or WII combined to obtained approximation of the given order
+time evolution by WI or WII approximations of the exponential, combined into an approximation
+of the given order, for the `algo` field of `Evolve`, see `approx_W`.
+
+- `order`: the order of the approximation, from 1 to 4, required
+- `w`: 1 or 2 for WI or WII (default 2)
+- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+  never)
 
 # Examples
+
     ApproxW(order = 2)                     # order 2, WII
     ApproxW(order = 4, w = 1)              # order 4, WI
     ApproxW(order = 4, n_hermitianize = 3) # order 4, make hermitian every 3 steps
@@ -155,37 +171,41 @@ This corresponds to time evolution with exponential approximation WI or WII comb
     n_hermitianize::Int = 0
 end
 
-show(io::IO, s::ApproxW) =
-    print(io, "ApproxW(order = $(s.order), w = $(s.w), n_hermitianize = $(s.n_hermitianize))")
-
-
 """
     Algo = Union{Tdvp, ApproxW}
 
-the type of the time evolution algorithms accepted by the `algo` field of the `Evolve` phase
+the time evolution algorithms the `algo` field of `Evolve` takes.
 """
 const Algo = Union{Tdvp, ApproxW}
 
+# an algorithm is printed on one line, field by field, read from its type as a phase is, so
+# that a field added to it shows up in the log and in `prog.jl` with nothing else to change
+show(io::IO, s::Algo) =
+    print(io, nameof(typeof(s)), "(",
+          join(("$f = $(repr(getfield(s, f)))" for f in fieldnames(typeof(s))), ", "), ")")
 
 """
-A phase type for time evolution
+    Evolve(; duration, time_step, algo, evolver, measures, measures_period, limits, options...)
 
-# Examples
-
-    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))), measures = "data" => [X, Y, Z])
+a phase of time evolution.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the initial simulation time
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `limits`: a Limits object to set cutoff, maxdim and mindim (see `Limits`)
-- `duration`: the duration of the time evolution
-- `time_step`: the time step, adjusted to the nearest one that divides the duration into a whole number of steps (the phase is skipped when that number is zero)
-- `algo`: the algorithm used (one of `Tdvp()` or `ApproxW(...)`)
-- `evolver`: the hamiltonian (evolver = -im * H) with a possible dissipator (evolver = -im * H + D)
-- `measures`: the measurement to make (default [])
-- `measures_period`: number of time steps between measurements (default 1)
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `limits`: constraints on the state, see `Limits`
+- `duration`: the duration of the evolution
+- `time_step`: the time step, adjusted to the nearest one that divides the duration into a
+  whole number of steps (the phase is skipped when that number is zero)
+- `algo`: the algorithm, `Tdvp(...)` or `ApproxW(...)`
+- `evolver`: `-im * H` for a hamiltonian `H`, plus dissipators for a mixed state, or
+  `evolvers => coefs` for a time dependent one, see the `coefs` option of `tdvp`
+- `measures`: the measurements to make during the evolution, see `output` (default `[]`)
+- `measures_period`: the number of time steps between two measurements (default 1)
+
+# Examples
+
+    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))),
+           measures = "data" => [X, Y, Z])
 """
 @kwdef struct Evolve
     name::String = "Time evolution"
@@ -200,16 +220,16 @@ A phase type for time evolution
     measures = []
 end
 
-
 """
-A phase type for applying gates
+    Gates(; gates, limits, name, time_start, final_measures)
+
+a phase that applies gates to the state.
 
 # Fields
-- `name`: the name of the phase
-- `time_start`: the simulation time to use at the start of the phase
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `limits`: the truncations made while applying a gate of several sites, see `apply`
+
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `gates`: the gates to apply
+- `limits`: the truncations made while applying a gate of several sites, see `apply`
 
 # Examples
 
@@ -223,24 +243,27 @@ A phase type for applying gates
     limits::Limits = Limits()
 end
 
-
 """
-A phase type for computing the ground state using Dmrg
+    GroundState(; hamiltonian, limits, nsweeps, noise, tolerance, measures, options...)
 
-# Examples
-    GroundState(hamiltonian = X(1)X(2), nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
+a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on a pure state.
 
 # Fields
-- `name`: the name of the phase
-- `time_start`: the initial simulation time
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `hamiltonian`: the Hamiltonian whose ground state is requested
-- `limits`: the limits on the state
+
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `hamiltonian`: the hamiltonian whose ground state is searched
+- `limits`: constraints on the state, see `Limits`
 - `nsweeps`: the maximum number of sweeps
-- `noise`: the noise to apply (either a number or a vector of numbers, ITensor dmrg documentation)
-- `measures`: measurements to make during the computation
-- `measures_period`: the interval at which the measurements are made
-- `tolerance`: computation is stopped if the progression in the energy between sweeps is lower than this number
+- `noise`: the noise to apply, a number or one value per sweep (default 0)
+- `measures`: the measurements to make during the search, see `output` (default `[]`)
+- `measures_period`: the number of sweeps between two measurements (default 1)
+- `tolerance`: the search stops when the energy changes by less than this from one sweep to
+  the next (default 0, never)
+
+# Examples
+
+    GroundState(hamiltonian = X(1)X(2), nsweeps = 10,
+                limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
 """
 @kwdef struct GroundState
     name::String = "Ground state computation using Dmrg"
@@ -270,23 +293,22 @@ Base.@deprecate_binding Dmrg GroundState false ", use GroundState instead."
 
 deprecated, use [`GroundState`](@ref) instead.
 
-`Dmrg` is an alias of `GroundState` and goes on working, but it is marked deprecated in the
-runtime and will be removed in a future version. The deprecation warning only shows with
-`--depwarn=yes`, which is what running the tests does; an ordinary run stays silent, so this
-line is the notice.
+`Dmrg` is an alias of `GroundState`, which works until it is removed in a future version. Its
+deprecation warning only shows with `--depwarn=yes`, as when running the tests, so this line
+is the notice.
 """ Dmrg
 
-
-
 """
-a phase type for applying a partial trace
+    PartialTrace(; trace_positions | keep_positions, name, time_start, final_measures)
+
+a phase that traces out part of the sites, given by exactly one of `trace_positions` and
+`keep_positions`.
 
 # Fields
-- `name`: the name of the phase
-- `time_start`: the initial simulation time
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `trace_positions`: an array of site numbers on which to trace
-- `keep_positions`: an array of site numbers which are not traced (all the others are)
+
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `trace_positions`: the sites to trace out
+- `keep_positions`: the sites to keep, all the others being traced out
 
 # Examples
 
@@ -302,17 +324,15 @@ a phase type for applying a partial trace
 end
 
 """
-A phase type to take the state down to a lower level of conservation, see `weaken`
+    Weaken(; target, name, time_start, final_measures)
 
-A phase may evolve under a strong symmetry, which every dissipator commuting with the charge
-allows, and the next one continue under a weak one, where a jump that moves the charge
-becomes possible.
+a phase that takes the state down to a lower level of conservation, see `weaken`. A phase may
+evolve under a strong symmetry, which every dissipator commuting with the charge allows, and
+the next one continue under a weak one, where a jump that moves the charge becomes possible.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the simulation time to use (no much use here)
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `target`: what the state must still conserve, as `weaken` takes it (default `nothing`, one
   level down: strong becomes weak, weak is dropped)
 
@@ -329,23 +349,24 @@ becomes possible.
     target = nothing
 end
 
-
 """
-a phase to compute the steady state of a Lindbladian
+    SteadyState(; lindbladian, limits, nsweeps, tolerance, measures, options...)
+
+a phase that searches the steady state of a Lindbladian, see `steady_state`, on a mixed state.
 
 # Fields
 
-- `name`: the name of the phase
-- `time_start`: the initial simulation time
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
-- `lindbladian`: the Lindbladian whose steady state is requested (should be of the form -im * hamiltonian + dissipators)
-- `mpo_limits`: limits on the resulting MPO (default `Limits()`, no truncation)
-- `mpo_algo`: algorithm for computing (L+)L: "naive" (default) or "zipup"
-- `limits`: limits on the state MPS
-- `nsweeps`: maximum number of sweeps
-- `measures`: measurements to be made during the computation
-- `measures_period`: the interval at which the measurements are made
-- `tolerance`: computation is stopped if the progression in the energy between sweeps is lower than this number
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `lindbladian`: the Lindbladian ``L`` whose steady state is searched, of the form
+  `-im * hamiltonian + dissipators`
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
+- `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
+- `limits`: constraints on the state, see `Limits`
+- `nsweeps`: the maximum number of sweeps
+- `measures`: the measurements to make during the search, see `output` (default `[]`)
+- `measures_period`: the number of sweeps between two measurements (default 1)
+- `tolerance`: the search stops when the dmrg energy changes by less than this from one sweep
+  to the next (default 0, never)
 
 # Examples
 
@@ -370,16 +391,19 @@ a phase to compute the steady state of a Lindbladian
     tolerance::Real = 0.
 end
 
+"""
+    Phases
 
-"""   
-    Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState, Weaken}
+the union of the phase types of the library: `CreateState`, `SaveState`, `LoadState`,
+`ToMixed`, `Evolve`, `Gates`, `GroundState`, `PartialTrace`, `SteadyState` and `Weaken`.
+Every phase has at least these three fields:
 
-A type that contains all possible phase types for SimData and runTMS.
-Each of the types contains at least the three following fields (like SimData).
+- `name`: the name of the phase, written in the log
+- `time_start`: the simulation time from the start of the phase (default `nothing`, keeping
+  the current time)
+- `final_measures`: the measurements to make at the end of the phase, see `output`
 
-- `name`: the name of the phase
-- `time_start`: the simulation time to use at the start of the phase
-- `final_measures`: the measurements to make at the end of the phase see `measure` and `output`
+A phase of your own can be defined, see `TensorMixedStates.run_phase`.
 """
 const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState, Weaken}
 

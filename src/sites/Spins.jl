@@ -1,11 +1,15 @@
+# The Spin site type, a spin of any integer or half integer value, with its states and
+# operators, gathered in the module Spins.
+
 export Spins
 
 """
-    Spin(spin)
+    Spin(s; conserve = ())
 
-A site type for representing spin sites (dim is `2 spin + 1`)
+the site type of a spin `s`, integer or half integer, of dimension ``2s + 1``, its basis going
+from ``S_z = s`` down to ``S_z = -s``.
 
-# Example
+# Examples
 
     Spin(3/2)
     Spin(2)
@@ -15,23 +19,21 @@ A site type for representing spin sites (dim is `2 spin + 1`)
 
 # States
 
-"0", "1", "-1"... for integer spins
-"1/2", "-1/2", "3/2", "-3/2"... for half integer spins
+For `m` from `s` down to `-s`, written as an integer or a fraction, `"1"`, `"-1/2"`:
 
-"X0", "X1/2", "X-1/2", ... for eigenstate of `Sx`
-"Y0", "Y1/2", "Y-1/2", ... for eigenstate of `Sy`
-"Z0", "Z1/2", "Z-1/2", ... for eigenstate of `Sz` (same as "0", "1/2" ...)
+- `"m"`, `"Zm"` : the eigenstate of `Sz` of eigenvalue `m`
+- `"Xm"`        : the eigenstate of `Sx` of eigenvalue `m`
+- `"Ym"`        : the eigenstate of `Sy` of eigenvalue `m`
 
 # Operators
 
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
 - `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators and ``S^2``
-- `N`                : the number of excitations above the state of maximal ``S_z``, that is
-                       ``s - S_z``, which is the counting of the Holstein-Primakoff mapping.
-                       Its eigenvalues are integers for every spin, half integer ones
-                       included, so `Spin(3/2, conserve = N)` conserves the same quantity as
-                       `Spin(3/2, conserve = 2Sz)` without the doubling. As for a qubit, it is
-                       `Sm` that raises it
+- `N`                : the number of excitations above the state of maximal ``S_z``,
+                       ``s - S_z``, as in the Holstein-Primakoff mapping. Its eigenvalues are
+                       integers for every spin, so `Spin(3/2, conserve = N)` conserves what
+                       `Spin(3/2, conserve = 2Sz)` does without the doubling. As for a qubit,
+                       `Sm` raises it
 """
 struct Spin <: AbstractSite
     s::Float64

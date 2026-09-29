@@ -1,13 +1,15 @@
+# The Qboson site type, a q-deformed boson mode truncated to a given number of levels, with its
+# states and operators, gathered in the module Qbosons.
+
 export Qbosons
 
 """
-    Qboson(q, dim)
+    Qboson(q, dim; conserve = ())
 
-a site type to represent q-boson sites, it is parametrised by `q` and the dimension of the Hilbert space
-(maximum occupancy is `dim - 1`).
-
-``a|n\\rangle = \\sqrt{1-q^n} |n-1\\rangle`` and ``a^\\dagger |n\\rangle = \\sqrt{1 - q^{n+1}} |n+1\\rangle``
-
+the site type of a q-boson mode truncated to `dim` levels, the occupation going from 0 to
+`dim - 1`, on which
+``a|n\\rangle = \\sqrt{1-q^n} |n-1\\rangle`` and
+``a^\\dagger |n\\rangle = \\sqrt{1 - q^{n+1}} |n+1\\rangle``.
 
 # Examples
 
@@ -16,13 +18,14 @@ a site type to represent q-boson sites, it is parametrised by `q` and the dimens
 
 # States
 
-`"0", "1", ...`
+`"0", "1", ..., "dim-1"` : the state of that occupation
 
 # Operators
 
-- `A` : the destruction operator
-- `N` : the number of q-bosons operator
-- `Q`, `P` : the position and momentum quadratures
+- `A` : the destruction operator ``a``
+- `N` : the number of q-bosons
+- `Q`, `P` : the position and momentum quadratures, ``(a + a^\\dagger)/\\sqrt{2}`` and
+  ``(a - a^\\dagger)/(i\\sqrt{2})``
 """
 struct Qboson <: AbstractSite
     q::Float64

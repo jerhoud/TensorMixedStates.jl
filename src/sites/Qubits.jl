@@ -1,11 +1,14 @@
+# The Qubit site type, its states and operators, the controlled gates and the graph states,
+# gathered in the module Qubits.
+
 export Qubits
 
 """
-    type Qubit
+    Qubit(; conserve = ())
 
-A site type for representing qubit sites, that is a two level system.
+the site type of a qubit, a two level system, whose basis is `"Up"`, `"Dn"`.
 
-# Example
+# Examples
 
     Qubit()
     Qubit(conserve = N)      # the number of excitations
@@ -13,28 +16,26 @@ A site type for representing qubit sites, that is a two level system.
 
 # States
 
-- `"Up", "Z+", "↑", "0"`  : the up state
-- `"Dn", "Z-", "↓", "1"`  : the down state
-- `"+", "X+"`             : the + state (+1 eigenvector of X)
-- `"-", "X-"`             : the - state (-1 eigenvector of X)
-- `"i", "Y+"`             : the i state (+1 eigenvector of Y)
-- `"-i", "Y-"`            : the -i state (-1 eigenvector of Y)
+- `"Up", "Z+", "↑", "0"` : the up state
+- `"Dn", "Z-", "↓", "1"` : the down state
+- `"+", "X+"`            : the +1 eigenvector of `X`
+- `"-", "X-"`            : the -1 eigenvector of `X`
+- `"i", "Y+"`            : the +1 eigenvector of `Y`
+- `"-i", "Y-"`           : the -1 eigenvector of `Y`
 
 # Operators
 
 - `X, Y, Z`          : the Pauli operators
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
-- `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators (half the Pauli operators) and ``S^2``
-- `N`                : the number of excitations, ``1/2 - S_z``, which counts `"Dn"` as the
-                       occupied state. It is the same operator as `Proj(1)` and as
-                       ``(1 - Z)/2``, and it is what a qubit standing for a hard core boson
-                       conserves: `Qubit(conserve = N)` says in one word what
-                       `Qubit(conserve = 2Sz)` says in two, and its charges are the integers
-                       0 and 1 rather than ±1. Note that `Sm` is then what creates an
-                       excitation and `Sp` what destroys one, `"Up"` being the empty state
+- `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators, half the Pauli operators, and
+                       ``S^2``
+- `N`                : the number of excitations, ``1/2 - S_z``, equal to `Proj(1)` and to
+                       ``(1 - Z)/2``: `"Dn"` is the occupied state, `Sm` creates an excitation
+                       and `Sp` destroys one. `Qubit(conserve = N)` conserves what
+                       `Qubit(conserve = 2Sz)` does, with charges 0 and 1 rather than ±1
 - `H, S, T, Swap`    : the Hadamard, S, T and Swap gates
 - `Phase(t)`         : the phase gate
-- `controlled(gate)` : controlled gate
+- `controlled(gate)` : the controlled gate
 """
 struct Qubit <: AbstractSite
     conserve::String
@@ -80,22 +81,38 @@ dim(::Qubit) = 2
     ]
 ])
 
+"""
+    controlled_name(op)
+
+the default name of `controlled(op)`: `C` followed by the name of an `Operator`, as `CZ`, and
+`controlled(op)` for an expression.
+"""
 controlled_name(a::Operator) = "C" * a.name
 controlled_name(a::Op) = "controlled($a)"
 
-# a fermionic operator controlled acts on several sites, which no fermionic Operator can: it
-# is plain, simplify replacing it by its expression, where its string is inserted
+"""
+    controlled_type(op)
+
+the default `OpType` of `controlled(op)`: that of an `Operator`, and `plain_op` for an
+expression. A controlled fermionic operator is plain too, as it acts on several sites, which
+no fermionic `Operator` can: `simplify` replaces it by its expression, where the
+Jordan-Wigner string is inserted.
+"""
 controlled_type(a::Operator) = a.type == fermionic_op ? plain_op : a.type
 controlled_type(a::Op) = plain_op
 
 """
-    controlled(op)
+    controlled(op; name, type)
 
-the controlled gate constructor
+the gate applying `op` to the following sites when the first one, a qubit, is in the state
+`"1"`, and nothing otherwise. Its name and its `OpType` default to those of `controlled_name`
+and `controlled_type`, `CZ` for `controlled(Z)`.
 
 # Examples
+
     CZ = controlled(Z)
     Toffoli = controlled(controlled(X))
+    CZ(1, 2)
 """
 controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = controlled_type(op)) where N =
     Operator{N+1}(name, Proj(0) ⊗ IdentityOp(op) + Proj(1) ⊗ op, type)
@@ -106,21 +123,22 @@ controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = co
 """
     Swap
 
-the qubit Swap operator
+the gate exchanging the states of two qubits.
 """
 const Swap = Operator{2}("Swap", (Id ⊗ Id + Z ⊗ Z) / 2 + Sp ⊗ dag(Sp) + dag(Sp) ⊗ Sp, involution_op)
 
 """
     Phase(t)
 
-the phase gate for qubits
+the phase gate of a qubit, ``\\mathrm{diag}(1, e^{it})``.
 """
 Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)], plain_op)
 
 """
-    graph_state(graph::Vector{Tuple{Int, Int}}; limits)
+    graph_state(graph; limits = Limits(cutoff = 1e-16))
 
-create a graph state corresponding to the given graph
+the graph state of `graph`, a list of edges: the pure state of `graph_base_size(graph)` qubits
+all in `"+"`, to which `controlled(Z)` is applied on every edge, truncated by `limits`.
 
 # Examples
 
@@ -137,10 +155,16 @@ function graph_state(g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.
 end
 
 """
-    create_graph_state(graph::Vector{Tuple{Int, Int}}; limits)
+    create_graph_state(graph; kwargs...)
 
-create the phases for building a graph state, to use in `SimData` and `runTMS`. They
-come as a list, which `SimData` accepts anywhere a phase is expected.
+the phases building the graph state of `graph`, see `graph_state`, for `SimData` and `runTMS`:
+a `CreateState` of qubits all in `"+"`, then a `Gates` phase applying `controlled(Z)` on every
+edge, which receives the keyword arguments. They come as a list, which `SimData` accepts
+wherever a phase is expected.
+
+# Examples
+
+    create_graph_state(complete_graph(10); limits = Limits(cutoff = 1e-14))
 """
 create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) = 
     [

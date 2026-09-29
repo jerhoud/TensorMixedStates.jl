@@ -1,19 +1,25 @@
+# Graphs as lists of edges, line, circle, complete or square lattice, for building hamiltonians
+# and graph states.
+
 export graph_base_size, line_graph, circle_graph, complete_graph, square_lattice
 
 """
     graph_base_size(::Vector{Tuple{Int, Int}})
 
-return the largest vertex number of a graph, that is the number of sites a system needs to
-host it. Note that this is neither the size of the graph, which is its number of edges, nor
-its order, which is its number of vertices: a graph may leave a vertex out of every edge,
-and the system still has to hold that site.
+the largest vertex of a graph, which is the number of sites a system needs to host it. It is
+neither the size of the graph, its number of edges, nor its order, its number of vertices: a
+vertex may be in no edge, and the system still has to hold that site.
+
+# Examples
+
+    graph_base_size([(1, 2), (2, 5)])     # 5
 """
 graph_base_size(g::Vector{Tuple{Int, Int}}) = maximum(maximum, g)
 
 """
     line_graph(n)
 
-return the graph 1-2, 2-3, ..., (n-1)-n
+the chain of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n)]`
 """
 line_graph(n::Int) =
     [(i, i+1) for i in 1:(n-1)]
@@ -21,7 +27,7 @@ line_graph(n::Int) =
 """
     circle_graph(n)
 
-return the graph 1-2, 2-3, ..., (n-1)-n, n-1
+the ring of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n), (n, 1)]`
 """
 circle_graph(n::Int) =
     [line_graph(n); [(n, 1)]]
@@ -29,7 +35,12 @@ circle_graph(n::Int) =
 """
     complete_graph(n)
 
-return the complete graph with n vertices 1-2, 1-3, ..., 1-n, 2-3, ..., 2-n, ...
+the complete graph of `n` vertices, as a vector of edges:
+`[(1, 2), (1, 3), ..., (1, n), (2, 3), ..., (n-1, n)]`
+
+# Examples
+
+    graph_state(complete_graph(10); limits = Limits(maxdim = 10))
 """
 complete_graph(n::Int) =
     [(i, j) for i in 1:(n-1) for j in (i+1):n]
@@ -38,14 +49,11 @@ complete_graph(n::Int) =
     square_lattice(nx, ny)
     square_lattice(n)
 
-return the `nx` by `ny` square lattice, its sites numbered along a snake running down the
-columns: the first column is numbered top to bottom, the second one bottom to top, and so
-on. This is the usual ordering for a tensor network, because the chain then advances along
-`x` while staying only `ny` sites wide, like a thickened line: vertical bonds join
-consecutive sites and horizontal ones are never further apart than `2ny - 1`. Put the
-short side of the lattice in `ny`, since that is what bounds the bond dimension.
-
-With a single argument the lattice is `n` by `n`.
+the `nx` by `ny` square lattice, as a vector of edges, its sites numbered along a snake
+running down the columns: the first column top to bottom, the second bottom to top, and so on.
+The chain then advances along `x` only `ny` sites wide: vertical bonds join consecutive sites
+and horizontal ones are at most `2ny - 1` sites apart. Put the short side in `ny`, since it
+bounds the bond dimension. With a single argument the lattice is `n` by `n`.
 
 # Examples
 

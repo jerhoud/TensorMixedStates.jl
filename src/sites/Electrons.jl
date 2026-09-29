@@ -1,33 +1,40 @@
+# The Electron site type, a spinful fermion orbital, with its states and operators, gathered in
+# the module Electrons.
+
 export Electrons
 
 """
-    Electron()
+    Electron(; conserve = ())
 
-a site type to represent electron sites (dim is 4)
+the site type of an electron orbital, of dimension 4.
 
 # Examples
 
     Electron()
     Electron(conserve = (Ntot, 2Sz))
+    Electron(conserve = (strong(Ntot), 2Sz))
 
 # States
 
-- `"0", "Emp"`   : empty state
-- `"Up", "↑"`    : up state
-- `"Dn", "↓"`    : down state
-- `"UpDn", "↑↓"` : up and down state
-- `"MixedSpin", "↑|↓"` : one electron of fully mixed spin, the mixed state
+- `"Emp", "0"`         : the empty state
+- `"Up", "↑"`          : one electron of spin up
+- `"Dn", "↓"`          : one electron of spin down
+- `"UpDn", "↑↓"`       : two electrons
+- `"MixedSpin", "↑|↓"` : one electron of fully mixed spin, the density matrix
   ``(|↑⟩⟨↑| + |↓⟩⟨↓|)/2``, which a strong conservation of `Ntot` allows where `"FullyMixed"`
   spreads over several numbers of electrons
 
 # Operators
 
-- `Cup, Cdn`              : the destruction operators
-- `Nup, Ndn, Nupdn, Ntot` : the numbers operator for up, down, up and down, and total
-- `Sx, Sy, Sz, Sp, Sm`    : spin operators
-- `S2`                    : the total spin squared of the site, that is `3/4 (Ntot - 2 Nupdn)`,
-                            three quarters of the projector on the singly occupied states
-- `Fup, Fdn`              : partial Jordan-Wigner F operators
+- `Cup, Cdn`              : the destruction operators, fermionic
+- `Nup, Ndn, Nupdn, Ntot` : the numbers of electrons of spin up, of spin down, of pairs and in
+                            total
+- `Sx, Sy, Sz, Sp, Sm`    : the spin operators
+- `S2`                    : the total spin squared of the site, `3/4 (Ntot - 2 Nupdn)`, three
+                            quarters of the projector on the singly occupied states
+- `F`                     : the Jordan-Wigner operator, ``(-1)^{N_{tot}}``
+- `Fup, Fdn`              : the partial Jordan-Wigner operators, ``(-1)^{N_\\uparrow}`` and
+                            ``(-1)^{N_\\downarrow}``
 """
 struct Electron <: AbstractSite
     conserve::String

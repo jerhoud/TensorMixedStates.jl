@@ -1,5 +1,12 @@
+# The module TensorMixedStates: what it imports from its dependencies, and its source files in
+# the order they are read.
+
 """
-    A module to make numerical simulations of closed or open quantum systems using Matrix Product States 
+    TensorMixedStates
+
+a library for simulating closed and open quantum systems with matrix product states. A state
+is either pure, its wave function as an MPS, or mixed, its density matrix as an MPS, on which
+Lindbladian evolution and noisy gates act.
 """
 module TensorMixedStates
 
@@ -16,6 +23,7 @@ include("Operators.jl")
 include("Sites.jl")
 include("Systems.jl")
 include("Mixer.jl")
+include("Definitions.jl")
 include("States.jl")
 include("Simplify.jl")
 

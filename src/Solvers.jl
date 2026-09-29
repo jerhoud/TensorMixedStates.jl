@@ -1,20 +1,34 @@
+# The algorithms on a state or a simulation: tdvp and approx_W for time evolution, dmrg for
+# ground states, and steady_state for the steady state of an open system.
+
 export tdvp, dmrg, approx_W, steady_state
 
 """
     tdvp(evolver, t, ::State; options...)
     tdvp(evolver, t, ::Simulation; options...)
 
-do time evolution with tdvp algorithm on a state / sim for the given time t. Also see `TdvpObserver`
+evolve a state, or a simulation, for a time `t` with the tdvp algorithm, in `nsweeps` steps of
+`t / nsweeps`. `evolver` is `-im * H` for a hamiltonian `H`, plus dissipators for a mixed
+state. A simulation comes back with its time advanced by `t`.
 
 # Options
 
-- `nsweeps`: number sweeps to do (time step = t / nsweeps) 
-- `first_sweep`: sweep to start from (default 1), to continue an evolution left unfinished
-- `coefs`: coefficients for time dependent evolver
-- `n_expand`: do expansion steps every n_expand steps (default 0 means no expansion)
-- `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
-- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
-- others are identical to ITensorMPS.tdvp
+- `nsweeps`: the number of steps (default 1)
+- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished
+- `time_start`: the simulation time the evolution starts from (default 0, and the time of
+  the simulation for a `Simulation`)
+- `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
+  the middle of each step
+- `n_expand`: expand the state every `n_expand` steps (default 0, never)
+- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+  never)
+- `limits`: constraints on the state, see `Limits`, which may give one value per step
+- `observer!`: an observer, see `TdvpObserver`
+- the other options are passed to `ITensorMPS.tdvp`
+
+# Examples
+
+    tdvp(-im * H, 1., state; nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
@@ -35,7 +49,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
         st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
-        end    
+        end
         if sweep_due(n_expand, sweep)
             st = expand(st, mpo; alg="global_krylov")
         end
@@ -55,19 +69,23 @@ tdvp(op, t::Number, state::State; kwargs...) =
     dmrg(hamiltonian, ::State; options...)
     dmrg(hamiltonian, ::Simulation; options...)
 
-optimize for ground state of the given Hamiltonian starting with state / simulation using dmrg.
-
-return `(energy, state)`, the energy first, and note that Dmrg does not work for mixed
-representations.
+the ground state of a hamiltonian by dmrg, starting from the given state, returned as
+`(energy, state)`, or `(energy, simulation)`. A hamiltonian is refused on a mixed state, where
+the lowest eigenvector of the superoperator it gives is neither the ground state nor a
+density matrix: search the ground state of the pure state, then `mix` it.
 
 # Options
 
-- `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run
-- `first_sweep`: sweep to start from (default 1), to continue an optimization left unfinished
-- `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
-- `noise`: the noise to apply, a number or one value per sweep
-- others identical to ITensorMPS.dmrg
+- `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
+- `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished
+- `limits`: constraints on the state, see `Limits`, which may give one value per sweep
+- `noise`: the noise to apply, a number or one value per sweep (default 0)
+- `observer!`: an observer, see `DmrgObserver`
+- the other options are passed to `ITensorMPS.dmrg`
+
+# Examples
+
+    energy, state = dmrg(H, state; nsweeps = 10, limits = Limits(maxdim = [10, 20, 50]))
 """
 function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = NoObserver(),
               limits::Limits = Limits(), noise = 0., kwargs...)
@@ -92,6 +110,12 @@ function dmrg(op, state::State; kwargs...)
     return dmrg(make_mpo(state, op), state; kwargs...)
 end
 
+"""
+    w_approx_coefs
+
+for each order from 1 to 4, the fractions of the time step whose W approximations, applied one
+after the other, make up the approximation of that order.
+"""
 const w_approx_coefs = Vector{ComplexF64}[
     [
         1.
@@ -111,42 +135,58 @@ const w_approx_coefs = Vector{ComplexF64}[
         -0.03154685814880379 + 0.24911905427556322im,
         0.1908290521106672 - 0.23185374923210605im,
         0.16372881485443674,
-        0.1908290521106672 + 0.23185374923210605im,        
+        0.1908290521106672 + 0.23185374923210605im,
         -0.03154685814880379 - 0.24911905427556322im,
         0.2588533986109182 - 0.0447561340111419im,
     ]
 ]
 
+"""
+    make_approx_W(pre, t; order, w, coefs = [1.])
+
+the MPOs of the approximation of the given `order` of a step `t`, to apply one after the
+other, built from WI (`w = 1`) or WII (`w = 2`) approximations; `coefs` are the values of the
+coefficients of a time dependent evolver.
+"""
 function make_approx_W(pre::PreMPO, t::Number; order::Int, w::Int, coefs = [1.])
     if order < 1 || order > length(w_approx_coefs)
         error("W approximation of order $order is not implemented")
     end
-    if w == 1
-        return map(c->make_approx_W1(pre, t * c, coefs), w_approx_coefs[order])
-    elseif w == 2
-        return map(c->make_approx_W2(pre, t * c, coefs), w_approx_coefs[order])
-    else 
+    if w ∉ (1, 2)
         error("W approximation is only defined for w=1 or 2 (not $w)")
     end
+    make = w == 1 ? make_approx_W1 : make_approx_W2
+    return map(c -> make(pre, t * c, coefs), w_approx_coefs[order])
 end
 
 """
-    approx_W(evolver, t, ::State; options...)
-    approx_W(evolver, t, ::Simulation; options...)
+    approx_W(evolver, t, ::State; order, options...)
+    approx_W(evolver, t, ::Simulation; order, options...)
 
-time evolution using approximation WI or WII at a given order. Also see `ApproxWObserver`
+evolve a state, or a simulation, for a time `t` in `nsweeps` steps of `t / nsweeps`, each
+approximating the exponential of the evolver at the given `order` with WI or WII
+approximations. `evolver` is as for `tdvp`, and a simulation comes back with its time
+advanced by `t`.
 
 # Options
 
-- `coefs`: coefficients for time dependent evolution
-- `n_hermitianize`: make hermitian (for mixed states) every n_hermitianize steps (default 0 for no corrections)
-- `nsweeps`: number of steps (time step is t / nsweeps)
-- `first_sweep`: sweep to start from (default 1), to continue an evolution left unfinished
-- `order`: order of approximation, required
-- `w`: 1 or 2 for WI or WII (default 2, WII, as in `ApproxW`)
-- `observer!`: observer (see ApproxWObserver)
-- `time_start`: the simulation time at the beginning of evolution
-- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
+- `order`: the order of the approximation, from 1 to 4, required
+- `w`: 1 or 2 for WI or WII (default 2)
+- `nsweeps`: the number of steps (default 1)
+- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished
+- `time_start`: the simulation time the evolution starts from (default 0, and the time of
+  the simulation for a `Simulation`)
+- `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
+  the middle of each step
+- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+  never)
+- `limits`: constraints on the state, see `Limits`, which may give one value per step
+- `observer!`: an observer, see `ApproxWObserver`
+- the other options are passed to `apply`
+
+# Examples
+
+    approx_W(-im * H, 1., state; order = 4, nsweeps = 10)
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
@@ -168,34 +208,41 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
             st = apply(mpo, st; lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
         end
         if sweep_due(n_hermitianize, sweep)
-            st = hermitianize(State(state, st); limits = lim).state;
+            st = hermitianize(State(state, st); limits = lim).state
         end
         if sweep_done!(observer!; sweep, state = st, current_time, mpos)
             break
         end
     end
-    return State(state, st)    
+    return State(state, st)
 end
 
 approx_W(op, t::Number, state::State; kwargs...) =
     approx_W(PreMPO(state, op), t, state; kwargs...)
 
 """
-    steady_state(lindbladian, state; kwargs...)
+    steady_state(lindbladian, ::State; options...)
+    steady_state(lindbladian, ::Simulation; options...)
 
-compute the steady state of the given Lindbladian starting on the given mixed state using DMRG on (L+)L
-
-return achieved "energy" (which should be zero) and computed steady state
+the steady state of a Lindbladian ``L``, of the form `-im * H` plus dissipators, by dmrg on
+``L^\\dagger L`` starting from the given mixed state. It is returned as `(value, state)`, or
+`(value, simulation)`, where `value` is the "energy" dmrg reaches, zero for a steady state,
+and the state is normalized to trace one.
 
 # Options
-- `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run
-- `first_sweep`: sweep to start from (default 1), to continue a search left unfinished
-- `observer!`: observer (see `DmrgObserver`)
-- `limits`: constraints on the mps (`cutoff`, `maxdim` and `mindim` may be vectors with one value per sweep)
-- `mpo_limits`: sets the limit on the MPO of (L+)L (default is no truncation)
-- `mpo_algo`: is "naive"(default) or "zipup": algorithm to compute (L+)L
-- others identical to ITensorMPS.dmrg
 
+- `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
+- `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished
+- `limits`: constraints on the state, see `Limits`, which may give one value per sweep
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
+- `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
+- `observer!`: an observer, see `DmrgObserver`
+- the other options are passed to `ITensorMPS.dmrg`
+
+# Examples
+
+    value, rho = steady_state(-im * H + D, rho; nsweeps = 10,
+                              limits = Limits(maxdim = [10, 20, 50]))
 """
 function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
     limits::Limits = Limits(), nsweeps::Int = 1,
@@ -207,17 +254,10 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
         mpo_algo = alg
     end
     l = make_mpo(state, op)
-    if mpo_algo == "naive"
-        # named apart from `truncate`, which is imported and has a method for States: a
-        # local binding of that name would shadow it for the whole function body
-        do_truncate = (mpo_limits != Limits())
-        l2 = apply(replaceprime(dag(l)', 2=>0), l;
-                   mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim,
-                   alg = mpo_algo, truncate = do_truncate)
-    else
-        l2 = apply(replaceprime(dag(l)', 2=>0), l;
-                   mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim, alg = mpo_algo)
-    end
+    # the naive algorithm truncates only when asked to, the others take no such option
+    extra = mpo_algo == "naive" ? (; truncate = mpo_limits != Limits()) : (;)
+    l2 = apply(replaceprime(dag(l)', 2=>0), l;
+               mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim, alg = mpo_algo, extra...)
     # an eigenvector of (L+)L has norm one and a sign of its own, the trace set to one makes it
     # the density matrix it stands for
     e, st = dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
@@ -226,7 +266,6 @@ end
 
 tdvp(op, t::Number, sim::Simulation; kwargs...) =
     Simulation(sim, tdvp(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
-
 
 function dmrg(op, sim::Simulation; kwargs...)
     e, st = dmrg(op, sim.state; kwargs...)

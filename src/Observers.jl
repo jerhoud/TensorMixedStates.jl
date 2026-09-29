@@ -1,10 +1,19 @@
+# The observers given to tdvp, dmrg and approx_W, which output measurements every given number of
+# steps, log the progress, and stop the algorithm when the simulation is asked to stop.
+
 export TdvpObserver, DmrgObserver, ApproxWObserver
 
 """
-    struct TdvpObserver
     TdvpObserver(sim, measurements, period)
 
-an observer for tdvp which make measurements every period steps
+an observer for `tdvp` that outputs `measurements`, given as `output` takes them, every
+`period` steps, at the time each step reaches; a `period` below one means never. It also
+logs the simulation time of every step and, within `runTMS`, stops the evolution when the
+simulation is asked to stop.
+
+# Examples
+
+    tdvp(evolver, 1., sim; nsweeps = 10, observer! = TdvpObserver(sim, "data" => [X, Z(1)], 2))
 """
 struct TdvpObserver <: AbstractObserver
     sim::Simulation
@@ -13,10 +22,17 @@ struct TdvpObserver <: AbstractObserver
 end
 
 """
-    struct ApproxWObserver
     ApproxWObserver(sim, measurements, period)
 
-an observer for approx_W which make measurements every period steps
+an observer for `approx_W` that outputs `measurements`, given as `output` takes them, every
+`period` steps, at the time each step reaches; a `period` below one means never. It also
+logs the simulation time of every step and, within `runTMS`, stops the evolution when the
+simulation is asked to stop.
+
+# Examples
+
+    approx_W(evolver, 1., sim; order = 4, nsweeps = 10,
+             observer! = ApproxWObserver(sim, "data" => [X, Z(1)], 2))
 """
 struct ApproxWObserver <: AbstractObserver
     sim::Simulation
@@ -25,14 +41,21 @@ struct ApproxWObserver <: AbstractObserver
 end
 
 """
-    struct DmrgObserver
     DmrgObserver(sim, measurements, period, tol[, done; nsweeps, energy])
 
-an observer for dmrg which makes and outputs measurements every period steps and stops it
-when energy improvements are smaller than tol. `done` is the number of sweeps already done
-before this run, non zero when the phase resumes from a checkpoint, `energy` the energy of
-the last of them, which the first sweep is compared with, and `nsweeps` the sweeps of the
-phase, which a stop on the tolerance records as done.
+an observer for `dmrg` and `steady_state` that stops the search when the energy changes by
+less than `tol` from one sweep to the next. It outputs `measurements`, given as `output`
+takes them, on the normalized state every `period` sweeps and on the sweep the tolerance
+stops at; a `period` below one means only then. It also logs every sweep and, within
+`runTMS`, stops the search when the simulation is asked to stop.
+
+The other arguments serve a search resumed from a checkpoint: `done` is the number of sweeps
+already done, `energy` the energy of the last of them, which the first sweep is compared with,
+and `nsweeps` the sweeps of the whole phase, which a stop on the tolerance records as done.
+
+# Examples
+
+    dmrg(H, sim; nsweeps = 10, observer! = DmrgObserver(sim, "data" => [X, Z(1)], 1, 1e-8))
 """
 mutable struct DmrgObserver <: AbstractObserver
     sim::Simulation
@@ -49,15 +72,15 @@ end
 """
     sweep_commit!(sim, state, time, sweep; energy)
 
-the end of a sweep of the phase being run, once its measurements and its log are written:
-commit it, write the commit if a checkpoint is due or a stop is asked for, and return whether
-the solver has to stop.
+close a sweep of the phase being run, once its measurements and its log are written: commit
+it, write the commit if a checkpoint is due or a stop is asked for, and return whether the
+solver has to stop.
 
-The order is what keeps a checkpoint and the outputs in step, so it is here, once, rather than
-in each observer: what is written after the commit is written again by the resumed run, and
-what is written before it is kept. The sweep is committed only in a phase that has read its
-resume point, see `resume_sweeps!`; in any other, the commit stays the start of the phase,
-while a stop and an interrupt are honoured all the same.
+This order keeps a checkpoint and the outputs in step, so it lives here rather than in each
+observer: what is written after the commit is written again by the resumed run, and what is
+written before it is kept. The sweep is committed only in a phase that has read its resume
+point, see `resume_sweeps!`; in any other the commit stays the start of the phase, while a
+stop and an interrupt are honoured all the same.
 """
 function sweep_commit!(sim::Simulation, state::State, t::Number, sweep::Int; energy = nothing)
     c = sim.checkpoint
@@ -79,17 +102,22 @@ end
     sweep_done!(observer; sweep, state, current_time, kwargs...)
 
 the end of a sweep of `tdvp` or `approx_W`, once all its work is done, expansion and
-hermitianization included, and whether the solver has to stop. The observers of the package
-write the measurements and the log of the sweep and then commit it, see `sweep_commit!`, so
-that a checkpoint holds exactly what is written up to it. Any other observer is handed the
-sweep as ITensorMPS hands it one, `measure!` then `checkdone!`.
+hermitianization included, returning whether the solver has to stop. The observers of the
+package write the measurements and the log of the sweep and then commit it, see
+`sweep_commit!`, so that a checkpoint holds exactly what is written up to it. Any other
+observer is handed the sweep as ITensorMPS hands it one, `measure!` then `checkdone!`.
 """
 function sweep_done!(o; kwargs...)
     measure!(o; kwargs...)
     return checkdone!(o; kwargs...)
 end
 
-# the two evolutions differ only in the operators they apply, which the first sweep logs
+"""
+    evolution_sweep_done!(observer, sweep, current_time, state, label, mpo, operators)
+
+`sweep_done!` for a `TdvpObserver` or an `ApproxWObserver`. The two differ only in the
+operators they apply, which the first sweep logs under `label`.
+"""
 function evolution_sweep_done!(o::Union{TdvpObserver, ApproxWObserver}, sweep, current_time,
                                state, label, mpo, operators)
     st = State(o.sim.state, state)

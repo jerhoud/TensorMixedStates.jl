@@ -1,3 +1,7 @@
+# The MPO of an operator: PreMPO, which gathers the terms of a simplified operator, and
+# make_mpo, which builds the MPO from it, with make_approx_W1 and make_approx_W2 for the WI and
+# WII approximations of an exponential.
+
 export PreMPO, make_mpo, make_approx_W1, make_approx_W2
 
 struct PreMPO{R <: PM}
@@ -13,12 +17,27 @@ struct PreMPO{R <: PM}
     end
 end
 
+"""
+    check_coefs(pre, coefs)
+
+refuse `coefs` unless it holds one value per time function of `pre`.
+"""
 function check_coefs(pre::PreMPO, coefs)
     if length(coefs) ≠ pre.nterms
         error("an evolver of $(pre.nterms) terms takes as many time functions, got $(length(coefs))")
     end
 end
 
+"""
+    PreMPO!(pre, coef, factors[, ref])
+    PreMPO!(pre, op[, ref])
+    PreMPO!(pre, ops)
+
+add to `pre`, and return it, the term `coef` times the product of the one site `factors`, or
+the terms of the simplified operator `op`, `ref` numbering their time function. A term of
+several sites takes a channel of its own on every link it spans. Each operator of the vector
+`ops` gets the time function of its position.
+"""
 function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
     foreach(o -> check_one_site(o, "an MPO"), subs)
     sys = pre.system
@@ -86,10 +105,9 @@ end
 """
     adapt_representation(::Type{R}, op)
 
-adapt an operator to the representation the MPO is built in. A pure operator given for a
-mixed state is an evolver (`-im * hamiltonian`) and is lifted with `Evolver`, which is what
-makes `-im * H` work on a mixed state. A time dependent evolver is a vector of terms and
-each term is lifted on its own.
+the operator `op` adapted to the representation `R` of the MPO. A pure operator for a mixed
+state is an evolver, `-im * H`, and is lifted with `Evolver`; a mixed one for a pure state is
+refused. The terms of a time dependent evolver, a vector, are adapted one by one.
 """
 adapt_representation(::Type{Pure}, a::IndexedOp{Mixed}) =
     error("cannot build a pure MPO from the mixed operator $a, " *
@@ -101,10 +119,18 @@ adapt_representation(::Type{R}, a) where R = a
 """
     PreMPO(::State, op)
 
-preprocess an operator, or a vector of operators for a time dependent evolver, in which
-case each one is a term whose coefficient is given by the matching time function.
-The result can be passed wherever an operator that must be turned into an MPO is expected.
-The operator is first adapted to the representation of the state, see `adapt_representation`.
+the operator `op` preprocessed for the representation of the state, to be turned into an MPO
+by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed wherever an operator to be
+turned into an MPO is expected. `op` may also be a vector of operators, the terms of a time
+dependent evolver, each multiplied by its own time function.
+
+A pure operator given for a mixed state is taken as an evolver, `-im * H`, and lifted to the
+mixed representation with `Evolver`.
+
+# Examples
+
+    pre = PreMPO(state, [sum(X(i) for i in 1:10), sum(Z(i) for i in 1:10)])
+    mpo = make_mpo(pre, [1., 0.5])
 """
 function PreMPO(state::State{R}, a) where R
     # on the operator as it was written, so that the message names what the caller wrote
@@ -117,11 +143,9 @@ end
 """
     mpo_eltype(::PreMPO, coefs)
 
-return the element type needed for the tensors of the MPO built from `pre` and `coefs`.
-The approximations WI and WII promote this further with the type of their time step.
-Real operators (built only from real matrices with real coefficients) give a real MPO,
-which makes all subsequent ITensor contractions about twice as fast.
-`Float64` is used as a floor so that integer or boolean data never reaches the tensors.
+the element type of the tensors of the MPO built from `pre` and `coefs`, `Float64` at least.
+Real matrices with real coefficients give a real MPO, whose contractions are cheaper. The
+approximations WI and WII promote it with the type of their time step.
 """
 mpo_eltype(pre::PreMPO, coefs) =
     promote_type(
@@ -132,15 +156,14 @@ mpo_eltype(pre::PreMPO, coefs) =
 """
     mpo_charges(pre, coefs)
 
-the charge of every channel of every link of the MPO, or `nothing` on a system without
-charges.
+the charge of every channel of every link of the MPO, `q[i + 1][k]` for channel `k` of the
+link on the right of site `i`.
 
-A channel stands for a term of the operator partly placed: the sites on its left have
-contributed their factors and the ones on its right have not. Its charge is therefore the
-opposite of what those factors carry, accumulated from the left, and that is what the link
-has to record for the MPO to be a tensor of definite flux. Channel one is the term not yet
-begun and holds nothing; the last one is the term finished and holds the opposite of the flux
-of the whole operator, which every term must agree on.
+A channel stands for a term partly placed, the sites on its left having contributed their
+factors, and its charge is minus the sum of their fluxes. The first channel is the term not
+yet begun and has no charge; the last is the term finished and has minus the flux of the whole
+operator, which every term must share or the operator is refused. Terms whose time function
+is zero are left out.
 """
 function mpo_charges(pre::PreMPO{R}, coefs) where R
     n = length(pre.system)
@@ -200,10 +223,10 @@ end
 """
     w_charges(pre, coefs)
 
-the charges of the links of the approximations WI and WII, which share one channel between
-the term not yet begun and the term finished. That only makes sense when the two carry the
-same charge, so the operator has to have a flux of zero, which an evolution generator has
-anyway: one that moved the charge would not keep the state in its sector.
+the charges of the links of the approximations WI and WII, where one channel serves both the
+term not yet begun and the term finished. The two must then have the same charge, so the
+operator must have zero flux, as does any generator of an evolution keeping the state in its
+sector.
 """
 function w_charges(pre::PreMPO, coefs)
     q = mpo_charges(pre, coefs)
@@ -218,11 +241,9 @@ end
 """
     link_maker(pre, coefs, charges)
 
-a function giving the link on the right of site `i` with `d` channels.
-
-The three builders draw their links the same way and differed only in which charges they
-ask for, `mpo_charges` or `w_charges`, so they share this. Without charges it is the plain
-index it always was.
+a function of `(i, d)` giving the link on the right of site `i` with `d` channels. On a
+charged system the channels carry the charges `charges(pre, coefs)` gives, `charges` being
+`mpo_charges` or `w_charges`; otherwise the link is a plain index.
 """
 function link_maker(pre::PreMPO, coefs, charges)
     if !is_charged(pre.system)
@@ -235,16 +256,16 @@ end
 """
     close_end(w, link, k)
 
-the tensor of the first or last site, with its dangling link fixed on channel `k`
+the tensor `w` of the first or the last site, with its outer link fixed on channel `k`.
 """
 close_end(w::ITensor, link::Index, k::Int) = w * onehot(link => k)
 
 """
     add_block!(w, llink, l, rlink, r, u, idx[, c])
 
-add `c` times the one site operator `u` to the channels `l` and `r` of `w`, the tensor of the
-site of index `idx`. Zeros are skipped rather than written: a block sparse tensor refuses an
-element outside its flux even when what is written there is nothing.
+add `c` times the one site operator `u` to the block of channels `l` and `r` of `w`, the
+tensor of the site of index `idx`, and return `w`. Zeros are skipped: a block sparse tensor
+refuses an element outside its flux, even a zero.
 """
 function add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::ITensor,
                     idx::Index, c::Number = 1)
@@ -259,9 +280,15 @@ end
 
 """
     make_mpo(::PreMPO[, coefs])
-    make_mpo(::State, operator)
+    make_mpo(::State, op)
 
-build an mpo representing an operator
+the MPO of an operator, in the representation of the state. For a time dependent evolver,
+`coefs` holds the value of each time function, one per term; it defaults to `[1.]`, a single
+operator.
+
+# Examples
+
+    mpo = make_mpo(state, sum(Z(i) * Z(i + 1) for i in 1:9))
 """
 function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     check_coefs(pre, coefs)
@@ -317,9 +344,10 @@ make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
 
 """
     make_approx_W1(::PreMPO, tau[, coefs])
-    make_approx_W1(::State, operator, tau)
+    make_approx_W1(::State, op, tau)
 
-build MPO representing approximation WI of a given operator and time step
+the MPO of the approximation WI of the exponential of `tau` times the operator, `coefs` being
+as for `make_mpo`. On a charged system the operator must have zero flux.
 """
 function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)
@@ -366,9 +394,10 @@ make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), 
 
 """
     make_approx_W2(::PreMPO, tau[, coefs])
-    make_approx_W2(::State, operator, tau)
+    make_approx_W2(::State, op, tau)
 
-build MPO representing approximation WII of a given operator and time step
+the MPO of the approximation WII of the exponential of `tau` times the operator, `coefs` being
+as for `make_mpo`. On a charged system the operator must have zero flux.
 """
 function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)

@@ -1,22 +1,30 @@
+# save_state and load_state, which write a state to a file and read it back with its system, the
+# sites being rebuilt from their recorded parameters.
+
 export save_state, load_state
 
+"""
+    state_file_version
+
+the version of the format `save_state` writes.
+"""
 const state_file_version = 2
+
+"""
+    readable_state_file_versions
+
+the versions of the format `load_state` reads.
+"""
 const readable_state_file_versions = (1, 2)
 
 """
     param_kind(x)
 
-the name a state file gives to the kind of value a site field holds, or `nothing` when a
-state file cannot carry it.
-
-Version 1 of the format wrote every field as a `Float64`, so a site carrying a `Symbol`, a
-name or a flag could not be saved at all: `save_state` failed on a `convert` raised deep
-inside HDF5, naming neither the site nor the field. Since a site has to be able to declare
-what it conserves, the fields now travel as a string each, together with the name of what
-they are, which also means reading them back does not depend on the field types of the site
-being declared concretely.
-
-`Bool` comes first on purpose, being an `Integer` as far as dispatch is concerned.
+the name a state file gives to the kind of the value `x` of a site field, or `nothing` when a
+state file cannot carry it. Each field is saved as a string along with this name, so that a
+site may hold a `Symbol`, a name or a flag, which version 1 of the format, writing every field
+as a `Float64`, could not, and so that reading it back does not depend on the field types of
+the site being concrete. `Bool`, an `Integer` for dispatch, has a kind of its own.
 """
 param_kind(::Bool) = "Bool"
 param_kind(::Integer) = "Int"
@@ -29,7 +37,8 @@ param_kind(_) = nothing
 """
     param_value(kind, s)
 
-the value a site field had, read back from the kind and the string `save_state` wrote
+the value of a site field, read back from its kind and the string `save_state` wrote. An
+integer too large for an `Int` is read as a `BigInt`.
 """
 param_value(kind::AbstractString, s::AbstractString) =
     if kind == "Bool"
@@ -52,16 +61,21 @@ param_value(kind::AbstractString, s::AbstractString) =
         error("state file describes a site field as \"$kind\", which this version does not know")
     end
 
-# a float is written as the `Float64` it widens to exactly, which the reader converts back to
-# the type of its field: `string(0.1f0)` is "0.1f0", which `parse(Float64, …)` refuses
+"""
+    param_string(x)
+
+the value `x` of a site field as a state file writes it. A float is written as the `Float64`
+it widens to exactly, and converted back to the type of its field on reading: `string(0.1f0)`
+is `"0.1f0"`, which `parse(Float64, s)` refuses.
+"""
 param_string(x::AbstractFloat) = string(Float64(x))
 param_string(x) = string(x)
 
 """
     site_params(site)
 
-the fields of a site, as the kinds of value they hold and those values written as strings,
-which is what a state file carries. See `param_kind`.
+the fields of `site` as a state file carries them: the kinds of their values, see
+`param_kind`, and the values written as strings. A field no kind fits is refused.
 """
 function site_params(site::AbstractSite)
     kinds = String[]
@@ -83,9 +97,10 @@ end
 """
     save_state(filename, statename, state)
 
-save the state to disk in a hdf5 file,
-several states with different names can be saved in the same file,
-saving under a name already present in the file replaces it
+save the state in the HDF5 file `filename` under the name `statename`. A file can hold several
+states under different names, and saving under a name already present replaces that state.
+Every field of every site must be an integer, a float, a boolean, a symbol, a string or
+`nothing`.
 
 # Examples
 
@@ -120,8 +135,8 @@ end
     site_module(name)
 
 the module a state file names for a site type: the path from a root module down, as
-`save_state` writes it, `Main.MySites` for a module defined in a script. Files written before
-carried the last name only, which is the whole path of a root module, so they read as they did.
+`save_state` writes it, `Main.MySites` for a module defined in a script. Older files hold the
+last name only, which is the whole path of a root module.
 """
 function site_module(name::String)
     root, path... = split(name, '.')
@@ -149,6 +164,13 @@ function site_module(name::String)
     return m
 end
 
+"""
+    build_site(modname, typename, params)
+
+the site of type `typename` of the module `modname`, built from the values `params` of its
+fields, each converted to the type of its field, which a file of version 1, holding every field
+as a `Float64`, requires.
+"""
 function build_site(modname::String, typename::String, params::Vector)
     t = getfield(site_module(modname), Symbol(typename))
     if !(t isa Type && t <: AbstractSite)
@@ -168,14 +190,13 @@ end
 """
     load_state(filename, statename[; system])
 
-load a state previously saved by `save_state`
+the state saved under the name `statename` in the file `filename` by `save_state`.
 
-The site types of the state are rebuilt by name, so the modules defining them
-must be loaded (this is automatic for the site types of this package)
-
-`system` reads the state onto an existing `System` rather than onto one built from the
-file. The sites must match, and this is what makes the state comparable with one already
-in hand, `inner` and the fidelities requiring their arguments to share a system.
+The site types are rebuilt by name, so the modules defining them must be loaded, which is
+automatic for those of this package. The state comes back on a system built from the file,
+or, when `system` is given, on that one, whose sites must match: this is what makes it
+comparable with a state already in hand, `inner` and the fidelities requiring their arguments
+to share a system.
 
 # Examples
 

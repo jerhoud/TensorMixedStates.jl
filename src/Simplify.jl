@@ -1,244 +1,122 @@
+# simplify, which brings an operator to the normal form the MPO construction expects, a sum of
+# products of one site operators ordered by site with their Jordan-Wigner strings, and
+# removeMulti, which spells those strings out site by site.
+
 export simplify
 
 """
-    simplify(op::Op)
+    simplify(op)
 
-simplifies an operator, this is used internally by functions creating MPOs.
-Multi site operators defined by an expression are replaced by that expression, so that
-the result is a sum of products of one site operators, which is what `PreMPO` expects.
+the operator `op` in a normal form, as the functions building an MPO compute it.
+
+Operators of several sites defined by an expression are replaced by it, products of sums are
+expanded, coefficients and like factors are gathered, and fermionic operators of one site get
+their Jordan-Wigner strings. A placed operator thus becomes a sum of products of one site
+operators ordered by site, which is what `PreMPO` expects; a function of an operator of
+several sites, such as its exponential, is kept whole. A collection of operators is
+simplified element by element.
+
+# Examples
+
+    simplify(X(1) * Z(2) * X(1))
+    simplify(C(3) * dag(C(5)))
 """
 function simplify end
 
-# Simplifications for collections of Operators
 
-simplify(a) = map(simplify, a)
+################### Sums and products in normal form ###################
 
+"""
+    pow_base(a)
+    pow_expo(a)
 
-# Simplification principles
-# One pass
-# expand definitions of Gate and Evolver
-# expand as go we in, simplify as we go out
-# the final result should be a sum of products
-# of one site (possibly complex) indexed operators with different indices in ascending order
+the base and the exponent of `a` as a power: `a` and `1` when it is not one.
+"""
+pow_base(a::Op) = a
+pow_base(a::Union{IntPowOp, GenPowOp}) = a.arg
+pow_expo(a::Op) = 1
+pow_expo(a::Union{IntPowOp, GenPowOp}) = a.expo
 
+"""
+    distribute(terms...)
 
+every product of one term taken from each of the vectors `terms`, as a vector of factors: the
+expansion of a product of sums.
+"""
+distribute(terms::Vector...) =
+    vec([ collect(reverse(p)) for p in Iterators.product(reverse(terms)...) ])
 
+"""
+    string_side(a, b)
 
-# Simplifications for both Generic and Indexed operators
-
-simplify(a::ScalarOp) = a.coef * simplify(a.arg)
-simplify(a::ProdOp) = simplify_prod(map(simplify, a.subs))
-simplify(a::SumOp) = simplify_sum(map(simplify, a.subs))
-simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
-
-
-# Simplification of Generic Operators
-
-simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
-
-simplify(a::IntPowOp) = power(simplify(a.arg), a.expo)
-simplify(a::GenPowOp) = power(simplify(a.arg), a.expo)
-simplify(a::ExpOp) = simplify_exp(simplify(a.arg))
-simplify(a::DagOp) = simplify_dag(simplify(a.arg))
-simplify(a::ModOp) = ModOp(simplify(a.arg), a.modulus)
-
-function simplify(a::Dissipator)
-    sarg = simplify(a.arg)
-    darg = simplify_dag(sarg)
-    daga = simplify_prod([darg, sarg])
-    simplify_sum([simplify_prod([simplify_l(sarg), simplify_r(sarg)]),
-                  -0.5 * simplify_l(daga), -0.5 * simplify_r(daga)])
+where the placed operator `a` lies with respect to the string `b`, by its first site: `:before`
+it, `:after` it, or `:inside` it. An operator of several sites starting on the first site of
+the string is before it.
+"""
+function string_side(a::AtIndex{R, N}, b::Multi_F{R}) where {R, N}
+    i = min(a.index...)
+    if i < b.start || (N > 1 && i == b.start)
+        return :before
+    elseif i > b.stop
+        return :after
+    end
+    return :inside
 end
 
+"""
+    split_string(b, a, string_first)
 
-simplify(a::Left) = simplify_l(simplify(a.arg))
-simplify(a::Right) = simplify_r(simplify(a.arg))
-
-
-# Simplifications of Indexed Operators
-
-function simplify(a::Gate)
-    sarg = simplify(a.arg)
-    simplify_prod([simplify_l(sarg), simplify_r(sarg)])
+the string `b` split around the operator `a`, whose first site `i` is inside it: the string up
+to `i - 1`, then `a` and the rest of the string. For an operator of one site, the `F` of its
+site is taken apart and put before `a` when `string_first` is true, the string having come
+first in the product, and after it otherwise.
+"""
+function split_string(b::Multi_F{R}, a::AtIndex{R, N}, string_first::Bool) where {R, N}
+    i = min(a.index...)
+    piece(start, stop) = Multi_F{R}(start, stop, b.left, b.right)
+    if N > 1
+        return [piece(b.start, i - 1), a, piece(i, b.stop)]
+    end
+    return string_first ? [piece(b.start, i - 1), piece(i, i), a, piece(i + 1, b.stop)] :
+                          [piece(b.start, i - 1), a, piece(i, i), piece(i + 1, b.stop)]
 end
 
-function simplify(a::Evolver)
-    sarg = simplify(a.arg)
-    simplify_sum([simplify_l(sarg), simplify_r(sarg)])
-end
+"""
+    simplify_sum(v)
 
-simplify(a::AtIndex) =
-    simplify_ind(simplify(a.op), a.index...)
-
-
-# Simplification with index
-# transmit indexation as deep as possible
-# to develop tensors, transform fermionic operators with JW, replace multi site operators by their definition
-
-
-simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
-# placed, the identity has no site, AtIndex giving the one of the whole system
-simplify_ind(a::IdentityOp, index...) = a(index...)
-simplify_ind(a::Union{JW_F, Proj, JW, SetState}, index) = a(index)
-simplify_ind(a::ExpOp, index...) = place_function(a, index...)
-simplify_ind(a::ModOp, index...) = place_function(a, index...)
-
-# a function of an operator of one site that is not even is kept whole, and placed after other
-# sites it is its part commuting with F, placed bare, plus its part anticommuting with F, which
-# takes the string as C does: placed whole, it had no string at all. Each part is an operator
-# of its own, the odd one fermionic, so that simplifying the result again leaves it as it is
-# rather than cutting the function inside the even part once more
-place_function(a, index...) =
-    if length(index) == 1 && only(index) > 1 && jw_parity(a.arg) ≠ 0
-        i = only(index)
-        even = Operator{1}("even($a)", 0.5 * (a + F * a * F), plain_op)
-        odd = Operator{1}("odd($a)", 0.5 * (a - F * a * F), fermionic_op)
-        simplify_sum([simplify_ind(even, i), simplify_ind(odd, i)])
-    else
-        a(index...)
-    end
-# an integer power is its product, placed factor by factor with their strings, and any other is
-# a function of the operator, placed as exp is: on one site through its matrix, split in the
-# parts that commute and anticommute with F, and whole on several
-simplify_ind(a::IntPowOp, index...) = simplify_prod(fill(simplify_ind(a.arg, index...), a.expo))
-
-function simplify_ind(a::GenPowOp{Pure}, index...)
-    g = simplify(a)
-    p = scalararg(g)
-    if !(p isa GenPowOp)
-        return simplify_ind(g, index...)
-    end
-    return scalarcoef(g) * place_function(p, index...)
-end
-
-simplify_ind(a::GenPowOp{Mixed}, index...) = simplify(a)(index...)
-simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
-simplify_ind(a::Left, index...) = simplify_l(simplify_ind(a.arg, index...))
-simplify_ind(a::Right, index...) = simplify_r(simplify_ind(a.arg, index...))
-
-simplify_ind(a::Operator{1}, index) =
-    if a.type == fermionic_op
-        if index > 1
-            Multi_F{Pure}(1, index-1, false, false) * JW(a)(index)
-        else
-            JW(a)(index)
-        end
-    else
-        a(index)
-    end
-
-# a multi site operator has to be replaced by its definition, PreMPO only knows how to
-# place one site factors. One site operators are handled by the method above and keep
-# their name, their definition is read from the site when the tensor is needed.
-simplify_ind(a::Operator, index...) =
-    if a.expr isa Op
-        # simplified first, as an operator placed as it is written would be: a renamed
-        # exp(c * Swap) has to be developed as exp(c * Swap) itself is
-        simplify_ind(simplify(a.expr), index...)
-    else
-        a(index...)
-    end
-
-simplify_ind(a::SumOp, index...) = simplify_sum(map(x->simplify_ind(x, index...), a.subs))
-simplify_ind(a::ProdOp, index...) = simplify_prod(map(x->simplify_ind(x, index...), a.subs))
-simplify_ind(a::TensorOp, index...) = simplify_prod(tensor_apply(simplify_ind, a, index...))
-
-
-# simplify exp : exp(0) => Id and exp(3X) => cosh(3)Id + sinh(3)X
-function simplify_exp(a::GenericOp{Pure, N}) where N
-    c = scalarcoef(a)
-    s = prodsubs(a)
-    if length(s) == 1 && is_involution(s[1])
-        simplify_sum([cosh(c) * IdentityOp(s[1]), sinh(c) * s[1]])
-    else
-        exp(a)
-    end
-end 
-
-
-# dag simplification : transmit the dag as deep as possible to allow
-# simplify operators according to type : dag(Id) = Id, dag(F) = F, dag(X) = X
-
-simplify_dag(a::DagOp) = a.arg
-simplify_dag(a::ScalarOp) = conj(a.coef) * simplify_dag(a.arg)
-simplify_dag(a::Operator) =
-    if a.type == involution_op || a.type == selfadjoint_op
-        a 
-    else
-        dag(a)
-    end
-# the adjoint of a product repeated is the adjoint repeated, but a non integer power goes
-# through a logarithm, whose branch cut the adjoint does not respect: dag(sqrt(X)) came out
-# as sqrt(X)
-simplify_dag(a::IntPowOp) = power(simplify_dag(a.arg), a.expo)
-simplify_dag(a::GenPowOp) = DagOp(a)
-simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
-simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
-# a projector is on a pure state, `matrix` refusing a mixed one, and so self adjoint
-simplify_dag(a::Union{IdentityOp, JW_F, Proj}) = a
-simplify_dag(a::JW) = dag(a)
-
-
-simplify_dag(a::ProdOp) = simplify_prod(reverse(simplify_dag.(a.subs)))
-simplify_dag(a::SumOp) = simplify_sum(simplify_dag.(a.subs))
-# the adjoint of a tensor product reverses its factors once placed, which shows only when two
-# of them anticommute, its sites being distinct: with a factor of odd or undefined parity it
-# waits for the sites, where the product of the placed factors takes the sign
-simplify_dag(a::TensorOp{N}) where N =
-    if all(o -> jw_parity(o) == 0, a.subs)
-        TensorOp{N}(simplify_dag.(a.subs))
-    else
-        DagOp(a)
-    end
-
-
-simplify_dag(a::AtIndex) = simplify_dag(a.op)(a.index...)
-simplify_dag(a::Multi_F) = a
-
-
-# Left simplification
-# Generic => just get the scalar factor out
-# Indexed => go as deep as possible
-
-simplify_l(a::GenericOp{Pure}) = Left(a)
-simplify_l(a::ScalarOp{Pure}) = a.coef * simplify_l(a.arg)
-
-simplify_l(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_l.(a.subs)) 
-simplify_l(a::SumOp{Pure, Indexed}) = SumOp(simplify_l.(a.subs))
-simplify_l(a::AtIndex{Pure}) = simplify_l(a.op)(a.index...)
-simplify_l(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
-simplify_l(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
-
-
-# Right simplification
-# Generic => get the scalar factor out and simplifies Right(Id) => Left(Id)
-# Indexed => go as deep as possible
-
-simplify_r(a::GenericOp{Pure}) = Right(a)
-simplify_r(a::ScalarOp{Pure}) = conj(a.coef) * simplify_r(a.arg) 
-
-simplify_r(a::ProdOp{Pure, Indexed}) = ProdOp(simplify_r.(a.subs)) 
-simplify_r(a::SumOp{Pure, Indexed}) = SumOp(simplify_r.(a.subs))
-simplify_r(a::AtIndex{Pure}) = simplify_r(a.op)(a.index...)
-simplify_r(a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
-simplify_r(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
-
-
-# sum simplification
-# flatten out inner sums, order terms, collect identical terms and remove nuls
-# X + (Y + Z) => X + Y + Z, X + Y + X => 2X + Y, X - X => 0
-# in Indexed sums gather terms with same indices : X(1) + Y(1) => (X+Y)(1)
-# and products that differ only by their last factor, on one site: P*X(2) + P*Y(2) => P*(X+Y)(2).
-# The Jordan-Wigner string of an odd term being a factor of its own, the terms of an odd sum of
-# one site share it: kept apart, they were a sum a gate refuses and an MPO carries one by one
-
+the sum of the simplified operators `v`, flattened and sorted, equal terms collected and zero
+ones removed: `X + (Y + Z)` gives `X + Y + Z` and `X + Y + X` gives `2X + Y`. In an indexed
+sum, terms on the same sites are gathered, `X(1) + Y(1)` giving `(X + Y)(1)`, and so are
+products differing only in their last factor, of one site, `P * X(2) + P * Y(2)` giving
+`P * (X + Y)(2)`. The odd terms of a sum on one site, whose Jordan-Wigner string is a factor
+of each, thus share it, rather than making a sum a gate refuses.
+"""
 simplify_sum(v::Vector) = simplify_core_sum(reduce(vcat, sumsubs.(v)))
 
-same_but_last(a, b) =
-    a isa ProdOp && b isa ProdOp && length(a.subs) == length(b.subs) &&
-    a.subs[end] isa AtIndex && b.subs[end] isa AtIndex &&
-    a.subs[end].index == b.subs[end].index && a.subs[1:end-1] == b.subs[1:end-1]
+"""
+    gathered(c, o, nc, no)
 
+the sum of the indexed terms `c * o` and `nc * no` as a single term, when they are on the same
+sites or are products of the same factors but their last ones, placed on the same sites, and
+`nothing` otherwise
+"""
+function gathered(c, o, nc, no)
+    if o isa AtIndex && no isa AtIndex && o.index == no.index
+        return simplify_sum([c * o.op, nc * no.op])(o.index...)
+    elseif o isa ProdOp && no isa ProdOp && length(o.subs) == length(no.subs) &&
+           o.subs[end] isa AtIndex && no.subs[end] isa AtIndex &&
+           o.subs[end].index == no.subs[end].index && o.subs[1:end-1] == no.subs[1:end-1]
+        l, nl = o.subs[end], no.subs[end]
+        return simplify_prod([o.subs[1:end-1]..., simplify_sum([c * l.op, nc * nl.op])(l.index...)])
+    end
+    return nothing
+end
+
+"""
+    simplify_core_sum(v)
+
+the sum of the flattened terms `v`, as `simplify_sum` describes.
+"""
 function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
     subs = sort(v; by=scalararg)
     r = Op{R, T, N}[]
@@ -250,27 +128,15 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
         if no == o
             c += nc
         elseif c == 0
-            c = nc 
-            o = no
-        elseif T == Indexed && o isa AtIndex && no isa AtIndex && o.index == no.index
-            o = simplify_sum([c * o.op, nc * no.op])(o.index...)
-            c = 1
-            if o isa ScalarOp
-                c = o.coef
-                o = o.arg
-            end
-        elseif T == Indexed && same_but_last(o, no)
-            l, nl = o.subs[end], no.subs[end]
-            o = simplify_prod([o.subs[1:end-1]..., simplify_sum([c * l.op, nc * nl.op])(l.index...)])
-            c = 1
-            if o isa ScalarOp
-                c = o.coef
-                o = o.arg
-            end
+            c, o = nc, no
         else
-            push!(r, c * o)
-            c = nc
-            o = no
+            m = T == Indexed ? gathered(c, o, nc, no) : nothing
+            if isnothing(m)
+                push!(r, c * o)
+                c, o = nc, no
+            else
+                c, o = scalarcoef(m), scalararg(m)
+            end
         end
     end
     if c ≠ 0
@@ -279,29 +145,39 @@ function simplify_core_sum(v::Vector{<:Op{R, T, N}}) where {R, T, N}
     return SumOp(r)
 end
 
+"""
+    simplify_prod(v)
 
-# product Simplifications
-# first flatten out inner products X * (Y * Z) => X * Y * Z
+the product of the simplified operators `v`, flattened, `X * (Y * Z)` giving `X * Y * Z`, with
+its coefficients gathered, and put in normal form by `simplify_core_prod`.
+"""
+function simplify_prod(v::Vector)
+    c = prod(scalarcoef.(v))
+    subs = reduce(vcat, prodsubs.(v))
+    if c == 0
+        return 0 * IdentityOp(subs[1])
+    end
+    return simplify_core_prod(c, subs)
+end
 
-simplify_prod(v::Vector) =
-     simplify_core_prod(prod(scalarcoef.(v)), reduce(vcat, prodsubs.(v)))
+"""
+    simplify_core_prod(c, v)
 
-# Generic Pure product
-# gather identical factors X * X => X^2
-# simplify powers using operator types Id^2 => Id, F^2 => Id, X^2 => Id
-# carry F to the right end with the sign the parity of each factor crossed gives, see jw_parity
-# F*X = X*F, F*JW(C) => -JW(C)*F, F*F = Id
+`c` times the product of the flattened factors `v`, in normal form.
 
-pow_base(a::Op) = a
-pow_base(a::Union{IntPowOp, GenPowOp}) = a.arg
-pow_expo(a::Op) = 1
-pow_expo(a::Union{IntPowOp, GenPowOp}) = a.expo
-
+- Generic pure: the `F` are carried to the right, with the sign the parity of each factor
+  crossed gives, `F * JW(C)` giving `-JW(C) * F`, see `jw_parity`, and are laid down before a
+  factor of no definite parity. Neighbouring powers of one base merge, `X * X` giving `X^2`,
+  an involution squared giving the identity.
+- Generic mixed: the `Left` factors are gathered into one and the `Right` ones into another,
+  `Left(X) * Right(Y) * Left(Z)` giving `Left(X * Z) * Right(Y)`. A product with other
+  factors, such as sums, is kept as it is.
+- Indexed: the sums are expanded with `distribute` and each product is sorted by site with
+  `orderprod`, factors on the same sites merging and the strings `Multi_F` being glued, split
+  or cancelled.
+"""
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     id = IdentityOp(v[1])
-    if c == 0
-        return 0 * id
-    end
     w = GenericOp{Pure, N}[]
     f = false
     for x in v
@@ -348,16 +224,8 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     return c * ProdOp(r)
 end
 
-# Generic Mixed products
-# (that is only Left and Right factors)
-# Gather Left and Right together
-# Left(X)*Right(Y)*Left(Z) => Left(X*Z)*Right(Y)
-
 function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
     id = IdentityOp(v[1])
-    if c == 0
-        return 0 * id
-    end
     # the identity is neither a Left nor a Right, and would keep the others from gathering
     v = filter(x -> !(x isa IdentityOp), v)
     if isempty(v)
@@ -370,135 +238,35 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
         return c * ProdOp(v)
     end
     r = GenericOp{Mixed, N}[]
-    if !isempty(larg)
-        left = simplify_l(simplify_prod(larg))
-        if left ≠ id
-            push!(r, left)
-        end
-    end
-    if !isempty(rarg)
-        right = simplify_r(simplify_prod(rarg))
-        if right ≠ id
-            push!(r, right)
+    for (S, args) in ((Left, larg), (Right, rarg))
+        if !isempty(args)
+            m = sided(S, simplify_prod(args))
+            if m ≠ id
+                push!(r, m)
+            end
         end
     end
     return c * ProdOp(r)
 end
 
-# Indexed product simplification
-# first expand inner sums with distribute
-# use orderedprod to reorder and simplify / expand factors
-# in a kind of bublesort in simplify_core_prod
-
-# order, gather and simplify factors X(1)Z(2)Y(1)Id(3) => (X*Y)(1)*Z(2)
-# do the right things with Multi_F (glue, split, reduce)
-# so that C(3)C(5) => Multi_F(1,2)JW(C)(3)Multi_F(1,4)JW(C)(5) => (JW(C)*F)(3)*F(4)*JW(C)(5)
-
-distribute(a::Vector{<:Vector}) = a
-function distribute(a::Vector{<:Vector}, b::Vector, c::Vector...)
-    r = Vector{Vector}(undef, length(a) * length(b))
-    n = 1
-    for i in a
-        for j in b
-            r[n] = vcat(i, [j])
-            n += 1
-        end
-    end
-    return distribute(r, c...)
-end
-distribute(a::Vector...) = distribute([[]], a...)
-
-orderprod(a::AtIndex, b::AtIndex) =
-    if a.index == b.index
-        [ simplify_prod([a.op, b.op])(a.index...) ]
-    elseif min(a.index...) > max(b.index...)
-        [b, a]
-    else
-        []
-    end
-
-function orderprod(a::AtIndex{R, N}, b::Multi_F{R}) where {R, N}
-    i = min(a.index...)
-    if i < b.start || (N > 1 && i == b.start)
-        []
-    elseif i > b.stop
-        [b, a]
-    elseif N == 1
-        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, i, b.left, b.right), Multi_F{R}(i + 1, b.stop, b.left, b.right)]
-    else
-        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, b.stop, b.left, b.right)]
-    end
-end
-
-function orderprod(b::Multi_F{R}, a::AtIndex{R, N}) where {R, N}
-    i = min(a.index...)
-    if i < b.start || (N > 1 && i == b.start)
-        [a, b]
-    elseif i > b.stop
-        []
-    elseif N == 1
-        [Multi_F{R}(b.start, i-1, b.left, b.right), Multi_F{R}(i, i, b.left, b.right), a, Multi_F{R}(i + 1, b.stop, b.left, b.right)]
-    else
-        [Multi_F{R}(b.start, i-1, b.left, b.right), a, Multi_F{R}(i, b.stop, b.left, b.right)]
-    end
-end
-
-orderprod(a::Multi_F{R}, b::Multi_F{R}) where R = 
-    if a.left == b.left && a.right == b.right && (a.stop == b.start-1 || b.stop == a.start-1)
-        [ Multi_F{R}(min(a.start, b.start), max(a.stop, b.stop), a.left, a.right)]
-    elseif a.stop < b.start
-        []
-    elseif b.stop < a.start
-        [b, a]
-    else
-        i = max(a.start, b.start)
-        j = min(a.stop, b.stop)
-        if a.left == b.left && a.right == b.right
-            m = IdentityOp(a)
-        else
-            m = Multi_F{R}(i, j, a.left ⊻ b.left, a.right ⊻ b.right)
-        end
-        [
-            Multi_F{R}(a.start, min(a.stop, i-1), a.left, a.right), Multi_F{R}(b.start, min(b.stop, i-1), b.left, b.right),
-            m,
-            Multi_F{R}(max(a.start, j+1), a.stop, a.left, a.right), Multi_F{R}(max(b.start, j+1), b.stop, b.left, b.right)
-        ]
-    end
-
-
 function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
-    id = IdentityOp(v[1])
-    if c == 0
-        return 0 * id
-    end
     s = map(distribute(sumsubs.(v)...)) do p
         cp = c * prod(scalarcoef.(p))
-        if cp == 0
-            return 0 * id
-        end
-        r = reduce(vcat, prodsubs.(p))
+        r = filter(x -> !(x isa IdentityOp), reduce(vcat, prodsubs.(p)))
         change = true
         while change
             change = false
             nr = IndexedOp{R}[]
             for right in r
-                if right isa IdentityOp
-                    continue
-                elseif isempty(nr)
+                t = isempty(nr) ? [] : orderprod(nr[end], right)
+                if isempty(t)
                     push!(nr, right)
-                    continue
                 else
-                    left = nr[end]
-                    t = orderprod(left, right)
-                    if isempty(t)
-                        push!(nr, right)
-                    else
-                        change = true
-                        pop!(nr)
-                        filter!(x -> !(x isa IdentityOp), t)
-                        cp *= prod(scalarcoef.(t))
-                        append!(nr, scalararg.(t))
-                    end
+                    change = true
+                    pop!(nr)
+                    filter!(x -> !(x isa IdentityOp), t)
+                    cp *= prod(scalarcoef.(t))
+                    append!(nr, scalararg.(t))
                 end
             end
             r = nr
@@ -508,14 +276,248 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
     return simplify_sum(s)
 end
 
+"""
+    orderprod(a, b)
+
+what replaces the product `a * b` of two placed operators or strings `Multi_F`, one step of the
+sort by site of an indexed product: an empty list when the pair stays as it is, the pair
+swapped when it is out of order, a single factor for two operators on the same sites or two
+adjacent strings, and a string split around an operator it overlaps. The sort takes, for
+instance, `X(1) * Z(2) * Y(1)` to `(X * Y)(1) * Z(2)`, and `C(3) * C(5)`, that is
+`Multi_F(1, 2) * JW(C)(3) * Multi_F(1, 4) * JW(C)(5)`, to `(JW(C) * F)(3) * F(4) * JW(C)(5)`.
+"""
+orderprod(a::AtIndex, b::AtIndex) =
+    if a.index == b.index
+        [ simplify_prod([a.op, b.op])(a.index...) ]
+    elseif min(a.index...) > max(b.index...)
+        [b, a]
+    else
+        []
+    end
+
+function orderprod(a::AtIndex{R}, b::Multi_F{R}) where R
+    side = string_side(a, b)
+    return side == :before ? [] : side == :after ? [b, a] : split_string(b, a, false)
+end
+
+function orderprod(b::Multi_F{R}, a::AtIndex{R}) where R
+    side = string_side(a, b)
+    return side == :before ? [a, b] : side == :after ? [] : split_string(b, a, true)
+end
+
+function orderprod(a::Multi_F{R}, b::Multi_F{R}) where R
+    piece(s, start, stop) = Multi_F{R}(start, stop, s.left, s.right)
+    if a.left == b.left && a.right == b.right && (a.stop == b.start-1 || b.stop == a.start-1)
+        return [ piece(a, min(a.start, b.start), max(a.stop, b.stop)) ]
+    elseif a.stop < b.start
+        return []
+    elseif b.stop < a.start
+        return [b, a]
+    end
+    i = max(a.start, b.start)
+    j = min(a.stop, b.stop)
+    m = a.left == b.left && a.right == b.right ? IdentityOp(a) :
+                                                 Multi_F{R}(i, j, a.left ⊻ b.left, a.right ⊻ b.right)
+    return [ piece(a, a.start, min(a.stop, i-1)), piece(b, b.start, min(b.stop, i-1)), m,
+             piece(a, max(a.start, j+1), a.stop), piece(b, max(b.start, j+1), b.stop) ]
+end
+
+
+################### Adjoint and exponential ###################
+
+"""
+    simplify_dag(a)
+
+the adjoint of the simplified operator `a`, carried as deep into it as it goes, down to the
+operators that are their own adjoint by their type: the identity, `F`, projectors,
+involutions and self adjoint operators. A non integer power, and a tensor product with a
+factor of odd or undefined parity, are kept under `dag`.
+"""
+simplify_dag(a::DagOp) = a.arg
+simplify_dag(a::ScalarOp) = conj(a.coef) * simplify_dag(a.arg)
+simplify_dag(a::Operator) =
+    if a.type == involution_op || a.type == selfadjoint_op
+        a
+    else
+        dag(a)
+    end
+# the adjoint of a product repeated is the adjoint repeated, but a non integer power goes
+# through a logarithm, whose branch cut the adjoint does not respect
+simplify_dag(a::IntPowOp) = power(simplify_dag(a.arg), a.expo)
+simplify_dag(a::GenPowOp) = DagOp(a)
+simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
+simplify_dag(a::ModOp) = ModOp(-simplify_dag(a.arg), a.modulus)
+# a projector is on a pure state, `matrix` refusing a mixed one, and so self adjoint
+simplify_dag(a::Union{IdentityOp, JW_F, Proj}) = a
+simplify_dag(a::JW) = dag(a)
+
+
+simplify_dag(a::ProdOp) = simplify_prod(reverse(simplify_dag.(a.subs)))
+simplify_dag(a::SumOp) = simplify_sum(simplify_dag.(a.subs))
+# the adjoint of a tensor product reverses its factors once placed, which shows only when two
+# of them anticommute, its sites being distinct: with a factor of odd or undefined parity it
+# waits for the sites, where the product of the placed factors takes the sign
+simplify_dag(a::TensorOp{N}) where N =
+    if all(o -> jw_parity(o) == 0, a.subs)
+        TensorOp{N}(simplify_dag.(a.subs))
+    else
+        DagOp(a)
+    end
+
+
+simplify_dag(a::AtIndex) = simplify_dag(a.op)(a.index...)
+simplify_dag(a::Multi_F) = a
+
+"""
+    simplify_exp(a)
+
+the exponential of the simplified pure operator `a`: `cosh(c) * Id + sinh(c) * X` when `a` is
+`c * X` with `X` an involution, `exp(a)` otherwise.
+"""
+function simplify_exp(a::GenericOp{Pure, N}) where N
+    c = scalarcoef(a)
+    s = prodsubs(a)
+    if length(s) == 1 && is_involution(s[1])
+        simplify_sum([cosh(c) * IdentityOp(s[1]), sinh(c) * s[1]])
+    else
+        exp(a)
+    end
+end
+
+
+################### Placing an operator on its sites ###################
+
+"""
+    simplify_ind(op, index...)
+
+the generic operator `op` placed on the sites `index` and simplified, the placement carried as
+deep into the expression as it goes: tensor products are split over their sites, fermionic
+operators of one site get their Jordan-Wigner string, and operators of several sites defined
+by an expression are replaced by it.
+"""
+simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
+simplify_ind(a::IdentityOp, index...) = a(index...)
+simplify_ind(a::Union{JW_F, Proj, JW, SetState}, index) = a(index)
+simplify_ind(a::ExpOp, index...) = place_function(a, index...)
+simplify_ind(a::ModOp, index...) = place_function(a, index...)
+
+"""
+    place_function(a, index...)
+
+the function `a` of an operator, an exponential, a `mod` or a non integer power, placed on the
+sites `index`. On a single site other than the first, when the argument is not even, it is
+the sum of its part commuting with `F`, placed bare, and its part anticommuting with `F`,
+which takes the Jordan-Wigner string as `C` does. Each part is an operator of its own, the odd
+one fermionic, so that simplifying the result again leaves it unchanged. Otherwise the
+function is placed whole.
+"""
+place_function(a, index...) =
+    if length(index) == 1 && only(index) > 1 && jw_parity(a.arg) ≠ 0
+        i = only(index)
+        even = Operator{1}("even($a)", 0.5 * (a + F * a * F), plain_op)
+        odd = Operator{1}("odd($a)", 0.5 * (a - F * a * F), fermionic_op)
+        simplify_sum([simplify_ind(even, i), simplify_ind(odd, i)])
+    else
+        a(index...)
+    end
+
+# an integer power is its product, placed factor by factor with their strings, and any other is
+# a function of the operator, placed as exp is: on one site through its matrix, split in the
+# parts that commute and anticommute with F, and whole on several
+simplify_ind(a::IntPowOp, index...) = simplify_prod(fill(simplify_ind(a.arg, index...), a.expo))
+
+function simplify_ind(a::GenPowOp{Pure}, index...)
+    g = simplify(a)
+    p = scalararg(g)
+    if !(p isa GenPowOp)
+        return simplify_ind(g, index...)
+    end
+    return scalarcoef(g) * place_function(p, index...)
+end
+
+simplify_ind(a::GenPowOp{Mixed}, index...) = simplify(a)(index...)
+simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
+simplify_ind(a::Left, index...) = sided(Left, simplify_ind(a.arg, index...))
+simplify_ind(a::Right, index...) = sided(Right, simplify_ind(a.arg, index...))
+
+simplify_ind(a::Operator{1}, index) =
+    if a.type == fermionic_op
+        if index > 1
+            Multi_F{Pure}(1, index-1, false, false) * JW(a)(index)
+        else
+            JW(a)(index)
+        end
+    else
+        a(index)
+    end
+
+# a multi site operator has to be replaced by its definition, PreMPO only knows how to
+# place one site factors. One site operators are handled by the method above and keep
+# their name, their definition is read from the site when the tensor is needed.
+simplify_ind(a::Operator, index...) =
+    if a.expr isa Op
+        # simplified first, as an operator placed as it is written would be: a renamed
+        # exp(c * Swap) has to be developed as exp(c * Swap) itself is
+        simplify_ind(simplify(a.expr), index...)
+    else
+        a(index...)
+    end
+
+simplify_ind(a::SumOp, index...) = simplify_sum(map(x->simplify_ind(x, index...), a.subs))
+simplify_ind(a::ProdOp, index...) = simplify_prod(map(x->simplify_ind(x, index...), a.subs))
+simplify_ind(a::TensorOp, index...) =
+    simplify_prod([ simplify_ind(o, index[p]...) for (o, p) in zip(a.subs, factor_sites(a)) ])
+
+
+################### simplify ###################
+
+simplify(a) = map(simplify, a)
+
+simplify(a::ScalarOp) = a.coef * simplify(a.arg)
+simplify(a::ProdOp) = simplify_prod(map(simplify, a.subs))
+simplify(a::SumOp) = simplify_sum(map(simplify, a.subs))
+simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
+
+simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
+
+simplify(a::Union{IntPowOp, GenPowOp}) = power(simplify(a.arg), a.expo)
+simplify(a::ExpOp) = simplify_exp(simplify(a.arg))
+simplify(a::DagOp) = simplify_dag(simplify(a.arg))
+simplify(a::ModOp) = ModOp(simplify(a.arg), a.modulus)
+
+function simplify(a::Dissipator)
+    sarg = simplify(a.arg)
+    darg = simplify_dag(sarg)
+    daga = simplify_prod([darg, sarg])
+    simplify_sum([simplify_prod([sided(Left, sarg), sided(Right, sarg)]),
+                  -0.5 * sided(Left, daga), -0.5 * sided(Right, daga)])
+end
+
+
+simplify(a::Left) = sided(Left, simplify(a.arg))
+simplify(a::Right) = sided(Right, simplify(a.arg))
+
+function simplify(a::Gate)
+    sarg = simplify(a.arg)
+    simplify_prod([sided(Left, sarg), sided(Right, sarg)])
+end
+
+function simplify(a::Evolver)
+    sarg = simplify(a.arg)
+    simplify_sum([sided(Left, sarg), sided(Right, sarg)])
+end
+
+simplify(a::AtIndex) =
+    simplify_ind(simplify(a.op), a.index...)
+
 
 ################### removeMulti ###################
 
 """
-    removeMulti(::Op)
+    removeMulti(op)
 
-transform Multi_F operators into their F equivalent
-Multi_F(3, 5) => F(3)F(4)F(5)
+the operator with each string `Multi_F` spelled out as one factor per site, `Multi_F(3, 5)`
+giving `F(3) * F(4) * F(5)`. A collection is processed element by element.
 """
 removeMulti(a::SumOp) = SumOp(removeMulti.(a.subs))
 removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))

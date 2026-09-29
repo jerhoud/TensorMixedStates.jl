@@ -1,3 +1,5 @@
+# apply, which applies gates, or an MPO, to a state or a simulation.
+
 export apply
 
 """
@@ -5,15 +7,20 @@ export apply
     apply(mpo, ::State; limits::Limits)
     apply(op, ::Simulation; limits::Limits)
 
-Apply the given gates to the state. `limits` constrain the truncations made while a gate of
-several sites is applied, on the bond it spans and on those crossed to bring its sites
-together: a gate of one site, and the other bonds, are not truncated. An MPO truncates the
-whole result. It is much more efficient to apply all the gates in a single call to apply.
-A product of gates is the operator it denotes, its rightmost factor acting first.
+the state, or the simulation, with the gates `op`, or the MPO `mpo`, applied.
+
+A product of gates is the operator it denotes, its rightmost factor acting first, and applying
+all the gates in a single call is much more efficient. A pure gate `A` applied to a mixed
+state acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: use
+`make_mpo` for it.
+
+`limits` constrains the truncations made while a gate of several sites is applied, on the bond
+it spans and on those crossed to bring its sites together; a gate of one site, and the other
+bonds, are not truncated. An MPO truncates the whole result.
 
 # Examples
-    apply(controlled(Z)(1, 3)*H(2)*controlled(X)(3, 4), state)
 
+    apply(controlled(Z)(1, 3) * H(2) * controlled(X)(3, 4), state)
 """
 function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
     # on the operator as it was written, as the pure path does, so that a site out of the
@@ -43,19 +50,15 @@ apply(mpo::MPO, state::State; limits::Limits=Limits()) =
 """
     prepare_gate(op)
 
-`apply` places one local tensor per factor and has no way to build the Jordan-Wigner
-string a fermionic operator needs: only `simplify` inserts those. Simplifying every gate
-is not an option, since it replaces a gate defined by an expression, such as `Swap`, with
-that expression, and a product of those becomes a sum `apply` cannot place. So only an
-operator that still has a fermionic factor is simplified, which leaves every other gate
-untouched, and the result is refused if it came out as a sum. It is refused as well if a
-fermionic factor survived, which happens inside an exponential or a power of several sites:
-`simplify` keeps those whole and has no string to put into them.
+the gate `op` with the Jordan-Wigner strings of its fermionic factors inserted and spelled out
+as one factor per site, see `removeMulti`, as `PreMPO` does.
 
-`removeMulti` then spells the string out as one factor per site, which is what `PreMPO`
-does too. Those one site factors are built by the `Multi_F` constructor, which is where
-the knowledge of whether the string acts on the left of the density matrix, on its right,
-or on both, already lives.
+`apply` places one tensor per factor and cannot build a string: only `simplify` inserts them.
+Simplifying every gate is not an option, since it replaces a gate defined by an expression,
+such as `Swap`, with that expression, and a product of those becomes a sum `apply` cannot
+place. So only a gate with a fermionic factor is simplified, and it is refused if it becomes a
+sum, or if a fermionic factor remains inside a function of several sites, which `simplify`
+keeps whole.
 """
 prepare_gate(a) =
     if has_fermionic(a)
@@ -76,10 +79,9 @@ prepare_gate(a) =
 """
     make_ops(::System, op)
 
-the coefficient of a gate and the tensors to place for it, one per factor.
-
-The two are kept apart because a factor may place no tensor: an identity contributes nothing,
-and a gate made of nothing else leaves an empty list, which no coefficient can ride.
+the coefficient of the gate `op` and the tensors to place for it, one per factor, a sum being
+refused. The two are kept apart because an identity places no tensor, so a gate made only of
+identities has no tensor to carry the coefficient.
 """
 make_ops(::System, a::SumOp) =
     error("cannot apply sums as gates ($a)")
