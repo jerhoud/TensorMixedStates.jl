@@ -113,6 +113,25 @@ show(io::IO, s::SimData) =
     $(s.phases))"""
     )
 
+"""
+    threading_stamp()
+
+the lines of the `stamp` file saying how the run is threaded, settings of the process that its
+running time depends on: the BLAS library and its threads, for the dense contractions, the
+threads of Julia and of Strided, for the dense permutations, and whether ITensors
+multithreads block sparse contractions.
+"""
+function threading_stamp()
+    blas = join((basename(l.libname) for l in BLAS.get_config().loaded_libs), ", ")
+    blocks = ITensors.using_threaded_blocksparse() ? "on" : "off"
+    return """
+        BLAS $blas, $(BLAS.get_num_threads()) threads
+        Julia threads $(Threads.nthreads())
+        Strided threads $(ITensors.NDTensors.Strided.get_num_threads())
+        Block sparse multithreading $blocks
+        CPU threads $(Sys.CPU_THREADS)
+        """
+end
 
 """
     runTMS(::SimData)
@@ -168,7 +187,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     Julia $VERSION
                     TensorMixedStates $(pkgversion(TensorMixedStates))
                     Date $(now())
-                    """)
+                    """ * threading_stamp())
             src_path = Base.source_path()
             if !isnothing(src_path) && src_path ≠ ""
                 cp(src_path, "prog.jl"; force = true)

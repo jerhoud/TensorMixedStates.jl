@@ -10,6 +10,12 @@ the reference article.
 
 ## [Unreleased]
 
+### Added
+
+- The `stamp` file of a simulation records the BLAS library and how the run is threaded: the
+  threads of BLAS, of Julia and of Strided, and whether ITensors multithreads block sparse
+  contractions.
+
 ### Changed
 
 - The identity on density matrices prints as `Gate(Id)` rather than `Left(Id)`, as it is

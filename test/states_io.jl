@@ -515,3 +515,18 @@ end
         @test all(getfield(back, f) == getfield(l, f) for f in fieldnames(Limits))
     end
 end
+
+@testset "The stamp records the threading" begin
+    # the running time depends on these settings of the process, so a run records them
+    mktempdir() do dir
+        cd(dir) do
+            runTMS(SimData(name = "stamped", phases = [CreateState{Pure}(2, Qubit(), "Up")]))
+            stamp = readlines(joinpath("stamped", "stamp"))
+            @test any(l -> startswith(l, "BLAS lib") && endswith(l, " threads"), stamp)
+            @test "Julia threads $(Threads.nthreads())" in stamp
+            @test any(l -> startswith(l, "Strided threads "), stamp)
+            @test "Block sparse multithreading off" in stamp
+            @test "CPU threads $(Sys.CPU_THREADS)" in stamp
+        end
+    end
+end
