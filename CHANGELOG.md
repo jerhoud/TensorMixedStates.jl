@@ -10,507 +10,305 @@ the reference article.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.5.0] - 2026-09-29
+
+This release adds exported names, among them `RealValue`, `ImaginaryValue` and
+`ComplexValue`, which is why it is a minor version rather than a patch.
+
 ### Added
 
-- `Electron` and `Tj` have the mixed state `"MixedSpin"`, or `"↑|↓"`: one electron of fully
-  mixed spin, `(|↑⟩⟨↑| + |↓⟩⟨↓|)/2`. It is the infinite spin temperature state of a Mott
-  insulator, and the one fully mixed state a strong conservation of `Ntot` allows, where
-  `"FullyMixed"` spreads over several numbers of electrons and is refused.
+- `Electron` and `Tj` have the mixed state `"MixedSpin"`, or `"↑|↓"`, one electron of fully
+  mixed spin, which a strong conservation of `Ntot` allows where `"FullyMixed"` is refused.
 
 - `named` defines an operator from a matrix or a function of the sites as well as from an
-  expression, and is the way the manual now gives. Its type is read off the matrix,
-  `involution_op`, `selfadjoint_op` or `plain_op`, and `fermionic_op` when it anticommutes
-  with the `F` of the sites it is given. Given its sites, it builds the operator on them as
-  `Operator{N}(name, def, type, sites...)` does, a single site standing for as many as the
-  size of a matrix asks for: `named(m, "MySwap", Qubit())` acts on two qubits. `type` sets the
-  type instead.
+  expression, its type read off the matrix, and builds it on the sites it is given: `named(m,
+  "MySwap", Qubit())` acts on two qubits.
 
-- An operator of several sites defined by a matrix, by a function of its sites or by an
-  expression `simplify` cannot develop, such as `exp(X ⊗ X)`, can be given the sites it acts
-  on: `Operator{2}("P2", m, selfadjoint_op, Spin(1))`, or `Operator{2}("K", m, plain_op,
-  Spin(1), Qubit())` for sites that differ. It is split into a sum of products of one site
-  operators, `P2¹₁ ⊗ P2²₁ + …`, which `simplify` replaces it with as it does for `Swap`, so
-  that it can be put in a hamiltonian or a lindbladian and measured, where it could only be
-  applied as a gate (#14). The identity is taken out on each site before the singular value
-  decompositions, which gives the fewest channels: the projector of the AKLT chain makes an
-  MPO of bond dimension 10, where its expression makes 14. Each factor carries a definite
-  charge of what its site conserves, and a matrix that does not commute with `F` on a
-  fermionic site is refused, since it is taken as it is, with no Jordan-Wigner string. On a
-  single site the definition is only replaced by its matrix there, computed once.
+- An operator of several sites defined by a matrix, a function or an expression `simplify`
+  cannot develop, such as `exp(X ⊗ X)`, can be given its sites, `Operator{2}("P2", m,
+  selfadjoint_op, Spin(1))`: split into one site factors, it goes into a hamiltonian and can
+  be measured, where it could only be applied as a gate (#14).
 
-- `RealValue`, `ImaginaryValue` and `ComplexValue`, which declare the values of a measurement
-  real, purely imaginary or complex (#19), the part a declaration drops being checked.
-  Without them `measure` finds the kind of an operator by a symbolic test, real when it is
-  self adjoint, imaginary when its adjoint is its opposite, complex when it can prove
-  neither. A state function or a function of time is real, and a number takes the kind of
-  its type.
+- `RealValue`, `ImaginaryValue` and `ComplexValue` declare the values of a measurement real,
+  purely imaginary or complex (#19); without them `measure` finds the kind of an operator by
+  itself.
 
 ### Changed
 
-- The checkpoint and output machinery is rebuilt on two foundations. The destinations of the
-  measurements are objects of four kinds, text files, streams, json files and `Data` stores,
-  each saying what a checkpoint has to carry of it, and a checkpoint is a commit: the state,
-  the counts and how far every destination had got, taken at one moment at the end of a sweep
-  or at a phase boundary, and written down as it is. The solvers end every sweep through one
-  call, which writes the measurements and the log of the sweep before committing it. What a
-  program sees does not change: the destination names, `output = io`, the files written,
-  `sim.data`, `get_sim_file` and the checkpoint options are the same.
+- The checkpoint and output machinery is rebuilt, a checkpoint recording the state, the
+  counts and the outputs of one and the same moment. What a program sees does not change.
 
-- The state of a checkpoint is written to `checkpoint-1.h5` or `checkpoint-2.h5`, which
-  `checkpoint.json` names, instead of `checkpoint.h5`.
+- The state of a checkpoint is written to `checkpoint-1.h5` or `checkpoint-2.h5` instead of
+  `checkpoint.h5`.
 
-- `CreateState` keeps the time of the simulation unless given its `time_start`, where it set
-  it to 0, which undid the `time_start` of `SimData`. A `CreateState` in the middle of a
-  simulation keeps the running time.
+- `CreateState` keeps the time of the simulation unless given its `time_start`. It set it to
+  0.
 
-- An `Evolve` phase covers the duration it is given, its time step being adjusted to the
-  nearest one dividing it into a whole number of steps, which the log reports. The duration
-  was adjusted instead, so that a duration of 1 in steps of 0.3 stopped at 0.9. A duration
-  shorter than half a step is skipped with a message.
+- An `Evolve` phase covers the duration it is given, its time step being adjusted. The
+  duration was adjusted instead: a duration of 1 in steps of 0.3 stopped at 0.9.
 
-- `Zd` on a `Qudit` is defined as `mod(N, d)`, the same matrix, so that as a conserved
-  quantity it carries its modulus: on `Qudit(2)` its eigenvalues ±1 were read as integers,
-  and their sum was conserved instead of a charge modulo 2.
+- `Zd` on a `Qudit` is `mod(N, d)`, so that it is conserved modulo `d`. On `Qudit(2)` it was
+  conserved as an integer.
 
-- With periodic checkpoints on, a checkpoint is written after the last phase, so that running
-  a completed simulation again does nothing, as the manual says, where it resumed from the
-  last checkpoint written during the run and computed its tail again.
+- With periodic checkpoints, a checkpoint is written after the last phase, so that running a
+  completed simulation again does nothing.
 
-- `EntanglementEntropy(pos, n)` writes `n` eigenvalues, the ones beyond the bond dimension at
-  the cut being zeros, where it wrote at most `n`, so that the rows of a file changed width.
+- `EntanglementEntropy(pos, n)` always writes `n` eigenvalues, padded with zeros.
 
-- `CreateState` refuses to randomize a `State` object into a mixed state, which has no
-  purification to draw from, with a message saying so, where the docstring promised it.
+- `CreateState` refuses by a message to randomize a `State` object into a mixed state, which
+  has no purification to draw from.
 
-- `measure` gives each value the kind of its measurement: its real part for a real one, its
-  imaginary part under the name `Im(name)` for an imaginary one, and a complex number for a
-  complex one, even on a real state. `Overlap` is complex, and so is a correlation matrix as
-  soon as one of its entries is, `(X, Y)` for instance. `expect`, `expect1` and `expect2`
-  still give the values as they are computed. A `Data` destination holds what `measure`
-  gives, so a complex value is a `ComplexF64` there, where it was its real part, and each
-  measurement keeps one type through a run.
+- `measure` gives each value the kind of its measurement: real, imaginary under the name
+  `Im(name)`, or complex. `expect`, `expect1` and `expect2` still give the values as
+  computed.
 
-- A `Check` writes each of its two values according to its kind, an imaginary one as a
-  complex number, its line having no name of its own to mark it. It compares them as they
-  are computed, as before.
+- A `Check` writes each of its two values according to its kind, and still compares them as
+  computed.
 
-- The warning about a large imaginary part goes through `@warn`, which `output` sends to the
-  log of the simulation as before and which a direct call of `measure` shows on the console.
-  It also reports a large real part dropped from an imaginary value, and gives the part
-  dropped relative to the modulus, where it was relative to the real part and read `Inf`
-  when that was zero. For a state function or a function of time, it names `ComplexValue`,
-  which keeps the part.
+- The warning about a large dropped part goes through `@warn`, also reports a real part
+  dropped from an imaginary value, and is relative to the modulus.
 
-- `simplify` takes the adjoint of a projector to be the projector, which lets `measure` find
-  that a projector gives real values.
+- `simplify` takes the adjoint of a projector to be the projector, so that a projector is
+  measured as real.
 
 - A json destination writes a complex number as `{"re": …, "im": …}`.
 
-- The checkpoint file is at version 3, and one written by an earlier version is refused: a
-  measurement becoming complex would continue its file in another layout, and the values of
-  a dictionary destination record the measurement set they belong to (see below). The
-  fingerprint of the phases no longer takes `mindim = 1` for the former default of 0, which
-  only served checkpoints of version 1.
+- The checkpoint file is at version 3, and one of an earlier version is refused.
+
+- A product of more than six factors is abbreviated in the name of a measurement, as a long
+  sum already was: `Z(1)*Z(2)*Z(3)*...*Z(9)*Z(10)`.
+
+- The docstrings are rewritten, shorter and clearer.
+
+### Removed
+
+- `output(sim, io, header, data)`, which only the tests used.
 
 ### Fixed
 
-- The powers of operators are rewritten on two rules. An integer power of zero or above is
-  a product, with the adjoint, the parity and the Jordan-Wigner strings of that product, and
-  an involution is reduced when the power is written, `X^10000` being `Id`. Any other power,
-  of an exponent that is not an integer, negative or complex, is a function of the operator,
-  the principal power, placed as `exp` is. This fixes the following:
-  - a non integer power of an operator of one site with a coefficient that is not positive,
-    `sqrt(-Z)(1)` or `((im * X)^0.5)(1)`, was refused by `expect` and `make_mpo`;
-  - a non integer power of an odd operator placed after a fermionic site was refused; its
-    odd part takes the string;
-  - a complex exponent failed with a `MethodError`;
-  - a non integer power of an operator of several sites defined by an expression, as
-    `sqrt(Swap)`, was expanded and then refused; it is kept whole, as an exponential is;
-  - a power that does not exist, `sqrt(C)`, gave zero; it is refused, and so is a negative
-    power of an operator that is not invertible;
-  - the product of powers of one operator, `(-X)^0.5 * (-X)^0.5`, could leave a coefficient
-    or an `F` among its factors, and `simplify` was not idempotent on it;
-  - `^` had no method for a placed operator: `X(1)^2` and `(X(1) + Z(2))^2` are products,
-    and `X(1)^0.5` is `(X^0.5)(1)`;
-  - a power of the identity on several sites, `(Id ⊗ Id)^3`, or on a density matrix,
-    `Left(Id)^2`, was not reduced.
+- Powers of operators follow two rules: an integer power of zero or above is a product, any
+  other a function of the operator, taken as `exp` is. This fixes non integer powers that
+  were refused or wrong, complex exponents, `^` of a placed operator and powers of the
+  identity left unreduced.
 
-- The identity had several forms, `Id ⊗ Id` on several sites, `Left(Id)`, `Right(Id)` and
-  `Gate(Id)` on a density matrix, `Id(1)` and `Id(k)` placed, each recognised in some places
-  and not in others: `Id(2) - X(2) * X(2)` did not cancel, `Id(2)` was measured as complex,
-  and a power of `Left(Id)` was not reduced. There is one identity of each kind, which every
-  construction of one gives. Placed, it has no site, being the identity of the whole system:
-  `Id(3) == Id(1)`, it prints as `Id`, and a site out of the system is not refused for it.
+- There is a single identity of each kind. `Id ⊗ Id`, `Left(Id)`, `Id(3)` and the others were
+  each recognised in some places only, so that `Id(2) - X(2) * X(2)` did not cancel.
 
-- `expect` checked the sites of an operator after simplifying it, so that a site out of the
-  system was reported as an internal factor of the Jordan-Wigner string, sometimes at another
-  site. It checks the operator as it was written, as `make_mpo` and `apply` do.
+- `expect` checks the sites of an operator as written, as `make_mpo` and `apply` do.
 
-- The coefficients of a time dependent evolver were laid on every site a term spans, so that
-  a term of k sites was multiplied by its coefficient to the power k, in `make_mpo`,
-  `make_approx_W1` and `make_approx_W2`: an evolution with a time dependent term of several
-  sites was silently wrong. The coefficient goes on the last site of the term alone.
+- The coefficient of a time dependent term of several sites was silently raised to the power
+  of its number of sites, in `make_mpo`, `make_approx_W1` and `make_approx_W2`.
 
-- `apply` applied a product of gates in the order it is written, so that `apply(A*B, state)`
-  computed `B*A`, unlike `make_mpo` and `expect`, and the order changed as soon as a
-  fermionic factor was present. A product is now the operator it denotes, its rightmost
-  factor acting first: a script that wrote a circuit from left to right must reverse it.
+- `apply(A*B, state)` computed `B*A`. A product of gates is the operator it denotes, its
+  rightmost factor acting first: a script writing a circuit from left to right must reverse
+  it.
 
-- The adjoint of a tensor product of fermionic operators lost its sign, `dag(C ⊗ C)` being
-  taken for `dag(C) ⊗ dag(C)` where it is its opposite, so that a hamiltonian written with
-  the adjoint of a hopping term was not self adjoint and the dissipator of such a jump did
-  not preserve the trace. A tensor product with a factor of odd or undefined parity keeps its
-  adjoint until it is placed, where the product of its placed factors gives the sign.
+- `dag(C ⊗ C)` lost its sign, so that a hamiltonian written with the adjoint of a hopping
+  term was not self adjoint.
 
-- The matrix and the tensor of a tensor product left out the Jordan-Wigner strings between its
-  factors, `matrix(C ⊗ dag(C), Fermion())` being the bare `kron` of the two matrices where
-  `C(1) * dag(C)(2)` is its opposite. An operator of several sites given by such an
-  expression and its sites, `Operator{2}(name, exp(-0.3 * (h * h)), plain_op, Fermion())`,
-  was silently the wrong operator, `exp(+0.3 * h * h)` there. A factor of no definite parity
-  after a fermionic site, as in `C ⊗ (C + N)`, is refused.
+- The matrix and the tensor of a tensor product left out the Jordan-Wigner strings between
+  its factors, which made some operators of several sites silently wrong.
 
-- An operator of several sites placed on a repeated site, as `Swap(1, 1)` or
-  `(X ⊗ Y)(1, 1)`, is refused. Applied as a gate it put one index into its tensor twice and
-  failed inside ITensors, and its adjoint came out with its factors in the wrong order. The
-  product on one site is written `X(1) * Y(1)`.
+- An operator of several sites placed on a repeated site, `Swap(1, 1)`, is refused.
 
-- `exp` and `mod` of an operator of one site that is not even, as `exp(0.7 * (C + dag(C)))`,
-  placed after a fermionic site, lost the Jordan-Wigner string, in `expect`, `make_mpo` and
-  `measure`. Its part anticommuting with `F` takes the string, as `C` does.
+- `exp` and `mod` of an operator of one site that is not even lost their Jordan-Wigner string
+  after a fermionic site.
 
-- A Jordan-Wigner string was commuted across a projector on a vector, `Proj([1, 1] / √2)`,
-  as if the state had a definite parity. It no longer is; a projector on a state given by
-  its name or its index is still taken to be even.
+- A Jordan-Wigner string was moved across a projector on a vector as if it had a definite
+  parity.
 
-- The terms of an odd sum of one site placed after other sites, `(C + dag(C))(3)` or
-  `C(3) + dag(C)(3)`, each took the Jordan-Wigner string on its own, so that `apply` refused
-  it as a sum, which it accepted on site 1, and an MPO carried every term apart. Products
-  that differ only by their last factor, on one site, are gathered, `P*X(i) + P*Y(i)` into
-  `P*(X+Y)(i)`, which also shrinks MPOs of operators that are not fermionic: a sum of
-  `Dissipator(C + dag(C))` on four sites went from 40 terms to 13.
+- The terms of an odd sum on one site, `(C + dag(C))(3)`, share their string, so that `apply`
+  takes it. Products that differ only by their last factor are gathered, which also shrinks
+  MPOs: a sum of `Dissipator(C + dag(C))` on four sites went from 40 terms to 13.
 
-- `RandomState{Mixed}` truncated the density matrix it drew to the link dimension asked for,
-  which for one that is not a square cut into a spectrum with no small tail and left a trace
-  off one and negative eigenvalues. Nothing is truncated: its link dimension is the largest
-  square not above the one asked for, `isqrt(linkdims)^2`, which the first truncation of an
-  evolution or of dmrg to that dimension keeps whole. It came back on a system of its own,
-  which `inner` and the fidelities refused against states of the system it was drawn for, and
-  its `states` given once as an amplitude vector failed. `RandomState(state, linkdims)` on a
-  state of one site overwrote the state it was given.
+- `RandomState{Mixed}` no longer truncates what it draws, which left a trace off one and
+  negative eigenvalues, and comes back on the system asked for. `RandomState(state,
+  linkdims)` no longer overwrites a state of one site.
 
-- A local state given by its index for every site, `State{Pure}(system, 1)`, was taken for
-  the amplitudes `[1, …, 1]` of a single site.
+- `State{Pure}(system, 1)` was taken for the amplitudes of a single site.
 
 - `sample(state, pos)` failed on a system conserving something.
 
-- A mixed state saved from a partial trace of a charged system, which keeps charged indices on
-  the sites that conserve nothing, could not be used once loaded.
+- A mixed state saved from a partial trace of a charged system could not be used once loaded.
 
-- `SetState` under a strong symmetry kept only the part of charge zero of the site it reset,
-  which gave a state of trace zero or below one. Resetting a site moves the charge of one side
-  of the density matrix alone, and is refused, as other jumps that move the charge are.
+- `SetState` under a strong symmetry gave a state of the wrong trace. It is refused.
 
-- The tensor product of two systems renewed the indices of its right operand only when both
-  were the same object, so that `S ⊗ U ⊗ S`, `(S ⊗ S) ⊗ S` or two loads of one file held
-  one index on several sites, and a gate then failed or never returned. The right operand is
-  renewed whenever it shares an index with the left one.
+- The tensor product of two systems could put one index on several sites, and a gate then
+  failed or never returned.
 
-- `weaken` rebuilt a site whose `conserve` field is not a string, which conserves nothing, with
-  a string in that field, and failed; so did every measurement of a state conserving
-  something strongly on a system holding such a site. A site conserving nothing is left as
-  it is.
+- `weaken` failed on a site whose `conserve` field is not a string.
 
-- A quantity taken modulo, `parity(N)` or `mod(N, 3)`, declared for a site with
-  `@def_operators` and conserved, was conserved as an integer charge: the modulus was read
-  only from an operator holding its definition, and not from the library of the site.
+- A quantity taken modulo, declared with `@def_operators` and conserved, was conserved as an
+  integer.
 
-- The example of `@def_operators` declared `A = C` as a `plain_op`, which is placed without a
-  Jordan-Wigner string and gives wrong signs. It is the definition of `Fermion`, and the
-  docstring says that a `plain_op` must commute with `F` on a fermionic site.
+- The example of `@def_operators` declared a fermionic operator as a `plain_op`.
 
-- A `Measure` given among other measurements, or to `output` as the measurements of a
-  destination, was taken for a single measurement: the names and values came out garbled and
-  the measurements after it were dropped. It stands for its measurements.
+- A `Measure` given among other measurements was taken for a single one. It stands for its
+  measurements.
 
-- `dest => "text"`, the measurement of a string, was written as a message of the log in
-  `final_measures`, and failed on a `Data` or json destination.
+- `dest => "text"` in `final_measures` was written to the log, and failed on a `Data` or json
+  destination.
 
-- `data_to_frame` joined the measurements on their time, which repeats over the sweeps of a
-  ground state search, over a circuit, or once the time is set back, and then paired values
-  that were never measured together. Each value of a json file or of a `Data` object records
-  under `"events"` the measurement set it belongs to, and `data_to_frame` gives one row per
-  set, in the order they were measured.
+- `data_to_frame` joined values on their time, pairing values never measured together. It
+  gives one row per measurement set, which each value records under `"events"`.
 
-- A matrix was written in a json file as the list of its columns, where a file writes it row
-  by row and a reader of json takes a nested list for its rows. It is the list of its rows.
+- A matrix is written in a json file as the list of its rows, not of its columns.
 
-- A resumed simulation did not always write what the uninterrupted one writes. An interrupt
-  during a sweep of dmrg checkpointed the state half way through the next one. A resumed
-  `GroundState` or `SteadyState` could not stop on its tolerance at its first sweep, and a
-  checkpoint written on the sweep where it stopped had it run again: the checkpoint holds the
-  energy of the last sweep, and a stop on the tolerance records the phase as done. A phase
-  stopped for a checkpoint took its final measurements, which stayed in the files after the
-  resume. A resume from a checkpoint written after the last phase took the final
-  measurements at the starting time of the simulation. An output file first opened after
-  the checkpoint was continued from what a killed attempt had left in it, and is created
-  anew.
+- A resumed simulation writes what the uninterrupted one writes, which it did not in several
+  cases, among them an interrupt during a dmrg sweep, a tolerance reached on the first
+  resumed sweep and the final measurements of a stopped phase.
 
-- A value that is not finite made the checkpoint fail and left a json file empty: the
-  checkpoint marks it, and a json file writes it as `"Inf"`, `"-Inf"` or `"NaN"`.
+- A value that is not finite no longer makes the checkpoint fail or leaves a json file empty.
 
 - The fingerprint of the phases failed on a phase holding a dictionary or a set.
 
-- `dmrg` with a hamiltonian on a mixed state, and so `GroundState`, minimised the superoperator
-  `ρ ↦ Hρ + ρH`, which gave twice the ground energy and a state that is not a density matrix,
-  as the manual says mixed states are not supported. It is refused; a superoperator given as
-  such is still accepted.
+- `dmrg` with a hamiltonian on a mixed state, and so `GroundState`, is refused. It minimised
+  the superoperator `ρ ↦ Hρ + ρH`.
 
-- `steady_state`, and so `SteadyState`, returned the eigenvector of `(L+)L` as dmrg finds it,
-  with a trace of arbitrary size and sign, which `Trace` and the phases after it read. It is
-  normalised to a trace of one.
+- `steady_state`, and so `SteadyState`, gives its state a trace of one.
 
-- The error messages on the charge of an MPO printed the opposite of the flux of the
-  operator.
+- The error messages on the charge of an MPO printed the opposite flux.
 
 - `RandomState{Mixed}` on a system conserving something strongly sent the user to another
   form, which refused as well.
 
 - `ToMixed` ignored its limits when the state was already mixed.
 
-- Docstrings and pages of the manual that the code contradicted: `isfermionic`, `exp` and
-  `dag`, `mixer`, `apply` and its limits, `SteadyState`, the example of `Evolve`, the
-  symbols `:energy` and those a phase does not provide, and `checkpoint_interval = 0`, which
-  disables periodic checkpoints only.
+- Docstrings and pages of the manual that the code contradicted are corrected.
 
-- Operations that are well defined were refused: `Gate` of a placed sum, which is
-  `Left(K) * Right(K)`, the gate of a factor of no definite parity on the first site,
-  `(C + N)(1)`, a renamed operator of several sites such as `named(exp(-0.3im * Swap), "R")`,
-  the matrix of an operator of several sites defined by a function when given one site for
-  identical ones, `controlled(C)`, `mutual_info_renyi2` of a part that is the whole system or
-  nothing, which is 0, a range as a measurement, and an integer `noise` in `GroundState`.
-  `has_fermionic` answers on a factor of no definite parity, where it raised.
+- Well defined operations that were refused are accepted, among them `Gate` of a placed sum,
+  `controlled(C)`, a renamed operator of several sites, a range as a measurement and an
+  integer `noise`.
 
-- `apply` of an `Evolver` and `Fidelity` or `Overlap` of a reference conserving less than the
-  measured state are refused with a message saying why, where they failed inside the library.
+- `apply` of an `Evolver`, and `Fidelity` or `Overlap` of a reference conserving less than
+  the measured state, are refused by a message.
 
-- Complex measurements lost their imaginary part when written by `output`, which kept the
-  real part with a warning in the log (#19): `Overlap`, whose docstring said it was written
-  as two columns, the expectation value of an operator that is not self adjoint such as
-  `Sp(1)`, and correlation matrices such as `(Sp, Sm)`, or `(X, Y)`, whose diagonal
-  `⟨XY⟩ = i⟨Z⟩` came out as zero. A complex value is written as two columns, its real part
-  then its imaginary part.
+- Complex measurements lost their imaginary part when written by `output` (#19). They take
+  two columns.
 
-- The part of a `Check` made on a vector observable is written number by number. It was
-  written as the literal Julia prints, `[0.0, 0.0]` in a single column, and JSON.jl 1.5
-  refused a complex number inside it when writing a json destination.
+- The part of a `Check` made on a vector observable is written number by number.
 
 - A vector of measurements inside a set, `"data" => [[Z(1), X(2)]]`, stands for its
-  measurements. Its name was the vector of theirs, written as a literal in a file, taken as a
-  vector key in `Data`, and refused by JSON.jl 1.5 as the key of a json destination.
+  measurements.
 
-- A `Data` destination resumed from a checkpoint gives its matrices back as matrices. They
-  came back as the vector of their columns.
+- A `Data` destination resumed from a checkpoint gives its matrices back as matrices.
 
-- A complex simulation time no longer makes JSON.jl 1.5 fail on an `InexactError` when it
-  writes a json destination, or the checkpoint of a simulation with a `Data` destination.
+- A complex simulation time no longer makes JSON.jl 1.5 fail.
 
-- A term whose factor vanishes on its site, such as `C(1) * C(1)`, or `Sp(1) * Sp(1)` on a
-  spin 1/2, is left out of the MPO. On a system conserving a charge, building the MPO failed
-  on an `ArgumentError` from ITensors, `collection must be non-empty`, which the square of a
-  hopping hamiltonian ran into (#13). Elsewhere the term took a channel on every link it
-  spans.
+- A term whose factor vanishes on its site, `C(1) * C(1)`, is left out of the MPO. It failed
+  on a charged system (#13).
 
-- A matrix whose size is not the dimension of the sites it is placed on is refused by a
-  message naming the operator and the sites. It failed on a `DimensionMismatch` from
-  `reshape`.
+- A matrix whose size does not fit its sites is refused by a message naming the operator and
+  the sites.
 
-- A simulation whose first phase is neither `CreateState` nor `LoadState` is refused when
-  its `SimData` is built. It started without a state and failed in its first phase on a
-  `MethodError` about `nothing`, after `runTMS` had created its directory.
+- A simulation whose first phase is neither `CreateState` nor `LoadState` is refused when its
+  `SimData` is built.
 
-- `Swap` goes into an MPO, `expect` and `measure` on qubits that conserve something, and so
-  does `controlled(Swap)`. It was written with `X ⊗ X + Y ⊗ Y`, whose factors, placed one by
-  one, carry no charge of their own. It is written with `Sp ⊗ dag(Sp) + dag(Sp) ⊗ Sp`, the
-  same operator, and its MPO is real, where `Y` made it complex.
+- `Swap` and `controlled(Swap)` go into an MPO and `expect` on qubits that conserve
+  something, and the MPO of `Swap` is real.
 
-- An operator whose matrix goes through an eigendecomposition, as the exponential of a
-  hermitian matrix or a non integer power does, is no longer refused on sites conserving a
-  charge for the rounding it holds between charges. The imaginary time step
-  `exp(-τ * (A ⊗ dag(A) + dag(A) ⊗ A + U * N ⊗ N))` of the Bose-Hubbard chain was said to
-  carry no definite charge on `Boson(d, conserve = N)`, and `flux` gave one to
-  `exp(0.2 * (A^2 + dag(A)^2) + 0.1 * N)` that `expect` then refused. An element below `1e-13`
-  relative to the norm of its matrix is rounding, for `flux` and for the tensors alike, where
-  `flux` took an absolute `1e-14` and the tensors nothing.
+- An operator computed through an eigendecomposition, as `exp` or a non integer power, is no
+  longer refused on charged sites for the rounding it holds between charges.
 
-- A power of a superoperator, `(Gate(X)^2)(1)` or `(Left(A)^2)(1)`, goes into an MPO. It
-  failed on a `MethodError` from `simplify`, while it could be applied as a gate. An integer
-  power is the composition repeated, and a non integer one is taken whole on its site.
+- A power of a superoperator, `(Gate(X)^2)(1)`, goes into an MPO.
 
-- A `GroundState` or a `SteadyState` resumed from a checkpoint numbers its sweeps as the
-  phase does, in the `sweep` of its measurements, in the log and in the schedule of
-  `measures_period`. It numbered them from 1 again.
+- A resumed `GroundState` or `SteadyState` numbers its sweeps as the phase does.
 
 - A term of coefficient zero is left out of a sum, so that `0 * C + dag(C)` is fermionic.
-  `apply` and `expect1` refused it as a sum of fermionic and non fermionic operators.
 
-- A state whose sites are of a type defined in a module inside another one, as a
-  `module MySites` of a script, is loaded back, and a simulation on such sites resumes from its
-  checkpoint. The state file named the innermost module alone, which could not be found again;
-  it holds the whole path, and files written before read as they did.
+- A state whose sites are of a type defined in a nested module is loaded back, and its
+  simulation resumes.
 
-- `Right` of an operator of several sites carrying no definite charge is refused by a message
-  naming it, as `Left` is, where ITensors said `Fluxes not all equal`.
+- `Right` of an operator of several sites carrying no definite charge is refused by a
+  message, as `Left` is.
 
-- `expect` refuses an operator placed on no site, `X` rather than `X(1)`, and a superoperator
-  given without its sites, by a message saying what it takes. Both failed on a `MethodError`
-  about iterating the operator.
+- `expect` refuses by a message an operator placed on no site, and a superoperator.
 
-- A measurement on a pure state carrying charges no longer fails once the orthogonality centre
-  of the state has moved past its first site, as an ordinary gate such as `Swap(2, 3)` or a
-  call to `orthogonalize` moves it. The left environment written for sites already orthogonal
-  had its arrows the other way round, which the contraction of charged tensors refused, and a
-  second measurement of the same state then met an `UndefRefError`.
+- A measurement on a charged pure state no longer fails once its orthogonality centre has
+  moved past its first site.
 
-- `isfermionic` extends the function of ITensors instead of shadowing it: after `using
-  TensorMixedStates, ITensors` the two exported names clashed and `isfermionic(C)` raised an
-  `UndefVarError`.
+- `isfermionic` extends the function of ITensors instead of shadowing it.
 
-- `tensor` of a matrix given one site for several identical ones lays it on as many indices of
-  that site, charges included, and refuses a size that matches no number of sites. It was laid
-  on a bare index, which a charged system refused, and a matrix of the wrong size was accepted.
-  A matrix carrying no definite charge is refused by a message.
+- `tensor` of a matrix given one site for several identical ones lays it on as many indices
+  of that site, charges included.
 
-- A conserved quantity whose name holds `:`, `;` or `%`, or ends in `*`, is refused, as one
-  ending in `!` was: those are the characters a site records its charges with, and
-  `named(N, "a%2")` came back as a charge modulo 2.
+- A conserved quantity whose name holds `:`, `;` or `%`, or ends in `*`, is refused.
 
-- A system whose sites conserve a quantity of the same name modulo different numbers, as
-  `Qudit(2, conserve = Zd)` beside `Qudit(3, conserve = Zd)`, is refused. The two charges were
-  added as one.
+- Sites conserving a quantity of the same name modulo different numbers are refused on one
+  system.
 
-- `@def_operators` refuses a name that already stands for an operator with a definition of
-  its own, `named(parity(N), "P")`, which never reads the library of the sites: the
-  declaration was recorded and never used.
+- `@def_operators` refuses a name that stands for an operator with a definition of its own.
 
-- Applying a fermionic pure operator to a mixed state checks its positions as written:
-  `apply(C(9), ρ)` on four sites named `Gate(F)(5)`, a factor of its string.
+- Applying a fermionic pure operator to a mixed state checks its positions as written.
 
-- A time dependent evolver is refused unless it is given one time function per term. Too
-  few raised a `BoundsError` on an internal vector, and too many were ignored.
+- A time dependent evolver is refused unless it is given one time function per term.
 
-- `partial_trace` keeps the trace of the state. The first site came from the left environment
-  of `expect`, divided by the trace, so the result had trace 1 whatever the state and a
-  traceless one gave NaN.
+- `partial_trace` keeps the trace of the state. It gave a trace of 1, and NaN for a traceless
+  state.
 
-- `data_to_frame` keeps a measurement named `time` or `event`, renamed `time_1` or `event_1`.
-  `DataFrame` refused it, its name clashing with the column of the rows.
+- `data_to_frame` renames a measurement named `time` or `event` to `time_1` or `event_1`.
 
 - `Xd` on `Qudit(1)` is the identity. It was zero.
 
-- The type of an operator is checked against its matrix each time it is placed on a site, and
-  refused when the matrix belies it: an involution or a self adjoint operator that is not
-  one, a fermionic operator that does not anticommute with `F`, or another that does not
-  commute with it. `simplify` reasons with the type, and `Operator{1}("Bad", [0 1; 0 0],
-  involution_op)` squared to `Id`, where its square is zero. `@def_operators` checks the
-  operators it declares on the site it is given, and `F` is checked to be an involution.
+- The type of an operator is checked against its matrix wherever it is placed, and a wrong
+  one is refused: `Operator{1}("Bad", [0 1; 0 0], involution_op)` squared to `Id`.
 
-- No operator stores a signed zero: `-0.0 + 1.0im` becomes `0.0 + 1.0im` in the coefficient
-  of an operator, a non integer exponent, the matrix defining an `Operator` and the state of a
-  `Proj` or a `SetState`. The two are equal to `==` but not to `isless` or `hash`: `simplify`,
-  which sorts the terms before merging the equal ones, could leave two equal terms unmerged
-  when a third sorted between them, as in `exp(c1 * X ⊗ X) - exp(im * X ⊗ X) + exp(c3 * X ⊗ X)`
-  with `c1 = -1 * -1im`, and `measure` computed the expectation value of two such operators
-  twice. The fingerprint of the phases takes the two zeros alike too.
+- No operator stores a signed zero, which kept `simplify` from merging equal terms.
 
-- `Proj` and `SetState` are ordered by the values of their state rather than by its printed
-  form, which told apart states equal to `==`: `[1, 0]` and `[1.0, 0.0]` sorted apart and
-  `[1, 1]` between them, so that `simplify` left two equal terms unmerged.
+- `Proj` and `SetState` are ordered by the values of their state, so that equal ones merge.
 
-- `apply` takes a null gate, which makes the state null as a gate that annihilates it does.
-  It was refused.
+- `apply` takes a null gate, which makes the state null.
 
-- An operator prints so that it reads back as itself, which matters for the names of the
-  measurements: `X ⊗ (Y*Z)` printed `X⊗Y*Z`, `(X^0.5)^0.5` printed `X^0.5^0.5`, `(1//2)X`
-  printed `1//2X` and `X^(1//2)` printed `X^1//2`.
+- An operator prints so that it reads back as itself: `X ⊗ (Y*Z)` printed `X⊗Y*Z`.
 
-- `weaken(system, symmetries(system))` is the system itself, as it already was for a state.
-  Sites declaring the same quantities in different orders were rewritten in the order of the
-  target, and the state weakened the same way no longer fitted the system.
+- `weaken(system, symmetries(system))` is the system itself.
 
-- `MutualInfoRenyi2(k)`, the mutual information across the link `k`, is named after the
-  sites it stands for, `MutualInfoRenyi2(1:k)`. It was named `MutualInfoRenyi2(k)`, as the one
-  site part `[k]`, a different quantity, and the two could not be measured together.
+- `MutualInfoRenyi2(k)` is named `MutualInfoRenyi2(1:k)`, after the sites it stands for.
 
-- A checkpoint is replaced whole or not at all: the state goes to the file the previous
-  checkpoint does not use, and the metadata naming it is renamed into place last. The state
-  and the metadata were renamed one after the other, and a kill between the two paired the new
-  state with the previous counts, so that the resume ran again sweeps the state already held.
+- A checkpoint is replaced whole or not at all, even when the process is killed while writing
+  it.
 
-- An interrupt no longer leaves a checkpoint whose outputs are ahead of its state. It wrote
-  the state of the last recorded sweep with the output files as they stood at the interrupt,
-  so that measurements taken since, those of a sweep of tdvp before its expansion for
-  instance, were written twice after the resume. An interrupt between a resume and the start
-  of the resumed phase wrote the evolved state as the start of that phase, which the next
-  resume evolved again.
+- An interrupt no longer leaves a checkpoint whose outputs are ahead of its state.
 
-- A resumed dmrg writes what the uninterrupted one writes: a stop asked for no longer
-  measures a sweep that `measures_period` skips, the line of the sweep a checkpoint falls on
-  stays in the log, and a search whose checkpoint fell on its last sweep writes its
-  `Done, dmrg final energy` line, instead of `Optimizing state with 0 sweeps`.
+- A resumed dmrg writes the same log and measurements as the uninterrupted one.
 
-- A complex simulation time with no imaginary part stays complex through a checkpoint, and
-  keeps its two columns after a resume.
+- A complex simulation time with no imaginary part stays complex through a checkpoint.
 
-- The fingerprint that tells a checkpoint of another simulation is computed with FNV-1a, whose
-  definition is fixed, rather than with `Base.hash`, which changes between versions of Julia:
-  a checkpoint was refused after an upgrade of Julia as belonging to another simulation.
+- The fingerprint of a simulation no longer changes with the version of Julia, which had its
+  checkpoint refused after an upgrade.
 
-- Without a directory, when `runTMS` is given `output`, an interrupt goes on to the caller.
-  It was taken for a checkpoint that was never written, and the run returned as if it had
-  completed. `max_time` stops such a run with a message saying that it cannot be resumed,
-  instead of one saying that it can.
+- Without a directory, an interrupt of `runTMS` goes on to the caller, instead of returning
+  as if the run had completed.
 
-- The `error` marker of a failed run is removed when the simulation is run again, instead of
-  describing a resumed run that succeeded.
+- The `error` marker of a failed run is removed when the simulation is run again.
 
-- A phase of one's own driving a solver with `TdvpObserver`, `ApproxWObserver` or
-  `DmrgObserver` resumes correctly. Its sweeps were checkpointed, and the resume handed it the
-  state it had reached, on which it ran all its sweeps again: stopped after two of four sweeps,
-  an evolution of `-im * X(1)` ended at ⟨Z(1)⟩ = 0.362 instead of 0.697. The sweeps of a phase
-  are now committed only once it has read its resume point with `resume_sweeps!`, which the
-  phases of the library do; any other is resumed from its start. A stopped run hands back the
-  state and the time it resumes from.
+- A phase of one's own driving a solver no longer runs all its sweeps again when resumed: it
+  is resumed from its start, unless it reads its resume point with `resume_sweeps!`.
 
-- A dmrg search stopped for a checkpoint no longer logs `Done, dmrg final energy`, which its
-  resume writes.
+- A dmrg search stopped for a checkpoint no longer logs `Done, dmrg final energy`.
 
-- The fingerprint of the phases writes a type by the full path of its module, whatever the
-  program imports. `string(typeof(Qubit()))` gives `Qubit` or `TensorMixedStates.Qubit`
-  depending on the `using` of the program, so reorganising them gave the same simulation
-  another fingerprint, and its checkpoint was refused as belonging to another simulation.
+- The fingerprint of the phases no longer depends on what the program imports.
 
-- A state file reads back a site field of a floating point type other than `Float64`, which
-  it wrote as `0.1f0` and could not parse, and an integer beyond `Int`, which overflowed.
+- A state file reads back a site field of a floating point type other than `Float64`, and an
+  integer beyond `Int`.
 
-- A state a site declares is the one its name gives. A generic form of the same spelling,
-  `"0"` or a spin state such as `"Z1/2"`, came first and shadowed it, and so did
-  `"FullyMixed"`, which is now one of the states every site has, looked for after those it
-  declares and its generic forms. An interrupt while a state is looked for goes on to where
-  the simulation stops, instead of turning into `state … is not defined`.
+- A state a site declares is the one its name gives, before its generic forms and
+  `"FullyMixed"`.
 
-- A local state of the wrong size, given to `CreateState`, `SetState` or `Proj`, is refused by
-  a message naming the site, instead of a `DimensionMismatch` from `reshape` naming neither
-  the state nor the site.
+- A local state of the wrong size is refused by a message naming the site.
 
-- Whether an operator or a local state carries a definite charge is computed before its tensor
-  is built, rather than read from the error ITensors raises: any other error ITensors raised at
-  that point was reported as a missing charge.
+- Whether a tensor carries a definite charge is computed beforehand, rather than read from an
+  error of ITensors.
 
-- A destination named as a file `runTMS` writes in the simulation directory is refused: `log`,
-  `stop`, `error`, `running`, `stamp`, `description`, `prog.jl` and the checkpoint files. A
-  destination called `stop` stopped the simulation at its first sweep and was erased by the
-  next run, one called `checkpoint.json` overwrote the checkpoint, and the others were erased
-  or overwritten in the same way.
+- A destination named as a file `runTMS` writes in the simulation directory, as `log`, `stop`
+  or `checkpoint.json`, is refused.
+
+- A declaration of kind given a range or a view, `RealValue(1:3)`, holds for each of its
+  elements. It failed on a `MethodError`.
+
+- The docstrings of `Fermion`, `Electron` and `Tj` list `F`.
 
 ## [1.4.0] - 2026-09-24
 
