@@ -197,10 +197,18 @@ inside another holds for what it contains.
 """
 RealValue(obs) = Declared(obs, real_kind)
 
-@doc (@doc RealValue)
+"""
+    ImaginaryValue(measurement)
+
+declare the values of a measurement purely imaginary, see `RealValue`.
+"""
 ImaginaryValue(obs) = Declared(obs, imaginary_kind)
 
-@doc (@doc RealValue)
+"""
+    ComplexValue(measurement)
+
+declare the values of a measurement complex, see `RealValue`.
+"""
 ComplexValue(obs) = Declared(obs, complex_kind)
 
 """
@@ -431,7 +439,9 @@ get_exp2(o) = Tuple{SimpleOp, SimpleOp}[ l.obs for l in leaves(ObsExp2, o) ]
 """
     Trace
 
-a state function measuring the trace of the density matrix, see `trace` and `StateFunc`.
+a state function measuring the trace of the density matrix, see `trace` and `StateFunc`. It
+gives the real part, the only one the trace of a Hermitian density matrix has; for the
+imaginary part that numerical errors may add, see `TraceError`.
 """
 const Trace = StateFunc("Trace", trace)
 
@@ -441,6 +451,10 @@ const Trace = StateFunc("Trace", trace)
 a state function measuring `1 - trace(state)`, the deviation of the trace from one, see
 `Trace`. Numerical inaccuracies tend to move the trace, so this is a good check of the
 accuracy of a simulation.
+
+Only its real part is given. The imaginary part comes from the anti-Hermitian part of the
+density matrix, which numerical errors alone produce and `HermiticityError` measures: it is
+dropped, with a warning when more than rounding, and `ComplexValue(TraceError)` keeps it.
 """
 const TraceError = StateFunc("TraceError", st -> 1. - trace(st))
 
@@ -452,7 +466,11 @@ state functions measuring the purity ``\\mathrm{tr}(\\rho^2)``, see `trace2` and
 """
 const Trace2 = StateFunc("Trace2", trace2)
 
-@doc (@doc Trace2)
+"""
+    Purity
+
+the state function `Trace2` under the name `Purity`, see `Trace2`.
+"""
 const Purity = StateFunc("Purity", trace2)
 
 """

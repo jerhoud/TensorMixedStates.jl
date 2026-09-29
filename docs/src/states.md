@@ -35,7 +35,7 @@ partial_trace
 
 ## Saving and loading
 
-States can be written to disk in the hdf5 format and read back later, several states may be
+States can be written to disk in the HDF5 format and read back later. Several states may be
 stored in the same file under different names. The same thing is available in the high level
 interface with the `SaveState` and `LoadState` phases.
 

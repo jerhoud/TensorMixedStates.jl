@@ -312,6 +312,7 @@ operator at all is refused in the same way.
 ```@docs
 string_state
 conserve_string
+show(::IO, ::AbstractSite)
 @def_states
 @def_operators
 @create_site_module

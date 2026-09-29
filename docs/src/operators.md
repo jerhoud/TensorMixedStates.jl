@@ -27,7 +27,7 @@ h = 0.5
 
 There are two kinds of operators: generic (like `X`) and indexed (like `X(3)`). Indexed operators are applied to specific site numbers.
 
-- Operators can be used to define Hamiltonians, for example
+Operators define Hamiltonians, for example
 
 ```@example operators
 hamiltonian = - j * sum(X(i)X(i+1) + Y(i)Y(i+1) for i in 1:n-1) - h * sum(Z(i) for i in 1:n)
@@ -39,7 +39,7 @@ or Lindbladian dissipators like
 dissipators = sum(Dissipator(Sp)(i) for i in 1:n)
 ```
 
-to build Lindbladian
+to build a Lindbladian
 
 ```@example operators
 lindbladian = -im * hamiltonian + dissipators
@@ -47,7 +47,7 @@ lindbladian = -im * hamiltonian + dissipators
 
 Note the factor `-im` for the Hamiltonian.
 
-- Operators can be used to define quantum gates like
+They define quantum gates, like
 
 ```@example operators
 gates = H(1)Swap(1, 2)H(1)
@@ -59,7 +59,7 @@ Noisy gates can be defined using the `Gate` constructor, for example
 noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
 ```
 
-- Operators can be used to define observables
+And they define observables
 
 ```@example operators
 obs = X(1)X(2)Z(3)
@@ -81,7 +81,8 @@ Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`,
 
 ```@docs
 Operator
-⊗
+Operator{N}(::String, ::Union{Matrix, Function, GenericOp{Pure, N}}, ::OpType, ::AbstractSite, ::AbstractSite...) where N
+⊗(::GenericOp{Pure, N}, ::GenericOp{Pure, M}) where {N, M}
 Proj
 Dissipator
 Gate
@@ -93,9 +94,10 @@ named
 parity
 mod(::GenericOp{Pure}, ::Int)
 dag(::GenericOp{Pure})
+exp(::GenericOp{Pure})
+sqrt(::GenericOp)
 isfermionic
 has_fermionic
-flux(::SimpleOp, ::AbstractSite)
 matrix
 tensor
 simplify

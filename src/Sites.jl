@@ -525,7 +525,8 @@ const common_states = Dict{String, Function}(
 """
     state(::AbstractSite, ::String)
 
-return the local state (as a vector or matrix) corresponding to the site and name given.
+the local state a name gives on a site: a vector, or a density matrix for a mixed one such as
+`"FullyMixed"`.
 
 The name is looked for among the states the site declares, see `@def_states`, then among its
 generic forms, see `string_state`, then among the states every site has, see `common_states`.

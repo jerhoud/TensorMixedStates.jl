@@ -18,7 +18,7 @@ the supertype of `Pure` and `Mixed`, the two representations of a state
 abstract type PM end
 
 """
-    type Pure <: PM
+    struct Pure <: PM
     Pure()
 
 the pure representation, in which a state is a wave function. It parametrizes states and
@@ -34,7 +34,7 @@ struct Pure <: PM end
 
 
 """
-    type Mixed <: PM
+    struct Mixed <: PM
     Mixed()
 
 the mixed representation, in which a state is a density matrix. It parametrizes states and
@@ -85,14 +85,14 @@ abstract type Op{R <: PM, T <: GI, N} end
 """
     GenericOp{R, N}
 
-the generic operators, not yet placed on sites, that is `Op{R, Generic, N}`
+the generic operators, not yet placed on sites, that is `Op{R, Generic, N}`.
 """
 const GenericOp{R, N} = Op{R, Generic, N}
 
 """
     IndexedOp{R}
 
-the operators placed on sites, that is `Op{R, Indexed, 1}`
+the operators placed on sites, that is `Op{R, Indexed, 1}`.
 """
 const IndexedOp{R} = Op{R, Indexed, 1}
 
@@ -217,7 +217,7 @@ state_key(x::AbstractArray) = (3, size(x), [ (real(y), imag(y)) for y in vec(x) 
 """
     @enum OpType
 
-the possible types of an `Operator`
+the possible types of an `Operator`.
 
 # Enumeration values
 
@@ -236,33 +236,33 @@ and a wrong type is refused.
 """
     plain_op
 
-the `OpType` of an operator with no particular properties
+the `OpType` of an operator with no particular properties.
 """
 plain_op
 
 """
     fermionic_op
 
-the `OpType` of a fermionic operator, for which the Jordan-Wigner transform must be used
+the `OpType` of a fermionic operator, for which the Jordan-Wigner transform must be used.
 """
 fermionic_op
 
 """
     selfadjoint_op
 
-the `OpType` of an operator invariant under `dag`
+the `OpType` of an operator invariant under `dag`.
 """
 selfadjoint_op
 
 """
     involution_op
 
-the `OpType` of an operator invariant under `dag` and whose square is the identity
+the `OpType` of an operator invariant under `dag` and whose square is the identity.
 """
 involution_op
 
 """
-    type Operator{N} <: GenericOp{Pure, N}
+    struct Operator{N} <: GenericOp{Pure, N}
     Operator{N}(name, expr, type)
 
 a named operator of `N` sites, as `X`, `Swap` or `C`, of the given `OpType`. `expr` defines
@@ -298,7 +298,7 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 ############ Identity ############
 
 """
-    type IdentityOp{R, T, N}
+    struct IdentityOp{R, T, N}
 
 the identity, one value for each kind of operator (pure or mixed, generic on `N` sites or
 placed). Every way of writing an identity gives it, `Id ⊗ Id`, `Left(Id)`, `Right(Id)`,
@@ -313,7 +313,7 @@ IdentityOp(::Op{R, T, N}) where {R, T, N} = IdentityOp{R, T, N}()
 """
     Id
 
-the identity operator, defined on every site type
+the identity operator, defined on every site type.
 """
 const Id = IdentityOp{Pure, Generic, 1}()
 
@@ -328,7 +328,7 @@ isless(::IdentityOp, ::IdentityOp) = false
 ################ Sums ##############
 
 """
-    type SumOp{R, T, N} <: Op{R, T, N}
+    struct SumOp{R, T, N} <: Op{R, T, N}
 
 a sum of operators, nested sums flattened and terms of coefficient zero left out. An empty
 sum is `0 * Id`, a sum of one term that term.
@@ -384,7 +384,7 @@ isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
 ################ Product by a number #############
 
 """
-    type ScalarOp{R, T, N} <: Op{R, T, N}
+    struct ScalarOp{R, T, N} <: Op{R, T, N}
 
 a number times an operator, the operator never a `ScalarOp` itself: `2 * (3X)` is `6X`. A
 coefficient of 1 gives the operator, of 0 gives `0 * Id`, and a number times a sum multiplies
@@ -440,7 +440,7 @@ isless(a::ScalarOp, b::ScalarOp) =
 ############### Products ###############
 
 """
-    type ProdOp{R, T, N} <: Op{R, T, N}
+    struct ProdOp{R, T, N} <: Op{R, T, N}
 
 a product of operators, nested products flattened and the coefficients of the factors
 gathered in front of it. An empty product is `Id`, a product of one factor that factor.
@@ -490,7 +490,7 @@ isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
 ############### Tensor products ############
 
 """
-    type TensorOp{N} <: GenericOp{Pure, N}
+    struct TensorOp{N} <: GenericOp{Pure, N}
 
 a tensor product of generic operators on pure states, acting on `N` sites, the sum of theirs.
 The coefficients of the factors are gathered in front of it, and a product of identities is
@@ -571,7 +571,7 @@ isless(a::TensorOp, b::TensorOp) = isless(a.subs, b.subs)
 ############# Jordan_Wigner transformation ##############
 
 """
-    type JW <: SimpleOp
+    struct JW <: SimpleOp
 
 a fermionic operator of one site once `simplify` has put its Jordan-Wigner string in front
 of it: `C(5)` becomes `Multi_F{Pure}(1, 4, false, false) * JW(C)(5)`. It has the matrix of
@@ -584,7 +584,7 @@ end
 isless(a::JW, b::JW) = isless(a.arg, b.arg)
 
 """
-    type JW_F
+    struct JW_F
 
 the type of `F`
 """
@@ -920,8 +920,8 @@ whether the exponent `p` is an integer of zero or above, whatever its type (`2.0
 is_natural(p::Number) = isreal(p) && isinteger(real(p)) && real(p) ≥ 0
 
 """
-    type IntPowOp{R, N} <: GenericOp{R, N}
-    type GenPowOp{R, N} <: GenericOp{R, N}
+    struct IntPowOp{R, N} <: GenericOp{R, N}
+    struct GenPowOp{R, N} <: GenericOp{R, N}
 
 internal types for the powers of an operator.
 
@@ -1026,9 +1026,9 @@ isless(a::GenPowOp, b::GenPowOp) =
 # ExpOp
 
 """
-    type ExpOp{N} <: GenericOp{Pure, N}
+    struct ExpOp{N} <: GenericOp{Pure, N}
 
-the exponential of a generic operator on pure states, see `exp`
+the exponential of a generic operator on pure states, see `exp`.
 """
 struct ExpOp{N} <: GenericOp{Pure, N}
     arg::GenericOp{Pure, N}
@@ -1052,7 +1052,7 @@ isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
 # DagOp
 
 """
-    type DagOp{N} <: GenericOp{Pure, N}
+    struct DagOp{N} <: GenericOp{Pure, N}
 
 the adjoint of a generic operator on pure states, see `dag`. `dag(dag(A))` is `A`, and
 `dag(c * A)` is `conj(c) * dag(A)`.
@@ -1069,7 +1069,7 @@ end
 """
     dag(::GenericOp{Pure})
 
-the adjoint ``A^\\dagger`` of a generic operator on pure states
+the adjoint ``A^\\dagger`` of a generic operator on pure states.
 
 # Examples
 
@@ -1088,7 +1088,7 @@ isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
 # ModOp
 
 """
-    type ModOp{N} <: GenericOp{Pure, N}
+    struct ModOp{N} <: GenericOp{Pure, N}
 
 an operator `A` taken modulo an integer `m` of at least 2, ``e^{2i\\pi A/m}``, see `mod`. A
 conserved quantity written this way is conserved modulo `m`.
@@ -1304,8 +1304,7 @@ miss the string on site 2.
 
 After `simplify` the factors are `JW` transforms, which are not fermionic, and the answer is
 false unless a factor was kept whole, as an exponential of several sites is. A factor of no
-definite parity, as `C + N`, answers true instead of raising. The operator is explored through
-its fields, as `==` does, so that no wrapper is forgotten.
+definite parity, as `C + N`, answers true instead of raising.
 """
 has_fermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
 

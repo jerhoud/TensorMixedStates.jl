@@ -130,7 +130,7 @@ struct SysIndex{R <: PM}
 """
     length(::System)
 
-the number of sites of the system
+the number of sites of the system.
 """
 length(system::System) = length(system.sites)
 

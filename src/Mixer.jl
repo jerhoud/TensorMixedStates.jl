@@ -645,7 +645,7 @@ end
     tensor(system::System, a::AtIndex)
 
 the ITensor of the operator `a` placed on sites, as `X(1)` or `(X ⊗ Y)(2, 3)`, on the indices
-of `system`, with one pair of indices per site it acts on
+of `system`, with one pair of indices per site it acts on.
 
 # Examples
 

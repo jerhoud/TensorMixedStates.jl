@@ -362,7 +362,7 @@ same way, through its state.
 
 # Examples
 
-    weaken(state)                          # one rung down
+    weaken(state)                          # one level down
     weaken(state, (strong(Ntot), 2Sz))     # exactly these
     weaken(state, ())                      # no charges at all
     weaken(state, symmetries(system))      # the identity

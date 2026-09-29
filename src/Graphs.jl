@@ -19,7 +19,7 @@ graph_base_size(g::Vector{Tuple{Int, Int}}) = maximum(maximum, g)
 """
     line_graph(n)
 
-the chain of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n)]`
+the chain of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n)]`.
 """
 line_graph(n::Int) =
     [(i, i+1) for i in 1:(n-1)]
@@ -27,7 +27,7 @@ line_graph(n::Int) =
 """
     circle_graph(n)
 
-the ring of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n), (n, 1)]`
+the ring of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n), (n, 1)]`.
 """
 circle_graph(n::Int) =
     [line_graph(n); [(n, 1)]]
@@ -36,7 +36,7 @@ circle_graph(n::Int) =
     complete_graph(n)
 
 the complete graph of `n` vertices, as a vector of edges:
-`[(1, 2), (1, 3), ..., (1, n), (2, 3), ..., (n-1, n)]`
+`[(1, 2), (1, 3), ..., (1, n), (2, 3), ..., (n-1, n)]`.
 
 # Examples
 

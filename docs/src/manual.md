@@ -29,13 +29,13 @@ using .Qubits
 
 Note the "." before the name and the "s" at the end.
 
-To define a site just call the corresponding creator for example
+To define a site, call the corresponding constructor, for example
 
 ```@example manual
 s = Qubit()
 ```
 
-Four site creators need an argument: `Qudit(dim)` and `Boson(dim)` for the dimension of
+Four site constructors need an argument: `Qudit(dim)` and `Boson(dim)` for the dimension of
 the local Hilbert space, `Spin(s)` for the spin, and `Qboson(q, dim)` for the deformation
 parameter and the dimension. For example
 
@@ -56,7 +56,7 @@ system1 = System(10, Qubit())
 nothing # hide
 ```
 
-gives you a system with 10 qubits. Systems may have different types of site, in this case you must feed `System` with an array of sites
+gives you a system with 10 qubits. Systems may have sites of different types, in which case `System` is given an array of sites
 
 ```@example manual
 using .Fermions
@@ -71,7 +71,7 @@ gives you a three site system.
 
 States may be in pure or mixed representation, these two possibilities are represented in TMS, by `Pure` or `Mixed`.
 
-To create a state, we call the State creator
+To create a state, we call the `State` constructor
 
 ```@example manual
 state1 = State{Pure}(system1, "Up")
@@ -103,24 +103,40 @@ mixedstate = mix(state1)
 nothing # hide
 ```
 
-For mixed states there is a local mixed state `"FullyMixed"` which correspond to a density matrix proportional to the identity matrix (that is the infinite temperature state).
+For mixed states there is a local mixed state `"FullyMixed"` which corresponds to a density matrix proportional to the identity matrix (that is the infinite temperature state).
 
-If you need a local state which is not predefined, it is possible to pass its vector (or matrix for mixed states) directly, For example, we could also define `state1` by
+If you need a local state which is not predefined, it is possible to pass its vector (or matrix for mixed states) directly. For example, we could also define `state1` by
 
 ```@example manual
 state1 = State{Pure}(system1, [1., 0.])
 nothing # hide
 ```
 
+## Conserved quantities
+
+A site can be told that a quantity is conserved, for instance the number of fermions:
+
+```@example manual
+mysystem = System(10, Fermion(conserve = N))
+mystate = State{Pure}(mysystem, [isodd(i) ? "Occ" : "Emp" for i in 1:10])
+nothing # hide
+```
+
+The tensors are then block sparse, which makes a large computation smaller and faster, and in
+exchange the state stays in the sector it was built in: a local state such as `"+"`, which
+superposes two numbers of particles, is refused, and so is an operator of no definite charge.
+For a mixed state, a quantity may also be conserved strongly, `Fermion(conserve = strong(N))`.
+All of this is described in [Conserving a quantity](@ref).
+
 ## Limits
 
-TMS uses Matrix Product State to internally represent quantum states. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
+TMS uses Matrix Product States to represent quantum states internally. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
 
 ```@example manual
 lim = Limits(cutoff = 1e-10, maxdim = 50)
 ```
 
-any of the arguments may be omitted in which case it corresponds to an absence of constraint for this parameter. In particular, `Limits()` represents no constraint.
+Any of the arguments may be omitted in which case it corresponds to an absence of constraint for this parameter. In particular, `Limits()` represents no constraint.
 
 A third parameter, `mindim`, sets the bond dimension the truncation is not allowed to go below, as in `Limits(cutoff = 1e-10, maxdim = 50, mindim = 4)`. `maxdim` keeps the last word when the two ask for opposite things.
 
@@ -138,7 +154,7 @@ state3 = (state1 + ghz) / 2
 nothing # hide
 ```
 
-One can write
+one can write
 
 ```@example manual
 state3 = +(state1, ghz; limits = lim) / 2
@@ -190,8 +206,8 @@ Many operations are defined on generic operators:
 - addition, multiplication and power by a number
 - tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`)
 - `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``.
-- `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the jump operator that may flip a qubit toward up (`Sp` is the ``S^+`` operator)
-- `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply an ``\sigma_x`` gate 10 percent of the time.
+- `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the dissipator whose jump operator, `Sp`, the ``S^+`` operator, flips a qubit toward up
+- `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply a ``\sigma_x`` gate 10 percent of the time.
 - `Proj` represents an operator that projects on the given state, for example `Proj("Up")` projects qubits on the up state.
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`
 - `controlled` for qubits makes controlled gates: `CX = controlled(X)`
@@ -238,8 +254,8 @@ myop(3)
 myswap(4, 7)
 ```
 
-An operator of several sites defined by a matrix, as `myswap` is, or a function of one, as
-`Rxy` is, can only be applied as a gate. To measure it or to put it in a hamiltonian, give
+An operator of several sites defined by a matrix, as `myswap` is, or by a function of such an
+operator, as the exponential in `Rxy`, can only be applied as a gate. To measure it or to put it in a hamiltonian, give
 the sites it acts on when creating it, one per index or a single one for identical sites,
 whose number is then read off the size of the matrix:
 
@@ -264,45 +280,124 @@ In the case of Hamiltonian or Lindbladian evolution the Hamiltonian part is to b
 evolver = -im * hamiltonian + dissipators
 ```
 
+### Fermions
+
+A fermionic operator is written as it is: `C(i)` destroys a fermion on site `i` and
+`dag(C)(j)` creates one on site `j`, the Jordan-Wigner strings being inserted for you wherever
+the operator is used, in expectation values, in MPOs and in gates. A hopping term is thus
+simply
+
+```@example manual
+hopping = sum(dag(C)(i)C(i+1) + dag(C)(i+1)C(i) for i in 1:n-1)
+nothing # hide
+```
+
+The expectation value of a single fermionic operator vanishes on any state of definite parity,
+so `measure` refuses to measure a fermionic operator on every site, as `C`, and so does
+`expect1`; placed on a site, `C(3)`, it is accepted, for a state that superposes parities. The
+two operators of a correlation, as `(dag(C), C)`, must both be fermionic or both not.
+
 ## Algorithms
 
 We can now work with states and operators.
 
-We can apply gates with `apply`
+### Gates
 
-```julia
-newstate = apply(gates, oldstate; limits)
+Gates are applied with `apply`. In a product of gates the rightmost acts first: here the
+Hadamard gate on the first qubit, then the controlled not, which turns two up qubits into a
+Bell pair
+
+```@example manual
+mybell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(2, Qubit()), "Up"))
+measure(mybell, [Z(1)Z(2), X(1)X(2)])
 ```
 
-the `gates` argument is an indexed operator representing the gates to apply
+Applying all the gates in a single call is much more efficient than one by one, and the
+keyword argument `limits` constrains the truncations made along the way.
 
-the keyword argument `limits` fixes the constraints to apply
+### Ground states
 
-We can compute ground states with `dmrg`
+The ground state of a hamiltonian is computed by `dmrg`, from a starting state, here a random
+state of bond dimension 8. It returns the energy and the ground state, which can then be
+measured. For the Ising chain in a transverse field
 
-```julia
-energy, groundstate = dmrg(hamiltonian, startstate; options...)
+```@example manual
+mysystem = System(10, Qubit())
+hamiltonian = -sum(Z(i)Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10)
+energy, ground = dmrg(hamiltonian, RandomState{Pure}(mysystem, 8); nsweeps = 10,
+                      limits = Limits(maxdim = 20))
+energy
 ```
 
-the options are `limits` to set constraints and `nsweeps` to fix the number of sweeps among others.
-
-We can do time evolution with `tdvp` and `approx_W`
-
-```julia
-newstate = tdvp(evolver, time, oldstate; options...)
-newstate = approx_W(evolver, time, oldstate; options...)
+```@example manual
+measure(ground, X)
 ```
 
-the options are `limits` for the constraints, `nsweeps` for the number of steps to do and for `approx_W`, `order` and `w` for the parameters of the algorithm (`order = 4, w = 2` are usually good)
+`nsweeps` is the number of sweeps, and `limits` may give one value per sweep, as in
+`Limits(maxdim = [10, 20, 50])`.
 
-For more details, see the reference or the inline help.
+### Time evolution
+
+Time evolution is done by `tdvp` or `approx_W`, which take an evolver, the time to evolve for
+and the state. The evolver follows the convention
+
+```julia
+evolver = -im * hamiltonian + dissipators
+```
+
+dissipators being accepted on a mixed state only. Under ``H = \sum_i \sigma_z^i``, qubits
+starting in `"+"` precess, with ``\langle \sigma_x \rangle = \cos 2t``, which is
+``\cos 1 \approx 0.5403`` at ``t = 0.5``:
+
+```@example manual
+myevolved = tdvp(-im * sum(Z(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "+");
+                 nsweeps = 10)
+measure(myevolved, X)
+```
+
+`nsweeps` is the number of steps, each of length `t / nsweeps`, and `limits` constrains the
+state as before. With no hamiltonian and `Dissipator(Sm)` on each site, the qubits of a mixed
+state decay from up to down, with ``\langle \sigma_z \rangle = 2e^{-t} - 1``, which is
+``-0.2642`` at ``t = 1``:
+
+```@example manual
+myrho = State{Mixed}(System(4, Qubit()), "Up")
+mydecayed = tdvp(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsweeps = 10)
+measure(mydecayed, Z)
+```
+
+`approx_W` is called the same way, with in addition the order of its approximation, from 1
+to 4, and `w`, 1 or 2, for which `order = 4, w = 2` is usually a good choice:
+
+```@example manual
+mydecayed = approx_W(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; order = 4, w = 2,
+                     nsweeps = 10)
+measure(mydecayed, Z)
+```
+
+An evolver may also depend on time, see [Time dependent evolvers](@ref).
+
+### Steady states
+
+The steady state of an open system is computed by `steady_state`, from a mixed state to start
+from. It returns a value, zero for a steady state, and the state. Qubits decaying toward down
+at rate 1 and pumped toward up at rate 0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
+
+```@example manual
+value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for i in 1:4),
+                               myrho; nsweeps = 10)
+measure(mysteady, Z)
+```
+
+For more details, see the [Algorithms](algorithms.md) page of the reference or the inline
+help.
 
 ## Measurements
 
 Once we have created a state, we may want to measure it. Take for example a three qubit state
 
 ```@example manual
-mystate = State{Pure}(System(3, Qubit()), "Up")
+mystate = State{Pure}(System(3, Qubit()), ["+", "Up", "+"])
 nothing # hide
 ```
 
@@ -322,20 +417,28 @@ will give the array of the ``\langle \psi | \sigma_x^i | \psi \rangle``
 result = measure(mystate, (X, Y))
 ```
 
-will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``
+will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``, complex
+since its diagonal is ``\langle \sigma_x \sigma_y \rangle = i \langle \sigma_z \rangle``
 
 We can also measure other properties with
-- `Trace` : the trace of the density matrix, this should be one, so it is a good indicator for accumulated error
-- `TraceError`: measure the deviation from trace 1
-- `Trace2`, `Purity`: measure the trace of the square of the density matrix
-- `Hermiticity`: measure how well the density matrix is Hermitian, return 1 if Hermitian, 0 if anti-Hermitian
-or any value in between
-- `HermiticityError` measure the deviation from Hermiticity 1
-- `Renyi2`: measure the Renyi entropy of order 2 of the system
-- `SubRenyi2`: measure the Renyi entropy of order 2 of a subsystem
-- `EntanglementEntropy`: entanglement entropy for pure representation, OSEE for mixed
+- `Trace`: the trace of the density matrix, which should be one, so it is a good indicator of
+  accumulated error
+- `TraceError`: the deviation of the trace from 1
+- `Trace2`, `Purity`: the trace of the square of the density matrix
+- `Norm`: the norm of the state
+- `Hermiticity`: how Hermitian the density matrix is, 1 if Hermitian, 0 if anti-Hermitian, or
+  any value in between
+- `HermiticityError`: the deviation of the hermiticity from 1
+- `Renyi2`: the Rényi entropy of order 2 of the system
+- `SubRenyi2`: the Rényi entropy of order 2 of a subsystem
+- `MutualInfoRenyi2`: the Rényi-2 mutual information between a subsystem and the rest
+- `EntanglementEntropy`: the entanglement entropy for a pure representation, the OSEE for a
+  mixed one
+- `Fidelity`, `Overlap`: the fidelity with a reference state, and the inner product with it
+- `Variance`: the variance of the energy of a hamiltonian
 - `MaxLinkdim`: the maximum bond dimension of the representation
-- `MemoryUsage`: the memory the state occupies, including the caches of the measurements already made on it
+- `MemoryUsage`: the memory the state occupies, including the caches of the measurements
+  already made on it
 
 We can also ask for several measurements at the same time
 
@@ -349,9 +452,10 @@ For more details see the reference or the inline help.
 
 ### Framework
 
-Most simulations follow the same pattern: start from some simple state, make some evolution and make measurements during or after the evolution and save the results to file. For these simple cases, TMS presents a simpler interface.
-
-A simple simulation follows a single state through a certain number of phases which act in a simple way on the state and make measurements during and/or after the evolution and save the results to file.
+Most simulations follow the same pattern: start from a simple state, evolve it, measure it
+during or after the evolution and save the results to files. For these cases TMS offers a
+higher level interface, in which a simulation follows a single state through a sequence of
+phases, each acting on the state and making its measurements.
 
 The following phases are available:
 
@@ -362,11 +466,11 @@ The following phases are available:
 - `Gates` : apply some gates
 - `PartialTrace` : trace the system over some sites (requires a mixed state)
 - `Weaken` : conserve less, for instance a strong symmetry asked for weakly (see `weaken`)
-- `SteadyState` : compute the steady state of a Lindblad equation (still experimental, requires a mixed state)
-- `SaveState` : write the state to disk in a hdf5 file
+- `SteadyState` : compute the steady state of a Lindblad equation (requires a mixed state)
+- `SaveState` : write the state to disk in an HDF5 file
 - `LoadState` : read back a state written by `SaveState`
 
-with these phases we define a `SimData` object that describes the simulation and finally, we call
+With these phases we define a `SimData` object that describes the simulation and finally, we call
 
 ```julia
 runTMS(simdata)
@@ -383,7 +487,7 @@ flattened before the simulation starts. This is meant for programs that build th
 in pieces, a helper returning the several phases it needs rather than a single one, as
 `create_graph_state` does.
 
-### Example
+### Examples
 
 What TMS is for is open systems, so here is one: six qubits evolving under a transverse
 field Ising hamiltonian while each of them decays. `CreateState{Mixed}` is what makes the
@@ -424,7 +528,11 @@ Purity   2      0.1086794
 The qubits start pure and pointing up; by the end the magnetization has reversed and the
 purity has fallen to 0.11, which is a state no pure state code could have represented.
 
-A longer one, the tight binding chain of fermions with dephasing noise:
+A longer one, the tight binding chain of fermions with dephasing noise. The hopping and the
+dephasing both conserve the number of fermions, so the sites are told to conserve it,
+`Fermion(conserve = N)`, and the tensors become block sparse, see [What it saves](@ref).
+Since the jump operators, `N`, commute with that number, it could also be conserved
+strongly, see [Weak and strong symmetries](@ref).
 
 ```julia
 using TensorMixedStates, .Fermions
@@ -435,7 +543,7 @@ dissipators(n, gamma) = sum(Dissipator(sqrt(4gamma) * N)(i) for i in 1:n)
 sim_data(n, gamma, step) = SimData(
     name = "fermion_chain_with_dephasing",
     phases = [
-        CreateState{Mixed}(n, Fermion(), [ iseven(i) ? "Occ" : "Emp" for i in 1:n ]),
+        CreateState{Mixed}(n, Fermion(conserve = N), [ iseven(i) ? "Occ" : "Emp" for i in 1:n ]),
         Evolve(
             duration = 4,
             time_step = step,
@@ -455,9 +563,22 @@ runTMS(sim_data(40, 1., 0.05))
 
 ### Output
 
-`runTMS` creates a directory named after the `SimData` object `name` field and puts the output files there. In particular, it produces a `log` file showing the progression of the computation, a `prog.jl` file containing a copy of the script, a `description` file containing the content of the `SimData` `description` field, a `stamp` file containing version and date info, a `running` empty file is present during the computation, in case of error an empty `error` file is created.
+`runTMS` creates a directory named after the `name` field of the `SimData` object and puts
+the output files there, in particular:
 
-Three keyword arguments may be given `restart` (default `false`) erases the directory before starting, `clean` (default `false`) erases the directory and does not run the simulation, `output` (default `nothing`) if set, does not create the directory nor any output files and redirect all output to the given io channel (useful values are stdout and devnull). 
+- `log`: the progression of the computation;
+- `prog.jl`: a copy of the script;
+- `description`: the content of the `description` field of the `SimData` object;
+- `stamp`: the versions, the date, the BLAS library and the thread settings of the run;
+- `running`: an empty file present during the computation;
+- `error`: an empty file created in case of error.
+
+Three keyword arguments may be given:
+
+- `restart` (default `false`): erase the directory before starting;
+- `clean` (default `false`): erase the directory and do not run the simulation;
+- `output` (default `nothing`): if set, create neither the directory nor any output file, and
+  redirect all output to the given stream, `stdout` or `devnull` for instance.
 
 ### Long runs, checkpoints and stopping
 
@@ -568,7 +689,7 @@ The possible measurements are described in the measurements section of this manu
   "file.dat" => X
   ```
 
-- json filenames: filenames ending by ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
+- json filenames: filenames ending in ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
 
   ```julia
   "file.json" => [Purity, X(2)Z(3), (X, Y)]

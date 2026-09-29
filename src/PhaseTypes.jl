@@ -56,13 +56,13 @@ CreateState{R}(sites, state; kwargs...) where R =
 """
     SaveState(; file, statename = "state", name, time_start, final_measures)
 
-a phase that saves the state in a hdf5 file, see `save_state`. Several states can be saved in
+a phase that saves the state in an HDF5 file, see `save_state`. Several states can be saved in
 one file under different `statename`; saving under a name already in the file replaces it.
 
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `file`: the name of the hdf5 file to write to
+- `file`: the name of the HDF5 file to write to
 - `statename`: the name under which the state is stored in the file
 
 # Examples
@@ -81,13 +81,13 @@ end
 """
     LoadState(; file, statename = "state", limits, name, time_start, final_measures)
 
-a phase that loads the state from a hdf5 file written by `SaveState` or `save_state`, see
+a phase that loads the state from an HDF5 file written by `SaveState` or `save_state`, see
 `load_state`, and truncates it to `limits`.
 
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `file`: the name of the hdf5 file to read from
+- `file`: the name of the HDF5 file to read from
 - `statename`: the name under which the state is stored in the file
 - `limits`: the truncation applied to the state once loaded, see `Limits`
 
@@ -133,7 +133,8 @@ end
 
 the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
 
-- `n_expand`: expand the state every `n_expand` steps (default 0, never)
+- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion every
+  `n_expand` steps (default 0, never)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 
@@ -204,8 +205,8 @@ a phase of time evolution.
 
 # Examples
 
-    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(), evolver = -im*(Z(1)Z(2)+(Z(2)Z(3))),
-           measures = "data" => [X, Y, Z])
+    Evolve(duration = 2., time_step = 0.1, algo = Tdvp(),
+           evolver = -im * (Z(1)Z(2) + Z(2)Z(3)), measures = "data" => [X, Y, Z])
 """
 @kwdef struct Evolve
     name::String = "Time evolution"

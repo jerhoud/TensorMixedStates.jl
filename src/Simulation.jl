@@ -62,10 +62,9 @@ functions that apply to a `State` apply to a `Simulation` too.
 
 `sim.data` is the dictionary of the `Data` destinations, see `Data`.
 
-A `Simulation` is immutable: a run threads the state through by building a new one at each
-step. The second form hands the new object the very `outputs` and `checkpoint` of `sim`, not
-copies, since the destinations and the record of where the run has got must not fork: a copy
-made while a phase runs sees, and can advance, the same checkpoint.
+A `Simulation` is immutable: the functions acting on it return a new one. The second form
+shares the destinations and the checkpoint of `sim` rather than copying them, so that the new
+simulation writes to the same destinations and advances the same checkpoint.
 
 # Examples
 

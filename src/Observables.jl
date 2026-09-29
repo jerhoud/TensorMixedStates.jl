@@ -225,6 +225,9 @@ end
 the trace of the density matrix, which should be one. On a pure representation it is the
 squared norm of the state, the trace of ``|\\psi\\rangle\\langle\\psi|``. It is computed
 once and kept with the state.
+
+It is a complex number whenever the tensors of the state are, after an evolution for
+instance: its imaginary part is then numerical error, and `Trace` measures the real part.
 """
 function trace(state::State)
     state = weak_form(state)

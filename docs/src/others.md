@@ -1,8 +1,8 @@
-# Others
+# Graphs and MPOs
 
 ## Graphs
 
-graphs are useful to describe interactions or gates to apply 
+Graphs are useful to describe interactions or gates to apply.
 
 ```@docs
 line_graph
@@ -15,7 +15,9 @@ graph_base_size
 ## MPO
 
 Matrix Product Operators (MPO) are used under the hood by TMS to operate on MPS (inner state representation).
-Except for `apply` and `measure` all operators are converted to MPO internally.
+Every operator is converted to an MPO internally, except in `apply`, which applies gates one
+by one, and in `expect`, `expect1`, `expect2` and `measure`, which contract the state
+directly.
 
 ### How the MPO is built, and what it costs
 
@@ -63,44 +65,4 @@ PreMPO
 make_mpo
 make_approx_W1
 make_approx_W2
-```
-
-## Time dependent operators
-
-For time evolution, it may be useful to have time dependent operators. In TMS, a time dependent operator
-is described in the following way: a vector of indexed operators and a vector of time functions. For example,
-to describe
-
-```math
-    h(t) = - e^{-t} \sum_{i=1}^{n-1} \sigma_x^i \sigma_x^{i+1} - \sin(t) \sum_{i=1}^n \sigma_z^i  
-```
-we use
-
-```@setup others
-using TensorMixedStates
-using .Qubits
-n = 6
-```
-
-```@example others
-hs = -im * [ -sum(X(i)X(i+1) for i in 1:n-1), -sum(Z(i) for i in 1:n)]
-```
-
-and
-
-```@example others
-coefs = [ t -> exp(-t), t -> sin(t) ]
-```
-
-`hs` is passed as usual to `tdvp` or `approx_W` and `coefs` is passed as a keyword argument called `coefs`.
-When using `Simulation` the simulation time is used for `t`, for `State` the initial simulation time is passed as a keyword argument called `time_start` (which default to 0)
-
-```julia
-tdvp(hs, duration, initial_state; coefs, time_start)
-```
-
-With the high level interface, one can use time dependent evolver for the Evolve phase with the following syntax
-
-```julia
-evolver = hs => coefs
 ```

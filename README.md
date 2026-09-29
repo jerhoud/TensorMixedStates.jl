@@ -79,11 +79,17 @@ purity has fallen to 0.11, which is a state no pure state code could have repres
 
 Everything is available directly too, without the phases: build a `State`, call `tdvp` or
 `dmrg` on it, and read `expect1`, `expect2` or `entanglement_entropy` off the result. The
-manual covers both styles, and [`examples/`](examples) holds eleven working scripts.
+manual covers both styles, and [`examples/`](examples) holds twelve working scripts.
 
 ## Documentation
 
 <https://jerhoud.github.io/TensorMixedStates.jl>
+
+For an introduction to matrix product states and tensor networks, see the lecture notes of the
+course Grégoire Misguich gave at the Les Houches summer school on Computational Physics: Open
+Quantum Systems, in June 2026, [arXiv:2606.24803](https://arxiv.org/abs/2606.24803), and their
+[Julia examples](https://github.com/gregoire-misguich/Introduction-to-matrix-product-states-and-tensor-networks),
+some of them written with TMS.
 
 ## Article of reference
 

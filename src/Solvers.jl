@@ -19,7 +19,8 @@ state. A simulation comes back with its time advanced by `t`.
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
   the middle of each step
-- `n_expand`: expand the state every `n_expand` steps (default 0, never)
+- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion every
+  `n_expand` steps (default 0, never)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
