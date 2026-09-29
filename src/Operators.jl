@@ -318,9 +318,9 @@ the identity operator, defined on every site type
 const Id = IdentityOp{Pure, Generic, 1}()
 
 show(io::IO, ::IdentityOp{Pure, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
-show(io::IO, ::IdentityOp{Mixed, Generic, N}) where N = print(io, "Left(", join(fill("Id", N), "⊗"), ")")
+show(io::IO, ::IdentityOp{Mixed, Generic, N}) where N = print(io, "Gate(", join(fill("Id", N), "⊗"), ")")
 show(io::IO, ::IdentityOp{Pure, Indexed}) = print(io, "Id")
-show(io::IO, ::IdentityOp{Mixed, Indexed}) = print(io, "Left(Id)")
+show(io::IO, ::IdentityOp{Mixed, Indexed}) = print(io, "Gate(Id)")
 
 isless(::IdentityOp, ::IdentityOp) = false
 

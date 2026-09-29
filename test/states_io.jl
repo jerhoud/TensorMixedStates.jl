@@ -503,3 +503,15 @@ end
         @test expect1(lm, N) ≈ expect1(stm, N)
     end
 end
+
+@testset "Printing Limits" begin
+    # printed as the call that builds it, the fields left at their default omitted, so that
+    # the text evaluates back to the same fields
+    @test repr(Limits()) == "Limits()"
+    @test repr(Limits(cutoff = 1e-10, maxdim = 50)) == "Limits(cutoff = 1.0e-10, maxdim = 50)"
+    for l in [Limits(), Limits(cutoff = 1e-10, maxdim = 50), Limits(maxdim = [10, 20, 50]),
+              Limits(cutoff = 1e-14, maxdim = 100, mindim = 10)]
+        back = eval(Meta.parse(repr(l)))
+        @test all(getfield(back, f) == getfield(l, f) for f in fieldnames(Limits))
+    end
+end

@@ -55,6 +55,14 @@ end
 Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 1) =
     Limits(float_cutoff(cutoff), maxdim, mindim)
 
+# printed as the call that builds it, the fields left at their default omitted
+function show(io::IO, l::Limits)
+    default = Limits()
+    given = [string(f, " = ", repr(getfield(l, f))) for f in fieldnames(Limits)
+             if getfield(l, f) != getfield(default, f)]
+    print(io, "Limits(", join(given, ", "), ")")
+end
+
 """
     float_cutoff(x)
 

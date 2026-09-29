@@ -10,7 +10,13 @@ the reference article.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The identity on density matrices prints as `Gate(Id)` rather than `Left(Id)`, as it is
+  written in a noisy gate such as `0.9Gate(Id) + 0.1Gate(X)`.
+
+- `Limits` prints as the call that builds it, without the fields left at their default:
+  `Limits(cutoff = 1.0e-10, maxdim = 50)`, `Limits()`.
 
 ## [1.5.0] - 2026-09-29
 
