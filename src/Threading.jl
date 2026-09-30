@@ -64,7 +64,8 @@ applied, see `threading_settings`:
   products of dense matrices;
 - `:blocks`: block sparse multithreading on the threads of Julia, BLAS and Strided on a single
   thread as ITensors recommends, for the many products of blocks of a system that conserves
-  something. Julia must have been started with several threads, `julia --threads=N`.
+  something. Julia has to be started with several threads, `julia --threads=N`: on a single
+  one, everything runs on one core, and ITensors warns.
 
 Given a system, a state or a simulation, the mode is `:blocks` when the system conserves
 something and Julia has several threads, `:dense` otherwise: which of the two is faster
@@ -86,10 +87,6 @@ function set_threading(mode::Symbol)
         strided.set_num_threads(initial_threads[].strided)
         BLAS.set_num_threads(initial_threads[].blas)
     elseif mode == :blocks
-        if Threads.nthreads() == 1
-            error("the :blocks mode runs the blocks on the threads of Julia, which has a " *
-                  "single one: start it with --threads=N")
-        end
         # set before block sparse multithreading is enabled, which warns about both otherwise
         strided.set_num_threads(1)
         BLAS.set_num_threads(1)
