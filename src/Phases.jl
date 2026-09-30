@@ -1,5 +1,78 @@
 # run_phase, which runs each type of phase on a simulation and returns the simulation it leaves
-# behind; a phase type of one's own gets a method of it.
+# behind; a phase type of one's own gets a method of it, with resume_step and run_steps to
+# resume it where it stopped.
+
+export resume_step, run_steps
+
+"""
+    resume_step(sim)
+
+the steps, or sweeps, the phase being run has already done, and the energy dmrg had reached at
+the last of them, as `(done, energy)`: `(0, nothing)` unless it is the phase a resumed run
+starts from. The resume point is then consumed, so that it is read once.
+
+Calling it is also what lets the steps of the phase be committed. A resume hands the phase the
+state of its last committed step, and only a phase that reads the steps done and continues
+after them goes on correctly from there; any other would run all its steps again on that
+state. So the steps of a phase that never calls this are not committed, and a checkpoint
+written while it runs resumes it from its start.
+
+A phase of your own driving a solver starts it at `first_sweep = done + 1`, and hands `done`
+and `energy` to a `DmrgObserver`. A loop of your own is best written with `run_steps`, which
+calls this for it.
+"""
+function resume_step(sim::Simulation)
+    c = sim.checkpoint
+    c.sweeps = true
+    r = c.resume
+    if isnothing(r) || isnothing(c.last) || r.phase ≠ c.last.phase
+        return (0, nothing)
+    end
+    c.resume = nothing
+    return (r.sweep, r.energy)
+end
+
+"""
+    run_steps(f, sim, nsteps)
+
+run the steps `1:nsteps` of a phase of your own, `f(sim, k)` doing step `k` and returning the
+simulation it leaves behind, its measurements written, with `output` for instance. Between two
+steps, a checkpoint is written when one is due and the phase stops when the simulation is
+asked to, and a resumed run continues after the last step done, from the state and the
+simulation time it had reached. Outside `runTMS` the steps simply run one after the other.
+
+# Examples
+
+    TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
+        run_steps(sim, p.nkicks) do sim, k
+            sim = apply(exp(-0.3im * X)(1), sim)
+            sim = Simulation(sim, sim.state, sim.time + 0.1)
+            output(sim, p.measures)
+            return sim
+        end
+"""
+function run_steps(f, sim::Simulation, nsteps::Int)
+    # read before resume_step consumes it
+    r = sim.checkpoint.resume
+    done, _ = resume_step(sim)
+    if done > 0
+        # a resume hands the phase the state of its last committed step, but the time the phase
+        # started from, which the solvers count their steps from: a loop of one's own goes on
+        # from the time it had reached
+        sim = Simulation(sim, sim.state, r.time)
+    end
+    for k in done + 1:nsteps
+        sim = f(sim, k)
+        if !(sim isa Simulation)
+            error("step $k of run_steps returned a $(typeof(sim)), where it has to return " *
+                  "the simulation it leaves behind")
+        end
+        if sweep_commit!(sim, sim.state, sim.time, k)
+            break
+        end
+    end
+    return sim
+end
 
 """
     run_phase(sim::Simulation, phase)
@@ -14,16 +87,13 @@ of that name would shadow it rather than extend it. `runTMS` then logs the phase
 library. Within the method, `output` measures the simulation, `log_msg` writes to its log and
 `get_sim_file` gives a file of the simulation to write anything else to.
 
-A phase that does not drive a solver has no point to be resumed from inside: the `stop` file
-and `max_time` are only seen once it ends, an interrupt stops it at once, and a resumed run
-runs it again from its start.
-
-A phase of your own that drives a solver with `TdvpObserver`, `ApproxWObserver` or
-`DmrgObserver` is stopped and checkpointed as those of the library are, but a checkpoint
-written while it runs resumes it from its start. To resume it at the sweep it had reached,
-read `done, energy = TensorMixedStates.resume_sweeps!(sim.checkpoint)` before starting the
-solver, start it at `first_sweep = done + 1`, and hand `done` and `energy` to a
-`DmrgObserver`.
+A phase written as a loop of steps with `run_steps` is stopped, checkpointed and resumed
+between two steps. One that drives a solver with `TdvpObserver`, `ApproxWObserver` or
+`DmrgObserver` is stopped and checkpointed between two sweeps as those of the library are,
+and resumed at the sweep it had reached if it reads `done, energy = resume_step(sim)` before
+starting the solver, see `resume_step`. Any other phase has no point to be resumed from
+inside: the `stop` file and `max_time` are only seen once it ends, an interrupt stops it at
+once, and a resumed run runs it again from its start.
 
 The method documented here is the fallback: it makes an object with no method of its own
 say so, rather than fail with a bare `MethodError` inside a run.
@@ -60,7 +130,7 @@ checkpoint, the line `final_line(e)` with the value reached. A search whose chec
 its last sweep has only that line left to write, with the value the checkpoint recorded.
 """
 function run_search(solve, sim::Simulation, phase, what::String, final_line)
-    done, e = resume_sweeps!(sim.checkpoint)
+    done, e = resume_step(sim)
     if done < phase.nsweeps
         log_msg(sim, "$what with $(phase.nsweeps - done) sweeps of Dmrg")
         e, sim = solve(sim; phase.nsweeps, first_sweep = done + 1, phase.limits,
@@ -145,7 +215,7 @@ function run_phase(sim::Simulation, phase::Evolve)
     # PreMPO adapts the evolver to the representation of the state, and handles the vector
     # form of a time dependent evolver
     pre = PreMPO(state, evolver)
-    done, _ = resume_sweeps!(sim.checkpoint)
+    done, _ = resume_step(sim)
     algo = phase.algo
     common = (; coefs, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
               first_sweep = done + 1)

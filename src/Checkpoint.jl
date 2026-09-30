@@ -209,7 +209,7 @@ appears in it or on an interrupt; with a directory, a checkpoint is written firs
 - `last`:       the last commit, which a checkpoint writes
 - `resume`:     the commit a resumed run starts from, until the phase it belongs to has run
 - `sweeps`:     whether the phase being run has read its resume point, which lets its sweeps
-                be committed, see `resume_sweeps!`
+                be committed, see `resume_step`
 - `written`:    the commit the checkpoint on the disk holds, which is not written again
 - `generation`: which of the two state files the checkpoint on the disk names, 0 for none
 - `stopping`:   set once a stop has been requested, so that every loop unwinds
@@ -294,7 +294,7 @@ state with the previous counts.
 
 Nothing is written without a directory, nor before the first phase has made a state, and a
 commit already on the disk is not written again: a phase that commits none of its sweeps is
-checkpointed at its start however long it runs, see `resume_sweeps!`.
+checkpointed at its start however long it runs, see `resume_step`.
 """
 function write_checkpoint(c::Checkpointer, o::Outputs)
     k = c.last
@@ -362,29 +362,6 @@ function load_checkpoint(dir::String)
             state = load_state(joinpath(dir, file), "checkpoint"),
             energy = restored_value(meta["energy"]), id = meta["id"], outputs = meta["outputs"],
             generation = file == state_file(2) ? 2 : 1)
-end
-
-"""
-    resume_sweeps!(::Checkpointer)
-
-the sweeps the phase being run has already done and the energy dmrg had reached at the last
-of them: `(0, nothing)` unless it is the phase a resumed run starts from. The resume point is
-then consumed, so that it is read once.
-
-Calling it is also what lets the sweeps of the phase be committed, see `sweep_commit!`. A
-resume hands the phase the state of its last committed sweep, and only a phase that reads the
-sweeps done and starts its solver after them continues correctly from there; any other would
-run all its sweeps again on that state. So the sweeps of a phase that never calls this are
-not committed, and a checkpoint written while it runs resumes it from its start.
-"""
-function resume_sweeps!(c::Checkpointer)
-    c.sweeps = true
-    r = c.resume
-    if isnothing(r) || isnothing(c.last) || r.phase ≠ c.last.phase
-        return (0, nothing)
-    end
-    c.resume = nothing
-    return (r.sweep, r.energy)
 end
 
 """

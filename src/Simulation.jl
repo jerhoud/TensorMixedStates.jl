@@ -1,7 +1,7 @@
 # Simulation, a state with its simulation time and the destinations of its measurements, as
 # runTMS runs it, and data_to_frame, which turns the values gathered in a Data into a table.
 
-export Simulation, get_sim_file, DataToFrame, data_to_frame
+export Simulation, get_sim_file, close_sim_files, DataToFrame, data_to_frame
 
 """
     data_to_frame(data)
@@ -159,7 +159,15 @@ end
     close_sim_files(::Simulation)
 
 write the json destinations and close the files opened for the simulation. The standard
-streams belong to the process and are left open.
+streams belong to the process and are left open. `runTMS` calls it when it ends; a
+`Simulation` built by hand calls it once its measurements are made, its json files being
+written only then.
+
+# Examples
+
+    sim = Simulation(state)
+    output(sim, "magnetization.json" => Z)
+    close_sim_files(sim)
 """
 close_sim_files(sim::Simulation) = close_outputs!(sim.outputs)
 

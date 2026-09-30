@@ -83,11 +83,29 @@ Base.@kwdef struct ResumingEvolve
 end
 
 function TensorMixedStates.run_phase(sim::Simulation, p::ResumingEvolve)
-    done, _ = TensorMixedStates.resume_sweeps!(sim.checkpoint)
+    done, _ = resume_step(sim)
     return tdvp(-im * X(1), 0.4, sim; nsweeps = 4, first_sweep = done + 1,
                 limits = Limits(maxdim = 4, cutoff = 1e-15),
                 observer! = TdvpObserver(sim, p.measures, 1))
 end
+
+# a phase of one's own written as a loop of steps, each a kick on the first qubit and the time
+# it takes, measured after it
+Base.@kwdef struct Kicks
+    name::String = "kicks"
+    time_start = nothing
+    final_measures = []
+    nkicks::Int = 4
+    measures = []
+end
+
+TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
+    run_steps(sim, p.nkicks) do sim, k
+        sim = apply(exp(-0.3im * X)(1), sim)
+        sim = Simulation(sim, sim.state, sim.time + 0.1)
+        output(sim, p.measures)
+        return sim
+    end
 
 @testset "A SimData is not a phase" begin
     # A SimData inside `phases` used to be accepted and to silently skip phases: the loop it
@@ -624,6 +642,48 @@ end
     end
 end
 
+@testset "A loop of one's own resumes after its last step" begin
+    # run_steps commits each step once it is measured: a stop between two steps resumes after
+    # the last one, from the state and the simulation time it had reached
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Kicks(measures = "data" => [Z(1), stopper_at(stop_in)],
+                            final_measures = "final" => Z(1))]
+            ref = runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 2
+            sim_data = SimData(; name = "chk", phases)
+            stopped = runTMS(sim_data)
+            @test stop_in[] == 0
+            # a stopped run hands back what it resumes from, and takes no final measurement
+            @test stopped.time ≈ 0.2
+            @test !isfile("chk/final")
+            sim = runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+            @test read("chk/final", String) == read("ref/final", String)
+            @test sim.time ≈ ref.time ≈ 0.4
+            @test real(expect(sim.state, Z(1))) ≈ real(expect(ref.state, Z(1)))
+            # outside runTMS the steps simply run
+            @test run_steps((s, k) -> Simulation(s, s.state, s.time + 1), Simulation(ref.state), 3).time ≈ 3
+            # a step has to hand back the simulation
+            @test_throws "has to return the simulation" run_steps((s, k) -> s.state, Simulation(ref.state), 1)
+        end
+    end
+end
+
+@testset "A simulation built by hand writes its json files once closed" begin
+    mktempdir() do dir
+        cd(dir) do
+            sim = Simulation(State{Pure}(System(2, Qubit()), "Up"))
+            output(sim, "d.json" => Z(1))
+            @test !isfile("d.json")
+            close_sim_files(sim)
+            @test only(TensorMixedStates.JSON.parsefile("d.json")["Z(1)"]["data"]) ≈ 1
+        end
+    end
+end
+
 @testset "A destination is not a file of the simulation" begin
     # a destination called stop stopped the simulation at its first sweep and was erased by
     # the next run, one called checkpoint.json overwrote the checkpoint, and so on
@@ -804,8 +864,8 @@ end
     sim = Simulation(nothing; checkpoint = c)
     TensorMixedStates.commit!(c, sim.outputs, 2, 0, 0., 0., nothing)
     c.resume = TensorMixedStates.Commit(2, 4, 0., 0., nothing, -1.5, (files = Dict(), data = Dict()))
-    @test TensorMixedStates.resume_sweeps!(c) == (4, -1.5)
-    @test TensorMixedStates.resume_sweeps!(c) == (0, nothing)
+    @test resume_step(sim) == (4, -1.5)
+    @test resume_step(sim) == (0, nothing)
     c.resume = TensorMixedStates.Commit(3, 4, 0., 0., nothing, nothing, (files = Dict(), data = Dict()))
-    @test TensorMixedStates.resume_sweeps!(c) == (0, nothing)        # another phase
+    @test resume_step(sim) == (0, nothing)                         # another phase
 end

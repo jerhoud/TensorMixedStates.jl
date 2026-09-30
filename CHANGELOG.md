@@ -23,6 +23,12 @@ the reference article.
 - `SimData` has a `threading` field: `:dense`, the default, `:blocks`, `:auto`, which chooses
   before each phase from the system of the state, or `nothing`.
 
+- Phases of one's own are supported: `run_steps` runs one written as a loop of steps, which is
+  checkpointed, stopped and resumed between two steps, and `resume_step` gives one driving a
+  solver the sweeps it has already done. The manual describes them.
+
+- `close_sim_files` is exported, so that a `Simulation` built by hand writes its json files.
+
 ### Changed
 
 - `runTMS` runs a simulation in the dense mode unless its `SimData` asks otherwise: Strided,
@@ -31,6 +37,8 @@ the reference article.
 
 - The identity on density matrices prints as `Gate(Id)` rather than `Left(Id)`, as it is
   written in a noisy gate such as `0.9Gate(Id) + 0.1Gate(X)`.
+
+- `resume_sweeps!(sim.checkpoint)`, which was not exported, is replaced by `resume_step(sim)`.
 
 - `Limits` prints as the call that builds it, without the fields left at their default:
   `Limits(cutoff = 1.0e-10, maxdim = 50)`, `Limits()`.

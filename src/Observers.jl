@@ -79,7 +79,7 @@ solver has to stop.
 This order keeps a checkpoint and the outputs in step, so it lives here rather than in each
 observer: what is written after the commit is written again by the resumed run, and what is
 written before it is kept. The sweep is committed only in a phase that has read its resume
-point, see `resume_sweeps!`; in any other the commit stays the start of the phase, while a
+point, see `resume_step`; in any other the commit stays the start of the phase, while a
 stop and an interrupt are honoured all the same.
 """
 function sweep_commit!(sim::Simulation, state::State, t::Number, sweep::Int; energy = nothing)

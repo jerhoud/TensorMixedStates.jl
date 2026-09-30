@@ -17,8 +17,8 @@ with its name alone, then one line per row, named `name:l` for row `l`. A comple
 two columns, its real part then its imaginary part, and a json file writes it as
 `{"re": …, "im": …}`: see `RealValue` for which values are complex.
 
-A json file is written when `runTMS` ends, so that one given to a `Simulation` built by hand
-is never written.
+A json file is written when the files of the simulation are closed, which `runTMS` does when
+it ends: a `Simulation` built by hand writes its json files with `close_sim_files`.
 
 # Examples
 

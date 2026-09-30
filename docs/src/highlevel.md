@@ -39,5 +39,7 @@ Weaken
 
 ```@docs
 TensorMixedStates.run_phase
-TensorMixedStates.resume_sweeps!
+run_steps
+resume_step
+close_sim_files
 ```
