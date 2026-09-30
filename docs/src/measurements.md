@@ -2,8 +2,9 @@
 
 ## Kinds of measurements
 
-`measure` takes operators, state functions, symbols, checks, and numbers or functions of the
-time. The examples below use a four qubit state
+`measure` takes operators, state functions, symbols, checks, numbers or functions of the
+time, and strings, which are written as a label with no value. The examples below use a four
+qubit state
 
 ```@setup measurements
 using TensorMixedStates
@@ -46,15 +47,15 @@ There are some state functions predefined:
 | `Hermiticity` | 1 for a Hermitian density matrix, down to 0 for an anti-Hermitian one |
 | `HermiticityError` | `1 - hermiticity` |
 | `Renyi2` | the Rényi entropy of order 2 of the state |
-| `SubRenyi2(sites)` | the Rényi entropy of order 2 of the sites given |
+| `SubRenyi2(sites)`, `SubRenyi2(link)` | the Rényi entropy of order 2 of the sites given, or of those up to the link |
 | `MutualInfoRenyi2(sites)`, `MutualInfoRenyi2(link)` | the Rényi-2 mutual information between the sites given, or those up to the link, and the rest |
-| `EntanglementEntropy(l)` | the entanglement entropy across the cut between sites `l` and `l+1` |
-| `EntanglementEntropy(l, n)` | the same, followed by the first `n` eigenvalues of the reduced density matrix of sites `1` to `l` |
-| `Fidelity(ref)` | the fidelity with the reference state `ref` |
+| `EntanglementEntropy(l)` | the entanglement entropy across the cut between sites `l` and `l+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
+| `EntanglementEntropy(l, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
+| `Fidelity(ref)` | the fidelity with the reference state `ref`, refused between two mixed representations |
 | `Overlap(ref)` | the inner product with the reference state `ref` |
-| `Variance(hamiltonian)` | the variance of the energy of `hamiltonian` |
+| `Variance(hamiltonian)` | the variance of the energy of `hamiltonian`, on a pure representation |
 | `MaxLinkdim` | the maximum bond dimension of the representation |
-| `MemoryUsage` | the memory the state occupies, the caches of the measurements included |
+| `MemoryUsage` | the memory the state occupies in bytes, the caches of the measurements included |
 
 They are used like this
 

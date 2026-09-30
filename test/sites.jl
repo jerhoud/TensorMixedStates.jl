@@ -346,7 +346,7 @@ end
     @test Boson(6, conserve = mod(N, 3)).conserve == "mod(N,3)%3:0,1,2,0,1,2"
     @test Spin(1, conserve = Sz).conserve == "Sz:1,0,-1"
     @test Spin(1/2, conserve = 2Sz).conserve == "2Sz:1,-1"
-    @test Electron(conserve = (Ntot, 2Sz)).conserve == "Ntot:0,1,1,2;2Sz:0,1,-1,0"
+    @test Electron(conserve = (Ntot, 2Sz)).conserve == "2Sz:0,1,-1,0;Ntot:0,1,1,2"
     @test Qubit().conserve == ""
 
     # the modulus of Zd is read off its spectrum, the eigenvalues being genuine roots of
@@ -389,7 +389,7 @@ end
     # the recorded form is read back as it was written
     c = Electron(conserve = (Ntot, 2Sz)).conserve
     @test TensorMixedStates.decode_conserve(c) ==
-        [("Ntot", 1, [0, 1, 1, 2], false), ("2Sz", 1, [0, 1, -1, 0], false)]
+        [("2Sz", 1, [0, 1, -1, 0], false), ("Ntot", 1, [0, 1, 1, 2], false)]
     @test TensorMixedStates.decode_conserve("") == Tuple{String, Int, Vector{Int}, Bool}[]
 
     # a site conserving nothing prints as it always did, and one that conserves prints
@@ -399,7 +399,7 @@ end
     @test repr(Spin(3/2)) == "Spin(1.5)"
     @test repr(Fermion(conserve = N)) == "Fermion(conserve = N)"
     @test repr(Boson(4, conserve = N)) == "Boson(4, conserve = N)"
-    @test repr(Electron(conserve = (Ntot, 2Sz))) == "Electron(conserve = (Ntot, 2Sz))"
+    @test repr(Electron(conserve = (Ntot, 2Sz))) == "Electron(conserve = (2Sz, Ntot))"
     @test repr(Fermion(conserve = parity(N))) == "Fermion(conserve = parity(N))"
 
     # declaring a conservation makes a different site, and two declarations agree
@@ -532,6 +532,20 @@ end
     @test_ok State(weaken(sys, t), weaken(st, t))
 end
 
+@testset "The order of the conserved quantities" begin
+    # it says nothing about what is conserved, and is that of ITensors, by name: a target
+    # naming the quantities in another order built a new system, on which the state had new
+    # indices, and two sites conserving the same quantities were different sites
+    @test Electron(conserve = (Ntot, 2Sz)) == Electron(conserve = (2Sz, Ntot))
+    sys = System(3, Electron(conserve = (strong(Ntot), 2Sz)))
+    @test repr(symmetries(sys)) == "(2Sz, strong(Ntot))"
+    st = State{Mixed}(sys, "Up")
+    for t in ((2Sz, strong(Ntot)), (strong(Ntot), 2Sz))
+        @test weaken(sys, t) === sys
+        @test weaken(st, t) === st
+    end
+end
+
 @testset "Declaring a strong symmetry" begin
     IT = TensorMixedStates.ITensors
     strong = TensorMixedStates.strong
@@ -541,13 +555,13 @@ end
     # both kinds, and it travels in the string the site keeps
     @test Fermion(conserve = strong(N)).conserve == "N!:0,1"
     @test Electron(conserve = (strong(Ntot), 2Sz)).conserve ==
-        "Ntot!:0,1,1,2;2Sz:0,1,-1,0"
+        "2Sz:0,1,-1,0;Ntot!:0,1,1,2"
     @test TensorMixedStates.decode_conserve("N!:0,1") == [("N", 1, [0, 1], true)]
 
-    # and a site goes on printing as the call that built it
+    # and a site goes on printing as a call that builds it
     @test repr(Fermion(conserve = strong(N))) == "Fermion(conserve = strong(N))"
     @test repr(Electron(conserve = (strong(Ntot), 2Sz))) ==
-        "Electron(conserve = (strong(Ntot), 2Sz))"
+        "Electron(conserve = (2Sz, strong(Ntot)))"
 
     # nothing changes on the pure side: only the bra of the mixed index takes another name
     @test IT.space(Index(Fermion(conserve = strong(N)))) ==

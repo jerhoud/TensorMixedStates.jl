@@ -440,8 +440,9 @@ get_exp2(o) = Tuple{SimpleOp, SimpleOp}[ l.obs for l in leaves(ObsExp2, o) ]
     Trace
 
 a state function measuring the trace of the density matrix, see `trace` and `StateFunc`. It
-gives the real part, the only one the trace of a Hermitian density matrix has; for the
-imaginary part that numerical errors may add, see `TraceError`.
+gives the real part, the only one the trace of a Hermitian density matrix has: the imaginary
+part that numerical errors may add is dropped, see `TraceError` for where it comes from, and
+`ComplexValue(Trace)` keeps it.
 """
 const Trace = StateFunc("Trace", trace)
 
@@ -503,17 +504,24 @@ a state function measuring the Rényi-2 entropy of the state, see `renyi2` and `
 const Renyi2 = StateFunc("Renyi2", renyi2)
 
 """
-    SubRenyi2(positions)
+    SubRenyi2(link)
+    SubRenyi2([positions...])
 
-a state function measuring the Rényi-2 entropy of the sites at `positions`, see `renyi2`. On a
-pure representation it measures how entangled those sites are with the rest, and the state is
-mixed first, which is much more expensive than the other state functions.
+a state function measuring the Rényi-2 entropy of the sites at `positions`, see `renyi2`. A
+link `k` stands for the sites `1:k` and is named after them, as for `MutualInfoRenyi2`. On a
+pure representation it measures how entangled those sites are with the rest: for a link it is
+read off the entanglement spectrum, as cheap as `EntanglementEntropy`, and for positions the
+state is mixed first, which is much more expensive than the other state functions.
 
 # Examples
 
-    measures = "data" => SubRenyi2(1:3)
+    measures = "data" => [SubRenyi2(3), SubRenyi2([1, 4])]
 """
 SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))
+
+# a link stands for the sites on its left, as for MutualInfoRenyi2
+SubRenyi2(link::Int) =
+    StateFunc("SubRenyi2($(compact_positions(1:link)))", st -> renyi2(st, link))
 
 """
     EntanglementEntropy(pos)
@@ -558,7 +566,8 @@ name, `EntanglementEntropy(3)` rather than `EE(3)`.
 
 a state function measuring the Rényi-2 mutual information between the sites at `positions`
 and the rest, see `mutual_info_renyi2`. A link `k` stands for the sites `1:k` and is named
-after them, `MutualInfoRenyi2(1:k)`.
+after them, as `compact_positions` writes them: `MutualInfoRenyi2(1:3)` for `k = 3`,
+`MutualInfoRenyi2(1,2)` for `k = 2`.
 """
 MutualInfoRenyi2(part) = StateFunc("MutualInfoRenyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
 
@@ -610,7 +619,9 @@ a state function measuring the fidelity with the reference state `ref`, see `fid
 
 `ref` is put on the system of the measured state, which `fidelity` requires: a measurement is
 written before the system the simulation runs on exists. It is weakened first to what that
-state conserves, so that it can still be measured after a `Weaken` phase.
+state conserves, so that it can still be measured after a `Weaken` phase. Between two mixed
+representations it is refused, see `fidelity`, at the first measurement and not when the
+phase is written.
 
 # Examples
 
@@ -636,7 +647,8 @@ Overlap(ref::State) = ComplexValue(StateFunc("Overlap", st -> inner(reference_on
     Variance(hamiltonian)
 
 a state function measuring the variance of the energy of `hamiltonian`, zero exactly when
-the state is one of its eigenstates, see `variance`.
+the state is one of its eigenstates, see `variance`. It needs a pure representation, and is
+refused on a mixed one at the first measurement.
 
 The MPO is built at every measurement, since the system the simulation runs on does not
 exist when the measurement is written. That is cheap next to the variance itself, which
@@ -671,8 +683,8 @@ binding only warns on a qualified access, `TensorMixedStates.Linkdim`, and is si
 """
     MemoryUsage
 
-a state function measuring the memory the state occupies, including the caches filled by the
-measurements already made on it, so that it depends on them.
+a state function measuring the memory the state occupies, in bytes, including the caches
+filled by the measurements already made on it, so that it depends on them.
 """
 const MemoryUsage = StateFunc("MemoryUsage", Base.summarysize)
 
@@ -807,18 +819,20 @@ function get_val(o::Check, v::Dict, st::State, t::Number; kwargs...)
 end
 
 """
-    measure(state, args[, t])
-    measure(state, measure[, t])
-    measure(state, [measures...][, t])
+    measure(state, measurements[, t]; kwargs...)
+    measure(state, ::Measure[, t]; kwargs...)
+    measure(state, ::Vector{Measure}[, t]; kwargs...)
 
-the measurements asked for on `state` at simulation time `t`, 0 by default, as a vector of
-pairs `name => value`, one per measurement; for a vector of `Measure`, one such vector per
-set. It is more efficient to ask for all measurements in one call.
+the measurements asked for on `state` at simulation time `t`, 0 by default: a measurement or
+a vector of them gives a vector of pairs `name => value`, one per measurement, and a vector of
+`Measure` one such vector per set. It is more efficient to ask for all measurements in one
+call.
 
 Each value is given the kind of its measurement, see `RealValue`: a real number, a complex
 number, or the imaginary part of a purely imaginary one under the name `Im(name)`. `expect`,
 `expect1` and `expect2` give the values as they are computed. A `Symbol` takes its value
-from the keyword argument of that name, and is empty without one.
+from the keyword argument of that name, and is empty without one: the phases pass `sweep`, and
+`energy` for a dmrg search.
 
 # Examples
 

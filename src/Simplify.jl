@@ -19,7 +19,7 @@ simplified element by element.
 # Examples
 
     simplify(X(1) * Z(2) * X(1))
-    simplify(C(3) * dag(C(5)))
+    simplify(C(3) * dag(C)(5))
 """
 function simplify end
 

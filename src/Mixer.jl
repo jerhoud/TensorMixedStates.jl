@@ -369,7 +369,9 @@ a single one may be given for all of them.
 
 The matrix is written in the basis of the sites, whatever they conserve. The last site varies
 fastest and, for an operator acting on a density matrix, the ket of a site varies faster than
-its bra.
+its bra. A tensor product of fermionic factors holds the Jordan-Wigner strings between them:
+the matrix of `C ⊗ dag(C)` is that of the operator `C(1) * dag(C)(2)`, not the Kronecker
+product of the two matrices.
 
 # Examples
 
@@ -614,7 +616,13 @@ is then read off its size. Several sites are gathered on a single index combinin
 its primed form.
 
 When any of the sites conserves something, the indices carry charges, and an operator or a
-matrix of no definite charge is refused.
+matrix of no definite charge is refused. The indices are drawn for this tensor, so that it
+does not contract with a state: `tensor(system, op)` gives the tensor of a placed operator on
+the indices of a system. A tensor product of fermionic factors holds the Jordan-Wigner strings
+between them, as `matrix` does.
+
+`tensor` of two operators is their tensor product, `tensor(X, Y)` being `X ⊗ Y`, and of two
+systems their product, see `⊗`.
 
 # Examples
 

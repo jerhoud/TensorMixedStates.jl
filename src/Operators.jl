@@ -703,7 +703,9 @@ isless(a::AtIndex, b::AtIndex) =
 
 the Lindblad dissipator of the jump operator `L`,
 ``\\rho \\mapsto L\\rho L^\\dagger - \\frac{1}{2}\\{L^\\dagger L, \\rho\\}``, to be added to
-the evolver of a mixed state. `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`.
+the evolver of a mixed state. `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`. `L` is a
+generic operator, placed on its sites afterwards, `Dissipator(C)(3)`: `Dissipator(C(3))` is
+refused.
 
 # Examples
     Dissipator(Sp)
@@ -753,7 +755,8 @@ isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 """
     Left(A)
 
-the superoperator ``\\rho \\mapsto A\\rho``, acting on the left of the density matrix.
+the superoperator ``\\rho \\mapsto A\\rho``, acting on the left of the density matrix. `A` is a
+generic operator, placed on its sites afterwards, `Left(X)(1)`.
 
 `Gate`, `Dissipator` and `Evolver` act on both sides at once, as ``A\\rho A^\\dagger`` or
 ``-i[H, \\rho]``. `Left` and `Right` act on a single side, which is not trace preserving. They
@@ -785,7 +788,8 @@ isless(a::Left, b::Left) =
     Right(A)
 
 the superoperator ``\\rho \\mapsto \\rho A^\\dagger``, acting on the right of the density
-matrix. `Right(c * A)` is `conj(c) * Right(A)`. See `Left`, of which it is the mirror.
+matrix. `Right(c * A)` is `conj(c) * Right(A)`. See `Left`, of which it is the mirror, and
+which also takes a generic operator.
 
 # Examples
 
@@ -880,8 +884,8 @@ isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
 
 the superoperator resetting a site to `state`, given by its name, its vector or its density
 matrix: ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, where ``\\sigma`` is
-the density matrix of `state` and ``\\mathrm{tr}_i`` the trace over the site. It acts on mixed
-states only.
+the density matrix of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a
+matrix is taken as it is, without normalization, as for `Proj`. It acts on mixed states only.
 
 # Examples
 
@@ -1298,9 +1302,9 @@ fermion_parity(a::Union{ExpOp, ModOp, GenPowOp}, strung::Bool) =
 
 whether an operator still holds an odd operator of one site whose Jordan-Wigner string
 `simplify` has not inserted, wherever it sits: in a tensor product, in the expression of an
-operator of several sites, or inside a superoperator. Their tensor carries the strings
-between consecutive sites only, so `(C ⊗ dag(C))(1, 3)`, which is `C(1) * dag(C)(3)`, would
-miss the string on site 2.
+operator of several sites, or inside a superoperator. The tensor of such an operator has
+legs on the sites it acts on only, so that it cannot hold the string on the sites in between:
+`(C ⊗ dag(C))(1, 3)`, which is `C(1) * dag(C)(3)`, would miss the string on site 2.
 
 After `simplify` the factors are `JW` transforms, which are not fermionic, and the answer is
 false unless a factor was kept whole, as an exponential of several sites is. A factor of no

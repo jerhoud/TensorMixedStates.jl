@@ -6,7 +6,8 @@ export Tjs
 """
     Tj(; conserve = ())
 
-the site type of the t-J model, an electron orbital without double occupancy, of dimension 3.
+the site type of the t-J model, an electron orbital without double occupancy, of dimension 3,
+whose basis is `"Emp"`, `"Up"`, `"Dn"`.
 
 # Examples
 

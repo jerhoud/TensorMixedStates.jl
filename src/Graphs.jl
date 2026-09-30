@@ -51,8 +51,8 @@ complete_graph(n::Int) =
 
 the `nx` by `ny` square lattice, as a vector of edges, its sites numbered along a snake
 running down the columns: the first column top to bottom, the second bottom to top, and so on.
-The chain then advances along `x` only `ny` sites wide: vertical bonds join consecutive sites
-and horizontal ones are at most `2ny - 1` sites apart. Put the short side in `ny`, since it
+The chain thus runs through the lattice column by column, in a band `ny` sites wide: vertical
+bonds join consecutive sites and horizontal ones are at most `2ny - 1` sites apart. Put the short side in `ny`, since it
 bounds the bond dimension. With a single argument the lattice is `n` by `n`.
 
 # Examples

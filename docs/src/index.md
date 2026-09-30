@@ -153,8 +153,8 @@ holds shorter ones:
 ## References
 
 TMS is described in the following article, published in SciPost Physics Codebases. Please
-cite both the article and the codebase release it documents, which is the convention
-SciPost asks for:
+cite both the article and the codebase release it documents, release 1.28, which is version
+1.2.8 of TMS, as SciPost asks:
 
 Jérôme Houdayer and Grégoire Misguich, *TensorMixedStates: A Julia library for simulating
 pure and mixed quantum states using matrix product states*,

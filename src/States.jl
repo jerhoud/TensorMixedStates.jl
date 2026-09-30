@@ -115,6 +115,8 @@ for `R = Mixed`.
 The local states are given as a vector, one per site, or as a single one for every site. A
 local state is a name, the number of a basis state counted from 0, a vector of amplitudes, a
 function of the site giving one of those, or, in mixed representation only, a density matrix.
+A vector of numbers is always the amplitudes of one local state, given to every site: basis
+numbers site by site are written `Any[0, 1, 0]` or `["0", "1", "0"]`.
 
 # Fields
 
@@ -134,8 +136,9 @@ function of the site giving one of those, or, in mixed representation only, a de
 
 # Operations
 
-States can be added, subtracted, multiplied and divided by numbers. A sum or difference
-takes truncation limits as `+(a, b; limits = Limits(maxdim = 100))`.
+States can be added, subtracted, multiplied and divided by numbers. The two states of a sum
+or a difference must be on the same system. It takes truncation limits as
+`+(a, b; limits = Limits(maxdim = 100))`, and truncates nothing by default.
 """
 struct State{R <: PM}
     system::System

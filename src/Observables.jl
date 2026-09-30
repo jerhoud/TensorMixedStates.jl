@@ -445,8 +445,8 @@ end
     hermitianize(state [; limits])
 
 the state whose density matrix is the Hermitian part ``(\\rho + \\rho^\\dagger)/2`` of that
-of `state`, the sum being truncated according to `limits`, a `Limits`. A pure representation
-is returned as it is.
+of `state`, the sum being truncated according to `limits`, a `Limits` (default `Limits()`,
+none, which doubles the bond dimension). A pure representation is returned as it is.
 """
 hermitianize(state::State{Pure}; kwargs...) =
     state
@@ -470,13 +470,16 @@ hermiticity(state::State{Mixed}) =
 """
     renyi2(::State)
     renyi2(::State, positions::AbstractVector{Int})
+    renyi2(::State, cut::Int)
 
 the Rényi entropy of order 2, ``-\\log \\mathrm{tr}(\\rho^2)``, of the state, 0 on a pure
 representation.
 
 Given positions, that of the state reduced to those sites, which on a pure state measures how
 much they are entangled with the rest. A pure state is then mixed first, which is much more
-expensive, since a partial trace needs a density matrix.
+expensive, since a partial trace needs a density matrix. A cut stands for the sites `1:cut`,
+from 0 to the number of sites; on a pure state it is read off the entanglement spectrum, as
+cheap as `entanglement_entropy`.
 """
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))
@@ -1060,13 +1063,50 @@ partial_trace(::State{Pure}, ::AbstractVector{Int}; kwargs...) =
     error("partial_trace needs a mixed representation, use mix(state) first")
 
 """
+    check_cut(state, cut, what)
+
+refuse a cut the state does not have, `what` naming the function it was given to: `cut` counts
+the sites on its left, from 0 to the number of sites, and at either end one part is empty.
+"""
+function check_cut(state::State, cut::Int, what)
+    n = length(state)
+    if !(0 ≤ cut ≤ n)
+        error("$what was given the cut $cut, which the state does not have: " *
+              "a cut counts the sites on its left, from 0 to $n")
+    end
+    return nothing
+end
+
+# a cut, the sites `1:cut`, as `mutual_info_renyi2` takes it. At either end one part is
+# empty: nothing, which has no entropy, or the whole state
+function renyi2(state::State, cut::Int)
+    check_cut(state, cut, "renyi2")
+    if cut == 0
+        return 0.0
+    elseif cut == length(state)
+        return renyi2(state)
+    end
+    return renyi2(state, collect(1:cut))
+end
+
+# the sites on the left of a cut share their Schmidt spectrum with the rest: their entropy is
+# read off it, as `mutual_info_renyi2` does, rather than from a partial trace of a mix
+function renyi2(state::State{Pure}, cut::Int)
+    check_cut(state, cut, "renyi2")
+    if cut == 0 || cut == length(state)
+        return 0.0
+    end
+    return -log(sum(abs2, last(entanglement_entropy(state, cut))))
+end
+
+"""
     mutual_info_renyi2(state::State, cut::Int)
     mutual_info_renyi2(state::State, a::AbstractVector{Int})
 
-an approximation of the mutual information between two parts of the state computed with
-Rényi-2 entropies, ``S_2(A) + S_2(B) - S_2(A \\cup B)``. Part A is given by its positions, or
-by a cut, sites `1:cut`; part B is the rest. Positions that are empty, or cover every site,
-give 0.
+the Rényi-2 analogue of the mutual information between two parts of the state,
+``S_2(A) + S_2(B) - S_2(A \\cup B)``, which unlike the mutual information can be negative on a
+mixed state. Part A is given by its positions, or by a cut, sites `1:cut`, from 0 to the number
+of sites; part B is the rest. Positions that are empty, or cover every site, give 0.
 
 On a pure state and for a cut, it is read off the entanglement spectrum and costs no more
 than `entanglement_entropy`. For positions a pure state is mixed first, which is much more
@@ -1087,13 +1127,21 @@ function mutual_info_renyi2(state::State, a::AbstractVector{Int})
            renyi2(w)
 end
 
-mutual_info_renyi2(state::State, cut::Int) =
-    mutual_info_renyi2(state, collect(1:cut))
+function mutual_info_renyi2(state::State, cut::Int)
+    check_cut(state, cut, "mutual_info_renyi2")
+    return mutual_info_renyi2(state, collect(1:cut))
+end
 
 # a pure state has no entropy of its own, and the two sides of a cut share their Schmidt
-# spectrum, so the mutual information is just twice the renyi2 entropy of either side
-mutual_info_renyi2(state::State{Pure}, cut::Int) =
-    -2 * log(sum(abs2, last(entanglement_entropy(state, cut))))
+# spectrum, so the mutual information is just twice the renyi2 entropy of either side. A cut
+# at either end leaves a side with no site, and no link to read a spectrum on at 0
+function mutual_info_renyi2(state::State{Pure}, cut::Int)
+    check_cut(state, cut, "mutual_info_renyi2")
+    if cut == 0 || cut == length(state)
+        return 0.0
+    end
+    return -2 * log(sum(abs2, last(entanglement_entropy(state, cut))))
+end
 
 # partial_trace needs a density matrix, there is no cheap route for an arbitrary subset
 mutual_info_renyi2(state::State{Pure}, a::AbstractVector{Int}) =

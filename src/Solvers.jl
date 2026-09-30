@@ -14,7 +14,9 @@ state. A simulation comes back with its time advanced by `t`.
 # Options
 
 - `nsweeps`: the number of steps (default 1)
-- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished
+- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished:
+  `t`, `nsweeps` and `time_start` are still those of the whole evolution, and a simulation
+  is given at the time that evolution started
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
@@ -24,6 +26,7 @@ state. A simulation comes back with its time advanced by `t`.
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
+  (default `Limits()`, none)
 - `observer!`: an observer, see `TdvpObserver`
 - the other options are passed to `ITensorMPS.tdvp`
 
@@ -80,9 +83,10 @@ density matrix: search the ground state of the pure state, then `mix` it.
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
 - `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished
 - `limits`: constraints on the state, see `Limits`, which may give one value per sweep
+  (default `Limits()`, none)
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `observer!`: an observer, see `DmrgObserver`
-- the other options are passed to `ITensorMPS.dmrg`
+- the other options are passed to `ITensorMPS.dmrg`, `outputlevel` defaulting here to 0
 
 # Examples
 
@@ -174,7 +178,9 @@ advanced by `t`.
 - `order`: the order of the approximation, from 1 to 4, required
 - `w`: 1 or 2 for WI or WII (default 2)
 - `nsweeps`: the number of steps (default 1)
-- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished
+- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished:
+  `t`, `nsweeps` and `time_start` are still those of the whole evolution, and a simulation
+  is given at the time that evolution started
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
@@ -182,8 +188,9 @@ advanced by `t`.
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
+  (default `Limits()`, none)
 - `observer!`: an observer, see `ApproxWObserver`
-- the other options are passed to `apply`
+- the other options are passed to the MPO product of ITensorMPS, `ITensorMPS.apply`
 
 # Examples
 
@@ -235,10 +242,11 @@ and the state is normalized to trace one.
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
 - `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished
 - `limits`: constraints on the state, see `Limits`, which may give one value per sweep
+  (default `Limits()`, none)
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
 - `observer!`: an observer, see `DmrgObserver`
-- the other options are passed to `ITensorMPS.dmrg`
+- the other options are passed to `ITensorMPS.dmrg`, `outputlevel` defaulting here to 0
 
 # Examples
 

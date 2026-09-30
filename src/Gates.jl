@@ -11,12 +11,14 @@ the state, or the simulation, with the gates `op`, or the MPO `mpo`, applied.
 
 A product of gates is the operator it denotes, its rightmost factor acting first, and applying
 all the gates in a single call is much more efficient. A pure gate `A` applied to a mixed
-state acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: use
-`make_mpo` for it.
+state acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: on a pure
+state, apply its MPO, `make_mpo(state, op)`, instead. On a mixed state that MPO is not a gate,
+see `make_mpo`.
 
-`limits` constrains the truncations made while a gate of several sites is applied, on the bond
-it spans and on those crossed to bring its sites together; a gate of one site, and the other
-bonds, are not truncated. An MPO truncates the whole result.
+`limits` (default `Limits()`, no truncation) constrains the truncations made while a gate of
+several sites is applied, on the bond it spans and on those crossed to bring its sites
+together; a gate of one site, and the other bonds, are not truncated. An MPO truncates the
+whole result.
 
 # Examples
 

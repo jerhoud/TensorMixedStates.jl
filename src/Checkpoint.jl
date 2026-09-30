@@ -98,7 +98,26 @@ phase_hash(h::UInt64, x::System) = phase_hash(fnv_mix(h, "System"), x.sites)
 # made, so the same state would hash differently once it has been measured
 phase_hash(h::UInt64, x::State{R}) where R =
     phase_hash(phase_hash(fnv_mix(h, "State{$R}"), x.system), x.state)
-phase_hash(h::UInt64, x::Function) = fnv_mix(h, type_key(typeof(x)))
+
+# a function bound to its name in its module counts by that name. Any other, anonymous or
+# local, has a type named by a counter, which changes as soon as the program is included
+# again in the same session or a function is added before it: it counts by the variables it
+# captures, the fields of its type
+function phase_hash(h::UInt64, x::Function)
+    m, n = parentmodule(x), nameof(x)
+    if isdefined(m, n) && getfield(m, n) === x
+        return fnv_mix(h, type_key(typeof(x)))
+    end
+    # the variables it captures count by their names and types, not by their values, which
+    # the closure may change as it runs, a counter for instance
+    h = fnv_mix(h, "anonymous function")
+    T = typeof(x)
+    for (f, t) in zip(fieldnames(T), fieldtypes(T))
+        h = fnv_mix(fnv_mix(h, string(f)), type_key(t))
+    end
+    return h
+end
+
 phase_hash(h::UInt64, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = fnv_mix(h, "()"))
 phase_hash(h::UInt64, x::AbstractArray) = foldl(phase_hash, x; init = foldl(fnv_mix, size(x); init = h))
 
@@ -130,9 +149,11 @@ to the simulation being run. The phases are walked field by field, the structure
 from the types, so a field added to a phase counts without anything else to change, and
 nothing depends on how phases are printed.
 
-Functions are a blind spot: only their type is hashed, so the coefficients of a time
-dependent evolver or the bodies of two `StateFunc` cannot be told apart. The type of an
-anonymous function reflects where it sits in the source.
+Functions are a blind spot: their bodies are never hashed. A function bound to its name in
+its module counts by that name, any other, anonymous or local, by the names and types of the
+variables it captures, and not by the name of its type, which a counter gives and which
+changes when the program is included again. So the coefficients of a time dependent evolver or the bodies of two
+`StateFunc` cannot be told apart.
 
 ITensor indices are left out, since they carry an identity drawn afresh in every session: a
 `System` is what its sites are.
@@ -190,7 +211,7 @@ appears in it or on an interrupt; with a directory, a checkpoint is written firs
 - `sweeps`:     whether the phase being run has read its resume point, which lets its sweeps
                 be committed, see `resume_sweeps!`
 - `written`:    the commit the checkpoint on the disk holds, which is not written again
-- `generation`: which of the two state files the checkpoint on the disk names
+- `generation`: which of the two state files the checkpoint on the disk names, 0 for none
 - `stopping`:   set once a stop has been requested, so that every loop unwinds
 """
 mutable struct Checkpointer

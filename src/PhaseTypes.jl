@@ -62,7 +62,8 @@ one file under different `statename`; saving under a name already in the file re
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `file`: the name of the HDF5 file to write to
+- `file`: the name of the HDF5 file to write to, taken in the simulation directory when it is
+  relative, since `runTMS` runs the phases there
 - `statename`: the name under which the state is stored in the file
 
 # Examples
@@ -87,9 +88,11 @@ a phase that loads the state from an HDF5 file written by `SaveState` or `save_s
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `file`: the name of the HDF5 file to read from
+- `file`: the name of the HDF5 file to read from, taken in the simulation directory when it is
+  relative: a state another simulation saved is found under `../othername/`
 - `statename`: the name under which the state is stored in the file
-- `limits`: the truncation applied to the state once loaded, see `Limits`
+- `limits`: the truncation applied to the state once loaded, see `Limits` (default `Limits()`,
+  none)
 
 # Examples
 
@@ -114,7 +117,7 @@ state already mixed is only truncated.
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `limits`: constraints on the mixed state, see `Limits`
+- `limits`: constraints on the mixed state, see `Limits` (default `Limits()`, none)
 
 # Examples
 
@@ -193,14 +196,16 @@ a phase of time evolution.
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `limits`: constraints on the state, see `Limits`
+- `limits`: constraints on the state, see `Limits` (default `Limits()`, none)
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one that divides the duration into a
   whole number of steps (the phase is skipped when that number is zero)
 - `algo`: the algorithm, `Tdvp(...)` or `ApproxW(...)`
 - `evolver`: `-im * H` for a hamiltonian `H`, plus dissipators for a mixed state, or
   `evolvers => coefs` for a time dependent one, see the `coefs` option of `tdvp`
-- `measures`: the measurements to make during the evolution, see `output` (default `[]`)
+- `measures`: the measurements to make during the evolution, see `output` (default `[]`),
+  after every `measures_period` time steps. The state the phase starts from is not measured
+  here: the `final_measures` of the phase before measure it
 - `measures_period`: the number of time steps between two measurements (default 1)
 
 # Examples
@@ -230,7 +235,8 @@ a phase that applies gates to the state.
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `gates`: the gates to apply
-- `limits`: the truncations made while applying a gate of several sites, see `apply`
+- `limits`: the truncations made while applying a gate of several sites, see `apply` (default
+  `Limits()`, none)
 
 # Examples
 
@@ -253,8 +259,8 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `hamiltonian`: the hamiltonian whose ground state is searched
-- `limits`: constraints on the state, see `Limits`
-- `nsweeps`: the maximum number of sweeps
+- `limits`: constraints on the state, see `Limits`, required
+- `nsweeps`: the maximum number of sweeps, required
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `measures`: the measurements to make during the search, see `output` (default `[]`)
 - `measures_period`: the number of sweeps between two measurements (default 1)
@@ -311,6 +317,10 @@ a phase that traces out part of the sites, given by exactly one of `trace_positi
 - `trace_positions`: the sites to trace out
 - `keep_positions`: the sites to keep, all the others being traced out
 
+The state must be mixed, see `ToMixed`, and conserve nothing strongly, see `Weaken`. The sites
+kept make a new system, numbered from 1 in their order, which the operators of the phases
+after this one refer to.
+
 # Examples
 
     PartialTrace(trace_positions = [2, 3, 6])
@@ -335,7 +345,8 @@ the next one continue under a weak one, where a jump that moves the charge becom
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
 - `target`: what the state must still conserve, as `weaken` takes it (default `nothing`, one
-  level down: strong becomes weak, weak is dropped)
+  level down: every strong quantity made weak or, when none is strong, every quantity
+  dropped)
 
 # Examples
 
@@ -362,8 +373,8 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
   `-im * hamiltonian + dissipators`
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
-- `limits`: constraints on the state, see `Limits`
-- `nsweeps`: the maximum number of sweeps
+- `limits`: constraints on the state, see `Limits`, required
+- `nsweeps`: the maximum number of sweeps, required
 - `measures`: the measurements to make during the search, see `output` (default `[]`)
 - `measures_period`: the number of sweeps between two measurements (default 1)
 - `tolerance`: the search stops when the dmrg energy changes by less than this from one sweep
@@ -400,9 +411,10 @@ the union of the phase types of the library: `CreateState`, `SaveState`, `LoadSt
 Every phase has at least these three fields:
 
 - `name`: the name of the phase, written in the log
-- `time_start`: the simulation time from the start of the phase (default `nothing`, keeping
-  the current time)
-- `final_measures`: the measurements to make at the end of the phase, see `output`
+- `time_start`: the simulation time the clock is set to when the phase starts (default
+  `nothing`, keeping the current time)
+- `final_measures`: the measurements to make at the end of the phase, see `output` (default
+  `[]`)
 
 A phase of your own can be defined, see `TensorMixedStates.run_phase`.
 """

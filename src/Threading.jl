@@ -99,8 +99,8 @@ set how ITensors threads the tensor contractions, and return the threading it re
   threads, and Strided, which ITensors uses for the dense permutations, on a single one, as
   ITensors recommends. Started with Julia, Strided has as many threads as Julia has, which
   compete with those of BLAS and can slow down a calculation on dense tensors considerably.
-  BLAS keeps its threads, or gets back those Julia gives it when it starts when the mode
-  replaces `:blocks`. `SimData` applies this mode by default, and a program calling the
+  BLAS keeps its threads, except after `:blocks`, where it gets back those Julia starts it
+  with. `SimData` applies this mode by default, and a program calling the
   functions of TMS directly should start with `set_threading(:dense)`;
 - `:blocks`: block sparse multithreading on the threads of Julia, BLAS and Strided on a single
   thread, for the many products of blocks of a system that conserves something. Julia has to

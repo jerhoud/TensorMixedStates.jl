@@ -184,7 +184,14 @@ function build_site(modname::String, typename::String, params::Vector)
     # version 1 wrote every field as a `Float64`, so the reader converts back to what the
     # site declares. Widening the constructors to take a `Real` dimension would put the
     # conversion in the wrong place and state something looser than the truth
-    return t([ convert(ft[i], p) for (i, p) in enumerate(params) ]...)
+    ps = [ convert(ft[i], p) for (i, p) in enumerate(params) ]
+    # a file written before the conserved quantities were sorted holds them in the order of
+    # their declaration, which the sites built now no longer have
+    k = findfirst(==(:conserve), fieldnames(t))
+    if !isnothing(k) && k ≤ length(ps) && ps[k] isa AbstractString
+        ps[k] = sorted_conserve(ps[k])
+    end
+    return t(ps...)
 end
 
 """

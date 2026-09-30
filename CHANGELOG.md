@@ -35,6 +35,39 @@ the reference article.
 - `Limits` prints as the call that builds it, without the fields left at their default:
   `Limits(cutoff = 1.0e-10, maxdim = 50)`, `Limits()`.
 
+- The quantities a site conserves are kept sorted by name, as ITensors sorts the components
+  of a charge: two sites conserving the same quantities are equal whatever the order of their
+  declaration, and a site and `symmetries` print them in that order. A checkpoint written by
+  an earlier version for a site declaring several quantities in another order is refused as
+  belonging to another simulation.
+
+### Fixed
+
+- Once a simulation stopped and resumed has completed, running it again does nothing, as with
+  periodic checkpoints. Without them, the checkpoint the stop wrote stayed on the disk, and the
+  next run resumed from it, cutting the output files back to the stop and computing their end
+  again.
+
+- The log of a resumed simulation gives the simulation time it resumes from, where it gave the
+  time the interrupted phase had started from.
+
+- `mutual_info_renyi2` and `MutualInfoRenyi2` take a cut from 0 to the number of sites in both
+  representations, where a cut at 0 failed on a pure state, and refuse any other, where a
+  negative cut gave 0 on a mixed state.
+
+- `SubRenyi2(k)` and `renyi2(state, k)` take the sites `1:k`, as `MutualInfoRenyi2(k)` does,
+  and read it off the entanglement spectrum on a pure state, where `SubRenyi2(k)` was
+  accepted and failed when measured.
+
+- `weaken` gives a state or a system back unchanged when the target names what it conserves
+  in another order, where it built a new system with new indices.
+
+- A simulation whose phases hold an anonymous function, such as a time dependent coefficient
+  or the function of a `StateFunc`, resumes when its program is included again in the same
+  Julia session, where its checkpoint was refused as belonging to another simulation. Such a
+  function counts by the names and types of the variables it captures rather than by the name
+  of its type, which a counter gives. A checkpoint written by an earlier version for such phases is refused once.
+
 ## [1.5.0] - 2026-09-29
 
 This release adds exported names, among them `RealValue`, `ImaginaryValue` and

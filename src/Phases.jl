@@ -11,7 +11,12 @@ has, `name`, `time_start` and `final_measures`, and a method of `TensorMixedStat
 for it. The full name is needed: `run_phase` is not exported, and a function of your own
 of that name would shadow it rather than extend it. `runTMS` then logs the phase, applies its
 `time_start`, calls the method and takes the final measurements, as for a phase of the
-library.
+library. Within the method, `output` measures the simulation, `log_msg` writes to its log and
+`get_sim_file` gives a file of the simulation to write anything else to.
+
+A phase that does not drive a solver has no point to be resumed from inside: the `stop` file
+and `max_time` are only seen once it ends, an interrupt stops it at once, and a resumed run
+runs it again from its start.
 
 A phase of your own that drives a solver with `TdvpObserver`, `ApproxWObserver` or
 `DmrgObserver` is stopped and checkpointed as those of the library are, but a checkpoint

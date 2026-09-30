@@ -120,12 +120,13 @@ adapt_representation(::Type{R}, a) where R = a
     PreMPO(::State, op)
 
 the operator `op` preprocessed for the representation of the state, to be turned into an MPO
-by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed wherever an operator to be
-turned into an MPO is expected. `op` may also be a vector of operators, the terms of a time
-dependent evolver, each multiplied by its own time function.
+by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp` or `approx_W` in
+place of the operator, which saves preprocessing it again. `op` may also be a vector of
+operators, the terms of a time dependent evolver, each multiplied by its own time function.
 
-A pure operator given for a mixed state is taken as an evolver, `-im * H`, and lifted to the
-mixed representation with `Evolver`.
+A pure operator ``A`` given for a mixed state is lifted with `Evolver` to
+``\\rho \\mapsto A \\rho + \\rho A^\\dagger``: the hamiltonian part of an evolver must already be
+written `-im * H`.
 
 # Examples
 
@@ -285,6 +286,10 @@ end
 the MPO of an operator, in the representation of the state. For a time dependent evolver,
 `coefs` holds the value of each time function, one per term; it defaults to `[1.]`, a single
 operator.
+
+A pure operator ``A`` given for a mixed state becomes its `Evolver`,
+``\\rho \\mapsto A \\rho + \\rho A^\\dagger``, see `PreMPO`, and not the gate
+``\\rho \\mapsto A \\rho A^\\dagger`` that `apply` makes of it.
 
 # Examples
 

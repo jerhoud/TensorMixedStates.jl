@@ -89,7 +89,7 @@ gives it back unchanged. This is the system `weaken(::State)` puts a state on.
 # Examples
 
     s = System(4, Electron(conserve = (strong(Ntot), 2Sz)))
-    weaken(s)          # conserves (Ntot, 2Sz)
+    weaken(s)          # conserves (2Sz, Ntot)
     weaken(s, 2Sz)     # conserves 2Sz only
     weaken(s, ())      # conserves nothing
 """
@@ -148,8 +148,9 @@ sim(system::System) =
 
 the tensor product of two systems: the sites of the first followed by those of the second,
 with their indices. When the two share an index, as in `S ⊗ S`, the second is given new ones.
-Both must carry charges or neither, a mixed product being built from its sites with `System`,
-and sites whose conserved quantities cannot live together on one system are refused.
+Both must carry charges or neither: the product of a charged system and an uncharged one is
+built from its sites with `System`. Sites whose conserved quantities cannot live together on
+one system are refused.
 """
 function (sys1::System ⊗ sys2::System)
     if is_charged(sys1) ≠ is_charged(sys2)

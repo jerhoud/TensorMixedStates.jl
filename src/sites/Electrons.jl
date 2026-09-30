@@ -6,7 +6,8 @@ export Electrons
 """
     Electron(; conserve = ())
 
-the site type of an electron orbital, of dimension 4.
+the site type of an electron orbital, of dimension 4, whose basis is `"Emp"`, `"Up"`, `"Dn"`,
+`"UpDn"`, the doubly occupied state being ``c^\\dagger_\\uparrow c^\\dagger_\\downarrow |0⟩``.
 
 # Examples
 

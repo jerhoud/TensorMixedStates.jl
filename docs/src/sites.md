@@ -164,10 +164,17 @@ A **state** lives in one sector. `Fermion(conserve = N)` takes `"Occ"` and `"Emp
 An **operator** must carry a definite charge, its flux, which is the difference between the
 charges of the states it connects. [`flux`](@ref) gives it:
 
-```julia
-flux(N, Fermion(conserve = N))          # QN("N", 0)
-flux(dag(C), Fermion(conserve = N))     # QN("N", 1)
-flux(C, Fermion(conserve = N))          # QN("N", -1)
+```jldoctest
+julia> using TensorMixedStates, .Fermions
+
+julia> flux(N, Fermion(conserve = N))
+QN("N",0)
+
+julia> flux(dag(C), Fermion(conserve = N))
+QN("N",1)
+
+julia> flux(C, Fermion(conserve = N))
+QN("N",-1)
 ```
 
 `X` connects the two states of a qubit in both directions at once, so under
@@ -213,12 +220,27 @@ A quantity is thus conserved at one of three levels: strongly, weakly, or not at
 [`symmetries`](@ref) tells which, in the form a declaration takes, and [`weaken`](@ref) takes a
 state, a system or a simulation down to a lower level, building the system it lands on:
 
-```julia
-symmetries(system)                     # (strong(Ntot), 2Sz)
-weaken(state)                          # one level down: strong becomes weak, weak is dropped
-weaken(state, (strong(Ntot), 2Sz))     # exactly these
-weaken(state, ())                      # no charges at all
-weaken(state, symmetries(system))      # the identity
+```jldoctest
+julia> using TensorMixedStates, .Electrons
+
+julia> mysystem = System(4, Electron(conserve = (strong(Ntot), 2Sz)));
+
+julia> mystate = State{Mixed}(mysystem, ["Up", "Dn", "Up", "Dn"]);
+
+julia> symmetries(mysystem)
+(2Sz, strong(Ntot))
+
+julia> symmetries(weaken(mystate).system)          # one level down: every strong quantity made weak
+(2Sz, Ntot)
+
+julia> symmetries(weaken(weaken(mystate)).system)  # or, when none is strong, every quantity dropped
+()
+
+julia> symmetries(weaken(mystate, 2Sz).system)     # exactly these
+2Sz
+
+julia> weaken(mystate, symmetries(mysystem)) === mystate   # the identity
+true
 ```
 
 This is a step of a simulation in its own right. A phase may evolve under a strong symmetry,

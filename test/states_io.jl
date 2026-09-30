@@ -199,6 +199,18 @@ end
     ])
 end
 
+@testset "A state file with its conserved quantities unsorted" begin
+    # written before they were sorted, in the order of their declaration: the state read back
+    # sat on sites no longer equal to those built now, and could not be put on their system
+    old = Electron("Ntot:0,1,1,2;2Sz:0,1,-1,0")
+    file = joinpath(mktempdir(), "old.h5")
+    save_state(file, "st", State{Pure}(System(2, old), "Up"))
+    sys = System(2, Electron(conserve = (Ntot, 2Sz)))
+    st = load_state(file, "st")
+    @test st.system.sites == sys.sites
+    @test_ok load_state(file, "st"; system = sys)
+end
+
 @testset "DataFrames extension" begin
     # a Data target gathers its measurements in the data field of the simulation,
     # one entry per name, and it works even when the output is redirected

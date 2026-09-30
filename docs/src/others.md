@@ -14,7 +14,8 @@ graph_base_size
 
 ## MPO
 
-Matrix Product Operators (MPO) are used under the hood by TMS to operate on MPS (inner state representation).
+Matrix Product Operators (MPO) are used under the hood by TMS to act on the matrix product states
+that represent its states.
 Every operator is converted to an MPO internally, except in `apply`, which applies gates one
 by one, and in `expect`, `expect1`, `expect2` and `measure`, which contract the state
 directly.
@@ -52,8 +53,8 @@ difference you will see, and the contraction cost follows it.
 This is a deliberate trade. The construction leaves the MPO in the triangular form that the
 WI and WII approximations of [`ApproxW`](@ref) need, which a compressed MPO no longer has.
 And because each term keeps its own identity, its coefficient can be changed from one sweep
-to the next without rebuilding anything, which is what makes time dependent evolvers
-possible at no extra cost.
+to the next without simplifying the operator again: only the tensors of the MPO are rebuilt,
+from the terms kept, which is what makes time dependent evolvers cheap.
 
 What follows from it in practice: the cost is paid per term, so it is worth writing an
 operator with as few terms as possible. `simplify` is applied on the way to the MPO and will

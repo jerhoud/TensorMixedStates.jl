@@ -432,6 +432,30 @@ end
     @test_throws "conserves less than the measured state" measure(sq, Fidelity(State{Pure}(System(2, Qubit()), "Up")))
 end
 
+@testset "A cut at either end" begin
+    # a cut at 0 gave 0 on a mixed state and an error about the entanglement entropy on a
+    # pure one, and a negative cut was taken for an empty part on a mixed state
+    ψ = RandomState{Pure}(System(3, Qubit()), 2)
+    for st in (ψ, mix(ψ))
+        @test mutual_info_renyi2(st, 0) == 0
+        @test mutual_info_renyi2(st, 3) == 0
+        @test_throws "the cut -1" mutual_info_renyi2(st, -1)
+        @test_throws "the cut 4" mutual_info_renyi2(st, 4)
+    end
+
+    # SubRenyi2(3) was accepted and failed when measured: a link stands for the sites on its
+    # left, as for MutualInfoRenyi2, and on a pure state is read off the spectrum
+    for cut in 1:2
+        @test renyi2(ψ, cut) ≈ renyi2(mix(ψ), collect(1:cut))
+        @test renyi2(mix(ψ), cut) ≈ renyi2(mix(ψ), collect(1:cut))
+    end
+    @test renyi2(ψ, 0) == 0
+    @test renyi2(mix(ψ), 3) ≈ renyi2(mix(ψ))
+    @test_throws "renyi2 was given the cut 4" renyi2(ψ, 4)
+    @test SubRenyi2(2).name == "SubRenyi2(1,2)"
+    @test last(only(measure(ψ, SubRenyi2(2)))) ≈ renyi2(mix(ψ), [1, 2])
+end
+
 @testset "Inner products and fidelities" begin
     sys = System(3, Qubit())
     up    = State{Pure}(sys, "Up")

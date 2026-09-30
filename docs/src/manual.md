@@ -138,7 +138,7 @@ lim = Limits(cutoff = 1e-10, maxdim = 50)
 
 Any of the arguments may be omitted in which case it corresponds to an absence of constraint for this parameter. In particular, `Limits()` represents no constraint.
 
-A third parameter, `mindim`, sets the bond dimension the truncation is not allowed to go below, as in `Limits(cutoff = 1e-10, maxdim = 50, mindim = 4)`. `maxdim` keeps the last word when the two ask for opposite things.
+A third parameter, `mindim`, sets the bond dimension the truncation is not allowed to go below, as in `Limits(cutoff = 1e-10, maxdim = 50, mindim = 4)`. `maxdim` takes precedence when the two conflict.
 
 To apply the constraints on a state, one uses
 
@@ -184,8 +184,8 @@ some sixty lowercase names, among them `state`, `output`, `measure`, `trace`, `d
 `matrix`, `tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
 of your program shadows the function for the rest of the file, and if you happen to have
 used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
-`cannot assign a value to imported variable`. Inside a function there is no such issue,
-where `state = ...` is an ordinary local variable. This manual prefixes its own variables
+`cannot assign a value to imported variable`. There is no such issue inside a
+function, where `state = ...` is an ordinary local variable. This manual prefixes its own variables
 with `my`, as in `mystate` and `myop`, which is one way of staying clear.
 
 The operator system is very rich and flexible. For example, if you want to use this Hamiltonian
@@ -274,12 +274,6 @@ The factors carry a definite charge of what their sites conserve. On a fermionic
 matrix has to commute with `F`, since it is taken as it is, with no Jordan-Wigner string:
 an operator moving fermions between sites is written with `C` and `dag(C)` instead.
 
-In the case of Hamiltonian or Lindbladian evolution the Hamiltonian part is to be multiplied by -im:
-
-```julia
-evolver = -im * hamiltonian + dissipators
-```
-
 ### Fermions
 
 A fermionic operator is written as it is: `C(i)` destroys a fermion on site `i` and
@@ -291,11 +285,6 @@ simply
 hopping = sum(dag(C)(i)C(i+1) + dag(C)(i+1)C(i) for i in 1:n-1)
 nothing # hide
 ```
-
-The expectation value of a single fermionic operator vanishes on any state of definite parity,
-so `measure` refuses to measure a fermionic operator on every site, as `C`, and so does
-`expect1`; placed on a site, `C(3)`, it is accepted, for a state that superposes parities. The
-two operators of a correlation, as `(dag(C), C)`, must both be fermionic or both not.
 
 ## Algorithms
 
@@ -380,7 +369,9 @@ An evolver may also depend on time, see [Time dependent evolvers](@ref).
 ### Steady states
 
 The steady state of an open system is computed by `steady_state`, from a mixed state to start
-from. It returns a value, zero for a steady state, and the state. Qubits decaying toward down
+from, by dmrg on ``L^\dagger L``. It returns the "energy" dmrg reaches, ``\|L \rho\|^2`` for
+``\rho`` of unit Hilbert-Schmidt norm, which is zero for a steady state, and the state,
+normalized to trace one. Qubits decaying toward down
 at rate 1 and pumped toward up at rate 0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
 
 ```@example manual
@@ -420,25 +411,14 @@ result = measure(mystate, (X, Y))
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``, complex
 since its diagonal is ``\langle \sigma_x \sigma_y \rangle = i \langle \sigma_z \rangle``
 
-We can also measure other properties with
-- `Trace`: the trace of the density matrix, which should be one, so it is a good indicator of
-  accumulated error
-- `TraceError`: the deviation of the trace from 1
-- `Trace2`, `Purity`: the trace of the square of the density matrix
-- `Norm`: the norm of the state
-- `Hermiticity`: how Hermitian the density matrix is, 1 if Hermitian, 0 if anti-Hermitian, or
-  any value in between
-- `HermiticityError`: the deviation of the hermiticity from 1
-- `Renyi2`: the Rényi entropy of order 2 of the system
-- `SubRenyi2`: the Rényi entropy of order 2 of a subsystem
-- `MutualInfoRenyi2`: the Rényi-2 mutual information between a subsystem and the rest
-- `EntanglementEntropy`: the entanglement entropy for a pure representation, the OSEE for a
-  mixed one
-- `Fidelity`, `Overlap`: the fidelity with a reference state, and the inner product with it
-- `Variance`: the variance of the energy of a hamiltonian
-- `MaxLinkdim`: the maximum bond dimension of the representation
-- `MemoryUsage`: the memory the state occupies, including the caches of the measurements
-  already made on it
+The expectation value of a single fermionic operator vanishes on any state of definite parity,
+so `measure` refuses a fermionic operator given for every site, as `C`, and so does `expect1`;
+placed on a site, as `C(3)`, it is accepted, for a state that superposes parities. The two
+operators of a correlation, as `(dag(C), C)`, must both be fermionic or both not.
+
+We can also measure properties of the state as a whole, with state functions such as
+`Trace`, `Purity`, `EntanglementEntropy(l)` or `Fidelity(ref)`: the
+[Measurements](measurements.md) page has the table of them all.
 
 We can also ask for several measurements at the same time
 
@@ -459,16 +439,16 @@ phases, each acting on the state and making its measurements.
 
 The following phases are available:
 
-- `CreateState` : create a simple state
-- `GroundState` : compute the ground state using dmrg (requires a pure state)
-- `ToMixed` : go from pure representation to mixed representation
-- `Evolve` : do Hamiltonian or Lindbladian evolution
-- `Gates` : apply some gates
-- `PartialTrace` : trace the system over some sites (requires a mixed state)
-- `Weaken` : conserve less, for instance a strong symmetry asked for weakly (see `weaken`)
-- `SteadyState` : compute the steady state of a Lindblad equation (requires a mixed state)
-- `SaveState` : write the state to disk in an HDF5 file
-- `LoadState` : read back a state written by `SaveState`
+- `CreateState`: create a simple state
+- `GroundState`: compute the ground state using dmrg (requires a pure state)
+- `ToMixed`: go from pure representation to mixed representation
+- `Evolve`: do Hamiltonian or Lindbladian evolution
+- `Gates`: apply some gates
+- `PartialTrace`: trace the system over some sites (requires a mixed state)
+- `Weaken`: conserve less, for instance a strong symmetry asked for weakly (see `weaken`)
+- `SteadyState`: compute the steady state of a Lindblad equation (requires a mixed state)
+- `SaveState`: write the state to disk in an HDF5 file
+- `LoadState`: read back a state written by `SaveState`
 
 With these phases we define a `SimData` object that describes the simulation and finally, we call
 
@@ -489,7 +469,7 @@ in pieces, a helper returning the several phases it needs rather than a single o
 
 ### Examples
 
-What TMS is for is open systems, so here is one: six qubits evolving under a transverse
+TMS is made for open systems, so here is one: six qubits evolving under a transverse
 field Ising hamiltonian while each of them decays. `CreateState{Mixed}` is what makes the
 state a density matrix, and the `Dissipator` terms added to the hamiltonian are what turn
 the evolution into a Lindblad equation.
@@ -515,7 +495,8 @@ runTMS(SimData(
 ))
 ```
 
-The magnetization on the six sites and the purity, at the start and at the end of the run:
+The magnetization on the six sites and the purity, after the first time step, `Evolve`
+measuring after each step, and at the end of the run:
 
 ```
 Z        0.1    0.94098941    0.94117682   0.94117682   0.94117682   0.94117682    0.94098941
@@ -526,7 +507,7 @@ Purity   2      0.1086794
 ```
 
 The qubits start pure and pointing up; by the end the magnetization has reversed and the
-purity has fallen to 0.11, which is a state no pure state code could have represented.
+purity has fallen to 0.11: a mixed state, which no single wave function can represent.
 
 A longer one, the tight binding chain of fermions with dephasing noise. The hopping and the
 dephasing both conserve the number of fermions, so the sites are told to conserve it,
@@ -563,8 +544,9 @@ runTMS(sim_data(40, 1., 0.05))
 
 ### Output
 
-`runTMS` creates a directory named after the `name` field of the `SimData` object and puts
-the output files there, in particular:
+`runTMS` creates a directory named after the `name` field of the `SimData` object, runs the
+phases in it, so that a relative file name, of a destination or of `SaveState` and
+`LoadState`, is taken there, and puts the output files there, in particular:
 
 - `log`: the progression of the computation;
 - `prog.jl`: a copy of the script;
@@ -573,12 +555,13 @@ the output files there, in particular:
 - `running`: an empty file present during the computation;
 - `error`: an empty file created in case of error.
 
-Three keyword arguments may be given:
+`runTMS` takes three keyword arguments:
 
 - `restart` (default `false`): erase the directory before starting;
 - `clean` (default `false`): erase the directory and do not run the simulation;
-- `output` (default `nothing`): if set, create neither the directory nor any output file, and
-  redirect all output to the given stream, `stdout` or `devnull` for instance.
+- `output` (default `nothing`): if set, create neither the directory nor the files `runTMS`
+  writes in it, and redirect all output to the given stream, `stdout` or `devnull` for
+  instance. A `SaveState` still writes its file, in the current directory.
 
 ### Long runs, checkpoints and stopping
 
@@ -616,9 +599,10 @@ resumed.
 
 `runTMS` resumes on its own: run the same program again and it picks up where it left off,
 skipping the phases that were finished and restarting the interrupted one at the sweep it
-had reached. There is nothing to pass and nothing to change in the program. With periodic
-checkpoints on, one is written after the last phase, so that running it once more after the
-simulation completed does nothing.
+had reached. There is nothing to pass and nothing to change in the program. A checkpoint is
+also written after the last phase, when periodic checkpoints are on or when one is already on
+the disk, left by a stop, so that running the program once more after the simulation
+completed does nothing. A simulation that never wrote one runs again from the start.
 
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption
@@ -628,12 +612,12 @@ produced.
 Use `restart = true` to ignore an existing checkpoint and start over, as it erases the
 directory.
 
-The random number generator is not part of a checkpoint. What draws random numbers after the
-point a run resumes from, a `CreateState` with `randomize` or a measurement calling `sample`,
-draws other numbers than the uninterrupted run, and the `seed` of a `CreateState` finished
-before that point is not applied again. The results are as valid, but they are not the same
-numbers. A `CreateState` that draws its state after its own `seed` is reproduced, since it is
-replayed whole; samples measured during an evolution are not.
+The random number generator is not part of a checkpoint. After a resume, whatever draws
+random numbers, a `CreateState` with `randomize` or a measurement calling `sample`, draws
+other numbers than the uninterrupted run would have, since the `seed` of a `CreateState`
+finished before the resume point is not applied again. The results are as valid, but they are
+not the same numbers. A `CreateState` replayed by the resume applies its `seed` again and
+draws the same state; samples measured during an evolution are not reproduced.
 
 A checkpoint records which phases it belongs to, and `runTMS` refuses to resume one that
 was written by a different simulation rather than mixing the two. So editing the phases of
@@ -659,8 +643,9 @@ The `stop` file is the one to reach for in batch, since it does not depend on ho
 queueing system signals its jobs. It is removed when the simulation next starts, so it
 never blocks a later run.
 
-Note that a simulation writing to a directory turns `Ctrl-C` into a clean stop rather than
-an immediate exit, for the whole program.
+Note that while a simulation writing to a directory runs, `Ctrl-C` stops it cleanly rather
+than ending the program. When `runTMS` returns, `Ctrl-C` gets back the behaviour Julia gives
+it by default.
 
 #### What can be resumed inside a phase
 
@@ -674,14 +659,16 @@ several `Gates` phases, which gives resume points at no cost.
 
 ### Measurements
 
-Measurements are specified in the `measures` or `final_measures` fields. They take the form of a pair or list of pairs.
+Measurements are specified in the `measures` field of `Evolve`, `GroundState` and
+`SteadyState`, taken as the phase sweeps, and in the `final_measures` field of every phase and
+of `SimData`, taken at its end. They take the form of a pair or list of pairs.
 
 ```julia
 measures = destination => measurements
 measures = [ dest1 => meas1, dest2 => meas2, ...]
 ```
 
-The possible measurements are described in the measurements section of this manual. There are three types of destinations:
+The possible measurements are described on the [Measurements](measurements.md) page. There are three types of destinations:
 
 - filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull). The files `runTMS` writes itself in the simulation directory cannot be destinations: `log`, `stop`, `error`, `running`, `stamp`, `description`, `prog.jl` and the checkpoint files
 
@@ -706,11 +693,12 @@ file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a co
 values are complex is described in the measurements section.
 
 A json file and a `Data` object hold, for each measurement, the lists `"times"`, `"data"` and
-`"events"`: the time of each value, the value, and the number of the measurement set it
-belongs to, counted for each destination, one per time the destination was written. Values
-measured together share their event, where their time alone repeats over the sweeps of a
-ground state search, over a circuit, or once the time is set back. A matrix is written in a
-json file as the list of its rows, as a file writes it row by row.
+`"events"`: the time of each value, the value, and its event, the number of the measurement
+set it belongs to. Events are counted for each destination, one each time it is written, and
+values measured together share one. They are what tells measurement sets apart when the time
+does not: it stays the same over the sweeps of a ground state search or over the gates of a
+circuit, and repeats once a phase sets it back. A matrix is written in a json file as the
+list of its rows, as a file writes it row by row.
 
 The `data_to_frame` function can be used on the result to get a `DataFrame` object, with one row per event (the `DataFrames` package must be imported first)
 
@@ -734,14 +722,14 @@ julia --threads=auto my_script.jl
 ```
 
 or `julia -t auto my_script.jl` for short; `--threads=4`, or `-t 4`, gives exactly four. The
-garbage collector then runs on as many threads, which speeds up the runs, and they are what
-the `:blocks` mode below runs on. Started without them, Julia still runs the products of dense
+garbage collector then runs on as many threads from Julia 1.12 on, and on half as many
+before, which speeds up the runs, and they are what the `:blocks` mode below runs on. Started without them, Julia still runs the products of dense
 matrices on several cores, BLAS having threads of its own, but everything else on a single
 one. The threads of Julia are fixed when it starts: they cannot be added from within a
 program.
 
-**The BLAS library.** On an Intel processor, MKL, which replaces OpenBLAS for the products of
-dense matrices, is often faster, see [BLAS backend](@ref). This choice is independent of the
+**The BLAS library.** On `x86_64` machines running Linux or Windows, MKL, which replaces
+OpenBLAS for the products of dense matrices, is often faster, see [BLAS backend](@ref). This choice is independent of the
 two others.
 
 **The mode.** The `threading` field of `SimData`, or `set_threading`, chooses how the
@@ -757,11 +745,12 @@ contractions use the threads of Julia:
   system are block sparse when it conserves something, see [Conserving a quantity](@ref), so
   this mode is meant for such systems: it is worth trying on them, with OpenBLAS above all;
 - `:auto`, for `SimData` only, chooses before each phase: `:blocks` when the system of the
-  state conserves something, `:dense` otherwise and until there is a state.
+  state conserves something and Julia has several threads, `:dense` otherwise and until there
+  is a state.
   `set_threading(mysystem)` makes the same choice once.
 
 ```julia
-using MKL                      # if MKL is installed, on an Intel processor: before TMS
+using MKL                      # if MKL is installed, on x86_64 Linux or Windows: before TMS
 using TensorMixedStates
 set_threading(:dense)          # first thing in a program calling the functions of TMS directly
 

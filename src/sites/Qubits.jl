@@ -105,8 +105,10 @@ controlled_type(a::Op) = plain_op
     controlled(op; name, type)
 
 the gate applying `op` to the following sites when the first one, a qubit, is in the state
-`"1"`, and nothing otherwise. Its name and its `OpType` default to those of `controlled_name`
-and `controlled_type`, `CZ` for `controlled(Z)`.
+`"1"`, and nothing otherwise. Its name defaults to `"C"` followed by the name of `op` when it
+is a named operator, `CZ` for `controlled(Z)`, and to `"controlled(op)"` otherwise. Its
+`OpType` defaults to that of a named operator, `plain_op` for a fermionic one, and to
+`plain_op` otherwise.
 
 # Examples
 

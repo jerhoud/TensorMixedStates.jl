@@ -11,8 +11,14 @@ compute the given measurements on a simulation, at its time and in a single call
 `measure`, and write them to their destinations. A destination is a name, read as
 `get_sim_file` reads it, or a `Data(name)`; the measurements are anything `measure` takes.
 
-A complex value takes two columns, its real part then its imaginary part, and a json file
-writes it as `{"re": …, "im": …}`: see `RealValue` for which values are complex.
+A text file takes one line per measurement, its name, the time and its values separated by
+tabs, the lines of the measurements of one call following each other. A matrix takes a line
+with its name alone, then one line per row, named `name:l` for row `l`. A complex value takes
+two columns, its real part then its imaginary part, and a json file writes it as
+`{"re": …, "im": …}`: see `RealValue` for which values are complex.
+
+A json file is written when `runTMS` ends, so that one given to a `Simulation` built by hand
+is never written.
 
 # Examples
 

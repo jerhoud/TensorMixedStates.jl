@@ -81,6 +81,20 @@ function decode_conserve(s::AbstractString)
 end
 
 """
+    sorted_conserve(s)
+
+the string `s` of `conserve_string` with its quantities sorted by name, as `Conserved` holds
+them. A state file written before they were sorted holds them in the order of their
+declaration.
+"""
+function sorted_conserve(s::AbstractString)
+    if isempty(s)
+        return String(s)
+    end
+    return join(sort(split(s, ';'); by = p -> first(only(decode_conserve(p)))), ";")
+end
+
+"""
     strong_names(site)
 
 the names of the quantities the site conserves strongly. See `strong`.
@@ -467,7 +481,7 @@ macro create_site_module(name, symbols)
         Expr(:import, imports...),
         Expr(:export, symbols.args...))
     doc = "    using .$name\n\nmodule giving access to the `$(symbols.args[1])` site type " *
-        "and its operators: " * join(map(s -> "`$s`", symbols.args[2:end]), ", ")
+        "and the names it exports: " * join(map(s -> "`$s`", symbols.args[2:end]), ", ")
     mod = Expr(:module, true, name, block)
     return esc(Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), __source__, doc, mod))
 end
@@ -529,7 +543,7 @@ the local state a name gives on a site: a vector, or a density matrix for a mixe
 `"FullyMixed"`.
 
 The name is looked for among the states the site declares, see `@def_states`, then among its
-generic forms, see `string_state`, then among the states every site has, see `common_states`.
+generic forms, see `string_state`, then among the states every site has, `"FullyMixed"`.
 
 # Examples
 
@@ -755,11 +769,14 @@ be given, so that what `symmetries` reports can be given back to `weaken`.
 
 # Examples
 
-    symmetries(system)                     # (strong(Ntot), 2Sz)
+    symmetries(system)                     # (2Sz, strong(Ntot))
     weaken(state, symmetries(system))      # the identity, by construction
 """
 struct Conserved
     names::Vector{Tuple{String, Bool}}
+    # sorted by name, as ITensors sorts the components of a QN: the order in which a
+    # declaration or a target names its quantities says nothing about what is conserved
+    Conserved(names) = new(sort(collect(Tuple{String, Bool}, names); by = first))
 end
 
 # defined together, as `Op` does: a `Set` or a `Dict` picks its bucket by `hash` and only
@@ -806,7 +823,7 @@ keep the others from conserving it.
 
 # Examples
 
-    symmetries(System(4, Electron(conserve = (strong(Ntot), 2Sz))))   # (strong(Ntot), 2Sz)
+    symmetries(System(4, Electron(conserve = (strong(Ntot), 2Sz))))   # (2Sz, strong(Ntot))
     symmetries(System(4, Fermion()))                                  # ()
     symmetries(System([Qubit(), Fermion(conserve = N)]))              # N
 """

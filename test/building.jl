@@ -420,7 +420,7 @@ end
 
     # and a system reports what it conserves in the form the target takes
     @test repr(symmetries(System(2, Electron(conserve = (strong(Ntot), 2Sz))))) ==
-        "(strong(Ntot), 2Sz)"
+        "(2Sz, strong(Ntot))"
     @test repr(symmetries(System(2, Fermion()))) == "()"
 
     # a site conserving nothing, put first, used to hide what the others conserve: weakening

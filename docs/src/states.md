@@ -43,10 +43,3 @@ interface with the `SaveState` and `LoadState` phases.
 save_state
 load_state
 ```
-
-## Simulations
-
-```@docs
-Simulation
-get_sim_file
-```

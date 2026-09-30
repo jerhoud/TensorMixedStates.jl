@@ -301,10 +301,16 @@ scope is not bound again: it is registered for the new site and checked against 
 already stands for, so that reusing a name that stands for something else, or declaring it
 with another `OpType`, is an error rather than a silent redefinition.
 
-An operator neither fermionic nor self adjoint is `plain_op`. On a fermionic site it is placed
-with no Jordan-Wigner string, so it has to commute with `F`: an operator that moves a fermion
-is `fermionic_op`. The types, and `F` being an involution, are checked on the site given, and
-again on each site an operator is placed on.
+A definition is a matrix, an expression of operators of one site, or a function of the site
+giving either. Every operator declared here acts on one site: one of several sites is defined
+with `named` or `Operator{N}`. `F` declares the Jordan-Wigner operator of a fermionic site,
+shared by every site, and binds no name of its own.
+
+An operator neither fermionic nor self adjoint is `plain_op`. On a fermionic site an operator
+is placed with no Jordan-Wigner string, so every type but `fermionic_op` has to commute with
+`F`, and a `fermionic_op`, which moves a fermion, has to anticommute with it. The types, and
+`F` being an involution, are checked on the site given, and again on each site an operator is
+placed on.
 
 # Examples
 
@@ -533,7 +539,7 @@ first, since the charges depend on its type and not on that field.
 
     conserve_string(Fermion(""), N)              # "N:0,1"
     conserve_string(Fermion(""), parity(N))      # "parity(N)%2:0,1"
-    conserve_string(Electron(""), (Ntot, 2Sz))   # "Ntot:0,1,1,2;2Sz:0,1,-1,0"
+    conserve_string(Electron(""), (Ntot, 2Sz))   # "2Sz:0,1,-1,0;Ntot:0,1,1,2"
 """
 function conserve_string(site::AbstractSite, spec)
     ops = spec isa Tuple ? collect(spec) : [spec]
@@ -563,5 +569,6 @@ function conserve_string(site::AbstractSite, spec)
         # are read exactly as before
         return (spec isa Strong ? head * "!" : head) * ":" * join(q, ",")
     end
-    return join(parts, ";")
+    # sorted by name, see `Conserved`
+    return sorted_conserve(join(parts, ";"))
 end

@@ -428,6 +428,52 @@ end
     end
 end
 
+@testset "Running again a simulation that was stopped and completed" begin
+    # without periodic checkpoints, the checkpoint a stop wrote stayed on the disk once the
+    # resumed run had completed, and the next run resumed from it: the files were cut back to
+    # the stop and their end computed again
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                             limits = Limits(maxdim = 4, cutoff = 1e-15),
+                             measures = "data" => [Z(1), stopper_at(stop_in)])]
+            sim_data = SimData(; name = "done", phases)
+            runTMS(sim_data)
+            @test stop_in[] == 0                          # the stop did happen
+            first = runTMS(sim_data)                      # resumed and completed
+            data = read("done/data", String)
+            again = runTMS(sim_data)
+            @test again.time ≈ first.time
+            @test read("done/data", String) == data
+            @test occursin("Resuming from checkpoint: phase 3", read("done/log", String))
+        end
+    end
+end
+
+@testset "A resume logs the time it resumes from" begin
+    # it logged the time the interrupted phase had started from, 0 here, rather than the time
+    # its last committed sweep had reached
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                             limits = Limits(maxdim = 4, cutoff = 1e-15),
+                             measures = "data" => [Z(1), stopper_at(stop_in)])]
+            sim_data = SimData(; name = "chk", phases)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            runTMS(sim_data)
+            m = match(r"Resuming from checkpoint: phase 2, sweep 2, simulation time (\S+)",
+                      read("chk/log", String))
+            @test !isnothing(m)
+            @test parse(Float64, m[1]) ≈ 0.2
+        end
+    end
+end
+
 @testset "Per sweep schedules" begin
     rs = TensorMixedStates.resume_schedule
     @test rs(1e-8, 3) == 1e-8                       # one value covers every sweep
@@ -704,6 +750,19 @@ end
     @test id([base; Gates(gates = X(1)); Gates(gates = Z(1))]) ≠
           id([base; Gates(gates = Z(1)); Gates(gates = X(1))])
     @test id(base) ≠ id(base[1:1])
+
+    # an anonymous function counts by the variables it captures, not by the name of its type,
+    # which a counter gives: the same program included again in a session named its
+    # functions anew, and its checkpoint was refused as another simulation's. Two copies of
+    # one function are two such names
+    timed(c) = [first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
+                                    evolver = [-im * Z(1)] => [c])]
+    @test id(timed(t -> exp(-t))) == id(timed(t -> exp(-t)))
+    decay1(g) = t -> exp(-g * t)
+    decay2(g) = t -> exp(-g * t)
+    @test id(timed(decay1(1.))) == id(timed(decay2(1.)))
+    # a function with a name counts by it
+    @test id(timed(sin)) ≠ id(timed(cos))
 
     # a State given as is, rather than described, is part of what the simulation computes
     sys = System(2, Qubit())

@@ -25,6 +25,10 @@ For `m` from `s` down to `-s`, written as an integer or a fraction, `"1"`, `"-1/
 - `"Xm"`        : the eigenstate of `Sx` of eigenvalue `m`
 - `"Ym"`        : the eigenstate of `Sy` of eigenvalue `m`
 
+A name gives an eigenvalue, where a number gives a basis state counted from 0, as on any site:
+on `Spin(1)`, `"1"` is ``S_z = 1`` and `1` is ``S_z = 0``, so that `Proj("1")` and `Proj(1)`
+differ.
+
 # Operators
 
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators

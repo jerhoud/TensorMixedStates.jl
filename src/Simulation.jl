@@ -50,8 +50,12 @@ const default_data_format = "%14.8g"
 
 a state with its simulation time and the destinations of its measurements, which `runTMS`
 returns. The first form builds one, `output` being a stream every destination is redirected
-to, as for `runTMS`. The second gives `sim` another state, and possibly another time. Most
-functions that apply to a `State` apply to a `Simulation` too.
+to, as for `runTMS`. The second gives `sim` another state, and possibly another time.
+
+`length`, `maxlinkdim`, `truncate`, `mix`, `weaken`, `apply`, `partial_trace`, `PreMPO`,
+`tdvp`, `approx_W`, `dmrg`, `steady_state` and `set_threading` take a `Simulation` as they take
+a `State`. The measurement functions do not: measure a simulation with `output`, or its state
+with `measure(sim.state, measurements, sim.time)`.
 
 # Fields
 
@@ -134,10 +138,17 @@ one gives that stream.
 In a simulation run by `runTMS` in its directory, the files `runTMS` writes there itself, the
 log, the checkpoint and the markers, cannot be asked for.
 
+It is meant for a phase of your own, see `TensorMixedStates.run_phase`, to write what is not a
+measurement in a file of the simulation: that file is cut back on a resume as the others are,
+where one opened with `open` would get the lines written since the last checkpoint twice.
+Once `runTMS` has returned, the files of the simulation are closed.
+
 # Examples
 
-    io = get_sim_file(sim, "notes.txt")
-    println(io, "converged")
+    function TensorMixedStates.run_phase(sim::Simulation, p::MyPhase)
+        println(get_sim_file(sim, "notes.txt"), "starting at time ", sim.time)
+        return sim
+    end
 """
 function get_sim_file(sim::Simulation, name::Union{AbstractString, Data})
     check_destination(sim, name)

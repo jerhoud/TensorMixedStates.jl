@@ -46,7 +46,8 @@ the description of a simulation, which `runTMS` runs.
 
 A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
 its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
-`max_time` is past, when the file `<name>/stop` appears, or on an interrupt.
+`max_time` is past, when the file `<name>/stop` appears, or on an interrupt. Run with the
+`output` of `runTMS`, it has no directory: only `max_time` stops it, and nothing is written.
 
 # Examples
 
@@ -171,14 +172,15 @@ if it belongs to a simulation with other phases.
 
 With a directory, an interrupt is a clean stop: a checkpoint is written and `runTMS` returns
 instead of killing the program. For that, Ctrl-C raises `InterruptException` during the run,
-a process wide setting put back when `runTMS` returns.
+a process wide setting that is given back the default Julia applies when `runTMS` returns.
 
-`runTMS` is meant to be called once at a time in a process. With a directory, it changes the
-working directory of the process for the duration of the run and sets the Ctrl-C behaviour,
-and a `CreateState` with a `seed` reseeds the global random generator: two simulations run at
-once in the same process, in parallel or one calling the other, would fight over all three.
-Run them in separate processes, or pass `output`. The threads ITensor uses for its
-contractions are not concerned.
+`runTMS` is meant to be called once at a time in a process. It sets the threading of the
+contractions for the whole process, unless its `SimData` has `threading = nothing`, and a
+`CreateState` with a `seed` reseeds the global random generator. With a directory, it also
+changes the working directory of the process and the Ctrl-C behaviour for the duration of the
+run. Two simulations run at once in the same process, in parallel or one calling the other,
+would fight over all of these: run them in separate processes. Passing `output` only spares
+the working directory and the Ctrl-C behaviour.
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)
@@ -235,7 +237,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 # which would empty a file the checkpoint continues
                 restore_outputs!(sim.outputs, k.outputs)
                 c.generation = k.generation
-                log_msg(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.phase_time)")
+                log_msg(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.time)")
                 # the resume point is the last commit from the start, so that an interrupt
                 # before the phase it belongs to has begun writes it back as it was, rather
                 # than the state it holds as the start of that phase
@@ -362,9 +364,11 @@ function log_phase(sim::Simulation, phases::Vector; threading = nothing)
         # still checkpoints what the simulation reached
         commit!(c, sim.outputs, i + 1, 0, sim.time, sim.time, sim.state)
         stop = stop_requested(c)
-        if stop || checkpoint_due(c) || (i == length(phases) && c.interval > 0)
+        if stop || checkpoint_due(c) || (i == length(phases) && (c.interval > 0 || c.generation ≠ 0))
             # the last phase done, a checkpoint records it whether one is due or not, so that
-            # running the simulation again resumes past every phase and does nothing
+            # running the simulation again resumes past every phase and does nothing. Without
+            # periodic checkpoints, only when one is on the disk, left by a stop: the next run
+            # would resume from it and compute the end of the simulation again
             write_checkpoint(c, sim.outputs)
         end
         if stop
