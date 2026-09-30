@@ -83,18 +83,13 @@ using TensorMixedStates
 Julia script names are usually written with a .jl extension. Once you have written your script, you can execute it with
 
 ```sh
-julia my_script.jl
+julia --threads=auto my_script.jl
 ```
 
-The tensor contractions already run on several cores, through BLAS. Starting Julia with
-
-```sh
-julia --gcthreads=4 my_script.jl
-```
-
-on a machine with four cores also runs the garbage collector on four threads, which often
-speeds the run up a little. See [Threads and performance](@ref) for this and the other
-settings.
+or `julia -t auto my_script.jl` for short, which starts Julia with as many threads as the
+machine has. A script calling the functions of TMS directly, rather than through `runTMS`,
+should then start with `set_threading(:dense)`: see [Threads and performance](@ref) for what
+these settings bring. `julia my_script.jl` runs the script too, on a single thread of Julia.
 
 You can also use TMS in the interactive Julia interpreter.
 

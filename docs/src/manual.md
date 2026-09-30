@@ -724,36 +724,65 @@ For more information, see the reference or inline help for each phase, `SimData`
 
 ## Threads and performance
 
-Most of the running time goes into the tensor contractions of ITensors, and a few settings
-decide how they use the cores of the machine:
+Most of the running time goes into the tensor contractions of ITensors. How they use the cores
+of the machine comes down to three choices.
 
-- BLAS, which computes the products of dense matrices, runs on threads of its own, several by
-  default: `julia my_script.jl` already uses several cores;
-- the garbage collector runs on as many threads as Julia has, one by default:
-  `julia --gcthreads=N my_script.jl`, with `N` the number of cores, gives it more, as
-  `julia --threads=N` also does;
-- when the system conserves something its tensors are block sparse, and ITensors can run the
-  products of their blocks in parallel on the threads of Julia, BLAS and Strided, which
-  ITensors uses for the dense permutations, being then on a single thread:
-  `set_threading(:blocks)`, Julia being started with `--threads=N`, and
-  `set_threading(:dense)` to go back. `set_threading(mysystem)` picks the first when the
-  system conserves something, and `SimData(threading = :auto, ...)` does so before each
-  phase;
-- MKL can replace OpenBLAS as the BLAS library, see [BLAS backend](@ref).
+**Starting Julia.** Start it with as many threads as the machine has:
 
-The threads of Julia and of its garbage collector are fixed when Julia starts, and MKL has to
-be loaded before TMS; the other settings can be changed at any time. The `stamp` file of a
-simulation records them all, so that the running times of two runs can be compared.
+```sh
+julia --threads=auto my_script.jl
+```
 
-What they gain depends on the calculation, on the machine and on the library. On a laptop with
-four cores and an Intel processor, for ground state searches and time evolutions of chains at
-bond dimensions from 128 to 768:
+or `julia -t auto my_script.jl` for short; `--threads=4`, or `-t 4`, gives exactly four. The
+garbage collector then runs on as many threads, which speeds up the runs, and they are what
+the `:blocks` mode below runs on. Started without them, Julia still runs the products of dense
+matrices on several cores, BLAS having threads of its own, but everything else on a single
+one. The threads of Julia are fixed when it starts: they cannot be added from within a
+program.
 
-- MKL shortened every run, by 11 to 26 % compared with OpenBLAS on as many threads;
-- four threads for the garbage collector shortened most runs, by up to 11 %;
-- block sparse multithreading, compared with the dense mode on as many threads, shortened the
-  runs conserving a quantity by 0 to 19 % with OpenBLAS, but lengthened some of them by up to
-  31 % with MKL, and lengthened the runs on dense tensors by 20 to 67 %.
+**The BLAS library.** On an Intel processor, MKL, which replaces OpenBLAS for the products of
+dense matrices, is often faster, see [BLAS backend](@ref). This choice is independent of the
+two others.
+
+**The mode.** The `threading` field of `SimData`, or `set_threading`, chooses how the
+contractions use the threads of Julia:
+
+- `:dense`: BLAS runs each product of matrices on several threads, and Strided, which ITensors
+  uses for the permutations of dense tensors, runs on a single one, as ITensors recommends.
+  Julia starts Strided on as many threads as it has itself, where they compete with those of
+  BLAS. `SimData` applies this mode by default; a program calling the functions of TMS directly
+  should start with `set_threading(:dense)`;
+- `:blocks` asks ITensors to run the products of the blocks of block sparse tensors in parallel
+  on the threads of Julia, BLAS running each of them on a single thread. The tensors of a
+  system are block sparse when it conserves something, see [Conserving a quantity](@ref), so
+  this mode is meant for such systems: it is worth trying on them, with OpenBLAS above all;
+- `:auto`, for `SimData` only, chooses before each phase: `:blocks` when the system of the
+  state conserves something, `:dense` otherwise. `set_threading(mysystem)` makes the same
+  choice once.
+
+```julia
+using TensorMixedStates
+set_threading(:dense)          # first thing in a program calling the functions of TMS directly
+
+old = set_threading(:blocks)   # set_threading returns the threading it replaces,
+set_threading(old)             # which it takes back
+
+SimData(name = "my_simulation", threading = :blocks, phases = [...])
+```
+
+The `stamp` file of a simulation records all these settings, so that the running times of two
+runs can be compared.
+
+On a laptop with four cores and an Intel processor, for ground state searches and time
+evolutions of chains at bond dimensions from 64 to 768:
+
+- `--threads=auto`, with the `:dense` mode, shortened every run, by 2 to 14 %;
+- MKL shortened every run by a further 5 to 21 %;
+- leaving Strided on the threads of Julia, rather than on one as `:dense` does, lengthened the
+  runs on dense tensors by 8 to 61 % at bond dimensions up to 256, and by 1 to 3 % at 512;
+- the `:blocks` mode, compared with `:dense` on as many threads, was between 19 % faster and
+  1 % slower on the runs conserving a quantity with OpenBLAS, between 1 % faster and 31 %
+  slower on them with MKL, and 20 to 67 % slower on dense tensors.
 
 The documentations of Julia and of ITensors agree that the way to find the best settings is to
 try them on a few sweeps of your own calculation.

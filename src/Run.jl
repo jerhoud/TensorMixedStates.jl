@@ -38,10 +38,10 @@ the description of a simulation, which `runTMS` runs.
 - `checkpoint_interval`: seconds between two checkpoints (default 0, no periodic checkpoint;
   a stop or an interrupt still writes one, so that the simulation can be resumed)
 - `max_time`: seconds after which the simulation stops cleanly (default `Inf`)
-- `threading`: how the tensor contractions are threaded, see `set_threading`: `:dense`,
-  `:blocks`, or `:auto`, which chooses the mode before each phase from the system of the
-  state (default `nothing`, the settings of the process being left as they are). The
-  settings in force before the run are put back when `runTMS` returns
+- `threading`: how the tensor contractions are threaded, see `set_threading`: `:dense`
+  (default), `:blocks`, `:auto`, which chooses the mode before each phase from the system of
+  the state, or `nothing`, which leaves the settings of the process as they are. The settings
+  in force before the run are put back when `runTMS` returns
 
 A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
 its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
@@ -69,7 +69,7 @@ its own when it finds one. The simulation stops cleanly, writing a checkpoint, w
     data_format::String = default_data_format
     checkpoint_interval::Real = 0
     max_time::Real = Inf
-    threading::Union{Nothing, Symbol} = nothing
+    threading::Union{Nothing, Symbol} = :dense
     phases
     # the phases are flattened once, here, so that everything downstream works on a single
     # list: the phase loop, the position a checkpoint records, the fingerprint that tells
@@ -134,14 +134,16 @@ show(io::IO, s::SimData) =
     )
 
 """
-    threading_stamp()
+    threading_stamp(mode)
 
-the lines of the `stamp` file saying how the run is threaded when it starts, settings of the
-process that its running time depends on, see `threading_settings`.
+the lines of the `stamp` file saying how the run is threaded when it starts: the `threading`
+of its `SimData`, and the settings of the process that its running time depends on, see
+`threading_settings`.
 """
-function threading_stamp()
+function threading_stamp(mode)
     s = threading_settings()
     return """
+        Threading $(repr(mode))
         BLAS $(s.blas_library), $(s.blas) threads
         Julia threads $(s.julia)
         GC threads $(s.gc)
@@ -186,8 +188,13 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         return
     end
     start_dir = pwd()
-    saved_threading = isnothing(sim_data.threading) ? nothing : threading_settings()
+    saved_threading = isnothing(sim_data.threading) ? nothing : save_threading()
     try
+        # a mode that does not depend on the state is set at once, so that the stamp records the
+        # settings the run has
+        if sim_data.threading in (:dense, :blocks)
+            set_threading(sim_data.threading)
+        end
         if live
             mkpath(sim_data.name);
             cd(sim_data.name);
@@ -206,7 +213,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     Julia $VERSION
                     TensorMixedStates $(pkgversion(TensorMixedStates))
                     Date $(now())
-                    """ * threading_stamp())
+                    """ * threading_stamp(sim_data.threading))
             src_path = Base.source_path()
             if !isnothing(src_path) && src_path ≠ ""
                 cp(src_path, "prog.jl"; force = true)
@@ -284,7 +291,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         end
         # process wide as well, and read back before the run
         if !isnothing(saved_threading)
-            restore_threading(saved_threading)
+            set_threading(saved_threading)
         end
     end
 end
@@ -302,7 +309,8 @@ function adapt_threading(sim::Simulation, threading)
         return
     end
     before = threading_settings()
-    after = set_threading(mode)
+    set_threading(mode)
+    after = threading_settings()
     if after != before
         log_msg(sim, "Threading set to :$mode: BLAS threads $(after.blas), Strided threads " *
                      "$(after.strided), block sparse multithreading " *
