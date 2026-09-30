@@ -188,7 +188,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         return
     end
     start_dir = pwd()
-    saved_threading = isnothing(sim_data.threading) ? nothing : save_threading()
+    saved_threading = isnothing(sim_data.threading) ? nothing : ThreadingState()
     try
         # a mode that does not depend on the state is set at once, so that the stamp records the
         # settings the run has

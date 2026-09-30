@@ -770,6 +770,11 @@ set_threading(old)             # which it takes back
 SimData(name = "my_simulation", threading = :blocks, phases = [...])
 ```
 
+The threading `set_threading` returns is a `ThreadingState`, which gives the threads of BLAS and
+of Strided and whether block sparse multithreading is on. One can be built by hand to try other
+settings: `set_threading(ThreadingState(blas = 2))` puts BLAS on two threads and leaves the rest
+as it is.
+
 The `stamp` file of a simulation records all these settings, so that the running times of two
 runs can be compared.
 

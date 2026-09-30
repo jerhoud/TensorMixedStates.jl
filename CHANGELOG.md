@@ -16,9 +16,9 @@ the reference article.
   threads of BLAS, of Julia, of its garbage collector and of Strided, and whether ITensors
   multithreads block sparse contractions.
 
-- `set_threading` sets how ITensors threads the contractions, in a dense mode or in a block
-  sparse mode suited to a system that conserves something, and `threading_settings` reads
-  these settings. `SimData` has a `threading` field, `:dense` by default, `:auto` choosing the
+- `set_threading` sets how ITensors threads the contractions, in a dense mode, in a block
+  sparse mode suited to a system that conserves something, or as a `ThreadingState` gives
+  it, returning the threading it replaces, and `threading_settings` reads these settings. `SimData` has a `threading` field, `:dense` by default, `:auto` choosing the
   mode before each phase from the system of the state.
 
 ### Changed

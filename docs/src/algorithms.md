@@ -91,5 +91,6 @@ How the contractions of all these algorithms use the cores of the machine, see
 
 ```@docs
 set_threading
+ThreadingState
 threading_settings
 ```
