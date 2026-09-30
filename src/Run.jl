@@ -4,6 +4,19 @@
 export runTMS, SimData
 
 """
+    check_threading(threading)
+
+refuse a `threading` of `SimData` other than `nothing`, `:auto`, `:dense` and `:blocks` when
+the simulation is described, rather than when its phases start.
+"""
+function check_threading(threading)
+    if !(threading in (nothing, :auto, :dense, :blocks))
+        error("unknown threading $(repr(threading)), expected :auto, :dense, :blocks or nothing")
+    end
+    return threading
+end
+
+"""
     SimData(; name = "simulation", phases, options...)
 
 the description of a simulation, which `runTMS` runs.
@@ -25,6 +38,10 @@ the description of a simulation, which `runTMS` runs.
 - `checkpoint_interval`: seconds between two checkpoints (default 0, no periodic checkpoint;
   a stop or an interrupt still writes one, so that the simulation can be resumed)
 - `max_time`: seconds after which the simulation stops cleanly (default `Inf`)
+- `threading`: how the tensor contractions are threaded, see `set_threading`: `:dense`,
+  `:blocks`, or `:auto`, which chooses the mode before each phase from the system of the
+  state (default `nothing`, the settings of the process being left as they are). The
+  settings in force before the run are put back when `runTMS` returns
 
 A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
 its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
@@ -52,15 +69,17 @@ its own when it finds one. The simulation stops cleanly, writing a checkpoint, w
     data_format::String = default_data_format
     checkpoint_interval::Real = 0
     max_time::Real = Inf
+    threading::Union{Nothing, Symbol} = nothing
     phases
     # the phases are flattened once, here, so that everything downstream works on a single
     # list: the phase loop, the position a checkpoint records, the fingerprint that tells
     # one simulation from another. None of them has to remember to do it, and none of them
     # can disagree on what the phases of a simulation are.
     SimData(description, name, time_start, final_measures, time_format, data_format,
-            checkpoint_interval, max_time, phases) =
+            checkpoint_interval, max_time, threading, phases) =
         new(description, name, time_start, final_measures, time_format, data_format,
-            checkpoint_interval, max_time, check_first_phase(flatten_phases(phases)))
+            checkpoint_interval, max_time, check_threading(threading),
+            check_first_phase(flatten_phases(phases)))
 end
 
 """
@@ -109,6 +128,7 @@ show(io::IO, s::SimData) =
         data_format = $(repr(s.data_format)),
         checkpoint_interval = $(s.checkpoint_interval),
         max_time = $(s.max_time),
+        threading = $(repr(s.threading)),
         phases =
     $(s.phases))"""
     )
@@ -116,19 +136,17 @@ show(io::IO, s::SimData) =
 """
     threading_stamp()
 
-the lines of the `stamp` file saying how the run is threaded, settings of the process that its
-running time depends on: the BLAS library and its threads, for the dense contractions, the
-threads of Julia and of Strided, for the dense permutations, and whether ITensors
-multithreads block sparse contractions.
+the lines of the `stamp` file saying how the run is threaded when it starts, settings of the
+process that its running time depends on, see `threading_settings`.
 """
 function threading_stamp()
-    blas = join((basename(l.libname) for l in BLAS.get_config().loaded_libs), ", ")
-    blocks = ITensors.using_threaded_blocksparse() ? "on" : "off"
+    s = threading_settings()
     return """
-        BLAS $blas, $(BLAS.get_num_threads()) threads
-        Julia threads $(Threads.nthreads())
-        Strided threads $(ITensors.NDTensors.Strided.get_num_threads())
-        Block sparse multithreading $blocks
+        BLAS $(s.blas_library), $(s.blas) threads
+        Julia threads $(s.julia)
+        GC threads $(s.gc)
+        Strided threads $(s.strided)
+        Block sparse multithreading $(s.blocksparse ? "on" : "off")
         CPU threads $(Sys.CPU_THREADS)
         """
 end
@@ -168,6 +186,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         return
     end
     start_dir = pwd()
+    saved_threading = isnothing(sim_data.threading) ? nothing : threading_settings()
     try
         if live
             mkpath(sim_data.name);
@@ -263,19 +282,45 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             # the REPL and in a session started with `-i`
             Base.exit_on_sigint(!isinteractive())
         end
+        # process wide as well, and read back before the run
+        if !isnothing(saved_threading)
+            restore_threading(saved_threading)
+        end
     end
 end
 
 """
-    log_phase(sim, phases::Vector)
+    adapt_threading(sim, threading)
+
+set the `threading` of a `SimData` before a phase: `:dense` or `:blocks` as asked, or for
+`:auto` the mode suited to the system of the state, once there is one. A change is logged.
+"""
+function adapt_threading(sim::Simulation, threading)
+    mode = threading == :auto ?
+        (sim.state isa State ? threading_mode(sim.state.system) : nothing) : threading
+    if isnothing(mode)
+        return
+    end
+    before = threading_settings()
+    after = set_threading(mode)
+    if after != before
+        log_msg(sim, "Threading set to :$mode: BLAS threads $(after.blas), Strided threads " *
+                     "$(after.strided), block sparse multithreading " *
+                     (after.blocksparse ? "on" : "off"))
+    end
+end
+
+"""
+    log_phase(sim, phases::Vector; threading)
     log_phase(sim, phase)
 
 run a list of phases, from the one a resumed run starts at, committing each boundary and
-writing a checkpoint when one is due or a stop is asked for, which ends the loop. A single
-phase is logged, given its `time_start`, run by `run_phase` and measured by its
-`final_measures`, unless it stopped for a checkpoint.
+writing a checkpoint when one is due or a stop is asked for, which ends the loop, and setting
+the `threading` of the `SimData` before each phase. A single phase is logged, given its
+`time_start`, run by `run_phase` and measured by its `final_measures`, unless it stopped for
+a checkpoint.
 """
-function log_phase(sim::Simulation, phases::Vector)
+function log_phase(sim::Simulation, phases::Vector; threading = nothing)
     c = sim.checkpoint
     r = c.resume
     # a resumed run starts again from the state and the time of its checkpoint, past the phases
@@ -292,6 +337,7 @@ function log_phase(sim::Simulation, phases::Vector)
     for i in c.last.phase:length(phases)
         # a phase commits its sweeps only once it has read its resume point
         c.sweeps = false
+        adapt_threading(sim, threading)
         sim = log_phase(sim, phases[i])
         # consumed by the phase it belongs to, whether it read it or not
         c.resume = nothing
@@ -377,4 +423,4 @@ function log_phase(sim::Simulation, phase)
 end
 
 run_phase(sim::Simulation, sd::SimData) =
-    log_phase(sim, sd.phases)
+    log_phase(sim, sd.phases; sd.threading)

@@ -721,3 +721,39 @@ df = data_to_frame(mysim.data["mydata"])
 
 
 For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
+
+## Threads and performance
+
+Most of the running time goes into the tensor contractions of ITensors, and a few settings
+decide how they use the cores of the machine:
+
+- BLAS, which computes the products of dense matrices, runs on threads of its own, several by
+  default: `julia my_script.jl` already uses several cores;
+- the garbage collector runs on as many threads as Julia has, one by default:
+  `julia --gcthreads=N my_script.jl`, with `N` the number of cores, gives it more, as
+  `julia --threads=N` also does;
+- when the system conserves something its tensors are block sparse, and ITensors can run the
+  products of their blocks in parallel on the threads of Julia, BLAS and Strided, which
+  ITensors uses for the dense permutations, being then on a single thread:
+  `set_threading(:blocks)`, Julia being started with `--threads=N`, and
+  `set_threading(:dense)` to go back. `set_threading(mysystem)` picks the first when the
+  system conserves something, and `SimData(threading = :auto, ...)` does so before each
+  phase;
+- MKL can replace OpenBLAS as the BLAS library, see [BLAS backend](@ref).
+
+The threads of Julia and of its garbage collector are fixed when Julia starts, and MKL has to
+be loaded before TMS; the other settings can be changed at any time. The `stamp` file of a
+simulation records them all, so that the running times of two runs can be compared.
+
+What they gain depends on the calculation, on the machine and on the library. On a laptop with
+four cores and an Intel processor, for ground state searches and time evolutions of chains at
+bond dimensions from 128 to 768:
+
+- MKL shortened every run, by 11 to 26 % compared with OpenBLAS on as many threads;
+- four threads for the garbage collector shortened most runs, by up to 11 %;
+- block sparse multithreading, compared with the dense mode on as many threads, shortened the
+  runs conserving a quantity by 0 to 19 % with OpenBLAS, but lengthened some of them by up to
+  31 % with MKL, and lengthened the runs on dense tensors by 20 to 67 %.
+
+The documentations of Julia and of ITensors agree that the way to find the best settings is to
+try them on a few sweeps of your own calculation.

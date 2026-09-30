@@ -83,3 +83,13 @@ ApproxWObserver
 ```@docs
 apply
 ```
+
+## Threading
+
+How the contractions of all these algorithms use the cores of the machine, see
+[Threads and performance](@ref).
+
+```@docs
+set_threading
+threading_settings
+```

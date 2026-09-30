@@ -13,8 +13,13 @@ the reference article.
 ### Added
 
 - The `stamp` file of a simulation records the BLAS library and how the run is threaded: the
-  threads of BLAS, of Julia and of Strided, and whether ITensors multithreads block sparse
-  contractions.
+  threads of BLAS, of Julia, of its garbage collector and of Strided, and whether ITensors
+  multithreads block sparse contractions.
+
+- `set_threading` sets how ITensors threads the contractions, in a dense mode or in a block
+  sparse mode suited to a system that conserves something, and `threading_settings` reads
+  these settings. `SimData` has a `threading` field, `:auto` choosing the mode before each
+  phase from the system of the state.
 
 ### Changed
 

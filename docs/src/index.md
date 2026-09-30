@@ -86,14 +86,15 @@ Julia script names are usually written with a .jl extension. Once you have writt
 julia my_script.jl
 ```
 
-to run it on a single processor, or
+The tensor contractions already run on several cores, through BLAS. Starting Julia with
 
 ```sh
-julia --threads=4 my_script.jl
-julia --threads=auto my_script.jl
+julia --gcthreads=4 my_script.jl
 ```
 
-to use multi-threading (see the Julia documentation for more details on multi-threading).
+on a machine with four cores also runs the garbage collector on four threads, which often
+speeds the run up a little. See [Threads and performance](@ref) for this and the other
+settings.
 
 You can also use TMS in the interactive Julia interpreter.
 
