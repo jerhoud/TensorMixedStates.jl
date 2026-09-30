@@ -779,15 +779,17 @@ The `stamp` file of a simulation records all these settings, so that the running
 runs can be compared.
 
 On a laptop with four cores and an Intel processor, for ground state searches and time
-evolutions of chains at bond dimensions from 64 to 768:
+evolutions of chains at bond dimensions from 64 to 768, the running times changed as follows:
 
-- `--threads=auto`, with the `:dense` mode, shortened every run, by 2 to 14 %;
-- MKL shortened every run by a further 5 to 21 %;
-- leaving Strided on the threads of Julia, rather than on one as `:dense` does, lengthened the
-  runs on dense tensors by 8 to 61 % at bond dimensions up to 256, and by 1 to 3 % at 512;
-- the `:blocks` mode, compared with `:dense` on as many threads, was between 19 % faster and
-  1 % slower on the runs conserving a quantity with OpenBLAS, between 1 % faster and 31 %
-  slower on them with MKL, and 20 to 67 % slower on dense tensors.
+| | dense tensors | block sparse tensors |
+|:---|:---|:---|
+| `--threads=auto` with `:dense`, rather than `julia` alone | −2 to −11 % | −8 to −14 % |
+| MKL rather than OpenBLAS | −6 to −21 % | −5 to −14 % |
+| Strided left on the threads of Julia, rather than on one as `:dense` puts it | +1 to +61 % | no effect |
+| `:blocks` rather than `:dense`, with OpenBLAS | +20 to +65 % | −19 to +1 % |
+| `:blocks` rather than `:dense`, with MKL | +35 to +67 % | −1 to +31 % |
+
+Strided weighs most at moderate bond dimensions, and hardly at all from 512 on.
 
 The documentations of Julia and of ITensors agree that the way to find the best settings is to
 try them on a few sweeps of your own calculation.
