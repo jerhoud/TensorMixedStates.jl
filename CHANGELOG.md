@@ -10,18 +10,21 @@ the reference article.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.6.0] - 2026-09-30
+
+This release adds exported names, among them `set_threading`, `run_steps` and
+`close_sim_files`, which is why it is a minor version rather than a patch.
+
 ### Added
 
-- The `stamp` file of a simulation records how the run is threaded: the `threading` of its
-  `SimData`, the BLAS library, the threads of BLAS, of Julia, of its garbage collector and of
-  Strided, and whether ITensors multithreads block sparse contractions.
+- `set_threading` and `threading_settings`, with `ThreadingState`, set and read how ITensors
+  threads the contractions, in a dense mode or in a block sparse one for systems that conserve
+  something, and `SimData` has a `threading` field: `:dense`, the default, `:blocks`, `:auto`,
+  which chooses before each phase, or `nothing`.
 
-- `set_threading` sets how ITensors threads the contractions, in a dense mode, in a block
-  sparse mode for systems that conserve something, or as a `ThreadingState` gives it, and
-  returns the threading it replaces; `threading_settings` reads these settings.
-
-- `SimData` has a `threading` field: `:dense`, the default, `:blocks`, `:auto`, which chooses
-  before each phase from the system of the state, or `nothing`.
+- The `stamp` file of a simulation records how the run is threaded.
 
 - Phases of one's own are supported: `run_steps` runs one written as a loop of steps, which is
   checkpointed, stopped and resumed between two steps, and `resume_step` gives one driving a
@@ -31,52 +34,39 @@ the reference article.
 
 ### Changed
 
-- `runTMS` runs a simulation in the dense mode unless its `SimData` asks otherwise: Strided,
-  which Julia starts on as many threads as it has, runs on a single one, as ITensors
-  recommends, and the threading found is put back when `runTMS` returns.
+- `runTMS` runs a simulation in the dense mode unless its `SimData` asks otherwise, and puts
+  the threading it found back when it returns.
 
-- The identity on density matrices prints as `Gate(Id)` rather than `Left(Id)`, as it is
-  written in a noisy gate such as `0.9Gate(Id) + 0.1Gate(X)`.
+- The quantities a site conserves are kept sorted by name, as ITensors sorts the components of
+  a charge: two sites conserving the same quantities are equal whatever the order of their
+  declaration. A checkpoint written by an earlier version for a site declaring several
+  quantities in another order is refused as belonging to another simulation.
 
 - `resume_sweeps!(sim.checkpoint)`, which was not exported, is replaced by `resume_step(sim)`.
 
-- `Limits` prints as the call that builds it, without the fields left at their default:
-  `Limits(cutoff = 1.0e-10, maxdim = 50)`, `Limits()`.
+- The identity on density matrices prints as `Gate(Id)`, and `Limits` as the call that builds
+  it.
 
-- The quantities a site conserves are kept sorted by name, as ITensors sorts the components
-  of a charge: two sites conserving the same quantities are equal whatever the order of their
-  declaration, and a site and `symmetries` print them in that order. A checkpoint written by
-  an earlier version for a site declaring several quantities in another order is refused as
-  belonging to another simulation.
+- The documentation is reviewed: statements the code contradicted are corrected, pitfalls and
+  defaults are documented, and the reference of the high level interface is reorganized.
 
 ### Fixed
 
-- Once a simulation stopped and resumed has completed, running it again does nothing, as with
-  periodic checkpoints. Without them, the checkpoint the stop wrote stayed on the disk, and the
-  next run resumed from it, cutting the output files back to the stop and computing their end
-  again.
+- A simulation stopped, resumed and completed does nothing when run again, where without
+  periodic checkpoints it resumed from the checkpoint of the stop.
 
-- The log of a resumed simulation gives the simulation time it resumes from, where it gave the
-  time the interrupted phase had started from.
+- The log of a resumed simulation gives the simulation time it resumes from.
 
-- `mutual_info_renyi2` and `MutualInfoRenyi2` take a cut from 0 to the number of sites in both
-  representations, where a cut at 0 failed on a pure state, and refuse any other, where a
-  negative cut gave 0 on a mixed state.
+- `mutual_info_renyi2`, `renyi2`, `MutualInfoRenyi2` and `SubRenyi2` take a cut from 0 to the
+  number of sites, `SubRenyi2(k)` standing for the sites `1:k`, where it failed when measured,
+  and give 0 for empty positions, given in a vector of any element type.
 
-- `SubRenyi2(k)` and `renyi2(state, k)` take the sites `1:k`, as `MutualInfoRenyi2(k)` does,
-  and read it off the entanglement spectrum on a pure state, where `SubRenyi2(k)` was
-  accepted and failed when measured. Empty positions give 0, where they raised an error, and
-  positions in a vector of any element type, as `[]`, are taken as integers, for
-  `mutual_info_renyi2` as well.
+- `weaken` gives a state or a system back unchanged when the target names what it conserves in
+  another order, where it built a new system with new indices.
 
-- `weaken` gives a state or a system back unchanged when the target names what it conserves
-  in another order, where it built a new system with new indices.
-
-- A simulation whose phases hold an anonymous function, such as a time dependent coefficient
-  or the function of a `StateFunc`, resumes when its program is included again in the same
-  Julia session, where its checkpoint was refused as belonging to another simulation. Such a
-  function counts by the names and types of the variables it captures rather than by the name
-  of its type, which a counter gives. A checkpoint written by an earlier version for such phases is refused once.
+- A simulation whose phases hold an anonymous function resumes when its program is included
+  again in the same Julia session, where its checkpoint was refused. A checkpoint written by an
+  earlier version for such phases is refused once.
 
 ## [1.5.0] - 2026-09-29
 
