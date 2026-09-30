@@ -152,8 +152,8 @@ nothing depends on how phases are printed.
 Functions are a blind spot: their bodies are never hashed. A function bound to its name in
 its module counts by that name, any other, anonymous or local, by the names and types of the
 variables it captures, and not by the name of its type, which a counter gives and which
-changes when the program is included again. So the coefficients of a time dependent evolver or the bodies of two
-`StateFunc` cannot be told apart.
+changes when the program is included again. So the coefficients of a time dependent evolver
+or the bodies of two `StateFunc` cannot be told apart.
 
 ITensor indices are left out, since they carry an identity drawn afresh in every session: a
 `System` is what its sites are.

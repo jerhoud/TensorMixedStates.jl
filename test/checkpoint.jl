@@ -642,6 +642,20 @@ end
     end
 end
 
+# a loop of one's own whose steps each run tdvp with the observer of the package
+Base.@kwdef struct Evolutions
+    name::String = "evolutions"
+    time_start = nothing
+    final_measures = []
+    measures = []
+end
+
+TensorMixedStates.run_phase(sim::Simulation, p::Evolutions) =
+    run_steps(sim, 2) do sim, k
+        tdvp(-im * X(1), 0.2, sim; nsweeps = 2, limits = Limits(maxdim = 4, cutoff = 1e-15),
+             observer! = TdvpObserver(sim, p.measures, 1))
+    end
+
 @testset "A loop of one's own resumes after its last step" begin
     # run_steps commits each step once it is measured: a stop between two steps resumes after
     # the last one, from the state and the simulation time it had reached
@@ -668,6 +682,30 @@ end
             @test run_steps((s, k) -> Simulation(s, s.state, s.time + 1), Simulation(ref.state), 3).time ≈ 3
             # a step has to hand back the simulation
             @test_throws "has to return the simulation" run_steps((s, k) -> s.state, Simulation(ref.state), 1)
+        end
+    end
+end
+
+@testset "A solver within a step of one's own" begin
+    # the sweeps of a solver run within a step were committed as steps of the phase, and a stop
+    # falling in the middle of the solver committed the unfinished step: the resume went on
+    # after it, from a state half evolved
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolutions(measures = "data" => [Z(1), stopper_at(stop_in)])]
+            ref = runTMS(SimData(; name = "ref", phases))
+            # the third measurement is the first sweep of the second step
+            stop_in[] = 3
+            sim_data = SimData(; name = "chk", phases)
+            stopped = runTMS(sim_data)
+            @test stop_in[] == 0
+            @test stopped.time ≈ 0.2                      # the last step done, the first
+            sim = runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+            @test sim.time ≈ ref.time ≈ 0.4
+            @test real(expect(sim.state, Z(1))) ≈ real(expect(ref.state, Z(1)))
         end
     end
 end

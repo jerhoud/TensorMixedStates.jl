@@ -18,9 +18,9 @@ otherwise, see `RealValue`.
 
 # Examples
 
-    Trace = StateFunc("Trace", trace)
-    measure(state, Trace)
-    measures = "data.dat" => Trace
+    halftrace = StateFunc("HalfTrace", st -> trace(st) / 2)
+    measure(state, halftrace)
+    measures = "data.dat" => halftrace
 """
 struct StateFunc
     name::String
@@ -35,11 +35,13 @@ show(io::IO, s::StateFunc) =
     TimeFunc(name, obs)
 
 a measurement given by a function of the simulation time, or by a constant, written under
-`name`. `measure` builds one for a number, a string or a function given as a measurement.
+`name`. `measure` builds one for a number or a function given as a measurement, and for a
+string a label with no value.
 
-Building it yourself gives it a name, which matters as soon as there are two functions: an
-anonymous one is named `"func"`, and two measurements of one set may not share a name, so
-`t -> sin(t)` and `t -> cos(t)` together are refused.
+Building it yourself gives it a name, which matters as soon as there are two functions: a
+function given as it is, named or anonymous, is named `"func"`, and two measurements of one set
+may not share a name, so `t -> sin(t)` and `t -> cos(t)`, or `sin` and `cos`, together are
+refused.
 
 # Examples
 
@@ -635,7 +637,9 @@ Fidelity(ref::State) = StateFunc("Fidelity", st -> fidelity(st, reference_on(st,
 a state function measuring the inner product with the reference state `ref`, that is
 ``\\langle ref | \\psi \\rangle`` on a pure representation, see `inner`. Unlike `Fidelity`
 it is not normalised, and it is declared `ComplexValue`, so it is written in two columns.
-`ref` is put on the system of the measured state, as for `Fidelity`.
+`ref` is put on the system of the measured state, as for `Fidelity`, and must be in its
+representation: on a mixed one the product is ``\\mathrm{tr}(ref^\\dagger \\rho)``, and a
+reference of the other representation is refused, at the first measurement.
 
 # Examples
 

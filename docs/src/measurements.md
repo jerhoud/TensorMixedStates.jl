@@ -77,7 +77,8 @@ measures = "sweeps.dat" => :sweep
 ```
 
 `:sweep` is the sweep number and is available in every phase that sweeps, that is `Evolve`,
-`GroundState` and `SteadyState`. `:energy` is the current energy and is available in
+`GroundState` and `SteadyState`, and in a phase of your own that passes it to `output`, as
+`output(sim, measures; sweep = k)`. `:energy` is the current energy and is available in
 `GroundState` and `SteadyState`, where it is the value dmrg minimises, zero at the steady
 state. Asking for a symbol that the running algorithm does not provide is not an error: the
 measurement produces an empty value, so `:energy` in an `Evolve` phase writes its name and
@@ -86,13 +87,14 @@ the time with no value in a file, and empty values in a json file or a `Data` ob
 Checks can be performed (useful for coherence tests)
 
 ```julia
-measure(mystate, Check(name, obs1, obs2))      # returns 3 values obs1, obs2 and |obs2 - obs1|
-measure(mystate, Check(name, obs1, obs2, tol)) # if |obs2 - obs1|>tol throw an error
-measure(mystate, Check(name, obs1, obs2), t)
+measure(mystate, Check("purity", Purity, 1))            # the two values and their distance
+measure(mystate, Check("purity", Purity, 1, 1e-8))      # an error if the distance is above 1e-8
+measure(mystate, Check("cos", X(1), t -> cos(2t)), 0.3) # against a function of time, at t = 0.3
 ```
 
-In `Check`, obs may also be constants, vectors or functions of time, like `t -> sin(t)`, in which
-case the simulation time must be given to `measure` as its third argument.
+The two measurements compared may be operators, state functions, constants, vectors or
+functions of time, like `t -> cos(2t)`, in which case the simulation time must be given to
+`measure` as its third argument.
 
 ## Real, imaginary and complex values
 

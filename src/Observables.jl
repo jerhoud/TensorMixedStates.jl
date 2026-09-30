@@ -477,23 +477,37 @@ representation.
 
 Given positions, that of the state reduced to those sites, which on a pure state measures how
 much they are entangled with the rest. A pure state is then mixed first, which is much more
-expensive, since a partial trace needs a density matrix. A cut stands for the sites `1:cut`,
-from 0 to the number of sites; on a pure state it is read off the entanglement spectrum, as
-cheap as `entanglement_entropy`.
+expensive, since a partial trace needs a density matrix. Empty positions give 0, as the cut
+0 does. A cut stands for the sites `1:cut`, from 0 to the number of sites; on a pure state it
+is read off the entanglement spectrum, as cheap as `entanglement_entropy`.
 """
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))
 
 # a number read off a partial trace gives nothing away, so unlike `partial_trace` itself this
-# goes through the weak form of a strongly conserving state
-renyi2(state::State{Mixed}, a::AbstractVector{Int}) =
-    renyi2(partial_trace(weak_form(state), a; keepers = true))
+# goes through the weak form of a strongly conserving state. No site: the state reduced to
+# nothing is its trace, a number, which has no entropy, where `partial_trace` refuses to give
+# a state of no site
+function renyi2(state::State{Mixed}, a::AbstractVector{Int})
+    if isempty(a)
+        return 0.0
+    end
+    return renyi2(partial_trace(weak_form(state), a; keepers = true))
+end
 
 # a subsystem of a pure state is not pure, so this is an entanglement measure rather than
 # 0. There is no cheap route for an arbitrary subset, the same way mutual_info_renyi2 has
 # none: a partial trace needs a density matrix.
-renyi2(state::State{Pure}, a::AbstractVector{Int}) =
-    renyi2(mix(state), a)
+function renyi2(state::State{Pure}, a::AbstractVector{Int})
+    if isempty(a)
+        return 0.0
+    end
+    return renyi2(mix(state), a)
+end
+
+# positions given in a vector of another element type, `[]` or `Any[1, 3]`, are taken as the
+# integers they are, rather than met with no method at the first measurement
+renyi2(state::State, a::AbstractVector) = renyi2(state, Vector{Int}(a))
 
 """
     unroll(x)
@@ -1146,6 +1160,9 @@ end
 # partial_trace needs a density matrix, there is no cheap route for an arbitrary subset
 mutual_info_renyi2(state::State{Pure}, a::AbstractVector{Int}) =
     mutual_info_renyi2(mix(state), a)
+
+# as for `renyi2`, positions in a vector of another element type are taken as integers
+mutual_info_renyi2(state::State, a::AbstractVector) = mutual_info_renyi2(state, Vector{Int}(a))
 
 
 

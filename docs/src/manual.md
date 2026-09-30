@@ -130,7 +130,7 @@ All of this is described in [Conserving a quantity](@ref).
 
 ## Limits
 
-TMS uses Matrix Product States to represent quantum states internally. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on singular values. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
+TMS uses Matrix Product States to represent quantum states internally. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on the truncation error, the weight of the singular values discarded. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
 
 ```@example manual
 lim = Limits(cutoff = 1e-10, maxdim = 50)
@@ -184,9 +184,9 @@ some sixty lowercase names, among them `state`, `output`, `measure`, `trace`, `d
 `matrix`, `tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
 of your program shadows the function for the rest of the file, and if you happen to have
 used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
-`cannot assign a value to imported variable`. There is no such issue inside a
-function, where `state = ...` is an ordinary local variable. This manual prefixes its own variables
-with `my`, as in `mystate` and `myop`, which is one way of staying clear.
+`cannot assign a value to imported variable`. There is no such issue inside a function,
+where `state = ...` is an ordinary local variable. This manual prefixes its own variables with
+`my`, as in `mystate` and `myop`, which is one way of staying clear.
 
 The operator system is very rich and flexible. For example, if you want to use this Hamiltonian
 
@@ -371,8 +371,8 @@ An evolver may also depend on time, see [Time dependent evolvers](@ref).
 The steady state of an open system is computed by `steady_state`, from a mixed state to start
 from, by dmrg on ``L^\dagger L``. It returns the "energy" dmrg reaches, ``\|L \rho\|^2`` for
 ``\rho`` of unit Hilbert-Schmidt norm, which is zero for a steady state, and the state,
-normalized to trace one. Qubits decaying toward down
-at rate 1 and pumped toward up at rate 0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
+normalized to trace one. Qubits decaying toward down at rate 1 and pumped toward up at rate
+0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
 
 ```@example manual
 value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for i in 1:4),
@@ -495,8 +495,8 @@ runTMS(SimData(
 ))
 ```
 
-The magnetization on the six sites and the purity, after the first time step, `Evolve`
-measuring after each step, and at the end of the run:
+The magnetization on the six sites and the purity after the first time step and at the end
+of the run, `Evolve` measuring after each step:
 
 ```
 Z        0.1    0.94098941    0.94117682   0.94117682   0.94117682   0.94117682    0.94098941
@@ -544,9 +544,9 @@ runTMS(sim_data(40, 1., 0.05))
 
 ### Output
 
-`runTMS` creates a directory named after the `name` field of the `SimData` object, runs the
-phases in it, so that a relative file name, of a destination or of `SaveState` and
-`LoadState`, is taken there, and puts the output files there, in particular:
+`runTMS` creates a directory named after the `name` field of the `SimData` object and runs
+the phases in it: a relative file name, of a destination or of `SaveState` and `LoadState`, is
+taken there. The directory holds in particular:
 
 - `log`: the progression of the computation;
 - `prog.jl`: a copy of the script;
@@ -582,8 +582,8 @@ SimData(
 checkpoints: a stop, from `max_time` or the `stop` file, or an interrupt, still writes one, so
 that the simulation can be resumed. `max_time` is a wall clock budget: once it is past, the simulation
 writes a checkpoint and returns instead of carrying on. Set it comfortably below the limit
-of your batch job, since a checkpoint is only taken between two sweeps: a sweep that lasts
-ten minutes delays the stop by up to ten minutes.
+of your batch job, since a checkpoint is only taken between two sweeps, two steps or two
+phases: a sweep that lasts ten minutes delays the stop by up to ten minutes.
 
 A checkpoint is written in the simulation directory, the state to `checkpoint-1.h5` or
 `checkpoint-2.h5` and the rest to `checkpoint.json`, which names the state file. The state
@@ -649,9 +649,10 @@ it by default.
 
 #### What can be resumed inside a phase
 
-`Evolve`, `GroundState` and `SteadyState` are resumed at the sweep they reached. The other
-phases are short enough to be replayed, and a checkpoint is taken between phases whenever
-one is due.
+`Evolve`, `GroundState` and `SteadyState` are resumed at the sweep they reached, and a phase
+of your own written with `run_steps` at the step it reached, see [Phases of one's own](@ref own-phases).
+The other phases are short enough to be replayed, and a checkpoint is taken between phases
+whenever one is due.
 
 The exception is `Gates`, which hands its whole list of gates to the tensor network library
 in one go and therefore cannot be cut in the middle. A deep circuit is better written as
@@ -690,7 +691,7 @@ The possible measurements are described on the [Measurements](measurements.md) p
 
 A complex value takes two columns in a file, its real part then its imaginary part, a json
 file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
-values are complex is described in the measurements section.
+values are complex is described in [Real, imaginary and complex values](@ref).
 
 A json file and a `Data` object hold, for each measurement, the lists `"times"`, `"data"` and
 `"events"`: the time of each value, the value, and its event, the number of the measurement
@@ -709,7 +710,7 @@ df = data_to_frame(mysim.data["mydata"])
 
 For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
 
-### Phases of one's own
+### [Phases of one's own](@id own-phases)
 
 A phase of your own is a struct with the three fields every phase has, `name`, `time_start`
 and `final_measures`, and a method of `TensorMixedStates.run_phase` for it, which returns the
@@ -732,7 +733,7 @@ TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
     run_steps(sim, p.nkicks) do sim, k
         sim = apply(exp(-0.3im * X)(1), sim)                # the kick
         sim = Simulation(sim, sim.state, sim.time + 0.1)    # and the time it takes
-        output(sim, p.measures)
+        output(sim, p.measures; sweep = k)                  # k for the :sweep measurement
         return sim
     end
 
@@ -760,14 +761,14 @@ julia --threads=auto my_script.jl
 
 or `julia -t auto my_script.jl` for short; `--threads=4`, or `-t 4`, gives exactly four. The
 garbage collector then runs on as many threads from Julia 1.12 on, and on half as many
-before, which speeds up the runs, and they are what the `:blocks` mode below runs on. Started without them, Julia still runs the products of dense
-matrices on several cores, BLAS having threads of its own, but everything else on a single
-one. The threads of Julia are fixed when it starts: they cannot be added from within a
-program.
+before, which speeds up the runs, and they are what the `:blocks` mode below runs on. Started
+without them, Julia still runs the products of dense matrices on several cores, BLAS having
+threads of its own, but everything else on a single one. The threads of Julia are fixed when
+it starts: they cannot be added from within a program.
 
 **The BLAS library.** On `x86_64` machines running Linux or Windows, MKL, which replaces
-OpenBLAS for the products of dense matrices, is often faster, see [BLAS backend](@ref). This choice is independent of the
-two others.
+OpenBLAS for the products of dense matrices, is often faster, see [BLAS backend](@ref). This
+choice is independent of the two others.
 
 **The mode.** The `threading` field of `SimData`, or `set_threading`, chooses how the
 contractions use the threads of Julia:

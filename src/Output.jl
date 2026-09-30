@@ -4,11 +4,13 @@
 export output, log_msg
 
 """
-    output(::Simulation, destination => measurements)
-    output(::Simulation, [ destination1 => measurements1, ... ])
+    output(::Simulation, destination => measurements; sweep, energy)
+    output(::Simulation, [ destination1 => measurements1, ... ]; sweep, energy)
 
 compute the given measurements on a simulation, at its time and in a single call of
-`measure`, and write them to their destinations. A destination is a name, read as
+`measure`, and write them to their destinations. The keyword arguments give their values to
+the `Symbol` measurements, `:sweep` and `:energy`, as for `measure`: the observers of the
+solvers pass them, and a step of `run_steps` passes `sweep = k`. A destination is a name, read as
 `get_sim_file` reads it, or a `Data(name)`; the measurements are anything `measure` takes.
 
 A text file takes one line per measurement, its name, the time and its values separated by
@@ -46,7 +48,9 @@ end
     log_msg(::Simulation, text)
 
 write the given line to the `log` file of the simulation, or to the stream its output is
-redirected to, flushed at once.
+redirected to, flushed at once. A `Simulation` built by hand without `output` has its log in a
+file `log` of the current directory, which its first line empties. The observers of the
+solvers write their progress there too.
 """
 function log_msg(sim::Simulation, text)
     # written here rather than through `output`, where `dest => "text"` is a measurement. A

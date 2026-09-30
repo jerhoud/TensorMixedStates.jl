@@ -47,7 +47,8 @@ the description of a simulation, which `runTMS` runs.
 A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
 its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
 `max_time` is past, when the file `<name>/stop` appears, or on an interrupt. Run with the
-`output` of `runTMS`, it has no directory: only `max_time` stops it, and nothing is written.
+`output` of `runTMS`, it has no directory: only `max_time` stops it, and no checkpoint is
+written.
 
 # Examples
 

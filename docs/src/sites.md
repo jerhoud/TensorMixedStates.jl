@@ -179,7 +179,7 @@ QN("N",-1)
 
 `X` connects the two states of a qubit in both directions at once, so under
 `Qubit(conserve = N)` it has no flux and is refused. Under `Qubit(conserve = parity(N))` it
-has one, `QN("parity(N)", 1, 2)`, the two differences becoming the same one modulo 2.
+has one, `QN("parity(N)",1,2)`, the two differences becoming the same one modulo 2.
 
 The flux is asked of every factor of one site, and not only of the whole operator: each
 factor becomes a tensor of its own. `Sx(1) * Sx(2) + Sy(1) * Sy(2)` conserves the

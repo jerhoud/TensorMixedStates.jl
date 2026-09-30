@@ -450,6 +450,15 @@ end
         @test renyi2(mix(ψ), cut) ≈ renyi2(mix(ψ), collect(1:cut))
     end
     @test renyi2(ψ, 0) == 0
+    # no site has no entropy, as the cut 0, where partial_trace refused to keep nothing
+    @test renyi2(ψ, Int[]) == 0
+    @test renyi2(mix(ψ), Int[]) == 0
+    @test last(only(measure(ψ, SubRenyi2(Int[])))) == 0
+    # positions in a vector of another element type failed at the first measurement
+    @test last(only(measure(ψ, SubRenyi2([])))) == 0
+    @test renyi2(ψ, Any[1, 2]) ≈ renyi2(ψ, [1, 2])
+    @test mutual_info_renyi2(ψ, Any[1]) ≈ mutual_info_renyi2(ψ, [1])
+    @test mutual_info_renyi2(ψ, []) == 0
     @test renyi2(mix(ψ), 3) ≈ renyi2(mix(ψ))
     @test_throws "renyi2 was given the cut 4" renyi2(ψ, 4)
     @test SubRenyi2(2).name == "SubRenyi2(1,2)"

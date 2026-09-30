@@ -25,14 +25,17 @@ PreObs() = PreObs([], [], [], [], [])
 the truncation limits of an MPS.
 
 # Fields
-- `cutoff`: the cutoff under which singular values are neglected
+- `cutoff`: the largest truncation error allowed, the weight of the discarded singular values,
+  the sum of their squares relative to that of all
 - `maxdim`: the maximum bond dimension
 - `mindim`: the minimum bond dimension; the default `1` means no minimum, and a smaller value
   is taken as `1`
 
-For a phase that sweeps, any field may be a vector, one value per sweep:
-`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A vector
-shorter than the number of sweeps is continued with its last value, as in ITensor.
+For `tdvp`, `approx_W`, `dmrg`, `steady_state` and the phases built on them, any field may
+be a vector, one value per sweep: `Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small
+and lets the state grow. A vector shorter than the number of sweeps is continued with its last
+value, as in ITensor. Elsewhere, as in `apply`, `truncate` or a sum of states, the fields are
+single values.
 
 # Examples
 
@@ -114,7 +117,8 @@ for `R = Mixed`.
 
 The local states are given as a vector, one per site, or as a single one for every site. A
 local state is a name, the number of a basis state counted from 0, a vector of amplitudes, a
-function of the site giving one of those, or, in mixed representation only, a density matrix.
+function of the site, the `AbstractSite` and not its position, giving one of those, or, in
+mixed representation only, a density matrix.
 A vector of numbers is always the amplitudes of one local state, given to every site: basis
 numbers site by site are written `Any[0, 1, 0]` or `["0", "1", "0"]`.
 

@@ -65,7 +65,9 @@ the reference article.
 
 - `SubRenyi2(k)` and `renyi2(state, k)` take the sites `1:k`, as `MutualInfoRenyi2(k)` does,
   and read it off the entanglement spectrum on a pure state, where `SubRenyi2(k)` was
-  accepted and failed when measured.
+  accepted and failed when measured. Empty positions give 0, where they raised an error, and
+  positions in a vector of any element type, as `[]`, are taken as integers, for
+  `mutual_info_renyi2` as well.
 
 - `weaken` gives a state or a system back unchanged when the target names what it conserves
   in another order, where it built a new system with new indices.

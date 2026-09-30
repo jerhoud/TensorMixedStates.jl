@@ -285,7 +285,8 @@ end
 
 the MPO of an operator, in the representation of the state. For a time dependent evolver,
 `coefs` holds the value of each time function, one per term; it defaults to `[1.]`, a single
-operator.
+operator. The form taking a `State` builds the MPO of a single operator: that of a vector of
+terms is built from its `PreMPO`, with its `coefs`.
 
 A pure operator ``A`` given for a mixed state becomes its `Evolver`,
 ``\\rho \\mapsto A \\rho + \\rho A^\\dagger``, see `PreMPO`, and not the gate
@@ -352,7 +353,8 @@ make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
     make_approx_W1(::State, op, tau)
 
 the MPO of the approximation WI of the exponential of `tau` times the operator, `coefs` being
-as for `make_mpo`. On a charged system the operator must have zero flux.
+as for `make_mpo`, and the form taking a `State` being for a single operator as well. On a
+charged system the operator must have zero flux.
 """
 function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)
@@ -402,7 +404,8 @@ make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), 
     make_approx_W2(::State, op, tau)
 
 the MPO of the approximation WII of the exponential of `tau` times the operator, `coefs` being
-as for `make_mpo`. On a charged system the operator must have zero flux.
+as for `make_mpo`, and the form taking a `State` being for a single operator as well. On a
+charged system the operator must have zero flux.
 """
 function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)

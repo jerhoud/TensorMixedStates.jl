@@ -617,9 +617,9 @@ its primed form.
 
 When any of the sites conserves something, the indices carry charges, and an operator or a
 matrix of no definite charge is refused. The indices are drawn for this tensor, so that it
-does not contract with a state: `tensor(system, op)` gives the tensor of a placed operator on
-the indices of a system. A tensor product of fermionic factors holds the Jordan-Wigner strings
-between them, as `matrix` does.
+does not contract with a state: `tensor(system, X(1))` gives that of an operator placed on
+sites, on the indices of a system. A tensor product of fermionic factors holds the
+Jordan-Wigner strings between them, as `matrix` does.
 
 `tensor` of two operators is their tensor product, `tensor(X, Y)` being `X ⊗ Y`, and of two
 systems their product, see `⊗`.
@@ -653,7 +653,11 @@ end
     tensor(system::System, a::AtIndex)
 
 the ITensor of the operator `a` placed on sites, as `X(1)` or `(X ⊗ Y)(2, 3)`, on the indices
-of `system`, with one pair of indices per site it acts on.
+of `system`, with one pair of indices per site it acts on. It takes a single generic operator
+placed as it is: a coefficient, as in `2X(1)`, or a product, as in `X(1) * Y(2)`, is not
+accepted. No Jordan-Wigner string is inserted but between the factors of a tensor product on
+consecutive sites: `C(3)` gets the bare matrix of `C`, with no string on sites 1 and 2, see
+`has_fermionic`.
 
 # Examples
 

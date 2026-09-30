@@ -16,8 +16,8 @@ systems using Matrix Product States representations.
 - An optional high level interface, which writes a simulation in a few lines, with its
   measurements, its output files and checkpoints.
 
-Being based on ITensor, TMS delivers high performance computations and naturally runs in
-parallel.
+Being based on ITensor, TMS delivers high performance computations, and uses the cores of
+the machine, see [Threads and performance](@ref).
 
 ## Installation
 

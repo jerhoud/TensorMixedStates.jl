@@ -551,7 +551,7 @@ by those of `op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `\\otimes`
 
 # Examples
 
-    controlled(op) = Proj("Up") ⊗ Id + Proj("Dn") ⊗ op
+    mycontrolled(op) = Proj("Up") ⊗ Id + Proj("Dn") ⊗ op     # op of one site
     Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
 
 """
@@ -885,7 +885,9 @@ isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
 the superoperator resetting a site to `state`, given by its name, its vector or its density
 matrix: ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, where ``\\sigma`` is
 the density matrix of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a
-matrix is taken as it is, without normalization, as for `Proj`. It acts on mixed states only.
+matrix is taken as it is, without normalization, as for `Proj`. It acts on mixed states only,
+and is refused on a site conserving something strongly, which it does not preserve: `weaken`
+the state first.
 
 # Examples
 
@@ -1182,8 +1184,9 @@ Its type, see `OpType`, unless `type` gives it:
 - an expression without sites: the type of the operator when it is a single one, else
   `fermionic_op` when it is fermionic of one site, `plain_op` otherwise;
 - a matrix, or anything given with its sites: the strongest type its matrix satisfies,
-  `involution_op`, `selfadjoint_op` or `plain_op`, or `fermionic_op` when, on one site, it
-  anticommutes with `F`;
+  `involution_op`, `selfadjoint_op` or `plain_op`, or `fermionic_op` when it acts on a single
+  site, given with it, and anticommutes with its `F`. A matrix given without sites is never
+  taken for fermionic: give it `type = fermionic_op`;
 - a function without sites: `plain_op`.
 
 The type is checked against the matrix each time the operator is placed on a site.

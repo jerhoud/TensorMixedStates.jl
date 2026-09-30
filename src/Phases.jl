@@ -17,9 +17,13 @@ after them goes on correctly from there; any other would run all its steps again
 state. So the steps of a phase that never calls this are not committed, and a checkpoint
 written while it runs resumes it from its start.
 
-A phase of your own driving a solver starts it at `first_sweep = done + 1`, and hands `done`
-and `energy` to a `DmrgObserver`. A loop of your own is best written with `run_steps`, which
-calls this for it.
+A phase of your own driving a solver starts it at `first_sweep = done + 1`, and hands `done`,
+`energy` and its `nsweeps` to a `DmrgObserver`, which records a search stopped by its tolerance
+as having done them all. The phase has to skip the solver when `done` has reached `nsweeps`, as
+a search stopped by its tolerance or checkpointed on its last sweep has: run again for no
+sweep, `dmrg` would give an energy of 0 rather than `energy`. A loop of your own is best
+written with `run_steps`, which calls this for it and must then not have it called again
+within its steps.
 """
 function resume_step(sim::Simulation)
     c = sim.checkpoint
@@ -36,10 +40,17 @@ end
     run_steps(f, sim, nsteps)
 
 run the steps `1:nsteps` of a phase of your own, `f(sim, k)` doing step `k` and returning the
-simulation it leaves behind, its measurements written, with `output` for instance. Between two
-steps, a checkpoint is written when one is due and the phase stops when the simulation is
-asked to, and a resumed run continues after the last step done, from the state and the
-simulation time it had reached. Outside `runTMS` the steps simply run one after the other.
+simulation it leaves behind, its measurements written, with `output` for instance, which takes
+`sweep = k` for the `:sweep` measurement. Between two steps, a checkpoint is written when one is
+due and the phase stops when the simulation is asked to, and a resumed run continues after the
+last step done, from the state and the simulation time it had reached. Outside `runTMS` the
+steps simply run one after the other.
+
+A step may run a solver with an observer of the package, `TdvpObserver` for instance: its
+sweeps are not steps of the phase and are not committed, and a stop it honours ends the phase
+with the last step done, the unfinished one being run again whole on a resume. A step does not
+call `resume_step`, which `run_steps` has called already: calling it again would have the
+sweeps of the solver committed as steps of the phase.
 
 # Examples
 
@@ -47,7 +58,7 @@ simulation time it had reached. Outside `runTMS` the steps simply run one after 
         run_steps(sim, p.nkicks) do sim, k
             sim = apply(exp(-0.3im * X)(1), sim)
             sim = Simulation(sim, sim.state, sim.time + 0.1)
-            output(sim, p.measures)
+            output(sim, p.measures; sweep = k)
             return sim
         end
 """
@@ -61,11 +72,21 @@ function run_steps(f, sim::Simulation, nsteps::Int)
         # from the time it had reached
         sim = Simulation(sim, sim.state, r.time)
     end
+    c = sim.checkpoint
     for k in done + 1:nsteps
+        # a solver run within a step with an observer of the package would commit its sweeps as
+        # steps of the phase: nothing is committed while the step runs. A stop the solver
+        # honours still writes the checkpoint of the last step done, and leaves this one
+        # unfinished, so that it is not committed either and is run again whole on a resume
+        c.sweeps = false
         sim = f(sim, k)
+        c.sweeps = true
         if !(sim isa Simulation)
             error("step $k of run_steps returned a $(typeof(sim)), where it has to return " *
                   "the simulation it leaves behind")
+        end
+        if c.stopping
+            break
         end
         if sweep_commit!(sim, sim.state, sim.time, k)
             break
@@ -86,6 +107,11 @@ of that name would shadow it rather than extend it. `runTMS` then logs the phase
 `time_start`, calls the method and takes the final measurements, as for a phase of the
 library. Within the method, `output` measures the simulation, `log_msg` writes to its log and
 `get_sim_file` gives a file of the simulation to write anything else to.
+
+The fields of a phase of your own are part of the fingerprint by which a checkpoint tells its
+simulation, see `TensorMixedStates.phases_id`: keep in them what describes the phase, not what
+changes from one run to the next or as it runs, which would have the checkpoint refused as
+another simulation's.
 
 A phase written as a loop of steps with `run_steps` is stopped, checkpointed and resumed
 between two steps. One that drives a solver with `TdvpObserver`, `ApproxWObserver` or

@@ -131,7 +131,8 @@ check_destination(::Simulation, ::Data) = nothing
 the destination `output` writes to under this name, to write to it directly. `"stdout"` (or
 `"-"`), `"stderr"` and `""` give `stdout`, `stderr` and `devnull`, any other name the stream
 of a file of that name. A name ending in `.json` gives instead a `Dict` gathering the data,
-written to the file as json at the end of `runTMS`, and `Data(name)` the `Dict` of
+written to the file as json when the files of the simulation are closed, see
+`close_sim_files`, and `Data(name)` the `Dict` of
 `sim.data[name]`. When the output of the simulation is redirected, every name but a `Data`
 one gives that stream.
 

@@ -314,7 +314,9 @@ placed on.
 
 # Examples
 
-    @def_operators(Fermion(),
+For a fermionic site type of your own, `MySite`, declared as the package declares `Fermion`:
+
+    @def_operators(MySite(),
     [
         fermionic_op => 
         [
@@ -531,7 +533,7 @@ expression and not a key of the operator library. Only their charges are needed,
 what the string holds.
 
 A site type of your own calls it to fill its `conserve` field, the site being built bare
-first, since the charges depend on its type and not on that field.
+first, since the charges depend on its type and on its other fields, not on that one.
 
 # Examples
 

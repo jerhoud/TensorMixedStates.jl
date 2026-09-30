@@ -14,9 +14,8 @@ graph_base_size
 
 ## MPO
 
-Matrix Product Operators (MPO) are used under the hood by TMS to act on the matrix product states
-that represent its states.
-Every operator is converted to an MPO internally, except in `apply`, which applies gates one
+Matrix Product Operators (MPO) are used under the hood by TMS to act on the states, which it
+represents as matrix product states. Every operator is converted to an MPO internally, except in `apply`, which applies gates one
 by one, and in `expect`, `expect1`, `expect2` and `measure`, which contract the state
 directly.
 

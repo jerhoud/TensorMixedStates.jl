@@ -435,7 +435,9 @@ Declaring a name twice for a site type is an error.
 
 # Examples
 
-    @def_states(Fermion(),
+For a fermionic site type of your own, `MySite`, declared as the package declares `Fermion`:
+
+    @def_states(MySite(),
     [
         ["Emp", "0"] => [1., 0.],
         "Occ" => [0., 1.],
