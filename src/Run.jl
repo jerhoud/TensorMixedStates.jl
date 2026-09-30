@@ -40,8 +40,9 @@ the description of a simulation, which `runTMS` runs.
 - `max_time`: seconds after which the simulation stops cleanly (default `Inf`)
 - `threading`: how the tensor contractions are threaded, see `set_threading`: `:dense`
   (default), `:blocks`, `:auto`, which chooses the mode before each phase from the system of
-  the state, or `nothing`, which leaves the settings of the process as they are. The settings
-  in force before the run are put back when `runTMS` returns
+  the state, `:dense` until there is one, or `nothing`, which leaves the settings of the
+  process as they are. The settings in force before the run are put back when `runTMS`
+  returns
 
 A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
 its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
@@ -190,10 +191,10 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     start_dir = pwd()
     saved_threading = isnothing(sim_data.threading) ? nothing : ThreadingState()
     try
-        # a mode that does not depend on the state is set at once, so that the stamp records the
-        # settings the run has
-        if sim_data.threading in (:dense, :blocks)
-            set_threading(sim_data.threading)
+        # set at once, so that the stamp records the settings the run starts with: `:auto`
+        # starts dense, having no state to choose from yet
+        if !isnothing(sim_data.threading)
+            set_threading(sim_data.threading == :auto ? :dense : sim_data.threading)
         end
         if live
             mkpath(sim_data.name);

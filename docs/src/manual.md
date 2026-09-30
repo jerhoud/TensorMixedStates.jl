@@ -757,10 +757,11 @@ contractions use the threads of Julia:
   system are block sparse when it conserves something, see [Conserving a quantity](@ref), so
   this mode is meant for such systems: it is worth trying on them, with OpenBLAS above all;
 - `:auto`, for `SimData` only, chooses before each phase: `:blocks` when the system of the
-  state conserves something, `:dense` otherwise. `set_threading(mysystem)` makes the same
-  choice once.
+  state conserves something, `:dense` otherwise and until there is a state.
+  `set_threading(mysystem)` makes the same choice once.
 
 ```julia
+using MKL                      # if MKL is installed, on an Intel processor: before TMS
 using TensorMixedStates
 set_threading(:dense)          # first thing in a program calling the functions of TMS directly
 

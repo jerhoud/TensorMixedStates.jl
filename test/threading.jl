@@ -89,6 +89,8 @@ end
                 auto = [CreateState{Mixed}(4, Fermion(conserve = N), ["Occ", "Emp", "Occ", "Emp"]),
                         evolve, Weaken(target = ()), evolve]
                 runTMS(SimData(name = "auto", threading = :auto, phases = auto))
+                # dense until there is a state, which the stamp records
+                @test "Strided threads 1" in readlines(joinpath("auto", "stamp"))
                 changes = filter(l -> startswith(l, "Threading set to"),
                                  readlines(joinpath("auto", "log")))
                 if Threads.nthreads() > 1
