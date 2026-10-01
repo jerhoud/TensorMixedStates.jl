@@ -35,12 +35,8 @@ the tensor on site `k` of `system` of the piece `o` of a com, an operator of one
 coefficient, built from its matrix as `tensor` builds that of a placed operator: placing it is
 not possible for the identity, which has no site once placed.
 """
-function com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R
-    # from its matrix, the identity is dense and not the diagonal of a delta: a channel of a
-    # com may carry on and close on the same site, where make_approx_W2 adds a dense tensor to
-    # its transport
-    return scalarcoef(o) * legs_on(scalararg(o), [sys[k]], [SysIndex{Pure}(sys, k)], [SysIndex{R}(sys, k)])
-end
+com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R =
+    scalarcoef(o) * legs_on(scalararg(o), [sys[k]], [SysIndex{Pure}(sys, k)], [SysIndex{R}(sys, k)])
 
 """
     live_channels(linkdims, pieces)
