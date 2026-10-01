@@ -9,14 +9,57 @@
 # alone, so that the tests do not depend on how compact gets there.
 
 """
+the term `c` times the product of the one site factors `subs` laid on `pre`, with a channel of
+its own on every link it spans and a delta on the sites between its factors
+"""
+function lay_term!(pre::TensorMixedStates.PreMPO{R}, c, subs, ref) where R
+    TMS = TensorMixedStates
+    sys = pre.system
+    sites = [ only(f.index) for f in subs ]
+    if !(issorted(sites) && allunique(sites))
+        error("the factors of a term are expected on distinct sites in order, got $sites")
+    end
+    us = [ TMS.tensor(sys, f) for f in subs ]
+    # a factor that vanishes on its site, as PreMPO drops it
+    if any(iszero, us)
+        return pre
+    end
+    ld = pre.linkdims
+    fst, lst = first(sites), last(sites)
+    for k in fst:lst-1
+        ld[k] += 1
+    end
+    at = Dict(zip(sites, us))
+    for k in fst:lst
+        kdx = TMS.SysIndex{R}(sys, k)
+        u = get(() -> TMS.delta(kdx', dag(kdx)), at, k)
+        l, r = k == fst ? 1 : ld[k-1], k == lst ? 1 : ld[k]
+        push!(pre.terms[k], (l, r, k == fst ? c * u : u, ref))
+    end
+    return pre
+end
+
+"""
 the operator `op` laid on the sites of `state` term by term, a channel for each term of several
 sites, as PreMPO laid it before compacting: the reference the MPOs are checked against
 """
 function naive_pre(state::State{R}, op) where R
     TMS = TensorMixedStates
-    n = op isa Vector ? length(op) : 1
-    s = TMS.removeMulti(simplify(TMS.adapt_representation(R, op)))
-    return TMS.PreMPO!(TMS.PreMPO{R}(state.system, n), s)
+    ops = op isa Vector ? op : [op]
+    pre = TMS.PreMPO{R}(state.system, length(ops))
+    for (ref, o) in enumerate(ops)
+        for t in TMS.sumsubs(TMS.removeMulti(simplify(TMS.adapt_representation(R, o))))
+            c, a = TMS.scalarcoef(t), TMS.scalararg(t)
+            subs = filter(f -> !(f isa TMS.IdentityOp), TMS.prodsubs(a))
+            if a isa TMS.ComOp || length(subs) < 2
+                # a com, a constant or a term of one site, laid as PreMPO lays them
+                TMS.PreMPO!(pre, c, a, ref)
+            else
+                lay_term!(pre, c, subs, ref)
+            end
+        end
+    end
+    return pre
 end
 
 """
