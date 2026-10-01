@@ -891,8 +891,8 @@ stops when the energy no longer progresses between two sweeps, which a search st
 metastable state also does, with a large variance. Extrapolating the energy to zero variance
 over several bond dimensions also gives an error bar.
 
-``H^2`` is never formed: TMS does not compress MPOs, so squaring a hamiltonian would square
-its number of terms and the bond dimension of its MPO. What is computed is
+``H^2`` is never formed: its terms are the products of pairs of those of `H`, and the product
+of the MPO of `H` by itself has the square of its bond dimension. What is computed is
 ``\\langle H\\psi | H\\psi \\rangle``, with the MPO of `H` on either side, at the cost of a
 `dmrg` sweep at the same bond dimension: this belongs in `final_measures`, or under a large
 `measures_period`, rather than at every sweep. Pass an `MPO` to reuse one already built.

@@ -10,6 +10,33 @@ the reference article.
 
 ## [Unreleased]
 
+### Added
+
+- `compact`, which writes an operator so that its MPO has the least bond dimension a
+  triangular MPO can have: its terms of several sites are gathered into coms, blocks of
+  channels printed `com(sites,linkdims)` in which the terms share what they have in common. On
+  `sum(Z(i)Z(j) for i in 1:39 for j in i+1:40)` the bond dimension goes from 402 to 3. A com can
+  be added to other operators, multiplied by a number, measured and lifted to a mixed
+  representation; it is refused as a factor of a product and as a gate.
+- `a ≈ b` for two operators placed on sites, comparing them through the products of one site
+  operators they expand into, those of a com included.
+
+### Changed
+
+- `PreMPO` compacts the operator, and so do `make_mpo`, `make_approx_W1`, `make_approx_W2`,
+  `tdvp`, `dmrg`, `approx_W`, `steady_state` and `variance`, which go through it, and `measure`
+  compacts the operators it measures. The operators of a site are compared through their
+  matrices on the system, so that `X*Y` and `im * Z` on a qubit, or `N` and `(1 - Z) / 2`, are
+  known to be related: the bond dimension on each link is 2 plus the rank of the operator
+  across it, once its parts that are the identity on either side are taken out.
+- The approximations WI and WII of an operator change where an operator at an end of one of
+  its terms is a combination of other ones and of the identity on its site, as `N` when `Z` is
+  used too, or `N` with the Jordan-Wigner strings of fermions: part of the term goes to terms
+  of fewer sites. They remain of the first order, with another error of order τ², while the
+  MPO of the operator still stands for it exactly.
+- `measure` refuses an operator with a factor acting on several sites at once when the
+  measurement is made, by `Measure`, rather than when it is taken.
+
 ### Fixed
 
 - The approximation WII, the default of `approx_W` and `ApproxW`, works on an operator with

@@ -39,29 +39,6 @@ com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R =
     scalarcoef(o) * legs_on(scalararg(o), [sys[k]], [SysIndex{Pure}(sys, k)], [SysIndex{R}(sys, k)])
 
 """
-    live_channels(linkdims, pieces)
-
-which channels of each link of a com some term goes through, reached from a term not yet
-begun and reaching a term finished, `pieces` holding the pieces `(l, r, _)` of each site
-"""
-function live_channels(linkdims::Vector{Int}, pieces)
-    n = length(pieces)
-    reached = [ falses(d) for d in linkdims ]
-    for j in 1:n-1, (l, r, _) in pieces[j]
-        if r > 0 && (l == 0 || reached[j-1][l])
-            reached[j][r] = true
-        end
-    end
-    finishing = [ falses(d) for d in linkdims ]
-    for j in n:-1:2, (l, r, _) in pieces[j]
-        if l > 0 && (r == 0 || finishing[j][r])
-            finishing[j-1][l] = true
-        end
-    end
-    return [ reached[j] .& finishing[j] for j in eachindex(linkdims) ]
-end
-
-"""
     PreMPO!(pre, coef, factors[, ref])
     PreMPO!(pre, coef, com[, ref])
     PreMPO!(pre, op[, ref])
@@ -70,8 +47,8 @@ end
 add to `pre`, and return it, the term `coef` times the product of the one site `factors`, the
 com `com` times `coef`, or the terms of the simplified operator `op`, `ref` numbering their
 time function. A term of several sites takes a channel of its own on every link it spans, and
-a com the channels it has there. Each operator of the vector `ops` gets the time function of
-its position.
+a com as few as the operators of its sites allow, see `reduce_on_sites`. Each operator of the
+vector `ops` gets the time function of its position.
 """
 function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
     foreach(o -> check_one_site(o, "an MPO"), subs)
@@ -122,23 +99,25 @@ end
 
 function PreMPO!(pre::PreMPO{R}, coef::Number, a::ComOp{R}, ref::Int = 1) where R
     sys = pre.system
-    ks = com_sites(a)
-    # a piece vanishing on its site, as Sp*Sp does on a spin 1/2, is dropped, as a term with
-    # such a factor is, and with it the channels no term goes through any more
-    ts = [ filter(x -> !iszero(x[3]), [ (l, r, com_tensor(sys, o, k)) for (l, r, o) in p ])
-           for (k, p) in zip(ks, a.pieces) ]
-    live = live_channels(a.linkdims, ts)
+    b, singles = reduce_on_sites(R, a, coef, sys)
+    ks = b.start .+ (0:length(b.pieces) - 1)
     ld = pre.linkdims
-    # the number of each live channel in `pre`, after the channels its link already has
-    num = [ ld[k] .+ cumsum(live[j]) for (j, k) in enumerate(ks[1:end-1]) ]
+    # the channels of the com numbered after those its links already have
+    offs = [ ld[k] for k in ks[1:end-1] ]
     for (j, k) in enumerate(ks[1:end-1])
-        ld[k] += count(live[j])
+        ld[k] += b.dims[j]
     end
-    for (j, k) in enumerate(ks), (l, r, t) in ts[j]
-        if (l == 0 || live[j-1][l]) && (r == 0 || live[j][r])
-            # the coefficient on the opening, which every term takes once
-            push!(pre.terms[k], (l == 0 ? 1 : num[j-1][l], r == 0 ? 1 : num[j][r],
-                                 l == 0 ? coef * t : t, ref))
+    for (j, k) in enumerate(ks)
+        laid = sort!(collect(b.pieces[j]); by = first)
+        if !isempty(singles[j])
+            push!(laid, (0, 0) => singles[j])
+        end
+        for ((l, r), comb) in laid
+            o = simplify_sum(GenericOp{R, 1}[ x * atom for (atom, x) in comb ])
+            if scalarcoef(o) ≠ 0
+                push!(pre.terms[k], (l == 0 ? 1 : offs[j-1] + l, r == 0 ? 1 : offs[j] + r,
+                                     com_tensor(sys, o, k), ref))
+            end
         end
     end
     return pre
@@ -185,6 +164,8 @@ the operator `op` preprocessed for the representation of the state, to be turned
 by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp` or `approx_W` in
 place of the operator, which saves preprocessing it again. `op` may also be a vector of
 operators, the terms of a time dependent evolver, each multiplied by its own time function.
+The terms of several sites are compacted, see `compact`, so that the bond dimension of the MPO
+is the least any triangular MPO of the operator can have.
 
 A pure operator ``A`` given for a mixed state is lifted with `Evolver` to
 ``\\rho \\mapsto A \\rho + \\rho A^\\dagger``: the hamiltonian part of an evolver must already be
@@ -200,7 +181,9 @@ function PreMPO(state::State{R}, a) where R
     # and not what `simplify` made of it
     check_indices(state.system, a)
     n = a isa Vector ? length(a) : 1
-    return PreMPO!(PreMPO{R}(state.system, n), removeMulti(simplify(adapt_representation(R, a))))
+    s = removeMulti(simplify(adapt_representation(R, a)))
+    gather(x) = compact_simplified(x, rounding_tol, "an MPO")
+    return PreMPO!(PreMPO{R}(state.system, n), s isa Vector ? map(gather, s) : gather(s))
 end
 
 """

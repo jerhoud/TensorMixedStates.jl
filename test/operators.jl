@@ -390,8 +390,10 @@ end
     @test maxlinkdim(make_mpo(st, chain(sw))) == maxlinkdim(make_mpo(st, chain(Swap)))
     @test norm(apply(make_mpo(st, chain(sw)), st) - apply(make_mpo(st, chain(Swap)), st)) < 1e-12
     st1 = RandomState{Pure}(System(4, s1), 4)
+    # its eight terms give the MPO its eight channels, which the twelve of the expression come
+    # down to once compacted
     @test maxlinkdim(make_mpo(st1, chain(p2))) == 10
-    @test maxlinkdim(make_mpo(st1, chain(p2e))) == 14
+    @test maxlinkdim(make_mpo(st1, chain(p2e))) == 10
     @test norm(apply(make_mpo(st1, chain(p2)), st1) - apply(make_mpo(st1, chain(p2e)), st1)) < 1e-12
     # on sites that are not neighbours, or given in the other order
     for (i, j) in [(1, 3), (4, 2), (2, 1)]
@@ -488,19 +490,23 @@ end
 
 @testset "Products differing by their last factor are gathered" begin
     # P*X(i) + P*Y(i) is P*(X+Y)(i): the terms of an odd sum of one site share their
-    # Jordan-Wigner string, and the MPO carries each product once. The metric is the number
-    # of terms, measured on sums written both ways, and the operator must not change
+    # Jordan-Wigner string, and an MPO laid term by term carries each product once. The metric
+    # is the number of factors simplify leaves, the terms of such an MPO, measured on sums
+    # written both ways: PreMPO compacts, which would gather the products whatever simplify
+    # did. The operator must not change
+    TMS = TensorMixedStates
+    factors(a) = sum(t -> count(f -> !(f isa TMS.IdentityOp), TMS.prodsubs(TMS.scalararg(t))),
+                     TMS.sumsubs(TMS.removeMulti(simplify(a))))
     fe = Fermion()
     st = RandomState{Pure}(System(5, fe), 2)
-    terms(s, a) = sum(length.(PreMPO(s, a).terms))
-    @test terms(st, sum((C + dag(C))(i) for i in 1:5)) == 15
-    @test terms(st, sum(C(i) + dag(C)(i) for i in 1:5)) == 15
-    @test maxlinkdim(make_mpo(st, sum((C + dag(C))(i) for i in 1:5))) == 6
-    ρ = mix(RandomState{Pure}(System(4, fe), 2))
-    @test terms(ρ, sum(Dissipator(C + dag(C))(i) for i in 1:4)) == 13
+    @test factors(sum((C + dag(C))(i) for i in 1:5)) == 15
+    @test factors(sum(C(i) + dag(C)(i) for i in 1:5)) == 15
+    # compacted, the strings share a single channel
+    @test maxlinkdim(make_mpo(st, sum((C + dag(C))(i) for i in 1:5))) == 3
+    @test factors(sum(Dissipator(C + dag(C))(i) for i in 1:4)) == 13
     q = RandomState{Pure}(System(3, Qubit()), 2)
     a = X(1) * Z(2) + X(1) * Y(2)
-    @test terms(q, a) == 2
+    @test factors(a) == 2
     @test norm(apply(make_mpo(q, a), q) - apply(make_mpo(q, X(1) * Z(2)), q) -
                apply(make_mpo(q, X(1) * Y(2)), q)) < 1e-12
 end

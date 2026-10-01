@@ -91,7 +91,8 @@ end
     struct ObsOp
     ObsOp(name, obs)
 
-an operator measurement for `measure`, `obs` being the terms of the operator, simplified.
+an operator measurement for `measure`, `obs` being the terms of the operator, simplified and
+compacted.
 """
 struct ObsOp
     name::String
@@ -280,6 +281,15 @@ constant_kind(x::AbstractArray) = any(y -> constant_kind(y) == complex_kind, x) 
 constant_kind(_) = real_kind
 
 """
+    obs_op(o, s)
+
+the `ObsOp` measuring the operator `o`, given simplified as `s`, its terms of several sites
+compacted so that a long sum of them is measured channel by channel, see `compact`
+"""
+obs_op(o::IndexedOp{Pure}, s::IndexedOp{Pure}) =
+    ObsOp(obs_name(o), compact_simplified(removeMulti(s), rounding_tol, "expect"))
+
+"""
     make_leaf(o)
 
 the measurement `o` stands for: an `ObsOp` for an operator placed on sites, an `ObsExp1` for
@@ -287,7 +297,7 @@ a one site operator, an `ObsExp2` for a pair of them, a `TimeFunc` for a number,
 a function, and `o` itself otherwise.
 """
 make_leaf(o::IndexedOp{Pure}) =
-    ObsOp(obs_name(o), simplify(o))
+    obs_op(o, simplify(o))
 make_leaf(o::Tuple{SimpleOp, SimpleOp}) =
     ObsExp2(obs_name(first(o)) * obs_name(last(o)), o)
 make_leaf(o::SimpleOp) =
@@ -312,10 +322,12 @@ make_obs(o::AbstractArray) = make_obs.(collect(o))
 make_obs(o::Check) =
     Check(o.name, make_obs(o.obs1), make_obs(o.obs2), o.tol)
 make_obs(o::Declared) = declare(o.obs, o.kind)
-# simplified once, for the measurement and for the test of its kind
+# simplified once, for the measurement and for the test of its kind. The kind is taken before
+# compacting: operator_kind compares an operator with its adjoint by their structure, and the
+# adjoint of a com of c†c and c c† swaps its channels, which made a real one complex
 function make_obs(o::IndexedOp{Pure})
     s = simplify(o)
-    return Declared(ObsOp(obs_name(o), s), operator_kind(s))
+    return Declared(obs_op(o, s), operator_kind(s))
 end
 make_obs(o::SimpleOp) =
     Declared(make_leaf(o), operator_kind(simplify(o(1))))

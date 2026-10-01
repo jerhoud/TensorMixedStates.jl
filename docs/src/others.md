@@ -21,47 +21,45 @@ directly.
 
 ### How the MPO is built, and what it costs
 
-TMS gives every term of a sum a channel of its own. A term acting on sites `i` to `j` opens
-a channel at `i`, carries it across the links in between and closes it at `j`. Two more
-channels run along the whole chain, one for the terms not yet started and one for those
-already finished. The bond dimension of the MPO on a given link is therefore
+Before building an MPO, TMS compacts the operator, see [`compact`](@ref): its terms of several
+sites are gathered into blocks of channels in which they share what they have in common, and
+the operators of each site are compared through their matrices on the sites of the system, so
+that `X*Y` and `im * Z` on a qubit, or `N` and `(1 - Z) / 2`, are known to be related. The MPO
+keeps the triangular form: one channel runs along the chain for the terms not yet started,
+another for those already finished, and in between each link has as many channels as the rank
+of the operator across it, once its parts that are the identity on either side are taken out.
+No MPO of this form has fewer.
 
-```
-2 + the number of terms crossing that link
-```
+For an operator whose terms are short ranged, this is what one channel per term gives already:
+the Ising chain `sum(Z(i)Z(i+1) for i in 1:n-1)` has bond dimension 3 whatever the number of
+sites. For a long ranged one, the difference is large. Measured on
+`sum(Z(i)Z(j) for i in 1:n-1 for j in i+1:n)`:
 
-For an operator whose terms are short ranged this is the best one can do. The Ising chain
-`sum(Z(i)Z(i+1) for i in 1:n-1)` has exactly one term crossing each link, so its MPO has
-bond dimension 3 whatever the number of sites.
+| sites | terms | one channel per term | compacted |
+|------:|------:|---------------------:|----------:|
+| 10    | 45    | 27                   | 3         |
+| 20    | 190   | 102                  | 3         |
+| 40    | 780   | 402                  | 3         |
 
-For a long ranged operator it is another matter, because every term is kept separate rather
-than merged with its neighbours. Measured on `sum(Z(i)Z(j) for i in 1:n-1 for j in i+1:n)`:
+Three channels is also what `ITensorMPS`' `OpSum` finds there, with an SVD. Each element of a
+time dependent evolver is compacted on its own, so that it keeps its time function, and changing
+the coefficients from one step to the next rebuilds the tensors of the MPO alone.
 
-| sites | terms | MPO bond dimension in TMS | with an SVD compressed construction |
-|------:|------:|--------------------------:|------------------------------------:|
-| 10    | 45    | 27                        | 3                                   |
-| 20    | 190   | 102                       | 3                                   |
-| 40    | 780   | 402                       | 3                                   |
+Two things follow from it in practice:
 
-The last column is what `ITensorMPS`' `OpSum` gives on the same operator: it compresses the
-construction with an SVD and finds the three channels that suffice. TMS does not compress,
-so its bond dimension grows like the number of terms crossing the middle of the chain, here
-`n²/4`. If you come from `ITensorMPS` and build a long ranged Hamiltonian, this is the
-difference you will see, and the contraction cost follows it.
-
-This is a deliberate trade. The construction leaves the MPO in the triangular form that the
-WI and WII approximations of [`ApproxW`](@ref) need, which a compressed MPO no longer has.
-And because each term keeps its own identity, its coefficient can be changed from one sweep
-to the next without simplifying the operator again: only the tensors of the MPO are rebuilt,
-from the terms kept, which is what makes time dependent evolvers cheap.
-
-What follows from it in practice: the cost is paid per term, so it is worth writing an
-operator with as few terms as possible. `simplify` is applied on the way to the MPO and will
-merge what it can, but it cannot know that two terms you wrote separately describe the same
-physics.
+- The WI and WII approximations of [`ApproxW`](@ref) need the triangular form, and their error,
+  of order τ², depends on how the operator is split into terms, not on the operator alone.
+  Compacting keeps the first and the last site of every term, unless an operator of a site is a
+  combination of other ones and of the identity there, as `N` when `Z` is used too, or `N` with
+  the Jordan-Wigner strings `F` of fermions: part of a term then goes to terms of fewer sites,
+  and the approximations change, while remaining of the same order.
+- `measure` compacts the operators it measures, once for all its measurements. `expect`
+  measures an operator as it is given, term by term: on a long ranged operator measured many
+  times, calling `compact` once beforehand saves most of the cost.
 
 ```@docs
 PreMPO
+compact
 make_mpo
 make_approx_W1
 make_approx_W2

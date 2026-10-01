@@ -440,40 +440,137 @@ function coms_of(::Type{R}, b::ComBlock) where R
 end
 
 
+################### Reduction on the sites of a system ###################
+
+"""
+    atom_basis(atoms, site, tol)
+
+the atoms of one site `atoms` written on a basis of them, compared through their matrices on
+`site`: a dictionary from each atom to its coefficient on the identity, its combination of the
+atoms kept, and the norm of its matrix.
+
+The part of each matrix along the identity, its trace over that of the identity, is taken out
+first, and `interpolative` keeps the atoms whose remainders are independent, each measured
+against its whole matrix. The atoms kept are then independent together with the identity, and
+an atom that is a number times the identity, as `S2` on a spin, or zero, as `Sp*Sp` on a spin
+1/2, keeps none of them.
+"""
+function atom_basis(atoms::Vector{Op}, site::AbstractSite, tol::Real)
+    ms = [ matrix(a, site) for a in atoms ]
+    S = float(mapreduce(eltype, promote_type, ms; init = Float64))
+    d = size(ms[1], 1)
+    τ = [ S(sum(m[i, i] for i in 1:d) / d) for m in ms ]
+    norms = [ cnorm(S.(vec(m))) for m in ms ]
+    rows = [ S.(vec(m)) for m in ms ]
+    for (g, x) in zip(rows, τ), i in 1:d
+        g[(i - 1) * d + i] -= x
+    end
+    kept, t = interpolative(rows, norms, tol)
+    basis = Dict{Op, Tuple{S, Vector{Pair{Op, S}}, real(S)}}()
+    for (j, a) in enumerate(atoms)
+        c = τ[j] - sum(t[j, p] * τ[kept[p]] for p in eachindex(kept); init = zero(S))
+        basis[a] = (c, Pair{Op, S}[ atoms[kept[p]] => t[j, p] for p in eachindex(kept) if !iszero(t[j, p]) ], norms[j])
+    end
+    return basis
+end
+
+"""
+    on_basis(comb, basis, id, tol)
+
+the combination of atoms `comb` written on the atoms `basis` keeps and on the identity `id`. A
+coefficient whose part is under `tol` times that of the whole combination is dropped, as
+`interpolative` drops one, so that what cancels up to rounding leaves nothing.
+"""
+function on_basis(comb::Dict{Op, T}, basis, id::Op, tol::Real) where T
+    out = Dict{Op, T}()
+    for (a, x) in sort!(collect(comb); by = first)
+        c, lin, _ = basis[a]
+        if !iszero(c)
+            add!(out, id, x * c)
+        end
+        for (b, y) in lin
+            add!(out, b, x * y)
+        end
+    end
+    scale = sqrt(sum(abs2(x) * basis[a][3]^2 for (a, x) in comb; init = 0.0))
+    return filter!(p -> abs(last(p)) * basis[first(p)][3] > tol * scale, out)
+end
+
+"""
+    push_identities!(b, id)
+
+take the identity `id` out of the openings of the block `b`, from left to right, and return the
+terms of one site this leaves, a combination for each site of `b`. A term opened by the
+identity on a site begins in fact on the next one: `α` times the identity opening channel `r`
+becomes `α` times each piece leaving `r` on the next site, an opening there, which may hold the
+identity in turn, or a term of one site when the piece closes.
+"""
+function push_identities!(b::ComBlock{T}, id::Op) where T
+    singles = [ Dict{Op, T}() for _ in b.pieces ]
+    for j in 1:length(b.pieces) - 1
+        opened = sort!([ (r, pop!(comb, id)) for ((l, r), comb) in b.pieces[j] if l == 0 && haskey(comb, id) ];
+                       by = first)
+        filter!(p -> !isempty(last(p)), b.pieces[j])
+        for (r, α) in opened, ((l, s), comb) in sort!(collect(b.pieces[j + 1]); by = first)
+            if l == r
+                to = s == 0 ? singles[j + 1] : get!(Dict{Op, T}, b.pieces[j + 1], (0, s))
+                for (a, x) in comb
+                    add!(to, a, α * x)
+                end
+            end
+        end
+    end
+    return singles
+end
+
+"""
+    reduce_on_sites(R, a, c, system)
+
+the com `a` times `c` as a block of channels on `system`, as few as its operators allow there,
+and the terms of one site this leaves, a combination of atoms for each site of the block. It is
+how `PreMPO` lays a com.
+
+`compact` takes the atoms of a site as independent, `X*Y` and `Z` being two operators to it.
+Here they are compared through their matrices on the site, see `atom_basis`, every piece is
+written on a basis of them that the identity completes, and `push_identities!` takes the
+identity out of the openings and of the closings. On a qubit, `N(1)*N(3) + Z(1)*Z(3)` has `N`
+written `(1 - Z) / 2` and keeps `5/4 * Z(1)*Z(3)` as its part of several sites, the rest going
+to the terms of one site and to the constant. The sweeps then reduce what the relations made
+dependent. On each link the channels are as few as the rank of the operator across it, once
+its parts that are the identity on either side are taken out, which no triangular MPO goes
+below.
+"""
+function reduce_on_sites(::Type{R}, a::ComOp{R}, c::Number, sys::System) where R
+    id = IdentityOp{R, Generic, 1}()
+    bases = map(zip(com_sites(a), a.pieces)) do (k, p)
+        atoms = unique!(sort!(Op[ id; [ atom for (_, _, o) in p for (atom, _) in linearize(o) ] ]))
+        atom_basis(atoms, sys[k], rounding_tol)
+    end
+    T = coef_type([ c; collect(com_coefs(a)); [ first(v) for basis in bases for v in values(basis) ] ])
+    b = block_of(a, c, T)
+    for (j, basis) in enumerate(bases)
+        b.pieces[j] = filter!(p -> !isempty(last(p)),
+                              SitePieces{T}(lr => on_basis(comb, basis, id, rounding_tol) for (lr, comb) in b.pieces[j]))
+    end
+    singles = push_identities!(b, id)
+    m = mirror(b)
+    closed = push_identities!(m, id)
+    b = right_sweep(left_sweep!(mirror(m), rounding_tol), rounding_tol)
+    return b, [ mergewith(+, s, t) for (s, t) in zip(singles, reverse(closed)) ]
+end
+
+
 ################### compact ###################
 
 """
-    compact(op; tol = rounding_tol)
+    compact_simplified(s, tol, what)
 
-`op` written so that its MPO has the smallest bond dimension: its terms of one site and its
-constant as they are, and its terms of several sites gathered into coms, blocks of channels
-in which the terms share what they have in common, printed `com(sites,linkdims)`. `make_mpo`,
-`PreMPO`, `tdvp`, `dmrg`, `approx_W` and `expect` take the result as they take `op`, and the
-bond dimension of its MPO on each link is 2 plus the rank of the coupling of the terms
-crossing it. An array of operators is compacted element by element, which is how a time
-dependent evolver is compacted, each term keeping its time function.
-
-`op` is simplified first, and the atoms of its factors, the operators of one site they sum,
-are taken as independent: `compact` does not know that `X` is `Sp + Sm` on a qubit, which
-leaves the result exact but not always minimal.
-
-`tol` decides what counts as zero: a channel whose part is below `tol` times all it holds is
-dropped, and so is a term below `tol` times itself. The default, `rounding_tol`, drops only
-what the package takes as rounding, and the operator stays exact; a larger value gives an
-approximation of it, which is not the best one of its size.
-
-A com can be added to other operators, multiplied by a number, measured and lifted to a
-mixed representation, but neither multiplied by another operator nor made a gate: take the
-product or the gate first, and compact it, as in `compact(Gate(op))`. `compact(op) ≈ op`
-compares the two, term by term.
-
-# Examples
-
-    H = compact(sum(0.6^(j - i) * Z(i) * Z(j) for i in 1:20 for j in i+1:20))
-    maxlinkdim(make_mpo(state, H))      # 3, rather than 102 for the sum itself
+`compact` of the operator `s`, simplified and with its Jordan-Wigner strings spelled out by
+`removeMulti` already, `what` naming the caller in the refusal of a factor of several sites.
+`PreMPO` and `make_obs` simplify the operator themselves, the one to keep its own messages,
+the other to find the kind of the operator on that same simplification.
 """
-function compact(op::IndexedOp{R}; tol::Real = rounding_tol) where R
-    s = removeMulti(simplify(op))
+function compact_simplified(s::IndexedOp{R}, tol::Real, what::String) where R
     kept = IndexedOp{R}[]
     coms = Tuple{Number, ComOp{R}}[]
     terms = Tuple{Number, Vector{Tuple{Int, Vector{Pair{Op, Number}}}}}[]
@@ -484,7 +581,7 @@ function compact(op::IndexedOp{R}; tol::Real = rounding_tol) where R
             continue
         end
         fs = filter(x -> !(x isa IdentityOp), prodsubs(a))
-        foreach(o -> check_one_site(o, "compact"), fs)
+        foreach(o -> check_one_site(o, what), fs)
         if length(fs) < 2
             push!(kept, t)
         else
@@ -506,6 +603,45 @@ function compact(op::IndexedOp{R}; tol::Real = rounding_tol) where R
     b = right_sweep(left_sweep!(direct_sum(blocks), tol), tol)
     return simplify_sum([ kept; coms_of(R, b) ])
 end
+
+"""
+    compact(op; tol = rounding_tol)
+
+`op` written so that its MPO has the smallest bond dimension: its terms of one site and its
+constant as they are, and its terms of several sites gathered into coms, blocks of channels
+in which the terms share what they have in common, printed `com(sites,linkdims)`. `make_mpo`,
+`PreMPO`, `tdvp`, `dmrg`, `approx_W`, `measure` and `expect` take the result as they take
+`op`, and all but `expect` compact an operator themselves: calling `compact` saves doing it
+again at each call, and speeds up `expect`, which measures an operator as it is given. An array
+of operators is compacted element by element, which is how a time dependent evolver is
+compacted, each term keeping its time function.
+
+`op` is simplified first, and the atoms of its factors, the operators of one site they sum,
+are taken as independent: `compact` does not know that `X*Y` is `im * Z` on a qubit, nor that
+`N` is `(1 - Z) / 2`. `PreMPO` does: when it lays a com, it compares them through their
+matrices on the sites of the system. The bond dimension of the MPO on each link is then 2 plus
+the rank of the operator across it, once its parts that are the identity on either side are
+taken out. In `N(1)*N(3) + Z(1)*Z(3)`, `N` is then written `(1 - Z) / 2`, which moves part of
+the operator to terms of one site and to the constant: the operator is the same, its
+approximations WI and WII are not.
+
+`tol` decides what counts as zero: a channel whose part is below `tol` times all it holds is
+dropped, and so is a term below `tol` times itself. The default, `rounding_tol`, drops only
+what the package takes as rounding, and the operator stays exact; a larger value gives an
+approximation of it, which is not the best one of its size.
+
+A com can be added to other operators, multiplied by a number, measured and lifted to a
+mixed representation, but neither multiplied by another operator nor made a gate: take the
+product or the gate first, and compact it, as in `compact(Gate(op))`. `compact(op) ≈ op`
+compares the two, term by term.
+
+# Examples
+
+    H = compact(sum(0.6^(j - i) * Z(i) * Z(j) for i in 1:20 for j in i+1:20))
+    maxlinkdim(make_mpo(state, H))      # 3, rather than 102 for the sum itself
+"""
+compact(op::IndexedOp; tol::Real = rounding_tol) =
+    compact_simplified(removeMulti(simplify(op)), tol, "compact")
 
 compact(a::GenericOp; kwargs...) =
     error("compact takes an operator placed on sites, such as $(a((1:nsites(a))...)) rather than $a")
