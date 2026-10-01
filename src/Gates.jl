@@ -88,6 +88,9 @@ identities has no tensor to carry the coefficient.
 make_ops(::System, a::SumOp) =
     error("cannot apply sums as gates ($a)")
 
+make_ops(::System, a::ComOp) =
+    error("cannot apply sums as gates ($a is a sum gathered by compact)")
+
 # Left(H) + Right(H), a sum
 make_ops(::System, a::Evolver) =
     error("cannot apply sums as gates ($a is Left + Right of its argument)")

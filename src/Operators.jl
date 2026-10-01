@@ -694,6 +694,47 @@ isless(a::AtIndex, b::AtIndex) =
     isless((a.index, a.op), (b.index, b.op))
 
 
+############ ComOp ################
+
+"""
+    struct ComOp{R} <: IndexedOp{R}
+
+a block of channels of an MPO, the form `compact` gives to the terms of several sites of an
+operator: ``\\sum_{i<j} C_i \\left(\\prod_{i<l<j} A_l\\right) B_j``, where on each site the row
+``C`` opens channels, the matrix ``A`` carries them and the column ``B`` closes them, each
+entry an operator of one site. `pieces` holds the entries of each site from `start` on, as
+`(l, r, op)`: `l` a channel of the link on the left of the site, or 0 for the terms not yet
+begun, `r` a channel of the link on its right, or 0 for the terms finished. `linkdims` gives
+the number of channels of each link, from the right of the first site to the left of the last.
+It prints as `com(sites,linkdims)`.
+"""
+struct ComOp{R} <: IndexedOp{R}
+    start::Int
+    linkdims::Vector{Int}
+    pieces::Vector{Vector{Tuple{Int, Int, GenericOp{R, 1}}}}
+end
+
+"""
+    com_sites(a)
+
+the sites the com `a` acts on, from the first to the last.
+"""
+com_sites(a::ComOp) = a.start:a.start + length(a.pieces) - 1
+
+"""
+    map_pieces(f, R, a)
+
+the com `a` with `f` applied to each of its pieces, a com of the representation `R`
+"""
+map_pieces(f, ::Type{R}, a::ComOp) where R =
+    ComOp{R}(a.start, a.linkdims, [ [ (l, r, f(o)) for (l, r, o) in p ] for p in a.pieces ])
+
+show(io::IO, a::ComOp) = print(io, "com(", com_sites(a), ",[", join(a.linkdims, ","), "])")
+
+isless(a::ComOp, b::ComOp) =
+    isless((a.start, a.linkdims, a.pieces), (b.start, b.linkdims, b.pieces))
+
+
 ############## Mixers ###############
 
 # Dissipator
@@ -828,6 +869,7 @@ sided(::Type{Right}, a::ScalarOp{Pure, Indexed, 1}) = conj(a.coef) * sided(Right
 sided(_, ::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 sided(::Type{Left}, a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
 sided(::Type{Right}, a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
+sided(S, a::ComOp{Pure}) = map_pieces(S, Mixed, a)
 
 # Gate
 
@@ -868,6 +910,11 @@ function Gate(a::SumOp{Pure, Indexed, 1})
     end
     return ProdOp([sided(Left, a), sided(Right, a)])
 end
+
+# a com is a sum, see above, whose two sides nothing can multiply: refused here, where the
+# message names the gate, rather than by simplify, which names a product the caller did not write
+Gate(a::ComOp{Pure}) =
+    error("cannot take the gate of $a: take the gate of the operator before compacting it")
 
 show(io::IO, a::Gate) =
     paren(io, 1000, 0) do io
@@ -1395,6 +1442,7 @@ ranking(::ScalarOp) = 20
 ranking(::ProdOp) = 21
 ranking(::SumOp) = 22
 ranking(::TensorOp) = 23
+ranking(::ComOp) = 24
 
 ranking(::IntPowOp) = 30
 ranking(::GenPowOp) = 34

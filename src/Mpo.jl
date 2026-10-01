@@ -29,14 +29,53 @@ function check_coefs(pre::PreMPO, coefs)
 end
 
 """
+    com_tensor(system, o, k)
+
+the tensor on site `k` of `system` of the piece `o` of a com, an operator of one site times a
+coefficient, built from its matrix as `tensor` builds that of a placed operator: placing it is
+not possible for the identity, which has no site once placed.
+"""
+function com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R
+    # from its matrix, the identity is dense and not the diagonal of a delta: a channel of a
+    # com may carry on and close on the same site, where make_approx_W2 adds a dense tensor to
+    # its transport
+    return scalarcoef(o) * legs_on(scalararg(o), [sys[k]], [SysIndex{Pure}(sys, k)], [SysIndex{R}(sys, k)])
+end
+
+"""
+    live_channels(linkdims, pieces)
+
+which channels of each link of a com some term goes through, reached from a term not yet
+begun and reaching a term finished, `pieces` holding the pieces `(l, r, _)` of each site
+"""
+function live_channels(dims::Vector{Int}, pieces)
+    n = length(pieces)
+    reached = [ falses(d) for d in dims ]
+    for j in 1:n-1, (l, r, _) in pieces[j]
+        if r > 0 && (l == 0 || reached[j-1][l])
+            reached[j][r] = true
+        end
+    end
+    finishing = [ falses(d) for d in dims ]
+    for j in n:-1:2, (l, r, _) in pieces[j]
+        if l > 0 && (r == 0 || finishing[j][r])
+            finishing[j-1][l] = true
+        end
+    end
+    return [ reached[j] .& finishing[j] for j in eachindex(dims) ]
+end
+
+"""
     PreMPO!(pre, coef, factors[, ref])
+    PreMPO!(pre, coef, com[, ref])
     PreMPO!(pre, op[, ref])
     PreMPO!(pre, ops)
 
-add to `pre`, and return it, the term `coef` times the product of the one site `factors`, or
-the terms of the simplified operator `op`, `ref` numbering their time function. A term of
-several sites takes a channel of its own on every link it spans. Each operator of the vector
-`ops` gets the time function of its position.
+add to `pre`, and return it, the term `coef` times the product of the one site `factors`, the
+com `com` times `coef`, or the terms of the simplified operator `op`, `ref` numbering their
+time function. A term of several sites takes a channel of its own on every link it spans, and
+a com the channels it has there. Each operator of the vector `ops` gets the time function of
+its position.
 """
 function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref::Int=1) where R
     foreach(o -> check_one_site(o, "an MPO"), subs)
@@ -85,8 +124,36 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, subs::Vector{<:IndexedOp{R}}, ref
     return pre
 end
 
+function PreMPO!(pre::PreMPO{R}, coef::Number, a::ComOp{R}, ref::Int = 1) where R
+    sys = pre.system
+    ks = com_sites(a)
+    # a piece vanishing on its site, as Sp*Sp does on a spin 1/2, is dropped, as a term with
+    # such a factor is, and with it the channels no term goes through any more
+    ts = [ filter(x -> !iszero(x[3]), [ (l, r, com_tensor(sys, o, k)) for (l, r, o) in p ])
+           for (k, p) in zip(ks, a.pieces) ]
+    live = live_channels(a.linkdims, ts)
+    num = [ cumsum(v) for v in live ]
+    ld = pre.linkdims
+    offs = [ ld[k] for k in ks[1:end-1] ]
+    for (j, k) in enumerate(ks[1:end-1])
+        ld[k] += count(live[j])
+    end
+    for (j, k) in enumerate(ks), (l, r, t) in ts[j]
+        if (l == 0 || live[j-1][l]) && (r == 0 || live[j][r])
+            # the coefficient on the opening, which every term takes once
+            push!(pre.terms[k], (l == 0 ? 1 : offs[j-1] + num[j-1][l],
+                                 r == 0 ? 1 : offs[j] + num[j][r],
+                                 l == 0 ? coef * t : t, ref))
+        end
+    end
+    return pre
+end
+
+PreMPO!(pre::PreMPO{R}, coef::Number, a::IndexedOp{R}, ref::Int = 1) where R =
+    PreMPO!(pre, coef, prodsubs(a), ref)
+
 PreMPO!(pre::PreMPO{R}, a::IndexedOp{R}, ref::Int = 1) where {R <: PM} =
-    PreMPO!(pre, scalarcoef(a), prodsubs(a), ref)
+    PreMPO!(pre, scalarcoef(a), scalararg(a), ref)
 
 function PreMPO!(pre::PreMPO{R}, s::SumOp{R, Indexed}, ref::Int=1) where {R <: PM}
     for p in s.subs
@@ -155,6 +222,23 @@ mpo_eltype(pre::PreMPO, coefs) =
         mapreduce(t -> eltype(t[3]), promote_type, Iterators.flatten(pre.terms); init = Bool))
 
 """
+    charge_mismatch(system, a, b, shown)
+
+raise the error for an operator on `system` whose terms do not all carry the same charge, `a`
+and `b` being the charges of two of them, printed when `shown`, or those of two partial terms
+entering the same channel of a com, whose values would mean nothing to the reader.
+"""
+function charge_mismatch(sys::System, a::QN, b::QN, shown::Bool)
+    st = strong_names(sys)
+    only_strong = !isempty(st) && weak_qn(a, st, String[]) == weak_qn(b, st, String[])
+    error("the terms of this operator do not all carry the same charge, " *
+          (shown ? "$(-a) and $(-b), " : "") *
+          (only_strong ?
+              "which only a strong symmetry tells apart: drop `strong` or weaken the state" :
+              "so it has no definite flux and cannot be put on a system that conserves it"))
+end
+
+"""
     mpo_charges(pre, coefs)
 
 the charge of every channel of every link of the MPO, `q[i + 1][k]` for channel `k` of the
@@ -163,8 +247,8 @@ link on the right of site `i`.
 A channel stands for a term partly placed, the sites on its left having contributed their
 factors, and its charge is minus the sum of their fluxes. The first channel is the term not
 yet begun and has no charge; the last is the term finished and has minus the flux of the whole
-operator, which every term must share or the operator is refused. Terms whose time function
-is zero are left out.
+operator, which every term must share or the operator is refused. A channel of a com is
+entered by several pieces, which must agree. Terms whose time function is zero are left out.
 """
 function mpo_charges(pre::PreMPO{R}, coefs) where R
     n = length(pre.system)
@@ -189,19 +273,13 @@ function mpo_charges(pre::PreMPO{R}, coefs) where R
             c = left - flux(u)
             if r == 1
                 if !isnothing(total) && total ≠ c
-                    st = strong_names(pre.system)
-                    only_strong = !isempty(st) &&
-                        weak_qn(total, st, String[]) == weak_qn(c, st, String[])
-                    error("the terms of this operator do not all carry the same charge, " *
-                          "$(-total) and $(-c), " *
-                          (only_strong ?
-                              "which only a strong symmetry tells apart: drop `strong` or " *
-                              "weaken the state" :
-                              "so it has no definite flux and cannot be put on a system " *
-                              "that conserves it"))
+                    charge_mismatch(pre.system, total, c, true)
                 end
                 total = c
             else
+                if !isnothing(q[i+1][r]) && q[i+1][r] ≠ c
+                    charge_mismatch(pre.system, q[i+1][r], c, false)
+                end
                 q[i+1][r] = c
             end
         end

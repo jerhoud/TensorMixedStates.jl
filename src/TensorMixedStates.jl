@@ -10,7 +10,7 @@ Lindbladian evolution and noisy gates act.
 """
 module TensorMixedStates
 
-import Base: *, +, -, /, ^, exp, sqrt, mod, show, length, getindex, isless, ==, hash
+import Base: *, +, -, /, ^, exp, sqrt, mod, show, length, getindex, isless, ==, hash, isapprox
 import ITensors: matrix, truncate, dim, Index, dag, norm, sim, inner, flux, isfermionic
 import LinearAlgebra: dot
 import ITensorMPS: maxlinkdim, apply, state, expect, normalize, checkdone!, tdvp, dmrg, sample
@@ -26,6 +26,7 @@ include("Mixer.jl")
 include("Definitions.jl")
 include("States.jl")
 include("Simplify.jl")
+include("Compact.jl")
 
 # Low Level interface
 include("Gates.jl")

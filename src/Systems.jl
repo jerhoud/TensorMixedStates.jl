@@ -201,6 +201,8 @@ end
 
 check_indices(system::System, a::Multi_F) =
     (check_index(system, a.start, a); check_index(system, a.stop, a))
+check_indices(system::System, a::ComOp) =
+    (check_index(system, first(com_sites(a)), a); check_index(system, last(com_sites(a)), a))
 check_indices(system::System, a::Union{SumOp, ProdOp}) =
     foreach(x -> check_indices(system, x), a.subs)
 check_indices(system::System, a::ScalarOp) = check_indices(system, a.arg)

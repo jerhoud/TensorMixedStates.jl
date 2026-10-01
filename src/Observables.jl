@@ -619,15 +619,35 @@ function expectfactor(state::State, a::Expector, o::Multi_F)
     return a
 end
 
+"""
+    times_piece(state, t, o, k)
+
+the expector tensor `t`, carried to site `k`, times the piece `o` of a com measured there, see
+`obs_at`. On a pure state the identity, the most frequent piece of a com, only renames the
+index of the site, which is much cheaper than contracting a delta.
+"""
+times_piece(state::State{Pure}, t::ITensor, o::SimpleOp, k::Int) =
+    if scalararg(o) isa IdentityOp
+        scalarcoef(o) * prime(t, SysIndex{Pure}(state.system, k))
+    else
+        t * scalarcoef(o) * obs_at(state, scalararg(o), k)
+    end
+
+times_piece(state::State{Mixed}, t::ITensor, o::SimpleOp, k::Int) =
+    t * scalarcoef(o) * obs_at(state, scalararg(o), k)
+
 
 """
     expect_norm(state, obs)
     expect_norm(state, coef, factors)
+    expect_norm(state, coef, com)
 
 `expect` without the simplification: the expectation value of an operator already in the
 form `simplify` gives, or the array of those of an array of them; given `coef` and
-`factors`, that of their product. `measure` calls it on operators `make_obs` has simplified
-once and for all.
+`factors`, that of their product, and given a com, that of the com times `coef`. A com is
+contracted from left to right with one expector per channel: a channel opens on `get_left`,
+goes from site to site by `zip_between` and closes on `get_right`. `measure` calls it on
+operators `make_obs` has simplified once and for all.
 """
 function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}})
     if coef == 0.
@@ -653,6 +673,36 @@ function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}}
     e = zipend(state, e)
     return coef * scalar(e.t)
 end
+
+function expect_norm(state::State, coef::Number, a::ComOp{Pure})
+    state = weak_form(state)
+    check_indices(state.system, a)
+    open = Union{Nothing, ITensor}[]
+    total = 0.
+    for (j, (k, ps)) in enumerate(zip(com_sites(a), a.pieces))
+        carried = [ isnothing(t) ? nothing : zip_between(state, t, k - 1, k) for t in open ]
+        next = Vector{Union{Nothing, ITensor}}(nothing, get(a.linkdims, j, 0))
+        for (l, r, o) in ps
+            from = l == 0 ? get_left(state, k) : carried[l]
+            if isnothing(from)
+                continue
+            end
+            t = times_piece(state, from, o, k)
+            if r == 0
+                total += scalar(t * get_right(state, k))
+            else
+                # out of place: a piece may share its storage with `get_left`, cached with the
+                # state, which adding in place would corrupt
+                next[r] = isnothing(next[r]) ? t : next[r] + t
+            end
+        end
+        open = next
+    end
+    return coef * total
+end
+
+expect_norm(state::State, coef::Number, a::IndexedOp{Pure}) =
+    expect_norm(state, coef, prodsubs(a))
 
 """
     expect(state, obs)
@@ -681,7 +731,7 @@ function expect(state::State, op)
 end
 
 expect_norm(state::State, p::IndexedOp{Pure}) =
-    expect_norm(state, scalarcoef(p), prodsubs(p))
+    expect_norm(state, scalarcoef(p), scalararg(p))
 
 expect_norm(state::State, op::SumOp{Pure, Indexed}) =
     sum(op.subs) do p

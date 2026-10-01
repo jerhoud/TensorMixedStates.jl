@@ -277,6 +277,15 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
 end
 
 """
+    cannot_multiply(a)
+
+refuse a product of the com `a` with another operator: the channels of a com are what is left
+of its terms, which a product would have to multiply one by one.
+"""
+cannot_multiply(a::ComOp) =
+    error("$a is compacted and cannot be multiplied: take the product first and compact it")
+
+"""
     orderprod(a, b)
 
 what replaces the product `a * b` of two placed operators or strings `Multi_F`, one step of the
@@ -321,6 +330,9 @@ function orderprod(a::Multi_F{R}, b::Multi_F{R}) where R
     return [ piece(a, a.start, min(a.stop, i-1)), piece(b, b.start, min(b.stop, i-1)), m,
              piece(a, max(a.start, j+1), a.stop), piece(b, max(b.start, j+1), b.stop) ]
 end
+
+orderprod(a::ComOp, ::IndexedOp) = cannot_multiply(a)
+orderprod(::Union{AtIndex, Multi_F}, b::ComOp) = cannot_multiply(b)
 
 
 ################### Adjoint and exponential ###################
@@ -367,6 +379,8 @@ simplify_dag(a::TensorOp{N}) where N =
 
 simplify_dag(a::AtIndex) = simplify_dag(a.op)(a.index...)
 simplify_dag(a::Multi_F) = a
+# piece by piece: the factors of a path sit on distinct sites, their strings in place
+simplify_dag(a::ComOp{Pure}) = map_pieces(simplify_dag, Pure, a)
 
 """
     simplify_exp(a)
@@ -478,7 +492,8 @@ simplify(a::ProdOp) = simplify_prod(map(simplify, a.subs))
 simplify(a::SumOp) = simplify_sum(map(simplify, a.subs))
 simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
 
-simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState}) = a
+# a com is built by `compact` from simplified terms
+simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState, ComOp}) = a
 
 simplify(a::Union{IntPowOp, GenPowOp}) = power(simplify(a.arg), a.expo)
 simplify(a::ExpOp) = simplify_exp(simplify(a.arg))
@@ -522,6 +537,6 @@ giving `F(3) * F(4) * F(5)`. A collection is processed element by element.
 removeMulti(a::SumOp) = SumOp(removeMulti.(a.subs))
 removeMulti(a::ProdOp) = ProdOp(removeMulti.(a.subs))
 removeMulti(a::ScalarOp) = a.coef * removeMulti(a.arg)
-removeMulti(a::Union{AtIndex, IdentityOp}) = a
+removeMulti(a::Union{AtIndex, IdentityOp, ComOp}) = a
 removeMulti(a::Multi_F{R}) where R = ProdOp([Multi_F{R}(i, i, a.left, a.right) for i in a.start:a.stop])
 removeMulti(a) = map(removeMulti, a)
