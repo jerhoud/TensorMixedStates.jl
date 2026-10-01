@@ -605,11 +605,12 @@ const charge_tol = 1e-14
 
 the size, relative to the norm of a matrix, below which an element, a singular value or a
 whole term is taken as rounding and treated as zero. The flux of a matrix (`charge_flux`),
-its tensor on charged indices (`charged_itensor`) and the splitting of an operator into one
-site factors (`Operator{N}(name, def, type, sites...)`) all go by it and have to agree.
+its tensor on charged indices (`charged_itensor`), the splitting of an operator into one
+site factors (`Operator{N}(name, def, type, sites...)`) and, by default, the channels of
+`compact` all go by it and have to agree.
 
-It is a rounding tolerance and not a setting: operators are not compressed here, the states
-they act on are truncated by the algorithms.
+It is a rounding tolerance and not a setting: operators are compressed only by `compact`, and
+exactly at its default, the states they act on being truncated by the algorithms.
 """
 const rounding_tol = 1e-13
 

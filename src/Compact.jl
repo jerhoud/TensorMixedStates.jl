@@ -443,7 +443,7 @@ end
 ################### compact ###################
 
 """
-    compact(op; tol = 1e-12)
+    compact(op; tol = rounding_tol)
 
 `op` written so that its MPO has the smallest bond dimension: its terms of one site and its
 constant as they are, and its terms of several sites gathered into coms, blocks of channels
@@ -458,9 +458,9 @@ are taken as independent: `compact` does not know that `X` is `Sp + Sm` on a qub
 leaves the result exact but not always minimal.
 
 `tol` decides what counts as zero: a channel whose part is below `tol` times all it holds is
-dropped, and so is a term below `tol` times itself. The default keeps the operator exact to
-that relative precision; a larger value gives an approximation of it, which is not the best
-one of its size.
+dropped, and so is a term below `tol` times itself. The default, `rounding_tol`, drops only
+what the package takes as rounding, and the operator stays exact; a larger value gives an
+approximation of it, which is not the best one of its size.
 
 A com can be added to other operators, multiplied by a number, measured and lifted to a
 mixed representation, but neither multiplied by another operator nor made a gate: take the
@@ -472,7 +472,7 @@ compares the two, term by term.
     H = compact(sum(0.6^(j - i) * Z(i) * Z(j) for i in 1:20 for j in i+1:20))
     maxlinkdim(make_mpo(state, H))      # 3, rather than 102 for the sum itself
 """
-function compact(op::IndexedOp{R}; tol::Real = 1e-12) where R
+function compact(op::IndexedOp{R}; tol::Real = rounding_tol) where R
     s = removeMulti(simplify(op))
     kept = IndexedOp{R}[]
     coms = Tuple{Number, ComOp{R}}[]
