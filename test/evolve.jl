@@ -159,6 +159,20 @@ end
     @test expect(st, Z(1)) ≈ cos(1.0) atol = 1e-12
 end
 
+@testset "A constant term in the approximation WII" begin
+    # a constant term is laid on the first site as a delta, whose diagonal storage ITensors
+    # could not add a tensor of another element type to, nor, on a charged system, add
+    # anything to or exponentiate: WII failed on each of these operators. A constant commutes
+    # with everything, so all it does is multiply WII by its exponential
+    for sys in (System(2, Qubit()), System(2, Qubit(conserve = N)))
+        st = State{Pure}(sys, "Dn")
+        w(op, coefs...) = prod(make_approx_W2(PreMPO(st, op), 0.1, coefs...))
+        @test norm(w(-im * N(1) + 0.5 * Id(1)) - exp(0.05) * w(-im * N(1))) < 1e-12
+        @test norm(w(-im * (N(2) + 0.5 * Id(1))) - exp(-0.05im) * w(-im * N(2))) < 1e-12
+        @test norm(w([Id(1), -im * N(1)], [0.7, 0.3]) - exp(0.07) * w([-im * N(1)], [0.3])) < 1e-12
+    end
+end
+
 @testset "Per sweep limits in an evolution" begin
     # `cutoff` and `maxdim` may be given one value per sweep. dmrg is handed the whole
     # schedule, but the evolution solvers drive their sweeps themselves and have to pick

@@ -433,8 +433,10 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
             c = coefs[ref]
             if c ≠ 0
                 # the coefficient and the time step go on the closing piece of a term alone,
-                # as in make_mpo
-                v[l, r] += (r == 1 ? c * tau : one(c)) * u
+                # as in make_mpo. Dense blocks: a constant term comes as a delta, whose
+                # diagonal storage ITensors cannot add a tensor of another element type to,
+                # nor, on a charged system, add anything to or exponentiate
+                v[l, r] += (r == 1 ? c * tau : one(c)) * denseblocks(u)
             end
         end
         d = v[1, 1]

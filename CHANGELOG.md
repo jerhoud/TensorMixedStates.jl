@@ -10,7 +10,12 @@ the reference article.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The approximation WII, the default of `approx_W` and `ApproxW`, works on an operator with
+  a constant term. It failed with an error from ITensors on every such operator on a system
+  conserving something, and elsewhere as soon as another term acting on the first site alone
+  had another element type than the constant, as in `-im * N(1) + 0.5 * Id(1)`.
 
 ## [1.6.0] - 2026-09-30
 
