@@ -153,6 +153,18 @@ end
     @test memory_channels(s, hc) == least_channels(exact(s, h), [3, 3, 3]) == [3, 3]
 end
 
+@testset "An MPO on a system of several kinds of sites" begin
+    # each site reduces the com with its own matrices: Sp*Sp vanishes on the qubits and not on
+    # the spins 1, and the string of C on the boson is its identity
+    sys = System([Qubit(), Spin(1), Qubit(), Spin(1)])
+    h = sum(0.6^(j - i) * (Sp(i) * Sm(j) + Sm(i) * Sp(j) + (Sp * Sp)(i) * Sz(j) + Sz(i) * Sz(j))
+            for i in 1:4 for j in i+1:4)
+    check_compact(State{Pure}(sys, ["Up", "1", "Up", "1"]), h)
+    sys = System([Fermion(), Boson(3), Fermion()])
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1) + 0.5 * N(1) * N(2) + 0.3 * (A + dag(A))(2) * N(3)
+    check_compact(State{Pure}(sys, ["Occ", "1", "Emp"]), h)
+end
+
 @testset "An MPO in the mixed representation" begin
     m = 3
     ρ = State{Mixed}(System(m, Qubit()), "FullyMixed")
