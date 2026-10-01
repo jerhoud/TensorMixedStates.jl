@@ -632,7 +632,7 @@ approximation of it, which is not the best one of its size.
 
 A com can be added to other operators, multiplied by a number, measured and lifted to a
 mixed representation, but neither multiplied by another operator nor made a gate: take the
-product or the gate first, and compact it, as in `compact(Gate(op))`. `compact(op) ≈ op`
+product or the gate first, and compact it, as in `compact(Gate(A)(1, 2))`. `compact(op) ≈ op`
 compares the two, term by term.
 
 # Examples

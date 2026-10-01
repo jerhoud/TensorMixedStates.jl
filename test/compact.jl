@@ -245,7 +245,11 @@ end
     @test_throws "is compacted and cannot be multiplied" make_mpo(st, hc * X(1))
     @test_throws "is compacted and cannot be multiplied" make_mpo(st, hc^2)
     @test_throws "cannot apply sums as gates" apply(hc, st)
-    @test_throws "take the gate of the operator before compacting it" Gate(compact(Z(1) * Z(2)))
+    @test_throws "which is placed on sites" Gate(compact(Z(1) * Z(2)))
+    # a com takes its gate where a product by an operator on mixed states asks for it, which
+    # refuses it as a product
+    ρ = State{Mixed}(System(4, Qubit()), "FullyMixed")
+    @test_throws "is compacted and cannot be multiplied" make_mpo(ρ, Gate(X)(1) * hc)
     @test_throws "compact takes an operator placed on sites" compact(X)
     # PreMPO compacts, and keeps its own refusal of a factor of several sites
     m2 = Operator{2}("M2", [1. 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], plain_op)

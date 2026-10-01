@@ -28,9 +28,9 @@ function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
     # on the operator as it was written, as the pure path does, so that a site out of the
     # system is named as the caller wrote it and not as a factor of its string
     check_indices(state.system, a)
-    # prepared before the Gate wrapping: Gate distributes over the product removeMulti
+    # prepared before the gate is built: build_gate distributes over the product removeMulti
     # leaves behind, down to the one site factors it knows how to lift
-    return apply(Gate(prepare_gate(a)), state; kwargs...)
+    return apply(build_gate(prepare_gate(a)), state; kwargs...)
 end
 
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R

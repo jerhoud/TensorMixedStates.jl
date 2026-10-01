@@ -274,7 +274,7 @@ end
     # well, (C ⊗ dag(C))(3, 4) being C(3) * dag(C)(4) by definition. Both used to be built
     # from the bare matrices
     ρ = mix(st)
-    for a in [Gate(C)(3), Left(C)(3), Right(C)(3), Gate(dag(C)(4) * C(3))]
+    for a in [Gate(C)(3), Left(C)(3), Right(C)(3), Gate(C ⊗ dag(C))(3, 4)]
         @test norm(apply(a, ρ) - apply(make_mpo(ρ, a), ρ)) < 1e-12
     end
     for a in [(dag(C) ⊗ Id ⊗ C)(1, 2, 3), (C ⊗ dag(C))(3, 4)]
@@ -306,15 +306,19 @@ end
 end
 
 @testset "Gates of sums and of mixed parities" begin
-    # the gate of a placed sum K is Left(K) Right(K), what K does to the pure state, strings
-    # included, and on one site it is the gate of the operator of that site
-    @test Gate(X(1) + Z(1)) == Gate(X + Z)(1)
+    # Gate takes an operator not placed on sites. The gate of a placed sum K, which a product
+    # of K by an operator on mixed states takes, is Left(K) Right(K), what K does to the pure
+    # state, strings included, and on one site it is the gate of the operator of that site
+    build_gate = TensorMixedStates.build_gate
+    @test_throws "which is placed on sites" Gate(X(1) + Z(1))
+    @test_throws "which is placed on sites" Gate(X(1))
+    @test build_gate(X(1) + Z(1)) == Gate(X + Z)(1)
     for (sys, K, obs) in [(System(3, Qubit()), (X(1) + Z(2)) / sqrt(2), [X(1), Z(2), X(1) * Y(3)]),
                           (System(3, Fermion()), (C(1) + dag(C)(3)) / sqrt(2),
                            [N(1), N(3), dag(C)(1) * C(3)])]
         ψ = RandomState{Pure}(sys, 2)
         kψ = apply(make_mpo(ψ, K), ψ)
-        ρk = apply(make_mpo(mix(ψ), Gate(K)), mix(ψ))
+        ρk = apply(make_mpo(mix(ψ), build_gate(K)), mix(ψ))
         @test [expect(ρk, o) for o in obs] ≈ [expect(kψ, o) for o in obs]
     end
     # a factor of no definite parity holds an odd part: on site 1 it needs no string and is

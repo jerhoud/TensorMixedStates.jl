@@ -878,8 +878,10 @@ sided(S, a::ComOp{Pure}) = map_pieces(S, Mixed, a)
 
 the superoperator ``\\rho \\mapsto A\\rho A^\\dagger`` of an operator `A` on pure states: `A`
 applied as a gate to a density matrix. Gates combine linearly, which is how a noisy gate is
-written, and `Gate(c * A)` is `abs2(c) * Gate(A)`. A placed operator on pure states multiplied
-by one on mixed states is turned into its gate.
+written, and `Gate(c * A)` is `abs2(c) * Gate(A)`. `A` is not placed on sites, the gate is:
+`Gate(X)(1)` rather than `Gate(X(1))`, and `Gate(X ⊗ Z)(1, 2)` for several sites. A placed
+operator on pure states applied to a mixed state, or multiplied by an operator on mixed states,
+is turned into its gate.
 
 # Examples
 
@@ -892,18 +894,24 @@ struct Gate{N} <: GenericOp{Mixed, N}
         (scalararg(arg) isa IdentityOp ? IdentityOp{Mixed, Generic, N}() : new{N}(scalararg(arg)))
 end
 
-(a::IndexedOp{Mixed} * b::IndexedOp{Pure}) = a * Gate(b)
-(a::IndexedOp{Pure} * b::IndexedOp{Mixed}) = Gate(a) * b
+Gate(a::IndexedOp) =
+    error("cannot take the gate of $a, which is placed on sites: write Gate(X)(1) rather than Gate(X(1))")
 
-Gate(a::ProdOp{Pure, Indexed, 1}) = ProdOp(Gate.(a.subs))
-Gate(ind::AtIndex{Pure}) = AtIndex(Gate(ind.op), ind.index)
-Gate(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
-Gate(a::ScalarOp{Pure, Indexed, 1}) = abs2(a.coef) * Gate(a.arg)
+"""
+    build_gate(a)
+
+the gate of the operator `a`, placed on sites, which `apply` takes on a mixed state and a
+product of `a` by an operator on mixed states takes
+"""
+build_gate(a::ProdOp{Pure, Indexed, 1}) = ProdOp(build_gate.(a.subs))
+build_gate(ind::AtIndex{Pure}) = AtIndex(Gate(ind.op), ind.index)
+build_gate(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
+build_gate(a::ScalarOp{Pure, Indexed, 1}) = abs2(a.coef) * build_gate(a.arg)
 
 # a gate built from a sum does not distribute: (A + B) rho (A + B)' has cross terms. On one
 # site the sum is an operator of that site, whose gate is placed whole; otherwise the gate of K
 # is Left(K) Right(K), which the placed factors of K give one by one
-function Gate(a::SumOp{Pure, Indexed, 1})
+function build_gate(a::SumOp{Pure, Indexed, 1})
     s = scalararg.(a.subs)
     if all(x -> x isa AtIndex && length(x.index) == 1, s) && allequal(x -> x.index, s)
         return Gate(sum(scalarcoef(x) * scalararg(x).op for x in a.subs))(only(first(s).index))
@@ -911,10 +919,12 @@ function Gate(a::SumOp{Pure, Indexed, 1})
     return ProdOp([sided(Left, a), sided(Right, a)])
 end
 
-# a com is a sum, see above, whose two sides nothing can multiply: refused here, where the
-# message names the gate, rather than by simplify, which names a product the caller did not write
-Gate(a::ComOp{Pure}) =
-    error("cannot take the gate of $a: take the gate of the operator before compacting it")
+# a com is a sum, see above: what asked for its gate refuses it with its own message, a product
+# as compacted and apply as a sum
+build_gate(a::ComOp{Pure}) = ProdOp([sided(Left, a), sided(Right, a)])
+
+(a::IndexedOp{Mixed} * b::IndexedOp{Pure}) = a * build_gate(b)
+(a::IndexedOp{Pure} * b::IndexedOp{Mixed}) = build_gate(a) * b
 
 show(io::IO, a::Gate) =
     paren(io, 1000, 0) do io

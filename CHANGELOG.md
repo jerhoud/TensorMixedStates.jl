@@ -36,6 +36,9 @@ the reference article.
   MPO of the operator still stands for it exactly.
 - `measure` refuses an operator with a factor acting on several sites at once when the
   measurement is made, by `Measure`, rather than when it is taken.
+- `Gate` refuses an operator placed on sites: write `Gate(X)(1)` rather than `Gate(X(1))`, and
+  `Gate(X ⊗ Z)(1, 2)` for several sites. A placed operator on pure states applied to a mixed
+  state, or multiplied by an operator on mixed states, is still turned into its gate.
 
 ### Fixed
 
