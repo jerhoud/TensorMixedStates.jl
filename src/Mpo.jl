@@ -44,21 +44,21 @@ com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R =
 which channels of each link of a com some term goes through, reached from a term not yet
 begun and reaching a term finished, `pieces` holding the pieces `(l, r, _)` of each site
 """
-function live_channels(dims::Vector{Int}, pieces)
+function live_channels(linkdims::Vector{Int}, pieces)
     n = length(pieces)
-    reached = [ falses(d) for d in dims ]
+    reached = [ falses(d) for d in linkdims ]
     for j in 1:n-1, (l, r, _) in pieces[j]
         if r > 0 && (l == 0 || reached[j-1][l])
             reached[j][r] = true
         end
     end
-    finishing = [ falses(d) for d in dims ]
+    finishing = [ falses(d) for d in linkdims ]
     for j in n:-1:2, (l, r, _) in pieces[j]
         if l > 0 && (r == 0 || finishing[j][r])
             finishing[j-1][l] = true
         end
     end
-    return [ reached[j] .& finishing[j] for j in eachindex(dims) ]
+    return [ reached[j] .& finishing[j] for j in eachindex(linkdims) ]
 end
 
 """
@@ -128,17 +128,16 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, a::ComOp{R}, ref::Int = 1) where 
     ts = [ filter(x -> !iszero(x[3]), [ (l, r, com_tensor(sys, o, k)) for (l, r, o) in p ])
            for (k, p) in zip(ks, a.pieces) ]
     live = live_channels(a.linkdims, ts)
-    num = [ cumsum(v) for v in live ]
     ld = pre.linkdims
-    offs = [ ld[k] for k in ks[1:end-1] ]
+    # the number of each live channel in `pre`, after the channels its link already has
+    num = [ ld[k] .+ cumsum(live[j]) for (j, k) in enumerate(ks[1:end-1]) ]
     for (j, k) in enumerate(ks[1:end-1])
         ld[k] += count(live[j])
     end
     for (j, k) in enumerate(ks), (l, r, t) in ts[j]
         if (l == 0 || live[j-1][l]) && (r == 0 || live[j][r])
             # the coefficient on the opening, which every term takes once
-            push!(pre.terms[k], (l == 0 ? 1 : offs[j-1] + num[j-1][l],
-                                 r == 0 ? 1 : offs[j] + num[j][r],
+            push!(pre.terms[k], (l == 0 ? 1 : num[j-1][l], r == 0 ? 1 : num[j][r],
                                  l == 0 ? coef * t : t, ref))
         end
     end

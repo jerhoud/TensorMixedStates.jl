@@ -31,16 +31,11 @@ side_terms(a::Op) = [a]
 
 the operator of one site `o` as a combination of its atoms, the operators it sums that are not
 sums themselves, their coefficients taken apart: `2X + Y` gives `[X => 2, Y => 1]`, and
-`Left(X + Y)` gives `[Left(X) => 1, Left(Y) => 1]`. The atoms are sorted and the coefficients of
-equal atoms gathered. `compact` takes distinct atoms as independent: `X` and `Sp + Sm` are
-different operators to it, even on a qubit.
+`Left(X + Y)` gives `[Left(X) => 1, Left(Y) => 1]`, gathered and sorted by `simplify_sum`.
 """
 function linearize(o::Op)
-    d = Dict{Op, Number}()
-    for t in sumsubs(o), u in side_terms(scalararg(t))
-        add!(d, scalararg(u), scalarcoef(t) * scalarcoef(u))
-    end
-    return sort!([ a => c for (a, c) in d if c ≠ 0 ]; by = first)
+    s = simplify_sum([ scalarcoef(t) * u for t in sumsubs(o) for u in side_terms(scalararg(t)) ])
+    return Pair{Op, Number}[ scalararg(t) => scalarcoef(t) for t in sumsubs(s) if scalarcoef(t) ≠ 0 ]
 end
 
 """
@@ -172,17 +167,24 @@ end
 ################### Blocks of channels ###################
 
 """
+    SitePieces{T}
+
+the pieces of a site of a block of channels: each pair of channels `(l, r)`, numbered as in
+`ComOp`, mapped to the combination of atoms laid there, with coefficients of type `T`
+"""
+const SitePieces{T} = Dict{Tuple{Int, Int}, Dict{Op, T}}
+
+"""
     struct ComBlock{T}
 
 a com being built or reduced, its pieces kept as combinations of atoms with coefficients of
-type `T`: `pieces[k]` maps each pair of channels `(l, r)` of the `k`-th site from `start` to the
-combination laid there, numbered as in `ComOp`, and `dims[k]` is the number of channels of the
-link on the right of that site.
+type `T`: `pieces[k]` holds those of the `k`-th site from `start`, and `dims[k]` is the number
+of channels of the link on the right of that site.
 """
 struct ComBlock{T}
     start::Int
     dims::Vector{Int}
-    pieces::Vector{Dict{Tuple{Int, Int}, Dict{Op, T}}}
+    pieces::Vector{SitePieces{T}}
 end
 
 """
@@ -210,7 +212,6 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
     nodes = Tuple{Int, F, Int}[]
     node_ids = Dict{Tuple{Int, F, Int}, Int}()
     starts = Dict{Int, Vector{Tuple{T, F, Int}}}()
-    first_site, last_site = typemax(Int), typemin(Int)
     for (c, fs) in terms
         c = T(c)
         normed = Tuple{Int, F}[]
@@ -232,19 +233,18 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
         end
         s, f = normed[1]
         push!(get!(starts, s, Tuple{T, F, Int}[]), (c, f, rest))
-        first_site = min(first_site, s)
-        last_site = max(last_site, first(normed[end]))
     end
+    first_site = minimum(keys(starts))
+    last_site = maximum(first(last(fs)) for (_, fs) in terms)
     n = last_site - first_site + 1
-    pieces = [ Dict{Tuple{Int, Int}, Dict{Op, T}}() for _ in 1:n ]
-    dims = zeros(Int, n - 1)
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    dims = zeros(Int, n)
     # the channels of the link on the left, over the suffixes `cols`
     q = Vector{T}[]
     cols = Int[]
     for (j, k) in enumerate(first_site:last_site)
         m = length(q)
         rows = Dict{Tuple{Int, Op}, Dict{Int, T}}()
-        closing = [ Dict{Op, T}() for _ in 1:m ]
         for r in 1:m, (x, v) in zip(q[r], cols)
             if iszero(x)
                 continue
@@ -253,7 +253,7 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
             if s == k
                 for (a, β) in f
                     if rest == 0
-                        add!(closing[r], a, x * β)
+                        add!(get!(Dict{Op, T}, pieces[j], (r, 0)), a, x * β)
                     else
                         add!(get!(Dict{Int, T}, rows, (r, a)), rest, x * β)
                     end
@@ -265,19 +265,15 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
         for (c, f, rest) in get(starts, k, Tuple{T, F, Int}[]), (a, β) in f
             add!(get!(Dict{Int, T}, rows, (0, a)), rest, c * β)
         end
-        for r in 1:m
-            if !isempty(closing[r])
-                pieces[j][(r, 0)] = closing[r]
-            end
-        end
         # the channels continued first, in order, then the terms beginning here
         rowkeys = sort!(collect(keys(rows)); by = x -> (x[1] == 0 ? m + 1 : x[1], x[2]))
         newcols, grows = dense_rows([ rows[key] for key in rowkeys ])
         # a row continuing a channel is measured against all that the channel holds, so that
-        # a remainder of rounding is not taken for a channel of its own
+        # a remainder of rounding is not taken for a channel of its own. The pieces of the site
+        # are only the closings yet, one per channel
         content = zeros(real(T), m)
-        for r in 1:m, a in sort!(collect(keys(closing[r])))
-            content[r] += abs2(closing[r][a])
+        for ((r, _), comb) in pieces[j], (_, x) in sort!(collect(comb); by = first)
+            content[r] += abs2(x)
         end
         for (key, g) in zip(rowkeys, grows)
             if key[1] > 0
@@ -291,14 +287,12 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
                 add!(get!(Dict{Op, T}, pieces[j], (r, p)), a, t[i, p])
             end
         end
-        if j == n && !isempty(kept)
-            error("bug: channels left open on the last site of the terms")
-        end
         q = grows[kept]
         cols = newcols
-        if j < n
-            dims[j] = length(kept)
-        end
+        dims[j] = length(kept)
+    end
+    if pop!(dims) ≠ 0
+        error("bug: channels left open on the last site of the terms")
     end
     return ComBlock{T}(first_site, dims, pieces)
 end
@@ -311,7 +305,7 @@ laid on its openings, which every term takes once
 """
 function block_of(a::ComOp, c::Number, ::Type{T}) where T
     pieces = map(a.pieces) do p
-        d = Dict{Tuple{Int, Int}, Dict{Op, T}}()
+        d = SitePieces{T}()
         for (l, r, o) in p, (atom, β) in linearize(o)
             add!(get!(Dict{Op, T}, d, (l, r)), atom, T(l == 0 ? c * β : β))
         end
@@ -331,7 +325,7 @@ function direct_sum(blocks::Vector{ComBlock{T}}) where T
     last_site = maximum(b -> b.start + length(b.pieces) - 1, blocks)
     n = last_site - first_site + 1
     dims = zeros(Int, n - 1)
-    pieces = [ Dict{Tuple{Int, Int}, Dict{Op, T}}() for _ in 1:n ]
+    pieces = [ SitePieces{T}() for _ in 1:n ]
     for b in blocks
         o = b.start - first_site
         offs = [ dims[o + j] for j in eachindex(b.dims) ]
@@ -356,9 +350,6 @@ over with the coefficients of the combination
 function left_sweep!(b::ComBlock{T}, tol::Real) where T
     for j in 1:length(b.pieces) - 1
         m = b.dims[j]
-        if m == 0
-            continue
-        end
         entries = [ Dict{Tuple{Int, Op}, T}() for _ in 1:m ]
         for ((l, r), comb) in b.pieces[j], (a, x) in comb
             if r > 0
@@ -370,19 +361,17 @@ function left_sweep!(b::ComBlock{T}, tol::Real) where T
         if length(kept) == m
             continue
         end
-        here = Dict{Tuple{Int, Int}, Dict{Op, T}}()
+        here = SitePieces{T}()
         for ((l, r), comb) in b.pieces[j]
             p = r == 0 ? 0 : findfirst(==(r), kept)
             if !isnothing(p)
                 here[(l, p)] = comb
             end
         end
-        next = Dict{Tuple{Int, Int}, Dict{Op, T}}()
-        for key in sort!(collect(keys(b.pieces[j + 1])))
-            l, r = key
-            comb = b.pieces[j + 1][key]
+        next = SitePieces{T}()
+        for ((l, r), comb) in sort!(collect(b.pieces[j + 1]); by = first)
             if l == 0
-                next[key] = comb
+                next[(l, r)] = comb
                 continue
             end
             for p in eachindex(kept)
@@ -409,8 +398,7 @@ site becoming `(r, l)`. Mirroring twice gives `b` back, `start` being kept, whic
 does not read.
 """
 mirror(b::ComBlock{T}) where T =
-    ComBlock{T}(b.start, reverse(b.dims),
-                [ Dict{Tuple{Int, Int}, Dict{Op, T}}((r, l) => c for ((l, r), c) in p) for p in reverse(b.pieces) ])
+    ComBlock{T}(b.start, reverse(b.dims), [ SitePieces{T}((r, l) => c for ((l, r), c) in p) for p in reverse(b.pieces) ])
 
 """
     right_sweep(b, tol)
@@ -423,20 +411,10 @@ the channels of each link are as few as the rank of the coupling across it allow
 right_sweep(b::ComBlock, tol::Real) = mirror(left_sweep!(mirror(b), tol))
 
 """
-    combination(R, comb)
-
-the combination of atoms `comb` as an operator of one site of the representation `R`, its
-atoms in order, or `nothing` when all its coefficients are zero
-"""
-function combination(::Type{R}, comb::Dict{Op, T}) where {R, T}
-    ts = GenericOp{R, 1}[ x * a for (a, x) in sort!(collect(comb); by = first) if !iszero(x) ]
-    return isempty(ts) ? nothing : SumOp(ts)
-end
-
-"""
     coms_of(R, b)
 
-the block `b` as coms of the representation `R`, one for each run of links with channels
+the block `b` as coms of the representation `R`, one for each run of links with channels, a
+piece whose coefficients all vanish being left out
 """
 function coms_of(::Type{R}, b::ComBlock) where R
     coms = ComOp{R}[]
@@ -449,8 +427,8 @@ function coms_of(::Type{R}, b::ComBlock) where R
         pieces = map(c+1:d) do s
             p = Tuple{Int, Int, GenericOp{R, 1}}[]
             for (lr, comb) in sort!(collect(b.pieces[s]); by = first)
-                o = combination(R, comb)
-                if !isnothing(o)
+                o = simplify_sum(GenericOp{R, 1}[ x * a for (a, x) in comb ])
+                if scalarcoef(o) ≠ 0
                     push!(p, (lr..., o))
                 end
             end
@@ -538,24 +516,28 @@ compact(a::AbstractArray; kwargs...) = map(x -> compact(x; kwargs...), a)
 ################### Comparison ###################
 
 """
+    AtomProduct
+
+a product of atoms, as `com_expansion` and `monomials` give them: its factors `(sites, atom)`
+in the order of the sites
+"""
+const AtomProduct = Vector{Tuple{Tuple, Op}}
+
+"""
     com_expansion(a)
 
-the terms of the com `a` as products of atoms: a dictionary from each product, a vector of
-`(sites, atom)` in the order of the sites, to its coefficient. The products are followed from
-left to right, one dictionary of partial products per channel, a product taking the
-coefficients of the pieces it goes through, and a partial product whose coefficient vanishes
-is abandoned. Coefficients meant to cancel may leave products with a coefficient of the order
-of rounding: the expansion is `a` to that precision, not to the bit.
+the terms of the com `a` as products of atoms, a dictionary from each product to its
+coefficient. Coefficients meant to cancel may leave products with a coefficient of the order of
+rounding: the expansion is `a` to that precision, not to the bit.
 """
 function com_expansion(a::ComOp)
     T = coef_type(com_coefs(a))
-    W = Vector{Tuple{Tuple, Op}}
-    result = Dict{W, T}()
-    open = Dict{W, T}[]
+    result = Dict{AtomProduct, T}()
+    open = Dict{AtomProduct, T}[]
     for (j, (k, ps)) in enumerate(zip(com_sites(a), a.pieces))
-        next = [ Dict{W, T}() for _ in 1:get(a.linkdims, j, 0) ]
+        next = [ Dict{AtomProduct, T}() for _ in 1:get(a.linkdims, j, 0) ]
         for (l, r, o) in ps
-            from = l == 0 ? Dict(W() => one(T)) : open[l]
+            from = l == 0 ? Dict(AtomProduct() => one(T)) : open[l]
             to = r == 0 ? result : next[r]
             lin = linearize(o)
             for (p, x) in from, (atom, β) in lin
@@ -572,13 +554,12 @@ end
 """
     monomials(op)
 
-the operator placed on sites `op` as the dictionary of its products of atoms, each a vector of
-`(sites, atom)` in the order of the sites, to their coefficients: its terms once simplified,
-with a product of combinations of atoms expanded into products of atoms and a com into its
-terms, see `com_expansion`.
+the operator placed on sites `op` as the dictionary of its products of atoms to their
+coefficients: its terms once simplified, with a product of combinations of atoms expanded into
+products of atoms and a com into its terms, see `com_expansion`.
 """
 function monomials(op::IndexedOp)
-    d = Dict{Vector{Tuple{Tuple, Op}}, Number}()
+    d = Dict{AtomProduct, Number}()
     for t in sumsubs(removeMulti(simplify(op)))
         c, a = scalarcoef(t), scalararg(t)
         if a isa ComOp
@@ -590,7 +571,7 @@ function monomials(op::IndexedOp)
         fs = filter(x -> !(x isa IdentityOp), prodsubs(a))
         combs = [ [ (f.index, atom) => β for (atom, β) in linearize(f.op) ] for f in fs ]
         for choice in distribute(combs...)
-            add!(d, Tuple{Tuple, Op}[ first(x) for x in choice ], c * prod(last, choice; init = 1))
+            add!(d, AtomProduct([ first(x) for x in choice ]), c * prod(last, choice; init = 1))
         end
     end
     return d
@@ -599,12 +580,14 @@ end
 """
     a ≈ b
 
-for two operators placed on sites, whether their terms are equal up to the tolerances `rtol`
-and `atol`, as `isapprox` compares two vectors: both are simplified and written as sums of
-products of atoms, see `monomials`, those of a com included. The comparison is symbolic, as
-`==` is: `X(1) ≈ (Sp + Sm)(1)` is false, on a qubit as well.
+for two operators placed on sites, whether their terms are equal up to the tolerances `atol`
+and `rtol`, as `isapprox` compares two vectors, `rtol` defaulting to zero when `atol` is
+given: both are simplified and written as sums of products of atoms, see `monomials`, those of
+a com included. The comparison is symbolic, as `==` is: `X(1) ≈ (Sp + Sm)(1)` is false, on a
+qubit as well.
 """
-function isapprox(a::IndexedOp{R}, b::IndexedOp{R}; rtol::Real = sqrt(eps(Float64)), atol::Real = 0) where R
+function isapprox(a::IndexedOp{R}, b::IndexedOp{R};
+                  atol::Real = 0, rtol::Real = atol > 0 ? 0 : sqrt(eps(Float64))) where R
     da, db = monomials(a), monomials(b)
     nrm(d) = sqrt(sum(abs2, values(d); init = 0.0))
     # a product of `db` alone comes with its sign, which the norm does not see
