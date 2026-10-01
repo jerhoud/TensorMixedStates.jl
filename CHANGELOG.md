@@ -42,6 +42,12 @@ the reference article.
 
 ### Fixed
 
+- The approximation WII, the default of `approx_W` and `ApproxW`, is the one of Zaletel et
+  al. Its blocks left out the terms of one site on a site that a term of several sites goes
+  through, took them on one side only at the ends of such a term, and took a closing and an
+  opening on the same site in one order: on `h * Z(2) + J * X(1) * X(3)`, for instance, it was
+  off by `τ² h J` on `X(1) * Z(2) * X(3)`. It remains of the first order, its error now coming
+  from the terms that cross a same link alone.
 - The approximation WII, the default of `approx_W` and `ApproxW`, works on an operator with
   a constant term. It failed with an error from ITensors on every such operator on a system
   conserving something, and elsewhere as soon as another term acting on the first site alone

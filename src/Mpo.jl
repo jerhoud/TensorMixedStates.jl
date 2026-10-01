@@ -320,14 +320,25 @@ close_end(w::ITensor, link::Index, k::Int) = w * onehot(link => k)
 """
     add_block!(w, llink, l, rlink, r, u, idx[, c])
 
-add `c` times the one site operator `u` to the block of channels `l` and `r` of `w`, the
-tensor of the site of index `idx`, and return `w`. Zeros are skipped: a block sparse tensor
-refuses an element outside its flux, even a zero.
+add `c` times the one site operator `u`, an ITensor or its matrix, rows on `idx'`, to the block
+of channels `l` and `r` of `w`, the tensor of the site of index `idx`, and return `w`. Zeros
+are skipped: a block sparse tensor refuses an element outside its flux, even a zero.
 """
 function add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::ITensor,
                     idx::Index, c::Number = 1)
     for j in eachindval(idx, idx')
         v = c * u[j...]
+        if !iszero(v)
+            w[llink => l, rlink => r, j...] += v
+        end
+    end
+    return w
+end
+
+function add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::AbstractMatrix,
+                    idx::Index, c::Number = 1)
+    for j in eachindval(idx, idx')
+        v = c * u[last(j[2]), last(j[1])]
         if !iszero(v)
             w[llink => l, rlink => r, j...] += v
         end
@@ -456,12 +467,37 @@ end
 make_approx_W1(state::State, a, tau::Number) = make_approx_W1(PreMPO(state, a), tau)
 
 """
+    duhamel(m, x)
+    duhamel(m, x, y)
+
+``\\int_0^1 e^{sm} x e^{(1-s)m} ds``, and ``\\int_{0<s<t<1} e^{(1-t)m} x e^{(t-s)m} y e^{sm}
+ds\\,dt``, read in the exponential of a block triangular matrix, as in Van Loan, Computing
+integrals involving the matrix exponential, IEEE Trans. Autom. Control 23, 395 (1978)
+"""
+function duhamel(m::Matrix, x::Matrix)
+    k = size(m, 1)
+    z = zero(m)
+    return exp([m x; z m])[1:k, k+1:2k]
+end
+
+function duhamel(m::Matrix, x::Matrix, y::Matrix)
+    k = size(m, 1)
+    z = zero(m)
+    return exp([m x z; z m y; z z m])[1:k, 2k+1:3k]
+end
+
+"""
     make_approx_W2(::PreMPO, tau[, coefs])
     make_approx_W2(::State, op, tau)
 
 the MPO of the approximation WII of the exponential of `tau` times the operator, `coefs` being
 as for `make_mpo`, and the form taking a `State` being for a single operator as well. On a
 charged system the operator must have zero flux.
+
+It is the WII of Zaletel et al., Phys. Rev. B 91, 165112 (2015). It keeps every product of
+terms of which no two cross the same link, the terms of one site included, wherever a term of
+several sites goes through their site; its error, of order ``\\tau^2``, comes from the terms
+that cross a same link.
 """
 function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)
@@ -491,41 +527,41 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
                 # the coefficient and the time step go on the closing piece of a term alone,
                 # as in make_mpo. Dense blocks: a constant term comes as a delta, whose
                 # diagonal storage ITensors cannot add a tensor of another element type to,
-                # nor, on a charged system, add anything to or exponentiate
+                # nor, on a charged system, add anything to
                 v[l, r] += (r == 1 ? c * tau : one(c)) * denseblocks(u)
             end
         end
-        d = v[1, 1]
-        if isempty(d)
-            e = delta(dag(idx), idx')
-        else
-            e = exp(d)
-        end
-        v[1, 1] = e
-        for l in 2:ldim, r in 2:rdim
-            vl = v[l, 1]
-            vr = v[1, r]
-            if !isempty(vl) && !isempty(vr)
-                v[l, r] += replaceprime(vl'' * e' * vr, 3=>1)
+        # their equation 11: each block is read in the exponential of the terms of one site D,
+        # the transport A from channel l to channel r, the closing B of l and the opening C of
+        # r, each taken once at most, which puts exp(D) around every piece and takes a closing
+        # and an opening on the same site in both orders. Computed on dense matrices, whose
+        # zeros outside the flux of a block stay exact zeros
+        k = dim(idx)
+        dense(u) = isempty(u) ? nothing : Matrix{elt}(Array(u, idx', idx))
+        d = something(dense(v[1, 1]), zeros(elt, k, k))
+        closing = [ l == 1 ? nothing : dense(v[l, 1]) for l in 1:ldim ]
+        opening = [ r == 1 ? nothing : dense(v[1, r]) for r in 1:rdim ]
+        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
+        add_block!(w, llink, 1, rlink, 1, exp(d), idx)
+        for l in 2:ldim
+            if !isnothing(closing[l])
+                add_block!(w, llink, l, rlink, 1, duhamel(d, closing[l]), idx)
             end
         end
         for r in 2:rdim
-            vr = v[1, r]
-            if !isempty(vr)
-                v[1, r] = replaceprime(e' * vr, 2=>1)
+            if !isnothing(opening[r])
+                add_block!(w, llink, 1, rlink, r, duhamel(d, opening[r]), idx)
             end
         end
-        for l in 2:ldim
-            vl = v[l, 1]
-            if !isempty(vl)
-                v[l, 1] = replaceprime(vl' * e, 2=>1)
+        for l in 2:ldim, r in 2:rdim
+            a = dense(v[l, r])
+            block = isnothing(a) ? nothing : duhamel(d, a)
+            if !isnothing(closing[l]) && !isnothing(opening[r])
+                both = duhamel(d, closing[l], opening[r]) + duhamel(d, opening[r], closing[l])
+                block = isnothing(block) ? both : block + both
             end
-        end
-        
-        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
-        for l in 1:ldim, r in 1:rdim
-            if !isempty(v[l, r])
-                add_block!(w, llink, l, rlink, r, v[l, r], idx)
+            if !isnothing(block)
+                add_block!(w, llink, l, rlink, r, block, idx)
             end
         end
         if i == 1

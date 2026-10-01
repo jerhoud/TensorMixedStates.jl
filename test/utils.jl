@@ -68,3 +68,13 @@ function check_mix(dims, sites, measures)
         error("mix check $d, $s, $m fails with $mp and $mm")
     end
 end
+
+"""
+the dense matrix of the MPO `mpo` on the sites of `state`, the first site varying slowest
+"""
+function dense(state::State{R}, mpo) where R
+    t = prod(mpo)
+    s = [ SysIndex{R}(state.system, k) for k in 1:length(state) ]
+    d = prod(dim, s)
+    return reshape(Array(t, reverse([ x' for x in s ])..., reverse(s)...), d, d)
+end

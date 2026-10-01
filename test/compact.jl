@@ -20,16 +20,6 @@ function naive_pre(state::State{R}, op) where R
 end
 
 """
-the dense matrix of the MPO `mpo` on the sites of `state`, the first site varying slowest
-"""
-function dense(state::State{R}, mpo) where R
-    t = prod(mpo)
-    s = [ SysIndex{R}(state.system, k) for k in 1:length(state) ]
-    d = prod(dim, s)
-    return reshape(Array(t, reverse([ x' for x in s ])..., reverse(s)...), d, d)
-end
-
-"""
 the dense matrix of `op` on the sites of `state`, laid term by term, or as PreMPO lays it,
 `coefs` being the values of the time functions of a vector of operators
 """

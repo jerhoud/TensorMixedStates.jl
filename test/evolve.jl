@@ -173,6 +173,49 @@ end
     end
 end
 
+@testset "WII keeps the products of terms that cross no same link" begin
+    # WII is the approximation of Zaletel et al., whose blocks put the exponential of the terms
+    # of one site around every piece, transports included, and take a closing and an opening
+    # on the same site in both orders. On these operators it has a closed form, which the
+    # former blocks missed by a term of order τ²
+    q = Qubit()
+    x, y, z, o = (matrix(a, q) for a in (X, Y, Z, Id))
+    id8 = kron(o, o, o)
+    τ, h, J, K = 0.1, 0.7, 0.4, 0.3
+    w(st, op) = dense(st, make_approx_W2(st, op, τ))
+    st2, st3 = State{Pure}(System(2, q), "Up"), State{Pure}(System(3, q), "Up")
+    # a term of one site that a coupling goes through, commuting with it
+    @test norm(w(st3, h * Z(2) + J * X(1) * X(3)) - kron(o, exp(τ * h * z), o) * (id8 + τ * J * kron(x, o, x))) < 1e-12
+    # one at the end of a coupling, anticommuting with its factor there
+    @test norm(w(st2, h * Z(1) + J * X(1) * X(2)) - (kron(exp(τ * h * z), o) + J * sinh(τ * h) / h * kron(x, x))) < 1e-12
+    # two couplings meeting on a site by anticommuting factors, whose two orders cancel
+    @test norm(w(st3, J * X(1) * X(2) + K * Y(2) * Y(3)) - (id8 + τ * (J * kron(x, x, o) + K * kron(o, y, y)))) < 1e-12
+end
+
+@testset "The error of WII comes from the terms that cross a same link" begin
+    # WII keeps, up to order τ³, every product of terms of which no two cross the same link:
+    # the coefficient of τ² in exp(τH) - WII is half the sum of H_x H_y over the ordered pairs
+    # of terms crossing a link in common, a term with itself included. It is read off by a
+    # Richardson extrapolation, which removes the order τ³. The atoms X, Y and Z leave the
+    # terms on their sites when PreMPO compacts them
+    rng = Xoshiro(20261001)
+    n = 5
+    st = State{Pure}(System(n, Qubit()), "Up")
+    pauli() = rand(rng, (X, Y, Z))
+    terms = [ [ (randn(rng) * pauli()(i), i:i) for i in 1:n ];
+              [ (randn(rng) * pauli()(i) * pauli()(j), i:j) for i in 1:n for j in i+1:n ];
+              [ (randn(rng) * pauli()(i) * pauli()(j) * pauli()(k), i:k) for (i, j, k) in ((1, 2, 4), (2, 3, 5)) ] ]
+    h = sum(first, terms)
+    ds = [ dense(st, make_mpo(st, t)) for (t, _) in terms ]
+    crossing(a, b) = max(first(a), first(b)) < min(last(a), last(b))
+    c2 = sum(ds[x] * ds[y] for x in eachindex(terms), y in eachindex(terms)
+             if crossing(last(terms[x]), last(terms[y]))) / 2
+    hd = dense(st, make_mpo(st, h))
+    err(τ) = exp(τ * hd) - dense(st, make_approx_W2(st, h, τ))
+    τ = 1e-3
+    @test norm((8 * err(τ / 2) - err(τ)) / τ^2 - c2) < 1e-3 * norm(c2)
+end
+
 @testset "Per sweep limits in an evolution" begin
     # `cutoff` and `maxdim` may be given one value per sweep. dmrg is handed the whole
     # schedule, but the evolution solvers drive their sweeps themselves and have to pick
