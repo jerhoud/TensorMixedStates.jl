@@ -167,14 +167,14 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `apply_algo`: the algorithm of the product of the state by each MPO, `"densitymatrix"`
-  (default), `"naive"` or `"zipup"`, see `approx_W`
+  (default) or `"naive"`, see `approx_W`
 
 # Examples
 
     ApproxW(order = 2)                       # order 2, WII
     ApproxW(order = 4, w = 1)                # order 4, WI
     ApproxW(order = 4, n_hermitianize = 3)   # order 4, make hermitian every 3 steps
-    ApproxW(order = 2, apply_algo = "zipup") # order 2, products by zipup
+    ApproxW(order = 2, apply_algo = "naive") # order 2, naive products
 """
 @kwdef struct ApproxW
     order::Int

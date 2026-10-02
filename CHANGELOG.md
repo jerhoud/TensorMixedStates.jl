@@ -26,7 +26,7 @@ the reference article.
   `Tdvp` algorithm and the `GroundState` and `SteadyState` phases. A field left to `nothing`
   keeps the default of the method.
 - `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO, the algorithm of the product
-  of the state by an MPO: `"densitymatrix"`, the default, `"naive"` or `"zipup"`.
+  of the state by an MPO: `"densitymatrix"`, the default, or `"naive"`.
 - `noise` for `SteadyState`, as for `GroundState`, and among the documented options of
   `steady_state`, which already passed it on to `dmrg`.
 

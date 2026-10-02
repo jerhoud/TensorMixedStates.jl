@@ -244,8 +244,8 @@ advanced by `t`.
   (default `Limits()`, none)
 - `observer!`: an observer, see `ApproxWObserver`
 - `apply_algo`: the algorithm of the product of the state by each MPO, as `ITensorMPS.apply`
-  takes it: `"densitymatrix"` (default), `"naive"` or `"zipup"`. `"fit"` is not offered, since
-  it needs a number of sweeps of its own
+  takes it: `"densitymatrix"` (default) or `"naive"`. `"fit"` is not offered, since it needs a
+  number of sweeps of its own, nor `"zipup"`, which versions of ITensorMPS before 0.3.45 lack
 
 # Examples
 

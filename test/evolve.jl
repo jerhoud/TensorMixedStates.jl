@@ -269,19 +269,18 @@ end
 end
 
 @testset "The algorithms of the product of an MPO by a state" begin
-    # without truncation, the three give the exact product
+    # without truncation, the two give the exact product
     n = 4
     h = sum(X(i) * X(i + 1) for i in 1:n - 1)
     up = State{Pure}(System(n, Qubit()), "Up")
     st = tdvp(-im * h, 0.5, up; nsweeps = 5, limits = Limits(maxdim = 16, cutoff = 1e-14))
     m = make_mpo(st, h)
     w = approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5)
-    for alg in ("naive", "zipup")
-        @test norm(apply(m, st; apply_algo = alg) - apply(m, st)) < 1e-12
-        @test norm(approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5, apply_algo = alg) - w) < 1e-12
-    end
-    # "fit" needs a number of sweeps of its own, and a name that is none of them is refused too
-    for alg in ("fit", "exact")
+    @test norm(apply(m, st; apply_algo = "naive") - apply(m, st)) < 1e-12
+    @test norm(approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5, apply_algo = "naive") - w) < 1e-12
+    # "fit" needs a number of sweeps of its own, "zipup" is missing for a state from the lowest
+    # ITensorMPS accepted, and a name that is none of them is refused too
+    for alg in ("fit", "zipup", "exact")
         @test_throws "apply_algo is" apply(m, st; apply_algo = alg)
         @test_throws "apply_algo is" approx_W(-im * h, 0.5, up; order = 2, apply_algo = alg)
     end

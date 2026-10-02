@@ -6,12 +6,13 @@ export apply
     check_apply_algo(apply_algo)
 
 refuse an algorithm of the product of an MPO by a state that is not one of those offered,
-`"densitymatrix"`, `"naive"` and `"zipup"`. ITensorMPS has `"fit"` too, which needs a number
-of sweeps of its own.
+`"densitymatrix"` and `"naive"`. ITensorMPS has `"fit"` too, which needs a number of sweeps of
+its own, and `"zipup"`, which it only has for a state from version 0.3.45 on, above the lowest
+version TMS accepts.
 """
 function check_apply_algo(apply_algo::String)
-    if apply_algo ∉ ("densitymatrix", "naive", "zipup")
-        error("apply_algo is \"densitymatrix\", \"naive\" or \"zipup\", not $(repr(apply_algo))")
+    if apply_algo ∉ ("densitymatrix", "naive")
+        error("apply_algo is \"densitymatrix\" or \"naive\", not $(repr(apply_algo))")
     end
 end
 
@@ -34,7 +35,7 @@ together; a gate of one site, and the other bonds, are not truncated. An MPO tru
 whole result.
 
 `apply_algo`, for an MPO only, is the algorithm of its product with the state, as
-`ITensorMPS.apply` takes it: `"densitymatrix"` (default), `"naive"` or `"zipup"`.
+`ITensorMPS.apply` takes it: `"densitymatrix"` (default) or `"naive"`.
 
 # Examples
 

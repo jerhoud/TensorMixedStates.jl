@@ -850,7 +850,7 @@ end
     @test id([first(base), Evolve(duration = 1., time_step = 0.1, algo = ApproxW(order = 2),
                                   evolver = -im * Z(1))]) ≠
           id([first(base), Evolve(duration = 1., time_step = 0.1,
-                                  algo = ApproxW(order = 2, apply_algo = "zipup"),
+                                  algo = ApproxW(order = 2, apply_algo = "naive"),
                                   evolver = -im * Z(1))])
     @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
                                              evolver = -im * Z(1), measures = ["f" => X])])
