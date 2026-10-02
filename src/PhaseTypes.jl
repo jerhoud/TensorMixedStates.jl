@@ -16,7 +16,8 @@ or `LoadState`.
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
-- `type`: the representation of the state, `Pure()` or `Mixed()`
+- `type`: the representation of the state, `Pure()` or `Mixed()`, or a `Representation` an
+  extension defines, together with the method of `run_phase` creating its state
 - `system`: the `System` of the state, unused when `state` is a `State`
 - `state`: a description of the state, or a `State`, which is mixed if `type` asks for it (a
   mixed one cannot be made pure)
@@ -37,7 +38,7 @@ or `LoadState`.
     CreateState{Pure}(10, Qubit(), "Up")                                      # simple form
     CreateState{Mixed}([Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])    # other simple form
 """
-@kwdef struct CreateState{R <: PM}
+@kwdef struct CreateState{R <: Representation}
     name::String = "Creating state"
     time_start::Union{Nothing, Number} = nothing
     final_measures = []

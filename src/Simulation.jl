@@ -77,16 +77,16 @@ simulation writes to the same destinations and advances the same checkpoint.
     output(sim, "data.dat" => [X, Z(1)])
 """
 struct Simulation
-    state::Union{Nothing, State}
+    state::Union{Nothing, AbstractState}
     time::Number
     outputs::Outputs
     checkpoint::Checkpointer
-    Simulation(state::Union{Nothing, State}; time::Number = 0., output = nothing,
+    Simulation(state::Union{Nothing, AbstractState}; time::Number = 0., output = nothing,
                time_format::String = default_time_format,
                data_format::String = default_data_format,
                checkpoint::Checkpointer = Checkpointer()) =
         new(state, time, Outputs(output, time_format, data_format), checkpoint)
-    Simulation(s::Simulation, st::Union{Nothing, State}, t::Number = s.time) =
+    Simulation(s::Simulation, st::Union{Nothing, AbstractState}, t::Number = s.time) =
         new(st, t, s.outputs, s.checkpoint)
 end
 

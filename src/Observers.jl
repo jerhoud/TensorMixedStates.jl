@@ -82,7 +82,8 @@ written before it is kept. The sweep is committed only in a phase that has read 
 point, see `resume_step`; in any other the commit stays the start of the phase, while a
 stop and an interrupt are honoured all the same.
 """
-function sweep_commit!(sim::Simulation, state::State, t::Number, sweep::Int; energy = nothing)
+function sweep_commit!(sim::Simulation, state::AbstractState, t::Number, sweep::Int;
+                       energy = nothing)
     c = sim.checkpoint
     if c.sweeps
         k = c.last

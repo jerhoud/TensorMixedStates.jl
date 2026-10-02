@@ -145,6 +145,6 @@ end
 
 set_threading(system::System) = set_threading(threading_mode(system))
 
-set_threading(state::State) = set_threading(state.system)
+set_threading(state::AbstractState) = set_threading(state.system)
 
 set_threading(sim::Simulation) = set_threading(sim.state)

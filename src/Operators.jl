@@ -2,7 +2,7 @@
 # states or on density matrices, and how they are built, combined, compared and printed, before
 # any site or state is involved.
 
-export Pure, Mixed, GenericOp, IndexedOp, SimpleOp
+export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
 export named, parity
@@ -11,11 +11,20 @@ export dag, ⊗, isfermionic, has_fermionic
 ############# Types ################
 
 """
-    abstract type PM
+    abstract type Representation
 
-the supertype of `Pure` and `Mixed`, the two representations of a state
+the supertype of the representations in which `CreateState` creates a state: `Pure` and
+`Mixed`, see `PM`, and those an extension defines, whose states are `AbstractState`s.
 """
-abstract type PM end
+abstract type Representation end
+
+"""
+    abstract type PM <: Representation
+
+the supertype of `Pure` and `Mixed`, the two representations of a state that the package
+defines, which parametrize operators as well as states
+"""
+abstract type PM <: Representation end
 
 """
     struct Pure <: PM

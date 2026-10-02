@@ -1,7 +1,7 @@
 # States, MPS on a system in the pure or the mixed representation: product states built from
 # local states, the truncation limits, mixing a pure state and weakening a state.
 
-export State, mix, maxlinkdim, Limits
+export AbstractState, State, mix, maxlinkdim, Limits
 
 """
     struct PreObs
@@ -104,7 +104,17 @@ means never: `mod(sweep, 0)` would raise a division by zero, and a negative peri
 it due every `-period` sweeps. `checkpoint_due` applies the same rule.
 """
 sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
-  
+
+"""
+    abstract type AbstractState
+
+the supertype of the states a `Simulation` holds: `State`, and the states of a
+`Representation` an extension defines. Such a state has a field `system`, the `System` it
+lives on, and methods of the functions it supports: `expect_norm`, `expect1` and `expect2`,
+which `measure` calls, `apply` for gates, `write_state` and `read_state` to be saved.
+"""
+abstract type AbstractState end
+
 """
     struct State{R <: PM}
     State{R}(::System, states)
@@ -144,7 +154,7 @@ States can be added, subtracted, multiplied and divided by numbers. The two stat
 or a difference must be on the same system. It takes truncation limits as
 `+(a, b; limits = Limits(maxdim = 100))`, and truncates nothing by default.
 """
-struct State{R <: PM}
+struct State{R <: PM} <: AbstractState
     system::System
     state::MPS
     preobs::PreObs
@@ -156,11 +166,11 @@ show(io::IO, s::State{R}) where R =
     print(io, "State{$R}($(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
 
 """
-    length(::State)
+    length(::AbstractState)
 
 the number of sites of the state.
 """
-length(state::State) = length(state.system)
+length(state::AbstractState) = length(state.system)
 
 """
     maxlinkdim(::State)

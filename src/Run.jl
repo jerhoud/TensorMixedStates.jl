@@ -260,7 +260,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 # it resumes are those of one moment
                 write_checkpoint(c, sim.outputs)
                 k = c.last
-                if !isnothing(k) && k.state isa State
+                if !isnothing(k) && k.state isa AbstractState
                     # the returned simulation must carry what was reached, not what the phase
                     # was handed when it started
                     sim = Simulation(sim, k.state, k.time)
@@ -308,7 +308,7 @@ set the `threading` of a `SimData` before a phase: `:dense` or `:blocks` as aske
 """
 function adapt_threading(sim::Simulation, threading)
     mode = threading == :auto ?
-        (sim.state isa State ? threading_mode(sim.state.system) : nothing) : threading
+        (sim.state isa AbstractState ? threading_mode(sim.state.system) : nothing) : threading
     if isnothing(mode)
         return
     end

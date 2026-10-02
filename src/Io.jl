@@ -95,38 +95,66 @@ function site_params(site::AbstractSite)
 end
 
 """
+    write_state(group, state)
+
+write the tensors of `state` in the HDF5 group `group`, where `save_state` writes its type and
+its sites: the MPS of a `State` under the name `state`. The state of a representation an
+extension defines needs a method of its own, and one of `read_state` to be read back.
+"""
+function write_state(g, state::State)
+    g["state"] = state.state
+    return nothing
+end
+
+"""
+    state_type_name(state)
+
+the type of `state` as a state file records it: `"Pure"` or `"Mixed"` for a `State`, and for the
+state of an extension the full path of its type, which `state_type` finds again as the type of
+a site is found.
+"""
+state_type_name(::State{R}) where R = string(nameof(R))
+state_type_name(state::AbstractState) =
+    join((fullname(parentmodule(typeof(state)))..., nameof(typeof(state))), ".")
+
+"""
     save_state(filename, statename, state)
 
 save the state in the HDF5 file `filename` under the name `statename`. A file can hold several
 states under different names, and saving under a name already present replaces that state.
 Every field of every site must be an integer, a float, a boolean, a symbol, a string or
-`nothing`.
+`nothing`. The state of a representation an extension defines is saved through its method of
+`write_state`.
 
 # Examples
 
     save_state("myfile.h5", "ground_state", state)
 """
-function save_state(filename::String, statename::String, state::State{R}) where R
+function save_state(filename::String, statename::String, state::AbstractState)
     sites = state.system.sites
-    # read before the file is opened. A site field a state file cannot carry must not leave a
-    # half written group behind, and above all must not reach `delete_object` first: saving a
-    # state that cannot be written over a name already in the file would then destroy what was
-    # there and put nothing in its place
+    # read before the file is opened. A site field a state file cannot carry, or a state with
+    # no way of being written, must not leave a half written group behind, and above all must
+    # not reach `delete_object` first: saving a state that cannot be written over a name
+    # already in the file would then destroy what was there and put nothing in its place
     ps = map(site_params, sites)
+    if !hasmethod(write_state, Tuple{HDF5.Group, typeof(state)})
+        error("cannot save a $(typeof(state)), its type has no method of " *
+              "TensorMixedStates.write_state")
+    end
     h5open(filename, "cw") do f
         if haskey(f, statename)
             delete_object(f, statename)
         end
         g = create_group(f, statename)
         attributes(g)["version"] = state_file_version
-        attributes(g)["type"] = string(nameof(R))
+        attributes(g)["type"] = state_type_name(state)
         # the whole path, so that a site type of a module inside another one is found again
         g["modules"] = [ join(fullname(parentmodule(typeof(s))), ".") for s in sites ]
         g["types"] = [ string(nameof(typeof(s))) for s in sites ]
         g["nparams"] = [ length(fieldnames(typeof(s))) for s in sites ]
         g["pkinds"] = reduce(vcat, first.(ps); init = String[])
         g["params"] = reduce(vcat, last.(ps); init = String[])
-        g["state"] = state.state
+        write_state(g, state)
     end
     return nothing
 end
@@ -134,9 +162,10 @@ end
 """
     site_module(name)
 
-the module a state file names for a site type: the path from a root module down, as
-`save_state` writes it, `Main.MySites` for a module defined in a script. Older files hold the
-last name only, which is the whole path of a root module.
+the module a state file names for a site type, or for the type of the state of an extension:
+the path from a root module down, as `save_state` writes it, `Main.MySites` for a module
+defined in a script. Older files hold the last name only, which is the whole path of a root
+module.
 """
 function site_module(name::String)
     root, path... = split(name, '.')
@@ -159,7 +188,7 @@ function site_module(name::String)
         m = getfield(m, Symbol(p))
     end
     if !(m isa Module)
-        error("cannot find module $name needed to rebuild sites, is it loaded ?")
+        error("cannot find module $name needed to read the state, is it loaded ?")
     end
     return m
 end
@@ -195,15 +224,114 @@ function build_site(modname::String, typename::String, params::Vector)
 end
 
 """
+    state_type(name, statename)
+
+the type of the state `statename`, which its file names `name`, see `state_type_name`:
+`State{Pure}`, `State{Mixed}`, or the type of the state of an extension, whose module must be
+loaded.
+"""
+function state_type(name::String, statename::String)
+    if name == "Pure"
+        return State{Pure}
+    elseif name == "Mixed"
+        return State{Mixed}
+    end
+    i = findlast(==('.'), name)
+    t = nothing
+    if !isnothing(i)
+        m = site_module(name[1:prevind(name, i)])
+        s = Symbol(name[nextind(name, i):end])
+        t = isdefined(m, s) ? getfield(m, s) : nothing
+    end
+    if !(t isa Type && t <: AbstractState)
+        error("state \"$statename\" has unknown type \"$name\"")
+    end
+    return t
+end
+
+"""
+    read_sites(g, version)
+
+the sites a state file records in the group `g`, rebuilt from their modules, their types and
+the values of their fields, as version `version` of the format writes them.
+"""
+function read_sites(g, version)
+    modules = read(g, "modules")
+    types = read(g, "types")
+    nparams = read(g, "nparams")
+    # version 1 wrote every field as a Float64, which is what a checkpoint or a state saved by
+    # an earlier version still holds
+    if version == 1
+        params = collect(read(g, "params"))
+    else
+        params = map(param_value, read(g, "pkinds"), read(g, "params"))
+    end
+    sites = AbstractSite[]
+    j = 0
+    for (m, t, n) in zip(modules, types, nparams)
+        push!(sites, build_site(m, t, params[j+1:j+n]))
+        j += n
+    end
+    return identity.(sites)
+end
+
+"""
+    read_mps(g, sites)
+
+the MPS a state file holds in the group `g` under the name `state`, refused when its length is
+not the number of `sites`
+"""
+function read_mps(g, sites)
+    st = read(g, "state", MPS)
+    if length(sites) ≠ length(st)
+        error("state \"$(lstrip(HDF5.name(g), '/'))\" has $(length(sites)) sites but a state " *
+              "of length $(length(st))")
+    end
+    return st
+end
+
+"""
+    read_state(::Type{S}, group, sites, system)
+
+the state of type `S` that `save_state` wrote in the HDF5 group `group`, whose header records
+the sites `sites`. Without a `system`, `nothing`, it comes back on a system built from the
+file, whose indices are its own; given one, whose sites must be those, it comes back on it,
+which is what comparing it with a state already in hand requires. The state of a
+representation an extension defines needs a method of its own, reading what its `write_state`
+wrote.
+"""
+function read_state(::Type{State{Pure}}, g, sites, system)
+    st = read_mps(g, sites)
+    idx = Index[ siteind(st, i) for i in 1:length(st) ]
+    state = State{Pure}(System(sites, idx,
+                               [ mixed_index(idx[k], sites[k]) for k in eachindex(sites) ]), st)
+    return isnothing(system) ? state : State(system, state)
+end
+
+function read_state(::Type{State{Mixed}}, g, sites, system)
+    st = read_mps(g, sites)
+    idx = Index[ siteind(st, i) for i in 1:length(st) ]
+    # the pure indices are rebuilt rather than read, only the mixed ones being in the file, so
+    # they take the mode of the stored ones: a partial trace of a charged system keeps charged
+    # indices on sites that conserve nothing
+    charged = hasqns(first(idx))
+    state = State{Mixed}(System(sites, [ site_index(s, charged) for s in sites ], idx), st)
+    return isnothing(system) ? state : State(system, state)
+end
+
+read_state(t::Type{<:AbstractState}, _, _, _) =
+    error("cannot read a $t, its type has no method of TensorMixedStates.read_state")
+
+"""
     load_state(filename, statename[; system])
 
 the state saved under the name `statename` in the file `filename` by `save_state`.
 
-The site types are rebuilt by name, so the modules defining them must be loaded, which is
-automatic for those of this package. The state comes back on a system built from the file,
-or, when `system` is given, on that one, whose sites must match: this is what makes it
-comparable with a state already in hand, `inner` and the fidelities requiring their arguments
-to share a system.
+The site types are rebuilt by name, and so is the type of the state of an extension, so the
+modules defining them must be loaded, which is automatic for those of this package. The state
+comes back on a system built from the file, or, when `system` is given, on that one, whose
+sites must match: this is what makes it comparable with a state already in hand, `inner` and
+the fidelities requiring their arguments to share a system.
 
 # Examples
 
@@ -212,56 +340,14 @@ to share a system.
 """
 function load_state(filename::String, statename::String;
                     system::Union{Nothing, System} = nothing)
-    st = h5open(filename, "r") do f
+    return h5open(filename, "r") do f
         g = open_group(f, statename)
         version = read(attributes(g)["version"])
         if !(version in readable_state_file_versions)
             error("state \"$statename\" has file version $version, expected one of " *
                   join(readable_state_file_versions, ", "))
         end
-        type = read(attributes(g)["type"])
-        modules = read(g, "modules")
-        types = read(g, "types")
-        nparams = read(g, "nparams")
-        # version 1 wrote every field as a Float64, which is what a checkpoint or a state
-        # saved by an earlier version still holds
-        if version == 1
-            params = collect(read(g, "params"))
-        else
-            params = map(param_value, read(g, "pkinds"), read(g, "params"))
-        end
-        st = read(g, "state", MPS)
-        if length(types) ≠ length(st)
-            error("state \"$statename\" has $(length(types)) sites but a state of length $(length(st))")
-        end
-        sites = AbstractSite[]
-        j = 0
-        for (m, t, n) in zip(modules, types, nparams)
-            push!(sites, build_site(m, t, params[j+1:j+n]))
-            j += n
-        end
-        sites = identity.(sites)
-        idx = Index[ siteind(st, i) for i in 1:length(st) ]
-        if type == "Pure"
-            return State{Pure}(System(sites,
-                idx, [ mixed_index(idx[k], sites[k]) for k in eachindex(sites) ]), st)
-        elseif type == "Mixed"
-            # the pure indices are rebuilt rather than read, only the mixed ones being in the
-            # file, so they take the mode of the stored ones: a partial trace of a charged
-            # system keeps charged indices on sites that conserve nothing
-            charged = hasqns(first(idx))
-            return State{Mixed}(
-                System(sites, [ site_index(s, charged) for s in sites ], idx), st)
-        else
-            error("state \"$statename\" has unknown type \"$type\"")
-        end
-    end
-    # without a system the state comes back on one built from the file, whose indices are
-    # its own. `system` puts it on an existing one instead, which is what comparing it with
-    # a state already in hand requires
-    if isnothing(system)
-        return st
-    else
-        return State(system, st)
+        type = state_type(read(attributes(g)["type"]), statename)
+        return read_state(type, g, read_sites(g, version), system)
     end
 end

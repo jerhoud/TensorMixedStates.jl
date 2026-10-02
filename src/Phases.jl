@@ -170,7 +170,7 @@ function run_search(solve, sim::Simulation, phase, what::String, final_line)
     return sim
 end
 
-function run_phase(sim::Simulation, phase::CreateState{R}) where R
+function run_phase(sim::Simulation, phase::CreateState{R}) where {R <: PM}
     if !isnothing(phase.seed)
         Random.seed!(phase.seed)
     end

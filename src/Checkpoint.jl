@@ -185,7 +185,7 @@ struct Commit
     sweep::Int
     phase_time::Number
     time::Number
-    state::Union{Nothing, State}
+    state::Union{Nothing, AbstractState}
     energy::Union{Nothing, Float64}
     reached::NamedTuple
 end
@@ -266,7 +266,7 @@ record a point the simulation can be resumed from, see `Commit`. How far the des
 have got is read here, at the same moment as the rest.
 """
 commit!(c::Checkpointer, o::Outputs, phase::Int, sweep::Int, phase_time::Number, t::Number,
-        state::Union{Nothing, State}; energy = nothing) =
+        state::Union{Nothing, AbstractState}; energy = nothing) =
     c.last = Commit(phase, sweep, phase_time, t, state, energy, output_marks(o))
 
 """
@@ -298,7 +298,7 @@ checkpointed at its start however long it runs, see `resume_step`.
 """
 function write_checkpoint(c::Checkpointer, o::Outputs)
     k = c.last
-    if isempty(c.dir) || isnothing(k) || !(k.state isa State)
+    if isempty(c.dir) || isnothing(k) || !(k.state isa AbstractState)
         return nothing
     end
     if k !== c.written

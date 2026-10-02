@@ -29,6 +29,12 @@ the reference article.
   of the state by an MPO: `"densitymatrix"`, the default, or `"naive"`.
 - `noise` for `SteadyState`, as for `GroundState`, and among the documented options of
   `steady_state`, which already passed it on to `dmrg`.
+- `AbstractState` and `Representation`, for a representation of a state that an extension
+  defines. `CreateState` takes it as its `type`, through the method of `run_phase` the
+  extension gives for it. A `Simulation` holds its states, `output` measures them through the
+  expectation values the extension computes, and `save_state`, `load_state` and the
+  checkpoints save them through its methods of `write_state` and `read_state`. The files of a
+  `State` are written as before.
 
 ### Changed
 

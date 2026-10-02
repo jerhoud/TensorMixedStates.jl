@@ -610,7 +610,7 @@ what `st` conserves, since a simulation may weaken its state after the reference
 Weakening is exact and costs nothing when the two already conserve the same. A reference
 conserving less than `st` is refused.
 """
-function reference_on(st::State, ref::State)
+function reference_on(st::AbstractState, ref::State)
     target = symmetries(st.system)
     source = symmetries(ref.system)
     # weakening the measured state instead would convert the whole state of the simulation at
@@ -762,24 +762,26 @@ the pairs `name => value` of the measurements of `o`, grouped as in `o`: `v` hol
 expectation values `measure` has computed, `t` is the time, and `kwargs` give the values of
 the `Symbol` measurements, empty for one it does not give.
 """
-get_val(o::Vector{Measure}, v::Dict, st::State, t::Number; kwargs...) =
+get_val(o::Vector{Measure}, v::Dict, st::AbstractState, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o]
-get_val(o::Measure, v::Dict, st::State, t::Number; kwargs...) =
+get_val(o::Measure, v::Dict, st::AbstractState, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o.measures]
-function get_val(o::Declared, v::Dict, st::State, t::Number; kwargs...)
+function get_val(o::Declared, v::Dict, st::AbstractState, t::Number; kwargs...)
     name, x = get_val(o.obs, v, st, t; kwargs...)
     return written_name(o.kind, name) => kept_value(o, name, x, t)
 end
-get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::State, ::Number; kwargs...) = o.name => v[o.obs]
-get_val(o::ObsOp, v::Dict, ::State, ::Number; kwargs...) = o.name => sum(v[p] for p in o.obs)
-get_val(o::TimeFunc, ::Dict, ::State, t::Number; kwargs...) =
+get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::AbstractState, ::Number; kwargs...) =
+    o.name => v[o.obs]
+get_val(o::ObsOp, v::Dict, ::AbstractState, ::Number; kwargs...) =
+    o.name => sum(v[p] for p in o.obs)
+get_val(o::TimeFunc, ::Dict, ::AbstractState, t::Number; kwargs...) =
     if o.obs isa Function
         o.name => o.obs(t)
     else
         o.name => o.obs
     end
-get_val(o::StateFunc, ::Dict, st::State, ::Number; kwargs...) = o.name => o.obs(st)
-get_val(o::Symbol, ::Dict, st::State, ::Number; kwargs...) =
+get_val(o::StateFunc, ::Dict, st::AbstractState, ::Number; kwargs...) = o.name => o.obs(st)
+get_val(o::Symbol, ::Dict, st::AbstractState, ::Number; kwargs...) =
     if haskey(kwargs, o)
         string(o) => kwargs[o]
     else
@@ -818,7 +820,7 @@ on_numbers(f, x::Number) = f(x)
 on_numbers(f, x::AbstractArray) = map(y -> on_numbers(f, y), x)
 on_numbers(_, x) = x
 
-function get_val(o::Check, v::Dict, st::State, t::Number; kwargs...)
+function get_val(o::Check, v::Dict, st::AbstractState, t::Number; kwargs...)
     # compared as computed: the kind of a part decides how it is written, and what it drops
     # must not decide whether the check passes, a complex reference given as a function of
     # time, real unless declared otherwise, for instance
@@ -858,13 +860,13 @@ from the keyword argument of that name, and is empty without one: the phases pas
     measure(state, Check("check", X(1)X(2), t->sin(2t)), 0.8) # compute and check the given observable against a computed value
     measure(state, [X(2), Y, (X, Y)]) # several measures together
 """
-measure(state::State, args, t::Number = 0.; kwargs...) =
+measure(state::AbstractState, args, t::Number = 0.; kwargs...) =
     measure(state, Measure(args), t; kwargs...)
 
-measure(state::State, m::Measure, t::Number = 0.; kwargs...) =
+measure(state::AbstractState, m::Measure, t::Number = 0.; kwargs...) =
     measure(state, [m], t; kwargs...)[1]
 
-function measure(state::State, m::Vector{Measure}, t::Number = 0.; kwargs...)
+function measure(state::AbstractState, m::Vector{Measure}, t::Number = 0.; kwargs...)
     vals = Dict()
     # the terms are computed with expect_norm: make_obs simplified them once, there is nothing
     # left for expect to normalise

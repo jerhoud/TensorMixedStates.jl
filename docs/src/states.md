@@ -15,7 +15,8 @@ SysIndex
 Limits
 State
 State(::System, ::State)
-length(::State)
+AbstractState
+length(::AbstractState)
 maxlinkdim(::State)
 mix
 truncate(::State)
