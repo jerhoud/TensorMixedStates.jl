@@ -295,58 +295,63 @@ mixed_index(i::Index, site::AbstractSite) =
     addtags(combinedind(combiner(i, dag(bra_index(i, site)'); tags = tags(i))), "Mixed")
 
 """
-    operator_library
+    operator_definition(site, ::Val{name})
 
-the definitions of the operators declared by `@def_operators`, keyed by site type and
-operator name: a matrix, a function of the site returning one, or an operator expression.
+the definition `@def_operators` gave the operator `name` for the type of `site`: a matrix, a
+function of the site returning one, or an operator expression, and `nothing` when it gave
+none. Each declaration adds a method, see `add_definition`.
 """
-const operator_library::Dict{Tuple{DataType, String}, Union{Matrix, Function, GenericOp}} = Dict()
+operator_definition(::AbstractSite, ::Val) = nothing
 
 """
-    state_library
+    state_definition(site, ::Val{name})
 
-the definitions of the states declared by `@def_states`, keyed by site type and state name:
-a vector, a density matrix, a function of the site returning either, or the name of another
-state.
+the definition `@def_states` gave the state `name` for the type of `site`: a vector, a density
+matrix, a function of the site returning either, or the name of another state, and `nothing`
+when it gave none. Each declaration adds a method, see `add_definition`.
 """
-const state_library::Dict{Tuple{DataType, String}, Union{String, Vector, Matrix, Function}} = Dict()
+state_definition(::AbstractSite, ::Val) = nothing
+
+"""
+    definition(f, site, name)
+
+the definition that `f`, `operator_definition` or `state_definition`, holds for the name
+`name` on the type of `site`, or `nothing`. It is looked for in the latest world: a
+declaration adds a method while the code around it runs, which a plain call would not see
+until that code is over, neither `check_declared` within the expansion of `@def_operators`
+nor what follows the declaration in the same `@testset`.
+"""
+definition(f, site::AbstractSite, name::String) = Base.invokelatest(f, site, Val(Symbol(name)))
 
 """
     F_info(site)
 
-return the matrix value of `F` for the `site` as stored in `operator_library`, the
-identity for a site with no `F` of its own, which is not fermionic.
+the definition of `F` for the `site`, as `@def_operators` gave it, and the identity for a site
+with no `F` of its own, which is not fermionic.
 """
-function F_info(site::AbstractSite)
-    name = typeof(site)
-    t = (name, "F")
-    return get(operator_library, t, Id)
-end
+F_info(site::AbstractSite) = something(definition(operator_definition, site, "F"), Id)
 
 """
     operator_info(site, op)
 
-the definition of the operator named `op` for the type of `site`, as `operator_library` holds
-it, and an error when there is none.
+the definition of the operator named `op` for the type of `site`, as `@def_operators` gave it,
+and an error when there is none.
 """
 function operator_info(site::AbstractSite, op::String)
-    name = typeof(site)
-    t = (name, op)
-    r = get(operator_library, t, nothing)
+    r = definition(operator_definition, site, op)
     if isnothing(r)
-        error("operator $op is not defined for site $name")
-    else
-        return r
+        error("operator $op is not defined for site $(typeof(site))")
     end
+    return r
 end
 
 """
     state_info(site, statename)
 
-the definition of the state `statename` for the type of `site`, as `state_library` holds it,
-and `nothing` when the site declares no state of that name.
+the definition of the state `statename` for the type of `site`, as `@def_states` gave it, and
+`nothing` when the site declares no state of that name.
 """
-state_info(site::AbstractSite, st::String) = get(state_library, (typeof(site), st), nothing)
+state_info(site::AbstractSite, st::String) = definition(state_definition, site, st)
 
 """
     identity_operator(site)
@@ -358,23 +363,56 @@ identity_operator(dim::Int) = Matrix{Float64}(I, dim, dim)
 identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
 """
-    add_operator(site, op, r, type = plain_op)
+    add_definition(f, mod, site, name, r, what)
 
-register `r` as the definition of the operator named `op` for the type of `site`, refusing a
-second one, and return the `Operator{1}` standing for that name.
+give `r` as the definition of `name` for the type of `site`, by a method of `f`,
+`operator_definition` or `state_definition`, refusing a second one, `what` naming the kind of
+`name` in the message.
+
+The method is evaluated in `mod`, the module making the declaration. Julia keeps the methods a
+package adds to the functions of another one when it precompiles it, where what it wrote in a
+dictionary of this module was lost, and a package may not evaluate into this module while it
+is precompiled. Being evaluated, the method can be added from any scope, a `@testset`
+included.
+"""
+function add_definition(f, mod::Module, site::AbstractSite, name::String, r, what::String)
+    if !isnothing(definition(f, site, name))
+        error("$what $name is already defined for site $(typeof(site))")
+    end
+    Core.eval(mod, :($(GlobalRef(@__MODULE__, nameof(f)))(::$(typeof(site)),
+                                                          ::$(Val{Symbol(name)})) =
+                     $(QuoteNode(r))))
+    return nothing
+end
+
+"""
+    remove_definition(f, site, name)
+
+take back the method of `f` that `add_definition` added for `name` on the type of `site`, so
+that a declaration `check_declared` refuses can be made again once corrected. The method
+common to every site is never taken back: it is the answer for every name never declared.
+"""
+function remove_definition(f, site::AbstractSite, name::String)
+    m = which(f, Tuple{typeof(site), Val{Symbol(name)}})
+    if m.sig == Tuple{typeof(f), typeof(site), Val{Symbol(name)}}
+        Base.delete_method(m)
+    end
+    return nothing
+end
+
+"""
+    add_operator(mod, site, op, r, type = plain_op)
+
+give `r` as the definition of the operator named `op` for the type of `site`, see
+`add_definition`, and return the `Operator{1}` standing for that name.
 
 Only `@def_operators` calls it, which keeps the name, its `OpType` and the definitions made
 for the other site types consistent.
 """
-function add_operator(site::AbstractSite, op::String, r::Union{Matrix, Function, SimpleOp}, type::OpType=plain_op)
-    name = typeof(site)
-    t = (name, op)
-    if haskey(operator_library, t)
-        error("operator $op is already defined for site $name")
-    else
-        operator_library[t] = r
-        return Operator{1}(op, nothing, type)
-    end
+function add_operator(mod::Module, site::AbstractSite, op::String,
+                      r::Union{Matrix, Function, SimpleOp}, type::OpType = plain_op)
+    add_definition(operator_definition, mod, site, op, r, "operator")
+    return Operator{1}(op, nothing, type)
 end
 
 """
@@ -404,25 +442,20 @@ function check_shared_operator(existing, name::String, type::OpType, site::Abstr
 end
 
 """
-    add_state(site, st, r)
-    add_state(site, sts, r)
+    add_state(mod, site, st, r)
+    add_state(mod, site, sts, r)
 
-register `r` as the definition of the state named `st`, or of every name of `sts`, for the
-type of `site`, refusing a second one. Only `@def_states` calls it.
+give `r` as the definition of the state named `st`, or of every name of `sts`, for the type of
+`site`, see `add_definition`. Only `@def_states` calls it.
 """
-function add_state(site::AbstractSite, st::String, r::Union{String, Vector, Matrix, Function})
-    name = typeof(site)
-    t = (name, st)
-    if haskey(state_library, t)
-        error("state $st is already defined for site $name")
-    else
-        state_library[t] = r
-    end
-end
+add_state(mod::Module, site::AbstractSite, st::String,
+          r::Union{String, Vector, Matrix, Function}) =
+    add_definition(state_definition, mod, site, st, r, "state")
 
-add_state(site::AbstractSite, sts::Vector{String}, r::Union{String, Vector, Matrix, Function}) =
+add_state(mod::Module, site::AbstractSite, sts::Vector{String},
+          r::Union{String, Vector, Matrix, Function}) =
     foreach(sts) do st
-        add_state(site, st, r)
+        add_state(mod, site, st, r)
     end
 
 """
@@ -457,7 +490,7 @@ macro def_states(site, symbols)
         val = expr.args[3]
         push!(e.args,
             quote
-                add_state($(esc(site)), $(esc(sym)), $(esc(val)))
+                add_state($__module__, $(esc(site)), $(esc(sym)), $(esc(val)))
             end)
     end
     return e

@@ -645,12 +645,15 @@ end
     # checked when the operator is built on its sites as well
     @test_throws "declared selfadjoint_op but is not self adjoint" Operator{2}("P",
         kron([0. 1.; 0. 0.], [1. 0.; 0. 1.]), selfadjoint_op, q)
-    # every operator of the libraries has the type its matrices say, on sites of every size
-    lib = TensorMixedStates.operator_library
+    # every operator of the libraries has the type its matrices say, on sites of every size.
+    # What a site type declares are the methods of operator_definition for that type
+    declared(t) = [ string(m.sig.parameters[3].parameters[1])
+                    for m in methods(TensorMixedStates.operator_definition)
+                    if m.sig.parameters[2] == t ]
     for s in [Qubit(), Fermion(), Electron(), Tj(), Spin(0), Spin(1/2), Spin(1), Qudit(1),
               Qudit(2), Qudit(3), Boson(2), Boson(4), Qboson(1., 2), Qboson(0.5, 4)]
-        for (t, name) in keys(lib)
-            if t == typeof(s) && name ≠ "F" && isdefined(TensorMixedStates, Symbol(name))
+        for name in declared(typeof(s))
+            if name ≠ "F" && isdefined(TensorMixedStates, Symbol(name))
                 o = getfield(TensorMixedStates, Symbol(name))
                 if o isa Operator
                     @test_ok matrix(o, s)

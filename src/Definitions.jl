@@ -275,8 +275,8 @@ end
 
 check the operators `@def_operators` has just declared for `site`, given as `(name, type)`
 pairs, against their types on that site, and `F` against being an involution. Other sites of
-the same type are checked where the operators are used, see `checked_type`. A refusal removes
-the declarations from the library, so that they can be made again once corrected.
+the same type are checked where the operators are used, see `checked_type`. A refusal takes
+the declarations back, so that they can be made again once corrected.
 """
 function check_declared(site::AbstractSite, declared)
     try
@@ -285,7 +285,7 @@ function check_declared(site::AbstractSite, declared)
         end
     catch
         for (name, _) in declared
-            delete!(operator_library, (typeof(site), name))
+            remove_definition(operator_definition, site, name)
         end
         rethrow()
     end
@@ -358,7 +358,7 @@ macro def_operators(site, symbols)
                 # name is left alone
                 push!(e.args,
                 quote
-                    add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                    add_operator($__module__, $(esc(site)), $nsym, $(esc(val)), $(esc(type)))
                 end)
             elseif isdefined(__module__, sym)
                 # the name is already in scope, so it is registered for this site and
@@ -369,12 +369,13 @@ macro def_operators(site, symbols)
                 push!(e.args,
                     quote
                         check_shared_operator($(esc(sym)), $nsym, $(esc(type)), $(esc(site)))
-                        add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                        add_operator($__module__, $(esc(site)), $nsym, $(esc(val)), $(esc(type)))
                     end)
             else
                 push!(e.args,
                     quote
-                        const $(esc(sym)) = add_operator($(esc(site)), $nsym, $(esc(val)), $(esc(type)))
+                        const $(esc(sym)) = add_operator($__module__, $(esc(site)), $nsym,
+                                                         $(esc(val)), $(esc(type)))
                     end)
             end
         end
@@ -529,8 +530,8 @@ wrote, one operator or a tuple of them, each possibly marked `strong`.
 
 The operators are read here rather than kept, since they could not be written to a state file
 and read back: the name a conserved quantity prints under, as `2Sz` or `parity(N)`, is an
-expression and not a key of the operator library. Only their charges are needed, and those are
-what the string holds.
+expression and not the name of an operator declared for the site. Only their charges are
+needed, and those are what the string holds.
 
 A site type of your own calls it to fill its `conserve` field, the site being built bare
 first, since the charges depend on its type and on its other fields, not on that one.

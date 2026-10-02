@@ -74,6 +74,10 @@ the reference article.
   a constant term. It failed with an error from ITensors on every such operator on a system
   conserving something, and elsewhere as soon as another term acting on the first site alone
   had another element type than the constant, as in `-im * N(1) + 0.5 * Id(1)`.
+- A site type declared in a package rather than in a script keeps the states and operators
+  that `@def_states` and `@def_operators` declare for it, and so do the operators a package
+  declares for a site type of TMS. Once the package was precompiled, they were lost, and the
+  site answered that they were not defined.
 
 ## [1.6.0] - 2026-09-30
 

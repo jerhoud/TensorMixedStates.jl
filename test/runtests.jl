@@ -15,7 +15,7 @@ the groups of tests, each one lives in the file of the same name, whose header c
 says what belongs there. To add a group, create the file and add its name here.
 """
 const GROUPS = ["building", "operators", "sites", "observables", "states_io", "evolve", "algorithms", "checkpoint",
-                "threading", "compact"]
+                "threading", "compact", "extension"]
 
 # without arguments everything runs, otherwise only the groups given on the command
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`

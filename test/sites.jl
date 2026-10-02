@@ -308,14 +308,21 @@ end
     @test_throws "operator N is not defined for site Dummit2" matrix(N, Dummit2())
     @test_throws "definition of its own" @def_operators(Dummit2(),
         [ plain_op => [ Renamed = [0. 0. ; 0. 1.] ] ])
-    # the types, and F, are checked on the site given, and a refusal leaves the library as it was
-    lib = TensorMixedStates.operator_library
+    # the types, and F, are checked on the site given, and a refusal takes the declaration back,
+    # so that it can be made again once corrected
     @test_throws "X is declared involution_op but is not self adjoint on Dummit2()" @def_operators(
         Dummit2(), [ involution_op => [ X = [0. 1. ; 0. 0.] ] ])
-    @test !haskey(lib, (Dummit2, "X"))
+    @test_throws "operator X is not defined for site Dummit2" matrix(X, Dummit2())
     @test_throws "F is not an involution on Dummit2()" @def_operators(Dummit2(),
         [ involution_op => [ F = [1. 0. ; 0. 2.] ] ])
-    @test !haskey(lib, (Dummit2, "F"))
+    @test matrix(F, Dummit2()) == identity_operator(2)
+    @def_operators(Dummit2(), [ involution_op => [ X = [0. 1. ; 1. 0.] ] ])
+    @test matrix(X, Dummit2()) == [0. 1. ; 1. 0.]
+    # a second declaration of a name for a site type is refused
+    @test_throws "operator X is already defined for site Dummit2" @def_operators(Dummit2(),
+        [ involution_op => [ X = [0. 1. ; 1. 0.] ] ])
+    @test_throws "state 1 is already defined for site Dummit" @def_states(Dummit(),
+        [ "1" => [1., 0.] ])
 end
 
 @testset "Index tags" begin
