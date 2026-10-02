@@ -19,6 +19,7 @@ makedocs(
     pages = [
         "index.md",
         "manual.md",
+        "extending.md",
         "Reference" => [
             "sites.md",
             "operators.md",

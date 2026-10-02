@@ -4,8 +4,8 @@
 # its top level is only checked by a package written for the occasion, precompiled and loaded
 # in a process of its own: that code runs while the package is precompiled, and only what
 # Julia keeps of that run is there once the package is loaded, while in the process of the
-# tests the same code would run when included and show nothing. A representation of its own,
-# with its state type, needs no such thing and is checked here directly.
+# tests the same code would run when included and show nothing. A representation or an
+# algorithm of its own needs no such thing and is checked here directly.
 
 """
     run_with_packages(script, dir)
@@ -134,4 +134,76 @@ end
             @test last(resumed.data["m"]["Z"]["data"]) ≈ [-1, 0, 1]
         end
     end
+end
+
+# An algorithm of one's own: tdvp one step at a time, `run_steps` doing the bookkeeping. It
+# makes the same steps as `Tdvp`, and so writes the same lines, interrupted or not.
+struct Stepwise <: Algo end
+
+function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::Evolve;
+                                  evolver, coefs, nsweeps)
+    dt = phase.duration / nsweeps
+    return run_steps(sim, nsweeps) do sim, k
+        sim = tdvp(evolver, dt, sim; phase.limits)
+        if mod(k, phase.measures_period) == 0
+            output(sim, phase.measures; sweep = k)
+        end
+        return sim
+    end
+end
+
+# Tdvp on the state of the representation above, through the tdvp of the state it wraps
+function TensorMixedStates.evolve(algo::Tdvp, st::WrappedState, sim::Simulation, phase::Evolve;
+                                  kwargs...)
+    s = TensorMixedStates.evolve(algo, st.inner, Simulation(sim, st.inner), phase; kwargs...)
+    return Simulation(s, WrappedState(s.state))
+end
+
+@testset "An algorithm of one's own" begin
+    mktempdir() do dir
+        cd(dir) do
+            # a measurement that creates the stop file when it has been taken `stop_in[]` times
+            stop_in = Ref(0)
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop_in[] > 0
+                    stop_in[] -= 1
+                    if stop_in[] == 0
+                        touch("stop")
+                    end
+                end
+                0.
+            end)
+            start = CreateState{Pure}(2, Qubit(), "Up")
+            stepped(algo) = Evolve(duration = 0.3, time_step = 0.1, algo = algo,
+                                   evolver = -im * (X(1) + Z(1) * Z(2)),
+                                   limits = Limits(maxdim = 4, cutoff = 1e-15),
+                                   measures = "data" => [X(1), Z(2), :sweep, stopper])
+            runTMS(SimData(name = "tdvp", phases = [start, stepped(Tdvp())]))
+            reference = read("tdvp/data", String)
+            runTMS(SimData(name = "own", phases = [start, stepped(Stepwise())]))
+            @test read("own/data", String) == reference
+            # stopped after each of its steps and resumed, it goes on from where it stopped
+            for k in 1:3
+                stop_in[] = k
+                data = SimData(name = "chk$k", phases = [start, stepped(Stepwise())])
+                runTMS(data)
+                @test stop_in[] == 0
+                runTMS(data)
+                @test read("chk$k/data", String) == reference
+            end
+        end
+    end
+    # Tdvp on the state of an extension, and an algorithm with no method for it
+    sys = System(2, Qubit())
+    brief(algo) = Evolve(duration = 0.2, time_step = 0.1, algo = algo, evolver = -im * X(1),
+                         final_measures = Data("z") => Z(1))
+    plain = runTMS(SimData(phases = [CreateState(type = Pure(), system = sys, state = "Up"),
+                                     brief(Tdvp())]); output = devnull)
+    wrapped = runTMS(SimData(phases = [CreateState(type = Wrapped(), system = sys, state = "Up"),
+                                       brief(Tdvp())]); output = devnull)
+    @test wrapped.state isa WrappedState
+    @test last(wrapped.data["z"]["Z(1)"]["data"]) ≈ last(plain.data["z"]["Z(1)"]["data"])
+    @test_throws "has no method for ApproxW on a WrappedState" runTMS(SimData(phases = [
+            CreateState(type = Wrapped(), system = sys, state = "Up"),
+            brief(ApproxW(order = 2))]); output = devnull)
 end

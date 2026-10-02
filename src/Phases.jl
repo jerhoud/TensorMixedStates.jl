@@ -170,6 +170,47 @@ function run_search(solve, sim::Simulation, phase, what::String, final_line)
     return sim
 end
 
+"""
+    evolve(algo, state, sim, phase; evolver, coefs, nsweeps)
+
+the simulation `sim` once the `Evolve` phase `phase` has evolved its state `state` with the
+algorithm `algo`, in `nsweeps` steps covering `phase.duration`: `evolver` is the evolver of the
+phase, and `coefs` the functions of time of a time dependent one, or `nothing`. The state is
+given apart from the simulation so that a method is chosen by its type as well as by that of
+the algorithm.
+
+An algorithm of an extension, or an algorithm for the state of an extension, comes with a
+method of its own. It is called before the phase has read its resume point, so that a method
+can read it with `resume_step`, or run its steps with `run_steps`, which resumes, stops and
+checkpoints them; `output(sim, phase.measures; sweep)` writes the measurements of the phase,
+every `phase.measures_period` steps.
+"""
+function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
+                nsweeps)
+    # PreMPO adapts the evolver to the representation of the state, and handles the vector
+    # form of a time dependent evolver
+    pre = PreMPO(state, evolver)
+    done, _ = resume_step(sim)
+    st = tdvp(pre, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
+              time_start = sim.time, phase.limits, first_sweep = done + 1, algo.n_expand,
+              algo.krylov, observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
+    return Simulation(sim, st)
+end
+
+function evolve(algo::ApproxW, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
+                nsweeps)
+    pre = PreMPO(state, evolver)
+    done, _ = resume_step(sim)
+    st = approx_W(pre, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
+                  time_start = sim.time, phase.limits, first_sweep = done + 1, algo.order,
+                  algo.w, algo.apply_algo,
+                  observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
+    return Simulation(sim, st)
+end
+
+evolve(algo, state, ::Simulation, ::Evolve; kwargs...) =
+    error("TensorMixedStates.evolve has no method for $(typeof(algo)) on a $(typeof(state))")
+
 function run_phase(sim::Simulation, phase::CreateState{R}) where {R <: PM}
     if !isnothing(phase.seed)
         Random.seed!(phase.seed)
@@ -237,24 +278,10 @@ function run_phase(sim::Simulation, phase::Evolve)
     log_msg(sim, "Evolving state from simulation time $(sim.time) to $(time_stop)")
     evolver, coefs = phase.evolver isa Pair ? (first(phase.evolver), last(phase.evolver)) :
                                               (phase.evolver, nothing)
-    state = sim.state
-    # PreMPO adapts the evolver to the representation of the state, and handles the vector
-    # form of a time dependent evolver
-    pre = PreMPO(state, evolver)
-    done, _ = resume_step(sim)
-    algo = phase.algo
-    common = (; coefs, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
-              first_sweep = done + 1)
-    if algo isa ApproxW
-        state = approx_W(pre, duration, state; common..., algo.order, algo.w, algo.apply_algo,
-            observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
-    else
-        state = tdvp(pre, duration, state; common..., algo.n_expand, algo.krylov,
-            observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
-    end
+    sim = evolve(phase.algo, sim.state, sim, phase; evolver, coefs, nsweeps)
     # a phase cut short by a checkpoint stops at the time it actually reached
     c = sim.checkpoint
-    return Simulation(sim, state, c.stopping ? c.last.time : time_stop)
+    return Simulation(sim, sim.state, c.stopping ? c.last.time : time_stop)
 end
 
 function run_phase(sim::Simulation, phase::Gates)

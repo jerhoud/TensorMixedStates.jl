@@ -35,11 +35,16 @@ PartialTrace
 Weaken
 ```
 
-## Phases of one's own
+## Phases, algorithms and representations of one's own
+
+How to use them is explained in [Extending TMS](@ref).
 
 ```@docs
 TensorMixedStates.run_phase
 run_steps
 resume_step
 close_sim_files
+TensorMixedStates.evolve
+TensorMixedStates.write_state
+TensorMixedStates.read_state
 ```

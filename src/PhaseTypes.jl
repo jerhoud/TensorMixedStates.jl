@@ -133,6 +133,14 @@ state already mixed is only truncated.
 end
 
 """
+    abstract type Algo
+
+the supertype of the time evolution algorithms the `algo` field of `Evolve` takes: `Tdvp` and
+`ApproxW`, and those an extension defines with a method of `TensorMixedStates.evolve`.
+"""
+abstract type Algo end
+
+"""
     Tdvp(; n_expand = 0, n_hermitianize = 0, krylov = Krylov())
 
 the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
@@ -151,7 +159,7 @@ the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
     Tdvp(n_hermitianize = 3)             # tdvp, make hermitian every 3 steps
     Tdvp(krylov = Krylov(tol = 1e-10))   # tdvp, local steps at a lower precision
 """
-@kwdef struct Tdvp
+@kwdef struct Tdvp <: Algo
     n_expand::Int = 0
     n_hermitianize::Int = 0
     krylov::Krylov = Krylov()
@@ -177,19 +185,12 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
     ApproxW(order = 4, n_hermitianize = 3)   # order 4, make hermitian every 3 steps
     ApproxW(order = 2, apply_algo = "naive") # order 2, naive products
 """
-@kwdef struct ApproxW
+@kwdef struct ApproxW <: Algo
     order::Int
     w::Int = 2
     n_hermitianize::Int = 0
     apply_algo::String = "densitymatrix"
 end
-
-"""
-    Algo = Union{Tdvp, ApproxW}
-
-the time evolution algorithms the `algo` field of `Evolve` takes.
-"""
-const Algo = Union{Tdvp, ApproxW}
 
 # an algorithm is printed on one line, field by field, read from its type as a phase is, so
 # that a field added to it shows up in the log and in `prog.jl` with nothing else to change

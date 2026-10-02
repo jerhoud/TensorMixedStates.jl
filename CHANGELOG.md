@@ -35,6 +35,11 @@ the reference article.
   expectation values the extension computes, and `save_state`, `load_state` and the
   checkpoints save them through its methods of `write_state` and `read_state`. The files of a
   `State` are written as before.
+- `TensorMixedStates.evolve`, to which the `Evolve` phase hands the evolution of its state, the
+  method being chosen by the type of the algorithm and by that of the state. An extension adds
+  an algorithm of its own, `Algo` being now the abstract supertype of `Tdvp` and `ApproxW`
+  rather than their union, or has them evolve a state of its own. Such a method can run its
+  steps with `run_steps`, which resumes, stops and checkpoints them.
 
 ### Changed
 

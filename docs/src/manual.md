@@ -710,43 +710,10 @@ df = data_to_frame(mysim.data["mydata"])
 
 For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
 
-### [Phases of one's own](@id own-phases)
+### Phases, algorithms and representations of one's own
 
-A phase of your own is a struct with the three fields every phase has, `name`, `time_start`
-and `final_measures`, and a method of `TensorMixedStates.run_phase` for it, which returns the
-simulation the phase leaves behind. The full name is needed, `run_phase` not being exported.
-Written as a loop with `run_steps`, the phase is checkpointed, stopped and resumed between two
-steps, as those of the library are between two sweeps:
-
-```julia
-using TensorMixedStates, .Qubits
-
-Base.@kwdef struct Kicks
-    name::String = "Kicks"
-    time_start = nothing
-    final_measures = []
-    nkicks::Int
-    measures = []
-end
-
-TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
-    run_steps(sim, p.nkicks) do sim, k
-        sim = apply(exp(-0.3im * X)(1), sim)                # the kick
-        sim = Simulation(sim, sim.state, sim.time + 0.1)    # and the time it takes
-        output(sim, p.measures; sweep = k)                  # k for the :sweep measurement
-        return sim
-    end
-
-runTMS(SimData(name = "kicks", phases = [
-    CreateState{Pure}(2, Qubit(), "Up"),
-    Kicks(nkicks = 10, measures = "data" => Z(1)),
-]))
-```
-
-Within the method, `output` measures the simulation, `log_msg` writes to its log and
-`get_sim_file` gives a file of the simulation to write anything else to, which is cut back on
-a resume as the others are. A phase driving a solver is described with
-[`TensorMixedStates.run_phase`](@ref).
+Phases, time evolution algorithms and representations of a state of your own are described
+in [Extending TMS](@ref).
 
 ## Threads and performance
 
