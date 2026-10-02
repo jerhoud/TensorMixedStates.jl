@@ -151,6 +151,21 @@ end
     # a noise is a real number, an integer one included, stored as the Float64 dmrg takes
     @test GroundState(hamiltonian = Z(1), limits = Limits(), nsweeps = 2, noise = 0).noise === 0.
     @test GroundState(hamiltonian = Z(1), limits = Limits(), nsweeps = 2, noise = [1, 0]).noise == [1., 0.]
+    @test SteadyState(lindbladian = Dissipator(Sm)(1), limits = Limits(), nsweeps = 2,
+                      noise = 0).noise === 0.
+    @test SteadyState(lindbladian = Dissipator(Sm)(1), limits = Limits(), nsweeps = 2,
+                      noise = [1, 0]).noise == [1., 0.]
+end
+
+@testset "The parameters of a Krylov method" begin
+    # a tolerance is a real number, an integer one included. A field left to nothing is not
+    # passed on, so that the method keeps its default, and `dim` is the `krylovdim` of
+    # KrylovKit, which dmrg takes with the prefix of ITensorMPS
+    @test Krylov(tol = 1).tol === 1.
+    kw = TensorMixedStates.krylov_kwargs
+    @test kw(Krylov()) == (;)
+    @test kw(Krylov(dim = 8, maxiter = 3, tol = 1e-10)) == (krylovdim = 8, maxiter = 3, tol = 1e-10)
+    @test kw(Krylov(dim = 8), "eigsolve_") == (eigsolve_krylovdim = 8,)
 end
 
 @testset "The phases that make the state" begin

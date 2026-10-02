@@ -76,6 +76,15 @@ TdvpObserver
 ApproxWObserver
 ```
 
+## Krylov methods
+
+At each step of their sweeps, `tdvp`, `dmrg` and `steady_state` solve a local problem by a
+Krylov method, whose parameters `Krylov` holds.
+
+```@docs
+Krylov
+```
+
 ## Gate application
 
 `apply` applies gates, or an MPO, to a state or a simulation.

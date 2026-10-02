@@ -20,6 +20,15 @@ the reference article.
   representation; it is refused as a factor of a product and as a gate.
 - `a ≈ b` for two operators placed on sites, comparing them through the products of one site
   operators they expand into, those of a com included.
+- `Krylov`, the parameters of the Krylov method that solves each local step of `tdvp`, `dmrg`
+  and `steady_state`: the largest dimension of a Krylov space, the number of spaces built one
+  after the other and the tolerance. The three functions take it as `krylov`, and so do the
+  `Tdvp` algorithm and the `GroundState` and `SteadyState` phases. A field left to `nothing`
+  keeps the default of the method.
+- `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO, the algorithm of the product
+  of the state by an MPO: `"densitymatrix"`, the default, `"naive"` or `"zipup"`.
+- `noise` for `SteadyState`, as for `GroundState`, and among the documented options of
+  `steady_state`, which already passed it on to `dmrg`.
 
 ### Changed
 
@@ -39,6 +48,19 @@ the reference article.
 - `Gate` refuses an operator placed on sites: write `Gate(X)(1)` rather than `Gate(X(1))`, and
   `Gate(X ⊗ Z)(1, 2)` for several sites. A placed operator on pure states applied to a mixed
   state, or multiplied by an operator on mixed states, is still turned into its gate.
+- `tdvp`, and so `Evolve` with `Tdvp()`, has the Krylov exponentiation of each local step test
+  its convergence after every vector rather than once its Krylov space is full. On a pure
+  chain of 20 spins and a mixed one of 10 qubits, the evolution took a fourth of the products
+  and a sixth to an eighth of the time, the states agreeing to 1e-13.
+- `Tdvp`, `ApproxW`, `GroundState` and `SteadyState` have new fields, which change the
+  fingerprint of a simulation using them: a checkpoint written before the upgrade is refused
+  after it.
+
+### Removed
+
+- `tdvp`, `dmrg`, `approx_W` and `steady_state` no longer pass the options they do not know on
+  to ITensorMPS: an unknown keyword is refused, and `cutoff`, `maxdim` and `mindim` go through
+  `limits`.
 
 ### Fixed
 

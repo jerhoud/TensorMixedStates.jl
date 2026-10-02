@@ -249,6 +249,57 @@ end
     end
 end
 
+@testset "The Krylov parameters reach tdvp" begin
+    # a single Krylov vector, never rebuilt, cannot hold the exponential of a step: the
+    # precession is then off, where the default parameters give it exactly
+    st0 = State{Pure}(System(2, Qubit()), "X+")
+    lim = Limits(maxdim = 10, cutoff = 1e-15)
+    poor = Krylov(dim = 1, maxiter = 1)
+    evolved(krylov) = tdvp(-im * Z(1), 1., st0; nsweeps = 10, limits = lim, krylov)
+    precession_error(st) = abs(expect(st, X(1)) - cos(2.)) + abs(expect(st, Y(1)) - sin(2.))
+    @test precession_error(evolved(Krylov())) < 1e-13
+    @test precession_error(evolved(poor)) > 1e-2
+    # and a Tdvp phase hands them on
+    sim = runTMS(SimData(phases = [
+            CreateState(type = Pure(), state = st0),
+            Evolve(duration = 1., time_step = 0.1, algo = Tdvp(krylov = poor), limits = lim,
+                   evolver = -im * Z(1))]);
+        output = devnull)
+    @test precession_error(sim.state) ≈ precession_error(evolved(poor))
+end
+
+@testset "The algorithms of the product of an MPO by a state" begin
+    # without truncation, the three give the exact product
+    n = 4
+    h = sum(X(i) * X(i + 1) for i in 1:n - 1)
+    up = State{Pure}(System(n, Qubit()), "Up")
+    st = tdvp(-im * h, 0.5, up; nsweeps = 5, limits = Limits(maxdim = 16, cutoff = 1e-14))
+    m = make_mpo(st, h)
+    w = approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5)
+    for alg in ("naive", "zipup")
+        @test norm(apply(m, st; apply_algo = alg) - apply(m, st)) < 1e-12
+        @test norm(approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5, apply_algo = alg) - w) < 1e-12
+    end
+    # "fit" needs a number of sweeps of its own, and a name that is none of them is refused too
+    for alg in ("fit", "exact")
+        @test_throws "apply_algo is" apply(m, st; apply_algo = alg)
+        @test_throws "apply_algo is" approx_W(-im * h, 0.5, up; order = 2, apply_algo = alg)
+    end
+    # and an ApproxW phase hands it on
+    @test_throws "apply_algo is" runTMS(SimData(phases = [
+            CreateState(type = Pure(), state = up),
+            Evolve(duration = 0.2, time_step = 0.1, algo = ApproxW(order = 2, apply_algo = "fit"),
+                   evolver = -im * h)]);
+        output = devnull)
+end
+
+@testset "tdvp and approx_W refuse the options of ITensorMPS" begin
+    # they no longer pass on what they do not know: the truncation goes through `limits`
+    st = State{Pure}(System(2, Qubit()), "Up")
+    @test_throws MethodError tdvp(-im * Z(1), 0.1, st; maxdim = 4)
+    @test_throws MethodError approx_W(-im * Z(1), 0.1, st; order = 1, maxdim = 4)
+end
+
 @testset "Noisy gates" begin
     @test_ok test_phases([
         CreateState{Mixed}(1, Qubit(),"Up"),

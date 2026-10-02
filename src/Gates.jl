@@ -3,8 +3,21 @@
 export apply
 
 """
+    check_apply_algo(apply_algo)
+
+refuse an algorithm of the product of an MPO by a state that is not one of those offered,
+`"densitymatrix"`, `"naive"` and `"zipup"`. ITensorMPS has `"fit"` too, which needs a number
+of sweeps of its own.
+"""
+function check_apply_algo(apply_algo::String)
+    if apply_algo ∉ ("densitymatrix", "naive", "zipup")
+        error("apply_algo is \"densitymatrix\", \"naive\" or \"zipup\", not $(repr(apply_algo))")
+    end
+end
+
+"""
     apply(op, ::State; limits::Limits)
-    apply(mpo, ::State; limits::Limits)
+    apply(mpo, ::State; limits::Limits, apply_algo)
     apply(op, ::Simulation; limits::Limits)
 
 the state, or the simulation, with the gates `op`, or the MPO `mpo`, applied.
@@ -19,6 +32,9 @@ see `make_mpo`.
 several sites is applied, on the bond it spans and on those crossed to bring its sites
 together; a gate of one site, and the other bonds, are not truncated. An MPO truncates the
 whole result.
+
+`apply_algo`, for an MPO only, is the algorithm of its product with the state, as
+`ITensorMPS.apply` takes it: `"densitymatrix"` (default), `"naive"` or `"zipup"`.
 
 # Examples
 
@@ -46,8 +62,12 @@ function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where 
     return State(state, coef == 1 ? st : coef * st)
 end
 
-apply(mpo::MPO, state::State; limits::Limits=Limits()) =
-    State(state, apply(mpo, state.state; limits.cutoff, limits.maxdim, limits.mindim))
+function apply(mpo::MPO, state::State; limits::Limits=Limits(),
+               apply_algo::String = "densitymatrix")
+    check_apply_algo(apply_algo)
+    return State(state, apply(mpo, state.state; alg = apply_algo, limits.cutoff, limits.maxdim,
+                              limits.mindim))
+end
     
 """
     prepare_gate(op)

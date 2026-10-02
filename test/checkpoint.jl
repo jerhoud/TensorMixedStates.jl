@@ -843,6 +843,15 @@ end
                                              algo = Tdvp(), evolver = -im * Z(2))])
     @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1,
                                              algo = ApproxW(order = 2), evolver = -im * Z(1))])
+    # the parameters of the solvers count too
+    @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1,
+                                             algo = Tdvp(krylov = Krylov(tol = 1e-10)),
+                                             evolver = -im * Z(1))])
+    @test id([first(base), Evolve(duration = 1., time_step = 0.1, algo = ApproxW(order = 2),
+                                  evolver = -im * Z(1))]) ≠
+          id([first(base), Evolve(duration = 1., time_step = 0.1,
+                                  algo = ApproxW(order = 2, apply_algo = "zipup"),
+                                  evolver = -im * Z(1))])
     @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
                                              evolver = -im * Z(1), measures = ["f" => X])])
     @test id([base; Gates(gates = X(1)); Gates(gates = Z(1))]) ≠

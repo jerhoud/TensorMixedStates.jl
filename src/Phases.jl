@@ -246,10 +246,10 @@ function run_phase(sim::Simulation, phase::Evolve)
     common = (; coefs, algo.n_hermitianize, nsweeps, time_start = sim.time, phase.limits,
               first_sweep = done + 1)
     if algo isa ApproxW
-        state = approx_W(pre, duration, state; common..., algo.order, algo.w,
+        state = approx_W(pre, duration, state; common..., algo.order, algo.w, algo.apply_algo,
             observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
     else
-        state = tdvp(pre, duration, state; common..., algo.n_expand,
+        state = tdvp(pre, duration, state; common..., algo.n_expand, algo.krylov,
             observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     end
     # a phase cut short by a checkpoint stops at the time it actually reached
@@ -263,7 +263,8 @@ function run_phase(sim::Simulation, phase::Gates)
 end
 
 run_phase(sim::Simulation, phase::GroundState) =
-    run_search((sim; kwargs...) -> dmrg(phase.hamiltonian, sim; phase.noise, kwargs...),
+    run_search((sim; kwargs...) -> dmrg(phase.hamiltonian, sim; phase.noise, phase.krylov,
+                                        kwargs...),
                sim, phase, "Optimizing state", e -> "Done, dmrg final energy is $e")
 
 function run_phase(sim::Simulation, phase::SaveState)
@@ -296,7 +297,7 @@ function run_phase(sim::Simulation, phase::SteadyState)
     end
     return run_search(
         (sim; kwargs...) -> steady_state(phase.lindbladian, sim; phase.mpo_limits,
-                                         phase.mpo_algo, kwargs...),
+                                         phase.mpo_algo, phase.noise, phase.krylov, kwargs...),
         sim, phase, "Searching for steady state",
         e -> "Done, dmrg final value is $e (0 for steady state)")
 end

@@ -1,7 +1,53 @@
 # The algorithms on a state or a simulation: tdvp and approx_W for time evolution, dmrg for
 # ground states, and steady_state for the steady state of an open system.
 
-export tdvp, dmrg, approx_W, steady_state
+export Krylov, tdvp, dmrg, approx_W, steady_state
+
+"""
+    Krylov(; dim = nothing, maxiter = nothing, tol = nothing)
+
+the parameters of the Krylov method that solves each local step: `KrylovKit.exponentiate`,
+computing the exponential of `tdvp`, and `KrylovKit.eigsolve`, the lowest eigenvector of
+`dmrg` and `steady_state`. A field left to `nothing` keeps the default of the method.
+
+# Fields
+
+- `dim`: the largest dimension of a Krylov space, the `krylovdim` of KrylovKit (default 30 for
+  `tdvp`, 3 for `dmrg`)
+- `maxiter`: the number of Krylov spaces built one after the other (default 100 for `tdvp`, 1
+  for `dmrg`): `tdvp` covers in several parts a step that one space does not cover at the
+  tolerance, `dmrg` restarts from its best vectors
+- `tol`: the tolerance (default `1e-12` per unit of time for `tdvp`, `1e-14` for `dmrg`)
+
+`tdvp` tests its convergence after every vector, so that `dim` bounds the number of vectors
+rather than fixing it, and `tol` is what sets it.
+
+# Examples
+
+    Krylov(tol = 1e-10)            # tdvp: fewer vectors, a lower precision
+    Krylov(dim = 8, maxiter = 3)   # dmrg: a more accurate local step
+"""
+@kwdef struct Krylov
+    dim::Union{Nothing, Int} = nothing
+    maxiter::Union{Nothing, Int} = nothing
+    tol::Union{Nothing, Float64} = nothing
+end
+
+# printed as the call that builds it, the fields left to the default of the method omitted
+show(io::IO, k::Krylov) =
+    print(io, "Krylov(", join((string(f, " = ", repr(getfield(k, f))) for f in fieldnames(Krylov)
+                               if !isnothing(getfield(k, f))), ", "), ")")
+
+"""
+    krylov_kwargs(::Krylov, prefix = "")
+
+the fields of a `Krylov` that are given, as the keyword arguments of KrylovKit, `dim` being
+its `krylovdim`, with `prefix` in front, those left to `nothing` omitted so that the method
+keeps its default.
+"""
+krylov_kwargs(k::Krylov, prefix = "") =
+    NamedTuple(Symbol(prefix, f == :dim ? :krylovdim : f) => getfield(k, f)
+               for f in fieldnames(Krylov) if !isnothing(getfield(k, f)))
 
 """
     tdvp(evolver, t, ::State; options...)
@@ -28,7 +74,8 @@ state. A simulation comes back with its time advanced by `t`.
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`, none)
 - `observer!`: an observer, see `TdvpObserver`
-- the other options are passed to `ITensorMPS.tdvp`
+- `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
+  (default `Krylov()`, those of `KrylovKit.exponentiate`)
 
 # Examples
 
@@ -36,10 +83,15 @@ state. A simulation comes back with its time advanced by `t`.
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
-    nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
+    nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(),
+    krylov::Krylov = Krylov()) where {R <: PM}
     time_dep = !isnothing(coefs)
     st = state.state
     dt = t / nsweeps
+    # KrylovKit builds its whole Krylov space, `dim` vectors, before it tests
+    # convergence: tested after every vector, as `eager` does, it stops at the same
+    # tolerance, which the short local steps of tdvp reach with far fewer products
+    updater_kwargs = (; eager = true, krylov_kwargs(krylov)...)
     if !time_dep
         mpo = make_mpo(pre)
     end
@@ -50,7 +102,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
         lim = sweep_limits(limits, sweep)
-        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
+        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, updater_kwargs)
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end
@@ -86,14 +138,15 @@ density matrix: search the ground state of the pure state, then `mix` it.
   (default `Limits()`, none)
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `observer!`: an observer, see `DmrgObserver`
-- the other options are passed to `ITensorMPS.dmrg`, `outputlevel` defaulting here to 0
+- `krylov`: the parameters of the Krylov search of the lowest eigenvector at each local step,
+  see `Krylov` (default `Krylov()`, those of `ITensorMPS.dmrg`)
 
 # Examples
 
     energy, state = dmrg(H, state; nsweeps = 10, limits = Limits(maxdim = [10, 20, 50]))
 """
 function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = NoObserver(),
-              limits::Limits = Limits(), noise = 0., kwargs...)
+              limits::Limits = Limits(), noise = 0., krylov::Krylov = Krylov())
     # ITensorMPS counts its sweeps from 1 and offers no way to start elsewhere, so a run
     # resuming at `first_sweep` asks for the sweeps it has left and is handed the tail of
     # its per sweep schedules. `tdvp` and `approx_W` drive their own loop and keep the
@@ -102,7 +155,7 @@ function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = 
     lim = resume_schedule(limits, done)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps = nsweeps - done,
                  observer = observer!, lim.cutoff, lim.maxdim, lim.mindim,
-                 noise = resume_schedule(noise, done), kwargs...)
+                 noise = resume_schedule(noise, done), krylov_kwargs(krylov, "eigsolve_")...)
     return (e, State(state, st))
 end
 
@@ -190,7 +243,9 @@ advanced by `t`.
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`, none)
 - `observer!`: an observer, see `ApproxWObserver`
-- the other options are passed to the MPO product of ITensorMPS, `ITensorMPS.apply`
+- `apply_algo`: the algorithm of the product of the state by each MPO, as `ITensorMPS.apply`
+  takes it: `"densitymatrix"` (default), `"naive"` or `"zipup"`. `"fit"` is not offered, since
+  it needs a number of sweeps of its own
 
 # Examples
 
@@ -198,7 +253,8 @@ advanced by `t`.
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
-    time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
+    time_start = zero(t), limits::Limits=Limits(), apply_algo::String = "densitymatrix") where {R <: PM}
+    check_apply_algo(apply_algo)
     st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)
@@ -213,7 +269,7 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
         end
         lim = sweep_limits(limits, sweep)
         for mpo in mpos
-            st = apply(mpo, st; lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
+            st = apply(mpo, st; alg = apply_algo, lim.cutoff, lim.maxdim, lim.mindim)
         end
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
@@ -245,8 +301,10 @@ and the state is normalized to trace one.
   (default `Limits()`, none)
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
+- `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `observer!`: an observer, see `DmrgObserver`
-- the other options are passed to `ITensorMPS.dmrg`, `outputlevel` defaulting here to 0
+- `krylov`: the parameters of the Krylov search of each local step of dmrg, see `Krylov`
+  (default `Krylov()`, those of `ITensorMPS.dmrg`)
 
 # Examples
 
@@ -254,9 +312,9 @@ and the state is normalized to trace one.
                               limits = Limits(maxdim = [10, 20, 50]))
 """
 function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
-    limits::Limits = Limits(), nsweeps::Int = 1,
+    limits::Limits = Limits(), nsweeps::Int = 1, first_sweep::Int = 1,
     observer! = NoObserver(), mpo_limits::Limits = Limits(), mpo_algo::String = "naive",
-    alg = nothing, kwargs...)
+    noise = 0., krylov::Krylov = Krylov(), alg = nothing)
     if !isnothing(alg)
         @warn "the `alg` keyword of steady_state is now `mpo_algo`, matching the field of " *
               "the SteadyState phase. The old name still works and will be removed." maxlog = 1
@@ -269,7 +327,7 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
                mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim, alg = mpo_algo, extra...)
     # an eigenvector of (L+)L has norm one and a sign of its own, the trace set to one makes it
     # the density matrix it stands for
-    e, st = dmrg(l2, state; nsweeps, limits, observer!, kwargs...)
+    e, st = dmrg(l2, state; nsweeps, first_sweep, limits, noise, observer!, krylov)
     return (e, normalize(st))
 end
 

@@ -200,6 +200,56 @@ end
     @test trace(ρ) ≈ 1
 end
 
+@testset "The options of steady_state" begin
+    # it resumes at `first_sweep` as dmrg does, which is how a SteadyState phase continues
+    # after a checkpoint, and takes a noise as GroundState does
+    L = Dissipator(Sp)(1) + Dissipator(Sm)(2)
+    ρ0 = State{Mixed}(System(2, Qubit()), "FullyMixed")
+    lim = Limits(maxdim = 16)
+    for first_sweep in 1:3
+        obs = TensorMixedStates.ITensorMPS.DMRGObserver()
+        steady_state(L, ρ0; nsweeps = 3, first_sweep, limits = lim, observer! = obs)
+        @test length(obs.energies) == 4 - first_sweep
+    end
+    _, ρ = steady_state(L, ρ0; nsweeps = 2, limits = lim, noise = 1e-6)
+    @test expect1(ρ, Z) ≈ [1, -1]
+end
+
+@testset "The Krylov parameters reach dmrg" begin
+    # a Krylov space of a single vector holds nothing but the state it starts from, so that
+    # the search does not leave it: dmrg ends where it started
+    n = 4
+    h = sum(X(i) * X(i + 1) for i in 1:n - 1)
+    up = State{Pure}(System(n, Qubit()), "Up")
+    lim = Limits(maxdim = 16)
+    @test first(dmrg(h, up; nsweeps = 3, limits = lim)) ≈ -3
+    e, st = dmrg(h, up; nsweeps = 3, limits = lim, krylov = Krylov(dim = 1))
+    @test e ≈ 0 atol = 1e-12
+    @test expect1(st, Z) ≈ ones(n)
+    # and steady_state, from the fully mixed state
+    L = Dissipator(Sp)(1) + Dissipator(Sm)(2)
+    ρ0 = State{Mixed}(System(2, Qubit()), "FullyMixed")
+    _, ρ = steady_state(L, ρ0; nsweeps = 2, limits = lim, krylov = Krylov(dim = 1))
+    @test expect1(ρ, Z) ≈ [0, 0] atol = 1e-12
+    # the phases hand them on: the state stays up through both searches, where the ground
+    # state of `h` has no magnetization and the steady state of `L` a spin down on site 2
+    sim = runTMS(SimData(phases = [
+            CreateState(type = Pure(), state = up),
+            GroundState(hamiltonian = h, limits = lim, nsweeps = 3, krylov = Krylov(dim = 1)),
+            ToMixed(),
+            SteadyState(lindbladian = L, limits = lim, nsweeps = 2, krylov = Krylov(dim = 1))]);
+        output = devnull)
+    @test expect1(sim.state, Z) ≈ ones(n)
+end
+
+@testset "dmrg and steady_state refuse the options of ITensorMPS" begin
+    # they no longer pass on what they do not know, `outputlevel` included
+    up = State{Pure}(System(2, Qubit()), "Up")
+    ρ0 = State{Mixed}(System(2, Qubit()), "FullyMixed")
+    @test_throws MethodError dmrg(X(1) * X(2), up; outputlevel = 1)
+    @test_throws MethodError steady_state(Dissipator(Sm)(1), ρ0; outputlevel = 1)
+end
+
 @testset "Dmrg of a hamiltonian on a mixed state" begin
     # it would minimise ρ ↦ Hρ + ρH, whose lowest eigenvector is neither the ground state nor a
     # density matrix, and is refused. A superoperator given as such is left to the caller

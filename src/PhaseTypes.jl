@@ -132,7 +132,7 @@ state already mixed is only truncated.
 end
 
 """
-    Tdvp(; n_expand = 0, n_hermitianize = 0)
+    Tdvp(; n_expand = 0, n_hermitianize = 0, krylov = Krylov())
 
 the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
 
@@ -140,20 +140,24 @@ the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
   `n_expand` steps (default 0, never)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
+- `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
+  (default `Krylov()`)
 
 # Examples
 
     Tdvp()
-    Tdvp(n_expand = 5)        # tdvp with expansion steps every 5 steps
-    Tdvp(n_hermitianize = 3)  # tdvp, make hermitian every 3 steps
+    Tdvp(n_expand = 5)                   # tdvp with expansion steps every 5 steps
+    Tdvp(n_hermitianize = 3)             # tdvp, make hermitian every 3 steps
+    Tdvp(krylov = Krylov(tol = 1e-10))   # tdvp, local steps at a lower precision
 """
 @kwdef struct Tdvp
     n_expand::Int = 0
     n_hermitianize::Int = 0
+    krylov::Krylov = Krylov()
 end
 
 """
-    ApproxW(; order, w = 2, n_hermitianize = 0)
+    ApproxW(; order, w = 2, n_hermitianize = 0, apply_algo = "densitymatrix")
 
 time evolution by WI or WII approximations of the exponential, combined into an approximation
 of the given order, for the `algo` field of `Evolve`, see `approx_W`.
@@ -162,17 +166,21 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
 - `w`: 1 or 2 for WI or WII (default 2)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
+- `apply_algo`: the algorithm of the product of the state by each MPO, `"densitymatrix"`
+  (default), `"naive"` or `"zipup"`, see `approx_W`
 
 # Examples
 
-    ApproxW(order = 2)                     # order 2, WII
-    ApproxW(order = 4, w = 1)              # order 4, WI
-    ApproxW(order = 4, n_hermitianize = 3) # order 4, make hermitian every 3 steps
+    ApproxW(order = 2)                       # order 2, WII
+    ApproxW(order = 4, w = 1)                # order 4, WI
+    ApproxW(order = 4, n_hermitianize = 3)   # order 4, make hermitian every 3 steps
+    ApproxW(order = 2, apply_algo = "zipup") # order 2, products by zipup
 """
 @kwdef struct ApproxW
     order::Int
     w::Int = 2
     n_hermitianize::Int = 0
+    apply_algo::String = "densitymatrix"
 end
 
 """
@@ -262,6 +270,8 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
+- `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
+  `Krylov()`)
 - `measures`: the measurements to make during the search, see `output` (default `[]`)
 - `measures_period`: the number of sweeps between two measurements (default 1)
 - `tolerance`: the search stops when the energy changes by less than this from one sweep to
@@ -280,15 +290,17 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
     limits::Limits
     nsweeps::Int
     noise::Union{Float64, Vector{Float64}} = 0.
+    krylov::Krylov = Krylov()
     measures = []
     measures_period::Int = 1
     tolerance::Real = 0.
     # a noise is a real number, an integer one included, stored as the Float64 dmrg takes
     GroundState(name, time_start, final_measures, hamiltonian, limits, nsweeps,
-                noise::Union{Real, AbstractVector{<:Real}}, measures, measures_period, tolerance) =
+                noise::Union{Real, AbstractVector{<:Real}}, krylov, measures, measures_period,
+                tolerance) =
         new(name, time_start, final_measures, hamiltonian, limits, nsweeps,
             noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
-            measures, measures_period, tolerance)
+            krylov, measures, measures_period, tolerance)
 end
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
@@ -362,7 +374,7 @@ the next one continue under a weak one, where a jump that moves the charge becom
 end
 
 """
-    SteadyState(; lindbladian, limits, nsweeps, tolerance, measures, options...)
+    SteadyState(; lindbladian, limits, nsweeps, noise, tolerance, measures, options...)
 
 a phase that searches the steady state of a Lindbladian, see `steady_state`, on a mixed state.
 
@@ -375,6 +387,9 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required
+- `noise`: the noise to apply, a number or one value per sweep (default 0)
+- `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
+  `Krylov()`)
 - `measures`: the measurements to make during the search, see `output` (default `[]`)
 - `measures_period`: the number of sweeps between two measurements (default 1)
 - `tolerance`: the search stops when the dmrg energy changes by less than this from one sweep
@@ -398,9 +413,18 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
     mpo_algo::String = "naive"
     limits::Limits
     nsweeps::Int
+    noise::Union{Float64, Vector{Float64}} = 0.
+    krylov::Krylov = Krylov()
     measures = []
     measures_period::Int = 1
     tolerance::Real = 0.
+    # a noise is stored as the Float64 dmrg takes, as in GroundState
+    SteadyState(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo, limits,
+                nsweeps, noise::Union{Real, AbstractVector{<:Real}}, krylov, measures,
+                measures_period, tolerance) =
+        new(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo, limits,
+            nsweeps, noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
+            krylov, measures, measures_period, tolerance)
 end
 
 """

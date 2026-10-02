@@ -18,8 +18,8 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") != "true"
         sm = string(m)
         mp = measure(stp, m)
         mm = measure(stm, m)
-        tdvp(-im*(Y(2)+2Z(1)X(3)), 0.1, stp; maxdim = 3)
-        approx_W(-im*(Y(2)+2Z(1)X(3)), 0.1, stp; order = 1, maxdim = 3)
+        tdvp(-im*(Y(2)+2Z(1)X(3)), 0.1, stp; limits = Limits(maxdim = 3))
+        approx_W(-im*(Y(2)+2Z(1)X(3)), 0.1, stp; order = 1, limits = Limits(maxdim = 3))
         # measured: with the workload as it stood, the first `tdvp` went from 30 s to
         # 3.6 s while the first `dmrg` stayed at 7.8 and the first `apply` at 5.0, for
         # want of being here. The mixed `apply` is a path of its own, the operator being

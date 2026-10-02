@@ -528,6 +528,16 @@ end
     end
 end
 
+@testset "Printing Krylov" begin
+    # as Limits is, the fields left to the default of the method omitted
+    @test repr(Krylov()) == "Krylov()"
+    @test repr(Krylov(dim = 8, tol = 1e-10)) == "Krylov(dim = 8, tol = 1.0e-10)"
+    for k in [Krylov(), Krylov(dim = 8, tol = 1e-10), Krylov(maxiter = 3)]
+        back = eval(Meta.parse(repr(k)))
+        @test all(getfield(back, f) == getfield(k, f) for f in fieldnames(Krylov))
+    end
+end
+
 @testset "The stamp records the threading" begin
     # the running time depends on these settings of the process, so a run records them
     mktempdir() do dir
