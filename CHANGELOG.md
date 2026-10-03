@@ -113,6 +113,10 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- A `SteadyState` checkpointed on its last sweep hands a state of trace one to the next phases
+  once resumed. Its checkpoint held the eigenvector dmrg gives, of norm one and of a sign of
+  its own, which the resume, having no sweep left to run, handed on and saved as it was, with
+  a trace such as -1.33; the measurements dividing by the trace did not show it.
 - `partial_trace`, and so the `PartialTrace` phase, keeps the fermionic signs: a fermion traced
   out is moved past the fermions kept on its right. It took the trace of the spins, on which a
   correlation of odd operators crossing a fermion traced out had the wrong sign or value, and
