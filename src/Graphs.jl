@@ -28,9 +28,15 @@ line_graph(n::Int) =
     circle_graph(n)
 
 the ring of `n` vertices, as a vector of edges: `[(1, 2), (2, 3), ..., (n-1, n), (n, 1)]`.
+The ring of two vertices joins them twice, `[(1, 2), (2, 1)]`, as the two bonds of a periodic
+chain of two sites; a ring of fewer vertices is refused.
 """
-circle_graph(n::Int) =
-    [line_graph(n); [(n, 1)]]
+function circle_graph(n::Int)
+    if n < 2
+        error("a ring has two vertices at least, and circle_graph was given $n")
+    end
+    return [line_graph(n); [(n, 1)]]
+end
 
 """
     complete_graph(n)

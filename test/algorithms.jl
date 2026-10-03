@@ -7,6 +7,8 @@
 @testset "Graph utilities" begin
     @test line_graph(4) == [(1, 2), (2, 3), (3, 4)]
     @test circle_graph(4) == [(1, 2), (2, 3), (3, 4), (4, 1)]
+    @test circle_graph(2) == [(1, 2), (2, 1)]
+    @test_throws "a ring has two vertices at least" circle_graph(1)
     @test complete_graph(4) == [(1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]
     @test graph_base_size(circle_graph(7)) == 7
     # the snake runs down the columns: 1 4 5 on the first row, 2 3 6 on the second
