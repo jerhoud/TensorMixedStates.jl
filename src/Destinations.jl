@@ -393,9 +393,15 @@ end
 
 the destination of the given name, opened on first use, or the redirect stream if there is
 one. A `Data` destination holds the series of that name in `sim.data`, created if needed.
+
+A file is known by its normalized path, so that two names of one file, as `"data"` and
+`"./data"`, share one destination: each opened it, emptying what the other had written. The
+empty name, which `normpath` would make `"."`, is kept as it is.
 """
 destination(o::Outputs, name::AbstractString) =
-    isnothing(o.redirect) ? get!(() -> open_destination(name), o.files, name) : Stream(o.redirect)
+    isnothing(o.redirect) ?
+        get!(() -> open_destination(name), o.files, isempty(name) ? name : normpath(name)) :
+        Stream(o.redirect)
 
 destination(o::Outputs, d::Data) = DataStore(get!(Series, o.data, d.name))
 

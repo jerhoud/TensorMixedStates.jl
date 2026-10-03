@@ -649,6 +649,19 @@ end
     end
 end
 
+@testset "Two names of one file" begin
+    # each name opened the file, emptying what the other had written
+    mktempdir() do dir
+        cd(dir) do
+            runTMS(SimData(name = "sim", phases = [
+                CreateState{Pure}(2, Qubit(), "Up"),
+                Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                       measures = ["data" => X(1), "./data" => Z(1), "sub/../data" => Y(1)])]))
+            @test length(readlines("sim/data")) == 9
+        end
+    end
+end
+
 @testset "The copy of the program runs again" begin
     # run again from the directory of the simulation, prog.jl was copied onto itself, which cp
     # refused, and the run failed
