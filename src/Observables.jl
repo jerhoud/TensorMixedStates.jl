@@ -982,14 +982,14 @@ function entropy_spectrum(S::ITensor)
 end
 
 """
-    entanglement_entropy(state, pos::Int)
+    entanglement_entropy(state, cut::Int)
 
-the entanglement entropy across the cut between sites `pos` and `pos + 1`, together with the
+the entanglement entropy across the cut between sites `cut` and `cut + 1`, together with the
 spectrum it is computed from: the eigenvalues of the reduced density matrix of the sites up
-to `pos`, that is the squared singular values of the cut normalised to sum to one, in
+to `cut`, that is the squared singular values of the cut normalised to sum to one, in
 decreasing order.
 
-`pos` runs from 1 to the number of sites; the last cut leaves nothing on its right and
+`cut` runs from 1 to the number of sites; the last cut leaves nothing on its right and
 always gives 0. On a mixed representation the same computation, on the density matrix seen
 as a vector, gives the operator space entanglement entropy (OSEE).
 
@@ -997,13 +997,13 @@ as a vector, gives the operator space entanglement entropy (OSEE).
 
     ee, spectrum = entanglement_entropy(state, 3)   # cut between sites 3 and 4
 """
-entanglement_entropy(state::State, pos::Int) = entropy_spectrum(cut_svd(state, pos)[2])
+entanglement_entropy(state::State, cut::Int) = entropy_spectrum(cut_svd(state, cut)[2])
 
 """
-    entanglement_by_sector(state::State{Pure}, pos::Int)
+    entanglement_by_sector(state::State{Pure}, cut::Int)
 
-the entanglement across the cut between sites `pos` and `pos + 1`, resolved by the charge the
-sites up to `pos` carry: a `Dict` from each charge, a `QN` as `flux` gives it, to the named
+the entanglement across the cut between sites `cut` and `cut + 1`, resolved by the charge the
+sites up to `cut` carry: a `Dict` from each charge, a `QN` as `flux` gives it, to the named
 tuple `(weight, entropy, spectrum)`, `weight` being the probability of that charge and
 `entropy` and `spectrum` those of the reduced density matrix restricted to it and normalised,
 the spectrum in decreasing order.
@@ -1019,14 +1019,14 @@ representation is refused.
     sectors = entanglement_by_sector(state, 3)   # cut between sites 3 and 4
     sectors[QN("N", 2)].weight
 """
-function entanglement_by_sector(state::State{Pure}, pos::Int)
-    U, S = cut_svd(state, pos)
+function entanglement_by_sector(state::State{Pure}, cut::Int)
+    U, S = cut_svd(state, cut)
     u = commonind(U, S)
     if !hasqns(u)
         ee, sp = entropy_spectrum(S)
         return Dict(QN() => (weight = 1.0, entropy = ee, spectrum = sp))
     end
-    # U carries no flux, so what flows into it through `u` is what the sites up to `pos` hold
+    # U carries no flux, so what flows into it through `u` is what the sites up to `cut` hold
     if flux(U) ≠ QN()
         error("bug: the left factor of a cut carries $(flux(U)), so its sectors cannot be read")
     end

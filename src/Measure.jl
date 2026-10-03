@@ -531,12 +531,13 @@ a state function measuring the Rényi-2 entropy of the state, see `renyi2` and `
 const Renyi2 = StateFunc("Renyi2", renyi2)
 
 """
-    SubRenyi2(link)
+    SubRenyi2(cut)
     SubRenyi2([positions...])
 
-a state function measuring the Rényi-2 entropy of the sites at `positions`, see `renyi2`. A
-link `k` stands for the sites `1:k` and is named after them, as for `MutualInfoRenyi2`. On a
-pure representation it measures how entangled those sites are with the rest: for a link it is
+a state function measuring the Rényi-2 entropy of the sites at `positions`, see `renyi2`. An
+integer is a cut: `SubRenyi2(k)` stands for the sites `1:k` and is named after them, as for
+`MutualInfoRenyi2`, the site `k` alone being `SubRenyi2([k])`. On a pure representation it
+measures how entangled those sites are with the rest: for a cut it is
 read off the entanglement spectrum, as cheap as `EntanglementEntropy`, and for positions the
 state is mixed first, which is much more expensive than the other state functions.
 
@@ -546,16 +547,16 @@ state is mixed first, which is much more expensive than the other state function
 """
 SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))
 
-# a link stands for the sites on its left, as for MutualInfoRenyi2
-SubRenyi2(link::Int) =
-    StateFunc("SubRenyi2($(compact_positions(1:link)))", st -> renyi2(st, link))
+# a cut stands for the sites on its left, as for MutualInfoRenyi2
+SubRenyi2(cut::Int) =
+    StateFunc("SubRenyi2($(compact_positions(1:cut)))", st -> renyi2(st, cut))
 
 """
-    EntanglementEntropy(pos)
-    EntanglementEntropy(pos, spectrum)
+    EntanglementEntropy(cut)
+    EntanglementEntropy(cut, spectrum)
 
 a state function measuring the entanglement entropy, or the OSEE on a mixed representation,
-across the cut between sites `pos` and `pos + 1`, see `entanglement_entropy`. Given
+across the cut between sites `cut` and `cut + 1`, see `entanglement_entropy`. Given
 `spectrum`, the entropy is followed by the first `spectrum` values of the spectrum, padded
 with zeros beyond the bond dimension of the cut, so that every row has the same width.
 
@@ -563,14 +564,14 @@ with zeros beyond the bond dimension of the cut, so that every row has the same 
 
     measures = "data" => [EntanglementEntropy(3), EntanglementEntropy(5, 4)]
 """
-EntanglementEntropy(pos) = StateFunc("EntanglementEntropy($pos)",
+EntanglementEntropy(cut) = StateFunc("EntanglementEntropy($cut)",
     st-> begin
-        ee, _ = entanglement_entropy(st, pos)
+        ee, _ = entanglement_entropy(st, cut)
         return ee
     end)
-EntanglementEntropy(pos, spectrum) = StateFunc("EntanglementEntropy($pos,$spectrum)",
+EntanglementEntropy(cut, spectrum) = StateFunc("EntanglementEntropy($cut,$spectrum)",
     st-> begin
-        ee, sp = entanglement_entropy(st, pos)
+        ee, sp = entanglement_entropy(st, cut)
         return [[ee]; sp[1:min(length(sp), spectrum)]; zeros(max(0, spectrum - length(sp)))]
     end)
 
@@ -588,20 +589,20 @@ name, `EntanglementEntropy(3)` rather than `EE(3)`.
 """ EE
 
 """
-    MutualInfoRenyi2(link)
+    MutualInfoRenyi2(cut)
     MutualInfoRenyi2([positions...])
 
 a state function measuring the Rényi-2 mutual information between the sites at `positions`
-and the rest, see `mutual_info_renyi2`. A link `k` stands for the sites `1:k` and is named
-after them, as `compact_positions` writes them: `MutualInfoRenyi2(1:3)` for `k = 3`,
+and the rest, see `mutual_info_renyi2`. An integer is a cut: `MutualInfoRenyi2(k)` stands for
+the sites `1:k` and is named after them, as `compact_positions` writes them: `MutualInfoRenyi2(1:3)` for `k = 3`,
 `MutualInfoRenyi2(1,2)` for `k = 2`.
 """
 MutualInfoRenyi2(part) = StateFunc("MutualInfoRenyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
 
-# named after the sites on the left of the link: MutualInfoRenyi2(3) was named as the one site
+# named after the sites on the left of the cut: MutualInfoRenyi2(3) was named as the one site
 # part [3], a different quantity
-MutualInfoRenyi2(link::Int) =
-    StateFunc("MutualInfoRenyi2($(compact_positions(1:link)))", st -> mutual_info_renyi2(st, link))
+MutualInfoRenyi2(cut::Int) =
+    StateFunc("MutualInfoRenyi2($(compact_positions(1:cut)))", st -> mutual_info_renyi2(st, cut))
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
 # expands to a toplevel block and a docstring cannot be attached to one

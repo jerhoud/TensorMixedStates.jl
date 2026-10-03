@@ -425,7 +425,7 @@ a site, as `C(3)`, it is accepted, for a state that superposes parities. In a co
 `(dag(C), C)`, the two operators must be both fermionic or both not.
 
 We can also measure properties of the state as a whole, with state functions such as
-`Trace`, `Purity`, `EntanglementEntropy(l)` or `Fidelity(ref)`: the
+`Trace`, `Purity`, `EntanglementEntropy(cut)` or `Fidelity(ref)`: the
 [Measurements](measurements.md) page has the table of them all.
 
 We can also ask for several measurements at the same time

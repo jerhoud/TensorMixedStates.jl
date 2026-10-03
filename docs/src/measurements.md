@@ -47,10 +47,10 @@ There are some state functions predefined:
 | `Hermiticity` | 1 for a Hermitian density matrix, down to 0 for an anti-Hermitian one |
 | `HermiticityError` | `1 - hermiticity` |
 | `Renyi2` | the Rényi entropy of order 2 of the state |
-| `SubRenyi2(sites)`, `SubRenyi2(link)` | the Rényi entropy of order 2 of the sites given, or of those up to the link |
-| `MutualInfoRenyi2(sites)`, `MutualInfoRenyi2(link)` | the Rényi-2 mutual information between the sites given, or those up to the link, and the rest |
-| `EntanglementEntropy(l)` | the entanglement entropy across the cut between sites `l` and `l+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
-| `EntanglementEntropy(l, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
+| `SubRenyi2(sites)`, `SubRenyi2(cut)` | the Rényi entropy of order 2 of the sites given, or of those up to the cut, an integer |
+| `MutualInfoRenyi2(sites)`, `MutualInfoRenyi2(cut)` | the Rényi-2 mutual information between the sites given, or those up to the cut, an integer, and the rest |
+| `EntanglementEntropy(cut)` | the entanglement entropy across the cut between sites `cut` and `cut+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
+| `EntanglementEntropy(cut, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
 | `Fidelity(ref)` | the fidelity with the reference state `ref`, refused between two mixed representations |
 | `Overlap(ref)` | the inner product with the reference state `ref` |
 | `Variance(hamiltonian)` | the variance of the energy of `hamiltonian`, on a pure representation |
