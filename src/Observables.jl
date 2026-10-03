@@ -319,6 +319,11 @@ normalize(state::State{Pure}) =
 normalize(state::State{Mixed}) =
     State(state, state.state / real(trace(state)))
 
+# LinearAlgebra has methods of these for any argument, which tried to iterate the state of a
+# representation of one's own that has none of its own
+norm(state::AbstractState) = throw(MethodError(norm, (state,)))
+normalize(state::AbstractState) = throw(MethodError(normalize, (state,)))
+
 """
     check_same_system(a, b)
 
@@ -375,6 +380,7 @@ inner(::State{Pure}, ::State{Mixed}) = different_representations()
 inner(::State{Mixed}, ::State{Pure}) = different_representations()
 
 dot(a::State, b::State) = inner(a, b)
+dot(a::AbstractState, b::AbstractState) = throw(MethodError(dot, (a, b)))
 
 """
     fidelity(a, b)

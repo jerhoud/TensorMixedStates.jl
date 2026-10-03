@@ -142,6 +142,15 @@ struct Unwritable <: AbstractState
     system::System
 end
 
+@testset "What a state of one's own has no method of" begin
+    # LinearAlgebra takes any argument for these, and they failed on iterate
+    st = Unwritable(System(2, Qubit()))
+    @test_throws "no method matching norm(::Unwritable)" norm(st)
+    @test_throws "no method matching normalize(::Unwritable)" normalize(st)
+    @test_throws "no method matching dot(::Unwritable, ::Unwritable)" dot(st, st)
+    @test_throws "no method matching norm(::Unwritable)" measure(st, Norm)
+end
+
 @testset "A representation of one's own" begin
     sys = System(3, Qubit())
     phases = [CreateState(type = Wrapped(), system = sys, state = "Up"),

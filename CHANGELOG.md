@@ -99,6 +99,9 @@ the reference article.
 - The log of a resumed simulation is continued without being cut back to the checkpoint, and
   keeps the history of every run: the line saying why a run stopped was lost on its resume.
   The steps done again from the checkpoint now appear twice in it.
+- `norm`, `normalize` and `dot` of the state of a representation that has no method of them
+  raise the `MethodError` naming them, where the methods of LinearAlgebra for any argument
+  failed on `iterate`.
 - A superoperator applied to a pure state, `apply(Gate(X)(1), ψ)`, is refused with a message
   saying to apply it to the mixed state, where it failed on a `MethodError` of ITensorMPS.
 - A site type whose inner constructor replaces the one taking its fields, by which a state file
