@@ -312,7 +312,8 @@ norm(state::State) = norm(state.state)
 """
     normalize(::State)
 
-the state rescaled to norm one on a pure representation, to trace one on a mixed one.
+the state rescaled to norm one on a pure representation, to trace one on a mixed one, the
+trace being taken as its real part, see `expect`.
 """
 normalize(state::State{Pure}) =
     State(state, normalize(state.state))
@@ -716,7 +717,10 @@ expect_norm(state::State, coef::Number, a::IndexedOp{Pure}) =
 
 the expectation value of `obs`, an operator placed on sites, or the array of those of an
 array of them. It is divided by the trace of the state, its squared norm on a pure
-representation, so the state need not be normalised.
+representation, so the state need not be normalised. On a mixed representation the trace is
+taken as its real part, its imaginary part being numerical error on a density matrix. One made
+non Hermitian by `Left` or `Right` has a trace of its own: `expect(state, A) *
+real(trace(state))` is then ``\\mathrm{tr}(A\\rho)``.
 
 `obs` is simplified first, so its factors may be given in any order and the Jordan-Wigner
 strings of fermionic operators are inserted for you. An operator not placed on sites, `X`
