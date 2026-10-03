@@ -5,9 +5,16 @@ Pages = ["manual.md"]
 Depth = 3
 ```
 
-## Import
+## How to read this manual
 
-To use TMS, you must first import it with
+The sections up to [Measurements](@ref manual-measurements) present the objects of TMS one after the other, sites,
+states, operators, then the algorithms and the measurements, with small examples run directly
+from Julia. [High Level Interface](@ref) shows how to write a whole simulation as a list of
+phases, which writes its results to files and can be stopped and resumed; most programs are
+written that way. [Threads and performance](@ref) is for when a computation gets large. The
+reference pages that follow give every function in detail.
+
+The examples assume TMS has been imported:
 
 ```@example manual
 using TensorMixedStates
@@ -69,7 +76,14 @@ gives you a three site system.
 
 ## States
 
-States may be in pure or mixed representation, these two possibilities are represented in TMS, by `Pure` or `Mixed`.
+A state is either a wave function, its pure representation, written `Pure`, or a density
+matrix, its mixed representation, written `Mixed`, which open systems need. Both are stored as
+a matrix product state (MPS): a chain of tensors, one per site, joined by links whose size,
+the bond dimension, measures how much entanglement, or for a density matrix how many
+correlations, the state can hold. A density matrix is stored as the vector of its entries, so
+each site has dimension ``d^2`` instead of ``d``, its norm is the Hilbert-Schmidt norm
+``\sqrt{\mathrm{tr}\,\rho^\dagger\rho}`` rather than its trace, and it costs more than a wave
+function of the same system.
 
 To create a state, we call the `State` constructor
 
@@ -130,7 +144,8 @@ All of this is described in [Conserving a quantity](@ref).
 
 ## Limits
 
-TMS uses Matrix Product States to represent quantum states internally. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff on the truncation error, the weight of the singular values discarded. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
+TMS uses Matrix Product States to represent quantum states internally. It is important to control the parameters of this approximation, in particular the maximum bond dimension and the cutoff, the total weight of the singular values a
+truncation of the tensors may drop. To achieve this, many functions accept a `Limits` object as keyword argument containing those parameters. It is built thus
 
 ```@example manual
 lim = Limits(cutoff = 1e-10, maxdim = 50)
@@ -219,28 +234,12 @@ Rxy(t) = exp(-im * t * (X⊗X + Y⊗Y) / 4)
 ```
 
 If this is not enough to define your favorite operator you can create new ones with `named`,
-from an expression, a matrix or a function of the sites. The type of the operator, which
-`simplify` reasons with (see `OpType`), is read off its matrix: here an involution.
+from an expression, a matrix or a function of the sites, see
+[Operators and measurements of one's own](@ref):
 
 ```@example manual
 myop = named([1 1 ; 1 -1] / √2, "MyOp")
 ```
-
-```@example manual
-myop.type
-```
-
-A matrix of several sites given alone does not say how many sites it acts on, which is then
-given in braces, with the type:
-
-```@example manual
-myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
-```
-
-A type given to `named` with a matrix is checked against it at once, as far as it can be
-without a site, and any type is checked against the matrix of the operator when that matrix is
-laid on a site. `simplify` relies on the type before, squaring an involution to the identity
-for instance, so a wrong type given to a function or an expression gives a wrong result.
 
 Finally from generic operators, we define indexed operators by simply applying them to the corresponding sites
 
@@ -252,29 +251,9 @@ Rxy(0.2)(2, 5)
 myop(3)
 ```
 
-```@example manual
-myswap(4, 7)
-```
-
-An operator of several sites defined by a matrix, as `myswap` is, or by a function of such an
-operator, as the exponential in `Rxy`, can only be applied as a gate. To measure it or to put it in a hamiltonian, give
-the sites it acts on when creating it, one per index or a single one for identical sites,
-whose number is then read off the size of the matrix:
-
-```@example manual
-myswap2 = named([1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], "MySwap2", Qubit())
-```
-
-It is then split into a sum of products of one site operators, which becomes its
-definition, the way `Swap` is defined by an expression:
-
-```@example manual
-myswap2.expr
-```
-
-The factors carry a definite charge of what their sites conserve. On a fermionic site the
-matrix has to commute with `F`, since it is taken as it is, with no Jordan-Wigner string:
-an operator moving fermions between sites is written with `C` and `dag(C)` instead.
+An operator of several sites that is a function of an operator, as the exponential in `Rxy`,
+can only be applied as a gate, unless it is created with the sites it acts on, see
+[Operators and measurements of one's own](@ref).
 
 ### Fermions
 
@@ -292,8 +271,8 @@ The strings follow the order of the sites: `C(j)` is the matrix of `C` on site `
 on every site before it. A product of two fermionic operators placed in increasing order of
 the sites, `A(i) * B(j)` with `i < j`, is thus `A * F` on site `i`, `F` on every site in
 between and `B` on site `j`, and in the other order it takes the sign of the swap. A matrix
-given for an operator of several sites is read in the basis of the sites as it is, with no
-string, which is why it has to commute with `F` on each of them.
+given for an operator of several sites, see [Operators and measurements of one's own](@ref),
+is read in the basis of the sites as it is, with no string.
 
 A function of an even fermionic operator of several sites, as the exponential of a hopping
 term, `exp(-0.1im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 5)`, is applied as a gate with its
@@ -336,8 +315,8 @@ energy
 measure(ground, X)
 ```
 
-`nsweeps` is the number of sweeps, and `limits` may give one value per sweep, as in
-`Limits(maxdim = [10, 20, 50])`.
+`nsweeps` is the number of sweeps, passes of dmrg along the chain and back, and `limits` may
+give one value per sweep, as in `Limits(maxdim = [10, 20, 50])`.
 
 ### Time evolution
 
@@ -348,7 +327,17 @@ and the state. The evolver follows the convention
 evolver = -im * hamiltonian + dissipators
 ```
 
-dissipators being accepted on a mixed state only. Under ``H = \sum_i \sigma_z^i``, qubits
+dissipators being accepted on a mixed state only. On a pure state, it integrates
+``\frac{d}{dt}|\psi\rangle = -iH|\psi\rangle``, and on a mixed state the Lindblad equation
+
+```math
+\frac{d\rho}{dt} = -i[H, \rho]
+    + \sum_k \left(L_k \rho L_k^\dagger - \tfrac{1}{2}\{L_k^\dagger L_k, \rho\}\right)
+```
+
+each term `Dissipator(L)` giving one jump operator ``L_k``, with ``\hbar = 1``. A rate
+``\gamma`` is written `γ * Dissipator(L)`, or equally `Dissipator(sqrt(γ) * L)`, since
+`Dissipator(c * L)` is `abs2(c) * Dissipator(L)`. Under ``H = \sum_i \sigma_z^i``, qubits
 starting in `"+"` precess, with ``\langle \sigma_x \rangle = \cos 2t``, which is
 ``\cos 1 \approx 0.5403`` at ``t = 0.5``:
 
@@ -369,8 +358,10 @@ mydecayed = tdvp(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsweeps = 10)
 measure(mydecayed, Z)
 ```
 
-`approx_W` is called the same way, with in addition the order of its approximation, from 1
-to 4, and `w`, 1 or 2, for which `order = 4, w = 2` is usually a good choice:
+`approx_W` approximates the exponential of the evolver over a step by MPOs, built from the
+approximations WI or WII of Zaletel et al. It is called the same way, with in addition the
+order of its approximation, from 1 to 4, and `w`, 1 or 2 for WI or WII, for which
+`order = 4, w = 2` is usually a good choice:
 
 ```@example manual
 mydecayed = approx_W(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; order = 4, w = 2,
@@ -382,10 +373,11 @@ An evolver may also depend on time, see [Time dependent evolvers](@ref).
 
 ### Steady states
 
-The steady state of an open system is computed by `steady_state`, from a mixed state to start
-from, by dmrg on ``L^\dagger L``. It returns the "energy" dmrg reaches, ``\|L \rho\|^2`` for
-``\rho`` of unit Hilbert-Schmidt norm, which is zero for a steady state, and the state,
-normalized to trace one. Qubits decaying toward down at rate 1 and pumped toward up at rate
+`steady_state` looks for the state ``\rho`` with ``L\rho = 0``, ``L`` being the evolver,
+starting from a mixed state, by running dmrg on ``L^\dagger L``. It returns two things: the
+residual ``\|L\rho\|^2``, for ``\rho`` of unit Hilbert-Schmidt norm, which is zero at a true
+steady state and tells how well the search converged, and the steady state itself, normalized
+to trace one. Qubits decaying toward down at rate 1 and pumped toward up at rate
 0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
 
 ```@example manual
@@ -397,7 +389,7 @@ measure(mysteady, Z)
 For more details, see the [Algorithms](algorithms.md) page of the reference or the inline
 help.
 
-## Measurements
+## [Measurements](@id manual-measurements)
 
 Once we have created a state, we may want to measure it. Take for example a three qubit state
 
@@ -425,10 +417,10 @@ result = measure(mystate, (X, Y))
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``, complex
 since its diagonal is ``\langle \sigma_x \sigma_y \rangle = i \langle \sigma_z \rangle``
 
-The expectation value of a single fermionic operator vanishes on any state of definite parity,
-so `measure` refuses a fermionic operator given for every site, as `C`, and so does `expect1`;
-placed on a site, as `C(3)`, it is accepted, for a state that superposes parities. The two
-operators of a correlation, as `(dag(C), C)`, must both be fermionic or both not.
+Fermionic operators follow two rules. A single one given for every site, as `C`, is refused by
+`measure` and `expect1`, since its value vanishes on every state of definite parity; placed on
+a site, as `C(3)`, it is accepted, for a state that superposes parities. In a correlation, as
+`(dag(C), C)`, the two operators must be both fermionic or both not.
 
 We can also measure properties of the state as a whole, with state functions such as
 `Trace`, `Purity`, `EntanglementEntropy(l)` or `Fidelity(ref)`: the
@@ -592,10 +584,10 @@ SimData(
 )
 ```
 
-`checkpoint_interval` is the time between two saves, `0` (the default) disables the periodic
-checkpoints: a stop, from `max_time` or the `stop` file, or an interrupt, still writes one, so
-that the simulation can be resumed. `max_time` is a wall clock budget: once it is past, the simulation
-writes a checkpoint and returns instead of carrying on. Set it comfortably below the limit
+`checkpoint_interval` is the time between two saves; `0`, the default, means no periodic save.
+Even then, a stop, from `max_time`, the `stop` file or an interrupt, writes a checkpoint, so
+that the simulation can always be resumed. `max_time` is a wall clock budget: once it is past,
+the simulation writes a checkpoint and returns instead of carrying on. Set it comfortably below the limit
 of your batch job, since a checkpoint is only taken between two sweeps, two steps or two
 phases: a sweep that lasts ten minutes delays the stop by up to ten minutes.
 
@@ -628,12 +620,12 @@ followed by the line marking the resume and by the steps done again from the che
 Use `restart = true` to ignore an existing checkpoint and start over, as it erases the
 directory.
 
-The random number generator is not part of a checkpoint. After a resume, whatever draws
-random numbers, a `CreateState` with `randomize` or a measurement calling `sample`, draws
-other numbers than the uninterrupted run would have, since the `seed` of a `CreateState`
-finished before the resume point is not applied again. The results are as valid, but they are
-not the same numbers. A `CreateState` replayed by the resume applies its `seed` again and
-draws the same state; samples measured during an evolution are not reproduced.
+The random number generator is not part of a checkpoint, so after a resume the random draws,
+of a `CreateState` with `randomize` or of a measurement calling `sample`, differ from those of
+the uninterrupted run: the results are as valid, but they are not the same numbers. A
+`CreateState` that the resume runs again applies its `seed` again and draws the same state,
+while one finished before the resume point does not, and samples measured during an evolution
+are not reproduced.
 
 A checkpoint records which phases it belongs to, and `runTMS` refuses to resume one that
 was written by a different simulation rather than mixing the two. So editing the phases of
@@ -688,44 +680,10 @@ measures = destination => measurements
 measures = [ dest1 => meas1, dest2 => meas2, ...]
 ```
 
-The possible measurements are described on the [Measurements](measurements.md) page. There are three types of destinations:
-
-- filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull). The files `runTMS` writes itself in the simulation directory cannot be destinations: `log`, `stop`, `error`, `running`, `stamp`, `description`, `prog.jl` and the checkpoint files
-
-  ```julia
-  "file.dat" => X
-  ```
-
-- json filenames: filenames ending in ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
-
-  ```julia
-  "file.json" => [Purity, X(2)Z(3), (X, Y)]
-  ```
-
-- Data object: data is accumulated during the simulation and stored in the `data` field of the `Simulation` object returned by `runTMS`. This is useful for analyzing the data inside the program.
-
-  ```julia
-  Data("mydata") => [TraceError, X(1), Y]
-  ```
-
-A complex value takes two columns in a file, its real part then its imaginary part, a json
-file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
-values are complex is described in [Real, imaginary and complex values](@ref).
-
-A json file and a `Data` object hold, for each measurement, the lists `"times"`, `"data"` and
-`"events"`: the time of each value, the value, and its event, the number of the measurement
-set it belongs to. Events are counted for each destination, one each time it is written, and
-values measured together share one. They are what tells measurement sets apart when the time
-does not: it stays the same over the sweeps of a ground state search or over the gates of a
-circuit, and repeats once a phase sets it back. A matrix is written in a json file as the
-list of its rows, as a file writes it row by row.
-
-The `data_to_frame` function can be used on the result to get a `DataFrame` object, with one row per event (the `DataFrames` package must be imported first)
-
-```julia
-mysim = runTMS(simdata)
-df = data_to_frame(mysim.data["mydata"])
-```
+The possible measurements are described on the [Measurements](measurements.md) page. A
+destination is a file, a json file or a `Data` object, which keeps the values in the program;
+the destinations and the format of what they hold are described in
+[Output](@ref measure-output).
 
 For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
 
@@ -807,3 +765,20 @@ Strided weighs most at moderate bond dimensions, and hardly at all from 512 on.
 
 The documentations of Julia and of ITensors agree that the way to find the best settings is to
 try them on a few sweeps of your own calculation.
+
+### BLAS backend
+
+Most of the running time of TMS is spent in the tensor contractions of ITensors, which
+themselves call BLAS. Julia ships with OpenBLAS and TMS uses it as it comes: switching the
+BLAS backend affects the whole Julia session, so that choice is left to you rather than
+made by a library you load.
+
+On `x86_64` machines running Linux or Windows, Intel's MKL is often noticeably faster on
+these contractions. To use it, add `MKL` to your project and load it before TMS:
+
+```julia
+using MKL
+using TensorMixedStates
+```
+
+MKL is not distributed for macOS nor for ARM machines, where OpenBLAS is the only option.

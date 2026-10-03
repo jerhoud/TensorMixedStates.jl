@@ -12,6 +12,9 @@ SysIndex
 ## States
 
 ```@docs
+Representation
+Pure
+Mixed
 Limits
 State
 State(::System, ::State)

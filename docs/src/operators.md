@@ -109,9 +109,6 @@ These types describe the operators themselves, they are mostly useful when writi
 operating on operators.
 
 ```@docs
-Representation
-Pure
-Mixed
 Op
 GenericOp
 IndexedOp

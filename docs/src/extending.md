@@ -15,6 +15,42 @@ own:
 To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly [`string_state`](@ref) on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using [`@def_states`](@ref) and [`@def_operators`](@ref).
 Don't forget to define the [`F`](@ref) operator for fermionic sites.
 
+An atom with a ground state, an excited one and a Rydberg one, driven from one to the next and
+decaying from the Rydberg state, with an interaction between Rydberg atoms side by side:
+
+```@example extending
+using TensorMixedStates
+
+struct Atom <: AbstractSite end          # a ground state g, an excited one e, a Rydberg one r
+TensorMixedStates.dim(::Atom) = 3        # the full name, to add a method to dim
+
+@def_states(Atom(), [
+    "G" => [1., 0., 0.],
+    "E" => [0., 1., 0.],
+    "R" => [0., 0., 1.],
+])
+
+@def_operators(Atom(), [
+    plain_op => [
+        Sge = [0. 1. 0. ; 0. 0. 0. ; 0. 0. 0.],     # |g><e|
+        Ser = [0. 0. 0. ; 0. 0. 1. ; 0. 0. 0.],     # |e><r|
+    ],
+    selfadjoint_op => [
+        Nr = [0. 0. 0. ; 0. 0. 0. ; 0. 0. 1.],      # the Rydberg population
+    ],
+])
+
+hamiltonian = sum(Sge(i) + dag(Sge)(i) + Ser(i) + dag(Ser)(i) for i in 1:4) +
+              sum(Nr(i) * Nr(i + 1) for i in 1:3)
+myrho = State{Mixed}(System(4, Atom()), "G")
+mystate = tdvp(-im * hamiltonian + sum(Dissipator(Ser)(i) for i in 1:4), 0.5, myrho;
+               nsweeps = 5)
+measure(mystate, [Nr, Trace])
+```
+
+The operators declared are constants of the module the declaration is in. Declared in a module
+of your own, the site type and the operator names are exported for the programs that use it.
+
 ### Conserved quantities
 
 A site type may carry a field named `conserve`, of type `String`, recording the quantities it
@@ -72,9 +108,51 @@ operator at all is refused in the same way.
 ## Operators and measurements of one's own
 
 An operator of your own is defined with [`named`](@ref), from a matrix, a function of the
-sites or an expression, or with [`Operator`](@ref) for one of several sites. A measurement
-of your own is a [`StateFunc`](@ref), a function of the state, or a [`TimeFunc`](@ref), a
-function of the simulation time.
+sites or an expression, or with [`Operator`](@ref) for one of several sites. Its type, which
+`simplify` reasons with, see [`OpType`](@ref), is read off its matrix: here an involution.
+
+```@example extending
+using TensorMixedStates, .Qubits
+
+myop = named([1 1 ; 1 -1] / √2, "MyOp")
+myop.type
+```
+
+A type given to `named` with a matrix is checked against it at once, as far as it can be
+without a site, and any type is checked against the matrix of the operator when that matrix is
+laid on a site. `simplify` relies on the type before, squaring an involution to the identity
+for instance, so a wrong type given to a function or an expression gives a wrong result.
+
+A matrix of several sites given alone does not say how many sites it acts on, which is then
+given in braces, with the type:
+
+```@example extending
+myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
+myswap(4, 7)
+```
+
+Such an operator, or a function of an operator of several sites, as
+`exp(-im * t * (X⊗X + Y⊗Y) / 4)`, can only be applied as a gate. To measure it or to put it
+in a hamiltonian, give the sites it acts on when creating it, one per index or a single one
+for identical sites, whose number is then read off the size of the matrix:
+
+```@example extending
+myswap2 = named([1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], "MySwap2", Qubit())
+```
+
+It is then split into a sum of products of one site operators, which becomes its definition,
+the way `Swap` is defined by an expression:
+
+```@example extending
+myswap2.expr
+```
+
+The factors carry a definite charge of what their sites conserve. On a fermionic site the
+matrix has to commute with `F`, since it is taken as it is, with no Jordan-Wigner string:
+an operator moving fermions between sites is written with `C` and `dag(C)` instead.
+
+A measurement of your own is a [`StateFunc`](@ref), a function of the state, or a
+[`TimeFunc`](@ref), a function of the simulation time.
 
 ## [Phases of one's own](@id own-phases)
 
@@ -152,14 +230,16 @@ one, `nothing` otherwise.
 ## Representations of one's own
 
 A representation of your own is a subtype of [`Representation`](@ref), which `CreateState`
-takes as its `type`, and needs nothing more. Its states are of a type of your own, a subtype
-of [`AbstractState`](@ref) with a field `system`, the `System` of their physical sites, which
-the package reads to save a state, its sites going in the file, to choose the threading, to
-log what a `Weaken` phase changes, and to put the reference of `Fidelity` or `Overlap` on the
-system of the measured state. It need not be the system the representation keeps its tensors
-on: a mixed state held as a pure state on a doubled system, a purification, has the system of
-its physical sites in `system`, and the doubled one in a field of its own. The phases and the
-measurements reach these states through the methods you give:
+takes as its `type`, and needs nothing more. Its states are of a type of your own, a subtype of
+[`AbstractState`](@ref) with a field `system` holding the `System` of their physical sites.
+TMS reads it to save a state, to choose the threading, to log what a `Weaken` phase changes,
+and to put the reference of `Fidelity` or `Overlap` on the system of the measured state.
+
+That system need not be the one the representation keeps its tensors on: a mixed state held as
+a pure state on a doubled system, a purification, has the system of its physical sites in
+`system`, and the doubled one in a field of its own.
+
+The phases and the measurements reach these states through the methods you give:
 
 - `TensorMixedStates.run_phase(sim, phase::CreateState{MyRepresentation})` creates the state
   from the fields of the phase;

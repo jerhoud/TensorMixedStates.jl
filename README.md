@@ -86,9 +86,9 @@ manual covers both styles, and [`examples/`](examples) holds twelve working scri
 <https://jerhoud.github.io/TensorMixedStates.jl>
 
 For an introduction to matrix product states and tensor networks, see the lecture notes of the
-course Grégoire Misguich gave at the Les Houches summer school on Computational Physics: Open
-Quantum Systems, in June 2026, [arXiv:2606.24803](https://arxiv.org/abs/2606.24803), and their
-[Julia examples](https://github.com/gregoire-misguich/Introduction-to-matrix-product-states-and-tensor-networks),
+course Grégoire Misguich gave at the 9th Les Houches summer school on Computational Physics:
+Open Quantum Systems, in June 2026, [arXiv:2606.24803](https://arxiv.org/abs/2606.24803), and
+their [sixteen Julia examples](https://github.com/gregoire-misguich/Introduction-to-matrix-product-states-and-tensor-networks),
 some of them written with TMS.
 
 ## Article of reference

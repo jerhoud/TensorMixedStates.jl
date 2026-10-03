@@ -166,7 +166,49 @@ Linkdim
 MemoryUsage
 ```
 
-## Output
+## [Output](@id measure-output)
+
+`output` takes measurements and writes them to destinations, as the phases of `runTMS` do with
+their `measures`, given as pairs `destination => measurements`.
+
+There are three types of destinations:
+
+- filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull). The files `runTMS` writes itself in the simulation directory cannot be destinations: `log`, `stop`, `error`, `running`, `stamp`, `description`, `prog.jl` and the checkpoint files
+
+  ```julia
+  "file.dat" => X
+  ```
+
+- json filenames: filenames ending in ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
+
+  ```julia
+  "file.json" => [Purity, X(2)Z(3), (X, Y)]
+  ```
+
+- Data object: data is accumulated during the simulation and stored in the `data` field of the `Simulation` object returned by `runTMS`. This is useful for analyzing the data inside the program.
+
+  ```julia
+  Data("mydata") => [TraceError, X(1), Y]
+  ```
+
+A complex value takes two columns in a file, its real part then its imaginary part, a json
+file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
+values are complex is described in [Real, imaginary and complex values](@ref).
+
+A json file and a `Data` object hold, for each measurement, the lists `"times"`, `"data"` and
+`"events"`: the time of each value, the value, and its event, the number of the measurement
+set it belongs to. Events are counted for each destination, one each time it is written, and
+values measured together share one. They are what tells measurement sets apart when the time
+does not: it stays the same over the sweeps of a ground state search or over the gates of a
+circuit, and repeats once a phase sets it back. A matrix is written in a json file as the
+list of its rows, as a file writes it row by row.
+
+The `data_to_frame` function can be used on the result to get a `DataFrame` object, with one row per event (the `DataFrames` package must be imported first)
+
+```julia
+mysim = runTMS(simdata)
+df = data_to_frame(mysim.data["mydata"])
+```
 
 ```@docs
 output

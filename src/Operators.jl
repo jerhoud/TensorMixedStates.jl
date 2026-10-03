@@ -14,7 +14,7 @@ export dag, ⊗, isfermionic, has_fermionic
     abstract type Representation
 
 the supertype of the representations in which `CreateState` creates a state: `Pure` and
-`Mixed`, see `PM`, and those an extension defines, whose states are `AbstractState`s.
+`Mixed`, and those an extension defines, whose states are `AbstractState`s.
 """
 abstract type Representation end
 
