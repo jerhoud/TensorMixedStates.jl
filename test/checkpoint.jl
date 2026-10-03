@@ -178,6 +178,45 @@ end
     end
 end
 
+@testset "Resuming a mixed state through every kind of evolution" begin
+    mktempdir() do dir
+        cd(dir) do
+            stop = Ref(false)
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop[]
+                    touch("stop")
+                end
+                0.
+            end)
+            ms = ["data" => [X(1), Y(1), X(2), Z(1), :sweep, stopper]]
+            lim = Limits(maxdim = 10, cutoff = 1e-15)
+            # a time dependent hamiltonian under Tdvp, a time dependent dissipative evolver
+            # under ApproxW, and a steady state, whose trace a resume on its last sweep left
+            # away from one, which expect does not show since it divides by it
+            phases = [CreateState{Mixed}(2, Qubit(), "X+"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), limits = lim,
+                             measures = ms, evolver = [-im * Z(1), -im * X(1) * X(2)] =>
+                                                      [t -> 1 + t, t -> cos(3t)]),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = ApproxW(order = 2),
+                             limits = lim, measures = ms,
+                             evolver = [-im * Z(1), Dissipator(sqrt(0.3) * Sm)(2)] =>
+                                       [t -> t^2, t -> 1.0]),
+                      SteadyState(lindbladian = Dissipator(Sp)(1) + Dissipator(Sm)(2),
+                                  nsweeps = 3, limits = lim, measures = ms,
+                                  final_measures = "final" => [Trace])]
+            runTMS(SimData(; name = "ref", phases))
+            # one sweep per run, as above
+            stop[] = true
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            for _ in 1:20
+                runTMS(sim_data)
+            end
+            @test read("chk/data", String) == read("ref/data", String)
+            @test read("chk/final", String) == read("ref/final", String)
+        end
+    end
+end
+
 @testset "Interrupting a phase without a solver" begin
     mktempdir() do dir
         cd(dir) do
