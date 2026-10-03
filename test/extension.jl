@@ -207,6 +207,16 @@ TensorMixedStates.apply(op::IndexedOp, st::InterleavedState; kwargs...) =
 TensorMixedStates.expect(st::InterleavedState, op::IndexedOp) =
     expect(st.inner, map_sites(interleaved, op))
 
+# the state on the doubled system goes in a subgroup, read back on the sites it lies on
+TensorMixedStates.write_state(g, st::InterleavedState) =
+    TensorMixedStates.write_state(TensorMixedStates.HDF5.create_group(g, "wide"), st.inner)
+
+function TensorMixedStates.read_state(::Type{InterleavedState}, g, sites, system)
+    wide = TensorMixedStates.read_state(State{Pure}, g["wide"],
+                                        reduce(vcat, [ [s, s] for s in sites ]), nothing)
+    return InterleavedState(isnothing(system) ? System(sites) : system, wide)
+end
+
 @testset "A representation on another system" begin
     sys = System(3, Fermion())
     hop(θ) = exp(-im * θ * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
@@ -223,6 +233,13 @@ TensorMixedStates.expect(st::InterleavedState, op::IndexedOp) =
     pair = (N(2), C(1) * dag(C)(3))
     @test expect(st, pair) isa Tuple
     @test collect(expect(wide, pair)) ≈ collect(expect(st, pair))
+    mktempdir() do dir
+        file = joinpath(dir, "wide.h5")
+        save_state(file, "wide", wide)
+        back = load_state(file, "wide"; system = sys)
+        @test back isa InterleavedState
+        @test last.(measure(back, ops)) ≈ last.(measure(st, ops))
+    end
 end
 
 # An algorithm of one's own: tdvp one step at a time, `run_steps` doing the bookkeeping. It

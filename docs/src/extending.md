@@ -271,7 +271,12 @@ The phases and the measurements reach these states through the methods you give:
   HDF5 group, where its type and its sites are already written, and the second rebuilds it from
   them, on `system` when that is not `nothing`. The type is written by its name alone: a type
   with parameters writes them in the group as well, and is read back by a method for the type
-  without them, `read_state(::Type{<:MyState}, group, sites, system)`.
+  without them, `read_state(::Type{<:MyState}, group, sites, system)`. A state holding a
+  `State`, on the physical sites or on a system of its own, writes it in a subgroup,
+  `write_state(create_group(group, "inner"), inner)`, `create_group` coming from HDF5, and
+  reads it back with `read_state(State{Pure}, group["inner"], sites, nothing)`, given the sites
+  it lies on. Whatever else the state needs to go on as it would have, the state of a random
+  number generator for instance, is written in the group as numbers or arrays of them.
 
 The other phases go through `truncate`, `mix`, `partial_trace`, `weaken`, `dmrg` and
 `steady_state`, and the state functions of the measurements through `trace`, `norm`,
