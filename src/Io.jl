@@ -323,6 +323,18 @@ read_state(t::Type{<:AbstractState}, _, _, _) =
     error("cannot read a $t, its type has no method of TensorMixedStates.read_state")
 
 """
+    saved_sites(filename, statename)
+
+the sites of the state saved under the name `statename` in the file `filename`, read without
+the state
+"""
+saved_sites(filename::String, statename::String) =
+    h5open(filename, "r") do f
+        g = open_group(f, statename)
+        return read_sites(g, read(attributes(g)["version"]))
+    end
+
+"""
     load_state(filename, statename[; system])
 
 the state saved under the name `statename` in the file `filename` by `save_state`.

@@ -157,6 +157,24 @@ function threading_stamp(mode)
 end
 
 """
+    resume_system(phases, phase, sites)
+
+the system the state of a checkpoint taken at the start of the phase `phase`, or in it, is put
+back on: the one an uninterrupted run has it on, that of the last `CreateState` before that
+phase, when it has the `sites` of the state, and otherwise `nothing`, the state then coming
+back on a system of its own. A measurement comparing with a state built on that system before
+the run, which `inner` and the fidelities require to share it, failed on every resume.
+"""
+function resume_system(phases::Vector, phase::Int, sites)
+    i = findlast(p -> p isa CreateState, phases[1:min(phase - 1, end)])
+    if isnothing(i)
+        return nothing
+    end
+    system = phases[i].system
+    return !isnothing(system) && system.sites == sites ? system : nothing
+end
+
+"""
     runTMS(::SimData)
     runTMS(::SimData; clean = true)
     runTMS(::SimData; restart = true)
@@ -235,7 +253,8 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
         try
             if live && has_checkpoint(".")
-                k = load_checkpoint(".")
+                system(phase, sites) = resume_system(sim_data.phases, phase, sites)
+                k = load_checkpoint(".", system)
                 if k.id ≠ c.id
                     error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
                           "its phases are not the ones being run. Use restart = true to start over " *

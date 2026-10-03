@@ -113,6 +113,10 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- A resumed simulation puts the state of its checkpoint back on the system of its last
+  `CreateState`, as the uninterrupted run has it, when their sites are the same. It came back
+  on a system of its own, so that a measurement comparing with a state built on that system,
+  as `StateFunc("F", st -> fidelity(ref, st))`, failed on every resume.
 - `runTMS` with `restart` or `clean` refuses a name that is the current directory or one of
   its ancestors, as `"."` or `".."`. It emptied that directory, the program included, before
   failing on the directory itself.

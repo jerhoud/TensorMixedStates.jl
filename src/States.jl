@@ -289,7 +289,13 @@ function State(system::System, st::State{R}) where R
         error("cannot put a state on a system of other sites: the state was built on " *
               "$(st.system.sites) and the system given has $(system.sites)")
     end
-    return State{R}(system, replace_siteinds(st.state, SysIndex{R}(system, 1:length(system))))
+    m = replace_siteinds(st.state, SysIndex{R}(system, 1:length(system)))
+    # other indices leave the values of the tensors, and so their orthogonality, which
+    # replace_siteinds forgets: expect, which does not contract the sites it knows to be
+    # orthogonal, then rounded otherwise, and a resumed run did not write the file of the
+    # uninterrupted one
+    ITensorMPS.set_ortho_lims!(m, ITensorMPS.ortho_lims(st.state))
+    return State{R}(system, m)
 end
 
 State{R}(size::Int, site::AbstractSite, state) where R =

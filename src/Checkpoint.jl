@@ -341,25 +341,30 @@ whether a checkpoint is present in the given directory
 has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
 
 """
-    load_checkpoint(dir)
+    load_checkpoint(dir[, system])
 
 read the checkpoint of the given directory, as a named tuple of the fields of the commit it
 records (`phase`, `sweep`, `phase_time`, `time`, `state`, `energy`), the fingerprint `id` of
 its phases, the `outputs` to put back with `restore_outputs!`, and the `generation` of its
-state file. A checkpoint of another version, or whose state file is missing, is refused.
+state file. Its state comes back on the system `system(phase, sites)` gives, from the phase of
+the commit and the sites of the state, or on a system of its own when that is `nothing`. A
+checkpoint of another version, or whose state file is missing, is refused.
 """
-function load_checkpoint(dir::String)
+function load_checkpoint(dir::String, system = (_, _) -> nothing)
     meta = JSON.parsefile(checkpoint_json(dir))
     if meta["version"] ≠ checkpoint_file_version
         error("checkpoint of $dir has version $(meta["version"]), expected $checkpoint_file_version")
     end
     file = meta["state"]
-    if !isfile(joinpath(dir, file))
+    path = joinpath(dir, file)
+    if !isfile(path)
         error("the checkpoint of $dir names the state file $file, which is missing")
     end
-    return (phase = Int(meta["phase"]), sweep = Int(meta["sweep"]),
+    phase = Int(meta["phase"])
+    return (phase, sweep = Int(meta["sweep"]),
             phase_time = restored_value(meta["phase_time"]), time = restored_value(meta["time"]),
-            state = load_state(joinpath(dir, file), "checkpoint"),
+            state = load_state(path, "checkpoint";
+                               system = system(phase, saved_sites(path, "checkpoint"))),
             energy = restored_value(meta["energy"]), id = meta["id"], outputs = meta["outputs"],
             generation = file == state_file(2) ? 2 : 1)
 end

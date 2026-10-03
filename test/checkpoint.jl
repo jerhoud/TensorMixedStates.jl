@@ -621,6 +621,34 @@ end
     end
 end
 
+@testset "A resume keeps the system of the phases" begin
+    # the state of a checkpoint came back on a system of its own, so that a measurement
+    # comparing with a state built on the system of the phases failed on every resume
+    mktempdir() do dir
+        cd(dir) do
+            sys = System(2, Qubit())
+            ref = State{Pure}(sys, "Up")
+            fid = StateFunc("Fid", st -> fidelity(ref, st))
+            for mixed in (false, true)
+                stop_in = Ref(0)
+                evolver = mixed ? -im * X(1) + Dissipator(Sm)(2) : -im * X(1)
+                phases = [CreateState(type = Pure(), system = sys, state = "Up");
+                          mixed ? [ToMixed()] : [];
+                          Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver,
+                                 measures = "data" => [fid, stopper_at(stop_in)])]
+                runTMS(SimData(; name = "ref$mixed", phases))
+                stop_in[] = 2
+                sim_data = SimData(; name = "chk$mixed", phases, checkpoint_interval = 1e-9)
+                runTMS(sim_data)
+                @test stop_in[] == 0
+                sim = runTMS(sim_data)
+                @test sim.state.system === sys
+                @test read("chk$mixed/data", String) == read("ref$mixed/data", String)
+            end
+        end
+    end
+end
+
 @testset "A restart does not remove the current directory" begin
     # with ".", an ancestor or the absolute path of the current directory, rm emptied it, the
     # program included, before failing on the directory itself
