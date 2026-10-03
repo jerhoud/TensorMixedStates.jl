@@ -616,11 +616,7 @@ function conserve_string(site::AbstractSite, spec)
             error("cannot conserve $name: ITensors takes names of at most $limit characters " *
                   "here, give it a shorter one with named")
         end
-        head = modulus == 1 ? name : "$name%$modulus"
-        # a strong symmetry is marked on the quantity and not on the site, so that one site
-        # may hold both kinds, and at the end of the head so that the name and the modulus
-        # are read exactly as before
-        return (spec isa Strong ? head * "!" : head) * ":" * join(q, ",")
+        return encode_quantity(name, modulus, q, spec isa Strong)
     end
     # sorted by name, see `Conserved`
     return sorted_conserve(join(parts, ";"))

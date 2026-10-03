@@ -86,6 +86,18 @@ function decode_conserve(s::AbstractString)
 end
 
 """
+    encode_quantity(name, modulus, charges, strong)
+
+the part of the string of `conserve_string` recording one quantity, as `decode_conserve` reads
+it back.
+"""
+encode_quantity(name, modulus, charges, strong::Bool) =
+    # a strong symmetry is marked on the quantity and not on the site, so that one site may
+    # hold both kinds, and at the end of the head so that the name and the modulus are read
+    # exactly as before
+    (modulus == 1 ? name : "$name%$modulus") * (strong ? "!" : "") * ":" * join(charges, ",")
+
+"""
     sorted_conserve(s)
 
 the string `s` of `conserve_string` with its quantities sorted by name, as `Conserved` holds
@@ -923,8 +935,7 @@ function retarget(site::AbstractSite, target::Conserved)
             continue
         end
         (_, modulus, charges, _) = qs[k]
-        head = modulus == 1 ? name : "$name%$modulus"
-        push!(parts, (strong ? head * "!" : head) * ":" * join(charges, ","))
+        push!(parts, encode_quantity(name, modulus, charges, strong))
     end
     return join(parts, ";")
 end
