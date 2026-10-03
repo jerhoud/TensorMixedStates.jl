@@ -417,6 +417,18 @@ end
     @test abs(trace(partial_trace(stm - stm, [1]))) < 1e-12
 end
 
+@testset "Measuring a multiple of the identity" begin
+    # a one site operator simplified to c Id went to the tensor of an identity placed on no
+    # site, which has none: expect1, expect2 and measure failed on it, Id alone measured right
+    st = RandomState{Pure}(System(3, Qubit()), 4)
+    for s in (st, mix(st))
+        @test expect1(s, 2Id) ≈ fill(2, 3)
+        @test expect1(s, (2X)^2) ≈ fill(4, 3)
+        @test expect2(s, (2Id, X)) ≈ 2 * expect2(s, (Id, X))
+        @test last(only(measure(s, (0.5Z)^2))) ≈ fill(0.25, 3)
+    end
+end
+
 @testset "A partial trace keeps the fermionic signs" begin
     # a fermion traced out has to be moved past the fermions kept on its right, which the
     # trace of the spins forgot: on (|110⟩ + |011⟩)/√2 the hopping from 3 to 1 crosses the

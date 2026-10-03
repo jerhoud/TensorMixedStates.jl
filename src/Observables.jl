@@ -99,11 +99,12 @@ tensor_obs(state::State, a::ScalarOp{Pure, Indexed, 1}) =
 """
     obs_at(state, op, i)
 
-the tensor measuring the one site operator `op` on site `i`, see `tensor_obs`, the identity
-included, see `identity_at`.
+the tensor measuring the one site operator `op` on site `i`, see `tensor_obs`, a multiple of the
+identity included, see `identity_at`: `(2X)^2`, simplified to `4Id`, went to `tensor_obs`, which
+an identity, placed on no site, has no method of.
 """
 obs_at(state::State, op::SimpleOp, i::Int) =
-    op isa IdentityOp ? identity_at(state, i) : tensor_obs(state, op(i))
+    scalararg(op) isa IdentityOp ? scalarcoef(op) * identity_at(state, i) : tensor_obs(state, op(i))
 
 """
     tensor_dag(state, i)

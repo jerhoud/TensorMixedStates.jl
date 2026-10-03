@@ -113,6 +113,8 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- `expect1`, `expect2` and `measure` take a one site operator that simplifies to a multiple of
+  the identity, as `2Id` or `(2X)^2`, on which they failed with a `MethodError`.
 - `named` refuses a matrix whose `type` it does not satisfy, as a matrix declared an involution
   that is not self adjoint. `simplify` relied on the type before any matrix was computed: such
   an operator squared to the identity, and gave a wrong result with no message.
