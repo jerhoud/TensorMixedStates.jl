@@ -1163,13 +1163,14 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keepers::B
     t = Vector{ITensor}(undef, kn)
     for (i, k) in enumerate(keep)
         if i == 1
-            # without the 1/trace the left environment of expect carries: a partial trace keeps
-            # the trace of the state, and a traceless state gave NaN
-            x = copy(mps[1])
+            # the sites on the left traced out, without the 1/trace the left environment of
+            # expect carries: a partial trace keeps the trace of the state, and a traceless
+            # state gave NaN
+            x = ITensor(1.)
             for l in 1:k-1
-                x = x * identity_at(state, l) * mps[l+1]
+                x *= get_loc(state, l)
             end
-            t[1] = x
+            t[1] = x * mps[k]
         else
             for l in j+1:k-1
                 t[i-1] *= get_loc(state, l)
