@@ -103,6 +103,11 @@ the reference article.
 - `≈` no longer takes a product with a factor of several sites kept whole, as an operator
   defined by a matrix, for the same product in another order when a Jordan-Wigner string had
   to cross that factor: the string was moved past it without the sign of an odd factor.
+- A tensor product with a fermionic factor of several sites, as `named(C ⊗ N, "CN")` or
+  `C ⊗ Id + Id ⊗ C`, has its adjoint, its matrix and its dissipator right. Such a factor was
+  taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
+  dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
+  sites before it.
 
 ## [1.6.0] - 2026-09-30
 
