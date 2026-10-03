@@ -236,7 +236,8 @@ end
                                             ["Occ", "Emp", "Occ", "Emp", "Emp", "Emp"]))
     wide = apply(gates, wide)
     ops = [dag(C)(3) * C(1), C(1) * dag(C)(3), N(1) * N(3) + 0.5 * dag(C)(2) * C(3), 2.]
-    @test last.(measure(wide, ops)) ≈ last.(measure(st, ops))
+    # the values are real or complex as declared: in a vector of Number, ≈ compares them exactly
+    @test [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
     # a tuple of operators gives a tuple of values, on a State as on a state of one's own
     pair = (N(2), C(1) * dag(C)(3))
@@ -247,7 +248,7 @@ end
         save_state(file, "wide", wide)
         back = load_state(file, "wide"; system = sys)
         @test back isa InterleavedState
-        @test last.(measure(back, ops)) ≈ last.(measure(st, ops))
+        @test [last.(measure(back, ops))...] ≈ [last.(measure(st, ops))...]
     end
 end
 

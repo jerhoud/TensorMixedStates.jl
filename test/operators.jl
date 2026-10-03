@@ -201,7 +201,7 @@ end
     @test length(Set([X(1) * Y(2), X(1) * Z(2)])) == 2
     # what it is for: a product shared by two measurements is asked for only once
     m = Measure([X(1) * Y(2) + Z(1), X(1) * Y(2) + Z(3)])
-    @test length(Set(TensorMixedStates.get_prods(m))) == 3
+    @test length(Set(TensorMixedStates.get_prods(State{Pure}(System(3, Qubit()), "Up"), m))) == 3
 end
 
 @testset "Modulo and parity operators" begin
