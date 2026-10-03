@@ -649,6 +649,19 @@ end
     end
 end
 
+@testset "SaveState refuses a file of the simulation" begin
+    # a state saved as a checkpoint file was destroyed by the next checkpoint
+    mktempdir() do dir
+        cd(dir) do
+            phases(file) = [CreateState{Pure}(2, Qubit(), "Up"), SaveState(; file)]
+            @test_throws "a file of the simulation directory" runTMS(SimData(name = "a",
+                phases = phases("checkpoint-1.h5")))
+            runTMS(SimData(name = "b", phases = phases("mine.h5")))
+            @test isfile("b/mine.h5")
+        end
+    end
+end
+
 @testset "Two names of one file" begin
     # each name opened the file, emptying what the other had written
     mktempdir() do dir
