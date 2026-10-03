@@ -231,6 +231,16 @@ end
     @test expect1(ρ, Z) ≈ [1, -1]
 end
 
+@testset "dmrg with no sweep left" begin
+    # a search resumed after its last sweep is asked for none, on which ITensorMPS gave an
+    # energy of 0: it is that of the state given
+    h = -sum(Z(i) for i in 1:2) - 0.5 * X(1)
+    st = State{Pure}(System(2, Qubit()), "Up")
+    e, s = dmrg(h, st; nsweeps = 2, first_sweep = 3)
+    @test e ≈ real(expect(st, h))
+    @test s === st
+end
+
 @testset "The Krylov parameters reach dmrg" begin
     # a Krylov space of a single vector holds nothing but the state it starts from, so that
     # the search does not leave it: dmrg ends where it started

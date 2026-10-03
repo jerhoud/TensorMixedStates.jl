@@ -642,7 +642,10 @@ simulation another name, or pass `restart = true`.
 Functions are the blind spot of that check: changing the coefficients of a time dependent
 evolver, or the body of a `StateFunc`, leaves the phases looking the same, and the
 simulation resumes from a checkpoint computed with the old ones. Restart such a run rather
-than resume it.
+than resume it. The other way round, a function that captures another function, as
+`t -> g(t)` built inside a function taking `g`, looks different when the program is included
+again in the same Julia session, and its checkpoint is then refused as another simulation's:
+resume it from a new session.
 
 #### Stopping on purpose
 

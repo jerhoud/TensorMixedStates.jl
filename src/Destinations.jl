@@ -276,9 +276,9 @@ end
 
 take the values of one call of `output`, pairs `header => value`: a text file or a stream
 writes them as rows and flushes, an accumulating destination appends them to its series as
-one new event.
+the event `event`, a new one unless the call gives it.
 """
-function emit!(d::Union{TextFile, Stream}, formats, time, values)
+function emit!(d::Union{TextFile, Stream}, formats, time, values; event = nothing)
     for (header, value) in values
         write_row(d.io, formats, time, header, value)
     end
@@ -287,8 +287,7 @@ function emit!(d::Union{TextFile, Stream}, formats, time, values)
     flush(d.io)
 end
 
-function emit!(d::Union{JsonFile, DataStore}, _, time, values)
-    event = next_event(d.series)
+function emit!(d::Union{JsonFile, DataStore}, _, time, values; event = next_event(d.series))
     for (header, value) in values
         push_value!(d.series, header, time, value, event)
     end

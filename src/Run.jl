@@ -386,7 +386,7 @@ function log_phase(sim::Simulation, phases::Vector; threading = nothing)
             # what a stopped run hands back is what it resumes from: the state and the time
             # of its last commit, the start of the phase when that one commits no sweep
             sim = Simulation(sim, c.last.state, c.last.time)
-            log_stop(sim, i)
+            log_stop(sim, i; within = true)
             break
         end
         # the next phase is the one to resume from, committed at a clean boundary. Marked here
@@ -411,14 +411,17 @@ function log_phase(sim::Simulation, phases::Vector; threading = nothing)
 end
 
 """
-    log_stop(sim, i)
+    log_stop(sim, i; within = false)
 
-log that the simulation stops after phase `i`, and whether it can be resumed.
+log that the simulation stops after phase `i`, or in it when `within`, and whether it can be
+resumed.
 """
-log_stop(sim::Simulation, i::Int) =
+function log_stop(sim::Simulation, i::Int; within::Bool = false)
+    where = within ? "in" : "after"
     log_msg(sim, isempty(sim.checkpoint.dir) ?
-        "***** Stopping after phase $i, with no directory to save it in: it cannot be resumed *****" :
-        "***** Stopping after phase $i, the simulation can be resumed *****")
+        "***** Stopping $where phase $i, with no directory to save it in: it cannot be resumed *****" :
+        "***** Stopping $where phase $i, the simulation can be resumed *****")
+end
 
 """
     check_is_phase(phase)
@@ -458,7 +461,9 @@ function log_phase(sim::Simulation, phase)
         else
             nothing
         end
-    log_msg(sim, "***** Ending phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(td.bytes)) allocated *****")
+    # a phase stopped for a checkpoint has not ended, and is resumed
+    ends = sim.checkpoint.stopping ? "Stopping" : "Ending"
+    log_msg(sim, "***** $ends phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(td.bytes)) allocated *****")
     if !isnothing(comp)
         log_msg(sim, "compilation time was $comp seconds")
     end

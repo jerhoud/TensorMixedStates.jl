@@ -21,7 +21,7 @@ A phase of your own driving a solver starts it at `first_sweep = done + 1`, and 
 `energy` and its `nsweeps` to a `DmrgObserver`, which records a search stopped by its tolerance
 as having done them all. The phase has to skip the solver when `done` has reached `nsweeps`, as
 a search stopped by its tolerance or checkpointed on its last sweep has: run again for no
-sweep, `dmrg` would give an energy of 0 rather than `energy`. A loop of your own is best
+sweep, `dmrg` would give the energy of the state given rather than `energy`. A loop of your own is best
 written with `run_steps`, which calls this for it and must then not have it called again
 within its steps.
 """
@@ -277,7 +277,9 @@ function run_phase(sim::Simulation, phase::Evolve)
                      "to cover the duration $duration in $nsweeps steps")
     end
     time_stop = sim.time + duration
-    log_msg(sim, "Evolving state from simulation time $(sim.time) to $(time_stop)")
+    # a phase resumed in its course goes on from the time of its checkpoint, not from its start
+    r = sim.checkpoint.resume
+    log_msg(sim, "Evolving state from simulation time $(isnothing(r) ? sim.time : r.time) to $(time_stop)")
     evolver, coefs = phase.evolver isa Pair ? (first(phase.evolver), last(phase.evolver)) :
                                               (phase.evolver, nothing)
     sim = evolve(phase.algo, sim.state, sim, phase; evolver, coefs, nsweeps)

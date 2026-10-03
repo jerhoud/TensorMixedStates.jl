@@ -665,6 +665,10 @@ end
             stop = findfirst("the simulation can be resumed", log)
             @test !isnothing(stop)
             @test first(stop) < first(findfirst("Resuming from checkpoint", log))
+            # stopped in the course of its evolution, which it resumes from where it was
+            @test occursin("Stopping in phase 2", log)
+            @test occursin("***** Stopping phase \"Time evolution\"", log)
+            @test count("Evolving state from simulation time 0.0 to", log) == 1
         end
     end
 end

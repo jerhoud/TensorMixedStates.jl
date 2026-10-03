@@ -528,6 +528,10 @@ end
 end
 
 @testset "Powers" begin
+    # a literal exponent goes through literal_pow, which called inv for a negative one
+    p = -1
+    @test X^-1 == X^p
+    @test (Id + 0.5X)^-1 == (Id + 0.5X)^p
     # an integer power is a product, with the adjoint, the parity and the strings of that
     # product, an involution reduced at once; any other is the principal power, a function of
     # the operator as exp is, of which only the modulus of a coefficient comes out

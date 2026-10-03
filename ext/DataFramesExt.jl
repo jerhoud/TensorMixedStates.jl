@@ -7,6 +7,10 @@ using DataFrames
 # sweeps of dmrg, a circuit, or once it is set back, and joining on it paired values that were
 # never measured together
 function data_to_frame(data::Dict)
+    # nothing gathered: outerjoin of no table failed
+    if isempty(data)
+        return DataFrame(time = [])
+    end
     # a measurement named time or event keeps its column, renamed time_1 or event_1
     dfs = [DataFrame("event" => identity.(val["events"]), "time" => identity.(val["times"]),
                      key => identity.(val["data"]); makeunique = true) for (key, val) in data]

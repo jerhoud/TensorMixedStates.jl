@@ -464,6 +464,8 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
     end
     m = matrix(op, site)
     d = diag(m)
+    # relative to the largest charge: the 80 bosons of Boson(80) missed theirs by 1.4e-14
+    tol *= max(1, maximum(abs, d))
     off = norm(m - Diagonal(d))
     if off > tol
         error("$op is not diagonal on site $(typeof(site)), off by $(short(off)), so it " *

@@ -251,6 +251,13 @@ end
     @test dfc.time_1 ≈ [5, 6]
     @test dfc.event_1 ≈ [7, 8]
     @test sort(names(data_to_frame(Dict("time" => rows([5., 6.]))))) == ["time", "time_1"]
+
+    # one call of output is one row, two pairs going to one Data made two, and nothing
+    # gathered is an empty table, where outerjoin of no table failed
+    simd = Simulation(State{Pure}(System(2, Qubit()), "Up"); output = devnull)
+    output(simd, [Data("d") => X(1), Data("d") => Z(1)])
+    @test size(data_to_frame(simd.data["d"])) == (1, 3)
+    @test size(data_to_frame(Dict())) == (0, 1)
 end
 
 @testset "Output of a complex simulation time" begin

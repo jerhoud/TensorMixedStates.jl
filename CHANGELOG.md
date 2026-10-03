@@ -76,6 +76,9 @@ the reference article.
   term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
   by its conjugate, which gave a state of complex trace.
 
+- The log says that a run stops in a phase, rather than after it, when it stops in the course
+  of that phase, and that phase logs `Stopping` rather than `Ending`. An `Evolve` resumed in
+  its course logs the time it goes on from, rather than the time it started from.
 - The log of a resumed simulation is continued without being cut back to the checkpoint, and
   keeps the history of every run: the line saying why a run stopped was lost on its resume.
   The steps done again from the checkpoint now appear twice in it.
@@ -117,6 +120,18 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- An operator to a literal negative power, as `X^-1` or `(Id + 0.5X)^-1`, is the power, where
+  it failed on a `MethodError` of `inv`.
+- A conserved quantity whose charges are large, as `dag(A) * A` on `Boson(80)`, is accepted:
+  the eigenvalues are compared with the charges to a tolerance relative to the largest, where
+  an absolute one of 1e-14 refused them.
+- `state` and `matrix` give a copy of the array a site declares, which changing changed the
+  state or the operator for everyone.
+- The values of one call of `output` sent to one `Data` by several pairs make one event, and so
+  one row of `data_to_frame`, rather than one per pair. `data_to_frame` of a `Data` that
+  gathered nothing gives an empty table, where it failed.
+- `dmrg` with no sweep left, its `first_sweep` past `nsweeps`, gives the energy of the state
+  it is given, where it gave 0.
 - `tdvp` and `Tdvp` with `n_expand` enlarge the bond dimension before the first step and then
   every `n_expand` steps, rather than after them. The first step from a product state, of bond
   dimension one, left the tangent space and kept an error of the order of the time step: 0.016

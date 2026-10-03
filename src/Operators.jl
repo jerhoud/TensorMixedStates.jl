@@ -1058,6 +1058,10 @@ power(a::GenericOp, p::Number) = is_natural(p) ? IntPowOp(a, Int(real(p))) : Gen
 
 (a::GenericOp ^ p::Number) = power(a, p)
 
+# a literal exponent goes through literal_pow, which for a negative one calls inv, which an
+# operator has no method of: X^-1 failed where p = -1; X^p did not
+Base.literal_pow(::typeof(^), a::Op, ::Val{p}) where p = a ^ p
+
 # a placed operator is its operator on its sites, which takes any power, and an integer power of
 # anything placed is its product; a function of a placed sum or product has nowhere to go
 (a::AtIndex ^ p::Number) = power(a.op, p)(a.index...)

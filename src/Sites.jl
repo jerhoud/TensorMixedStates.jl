@@ -529,7 +529,9 @@ function state(site::AbstractSite, a::Union{Vector, Matrix})
         error("a $(size(a, 1))×$(size(a, 2)) density matrix cannot be one of $site, whose " *
               "dimension is $d")
     end
-    return a
+    # a copy, which the caller may change: the array of a declaration changed every state of
+    # its name
+    return copy(a)
 end
 
 state(site::AbstractSite, a::Function) = state(site, a(site))
@@ -627,8 +629,9 @@ end
 """
     charge_tol
 
-how far the eigenvalues of a conserved quantity may lie from the charges they stand for. It is
-a rounding tolerance and not a setting: a quantity missing its charges by more is
+how far the eigenvalues of a conserved quantity may lie from the charges they stand for,
+relative to the largest of them when it is above one. It is a rounding tolerance and not a
+setting: a quantity missing its charges by more is
 approximate, and has to be defined exactly rather than let through.
 """
 const charge_tol = 1e-14
