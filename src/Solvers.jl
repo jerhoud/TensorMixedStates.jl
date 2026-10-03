@@ -65,8 +65,8 @@ state. A simulation comes back with its time advanced by `t`.
   is given at the time that evolution started
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
-- `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
-  the middle of each step
+- `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
+  at the middle of each step
 - `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion every
   `n_expand` steps (default 0, never)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
@@ -203,8 +203,8 @@ const w_approx_coefs = Vector{ComplexF64}[
     make_approx_W(pre, t; order, w, coefs = [1.])
 
 the MPOs of the approximation of the given `order` of a step `t`, to apply one after the
-other, built from WI (`w = 1`) or WII (`w = 2`) approximations; `coefs` are the values of the
-coefficients of a time dependent evolver.
+other, built from WI (`w = 1`) or WII (`w = 2`) approximations; `coefs` are the real values of
+the coefficients of a time dependent evolver.
 """
 function make_approx_W(pre::PreMPO, t::Number; order::Int, w::Int, coefs = [1.])
     if order < 1 || order > length(w_approx_coefs)
@@ -236,8 +236,8 @@ advanced by `t`.
   is given at the time that evolution started
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
-- `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
-  the middle of each step
+- `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
+  at the middle of each step
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step

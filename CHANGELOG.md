@@ -66,6 +66,10 @@ the reference article.
 - `Tdvp`, `ApproxW`, `GroundState` and `SteadyState` have new fields, which change the
   fingerprint of a simulation using them: a checkpoint written before the upgrade is refused
   after it.
+- The time functions of a time dependent evolver take real values, a complex value being
+  refused: a complex function is written as its real and imaginary parts, each with its own
+  term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
+  by its conjugate, which gave a state of complex trace.
 
 ### Removed
 

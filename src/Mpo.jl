@@ -20,11 +20,20 @@ end
 """
     check_coefs(pre, coefs)
 
-refuse `coefs` unless it holds one value per time function of `pre`.
+refuse `coefs` unless it holds one real value per time function of `pre`. A pure term lifted
+for a mixed state, ``A \\rho + \\rho A^\\dagger``, would need a complex value on one side and
+its conjugate on the other, so a complex function is written as its real and imaginary parts,
+each with its own term, on pure states as well, which keeps one interface for both.
 """
 function check_coefs(pre::PreMPO, coefs)
     if length(coefs) ≠ pre.nterms
         error("an evolver of $(pre.nterms) terms takes as many time functions, got $(length(coefs))")
+    end
+    for (k, c) in enumerate(coefs)
+        if !(c isa Real)
+            error("time functions take real values, and term $k got $c: " *
+                  "write f * A as real(f) * A + imag(f) * (im * A)")
+        end
     end
 end
 
@@ -137,7 +146,7 @@ adapt_representation(::Type{R}, a) where R = a
 the operator `op` preprocessed for the representation of the state, to be turned into an MPO
 by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp` or `approx_W` in
 place of the operator, which saves preprocessing it again. `op` may also be a vector of
-operators, the terms of a time dependent evolver, each multiplied by its own time function.
+operators, the terms of a time dependent evolver, each multiplied by its own real time function.
 The terms of several sites are compacted, see `compact`, so that the bond dimension of the MPO
 is the least any triangular MPO of the operator can have.
 
@@ -334,8 +343,8 @@ add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::ITensor, i
     make_mpo(::State, op)
 
 the MPO of an operator, in the representation of the state. For a time dependent evolver,
-`coefs` holds the value of each time function, one per term; it defaults to `[1.]`, a single
-operator. The form taking a `State` builds the MPO of a single operator: that of a vector of
+`coefs` holds the value of each time function, one real number per term; it defaults to
+`[1.]`, a single operator. The form taking a `State` builds the MPO of a single operator: that of a vector of
 terms is built from its `PreMPO`, with its `coefs`.
 
 A pure operator ``A`` given for a mixed state becomes its `Evolver`,

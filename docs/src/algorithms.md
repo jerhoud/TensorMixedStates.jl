@@ -69,6 +69,15 @@ writing
 evolver = hs => coefs
 ```
 
+The time functions take real values. A complex one is written as its real and imaginary
+parts, each with its own term, ``f(t) A = \mathrm{Re} f(t)\, A + \mathrm{Im} f(t)\, (i A)``.
+A drive ``\Omega (e^{i\omega t} \sigma^+ + e^{-i\omega t} \sigma^-)`` is thus
+
+```julia
+hs = -im * [ Ω * X(1), -Ω * Y(1) ]
+coefs = [ t -> cos(ω * t), t -> sin(ω * t) ]
+```
+
 ```@docs
 tdvp
 approx_W
