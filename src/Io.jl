@@ -99,7 +99,8 @@ end
 
 write the tensors of `state` in the HDF5 group `group`, where `save_state` writes its type and
 its sites: the MPS of a `State` under the name `state`. The state of a representation an
-extension defines needs a method of its own, and one of `read_state` to be read back.
+extension defines needs a method of its own, and one of `read_state` to be read back. Its type
+is recorded by its name alone, so a type with parameters writes them in the group too.
 """
 function write_state(g, state::State)
     g["state"] = state.state
@@ -298,7 +299,8 @@ the sites `sites`. Without a `system`, `nothing`, it comes back on a system buil
 file, whose indices are its own; given one, whose sites must be those, it comes back on it,
 which is what comparing it with a state already in hand requires. The state of a
 representation an extension defines needs a method of its own, reading what its `write_state`
-wrote.
+wrote: for a type with parameters, recorded without them, a method for the type without them,
+as `read_state(::Type{<:MyState}, group, sites, system)`, which reads them from the group.
 """
 function read_state(::Type{State{Pure}}, g, sites, system)
     st = read_mps(g, sites)
@@ -320,7 +322,9 @@ function read_state(::Type{State{Mixed}}, g, sites, system)
 end
 
 read_state(t::Type{<:AbstractState}, _, _, _) =
-    error("cannot read a $t, its type has no method of TensorMixedStates.read_state")
+    error("cannot read a $t, its type has no method of TensorMixedStates.read_state" *
+          (t isa UnionAll ? ": a type with parameters is read by a method for the type without " *
+                            "them" : ""))
 
 """
     saved_sites(filename, statename)

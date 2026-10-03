@@ -113,6 +113,11 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- The documentation of `write_state` and `read_state` says how the state of an extension whose
+  type has parameters is saved, the file recording the type without them: its parameters are
+  written by `write_state`, and read back by a method of `read_state` for the type without
+  them. A state read by a method for its types with parameters only is refused with a message
+  saying so.
 - `SaveState` refuses a file that the simulation keeps for itself, as `checkpoint-1.h5`, which
   the next checkpoint overwrote, destroying the state saved.
 - Two names of one file, as `"data"` and `"./data"`, write to one destination. Each opened the

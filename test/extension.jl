@@ -94,6 +94,35 @@ TensorMixedStates.write_state(g, st::WrappedState) = TensorMixedStates.write_sta
 TensorMixedStates.read_state(::Type{WrappedState}, g, sites, system) =
     WrappedState(TensorMixedStates.read_state(State{Pure}, g, sites, system))
 
+# a state whose type has a parameter, which a state file does not record: write_state writes it
+# in the group and a method of read_state for the type without parameters reads it back
+struct Tagged{T} <: AbstractState
+    system::System
+    inner::State{Pure}
+end
+
+function TensorMixedStates.write_state(g, st::Tagged{T}) where T
+    g["tag"] = T
+    return TensorMixedStates.write_state(g, st.inner)
+end
+
+function TensorMixedStates.read_state(::Type{<:Tagged}, g, sites, system)
+    inner = TensorMixedStates.read_state(State{Pure}, g, sites, system)
+    return Tagged{read(g, "tag")}(inner.system, inner)
+end
+
+# and one read by a method for its types with parameters only, which a file cannot give
+struct Untagged{T} <: AbstractState
+    system::System
+    inner::State{Pure}
+end
+
+TensorMixedStates.write_state(g, st::Untagged) = TensorMixedStates.write_state(g, st.inner)
+function TensorMixedStates.read_state(::Type{Untagged{T}}, g, sites, system) where T
+    inner = TensorMixedStates.read_state(State{Pure}, g, sites, system)
+    return Untagged{T}(inner.system, inner)
+end
+
 # a state with no way of being written
 struct Unwritable <: AbstractState
     system::System
@@ -122,6 +151,11 @@ end
         @test_throws "has no method of TensorMixedStates.write_state" save_state(file, "w",
                                                                                Unwritable(sys))
         @test load_state(file, "w") isa WrappedState
+        # a type with parameters is recorded without them
+        save_state(file, "t", Tagged{3}(sys, State{Pure}(sys, "Up")))
+        @test load_state(file, "t") isa Tagged{3}
+        save_state(file, "u", Untagged{3}(sys, State{Pure}(sys, "Up")))
+        @test_throws "is read by a method for the type without them" load_state(file, "u")
         # a run stopped after its first phase writes the state in its checkpoint, and the run
         # resumed from it reads it back and finishes as the uninterrupted one
         cd(dir) do

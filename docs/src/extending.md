@@ -174,7 +174,9 @@ measurements reach these states through the methods you give:
   `TensorMixedStates.read_state(::Type{MyState}, group, sites, system)` save the state and read
   it back, for `SaveState`, `LoadState` and the checkpoints: the first writes its tensors in the
   HDF5 group, where its type and its sites are already written, and the second rebuilds it from
-  them, on `system` when that is not `nothing`.
+  them, on `system` when that is not `nothing`. The type is written by its name alone: a type
+  with parameters writes them in the group as well, and is read back by a method for the type
+  without them, `read_state(::Type{<:MyState}, group, sites, system)`.
 
 The other phases go through `truncate`, `mix`, `partial_trace`, `weaken`, `dmrg` and
 `steady_state`, and the state functions of the measurements through `trace`, `norm`,
