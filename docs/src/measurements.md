@@ -69,6 +69,9 @@ New state functions may be defined by
 stfunc = StateFunc("half_trace", st -> trace(st) / 2)
 ```
 
+A function of the time given as a measurement, as `t -> cos(2t)`, is written under the name
+`"func"`; [`TimeFunc`](@ref) gives it a name of its own.
+
 Some quantities produced by the algorithm itself, rather than computed from the state, are
 asked for with a symbol
 
@@ -195,8 +198,9 @@ A complex value takes two columns in a file, its real part then its imaginary pa
 file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
 values are complex is described in [Real, imaginary and complex values](@ref).
 
-A json file and a `Data` object hold, for each measurement, the lists `"times"`, `"data"` and
-`"events"`: the time of each value, the value, and its event, the number of the measurement
+A json file and a `Data` object hold each measurement under the name a file writes in its
+first column, `"X(1)"` or `"sweep"` for `:sweep`, and for each one the lists `"times"`, `"data"`
+and `"events"`: the time of each value, the value, and its event, the number of the measurement
 set it belongs to. Events are counted for each destination, one each time it is written, and
 values measured together share one. They are what tells measurement sets apart when the time
 does not: it stays the same over the sweeps of a ground state search or over the gates of a

@@ -1,7 +1,7 @@
 # runTMS, which runs a simulation described by a SimData phase after phase, in a directory of its
 # own, with its log, its checkpoints and the resumption of an interrupted run.
 
-export runTMS, SimData
+export runTMS, SimData, stopped
 
 """
     check_threading(threading)
@@ -173,6 +173,22 @@ function resume_system(phases::Vector, phase::Int, sites)
     system = phases[i].system
     return !isnothing(system) && system.sites == sites ? system : nothing
 end
+
+"""
+    stopped(sim)
+
+whether the simulation `runTMS` returned stopped before the end of its phases, at `max_time`,
+on the file `stop` or on an interrupt, rather than completed: it is then resumed by running it
+again, see [High Level Interface](@ref).
+
+# Examples
+
+    sim = runTMS(sim_data)
+    if stopped(sim)
+        println("stopped at time ", sim.time, ", to be resumed")
+    end
+"""
+stopped(sim::Simulation) = sim.checkpoint.stopping
 
 """
     runTMS(::SimData)

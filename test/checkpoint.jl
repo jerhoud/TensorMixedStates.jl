@@ -649,6 +649,22 @@ end
     end
 end
 
+@testset "stopped tells a stopped run from a completed one" begin
+    # the number of lines written, or the time reached, was the only way to tell
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                             measures = "data" => [stopper_at(stop_in)])]
+            sim_data = SimData(; name = "sim", phases, checkpoint_interval = 1e-9)
+            @test stopped(runTMS(sim_data))
+            @test !stopped(runTMS(sim_data))
+            @test !stopped(Simulation(State{Pure}(System(2, Qubit()), "Up")))
+        end
+    end
+end
+
 @testset "The log keeps the history of every run" begin
     # cut back to the checkpoint on a resume, as the measurements are, the log lost the line
     # saying why a run had stopped

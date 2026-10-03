@@ -13,8 +13,9 @@ export RealValue, ImaginaryValue, ComplexValue
     StateFunc(name, func)
 
 a measurement given by a function of the state, written under `name`. `Trace`, `Purity` and
-the other state functions are built this way. Its value is taken as real unless declared
-otherwise, see `RealValue`.
+the other state functions are built this way. The function returns a number, or a vector or a
+matrix of numbers, written as the values of a one site operator or of a correlation are. Its
+value is taken as real unless declared otherwise, see `RealValue`.
 
 # Examples
 

@@ -7,6 +7,7 @@ returns the `Simulation` it ends with. The [Manual](@ref) shows it at work.
 
 ```@docs
 runTMS
+stopped
 SimData
 Simulation
 get_sim_file

@@ -54,7 +54,9 @@ coefs = [ t -> exp(-t), t -> sin(t) ]
 nothing # hide
 ```
 
-`hs` is passed to `tdvp` or `approx_W` as usual, and `coefs` as the keyword argument `coefs`.
+A term that does not depend on time takes a constant function, `t -> 1.0`. Each function is
+taken at the middle of each time step. `hs` is passed to `tdvp` or `approx_W` as usual, and
+`coefs` as the keyword argument `coefs`.
 With a `Simulation`, `t` is the simulation time; with a `State`, the evolution starts from the
 time given by the keyword argument `time_start`, 0 by default:
 

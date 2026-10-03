@@ -85,6 +85,9 @@ You can have access to inline documentation on TMS at the Julia prompt simply by
 ?runTMS
 ```
 
+For a function TMS shares with ITensorMPS, as `tdvp`, `dmrg`, `expect` or `normalize`, the
+help shows that of ITensorMPS first, then that of TMS.
+
 For this to work you must have first imported TMS with
 
 ```julia

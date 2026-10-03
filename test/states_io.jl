@@ -226,7 +226,7 @@ end
     # extension loads at all. Several measures are joined on the time column.
     df = data_to_frame(sim.data["obs"])
     @test df isa DataFrame
-    @test sort(names(df)) == ["Norm", "Trace", "time"]      # the order is not stable
+    @test names(df) == ["time", "Norm", "Trace"]            # in the order of their names
     @test size(df) == (2, 3)
     @test df.time ≈ [0.1, 0.2]
     @test df.Norm ≈ [1, 1]

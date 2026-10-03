@@ -209,7 +209,7 @@ function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::E
                                   evolver, coefs, nsweeps)
     dt = phase.duration / nsweeps
     return run_steps(sim, nsweeps) do sim, k
-        sim = tdvp(evolver, dt, sim; phase.limits)
+        sim = tdvp(evolver, dt, sim; coefs, phase.limits)
         if mod(k, phase.measures_period) == 0
             output(sim, phase.measures; sweep = k)
         end
@@ -225,7 +225,7 @@ runTMS(SimData(name = "stepwise", phases = [
 ```
 
 `evolver` is the evolver of the phase, and `coefs` the functions of time of a time dependent
-one, `nothing` otherwise.
+one, `nothing` otherwise, which `tdvp` takes as they are.
 
 ## Representations of one's own
 

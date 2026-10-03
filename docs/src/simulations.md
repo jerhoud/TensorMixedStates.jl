@@ -177,7 +177,8 @@ completed does nothing. A simulation that never wrote one runs again from the st
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption
 are not duplicated. The result is the same file as an uninterrupted run would have
-produced. The log is the exception: it keeps the history of every run, so what an
+produced. A json file and a `Data` object are put back as they were at the checkpoint, the
+values measured after it dropped. The log is the exception: it keeps the history of every run, so what an
 interrupted run wrote after its last checkpoint stays, with the line saying why it stopped,
 followed by the line marking the resume and by the steps done again from the checkpoint.
 
@@ -217,6 +218,16 @@ Three things ask a running simulation to stop, and all three write a checkpoint 
 The `stop` file is the one to reach for in batch, since it does not depend on how the
 queueing system signals its jobs. It is removed when the simulation next starts, so it
 never blocks a later run.
+
+A stopped run returns the simulation it resumes from, and [`stopped`](@ref) tells it from one
+that completed:
+
+```julia
+sim = runTMS(sim_data)
+if stopped(sim)
+    println("stopped at time ", sim.time, ", run the program again to resume")
+end
+```
 
 Note that while a simulation writing to a directory runs, `Ctrl-C` stops it cleanly rather
 than ending the program. When `runTMS` returns, `Ctrl-C` gets back the behaviour Julia gives

@@ -35,6 +35,8 @@ the reference article.
   expectation values the extension computes, and `save_state`, `load_state` and the
   checkpoints save them through its methods of `write_state` and `read_state`. The files of a
   `State` are written as before.
+- `stopped(sim)`, which tells whether the simulation `runTMS` returned stopped before the end
+  of its phases, at `max_time`, on the file `stop` or on an interrupt, rather than completed.
 - A function of an even fermionic operator of several sites, as the exponential of a hopping
   term `exp(-im * θ * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))`, is applied as a gate on any sites, in
   any order and apart, the strings through the sites in between coming from diagonal gates of
@@ -76,6 +78,8 @@ the reference article.
   term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
   by its conjugate, which gave a state of complex trace.
 
+- `data_to_frame` gives the columns of the measurements in the order of their names, where it
+  followed the order of a dictionary, which changed from one process to the next.
 - `steady_state` and `SteadyState` search each local step with `Krylov(dim = 8, maxiter = 3)`
   by default, rather than with the three vectors of `ITensorMPS.dmrg`, which do not resolve the
   spectrum of ``L^\dagger L`` near zero: the search stalled on a state that was not steady, a

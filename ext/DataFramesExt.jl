@@ -11,9 +11,12 @@ function data_to_frame(data::Dict)
     if isempty(data)
         return DataFrame(time = [])
     end
-    # a measurement named time or event keeps its column, renamed time_1 or event_1
+    # a measurement named time or event keeps its column, renamed time_1 or event_1. In the
+    # order of their names, which the order of the dictionary changed from one process to the
+    # next
     dfs = [DataFrame("event" => identity.(val["events"]), "time" => identity.(val["times"]),
-                     key => identity.(val["data"]); makeunique = true) for (key, val) in data]
+                     key => identity.(val["data"]); makeunique = true)
+           for (key, val) in sort!(collect(data); by = first)]
     df = length(dfs) == 1 ? dfs[1] : outerjoin(dfs...; on = [:event, :time], makeunique = true)
     sort!(df, :event)
     return select!(df, Not(:event))

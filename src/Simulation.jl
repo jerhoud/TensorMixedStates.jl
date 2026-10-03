@@ -7,8 +7,8 @@ export Simulation, get_sim_file, close_sim_files, DataToFrame, data_to_frame
     data_to_frame(data)
 
 a `DataFrame` of the values gathered in a `Data` destination, `sim.data[name]`: a `time`
-column and a column for each measurement, with a row for each call of `output`, in the order
-of the calls. The `DataFrames` package must be loaded.
+column and a column for each measurement, in the order of their names, with a row for each
+call of `output`, in the order of the calls. The `DataFrames` package must be loaded.
 
 # Examples
 
