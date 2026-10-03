@@ -621,6 +621,32 @@ end
     end
 end
 
+@testset "A restart does not remove the current directory" begin
+    # with ".", an ancestor or the absolute path of the current directory, rm emptied it, the
+    # program included, before failing on the directory itself
+    mktempdir() do dir
+        cd(dir) do
+            phases = [CreateState{Pure}(2, Qubit(), "Up")]
+            mkpath("sub")
+            touch("sub/precious")
+            cd("sub") do
+                refusal = "which contains the current directory"
+                for name in (".", "..", pwd())
+                    @test_throws refusal runTMS(SimData(; name, phases); restart = true)
+                    @test_throws refusal runTMS(SimData(; name, phases); clean = true)
+                end
+                @test isfile("precious")
+                # an ordinary name is removed and run again
+                runTMS(SimData(; name = "sim", phases))
+                touch("sim/old")
+                runTMS(SimData(; name = "sim", phases); restart = true)
+                @test !isfile("sim/old")
+                @test isfile("sim/log")
+            end
+        end
+    end
+end
+
 @testset "A resumed dmrg with a measurement period" begin
     # a deadline already past stops every run after one sweep or one phase. A stop measured a
     # sweep its period skips, the line of a checkpointed sweep was cut from the log, and a

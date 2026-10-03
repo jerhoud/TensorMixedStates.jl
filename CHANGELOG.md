@@ -113,6 +113,9 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- `runTMS` with `restart` or `clean` refuses a name that is the current directory or one of
+  its ancestors, as `"."` or `".."`. It emptied that directory, the program included, before
+  failing on the directory itself.
 - An `Evolve` whose duration and time step have opposite signs evolves over its duration, the
   step taken with the sign of the duration. It made no step while the time went on to the end
   of the duration. `tdvp` and `approx_W` refuse `nsweeps` below one, which did the same, or

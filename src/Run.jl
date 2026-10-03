@@ -186,7 +186,14 @@ the working directory and the Ctrl-C behaviour.
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)
     if live && (restart || clean)
-        rm(sim_data.name; recursive = true, force = true)
+        name = sim_data.name
+        # "." or an ancestor of the current directory was emptied, the program included,
+        # before rm failed on the directory itself. A link is removed without its target
+        if ispath(name) && !islink(name) &&
+           startswith(joinpath(realpath(pwd()), ""), joinpath(realpath(name), ""))
+            error("cannot remove \"$name\", which contains the current directory")
+        end
+        rm(name; recursive = true, force = true)
     end
     if clean 
         return
