@@ -649,6 +649,26 @@ end
     end
 end
 
+@testset "The log keeps the history of every run" begin
+    # cut back to the checkpoint on a resume, as the measurements are, the log lost the line
+    # saying why a run had stopped
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
+                             measures = "data" => [stopper_at(stop_in)])]
+            sim_data = SimData(; name = "sim", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            runTMS(sim_data)
+            log = read("sim/log", String)
+            stop = findfirst("the simulation can be resumed", log)
+            @test !isnothing(stop)
+            @test first(stop) < first(findfirst("Resuming from checkpoint", log))
+        end
+    end
+end
+
 @testset "SaveState refuses a file of the simulation" begin
     # a state saved as a checkpoint file was destroyed by the next checkpoint
     mktempdir() do dir

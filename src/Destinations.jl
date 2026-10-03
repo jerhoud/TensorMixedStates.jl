@@ -431,11 +431,13 @@ persist_outputs(o::Outputs, marks) =
 put back the destinations a checkpoint carries: a text file is cut back to its recorded
 position and continued, a series holds again what it held. A file the checkpoint does not
 know is left alone here, and is created, emptied, on first use, as in the uninterrupted run.
+The log is continued without being cut back: it keeps the history of every run, the stop of
+an interrupted one included, where the other files hold what an uninterrupted run writes.
 """
 function restore_outputs!(o::Outputs, persisted)
     for (name, p) in persisted["files"]
         if haskey(p, "text")
-            if isfile(name) && filesize(name) > p["text"]
+            if name ≠ "log" && isfile(name) && filesize(name) > p["text"]
                 open(name, "a") do io
                     Base.truncate(io, p["text"])
                 end

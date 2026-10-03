@@ -76,6 +76,10 @@ the reference article.
   term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
   by its conjugate, which gave a state of complex trace.
 
+- The log of a resumed simulation is continued without being cut back to the checkpoint, and
+  keeps the history of every run: the line saying why a run stopped was lost on its resume.
+  The steps done again from the checkpoint now appear twice in it.
+
 ### Removed
 
 - `tdvp`, `dmrg`, `approx_W` and `steady_state` no longer pass the options they do not know on

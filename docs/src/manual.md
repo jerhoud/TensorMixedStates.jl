@@ -619,7 +619,9 @@ completed does nothing. A simulation that never wrote one runs again from the st
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption
 are not duplicated. The result is the same file as an uninterrupted run would have
-produced.
+produced. The log is the exception: it keeps the history of every run, so what an
+interrupted run wrote after its last checkpoint stays, with the line saying why it stopped,
+followed by the line marking the resume and by the steps done again from the checkpoint.
 
 Use `restart = true` to ignore an existing checkpoint and start over, as it erases the
 directory.
