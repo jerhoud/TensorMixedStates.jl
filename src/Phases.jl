@@ -171,10 +171,10 @@ function run_search(solve, sim::Simulation, phase, what::String, final_line)
 end
 
 """
-    evolve(algo, state, sim, phase; evolver, coefs, nsweeps)
+    evolve(algo, state, sim, phase; evolver, coefs, nsteps)
 
 the simulation `sim` once the `Evolve` phase `phase` has evolved its state `state` with the
-algorithm `algo`, in `nsweeps` steps covering `phase.duration`: `evolver` is the evolver of the
+algorithm `algo`, in `nsteps` steps covering `phase.duration`: `evolver` is the evolver of the
 phase, and `coefs` the functions of time of a time dependent one, or `nothing`. The state is
 given apart from the simulation so that a method is chosen by its type as well as by that of
 the algorithm.
@@ -186,18 +186,18 @@ checkpoints them; `output(sim, phase.measures; sweep)` writes the measurements o
 every `phase.measures_period` steps.
 """
 function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
-                nsweeps)
+                nsteps)
     done, _ = resume_step(sim)
-    st = tdvp(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
+    st = tdvp(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps = nsteps,
               time_start = sim.time, phase.limits, first_sweep = done + 1, algo.n_expand,
               algo.krylov, observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     return Simulation(sim, st)
 end
 
 function evolve(algo::ApproxW, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
-                nsweeps)
+                nsteps)
     done, _ = resume_step(sim)
-    st = approx_W(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
+    st = approx_W(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps = nsteps,
                   time_start = sim.time, phase.limits, first_sweep = done + 1, algo.order,
                   algo.w, algo.apply_algo,
                   observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
@@ -260,17 +260,17 @@ end
 function run_phase(sim::Simulation, phase::Evolve)
     # the duration gives the direction, and a step of the other sign is adjusted as one that
     # does not divide it: of the opposite sign, it made no step while the time went on
-    nsweeps = round(Int, abs(phase.duration / phase.time_step))
-    if nsweeps == 0
+    nsteps = round(Int, abs(phase.duration / phase.time_step))
+    if nsteps == 0
         log_msg(sim, "Skipping an evolution of $(phase.duration), shorter than half a time step")
         return sim
     end
     # the step is adjusted rather than the duration, so that the phase ends where it was asked
     # to: a duration of 1 in steps of 0.3 stopped at 0.9
     duration = phase.duration
-    if !(duration / nsweeps ≈ phase.time_step)
-        log_msg(sim, "Taking a time step of $(duration / nsweeps) rather than $(phase.time_step) " *
-                     "to cover the duration $duration in $nsweeps steps")
+    if !(duration / nsteps ≈ phase.time_step)
+        log_msg(sim, "Taking a time step of $(duration / nsteps) rather than $(phase.time_step) " *
+                     "to cover the duration $duration in $nsteps steps")
     end
     time_stop = sim.time + duration
     # a phase resumed in its course goes on from the time of its checkpoint, not from its start
@@ -278,7 +278,7 @@ function run_phase(sim::Simulation, phase::Evolve)
     log_msg(sim, "Evolving state from simulation time $(isnothing(r) ? sim.time : r.time) to $(time_stop)")
     evolver, coefs = phase.evolver isa Pair ? (first(phase.evolver), last(phase.evolver)) :
                                               (phase.evolver, nothing)
-    sim = evolve(phase.algo, sim.state, sim, phase; evolver, coefs, nsweeps)
+    sim = evolve(phase.algo, sim.state, sim, phase; evolver, coefs, nsteps)
     # a phase cut short by a checkpoint stops at the time it actually reached
     c = sim.checkpoint
     return Simulation(sim, sim.state, c.stopping ? c.last.time : time_stop)

@@ -214,9 +214,9 @@ using TensorMixedStates, .Qubits
 struct Stepwise <: Algo end     # tdvp, one step at a time
 
 function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::Evolve;
-                                  evolver, coefs, nsweeps)
-    dt = phase.duration / nsweeps
-    return run_steps(sim, nsweeps) do sim, k
+                                  evolver, coefs, nsteps)
+    dt = phase.duration / nsteps
+    return run_steps(sim, nsteps) do sim, k
         sim = tdvp(evolver, dt, sim; coefs, phase.limits)
         if mod(k, phase.measures_period) == 0
             output(sim, phase.measures; sweep = k)
@@ -262,7 +262,7 @@ The phases and the measurements reach these states through the methods you give:
   together;
 - `apply(gates, state; limits)` applies the gates of a `Gates` phase, whose channels
   [`kraus_operators`](@ref) gives as their Kraus operators;
-- `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsweeps)` evolves the state
+- `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsteps)` evolves the state
   in an `Evolve` phase, for each algorithm it supports, the hamiltonian and the jump operators
   of the evolver being given by [`lindblad_terms`](@ref);
 - `TensorMixedStates.write_state(group, state)` and
