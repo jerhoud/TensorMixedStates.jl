@@ -1286,6 +1286,82 @@ show(io::IO, a::ModOp) =
 
 isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
 
+"""
+    fermion_parity(a, strung)
+
+the parity of an operator: `0` if even, `1` if odd, `nothing` if it has none. An operator of
+several sites has that of the product of its pieces placed: a tensor product the sum of the
+parities of its factors, an operator defined by an expression that of its expression. It
+serves `jw_parity`, and `isfermionic` and `has_fermionic`, which ask two different questions,
+told apart by `strung`:
+
+- `strung = true`, for `jw_parity`: how the operator behaves when the `F` of its site crosses
+  it, the Jordan-Wigner strings being in place. A `JW` transform is then odd, and a projector
+  on a vector is taken to have no parity, since the vector may mix even and odd states.
+- `strung = false`, for `isfermionic` and `has_fermionic`: whether the operator holds a fermionic factor whose
+  string `simplify` has not inserted yet. A `JW` transform then counts as even, its string
+  being already in place, and so does a projector, which never takes a string.
+
+`strung` changes nothing else: a composite operator passes it on to its pieces.
+"""
+fermion_parity(::Op, ::Bool) = 0
+fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
+# an operator of several sites cannot be declared fermionic: one defined by an expression has
+# its parity, one defined by a matrix or a function is taken as even, its matrix being laid
+# with no Jordan-Wigner string
+fermion_parity(a::Operator{N}, strung::Bool) where N =
+    if a.type == fermionic_op
+        1
+    elseif N > 1 && a.expr isa Op
+        fermion_parity(a.expr, strung)
+    else
+        0
+    end
+fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
+# a projector on a basis state, given by its index or by a name, is even: the named states of
+# the fermionic sites are all basis states, which a site defined outside the package is taken
+# to follow
+fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
+
+# a tensor product placed is the product of its factors placed, see ⊗
+function fermion_parity(a::Union{ProdOp, TensorOp}, strung::Bool)
+    ps = map(x -> fermion_parity(x, strung), a.subs)
+    return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
+end
+
+function fermion_parity(a::SumOp, strung::Bool)
+    ps = unique(map(x -> fermion_parity(x, strung), a.subs))
+    return length(ps) == 1 ? only(ps) : nothing
+end
+
+function fermion_parity(a::IntPowOp, strung::Bool)
+    p = fermion_parity(a.arg, strung)
+    return isnothing(p) ? nothing : mod(p * a.expo, 2)
+end
+
+# a function of an odd operator, its exponential or a non integer power, mixes the two parities
+fermion_parity(a::Union{ExpOp, ModOp, GenPowOp}, strung::Bool) =
+    fermion_parity(a.arg, strung) == 0 ? 0 : nothing
+
+################## isfermionic #################
+
+"""
+    isfermionic(::SimpleOp)
+
+whether an operator of one site on pure states is odd under the fermion parity. An operator
+of no definite parity raises an error: a sum of fermionic and non fermionic terms, or the
+exponential, `mod` or non integer power of a fermionic operator. For operators of several
+sites and superoperators, see `has_fermionic`.
+"""
+function isfermionic(a::SimpleOp)
+    p = fermion_parity(a, false)
+    if isnothing(p)
+        error("$a has no definite fermionic parity: it sums fermionic and non fermionic " *
+              "operators, or is a function of a fermionic one")
+    end
+    return p == 1
+end
+
 # named
 
 """
@@ -1344,112 +1420,6 @@ share one charge, and renaming keeps two quantities apart.
 named(op::GenericOp{Pure, N}, name::String; type::OpType = named_type(op)) where N =
     Operator{N}(name, op, type)
 
-
-################## isfermionic #################
-
-"""
-    isfermionic(::SimpleOp)
-
-whether an operator of one site on pure states is odd under the fermion parity. An operator
-of no definite parity raises an error: a sum of fermionic and non fermionic terms, or the
-exponential, `mod` or non integer power of a fermionic operator. For operators of several
-sites and superoperators, see `has_fermionic`.
-"""
-isfermionic(a::SimpleOp) = false
-isfermionic(a::Operator{1}) = a.type == fermionic_op
-isfermionic(a::ScalarOp{Pure}) = isfermionic(a.arg)
-isfermionic(a::DagOp) = isfermionic(a.arg)
-isfermionic(a::ProdOp{Pure, Generic, 1}) = isodd(count(isfermionic, a.subs))
-isfermionic(a::ExpOp) =
-    if isfermionic(a.arg)
-        error("cannot take the exponential of the fermionic operator $(a.arg)")
-    else
-        false
-    end
-
-isfermionic(a::ModOp) =
-    if isfermionic(a.arg)
-        error("cannot compute $a, which exponentiates the fermionic operator $(a.arg)")
-    else
-        false
-    end
-function isfermionic(a::SumOp{Pure, Generic, 1})
-    n = length(a.subs)
-    nf = count(isfermionic, a.subs)
-    if n == nf
-        return true
-    elseif nf == 0
-        return false
-    else
-        error("cannot sum fermionic and non fermionic operators ($a)")
-    end
-end
-
-isfermionic(a::IntPowOp) = isfermionic(a.arg) && isodd(a.expo)
-
-isfermionic(a::GenPowOp) =
-    if isfermionic(a.arg)
-        error("cannot take the non integer power $(a.expo) of the fermionic operator $(a.arg)")
-    else
-        false
-    end
-
-"""
-    fermion_parity(a, strung)
-
-the parity of an operator: `0` if even, `1` if odd, `nothing` if it has none. An operator of
-several sites has that of the product of its pieces placed: a tensor product the sum of the
-parities of its factors, an operator defined by an expression that of its expression. It
-serves `jw_parity` and `has_fermionic`, which ask two different questions, told apart by
-`strung`:
-
-- `strung = true`, for `jw_parity`: how the operator behaves when the `F` of its site crosses
-  it, the Jordan-Wigner strings being in place. A `JW` transform is then odd, and a projector
-  on a vector is taken to have no parity, since the vector may mix even and odd states.
-- `strung = false`, for `has_fermionic`: whether the operator holds a fermionic factor whose
-  string `simplify` has not inserted yet. A `JW` transform then counts as even, its string
-  being already in place, and so does a projector, which never takes a string.
-
-`strung` changes nothing else: a composite operator passes it on to its pieces.
-"""
-fermion_parity(::Op, ::Bool) = 0
-fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
-# an operator of several sites cannot be declared fermionic: one defined by an expression has
-# its parity, one defined by a matrix or a function is taken as even, its matrix being laid
-# with no Jordan-Wigner string
-fermion_parity(a::Operator{N}, strung::Bool) where N =
-    if a.type == fermionic_op
-        1
-    elseif N > 1 && a.expr isa Op
-        fermion_parity(a.expr, strung)
-    else
-        0
-    end
-fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
-# a projector on a basis state, given by its index or by a name, is even: the named states of
-# the fermionic sites are all basis states, which a site defined outside the package is taken
-# to follow
-fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
-
-# a tensor product placed is the product of its factors placed, see ⊗
-function fermion_parity(a::Union{ProdOp, TensorOp}, strung::Bool)
-    ps = map(x -> fermion_parity(x, strung), a.subs)
-    return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
-end
-
-function fermion_parity(a::SumOp, strung::Bool)
-    ps = unique(map(x -> fermion_parity(x, strung), a.subs))
-    return length(ps) == 1 ? only(ps) : nothing
-end
-
-function fermion_parity(a::IntPowOp, strung::Bool)
-    p = fermion_parity(a.arg, strung)
-    return isnothing(p) ? nothing : mod(p * a.expo, 2)
-end
-
-# a function of an odd operator, its exponential or a non integer power, mixes the two parities
-fermion_parity(a::Union{ExpOp, ModOp, GenPowOp}, strung::Bool) =
-    fermion_parity(a.arg, strung) == 0 ? 0 : nothing
 
 """
     has_fermionic(::Op)

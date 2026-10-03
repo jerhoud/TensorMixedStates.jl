@@ -227,7 +227,7 @@ end
     @test matrix(parity(N), b) ≈ adjoint(matrix(parity(N), b))
 
     @test_throws "a modulus is at least 2, got 1" mod(N, 1)
-    @test_throws "exponentiates the fermionic operator" isfermionic(parity(C))
+    @test_throws "parity(C) has no definite fermionic parity" isfermionic(parity(C))
 end
 
 @testset "Renaming an operator" begin
@@ -245,7 +245,7 @@ end
     @test named(2C, "C2").type == fermionic_op
     @test named(dag(C), "Cd").type == fermionic_op
     @test named(dag(C) * C, "n").type == plain_op
-    @test_throws "cannot sum fermionic and non fermionic operators" named(C + N, "x")
+    @test_throws "C+N has no definite fermionic parity" named(C + N, "x")
 end
 
 @testset "Flux of an operator" begin
