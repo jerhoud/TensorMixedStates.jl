@@ -786,6 +786,11 @@ struct Evolver <: IndexedOp{Mixed}
     arg::IndexedOp{Pure}
 end
 
+# the converse of Gate, which takes an operator before it is placed
+Evolver(a::GenericOp) =
+    error("Evolver takes an operator placed on sites: write Evolver(X(1)) rather than " *
+          "Evolver(X)(1)")
+
 show(io::IO, a::Evolver) =
     paren(io, 1000, 0) do io
         show_func(io, "Evolver", a.arg)

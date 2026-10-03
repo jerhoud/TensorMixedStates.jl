@@ -468,6 +468,7 @@ end
     build_gate = TensorMixedStates.build_gate
     @test_throws "which is placed on sites" Gate(X(1) + Z(1))
     @test_throws "which is placed on sites" Gate(X(1))
+    @test_throws "Evolver takes an operator placed on sites" Evolver(X)
     @test build_gate(X(1) + Z(1)) == Gate(X + Z)(1)
     for (sys, K, obs) in [(System(3, Qubit()), (X(1) + Z(2)) / sqrt(2), [X(1), Z(2), X(1) * Y(3)]),
                           (System(3, Fermion()), (C(1) + dag(C)(3)) / sqrt(2),
