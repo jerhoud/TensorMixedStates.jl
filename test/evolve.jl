@@ -399,9 +399,11 @@ end
     end
     @test norm(apply(Gate(C + dag(C))(3), ρ) - apply(make_mpo(ρ, Gate(C + dag(C))(3)), ρ)) < 1e-12
     # what has no gate to become is refused: a dissipator of a fermionic operator turns into
-    # a sum, and a function of one on several sites has no room for a string
+    # a sum, and a function of an odd operator of several sites mixes the two parities. One of
+    # an even operator is a gate, checked against dense matrices in observables.jl
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
-    @test_throws "cannot be inserted" apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
+    @test_throws "mixes the two parities" apply(exp(0.3 * (C ⊗ Id + Id ⊗ C))(1, 3), st)
+    @test_ok apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
     # a gate of several sites defined by a matrix is kept whole, and a string covering only
     # some of its sites does not commute with it. It used to be moved past it, which changed
     # the sign of the branch where the gate moves a fermion onto site 2

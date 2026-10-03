@@ -71,15 +71,73 @@ function apply(mpo::MPO, state::State; limits::Limits=Limits(),
 end
     
 """
+    parity_sign
+
+the gate ``(-1)^{p_1 p_2}`` of two sites, `p` being the fermionic parity of a site, which gives
+a function of fermionic operators the strings of the sites it skips, see `strung_function`
+"""
+const parity_sign = Operator{2}("ParitySign", Id ⊗ Id - 2 * (((Id - F) / 2) ⊗ ((Id - F) / 2)),
+                                involution_op)
+
+"""
+    order_signs(sites, index)
+
+the diagonal, as a vector, of the matrix that takes an operator of the `sites`, placed on the
+sites `index`, from the order of its factors to the order of the sites: the sign of each pair
+of odd basis states whose sites it swaps, a basis written with the last site varying fastest
+"""
+function order_signs(sites, index)
+    ps = [ (1 .- real(diag(matrix(F, s)))) ./ 2 for s in sites ]
+    d = ones(prod(length, ps))
+    for a in eachindex(index), b in a+1:length(index)
+        if index[a] > index[b]
+            d .*= 1 .- 2 .* foldl(kron, [ k == a || k == b ? ps[k] : ones(length(ps[k]))
+                                          for k in eachindex(ps) ])
+        end
+    end
+    return d
+end
+
+"""
+    strung_function(a, index)
+
+the gate of the function `a` of an even fermionic operator, placed on the sites `index`. Its
+matrix on these sites, laid in the order of the sites with the sign of each pair of odd factors
+it swaps, see `order_signs`, is the gate on the sites taken as neighbours. The strings its odd
+factors take through the sites in between come from the conjugation by
+``K = \\prod (-1)^{p_s p_k}``, over the sites `s` of the gate and the sites `k` in between on
+their right: `K` is diagonal and squares to the identity, conjugating an operator by it gives
+each odd factor the strings of the sites in between on its right, which an even operator cannot
+tell from those on its left, and a function goes through the conjugation. A function of an odd
+operator, or of one of no definite parity, mixes the two parities and is left whole, for
+`prepare_gate` to refuse.
+"""
+function strung_function(a, index)
+    if fermion_parity(a, false) ≠ 0
+        return a(index...)
+    end
+    n = length(index)
+    function laid(sites...)
+        d = order_signs(sites, index)
+        return d .* matrix(a, sites...) .* transpose(d)
+    end
+    g = Operator{n}(repr(a), laid, plain_op)
+    k = ProdOp(IndexedOp{Pure}[ parity_sign(s, j) for j in min(index...)+1:max(index...)-1
+                                if j ∉ index for s in index if s < j ])
+    return k * g(index...) * k
+end
+
+"""
     expand_gate(op)
 
 the gate `op` with each factor of several sites holding a fermionic operator replaced by a
 product of factors of one site, by the definitions of the tensor product, `(A ⊗ B)(i, j)` being
 `A(i) * B(j)`, of the product, of the integer power, of the adjoint, of an operator defined by
-an expression, and of `Left`, `Right` and `Gate`, the order of the factors being kept. Any
-other factor of several sites is kept whole: a function of a fermionic operator, which
-`prepare_gate` then refuses, or an operator with no fermionic factor, which `apply` places as
-it is.
+an expression, and of `Left`, `Right` and `Gate`, the order of the factors being kept. A
+function of an even fermionic operator becomes its gate with its strings, see
+`strung_function`. Any other factor of several sites is kept whole: a function of an odd
+fermionic operator, which `prepare_gate` then refuses, or an operator with no fermionic factor,
+which `apply` places as it is.
 """
 expand_gate(a::ProdOp{R, Indexed, 1}) where R = ProdOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
 expand_gate(a::SumOp{R, Indexed, 1}) where R = SumOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
@@ -95,6 +153,7 @@ expand_placed(a::ProdOp{R}, index) where R =
 expand_placed(a::SumOp{R}, index) where R =
     SumOp(IndexedOp{R}[ expand_gate(o(index...)) for o in a.subs ])
 expand_placed(a::IntPowOp, index) = ProdOp(fill(expand_gate(a.arg(index...)), a.expo))
+expand_placed(a::Union{ExpOp, GenPowOp{Pure}, ModOp}, index) = strung_function(a, index)
 expand_placed(a::Operator, index) = a.expr isa Op ? expand_gate(a.expr(index...)) : a(index...)
 expand_placed(a::DagOp, index) = placed_dag(expand_gate(a.arg(index...)))
 expand_placed(a::Left, index) = sided(Left, expand_gate(a.arg(index...)))
@@ -142,7 +201,7 @@ fermionic factor is first expanded into factors of one site where it can be, see
 `expand_gate`, and then simplified piece by piece: each run of factors of one site on its own,
 the factors of several sites left whole between them, so that `simplify` never sees one. The
 gate is refused if a piece becomes a sum, or if a fermionic factor remains inside a function of
-several sites.
+several sites, its argument being odd.
 """
 function prepare_gate(a::IndexedOp{R}) where R
     if !has_fermionic(a)
@@ -173,8 +232,8 @@ function prepare_gate(a::IndexedOp{R}) where R
     close_run()
     b = removeMulti(scalarcoef(e) * ProdOp(pieces))
     if has_fermionic(b)
-        error("cannot apply $a as a gate: its Jordan-Wigner strings cannot be inserted " *
-              "into a function of a fermionic operator acting on several sites")
+        error("cannot apply $a as a gate: it holds a function of an odd fermionic operator " *
+              "of several sites, which mixes the two parities")
     end
     return b
 end

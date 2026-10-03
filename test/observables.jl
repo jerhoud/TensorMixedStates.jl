@@ -451,8 +451,8 @@ end
 @testset "A random fermionic oracle" begin
     # every implementation of the Jordan-Wigner strings checked on random products against
     # the dense matrices of the strings written out: simplify, through expect on a pure and on
-    # a mixed state, the MPO and the gates, expect2, the matrix of a tensor product and
-    # partial_trace. In the dense basis C(j) is F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and any other
+    # a mixed state, the MPO and the gates, the gates of functions of several sites, expect2,
+    # the matrix of a tensor product and partial_trace. In the dense basis C(j) is F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and any other
     # operator is written from those, so that the reference knows nothing of the package
     fe = Fermion()
     mc, mf, mi = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
@@ -497,6 +497,34 @@ end
         keep = sort(randperm(n)[1:rand(1:3)])
         o, d = product(length(keep), p -> keep[p], n)
         @test expect(partial_trace(ρ, keep; keepers = true), o) ≈ value(d) atol = 1e-10
+    end
+    # a function of an even product applied as a gate, on sites in any order and apart, whose
+    # strings come from a conjugation by diagonal gates
+    odd = singles[[1, 2, 4]]
+    for _ in 1:10
+        fs = Any[ rand(odd), rand(odd) ]
+        if rand(Bool)
+            insert!(fs, rand(1:3), singles[3])
+        end
+        sites = randperm(n)[1:length(fs)]
+        a = reduce(⊗, first.(fs))
+        da = prod(f[2](s, n) for (f, s) in zip(fs, sites))
+        g = exp(0.3 * a - 0.3 * dag(a))(sites...)
+        @test dense_vec(apply(g, ψ)) ≈ exp(0.3 * da - 0.3 * da') * v atol = 1e-10
+        @test norm(apply(g, ρ) - mix(apply(g, ψ))) < 1e-10
+    end
+    # and on electrons, whose parity counts both spins
+    el = Electron()
+    mu, md, mfe, mie = matrix(Cup, el), matrix(Cdn, el), matrix(F, el), matrix(Id, el)
+    ce(j, m) = foldl(kron, [ k < j ? mfe : k == j ? m : mie for k in 1:3 ])
+    es = System(3, el)
+    eidx = [ SysIndex{Pure}(es, k) for k in 1:3 ]
+    dense_e(st) = reshape(Array(reduce(*, [ st.state[k] for k in 1:3 ]), reverse(eidx)...), 64)
+    ψe = RandomState{Pure}(es, 4)
+    ge = exp(-0.4im * (dag(Cup) ⊗ Cdn + dag(dag(Cup) ⊗ Cdn)))
+    for (i, j) in [(1, 3), (3, 1), (1, 2)]
+        h = ce(i, mu)' * ce(j, md) + ce(j, md)' * ce(i, mu)
+        @test dense_e(apply(ge(i, j), ψe)) ≈ exp(-0.4im * h) * dense_e(ψe) atol = 1e-10
     end
     for (a, da) in singles, (b, db) in singles
         if isfermionic(a) == isfermionic(b)

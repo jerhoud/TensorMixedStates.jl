@@ -35,6 +35,11 @@ the reference article.
   expectation values the extension computes, and `save_state`, `load_state` and the
   checkpoints save them through its methods of `write_state` and `read_state`. The files of a
   `State` are written as before.
+- A function of an even fermionic operator of several sites, as the exponential of a hopping
+  term `exp(-im * θ * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))`, is applied as a gate on any sites, in
+  any order and apart, the strings through the sites in between coming from diagonal gates of
+  two sites around it. It was refused. A function of an odd operator still is, mixing the two
+  parities.
 - `TensorMixedStates.evolve`, to which the `Evolve` phase hands the evolution of its state, the
   method being chosen by the type of the algorithm and by that of the state. An extension adds
   an algorithm of its own, `Algo` being now the abstract supertype of `Tdvp` and `ApproxW`

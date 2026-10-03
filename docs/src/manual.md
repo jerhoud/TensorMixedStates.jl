@@ -293,6 +293,11 @@ between and `B` on site `j`, and in the other order it takes the sign of the swa
 given for an operator of several sites is read in the basis of the sites as it is, with no
 string, which is why it has to commute with `F` on each of them.
 
+A function of an even fermionic operator of several sites, as the exponential of a hopping
+term, `exp(-0.1im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 5)`, is applied as a gate with its
+strings, on sites in any order and apart. A function of an odd operator mixes the two
+parities and is refused.
+
 ## Algorithms
 
 We can now work with states and operators.
