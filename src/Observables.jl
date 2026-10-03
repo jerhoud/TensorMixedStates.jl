@@ -1270,14 +1270,11 @@ function mutual_info_renyi2(state::State, cut::Int)
 end
 
 # a pure state has no entropy of its own, and the two sides of a cut share their Schmidt
-# spectrum, so the mutual information is just twice the renyi2 entropy of either side. A cut
-# at either end leaves a side with no site, and no link to read a spectrum on at 0
+# spectrum, so the mutual information is just twice the renyi2 entropy of either side. The cut
+# is checked here for the message to name this function
 function mutual_info_renyi2(state::State{Pure}, cut::Int)
     check_cut(state, cut, "mutual_info_renyi2")
-    if cut == 0 || cut == length(state)
-        return 0.0
-    end
-    return -2 * log(sum(abs2, last(entanglement_entropy(state, cut))))
+    return 2 * renyi2(state, cut)
 end
 
 # partial_trace needs a density matrix, there is no cheap route for an arbitrary subset
