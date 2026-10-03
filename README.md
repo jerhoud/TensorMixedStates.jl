@@ -63,8 +63,8 @@ The `Mixed` of `CreateState{Mixed}` is what makes the state a density matrix, an
 `Dissipator` terms added to the hamiltonian are what turn the evolution into a Lindblad equation. The run writes a
 `dissipative_ising` directory: `log` for what happened, `data` for the measurements,
 `description` and `stamp` for what was asked and when, and `prog.jl`, a copy of the script
-that produced it. The magnetization on the six sites and the purity, at the start and at the
-end of the evolution:
+that produced it. The magnetization on the six sites and the purity, after the first time
+step and at the end of the evolution:
 
 ```
 Z        0.1    0.94098941    0.94117682   0.94117682   0.94117682   0.94117682    0.94098941

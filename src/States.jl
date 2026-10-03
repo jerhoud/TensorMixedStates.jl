@@ -131,7 +131,9 @@ local state is a name, the number of a basis state counted from 0, a vector of a
 function of the site, the `AbstractSite` and not its position, giving one of those, or, in
 mixed representation only, a density matrix.
 A vector of numbers is always the amplitudes of one local state, given to every site: basis
-numbers site by site are written `Any[0, 1, 0]` or `["0", "1", "0"]`.
+numbers site by site are written `Any[0, 1, 0]`. A string such as `"1"` is a name, which a site
+reads by its own rule, see `string_state`: most read it as that basis number, but `Spin` reads
+it as a value of ``S_z`` and `Electron` has no such name.
 
 # Fields
 

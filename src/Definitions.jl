@@ -276,7 +276,9 @@ end
 check the operators `@def_operators` has just declared for `site`, given as `(name, type)`
 pairs, against their types on that site, and `F` against being an involution. Other sites of
 the same type are checked where the operators are used, see `checked_type`. A refusal takes
-the declarations back, so that they can be made again once corrected.
+the definitions back, so that the declaration can be made again once its matrices are
+corrected. The names it bound keep the type they were declared with, so giving one of them
+another type needs a new session.
 """
 function check_declared(site::AbstractSite, declared)
     try
@@ -311,6 +313,13 @@ is placed with no Jordan-Wigner string, so every type but `fermionic_op` has to 
 `F`, and a `fermionic_op`, which moves a fermion, has to anticommute with it. The types, and
 `F` being an involution, are checked on the site given, and again on each site an operator is
 placed on.
+
+The names are bound by `const`, so the macro is used at the top level of a module or a script,
+not inside a function, a `let` or a `@testset`. A declaration refused by its check is taken
+back and can be made again once its matrices are corrected, but a name it bound keeps its
+type, and giving it another one needs a new session. A declaration interrupted by an error in
+its block, a name it does not know for instance, is not taken back, and is made again in a
+new session.
 
 # Examples
 

@@ -159,7 +159,7 @@ Conserving is a promise about the whole computation, and what breaks it is refus
 message naming the culprit rather than discovered in the middle of a run.
 
 A **state** lives in one sector. `Fermion(conserve = N)` takes `"Occ"` and `"Emp"` and refuses
-`"+"`, which superposes two numbers of particles and so has no number of its own.
+`[1, 1] / √2`, which superposes two numbers of particles and so has no number of its own.
 
 An **operator** must carry a definite charge, its flux, which is the difference between the
 charges of the states it connects. [`flux`](@ref) gives it:
@@ -209,7 +209,7 @@ exchange the state lives in a single sector, exactly as a pure one does.
 
 Dephasing, whose jump operator is `N` itself, is the usual strong case; particle loss, whose
 jump is `C`, is not. Declaring `strong` and then using a jump that moves the charge is refused
-by a message naming the operator and pointing at the weak form.
+by a message saying which quantity the jump changes and pointing at the weak form.
 
 A strong quantity takes two of the four charge components ITensors allows, where a weak one
 takes a single one, so at most two quantities can be declared strong.

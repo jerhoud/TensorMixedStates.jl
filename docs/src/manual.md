@@ -123,8 +123,8 @@ nothing # hide
 ```
 
 The tensors are then block sparse, which makes a large computation smaller and faster, and in
-exchange the state stays in the sector it was built in: a local state such as `"+"`, which
-superposes two numbers of particles, is refused, and so is an operator of no definite charge.
+exchange the state stays in the sector it was built in: a local state such as `[1, 1] / √2`,
+which superposes two numbers of particles, is refused, and so is an operator of no definite charge.
 For a mixed state, a quantity may also be conserved strongly, `Fermion(conserve = strong(N))`.
 All of this is described in [Conserving a quantity](@ref).
 
@@ -180,7 +180,7 @@ represents the ``\sigma_x`` Pauli operator applied to the system site number 3. 
 Note that all predefined operator names start with a capital letter, so it is better to keep your own identifiers lowercase to prevent name collisions with them.
 
 Lowercase is not a safe harbour by itself, though. `using TensorMixedStates` also brings in
-some sixty lowercase names, among them `state`, `output`, `measure`, `trace`, `dim`,
+seventy lowercase names, among them `state`, `output`, `measure`, `trace`, `dim`,
 `matrix`, `tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
 of your program shadows the function for the rest of the file, and if you happen to have
 used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
@@ -237,8 +237,10 @@ given in braces, with the type:
 myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
 ```
 
-Whichever way it is given, the type is checked against the matrix each time the operator is
-placed on a site.
+A type given to `named` with a matrix is checked against it at once, as far as it can be
+without a site, and any type is checked against the matrix of the operator when that matrix is
+laid on a site. `simplify` relies on the type before, squaring an involution to the identity
+for instance, so a wrong type given to a function or an expression gives a wrong result.
 
 Finally from generic operators, we define indexed operators by simply applying them to the corresponding sites
 
