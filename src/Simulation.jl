@@ -18,6 +18,16 @@ of the calls. The `DataFrames` package must be loaded.
 """
 function data_to_frame end
 
+# data_to_frame lives in the extension DataFramesExt, loaded with DataFrames: without it, a call
+# is a MethodError, which says so
+function __init__()
+    Base.Experimental.register_error_hint(MethodError) do io, e, _, _
+        if e.f === data_to_frame && isnothing(Base.get_extension(@__MODULE__, :DataFramesExt))
+            print(io, "\ndata_to_frame needs the DataFrames package: run using DataFrames")
+        end
+    end
+end
+
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
 # expands to a toplevel block and a docstring cannot be attached to one
 Base.@deprecate DataToFrame(data) data_to_frame(data) false

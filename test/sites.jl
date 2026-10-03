@@ -354,6 +354,9 @@ end
     s4 = State{Pure}(System(3, Qudit(4, conserve = Zd^2)), "0")
     @test_ok make_mpo(s4, (Xd ⊗ Xd + dag(Xd ⊗ Xd))(1, 2))
     @test Boson(3, conserve = N^2).conserve == "N^2:0,1,4"
+    # a quantity given twice was refused by ITensors, or as strong and weak at once
+    @test_throws "Ntot is given twice in conserve" Electron(conserve = (Ntot, Ntot))
+    @test_throws "Ntot is given twice in conserve" Electron(conserve = (strong(Ntot), Ntot))
     # large charges are compared to a relative tolerance: 80 bosons missed theirs by 1.4e-14
     @test_ok Boson(80, conserve = dag(A) * A)
     @test_ok Spin(10, conserve = Sp * Sm - Sm * Sp)

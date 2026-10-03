@@ -120,6 +120,13 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- An `Evolve` takes a single term and its function of time written without the vectors,
+  `A => f`, on which it failed at its first step with a `MethodError`, and refuses when it is
+  written an evolver of as many terms as functions, which only its first step refused.
+- `conserve` refuses a quantity given twice, which ITensors refused later, or with a message
+  about its strength when it was given once strong and once weak.
+- `data_to_frame` called without `using DataFrames` says that it needs it, where it raised a
+  bare `MethodError`.
 - A power or the adjoint of a charge modulo `d`, as `Zd^2` on `Qudit(4)` or `dag(Zd)` on
   `Qudit(2)`, is a charge modulo `d`. Its eigenvalues, all ±1 there, were read as integers,
   under which `Xd` had no flux and `Xd ⊗ Xd + h.c.` was refused.

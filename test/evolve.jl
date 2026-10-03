@@ -109,6 +109,15 @@ end
     @test_throws "takes as many time functions, got 1" tdvp(hs, 0.1, st; coefs = [t -> 1.0])
     @test_throws "takes as many time functions, got 3" tdvp(hs, 0.1, st;
         coefs = [t -> 1.0, t -> 1.0, t -> 1.0])
+    # in an Evolve, refused when it is written rather than at its first step, and a single
+    # term with its function, written without the vectors, which failed on a MethodError
+    evolve(evolver) = Evolve(; duration = 0.2, time_step = 0.1, algo = Tdvp(), evolver)
+    @test_throws "one function of time per term" evolve(hs => [t -> 1.0])
+    @test_throws "one function of time per term" evolve(-im * Z(1) => [t -> 1.0])
+    @test evolve(-im * Z(1) => (t -> 1.0)).evolver isa Pair{<:Vector, <:Vector}
+    sim = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "X+"),
+                                   evolve(-im * Z(1) => (t -> 2.0))]); output = devnull)
+    @test real(expect(sim.state, X(1))) ≈ cos(0.8)
 end
 
 @testset "Time functions take real values" begin

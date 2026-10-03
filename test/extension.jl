@@ -26,6 +26,21 @@ function run_with_packages(script::String, dir::String)
     end
 end
 
+@testset "data_to_frame without DataFrames" begin
+    # a MethodError naming no remedy: a hint says what to load, and only while it is not loaded
+    script = """
+        using TensorMixedStates
+        try
+            data_to_frame(Dict())
+        catch e
+            print(occursin("needs the DataFrames package", sprint(showerror, e)))
+        end
+        """
+    @test read(`$(Base.julia_cmd()) --project=$(Base.active_project()) -e $script`, String) == "true"
+    message = try data_to_frame(1) catch e sprint(showerror, e) end
+    @test !occursin("needs the DataFrames package", message)
+end
+
 @testset "A site type declared in a package" begin
     # @def_states and @def_operators used to fill dictionaries of TensorMixedStates, which a
     # package writes into while it is precompiled and which Julia does not keep: once loaded,

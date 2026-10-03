@@ -582,6 +582,14 @@ function conserve_string(site::AbstractSite, spec)
     if isempty(ops)
         return ""
     end
+    # refused here rather than by ITensors, when the index is built, or with a message about
+    # strength when it was given once strong and once weak
+    names = [ obs_name(o isa Strong ? o.arg : o) for o in ops ]
+    for n in names
+        if count(==(n), names) > 1
+            error("$n is given twice in conserve")
+        end
+    end
     parts = map(ops) do spec
         op = spec isa Strong ? spec.arg : spec
         modulus, q = site_charges(op, site)

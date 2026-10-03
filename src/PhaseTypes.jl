@@ -248,6 +248,18 @@ a phase of time evolution.
         if iszero(time_step)
             error("the time step of an Evolve cannot be zero")
         end
+        # a single term and its function of time, written without the vectors, which failed on
+        # a MethodError at the first step, and a function per term, which only the first step
+        # checked
+        if evolver isa Pair
+            ops, fs = evolver
+            if !(ops isa AbstractVector) && !(fs isa AbstractVector)
+                evolver = [ops] => [fs]
+            elseif !(ops isa AbstractVector && fs isa AbstractVector) || length(ops) ≠ length(fs)
+                error("a time dependent evolver gives one function of time per term, as " *
+                      "[A, B] => [f, g] or A => f")
+            end
+        end
         return new(name, time_start, final_measures, limits, duration, time_step, algo, evolver,
                    measures_period, measures)
     end
