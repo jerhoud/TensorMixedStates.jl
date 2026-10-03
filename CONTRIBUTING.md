@@ -171,6 +171,18 @@ Control flow is written with `if`, never with the short-circuit operators. `cond
 `&&` or `||` for its side effect. Inside a boolean expression, as in `if a && b`, they are
 ordinary and welcome.
 
+A new public name takes the form most of the package already has. The names published before
+are kept as they are, since renaming them would break programs for no gain; the rules are for
+the names to come:
+
+- a number of time steps is `nsteps`, a number of dmrg sweeps `nsweeps` (`tdvp` and
+  `approx_W`, older, keep `nsweeps` for their time steps);
+- something done every `k` steps is given by `<what>_period`, as `measures_period`;
+- a field does not repeat the name of its struct: `Krylov(dim = 8)`, not `krylovdim`;
+- the suffix `Error` is for an exception (`TraceError` and `HermiticityError`, older, are
+  measurements whose names are column headers);
+- a constructor returns an object of its own type (`RandomState`, older, returns a `State`).
+
 ## Performance work
 
 Two things are worth knowing before optimising anything.
