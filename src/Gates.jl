@@ -50,6 +50,9 @@ function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
     return apply(build_gate(prepare_gate(a)), state; kwargs...)
 end
 
+apply(a::IndexedOp{Mixed}, ::State{Pure}; kwargs...) =
+    error("$a acts on a density matrix, which a pure state is not: apply it to mix(state)")
+
 function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
     check_indices(state.system, a)
     coef, ops = make_ops(state.system, prepare_gate(a))

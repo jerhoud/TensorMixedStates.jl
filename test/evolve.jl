@@ -179,6 +179,12 @@ end
     @test_throws "C(9) acts on site 9, which the system does not have" apply(C(9), st)
 end
 
+@testset "A superoperator is refused on a pure state" begin
+    ψ = State{Pure}(System(2, Qubit()), "Up")
+    @test_throws "acts on a density matrix, which a pure state is not" apply(Gate(X)(1), ψ)
+    @test_throws "acts on a density matrix, which a pure state is not" apply(Dissipator(X)(1), ψ)
+end
+
 @testset "Time dependent terms of several sites" begin
     # the coefficient of a term goes once into the MPO, whatever the number of sites it spans:
     # laid on each of its pieces, a term of k sites took it to the power k, which the one site
