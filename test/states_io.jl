@@ -523,6 +523,42 @@ end
     @test_throws "expected one of 1, 2" load_state(future, "s")
 end
 
+@testset "Reading a version 2 state file" begin
+    # written by the released 1.6.0, see reference/make_state_v2.jl: a file save_state writes
+    # stays readable by every later version, the current format included
+    file = joinpath(@__DIR__, "reference", "state_v2.h5")
+    strong = TensorMixedStates.strong
+    n = [0.8, 0.2, 1.0, 0.0]
+
+    p = load_state(file, "fermions")
+    @test p isa State{Pure}
+    @test p.system.sites == fill(Fermion(conserve = N), 4)
+    @test real(expect1(p, N)) ≈ n
+    @test expect(p, dag(C)(1) * C(2)) ≈ 0.4
+
+    m = load_state(file, "fermions_mixed")
+    @test m isa State{Mixed}
+    @test real(expect1(m, N)) ≈ n
+    @test expect(m, dag(C)(1) * C(2)) ≈ 0.4
+
+    s = load_state(file, "fermions_strong")
+    @test s.system.sites == fill(Fermion(conserve = strong(N)), 4)
+    @test real(expect1(s, N)) ≈ n
+
+    e = load_state(file, "electrons")
+    @test e.system.sites == fill(Electron(conserve = (Ntot, 2Sz)), 2)
+    @test real(expect1(e, Nup)) ≈ [1, 0]
+
+    # sites 1 and 3 traced out, 2 and 4 kept
+    t = load_state(file, "partial_trace")
+    @test real(expect1(t, N)) ≈ [0.2, 0.0]
+    @test trace(t) ≈ 1
+
+    k = load_state(file, "kindly")
+    @test k.system.sites[1] == Kindly(:none, true, "a", 3, 0.5, nothing)
+    @test expect(k, Z(2)) ≈ 1
+end
+
 @testset "Saving a state that carries charges" begin
     strong = TensorMixedStates.strong
     dir = mktempdir()
