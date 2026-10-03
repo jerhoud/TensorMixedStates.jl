@@ -190,6 +190,13 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
     w::Int = 2
     n_hermitianize::Int = 0
     apply_algo::String = "densitymatrix"
+    # checked when the phase is written rather than when it runs: corrected then, it could not
+    # resume its checkpoint, which belongs to a simulation of other phases
+    function ApproxW(order, w, n_hermitianize, apply_algo)
+        check_w_approx(order, w)
+        check_apply_algo(apply_algo)
+        return new(order, w, n_hermitianize, apply_algo)
+    end
 end
 
 # an algorithm is printed on one line, field by field, read from its type as a phase is, so
@@ -235,6 +242,15 @@ a phase of time evolution.
     evolver::Union{IndexedOp, Pair}
     measures_period::Int = 1
     measures = []
+    # refused here rather than when it runs, as the fields of ApproxW
+    function Evolve(name, time_start, final_measures, limits, duration, time_step, algo, evolver,
+                    measures_period, measures)
+        if iszero(time_step)
+            error("the time step of an Evolve cannot be zero")
+        end
+        return new(name, time_start, final_measures, limits, duration, time_step, algo, evolver,
+                   measures_period, measures)
+    end
 end
 
 """
@@ -421,13 +437,16 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
     measures = []
     measures_period::Int = 1
     tolerance::Real = 0.
-    # a noise is stored as the Float64 dmrg takes, as in GroundState
-    SteadyState(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo, limits,
-                nsweeps, noise::Union{Real, AbstractVector{<:Real}}, krylov, measures,
-                measures_period, tolerance) =
-        new(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo, limits,
-            nsweeps, noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
-            krylov, measures, measures_period, tolerance)
+    # a noise is stored as the Float64 dmrg takes, as in GroundState, and mpo_algo is checked
+    # when the phase is written, as the fields of ApproxW
+    function SteadyState(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo,
+                         limits, nsweeps, noise::Union{Real, AbstractVector{<:Real}}, krylov,
+                         measures, measures_period, tolerance)
+        check_mpo_algo(mpo_algo)
+        return new(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo, limits,
+                   nsweeps, noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
+                   krylov, measures, measures_period, tolerance)
+    end
 end
 
 """

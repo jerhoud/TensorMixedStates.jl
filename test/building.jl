@@ -461,6 +461,19 @@ end
     @test shifted(z) ≈ reference
 end
 
+@testset "A phase refuses at once what it could not run" begin
+    # refused when the phase ran, a wrong field could not be corrected and resumed, the
+    # checkpoint then belonging to a simulation of other phases
+    @test_throws "of order 5 is not implemented" ApproxW(order = 5)
+    @test_throws "w=1 or 2 (not 3)" ApproxW(order = 2, w = 3)
+    @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = "fit")
+    @test_throws "mpo_algo is" SteadyState(lindbladian = Dissipator(Sm)(1), limits = Limits(),
+                                           nsweeps = 2, mpo_algo = "zipp")
+    @test_throws "cannot be zero" Evolve(duration = 1., time_step = 0, algo = Tdvp(),
+                                         evolver = -im * X(1))
+    @test_ok ApproxW(order = 4, w = 1, apply_algo = "naive")
+end
+
 @testset "A pure state dropping part of what it conserves" begin
     # a site left conserving nothing is cut into a single block on a system still charged,
     # where the relabelled index keeps one block per basis state: weaken refused to put the

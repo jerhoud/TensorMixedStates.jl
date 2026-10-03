@@ -213,6 +213,20 @@ const w_approx_coefs = Vector{ComplexF64}[
 ]
 
 """
+    check_w_approx(order, w)
+
+refuse an approximation by WI and WII of an order or of a `w` not offered
+"""
+function check_w_approx(order::Int, w::Int)
+    if order < 1 || order > length(w_approx_coefs)
+        error("W approximation of order $order is not implemented")
+    end
+    if w ∉ (1, 2)
+        error("W approximation is only defined for w=1 or 2 (not $w)")
+    end
+end
+
+"""
     make_approx_W(pre, t; order, w, coefs = [1.])
 
 the MPOs of the approximation of the given `order` of a step `t`, to apply one after the
@@ -220,12 +234,7 @@ other, built from WI (`w = 1`) or WII (`w = 2`) approximations; `coefs` are the 
 the coefficients of a time dependent evolver.
 """
 function make_approx_W(pre::PreMPO, t::Number; order::Int, w::Int, coefs = [1.])
-    if order < 1 || order > length(w_approx_coefs)
-        error("W approximation of order $order is not implemented")
-    end
-    if w ∉ (1, 2)
-        error("W approximation is only defined for w=1 or 2 (not $w)")
-    end
+    check_w_approx(order, w)
     make = w == 1 ? make_approx_W1 : make_approx_W2
     return map(c -> make(pre, t * c, coefs), w_approx_coefs[order])
 end
@@ -299,6 +308,18 @@ approx_W(op, t::Number, state::State; kwargs...) =
     approx_W(PreMPO(state, op), t, state; kwargs...)
 
 """
+    check_mpo_algo(mpo_algo)
+
+refuse an algorithm of the product of two MPOs, computing ``L^\\dagger L``, that is not one of
+those `steady_state` offers, `"naive"` and `"zipup"`
+"""
+function check_mpo_algo(mpo_algo::String)
+    if mpo_algo ∉ ("naive", "zipup")
+        error("mpo_algo is \"naive\" or \"zipup\", not $(repr(mpo_algo))")
+    end
+end
+
+"""
     steady_state(lindbladian, ::State; options...)
     steady_state(lindbladian, ::Simulation; options...)
 
@@ -334,6 +355,7 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
               "the SteadyState phase. The old name still works and will be removed." maxlog = 1
         mpo_algo = alg
     end
+    check_mpo_algo(mpo_algo)
     l = make_mpo(state, op)
     # the naive algorithm truncates only when asked to, the others take no such option
     extra = mpo_algo == "naive" ? (; truncate = mpo_limits != Limits()) : (;)
