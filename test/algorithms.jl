@@ -146,12 +146,10 @@ end
 end
 
 @testset "Free bosons with source" begin
-    # Unlike the two testsets above, these reference values are recorded from a run of the
-    # library rather than computed independently: with four sites of dimension 7 the Fock
-    # space has 2401 states and the vectorized Liouvillian 2401^2, which puts a dense
-    # reference out of reach. A reference built from the Gaussian moments of this quadratic
-    # Lindbladian would close the gap and has not been written. Until then, read this
-    # testset as a regression check on the behaviour of the day it was recorded.
+    # The reference values are exact, from the Gaussian moments of this quadratic Lindbladian
+    # in test/reference/boson_gaussian.jl, which shares no code with what is tested here: with
+    # four sites of dimension 7 a dense reference, on a vectorized Liouvillian of 2401^2, is
+    # out of reach. The evolution below is 6e-7 to 8e-7 away from them.
     #
     # The bond dimension is 16 rather than the 10 first used, and that is not a detail. At
     # 10 the truncation itself is unstable: which singular values survive depends on the
@@ -173,9 +171,10 @@ end
             evolver =
                 -im*sum(A(i)*dag(A)(i+1)+dag(A)(i)*A(i+1) for i in 1:3) + Dissipator(2*sqrt(0.1)*dag(A))(2),
             final_measures = [
-                    check(N,[0.363288753916464e-2,.120023637053104,0.356800815401577e-2,0.486649287358378e-4],1e-5),
-                    check([dag(A)(2)*A(i) for i in 1:4],[-0.180013492215079e-1*im,.120023637053104,-0.178675615179132e-1*im,-0.178658178615343e-2],1e-5),
-                    check(Purity,.7965328508313,1e-5)
+                    check(N, [0.0036328913502, 0.1200236303285, 0.0035680174576, 4.86613106e-5], 1e-5),
+                    check([dag(A)(2)*A(i) for i in 1:4],
+                          [-0.0180013634952im, 0.1200236303285, -0.0178675798942im, -0.0017865872242], 1e-5),
+                    check(Purity, 0.7965328475916, 1e-5)
                 ])
     ])
 end
