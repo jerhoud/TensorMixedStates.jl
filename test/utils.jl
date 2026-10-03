@@ -35,20 +35,37 @@ macro test_pm(a)
 end
 
 """
-exact one particle correlation matrix <c^dag_i c_j> of a pure state, computed in the full
-Fock basis with an explicit Jordan-Wigner string. Independent of the fermionic machinery
-of the package, so it can be used as a reference for it. Only usable on small systems.
+the vector of a pure state in the full basis, site 1 most significant, normalised. Only usable
+on small systems.
+"""
+function dense_state(state::State{Pure})
+    n = length(state)
+    idx = [ SysIndex{Pure}(state.system, k) for k in 1:n ]
+    psi = vec(Array(reduce(*, [state.state[k] for k in 1:n]), reverse(idx)...))
+    return psi / norm(psi)
+end
+
+"""
+the matrix, on `n` sites `site`, of the product of operators of one site `factors`, pairs
+`op => i` in the order of the product, written with explicit Jordan-Wigner strings: a
+fermionic operator on site `i` carries `F` on every site before it. Independent of the
+fermionic machinery of the package, so it can be used as a reference for it.
+"""
+function jw_matrix(site, n, factors)
+    mf = matrix(F, site)
+    id = matrix(Id, site)
+    placed(a, j) = foldl(kron, [ k == j ? matrix(a, site) : (k < j && isfermionic(a) ? mf : id)
+                                 for k in 1:n ])
+    return prod(placed(a, j) for (a, j) in factors)
+end
+
+"""
+exact one particle correlation matrix <c^dag_i c_j> of a pure state, see `jw_matrix`
 """
 function exact_fermionic_correlations(state::State{Pure}, site)
     n = length(state)
-    mc = matrix(C, site)
-    mf = matrix(F, site)
-    id = matrix(Id, site)
-    c(j) = foldl(kron, [ k < j ? mf : (k == j ? mc : id) for k in 1:n ])
-    idx = [ SysIndex{Pure}(state.system, k) for k in 1:n ]
-    psi = reshape(Array(reduce(*, [state.state[k] for k in 1:n]), reverse(idx)...), dim(site)^n)
-    psi /= norm(psi)
-    return [ psi' * (c(i)' * c(j)) * psi for i in 1:n, j in 1:n ]
+    psi = dense_state(state)
+    return [ psi' * jw_matrix(site, n, [dag(C) => i, C => j]) * psi for i in 1:n, j in 1:n ]
 end
 
 """

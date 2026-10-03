@@ -116,6 +116,25 @@ end
     end
 end
 
+@testset "Electron and Tj against Jordan-Wigner strings written by hand" begin
+    # two species on a site, whose order on the site the matrices of Cup and Cdn hold, and
+    # strings through the whole sites on the left
+    n = 4
+    for site in (Electron(), Tj())
+        st = RandomState{Pure}(System(n, site), 4)
+        psi = dense_state(st)
+        exact(factors) = psi' * jw_matrix(site, n, factors) * psi
+        for a in (Cup, Cdn), b in (Cup, Cdn)
+            ref = [ exact([dag(a) => i, b => j]) for i in 1:n, j in 1:n ]
+            @test [ expect(st, dag(a)(i) * b(j)) for i in 1:n, j in 1:n ] ≈ ref atol = 1e-10
+            @test expect2(st, (dag(a), b)) ≈ ref atol = 1e-10
+        end
+        # a pair hopping, four fermionic factors on two sites apart
+        @test expect(st, dag(Cup)(1) * dag(Cdn)(1) * Cdn(3) * Cup(3)) ≈
+              exact([dag(Cup) => 1, dag(Cdn) => 1, Cdn => 3, Cup => 3]) atol = 1e-10
+    end
+end
+
 @testset "The adjoint of a tensor product of fermions" begin
     # (A ⊗ B)(i, j) is A(i) * B(j), whose adjoint reverses the factors: two fermions
     # anticommute, so dag(C ⊗ C) is the opposite of dag(C) ⊗ dag(C)
