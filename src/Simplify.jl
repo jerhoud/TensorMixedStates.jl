@@ -245,9 +245,10 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
                 else
                     change = true
                     pop!(nr)
-                    filter!(x -> !(x isa IdentityOp), t)
+                    # the coefficients first: a merge giving -Id left its identity in the
+                    # product, the filter seeing a scalar times it
                     cp *= prod(scalarcoef.(t))
-                    append!(nr, scalararg.(t))
+                    append!(nr, filter(x -> !(x isa IdentityOp), scalararg.(t)))
                 end
             end
             r = nr

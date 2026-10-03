@@ -113,6 +113,10 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- A product whose factors on one site multiply to a multiple of the identity other than the
+  identity itself, as `((im * X)^0.5)(1) * ((im * X)^1.5)(1) * Z(2)`, is simplified, and so
+  can be measured and made an MPO. It failed with a `MethodError`, the identity being left in
+  the product.
 - `weaken` of a pure state, the `Weaken` phase on one, and `Fidelity` or `Overlap` of a pure
   reference on a weakened state work when a site is left conserving nothing on a system still
   conserving something. They failed with an error of ITensors, the indices of that site being

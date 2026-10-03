@@ -559,6 +559,10 @@ end
     @test simplify((-X)^0.5 * (-X)^0.5) == -X
     @test simplify(X^0.5 * X^0.5) == X
     @test simplify(F^0.5 * F^0.5 * C) == simplify(F * C)
+    # and placed, a merge giving a multiple of the identity leaves only its coefficient: -Id
+    # stayed in the product, which the sort by site then failed on
+    a = ((im * X)^0.5)(1) * ((im * X)^1.5)(1)
+    @test simplify(a * Z(2)) == simplify(Z(2) * a) == simplify(-Z(2))
 
     # a placed operator takes powers, an integer one of anything placed and any one of an
     # operator on its sites
