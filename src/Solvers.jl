@@ -13,10 +13,10 @@ computing the exponential of `tdvp`, and `KrylovKit.eigsolve`, the lowest eigenv
 # Fields
 
 - `dim`: the largest dimension of a Krylov space, the `krylovdim` of KrylovKit (default 30 for
-  `tdvp`, 3 for `dmrg`)
+  `tdvp`, 3 for `dmrg`, 8 for `steady_state`)
 - `maxiter`: the number of Krylov spaces built one after the other (default 100 for `tdvp`, 1
-  for `dmrg`): `tdvp` covers in several parts a step that one space does not cover at the
-  tolerance, `dmrg` restarts from its best vectors
+  for `dmrg`, 3 for `steady_state`): `tdvp` covers in several parts a step that one space does
+  not cover at the tolerance, `dmrg` restarts from its best vectors
 - `tol`: the tolerance (default `1e-12` per unit of time for `tdvp`, `1e-14` for `dmrg`)
 
 `tdvp` tests its convergence after every vector, so that `dim` bounds the number of vectors
@@ -349,7 +349,9 @@ and the state is normalized to trace one.
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `observer!`: an observer, see `DmrgObserver`
 - `krylov`: the parameters of the Krylov search of each local step of dmrg, see `Krylov`
-  (default `Krylov()`, those of `ITensorMPS.dmrg`)
+  (default `Krylov(dim = 8, maxiter = 3)`). The spectrum of ``L^\\dagger L`` crowds near zero,
+  which the default of `ITensorMPS.dmrg`, three vectors, does not resolve: the search then
+  stalls at a residual well above rounding, on a state that is not steady
 
 # Examples
 
@@ -359,7 +361,7 @@ and the state is normalized to trace one.
 function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
     limits::Limits = Limits(), nsweeps::Int = 1, first_sweep::Int = 1,
     observer! = NoObserver(), mpo_limits::Limits = Limits(), mpo_algo::String = "naive",
-    noise = 0., krylov::Krylov = Krylov(), alg = nothing)
+    noise = 0., krylov::Krylov = Krylov(dim = 8, maxiter = 3), alg = nothing)
     if !isnothing(alg)
         @warn "the `alg` keyword of steady_state is now `mpo_algo`, matching the field of " *
               "the SteadyState phase. The old name still works and will be removed." maxlog = 1

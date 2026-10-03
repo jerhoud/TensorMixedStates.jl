@@ -420,7 +420,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 - `nsweeps`: the maximum number of sweeps, required
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
-  `Krylov()`)
+  `Krylov(dim = 8, maxiter = 3)`, see `steady_state`)
 - `measures`: the measurements to make during the search, see `output` (default `[]`)
 - `measures_period`: the number of sweeps between two measurements (default 1)
 - `tolerance`: the search stops when the dmrg energy changes by less than this from one sweep
@@ -445,7 +445,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
     limits::Limits
     nsweeps::Int
     noise::Union{Float64, Vector{Float64}} = 0.
-    krylov::Krylov = Krylov()
+    krylov::Krylov = Krylov(dim = 8, maxiter = 3)
     measures = []
     measures_period::Int = 1
     tolerance::Real = 0.

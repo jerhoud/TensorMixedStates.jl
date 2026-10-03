@@ -175,7 +175,7 @@ end
             lindbladian = Dissipator(Sp)(1) + Dissipator(Sm)(2),
             nsweeps = 20,
             limits = Limits(cutoff = 1e-10, maxdim = 10),
-            final_measures = check([X, Y, Z], [[0, 0], [0, 0], [1, -1]], 1e-2)
+            final_measures = check([X, Y, Z], [[0, 0], [0, 0], [1, -1]], 1e-10)
         )
     ])
     @test_ok test_phases([
@@ -184,14 +184,13 @@ end
             system = System(5, Qubit()),
             randomize = 10,
         ),
-        # from a random start dmrg is left about 1e-6 away after 20 sweeps, but a start in a
-        # few percent of the draws leaves it at 1e-2, the tolerance below: 40 sweeps take
-        # the typical error to 1e-10, and those starts well within it
+        # the tolerances of these three searches hid an error of the default Krylov search of
+        # ITensorMPS, 1e-5 on the first, which the default of steady_state now resolves
         SteadyState(
             lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
             limits = Limits(maxdim = 10, cutoff = 1e-10),
             nsweeps = 40,
-            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-2)
+            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-8)
         )
     ])
     @test_ok test_phases([
@@ -203,8 +202,8 @@ end
             nsweeps = 200,
             limits = Limits(cutoff = 1e-10, maxdim = 10),
             final_measures = [
-                check(Z, [0.05882352941176472, 0.0, 0.0,-0.05882352941176472], 5e-6),
-                check([2(X(i)Y(i+1)-Y(i)X(i+1)) for i in 1:3], fill(0.9411764705882353, 3), 5e-6),
+                check(Z, [0.05882352941176472, 0.0, 0.0,-0.05882352941176472], 1e-7),
+                check([2(X(i)Y(i+1)-Y(i)X(i+1)) for i in 1:3], fill(0.9411764705882353, 3), 1e-7),
             ]
         )
     ])

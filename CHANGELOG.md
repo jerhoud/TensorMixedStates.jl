@@ -76,6 +76,12 @@ the reference article.
   term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
   by its conjugate, which gave a state of complex trace.
 
+- `steady_state` and `SteadyState` search each local step with `Krylov(dim = 8, maxiter = 3)`
+  by default, rather than with the three vectors of `ITensorMPS.dmrg`, which do not resolve the
+  spectrum of ``L^\dagger L`` near zero: the search stalled on a state that was not steady, a
+  residual of 0.0027 and currents off by 3 % on an open XX chain, an error of 1e-5 on two
+  qubits, where it now reaches rounding, in less time. The results of a simulation searching a
+  steady state change accordingly.
 - The log says that a run stops in a phase, rather than after it, when it stops in the course
   of that phase, and that phase logs `Stopping` rather than `Ending`. An `Evolve` resumed in
   its course logs the time it goes on from, rather than the time it started from.
