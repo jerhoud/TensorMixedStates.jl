@@ -74,6 +74,14 @@ A conserved quantity is an operator of your site, diagonal, whose eigenvalues ar
 integers or all roots of unity. `MySite(conserve = N)` and `MySite(conserve = (N, 2Sz))` are
 then written the same way as for the site types of this package.
 
+### The fields of a site
+
+A site is rebuilt from the values of its fields, in their order, by `MySite(values...)`: when a
+state file, which records them, is read, and when a `Weaken` phase changes what the site
+conserves. Julia gives this constructor to every struct, unless an inner constructor replaces
+it, in which case one taking all the fields in their order has to be kept. For the states on
+your site to be saved, its fields must be numbers, booleans, symbols, strings or `nothing`.
+
 ### Reusing an operator name
 
 Site types are meant to share operator names: `N` means the same thing for a `Fermion`, a

@@ -43,6 +43,21 @@ end
 
 TensorMixedStates.dim(::Widely) = 2
 
+# a site whose inner constructor replaces the one taking its fields, by which a state file and
+# weaken rebuild a site
+struct Guarded <: AbstractSite
+    conserve::String
+    Guarded(; conserve = ()) = new(conserve_string(new(""), conserve))
+end
+
+TensorMixedStates.dim(::Guarded) = 2
+
+@def_operators(Guarded(), [
+    selfadjoint_op => [
+        N = [0. 0. ; 0. 1.],
+    ],
+])
+
 @testset "SetState" begin
     sys = System(3, Qubit())
     st = State{Mixed}(sys, ["Dn", "FullyMixed", "+"])  # arbitrary starting local states
@@ -79,6 +94,18 @@ end
     @test trace(ρ) ≈ 1
     @test expect(ρ, N(2)) ≈ 1
     @test_ok weaken(ρ, ())
+end
+
+@testset "A site rebuilt from its fields must keep the constructor taking them" begin
+    sys = System([Guarded(conserve = strong(N)), Guarded(conserve = strong(N))])
+    st = State{Pure}(sys, Any[[0., 1.], [1., 0.]])
+    @test expect(st, N(1)) ≈ 1
+    @test_throws "Guarded must keep its constructor Guarded(conserve) for its conserved" weaken(st, ())
+    mktempdir() do dir
+        file = joinpath(dir, "guarded.h5")
+        save_state(file, "g", st)
+        @test_throws "Guarded must keep its constructor Guarded(conserve) for a state file" load_state(file, "g")
+    end
 end
 
 @testset "Measurement sets and their rows" begin

@@ -16,6 +16,11 @@ A site type defines `dim`, possibly `string_state`, and its states and operators
 constructor fills through `conserve_string` with what the site conserves. The field is
 optional: a site type that can conserve nothing leaves it out.
 
+A site is rebuilt from the values of its fields, in their order, by `MySite(values...)`, when
+a state file is read and when `weaken` changes what it conserves: a site type keeps this
+constructor, which Julia gives unless an inner constructor replaces it. Its states can be saved
+when its fields are numbers, booleans, symbols, strings or `nothing`.
+
 # Examples
 
     struct MySite <: AbstractSite
@@ -944,14 +949,27 @@ function transitions(source::Conserved, target::Conserved)
     return collapse, drop
 end
 
+"""
+    rebuild_site(t, values, why)
+
+the site of type `t` built from the values of its fields, in their order, refused with a message
+saying it is needed for `why` when `t` has no constructor taking them.
+"""
+function rebuild_site(t::Type{<:AbstractSite}, values, why::String)
+    if !hasmethod(t, Tuple{map(typeof, values)...})
+        error("$t must keep its constructor $t($(join(fieldnames(t), ", "))) for $why")
+    end
+    return t(values...)
+end
+
 function weaken(site::AbstractSite, target::Conserved)
     # a site conserving nothing has nothing to weaken, whatever its conserve field holds
     if isempty(conserved(site))
         return site
     end
     t = typeof(site)
-    return t(( f === :conserve ? retarget(site, target) : getfield(site, f)
-               for f in fieldnames(t) )...)
+    return rebuild_site(t, [ f === :conserve ? retarget(site, target) : getfield(site, f)
+                             for f in fieldnames(t) ], "its conserved quantities to be weakened")
 end
 
 """

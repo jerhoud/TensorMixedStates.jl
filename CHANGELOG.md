@@ -99,6 +99,10 @@ the reference article.
 - The log of a resumed simulation is continued without being cut back to the checkpoint, and
   keeps the history of every run: the line saying why a run stopped was lost on its resume.
   The steps done again from the checkpoint now appear twice in it.
+- A site type whose inner constructor replaces the one taking its fields, by which a state file
+  is read and `weaken` changes what a site conserves, is refused with a message saying so,
+  rather than a `MethodError`. The documentation of `AbstractSite` and the page on extending
+  the package say what a site needs for that.
 - `LoadState` truncates the state it loads only when it is given limits, so that a
   representation of one's own needs no `truncate` to be loaded: the default `Limits()`
   truncates nothing.

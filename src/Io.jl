@@ -221,7 +221,7 @@ function build_site(modname::String, typename::String, params::Vector)
     if !isnothing(k) && k ≤ length(ps) && ps[k] isa AbstractString
         ps[k] = sorted_conserve(ps[k])
     end
-    return t(ps...)
+    return rebuild_site(t, ps, "a state file to be read")
 end
 
 """
