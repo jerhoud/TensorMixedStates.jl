@@ -383,6 +383,13 @@ end
     # a sum, and a function of one on several sites has no room for a string
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
     @test_throws "cannot be inserted" apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
+    # a gate of several sites defined by a matrix is kept whole, and a string covering only
+    # some of its sites does not commute with it. It used to be moved past it, which changed
+    # the sign of the branch where the gate moves a fermion onto site 2
+    sw = Operator{2}("Sw", [1. 0. 0. 0. ; 0. 0. 1. 0. ; 0. 1. 0. 0. ; 0. 0. 0. 1.], involution_op)
+    a = dag(C)(1) * dag(C)(4) * sw(1, 2)
+    @test norm(apply(a, st) - apply(dag(C)(1), apply(dag(C)(4), apply(sw(1, 2), st)))) < 1e-12
+    @test norm(mix(apply(a, st)) - apply(a, ρ)) < 1e-12
     # a term of coefficient zero leaves the parity of a gate alone, where it made one a sum of
     # fermionic and non fermionic operators, and a gate whose terms all vanish makes the state
     # null, as a gate that annihilates it does, where it was refused
@@ -396,6 +403,9 @@ end
     # a non fermionic gate must not be simplified: Swap is defined by an expression and
     # simplifying a product of them would make a sum, which apply cannot place
     @test_ok apply(Swap(1, 2) * Swap(3, 4), State{Pure}(System(4, Qubit()), "Up"))
+    # nor is one beside a fermionic factor, which used to make the whole gate a sum, refused
+    sq = State{Pure}(System([Qubit(), Qubit(), Fermion()]), ["Up", "Dn", "0"])
+    @test norm(apply(Swap(1, 2) * dag(C)(3), sq) - apply(Swap(1, 2), apply(dag(C)(3), sq))) < 1e-12
 end
 
 @testset "Gates of sums and of mixed parities" begin

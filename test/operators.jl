@@ -557,6 +557,12 @@ end
     @test_throws "acts on several sites" expect(st, sqrt(Swap)(1, 2))
     sf = State{Pure}(System([q, q, fe]), ["Up", "Dn", "Emp"])
     @test_ok apply(sqrt(Swap)(1, 2) * dag(C)(3), sf)
+    # a string is not moved past a factor of several sites kept whole, which it commutes with
+    # only if the factor is even: this one, odd on site 1, used to compare equal to the product
+    # in the other order, its opposite. A factor with no string in the way is still sorted
+    xi = Operator{2}("XI", kron([0. 1. ; 1. 0.], [1. 0. ; 0. 1.]), plain_op)
+    @test !(xi(1, 2) * dag(C)(4) ≈ dag(C)(4) * xi(1, 2))
+    @test xi(1, 2) * N(4) ≈ N(4) * xi(1, 2)
 end
 
 @testset "The identity is one value of each kind" begin

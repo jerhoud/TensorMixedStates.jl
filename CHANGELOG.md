@@ -89,6 +89,16 @@ the reference article.
   that `@def_states` and `@def_operators` declare for it, and so do the operators a package
   declares for a site type of TMS. Once the package was precompiled, they were lost, and the
   site answered that they were not defined.
+- A gate made of fermionic operators and of an operator of several sites defined by a matrix
+  and created without its sites, as `C(1) * C(4) * M(1, 2)`, is applied right. A
+  Jordan-Wigner string covering only some of the sites of `M` was moved past it, which gave a
+  wrong state without a message.
+- A gate defined by an expression, as `Swap` or `controlled(X)`, can be applied in a product
+  with fermionic operators, as `Swap(1, 2) * dag(C)(3)`. It was replaced by its expression,
+  which made the gate a sum, refused.
+- `≈` no longer takes a product with a factor of several sites kept whole, as an operator
+  defined by a matrix, for the same product in another order when a Jordan-Wigner string had
+  to cross that factor: the string was moved past it without the sign of an odd factor.
 
 ## [1.6.0] - 2026-09-30
 

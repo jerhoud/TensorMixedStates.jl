@@ -71,33 +71,113 @@ function apply(mpo::MPO, state::State; limits::Limits=Limits(),
 end
     
 """
+    expand_gate(op)
+
+the gate `op` with each factor of several sites holding a fermionic operator replaced by a
+product of factors of one site, by the definitions of the tensor product, `(A ⊗ B)(i, j)` being
+`A(i) * B(j)`, of the product, of the integer power, of the adjoint, of an operator defined by
+an expression, and of `Left`, `Right` and `Gate`, the order of the factors being kept. Any
+other factor of several sites is kept whole: a function of a fermionic operator, which
+`prepare_gate` then refuses, or an operator with no fermionic factor, which `apply` places as
+it is.
+"""
+expand_gate(a::ProdOp{R, Indexed, 1}) where R = ProdOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
+expand_gate(a::SumOp{R, Indexed, 1}) where R = SumOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
+expand_gate(a::ScalarOp{R, Indexed, 1}) where R = a.coef * expand_gate(a.arg)
+expand_gate(a::AtIndex{R, N}) where {R, N} =
+    N > 1 && has_fermionic(a.op) ? expand_placed(a.op, a.index) : a
+expand_gate(a::IndexedOp) = a
+
+expand_placed(a::TensorOp, index) =
+    ProdOp(IndexedOp{Pure}[ expand_gate(o(index[p]...)) for (o, p) in zip(a.subs, factor_sites(a)) ])
+expand_placed(a::ProdOp{R}, index) where R =
+    ProdOp(IndexedOp{R}[ expand_gate(o(index...)) for o in a.subs ])
+expand_placed(a::SumOp{R}, index) where R =
+    SumOp(IndexedOp{R}[ expand_gate(o(index...)) for o in a.subs ])
+expand_placed(a::IntPowOp, index) = ProdOp(fill(expand_gate(a.arg(index...)), a.expo))
+expand_placed(a::Operator, index) = a.expr isa Op ? expand_gate(a.expr(index...)) : a(index...)
+expand_placed(a::DagOp, index) = placed_dag(expand_gate(a.arg(index...)))
+expand_placed(a::Left, index) = sided(Left, expand_gate(a.arg(index...)))
+expand_placed(a::Right, index) = sided(Right, expand_gate(a.arg(index...)))
+function expand_placed(a::Gate, index)
+    e = expand_gate(a.arg(index...))
+    return ProdOp([sided(Left, e), sided(Right, e)])
+end
+expand_placed(a, index) = a(index...)
+
+"""
+    placed_dag(op)
+
+the adjoint of an operator on pure states placed on sites, the factors of a product taken in
+the reverse order, each one keeping its sites
+"""
+placed_dag(a::ProdOp{Pure, Indexed, 1}) = ProdOp(reverse(placed_dag.(a.subs)))
+placed_dag(a::SumOp{Pure, Indexed, 1}) = SumOp(placed_dag.(a.subs))
+placed_dag(a::ScalarOp{Pure, Indexed, 1}) = conj(a.coef) * placed_dag(a.arg)
+placed_dag(a::AtIndex{Pure}) = dag(a.op)(a.index...)
+placed_dag(a::IdentityOp) = a
+
+"""
+    spans_sites(op)
+
+whether an operator placed on sites holds a factor acting on several sites at once
+"""
+spans_sites(a::AtIndex) = length(a.index) > 1
+spans_sites(a::Union{ProdOp, SumOp}) = any(spans_sites, a.subs)
+spans_sites(a::ScalarOp) = spans_sites(a.arg)
+spans_sites(::Op) = false
+
+"""
     prepare_gate(op)
 
 the gate `op` with the Jordan-Wigner strings of its fermionic factors inserted and spelled out
 as one factor per site, see `removeMulti`, as `PreMPO` does.
 
 `apply` places one tensor per factor and cannot build a string: only `simplify` inserts them.
-Simplifying every gate is not an option, since it replaces a gate defined by an expression,
+Simplifying a whole gate is not an option. It would replace a gate defined by an expression,
 such as `Swap`, with that expression, and a product of those becomes a sum `apply` cannot
-place. So only a gate with a fermionic factor is simplified, and it is refused if it becomes a
-sum, or if a fermionic factor remains inside a function of several sites, which `simplify`
-keeps whole.
+place. And it sorts the factors by site, moving strings past a factor of several sites, which
+is only right when the string holds all of its sites or none of them. So a gate with a
+fermionic factor is first expanded into factors of one site where it can be, see
+`expand_gate`, and then simplified piece by piece: each run of factors of one site on its own,
+the factors of several sites left whole between them, so that `simplify` never sees one. The
+gate is refused if a piece becomes a sum, or if a fermionic factor remains inside a function of
+several sites.
 """
-prepare_gate(a) =
-    if has_fermionic(a)
-        b = removeMulti(simplify(a))
-        if scalararg(b) isa SumOp
+function prepare_gate(a::IndexedOp{R}) where R
+    if !has_fermionic(a)
+        return a
+    end
+    e = expand_gate(a)
+    pieces = IndexedOp{R}[]
+    run = IndexedOp{R}[]
+    function close_run()
+        p = simplify(ProdOp(run))
+        if scalararg(p) isa SumOp
             error("cannot apply $a as a gate: inserting its Jordan-Wigner strings makes " *
                   "it a sum, which apply cannot place. Use make_mpo to build an MPO instead")
         end
-        if has_fermionic(b)
-            error("cannot apply $a as a gate: its Jordan-Wigner strings cannot be inserted " *
-                  "into a function of a fermionic operator acting on several sites")
-        end
-        b
-    else
-        a
+        push!(pieces, p)
+        empty!(run)
     end
+    for x in prodsubs(e)
+        if !spans_sites(x)
+            push!(run, x)
+        elseif x isa AtIndex
+            close_run()
+            push!(pieces, x)
+        else
+            error("cannot apply sums as gates ($a)")
+        end
+    end
+    close_run()
+    b = removeMulti(scalarcoef(e) * ProdOp(pieces))
+    if has_fermionic(b)
+        error("cannot apply $a as a gate: its Jordan-Wigner strings cannot be inserted " *
+              "into a function of a fermionic operator acting on several sites")
+    end
+    return b
+end
 
 """
     make_ops(::System, op)
