@@ -200,8 +200,9 @@ is only right when the string holds all of its sites or none of them. So a gate 
 fermionic factor is first expanded into factors of one site where it can be, see
 `expand_gate`, and then simplified piece by piece: each run of factors of one site on its own,
 the factors of several sites left whole between them, so that `simplify` never sees one. The
-gate is refused if a piece becomes a sum, or if a fermionic factor remains inside a function of
-several sites, its argument being odd.
+gate is refused if a piece becomes a sum, or if a function of an odd fermionic operator
+remains whole, on several sites or on the first one, where it has no string to take but mixes
+the two parities.
 """
 function prepare_gate(a::IndexedOp{R}) where R
     if !has_fermionic(a)
@@ -232,8 +233,8 @@ function prepare_gate(a::IndexedOp{R}) where R
     close_run()
     b = removeMulti(scalarcoef(e) * ProdOp(pieces))
     if has_fermionic(b)
-        error("cannot apply $a as a gate: it holds a function of an odd fermionic operator " *
-              "of several sites, which mixes the two parities")
+        error("cannot apply $a as a gate: it holds a function of an odd fermionic operator, " *
+              "which mixes the two parities")
     end
     return b
 end

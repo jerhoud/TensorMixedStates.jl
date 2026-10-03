@@ -417,6 +417,9 @@ end
     # an even operator is a gate, checked against dense matrices in observables.jl
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
     @test_throws "mixes the two parities" apply(exp(0.3 * (C ⊗ Id + Id ⊗ C))(1, 3), st)
+    # on the first site as well, where it has no string: it is refused for its parity
+    @test_throws "a function of an odd fermionic operator, which mixes the two parities" apply(
+        exp(0.3 * (C + dag(C)))(1), st)
     @test_ok apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
     # a gate of several sites defined by a matrix is kept whole, and a string covering only
     # some of its sites does not commute with it. It used to be moved past it, which changed
