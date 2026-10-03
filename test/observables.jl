@@ -448,6 +448,80 @@ end
     @test maxlinkdim(partial_trace(ρ, [3, 4])) ≤ maxlinkdim(ρ)
 end
 
+@testset "A random fermionic oracle" begin
+    # every implementation of the Jordan-Wigner strings checked on random products against
+    # the dense matrices of the strings written out: simplify, through expect on a pure and on
+    # a mixed state, the MPO and the gates, expect2, the matrix of a tensor product and
+    # partial_trace. In the dense basis C(j) is F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and any other
+    # operator is written from those, so that the reference knows nothing of the package
+    fe = Fermion()
+    mc, mf, mi = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
+    cd(j, n) = foldl(kron, [ k < j ? mf : k == j ? mc : mi for k in 1:n ])
+    singles = [ (C, (j, n) -> cd(j, n)), (dag(C), (j, n) -> cd(j, n)'),
+                (N, (j, n) -> cd(j, n)' * cd(j, n)),
+                (C + 2dag(C), (j, n) -> cd(j, n) + 2cd(j, n)') ]
+    count = Ref(0)
+    # a factor on the positions 1:m, as an operator and as the dense matrix on the n sites of
+    # the state, `site` taking a position to its site: an operator of one site, or a tensor
+    # product of two, renamed or not, on two positions in either order
+    function factor(m, site, n)
+        a, da = rand(singles)
+        i = rand(1:m)
+        if m == 1 || rand(Bool)
+            return a(i), da(site(i), n)
+        end
+        b, db = rand(singles)
+        j = rand(setdiff(1:m, i))
+        t = rand(Bool) ? a ⊗ b : named(a ⊗ b, "T$(count[] += 1)")
+        return t(i, j), da(site(i), n) * db(site(j), n)
+    end
+    function product(m, site, n)
+        fs = [ factor(m, site, n) for _ in 1:rand(1:3) ]
+        return prod(first.(fs)), prod(last.(fs))
+    end
+    n = 4
+    sys = System(n, fe)
+    idx = [ SysIndex{Pure}(sys, k) for k in 1:n ]
+    dense_vec(st) = reshape(Array(reduce(*, [ st.state[k] for k in 1:n ]), reverse(idx)...), 2^n)
+    ψ = RandomState{Pure}(sys, 4)
+    ρ = mix(ψ)
+    v = dense_vec(ψ)
+    value(d) = v' * d * v / (v' * v)
+    for _ in 1:30
+        o, d = product(n, identity, n)
+        @test expect(ψ, o) ≈ value(d) atol = 1e-10
+        @test expect(ρ, o) ≈ value(d) atol = 1e-10
+        @test dense_vec(apply(make_mpo(ψ, o), ψ)) ≈ d * v atol = 1e-10
+        @test dense_vec(apply(o, ψ)) ≈ d * v atol = 1e-10
+        @test norm(apply(o, ρ) - mix(apply(o, ψ))) < 1e-10
+        keep = sort(randperm(n)[1:rand(1:3)])
+        o, d = product(length(keep), p -> keep[p], n)
+        @test expect(partial_trace(ρ, keep; keepers = true), o) ≈ value(d) atol = 1e-10
+    end
+    for (a, da) in singles, (b, db) in singles
+        if isfermionic(a) == isfermionic(b)
+            ref = [ value(da(i, n) * db(j, n)) for i in 1:n, j in 1:n ]
+            @test expect2(ψ, (a, b)) ≈ ref atol = 1e-10
+        end
+    end
+    # a tensor product on consecutive sites, of operators of one site and of renamed tensor
+    # products of two, each with its width and its dense matrix from its first site
+    for _ in 1:20
+        fs = map(1:rand(2:3)) do _
+            a, da = rand(singles)
+            if rand(Bool)
+                return (a, 1, da)
+            end
+            b, db = rand(singles)
+            return (named(a ⊗ b, "T$(count[] += 1)"), 2, (j, n) -> da(j, n) * db(j + 1, n))
+        end
+        starts = cumsum([ 1; [ w for (_, w, _) in fs ] ])
+        m = starts[end] - 1
+        ref = prod(d(s, m) for ((_, _, d), s) in zip(fs, starts))
+        @test matrix(reduce(⊗, first.(fs)), fe) ≈ ref atol = 1e-12
+    end
+end
+
 @testset "Measurements that were refused" begin
     # a part that is all the system or nothing shares nothing with the rest
     ρ = mix(RandomState{Pure}(System(3, Qubit()), 2))

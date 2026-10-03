@@ -157,6 +157,15 @@ same holds for `@def_states` and `@create_site_module`.
 
 Global identifiers are `const`.
 
+Fermions rest on one invariant, the Jordan-Wigner convention: a fermionic operator `A` placed
+on site `i` is its matrix there with `F` on every site before it, so that `A(i) * B(j)`, with
+`i < j`, is `(A * F)(i) * F(i+1) * … * F(j-1) * B(j)` on the matrices of the sites. Four places
+build these strings and must agree: `simplify`, for the MPOs, `expect`, the gates and
+`compact`; `expect2`, along its correlation matrix; `legs(::TensorOp)`, for the matrix of a
+tensor product; and `trace_signs`, for `partial_trace`. The testset "A random fermionic
+oracle" of `test/observables.jl` checks them all against dense matrices written from the
+convention alone. A new place building strings goes through `simplify` or is added to it.
+
 Control flow is written with `if`, never with the short-circuit operators. `cond && return`,
 `x isa T || error(…)` and `flag && do_something()` are out, and so is every other use of
 `&&` or `||` for its side effect. Inside a boolean expression, as in `if a && b`, they are
@@ -176,8 +185,10 @@ simplification that runs twice as fast but leaves more terms behind is a loss, b
 term count is what the bond dimension is paid on, and the bond dimension is what the whole
 computation is paid on.
 
-One design point that looks like an oversight and is not: applying gates deliberately
-bypasses `simplify`, and only the MPO path simplifies.
+One design point that looks like an oversight and is not: applying a gate does not simplify
+it, since `Swap` would become its expression and a product of those a sum the gate cannot be.
+Only a gate with a fermionic factor goes through `simplify`, to get its strings, and then piece
+by piece, its factors of several sites left whole, see `prepare_gate`.
 
 ## Reporting a problem
 

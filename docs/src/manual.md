@@ -286,6 +286,13 @@ hopping = sum(dag(C)(i)C(i+1) + dag(C)(i+1)C(i) for i in 1:n-1)
 nothing # hide
 ```
 
+The strings follow the order of the sites: `C(j)` is the matrix of `C` on site `j` with `F`
+on every site before it. A product of two fermionic operators placed in increasing order of
+the sites, `A(i) * B(j)` with `i < j`, is thus `A * F` on site `i`, `F` on every site in
+between and `B` on site `j`, and in the other order it takes the sign of the swap. A matrix
+given for an operator of several sites is read in the basis of the sites as it is, with no
+string, which is why it has to commute with `F` on each of them.
+
 ## Algorithms
 
 We can now work with states and operators.
