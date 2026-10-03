@@ -958,6 +958,15 @@ function cut_svd(state::State, pos::Int)
 end
 
 """
+    shannon_entropy(p)
+
+the entropy ``-\\sum_i p_i \\log p_i`` of the probabilities `p`. A probability of exactly zero,
+which a singular value kept by a `mindim` above the Schmidt rank gives, adds nothing, where
+`0 * log(0)` would make it NaN.
+"""
+shannon_entropy(p) = -sum(x * log(x) for x in p if x > 0)
+
+"""
     entropy_spectrum(S)
 
 the entanglement entropy and spectrum read off the singular values `S` of a cut, as
@@ -969,10 +978,7 @@ function entropy_spectrum(S::ITensor)
     # the spectrum would come out grouped by sector rather than decreasing
     sp = sort([ S[i,i]^2 for i in 1:dim(S, 1) ]; rev = true)
     sp /= sum(sp)
-    # a singular value of exactly zero, which a `mindim` above the Schmidt rank keeps, adds
-    # nothing to the entropy, while 0 * log(0) would make it NaN
-    ee = -sum(p * log(p) for p in sp if p > 0)
-    return (ee, sp)
+    return (shannon_entropy(sp), sp)
 end
 
 """
@@ -1041,8 +1047,7 @@ function entanglement_by_sector(state::State{Pure}, pos::Int)
             continue
         end
         sp = sort(sq / w; rev = true)
-        sectors[q] = (weight = w / total, entropy = -sum(p * log(p) for p in sp if p > 0),
-                      spectrum = sp)
+        sectors[q] = (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp)
     end
     return sectors
 end
