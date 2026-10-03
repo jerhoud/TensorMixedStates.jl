@@ -19,6 +19,9 @@ makedocs(
     pages = [
         "index.md",
         "manual.md",
+        "simulations.md",
+        "conservation.md",
+        "performance.md",
         "extending.md",
         "Reference" => [
             "sites.md",
