@@ -812,7 +812,7 @@ fermion parity. On a state superposing parities, measure it site by site with
 function expect1(state::State, op)
     state = weak_form(state)
     n = length(state)
-    r = [ expect1_one(state, op, i, zipend(state, zipto(state, Expector(), i)).t) for i in 1:n ]
+    r = [ expect1_one(state, op, i, get_left(state, i) * get_right(state, i)) for i in 1:n ]
     return unroll(r)
 end
 
