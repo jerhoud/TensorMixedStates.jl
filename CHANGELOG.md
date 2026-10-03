@@ -113,6 +113,9 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- `named` refuses a matrix whose `type` it does not satisfy, as a matrix declared an involution
+  that is not self adjoint. `simplify` relied on the type before any matrix was computed: such
+  an operator squared to the identity, and gave a wrong result with no message.
 - A product whose factors on one site multiply to an operator holding the identity, as
   `((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)`, which stands for `Z(2) + Z(1) * Z(2)`, can be
   made an MPO and compacted, and compares equal with `≈` to the operator it stands for. The

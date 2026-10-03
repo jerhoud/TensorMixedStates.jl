@@ -668,6 +668,13 @@ end
     for s in (q, f, Electron(), Tj(), Boson(3))
         @test matrix(F, s)^2 ≈ matrix(Id, s)
     end
+    # named checks a matrix at once, simplify reading its type before any matrix is computed:
+    # W(2)^2 was measured 1 and V(2) - dag(V)(2) simplified to zero
+    @test_throws "W is declared involution_op but is not self adjoint" named(
+        [0. 1.; 0. 0.], "W"; type = involution_op)
+    @test_throws "V is declared selfadjoint_op but is not self adjoint" named(
+        [0. 1.; 0. 0.], "V"; type = selfadjoint_op)
+    @test named([0. 1.; 1. 0.], "Xn").type == involution_op
     # checked when the operator is built on its sites as well
     @test_throws "declared selfadjoint_op but is not self adjoint" Operator{2}("P",
         kron([0. 1.; 0. 0.], [1. 0.; 0. 1.]), selfadjoint_op, q)

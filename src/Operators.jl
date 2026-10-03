@@ -1255,7 +1255,10 @@ Its type, see `OpType`, unless `type` gives it:
   taken for fermionic: give it `type = fermionic_op`;
 - a function without sites: `plain_op`.
 
-The type is checked against the matrix each time the operator is placed on a site.
+A matrix given without sites is checked against its type at once, except for its parity,
+which needs the `F` of a site and is checked when the matrix is laid on one. A type given to a
+function or an expression without sites is taken as it is: `simplify` relies on it, squaring an
+involution to the identity for instance, so a wrong one gives a wrong result.
 
 The name also identifies a conserved quantity: sites conserving operators of the same name
 share one charge, and renaming keeps two quantities apart.
