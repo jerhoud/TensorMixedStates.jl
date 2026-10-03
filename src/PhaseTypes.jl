@@ -209,7 +209,8 @@ a phase of time evolution.
 - `limits`: constraints on the state, see `Limits` (default `Limits()`, none)
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one that divides the duration into a
-  whole number of steps (the phase is skipped when that number is zero)
+  whole number of steps, and taken with the sign of the duration (the phase is skipped when
+  that number is zero)
 - `algo`: the algorithm, `Tdvp(...)` or `ApproxW(...)`
 - `evolver`: `-im * H` for a hamiltonian `H`, plus dissipators for a mixed state, or
   `evolvers => coefs` for a time dependent one, see the `coefs` option of `tdvp`

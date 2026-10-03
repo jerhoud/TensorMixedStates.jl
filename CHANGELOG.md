@@ -113,6 +113,10 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- An `Evolve` whose duration and time step have opposite signs evolves over its duration, the
+  step taken with the sign of the duration. It made no step while the time went on to the end
+  of the duration. `tdvp` and `approx_W` refuse `nsweeps` below one, which did the same, or
+  divided by zero.
 - A `SteadyState` checkpointed on its last sweep hands a state of trace one to the next phases
   once resumed. Its checkpoint held the eigenvector dmrg gives, of norm one and of a sign of
   its own, which the resume, having no sweep left to run, handed on and saved as it was, with

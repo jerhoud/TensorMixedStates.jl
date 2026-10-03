@@ -262,7 +262,9 @@ function run_phase(sim::Simulation, phase::ToMixed)
 end
 
 function run_phase(sim::Simulation, phase::Evolve)
-    nsweeps = round(Int, phase.duration / phase.time_step)
+    # the duration gives the direction, and a step of the other sign is adjusted as one that
+    # does not divide it: of the opposite sign, it made no step while the time went on
+    nsweeps = round(Int, abs(phase.duration / phase.time_step))
     if nsweeps == 0
         log_msg(sim, "Skipping an evolution of $(phase.duration), shorter than half a time step")
         return sim

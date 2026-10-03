@@ -50,6 +50,18 @@ krylov_kwargs(k::Krylov, prefix = "") =
                for f in fieldnames(Krylov) if !isnothing(getfield(k, f)))
 
 """
+    check_nsweeps(nsweeps)
+
+refuse an evolution in less than one step: it made no step, while a simulation took the time
+on, and `approx_W` divided its duration by zero
+"""
+function check_nsweeps(nsweeps)
+    if nsweeps < 1
+        error("an evolution takes at least one step, and nsweeps is $nsweeps")
+    end
+end
+
+"""
     tdvp(evolver, t, ::State; options...)
     tdvp(evolver, t, ::Simulation; options...)
 
@@ -85,6 +97,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
     nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(),
     krylov::Krylov = Krylov()) where {R <: PM}
+    check_nsweeps(nsweeps)
     time_dep = !isnothing(coefs)
     st = state.state
     dt = t / nsweeps
@@ -255,6 +268,7 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
     time_start = zero(t), limits::Limits=Limits(), apply_algo::String = "densitymatrix") where {R <: PM}
     check_apply_algo(apply_algo)
+    check_nsweeps(nsweeps)
     st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)

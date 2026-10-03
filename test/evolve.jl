@@ -133,10 +133,10 @@ end
 @testset "An evolution ends where it was asked to" begin
     # the step is adjusted to divide the duration: a duration of 1 in steps of 0.3 stopped at
     # 0.9, and one shorter than half a step ran no step at all
-    function evolve(duration, time_step)
+    function evolve(duration, time_step; algo = Tdvp())
         return runTMS(SimData(phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
-                Evolve(; duration, time_step, algo = Tdvp(), evolver = -im * X(1),
+                Evolve(; duration, time_step, algo, evolver = -im * X(1),
                        measures = Data("m") => Z(1))]);
             output = devnull)
     end
@@ -147,6 +147,20 @@ end
     sim = evolve(0.1, 0.3)
     @test sim.time == 0
     @test !haskey(sim.data, "m")
+    # the duration gives the direction: a step of the other sign made no step, while the time
+    # went on to the end of the duration
+    for algo in (Tdvp(), ApproxW(order = 4)), duration in (0.5, -0.5), time_step in (0.1, -0.1)
+        sim = evolve(duration, time_step; algo)
+        @test sim.time ≈ duration
+        @test length(sim.data["m"]["Z(1)"]["times"]) == 5
+        @test expect(sim.state, Z(1)) ≈ cos(2duration) atol = 1e-10
+    end
+    # and the solvers take at least one step, where none advanced the time of a simulation
+    st = State{Pure}(System(2, Qubit()), "Up")
+    for nsweeps in (0, -3)
+        @test_throws "takes at least one step" tdvp(-im * X(1), 0.5, st; nsweeps)
+        @test_throws "takes at least one step" approx_W(-im * X(1), 0.5, st; nsweeps, order = 2)
+    end
 end
 
 @testset "Positions checked before a gate on a mixed state" begin
