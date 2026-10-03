@@ -103,6 +103,18 @@ tensor
 simplify
 ```
 
+## Lindblad and Kraus forms
+
+An evolver and gates written by the user can be read back as the terms a representation of
+one's own needs to unravel them, quantum trajectories for instance, see
+[Representations of one's own](@ref): the hamiltonian and the jump operators of an evolver, and
+the Kraus operators of each channel of a product of gates.
+
+```@docs
+lindblad_terms
+kraus_operators
+```
+
 ## Operator types
 
 These types describe the operators themselves, they are mostly useful when writing functions

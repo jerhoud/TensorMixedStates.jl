@@ -35,6 +35,10 @@ the reference article.
   expectation values the extension computes, and `save_state`, `load_state` and the
   checkpoints save them through its methods of `write_state` and `read_state`. The files of a
   `State` are written as before.
+- `lindblad_terms(evolver)`, the hamiltonian of an evolver and its jump operators, as pairs
+  `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
+  product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
+  quantum trajectories, reads to unravel an evolution or apply gates.
 - `stopped(sim)`, which tells whether the simulation `runTMS` returned stopped before the end
   of its phases, at `max_time`, on the file `stop` or on an interrupt, rather than completed.
 - A function of an even fermionic operator of several sites, as the exponential of a hopping

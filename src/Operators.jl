@@ -6,7 +6,7 @@ export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
 export named, parity
-export dag, ⊗, isfermionic, has_fermionic
+export dag, ⊗, isfermionic, has_fermionic, lindblad_terms
 
 ############# Types ################
 
@@ -941,6 +941,54 @@ show(io::IO, a::Gate) =
     end
 
 isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
+
+"""
+    lindblad_terms(evolver)
+
+the hamiltonian and the jump operators of an evolver written `-im * H + Σ Dissipator(L)(sites)`,
+as `(H, jumps)`: `H` an operator placed on sites, zero when there is none, and `jumps` a vector
+of pairs `L => sites`, `L` a generic operator with its rate taken in, so that
+`Dissipator(L)(sites...)` is the term again: `γ * Dissipator(Sm)(2)` gives
+`sqrt(γ) * Sm => (2,)`. An evolver on pure states is a hamiltonian part alone.
+
+What it reads is what a representation of a state needs to unravel the evolution, quantum
+trajectories for instance, from the evolver of an `Evolve` phase. A term of another form, as
+`Left(X)(1)`, or a dissipator whose rate is negative or complex, which no jump operator gives, is
+refused. The terms of a time dependent evolver are read one by one: a rate multiplied by a
+function ``f(t)`` gives the jump ``\\sqrt{f(t)}\\,L``.
+
+# Examples
+
+    H, jumps = lindblad_terms(-im * sum(Z(i) for i in 1:4) + 0.5 * sum(Dissipator(Sm)(i) for i in 1:4))
+"""
+function lindblad_terms(evolver::IndexedOp)
+    hs = IndexedOp{Pure}[]
+    jumps = Pair{GenericOp{Pure}, Tuple}[]
+    c0 = scalarcoef(evolver)
+    for t in sumsubs(scalararg(evolver))
+        c, a = c0 * scalarcoef(t), scalararg(t)
+        if a isa IndexedOp{Pure}
+            push!(hs, im * c * a)
+        elseif a isa Evolver && isreal(c)
+            push!(hs, im * real(c) * a.arg)
+        elseif a isa AtIndex{Mixed}
+            for u in sumsubs(a.op)
+                r, d = c * scalarcoef(u), scalararg(u)
+                if !(d isa Dissipator)
+                    error("lindblad_terms reads -im * H and dissipators, and $evolver holds $(d)")
+                elseif !isreal(r) || real(r) < 0
+                    error("a dissipator of rate $r has no jump operator: the rate must be real " *
+                          "and not negative")
+                end
+                push!(jumps, sqrt(real(r)) * d.arg => a.index)
+            end
+        else
+            error("lindblad_terms reads -im * H and dissipators, and $evolver holds $(c * a)")
+        end
+    end
+    h = isempty(hs) ? 0 * IdentityOp{Pure, Indexed, 1}() : sum(hs)
+    return (h, jumps)
+end
 
 
 # SetState

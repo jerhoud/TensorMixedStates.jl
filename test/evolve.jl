@@ -481,6 +481,36 @@ end
     @test_throws "cannot apply sums as gates" apply(Evolver(Z(1)), mix(ψ))
 end
 
+@testset "The Lindblad and Kraus forms of evolvers and gates" begin
+    # what a representation of one's own reads to unravel them: put back together, the
+    # hamiltonian and the jumps give the evolver, and the Kraus operators the channels
+    sys = System(3, Qubit())
+    ρ = mix(RandomState{Pure}(sys, 4))
+    ev = -im * (sum(Z(i) for i in 1:3) + X(1)X(2)) + 0.5 * sum(Dissipator(Sm)(i) for i in 1:3) +
+         Dissipator(0.2 * (X ⊗ Y))(1, 3)
+    h, jumps = lindblad_terms(ev)
+    @test length(jumps) == 4
+    @test jumps[1] == (sqrt(0.5) * Sm => (1,))
+    rebuilt = -im * h + sum(Dissipator(l)(s...) for (l, s) in jumps)
+    @test norm(apply(make_mpo(ρ, ev), ρ) - apply(make_mpo(ρ, rebuilt), ρ)) < 1e-12
+    @test lindblad_terms(-im * Z(1)) == (Z(1), [])
+    @test_throws "reads -im * H and dissipators" lindblad_terms(Left(X)(1))
+    @test_throws "rate must be real and not negative" lindblad_terms(-0.5 * Dissipator(Sm)(1))
+    channel(ρ, ks) = sum(apply(k, ρ) for k in ks)
+    # a sum of gates on several sites is not a gate apply takes, and is applied as an MPO
+    for (g, as_mpo) in [((0.9Gate(Id) + 0.1Gate(X))(1) * Gate(H)(2), false),
+                        (SetState("Up")(2) * Gate(X)(1), false),
+                        (SetState([0.3 0. ; 0. 0.7])(3), false),
+                        (0.5 * Gate(X)(1) * Gate(X)(2) + 0.5 * Gate(Z)(1) * Gate(Z)(2), true),
+                        (2.0 * X(1) * H(2), false)]
+        ref = as_mpo ? apply(make_mpo(ρ, g), ρ) : apply(g, ρ)
+        @test norm(foldl(channel, kraus_operators(sys, g); init = ρ) - ref) < 1e-12
+    end
+    @test length.(kraus_operators(sys, (0.9Gate(Id) + 0.1Gate(X))(1) * Gate(H)(2))) == [1, 2]
+    @test_throws "reads gates, sums of them and SetState" kraus_operators(sys, Left(X)(1))
+    @test_throws "weight must be real and not negative" kraus_operators(sys, -0.1 * Gate(X)(1))
+end
+
 @testset "Periods below one mean never" begin
     # one rule for every period of the library: `measures_period`, `n_expand`,
     # `n_hermitianize`, and the `checkpoint_interval` covered in checkpoint.jl.

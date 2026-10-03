@@ -247,9 +247,11 @@ The phases and the measurements reach these states through the methods you give:
   `expect2(state, pairs)` compute what `measure`, and so `output`, asks for: the expectation
   values of the terms of the operators, already simplified, those of one site operators on
   every site, and the correlations of pairs of them;
-- `apply(gates, state; limits)` applies the gates of a `Gates` phase;
+- `apply(gates, state; limits)` applies the gates of a `Gates` phase, whose channels
+  [`kraus_operators`](@ref) gives as their Kraus operators;
 - `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsweeps)` evolves the state
-  in an `Evolve` phase, for each algorithm it supports;
+  in an `Evolve` phase, for each algorithm it supports, the hamiltonian and the jump operators
+  of the evolver being given by [`lindblad_terms`](@ref);
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites, system)` save the state and read
   it back, for `SaveState`, `LoadState` and the checkpoints: the first writes its tensors in the
