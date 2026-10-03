@@ -346,6 +346,14 @@ end
 end
 
 @testset "Declaring a conserved quantity" begin
+    # a power or the adjoint of a charge modulo d is one modulo d, whose eigenvalues all ±1
+    # were read as integers, under which Xd had no flux and Xd ⊗ Xd + h.c. was refused
+    @test Qudit(2, conserve = dag(Zd)).conserve == "dag(Zd)%2:0,1"
+    @test Qudit(4, conserve = Zd^2).conserve == "Zd^2%4:0,2,0,2"
+    @test flux(Xd, Qudit(2, conserve = dag(Zd))) == TensorMixedStates.ITensors.QN("dag(Zd)", 1, 2)
+    s4 = State{Pure}(System(3, Qudit(4, conserve = Zd^2)), "0")
+    @test_ok make_mpo(s4, (Xd ⊗ Xd + dag(Xd ⊗ Xd))(1, 2))
+    @test Boson(3, conserve = N^2).conserve == "N^2:0,1,4"
     # large charges are compared to a relative tolerance: 80 bosons missed theirs by 1.4e-14
     @test_ok Boson(80, conserve = dag(A) * A)
     @test_ok Spin(10, conserve = Sp * Sm - Sm * Sp)

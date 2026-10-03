@@ -497,6 +497,29 @@ site_charges(op::GenericOp{Pure}, ::AbstractSite) =
 
 # the modulus of a ModOp is carried rather than read back, ±1 being unreadable, and the
 # charges are those of its argument taken modulo it
+# a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: Zd^2
+# on Qudit(4) has them all ±1, which the reading of the matrix takes for integers, under which
+# Xd has no flux. An argument that is no charge, or an integer one, leaves it to that reading
+function site_charges(a::Union{IntPowOp{Pure, 1}, GenPowOp{Pure, 1}, DagOp{1}}, site::AbstractSite;
+                      tol::Float64 = charge_tol)
+    p = a isa DagOp ? -1 : a.expo
+    if isreal(p) && isinteger(real(p))
+        mq = try
+            site_charges(a.arg, site; tol)
+        catch e
+            if !(e isa ErrorException)
+                rethrow()
+            end
+            nothing
+        end
+        if !isnothing(mq) && first(mq) ≠ 1
+            m, q = mq
+            return (m, mod.(Int(real(p)) .* q, m))
+        end
+    end
+    return invoke(site_charges, Tuple{SimpleOp, AbstractSite}, a, site; tol)
+end
+
 function site_charges(a::ModOp{1}, site::AbstractSite; tol::Float64 = charge_tol)
     m, q = site_charges(a.arg, site; tol)
     if m ≠ 1

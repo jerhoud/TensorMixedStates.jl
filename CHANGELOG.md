@@ -120,6 +120,9 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- A power or the adjoint of a charge modulo `d`, as `Zd^2` on `Qudit(4)` or `dag(Zd)` on
+  `Qudit(2)`, is a charge modulo `d`. Its eigenvalues, all ±1 there, were read as integers,
+  under which `Xd` had no flux and `Xd ⊗ Xd + h.c.` was refused.
 - An operator to a literal negative power, as `X^-1` or `(Id + 0.5X)^-1`, is the power, where
   it failed on a `MethodError` of `inv`.
 - A conserved quantity whose charges are large, as `dag(A) * A` on `Boson(80)`, is accepted:
