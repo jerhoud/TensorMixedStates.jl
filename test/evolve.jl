@@ -29,6 +29,46 @@
         end
 end
 
+@testset "Dissipative evolve" begin
+    # the tolerances say how accurate each algorithm is on these problems, as above
+    lim = Limits(maxdim = 10, cutoff = 1e-15)
+
+    # a qubit damped towards Up while it precesses, from X+: X(t) = e^{-γt/2} cos 2t,
+    # Y(t) = e^{-γt/2} sin 2t and Z(t) = 1 - e^{-γt}
+    γ = 0.5
+    ev = -im * Z(1) + Dissipator(sqrt(γ) * Sp)(1)
+    ρ = State{Mixed}(System(2, Qubit()), "X+")
+    exact = [exp(-γ / 2) * cos(2), exp(-γ / 2) * sin(2), 1 - exp(-γ)]
+    for (evolve, tol) in [(st -> tdvp(ev, 1.0, st; nsweeps = 10, limits = lim), 1e-12),
+                          (st -> approx_W(ev, 1.0, st; order = 4, w = 2, nsweeps = 10, limits = lim), 1e-12),
+                          (st -> approx_W(ev, 1.0, st; order = 4, w = 1, nsweeps = 10, limits = lim), 2e-6),
+                          (st -> approx_W(ev, 1.0, st; order = 1, w = 1, nsweeps = 100, limits = lim), 0.03)]
+        st = evolve(ρ)
+        @test real(expect(st, [X(1), Y(1), Z(1)])) ≈ exact atol = tol
+        @test trace(st) ≈ 1 atol = 1e-12
+    end
+
+    # two qubits coupled, one dephased and the other damped, against the dense Liouvillian
+    LA = TensorMixedStates.LinearAlgebra
+    x, y, z, i2 = [0. 1. ; 1. 0.], [0. -im ; im 0.], [1. 0. ; 0. -1.], [1. 0. ; 0. 1.]
+    h = kron(x, x) + 0.7 * kron(z, i2)
+    ls = [sqrt(0.3) * kron(z, i2), sqrt(0.2) * kron(i2, [0. 1. ; 0. 0.])]
+    i4 = Matrix{ComplexF64}(LA.I, 4, 4)
+    # vectorized column major: vec(AρB) = (Bᵀ⊗A) vec(ρ)
+    liou = -im * (kron(i4, h) - kron(transpose(h), i4)) +
+           sum(kron(conj(l), l) - 0.5 * (kron(i4, l' * l) + kron(transpose(l' * l), i4)) for l in ls)
+    ψ = kron([1., 1.] / sqrt(2), [1., 0.])
+    r = reshape(exp(liou) * vec(ψ * ψ'), 4, 4)
+    ref = real([LA.tr(r * kron(x, i2)), LA.tr(r * kron(i2, z)), LA.tr(r * kron(y, x))])
+    ev2 = -im * (X(1) * X(2) + 0.7 * Z(1)) + Dissipator(sqrt(0.3) * Z)(1) + Dissipator(sqrt(0.2) * Sp)(2)
+    ρ2 = State{Mixed}(System(2, Qubit()), ["X+", "Up"])
+    for (evolve, tol) in [(st -> tdvp(ev2, 1.0, st; nsweeps = 20, limits = lim), 1e-11),
+                          (st -> approx_W(ev2, 1.0, st; order = 4, w = 2, nsweeps = 20, limits = lim), 1e-7),
+                          (st -> approx_W(ev2, 1.0, st; order = 4, w = 1, nsweeps = 20, limits = lim), 1e-7)]
+        @test real(expect(evolve(ρ2), [X(1), Z(2), Y(1) * X(2)])) ≈ ref atol = tol
+    end
+end
+
 @testset "Multi evolve" begin
     for (algo, time_step, tol) in [
         (Tdvp(), 0.1, 1e-14),
