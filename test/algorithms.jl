@@ -25,6 +25,16 @@
     end
 end
 
+@testset "A failed Check fails test_phases" begin
+    # what every test_phases of a check relies on: a Check that fails stops the run with its
+    # error, rather than being logged. The tolerance bounds the norm of the difference
+    @test_throws "failed with values" redirect_stdout(devnull) do
+        test_phases([CreateState{Pure}(2, Qubit(), "Up"),
+                     Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(), evolver = -im * Z(1),
+                            final_measures = check(Z(1), -1))])
+    end
+end
+
 @testset "Complete graphs" begin
     @test_ok test_phases(create_graph_state(complete_graph(4);
         final_measures = check([X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y)],
