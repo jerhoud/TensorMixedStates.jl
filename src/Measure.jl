@@ -68,8 +68,6 @@ two different sets keep two different names.
     compact_positions(1:20)        # "1:20"
     compact_positions([1,2,3,7,8]) # "1:3,7,8"
 """
-compact_positions(p::Int) = string(p)
-
 function compact_positions(p)
     v = sort(unique(collect(p)))
     if isempty(v)
