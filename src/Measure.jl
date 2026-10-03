@@ -826,6 +826,14 @@ function get_val(o::Check, v::Dict, st::AbstractState, t::Number; kwargs...)
     # time, real unless declared otherwise, for instance
     v1 = part_value(o.obs1, v, st, t; kwargs...)
     v2 = part_value(o.obs2, v, st, t; kwargs...)
+    # a symbol not given here has an empty value, which nothing compares to: the check is as
+    # empty, unless it was asked to pass, which it cannot do that way
+    if isempty(v1) || isempty(v2)
+        if !isnothing(o.tol)
+            error("Check $(o.name) has nothing to compare, a symbol it measures not being given here")
+        end
+        return o.name => Any[v1, v2, []]
+    end
     d = norm(v1 - v2)
     if !isnothing(o.tol) && d > o.tol
         error("Check $(o.name) failed with values $v1, $v2 and difference $d")

@@ -82,7 +82,10 @@ measures = "sweeps.dat" => :sweep
 `GroundState` and `SteadyState`, where it is the value dmrg minimises, zero at the steady
 state. Asking for a symbol that the running algorithm does not provide is not an error: the
 measurement produces an empty value, so `:energy` in an `Evolve` phase writes its name and
-the time with no value in a file, and empty values in a json file or a `Data` object.
+the time with no value in a file, and empty values in a json file or a `Data` object. The
+symbols are given to the `measures` of a phase, not to its `final_measures`, which are taken
+once it is over: the energy a `GroundState` ends with is measured as the last line of its
+`measures`, or as the expectation value of its hamiltonian.
 
 Checks can be performed (useful for coherence tests)
 
@@ -94,7 +97,8 @@ measure(mystate, Check("cos", X(1), t -> cos(2t)), 0.3) # against a function of 
 
 The two measurements compared may be operators, state functions, constants, vectors or
 functions of time, like `t -> cos(2t)`, in which case the simulation time must be given to
-`measure` as its third argument.
+`measure` as its third argument. They may be symbols as well: a check on a symbol that is not
+given has empty values, and is an error when it has a tolerance, having nothing to pass.
 
 ## Real, imaginary and complex values
 

@@ -417,6 +417,15 @@ end
     @test abs(trace(partial_trace(stm - stm, [1]))) < 1e-12
 end
 
+@testset "A check on a symbol not given" begin
+    # an empty value, which a symbol not given has, was subtracted from the other: the check
+    # failed on a MethodError, and with it a whole simulation measuring it at its end
+    st = State{Pure}(System(2, Qubit()), "Up")
+    @test last(only(measure(st, Check("e", :energy, -1.0)))) == Any[[], -1.0, []]
+    @test last(only(measure(st, Check("e", :energy, -1.0); energy = -1.0))) == Any[-1.0, -1.0, 0.0]
+    @test_throws "Check e has nothing to compare" measure(st, Check("e", :energy, -1.0, 1e-8))
+end
+
 @testset "Measuring a multiple of the identity" begin
     # a one site operator simplified to c Id went to the tensor of an identity placed on no
     # site, which has none: expect1, expect2 and measure failed on it, Id alone measured right
