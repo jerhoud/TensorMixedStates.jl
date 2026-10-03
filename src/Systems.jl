@@ -62,12 +62,15 @@ end
 System(size::Int, a::AbstractSite) = System(fill(a, size))
 
 """
+    strong_names(sites)
     strong_names(::System)
 
-the names of the quantities the sites of the system conserve strongly, see `strong`
+the names of the quantities the sites, or the sites of the system, conserve strongly, see
+`strong`
 """
-strong_names(system::System) =
-    unique(reduce(vcat, map(strong_names, system.sites); init = String[]))
+strong_names(sites::AbstractVector{<:AbstractSite}) =
+    unique(reduce(vcat, map(strong_names, sites); init = String[]))
+strong_names(system::System) = strong_names(system.sites)
 
 symmetries(system::System) =
     Conserved(unique(reduce(vcat, [ symmetries(s).names for s in system.sites ];

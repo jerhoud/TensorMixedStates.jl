@@ -191,7 +191,7 @@ one of them conserves something, a site conserving nothing then taking a trivial
 does in a system
 """
 function site_indices(sites)
-    charged = any(s -> !isempty(conserved(s)), sites)
+    charged = is_charged(sites)
     return [ site_index(s, charged) for s in sites ]
 end
 
@@ -591,7 +591,7 @@ function legs(a::GenericOp{Mixed}, sites, js, bs)
     end
     # the weak pairing, whose bra carries the charges of the ket, tells a jump that only the
     # strong symmetry forbids, one moving the charge, from one no conservation allows
-    st = unique(reduce(vcat, [ strong_names(s) for s in sites ]))
+    st = strong_names(sites)
     if !isempty(st) && !isnothing(lay(m, mixed_sides(js, [ sim(j) for j in js ])...))
         error("$a changes $(join(st, ", ")) between its two sides, which conserving it " *
               "strongly forbids: drop `strong` to allow a jump that moves the charge")
