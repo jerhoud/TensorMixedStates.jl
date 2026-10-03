@@ -108,6 +108,14 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- `partial_trace`, and so the `PartialTrace` phase, keeps the fermionic signs: a fermion traced
+  out is moved past the fermions kept on its right. It took the trace of the spins, on which a
+  correlation of odd operators crossing a fermion traced out had the wrong sign or value, and
+  so did a single odd operator on a state of no definite parity. `renyi2`,
+  `mutual_info_renyi2`, `SubRenyi2` and `MutualInfoRenyi2`, which go through it, were wrong too
+  when fermionic sites were traced out on both sides of a fermionic site kept, a state of
+  definite parity included. The bond dimension of the result may double when a fermionic site
+  traced out has fermionic sites kept on its right.
 
 ## [1.6.0] - 2026-09-30
 
