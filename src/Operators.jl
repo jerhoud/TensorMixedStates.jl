@@ -693,11 +693,7 @@ end
     AtIndex(op, index)
 
 show(io::IO, ind::AtIndex) =
-    if ind.op isa Operator
-        show_func(io, ind.op.name, collect(ind.index))
-    else
-        show_func(io, repr(ind.op; context=:precedence=>500), collect(ind.index))
-    end
+    show_func(io, repr(ind.op; context=:precedence=>500), collect(ind.index))
 
 isless(a::AtIndex, b::AtIndex) =
     isless((a.index, a.op), (b.index, b.op))
