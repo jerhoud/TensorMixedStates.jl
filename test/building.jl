@@ -461,3 +461,23 @@ end
     @test shifted(z) ≈ reference
 end
 
+@testset "A pure state dropping part of what it conserves" begin
+    # a site left conserving nothing is cut into a single block on a system still charged,
+    # where the relabelled index keeps one block per basis state: weaken refused to put the
+    # one on the other, and so did the Fidelity of a pure reference on a weakened state
+    sys = System([Qubit(conserve = N), Boson(3, conserve = named(N, "Nb")),
+                  Boson(3, conserve = named(N, "Nb")), Qubit(conserve = N)])
+    p(v) = State{Pure}(sys, v)
+    ψ = normalize(p(["1", "2", "0", "0"]) + 0.5 * p(["0", "1", "1", "1"]) -
+                  0.7im * p(["1", "0", "2", "0"]))
+    numbers(s) = [ real(expect(s, N(k))) for k in 1:4 ]
+    for target in (N, named(N, "Nb"))
+        w = weaken(ψ, target)
+        @test symmetries(w.system) == symmetries(weaken(sys, target))
+        @test numbers(w) ≈ numbers(ψ)
+        ρw = weaken(mix(ψ), target)
+        @test fidelity(ρw, State(ρw.system, w)) ≈ 1
+        @test last(only(measure(ρw, Fidelity(ψ)))) ≈ 1
+    end
+end
+

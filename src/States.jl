@@ -402,14 +402,19 @@ function weaken(state::State{R}, target::Conserved) where R
     collapse, drop = transitions(source, target)
     relab = relabeller(i -> weak_index(i, collapse, drop))
     if R === Pure
-        # the pure index keeps one block per basis state, in the order of the basis, so its
-        # flat order survives both the relabelling and the densifying and the tensors only
-        # have to be put on the indices of the new system. One relabeller for all the
-        # tensors, or the two ends of a link would each get a new index of their own and the
-        # state would come apart
-        st = is_charged(weak) ? MPS([ relabel(t, relab) for t in state.state ]) :
-                                dense(state.state)
-        return State{Pure}(weak, replace_siteinds(st, SysIndex{Pure}(weak, 1:n)))
+        if !is_charged(weak)
+            return State{Pure}(weak, replace_siteinds(dense(state.state), SysIndex{Pure}(weak, 1:n)))
+        end
+        # the pure index keeps its flat order, that of the basis, through the relabelling, and
+        # the tensors only have to be put on the indices of the new system, unless a site that
+        # conserves nothing left is cut into a single block there, where the relabelling keeps
+        # one block per basis state. One relabeller for all the tensors, or the two ends of a
+        # link would each get a new index of their own and the state would come apart
+        return State{Pure}(weak, MPS(map(1:n) do i
+            t = relabel(state.state[i], relab)
+            old, new = relab(SysIndex{Pure}(system, i)), SysIndex{Pure}(weak, i)
+            return space(old) == space(new) ? replaceind(t, old, new) : t * pure_map(old, new)
+        end))
     end
     if !is_charged(weak)
         # an ITensor holds either charged indices or plain ones, so the last rung densifies

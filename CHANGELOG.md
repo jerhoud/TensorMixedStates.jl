@@ -113,6 +113,10 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- `weaken` of a pure state, the `Weaken` phase on one, and `Fidelity` or `Overlap` of a pure
+  reference on a weakened state work when a site is left conserving nothing on a system still
+  conserving something. They failed with an error of ITensors, the indices of that site being
+  cut into other blocks on the two systems.
 - A resumed simulation puts the state of its checkpoint back on the system of its last
   `CreateState`, as the uninterrupted run has it, when their sites are the same. It came back
   on a system of its own, so that a measurement comparing with a state built on that system,

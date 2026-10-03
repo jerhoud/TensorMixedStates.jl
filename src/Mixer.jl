@@ -99,6 +99,15 @@ weak_map(strong::System, weak::System, i::Int, relab) =
     element_map(weak, strong, i, t -> relabel(t, relab))
 
 """
+    pure_map(old, new)
+
+the tensor carrying the pure index `old` of a site onto `new`, basis state by basis state: the
+pure counterpart of `weak_map`, for two indices holding the basis in the same order and the
+same charges but cut into other blocks
+"""
+pure_map(old::Index, new::Index) = sum(onehot(new => m) * dag(onehot(old => m)) for m in 1:dim(old))
+
+"""
     adj_map(system, i, relab)
 
 the tensor sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on site `i`, from
