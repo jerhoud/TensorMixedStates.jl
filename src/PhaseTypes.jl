@@ -84,7 +84,7 @@ end
     LoadState(; file, statename = "state", limits, name, time_start, final_measures)
 
 a phase that loads the state from an HDF5 file written by `SaveState` or `save_state`, see
-`load_state`, and truncates it to `limits`.
+`load_state`, and truncates it to `limits`, unless they are the default `Limits()`.
 
 # Fields
 

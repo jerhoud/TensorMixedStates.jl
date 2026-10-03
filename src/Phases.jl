@@ -305,8 +305,11 @@ function run_phase(sim::Simulation, phase::SaveState)
     return sim
 end
 
-run_phase(sim::Simulation, phase::LoadState) =
-    Simulation(sim, truncate(load_state(phase.file, phase.statename); phase.limits))
+function run_phase(sim::Simulation, phase::LoadState)
+    st = load_state(phase.file, phase.statename)
+    # Limits() truncates nothing, which a representation of one's own need not support
+    return Simulation(sim, phase.limits == Limits() ? st : truncate(st; phase.limits))
+end
 
 function run_phase(sim::Simulation, phase::PartialTrace)
     pos = phase.trace_positions

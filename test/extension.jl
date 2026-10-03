@@ -181,6 +181,13 @@ end
             @test resumed.state isa WrappedState
             @test last(resumed.data["m"]["Z"]["data"]) ≈ [-1, 0, 1]
         end
+        # LoadState truncates only when it is given limits, and WrappedState has no truncate
+        loaded = runTMS(SimData(phases = [LoadState(file = file, statename = "w")]);
+                        output = devnull)
+        @test loaded.state isa WrappedState
+        @test_throws MethodError runTMS(SimData(phases = [
+                LoadState(file = file, statename = "w", limits = Limits(maxdim = 2))]);
+            output = devnull)
     end
 end
 

@@ -99,6 +99,9 @@ the reference article.
 - The log of a resumed simulation is continued without being cut back to the checkpoint, and
   keeps the history of every run: the line saying why a run stopped was lost on its resume.
   The steps done again from the checkpoint now appear twice in it.
+- `LoadState` truncates the state it loads only when it is given limits, so that a
+  representation of one's own needs no `truncate` to be loaded: the default `Limits()`
+  truncates nothing.
 
 ### Removed
 

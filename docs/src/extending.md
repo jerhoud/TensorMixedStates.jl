@@ -268,4 +268,5 @@ The phases and the measurements reach these states through the methods you give:
 The other phases go through `truncate`, `mix`, `partial_trace`, `weaken`, `dmrg` and
 `steady_state`, and the state functions of the measurements through `trace`, `norm`,
 `entanglement_entropy` and the like. A state gets what its type has a method for, and a phase or
-a measurement it does not support raises a `MethodError`.
+a measurement it does not support raises a `MethodError`. `LoadState` goes through `truncate`
+only when it is given limits.
