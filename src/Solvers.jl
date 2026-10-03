@@ -79,8 +79,8 @@ state. A simulation comes back with its time advanced by `t`.
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
   at the middle of each step
-- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion every
-  `n_expand` steps (default 0, never)
+- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion before the
+  first step and then every `n_expand` steps (default 0, never)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
@@ -115,15 +115,18 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
         lim = sweep_limits(limits, sweep)
+        # before the step rather than after it, on the schedule shifted by one: the first
+        # step from a product state, of bond dimension one, left the tangent space and kept
+        # an error of order dt, the expansion after it coming too late
+        if sweep_due(n_expand, sweep - 1)
+            st = expand(st, mpo; alg="global_krylov")
+        end
         st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, updater_kwargs)
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end
-        if sweep_due(n_expand, sweep)
-            st = expand(st, mpo; alg="global_krylov")
-        end
-        # once the whole sweep is done, the expansion included: the sweep is committed right
-        # after its measurements, and a checkpoint cannot fall between them
+        # once the whole sweep is done: the sweep is committed right after its measurements,
+        # and a checkpoint cannot fall between them
         if sweep_done!(observer!; sweep, state = st, current_time, mpo)
             break
         end

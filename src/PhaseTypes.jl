@@ -145,8 +145,8 @@ abstract type Algo end
 
 the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
 
-- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion every
-  `n_expand` steps (default 0, never)
+- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion before the
+  first step and then every `n_expand` steps (default 0, never)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`

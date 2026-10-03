@@ -113,6 +113,11 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- `tdvp` and `Tdvp` with `n_expand` enlarge the bond dimension before the first step and then
+  every `n_expand` steps, rather than after them. The first step from a product state, of bond
+  dimension one, left the tangent space and kept an error of the order of the time step: 0.016
+  on a ring of 6 qubits, where it is now 1e-9. The results of a simulation using `n_expand`
+  change accordingly.
 - The documentation of `write_state` and `read_state` says how the state of an extension whose
   type has parameters is saved, the file recording the type without them: its parameters are
   written by `write_state`, and read back by a method of `read_state` for the type without
