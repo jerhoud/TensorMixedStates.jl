@@ -187,11 +187,8 @@ every `phase.measures_period` steps.
 """
 function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
                 nsweeps)
-    # PreMPO adapts the evolver to the representation of the state, and handles the vector
-    # form of a time dependent evolver
-    pre = PreMPO(state, evolver)
     done, _ = resume_step(sim)
-    st = tdvp(pre, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
+    st = tdvp(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
               time_start = sim.time, phase.limits, first_sweep = done + 1, algo.n_expand,
               algo.krylov, observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
     return Simulation(sim, st)
@@ -199,9 +196,8 @@ end
 
 function evolve(algo::ApproxW, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
                 nsweeps)
-    pre = PreMPO(state, evolver)
     done, _ = resume_step(sim)
-    st = approx_W(pre, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
+    st = approx_W(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps,
                   time_start = sim.time, phase.limits, first_sweep = done + 1, algo.order,
                   algo.w, algo.apply_algo,
                   observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
