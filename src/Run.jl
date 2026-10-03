@@ -244,7 +244,10 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     Date $(now())
                     """ * threading_stamp(sim_data.threading))
             src_path = Base.source_path()
-            if !isnothing(src_path) && src_path ≠ ""
+            # the copy run again is the program already there, which cp refused to copy onto
+            # itself
+            if !isnothing(src_path) && src_path ≠ "" &&
+               !(isfile("prog.jl") && samefile(src_path, "prog.jl"))
                 cp(src_path, "prog.jl"; force = true)
             end
         end

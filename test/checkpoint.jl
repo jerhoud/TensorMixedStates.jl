@@ -649,6 +649,24 @@ end
     end
 end
 
+@testset "The copy of the program runs again" begin
+    # run again from the directory of the simulation, prog.jl was copied onto itself, which cp
+    # refused, and the run failed
+    mktempdir() do dir
+        cd(dir) do
+            write("prog.jl", """
+                using TensorMixedStates, .Qubits
+                runTMS(SimData(name = "sim", phases = [CreateState{Pure}(2, Qubit(), "Up")]))
+                """)
+            include(joinpath(dir, "prog.jl"))
+            @test isfile("sim/prog.jl")
+            include(joinpath(dir, "sim", "prog.jl"))
+            @test !isfile("sim/error")
+            @test read("sim/prog.jl", String) == read("prog.jl", String)
+        end
+    end
+end
+
 @testset "A restart does not remove the current directory" begin
     # with ".", an ancestor or the absolute path of the current directory, rm emptied it, the
     # program included, before failing on the directory itself

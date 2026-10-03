@@ -113,6 +113,8 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- The copy `prog.jl` of the program that `runTMS` leaves in the directory of a simulation can
+  be run again. `runTMS` copied it onto itself, which failed.
 - `ApproxW` refuses an `order`, a `w` or an `apply_algo` it does not offer, `SteadyState` an
   `mpo_algo`, and `Evolve` a time step of zero, when the phase is written. They were refused
   when the phase ran, or failed then, and the phase corrected could not resume the checkpoint,
