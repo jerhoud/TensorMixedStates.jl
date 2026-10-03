@@ -315,6 +315,8 @@ end
     # the MPO of `(L+)L`, whose flux is zero whenever that of `L` is. Both must land where
     # the dense computation does
     e = first(dmrg(h, start(Fermion()); nsweeps = 3, limits = lim))
+    # the two modes of negative energy filled, -2cos(π/5) - 2cos(2π/5)
+    @test e ≈ -sqrt(5)
     z = real(first(steady_state(lind, mix(start(Fermion())); nsweeps = 2, limits = lim)))
     for site in (Fermion(conserve = N), Fermion(conserve = strong(N)))
         @test first(dmrg(h, start(site); nsweeps = 3, limits = lim)) ≈ e

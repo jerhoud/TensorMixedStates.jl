@@ -853,8 +853,14 @@ end
     @test variance(make_mpo(r, h), r) ≈ variance(h, r)
 
     # what it is for: a converged ground state has a variance the energy alone cannot show
-    _, gs = dmrg(h, RandomState{Pure}(sys, 16); nsweeps = 12,
+    e, gs = dmrg(h, RandomState{Pure}(sys, 16); nsweeps = 12,
                  limits = Limits(cutoff = 1e-14, maxdim = 32))
+    # and its energy is the lowest eigenvalue of the dense hamiltonian
+    LA = TensorMixedStates.LinearAlgebra
+    on(m, i) = kron([ k == i ? m : [1. 0. ; 0. 1.] for k in 1:6 ]...)
+    dense = -sum(on([1. 0. ; 0. -1.], i) * on([1. 0. ; 0. -1.], i + 1) for i in 1:5) -
+            sum(on([0. 1. ; 1. 0.], i) for i in 1:6)
+    @test e ≈ minimum(LA.eigvals(LA.Symmetric(dense))) atol = 1e-10
     @test variance(h, gs) < 1e-8
     @test variance(h, gs) < variance(h, r)
 
