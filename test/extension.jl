@@ -100,8 +100,7 @@ TensorMixedStates.run_phase(sim::Simulation, phase::CreateState{Wrapped}) =
 TensorMixedStates.apply(op::IndexedOp, st::WrappedState; kwargs...) =
     WrappedState(apply(op, st.inner; kwargs...))
 
-TensorMixedStates.expect_norm(st::WrappedState, terms::Vector) =
-    TensorMixedStates.expect_norm(st.inner, terms)
+TensorMixedStates.expect(st::WrappedState, op::IndexedOp) = expect(st.inner, op)
 TensorMixedStates.expect1(st::WrappedState, ops) = expect1(st.inner, ops)
 TensorMixedStates.expect2(st::WrappedState, pairs) = expect2(st.inner, pairs)
 
@@ -183,6 +182,40 @@ end
             @test last(resumed.data["m"]["Z"]["data"]) ≈ [-1, 0, 1]
         end
     end
+end
+
+# A representation on another system: a pure state whose physical sites are the odd sites of a
+# doubled system, each followed by an ancilla left empty, as a purification interleaves them.
+# It receives the operators as written and places them on its system with map_sites.
+struct InterleavedState <: AbstractState
+    system::System
+    inner::State{Pure}
+end
+
+interleaved(i) = 2i - 1
+
+TensorMixedStates.apply(op::IndexedOp, st::InterleavedState; kwargs...) =
+    InterleavedState(st.system, apply(map_sites(interleaved, op), st.inner; kwargs...))
+
+TensorMixedStates.expect(st::InterleavedState, op::IndexedOp) =
+    expect(st.inner, map_sites(interleaved, op))
+
+@testset "A representation on another system" begin
+    sys = System(3, Fermion())
+    hop(θ) = exp(-im * θ * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
+    # the second hop goes past site 2, occupied or not, which the strings must account for
+    gates = hop(0.4)(1, 3) * hop(0.7)(2, 3)
+    st = apply(gates, State{Pure}(sys, ["Occ", "Occ", "Emp"]))
+    wide = InterleavedState(sys, State{Pure}(System(6, Fermion()),
+                                            ["Occ", "Emp", "Occ", "Emp", "Emp", "Emp"]))
+    wide = apply(gates, wide)
+    ops = [dag(C)(3) * C(1), C(1) * dag(C)(3), N(1) * N(3) + 0.5 * dag(C)(2) * C(3), 2.]
+    @test last.(measure(wide, ops)) ≈ last.(measure(st, ops))
+    @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
+    # a tuple of operators gives a tuple of values, on a State as on a state of one's own
+    pair = (N(2), C(1) * dag(C)(3))
+    @test expect(st, pair) isa Tuple
+    @test collect(expect(wide, pair)) ≈ collect(expect(st, pair))
 end
 
 # An algorithm of one's own: tdvp one step at a time, `run_steps` doing the bookkeeping. It

@@ -90,16 +90,18 @@ end
 
 """
     struct ObsOp
-    ObsOp(name, obs)
+    ObsOp(name, op, obs)
 
-an operator measurement for `measure`, `obs` being the terms of the operator, simplified and
-compacted.
+an operator measurement for `measure`: `op` is the operator as written, which a state of a
+representation of one's own measures with `expect`, and `obs` its terms, simplified and
+compacted, which a `State` measures with `expect_norm`.
 """
 struct ObsOp
     name::String
+    op::IndexedOp{Pure}
     obs::Vector{IndexedOp{Pure}}
 end
-ObsOp(name::String, o::IndexedOp{Pure}) = ObsOp(name, sumsubs(o))
+ObsOp(name::String, op::IndexedOp{Pure}, s::IndexedOp{Pure}) = ObsOp(name, op, sumsubs(s))
 
 """
     struct ObsExp1
@@ -288,7 +290,7 @@ the `ObsOp` measuring the operator `o`, given simplified as `s`, its terms of se
 compacted so that a long sum of them is measured channel by channel, see `compact`
 """
 obs_op(o::IndexedOp{Pure}, s::IndexedOp{Pure}) =
-    ObsOp(obs_name(o), compact_simplified(removeMulti(s), rounding_tol, "expect"))
+    ObsOp(obs_name(o), o, compact_simplified(removeMulti(s), rounding_tol, "expect"))
 
 """
     make_leaf(o)
@@ -439,17 +441,29 @@ leaves(T, o::Check) = [ leaves(T, o.obs1); leaves(T, o.obs2) ]
 leaves(T, o) = o isa T ? T[o] : T[]
 
 """
-    get_prods(o)
+    get_prods(state, o)
     get_exp1(o)
     get_exp2(o)
 
-the terms of every operator measurement in `o`, the operators of every `ObsExp1` and the pairs
-of every `ObsExp2`, for `measure` to compute each kind all at once, with `expect_norm`,
-`expect1` and `expect2`.
+what the measurements of `o` ask for, for `measure` to compute each kind all at once: of
+every operator measurement, the terms on a `State` and the operator as written on a state of
+another representation, see `prod_values`, the operators of every `ObsExp1`, computed with
+`expect1`, and the pairs of every `ObsExp2`, computed with `expect2`.
 """
-get_prods(o) = reduce(vcat, [ l.obs for l in leaves(ObsOp, o) ]; init = IndexedOp{Pure}[])
+get_prods(::State, o) = reduce(vcat, [ l.obs for l in leaves(ObsOp, o) ]; init = IndexedOp{Pure}[])
+get_prods(::AbstractState, o) = IndexedOp{Pure}[ l.op for l in leaves(ObsOp, o) ]
 get_exp1(o) = SimpleOp[ l.obs for l in leaves(ObsExp1, o) ]
 get_exp2(o) = Tuple{SimpleOp, SimpleOp}[ l.obs for l in leaves(ObsExp2, o) ]
+
+"""
+    prod_values(state, prods)
+
+the values of what `get_prods` gives: on a `State`, terms that `make_obs` simplified once and
+for all, which `expect_norm` takes as they are, and on a state of another representation,
+operators as written, which the `expect` of that representation measures.
+"""
+prod_values(state::State, terms) = expect_norm(state, terms)
+prod_values(state::AbstractState, ops) = expect(state, ops)
 
 """
     Trace
@@ -773,8 +787,10 @@ function get_val(o::Declared, v::Dict, st::AbstractState, t::Number; kwargs...)
 end
 get_val(o::Union{ObsExp1, ObsExp2}, v::Dict, ::AbstractState, ::Number; kwargs...) =
     o.name => v[o.obs]
-get_val(o::ObsOp, v::Dict, ::AbstractState, ::Number; kwargs...) =
+get_val(o::ObsOp, v::Dict, ::State, ::Number; kwargs...) =
     o.name => sum(v[p] for p in o.obs)
+get_val(o::ObsOp, v::Dict, ::AbstractState, ::Number; kwargs...) =
+    o.name => v[o.op]
 get_val(o::TimeFunc, ::Dict, ::AbstractState, t::Number; kwargs...) =
     if o.obs isa Function
         o.name => o.obs(t)
@@ -877,9 +893,7 @@ measure(state::AbstractState, m::Measure, t::Number = 0.; kwargs...) =
 
 function measure(state::AbstractState, m::Vector{Measure}, t::Number = 0.; kwargs...)
     vals = Dict()
-    # the terms are computed with expect_norm: make_obs simplified them once, there is nothing
-    # left for expect to normalise
-    for (items, compute) in ((get_prods(m), expect_norm), (get_exp1(m), expect1),
+    for (items, compute) in ((get_prods(state, m), prod_values), (get_exp1(m), expect1),
                              (get_exp2(m), expect2))
         u = unique(items)
         if !isempty(u)

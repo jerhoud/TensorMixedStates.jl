@@ -243,10 +243,15 @@ The phases and the measurements reach these states through the methods you give:
 
 - `TensorMixedStates.run_phase(sim, phase::CreateState{MyRepresentation})` creates the state
   from the fields of the phase;
-- `TensorMixedStates.expect_norm(state, terms)`, `expect1(state, ops)` and
-  `expect2(state, pairs)` compute what `measure`, and so `output`, asks for: the expectation
-  values of the terms of the operators, already simplified, those of one site operators on
-  every site, and the correlations of pairs of them;
+- `expect(state, op::IndexedOp)`, `expect1(state, ops)` and `expect2(state, pairs)` compute
+  what `measure`, and so `output`, asks for: the expectation value of an operator placed on
+  sites, normalised by the trace, those of one site operators on every site, and the
+  correlations of pairs of them. The operator is given as the user wrote it, on the physical
+  sites, its factors in any order and without the Jordan-Wigner strings of fermionic
+  operators, which [`map_sites`](@ref) places on another system. `measure` gives all the
+  operators it measures at once to `expect(state, ops)`, which calls the method of one
+  operator on each, unless you give one for `ops::Vector{<:IndexedOp}` that computes them
+  together;
 - `apply(gates, state; limits)` applies the gates of a `Gates` phase, whose channels
   [`kraus_operators`](@ref) gives as their Kraus operators;
 - `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsweeps)` evolves the state

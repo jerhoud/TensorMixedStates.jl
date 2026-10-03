@@ -717,19 +717,27 @@ strings of fermionic operators are inserted for you. An operator not placed on s
 rather than `X(1)`, is refused, `expect1` measuring it on every site, and so is a
 superoperator.
 
+A representation of one's own measures operators through `expect`, see
+[Representations of one's own](@ref).
+
 # Examples
 
     expect(state, X(1)*Y(2) + Y(1)*Z(3))
     expect(state, [X(1)*Y(2), X(3), Z(1)*X(2)])
     expect(state, C(3)*dag(C)(1))
 """
-function expect(state::State, op)
+function expect(state::State, op::Op)
     # on the operator as it was written, as make_mpo and apply do: simplify places an identity
     # on the first site whatever site it was given, and its Jordan-Wigner strings would be
     # named in the message rather than what the caller wrote
     check_indices(state.system, op)
     return expect_norm(state, simplify(op))
 end
+
+expect(state::AbstractState, ops::Union{AbstractArray, Tuple}) =
+    map(ops) do o
+        expect(state, o)
+    end
 
 expect_norm(state::State, p::IndexedOp{Pure}) =
     expect_norm(state, scalarcoef(p), scalararg(p))

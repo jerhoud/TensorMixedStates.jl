@@ -789,3 +789,14 @@ end
     @test TensorMixedStates.obs_name(X(1) + 2p) == "X(1)+2Z(1)*Z(2)*Z(3)*...*Z(9)*Z(10)"
 end
 
+
+@testset "map_sites moves the factors of an operator" begin
+    twice(i) = 2i
+    @test map_sites(twice, X(1) * Y(2)) ≈ X(2) * Y(4)
+    @test map_sites(twice, 0.5 * Swap(1, 3) + Z(2) - 3 * Id(1)) ≈ 0.5 * Swap(2, 6) + Z(4) - 3 * Id(1)
+    # the factors keep their order, and so the sign of a product of fermionic operators
+    @test map_sites(twice, C(3) * dag(C)(1)) ≈ C(6) * dag(C)(2)
+    @test !(map_sites(twice, C(3) * dag(C)(1)) ≈ dag(C)(2) * C(6))
+    @test map_sites(twice, Gate(X)(1) - im * Z(2)) ≈ Gate(X)(2) - im * Z(4)
+    @test_throws "repeats a site" map_sites(i -> 1, Swap(1, 2))
+end

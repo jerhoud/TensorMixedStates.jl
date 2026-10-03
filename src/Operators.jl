@@ -6,7 +6,7 @@ export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
 export named, parity
-export dag, ⊗, isfermionic, has_fermionic, lindblad_terms
+export dag, ⊗, isfermionic, has_fermionic, lindblad_terms, map_sites
 
 ############# Types ################
 
@@ -799,6 +799,23 @@ isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 
 (a::IndexedOp{Mixed} + b::IndexedOp{Pure}) = a + Evolver(b)
 (a::IndexedOp{Pure} + b::IndexedOp{Mixed}) = Evolver(a) + b
+
+"""
+    map_sites(f, op)
+
+the operator placed on sites `op` with each of its factors moved from its sites to their
+images by `f`, a function from a site to a site: `map_sites(i -> 2i - 1, X(1) * Y(2))` is
+`X(1) * Y(3)`. The factors keep their order, and so does the product of fermionic operators
+they make. A representation of one's own whose tensors lie on another system, a purification
+interleaving an ancilla with each site for instance, places with it on that system the
+operators it is given.
+"""
+map_sites(f, a::AtIndex) = AtIndex(a.op, map(f, a.index))
+map_sites(f, a::SumOp) = SumOp(map(x -> map_sites(f, x), a.subs))
+map_sites(f, a::ProdOp) = ProdOp(map(x -> map_sites(f, x), a.subs))
+map_sites(f, a::ScalarOp) = a.coef * map_sites(f, a.arg)
+map_sites(f, a::Evolver) = Evolver(map_sites(f, a.arg))
+map_sites(_, a::IdentityOp) = a
 
 # Left
 

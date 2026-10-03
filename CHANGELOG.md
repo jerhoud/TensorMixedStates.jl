@@ -32,13 +32,16 @@ the reference article.
 - `AbstractState` and `Representation`, for a representation of a state that an extension
   defines. `CreateState` takes it as its `type`, through the method of `run_phase` the
   extension gives for it. A `Simulation` holds its states, `output` measures them through the
-  expectation values the extension computes, and `save_state`, `load_state` and the
-  checkpoints save them through its methods of `write_state` and `read_state`. The files of a
-  `State` are written as before.
+  method of `expect` the extension gives, which receives each operator as written, and
+  `save_state`, `load_state` and the checkpoints save them through its methods of
+  `write_state` and `read_state`. The files of a `State` are written as before.
 - `lindblad_terms(evolver)`, the hamiltonian of an evolver and its jump operators, as pairs
   `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
   product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
   quantum trajectories, reads to unravel an evolution or apply gates.
+- `map_sites(f, op)`, the operator `op` with each factor moved to the images of its sites by
+  `f`, for a representation of one's own that keeps its tensors on another system, a
+  purification for instance.
 - `stopped(sim)`, which tells whether the simulation `runTMS` returned stopped before the end
   of its phases, at `max_time`, on the file `stop` or on an interrupt, rather than completed.
 - A function of an even fermionic operator of several sites, as the exponential of a hopping
