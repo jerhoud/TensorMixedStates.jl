@@ -125,6 +125,24 @@ end
     end
 end
 
+@testset "A factor holding the identity" begin
+    # a merge of two factors of one site may hold the identity, (Id + Z)(1) * Z(2) standing for
+    # Z(2) + Z(1) * Z(2): compact, which lays a term of several sites on the sites it acts on,
+    # failed on it with an internal error, and ≈ kept the identity in the product
+    st = RandomState{Pure}(System(3, Qubit()), 4)
+    a = ((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)
+    b = Z(2) + Z(1) * Z(2)
+    @test laid(st, a) ≈ exact(st, b)
+    @test compact(a) ≈ b
+    @test a ≈ b
+    ρ = mix(st)
+    sq = Left((Id + Z)^0.5)(1)
+    @test laid(ρ, sq * sq * Left(Z)(2)) ≈ exact(ρ, Left(Z)(2) + Left(Z)(1) * Left(Z)(2))
+    sf = RandomState{Pure}(System(4, Fermion()), 4)
+    r = ((Id + 0.25N)^0.5)(3)
+    @test laid(sf, r * r * dag(C)(1) * C(4)) ≈ exact(sf, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
+end
+
 @testset "An MPO has the least channels a triangular MPO can have" begin
     rng = Xoshiro(20261001)
     n = 5

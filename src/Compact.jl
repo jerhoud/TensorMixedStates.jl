@@ -563,6 +563,34 @@ end
 ################### compact ###################
 
 """
+    holds_identity(f)
+
+whether the factor `f` of a product has the identity among its atoms, see `linearize`
+"""
+holds_identity(f) = f isa AtIndex && any(x -> first(x) isa IdentityOp, linearize(f.op))
+
+"""
+    expand_identities(s)
+
+the simplified operator `s` with each term of several sites that has a factor holding the
+identity written out, that factor replaced by the sum of its atoms on its site: `(Id + Z)(1) *
+Z(2)`, which a merge of two factors of one site gives, becomes `Z(2) + Z(1) * Z(2)`. A term of
+several sites is laid on the sites it acts on, which a part of it acting on fewer would not be.
+"""
+function expand_identities(s::IndexedOp)
+    return simplify_sum(map(sumsubs(s)) do t
+        fs = prodsubs(scalararg(t))
+        if count(f -> !(f isa IdentityOp), fs) < 2 || !any(holds_identity, fs)
+            return t
+        end
+        written = map(fs) do f
+            holds_identity(f) ? simplify_sum([ x * a(f.index...) for (a, x) in linearize(f.op) ]) : f
+        end
+        return scalarcoef(t) * removeMulti(simplify_prod(written))
+    end)
+end
+
+"""
     compact_simplified(s, tol, what)
 
 `compact` of the operator `s`, simplified and with its Jordan-Wigner strings spelled out by
@@ -571,6 +599,7 @@ end
 the other to find the kind of the operator on that same simplification.
 """
 function compact_simplified(s::IndexedOp{R}, tol::Real, what::String) where R
+    s = expand_identities(s)
     kept = IndexedOp{R}[]
     coms = Tuple{Number, ComOp{R}}[]
     terms = Tuple{Number, Vector{Tuple{Int, Vector{Pair{Op, Number}}}}}[]
@@ -707,7 +736,9 @@ function monomials(op::IndexedOp)
         fs = filter(x -> !(x isa IdentityOp), prodsubs(a))
         combs = [ [ (f.index, atom) => β for (atom, β) in linearize(f.op) ] for f in fs ]
         for choice in distribute(combs...)
-            add!(d, AtomProduct([ first(x) for x in choice ]), c * prod(last, choice; init = 1))
+            # the identity left out, as com_expansion does
+            add!(d, AtomProduct([ first(x) for x in choice if !(last(first(x)) isa IdentityOp) ]),
+                 c * prod(last, choice; init = 1))
         end
     end
     return d

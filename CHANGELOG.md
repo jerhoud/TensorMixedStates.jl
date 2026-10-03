@@ -113,6 +113,10 @@ the reference article.
   taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
   dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
   sites before it.
+- A product whose factors on one site multiply to an operator holding the identity, as
+  `((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)`, which stands for `Z(2) + Z(1) * Z(2)`, can be
+  made an MPO and compacted, and compares equal with `≈` to the operator it stands for. The
+  first two failed on an internal error and `≈` answered false.
 - A product whose factors on one site multiply to a multiple of the identity other than the
   identity itself, as `((im * X)^0.5)(1) * ((im * X)^1.5)(1) * Z(2)`, is simplified, and so
   can be measured and made an MPO. It failed with a `MethodError`, the identity being left in
