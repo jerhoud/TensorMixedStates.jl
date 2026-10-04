@@ -90,4 +90,46 @@ end
     ],
 ])
 
-@create_site_module(Spins, [Spin, Sp, Sm, Sx, Sy, Sz, S2, N])
+"""
+    aklt_state(system; left = "Up", right = "Up")
+
+the AKLT state of a chain of spins one, `Spin(1)`, the exact ground state of
+``\\sum_i \\vec S_i \\cdot \\vec S_{i+1} + \\frac{1}{3} (\\vec S_i \\cdot \\vec S_{i+1})^2``,
+of energy ``-\\frac{2}{3}(n - 1)``: the MPS of bond dimension 2 of tensors
+``A^{+1} = \\sqrt{2/3}\\, \\sigma^+``, ``A^0 = -\\sqrt{1/3}\\, \\sigma^z`` and
+``A^{-1} = -\\sqrt{2/3}\\, \\sigma^-``. On an open chain the ground state is fourfold degenerate,
+the virtual spins one half at the two ends being free: `left` and `right` set them, `"Up"` or
+`"Dn"`, or a vector of two components, and the total ``S^z`` is that of `left` less that of
+`right`, 0 by default.
+
+# Examples
+
+    aklt_state(System(20, Spin(1)))
+    aklt_state(System(20, Spin(1, conserve = Sz)); right = "Dn")    # total Sz of 1
+"""
+function aklt_state(system::System; left = "Up", right = "Up")
+    if !all(s -> s isa Spin && s.s == 1, system.sites)
+        error("aklt_state takes a chain of spins one, Spin(1)")
+    end
+    edge(v) = v == "Up" ? [1., 0.] : v == "Dn" ? [0., 1.] : v
+    l, r = edge(left), edge(right)
+    # in the basis of Spin(1), m = 1, 0, -1, and of the virtual spins, up then down
+    A = zeros(2, 3, 2)
+    A[1, 1, 2] = sqrt(2 / 3)
+    A[1, 2, 1], A[2, 2, 2] = -sqrt(1 / 3), sqrt(1 / 3)
+    A[2, 3, 1] = -sqrt(2 / 3)
+    n = length(system)
+    tensors = map(1:n) do k
+        t = A
+        if k == 1
+            t = reshape(sum(l[a] * t[a, :, :] for a in 1:2), 1, 3, 2)
+        end
+        if k == n
+            t = reshape(sum(t[:, :, b] * r[b] for b in 1:2), size(t, 1), 3, 1)
+        end
+        t
+    end
+    return mps_state(system, tensors)
+end
+
+@create_site_module(Spins, [aklt_state, Spin, Sp, Sm, Sx, Sy, Sz, S2, N])

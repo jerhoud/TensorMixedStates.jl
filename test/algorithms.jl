@@ -205,6 +205,21 @@ end
     @test_throws "needs them orthonormal" dimer_state(System(2, Qubit()), [(1, 2)], "Up", "+")
 end
 
+@testset "AKLT states" begin
+    # an exact ground state whatever the virtual spins at the ends, which set the total Sz
+    n = 10
+    ss(i) = Sz(i) * Sz(i+1) + (Sp(i) * Sm(i+1) + Sm(i) * Sp(i+1)) / 2
+    h = sum(ss(i) + ss(i) * ss(i) / 3 for i in 1:n-1)
+    for site in (Spin(1), Spin(1, conserve = Sz)), (l, r, sz) in (("Up", "Up", 0), ("Up", "Dn", 1))
+        a = aklt_state(System(n, site); left = l, right = r)
+        @test maxlinkdim(a) == 2
+        @test expect(a, h) ≈ -2 * (n - 1) / 3
+        @test variance(h, a) ≈ 0 atol = 1e-10
+        @test sum(expect1(a, Sz)) ≈ sz atol = 1e-12
+    end
+    @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
+end
+
 @testset "Dmrg" begin
     @test_ok test_phases([
         CreateState(

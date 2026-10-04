@@ -44,8 +44,8 @@ bond dimension, as the GHZ, Dicke and W states, the states of singlets on pairs 
 Slater determinants of free fermions, and the Fermi sea
 of a quadratic hamiltonian, on sites of `Fermion` or `Electron`, beside sites of other types if
 need be, an impurity for instance.
-The graph states of qubits are built by [`graph_state`](@ref), and the thermal states by
-[`thermal_state`](@ref).
+The graph states of qubits are built by [`graph_state`](@ref), the AKLT state of spins one by
+[`aklt_state`](@ref), and the thermal states by [`thermal_state`](@ref).
 
 ```@docs
 ghz_state

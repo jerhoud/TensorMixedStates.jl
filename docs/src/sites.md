@@ -48,6 +48,7 @@ using .Spins
 ```@docs
 TensorMixedStates.Spins
 Spin
+aklt_state
 ```
 
 ## Boson
