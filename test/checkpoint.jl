@@ -64,7 +64,7 @@ end
 
 # phases of one's own driving tdvp with the observer of the package, as the docstring of
 # `run_phase` describes: the first does not read its resume point, the second does
-Base.@kwdef struct PlainEvolve
+Base.@kwdef struct PlainEvolve <: AbstractPhase
     name::String = "plain evolution"
     time_start = nothing
     final_measures = []
@@ -75,7 +75,7 @@ TensorMixedStates.run_phase(sim::Simulation, p::PlainEvolve) =
     tdvp(-im * X(1), 0.4, sim; nsweeps = 4, limits = Limits(maxdim = 4, cutoff = 1e-15),
          observer! = TdvpObserver(sim, p.measures, 1))
 
-Base.@kwdef struct ResumingEvolve
+Base.@kwdef struct ResumingEvolve <: AbstractPhase
     name::String = "resuming evolution"
     time_start = nothing
     final_measures = []
@@ -91,7 +91,7 @@ end
 
 # a phase of one's own written as a loop of steps, each a kick on the first qubit and the time
 # it takes, measured after it
-Base.@kwdef struct Kicks
+Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "kicks"
     time_start = nothing
     final_measures = []
@@ -117,6 +117,21 @@ TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
     @test_throws "cannot be a phase" SimData(name = "outer", phases = [p, inner])
     # what grouping is for, and it still flattens to any depth
     @test length(SimData(name = "flat", phases = [p, [p, [p, p]]]).phases) == 4
+end
+
+# the fields of a phase, without being one
+struct Lookalike
+    name::String
+    time_start
+    final_measures
+end
+
+@testset "A phase descends from AbstractPhase" begin
+    # refused when the simulation is written, a struct with the fields of a phase included
+    @test_throws "a phase is a subtype of AbstractPhase" SimData(phases = [
+        CreateState{Pure}(2, Qubit(), "Up"), Lookalike("x", nothing, [])])
+    # and printed as those of the library are, field by field
+    @test startswith(repr(Kicks()), "\nKicks(\n    name = \"kicks\"")
 end
 
 @testset "A simulation starts with its state" begin
@@ -880,7 +895,7 @@ end
 end
 
 # a loop of one's own whose steps each run tdvp with the observer of the package
-Base.@kwdef struct Evolutions
+Base.@kwdef struct Evolutions <: AbstractPhase
     name::String = "evolutions"
     time_start = nothing
     final_measures = []
@@ -924,7 +939,7 @@ TensorMixedStates.run_phase(sim::Simulation, p::Evolutions) =
 end
 
 # kicks whose steps sum the magnetization they reach, carried from one step to the next
-Base.@kwdef struct SummingKicks
+Base.@kwdef struct SummingKicks <: AbstractPhase
     name::String = "summing kicks"
     time_start = nothing
     final_measures = []
@@ -969,7 +984,7 @@ end
 end
 
 # a phase of one's own creating the state, on a system it is given
-Base.@kwdef struct PrepareGHZ
+Base.@kwdef struct PrepareGHZ <: AbstractPhase
     name::String = "preparing a GHZ state"
     time_start = nothing
     final_measures = []

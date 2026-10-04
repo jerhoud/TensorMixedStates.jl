@@ -24,8 +24,9 @@ the description of a simulation, which `runTMS` runs.
 # Fields
 
 - `name`: the name of the simulation, and of the directory its results are written to
-- `phases`: the phases of the simulation, see `Phases`, as a vector which may contain vectors
-  to any depth and is flattened. The first phase must be `CreateState` or `LoadState`, the
+- `phases`: the phases of the simulation, see `AbstractPhase`, as a vector which may contain
+  vectors to any depth and is flattened. The first phase must create the state, as
+  `CreateState` and `LoadState` do, see `TensorMixedStates.creates_state`, the
   simulation having no state before it
 - `description`: the text of the `description` file of the simulation (default `""`)
 - `time_start`: the initial simulation time (default 0.)
@@ -82,7 +83,7 @@ written.
             checkpoint_interval, max_time, threading, phases) =
         new(description, name, time_start, final_measures, time_format, data_format,
             checkpoint_interval, max_time, check_threading(threading),
-            check_first_phase(flatten_phases(phases)))
+            check_first_phase(check_phases(flatten_phases(phases))))
 end
 
 """
@@ -94,6 +95,18 @@ is what a checkpoint records.
 """
 flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
 flatten_phases(p) = [p]
+
+"""
+    check_phases(phases)
+
+refuse an object among the phases that is not one, see `check_is_phase`, when the simulation is
+written rather than when it reaches it: corrected then, it could not resume its checkpoint,
+which belongs to a simulation of other phases.
+"""
+function check_phases(phases::Vector)
+    foreach(check_is_phase, phases)
+    return phases
+end
 
 """
     check_first_phase(phases)
@@ -446,11 +459,16 @@ end
 """
     check_is_phase(phase)
 
-refuse an object without the three fields every phase is read through, `name`, `time_start`
-and `final_measures`, so that it says so instead of failing with a `FieldError` in the middle
-of a run. A missing `run_phase` method is then reported by the fallback of `run_phase`.
+refuse an object that is not a subtype of `AbstractPhase`, or has not the three fields every
+phase is read through, `name`, `time_start` and `final_measures`, so that it says so instead of
+failing with a `FieldError` in the middle of a run. A missing `run_phase` method is then
+reported by the fallback of `run_phase`.
 """
 function check_is_phase(phase)
+    if !(phase isa AbstractPhase)
+        error("$(typeof(phase)) is not a phase: a phase is a subtype of AbstractPhase, with the " *
+              "fields name, time_start and final_measures and a method of run_phase")
+    end
     for f in (:name, :time_start, :final_measures)
         if hasfield(typeof(phase), f)
             continue
@@ -461,7 +479,6 @@ function check_is_phase(phase)
 end
 
 function log_phase(sim::Simulation, phase)
-    check_is_phase(phase)
     log_msg(sim, "\n***** Starting phase \"$(phase.name)\" *****")
     if !isnothing(phase.time_start)
         sim = Simulation(sim, sim.state, phase.time_start)

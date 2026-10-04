@@ -19,7 +19,7 @@ DataToFrame
 ## Phases
 
 ```@docs
-Phases
+AbstractPhase
 CreateState
 LoadState
 SaveState
@@ -47,6 +47,8 @@ TensorMixedStates.creates_state
 TensorMixedStates.phase_system
 run_steps
 resume_step
+resume_time
+committed_time
 close_sim_files
 TensorMixedStates.evolve
 TensorMixedStates.write_state

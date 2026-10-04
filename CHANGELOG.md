@@ -58,6 +58,12 @@ the reference article.
 - `save_state(file, name, sim)`, the state of a simulation saved, refusing a file of the
   simulation directory, as its checkpoint, which `SaveState` already refused. `stopped(sim)`
   is documented for a phase of one's own as well, telling whether the run is stopping.
+- `AbstractPhase`, the supertype of the phases, those of the library and those of one's own,
+  which are printed field by field in the log as those of the library are. The phases of the
+  library are written each in a file of `src/phases` through the interface a phase of one's own
+  uses, and make as many examples.
+- `resume_time(sim)` and `committed_time(sim)`, the time a resumed phase goes on from and that
+  of the last step committed, for a phase of one's own driving a solver.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
 - `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states
@@ -106,6 +112,9 @@ the reference article.
 
 ### Changed
 
+- A phase of one's own is a subtype of `AbstractPhase`, which `SimData` checks when it is
+  written: a struct with the fields of a phase alone is refused.
+- The log of a `Gates` phase says "Applying gates", without the count of the factors.
 - A sum of operators gathers its terms in one pass: the sum of a vector of 79800 terms is built
   in 0.35 s, and a sum written with a generator, built term by term, three times faster than
   before. The second still grows as the square of the number of terms, see the page on
@@ -169,6 +178,7 @@ the reference article.
 
 ### Removed
 
+- `Phases`, the union of the phase types of the library, which `AbstractPhase` replaces.
 - `tdvp`, `dmrg`, `approx_W` and `steady_state` no longer pass the options they do not know on
   to ITensorMPS: an unknown keyword is refused, and `cutoff`, `maxdim` and `mindim` go through
   `limits`.

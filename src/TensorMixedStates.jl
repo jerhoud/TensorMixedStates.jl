@@ -44,9 +44,22 @@ include("Threading.jl")
 include("Output.jl")
 include("Observers.jl")
 include("Solvers.jl")
-include("PhaseTypes.jl")
 include("Phases.jl")
 include("Run.jl")
+
+# The phases, each written through the interface of Phases.jl
+include("phases/CreateState.jl")
+include("phases/LoadState.jl")
+include("phases/SaveState.jl")
+include("phases/ToMixed.jl")
+include("phases/Evolve.jl")
+include("phases/Gates.jl")
+include("phases/search.jl")
+include("phases/GroundState.jl")
+include("phases/SteadyState.jl")
+include("phases/Thermalize.jl")
+include("phases/PartialTrace.jl")
+include("phases/Weaken.jl")
 
 # Utilities
 include("Graphs.jl")

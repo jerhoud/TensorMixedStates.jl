@@ -171,16 +171,18 @@ A measurement of your own is a [`StateFunc`](@ref), a function of the state, or 
 
 ## [Phases of one's own](@id own-phases)
 
-A phase of your own is a struct with the three fields every phase has, `name`, `time_start`
-and `final_measures`, and a method of [`TensorMixedStates.run_phase`](@ref) for it, which returns the
-simulation the phase leaves behind. The full name is needed, `run_phase` not being exported.
+A phase of your own is a subtype of [`AbstractPhase`](@ref) with the three fields every phase has,
+`name`, `time_start` and `final_measures`, and a method of [`TensorMixedStates.run_phase`](@ref)
+for it, which returns the simulation the phase leaves behind. The full name is needed,
+`run_phase` not being exported. The phases of the library are written the same way, each in a
+file of `src/phases`, and make as many examples.
 Written as a loop with [`run_steps`](@ref), the phase is checkpointed, stopped and resumed between two
 steps, as those of the library are between two sweeps:
 
 ```julia
 using TensorMixedStates, .Qubits
 
-Base.@kwdef struct Kicks
+Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "Kicks"
     time_start = nothing
     final_measures = []
@@ -211,7 +213,9 @@ A phase creating the state, the adapter of another library for instance, says so
 of [`TensorMixedStates.creates_state`](@ref), which lets it be the first phase of a simulation,
 and gives the system it creates the state on by one of
 [`TensorMixedStates.phase_system`](@ref), on which a resumed run puts the state of its
-checkpoint back. Within a phase, [`stopped`](@ref) tells whether the run is stopping, and
+checkpoint back. Within a phase, [`stopped`](@ref) tells whether the run is stopping,
+[`resume_time`](@ref) the time a resumed phase goes on from and [`committed_time`](@ref) the time
+of the last step committed, which a phase stopped in its course has reached, and
 `save_state(file, name, sim)` saves the state, refusing a file of the simulation, as its
 checkpoint.
 
