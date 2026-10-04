@@ -10,7 +10,9 @@ systems using Matrix Product States representations.
 - A rich set of sites and operators, easily extended by the user, with a very expressive
   syntax for observables, gates, Hamiltonians and Lindbladians.
 - Ground states with DMRG, Hamiltonian and Lindbladian evolution with TDVP and with the WI and
-  WII approximations, and steady states.
+  WII approximations, steady states, and thermal states by evolution in imaginary time.
+- Prepared states: GHZ, Dicke and W states, singlets on pairs of sites, the AKLT state, Slater
+  determinants and Fermi seas of free fermions, and the fully mixed states of a sector.
 - Gates, noisy gates included.
 - Conserved quantities, with weak and strong symmetries for open systems.
 - An optional high level interface, which writes a simulation in a few lines, with its

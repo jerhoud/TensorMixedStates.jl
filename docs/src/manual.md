@@ -128,6 +128,27 @@ state1 = State{Pure}(system1, [1., 0.])
 nothing # hide
 ```
 
+### [Prepared states](@id manual-prepared-states)
+
+States that are not products of local states, but have an exact MPS of small bond dimension,
+are built by functions of their own, which take the local states they are made of:
+
+```@example manual
+myghz = ghz_state(System(6, Qubit()), "Up", "Dn")          # (|↑↑…↑⟩ + |↓↓…↓⟩)/√2
+mydicke = dicke_state(System(6, Qubit()), 2, "Up", "Dn")   # two sites down, in every way
+mydimers = dimer_state(System(6, Spin(1/2)), [(1, 2), (3, 4), (5, 6)], "1/2", "-1/2")
+myaklt = aklt_state(System(6, Spin(1)))
+mysector = fully_mixed(System(6, Fermion()), N => 3)       # 3 fermions at infinite temperature
+measure(mydicke, Z)
+```
+
+`w_state` is the Dicke state of one site, `dimer_state` puts a singlet on each pair of sites
+given, `aklt_state` is the ground state of the AKLT chain of spins one, and `fully_mixed` the
+fully mixed state of a sector, here of 3 fermions. The Slater determinants and the Fermi seas
+of free fermions are built by `slater_state` and `fermi_sea`, see [Fermions](@ref), and the
+thermal states by `thermal_state`, see [Thermal states](@ref manual-thermal-states). Each is a `State`, which
+`CreateState` takes as its `state`, see [Prepared states](@ref) for the details.
+
 ## Conserved quantities
 
 A site can be told that a quantity is conserved, for instance the number of fermions:
@@ -397,7 +418,7 @@ value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for 
 measure(mysteady, Z)
 ```
 
-### Thermal states
+### [Thermal states](@id manual-thermal-states)
 
 `thermal_state` takes a mixed state ``\rho`` to ``e^{-\beta H/2} \rho \, e^{-\beta H/2}``,
 normalized, by tdvp in imaginary time. From `"FullyMixed"`, the state at infinite temperature,
