@@ -120,7 +120,7 @@ for instance. A simulation comes back with its time advanced by `t`.
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
-  (default `Limits()`, none)
+  (default `Limits()`)
 - `observer!`: an observer, see `TdvpObserver`
 - `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
   (default `Krylov()`, those of `KrylovKit.exponentiate`)
@@ -181,7 +181,7 @@ density matrix: search the ground state of the pure state, then `mix` it.
 - `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished;
   past `nsweeps`, no sweep is done and the energy is that of the state given
 - `limits`: constraints on the state, see `Limits`, which may give one value per sweep
-  (default `Limits()`, none)
+  (default `Limits()`)
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `observer!`: an observer, see `DmrgObserver`
 - `krylov`: the parameters of the Krylov search of the lowest eigenvector at each local step,
@@ -307,7 +307,7 @@ advanced by `t`.
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
-  (default `Limits()`, none)
+  (default `Limits()`)
 - `observer!`: an observer, see `ApproxWObserver`
 - `apply_algo`: the algorithm of the product of the state by each MPO, as `ITensorMPS.apply`
   takes it: `"densitymatrix"` (default) or `"naive"`. `"fit"` is not offered, since it needs a
@@ -378,8 +378,8 @@ and the state is normalized to trace one.
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
 - `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished
 - `limits`: constraints on the state, see `Limits`, which may give one value per sweep
-  (default `Limits()`, none)
-- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
+  (default `Limits()`)
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`)
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `observer!`: an observer, see `DmrgObserver`
@@ -451,7 +451,7 @@ state, see `dmrg`.
   first step and then every `n_expand` steps (default 0, never)
 - `n_hermitianize`: make the state hermitian every `n_hermitianize` steps (default 0, never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
-  (default `Limits()`, none)
+  (default `Limits()`)
 - `observer!`: an observer, see `ThermalObserver`
 - `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
   (default `Krylov()`, those of `KrylovKit.exponentiate`)

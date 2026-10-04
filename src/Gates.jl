@@ -29,7 +29,7 @@ state acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refuse
 state, apply its MPO, `make_mpo(state, op)`, instead. On a mixed state that MPO is not a gate,
 see `make_mpo`.
 
-`limits` (default `Limits()`, no truncation) constrains the truncations made while a gate of
+`limits` (default `Limits()`) constrains the truncations made while a gate of
 several sites is applied, on the bond it spans and on those crossed to bring its sites
 together; a gate of one site, and the other bonds, are not truncated. An MPO truncates the
 whole result.

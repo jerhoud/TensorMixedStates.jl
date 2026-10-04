@@ -20,13 +20,16 @@ end
 PreObs() = PreObs([], [], [], [], [])
 
 """
-    Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 1)
+    Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1)
 
 the truncation limits of an MPS.
 
 # Fields
 - `cutoff`: the largest truncation error allowed, the weight of the discarded singular values,
-  the sum of their squares relative to that of all
+  the sum of their squares relative to that of all; the default `eps()`, about 2.2e-16, the
+  default of the solvers of ITensorMPS, discards the singular values below about 1.5e-8 of the
+  norm, which rounding leaves and which would otherwise swell the bond dimension, and `0`
+  discards nothing
 - `maxdim`: the maximum bond dimension
 - `mindim`: the minimum bond dimension; the default `1` means no minimum, and a smaller value
   is taken as `1`
@@ -55,7 +58,7 @@ end
 
 # a cutoff is a real number, and `cutoff = 0` has to be accepted as one: a field whose type
 # is a union is not converted to, so `@kwdef` refused it
-Limits(; cutoff = 0., maxdim = typemax(Int), mindim = 1) =
+Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1) =
     Limits(float_cutoff(cutoff), maxdim, mindim)
 
 # printed as the call that builds it, the fields left at their default omitted
@@ -155,8 +158,7 @@ it as a value of ``S_z`` and `Electron` has no such name.
 
 States can be added, subtracted, multiplied and divided by numbers. The two states of a sum
 or a difference must be on the same system. It takes truncation limits as
-`+(a, b; limits = Limits(maxdim = 100))`, and by default truncates nothing but what rounding
-leaves, eigenvalues below 1e-15.
+`+(a, b; limits = Limits(maxdim = 100))`, by default those of `Limits()`.
 """
 struct State{R <: PM} <: AbstractState
     system::System
@@ -312,20 +314,11 @@ State{R}(sites::Vector{<:AbstractSite}, state) where R =
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
-"""
-    sum_cutoff(limits)
-
-the cutoff of a sum of two states: that of `limits`, or for no truncation 1e-15, the default of
-ITensorMPS, below which an eigenvalue is rounding. The sum goes through the density matrices of
-ITensorMPS, which, told 0, kept such eigenvalues as states: the sum of nine product states of
-twenty qubits had a bond dimension of 2304 rather than 9 at most.
-"""
-sum_cutoff(limits::Limits) = iszero(limits.cutoff) ? 1e-15 : limits.cutoff
 
 +(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State(a, +(a.state, b.state; cutoff = sum_cutoff(limits), limits.maxdim, limits.mindim))
+    State(a, +(a.state, b.state; limits.cutoff, limits.maxdim, limits.mindim))
 -(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State(a, -(a.state, b.state; cutoff = sum_cutoff(limits), limits.maxdim, limits.mindim))
+    State(a, -(a.state, b.state; limits.cutoff, limits.maxdim, limits.mindim))
 
 """
     mix(::State)

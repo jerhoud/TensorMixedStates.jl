@@ -84,7 +84,7 @@ a phase of time evolution.
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
-- `limits`: constraints on the state, see `Limits` (default `Limits()`, none)
+- `limits`: constraints on the state, see `Limits` (default `Limits()`)
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one that divides the duration into a
   whole number of steps, and taken with the sign of the duration (the phase is skipped when

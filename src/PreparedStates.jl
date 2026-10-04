@@ -98,12 +98,12 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
 end
 
 """
-    dense_mps(a, idx, sites; combiners = ITensor[])
+    dense_mps(a, idx, sites, limits; combiners = ITensor[])
 
 the MPS on `sites` of the array `a` on the indices `idx`, once the combiners `combiners` have
-gathered these indices into the sites, cut at the rounding as `sum_cutoff` cuts a sum
+gathered these indices into the sites, truncated to `limits`
 """
-function dense_mps(a::AbstractArray, idx, sites; combiners = ITensor[])
+function dense_mps(a::AbstractArray, idx, sites, limits::Limits; combiners = ITensor[])
     if !has_definite_flux(a, idx)
         error("the state has no definite charge, which a system conserving it cannot hold")
     end
@@ -111,7 +111,7 @@ function dense_mps(a::AbstractArray, idx, sites; combiners = ITensor[])
     for c in combiners
         t *= c
     end
-    return MPS(t, sites; cutoff = sum_cutoff(Limits()))
+    return MPS(t, sites; limits.cutoff, limits.maxdim, limits.mindim)
 end
 
 """
@@ -120,8 +120,8 @@ end
 
 the pure state of `system` of vector `ψ`, or the mixed state of density matrix `ρ`, on the
 basis of the product states of the sites ordered as `kron` orders them, the first site varying
-the slowest, normalized. Its MPS comes from successive decompositions of the whole vector, exact
-up to rounding and truncated to `limits` when they are given, for a system small enough to be
+the slowest, normalized. Its MPS comes from successive decompositions of the whole vector,
+truncated to `limits`, for a system small enough to be
 written down: to compare with an exact diagonalization, or to take a state from another code.
 On a system carrying charges, a state of no definite charge is refused.
 
@@ -136,8 +136,7 @@ function dense_state(system::System, ψ::AbstractVector{<:Number}; limits::Limit
         error("a vector of $(length(ψ)) elements cannot be a state of $(prod(dim, s)) basis states")
     end
     a, idx = on_legs(reshape(collect(ψ), :, 1), s, Index[])
-    st = normalize(State{Pure}(system, dense_mps(a, idx, s)))
-    return limits == Limits() ? st : truncate(st; limits)
+    return normalize(State{Pure}(system, dense_mps(a, idx, s, limits)))
 end
 
 function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limits = Limits())
@@ -150,8 +149,8 @@ function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limit
     mixers = [ mixer(s[k], SysIndex{Mixed}(system, k), system[k]) for k in 1:n ]
     a, idx = on_legs(Matrix(ρ), s, [ dag(b') for (b, _) in mixers ])
     sites = [ SysIndex{Mixed}(system, k) for k in 1:n ]
-    st = normalize(State{Mixed}(system, dense_mps(a, idx, sites; combiners = last.(mixers))))
-    return limits == Limits() ? st : truncate(st; limits)
+    return normalize(State{Mixed}(system, dense_mps(a, idx, sites, limits;
+                                                    combiners = last.(mixers))))
 end
 
 """

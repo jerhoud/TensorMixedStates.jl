@@ -467,15 +467,14 @@ end
     hermitianize(state [; limits])
 
 the state whose density matrix is the Hermitian part ``(\\rho + \\rho^\\dagger)/2`` of that
-of `state`, the sum being truncated according to `limits`, a `Limits` (default `Limits()`,
-which drops only what is of the order of rounding, see `State`). A pure representation is
+of `state`, the sum being truncated according to `limits`, a `Limits` (default `Limits()`). A pure representation is
 returned as it is.
 """
 hermitianize(state::State{Pure}; limits::Limits=Limits()) =
     state
 hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
     State(state, 0.5*(+(state.state, dag(state).state;
-                        cutoff = sum_cutoff(limits), limits.maxdim, limits.mindim)))
+                        limits.cutoff, limits.maxdim, limits.mindim)))
 
 
 """

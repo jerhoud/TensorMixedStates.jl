@@ -12,7 +12,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
 - `lindbladian`: the Lindbladian ``L`` whose steady state is searched, of the form
   `-im * hamiltonian + dissipators`
-- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`, none)
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`)
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required

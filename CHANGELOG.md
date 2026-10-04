@@ -84,7 +84,7 @@ the reference article.
   `A[l, s, r]`, the charges of its links read off the tensors on a charged system.
 - `dense_state(system, ψ)` and `dense_state(system, ρ)`, the pure state of a vector and the
   mixed state of a density matrix on the basis of the product states, ordered as `kron` orders
-  them, decomposed into an MPS exact up to rounding or truncated to `limits`.
+  them, decomposed into an MPS truncated to `limits`.
 - `fully_mixed(system, op => value...)`, the fully mixed state of the sector where the sum of
   each operator over the sites takes its value, exact, of bond dimension `N + 1` at most for
   `N => N`: the state at infinite temperature of a sector, from which `Thermalize` gives the
@@ -123,6 +123,14 @@ the reference article.
 
 ### Changed
 
+- The default cutoff of `Limits` is `eps()`, about 2.2e-16, the default of the solvers of
+  ITensorMPS, which discards the singular values below about 1.5e-8 of the norm, rather than 0,
+  which kept those rounding leaves: `tdvp` under a
+  field that creates no entanglement took a superposition of 9 product states of 20 qubits to
+  a bond dimension of 36, and a chain of controlled Z to 17, where they stay at 9. The phases
+  and functions truncating with the default limits are concerned, `Evolve`, `Gates`,
+  `Thermalize`, `ToMixed`, `tdvp`, `approx_W`, `dmrg`, `apply` and `truncate`, and
+  `Limits(cutoff = 0)` truncates nothing anywhere, a sum of states included.
 - A phase of one's own is a subtype of `AbstractPhase`, which `SimData` checks when it is
   written: a struct with the fields of a phase alone is refused.
 - The log of a `Gates` phase says "Applying gates", without the count of the factors.
@@ -201,8 +209,8 @@ the reference article.
 - The sum and the difference of two states, and `hermitianize`, kept the eigenvalues of the
   order of rounding as states when no truncation was asked for, so that their bond dimension
   grew without bound: the sum of nine product states of twenty qubits had a bond dimension of
-  2304 rather than 9. Without limits they now drop what is below 1e-15, the default of
-  ITensorMPS, and a sum of product states has the bond dimension of its number of terms.
+  2304 rather than 9. With the default limits they now drop it, see the default cutoff of
+  `Limits`, and a sum of product states has the bond dimension of its number of terms.
 - The approximation WII, the default of `approx_W` and `ApproxW`, is the one of Zaletel et
   al. Its blocks left out the terms of one site on a site that a term of several sites goes
   through, took them on one side only at the ends of such a term, and took a closing and an

@@ -33,7 +33,8 @@ end
 
 function run_phase(sim::Simulation, phase::LoadState)
     st = load_state(phase.file, phase.statename)
-    # Limits() truncates nothing, which a representation of one's own need not support
+    # a state read back is not truncated without limits of its own, which a representation of
+    # one's own need not support
     return Simulation(sim, phase.limits == Limits() ? st : truncate(st; phase.limits))
 end
 

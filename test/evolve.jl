@@ -250,9 +250,11 @@ end
     end
     # the same drive written with its real and imaginary parts: evolving the mixed state is
     # mixing the evolved pure state, the hamiltonian not commuting at different times. Tdvp
-    # is exact at full bond dimension, the tolerance of ApproxW is its error measured here
+    # is exact at full bond dimension, which a cutoff of zero keeps, the default discarding
+    # singular values up to 1.5e-8, and the tolerance of ApproxW is its error measured here
     coefs = [t -> cos(3t), t -> sin(3t), t -> 1.0]
-    for (ev, tol) in [(st -> tdvp(hs, 1.0, st; coefs, nsweeps = 50), 1e-11),
+    for (ev, tol) in [(st -> tdvp(hs, 1.0, st; coefs, nsweeps = 50, limits = Limits(cutoff = 0)),
+                       1e-11),
                       (st -> approx_W(hs, 1.0, st; coefs, nsweeps = 50, order = 4), 1e-7)]
         @test norm(ev(mix(ψ)) - mix(ev(ψ))) < tol
     end

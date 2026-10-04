@@ -22,7 +22,7 @@ move.
   zero)
 - `algo`: the algorithm, `Tdvp(...)`, whose `n_expand`, `n_hermitianize` and `krylov` it takes
   (default `Tdvp()`)
-- `limits`: constraints on the state, see `Limits` (default `Limits()`, none)
+- `limits`: constraints on the state, see `Limits` (default `Limits()`)
 - `measures`: the measurements to make during the phase, see `output` (default `[]`), after
   every `measures_period` steps. The symbols `:beta` and `:log_trace` take the inverse
   temperature reached and the logarithm of the trace the state would have without being

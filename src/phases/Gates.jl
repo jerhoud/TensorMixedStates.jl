@@ -12,7 +12,7 @@ a phase that applies gates to the state.
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
 - `gates`: the gates to apply
 - `limits`: the truncations made while applying a gate of several sites, see `apply` (default
-  `Limits()`, none)
+  `Limits()`)
 
 # Examples
 

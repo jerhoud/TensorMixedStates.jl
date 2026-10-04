@@ -11,7 +11,7 @@ state already mixed is only truncated.
 # Fields
 
 - `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
-- `limits`: constraints on the mixed state, see `Limits` (default `Limits()`, none)
+- `limits`: constraints on the mixed state, see `Limits` (default `Limits()`)
 
 # Examples
 

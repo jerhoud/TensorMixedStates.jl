@@ -61,6 +61,21 @@ end
     @test maxlinkdim(s - cs[1] * State{Pure}(sys, cfgs[1])) ≤ 13
 end
 
+@testset "The default limits cut the noise of rounding" begin
+    # gates and an evolution that create no entanglement kept the singular values of rounding
+    rng = TensorMixedStates.Random.Xoshiro(3)
+    sys = System(20, Qubit())
+    s = sum(randn(rng) * State{Pure}(sys, rand(rng, ["Up", "Dn"], 20)) for _ in 1:9)
+    @test Limits().cutoff == eps()
+    @test maxlinkdim(apply(prod(controlled(Z)(i, i + 1) for i in 1:19), s)) == maxlinkdim(s)
+    @test maxlinkdim(tdvp(-im * sum(Z(i) for i in 1:20), 0.1, s)) == maxlinkdim(s)
+    # a weight of 1e-18 is below the default cutoff, and a cutoff of zero keeps everything
+    up, dn = State{Pure}(System(6, Qubit()), "Up"), State{Pure}(System(6, Qubit()), "Dn")
+    dn = State(up.system, dn)
+    @test maxlinkdim(up + 1e-9 * dn) == 1
+    @test maxlinkdim(+(up, 1e-9 * dn; limits = Limits(cutoff = 0))) ≥ 2
+end
+
 @testset "Random states" begin
     sys = System(6, Qubit())
     @test maxlinkdim(RandomState{Pure}(sys, 8)) == 8
