@@ -163,6 +163,19 @@ end
     @test_throws "one local state at least" ghz_state(System(4, Qubit()))
 end
 
+@testset "Dicke and W states" begin
+    d = dicke_state(System(5, Qubit()), 2, "Up", "Dn")
+    @test maxlinkdim(d) == 3
+    @test dense_state(d) ≈ [ count_ones(b) == 2 ? 1 / sqrt(10) : 0. for b in 0:31 ]
+    # every product state of a Dicke state has the same charge
+    dc = dicke_state(System(8, Qubit(conserve = N)), 4, "Up", "Dn")
+    @test sum(expect1(dc, N)) ≈ 4
+    @test expect1(w_state(System(6, Qubit()), "Up", "Dn"), Z) ≈ fill(2 / 3, 6)
+    @test expect1(dicke_state(System(3, Qubit()), 0, "Up", "Dn"), Z) ≈ [1, 1, 1]
+    @test expect1(dicke_state(System(3, Qubit()), 3, "Up", "Dn"), Z) ≈ [-1, -1, -1]
+    @test_throws "do not fit on 3 sites" dicke_state(System(3, Qubit()), 4, "Up", "Dn")
+end
+
 @testset "Dmrg" begin
     @test_ok test_phases([
         CreateState(

@@ -1,7 +1,7 @@
 # Prepared pure states with an exact MPS of small bond dimension, built from their tensors: the
 # GHZ state, the Dicke states, of which the W state, and the states of singlets on pairs.
 
-export ghz_state
+export ghz_state, dicke_state, w_state
 
 """
     local_vector(site, st)
@@ -99,3 +99,52 @@ function ghz_state(system::System, states...)
     end
     return mps_state(system, tensors)
 end
+
+"""
+    dicke_state(system, k, a, b)
+
+the Dicke state of `k` sites in the local pure state `b` and the others in `a`, given by their
+names or their vectors: the superposition with equal weights of the product states that place
+`b` on `k` sites and `a` on the others, ``\\binom{n}{k}^{-1/2} \\sum |a\\dots b \\dots
+a\\rangle`` for orthonormal states, normalized in any case. It is exact, of bond dimension
+`k + 1` at most, and holds the charge of its product states, which share it.
+
+# Examples
+
+    dicke_state(System(10, Qubit()), 3, "Up", "Dn")
+    dicke_state(System(10, Qubit(conserve = N)), 5, "Up", "Dn")
+"""
+function dicke_state(system::System, k::Int, a, b)
+    n = length(system)
+    if !(0 ≤ k ≤ n)
+        error("$k sites in $b do not fit on $n sites")
+    end
+    # the numbers of sites in b on the left of a link that can still reach k
+    reach(j) = max(0, k - (n - j)):min(j, k)
+    tensors = map(1:n) do j
+        va, vb = local_vector(system[j], a), local_vector(system[j], b)
+        left, right = reach(j - 1), reach(j)
+        A = zeros(promote_type(eltype(va), eltype(vb)), length(left), dim(system[j]),
+                  length(right))
+        for (p, c) in enumerate(left), (q, d) in enumerate(right)
+            if d == c
+                A[p, :, q] = va
+            elseif d == c + 1
+                A[p, :, q] = vb
+            end
+        end
+        A
+    end
+    return mps_state(system, tensors)
+end
+
+"""
+    w_state(system, a, b)
+
+the W state, the Dicke state of one site in `b` and the others in `a`, see `dicke_state`.
+
+# Examples
+
+    w_state(System(10, Qubit()), "Up", "Dn")
+"""
+w_state(system::System, a, b) = dicke_state(system, 1, a, b)

@@ -41,6 +41,9 @@ the reference article.
   quantum trajectories, reads to unravel an evolution or apply gates.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
+- `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states
+  with `k` sites in `b` and the others in `a`, and `w_state(system, a, b)`, the case of one
+  site, exact, of bond dimension `k + 1` at most, on charged sites as well.
 - `slater_state(system, orbitals...)`, the Slater determinant of given orbitals, one matrix for
   each species of fermions, and `fermi_sea(system, H, nparticles...)`, the ground state of
   free fermions under a quadratic hamiltonian H written as for any other function, on sites
