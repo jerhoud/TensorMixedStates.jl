@@ -257,7 +257,7 @@ end
 struct Stepwise <: Algo end
 
 function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::Evolve;
-                                  evolver, coefs, nsteps)
+                                  evolver, coefs, nsteps, kwargs...)
     dt = phase.duration / nsteps
     return run_steps(sim, nsteps) do sim, k
         sim = tdvp(evolver, dt, sim; phase.limits)

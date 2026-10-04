@@ -239,7 +239,7 @@ using TensorMixedStates, .Qubits
 struct Stepwise <: Algo end     # tdvp, one step at a time
 
 function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::Evolve;
-                                  evolver, coefs, nsteps)
+                                  evolver, coefs, nsteps, kwargs...)
     dt = phase.duration / nsteps
     return run_steps(sim, nsteps) do sim, k
         sim = tdvp(evolver, dt, sim; coefs, phase.limits)
@@ -258,7 +258,8 @@ runTMS(SimData(name = "stepwise", phases = [
 ```
 
 `evolver` is the evolver of the phase, and `coefs` the functions of time of a time dependent
-one, `nothing` otherwise, which `tdvp` takes as they are.
+one, `nothing` otherwise, which `tdvp` takes as they are. The method ends its keywords with
+`kwargs...`, see [Keywords of the methods you give](@ref extending-keywords).
 
 ## Representations of one's own
 
@@ -285,9 +286,10 @@ The phases and the measurements reach these states through the methods you give:
   operators it measures at once to `expect(state, ops)`, which calls the method of one
   operator on each, unless you give one for `ops::Vector{<:IndexedOp}` that computes them
   together;
-- `apply(gates, state; limits)` applies the gates of a `Gates` phase, whose channels
+- `apply(gates, state; limits, kwargs...)` applies the gates of a `Gates` phase, whose channels
   [`kraus_operators`](@ref) gives as their Kraus operators;
-- `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsteps)` evolves the state
+- `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsteps, kwargs...)`
+  evolves the state
   in an `Evolve` phase, for each algorithm it supports, the hamiltonian and the jump operators
   of the evolver being given by [`lindblad_terms`](@ref);
 - `TensorMixedStates.write_state(group, state)` and
@@ -308,3 +310,12 @@ The other phases go through `truncate`, `mix`, `partial_trace`, `weaken`, `dmrg`
 `entanglement_entropy` and the like. A state gets what its type has a method for, and a phase or
 a measurement it does not support raises a `MethodError`. `LoadState` goes through `truncate`
 only when it is given limits.
+
+## [Keywords of the methods you give](@id extending-keywords)
+
+A method you give for a function TMS calls with keywords, `evolve`, `apply` or
+`truncate(state; limits)`, ends its keywords with `kwargs...`, as `Stepwise` above does, even
+when it uses every keyword it is given. A later version of TMS may pass one more keyword, the
+generator of random numbers of a trajectory for instance, and Julia refuses a keyword that a
+method does not declare: a method declaring only those it uses would then fail, where one
+taking `kwargs...` ignores what it does not need.

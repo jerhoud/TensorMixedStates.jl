@@ -137,7 +137,7 @@ a phase of time evolution.
 end
 
 """
-    evolve(algo, state, sim, phase; evolver, coefs, nsteps)
+    evolve(algo, state, sim, phase; evolver, coefs, nsteps, kwargs...)
 
 the simulation `sim` once the `Evolve` phase `phase` has evolved its state `state` with the
 algorithm `algo`, in `nsteps` steps covering `phase.duration`: `evolver` is the evolver of the
@@ -149,7 +149,8 @@ An algorithm of an extension, or an algorithm for the state of an extension, com
 method of its own. It is called before the phase has read its resume point, so that a method
 can read it with `resume_step`, or run its steps with `run_steps`, which resumes, stops and
 checkpoints them; `output(sim, phase.measures; sweep)` writes the measurements of the phase,
-every `phase.measures_period` steps.
+every `phase.measures_period` steps. Such a method takes `kwargs...` after the keywords it
+uses, so that a keyword a later version of TMS passes does not break it.
 """
 function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
                 nsteps)
