@@ -135,6 +135,44 @@ end
     end
 end
 
+@testset "Superoperators of placed operators, unnormalized expectations and matrix elements" begin
+    strong = TensorMixedStates.strong
+    sys = System(4, Fermion())
+    ψ = normalize(RandomState{Pure}(ComplexF64, sys, 4))
+    ρ = mix(ψ)
+    a = dag(C)(1) * C(3) + 0.5im * N(2)
+    adjoint_a = dag(C)(3) * C(1) - 0.5im * N(2)
+    b = dag(C)(3) * C(1) + N(4)
+    # Left and Right of a placed operator, a sum with its strings and its coefficients, against
+    # the pure state: tr(b a ρ) = <ψ|b a|ψ> and tr(b ρ a†) = <ψ|a† b|ψ>
+    @test expect(apply(make_mpo(ρ, Left(a)), ρ), b; normalize = false) ≈ inner(ψ, b * a, ψ)
+    @test expect(apply(make_mpo(ρ, Right(a)), ρ), b; normalize = false) ≈
+          inner(ψ, adjoint_a * b, ψ)
+    @test norm(apply(Left(dag(C)(1) * C(3)), ρ) - apply(Left(dag(C))(1) * Left(C)(3), ρ)) < 1e-12
+
+    # not divided by the trace: of the identity, of a pure state, and of c_1 ρ, of trace zero on
+    # a state of a definite number of fermions, which the normalized one cannot divide by
+    @test expect(2 * ρ, 3 * Id(1); normalize = false) ≈ 6
+    @test expect(2 * ψ, N(1); normalize = false) ≈ 4 * expect(ψ, N(1))
+    for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
+        s = System(4, site)
+        φ = normalize(State{Pure}(s, ["Occ", "Emp", "Occ", "Emp"]) +
+                      0.5 * State{Pure}(s, ["Emp", "Occ", "Occ", "Emp"]))
+        σ = apply(Left(C(1)), mix(φ))
+        @test expect(σ, dag(C)(1); normalize = false) ≈ expect(mix(φ), N(1))
+        @test expect(σ, [dag(C)(1), dag(C)(1) * N(3)]; normalize = false) ≈ [0.8, 0.8]
+    end
+
+    # the matrix element of an operator between two states, and of a superoperator between two
+    # mixed ones: <<mix(u)| Gate(X) |mix(v)>> = |<u|X|v>|^2
+    q = System(4, Qubit())
+    u, v = RandomState{Pure}(ComplexF64, q, 3), RandomState{Pure}(ComplexF64, q, 3)
+    m = X(1) * Z(3) + 0.3 * Y(2)
+    @test inner(u, m, v) ≈ inner(u, apply(make_mpo(v, m), v))
+    @test dot(u, m, v) ≈ inner(u, m, v)
+    @test inner(mix(u), Gate(X)(1), mix(v)) ≈ abs2(inner(u, X(1), v))
+end
+
 @testset "The adjoint of a tensor product of fermions" begin
     # (A ⊗ B)(i, j) is A(i) * B(j), whose adjoint reverses the factors: two fermions
     # anticommute, so dag(C ⊗ C) is the opposite of dag(C) ⊗ dag(C)

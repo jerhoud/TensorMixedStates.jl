@@ -835,7 +835,9 @@ map_sites(_, a::IdentityOp) = a
     Left(A)
 
 the superoperator ``\\rho \\mapsto A\\rho``, acting on the left of the density matrix. `A` is a
-generic operator, placed on its sites afterwards, `Left(X)(1)`.
+generic operator, placed on its sites afterwards, `Left(X)(1)`, or an operator already placed,
+a sum or a product, `Left(X(1) * Z(3))` being `Left(X)(1) * Left(Z)(3)`, the strings of its
+fermionic factors included.
 
 `Gate`, `Dissipator` and `Evolver` act on both sides at once, as ``A\\rho A^\\dagger`` or
 ``-i[H, \\rho]``. `Left` and `Right` act on a single side, which is not trace preserving. They
@@ -845,6 +847,7 @@ can be used in an evolution or applied as gates, but they are not observables.
 
     apply(Left(X)(1), rho)          # rho -> X rho
     make_mpo(rho, Left(X)(1))
+    make_mpo(rho, Left(dag(C)(1) * C(3) + N(2)))
 """
 struct Left{N} <: GenericOp{Mixed, N}
     arg::GenericOp{Pure, N}
@@ -868,7 +871,7 @@ isless(a::Left, b::Left) =
 
 the superoperator ``\\rho \\mapsto \\rho A^\\dagger``, acting on the right of the density
 matrix. `Right(c * A)` is `conj(c) * Right(A)`. See `Left`, of which it is the mirror, and
-which also takes a generic operator.
+which also takes a generic operator or an operator already placed.
 
 # Examples
 
@@ -908,6 +911,10 @@ sided(_, ::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 sided(::Type{Left}, a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, false)
 sided(::Type{Right}, a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
 sided(S, a::ComOp{Pure}) = map_pieces(S, Mixed, a)
+
+# an operator already placed, a sum or a product with its coefficients, through sided
+Left(a::IndexedOp{Pure}) = sided(Left, a)
+Right(a::IndexedOp{Pure}) = sided(Right, a)
 
 # Gate
 

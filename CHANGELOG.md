@@ -39,6 +39,14 @@ the reference article.
   `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
   product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
   quantum trajectories, reads to unravel an evolution or apply gates.
+- `Left(A)` and `Right(A)` of an operator already placed on sites, a sum or a product, its
+  coefficients and the strings of its fermionic factors included, `Left(X(1) * Z(3))` being
+  `Left(X)(1) * Left(Z)(3)`.
+- `expect(state, op; normalize = false)`, tr(Aρ) or ⟨ψ|A|ψ⟩ not divided by the trace, which an
+  operator made non hermitian by `Left` or `Right` needs, Bρ in a correlation at two times
+  whose trace may be zero.
+- `inner(a, op, b)` and `dot(a, op, b)`, the matrix element of an operator between two pure
+  states, or of a superoperator between two mixed ones.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
 - `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states

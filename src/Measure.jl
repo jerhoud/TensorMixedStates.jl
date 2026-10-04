@@ -457,10 +457,11 @@ get_exp2(o) = Tuple{SimpleOp, SimpleOp}[ l.obs for l in leaves(ObsExp2, o) ]
     prod_values(state, prods)
 
 the values of what `get_prods` gives: on a `State`, terms that `make_obs` simplified once and
-for all, which `expect_norm` takes as they are, and on a state of another representation,
+for all, which `expect_norm` takes as they are, divided by the trace as `expect` divides, and
+on a state of another representation,
 operators as written, which the `expect` of that representation measures.
 """
-prod_values(state::State, terms) = expect_norm(state, terms)
+prod_values(state::State, terms) = expect_norm(state, terms) ./ real(trace(state))
 prod_values(state::AbstractState, ops) = expect(state, ops)
 
 """

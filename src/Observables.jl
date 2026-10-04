@@ -253,7 +253,7 @@ function extend_left!(l, state::State{Pure}, i::Int)
             # what the branch below leaves: the link of the ket as st[k-1] holds it, and that
             # of the bra daggered and primed. The other way round, which only charges tell
             # apart, it did not contract with st[k]
-            delta(llink, dag(llink)') / real(trace(state))
+            delta(llink, dag(llink)')
         else
             l[k-1] * identity_at(state, k-1) * dag(st[k-1]')
         end
@@ -275,14 +275,15 @@ end
 """
     get_left(state, i)
 
-the environment on the left of site `i`, divided by the trace: the sites before `i`
-contracted, traced out on a mixed state, ket with bra on a pure one, followed by the tensor
-of the state on `i`. Computed up to `i` on demand and kept with the state.
+the environment on the left of site `i`: the sites before `i` contracted, traced out on a mixed
+state, ket with bra on a pure one, followed by the tensor of the state on `i`. It is not
+divided by the trace, which the measurements built on it divide by when they normalize, so
+that the same environments serve both. Computed up to `i` on demand and kept with the state.
 """
 function get_left(state::State, i::Int)
     l = state.preobs.left
     if isempty(l)
-        push!(l, state.state[1] / real(trace(state)))
+        push!(l, state.state[1])
     end
     if length(l) < i
         extend_left!(l, state, i)
@@ -343,9 +344,12 @@ end
 """
     inner(a::State, b::State)
     dot(a::State, b::State)
+    inner(a::State, op, b::State)
+    dot(a::State, op, b::State)
 
 the inner product of two states of the same system and representation, `dot` being an alias
-of `inner`.
+of `inner`, and given an operator placed on sites `op`, the matrix element of `op` between
+them, ``\\langle a | op | b \\rangle``, a superoperator on mixed representations.
 
 On pure representations this is the overlap ``\\langle a | b \\rangle``, the first argument
 conjugated. On mixed ones it is the Hilbert-Schmidt product ``\\mathrm{tr}(a^\\dagger b)``.
@@ -358,6 +362,7 @@ representation are refused.
 
     inner(state, ground_state)
     abs2(inner(a, b))              # the Loschmidt echo of a pure state
+    inner(ground_state, X(1) * X(2), excited)
 """
 function inner(a::State{R}, b::State{R}) where R
     check_same_system(a, b)
@@ -381,6 +386,15 @@ inner(::State{Pure}, ::State{Mixed}) = different_representations()
 inner(::State{Mixed}, ::State{Pure}) = different_representations()
 
 dot(a::State, b::State) = inner(a, b)
+
+function inner(a::State{R}, op::IndexedOp{R}, b::State{R}) where R
+    check_same_system(a, b)
+    # checked on the operator as it was written, as expect does
+    check_indices(a.system, op)
+    return inner(a.state', make_mpo(b, op), b.state)
+end
+
+dot(a::State, op::IndexedOp, b::State) = inner(a, op, b)
 dot(a::AbstractState, b::AbstractState) = throw(MethodError(dot, (a, b)))
 
 """
@@ -650,9 +664,10 @@ times_piece(state::State{Mixed}, t::ITensor, o::SimpleOp, k::Int) =
     expect_norm(state, coef, factors)
     expect_norm(state, coef, com)
 
-`expect` without the simplification: the expectation value of an operator already in the
-form `simplify` gives, or the array of those of an array of them; given `coef` and
-`factors`, that of their product, and given a com, that of the com times `coef`. A com is
+`expect` without the simplification nor the normalization: ``\\mathrm{tr}(A\\rho)``, or
+``\\langle\\psi|A|\\psi\\rangle``, of an operator already in the form `simplify` gives, or the
+array of those of an array of them; given `coef` and `factors`, that of their product, and given
+a com, that of the com times `coef`. A com is
 contracted from left to right with one expector per channel: a channel opens on `get_left`,
 goes from site to site by `zip_between` and closes on `get_right`. `measure` calls it on
 operators `make_obs` has simplified once and for all.
@@ -667,12 +682,10 @@ function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}}
     # few integer comparisons per term, nothing next to the contractions below
     foreach(o -> check_indices(state.system, o), subs)
     foreach(o -> check_one_site(o, "expect"), subs)
-    # the identity has no site and is one on any state, expect dividing by the norm or the
-    # trace: a term made of it alone is its coefficient, of the type a contraction of the
-    # state would give
+    # the identity has no site, and the trace is what it gives
     subs = filter(o -> !(o isa IdentityOp), subs)
     if isempty(subs)
-        return coef * one(eltype(state.state[1]))
+        return coef * trace(state)
     end
     e = Expector()
     for o in subs
@@ -713,14 +726,17 @@ expect_norm(state::State, coef::Number, a::IndexedOp{Pure}) =
     expect_norm(state, coef, prodsubs(a))
 
 """
-    expect(state, obs)
+    expect(state, obs; normalize = true)
 
 the expectation value of `obs`, an operator placed on sites, or the array of those of an
 array of them. It is divided by the trace of the state, its squared norm on a pure
 representation, so the state need not be normalised. On a mixed representation the trace is
-taken as its real part, its imaginary part being numerical error on a density matrix. One made
-non Hermitian by `Left` or `Right` has a trace of its own: `expect(state, A) *
-real(trace(state))` is then ``\\mathrm{tr}(A\\rho)``.
+taken as its real part, its imaginary part being numerical error on a density matrix.
+
+With `normalize = false` it is not divided: ``\\mathrm{tr}(A\\rho)``, or
+``\\langle\\psi|A|\\psi\\rangle``, as it is. This is what an operator made non Hermitian by
+`Left` or `Right` needs, ``B\\rho`` in a correlation at two times for instance, whose trace
+has an imaginary part of its own or is zero.
 
 `obs` is simplified first, so its factors may be given in any order and the Jordan-Wigner
 strings of fermionic operators are inserted for you. An operator not placed on sites, `X`
@@ -736,18 +752,21 @@ A representation of one's own measures operators through `expect`, see
     expect(state, [X(1)*Y(2), X(3), Z(1)*X(2)])
     expect(state, C(3)*dag(C)(1))
 """
-function expect(state::State, op::Op)
+function expect(state::State, op::Op; normalize::Bool = true)
     # on the operator as it was written, as make_mpo and apply do: simplify places an identity
     # on the first site whatever site it was given, and its Jordan-Wigner strings would be
     # named in the message rather than what the caller wrote
     check_indices(state.system, op)
-    return expect_norm(state, simplify(op))
+    v = expect_norm(state, simplify(op))
+    return normalize ? v / real(trace(state)) : v
 end
 
-expect(state::AbstractState, ops::Union{AbstractArray, Tuple}) =
+expect(state::AbstractState, ops::Union{AbstractArray, Tuple}; kwargs...) =
     map(ops) do o
-        expect(state, o)
+        expect(state, o; kwargs...)
     end
+
+
 
 expect_norm(state::State, p::IndexedOp{Pure}) =
     expect_norm(state, scalarcoef(p), scalararg(p))
@@ -816,7 +835,8 @@ fermion parity. On a state superposing parities, measure it site by site with
 function expect1(state::State, op)
     state = weak_form(state)
     n = length(state)
-    r = [ expect1_one(state, op, i, get_left(state, i) * get_right(state, i)) for i in 1:n ]
+    t = real(trace(state))
+    r = [ expect1_one(state, op, i, get_left(state, i) * get_right(state, i) / t) for i in 1:n ]
     return unroll(r)
 end
 
@@ -843,8 +863,11 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     # cell is computed, since it follows what `scalar` returns for this state, and `unroll`
     # rebuilds a concretely typed result at the end, so the untyped container stays internal
     r = Matrix{Any}(undef, n, n)
+    scale = real(trace(state))
     for i in 1:n
-        lnf = zipto(state, Expector(), i)
+        # divided by the trace once, every correlation of site i being built on it
+        e = zipto(state, Expector(), i)
+        lnf = Expector(e.pos, e.t / scale)
         t = zipend(state, lnf).t
         r[i, i] = map(ops) do (o1, o2)
             expect1_one(state, o1 * o2, i, t)
@@ -1347,7 +1370,7 @@ end
 function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
     state = weak_form(state)
     sys = state.system
-    l = get_left(state, pos)
+    l = get_left(state, pos) / real(trace(state))
     r = get_right(state, pos)
     d = dim(SysIndex{Pure}(sys, pos))
     rnd = rand(rng)
