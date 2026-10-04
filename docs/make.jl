@@ -23,6 +23,7 @@ makedocs(
         "conservation.md",
         "performance.md",
         "extending.md",
+        "upgrading.md",
         "Reference" => [
             "sites.md",
             "operators.md",

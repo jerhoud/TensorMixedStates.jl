@@ -10,6 +10,10 @@ the reference article.
 
 ## [Unreleased]
 
+A program written for 1.x may need a few edits, which the page "Upgrading from 1.x" of the
+documentation gathers: renamed and removed names, phases of one's own, and the defaults that
+changed.
+
 ### Added
 
 - `compact`, which writes an operator so that its MPO has the least bond dimension a
@@ -146,9 +150,9 @@ the reference article.
   rather than resumed without that value.
 - The default cutoff of `Limits` is `eps()`, about 2.2e-16, the default of the solvers of
   ITensorMPS, which discards the singular values below about 1.5e-8 of the norm, rather than 0,
-  which kept those rounding leaves: `tdvp` under a
-  field that creates no entanglement took a superposition of 9 product states of 20 qubits to
-  a bond dimension of 36, and a chain of controlled Z to 17, where they stay at 9. The phases
+  which kept those rounding leaves: `tdvp` under a field that creates no entanglement took a
+  superposition of 9 product states of 20 qubits to a bond dimension of 36, and a chain of
+  controlled Z to 17, where they stay at 9. The phases
   and functions truncating with the default limits are concerned, `Evolve`, `Gates`,
   `Thermalize`, `ToMixed`, `tdvp`, `approx_W`, `dmrg`, `apply` and `truncate`, and
   `Limits(cutoff = 0)` truncates nothing anywhere, a sum of states included.
