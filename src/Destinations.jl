@@ -287,7 +287,10 @@ function emit!(d::Union{TextFile, Stream}, formats, time, values; event = nothin
     flush(d.io)
 end
 
-function emit!(d::Union{JsonFile, DataStore}, _, time, values; event = next_event(d.series))
+# the formats are named although unused: Julia 1.10 refuses an argument `_` beside a keyword
+# whose default is computed
+function emit!(d::Union{JsonFile, DataStore}, formats, time, values;
+               event = next_event(d.series))
     for (header, value) in values
         push_value!(d.series, header, time, value, event)
     end
