@@ -37,6 +37,18 @@ RandomState
 partial_trace
 ```
 
+## Prepared states
+
+Besides the product states the local states give, TMS builds the Slater determinants of free
+fermions, and the Fermi sea of a quadratic hamiltonian, on sites of `Fermion` or `Electron`.
+The graph states of qubits are built by [`graph_state`](@ref), and the thermal states by
+[`thermal_state`](@ref).
+
+```@docs
+slater_state
+fermi_sea
+```
+
 ## Saving and loading
 
 States can be written to disk in the HDF5 format and read back later. Several states may be

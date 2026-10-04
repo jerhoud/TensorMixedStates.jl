@@ -39,6 +39,13 @@ the reference article.
   `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
   product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
   quantum trajectories, reads to unravel an evolution or apply gates.
+- `slater_state(system, orbitals...)`, the Slater determinant of given orbitals, one matrix for
+  each species of fermions, and `fermi_sea(system, H, nparticles...)`, the ground state of
+  free fermions under a quadratic hamiltonian H written as for any other function, on sites
+  of `Fermion` or `Electron`. The determinant is built as a circuit of rotations of
+  neighbouring modes applied to a product state, after Fishman and White, and conserves the
+  number of fermions of each species. A hamiltonian that is not quadratic, or mixes the
+  species, is refused, and so is a number of fermions filling a degenerate level in part.
 - `thermal_state(H, β, ρ)` and the phase `Thermalize`, which take a mixed state ρ to
   e^(-βH/2) ρ e^(-βH/2), normalized, by tdvp in imaginary time: from `"FullyMixed"` the thermal
   state e^(-βH)/Z, and from a state that commutes with H, as `"MixedSpin"`, the thermal state

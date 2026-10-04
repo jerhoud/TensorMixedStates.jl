@@ -56,4 +56,6 @@ dim(::Fermion) = 2
     ]
 ])
 
+fermion_species(::Fermion) = (C,)
+
 @create_site_module(Fermions, [Fermion, C, N])

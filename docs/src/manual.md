@@ -281,6 +281,15 @@ term, `exp(-0.1im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 5)`, is applied as a 
 strings, on sites in any order and apart. A function of an odd operator mixes the two
 parities and is refused.
 
+The ground state of free fermions, the Fermi sea of a quadratic hamiltonian, is built at once
+by `fermi_sea`, here with three fermions, and any Slater determinant by `slater_state`, see
+[Prepared states](@ref):
+
+```@example manual
+sea = fermi_sea(System(n, Fermion()), -hopping, 3)
+measure(sea, N)
+```
+
 ## Algorithms
 
 We can now work with states and operators.

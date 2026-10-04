@@ -122,4 +122,6 @@ string_state(::Electron, ::String) = error("no generic state for Electron")
     ]
 ])
 
+fermion_species(::Electron) = (Cup, Cdn)
+
 @create_site_module(Electrons, [Electron, Cup, Cdn, Fup, Fdn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])

@@ -82,6 +82,13 @@ conserves. Julia gives this constructor to every struct, unless an inner constru
 it, in which case one taking all the fields in their order has to be kept. For the states on
 your site to be saved, its fields must be numbers, booleans, symbols, strings or `nothing`.
 
+### Free fermions
+
+A site holding fermions that are free under a quadratic hamiltonian gives their annihilation
+operators, one per species, by a method of `TensorMixedStates.fermion_species`, as `(C,)` for
+a `Fermion` and `(Cup, Cdn)` for an `Electron`. `slater_state` and `fermi_sea` then build its
+Slater determinants and Fermi seas, its local state `"0"` being the one with no fermion.
+
 ### Reusing an operator name
 
 Site types are meant to share operator names: `N` means the same thing for a `Fermion`, a

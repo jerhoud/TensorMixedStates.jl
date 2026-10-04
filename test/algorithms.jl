@@ -45,6 +45,77 @@ end
 
 end
 
+@testset "Slater determinants and Fermi seas" begin
+    LA = TensorMixedStates.LinearAlgebra
+    orth(n, m) = Matrix(LA.qr(randn(ComplexF64, n, m)).Q)[:, 1:m]
+
+    # the amplitude of each configuration is the determinant of the orbitals on its sites, in
+    # the order of the Jordan-Wigner convention, up to a global phase
+    n, m = 6, 3
+    Φ = orth(n, m)
+    d = zeros(ComplexF64, 2^n)
+    for b in 0:2^n-1
+        occ = [ (b >> (n - k)) & 1 for k in 1:n ]
+        if sum(occ) == m
+            d[b + 1] = LA.det(Φ[findall(==(1), occ), :])
+        end
+    end
+    @test abs(LA.dot(d / LA.norm(d), dense_state(slater_state(System(n, Fermion()), Φ)))) ≈ 1
+
+    # the correlations, on sites conserving the number of fermions, and Wick's theorem
+    n, m = 8, 3
+    Φ = orth(n, m)
+    ψ = slater_state(System(n, Fermion(conserve = N)), Φ)
+    Λ = conj(Φ) * transpose(Φ)
+    @test expect2(ψ, (dag(C), C)) ≈ Λ atol = 1e-10
+    @test [ expect(ψ, N(i) * N(j)) for i in 1:n for j in 1:n if i ≠ j ] ≈
+          [ Λ[i, i] * Λ[j, j] - Λ[i, j] * Λ[j, i] for i in 1:n for j in 1:n if i ≠ j ] atol = 1e-10
+
+    # electrons, a matrix of orbitals per spin, under a strong conservation
+    up, dn = orth(5, 2), orth(5, 3)
+    ψ = slater_state(System(5, Electron(conserve = (TensorMixedStates.strong(Ntot), 2Sz))),
+                     up, dn)
+    @test expect2(ψ, (dag(Cup), Cup)) ≈ conj(up) * transpose(up) atol = 1e-10
+    @test expect2(ψ, (dag(Cdn), Cdn)) ≈ conj(dn) * transpose(dn) atol = 1e-10
+
+    # the Fermi sea of a hamiltonian written in several ways, with a potential, a constant and a
+    # flux through a ring: its energy is the sum of the lowest levels
+    n, m = 12, 5
+    flux = exp(0.4im)
+    H = -sum((dag(C) ⊗ C)(i, i+1) for i in 1:n-1) + sum(C(i) * dag(C)(i+1) for i in 1:n-1) +
+        0.3 * N(4) + 2 * Id(1) - flux * dag(C)(n) * C(1) - conj(flux) * dag(C)(1) * C(n)
+    h = zeros(ComplexF64, n, n)
+    for i in 1:n-1
+        h[i, i+1] = h[i+1, i] = -1
+    end
+    h[4, 4] = 0.3
+    h[n, 1], h[1, n] = -flux, -conj(flux)
+    ψ = fermi_sea(System(n, Fermion()), H, m)
+    @test real(expect(ψ, H)) ≈ 2 + sum(LA.eigvals(LA.Hermitian(h))[1:m]) atol = 1e-9
+    @test sum(real(expect1(ψ, N))) ≈ m
+    hop(c, k) = -sum(dag(c)(i) * c(i + 1) + dag(c)(i + 1) * c(i) for i in 1:k-1)
+    he = hop(Cup, 6) + 0.5 * hop(Cdn, 6)
+    ψ = fermi_sea(System(6, Electron(conserve = (Ntot, 2Sz))), he, 3, 1)
+    ε = LA.eigvals([ abs(i - j) == 1 ? -1. : 0. for i in 1:6, j in 1:6 ])
+    @test real(expect(ψ, he)) ≈ sum(ε[1:3]) + 0.5 * ε[1] atol = 1e-9
+
+    # a level filled in part has no single ground state, which a small term settles
+    ring = -sum(dag(C)(i) * C(j) + dag(C)(j) * C(i) for (i, j) in circle_graph(10))
+    @test_throws "take 3 or 5" fermi_sea(System(10, Fermion()), ring, 4)
+    @test sum(real(expect1(fermi_sea(System(10, Fermion()), ring + 1e-3 * N(1), 4), N))) ≈ 4
+
+    # refused: what is not a hamiltonian of free fermions, and arguments that do not fit
+    free = hop(C, 4)
+    @test_throws "not free" fermi_sea(System(4, Fermion()), free + N(1) * N(2), 2)
+    @test_throws "not free" fermi_sea(System(4, Fermion()),
+                                      free + C(1) * C(2) + dag(C)(2) * dag(C)(1), 2)
+    @test_throws "not free" fermi_sea(System(4, Electron()),
+                                      hop(Cup, 4) + dag(Cup)(1) * Cdn(1) + dag(Cdn)(1) * Cup(1), 1, 1)
+    @test_throws "take as many numbers" fermi_sea(System(4, Electron()), hop(Cup, 4), 1)
+    @test_throws "not orthonormal" slater_state(System(4, Fermion()), ones(4, 1))
+    @test_throws "holds no free fermions" slater_state(System(4, Qubit()), orth(4, 1))
+end
+
 @testset "Dmrg" begin
     @test_ok test_phases([
         CreateState(
