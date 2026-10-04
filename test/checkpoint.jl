@@ -217,6 +217,35 @@ end
     end
 end
 
+@testset "Resuming a thermalization" begin
+    mktempdir() do dir
+        cd(dir) do
+            stop = Ref(false)
+            stopper = StateFunc("Stopper", _ -> begin
+                if stop[]
+                    touch("stop")
+                end
+                0.
+            end)
+            # the logarithm of the trace is summed over the steps, and carried by the commit
+            # for a resumed run to go on summing from where it stopped
+            h = -Z(1) * Z(2) - Z(2) * Z(3) - 0.7 * (X(1) + X(2) + X(3))
+            phases = [CreateState{Mixed}(3, Qubit(), "FullyMixed"),
+                      Thermalize(hamiltonian = h, beta = 0.6, beta_step = 0.1,
+                                 limits = Limits(maxdim = 10, cutoff = 1e-15),
+                                 measures = ["data" => [:beta, :log_trace, Z(1), X(2), :sweep,
+                                                        stopper]])]
+            runTMS(SimData(; name = "ref", phases))
+            stop[] = true
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            for _ in 1:10
+                runTMS(sim_data)
+            end
+            @test read("chk/data", String) == read("ref/data", String)
+        end
+    end
+end
+
 @testset "Interrupting a phase without a solver" begin
     mktempdir() do dir
         cd(dir) do

@@ -1,9 +1,9 @@
 # The phase types a simulation is made of, as runTMS takes them: CreateState, LoadState,
 # SaveState, ToMixed, the evolutions Tdvp, ApproxW, Evolve and Gates, GroundState, SteadyState,
-# PartialTrace and Weaken.
+# Thermalize, PartialTrace and Weaken.
 
 export Phases, Algo, CreateState, LoadState, SaveState, ToMixed, Tdvp, ApproxW, Evolve, Gates
-export GroundState, Dmrg, PartialTrace, SteadyState, Weaken
+export GroundState, Dmrg, PartialTrace, SteadyState, Thermalize, Weaken
 
 """
     CreateState(; type, system, state, randomize, seed, name, time_start, final_measures)
@@ -463,10 +463,69 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 end
 
 """
+    Thermalize(; hamiltonian, beta, beta_step, algo, limits, measures, measures_period, options...)
+
+a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``,
+normalized to trace one, by tdvp in imaginary time, see `thermal_state`. After
+`CreateState{Mixed}(…, "FullyMixed")`, the state at infinite temperature, it gives the thermal
+state ``e^{-\\beta H}/Z``; a state that commutes with ``H`` gives the thermal state restricted
+to what it describes. The time of the simulation does not move.
+
+# Fields
+
+- `name`, `time_start`, `final_measures`: the fields every phase has, see `Phases`
+- `hamiltonian`: the hamiltonian ``H``
+- `beta`: the inverse temperature ``\\beta``
+- `beta_step`: the step of `beta`, adjusted to the nearest one that divides `beta` into a whole
+  number of steps, and taken with the sign of `beta` (the phase is skipped when that number is
+  zero)
+- `algo`: the algorithm, `Tdvp(...)`, whose `n_expand`, `n_hermitianize` and `krylov` it takes
+  (default `Tdvp()`)
+- `limits`: constraints on the state, see `Limits` (default `Limits()`, none)
+- `measures`: the measurements to make during the phase, see `output` (default `[]`), after
+  every `measures_period` steps. The symbols `:beta` and `:log_trace` take the inverse
+  temperature reached and the logarithm of the trace the state would have without being
+  normalized, ``\\log Z - \\sum_i \\log d_i`` from `"FullyMixed"`, ``d_i`` being the dimension
+  of site `i`, see `thermal_state`
+- `measures_period`: the number of steps between two measurements (default 1)
+
+# Examples
+
+    Thermalize(hamiltonian = -sum(Z(i)Z(i+1) for i in 1:9) - sum(X(i) for i in 1:10),
+               beta = 2., beta_step = 0.1, limits = Limits(cutoff = 1e-12, maxdim = 64),
+               measures = "thermo" => [:beta, :log_trace, Z(5)])
+"""
+@kwdef struct Thermalize
+    name::String = "Thermalization"
+    time_start::Union{Nothing, Number} = nothing
+    final_measures = []
+    hamiltonian::IndexedOp{Pure}
+    beta::Real
+    beta_step::Real
+    algo::Algo = Tdvp()
+    limits::Limits = Limits()
+    measures = []
+    measures_period::Int = 1
+    # refused here rather than when it runs, as the fields of Evolve
+    function Thermalize(name, time_start, final_measures, hamiltonian, beta, beta_step, algo,
+                        limits, measures, measures_period)
+        if iszero(beta_step)
+            error("the beta_step of a Thermalize cannot be zero")
+        end
+        if !(algo isa Tdvp)
+            error("Thermalize computes with Tdvp(...), not $algo")
+        end
+        return new(name, time_start, final_measures, hamiltonian, beta, beta_step, algo, limits,
+                   measures, measures_period)
+    end
+end
+
+"""
     Phases
 
 the union of the phase types of the library: `CreateState`, `SaveState`, `LoadState`,
-`ToMixed`, `Evolve`, `Gates`, `GroundState`, `PartialTrace`, `SteadyState` and `Weaken`.
+`ToMixed`, `Evolve`, `Gates`, `GroundState`, `PartialTrace`, `SteadyState`, `Thermalize` and
+`Weaken`.
 Every phase has at least these three fields:
 
 - `name`: the name of the phase, written in the log
@@ -477,7 +536,8 @@ Every phase has at least these three fields:
 
 A phase of your own can be defined, see `TensorMixedStates.run_phase`.
 """
-const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState, PartialTrace, SteadyState, Weaken}
+const Phases = Union{CreateState, SaveState, LoadState, ToMixed, Evolve, Gates, GroundState,
+                     PartialTrace, SteadyState, Thermalize, Weaken}
 
 # The phases are printed field by field, read from the type rather than written out one by
 # one, so that a field added to a phase shows up in the log and in `prog.jl` without

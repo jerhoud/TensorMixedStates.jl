@@ -32,6 +32,7 @@ Gates
 GroundState
 Dmrg
 SteadyState
+Thermalize
 PartialTrace
 Weaken
 ```

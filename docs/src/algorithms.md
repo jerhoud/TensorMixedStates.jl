@@ -87,10 +87,26 @@ TdvpObserver
 ApproxWObserver
 ```
 
+## Thermal states
+
+`thermal_state` takes a mixed state to ``e^{-\beta H/2} \rho \, e^{-\beta H/2}``, normalized,
+by tdvp in imaginary time: from `"FullyMixed"`, the thermal state ``e^{-\beta H}/Z``.
+
+The state can be checked without an exact reference: the energy is ``-d \log Z / d\beta``,
+which the `log_trace` it returns gives apart from `expect`, a thermal state commutes with
+``H``, so that a short evolution under ``-iH`` changes no measurement, and the energy falls
+towards the ground state energy, which `dmrg` gives, as ``\beta`` grows. The results must
+not move when the step is halved or the limits raised.
+
+```@docs
+thermal_state
+ThermalObserver
+```
+
 ## Krylov methods
 
-At each step of their sweeps, `tdvp`, `dmrg` and `steady_state` solve a local problem by a
-Krylov method, whose parameters `Krylov` holds.
+At each step of their sweeps, `tdvp`, `thermal_state`, `dmrg` and `steady_state` solve a local
+problem by a Krylov method, whose parameters `Krylov` holds.
 
 ```@docs
 Krylov

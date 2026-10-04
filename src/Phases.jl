@@ -8,8 +8,8 @@ export resume_step, run_steps
     resume_step(sim)
 
 the steps, or sweeps, the phase being run has already done, and the energy dmrg had reached at
-the last of them, as `(done, energy)`: `(0, nothing)` unless it is the phase a resumed run
-starts from. The resume point is then consumed, so that it is read once.
+the last of them, or the logarithm of the trace `thermal_state` had reached, as
+`(done, energy)`: `(0, nothing)` unless it is the phase a resumed run starts from. The resume point is then consumed, so that it is read once.
 
 Calling it is also what lets the steps of the phase be committed. A resume hands the phase the
 state of its last committed step, and only a phase that reads the steps done and continues
@@ -332,4 +332,27 @@ function run_phase(sim::Simulation, phase::SteadyState)
                                          phase.mpo_algo, phase.noise, phase.krylov, kwargs...),
         sim, phase, "Searching for steady state",
         e -> "Done, dmrg final value is $e (0 for steady state)")
+end
+
+function run_phase(sim::Simulation, phase::Thermalize)
+    # adjusted as the time step of Evolve, the step taking the sign of beta
+    nsteps = round(Int, abs(phase.beta / phase.beta_step))
+    if nsteps == 0
+        log_msg(sim, "Skipping a thermalization to beta $(phase.beta), shorter than half a step")
+        return sim
+    end
+    beta = phase.beta
+    if !(beta / nsteps ≈ phase.beta_step)
+        log_msg(sim, "Taking a step of $(beta / nsteps) rather than $(phase.beta_step) to reach " *
+                     "beta $beta in $nsteps steps")
+    end
+    done, log_trace = resume_step(sim)
+    log_msg(sim, "Thermalizing state to beta $beta")
+    algo = phase.algo
+    l, sim = thermal_state(phase.hamiltonian, beta, sim; nsteps, first_step = done + 1,
+                           log_trace = something(log_trace, 0.), algo.n_expand,
+                           algo.n_hermitianize, phase.limits, algo.krylov,
+                           observer! = ThermalObserver(sim, phase.measures, phase.measures_period))
+    log_msg(sim, "Done, log_trace is $l")
+    return sim
 end

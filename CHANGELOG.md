@@ -39,6 +39,13 @@ the reference article.
   `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
   product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
   quantum trajectories, reads to unravel an evolution or apply gates.
+- `thermal_state(H, β, ρ)` and the phase `Thermalize`, which take a mixed state ρ to
+  e^(-βH/2) ρ e^(-βH/2), normalized, by tdvp in imaginary time: from `"FullyMixed"` the thermal
+  state e^(-βH)/Z, and from a state that commutes with H, as `"MixedSpin"`, the thermal state
+  restricted to what it describes. Each step is normalized and the logarithms of the traces are
+  summed into `log_trace`, log Z up to the dimension of the space: the function returns it, and
+  the phase gives it with β to its measurements, as the symbols `:log_trace` and `:beta`, and
+  carries it through a resume. `ThermalObserver` is its observer.
 - `map_sites(f, op)`, the operator `op` with each factor moved to the images of its sites by
   `f`, for a representation of one's own that keeps its tensors on another system, a
   purification for instance.

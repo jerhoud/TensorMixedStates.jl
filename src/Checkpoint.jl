@@ -177,7 +177,8 @@ and the outputs of one and the same moment.
 - `time`:       simulation time reached
 - `state`:      the state reached, `nothing` before the first phase has made one
 - `energy`:     the energy of the last dmrg sweep, which a resumed search compares its first
-                sweep with
+                sweep with, or the logarithm of the trace `thermal_state` has reached, which
+                a resumed computation goes on summing
 - `reached`:    how far every destination had got, see `output_marks`
 """
 struct Commit

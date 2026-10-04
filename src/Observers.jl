@@ -1,7 +1,7 @@
 # The observers given to tdvp, dmrg and approx_W, which output measurements every given number of
 # steps, log the progress, and stop the algorithm when the simulation is asked to stop.
 
-export TdvpObserver, DmrgObserver, ApproxWObserver
+export TdvpObserver, DmrgObserver, ApproxWObserver, ThermalObserver
 
 """
     TdvpObserver(sim, measurements, period)
@@ -35,6 +35,26 @@ simulation is asked to stop.
              observer! = ApproxWObserver(sim, "data" => [X, Z(1)], 2))
 """
 struct ApproxWObserver <: AbstractObserver
+    sim::Simulation
+    measurements::Union{Vector, Pair}
+    period::Int
+end
+
+"""
+    ThermalObserver(sim, measurements, period)
+
+an observer for `thermal_state` that outputs `measurements`, given as `output` takes them,
+every `period` steps, the symbols `:beta` and `:log_trace` taking the inverse temperature and
+the logarithm of the trace each step reaches; a `period` below one means never. It also logs
+the inverse temperature of every step and, within `runTMS`, stops the computation when the
+simulation is asked to stop.
+
+# Examples
+
+    thermal_state(H, 2.0, sim; nsteps = 20,
+                  observer! = ThermalObserver(sim, "data" => [:beta, :log_trace, Z(1)], 1))
+"""
+struct ThermalObserver <: AbstractObserver
     sim::Simulation
     measurements::Union{Vector, Pair}
     period::Int
@@ -137,6 +157,17 @@ sweep_done!(o::TdvpObserver; sweep, current_time, state, mpo, kwargs...) =
 
 sweep_done!(o::ApproxWObserver; sweep, current_time, state, mpos, kwargs...) =
     evolution_sweep_done!(o, sweep, current_time, state, "Approx_W MPOS", mpos[1], mpos)
+
+function sweep_done!(o::ThermalObserver; sweep, state, beta, log_trace, kwargs...)
+    st = State(o.sim.state, state)
+    if sweep_due(o.period, sweep)
+        output(Simulation(o.sim, st), o.measurements; sweep, beta, log_trace)
+    end
+    log_msg(o.sim, "beta $(round(beta; digits=8))")
+    # the simulation time does not move, and the logarithm of the trace is carried in the
+    # commit, as the energy of a dmrg sweep is, for a resumed computation to go on from it
+    return sweep_commit!(o.sim, st, o.sim.time, sweep; energy = log_trace)
+end
 
 function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
     # ITensorMPS counts the sweeps of a resumed run from 1 again, and what is measured, logged

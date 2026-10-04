@@ -1,7 +1,7 @@
 # The algorithms on a state or a simulation: tdvp and approx_W for time evolution, dmrg for
 # ground states, and steady_state for the steady state of an open system.
 
-export Krylov, tdvp, dmrg, approx_W, steady_state
+export Krylov, tdvp, dmrg, approx_W, steady_state, thermal_state
 
 """
     Krylov(; dim = nothing, maxiter = nothing, tol = nothing)
@@ -50,15 +50,37 @@ krylov_kwargs(k::Krylov, prefix = "") =
                for f in fieldnames(Krylov) if !isnothing(getfield(k, f)))
 
 """
-    check_nsweeps(nsweeps)
+    check_nsweeps(nsweeps, name = "nsweeps")
 
-refuse an evolution in less than one step: it made no step, while a simulation took the time
-on, and `approx_W` divided its duration by zero
+refuse an evolution in less than one step, its number of steps being called `name`: it made no
+step, while a simulation took the time on, and `approx_W` divided its duration by zero
 """
-function check_nsweeps(nsweeps)
+function check_nsweeps(nsweeps, name = "nsweeps")
     if nsweeps < 1
-        error("an evolution takes at least one step, and nsweeps is $nsweeps")
+        error("an evolution takes at least one step, and $name is $nsweeps")
     end
+end
+
+"""
+    tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize, limits, updater_kwargs)
+
+the MPS `st` of a state of the representation of `state` after step `sweep` of tdvp, a step
+of `dt` under `mpo`: expanded before the step and hermitianized after it when they are due,
+see `tdvp`
+"""
+function tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize, limits, updater_kwargs)
+    # before the step rather than after it, on the schedule shifted by one: the first
+    # step from a product state, of bond dimension one, left the tangent space and kept
+    # an error of order dt, the expansion after it coming too late
+    if sweep_due(n_expand, sweep - 1)
+        st = expand(st, mpo; alg="global_krylov")
+    end
+    st = tdvp(mpo, dt, st; nsweeps = 1, limits.cutoff, limits.maxdim, limits.mindim,
+              updater_kwargs)
+    if sweep_due(n_hermitianize, sweep)
+        st = hermitianize(State(state, st); limits).state
+    end
+    return st
 end
 
 """
@@ -114,17 +136,8 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             tf = current_time - dt / 2
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
-        lim = sweep_limits(limits, sweep)
-        # before the step rather than after it, on the schedule shifted by one: the first
-        # step from a product state, of bond dimension one, left the tangent space and kept
-        # an error of order dt, the expansion after it coming too late
-        if sweep_due(n_expand, sweep - 1)
-            st = expand(st, mpo; alg="global_krylov")
-        end
-        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, updater_kwargs)
-        if sweep_due(n_hermitianize, sweep)
-            st = hermitianize(State(state, st); limits = lim).state
-        end
+        st = tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize,
+                       sweep_limits(limits, sweep), updater_kwargs)
         # once the whole sweep is done: the sweep is committed right after its measurements,
         # and a checkpoint cannot fall between them
         if sweep_done!(observer!; sweep, state = st, current_time, mpo)
@@ -379,6 +392,81 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
     return (e, normalize(st))
 end
 
+"""
+    thermal_state(hamiltonian, beta, ::State; options...)
+    thermal_state(hamiltonian, beta, ::Simulation; options...)
+
+the mixed state ``\\rho`` taken to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``, normalized to
+trace one, by tdvp in imaginary time, in `nsteps` steps of `beta / nsteps`. It is returned as
+`(log_trace, state)`, or `(log_trace, simulation)`, the time of the simulation unchanged, where
+`log_trace` is ``\\log \\mathrm{tr}(e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2})``, ``\\rho`` being
+the state given normalized to trace one: each step is normalized, so that the trace, which
+grows or shrinks exponentially with `beta`, never leaves the range of the numbers, and its
+logarithms are summed.
+
+From `"FullyMixed"`, the state at infinite temperature, it gives the thermal state
+``e^{-\\beta H}/Z``, and `log_trace` is ``\\log Z - \\sum_i \\log d_i``, ``d_i`` being the
+dimension of site `i`. More generally a state that commutes with ``H`` gives the thermal state
+restricted to what it describes: `"MixedSpin"` on `Tj` sites, at one electron per site, gives
+that of the Heisenberg model, and a product state of populations ``e^{\\beta\\mu n_i}``
+the grand canonical state at chemical potential ``\\mu``, for a hamiltonian conserving the
+number of particles. A pure state is refused: ``e^{-\\beta H/2}`` takes it towards the ground
+state, see `dmrg`.
+
+# Options
+
+- `nsteps`: the number of steps (default 1)
+- `first_step`: the step to start from (default 1), to continue a computation left unfinished
+  from the state it had reached: `beta` and `nsteps` are still those of the whole computation
+- `log_trace`: the value of `log_trace` the computation starts from (default 0), that of the
+  step before `first_step` to continue it
+- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion before the
+  first step and then every `n_expand` steps (default 0, never)
+- `n_hermitianize`: make the state hermitian every `n_hermitianize` steps (default 0, never)
+- `limits`: constraints on the state, see `Limits`, which may give one value per step
+  (default `Limits()`, none)
+- `observer!`: an observer, see `ThermalObserver`
+- `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
+  (default `Krylov()`, those of `KrylovKit.exponentiate`)
+
+# Examples
+
+    log_trace, rho = thermal_state(H, 2.0, State{Mixed}(system, "FullyMixed"); nsteps = 20,
+                                   limits = Limits(cutoff = 1e-12, maxdim = 64))
+"""
+function thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mixed};
+    observer! = NoObserver(), nsteps::Int = 1, first_step::Int = 1, log_trace::Real = 0.,
+    n_expand::Int = 0, n_hermitianize::Int = 0, limits::Limits = Limits(),
+    krylov::Krylov = Krylov())
+    check_nsweeps(nsteps, "nsteps")
+    dbeta = beta / nsteps
+    # a placed operator on a mixed state becomes its Evolver, A ρ + ρ A†, which for A = -H/2
+    # is the generator of e^{-βH/2} ρ e^{-βH/2}
+    mpo = make_mpo(state, -hamiltonian / 2)
+    updater_kwargs = (; eager = true, krylov_kwargs(krylov)...)
+    # a computation continued goes on from the state it had reached, already normalized:
+    # normalized again, its rounding would differ from that of the uninterrupted one
+    st = first_step == 1 ? normalize(state).state : state.state
+    for step in first_step:nsteps
+        st = tdvp_step(mpo, dbeta, st, state, step, n_expand, n_hermitianize,
+                       sweep_limits(limits, step), updater_kwargs)
+        t = real(trace(State(state, st)))
+        if !(t > 0)
+            error("the trace of the state reached $t at step $step of thermal_state: take " *
+                  "smaller steps or larger limits")
+        end
+        st /= t
+        log_trace += log(t)
+        if sweep_done!(observer!; sweep = step, state = st, beta = step * dbeta, log_trace)
+            break
+        end
+    end
+    return (log_trace, State(state, st))
+end
+
+thermal_state(::IndexedOp{Pure}, ::Real, ::State{Pure}; kwargs...) =
+    error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
+
 tdvp(op, t::Number, sim::Simulation; kwargs...) =
     Simulation(sim, tdvp(op, t, sim.state; time_start = sim.time, kwargs...), sim.time + t)
 
@@ -393,4 +481,9 @@ approx_W(op, t::Number, sim::Simulation; kwargs...) =
 function steady_state(op, sim::Simulation; kwargs...)
     e, st = steady_state(op, sim.state; kwargs...)
     return (e, Simulation(sim, st))
+end
+
+function thermal_state(hamiltonian, beta, sim::Simulation; kwargs...)
+    l, st = thermal_state(hamiltonian, beta, sim.state; kwargs...)
+    return (l, Simulation(sim, st))
 end

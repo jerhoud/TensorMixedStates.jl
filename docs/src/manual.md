@@ -388,6 +388,25 @@ value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for 
 measure(mysteady, Z)
 ```
 
+### Thermal states
+
+`thermal_state` takes a mixed state ``\rho`` to ``e^{-\beta H/2} \rho \, e^{-\beta H/2}``,
+normalized, by tdvp in imaginary time. From `"FullyMixed"`, the state at infinite temperature,
+it gives the thermal state ``e^{-\beta H}/Z``. It returns the logarithm of the trace the state
+would have without being normalized, here ``\log Z - 4 \log 2``, and the state. Qubits in the
+field ``H = -\sum_i \sigma_z^i`` have ``\langle \sigma_z \rangle = \tanh \beta``, which is
+``0.4621`` at ``\beta = 0.5``, and ``\log Z - 4 \log 2 = 4 \log \cosh \beta \approx 0.4895``:
+
+```@example manual
+mylog, mythermal = thermal_state(-sum(Z(i) for i in 1:4), 0.5,
+                                 State{Mixed}(System(4, Qubit()), "FullyMixed"); nsteps = 10)
+mylog
+```
+
+```@example manual
+measure(mythermal, Z)
+```
+
 For more details, see the [Algorithms](algorithms.md) page of the reference or the inline
 help.
 

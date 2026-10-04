@@ -69,6 +69,85 @@ end
     end
 end
 
+@testset "Thermal states" begin
+    # the tolerances say how accurate tdvp is in imaginary time on these problems, as above
+    lim = Limits(cutoff = 1e-14, maxdim = 64)
+    LA = TensorMixedStates.LinearAlgebra
+    on(m, i, n) = kron([ k == i ? m : Matrix{Float64}(LA.I, size(m)...) for k in 1:n ]...)
+    tr = LA.tr
+    x, y, z = [0. 1. ; 1. 0.], [0. -im ; im 0.], [1. 0. ; 0. -1.]
+
+    # from the fully mixed state, the thermal state of a transverse field Ising chain against
+    # the exponential of its dense hamiltonian, the trace included
+    n, β = 4, 1.3
+    h = -sum(Z(i) * Z(i+1) for i in 1:n-1) - 0.7 * sum(X(i) for i in 1:n)
+    l, ρ = thermal_state(h, β, State{Mixed}(System(n, Qubit()), "FullyMixed"); nsteps = 13,
+                         limits = lim)
+    dense = -sum(on(z, i, n) * on(z, i+1, n) for i in 1:n-1) - 0.7 * sum(on(x, i, n) for i in 1:n)
+    g = exp(-β * dense)
+    @test real(expect(ρ, h)) ≈ tr(g * dense) / tr(g) atol = 1e-6
+    @test real(expect(ρ, X(1) * X(3))) ≈ tr(g * on(x, 1, n) * on(x, 3, n)) / tr(g) atol = 1e-7
+    @test trace2(ρ) ≈ tr(g * g) / tr(g)^2 atol = 1e-7
+    @test l ≈ log(tr(g) / 2^n) atol = 1e-7
+    @test trace(ρ) ≈ 1
+
+    # free fermions against Fermi-Dirac, <c†_i c_j> = [(e^{βh} + 1)^{-1}]_{ji}
+    n, β = 8, 1.5
+    hop = zeros(n, n)
+    for i in 1:n-1
+        hop[i, i+1] = hop[i+1, i] = -1.
+    end
+    l, ρ = thermal_state(-sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:n-1), β,
+                         State{Mixed}(System(n, Fermion()), "FullyMixed"); nsteps = 15,
+                         limits = lim)
+    ε = LA.eigvals(hop)
+    @test expect2(ρ, (dag(C), C)) ≈ transpose(inv(exp(β * hop) + LA.I)) atol = 5e-5
+    @test l ≈ sum(log.(1 .+ exp.(-β * ε))) - n * log(2) atol = 1e-5
+
+    # a state that commutes with the hamiltonian gives the thermal state restricted to it: one
+    # electron of mixed spin per site, under a strong conservation of their number, makes the
+    # t-J model the Heisenberg model, hopping blocked
+    n, β, J = 4, 1.1, 0.8
+    hopping = -sum(dag(Cup)(i) * Cup(i+1) + dag(Cup)(i+1) * Cup(i) +
+                   dag(Cdn)(i) * Cdn(i+1) + dag(Cdn)(i+1) * Cdn(i) for i in 1:n-1)
+    heisenberg = J * sum(Sz(i) * Sz(i+1) + (Sp(i) * Sm(i+1) + Sm(i) * Sp(i+1)) / 2 for i in 1:n-1)
+    sys = System(n, Tj(conserve = TensorMixedStates.strong(Ntot)))
+    l, ρ = thermal_state(hopping + heisenberg, β, State{Mixed}(sys, "MixedSpin"); nsteps = 11,
+                         limits = lim)
+    s = [x / 2, y / 2, z / 2]
+    dense = J * sum(real(sum(on(m, i, n) * on(m, i+1, n) for m in s)) for i in 1:n-1)
+    g = exp(-β * dense)
+    @test real(expect(ρ, heisenberg)) ≈ tr(g * dense) / tr(g) atol = 1e-6
+    @test real(expect(ρ, Sz(1) * Sz(2))) ≈
+          tr(g * on(s[3], 1, n) * on(s[3], 2, n)) / tr(g) atol = 1e-7
+    @test l ≈ log(tr(g) / 2^n) atol = 1e-7
+
+    # the phase: the energy is the derivative of the logarithm of the trace, the two computed
+    # apart, and the time of the simulation does not move
+    n = 4
+    h = -sum(Z(i) * Z(i+1) for i in 1:n-1) - 0.7 * sum(X(i) for i in 1:n)
+    energy = StateFunc("E", st -> real(expect(st, h)))
+    thermalize = Thermalize(hamiltonian = h, beta = 1., beta_step = 0.05, limits = lim,
+                            measures = Data("t") => [:beta, :log_trace, energy])
+    sim = runTMS(SimData(phases = [CreateState{Mixed}(n, Qubit(), "FullyMixed", time_start = 0.3),
+                                   thermalize]); output = devnull)
+    d = sim.data["t"]
+    b, l, e = d["beta"]["data"], d["log_trace"]["data"], d["E"]["data"]
+    @test b ≈ 0.05:0.05:1
+    @test maximum(abs((l[k+1] - l[k-1]) / (b[k+1] - b[k-1]) + e[k]) for k in 2:19) < 5e-3
+    @test sim.time == 0.3
+
+    # refused: a step of zero, another algorithm, and a pure state, which e^{-βH/2} takes to
+    # its ground state
+    @test_throws "cannot be zero" Thermalize(hamiltonian = h, beta = 1., beta_step = 0.)
+    @test_throws "computes with Tdvp" Thermalize(hamiltonian = h, beta = 1., beta_step = 0.1,
+                                                 algo = ApproxW(order = 2))
+    @test_throws "needs a mixed representation" thermal_state(h, 1.,
+                                                              State{Pure}(System(n, Qubit()), "Up"))
+    @test_throws "nsteps is 0" thermal_state(h, 1., State{Mixed}(System(n, Qubit()), "FullyMixed");
+                                             nsteps = 0)
+end
+
 @testset "Multi evolve" begin
     for (algo, time_step, tol) in [
         (Tdvp(), 0.1, 1e-14),
