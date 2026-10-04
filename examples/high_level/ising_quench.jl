@@ -9,7 +9,7 @@ limits = Limits(
 # description below can be built from the values actually used. A description that restates
 # them by hand drifts, and what it writes to the run directory is then a false record of
 # what was computed
-algo = ApproxW(order = 4, n_hermitianize = 5)
+algo = ApproxW(order = 4, hermitianize_period = 5)
 time_step = 0.04
 
 measurements(n) = [
@@ -50,7 +50,7 @@ sim_data(J,h,n) = SimData(
             limits = limits,
         ), 
         Evolve(
-            #algo = Tdvp(n_hermitianize = 5),
+            #algo = Tdvp(hermitianize_period = 5),
             algo = algo,
             limits = limits,
             duration = 1,

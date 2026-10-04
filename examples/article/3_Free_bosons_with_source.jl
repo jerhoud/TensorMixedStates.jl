@@ -58,11 +58,11 @@ sim_data(n, step, duration, alg, gamma) = SimData(
         # a phase for Lindblad evolution
         Evolve(
             # evolution algorithm TDVP (alg=0) or ApproxW 1 (alg=1) or ApproxW 2 (alg=2)
-            # n_hermitianize = 5 makes the density matrix Hermitian again every 5 steps
+            # hermitianize_period = 5 makes the density matrix Hermitian again every 5 steps
             algo= (
                 (alg==0) ? Tdvp() : (
-                (alg==1) ? ApproxW(order = 4, w = 1, n_hermitianize = 5) 
-                         : ApproxW(order = 4, w = 2, n_hermitianize = 5)
+                (alg==1) ? ApproxW(order = 4, w = 1, hermitianize_period = 5) 
+                         : ApproxW(order = 4, w = 2, hermitianize_period = 5)
                 )),
             # the limits on the MPS
             limits = limits,

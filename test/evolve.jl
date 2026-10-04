@@ -640,8 +640,8 @@ end
 end
 
 @testset "Periods below one mean never" begin
-    # one rule for every period of the library: `measurements_period`, `n_expand`,
-    # `n_hermitianize`, and the `checkpoint_interval` covered in checkpoint.jl.
+    # one rule for every period of the library: `measurements_period`, `expand_period`,
+    # `hermitianize_period`, and the `checkpoint_interval` covered in checkpoint.jl.
     # `mod(sweep, 0)` raised a division by zero and `mod(sweep, -2)` is zero on every
     # second sweep, so anything below one is read as never rather than as one of those
     due = TensorMixedStates.sweep_due

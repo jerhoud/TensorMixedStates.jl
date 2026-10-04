@@ -75,22 +75,24 @@ function check_pre_system(pre::PreMPO, state::State)
 end
 
 """
-    tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize, limits, updater_kwargs)
+    tdvp_step(mpo, dt, st, state, sweep, expand_period, hermitianize_period, limits,
+              updater_kwargs)
 
 the MPS `st` of a state of the representation of `state` after step `sweep` of tdvp, a step
 of `dt` under `mpo`: expanded before the step and hermitianized after it when they are due,
 see `tdvp`
 """
-function tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize, limits, updater_kwargs)
+function tdvp_step(mpo, dt, st, state, sweep, expand_period, hermitianize_period, limits,
+                   updater_kwargs)
     # before the step rather than after it, on the schedule shifted by one: the first
     # step from a product state, of bond dimension one, left the tangent space and kept
     # an error of order dt, the expansion after it coming too late
-    if sweep_due(n_expand, sweep - 1)
+    if sweep_due(expand_period, sweep - 1)
         st = expand(st, mpo; alg="global_krylov")
     end
     st = tdvp(mpo, dt, st; nsweeps = 1, limits.cutoff, limits.maxdim, limits.mindim,
               updater_kwargs)
-    if sweep_due(n_hermitianize, sweep)
+    if sweep_due(hermitianize_period, sweep)
         st = hermitianize(State(state, st); limits).state
     end
     return st
@@ -115,9 +117,9 @@ for instance. A simulation comes back with its time advanced by `t`.
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
   at the middle of each step
-- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion before the
-  first step and then every `n_expand` steps (default 0, never)
-- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+- `expand_period`: enlarge the bond dimension of the state by a global Krylov expansion before the
+  first step and then every `expand_period` steps (default 0, never)
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`)
@@ -130,7 +132,7 @@ for instance. A simulation comes back with its time advanced by `t`.
     tdvp(-im * H, 1., state; nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
-    observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
+    observer! = NoObserver(), coefs=nothing, expand_period = 0, hermitianize_period = 0,
     nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(),
     krylov::Krylov = Krylov()) where {R <: PM}
     check_pre_system(pre, state)
@@ -151,7 +153,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             tf = current_time - dt / 2
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
-        st = tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize,
+        st = tdvp_step(mpo, dt, st, state, sweep, expand_period, hermitianize_period,
                        sweep_limits(limits, sweep), updater_kwargs)
         # once the whole sweep is done: the sweep is committed right after its measurements,
         # and a checkpoint cannot fall between them
@@ -304,7 +306,7 @@ advanced by `t`.
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
   at the middle of each step
-- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`)
@@ -317,8 +319,8 @@ advanced by `t`.
 
     approx_W(-im * H, 1., state; order = 4, nsweeps = 10)
 """
-function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
-    nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
+function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing,
+    hermitianize_period::Int = 0, nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
     time_start = zero(t), limits::Limits=Limits(), apply_algo::String = "densitymatrix") where {R <: PM}
     check_pre_system(pre, state)
     check_apply_algo(apply_algo)
@@ -339,7 +341,7 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n
         for mpo in mpos
             st = apply(mpo, st; alg = apply_algo, lim.cutoff, lim.maxdim, lim.mindim)
         end
-        if sweep_due(n_hermitianize, sweep)
+        if sweep_due(hermitianize_period, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end
         if sweep_done!(observer!; sweep, state = st, current_time, mpos)
@@ -442,9 +444,10 @@ state, see `dmrg`.
   from the state it had reached: `beta` and `nsteps` are still those of the whole computation
 - `log_trace`: the value of `log_trace` the computation starts from (default 0), that of the
   step before `first_step` to continue it
-- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion before the
-  first step and then every `n_expand` steps (default 0, never)
-- `n_hermitianize`: make the state hermitian every `n_hermitianize` steps (default 0, never)
+- `expand_period`: enlarge the bond dimension of the state by a global Krylov expansion before the
+  first step and then every `expand_period` steps (default 0, never)
+- `hermitianize_period`: make the state hermitian every `hermitianize_period` steps (default 0,
+  never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`)
 - `observer!`: an observer, see `ThermalObserver`
@@ -458,7 +461,7 @@ state, see `dmrg`.
 """
 function thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mixed};
     observer! = NoObserver(), nsteps::Int = 1, first_step::Int = 1, log_trace::Real = 0.,
-    n_expand::Int = 0, n_hermitianize::Int = 0, limits::Limits = Limits(),
+    expand_period::Int = 0, hermitianize_period::Int = 0, limits::Limits = Limits(),
     krylov::Krylov = Krylov())
     check_nsweeps(nsteps, "nsteps")
     dbeta = beta / nsteps
@@ -470,7 +473,7 @@ function thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mi
     # normalized again, its rounding would differ from that of the uninterrupted one
     st = first_step == 1 ? normalize(state).state : state.state
     for step in first_step:nsteps
-        st = tdvp_step(mpo, dbeta, st, state, step, n_expand, n_hermitianize,
+        st = tdvp_step(mpo, dbeta, st, state, step, expand_period, hermitianize_period,
                        sweep_limits(limits, step), updater_kwargs)
         t = real(trace(State(state, st)))
         if !(t > 0)

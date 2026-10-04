@@ -21,8 +21,8 @@ move.
 - `beta_step`: the step of `beta`, adjusted to the nearest one that divides `beta` into a whole
   number of steps, and taken with the sign of `beta` (the phase is skipped when that number is
   zero)
-- `algo`: the algorithm, `Tdvp(...)`, whose `n_expand`, `n_hermitianize` and `krylov` it takes
-  (default `Tdvp()`)
+- `algo`: the algorithm, `Tdvp(...)`, whose `expand_period`, `hermitianize_period` and `krylov`
+  it takes (default `Tdvp()`)
 - `limits`: constraints on the state, see `Limits` (default `Limits()`)
 - `measurements`: the measurements to make during the phase, see `output` (default `[]`), after
   every `measurements_period` steps. The symbols `:beta` and `:log_trace` take the inverse
@@ -78,8 +78,8 @@ function run_phase(sim::Simulation, phase::Thermalize)
     log_msg(sim, "Thermalizing state to beta $beta")
     algo = phase.algo
     l, sim = thermal_state(phase.hamiltonian, beta, sim; nsteps, first_step = done + 1,
-                           log_trace = something(log_trace, 0.), algo.n_expand,
-                           algo.n_hermitianize, phase.limits, algo.krylov,
+                           log_trace = something(log_trace, 0.), algo.expand_period,
+                           algo.hermitianize_period, phase.limits, algo.krylov,
                            observer! = ThermalObserver(sim, phase.measurements,
                                                        phase.measurements_period))
     log_msg(sim, "Done, log_trace is $l")

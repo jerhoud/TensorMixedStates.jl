@@ -123,6 +123,8 @@ the reference article.
 
 ### Changed
 
+- The options `n_expand` and `n_hermitianize` of `Tdvp`, `ApproxW`, `tdvp`, `approx_W` and
+  `thermal_state` are `expand_period` and `hermitianize_period`, as `measurements_period`.
 - The field `tolerance` of `GroundState` and `SteadyState` is `tol`, as everywhere else
   (`Krylov`, `DmrgObserver`, `compact`, `Check`).
 - `variance(state, h)` takes the state first, as `expect` and the other measurements do,
@@ -280,10 +282,10 @@ the reference article.
   gathered nothing gives an empty table, where it failed.
 - `dmrg` with no sweep left, its `first_sweep` past `nsweeps`, gives the energy of the state
   it is given, where it gave 0.
-- `tdvp` and `Tdvp` with `n_expand` enlarge the bond dimension before the first step and then
-  every `n_expand` steps, rather than after them. The first step from a product state, of bond
+- `tdvp` and `Tdvp` with `expand_period` enlarge the bond dimension before the first step and then
+  every `expand_period` steps, rather than after them. The first step from a product state, of bond
   dimension one, left the tangent space and kept an error of the order of the time step: 0.016
-  on a ring of 6 qubits, where it is now 1e-9. The results of a simulation using `n_expand`
+  on a ring of 6 qubits, where it is now 1e-9. The results of a simulation using `expand_period`
   change accordingly.
 - The documentation of `write_state` and `read_state` says how the state of an extension whose
   type has parameters is saved, the file recording the type without them: its parameters are

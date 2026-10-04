@@ -12,13 +12,13 @@ the supertype of the time evolution algorithms the `algo` field of `Evolve` take
 abstract type Algo end
 
 """
-    Tdvp(; n_expand = 0, n_hermitianize = 0, krylov = Krylov())
+    Tdvp(; expand_period = 0, hermitianize_period = 0, krylov = Krylov())
 
 the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
 
-- `n_expand`: enlarge the bond dimension of the state by a global Krylov expansion before the
-  first step and then every `n_expand` steps (default 0, never)
-- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+- `expand_period`: enlarge the bond dimension of the state by a global Krylov expansion before the
+  first step and then every `expand_period` steps (default 0, never)
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
   never)
 - `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
   (default `Krylov()`)
@@ -26,47 +26,47 @@ the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
 # Examples
 
     Tdvp()
-    Tdvp(n_expand = 5)                   # tdvp with expansion steps every 5 steps
-    Tdvp(n_hermitianize = 3)             # tdvp, make hermitian every 3 steps
-    Tdvp(krylov = Krylov(tol = 1e-10))   # tdvp, local steps at a lower precision
+    Tdvp(expand_period = 5)               # tdvp with expansion steps every 5 steps
+    Tdvp(hermitianize_period = 3)         # tdvp, make hermitian every 3 steps
+    Tdvp(krylov = Krylov(tol = 1e-10))    # tdvp, local steps at a lower precision
 """
 @kwdef struct Tdvp <: Algo
-    n_expand::Int = 0
-    n_hermitianize::Int = 0
+    expand_period::Int = 0
+    hermitianize_period::Int = 0
     krylov::Krylov = Krylov()
 end
 
 """
-    ApproxW(; order, w = 2, n_hermitianize = 0, apply_algo = "densitymatrix")
+    ApproxW(; order, w = 2, hermitianize_period = 0, apply_algo = "densitymatrix")
 
 time evolution by WI or WII approximations of the exponential, combined into an approximation
 of the given order, for the `algo` field of `Evolve`, see `approx_W`.
 
 - `order`: the order of the approximation, from 1 to 4, required
 - `w`: 1 or 2 for WI or WII (default 2)
-- `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
   never)
 - `apply_algo`: the algorithm of the product of the state by each MPO, `"densitymatrix"`
   (default) or `"naive"`, see `approx_W`
 
 # Examples
 
-    ApproxW(order = 2)                       # order 2, WII
-    ApproxW(order = 4, w = 1)                # order 4, WI
-    ApproxW(order = 4, n_hermitianize = 3)   # order 4, make hermitian every 3 steps
-    ApproxW(order = 2, apply_algo = "naive") # order 2, naive products
+    ApproxW(order = 2)                            # order 2, WII
+    ApproxW(order = 4, w = 1)                     # order 4, WI
+    ApproxW(order = 4, hermitianize_period = 3)   # order 4, make hermitian every 3 steps
+    ApproxW(order = 2, apply_algo = "naive")      # order 2, naive products
 """
 @kwdef struct ApproxW <: Algo
     order::Int
     w::Int = 2
-    n_hermitianize::Int = 0
+    hermitianize_period::Int = 0
     apply_algo::String = "densitymatrix"
     # checked when the phase is written rather than when it runs: corrected then, it could not
     # resume its checkpoint, which belongs to a simulation of other phases
-    function ApproxW(order, w, n_hermitianize, apply_algo)
+    function ApproxW(order, w, hermitianize_period, apply_algo)
         check_w_approx(order, w)
         check_apply_algo(apply_algo)
-        return new(order, w, n_hermitianize, apply_algo)
+        return new(order, w, hermitianize_period, apply_algo)
     end
 end
 
@@ -156,8 +156,8 @@ uses, so that a keyword a later version of TMS passes does not break it.
 function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
                 nsteps)
     done, _ = resume_step(sim)
-    st = tdvp(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps = nsteps,
-              time_start = sim.time, phase.limits, first_sweep = done + 1, algo.n_expand,
+    st = tdvp(evolver, phase.duration, state; coefs, algo.hermitianize_period, nsweeps = nsteps,
+              time_start = sim.time, phase.limits, first_sweep = done + 1, algo.expand_period,
               algo.krylov,
               observer! = TdvpObserver(sim, phase.measurements, phase.measurements_period))
     return Simulation(sim, st)
@@ -166,7 +166,7 @@ end
 function evolve(algo::ApproxW, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
                 nsteps)
     done, _ = resume_step(sim)
-    st = approx_W(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps = nsteps,
+    st = approx_W(evolver, phase.duration, state; coefs, algo.hermitianize_period, nsweeps = nsteps,
                   time_start = sim.time, phase.limits, first_sweep = done + 1, algo.order,
                   algo.w, algo.apply_algo,
                   observer! = ApproxWObserver(sim, phase.measurements, phase.measurements_period))

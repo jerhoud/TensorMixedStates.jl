@@ -409,11 +409,11 @@ end
 @testset "An expansion before the first step" begin
     # the ring above from a product state, with tdvp: the first step, of bond dimension one,
     # left the tangent space through Z(6)Z(1), and the expansion, coming after it, left an
-    # error of order the time step, 0.016 on X(1), whatever n_expand
-    for n_expand in (1, 2)
+    # error of order the time step, 0.016 on X(1), whatever expand_period
+    for expand_period in (1, 2)
         @test_ok test_phases([
             CreateState{Pure}(6, Qubit(), "X+"),
-            Evolve(algo = Tdvp(; n_expand), limits = Limits(maxdim = 8, cutoff = 1e-14),
+            Evolve(algo = Tdvp(; expand_period), limits = Limits(maxdim = 8, cutoff = 1e-14),
                    duration = 1.0, time_step = 0.1,
                    evolver = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) -
                                     sum(X(i) for i in 1:6)),
