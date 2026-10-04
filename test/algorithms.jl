@@ -176,6 +176,35 @@ end
     @test_throws "do not fit on 3 sites" dicke_state(System(3, Qubit()), 4, "Up", "Dn")
 end
 
+@testset "Dimer states" begin
+    # pairs that cross, against the product of the two singlets, |ab> - |ba> with a first
+    up, dn = [1., 0.], [0., 1.]
+    ref = sum(c1 * c2 * kron(s1, s2, s3, s4) for (s1, s3, c1) in ((up, dn, 1), (dn, up, -1))
+                                              for (s2, s4, c2) in ((up, dn, 1), (dn, up, -1))) / 2
+    @test dense_state(dimer_state(System(4, Qubit()), [(1, 3), (2, 4)], "Up", "Dn")) ≈ ref
+    # Majumdar-Ghosh, on charged sites
+    mg = dimer_state(System(10, Qubit(conserve = N)), [ (i, i + 1) for i in 1:2:9 ], "Up", "Dn")
+    @test maxlinkdim(mg) == 2
+    @test expect(mg, Z(1) * Z(2)) ≈ -1
+    @test expect(mg, Z(2) * Z(3)) ≈ 0 atol = 1e-12
+    # the rainbow state, nested pairs
+    rb = dimer_state(System(8, Qubit()), [ (i, 9 - i) for i in 1:4 ], "Up", "Dn")
+    @test maxlinkdim(rb) == 16
+    @test expect(rb, X(1) * X(8)) ≈ -1
+    # a site in no pair, and electrons, whose spins make the singlet
+    sp = dimer_state(System(5, Spin(1/2)), [(1, 2), (4, 5)], "1/2", "-1/2"; others = "1/2")
+    @test expect(sp, Sx(1) * Sx(2) + Sy(1) * Sy(2) + Sz(1) * Sz(2)) ≈ -0.75
+    @test expect(sp, Sz(3)) ≈ 0.5
+    el = dimer_state(System(4, Electron(conserve = (Ntot, 2Sz))), [(1, 4), (2, 3)], "Up", "Dn")
+    @test expect(el, Sz(1) * Sz(4) + (Sp(1) * Sm(4) + Sm(1) * Sp(4)) / 2) ≈ -0.75
+    @test_throws "a site is in two pairs" dimer_state(System(4, Qubit()), [(1, 2), (2, 3)],
+                                                      "Up", "Dn")
+    @test_throws "reach beyond the 4 sites" dimer_state(System(4, Qubit()), [(1, 5)], "Up", "Dn";
+                                                        others = "Up")
+    @test_throws "site 3 is in no pair" dimer_state(System(3, Qubit()), [(1, 2)], "Up", "Dn")
+    @test_throws "needs them orthonormal" dimer_state(System(2, Qubit()), [(1, 2)], "Up", "+")
+end
+
 @testset "Dmrg" begin
     @test_ok test_phases([
         CreateState(

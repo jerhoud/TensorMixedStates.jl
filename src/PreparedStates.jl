@@ -1,7 +1,7 @@
 # Prepared pure states with an exact MPS of small bond dimension, built from their tensors: the
 # GHZ state, the Dicke states, of which the W state, and the states of singlets on pairs.
 
-export ghz_state, dicke_state, w_state
+export ghz_state, dicke_state, w_state, dimer_state
 
 """
     local_vector(site, st)
@@ -148,3 +148,68 @@ the W state, the Dicke state of one site in `b` and the others in `a`, see `dick
     w_state(System(10, Qubit()), "Up", "Dn")
 """
 w_state(system::System, a, b) = dicke_state(system, 1, a, b)
+
+"""
+    dimer_state(system, pairs, a, b; others, limits = Limits())
+
+the state of a singlet ``(|ab\\rangle - |ba\\rangle)/\\sqrt{2}`` on each pair `(i, j)` of
+`pairs`, `a` on `i` in the first term, of the local pure states `a` and `b`, given by their
+names or their vectors and orthonormal: `"Up"` and `"Dn"` for spins one half. The sites in no
+pair take the local state `others`, one for all of them or a vector of one for each, which
+they then need.
+
+Each singlet comes from a gate of two sites applied to ``|ab\\rangle``, on sites apart as well,
+so that pairs of neighbours give the Majumdar-Ghosh state, of bond dimension 2, and nested
+pairs `(i, n + 1 - i)` the rainbow state, of bond dimension ``2^{n/2}`` in the middle: `limits`
+constrains the truncations made as the gates are applied.
+
+# Examples
+
+    dimer_state(System(10, Qubit()), [ (i, i + 1) for i in 1:2:9 ], "Up", "Dn")
+    dimer_state(System(9, Spin(1/2)), [ (i, i + 1) for i in 1:2:7 ], "1/2", "-1/2";
+                others = "1/2")
+"""
+function dimer_state(system::System, pairs::AbstractVector{Tuple{Int, Int}}, a, b;
+                     others = nothing, limits::Limits = Limits())
+    n = length(system)
+    paired = reduce(vcat, [ [i, j] for (i, j) in pairs ]; init = Int[])
+    if !allunique(paired)
+        error("a site is in two pairs of $pairs")
+    end
+    if any(k -> !(1 ≤ k ≤ n), paired)
+        error("the pairs $pairs reach beyond the $n sites of the system")
+    end
+    rest = setdiff(1:n, paired)
+    states = Vector{Any}(undef, n)
+    for (i, j) in pairs
+        states[i], states[j] = a, b
+    end
+    if !isempty(rest)
+        if isnothing(others)
+            which = length(rest) == 1 ? "site $(only(rest)) is in no pair: give its" :
+                                        "sites $(join(rest, ", ")) are in no pair: give their"
+            error("$which state with others")
+        end
+        local_states = others isa AbstractVector && !(eltype(others) <: Number) ? others :
+                       fill(others, length(rest))
+        if length(local_states) ≠ length(rest)
+            error("others gives $(length(local_states)) states for the $(length(rest)) sites " *
+                  "in no pair")
+        end
+        states[rest] = local_states
+    end
+    st = State{Pure}(system, states)
+    gates = map(pairs) do (i, j)
+        va, vb = local_vector(system[i], a), local_vector(system[i], b)
+        wa, wb = local_vector(system[j], a), local_vector(system[j], b)
+        if abs(va' * vb) > 1e-12 || abs(wa' * wb) > 1e-12
+            error("a singlet of $a and $b needs them orthonormal")
+        end
+        # on the basis of the two sites, the gate takes |ab⟩ to the singlet and |ba⟩ to the
+        # triplet of no charge, and leaves alone what is orthogonal to both
+        x, y = kron(va, wb), kron(vb, wa)
+        U = I + ((x - y) / sqrt(2) - x) * x' + ((x + y) / sqrt(2) - y) * y'
+        named(U, "Singlet", system[i], system[j])(i, j)
+    end
+    return isempty(gates) ? st : apply(prod(gates), st; limits)
+end

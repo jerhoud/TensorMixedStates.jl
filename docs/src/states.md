@@ -40,7 +40,8 @@ partial_trace
 ## Prepared states
 
 Besides the product states the local states give, TMS builds states with an exact MPS of small
-bond dimension, as the GHZ, Dicke and W states, the Slater determinants of free fermions, and the Fermi sea
+bond dimension, as the GHZ, Dicke and W states, the states of singlets on pairs of sites, the
+Slater determinants of free fermions, and the Fermi sea
 of a quadratic hamiltonian, on sites of `Fermion` or `Electron`, beside sites of other types if
 need be, an impurity for instance.
 The graph states of qubits are built by [`graph_state`](@ref), and the thermal states by
@@ -50,6 +51,7 @@ The graph states of qubits are built by [`graph_state`](@ref), and the thermal s
 ghz_state
 dicke_state
 w_state
+dimer_state
 slater_state
 fermi_sea
 ```
