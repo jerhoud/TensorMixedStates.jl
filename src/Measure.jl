@@ -699,9 +699,8 @@ a state function measuring the maximum bond dimension of the state, see `maxlink
 const MaxLinkdim = StateFunc("MaxLinkdim", maxlinkdim)
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one
-Base.@deprecate_binding Linkdim MaxLinkdim false ", use MaxLinkdim instead."
-
+# expands to a toplevel block and a docstring cannot be attached to one. It comes before the
+# deprecation: after it, attaching the docstring used the deprecated name and warned
 @doc """
     Linkdim
 
@@ -709,6 +708,8 @@ deprecated, use [`MaxLinkdim`](@ref) instead, whose name labels the column. A de
 binding only warns on a qualified access, `TensorMixedStates.Linkdim`, and is silent after
 `using TensorMixedStates`, so this line and the changelog are the notice.
 """ Linkdim
+
+Base.@deprecate_binding Linkdim MaxLinkdim false ", use MaxLinkdim instead."
 
 """
     MemoryUsage

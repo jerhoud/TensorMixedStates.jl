@@ -335,9 +335,8 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
 end
 
 # the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one
-Base.@deprecate_binding Dmrg GroundState false ", use GroundState instead."
-
+# expands to a toplevel block and a docstring cannot be attached to one. It comes before the
+# deprecation: after it, attaching the docstring used the deprecated name and warned
 @doc """
     Dmrg
 
@@ -347,6 +346,8 @@ deprecated, use [`GroundState`](@ref) instead.
 deprecation warning only shows with `--depwarn=yes`, as when running the tests, so this line
 is the notice.
 """ Dmrg
+
+Base.@deprecate_binding Dmrg GroundState false ", use GroundState instead."
 
 """
     PartialTrace(; trace_positions | keep_positions, name, time_start, final_measures)
