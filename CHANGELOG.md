@@ -123,6 +123,9 @@ the reference article.
 
 ### Changed
 
+- `partial_trace(state, positions; keep = true)` keeps the sites at `positions`, the keyword
+  formerly `keepers`, and the `PartialTrace` phase takes the same `positions` and `keep`
+  rather than one of `trace_positions` and `keep_positions`.
 - The options `n_expand` and `n_hermitianize` of `Tdvp`, `ApproxW`, `tdvp`, `approx_W` and
   `thermal_state` are `expand_period` and `hermitianize_period`, as `measurements_period`.
 - The field `tolerance` of `GroundState` and `SteadyState` is `tol`, as everywhere else

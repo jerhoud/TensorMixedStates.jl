@@ -372,7 +372,7 @@ end
         CreateState(type = Mixed(), state = ghz,
             final_measurements = check([Purity, prod(X(i) for i in 1:6)], [1, 1], 1e-10)),
         PartialTrace(
-            keep_positions = [2, 3, 5],
+            positions = [2, 3, 5], keep = true,
             final_measurements = check([X, Y, Z, (Z, Z)], [[0, 0, 0], [0, 0, 0], [0, 0, 0], [1 1 1 ; 1 1 1 ; 1 1 1]])
             )
             ])

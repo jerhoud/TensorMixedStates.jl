@@ -454,7 +454,7 @@ end
     @test renyi2(stm, 1:3) ≈ renyi2(stm, [1, 2, 3])
     @test renyi2(stp, 1:3) ≈ renyi2(stp, [1, 2, 3])
     @test mutual_info_renyi2(stm, 1:3) ≈ mutual_info_renyi2(stm, [1, 2, 3])
-    @test length(partial_trace(stm, 1:3; keepers = true)) == 3
+    @test length(partial_trace(stm, 1:3; keep = true)) == 3
     # `measure` hands back a vector of name => value pairs, one per measurement
     @test last(only(measure(stm, SubRenyi2(1:3)))) ≈ renyi2(stm, [1, 2, 3])
     @test last(only(measure(stm, MutualInfoRenyi2(1:3)))) ≈ mutual_info_renyi2(stm, [1, 2, 3])
@@ -509,7 +509,7 @@ end
     # the spins were wrong too, for a state of definite parity
     ρ = mix(RandomState(State{Pure}(System(5, Fermion(conserve = N)),
                                     ["Occ", "Occ", "Emp", "Emp", "Occ"]), 4))
-    red = partial_trace(ρ, [1, 4]; keepers = true)
+    red = partial_trace(ρ, [1, 4]; keep = true)
     odd = (C, dag(C))
     for a in (Id, N, C, dag(C)), b in (Id, N, C, dag(C))
         if (a in odd) == (b in odd)
@@ -572,7 +572,7 @@ end
         @test norm(apply(o, ρ) - mix(apply(o, ψ))) < 1e-10
         keep = sort(randperm(n)[1:rand(1:3)])
         o, d = product(length(keep), p -> keep[p], n)
-        @test expect(partial_trace(ρ, keep; keepers = true), o) ≈ value(d) atol = 1e-10
+        @test expect(partial_trace(ρ, keep; keep = true), o) ≈ value(d) atol = 1e-10
     end
     # a function of an even product applied as a gate, on sites in any order and apart, whose
     # strings come from a conjugation by diagonal gates

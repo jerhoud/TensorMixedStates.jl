@@ -3,16 +3,17 @@
 export PartialTrace
 
 """
-    PartialTrace(; trace_positions | keep_positions, name, time_start, final_measurements)
+    PartialTrace(; positions, keep = false, name, time_start, final_measurements)
 
-a phase that traces out part of the sites, given by exactly one of `trace_positions` and
-`keep_positions`.
+a phase that traces out the sites at `positions` or, with `keep = true`, all the others, see
+`partial_trace`.
 
 # Fields
 
 - `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
-- `trace_positions`: the sites to trace out
-- `keep_positions`: the sites to keep, all the others being traced out
+- `positions`: the sites to trace out, or to keep
+- `keep`: whether `positions` are the sites to keep rather than those to trace out (default
+  `false`)
 
 The state must be mixed, see `ToMixed`, and conserve nothing strongly, see `Weaken`. The sites
 kept make a new system, numbered from 1 in their order, which the operators of the phases
@@ -20,22 +21,15 @@ after this one refer to.
 
 # Examples
 
-    PartialTrace(trace_positions = [2, 3, 6])
-    PartialTrace(keep_positions = [1, 4, 5])
+    PartialTrace(positions = [2, 3, 6])
+    PartialTrace(positions = [1, 4, 5], keep = true)
 """
 @kwdef struct PartialTrace <: AbstractPhase
     name::String = "Computing partial trace"
     time_start::Union{Nothing, Number} = nothing
     final_measurements = []
-    trace_positions::Union{Nothing, Vector{Int}} = nothing
-    keep_positions::Union{Nothing, Vector{Int}} = nothing
+    positions::Vector{Int}
+    keep::Bool = false
 end
 
-function run_phase(sim::Simulation, phase::PartialTrace)
-    pos = phase.trace_positions
-    keep = phase.keep_positions
-    if isnothing(pos) == isnothing(keep)
-        error("PartialTrace requires one and only one of trace_positions and keep_positions")
-    end
-    return isnothing(pos) ? partial_trace(sim, keep; keepers = true) : partial_trace(sim, pos)
-end
+run_phase(sim::Simulation, phase::PartialTrace) = partial_trace(sim, phase.positions; phase.keep)

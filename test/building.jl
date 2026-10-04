@@ -299,7 +299,7 @@ end
     # partial_trace used to skip a position it did not find when tracing, leaving the state
     # whole, and to raise a BoundsError when keeping it
     @test_throws "given site 5, which the state does not have" partial_trace(stm, [5])
-    @test_throws "given site 0" partial_trace(stm, [0, 1]; keepers = true)
+    @test_throws "given site 0" partial_trace(stm, [0, 1]; keep = true)
     @test_throws "does not have" renyi2(stm, [2, 7])
     # an operator placed on no site, or a superoperator, is refused by expect by name rather
     # than by a MethodError about iterating it

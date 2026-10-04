@@ -514,7 +514,7 @@ function renyi2(state::State{Mixed}, a::AbstractVector{Int})
     if isempty(a)
         return 0.0
     end
-    return renyi2(partial_trace(weak_form(state), a; keepers = true))
+    return renyi2(partial_trace(weak_form(state), a; keep = true))
 end
 
 # a subsystem of a pure state is not pure, so this is an entanglement measure rather than
@@ -1152,9 +1152,9 @@ function trace_signs(state::State{Mixed}, keep)
 end
 
 """
-    partial_trace(state, positions::AbstractVector{Int} [; keepers = false])
+    partial_trace(state, positions::AbstractVector{Int} [; keep = false])
 
-the state with the sites at `positions` traced out, or, with `keepers = true`, all the others.
+the state with the sites at `positions` traced out, or, with `keep = true`, all the others.
 The result is a mixed state on a new system made of the sites kept, in their order, and it
 has the trace of `state`. It keeps the fermionic signs: an operator of the sites kept has on it
 the expectation value it has on `state`, its Jordan-Wigner strings crossing the fermions traced
@@ -1168,9 +1168,9 @@ sectors: weaken it first. Tracing out every site is refused too.
 # Examples
 
     partial_trace(state, [1, 2])
-    partial_trace(state, 3:5; keepers = true)
+    partial_trace(state, 3:5; keep = true)
 """
-function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keepers::Bool = false)
+function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keep::Bool = false)
     if !isempty(strong_names(state.system))
         error("cannot trace out part of a state conserving something strongly, what is left " *
               "spreads over several sectors: weaken it first, giving up the strong symmetry")
@@ -1179,21 +1179,21 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keepers::B
     # a position the state does not have would be silently ignored when tracing, the filter
     # below never meeting it, and would raise a BoundsError when keeping
     check_positions(state, pos, "partial_trace")
-    if keepers
-        keep = sort(unique(pos))
+    if keep
+        kept_sites = sort(unique(pos))
     else
-        keep = filter(e->e ∉ pos, 1:n)
+        kept_sites = filter(e->e ∉ pos, 1:n)
     end
-    kn = length(keep)
+    kn = length(kept_sites)
     if kn == 0
         error("partial_trace cannot trace all sites of a state")
     end
-    state = trace_signs(state, keep)
+    state = trace_signs(state, kept_sites)
     mps = state.state
     sys = state.system
     j = 0
     t = Vector{ITensor}(undef, kn)
-    for (i, k) in enumerate(keep)
+    for (i, k) in enumerate(kept_sites)
         if i == 1
             # the sites on the left traced out, without the 1/trace the left environment of
             # expect carries: a partial trace keeps the trace of the state, and a traceless
@@ -1211,16 +1211,16 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keepers::B
         end
         j = k
     end
-    t[kn] *= get_right(state, keep[kn])
+    t[kn] *= get_right(state, kept_sites[kn])
     for i in 1:kn-1
         idx = commonind(t[i], t[i+1])
         jdx = settags(idx, "Link, l=$i")
         replaceind!(t[i], idx, jdx)
         replaceind!(t[i+1], idx, jdx)
     end
-    kept = System(AbstractSite[ sys[k] for k in keep ],
-                  Index[ SysIndex{Pure}(sys, k) for k in keep ],
-                  Index[ SysIndex{Mixed}(sys, k) for k in keep ])
+    kept = System(AbstractSite[ sys[k] for k in kept_sites ],
+                  Index[ SysIndex{Pure}(sys, k) for k in kept_sites ],
+                  Index[ SysIndex{Mixed}(sys, k) for k in kept_sites ])
     return State{Mixed}(kept, MPS(t))
 end
 
@@ -1291,8 +1291,8 @@ function mutual_info_renyi2(state::State, a::AbstractVector{Int})
         return 0.0
     end
     w = weak_form(state)
-    return renyi2(partial_trace(w, a; keepers = true)) +
-           renyi2(partial_trace(w, a; keepers = false)) -
+    return renyi2(partial_trace(w, a; keep = true)) +
+           renyi2(partial_trace(w, a; keep = false)) -
            renyi2(w)
 end
 

@@ -161,7 +161,7 @@ end
     # the pure ones in that mode
     file = joinpath(mktempdir(), "traced.h5")
     sq = System([Qubit(), Fermion(conserve = N)])
-    ρ = partial_trace(mix(State{Pure}(sq, ["+", "Occ"])), [1]; keepers = true)
+    ρ = partial_trace(mix(State{Pure}(sq, ["+", "Occ"])), [1]; keep = true)
     save_state(file, "traced", ρ)
     lt = load_state(file, "traced")
     @test trace(lt) ≈ 1

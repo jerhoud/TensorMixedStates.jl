@@ -60,7 +60,7 @@ of dmrg, where one above it would be truncated at once. The traced state is put 
 """
 function purify(elt::Type{<:Number}, start::State{Pure}, system::System, linkdims::Int)
     super_rand = mix(RandomState(elt, start, isqrt(linkdims)))
-    ρ = partial_trace(super_rand, collect(1:length(system)); keepers = true)
+    ρ = partial_trace(super_rand, collect(1:length(system)); keep = true)
     return State{Mixed}(system, ρ.state)
 end
 
