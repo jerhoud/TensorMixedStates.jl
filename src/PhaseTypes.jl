@@ -469,7 +469,8 @@ a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\
 normalized to trace one, by tdvp in imaginary time, see `thermal_state`. After
 `CreateState{Mixed}(…, "FullyMixed")`, the state at infinite temperature, it gives the thermal
 state ``e^{-\\beta H}/Z``; a state that commutes with ``H`` gives the thermal state restricted
-to what it describes. The time of the simulation does not move.
+to what it describes, as `fully_mixed` the canonical one. The time of the simulation does not
+move.
 
 # Fields
 

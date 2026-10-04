@@ -1,7 +1,8 @@
-# Prepared pure states with an exact MPS of small bond dimension, built from their tensors: the
-# GHZ state, the Dicke states, of which the W state, and the states of singlets on pairs.
+# Prepared states with an exact MPS of small bond dimension, built from their tensors: the GHZ
+# state, the Dicke states, of which the W state, the states of singlets on pairs, and the fully
+# mixed state of a sector.
 
-export ghz_state, dicke_state, w_state, dimer_state
+export ghz_state, dicke_state, w_state, dimer_state, fully_mixed
 
 """
     local_vector(site, st)
@@ -51,7 +52,8 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
     else
         [ Index(size(tensors[k], 3); tags = "Link,l=$k") for k in 1:n ]
     end
-    edge = is_charged(system) ? Index(QN() => 1; tags = "Link,l=0") : Index(1; tags = "Link,l=0")
+    edge = is_charged(system) ? Index(QN() => 1; tags = "Link,l=0") :
+                                Index(1; tags = "Link,l=0")
     its = map(1:n) do k
         l = k == 1 ? edge : dag(links[k-1])
         t = ITensor(tensors[k], l, s[k], links[k])
@@ -72,8 +74,8 @@ end
 
 the GHZ state of `states`, local pure states given by their names or their vectors: the
 superposition with equal weights of the product states in which every site is in the same one,
-``(|aa\\dots a\\rangle + |bb\\dots b\\rangle + \\dots)/\\sqrt{m}`` for orthonormal states, normalized
-in any case. It is exact, of bond dimension the number of states. On sites conserving
+``(|aa\\dots a\\rangle + |bb\\dots b\\rangle + \\dots)/\\sqrt{m}`` for orthonormal states,
+normalized in any case. It is exact, of bond dimension the number of states. On sites conserving
 something, the product states must have the same charge.
 
 # Examples
@@ -212,4 +214,104 @@ function dimer_state(system::System, pairs::AbstractVector{Tuple{Int, Int}}, a, 
         named(U, "Singlet", system[i], system[j])(i, j)
     end
     return isempty(gates) ? st : apply(prod(gates), st; limits)
+end
+
+"""
+    fully_mixed(system, quantities...)
+
+the fully mixed state of the sector where each quantity takes its value, given as pairs
+`op => value`, the sum of `op` over the sites taking the value: the projector on the basis
+states of the sector divided by their number, the state at infinite temperature of a sector,
+from which `Thermalize` gives the canonical thermal state of a hamiltonian conserving these
+quantities. An operator is diagonal on the
+basis of every site, as a number of particles or a ``S^z``, and the sites need not conserve
+it. Without quantities, it is the fully mixed state of the system, which a system conserving
+something strongly refuses, its sectors being apart: a sector that fixes what it conserves
+strongly is accepted.
+
+It is exact, its bond dimension the number of values the quantities take on the sites on the
+left of a link that can still reach the sector, `N + 1` at most for `N => N`.
+
+# Examples
+
+    fully_mixed(System(10, Fermion()), N => 4)
+    fully_mixed(System(8, Electron(conserve = (strong(Ntot), 2Sz))), Ntot => 8, Sz => 0)
+"""
+function fully_mixed(system::System, quantities::Pair...)
+    n = length(system)
+    if isempty(quantities)
+        return State{Mixed}(system, "FullyMixed")
+    end
+    # the values of the quantities on each basis state of each site, rounded so that sums of
+    # the same values are equal, half integers and integers being exact anyway
+    key(x) = round(x; digits = 10)
+    values = map(1:n) do k
+        ms = [ matrix(op, system[k]) for (op, _) in quantities ]
+        for (m, (op, _)) in zip(ms, quantities)
+            if !isdiag(m)
+                error("$op is not diagonal on the basis of $(system[k])")
+            end
+        end
+        [ Tuple(key(real(m[j, j])) for m in ms) for j in 1:dim(system[k]) ]
+    end
+    target = Tuple(key(Float64(v)) for (_, v) in quantities)
+    add(a, b) = key.(a .+ b)
+    # the values the sites on the right of each link can still bring to the target
+    needed = Vector{Set{Tuple}}(undef, n + 1)
+    needed[n+1] = Set{Tuple}([target])
+    for k in n:-1:1
+        needed[k] = Set{Tuple}(key.(v .- q) for v in needed[k+1] for q in values[k])
+    end
+    if !(Tuple(0. for _ in quantities) in needed[1])
+        error("no basis state of the system has " *
+              join(("$op = $v" for (op, v) in quantities), ", "))
+    end
+    # the local tensor of each basis state |s><s|, on the mixed index, with its charge
+    projector(d, j) = [ a == j && b == j ? 1. : 0. for a in 1:d, b in 1:d ]
+    locals = [ [ make_one_state(Mixed(), system, k, projector(dim(system[k]), j))
+                 for j in 1:dim(system[k]) ] for k in 1:n ]
+    charged = hasqns(locals[1][1])
+    charge(t) = charged ? flux(t) : nothing
+    # the states of each link: the values of the quantities on the sites on its left, with
+    # their charge, which differs between paths when the system conserves something else
+    states = Vector{Vector{Tuple}}(undef, n + 1)
+    states[1] = [ (Tuple(0. for _ in quantities), charged ? QN() : nothing) ]
+    terms = Vector{Vector{Tuple{Int, Int, Int}}}(undef, n)
+    for k in 1:n
+        next = Tuple[]
+        ts = Tuple{Int, Int, Int}[]
+        for (l, (v, q)) in enumerate(states[k]), j in 1:dim(system[k])
+            w = add(v, values[k][j])
+            if w in needed[k+1]
+                r = (w, charged ? q + charge(locals[k][j]) : nothing)
+                i = findfirst(==(r), next)
+                if isnothing(i)
+                    push!(next, r)
+                    i = length(next)
+                end
+                push!(ts, (l, j, i))
+            end
+        end
+        states[k+1], terms[k] = next, ts
+    end
+    if length(states[n+1]) > 1
+        error("the sector does not fix the charges the system conserves strongly, which a " *
+              "mixed state cannot spread over")
+    end
+    # links as those of a product state, carrying the charge of the sites on their left
+    links = [ charged ? dag(Index([ q => 1 for (_, q) in states[k+1] ]...; tags = "Link,l=$k")) :
+                        Index(length(states[k+1]); tags = "Link,l=$k") for k in 1:n-1 ]
+    its = map(1:n) do k
+        sum(terms[k]) do (l, j, r)
+            t = locals[k][j]
+            if k > 1
+                t *= onehot(dag(links[k-1]) => l)
+            end
+            if k < n
+                t *= onehot(links[k] => r)
+            end
+            t
+        end
+    end
+    return normalize(State{Mixed}(system, MPS(its)))
 end

@@ -407,7 +407,8 @@ logarithms are summed.
 From `"FullyMixed"`, the state at infinite temperature, it gives the thermal state
 ``e^{-\\beta H}/Z``, and `log_trace` is ``\\log Z - \\sum_i \\log d_i``, ``d_i`` being the
 dimension of site `i`. More generally a state that commutes with ``H`` gives the thermal state
-restricted to what it describes: `"MixedSpin"` on `Tj` sites, at one electron per site, gives
+restricted to what it describes: `fully_mixed(system, N => m)` the canonical thermal state
+of `m` particles, `"MixedSpin"` on `Tj` sites, at one electron per site,
 that of the Heisenberg model, and a product state of populations ``e^{\\beta\\mu n_i}``
 the grand canonical state at chemical potential ``\\mu``, for a hamiltonian conserving the
 number of particles. A pure state is refused: ``e^{-\\beta H/2}`` takes it towards the ground

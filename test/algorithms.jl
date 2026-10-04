@@ -220,6 +220,45 @@ end
     @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
 end
 
+@testset "Fully mixed states of a sector" begin
+    LA = TensorMixedStates.LinearAlgebra
+    strong = TensorMixedStates.strong
+    # the projector on the sector over its dimension, whatever the sites conserve
+    n, m = 6, 2
+    for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
+        ρ = fully_mixed(System(n, site), N => m)
+        @test trace(ρ) ≈ 1
+        @test trace2(ρ) ≈ 1 / binomial(n, m)
+        @test expect(ρ, N(2)) ≈ m / n
+        @test expect(ρ, N(1) * N(4)) ≈ m * (m - 1) / (n * (n - 1))
+        @test maxlinkdim(ρ) == m + 1
+    end
+    # two quantities, the second a half integer, under a strong conservation: 36 states of four
+    # electrons on four sites with no magnetization
+    ρ = fully_mixed(System(4, Electron(conserve = (strong(Ntot), 2Sz))), Ntot => 4, Sz => 0)
+    @test trace2(ρ) ≈ 1 / 36
+    @test sum(expect1(ρ, Sz)) ≈ 0 atol = 1e-12
+
+    # the canonical thermal state of fermions hopping, which Thermalize reaches from it
+    n, m, β = 4, 2, 0.9
+    h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:n-1) + 0.4 * N(1)
+    c(j) = foldl(kron, [ k < j ? [1. 0. ; 0. -1.] : k == j ? [0. 1. ; 0. 0.] : [1. 0. ; 0. 1.]
+                         for k in 1:n ])
+    dense = -sum(c(i)' * c(i+1) + c(i+1)' * c(i) for i in 1:n-1) + 0.4 * c(1)' * c(1)
+    sector = LA.Diagonal(Float64.(round.(LA.diag(sum(c(i)' * c(i) for i in 1:n))) .== m))
+    g = exp(-β * dense) * sector
+    for site in (Fermion(conserve = N), Fermion(conserve = strong(N)))
+        _, ρ = thermal_state(h, β, fully_mixed(System(n, site), N => m); nsteps = 18,
+                             limits = Limits(cutoff = 1e-14, maxdim = 64))
+        @test expect(ρ, h) ≈ LA.tr(g * dense) / LA.tr(g) atol = 1e-5
+    end
+
+    @test_throws "no basis state of the system has N = 5" fully_mixed(System(4, Fermion()), N => 5)
+    @test_throws "not diagonal" fully_mixed(System(4, Qubit()), X => 2)
+    @test_throws "does not fix the charges" fully_mixed(
+        System(4, Electron(conserve = (strong(Ntot), 2Sz))), Sz => 0)
+end
+
 @testset "Dmrg" begin
     @test_ok test_phases([
         CreateState(

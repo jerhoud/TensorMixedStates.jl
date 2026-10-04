@@ -49,6 +49,10 @@ the reference article.
   in no pair taking the local state given by `others`.
 - `aklt_state(system)`, the AKLT state of a chain of spins one, its exact MPS of bond
   dimension 2, the virtual spins at the ends set by `left` and `right`.
+- `fully_mixed(system, op => value...)`, the fully mixed state of the sector where the sum of
+  each operator over the sites takes its value, exact, of bond dimension `N + 1` at most for
+  `N => N`: the state at infinite temperature of a sector, from which `Thermalize` gives the
+  canonical thermal state, under any conservation, a strong one included.
 - `slater_state(system, orbitals...)`, the Slater determinant of given orbitals, one matrix for
   each species of fermions, and `fermi_sea(system, H, nparticles...)`, the ground state of
   free fermions under a quadratic hamiltonian H written as for any other function, on sites
