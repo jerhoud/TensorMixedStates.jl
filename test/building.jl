@@ -46,6 +46,21 @@ end
     @test_ok State{Mixed}(System(3, Qubit()), "FullyMixed")
 end
 
+@testset "A sum of states keeps its bond dimension" begin
+    # the eigenvalues rounding leaves were kept as states by the sum: nine product states of
+    # twenty qubits had a bond dimension of 2304
+    rng = TensorMixedStates.Random.Xoshiro(3)
+    sys = System(20, Qubit())
+    cfgs = [ rand(rng, ["Up", "Dn"], 20) for _ in 1:12 ]
+    cs = randn(rng, 12)
+    s = sum(cs[k] * State{Pure}(sys, cfgs[k]) for k in 1:12)
+    @test maxlinkdim(s) ≤ 12
+    @test [ inner(State{Pure}(sys, c), s) for c in cfgs ] ≈ cs
+    # what the truncation of the sum left of the first term, of a weight of the order of the
+    # cutoff, may or may not be cut: the bound is that of a sum of states of dimensions 12 and 1
+    @test maxlinkdim(s - cs[1] * State{Pure}(sys, cfgs[1])) ≤ 13
+end
+
 @testset "Random states" begin
     sys = System(6, Qubit())
     @test maxlinkdim(RandomState{Pure}(sys, 8)) == 8

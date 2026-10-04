@@ -185,6 +185,11 @@ the reference article.
 
 ### Fixed
 
+- The sum and the difference of two states, and `hermitianize`, kept the eigenvalues of the
+  order of rounding as states when no truncation was asked for, so that their bond dimension
+  grew without bound: the sum of nine product states of twenty qubits had a bond dimension of
+  2304 rather than 9. Without limits they now drop what is below 1e-15, the default of
+  ITensorMPS, and a sum of product states has the bond dimension of its number of terms.
 - The approximation WII, the default of `approx_W` and `ApproxW`, is the one of Zaletel et
   al. Its blocks left out the terms of one site on a site that a term of several sites goes
   through, took them on one side only at the ends of such a term, and took a closing and an

@@ -155,7 +155,8 @@ it as a value of ``S_z`` and `Electron` has no such name.
 
 States can be added, subtracted, multiplied and divided by numbers. The two states of a sum
 or a difference must be on the same system. It takes truncation limits as
-`+(a, b; limits = Limits(maxdim = 100))`, and truncates nothing by default.
+`+(a, b; limits = Limits(maxdim = 100))`, and by default truncates nothing but what rounding
+leaves, eigenvalues below 1e-15.
 """
 struct State{R <: PM} <: AbstractState
     system::System
@@ -311,10 +312,20 @@ State{R}(sites::Vector{<:AbstractSite}, state) where R =
 (a::State / b::Number) = inv(b) * a
 (-a::State) = -1 * a
 
+"""
+    sum_cutoff(limits)
+
+the cutoff of a sum of two states: that of `limits`, or for no truncation 1e-15, the default of
+ITensorMPS, below which an eigenvalue is rounding. The sum goes through the density matrices of
+ITensorMPS, which, told 0, kept such eigenvalues as states: the sum of nine product states of
+twenty qubits had a bond dimension of 2304 rather than 9 at most.
+"""
+sum_cutoff(limits::Limits) = iszero(limits.cutoff) ? 1e-15 : limits.cutoff
+
 +(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State(a, +(a.state, b.state; limits.cutoff, limits.maxdim, limits.mindim))
+    State(a, +(a.state, b.state; cutoff = sum_cutoff(limits), limits.maxdim, limits.mindim))
 -(a::State{R}, b::State{R}; limits::Limits=Limits()) where R =
-    State(a, -(a.state, b.state; limits.cutoff, limits.maxdim, limits.mindim))
+    State(a, -(a.state, b.state; cutoff = sum_cutoff(limits), limits.maxdim, limits.mindim))
 
 """
     mix(::State)
