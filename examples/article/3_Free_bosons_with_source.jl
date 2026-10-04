@@ -53,7 +53,7 @@ sim_data(n, step, duration, alg, gamma) = SimData(
             type = Mixed(), # type of representation
             system = System(n, Boson(MAXOCC + 1)), # system description (n boson sites)
             state =  "0", # initial empty state
-            final_measures = output(n), # save measurements for inital state
+            final_measurements = output(n), # save measurements for inital state
         ),
         # a phase for Lindblad evolution
         Evolve(
@@ -75,9 +75,9 @@ sim_data(n, step, duration, alg, gamma) = SimData(
                 -im * sum(A(i)dag(A)(i+1) + dag(A)(i)A(i+1) for i in 1:n-1)
                 + Dissipator(2 * sqrt(gamma)dag(A))(n ÷ 2),
             # save measurements
-            measures = output(n),
+            measurements = output(n),
             # every two time steps
-            measures_period = 2,
+            measurements_period = 2,
         ),
     ]
 )

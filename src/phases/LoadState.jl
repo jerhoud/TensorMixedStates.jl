@@ -3,14 +3,14 @@
 export LoadState
 
 """
-    LoadState(; file, statename = "state", limits, name, time_start, final_measures)
+    LoadState(; file, statename = "state", limits, name, time_start, final_measurements)
 
 a phase that loads the state from an HDF5 file written by `SaveState` or `save_state`, see
 `load_state`, and truncates it to `limits`, unless they are the default `Limits()`.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `file`: the name of the HDF5 file to read from, taken in the simulation directory when it is
   relative: a state another simulation saved is found under `../othername/`
 - `statename`: the name under which the state is stored in the file
@@ -25,7 +25,7 @@ a phase that loads the state from an HDF5 file written by `SaveState` or `save_s
 @kwdef struct LoadState <: AbstractPhase
     name::String = "Loading state"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     file::String
     statename::String = "state"
     limits::Limits = Limits()

@@ -4,7 +4,7 @@
 export CreateState
 
 """
-    CreateState(; type, system, state, randomize, seed, name, time_start, final_measures)
+    CreateState(; type, system, state, randomize, seed, name, time_start, final_measurements)
     CreateState{Pure|Mixed}(n, site, state; options...)
     CreateState{Pure|Mixed}(sites, state; options...)
 
@@ -13,7 +13,7 @@ or `LoadState`.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `type`: the representation of the state, `Pure()` or `Mixed()`, or a `Representation` an
   extension defines, together with the method of `run_phase` creating its state
 - `system`: the `System` of the state, unused when `state` is a `State`
@@ -39,7 +39,7 @@ or `LoadState`.
 @kwdef struct CreateState{R <: Representation} <: AbstractPhase
     name::String = "Creating state"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     type::R
     system::Union{Nothing, System} = nothing
     state = nothing

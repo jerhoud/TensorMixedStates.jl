@@ -3,13 +3,13 @@
 export Gates
 
 """
-    Gates(; gates, limits, name, time_start, final_measures)
+    Gates(; gates, limits, name, time_start, final_measurements)
 
 a phase that applies gates to the state.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `gates`: the gates to apply
 - `limits`: the truncations made while applying a gate of several sites, see `apply` (default
   `Limits()`)
@@ -21,7 +21,7 @@ a phase that applies gates to the state.
 @kwdef struct Gates <: AbstractPhase
     name::String = "Applying gates"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     gates::IndexedOp
     limits::Limits = Limits()
 end

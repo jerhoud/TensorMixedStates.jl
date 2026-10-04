@@ -3,13 +3,13 @@
 export SteadyState
 
 """
-    SteadyState(; lindbladian, limits, nsweeps, noise, tolerance, measures, options...)
+    SteadyState(; lindbladian, limits, nsweeps, noise, tolerance, measurements, options...)
 
 a phase that searches the steady state of a Lindbladian, see `steady_state`, on a mixed state.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `lindbladian`: the Lindbladian ``L`` whose steady state is searched, of the form
   `-im * hamiltonian + dissipators`
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`)
@@ -19,8 +19,8 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
   `Krylov(dim = 8, maxiter = 3)`, see `steady_state`)
-- `measures`: the measurements to make during the search, see `output` (default `[]`)
-- `measures_period`: the number of sweeps between two measurements (default 1)
+- `measurements`: the measurements to make during the search, see `output` (default `[]`)
+- `measurements_period`: the number of sweeps between two measurements (default 1)
 - `tolerance`: the search stops when the dmrg energy changes by less than this from one sweep
   to the next (default 0, never)
 
@@ -36,7 +36,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 @kwdef struct SteadyState <: AbstractPhase
     name::String = "Steady state optimization"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     lindbladian::IndexedOp{Mixed}
     mpo_limits::Limits = Limits()
     mpo_algo::String = "naive"
@@ -44,18 +44,18 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
     nsweeps::Int
     noise::Union{Float64, Vector{Float64}} = 0.
     krylov::Krylov = Krylov(dim = 8, maxiter = 3)
-    measures = []
-    measures_period::Int = 1
+    measurements = []
+    measurements_period::Int = 1
     tolerance::Real = 0.
     # a noise is stored as the Float64 dmrg takes, as in GroundState, and mpo_algo is checked
     # when the phase is written, as the fields of ApproxW
-    function SteadyState(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo,
+    function SteadyState(name, time_start, final_measurements, lindbladian, mpo_limits, mpo_algo,
                          limits, nsweeps, noise::Union{Real, AbstractVector{<:Real}}, krylov,
-                         measures, measures_period, tolerance)
+                         measurements, measurements_period, tolerance)
         check_mpo_algo(mpo_algo)
-        return new(name, time_start, final_measures, lindbladian, mpo_limits, mpo_algo, limits,
+        return new(name, time_start, final_measurements, lindbladian, mpo_limits, mpo_algo, limits,
                    nsweeps, noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
-                   krylov, measures, measures_period, tolerance)
+                   krylov, measurements, measurements_period, tolerance)
     end
 end
 

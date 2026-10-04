@@ -29,8 +29,8 @@ runTMS(simdata)
 which executes the simulation.
 
 Phases that sweep take their measurements at every step by default. The
-`measures_period` field of `Evolve`, `GroundState` and `SteadyState` raises that interval:
-`measures_period = 10` measures one step out of ten, which is what long runs usually want.
+`measurements_period` field of `Evolve`, `GroundState` and `SteadyState` raises that interval:
+`measurements_period = 10` measures one step out of ten, which is what long runs usually want.
 
 The `phases` field is a list, but that list may contain lists, to any depth, and is
 flattened before the simulation starts. This is meant for programs that build their phases
@@ -59,7 +59,7 @@ runTMS(SimData(
             limits = Limits(maxdim = 64),
             evolver = -im * (-sum(Z(i)Z(i + 1) for i in 1:5) - sum(X(i) for i in 1:6))
                       + sum(Dissipator(sqrt(0.2) * Sm)(i) for i in 1:6),
-            measures = "data" => [Z, Purity],
+            measurements = "data" => [Z, Purity],
         ),
     ],
 ))
@@ -101,7 +101,7 @@ sim_data(n, gamma, step) = SimData(
             algo = Tdvp(),
             evolver = -im*hamiltonian(n) + dissipators(n, gamma),
             limits = Limits(cutoff = 1e-30, maxdim = 100),
-            measures = [
+            measurements = [
                 "density.dat" => N,
                 "OSEE.dat" => EntanglementEntropy(div(n, 2))
             ]
@@ -246,13 +246,13 @@ several `Gates` phases, which gives resume points at no cost.
 
 ## Measurements
 
-Measurements are specified in the `measures` field of `Evolve`, `GroundState` and
-`SteadyState`, taken as the phase sweeps, and in the `final_measures` field of every phase and
+Measurements are specified in the `measurements` field of `Evolve`, `GroundState` and
+`SteadyState`, taken as the phase sweeps, and in the `final_measurements` field of every phase and
 of `SimData`, taken at its end. They take the form of a pair or list of pairs.
 
 ```julia
-measures = destination => measurements
-measures = [ dest1 => meas1, dest2 => meas2, ...]
+measurements = destination => measurements
+measurements = [ dest1 => meas1, dest2 => meas2, ...]
 ```
 
 The possible measurements are described on the [Measurements](measurements.md) page. A

@@ -172,7 +172,7 @@ A measurement of your own is a [`StateFunc`](@ref), a function of the state, or 
 ## [Phases of one's own](@id own-phases)
 
 A phase of your own is a subtype of [`AbstractPhase`](@ref) with the three fields every phase has,
-`name`, `time_start` and `final_measures`, and a method of [`TensorMixedStates.run_phase`](@ref)
+`name`, `time_start` and `final_measurements`, and a method of [`TensorMixedStates.run_phase`](@ref)
 for it, which returns the simulation the phase leaves behind. The full name is needed,
 `run_phase` not being exported. The phases of the library are written the same way, each in a
 file of `src/phases`, and make as many examples.
@@ -185,22 +185,22 @@ using TensorMixedStates, .Qubits
 Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "Kicks"
     time_start = nothing
-    final_measures = []
+    final_measurements = []
     nkicks::Int
-    measures = []
+    measurements = []
 end
 
 TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
     run_steps(sim, p.nkicks) do sim, k
         sim = apply(exp(-0.3im * X)(1), sim)                # the kick
         sim = Simulation(sim, sim.state, sim.time + 0.1)    # and the time it takes
-        output(sim, p.measures; sweep = k)                  # k for the :sweep measurement
+        output(sim, p.measurements; sweep = k)                  # k for the :sweep measurement
         return sim
     end
 
 runTMS(SimData(name = "kicks", phases = [
     CreateState{Pure}(2, Qubit(), "Up"),
-    Kicks(nkicks = 10, measures = "data" => Z(1)),
+    Kicks(nkicks = 10, measurements = "data" => Z(1)),
 ]))
 ```
 
@@ -243,8 +243,8 @@ function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::E
     dt = phase.duration / nsteps
     return run_steps(sim, nsteps) do sim, k
         sim = tdvp(evolver, dt, sim; coefs, phase.limits)
-        if mod(k, phase.measures_period) == 0
-            output(sim, phase.measures; sweep = k)
+        if mod(k, phase.measurements_period) == 0
+            output(sim, phase.measurements; sweep = k)
         end
         return sim
     end
@@ -253,7 +253,7 @@ end
 runTMS(SimData(name = "stepwise", phases = [
     CreateState{Pure}(2, Qubit(), "Up"),
     Evolve(duration = 1., time_step = 0.1, algo = Stepwise(), evolver = -im * X(1),
-           measures = "data" => Z(1)),
+           measurements = "data" => Z(1)),
 ]))
 ```
 

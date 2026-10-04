@@ -3,7 +3,7 @@
 export Weaken
 
 """
-    Weaken(; target, name, time_start, final_measures)
+    Weaken(; target, name, time_start, final_measurements)
 
 a phase that takes the state down to a lower level of conservation, see `weaken`. A phase may
 evolve under a strong symmetry, which every dissipator commuting with the charge allows, and
@@ -11,7 +11,7 @@ the next one continue under a weak one, where a jump that moves the charge becom
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `target`: what the state must still conserve, as `weaken` takes it (default `nothing`, one
   level down: every strong quantity made weak or, when none is strong, every quantity
   dropped)
@@ -25,7 +25,7 @@ the next one continue under a weak one, where a jump that moves the charge becom
 @kwdef struct Weaken <: AbstractPhase
     name::String = "Weakening the symmetries"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     target = nothing
 end
 

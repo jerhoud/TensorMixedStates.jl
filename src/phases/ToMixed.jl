@@ -3,14 +3,14 @@
 export ToMixed
 
 """
-    ToMixed(; limits, name, time_start, final_measures)
+    ToMixed(; limits, name, time_start, final_measurements)
 
 a phase that switches the state to the mixed representation and truncates it to `limits`; a
 state already mixed is only truncated.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `limits`: constraints on the mixed state, see `Limits` (default `Limits()`)
 
 # Examples
@@ -21,7 +21,7 @@ state already mixed is only truncated.
 @kwdef struct ToMixed <: AbstractPhase
     name::String = "Switching to mixed state representation"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     limits::Limits = Limits()
 end
 

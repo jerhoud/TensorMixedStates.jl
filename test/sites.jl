@@ -69,13 +69,13 @@ TensorMixedStates.string_state(::Interrupter, ::String) = throw(InterruptExcepti
 
 @testset "Qubit measuring" begin
     @test_pm test_phases(CreateState{type}(1, Qubit(), "Z+"; 
-        final_measures = check([X(1), Y(1), Z(1)], [0, 0, 1])))
+        final_measurements = check([X(1), Y(1), Z(1)], [0, 0, 1])))
     @test_pm test_phases(CreateState{type}(6, Qubit(), ["X+", "Y+", "Z+", "X-", "Y-", "Z-"];
-        final_measures = check([X, Y, Z], [[1, 0, 0, -1, 0, 0], [0, 1, 0, 0, -1, 0], [0, 0, 1, 0, 0, -1]])))
+        final_measurements = check([X, Y, Z], [[1, 0, 0, -1, 0, 0], [0, 1, 0, 0, -1, 0], [0, 0, 1, 0, 0, -1]])))
     @test_pm test_phases(CreateState{type}(3, Qubit(), ["X+", "Y-", "Z-"];
-        final_measures = check([(X, Y), (Z, Z)], [[0 -1 0; 0 0 0; 0 0 -im], [1 0 0; 0 1 0; 0 0 1]])))
+        final_measurements = check([(X, Y), (Z, Z)], [[0 -1 0; 0 0 0; 0 0 -im], [1 0 0; 0 1 0; 0 0 1]])))
     @test_pm test_phases(CreateState{type}(4, Qubit(), ["Z+", "X-", "Z-", "Y-"];
-        final_measures = check([Z(1)Y(4), X(2)Z(3), Z(1)Z(3), X(2)Y(4)], [-1, 1, -1, 1])))
+        final_measurements = check([Z(1)Y(4), X(2)Z(3), Z(1)Z(3), X(2)Y(4)], [-1, 1, -1, 1])))
     @test norm(matrix(Sx^2+Sy^2+Sz^2-S2, Qubit()))≈0 atol=1e-12
 end
 
@@ -127,28 +127,28 @@ end
 
 @testset "Fermion measuring" begin
     @test_pm test_phases(CreateState{type}(1, Fermion(), "1";
-        final_measures = check(N(1), 1)))
+        final_measurements = check(N(1), 1)))
     @test_pm test_phases(CreateState{type}(2, Fermion(), ["0", "1"];
-        final_measures = check(N, [0, 1])))
+        final_measurements = check(N, [0, 1])))
 end
 
 @testset "Boson measuring" begin
     @test_pm test_phases(CreateState{type}(4, Boson(4), ["0", "1", "2", "3"];
-        final_measures = check(N, [0, 1, 2, 3])))
+        final_measurements = check(N, [0, 1, 2, 3])))
 end
 
 @testset "Spin measuring" begin
     @test_pm test_phases(CreateState{type}(4, Spin(3/2), ["-3/2", "-1/2", "1/2", "3/2"];
-        final_measures = check([Sx, Sy, Sz], [[0, 0, 0, 0], [0, 0, 0, 0], [-3/2, -1/2, 1/2, 3/2]])))
+        final_measurements = check([Sx, Sy, Sz], [[0, 0, 0, 0], [0, 0, 0, 0], [-3/2, -1/2, 1/2, 3/2]])))
     @test norm(matrix(Sx^2+Sy^2+Sz^2-S2,Spin(5/2)))≈0 atol=1e-12
     @test norm(matrix(Sx^2+Sy^2+Sz^2-S2,Spin(4)))≈0 atol=1e-12
     @test_pm test_phases(CreateState{type}(9, Spin(1),
             ["X-1", "X0", "X1", "Y-1", "Y0", "Y1", "Z-1", "Z0", "Z1"];
-        final_measures = check([Sx, Sy, Sz],
+        final_measurements = check([Sx, Sy, Sz],
             [[-1, 0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, -1, 0, 1]])))
     @test_pm test_phases(CreateState{type}(12, Spin(3/2),
             ["X-3/2", "X-1/2", "X1/2", "X3/2", "Y-3/2", "Y-1/2", "Y1/2", "Y3/2", "Z-3/2", "Z-1/2", "Z1/2", "Z3/2"];
-        final_measures = check([Sx, Sy, Sz],
+        final_measurements = check([Sx, Sy, Sz],
             [[-3/2, -1/2, 1/2, 3/2, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, -3/2, -1/2, 1/2, 3/2, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0, -3/2, -1/2, 1/2, 3/2]])))
@@ -156,12 +156,12 @@ end
 
 @testset "Electron measuring" begin
     @test_pm test_phases(CreateState{type}(4, Electron(), ["Emp", "Up", "Dn", "UpDn"];
-        final_measures = check([Nup, Ndn, Nupdn, Ntot], [[0, 1, 0, 1], [0, 0, 1, 1], [0, 0, 0, 1], [0, 1, 1, 2]])))        
+        final_measurements = check([Nup, Ndn, Nupdn, Ntot], [[0, 1, 0, 1], [0, 0, 1, 1], [0, 0, 0, 1], [0, 1, 1, 2]])))        
 end
 
 @testset "Tj measuring" begin
     @test_pm test_phases(CreateState{type}(3, Tj(), ["Emp", "Up", "Dn"];
-        final_measures = check([Nup, Ndn, Ntot], [[0, 1, 0], [0, 0, 1], [0, 1, 1]])))        
+        final_measurements = check([Nup, Ndn, Ntot], [[0, 1, 0], [0, 0, 1], [0, 1, 1]])))        
 end
 
 @testset "One electron of fully mixed spin" begin
@@ -180,7 +180,7 @@ end
 
 @testset "Qboson measuring" begin
     @test_pm test_phases(CreateState{type}(4, Qboson(0.1, 4), ["0", "1", "2", "3"];
-        final_measures = check(N, [0, 1, 2, 3])))
+        final_measurements = check(N, [0, 1, 2, 3])))
 end
 
 @testset "State mixing" begin
@@ -252,7 +252,7 @@ end
     sys = System(3, Qudit(3))
     @test expect1(State{Pure}(sys, ["0", "1", "2"]), Zd) ≈ [exp(2im * π * n / 3) for n in 0:2]
     @test_pm test_phases(CreateState{type}(3, Qudit(3), ["0", "1", "2"];
-        final_measures = check(Zd, [exp(2im * π * n / 3) for n in 0:2])))
+        final_measurements = check(Zd, [exp(2im * π * n / 3) for n in 0:2])))
 end
 
 @testset "Unknown operator and state names" begin

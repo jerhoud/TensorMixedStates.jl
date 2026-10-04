@@ -3,7 +3,8 @@
 export Thermalize
 
 """
-    Thermalize(; hamiltonian, beta, beta_step, algo, limits, measures, measures_period, options...)
+    Thermalize(; hamiltonian, beta, beta_step, algo, limits, measurements, measurements_period,
+                 options...)
 
 a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``,
 normalized to trace one, by tdvp in imaginary time, see `thermal_state`. After
@@ -14,7 +15,7 @@ move.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `hamiltonian`: the hamiltonian ``H``
 - `beta`: the inverse temperature ``\\beta``
 - `beta_step`: the step of `beta`, adjusted to the nearest one that divides `beta` into a whole
@@ -23,41 +24,41 @@ move.
 - `algo`: the algorithm, `Tdvp(...)`, whose `n_expand`, `n_hermitianize` and `krylov` it takes
   (default `Tdvp()`)
 - `limits`: constraints on the state, see `Limits` (default `Limits()`)
-- `measures`: the measurements to make during the phase, see `output` (default `[]`), after
-  every `measures_period` steps. The symbols `:beta` and `:log_trace` take the inverse
+- `measurements`: the measurements to make during the phase, see `output` (default `[]`), after
+  every `measurements_period` steps. The symbols `:beta` and `:log_trace` take the inverse
   temperature reached and the logarithm of the trace the state would have without being
   normalized, ``\\log Z - \\sum_i \\log d_i`` from `"FullyMixed"`, ``d_i`` being the dimension
   of site `i`, see `thermal_state`
-- `measures_period`: the number of steps between two measurements (default 1)
+- `measurements_period`: the number of steps between two measurements (default 1)
 
 # Examples
 
     Thermalize(hamiltonian = -sum(Z(i)Z(i+1) for i in 1:9) - sum(X(i) for i in 1:10),
                beta = 2., beta_step = 0.1, limits = Limits(cutoff = 1e-12, maxdim = 64),
-               measures = "thermo" => [:beta, :log_trace, Z(5)])
+               measurements = "thermo" => [:beta, :log_trace, Z(5)])
 """
 @kwdef struct Thermalize <: AbstractPhase
     name::String = "Thermalization"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     hamiltonian::IndexedOp{Pure}
     beta::Real
     beta_step::Real
     algo::Algo = Tdvp()
     limits::Limits = Limits()
-    measures = []
-    measures_period::Int = 1
+    measurements = []
+    measurements_period::Int = 1
     # refused here rather than when it runs, as the fields of Evolve
-    function Thermalize(name, time_start, final_measures, hamiltonian, beta, beta_step, algo,
-                        limits, measures, measures_period)
+    function Thermalize(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
+                        limits, measurements, measurements_period)
         if iszero(beta_step)
             error("the beta_step of a Thermalize cannot be zero")
         end
         if !(algo isa Tdvp)
             error("Thermalize computes with Tdvp(...), not $algo")
         end
-        return new(name, time_start, final_measures, hamiltonian, beta, beta_step, algo, limits,
-                   measures, measures_period)
+        return new(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo, limits,
+                   measurements, measurements_period)
     end
 end
 
@@ -79,7 +80,8 @@ function run_phase(sim::Simulation, phase::Thermalize)
     l, sim = thermal_state(phase.hamiltonian, beta, sim; nsteps, first_step = done + 1,
                            log_trace = something(log_trace, 0.), algo.n_expand,
                            algo.n_hermitianize, phase.limits, algo.krylov,
-                           observer! = ThermalObserver(sim, phase.measures, phase.measures_period))
+                           observer! = ThermalObserver(sim, phase.measurements,
+                                                       phase.measurements_period))
     log_msg(sim, "Done, log_trace is $l")
     return sim
 end

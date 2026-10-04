@@ -48,7 +48,7 @@ sim_data(n, ϕ, steps, noise) = SimData(
             type = Mixed(), # type of representation
             system = System(n, Qubit()), # system description (n qubits)
             state =  "0",  # initial all 0 state
-            final_measures = output(n), # save measurements for inital state
+            final_measurements = output(n), # save measurements for inital state
         ),
         # A vector of vector of Gates phases. Subvectors to any depth are ok in phases
         # one Gates phase has a name for the log, gates to apply, and limits on the MPS to enforce
@@ -65,7 +65,7 @@ sim_data(n, ϕ, steps, noise) = SimData(
         ),
         Gates(
             name = "Depolarization channel on all qubits",
-            final_measures = output(n),
+            final_measurements = output(n),
             gates = prod(DPL(noise)(i) for i in 1:n),
             limits = limits,
         )

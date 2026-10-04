@@ -3,14 +3,14 @@
 export PartialTrace
 
 """
-    PartialTrace(; trace_positions | keep_positions, name, time_start, final_measures)
+    PartialTrace(; trace_positions | keep_positions, name, time_start, final_measurements)
 
 a phase that traces out part of the sites, given by exactly one of `trace_positions` and
 `keep_positions`.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `trace_positions`: the sites to trace out
 - `keep_positions`: the sites to keep, all the others being traced out
 
@@ -26,7 +26,7 @@ after this one refer to.
 @kwdef struct PartialTrace <: AbstractPhase
     name::String = "Computing partial trace"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     trace_positions::Union{Nothing, Vector{Int}} = nothing
     keep_positions::Union{Nothing, Vector{Int}} = nothing
 end

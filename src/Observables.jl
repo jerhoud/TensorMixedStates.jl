@@ -412,7 +412,7 @@ needs the spectrum of a density operator, out of reach for a matrix product stat
 # Examples
 
     fidelity(state, ground_state)
-    measures = "data" => Fidelity(ground_state)
+    measurements = "data" => Fidelity(ground_state)
 """
 fidelity(a::State{Pure}, b::State{Pure}) =
     abs2(inner(a, b)) / (norm(a)^2 * norm(b)^2)
@@ -467,8 +467,8 @@ end
     hermitianize(state [; limits])
 
 the state whose density matrix is the Hermitian part ``(\\rho + \\rho^\\dagger)/2`` of that
-of `state`, the sum being truncated according to `limits`, a `Limits` (default `Limits()`). A pure representation is
-returned as it is.
+of `state`, the sum being truncated according to `limits`, a `Limits` (default `Limits()`). A
+pure representation is returned as it is.
 """
 hermitianize(state::State{Pure}; limits::Limits=Limits()) =
     state
@@ -936,14 +936,14 @@ over several bond dimensions also gives an error bar.
 ``H^2`` is never formed: its terms are the products of pairs of those of `H`, and the product
 of the MPO of `H` by itself has the square of its bond dimension. What is computed is
 ``\\langle H\\psi | H\\psi \\rangle``, with the MPO of `H` on either side, at the cost of a
-`dmrg` sweep at the same bond dimension: this belongs in `final_measures`, or under a large
-`measures_period`, rather than at every sweep. Pass an `MPO` to reuse one already built.
+`dmrg` sweep at the same bond dimension: this belongs in `final_measurements`, or under a large
+`measurements_period`, rather than at every sweep. Pass an `MPO` to reuse one already built.
 
 # Examples
 
     energy, gs = dmrg(hamiltonian, state; nsweeps = 10)
     variance(hamiltonian, gs)
-    measures = "data" => Variance(hamiltonian)
+    measurements = "data" => Variance(hamiltonian)
 """
 function variance(mpo::MPO, state::State{Pure})
     st = state.state

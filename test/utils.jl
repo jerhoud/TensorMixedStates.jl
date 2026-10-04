@@ -71,8 +71,8 @@ end
 """
 checks whether measurements are equal between a random pure state and its computed mixed represenetation
 """
-function check_mix(dims, sites, measures)
-    for d in dims, (s, m) in zip(sites, measures)
+function check_mix(dims, sites, measurements)
+    for d in dims, (s, m) in zip(sites, measurements)
         sys = System(10, s)
         stp = RandomState{Pure}(sys, d)
         stm = mix(stp)

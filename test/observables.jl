@@ -733,7 +733,7 @@ end
     # and through a run, where the system does not exist until the phase creates it
     sim = runTMS(SimData(phases = [
             CreateState{Pure}(3, Qubit(), ["+", "+", "Up"];
-                final_measures = Data("d") => [Fidelity(ref), Overlap(ref)])]);
+                final_measurements = Data("d") => [Fidelity(ref), Overlap(ref)])]);
         output = devnull)
     @test only(sim.data["d"]["Fidelity"]["data"]) ≈ 0.5
     @test only(sim.data["d"]["Overlap"]["data"]) ≈ 1/√2

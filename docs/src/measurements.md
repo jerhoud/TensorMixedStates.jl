@@ -76,19 +76,19 @@ Some quantities produced by the algorithm itself, rather than computed from the 
 asked for with a symbol
 
 ```julia
-measures = "sweeps.dat" => :sweep
+measurements = "sweeps.dat" => :sweep
 ```
 
 `:sweep` is the sweep number and is available in every phase that sweeps, that is `Evolve`,
 `GroundState` and `SteadyState`, and in a phase of your own that passes it to `output`, as
-`output(sim, measures; sweep = k)`. `:energy` is the current energy and is available in
+`output(sim, measurements; sweep = k)`. `:energy` is the current energy and is available in
 `GroundState` and `SteadyState`, where it is the value dmrg minimises, zero at the steady
 state. Asking for a symbol that the running algorithm does not provide is not an error: the
 measurement produces an empty value, so `:energy` in an `Evolve` phase writes its name and
 the time with no value in a file, and empty values in a json file or a `Data` object. The
-symbols are given to the `measures` of a phase, not to its `final_measures`, which are taken
+symbols are given to the `measurements` of a phase, not to its `final_measurements`, which are taken
 once it is over: the energy a `GroundState` ends with is measured as the last line of its
-`measures`, or as the expectation value of its hamiltonian.
+`measurements`, or as the expectation value of its hamiltonian.
 
 Checks can be performed (useful for coherence tests)
 
@@ -125,7 +125,7 @@ which is real. `RealValue`, `ImaginaryValue` and `ComplexValue` declare the kind
 they do for a state function whose values are complex
 
 ```julia
-measures = "data" => [RealValue(Sp(1)Sm(2) + Sm(1)Sp(2)), ComplexValue(stfunc)]
+measurements = "data" => [RealValue(Sp(1)Sm(2) + Sm(1)Sp(2)), ComplexValue(stfunc)]
 ```
 
 ## Reference
@@ -169,7 +169,7 @@ MemoryUsage
 ## [Output](@id measure-output)
 
 `output` takes measurements and writes them to destinations, as the phases of `runTMS` do with
-their `measures`, given as pairs `destination => measurements`.
+their `measurements`, given as pairs `destination => measurements`.
 
 There are three types of destinations:
 

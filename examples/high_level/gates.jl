@@ -10,14 +10,14 @@ measurements = "data" => [X, Y, Z, (X, X), (Y, Y), (Z, Z), Purity]
 phases(n) = [
   CreateState(
     name = "Building my very special state",
-    final_measures = measurements,
+    final_measurements = measurements,
     type = Pure(),
     system = System(n, Qubit()),
     state = "Up",
   ),
   Gates(
     name = "Applying gate X to all qubits",
-    final_measures = measurements,
+    final_measurements = measurements,
     gates = prod(X(i) for i in 1:n),
     limits = limits,
   ),

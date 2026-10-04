@@ -52,13 +52,13 @@ function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
     end)
     # the sweep of each measurement is written too: a resumed dmrg phase numbered its own from
     # 1 again, ITensorMPS counting afresh the sweeps it is asked for
-    measures = ["data" => [X(1), Y(1), Z(2), :sweep, stopper, breaker]]
+    measurements = ["data" => [X(1), Y(1), Z(2), :sweep, stopper, breaker]]
     evolve(op) = Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * op,
-                        limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
+                        limits = Limits(maxdim = 10, cutoff = 1e-15), measurements)
     # a dmrg phase resumes on its sweep count rather than on a simulation time, which is a
     # path of its own through `DmrgObserver`
     ground = GroundState(; hamiltonian = sum(-Z(i) for i in 1:3), nsweeps = 3,
-                         limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
+                         limits = Limits(maxdim = 10, cutoff = 1e-15), measurements)
     return [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)), evolve(Z(2)), ground]
 end
 
@@ -67,26 +67,26 @@ end
 Base.@kwdef struct PlainEvolve <: AbstractPhase
     name::String = "plain evolution"
     time_start = nothing
-    final_measures = []
-    measures = []
+    final_measurements = []
+    measurements = []
 end
 
 TensorMixedStates.run_phase(sim::Simulation, p::PlainEvolve) =
     tdvp(-im * X(1), 0.4, sim; nsweeps = 4, limits = Limits(maxdim = 4, cutoff = 1e-15),
-         observer! = TdvpObserver(sim, p.measures, 1))
+         observer! = TdvpObserver(sim, p.measurements, 1))
 
 Base.@kwdef struct ResumingEvolve <: AbstractPhase
     name::String = "resuming evolution"
     time_start = nothing
-    final_measures = []
-    measures = []
+    final_measurements = []
+    measurements = []
 end
 
 function TensorMixedStates.run_phase(sim::Simulation, p::ResumingEvolve)
     done, _ = resume_step(sim)
     return tdvp(-im * X(1), 0.4, sim; nsweeps = 4, first_sweep = done + 1,
                 limits = Limits(maxdim = 4, cutoff = 1e-15),
-                observer! = TdvpObserver(sim, p.measures, 1))
+                observer! = TdvpObserver(sim, p.measurements, 1))
 end
 
 # a phase of one's own written as a loop of steps, each a kick on the first qubit and the time
@@ -94,16 +94,16 @@ end
 Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "kicks"
     time_start = nothing
-    final_measures = []
+    final_measurements = []
     nkicks::Int = 4
-    measures = []
+    measurements = []
 end
 
 TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
     run_steps(sim, p.nkicks) do sim, k
         sim = apply(exp(-0.3im * X)(1), sim)
         sim = Simulation(sim, sim.state, sim.time + 0.1)
-        output(sim, p.measures)
+        output(sim, p.measurements)
         return sim
     end
 
@@ -123,7 +123,7 @@ end
 struct Lookalike
     name::String
     time_start
-    final_measures
+    final_measurements
 end
 
 @testset "A phase descends from AbstractPhase" begin
@@ -210,15 +210,15 @@ end
             # away from one, which expect does not show since it divides by it
             phases = [CreateState{Mixed}(2, Qubit(), "X+"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), limits = lim,
-                             measures = ms, evolver = [-im * Z(1), -im * X(1) * X(2)] =>
+                             measurements = ms, evolver = [-im * Z(1), -im * X(1) * X(2)] =>
                                                       [t -> 1 + t, t -> cos(3t)]),
                       Evolve(duration = 0.3, time_step = 0.1, algo = ApproxW(order = 2),
-                             limits = lim, measures = ms,
+                             limits = lim, measurements = ms,
                              evolver = [-im * Z(1), Dissipator(sqrt(0.3) * Sm)(2)] =>
                                        [t -> t^2, t -> 1.0]),
                       SteadyState(lindbladian = Dissipator(Sp)(1) + Dissipator(Sm)(2),
-                                  nsweeps = 3, limits = lim, measures = ms,
-                                  final_measures = "final" => [Trace])]
+                                  nsweeps = 3, limits = lim, measurements = ms,
+                                  final_measurements = "final" => [Trace])]
             runTMS(SimData(; name = "ref", phases))
             # one sweep per run, as above
             stop[] = true
@@ -248,7 +248,7 @@ end
             phases = [CreateState{Mixed}(3, Qubit(), "FullyMixed"),
                       Thermalize(hamiltonian = h, beta = 0.6, beta_step = 0.1,
                                  limits = Limits(maxdim = 10, cutoff = 1e-15),
-                                 measures = ["data" => [:beta, :log_trace, Z(1), X(2), :sweep,
+                                 measurements = ["data" => [:beta, :log_trace, Z(1), X(2), :sweep,
                                                         stopper]])]
             runTMS(SimData(; name = "ref", phases))
             stop[] = true
@@ -274,10 +274,10 @@ end
                 end
                 0.
             end)
-            measures = ["data" => [X(1), Y(1)]]
+            measurements = ["data" => [X(1), Y(1)]]
             evolve(op) = Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(),
                                 evolver = -im * op,
-                                limits = Limits(maxdim = 10, cutoff = 1e-15), measures)
+                                limits = Limits(maxdim = 10, cutoff = 1e-15), measurements)
             # a `Gates` phase runs no sweep, so nothing records its progress while it runs.
             # An interrupt in the second one has to resume from the state the first one
             # produced and from sweep 0, not from the state and the sweep count the
@@ -285,7 +285,7 @@ end
             # before writing any of them, so the breaker throws without a partial line.
             phases = [CreateState{Pure}(3, Qubit(), "X+"), evolve(Z(1)),
                       Gates(; gates = Z(1)),
-                      Gates(; gates = X(1), final_measures = ["data" => [breaker]]),
+                      Gates(; gates = X(1), final_measurements = ["data" => [breaker]]),
                       evolve(Z(2))]
             runTMS(SimData(; name = "ref", phases))
             reference = read("ref/data", String)
@@ -318,11 +318,11 @@ end
             # a text destination is continued from the position the checkpoint recorded,
             # but a json one and a `Data` one accumulate in memory and are only handed over
             # at the end, so the checkpoint has to carry what they hold
-            measures = ["data" => [X(1), stopper], "out.json" => [X(1)], Data("d") => [X(1)]]
+            measurements = ["data" => [X(1), stopper], "out.json" => [X(1)], Data("d") => [X(1)]]
             phases = [CreateState{Pure}(3, Qubit(), "X+"),
                       Evolve(duration = 0.6, time_step = 0.1, algo = Tdvp(),
                              evolver = -im * Z(1),
-                             limits = Limits(maxdim = 10, cutoff = 1e-15); measures)]
+                             limits = Limits(maxdim = 10, cutoff = 1e-15); measurements)]
             ref = runTMS(SimData(; name = "ref", phases))
             reference = read("ref/data", String)
             ref_json = TensorMixedStates.JSON.parsefile("ref/out.json")
@@ -356,11 +356,11 @@ end
                 0.
             end)
             ms = [Sp(1), (X, Z), (Sp, Sm)]
-            measures = ["data" => [ms; stopper], "out.json" => ms, Data("d") => ms]
+            measurements = ["data" => [ms; stopper], "out.json" => ms, Data("d") => ms]
             phases = [CreateState{Pure}(2, Qubit(), "X+"),
                       Evolve(duration = 0.6, time_step = 0.1, algo = Tdvp(),
                              evolver = -im * (Z(1) + X(1)X(2)),
-                             limits = Limits(maxdim = 10, cutoff = 1e-15); measures)]
+                             limits = Limits(maxdim = 10, cutoff = 1e-15); measurements)]
             ref = runTMS(SimData(; name = "ref", phases))
             stop_in[] = 3
             sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
@@ -384,7 +384,7 @@ end
         cd(dir) do
             # a complex simulation time is marked in the checkpoint as well
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                      Gates(gates = X(1), time_start = 0.5im, final_measures = Data("d") => Z(1)),
+                      Gates(gates = X(1), time_start = 0.5im, final_measurements = Data("d") => Z(1)),
                       Gates(gates = X(1))]
             sim_data = SimData(; name = "ctime", phases, checkpoint_interval = 1e-9)
             runTMS(sim_data)
@@ -426,8 +426,8 @@ end
             phases = [CreateState{Pure}(4, Qubit(), "Up"),
                       GroundState(hamiltonian = h, nsweeps = 30, tolerance = 1e-10,
                                   limits = Limits(maxdim = 8, cutoff = 1e-14),
-                                  measures = "data" => [stopper_at(stop_in), Z(1)],
-                                  final_measures = "final" => [Z(1)])]
+                                  measurements = "data" => [stopper_at(stop_in), Z(1)],
+                                  final_measurements = "final" => [Z(1)])]
             runTMS(SimData(; name = "ref", phases))
             reference = read("ref/data", String)
             sweeps = count(l -> startswith(l, "Z(1)"), split(reference, '\n'))
@@ -455,10 +455,10 @@ end
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
                              limits = Limits(maxdim = 4, cutoff = 1e-15),
-                             final_measures = "data" => [stopper_at(stop_in)])]
-            ref = runTMS(SimData(; name = "ref", phases, final_measures = "fin" => Z(1)))
+                             final_measurements = "data" => [stopper_at(stop_in)])]
+            ref = runTMS(SimData(; name = "ref", phases, final_measurements = "fin" => Z(1)))
             stop_in[] = 1
-            sim_data = SimData(; name = "chk", phases, final_measures = "fin" => Z(1),
+            sim_data = SimData(; name = "chk", phases, final_measurements = "fin" => Z(1),
                                checkpoint_interval = 1e9)
             runTMS(sim_data)
             @test stop_in[] == 0
@@ -496,7 +496,7 @@ end
     mktempdir() do dir
         cd(dir) do
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                      Gates(gates = X(1), final_measures = [Data("d") => [NaN, -Inf], "out.json" => [Inf]]),
+                      Gates(gates = X(1), final_measurements = [Data("d") => [NaN, -Inf], "out.json" => [Inf]]),
                       Gates(gates = X(1))]
             runTMS(SimData(; name = "nonfinite", phases, checkpoint_interval = 1e-9))
             @test only(TensorMixedStates.JSON.parsefile("nonfinite/out.json")["Inf"]["data"]) == "Inf"
@@ -515,9 +515,9 @@ end
         cd(dir) do
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
-                             limits = Limits(maxdim = 4, cutoff = 1e-15), measures = "data" => [Z(1)])]
+                             limits = Limits(maxdim = 4, cutoff = 1e-15), measurements = "data" => [Z(1)])]
             sim_data = SimData(; name = "done", phases, checkpoint_interval = 1e9,
-                               final_measures = "fin" => Z(1))
+                               final_measurements = "fin" => Z(1))
             first = runTMS(sim_data)
             data, fin = read("done/data", String), read("done/fin", String)
             again = runTMS(sim_data)
@@ -539,7 +539,7 @@ end
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
                              limits = Limits(maxdim = 4, cutoff = 1e-15),
-                             measures = "data" => [Z(1), stopper_at(stop_in)])]
+                             measurements = "data" => [Z(1), stopper_at(stop_in)])]
             sim_data = SimData(; name = "done", phases)
             runTMS(sim_data)
             @test stop_in[] == 0                          # the stop did happen
@@ -562,7 +562,7 @@ end
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
                              limits = Limits(maxdim = 4, cutoff = 1e-15),
-                             measures = "data" => [Z(1), stopper_at(stop_in)])]
+                             measurements = "data" => [Z(1), stopper_at(stop_in)])]
             sim_data = SimData(; name = "chk", phases)
             runTMS(sim_data)
             @test stop_in[] == 0
@@ -626,7 +626,7 @@ end
                                             sum(1. * X(i) for i in 1:6),
                             nsweeps = 4, limits = Limits(maxdim = [2, 2, 8, 8], cutoff = 1e-14),
                             noise = [1e-2, 1e-3, 0., 0.],
-                            measures = ["data" => [MaxLinkdim, X(1), Z(1)Z(2), stopper]]),
+                            measurements = ["data" => [MaxLinkdim, X(1), Z(1)Z(2), stopper]]),
             ]
             runTMS(SimData(; name = "ref", phases))
             stop_in[] = 1
@@ -657,7 +657,7 @@ end
                        evolver = -im * (sum(-Z(i) * Z(i + 1) for i in 1:5) -
                                         sum(1. * X(i) for i in 1:6)),
                        limits = Limits(maxdim = [2, 2, 8, 8], cutoff = 1e-14),
-                       measures = ["data" => [MaxLinkdim, X(1), Z(1)Z(2), stopper]]),
+                       measurements = ["data" => [MaxLinkdim, X(1), Z(1)Z(2), stopper]]),
             ]
             runTMS(SimData(; name = "ref", phases))
             # the link dimension really does follow the schedule, otherwise the run below
@@ -684,7 +684,7 @@ end
             phases = [CreateState{Mixed}(3, Qubit(), "Up"),
                       SteadyState(lindbladian = lind, nsweeps = 4,
                                   limits = Limits(cutoff = 1e-12, maxdim = 32),
-                                  measures = "data" => [stopper_at(stop_in)]),
+                                  measurements = "data" => [stopper_at(stop_in)]),
                       Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(), evolver = lind,
                              limits = Limits(cutoff = 1e-12, maxdim = 32)),
                       SaveState(file = "saved.h5")]
@@ -721,7 +721,7 @@ end
                 phases = [create;
                           mixed ? [ToMixed()] : [];
                           Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver,
-                                 measures = "data" => [fid, stopper_at(stop_in)])]
+                                 measurements = "data" => [fid, stopper_at(stop_in)])]
                 runTMS(SimData(; name = "ref$mixed$given", phases))
                 stop_in[] = 2
                 sim_data = SimData(; name = "chk$mixed$given", phases, checkpoint_interval = 1e-9)
@@ -742,7 +742,7 @@ end
             stop_in = Ref(2)
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
-                             measures = "data" => [stopper_at(stop_in)])]
+                             measurements = "data" => [stopper_at(stop_in)])]
             sim_data = SimData(; name = "sim", phases, checkpoint_interval = 1e-9)
             @test stopped(runTMS(sim_data))
             @test !stopped(runTMS(sim_data))
@@ -759,7 +759,7 @@ end
             stop_in = Ref(2)
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
-                             measures = "data" => [stopper_at(stop_in)])]
+                             measurements = "data" => [stopper_at(stop_in)])]
             sim_data = SimData(; name = "sim", phases, checkpoint_interval = 1e-9)
             runTMS(sim_data)
             runTMS(sim_data)
@@ -795,7 +795,7 @@ end
             runTMS(SimData(name = "sim", phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
                 Evolve(duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver = -im * X(1),
-                       measures = ["data" => X(1), "./data" => Z(1), "sub/../data" => Y(1)])]))
+                       measurements = ["data" => X(1), "./data" => Z(1), "sub/../data" => Y(1)])]))
             @test length(readlines("sim/data")) == 9
         end
     end
@@ -855,7 +855,7 @@ end
             phases = [CreateState{Pure}(4, Qubit(), "Up"),
                       GroundState(hamiltonian = h, nsweeps = 5,
                                   limits = Limits(maxdim = 8, cutoff = 1e-14),
-                                  measures = "data" => [Z(1), :sweep], measures_period = 2)]
+                                  measurements = "data" => [Z(1), :sweep], measurements_period = 2)]
             runTMS(SimData(; name = "ref", phases))
             sim_data = SimData(; name = "chk", phases, max_time = -1)
             runTMS(sim_data)
@@ -880,7 +880,7 @@ end
             for (name, P) in (("plain", PlainEvolve), ("resuming", ResumingEvolve))
                 stop_in = Ref(0)
                 phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                          P(measures = "data" => [Z(1), stopper_at(stop_in)])]
+                          P(measurements = "data" => [Z(1), stopper_at(stop_in)])]
                 ref = runTMS(SimData(; name = "ref$name", phases))
                 stop_in[] = 2
                 sim_data = SimData(; name = "chk$name", phases, checkpoint_interval = 1e-9)
@@ -901,14 +901,14 @@ end
 Base.@kwdef struct Evolutions <: AbstractPhase
     name::String = "evolutions"
     time_start = nothing
-    final_measures = []
-    measures = []
+    final_measurements = []
+    measurements = []
 end
 
 TensorMixedStates.run_phase(sim::Simulation, p::Evolutions) =
     run_steps(sim, 2) do sim, k
         tdvp(-im * X(1), 0.2, sim; nsweeps = 2, limits = Limits(maxdim = 4, cutoff = 1e-15),
-             observer! = TdvpObserver(sim, p.measures, 1))
+             observer! = TdvpObserver(sim, p.measurements, 1))
     end
 
 @testset "A loop of one's own resumes after its last step" begin
@@ -918,8 +918,8 @@ TensorMixedStates.run_phase(sim::Simulation, p::Evolutions) =
         cd(dir) do
             stop_in = Ref(0)
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                      Kicks(measures = "data" => [Z(1), stopper_at(stop_in)],
-                            final_measures = "final" => Z(1))]
+                      Kicks(measurements = "data" => [Z(1), stopper_at(stop_in)],
+                            final_measurements = "final" => Z(1))]
             ref = runTMS(SimData(; name = "ref", phases))
             stop_in[] = 2
             sim_data = SimData(; name = "chk", phases)
@@ -945,16 +945,16 @@ end
 Base.@kwdef struct SummingKicks <: AbstractPhase
     name::String = "summing kicks"
     time_start = nothing
-    final_measures = []
+    final_measurements = []
     nkicks::Int = 4
-    measures = []
+    measurements = []
 end
 
 function TensorMixedStates.run_phase(sim::Simulation, p::SummingKicks)
     sim, total = run_steps(sim, p.nkicks; carry = 0.) do sim, k, total
         sim = apply(exp(-0.3im * X)(1), sim)
         total += real(expect(sim.state, Z(1)))
-        output(sim, p.measures; total)
+        output(sim, p.measurements; total)
         return sim, total
     end
     output(sim, "final" => [:total]; total)
@@ -968,7 +968,7 @@ end
         cd(dir) do
             stop_in = Ref(0)
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                      SummingKicks(measures = "data" => [:total, stopper_at(stop_in)])]
+                      SummingKicks(measurements = "data" => [:total, stopper_at(stop_in)])]
             runTMS(SimData(; name = "ref", phases))
             stop_in[] = 2
             sim_data = SimData(; name = "chk", phases)
@@ -991,16 +991,16 @@ end
 Base.@kwdef struct SteppedWord <: AbstractPhase
     name::String = "stepped word"
     time_start = nothing
-    final_measures = []
+    final_measurements = []
     nsteps::Int = 4
-    measures = []
+    measurements = []
 end
 
 const last_word = Ref{Any}(nothing)
 
 function TensorMixedStates.run_phase(sim::Simulation, p::SteppedWord)
     sim, word = run_steps(sim, p.nsteps; carry = typemax(UInt64) - UInt64(12345)) do sim, k, word
-        output(sim, p.measures)
+        output(sim, p.measurements)
         return sim, word * 0x5851f42d4c957f2d + 0x14057b7ef767814f
     end
     last_word[] = word
@@ -1015,7 +1015,7 @@ end
         cd(dir) do
             stop_in = Ref(0)
             phases = [CreateState{Pure}(1, Qubit(), "Up"),
-                      SteppedWord(measures = "data" => [stopper_at(stop_in)])]
+                      SteppedWord(measurements = "data" => [stopper_at(stop_in)])]
             runTMS(SimData(; name = "ref", phases))
             ref = last_word[]
             stop_in[] = 2
@@ -1038,7 +1038,7 @@ end
 Base.@kwdef struct PrepareGHZ <: AbstractPhase
     name::String = "preparing a GHZ state"
     time_start = nothing
-    final_measures = []
+    final_measurements = []
     system::System
 end
 
@@ -1054,7 +1054,7 @@ TensorMixedStates.run_phase(sim::Simulation, p::PrepareGHZ) =
             sys = System(2, Qubit())
             stop_in = Ref(0)
             phases = [PrepareGHZ(system = sys),
-                      Kicks(measures = "data" => [Z(1), stopper_at(stop_in)])]
+                      Kicks(measurements = "data" => [Z(1), stopper_at(stop_in)])]
             ref = runTMS(SimData(; name = "ref", phases))
             @test_throws "first phase must be" SimData(phases = [Kicks()])
             # resumed in the kicks, the state comes back on the system the phase created it on,
@@ -1081,7 +1081,7 @@ end
         cd(dir) do
             stop_in = Ref(0)
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                      Evolutions(measures = "data" => [Z(1), stopper_at(stop_in)])]
+                      Evolutions(measurements = "data" => [Z(1), stopper_at(stop_in)])]
             ref = runTMS(SimData(; name = "ref", phases))
             # the third measurement is the first sweep of the second step
             stop_in[] = 3
@@ -1117,15 +1117,15 @@ end
             p = CreateState{Pure}(2, Qubit(), "Up")
             for name in ("stop", "log", "checkpoint.json", "./running")
                 @test_throws "a file of the simulation directory" runTMS(SimData(name = "s",
-                    phases = [p, Gates(gates = X(1), final_measures = name => [Z(1)])]))
+                    phases = [p, Gates(gates = X(1), final_measurements = name => [Z(1)])]))
             end
             # every file a run and its checkpoints leave in the directory is one of those
             runTMS(SimData(name = "all", description = "d", checkpoint_interval = 1e-9,
                            phases = [p, Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(),
-                                               evolver = -im * X(1), measures = "data" => Z(1))]))
+                                               evolver = -im * X(1), measurements = "data" => Z(1))]))
             @test issubset(setdiff(readdir("all"), ["data"]), TensorMixedStates.simulation_files)
             # without a directory nothing is written there, and any name goes
-            @test_ok runTMS(SimData(phases = [p, Gates(gates = X(1), final_measures = "stop" => Z(1))]);
+            @test_ok runTMS(SimData(phases = [p, Gates(gates = X(1), final_measurements = "stop" => Z(1))]);
                             output = devnull)
         end
     end
@@ -1136,7 +1136,7 @@ end
     # checkpoint that was never written, and the run returned as if it had completed
     breaker = StateFunc("Breaker", _ -> throw(InterruptException()))
     phases = [CreateState{Pure}(2, Qubit(), "Up"),
-              Gates(gates = X(1), final_measures = "data" => [breaker])]
+              Gates(gates = X(1), final_measurements = "data" => [breaker])]
     @test_throws InterruptException runTMS(SimData(; phases); output = devnull)
 end
 
@@ -1150,7 +1150,7 @@ end
             phases = [CreateState{Pure}(3, Qubit(), "X+"),
                       Evolve(duration = 0.4, time_step = 0.1, algo = Tdvp(), evolver = -im * Z(1),
                              limits = Limits(maxdim = 10, cutoff = 1e-15),
-                             measures = "data" => [X(1), stopper_at(stop_in)])]
+                             measurements = "data" => [X(1), stopper_at(stop_in)])]
             runTMS(SimData(; name = "ref", phases))
             stop_in[] = 2
             sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
@@ -1172,8 +1172,8 @@ end
             stop_in = Ref(0)
             phases = [CreateState{Pure}(2, Qubit(), "Up"),
                       Gates(gates = X(1), time_start = complex(0.5),
-                            final_measures = "data" => [Z(1), stopper_at(stop_in)]),
-                      Gates(gates = X(1), final_measures = "data" => [Z(1)])]
+                            final_measurements = "data" => [Z(1), stopper_at(stop_in)]),
+                      Gates(gates = X(1), final_measurements = "data" => [Z(1)])]
             runTMS(SimData(; name = "ref", phases))
             stop_in[] = 1
             sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e9)
@@ -1240,7 +1240,7 @@ end
                                   algo = ApproxW(order = 2, apply_algo = "naive"),
                                   evolver = -im * Z(1))])
     @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
-                                             evolver = -im * Z(1), measures = ["f" => X])])
+                                             evolver = -im * Z(1), measurements = ["f" => X])])
     @test id([base; Gates(gates = X(1)); Gates(gates = Z(1))]) ≠
           id([base; Gates(gates = Z(1)); Gates(gates = X(1))])
     @test id(base) ≠ id(base[1:1])

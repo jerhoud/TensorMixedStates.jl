@@ -3,21 +3,21 @@
 export GroundState
 
 """
-    GroundState(; hamiltonian, limits, nsweeps, noise, tolerance, measures, options...)
+    GroundState(; hamiltonian, limits, nsweeps, noise, tolerance, measurements, options...)
 
 a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on a pure state.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `hamiltonian`: the hamiltonian whose ground state is searched
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
 - `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
   `Krylov()`)
-- `measures`: the measurements to make during the search, see `output` (default `[]`)
-- `measures_period`: the number of sweeps between two measurements (default 1)
+- `measurements`: the measurements to make during the search, see `output` (default `[]`)
+- `measurements_period`: the number of sweeps between two measurements (default 1)
 - `tolerance`: the search stops when the energy changes by less than this from one sweep to
   the next (default 0, never)
 
@@ -29,22 +29,22 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
 @kwdef struct GroundState <: AbstractPhase
     name::String = "Ground state computation using Dmrg"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     hamiltonian::IndexedOp{Pure}
     limits::Limits
     nsweeps::Int
     noise::Union{Float64, Vector{Float64}} = 0.
     krylov::Krylov = Krylov()
-    measures = []
-    measures_period::Int = 1
+    measurements = []
+    measurements_period::Int = 1
     tolerance::Real = 0.
     # a noise is a real number, an integer one included, stored as the Float64 dmrg takes
-    GroundState(name, time_start, final_measures, hamiltonian, limits, nsweeps,
-                noise::Union{Real, AbstractVector{<:Real}}, krylov, measures, measures_period,
-                tolerance) =
-        new(name, time_start, final_measures, hamiltonian, limits, nsweeps,
+    GroundState(name, time_start, final_measurements, hamiltonian, limits, nsweeps,
+                noise::Union{Real, AbstractVector{<:Real}}, krylov, measurements,
+                measurements_period, tolerance) =
+        new(name, time_start, final_measurements, hamiltonian, limits, nsweeps,
             noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
-            krylov, measures, measures_period, tolerance)
+            krylov, measurements, measurements_period, tolerance)
 end
 
 run_phase(sim::Simulation, phase::GroundState) =

@@ -177,7 +177,7 @@ the names to come:
 
 - a number of time steps is `nsteps`, a number of dmrg sweeps `nsweeps` (`tdvp` and
   `approx_W`, older, keep `nsweeps` for their time steps);
-- something done every `k` steps is given by `<what>_period`, as `measures_period`;
+- something done every `k` steps is given by `<what>_period`, as `measurements_period`;
 - a field does not repeat the name of its struct: `Krylov(dim = 8)`, not `krylovdim`;
 - the suffix `Error` is for an exception (`TraceError` and `HermiticityError`, older, are
   measurements whose names are column headers);

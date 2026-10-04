@@ -41,8 +41,8 @@ evolve(evolver) = Evolve(
     duration = 0.25,
     time_step = time_step,
     evolver = evolver,
-    measures = measurements(n),
-    measures_period = 2,
+    measurements = measurements(n),
+    measurements_period = 2,
 )
 
 sim_data(n) = SimData(
@@ -61,7 +61,7 @@ sim_data(n) = SimData(
             type = Mixed(),
             system = System(n, Fermion(conserve = strong(N))),
             state = [i % 2 == 0 ? "Occ" : "Emp" for i in 1:n],
-            final_measures = measurements(n),
+            final_measurements = measurements(n),
         ),
         evolve(hopping(n) + dephasing(n)),
         Weaken(),

@@ -49,7 +49,7 @@ sim_data(n, step, duration, alg, Gamma) = SimData(
             type = Mixed(), # type of representation
             system = System(n, Fermion()), # system description (n fermion sites)
             state =  "0", # initial empty state
-            final_measures = output(n), # save measurements for inital state
+            final_measurements = output(n), # save measurements for inital state
         ),
         # a phase for Lindblad evolution
         Evolve(
@@ -71,9 +71,9 @@ sim_data(n, step, duration, alg, Gamma) = SimData(
                 -im * sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:n-1)
                 + Dissipator(sqrt(2*Gamma)*dag(C))(n ÷ 2), #dissipative term injecting fermions in the center of the chain
             # save measurements
-            measures = output(n),
+            measurements = output(n),
             # every two time steps
-            measures_period = 2,
+            measurements_period = 2,
         ),
  
     ]

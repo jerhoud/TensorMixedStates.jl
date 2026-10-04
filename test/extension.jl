@@ -155,9 +155,9 @@ end
     sys = System(3, Qubit())
     phases = [CreateState(type = Wrapped(), system = sys, state = "Up"),
               Gates(gates = X(1) * H(2))]
-    measures = Data("m") => [Z, Z(1) * Z(3), (Z, Z)]
+    measurements = Data("m") => [Z, Z(1) * Z(3), (Z, Z)]
     # the threading :auto reads the system of the state before each phase
-    sim = runTMS(SimData(phases = phases, final_measures = measures, threading = :auto);
+    sim = runTMS(SimData(phases = phases, final_measurements = measurements, threading = :auto);
                  output = devnull)
     @test sim.state isa WrappedState
     @test last(sim.data["m"]["Z"]["data"]) ≈ [-1, 0, 1]
@@ -183,10 +183,10 @@ end
         # resumed from it reads it back and finishes as the uninterrupted one
         cd(dir) do
             stopped = runTMS(SimData(name = "wrapped", phases = phases,
-                                     final_measures = measures, max_time = 0))
+                                     final_measurements = measurements, max_time = 0))
             @test stopped.state isa WrappedState
             @test !haskey(stopped.data, "m")
-            resumed = runTMS(SimData(name = "wrapped", phases = phases, final_measures = measures))
+            resumed = runTMS(SimData(name = "wrapped", phases = phases, final_measurements = measurements))
             @test resumed.state isa WrappedState
             @test last(resumed.data["m"]["Z"]["data"]) ≈ [-1, 0, 1]
         end
@@ -261,8 +261,8 @@ function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::E
     dt = phase.duration / nsteps
     return run_steps(sim, nsteps) do sim, k
         sim = tdvp(evolver, dt, sim; phase.limits)
-        if mod(k, phase.measures_period) == 0
-            output(sim, phase.measures; sweep = k)
+        if mod(k, phase.measurements_period) == 0
+            output(sim, phase.measurements; sweep = k)
         end
         return sim
     end
@@ -293,7 +293,7 @@ end
             stepped(algo) = Evolve(duration = 0.3, time_step = 0.1, algo = algo,
                                    evolver = -im * (X(1) + Z(1) * Z(2)),
                                    limits = Limits(maxdim = 4, cutoff = 1e-15),
-                                   measures = "data" => [X(1), Z(2), :sweep, stopper])
+                                   measurements = "data" => [X(1), Z(2), :sweep, stopper])
             runTMS(SimData(name = "tdvp", phases = [start, stepped(Tdvp())]))
             reference = read("tdvp/data", String)
             runTMS(SimData(name = "own", phases = [start, stepped(Stepwise())]))
@@ -312,7 +312,7 @@ end
     # Tdvp on the state of an extension, and an algorithm with no method for it
     sys = System(2, Qubit())
     brief(algo) = Evolve(duration = 0.2, time_step = 0.1, algo = algo, evolver = -im * X(1),
-                         final_measures = Data("z") => Z(1))
+                         final_measurements = Data("z") => Z(1))
     plain = runTMS(SimData(phases = [CreateState(type = Pure(), system = sys, state = "Up"),
                                      brief(Tdvp())]); output = devnull)
     wrapped = runTMS(SimData(phases = [CreateState(type = Wrapped(), system = sys, state = "Up"),

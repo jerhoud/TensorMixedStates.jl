@@ -112,10 +112,10 @@ end
     mktempdir() do dir
         cd(dir) do
             # a Measure among the measurements stands for its measurements, and a string is a
-            # measurement in final_measures too, a line with its label and the time
+            # measurement in final_measurements too, a line with its label and the time
             sim = runTMS(SimData(name = "sets", phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
-                Gates(gates = X(1), final_measures = [Data("d") => [Measure(X(1), Z(1)), Z(2)],
+                Gates(gates = X(1), final_measurements = [Data("d") => [Measure(X(1), Z(1)), Z(2)],
                                                       "out.dat" => "label", Data("s") => "label"])]))
             d = sim.data["d"]
             @test sort(collect(keys(d))) == ["X(1)", "Z(1)", "Z(2)"]
@@ -129,8 +129,8 @@ end
             # X(1), measured in the second
             sim = runTMS(SimData(name = "rows", phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
-                Gates(gates = X(1), final_measures = Data("d") => [Z(1), Z(2)]),
-                Gates(gates = X(2), final_measures = Data("d") => [X(1), Z(2)])]))
+                Gates(gates = X(1), final_measurements = Data("d") => [Z(1), Z(2)]),
+                Gates(gates = X(2), final_measurements = Data("d") => [X(1), Z(2)])]))
             d = sim.data["d"]
             @test d["Z(2)"]["events"] == [1, 2]
             df = data_to_frame(d)
@@ -222,7 +222,7 @@ end
         SaveState(file = file2, statename = "st"),
         CreateState{Pure}(1, Qubit(), "Dn"),
         LoadState(file = file2, statename = "st",
-            final_measures = check(Z, [1, -1, 1])),
+            final_measurements = check(Z, [1, -1, 1])),
     ])
 end
 
@@ -244,13 +244,13 @@ end
     sim = runTMS(SimData(name = "datatoframe", phases = [
         CreateState{Pure}(2, Qubit(), ["Z+", "Z-"]),
         Evolve(algo = Tdvp(), duration = 0.2, time_step = 0.1, evolver = -im * X(1),
-               measures = Data("obs") => [Norm, Trace]),
+               measurements = Data("obs") => [Norm, Trace]),
     ]); output = devnull)
     @test collect(keys(sim.data)) == ["obs"]
     @test sort(collect(keys(sim.data["obs"]))) == ["Norm", "Trace"]
 
     # data_to_frame lives in the DataFrames extension, so this also checks that the
-    # extension loads at all. Several measures are joined on the time column.
+    # extension loads at all. Several measurements are joined on the time column.
     df = data_to_frame(sim.data["obs"])
     @test df isa DataFrame
     @test names(df) == ["time", "Norm", "Trace"]            # in the order of their names
@@ -263,7 +263,7 @@ end
     sim1 = runTMS(SimData(name = "datatoframe", phases = [
         CreateState{Pure}(2, Qubit(), ["Z+", "Z-"]),
         Evolve(algo = Tdvp(), duration = 0.2, time_step = 0.1, evolver = -im * X(1),
-               measures = Data("one") => Norm),
+               measurements = Data("one") => Norm),
     ]); output = devnull)
     df1 = data_to_frame(sim1.data["one"])
     @test df1 isa DataFrame
@@ -343,7 +343,7 @@ end
             ms = [X(1), Sp(1), (Sp, Sm)]
             sim = runTMS(SimData(name = "cplx", phases = [
                 CreateState{Pure}(2, Qubit(), "+"),
-                Gates(gates = Phase(0.7)(1), final_measures = [Data("d") => ms, "out.json" => ms])]))
+                Gates(gates = Phase(0.7)(1), final_measurements = [Data("d") => ms, "out.json" => ms])]))
             d = sim.data["d"]
             @test only(d["X(1)"]["data"]) isa Float64
             @test only(d["Sp(1)"]["data"]) ≈ exp(0.7im) / 2
@@ -358,7 +358,7 @@ end
 
             runTMS(SimData(name = "ctime", phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
-                Gates(gates = X(1), time_start = 0.5im, final_measures = "out.json" => Z(1))]))
+                Gates(gates = X(1), time_start = 0.5im, final_measurements = "out.json" => Z(1))]))
             t = only(TensorMixedStates.JSON.parsefile("ctime/out.json")["Z(1)"]["times"])
             @test complex(t["re"], t["im"]) == 0.5im
         end
@@ -390,7 +390,7 @@ end
             phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
                 Gates(gates = X(1),
-                      final_measures = ["stdout" => Z, "stderr" => Norm, "" => MaxLinkdim]),
+                      final_measurements = ["stdout" => Z, "stderr" => Norm, "" => MaxLinkdim]),
             ]
             still_open = open("captured", "w") do io
                 redirect_stdout(io) do
@@ -414,8 +414,8 @@ end
             boom = StateFunc("boom", _ -> error("phase failure on purpose"))
             phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
-                Gates(gates = X(1), final_measures = ["data.json" => Norm]),
-                Gates(gates = X(1), final_measures = ["data.json" => boom]),
+                Gates(gates = X(1), final_measurements = ["data.json" => Norm]),
+                Gates(gates = X(1), final_measurements = ["data.json" => boom]),
             ]
             @test_throws ErrorException runTMS(SimData(; name = "failing", phases))
             @test isfile(joinpath("failing", "data.json"))

@@ -21,7 +21,7 @@ value is taken as real unless declared otherwise, see `RealValue`.
 
     halftrace = StateFunc("HalfTrace", st -> trace(st) / 2)
     measure(state, halftrace)
-    measures = "data.dat" => halftrace
+    measurements = "data.dat" => halftrace
 """
 struct StateFunc
     name::String
@@ -46,7 +46,7 @@ refused.
 
 # Examples
 
-    measures = "data" => [TimeFunc("sinus", t -> sin(t)), TimeFunc("cosinus", t -> cos(t))]
+    measurements = "data" => [TimeFunc("sinus", t -> sin(t)), TimeFunc("cosinus", t -> cos(t))]
 """
 struct TimeFunc
     name::String
@@ -138,7 +138,7 @@ which only decides how they are written.
 # Examples
 
     measure(state, Check("check", X(1)X(2), t -> sin(2t)), 0.8)
-    measures = "data" => Check("trace", Trace, 1., 1e-6)
+    measurements = "data" => Check("trace", Trace, 1., 1e-6)
 """
 struct Check
     name::String
@@ -197,7 +197,7 @@ inside another holds for what it contains.
 
 # Examples
 
-    measures = "data" => [RealValue(Sp(1)Sm(2) + Sm(1)Sp(2)), ComplexValue(my_state_function)]
+    measurements = "data" => [RealValue(Sp(1)Sm(2) + Sm(1)Sp(2)), ComplexValue(my_state_function)]
 """
 RealValue(obs) = Declared(obs, real_kind)
 
@@ -361,12 +361,13 @@ row_major(x::AbstractVector) = x
 row_major(x::AbstractMatrix) = vec(permutedims(x))
 
 """
-    flat_measures(x)
+    flat_measurements(x)
 
 the measurements of `x` in a flat vector, nested arrays being unrolled, a matrix row by row.
 """
-flat_measures(x::AbstractArray) = reduce(vcat, [ flat_measures(y) for y in row_major(x) ]; init = [])
-flat_measures(x) = [x]
+flat_measurements(x::AbstractArray) =
+    reduce(vcat, [ flat_measurements(y) for y in row_major(x) ]; init = [])
+flat_measurements(x) = [x]
 
 """
     written_name(kind, name)
@@ -400,31 +401,31 @@ product shared by two of them only once. A single set is written as a plain vect
 `output` builds these for you, one per destination.
 """
 struct Measure
-    measures::Vector
+    measurements::Vector
     function Measure(obs::Vector)
         # a single name for several values would have to be a vector, which is neither a
         # column header nor a key. Inside a `Check` a vector stays one, compared element
         # by element
-        measures = flat_measures(make_obs.(obs))
+        measurements = flat_measurements(make_obs.(obs))
         # names become column headers and keys, so two measurements sharing one would be
         # written on top of each other. It takes a long operator, abbreviated to the same
         # text as another, to get there, so the way out is left to the caller: name the
         # measurements apart or put them in different destinations.
-        ns = reduce(vcat, measure_names.(measures); init = String[])
+        ns = reduce(vcat, measure_names.(measurements); init = String[])
         dup = unique([n for n in ns if count(==(n), ns) > 1])
         if !isempty(dup)
             error("several measurements of the same set are named $(join(repr.(dup), ", ")). " *
                   "Names are used as column headers, so they must differ: split them between " *
                   "destinations, or name them explicitly.")
         end
-        return new(measures)
+        return new(measurements)
     end
 end
 
 Measure(args...) = Measure([args...])
 
 # a set inside a set stands for its measurements, which are already made
-make_obs(o::Measure) = o.measures
+make_obs(o::Measure) = o.measurements
 
 
 """
@@ -433,7 +434,7 @@ make_obs(o::Measure) = o.measures
 the measurements of type `T` in `o`, found through arrays, sets, declarations and checks.
 """
 leaves(T, o::Union{Vector, Matrix}) = reduce(vcat, [ leaves(T, x) for x in o ]; init = T[])
-leaves(T, o::Measure) = leaves(T, o.measures)
+leaves(T, o::Measure) = leaves(T, o.measurements)
 leaves(T, o::Declared) = leaves(T, o.obs)
 leaves(T, o::Check) = [ leaves(T, o.obs1); leaves(T, o.obs2) ]
 leaves(T, o) = o isa T ? T[o] : T[]
@@ -544,7 +545,7 @@ state is mixed first, which is much more expensive than the other state function
 
 # Examples
 
-    measures = "data" => [SubRenyi2(3), SubRenyi2([1, 4])]
+    measurements = "data" => [SubRenyi2(3), SubRenyi2([1, 4])]
 """
 SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))
 
@@ -563,7 +564,7 @@ with zeros beyond the bond dimension of the cut, so that every row has the same 
 
 # Examples
 
-    measures = "data" => [EntanglementEntropy(3), EntanglementEntropy(5, 4)]
+    measurements = "data" => [EntanglementEntropy(3), EntanglementEntropy(5, 4)]
 """
 EntanglementEntropy(cut) = StateFunc("EntanglementEntropy($cut)",
     st-> begin
@@ -629,7 +630,7 @@ phase is written.
 
 # Examples
 
-    measures = "data" => [Fidelity(ground_state), Purity]
+    measurements = "data" => [Fidelity(ground_state), Purity]
 """
 Fidelity(ref::State) = StateFunc("Fidelity", st -> fidelity(st, reference_on(st, ref)))
 
@@ -645,7 +646,7 @@ reference of the other representation is refused, at the first measurement.
 
 # Examples
 
-    measures = "data" => Overlap(initial_state)
+    measurements = "data" => Overlap(initial_state)
 """
 Overlap(ref::State) = ComplexValue(StateFunc("Overlap", st -> inner(reference_on(st, ref), st)))
 
@@ -658,12 +659,12 @@ refused on a mixed one at the first measurement.
 
 The MPO is built at every measurement, since the system the simulation runs on does not
 exist when the measurement is written. That is cheap next to the variance itself, which
-costs a `dmrg` sweep: ask for it in `final_measures` or under a large `measures_period`, not
+costs a `dmrg` sweep: ask for it in `final_measurements` or under a large `measurements_period`, not
 at every sweep.
 
 # Examples
 
-    final_measures = "data" => Variance(hamiltonian)
+    final_measurements = "data" => Variance(hamiltonian)
 """
 Variance(h) = StateFunc("Variance", st -> variance(h, st))
 
@@ -743,7 +744,7 @@ the `Symbol` measurements, empty for one it does not give.
 get_val(o::Vector{Measure}, v::Dict, st::AbstractState, t::Number; kwargs...) =
     [get_val(x, v, st, t; kwargs...) for x in o]
 get_val(o::Measure, v::Dict, st::AbstractState, t::Number; kwargs...) =
-    [get_val(x, v, st, t; kwargs...) for x in o.measures]
+    [get_val(x, v, st, t; kwargs...) for x in o.measurements]
 function get_val(o::Declared, v::Dict, st::AbstractState, t::Number; kwargs...)
     name, x = get_val(o.obs, v, st, t; kwargs...)
     return written_name(o.kind, name) => kept_value(o, name, x, t)
@@ -846,7 +847,7 @@ from the keyword argument of that name, and is empty without one: the phases pas
     measure(state, X)        # compute observable X on all sites
     measure(state, (X, Y))   # compute correlations XY on all pairs of sites
     measure(state, Check("check", X(1)X(2), t->sin(2t)), 0.8) # compute and check the given observable against a computed value
-    measure(state, [X(2), Y, (X, Y)]) # several measures together
+    measure(state, [X(2), Y, (X, Y)]) # several measurements together
 """
 measure(state::AbstractState, args, t::Number = 0.; kwargs...) =
     measure(state, Measure(args), t; kwargs...)

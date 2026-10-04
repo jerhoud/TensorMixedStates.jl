@@ -31,16 +31,16 @@ end
     @test_throws "failed with values" redirect_stdout(devnull) do
         test_phases([CreateState{Pure}(2, Qubit(), "Up"),
                      Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(), evolver = -im * Z(1),
-                            final_measures = check(Z(1), -1))])
+                            final_measurements = check(Z(1), -1))])
     end
 end
 
 @testset "Complete graphs" begin
     @test_ok test_phases(create_graph_state(complete_graph(4);
-        final_measures = check([X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y)],
+        final_measurements = check([X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y)],
         [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], 1, [1 1 1 1; 1 1 1 1; 1 1 1 1; 1 1 1 1]])))
     @test_ok test_phases([ create_graph_state(complete_graph(4)), ToMixed(;
-        final_measures = check([X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y)],
+        final_measurements = check([X, Y, Z, X(1)Z(2)Z(3)Z(4), (Y, Y)],
         [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], 1, [1 1 1 1; 1 1 1 1; 1 1 1 1; 1 1 1 1]]))])
 
 end
@@ -356,7 +356,7 @@ end
                 hamiltonian = sum(-Z(i) for i in 1:5),
                 limits = Limits(maxdim = 10),
                 nsweeps = 2,
-                final_measures = check([X, Y, Z, Norm], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1], 1e-7)
+                final_measurements = check([X, Y, Z, Norm], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], 1], 1e-7)
                 )
                 ])
             end
@@ -370,10 +370,10 @@ end
                     ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))
                     test_phases([
         CreateState(type = Mixed(), state = ghz,
-            final_measures = check([Purity, prod(X(i) for i in 1:6)], [1, 1], 1e-10)),
+            final_measurements = check([Purity, prod(X(i) for i in 1:6)], [1, 1], 1e-10)),
         PartialTrace(
             keep_positions = [2, 3, 5],
-            final_measures = check([X, Y, Z, (Z, Z)], [[0, 0, 0], [0, 0, 0], [0, 0, 0], [1 1 1 ; 1 1 1 ; 1 1 1]])
+            final_measurements = check([X, Y, Z, (Z, Z)], [[0, 0, 0], [0, 0, 0], [0, 0, 0], [1 1 1 ; 1 1 1 ; 1 1 1]])
             )
             ])
         end
@@ -394,7 +394,7 @@ end
     time_step = 0.02,
     evolver =
         -im*(sum(Z(i)*Z(i+1) for i in 1:5)+Z(6)*Z(1)-sum(X(i) for i in 1:6)),
-    final_measures = [
+    final_measurements = [
         check([X,Y,Z],[[0.48881258418,0.48881258418,0.48881258418,0.48881258418,0.48881258418,0.48881258418],[0.0,0,0,0,0,0],[0.0,0,0,0,0,0]],1e-7),
         check([Z(1)Z(2),Z(2)Z(3),Z(1)Z(6)],[-0.51118741582,-0.51118741582,-0.51118741582],1e-7),
         check([Y(1)Y(2),Y(2)Y(3),Y(1)Y(6)],[-0.2518341076,-0.2518341076,-0.2518341076],1e-7),
@@ -417,7 +417,7 @@ end
                    duration = 1.0, time_step = 0.1,
                    evolver = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) -
                                     sum(X(i) for i in 1:6)),
-                   final_measures = [check(X(1), 0.48881258418, 1e-8),
+                   final_measurements = [check(X(1), 0.48881258418, 1e-8),
                                      check(Z(1)Z(6), -0.51118741582, 1e-8)])])
     end
 end
@@ -436,7 +436,7 @@ end
             time_step = 0.05,
             evolver =
                 -im * sum(dag(C)(i)*C(i+1)+dag(C)(i+1)*C(i) for i in 1:4) + Dissipator(sqrt(2*0.2)*dag(C))(3),
-            final_measures = [
+            final_measurements = [
                 check(N, [0.0125582080327,0.063008590052,0.1950187333854,0.063008590052,0.0125582080327], 1e-6),
                 check([dag(C)(3)*C(i) for i in 1:5],
                 [-0.023529279887, -0.0783682258151im,0.1950187333854,-0.0783682258151im,-0.023529279887],1e-6),
@@ -470,7 +470,7 @@ end
             time_step = 0.1,
             evolver =
                 -im*sum(A(i)*dag(A)(i+1)+dag(A)(i)*A(i+1) for i in 1:3) + Dissipator(2*sqrt(0.1)*dag(A))(2),
-            final_measures = [
+            final_measurements = [
                     check(N, [0.0036328913502, 0.1200236303285, 0.0035680174576, 4.86613106e-5], 1e-5),
                     check([dag(A)(2)*A(i) for i in 1:4],
                           [-0.0180013634952im, 0.1200236303285, -0.0178675798942im, -0.0017865872242], 1e-5),
@@ -486,7 +486,7 @@ end
             lindbladian = Dissipator(Sp)(1) + Dissipator(Sm)(2),
             nsweeps = 20,
             limits = Limits(cutoff = 1e-10, maxdim = 10),
-            final_measures = check([X, Y, Z], [[0, 0], [0, 0], [1, -1]], 1e-10)
+            final_measurements = check([X, Y, Z], [[0, 0], [0, 0], [1, -1]], 1e-10)
         )
     ])
     @test_ok test_phases([
@@ -501,7 +501,7 @@ end
             lindbladian = -im * (-sum(Z(i)Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
             limits = Limits(maxdim = 10, cutoff = 1e-10),
             nsweeps = 40,
-            final_measures = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-8)
+            final_measurements = check([X, Y, Z], [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [1, 1, 1, 1, 1]], 1e-8)
         )
     ])
     @test_ok test_phases([
@@ -512,7 +512,7 @@ end
                 + Dissipator(Sp)(1) + Dissipator(Sm)(4),
             nsweeps = 200,
             limits = Limits(cutoff = 1e-10, maxdim = 10),
-            final_measures = [
+            final_measurements = [
                 check(Z, [0.05882352941176472, 0.0, 0.0,-0.05882352941176472], 1e-7),
                 check([2(X(i)Y(i+1)-Y(i)X(i+1)) for i in 1:3], fill(0.9411764705882353, 3), 1e-7),
             ]

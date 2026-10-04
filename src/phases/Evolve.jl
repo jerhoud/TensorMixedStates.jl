@@ -77,13 +77,14 @@ show(io::IO, s::Algo) =
           join(("$f = $(repr(getfield(s, f)))" for f in fieldnames(typeof(s))), ", "), ")")
 
 """
-    Evolve(; duration, time_step, algo, evolver, measures, measures_period, limits, options...)
+    Evolve(; duration, time_step, algo, evolver, measurements, measurements_period, limits,
+             options...)
 
 a phase of time evolution.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `limits`: constraints on the state, see `Limits` (default `Limits()`)
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one that divides the duration into a
@@ -92,30 +93,30 @@ a phase of time evolution.
 - `algo`: the algorithm, `Tdvp(...)` or `ApproxW(...)`
 - `evolver`: `-im * H` for a hamiltonian `H`, plus dissipators for a mixed state, or
   `evolvers => coefs` for a time dependent one, see the `coefs` option of `tdvp`
-- `measures`: the measurements to make during the evolution, see `output` (default `[]`),
-  after every `measures_period` time steps. The state the phase starts from is not measured
-  here: the `final_measures` of the phase before measure it
-- `measures_period`: the number of time steps between two measurements (default 1)
+- `measurements`: the measurements to make during the evolution, see `output` (default `[]`),
+  after every `measurements_period` time steps. The state the phase starts from is not measured
+  here: the `final_measurements` of the phase before measure it
+- `measurements_period`: the number of time steps between two measurements (default 1)
 
 # Examples
 
     Evolve(duration = 2., time_step = 0.1, algo = Tdvp(),
-           evolver = -im * (Z(1)Z(2) + Z(2)Z(3)), measures = "data" => [X, Y, Z])
+           evolver = -im * (Z(1)Z(2) + Z(2)Z(3)), measurements = "data" => [X, Y, Z])
 """
 @kwdef struct Evolve <: AbstractPhase
     name::String = "Time evolution"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     limits::Limits = Limits()
     duration::Number
     time_step::Number
     algo::Algo
     evolver::Union{IndexedOp, Pair}
-    measures_period::Int = 1
-    measures = []
+    measurements_period::Int = 1
+    measurements = []
     # refused here rather than when it runs, as the fields of ApproxW
-    function Evolve(name, time_start, final_measures, limits, duration, time_step, algo, evolver,
-                    measures_period, measures)
+    function Evolve(name, time_start, final_measurements, limits, duration, time_step, algo,
+                    evolver, measurements_period, measurements)
         if iszero(time_step)
             error("the time step of an Evolve cannot be zero")
         end
@@ -131,8 +132,8 @@ a phase of time evolution.
                       "[A, B] => [f, g] or A => f")
             end
         end
-        return new(name, time_start, final_measures, limits, duration, time_step, algo, evolver,
-                   measures_period, measures)
+        return new(name, time_start, final_measurements, limits, duration, time_step, algo, evolver,
+                   measurements_period, measurements)
     end
 end
 
@@ -148,8 +149,8 @@ the algorithm.
 An algorithm of an extension, or an algorithm for the state of an extension, comes with a
 method of its own. It is called before the phase has read its resume point, so that a method
 can read it with `resume_step`, or run its steps with `run_steps`, which resumes, stops and
-checkpoints them; `output(sim, phase.measures; sweep)` writes the measurements of the phase,
-every `phase.measures_period` steps. Such a method takes `kwargs...` after the keywords it
+checkpoints them; `output(sim, phase.measurements; sweep)` writes the measurements of the phase,
+every `phase.measurements_period` steps. Such a method takes `kwargs...` after the keywords it
 uses, so that a keyword a later version of TMS passes does not break it.
 """
 function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
@@ -157,7 +158,8 @@ function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolve
     done, _ = resume_step(sim)
     st = tdvp(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps = nsteps,
               time_start = sim.time, phase.limits, first_sweep = done + 1, algo.n_expand,
-              algo.krylov, observer! = TdvpObserver(sim, phase.measures, phase.measures_period))
+              algo.krylov,
+              observer! = TdvpObserver(sim, phase.measurements, phase.measurements_period))
     return Simulation(sim, st)
 end
 
@@ -167,7 +169,7 @@ function evolve(algo::ApproxW, state::State, sim::Simulation, phase::Evolve; evo
     st = approx_W(evolver, phase.duration, state; coefs, algo.n_hermitianize, nsweeps = nsteps,
                   time_start = sim.time, phase.limits, first_sweep = done + 1, algo.order,
                   algo.w, algo.apply_algo,
-                  observer! = ApproxWObserver(sim, phase.measures, phase.measures_period))
+                  observer! = ApproxWObserver(sim, phase.measurements, phase.measurements_period))
     return Simulation(sim, st)
 end
 

@@ -3,14 +3,14 @@
 export SaveState
 
 """
-    SaveState(; file, statename = "state", name, time_start, final_measures)
+    SaveState(; file, statename = "state", name, time_start, final_measurements)
 
 a phase that saves the state in an HDF5 file, see `save_state`. Several states can be saved in
 one file under different `statename`; saving under a name already in the file replaces it.
 
 # Fields
 
-- `name`, `time_start`, `final_measures`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `file`: the name of the HDF5 file to write to, taken in the simulation directory when it is
   relative, since `runTMS` runs the phases there
 - `statename`: the name under which the state is stored in the file
@@ -23,7 +23,7 @@ one file under different `statename`; saving under a name already in the file re
 @kwdef struct SaveState <: AbstractPhase
     name::String = "Saving state"
     time_start::Union{Nothing, Number} = nothing
-    final_measures = []
+    final_measurements = []
     file::String
     statename::String = "state"
 end

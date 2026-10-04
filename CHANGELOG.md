@@ -123,6 +123,10 @@ the reference article.
 
 ### Changed
 
+- The fields `measures`, `final_measures` and `measures_period` of the phases, and
+  `final_measures` of `SimData`, are `measurements`, `final_measurements` and
+  `measurements_period`, the word `output` and the observers already used. A phase of one's
+  own names its field `final_measurements`.
 - The checkpoint file is at version 4, its value carried from one step to the next written
   `carried` rather than `energy`, and a checkpoint of version 3, written by 1.6.0, is refused
   rather than resumed without that value.
@@ -293,7 +297,7 @@ the reference article.
   when the phase ran, or failed then, and the phase corrected could not resume the checkpoint,
   which belonged to a simulation of other phases.
 - A `Check` on a symbol that is not given, as `:energy` in an `Evolve` phase or in the
-  `final_measures` of any phase, has empty values, and is an error when it has a tolerance. It
+  `final_measurements` of any phase, has empty values, and is an error when it has a tolerance. It
   failed with a `MethodError`, stopping the simulation.
 - `expect1`, `expect2` and `measure` take a one site operator that simplifies to a multiple of
   the identity, as `2Id` or `(2X)^2`, on which they failed with a `MethodError`.

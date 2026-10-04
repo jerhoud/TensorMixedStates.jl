@@ -23,7 +23,7 @@
             limits = Limits(maxdim = 10, cutoff = 1e-15),
             evolver = -im * Z(1),
             duration = 1,
-            final_measures = check([X(1), Y(1)], t->[cos(2t), sin(2t)], tol)
+            final_measurements = check([X(1), Y(1)], t->[cos(2t), sin(2t)], tol)
             )
             ])
         end
@@ -128,7 +128,7 @@ end
     h = -sum(Z(i) * Z(i+1) for i in 1:n-1) - 0.7 * sum(X(i) for i in 1:n)
     energy = StateFunc("E", st -> real(expect(st, h)))
     thermalize = Thermalize(hamiltonian = h, beta = 1., beta_step = 0.05, limits = lim,
-                            measures = Data("t") => [:beta, :log_trace, energy])
+                            measurements = Data("t") => [:beta, :log_trace, energy])
     sim = runTMS(SimData(phases = [CreateState{Mixed}(n, Qubit(), "FullyMixed", time_start = 0.3),
                                    thermalize]); output = devnull)
     d = sim.data["t"]
@@ -162,7 +162,7 @@ end
             limits = Limits(maxdim = 10, cutoff = 1e-15),
             evolver = -im * Z(1) * Z(2),
             duration = 1,
-            final_measures = check([X(1), Y(1), Z(2)], t->[cos(2t), -sin(2t), -1], tol)
+            final_measurements = check([X(1), Y(1), Z(2)], t->[cos(2t), -sin(2t), -1], tol)
             )
         ])
     end
@@ -182,7 +182,7 @@ end
             limits = Limits(maxdim = 10, cutoff = 1e-15),
             evolver = -im * (Z(2)Z(4) + Z(3)Z(1) + Z(3)Z(5)),
             duration = 1,
-            final_measures = check([Y(1), Y(4), Y(5)], t->sin(2t) * [-1., 1., -1.], tol)
+            final_measurements = check([Y(1), Y(4), Y(5)], t->sin(2t) * [-1., 1., -1.], tol)
             )
             ])
         end
@@ -209,7 +209,7 @@ end
             limits = Limits(maxdim = 10, cutoff = 1e-15),
             evolver = hs => coefs,
             duration = 1,
-            final_measures = check([X(1), Y(1), X(2), Y(2)],
+            final_measurements = check([X(1), Y(1), X(2), Y(2)],
                 t->[cos(2t), sin(2t), cos(t^2), sin(t^2)], tol)
             )
             ])
@@ -267,7 +267,7 @@ end
         return runTMS(SimData(phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
                 Evolve(; duration, time_step, algo, evolver = -im * X(1),
-                       measures = Data("m") => Z(1))]);
+                       measurements = Data("m") => Z(1))]);
             output = devnull)
     end
     sim = evolve(1.0, 0.3)
@@ -473,7 +473,7 @@ end
         CreateState{Mixed}(1, Qubit(),"Up"),
         Gates(
             gates = (0.5*Gate(Id)+0.5*Gate(X))(1),
-            final_measures = [
+            final_measurements = [
                 check([X(1), Y(1), Z(1)], [0, 0, 0], 1e-12),
                 check(Trace2, 0.5, 1e-12)
             ]
@@ -483,7 +483,7 @@ end
         CreateState{Mixed}(2, Qubit(),"Up"),
         Gates(
             gates = (0.5*Gate(Id⊗Id)+0.5*Gate(X⊗X))(1, 2),
-            final_measures = [
+            final_measurements = [
                 check([X, Y, Z], [[0, 0], [0, 0], [0, 0]], 1e-12),
                 check(Trace2, 0.5, 1e-12),
                 check(Z(1)Z(2), 1, 1e-12)
@@ -640,7 +640,7 @@ end
 end
 
 @testset "Periods below one mean never" begin
-    # one rule for every period of the library: `measures_period`, `n_expand`,
+    # one rule for every period of the library: `measurements_period`, `n_expand`,
     # `n_hermitianize`, and the `checkpoint_interval` covered in checkpoint.jl.
     # `mod(sweep, 0)` raised a division by zero and `mod(sweep, -2)` is zero on every
     # second sweep, so anything below one is read as never rather than as one of those
@@ -657,8 +657,8 @@ end
         sim = runTMS(SimData(phases = [
                 CreateState{Pure}(2, Qubit(), "Up"),
                 Evolve(duration = 0.4, time_step = 0.1, algo = Tdvp(),
-                       evolver = -im * Z(1), measures = Data("m") => Z,
-                       measures_period = period)]);
+                       evolver = -im * Z(1), measurements = Data("m") => Z,
+                       measurements_period = period)]);
             output = devnull)
         return haskey(sim.data, "m") ? length(sim.data["m"]["Z"]["times"]) : 0
     end

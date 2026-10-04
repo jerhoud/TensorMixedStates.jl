@@ -30,7 +30,7 @@ the description of a simulation, which `runTMS` runs.
   simulation having no state before it
 - `description`: the text of the `description` file of the simulation (default `""`)
 - `time_start`: the initial simulation time (default 0.)
-- `final_measures`: the measurements to make at the end of the simulation, see `output`
+- `final_measurements`: the measurements to make at the end of the simulation, see `output`
   (default `[]`)
 - `time_format`: the C like format of the simulation times written (default
   `$default_time_format`)
@@ -61,14 +61,14 @@ written.
                 hamiltonian = -sum(Z(i)Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10),
                 limits = Limits(maxdim = [10, 20, 50]), nsweeps = 10),
         ],
-        final_measures = "data" => [X, Z],
+        final_measurements = "data" => [X, Z],
     )
 """
 @kwdef struct SimData
     description::String = ""
     name::String = "simulation"
     time_start::Number = 0.
-    final_measures = []
+    final_measurements = []
     time_format::String = default_time_format
     data_format::String = default_data_format
     checkpoint_interval::Real = 0
@@ -79,9 +79,9 @@ written.
     # list: the phase loop, the position a checkpoint records, the fingerprint that tells
     # one simulation from another. None of them has to remember to do it, and none of them
     # can disagree on what the phases of a simulation are.
-    SimData(description, name, time_start, final_measures, time_format, data_format,
+    SimData(description, name, time_start, final_measurements, time_format, data_format,
             checkpoint_interval, max_time, threading, phases) =
-        new(description, name, time_start, final_measures, time_format, data_format,
+        new(description, name, time_start, final_measurements, time_format, data_format,
             checkpoint_interval, max_time, check_threading(threading),
             check_first_phase(check_phases(flatten_phases(phases))))
 end
@@ -123,7 +123,7 @@ function check_first_phase(phases::Vector)
     return phases
 end
 
-# A `SimData` has the shape of a phase — `name`, `time_start`, `final_measures` — because
+# A `SimData` has the shape of a phase — `name`, `time_start`, `final_measurements` — because
 # `runTMS` runs the top level one through `log_phase` like any other phase, which is where
 # the first line of the log comes from. That makes `run_phase(::Simulation, ::SimData)`
 # reachable for a `SimData` sitting inside `phases`, and there it silently misbehaves: the
@@ -141,7 +141,7 @@ show(io::IO, s::SimData) =
         description = $(repr(s.description)),
         name = $(repr(s.name)),
         time_start = $(s.time_start),
-        final_measures = $(s.final_measures),
+        final_measurements = $(s.final_measurements),
         time_format = $(repr(s.time_format)),
         data_format = $(repr(s.data_format)),
         checkpoint_interval = $(s.checkpoint_interval),
@@ -391,7 +391,7 @@ end
 run a list of phases, from the one a resumed run starts at, committing each boundary and
 writing a checkpoint when one is due or a stop is asked for, which ends the loop, and setting
 the `threading` of the `SimData` before each phase. A single phase is logged, given its
-`time_start`, run by `run_phase` and measured by its `final_measures`, unless it stopped for
+`time_start`, run by `run_phase` and measured by its `final_measurements`, unless it stopped for
 a checkpoint.
 """
 function log_phase(sim::Simulation, phases::Vector; threading = nothing)
@@ -460,21 +460,21 @@ end
     check_is_phase(phase)
 
 refuse an object that is not a subtype of `AbstractPhase`, or has not the three fields every
-phase is read through, `name`, `time_start` and `final_measures`, so that it says so instead of
+phase is read through, `name`, `time_start` and `final_measurements`, so that it says so instead of
 failing with a `FieldError` in the middle of a run. A missing `run_phase` method is then
 reported by the fallback of `run_phase`.
 """
 function check_is_phase(phase)
     if !(phase isa AbstractPhase)
         error("$(typeof(phase)) is not a phase: a phase is a subtype of AbstractPhase, with the " *
-              "fields name, time_start and final_measures and a method of run_phase")
+              "fields name, time_start and final_measurements and a method of run_phase")
     end
-    for f in (:name, :time_start, :final_measures)
+    for f in (:name, :time_start, :final_measurements)
         if hasfield(typeof(phase), f)
             continue
         end
         error("$(typeof(phase)) is not a phase, it has no `$f`. A phase needs name, " *
-              "time_start, final_measures and a run_phase method")
+              "time_start, final_measurements and a run_phase method")
     end
 end
 
@@ -488,7 +488,7 @@ function log_phase(sim::Simulation, phase)
         # a phase stopped for a checkpoint takes its final measurements when it is resumed and
         # finished, from the state an uninterrupted run takes them from
         if !sim.checkpoint.stopping
-            output(sim, phase.final_measures)
+            output(sim, phase.final_measurements)
         end
     end
     elapsed = round(td.time; digits=3)

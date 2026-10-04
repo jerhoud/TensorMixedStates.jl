@@ -50,7 +50,7 @@ sim_data(n, step, duration, alg, eL, eR, muL, muR) = SimData(
             type = Mixed(), # type of representation
             system = System(n, Qubit()), # system description (n qubit sites)
             state =  "FullyMixed", # initial state (infinite temperature)
-            final_measures = output(n), # save measurements for inital state
+            final_measurements = output(n), # save measurements for inital state
         ),
         # a phase for Lindblad evolution
         Evolve(
@@ -74,9 +74,9 @@ sim_data(n, step, duration, alg, eL, eR, muL, muR) = SimData(
                 + Dissipator(sqrt(eR*(1+muR)*0.5)*Sp)(n)
                 + Dissipator(sqrt(eR*(1-muR)*0.5)*Sm)(n),
             # save measurements
-            measures = output(n),
+            measurements = output(n),
             # every two time steps
-            measures_period = 2,
+            measurements_period = 2,
         )
     ]
 )

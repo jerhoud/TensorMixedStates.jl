@@ -16,7 +16,7 @@ phase has at least these three fields:
 - `name`: the name of the phase, written in the log
 - `time_start`: the simulation time the clock is set to when the phase starts (default
   `nothing`, keeping the current time)
-- `final_measures`: the measurements to make at the end of the phase, see `output` (default
+- `final_measurements`: the measurements to make at the end of the phase, see `output` (default
   `[]`)
 """
 abstract type AbstractPhase end
@@ -150,7 +150,7 @@ sweeps of the solver committed as steps of the phase.
         run_steps(sim, p.nkicks) do sim, k
             sim = apply(exp(-0.3im * X)(1), sim)
             sim = Simulation(sim, sim.state, sim.time + 0.1)
-            output(sim, p.measures; sweep = k)
+            output(sim, p.measurements; sweep = k)
             return sim
         end
 
@@ -213,7 +213,7 @@ end
 run one phase on a simulation and return the simulation it leaves behind.
 
 This is where a phase of your own plugs in: define a subtype of `AbstractPhase` with the three
-fields every phase has, `name`, `time_start` and `final_measures`, and a method of
+fields every phase has, `name`, `time_start` and `final_measurements`, and a method of
 `TensorMixedStates.run_phase` for it. The full name is needed: `run_phase` is not exported, and a function of your own
 of that name would shadow it rather than extend it. `runTMS` then logs the phase, applies its
 `time_start`, calls the method and takes the final measurements, as for a phase of the

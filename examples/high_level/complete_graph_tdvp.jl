@@ -17,7 +17,7 @@ sim_data(n) = SimData(
     phases = [
         create_graph_state(complete_graph(n); limits),
         ToMixed(
-            final_measures = measurements(n),
+            final_measurements = measurements(n),
             limits = limits,
         ),
         Evolve(
@@ -26,8 +26,8 @@ sim_data(n) = SimData(
             time_step = 0.025,
             algo = Tdvp(),
             evolver = sum(Dissipator(Sp)(i) for i in 1:n),
-            measures = measurements(n),
-            measures_period = 4,
+            measurements = measurements(n),
+            measurements_period = 4,
         ),
     ],
 )

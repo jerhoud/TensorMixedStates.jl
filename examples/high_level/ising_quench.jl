@@ -43,10 +43,10 @@ sim_data(J,h,n) = SimData(
             type = Pure(),
             system = System(n, Qubit()),
             state = "X+",
-            final_measures = measurements(n),
+            final_measurements = measurements(n),
         ),
         ToMixed(
-            final_measures=measurements(n),
+            final_measurements=measurements(n),
             limits = limits,
         ), 
         Evolve(
@@ -59,8 +59,8 @@ sim_data(J,h,n) = SimData(
                     J*(sum(Z(i)*Z(i+1) for i in 1:n-1)+Z(n)*Z(1))
                     -h*sum(X(i) for i in 1:n)
                     ),
-            measures = measurements(n),
-            measures_period = 5,
+            measurements = measurements(n),
+            measurements_period = 5,
         ),
  
     ]

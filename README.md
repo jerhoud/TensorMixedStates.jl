@@ -55,7 +55,7 @@ runTMS(SimData(
             limits = Limits(maxdim = 64),
             evolver = -im * (-sum(Z(i)Z(i + 1) for i in 1:5) - sum(X(i) for i in 1:6))
                       + sum(Dissipator(sqrt(0.2) * Sm)(i) for i in 1:6),
-            measures = "data" => [Z, Purity],
+            measurements = "data" => [Z, Purity],
         ),
     ],
 ))
