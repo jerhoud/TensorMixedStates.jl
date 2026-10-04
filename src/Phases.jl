@@ -323,9 +323,7 @@ run_phase(sim::Simulation, phase::GroundState) =
                sim, phase, "Optimizing state", e -> "Done, dmrg final energy is $e")
 
 function run_phase(sim::Simulation, phase::SaveState)
-    # a file of the simulation, as a checkpoint, would be overwritten by it, or overwrite it
-    check_destination(sim, phase.file)
-    save_state(phase.file, phase.statename, sim.state)
+    save_state(phase.file, phase.statename, sim)
     return sim
 end
 

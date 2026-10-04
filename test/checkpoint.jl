@@ -968,6 +968,45 @@ end
     end
 end
 
+# a phase of one's own creating the state, on a system it is given
+Base.@kwdef struct PrepareGHZ
+    name::String = "preparing a GHZ state"
+    time_start = nothing
+    final_measures = []
+    system::System
+end
+
+TensorMixedStates.creates_state(::PrepareGHZ) = true
+TensorMixedStates.phase_system(p::PrepareGHZ) = p.system
+TensorMixedStates.run_phase(sim::Simulation, p::PrepareGHZ) =
+    Simulation(sim, ghz_state(p.system, "Up", "Dn"))
+
+@testset "A phase of one's own creating the state" begin
+    mktempdir() do dir
+        cd(dir) do
+            # it can start a simulation, where a phase of one's own transforming the state cannot
+            sys = System(2, Qubit())
+            stop_in = Ref(0)
+            phases = [PrepareGHZ(system = sys),
+                      Kicks(measures = "data" => [Z(1), stopper_at(stop_in)])]
+            ref = runTMS(SimData(; name = "ref", phases))
+            @test_throws "first phase must be" SimData(phases = [Kicks()])
+            # resumed in the kicks, the state comes back on the system the phase created it on,
+            # where it can be compared with a state built on it
+            stop_in[] = 2
+            sim_data = SimData(; name = "chk", phases)
+            runTMS(sim_data)
+            sim = runTMS(sim_data)
+            @test sim.state.system === sys
+            @test abs(inner(sim.state, State(sys, ref.state))) ≈ 1
+            # the state of a simulation is not saved over a file of the simulation
+            @test_throws "a file of the simulation directory" save_state(
+                TensorMixedStates.state_file(1), "s", sim)
+            @test_ok save_state("other.h5", "s", sim)
+        end
+    end
+end
+
 @testset "A solver within a step of one's own" begin
     # the sweeps of a solver run within a step were committed as steps of the phase, and a stop
     # falling in the middle of the solver committed the unfinished step: the resume went on

@@ -98,12 +98,14 @@ flatten_phases(p) = [p]
 """
     check_first_phase(phases)
 
-refuse a first phase other than `CreateState` or `LoadState`. A simulation starts without a
-state, which every other phase transforms: it would fail on `nothing` deep inside its solver.
+refuse a first phase that does not create the state, see `creates_state`. A simulation starts
+without a state, which every other phase transforms: it would fail on `nothing` deep inside its
+solver.
 """
 function check_first_phase(phases::Vector)
-    if isempty(phases) || !(first(phases) isa Union{CreateState, LoadState})
-        error("the first phase must be CreateState or LoadState, which give the simulation its state")
+    if isempty(phases) || !creates_state(first(phases))
+        error("the first phase must be CreateState, LoadState or a phase of one's own creating " *
+              "the state, see TensorMixedStates.creates_state")
     end
     return phases
 end
@@ -160,17 +162,17 @@ end
     resume_system(phases, phase, sites)
 
 the system the state of a checkpoint taken at the start of the phase `phase`, or in it, is put
-back on: the one an uninterrupted run has it on, that of the last `CreateState` before that
-phase, when it has the `sites` of the state, and otherwise `nothing`, the state then coming
-back on a system of its own. A measurement comparing with a state built on that system before
+back on: the one an uninterrupted run has it on, that of the last phase creating the state
+before that phase, see `phase_system`, when it has the `sites` of the state, and otherwise
+`nothing`, the state then coming back on a system of its own. A measurement comparing with a state built on that system before
 the run, which `inner` and the fidelities require to share it, failed on every resume.
 """
 function resume_system(phases::Vector, phase::Int, sites)
-    i = findlast(p -> p isa CreateState, phases[1:min(phase - 1, end)])
+    i = findlast(creates_state, phases[1:min(phase - 1, end)])
     if isnothing(i)
         return nothing
     end
-    system = phases[i].system
+    system = phase_system(phases[i])
     return !isnothing(system) && system.sites == sites ? system : nothing
 end
 
@@ -179,7 +181,9 @@ end
 
 whether the simulation `runTMS` returned stopped before the end of its phases, at `max_time`,
 on the file `stop` or on an interrupt, rather than completed: it is then resumed by running it
-again, see [High Level Interface](@ref).
+again, see [High Level Interface](@ref). Within a phase of one's own, whether the run is
+stopping, its solver or its steps having stopped for a checkpoint: the phase leaves out then
+what it writes at its end, which its resume writes.
 
 # Examples
 

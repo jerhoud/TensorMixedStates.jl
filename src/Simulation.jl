@@ -136,6 +136,21 @@ end
 check_destination(::Simulation, ::Data) = nothing
 
 """
+    save_state(filename, statename, ::Simulation)
+
+the state of the simulation saved as `save_state` saves a state, refused when `filename` names
+a file of the simulation directory, as its checkpoint, which it would overwrite.
+
+# Examples
+
+    save_state("ground.h5", "gs", sim)
+"""
+function save_state(filename::String, statename::String, sim::Simulation)
+    check_destination(sim, filename)
+    return save_state(filename, statename, sim.state)
+end
+
+"""
     get_sim_file(::Simulation, name)
 
 the destination `output` writes to under this name, to write to it directly. `"stdout"` (or

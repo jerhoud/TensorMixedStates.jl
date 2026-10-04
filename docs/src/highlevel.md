@@ -43,6 +43,8 @@ How to use them is explained in [Extending TMS](@ref).
 
 ```@docs
 TensorMixedStates.run_phase
+TensorMixedStates.creates_state
+TensorMixedStates.phase_system
 run_steps
 resume_step
 close_sim_files

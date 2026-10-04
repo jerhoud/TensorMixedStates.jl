@@ -555,3 +555,27 @@ function show(io::IO, s::Phases)
         print(io, "\n    ", f, " = ", repr(getfield(s, f)), i < length(fs) ? "," : ")")
     end
 end
+
+"""
+    TensorMixedStates.creates_state(phase)
+
+whether `phase` gives the simulation a state of its own, as `CreateState` and `LoadState` do,
+false by default. A simulation has to start with such a phase, having no state before it. A
+phase of one's own creating the state, the adapter of another library for instance, gets a
+method of it: `TensorMixedStates.creates_state(::MyPhase) = true`.
+"""
+creates_state(_) = false
+creates_state(::Union{CreateState, LoadState}) = true
+
+"""
+    TensorMixedStates.phase_system(phase)
+
+the system on which a phase creating the state creates it, when the phase knows it
+beforehand, and `nothing` otherwise, the default. A resumed run puts the state of its checkpoint
+back on the system of the last phase creating the state before the point it resumes from, so
+that the state can still be compared with states built on that system. `CreateState` gives its
+`system`, and a phase of one's own creating the state on a system it is given gets a method of
+it.
+"""
+phase_system(_) = nothing
+phase_system(p::CreateState) = p.system

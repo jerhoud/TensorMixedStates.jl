@@ -51,6 +51,13 @@ the reference article.
   one to the next, committed with each step and given back to a resumed run.
 - `dmrg` and `steady_state` take a `PreMPO`, as `tdvp` and `approx_W` already did, so that an
   operator is prepared once for several calls.
+- `TensorMixedStates.creates_state(phase)` and `TensorMixedStates.phase_system(phase)`, which a
+  phase of one's own creating the state defines, the adapter of another library for instance:
+  it can then start a simulation, and a resumed run puts the state of its checkpoint back on
+  the system it gives, as for `CreateState`.
+- `save_state(file, name, sim)`, the state of a simulation saved, refusing a file of the
+  simulation directory, as its checkpoint, which `SaveState` already refused. `stopped(sim)`
+  is documented for a phase of one's own as well, telling whether the run is stopping.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
 - `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states

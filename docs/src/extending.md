@@ -207,6 +207,14 @@ Within the method, `output` measures the simulation, `log_msg` writes to its log
 a resume as the others are. A phase driving a solver is described with
 [`TensorMixedStates.run_phase`](@ref).
 
+A phase creating the state, the adapter of another library for instance, says so by a method
+of [`TensorMixedStates.creates_state`](@ref), which lets it be the first phase of a simulation,
+and gives the system it creates the state on by one of
+[`TensorMixedStates.phase_system`](@ref), on which a resumed run puts the state of its
+checkpoint back. Within a phase, [`stopped`](@ref) tells whether the run is stopping, and
+`save_state(file, name, sim)` saves the state, refusing a file of the simulation, as its
+checkpoint.
+
 A value the steps carry from one to the next, a sum, a count or the state of a random number
 generator, is given to `run_steps` as `carry`: each step receives it and returns it updated
 with the simulation, and a resumed run gets it back, see [`run_steps`](@ref). A phase evolving
