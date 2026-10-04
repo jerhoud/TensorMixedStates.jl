@@ -3,7 +3,7 @@
 export GroundState
 
 """
-    GroundState(; hamiltonian, limits, nsweeps, noise, tolerance, measurements, options...)
+    GroundState(; hamiltonian, limits, nsweeps, noise, tol, measurements, options...)
 
 a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on a pure state.
 
@@ -18,13 +18,13 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
   `Krylov()`)
 - `measurements`: the measurements to make during the search, see `output` (default `[]`)
 - `measurements_period`: the number of sweeps between two measurements (default 1)
-- `tolerance`: the search stops when the energy changes by less than this from one sweep to
+- `tol`: the search stops when the energy changes by less than this from one sweep to
   the next (default 0, never)
 
 # Examples
 
     GroundState(hamiltonian = X(1)X(2), nsweeps = 10,
-                limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tolerance = 1e-6)
+                limits = Limits(cutoff = 1e-10, maxdim = [10, 20, 30]), tol = 1e-6)
 """
 @kwdef struct GroundState <: AbstractPhase
     name::String = "Ground state computation using Dmrg"
@@ -37,14 +37,14 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
     krylov::Krylov = Krylov()
     measurements = []
     measurements_period::Int = 1
-    tolerance::Real = 0.
+    tol::Real = 0.
     # a noise is a real number, an integer one included, stored as the Float64 dmrg takes
     GroundState(name, time_start, final_measurements, hamiltonian, limits, nsweeps,
                 noise::Union{Real, AbstractVector{<:Real}}, krylov, measurements,
-                measurements_period, tolerance) =
+                measurements_period, tol) =
         new(name, time_start, final_measurements, hamiltonian, limits, nsweeps,
             noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
-            krylov, measurements, measurements_period, tolerance)
+            krylov, measurements, measurements_period, tol)
 end
 
 run_phase(sim::Simulation, phase::GroundState) =

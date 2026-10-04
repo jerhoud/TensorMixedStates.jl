@@ -3,7 +3,7 @@
 export SteadyState
 
 """
-    SteadyState(; lindbladian, limits, nsweeps, noise, tolerance, measurements, options...)
+    SteadyState(; lindbladian, limits, nsweeps, noise, tol, measurements, options...)
 
 a phase that searches the steady state of a Lindbladian, see `steady_state`, on a mixed state.
 
@@ -21,7 +21,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
   `Krylov(dim = 8, maxiter = 3)`, see `steady_state`)
 - `measurements`: the measurements to make during the search, see `output` (default `[]`)
 - `measurements_period`: the number of sweeps between two measurements (default 1)
-- `tolerance`: the search stops when the dmrg energy changes by less than this from one sweep
+- `tol`: the search stops when the dmrg energy changes by less than this from one sweep
   to the next (default 0, never)
 
 # Examples
@@ -30,7 +30,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
         lindbladian = -im * hamiltonian + dissipators,
         limits = Limits(cutoff = 1e-20, maxdim = [10, 20, 50]),
         nsweeps = 10,
-        tolerance = 1e-5,
+        tol = 1e-5,
     )
 """
 @kwdef struct SteadyState <: AbstractPhase
@@ -46,16 +46,16 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
     krylov::Krylov = Krylov(dim = 8, maxiter = 3)
     measurements = []
     measurements_period::Int = 1
-    tolerance::Real = 0.
+    tol::Real = 0.
     # a noise is stored as the Float64 dmrg takes, as in GroundState, and mpo_algo is checked
     # when the phase is written, as the fields of ApproxW
     function SteadyState(name, time_start, final_measurements, lindbladian, mpo_limits, mpo_algo,
                          limits, nsweeps, noise::Union{Real, AbstractVector{<:Real}}, krylov,
-                         measurements, measurements_period, tolerance)
+                         measurements, measurements_period, tol)
         check_mpo_algo(mpo_algo)
         return new(name, time_start, final_measurements, lindbladian, mpo_limits, mpo_algo, limits,
                    nsweeps, noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
-                   krylov, measurements, measurements_period, tolerance)
+                   krylov, measurements, measurements_period, tol)
     end
 end
 

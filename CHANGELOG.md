@@ -123,6 +123,8 @@ the reference article.
 
 ### Changed
 
+- The field `tolerance` of `GroundState` and `SteadyState` is `tol`, as everywhere else
+  (`Krylov`, `DmrgObserver`, `compact`, `Check`).
 - `variance(state, h)` takes the state first, as `expect` and the other measurements do,
   rather than `variance(h, state)`.
 - The fields `measures`, `final_measures` and `measures_period` of the phases, and

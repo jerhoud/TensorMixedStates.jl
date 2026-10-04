@@ -424,7 +424,7 @@ end
             stop_in = Ref(0)
             h = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.8 * sum(X(i) for i in 1:4)
             phases = [CreateState{Pure}(4, Qubit(), "Up"),
-                      GroundState(hamiltonian = h, nsweeps = 30, tolerance = 1e-10,
+                      GroundState(hamiltonian = h, nsweeps = 30, tol = 1e-10,
                                   limits = Limits(maxdim = 8, cutoff = 1e-14),
                                   measurements = "data" => [stopper_at(stop_in), Z(1)],
                                   final_measurements = "final" => [Z(1)])]

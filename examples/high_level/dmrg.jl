@@ -17,7 +17,7 @@ sim_data(n) = SimData(
             limits = Limits(cutoff = 1e-10, maxdim = [5, 10, 25, 50, 100]),
             nsweeps = 6,
             measurements = measurements,
-            tolerance = 1e-8,       
+            tol = 1e-8,
         ),
     ]
 )

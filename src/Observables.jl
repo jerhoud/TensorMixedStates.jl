@@ -928,7 +928,7 @@ the variance of the energy, ``\\langle H^2 \\rangle - \\langle H \\rangle^2``, z
 when the state is an eigenstate of the hamiltonian. The state need not be normalised, and a
 mixed representation is refused.
 
-This is the convergence check of a ground state search. The `tolerance` of `GroundState`
+This is the convergence check of a ground state search. The `tol` of `GroundState`
 stops when the energy no longer progresses between two sweeps, which a search stuck in a
 metastable state also does, with a large variance. Extrapolating the energy to zero variance
 over several bond dimensions also gives an error bar.

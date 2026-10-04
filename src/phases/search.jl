@@ -16,7 +16,7 @@ function run_search(solve, sim::Simulation, phase, what::String, final_line)
         log_msg(sim, "$what with $(phase.nsweeps - done) sweeps of Dmrg")
         e, sim = solve(sim; phase.nsweeps, first_sweep = done + 1, phase.limits,
             observer! = DmrgObserver(sim, phase.measurements, phase.measurements_period,
-                                     phase.tolerance, done; phase.nsweeps, energy = e))
+                                     phase.tol, done; phase.nsweeps, energy = e))
     end
     # a search stopped for a checkpoint is not done, and its resume writes the line
     if !stopped(sim)
