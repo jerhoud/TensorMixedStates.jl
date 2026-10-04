@@ -176,9 +176,11 @@ and the outputs of one and the same moment.
 - `phase_time`: simulation time the phase started from, which its solver counts sweeps from
 - `time`:       simulation time reached
 - `state`:      the state reached, `nothing` before the first phase has made one
-- `energy`:     the energy of the last dmrg sweep, which a resumed search compares its first
-                sweep with, or the logarithm of the trace `thermal_state` has reached, which
-                a resumed computation goes on summing
+- `carried`:    the value the phase carries from one step to the next: the energy of the last
+                dmrg sweep, which a resumed search compares its first sweep with, the
+                logarithm of the trace `thermal_state` has reached, which a resumed
+                computation goes on summing, or the value of a phase of one's own, see
+                `run_steps`
 - `reached`:    how far every destination had got, see `output_marks`
 """
 struct Commit
@@ -187,7 +189,7 @@ struct Commit
     phase_time::Number
     time::Number
     state::Union{Nothing, AbstractState}
-    energy::Union{Nothing, Float64}
+    carried::Any
     reached::NamedTuple
 end
 
@@ -261,14 +263,14 @@ checkpoint in the past and write the whole state on every sweep.
 checkpoint_due(c::Checkpointer) = c.interval > 0 && time() ≥ c.next
 
 """
-    commit!(::Checkpointer, ::Outputs, phase, sweep, phase_time, time, state; energy)
+    commit!(::Checkpointer, ::Outputs, phase, sweep, phase_time, time, state; carried)
 
 record a point the simulation can be resumed from, see `Commit`. How far the destinations
 have got is read here, at the same moment as the rest.
 """
 commit!(c::Checkpointer, o::Outputs, phase::Int, sweep::Int, phase_time::Number, t::Number,
-        state::Union{Nothing, AbstractState}; energy = nothing) =
-    c.last = Commit(phase, sweep, phase_time, t, state, energy, output_marks(o))
+        state::Union{Nothing, AbstractState}; carried = nothing) =
+    c.last = Commit(phase, sweep, phase_time, t, state, carried, output_marks(o))
 
 """
     checkpoint_json(dir)
@@ -316,7 +318,7 @@ function write_checkpoint(c::Checkpointer, o::Outputs)
                 "id" => c.id,
                 "phase" => k.phase,
                 "sweep" => k.sweep,
-                "energy" => checkpoint_value(k.energy),
+                "carried" => checkpoint_value(k.carried),
                 # through `checkpoint_value`, as the times of the destinations, so that a
                 # complex time with no imaginary part stays complex and keeps its two columns
                 "phase_time" => checkpoint_value(k.phase_time),
@@ -345,7 +347,7 @@ has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
     load_checkpoint(dir[, system])
 
 read the checkpoint of the given directory, as a named tuple of the fields of the commit it
-records (`phase`, `sweep`, `phase_time`, `time`, `state`, `energy`), the fingerprint `id` of
+records (`phase`, `sweep`, `phase_time`, `time`, `state`, `carried`), the fingerprint `id` of
 its phases, the `outputs` to put back with `restore_outputs!`, and the `generation` of its
 state file. Its state comes back on the system `system(phase, sites)` gives, from the phase of
 the commit and the sites of the state, or on a system of its own when that is `nothing`. A
@@ -366,7 +368,9 @@ function load_checkpoint(dir::String, system = (_, _) -> nothing)
             phase_time = restored_value(meta["phase_time"]), time = restored_value(meta["time"]),
             state = load_state(path, "checkpoint";
                                system = system(phase, saved_sites(path, "checkpoint"))),
-            energy = restored_value(meta["energy"]), id = meta["id"], outputs = meta["outputs"],
+            # written `energy` before a phase of one's own could carry a value of its own
+            carried = restored_value(get(meta, "carried", get(meta, "energy", nothing))),
+            id = meta["id"], outputs = meta["outputs"],
             generation = file == state_file(2) ? 2 : 1)
 end
 

@@ -7,9 +7,10 @@ export resume_step, run_steps
 """
     resume_step(sim)
 
-the steps, or sweeps, the phase being run has already done, and the energy dmrg had reached at
-the last of them, or the logarithm of the trace `thermal_state` had reached, as
-`(done, energy)`: `(0, nothing)` unless it is the phase a resumed run starts from. The resume point is then consumed, so that it is read once.
+the steps, or sweeps, the phase being run has already done, and the value it carried from the
+last of them, as `(done, carried)`: the energy dmrg had reached, the logarithm of the trace
+`thermal_state` had reached, or the value `run_steps` carries, `(0, nothing)` unless it is the
+phase a resumed run starts from. The resume point is then consumed, so that it is read once.
 
 Calling it is also what lets the steps of the phase be committed. A resume hands the phase the
 state of its last committed step, and only a phase that reads the steps done and continues
@@ -33,11 +34,12 @@ function resume_step(sim::Simulation)
         return (0, nothing)
     end
     c.resume = nothing
-    return (r.sweep, r.energy)
+    return (r.sweep, r.carried)
 end
 
 """
     run_steps(f, sim, nsteps)
+    run_steps(f, sim, nsteps; carry)
 
 run the steps `1:nsteps` of a phase of your own, `f(sim, k)` doing step `k` and returning the
 simulation it leaves behind, its measurements written, with `output` for instance, which takes
@@ -45,6 +47,12 @@ simulation it leaves behind, its measurements written, with `output` for instanc
 due and the phase stops when the simulation is asked to, and a resumed run continues after the
 last step done, from the state and the simulation time it had reached. Outside `runTMS` the
 steps simply run one after the other.
+
+Given `carry`, a value other than `nothing`, the steps carry a value from one to the next, a
+sum or a count for instance: `f(sim, k, carried)` returns `(sim, carried)`, the first step
+receives `carry`, and `run_steps` returns `(sim, carried)` after the last. The value is
+committed with each step and given back to a resumed run, so it is one a checkpoint can write:
+numbers, strings, and arrays and dictionaries of them.
 
 A step may run a solver with an observer of the package, `TdvpObserver` for instance: its
 sweeps are not steps of the phase and are not committed, and a stop it honours ends the phase
@@ -61,12 +69,24 @@ sweeps of the solver committed as steps of the phase.
             output(sim, p.measures; sweep = k)
             return sim
         end
+
+    # the number of kicks the first qubit was found up after, carried through a resume
+    function TensorMixedStates.run_phase(sim::Simulation, p::CountedKicks)
+        sim, ups = run_steps(sim, p.nkicks; carry = 0) do sim, k, ups
+            sim = apply(exp(-0.3im * X)(1), sim)
+            return sim, ups + (real(expect(sim.state, Z(1))) > 0)
+        end
+        log_msg(sim, "up after \$ups kicks")
+        return sim
+    end
 """
-function run_steps(f, sim::Simulation, nsteps::Int)
+function run_steps(f, sim::Simulation, nsteps::Int; carry = nothing)
     # read before resume_step consumes it
     r = sim.checkpoint.resume
-    done, _ = resume_step(sim)
-    if done > 0
+    done, carried = resume_step(sim)
+    if done == 0
+        carried = carry
+    else
         # a resume hands the phase the state of its last committed step, but the time the phase
         # started from, which the solvers count their steps from: a loop of one's own goes on
         # from the time it had reached
@@ -79,8 +99,16 @@ function run_steps(f, sim::Simulation, nsteps::Int)
         # honours still writes the checkpoint of the last step done, and leaves this one
         # unfinished, so that it is not committed either and is run again whole on a resume
         c.sweeps = false
-        sim = f(sim, k)
+        out = isnothing(carry) ? f(sim, k) : f(sim, k, carried)
         c.sweeps = true
+        if isnothing(carry)
+            sim = out
+        elseif out isa Tuple && length(out) == 2
+            sim, carried = out
+        else
+            error("step $k of run_steps returned a $(typeof(out)), where with carry it has to " *
+                  "return the simulation it leaves behind and the value it carries")
+        end
         if !(sim isa Simulation)
             error("step $k of run_steps returned a $(typeof(sim)), where it has to return " *
                   "the simulation it leaves behind")
@@ -88,11 +116,11 @@ function run_steps(f, sim::Simulation, nsteps::Int)
         if c.stopping
             break
         end
-        if sweep_commit!(sim, sim.state, sim.time, k)
+        if sweep_commit!(sim, sim.state, sim.time, k; carried)
             break
         end
     end
-    return sim
+    return isnothing(carry) ? sim : (sim, carried)
 end
 
 """

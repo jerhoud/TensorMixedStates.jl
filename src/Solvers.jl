@@ -62,6 +62,19 @@ function check_nsweeps(nsweeps, name = "nsweeps")
 end
 
 """
+    check_pre_system(pre, state)
+
+refuse a `PreMPO` prepared on another system than that of the state, whose indices differ:
+ITensorMPS refused the product with a message naming neither
+"""
+function check_pre_system(pre::PreMPO, state::State)
+    if pre.system !== state.system
+        error("the PreMPO was prepared on another System than that of the state: prepare it " *
+              "with the state, PreMPO(state, op)")
+    end
+end
+
+"""
     tdvp_step(mpo, dt, st, state, sweep, n_expand, n_hermitianize, limits, updater_kwargs)
 
 the MPS `st` of a state of the representation of `state` after step `sweep` of tdvp, a step
@@ -89,7 +102,8 @@ end
 
 evolve a state, or a simulation, for a time `t` with the tdvp algorithm, in `nsweeps` steps of
 `t / nsweeps`. `evolver` is `-im * H` for a hamiltonian `H`, plus dissipators for a mixed
-state. A simulation comes back with its time advanced by `t`.
+state, or its `PreMPO`, prepared once for the calls that evolve under it, one step at a time
+for instance. A simulation comes back with its time advanced by `t`.
 
 # Options
 
@@ -119,6 +133,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
     nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(),
     krylov::Krylov = Krylov()) where {R <: PM}
+    check_pre_system(pre, state)
     check_nsweeps(nsweeps)
     time_dep = !isnothing(coefs)
     st = state.state
@@ -155,7 +170,8 @@ tdvp(op, t::Number, state::State; kwargs...) =
     dmrg(hamiltonian, ::Simulation; options...)
 
 the ground state of a hamiltonian by dmrg, starting from the given state, returned as
-`(energy, state)`, or `(energy, simulation)`. A hamiltonian is refused on a mixed state, where
+`(energy, state)`, or `(energy, simulation)`. The hamiltonian may be given by its `PreMPO` or its
+MPO, prepared once for several searches. A hamiltonian is refused on a mixed state, where
 the lowest eigenvector of the superoperator it gives is neither the ground state nor a
 density matrix: search the ground state of the pure state, then `mix` it.
 
@@ -193,6 +209,11 @@ function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = 
                  observer = observer!, lim.cutoff, lim.maxdim, lim.mindim,
                  noise = resume_schedule(noise, done), krylov_kwargs(krylov, "eigsolve_")...)
     return (e, State(state, st))
+end
+
+function dmrg(pre::PreMPO, state::State; kwargs...)
+    check_pre_system(pre, state)
+    return dmrg(make_mpo(pre), state; kwargs...)
 end
 
 function dmrg(op, state::State; kwargs...)
@@ -299,6 +320,7 @@ advanced by `t`.
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
     time_start = zero(t), limits::Limits=Limits(), apply_algo::String = "densitymatrix") where {R <: PM}
+    check_pre_system(pre, state)
     check_apply_algo(apply_algo)
     check_nsweeps(nsweeps)
     st = state.state
@@ -346,8 +368,8 @@ end
     steady_state(lindbladian, ::State; options...)
     steady_state(lindbladian, ::Simulation; options...)
 
-the steady state of a Lindbladian ``L``, of the form `-im * H` plus dissipators, by dmrg on
-``L^\\dagger L`` starting from the given mixed state. It is returned as `(value, state)`, or
+the steady state of a Lindbladian ``L``, of the form `-im * H` plus dissipators, or its
+`PreMPO`, by dmrg on ``L^\\dagger L`` starting from the given mixed state. It is returned as `(value, state)`, or
 `(value, simulation)`, where `value` is the "energy" dmrg reaches, zero for a steady state,
 and the state is normalized to trace one.
 
@@ -371,7 +393,10 @@ and the state is normalized to trace one.
     value, rho = steady_state(-im * H + D, rho; nsweeps = 10,
                               limits = Limits(maxdim = [10, 20, 50]))
 """
-function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
+steady_state(op::IndexedOp{Mixed}, state::State{Mixed}; kwargs...) =
+    steady_state(PreMPO(state, op), state; kwargs...)
+
+function steady_state(pre::PreMPO{Mixed}, state::State{Mixed};
     limits::Limits = Limits(), nsweeps::Int = 1, first_sweep::Int = 1,
     observer! = NoObserver(), mpo_limits::Limits = Limits(), mpo_algo::String = "naive",
     noise = 0., krylov::Krylov = Krylov(dim = 8, maxiter = 3), alg = nothing)
@@ -380,8 +405,9 @@ function steady_state(op::IndexedOp{Mixed}, state::State{Mixed};
               "the SteadyState phase. The old name still works and will be removed." maxlog = 1
         mpo_algo = alg
     end
+    check_pre_system(pre, state)
     check_mpo_algo(mpo_algo)
-    l = make_mpo(state, op)
+    l = make_mpo(pre)
     # the naive algorithm truncates only when asked to, the others take no such option
     extra = mpo_algo == "naive" ? (; truncate = mpo_limits != Limits()) : (;)
     l2 = apply(replaceprime(dag(l)', 2=>0), l;

@@ -144,8 +144,9 @@ adapt_representation(::Type{R}, a) where R = a
     PreMPO(::State, op)
 
 the operator `op` preprocessed for the representation of the state, to be turned into an MPO
-by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp` or `approx_W` in
-place of the operator, which saves preprocessing it again. `op` may also be a vector of
+by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp`, `approx_W`, `dmrg`
+or `steady_state` in place of the operator, which saves preprocessing it again: a phase of
+one's own evolving one step at a time prepares its evolver once. `op` may also be a vector of
 operators, the terms of a time dependent evolver, each multiplied by its own real time function.
 The terms of several sites are compacted, see `compact`, so that the bond dimension of the MPO
 is the least any triangular MPO of the operator can have.

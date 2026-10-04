@@ -923,6 +923,51 @@ TensorMixedStates.run_phase(sim::Simulation, p::Evolutions) =
     end
 end
 
+# kicks whose steps sum the magnetization they reach, carried from one step to the next
+Base.@kwdef struct SummingKicks
+    name::String = "summing kicks"
+    time_start = nothing
+    final_measures = []
+    nkicks::Int = 4
+    measures = []
+end
+
+function TensorMixedStates.run_phase(sim::Simulation, p::SummingKicks)
+    sim, total = run_steps(sim, p.nkicks; carry = 0.) do sim, k, total
+        sim = apply(exp(-0.3im * X)(1), sim)
+        total += real(expect(sim.state, Z(1)))
+        output(sim, p.measures; total)
+        return sim, total
+    end
+    output(sim, "final" => [:total]; total)
+    return sim
+end
+
+@testset "A value carried by the steps of one's own" begin
+    # committed with each step, the value a resumed run goes on from is the one the step it
+    # resumes after had reached, so that the sums written are those of the uninterrupted run
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      SummingKicks(measures = "data" => [:total, stopper_at(stop_in)])]
+            runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 2
+            sim_data = SimData(; name = "chk", phases)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            runTMS(sim_data)
+            @test read("chk/data", String) == read("ref/data", String)
+            @test read("chk/final", String) == read("ref/final", String)
+            # outside runTMS the value comes back with the simulation
+            s, n = run_steps((s, k, n) -> (s, n + k), Simulation(State{Pure}(System(1, Qubit()), "Up")), 3;
+                             carry = 0)
+            @test n == 6
+            @test_throws "the value it carries" run_steps((s, k, n) -> s, s, 1; carry = 0)
+        end
+    end
+end
+
 @testset "A solver within a step of one's own" begin
     # the sweeps of a solver run within a step were committed as steps of the phase, and a stop
     # falling in the middle of the solver committed the unfinished step: the resume went on

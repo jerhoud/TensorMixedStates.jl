@@ -207,6 +207,12 @@ Within the method, `output` measures the simulation, `log_msg` writes to its log
 a resume as the others are. A phase driving a solver is described with
 [`TensorMixedStates.run_phase`](@ref).
 
+A value the steps carry from one to the next, a sum, a count or the state of a random number
+generator, is given to `run_steps` as `carry`: each step receives it and returns it updated
+with the simulation, and a resumed run gets it back, see [`run_steps`](@ref). A phase evolving
+one step at a time prepares its evolver once with [`PreMPO`](@ref), which the solvers take in
+place of the operator.
+
 ## Algorithms of one's own
 
 An `Evolve` phase hands the evolution of its state to [`TensorMixedStates.evolve`](@ref), whose method

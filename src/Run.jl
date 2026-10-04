@@ -287,7 +287,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 # the resume point is the last commit from the start, so that an interrupt
                 # before the phase it belongs to has begun writes it back as it was, rather
                 # than the state it holds as the start of that phase
-                c.resume = Commit(k.phase, k.sweep, k.phase_time, k.time, k.state, k.energy,
+                c.resume = Commit(k.phase, k.sweep, k.phase_time, k.time, k.state, k.carried,
                                   output_marks(sim.outputs))
                 c.last = c.resume
             end

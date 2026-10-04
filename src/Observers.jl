@@ -90,11 +90,11 @@ mutable struct DmrgObserver <: AbstractObserver
 end
 
 """
-    sweep_commit!(sim, state, time, sweep; energy)
+    sweep_commit!(sim, state, time, sweep; carried)
 
 close a sweep of the phase being run, once its measurements and its log are written: commit
-it, write the commit if a checkpoint is due or a stop is asked for, and return whether the
-solver has to stop.
+it, with the value `carried` the phase carries to its next sweep, see `Commit`, write the commit
+if a checkpoint is due or a stop is asked for, and return whether the solver has to stop.
 
 This order keeps a checkpoint and the outputs in step, so it lives here rather than in each
 observer: what is written after the commit is written again by the resumed run, and what is
@@ -103,13 +103,13 @@ point, see `resume_step`; in any other the commit stays the start of the phase, 
 stop and an interrupt are honoured all the same.
 """
 function sweep_commit!(sim::Simulation, state::AbstractState, t::Number, sweep::Int;
-                       energy = nothing)
+                       carried = nothing)
     c = sim.checkpoint
     if c.sweeps
         k = c.last
         # a solver run on a simulation of one's own, outside `runTMS`, has no phase around it
         phase, phase_time = isnothing(k) ? (1, t) : (k.phase, k.phase_time)
-        commit!(c, sim.outputs, phase, sweep, phase_time, t, state; energy)
+        commit!(c, sim.outputs, phase, sweep, phase_time, t, state; carried)
     end
     stop = stop_requested(c)
     if stop || checkpoint_due(c)
@@ -166,7 +166,7 @@ function sweep_done!(o::ThermalObserver; sweep, state, beta, log_trace, kwargs..
     log_msg(o.sim, "beta $(round(beta; digits=8))")
     # the simulation time does not move, and the logarithm of the trace is carried in the
     # commit, as the energy of a dmrg sweep is, for a resumed computation to go on from it
-    return sweep_commit!(o.sim, st, o.sim.time, sweep; energy = log_trace)
+    return sweep_commit!(o.sim, st, o.sim.time, sweep; carried = log_trace)
 end
 
 function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
@@ -190,7 +190,7 @@ function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
     o.energy = energy
     # a dmrg sweep does not change the simulation time, so the sweep count is what a resume
     # needs, and a stop on the tolerance records the phase as done, not to be run again
-    if sweep_commit!(o.sim, st, o.sim.time, stop ? o.nsweeps : s; energy)
+    if sweep_commit!(o.sim, st, o.sim.time, stop ? o.nsweeps : s; carried = energy)
         stop = true
     end
     return stop

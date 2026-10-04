@@ -47,6 +47,10 @@ the reference article.
   whose trace may be zero.
 - `inner(a, op, b)` and `dot(a, op, b)`, the matrix element of an operator between two pure
   states, or of a superoperator between two mixed ones.
+- `run_steps(f, sim, nsteps; carry)`, the steps of a phase of one's own carrying a value from
+  one to the next, committed with each step and given back to a resumed run.
+- `dmrg` and `steady_state` take a `PreMPO`, as `tdvp` and `approx_W` already did, so that an
+  operator is prepared once for several calls.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
 - `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states
