@@ -11,9 +11,11 @@
 #     julia --project=/tmp/tms-v160 test/reference/make_state_v2.jl
 #     git worktree remove /tmp/tms-v160
 #
-# The states exercise what version 2 added to version 1: conserved quantities, weak and
-# strong, on one species and on two, a partial trace of a charged state, and site fields of
-# every kind a file accepts, on `Kindly`, the site of `test/states_io.jl`.
+# The states exercise what version 2 added to version 1, and nothing more, each one adding 20
+# to 40 kB to the file, most of it HDF5 structure: a pure state conserving two quantities on a
+# site, a mixed one conserving a quantity strongly, whose correlation checks that its numbers
+# are read back intact, and site fields of every kind a file accepts, on `Kindly`, the site of
+# `test/states_io.jl`.
 
 using TensorMixedStates, .Fermions, .Electrons, .Qubits
 strong = TensorMixedStates.strong
@@ -34,17 +36,14 @@ TensorMixedStates.dim(::Kindly) = 2
 file = get(ARGS, 1, joinpath(@__DIR__, "state_v2.h5"))
 rm(file; force = true)
 
-spread(sys) = (State{Pure}(sys, ["Occ", "Emp", "Occ", "Emp"]) +
-               0.5 * State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
-ψ = spread(System(4, Fermion(conserve = N)))
-save_state(file, "fermions", ψ)
-save_state(file, "fermions_mixed", mix(ψ))
-save_state(file, "fermions_strong", mix(spread(System(4, Fermion(conserve = strong(N))))))
-save_state(file, "electrons", State{Pure}(System(2, Electron(conserve = (Ntot, 2Sz))), ["Up", "Dn"]))
-save_state(file, "partial_trace", partial_trace(mix(ψ), [1, 3]))
+sys = System(2, Fermion(conserve = strong(N)))
+ρ = mix((State{Pure}(sys, ["Occ", "Emp"]) + 0.5 * State{Pure}(sys, ["Emp", "Occ"])) / sqrt(1.25))
+save_state(file, "fermions_strong", ρ)
+save_state(file, "electrons",
+           State{Pure}(System(2, Electron(conserve = (Ntot, 2Sz))), ["Up", "Dn"]))
 save_state(file, "kindly",
            State{Pure}(System([Kindly(:none, true, "a", 3, 0.5, nothing), Qubit()]), ["1", "Up"]))
 
 println("wrote $file")
-println("  N             : ", real.(expect1(ψ, N)))
-println("  c1†c2         : ", expect(ψ, dag(C)(1) * C(2)))
+println("  N             : ", real.(expect1(ρ, N)))
+println("  c1†c2         : ", expect(ρ, dag(C)(1) * C(2)))

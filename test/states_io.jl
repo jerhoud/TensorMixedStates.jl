@@ -528,31 +528,19 @@ end
     # stays readable by every later version, the current format included
     file = joinpath(@__DIR__, "reference", "state_v2.h5")
     strong = TensorMixedStates.strong
-    n = [0.8, 0.2, 1.0, 0.0]
-
-    p = load_state(file, "fermions")
-    @test p isa State{Pure}
-    @test p.system.sites == fill(Fermion(conserve = N), 4)
-    @test real(expect1(p, N)) ≈ n
-    @test expect(p, dag(C)(1) * C(2)) ≈ 0.4
-
-    m = load_state(file, "fermions_mixed")
-    @test m isa State{Mixed}
-    @test real(expect1(m, N)) ≈ n
-    @test expect(m, dag(C)(1) * C(2)) ≈ 0.4
-
-    s = load_state(file, "fermions_strong")
-    @test s.system.sites == fill(Fermion(conserve = strong(N)), 4)
-    @test real(expect1(s, N)) ≈ n
 
     e = load_state(file, "electrons")
+    @test e isa State{Pure}
     @test e.system.sites == fill(Electron(conserve = (Ntot, 2Sz)), 2)
     @test real(expect1(e, Nup)) ≈ [1, 0]
+    @test real(expect1(e, Ndn)) ≈ [0, 1]
 
-    # sites 1 and 3 traced out, 2 and 4 kept
-    t = load_state(file, "partial_trace")
-    @test real(expect1(t, N)) ≈ [0.2, 0.0]
-    @test trace(t) ≈ 1
+    ρ = load_state(file, "fermions_strong")
+    @test ρ isa State{Mixed}
+    @test ρ.system.sites == fill(Fermion(conserve = strong(N)), 2)
+    @test real(expect1(ρ, N)) ≈ [0.8, 0.2]
+    @test expect(ρ, dag(C)(1) * C(2)) ≈ 0.4
+    @test trace(ρ) ≈ 1
 
     k = load_state(file, "kindly")
     @test k.system.sites[1] == Kindly(:none, true, "a", 3, 0.5, nothing)
