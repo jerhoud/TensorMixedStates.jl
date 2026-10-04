@@ -114,6 +114,39 @@ end
     @test_throws "take as many numbers" fermi_sea(System(4, Electron()), hop(Cup, 4), 1)
     @test_throws "not orthonormal" slater_state(System(4, Fermion()), ones(4, 1))
     @test_throws "holds no free fermions" slater_state(System(4, Qubit()), orth(4, 1))
+
+    # sites holding no fermions take the local state given, and the strings run across them:
+    # the determinant on the fermions, the qubit down
+    sys = System([Fermion(), Fermion(), Qubit(), Fermion(), Fermion()])
+    fs = [1, 2, 4, 5]
+    Φ = orth(4, 2)
+    ψ = slater_state(sys, Φ; others = "Dn")
+    d = zeros(ComplexF64, 2^5)
+    for b in 0:2^5-1
+        occ = [ (b >> (5 - k)) & 1 for k in 1:5 ]
+        if occ[3] == 1 && sum(occ[fs]) == 2
+            d[b + 1] = LA.det(Φ[findall(==(1), occ[fs]), :])
+        end
+    end
+    @test abs(LA.dot(d / LA.norm(d), dense_state(ψ))) ≈ 1
+    Λ = conj(Φ) * transpose(Φ)
+    @test [ expect(ψ, dag(C)(fs[p]) * C(fs[q])) for p in 1:4, q in 1:4 ] ≈ Λ atol = 1e-10
+
+    # an impurity in a Fermi sea, which a term acting on it or coupling it would make not free
+    hf = -sum(dag(C)(i) * C(j) + dag(C)(j) * C(i) for (i, j) in [(1, 2), (2, 4), (4, 5)])
+    ψ = fermi_sea(sys, hf, 2; others = "Up")
+    @test real(expect(ψ, hf)) ≈ sum(LA.eigvals([ abs(i - j) == 1 ? -1. : 0. for i in 1:4, j in 1:4 ])[1:2])
+    @test expect(ψ, Z(3)) ≈ 1
+    @test_throws "acts on the sites holding none" fermi_sea(sys, hf + Z(3), 2; others = "Up")
+    @test_throws "not free" fermi_sea(sys, hf + X(3) * N(1), 2; others = "Up")
+    @test_throws "site 3 holds no fermions" fermi_sea(sys, hf, 2)
+
+    # each species on the sites holding it, in the order they first appear
+    ψ = slater_state(System([Electron(), Fermion(), Electron(), Fermion()]),
+                     orth(2, 1), orth(2, 1), orth(2, 1))
+    @test real(expect(ψ, Nup(1) + Nup(3))) ≈ 1
+    @test real(expect(ψ, Ndn(1) + Ndn(3))) ≈ 1
+    @test real(expect(ψ, N(2) + N(4))) ≈ 1
 end
 
 @testset "Dmrg" begin

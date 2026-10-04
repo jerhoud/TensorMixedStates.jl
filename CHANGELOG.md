@@ -44,8 +44,10 @@ the reference article.
   free fermions under a quadratic hamiltonian H written as for any other function, on sites
   of `Fermion` or `Electron`. The determinant is built as a circuit of rotations of
   neighbouring modes applied to a product state, after Fishman and White, and conserves the
-  number of fermions of each species. A hamiltonian that is not quadratic, or mixes the
-  species, is refused, and so is a number of fermions filling a degenerate level in part.
+  number of fermions of each species. Sites holding no fermions, an impurity or bosons beside
+  the fermions, take the local state given by `others`. A hamiltonian that is not quadratic,
+  mixes the species or acts on the sites without fermions is refused, and so is a number of
+  fermions filling a degenerate level in part.
 - `thermal_state(H, β, ρ)` and the phase `Thermalize`, which take a mixed state ρ to
   e^(-βH/2) ρ e^(-βH/2), normalized, by tdvp in imaginary time: from `"FullyMixed"` the thermal
   state e^(-βH)/Z, and from a state that commutes with H, as `"MixedSpin"`, the thermal state
