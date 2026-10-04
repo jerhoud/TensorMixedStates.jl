@@ -72,7 +72,7 @@ Base.@kwdef struct PlainEvolve <: AbstractPhase
 end
 
 TensorMixedStates.run_phase(sim::Simulation, p::PlainEvolve) =
-    tdvp(-im * X(1), 0.4, sim; nsweeps = 4, limits = Limits(maxdim = 4, cutoff = 1e-15),
+    tdvp(-im * X(1), 0.4, sim; nsteps = 4, limits = Limits(maxdim = 4, cutoff = 1e-15),
          observer! = TdvpObserver(sim, p.measurements, 1))
 
 Base.@kwdef struct ResumingEvolve <: AbstractPhase
@@ -84,7 +84,7 @@ end
 
 function TensorMixedStates.run_phase(sim::Simulation, p::ResumingEvolve)
     done, _ = resume_step(sim)
-    return tdvp(-im * X(1), 0.4, sim; nsweeps = 4, first_sweep = done + 1,
+    return tdvp(-im * X(1), 0.4, sim; nsteps = 4, first_step = done + 1,
                 limits = Limits(maxdim = 4, cutoff = 1e-15),
                 observer! = TdvpObserver(sim, p.measurements, 1))
 end
@@ -907,7 +907,7 @@ end
 
 TensorMixedStates.run_phase(sim::Simulation, p::Evolutions) =
     run_steps(sim, 2) do sim, k
-        tdvp(-im * X(1), 0.2, sim; nsweeps = 2, limits = Limits(maxdim = 4, cutoff = 1e-15),
+        tdvp(-im * X(1), 0.2, sim; nsteps = 2, limits = Limits(maxdim = 4, cutoff = 1e-15),
              observer! = TdvpObserver(sim, p.measurements, 1))
     end
 

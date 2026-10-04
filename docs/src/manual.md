@@ -378,18 +378,18 @@ starting in `"+"` precess, with ``\langle \sigma_x \rangle = \cos 2t``, which is
 
 ```@example manual
 myevolved = tdvp(-im * sum(Z(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "+");
-                 nsweeps = 10)
+                 nsteps = 10)
 measure(myevolved, X)
 ```
 
-`nsweeps` is the number of steps, each of length `t / nsweeps`, and `limits` constrains the
+`nsteps` is the number of steps, each of length `t / nsteps`, and `limits` constrains the
 state as before. With no hamiltonian and `Dissipator(Sm)` on each site, the qubits of a mixed
 state decay from up to down, with ``\langle \sigma_z \rangle = 2e^{-t} - 1``, which is
 ``-0.2642`` at ``t = 1``:
 
 ```@example manual
 myrho = State{Mixed}(System(4, Qubit()), "Up")
-mydecayed = tdvp(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsweeps = 10)
+mydecayed = tdvp(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsteps = 10)
 measure(mydecayed, Z)
 ```
 
@@ -400,7 +400,7 @@ order of its approximation, from 1 to 4, and `w`, 1 or 2 for WI or WII, for whic
 
 ```@example manual
 mydecayed = approx_W(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; order = 4, w = 2,
-                     nsweeps = 10)
+                     nsteps = 10)
 measure(mydecayed, Z)
 ```
 

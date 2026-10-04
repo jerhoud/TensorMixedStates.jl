@@ -50,14 +50,14 @@ krylov_kwargs(k::Krylov, prefix = "") =
                for f in fieldnames(Krylov) if !isnothing(getfield(k, f)))
 
 """
-    check_nsweeps(nsweeps, name = "nsweeps")
+    check_nsteps(nsteps)
 
-refuse an evolution in less than one step, its number of steps being called `name`: it made no
-step, while a simulation took the time on, and `approx_W` divided its duration by zero
+refuse an evolution in less than one step: it made no step, while a simulation took the time
+on, and `approx_W` divided its duration by zero
 """
-function check_nsweeps(nsweeps, name = "nsweeps")
-    if nsweeps < 1
-        error("an evolution takes at least one step, and $name is $nsweeps")
+function check_nsteps(nsteps)
+    if nsteps < 1
+        error("an evolution takes at least one step, and nsteps is $nsteps")
     end
 end
 
@@ -102,25 +102,25 @@ end
     tdvp(evolver, t, ::State; options...)
     tdvp(evolver, t, ::Simulation; options...)
 
-evolve a state, or a simulation, for a time `t` with the tdvp algorithm, in `nsweeps` steps of
-`t / nsweeps`. `evolver` is `-im * H` for a hamiltonian `H`, plus dissipators for a mixed
+evolve a state, or a simulation, for a time `t` with the tdvp algorithm, in `nsteps` steps of
+`t / nsteps`. `evolver` is `-im * H` for a hamiltonian `H`, plus dissipators for a mixed
 state, or its `PreMPO`, prepared once for the calls that evolve under it, one step at a time
 for instance. A simulation comes back with its time advanced by `t`.
 
 # Options
 
-- `nsweeps`: the number of steps (default 1)
-- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished:
-  `t`, `nsweeps` and `time_start` are still those of the whole evolution, and a simulation
+- `nsteps`: the number of steps (default 1)
+- `first_step`: the step to start from (default 1), to continue an evolution left unfinished:
+  `t`, `nsteps` and `time_start` are still those of the whole evolution, and a simulation
   is given at the time that evolution started
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
   at the middle of each step
-- `expand_period`: enlarge the bond dimension of the state by a global Krylov expansion before the
-  first step and then every `expand_period` steps (default 0, never)
-- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
-  never)
+- `expand_period`: enlarge the bond dimension of the state by a global Krylov expansion before
+  the first step and then every `expand_period` steps (default 0, never)
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
+  (default 0, never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`)
 - `observer!`: an observer, see `TdvpObserver`
@@ -129,17 +129,17 @@ for instance. A simulation comes back with its time advanced by `t`.
 
 # Examples
 
-    tdvp(-im * H, 1., state; nsweeps = 10, limits = Limits(cutoff = 1e-10, maxdim = 50))
+    tdvp(-im * H, 1., state; nsteps = 10, limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, expand_period = 0, hermitianize_period = 0,
-    nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(),
+    nsteps = 1, first_step = 1, time_start = zero(t), limits::Limits=Limits(),
     krylov::Krylov = Krylov()) where {R <: PM}
     check_pre_system(pre, state)
-    check_nsweeps(nsweeps)
+    check_nsteps(nsteps)
     time_dep = !isnothing(coefs)
     st = state.state
-    dt = t / nsweeps
+    dt = t / nsteps
     # KrylovKit builds its whole Krylov space, `dim` vectors, before it tests
     # convergence: tested after every vector, as `eager` does, it stops at the same
     # tolerance, which the short local steps of tdvp reach with far fewer products
@@ -147,7 +147,7 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     if !time_dep
         mpo = make_mpo(pre)
     end
-    for sweep in first_sweep:nsweeps
+    for sweep in first_step:nsteps
         current_time = time_start + sweep * dt
         if time_dep
             tf = current_time - dt / 2
@@ -198,7 +198,7 @@ function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = 
     # ITensorMPS counts its sweeps from 1 and offers no way to start elsewhere, so a run
     # resuming at `first_sweep` asks for the sweeps it has left and is handed the tail of
     # its per sweep schedules. `tdvp` and `approx_W` drive their own loop and keep the
-    # sweep numbers of the run instead, which is why only this one has to adapt.
+    # step numbers of the run instead, which is why only this one has to adapt.
     done = first_sweep - 1
     # no sweep left, for a search resumed after its last one: the energy is that of the state
     # given, where ITensorMPS, asked for no sweep, gave 0
@@ -289,7 +289,7 @@ end
     approx_W(evolver, t, ::State; order, options...)
     approx_W(evolver, t, ::Simulation; order, options...)
 
-evolve a state, or a simulation, for a time `t` in `nsweeps` steps of `t / nsweeps`, each
+evolve a state, or a simulation, for a time `t` in `nsteps` steps of `t / nsteps`, each
 approximating the exponential of the evolver at the given `order` with WI or WII
 approximations. `evolver` is as for `tdvp`, and a simulation comes back with its time
 advanced by `t`.
@@ -298,16 +298,16 @@ advanced by `t`.
 
 - `order`: the order of the approximation, from 1 to 4, required
 - `w`: 1 or 2 for WI or WII (default 2)
-- `nsweeps`: the number of steps (default 1)
-- `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished:
-  `t`, `nsweeps` and `time_start` are still those of the whole evolution, and a simulation
+- `nsteps`: the number of steps (default 1)
+- `first_step`: the step to start from (default 1), to continue an evolution left unfinished:
+  `t`, `nsteps` and `time_start` are still those of the whole evolution, and a simulation
   is given at the time that evolution started
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
   at the middle of each step
-- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
-  never)
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
+  (default 0, never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
   (default `Limits()`)
 - `observer!`: an observer, see `ApproxWObserver`
@@ -317,21 +317,22 @@ advanced by `t`.
 
 # Examples
 
-    approx_W(-im * H, 1., state; order = 4, nsweeps = 10)
+    approx_W(-im * H, 1., state; order = 4, nsteps = 10)
 """
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing,
-    hermitianize_period::Int = 0, nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
-    time_start = zero(t), limits::Limits=Limits(), apply_algo::String = "densitymatrix") where {R <: PM}
+    hermitianize_period::Int = 0, nsteps::Int = 1, first_step::Int = 1, order::Int, w::Int = 2,
+    observer! = NoObserver(), time_start = zero(t), limits::Limits=Limits(),
+    apply_algo::String = "densitymatrix") where {R <: PM}
     check_pre_system(pre, state)
     check_apply_algo(apply_algo)
-    check_nsweeps(nsweeps)
+    check_nsteps(nsteps)
     st = state.state
-    dt = t / nsweeps
+    dt = t / nsteps
     time_dep = !isnothing(coefs)
     if !time_dep
         mpos = make_approx_W(pre, dt; order, w)
     end
-    for sweep in first_sweep:nsweeps
+    for sweep in first_step:nsteps
         current_time = time_start + sweep * dt
         if time_dep
             tf = current_time - dt / 2
@@ -463,7 +464,7 @@ function thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mi
     observer! = NoObserver(), nsteps::Int = 1, first_step::Int = 1, log_trace::Real = 0.,
     expand_period::Int = 0, hermitianize_period::Int = 0, limits::Limits = Limits(),
     krylov::Krylov = Krylov())
-    check_nsweeps(nsteps, "nsteps")
+    check_nsteps(nsteps)
     dbeta = beta / nsteps
     # a placed operator on a mixed state becomes its Evolver, A ρ + ρ A†, which for A = -H/2
     # is the generator of e^{-βH/2} ρ e^{-βH/2}

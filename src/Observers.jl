@@ -13,7 +13,7 @@ simulation is asked to stop.
 
 # Examples
 
-    tdvp(evolver, 1., sim; nsweeps = 10, observer! = TdvpObserver(sim, "data" => [X, Z(1)], 2))
+    tdvp(evolver, 1., sim; nsteps = 10, observer! = TdvpObserver(sim, "data" => [X, Z(1)], 2))
 """
 struct TdvpObserver <: AbstractObserver
     sim::Simulation
@@ -31,7 +31,7 @@ simulation is asked to stop.
 
 # Examples
 
-    approx_W(evolver, 1., sim; order = 4, nsweeps = 10,
+    approx_W(evolver, 1., sim; order = 4, nsteps = 10,
              observer! = ApproxWObserver(sim, "data" => [X, Z(1)], 2))
 """
 struct ApproxWObserver <: AbstractObserver

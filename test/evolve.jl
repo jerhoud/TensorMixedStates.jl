@@ -39,10 +39,10 @@ end
     ev = -im * Z(1) + Dissipator(sqrt(γ) * Sp)(1)
     ρ = State{Mixed}(System(2, Qubit()), "X+")
     exact = [exp(-γ / 2) * cos(2), exp(-γ / 2) * sin(2), 1 - exp(-γ)]
-    for (evolve, tol) in [(st -> tdvp(ev, 1.0, st; nsweeps = 10, limits = lim), 1e-12),
-                          (st -> approx_W(ev, 1.0, st; order = 4, w = 2, nsweeps = 10, limits = lim), 1e-12),
-                          (st -> approx_W(ev, 1.0, st; order = 4, w = 1, nsweeps = 10, limits = lim), 2e-6),
-                          (st -> approx_W(ev, 1.0, st; order = 1, w = 1, nsweeps = 100, limits = lim), 0.03)]
+    for (evolve, tol) in [(st -> tdvp(ev, 1.0, st; nsteps = 10, limits = lim), 1e-12),
+                          (st -> approx_W(ev, 1.0, st; order = 4, w = 2, nsteps = 10, limits = lim), 1e-12),
+                          (st -> approx_W(ev, 1.0, st; order = 4, w = 1, nsteps = 10, limits = lim), 2e-6),
+                          (st -> approx_W(ev, 1.0, st; order = 1, w = 1, nsteps = 100, limits = lim), 0.03)]
         st = evolve(ρ)
         @test real(expect(st, [X(1), Y(1), Z(1)])) ≈ exact atol = tol
         @test trace(st) ≈ 1 atol = 1e-12
@@ -62,9 +62,9 @@ end
     ref = real([LA.tr(r * kron(x, i2)), LA.tr(r * kron(i2, z)), LA.tr(r * kron(y, x))])
     ev2 = -im * (X(1) * X(2) + 0.7 * Z(1)) + Dissipator(sqrt(0.3) * Z)(1) + Dissipator(sqrt(0.2) * Sp)(2)
     ρ2 = State{Mixed}(System(2, Qubit()), ["X+", "Up"])
-    for (evolve, tol) in [(st -> tdvp(ev2, 1.0, st; nsweeps = 20, limits = lim), 1e-11),
-                          (st -> approx_W(ev2, 1.0, st; order = 4, w = 2, nsweeps = 20, limits = lim), 1e-7),
-                          (st -> approx_W(ev2, 1.0, st; order = 4, w = 1, nsweeps = 20, limits = lim), 1e-7)]
+    for (evolve, tol) in [(st -> tdvp(ev2, 1.0, st; nsteps = 20, limits = lim), 1e-11),
+                          (st -> approx_W(ev2, 1.0, st; order = 4, w = 2, nsteps = 20, limits = lim), 1e-7),
+                          (st -> approx_W(ev2, 1.0, st; order = 4, w = 1, nsteps = 20, limits = lim), 1e-7)]
         @test real(expect(evolve(ρ2), [X(1), Z(2), Y(1) * X(2)])) ≈ ref atol = tol
     end
 end
@@ -216,7 +216,7 @@ end
     end
     # the low level entry point documented in others.md, on a mixed state so that lifting
     # a pure evolver to the mixed representation is exercised on every term of the vector
-    st = tdvp(hs, 1.0, mix(State{Pure}(System(2, Qubit()), "X+")); coefs, nsweeps = 100)
+    st = tdvp(hs, 1.0, mix(State{Pure}(System(2, Qubit()), "X+")); coefs, nsteps = 100)
     @test expect(st, X(1)) ≈ cos(2.0) atol = 1e-13
     @test expect(st, X(2)) ≈ cos(1.0) atol = 1e-13
 end
@@ -253,9 +253,9 @@ end
     # is exact at full bond dimension, which a cutoff of zero keeps, the default discarding
     # singular values up to 1.5e-8, and the tolerance of ApproxW is its error measured here
     coefs = [t -> cos(3t), t -> sin(3t), t -> 1.0]
-    for (ev, tol) in [(st -> tdvp(hs, 1.0, st; coefs, nsweeps = 50, limits = Limits(cutoff = 0)),
+    for (ev, tol) in [(st -> tdvp(hs, 1.0, st; coefs, nsteps = 50, limits = Limits(cutoff = 0)),
                        1e-11),
-                      (st -> approx_W(hs, 1.0, st; coefs, nsweeps = 50, order = 4), 1e-7)]
+                      (st -> approx_W(hs, 1.0, st; coefs, nsteps = 50, order = 4), 1e-7)]
         @test norm(ev(mix(ψ)) - mix(ev(ψ))) < tol
     end
 end
@@ -287,9 +287,9 @@ end
     end
     # and the solvers take at least one step, where none advanced the time of a simulation
     st = State{Pure}(System(2, Qubit()), "Up")
-    for nsweeps in (0, -3)
-        @test_throws "takes at least one step" tdvp(-im * X(1), 0.5, st; nsweeps)
-        @test_throws "takes at least one step" approx_W(-im * X(1), 0.5, st; nsweeps, order = 2)
+    for nsteps in (0, -3)
+        @test_throws "takes at least one step" tdvp(-im * X(1), 0.5, st; nsteps)
+        @test_throws "takes at least one step" approx_W(-im * X(1), 0.5, st; nsteps, order = 2)
     end
 end
 
@@ -324,7 +324,7 @@ end
     end
     # and through an evolution: -i X(1)X(2)/2 over a time 1 turns Z(1) by an angle 1
     st = tdvp([-im * X(1) * X(2)], 1.0, State{Pure}(System(2, Qubit()), "Up");
-              coefs = [t -> 0.5], nsweeps = 10, limits = Limits(maxdim = 4, cutoff = 1e-14))
+              coefs = [t -> 0.5], nsteps = 10, limits = Limits(maxdim = 4, cutoff = 1e-14))
     @test expect(st, Z(1)) ≈ cos(1.0) atol = 1e-12
 end
 
@@ -399,20 +399,20 @@ end
     # `ApproxW` phase does; `tdvp` has nothing of the sort, hence the per solver arguments
     for (solver, opts) in [(tdvp, (;)), (approx_W, (; order = 1))]
         chained = foldl(sched; init = st0) do st, m
-            solver(-im * h, 0.1, st; nsweeps = 1, limits = Limits(cutoff = 1e-14, maxdim = m),
+            solver(-im * h, 0.1, st; nsteps = 1, limits = Limits(cutoff = 1e-14, maxdim = m),
                    opts...)
         end
         scheduled = solver(-im * h, 0.4, st0;
-                           nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = sched), opts...)
+                           nsteps = 4, limits = Limits(cutoff = 1e-14, maxdim = sched), opts...)
         @test maxlinkdim(scheduled) == maxlinkdim(chained)
         @test expect1(scheduled, Z) ≈ expect1(chained, Z)
-        # a constant schedule is the plain value, and one shorter than the sweeps keeps
+        # a constant schedule is the plain value, and one shorter than the steps keeps
         # its last value for the rest of them
-        flat = solver(-im * h, 0.4, st0; nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = 4),
+        flat = solver(-im * h, 0.4, st0; nsteps = 4, limits = Limits(cutoff = 1e-14, maxdim = 4),
                       opts...)
         for m in [[4, 4, 4, 4], [4]]
             st = solver(-im * h, 0.4, st0;
-                        nsweeps = 4, limits = Limits(cutoff = 1e-14, maxdim = m), opts...)
+                        nsteps = 4, limits = Limits(cutoff = 1e-14, maxdim = m), opts...)
             @test expect1(st, Z) ≈ expect1(flat, Z)
         end
     end
@@ -424,7 +424,7 @@ end
     st0 = State{Pure}(System(2, Qubit()), "X+")
     lim = Limits(maxdim = 10, cutoff = 1e-15)
     poor = Krylov(dim = 1, maxiter = 1)
-    evolved(krylov) = tdvp(-im * Z(1), 1., st0; nsweeps = 10, limits = lim, krylov)
+    evolved(krylov) = tdvp(-im * Z(1), 1., st0; nsteps = 10, limits = lim, krylov)
     precession_error(st) = abs(expect(st, X(1)) - cos(2.)) + abs(expect(st, Y(1)) - sin(2.))
     @test precession_error(evolved(Krylov())) < 1e-13
     @test precession_error(evolved(poor)) > 1e-2
@@ -442,11 +442,11 @@ end
     n = 4
     h = sum(X(i) * X(i + 1) for i in 1:n - 1)
     up = State{Pure}(System(n, Qubit()), "Up")
-    st = tdvp(-im * h, 0.5, up; nsweeps = 5, limits = Limits(maxdim = 16, cutoff = 1e-14))
+    st = tdvp(-im * h, 0.5, up; nsteps = 5, limits = Limits(maxdim = 16, cutoff = 1e-14))
     m = make_mpo(st, h)
-    w = approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5)
+    w = approx_W(-im * h, 0.5, up; order = 2, nsteps = 5)
     @test norm(apply(m, st; apply_algo = "naive") - apply(m, st)) < 1e-12
-    @test norm(approx_W(-im * h, 0.5, up; order = 2, nsweeps = 5, apply_algo = "naive") - w) < 1e-12
+    @test norm(approx_W(-im * h, 0.5, up; order = 2, nsteps = 5, apply_algo = "naive") - w) < 1e-12
     # "fit" needs a number of sweeps of its own, "zipup" is missing for a state from the lowest
     # ITensorMPS accepted, and a name that is none of them is refused too
     for alg in ("fit", "zipup", "exact")
@@ -685,10 +685,10 @@ end
     # accumulated, and the answer must not notice. The mixed case uses dephasing, whose jump
     # commutes with the charge, so that it is a strong symmetry as well as a weak one
     for (op, mixed) in ((-im * h, false), (lind, true))
-        ref_t = real.(expect1(tdvp(op, 0.2, start(Fermion(), mixed); nsweeps = 1, limits = lim), N))
+        ref_t = real.(expect1(tdvp(op, 0.2, start(Fermion(), mixed); nsteps = 1, limits = lim), N))
         ref_w = real.(expect1(approx_W(op, 0.2, start(Fermion(), mixed); limits = lim, order = 2), N))
         for site in charged
-            @test real.(expect1(tdvp(op, 0.2, start(site, mixed); nsweeps = 1, limits = lim), N)) ≈ ref_t
+            @test real.(expect1(tdvp(op, 0.2, start(site, mixed); nsteps = 1, limits = lim), N)) ≈ ref_t
             @test real.(expect1(approx_W(op, 0.2, start(site, mixed); limits = lim, order = 2), N)) ≈ ref_w
         end
     end

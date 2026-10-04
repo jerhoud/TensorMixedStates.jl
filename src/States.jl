@@ -35,9 +35,9 @@ the truncation limits of an MPS.
   is taken as `1`
 
 For `tdvp`, `approx_W`, `dmrg`, `steady_state` and the phases built on them, any field may
-be a vector, one value per sweep: `Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small
-and lets the state grow. A vector shorter than the number of sweeps is continued with its last
-value, as in ITensor. Elsewhere, as in `apply`, `truncate` or a sum of states, the fields are
+be a vector, one value per step of an evolution or per sweep of a search:
+`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A vector
+shorter than the number of steps or sweeps is continued with its last value, as in ITensor. Elsewhere, as in `apply`, `truncate` or a sum of states, the fields are
 single values.
 
 # Examples

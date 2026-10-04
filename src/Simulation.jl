@@ -74,7 +74,7 @@ simulation writes to the same destinations and advances the same checkpoint.
 # Examples
 
     sim = Simulation(state)
-    sim = tdvp(-im * H, 1., sim; nsweeps = 10)
+    sim = tdvp(-im * H, 1., sim; nsteps = 10)
     output(sim, "data.dat" => [X, Z(1)])
 """
 struct Simulation

@@ -44,7 +44,7 @@ hamiltonian = sum(Sge(i) + dag(Sge)(i) + Ser(i) + dag(Ser)(i) for i in 1:4) +
               sum(Nr(i) * Nr(i + 1) for i in 1:3)
 myrho = State{Mixed}(System(4, Atom()), "G")
 mystate = tdvp(-im * hamiltonian + sum(Dissipator(Ser)(i) for i in 1:4), 0.5, myrho;
-               nsweeps = 5)
+               nsteps = 5)
 measure(mystate, [Nr, Trace])
 ```
 
