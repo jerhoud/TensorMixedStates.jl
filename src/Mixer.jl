@@ -551,7 +551,7 @@ end
 # through those before it, leaves on each of them an F per odd factor that follows, and a factor
 # of no definite parity after a fermionic site makes the product a sum, which is refused rather
 # than laid without its string. Sites apart, as a gate places it, still miss the strings of the
-# sites in between, which is why `has_fermionic` sends such an operator through `simplify`
+# sites in between, which is why `hasfermionic` sends such an operator through `simplify`
 function legs(a::TensorOp, sites, js)
     pos = factor_sites(a)
     ps = map(jw_parity, a.subs)
@@ -667,7 +667,7 @@ of `system`, with one pair of indices per site it acts on. It takes a single gen
 placed as it is: a coefficient, as in `2X(1)`, or a product, as in `X(1) * Y(2)`, is not
 accepted. No Jordan-Wigner string is inserted but between the factors of a tensor product on
 consecutive sites: `C(3)` gets the bare matrix of `C`, with no string on sites 1 and 2, see
-`has_fermionic`.
+`hasfermionic`.
 
 # Examples
 

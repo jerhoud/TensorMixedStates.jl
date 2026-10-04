@@ -146,7 +146,7 @@ expand_gate(a::ProdOp{R, Indexed, 1}) where R = ProdOp(IndexedOp{R}[ expand_gate
 expand_gate(a::SumOp{R, Indexed, 1}) where R = SumOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
 expand_gate(a::ScalarOp{R, Indexed, 1}) where R = a.coef * expand_gate(a.arg)
 expand_gate(a::AtIndex{R, N}) where {R, N} =
-    N > 1 && has_fermionic(a.op) ? expand_placed(a.op, a.index) : a
+    N > 1 && hasfermionic(a.op) ? expand_placed(a.op, a.index) : a
 expand_gate(a::IndexedOp) = a
 
 expand_placed(a::TensorOp, index) =
@@ -208,7 +208,7 @@ remains whole, on several sites or on the first one, where it has no string to t
 the two parities.
 """
 function prepare_gate(a::IndexedOp{R}) where R
-    if !has_fermionic(a)
+    if !hasfermionic(a)
         return a
     end
     e = expand_gate(a)
@@ -235,7 +235,7 @@ function prepare_gate(a::IndexedOp{R}) where R
     end
     close_run()
     b = removeMulti(scalarcoef(e) * ProdOp(pieces))
-    if has_fermionic(b)
+    if hasfermionic(b)
         error("cannot apply $a as a gate: it holds a function of an odd fermionic operator, " *
               "which mixes the two parities")
     end

@@ -97,7 +97,7 @@ dag(::GenericOp{Pure})
 exp(::GenericOp{Pure})
 sqrt(::GenericOp)
 isfermionic
-has_fermionic
+hasfermionic
 matrix
 tensor
 simplify

@@ -79,18 +79,18 @@ end
     @test matrix(g * C + g * dag(C), Fermion()) == zeros(2, 2)
     @test matrix(TensorMixedStates.SumOp(TensorMixedStates.Op{Pure, TensorMixedStates.Generic, 1}[]),
                  Fermion()) == zeros(2, 2)
-    # has_fermionic asks the other question: whether a factor still needs its
+    # hasfermionic asks the other question: whether a factor still needs its
     # Jordan-Wigner string. A product of two fermionic operators is not fermionic, but
     # both of its factors are, so it does.
-    @test has_fermionic(dag(C)(1))
-    @test has_fermionic(dag(C)(1) * C(3))
-    @test has_fermionic(2 * C(2) + C(4))
-    @test !has_fermionic(N(1))
-    @test !has_fermionic(N(1) * N(2))
-    @test !has_fermionic(Id(1))
+    @test hasfermionic(dag(C)(1))
+    @test hasfermionic(dag(C)(1) * C(3))
+    @test hasfermionic(2 * C(2) + C(4))
+    @test !hasfermionic(N(1))
+    @test !hasfermionic(N(1) * N(2))
+    @test !hasfermionic(Id(1))
     # simplify is what inserts the strings, and so what makes the answer false
-    @test !has_fermionic(simplify(dag(C)(3)))
-    @test !has_fermionic(simplify(dag(C)(1) * C(3)))
+    @test !hasfermionic(simplify(dag(C)(3)))
+    @test !hasfermionic(simplify(dag(C)(1) * C(3)))
 end
 
 @testset "Multi_F removal" begin

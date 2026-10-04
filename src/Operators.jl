@@ -6,7 +6,7 @@ export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
 export named, parity
-export dag, ⊗, isfermionic, has_fermionic, lindblad_terms, map_sites
+export dag, ⊗, isfermionic, hasfermionic, lindblad_terms, map_sites
 
 ############# Types ################
 
@@ -1311,13 +1311,13 @@ isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
 the parity of an operator: `0` if even, `1` if odd, `nothing` if it has none. An operator of
 several sites has that of the product of its pieces placed: a tensor product the sum of the
 parities of its factors, an operator defined by an expression that of its expression. It
-serves `jw_parity`, and `isfermionic` and `has_fermionic`, which ask two different questions,
+serves `jw_parity`, and `isfermionic` and `hasfermionic`, which ask two different questions,
 told apart by `strung`:
 
 - `strung = true`, for `jw_parity`: how the operator behaves when the `F` of its site crosses
   it, the Jordan-Wigner strings being in place. A `JW` transform is then odd, and a projector
   on a vector is taken to have no parity, since the vector may mix even and odd states.
-- `strung = false`, for `isfermionic` and `has_fermionic`: whether the operator holds a fermionic factor whose
+- `strung = false`, for `isfermionic` and `hasfermionic`: whether the operator holds a fermionic factor whose
   string `simplify` has not inserted yet. A `JW` transform then counts as even, its string
   being already in place, and so does a projector, which never takes a string.
 
@@ -1370,7 +1370,7 @@ fermion_parity(a::Union{ExpOp, ModOp, GenPowOp}, strung::Bool) =
 whether an operator of one site on pure states is odd under the fermion parity. An operator
 of no definite parity raises an error: a sum of fermionic and non fermionic terms, or the
 exponential, `mod` or non integer power of a fermionic operator. For operators of several
-sites and superoperators, see `has_fermionic`.
+sites and superoperators, see `hasfermionic`.
 """
 function isfermionic(a::SimpleOp)
     p = fermion_parity(a, false)
@@ -1441,7 +1441,7 @@ named(op::GenericOp{Pure, N}, name::String; type::OpType = named_type(op)) where
 
 
 """
-    has_fermionic(::Op)
+    hasfermionic(::Op)
 
 whether an operator still holds an odd operator of one site whose Jordan-Wigner string
 `simplify` has not inserted, wherever it sits: in a tensor product, in the expression of an
@@ -1453,14 +1453,14 @@ After `simplify` the factors are `JW` transforms, which are not fermionic, and t
 false unless a factor was kept whole, as an exponential of several sites is. A factor of no
 definite parity, as `C + N`, answers true instead of raising.
 """
-has_fermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
+hasfermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
 
-function has_fermionic(a::Op)
+function hasfermionic(a::Op)
     for f in fieldnames(typeof(a))
         x = getfield(a, f)
-        if x isa Op && has_fermionic(x)
+        if x isa Op && hasfermionic(x)
             return true
-        elseif x isa Vector && any(y -> y isa Op && has_fermionic(y), x)
+        elseif x isa Vector && any(y -> y isa Op && hasfermionic(y), x)
             return true
         end
     end
