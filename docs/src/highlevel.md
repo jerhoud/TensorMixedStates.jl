@@ -13,7 +13,6 @@ Simulation
 get_sim_file
 Data
 data_to_frame
-DataToFrame
 ```
 
 ## Phases
@@ -30,7 +29,6 @@ Tdvp
 ApproxW
 Gates
 GroundState
-Dmrg
 SteadyState
 Thermalize
 PartialTrace

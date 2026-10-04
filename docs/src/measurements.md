@@ -161,11 +161,8 @@ Fidelity
 Overlap
 Variance
 MutualInfoRenyi2
-Mutual_Info_Renyi2
 EntanglementEntropy
-EE
 MaxLinkdim
-Linkdim
 MemoryUsage
 ```
 

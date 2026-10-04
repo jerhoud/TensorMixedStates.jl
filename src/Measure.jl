@@ -3,8 +3,8 @@
 # computes a whole set of them at once.
 
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
-export EE, EntanglementEntropy, MutualInfoRenyi2, Mutual_Info_Renyi2, measure
-export Linkdim, MaxLinkdim, MemoryUsage
+export EntanglementEntropy, MutualInfoRenyi2, measure
+export MaxLinkdim, MemoryUsage
 export Fidelity, Overlap, Variance
 export RealValue, ImaginaryValue, ComplexValue
 
@@ -576,19 +576,6 @@ EntanglementEntropy(cut, spectrum) = StateFunc("EntanglementEntropy($cut,$spectr
         return [[ee]; sp[1:min(length(sp), spectrum)]; zeros(max(0, spectrum - length(sp)))]
     end)
 
-# the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one
-Base.@deprecate EE(pos) EntanglementEntropy(pos) false
-Base.@deprecate EE(pos, spectrum) EntanglementEntropy(pos, spectrum) false
-
-@doc """
-    EE(pos)
-    EE(pos, spectrum)
-
-deprecated, use [`EntanglementEntropy`](@ref) instead. The column is labelled with the new
-name, `EntanglementEntropy(3)` rather than `EE(3)`.
-""" EE
-
 """
     MutualInfoRenyi2(cut)
     MutualInfoRenyi2([positions...])
@@ -604,18 +591,6 @@ MutualInfoRenyi2(part) = StateFunc("MutualInfoRenyi2($(compact_positions(part)))
 # part [3], a different quantity
 MutualInfoRenyi2(cut::Int) =
     StateFunc("MutualInfoRenyi2($(compact_positions(1:cut)))", st -> mutual_info_renyi2(st, cut))
-
-# the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one
-Base.@deprecate Mutual_Info_Renyi2(part) MutualInfoRenyi2(part) false
-
-@doc """
-    Mutual_Info_Renyi2(part)
-
-deprecated, use [`MutualInfoRenyi2`](@ref) instead: the measurement is the same, labelled
-with the new name. The deprecation warning only shows with `--depwarn=yes`, as when running
-the tests, so this line is the notice.
-""" Mutual_Info_Renyi2
 
 """
     reference_on(st, ref)
@@ -698,19 +673,6 @@ Variance(h) = StateFunc("Variance", st -> variance(h, st))
 a state function measuring the maximum bond dimension of the state, see `maxlinkdim`.
 """
 const MaxLinkdim = StateFunc("MaxLinkdim", maxlinkdim)
-
-# the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one. It comes before the
-# deprecation: after it, attaching the docstring used the deprecated name and warned
-@doc """
-    Linkdim
-
-deprecated, use [`MaxLinkdim`](@ref) instead, whose name labels the column. A deprecated
-binding only warns on a qualified access, `TensorMixedStates.Linkdim`, and is silent after
-`using TensorMixedStates`, so this line and the changelog are the notice.
-""" Linkdim
-
-Base.@deprecate_binding Linkdim MaxLinkdim false ", use MaxLinkdim instead."
 
 """
     MemoryUsage

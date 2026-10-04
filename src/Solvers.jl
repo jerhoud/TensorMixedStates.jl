@@ -399,12 +399,7 @@ steady_state(op::IndexedOp{Mixed}, state::State{Mixed}; kwargs...) =
 function steady_state(pre::PreMPO{Mixed}, state::State{Mixed};
     limits::Limits = Limits(), nsweeps::Int = 1, first_sweep::Int = 1,
     observer! = NoObserver(), mpo_limits::Limits = Limits(), mpo_algo::String = "naive",
-    noise = 0., krylov::Krylov = Krylov(dim = 8, maxiter = 3), alg = nothing)
-    if !isnothing(alg)
-        @warn "the `alg` keyword of steady_state is now `mpo_algo`, matching the field of " *
-              "the SteadyState phase. The old name still works and will be removed." maxlog = 1
-        mpo_algo = alg
-    end
+    noise = 0., krylov::Krylov = Krylov(dim = 8, maxiter = 3))
     check_pre_system(pre, state)
     check_mpo_algo(mpo_algo)
     l = make_mpo(pre)

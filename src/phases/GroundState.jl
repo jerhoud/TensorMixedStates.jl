@@ -1,7 +1,6 @@
-# The GroundState phase, which searches the ground state of a hamiltonian by dmrg, and its
-# deprecated name Dmrg.
+# The GroundState phase, which searches the ground state of a hamiltonian by dmrg.
 
-export GroundState, Dmrg
+export GroundState
 
 """
     GroundState(; hamiltonian, limits, nsweeps, noise, tolerance, measures, options...)
@@ -47,21 +46,6 @@ a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on 
             noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
             krylov, measures, measures_period, tolerance)
 end
-
-# the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one. It comes before the
-# deprecation: after it, attaching the docstring used the deprecated name and warned
-@doc """
-    Dmrg
-
-deprecated, use [`GroundState`](@ref) instead.
-
-`Dmrg` is an alias of `GroundState`, which works until it is removed in a future version. Its
-deprecation warning only shows with `--depwarn=yes`, as when running the tests, so this line
-is the notice.
-""" Dmrg
-
-Base.@deprecate_binding Dmrg GroundState false ", use GroundState instead."
 
 run_phase(sim::Simulation, phase::GroundState) =
     run_search((sim; kwargs...) -> dmrg(phase.hamiltonian, sim; phase.noise, phase.krylov,

@@ -192,11 +192,14 @@ the reference article.
   rather than a `MethodError`. The documentation of `AbstractSite` and the page on extending
   the package say what a site needs for that.
 - `LoadState` truncates the state it loads only when it is given limits, so that a
-  representation of one's own needs no `truncate` to be loaded: the default `Limits()`
-  truncates nothing.
+  representation of one's own needs no `truncate` to be loaded.
 
 ### Removed
 
+- The names deprecated since 1.2.0 and 1.3.0: `Mutual_Info_Renyi2`, `EE`, `Linkdim`,
+  `DataToFrame` and `Dmrg`, replaced by `MutualInfoRenyi2`, `EntanglementEntropy`,
+  `MaxLinkdim`, `data_to_frame` and `GroundState`, and the `alg` keyword of `steady_state`,
+  replaced by `mpo_algo`.
 - `Phases`, the union of the phase types of the library, which `AbstractPhase` replaces.
 - `tdvp`, `dmrg`, `approx_W` and `steady_state` no longer pass the options they do not know on
   to ITensorMPS: an unknown keyword is refused, and `cutoff`, `maxdim` and `mindim` go through

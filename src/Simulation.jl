@@ -1,7 +1,7 @@
 # Simulation, a state with its simulation time and the destinations of its measurements, as
 # runTMS runs it, and data_to_frame, which turns the values gathered in a Data into a table.
 
-export Simulation, get_sim_file, close_sim_files, DataToFrame, data_to_frame
+export Simulation, get_sim_file, close_sim_files, data_to_frame
 
 """
     data_to_frame(data)
@@ -27,16 +27,6 @@ function __init__()
         end
     end
 end
-
-# the docstring goes through `@doc` rather than sitting above the call, because the macro
-# expands to a toplevel block and a docstring cannot be attached to one
-Base.@deprecate DataToFrame(data) data_to_frame(data) false
-
-@doc """
-    DataToFrame(data)
-
-deprecated, use [`data_to_frame`](@ref) instead.
-""" DataToFrame
 
 """
     default_time_format

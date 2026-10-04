@@ -178,7 +178,7 @@ end
     output_time(io, t, format)
 
 write the time column of a row. It always takes the time format, unlike a measured value,
-which keeps its own printed form when it is not a float: `Linkdim` reads 8, not 8.000.
+which keeps its own printed form when it is not a float: `MaxLinkdim` reads 8, not 8.000.
 """
 function output_time(file, t::Number, format)
     Printf.format(file, format, t)

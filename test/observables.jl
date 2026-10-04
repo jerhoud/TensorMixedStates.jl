@@ -323,9 +323,7 @@ end
     @test m(mix(ghz), SubRenyi2([1])) ≈ L2
     @test m(ghz, MutualInfoRenyi2(2)) ≈ 2L2
     @test m(mix(ghz), MutualInfoRenyi2(2)) ≈ 2L2
-    # the deprecated spelling forwards to the new one, label included
     @test MutualInfoRenyi2(2).name == "MutualInfoRenyi2(1,2)"
-    @test Mutual_Info_Renyi2(2).name == MutualInfoRenyi2(2).name
     # a link is named after the sites on its left, which it stands for: MutualInfoRenyi2(3)
     # was named as the one site part [3], so that the two could not be measured together
     st4 = RandomState{Pure}(System(4, Qubit()), 3)
