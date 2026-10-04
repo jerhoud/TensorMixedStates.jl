@@ -986,6 +986,54 @@ end
     end
 end
 
+# steps carrying a word of 64 bits, as the state of a generator of random numbers is carried,
+# stepped by the wrapping arithmetic of UInt64
+Base.@kwdef struct SteppedWord <: AbstractPhase
+    name::String = "stepped word"
+    time_start = nothing
+    final_measures = []
+    nsteps::Int = 4
+    measures = []
+end
+
+const last_word = Ref{Any}(nothing)
+
+function TensorMixedStates.run_phase(sim::Simulation, p::SteppedWord)
+    sim, word = run_steps(sim, p.nsteps; carry = typemax(UInt64) - UInt64(12345)) do sim, k, word
+        output(sim, p.measures)
+        return sim, word * 0x5851f42d4c957f2d + 0x14057b7ef767814f
+    end
+    last_word[] = word
+    return sim
+end
+
+@testset "A carried word of 64 bits comes back as it was" begin
+    # json reads an integer above typemax(Int64) as a BigInt, and JSON 0.21 as the negative
+    # Int64 of its bits: the word has to come back a UInt64 of the same value, for a resumed
+    # run to go on as the uninterrupted one
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            phases = [CreateState{Pure}(1, Qubit(), "Up"),
+                      SteppedWord(measures = "data" => [stopper_at(stop_in)])]
+            runTMS(SimData(; name = "ref", phases))
+            ref = last_word[]
+            stop_in[] = 2
+            sim_data = SimData(; name = "chk", phases)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            runTMS(sim_data)
+            @test last_word[] === ref
+        end
+    end
+    # a vector of them, as the state of a Xoshiro, keeps its element type
+    json = TensorMixedStates.JSON
+    words = UInt64[7, typemax(UInt64)]
+    back = TensorMixedStates.restored_value(json.parse(json.json(TensorMixedStates.checkpoint_value(words))))
+    @test back isa Vector{UInt64}
+    @test back == words
+end
+
 # a phase of one's own creating the state, on a system it is given
 Base.@kwdef struct PrepareGHZ <: AbstractPhase
     name::String = "preparing a GHZ state"

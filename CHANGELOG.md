@@ -210,6 +210,10 @@ the reference article.
 
 ### Fixed
 
+- A checkpoint wrote an integer other than an `Int` as a json number, which came back as an
+  `Int64` or a `BigInt`, and with JSON 0.21 above `typemax(Int64)` as a negative number: a
+  word of 64 bits carried by `run_steps`, the state of a generator of random numbers, went on
+  otherwise in a resumed run. Such an integer is written with its type.
 - `hermitianize` of a pure state accepted any keyword and ignored it; it takes `limits` only,
   as on a mixed state.
 - The sum and the difference of two states, and `hermitianize`, kept the eigenvalues of the
