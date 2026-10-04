@@ -39,6 +39,8 @@ the reference article.
   `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
   product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
   quantum trajectories, reads to unravel an evolution or apply gates.
+- `ghz_state(system, states...)`, the superposition with equal weights of the product states in
+  which every site is in the same local state, exact, of bond dimension the number of states.
 - `slater_state(system, orbitals...)`, the Slater determinant of given orbitals, one matrix for
   each species of fermions, and `fermi_sea(system, H, nparticles...)`, the ground state of
   free fermions under a quadratic hamiltonian H written as for any other function, on sites

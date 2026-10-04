@@ -51,6 +51,7 @@ include("Run.jl")
 # Utilities
 include("Graphs.jl")
 include("FreeFermions.jl")
+include("PreparedStates.jl")
 
 # Sites
 include("sites/Qubits.jl")

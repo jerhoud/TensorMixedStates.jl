@@ -149,6 +149,20 @@ end
     @test real(expect(ψ, N(2) + N(4))) ≈ 1
 end
 
+@testset "GHZ states" begin
+    g = ghz_state(System(6, Qubit()), "Up", "Dn")
+    @test maxlinkdim(g) == 2
+    @test dense_state(g) ≈ [ k == 1 || k == 64 ? 1 / sqrt(2) : 0 for k in 1:64 ]
+    @test expect(g, prod(X(i) for i in 1:6)) ≈ 1
+    @test real(expect(ghz_state(System(1, Qubit()), "Up", "Dn"), X(1))) ≈ 1
+    @test norm(ghz_state(System(5, Qudit(3)), "0", "1", "2")) ≈ 1
+    # electrons of either spin, which conserving their number allows, both product states having
+    # the same, but not up and down qubits counted by N
+    @test expect(ghz_state(System(4, Electron(conserve = Ntot)), "Up", "Dn"), Sz(1) * Sz(4)) ≈ 0.25
+    @test_throws "no definite charge" ghz_state(System(4, Qubit(conserve = N)), "Up", "Dn")
+    @test_throws "one local state at least" ghz_state(System(4, Qubit()))
+end
+
 @testset "Dmrg" begin
     @test_ok test_phases([
         CreateState(
