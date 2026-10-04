@@ -134,6 +134,7 @@ States that are not products of local states, but have an exact MPS of small bon
 are built by functions of their own, which take the local states they are made of:
 
 ```@example manual
+myneel = superposition(System(4, Qubit()), [1 => ["Up", "Dn", "Up", "Dn"], 1 => ["Dn", "Up", "Dn", "Up"]])
 myghz = ghz_state(System(6, Qubit()), "Up", "Dn")          # (|↑↑…↑⟩ + |↓↓…↓⟩)/√2
 mydicke = dicke_state(System(6, Qubit()), 2, "Up", "Dn")   # two sites down, in every way
 mydimers = dimer_state(System(6, Spin(1/2)), [(1, 2), (3, 4), (5, 6)], "1/2", "-1/2")
@@ -142,7 +143,9 @@ mysector = fully_mixed(System(6, Fermion()), N => 3)       # 3 fermions at infin
 measure(mydicke, Z)
 ```
 
-`w_state` is the Dicke state of one site, `dimer_state` puts a singlet on each pair of sites
+`superposition` superposes product states with the coefficients given, here the two Néel
+states, as `mixture` mixes them with weights in a mixed representation, `w_state` is the Dicke
+state of one site, `dimer_state` puts a singlet on each pair of sites
 given, `aklt_state` is the ground state of the AKLT chain of spins one, and `fully_mixed` the
 fully mixed state of a sector, here of 3 fermions. The Slater determinants and the Fermi seas
 of free fermions are built by `slater_state` and `fermi_sea`, see [Fermions](@ref), and the

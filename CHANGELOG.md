@@ -64,6 +64,10 @@ the reference article.
   uses, and make as many examples.
 - `resume_time(sim)` and `committed_time(sim)`, the time a resumed phase goes on from and that
   of the last step committed, for a phase of one's own driving a solver.
+- `superposition(system, [c => states, ...])`, the superposition of product states with the
+  given coefficients, and `mixture(system, [p => states, ...])`, the mixture of product states
+  with the given weights, exact, of bond dimension the number of nonzero terms, built at once rather
+  than term by term. `ghz_state` is the superposition of uniform product states.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
 - `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states

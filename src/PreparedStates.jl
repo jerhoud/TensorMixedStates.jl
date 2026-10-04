@@ -2,7 +2,7 @@
 # state, the Dicke states, of which the W state, the states of singlets on pairs, and the fully
 # mixed state of a sector.
 
-export ghz_state, dicke_state, w_state, dimer_state, fully_mixed
+export ghz_state, superposition, mixture, dicke_state, w_state, dimer_state, fully_mixed
 
 """
     local_vector(site, st)
@@ -70,6 +70,103 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
 end
 
 """
+    product_sum(type, system, terms)
+
+the sum of the product states of `terms`, pairs `c => states` of a coefficient and the local
+states of a product state, one for every site or one for all of them, in the representation
+`type`, `Pure()` or `Mixed()`. Its MPS has a channel per term of nonzero coefficient, each
+carrying the charge of the sites of its product state on the left of the link, so that these
+terms must have the same charge on a system conserving something.
+"""
+function product_sum(type::PM, system::System, terms)
+    n = length(system)
+    if isempty(terms)
+        error("a sum of product states needs one term at least")
+    end
+    per_site(st) = st isa AbstractVector && !(eltype(st) <: Number) ? st : fill(st, n)
+    locals = map(terms) do (_, states)
+        sts = per_site(states)
+        if length(sts) ≠ n
+            error("a product state of $(length(sts)) local states cannot be one of $n sites")
+        end
+        [ make_one_state(type, system, k, sts[k]) for k in 1:n ]
+    end
+    kept = findall(!iszero ∘ first, terms)
+    if isempty(kept)
+        error("a sum of product states needs a nonzero term at least")
+    end
+    coefs = first.(terms[kept])
+    locals = locals[kept]
+    charged = hasqns(locals[1][1])
+    if charged && !allequal(sum(flux, ts) for ts in locals)
+        error("the terms have different charges: the sum has no definite charge, which a " *
+              "system conserving it cannot hold")
+    end
+    # as the links of a product state, the charge of the sites on the left of each, daggered
+    links = map(1:n-1) do k
+        charged ? dag(Index([ sum(flux, ts[1:k]) => 1 for ts in locals ]...; tags = "Link,l=$k")) :
+                  Index(length(kept); tags = "Link,l=$k")
+    end
+    its = map(1:n) do k
+        sum(enumerate(locals)) do (t, ts)
+            x = k == 1 ? coefs[t] * ts[k] : ts[k]
+            if k > 1
+                x *= onehot(dag(links[k-1]) => t)
+            end
+            if k < n
+                x *= onehot(links[k] => t)
+            end
+            x
+        end
+    end
+    return MPS(its)
+end
+
+"""
+    superposition(system, terms; limits = Limits())
+
+the pure state ``\\sum_k c_k |s^k_1 s^k_2 \\dots s^k_n\\rangle`` of `terms`, pairs `c => states`
+of a coefficient and the local pure states of a product state, given by their names or their
+vectors, one for every site or one for all of them, normalized. It is exact, of bond dimension
+the number of terms of nonzero coefficient, truncated to `limits` when they are given, and built
+at once rather than term by term. On a system conserving something, the product states of these
+terms must have the same charge.
+
+# Examples
+
+    superposition(System(4, Qubit()),
+                  [1 => ["Up", "Dn", "Up", "Dn"], -1 => ["Dn", "Up", "Dn", "Up"]])
+    superposition(System(6, Qubit()), [1 => "Up", 1 => "Dn"])     # the GHZ state
+"""
+function superposition(system::System, terms::AbstractVector{<:Pair}; limits::Limits = Limits())
+    st = normalize(State{Pure}(system, product_sum(Pure(), system, terms)))
+    return limits == Limits() ? st : truncate(st; limits)
+end
+
+"""
+    mixture(system, terms; limits = Limits())
+
+the mixed state ``\\sum_k p_k \\rho^k_1 \\otimes \\dots \\otimes \\rho^k_n`` of `terms`, pairs
+`p => states` of a weight, real and not negative, and the local states of a product state, pure
+or mixed, given by their names, their vectors or their density matrices, one for every site or
+one for all of them, normalized to trace one. It is exact, of bond dimension the number of
+terms of nonzero weight, truncated to `limits` when they are given: a classical ensemble of product states.
+
+# Examples
+
+    mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
+"""
+function mixture(system::System, terms::AbstractVector{<:Pair}; limits::Limits = Limits())
+    for (p, _) in terms
+        if !(p isa Real) || p < 0
+            error("the weights of a mixture are real and not negative, and $p is not")
+        end
+    end
+    st = normalize(State{Mixed}(system, product_sum(Mixed(), system, terms)))
+    return limits == Limits() ? st : truncate(st; limits)
+end
+
+"""
     ghz_state(system, states...)
 
 the GHZ state of `states`, local pure states given by their names or their vectors: the
@@ -83,24 +180,12 @@ something, the product states must have the same charge.
     ghz_state(System(10, Qubit()), "Up", "Dn")
     ghz_state(System(6, Qudit(3)), "0", "1", "2")
 """
-function ghz_state(system::System, states...)
+ghz_state(system::System, states...) =
     if isempty(states)
         error("a GHZ state needs one local state at least")
+    else
+        superposition(system, [ 1 => st for st in states ])
     end
-    n = length(system)
-    m = length(states)
-    tensors = map(1:n) do k
-        vs = [ local_vector(system[k], st) for st in states ]
-        A = zeros(promote_type(map(eltype, vs)...), k == 1 ? 1 : m, dim(system[k]),
-                  k == n ? 1 : m)
-        # added rather than set: on a single site, every state falls on the same element
-        for b in 1:m
-            A[k == 1 ? 1 : b, :, k == n ? 1 : b] += vs[b]
-        end
-        A
-    end
-    return mps_state(system, tensors)
-end
 
 """
     dicke_state(system, k, a, b)

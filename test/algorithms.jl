@@ -163,6 +163,37 @@ end
     @test_throws "one local state at least" ghz_state(System(4, Qubit()))
 end
 
+@testset "Superpositions and mixtures of product states" begin
+    up, dn = [1., 0.], [0., 1.]
+    s = superposition(System(4, Qubit()), [1 => ["Up", "Dn", "Up", "Dn"],
+                                           -1 => ["Dn", "Up", "Dn", "Up"], 0.5im => "+"])
+    ref = kron(up, dn, up, dn) - kron(dn, up, dn, up) + 0.5im * kron(fill([1., 1.] / sqrt(2), 4)...)
+    @test abs(TensorMixedStates.LinearAlgebra.dot(dense_state(s), ref / norm(ref))) ≈ 1
+    @test maxlinkdim(s) == 3
+    # on charged sites, the terms of the same charge
+    sc = superposition(System(4, Fermion(conserve = N)),
+                       [1 => ["Occ", "Emp", "Occ", "Emp"], 2 => ["Emp", "Occ", "Emp", "Occ"]])
+    @test expect(sc, N(1)) ≈ 0.2
+    @test_throws "no definite charge" superposition(System(4, Fermion(conserve = N)),
+                                                    [1 => "Occ", 1 => "Emp"])
+    # a term of zero coefficient has no channel and no say in the charge
+    @test maxlinkdim(superposition(System(4, Qubit()), [1 => "Up", 0 => "Dn"])) == 1
+    @test expect(superposition(System(4, Fermion(conserve = N)), [1 => "Occ", 0 => "Emp"]), N(1)) ≈ 1
+    @test_throws "a nonzero term" superposition(System(4, Qubit()), [0 => "Up", 0 => "Dn"])
+    @test_throws "a nonzero term" mixture(System(4, Qubit()), [0 => "Up"])
+    @test_throws "cannot be one of 4 sites" superposition(System(4, Qubit()), [1 => "Up", 0 => ["Dn"]])
+    @test maxlinkdim(superposition(System(8, Qubit()), [ k => isodd(k) ? "Up" : "Dn" for k in 1:10 ];
+                                   limits = Limits(maxdim = 1))) == 1
+    # a classical ensemble of two Néel states, and one of mixed local states
+    m = mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
+    @test trace2(m) ≈ 0.5
+    @test expect(m, Z(1) * Z(2)) ≈ -1
+    mm = mixture(System(2, Qubit()), [1 => ["FullyMixed", "Up"], 3 => [[0.5 0.5 ; 0.5 0.5], "Dn"]])
+    @test expect(mm, Z(2)) ≈ -0.5
+    @test expect(mm, X(1)) ≈ 0.75
+    @test_throws "real and not negative" mixture(System(2, Qubit()), [-1 => "Up"])
+end
+
 @testset "Dicke and W states" begin
     d = dicke_state(System(5, Qubit()), 2, "Up", "Dn")
     @test maxlinkdim(d) == 3
