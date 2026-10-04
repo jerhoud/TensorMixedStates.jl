@@ -111,8 +111,8 @@ sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
 the supertype of the states a `Simulation` holds: `State`, and the states of a
 `Representation` an extension defines. Such a state has a field `system`, the `System` of its
 physical sites, which need not be the one the representation keeps its tensors on, and
-methods of the functions it supports: `expect_norm`, `expect1` and `expect2`, which
-`measure` calls, `apply` for gates, `write_state` and `read_state` to be saved.
+methods of the functions it supports: `expect`, `expect1` and `expect2`, which `measure`
+calls, `apply` for gates, `write_state` and `read_state` to be saved, see [Extending TMS](@ref).
 """
 abstract type AbstractState end
 

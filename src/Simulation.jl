@@ -71,8 +71,9 @@ with `measure(sim.state, measurements, sim.time)`.
 
 - `state`: the state of the system
 - `time`: the simulation time
-- `outputs`: the destinations of the measurements and the formats they are written in
-- `checkpoint`: the checkpointing machinery
+
+The other fields, the destinations of the measurements and the checkpointing machinery, are
+internal.
 
 `sim.data` is the dictionary of the `Data` destinations, see `Data`.
 

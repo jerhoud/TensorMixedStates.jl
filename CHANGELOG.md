@@ -196,6 +196,8 @@ the reference article.
 
 ### Fixed
 
+- `hermitianize` of a pure state accepted any keyword and ignored it; it takes `limits` only,
+  as on a mixed state.
 - The sum and the difference of two states, and `hermitianize`, kept the eigenvalues of the
   order of rounding as states when no truncation was asked for, so that their bond dimension
   grew without bound: the sum of nine product states of twenty qubits had a bond dimension of
@@ -293,7 +295,8 @@ the reference article.
   conserving something. They failed with an error of ITensors, the indices of that site being
   cut into other blocks on the two systems.
 - A resumed simulation puts the state of its checkpoint back on the system of its last
-  `CreateState`, as the uninterrupted run has it, when their sites are the same. It came back
+  `CreateState`, the system given to it or that of the `State` given to it, as the
+  uninterrupted run has it, when their sites are the same. It came back
   on a system of its own, so that a measurement comparing with a state built on that system,
   as `StateFunc("F", st -> fidelity(ref, st))`, failed on every resume.
 - `runTMS` with `restart` or `clean` refuses a name that is the current directory or one of

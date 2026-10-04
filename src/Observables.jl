@@ -468,9 +468,10 @@ end
 
 the state whose density matrix is the Hermitian part ``(\\rho + \\rho^\\dagger)/2`` of that
 of `state`, the sum being truncated according to `limits`, a `Limits` (default `Limits()`,
-none, which doubles the bond dimension). A pure representation is returned as it is.
+which drops only what is of the order of rounding, see `State`). A pure representation is
+returned as it is.
 """
-hermitianize(state::State{Pure}; kwargs...) =
+hermitianize(state::State{Pure}; limits::Limits=Limits()) =
     state
 hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
     State(state, 0.5*(+(state.state, dag(state).state;

@@ -107,4 +107,4 @@ function run_phase(sim::Simulation, phase::CreateState{R}) where {R <: PM}
 end
 
 creates_state(::CreateState) = true
-phase_system(p::CreateState) = p.system
+phase_system(p::CreateState) = p.state isa State ? p.state.system : p.system

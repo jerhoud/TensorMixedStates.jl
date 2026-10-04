@@ -712,21 +712,24 @@ end
             sys = System(2, Qubit())
             ref = State{Pure}(sys, "Up")
             fid = StateFunc("Fid", st -> fidelity(ref, st))
-            for mixed in (false, true)
+            # the system given to CreateState, or that of the State it is given
+            for mixed in (false, true), given in (false, true)
                 stop_in = Ref(0)
                 evolver = mixed ? -im * X(1) + Dissipator(Sm)(2) : -im * X(1)
-                phases = [CreateState(type = Pure(), system = sys, state = "Up");
+                create = given ? CreateState(type = Pure(), state = ref) :
+                                 CreateState(type = Pure(), system = sys, state = "Up")
+                phases = [create;
                           mixed ? [ToMixed()] : [];
                           Evolve(; duration = 0.3, time_step = 0.1, algo = Tdvp(), evolver,
                                  measures = "data" => [fid, stopper_at(stop_in)])]
-                runTMS(SimData(; name = "ref$mixed", phases))
+                runTMS(SimData(; name = "ref$mixed$given", phases))
                 stop_in[] = 2
-                sim_data = SimData(; name = "chk$mixed", phases, checkpoint_interval = 1e-9)
+                sim_data = SimData(; name = "chk$mixed$given", phases, checkpoint_interval = 1e-9)
                 runTMS(sim_data)
                 @test stop_in[] == 0
                 sim = runTMS(sim_data)
                 @test sim.state.system === sys
-                @test read("chk$mixed/data", String) == read("ref$mixed/data", String)
+                @test read("chk$mixed$given/data", String) == read("ref$mixed$given/data", String)
             end
         end
     end
