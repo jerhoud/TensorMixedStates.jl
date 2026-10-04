@@ -1,8 +1,10 @@
 # Prepared states with an exact MPS of small bond dimension, built from their tensors: the GHZ
 # state, the Dicke states, of which the W state, the states of singlets on pairs, and the fully
-# mixed state of a sector.
+# mixed state of a sector, and the states given by the tensors of their MPS or by their dense
+# vector or density matrix.
 
-export ghz_state, superposition, mixture, dicke_state, w_state, dimer_state, fully_mixed
+export mps_state, dense_state, ghz_state, superposition, mixture, dicke_state, w_state,
+       dimer_state, fully_mixed
 
 """
     local_vector(site, st)
@@ -20,9 +22,35 @@ basis of its site, the first of left dimension 1 and the last of right dimension
 On a system carrying charges, the charge of each link is read off the tensors, each of their
 elements adding the charge of its basis state to that of its left link, and a state of no
 definite charge is refused: a superposition of different charges has no MPS of charged indices.
+
+# Examples
+
+    # the cluster state of a chain of qubits, each link carrying the state of the site on its
+    # left, and a sign when both sites are in "Dn"
+    A = zeros(2, 2, 2)
+    for l in 1:2, s in 1:2
+        A[l, s, s] = l == s == 2 ? -1 : 1
+    end
+    mps_state(System(10, Qubit()), [ A[1:1, :, :], fill(A, 8)..., sum(A; dims = 3) ])
 """
 function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}})
     n = length(system)
+    if length(tensors) ≠ n
+        error("$(length(tensors)) tensors cannot make the MPS of $n sites")
+    end
+    for k in 1:n
+        A = tensors[k]
+        if size(A, 2) ≠ dim(system[k])
+            error("tensor $k has $(size(A, 2)) states for a site of dimension $(dim(system[k]))")
+        end
+        left = k == 1 ? 1 : size(tensors[k-1], 3)
+        if size(A, 1) ≠ left
+            error("tensor $k has a left dimension of $(size(A, 1)) where $left is expected")
+        end
+    end
+    if size(tensors[n], 3) ≠ 1
+        error("the last tensor has a right dimension of $(size(tensors[n], 3)) where 1 is expected")
+    end
     s = [ SysIndex{Pure}(system, k) for k in 1:n ]
     links = if is_charged(system)
         # the charge of each basis state of each site, one block of its index each, and none on
@@ -67,6 +95,63 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
         t
     end
     return normalize(State{Pure}(system, MPS(its)))
+end
+
+"""
+    dense_mps(a, idx, sites; combiners = ITensor[])
+
+the MPS on `sites` of the array `a` on the indices `idx`, once the combiners `combiners` have
+gathered these indices into the sites, cut at the rounding as `sum_cutoff` cuts a sum
+"""
+function dense_mps(a::AbstractArray, idx, sites; combiners = ITensor[])
+    if !has_definite_flux(a, idx)
+        error("the state has no definite charge, which a system conserving it cannot hold")
+    end
+    t = charged_itensor(a, idx)
+    for c in combiners
+        t *= c
+    end
+    return MPS(t, sites; cutoff = sum_cutoff(Limits()))
+end
+
+"""
+    dense_state(system, ψ; limits = Limits())
+    dense_state(system, ρ; limits = Limits())
+
+the pure state of `system` of vector `ψ`, or the mixed state of density matrix `ρ`, on the
+basis of the product states of the sites ordered as `kron` orders them, the first site varying
+the slowest, normalized. Its MPS comes from successive decompositions of the whole vector, exact
+up to rounding and truncated to `limits` when they are given, for a system small enough to be
+written down: to compare with an exact diagonalization, or to take a state from another code.
+On a system carrying charges, a state of no definite charge is refused.
+
+# Examples
+
+    dense_state(System(2, Qubit()), [1, 0, 0, 1])               # (|↑↑⟩ + |↓↓⟩)/√2
+    dense_state(System(2, Qubit()), [1 0 0 0 ; 0 0 0 0 ; 0 0 0 0 ; 0 0 0 1])
+"""
+function dense_state(system::System, ψ::AbstractVector{<:Number}; limits::Limits = Limits())
+    s = [ SysIndex{Pure}(system, k) for k in 1:length(system) ]
+    if length(ψ) ≠ prod(dim, s)
+        error("a vector of $(length(ψ)) elements cannot be a state of $(prod(dim, s)) basis states")
+    end
+    a, idx = on_legs(reshape(collect(ψ), :, 1), s, Index[])
+    st = normalize(State{Pure}(system, dense_mps(a, idx, s)))
+    return limits == Limits() ? st : truncate(st; limits)
+end
+
+function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limits = Limits())
+    n = length(system)
+    s = [ SysIndex{Pure}(system, k) for k in 1:n ]
+    d = prod(dim, s)
+    if size(ρ) ≠ (d, d)
+        error("a matrix of size $(size(ρ)) cannot be a density matrix of $d basis states")
+    end
+    mixers = [ mixer(s[k], SysIndex{Mixed}(system, k), system[k]) for k in 1:n ]
+    a, idx = on_legs(Matrix(ρ), s, [ dag(b') for (b, _) in mixers ])
+    sites = [ SysIndex{Mixed}(system, k) for k in 1:n ]
+    st = normalize(State{Mixed}(system, dense_mps(a, idx, sites; combiners = last.(mixers))))
+    return limits == Limits() ? st : truncate(st; limits)
 end
 
 """
@@ -201,7 +286,14 @@ a\\rangle`` for orthonormal states, normalized in any case. It is exact, of bond
     dicke_state(System(10, Qubit()), 3, "Up", "Dn")
     dicke_state(System(10, Qubit(conserve = N)), 5, "Up", "Dn")
 """
-function dicke_state(system::System, k::Int, a, b)
+dicke_state(system::System, k::Int, a, b) = dicke_mps(system, k, a, b, ones(length(system)))
+
+"""
+    dicke_mps(system, k, a, b, amplitudes)
+
+the state of `dicke_state`, each site in `b` weighted by its amplitude in `amplitudes`
+"""
+function dicke_mps(system::System, k::Int, a, b, amplitudes::AbstractVector{<:Number})
     n = length(system)
     if !(0 ≤ k ≤ n)
         error("$k sites in $b do not fit on $n sites")
@@ -209,7 +301,7 @@ function dicke_state(system::System, k::Int, a, b)
     # the numbers of sites in b on the left of a link that can still reach k
     reach(j) = max(0, k - (n - j)):min(j, k)
     tensors = map(1:n) do j
-        va, vb = local_vector(system[j], a), local_vector(system[j], b)
+        va, vb = local_vector(system[j], a), amplitudes[j] * local_vector(system[j], b)
         left, right = reach(j - 1), reach(j)
         A = zeros(promote_type(eltype(va), eltype(vb)), length(left), dim(system[j]),
                   length(right))
@@ -227,14 +319,29 @@ end
 
 """
     w_state(system, a, b)
+    w_state(system, a, b, amplitudes)
 
-the W state, the Dicke state of one site in `b` and the others in `a`, see `dicke_state`.
+the W state, the Dicke state of one site in `b` and the others in `a`, see `dicke_state`. With
+`amplitudes`, one for each site, the superposition ``\\sum_j \\phi_j |a \\dots a b_j a \\dots
+a\\rangle`` of the states in which site `j` alone is in `b`, normalized: a wave packet of a
+single excitation, of bond dimension 2.
 
 # Examples
 
     w_state(System(10, Qubit()), "Up", "Dn")
+    w_state(System(40, Qubit()), "Up", "Dn", [ exp(-(j - 10)^2 / 8 + im * π / 2 * j) for j in 1:40 ])
 """
 w_state(system::System, a, b) = dicke_state(system, 1, a, b)
+
+function w_state(system::System, a, b, amplitudes::AbstractVector{<:Number})
+    if length(amplitudes) ≠ length(system)
+        error("$(length(amplitudes)) amplitudes for $(length(system)) sites")
+    end
+    if all(iszero, amplitudes)
+        error("a wave packet needs a nonzero amplitude at least")
+    end
+    return dicke_mps(system, 1, a, b, amplitudes)
+end
 
 """
     dimer_state(system, pairs, a, b; others, limits = Limits())

@@ -60,7 +60,7 @@ end
             d[b + 1] = LA.det(Φ[findall(==(1), occ), :])
         end
     end
-    @test abs(LA.dot(d / LA.norm(d), dense_state(slater_state(System(n, Fermion()), Φ)))) ≈ 1
+    @test abs(LA.dot(d / LA.norm(d), dense_vector(slater_state(System(n, Fermion()), Φ)))) ≈ 1
 
     # the correlations, on sites conserving the number of fermions, and Wick's theorem
     n, m = 8, 3
@@ -128,7 +128,7 @@ end
             d[b + 1] = LA.det(Φ[findall(==(1), occ[fs]), :])
         end
     end
-    @test abs(LA.dot(d / LA.norm(d), dense_state(ψ))) ≈ 1
+    @test abs(LA.dot(d / LA.norm(d), dense_vector(ψ))) ≈ 1
     Λ = conj(Φ) * transpose(Φ)
     @test [ expect(ψ, dag(C)(fs[p]) * C(fs[q])) for p in 1:4, q in 1:4 ] ≈ Λ atol = 1e-10
 
@@ -152,7 +152,7 @@ end
 @testset "GHZ states" begin
     g = ghz_state(System(6, Qubit()), "Up", "Dn")
     @test maxlinkdim(g) == 2
-    @test dense_state(g) ≈ [ k == 1 || k == 64 ? 1 / sqrt(2) : 0 for k in 1:64 ]
+    @test dense_vector(g) ≈ [ k == 1 || k == 64 ? 1 / sqrt(2) : 0 for k in 1:64 ]
     @test expect(g, prod(X(i) for i in 1:6)) ≈ 1
     @test real(expect(ghz_state(System(1, Qubit()), "Up", "Dn"), X(1))) ≈ 1
     @test norm(ghz_state(System(5, Qudit(3)), "0", "1", "2")) ≈ 1
@@ -163,12 +163,56 @@ end
     @test_throws "one local state at least" ghz_state(System(4, Qubit()))
 end
 
+@testset "States from the tensors of their MPS and from their dense vector" begin
+    LA = TensorMixedStates.LinearAlgebra
+    # the cluster state, against the graph state of a chain
+    A = zeros(2, 2, 2)
+    for l in 1:2, s in 1:2
+        A[l, s, s] = l == s == 2 ? -1 : 1
+    end
+    c = mps_state(System(6, Qubit()), [ A[1:1, :, :], fill(A, 4)..., sum(A; dims = 3) ])
+    @test maxlinkdim(c) == 2
+    @test abs(LA.dot(dense_vector(c), dense_vector(graph_state(line_graph(6))))) ≈ 1
+    @test_throws "3 tensors cannot" mps_state(System(4, Qubit()), [A[1:1, :, :], A, sum(A; dims = 3)])
+    @test_throws "left dimension of 2 where 1" mps_state(System(2, Qubit()), [A, sum(A; dims = 3)])
+    @test_throws "right dimension of 2" mps_state(System(2, Qubit()), [A[1:1, :, :], A])
+    @test_throws "3 states for a site of dimension 2" mps_state(System(2, Qubit()),
+                                                                [zeros(1, 3, 1), zeros(1, 2, 1)])
+    # a pure state, and one of definite charge on fermions conserving it
+    ψ = [ sin(3k) + im * cos(5k) for k in 1:32 ]
+    @test dense_vector(dense_state(System(5, Qubit()), ψ)) ≈ ψ / LA.norm(ψ)
+    φ = [ count_ones(b) == 2 ? sin(3b) : 0. for b in 0:15 ]
+    dc = dense_state(System(4, Fermion(conserve = N)), φ)
+    @test sum(expect1(dc, N)) ≈ 2
+    @test dense_vector(dc) ≈ φ / LA.norm(φ)
+    @test maxlinkdim(dense_state(System(8, Qubit()), kron(fill([1., 1.], 8)...))) == 1
+    @test_throws "no definite charge" dense_state(System(4, Fermion(conserve = N)), ones(16))
+    @test_throws "cannot be a state of 16" dense_state(System(4, Qubit()), ones(8))
+    # a density matrix, against the expectations it gives
+    M = [ sin(k + 2l) + im * cos(3k - l) for k in 1:8, l in 1:8 ]
+    ρ = M * M' / LA.tr(M * M')
+    m = dense_state(System(3, Qubit()), ρ)
+    z, x, id = [1 0 ; 0 -1], [0 1 ; 1 0], [1 0 ; 0 1]
+    @test expect(m, Z(1) * Z(3)) ≈ real(LA.tr(ρ * kron(z, id, z)))
+    @test expect(m, X(2) * Z(3)) ≈ real(LA.tr(ρ * kron(id, x, z)))
+    @test trace2(m) ≈ real(LA.tr(ρ * ρ))
+    # on fermions, a coherence within a sector, under weak and strong conservations
+    ρf = [ 0 0 0 0 ; 0 0.5 0.3im 0 ; 0 -0.3im 0.5 0 ; 0 0 0 0 ]
+    hop = jw_matrix(Fermion(), 2, [dag(C) => 1, C => 2])
+    for site in (Fermion(conserve = N), Fermion(conserve = TensorMixedStates.strong(N)))
+        mf = dense_state(System(2, site), ρf)
+        @test expect(mf, dag(C)(1) * C(2)) ≈ LA.tr(ρf * hop)
+    end
+    @test_throws "no definite charge" dense_state(System(2, Fermion(conserve = N)), ones(4, 4))
+    @test_throws "size (4, 4) cannot" dense_state(System(3, Qubit()), ones(4, 4))
+end
+
 @testset "Superpositions and mixtures of product states" begin
     up, dn = [1., 0.], [0., 1.]
     s = superposition(System(4, Qubit()), [1 => ["Up", "Dn", "Up", "Dn"],
                                            -1 => ["Dn", "Up", "Dn", "Up"], 0.5im => "+"])
     ref = kron(up, dn, up, dn) - kron(dn, up, dn, up) + 0.5im * kron(fill([1., 1.] / sqrt(2), 4)...)
-    @test abs(TensorMixedStates.LinearAlgebra.dot(dense_state(s), ref / norm(ref))) ≈ 1
+    @test abs(TensorMixedStates.LinearAlgebra.dot(dense_vector(s), ref / norm(ref))) ≈ 1
     @test maxlinkdim(s) == 3
     # on charged sites, the terms of the same charge
     sc = superposition(System(4, Fermion(conserve = N)),
@@ -197,7 +241,7 @@ end
 @testset "Dicke and W states" begin
     d = dicke_state(System(5, Qubit()), 2, "Up", "Dn")
     @test maxlinkdim(d) == 3
-    @test dense_state(d) ≈ [ count_ones(b) == 2 ? 1 / sqrt(10) : 0. for b in 0:31 ]
+    @test dense_vector(d) ≈ [ count_ones(b) == 2 ? 1 / sqrt(10) : 0. for b in 0:31 ]
     # every product state of a Dicke state has the same charge
     dc = dicke_state(System(8, Qubit(conserve = N)), 4, "Up", "Dn")
     @test sum(expect1(dc, N)) ≈ 4
@@ -205,6 +249,17 @@ end
     @test expect1(dicke_state(System(3, Qubit()), 0, "Up", "Dn"), Z) ≈ [1, 1, 1]
     @test expect1(dicke_state(System(3, Qubit()), 3, "Up", "Dn"), Z) ≈ [-1, -1, -1]
     @test_throws "do not fit on 3 sites" dicke_state(System(3, Qubit()), 4, "Up", "Dn")
+    LA = TensorMixedStates.LinearAlgebra
+    # a wave packet of one excitation, a site of zero amplitude included
+    up, dn = [1., 0.], [0., 1.]
+    φ = [1, 2im, 0, -1]
+    w = w_state(System(4, Qubit()), "Up", "Dn", φ)
+    ref = sum(φ[j] * kron([ k == j ? dn : up for k in 1:4 ]...) for j in 1:4)
+    @test dense_vector(w) ≈ ref / LA.norm(ref)
+    @test maxlinkdim(w) == 2
+    @test sum(expect1(w_state(System(6, Qubit(conserve = N)), "Up", "Dn", 1:6), Z)) ≈ 4
+    @test_throws "a nonzero amplitude" w_state(System(3, Qubit()), "Up", "Dn", zeros(3))
+    @test_throws "2 amplitudes for 3 sites" w_state(System(3, Qubit()), "Up", "Dn", [1, 1])
 end
 
 @testset "Dimer states" begin
@@ -212,7 +267,7 @@ end
     up, dn = [1., 0.], [0., 1.]
     ref = sum(c1 * c2 * kron(s1, s2, s3, s4) for (s1, s3, c1) in ((up, dn, 1), (dn, up, -1))
                                               for (s2, s4, c2) in ((up, dn, 1), (dn, up, -1))) / 2
-    @test dense_state(dimer_state(System(4, Qubit()), [(1, 3), (2, 4)], "Up", "Dn")) ≈ ref
+    @test dense_vector(dimer_state(System(4, Qubit()), [(1, 3), (2, 4)], "Up", "Dn")) ≈ ref
     # Majumdar-Ghosh, on charged sites
     mg = dimer_state(System(10, Qubit(conserve = N)), [ (i, i + 1) for i in 1:2:9 ], "Up", "Dn")
     @test maxlinkdim(mg) == 2

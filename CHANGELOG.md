@@ -66,18 +66,25 @@ the reference article.
   of the last step committed, for a phase of one's own driving a solver.
 - `superposition(system, [c => states, ...])`, the superposition of product states with the
   given coefficients, and `mixture(system, [p => states, ...])`, the mixture of product states
-  with the given weights, exact, of bond dimension the number of nonzero terms, built at once rather
-  than term by term. `ghz_state` is the superposition of uniform product states.
+  with the given weights, exact, of bond dimension the number of nonzero terms, built at once
+  rather than term by term. `ghz_state` is the superposition of uniform product states.
 - `ghz_state(system, states...)`, the superposition with equal weights of the product states in
   which every site is in the same local state, exact, of bond dimension the number of states.
 - `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states
   with `k` sites in `b` and the others in `a`, and `w_state(system, a, b)`, the case of one
   site, exact, of bond dimension `k + 1` at most, on charged sites as well.
+  `w_state(system, a, b, amplitudes)` weights each site in `b` by its amplitude, a wave packet
+  of one excitation.
 - `dimer_state(system, pairs, a, b)`, a singlet (|ab⟩ - |ba⟩)/√2 on each pair of sites, the
   Majumdar-Ghosh state for pairs of neighbours and the rainbow state for nested pairs, the sites
   in no pair taking the local state given by `others`.
 - `aklt_state(system)`, the AKLT state of a chain of spins one, its exact MPS of bond
   dimension 2, the virtual spins at the ends set by `left` and `right`.
+- `mps_state(system, tensors)`, the pure state of the MPS of the tensors given as arrays
+  `A[l, s, r]`, the charges of its links read off the tensors on a charged system.
+- `dense_state(system, ψ)` and `dense_state(system, ρ)`, the pure state of a vector and the
+  mixed state of a density matrix on the basis of the product states, ordered as `kron` orders
+  them, decomposed into an MPS exact up to rounding or truncated to `limits`.
 - `fully_mixed(system, op => value...)`, the fully mixed state of the sector where the sum of
   each operator over the sites takes its value, exact, of bond dimension `N + 1` at most for
   `N => N`: the state at infinite temperature of a sector, from which `Thermalize` gives the

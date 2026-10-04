@@ -38,7 +38,7 @@ end
 the vector of a pure state in the full basis, site 1 most significant, normalised. Only usable
 on small systems.
 """
-function dense_state(state::State{Pure})
+function dense_vector(state::State{Pure})
     n = length(state)
     idx = [ SysIndex{Pure}(state.system, k) for k in 1:n ]
     psi = vec(Array(reduce(*, [state.state[k] for k in 1:n]), reverse(idx)...))
@@ -64,7 +64,7 @@ exact one particle correlation matrix <c^dag_i c_j> of a pure state, see `jw_mat
 """
 function exact_fermionic_correlations(state::State{Pure}, site)
     n = length(state)
-    psi = dense_state(state)
+    psi = dense_vector(state)
     return [ psi' * jw_matrix(site, n, [dag(C) => i, C => j]) * psi for i in 1:n, j in 1:n ]
 end
 

@@ -122,7 +122,7 @@ end
     n = 4
     for site in (Electron(), Tj())
         st = RandomState{Pure}(System(n, site), 4)
-        psi = dense_state(st)
+        psi = dense_vector(st)
         exact(factors) = psi' * jw_matrix(site, n, factors) * psi
         for a in (Cup, Cdn), b in (Cup, Cdn)
             ref = [ exact([dag(a) => i, b => j]) for i in 1:n, j in 1:n ]

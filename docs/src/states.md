@@ -45,11 +45,15 @@ states, the states of singlets on pairs of sites, the
 fully mixed state of a sector, from which [`thermal_state`](@ref) gives the canonical thermal
 state, the Slater determinants of free fermions, and the Fermi sea
 of a quadratic hamiltonian, on sites of `Fermion` or `Electron`, beside sites of other types if
-need be, an impurity for instance.
+need be, an impurity for instance. Any other state of which one knows the tensors of an MPS is
+built by `mps_state`, and a state small enough to be written down, by its dense vector or
+density matrix, with `dense_state`.
 The graph states of qubits are built by [`graph_state`](@ref), the AKLT state of spins one by
 [`aklt_state`](@ref), and the thermal states by [`thermal_state`](@ref).
 
 ```@docs
+mps_state
+dense_state
 superposition
 mixture
 ghz_state
