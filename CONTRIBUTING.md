@@ -171,16 +171,21 @@ Control flow is written with `if`, never with the short-circuit operators. `cond
 `&&` or `||` for its side effect. Inside a boolean expression, as in `if a && b`, they are
 ordinary and welcome.
 
-A new public name takes the form most of the package already has. The names published before
-are kept as they are, since renaming them would break programs for no gain; the rules are for
-the names to come:
+A public name takes the form most of the package has. Version 2.0 brought the names published
+before into line with the rules below, but for the exceptions noted; from then on a published
+name is kept as it is, since renaming it would break programs for no gain:
 
+- words are written out: `measurements`, `log_message`, the tolerance `tol` excepted;
+- a predicate is one word, as in Base: `isfermionic`, `hasfermionic`;
+- a measurement takes the state first, as `expect` and `variance`, and a solver the operator
+  first, as in ITensorMPS: `tdvp(evolver, t, state)`;
 - a number of time steps is `nsteps`, a number of dmrg sweeps `nsweeps`;
 - something done every `k` steps is given by `<what>_period`, as `measurements_period`;
 - a field does not repeat the name of its struct: `Krylov(dim = 8)`, not `krylovdim`;
-- the suffix `Error` is for an exception (`TraceError` and `HermiticityError`, older, are
-  measurements whose names are column headers);
-- a constructor returns an object of its own type (`RandomState`, older, returns a `State`).
+- the suffix `Error` is for an exception (`TraceError` and `HermiticityError`, kept, are
+  measurements whose names are column headers of the output files);
+- a constructor returns an object of its own type (`RandomState`, kept, returns a `State`, as
+  `State{Pure}(...)` does, whose forms it follows).
 
 ## Performance work
 
