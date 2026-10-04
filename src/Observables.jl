@@ -921,8 +921,8 @@ expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
     expect2(state, [ops])[1]
 
 """
-    variance(hamiltonian, ::State{Pure})
-    variance(::MPO, ::State{Pure})
+    variance(::State{Pure}, hamiltonian)
+    variance(::State{Pure}, ::MPO)
 
 the variance of the energy, ``\\langle H^2 \\rangle - \\langle H \\rangle^2``, zero exactly
 when the state is an eigenstate of the hamiltonian. The state need not be normalised, and a
@@ -942,10 +942,10 @@ of the MPO of `H` by itself has the square of its bond dimension. What is comput
 # Examples
 
     energy, gs = dmrg(hamiltonian, state; nsweeps = 10)
-    variance(hamiltonian, gs)
+    variance(gs, hamiltonian)
     measurements = "data" => Variance(hamiltonian)
 """
-function variance(mpo::MPO, state::State{Pure})
+function variance(state::State{Pure}, mpo::MPO)
     st = state.state
     n2 = real(dot(st, st))
     # the bra is primed because that is the form `inner` wants: contracting the mpo with
@@ -956,12 +956,12 @@ function variance(mpo::MPO, state::State{Pure})
     return e2 - e^2
 end
 
-variance(h, state::State{Pure}) = variance(make_mpo(state, h), state)
+variance(state::State{Pure}, h) = variance(state, make_mpo(state, h))
 
 # a hamiltonian on a density matrix does not have this reading, and the quantity that
 # plays the part is already there: `steady_state` optimises on ``L^\\dagger L`` and returns
 # ``\\|L\\rho\\|^2``, which is zero exactly when the state is stationary
-variance(_, ::State{Mixed}) =
+variance(::State{Mixed}, _) =
     error("variance needs a pure representation. On a mixed one steady_state returns " *
           "the equivalent for a Lindbladian")
 

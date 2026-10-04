@@ -246,7 +246,7 @@ end
     # expect measures term by term what it is given, measure the compacted operator
     @test isapprox(expect(ψ, hc), expect(ψ, h); rtol = 1e-12)
     @test isapprox(last(only(measure(ψ, h))), expect(ψ, h); rtol = 1e-12)
-    @test isapprox(variance(h, ψ), variance(make_mpo(naive_pre(ψ, h)), ψ); rtol = 1e-10, atol = 1e-12)
+    @test isapprox(variance(ψ, h), variance(ψ, make_mpo(naive_pre(ψ, h))); rtol = 1e-10, atol = 1e-12)
     ρ = RandomState{Mixed}(System(n, Qubit()), 4)
     @test isapprox(expect(ρ, hc), expect(ρ, h); rtol = 1e-12)
     hf = sum(0.5^(j - i) * (dag(C)(i) * C(j) + dag(C)(j) * C(i)) + 0.2 * N(i) * N(j) for i in 1:n for j in i+1:n)

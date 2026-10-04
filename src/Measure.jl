@@ -666,7 +666,7 @@ at every sweep.
 
     final_measurements = "data" => Variance(hamiltonian)
 """
-Variance(h) = StateFunc("Variance", st -> variance(h, st))
+Variance(h) = StateFunc("Variance", st -> variance(st, h))
 
 """
     MaxLinkdim

@@ -123,6 +123,8 @@ the reference article.
 
 ### Changed
 
+- `variance(state, h)` takes the state first, as `expect` and the other measurements do,
+  rather than `variance(h, state)`.
 - The fields `measures`, `final_measures` and `measures_period` of the phases, and
   `final_measures` of `SimData`, are `measurements`, `final_measurements` and
   `measurements_period`, the word `output` and the observers already used. A phase of one's

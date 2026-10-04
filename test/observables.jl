@@ -891,21 +891,21 @@ end
     h = ising + field
 
     # zero exactly on an eigenstate, whichever one
-    @test variance(ising, State{Pure}(sys, "Up")) ≈ 0 atol = 1e-12
-    @test variance(ising, State{Pure}(sys, ["Up", "Dn", "Up", "Dn", "Up", "Dn"])) ≈ 0 atol = 1e-12
-    @test variance(field, State{Pure}(sys, "+")) ≈ 0 atol = 1e-12
+    @test variance(State{Pure}(sys, "Up"), ising) ≈ 0 atol = 1e-12
+    @test variance(State{Pure}(sys, ["Up", "Dn", "Up", "Dn", "Up", "Dn"]), ising) ≈ 0 atol = 1e-12
+    @test variance(State{Pure}(sys, "+"), field) ≈ 0 atol = 1e-12
     # |+...+> is an eigenstate of the field but not of the couplings. <ZZ> is zero there and
     # so are the cross terms, so the variance is the number of couplings
-    @test variance(h, State{Pure}(sys, "+")) ≈ 5
+    @test variance(State{Pure}(sys, "+"), h) ≈ 5
 
     # against the naive route, the one that forms H^2 and that the implementation avoids
     r = RandomState{Pure}(sys, 8)
-    @test variance(h, r) ≈ real(expect(r, h * h)) - real(expect(r, h))^2
+    @test variance(r, h) ≈ real(expect(r, h * h)) - real(expect(r, h))^2
     # neither the norm nor a phase of the state changes it
-    @test variance(h, 3r) ≈ variance(h, r)
-    @test variance(h, im * r) ≈ variance(h, r)
+    @test variance(3r, h) ≈ variance(r, h)
+    @test variance(im * r, h) ≈ variance(r, h)
     # an mpo already built gives the same answer
-    @test variance(make_mpo(r, h), r) ≈ variance(h, r)
+    @test variance(r, make_mpo(r, h)) ≈ variance(r, h)
 
     # what it is for: a converged ground state has a variance the energy alone cannot show
     e, gs = dmrg(h, RandomState{Pure}(sys, 16); nsweeps = 12,
@@ -916,15 +916,15 @@ end
     dense = -sum(on([1. 0. ; 0. -1.], i) * on([1. 0. ; 0. -1.], i + 1) for i in 1:5) -
             sum(on([0. 1. ; 1. 0.], i) for i in 1:6)
     @test e ≈ minimum(LA.eigvals(LA.Symmetric(dense))) atol = 1e-10
-    @test variance(h, gs) < 1e-8
-    @test variance(h, gs) < variance(h, r)
+    @test variance(gs, h) < 1e-8
+    @test variance(gs, h) < variance(r, h)
 
     # as a measurement
     @test first(only(measure(gs, Variance(h)))) == "Variance"
-    @test last(only(measure(gs, Variance(h)))) ≈ variance(h, gs)
+    @test last(only(measure(gs, Variance(h)))) ≈ variance(gs, h)
 
     # a hamiltonian on a density matrix has no variance in this sense
-    @test_throws "needs a pure representation" variance(h, mix(r))
+    @test_throws "needs a pure representation" variance(mix(r), h)
 end
 
 @testset "Observables do not depend on the charges" begin

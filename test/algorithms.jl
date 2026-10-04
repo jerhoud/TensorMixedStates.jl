@@ -300,7 +300,7 @@ end
         a = aklt_state(System(n, site); left = l, right = r)
         @test maxlinkdim(a) == 2
         @test expect(a, h) ≈ -2 * (n - 1) / 3
-        @test variance(h, a) ≈ 0 atol = 1e-10
+        @test variance(a, h) ≈ 0 atol = 1e-10
         @test sum(expect1(a, Sz)) ≈ sz atol = 1e-12
     end
     @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
