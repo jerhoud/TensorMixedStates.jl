@@ -146,9 +146,9 @@ function evolution_sweep_done!(o::Union{TdvpObserver, ApproxWObserver}, sweep, c
         output(Simulation(o.sim, st, current_time), o.measurements; sweep)
     end
     if sweep == 1
-        log_msg(o.sim, "$label: maxlinkdim=$(maxlinkdim(mpo)), memory=$(Base.summarysize(operators))")
+        log_message(o.sim, "$label: maxlinkdim=$(maxlinkdim(mpo)), memory=$(Base.summarysize(operators))")
     end
-    log_msg(o.sim, "sim_time $(round(current_time; digits=8))")
+    log_message(o.sim, "sim_time $(round(current_time; digits=8))")
     return sweep_commit!(o.sim, st, current_time, sweep)
 end
 
@@ -163,7 +163,7 @@ function sweep_done!(o::ThermalObserver; sweep, state, beta, log_trace, kwargs..
     if sweep_due(o.period, sweep)
         output(Simulation(o.sim, st), o.measurements; sweep, beta, log_trace)
     end
-    log_msg(o.sim, "beta $(round(beta; digits=8))")
+    log_message(o.sim, "beta $(round(beta; digits=8))")
     # the simulation time does not move, and the logarithm of the trace is carried in the
     # commit, as the energy of a dmrg sweep is, for a resumed computation to go on from it
     return sweep_commit!(o.sim, st, o.sim.time, sweep; carried = log_trace)
@@ -186,7 +186,7 @@ function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
     if stop || sweep_due(o.period, s)
         output(Simulation(o.sim, st), o.measurements; energy, sweep = s)
     end
-    log_msg(o.sim, "sweep $s")
+    log_message(o.sim, "sweep $s")
     o.energy = energy
     # a dmrg sweep does not change the simulation time, so the sweep count is what a resume
     # needs, and a stop on the tolerance records the phase as done, not to be run again

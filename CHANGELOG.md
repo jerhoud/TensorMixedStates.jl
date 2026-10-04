@@ -123,6 +123,7 @@ the reference article.
 
 ### Changed
 
+- `log_msg(sim, text)` is `log_message(sim, text)`, the word written out.
 - `has_fermionic` is `hasfermionic`, written as `isfermionic` and the predicates of Base.
 - `partial_trace(state, positions; keep = true)` keeps the sites at `positions`, the keyword
   formerly `keepers`, and the `PartialTrace` phase takes the same `positions` and `keep`

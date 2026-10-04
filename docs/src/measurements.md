@@ -213,5 +213,5 @@ df = data_to_frame(mysim.data["mydata"])
 
 ```@docs
 output
-log_msg
+log_message
 ```

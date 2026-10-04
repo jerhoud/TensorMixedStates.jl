@@ -32,6 +32,6 @@ end
 function run_phase(sim::Simulation, phase::Weaken)
     from = symmetries(sim.state.system)
     sim = isnothing(phase.target) ? weaken(sim) : weaken(sim, phase.target)
-    log_msg(sim, "Symmetries weakened from $from to $(symmetries(sim.state.system))")
+    log_message(sim, "Symmetries weakened from $from to $(symmetries(sim.state.system))")
     return sim
 end

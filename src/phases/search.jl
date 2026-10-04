@@ -13,14 +13,14 @@ its last sweep has only that line left to write, with the value the checkpoint r
 function run_search(solve, sim::Simulation, phase, what::String, final_line)
     done, e = resume_step(sim)
     if done < phase.nsweeps
-        log_msg(sim, "$what with $(phase.nsweeps - done) sweeps of Dmrg")
+        log_message(sim, "$what with $(phase.nsweeps - done) sweeps of Dmrg")
         e, sim = solve(sim; phase.nsweeps, first_sweep = done + 1, phase.limits,
             observer! = DmrgObserver(sim, phase.measurements, phase.measurements_period,
                                      phase.tol, done; phase.nsweeps, energy = e))
     end
     # a search stopped for a checkpoint is not done, and its resume writes the line
     if !stopped(sim)
-        log_msg(sim, final_line(e))
+        log_message(sim, final_line(e))
     end
     return sim
 end

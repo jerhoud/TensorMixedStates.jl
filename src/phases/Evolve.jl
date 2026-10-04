@@ -181,19 +181,20 @@ function run_phase(sim::Simulation, phase::Evolve)
     # does not divide it: of the opposite sign, it made no step while the time went on
     nsteps = round(Int, abs(phase.duration / phase.time_step))
     if nsteps == 0
-        log_msg(sim, "Skipping an evolution of $(phase.duration), shorter than half a time step")
+        log_message(sim, "Skipping an evolution of $(phase.duration), shorter than half a " *
+                         "time step")
         return sim
     end
     # the step is adjusted rather than the duration, so that the phase ends where it was asked
     # to: a duration of 1 in steps of 0.3 stopped at 0.9
     duration = phase.duration
     if !(duration / nsteps ≈ phase.time_step)
-        log_msg(sim, "Taking a time step of $(duration / nsteps) rather than $(phase.time_step) " *
-                     "to cover the duration $duration in $nsteps steps")
+        log_message(sim, "Taking a time step of $(duration / nsteps) rather than " *
+                         "$(phase.time_step) to cover the duration $duration in $nsteps steps")
     end
     time_stop = sim.time + duration
     # a phase resumed in its course goes on from the time of its checkpoint, not from its start
-    log_msg(sim, "Evolving state from simulation time $(resume_time(sim)) to $(time_stop)")
+    log_message(sim, "Evolving state from simulation time $(resume_time(sim)) to $(time_stop)")
     evolver, coefs = phase.evolver isa Pair ? (first(phase.evolver), last(phase.evolver)) :
                                               (phase.evolver, nothing)
     sim = evolve(phase.algo, sim.state, sim, phase; evolver, coefs, nsteps)

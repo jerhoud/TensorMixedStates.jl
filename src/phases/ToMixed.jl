@@ -27,12 +27,12 @@ end
 
 function run_phase(sim::Simulation, phase::ToMixed)
     if sim.state isa State{Mixed}
-        log_msg(sim, "State is already in mixed representation")
+        log_message(sim, "State is already in mixed representation")
         sim = truncate(sim; phase.limits)
     else
-        log_msg(sim, "Creating mixed representation with $(length(sim)) sites")
+        log_message(sim, "Creating mixed representation with $(length(sim)) sites")
         sim = truncate(mix(sim); phase.limits)
-        log_msg(sim, "State is now in mixed representation")
+        log_message(sim, "State is now in mixed representation")
     end
     return sim
 end

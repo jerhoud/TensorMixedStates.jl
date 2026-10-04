@@ -66,22 +66,23 @@ function run_phase(sim::Simulation, phase::Thermalize)
     # adjusted as the time step of Evolve, the step taking the sign of beta
     nsteps = round(Int, abs(phase.beta / phase.beta_step))
     if nsteps == 0
-        log_msg(sim, "Skipping a thermalization to beta $(phase.beta), shorter than half a step")
+        log_message(sim, "Skipping a thermalization to beta $(phase.beta), shorter than half " *
+                         "a step")
         return sim
     end
     beta = phase.beta
     if !(beta / nsteps ≈ phase.beta_step)
-        log_msg(sim, "Taking a step of $(beta / nsteps) rather than $(phase.beta_step) to reach " *
-                     "beta $beta in $nsteps steps")
+        log_message(sim, "Taking a step of $(beta / nsteps) rather than $(phase.beta_step) to " *
+                         "reach beta $beta in $nsteps steps")
     end
     done, log_trace = resume_step(sim)
-    log_msg(sim, "Thermalizing state to beta $beta")
+    log_message(sim, "Thermalizing state to beta $beta")
     algo = phase.algo
     l, sim = thermal_state(phase.hamiltonian, beta, sim; nsteps, first_step = done + 1,
                            log_trace = something(log_trace, 0.), algo.expand_period,
                            algo.hermitianize_period, phase.limits, algo.krylov,
                            observer! = ThermalObserver(sim, phase.measurements,
                                                        phase.measurements_period))
-    log_msg(sim, "Done, log_trace is $l")
+    log_message(sim, "Done, log_trace is $l")
     return sim
 end

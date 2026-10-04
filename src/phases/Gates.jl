@@ -27,6 +27,6 @@ a phase that applies gates to the state.
 end
 
 function run_phase(sim::Simulation, phase::Gates)
-    log_msg(sim, "Applying gates")
+    log_message(sim, "Applying gates")
     return apply(phase.gates, sim; phase.limits)
 end

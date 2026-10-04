@@ -1,7 +1,7 @@
-# output, which measures a simulation and writes the values to their destinations, log_msg,
+# output, which measures a simulation and writes the values to their destinations, log_message,
 # which writes to its log, and the logger sending the warnings of the package to that log.
 
-export output, log_msg
+export output, log_message
 
 """
     output(::Simulation, destination => measurements; sweep, energy)
@@ -51,14 +51,14 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
 end
 
 """
-    log_msg(::Simulation, text)
+    log_message(::Simulation, text)
 
 write the given line to the `log` file of the simulation, or to the stream its output is
 redirected to, flushed at once. A `Simulation` built by hand without `output` has its log in a
 file `log` of the current directory, which its first line empties. The observers of the
 solvers write their progress there too.
 """
-function log_msg(sim::Simulation, text)
+function log_message(sim::Simulation, text)
     # written here rather than through `output`, where `dest => "text"` is a measurement. A
     # comment between a docstring and what it documents detaches it, so this one is inside
     emit_line!(destination(sim.outputs, "log"), text)
@@ -94,7 +94,7 @@ Logging.catch_exceptions(l::SimLogger) = Logging.catch_exceptions(l.parent)
 
 function Logging.handle_message(l::SimLogger, level, message, _module, group, id, file, line; kwargs...)
     if simulation_warning(level, _module)
-        log_msg(l.sim, "WARNING: $message")
+        log_message(l.sim, "WARNING: $message")
     elseif level >= Logging.min_enabled_level(l.parent)
         # the level of this logger is the lower of the two, so the parent's has to be
         # checked again here

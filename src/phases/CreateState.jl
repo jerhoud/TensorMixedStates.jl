@@ -61,7 +61,7 @@ description. A pure state is mixed if `R` is `Mixed`; a mixed state is refused i
 """
 as_representation(::Simulation, ::Type{R}, state::State{R}) where R = state
 function as_representation(sim::Simulation, ::Type{Mixed}, state::State{Pure})
-    log_msg(sim, "Creating mixed representation with $(length(state)) sites")
+    log_message(sim, "Creating mixed representation with $(length(state)) sites")
     return mix(state)
 end
 as_representation(::Simulation, ::Type{Pure}, ::State{Mixed}) =

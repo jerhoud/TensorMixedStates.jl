@@ -204,7 +204,7 @@ runTMS(SimData(name = "kicks", phases = [
 ]))
 ```
 
-Within the method, `output` measures the simulation, `log_msg` writes to its log and
+Within the method, `output` measures the simulation, `log_message` writes to its log and
 `get_sim_file` gives a file of the simulation to write anything else to, which is cut back on
 a resume as the others are. A phase driving a solver is described with
 [`TensorMixedStates.run_phase`](@ref).

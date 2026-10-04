@@ -160,7 +160,7 @@ sweeps of the solver committed as steps of the phase.
             sim = apply(exp(-0.3im * X)(1), sim)
             return sim, ups + (real(expect(sim.state, Z(1))) > 0)
         end
-        log_msg(sim, "up after \$ups kicks")
+        log_message(sim, "up after \$ups kicks")
         return sim
     end
 """
@@ -217,7 +217,7 @@ fields every phase has, `name`, `time_start` and `final_measurements`, and a met
 `TensorMixedStates.run_phase` for it. The full name is needed: `run_phase` is not exported, and a function of your own
 of that name would shadow it rather than extend it. `runTMS` then logs the phase, applies its
 `time_start`, calls the method and takes the final measurements, as for a phase of the
-library. Within the method, `output` measures the simulation, `log_msg` writes to its log and
+library. Within the method, `output` measures the simulation, `log_message` writes to its log and
 `get_sim_file` gives a file of the simulation to write anything else to.
 
 The fields of a phase of your own are part of the fingerprint by which a checkpoint tells its

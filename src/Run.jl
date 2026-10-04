@@ -300,7 +300,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 # which would empty a file the checkpoint continues
                 restore_outputs!(sim.outputs, k.outputs)
                 c.generation = k.generation
-                log_msg(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.time)")
+                log_message(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.time)")
                 # the resume point is the last commit from the start, so that an interrupt
                 # before the phase it belongs to has begun writes it back as it was, rather
                 # than the state it holds as the start of that phase
@@ -317,7 +317,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 if !(e isa InterruptException) || isempty(c.dir)
                     rethrow()
                 end
-                log_msg(sim, "\n***** Interrupted, writing a checkpoint *****")
+                log_message(sim, "\n***** Interrupted, writing a checkpoint *****")
                 # the last commit, whatever was written since: the checkpoint and the outputs
                 # it resumes are those of one moment
                 write_checkpoint(c, sim.outputs)
@@ -378,9 +378,9 @@ function adapt_threading(sim::Simulation, threading)
     set_threading(mode)
     after = threading_settings()
     if after != before
-        log_msg(sim, "Threading set to :$mode: BLAS threads $(after.blas), Strided threads " *
-                     "$(after.strided), block sparse multithreading " *
-                     (after.blocksparse ? "on" : "off"))
+        log_message(sim, "Threading set to :$mode: BLAS threads $(after.blas), Strided threads " *
+                         "$(after.strided), block sparse multithreading " *
+                         (after.blocksparse ? "on" : "off"))
     end
 end
 
@@ -451,7 +451,7 @@ resumed.
 """
 function log_stop(sim::Simulation, i::Int; within::Bool = false)
     where = within ? "in" : "after"
-    log_msg(sim, isempty(sim.checkpoint.dir) ?
+    log_message(sim, isempty(sim.checkpoint.dir) ?
         "***** Stopping $where phase $i, with no directory to save it in: it cannot be resumed *****" :
         "***** Stopping $where phase $i, the simulation can be resumed *****")
 end
@@ -479,7 +479,7 @@ function check_is_phase(phase)
 end
 
 function log_phase(sim::Simulation, phase)
-    log_msg(sim, "\n***** Starting phase \"$(phase.name)\" *****")
+    log_message(sim, "\n***** Starting phase \"$(phase.name)\" *****")
     if !isnothing(phase.time_start)
         sim = Simulation(sim, sim.state, phase.time_start)
     end
@@ -500,9 +500,9 @@ function log_phase(sim::Simulation, phase)
         end
     # a phase stopped for a checkpoint has not ended, and is resumed
     ends = sim.checkpoint.stopping ? "Stopping" : "Ending"
-    log_msg(sim, "***** $ends phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(td.bytes)) allocated *****")
+    log_message(sim, "***** $ends phase \"$(phase.name)\" after $elapsed seconds, $(Base.format_bytes(td.bytes)) allocated *****")
     if !isnothing(comp)
-        log_msg(sim, "compilation time was $comp seconds")
+        log_message(sim, "compilation time was $comp seconds")
     end
     return sim
 end
