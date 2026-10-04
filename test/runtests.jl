@@ -26,8 +26,12 @@ for g in selected
     end
 end
 
+# one testset per group, which the summary shows as one line, unfolded by Test when one of
+# its tests fails
 @testset verbose=true "TensorMixedStates.jl" begin
     for g in selected
-        include("$g.jl")
+        @testset "$g" begin
+            include("$g.jl")
+        end
     end
 end
