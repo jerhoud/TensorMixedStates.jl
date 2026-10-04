@@ -12,7 +12,8 @@ the reference article.
 
 A program written for 1.x may need a few edits, which the page "Upgrading from 1.x" of the
 documentation gathers: renamed and removed names, phases of one's own, and the defaults that
-changed.
+changed. The interfaces of the phases, the algorithms and the representations of one's own,
+on the page "Extending TMS", are experimental and may still change in a version 2.x.
 
 ### Added
 

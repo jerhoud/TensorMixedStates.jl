@@ -10,6 +10,15 @@ own:
 - [representations](@ref "Representations of one's own") of a state, with a state type of
   their own.
 
+!!! warning "Experimental"
+    The interfaces of the [phases](@ref own-phases), the
+    [algorithms](@ref "Algorithms of one's own") and the
+    [representations](@ref "Representations of one's own") of one's own, and the functions
+    they name, are experimental. They were written for extensions still to come, quantum
+    trajectories, purifications or adapters of other libraries, and may change in a version
+    2.x when the first of these shows what they lack. The site types, the operators and the
+    measurements of one's own are not concerned.
+
 ## Site types of one's own
 
 To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly [`string_state`](@ref) on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using [`@def_states`](@ref) and [`@def_operators`](@ref).
