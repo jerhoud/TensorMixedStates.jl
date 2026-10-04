@@ -345,9 +345,20 @@ sum is `0 * Id`, a sum of one term that term.
 struct SumOp{R, T, N} <: Op{R, T, N}
     subs::Vector{<:Op{R, T, N}}
     function SumOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
-        # a term of coefficient zero is left out: the zero operator has every parity, and
-        # kept, it made `0C + dag(C)` a sum of fermionic and non fermionic operators
-        s = filter(x -> scalarcoef(x) ≠ 0, reduce(vcat, sumsubs.(subs); init = Op{R, T, N}[]))
+        # gathered in one pass: a sum built term by term, as `sum` does from a generator, copies
+        # what it holds at every term, and concatenating and filtering it again made that cost
+        # grow much faster, 3.8 s for 20000 terms
+        s = Op{R, T, N}[]
+        for x in subs
+            if x isa SumOp
+                # its terms are already those of coefficient other than zero
+                append!(s, x.subs)
+            elseif scalarcoef(x) ≠ 0
+                # a term of coefficient zero is left out: the zero operator has every parity,
+                # and kept, it made `0C + dag(C)` a sum of fermionic and non fermionic operators
+                push!(s, x)
+            end
+        end
         if isempty(s)
             return 0 * IdentityOp{R, T, N}()
         elseif length(s) == 1

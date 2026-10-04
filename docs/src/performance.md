@@ -88,3 +88,11 @@ using TensorMixedStates
 ```
 
 MKL is not distributed for macOS nor for ARM machines, where OpenBLAS is the only option.
+
+## Long sums
+
+A sum written with a generator, `sum(Z(i) * Z(j) for (i, j) in g)`, is built term by term,
+each term copying the sum so far, so that its cost grows as the square of the number of terms.
+Written with brackets, `sum([Z(i) * Z(j) for (i, j) in g])`, it is the sum of a vector, which
+Julia adds by halves: the 79800 terms of the pairs of 400 sites take 0.35 s rather than 29 s.
+Below a few thousand terms, the two are alike.

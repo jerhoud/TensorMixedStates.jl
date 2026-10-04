@@ -64,6 +64,10 @@ the reference article.
 
 ### Changed
 
+- A sum of operators gathers its terms in one pass: the sum of a vector of 79800 terms is built
+  in 0.35 s, and a sum written with a generator, built term by term, three times faster than
+  before. The second still grows as the square of the number of terms, see the page on
+  performance.
 - `PreMPO` compacts the operator, and so do `make_mpo`, `make_approx_W1`, `make_approx_W2`,
   `tdvp`, `dmrg`, `approx_W`, `steady_state` and `variance`, which go through it, and `measure`
   compacts the operators it measures. The operators of a site are compared through their
