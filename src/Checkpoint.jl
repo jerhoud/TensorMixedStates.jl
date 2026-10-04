@@ -7,7 +7,7 @@
 
 the layout version of a checkpoint; `load_checkpoint` refuses a checkpoint of another one.
 """
-const checkpoint_file_version = 3
+const checkpoint_file_version = 4
 
 ############### the fingerprint of the phases ###############
 
@@ -368,8 +368,7 @@ function load_checkpoint(dir::String, system = (_, _) -> nothing)
             phase_time = restored_value(meta["phase_time"]), time = restored_value(meta["time"]),
             state = load_state(path, "checkpoint";
                                system = system(phase, saved_sites(path, "checkpoint"))),
-            # written `energy` before a phase of one's own could carry a value of its own
-            carried = restored_value(get(meta, "carried", get(meta, "energy", nothing))),
+            carried = restored_value(meta["carried"]),
             id = meta["id"], outputs = meta["outputs"],
             generation = file == state_file(2) ? 2 : 1)
 end

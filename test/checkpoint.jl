@@ -395,8 +395,8 @@ end
             # and a checkpoint of an earlier version is refused: its values do not say which
             # call of output they came from
             meta = "ctime/checkpoint.json"
-            write(meta, replace(read(meta, String), "\"version\":3" => "\"version\":2"))
-            @test_throws "has version 2" runTMS(sim_data)
+            write(meta, replace(read(meta, String), "\"version\":4" => "\"version\":3"))
+            @test_throws "has version 3" runTMS(sim_data)
         end
     end
 end

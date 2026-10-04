@@ -123,6 +123,9 @@ the reference article.
 
 ### Changed
 
+- The checkpoint file is at version 4, its value carried from one step to the next written
+  `carried` rather than `energy`, and a checkpoint of version 3, written by 1.6.0, is refused
+  rather than resumed without that value.
 - The default cutoff of `Limits` is `eps()`, about 2.2e-16, the default of the solvers of
   ITensorMPS, which discards the singular values below about 1.5e-8 of the norm, rather than 0,
   which kept those rounding leaves: `tdvp` under a
