@@ -180,6 +180,12 @@ There are three types of destinations:
   "file.dat" => X
   ```
 
+  The lines of the measurements of a file follow each other, each with its own number of
+  columns. A file holding a single measurement other than a matrix is a regular table, its
+  name, the time and its values on every line, as a reader of tables such as CSV.jl expects;
+  a matrix, a correlation `(X, Y)` for instance, is better kept in a json file or a `Data`
+  object.
+
 - json filenames: filenames ending in ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
 
   ```julia
