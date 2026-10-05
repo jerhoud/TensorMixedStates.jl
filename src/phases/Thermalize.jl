@@ -83,6 +83,9 @@ function run_phase(sim::Simulation, phase::Thermalize)
                            algo.hermitianize_period, phase.limits, algo.krylov,
                            observer! = ThermalObserver(sim, phase.measurements,
                                                        phase.measurements_period))
-    log_message(sim, "Done, log_trace is $l")
+    # a computation stopped for a checkpoint is not done, and its resume writes the line
+    if !stopped(sim)
+        log_message(sim, "Done, log_trace is $l")
+    end
     return sim
 end

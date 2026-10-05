@@ -414,6 +414,24 @@ function stopper_at(stop_in::Ref{Int})
     end)
 end
 
+@testset "A stopped thermalization is not done" begin
+    # it wrote its last line, Done and the logarithm of the trace reached, when it stopped for
+    # a checkpoint as well, which the searches of dmrg did not
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Mixed}(2, Qubit(), "FullyMixed"),
+                      Thermalize(hamiltonian = -Z(1) * Z(2) - 0.5 * (X(1) + X(2)), beta = 0.4,
+                                 beta_step = 0.1, limits = Limits(maxdim = 4),
+                                 measurements = "data" => [stopper_at(stop_in)])]
+            @test stopped(runTMS(SimData(; name = "th", phases)))
+            @test !occursin("Done", read("th/log", String))
+            @test !stopped(runTMS(SimData(; name = "th", phases)))
+            @test occursin("Done", read("th/log", String))
+        end
+    end
+end
+
 @testset "A resumed ground state search stops where it would have" begin
     # the tolerance is checked against the energy of the sweep before, which the checkpoint
     # carries, a stop on it records the phase as done, and the state checkpointed is the one

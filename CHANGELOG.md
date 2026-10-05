@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A `Thermalize` phase stopped for a checkpoint no longer writes in the log that it is done,
+  with the logarithm of the trace it had reached.
 - A json destination in a directory that does not exist is refused at its first measurement,
   as a text file is. Written when the files are closed, it failed at the end of the run, and
   the json files after it in the closing were never written; each is now written whatever
