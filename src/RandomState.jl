@@ -30,6 +30,12 @@ state can be drawn when a quantity is conserved strongly, since tracing half of 
 purification leaves a mixture over several sectors. Randomising a mixed state is not
 implemented.
 
+A system conserving nothing knows nothing of the parity of its fermionic sites, which every
+physical state keeps: a pure state drawn on it has no definite parity, and a mixed one holds
+coherences between the two. Conserving the parity, as `Fermion(conserve = parity(N))`, or the
+number of fermions keeps it: a pure state is then drawn by randomising one of the parity
+wanted, and a mixed one by naming the states its purification starts from.
+
 # Examples
 
     RandomState{Pure}(system, 20)
