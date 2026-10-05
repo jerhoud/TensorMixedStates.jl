@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A state can be measured from several threads at once: its caches, filled on first use, had
+  no lock, and a thread found one sized and not yet filled, failing on an `UndefRefError`.
 - `weaken` refuses a target naming a quantity twice by a message saying so: it failed inside
   ITensors, or, given once strong and once weak, with a message about strength.
 - A site of parameters out of their range is refused when it is built: `Spin(-1/2)`, of

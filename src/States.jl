@@ -8,7 +8,9 @@ export AbstractState, State, mix, maxlinkdim, Limits
 
 the caches a `State` keeps for measurements, each filled on first use: the local tensors,
 the environments from the left and from the right, the trace, and the weakened form of a
-state conserving something strongly.
+state conserving something strongly. `lock` is held while they are filled, so that several
+threads may measure one state: one found a cache sized and not yet filled, and failed on an
+`UndefRefError`. It is reentrant, filling a cache filling others.
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -16,8 +18,9 @@ struct PreObs
     right::Vector{ITensor}
     trace::Vector{Number}
     weak::Vector{Any}
+    lock::ReentrantLock
 end
-PreObs() = PreObs([], [], [], [], [])
+PreObs() = PreObs([], [], [], [], [], ReentrantLock())
 
 """
     Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1)
