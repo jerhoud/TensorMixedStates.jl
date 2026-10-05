@@ -526,8 +526,7 @@ function renyi2(state::State{Mixed}, a::AbstractVector{Int})
 end
 
 # a subsystem of a pure state is not pure, so this is an entanglement measure rather than
-# 0. There is no cheap route for an arbitrary subset, the same way mutual_info_renyi2 has
-# none: a partial trace needs a density matrix.
+# 0. There is no cheap route for an arbitrary subset: a partial trace needs a density matrix.
 function renyi2(state::State{Pure}, a::AbstractVector{Int})
     if isempty(a)
         return 0.0
@@ -1287,6 +1286,22 @@ function renyi2(state::State{Pure}, cut::Int)
 end
 
 """
+    parts_renyi2(state, a)
+
+``S_2(A) + S_2(B) - S_2(A \\cup B)`` for part A at the positions `a` and B the rest, neither
+of them empty. On a pure state it is ``2 S_2(A)``, which takes a single partial trace of the
+mixed state.
+"""
+function parts_renyi2(state::State{Mixed}, a::AbstractVector{Int})
+    w = weak_form(state)
+    return renyi2(partial_trace(w, a; keep = true)) +
+           renyi2(partial_trace(w, a; keep = false)) -
+           renyi2(w)
+end
+
+parts_renyi2(state::State{Pure}, a::AbstractVector{Int}) = 2 * renyi2(state, a)
+
+"""
     mutual_info_renyi2(state::State, cut::Int)
     mutual_info_renyi2(state::State, a::AbstractVector{Int})
 
@@ -1295,9 +1310,10 @@ the Rényi-2 analogue of the mutual information between two parts of the state,
 mixed state. Part A is given by its positions, or by a cut, sites `1:cut`, from 0 to the number
 of sites; part B is the rest. Positions that are empty, or cover every site, give 0.
 
-On a pure state and for a cut, it is read off the entanglement spectrum and costs no more
-than `entanglement_entropy`. For positions a pure state is mixed first, which is much more
-expensive.
+On a pure state the two parts share their spectrum, and it is twice the `renyi2` of part A:
+for a cut, read off the entanglement spectrum, it costs no more than `entanglement_entropy`,
+and for positions the state is mixed first, which is much more expensive. For fermions this
+holds for a state of definite parity, as every physical one is, see `RandomState`.
 """
 function mutual_info_renyi2(state::State, a::AbstractVector{Int})
     n = length(state)
@@ -1308,10 +1324,7 @@ function mutual_info_renyi2(state::State, a::AbstractVector{Int})
     if k == 0 || k == n
         return 0.0
     end
-    w = weak_form(state)
-    return renyi2(partial_trace(w, a; keep = true)) +
-           renyi2(partial_trace(w, a; keep = false)) -
-           renyi2(w)
+    return parts_renyi2(state, a)
 end
 
 function mutual_info_renyi2(state::State, cut::Int)
@@ -1326,10 +1339,6 @@ function mutual_info_renyi2(state::State{Pure}, cut::Int)
     check_cut(state, cut, "mutual_info_renyi2")
     return 2 * renyi2(state, cut)
 end
-
-# partial_trace needs a density matrix, there is no cheap route for an arbitrary subset
-mutual_info_renyi2(state::State{Pure}, a::AbstractVector{Int}) =
-    mutual_info_renyi2(mix(state), a)
 
 # as for `renyi2`, positions in a vector of another element type are taken as integers
 mutual_info_renyi2(state::State, a::AbstractVector) = mutual_info_renyi2(state, Vector{Int}(a))

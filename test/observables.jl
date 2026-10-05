@@ -309,8 +309,12 @@ end
         # the cut form must agree with the list form on the same bipartition
         @test mutual_info_renyi2(spread, cut) ≈ mutual_info_renyi2(spread, collect(1:cut))
     end
-    # a non contiguous part has no such shortcut, but must still be accepted on a pure state
+    # a non contiguous part of a pure state is twice its entropy as well, one partial trace
+    # standing for the two parts and the whole of the mixed state
     @test mutual_info_renyi2(spread, [1, 3]) ≈ mutual_info_renyi2(mix(spread), [1, 3])
+    # and so on fermions, for a state of definite parity
+    ψf = RandomState(State{Pure}(System(6, Fermion(conserve = parity(N))), "Emp"), 8)
+    @test mutual_info_renyi2(ψf, [2, 5]) ≈ mutual_info_renyi2(mix(ψf), [2, 5])
 
     # the same quantities as measurements must agree with the functions
     m(state, f) = only(last.(measure(state, Measure(f))))

@@ -266,6 +266,11 @@ on the page "Extending TMS", are experimental and may still change in a version 
   now takes 0.02 s and 0.05 s, the WI approximation as much; WII goes from 6.8 s and 8.5 s
   to 5.7 s and 6.0 s, the rest being its exponentials. A time dependent evolver builds them
   at every step.
+- `mutual_info_renyi2` of a pure state and positions is twice the `renyi2` of the part, the
+  two parts sharing their spectrum, which takes one partial trace of the mixed state rather
+  than two and the purity of the whole: three to five times faster on 12 to 16 qubits. On
+  fermions it holds for a state of definite parity, which a state drawn by `RandomState` on a
+  system conserving nothing is not.
 - The precompiled code covers product states, whose tensors are real, the evolution of a
   mixed state and `runTMS`. In a new session, the first `dmrg` on a product state took 22 s,
   it now takes 5 s, the first `tdvp` of a mixed state 14 s, now 4 s, and the first `runTMS`
