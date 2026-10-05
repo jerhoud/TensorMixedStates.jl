@@ -526,6 +526,25 @@ end
     @test trace(ρ) ≈ 1
 end
 
+@testset "A steady state that is not unique" begin
+    # dephasing keeps the number of fermions, so that the Lindbladian has a steady state in each
+    # sector of it, of which dmrg returns a combination that rounding picks: it was not
+    # hermitian, its trace complex and ⟨N⟩ far from 0.5, and nothing said so. Conserved
+    # strongly, the number keeps the search in the sector of the starting state, where the
+    # steady state is unique
+    strong = TensorMixedStates.strong
+    h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)
+    lind = -im * h + sum(Dissipator(N)(i) for i in 1:4)
+    lim = Limits(maxdim = 32)
+    start(site) = State{Mixed}(System(4, site), ["Occ", "Emp", "Occ", "Emp"])
+    @test_logs (:warn, r"not unique") steady_state(lind, start(Fermion()); nsweeps = 10,
+                                                   limits = lim)
+    _, ρ = @test_logs steady_state(lind, start(Fermion(conserve = strong(N))); nsweeps = 10,
+                                   limits = lim)
+    @test expect1(ρ, N) ≈ fill(0.5, 4)
+    @test trace(ρ) ≈ 1
+end
+
 @testset "The options of steady_state" begin
     # it resumes at `first_sweep` as dmrg does, which is how a SteadyState phase continues
     # after a checkpoint, and takes a noise as GroundState does

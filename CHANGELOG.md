@@ -233,6 +233,12 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `steady_state` warns when the state it finds is not hermitian, its `HermiticityError`
+  exceeding `1e-6`: the search has not converged, or the Lindbladian has several steady
+  states, of which dmrg returns any combination. Under dephasing, which keeps the number of
+  fermions, the state found had a complex trace and densities far from their value, and nothing
+  said so. The state is divided by its trace rather than by the real part of it, which left the
+  phase an eigenvector may have.
 - A checkpoint wrote an integer other than an `Int` as a json number, which came back as an
   `Int64` or a `BigInt`, and with JSON 0.21 above `typemax(Int64)` as a negative number: a
   word of 64 bits carried by `run_steps`, the state of a generator of random numbers, went on

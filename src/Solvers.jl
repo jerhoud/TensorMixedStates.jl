@@ -376,6 +376,16 @@ the steady state of a Lindbladian ``L``, of the form `-im * H` plus dissipators,
 `(value, simulation)`, where `value` is the "energy" dmrg reaches, zero for a steady state,
 and the state is normalized to trace one.
 
+A Lindbladian may have several steady states, of which dmrg returns any combination, which in
+general is not a density matrix: one in each sector of a quantity that its hamiltonian and its
+jump operators all commute with, for instance. The one a system reaches depends on the state it
+starts from: it is the limit of its evolution in time, when that converges, which `tdvp` gives.
+When the quantity is one a site can conserve, declaring it `strong` keeps the search in the
+sector of the starting state, see [Conserving a quantity](@ref). The steady state of a
+Lindbladian is hermitian, and a warning is given when the state found is not, its
+`HermiticityError` exceeding `1e-6`: the search has not converged, or the steady state is not
+unique. A hermitian state does not prove the steady state unique.
+
 # Options
 
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
@@ -410,10 +420,20 @@ function steady_state(pre::PreMPO{Mixed}, state::State{Mixed};
     extra = mpo_algo == "naive" ? (; truncate = mpo_limits != Limits()) : (;)
     l2 = apply(replaceprime(dag(l)', 2=>0), l;
                mpo_limits.cutoff, mpo_limits.maxdim, mpo_limits.mindim, alg = mpo_algo, extra...)
-    # an eigenvector of (L+)L has norm one and a sign of its own, the trace set to one makes it
-    # the density matrix it stands for
     e, st = dmrg(l2, state; nsweeps, first_sweep, limits, noise, observer!, krylov)
-    return (e, normalize(st))
+    # an eigenvector of (L+)L is the steady state times a complex number, which dividing by the
+    # trace takes away, where dividing by its real part, as `normalize` does, would leave a phase
+    ρ = st / trace(st)
+    # the steady state of a Lindbladian is hermitian, so that an anti-hermitian part is error:
+    # a HermiticityError δ proves an error of √δ at least relative to the norm of the state,
+    # 1e-3 here. It comes from a search that has not converged, or from a Lindbladian with
+    # several steady states, of which dmrg returns any combination
+    δ = 1 - hermiticity(ρ)
+    if δ > 1e-6
+        @warn "the steady state found has a HermiticityError of $(short(δ)): the search has " *
+              "not converged, or the steady state is not unique, see steady_state"
+    end
+    return (e, ρ)
 end
 
 """
