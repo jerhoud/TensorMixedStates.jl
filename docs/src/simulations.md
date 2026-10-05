@@ -117,9 +117,11 @@ runTMS(sim_data(40, 1., 0.05))
 
 ## Output
 
-`runTMS` creates a directory named after the `name` field of the `SimData` object and runs
-the phases in it: a relative file name, of a destination or of `SaveState` and `LoadState`, is
-taken there. The directory holds in particular:
+`runTMS` creates a directory named after the `name` field of the `SimData` object and writes
+the files of the simulation there: a relative file name, of a destination or of `SaveState`
+and `LoadState`, is taken there. The working directory of the process does not change, so a
+file opened by a phase of your own with a relative name is taken from it: write it with
+`get_sim_file`, which also cuts it back on a resume. The directory holds in particular:
 
 - `log`: the progression of the computation;
 - `prog.jl`: a copy of the script;

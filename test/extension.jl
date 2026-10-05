@@ -284,7 +284,7 @@ end
                 if stop_in[] > 0
                     stop_in[] -= 1
                     if stop_in[] == 0
-                        touch("stop")
+                        request_stop()
                     end
                 end
                 0.

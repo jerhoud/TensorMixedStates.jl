@@ -366,47 +366,60 @@ handle(d::Union{TextFile, Stream}) = d.io
 handle(d::Union{JsonFile, DataStore}) = d.series
 
 """
-    Outputs(redirect, time_format, data_format)
+    in_dir(dir, name)
+
+the file `name` taken in the directory `dir` when it is relative, `dir` being that of a
+simulation, or empty for the working directory
+"""
+in_dir(dir::AbstractString, name::AbstractString) =
+    isempty(dir) || isabspath(name) ? name : joinpath(dir, name)
+
+"""
+    Outputs(redirect, time_format, data_format[, dir])
 
 the destinations of a simulation and the formats of what is written. A destination is opened
 the first time its name is asked for and is the same afterwards. This is the only place that
 reads a destination name: `"stdout"` (or `"-"`), `"stderr"` and `""` (`devnull`) are the
-streams of the process, a name ending in `.json` an accumulating file, any other a text file.
-With `redirect`, every name is that stream, and a `Data` destination is still kept in memory.
+streams of the process, a name ending in `.json` an accumulating file, any other a text file,
+taken in the directory `dir` when it is relative. With `redirect`, every name is that stream,
+and a `Data` destination is still kept in memory.
 """
 struct Outputs
     redirect::Union{Nothing, IO}
     files::Dict{String, Destination}
     data::Dict{String, Series}
     formats::Tuple{Printf.Format, Printf.Format}
-    Outputs(redirect, time_format::String, data_format::String) =
+    dir::String
+    Outputs(redirect, time_format::String, data_format::String, dir::String = "") =
         new(redirect, Dict{String, Destination}(), Dict{String, Series}(),
-            (Printf.Format(time_format), Printf.Format(data_format)))
+            (Printf.Format(time_format), Printf.Format(data_format)), dir)
 end
 
 """
-    open_destination(name)
+    open_destination(dir, name)
 
 the destination a name stands for, see `Outputs`. A text file is created, emptied if it
 exists.
 """
-function open_destination(name::AbstractString)
+function open_destination(dir::AbstractString, name::AbstractString)
     if name == "stdout" || name == "-"
         return Stream(stdout)
     elseif name == ""
         return Stream(devnull)
     elseif name == "stderr"
         return Stream(stderr)
-    elseif last(splitext(name)) == ".json"
+    end
+    path = in_dir(dir, name)
+    if last(splitext(name)) == ".json"
         # written when it is closed, at the end of the run, a json file is refused here as a
         # text file is by `open`, rather than after the whole computation
-        dir = dirname(name)
-        if !isempty(dir) && !isdir(dir)
-            error("cannot write $name: there is no directory $dir")
+        parent = dirname(path)
+        if !isempty(parent) && !isdir(parent)
+            error("cannot write $name: there is no directory $parent")
         end
-        return JsonFile(name, Series())
+        return JsonFile(path, Series())
     end
-    return TextFile(open(name, "w"))
+    return TextFile(open(path, "w"))
 end
 
 """
@@ -422,7 +435,7 @@ empty name, which `normpath` would make `"."`, is kept as it is.
 """
 destination(o::Outputs, name::AbstractString) =
     isnothing(o.redirect) ?
-        get!(() -> open_destination(name), o.files, isempty(name) ? name : normpath(name)) :
+        get!(() -> open_destination(o.dir, name), o.files, isempty(name) ? name : normpath(name)) :
         Stream(o.redirect)
 
 destination(o::Outputs, d::Data) = DataStore(get!(Series, o.data, d.name))
@@ -463,20 +476,21 @@ the log to say so.
 function restore_outputs!(o::Outputs, persisted)
     shortened = String[]
     for (name, p) in persisted["files"]
+        path = in_dir(o.dir, name)
         if haskey(p, "text")
             if name ≠ "log"
-                len = isfile(name) ? filesize(name) : 0
+                len = isfile(path) ? filesize(path) : 0
                 if len > p["text"]
-                    open(name, "a") do io
+                    open(path, "a") do io
                         Base.truncate(io, p["text"])
                     end
                 elseif len < p["text"]
                     push!(shortened, name)
                 end
             end
-            o.files[name] = TextFile(open(name, "a"))
+            o.files[name] = TextFile(open(path, "a"))
         else
-            o.files[name] = JsonFile(name, restore_series(p["json"]))
+            o.files[name] = JsonFile(path, restore_series(p["json"]))
         end
     end
     for (name, s) in persisted["data"]

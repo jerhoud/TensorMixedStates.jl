@@ -151,19 +151,20 @@ show(io::IO, s::SimData) =
     )
 
 """
-    same_program(src_path)
+    same_program(dir, src_path)
 
-whether the checkpoint of the current directory may be resumed by the program `src_path`
+whether the checkpoint of the directory `dir` may be resumed by the program `src_path`
 given the arguments `ARGS`: the same, byte for byte, as its copy `prog.jl`, given the same
 arguments as those `prog_args.json` holds, none when it is absent. A program with no file, run
 from the REPL, has nothing to compare and is always accepted.
 """
-function same_program(src_path)
+function same_program(dir, src_path)
     if isnothing(src_path) || src_path == ""
         return true
     end
-    args = isfile("prog_args.json") ? JSON.parsefile("prog_args.json") : []
-    return isfile("prog.jl") && read(src_path) == read("prog.jl") && args == ARGS
+    prog, args_file = joinpath(dir, "prog.jl"), joinpath(dir, "prog_args.json")
+    args = isfile(args_file) ? JSON.parsefile(args_file) : []
+    return isfile(prog) && read(src_path) == read(prog) && args == ARGS
 end
 
 """
@@ -264,10 +265,11 @@ a process wide setting that is given back the default Julia applies when `runTMS
 `runTMS` is meant to be called once at a time in a process. It sets the threading of the
 contractions for the whole process, unless its `SimData` has `threading = nothing`, and a
 `CreateState` with a `seed` reseeds the global random generator. With a directory, it also
-changes the working directory of the process and the Ctrl-C behaviour for the duration of the
-run. Two simulations run at once in the same process, in parallel or one calling the other,
-would fight over all of these: run them in separate processes. Passing `output` only spares
-the working directory and the Ctrl-C behaviour.
+changes the Ctrl-C behaviour for the duration of the run. Two simulations run at once in the
+same process, in parallel or one calling the other, would fight over all of these: run them
+in separate processes. Passing `output` only spares the Ctrl-C behaviour. The working
+directory of the process is left as it is: the files of the simulation are written in its
+directory by their full path.
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)
@@ -284,33 +286,35 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     if clean 
         return
     end
-    start_dir = pwd()
     saved_threading = isnothing(sim_data.threading) ? nothing : ThreadingState()
-    # how far the run got into its directory, which the way out undoes and no further: a
-    # directory that could not be entered had the marker `error` written and a file `running`
+    # whether the run has taken its directory, which the way out undoes and no further: a
+    # directory that could not be made had the marker `error` written and a file `running`
     # removed in the directory of the caller
-    entered = false
     started = false
+    # the empty name would be the working directory itself
+    if live && isempty(sim_data.name)
+        error("a simulation run in a directory needs a name, that of its directory")
+    end
+    dir = live ? abspath(sim_data.name) : ""
+    file(name) = joinpath(dir, name)
     try
         # set at once, so that the stamp records the settings the run starts with: `:auto`
         # starts dense, having no state to choose from yet
         if !isnothing(sim_data.threading)
             set_threading(sim_data.threading == :auto ? :dense : sim_data.threading)
         end
-        c = Checkpointer(live ? "." : "";
+        c = Checkpointer(dir;
                          interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         # the machine and the process named in the file running of a run that ended without
         # removing it
         stale = nothing
         if live
-            mkpath(sim_data.name);
-            cd(sim_data.name);
-            entered = true
+            mkpath(dir)
             # refused before anything is written or loaded: the directory holds the results of
             # another simulation, whose program, description and markers were overwritten,
             # and its state may need site types this program does not load
-            if isfile("running")
-                marker = read("running", String)
+            if isfile(file("running"))
+                marker = read(file("running"), String)
                 if live_marker(marker)
                     error("\"$(sim_data.name)\" holds the file running of another run, which " *
                           "may still be going on: if none is, remove $(sim_data.name)/running")
@@ -318,25 +322,25 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 stale = split(marker)
             end
             src_path = Base.source_path()
-            if has_checkpoint(".") && !same_program(src_path)
+            if has_checkpoint(dir) && !same_program(dir, src_path)
                 error("the checkpoint of \"$(sim_data.name)\" was written by another program, " *
                       "or one given other arguments: to resume with this one, copy it onto " *
                       "prog.jl and its arguments into prog_args.json, or start over with " *
                       "restart = true")
             end
             started = true
-            write("running", "$(gethostname()) $(getpid())\n")
+            write(file("running"), "$(gethostname()) $(getpid())\n")
             # a stop left over from the previous run would stop this one immediately, and the
             # marker of a failed run would go on describing this one once it has succeeded
-            rm("stop"; force = true)
-            rm("error"; force = true)
+            rm(file("stop"); force = true)
+            rm(file("error"); force = true)
             # scripts exit straight away on an interrupt, which would lose the state.
             # asking for an exception instead lets the simulation checkpoint and quit.
             Base.exit_on_sigint(false)
             if sim_data.description ≠ ""
-                write("description", sim_data.description)
+                write(file("description"), sim_data.description)
             end
-            write("stamp", """
+            write(file("stamp"), """
                     Julia $VERSION
                     TensorMixedStates $(pkgversion(TensorMixedStates))
                     Date $(now())
@@ -344,14 +348,14 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             # the copy run again is the program already there, which cp refused to copy onto
             # itself
             if !isnothing(src_path) && src_path ≠ ""
-                if !(isfile("prog.jl") && samefile(src_path, "prog.jl"))
-                    cp(src_path, "prog.jl"; force = true)
+                if !(isfile(file("prog.jl")) && samefile(src_path, file("prog.jl")))
+                    cp(src_path, file("prog.jl"); force = true)
                 end
                 # none is written as no file, and the file of a run that had some is removed
                 if isempty(ARGS)
-                    rm("prog_args.json"; force = true)
+                    rm(file("prog_args.json"); force = true)
                 else
-                    write("prog_args.json", JSON.json(ARGS))
+                    write(file("prog_args.json"), JSON.json(ARGS))
                 end
             end
         end
@@ -361,9 +365,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                              "ended without removing running")
         end
         try
-            if live && has_checkpoint(".")
+            if live && has_checkpoint(dir)
                 system(phase, sites) = resume_system(sim_data.phases, phase, sites)
-                k = load_checkpoint(".", system)
+                k = load_checkpoint(dir, system)
                 # put back before anything is written: a destination is created on first use,
                 # which would empty a file the checkpoint continues
                 shortened = restore_outputs!(sim.outputs, k.outputs)
@@ -409,25 +413,21 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         end
         return sim
     catch
-        # all the catch has of its own: the marker is written while the working directory
-        # is still the simulation's, the finally below leaving it just afterwards
+        # all the catch has of its own: the marker of a run that failed
         if started
-            touch("error")
+            touch(file("error"))
         end
         rethrow()
     finally
         # leaving the simulation, by whichever way, is described here and nowhere else, so
         # that a step added later cannot be put on one path and forgotten on the other
         if started
-            rm("running"; force = true)
+            rm(file("running"); force = true)
             # the flag is process wide and would otherwise change how Ctrl-C behaves for
             # everything the caller runs afterwards. There is no way to read it back, so
             # what goes back is the default Julia itself applies: on in a script, off in
             # the REPL and in a session started with `-i`
             Base.exit_on_sigint(!isinteractive())
-        end
-        if entered
-            cd(start_dir)
         end
         # process wide as well, and read back before the run
         if !isnothing(saved_threading)

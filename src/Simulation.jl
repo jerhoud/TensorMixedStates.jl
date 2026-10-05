@@ -86,7 +86,7 @@ struct Simulation
                time_format::String = default_time_format,
                data_format::String = default_data_format,
                checkpoint::Checkpointer = Checkpointer()) =
-        new(state, time, Outputs(output, time_format, data_format), checkpoint)
+        new(state, time, Outputs(output, time_format, data_format, checkpoint.dir), checkpoint)
     Simulation(s::Simulation, st::Union{Nothing, AbstractState}, t::Number = s.time) =
         new(st, t, s.outputs, s.checkpoint)
 end
@@ -138,7 +138,7 @@ a file of the simulation directory, as its checkpoint, which it would overwrite.
 """
 function save_state(filename::String, statename::String, sim::Simulation)
     check_destination(sim, filename)
-    return save_state(filename, statename, sim.state)
+    return save_state(in_dir(sim.checkpoint.dir, filename), statename, sim.state)
 end
 
 """

@@ -17,6 +17,20 @@ end
 check(a, b, tol=1e-8) = "" => Check("", a, b, tol)
 
 """
+ask the simulation being run to stop, as a user does by creating the file `stop` in its
+directory: the one directory of the working directory that holds the marker `running`,
+since a measurement is not told the directory of its simulation, and `runTMS` leaves the
+working directory as it is
+"""
+function request_stop()
+    for d in readdir()
+        if isfile(joinpath(d, "running"))
+            touch(joinpath(d, "stop"))
+        end
+    end
+end
+
+"""
 test whether a statement execute without throwing an exception
 """
 macro test_ok(a)

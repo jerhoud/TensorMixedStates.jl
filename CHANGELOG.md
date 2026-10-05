@@ -128,6 +128,11 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Changed
 
+- `runTMS` leaves the working directory of the process as it is, and writes the files of the
+  simulation in its directory by their full path, where it changed to that directory for the
+  whole run. A relative name of a destination, of `SaveState` or of `LoadState` is still taken
+  there, but a file a phase of one's own opens with a relative name, rather than with
+  `get_sim_file`, is now taken from the working directory. An empty name is refused.
 - `runTMS` refuses to start in a directory where another run may still be going on, which
   the file `running` marks, now naming the machine and the process. A file left by a process
   of the same machine that no longer exists, killed for instance, is replaced with a warning in

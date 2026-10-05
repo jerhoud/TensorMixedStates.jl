@@ -32,7 +32,7 @@ a phase that loads the state from an HDF5 file written by `SaveState` or `save_s
 end
 
 function run_phase(sim::Simulation, phase::LoadState)
-    st = load_state(phase.file, phase.statename)
+    st = load_state(in_dir(sim.checkpoint.dir, phase.file), phase.statename)
     # a state read back is not truncated without limits of its own, which a representation of
     # one's own need not support
     return Simulation(sim, phase.limits == Limits() ? st : truncate(st; phase.limits))

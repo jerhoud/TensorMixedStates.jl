@@ -14,9 +14,8 @@ fires every time.
 `stop_in` asks the run to stop: the `stop` file is what a user creates to end a simulation
 cleanly, but `runTMS` erases a leftover one when it starts, so it has to appear while the
 run is going. A measurement is the one piece of user code called at every sweep, and it
-runs with the simulation directory as working directory, which is exactly where the file is
-looked for. This makes the stop fall on a known sweep instead of depending on a clock,
-which a loaded machine would make unreliable.
+creates the file with `request_stop`. This makes the stop fall on a known sweep instead of
+depending on a clock, which a loaded machine would make unreliable.
 
 `fail_in` raises an `InterruptException`, taking the same path as a real interrupt without
 involving a signal, and `crash_in` raises an ordinary error, which stands for the simulation
@@ -37,7 +36,7 @@ function resume_phases(stop_in::Ref{Int}, fail_in::Ref{Int}, crash_in::Ref{Int})
     end
     stopper = StateFunc("Stopper", _ -> begin
         if fire!(stop_in)
-            touch("stop")
+            request_stop()
         end
         0.
     end)
@@ -215,7 +214,7 @@ end
             stop = Ref(false)
             stopper = StateFunc("Stopper", _ -> begin
                 if stop[]
-                    touch("stop")
+                    request_stop()
                 end
                 0.
             end)
@@ -254,7 +253,7 @@ end
             stop = Ref(false)
             stopper = StateFunc("Stopper", _ -> begin
                 if stop[]
-                    touch("stop")
+                    request_stop()
                 end
                 0.
             end)
@@ -326,7 +325,7 @@ end
                 if stop_in[] > 0
                     stop_in[] -= 1
                     if stop_in[] == 0
-                        touch("stop")
+                        request_stop()
                     end
                 end
                 0.
@@ -366,7 +365,7 @@ end
                 if stop_in[] > 0
                     stop_in[] -= 1
                     if stop_in[] == 0
-                        touch("stop")
+                        request_stop()
                     end
                 end
                 0.
@@ -423,7 +422,7 @@ function stopper_at(stop_in::Ref{Int})
         if stop_in[] > 0
             stop_in[] -= 1
             if stop_in[] == 0
-                touch("stop")
+                request_stop()
             end
         end
         0.
@@ -665,7 +664,7 @@ end
                 if stop_in[] > 0
                     stop_in[] -= 1
                     if stop_in[] == 0
-                        touch("stop")
+                        request_stop()
                     end
                 end
                 0.
@@ -696,7 +695,7 @@ end
                 if stop_in[] > 0
                     stop_in[] -= 1
                     if stop_in[] == 0
-                        touch("stop")
+                        request_stop()
                     end
                 end
                 0.
@@ -869,6 +868,30 @@ end
     end
 end
 
+@testset "The working directory is left as it is" begin
+    # runTMS ran the phases in the directory of the simulation, changing it for the whole
+    # process: its files are written there by their full path instead, relative names of
+    # destinations, SaveState and LoadState included
+    mktempdir() do dir
+        cd(dir) do
+            here = pwd()
+            seen = String[]
+            seeing = StateFunc("dir", _ -> (push!(seen, pwd()); 0.0))
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      SaveState(file = "s.h5", final_measurements = "data" => seeing)]
+            runTMS(SimData(; name = "first", phases))
+            @test pwd() == here
+            @test !isempty(seen) && all(==(here), seen)
+            @test isfile("first/s.h5") && isfile("first/data") && isfile("first/log")
+            @test !isfile("s.h5") && !isfile("data")
+            runTMS(SimData(name = "second", phases = [LoadState(file = "../first/s.h5"),
+                                                      SaveState(file = "t.h5")]))
+            @test isfile("second/t.h5")
+            @test pwd() == here
+        end
+    end
+end
+
 @testset "A restart does not remove the current directory" begin
     # with ".", an ancestor or the absolute path of the current directory, rm emptied it, the
     # program included, before failing on the directory itself
@@ -1006,7 +1029,7 @@ end
     end
 end
 
-@testset "A directory that cannot be entered leaves the caller's alone" begin
+@testset "A directory that cannot be made leaves the caller's alone" begin
     # a file of that name, or the empty name, made runTMS write its marker error in the
     # directory of the caller, and remove a file running there
     mktempdir() do dir
@@ -1014,8 +1037,8 @@ end
             write("clash", "")
             write("running", "mine")
             phases = [CreateState{Pure}(1, Qubit(), "Up")]
-            for name in ("clash", "")
-                @test_throws Base.IOError runTMS(SimData(; name, phases))
+            for (name, err) in (("clash", Base.IOError), ("", "needs a name"))
+                @test_throws err runTMS(SimData(; name, phases))
                 @test !isfile("error")
                 @test read("running", String) == "mine"
                 @test pwd() == realpath(dir)

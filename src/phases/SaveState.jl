@@ -12,7 +12,7 @@ one file under different `statename`; saving under a name already in the file re
 
 - `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `file`: the name of the HDF5 file to write to, taken in the simulation directory when it is
-  relative, since `runTMS` runs the phases there
+  relative
 - `statename`: the name under which the state is stored in the file
 
 # Examples
