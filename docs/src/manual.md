@@ -514,8 +514,9 @@ checked by running again with a larger `maxdim` and a smaller `cutoff`.
 An evolution is checked by halving its time step, and by comparing `Tdvp` with `ApproxW`,
 whose errors have different origins. `ApproxW` of order `k` makes an error of order
 ``\tau^k`` in the time step ``\tau`` when the evolver does not depend on time. When it does,
-its functions are taken at the middle of each step, which limits every algorithm to an error
-of order ``\tau^2``. `tdvp` projects the evolution on the states of the bond dimension the
+`tdvp` and `ApproxW` of order 1 or 2 take its functions at the middle of each step, which
+limits them to an error of order ``\tau^2``, while `ApproxW` of order 3 or 4 keeps the order
+of its approximation, see [Time dependent evolvers](@ref). `tdvp` projects the evolution on the states of the bond dimension the
 state has, its steps on two sites letting that dimension grow: from a state of small bond
 dimension, as a product state, or for `thermal_state`, compare with `expand_period = 1`, which
 enlarges the bond dimension by a global Krylov expansion before each step.

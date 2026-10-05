@@ -54,10 +54,18 @@ coefs = [ t -> exp(-t), t -> sin(t) ]
 nothing # hide
 ```
 
-A term that does not depend on time takes a constant function, `t -> 1.0`. Each function is
-taken at the middle of each time step, which limits every algorithm to an error of order
-``\tau^2`` in the time step ``\tau``, `ApproxW` of a higher order included. `hs` is passed to `tdvp` or `approx_W` as usual, and
-`coefs` as the keyword argument `coefs`.
+A term that does not depend on time takes a constant function, `t -> 1.0`. `hs` is passed to
+`tdvp` or `approx_W` as usual, and `coefs` as the keyword argument `coefs`.
+
+`tdvp`, and `approx_W` of order 1 or 2, take each function at the middle of each time step,
+which limits them to an error of order ``\tau^2`` in the time step ``\tau``. `approx_W` of
+order 3 or 4 keeps the error of its order: each step is made of two exponentials, each of the
+evolver with its functions combined from their values at the two points of the Gauss
+quadrature of the step, ``t + (1/2 \mp \sqrt{3}/6)\,\tau``, with the weights
+``(3 \pm 2\sqrt{3})/12``. This is the commutator-free Magnus integrator of order 4 of Blanes
+and Moan, and a step costs twice as much as with a single exponential. One of the weights is
+negative: a dissipator whose rate varies by a factor of more than 13.9 between the two points gets a
+negative rate in one of the two exponentials, and the step must then be shortened.
 With a `Simulation`, `t` is the simulation time; with a `State`, the evolution starts from the
 time given by the keyword argument `time_start`, 0 by default:
 

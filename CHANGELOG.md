@@ -128,6 +128,11 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Changed
 
+- `approx_W` of order 3 or 4 keeps its order under a time dependent evolver, where the time
+  functions, taken at the middle of each step, limited it to order 2: each step is the
+  commutator-free Magnus integrator of order 4, two exponentials taking the functions at
+  the two Gauss points of the step. A step costs twice as much, and the results change, by
+  the error of order 2 they no longer have.
 - A float coefficient of integer value prints as that integer, `2.0X` as `2X`, which changes
   the name of a measurement written with one, and so does each part of a complex coefficient,
   `(1 + 2im)X` rather than `(1.0 + 2.0im)X`.

@@ -260,6 +260,21 @@ end
     end
 end
 
+@testset "ApproxW keeps its order under a time dependent evolver" begin
+    # the functions taken at the middle of each step gave an error of order two whatever the
+    # order: halving the step divided it by 4, where order 4 divides it by 16. The reference
+    # is the same evolution in many more steps, whose own error is negligible here
+    hs = -im * [X(1) * X(2), Z(1) + Z(2), X(1) + X(2)]
+    lind = [hs[1] + 0.2 * (Dissipator(Sm)(1) + Dissipator(Sm)(2)), hs[2], hs[3]]
+    coefs = [t -> 1.0, t -> cos(3t), t -> sin(2t)^2]
+    for (R, ops) in ((Pure, hs), (Mixed, lind))
+        st = State{R}(System(2, Qubit()), "X+")
+        ev(nsteps) = approx_W(ops, 1.0, st; order = 4, nsteps, coefs, limits = Limits(cutoff = 0))
+        ref = ev(200)
+        @test norm(ev(10) - ref) / norm(ev(20) - ref) > 12
+    end
+end
+
 @testset "An evolution ends where it was asked to" begin
     # the step is adjusted to divide the duration: a duration of 1 in steps of 0.3 stopped at
     # 0.9, and one shorter than half a step ran no step at all

@@ -290,6 +290,25 @@ function make_approx_W(pre::PreMPO, t::Number; order::Int, w::Int, coefs = [1.])
 end
 
 """
+    step_coefs(coefs, t, dt, order)
+
+the values of the time functions `coefs` of a time dependent evolver for a step of `dt` from
+`t`, one vector per exponential of the step, in the order they are applied. Up to order 2, a
+single exponential takes them at the middle of the step, which is of order 2. From order 3,
+the step is the commutator-free Magnus integrator of order 4 of Blanes and Moan: two
+exponentials, each taking a combination of the values at the two Gauss points of the step,
+``t + (1/2 \\mp \\sqrt{3}/6)\\,dt``, weighted by ``(3 \\pm 2\\sqrt{3})/12``.
+"""
+function step_coefs(coefs, t::Number, dt::Number, order::Int)
+    if order ≤ 2
+        return [ map(f -> f(t + dt / 2), coefs) ]
+    end
+    v1, v2 = (map(f -> f(t + (1/2 + s * √3/6) * dt), coefs) for s in (-1, 1))
+    w1, w2 = (3 + 2√3) / 12, (3 - 2√3) / 12
+    return [ w1 * v1 + w2 * v2, w2 * v1 + w1 * v2 ]
+end
+
+"""
     approx_W(evolver, t, ::State; order, options...)
     approx_W(evolver, t, ::Simulation; order, options...)
 
@@ -309,7 +328,9 @@ advanced by `t`.
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the real functions of time they are multiplied by, taken
-  at the middle of each step
+  at the middle of each step up to order 2, which limits the error to order 2, and from
+  order 3 at two points of each step, which leaves it of the order asked, see
+  [Time dependent evolvers](@ref)
 - `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
   (default 0, never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step
@@ -339,8 +360,8 @@ function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing,
     for sweep in first_step:nsteps
         current_time = time_start + sweep * dt
         if time_dep
-            tf = current_time - dt / 2
-            mpos = make_approx_W(pre, dt; order, w, coefs = map(f->f(tf), coefs))
+            mpos = reduce(vcat, [ make_approx_W(pre, dt; order, w, coefs = c)
+                                  for c in step_coefs(coefs, current_time - dt, dt, order) ])
         end
         lim = sweep_limits(limits, sweep)
         for mpo in mpos
