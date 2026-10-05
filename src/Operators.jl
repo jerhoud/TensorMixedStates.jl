@@ -677,7 +677,7 @@ isless(a::Multi_F, b::Multi_F) =
 
 the projector ``|s\\rangle\\langle s|`` on a pure state of one site, given by its name, by
 its vector in the basis of the site, taken as it is without normalization, or by the number
-of a basis state, counted from 0.
+of a basis state, counted from 0. On a fermionic site, the state must have a definite parity.
 
 # Examples
 
@@ -1311,9 +1311,9 @@ several sites taking that of the product of its pieces placed. `strung` tells tw
 apart:
 
 - `true`, for `jw_parity`: how the operator behaves when the `F` of its site crosses it, the
-  strings in place. A `JW` transform is odd, and a projector on a vector has no parity.
+  strings in place. A `JW` transform is odd.
 - `false`, for `isfermionic` and `hasfermionic`: whether it holds a fermionic factor whose
-  string `simplify` has not inserted yet. A `JW` transform and a projector are even.
+  string `simplify` has not inserted yet. A `JW` transform is even.
 """
 fermion_parity(::Op, ::Bool) = 0
 fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
@@ -1328,9 +1328,6 @@ fermion_parity(a::Operator{N}, strung::Bool) where N =
         0
     end
 fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
-# the named states of fermionic sites are basis states, whose projectors are even
-fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
-
 function fermion_parity(a::Union{ProdOp, TensorOp}, strung::Bool)
     ps = map(x -> fermion_parity(x, strung), a.subs)
     return any(isnothing, ps) ? nothing : mod(sum(ps), 2)

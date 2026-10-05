@@ -254,6 +254,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A projector on a fermionic site needs a state of definite parity, the others being refused.
+  A named one was taken as even, so that `F` crossed it as if they commuted, which gave wrong
+  values on a site of one's own with a named superposition of the two parities; one on a vector
+  was placed without string, which is no observable of the fermion mode.
 - `simplify` no longer compiles a method for every number of factors of a product: a product of
   60 operators took 20 s the first time, one of 100 took 42 s, and every string correlator of
   another length paid it again. It now takes less than a millisecond.

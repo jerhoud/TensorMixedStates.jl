@@ -427,9 +427,7 @@ which takes the Jordan-Wigner string as `C` does. Each part is an operator of it
 one fermionic, so that simplifying the result again leaves it unchanged. Otherwise the
 function is placed whole.
 
-A projector counts as even, as it does when placed itself, since it never takes a string, see
-`fermion_parity`: taken for one of no parity, a function of `Proj(v)` was split and given a
-string that `Proj(v)` has not, `(P^0.5)(3)` differing from `P(3)` although `P^0.5` is `P`.
+A projector is even, see `Proj`, and so is a function of it.
 """
 place_function(a, index...) =
     if length(index) == 1 && only(index) > 1 && fermion_parity(a.arg, false) ≠ 0

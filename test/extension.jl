@@ -83,6 +83,25 @@ end
     end
 end
 
+# A fermionic site of one's own, with a named state of no definite parity
+struct ParityProbe <: AbstractSite end
+
+TensorMixedStates.dim(::ParityProbe) = 2
+
+@def_states(ParityProbe(), [ "Emp" => [1., 0.], "Occ" => [0., 1.], "Plus" => [1., 1.] / √2 ])
+
+@def_operators(ParityProbe(), [ fermionic_op => [ Cq = [0. 1. ; 0. 0.] ],
+                                involution_op => [ F = Float64[1 0 ; 0 -1] ] ])
+
+@testset "A projector on a named state of no definite fermionic parity" begin
+    # simplify takes a projector as even: on "Plus", F crossed it as if they commuted, and
+    # (F * Proj("Plus"))(1) gave the conjugate of its value
+    φ = State{Pure}(System(1, ParityProbe()), [0.6, 0.8im])
+    @test_throws "no definite fermionic parity" expect(φ, (F * Proj("Plus"))(1))
+    @test_throws "no definite fermionic parity" expect(φ, (F * Proj([1., 1.] / √2))(1))
+    @test expect(φ, (F * Proj("Occ"))(1)) ≈ -0.64
+end
+
 # A representation of one's own: a state wrapping a pure `State`, which goes through the
 # phases of the package, its measurements, its state files and its checkpoints like a `State`.
 struct Wrapped <: Representation end

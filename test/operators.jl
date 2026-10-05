@@ -597,11 +597,10 @@ end
 end
 
 @testset "A function of a projector takes no string" begin
-    # a projector on a vector is placed bare on a fermionic site, and so is a function of it:
-    # taken for an operator of no parity, the function was split and its odd part given a
-    # string, (P^0.5)(3) differing from P(3) although P^0.5 is P
+    # a projector is even, and so is a function of it: split and given a string, (P^0.5)(3)
+    # differed from P(3) although P^0.5 is P
     st = RandomState{Pure}(System(3, Fermion()), 4)
-    P = Proj([0.6, 0.8])
+    P = Proj([0., 1.])
     for i in 1:3
         @test expect(st, (P^0.5)(i)) ≈ expect(st, P(i))
         @test expect(st, exp(0.7im * P)(i)) ≈ expect(st, Id(i) + (exp(0.7im) - 1) * P(i))
