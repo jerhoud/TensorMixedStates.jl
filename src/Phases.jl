@@ -138,8 +138,11 @@ steps simply run one after the other.
 Given `carry`, a value other than `nothing`, the steps carry a value from one to the next, a
 sum or a count for instance: `f(sim, k, carried)` returns `(sim, carried)`, the first step
 receives `carry`, and `run_steps` returns `(sim, carried)` after the last. The value is
-committed with each step and given back to a resumed run, so it is one a checkpoint can write:
-numbers, strings, and arrays and dictionaries of them.
+committed with each step and given back to a resumed run, so it has to come back from the json
+of a checkpoint as it was, of the same type, which is checked after each step of a run with a
+directory: numbers, strings, and vectors, matrices and dictionaries with string keys of them,
+typed by what they hold, a `Vector{Any}` of floats coming back a `Vector{Float64}`. A random
+number generator is carried by the `UInt64` it is made of, `Xoshiro(words...)` giving it back.
 
 A step may run a solver with an observer of the package, `TdvpObserver` for instance: its
 sweeps are not steps of the phase and are not committed, and a stop it honours ends the phase
@@ -199,6 +202,10 @@ function run_steps(f, sim::Simulation, nsteps::Int; carry = nothing)
         if !(sim isa Simulation)
             error("step $k of run_steps returned a $(typeof(sim)), where it has to return " *
                   "the simulation it leaves behind")
+        end
+        # only a run with a directory writes checkpoints, and gives back what they hold
+        if !isnothing(carry) && !isempty(c.dir)
+            check_carried(carried, k)
         end
         if c.stopping
             break

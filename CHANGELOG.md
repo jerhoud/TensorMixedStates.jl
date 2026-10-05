@@ -236,6 +236,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A value carried by `run_steps` that a checkpoint does not give back as it is, a `Float32`, a
+  symbol, a tuple, a dictionary with keys other than strings or an object such as a random
+  number generator, is refused at the step that carries it, in a run with a directory: a
+  resumed run went on with another value, or failed on it.
 - A resumed run says in its log which text files are shorter than at the checkpoint, cut or
   removed by hand: they were continued with a hole where the lines they lost were, and nothing
   said so.

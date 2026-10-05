@@ -228,9 +228,10 @@ of the last step committed, which a phase stopped in its course has reached, and
 `save_state(file, name, sim)` saves the state, refusing a file of the simulation, as its
 checkpoint.
 
-A value the steps carry from one to the next, a sum, a count or the state of a random number
-generator, is given to `run_steps` as `carry`: each step receives it and returns it updated
-with the simulation, and a resumed run gets it back, see [`run_steps`](@ref). A phase evolving
+A value the steps carry from one to the next, a sum, a count or the `UInt64` a random number
+generator is made of, is given to `run_steps` as `carry`: each step receives it and returns it
+updated with the simulation, and a resumed run gets it back, see [`run_steps`](@ref), which
+refuses a value a checkpoint would not give back as it is. A phase evolving
 one step at a time prepares its evolver once with [`PreMPO`](@ref), which the solvers take in
 place of the operator.
 

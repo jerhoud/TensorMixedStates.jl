@@ -1073,6 +1073,40 @@ end
     end
 end
 
+# steps carrying the value they are given, unchanged
+Base.@kwdef struct CarryingSteps <: AbstractPhase
+    name::String = "carrying steps"
+    time_start = nothing
+    final_measurements = []
+    value = 0.
+end
+
+TensorMixedStates.run_phase(sim::Simulation, p::CarryingSteps) =
+    first(run_steps((sim, k, v) -> (sim, v), sim, 2; carry = p.value))
+
+@testset "A value a checkpoint would not give back is refused at once" begin
+    # json gave a resumed run another value, a Float64 for a Float32, string keys, a vector for
+    # a tuple, a dictionary for an object, or none at all, possibly days after the run
+    mktempdir() do dir
+        cd(dir) do
+            run(v) = runTMS(SimData(name = "carry", phases = [CreateState{Pure}(1, Qubit(), "Up"),
+                                                             CarryingSteps(value = v)]);
+                            restart = true)
+            for v in (0.4f0, Dict(1 => 0), :s, (0, 1), (a = 0,), Xoshiro(1),
+                      Dict("float" => 1.0), Any[1.0, 2.0])
+                @test_throws "run_steps carries" run(v)
+            end
+            for v in (0.4, 3, "s", [1.0, 2.0], [1 2; 3 4], Dict("a" => 1),
+                      UInt64[7, typemax(UInt64)])
+                @test_ok run(v)
+            end
+            # without a directory nothing is checkpointed, and nothing refused
+            s = Simulation(State{Pure}(System(1, Qubit()), "Up"))
+            @test last(run_steps((s, k, v) -> (s, v), s, 2; carry = :s)) === :s
+        end
+    end
+end
+
 # steps carrying a word of 64 bits, as the state of a generator of random numbers is carried,
 # stepped by the wrapping arithmetic of UInt64
 Base.@kwdef struct SteppedWord <: AbstractPhase

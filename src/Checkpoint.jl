@@ -273,6 +273,36 @@ commit!(c::Checkpointer, o::Outputs, phase::Int, sweep::Int, phase_time::Number,
     c.last = Commit(phase, sweep, phase_time, t, state, carried, output_marks(o))
 
 """
+    check_carried(x, step)
+
+refuse the value `x` that the step `step` of `run_steps` carries when a checkpoint would not
+give it back as it is, of the same type: json holds no symbol, tuple or float of another width,
+a dictionary comes back with string keys, an object as a dictionary of its fields. A resumed run
+went on with that other value, or failed on it, possibly days later; the step is refused at
+once.
+"""
+function check_carried(x, step::Int)
+    back = try
+        Some(restored_value(JSON.parse(JSON.json(checkpoint_value(x)))))
+    catch e
+        if e isa InterruptException
+            rethrow()
+        end
+        nothing
+    end
+    shown(v) = sprint(show, v; context = :limit => true)
+    if isnothing(back)
+        error("step $step of run_steps carries $(shown(x)), which a checkpoint cannot write: " *
+              "carry numbers, strings, and vectors and dictionaries with string keys of them")
+    elseif typeof(something(back)) ≠ typeof(x) || !isequal(something(back), x)
+        error("step $step of run_steps carries $(shown(x)), which a checkpoint gives back as " *
+              "$(shown(something(back))): carry numbers, strings, and vectors and dictionaries " *
+              "with string keys of them")
+    end
+    return nothing
+end
+
+"""
     checkpoint_json(dir)
 
 the metadata file of the checkpoint of a directory.
