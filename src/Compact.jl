@@ -56,25 +56,6 @@ com_coefs(a::ComOp) = (x for p in a.pieces for (_, _, o) in p for (_, x) in line
 ################### Rank decisions ###################
 
 """
-    cdot(x, y)
-    cnorm(x)
-
-the scalar product ``x^\\dagger y`` of two vectors, and the norm of one, summed in order by a
-plain loop. BLAS sums in the order of the kernel it picks for the processor, and the
-fingerprint of a phase hashes the coefficients of its operators: a `compact` computed again
-when a simulation resumes, possibly on another machine, must give them to the bit.
-"""
-function cdot(x::AbstractVector, y::AbstractVector)
-    s = zero(promote_type(eltype(x), eltype(y)))
-    for i in eachindex(x, y)
-        s += conj(x[i]) * y[i]
-    end
-    return s
-end
-
-cnorm(x::AbstractVector) = sqrt(real(cdot(x, x)))
-
-"""
     interpolative(rows, scales, tol)
 
 the positions of the rows kept among `rows`, in increasing order, and the coefficients `t`
@@ -94,13 +75,13 @@ function interpolative(rows::Vector{Vector{T}}, scales::Vector{<:Real}, tol::Rea
     n = length(rows)
     res = copy.(rows)
     # the rows that are neither negligible nor taken yet
-    cand = [ i for i in 1:n if cnorm(rows[i]) > tol * scales[i] ]
+    cand = [ i for i in 1:n if norm(rows[i]) > tol * scales[i] ]
     basis = Vector{T}[]
     kept = Int[]
     while true
         best, bestnorm = 0, zero(real(T))
         for i in cand
-            ν = cnorm(res[i])
+            ν = norm(res[i])
             if ν > tol * scales[i] && ν > bestnorm
                 best, bestnorm = i, ν
             end
@@ -111,27 +92,27 @@ function interpolative(rows::Vector{Vector{T}}, scales::Vector{<:Real}, tol::Rea
         # orthogonalized once more, the residuals having been updated one vector at a time
         v = copy(res[best])
         for b in basis
-            v .-= cdot(b, v) .* b
+            v .-= dot(b, v) .* b
         end
-        q = v ./ cnorm(v)
+        q = v ./ norm(v)
         push!(basis, q)
         push!(kept, best)
         filter!(≠(best), cand)
         for i in cand
-            res[i] .-= cdot(q, res[i]) .* q
+            res[i] .-= dot(q, res[i]) .* q
         end
     end
     k = length(kept)
     # the rows kept on the basis, triangular in the order they were taken: the coefficients of
     # a row are its projections solved against it, not the projections themselves
-    r = [ cdot(basis[a], rows[kept[b]]) for a in 1:k, b in 1:k ]
-    knorms = [ cnorm(rows[i]) for i in kept ]
+    r = [ dot(basis[a], rows[kept[b]]) for a in 1:k, b in 1:k ]
+    knorms = [ norm(rows[i]) for i in kept ]
     t = zeros(T, n, k)
     for (a, i) in enumerate(kept)
         t[i, a] = one(T)
     end
     for i in cand
-        c = [ cdot(basis[a], rows[i]) for a in 1:k ]
+        c = [ dot(basis[a], rows[i]) for a in 1:k ]
         for a in k:-1:1
             for b in a+1:k
                 c[a] -= r[a, b] * c[b]
@@ -277,10 +258,10 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
         end
         for (key, g) in zip(rowkeys, grows)
             if key[1] > 0
-                content[key[1]] += real(cdot(g, g))
+                content[key[1]] += real(dot(g, g))
             end
         end
-        scales = [ key[1] > 0 ? sqrt(content[key[1]]) : cnorm(g) for (key, g) in zip(rowkeys, grows) ]
+        scales = [ key[1] > 0 ? sqrt(content[key[1]]) : norm(g) for (key, g) in zip(rowkeys, grows) ]
         kept, t = interpolative(grows, scales, tol)
         for (i, (r, a)) in enumerate(rowkeys), p in eachindex(kept)
             if !iszero(t[i, p])
@@ -357,7 +338,7 @@ function left_sweep!(b::ComBlock{T}, tol::Real) where T
             end
         end
         _, rows = dense_rows(entries)
-        kept, t = interpolative(rows, cnorm.(rows), tol)
+        kept, t = interpolative(rows, norm.(rows), tol)
         if length(kept) == m
             continue
         end
@@ -460,7 +441,7 @@ function atom_basis(atoms::Vector{Op}, site::AbstractSite, tol::Real)
     S = float(mapreduce(eltype, promote_type, ms; init = Float64))
     d = size(ms[1], 1)
     τ = [ S(sum(m[i, i] for i in 1:d) / d) for m in ms ]
-    norms = [ cnorm(S.(vec(m))) for m in ms ]
+    norms = [ norm(S.(vec(m))) for m in ms ]
     rows = [ S.(vec(m)) for m in ms ]
     for (g, x) in zip(rows, τ), i in 1:d
         g[(i - 1) * d + i] -= x

@@ -120,7 +120,7 @@ end
         # symbolically too, the relations of the sites being used only where a com is laid
         @test hc ≈ h
         @test norm(laid(st, hc) - exact(st, h)) < 1e-12 * norm(exact(st, h))
-        # the same coefficients to the bit, which the fingerprint of a phase hashes
+        # and the same coefficients each time
         @test compact(h) == hc
     end
 end
