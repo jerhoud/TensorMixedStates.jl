@@ -433,7 +433,7 @@ normalized, by tdvp in imaginary time. From `"FullyMixed"`, the state at infinit
 it gives the thermal state ``e^{-\beta H}/Z``. It returns the logarithm of the trace the state
 would have without being normalized, here ``\log Z - 4 \log 2``, and the state. Qubits in the
 field ``H = -\sum_i \sigma_z^i`` have ``\langle \sigma_z \rangle = \tanh \beta``, which is
-``0.4621`` at ``\beta = 0.5``, and ``\log Z - 4 \log 2 = 4 \log \cosh \beta \approx 0.4895``:
+``0.4621`` at ``\beta = 0.5``, and ``\log Z - 4 \log 2 = 4 \log \cosh \beta \approx 0.4805``:
 
 ```@example manual
 mylog, mythermal = thermal_state(-sum(Z(i) for i in 1:4), 0.5,
