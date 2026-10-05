@@ -133,4 +133,4 @@ function aklt_state(system::System; left = "Up", right = "Up")
     return mps_state(system, tensors)
 end
 
-@create_site_module(Spins, [aklt_state, Spin, Sp, Sm, Sx, Sy, Sz, S2, N])
+@create_site_module(Spins, [Spin, aklt_state, Sp, Sm, Sx, Sy, Sz, S2, N])
