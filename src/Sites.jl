@@ -16,10 +16,9 @@ A site type defines `dim`, possibly `string_state`, and its states and operators
 constructor fills through `conserve_string` with what the site conserves. The field is
 optional: a site type that can conserve nothing leaves it out.
 
-A site is rebuilt from the values of its fields, in their order, by `MySite(values...)`, when
-a state file is read and when `weaken` changes what it conserves: a site type keeps this
-constructor, which Julia gives unless an inner constructor replaces it. Its states can be saved
-when its fields are numbers, booleans, symbols, strings or `nothing`.
+A site type keeps the constructor taking the values of its fields in their order, which
+reading a state file and `weaken` use. Its states can be saved when those values are numbers,
+booleans, symbols, strings or `nothing`.
 
 # Examples
 
@@ -46,9 +45,8 @@ dim(site::AbstractSite) = error("dim not implemented on site $site")
 """
     conserved(site)
 
-what a site conserves, as `conserve_string` records it, or `""` when it conserves nothing.
-Everything reads this rather than the optional field `conserve`: a site type without that
-field, or with one that is not a string, conserves nothing.
+what a site conserves, as `conserve_string` records it, `""` for a site conserving nothing or
+without a string field `conserve`
 """
 conserved(site::AbstractSite) =
     if hasfield(typeof(site), :conserve) && getfield(site, :conserve) isa AbstractString
@@ -92,17 +90,14 @@ the part of the string of `conserve_string` recording one quantity, as `decode_c
 it back.
 """
 encode_quantity(name, modulus, charges, strong::Bool) =
-    # a strong symmetry is marked on the quantity and not on the site, so that one site may
-    # hold both kinds, and at the end of the head so that the name and the modulus are read
-    # exactly as before
+    # marked on each quantity, so that one site may hold both kinds
     (modulus == 1 ? name : "$name%$modulus") * (strong ? "!" : "") * ":" * join(charges, ",")
 
 """
     sorted_conserve(s)
 
 the string `s` of `conserve_string` with its quantities sorted by name, as `Conserved` holds
-them. A state file written before they were sorted holds them in the order of their
-declaration.
+them, which a state file of an older version may not
 """
 function sorted_conserve(s::AbstractString)
     if isempty(s)
@@ -144,17 +139,15 @@ end
 the ITensor index of a site in the pure representation, `charged` telling whether its system
 carries quantum numbers.
 
-A site conserving nothing in a charged system takes a trivial index, one sector of charge zero
-holding the whole space, since an MPS cannot mix indices with and without charges; every
-operator keeps its matrix, in that one block. The sectors come one per basis state rather than
-merged by charge: merging would reorder the basis whenever equal charges are not contiguous,
-as those of `parity(N)` on a boson, 0, 1, 0, 1.
+A site conserving nothing in a charged system takes a single sector of charge zero, an MPS
+mixing no indices with and without charges. The sectors come one per basis state: merged by
+charge, they would reorder the basis whenever equal charges are not contiguous, as those of
+`parity(N)` on a boson, 0, 1, 0, 1.
 """
 function site_index(site::AbstractSite, charged::Bool)
     n = dim(site)
-    # `nameof` rather than `string(typeof(site))`: the latter prints the module prefix when
-    # the site module is not in scope, and ITensors silently cuts a tag at 16 characters, so
-    # every site type ended up tagged "TensorMixedState" depending on what the user imported
+    # `nameof`: `string(typeof(site))` may carry the module, and ITensors cuts a tag at 16
+    # characters
     tg = "$(nameof(typeof(site))), Site"
     if isempty(conserved(site))
         return charged ? Index(QN() => n; tags = tg) : Index(n; tags = tg)
@@ -165,10 +158,8 @@ end
 """
     qn_components(q::QN)
 
-the components of the charge `q`, as a vector of `(name, value, modulus)`, a modulus of 1
-meaning an integer charge. A `QN` always has four slots, the unused ones having an empty
-name: they are left out. `QN(components...)` gives the charge back, which is how `weak_qn`,
-`star` and `adjoint_qn` rebuild a charge after changing its components.
+the components of the charge `q`, as `(name, value, modulus)`, the unused slots of the `QN`
+left out; `QN(components...)` gives the charge back
 """
 function qn_components(q::QN)
     cs = Tuple{String, Int, Int}[]
@@ -305,8 +296,7 @@ those of ``m`` and ``n``: this is the pairing `mix(::State)` produces, contracti
 `dag(t')`. Under a strong symmetry the bra is also starred, which keeps the two charges
 apart, see `strong`.
 
-The index is fresh, so it contracts with nothing already built: a caller wants the one its
-system drew, `SysIndex{Mixed}(system, i)`.
+The index is fresh: the one of a system is `SysIndex{Mixed}(system, i)`.
 """
 mixed_index(i::Index, site::AbstractSite) =
     addtags(combinedind(combiner(i, dag(bra_index(i, site)'); tags = tags(i))), "Mixed")
@@ -333,10 +323,8 @@ state_definition(::AbstractSite, ::Val) = nothing
     definition(f, site, name)
 
 the definition that `f`, `operator_definition` or `state_definition`, holds for the name
-`name` on the type of `site`, or `nothing`. It is looked for in the latest world: a
-declaration adds a method while the code around it runs, which a plain call would not see
-until that code is over, neither `check_declared` within the expansion of `@def_operators`
-nor what follows the declaration in the same `@testset`.
+`name` on the type of `site`, or `nothing`, looked for in the latest world, a declaration adding a method while the code around
+it runs
 """
 definition(f, site::AbstractSite, name::String) = Base.invokelatest(f, site, Val(Symbol(name)))
 
@@ -384,13 +372,8 @@ identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
 give `r` as the definition of `name` for the type of `site`, by a method of `f`,
 `operator_definition` or `state_definition`, refusing a second one, `what` naming the kind of
-`name` in the message.
-
-The method is evaluated in `mod`, the module making the declaration. Julia keeps the methods a
-package adds to the functions of another one when it precompiles it, where what it wrote in a
-dictionary of this module was lost, and a package may not evaluate into this module while it
-is precompiled. Being evaluated, the method can be added from any scope, a `@testset`
-included.
+`name` in the message. The method is evaluated in `mod`, the declaring module, which keeps it
+when a package is precompiled.
 """
 function add_definition(f, mod::Module, site::AbstractSite, name::String, r, what::String)
     if !isnothing(definition(f, site, name))
@@ -421,10 +404,8 @@ end
     add_operator(mod, site, op, r, type = plain_op)
 
 give `r` as the definition of the operator named `op` for the type of `site`, see
-`add_definition`, and return the `Operator{1}` standing for that name.
-
-Only `@def_operators` calls it, which keeps the name, its `OpType` and the definitions made
-for the other site types consistent.
+`add_definition`, and return the `Operator{1}` standing for that name. Only `@def_operators`
+calls it.
 """
 function add_operator(mod::Module, site::AbstractSite, op::String,
                       r::Union{Matrix, Function, SimpleOp}, type::OpType = plain_op)
@@ -447,8 +428,6 @@ function check_shared_operator(existing, name::String, type::OpType, site::Abstr
         error("cannot declare operator $name for site $(typeof(site)): the name already " *
               "stands for the operator $(existing.name)")
     elseif !isnothing(existing.expr)
-        # an operator with a definition of its own never reads the library of the sites, so
-        # the declaration would be recorded and never used
         error("cannot declare operator $name for site $(typeof(site)): the name already " *
               "stands for an operator with a definition of its own. Choose another one")
     elseif existing.type ≠ type
@@ -546,8 +525,7 @@ function state(site::AbstractSite, a::Union{Vector, Matrix})
         error("a $(size(a, 1))×$(size(a, 2)) density matrix cannot be one of $site, whose " *
               "dimension is $d")
     end
-    # a copy, which the caller may change: the array of a declaration changed every state of
-    # its name
+    # a copy: the array belongs to the declaration
     return copy(a)
 end
 
@@ -623,8 +601,7 @@ function state(site::AbstractSite, st::String)
     generic = try
         string_state(site, st)
     catch e
-        # an error is how `string_state` says the name is not one of its forms. An interrupt
-        # is not one, and has to go on to where a simulation stops on it
+        # an error says the name is not one of its forms, an interrupt goes on
         if e isa InterruptException
             rethrow()
         end
@@ -647,9 +624,7 @@ end
     charge_tol
 
 how far the eigenvalues of a conserved quantity may lie from the charges they stand for,
-relative to the largest of them when it is above one. It is a rounding tolerance and not a
-setting: a quantity missing its charges by more is
-approximate, and has to be defined exactly rather than let through.
+relative to the largest of them when it is above one: a rounding tolerance, not a setting
 """
 const charge_tol = 1e-14
 
@@ -657,13 +632,9 @@ const charge_tol = 1e-14
     rounding_tol
 
 the size, relative to the norm of a matrix, below which an element, a singular value or a
-whole term is taken as rounding and treated as zero. The flux of a matrix (`charge_flux`),
-its tensor on charged indices (`charged_itensor`), the splitting of an operator into one
-site factors (`Operator{N}(name, def, type, sites...)`) and, by default, the channels of
-`compact` all go by it and have to agree.
-
-It is a rounding tolerance and not a setting: operators are compressed only by `compact`, and
-exactly at its default, the states they act on being truncated by the algorithms.
+whole term is rounding and treated as zero: a rounding tolerance, not a setting. The flux of
+a matrix (`charge_flux`), its tensor on charged indices (`charged_itensor`), the splitting of
+an operator into one site factors and, by default, `compact` all go by it and have to agree.
 """
 const rounding_tol = 1e-13
 
@@ -684,11 +655,8 @@ show_charges(d) = join(["$name=$val" for (name, val, _) in d], ",")
 """
     charge_flux(m, what, site)
 
-the flux of the matrix `m` of `what` on `site`, and an error naming `what` when it has none.
-`flux` answers with it and the tensor of an operator is checked with it, so that a matrix not
-fitting the charges of its site is refused by name rather than by the `Fluxes not all equal` of
-ITensors. Elements below `tol` relative to the norm are rounding and ignored, as
-`charged_itensor` does.
+the flux of the matrix `m` of `what` on `site`, and an error naming `what` when it has none,
+elements below `tol` relative to the norm being ignored
 """
 function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = rounding_tol)
     qs = decode_conserve(conserved(site))
@@ -718,12 +686,9 @@ end
     charged_itensor(a, inds)
 
 the ITensor of the array `a` on the indices `inds`, dropping what rounding leaves outside the
-blocks of charged indices, see `rounding_tol`. Plain indices keep everything.
-
-A matrix computed through an eigendecomposition, as an exponential or a non integer power,
-holds elements of the size of rounding between charges the exact one keeps apart. ITensors,
-which drops nothing by default, would make a block of each and refuse the tensor for its
-fluxes. A tensor that genuinely has no definite charge is still refused.
+blocks of charged indices, see `rounding_tol`: an exponential or a non integer power leaves
+such elements between charges the exact matrix keeps apart, which ITensors would refuse for
+their fluxes
 """
 charged_itensor(a::AbstractArray, inds) =
     if any(hasqns, inds)
@@ -769,9 +734,7 @@ end
 
 whether the array `a` on the indices `inds` carries a definite charge: every element above
 rounding, by the rule of `charged_itensor`, connects states whose charges differ by the same
-amount. An array on plain indices always does. It asks beforehand what ITensors answers with
-`Fluxes not all equal`, so that a refusal can name what it refuses without catching an error
-of ITensors.
+amount. An array on plain indices always does.
 """
 function has_definite_flux(a::AbstractArray, inds)
     if !any(hasqns, inds)
@@ -835,10 +798,7 @@ struct Conserved
     Conserved(names) = new(sort(collect(Tuple{String, Bool}, names); by = first))
 end
 
-# defined together, as `Op` does: a `Set` or a `Dict` picks its bucket by `hash` and only
-# then compares, so two equal values that hash apart would sit in different buckets. The
-# field being a vector, the fallback would compare identities and call two equal lists
-# different
+# with `hash`, as for `Op`: the default would compare the vector field by identity
 ==(a::Conserved, b::Conserved) = a.names == b.names
 hash(a::Conserved, h::UInt) = hash(a.names, hash(Conserved, h))
 
@@ -854,18 +814,13 @@ show(io::IO, c::Conserved) =
 """
     spec_names(spec)
 
-the quantities a target names, as the `(name, strong)` pairs `Conserved` holds.
-
-It reads both the operators `conserve` takes and what `symmetries` returns. The names are all
-`weaken` needs, since it recomputes no charge; a declaration does, which is why `conserve`
-asks for the operators themselves.
+the quantities a target names, as the `(name, strong)` pairs `Conserved` holds, from the
+operators `conserve` takes or from what `symmetries` returns
 """
 spec_names(c::Conserved) = c.names
 spec_names(::Tuple{}) = Tuple{String, Bool}[]
 function spec_names(spec::Tuple)
     names = reduce(vcat, map(spec_names, spec))
-    # refused here, as `conserve_string` refuses it, rather than inside ITensors, on a
-    # duplicate name in a QN, or by a message about strength when given once strong and once weak
     for (n, _) in names
         if count(x -> first(x) == n, names) > 1
             error("$n is given twice")
@@ -1055,10 +1010,8 @@ end
     charged_state(a, inds, what, site)
 
 the tensor of the local state `what`, of array `a`, on the indices `inds` of `site`, refused
-by a message naming the state and the site when it has no definite charge. A state of a
-charged site must lie in one sector: `"Up"` and `"Dn"` do, `"+"`, their sum, does not. The
-question is asked here, see `has_definite_flux`, rather than left to the `Fluxes not all
-equal` of ITensors, raised where neither the state nor the site is in sight.
+by a message naming the state and the site when it has no definite charge: `"Up"` and
+`"Dn"` lie in one sector, `"+"`, their sum, does not
 """
 function charged_state(a::AbstractArray, inds, what, site::AbstractSite)
     if !has_definite_flux(a, inds)
@@ -1073,11 +1026,8 @@ end
     show(io, ::AbstractSite)
 
 print a site as the call that builds it, `Qubit()` or `Fermion(conserve = N)`, the conserved
-quantities under their names rather than as the charges recorded.
-
-The trailing fields holding `""` or `nothing` are left out, and only those: dropping one in
-the middle would misalign the arguments with the fields, `Site(nothing, 3)` printing as
-`Site(3)`.
+quantities under their names. The trailing fields holding `""` or `nothing` are left out, and
+only those, which keeps the arguments in line with the fields.
 """
 function show(io::IO, site::AbstractSite)
     t = typeof(site)
