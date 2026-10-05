@@ -78,7 +78,7 @@ end
 
 the tensor pairing each element ``|m\\rangle\\langle n|`` of site `i` of the system `from`,
 passed through `f`, with the same element of `to`, or with ``|n\\rangle\\langle m|`` when
-`swap` is true: the form `weak_map`, `adj_map` and `dense_map` share
+`swap` is true: the form `weak_maps`, `adj_maps` and `dense_maps` share
 """
 function element_map(to::System, from::System, i::Int, f; swap::Bool = false)
     d = dim(SysIndex{Pure}(from, i))
@@ -88,33 +88,57 @@ function element_map(to::System, from::System, i::Int, f; swap::Bool = false)
 end
 
 """
-    weak_map(strong, weak, i, relab)
+    element_maps(to, from, f; swap = false)
 
-the tensor carrying site `i` of the system `strong` onto the same site of `weak`, the charged
-system it is weakened to, `relab` being the relabelling by `weak_index`.
+`element_map` on every site, built once for the sites alike and carried onto the indices of
+the others. Two sites whose pure indices have the same space in both systems, and which
+conserve the same quantities strongly, give the same tensor but for its two indices: their
+combiners sort the same blocks the same way, and `f` treats their mixed indices alike.
+"""
+function element_maps(to::System, from::System, f; swap::Bool = false)
+    # the mixed index of site `i` in `to`, and the one `f` puts in place of that of `from`,
+    # read on a tensor of it alone
+    ends(i) = (SysIndex{Mixed}(to, i), only(inds(f(onehot(SysIndex{Mixed}(from, i) => 1)))))
+    first_alike = Dict{Any, Int}()
+    maps = ITensor[]
+    for i in 1:length(to)
+        key = (space(SysIndex{Pure}(to, i)), space(SysIndex{Pure}(from, i)),
+               strong_names(to[i]), strong_names(from[i]))
+        k = get!(first_alike, key, i)
+        push!(maps, k == i ? element_map(to, from, i, f; swap) :
+                             replaceinds(maps[k], ends(k), ends(i)))
+    end
+    return maps
+end
+
+"""
+    weak_maps(strong, weak, relab)
+
+the tensors carrying each site of the system `strong` onto the same site of `weak`, the
+charged system it is weakened to, `relab` being the relabelling by `weak_index`.
 
 It pairs each element ``|m\\rangle\\langle n|`` of one mixed index with the same element of
 the other. The relabelling has already put both under the same charge, so every term has zero
 flux; what the tensor does beyond renaming is to regroup the blocks, which the two indices
 order differently.
 """
-weak_map(strong::System, weak::System, i::Int, relab) =
-    element_map(weak, strong, i, t -> relabel(t, relab))
+weak_maps(strong::System, weak::System, relab) =
+    element_maps(weak, strong, t -> relabel(t, relab))
 
 """
     pure_map(old, new)
 
 the tensor carrying the pure index `old` of a site onto `new`, basis state by basis state: the
-pure counterpart of `weak_map`, for two indices holding the basis in the same order and the
+pure counterpart of `weak_maps`, for two indices holding the basis in the same order and the
 same charges but cut into other blocks
 """
 pure_map(old::Index, new::Index) = sum(onehot(new => m) * dag(onehot(old => m)) for m in 1:dim(old))
 
 """
-    adj_map(system, i, relab)
+    adj_maps(system, relab)
 
-the tensor sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on site `i`, from
-the index relabelled by `adjoint_index`, `relab` being that relabelling, to the index of
+the tensors sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on each site,
+from the index relabelled by `adjoint_index`, `relab` being that relabelling, to the index of
 `system`.
 
 Under a strong symmetry the exchange alone has no definite flux, but the relabelling has
@@ -123,21 +147,21 @@ This needs the relabelled index to be a new one, which it always is on a charged
 plain one the two sides would contract into a scalar, one reason, besides the cost, why a
 system without a strong symmetry uses `tensor_dag` instead.
 """
-adj_map(system::System, i::Int, relab) =
-    element_map(system, system, i, t -> relabel(t, relab); swap = true)
+adj_maps(system::System, relab) =
+    element_maps(system, system, t -> relabel(t, relab); swap = true)
 
 """
-    dense_map(charged, plain, i)
+    dense_maps(charged, plain)
 
-the tensor carrying site `i` of the system `charged`, once densified, onto the same site of
+the tensors carrying each site of the system `charged`, once densified, onto the same site of
 `plain`, the same sites conserving nothing.
 
 An ITensor holds either charged indices or plain ones, never both, so this last step of
 weakening cannot be a relabelling: the state is densified first. Densifying lays the blocks
-out in the order of the charges, not in the order a plain combiner gives, and this tensor is
+out in the order of the charges, not in the order a plain combiner gives, and each tensor is
 the permutation between the two. Having no charges, it has no flux to respect.
 """
-dense_map(charged::System, plain::System, i::Int) = element_map(plain, charged, i, dense)
+dense_maps(charged::System, plain::System) = element_maps(plain, charged, dense)
 
 
 ############### Laying a matrix on indices ###############

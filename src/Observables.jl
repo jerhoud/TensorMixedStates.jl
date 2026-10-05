@@ -466,8 +466,8 @@ function dag(state::State{Mixed})
     end
     # `conj` rather than `dag`: the directions stay, only the charges are relabelled
     relab = relabeller(i -> adjoint_index(i, strong_names(s)))
-    return State(state, MPS([ relabel(conj(state.state[i]), relab) * adj_map(s, i, relab)
-                              for i in 1:n ]))
+    return State(state, MPS([ relabel(conj(state.state[i]), relab) * m
+                              for (i, m) in enumerate(adj_maps(s, relab)) ]))
 end
 
 

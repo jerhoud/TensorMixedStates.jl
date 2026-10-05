@@ -262,7 +262,7 @@ A strong quantity carries `X`, the charge of `x`, and `X*`, minus that of `y`, s
 becomes `(-X*, -X)`; a weak one holds their difference and is only negated. This is an
 automorphism of the charge group: relabelling every index of a state, links included, keeps
 each tensor consistent with no data moved, and what remains of the adjoint is a permutation of
-zero flux, see `adj_map`.
+zero flux, see `adj_maps`.
 """
 adjoint_qn(q::QN, names) =
     QN([ (endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n, -v, m)

@@ -440,11 +440,11 @@ function weaken(state::State{R}, target::Conserved) where R
         # an ITensor holds either charged indices or plain ones, so the last rung densifies
         # first and then permutes, the two orders having nothing in common
         return State{Mixed}(weak,
-            MPS([ dense(state.state[i]) * dense_map(system, weak, i) for i in 1:n ]))
+            MPS([ dense(state.state[i]) * m for (i, m) in enumerate(dense_maps(system, weak)) ]))
     end
     return State{Mixed}(weak,
-        MPS([ relabel(state.state[i], relab) * weak_map(system, weak, i, relab)
-              for i in 1:n ]))
+        MPS([ relabel(state.state[i], relab) * m
+              for (i, m) in enumerate(weak_maps(system, weak, relab)) ]))
 end
 
 weaken(state::State{R}, spec) where R = weaken(state, Conserved(spec_names(spec)))
