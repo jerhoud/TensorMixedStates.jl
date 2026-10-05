@@ -1,6 +1,6 @@
 # Checkpointing: stopping a simulation and starting it again from where it stopped.
 #
-# Goes here: `Checkpointer`, the phase fingerprint `phases_id`, `flatten_phases` and the
+# Goes here: `Checkpointer`, the check of the program resuming, `flatten_phases` and the
 # resume path of `runTMS`. The tests below create output directories, so they run inside a
 # temporary directory and are the only ones of the suite to touch the disk. They also
 # change the working directory of the process while they run, which is safe as long as the
@@ -895,21 +895,75 @@ end
     end
 end
 
-@testset "A checkpoint of another simulation is refused before anything is written" begin
-    # the simulation refused overwrote the description and the stamp of the one whose results
-    # the directory holds, its program as well, and marked those results with an error
+@testset "Only the program that wrote a checkpoint resumes it" begin
+    # the same file, byte for byte, given the same arguments: the program and the arguments
+    # are kept in the directory, and copying the program there is how an edited one resumes
+    program(state) = """
+        using TensorMixedStates, .Qubits
+        runTMS(SimData(name = "sim", description = "$state", checkpoint_interval = 1e-9,
+                       phases = [CreateState{Pure}(2, Qubit(), "$state"), Gates(gates = X(1))]))
+        """
+    # the arguments of the program, set for the call and given back, whatever those of the
+    # test process are
+    function with_args(f, args)
+        saved = copy(ARGS)
+        empty!(ARGS)
+        append!(ARGS, args)
+        try
+            f()
+        finally
+            empty!(ARGS)
+            append!(ARGS, saved)
+        end
+    end
     mktempdir() do dir
         cd(dir) do
-            runTMS(SimData(name = "sim", description = "first", checkpoint_interval = 1e-9,
-                           phases = [CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1))]))
+            run_prog(args = String[]) = with_args(() -> include(joinpath(dir, "prog.jl")), args)
+            write("prog.jl", program("Up"))
+            run_prog()
+            # no arguments, no file
+            @test !isfile("sim/prog_args.json")
             stamp = read("sim/stamp", String)
-            other = SimData(name = "sim", description = "other",
-                            phases = [CreateState{Pure}(2, Qubit(), "Dn"), Gates(gates = X(2))])
-            @test_throws "belongs to another simulation" runTMS(other)
-            @test read("sim/description", String) == "first"
+            # refused before anything is written: the simulation refused overwrote the
+            # description, the stamp and the program of the one whose results the directory
+            # holds, and marked them with an error
+            write("prog.jl", program("Dn"))
+            @test_throws "written by another program" run_prog()
+            @test read("sim/description", String) == "Up"
             @test read("sim/stamp", String) == stamp
+            @test read("sim/prog.jl", String) == program("Up")
             @test !isfile("sim/error")
             @test !isfile("sim/running")
+            # other arguments are another simulation as well
+            write("prog.jl", program("Up"))
+            @test_throws "other arguments" run_prog(["other"])
+            # and so is a directory that lost its program
+            mv("sim/prog.jl", "saved.jl")
+            @test_throws "written by another program" run_prog()
+            mv("saved.jl", "sim/prog.jl")
+            # the edited program copied there resumes the checkpoint
+            write("prog.jl", program("Dn"))
+            cp("prog.jl", "sim/prog.jl"; force = true)
+            run_prog()
+            @test read("sim/description", String) == "Dn"
+            # arguments are kept, and a run without them is then refused as well
+            rm("sim"; recursive = true)
+            run_prog(["x"])
+            @test TensorMixedStates.JSON.parsefile("sim/prog_args.json") == ["x"]
+            @test_throws "other arguments" run_prog()
+            # a fresh start without arguments removes those of the run before
+            rm("sim/checkpoint.json")
+            run_prog()
+            @test !isfile("sim/prog_args.json")
+            # with no program file, from the REPL, nothing can be compared and the checkpoint
+            # is resumed
+            write("sim/prog.jl", "something else")
+            task_local_storage(:SOURCE_PATH, nothing) do
+                runTMS(SimData(name = "sim", checkpoint_interval = 1e-9,
+                               phases = [CreateState{Pure}(2, Qubit(), "Dn"), Gates(gates = X(1))]))
+            end
+            @test !isfile("sim/error")
+            @test read("sim/prog.jl", String) == "something else"
         end
     end
 end
@@ -1327,109 +1381,6 @@ end
             @test read("chk/data", String) == read("ref/data", String)
         end
     end
-end
-
-@testset "A checkpoint belongs to what its SimData says it writes" begin
-    # only the phases told the simulation of a checkpoint: a resume with other formats was
-    # accepted, a file then mixing two, and so was one with another start time, ignored
-    mktempdir() do dir
-        cd(dir) do
-            stop_in = Ref(2)
-            phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                      Kicks(measurements = "data" => [Z(1), stopper_at(stop_in)])]
-            @test stopped(runTMS(SimData(; name = "sim", phases)))
-            for changed in (SimData(; name = "sim", phases, data_format = "%.3f"),
-                            SimData(; name = "sim", phases, time_format = "%.3f"),
-                            SimData(; name = "sim", phases, time_start = 100.),
-                            SimData(; name = "sim", phases, final_measurements = "f" => Z))
-                @test_throws "belongs to another simulation" runTMS(changed)
-            end
-            # how it is run may change, as its description
-            @test !stopped(runTMS(SimData(; name = "sim", phases, description = "again",
-                                          max_time = 1e6, checkpoint_interval = 1e3,
-                                          threading = nothing)))
-        end
-    end
-end
-
-@testset "Phase fingerprint" begin
-    # the phases of a simulation are what `SimData` made of them, flattened
-    id(phases) = TensorMixedStates.phases_id(SimData(; phases).phases)
-    base = [CreateState{Pure}(3, Qubit(), "X+"),
-            Evolve(duration = 1., time_step = 0.1, algo = Tdvp(), evolver = -im * Z(1))]
-
-    # how the phases are grouped says nothing about what is computed
-    @test id(base) == id([first(base), [last(base)]])
-    @test id(base) == id([[[first(base)]], last(base)])
-    # and it does not depend on the indices a session happens to draw
-    @test id(base) == id(deepcopy(base))
-    # a dictionary or a set is what it holds, in no order, and no longer raises
-    ph = TensorMixedStates.phase_hash
-    @test ph(UInt(0), Dict("a" => 1, "b" => 2)) == ph(UInt(0), Dict("b" => 2, "a" => 1))
-    @test ph(UInt(0), Dict("a" => 1)) ≠ ph(UInt(0), Dict("a" => 2))
-    @test ph(UInt(0), Set([1, 2])) == ph(UInt(0), Set([2, 1]))
-    # FNV-1a, whose definition is fixed, where `Base.hash` changes between versions of Julia
-    # and refused a checkpoint after an upgrade as belonging to another simulation
-    o = TensorMixedStates.fnv_offset
-    @test TensorMixedStates.fnv(o, codeunits("a")) == 0xaf63dc4c8601ec8c   # its published value
-    @test ph(o, 1.5) == 0xaa95e93229a27c80
-    @test ph(o, "abc") == 0xc11ab6d2519bc2b2
-    @test ph(o, 3) == 0xc7c2bf3b330983e6
-    @test ph(o, 1 + 2im) == 0x7717980363c8e066
-    # a type is written by its full path, not as the program happens to see it: `Qubit` or
-    # `TensorMixedStates.Qubit`, depending on the `using`, gave the same simulation two
-    # fingerprints
-    tk = TensorMixedStates.type_key
-    @test tk(Qubit) == "TensorMixedStates.Qubit"
-    @test tk(State{Pure}) == "TensorMixedStates.State{TensorMixedStates.Pure}"
-    @test tk(Vector{Float64}) == "Core.Array{Core.Float64,1}"
-    @test tk(Union{Int, Nothing}) == "Union{Core.Int64,Core.Nothing}"
-
-    # a checkpoint of another simulation must be refused, so anything a phase says has to
-    # count. Resuming into the wrong simulation is silent, which is what makes it serious.
-    @test id(base) ≠ id([CreateState{Pure}(3, Qubit(), "X-"), last(base)])
-    @test id(base) ≠ id([CreateState{Mixed}(3, Qubit(), "X+"), last(base)])
-    @test id(base) ≠ id([CreateState{Pure}(4, Qubit(), "X+"), last(base)])
-    @test id(base) ≠ id([CreateState{Pure}(3, Boson(2), "X+"), last(base)])
-    @test id(base) ≠ id([first(base), Evolve(duration = 2., time_step = 0.1,
-                                             algo = Tdvp(), evolver = -im * Z(1))])
-    @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1,
-                                             algo = Tdvp(), evolver = -im * Z(2))])
-    @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1,
-                                             algo = ApproxW(order = 2), evolver = -im * Z(1))])
-    # the parameters of the solvers count too
-    @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1,
-                                             algo = Tdvp(krylov = Krylov(tol = 1e-10)),
-                                             evolver = -im * Z(1))])
-    @test id([first(base), Evolve(duration = 1., time_step = 0.1, algo = ApproxW(order = 2),
-                                  evolver = -im * Z(1))]) ≠
-          id([first(base), Evolve(duration = 1., time_step = 0.1,
-                                  algo = ApproxW(order = 2, apply_algo = "naive"),
-                                  evolver = -im * Z(1))])
-    @test id(base) ≠ id([first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
-                                             evolver = -im * Z(1), measurements = ["f" => X])])
-    @test id([base; Gates(gates = X(1)); Gates(gates = Z(1))]) ≠
-          id([base; Gates(gates = Z(1)); Gates(gates = X(1))])
-    @test id(base) ≠ id(base[1:1])
-
-    # an anonymous function counts by the variables it captures, not by the name of its type,
-    # which a counter gives: the same program included again in a session named its
-    # functions anew, and its checkpoint was refused as another simulation's. Two copies of
-    # one function are two such names
-    timed(c) = [first(base), Evolve(duration = 1., time_step = 0.1, algo = Tdvp(),
-                                    evolver = [-im * Z(1)] => [c])]
-    @test id(timed(t -> exp(-t))) == id(timed(t -> exp(-t)))
-    decay1(g) = t -> exp(-g * t)
-    decay2(g) = t -> exp(-g * t)
-    @test id(timed(decay1(1.))) == id(timed(decay2(1.)))
-    # a function with a name counts by it
-    @test id(timed(sin)) ≠ id(timed(cos))
-
-    # a State given as is, rather than described, is part of what the simulation computes
-    sys = System(2, Qubit())
-    with(st) = [CreateState(type = Pure(), system = sys, state = st)]
-    @test id(with(State{Pure}(sys, "Z+"))) == id(with(State{Pure}(sys, "Z+")))
-    @test id(with(State{Pure}(sys, "Z+"))) ≠ id(with(State{Pure}(sys, "Z-")))
 end
 
 @testset "Nested phases" begin

@@ -230,11 +230,6 @@ of that name would shadow it rather than extend it. `runTMS` then logs the phase
 library. Within the method, `output` measures the simulation, `log_message` writes to its log and
 `get_sim_file` gives a file of the simulation to write anything else to.
 
-The fields of a phase of your own are part of the fingerprint by which a checkpoint tells its
-simulation, see `TensorMixedStates.phases_id`: keep in them what describes the phase, not what
-changes from one run to the next or as it runs, which would have the checkpoint refused as
-another simulation's.
-
 A phase written as a loop of steps with `run_steps` is stopped, checkpointed and resumed
 between two steps. One that drives a solver with `TdvpObserver`, `ApproxWObserver` or
 `DmrgObserver` is stopped and checkpointed between two sweeps as those of the library are,

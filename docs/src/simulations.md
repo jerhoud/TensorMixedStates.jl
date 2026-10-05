@@ -123,6 +123,7 @@ taken there. The directory holds in particular:
 
 - `log`: the progression of the computation;
 - `prog.jl`: a copy of the script;
+- `prog_args.json`: the command line arguments it was given, if any;
 - `description`: the content of the `description` field of the `SimData` object;
 - `stamp`: the versions, the date, the BLAS library and the thread settings of the run;
 - `running`: an empty file present during the computation;
@@ -195,21 +196,15 @@ the uninterrupted run: the results are as valid, but they are not the same numbe
 while one finished before the resume point does not, and samples measured during an evolution
 are not reproduced.
 
-A checkpoint records which simulation it belongs to, by its phases, its `time_start`, its
-`final_measurements` and its formats, and `runTMS` refuses to resume one that was written by a
-different simulation rather than mixing the two. So editing the phases of a program and
-running it again under the same name reports an error instead of quietly continuing something
-else, which matters when trying things out interactively. Give the simulation another name, or
-pass `restart = true`. Its name, its description, `checkpoint_interval`, `max_time` and
-`threading` may change: a simulation is resumed with more time or other threads.
-
-Functions are the blind spot of that check: changing the coefficients of a time dependent
-evolver, or the body of a `StateFunc`, leaves the phases looking the same, and the
-simulation resumes from a checkpoint computed with the old ones. Restart such a run rather
-than resume it. The other way round, a function that captures another function, as
-`t -> g(t)` built inside a function taking `g`, looks different when the program is included
-again in the same Julia session, and its checkpoint is then refused as another simulation's:
-resume it from a new session.
+A checkpoint is resumed only by the program that wrote it: the program run must be the same,
+byte for byte, as the copy `prog.jl` in the directory, and be given the same command line
+arguments, which `prog_args.json` holds when there are some. Editing the program and running it again under the
+same name thus reports an error instead of quietly continuing something else. To resume with
+the edited program all the same, more time or other threads for instance, copy it onto
+`prog.jl`, and its arguments into `prog_args.json`; to start over, pass `restart = true` or
+give the simulation another name. Only these two files are compared: a change in a file the
+program includes, or in a parameter it reads elsewhere, from an environment variable or a data
+file, goes unseen. A simulation run from the REPL, with no program file, is always resumed.
 
 ### Stopping on purpose
 

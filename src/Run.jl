@@ -76,9 +76,8 @@ written.
     threading::Union{Nothing, Symbol} = :dense
     phases
     # the phases are flattened once, here, so that everything downstream works on a single
-    # list: the phase loop, the position a checkpoint records, the fingerprint that tells
-    # one simulation from another. None of them has to remember to do it, and none of them
-    # can disagree on what the phases of a simulation are.
+    # list: the phase loop and the position a checkpoint records. Neither has to remember to
+    # do it, and the two cannot disagree on what the phases of a simulation are.
     SimData(description, name, time_start, final_measurements, time_format, data_format,
             checkpoint_interval, max_time, threading, phases) =
         new(description, name, time_start, final_measurements, time_format, data_format,
@@ -152,17 +151,20 @@ show(io::IO, s::SimData) =
     )
 
 """
-    simulation_id(sim_data)
+    same_program(src_path)
 
-the fingerprint by which a checkpoint tells the simulation it belongs to: that of its phases,
-see `phases_id`, and of the rest of what decides what the simulation writes, its `time_start`,
-its `final_measurements` and its formats, which a resume could change, a file then mixing two
-formats. Its name, its description and how it is run, `checkpoint_interval`, `max_time` and
-`threading`, are left out: a simulation may be resumed with more time or other threads.
+whether the checkpoint of the current directory may be resumed by the program `src_path`
+given the arguments `ARGS`: the same, byte for byte, as its copy `prog.jl`, given the same
+arguments as those `prog_args.json` holds, none when it is absent. A program with no file, run
+from the REPL, has nothing to compare and is always accepted.
 """
-simulation_id(sd::SimData) =
-    string(phase_hash(fnv_offset, (sd.phases, sd.time_start, sd.final_measurements,
-                                   sd.time_format, sd.data_format)))
+function same_program(src_path)
+    if isnothing(src_path) || src_path == ""
+        return true
+    end
+    args = isfile("prog_args.json") ? JSON.parsefile("prog_args.json") : []
+    return isfile("prog.jl") && read(src_path) == read("prog.jl") && args == ARGS
+end
 
 """
     threading_stamp(mode)
@@ -228,8 +230,7 @@ stopped(sim::Simulation) = sim.checkpoint.stopping
 
 run the given simulation, see `SimData`, in a directory named after it, and return the
 `Simulation` it ends with. A checkpoint found in the directory is resumed from, and refused
-if it belongs to another simulation, of other phases, start time, final measurements or
-formats, see `simulation_id`.
+if it was written by another program, or one given other arguments, see [Resuming](@ref).
 
 - `restart` (default `false`): remove the simulation directory first
 - `clean` (default `false`): remove the simulation directory and return without running
@@ -276,7 +277,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         if !isnothing(sim_data.threading)
             set_threading(sim_data.threading == :auto ? :dense : sim_data.threading)
         end
-        c = Checkpointer(live ? "." : "", simulation_id(sim_data);
+        c = Checkpointer(live ? "." : "";
                          interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         if live
             mkpath(sim_data.name);
@@ -285,11 +286,12 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             # refused before anything is written or loaded: the directory holds the results of
             # another simulation, whose program, description and markers were overwritten,
             # and its state may need site types this program does not load
-            if has_checkpoint(".") && checkpoint_meta(".")["id"] ≠ c.id
-                error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
-                      "its phases, start time, final measurements or formats are not the ones " *
-                      "being run. Use restart = true to start over and erase it, or choose " *
-                      "another name.")
+            src_path = Base.source_path()
+            if has_checkpoint(".") && !same_program(src_path)
+                error("the checkpoint of \"$(sim_data.name)\" was written by another program, " *
+                      "or one given other arguments: to resume with this one, copy it onto " *
+                      "prog.jl and its arguments into prog_args.json, or start over with " *
+                      "restart = true")
             end
             started = true
             touch("running")
@@ -308,12 +310,18 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     TensorMixedStates $(pkgversion(TensorMixedStates))
                     Date $(now())
                     """ * threading_stamp(sim_data.threading))
-            src_path = Base.source_path()
             # the copy run again is the program already there, which cp refused to copy onto
             # itself
-            if !isnothing(src_path) && src_path ≠ "" &&
-               !(isfile("prog.jl") && samefile(src_path, "prog.jl"))
-                cp(src_path, "prog.jl"; force = true)
+            if !isnothing(src_path) && src_path ≠ ""
+                if !(isfile("prog.jl") && samefile(src_path, "prog.jl"))
+                    cp(src_path, "prog.jl"; force = true)
+                end
+                # none is written as no file, and the file of a run that had some is removed
+                if isempty(ARGS)
+                    rm("prog_args.json"; force = true)
+                else
+                    write("prog_args.json", JSON.json(ARGS))
+                end
             end
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)

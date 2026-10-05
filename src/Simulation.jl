@@ -110,7 +110,7 @@ no destination may be named after: a destination called `stop` would stop the si
 one called `checkpoint.json` would overwrite the checkpoint.
 """
 const simulation_files = Set(["log", "stop", "error", "running", "stamp", "description",
-    "prog.jl", basename(checkpoint_json("")), basename(checkpoint_json("")) * ".tmp",
+    "prog.jl", "prog_args.json", basename(checkpoint_json("")), basename(checkpoint_json("")) * ".tmp",
     state_file(1), state_file(2)])
 
 """

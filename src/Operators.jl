@@ -1537,8 +1537,7 @@ jw_parity(a) = fermion_parity(a, true)
 # definition of their own — and so does every type that may hold one of them, since a
 # `ScalarOp` wrapping a `ProdOp` is `===` only to itself. Picking those types one by one
 # is what let `2X(1)*Y(2)`, `dag(X*Y)`, `Left(X*Y)`, `Phase(0.3)`, `controlled(Z)` and
-# half the hierarchy fall through, so it is read from the type instead, once, the way
-# `phase_hash` reads a phase.
+# half the hierarchy fall through, so it is read from the type instead, once.
 #
 # `Set` and `Dict` pick their bucket by `hash` and only then compare, so the two have to
 # be defined together or two equal operators land apart. `Measure` relies on this to ask

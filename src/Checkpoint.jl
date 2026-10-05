@@ -1,6 +1,5 @@
-# Checkpointing a running simulation: the fingerprint that identifies its phases, when a
-# checkpoint is due or a stop requested, and how a checkpoint is written, committed and loaded
-# back.
+# Checkpointing a running simulation: when a checkpoint is due or a stop requested, and how a
+# checkpoint is written, committed and loaded back.
 
 """
     checkpoint_file_version
@@ -8,158 +7,6 @@
 the layout version of a checkpoint; `load_checkpoint` refuses a checkpoint of another one.
 """
 const checkpoint_file_version = 4
-
-############### the fingerprint of the phases ###############
-
-"""
-    fnv_offset
-
-the offset basis of the 64 bit FNV-1a hash, by which the phases are fingerprinted. Its
-definition is fixed, unlike that of `Base.hash`, which changes between versions of Julia and
-would make a checkpoint look like another simulation's after an upgrade.
-"""
-const fnv_offset = 0xcbf29ce484222325
-
-"""
-    fnv_prime
-
-the prime of the FNV-1a hash, see `fnv_offset`.
-"""
-const fnv_prime = 0x00000100000001b3
-
-"""
-    fnv(h, bytes)
-
-the FNV-1a hash `h` with the given bytes mixed in.
-"""
-fnv(h::UInt64, bytes) = foldl((h, b) -> (h ⊻ b) * fnv_prime, bytes; init = h)
-
-"""
-    fnv_mix(h, x)
-
-the FNV-1a hash `h` with the value `x` mixed in, by bytes none of which depends on the version
-of Julia: an integer by its 64 bits, or by its digits beyond them, a float by the bits of its
-`Float64`, a rational or a complex number by its two parts, a string by its length and its code
-units, anything else by the string it prints as.
-"""
-fnv_mix(h::UInt64, x::UInt64) = fnv(h, reinterpret(UInt8, [x]))
-fnv_mix(h::UInt64, x::Integer) =
-    typemin(Int64) ≤ x ≤ typemax(Int64) ? fnv(h, reinterpret(UInt8, [Int64(x)])) : fnv_mix(h, string(x))
-# a signed zero mixes in as the zero it is equal to, `==` holding the two phases equal
-fnv_mix(h::UInt64, x::AbstractFloat) = fnv(h, reinterpret(UInt8, [no_signed_zero(Float64(x))]))
-fnv_mix(h::UInt64, x::Rational) = fnv_mix(fnv_mix(h, numerator(x)), denominator(x))
-fnv_mix(h::UInt64, x::Complex) = fnv_mix(fnv_mix(h, real(x)), imag(x))
-fnv_mix(h::UInt64, x::AbstractString) = fnv(fnv_mix(h, ncodeunits(x)), codeunits(x))
-fnv_mix(h::UInt64, x::Union{Number, Symbol, Char}) = fnv_mix(h, string(x))
-fnv_mix(h::UInt64, ::Nothing) = fnv_mix(h, "nothing")
-
-"""
-    type_key(T)
-
-a type written by the full path of its module, its name and its parameters, which does not
-depend on the names visible where it is written. `string(typeof(Qubit()))` gives `Qubit` or
-`TensorMixedStates.Qubit` depending on the `using` of the program, which would give one
-simulation two fingerprints.
-"""
-function type_key(T::DataType)
-    name = join((fullname(parentmodule(T))..., nameof(T)), ".")
-    if isempty(T.parameters)
-        return name
-    end
-    return name * "{" * join(map(type_parameter_key, T.parameters), ",") * "}"
-end
-type_key(T::UnionAll) = type_key(Base.unwrap_unionall(T))
-type_key(T::Union) = "Union{" * join(sort(map(type_key, Base.uniontypes(T))), ",") * "}"
-type_key(T::TypeVar) = string(T.name)
-# `Union{}`, the one type of none of the kinds above
-type_key(T::Type) = string(T)
-
-"""
-    type_parameter_key(p)
-
-a parameter of a type as `type_key` writes it: a type or a type variable by its `type_key`, a
-value, such as the dimension of an array or the names of a named tuple, as `repr` writes it.
-"""
-type_parameter_key(p::Union{Type, TypeVar}) = type_key(p)
-type_parameter_key(p) = repr(p)
-
-"""
-    phase_hash(h, x)
-
-the hash `h` with `x` mixed in, walking into its fields, see `phases_id`.
-"""
-phase_hash(h::UInt64, x::Union{Number, AbstractString, Symbol, Char, Nothing}) = fnv_mix(h, x)
-phase_hash(h::UInt64, x::Type) = fnv_mix(h, type_key(x))
-# an enumeration value has no field to walk into, its name is what it is
-phase_hash(h::UInt64, x::Enum) = fnv_mix(h, type_key(typeof(x)) * "." * string(x))
-phase_hash(h::UInt64, ::Index) = h
-phase_hash(h::UInt64, x::System) = phase_hash(fnv_mix(h, "System"), x.sites)
-# a State is its system and its tensors: `preobs` is a cache filled as measurements are
-# made, so the same state would hash differently once it has been measured
-phase_hash(h::UInt64, x::State{R}) where R =
-    phase_hash(phase_hash(fnv_mix(h, "State{$R}"), x.system), x.state)
-
-# a function bound to its name in its module counts by that name. Any other, anonymous or
-# local, has a type named by a counter, which changes as soon as the program is included
-# again in the same session or a function is added before it: it counts by the variables it
-# captures, the fields of its type
-function phase_hash(h::UInt64, x::Function)
-    m, n = parentmodule(x), nameof(x)
-    if isdefined(m, n) && getfield(m, n) === x
-        return fnv_mix(h, type_key(typeof(x)))
-    end
-    # the variables it captures count by their names and types, not by their values, which
-    # the closure may change as it runs, a counter for instance
-    h = fnv_mix(h, "anonymous function")
-    T = typeof(x)
-    for (f, t) in zip(fieldnames(T), fieldtypes(T))
-        h = fnv_mix(fnv_mix(h, string(f)), type_key(t))
-    end
-    return h
-end
-
-phase_hash(h::UInt64, x::Union{Tuple, Pair}) = foldl(phase_hash, (x...,); init = fnv_mix(h, "()"))
-phase_hash(h::UInt64, x::AbstractArray) = foldl(phase_hash, x; init = foldl(fnv_mix, size(x); init = h))
-
-# what a dictionary or a set holds, in no order: its storage order is not part of it, and its
-# fields are the internals of a hash table, some of them undefined
-function phase_hash(h::UInt64, x::Union{AbstractDict, AbstractSet})
-    s = zero(UInt64)
-    for y in x
-        s += phase_hash(zero(UInt64), y)
-    end
-    return fnv_mix(fnv_mix(h, type_key(typeof(x))), s)
-end
-
-function phase_hash(h::UInt64, x)
-    h = fnv_mix(h, type_key(typeof(x)))
-    for f in fieldnames(typeof(x))
-        if isdefined(x, f)
-            h = phase_hash(h, getfield(x, f))
-        end
-    end
-    return h
-end
-
-"""
-    phases_id(phases)
-
-a fingerprint of the phases of a simulation, by which, with the rest of what its `SimData`
-says it writes, a checkpoint tells whether it belongs to the simulation being run, see
-`simulation_id`. The phases are walked field by field, the structure being read
-from the types, so a field added to a phase counts without anything else to change, and
-nothing depends on how phases are printed.
-
-Functions are a blind spot: their bodies are never hashed. A function bound to its name in
-its module counts by that name, any other, anonymous or local, by the names and types of the
-variables it captures, and not by the name of its type, which a counter gives and which
-changes when the program is included again. So the coefficients of a time dependent evolver
-or the bodies of two `StateFunc` cannot be told apart.
-
-ITensor indices are left out, since they carry an identity drawn afresh in every session: a
-`System` is what its sites are.
-"""
-phases_id(phases) = string(phase_hash(fnv_offset, phases))
 
 ############### commits ###############
 
@@ -195,7 +42,7 @@ struct Commit
 end
 
 """
-    Checkpointer(dir = "", id = ""; interval = 0, max_time = Inf)
+    Checkpointer(dir = ""; interval = 0, max_time = Inf)
 
 the checkpointing machinery of a simulation, created by `runTMS` and carried by the
 `Simulation`, so that the solvers reach it through their observers. A simulation stops
@@ -205,8 +52,6 @@ appears in it or on an interrupt; with a directory, a checkpoint is written firs
 # Fields
 
 - `dir`:        the simulation directory, where the checkpoint is written, empty for none
-- `id`:         the fingerprint of the phases, see `phases_id`: a checkpoint with another one
-                is refused
 - `interval`:   seconds between two checkpoints, zero or less for no periodic checkpoint
 - `deadline`:   the `time()` after which the simulation stops cleanly, `Inf` for none
 - `next`:       the `time()` of the next checkpoint
@@ -220,7 +65,6 @@ appears in it or on an interrupt; with a directory, a checkpoint is written firs
 """
 mutable struct Checkpointer
     dir::String
-    id::String
     interval::Float64
     deadline::Float64
     next::Float64
@@ -232,8 +76,8 @@ mutable struct Checkpointer
     stopping::Bool
 end
 
-Checkpointer(dir::String = "", id::String = ""; interval::Real = 0, max_time::Real = Inf) =
-    Checkpointer(dir, id, interval,
+Checkpointer(dir::String = ""; interval::Real = 0, max_time::Real = Inf) =
+    Checkpointer(dir, interval,
                  max_time == Inf ? Inf : time() + max_time,
                  interval ≤ 0 ? Inf : time() + interval,
                  nothing, nothing, false, nothing, 0, false)
@@ -346,7 +190,6 @@ function write_checkpoint(c::Checkpointer, o::Outputs)
         open(tjs, "w") do io
             JSON.print(io, Dict(
                 "version" => checkpoint_file_version,
-                "id" => c.id,
                 "phase" => k.phase,
                 "sweep" => k.sweep,
                 "carried" => checkpoint_value(k.carried),
@@ -375,32 +218,19 @@ whether a checkpoint is present in the given directory
 has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
 
 """
-    checkpoint_meta(dir)
-
-the metadata of the checkpoint of the given directory, read without its state, which tells
-whom the checkpoint belongs to by its fingerprint `"id"`. A checkpoint of another version is
-refused.
-"""
-function checkpoint_meta(dir::String)
-    meta = JSON.parsefile(checkpoint_json(dir))
-    if meta["version"] ≠ checkpoint_file_version
-        error("checkpoint of $dir has version $(meta["version"]), expected $checkpoint_file_version")
-    end
-    return meta
-end
-
-"""
     load_checkpoint(dir[, system])
 
 read the checkpoint of the given directory, as a named tuple of the fields of the commit it
-records (`phase`, `sweep`, `phase_time`, `time`, `state`, `carried`), the fingerprint `id` of
-its phases, the `outputs` to put back with `restore_outputs!`, and the `generation` of its
+records (`phase`, `sweep`, `phase_time`, `time`, `state`, `carried`), the `outputs` to put back with `restore_outputs!`, and the `generation` of its
 state file. Its state comes back on the system `system(phase, sites)` gives, from the phase of
 the commit and the sites of the state, or on a system of its own when that is `nothing`. A
 checkpoint of another version, or whose state file is missing, is refused.
 """
 function load_checkpoint(dir::String, system = (_, _) -> nothing)
-    meta = checkpoint_meta(dir)
+    meta = JSON.parsefile(checkpoint_json(dir))
+    if meta["version"] ≠ checkpoint_file_version
+        error("checkpoint of $dir has version $(meta["version"]), expected $checkpoint_file_version")
+    end
     file = meta["state"]
     path = joinpath(dir, file)
     if !isfile(path)
@@ -412,7 +242,7 @@ function load_checkpoint(dir::String, system = (_, _) -> nothing)
             state = load_state(path, "checkpoint";
                                system = system(phase, saved_sites(path, "checkpoint"))),
             carried = restored_value(meta["carried"]),
-            id = meta["id"], outputs = meta["outputs"],
+            outputs = meta["outputs"],
             generation = file == state_file(2) ? 2 : 1)
 end
 

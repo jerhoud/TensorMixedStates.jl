@@ -61,8 +61,8 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
     w::Int = 2
     hermitianize_period::Int = 0
     apply_algo::String = "densitymatrix"
-    # checked when the phase is written rather than when it runs: corrected then, it could not
-    # resume its checkpoint, which belongs to a simulation of other phases
+    # checked when the phase is written rather than when it runs: corrected then, the program
+    # would no longer be the one that wrote its checkpoint
     function ApproxW(order, w, hermitianize_period, apply_algo)
         check_w_approx(order, w)
         check_apply_algo(apply_algo)

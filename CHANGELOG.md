@@ -128,6 +128,13 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Changed
 
+- A checkpoint is resumed only by the program that wrote it: the same, byte for byte, as its
+  copy `prog.jl`, given the same command line arguments, which `prog_args.json` now keeps when
+  there are some. The fingerprint of the phases it was checked against missed a change in a
+  function, and could refuse a checkpoint of the same program included again in one session.
+  To resume with an edited program, copy it onto `prog.jl`. A program run from the REPL is
+  always resumed, and a checkpoint written before the upgrade is resumed by the same program
+  given no arguments.
 - `approx_W` of order 3 or 4 keeps its order under a time dependent evolver, where the time
   functions, taken at the middle of each step, limited it to order 2: each step is the
   commutator-free Magnus integrator of order 4, two exponentials taking the functions at
@@ -192,9 +199,6 @@ on the page "Extending TMS", are experimental and may still change in a version 
   its convergence after every vector rather than once its Krylov space is full. On a pure
   chain of 20 spins and a mixed one of 10 qubits, the evolution took a fourth of the products
   and a sixth to an eighth of the time, the states agreeing to 1e-13.
-- `Tdvp`, `ApproxW`, `GroundState` and `SteadyState` have new fields, which change the
-  fingerprint of a simulation using them: a checkpoint written before the upgrade is refused
-  after it.
 - The time functions of a time dependent evolver take real values, a complex value being
   refused: a complex function is written as its real and imaginary parts, each with its own
   term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
@@ -296,7 +300,7 @@ on the page "Extending TMS", are experimental and may still change in a version 
   as a text file is. Written when the files are closed, it failed at the end of the run, and
   the json files after it in the closing were never written; each is now written whatever
   happens to the others.
-- `runTMS` refuses a checkpoint of another simulation before it writes anything in its
+- `runTMS` refuses a checkpoint it cannot resume before it writes anything in its
   directory. It overwrote the description, the stamp and the program of the simulation whose
   results the directory holds, marked them with an error, and loaded its state first, which
   needed its site types. A directory that cannot be created or entered no longer has `runTMS`
