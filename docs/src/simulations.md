@@ -17,6 +17,8 @@ The following phases are available:
 - `PartialTrace`: trace the system over some sites (requires a mixed state)
 - `Weaken`: conserve less, for instance a strong symmetry asked for weakly (see `weaken`)
 - `SteadyState`: compute the steady state of a Lindblad equation (requires a mixed state)
+- `Thermalize`: take a mixed state towards the thermal state of a hamiltonian, by evolution in
+  imaginary time
 - `SaveState`: write the state to disk in an HDF5 file
 - `LoadState`: read back a state written by `SaveState`
 
@@ -29,7 +31,8 @@ runTMS(simdata)
 which executes the simulation.
 
 Phases that sweep take their measurements at every step by default. The
-`measurements_period` field of `Evolve`, `GroundState` and `SteadyState` raises that interval:
+`measurements_period` field of `Evolve`, `GroundState`, `SteadyState` and `Thermalize` raises that
+interval:
 `measurements_period = 10` measures one step out of ten, which is what long runs usually want.
 
 The `phases` field is a list, but that list may contain lists, to any depth, and is
@@ -214,11 +217,12 @@ Three things ask a running simulation to stop, and all three write a checkpoint 
 
 - `max_time` running out,
 - the file `stop` appearing in the simulation directory, typically with `touch
-  my_simulation/stop`, from the shell or from the epilogue of a batch job,
+  my_simulation/stop` from the shell; in a batch job, `max_time` set a little below the time
+  limit does the same without a file,
 - an interrupt, that is `Ctrl-C`.
 
-The `stop` file is the one to reach for in batch, since it does not depend on how the
-queueing system signals its jobs. It is removed when the simulation next starts, so it
+`max_time` is the one to reach for in batch, since it does not depend on how the queueing
+system signals its jobs. The `stop` file is removed when the simulation next starts, so it
 never blocks a later run.
 
 A stopped run returns the simulation it resumes from, and [`stopped`](@ref) tells it from one
@@ -237,7 +241,7 @@ it by default.
 
 ### What can be resumed inside a phase
 
-`Evolve`, `GroundState` and `SteadyState` are resumed at the sweep they reached, and a phase
+`Evolve`, `GroundState`, `SteadyState` and `Thermalize` are resumed at the sweep they reached, and a phase
 of your own written with `run_steps` at the step it reached, see [Phases of one's own](@ref own-phases).
 The other phases are short enough to be replayed, and a checkpoint is taken between phases
 whenever one is due.
@@ -248,8 +252,8 @@ several `Gates` phases, which gives resume points at no cost.
 
 ## Measurements
 
-Measurements are specified in the `measurements` field of `Evolve`, `GroundState` and
-`SteadyState`, taken as the phase sweeps, and in the `final_measurements` field of every phase and
+Measurements are specified in the `measurements` field of `Evolve`, `GroundState`,
+`SteadyState` and `Thermalize`, taken as the phase sweeps, and in the `final_measurements` field of every phase and
 of `SimData`, taken at its end. They take the form of a pair or list of pairs.
 
 ```julia
