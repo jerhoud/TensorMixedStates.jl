@@ -1147,6 +1147,15 @@ struct GenPowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
     expo::Number
     function GenPowOp(arg::GenericOp{R, N}, p::Number) where {R, N}
+        # a superoperator holding a fermionic operator takes, once placed, strings on both
+        # sides of the density matrix, which its power does not commute with: Gate(C +
+        # dag(C))^0.5 on site 3 was the power of the gate without them. Refused whatever its
+        # sites, rather than on all but the first. `hasfermionic` comes further on, reading the
+        # parity of this type
+        if R === Mixed && hasfermionic(arg)
+            error("$arg has no non integer power: the Jordan-Wigner strings of its fermionic " *
+                  "operators do not commute with it")
+        end
         c = scalarcoef(arg)
         a = scalararg(arg)
         m = abs(c)

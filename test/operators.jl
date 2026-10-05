@@ -608,6 +608,17 @@ end
     end
 end
 
+@testset "A non integer power of a fermionic superoperator" begin
+    # the strings it takes on both sides of the density matrix once placed do not commute with
+    # its power, which was taken without them on any site but the first: it is refused as it is
+    # written, whatever its sites
+    @test_throws "has no non integer power" Gate(C + dag(C))^0.5
+    @test_throws "has no non integer power" Left(C)^0.5
+    # an even one takes no string, and goes anywhere
+    ρ = State{Mixed}(System(3, Fermion()), "FullyMixed")
+    @test_ok make_mpo(ρ, (Gate(N)^0.5)(3))
+end
+
 @testset "The identity is one value of each kind" begin
     # every construction of an identity gives the same value, told by its type alone: on
     # several sites, on a density matrix, and placed, where it has no site, being the identity
