@@ -243,6 +243,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
   weakening it built the combiner of each site once per element `|m⟩⟨n|`, `d²` times, and
   built again on every site what is the same on sites alike. One measurement on 6 sites of
   `Boson(16)` took 2.1 s, it now takes 0.11 s.
+- The observers of the solvers prepare their measurements once for the phase, where every
+  output simplified and compacted the operators again. Measuring a long range interaction
+  and the Heisenberg energy of 100 spins at a bond dimension of 20 took 590 ms per output, it
+  now takes 140 ms. A measurement written wrongly is refused when the phase starts.
 - `Dissipator(Sm(1))`, `expect1(state, X(1))` and `expect2` of operators placed on sites are
   refused by a message saying what to write, where they raised a `MethodError`.
 - A state can be measured from several threads at once: its caches, filled on first use, had

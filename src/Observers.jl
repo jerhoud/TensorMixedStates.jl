@@ -17,8 +17,9 @@ simulation is asked to stop.
 """
 struct TdvpObserver <: AbstractObserver
     sim::Simulation
-    measurements::Union{Vector, Pair}
+    measurements::Vector
     period::Int
+    TdvpObserver(sim, measurements, period) = new(sim, measure_sets(measurements), period)
 end
 
 """
@@ -36,8 +37,9 @@ simulation is asked to stop.
 """
 struct ApproxWObserver <: AbstractObserver
     sim::Simulation
-    measurements::Union{Vector, Pair}
+    measurements::Vector
     period::Int
+    ApproxWObserver(sim, measurements, period) = new(sim, measure_sets(measurements), period)
 end
 
 """
@@ -56,8 +58,9 @@ simulation is asked to stop.
 """
 struct ThermalObserver <: AbstractObserver
     sim::Simulation
-    measurements::Union{Vector, Pair}
+    measurements::Vector
     period::Int
+    ThermalObserver(sim, measurements, period) = new(sim, measure_sets(measurements), period)
 end
 
 """
@@ -79,14 +82,14 @@ and `nsweeps` the sweeps of the whole phase, which a stop on the tolerance recor
 """
 mutable struct DmrgObserver <: AbstractObserver
     sim::Simulation
-    measurements::Union{Vector, Pair}
+    measurements::Vector
     period::Int
     tol::Real
     energy::Union{Nothing, Float64}
     done::Int
     nsweeps::Int
     DmrgObserver(sim, measurements, period, tol, done = 0; nsweeps = typemax(Int), energy = nothing) =
-        new(sim, measurements, period, tol, energy, done, nsweeps)
+        new(sim, measure_sets(measurements), period, tol, energy, done, nsweeps)
 end
 
 """

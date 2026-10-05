@@ -51,6 +51,16 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
 end
 
 """
+    measure_sets(measurements)
+
+the measurements given as `output` takes them, each destination with its `Measure`, which
+`output` takes as well: what an observer keeps, so that the operators are simplified and
+compacted once for its phase rather than at every output
+"""
+measure_sets(m::Pair) = measure_sets([m])
+measure_sets(ms::Vector) = Pair[ first(m) => Measure(last(m)) for m in ms ]
+
+"""
     log_message(::Simulation, text)
 
 write the given line to the `log` file of the simulation, or to the stream its output is
