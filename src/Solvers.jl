@@ -384,7 +384,8 @@ When the quantity is one a site can conserve, declaring it `strong` keeps the se
 sector of the starting state, see [Conserving a quantity](@ref). The steady state of a
 Lindbladian is hermitian, and a warning is given when the state found is not, its
 `HermiticityError` exceeding `1e-6`: the search has not converged, or the steady state is not
-unique. A hermitian state does not prove the steady state unique.
+unique. A hermitian state does not prove the steady state unique, see
+[Checking the accuracy](@ref).
 
 # Options
 

@@ -521,7 +521,11 @@ const Hermiticity = StateFunc("Hermiticity", hermiticity)
 """
     HermiticityError
 
-a state function measuring `1 - hermiticity(state)`, see `Hermiticity`.
+a state function measuring `1 - hermiticity(state)`, see `Hermiticity`: the squared norm of the
+anti-hermitian part of the density matrix, relative to that of the whole. When the exact state
+is hermitian, as under a Lindbladian, gates and noisy gates, and for a thermal or a steady
+state, that part is error: its square root is a lower bound of the error relative to the norm
+of the state, which makes it a criterion of convergence, see [Checking the accuracy](@ref).
 """
 const HermiticityError = StateFunc("HermiticityError", st -> 1. - hermiticity(st))
 
