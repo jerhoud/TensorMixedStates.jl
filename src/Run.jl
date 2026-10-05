@@ -152,6 +152,19 @@ show(io::IO, s::SimData) =
     )
 
 """
+    simulation_id(sim_data)
+
+the fingerprint by which a checkpoint tells the simulation it belongs to: that of its phases,
+see `phases_id`, and of the rest of what decides what the simulation writes, its `time_start`,
+its `final_measurements` and its formats, which a resume could change, a file then mixing two
+formats. Its name, its description and how it is run, `checkpoint_interval`, `max_time` and
+`threading`, are left out: a simulation may be resumed with more time or other threads.
+"""
+simulation_id(sd::SimData) =
+    string(phase_hash(fnv_offset, (sd.phases, sd.time_start, sd.final_measurements,
+                                   sd.time_format, sd.data_format)))
+
+"""
     threading_stamp(mode)
 
 the lines of the `stamp` file saying how the run is threaded when it starts: the `threading`
@@ -215,7 +228,8 @@ stopped(sim::Simulation) = sim.checkpoint.stopping
 
 run the given simulation, see `SimData`, in a directory named after it, and return the
 `Simulation` it ends with. A checkpoint found in the directory is resumed from, and refused
-if it belongs to a simulation with other phases.
+if it belongs to another simulation, of other phases, start time, final measurements or
+formats, see `simulation_id`.
 
 - `restart` (default `false`): remove the simulation directory first
 - `clean` (default `false`): remove the simulation directory and return without running
@@ -262,7 +276,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         if !isnothing(sim_data.threading)
             set_threading(sim_data.threading == :auto ? :dense : sim_data.threading)
         end
-        c = Checkpointer(live ? "." : "", phases_id(sim_data.phases);
+        c = Checkpointer(live ? "." : "", simulation_id(sim_data);
                          interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         if live
             mkpath(sim_data.name);
@@ -273,8 +287,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             # and its state may need site types this program does not load
             if has_checkpoint(".") && checkpoint_meta(".")["id"] ≠ c.id
                 error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
-                      "its phases are not the ones being run. Use restart = true to start over " *
-                      "and erase it, or choose another name.")
+                      "its phases, start time, final measurements or formats are not the ones " *
+                      "being run. Use restart = true to start over and erase it, or choose " *
+                      "another name.")
             end
             started = true
             touch("running")

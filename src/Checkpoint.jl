@@ -144,8 +144,9 @@ end
 """
     phases_id(phases)
 
-a fingerprint of the phases of a simulation, by which a checkpoint tells whether it belongs
-to the simulation being run. The phases are walked field by field, the structure being read
+a fingerprint of the phases of a simulation, by which, with the rest of what its `SimData`
+says it writes, a checkpoint tells whether it belongs to the simulation being run, see
+`simulation_id`. The phases are walked field by field, the structure being read
 from the types, so a field added to a phase counts without anything else to change, and
 nothing depends on how phases are printed.
 

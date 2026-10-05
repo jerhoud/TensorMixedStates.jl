@@ -1329,6 +1329,29 @@ end
     end
 end
 
+@testset "A checkpoint belongs to what its SimData says it writes" begin
+    # only the phases told the simulation of a checkpoint: a resume with other formats was
+    # accepted, a file then mixing two, and so was one with another start time, ignored
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Kicks(measurements = "data" => [Z(1), stopper_at(stop_in)])]
+            @test stopped(runTMS(SimData(; name = "sim", phases)))
+            for changed in (SimData(; name = "sim", phases, data_format = "%.3f"),
+                            SimData(; name = "sim", phases, time_format = "%.3f"),
+                            SimData(; name = "sim", phases, time_start = 100.),
+                            SimData(; name = "sim", phases, final_measurements = "f" => Z))
+                @test_throws "belongs to another simulation" runTMS(changed)
+            end
+            # how it is run may change, as its description
+            @test !stopped(runTMS(SimData(; name = "sim", phases, description = "again",
+                                          max_time = 1e6, checkpoint_interval = 1e3,
+                                          threading = nothing)))
+        end
+    end
+end
+
 @testset "Phase fingerprint" begin
     # the phases of a simulation are what `SimData` made of them, flattened
     id(phases) = TensorMixedStates.phases_id(SimData(; phases).phases)

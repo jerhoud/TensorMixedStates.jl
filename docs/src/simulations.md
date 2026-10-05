@@ -192,11 +192,13 @@ the uninterrupted run: the results are as valid, but they are not the same numbe
 while one finished before the resume point does not, and samples measured during an evolution
 are not reproduced.
 
-A checkpoint records which phases it belongs to, and `runTMS` refuses to resume one that
-was written by a different simulation rather than mixing the two. So editing the phases of
-a program and running it again under the same name reports an error instead of quietly
-continuing something else, which matters when trying things out interactively. Give the
-simulation another name, or pass `restart = true`.
+A checkpoint records which simulation it belongs to, by its phases, its `time_start`, its
+`final_measurements` and its formats, and `runTMS` refuses to resume one that was written by a
+different simulation rather than mixing the two. So editing the phases of a program and
+running it again under the same name reports an error instead of quietly continuing something
+else, which matters when trying things out interactively. Give the simulation another name, or
+pass `restart = true`. Its name, its description, `checkpoint_interval`, `max_time` and
+`threading` may change: a simulation is resumed with more time or other threads.
 
 Functions are the blind spot of that check: changing the coefficients of a time dependent
 evolver, or the body of a `StateFunc`, leaves the phases looking the same, and the

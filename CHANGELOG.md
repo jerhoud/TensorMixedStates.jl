@@ -236,6 +236,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A checkpoint is refused when the `time_start`, the `final_measurements` or the formats of the
+  `SimData` being run are not those of its simulation, which its phases alone told: a resume
+  went on with them, a file then mixing two formats. The name, the description,
+  `checkpoint_interval`, `max_time` and `threading` may still change.
 - A value carried by `run_steps` that a checkpoint does not give back as it is, a `Float32`, a
   symbol, a tuple, a dictionary with keys other than strings or an object such as a random
   number generator, is refused at the step that carries it, in a run with a directory: a
