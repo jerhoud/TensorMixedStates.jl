@@ -818,6 +818,10 @@ expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =
         scalar(t * obs_at(state, op, i))
     end
 
+# said here rather than by the MethodError of `length` the method below raised on it
+expect1_one(::State, a::IndexedOp, ::Int, ::ITensor) =
+    error("expect1 measures an operator on every site, X rather than X(1): measure $a with expect")
+
 expect1_one(state::State, ops, i::Int, t::ITensor) =
     map(ops) do o
         expect1_one(state, o, i, t)
@@ -927,6 +931,12 @@ otherwise; the Jordan-Wigner strings of fermionic ones are inserted for you.
 """
 expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
     expect2(state, [ops])[1]
+
+# a pair of operators placed on sites, or anything else that is not a pair of operators of one
+# site, said here rather than by a MethodError
+expect2(::State, ops) =
+    error("expect2 correlates two operators on every pair of sites, (X, Y) rather than " *
+          "(X(1), Y(2)): measure X(1) * Y(2) with expect")
 
 """
     variance(::State{Pure}, hamiltonian)

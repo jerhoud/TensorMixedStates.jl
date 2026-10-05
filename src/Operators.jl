@@ -810,6 +810,11 @@ struct Dissipator{N} <: GenericOp{Mixed, N}
         abs2(scalarcoef(arg)) * new{N}(scalararg(arg))
 end
 
+# said here, as Gate says it, rather than by a MethodError naming no way out
+Dissipator(a::IndexedOp) =
+    error("cannot take the dissipator of $a, which is placed on sites: write Dissipator(Sm)(1) " *
+          "rather than Dissipator(Sm(1))")
+
 show(io::IO, a::Dissipator) =
     paren(io, 1000, 0) do io
         show_func(io, "Dissipator", a.arg)

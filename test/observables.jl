@@ -1059,3 +1059,13 @@ end
     both(x -> mutual_info_renyi2(x, [1, 2]))
     both(x -> mutual_info_renyi2(x, 2))
 end
+
+@testset "A placed operator where a generic one is expected" begin
+    # each raised a MethodError naming no way out, expect1 one on `length`
+    ψ = State{Pure}(System(2, Qubit()), "Up")
+    @test_throws "measure X(1) with expect" expect1(ψ, X(1))
+    @test_throws "measure X(1) with expect" expect1(ψ, [Z, X(1)])
+    @test_throws "(X, Y) rather than (X(1), Y(2))" expect2(ψ, (X(1), X(2)))
+    @test_throws "(X, Y) rather than (X(1), Y(2))" expect2(ψ, [(X, X), (X(1), X(2))])
+    @test_throws "rather than Dissipator(Sm(1))" Dissipator(Sm(1))
+end

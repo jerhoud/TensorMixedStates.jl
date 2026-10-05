@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `Dissipator(Sm(1))`, `expect1(state, X(1))` and `expect2` of operators placed on sites are
+  refused by a message saying what to write, where they raised a `MethodError`.
 - A state can be measured from several threads at once: its caches, filled on first use, had
   no lock, and a thread found one sized and not yet filled, failing on an `UndefRefError`.
 - `weaken` refuses a target naming a quantity twice by a message saying so: it failed inside
