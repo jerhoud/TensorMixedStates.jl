@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `Limits` takes a bond dimension of any integer type, an `Int32` raising a `MethodError`, and
+  refuses a float by a message naming `maxdim` or `mindim`.
 - A checkpoint is refused when the `time_start`, the `final_measurements` or the formats of the
   `SimData` being run are not those of its simulation, which its phases alone told: a resume
   went on with them, a file then mixing two formats. The name, the description,

@@ -56,10 +56,29 @@ struct Limits
     Limits(cutoff, maxdim, mindim) = new(cutoff, maxdim, at_least_one(mindim))
 end
 
+"""
+    float_cutoff(x)
+
+the cutoff `x`, a real number or a vector of them, as `Float64`.
+"""
+float_cutoff(x::Real) = Float64(x)
+float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
+
+"""
+    int_dims(x, what)
+
+the bond dimension `x`, an integer or a vector of them, as `Int`, which `Limits` holds: an
+`Int32` raised a `MethodError`. Anything else, a float included, is refused by a message naming
+`what`, a bond dimension being an integer.
+"""
+int_dims(x::Integer, _) = Int(x)
+int_dims(x::AbstractVector{<:Integer}, _) = Vector{Int}(x)
+int_dims(x, what) = error("$what is an integer, or a vector of them, not $(repr(x))")
+
 # a cutoff is a real number, and `cutoff = 0` has to be accepted as one: a field whose type
 # is a union is not converted to, so `@kwdef` refused it
 Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1) =
-    Limits(float_cutoff(cutoff), maxdim, mindim)
+    Limits(float_cutoff(cutoff), int_dims(maxdim, "maxdim"), int_dims(mindim, "mindim"))
 
 # printed as the call that builds it, the fields left at their default omitted
 function show(io::IO, l::Limits)
@@ -68,14 +87,6 @@ function show(io::IO, l::Limits)
              if getfield(l, f) != getfield(default, f)]
     print(io, "Limits(", join(given, ", "), ")")
 end
-
-"""
-    float_cutoff(x)
-
-the cutoff `x`, a real number or a vector of them, as `Float64`.
-"""
-float_cutoff(x::Real) = Float64(x)
-float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
 
 """
     at_least_one(m)

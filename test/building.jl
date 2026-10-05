@@ -157,6 +157,12 @@ end
     # zero states used to fail inside ITensors
     @test Limits(mindim = 0).mindim == 1
     @test Limits(mindim = [0, 2]).mindim == [1, 2]
+    # a dimension is an integer of any type, an Int32 raising a MethodError, and a float is
+    # refused by name
+    @test Limits(maxdim = Int32(10)).maxdim === 10
+    @test Limits(maxdim = Int32[10, 20], mindim = UInt8(2)).maxdim == [10, 20]
+    @test_throws "maxdim is an integer" Limits(maxdim = 1e3)
+    @test_throws "mindim is an integer" Limits(mindim = [1.5])
     q = State{Pure}(System(3, Qubit()), "Up")
     z = apply(Sp(2), q)
     @test norm(z - z) == 0
