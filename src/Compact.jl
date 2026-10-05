@@ -667,7 +667,8 @@ compares the two, term by term.
 # Examples
 
     H = compact(sum(0.6^(j - i) * Z(i) * Z(j) for i in 1:20 for j in i+1:20))
-    maxlinkdim(make_mpo(state, H))      # 3, rather than 102 for the sum itself
+    maxlinkdim(make_mpo(state, H))      # 3, as for the sum itself, which make_mpo compacts:
+                                        # compact spares doing it again at each call
 """
 compact(op::IndexedOp; tol::Real = rounding_tol) =
     compact_simplified(removeMulti(simplify(op)), tol, "compact")
