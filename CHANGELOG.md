@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `weaken` refuses a target naming a quantity twice by a message saying so: it failed inside
+  ITensors, or, given once strong and once weak, with a message about strength.
 - A site of parameters out of their range is refused when it is built: `Spin(-1/2)`, of
   dimension 0, `Boson(0)` and `Qudit(0)` were taken, and `Qboson(1.5, 3)`, whose `1 - q^n` is
   negative, failed only on the square root its `A` takes.

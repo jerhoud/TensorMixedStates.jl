@@ -571,6 +571,10 @@ end
     @test weaken(sys, t) === sys
     @test weaken(st, t) === st
     @test_ok State(weaken(sys, t), weaken(st, t))
+    # a quantity named twice failed inside ITensors, and once strong and once weak on a
+    # message about strength
+    @test_throws "Ntot is given twice" weaken(st, (Ntot, Ntot))
+    @test_throws "Ntot is given twice" weaken(sys, (strong(Ntot), Ntot))
 end
 
 @testset "The order of the conserved quantities" begin

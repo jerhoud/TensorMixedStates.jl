@@ -862,7 +862,17 @@ asks for the operators themselves.
 """
 spec_names(c::Conserved) = c.names
 spec_names(::Tuple{}) = Tuple{String, Bool}[]
-spec_names(spec::Tuple) = reduce(vcat, map(spec_names, spec))
+function spec_names(spec::Tuple)
+    names = reduce(vcat, map(spec_names, spec))
+    # refused here, as `conserve_string` refuses it, rather than inside ITensors, on a
+    # duplicate name in a QN, or by a message about strength when given once strong and once weak
+    for (n, _) in names
+        if count(x -> first(x) == n, names) > 1
+            error("$n is given twice")
+        end
+    end
+    return names
+end
 spec_names(a::Strong) = [ (obs_name(a.arg), true) ]
 spec_names(a::SimpleOp) = [ (obs_name(a), false) ]
 spec_names(a) = error("$a does not name a conserved quantity")
