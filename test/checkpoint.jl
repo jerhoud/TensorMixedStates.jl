@@ -1146,6 +1146,29 @@ end
     end
 end
 
+@testset "A json file that cannot be written is refused at once" begin
+    # written when closed, a json file in no directory failed only at the end of the run, and
+    # the json files after it in the closing were never written
+    mktempdir() do dir
+        cd(dir) do
+            sim = Simulation(State{Pure}(System(2, Qubit()), "Up"))
+            output(sim, "good.json" => Z(1))
+            @test_throws "there is no directory nodir" output(sim, "nodir/bad.json" => Z(1))
+            close_sim_files(sim)
+            @test isfile("good.json")
+            # one that fails as it is closed does not keep the others from being written
+            o = sim.outputs
+            o.files["nodir/late.json"] = TensorMixedStates.JsonFile("nodir/late.json",
+                                                                     TensorMixedStates.Series())
+            for k in 1:3
+                output(sim, "after$k.json" => Z(1))
+            end
+            @test_throws SystemError close_sim_files(sim)
+            @test all(k -> isfile("after$k.json"), 1:3)
+        end
+    end
+end
+
 @testset "A destination is not a file of the simulation" begin
     # a destination called stop stopped the simulation at its first sweep and was erased by
     # the next run, one called checkpoint.json overwrote the checkpoint, and so on

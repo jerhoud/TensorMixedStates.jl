@@ -398,6 +398,12 @@ function open_destination(name::AbstractString)
     elseif name == "stderr"
         return Stream(stderr)
     elseif last(splitext(name)) == ".json"
+        # written when it is closed, at the end of the run, a json file is refused here as a
+        # text file is by `open`, rather than after the whole computation
+        dir = dirname(name)
+        if !isempty(dir) && !isdir(dir)
+            error("cannot write $name: there is no directory $dir")
+        end
         return JsonFile(name, Series())
     end
     return TextFile(open(name, "w"))
@@ -472,6 +478,23 @@ end
 """
     close_outputs!(::Outputs)
 
-close every destination opened by name, which writes the json files, see `close!`.
+close every destination opened by name, which writes the json files, see `close!`. Each is
+closed even when another fails, the first failure being raised once they all are: the json
+files after a failing one were never written.
 """
-close_outputs!(o::Outputs) = foreach(close!, values(o.files))
+function close_outputs!(o::Outputs)
+    failure = nothing
+    for d in values(o.files)
+        try
+            close!(d)
+        catch e
+            if isnothing(failure)
+                failure = e
+            end
+        end
+    end
+    if !isnothing(failure)
+        throw(failure)
+    end
+    return nothing
+end

@@ -236,6 +236,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A json destination in a directory that does not exist is refused at its first measurement,
+  as a text file is. Written when the files are closed, it failed at the end of the run, and
+  the json files after it in the closing were never written; each is now written whatever
+  happens to the others.
 - `runTMS` refuses a checkpoint of another simulation before it writes anything in its
   directory. It overwrote the description, the stamp and the program of the simulation whose
   results the directory holds, marked them with an error, and loaded its state first, which
