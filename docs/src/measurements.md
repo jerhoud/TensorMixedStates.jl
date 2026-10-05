@@ -42,7 +42,7 @@ There are some state functions predefined:
 |:---|:---|
 | `Trace` | the trace of the density matrix |
 | `TraceError` | `1 - trace`, to monitor how far the trace drifts |
-| `Trace2`, `Purity` | the trace of the square of the density matrix |
+| `Trace2`, `Purity` | the trace of the square of the density matrix divided by the square of its trace, 1 on a pure state |
 | `Norm` | the norm of the state |
 | `Hermiticity` | 1 for a Hermitian density matrix, down to 0 for an anti-Hermitian one |
 | `HermiticityError` | `1 - hermiticity` |
@@ -80,10 +80,11 @@ measurements = "sweeps.dat" => :sweep
 ```
 
 `:sweep` is the sweep number and is available in every phase that sweeps, that is `Evolve`,
-`GroundState` and `SteadyState`, and in a phase of your own that passes it to `output`, as
+`GroundState`, `SteadyState` and `Thermalize`, and in a phase of your own that passes it to `output`, as
 `output(sim, measurements; sweep = k)`. `:energy` is the current energy and is available in
 `GroundState` and `SteadyState`, where it is the value dmrg minimises, zero at the steady
-state. Asking for a symbol that the running algorithm does not provide is not an error: the
+state. `:beta` and `:log_trace` are available in `Thermalize`: the inverse temperature and the
+logarithm of the trace each step reaches, see `thermal_state`. Asking for a symbol that the running algorithm does not provide is not an error: the
 measurement produces an empty value, so `:energy` in an `Evolve` phase writes its name and
 the time with no value in a file, and empty values in a json file or a `Data` object. The
 symbols are given to the `measurements` of a phase, not to its `final_measurements`, which are taken
