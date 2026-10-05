@@ -308,9 +308,13 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 k = load_checkpoint(".", system)
                 # put back before anything is written: a destination is created on first use,
                 # which would empty a file the checkpoint continues
-                restore_outputs!(sim.outputs, k.outputs)
+                shortened = restore_outputs!(sim.outputs, k.outputs)
                 c.generation = k.generation
                 log_message(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.time)")
+                for name in shortened
+                    log_message(sim, "Warning: $name is shorter than at the checkpoint, the lines " *
+                                     "it lost are not written again")
+                end
                 # the resume point is the last commit from the start, so that an interrupt
                 # before the phase it belongs to has begun writes it back as it was, rather
                 # than the state it holds as the start of that phase

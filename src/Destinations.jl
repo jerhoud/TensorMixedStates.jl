@@ -455,13 +455,23 @@ position and continued, a series holds again what it held. A file the checkpoint
 know is left alone here, and is created, emptied, on first use, as in the uninterrupted run.
 The log is continued without being cut back: it keeps the history of every run, the stop of
 an interrupted one included, where the other files hold what an uninterrupted run writes.
+
+The text files shorter than their recorded position, cut or removed by hand, are continued
+as they are, the lines they lost being written again by no one: their names are returned, for
+the log to say so.
 """
 function restore_outputs!(o::Outputs, persisted)
+    shortened = String[]
     for (name, p) in persisted["files"]
         if haskey(p, "text")
-            if name ≠ "log" && isfile(name) && filesize(name) > p["text"]
-                open(name, "a") do io
-                    Base.truncate(io, p["text"])
+            if name ≠ "log"
+                len = isfile(name) ? filesize(name) : 0
+                if len > p["text"]
+                    open(name, "a") do io
+                        Base.truncate(io, p["text"])
+                    end
+                elseif len < p["text"]
+                    push!(shortened, name)
                 end
             end
             o.files[name] = TextFile(open(name, "a"))
@@ -472,7 +482,7 @@ function restore_outputs!(o::Outputs, persisted)
     for (name, s) in persisted["data"]
         o.data[name] = restore_series(s)
     end
-    return o
+    return shortened
 end
 
 """

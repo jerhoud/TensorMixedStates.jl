@@ -504,6 +504,22 @@ end
     end
 end
 
+@testset "A resume says when a file was cut short" begin
+    # a file shorter than at its checkpoint, cut or removed by hand, was continued as it was,
+    # with a hole where the lines it lost were, and nothing said so
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(2)
+            phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                      Kicks(measurements = "data" => [Z(1), stopper_at(stop_in)])]
+            @test stopped(runTMS(SimData(; name = "cut", phases)))
+            rm("cut/data")
+            @test !stopped(runTMS(SimData(; name = "cut", phases)))
+            @test occursin("data is shorter than at the checkpoint", read("cut/log", String))
+        end
+    end
+end
+
 @testset "An output the checkpoint does not know is created anew" begin
     # a file opened after the checkpoint a run resumes from holds what a killed attempt left:
     # the uninterrupted run creates it, so the resumed one does too, where a file the

@@ -236,6 +236,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A resumed run says in its log which text files are shorter than at the checkpoint, cut or
+  removed by hand: they were continued with a hole where the lines they lost were, and nothing
+  said so.
 - A phase of one's own whose type has a parameter that is not a type, as `MyPhase{3}`, prints,
   and so does a `SimData` holding it: the name of each parameter was taken, which `3` has not.
 - A `Thermalize` phase stopped for a checkpoint no longer writes in the log that it is done,
