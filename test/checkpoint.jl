@@ -134,6 +134,22 @@ end
     @test startswith(repr(Kicks()), "\nKicks(\n    name = \"kicks\"")
 end
 
+# a phase of one's own whose parameter is a value rather than a type
+struct Valued{N} <: AbstractPhase
+    name::String
+    time_start
+    final_measurements
+end
+
+@testset "A phase prints the values of its parameters" begin
+    # it took the name of every parameter, and nameof(3) raised, as did the printing of a
+    # SimData holding the phase
+    @test startswith(repr(Valued{3}("valued", nothing, [])), "\nValued{3}(")
+    @test startswith(repr(CreateState{Mixed}(2, Qubit(), "Up")), "\nCreateState{Mixed}(")
+    @test_ok repr(SimData(phases = [CreateState{Pure}(1, Qubit(), "Up"),
+                                    Valued{3}("valued", nothing, [])]))
+end
+
 @testset "A simulation starts with its state" begin
     # it has none before its first phase, which used to fail on `nothing` inside its solver
     @test_throws "first phase must be" SimData(phases = [Gates(gates = X(1))])

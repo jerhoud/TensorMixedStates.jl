@@ -28,7 +28,10 @@ function show(io::IO, s::AbstractPhase)
     t = typeof(s)
     print(io, "\n", nameof(t))
     if !isempty(t.parameters)
-        print(io, "{", join(nameof.(t.parameters), ", "), "}")
+        # a type by its name, `Mixed` rather than `TensorMixedStates.Mixed`, and a value as it
+        # prints: the name of `3` raised, and with it the printing of a SimData holding the phase
+        print(io, "{", join((p isa Union{DataType, UnionAll} ? nameof(p) : repr(p)
+                             for p in t.parameters), ", "), "}")
     end
     print(io, "(")
     fs = fieldnames(t)

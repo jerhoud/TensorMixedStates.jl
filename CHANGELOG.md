@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A phase of one's own whose type has a parameter that is not a type, as `MyPhase{3}`, prints,
+  and so does a `SimData` holding it: the name of each parameter was taken, which `3` has not.
 - A `Thermalize` phase stopped for a checkpoint no longer writes in the log that it is done,
   with the logarithm of the trace it had reached.
 - A json destination in a directory that does not exist is refused at its first measurement,
