@@ -29,6 +29,12 @@ the site type of a boson mode truncated to `dim` levels, the occupation going fr
 struct Boson <: AbstractSite
     dim::Int
     conserve::String
+    Boson(dim::Int, conserve::AbstractString) =
+        if dim ≥ 1
+            new(dim, conserve)
+        else
+            error("a Boson has 1 level at least, not $dim")
+        end
 end
 
 Boson(dim::Int; conserve = ()) = Boson(dim, conserve_string(Boson(dim, ""), conserve))

@@ -42,11 +42,12 @@ differ.
 struct Spin <: AbstractSite
     s::Float64
     conserve::String
+    # a negative spin was taken, of dimension 2s + 1, 0 or less
     Spin(s::Number, conserve::AbstractString) =
-        if isinteger(2 * s)
+        if isinteger(2 * s) && s ≥ 0
             new(s, conserve)
         else
-            error("Spin requires an half integer as argument")
+            error("Spin requires a half integer of 0 or more as argument, not $s")
         end
 end
 

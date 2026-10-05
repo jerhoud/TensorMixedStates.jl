@@ -236,6 +236,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A site of parameters out of their range is refused when it is built: `Spin(-1/2)`, of
+  dimension 0, `Boson(0)` and `Qudit(0)` were taken, and `Qboson(1.5, 3)`, whose `1 - q^n` is
+  negative, failed only on the square root its `A` takes.
 - A non integer power of a superoperator holding a fermionic operator, as
   `Gate(C + dag(C))^0.5`, is refused as it is written: placed on any site but the first, without
   the strings it takes on both sides of the density matrix, which do not commute with the power,

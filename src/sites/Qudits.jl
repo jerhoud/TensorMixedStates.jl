@@ -41,6 +41,12 @@ by `Zd` and `Xd` onto themselves by conjugation.
 struct Qudit <: AbstractSite
     dim::Int
     conserve::String
+    Qudit(dim::Int, conserve::AbstractString) =
+        if dim ≥ 1
+            new(dim, conserve)
+        else
+            error("a Qudit has a dimension of 1 at least, not $dim")
+        end
 end
 
 Qudit(dim::Int; conserve = ()) = Qudit(dim, conserve_string(Qudit(dim, ""), conserve))

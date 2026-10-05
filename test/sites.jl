@@ -178,6 +178,19 @@ end
     end
 end
 
+@testset "Site parameters out of their range are refused" begin
+    # a spin of -1/2 had dimension 0, a boson or a qudit of no level was taken, and a q boson
+    # whose 1 - q^n is negative failed only on the square root of its A
+    @test_throws "half integer of 0 or more" Spin(-1/2)
+    @test_throws "1 level at least" Boson(0)
+    @test_throws "dimension of 1 at least" Qudit(0)
+    @test_throws "1 - q^n < 0" Qboson(1.5, 3)
+    @test_throws "1 - q^n < 0" Qboson(-2.0, 3)
+    @test dim(Spin(0)) == 1
+    # every level of A has its square root
+    @test matrix(A, Qboson(-2.0, 2)) ≈ [0 sqrt(3); 0 0]
+end
+
 @testset "Qboson measuring" begin
     @test_pm test_phases(CreateState{type}(4, Qboson(0.1, 4), ["0", "1", "2", "3"];
         final_measurements = check(N, [0, 1, 2, 3])))
