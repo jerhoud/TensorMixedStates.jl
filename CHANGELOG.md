@@ -128,6 +128,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Changed
 
+- A float coefficient of integer value prints as that integer, `2.0X` as `2X`, which changes
+  the name of a measurement written with one, and so does each part of a complex coefficient,
+  `(1 + 2im)X` rather than `(1.0 + 2.0im)X`.
 - `tdvp` and `approx_W` count their time steps with `nsteps` and `first_step`, rather than
   `nsweeps` and `first_sweep`, which `dmrg` and `steady_state` keep for their sweeps, as
   `thermal_state` already did.
@@ -233,6 +236,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- An integer coefficient is stored as a float, whose products do not wrap around as those of
+  integers silently do: the string `prod(2Sz(i) for i in 1:63)` measured -1 on sites up rather
+  than 1, on 64 sites 0, and `(2X)^64` was `0Id`. `(2X)^-1`, a negative power of an integer
+  coefficient, raised a `DomainError`. An integer coefficient prints as before, see Changed.
 - `steady_state` warns when the state it finds is not hermitian, its `HermiticityError`
   exceeding `1e-6`: the search has not converged, or the Lindbladian has several steady
   states, of which dmrg returns any combination. Under dephasing, which keeps the number of

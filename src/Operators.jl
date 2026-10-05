@@ -136,10 +136,26 @@ function show_func(io::IO, name, args, kwargs=(;))
 end
 
 """
+    print_number(io, x)
+
+print the real number `x`, a float of integer value as that integer, `2` rather than `2.0`: an
+integer coefficient is stored as a float, see `float_coef`, and prints as it was written.
+Beyond `maxintfloat`, where a float no longer stands for a single integer, it prints as a float.
+"""
+print_number(io::IO, x::AbstractFloat) =
+    if isinteger(x) && abs(x) < maxintfloat(Float64)
+        print(io, Int(x))
+    else
+        print(io, x)
+    end
+print_number(io::IO, x::Real) = print(io, x)
+
+"""
     print_coef(io, a)
 
 print the number `a` as the coefficient in front of an operator: nothing for 1, `-` for -1,
-`2im*` for an imaginary number, a rational or a complex number in parentheses
+`2im*` for an imaginary number, a rational or a complex number in parentheses, the floats of
+integer value as integers, see `print_number`
 """
 print_coef(io::IO, a::Number) =
 if a ≠ 1
@@ -151,6 +167,12 @@ if a ≠ 1
         elseif real(a) == 0
             print_coef(io, imag(a))
             print(io, "im*")
+        elseif isfinite(a)
+            print(io, "(")
+            print_number(io, real(a))
+            print(io, imag(a) < 0 ? " - " : " + ")
+            print_number(io, abs(imag(a)))
+            print(io, "im)")
         else
             print(io, "(", a, ")")
         end
@@ -158,7 +180,7 @@ if a ≠ 1
         # (1//2)X and not 1//2X, which reads 1//(2X)
         print(io, "(", a, ")")
     else
-        print(io, a)
+        print_number(io, a)
     end
 end
 
@@ -404,24 +426,36 @@ isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
 ################ Product by a number #############
 
 """
+    float_coef(x)
+
+the number `x` as an operator stores it as its coefficient: an integer of fixed width, or a
+complex number of them, as a float, whose products cannot wrap around as those of such integers
+silently do, `prod(2Sz(i) for i in 1:63)` having had the coefficient `-2^63`. Any other number
+is kept as it is, a rational refusing to overflow. The float prints as the integer, see
+`print_number`.
+"""
+float_coef(x::Union{Bool, Base.BitInteger, Complex{<:Union{Bool, Base.BitInteger}}}) = float(x)
+float_coef(x::Number) = x
+
+"""
     struct ScalarOp{R, T, N} <: Op{R, T, N}
 
 a number times an operator, the operator never a `ScalarOp` itself: `2 * (3X)` is `6X`. A
 coefficient of 1 gives the operator, of 0 gives `0 * Id`, and a number times a sum multiplies
-each term.
+each term. An integer coefficient is stored as a float, see `float_coef`.
 """
 struct ScalarOp{R, T, N} <: Op{R, T, N}
     coef::Number
     arg::Op{R, T, N}
     ScalarOp(coef::Number, arg::Op{R, T, N}) where {R, T, N} =
         if coef == 0
-            new{R, T, N}(0, IdentityOp{R, T, N}())
+            new{R, T, N}(0., IdentityOp{R, T, N}())
         elseif coef == 1
             arg
         elseif arg isa SumOp
             SumOp(map(x -> coef * x, arg.subs))
         else
-            new{R, T, N}(no_signed_zero(coef * scalarcoef(arg)), scalararg(arg))
+            new{R, T, N}(no_signed_zero(float_coef(coef * scalarcoef(arg))), scalararg(arg))
         end
 end
 
