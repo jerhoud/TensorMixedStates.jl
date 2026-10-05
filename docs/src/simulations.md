@@ -211,6 +211,12 @@ give the simulation another name. Only these two files are compared: a change in
 program includes, or in a parameter it reads elsewhere, from an environment variable or a data
 file, goes unseen. A simulation run from the REPL, with no program file, is always resumed.
 
+A program running several simulations copies itself into the directory of each, so that once
+it is edited none of them resumes, those it did not change included, until it is copied onto
+the `prog.jl` of each or they start over. Two simulations of one program must have different
+names: under the same name, they share a directory, and the second resumes the checkpoint of
+the first, of the same program, giving its results back as its own.
+
 ### Stopping on purpose
 
 Three things ask a running simulation to stop, and all three write a checkpoint first:
