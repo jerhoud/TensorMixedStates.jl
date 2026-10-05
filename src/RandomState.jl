@@ -22,7 +22,10 @@ whole computation stays real.
 On a system conserving something there is no sector to draw a state in, so the forms without
 `states` or a `State` are refused. A pure state is drawn by randomising a state you have, which
 stays in its sector; a mixed one by naming the `states` its purification starts from, written
-as for `State`, the result being a mixture over the sectors around the one named. No mixed
+as for `State`, the result being a mixture over the sectors around the one named. The
+purification draws its correlations through the sites it can change: a site whose charge the
+named states pin, on its two copies, stays pure, and no correlation crosses it, so that the
+link dimension may be lower than asked. No mixed
 state can be drawn when a quantity is conserved strongly, since tracing half of the
 purification leaves a mixture over several sectors. Randomising a mixed state is not
 implemented.
