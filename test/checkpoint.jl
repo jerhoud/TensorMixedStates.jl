@@ -845,6 +845,43 @@ end
     end
 end
 
+@testset "A checkpoint of another simulation is refused before anything is written" begin
+    # the simulation refused overwrote the description and the stamp of the one whose results
+    # the directory holds, its program as well, and marked those results with an error
+    mktempdir() do dir
+        cd(dir) do
+            runTMS(SimData(name = "sim", description = "first", checkpoint_interval = 1e-9,
+                           phases = [CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1))]))
+            stamp = read("sim/stamp", String)
+            other = SimData(name = "sim", description = "other",
+                            phases = [CreateState{Pure}(2, Qubit(), "Dn"), Gates(gates = X(2))])
+            @test_throws "belongs to another simulation" runTMS(other)
+            @test read("sim/description", String) == "first"
+            @test read("sim/stamp", String) == stamp
+            @test !isfile("sim/error")
+            @test !isfile("sim/running")
+        end
+    end
+end
+
+@testset "A directory that cannot be entered leaves the caller's alone" begin
+    # a file of that name, or the empty name, made runTMS write its marker error in the
+    # directory of the caller, and remove a file running there
+    mktempdir() do dir
+        cd(dir) do
+            write("clash", "")
+            write("running", "mine")
+            phases = [CreateState{Pure}(1, Qubit(), "Up")]
+            for name in ("clash", "")
+                @test_throws Base.IOError runTMS(SimData(; name, phases))
+                @test !isfile("error")
+                @test read("running", String) == "mine"
+                @test pwd() == realpath(dir)
+            end
+        end
+    end
+end
+
 @testset "A resumed dmrg with a measurement period" begin
     # a deadline already past stops every run after one sweep or one phase. A stop measured a
     # sweep its period skips, the line of a checkpointed sweep was cut from the log, and a

@@ -344,6 +344,21 @@ whether a checkpoint is present in the given directory
 has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
 
 """
+    checkpoint_meta(dir)
+
+the metadata of the checkpoint of the given directory, read without its state, which tells
+whom the checkpoint belongs to by its fingerprint `"id"`. A checkpoint of another version is
+refused.
+"""
+function checkpoint_meta(dir::String)
+    meta = JSON.parsefile(checkpoint_json(dir))
+    if meta["version"] ≠ checkpoint_file_version
+        error("checkpoint of $dir has version $(meta["version"]), expected $checkpoint_file_version")
+    end
+    return meta
+end
+
+"""
     load_checkpoint(dir[, system])
 
 read the checkpoint of the given directory, as a named tuple of the fields of the commit it
@@ -354,10 +369,7 @@ the commit and the sites of the state, or on a system of its own when that is `n
 checkpoint of another version, or whose state file is missing, is refused.
 """
 function load_checkpoint(dir::String, system = (_, _) -> nothing)
-    meta = JSON.parsefile(checkpoint_json(dir))
-    if meta["version"] ≠ checkpoint_file_version
-        error("checkpoint of $dir has version $(meta["version"]), expected $checkpoint_file_version")
-    end
+    meta = checkpoint_meta(dir)
     file = meta["state"]
     path = joinpath(dir, file)
     if !isfile(path)

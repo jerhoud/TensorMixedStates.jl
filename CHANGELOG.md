@@ -236,6 +236,11 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `runTMS` refuses a checkpoint of another simulation before it writes anything in its
+  directory. It overwrote the description, the stamp and the program of the simulation whose
+  results the directory holds, marked them with an error, and loaded its state first, which
+  needed its site types. A directory that cannot be created or entered no longer has `runTMS`
+  write the marker `error` in the directory of the caller, and remove a file `running` there.
 - `sample` of a mixed state drew every site after about the 1074th of a fully mixed chain of
   qubits in its last state, the probability of the outcomes drawn so far having fallen below
   the smallest float, and sooner on sites of a larger dimension.

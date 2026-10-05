@@ -251,15 +251,32 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     end
     start_dir = pwd()
     saved_threading = isnothing(sim_data.threading) ? nothing : ThreadingState()
+    # how far the run got into its directory, which the way out undoes and no further: a
+    # directory that could not be entered had the marker `error` written and a file `running`
+    # removed in the directory of the caller
+    entered = false
+    started = false
     try
         # set at once, so that the stamp records the settings the run starts with: `:auto`
         # starts dense, having no state to choose from yet
         if !isnothing(sim_data.threading)
             set_threading(sim_data.threading == :auto ? :dense : sim_data.threading)
         end
+        c = Checkpointer(live ? "." : "", phases_id(sim_data.phases);
+                         interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         if live
             mkpath(sim_data.name);
             cd(sim_data.name);
+            entered = true
+            # refused before anything is written or loaded: the directory holds the results of
+            # another simulation, whose program, description and markers were overwritten,
+            # and its state may need site types this program does not load
+            if has_checkpoint(".") && checkpoint_meta(".")["id"] ≠ c.id
+                error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
+                      "its phases are not the ones being run. Use restart = true to start over " *
+                      "and erase it, or choose another name.")
+            end
+            started = true
             touch("running")
             # a stop left over from the previous run would stop this one immediately, and the
             # marker of a failed run would go on describing this one once it has succeeded
@@ -284,18 +301,11 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                 cp(src_path, "prog.jl"; force = true)
             end
         end
-        c = Checkpointer(live ? "." : "", phases_id(sim_data.phases);
-                         interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
         try
             if live && has_checkpoint(".")
                 system(phase, sites) = resume_system(sim_data.phases, phase, sites)
                 k = load_checkpoint(".", system)
-                if k.id ≠ c.id
-                    error("the checkpoint of \"$(sim_data.name)\" belongs to another simulation, " *
-                          "its phases are not the ones being run. Use restart = true to start over " *
-                          "and erase it, or choose another name.")
-                end
                 # put back before anything is written: a destination is created on first use,
                 # which would empty a file the checkpoint continues
                 restore_outputs!(sim.outputs, k.outputs)
@@ -339,21 +349,23 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     catch
         # all the catch has of its own: the marker is written while the working directory
         # is still the simulation's, the finally below leaving it just afterwards
-        if live
+        if started
             touch("error")
         end
         rethrow()
     finally
         # leaving the simulation, by whichever way, is described here and nowhere else, so
         # that a step added later cannot be put on one path and forgotten on the other
-        if live
+        if started
             rm("running"; force = true)
-            cd(start_dir)
             # the flag is process wide and would otherwise change how Ctrl-C behaves for
             # everything the caller runs afterwards. There is no way to read it back, so
             # what goes back is the default Julia itself applies: on in a script, off in
             # the REPL and in a session started with `-i`
             Base.exit_on_sigint(!isinteractive())
+        end
+        if entered
+            cd(start_dir)
         end
         # process wide as well, and read back before the run
         if !isnothing(saved_threading)
