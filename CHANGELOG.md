@@ -239,6 +239,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `simplify` no longer compiles a method for every number of factors of a product: a product of
   60 operators took 20 s the first time, one of 100 took 42 s, and every string correlator of
   another length paid it again. It now takes less than a millisecond.
+- Measuring a new density matrix that conserves something strongly is three times faster:
+  weakening it built the combiner of each site once per element `|m⟩⟨n|`, `d²` times. One
+  measurement on 6 sites of `Boson(16)` took 2.1 s, it now takes 0.63 s.
 - `Dissipator(Sm(1))`, `expect1(state, X(1))` and `expect2` of operators placed on sites are
   refused by a message saying what to write, where they raised a `MethodError`.
 - A state can be measured from several threads at once: its caches, filled on first use, had

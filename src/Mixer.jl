@@ -36,14 +36,16 @@ function mixer(j::Index, k::Index, site::AbstractSite)
 end
 
 """
-    ket_bra(system, i, m, n)
+    ket_bras(system, i)
 
-the element ``|m\\rangle\\langle n|`` of site `i`, vectorised on its mixed index
+the function giving, for `(m, n)`, the element ``|m\\rangle\\langle n|`` of site `i`,
+vectorised on its mixed index. The combiner of `mixer` depends on the site alone, so it is
+built once for all the elements.
 """
-function ket_bra(system::System, i::Int, m::Int, n::Int)
+function ket_bras(system::System, i::Int)
     j = SysIndex{Pure}(system, i)
     b, c = mixer(j, SysIndex{Mixed}(system, i), system[i])
-    return onehot(j => m, dag(b') => n) * c
+    return (m, n) -> onehot(j => m, dag(b') => n) * c
 end
 
 """
@@ -80,7 +82,8 @@ passed through `f`, with the same element of `to`, or with ``|n\\rangle\\langle 
 """
 function element_map(to::System, from::System, i::Int, f; swap::Bool = false)
     d = dim(SysIndex{Pure}(from, i))
-    return sum( ket_bra(to, i, (swap ? (n, m) : (m, n))...) * dag(f(ket_bra(from, i, m, n)))
+    to_element, from_element = ket_bras(to, i), ket_bras(from, i)
+    return sum( to_element((swap ? (n, m) : (m, n))...) * dag(f(from_element(m, n)))
                 for m in 1:d, n in 1:d )
 end
 
