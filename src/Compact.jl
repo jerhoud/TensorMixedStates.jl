@@ -736,7 +736,7 @@ function monomials(op::IndexedOp)
         end
         fs = filter(x -> !(x isa IdentityOp), prodsubs(a))
         combs = [ [ (f.index, atom) => β for (atom, β) in linearize(f.op) ] for f in fs ]
-        for choice in distribute(combs...)
+        for choice in distribute(combs)
             # the identity left out, as com_expansion does
             add!(d, AtomProduct([ first(x) for x in choice if !(last(first(x)) isa IdentityOp) ]),
                  c * prod(last, choice; init = 1))

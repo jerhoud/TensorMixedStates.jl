@@ -236,6 +236,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `simplify` no longer compiles a method for every number of factors of a product: a product of
+  60 operators took 20 s the first time, one of 100 took 42 s, and every string correlator of
+  another length paid it again. It now takes less than a millisecond.
 - `Dissipator(Sm(1))`, `expect1(state, X(1))` and `expect2` of operators placed on sites are
   refused by a message saying what to write, where they raised a `MethodError`.
 - A state can be measured from several threads at once: its caches, filled on first use, had

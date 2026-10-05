@@ -39,13 +39,26 @@ pow_expo(a::Op) = 1
 pow_expo(a::Union{IntPowOp, GenPowOp}) = a.expo
 
 """
-    distribute(terms...)
+    distribute(terms)
 
-every product of one term taken from each of the vectors `terms`, as a vector of factors: the
-expansion of a product of sums.
+every product of one term taken from each of the vectors of `terms`, as a vector of factors,
+the term of the last vector varying fastest: the expansion of a product of sums.
+
+The products are built one vector at a time, so that the code does not depend on how many
+there are: splatted into `Iterators.product`, they had a method compiled for every number of
+factors, 20 s for a product of 60 and 42 s for one of 100, every string correlator of another
+length paying it again. A product with no sum, the common case, is its one term.
 """
-distribute(terms::Vector...) =
-    vec([ collect(reverse(p)) for p in Iterators.product(reverse(terms)...) ])
+function distribute(terms::AbstractVector)
+    if all(t -> length(t) == 1, terms)
+        return [ Any[ only(t) for t in terms ] ]
+    end
+    products = [ Any[] ]
+    for t in terms
+        products = [ Any[p; x] for p in products for x in t ]
+    end
+    return products
+end
 
 """
     split_string(b, a, string_first)
@@ -231,7 +244,7 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
 end
 
 function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
-    s = map(distribute(sumsubs.(v)...)) do p
+    s = map(distribute(sumsubs.(v))) do p
         cp = c * prod(scalarcoef.(p))
         r = filter(x -> !(x isa IdentityOp), reduce(vcat, prodsubs.(p)))
         change = true
