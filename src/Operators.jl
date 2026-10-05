@@ -13,16 +13,15 @@ export dag, ⊗, isfermionic, hasfermionic, lindblad_terms, map_sites
 """
     abstract type Representation
 
-the supertype of the representations in which `CreateState` creates a state: `Pure` and
-`Mixed`, and those an extension defines, whose states are `AbstractState`s.
+the supertype of the representations of a state: `Pure`, `Mixed`, and those an extension
+defines, whose states are `AbstractState`s.
 """
 abstract type Representation end
 
 """
     abstract type PM <: Representation
 
-the supertype of `Pure` and `Mixed`, the two representations of a state that the package
-defines, which parametrize operators as well as states
+the supertype of `Pure` and `Mixed`, which parametrize operators as well as states
 """
 abstract type PM <: Representation end
 
@@ -30,9 +29,8 @@ abstract type PM <: Representation end
     struct Pure <: PM
     Pure()
 
-the pure representation, in which a state is a wave function. It parametrizes states and
-operators, `State{Pure}` and `Op{Pure}`, and `Pure()` selects it where a representation is
-passed as a value.
+the representation of a state as a wave function, as in `State{Pure}` and `Op{Pure}`;
+`Pure()` selects it where a representation is passed as a value.
 
 # Examples
 
@@ -46,9 +44,9 @@ struct Pure <: PM end
     struct Mixed <: PM
     Mixed()
 
-the mixed representation, in which a state is a density matrix. It parametrizes states and
-operators, `State{Mixed}` and `Op{Mixed}`, and `Mixed()` selects it where a representation is
-passed as a value. Superoperators such as `Gate`, `Dissipator` or `Left` act on it only.
+the representation of a state as a density matrix, as in `State{Mixed}` and `Op{Mixed}`;
+`Mixed()` selects it where a representation is passed as a value. Superoperators, as `Gate`,
+`Dissipator` or `Left`, act on it only.
 
 # Examples
 
@@ -138,9 +136,8 @@ end
 """
     print_number(io, x)
 
-print the real number `x`, a float of integer value as that integer, `2` rather than `2.0`: an
-integer coefficient is stored as a float, see `float_coef`, and prints as it was written.
-Beyond `maxintfloat`, where a float no longer stands for a single integer, it prints as a float.
+print the real number `x`, a float of integer value as that integer, `2` rather than `2.0`,
+below `maxintfloat`
 """
 print_number(io::IO, x::AbstractFloat) =
     if isinteger(x) && abs(x) < maxintfloat(Float64)
@@ -154,8 +151,7 @@ print_number(io::IO, x::Real) = print(io, x)
     print_coef(io, a)
 
 print the number `a` as the coefficient in front of an operator: nothing for 1, `-` for -1,
-`2im*` for an imaginary number, a rational or a complex number in parentheses, the floats of
-integer value as integers, see `print_number`
+`2im*` for an imaginary number, a rational or a complex number in parentheses
 """
 print_coef(io::IO, a::Number) =
 if a ≠ 1
@@ -222,10 +218,9 @@ end
 """
     no_signed_zero(x)
 
-`x` with its signed zeros made positive (`-0.0 + 1.0im` becomes `0.0 + 1.0im`), any other
-value unchanged. Operators store their numbers through it: `-0.0 == 0.0`, but `isless` and
-`hash` tell them apart, so `simplify` could leave two equal terms unmerged and `measure` could
-compute the same operator twice.
+`x` with its signed zeros made positive, as operators store their numbers: `-0.0 == 0.0`,
+but `isless` and `hash` tell them apart, which would keep equal terms apart in `simplify` and
+`measure`
 """
 no_signed_zero(x::Union{AbstractFloat, Complex{<:AbstractFloat}}) = x + zero(x)
 no_signed_zero(x::AbstractArray) = map(no_signed_zero, x)
@@ -234,10 +229,8 @@ no_signed_zero(x) = x
 """
     state_key(state)
 
-the key a `Proj` or a `SetState` is ordered by: the kind of its state (an index, a name or an
-array), then its value, an array by its size and by the real and imaginary parts of its
-elements. The order is total, complex numbers included, and two keys tie exactly when the
-states are `==`, so that `simplify` merges the projectors on `[1, 0]` and on `[1.0, 0.0]`.
+the key a `Proj` or a `SetState` is ordered by, total, complex numbers included, and tying
+exactly when the states are `==`
 """
 state_key(x::Int) = (1, x)
 state_key(x::AbstractString) = (2, x)
@@ -257,10 +250,8 @@ the possible types of an `Operator`.
 - `selfadjoint_op`: invariant under `dag`
 - `involution_op`: invariant under `dag`, and its square is the identity
 
-`simplify` relies on the type: `dag(A)` is `A` for a self-adjoint `A`, `A * A` is `Id` for an
-involution, and the `F` of a site crosses a fermionic operator with a sign, any other without.
-The type is therefore checked against the matrix whenever the operator is placed on a site,
-and a wrong type is refused.
+`simplify` relies on the type, which is checked against the matrix when the operator is
+placed on a site.
 """
 @enum OpType plain_op fermionic_op selfadjoint_op involution_op
 
@@ -331,11 +322,8 @@ isless(a::Operator, b::Operator) = isless(a.name, b.name)
 """
     struct IdentityOp{R, T, N}
 
-the identity, one value for each kind of operator (pure or mixed, generic on `N` sites or
-placed). Every way of writing an identity gives it, `Id ⊗ Id`, `Left(Id)`, `Right(Id)`,
-`Gate(Id)` and `Id(3)` included, so an identity is recognized by its type alone. Placed, it is
-the identity of the whole system and has no site: the code that needs its tensor on a site
-builds it there.
+the identity, one value for each kind of operator, so that every way of writing it, as
+`Id ⊗ Id`, `Gate(Id)` or `Id(3)`, is recognized by its type. Placed, it has no site.
 """
 struct IdentityOp{R, T, N} <: Op{R, T, N} end
 
@@ -367,17 +355,15 @@ sum is `0 * Id`, a sum of one term that term.
 struct SumOp{R, T, N} <: Op{R, T, N}
     subs::Vector{<:Op{R, T, N}}
     function SumOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
-        # gathered in one pass: a sum built term by term, as `sum` does from a generator, copies
-        # what it holds at every term, and concatenating and filtering it again made that cost
-        # grow much faster, 3.8 s for 20000 terms
+        # in one pass: a sum built term by term, as `sum` of a generator does, copies its terms
+        # at each one, and filtering them again would make that cost grow faster still
         s = Op{R, T, N}[]
         for x in subs
             if x isa SumOp
                 # its terms are already those of coefficient other than zero
                 append!(s, x.subs)
             elseif scalarcoef(x) ≠ 0
-                # a term of coefficient zero is left out: the zero operator has every parity,
-                # and kept, it made `0C + dag(C)` a sum of fermionic and non fermionic operators
+                # left out: the zero operator has every parity, and `0C + dag(C)` would have none
                 push!(s, x)
             end
         end
@@ -428,11 +414,8 @@ isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
 """
     float_coef(x)
 
-the number `x` as an operator stores it as its coefficient: an integer of fixed width, or a
-complex number of them, as a float, whose products cannot wrap around as those of such integers
-silently do, `prod(2Sz(i) for i in 1:63)` having had the coefficient `-2^63`. Any other number
-is kept as it is, a rational refusing to overflow. The float prints as the integer, see
-`print_number`.
+the number `x` as the coefficient of an operator: an integer of fixed width, or a complex
+number of them, as a float, whose products cannot silently wrap around
 """
 float_coef(x::Union{Bool, Base.BitInteger, Complex{<:Union{Bool, Base.BitInteger}}}) = float(x)
 float_coef(x::Number) = x
@@ -583,9 +566,7 @@ nsites(::GenericOp{R, N}) where {R, N} = N
 """
     factor_sites(a::TensorOp)
 
-the positions, among the sites of the tensor product `a`, that each of its factors acts on, as
-ranges in the order of the factors: the first factor takes the first sites, the next one the
-following ones, and so on
+the ranges of the sites of the tensor product `a` that each of its factors acts on, in order
 """
 function factor_sites(a::TensorOp)
     stop = 0
@@ -810,7 +791,6 @@ struct Dissipator{N} <: GenericOp{Mixed, N}
         abs2(scalarcoef(arg)) * new{N}(scalararg(arg))
 end
 
-# said here, as Gate says it, rather than by a MethodError naming no way out
 Dissipator(a::IndexedOp) =
     error("cannot take the dissipator of $a, which is placed on sites: write Dissipator(Sm)(1) " *
           "rather than Dissipator(Sm(1))")
@@ -828,7 +808,7 @@ isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
     Evolver(A)
 
 the superoperator ``\\rho \\mapsto A\\rho + \\rho A^\\dagger`` of a placed operator `A` on
-pure states, which for `A = -im * H` is the hamiltonian part ``-i[H, \\rho]`` of an evolver.
+pure states, which for `A = -im * H` is the Hamiltonian part ``-i[H, \\rho]`` of an evolver.
 It is rarely written: a placed pure operator added to a mixed one, or turned into an MPO for a
 mixed state, becomes its `Evolver`.
 """
@@ -836,7 +816,6 @@ struct Evolver <: IndexedOp{Mixed}
     arg::IndexedOp{Pure}
 end
 
-# the converse of Gate, which takes an operator before it is placed
 Evolver(a::GenericOp) =
     error("Evolver takes an operator placed on sites: write Evolver(X(1)) rather than " *
           "Evolver(X)(1)")
@@ -856,10 +835,8 @@ isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 
 the operator placed on sites `op` with each of its factors moved from its sites to their
 images by `f`, a function from a site to a site: `map_sites(i -> 2i - 1, X(1) * Y(2))` is
-`X(1) * Y(3)`. The factors keep their order, and so does the product of fermionic operators
-they make. A representation of one's own whose tensors lie on another system, a purification
-interleaving an ancilla with each site for instance, places with it on that system the
-operators it is given.
+`X(1) * Y(3)`, the factors keeping their order. A representation of one's own whose tensors
+lie on another system, a purification for instance, places with it the operators it is given.
 """
 map_sites(f, a::AtIndex) = AtIndex(a.op, map(f, a.index))
 map_sites(f, a::SumOp) = SumOp(map(x -> map_sites(f, x), a.subs))
@@ -878,9 +855,8 @@ generic operator, placed on its sites afterwards, `Left(X)(1)`, or an operator a
 a sum or a product, `Left(X(1) * Z(3))` being `Left(X)(1) * Left(Z)(3)`, the strings of its
 fermionic factors included.
 
-`Gate`, `Dissipator` and `Evolver` act on both sides at once, as ``A\\rho A^\\dagger`` or
-``-i[H, \\rho]``. `Left` and `Right` act on a single side, which is not trace preserving. They
-can be used in an evolution or applied as gates, but they are not observables.
+Acting on a single side, `Left` and `Right` do not preserve the trace. They can be used in an
+evolution or applied as gates, but are not observables.
 
 # Examples
 
@@ -934,11 +910,9 @@ isless(a::Right, b::Right) =
 """
     sided(S, a)
 
-the superoperator `S` (`Left` or `Right`) of an operator `a` on pure states. A generic
-operator gives `S(a)`. A placed one is built factor by factor, the strings `Multi_F` included:
-`Left` is linear and `Right` conjugates the coefficients, and both are multiplicative in the
-order of the factors, `Right(A) Right(B) ρ` being `ρ B† A† = Right(A B) ρ`. There is no
-fallback for placed forms: one with no method raises rather than being dropped.
+the superoperator `S`, `Left` or `Right`, of an operator `a` on pure states, built factor by
+factor for a placed one, strings included: both keep the order of the factors,
+`Right(A) Right(B) ρ` being `ρ B† A† = Right(A B) ρ`, and `Right` conjugates the coefficients
 """
 sided(S, a::GenericOp{Pure}) = S(a)
 sided(S, a::AtIndex{Pure}) = AtIndex(S(a.op), a.index)
@@ -951,7 +925,6 @@ sided(::Type{Left}, a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, true, fa
 sided(::Type{Right}, a::Multi_F{Pure}) = Multi_F{Mixed}(a.start, a.stop, false, true)
 sided(S, a::ComOp{Pure}) = map_pieces(S, Mixed, a)
 
-# an operator already placed, a sum or a product with its coefficients, through sided
 Left(a::IndexedOp{Pure}) = sided(Left, a)
 Right(a::IndexedOp{Pure}) = sided(Right, a)
 
@@ -960,12 +933,11 @@ Right(a::IndexedOp{Pure}) = sided(Right, a)
 """
     Gate(A)
 
-the superoperator ``\\rho \\mapsto A\\rho A^\\dagger`` of an operator `A` on pure states: `A`
-applied as a gate to a density matrix. Gates combine linearly, which is how a noisy gate is
-written, and `Gate(c * A)` is `abs2(c) * Gate(A)`. `A` is not placed on sites, the gate is:
-`Gate(X)(1)` rather than `Gate(X(1))`, and `Gate(X ⊗ Z)(1, 2)` for several sites. A placed
-operator on pure states applied to a mixed state, or multiplied by an operator on mixed states,
-is turned into its gate.
+the superoperator ``\\rho \\mapsto A\\rho A^\\dagger`` of an operator `A` on pure states.
+Gates combine linearly, which is how a noisy gate is written, and `Gate(c * A)` is
+`abs2(c) * Gate(A)`. The gate is placed, not `A`: `Gate(X)(1)`, `Gate(X ⊗ Z)(1, 2)`. A placed
+operator on pure states applied to a mixed state, or multiplied by a mixed one, becomes its
+gate.
 
 # Examples
 
@@ -984,17 +956,15 @@ Gate(a::IndexedOp) =
 """
     build_gate(a)
 
-the gate of the operator `a`, placed on sites, which `apply` takes on a mixed state and a
-product of `a` by an operator on mixed states takes
+the gate of the placed operator `a`, see `Gate`
 """
 build_gate(a::ProdOp{Pure, Indexed, 1}) = ProdOp(build_gate.(a.subs))
 build_gate(ind::AtIndex{Pure}) = AtIndex(Gate(ind.op), ind.index)
 build_gate(::IdentityOp{Pure, Indexed, 1}) = IdentityOp{Mixed, Indexed, 1}()
 build_gate(a::ScalarOp{Pure, Indexed, 1}) = abs2(a.coef) * build_gate(a.arg)
 
-# a gate built from a sum does not distribute: (A + B) rho (A + B)' has cross terms. On one
-# site the sum is an operator of that site, whose gate is placed whole; otherwise the gate of K
-# is Left(K) Right(K), which the placed factors of K give one by one
+# the gate of a sum does not distribute, (A + B) ρ (A + B)† having cross terms: on one site it
+# is the gate of the sum, otherwise Left(K) Right(K)
 function build_gate(a::SumOp{Pure, Indexed, 1})
     s = scalararg.(a.subs)
     if all(x -> x isa AtIndex && length(x.index) == 1, s) && allequal(x -> x.index, s)
@@ -1003,8 +973,7 @@ function build_gate(a::SumOp{Pure, Indexed, 1})
     return ProdOp([sided(Left, a), sided(Right, a)])
 end
 
-# a com is a sum, see above: what asked for its gate refuses it with its own message, a product
-# as compacted and apply as a sum
+# a com is a sum, see above
 build_gate(a::ComOp{Pure}) = ProdOp([sided(Left, a), sided(Right, a)])
 
 (a::IndexedOp{Mixed} * b::IndexedOp{Pure}) = a * build_gate(b)
@@ -1020,17 +989,13 @@ isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
 """
     lindblad_terms(evolver)
 
-the hamiltonian and the jump operators of an evolver written `-im * H + Σ Dissipator(L)(sites)`,
-as `(H, jumps)`: `H` an operator placed on sites, zero when there is none, and `jumps` a vector
-of pairs `L => sites`, `L` a generic operator with its rate taken in, so that
-`Dissipator(L)(sites...)` is the term again: `γ * Dissipator(Sm)(2)` gives
-`sqrt(γ) * Sm => (2,)`. An evolver on pure states is a hamiltonian part alone.
-
-What it reads is what a representation of a state needs to unravel the evolution, quantum
-trajectories for instance, from the evolver of an `Evolve` phase. A term of another form, as
-`Left(X)(1)`, or a dissipator whose rate is negative or complex, which no jump operator gives, is
-refused. The terms of a time dependent evolver are read one by one: a rate multiplied by a
-function ``f(t)`` gives the jump ``\\sqrt{f(t)}\\,L``.
+the Hamiltonian and the jump operators of an evolver `-im * H + Σ Dissipator(L)(sites)`, as
+`(H, jumps)`: `H` placed on sites, zero when there is none, and `jumps` a vector of pairs
+`L => sites`, the rate taken into `L`: `γ * Dissipator(Sm)(2)` gives `sqrt(γ) * Sm => (2,)`.
+An evolver on pure states is a Hamiltonian part alone. It serves to unravel an evolution,
+into quantum trajectories for instance. A term of another form, as `Left(X)(1)`, or a
+dissipator of negative or complex rate is refused. A time dependent evolver is read term by
+term, a rate multiplied by ``f(t)`` giving the jump ``\\sqrt{f(t)}\\,L``.
 
 # Examples
 
@@ -1120,14 +1085,9 @@ is_natural(p::Number) = isreal(p) && isinteger(real(p)) && real(p) ≥ 0
 
 internal types for the powers of an operator.
 
-- `IntPowOp`, an integer exponent of zero or above: `A^3` is the product `A * A * A`, kept
-  whole only to print that way, with the adjoint, parity and Jordan-Wigner strings of that
-  product. A power of an involution is reduced at once, `X^10000` is `Id`.
-- `GenPowOp`, any other exponent (not an integer, negative or complex): a function of the
-  operator, the principal power taken through its logarithm, as `exp` is. It does not split
-  over factors, and of a coefficient only the modulus comes out, the phase staying inside.
-
-Both merge, `A^p * A^q` being `A^(p + q)`.
+- `IntPowOp`, an integer exponent of zero or above: the product, kept whole to print that way
+- `GenPowOp`, any other exponent: the principal power, a function of the operator, from which
+  only the modulus of a coefficient comes out
 """
 struct IntPowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
@@ -1152,11 +1112,9 @@ struct GenPowOp{R, N} <: GenericOp{R, N}
     arg::GenericOp{R, N}
     expo::Number
     function GenPowOp(arg::GenericOp{R, N}, p::Number) where {R, N}
-        # a superoperator holding a fermionic operator takes, once placed, strings on both
-        # sides of the density matrix, which its power does not commute with: Gate(C +
-        # dag(C))^0.5 on site 3 was the power of the gate without them. Refused whatever its
-        # sites, rather than on all but the first. `hasfermionic` comes further on, reading the
-        # parity of this type
+        # placed, a superoperator holding a fermionic operator takes strings on both sides of
+        # the density matrix, which its power does not commute with. `hasfermionic` is defined
+        # further on
         if R === Mixed && hasfermionic(arg)
             error("$arg has no non integer power: the Jordan-Wigner strings of its fermionic " *
                   "operators do not commute with it")
@@ -1182,20 +1140,17 @@ end
 """
     power(a, p)
 
-`a^p`: an `IntPowOp` when `p` is natural, see `is_natural`, a `GenPowOp` otherwise. It is
-also what two powers of the same operator merge into, the sum of their exponents choosing
-the kind.
+`a^p`: an `IntPowOp` when `p` is natural, see `is_natural`, a `GenPowOp` otherwise
 """
 power(a::GenericOp, p::Number) = is_natural(p) ? IntPowOp(a, Int(real(p))) : GenPowOp(a, p)
 
 (a::GenericOp ^ p::Number) = power(a, p)
 
-# a literal exponent goes through literal_pow, which for a negative one calls inv, which an
-# operator has no method of: X^-1 failed where p = -1; X^p did not
+# a literal negative exponent would go through `inv`, which an operator has no method of
 Base.literal_pow(::typeof(^), a::Op, ::Val{p}) where p = a ^ p
 
-# a placed operator is its operator on its sites, which takes any power, and an integer power of
-# anything placed is its product; a function of a placed sum or product has nowhere to go
+# the power of a placed operator is that of its operator; anything else placed only takes an
+# integer power, its product
 (a::AtIndex ^ p::Number) = power(a.op, p)(a.index...)
 
 # the identity to any power, the principal one of 1 being 1
@@ -1219,9 +1174,7 @@ sqrt(a::GenericOp) = a ^ 0.5
 
 show(io::IO, a::Union{IntPowOp, GenPowOp}) =
     paren(io, Base.operator_precedence(:^)) do io
-        # the base a precedence higher, ^ being right associative: (X^0.5)^0.5 printed
-        # X^0.5^0.5, which reads X^(0.5^0.5). A complex or rational exponent in parentheses,
-        # X^(0.0 + 0.5im) and X^(1//2), not X^0.0 + 0.5im and X^1//2
+        # the base a precedence higher, ^ being right associative: (X^0.5)^0.5, not X^0.5^0.5
         print(IOContext(io, :precedence => Base.operator_precedence(:^) + 1), a.arg)
         print(io, "^", a.expo isa Union{Complex, Rational} ? "($(a.expo))" : a.expo)
     end
@@ -1316,11 +1269,8 @@ end
     mod(A, m)
 
 the operator ``e^{2i\\pi A/m}``, of eigenvalues ``e^{2i\\pi a/m}`` for the eigenvalues ``a``
-of `A`. It can be measured like any other, and it is how a conserved quantity of
-``\\mathbb{Z}_m`` is written.
-
-The modulus is carried by the operator rather than read from its eigenvalues, which cannot
-tell it for ``m = 2``: ``\\pm 1`` could as well be integer charges.
+of `A`. Measured, `mod(N, 3)` gives the cube roots of unity; conserved, `conserve = mod(N, 3)`
+gives the charges ``n \\bmod 3``, 0, 1 or 2, added modulo 3 over the sites.
 
 # Examples
 
@@ -1356,26 +1306,19 @@ isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
 """
     fermion_parity(a, strung)
 
-the parity of an operator: `0` if even, `1` if odd, `nothing` if it has none. An operator of
-several sites has that of the product of its pieces placed: a tensor product the sum of the
-parities of its factors, an operator defined by an expression that of its expression. It
-serves `jw_parity`, and `isfermionic` and `hasfermionic`, which ask two different questions,
-told apart by `strung`:
+the parity of an operator: `0` if even, `1` if odd, `nothing` if it has none, an operator of
+several sites taking that of the product of its pieces placed. `strung` tells two questions
+apart:
 
-- `strung = true`, for `jw_parity`: how the operator behaves when the `F` of its site crosses
-  it, the Jordan-Wigner strings being in place. A `JW` transform is then odd, and a projector
-  on a vector is taken to have no parity, since the vector may mix even and odd states.
-- `strung = false`, for `isfermionic` and `hasfermionic`: whether the operator holds a fermionic factor whose
-  string `simplify` has not inserted yet. A `JW` transform then counts as even, its string
-  being already in place, and so does a projector, which never takes a string.
-
-`strung` changes nothing else: a composite operator passes it on to its pieces.
+- `true`, for `jw_parity`: how the operator behaves when the `F` of its site crosses it, the
+  strings in place. A `JW` transform is odd, and a projector on a vector has no parity.
+- `false`, for `isfermionic` and `hasfermionic`: whether it holds a fermionic factor whose
+  string `simplify` has not inserted yet. A `JW` transform and a projector are even.
 """
 fermion_parity(::Op, ::Bool) = 0
 fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
-# an operator of several sites cannot be declared fermionic: one defined by an expression has
-# its parity, one defined by a matrix or a function is taken as even, its matrix being laid
-# with no Jordan-Wigner string
+# an operator of several sites defined by a matrix or a function is even, its matrix being laid
+# with no string
 fermion_parity(a::Operator{N}, strung::Bool) where N =
     if a.type == fermionic_op
         1
@@ -1385,12 +1328,9 @@ fermion_parity(a::Operator{N}, strung::Bool) where N =
         0
     end
 fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
-# a projector on a basis state, given by its index or by a name, is even: the named states of
-# the fermionic sites are all basis states, which a site defined outside the package is taken
-# to follow
+# the named states of fermionic sites are basis states, whose projectors are even
 fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
 
-# a tensor product placed is the product of its factors placed, see ⊗
 function fermion_parity(a::Union{ProdOp, TensorOp}, strung::Bool)
     ps = map(x -> fermion_parity(x, strung), a.subs)
     return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
@@ -1435,12 +1375,8 @@ end
     named_type(op)
 
 the `OpType` `named` gives by default: the type of `op` for an `Operator`, `fermionic_op` for
-a fermionic expression of one site, `plain_op` otherwise.
-
-A renamed operator of one site keeps its name through `simplify`, so its type is the only thing
-that gives it a Jordan-Wigner string. `controlled_type` does the opposite for a fermionic
-target: a controlled operator acts on several sites, and `simplify` replaces it by its
-expression.
+a fermionic expression of one site, whose string its type alone gives once renamed, and
+`plain_op` otherwise
 """
 named_type(a::Operator) = a.type
 named_type(a::Op) = a isa SimpleOp && isfermionic(a) ? fermionic_op : plain_op
@@ -1451,29 +1387,22 @@ named_type(a::Op) = a isa SimpleOp && isfermionic(a) ? fermionic_op : plain_op
 the operator `name` defined by `def`, an expression, a matrix or a function of the sites: the
 way to define an operator of one's own.
 
-Its sites:
-- none given: an expression acts on as many sites as it does, a matrix or a function on one;
-- given: the operator is computed on them once and for all, which lets an operator of several
-  sites into a hamiltonian, see `Operator{N}(name, def, type, sites...)`. A single site
-  stands for as many identical ones as the size of a matrix asks for. A function then serves
-  these sites only: to keep it for every site, give it without sites and with its `type`.
+Without sites, an expression acts on as many sites as it does, a matrix or a function on one.
+With sites, the operator is computed on them once and for all, a single site standing for as
+many as the size of a matrix asks for, and a function then serves these sites only: give it
+without sites, with its `type`, to keep it for every site.
 
 Its type, see `OpType`, unless `type` gives it:
-- an expression without sites: the type of the operator when it is a single one, else
+- an expression without sites: that of the operator when it is a single one, else
   `fermionic_op` when it is fermionic of one site, `plain_op` otherwise;
-- a matrix, or anything given with its sites: the strongest type its matrix satisfies,
-  `involution_op`, `selfadjoint_op` or `plain_op`, or `fermionic_op` when it acts on a single
-  site, given with it, and anticommutes with its `F`. A matrix given without sites is never
-  taken for fermionic: give it `type = fermionic_op`;
+- a matrix, or anything given with its sites: the strongest type its matrix satisfies, and
+  `fermionic_op` only on a single site given with it; a matrix without sites is never taken
+  for fermionic;
 - a function without sites: `plain_op`.
 
-A matrix given without sites is checked against its type at once, except for its parity,
-which needs the `F` of a site and is checked when the matrix is laid on one. A type given to a
-function or an expression without sites is taken as it is: `simplify` relies on it, squaring an
-involution to the identity for instance, so a wrong one gives a wrong result.
-
-The name also identifies a conserved quantity: sites conserving operators of the same name
-share one charge, and renaming keeps two quantities apart.
+A type given to a function or an expression without sites is taken as it is, and a wrong one
+gives wrong results. Sites conserving operators of the same name share one charge, and
+renaming keeps two quantities apart.
 
 # Examples
 
@@ -1491,15 +1420,11 @@ named(op::GenericOp{Pure, N}, name::String; type::OpType = named_type(op)) where
 """
     hasfermionic(::Op)
 
-whether an operator still holds an odd operator of one site whose Jordan-Wigner string
-`simplify` has not inserted, wherever it sits: in a tensor product, in the expression of an
-operator of several sites, or inside a superoperator. The tensor of such an operator has
-legs on the sites it acts on only, so that it cannot hold the string on the sites in between:
-`(C ⊗ dag(C))(1, 3)`, which is `C(1) * dag(C)(3)`, would miss the string on site 2.
-
-After `simplify` the factors are `JW` transforms, which are not fermionic, and the answer is
-false unless a factor was kept whole, as an exponential of several sites is. A factor of no
-definite parity, as `C + N`, answers true instead of raising.
+whether an operator holds an odd operator of one site whose Jordan-Wigner string `simplify`
+has not inserted, wherever it sits: in a tensor product, in the expression of an operator of
+several sites, or inside a superoperator. Such an operator needs `simplify` before it is laid,
+its tensor holding no string on the sites in between. A factor of no definite parity, as
+`C + N`, answers true.
 """
 hasfermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
 
@@ -1522,26 +1447,16 @@ end
 how a factor of a product behaves when the `F` of its sites cross it: `0` if it commutes with
 them, `1` if it anticommutes, `nothing` if neither.
 
-A fermionic operator and its Jordan-Wigner transform are odd, any other operator is taken as
-even, the convention the strings rest on, and a composite factor gets the parity of its pieces.
-Sums count too, since `simplify` gathers the terms of one site into one factor: taking
-`(C + dag(C))(1)` as even gave `C(3) * (C + dag(C))(1)` the wrong sign.
+A fermionic operator and its Jordan-Wigner transform are odd, any other operator is even, and
+a composite factor, a sum included, gets the parity of its pieces.
 """
 jw_parity(a) = fermion_parity(a, true)
 
 ################## Equality #################
 
-# An operator is compared by what it is made of, never by the identity of the object that
-# holds it. The default `==` of an immutable struct falls back to `===`, which walks the
-# fields but compares a `Vector` field by identity, so the types carrying `subs` need a
-# definition of their own — and so does every type that may hold one of them, since a
-# `ScalarOp` wrapping a `ProdOp` is `===` only to itself. Picking those types one by one
-# is what let `2X(1)*Y(2)`, `dag(X*Y)`, `Left(X*Y)`, `Phase(0.3)`, `controlled(Z)` and
-# half the hierarchy fall through, so it is read from the type instead, once.
-#
-# `Set` and `Dict` pick their bucket by `hash` and only then compare, so the two have to
-# be defined together or two equal operators land apart. `Measure` relies on this to ask
-# for a measurement shared by two observables only once.
+# An operator is compared by what it is made of: the default `==` of an immutable struct
+# compares a `Vector` field by identity, so equality is read from the fields of every type at
+# once. `hash` goes with it, or two equal operators land apart in a `Set` or a `Dict`.
 
 (a::Op == b::Op) =
     typeof(a) == typeof(b) &&
@@ -1593,8 +1508,6 @@ ranking(::ModOp) = 33
 """
     obs_name(op)
 
-the default name of a measurement: the compact printed form of the operator, in which long
-sums and products are abbreviated. Only an `Operator` has a `name` field; `X * Y`, `2X` or
-`X + Y` have no other description than their printed form.
+the default name of a measurement: the compact printed form of the operator
 """
 obs_name(op) = sprint(print, op; context = :compact => true)
