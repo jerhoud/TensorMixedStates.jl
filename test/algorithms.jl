@@ -11,6 +11,8 @@
     @test_throws "a ring has two vertices at least" circle_graph(1)
     @test complete_graph(4) == [(1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]
     @test graph_base_size(circle_graph(7)) == 7
+    # a graph without edges, which a reduction over nothing refused
+    @test graph_base_size(line_graph(1)) == graph_base_size(complete_graph(1)) == 0
     # the snake runs down the columns: 1 4 5 on the first row, 2 3 6 on the second
     @test square_lattice(3, 2) == [(1, 2), (3, 4), (5, 6), (1, 4), (2, 3), (4, 5), (3, 6)]
     @test square_lattice(3) == square_lattice(3, 3)

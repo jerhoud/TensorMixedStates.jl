@@ -6,15 +6,16 @@ export graph_base_size, line_graph, circle_graph, complete_graph, square_lattice
 """
     graph_base_size(::Vector{Tuple{Int, Int}})
 
-the largest vertex of a graph, which is the number of sites a system needs to host it. It is
-neither the size of the graph, its number of edges, nor its order, its number of vertices: a
-vertex may be in no edge, and the system still has to hold that site.
+the largest vertex of a graph, which is the number of sites a system needs to host it, 0 for
+a graph without edges. It is neither the size of the graph, its number of edges, nor its
+order, its number of vertices: a vertex may be in no edge, and the system still has to hold
+that site.
 
 # Examples
 
     graph_base_size([(1, 2), (2, 5)])     # 5
 """
-graph_base_size(g::Vector{Tuple{Int, Int}}) = maximum(maximum, g)
+graph_base_size(g::Vector{Tuple{Int, Int}}) = maximum(maximum, g; init = 0)
 
 """
     line_graph(n)

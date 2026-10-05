@@ -236,6 +236,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `graph_base_size` of a graph without edges, as `line_graph(1)`, is 0, where it raised an
+  error on reducing nothing.
 - `Limits` takes a bond dimension of any integer type, an `Int32` raising a `MethodError`, and
   refuses a float by a message naming `maxdim` or `mindim`.
 - A checkpoint is refused when the `time_start`, the `final_measurements` or the formats of the
