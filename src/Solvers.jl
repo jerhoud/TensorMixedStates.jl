@@ -173,9 +173,11 @@ tdvp(op, t::Number, state::State; kwargs...) =
 
 the ground state of a hamiltonian by dmrg, starting from the given state, returned as
 `(energy, state)`, or `(energy, simulation)`. The hamiltonian may be given by its `PreMPO` or its
-MPO, prepared once for several searches. A hamiltonian is refused on a mixed state, where
-the lowest eigenvector of the superoperator it gives is neither the ground state nor a
-density matrix: search the ground state of the pure state, then `mix` it.
+MPO, prepared once for several searches. dmrg takes the operator to be hermitian, and for one
+that is not, a Lindbladian for instance, what it returns is meaningless: the steady state of a
+Lindbladian is given by `steady_state`. A hamiltonian is refused on a mixed state, where dmrg
+would minimise the superoperator ``\\rho \\mapsto H\\rho + \\rho H`` with no guarantee of ending
+on a density matrix: search the ground state of the pure state, then `mix` it.
 
 # Options
 
@@ -219,8 +221,10 @@ function dmrg(pre::PreMPO, state::State; kwargs...)
 end
 
 function dmrg(op, state::State; kwargs...)
-    # a hamiltonian on a mixed state becomes the superoperator ρ ↦ Hρ + ρH, whose lowest
-    # eigenvector is neither the ground state nor a density matrix
+    # a hamiltonian on a mixed state becomes the superoperator ρ ↦ Hρ + ρH, of which dmrg gives
+    # a lowest eigenvector with no guarantee of a density matrix: with a degenerate ground state
+    # it may be a coherence between two of them, and truncation keeps nothing positive, where a
+    # pure state searched and then mixed is positive by construction
     if state isa State{Mixed} && op isa IndexedOp{Pure}
         error("dmrg finds the ground state of a pure state: search it pure and mix it")
     end

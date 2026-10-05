@@ -606,8 +606,8 @@ end
 end
 
 @testset "Dmrg of a hamiltonian on a mixed state" begin
-    # it would minimise ρ ↦ Hρ + ρH, whose lowest eigenvector is neither the ground state nor a
-    # density matrix, and is refused. A superoperator given as such is left to the caller
+    # it would minimise ρ ↦ Hρ + ρH with no guarantee of ending on a density matrix, and is
+    # refused. A superoperator given as such is left to the caller
     h = -Z(1) * Z(2) - 0.5 * (X(1) + X(2))
     ρ = mix(RandomState{Pure}(System(2, Qubit()), 2))
     lim = Limits(maxdim = 4)
