@@ -968,6 +968,44 @@ end
     end
 end
 
+@testset "A directory another run may be using is refused" begin
+    # two runs in one directory wrote over each other's files. The file running names the
+    # machine and the process, and one left by a process of this machine that has ended,
+    # killed for instance, does not block the run after it
+    phases = [CreateState{Pure}(2, Qubit(), "Up")]
+    julia = `$(Base.julia_cmd()) --startup-file=no`
+    mktempdir() do dir
+        cd(dir) do
+            runTMS(SimData(; name = "sim", phases))
+            @test !isfile("sim/running")
+            # a process of this machine still there, another machine, or a file naming none,
+            # as written before this version
+            p = run(`$julia -e "sleep(300)"`; wait = false)
+            try
+                for marker in ("$(gethostname()) $(getpid(p))\n", "elsewhere 12\n", "")
+                    write("sim/running", marker)
+                    @test_throws "may still be going on" runTMS(SimData(; name = "sim", phases))
+                    @test read("sim/running", String) == marker
+                    @test !isfile("sim/error")
+                end
+            finally
+                kill(p)
+            end
+            # a process of this machine that has ended, or this very one, whose number it had
+            q = run(`$julia -e "sleep(1)"`; wait = false)
+            ended = getpid(q)
+            wait(q)
+            for pid in (ended, getpid())
+                write("sim/running", "$(gethostname()) $pid\n")
+                runTMS(SimData(; name = "sim", phases))
+                @test !isfile("sim/running")
+                @test occursin("process $pid on $(gethostname()), ended without removing running",
+                               read("sim/log", String))
+            end
+        end
+    end
+end
+
 @testset "A directory that cannot be entered leaves the caller's alone" begin
     # a file of that name, or the empty name, made runTMS write its marker error in the
     # directory of the caller, and remove a file running there

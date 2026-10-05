@@ -128,6 +128,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Changed
 
+- `runTMS` refuses to start in a directory where another run may still be going on, which
+  the file `running` marks, now naming the machine and the process. A file left by a process
+  of the same machine that no longer exists, killed for instance, is replaced with a warning in
+  the log; any other is removed by hand.
 - A checkpoint is resumed only by the program that wrote it: the same, byte for byte, as its
   copy `prog.jl`, given the same command line arguments, which `prog_args.json` now keeps when
   there are some. The fingerprint of the phases it was checked against missed a change in a

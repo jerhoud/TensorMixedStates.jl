@@ -126,7 +126,10 @@ taken there. The directory holds in particular:
 - `prog_args.json`: the command line arguments it was given, if any;
 - `description`: the content of the `description` field of the `SimData` object;
 - `stamp`: the versions, the date, the BLAS library and the thread settings of the run;
-- `running`: an empty file present during the computation;
+- `running`: present during the computation, naming the machine and the process running it.
+  `runTMS` refuses to start in a directory where another run may be going on. A file left by
+  a process of the same machine that no longer exists, killed for instance, is replaced with
+  a warning in the log; any other is removed by hand;
 - `error`: an empty file created in case of error.
 
 `runTMS` takes three keyword arguments:

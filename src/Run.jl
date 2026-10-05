@@ -167,6 +167,26 @@ function same_program(src_path)
 end
 
 """
+    live_marker(text)
+
+whether the file `running` holding `text`, the machine and the process of a run, marks a run
+that may still be going on. Not when it names a process of this machine that no longer exists,
+which ended without removing it, killed for instance, or this very process, whose number the
+dead one had. A file naming another machine, or naming none, as written before this version,
+is taken as live, there being no way to tell.
+"""
+function live_marker(text::AbstractString)
+    parts = split(text)
+    if length(parts) ≠ 2 || parts[1] ≠ gethostname() || isnothing(tryparse(Int32, parts[2]))
+        return true
+    end
+    pid = parse(Int32, parts[2])
+    # libuv answers signal 0 on every system: 0 for a process that exists, a refusal of
+    # permission for one of another user, and ESRCH for none
+    return pid ≠ getpid() && ccall(:uv_kill, Cint, (Cint, Cint), pid, 0) ≠ Base.UV_ESRCH
+end
+
+"""
     threading_stamp(mode)
 
 the lines of the `stamp` file saying how the run is threaded when it starts: the `threading`
@@ -279,6 +299,9 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         end
         c = Checkpointer(live ? "." : "";
                          interval = sim_data.checkpoint_interval, max_time = sim_data.max_time)
+        # the machine and the process named in the file running of a run that ended without
+        # removing it
+        stale = nothing
         if live
             mkpath(sim_data.name);
             cd(sim_data.name);
@@ -286,6 +309,14 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             # refused before anything is written or loaded: the directory holds the results of
             # another simulation, whose program, description and markers were overwritten,
             # and its state may need site types this program does not load
+            if isfile("running")
+                marker = read("running", String)
+                if live_marker(marker)
+                    error("\"$(sim_data.name)\" holds the file running of another run, which " *
+                          "may still be going on: if none is, remove $(sim_data.name)/running")
+                end
+                stale = split(marker)
+            end
             src_path = Base.source_path()
             if has_checkpoint(".") && !same_program(src_path)
                 error("the checkpoint of \"$(sim_data.name)\" was written by another program, " *
@@ -294,7 +325,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                       "restart = true")
             end
             started = true
-            touch("running")
+            write("running", "$(gethostname()) $(getpid())\n")
             # a stop left over from the previous run would stop this one immediately, and the
             # marker of a failed run would go on describing this one once it has succeeded
             rm("stop"; force = true)
@@ -325,6 +356,10 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             end
         end
         sim = Simulation(nothing; output, sim_data.time_format, sim_data.data_format, checkpoint = c)
+        if !isnothing(stale)
+            log_message(sim, "Warning: the run before, process $(stale[2]) on $(stale[1]), " *
+                             "ended without removing running")
+        end
         try
             if live && has_checkpoint(".")
                 system(phase, sites) = resume_system(sim_data.phases, phase, sites)
