@@ -247,6 +247,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
   output simplified and compacted the operators again. Measuring a long range interaction
   and the Heisenberg energy of 100 spins at a bond dimension of 20 took 590 ms per output, it
   now takes 140 ms. A measurement written wrongly is refused when the phase starts.
+- The precompiled code covers product states, whose tensors are real, the evolution of a
+  mixed state and `runTMS`. In a new session, the first `dmrg` on a product state took 22 s,
+  it now takes 5 s, the first `tdvp` of a mixed state 14 s, now 4 s, and the first `runTMS`
+  7 s, now 0.2 s. Precompiling takes about half a minute longer.
 - `Dissipator(Sm(1))`, `expect1(state, X(1))` and `expect2` of operators placed on sites are
   refused by a message saying what to write, where they raised a `MethodError`.
 - A state can be measured from several threads at once: its caches, filled on first use, had

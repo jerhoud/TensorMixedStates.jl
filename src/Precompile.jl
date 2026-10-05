@@ -27,5 +27,24 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") != "true"
         dmrg(Z(1)Z(2) + Z(2)Z(3), stp; nsweeps = 2, limits = Limits(maxdim = 3))
         apply(X(1) * H(2), stp; limits = Limits(maxdim = 3))
         apply(X(1), stm; limits = Limits(maxdim = 3))
+        # a product state has real tensors, which take paths of their own through the
+        # solvers, and runTMS has its own as well. Measured: the first dmrg on a product state
+        # went from 22 s to 5 s, the first tdvp of a mixed one from 14 s to 4 s and the first
+        # runTMS from 7 s to 0.2 s
+        stpr = State{Pure}(s, "Up")
+        stmr = State{Mixed}(s, "Up")
+        measure(stpr, m)
+        measure(stmr, m)
+        dmrg(Z(1)Z(2) + X(2), stpr; nsweeps = 2, limits = Limits(maxdim = 3))
+        tdvp(-im*(Y(2)+2Z(1)X(3)), 0.1, stpr; limits = Limits(maxdim = 3))
+        tdvp(-im*X(1) + Dissipator(Sm)(2), 0.1, stmr; limits = Limits(maxdim = 3))
+        mktempdir() do dir
+            cd(dir) do
+                runTMS(SimData(name = "workload", phases = [CreateState{Mixed}(3, Qubit(), "Up"),
+                    Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(), limits = Limits(maxdim = 3),
+                           evolver = -im * X(1) + Dissipator(Sm)(2),
+                           measurements = "data" => [Z, Purity])]); output = devnull)
+            end
+        end
     end
 end
