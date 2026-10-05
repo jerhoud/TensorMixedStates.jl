@@ -596,6 +596,18 @@ end
     @test xi(1, 2) * N(4) ≈ N(4) * xi(1, 2)
 end
 
+@testset "A function of a projector takes no string" begin
+    # a projector on a vector is placed bare on a fermionic site, and so is a function of it:
+    # taken for an operator of no parity, the function was split and its odd part given a
+    # string, (P^0.5)(3) differing from P(3) although P^0.5 is P
+    st = RandomState{Pure}(System(3, Fermion()), 4)
+    P = Proj([0.6, 0.8])
+    for i in 1:3
+        @test expect(st, (P^0.5)(i)) ≈ expect(st, P(i))
+        @test expect(st, exp(0.7im * P)(i)) ≈ expect(st, Id(i) + (exp(0.7im) - 1) * P(i))
+    end
+end
+
 @testset "The identity is one value of each kind" begin
     # every construction of an identity gives the same value, told by its type alone: on
     # several sites, on a density matrix, and placed, where it has no site, being the identity

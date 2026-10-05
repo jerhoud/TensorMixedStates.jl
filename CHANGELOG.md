@@ -236,6 +236,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- A function of a projector on a vector, as `Proj(v)^0.5` or `exp(im * Proj(v))`, is placed on
+  a fermionic site other than the first as the projector itself is, with no Jordan-Wigner
+  string: split as an operator of no parity, its odd part took one, `(P^0.5)(3)` differing
+  from `P(3)`.
 - `graph_base_size` of a graph without edges, as `line_graph(1)`, is 0, where it raised an
   error on reducing nothing.
 - `Limits` takes a bond dimension of any integer type, an `Int32` raising a `MethodError`, and

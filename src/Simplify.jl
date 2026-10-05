@@ -413,9 +413,13 @@ the sum of its part commuting with `F`, placed bare, and its part anticommuting 
 which takes the Jordan-Wigner string as `C` does. Each part is an operator of its own, the odd
 one fermionic, so that simplifying the result again leaves it unchanged. Otherwise the
 function is placed whole.
+
+A projector counts as even, as it does when placed itself, since it never takes a string, see
+`fermion_parity`: taken for one of no parity, a function of `Proj(v)` was split and given a
+string that `Proj(v)` has not, `(P^0.5)(3)` differing from `P(3)` although `P^0.5` is `P`.
 """
 place_function(a, index...) =
-    if length(index) == 1 && only(index) > 1 && jw_parity(a.arg) ≠ 0
+    if length(index) == 1 && only(index) > 1 && fermion_parity(a.arg, false) ≠ 0
         i = only(index)
         even = Operator{1}("even($a)", 0.5 * (a + F * a * F), plain_op)
         odd = Operator{1}("odd($a)", 0.5 * (a - F * a * F), fermionic_op)
