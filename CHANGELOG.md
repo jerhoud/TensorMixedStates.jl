@@ -260,6 +260,12 @@ on the page "Extending TMS", are experimental and may still change in a version 
   output simplified and compacted the operators again. Measuring a long range interaction
   and the Heisenberg energy of 100 spins at a bond dimension of 20 took 590 ms per output, it
   now takes 140 ms. A measurement written wrongly is refused when the phase starts.
+- An MPO is filled block by block from the matrices of its terms, read once when its `PreMPO` is
+  built, where every MPO read them and wrote its tensors element by element. On 80 sites of
+  `Boson(6)` in the mixed representation, `make_mpo` took 0.6 s, 1.8 s conserving `N`, and
+  now takes 0.02 s and 0.05 s, the WI approximation as much; WII goes from 6.8 s and 8.5 s
+  to 5.7 s and 6.0 s, the rest being its exponentials. A time dependent evolver builds them
+  at every step.
 - The precompiled code covers product states, whose tensors are real, the evolution of a
   mixed state and `runTMS`. In a new session, the first `dmrg` on a product state took 22 s,
   it now takes 5 s, the first `tdvp` of a mixed state 14 s, now 4 s, and the first `runTMS`

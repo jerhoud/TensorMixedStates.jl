@@ -7,15 +7,37 @@ export PreMPO, make_mpo, make_approx_W1, make_approx_W2
 struct PreMPO{R <: PM}
     system::System
     linkdims::Vector{Int}
-    terms::Vector{Vector{Tuple{Int, Int, ITensor, Int}}}
+    # the pieces on each site, see `add_term!`
+    terms::Vector{Vector{Tuple{Int, Int, ITensor, Int, Matrix}}}
     # the number of time functions the terms take, one per element of a time dependent
     # evolver: it cannot be counted from `terms`, a whole element vanishing on its sites
     nterms::Int
     function PreMPO{R}(system::System, nterms::Int = 1) where R
         n = length(system)
-        return new{R}(system, fill(1, n - 1), [ Tuple{Int, Int, ITensor, Int}[] for _ in 1:n ], nterms)
+        return new{R}(system, fill(1, n - 1),
+                      [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms)
     end
 end
+
+"""
+    site_matrix(u, idx)
+
+the matrix of the one site operator `u` on the site of index `idx`, rows on `idx'`. It is read
+through `dense`, which takes a delta or a block sparse tensor as any other: with the NDTensors
+of ITensors 0.7, `Array` fails on the delta of a charged site and `denseblocks` on a dense
+tensor.
+"""
+site_matrix(u::ITensor, idx::Index) = Array(dense(u), idx', dag(idx))
+
+"""
+    add_term!(pre, k, l, r, u, ref)
+
+add to site `k` of `pre` the piece `u`, going from channel `l` to channel `r` and taking the
+time function `ref`, with its matrix on the index of the site, read once here rather than at
+every MPO built from `pre`
+"""
+add_term!(pre::PreMPO{R}, k::Int, l::Int, r::Int, u::ITensor, ref::Int) where R =
+    push!(pre.terms[k], (l, r, u, ref, site_matrix(u, SysIndex{R}(pre.system, k))))
 
 """
     check_coefs(pre, coefs)
@@ -65,7 +87,7 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, a::IndexedOp{R}, ref::Int = 1) wh
     subs = filter(o -> !(o isa IdentityOp), prodsubs(a))
     if isempty(subs)
         kdx = SysIndex{R}(sys, 1)
-        push!(pre.terms[1], (1, 1, coef * delta(kdx', dag(kdx)), ref))
+        add_term!(pre, 1, 1, 1, coef * delta(kdx', dag(kdx)), ref)
         return pre
     end
     if length(subs) > 1
@@ -78,7 +100,7 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, a::IndexedOp{R}, ref::Int = 1) wh
     # operators of different algebras on different sites. Kept, on a charged system its
     # tensor would have no block, hence no flux
     if !iszero(u)
-        push!(pre.terms[only(o.index)], (1, 1, coef * u, ref))
+        add_term!(pre, only(o.index), 1, 1, coef * u, ref)
     end
     return pre
 end
@@ -101,8 +123,8 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, a::ComOp{R}, ref::Int = 1) where 
         for ((l, r), comb) in laid
             o = simplify_sum(GenericOp{R, 1}[ x * atom for (atom, x) in comb ])
             if scalarcoef(o) ≠ 0
-                push!(pre.terms[k], (l == 0 ? 1 : offs[j-1] + l, r == 0 ? 1 : offs[j] + r,
-                                     com_tensor(sys, o, k), ref))
+                add_term!(pre, k, l == 0 ? 1 : offs[j-1] + l, r == 0 ? 1 : offs[j] + r,
+                          com_tensor(sys, o, k), ref)
             end
         end
     end
@@ -226,7 +248,7 @@ function mpo_charges(pre::PreMPO{R}, coefs) where R
     q = [ Union{Nothing, QN}[ QN(); fill(nothing, d) ] for d in channel_counts(pre) ]
     total = nothing
     for i in 1:n
-        for (l, r, u, ref) in tm[i]
+        for (l, r, u, ref, _) in tm[i]
             if coefs[ref] == 0
                 continue
             end
@@ -309,35 +331,35 @@ function close_ends(ts::Vector{ITensor}, links::Vector{<:Index}, k::Int)
 end
 
 """
-    site_matrix(u, idx)
+    site_array(elt, idx, llink, rlink)
 
-the matrix of the one site operator `u` on the site of index `idx`, rows on `idx'`, read element
-by element: with the NDTensors of ITensors 0.7, `Array` fails on the delta of a charged site
-and `denseblocks` on a dense tensor.
+the array, zero, of the tensor of the site of index `idx` in an MPO of links `llink` and
+`rlink`, its axes those of `idx'`, `dag(idx)`, `llink` and `rlink`: filled block by block with
+`add_block!`, it is made a tensor at once by `site_tensor`
 """
-site_matrix(u::ITensor, idx::Index) =
-    [ u[idx' => a, idx => b] for a in 1:dim(idx), b in 1:dim(idx) ]
+site_array(elt::Type, idx::Index, llink::Index, rlink::Index) =
+    zeros(elt, dim(idx), dim(idx), dim(llink), dim(rlink))
 
 """
-    add_block!(w, llink, l, rlink, r, u, idx[, c])
+    add_block!(a, l, r, m[, c])
 
-add `c` times the one site operator `u`, its matrix, rows on `idx'`, or an ITensor, to the block
-of channels `l` and `r` of `w`, the tensor of the site of index `idx`, and return `w`. Zeros
-are skipped: a block sparse tensor refuses an element outside its flux, even a zero.
+add `c` times the matrix `m` of a one site operator, rows on `idx'`, to the block of channels
+`l` and `r` of the array `a` of `site_array`, and return `a`
 """
-function add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::AbstractMatrix,
-                    idx::Index, c::Number = 1)
-    for j in eachindval(idx, idx')
-        v = c * u[last(j[2]), last(j[1])]
-        if !iszero(v)
-            w[llink => l, rlink => r, j...] += v
-        end
-    end
-    return w
+function add_block!(a::Array{<:Number, 4}, l::Int, r::Int, m::AbstractMatrix, c::Number = 1)
+    @views a[:, :, l, r] .+= c .* m
+    return a
 end
 
-add_block!(w::ITensor, llink::Index, l::Int, rlink::Index, r::Int, u::ITensor, idx::Index,
-           c::Number = 1) = add_block!(w, llink, l, rlink, r, site_matrix(u, idx), idx, c)
+"""
+    site_tensor(a, idx, llink, rlink)
+
+the tensor of the array `a` of `site_array`, made at once: writing the elements of a block
+sparse tensor one by one made most of the cost of an MPO. On a charged system only the blocks
+that are not zero are kept, and they must all have the flux the charges of the links give.
+"""
+site_tensor(a::Array{<:Number, 4}, idx::Index, llink::Index, rlink::Index) =
+    ITensor(a, idx', dag(idx), dag(llink), rlink)
 
 """
     make_mpo(::PreMPO[, coefs])
@@ -367,23 +389,23 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     ts = map(1:length(sys)) do i
         idx = SysIndex{R}(sys, i)
         llink, rlink = links[i], links[i+1]
-        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
-        id = delta(dag(idx), idx')
-        add_block!(w, llink, 1, rlink, 1, id, idx)
-        add_block!(w, llink, 1 + dims[i], rlink, 1 + dims[i+1], id, idx)
-        for (l, r, u, ref) in pre.terms[i]
+        a = site_array(elt, idx, llink, rlink)
+        id = Matrix{elt}(I, dim(idx), dim(idx))
+        add_block!(a, 1, 1, id)
+        add_block!(a, 1 + dims[i], 1 + dims[i+1], id)
+        for (l, r, _, ref, m) in pre.terms[i]
             c = coefs[ref]
             if c ≠ 0
                 # the coefficient of a term goes on its closing piece alone, the only one
                 # with r == 1: laid on every piece, a term of k sites took it to the power k
                 if r == 1
-                    add_block!(w, llink, l, rlink, 1 + dims[i+1], u, idx, c)
+                    add_block!(a, l, 1 + dims[i+1], m, c)
                 else
-                    add_block!(w, llink, l, rlink, r, u, idx)
+                    add_block!(a, l, r, m)
                 end
             end
         end
-        return w
+        return site_tensor(a, idx, llink, rlink)
     end
     return close_ends(ts, links, 2)
 end
@@ -406,17 +428,17 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     ts = map(1:length(sys)) do i
         idx = SysIndex{R}(sys, i)
         llink, rlink = links[i], links[i+1]
-        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
-        add_block!(w, llink, 1, rlink, 1, delta(dag(idx), idx'), idx)
-        for (l, r, u, ref) in pre.terms[i]
+        a = site_array(elt, idx, llink, rlink)
+        add_block!(a, 1, 1, Matrix{elt}(I, dim(idx), dim(idx)))
+        for (l, r, _, ref, m) in pre.terms[i]
             c = coefs[ref]
             if c ≠ 0
                 # the coefficient and the time step go on the closing piece of a term alone,
                 # as in make_mpo
-                add_block!(w, llink, l, rlink, r, u, idx, r == 1 ? c * tau : one(c))
+                add_block!(a, l, r, m, r == 1 ? c * tau : one(c))
             end
         end
-        return w
+        return site_tensor(a, idx, llink, rlink)
     end
     return close_ends(ts, links, 1)
 end
@@ -468,12 +490,12 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         ldim, rdim = dims[i], dims[i+1]
         k = dim(idx)
         v = Matrix{Union{Nothing, Matrix{elt}}}(nothing, ldim, rdim)
-        for (l, r, u, ref) in pre.terms[i]
+        for (l, r, _, ref, u) in pre.terms[i]
             c = coefs[ref]
             if c ≠ 0
                 # the coefficient and the time step go on the closing piece of a term alone,
                 # as in make_mpo
-                m = (r == 1 ? c * tau : one(c)) * site_matrix(u, idx)
+                m = (r == 1 ? c * tau : one(c)) * u
                 v[l, r] = isnothing(v[l, r]) ? m : v[l, r] + m
             end
         end
@@ -485,16 +507,16 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         d = something(v[1, 1], zeros(elt, k, k))
         closing = v[:, 1]
         opening = v[1, :]
-        w = ITensor(elt, idx', dag(idx), dag(llink), rlink)
-        add_block!(w, llink, 1, rlink, 1, exp(d), idx)
+        a = site_array(elt, idx, llink, rlink)
+        add_block!(a, 1, 1, exp(d))
         for l in 2:ldim
             if !isnothing(closing[l])
-                add_block!(w, llink, l, rlink, 1, duhamel(d, closing[l]), idx)
+                add_block!(a, l, 1, duhamel(d, closing[l]))
             end
         end
         for r in 2:rdim
             if !isnothing(opening[r])
-                add_block!(w, llink, 1, rlink, r, duhamel(d, opening[r]), idx)
+                add_block!(a, 1, r, duhamel(d, opening[r]))
             end
         end
         for l in 2:ldim, r in 2:rdim
@@ -504,10 +526,10 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
                 block = isnothing(block) ? both : block + both
             end
             if !isnothing(block)
-                add_block!(w, llink, l, rlink, r, block, idx)
+                add_block!(a, l, r, block)
             end
         end
-        return w
+        return site_tensor(a, idx, llink, rlink)
     end
     return close_ends(ts, links, 1)
 end

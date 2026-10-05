@@ -34,7 +34,7 @@ function lay_term!(pre::TensorMixedStates.PreMPO{R}, c, subs, ref) where R
         kdx = TMS.SysIndex{R}(sys, k)
         u = get(() -> TMS.delta(kdx', dag(kdx)), at, k)
         l, r = k == fst ? 1 : ld[k-1], k == lst ? 1 : ld[k]
-        push!(pre.terms[k], (l, r, k == fst ? c * u : u, ref))
+        TMS.add_term!(pre, k, l, r, k == fst ? c * u : u, ref)
     end
     return pre
 end

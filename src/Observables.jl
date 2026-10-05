@@ -1143,20 +1143,20 @@ function trace_signs(state::State{Mixed}, keep)
     ts = map(1:n) do i
         idx = SysIndex{Mixed}(sys, i)
         l, r = links[i], links[i+1]
-        w = ITensor(idx', dag(idx), dag(l), r)
-        id = delta(dag(idx), idx')
+        a = site_array(Float64, idx, l, r)
+        id = Matrix{Float64}(I, dim(idx), dim(idx))
         for p in 1:2
             if !odd[i]
-                add_block!(w, l, p, r, p, id, idx)
+                add_block!(a, p, p, id)
             elseif i in keep
-                add_block!(w, l, p, r, p, p == 1 ? id : tensor(sys, Gate(F)(i)), idx)
+                add_block!(a, p, p, p == 1 ? id : site_matrix(tensor(sys, Gate(F)(i)), idx))
             else
                 for q in 1:2
-                    add_block!(w, l, p, r, xor(p - 1, q - 1) + 1, tensor(sys, projs[q](i)), idx)
+                    add_block!(a, p, xor(p - 1, q - 1) + 1, site_matrix(tensor(sys, projs[q](i)), idx))
                 end
             end
         end
-        return noprime(w * mps[i])
+        return noprime(site_tensor(a, idx, l, r) * mps[i])
     end
     # no fermion on the left of the first site, and either parity on the right of the last
     ts[1] *= onehot(links[1] => 1)
