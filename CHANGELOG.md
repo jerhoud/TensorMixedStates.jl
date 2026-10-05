@@ -236,6 +236,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Fixed
 
+- `sample` of a mixed state drew every site after about the 1074th of a fully mixed chain of
+  qubits in its last state, the probability of the outcomes drawn so far having fallen below
+  the smallest float, and sooner on sites of a larger dimension.
 - An integer coefficient is stored as a float, whose products do not wrap around as those of
   integers silently do: the string `prod(2Sz(i) for i in 1:63)` measured -1 on sites up rather
   than 1, on 64 sites 0, and `(2X)^64` was `0Id`. `(2X)^-1`, a negative power of an integer

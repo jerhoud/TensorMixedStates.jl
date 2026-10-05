@@ -1392,6 +1392,10 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
         x = draw(i -> real(scalar(a * tensor_obs(state, Proj(i)(pos)) * r)), d, rnd)
         result[pos] = x
         l = a * tensor_obs(state, Proj(x)(pos))
+        # rescaled, the probabilities of the sites to come being ratios: as it was, it carried
+        # the probability of the outcomes drawn so far, which fell below the smallest float
+        # after some 1074 qubits, every later site being then drawn in its last state
+        l /= norm(l)
     end
     return result
 end

@@ -43,6 +43,12 @@
 
     samples_full = [sample(stm; rng)[1] for _ in 1:nm]
     @test isapprox(count(==(0), samples_full) / nm, p0; atol = 0.03)
+
+    # the vector carried along a mixed chain held the probability of the outcomes drawn so far,
+    # which fell below the smallest float after some 1074 qubits: every later site came out in
+    # its last state. A fully mixed chain draws ones and zeros to its end
+    far = sample(State{Mixed}(System(1200, Qubit()), "FullyMixed"); rng)
+    @test 0 < sum(far[1101:1200]) < 100
 end
 
 @testset "Sampling a site of a charged state" begin
