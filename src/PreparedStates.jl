@@ -1,7 +1,6 @@
-# Prepared states with an exact MPS of small bond dimension, built from their tensors: the GHZ
-# state, the Dicke states, of which the W state, the states of singlets on pairs, and the fully
-# mixed state of a sector, and the states given by the tensors of their MPS or by their dense
-# vector or density matrix.
+# Prepared states with an exact MPS: the GHZ, Dicke and W states, singlets on pairs, the fully
+# mixed state of a sector, and the states given by their MPS tensors, their dense vector or
+# their density matrix.
 
 export mps_state, dense_state, ghz_state, superposition, mixture, dicke_state, w_state,
        dimer_state, fully_mixed
@@ -17,11 +16,9 @@ local_vector(::AbstractSite, st::Vector{<:Number}) = st
 """
     mps_state(system, tensors)
 
-the pure state of `system` whose MPS has the tensors `tensors`, each an array `A[l, s, r]` in the
-basis of its site, the first of left dimension 1 and the last of right dimension 1, normalized.
-On a system carrying charges, the charge of each link is read off the tensors, each of their
-elements adding the charge of its basis state to that of its left link, and a state of no
-definite charge is refused: a superposition of different charges has no MPS of charged indices.
+the pure state of `system`, normalized, whose MPS has the tensors `tensors`, each an array
+`A[l, s, r]` in the basis of its site, the first of left dimension 1 and the last of right
+dimension 1. On a system carrying charges, a state of no definite charge is refused.
 
 # Examples
 
@@ -53,8 +50,7 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
     end
     s = [ SysIndex{Pure}(system, k) for k in 1:n ]
     links = if is_charged(system)
-        # the charge of each basis state of each site, one block of its index each, and none on
-        # a site conserving nothing beside sites that do
+        # none on a site conserving nothing, whose index has a single sector of charge zero
         charge(k, j) = isempty(conserved(system[k])) ? QN() : basis_charges(system[k])[j]
         partial = QN[ QN() ]
         map(1:n) do k
@@ -73,8 +69,7 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
             end
             # a link state no element reaches carries nothing: any charge will do
             partial = QN[ something(q, QN()) for q in next ]
-            # the charges of a link are those of its left part taken out, so that each tensor
-            # but the last has no flux and the last the charge of the state
+            # the charges of the left part taken out: each tensor but the last has no flux
             Index([ -q => 1 for q in partial ]...; tags = "Link,l=$k")
         end
     else
@@ -85,7 +80,7 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
     its = map(1:n) do k
         l = k == 1 ? edge : dag(links[k-1])
         t = ITensor(tensors[k], l, s[k], links[k])
-        # the dimensions of one on the edges, which an MPS does not have
+        # an MPS has no edge links
         if k == 1
             t *= onehot(dag(edge) => 1)
         end
@@ -118,12 +113,10 @@ end
     dense_state(system, ψ; limits = Limits())
     dense_state(system, ρ; limits = Limits())
 
-the pure state of `system` of vector `ψ`, or the mixed state of density matrix `ρ`, on the
-basis of the product states of the sites ordered as `kron` orders them, the first site varying
-the slowest, normalized. Its MPS comes from successive decompositions of the whole vector,
-truncated to `limits`, for a system small enough to be
-written down: to compare with an exact diagonalization, or to take a state from another code.
-On a system carrying charges, a state of no definite charge is refused.
+the pure state of `system` of vector `ψ`, or the mixed state of density matrix `ρ`,
+normalized, on the basis of product states ordered as `kron` orders them, the first site
+varying the slowest. Its MPS is decomposed from the whole array and truncated to `limits`. On a
+system carrying charges, a state of no definite charge is refused.
 
 # Examples
 
@@ -156,11 +149,9 @@ end
 """
     product_sum(type, system, terms)
 
-the sum of the product states of `terms`, pairs `c => states` of a coefficient and the local
-states of a product state, one for every site or one for all of them, in the representation
-`type`, `Pure()` or `Mixed()`. Its MPS has a channel per term of nonzero coefficient, each
-carrying the charge of the sites of its product state on the left of the link, so that these
-terms must have the same charge on a system conserving something.
+the MPS, in the representation `type`, of the sum of the product states of `terms`, pairs
+`c => states`, with a channel per term of nonzero coefficient; on a charged system the terms
+must have the same charge
 """
 function product_sum(type::PM, system::System, terms)
     n = length(system)
@@ -186,7 +177,7 @@ function product_sum(type::PM, system::System, terms)
         error("the terms have different charges: the sum has no definite charge, which a " *
               "system conserving it cannot hold")
     end
-    # as the links of a product state, the charge of the sites on the left of each, daggered
+    # each link carries, daggered, the charge of the sites on its left
     links = map(1:n-1) do k
         charged ? dag(Index([ sum(flux, ts[1:k]) => 1 for ts in locals ]...; tags = "Link,l=$k")) :
                   Index(length(kept); tags = "Link,l=$k")
@@ -212,9 +203,8 @@ end
 the pure state ``\\sum_k c_k |s^k_1 s^k_2 \\dots s^k_n\\rangle`` of `terms`, pairs `c => states`
 of a coefficient and the local pure states of a product state, given by their names or their
 vectors, one for every site or one for all of them, normalized. It is exact, of bond dimension
-the number of terms of nonzero coefficient, truncated to `limits` when they are given, and built
-at once rather than term by term. On a system conserving something, the product states of these
-terms must have the same charge.
+the number of terms of nonzero coefficient, truncated to `limits` when they are given. On a
+system conserving something, the product states of these terms must have the same charge.
 
 # Examples
 
@@ -234,7 +224,7 @@ the mixed state ``\\sum_k p_k \\rho^k_1 \\otimes \\dots \\otimes \\rho^k_n`` of 
 `p => states` of a weight, real and not negative, and the local states of a product state, pure
 or mixed, given by their names, their vectors or their density matrices, one for every site or
 one for all of them, normalized to trace one. It is exact, of bond dimension the number of
-terms of nonzero weight, truncated to `limits` when they are given: a classical ensemble of product states.
+terms of nonzero weight, truncated to `limits` when they are given.
 
 # Examples
 
@@ -351,10 +341,10 @@ names or their vectors and orthonormal: `"Up"` and `"Dn"` for spins one half. Th
 pair take the local state `others`, one for all of them or a vector of one for each, which
 they then need.
 
-Each singlet comes from a gate of two sites applied to ``|ab\\rangle``, on sites apart as well,
-so that pairs of neighbours give the Majumdar-Ghosh state, of bond dimension 2, and nested
-pairs `(i, n + 1 - i)` the rainbow state, of bond dimension ``2^{n/2}`` in the middle: `limits`
-constrains the truncations made as the gates are applied.
+The pairs need not be neighbours: pairs of neighbours give the Majumdar-Ghosh state, of bond
+dimension 2, and nested pairs `(i, n + 1 - i)` the rainbow state, of bond dimension
+``2^{n/2}`` in the middle. `limits` constrains the truncations made as the singlets are
+applied.
 
 # Examples
 
@@ -398,8 +388,7 @@ function dimer_state(system::System, pairs::AbstractVector{Tuple{Int, Int}}, a, 
         if abs(va' * vb) > 1e-12 || abs(wa' * wb) > 1e-12
             error("a singlet of $a and $b needs them orthonormal")
         end
-        # on the basis of the two sites, the gate takes |ab⟩ to the singlet and |ba⟩ to the
-        # triplet of no charge, and leaves alone what is orthogonal to both
+        # |ab⟩ to the singlet, |ba⟩ to the triplet of no charge, the identity elsewhere
         x, y = kron(va, wb), kron(vb, wa)
         U = I + ((x - y) / sqrt(2) - x) * x' + ((x + y) / sqrt(2) - y) * y'
         named(U, "Singlet", system[i], system[j])(i, j)
@@ -410,18 +399,14 @@ end
 """
     fully_mixed(system, quantities...)
 
-the fully mixed state of the sector where each quantity takes its value, given as pairs
-`op => value`, the sum of `op` over the sites taking the value: the projector on the basis
-states of the sector divided by their number, the state at infinite temperature of a sector,
-from which `Thermalize` gives the canonical thermal state of a hamiltonian conserving these
-quantities. An operator is diagonal on the
-basis of every site, as a number of particles or a ``S^z``, and the sites need not conserve
-it. Without quantities, it is the fully mixed state of the system, which a system conserving
-something strongly refuses, its sectors being apart: a sector that fixes what it conserves
-strongly is accepted.
-
-It is exact, its bond dimension the number of values the quantities take on the sites on the
-left of a link that can still reach the sector, `N + 1` at most for `N => N`.
+the fully mixed state of the sector given by `quantities`, pairs `op => value` where the sum
+of `op` over the sites takes the value: the projector on the basis states of the sector divided
+by their number, from which `Thermalize` gives the canonical thermal state of a Hamiltonian
+conserving these quantities. Each `op` must be diagonal on the basis of every site, as a number
+of particles or an ``S^z``, but the sites need not conserve it. Without quantities, it is the
+fully mixed state of the system, which a system conserving something strongly refuses: give a
+sector fixing what it conserves strongly. It is exact, of bond dimension `N + 1` at most for
+`N => N`.
 
 # Examples
 
@@ -433,8 +418,7 @@ function fully_mixed(system::System, quantities::Pair...)
     if isempty(quantities)
         return State{Mixed}(system, "FullyMixed")
     end
-    # the values of the quantities on each basis state of each site, rounded so that sums of
-    # the same values are equal, half integers and integers being exact anyway
+    # rounded so that sums of the same values compare equal
     key(x) = round(x; digits = 10)
     values = map(1:n) do k
         ms = [ matrix(op, system[k]) for (op, _) in quantities ]
@@ -457,14 +441,13 @@ function fully_mixed(system::System, quantities::Pair...)
         error("no basis state of the system has " *
               join(("$op = $v" for (op, v) in quantities), ", "))
     end
-    # the local tensor of each basis state |s><s|, on the mixed index, with its charge
     projector(d, j) = [ a == j && b == j ? 1. : 0. for a in 1:d, b in 1:d ]
     locals = [ [ make_one_state(Mixed(), system, k, projector(dim(system[k]), j))
                  for j in 1:dim(system[k]) ] for k in 1:n ]
     charged = hasqns(locals[1][1])
     charge(t) = charged ? flux(t) : nothing
-    # the states of each link: the values of the quantities on the sites on its left, with
-    # their charge, which differs between paths when the system conserves something else
+    # a link state is the values of the quantities on its left with their charge, which differs
+    # between paths when the system conserves something else
     states = Vector{Vector{Tuple}}(undef, n + 1)
     states[1] = [ (Tuple(0. for _ in quantities), charged ? QN() : nothing) ]
     terms = Vector{Vector{Tuple{Int, Int, Int}}}(undef, n)
@@ -489,7 +472,7 @@ function fully_mixed(system::System, quantities::Pair...)
         error("the sector does not fix the charges the system conserves strongly, which a " *
               "mixed state cannot spread over")
     end
-    # links as those of a product state, carrying the charge of the sites on their left
+    # each link carries, daggered, the charge of the sites on its left
     links = [ charged ? dag(Index([ q => 1 for (_, q) in states[k+1] ]...; tags = "Link,l=$k")) :
                         Index(length(states[k+1]); tags = "Link,l=$k") for k in 1:n-1 ]
     its = map(1:n) do k
