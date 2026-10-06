@@ -282,8 +282,9 @@ end
 """
     trace2(::State)
 
-the purity ``\\mathrm{tr}(\\rho^2)`` of the density matrix normalised to trace one: 1 for a
-pure state, less for a mixed one.
+the purity ``\\mathrm{tr}(\\rho^\\dagger\\rho) / (\\mathrm{tr}\\,\\rho)^2``, which is
+``\\mathrm{tr}(\\rho^2)`` for a density matrix of trace one: 1 for a pure state, less for a
+mixed one, above 1 only for a matrix that is not positive or not hermitian.
 """
 trace2(::State{Pure}) = 1.
 trace2(state::State{Mixed}) = (norm(state.state) / real(trace(state))) ^ 2

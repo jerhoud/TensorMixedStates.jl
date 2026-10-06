@@ -459,7 +459,8 @@ const TraceError = StateFunc("TraceError", st -> 1. - trace(st))
     Trace2
     Purity
 
-state functions measuring the purity ``\\mathrm{tr}(\\rho^2)``, see `trace2` and `StateFunc`.
+state functions measuring the purity
+``\\mathrm{tr}(\\rho^\\dagger\\rho) / (\\mathrm{tr}\\,\\rho)^2``, see `trace2` and `StateFunc`.
 """
 const Trace2 = StateFunc("Trace2", trace2)
 
