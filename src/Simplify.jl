@@ -7,15 +7,12 @@ export simplify
 """
     simplify(op)
 
-the operator `op` in a normal form, as the functions building an MPO compute it.
-
-Operators of several sites defined by an expression are replaced by it, products of sums are
-expanded, coefficients and like factors are gathered, and fermionic operators of one site get
-their Jordan-Wigner strings. A placed operator thus becomes a sum of products of one site
-operators ordered by site, which is what `PreMPO` expects. An operator of several sites that
-cannot be developed, a function of one, such as its exponential, or one defined by a matrix
-and created without its sites, is kept whole, and keeps its place with respect to the
-Jordan-Wigner strings. A collection of operators is simplified element by element.
+the operator `op` in the normal form the functions building an MPO compute: operators of
+several sites defined by an expression replaced by it, products of sums expanded, coefficients
+and like factors gathered, fermionic operators of one site given their Jordan-Wigner strings.
+A placed operator becomes a sum of products of one site operators ordered by site, except an
+operator of several sites that cannot be developed, as the exponential of one or one defined
+by a matrix, which is kept whole. A collection is simplified element by element.
 
 # Examples
 
@@ -42,12 +39,9 @@ pow_expo(a::Union{IntPowOp, GenPowOp}) = a.expo
     distribute(terms)
 
 every product of one term taken from each of the vectors of `terms`, as a vector of factors,
-the term of the last vector varying fastest: the expansion of a product of sums.
-
-The products are built one vector at a time, so that the code does not depend on how many
-there are: splatted into `Iterators.product`, they had a method compiled for every number of
-factors, 20 s for a product of 60 and 42 s for one of 100, every string correlator of another
-length paying it again. A product with no sum, the common case, is its one term.
+the term of the last vector varying fastest: the expansion of a product of sums. Built one
+vector at a time, not by splatting into `Iterators.product`, which compiles a method for every
+number of factors.
 """
 function distribute(terms::AbstractVector)
     if all(t -> length(t) == 1, terms)
@@ -82,8 +76,8 @@ the sum of the simplified operators `v`, flattened and sorted, equal terms colle
 ones removed: `X + (Y + Z)` gives `X + Y + Z` and `X + Y + X` gives `2X + Y`. In an indexed
 sum, terms on the same sites are gathered, `X(1) + Y(1)` giving `(X + Y)(1)`, and so are
 products differing only in their last factor, of one site, `P * X(2) + P * Y(2)` giving
-`P * (X + Y)(2)`. The odd terms of a sum on one site, whose Jordan-Wigner string is a factor
-of each, thus share it, rather than making a sum a gate refuses.
+`P * (X + Y)(2)`, so that the odd terms of a sum on one site share their Jordan-Wigner string,
+a sum a gate would refuse otherwise.
 """
 simplify_sum(v::Vector) = simplify_core_sum(reduce(vcat, sumsubs.(v)))
 
@@ -181,7 +175,6 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
         end
         p = jw_parity(x)
         if f && isnothing(p)
-            # a factor of no definite parity stops the F, which are laid down just before it
             push!(w, F)
             f = false
         elseif f && p == 1
@@ -192,10 +185,8 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Pure, N}}) where N
     if f
         push!(w, F)
     end
-    # neighbours of one base merge, A^p * A^q being A^(p + q), and what a merge gives has its
-    # coefficient taken out of the product: (-X)^0.5 * (-X)^0.5 is -X, whose -1 left as a
-    # factor kept the product from its normal form. A merge that gives F, as F^0.5 * F^0.5
-    # does, has to go through the crossing of the F again
+    # the coefficient of a merge is taken out of the product, (-X)^0.5 * (-X)^0.5 being -X,
+    # and a merge giving F, as F^0.5 * F^0.5, goes through the crossing of the F again
     r = GenericOp{Pure, N}[]
     again = false
     for x in w
@@ -227,7 +218,6 @@ function simplify_core_prod(c::Number, v::Vector{<:GenericOp{Mixed, N}}) where N
     end
     larg = map(x -> x.arg, filter(x -> x isa Left, v))
     rarg = map(x -> x.arg, filter(x -> x isa Right, v))
-    # test whether factors other than Left and Right are present (like sums)
     if length(larg) + length(rarg) ≠ length(v)
         return c * ProdOp(v)
     end
@@ -258,8 +248,7 @@ function simplify_core_prod(c::Number, v::Vector{<:IndexedOp{R}}) where R
                 else
                     change = true
                     pop!(nr)
-                    # the coefficients first: a merge giving -Id left its identity in the
-                    # product, the filter seeing a scalar times it
+                    # the coefficients first, which the filter needs: a merge may give -Id
                     cp *= prod(scalarcoef.(t))
                     append!(nr, filter(x -> !(x isa IdentityOp), scalararg.(t)))
                 end
@@ -274,8 +263,7 @@ end
 """
     cannot_multiply(a)
 
-refuse a product of the com `a` with another operator: the channels of a com are what is left
-of its terms, which a product would have to multiply one by one.
+refuse a product of the com `a` with another operator
 """
 cannot_multiply(a::ComOp) =
     error("$a is compacted and cannot be multiplied: take the product first and compact it")
@@ -309,10 +297,9 @@ function orderprod(b::Multi_F{R}, a::AtIndex{R, 1}) where R
     return i < b.start ? [a, b] : i > b.stop ? [] : split_string(b, a, true)
 end
 
-# a factor of several sites is never moved past a string, which commutes with it only if it
-# holds all of its sites or none of them, and the factor is even in the first case. What is
-# left of one after simplify is refused wherever it would be placed, see check_one_site, and a
-# gate keeps its factors of several sites out of simplify, see prepare_gate
+# a factor of several sites is never moved past a string, which it may not commute with: what
+# is left of one is refused wherever it would be placed, see check_one_site, and a gate keeps
+# its own out of simplify, see prepare_gate
 orderprod(::AtIndex{R}, ::Multi_F{R}) where R = []
 orderprod(::Multi_F{R}, ::AtIndex{R}) where R = []
 
@@ -355,8 +342,7 @@ simplify_dag(a::Operator) =
     else
         dag(a)
     end
-# the adjoint of a product repeated is the adjoint repeated, but a non integer power goes
-# through a logarithm, whose branch cut the adjoint does not respect
+# a non integer power goes through a logarithm, whose branch cut the adjoint does not respect
 simplify_dag(a::IntPowOp) = power(simplify_dag(a.arg), a.expo)
 simplify_dag(a::GenPowOp) = DagOp(a)
 simplify_dag(a::ExpOp) = ExpOp(simplify_dag(a.arg))
@@ -368,9 +354,8 @@ simplify_dag(a::JW) = dag(a)
 
 simplify_dag(a::ProdOp) = simplify_prod(reverse(simplify_dag.(a.subs)))
 simplify_dag(a::SumOp) = simplify_sum(simplify_dag.(a.subs))
-# the adjoint of a tensor product reverses its factors once placed, which shows only when two
-# of them anticommute, its sites being distinct: with a factor of odd or undefined parity it
-# waits for the sites, where the product of the placed factors takes the sign
+# the adjoint reverses the factors once placed, which gives a sign when two of them
+# anticommute: with a factor of odd or undefined parity it waits for the sites
 simplify_dag(a::TensorOp{N}) where N =
     if all(o -> jw_parity(o) == 0, a.subs)
         TensorOp{N}(simplify_dag.(a.subs))
@@ -421,13 +406,10 @@ simplify_ind(a::ModOp, index...) = place_function(a, index...)
     place_function(a, index...)
 
 the function `a` of an operator, an exponential, a `mod` or a non integer power, placed on the
-sites `index`. On a single site other than the first, when the argument is not even, it is
-the sum of its part commuting with `F`, placed bare, and its part anticommuting with `F`,
-which takes the Jordan-Wigner string as `C` does. Each part is an operator of its own, the odd
-one fermionic, so that simplifying the result again leaves it unchanged. Otherwise the
-function is placed whole.
-
-A projector is even, see `Proj`, and so is a function of it.
+sites `index`. On a single site other than the first, with an argument not even, it is the sum
+of its part commuting with `F`, placed bare, and of its part anticommuting with `F`, a
+fermionic operator taking the Jordan-Wigner string, so that simplifying the result again
+leaves it unchanged. Otherwise the function is placed whole.
 """
 place_function(a, index...) =
     if length(index) == 1 && only(index) > 1 && fermion_parity(a.arg, false) ≠ 0
@@ -439,9 +421,7 @@ place_function(a, index...) =
         a(index...)
     end
 
-# an integer power is its product, placed factor by factor with their strings, and any other is
-# a function of the operator, placed as exp is: on one site through its matrix, split in the
-# parts that commute and anticommute with F, and whole on several
+# an integer power is placed factor by factor with their strings, any other by place_function
 simplify_ind(a::IntPowOp, index...) = simplify_prod(fill(simplify_ind(a.arg, index...), a.expo))
 
 function simplify_ind(a::GenPowOp{Pure}, index...)
@@ -469,13 +449,11 @@ simplify_ind(a::Operator{1}, index) =
         a(index)
     end
 
-# a multi site operator has to be replaced by its definition, PreMPO only knows how to
-# place one site factors. One site operators are handled by the method above and keep
-# their name, their definition is read from the site when the tensor is needed.
+# an operator of several sites is replaced by its definition, PreMPO placing only factors of
+# one site
 simplify_ind(a::Operator, index...) =
     if a.expr isa Op
-        # simplified first, as an operator placed as it is written would be: a renamed
-        # exp(c * Swap) has to be developed as exp(c * Swap) itself is
+        # simplified first, so that a renamed exp(c * Swap) is developed as exp(c * Swap) is
         simplify_ind(simplify(a.expr), index...)
     else
         a(index...)
