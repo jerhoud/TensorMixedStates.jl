@@ -42,10 +42,11 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
     # pairs going to one Data made two
     events = IdDict()
     for (v, name) in zip(vals, first.(measurements))
-        check_destination(sim, name)
-        d = destination(sim.outputs, name)
-        event = get!(() -> new_event(d), events, d)
-        emit!(d, sim.outputs.formats, sim.time, v; event)
+        d = Destination(name)
+        check_destination(sim, d)
+        s = sink(sim.outputs, d)
+        event = get!(() -> new_event(s), events, s)
+        emit!(s, sim.outputs.formats, sim.time, v; event)
     end
 end
 
@@ -70,7 +71,7 @@ solvers write their progress there too.
 function log_message(sim::Simulation, text)
     # written here rather than through `output`, where `dest => "text"` is a measurement. A
     # comment between a docstring and what it documents detaches it, so this one is inside
-    emit_line!(destination(sim.outputs, "log"), text)
+    emit_line!(sink(sim.outputs, LogFile()), text)
 end
 
 """

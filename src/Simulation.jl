@@ -124,7 +124,9 @@ function check_destination(sim::Simulation, name::AbstractString)
         error("cannot write to $name, a file of the simulation directory: choose another name")
     end
 end
-check_destination(::Simulation, ::Data) = nothing
+check_destination(sim::Simulation, d::Union{TextFile, JsonFile}) = check_destination(sim, d.name)
+check_destination(sim::Simulation, ::LogFile) = check_destination(sim, "log")
+check_destination(::Simulation, ::Destination) = nothing
 
 """
     save_state(filename, statename, ::Simulation)
@@ -144,13 +146,11 @@ end
 """
     get_sim_file(::Simulation, name)
 
-the destination `output` writes to under this name, to write to it directly. `"stdout"` (or
+the stream `output` writes to under this name, to write to it directly. `"stdout"` (or
 `"-"`), `"stderr"` and `""` give `stdout`, `stderr` and `devnull`, any other name the stream
-of a file of that name. A name ending in `.json` gives instead a `Dict` gathering the data,
-written to the file as json when the files of the simulation are closed, see
-`close_sim_files`, and `Data(name)` the `Dict` of
-`sim.data[name]`. When the output of the simulation is redirected, every name but a `Data`
-one gives that stream.
+of a file of that name. When the output of the simulation is redirected, every name gives
+that stream. A name ending in `.json` and a `Data`, whose values `output` alone writes, are
+refused.
 
 In a simulation run by `runTMS` in its directory, the files `runTMS` writes there itself, the
 log, the checkpoint and the markers, cannot be asked for.
@@ -167,9 +167,10 @@ Once `runTMS` has returned, the files of the simulation are closed.
         return sim
     end
 """
-function get_sim_file(sim::Simulation, name::Union{AbstractString, Data})
-    check_destination(sim, name)
-    return handle(destination(sim.outputs, name))
+function get_sim_file(sim::Simulation, name::Union{AbstractString, Destination})
+    d = Destination(name)
+    check_destination(sim, d)
+    return stream(sink(sim.outputs, d))
 end
 
 """

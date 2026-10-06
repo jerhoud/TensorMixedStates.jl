@@ -1,7 +1,18 @@
 # The destinations of measurements: text files, streams, json files and Data, kept in memory,
-# how values are written to each, and how they are persisted and restored with a checkpoint.
+# the sinks they open to, how values are written to each, and how they are persisted and
+# restored with a checkpoint.
 
 export Data
+
+"""
+    Destination
+
+what a destination of measurements is, as `output` and `get_sim_file` take it: a description,
+compared by value, which the simulation opens to a sink the first time it is used. A name is
+read as one by `Destination(name)`. The kinds are `TextFile`, `LogFile`, `Stream`, `JsonFile`
+and `Data`.
+"""
+abstract type Destination end
 
 """
     Data(name)
@@ -14,7 +25,7 @@ in `sim.data[name]`, which `data_to_frame` turns into a table.
     output(sim, Data("magnetization") => [X, Z(1)])
     data_to_frame(sim.data["magnetization"])
 """
-struct Data
+struct Data <: Destination
     name::String
 end
 
@@ -223,161 +234,210 @@ end
 ############### destinations ###############
 
 """
-    Destination
+    TextFile(name)
 
-where the measurements of an `output` go, of five kinds:
-
-- `TextFile`: a file of the simulation, written line by line as the measurements are made;
-- `LogFile`: the file `log`, a text file that a resumed run continues without cutting it back;
-- `Stream`: `stdout`, `stderr`, `devnull` or the stream `runTMS` redirects everything to;
-  it belongs to the process, so it is neither closed nor resumed;
-- `JsonFile`: a `.json` file, accumulated in memory and written when the files are closed;
-- `DataStore`: a `Data(name)` destination, accumulated in memory in `sim.data`.
-
-Each kind has its methods of `emit!`, `new_event`, `reached`, `persist`, `close!` and
-`handle`; `emit_line!` is for those that can hold the log.
-"""
-abstract type Destination end
-
-"""
-    TextFile(io)
-
-a text file of the simulation, see `Destination`.
+a text file of the simulation, written line by line as the measurements are made, known by
+its normalized path, so that `"data"` and `"./data"` are one file rather than each emptying
+the other
 """
 struct TextFile <: Destination
-    io::IO
+    name::String
+    TextFile(name::AbstractString) = new(normpath(name))
 end
 
 """
-    LogFile(io)
+    LogFile()
 
-the log of the simulation, see `Destination`.
+the log of the simulation, the file `log`: a text file that a resumed run continues without
+cutting it back, keeping the history of every run
 """
-struct LogFile <: Destination
-    io::IO
-end
+struct LogFile <: Destination end
 
 """
     Stream(io)
 
-a stream of the process, see `Destination`.
+a stream of the process, `stdout`, `stderr`, `devnull` or the stream `runTMS` redirects
+everything to: it belongs to the process, so it is neither closed nor resumed
 """
 struct Stream <: Destination
     io::IO
 end
 
 """
-    JsonFile(path, series)
+    JsonFile(name)
 
-a `.json` file, whose series are written to `path` when it is closed, see `Destination`.
+a `.json` file, accumulated in memory and written when the files are closed, known by its
+normalized path as a `TextFile` is
 """
 struct JsonFile <: Destination
+    name::String
+    JsonFile(name::AbstractString) = new(normpath(name))
+end
+
+"""
+    Destination(name)
+
+the destination a name stands for: `"stdout"` (or `"-"`), `"stderr"` and `""` the streams of
+the process, the last being `devnull`, `"log"` the log, a name ending in `.json` a json file,
+any other a text file
+"""
+function Destination(name::AbstractString)
+    if name == "stdout" || name == "-"
+        return Stream(stdout)
+    elseif name == ""
+        return Stream(devnull)
+    elseif name == "stderr"
+        return Stream(stderr)
+    elseif normpath(name) == "log"
+        return LogFile()
+    elseif last(splitext(name)) == ".json"
+        return JsonFile(name)
+    end
+    return TextFile(name)
+end
+
+Destination(d::Destination) = d
+
+############### sinks ###############
+
+"""
+    Sink
+
+what a destination opens to, holding what is written to it: a `TextSink` for a text file or
+the log, a `StreamSink` for a stream, a `JsonSink` or a `DataSink` for an accumulating
+destination. Each kind has its methods of `emit!`, `new_event`, `reached`, `persist` and
+`close!`; `emit_line!` and `stream` are for those of text.
+"""
+abstract type Sink end
+
+"""
+    TextSink(io)
+
+the open file of a `TextFile` or of the `LogFile`, see `Sink`.
+"""
+struct TextSink <: Sink
+    io::IO
+end
+
+"""
+    StreamSink(io)
+
+the stream of a `Stream`, see `Sink`.
+"""
+struct StreamSink <: Sink
+    io::IO
+end
+
+"""
+    JsonSink(path, series)
+
+the series of a `JsonFile`, written to `path` when it is closed, see `Sink`.
+"""
+struct JsonSink <: Sink
     path::String
     series::Series
 end
 
 """
-    DataStore(series)
+    DataSink(series)
 
-a `Data` destination, whose series is the one `sim.data` holds, see `Destination`.
+the series of a `Data`, the one `sim.data` holds, see `Sink`.
 """
-struct DataStore <: Destination
+struct DataSink <: Sink
     series::Series
 end
 
 """
-    emit!(::Destination, formats, time, values; event)
+    emit!(::Sink, formats, time, values; event)
 
-take the values of one call of `output`, pairs `header => value`: a text destination writes
-them as rows and flushes, an accumulating destination appends them to its series as the
-event `event`, a new one by default.
+take the values of one call of `output`, pairs `header => value`: a text sink writes them as
+rows and flushes, an accumulating sink appends them to its series as the event `event`, a
+new one by default.
 """
-function emit!(d::Union{TextFile, LogFile, Stream}, formats, time, values; event = nothing)
+function emit!(s::Union{TextSink, StreamSink}, formats, time, values; event = nothing)
     for (header, value) in values
-        write_row(d.io, formats, time, header, value)
+        write_row(s.io, formats, time, header, value)
     end
     # so that a run can be followed, and a crash loses nothing already measured
-    flush(d.io)
+    flush(s.io)
 end
 
 # `formats` named although unused: Julia 1.10 refuses `_` beside a keyword whose default is
 # computed
-function emit!(d::Union{JsonFile, DataStore}, formats, time, values;
-               event = next_event(d.series))
+function emit!(s::Union{JsonSink, DataSink}, formats, time, values;
+               event = next_event(s.series))
     for (header, value) in values
-        push_value!(d.series, header, time, value, event)
+        push_value!(s.series, header, time, value, event)
     end
 end
 
 """
-    emit_line!(::Destination, text)
+    emit_line!(::Sink, text)
 
-write a line of the log to the log file or to a stream, flushed at once.
+write a line of the log to a text sink, flushed at once.
 """
-function emit_line!(d::Union{LogFile, Stream}, text)
-    println(d.io, text)
-    flush(d.io)
+function emit_line!(s::Union{TextSink, StreamSink}, text)
+    println(s.io, text)
+    flush(s.io)
 end
 
 """
-    new_event(::Destination)
+    new_event(::Sink)
 
-the event the values of a call of `output` take in an accumulating destination, `nothing`
-for a text destination, which does not number them
+the event the values of a call of `output` take in an accumulating sink, `nothing` for a
+text sink, which does not number them
 """
-new_event(::Union{TextFile, LogFile, Stream}) = nothing
-new_event(d::Union{JsonFile, DataStore}) = next_event(d.series)
-
-"""
-    reached(::Destination)
-
-how far a destination has got, as a checkpoint records it: the position of a file, once
-flushed, the lengths of the series of an accumulating destination, `nothing` for a stream,
-which is not resumed.
-"""
-reached(d::Union{TextFile, LogFile}) = (flush(d.io); position(d.io))
-reached(::Stream) = nothing
-reached(d::Union{JsonFile, DataStore}) = series_lengths(d.series)
+new_event(::Union{TextSink, StreamSink}) = nothing
+new_event(s::Union{JsonSink, DataSink}) = next_event(s.series)
 
 """
-    persist(::Destination, reached)
+    reached(::Sink)
 
-what a checkpoint carries of a destination up to `reached`, as pairs headed by its `kind`:
-the position of a text file, already on the disk, which a resume cuts it back to, nothing
-more for the log, the part of the series of an accumulating destination.
+how far a sink has got, as a checkpoint records it: the position of a file, once flushed,
+the lengths of the series of an accumulating sink, `nothing` for a stream, which is not
+resumed.
 """
-persist(::TextFile, pos::Int) = ("kind" => "text", "position" => pos)
-persist(::LogFile, _) = ("kind" => "log",)
-persist(d::JsonFile, lengths) =
-    ("kind" => "json", "series" => persist_series(d.series, lengths))
-persist(d::DataStore, lengths) =
-    ("kind" => "data", "series" => persist_series(d.series, lengths))
+reached(s::TextSink) = (flush(s.io); position(s.io))
+reached(::StreamSink) = nothing
+reached(s::Union{JsonSink, DataSink}) = series_lengths(s.series)
 
 """
-    close!(::Destination)
+    persist(::Sink, reached)
 
-close a file, or write a json file; a stream or a `Data` destination is left as it is.
+what a checkpoint carries of a sink up to `reached`, as pairs: the position of a file,
+already on the disk, the part of the series of an accumulating sink
 """
-close!(d::Union{TextFile, LogFile}) = close(d.io)
-close!(::Union{Stream, DataStore}) = nothing
+persist(::TextSink, pos::Int) = ("position" => pos,)
+persist(s::Union{JsonSink, DataSink}, lengths) =
+    ("series" => persist_series(s.series, lengths),)
 
-function close!(d::JsonFile)
+"""
+    close!(::Sink)
+
+close a file, or write a json file; a stream or a `Data` is left as it is.
+"""
+close!(s::TextSink) = close(s.io)
+close!(::Union{StreamSink, DataSink}) = nothing
+
+function close!(s::JsonSink)
     # serialized before the file is opened, which empties it: a value json cannot hold leaves
     # the previous file
-    text = JSON.json(json_value(d.series))
-    open(d.path, "w") do io
+    text = JSON.json(json_value(s.series))
+    open(s.path, "w") do io
         print(io, text)
     end
 end
 
 """
-    handle(::Destination)
+    stream(::Sink)
 
-what `get_sim_file` returns for a destination: the stream of a text destination, the series
-of an accumulating one.
+the stream `get_sim_file` gives, that of a text sink: the series of an accumulating sink are
+written by `output` alone, which numbers the events.
 """
-handle(d::Union{TextFile, LogFile, Stream}) = d.io
-handle(d::Union{JsonFile, DataStore}) = d.series
+stream(s::Union{TextSink, StreamSink}) = s.io
+stream(::Union{JsonSink, DataSink}) =
+    error("get_sim_file gives text files and streams: a json file or a Data is written by " *
+          "output")
 
 """
     in_dir(dir, name)
@@ -389,71 +449,108 @@ in_dir(dir::AbstractString, name::AbstractString) =
     isempty(dir) || isabspath(name) ? name : joinpath(dir, name)
 
 """
+    open_sink(::Destination, dir)
+
+the sink a destination opens to, its file taken in the directory `dir`. A text file is
+created, emptied if it exists.
+"""
+open_sink(d::TextFile, dir) = TextSink(open(in_dir(dir, d.name), "w"))
+open_sink(::LogFile, dir) = TextSink(open(in_dir(dir, "log"), "w"))
+open_sink(d::Stream, _) = StreamSink(d.io)
+open_sink(::Data, _) = DataSink(Series())
+
+function open_sink(d::JsonFile, dir)
+    path = in_dir(dir, d.name)
+    # refused now, as `open` refuses a text file, rather than when it is written at the end of
+    # the run
+    parent = dirname(path)
+    if !isempty(parent) && !isdir(parent)
+        error("cannot write $(d.name): there is no directory $parent")
+    end
+    return JsonSink(path, Series())
+end
+
+"""
+    describe(::Destination)
+
+how a checkpoint names a destination, as pairs, which `described` reads back
+"""
+describe(d::TextFile) = ("kind" => "text", "name" => d.name)
+describe(::LogFile) = ("kind" => "log", "name" => "log")
+describe(d::JsonFile) = ("kind" => "json", "name" => d.name)
+describe(d::Data) = ("kind" => "data", "name" => d.name)
+
+"""
+    described(entry)
+
+the destination an entry of a checkpoint names, see `describe`
+"""
+function described(p::AbstractDict)
+    kind, name = p["kind"], p["name"]
+    if kind == "text"
+        return TextFile(name)
+    elseif kind == "log"
+        return LogFile()
+    elseif kind == "json"
+        return JsonFile(name)
+    elseif kind == "data"
+        return Data(name)
+    end
+    error("a checkpoint names a destination of unknown kind $kind")
+end
+
+"""
+    restore_sink(::Destination, dir, entry)
+
+the sink of a destination put back from its entry in a checkpoint, with whether a text file
+is shorter than its recorded position: a text file is cut back to that position and
+continued, the log continued as it is, a series holds again what it held.
+"""
+function restore_sink(d::TextFile, dir, p)
+    path = in_dir(dir, d.name)
+    len = isfile(path) ? filesize(path) : 0
+    if len > p["position"]
+        open(path, "a") do io
+            Base.truncate(io, p["position"])
+        end
+    end
+    return TextSink(open(path, "a")), len < p["position"]
+end
+
+restore_sink(::LogFile, dir, _) = TextSink(open(in_dir(dir, "log"), "a")), false
+restore_sink(d::JsonFile, dir, p) =
+    JsonSink(in_dir(dir, d.name), restore_series(p["series"])), false
+restore_sink(::Data, _, p) = DataSink(restore_series(p["series"])), false
+
+############### the destinations of a simulation ###############
+
+"""
     Outputs(redirect, time_format, data_format[, dir])
 
-the destinations of a simulation and the formats of what is written. A destination is opened
-the first time it is asked for and is the same afterwards, kept under its key: the
-normalized path of a name, or the `Data` itself. `"stdout"` (or `"-"`), `"stderr"` and `""`
-(`devnull`) are the streams of the process, `"log"` the log, a name ending in `.json` an
-accumulating file, any other a text file, taken in the directory `dir` when it is relative.
-With `redirect`, every name is that stream, a `Data` destination still being kept in memory.
+the sinks of a simulation, by destination, and the formats of what is written. A destination
+is opened the first time it is used and is the same afterwards, its file taken in the
+directory `dir` when it is relative. With `redirect`, every destination is that stream, a
+`Data` still being kept in memory.
 """
 struct Outputs
-    redirect::Union{Nothing, Stream}
-    destinations::Dict{Union{String, Data}, Destination}
+    redirect::Union{Nothing, StreamSink}
+    sinks::Dict{Destination, Sink}
     formats::Tuple{Printf.Format, Printf.Format}
     dir::String
     Outputs(redirect, time_format::String, data_format::String, dir::String = "") =
-        new(isnothing(redirect) ? nothing : Stream(redirect),
-            Dict{Union{String, Data}, Destination}(),
+        new(isnothing(redirect) ? nothing : StreamSink(redirect), Dict{Destination, Sink}(),
             (Printf.Format(time_format), Printf.Format(data_format)), dir)
 end
 
 """
-    open_destination(dir, name)
+    sink(::Outputs, ::Destination)
 
-the destination a name stands for, see `Outputs`. A text file is created, emptied if it
-exists.
+the sink of a destination, opened on first use, or the redirect stream if there is one
 """
-function open_destination(dir::AbstractString, name::AbstractString)
-    if name == "stdout" || name == "-"
-        return Stream(stdout)
-    elseif name == ""
-        return Stream(devnull)
-    elseif name == "stderr"
-        return Stream(stderr)
-    end
-    path = in_dir(dir, name)
-    if last(splitext(name)) == ".json"
-        # refused now, as `open` refuses a text file, rather than when it is written at the end
-        # of the run
-        parent = dirname(path)
-        if !isempty(parent) && !isdir(parent)
-            error("cannot write $name: there is no directory $parent")
-        end
-        return JsonFile(path, Series())
-    end
-    io = open(path, "w")
-    return normpath(name) == "log" ? LogFile(io) : TextFile(io)
-end
+sink(o::Outputs, d::Destination) =
+    isnothing(o.redirect) ? get!(() -> open_sink(d, o.dir), o.sinks, d) : o.redirect
 
-"""
-    destination(::Outputs, name)
-    destination(::Outputs, ::Data)
-
-the destination of the given name, opened on first use, or the redirect stream if there is
-one. A `Data` destination holds the series of that name in `sim.data`, created if needed.
-
-A file is known by its normalized path, so that `"data"` and `"./data"` share one destination
-rather than each emptying the other; the empty name is kept as it is.
-"""
-destination(o::Outputs, name::AbstractString) =
-    isnothing(o.redirect) ?
-        get!(() -> open_destination(o.dir, name), o.destinations,
-             isempty(name) ? String(name) : normpath(name)) :
-        o.redirect
-
-destination(o::Outputs, d::Data) = get!(() -> DataStore(Series()), o.destinations, d)
+sink(o::Outputs, d::Data) = get!(() -> open_sink(d, o.dir), o.sinks, d)
 
 """
     data_series(::Outputs)
@@ -461,20 +558,20 @@ destination(o::Outputs, d::Data) = get!(() -> DataStore(Series()), o.destination
 the series of the `Data` destinations by name, as `sim.data` gives them
 """
 data_series(o::Outputs) =
-    Dict{String, Series}(key.name => handle(d) for (key, d) in o.destinations if key isa Data)
+    Dict{String, Series}(d.name => s.series for (d, s) in o.sinks if d isa Data)
 
 """
     output_marks(::Outputs)
 
-how far every destination but the streams has got, by key, as a checkpoint records it, see
+how far every sink but the streams has got, by destination, as a checkpoint records it, see
 `reached`
 """
 function output_marks(o::Outputs)
-    marks = Dict{Union{String, Data}, Any}()
-    for (key, d) in o.destinations
-        m = reached(d)
+    marks = Dict{Destination, Any}()
+    for (d, s) in o.sinks
+        m = reached(s)
         if !isnothing(m)
-            marks[key] = m
+            marks[d] = m
         end
     end
     return marks
@@ -484,44 +581,15 @@ end
     persist_outputs(::Outputs, marks)
 
 what a checkpoint carries of the destinations, up to the `marks` of `output_marks`: one entry
-per destination, its name and what `persist` gives.
+per destination, what `describe` and `persist` give.
 """
 persist_outputs(o::Outputs, marks) =
-    [ Dict("name" => key isa Data ? key.name : key, persist(o.destinations[key], m)...)
-      for (key, m) in marks ]
-
-"""
-    restored_destination(dir, entry)
-
-the key and the destination an entry of `persist_outputs` stands for, with whether a text
-file is shorter than its recorded position: a text file is cut back to that position and
-continued, the log continued as it is, keeping the history of every run, a series holds again
-what it held.
-"""
-function restored_destination(dir::AbstractString, p::AbstractDict)
-    name, kind = p["name"], p["kind"]
-    if kind == "data"
-        return Data(name), DataStore(restore_series(p["series"])), false
-    end
-    path = in_dir(dir, name)
-    if kind == "json"
-        return name, JsonFile(path, restore_series(p["series"])), false
-    elseif kind == "log"
-        return name, LogFile(open(path, "a")), false
-    end
-    len = isfile(path) ? filesize(path) : 0
-    if len > p["position"]
-        open(path, "a") do io
-            Base.truncate(io, p["position"])
-        end
-    end
-    return name, TextFile(open(path, "a")), len < p["position"]
-end
+    [ Dict(describe(d)..., persist(o.sinks[d], m)...) for (d, m) in marks ]
 
 """
     restore_outputs!(::Outputs, persisted)
 
-put back the destinations a checkpoint carries, see `restored_destination`, a destination the
+put back the destinations a checkpoint carries, see `restore_sink`, a destination the
 checkpoint does not know being created on first use.
 
 Return the names of the text files shorter than their recorded position, cut or removed by
@@ -530,10 +598,11 @@ hand, which are continued as they are, for the log to say so.
 function restore_outputs!(o::Outputs, persisted)
     shortened = String[]
     for p in persisted
-        key, d, short = restored_destination(o.dir, p)
-        o.destinations[key] = d
+        d = described(p)
+        s, short = restore_sink(d, o.dir, p)
+        o.sinks[d] = s
         if short
-            push!(shortened, key)
+            push!(shortened, d.name)
         end
     end
     return shortened
@@ -542,14 +611,14 @@ end
 """
     close_outputs!(::Outputs)
 
-close every destination, which writes the json files, each even when another fails, the
-first failure being raised at the end
+close every sink, which writes the json files, each even when another fails, the first
+failure being raised at the end
 """
 function close_outputs!(o::Outputs)
     failure = nothing
-    for d in values(o.destinations)
+    for s in values(o.sinks)
         try
-            close!(d)
+            close!(s)
         catch e
             if isnothing(failure)
                 failure = e

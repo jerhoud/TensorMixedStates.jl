@@ -240,6 +240,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
   the package say what a site needs for that.
 - `LoadState` truncates the state it loads only when it is given limits, so that a
   representation of one's own needs no `truncate` to be loaded.
+- `get_sim_file` gives text files and streams alone: a name ending in `.json` and a `Data`,
+  whose values `output` alone writes, are refused, where it gave the dictionary of their
+  series to write in. `sim.data` still gives the series of a `Data` to read.
 
 ### Removed
 

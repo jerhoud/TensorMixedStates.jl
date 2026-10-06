@@ -35,7 +35,7 @@ struct Commit
     time::Number
     state::Union{Nothing, AbstractState}
     carried::Any
-    reached::Dict{Union{String, Data}, Any}
+    reached::Dict{Destination, Any}
 end
 
 """

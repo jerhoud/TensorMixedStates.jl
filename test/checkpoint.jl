@@ -540,6 +540,21 @@ end
     end
 end
 
+@testset "get_sim_file gives text files and streams" begin
+    # the series of a json file or a Data are written by output alone, which numbers the
+    # calls data_to_frame makes rows of
+    mktempdir() do dir
+        cd(dir) do
+            sim = Simulation(State{Pure}(System(2, Qubit()), "Up"))
+            @test get_sim_file(sim, "stdout") === stdout
+            @test get_sim_file(sim, "notes") === get_sim_file(sim, "./notes")
+            @test_throws "written by output" get_sim_file(sim, "d.json")
+            @test_throws "written by output" get_sim_file(sim, Data("d"))
+            close_sim_files(sim)
+        end
+    end
+end
+
 @testset "Values that are not finite" begin
     # json has no number for them: the checkpoint marks them and gives them back, and a json
     # file writes them as Julia prints them
@@ -1362,8 +1377,8 @@ end
             @test isfile("good.json")
             # one that fails as it is closed does not keep the others from being written
             o = sim.outputs
-            o.destinations["nodir/late.json"] = TensorMixedStates.JsonFile("nodir/late.json",
-                                                                     TensorMixedStates.Series())
+            o.sinks[TensorMixedStates.JsonFile("nodir/late.json")] =
+                TensorMixedStates.JsonSink("nodir/late.json", TensorMixedStates.Series())
             for k in 1:3
                 output(sim, "after$k.json" => Z(1))
             end
