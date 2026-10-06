@@ -18,466 +18,220 @@ on the page "Extending TMS", are experimental and may still change in a version 
 ### Added
 
 - `compact`, which writes an operator so that its MPO has the least bond dimension a
-  triangular MPO can have: its terms of several sites are gathered into coms, blocks of
-  channels printed `com(sites,linkdims)` in which the terms share what they have in common. On
-  `sum(Z(i)Z(j) for i in 1:39 for j in i+1:40)` the bond dimension goes from 402 to 3. A com can
-  be added to other operators, multiplied by a number, measured and lifted to a mixed
-  representation; it is refused as a factor of a product and as a gate.
-- `a ≈ b` for two operators placed on sites, comparing them through the products of one site
-  operators they expand into, those of a com included.
-- `Krylov`, the parameters of the Krylov method that solves each local step of `tdvp`, `dmrg`
-  and `steady_state`: the largest dimension of a Krylov space, the number of spaces built one
-  after the other and the tolerance. The three functions take it as `krylov`, and so do the
-  `Tdvp` algorithm and the `GroundState` and `SteadyState` phases. A field left to `nothing`
-  keeps the default of the method.
-- `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO, the algorithm of the product
-  of the state by an MPO: `"densitymatrix"`, the default, or `"naive"`.
-- `noise` for `SteadyState`, as for `GroundState`, and among the documented options of
-  `steady_state`, which already passed it on to `dmrg`.
-- `AbstractState` and `Representation`, for a representation of a state that an extension
-  defines. `CreateState` takes it as its `type`, through the method of `run_phase` the
-  extension gives for it. A `Simulation` holds its states, `output` measures them through the
-  method of `expect` the extension gives, which receives each operator as written, and
-  `save_state`, `load_state` and the checkpoints save them through its methods of
-  `write_state` and `read_state`. The files of a `State` are written as before.
-- `lindblad_terms(evolver)`, the hamiltonian of an evolver and its jump operators, as pairs
-  `L => sites`, and `kraus_operators(system, gates)`, the Kraus operators of each channel of a
-  product of gates, `Gate`, noisy gates and `SetState`: what a representation of one's own, as
-  quantum trajectories, reads to unravel an evolution or apply gates.
-- `Left(A)` and `Right(A)` of an operator already placed on sites, a sum or a product, its
-  coefficients and the strings of its fermionic factors included, `Left(X(1) * Z(3))` being
+  triangular MPO can have, its terms gathered into coms printed `com(sites,linkdims)`: on
+  `sum(Z(i)Z(j) for i in 1:39 for j in i+1:40)` the bond dimension goes from 402 to 3.
+- `a ≈ b` for two operators placed on sites.
+- `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
+  `steady_state`, `Tdvp`, `GroundState` and `SteadyState` take as `krylov`.
+- `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or
+  `"naive"`.
+- `noise` for `SteadyState`, as for `GroundState`.
+- `dmrg` and `steady_state` take a `PreMPO`, as `tdvp` and `approx_W` do.
+- `Left(A)` and `Right(A)` of an operator already placed on sites, `Left(X(1) * Z(3))` being
   `Left(X)(1) * Left(Z)(3)`.
-- `expect(state, op; normalize = false)`, tr(Aρ) or ⟨ψ|A|ψ⟩ not divided by the trace, which an
-  operator made non hermitian by `Left` or `Right` needs, Bρ in a correlation at two times
-  whose trace may be zero.
+- `expect(state, op; normalize = false)`, not divided by the trace, for an operator made non
+  hermitian by `Left` or `Right`.
 - `inner(a, op, b)` and `dot(a, op, b)`, the matrix element of an operator between two pure
   states, or of a superoperator between two mixed ones.
-- `run_steps(f, sim, nsteps; carry)`, the steps of a phase of one's own carrying a value from
-  one to the next, committed with each step and given back to a resumed run.
-- `dmrg` and `steady_state` take a `PreMPO`, as `tdvp` and `approx_W` already did, so that an
-  operator is prepared once for several calls.
-- `TensorMixedStates.creates_state(phase)` and `TensorMixedStates.phase_system(phase)`, which a
-  phase of one's own creating the state defines, the adapter of another library for instance:
-  it can then start a simulation, and a resumed run puts the state of its checkpoint back on
-  the system it gives, as for `CreateState`.
-- `save_state(file, name, sim)`, the state of a simulation saved, refusing a file of the
-  simulation directory, as its checkpoint, which `SaveState` already refused. `stopped(sim)`
-  is documented for a phase of one's own as well, telling whether the run is stopping.
-- `AbstractPhase`, the supertype of the phases, those of the library and those of one's own,
-  which are printed field by field in the log as those of the library are. The phases of the
-  library are written each in a file of `src/phases` through the interface a phase of one's own
-  uses, and make as many examples.
-- `resume_time(sim)` and `committed_time(sim)`, the time a resumed phase goes on from and that
-  of the last step committed, for a phase of one's own driving a solver.
-- `superposition(system, [c => states, ...])`, the superposition of product states with the
-  given coefficients, and `mixture(system, [p => states, ...])`, the mixture of product states
-  with the given weights, exact, of bond dimension the number of nonzero terms, built at once
-  rather than term by term. `ghz_state` is the superposition of uniform product states.
-- `ghz_state(system, states...)`, the superposition with equal weights of the product states in
-  which every site is in the same local state, exact, of bond dimension the number of states.
-- `dicke_state(system, k, a, b)`, the superposition with equal weights of the product states
-  with `k` sites in `b` and the others in `a`, and `w_state(system, a, b)`, the case of one
-  site, exact, of bond dimension `k + 1` at most, on charged sites as well.
-  `w_state(system, a, b, amplitudes)` weights each site in `b` by its amplitude, a wave packet
-  of one excitation.
-- `dimer_state(system, pairs, a, b)`, a singlet (|ab⟩ - |ba⟩)/√2 on each pair of sites, the
-  Majumdar-Ghosh state for pairs of neighbours and the rainbow state for nested pairs, the sites
-  in no pair taking the local state given by `others`.
-- `aklt_state(system)`, the AKLT state of a chain of spins one, its exact MPS of bond
-  dimension 2, the virtual spins at the ends set by `left` and `right`.
-- `mps_state(system, tensors)`, the pure state of the MPS of the tensors given as arrays
-  `A[l, s, r]`, the charges of its links read off the tensors on a charged system.
-- `dense_state(system, ψ)` and `dense_state(system, ρ)`, the pure state of a vector and the
-  mixed state of a density matrix on the basis of the product states, ordered as `kron` orders
-  them, decomposed into an MPS truncated to `limits`.
-- `fully_mixed(system, op => value...)`, the fully mixed state of the sector where the sum of
-  each operator over the sites takes its value, exact, of bond dimension `N + 1` at most for
-  `N => N`: the state at infinite temperature of a sector, from which `Thermalize` gives the
-  canonical thermal state, under any conservation, a strong one included.
-- `slater_state(system, orbitals...)`, the Slater determinant of given orbitals, one matrix for
-  each species of fermions, and `fermi_sea(system, H, nparticles...)`, the ground state of
-  free fermions under a quadratic hamiltonian H written as for any other function, on sites
-  of `Fermion` or `Electron`. The determinant is built as a circuit of rotations of
-  neighbouring modes applied to a product state, after Fishman and White, and conserves the
-  number of fermions of each species. Sites holding no fermions, an impurity or bosons beside
-  the fermions, take the local state given by `others`. A hamiltonian that is not quadratic,
-  mixes the species or acts on the sites without fermions is refused, and so is a number of
-  fermions filling a degenerate level in part.
+- A function of an even fermionic operator of several sites, as the exponential of a hopping
+  term, is applied as a gate on any sites, in any order and apart. It was refused.
+- Prepared states, of exact MPS: `superposition` and `mixture` of product states, `ghz_state`,
+  `dicke_state`, `w_state`, `dimer_state` (the Majumdar-Ghosh and rainbow states),
+  `aklt_state`, `mps_state` from the tensors of an MPS, `dense_state` from a vector or a
+  density matrix, and `fully_mixed(system, op => value...)`, the fully mixed state of a sector.
+- `slater_state(system, orbitals...)`, the Slater determinant of given orbitals, and
+  `fermi_sea(system, H, nparticles...)`, the ground state of free fermions under a quadratic
+  Hamiltonian, on sites of `Fermion` or `Electron`.
 - `thermal_state(H, β, ρ)` and the phase `Thermalize`, which take a mixed state ρ to
   e^(-βH/2) ρ e^(-βH/2), normalized, by tdvp in imaginary time: from `"FullyMixed"` the thermal
-  state e^(-βH)/Z, and from a state that commutes with H, as `"MixedSpin"`, the thermal state
-  restricted to what it describes. Each step is normalized and the logarithms of the traces are
-  summed into `log_trace`, log Z up to the dimension of the space: the function returns it, and
-  the phase gives it with β to its measurements, as the symbols `:log_trace` and `:beta`, and
-  carries it through a resume. `ThermalObserver` is its observer.
-- `map_sites(f, op)`, the operator `op` with each factor moved to the images of its sites by
-  `f`, for a representation of one's own that keeps its tensors on another system, a
-  purification for instance.
-- `stopped(sim)`, which tells whether the simulation `runTMS` returned stopped before the end
-  of its phases, at `max_time`, on the file `stop` or on an interrupt, rather than completed.
-- A function of an even fermionic operator of several sites, as the exponential of a hopping
-  term `exp(-im * θ * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))`, is applied as a gate on any sites, in
-  any order and apart, the strings through the sites in between coming from diagonal gates of
-  two sites around it. It was refused. A function of an odd operator still is, mixing the two
-  parities.
-- `TensorMixedStates.evolve`, to which the `Evolve` phase hands the evolution of its state, the
-  method being chosen by the type of the algorithm and by that of the state. An extension adds
-  an algorithm of its own, `Algo` being now the abstract supertype of `Tdvp` and `ApproxW`
-  rather than their union, or has them evolve a state of its own. Such a method can run its
-  steps with `run_steps`, which resumes, stops and checkpoints them.
+  state e^(-βH)/Z, from `fully_mixed` of a sector the canonical one. The logarithm of the trace
+  is measured as `:log_trace`, with `:beta`; `ThermalObserver` is the observer.
+- Phases of one's own, see "Extending TMS": `AbstractPhase`, their supertype, printed in the
+  log as the phases of the library; `run_steps(f, sim, nsteps; carry)`, steps committed and
+  resumed, carrying a value; `resume_time` and `committed_time`, for a phase driving a solver;
+  `creates_state` and `phase_system`, for a phase creating the state; `save_state(file, name,
+  sim)`; `stopped(sim)`, also telling whether the simulation `runTMS` returned stopped early.
+- Representations of one's own, see "Extending TMS": `AbstractState` and `Representation`,
+  which `CreateState`, `output`, `save_state`, `load_state` and the checkpoints handle through
+  the methods `expect`, `write_state` and `read_state`; `TensorMixedStates.evolve`, through
+  which `Evolve` runs an algorithm or a state of one's own, `Algo` being the abstract supertype
+  of `Tdvp` and `ApproxW`; and `lindblad_terms`, `kraus_operators` and `map_sites`, which such
+  a representation reads.
 
 ### Changed
 
-- `runTMS` leaves the working directory of the process as it is, and writes the files of the
-  simulation in its directory by their full path, where it changed to that directory for the
-  whole run. A relative name of a destination, of `SaveState` or of `LoadState` is still taken
-  there, but a file a phase of one's own opens with a relative name, rather than with
-  `get_sim_file`, is now taken from the working directory. An empty name is refused.
-- `runTMS` refuses to start in a directory where another run may still be going on, which
-  the file `running` marks, now naming the machine and the process. A file left by a process
-  of the same machine that no longer exists, killed for instance, is replaced with a warning in
-  the log; any other is removed by hand.
-- A checkpoint is resumed only by the program that wrote it: the same, byte for byte, as its
-  copy `prog.jl`, given the same command line arguments, which `prog_args.json` now keeps when
-  there are some. The fingerprint of the phases it was checked against missed a change in a
-  function, and could refuse a checkpoint of the same program included again in one session.
-  To resume with an edited program, copy it onto `prog.jl`. A program run from the REPL is
-  always resumed, and a checkpoint written before the upgrade is resumed by the same program
-  given no arguments.
-- `approx_W` of order 3 or 4 keeps its order under a time dependent evolver, where the time
-  functions, taken at the middle of each step, limited it to order 2: each step is the
-  commutator-free Magnus integrator of order 4, two exponentials taking the functions at
-  the two Gauss points of the step. A step costs twice as much, and the results change, by
-  the error of order 2 they no longer have.
-- A float coefficient of integer value prints as that integer, `2.0X` as `2X`, which changes
-  the name of a measurement written with one, and so does each part of a complex coefficient,
-  `(1 + 2im)X` rather than `(1.0 + 2.0im)X`.
-- `tdvp` and `approx_W` count their time steps with `nsteps` and `first_step`, rather than
-  `nsweeps` and `first_sweep`, which `dmrg` and `steady_state` keep for their sweeps, as
-  `thermal_state` already did.
-- `log_msg(sim, text)` is `log_message(sim, text)`, the word written out.
-- `has_fermionic` is `hasfermionic`, written as `isfermionic` and the predicates of Base.
-- `partial_trace(state, positions; keep = true)` keeps the sites at `positions`, the keyword
-  formerly `keepers`, and the `PartialTrace` phase takes the same `positions` and `keep`
-  rather than one of `trace_positions` and `keep_positions`.
-- The options `n_expand` and `n_hermitianize` of `Tdvp`, `ApproxW`, `tdvp`, `approx_W` and
-  `thermal_state` are `expand_period` and `hermitianize_period`, as `measurements_period`.
-- The field `tolerance` of `GroundState` and `SteadyState` is `tol`, as everywhere else
-  (`Krylov`, `DmrgObserver`, `compact`, `Check`).
-- `variance(state, h)` takes the state first, as `expect` and the other measurements do,
-  rather than `variance(h, state)`.
-- The fields `measures`, `final_measures` and `measures_period` of the phases, and
-  `final_measures` of `SimData`, are `measurements`, `final_measurements` and
-  `measurements_period`, the word `output` and the observers already used. A phase of one's
-  own names its field `final_measurements`.
-- The checkpoint file is at version 4, its value carried from one step to the next written
-  `carried` rather than `energy`, and a checkpoint of version 3, written by 1.6.0, is refused
-  rather than resumed without that value.
-- The default cutoff of `Limits` is `eps()`, about 2.2e-16, the default of the solvers of
-  ITensorMPS, which discards the singular values below about 1.5e-8 of the norm, rather than 0,
-  which kept those rounding leaves: `tdvp` under a field that creates no entanglement took a
-  superposition of 9 product states of 20 qubits to a bond dimension of 36, and a chain of
-  controlled Z to 17, where they stay at 9. The phases
-  and functions truncating with the default limits are concerned, `Evolve`, `Gates`,
-  `Thermalize`, `ToMixed`, `tdvp`, `approx_W`, `dmrg`, `apply` and `truncate`, and
-  `Limits(cutoff = 0)` truncates nothing anywhere, a sum of states included. `graph_state`
-  takes `Limits()` by default as well, rather than a cutoff of 1e-16.
-- A phase of one's own is a subtype of `AbstractPhase`, which `SimData` checks when it is
-  written: a struct with the fields of a phase alone is refused.
-- The log of a `Gates` phase says "Applying gates", without the count of the factors.
-- A sum of operators gathers its terms in one pass: the sum of a vector of 79800 terms is built
-  in 0.35 s, and a sum written with a generator, built term by term, three times faster than
-  before. The second still grows as the square of the number of terms, see the page on
-  performance.
-- `PreMPO` compacts the operator, and so do `make_mpo`, `make_approx_W1`, `make_approx_W2`,
-  `tdvp`, `dmrg`, `approx_W`, `steady_state` and `variance`, which go through it, and `measure`
-  compacts the operators it measures. The operators of a site are compared through their
-  matrices on the system, so that `X*Y` and `im * Z` on a qubit, or `N` and `(1 - Z) / 2`, are
-  known to be related: the bond dimension on each link is 2 plus the rank of the operator
-  across it, once its parts that are the identity on either side are taken out.
-- The approximations WI and WII of an operator change where an operator at an end of one of
-  its terms is a combination of other ones and of the identity on its site, as `N` when `Z` is
-  used too, or `N` with the Jordan-Wigner strings of fermions: part of the term goes to terms
-  of fewer sites. They remain of the first order, with another error of order τ², while the
-  MPO of the operator still stands for it exactly.
-- `measure` refuses an operator with a factor acting on several sites at once when the
-  measurement is made, by `Measure`, rather than when it is taken.
-- `Gate` refuses an operator placed on sites: write `Gate(X)(1)` rather than `Gate(X(1))`, and
-  `Gate(X ⊗ Z)(1, 2)` for several sites. A placed operator on pure states applied to a mixed
-  state, or multiplied by an operator on mixed states, is still turned into its gate.
-- `tdvp`, and so `Evolve` with `Tdvp()`, has the Krylov exponentiation of each local step test
-  its convergence after every vector rather than once its Krylov space is full. On a pure
-  chain of 20 spins and a mixed one of 10 qubits, the evolution took a fourth of the products
-  and a sixth to an eighth of the time, the states agreeing to 1e-13.
-- The time functions of a time dependent evolver take real values, a complex value being
-  refused: a complex function is written as its real and imaginary parts, each with its own
-  term. On a mixed state, a complex value multiplied ``\rho A^\dagger`` by itself rather than
-  by its conjugate, which gave a state of complex trace.
+Renamed, see "Upgrading from 1.x":
 
-- `data_to_frame` gives the columns of the measurements in the order of their names, where it
-  followed the order of a dictionary, which changed from one process to the next.
-- `steady_state` and `SteadyState` search each local step with `Krylov(dim = 8, maxiter = 3)`
-  by default, rather than with the three vectors of `ITensorMPS.dmrg`, which do not resolve the
-  spectrum of ``L^\dagger L`` near zero: the search stalled on a state that was not steady, a
-  residual of 0.0027 and currents off by 3 % on an open XX chain, an error of 1e-5 on two
-  qubits, where it now reaches rounding, in less time. The results of a simulation searching a
-  steady state change accordingly.
-- The log says that a run stops in a phase, rather than after it, when it stops in the course
-  of that phase, and that phase logs `Stopping` rather than `Ending`. An `Evolve` resumed in
-  its course logs the time it goes on from, rather than the time it started from.
-- The log of a resumed simulation is continued without being cut back to the checkpoint, and
-  keeps the history of every run: the line saying why a run stopped was lost on its resume.
-  The steps done again from the checkpoint now appear twice in it.
-- `circle_graph(n)` refuses a ring of fewer than two vertices, for which it gave the edge
-  `(1, 1)` or `(0, 1)`. The ring of two vertices keeps its two edges, now documented.
-- `norm`, `normalize` and `dot` of the state of a representation that has no method of them
-  raise the `MethodError` naming them, where the methods of LinearAlgebra for any argument
-  failed on `iterate`.
-- A superoperator applied to a pure state, `apply(Gate(X)(1), ψ)`, is refused with a message
-  saying to apply it to the mixed state, where it failed on a `MethodError` of ITensorMPS.
-- A site type whose inner constructor replaces the one taking its fields, by which a state file
-  is read and `weaken` changes what a site conserves, is refused with a message saying so,
-  rather than a `MethodError`. The documentation of `AbstractSite` and the page on extending
-  the package say what a site needs for that.
-- `LoadState` truncates the state it loads only when it is given limits, so that a
-  representation of one's own needs no `truncate` to be loaded.
-- `get_sim_file` gives text files and streams alone: a name ending in `.json` and a `Data`,
-  whose values `output` alone writes, are refused, where it gave the dictionary of their
-  series to write in. `sim.data` still gives the series of a `Data` to read.
+- The fields `measures`, `final_measures` and `measures_period` of the phases and of `SimData`
+  are `measurements`, `final_measurements` and `measurements_period`.
+- `log_msg` is `log_message`, and `has_fermionic` is `hasfermionic`.
+- `partial_trace(state, positions; keep = true)` keeps the sites at `positions`, rather than
+  `keepers`, and `PartialTrace` takes the same `positions` and `keep` rather than
+  `trace_positions` or `keep_positions`.
+- The options `n_expand` and `n_hermitianize` are `expand_period` and `hermitianize_period`.
+- `tdvp` and `approx_W` count their time steps with `nsteps` and `first_step`, rather than
+  `nsweeps` and `first_sweep`, which `dmrg` and `steady_state` keep.
+- The field `tolerance` of `GroundState` and `SteadyState` is `tol`.
+- `variance(state, h)` takes the state first.
+
+Simulations:
+
+- A phase of one's own is a subtype of `AbstractPhase`, which `SimData` checks.
+- `runTMS` leaves the working directory as it is: a relative name of a destination, of
+  `SaveState` or of `LoadState` is still taken in the directory of the simulation, but a file a
+  phase of one's own opens with `open` is taken in the working directory.
+- A checkpoint is resumed only by the program that wrote it, the same as its copy `prog.jl`,
+  given the same arguments, kept in `prog_args.json`: to resume with an edited program, copy
+  it onto `prog.jl`. A checkpoint written by 1.6.0 is refused.
+- `runTMS` refuses to start in a directory where another run may still be going on, which the
+  file `running` marks with the machine and the process; one left by a process of the same
+  machine that no longer exists is replaced with a warning.
+- The log of a resumed simulation is continued rather than cut back to the checkpoint, keeping
+  the history of every run. A run stopping in the course of a phase says so, and an `Evolve`
+  resumed in its course logs the time it goes on from. `Gates` logs "Applying gates".
+- `get_sim_file` gives text files and streams alone: a json file and a `Data` are written by
+  `output`, and `sim.data` gives the series of a `Data`.
+- `data_to_frame` gives the columns of the measurements in the order of their names.
+- `measure` refuses an operator acting on several sites at once when the measurement is
+  prepared, as do the observers when the phase starts.
+
+Results:
+
+- The default cutoff of `Limits` is `eps()`, the default of ITensorMPS, rather than 0, which
+  kept the singular values of rounding: a sum of nine product states of twenty qubits had a
+  bond dimension of 2304 rather than 9. Every function and phase whose `limits` default to
+  `Limits()` is concerned, and `graph_state`, which took a cutoff of 1e-16. `Limits(cutoff = 0)`
+  truncates nothing.
+- `approx_W` of order 3 or 4 keeps its order under a time dependent evolver, each step being
+  the commutator-free Magnus integrator of order 4, at twice the cost: it was of order 2.
+- `steady_state` and `SteadyState` search each local step with `Krylov(dim = 8, maxiter = 3)`,
+  rather than the three vectors of ITensorMPS, which stalled on states that were not steady.
+- `steady_state` warns when the state it finds is not hermitian: the search has not converged,
+  or the steady state is not unique.
+- `tdvp` with `expand_period` expands before the first step as well, which removes an error of
+  the order of the time step from a product state.
+- The time functions of a time dependent evolver take real values: a complex function is
+  written as its real and imaginary parts, each with its own term.
+- An operator is compacted, as by `compact`, when it is made an MPO or measured, which lowers
+  the bond dimension of its MPO. The approximations WI and WII change accordingly, within
+  their error of order τ².
+- `mutual_info_renyi2` of a pure state is twice the `renyi2` of the part, which differs from
+  before on fermions in a state of no definite parity.
+- `Gate` refuses an operator placed on sites: write `Gate(X)(1)` rather than `Gate(X(1))`.
+- A float coefficient of integer value prints as that integer, `2X` rather than `2.0X`, which
+  changes the name of a measurement written with one.
+
+Performance:
+
+- `simplify` no longer compiles a method for every number of factors: a product of 100
+  operators took 42 s the first time.
+- A sum of operators is built in one pass: a sum of 79800 terms in 0.35 s.
+- `make_mpo` and WI fill their tensors block by block, thirty times faster on 80 sites of
+  `Boson(6)` in the mixed representation.
+- The Krylov exponentiation of `tdvp` tests its convergence after every vector, six to eight
+  times faster.
+- `expect2` of a pure state is up to five times faster, and twice as fast for `(X, X)`.
+- `mutual_info_renyi2` of a pure state is three to five times faster.
+- Measuring a density matrix that conserves something strongly is twenty times faster.
+- The observers prepare their measurements once for the phase.
+- The precompiled code covers product states, mixed evolutions and `runTMS`, whose first call
+  is three to thirty times faster.
 
 ### Removed
 
 - The names deprecated since 1.2.0 and 1.3.0: `Mutual_Info_Renyi2`, `EE`, `Linkdim`,
-  `DataToFrame` and `Dmrg`, replaced by `MutualInfoRenyi2`, `EntanglementEntropy`,
-  `MaxLinkdim`, `data_to_frame` and `GroundState`, and the `alg` keyword of `steady_state`,
-  replaced by `mpo_algo`.
-- `Phases`, the union of the phase types of the library, which `AbstractPhase` replaces.
-- `tdvp`, `dmrg`, `approx_W` and `steady_state` no longer pass the options they do not know on
-  to ITensorMPS: an unknown keyword is refused, and `cutoff`, `maxdim` and `mindim` go through
-  `limits`.
+  `DataToFrame` and `Dmrg`, and the `alg` keyword of `steady_state`.
+- `Phases`, the union of the phase types, which `AbstractPhase` replaces.
+- The solvers no longer pass unknown options on to ITensorMPS: an unknown keyword is refused,
+  and `cutoff`, `maxdim` and `mindim` go through `limits`.
 
 ### Fixed
 
-- A projector on a fermionic site needs a state of definite parity, the others being refused.
-  A named one was taken as even, so that `F` crossed it as if they commuted, which gave wrong
-  values on a site of one's own with a named superposition of the two parities; one on a vector
-  was placed without string, which is no observable of the fermion mode.
-- `simplify` no longer compiles a method for every number of factors of a product: a product of
-  60 operators took 20 s the first time, one of 100 took 42 s, and every string correlator of
-  another length paid it again. It now takes less than a millisecond.
-- Measuring a new density matrix that conserves something strongly is twenty times faster:
-  weakening it built the combiner of each site once per element `|m⟩⟨n|`, `d²` times, and
-  built again on every site what is the same on sites alike. One measurement on 6 sites of
-  `Boson(16)` took 2.1 s, it now takes 0.11 s.
-- The observers of the solvers prepare their measurements once for the phase, where every
-  output simplified and compacted the operators again. Measuring a long range interaction
-  and the Heisenberg energy of 100 spins at a bond dimension of 20 took 590 ms per output, it
-  now takes 140 ms. A measurement written wrongly is refused when the phase starts.
-- An MPO is filled block by block from the matrices of its terms, read once when its `PreMPO` is
-  built, where every MPO read them and wrote its tensors element by element. On 80 sites of
-  `Boson(6)` in the mixed representation, `make_mpo` took 0.6 s, 1.8 s conserving `N`, and
-  now takes 0.02 s and 0.05 s, the WI approximation as much; WII goes from 6.8 s and 8.5 s
-  to 5.7 s and 6.0 s, the rest being its exponentials. A time dependent evolver builds them
-  at every step.
-- `expect2` of a pure state places the operator of each site at once and carries a closed
-  environment, where the site left open made each step cost the square of its dimension more.
-  On 16 sites at bond dimension 32, it went from 0.26 s to 0.05 s for `Boson(4)`, from 0.07 s
-  to 0.04 s for fermions, and is as fast for qubits; a mixed state keeps its algorithm. The
-  entries `(j, i)` of a pair of equal operators, and on a pure state of an operator and its
-  adjoint, are read from the entries `(i, j)`, which halves the time for `(X, X)`.
-- `mutual_info_renyi2` of a pure state and positions is twice the `renyi2` of the part, the
-  two parts sharing their spectrum, which takes one partial trace of the mixed state rather
-  than two and the purity of the whole: three to five times faster on 12 to 16 qubits. On
-  fermions it holds for a state of definite parity, which a state drawn by `RandomState` on a
-  system conserving nothing is not.
-- The precompiled code covers product states, whose tensors are real, the evolution of a
-  mixed state and `runTMS`. In a new session, the first `dmrg` on a product state took 22 s,
-  it now takes 5 s, the first `tdvp` of a mixed state 14 s, now 4 s, and the first `runTMS`
-  7 s, now 0.2 s. Precompiling takes about half a minute longer.
-- `Dissipator(Sm(1))`, `expect1(state, X(1))` and `expect2` of operators placed on sites are
-  refused by a message saying what to write, where they raised a `MethodError`.
-- A state can be measured from several threads at once: its caches, filled on first use, had
-  no lock, and a thread found one sized and not yet filled, failing on an `UndefRefError`.
-- `weaken` refuses a target naming a quantity twice by a message saying so: it failed inside
-  ITensors, or, given once strong and once weak, with a message about strength.
-- A site of parameters out of their range is refused when it is built: `Spin(-1/2)`, of
-  dimension 0, `Boson(0)` and `Qudit(0)` were taken, and `Qboson(1.5, 3)`, whose `1 - q^n` is
-  negative, failed only on the square root its `A` takes.
+Results that were wrong without a message:
+
+- A projector on a fermionic site needs a state of definite parity: a named one was taken as
+  even whatever its parity, and one on a vector of no definite parity was placed without
+  string.
 - A non integer power of a superoperator holding a fermionic operator, as
-  `Gate(C + dag(C))^0.5`, is refused as it is written: placed on any site but the first, without
-  the strings it takes on both sides of the density matrix, which do not commute with the power,
-  it was wrong.
-- A function of a projector on a vector, as `Proj(v)^0.5` or `exp(im * Proj(v))`, is placed on
-  a fermionic site other than the first as the projector itself is, with no Jordan-Wigner
-  string: split as an operator of no parity, its odd part took one, `(P^0.5)(3)` differing
-  from `P(3)`.
-- `graph_base_size` of a graph without edges, as `line_graph(1)`, is 0, where it raised an
-  error on reducing nothing.
-- `Limits` takes a bond dimension of any integer type, an `Int32` raising a `MethodError`, and
-  refuses a float by a message naming `maxdim` or `mindim`.
-- A checkpoint is refused when the `time_start`, the `final_measurements` or the formats of the
-  `SimData` being run are not those of its simulation, which its phases alone told: a resume
-  went on with them, a file then mixing two formats. The name, the description,
-  `checkpoint_interval`, `max_time` and `threading` may still change.
-- A value carried by `run_steps` that a checkpoint does not give back as it is, a `Float32`, a
-  symbol, a tuple, a dictionary with keys other than strings or an object such as a random
-  number generator, is refused at the step that carries it, in a run with a directory: a
-  resumed run went on with another value, or failed on it.
-- A resumed run says in its log which text files are shorter than at the checkpoint, cut or
-  removed by hand: they were continued with a hole where the lines they lost were, and nothing
-  said so.
-- A phase of one's own whose type has a parameter that is not a type, as `MyPhase{3}`, prints,
-  and so does a `SimData` holding it: the name of each parameter was taken, which `3` has not.
-- A `Thermalize` phase stopped for a checkpoint no longer writes in the log that it is done,
-  with the logarithm of the trace it had reached.
-- A json destination in a directory that does not exist is refused at its first measurement,
-  as a text file is. Written when the files are closed, it failed at the end of the run, and
-  the json files after it in the closing were never written; each is now written whatever
-  happens to the others.
-- `runTMS` refuses a checkpoint it cannot resume before it writes anything in its
-  directory. It overwrote the description, the stamp and the program of the simulation whose
-  results the directory holds, marked them with an error, and loaded its state first, which
-  needed its site types. A directory that cannot be created or entered no longer has `runTMS`
-  write the marker `error` in the directory of the caller, and remove a file `running` there.
-- `sample` of a mixed state drew every site after about the 1074th of a fully mixed chain of
-  qubits in its last state, the probability of the outcomes drawn so far having fallen below
-  the smallest float, and sooner on sites of a larger dimension.
-- An integer coefficient is stored as a float, whose products do not wrap around as those of
-  integers silently do: the string `prod(2Sz(i) for i in 1:63)` measured -1 on sites up rather
-  than 1, on 64 sites 0, and `(2X)^64` was `0Id`. `(2X)^-1`, a negative power of an integer
-  coefficient, raised a `DomainError`. An integer coefficient prints as before, see Changed.
-- `steady_state` warns when the state it finds is not hermitian, its `HermiticityError`
-  exceeding `1e-6`: the search has not converged, or the Lindbladian has several steady
-  states, of which dmrg returns any combination. Under dephasing, which keeps the number of
-  fermions, the state found had a complex trace and densities far from their value, and nothing
-  said so. The state is divided by its trace rather than by the real part of it, which left the
-  phase an eigenvector may have.
-- A checkpoint wrote an integer other than an `Int` as a json number, which came back as an
-  `Int64` or a `BigInt`, and with JSON 0.21 above `typemax(Int64)` as a negative number: a
-  word of 64 bits carried by `run_steps`, the state of a generator of random numbers, went on
-  otherwise in a resumed run. Such an integer is written with its type.
-- `hermitianize` of a pure state accepted any keyword and ignored it; it takes `limits` only,
-  as on a mixed state.
-- The sum and the difference of two states, and `hermitianize`, kept the eigenvalues of the
-  order of rounding as states when no truncation was asked for, so that their bond dimension
-  grew without bound: the sum of nine product states of twenty qubits had a bond dimension of
-  2304 rather than 9. With the default limits they now drop it, see the default cutoff of
-  `Limits`, and a sum of product states has the bond dimension of its number of terms.
-- The approximation WII, the default of `approx_W` and `ApproxW`, is the one of Zaletel et
-  al. Its blocks left out the terms of one site on a site that a term of several sites goes
-  through, took them on one side only at the ends of such a term, and took a closing and an
-  opening on the same site in one order: on `h * Z(2) + J * X(1) * X(3)`, for instance, it was
-  off by `τ² h J` on `X(1) * Z(2) * X(3)`. It remains of the first order, its error now coming
-  from the terms that cross a same link alone.
-- The approximation WII, the default of `approx_W` and `ApproxW`, works on an operator with
-  a constant term. It failed with an error from ITensors on every such operator on a system
-  conserving something, and elsewhere as soon as another term acting on the first site alone
-  had another element type than the constant, as in `-im * N(1) + 0.5 * Id(1)`.
-- A site type declared in a package rather than in a script keeps the states and operators
-  that `@def_states` and `@def_operators` declare for it, and so do the operators a package
-  declares for a site type of TMS. Once the package was precompiled, they were lost, and the
-  site answered that they were not defined.
-- A gate made of fermionic operators and of an operator of several sites defined by a matrix
-  and created without its sites, as `C(1) * C(4) * M(1, 2)`, is applied right. A
-  Jordan-Wigner string covering only some of the sites of `M` was moved past it, which gave a
-  wrong state without a message.
-- A gate defined by an expression, as `Swap` or `controlled(X)`, can be applied in a product
-  with fermionic operators, as `Swap(1, 2) * dag(C)(3)`. It was replaced by its expression,
-  which made the gate a sum, refused.
-- `≈` no longer takes a product with a factor of several sites kept whole, as an operator
-  defined by a matrix, for the same product in another order when a Jordan-Wigner string had
-  to cross that factor: the string was moved past it without the sign of an odd factor.
-- A tensor product with a fermionic factor of several sites, as `named(C ⊗ N, "CN")` or
-  `C ⊗ Id + Id ⊗ C`, has its adjoint, its matrix and its dissipator right. Such a factor was
-  taken as even: the adjoint lost its sign, which made `dag(L) * L` negative and the
-  dissipator of `L` change the trace, and the matrix lost the strings the factor puts on the
-  sites before it.
-- An `Evolve` takes a single term and its function of time written without the vectors,
-  `A => f`, on which it failed at its first step with a `MethodError`, and refuses when it is
-  written an evolver of as many terms as functions, which only its first step refused.
-- `conserve` refuses a quantity given twice, which ITensors refused later, or with a message
-  about its strength when it was given once strong and once weak.
-- `data_to_frame` called without `using DataFrames` says that it needs it, where it raised a
-  bare `MethodError`.
-- A power or the adjoint of a charge modulo `d`, as `Zd^2` on `Qudit(4)` or `dag(Zd)` on
-  `Qudit(2)`, is a charge modulo `d`. Its eigenvalues, all ±1 there, were read as integers,
-  under which `Xd` had no flux and `Xd ⊗ Xd + h.c.` was refused.
-- An operator to a literal negative power, as `X^-1` or `(Id + 0.5X)^-1`, is the power, where
-  it failed on a `MethodError` of `inv`.
-- A conserved quantity whose charges are large, as `dag(A) * A` on `Boson(80)`, is accepted:
-  the eigenvalues are compared with the charges to a tolerance relative to the largest, where
-  an absolute one of 1e-14 refused them.
-- `state` and `matrix` give a copy of the array a site declares, which changing changed the
-  state or the operator for everyone.
-- The values of one call of `output` sent to one `Data` by several pairs make one event, and so
-  one row of `data_to_frame`, rather than one per pair. `data_to_frame` of a `Data` that
-  gathered nothing gives an empty table, where it failed.
-- `dmrg` with no sweep left, its `first_sweep` past `nsweeps`, gives the energy of the state
-  it is given, where it gave 0.
-- `tdvp` and `Tdvp` with `expand_period` enlarge the bond dimension before the first step and then
-  every `expand_period` steps, rather than after them. The first step from a product state, of bond
-  dimension one, left the tangent space and kept an error of the order of the time step: 0.016
-  on a ring of 6 qubits, where it is now 1e-9. The results of a simulation using `expand_period`
-  change accordingly.
-- The documentation of `write_state` and `read_state` says how the state of an extension whose
-  type has parameters is saved, the file recording the type without them: its parameters are
-  written by `write_state`, and read back by a method of `read_state` for the type without
-  them. A state read by a method for its types with parameters only is refused with a message
-  saying so.
-- `SaveState` refuses a file that the simulation keeps for itself, as `checkpoint-1.h5`, which
-  the next checkpoint overwrote, destroying the state saved.
-- Two names of one file, as `"data"` and `"./data"`, write to one destination. Each opened the
-  file, emptying what the other had written.
-- The copy `prog.jl` of the program that `runTMS` leaves in the directory of a simulation can
-  be run again. `runTMS` copied it onto itself, which failed.
-- `ApproxW` refuses an `order`, a `w` or an `apply_algo` it does not offer, `SteadyState` an
-  `mpo_algo`, and `Evolve` a time step of zero, when the phase is written. They were refused
-  when the phase ran, or failed then, and the phase corrected could not resume the checkpoint,
-  which belonged to a simulation of other phases.
-- A `Check` on a symbol that is not given, as `:energy` in an `Evolve` phase or in the
-  `final_measurements` of any phase, has empty values, and is an error when it has a tolerance. It
-  failed with a `MethodError`, stopping the simulation.
-- `expect1`, `expect2` and `measure` take a one site operator that simplifies to a multiple of
-  the identity, as `2Id` or `(2X)^2`, on which they failed with a `MethodError`.
-- `named` refuses a matrix whose `type` it does not satisfy, as a matrix declared an involution
-  that is not self adjoint. `simplify` relied on the type before any matrix was computed: such
-  an operator squared to the identity, and gave a wrong result with no message.
-- A product whose factors on one site multiply to an operator holding the identity, as
-  `((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)`, which stands for `Z(2) + Z(1) * Z(2)`, can be
-  made an MPO and compacted, and compares equal with `≈` to the operator it stands for. The
-  first two failed on an internal error and `≈` answered false.
-- A product whose factors on one site multiply to a multiple of the identity other than the
-  identity itself, as `((im * X)^0.5)(1) * ((im * X)^1.5)(1) * Z(2)`, is simplified, and so
-  can be measured and made an MPO. It failed with a `MethodError`, the identity being left in
-  the product.
-- `weaken` of a pure state, the `Weaken` phase on one, and `Fidelity` or `Overlap` of a pure
-  reference on a weakened state work when a site is left conserving nothing on a system still
-  conserving something. They failed with an error of ITensors, the indices of that site being
-  cut into other blocks on the two systems.
+  `Gate(C + dag(C))^0.5`, is refused: placed on any site but the first, it was wrong.
+- A tensor product with a fermionic factor of several sites, as `named(C ⊗ N, "CN")`, was
+  taken as even: its adjoint, its matrix and its dissipator were wrong.
+- A gate of fermionic operators and of an operator of several sites defined by a matrix, as
+  `C(1) * C(4) * M(1, 2)`, gave a wrong state, a string being moved past part of `M`.
+- `partial_trace`, the `PartialTrace` phase, and through it `renyi2`, `mutual_info_renyi2`,
+  `SubRenyi2` and `MutualInfoRenyi2`, keep the fermionic signs of the sites traced out.
+- The approximation WII, the default of `approx_W`, is the one of Zaletel et al.: it was off
+  by terms of order τ² where a term of one site meets a term of several sites.
+- An integer coefficient is stored as a float: products of integers wrapped around, so that
+  `(2X)^64` was `0Id`.
+- `named` refuses a matrix that does not satisfy its `type`, as a matrix declared an involution
+  that is not self adjoint, which `simplify` squared to the identity.
+- `sample` of a mixed state drew every site after about the 1074th of a chain in its last
+  state, a probability falling below the smallest float.
+- `steady_state` divides the state by its trace rather than by its real part, which left the
+  phase an eigenvector may have; a `SteadyState` checkpointed on its last sweep, once resumed,
+  handed on that eigenvector rather than a state of trace one.
+- An `Evolve` whose duration and time step have opposite signs evolves over its duration: it
+  made no step while the time went on.
+- `state` and `matrix` give a copy of the array a site declares, which changing changed it for
+  everyone.
+- A checkpoint gives back an integer measurement other than an `Int` with its type, where it
+  came back an `Int64`, or negative above `typemax(Int64)`.
+- The values of one call of `output` sent to one `Data` by several pairs make one event, one
+  row of `data_to_frame`, rather than one per pair.
+- `dmrg` with no sweep left gives the energy of the state it is given, where it gave 0.
+- A complex time function on a mixed state gave a state of complex trace; it is refused, see
+  Changed.
+- A state can be measured from several threads at once.
+
+Simulations and their files:
+
 - A resumed simulation puts the state of its checkpoint back on the system of its last
-  `CreateState`, the system given to it or that of the `State` given to it, as the
-  uninterrupted run has it, when their sites are the same. It came back
-  on a system of its own, so that a measurement comparing with a state built on that system,
-  as `StateFunc("F", st -> fidelity(ref, st))`, failed on every resume.
-- `runTMS` with `restart` or `clean` refuses a name that is the current directory or one of
-  its ancestors, as `"."` or `".."`. It emptied that directory, the program included, before
-  failing on the directory itself.
-- An `Evolve` whose duration and time step have opposite signs evolves over its duration, the
-  step taken with the sign of the duration. It made no step while the time went on to the end
-  of the duration. `tdvp` and `approx_W` refuse `nsweeps` below one, which did the same, or
-  divided by zero.
-- A `SteadyState` checkpointed on its last sweep hands a state of trace one to the next phases
-  once resumed. Its checkpoint held the eigenvector dmrg gives, of norm one and of a sign of
-  its own, which the resume, having no sweep left to run, handed on and saved as it was, with
-  a trace such as -1.33; the measurements dividing by the trace did not show it.
-- `partial_trace`, and so the `PartialTrace` phase, keeps the fermionic signs: a fermion traced
-  out is moved past the fermions kept on its right. It took the trace of the spins, on which a
-  correlation of odd operators crossing a fermion traced out had the wrong sign or value, and
-  so did a single odd operator on a state of no definite parity. `renyi2`,
-  `mutual_info_renyi2`, `SubRenyi2` and `MutualInfoRenyi2`, which go through it, were wrong too
-  when fermionic sites were traced out on both sides of a fermionic site kept, a state of
-  definite parity included. The bond dimension of the result may double when a fermionic site
-  traced out has fermionic sites kept on its right.
+  `CreateState`, so that comparing with a state built on that system works after a resume.
+- A resumed run says in its log which text files are shorter than at the checkpoint, where it
+  continued them silently.
+- Two names of one file, as `"data"` and `"./data"`, write to one destination, rather than
+  each emptying the other.
+- A json destination in a directory that does not exist is refused at its first measurement,
+  and a json file that fails to be written no longer keeps the others from being written.
+- `runTMS` refuses a checkpoint of another simulation before writing anything in its
+  directory, and writes no `error` marker in the directory of the caller when its own cannot be
+  made.
+- `runTMS` with `restart` or `clean` refuses `"."` or an ancestor of the current directory,
+  which it emptied.
+- The copy `prog.jl` that `runTMS` leaves can be run again; it was copied onto itself.
+- `SaveState` refuses a file the simulation keeps for itself, as `checkpoint-1.h5`, which the
+  next checkpoint overwrote.
+- `ApproxW` refuses an `order` or a `w` it does not offer, `SteadyState` an `mpo_algo`, and
+  `Evolve` a time step of zero or an evolver of as many terms as functions, when the phase is
+  written rather than when it runs, when a corrected phase could no longer resume.
+- A `Check` on a symbol that is not given has empty values, where it stopped the simulation.
+- The states and operators that `@def_states` and `@def_operators` declare in a package
+  survive its precompilation.
+
+Errors where a call was valid:
+
+- An `Evolve` takes a single term and its function written `A => f`.
+- A gate defined by an expression, as `Swap`, can be multiplied by fermionic operators.
+- `expect1`, `expect2` and `measure` take a one site operator that simplifies to a multiple of
+  the identity, as `2Id` or `(2X)^2`.
+- A product whose factors on one site multiply to a multiple of the identity, as
+  `((im * X)^0.5)(1) * ((im * X)^1.5)(1) * Z(2)`, is simplified.
+- `weaken` of a pure state, and `Fidelity` or `Overlap` on a weakened one, work when a site is
+  left conserving nothing on a charged system.
+- A power or the adjoint of a charge modulo `d`, as `Zd^2`, is a charge modulo `d`.
+- An operator to a literal negative power, as `X^-1`, and `(2X)^-1`, are computed.
+- A conserved quantity of large charges, as `dag(A) * A` on `Boson(80)`, is accepted.
+- `graph_base_size` of a graph without edges is 0.
+- `Limits` takes a bond dimension of any integer type.
+- `data_to_frame` of a `Data` that gathered nothing gives an empty table.
+
+Clearer refusals, where a call failed on a `MethodError` or deep inside ITensors:
+
+- `Dissipator(Sm(1))`, `expect1(state, X(1))`, `expect2` of placed operators, `data_to_frame`
+  without `using DataFrames`, a float given to `Limits`, a quantity given twice to `conserve`
+  or `weaken`, and a site of parameters out of their range, as `Spin(-1/2)`.
+- `hermitianize` of a pure state takes `limits` only, where it ignored any keyword.
 
 ## [1.6.0] - 2026-09-30
 
