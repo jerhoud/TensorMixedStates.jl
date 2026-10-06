@@ -185,20 +185,19 @@ end
 expand_sites(a::GenericOp, sites) = expand_sites(a, nsites(a), sites)
 
 """
-    named_sites(what, def, site, sites)
+    named_sites(what, def, sites)
 
-the sites of `def`, the definition of `what`, given with `site` and `sites`, see
-`expand_sites`: an expression acts on as many as it does, a function on those given, and a
-matrix given a single site on as many copies of it as its size asks for
+the sites of `def`, the definition of `what`, given with the sites `sites`, see `expand_sites`:
+an expression acts on as many as it does, a function on those given, and a matrix given a
+single site on as many copies of it as its size asks for
 """
-named_sites(what, ::GenericOp{Pure, N}, site, sites) where N =
-    expand_sites(what, N, (site, sites...))
-named_sites(what, ::Function, site, sites) =
-    expand_sites(what, 1 + length(sites), (site, sites...))
-function named_sites(what, m::Matrix, site, sites)
-    if !isempty(sites)
-        return expand_sites(what, 1 + length(sites), (site, sites...))
+named_sites(what, ::GenericOp{Pure, N}, sites) where N = expand_sites(what, N, sites)
+named_sites(what, ::Function, sites) = expand_sites(what, length(sites), sites)
+function named_sites(what, m::Matrix, sites)
+    if length(sites) > 1
+        return expand_sites(what, length(sites), sites)
     end
+    site = only(sites)
     d, n, k = dim(site), size(m, 1), 1
     while d > 1 && d^k < n
         k += 1
@@ -206,7 +205,7 @@ function named_sites(what, m::Matrix, site, sites)
     if d^k ≠ n
         error("a $(size(m, 1))×$(size(m, 2)) matrix acts on no number of $site")
     end
-    return expand_sites(what, k, (site,))
+    return expand_sites(what, k, sites)
 end
 
 """
@@ -681,7 +680,7 @@ function tensor(a::GenericOp, site::AbstractSite...)
 end
 
 function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...)
-    ss = named_sites("the matrix", a, site, sites)
+    ss = named_sites("the matrix", a, (site, sites...))
     check_size("the operator", a, ss)
     js = site_indices(ss)
     t = lay(a, pure_sides(js)...)
