@@ -130,13 +130,14 @@ function check_carried(x, step::Int)
         nothing
     end
     shown(v) = sprint(show, v; context = :limit => true)
+    advice = "carry numbers, strings, and vectors, matrices and dictionaries with string keys " *
+             "of them"
     if isnothing(back)
         error("step $step of run_steps carries $(shown(x)), which a checkpoint cannot write: " *
-              "carry numbers, strings, and vectors and dictionaries with string keys of them")
+              advice)
     elseif typeof(something(back)) ≠ typeof(x) || !isequal(something(back), x)
         error("step $step of run_steps carries $(shown(x)), which a checkpoint gives back as " *
-              "$(shown(something(back))): carry numbers, strings, and vectors and dictionaries " *
-              "with string keys of them")
+              "$(shown(something(back))): " * advice)
     end
     return nothing
 end

@@ -1231,6 +1231,8 @@ TensorMixedStates.run_phase(sim::Simulation, p::CarryingSteps) =
                       Dict("float" => 1.0), Any[1.0, 2.0])
                 @test_throws "run_steps carries" run(v)
             end
+            # the message names what can be carried, matrices included
+            @test_throws "vectors, matrices and dictionaries" run(:s)
             for v in (0.4, 3, "s", [1.0, 2.0], [1 2; 3 4], Dict("a" => 1),
                       UInt64[7, typemax(UInt64)])
                 @test_ok run(v)
