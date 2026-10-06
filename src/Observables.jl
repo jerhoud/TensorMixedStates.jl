@@ -5,7 +5,7 @@ export trace, trace2, norm, normalize, hermitianize, hermiticity, renyi2
 export inner, dot, fidelity, hs_fidelity
 export expect, expect1, expect2
 export entanglement_entropy, entanglement_by_sector, partial_trace, mutual_info_renyi2, sample, variance
-export reduced_density_matrix, vonneumann_entropy
+export reduced_density_matrix, vonneumann_entropy, log_negativity
 
 """
     weak_form(state)
@@ -1282,6 +1282,51 @@ any number of sites.
 function vonneumann_entropy(state::State, pos::AbstractVector)
     λ = eigvals(Hermitian(reduced_density_matrix(state, pos)))
     return sum((-x * log(x) for x in λ if x > 0); init = 0.0)
+end
+
+"""
+    log_negativity(state, a, b)
+
+the logarithmic negativity ``\\log \\|\\rho^{T_B}\\|_1`` between the sites at `a` and those at
+`b`, ``\\rho`` being their `reduced_density_matrix` and ``T_B`` the partial transpose on `b`,
+zero for a separable state and 0 when a part is empty. The partial transpose in the
+Jordan-Wigner basis is not the fermionic one: it is taken on a part holding no fermionic
+site, and refused when both hold one.
+
+# Examples
+
+    log_negativity(state, [1, 2], [5])
+"""
+function log_negativity(state::State, a::AbstractVector, b::AbstractVector)
+    a, b = sort(unique(Vector{Int}(a))), sort(unique(Vector{Int}(b)))
+    if !isempty(intersect(a, b))
+        error("log_negativity was given sites in both parts: $(intersect(a, b))")
+    end
+    if isempty(a) || isempty(b)
+        return 0.0
+    end
+    sys = state.system
+    fermionic(part) = any(i -> matrix(F, sys[i]) != I, part)
+    if fermionic(b)
+        if fermionic(a)
+            error("log_negativity needs a part without fermionic sites, whose partial " *
+                  "transpose is the usual one")
+        end
+        a, b = b, a
+    end
+    u = sort([a; b])
+    k = length(u)
+    dims = [ dim(sys[i]) for i in u ]
+    # kets then bras, the last site first, as kron orders the basis
+    t = reshape(reduced_density_matrix(state, u), reverse(dims)..., reverse(dims)...)
+    perm = collect(1:2k)
+    for (p, i) in enumerate(u)
+        if i in b
+            perm[k + 1 - p], perm[2k + 1 - p] = 2k + 1 - p, k + 1 - p
+        end
+    end
+    d = prod(dims)
+    return log(sum(abs, eigvals(Hermitian(reshape(permutedims(t, perm), d, d)))))
 end
 
 """

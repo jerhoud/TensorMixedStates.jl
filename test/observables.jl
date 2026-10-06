@@ -586,6 +586,29 @@ end
     @test values["VonNeumannEntropy(1)"] ≈ vonneumann_entropy(q, [1])
 end
 
+@testset "Logarithmic negativity" begin
+    # log 2 for a Bell pair, and for the Werner state p Bell + (1 - p) I/4, the depolarization
+    # of the pair, log((1 + 3p)/2) above p = 1/3, separable below; the partial transpose of
+    # either part gives the same, which lets a part without fermionic site take it
+    bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
+    @test log_negativity(bell, [1], [2]) ≈ log(2)
+    @test abs(log_negativity(bell, [1], [3])) < 1e-12
+    for p in [0.6, 0.2]
+        werner = apply(depolarizing_gate(1 - p, 2)(1, 2), mix(bell))
+        @test log_negativity(werner, [1], [2]) ≈ max(0, log((1 + 3p) / 2)) atol = 1e-12
+    end
+    q = RandomState{Pure}(System(4, Qubit()), 4)
+    @test log_negativity(q, [1], [3, 4]) ≈ log_negativity(q, [3, 4], [1])
+    s = RandomState{Pure}(System([Fermion(), Qubit(), Fermion()]), 4)
+    @test log_negativity(s, [1], [2]) ≈ log_negativity(s, [2], [1])
+    @test_throws "a part without fermionic sites" log_negativity(s, [1], [3])
+    @test_throws "sites in both parts" log_negativity(q, [1, 2], [2])
+    @test log_negativity(q, [], [2]) == 0
+    name, value = only(measure(bell, LogNegativity([1], [2])))
+    @test name == "LogNegativity(1;2)"
+    @test value ≈ log(2)
+end
+
 @testset "A random fermionic oracle" begin
     # every implementation of the Jordan-Wigner strings checked on random products against
     # the dense matrices of the strings written out: simplify, through expect on a pure and on

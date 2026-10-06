@@ -2,7 +2,8 @@
 # of their values, and measure, which computes a whole set of them at once.
 
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
-export EntanglementEntropy, MutualInfoRenyi2, ReducedDensityMatrix, VonNeumannEntropy, measure
+export EntanglementEntropy, MutualInfoRenyi2, ReducedDensityMatrix, VonNeumannEntropy
+export LogNegativity, measure
 export MaxLinkdim, MemoryUsage
 export Fidelity, Overlap, Variance
 export RealValue, ImaginaryValue, ComplexValue
@@ -548,6 +549,20 @@ a state function measuring the von Neumann entropy of the sites at `positions`, 
 """
 VonNeumannEntropy(pos) =
     StateFunc("VonNeumannEntropy($(compact_positions(pos)))", st -> vonneumann_entropy(st, pos))
+
+"""
+    LogNegativity([positions_a...], [positions_b...])
+
+a state function measuring the logarithmic negativity between the sites at `positions_a` and
+those at `positions_b`, see `log_negativity`.
+
+# Examples
+
+    measurements = "data" => LogNegativity([1, 2], [5])
+"""
+LogNegativity(a, b) =
+    StateFunc("LogNegativity($(compact_positions(a));$(compact_positions(b)))",
+              st -> log_negativity(st, a, b))
 
 """
     EntanglementEntropy(cut)

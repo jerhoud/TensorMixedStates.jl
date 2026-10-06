@@ -51,6 +51,7 @@ There are some state functions predefined:
 | `MutualInfoRenyi2(sites)`, `MutualInfoRenyi2(cut)` | the Rényi-2 mutual information between the sites given, or those up to the cut, an integer, and the rest |
 | `VonNeumannEntropy(sites)` | the von Neumann entropy of the sites given, from their reduced density matrix |
 | `ReducedDensityMatrix(sites)` | the density matrix of the sites given, a complex matrix, see `reduced_density_matrix` |
+| `LogNegativity(sites_a, sites_b)` | the logarithmic negativity between the sites of `sites_a` and those of `sites_b` |
 | `EntanglementEntropy(cut)` | the entanglement entropy across the cut between sites `cut` and `cut+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
 | `EntanglementEntropy(cut, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
 | `Fidelity(ref)` | the fidelity with the reference state `ref`, refused between two mixed representations |
@@ -153,6 +154,7 @@ renyi2
 mutual_info_renyi2
 reduced_density_matrix
 vonneumann_entropy
+log_negativity
 Trace
 TraceError
 Trace2
@@ -168,6 +170,7 @@ Variance
 MutualInfoRenyi2
 VonNeumannEntropy
 ReducedDensityMatrix
+LogNegativity
 EntanglementEntropy
 MaxLinkdim
 MemoryUsage
