@@ -22,13 +22,10 @@ end
     mixer(j::Index, k::Index, site::AbstractSite)
 
 the pair `(b, c)`: `b` the index carrying the bra of the ket index `j` on `site`, see
-`bra_index`, and `c` the combiner gathering `j` and `dag(b')` into the mixed index `k`.
-
-The bra is daggered, so that without a strong symmetry the charge `k` carries is the
-difference of those of the ket and the bra, which gives a density matrix zero flux. Under a
-strong symmetry `b` carries its charges under starred names, and `k` keeps both apart.
-Everything crossing between the pure and the mixed representations goes through this
-combiner, so that the pairs are flattened in the same order everywhere.
+`bra_index`, and `c` the combiner gathering `j` and `dag(b')` into the mixed index `k`, the
+bra daggered so that a density matrix has zero flux. Everything crossing between the pure and
+the mixed representations goes through this combiner, so that the pairs are flattened in the
+same order everywhere.
 """
 function mixer(j::Index, k::Index, site::AbstractSite)
     b = bra_index(j, site)
@@ -39,8 +36,7 @@ end
     ket_bras(system, i)
 
 the function giving, for `(m, n)`, the element ``|m\\rangle\\langle n|`` of site `i`,
-vectorised on its mixed index. The combiner of `mixer` depends on the site alone, so it is
-built once for all the elements.
+vectorised on its mixed index
 """
 function ket_bras(system::System, i::Int)
     j = SysIndex{Pure}(system, i)
@@ -51,8 +47,7 @@ end
 """
     relabel(t, f)
 
-the tensor `t` with each of its indices passed through `f`, its storage untouched, through
-the internal `ITensors.setinds`
+the tensor `t` with each of its indices passed through `f`, its storage untouched
 """
 relabel(t::ITensor, f) = ITensors.setinds(t, map(f, inds(t)))
 
@@ -60,10 +55,8 @@ relabel(t::ITensor, f) = ITensors.setinds(t, map(f, inds(t)))
     relabeller(f)
 
 a function relabelling an index by `f`, memoised on its identity and prime level, and giving
-the result in the direction of the index it is given.
-
-The key leaves the direction out because a link appears daggered on one of the two sites it
-joins, and both ends have to be relabelled to the same index or the tensors stop contracting.
+the result in the direction of the index it is given: the two ends of a link, one daggered,
+must be relabelled to the same index for the tensors to keep contracting
 """
 function relabeller(f)
     seen = Dict{Tuple{ITensors.IDType, Int}, Index}()
@@ -78,7 +71,7 @@ end
 
 the tensor pairing each element ``|m\\rangle\\langle n|`` of site `i` of the system `from`,
 passed through `f`, with the same element of `to`, or with ``|n\\rangle\\langle m|`` when
-`swap` is true: the form `weak_maps`, `adj_maps` and `dense_maps` share
+`swap` is true
 """
 function element_map(to::System, from::System, i::Int, f; swap::Bool = false)
     d = dim(SysIndex{Pure}(from, i))
@@ -91,13 +84,11 @@ end
     element_maps(to, from, f; swap = false)
 
 `element_map` on every site, built once for the sites alike and carried onto the indices of
-the others. Two sites whose pure indices have the same space in both systems, and which
-conserve the same quantities strongly, give the same tensor but for its two indices: their
-combiners sort the same blocks the same way, and `f` treats their mixed indices alike.
+the others: two sites whose pure indices have the same space in both systems, and which
+conserve the same quantities strongly, give the same tensor but for its two indices
 """
 function element_maps(to::System, from::System, f; swap::Bool = false)
-    # the mixed index of site `i` in `to`, and the one `f` puts in place of that of `from`,
-    # read on a tensor of it alone
+    # the mixed index of site `i` in `to`, and the one `f` puts in place of that of `from`
     ends(i) = (SysIndex{Mixed}(to, i), only(inds(f(onehot(SysIndex{Mixed}(from, i) => 1)))))
     first_alike = Dict{Any, Int}()
     maps = ITensor[]
@@ -115,12 +106,8 @@ end
     weak_maps(strong, weak, relab)
 
 the tensors carrying each site of the system `strong` onto the same site of `weak`, the
-charged system it is weakened to, `relab` being the relabelling by `weak_index`.
-
-It pairs each element ``|m\\rangle\\langle n|`` of one mixed index with the same element of
-the other. The relabelling has already put both under the same charge, so every term has zero
-flux; what the tensor does beyond renaming is to regroup the blocks, which the two indices
-order differently.
+charged system it is weakened to, `relab` being the relabelling by `weak_index`: beyond
+renaming, they regroup the blocks, which the two mixed indices order differently
 """
 weak_maps(strong::System, weak::System, relab) =
     element_maps(weak, strong, t -> relabel(t, relab))
@@ -139,13 +126,9 @@ pure_map(old::Index, new::Index) = sum(onehot(new => m) * dag(onehot(old => m)) 
 
 the tensors sending ``|x\\rangle\\langle y|`` to ``|y\\rangle\\langle x|`` on each site,
 from the index relabelled by `adjoint_index`, `relab` being that relabelling, to the index of
-`system`.
-
-Under a strong symmetry the exchange alone has no definite flux, but the relabelling has
-already given each element the charge of the one it is sent to, so every term has zero flux.
-This needs the relabelled index to be a new one, which it always is on a charged system: on a
-plain one the two sides would contract into a scalar, one reason, besides the cost, why a
-system without a strong symmetry uses `tensor_dag` instead.
+`system`. The relabelled index must be a new one, as it is on a charged system: on a plain
+one the two sides would contract into a scalar, and a system without a strong symmetry uses
+`tensor_dag` instead.
 """
 adj_maps(system::System, relab) =
     element_maps(system, system, t -> relabel(t, relab); swap = true)
@@ -154,12 +137,8 @@ adj_maps(system::System, relab) =
     dense_maps(charged, plain)
 
 the tensors carrying each site of the system `charged`, once densified, onto the same site of
-`plain`, the same sites conserving nothing.
-
-An ITensor holds either charged indices or plain ones, never both, so this last step of
-weakening cannot be a relabelling: the state is densified first. Densifying lays the blocks
-out in the order of the charges, not in the order a plain combiner gives, and each tensor is
-the permutation between the two. Having no charges, it has no flux to respect.
+`plain`, the same sites conserving nothing: densifying lays the blocks out in the order of
+the charges, and each tensor is the permutation to the order of a plain combiner
 """
 dense_maps(charged::System, plain::System) = element_maps(plain, charged, dense)
 
@@ -251,9 +230,7 @@ end
     lay(m, outs, ins)
 
 the matrix `m` laid on the legs `outs` and `ins`, or `nothing` when their charges cannot
-carry it, see `has_definite_flux`. The caller then refuses the operator by name with
-`no_definite_charge`, where ITensors would refuse the matrix with `Fluxes not all equal`, with
-neither the operator nor its sites in sight.
+carry it, see `has_definite_flux`, for the caller to refuse it with `no_definite_charge`
 """
 function lay(m::Matrix, outs, ins)
     a, idx = on_legs(m, outs, ins)
@@ -283,7 +260,7 @@ pure_sides(js) = ([ j' for j in js ], [ dag(j) for j in js ])
 
 the outgoing and the incoming legs of an operator on a density matrix, in the order a matrix of
 the mixed space reads them: the last site varying fastest and, inside a site, the ket faster
-than the bra, which is how `mixer` pairs them.
+than the bra, as `mixer` pairs them
 """
 mixed_sides(js, bs) =
     (reduce(vcat, [ [dag(b''), j'] for (j, b) in zip(js, bs) ]),
@@ -292,9 +269,8 @@ mixed_sides(js, bs) =
 """
     fresh_bras(js, sites)
 
-the indices the bra of an operator on a density matrix lives on, one per site, see `legs`:
-starred, so that a site conserving something strongly keeps its bra apart from its ket, and
-drawn with `sim`, so that they are new ones
+the new indices the bra of an operator on a density matrix lives on, one per site, see `legs`,
+starred so that a site conserving something strongly keeps its bra apart from its ket
 """
 fresh_bras(js, sites) = [ sim(star(j, strong_names(s))) for (j, s) in zip(js, sites) ]
 
@@ -302,7 +278,7 @@ fresh_bras(js, sites) = [ sim(star(j, strong_names(s))) for (j, s) in zip(js, si
     onto_mixed(t, js, bs, ks)
 
 the operator `t`, laid on the ket and bra legs of each site, carried onto `ks`, the mixed
-indices of the sites, through the combiner of `mixer`.
+indices of the sites, through the combiner of `mixer`
 """
 function onto_mixed(t::ITensor, js, bs, ks)
     for (j, b, k) in zip(js, bs, ks)
@@ -316,15 +292,14 @@ end
     combine_sites(t, is)
 
 the operator `t`, laid on one pair of indices per site, gathered on a single pair combining
-them: the form `tensor` gives for several sites. An operator placed on a system keeps one pair
-per site and never goes through this.
+them: the form `tensor` gives for several sites
 """
 function combine_sites(t::ITensor, is)
     if length(is) == 1
         return t
     end
-    # built on the daggered indices, the ones the operator takes in, so that the combiner
-    # carries them the other way and meets them; its primed dagger meets the outputs
+    # on the daggered indices, so that the combiner meets the inputs and its primed dagger the
+    # outputs
     c = combiner(reverse([ dag(i) for i in is ])...; tags = "")
     return t * c * dag(c')
 end
@@ -376,13 +351,11 @@ site_F(sites) = length(sites) == 1 ? matrix(F, only(sites)) : nothing
     checked_type(what, type, m, sites)
 
 the matrix `m` of the operator `what`, declared of `type`, refused when it is not of that type,
-see `OpType`. Parity is checked only on a single site; an operator of several sites has it
-checked where it is split, see `split_matrix`. A matrix whose size does not fit the sites is
-let through, to be refused where it is laid.
+see `OpType`, parity being checked only on a single site, see `split_matrix` for several. A
+matrix whose size does not fit the sites is let through, to be refused where it is laid.
 """
 function checked_type(what, type::OpType, m::AbstractMatrix, sites)
     n = prod(dim, sites)
-    # a size the sites do not fit is refused by whoever lays the matrix, naming the operator
     if size(m) ≠ (n, n)
         return m
     end
@@ -398,14 +371,11 @@ end
 """
     matrix(a::GenericOp, site::AbstractSite...)
 
-the matrix of the generic operator `a` on the given sites. When the sites are all identical,
-a single one may be given for all of them.
-
-The matrix is written in the basis of the sites, whatever they conserve. The last site varies
-fastest and, for an operator acting on a density matrix, the ket of a site varies faster than
-its bra. A tensor product of fermionic factors holds the Jordan-Wigner strings between them:
-the matrix of `C ⊗ dag(C)` is that of the operator `C(1) * dag(C)(2)`, not the Kronecker
-product of the two matrices.
+the matrix of the generic operator `a` on the given sites, a single one standing for several
+identical ones. It is written in the basis of the sites, whatever they conserve, the last site
+varying fastest and, on a density matrix, the ket of a site faster than its bra. A tensor
+product of fermionic factors holds the Jordan-Wigner strings between them: the matrix of
+`C ⊗ dag(C)` is that of `C(1) * dag(C)(2)`, not the Kronecker product of the two matrices.
 
 # Examples
 
@@ -431,7 +401,7 @@ function matrix(a::Union{TensorOp, Left, Right}, site::AbstractSite...)
     return reshape(Array(t, reverse(outs)..., reverse(ins)...), d, d)
 end
 
-# a copy, which the caller may change: the matrix of a declaration changed the operator
+# a copy: changing it would change the declared operator
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
 
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
@@ -443,7 +413,6 @@ matrix(a::String, site::AbstractSite, ::AbstractSite...) =
 matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite...) =
     identity_operator(prod(dim, expand_sites(a, site)))
 
-# on a density matrix, the identity of the ket and the bra of each site
 matrix(a::IdentityOp{Mixed, Generic}, site::AbstractSite...) =
     identity_operator(prod(s -> dim(s)^2, expand_sites(a, site)))
 
@@ -456,7 +425,7 @@ function matrix(::JW_F, site::AbstractSite)
 end
 
 function matrix(a::Operator, site::AbstractSite...)
-    # one site given for identical ones, which a function of the sites cannot take
+    # every site, which a definition by a function of the sites needs
     sites = expand_sites(a, site)
     m = isnothing(a.expr) ? matrix(a.name, site...) : matrix(a.expr, sites...)
     return checked_type(a, a.type, m, sites)
@@ -505,10 +474,8 @@ function matrix(a::GenPowOp, site::AbstractSite...)
     elseif real(a.expo) > 0 && r ≠ rank(m * m)
         error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
     end
-    # Julia 1.10 takes a non integer power of a real diagonal matrix entry by entry and
-    # refuses a negative entry, where later versions go complex; it also returns a
-    # Symmetric or Hermitian wrapper for a non integer power of such a matrix, which the
-    # rest of the package, laying matrices on indices, does not take
+    # Julia 1.10 refuses a non integer power of a real diagonal matrix with a negative entry,
+    # and `Matrix` unwraps the Symmetric or Hermitian it may return
     if eltype(m) <: Real && isdiag(m) && any(<(0), diag(m))
         return Matrix(complex(m) ^ a.expo)
     end
@@ -526,10 +493,8 @@ function matrix(a::Dissipator, site::AbstractSite...)
     return matrix(Gate(a.arg), site...) - 0.5 * (matrix(Left(aa), site...) + matrix(Right(aa), site...))
 end
 
-# the density matrix of the state times the trace: ρ ↦ m tr(ρ), the ket varying fastest. It is
-# laid through `lay` as any operator of a density matrix, so that under a strong symmetry, where
-# resetting a site moves the charge of one side only, it is refused rather than left with the
-# block of charge zero alone, which gave a state of trace zero
+# ρ ↦ m tr(ρ), the ket varying fastest; under a strong symmetry, where resetting a site moves
+# the charge of one side only, `lay` refuses it
 function matrix(a::SetState, site::AbstractSite)
     v = state(site, a.state)
     m = v isa Matrix ? v : v * v'
@@ -541,9 +506,7 @@ end
 
 the matrix of the operator `a` on `sites`, refused by a message naming `a` when its size is not
 the dimension of the sites, or when it has no definite flux on a single site whose index is
-charged. Otherwise the first would fail on a `DimensionMismatch` from `reshape` and the second
-deep inside ITensors, naming neither the operator nor the site. The flux is only checked on a
-charged index: `matrix` lays operators on plain indices, where there is none to check.
+charged
 """
 function checked_matrix(a, sites, js)
     m = check_size(a, matrix(a, sites...), sites)
@@ -558,17 +521,13 @@ end
     legs(a, sites, js, bs)
 
 the tensor of the operator `a` on `sites`, `js` being their indices. An operator acting on a
-pure state has one pair of legs per site, `j'` out and `dag(j)` in.
+pure state has one pair of legs per site, `j'` out and `dag(j)` in. One acting on a density
+matrix has its bra on indices of its own, `bs`, drawn by `fresh_bras`: its legs are `j'` and
+`dag(b'')` out, `dag(j)` and `b'` in, and `onto_mixed` then gathers each pair onto the mixed
+index of its site.
 
-An operator acting on a density matrix needs four legs per site, while a mixed index and its
-primed form offer only three distinct ones, so its bra lives on indices of its own, `bs`,
-drawn by `fresh_bras`. Its legs are `j'` and `dag(b'')` out, `dag(j)` and `b'` in, and
-`onto_mixed` then gathers each pair onto the mixed index of its site.
-
-Nothing here combines two sites: every matrix is laid on the indices of the sites one by one,
-each keeping one block per basis state in the order of the basis, so no charge reorders
-anything. The only thing that sorts charged sectors is the combiner of `mixer`, which is only
-ever given a ket and its bra.
+No two sites are combined here, so no charge reorders the basis: only the combiner of `mixer`
+sorts charged sectors.
 """
 function legs(a::GenericOp{Pure}, sites, js)
     t = lay(checked_matrix(a, sites, js), pure_sides(js)...)
@@ -578,11 +537,9 @@ function legs(a::GenericOp{Pure}, sites, js)
     return t
 end
 
-# (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): the string of each odd factor, moved left
-# through those before it, leaves on each of them an F per odd factor that follows, and a factor
-# of no definite parity after a fermionic site makes the product a sum, which is refused rather
-# than laid without its string. Sites apart, as a gate places it, still miss the strings of the
-# sites in between, which is why `hasfermionic` sends such an operator through `simplify`
+# (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): each factor takes an F per odd factor
+# that follows, and a factor of no definite parity after a fermionic site is refused. Placed on
+# sites apart, it misses the strings in between: `hasfermionic` sends it through `simplify`
 function legs(a::TensorOp, sites, js)
     pos = factor_sites(a)
     ps = map(jw_parity, a.subs)
@@ -609,8 +566,7 @@ legs(a::Left, sites, js, bs) =
     legs(a.arg, sites, js) * prod(denseblocks(delta(b', dag(b''))) for b in bs)
 
 # the operator laid on the bras, `b'` out and `dag(b)` in, daggered and primed: its conjugate,
-# `dag(b'')` out and `b'` in. It goes through `legs` as the one of `Left` does, so that a
-# factor of no definite charge is refused by name rather than by ITensors
+# `dag(b'')` out and `b'` in
 legs(a::Right, sites, js, bs) =
     prod(denseblocks(delta(j', dag(j))) for j in js) * dag(legs(a.arg, sites, bs))'
 
@@ -651,16 +607,15 @@ end
     tensor(a::GenericOp, site::AbstractSite...)
     tensor(m::Matrix, site::AbstractSite...)
 
-the ITensor of the generic operator `a`, or of the matrix `m`, on the given sites. When the
-sites are all identical, a single one may be given for all of them; for a matrix, their number
-is then read off its size. Several sites are gathered on a single index combining theirs, and
-its primed form.
+the ITensor of the generic operator `a`, or of the matrix `m`, on the given sites, a single
+one standing for several identical ones, as many as the size of a matrix asks for. Several
+sites are gathered on a single index combining theirs, and its primed form. The indices are
+new ones, which contract with no state: `tensor(system, X(1))` lays a placed operator on the
+indices of a system.
 
-When any of the sites conserves something, the indices carry charges, and an operator or a
-matrix of no definite charge is refused. The indices are drawn for this tensor, so that it
-does not contract with a state: `tensor(system, X(1))` gives that of an operator placed on
-sites, on the indices of a system. A tensor product of fermionic factors holds the
-Jordan-Wigner strings between them, as `matrix` does.
+When a site conserves something, an operator or a matrix of no definite charge is refused. A
+tensor product of fermionic factors holds the Jordan-Wigner strings between them, as in
+`matrix`.
 
 `tensor` of two operators is their tensor product, `tensor(X, Y)` being `X ⊗ Y`, and of two
 systems their product, see `⊗`.
@@ -694,11 +649,10 @@ end
     tensor(system::System, a::AtIndex)
 
 the ITensor of the operator `a` placed on sites, as `X(1)` or `(X ⊗ Y)(2, 3)`, on the indices
-of `system`, with one pair of indices per site it acts on. It takes a single generic operator
-placed as it is: a coefficient, as in `2X(1)`, or a product, as in `X(1) * Y(2)`, is not
-accepted. No Jordan-Wigner string is inserted but between the factors of a tensor product on
-consecutive sites: `C(3)` gets the bare matrix of `C`, with no string on sites 1 and 2, see
-`hasfermionic`.
+of `system`, with one pair of indices per site it acts on. It takes a single placed generic
+operator, not a coefficient, as in `2X(1)`, nor a product, as in `X(1) * Y(2)`. Jordan-Wigner
+strings are inserted only between the factors of a tensor product on consecutive sites: `C(3)`
+gets the bare matrix of `C`, see `hasfermionic`.
 
 # Examples
 
