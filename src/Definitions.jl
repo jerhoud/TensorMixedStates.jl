@@ -33,10 +33,9 @@ script(digits, n::Int) = join(digits[c - '0' + 1] for c in string(n))
 """
     check_even(name, m, sites, tol)
 
-refuse a matrix that does not commute with `F` on each of its sites. Its one site factors are
-placed with no Jordan-Wigner string between them, and the strings of other factors cross them
-as if they were even: right for a density, a spin or a pair, all even on each site, wrong for
-an operator moving a fermion from one site to another.
+refuse a matrix that does not commute with `F` on each of its sites: its one site factors are
+placed with no Jordan-Wigner string and crossed by strings as if even, which is wrong for an
+operator moving a fermion from one site to another
 """
 function check_even(name, m, sites, tol)
     d = [ dim(s) for s in sites ]
@@ -96,9 +95,8 @@ end
     part_on(x, d, on)
 
 the part of an operator acting on the sites where `on` is true and as the identity on the
-others, with an axis for each of the former. On those, the component along the identity is
-projected out; the others are traced out and divided by their dimension, so that what the part
-stands for there is the identity itself.
+others, with an axis for each of the former: the component along the identity is projected
+out on the former, the latter are traced out and divided by their dimension
 """
 function part_on(x::AbstractArray, d, on)
     y = x
@@ -120,11 +118,8 @@ end
 the terms of an operator acting on each of its sites, as pairs of a coefficient and of one
 factor per site: `y` has an axis per site, `charges` gives the charge of each value of each
 axis, `q` is the charge of the operator and `make(k, v)` builds the factor of its `k`-th site
-from a vectorised matrix.
-
-The first site is split from the others by a singular value decomposition, made charge by
-charge so that every factor has a definite one, and each right singular vector is split in
-turn in the same way.
+from a vectorised matrix. The sites are split off one by one by singular value
+decompositions, made charge by charge so that every factor has a definite one.
 """
 function svd_terms(y::AbstractArray, charges, q, tol, make)
     if ndims(y) == 1
@@ -178,17 +173,16 @@ its own, so that no term spans more sites than it acts on.
 function split_matrix(name::String, m::AbstractMatrix, sites::Vector)
     n = length(sites)
     d = [ dim(s) for s in sites ]
-    # a real operator keeps real factors, which gives a real MPO and halves the cost of
-    # every contraction with it
+    # real factors for a real operator, which give a real MPO, cheaper to contract
     if eltype(m) <: Complex && all(x -> iszero(imag(x)), m)
         m = real(m)
     end
     m = float(m)
     tol = rounding_tol * norm(m)
     check_even(name, m, sites, tol)
-    # one axis per site, holding the vectorised matrix of a one site operator. The axes of a
-    # matrix reshaped put the last site first and every output before every input, so each
-    # site has its two brought together, the output varying faster
+    # one axis per site, holding the vectorised matrix of a one site operator: a matrix
+    # reshaped puts the last site first and every output before every input, so the two axes
+    # of each site are brought together, the output varying faster
     x = reshape(permutedims(reshape(m, (reverse(d)..., reverse(d)...)),
                             [ k for j in 1:n for k in (n - j + 1, 2n - j + 1) ]),
                 Tuple(d .^ 2))
@@ -224,30 +218,20 @@ end
     Operator{N}(name, def, type, sites...)
 
 an operator of `N` sites whose definition `simplify` cannot develop (a matrix, a function of
-its sites, or an expression such as `exp(X ⊗ X)`) split once and for all into a sum of tensor
-products of one site operators. That sum becomes its definition, which `simplify` substitutes
-as it does for `Swap`, and this is what lets it into a hamiltonian, a lindbladian or `expect`.
-Created without its sites, such an operator can only be applied as a gate.
-
-On a single site nothing is split: the definition is replaced by its matrix on that site,
-computed once rather than each time a tensor is built.
+its sites, or an expression such as `exp(X ⊗ X)`), split once and for all into a sum of tensor
+products of one site operators, which `simplify` substitutes as it does for `Swap`: this lets
+it into a Hamiltonian, a Lindbladian or `expect`. Created without its sites, such an operator
+can only be applied as a gate. On a single site, the definition is replaced by its matrix.
 
 The sites come in the order of the indices, a single one standing for `N` identical ones, and
 a matrix is written in their basis with the last site varying fastest, as `matrix` gives it.
-The split depends on the sites through:
+Every factor carries a definite charge of what the sites conserve. A matrix is taken with no
+Jordan-Wigner string: one not commuting with `F` on each of its fermionic sites is refused, to
+be written with `C` and `dag(C)`.
 
-- their dimensions, which the size of a matrix does not give when the sites differ;
-- what they conserve: every factor carries a definite charge, so that the operator acts on
-  these sites, and on the same sites once weakened;
-- whether they are fermionic. A matrix is taken as it is, with no Jordan-Wigner string, which
-  is only right for an operator commuting with `F` on each of its sites. Any other is refused,
-  and is to be written as an expression of `C` and `dag(C)`, into which `simplify` inserts the
-  strings.
-
-The factors are named after the operator: `P2¹₂` is its second factor on its first site, and
-the subscript 0 marks the part acting on that site alone. What acts as the identity on a site
-is taken out first, so that no term spans more sites than it acts on, and the rest is split by
-singular value decompositions.
+The factors are named after the operator: `P2¹₂` is its second factor on its first site, the
+subscript 0 marking the part acting on that site alone. No term spans more sites than it acts
+on.
 
 # Examples
 
@@ -262,7 +246,6 @@ function Operator{N}(name::String, def::Union{Matrix, Function, GenericOp{Pure, 
     if N > 1
         return Operator{N}(name, split_matrix(name, m, ss), type)
     end
-    # one site has nothing to be split: its matrix is only computed once and for all, and
     # its type, fermionic included, says what simplify does with it
     return Operator{1}(name, m, type)
 end
@@ -274,11 +257,8 @@ end
     check_declared(site, declared)
 
 check the operators `@def_operators` has just declared for `site`, given as `(name, type)`
-pairs, against their types on that site, and `F` against being an involution. Other sites of
-the same type are checked where the operators are used, see `checked_type`. A refusal takes
-the definitions back, so that the declaration can be made again once its matrices are
-corrected. The names it bound keep the type they were declared with, so giving one of them
-another type needs a new session.
+pairs, against their types on that site, and `F` against being an involution, a refusal taking
+the definitions back
 """
 function check_declared(site::AbstractSite, declared)
     try
@@ -296,30 +276,21 @@ end
 """
     @def_operators(site, symbols)
 
-define operators for `site`, grouped by `OpType` as in the example below.
+define operators for `site`, grouped by `OpType` as in the example below. A definition is a
+matrix, an expression of operators of one site, or a function of the site giving either; an
+operator of several sites is defined with `named` or `Operator{N}`. `F` declares the
+Jordan-Wigner operator of a fermionic site and binds no name of its own.
 
-Each name becomes a `const` of the calling module the first time it is seen. A name already in
-scope is not bound again: it is registered for the new site and checked against what it
-already stands for, so that reusing a name that stands for something else, or declaring it
-with another `OpType`, is an error rather than a silent redefinition.
+Each name becomes a `const` of the calling module the first time it is seen, so the macro is
+used at the top level of a module or a script, not inside a function, a `let` or a
+`@testset`. A name already in scope is registered for the new site, and refused if it stands
+for something else or with another `OpType`.
 
-A definition is a matrix, an expression of operators of one site, or a function of the site
-giving either. Every operator declared here acts on one site: one of several sites is defined
-with `named` or `Operator{N}`. `F` declares the Jordan-Wigner operator of a fermionic site,
-shared by every site, and binds no name of its own.
-
-An operator neither fermionic nor self adjoint is `plain_op`. On a fermionic site an operator
-is placed with no Jordan-Wigner string, so every type but `fermionic_op` has to commute with
-`F`, and a `fermionic_op`, which moves a fermion, has to anticommute with it. The types, and
-`F` being an involution, are checked on the site given, and again on each site an operator is
-placed on.
-
-The names are bound by `const`, so the macro is used at the top level of a module or a script,
-not inside a function, a `let` or a `@testset`. A declaration refused by its check is taken
-back and can be made again once its matrices are corrected, but a name it bound keeps its
-type, and giving it another one needs a new session. A declaration interrupted by an error in
-its block, a name it does not know for instance, is not taken back, and is made again in a
-new session.
+An operator neither fermionic nor self adjoint is `plain_op`. On a fermionic site, a
+`fermionic_op` has to anticommute with `F` and any other type to commute with it. The types
+are checked on the site given and on each site an operator is placed on. A declaration refused
+by its check is taken back and can be made again once corrected, but a name it bound keeps its
+type until a new session. One interrupted by an error in its block is not taken back.
 
 # Examples
 
@@ -362,19 +333,16 @@ macro def_operators(site, symbols)
             val = last(expr.args)
             push!(declared, :(($nsym, $(esc(type)))))
             if nsym == "F"
-                # `F` is the Jordan-Wigner operator of `Operators.jl`, shared by every
-                # fermionic site and not an `Operator{1}`: the site is registered and the
-                # name is left alone
+                # `F` is shared by every fermionic site and is not an `Operator{1}`: the site
+                # is registered and the name left alone
                 push!(e.args,
                 quote
                     add_operator($__module__, $(esc(site)), $nsym, $(esc(val)), $(esc(type)))
                 end)
             elseif isdefined(__module__, sym)
-                # the name is already in scope, so it is registered for this site and
-                # checked, but not bound again. Binding it again would rebind it for every
-                # site already using it, and up to Julia 1.11 rebinding a name brought in by
-                # `using` is a hard error of the language. The decision is taken here, at
-                # expansion time, so that no binding is emitted at all in that case
+                # not bound again, which would rebind it for every site using it, and is an
+                # error up to Julia 1.11 for a name brought in by `using`: decided at
+                # expansion time, so that no binding is emitted
                 push!(e.args,
                     quote
                         check_shared_operator($(esc(sym)), $nsym, $(esc(type)), $(esc(site)))
@@ -404,7 +372,6 @@ size does not fit the sites is `plain_op`, to be refused where the operator is b
 """
 function matrix_type(m::AbstractMatrix, sites = AbstractSite[], what = "the matrix")
     n = isempty(sites) ? size(m, 1) : prod(dim, sites)
-    # a size the sites do not fit is refused where the operator is built, naming it
     if size(m) ≠ (n, n)
         return plain_op
     end
@@ -418,9 +385,8 @@ function matrix_type(m::AbstractMatrix, sites = AbstractSite[], what = "the matr
 end
 
 function named(m::Matrix, name::String; type::OpType = matrix_type(m))
-    # what simplify reads off the type, as an involution squaring to the identity, is checked
-    # at once, where it was only checked once a matrix of the operator was computed, which
-    # simplify could have spared. Parity needs the F of a site, where it is checked
+    # checked at once, simplify relying on the type; parity needs the F of a site, where it
+    # is checked
     v = violation(type, m, nothing)
     if !isnothing(v)
         error("$name is declared $type but $v")
@@ -451,17 +417,12 @@ the modulus and the charge of each basis state of `site` for the conserved quant
 
 `op` has to be diagonal on the site, with eigenvalues that are either integers, taken as the
 charges, or roots of unity, the charge being the exponent and the modulus read off the
-denominators: this is what makes `Zd` work on a `Qudit` with no modulus written anywhere.
-
-The two readings overlap on ±1 and are different conservations: two sites carrying -1 make -2
-over the integers and 0 modulo 2. The integer reading wins, and `parity` asks for the other.
+denominators, as for `Zd` on a `Qudit`. On ±1, where both readings apply, the integer one
+wins, and `parity` asks for the other.
 """
 function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
-    # a renamed operator reads its charges off what it renames, which is where a modulus is
-    # carried: named(parity(N), "P") read its ±1 as integers and conserved their sum instead
-    # of a parity
-    # and so does one declared for the site, whose definition is in the library rather than
-    # in the operator: parity(N) given to @def_operators was read as a U(1) charge
+    # a renamed operator, or one declared for the site, reads its charges off its definition,
+    # which may carry a modulus, as parity(N) does
     if op isa Operator
         def = isnothing(op.expr) ? operator_info(site, op.name) : op.expr
         if def isa Function
@@ -473,7 +434,7 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
     end
     m = matrix(op, site)
     d = diag(m)
-    # relative to the largest charge: the 80 bosons of Boson(80) missed theirs by 1.4e-14
+    # relative to the largest charge, whose rounding grows with it
     tol *= max(1, maximum(abs, d))
     off = norm(m - Diagonal(d))
     if off > tol
@@ -504,11 +465,8 @@ end
 site_charges(op::GenericOp{Pure}, ::AbstractSite) =
     error("a conserved quantity acts on one site, and $op acts on several")
 
-# the modulus of a ModOp is carried rather than read back, ±1 being unreadable, and the
-# charges are those of its argument taken modulo it
-# a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: Zd^2
-# on Qudit(4) has them all ±1, which the reading of the matrix takes for integers, under which
-# Xd has no flux. An argument that is no charge, or an integer one, leaves it to that reading
+# a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: those
+# of Zd^2 on Qudit(4), all ±1, would be read as integers
 function site_charges(a::Union{IntPowOp{Pure, 1}, GenPowOp{Pure, 1}, DagOp{1}}, site::AbstractSite;
                       tol::Float64 = charge_tol)
     p = a isa DagOp ? -1 : a.expo
@@ -529,6 +487,7 @@ function site_charges(a::Union{IntPowOp{Pure, 1}, GenPowOp{Pure, 1}, DagOp{1}}, 
     return invoke(site_charges, Tuple{SimpleOp, AbstractSite}, a, site; tol)
 end
 
+# the modulus of a ModOp is carried rather than read back, ±1 being ambiguous
 function site_charges(a::ModOp{1}, site::AbstractSite; tol::Float64 = charge_tol)
     m, q = site_charges(a.arg, site; tol)
     if m ≠ 1
@@ -547,9 +506,8 @@ is the zero charge for an operator commuting with everything the site conserves,
 a site conserving nothing.
 
 An operator connecting states whose charges differ in more than one way has no flux and is
-refused. `X` raises and lowers `N` at once, while under `parity(N)` both differences are 1
-modulo 2. The modulus is also what gives `Xd` a flux under `Zd`: its wrap around, from the last
-state to the first, is a difference of `1 - d`, which is 1 modulo `d`.
+refused: `X` raises and lowers `N` at once, while under `parity(N)` both differences are 1
+modulo 2.
 
 # Examples
 
@@ -567,16 +525,11 @@ flux(op::GenericOp{Pure}, site::AbstractSite) =
     conserve_string(site, spec)
 
 the string in which a site records what it conserves: for each quantity, its name, its
-modulus when that is not 1, and the charge of every basis state. `spec` is what the user
-wrote, one operator or a tuple of them, each possibly marked `strong`.
+modulus when that is not 1, and the charge of every basis state. `spec` is one operator or a
+tuple of them, each possibly marked `strong`.
 
-The operators are read here rather than kept, since they could not be written to a state file
-and read back: the name a conserved quantity prints under, as `2Sz` or `parity(N)`, is an
-expression and not the name of an operator declared for the site. Only their charges are
-needed, and those are what the string holds.
-
-A site type of your own calls it to fill its `conserve` field, the site being built bare
-first, since the charges depend on its type and on its other fields, not on that one.
+A site type of your own calls it to fill its `conserve` field, on the site built bare, as
+below.
 
 # Examples
 
@@ -591,8 +544,6 @@ function conserve_string(site::AbstractSite, spec)
     if isempty(ops)
         return ""
     end
-    # refused here rather than by ITensors, when the index is built, or with a message about
-    # strength when it was given once strong and once weak
     names = [ obs_name(o isa Strong ? o.arg : o) for o in ops ]
     for n in names
         if count(==(n), names) > 1
@@ -603,14 +554,11 @@ function conserve_string(site::AbstractSite, spec)
         op = spec isa Strong ? spec.arg : spec
         modulus, q = site_charges(op, site)
         name = obs_name(op)
-        # the characters the recorded form and the relabelling of a strong symmetry read: a
-        # name ending in %2 was read back as a charge modulo 2
         if endswith(name, '!') || endswith(name, '*') || any(in(name), (':', ';', '%'))
             error("cannot conserve $name: a name holding :, ; or %, or ending in ! or *, " *
                   "cannot be told from how a site records its charges")
         end
-        # ITensors refuses a longer charge name when the index is built, far from here, and
-        # the bra of a strong one takes a star (`ITensors.SmallStrings.smallLength`, internal)
+        # the bra of a strong quantity takes a star in its name
         limit = ITensors.SmallStrings.smallLength - (spec isa Strong ? 1 : 0)
         if length(name) > limit
             error("cannot conserve $name: ITensors takes names of at most $limit characters " *
