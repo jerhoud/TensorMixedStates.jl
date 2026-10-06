@@ -103,17 +103,13 @@ tensor
 simplify
 ```
 
-## Lindblad and Kraus forms
+## Operators on another system
 
-An evolver and gates written by the user can be read back as the terms a representation of
-one's own needs to unravel them, quantum trajectories for instance, see
-[Representations of one's own](@ref): the hamiltonian and the jump operators of an evolver, and
-the Kraus operators of each channel of a product of gates. `map_sites` places these operators,
-and those it measures, on the system its tensors lie on.
+A representation of one's own that keeps its tensors on another system, see
+[Representations of one's own](@ref), places the operators it measures or applies there with
+`map_sites`.
 
 ```@docs
-lindblad_terms
-kraus_operators
 map_sites
 ```
 

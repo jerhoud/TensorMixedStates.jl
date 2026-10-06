@@ -296,12 +296,10 @@ The phases and the measurements reach these states through the methods you give:
   operators it measures at once to `expect(state, ops)`, which calls the method of one
   operator on each, unless you give one for `ops::Vector{<:IndexedOp}` that computes them
   together;
-- `apply(gates, state; limits, kwargs...)` applies the gates of a `Gates` phase, whose channels
-  [`kraus_operators`](@ref) gives as their Kraus operators;
+- `apply(gates, state; limits, kwargs...)` applies the gates of a `Gates` phase;
 - `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsteps, kwargs...)`
   evolves the state
-  in an `Evolve` phase, for each algorithm it supports, the hamiltonian and the jump operators
-  of the evolver being given by [`lindblad_terms`](@ref);
+  in an `Evolve` phase, for each algorithm it supports;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites, system)` save the state and read
   it back, for `SaveState`, `LoadState` and the checkpoints: the first writes its tensors in the

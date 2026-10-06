@@ -57,8 +57,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
   which `CreateState`, `output`, `save_state`, `load_state` and the checkpoints handle through
   the methods `expect`, `write_state` and `read_state`; `TensorMixedStates.evolve`, through
   which `Evolve` runs an algorithm or a state of one's own, `Algo` being the abstract supertype
-  of `Tdvp` and `ApproxW`; and `lindblad_terms`, `kraus_operators` and `map_sites`, which such
-  a representation reads.
+  of `Tdvp` and `ApproxW`; and `map_sites`, which places an operator on the system of such a
+  representation.
 
 ### Changed
 
