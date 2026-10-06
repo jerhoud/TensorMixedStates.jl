@@ -1,24 +1,22 @@
-# The states of free fermions: the Slater determinant of given orbitals, built by a circuit of
-# rotations of neighbouring modes applied to a product state, and the Fermi sea of a quadratic
-# hamiltonian, the determinant of its lowest orbitals.
+# The states of free fermions: the Slater determinant of given orbitals, and the Fermi sea of a
+# quadratic Hamiltonian, the determinant of its lowest orbitals.
 
 export slater_state, fermi_sea
 
 """
     fermion_species(site)
 
-the annihilation operators of the species of fermions a site holds, a mode of each: `(C,)` for a
-`Fermion`, `(Cup, Cdn)` for an `Electron`, and none for a site holding no fermions, the default.
-`slater_state` and `fermi_sea` read it off the sites they are given, and a site type of one's
-own holding free fermions gets them by a method of it.
+the annihilation operators of the species of fermions a site holds: `(C,)` for a `Fermion`,
+`(Cup, Cdn)` for an `Electron`, `()` by default. A site type of one's own holding fermions
+defines a method of it for `slater_state` and `fermi_sea`.
 """
 fermion_species(::AbstractSite) = ()
 
 """
     species_sites(system)
 
-the species of fermions of the sites of `system`, see `fermion_species`, in the order they
-first appear, each with the sites holding it, its modes, as pairs `c => sites`
+the species of fermions of `system`, in the order they first appear, as pairs `c => sites` of
+the sites holding each
 """
 function species_sites(system::System)
     result = Pair{SimpleOp, Vector{Int}}[]
@@ -67,14 +65,12 @@ end
 """
     givens_circuit(orbitals)
 
-the circuit of rotations of neighbouring modes taking the Slater determinant of `orbitals`,
-whose columns are orthonormal, to a product state, after Fishman and White (2015): the
-rotations `(j, W)`, the unitary `W` of 2×2 acting on the modes `j` and `j + 1`, in the order
-they are found, and the occupation of each mode once they are all applied.
-
-The modes are taken one after the other. On a window of the next ones, as narrow as the
-precision allows, the eigenvector of the correlations whose eigenvalue is nearest to 0 or 1 is
-brought onto the first mode of the window, which is then empty or occupied and drops out.
+the circuit of rotations of neighbouring modes taking the Slater determinant of the orthonormal
+columns of `orbitals` to a product state, after Fishman and White (2015): the rotations
+`(j, W)`, `W` a 2×2 unitary on the modes `j` and `j + 1`, in the order they are found, and the
+occupation of each mode once they are applied. The modes are taken in turn: on the narrowest
+window of the next ones that the precision allows, the eigenvector of the correlations nearest
+to an occupation 0 or 1 is brought onto the first mode, which then drops out.
 """
 function givens_circuit(orbitals::AbstractMatrix)
     n = size(orbitals, 1)
@@ -83,8 +79,8 @@ function givens_circuit(orbitals::AbstractMatrix)
     rotations = Tuple{Int, Matrix{ComplexF64}}[]
     occupations = zeros(Int, n)
     for i in 1:n
-        # the window grows until its eigenvalue is a pure occupation to 1e-12, which the full
-        # rest of the modes always gives, the correlations of a determinant being a projector
+        # the window grows until an eigenvalue is 0 or 1 to 1e-12, which the whole rest of the
+        # modes reaches, the correlations of a determinant being a projector
         λ, v = 0., ComplexF64[]
         for stop in i:n
             e = eigen(Hermitian(M[i:stop, i:stop]))
@@ -116,10 +112,9 @@ end
 """
     mode_gate(c, W, a, b)
 
-the gate on the sites `a < b` that rotates their modes of annihilation operator `c` by `W`, a
-unitary of 2×2: ``\\mathcal{G}\\, c_p^\\dagger \\mathcal{G}^\\dagger = \\sum_q W_{qp}
-c_q^\\dagger``. It is the exponential of ``\\sum_{pq} K_{pq} c_p^\\dagger c_q`` for
-``K = \\log W``, an even operator of two sites, which `apply` takes on sites apart as well.
+the gate on the sites `a < b` rotating their modes of annihilation operator `c` by the 2×2
+unitary `W`: ``\\mathcal{G}\\, c_p^\\dagger \\mathcal{G}^\\dagger = \\sum_q W_{qp}
+c_q^\\dagger``. `a` and `b` need not be neighbours, `apply` taking an even gate on sites apart.
 """
 function mode_gate(c::SimpleOp, W::AbstractMatrix, a::Int, b::Int)
     K = log(W)
@@ -131,23 +126,22 @@ end
 """
     slater_state(system, orbitals...; others, limits = Limits())
 
-the Slater determinant of `orbitals`, one matrix for each species of fermions of the sites, as
-`fermion_species` gives them, `C` for a `Fermion`, `Cup` and `Cdn` for an `Electron`: the column
-`k` of the matrix of a species holds the amplitudes of its orbital `k` on the sites holding that
-species, in their order, the columns being orthonormal. The state is
+the Slater determinant of `orbitals`, one matrix ``\\Phi`` for each species of fermions of the
+sites, in the order the species first appear along them (`C` for a `Fermion`, `Cup` then `Cdn`
+for an `Electron`). The matrix of a species has a row for each site holding it, in their
+order, and a column for each fermion of that species: column `k` holds the amplitudes of
+orbital `k`, the columns being orthonormal. The state is
 ``\\prod_k \\left(\\sum_i \\Phi_{ik} c_i^\\dagger\\right) |0\\rangle``, up to a global
 phase, so that ``\\langle c_i^\\dagger c_j \\rangle = \\sum_k \\overline{\\Phi_{ik}}
-\\Phi_{jk}``. The species are taken in the order they first appear along the sites.
+\\Phi_{jk}``.
 
-The sites holding no fermions, qubits, spins or bosons beside the fermions, take the local state
-`others`, one for all of them or a vector of one for each, which they then need: an impurity
-in a Fermi sea, for instance.
+The sites holding no fermions take the local state `others`, one for all of them or a vector of
+one for each, which they then need.
 
-It is built after Fishman and White (2015), as a circuit of rotations of neighbouring modes
-applied to a product state, exact to 1e-12 on the correlations: `limits` constrains the
-truncations made as the gates are applied, the entanglement of a determinant growing with
-the size of the system. The number of fermions of each species is conserved, so the sites may
-conserve it, weakly or strongly.
+It is built by a circuit of rotations of neighbouring modes (Fishman and White, 2015), exact to
+1e-12 on the correlations; `limits` constrains the truncations made as it is applied, the
+entanglement of a determinant growing with the size of the system. The sites may conserve the
+number of fermions of each species, weakly or strongly.
 
 # Examples
 
@@ -192,16 +186,15 @@ end
 """
     one_body(system, hamiltonian, species, references)
 
-the constant `E0` and the matrices `h` of the terms ``\\sum_{ij} h_{ij} c_i^\\dagger c_j`` of
-each species `c` of a hamiltonian of free fermions, its modes on the sites `species` gives with
-it, read off the product state of no fermion, of local states `references`, see
-`reference_states`, and the states of one fermion added to it: ``E_0 = \\langle 0 | H | 0
-\\rangle`` and ``h_{ij} = \\langle 1_i | H | 1_j \\rangle - E_0 \\delta_{ij}``. The MPO of the
-hamiltonian is contracted between product states by its transfer matrices, without a charge,
-so that the basis of a site is that of its vectors. Whether the hamiltonian is of that form is
-left to the caller.
+the constant `E0` and, for each species of `species`, the matrix `h` of `hamiltonian` read as
+``E_0 + \\sum_{ij} h_{ij} c_i^\\dagger c_j``, from the product state of no fermion, of local
+states `references`, and the states of one fermion added to it: ``E_0 = \\langle 0 | H | 0
+\\rangle`` and ``h_{ij} = \\langle 1_i | H | 1_j \\rangle - E_0 \\delta_{ij}``. Whether the
+Hamiltonian is of that form is left to the caller.
 """
 function one_body(system::System, hamiltonian::IndexedOp{Pure}, species, references)
+    # without charges: the MPO is contracted between states of zero and one fermion, in the
+    # basis of the vectors of each site
     plain = weaken(system, ())
     n = length(plain)
     zero = [ v isa String ? state(plain[k], v) : v for (k, v) in enumerate(references) ]
@@ -254,17 +247,15 @@ end
 """
     fermi_sea(system, hamiltonian, nparticles...; others, limits = Limits())
 
-the ground state of `nparticles` free fermions of each species of the sites, as
-`fermion_species` gives them in the order they first appear, under `hamiltonian`, a quadratic
-hamiltonian conserving the number of each, ``E_0 + \\sum_{ij} h_{ij} c_i^\\dagger c_j`` for
-each species: the Slater determinant of the `nparticles` lowest orbitals of `h`, see
-`slater_state`, whose `others` and `limits` it takes.
+the ground state of `nparticles` free fermions of each species of the sites, in the order they
+first appear, under `hamiltonian`, a quadratic Hamiltonian conserving the number of each,
+``E_0 + \\sum_{ij} h_{ij} c_i^\\dagger c_j`` for each species: the Slater determinant of the
+`nparticles` lowest orbitals of `h`, see `slater_state`, whose `others` and `limits` it takes.
 
-The hamiltonian is written as for any other function, on any graph, with potentials or
-fluxes. A hamiltonian of another form is refused, an interaction, a term mixing species or a
-term acting on the sites holding no fermions for instance, and so is a number of fermions
-that fills a degenerate level in part, whose ground state is not unique: the message gives the
-nearest numbers that fill it, and a small term added to the hamiltonian lifts the degeneracy.
+A Hamiltonian of another form is refused, as one with an interaction, a term mixing species or
+a term acting on the sites holding no fermions, and so is a number of fermions filling a
+degenerate level in part: the message gives the nearest numbers that fill it, and a small term
+added to the Hamiltonian lifts the degeneracy.
 
 # Examples
 
@@ -284,11 +275,9 @@ function fermi_sea(system::System, hamiltonian::IndexedOp{Pure}, nparticles::Int
     end
     references = reference_states(system, others)
     e0, hs = one_body(system, hamiltonian, species, references)
-    # the hamiltonian rebuilt from what the states of no fermion and of one see of it: the
-    # same unless it holds terms they do not see, an interaction, a term mixing species or one
-    # acting on the sites without fermions. Compared by the Hilbert-Schmidt norms of MPOs, which
-    # `≈` does not replace: it compares how the operators are written, and tells N(1) from
-    # dag(C)(1) * C(1)
+    # rebuilt from what the states of no fermion and of one see of it, so differing by the terms
+    # they do not see. Compared by the norms of MPOs: `≈` compares how operators are written,
+    # and tells N(1) from dag(C)(1) * C(1)
     rebuilt = e0 * Id(1) + sum(h[p, q] * dag(c)(sites[p]) * c(sites[q])
                                for ((c, sites), h) in zip(species, hs)
                                for p in eachindex(sites), q in eachindex(sites)
