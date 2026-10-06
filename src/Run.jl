@@ -524,10 +524,10 @@ log that the simulation stops after phase `i`, or in it when `within`, and wheth
 resumed.
 """
 function log_stop(sim::Simulation, i::Int; within::Bool = false)
-    where = within ? "in" : "after"
+    at = within ? "in" : "after"
     log_message(sim, isempty(sim.checkpoint.dir) ?
-        "***** Stopping $where phase $i, with no directory to save it in: it cannot be resumed *****" :
-        "***** Stopping $where phase $i, the simulation can be resumed *****")
+        "***** Stopping $at phase $i, with no directory to save it in: it cannot be resumed *****" :
+        "***** Stopping $at phase $i, the simulation can be resumed *****")
 end
 
 """
