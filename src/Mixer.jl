@@ -168,9 +168,11 @@ dense_maps(charged::System, plain::System) = element_maps(plain, charged, dense)
 
 """
     expand_sites(what, n, sites)
+    expand_sites(a::GenericOp, sites)
 
-the `n` sites `what` acts on, given as `sites`: a single site stands for `n` identical ones, and
-any other number of sites than `n` is refused
+the `n` sites `what` acts on, given as `sites`, `n` being that of the generic operator `a` in
+the second form: a single site stands for `n` identical ones, and any other number of sites
+than `n` is refused
 """
 function expand_sites(what, n::Int, sites)
     ss = length(sites) == 1 ? fill(only(sites), n) : collect(AbstractSite, sites)
@@ -180,18 +182,22 @@ function expand_sites(what, n::Int, sites)
     return ss
 end
 
-"""
-    named_sites(def, site, sites)
+expand_sites(a::GenericOp, sites) = expand_sites(a, nsites(a), sites)
 
-the number of sites of a definition given with its sites: an expression has its own, a
-function acts on those given, and a matrix given a single site acts on as many copies of it as
-its size asks for
 """
-named_sites(::GenericOp{Pure, N}, _, _) where N = N
-named_sites(::Function, _, sites) = 1 + length(sites)
-function named_sites(m::Matrix, site, sites)
+    named_sites(what, def, site, sites)
+
+the sites of `def`, the definition of `what`, given with `site` and `sites`, see
+`expand_sites`: an expression acts on as many as it does, a function on those given, and a
+matrix given a single site on as many copies of it as its size asks for
+"""
+named_sites(what, ::GenericOp{Pure, N}, site, sites) where N =
+    expand_sites(what, N, (site, sites...))
+named_sites(what, ::Function, site, sites) =
+    expand_sites(what, 1 + length(sites), (site, sites...))
+function named_sites(what, m::Matrix, site, sites)
     if !isempty(sites)
-        return 1 + length(sites)
+        return expand_sites(what, 1 + length(sites), (site, sites...))
     end
     d, n, k = dim(site), size(m, 1), 1
     while d > 1 && d^k < n
@@ -200,7 +206,7 @@ function named_sites(m::Matrix, site, sites)
     if d^k ≠ n
         error("a $(size(m, 1))×$(size(m, 2)) matrix acts on no number of $site")
     end
-    return k
+    return expand_sites(what, k, (site,))
 end
 
 """
@@ -410,7 +416,7 @@ product of the two matrices.
     matrix(Left(X), Qubit())
 """
 function matrix(a::Union{TensorOp, Left, Right}, site::AbstractSite...)
-    sites = expand_sites(a, nsites(a), site)
+    sites = expand_sites(a, site)
     # plain indices: nothing is there to reorder the basis, and no charge to check
     js = [ Index(dim(s)) for s in sites ]
     if a isa GenericOp{Pure}
@@ -436,11 +442,11 @@ matrix(a::String, site::AbstractSite, ::AbstractSite...) =
     matrix(operator_info(site, a), site)
 
 matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite...) =
-    identity_operator(prod(dim, expand_sites(a, nsites(a), site)))
+    identity_operator(prod(dim, expand_sites(a, site)))
 
 # on a density matrix, the identity of the ket and the bra of each site
 matrix(a::IdentityOp{Mixed, Generic}, site::AbstractSite...) =
-    identity_operator(prod(s -> dim(s)^2, expand_sites(a, nsites(a), site)))
+    identity_operator(prod(s -> dim(s)^2, expand_sites(a, site)))
 
 function matrix(::JW_F, site::AbstractSite)
     m = matrix(F_info(site), site)
@@ -452,7 +458,7 @@ end
 
 function matrix(a::Operator, site::AbstractSite...)
     # one site given for identical ones, which a function of the sites cannot take
-    sites = expand_sites(a, nsites(a), site)
+    sites = expand_sites(a, site)
     m = isnothing(a.expr) ? matrix(a.name, site...) : matrix(a.expr, sites...)
     return checked_type(a, a.type, m, sites)
 end
@@ -668,14 +674,14 @@ systems their product, see `⊗`.
     tensor([0. 1. ; 1. 0.], Qubit())
 """
 function tensor(a::GenericOp, site::AbstractSite...)
-    sites = expand_sites(a, nsites(a), site)
+    sites = expand_sites(a, site)
     js = site_indices(sites)
     ks = a isa GenericOp{Pure} ? js : [ mixed_index(j, s) for (j, s) in zip(js, sites) ]
     return combine_sites(legs_on(a, sites, js, ks), ks)
 end
 
 function tensor(a::Matrix, site::AbstractSite, sites::AbstractSite...)
-    ss = expand_sites("the matrix", named_sites(a, site, sites), (site, sites...))
+    ss = named_sites("the matrix", a, site, sites)
     check_size("the operator", a, ss)
     js = site_indices(ss)
     t = lay(a, pure_sides(js)...)

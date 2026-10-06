@@ -433,8 +433,8 @@ named(f::Function, name::String; type::OpType = plain_op) =
 
 function named(def::Union{Matrix, Function, GenericOp{Pure}}, name::String,
                site::AbstractSite, sites::AbstractSite...; type::Union{Nothing, OpType} = nothing)
-    n = named_sites(def, site, sites)
-    ss = expand_sites(name, n, (site, sites...))
+    ss = named_sites(name, def, site, sites)
+    n = length(ss)
     t = isnothing(type) ? matrix_type(matrix(def, ss...), ss, name) : type
     return Operator{n}(name, def, t, ss...)
 end
