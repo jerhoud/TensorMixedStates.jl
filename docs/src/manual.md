@@ -410,6 +410,47 @@ measure(mydecayed, Z)
 
 An evolver may also depend on time, see [Time dependent evolvers](@ref).
 
+### [Noise](@id manual-noise)
+
+Noise acts on a mixed state, either as a channel applied between gates, or as a term of an
+evolver. Three kinds are ready for sites of any type, each as a channel `…_gate(p, …)`, taking
+place with probability `p`, and as a generator `…_dissipator(γ, …)`, of rate `γ`:
+
+- [`relaxing_gate`](@ref)`(p, state)` resets a site to `state`, see `SetState`; with `n`,
+  `relaxing_gate(p, n, state)` resets `n` sites together, and `relaxing_gate(p, [s1, s2])`
+  each site to its state;
+- [`depolarizing_gate`](@ref)`(p, n)` is the relaxation towards `"FullyMixed"`;
+- [`dephasing_gate`](@ref)`(p, A)` erases the coherences between the eigenspaces of `A`, or
+  in the basis of the site without `A`, see `Dephase`.
+
+Evolving under a generator for a time `t` is the channel of probability ``1 - e^{-\gamma t}``.
+Dephasing qubits in `"+"` at rate 1 gives ``\langle \sigma_x \rangle = e^{-t}``, which is
+``0.6065`` at ``t = 0.5``, both ways:
+
+```@example manual
+myplus = State{Mixed}(System(2, Qubit()), "+")
+mydephased = tdvp(sum(dephasing_dissipator(1.0)(i) for i in 1:2), 0.5, myplus; nsteps = 10)
+measure(mydephased, X)
+```
+
+```@example manual
+measure(apply(prod(dephasing_gate(1 - exp(-0.5))(i) for i in 1:2), myplus), X)
+```
+
+Sites relaxed together are not sites relaxed each on its own: `depolarizing_gate(p, 2)`
+depolarizes both sites with probability `p`, where
+`depolarizing_gate(p) ⊗ depolarizing_gate(p)` depolarizes each with probability `p`. And
+`dephasing_dissipator(γ, A)` damps every coherence between two eigenspaces of `A` at the rate
+`γ`, where `Dissipator(A)` damps it at ``(\lambda_a - \lambda_b)^2/2``, faster for distant
+eigenvalues; they agree on a qubit, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`.
+
+The relaxation, and so the depolarization, changes the charges and is refused on sites
+conserving something strongly, where a dephasing in the eigenbasis of an operator commuting
+with the charge, as `N`, is accepted. Any other channel is a sum of gates, `Gate(K)` being
+``\rho \mapsto K \rho K^\dagger``: the amplitude damping of a qubit, which brings it back
+to `"Up"` while keeping part of its coherences, is
+`Gate(Id - (1 - sqrt(1 - γ)) * N) + γ * Gate(Sp)`.
+
 ### Steady states
 
 `steady_state` looks for the state ``\rho`` with ``L\rho = 0``, ``L`` being the evolver,
