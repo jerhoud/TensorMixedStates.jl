@@ -1,6 +1,5 @@
-# compact, which writes the terms of several sites of an operator as coms, the blocks of
-# channels of Operators.jl, with no more channels than its terms need, and ≈, which compares
-# two operators through the products of atoms they expand into, those of a com included.
+# compact, which gathers the terms of several sites of an operator into coms, and ≈, which
+# compares two operators through the products of atoms they expand into.
 
 export compact
 
@@ -19,8 +18,8 @@ end
 """
     side_terms(a)
 
-the terms of `a`: those of its argument taken to the side of `a` for a `Left` or a `Right`,
-which are linear, and `a` itself for any other operator
+the terms of `a`: those of its argument taken to its side for a `Left` or a `Right`, `a`
+itself for any other operator
 """
 side_terms(a::Left) = [ Left(x) for x in sumsubs(a.arg) ]
 side_terms(a::Right) = [ Right(x) for x in sumsubs(a.arg) ]
@@ -29,9 +28,9 @@ side_terms(a::Op) = [a]
 """
     linearize(o)
 
-the operator of one site `o` as a combination of its atoms, the operators it sums that are not
-sums themselves, their coefficients taken apart: `2X + Y` gives `[X => 2, Y => 1]`, and
-`Left(X + Y)` gives `[Left(X) => 1, Left(Y) => 1]`, gathered and sorted by `simplify_sum`.
+the operator of one site `o` as a sorted combination of its atoms, the operators it sums that
+are not sums themselves: `2X + Y` gives `[X => 2, Y => 1]`, `Left(X + Y)` gives
+`[Left(X) => 1, Left(Y) => 1]`
 """
 function linearize(o::Op)
     s = simplify_sum([ scalarcoef(t) * u for t in sumsubs(o) for u in side_terms(scalararg(t)) ])
@@ -61,15 +60,9 @@ com_coefs(a::ComOp) = (x for p in a.pieces for (_, _, o) in p for (_, x) in line
 the positions of the rows kept among `rows`, in increasing order, and the coefficients `t`
 expressing every row in terms of them, `rows[i] ≈ sum(t[i, j] * rows[kept[j]])`.
 
-The rows are taken one at a time, the one with the largest residual on those already taken
-first, as long as that residual exceeds `tol` times the scale of its row. Every other row is a
-combination of the rows taken, computed from its projections, and a row itself under that
-bound is dropped whole. A coefficient whose part in its row is under the bound is dropped too,
-so that rounding leaves no piece of the order of 1e-17 in the MPO.
-
-The pivoting is what keeps the coefficients bounded: taking the rows in their order, a row
-taken while small makes the following ones its large multiples, and `λ^(j-i)` gets coefficients
-growing as `λ^(-i)`.
+The row of largest residual is taken first, as long as that residual exceeds `tol` times the
+scale of its row; a row, or a coefficient, under that bound is dropped. This pivoting keeps
+the coefficients bounded.
 """
 function interpolative(rows::Vector{Vector{T}}, scales::Vector{<:Real}, tol::Real) where T
     n = length(rows)
@@ -89,7 +82,7 @@ function interpolative(rows::Vector{Vector{T}}, scales::Vector{<:Real}, tol::Rea
         if best == 0
             break
         end
-        # orthogonalized once more, the residuals having been updated one vector at a time
+        # orthogonalized again: the residuals were updated one vector at a time
         v = copy(res[best])
         for b in basis
             v .-= dot(b, v) .* b
@@ -103,8 +96,8 @@ function interpolative(rows::Vector{Vector{T}}, scales::Vector{<:Real}, tol::Rea
         end
     end
     k = length(kept)
-    # the rows kept on the basis, triangular in the order they were taken: the coefficients of
-    # a row are its projections solved against it, not the projections themselves
+    # triangular in the order the rows were taken: the coefficients of a row are its
+    # projections solved against it, not the projections themselves
     r = [ dot(basis[a], rows[kept[b]]) for a in 1:k, b in 1:k ]
     knorms = [ norm(rows[i]) for i in kept ]
     t = zeros(T, n, k)
@@ -172,23 +165,19 @@ end
     direct_pass(R, terms, T, tol)
 
 the block of channels of the terms of several sites `terms`, each given by its coefficient and
-its factors in the order of their sites, as `(site, combination of atoms)`. `R` is the
-representation of the operator and `T` the type of the coefficients.
+its factors in the order of their sites, as `(site, combination of atoms)`, `R` being the
+representation and `T` the type of the coefficients.
 
-It is built from left to right in a single pass. On each site, the rows are the channels of the
-link on the left continued by the identity or by an atom of the site, and the terms beginning
-there; the columns are what remains of the terms on the right of the site, their suffixes. The
-rows `interpolative` keeps are the channels of the link on the right, and the coefficients of
-all the rows are the pieces of the site. A term thus opens on its first site and closes on its
-last, and the channels are independent on their left: their number is the rank of the coupling
-of the terms crossing the link whenever the suffixes are independent operators, which
-`right_sweep` sees to otherwise.
+Built from left to right: on each site, the channels on the left continued by the identity or
+an atom, and the terms beginning there, are rows over the suffixes of the terms; the rows
+`interpolative` keeps are the channels on the right, and the coefficients of all the rows the
+pieces of the site. A term opens on its first site and closes on its last, and the channels
+are independent on their left, leaving `right_sweep` to reduce dependent suffixes.
 """
 function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
     id = IdentityOp{R, Generic, 1}()
-    # the suffixes of the terms, each a node (site, factor, rest) of a tree the terms share, the
-    # factors divided by their first coefficient so that proportional ones are one; and the
-    # terms by their first site
+    # the suffixes of the terms, nodes (site, factor, rest) of a tree the terms share, the
+    # factors divided by their first coefficient so that proportional ones are one
     F = Vector{Pair{Op, T}}
     nodes = Tuple{Int, F, Int}[]
     node_ids = Dict{Tuple{Int, F, Int}, Int}()
@@ -249,9 +238,9 @@ function direct_pass(::Type{R}, terms, ::Type{T}, tol::Real) where {R, T}
         # the channels continued first, in order, then the terms beginning here
         rowkeys = sort!(collect(keys(rows)); by = x -> (x[1] == 0 ? m + 1 : x[1], x[2]))
         newcols, grows = dense_rows([ rows[key] for key in rowkeys ])
-        # a row continuing a channel is measured against all that the channel holds, so that
-        # a remainder of rounding is not taken for a channel of its own. The pieces of the site
-        # are only the closings yet, one per channel
+        # a row continuing a channel is measured against all the channel holds, so that a
+        # remainder of rounding is not taken for a channel of its own; the pieces of the site
+        # hold only the closings yet
         content = zeros(real(T), m)
         for ((r, _), comb) in pieces[j], (_, x) in sort!(collect(comb); by = first)
             content[r] += abs2(x)
@@ -324,9 +313,8 @@ end
     left_sweep!(b, tol)
 
 reduce the block `b`, from left to right, to channels whose left operators are independent,
-and return it: on each link, a channel is a combination of the pieces entering it, and one
-that is a combination of the others is merged into them, its pieces on the next site carried
-over with the coefficients of the combination
+and return it, a channel that is a combination of the others being merged into them on the
+next site
 """
 function left_sweep!(b::ComBlock{T}, tol::Real) where T
     for j in 1:length(b.pieces) - 1
@@ -374,9 +362,8 @@ end
 """
     mirror(b)
 
-the block `b` read from right to left: its sites in the reverse order, the piece `(l, r)` of a
-site becoming `(r, l)`. Mirroring twice gives `b` back, `start` being kept, which `left_sweep!`
-does not read.
+the block `b` read from right to left, the piece `(l, r)` of a site becoming `(r, l)`. `start`
+is kept, which `left_sweep!` does not read, so that mirroring twice gives `b` back.
 """
 mirror(b::ComBlock{T}) where T =
     ComBlock{T}(b.start, reverse(b.dims), [ SitePieces{T}((r, l) => c for ((l, r), c) in p) for p in reverse(b.pieces) ])
@@ -384,10 +371,9 @@ mirror(b::ComBlock{T}) where T =
 """
     right_sweep(b, tol)
 
-the block `b` reduced, from right to left, to channels whose right operators are independent:
-`left_sweep!` on its mirror, where a channel is a combination of the pieces leaving it. After
-`left_sweep!`, or after `direct_pass`, whose channels are already independent on their left,
-the channels of each link are as few as the rank of the coupling across it allows.
+the block `b` reduced, from right to left, to channels whose right operators are independent,
+by `left_sweep!` on its mirror. After `left_sweep!` or `direct_pass`, the channels of each
+link are then as few as the rank of the coupling across it.
 """
 right_sweep(b::ComBlock, tol::Real) = mirror(left_sweep!(mirror(b), tol))
 
@@ -399,7 +385,6 @@ piece whose coefficients all vanish being left out
 """
 function coms_of(::Type{R}, b::ComBlock) where R
     coms = ComOp{R}[]
-    # the links without channels cut the block into its coms
     cuts = [ 0; findall(iszero, b.dims); length(b.pieces) ]
     for (c, d) in zip(cuts, cuts[2:end])
         if d - c < 2
@@ -428,13 +413,9 @@ end
 
 the atoms of one site `atoms` written on a basis of them, compared through their matrices on
 `site`: a dictionary from each atom to its coefficient on the identity, its combination of the
-atoms kept, and the norm of its matrix.
-
-The part of each matrix along the identity, its trace over that of the identity, is taken out
-first, and `interpolative` keeps the atoms whose remainders are independent, each measured
-against its whole matrix. The atoms kept are then independent together with the identity, and
-an atom that is a number times the identity, as `S2` on a spin, or zero, as `Sp*Sp` on a spin
-1/2, keeps none of them.
+atoms kept, and the norm of its matrix. The part along the identity is taken out first, so
+that the atoms kept are independent together with the identity, and an atom that is a number
+times the identity, as `S2` on a spin, or zero keeps none of them.
 """
 function atom_basis(atoms::Vector{Op}, site::AbstractSite, tol::Real)
     ms = [ matrix(a, site) for a in atoms ]
@@ -458,9 +439,8 @@ end
 """
     on_basis(comb, basis, id, tol)
 
-the combination of atoms `comb` written on the atoms `basis` keeps and on the identity `id`. A
-coefficient whose part is under `tol` times that of the whole combination is dropped, as
-`interpolative` drops one, so that what cancels up to rounding leaves nothing.
+the combination of atoms `comb` written on the atoms `basis` keeps and on the identity `id`, a
+coefficient whose part is under `tol` times the whole combination being dropped
 """
 function on_basis(comb::Dict{Op, T}, basis, id::Op, tol::Real) where T
     out = Dict{Op, T}()
@@ -481,10 +461,9 @@ end
     push_identities!(b, id)
 
 take the identity `id` out of the openings of the block `b`, from left to right, and return the
-terms of one site this leaves, a combination for each site of `b`. A term opened by the
-identity on a site begins in fact on the next one: `α` times the identity opening channel `r`
-becomes `α` times each piece leaving `r` on the next site, an opening there, which may hold the
-identity in turn, or a term of one site when the piece closes.
+terms of one site this leaves, a combination for each site of `b`: `α` times the identity
+opening channel `r` becomes `α` times each piece leaving `r` on the next site, an opening
+there, which may hold the identity in turn, or a term of one site when the piece closes.
 """
 function push_identities!(b::ComBlock{T}, id::Op) where T
     singles = [ Dict{Op, T}() for _ in b.pieces ]
@@ -508,18 +487,14 @@ end
     reduce_on_sites(R, a, c, system)
 
 the com `a` times `c` as a block of channels on `system`, as few as its operators allow there,
-and the terms of one site this leaves, a combination of atoms for each site of the block. It is
-how `PreMPO` lays a com.
+and the terms of one site this leaves, a combination of atoms for each site of the block, as
+`PreMPO` lays a com.
 
-`compact` takes the atoms of a site as independent, `X*Y` and `Z` being two operators to it.
-Here they are compared through their matrices on the site, see `atom_basis`, every piece is
-written on a basis of them that the identity completes, and `push_identities!` takes the
-identity out of the openings and of the closings. On a qubit, `N(1)*N(3) + Z(1)*Z(3)` has `N`
-written `(1 - Z) / 2` and keeps `5/4 * Z(1)*Z(3)` as its part of several sites, the rest going
-to the terms of one site and to the constant. The sweeps then reduce what the relations made
-dependent. On each link the channels are as few as the rank of the operator across it, once
-its parts that are the identity on either side are taken out, which no triangular MPO goes
-below.
+Unlike `compact`, it compares the atoms through their matrices on the site, see `atom_basis`,
+writes every piece on a basis of them completed by the identity, and takes the identity out of
+the openings and the closings, see `push_identities!`: on a qubit, `N(1)*N(3) + Z(1)*Z(3)`
+keeps `5/4 * Z(1)*Z(3)` as its part of several sites. The sweeps then reduce what these
+relations made dependent.
 """
 function reduce_on_sites(::Type{R}, a::ComOp{R}, c::Number, sys::System) where R
     id = IdentityOp{R, Generic, 1}()
@@ -555,8 +530,7 @@ holds_identity(f) = f isa AtIndex && any(x -> first(x) isa IdentityOp, linearize
 
 the simplified operator `s` with each term of several sites that has a factor holding the
 identity written out, that factor replaced by the sum of its atoms on its site: `(Id + Z)(1) *
-Z(2)`, which a merge of two factors of one site gives, becomes `Z(2) + Z(1) * Z(2)`. A term of
-several sites is laid on the sites it acts on, which a part of it acting on fewer would not be.
+Z(2)` becomes `Z(2) + Z(1) * Z(2)`, so that each part is laid only on the sites it acts on
 """
 function expand_identities(s::IndexedOp)
     return simplify_sum(map(sumsubs(s)) do t
@@ -575,9 +549,7 @@ end
     compact_simplified(s, tol, what)
 
 `compact` of the operator `s`, simplified and with its Jordan-Wigner strings spelled out by
-`removeMulti` already, `what` naming the caller in the refusal of a factor of several sites.
-`PreMPO` and `make_obs` simplify the operator themselves, the one to keep its own messages,
-the other to find the kind of the operator on that same simplification.
+`removeMulti` already, `what` naming the caller in the refusal of a factor of several sites
 """
 function compact_simplified(s::IndexedOp{R}, tol::Real, what::String) where R
     s = expand_identities(s)
@@ -617,33 +589,24 @@ end
 """
     compact(op; tol = rounding_tol)
 
-`op` written so that its MPO has the smallest bond dimension: its terms of one site and its
-constant as they are, and its terms of several sites gathered into coms, blocks of channels
-in which the terms share what they have in common, printed `com(sites,linkdims)`. `make_mpo`,
-`PreMPO`, `tdvp`, `dmrg`, `approx_W`, `measure` and `expect` take the result as they take
-`op`, and all but `expect` compact an operator themselves: calling `compact` saves doing it
-again at each call, and speeds up `expect`, which measures an operator as it is given. An array
-of operators is compacted element by element, which is how a time dependent evolver is
-compacted, each term keeping its time function.
+`op` written so that its MPO has the smallest bond dimension, its terms of several sites
+gathered into coms, blocks of channels in which they share what they have in common, printed
+`com(sites,linkdims)`. An array of operators, as a time dependent evolver, is compacted
+element by element.
 
-`op` is simplified first, and the atoms of its factors, the operators of one site they sum,
-are taken as independent: `compact` does not know that `X*Y` is `im * Z` on a qubit, nor that
-`N` is `(1 - Z) / 2`. `PreMPO` does: when it lays a com, it compares them through their
-matrices on the sites of the system. The bond dimension of the MPO on each link is then 2 plus
-the rank of the operator across it, once its parts that are the identity on either side are
-taken out. In `N(1)*N(3) + Z(1)*Z(3)`, `N` is then written `(1 - Z) / 2`, which moves part of
-the operator to terms of one site and to the constant: the operator is the same, its
-approximations WI and WII are not.
+`make_mpo`, `PreMPO`, `tdvp`, `dmrg`, `approx_W`, `measure` and `expect` take the result as
+they take `op`, and all but `expect` compact an operator themselves: calling `compact` once
+saves doing it at each call, and speeds up `expect`. The operators of a site are taken as
+independent, `X*Y` and `im * Z` on a qubit for instance, which `PreMPO` then relates through
+their matrices on the system.
 
-`tol` decides what counts as zero: a channel whose part is below `tol` times all it holds is
-dropped, and so is a term below `tol` times itself. The default, `rounding_tol`, drops only
-what the package takes as rounding, and the operator stays exact; a larger value gives an
-approximation of it, which is not the best one of its size.
+- `tol`: the relative size below which a channel or a term is dropped (default
+  `rounding_tol`, which keeps the operator exact); a larger value gives an approximation, not
+  the best one of its size
 
-A com can be added to other operators, multiplied by a number, measured and lifted to a
-mixed representation, but neither multiplied by another operator nor made a gate: take the
-product or the gate first, and compact it, as in `compact(Gate(A)(1, 2))`. `compact(op) ≈ op`
-compares the two, term by term.
+A com can be added, multiplied by a number, measured and lifted to a mixed representation,
+but neither multiplied by another operator nor made a gate: compact the product or the gate,
+as in `compact(Gate(A)(1, 2))`. `compact(op) ≈ op` compares the two.
 
 # Examples
 
@@ -674,8 +637,7 @@ const AtomProduct = Vector{Tuple{Tuple, Op}}
     com_expansion(a)
 
 the terms of the com `a` as products of atoms, a dictionary from each product to its
-coefficient. Coefficients meant to cancel may leave products with a coefficient of the order of
-rounding: the expansion is `a` to that precision, not to the bit.
+coefficient, exact up to rounding: coefficients meant to cancel may leave tiny products
 """
 function com_expansion(a::ComOp)
     T = coef_type(com_coefs(a))
@@ -701,9 +663,8 @@ end
 """
     monomials(op)
 
-the operator placed on sites `op` as the dictionary of its products of atoms to their
-coefficients: its terms once simplified, with a product of combinations of atoms expanded into
-products of atoms and a com into its terms, see `com_expansion`.
+the operator placed on sites `op`, simplified, as the dictionary of its products of atoms to
+their coefficients, a com expanded by `com_expansion`
 """
 function monomials(op::IndexedOp)
     d = Dict{AtomProduct, Number}()
@@ -728,12 +689,12 @@ end
 
 """
     a ≈ b
+    isapprox(a, b; atol = 0, rtol)
 
-for two operators placed on sites, whether their terms are equal up to the tolerances `atol`
-and `rtol`, as `isapprox` compares two vectors, `rtol` defaulting to zero when `atol` is
-given: both are simplified and written as sums of products of atoms, see `monomials`, those of
-a com included. The comparison is symbolic, as `==` is: `X(1) ≈ (Sp + Sm)(1)` is false, on a
-qubit as well.
+whether the operators placed on sites `a` and `b`, simplified and their coms expanded, have
+equal terms up to `atol` and `rtol`, as `isapprox` compares two vectors, `rtol` defaulting to
+zero when `atol` is given. The comparison is symbolic, as `==` is: `X(1) ≈ (Sp + Sm)(1)` is
+false, on a qubit as well.
 """
 function isapprox(a::IndexedOp{R}, b::IndexedOp{R};
                   atol::Real = 0, rtol::Real = atol > 0 ? 0 : sqrt(eps(Float64))) where R
