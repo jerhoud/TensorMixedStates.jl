@@ -531,6 +531,16 @@ We can also measure properties of the state as a whole, with state functions suc
 `Trace`, `Purity`, `EntanglementEntropy(cut)` or `Fidelity(ref)`: the
 [Measurements](measurements.md) page has the table of them all.
 
+A few sites can be looked at together: `reduced_density_matrix(state, positions)` gives their
+density matrix, from which `vonneumann_entropy` gives their entropy and `log_negativity` the
+entanglement between two parts of them, which on a mixed state the entropy no longer tells.
+Both are ``\log 2`` for one qubit of a Bell pair:
+
+```@example manual
+mybell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
+vonneumann_entropy(mybell, [1]), log_negativity(mybell, [1], [2])
+```
+
 We can also ask for several measurements at the same time
 
 ```@example manual
