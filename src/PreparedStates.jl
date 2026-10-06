@@ -385,7 +385,7 @@ function dimer_state(system::System, pairs::AbstractVector{Tuple{Int, Int}}, a, 
     gates = map(pairs) do (i, j)
         va, vb = local_vector(system[i], a), local_vector(system[i], b)
         wa, wb = local_vector(system[j], a), local_vector(system[j], b)
-        if abs(va' * vb) > 1e-12 || abs(wa' * wb) > 1e-12
+        if norm([va vb]' * [va vb] - I) > 1e-12 || norm([wa wb]' * [wa wb] - I) > 1e-12
             error("a singlet of $a and $b needs them orthonormal")
         end
         # |ab⟩ to the singlet, |ba⟩ to the triplet of no charge, the identity elsewhere

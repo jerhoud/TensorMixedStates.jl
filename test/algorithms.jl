@@ -291,6 +291,8 @@ end
                                                         others = "Up")
     @test_throws "site 3 is in no pair" dimer_state(System(3, Qubit()), [(1, 2)], "Up", "Dn")
     @test_throws "needs them orthonormal" dimer_state(System(2, Qubit()), [(1, 2)], "Up", "+")
+    @test_throws "needs them orthonormal" dimer_state(System(2, Qubit()), [(1, 2)], [2., 0.],
+                                                      [0., 1.])
 end
 
 @testset "AKLT states" begin
