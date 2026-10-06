@@ -675,6 +675,28 @@ end
                                                         State{Mixed}(strong_sys, "Up"))
 end
 
+@testset "Relaxation" begin
+    # the reset of SetState with probability p, towards a state, n times the same state or a
+    # state per site, and its generator, whose evolution for a time t is the channel of
+    # probability 1 - exp(-γt)
+    p, γ, t = 0.4, 0.7, 0.5
+    q = mix(RandomState{Pure}(System(3, Qubit()), 4))
+    applied(g) = apply(g, q)
+    @test norm(applied(relaxing_gate(p, "Up")(2)) -
+               applied(((1 - p) * Gate(Id) + p * SetState("Up"))(2))) < 1e-12
+    each = (1 - p) * Gate(Id ⊗ Id) + p * (SetState("Up") ⊗ SetState("Dn"))
+    @test norm(applied(relaxing_gate(p, ["Up", "Dn"])(1, 3)) - applied(each(1, 3))) < 1e-12
+    by_number = applied(relaxing_gate(p, 2, 0)(1, 3))
+    @test norm(by_number - applied(relaxing_gate(p, ["Up", "Up"])(1, 3))) < 1e-12
+    # a vector of numbers is the amplitudes of a single state, as for State
+    by_vector = applied(relaxing_gate(p, [0., 1.])(2))
+    @test norm(by_vector - applied(relaxing_gate(p, "Dn")(2))) < 1e-12
+    evolved = tdvp(relaxing_dissipator(γ, "Up")(2), t, q; nsteps = 20,
+                   limits = Limits(maxdim = 64))
+    @test norm(evolved - applied(relaxing_gate(1 - exp(-γ * t), "Up")(2))) < 1e-10
+    @test depolarizing_gate(p, 2) == relaxing_gate(p, 2, "FullyMixed")
+end
+
 @testset "Dephasing" begin
     # Dephase(A) erases the coherences between the eigenspaces of A and keeps those within one;
     # its generator damps them all at one rate, where Dissipator(A) depends on the eigenvalues

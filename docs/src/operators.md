@@ -59,8 +59,10 @@ Noisy gates can be defined using the `Gate` constructor, for example
 noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
 ```
 
-The depolarizing channel of sites of any type is [`depolarizing_gate`](@ref), and its Lindblad
-generator, for an evolver, [`depolarizing_dissipator`](@ref). The dephasing channel and its
+The relaxation of sites of any type towards a state is the channel [`relaxing_gate`](@ref), and
+its Lindblad generator, for an evolver, [`relaxing_dissipator`](@ref); towards the fully mixed
+state, it is the depolarization, [`depolarizing_gate`](@ref) and
+[`depolarizing_dissipator`](@ref). The dephasing channel and its
 generator are [`dephasing_gate`](@ref) and [`dephasing_dissipator`](@ref), built on
 [`Dephase`](@ref).
 
@@ -93,6 +95,8 @@ Dissipator
 Gate
 SetState
 Dephase
+relaxing_gate
+relaxing_dissipator
 depolarizing_gate
 depolarizing_dissipator
 dephasing_gate

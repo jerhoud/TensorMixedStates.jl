@@ -23,8 +23,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `a ≈ b` for two operators placed on sites.
 - `⊗` of superoperators, for channels of several sites, as
   `SetState("FullyMixed") ⊗ SetState("FullyMixed")`.
-- `depolarizing_gate(p, n)` and `depolarizing_dissipator(γ, n)`, the depolarizing channel of
-  `n` sites of any type and its Lindblad generator.
+- `relaxing_gate(p, n, state)` and `relaxing_dissipator(γ, n, state)`, the relaxation of `n`
+  sites of any type towards `state`, or towards a state per site, and its Lindblad generator,
+  and `depolarizing_gate(p, n)` and `depolarizing_dissipator(γ, n)`, towards `"FullyMixed"`.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.
 - `Dephase(A)`, the measurement of `A` whose result is not read, and `dephasing_gate(p, A)` and
   `dephasing_dissipator(γ, A)`, the dephasing channel in the eigenbasis of `A`, or in the basis
