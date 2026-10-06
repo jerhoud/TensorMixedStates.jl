@@ -7,8 +7,8 @@ export Simulation, get_sim_file, close_sim_files, data_to_frame
     data_to_frame(data)
 
 a `DataFrame` of the values gathered in a `Data` destination, `sim.data[name]`: a `time`
-column and a column for each measurement, in the order of their names, with a row for each
-call of `output`, in the order of the calls. The `DataFrames` package must be loaded.
+column and a column per measurement, in the order of their names, and a row per call of
+`output`, in the order of the calls. The `DataFrames` package must be loaded.
 
 # Examples
 
@@ -18,8 +18,7 @@ call of `output`, in the order of the calls. The `DataFrames` package must be lo
 """
 function data_to_frame end
 
-# data_to_frame lives in the extension DataFramesExt, loaded with DataFrames: without it, a call
-# is a MethodError, which says so
+# data_to_frame lives in DataFramesExt: without DataFrames, its MethodError says so
 function __init__()
     Base.Experimental.register_error_hint(MethodError) do io, e, _, _
         if e.f === data_to_frame && isnothing(Base.get_extension(@__MODULE__, :DataFramesExt))
@@ -31,16 +30,15 @@ end
 """
     default_time_format
 
-the C like format simulation times are written in by default. `Simulation` and `SimData` both
-default to it and to `default_data_format`, and have to agree: a `Simulation` built by
-`runTMS` is given the formats of the `SimData`, one built directly falls back to these.
+the C like format simulation times are written in by default, on which `Simulation` and
+`SimData` have to agree, as on `default_data_format`
 """
 const default_time_format = "%8.4g"
 
 """
     default_data_format
 
-the C like format measured values are written in by default, see `default_time_format`.
+the C like format measured values are written in by default, see `default_time_format`
 """
 const default_data_format = "%14.8g"
 
@@ -50,26 +48,22 @@ const default_data_format = "%14.8g"
 
 a state with its simulation time and the destinations of its measurements, which `runTMS`
 returns. The first form builds one, `output` being a stream every destination is redirected
-to, as for `runTMS`. The second gives `sim` another state, and possibly another time.
+to, as for `runTMS`. The second gives `sim` another state, and possibly another time, sharing
+its destinations and its checkpoint.
 
-`length`, `maxlinkdim`, `truncate`, `mix`, `weaken`, `apply`, `partial_trace`, `PreMPO`,
-`tdvp`, `approx_W`, `dmrg`, `steady_state` and `set_threading` take a `Simulation` as they take
-a `State`. The measurement functions do not: measure a simulation with `output`, or its state
-with `measure(sim.state, measurements, sim.time)`.
+A `Simulation` is immutable: the functions acting on it return a new one. `length`,
+`maxlinkdim`, `truncate`, `mix`, `weaken`, `apply`, `partial_trace`, `PreMPO`, `tdvp`,
+`approx_W`, `dmrg`, `steady_state`, `thermal_state` and `set_threading` take a `Simulation`
+as they take a `State`. The measurement functions do not: measure a simulation with `output`,
+or its state with `measure(sim.state, measurements, sim.time)`.
 
 # Fields
 
 - `state`: the state of the system
 - `time`: the simulation time
 
-The other fields, the destinations of the measurements and the checkpointing machinery, are
-internal.
-
-`sim.data` is the dictionary of the `Data` destinations, see `Data`.
-
-A `Simulation` is immutable: the functions acting on it return a new one. The second form
-shares the destinations and the checkpoint of `sim` rather than copying them, so that the new
-simulation writes to the same destinations and advances the same checkpoint.
+The other fields are internal. `sim.data` is the dictionary of the `Data` destinations, see
+`Data`.
 
 # Examples
 
@@ -106,8 +100,7 @@ show(io::IO, s::Simulation) = print(io, "Simulation($(s.state), $(s.time), ...)"
     simulation_files
 
 the files `runTMS`, the log and the checkpoints write in the directory of a simulation, which
-no destination may be named after: a destination called `stop` would stop the simulation, and
-one called `checkpoint.json` would overwrite the checkpoint.
+no destination may be named after
 """
 const simulation_files = Set(["log", "stop", "error", "running", "stamp", "description",
     "prog.jl", "prog_args.json", basename(checkpoint_json("")), basename(checkpoint_json("")) * ".tmp",
@@ -116,8 +109,8 @@ const simulation_files = Set(["log", "stop", "error", "running", "stamp", "descr
 """
     check_destination(::Simulation, name)
 
-refuse a destination named after one of the `simulation_files`, in a simulation with a
-directory, the one `runTMS` writes in, which keeps its files for itself.
+refuse a destination named after one of the `simulation_files` in a simulation with a
+directory
 """
 function check_destination(sim::Simulation, name::AbstractString)
     if !isempty(sim.checkpoint.dir) && normpath(name) in simulation_files
@@ -131,8 +124,8 @@ check_destination(::Simulation, ::Destination) = nothing
 """
     save_state(filename, statename, ::Simulation)
 
-the state of the simulation saved as `save_state` saves a state, refused when `filename` names
-a file of the simulation directory, as its checkpoint, which it would overwrite.
+save the state of the simulation as `save_state` saves a state, refusing a `filename` that
+names a file of the simulation directory, as its checkpoint.
 
 # Examples
 
@@ -148,17 +141,13 @@ end
 
 the stream `output` writes to under this name, to write to it directly. `"stdout"` (or
 `"-"`), `"stderr"` and `""` give `stdout`, `stderr` and `devnull`, any other name the stream
-of a file of that name. When the output of the simulation is redirected, every name gives
-that stream. A name ending in `.json` and a `Data`, whose values `output` alone writes, are
-refused.
-
-In a simulation run by `runTMS` in its directory, the files `runTMS` writes there itself, the
-log, the checkpoint and the markers, cannot be asked for.
+of a file. When the output of the simulation is redirected, every name gives that stream. A
+name ending in `.json` and a `Data`, whose values `output` alone writes, are refused, as are
+the files `runTMS` writes itself in its directory, the log, the checkpoint and the markers.
 
 It is meant for a phase of your own, see `TensorMixedStates.run_phase`, to write what is not a
-measurement in a file of the simulation: that file is cut back on a resume as the others are,
-where one opened with `open` would get the lines written since the last checkpoint twice.
-Once `runTMS` has returned, the files of the simulation are closed.
+measurement: unlike a file opened with `open`, such a file is cut back on a resume as the
+others are. Once `runTMS` has returned, the files of the simulation are closed.
 
 # Examples
 
@@ -176,10 +165,9 @@ end
 """
     close_sim_files(::Simulation)
 
-write the json destinations and close the files opened for the simulation. The standard
-streams belong to the process and are left open. `runTMS` calls it when it ends; a
-`Simulation` built by hand calls it once its measurements are made, its json files being
-written only then.
+write the json destinations and close the files opened for the simulation, the standard
+streams being left open. `runTMS` calls it when it ends; a `Simulation` built by hand calls
+it once its measurements are made, its json files being written only then.
 
 # Examples
 
