@@ -22,10 +22,9 @@ end
 """
     site_matrix(u, idx)
 
-the matrix of the one site operator `u` on the site of index `idx`, rows on `idx'`. It is read
-through `dense`, which takes a delta or a block sparse tensor as any other: with the NDTensors
-of ITensors 0.7, `Array` fails on the delta of a charged site and `denseblocks` on a dense
-tensor.
+the matrix of the one site operator `u` on the site of index `idx`, rows on `idx'`, read
+through `dense`: `Array` fails on the delta of a charged site, and `denseblocks` on a dense
+tensor
 """
 site_matrix(u::ITensor, idx::Index) = Array(dense(u), idx', dag(idx))
 
@@ -33,8 +32,7 @@ site_matrix(u::ITensor, idx::Index) = Array(dense(u), idx', dag(idx))
     add_term!(pre, k, l, r, u, ref)
 
 add to site `k` of `pre` the piece `u`, going from channel `l` to channel `r` and taking the
-time function `ref`, with its matrix on the index of the site, read once here rather than at
-every MPO built from `pre`
+time function `ref`, with its matrix on the index of the site
 """
 add_term!(pre::PreMPO{R}, k::Int, l::Int, r::Int, u::ITensor, ref::Int) where R =
     push!(pre.terms[k], (l, r, u, ref, site_matrix(u, SysIndex{R}(pre.system, k))))
@@ -42,10 +40,9 @@ add_term!(pre::PreMPO{R}, k::Int, l::Int, r::Int, u::ITensor, ref::Int) where R 
 """
     check_coefs(pre, coefs)
 
-refuse `coefs` unless it holds one real value per time function of `pre`. A pure term lifted
+refuse `coefs` unless it holds one real value per time function of `pre`: a pure term lifted
 for a mixed state, ``A \\rho + \\rho A^\\dagger``, would need a complex value on one side and
-its conjugate on the other, so a complex function is written as its real and imaginary parts,
-each with its own term, on pure states as well, which keeps one interface for both.
+its conjugate on the other
 """
 function check_coefs(pre::PreMPO, coefs)
     if length(coefs) ≠ pre.nterms
@@ -63,8 +60,7 @@ end
     com_tensor(system, o, k)
 
 the tensor on site `k` of `system` of the piece `o` of a com, an operator of one site times a
-coefficient, built from its matrix as `tensor` builds that of a placed operator: placing it is
-not possible for the identity, which has no site once placed.
+coefficient, built without placing it, since a placed identity has no site
 """
 com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R =
     scalarcoef(o) * legs_on(scalararg(o), [sys[k]], [SysIndex{Pure}(sys, k)], [SysIndex{R}(sys, k)])
@@ -77,9 +73,8 @@ com_tensor(sys::System, o::GenericOp{R, 1}, k::Int) where R =
 
 add to `pre`, and return it, `coef` times the constant or the term of one site `term`, the
 com `com` times `coef`, or the terms of the simplified and compacted operator `op`, `ref`
-numbering their time function: the terms of several sites come gathered in coms, see
-`compact_simplified`, and a com takes as few channels as the operators of its sites allow, see
-`reduce_on_sites`. Each operator of the vector `ops` gets the time function of its position.
+numbering their time function, see `compact_simplified` and `reduce_on_sites`. Each operator
+of the vector `ops` gets the time function of its position.
 """
 function PreMPO!(pre::PreMPO{R}, coef::Number, a::IndexedOp{R}, ref::Int = 1) where R
     sys = pre.system
@@ -95,10 +90,8 @@ function PreMPO!(pre::PreMPO{R}, coef::Number, a::IndexedOp{R}, ref::Int = 1) wh
     end
     o = only(subs)
     u = tensor(sys, o)
-    # a term whose factor vanishes on its site, as C(1)*C(1) or Sp(1)*Sp(1) on a spin 1/2, is
-    # dropped here, where the sites are known: simplify cannot tell, one name standing for
-    # operators of different algebras on different sites. Kept, on a charged system its
-    # tensor would have no block, hence no flux
+    # a factor vanishing on its site, as Sp(1)*Sp(1) on a spin 1/2, which simplify cannot
+    # tell, is dropped: on a charged system its tensor would have no block, hence no flux
     if !iszero(u)
         add_term!(pre, only(o.index), 1, 1, coef * u, ref)
     end
@@ -165,17 +158,16 @@ adapt_representation(::Type{R}, a) where R = a
 """
     PreMPO(::State, op)
 
-the operator `op` preprocessed for the representation of the state, to be turned into an MPO
-by `make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp`, `approx_W`, `dmrg`
-or `steady_state` in place of the operator, which saves preprocessing it again: a phase of
-one's own evolving one step at a time prepares its evolver once. `op` may also be a vector of
-operators, the terms of a time dependent evolver, each multiplied by its own real time function.
-The terms of several sites are compacted, see `compact`, so that the bond dimension of the MPO
-is the least any triangular MPO of the operator can have.
+the operator `op` prepared for the representation of the state, to be turned into an MPO by
+`make_mpo`, `make_approx_W1` or `make_approx_W2`, or passed to `tdvp`, `approx_W`, `dmrg` or
+`steady_state` in place of the operator, to prepare it once for several calls. `op` may also
+be a vector of operators, the terms of a time dependent evolver, each multiplied by its own
+real time function. The terms of several sites are compacted, see `compact`, so that the bond
+dimension of the MPO is the least any triangular MPO of the operator can have.
 
-A pure operator ``A`` given for a mixed state is lifted with `Evolver` to
-``\\rho \\mapsto A \\rho + \\rho A^\\dagger``: the hamiltonian part of an evolver must already be
-written `-im * H`.
+A pure operator ``A`` given for a mixed state becomes its `Evolver`,
+``\\rho \\mapsto A \\rho + \\rho A^\\dagger``: the Hamiltonian part of an evolver is written
+`-im * H`.
 
 # Examples
 
@@ -183,8 +175,7 @@ written `-im * H`.
     mpo = make_mpo(pre, [1., 0.5])
 """
 function PreMPO(state::State{R}, a) where R
-    # on the operator as it was written, so that the message names what the caller wrote
-    # and not what `simplify` made of it
+    # before `simplify`, so that a message names the operator as written
     check_indices(state.system, a)
     n = a isa Vector ? length(a) : 1
     s = removeMulti(simplify(adapt_representation(R, a)))
@@ -195,9 +186,8 @@ end
 """
     mpo_eltype(::PreMPO, coefs)
 
-the element type of the tensors of the MPO built from `pre` and `coefs`, `Float64` at least.
-Real matrices with real coefficients give a real MPO, whose contractions are cheaper. The
-approximations WI and WII promote it with the type of their time step.
+the element type of the tensors of the MPO built from `pre` and `coefs`, `Float64` at least,
+and real for real matrices and coefficients
 """
 mpo_eltype(pre::PreMPO, coefs) =
     promote_type(
@@ -209,8 +199,8 @@ mpo_eltype(pre::PreMPO, coefs) =
     charge_mismatch(system, a, b, shown)
 
 raise the error for an operator on `system` whose terms do not all carry the same charge, `a`
-and `b` being the charges of two of them, printed when `shown`, or those of two partial terms
-entering the same channel of a com, whose values would mean nothing to the reader.
+and `b` being the charges of two of them, printed when `shown`, or of two partial terms
+entering the same channel of a com
 """
 function charge_mismatch(sys::System, a::QN, b::QN, shown::Bool)
     st = strong_names(sys)
@@ -226,7 +216,7 @@ end
     channel_counts(pre)
 
 the number of channels the terms of `pre` take on each link, from the one on the left of the
-first site to the one on the right of the last, the term not yet begun included.
+first site to the one on the right of the last, the term not yet begun included
 """
 channel_counts(pre::PreMPO) = [ 1; pre.linkdims; 1 ]
 
@@ -234,13 +224,10 @@ channel_counts(pre::PreMPO) = [ 1; pre.linkdims; 1 ]
     mpo_charges(pre, coefs)
 
 the charge of every channel of every link of the MPO, `q[i + 1][k]` for channel `k` of the
-link on the right of site `i`.
-
-A channel stands for a term partly placed, the sites on its left having contributed their
-factors, and its charge is minus the sum of their fluxes. The first channel is the term not
-yet begun and has no charge; the last is the term finished and has minus the flux of the whole
-operator, which every term must share or the operator is refused. A channel of a com is
-entered by several pieces, which must agree. Terms whose time function is zero are left out.
+link on the right of site `i`: minus the sum of the fluxes of the factors on its left. The
+first channel, the term not yet begun, has no charge; the last, the term finished, has minus
+the flux of the operator, which every term must share, as must the pieces entering a channel
+of a com. Terms whose time function is zero are left out.
 """
 function mpo_charges(pre::PreMPO{R}, coefs) where R
     n = length(pre.system)
@@ -285,9 +272,7 @@ end
     w_charges(pre, coefs)
 
 the charges of the links of the approximations WI and WII, where one channel serves both the
-term not yet begun and the term finished. The two must then have the same charge, so the
-operator must have zero flux, as does any generator of an evolution keeping the state in its
-sector.
+term not yet begun and the term finished, so that the operator must have zero flux
 """
 function w_charges(pre::PreMPO, coefs)
     q = mpo_charges(pre, coefs)
@@ -302,11 +287,9 @@ end
 """
     mpo_links(pre, coefs, charges, extra)
 
-the links of the MPO of `pre`, from the one on the left of the first site to the one on the
-right of the last, each with `extra` channels besides those of `channel_counts`: one, for the
-term finished, in `make_mpo`, and none in WI and WII, where the term not yet begun serves as
-finished. On a charged system the channels carry the charges `charges(pre, coefs)` gives,
-`charges` being `mpo_charges` or `w_charges`; otherwise the links are plain indices.
+the links of the MPO of `pre`, each with `extra` channels besides those of `channel_counts`,
+one for the term finished in `make_mpo`, none in WI and WII. On a charged system the channels
+carry the charges `charges(pre, coefs)` gives, `mpo_charges` or `w_charges`.
 """
 function mpo_links(pre::PreMPO, coefs, charges, extra::Int)
     ds = channel_counts(pre) .+ extra
@@ -334,8 +317,7 @@ end
     site_array(elt, idx, llink, rlink)
 
 the array, zero, of the tensor of the site of index `idx` in an MPO of links `llink` and
-`rlink`, its axes those of `idx'`, `dag(idx)`, `llink` and `rlink`: filled block by block with
-`add_block!`, it is made a tensor at once by `site_tensor`
+`rlink`, its axes those of `idx'`, `dag(idx)`, `llink` and `rlink`, to fill with `add_block!`
 """
 site_array(elt::Type, idx::Index, llink::Index, rlink::Index) =
     zeros(elt, dim(idx), dim(idx), dim(llink), dim(rlink))
@@ -354,9 +336,8 @@ end
 """
     site_tensor(a, idx, llink, rlink)
 
-the tensor of the array `a` of `site_array`, made at once: writing the elements of a block
-sparse tensor one by one made most of the cost of an MPO. On a charged system only the blocks
-that are not zero are kept, and they must all have the flux the charges of the links give.
+the tensor of the array `a` of `site_array`; on a charged system only the blocks that are not
+zero are kept, and they must all have the flux the charges of the links give
 """
 site_tensor(a::Array{<:Number, 4}, idx::Index, llink::Index, rlink::Index) =
     ITensor(a, idx', dag(idx), dag(llink), rlink)
@@ -365,13 +346,12 @@ site_tensor(a::Array{<:Number, 4}, idx::Index, llink::Index, rlink::Index) =
     make_mpo(::PreMPO[, coefs])
     make_mpo(::State, op)
 
-the MPO of an operator, in the representation of the state. For a time dependent evolver,
-`coefs` holds the value of each time function, one real number per term; it defaults to
-`[1.]`, a single operator. The form taking a `State` builds the MPO of a single operator: that of a vector of
-terms is built from its `PreMPO`, with its `coefs`.
+the MPO of the operator `op` in the representation of the state, given with the state or as
+`PreMPO(state, op)`. For a time dependent evolver, built from its `PreMPO`, `coefs` holds the
+value of each time function, one real number per term (default `[1.]`, a single operator).
 
 A pure operator ``A`` given for a mixed state becomes its `Evolver`,
-``\\rho \\mapsto A \\rho + \\rho A^\\dagger``, see `PreMPO`, and not the gate
+``\\rho \\mapsto A \\rho + \\rho A^\\dagger``, not the gate
 ``\\rho \\mapsto A \\rho A^\\dagger`` that `apply` makes of it.
 
 # Examples
@@ -383,8 +363,6 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
     sys = pre.system
     elt = mpo_eltype(pre, coefs)
     dims = channel_counts(pre)
-    # the links of a charged MPO carry the charge each channel has accumulated, without which
-    # the tensor of a site would hold several fluxes
     links = mpo_links(pre, coefs, mpo_charges, 1)
     ts = map(1:length(sys)) do i
         idx = SysIndex{R}(sys, i)
@@ -397,7 +375,7 @@ function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
             c = coefs[ref]
             if c ≠ 0
                 # the coefficient of a term goes on its closing piece alone, the only one
-                # with r == 1: laid on every piece, a term of k sites took it to the power k
+                # with r == 1
                 if r == 1
                     add_block!(a, l, 1 + dims[i+1], m, c)
                 else
@@ -416,9 +394,9 @@ make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
     make_approx_W1(::PreMPO, tau[, coefs])
     make_approx_W1(::State, op, tau)
 
-the MPO of the approximation WI of the exponential of `tau` times the operator, `coefs` being
-as for `make_mpo`, and the form taking a `State` being for a single operator as well. On a
-charged system the operator must have zero flux.
+the MPO of the approximation WI of the exponential of `tau` times the operator `op`, given
+with the state or as `PreMPO(state, op)`, `coefs` being as for `make_mpo`. On a charged
+system the operator must have zero flux.
 """
 function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)
@@ -433,8 +411,7 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         for (l, r, _, ref, m) in pre.terms[i]
             c = coefs[ref]
             if c ≠ 0
-                # the coefficient and the time step go on the closing piece of a term alone,
-                # as in make_mpo
+                # the coefficient and the time step on the closing piece alone, as in make_mpo
                 add_block!(a, l, r, m, r == 1 ? c * tau : one(c))
             end
         end
@@ -469,14 +446,10 @@ end
     make_approx_W2(::PreMPO, tau[, coefs])
     make_approx_W2(::State, op, tau)
 
-the MPO of the approximation WII of the exponential of `tau` times the operator, `coefs` being
-as for `make_mpo`, and the form taking a `State` being for a single operator as well. On a
-charged system the operator must have zero flux.
-
-It is the WII of Zaletel et al., Phys. Rev. B 91, 165112 (2015). It keeps every product of
-terms of which no two cross the same link, the terms of one site included, wherever a term of
-several sites goes through their site; its error, of order ``\\tau^2``, comes from the terms
-that cross a same link.
+the MPO of the approximation WII of Zaletel et al., Phys. Rev. B 91, 165112 (2015), of the
+exponential of `tau` times the operator `op`, given with the state or as `PreMPO(state, op)`,
+`coefs` being as for `make_mpo`. On a charged system the operator must have zero flux. Its
+error, of order ``\\tau^2``, comes from the products of terms that cross a same link.
 """
 function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
     check_coefs(pre, coefs)
@@ -493,17 +466,15 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
         for (l, r, _, ref, u) in pre.terms[i]
             c = coefs[ref]
             if c ≠ 0
-                # the coefficient and the time step go on the closing piece of a term alone,
-                # as in make_mpo
-                m = (r == 1 ? c * tau : one(c)) * u
+                # the coefficient and the time step on the closing piece alone, as in make_mpo
+                m =(r == 1 ? c * tau : one(c)) * u
                 v[l, r] = isnothing(v[l, r]) ? m : v[l, r] + m
             end
         end
         # their equation 11: each block is read in the exponential of the terms of one site D,
         # the transport A from channel l to channel r, the closing B of l and the opening C of
-        # r, each taken once at most, which puts exp(D) around every piece and takes a closing
-        # and an opening on the same site in both orders. Computed on dense matrices, whose
-        # zeros outside the flux of a block stay exact zeros
+        # r, each taken once at most. On dense matrices, whose zeros outside the flux of a
+        # block stay exact zeros
         d = something(v[1, 1], zeros(elt, k, k))
         closing = v[:, 1]
         opening = v[1, :]
