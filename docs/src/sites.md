@@ -35,6 +35,10 @@ Swap
 controlled
 graph_state
 create_graph_state
+amplitude_damping_gate
+amplitude_damping_dissipator
+thermal_relaxation_gate
+thermal_relaxation_dissipator
 ```
 
 ## Spins

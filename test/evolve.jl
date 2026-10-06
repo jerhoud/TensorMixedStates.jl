@@ -697,6 +697,31 @@ end
     @test depolarizing_gate(p, 2) == relaxing_gate(p, 2, "FullyMixed")
 end
 
+@testset "Qubit decay and relaxation" begin
+    # the decay goes from "Dn", the excitation N counts, to "Up", the coherences keeping
+    # sqrt(1 - p); the relaxation of times T1 and T2 is that decay and a dephasing, which
+    # commute, so that the generator for a time t gives the product of their channels
+    p = 0.3
+    ψ = State{Pure}(System(2, Qubit()), [[0.6, 0.8], "Up"])
+    decayed = apply(amplitude_damping_gate(p)(1), mix(ψ))
+    @test trace(decayed) ≈ 1
+    @test expect(decayed, N(1)) ≈ 0.64 * (1 - p)
+    @test expect(decayed, X(1)) ≈ 2 * 0.48 * sqrt(1 - p)
+    γ, t = 0.7, 0.5
+    by_rate = tdvp(amplitude_damping_dissipator(γ)(1), t, mix(ψ); nsteps = 20,
+                   limits = Limits(maxdim = 16))
+    @test norm(by_rate - apply(amplitude_damping_gate(1 - exp(-γ * t))(1), mix(ψ))) < 1e-10
+    T1, T2 = 2., 1.5
+    relaxed = tdvp(thermal_relaxation_dissipator(T1, T2)(1), t, mix(ψ); nsteps = 20,
+                   limits = Limits(maxdim = 16))
+    @test norm(relaxed - apply(thermal_relaxation_gate(T1, T2, t)(1), mix(ψ))) < 1e-10
+    @test expect(relaxed, N(1)) ≈ 0.64 * exp(-t / T1)
+    @test expect(relaxed, X(1)) ≈ 2 * 0.48 * exp(-t / T2)
+    @test_throws "no relaxation reaches" thermal_relaxation_gate(1., 3., t)
+    @test_throws "must be positive" thermal_relaxation_dissipator(0., 1.)
+    @test_throws "between 0 and 1" amplitude_damping_gate(1.5)
+end
+
 @testset "Dephasing" begin
     # Dephase(A) erases the coherences between the eigenspaces of A and keeps those within one;
     # its generator damps them all at one rate, where Dissipator(A) depends on the eigenvalues

@@ -180,4 +180,88 @@ create_graph_state(g::Vector{Tuple{Int, Int}}; kwargs...) =
         )
     ]
 
-@create_site_module(Qubits, [Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm, H, S, T, Swap, Phase])
+"""
+    amplitude_damping_dissipator(γ)
+
+the Lindblad generator of the decay of a qubit at rate `γ`, from `"Dn"`, ``|1\\rangle``, the
+excitation `N` counts, to `"Up"`, ``|0\\rangle``, for an evolver: `γ * Dissipator(Sp)`.
+Evolving under it for a time `t` is `amplitude_damping_gate(1 - exp(-γt))`.
+
+# Examples
+
+    evolver = -im * H + sum(amplitude_damping_dissipator(0.1)(i) for i in 1:10)
+"""
+amplitude_damping_dissipator(γ::Real) = γ * Dissipator(Sp)
+
+"""
+    amplitude_damping_gate(p)
+
+the channel of the decay of a qubit with probability `p`, from `"Dn"` to `"Up"`, for a gate:
+its Kraus operators are `Id - (1 - sqrt(1 - p)) * N` and `sqrt(p) * Sp`, the coherences
+keeping a factor ``\\sqrt{1 - p}``.
+
+# Examples
+
+    Gates(gates = prod(amplitude_damping_gate(0.01)(i) for i in 1:10))
+"""
+function amplitude_damping_gate(p::Real)
+    if !(0 ≤ p ≤ 1)
+        error("amplitude_damping_gate takes a probability between 0 and 1, not $p")
+    end
+    return Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(Sp)
+end
+
+"""
+    thermal_relaxation_check(T1, T2)
+
+refuse times `T1` and `T2` that are not positive, or a `T2` above `2T1`, which would ask for a
+negative rate of dephasing
+"""
+function thermal_relaxation_check(T1::Real, T2::Real)
+    if !(T1 > 0 && T2 > 0)
+        error("the times T1 = $T1 and T2 = $T2 of a thermal relaxation must be positive")
+    elseif T2 > 2T1
+        error("T2 = $T2 is above 2T1 = $(2T1), which no relaxation reaches: the decay alone " *
+              "takes the coherences in a time 2T1")
+    end
+end
+
+"""
+    thermal_relaxation_dissipator(T1, T2)
+
+the Lindblad generator of the relaxation of a qubit of times `T1` and `T2`, for an evolver: its
+decay to `"Up"`, of time `T1`, and the dephasing that brings the decay of its coherences to
+the time `T2`,
+`amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1))`. `T2` cannot
+exceed `2T1`. Evolving under it for a time `t` is `thermal_relaxation_gate(T1, T2, t)`.
+
+# Examples
+
+    evolver = -im * H + sum(thermal_relaxation_dissipator(50., 30.)(i) for i in 1:10)
+"""
+function thermal_relaxation_dissipator(T1::Real, T2::Real)
+    thermal_relaxation_check(T1, T2)
+    return amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1))
+end
+
+"""
+    thermal_relaxation_gate(T1, T2, t)
+
+the channel of the relaxation of a qubit of times `T1` and `T2` over a time `t`, for a gate:
+the population of `"Dn"` decays by ``e^{-t/T_1}`` and the coherences by ``e^{-t/T_2}``, the
+product of `amplitude_damping_gate` and `dephasing_gate`. `T2` cannot exceed `2T1`.
+
+# Examples
+
+    Gates(gates = prod(thermal_relaxation_gate(50., 30., 0.1)(i) for i in 1:10))
+"""
+function thermal_relaxation_gate(T1::Real, T2::Real, t::Real)
+    thermal_relaxation_check(T1, T2)
+    dephasing = dephasing_gate(1 - exp(-t * (1 / T2 - 1 / (2T1))))
+    return dephasing * amplitude_damping_gate(1 - exp(-t / T1))
+end
+
+@create_site_module(Qubits, [Qubit, controlled, graph_state, create_graph_state, X, Y, Z, Sx,
+                             Sy, Sz, S2, N, Sp, Sm, H, S, T, Swap, Phase,
+                             amplitude_damping_dissipator, amplitude_damping_gate,
+                             thermal_relaxation_dissipator, thermal_relaxation_gate])

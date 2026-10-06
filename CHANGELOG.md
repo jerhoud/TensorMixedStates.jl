@@ -26,6 +26,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `relaxing_gate(p, n, state)` and `relaxing_dissipator(γ, n, state)`, the relaxation of `n`
   sites of any type towards `state`, or towards a state per site, and its Lindblad generator,
   and `depolarizing_gate(p, n)` and `depolarizing_dissipator(γ, n)`, towards `"FullyMixed"`.
+- `amplitude_damping_gate(p)` and `thermal_relaxation_gate(T1, T2, t)` for qubits, the decay
+  of an excitation and the relaxation of times T1 and T2, with their Lindblad generators
+  `amplitude_damping_dissipator(γ)` and `thermal_relaxation_dissipator(T1, T2)`.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.
 - `Dephase(A)`, the measurement of `A` whose result is not read, and `dephasing_gate(p, A)` and
   `dephasing_dissipator(γ, A)`, the dephasing channel in the eigenbasis of `A`, or in the basis

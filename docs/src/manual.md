@@ -447,9 +447,14 @@ eigenvalues; they agree on a qubit, `Dissipator(Z)` being `dephasing_dissipator(
 The relaxation, and so the depolarization, changes the charges and is refused on sites
 conserving something strongly, where a dephasing in the eigenbasis of an operator commuting
 with the charge, as `N`, is accepted. Any other channel is a sum of gates, `Gate(K)` being
-``\rho \mapsto K \rho K^\dagger``: the amplitude damping of a qubit, which brings it back
-to `"Up"` while keeping part of its coherences, is
-`Gate(Id - (1 - sqrt(1 - γ)) * N) + γ * Gate(Sp)`.
+``\rho \mapsto K \rho K^\dagger``.
+
+On a qubit, `"Up"` is ``|0\rangle`` and `"Dn"` ``|1\rangle``, the excitation `N` counts: the
+decay of an excitation, from `"Dn"` to `"Up"`, is `Dissipator(Sp)`, and `Dissipator(Sm)`, which
+takes `"Up"` to `"Dn"` in the evolution above, excites. The module `Qubits` gives the decay as
+[`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref), and the relaxation
+of times ``T_1`` and ``T_2`` of a qubit, its decay and its dephasing, as
+[`thermal_relaxation_gate`](@ref) and [`thermal_relaxation_dissipator`](@ref).
 
 ### Steady states
 
