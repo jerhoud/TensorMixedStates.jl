@@ -310,6 +310,21 @@ read_state(t::Type{<:AbstractState}, _, _, _) =
                             "them" : ""))
 
 """
+    file_version(g, statename)
+
+the version of the format of the state `statename`, in the HDF5 group `g`, refused when it is
+not one of the `readable_state_file_versions`
+"""
+function file_version(g, statename)
+    version = read(attributes(g)["version"])
+    if !(version in readable_state_file_versions)
+        error("state \"$statename\" has file version $version, expected one of " *
+              join(readable_state_file_versions, ", "))
+    end
+    return version
+end
+
+"""
     saved_sites(filename, statename)
 
 the sites of the state saved under the name `statename` in the file `filename`, read without
@@ -318,7 +333,7 @@ the state
 saved_sites(filename::String, statename::String) =
     h5open(filename, "r") do f
         g = open_group(f, statename)
-        return read_sites(g, read(attributes(g)["version"]))
+        return read_sites(g, file_version(g, statename))
     end
 
 """
@@ -338,11 +353,7 @@ function load_state(filename::String, statename::String;
                     system::Union{Nothing, System} = nothing)
     return h5open(filename, "r") do f
         g = open_group(f, statename)
-        version = read(attributes(g)["version"])
-        if !(version in readable_state_file_versions)
-            error("state \"$statename\" has file version $version, expected one of " *
-                  join(readable_state_file_versions, ", "))
-        end
+        version = file_version(g, statename)
         type = state_type(read(attributes(g)["type"]), statename)
         return read_state(type, g, read_sites(g, version), system)
     end

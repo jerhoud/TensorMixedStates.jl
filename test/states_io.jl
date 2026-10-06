@@ -521,6 +521,8 @@ end
         TensorMixedStates.HDF5.attributes(g)["version"] = 99
     end
     @test_throws "expected one of 1, 2" load_state(future, "s")
+    # and so it is when a checkpoint reads the sites alone
+    @test_throws "expected one of 1, 2" TensorMixedStates.saved_sites(future, "s")
 end
 
 @testset "Reading a version 2 state file" begin
