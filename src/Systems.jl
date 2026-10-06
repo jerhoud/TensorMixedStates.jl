@@ -42,13 +42,11 @@ end
     is_charged(system)
 
 whether a system of those sites carries quantum numbers, that is whether any of them conserves
-something. One such site makes every index of the system charged, the others taking a trivial
-charge, since an MPS cannot mix the two kinds.
+something, which makes every index of the system charged.
 """
 is_charged(sites) = any(s -> !isempty(conserved(s)), sites)
 
-# read off an index rather than walked over the sites again: it is asked once per operator
-# placed on the system, which an MPO does for every factor of every term
+# read off an index: an MPO asks it for every factor of every term
 is_charged(system::System) = hasqns(first(system.pure_indices))
 
 function System(sites::Vector{<:AbstractSite})
@@ -80,14 +78,11 @@ symmetries(system::System) =
     weaken(::System)
     weaken(::System, target)
 
-the same sites, each keeping of what it conserves only what `target` names, and as strongly as
-`target` asks. `target` is written as `conserve` is given, or as `symmetries` returns it.
-Without a target, the system goes one level down: every strong quantity becomes weak or, when
-none is strong, every quantity is dropped.
-
-A quantity can be dropped or made weak, but a target asking for a quantity the system does not
-conserve, or for a weak one strongly, is refused. A target equal to what the system conserves
-gives it back unchanged. This is the system `weaken(::State)` puts a state on.
+the same sites, each keeping of what it conserves only what `target` names, as strongly as
+`target` asks, written as `conserve` is given or as `symmetries` returns it. Without a target,
+the system goes one level down, as for `weaken(::State)`. A target asking for a quantity the
+system does not conserve, or for a weak one strongly, is refused; one equal to what the system
+conserves gives it back unchanged.
 
 # Examples
 
@@ -150,10 +145,9 @@ sim(system::System) =
     tensor(::System, ::System)
 
 the tensor product of two systems: the sites of the first followed by those of the second,
-with their indices. When the two share an index, as in `S ⊗ S`, the second is given new ones.
-Both must carry charges or neither: the product of a charged system and an uncharged one is
-built from its sites with `System`. Sites whose conserved quantities cannot live together on
-one system are refused.
+with their indices, the second given new ones when the two share an index, as in `S ⊗ S`.
+Both must carry charges or neither, otherwise build the product from its sites with `System`.
+Sites whose conserved quantities cannot live together on one system are refused.
 """
 function (sys1::System ⊗ sys2::System)
     if is_charged(sys1) ≠ is_charged(sys2)
@@ -191,9 +185,7 @@ end
     check_indices(system, op)
 
 check that every site the indexed operator `op` acts on is a site of `system`, naming the
-factor at fault. Nothing else compares `X(10)` with the size of the system: without this check,
-made where an operator enters `expect_norm`, `PreMPO` or `apply`, each would fail on a
-`BoundsError` of an internal array.
+factor at fault; nothing else compares the sites of an operator with the size of the system.
 """
 function check_indices(system::System, a::AtIndex)
     for i in a.index
@@ -217,8 +209,7 @@ check_indices(::System, _) = nothing
     check_one_site(a, what)
 
 refuse a factor acting on several sites at once, which `what`, an MPO or `expect`, cannot
-place, since both place one site factors only. Such a factor is what `simplify` leaves of an
-operator of several sites with no expression to be replaced by, one defined by a matrix or a
+place: what `simplify` leaves of an operator of several sites defined by a matrix or a
 function and created without its sites.
 """
 function check_one_site(a, what)
