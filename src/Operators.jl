@@ -4,8 +4,8 @@
 
 export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
-export depolarizing_dissipator, depolarizing_gate
+export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState, Dephase
+export depolarizing_dissipator, depolarizing_gate, dephasing_dissipator, dephasing_gate
 export named, parity
 export dag, ⊗, isfermionic, hasfermionic, map_sites
 
@@ -1019,6 +1019,43 @@ end
 isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state))
 
 
+# Dephase
+
+"""
+    Dephase()
+    Dephase(A)
+
+the superoperator dephasing a site in the basis of the eigenspaces of the Hermitian operator
+`A`, ``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``, ``P_\\lambda`` being the
+projector on the eigenspace of `A` of eigenvalue ``\\lambda``: the measurement of `A` whose
+result is not read. It erases the coherences between eigenspaces and keeps those within one.
+Without `A`, it dephases in the basis of the site. On a fermionic site, `A` must commute with
+the parity.
+
+# Examples
+
+    Dephase()(3)
+    Dephase(Ntot)(2)        # on an Electron, keeps the coherence of Up and Dn
+"""
+struct Dephase <: GenericOp{Mixed, 1}
+    arg::Union{Nothing, GenericOp{Pure, 1}}
+    Dephase() = new(nothing)
+    Dephase(arg::GenericOp{Pure, 1}) = new(arg)
+end
+
+Dephase(a::IndexedOp) =
+    error("cannot dephase in the eigenbasis of $a, which is placed on sites: write " *
+          "Dephase(N)(1) rather than Dephase(N(1))")
+
+show(io::IO, a::Dephase) =
+    isnothing(a.arg) ? print(io, "Dephase()") : paren(io, 1000, 0) do io
+        show_func(io, "Dephase", a.arg)
+    end
+
+isless(a::Dephase, b::Dephase) =
+    isless(isnothing(a.arg) ? (0,) : (1, a.arg), isnothing(b.arg) ? (0,) : (1, b.arg))
+
+
 # Depolarization
 
 """
@@ -1027,6 +1064,40 @@ isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state)
 the tensor product of `n` copies of the generic operator `a`, `a` itself for `n = 1`
 """
 tensor_power(a::GenericOp, n::Int) = reduce(⊗, fill(a, n))
+
+
+# Dephasing
+
+"""
+    dephasing_dissipator(γ[, A])
+
+the Lindblad generator dephasing a site at rate `γ` in the eigenbasis of `A`, or in the basis
+of the site, for an evolver: ``\\gamma\\,(\\Delta - \\mathrm{Id})``, `Δ` being `Dephase(A)`.
+Every coherence between two eigenspaces decays at the same rate `γ`, where `Dissipator(A)`
+damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant eigenvalues: the two agree
+when `A` has two eigenvalues, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`. Evolving
+under it for a time `t` is `dephasing_gate(1 - exp(-γt), A)`.
+
+# Examples
+
+    evolver = -im * H + sum(dephasing_dissipator(0.1)(i) for i in 1:10)
+"""
+dephasing_dissipator(γ::Real) = γ * (Dephase() - Gate(Id))
+dephasing_dissipator(γ::Real, a::GenericOp{Pure, 1}) = γ * (Dephase(a) - Gate(Id))
+
+"""
+    dephasing_gate(p[, A])
+
+the channel dephasing a site with probability `p` in the eigenbasis of `A`, or in the basis of
+the site, for a gate: ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being `Dephase(A)`. It is
+`Gate(Id) + dephasing_dissipator(p, A)`.
+
+# Examples
+
+    Gates(gates = prod(dephasing_gate(0.01)(i) for i in 1:10))
+"""
+dephasing_gate(p::Real) = (1 - p) * Gate(Id) + p * Dephase()
+dephasing_gate(p::Real, a::GenericOp{Pure, 1}) = (1 - p) * Gate(Id) + p * Dephase(a)
 
 """
     depolarizing_dissipator(γ, n = 1)
@@ -1059,7 +1130,7 @@ sites conserving something strongly.
     apply(depolarizing_gate(0.02, 2)(1, 2) * controlled(Z)(1, 2), ρ)
 """
 depolarizing_gate(p::Real, n::Int = 1) =
-    Gate(tensor_power(Id, n)) + depolarizing_dissipator(p, n)
+    (1 - p) * Gate(tensor_power(Id, n)) + p * tensor_power(SetState("FullyMixed"), n)
 
 
 ############## Operator functions ###########
@@ -1495,6 +1566,7 @@ ranking(::Evolver) = 13
 ranking(::Left) = 14
 ranking(::Right) = 15
 ranking(::SetState) = 16
+ranking(::Dephase) = 17
 
 ranking(::ScalarOp) = 20
 ranking(::ProdOp) = 21

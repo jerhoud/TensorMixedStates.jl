@@ -25,6 +25,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
   `SetState("FullyMixed") ⊗ SetState("FullyMixed")`.
 - `depolarizing_gate(p, n)` and `depolarizing_dissipator(γ, n)`, the depolarizing channel of
   `n` sites of any type and its Lindblad generator.
+- `Dephase(A)`, the measurement of `A` whose result is not read, and `dephasing_gate(p, A)` and
+  `dephasing_dissipator(γ, A)`, the dephasing channel in the eigenbasis of `A`, or in the basis
+  of the site, and its Lindblad generator.
 - `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
   `steady_state`, `Tdvp`, `GroundState` and `SteadyState` take as `krylov`.
 - `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or

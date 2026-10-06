@@ -675,6 +675,34 @@ end
                                                         State{Mixed}(strong_sys, "Up"))
 end
 
+@testset "Dephasing" begin
+    # Dephase(A) erases the coherences between the eigenspaces of A and keeps those within one;
+    # its generator damps them all at one rate, where Dissipator(A) depends on the eigenvalues
+    γ, t = 0.7, 0.5
+    b = mix(State{Pure}(System(2, Boson(4)), [[1., 1., 1., 0.] / sqrt(3), "0"]))
+    @test norm(apply(Dephase()(1), b) - apply(Dephase(N)(1), b)) < 1e-12
+    @test abs(expect(apply(Dephase()(1), b), A(1))) < 1e-12
+    @test expect(apply(Dephase()(1), b), N(1)) ≈ expect(b, N(1))
+    @test norm(apply(make_mpo(b, dephasing_gate(0.3)(1)), b) - apply(dephasing_gate(0.3)(1), b)) <
+          1e-12
+    evolved = tdvp(dephasing_dissipator(γ)(1), t, b; nsteps = 20, limits = Limits(maxdim = 100))
+    @test norm(evolved - apply(dephasing_gate(1 - exp(-γ * t))(1), b)) < 1e-10
+    q = mix(RandomState{Pure}(System(3, Qubit()), 4))
+    by_rate = tdvp(dephasing_dissipator(2, Z)(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
+    by_dissipator = tdvp(Dissipator(Z)(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
+    @test norm(by_rate - by_dissipator) < 1e-10
+    # on an electron, Ntot does not tell Up from Dn
+    e = mix(State{Pure}(System(1, Electron()), [[0., 1., 1., 0.] / sqrt(2)]))
+    coherence = named([ i == 2 && j == 3 ? 1. : 0. for i in 1:4, j in 1:4 ], "UpDn")
+    @test expect(apply(Dephase(Ntot)(1), e), coherence(1)) ≈ 0.5
+    @test abs(expect(apply(Dephase()(1), e), coherence(1))) < 1e-12
+    # diagonal in the charges, it passes a strong conservation
+    strong_q = State{Mixed}(System(2, Qubit(conserve = strong(N))), "Up")
+    @test trace(apply(dephasing_gate(0.3)(1), strong_q)) ≈ 1
+    @test_throws "needs a Hermitian operator" apply(Dephase(Sp)(1), q)
+    @test_throws "Dephase(N)(1) rather than Dephase(N(1))" Dephase(N(1))
+end
+
 @testset "Periods below one mean never" begin
     # one rule for every period of the library: `measurements_period`, `expand_period`,
     # `hermitianize_period`, and the `checkpoint_interval` covered in checkpoint.jl.

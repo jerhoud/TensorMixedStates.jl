@@ -60,7 +60,9 @@ noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
 ```
 
 The depolarizing channel of sites of any type is [`depolarizing_gate`](@ref), and its Lindblad
-generator, for an evolver, [`depolarizing_dissipator`](@ref).
+generator, for an evolver, [`depolarizing_dissipator`](@ref). The dephasing channel and its
+generator are [`dephasing_gate`](@ref) and [`dephasing_dissipator`](@ref), built on
+[`Dephase`](@ref).
 
 And they define observables
 
@@ -90,8 +92,11 @@ Proj
 Dissipator
 Gate
 SetState
+Dephase
 depolarizing_gate
 depolarizing_dissipator
+dephasing_gate
+dephasing_dissipator
 Left
 Right
 Evolver
