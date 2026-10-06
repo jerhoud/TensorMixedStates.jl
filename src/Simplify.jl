@@ -356,9 +356,9 @@ simplify_dag(a::ProdOp) = simplify_prod(reverse(simplify_dag.(a.subs)))
 simplify_dag(a::SumOp) = simplify_sum(simplify_dag.(a.subs))
 # the adjoint reverses the factors once placed, which gives a sign when two of them
 # anticommute: with a factor of odd or undefined parity it waits for the sites
-simplify_dag(a::TensorOp{N}) where N =
+simplify_dag(a::TensorOp{Pure, N}) where N =
     if all(o -> jw_parity(o) == 0, a.subs)
-        TensorOp{N}(simplify_dag.(a.subs))
+        TensorOp{Pure, N}(simplify_dag.(a.subs))
     else
         DagOp(a)
     end
@@ -472,7 +472,7 @@ simplify(a) = map(simplify, a)
 simplify(a::ScalarOp) = a.coef * simplify(a.arg)
 simplify(a::ProdOp) = simplify_prod(map(simplify, a.subs))
 simplify(a::SumOp) = simplify_sum(map(simplify, a.subs))
-simplify(a::TensorOp{N}) where N = TensorOp{N}(simplify.(a.subs))
+simplify(a::TensorOp{R, N}) where {R, N} = TensorOp{R, N}(simplify.(a.subs))
 
 # a com is built by `compact` from simplified terms
 simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState, ComOp}) = a

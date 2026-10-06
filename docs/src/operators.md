@@ -82,7 +82,7 @@ Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`,
 ```@docs
 Operator
 Operator{N}(::String, ::Union{Matrix, Function, GenericOp{Pure, N}}, ::OpType, ::AbstractSite, ::AbstractSite...) where N
-⊗(::GenericOp{Pure, N}, ::GenericOp{Pure, M}) where {N, M}
+⊗(::GenericOp{R, N}, ::GenericOp{R, M}) where {R, N, M}
 Proj
 Dissipator
 Gate

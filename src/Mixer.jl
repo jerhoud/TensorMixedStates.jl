@@ -540,7 +540,7 @@ end
 # (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): each factor takes an F per odd factor
 # that follows, and a factor of no definite parity after a fermionic site is refused. Placed on
 # sites apart, it misses the strings in between: `hasfermionic` sends it through `simplify`
-function legs(a::TensorOp, sites, js)
+function legs(a::TensorOp{Pure}, sites, js)
     pos = factor_sites(a)
     ps = map(jw_parity, a.subs)
     fs = GenericOp{Pure}[]
@@ -560,6 +560,11 @@ function legs(a::TensorOp, sites, js)
     end
     return prod(legs(o, sites[p], js[p]) for (o, p) in zip(fs, pos))
 end
+
+# each factor on its sites: no string, a tensor product holding a fermionic operator being
+# expanded by `prepare_gate` and `simplify` before it is laid
+legs(a::TensorOp{Mixed}, sites, js, bs) =
+    prod(legs(o, sites[p], js[p], bs[p]) for (o, p) in zip(a.subs, factor_sites(a)))
 
 # the identities are dense blocked because ITensors has no outer product of two charged deltas
 legs(a::Left, sites, js, bs) =

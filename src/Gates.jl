@@ -132,8 +132,8 @@ expand_gate(a::AtIndex{R, N}) where {R, N} =
     N > 1 && hasfermionic(a.op) ? expand_placed(a.op, a.index) : a
 expand_gate(a::IndexedOp) = a
 
-expand_placed(a::TensorOp, index) =
-    ProdOp(IndexedOp{Pure}[ expand_gate(o(index[p]...)) for (o, p) in zip(a.subs, factor_sites(a)) ])
+expand_placed(a::TensorOp{R}, index) where R =
+    ProdOp(IndexedOp{R}[ expand_gate(o(index[p]...)) for (o, p) in zip(a.subs, factor_sites(a)) ])
 expand_placed(a::ProdOp{R}, index) where R =
     ProdOp(IndexedOp{R}[ expand_gate(o(index...)) for o in a.subs ])
 expand_placed(a::SumOp{R}, index) where R =
@@ -287,8 +287,8 @@ end
     kraus_channel(system, a)
 
 the Kraus operators of the factor `a` of a product of gates on mixed states, a sum of terms of
-weights not negative, each a `SetState`, gates of a pure operator, `Gate(A)`, placed on sites,
-or a sum of them placed on the same sites, a noisy gate
+weights not negative, each a `SetState`, a gate of a pure operator, `Gate(A)`, a tensor product
+or a product of them, placed on sites, or a sum of them placed on the same sites, a noisy gate
 """
 function kraus_channel(system::System, a::IndexedOp{Mixed})
     terms = IndexedOp{Pure}[]
@@ -307,16 +307,23 @@ function kraus_channel(system::System, a::IndexedOp{Mixed})
             for u in sumsubs(b.op)
                 append!(terms, w .* kraus_channel(system, scalarcoef(u) * AtIndex(scalararg(u), b.index)))
             end
-        else
-            # gates on several sites at once, as Gate(X)(1) * Gate(X)(2)
-            k = w * IdentityOp{Pure, Indexed, 1}()
-            for f in prodsubs(b)
-                if !(f isa AtIndex && f.op isa Gate)
-                    error("kraus_operators reads gates, sums of them and SetState, and $a holds $f")
-                end
-                k = k * f.op.arg(f.index...)
+        elseif b isa AtIndex && b.op isa Gate
+            push!(terms, w * b.op.arg(b.index...))
+        elseif b isa AtIndex && b.op isa TensorOp
+            # `(A ⊗ B)(i, j)` is `A(i) * B(j)`
+            factors = IndexedOp{Mixed}[ o(b.index[p]...)
+                                        for (o, p) in zip(b.op.subs, factor_sites(b.op)) ]
+            append!(terms, w .* kraus_channel(system, ProdOp(factors)))
+        elseif b isa ProdOp
+            # a product of channels, as Gate(X)(1) * SetState("Up")(2): the products of their
+            # Kraus operators, in the same order
+            ks = [ kraus_channel(system, f) for f in b.subs ]
+            for choice in Iterators.product(ks...)
+                push!(terms, w * prod(choice))
             end
-            push!(terms, k)
+        else
+            error("kraus_operators reads gates, sums and products of them and SetState, and " *
+                  "$a holds $b")
         end
     end
     return terms
@@ -331,8 +338,10 @@ channel ``\\rho \\mapsto \\sum_k K_k \\rho K_k^\\dagger``. A gate on pure states
 channel of a single operator, a noisy gate `c₁ Gate(A₁)(i) + c₂ Gate(A₂)(i)` one of
 `sqrt(c₁) * A₁(i)` and `sqrt(c₂) * A₂(i)`, and `SetState(s)(i)` one of an operator
 ``|s\\rangle\\langle k|`` for each basis state ``k`` of site `i`. A coefficient of the whole
-product goes to its first channel. A superoperator of another form, as `Left(X)(1)`, a gate of
-negative or complex weight, and a `SetState` on a fermionic site are refused.
+product goes to its first channel. A tensor product of channels, as
+`(SetState(s) ⊗ Gate(A))(i, j)`, has the products of their Kraus operators. A superoperator of
+another form, as `Left(X)(1)`, a gate of negative or complex weight, and a `SetState` on a
+fermionic site are refused.
 
 # Examples
 

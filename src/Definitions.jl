@@ -208,7 +208,7 @@ function split_matrix(name::String, m::AbstractMatrix, sites::Vector)
         for (c, fs) in svd_terms(y, charges[js], q, tol, make)
             ops = GenericOp{Pure, 1}[ Id for _ in 1:n ]
             ops[js] = fs
-            push!(terms, c * TensorOp{n}(ops))
+            push!(terms, c * TensorOp{Pure, n}(ops))
         end
     end
     return SumOp(terms)

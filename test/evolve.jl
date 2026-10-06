@@ -650,8 +650,43 @@ end
         @test norm(foldl(channel, kraus_operators(sys, g); init = ρ) - ref) < 1e-12
     end
     @test length.(kraus_operators(sys, (0.9Gate(Id) + 0.1Gate(X))(1) * Gate(H)(2))) == [1, 2]
-    @test_throws "reads gates, sums of them and SetState" kraus_operators(sys, Left(X)(1))
+    @test_throws "reads gates, sums and products of them and SetState" kraus_operators(sys,
+                                                                             Left(X)(1))
     @test_throws "weight must be real and not negative" kraus_operators(sys, -0.1 * Gate(X)(1))
+end
+
+@testset "Tensor products of superoperators" begin
+    # `(A ⊗ B)(i, j)` is `A(i) * B(j)` for superoperators too, an operator on pure states being
+    # its gate, so that a channel of several sites is written once and placed anywhere
+    p = 0.4
+    FM = SetState("FullyMixed")
+    paulis = (Id, X, Y, Z)
+    depolarizing2 = (1 - p) * Gate(Id ⊗ Id) + p * (FM ⊗ FM)
+    pauli_form = (1 - p) * Gate(Id ⊗ Id) + p / 16 * sum(Gate(a ⊗ b) for a in paulis for b in paulis)
+    sys = System(3, Qubit())
+    ρ = mix(RandomState{Pure}(sys, 4))
+    for s in [(1, 2), (1, 3), (3, 1)]
+        @test norm(apply(depolarizing2(s...), ρ) - apply(pauli_form(s...), ρ)) < 1e-12
+    end
+    @test norm(apply(make_mpo(ρ, depolarizing2(1, 3)), ρ) - apply(depolarizing2(1, 3), ρ)) < 1e-12
+    @test X ⊗ FM == Gate(X) ⊗ FM
+    @test norm(apply((X ⊗ SetState("Up"))(1, 3), ρ) - apply(Gate(X)(1) * SetState("Up")(3), ρ)) <
+          1e-12
+    w = mix(State{Pure}(System(3, Qubit(conserve = N)), ["Up", "Dn", "Up"]))
+    @test norm(apply((Gate(Sp) ⊗ Gate(Sm))(2, 3), w) - apply(Gate(Sp)(2) * Gate(Sm)(3), w)) < 1e-12
+    # on fermions, the strings are inserted factor by factor, in either order of the sites
+    f = mix(RandomState{Pure}(System(4, Fermion()), 4))
+    for (g, s) in [(Gate(C) ⊗ Gate(dag(C)), (1, 3)), (Gate(C) ⊗ Gate(dag(C)), (3, 1)),
+                   (FM ⊗ FM, (1, 3)), (C ⊗ SetState("Emp"), (1, 3))]
+        ref = apply(prod(o(i) for (o, i) in zip((g.subs...,), s)), f)
+        @test norm(apply(g(s...), f) - ref) < 1e-12
+    end
+    @test norm(apply(make_mpo(f, depolarizing2(2, 4)), f) - apply(depolarizing2(2, 4), f)) < 1e-12
+    # the Kraus operators of a tensor product of channels are the products of theirs
+    channel(ρ, ks) = sum(apply(k, ρ) for k in ks)
+    for g in [depolarizing2(1, 3), (X ⊗ SetState("Up"))(1, 3), (FM ⊗ Gate(Y))(2, 1)]
+        @test norm(foldl(channel, kraus_operators(sys, g); init = ρ) - apply(g, ρ)) < 1e-12
+    end
 end
 
 @testset "Periods below one mean never" begin

@@ -21,6 +21,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
   triangular MPO can have, its terms gathered into coms printed `com(sites,linkdims)`: on
   `sum(Z(i)Z(j) for i in 1:39 for j in i+1:40)` the bond dimension goes from 402 to 3.
 - `a ≈ b` for two operators placed on sites.
+- `⊗` of superoperators, for channels of several sites, as
+  `SetState("FullyMixed") ⊗ SetState("FullyMixed")`.
 - `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
   `steady_state`, `Tdvp`, `GroundState` and `SteadyState` take as `krylov`.
 - `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or

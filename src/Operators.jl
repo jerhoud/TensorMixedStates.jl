@@ -527,24 +527,25 @@ isless(a::ProdOp, b::ProdOp) = isless(a.subs, b.subs)
 ############### Tensor products ############
 
 """
-    struct TensorOp{N} <: GenericOp{Pure, N}
+    struct TensorOp{R, N} <: GenericOp{R, N}
 
-a tensor product of generic operators on pure states, acting on `N` sites, the sum of theirs.
+a tensor product of generic operators of representation `R`, acting on `N` sites, the sum of
+theirs.
 The coefficients of the factors are gathered in front of it, and a product of identities is
 the identity of `N` sites.
 """
-struct TensorOp{N} <: GenericOp{Pure, N}
-    subs::Vector{<:GenericOp{Pure}}
-    TensorOp{N}(subs::Vector{<:GenericOp{Pure}}) where N =
+struct TensorOp{R, N} <: GenericOp{R, N}
+    subs::Vector{<:GenericOp{R}}
+    TensorOp{R, N}(subs::Vector{<:GenericOp{R}}) where {R, N} =
         if length(subs) == 1
             subs[1]
         else
             c = prod(scalarcoef.(subs))
             s = scalararg.(subs)
             if all(x -> x isa IdentityOp, s)
-                return c * IdentityOp{Pure, Generic, N}()
+                return c * IdentityOp{R, Generic, N}()
             end
-            c * new{N}(s)
+            c * new{R, N}(s)
         end
 end
 
@@ -580,18 +581,23 @@ end
 """
     op1 ⊗ op2
 
-the tensor product of generic operators on pure states, acting on the sites of `op1` followed
-by those of `op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `\\otimes`, and
-`tensor(op1, op2, ...)` is the same product.
+the tensor product of generic operators, acting on the sites of `op1` followed by those of
+`op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. Beside a superoperator, an operator on pure states is
+its gate, as in a product. `⊗` is typed `\\otimes`, and `tensor(op1, op2, ...)` is the same
+product.
 
 # Examples
 
     mycontrolled(op) = Proj("Up") ⊗ Id + Proj("Dn") ⊗ op     # op of one site
     Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
+    FM = SetState("FullyMixed")
+    depolarizing2(p) = (1 - p) * Gate(Id ⊗ Id) + p * (FM ⊗ FM)
 
 """
-(a::GenericOp{Pure, N} ⊗ b::GenericOp{Pure, M}) where {N, M} =
-    TensorOp{N + M}([tensorsubs(a) ; tensorsubs(b)])
+(a::GenericOp{R, N} ⊗ b::GenericOp{R, M}) where {R, N, M} =
+    TensorOp{R, N + M}([tensorsubs(a) ; tensorsubs(b)])
+(a::GenericOp{Pure} ⊗ b::GenericOp{Mixed}) = Gate(a) ⊗ b
+(a::GenericOp{Mixed} ⊗ b::GenericOp{Pure}) = a ⊗ Gate(b)
 tensor(a::GenericOp, b::GenericOp) = a ⊗ b
 tensor(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = tensor(a ⊗ b, c, d...)
 
