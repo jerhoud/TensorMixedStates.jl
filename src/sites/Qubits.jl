@@ -135,7 +135,7 @@ the phase gate of a qubit, ``\\mathrm{diag}(1, e^{it})``.
 Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)], plain_op)
 
 """
-    graph_state(graph; limits = Limits(cutoff = 1e-16))
+    graph_state(graph; limits = Limits())
 
 the graph state of `graph`, a list of edges: the pure state of `graph_base_size(graph)` qubits
 all in `"+"`, to which `controlled(Z)` is applied on every edge, truncated by `limits`.
@@ -144,7 +144,7 @@ all in `"+"`, to which `controlled(Z)` is applied on every edge, truncated by `l
 
     graph_state(complete_graph(10); limits = Limits(maxdim = 10))
 """
-function graph_state(g::Vector{Tuple{Int, Int}}; limits::Limits=Limits(cutoff=1.e-16))
+function graph_state(g::Vector{Tuple{Int, Int}}; limits::Limits = Limits())
     n = graph_base_size(g)
     s = System(n, Qubit())
     state = State{Pure}(s, "+")

@@ -180,7 +180,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
   controlled Z to 17, where they stay at 9. The phases
   and functions truncating with the default limits are concerned, `Evolve`, `Gates`,
   `Thermalize`, `ToMixed`, `tdvp`, `approx_W`, `dmrg`, `apply` and `truncate`, and
-  `Limits(cutoff = 0)` truncates nothing anywhere, a sum of states included.
+  `Limits(cutoff = 0)` truncates nothing anywhere, a sum of states included. `graph_state`
+  takes `Limits()` by default as well, rather than a cutoff of 1e-16.
 - A phase of one's own is a subtype of `AbstractPhase`, which `SimData` checks when it is
   written: a struct with the fields of a phase alone is refused.
 - The log of a `Gates` phase says "Applying gates", without the count of the factors.
