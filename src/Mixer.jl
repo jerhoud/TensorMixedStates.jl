@@ -181,13 +181,6 @@ function expand_sites(what, n::Int, sites)
 end
 
 """
-    all_sites(a, site)
-
-the sites the operator `a` acts on, see `expand_sites`
-"""
-all_sites(a::GenericOp{R, N}, site) where {R, N} = expand_sites(a, N, site)
-
-"""
     named_sites(def, site, sites)
 
 the number of sites of a definition given with its sites: an expression has its own, a
@@ -417,7 +410,7 @@ product of the two matrices.
     matrix(Left(X), Qubit())
 """
 function matrix(a::Union{TensorOp, Left, Right}, site::AbstractSite...)
-    sites = all_sites(a, site)
+    sites = expand_sites(a, nsites(a), site)
     # plain indices: nothing is there to reorder the basis, and no charge to check
     js = [ Index(dim(s)) for s in sites ]
     if a isa GenericOp{Pure}
@@ -443,11 +436,11 @@ matrix(a::String, site::AbstractSite, ::AbstractSite...) =
     matrix(operator_info(site, a), site)
 
 matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite...) =
-    identity_operator(prod(dim, all_sites(a, site)))
+    identity_operator(prod(dim, expand_sites(a, nsites(a), site)))
 
 # on a density matrix, the identity of the ket and the bra of each site
 matrix(a::IdentityOp{Mixed, Generic}, site::AbstractSite...) =
-    identity_operator(prod(s -> dim(s)^2, all_sites(a, site)))
+    identity_operator(prod(s -> dim(s)^2, expand_sites(a, nsites(a), site)))
 
 function matrix(::JW_F, site::AbstractSite)
     m = matrix(F_info(site), site)
@@ -459,7 +452,7 @@ end
 
 function matrix(a::Operator, site::AbstractSite...)
     # one site given for identical ones, which a function of the sites cannot take
-    sites = all_sites(a, site)
+    sites = expand_sites(a, nsites(a), site)
     m = isnothing(a.expr) ? matrix(a.name, site...) : matrix(a.expr, sites...)
     return checked_type(a, a.type, m, sites)
 end
@@ -675,7 +668,7 @@ systems their product, see `⊗`.
     tensor([0. 1. ; 1. 0.], Qubit())
 """
 function tensor(a::GenericOp, site::AbstractSite...)
-    sites = all_sites(a, site)
+    sites = expand_sites(a, nsites(a), site)
     js = site_indices(sites)
     ks = a isa GenericOp{Pure} ? js : [ mixed_index(j, s) for (j, s) in zip(js, sites) ]
     return combine_sites(legs_on(a, sites, js, ks), ks)
