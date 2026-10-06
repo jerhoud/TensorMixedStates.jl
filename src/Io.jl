@@ -20,11 +20,9 @@ const readable_state_file_versions = (1, 2)
 """
     param_kind(x)
 
-the name a state file gives to the kind of the value `x` of a site field, or `nothing` when a
-state file cannot carry it. Each field is saved as a string along with this name, so that a
-site may hold a `Symbol`, a name or a flag, which version 1 of the format, writing every field
-as a `Float64`, could not, and so that reading it back does not depend on the field types of
-the site being concrete. `Bool`, an `Integer` for dispatch, has a kind of its own.
+the name a state file gives to the kind of the value `x` of a site field, saved as a string
+along with it, or `nothing` when a state file cannot carry it. `Bool`, an `Integer` for
+dispatch, has a kind of its own.
 """
 param_kind(::Bool) = "Bool"
 param_kind(::Integer) = "Int"
@@ -44,8 +42,6 @@ param_value(kind::AbstractString, s::AbstractString) =
     if kind == "Bool"
         parse(Bool, s)
     elseif kind == "Int"
-        # an integer beyond `Int` is read as the integer it is, and converted to the type of
-        # its field by whoever rebuilds the site
         let n = tryparse(Int, s)
             isnothing(n) ? parse(BigInt, s) : n
         end
@@ -64,9 +60,8 @@ param_value(kind::AbstractString, s::AbstractString) =
 """
     param_string(x)
 
-the value `x` of a site field as a state file writes it. A float is written as the `Float64`
-it widens to exactly, and converted back to the type of its field on reading: `string(0.1f0)`
-is `"0.1f0"`, which `parse(Float64, s)` refuses.
+the value `x` of a site field as a state file writes it, a float as the `Float64` it widens to:
+`string(0.1f0)` is `"0.1f0"`, which `parse(Float64, s)` refuses.
 """
 param_string(x::AbstractFloat) = string(Float64(x))
 param_string(x) = string(x)
@@ -98,9 +93,9 @@ end
     write_state(group, state)
 
 write the tensors of `state` in the HDF5 group `group`, where `save_state` writes its type and
-its sites: the MPS of a `State` under the name `state`. The state of a representation an
-extension defines needs a method of its own, and one of `read_state` to be read back. Its type
-is recorded by its name alone, so a type with parameters writes them in the group too.
+its sites: the MPS of a `State` under the name `state`. The state of an extension needs a
+method of its own, and one of `read_state`, see [Extending TMS](@ref); its type is recorded by
+its name alone, so a type with parameters writes them in the group too.
 """
 function write_state(g, state::State)
     g["state"] = state.state
@@ -124,8 +119,7 @@ state_type_name(state::AbstractState) =
 save the state in the HDF5 file `filename` under the name `statename`. A file can hold several
 states under different names, and saving under a name already present replaces that state.
 Every field of every site must be an integer, a float, a boolean, a symbol, a string or
-`nothing`. The state of a representation an extension defines is saved through its method of
-`write_state`.
+`nothing`. The state of an extension is saved through its method of `write_state`.
 
 # Examples
 
@@ -133,10 +127,8 @@ Every field of every site must be an integer, a float, a boolean, a symbol, a st
 """
 function save_state(filename::String, statename::String, state::AbstractState)
     sites = state.system.sites
-    # read before the file is opened. A site field a state file cannot carry, or a state with
-    # no way of being written, must not leave a half written group behind, and above all must
-    # not reach `delete_object` first: saving a state that cannot be written over a name
-    # already in the file would then destroy what was there and put nothing in its place
+    # checked before the file is opened: a state that cannot be written must neither leave a
+    # half written group nor delete the state already saved under its name
     ps = map(site_params, sites)
     if !hasmethod(write_state, Tuple{HDF5.Group, typeof(state)})
         error("cannot save a $(typeof(state)), its type has no method of " *
@@ -165,8 +157,7 @@ end
 
 the module a state file names for a site type, or for the type of the state of an extension:
 the path from a root module down, as `save_state` writes it, `Main.MySites` for a module
-defined in a script. Older files hold the last name only, which is the whole path of a root
-module.
+defined in a script. Older files hold the last name only, the path of a root module.
 """
 function site_module(name::String)
     root, path... = split(name, '.')
@@ -198,7 +189,7 @@ end
     build_site(modname, typename, params)
 
 the site of type `typename` of the module `modname`, built from the values `params` of its
-fields, each converted to the type of its field, which a file of version 1, holding every field
+fields, each converted to the type of its field, as a file of version 1, holding every field
 as a `Float64`, requires.
 """
 function build_site(modname::String, typename::String, params::Vector)
@@ -211,12 +202,8 @@ function build_site(modname::String, typename::String, params::Vector)
         error("state file gives $(length(params)) parameters for site $typename, which has " *
               "$(length(ft)) fields")
     end
-    # version 1 wrote every field as a `Float64`, so the reader converts back to what the
-    # site declares. Widening the constructors to take a `Real` dimension would put the
-    # conversion in the wrong place and state something looser than the truth
     ps = [ convert(ft[i], p) for (i, p) in enumerate(params) ]
-    # a file written before the conserved quantities were sorted holds them in the order of
-    # their declaration, which the sites built now no longer have
+    # an older file may hold the conserved quantities unsorted
     k = findfirst(==(:conserve), fieldnames(t))
     if !isnothing(k) && k ≤ length(ps) && ps[k] isa AbstractString
         ps[k] = sorted_conserve(ps[k])
@@ -260,8 +247,7 @@ function read_sites(g, version)
     modules = read(g, "modules")
     types = read(g, "types")
     nparams = read(g, "nparams")
-    # version 1 wrote every field as a Float64, which is what a checkpoint or a state saved by
-    # an earlier version still holds
+    # version 1 wrote every field as a Float64
     if version == 1
         params = collect(read(g, "params"))
     else
@@ -294,13 +280,11 @@ end
 """
     read_state(::Type{S}, group, sites, system)
 
-the state of type `S` that `save_state` wrote in the HDF5 group `group`, whose header records
-the sites `sites`. Without a `system`, `nothing`, it comes back on a system built from the
-file, whose indices are its own; given one, whose sites must be those, it comes back on it,
-which is what comparing it with a state already in hand requires. The state of a
-representation an extension defines needs a method of its own, reading what its `write_state`
-wrote: for a type with parameters, recorded without them, a method for the type without them,
-as `read_state(::Type{<:MyState}, group, sites, system)`, which reads them from the group.
+the state of type `S` that `save_state` wrote in the HDF5 group `group`, on the sites `sites`:
+on a system built from the file when `system` is `nothing`, on `system`, whose sites must be
+those, otherwise. The state of an extension needs a method of its own, reading what its
+`write_state` wrote; a type with parameters is read by a method for the type without them, as
+`read_state(::Type{<:MyState}, group, sites, system)`.
 """
 function read_state(::Type{State{Pure}}, g, sites, system)
     st = read_mps(g, sites)
@@ -313,9 +297,8 @@ end
 function read_state(::Type{State{Mixed}}, g, sites, system)
     st = read_mps(g, sites)
     idx = Index[ siteind(st, i) for i in 1:length(st) ]
-    # the pure indices are rebuilt rather than read, only the mixed ones being in the file, so
-    # they take the mode of the stored ones: a partial trace of a charged system keeps charged
-    # indices on sites that conserve nothing
+    # the pure indices, not in the file, take the mode of the mixed ones: a partial trace of a
+    # charged system keeps charged indices on sites conserving nothing
     charged = hasqns(first(idx))
     state = State{Mixed}(System(sites, [ site_index(s, charged) for s in sites ], idx), st)
     return isnothing(system) ? state : State(system, state)
@@ -341,13 +324,10 @@ saved_sites(filename::String, statename::String) =
 """
     load_state(filename, statename[; system])
 
-the state saved under the name `statename` in the file `filename` by `save_state`.
-
-The site types are rebuilt by name, and so is the type of the state of an extension, so the
-modules defining them must be loaded, which is automatic for those of this package. The state
-comes back on a system built from the file, or, when `system` is given, on that one, whose
-sites must match: this is what makes it comparable with a state already in hand, `inner` and
-the fidelities requiring their arguments to share a system.
+the state saved under the name `statename` in the file `filename` by `save_state`. The modules
+defining its site types, and the state type of an extension, must be loaded. The state comes
+back on a system built from the file or, when `system` is given, on that one, whose sites must
+match, as `inner` and the fidelities require to compare it with a state already in hand.
 
 # Examples
 
