@@ -999,8 +999,8 @@ isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
 """
     SetState(state)
 
-the superoperator resetting a site to `state`, given by its name, its vector or its density
-matrix: ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, where ``\\sigma`` is
+the superoperator resetting a site to `state`, given by its name, the number of a basis state
+counted from 0, its vector or its density matrix: ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, where ``\\sigma`` is
 the density matrix of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a
 matrix is taken as it is, without normalization, as for `Proj`. It acts on mixed states only,
 and is refused on a site conserving something strongly, which it does not preserve: `weaken`
@@ -1009,11 +1009,12 @@ the state first.
 # Examples
 
     SetState("Up")(3)
+    SetState(0)(3)
     SetState([0.3 0. ; 0. 0.7])(3)
 """
 struct SetState <: GenericOp{Mixed, 1}
-    state::Union{String, Vector, Matrix}
-    SetState(state::Union{String, Vector, Matrix}) = new(no_signed_zero(state))
+    state::Union{Int, String, Vector, Matrix}
+    SetState(state::Union{Int, String, Vector, Matrix}) = new(no_signed_zero(state))
 end
 
 isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state))

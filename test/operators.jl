@@ -123,11 +123,12 @@ end
     @test matrix(simplify(Proj(1) + Proj("Up")), Qubit()) ≈ identity_operator(2)
     @test isless(Evolver(X(1)), Evolver(Y(1)))
     @test !isless(Evolver(Y(1)), Evolver(X(1)))
-    # a SetState holds a name, a vector or a matrix, and two of them have to be ordered
-    # whatever they hold: there is no order between those types, nor between two matrices
+    # a SetState holds a number, a name, a vector or a matrix, and two of them have to be
+    # ordered whatever they hold: there is no order between those types, nor between two matrices
     @test isless(SetState("Dn"), SetState("Up"))
     @test length(sort([SetState("Up"), SetState([1., 0.]), SetState("Dn"),
-                       SetState([1. 0. ; 0. 0.])])) == 4
+                       SetState([1. 0. ; 0. 0.]), SetState(1)])) == 5
+    @test matrix(SetState(1), Qubit()) == matrix(SetState("Dn"), Qubit())
     # the ranking puts the types in the order it declares
     @test isless(Id, X)                     # Identity before Operator
     @test isless(X(1), Gate(X)(1))          # AtIndex before Gate
