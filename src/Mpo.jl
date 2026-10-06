@@ -40,11 +40,11 @@ add_term!(pre::PreMPO{R}, k::Int, l::Int, r::Int, u::ITensor, ref::Int) where R 
 """
     check_coefs(pre, coefs)
 
-refuse `coefs` unless it holds one real value per time function of `pre`: a pure term lifted
-for a mixed state, ``A \\rho + \\rho A^\\dagger``, would need a complex value on one side and
-its conjugate on the other
+`coefs` as a `Vector{Float64}`, refused unless it holds one real value per time function of
+`pre`: a pure term lifted for a mixed state, ``A \\rho + \\rho A^\\dagger``, would need a
+complex value on one side and its conjugate on the other
 """
-function check_coefs(pre::PreMPO, coefs)
+function check_coefs(pre::PreMPO, coefs::AbstractVector)
     if length(coefs) ≠ pre.nterms
         error("an evolver of $(pre.nterms) terms takes as many time functions, got $(length(coefs))")
     end
@@ -54,6 +54,7 @@ function check_coefs(pre::PreMPO, coefs)
                   "write f * A as real(f) * A + imag(f) * (im * A)")
         end
     end
+    return Vector{Float64}(coefs)
 end
 
 """
@@ -184,16 +185,14 @@ function PreMPO(state::State{R}, a) where R
 end
 
 """
-    mpo_eltype(::PreMPO, coefs)
+    mpo_eltype(::PreMPO)
 
-the element type of the tensors of the MPO built from `pre` and `coefs`, `Float64` at least,
-and real for real matrices and coefficients
+the element type of the tensors of the MPO built from `pre`, `Float64` at least, and real for
+real matrices, the coefficients being real
 """
-mpo_eltype(pre::PreMPO, coefs) =
-    promote_type(
-        Float64,
-        mapreduce(typeof, promote_type, coefs; init = Bool),
-        mapreduce(t -> eltype(t[3]), promote_type, Iterators.flatten(pre.terms); init = Bool))
+mpo_eltype(pre::PreMPO) =
+    promote_type(Float64, mapreduce(t -> eltype(t[3]), promote_type, Iterators.flatten(pre.terms);
+                                    init = Bool))
 
 """
     charge_mismatch(system, a, b, shown)
@@ -229,7 +228,7 @@ first channel, the term not yet begun, has no charge; the last, the term finishe
 the flux of the operator, which every term must share, as must the pieces entering a channel
 of a com. Terms whose time function is zero are left out.
 """
-function mpo_charges(pre::PreMPO{R}, coefs) where R
+function mpo_charges(pre::PreMPO{R}, coefs::Vector{Float64}) where R
     n = length(pre.system)
     tm = pre.terms
     q = [ Union{Nothing, QN}[ QN(); fill(nothing, d) ] for d in channel_counts(pre) ]
@@ -274,7 +273,7 @@ end
 the charges of the links of the approximations WI and WII, where one channel serves both the
 term not yet begun and the term finished, so that the operator must have zero flux
 """
-function w_charges(pre::PreMPO, coefs)
+function w_charges(pre::PreMPO, coefs::Vector{Float64})
     q = mpo_charges(pre, coefs)
     total = q[1][end]
     if total ≠ QN()
@@ -291,7 +290,7 @@ the links of the MPO of `pre`, each with `extra` channels besides those of `chan
 one for the term finished in `make_mpo`, none in WI and WII. On a charged system the channels
 carry the charges `charges(pre, coefs)` gives, `mpo_charges` or `w_charges`.
 """
-function mpo_links(pre::PreMPO, coefs, charges, extra::Int)
+function mpo_links(pre::PreMPO, coefs::Vector{Float64}, charges, extra::Int)
     ds = channel_counts(pre) .+ extra
     if !is_charged(pre.system)
         return [ Index(d, "Link,l=$(i-1)") for (i, d) in enumerate(ds) ]
@@ -358,10 +357,10 @@ A pure operator ``A`` given for a mixed state becomes its `Evolver`,
 
     mpo = make_mpo(state, sum(Z(i) * Z(i + 1) for i in 1:9))
 """
-function make_mpo(pre::PreMPO{R}, coefs=[1.]) where R
-    check_coefs(pre, coefs)
+function make_mpo(pre::PreMPO{R}, coefs::AbstractVector = [1.]) where R
+    coefs = check_coefs(pre, coefs)
     sys = pre.system
-    elt = mpo_eltype(pre, coefs)
+    elt = mpo_eltype(pre)
     dims = channel_counts(pre)
     links = mpo_links(pre, coefs, mpo_charges, 1)
     ts = map(1:length(sys)) do i
@@ -398,10 +397,10 @@ the MPO of the approximation WI of the exponential of `tau` times the operator `
 with the state or as `PreMPO(state, op)`, `coefs` being as for `make_mpo`. On a charged
 system the operator must have zero flux.
 """
-function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
-    check_coefs(pre, coefs)
+function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs::AbstractVector = [1.]) where R
+    coefs = check_coefs(pre, coefs)
     sys = pre.system
-    elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
+    elt = promote_type(mpo_eltype(pre), typeof(tau))
     links = mpo_links(pre, coefs, w_charges, 0)
     ts = map(1:length(sys)) do i
         idx = SysIndex{R}(sys, i)
@@ -451,10 +450,10 @@ exponential of `tau` times the operator `op`, given with the state or as `PreMPO
 `coefs` being as for `make_mpo`. On a charged system the operator must have zero flux. Its
 error, of order ``\\tau^2``, comes from the products of terms that cross a same link.
 """
-function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs=[1.]) where R
-    check_coefs(pre, coefs)
+function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs::AbstractVector = [1.]) where R
+    coefs = check_coefs(pre, coefs)
     sys = pre.system
-    elt = promote_type(mpo_eltype(pre, coefs), typeof(tau))
+    elt = promote_type(mpo_eltype(pre), typeof(tau))
     dims = channel_counts(pre)
     links = mpo_links(pre, coefs, w_charges, 0)
     ts = map(1:length(sys)) do i
