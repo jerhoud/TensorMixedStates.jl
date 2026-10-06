@@ -5,10 +5,8 @@ export apply, kraus_operators
 """
     check_apply_algo(apply_algo)
 
-refuse an algorithm of the product of an MPO by a state that is not one of those offered,
-`"densitymatrix"` and `"naive"`. ITensorMPS has `"fit"` too, which needs a number of sweeps of
-its own, and `"zipup"`, which it only has for a state from version 0.3.45 on, above the lowest
-version TMS accepts.
+refuse an algorithm of the product of an MPO by a state other than `"densitymatrix"` and
+`"naive"`: `"fit"` needs sweeps of its own, and `"zipup"` a later ITensorMPS than TMS requires
 """
 function check_apply_algo(apply_algo::String)
     if apply_algo ∉ ("densitymatrix", "naive")
@@ -21,32 +19,27 @@ end
     apply(mpo, ::State; limits::Limits, apply_algo)
     apply(op, ::Simulation; limits::Limits)
 
-the state, or the simulation, with the gates `op`, or the MPO `mpo`, applied.
+the state, or the simulation, with the gates `op`, or the MPO `mpo`, from `make_mpo`, applied.
+A product of gates acts as the operator it denotes, its rightmost factor first; applying all
+the gates in a single call is much more efficient. A pure gate `A` applied to a mixed state
+acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: on a pure state,
+apply its MPO, `make_mpo(state, op)`, instead; on a mixed state that MPO is not a gate.
 
-A product of gates is the operator it denotes, its rightmost factor acting first, and applying
-all the gates in a single call is much more efficient. A pure gate `A` applied to a mixed
-state acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: on a pure
-state, apply its MPO, `make_mpo(state, op)`, instead. On a mixed state that MPO is not a gate,
-see `make_mpo`.
-
-`limits` (default `Limits()`) constrains the truncations made while a gate of
-several sites is applied, on the bond it spans and on those crossed to bring its sites
-together; a gate of one site, and the other bonds, are not truncated. An MPO truncates the
-whole result.
-
-`apply_algo`, for an MPO only, is the algorithm of its product with the state, as
-`ITensorMPS.apply` takes it: `"densitymatrix"` (default) or `"naive"`.
+- `limits`: the truncation of each gate of several sites, on the bonds it spans or crosses,
+  the other bonds and the gates of one site being left untouched, or of the whole result for
+  an MPO (default `Limits()`)
+- `apply_algo`: for an MPO, the algorithm of its product with the state, `"densitymatrix"`
+  (default) or `"naive"`
 
 # Examples
 
     apply(controlled(Z)(1, 3) * H(2) * controlled(X)(3, 4), state)
 """
 function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
-    # on the operator as it was written, as the pure path does, so that a site out of the
-    # system is named as the caller wrote it and not as a factor of its string
+    # before any rewriting, so that a site out of the system is named as the caller wrote it
     check_indices(state.system, a)
-    # prepared before the gate is built: build_gate distributes over the product removeMulti
-    # leaves behind, down to the one site factors it knows how to lift
+    # prepared first: build_gate distributes over the product removeMulti leaves, down to the
+    # one site factors it knows how to lift
     return apply(build_gate(prepare_gate(a)), state; kwargs...)
 end
 
@@ -60,9 +53,7 @@ function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where 
     # right to left: A*B is B applied first
     st = apply(reverse(ops), state.state; move_sites_back_between_gates=false,
             limits.cutoff, limits.maxdim, limits.mindim)
-    # the coefficient is carried here rather than laid on the first tensor, because a gate
-    # whose factors are all identities places no tensor at all and there would be nothing
-    # to lay it on: `2Id(1)` then went through leaving the state unscaled
+    # the coefficient is carried apart: a gate made only of identities places no tensor
     return State(state, coef == 1 ? st : coef * st)
 end
 
@@ -104,16 +95,12 @@ end
 """
     strung_function(a, index)
 
-the gate of the function `a` of an even fermionic operator, placed on the sites `index`. Its
-matrix on these sites, laid in the order of the sites with the sign of each pair of odd factors
-it swaps, see `order_signs`, is the gate on the sites taken as neighbours. The strings its odd
-factors take through the sites in between come from the conjugation by
-``K = \\prod (-1)^{p_s p_k}``, over the sites `s` of the gate and the sites `k` in between on
-their right: `K` is diagonal and squares to the identity, conjugating an operator by it gives
-each odd factor the strings of the sites in between on its right, which an even operator cannot
-tell from those on its left, and a function goes through the conjugation. A function of an odd
-operator, or of one of no definite parity, mixes the two parities and is left whole, for
-`prepare_gate` to refuse.
+the gate of the function `a` of an even fermionic operator, placed on the sites `index`: its
+matrix laid in the order of the sites, see `order_signs`, conjugated by
+``K = \\prod (-1)^{p_s p_k}`` over the sites `s` of the gate and the sites `k` in between on
+their right, which gives each odd factor the strings of the sites in between on its right,
+equivalent for an even operator to those on its left. A function of an operator of odd or no
+definite parity is left whole, for `prepare_gate` to refuse.
 """
 function strung_function(a, index)
     if fermion_parity(a, false) ≠ 0
@@ -133,14 +120,10 @@ end
 """
     expand_gate(op)
 
-the gate `op` with each factor of several sites holding a fermionic operator replaced by a
-product of factors of one site, by the definitions of the tensor product, `(A ⊗ B)(i, j)` being
-`A(i) * B(j)`, of the product, of the integer power, of the adjoint, of an operator defined by
-an expression, and of `Left`, `Right` and `Gate`, the order of the factors being kept. A
-function of an even fermionic operator becomes its gate with its strings, see
-`strung_function`. Any other factor of several sites is kept whole: a function of an odd
-fermionic operator, which `prepare_gate` then refuses, or an operator with no fermionic factor,
-which `apply` places as it is.
+the gate `op` with each factor of several sites holding a fermionic operator replaced, where
+its definition allows, by a product of factors of one site in the same order, `(A ⊗ B)(i, j)`
+being `A(i) * B(j)`, and a function of an even fermionic operator by its gate with its
+strings, see `strung_function`. Any other factor of several sites is kept whole.
 """
 expand_gate(a::ProdOp{R, Indexed, 1}) where R = ProdOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
 expand_gate(a::SumOp{R, Indexed, 1}) where R = SumOp(IndexedOp{R}[ expand_gate(x) for x in a.subs ])
@@ -193,19 +176,11 @@ spans_sites(::Op) = false
     prepare_gate(op)
 
 the gate `op` with the Jordan-Wigner strings of its fermionic factors inserted and spelled out
-as one factor per site, see `removeMulti`, as `PreMPO` does.
-
-`apply` places one tensor per factor and cannot build a string: only `simplify` inserts them.
-Simplifying a whole gate is not an option. It would replace a gate defined by an expression,
-such as `Swap`, with that expression, and a product of those becomes a sum `apply` cannot
-place. And it sorts the factors by site, moving strings past a factor of several sites, which
-is only right when the string holds all of its sites or none of them. So a gate with a
-fermionic factor is first expanded into factors of one site where it can be, see
-`expand_gate`, and then simplified piece by piece: each run of factors of one site on its own,
-the factors of several sites left whole between them, so that `simplify` never sees one. The
-gate is refused if a piece becomes a sum, or if a function of an odd fermionic operator
-remains whole, on several sites or on the first one, where it has no string to take but mixes
-the two parities.
+as one factor per site, see `removeMulti`. A gate with a fermionic factor is expanded, see
+`expand_gate`, then simplified piece by piece, each run of factors of one site on its own and
+the factors of several sites left whole, which `simplify` would rewrite into sums or move
+strings past. The gate is refused if a piece becomes a sum, or if a function of an odd
+fermionic operator remains, which mixes the two parities.
 """
 function prepare_gate(a::IndexedOp{R}) where R
     if !hasfermionic(a)
@@ -246,8 +221,7 @@ end
     make_ops(::System, op)
 
 the coefficient of the gate `op` and the tensors to place for it, one per factor, a sum being
-refused. The two are kept apart because an identity places no tensor, so a gate made only of
-identities has no tensor to carry the coefficient.
+refused
 """
 make_ops(::System, a::SumOp) =
     error("cannot apply sums as gates ($a)")
@@ -255,12 +229,10 @@ make_ops(::System, a::SumOp) =
 make_ops(::System, a::ComOp) =
     error("cannot apply sums as gates ($a is a sum gathered by compact)")
 
-# Left(H) + Right(H), a sum
 make_ops(::System, a::Evolver) =
     error("cannot apply sums as gates ($a is Left + Right of its argument)")
 
-# a null gate is `0Id`, which places no tensor and makes the state null, as a gate that
-# annihilates it does
+# a null gate, `0Id`, places no tensor and makes the state null through its coefficient
 function make_ops(s::System, a::ScalarOp)
     coef, ops = make_ops(s, a.arg)
     return (coef * a.coef, ops)
@@ -359,11 +331,8 @@ channel ``\\rho \\mapsto \\sum_k K_k \\rho K_k^\\dagger``. A gate on pure states
 channel of a single operator, a noisy gate `c₁ Gate(A₁)(i) + c₂ Gate(A₂)(i)` one of
 `sqrt(c₁) * A₁(i)` and `sqrt(c₂) * A₂(i)`, and `SetState(s)(i)` one of an operator
 ``|s\\rangle\\langle k|`` for each basis state ``k`` of site `i`. A coefficient of the whole
-product goes to its first channel.
-
-What it reads is what a representation of a state needs to apply the gates of a `Gates`
-phase by sampling their Kraus operators, quantum trajectories for instance. A superoperator of
-another form, as `Left(X)(1)`, or a gate of negative or complex weight is refused.
+product goes to its first channel. A superoperator of another form, as `Left(X)(1)`, a gate of
+negative or complex weight, and a `SetState` on a fermionic site are refused.
 
 # Examples
 
