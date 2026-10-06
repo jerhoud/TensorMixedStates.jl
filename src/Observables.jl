@@ -798,6 +798,24 @@ function check_pair_parities(ops)
 end
 
 """
+    mirror(state, o1, o2)
+
+the function giving the entry `(j, i)`, `j > i`, of the pair `(o1, o2)` from its entry `(i, j)`,
+or `nothing`: for `o1 == o2`, the same value, of opposite sign for a fermionic operator, the
+two sites being different; on a pure state, for `o2` the adjoint of `o1`, its conjugate,
+`(o1(i) o2(j))†` being `o1(j) o2(i)`. On a mixed state, which truncation leaves only nearly
+hermitian, the second is computed.
+"""
+function mirror(state::State, o1::SimpleOp, o2::SimpleOp)
+    if o1 == o2
+        return isfermionic(o1) ? (-) : identity
+    elseif state isa State{Pure} && simplify(dag(o1)) == simplify(o2)
+        return conj
+    end
+    return nothing
+end
+
+"""
     closed_row(state, e, a, i)
 
 the operator `a` placed on site `i` of the expector `e`, with its string when it is fermionic,
@@ -827,7 +845,9 @@ function expect2(state::State{Pure}, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     state = weak_form(state)
     n = length(state)
     scale = real(trace(state))
-    firsts = unique([first.(ops); last.(ops)])
+    mirrors = [ mirror(state, o1, o2) for (o1, o2) in ops ]
+    # the operators placed first, the second of a pair only for its entries (j, i)
+    firsts = unique([first.(ops); [ o2 for ((_, o2), m) in zip(ops, mirrors) if isnothing(m) ]])
     r = Matrix{Any}(undef, n, n)
     for i in 1:n
         e = zipto(state, Expector(), i)
@@ -838,9 +858,12 @@ function expect2(state::State{Pure}, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
         for j in i+1:n
             r[i, j] = map(((o1, o2),) -> scalar(rows[o1][j] * obs_at(state, o2, j)), ops)
             # swapping two fermionic operators costs a sign
-            r[j, i] = map(ops) do (o1, o2)
-                v = scalar(rows[o2][j] * obs_at(state, o1, j))
-                isfermionic(o1) ? -v : v
+            r[j, i] = map(zip(ops, mirrors, r[i, j])) do ((o1, o2), m, v)
+                if !isnothing(m)
+                    return m(v)
+                end
+                w = scalar(rows[o2][j] * obs_at(state, o1, j))
+                return isfermionic(o1) ? -w : w
             end
         end
     end
@@ -854,6 +877,7 @@ function expect2(state::State{Mixed}, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     need_fermionic = any(isfermionic, oplist)
     need_non_fermionic = any(x->!isfermionic(x), oplist)
     n = length(state)
+    mirrors = [ mirror(state, o1, o2) for (o1, o2) in ops ]
     # the element type follows what `scalar` returns; `unroll` gives a concretely typed result
     r = Matrix{Any}(undef, n, n)
     scale = real(trace(state))
@@ -876,8 +900,11 @@ function expect2(state::State{Mixed}, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
                     scalar(enf.t * obs_at(state, a, i) * obs_at(state, b, j))
             r[i, j] = map(((o1, o2),) -> correlation(o1, o2), ops)
             # swapping two fermionic operators costs a sign
-            r[j, i] = map(ops) do (o1, o2)
-                isfermionic(o1) ? -correlation(o2, o1) : correlation(o2, o1)
+            r[j, i] = map(zip(ops, mirrors, r[i, j])) do ((o1, o2), m, v)
+                if !isnothing(m)
+                    return m(v)
+                end
+                return isfermionic(o1) ? -correlation(o2, o1) : correlation(o2, o1)
             end
             if j < n
                 if need_non_fermionic

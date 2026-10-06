@@ -278,7 +278,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `expect2` of a pure state places the operator of each site at once and carries a closed
   environment, where the site left open made each step cost the square of its dimension more.
   On 16 sites at bond dimension 32, it went from 0.26 s to 0.05 s for `Boson(4)`, from 0.07 s
-  to 0.04 s for fermions, and is as fast for qubits; a mixed state keeps its algorithm.
+  to 0.04 s for fermions, and is as fast for qubits; a mixed state keeps its algorithm. The
+  entries `(j, i)` of a pair of equal operators, and on a pure state of an operator and its
+  adjoint, are read from the entries `(i, j)`, which halves the time for `(X, X)`.
 - `mutual_info_renyi2` of a pure state and positions is twice the `renyi2` of the part, the
   two parts sharing their spectrum, which takes one partial trace of the mixed state rather
   than two and the purity of the whole: three to five times faster on 12 to 16 qubits. On
