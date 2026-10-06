@@ -3,17 +3,15 @@ module DataFramesExt
 import TensorMixedStates: data_to_frame
 using DataFrames
 
-# one row per call of `output`, the values measured together: the time alone repeats over the
-# sweeps of dmrg, a circuit, or once it is set back, and joining on it paired values that were
-# never measured together
+# one row per call of `output`: the time alone repeats, over the sweeps of dmrg for instance,
+# and joining on it would pair values never measured together
 function data_to_frame(data::Dict)
-    # nothing gathered: outerjoin of no table failed
+    # nothing gathered: no table to join
     if isempty(data)
         return DataFrame(time = [])
     end
-    # a measurement named time or event keeps its column, renamed time_1 or event_1. In the
-    # order of their names, which the order of the dictionary changed from one process to the
-    # next
+    # a measurement named time or event keeps its column, renamed time_1 or event_1; sorted by
+    # name, the order of a dictionary changing from one process to the next
     dfs = [DataFrame("event" => identity.(val["events"]), "time" => identity.(val["times"]),
                      key => identity.(val["data"]); makeunique = true)
            for (key, val) in sort!(collect(data); by = first)]
