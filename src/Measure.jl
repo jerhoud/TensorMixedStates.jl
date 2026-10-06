@@ -1,6 +1,5 @@
-# Measurements as the high level interface asks for them: the measurement types (Trace,
-# EntanglementEntropy, Check...), their names and the kind of their values, and measure, which
-# computes a whole set of them at once.
+# The measurements: their types (Trace, EntanglementEntropy, Check...), their names and the kind
+# of their values, and measure, which computes a whole set of them at once.
 
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
 export EntanglementEntropy, MutualInfoRenyi2, measure
@@ -12,10 +11,9 @@ export RealValue, ImaginaryValue, ComplexValue
     struct StateFunc
     StateFunc(name, func)
 
-a measurement given by a function of the state, written under `name`. `Trace`, `Purity` and
-the other state functions are built this way. The function returns a number, or a vector or a
-matrix of numbers, written as the values of a one site operator or of a correlation are. Its
-value is taken as real unless declared otherwise, see `RealValue`.
+a measurement given by a function of the state, written under `name`. The function returns a
+number, or a vector or a matrix of numbers, taken as real unless declared otherwise, see
+`RealValue`.
 
 # Examples
 
@@ -36,13 +34,9 @@ show(io::IO, s::StateFunc) =
     TimeFunc(name, obs)
 
 a measurement given by a function of the simulation time, or by a constant, written under
-`name`. `measure` builds one for a number or a function given as a measurement, and for a
-string a label with no value.
-
-Building it yourself gives it a name, which matters as soon as there are two functions: a
-function given as it is, named or anonymous, is named `"func"`, and two measurements of one set
-may not share a name, so `t -> sin(t)` and `t -> cos(t)`, or `sin` and `cos`, together are
-refused.
+`name`. A number or a function given as a measurement becomes one, and a string a label with
+no value. A function given as it is is named `"func"`: two of them in one set need a
+`TimeFunc` each, two measurements of a set not sharing a name.
 
 # Examples
 
@@ -59,9 +53,8 @@ show(io::IO, s::TimeFunc) =
 """
     compact_positions(positions)
 
-a set of site positions written in short, runs of three or more consecutive sites becoming
-ranges, for the name of a measurement on many sites. Names are column headers and keys, so
-two different sets keep two different names.
+a set of site positions written in short for a name, runs of three or more consecutive sites
+becoming ranges, two different sets giving two different names
 
 # Examples
 
@@ -90,9 +83,8 @@ end
     struct ObsOp
     ObsOp(name, op, obs)
 
-an operator measurement for `measure`: `op` is the operator as written, which a state of a
-representation of one's own measures with `expect`, and `obs` its terms, simplified and
-compacted, which a `State` measures with `expect_norm`.
+an operator measurement: `op` as written, for the `expect` of a representation of one's own,
+and `obs` its terms, simplified and compacted, for the `expect_norm` of a `State`
 """
 struct ObsOp
     name::String
@@ -130,10 +122,8 @@ end
     Check(name, obs1, obs2[, tol])
 
 a measurement comparing two measurements: its value is theirs followed by the norm of their
-difference, and an error is raised when that difference exceeds `tol`, if given.
-
-The two are compared as computed, before `measure` gives them their kind (see `RealValue`),
-which only decides how they are written.
+difference, and an error is raised when that difference exceeds `tol`, if given. They are
+compared as computed, before their kind (see `RealValue`) is applied.
 
 # Examples
 
@@ -166,8 +156,8 @@ the kind of the values of a measurement, which decides how `measure` gives them.
     struct Declared
     Declared(obs, kind)
 
-a measurement together with the kind of its values. `RealValue`, `ImaginaryValue` and
-`ComplexValue` build one for the user, and `make_obs` one for every other measurement.
+a measurement together with the kind of its values, built by `RealValue`, `ImaginaryValue`,
+`ComplexValue`, and `make_obs` for every other measurement
 """
 struct Declared
     obs
@@ -181,19 +171,17 @@ end
 
 declare the values of a measurement real, purely imaginary or complex, when the kind
 `measure` gives it by itself is not the one wanted. A real value is written in one column,
-an imaginary one as its imaginary part in one column named `Im(name)`, and a complex one in
-two, its real part then its imaginary part. A warning is written when the part dropped is
-more than rounding.
+an imaginary one as its imaginary part in a column named `Im(name)`, and a complex one in
+two, real then imaginary part. A warning is written when the part dropped is more than
+rounding.
 
-`measure` finds the kind of an operator by itself: real when it is self adjoint, imaginary
-when its adjoint is its opposite, complex otherwise. The test is symbolic and only says real
-or imaginary when it can prove it, so what it misses comes out complex, with a column of
-rounding: `Sp(1)Sm(2) + Sm(1)Sp(2)` for instance, the test not knowing how `Sm` relates to
-`Sp`. A state function or a function of time is real unless declared otherwise, and a number
-takes the kind of its type.
+By itself, an operator is real when it is self adjoint, imaginary when its adjoint is its
+opposite, and complex when the symbolic test cannot prove either, as for
+`Sp(1)Sm(2) + Sm(1)Sp(2)`. A state function or a function of time is real, and a number takes
+the kind of its type.
 
-A declaration given a vector or a `Check` holds for each of its measurements, and one given
-inside another holds for what it contains.
+A declaration holds for each measurement of a vector or a `Check`, one inside it keeping its
+own.
 
 # Examples
 
@@ -229,12 +217,8 @@ show(io::IO, d::Declared) = print(io, kind_constructors[d.kind], "(", d.obs, ")"
     operator_kind(s)
 
 the kind of the values of an operator already simplified: real when `simplify_dag` leaves it
-unchanged, imaginary when it gives its opposite, complex otherwise.
-
-Canonical forms are compared, so an operator whose adjoint the rules of `simplify_dag`, which
-rest on the `OpType` of the named operators, cannot bring back to it comes out complex. That
-is the only way the test can err: a column of rounding too many, never an imaginary part
-lost.
+unchanged, imaginary when it gives its opposite, complex otherwise. Comparing canonical forms,
+it can only err towards complex, never losing an imaginary part.
 """
 function operator_kind(s)
     d = simplify_dag(s)
@@ -250,10 +234,9 @@ end
 """
     pair_kind(a, b)
 
-the kind of the correlation matrix of `a` and `b`: the one shared by the three operators its
-entries measure, `a * b` on one site and the pair on two sites in either order, and complex
-when they differ, since a kind per entry would give its rows columns of their own. The
-Jordan-Wigner strings of fermionic entries lie on the sites in between and are self adjoint.
+the kind of the correlation matrix of `a` and `b`: the one shared by `a * b` on one site and
+the pair on two sites in either order, complex when they differ. The Jordan-Wigner strings of
+fermionic entries, in between and self adjoint, do not change it.
 """
 function pair_kind(a::SimpleOp, b::SimpleOp)
     ks = unique([ operator_kind(simplify(p)) for p in ((a * b)(1), a(1) * b(2), a(2) * b(1)) ])
@@ -263,10 +246,9 @@ end
 """
     value_kind(leaf)
 
-the kind of the values of a measurement that is not an operator: real for a function, which
-the symbolic test cannot see into, unless declared otherwise. A constant, often the reference
-of a `Check`, takes the kind of its type, see `constant_kind`, since it decides how the
-measurement is written and must not depend on a value computed along the way.
+the kind of the values of a measurement that is not an operator: real for a function, and
+for a constant that of its type, see `constant_kind`, so that how it is written does not
+depend on a value
 """
 value_kind(o::TimeFunc) = o.obs isa Function ? real_kind : constant_kind(o.obs)
 value_kind(_) = real_kind
@@ -285,7 +267,7 @@ constant_kind(_) = real_kind
     obs_op(o, s)
 
 the `ObsOp` measuring the operator `o`, given simplified as `s`, its terms of several sites
-compacted so that a long sum of them is measured channel by channel, see `compact`
+compacted, see `compact`
 """
 obs_op(o::IndexedOp{Pure}, s::IndexedOp{Pure}) =
     ObsOp(obs_name(o), o, compact_simplified(removeMulti(s), rounding_tol, "expect"))
@@ -315,17 +297,15 @@ make_leaf(o) = o
     make_obs(o)
 
 the measurement `o` made ready for `measure`: its leaf, see `make_leaf`, in a `Declared` with
-the kind of its values, the one declared or else the one `operator_kind`, `pair_kind` or
-`value_kind` finds. Any array, a range as well as the equal vector, becomes a `Vector` or a
-`Matrix` of them, which is what the rest takes, and a `Check` a `Check` of them.
+the kind declared or found by `operator_kind`, `pair_kind` or `value_kind`. An array, a range
+included, becomes a `Vector` or a `Matrix` of them, and a `Check` a `Check` of them.
 """
 make_obs(o::AbstractArray) = make_obs.(collect(o))
 make_obs(o::Check) =
     Check(o.name, make_obs(o.obs1), make_obs(o.obs2), o.tol)
 make_obs(o::Declared) = declare(o.obs, o.kind)
-# simplified once, for the measurement and for the test of its kind. The kind is taken before
-# compacting: operator_kind compares an operator with its adjoint by their structure, and the
-# adjoint of a com of c†c and c c† swaps its channels, which made a real one complex
+# the kind is taken before compacting: the adjoint of a compacted operator may swap its
+# channels, which operator_kind, comparing structures, would take as complex
 function make_obs(o::IndexedOp{Pure})
     s = simplify(o)
     return Declared(obs_op(o, s), operator_kind(s))
@@ -342,8 +322,8 @@ end
 """
     declare(o, kind)
 
-the measurement `o` made ready as by `make_obs`, but with the given kind, which holds for
-each measurement of an array or a `Check`, while a declaration inside `o` keeps its own.
+the measurement `o` made ready as by `make_obs` with the given kind, for each measurement of
+an array or a `Check`, a declaration inside `o` keeping its own
 """
 declare(o::Declared, ::ValueKind) = make_obs(o)
 declare(o::AbstractArray, kind::ValueKind) = map(x -> declare(x, kind), collect(o))
@@ -354,8 +334,7 @@ declare(o, kind::ValueKind) = Declared(make_leaf(o), kind)
 """
     row_major(x)
 
-the elements of the vector or matrix `x` in a vector, row by row, the order in which the
-lines of a matrix are written.
+the elements of the vector or matrix `x` in a vector, row by row, as a matrix is written
 """
 row_major(x::AbstractVector) = x
 row_major(x::AbstractMatrix) = vec(permutedims(x))
@@ -391,26 +370,19 @@ measure_names(_) = String[]
     struct Measure
     Measure(args...)
 
-a set of measurements, which is what a destination is given. A vector inside a set stands for
-its measurements, each given on its own. Names are column headers, so two measurements of a
-set may not share one.
+a set of measurements, what a destination is given, a vector inside it standing for its
+measurements. Two measurements of a set may not share a name, names being column headers.
 
-Building one by hand is only needed to measure several sets at once, `measure(state,
-[Measure(...), Measure(...)])`, which returns one group of results per set and computes a
-product shared by two of them only once. A single set is written as a plain vector, and
-`output` builds these for you, one per destination.
+Building one is only needed to measure several sets at once,
+`measure(state, [Measure(...), Measure(...)])`, which returns one group of results per set and
+computes a product shared by them only once; `output` builds them, one per destination.
 """
 struct Measure
     measurements::Vector
     function Measure(obs::Vector)
-        # a single name for several values would have to be a vector, which is neither a
-        # column header nor a key. Inside a `Check` a vector stays one, compared element
-        # by element
+        # flattened, a name standing for one value; a vector inside a `Check` stays one
         measurements = flat_measurements(make_obs.(obs))
-        # names become column headers and keys, so two measurements sharing one would be
-        # written on top of each other. It takes a long operator, abbreviated to the same
-        # text as another, to get there, so the way out is left to the caller: name the
-        # measurements apart or put them in different destinations.
+        # two long operators may be abbreviated to the same name
         ns = reduce(vcat, measure_names.(measurements); init = String[])
         dup = unique([n for n in ns if count(==(n), ns) > 1])
         if !isempty(dup)
@@ -444,10 +416,10 @@ leaves(T, o) = o isa T ? T[o] : T[]
     get_exp1(o)
     get_exp2(o)
 
-what the measurements of `o` ask for, for `measure` to compute each kind all at once: of
-every operator measurement, the terms on a `State` and the operator as written on a state of
-another representation, see `prod_values`, the operators of every `ObsExp1`, computed with
-`expect1`, and the pairs of every `ObsExp2`, computed with `expect2`.
+what the measurements of `o` ask for, for `measure` to compute each kind at once: the terms
+of the operator measurements on a `State`, the operators as written on another representation,
+see `prod_values`, the operators of the `ObsExp1` for `expect1`, and the pairs of the `ObsExp2`
+for `expect2`
 """
 get_prods(::State, o) = reduce(vcat, [ l.obs for l in leaves(ObsOp, o) ]; init = IndexedOp{Pure}[])
 get_prods(::AbstractState, o) = IndexedOp{Pure}[ l.op for l in leaves(ObsOp, o) ]
@@ -457,10 +429,9 @@ get_exp2(o) = Tuple{SimpleOp, SimpleOp}[ l.obs for l in leaves(ObsExp2, o) ]
 """
     prod_values(state, prods)
 
-the values of what `get_prods` gives: on a `State`, terms that `make_obs` simplified once and
-for all, which `expect_norm` takes as they are, divided by the trace as `expect` divides, and
-on a state of another representation,
-operators as written, which the `expect` of that representation measures.
+the values of what `get_prods` gives: on a `State`, by `expect_norm` on the terms already
+simplified, divided by the trace as `expect` divides, and on another representation by its
+`expect`
 """
 prod_values(state::State, terms) = expect_norm(state, terms) ./ real(trace(state))
 prod_values(state::AbstractState, ops) = expect(state, ops)
@@ -468,23 +439,19 @@ prod_values(state::AbstractState, ops) = expect(state, ops)
 """
     Trace
 
-a state function measuring the trace of the density matrix, see `trace` and `StateFunc`. It
-gives the real part, the only one the trace of a Hermitian density matrix has: the imaginary
-part that numerical errors may add is dropped, see `TraceError` for where it comes from, and
-`ComplexValue(Trace)` keeps it.
+a state function measuring the trace of the density matrix, see `trace` and `StateFunc`. Only
+its real part is given: `ComplexValue(Trace)` keeps the imaginary part numerical errors may
+add, see `TraceError`.
 """
 const Trace = StateFunc("Trace", trace)
 
 """
     TraceError
 
-a state function measuring `1 - trace(state)`, the deviation of the trace from one, see
-`Trace`. Numerical inaccuracies tend to move the trace, so this is a good check of the
-accuracy of a simulation.
-
-Only its real part is given. The imaginary part comes from the anti-Hermitian part of the
-density matrix, which numerical errors alone produce and `HermiticityError` measures: it is
-dropped, with a warning when more than rounding, and `ComplexValue(TraceError)` keeps it.
+a state function measuring `1 - trace(state)`, see `Trace`, a good check of the accuracy of a
+simulation, numerical inaccuracies tending to move the trace. Only its real part is given:
+`ComplexValue(TraceError)` keeps the imaginary part, which comes from the anti-Hermitian part
+of the density matrix, see `HermiticityError`.
 """
 const TraceError = StateFunc("TraceError", st -> 1. - trace(st))
 
@@ -522,10 +489,10 @@ const Hermiticity = StateFunc("Hermiticity", hermiticity)
     HermiticityError
 
 a state function measuring `1 - hermiticity(state)`, see `Hermiticity`: the squared norm of the
-anti-hermitian part of the density matrix, relative to that of the whole. When the exact state
-is hermitian, as under a Lindbladian, gates and noisy gates, and for a thermal or a steady
-state, that part is error: its square root is a lower bound of the error relative to the norm
-of the state, which makes it a criterion of convergence, see [Checking the accuracy](@ref).
+anti-Hermitian part of the density matrix, relative to that of the whole. When the exact state
+is Hermitian, as under a Lindbladian, gates and noisy gates, and for a thermal or a steady
+state, its square root is a lower bound of the error relative to the norm of the state, a
+criterion of convergence, see [Checking the accuracy](@ref).
 """
 const HermiticityError = StateFunc("HermiticityError", st -> 1. - hermiticity(st))
 
@@ -541,11 +508,9 @@ const Renyi2 = StateFunc("Renyi2", renyi2)
     SubRenyi2([positions...])
 
 a state function measuring the Rényi-2 entropy of the sites at `positions`, see `renyi2`. An
-integer is a cut: `SubRenyi2(k)` stands for the sites `1:k` and is named after them, as for
-`MutualInfoRenyi2`, the site `k` alone being `SubRenyi2([k])`. On a pure representation it
-measures how entangled those sites are with the rest: for a cut it is
-read off the entanglement spectrum, as cheap as `EntanglementEntropy`, and for positions the
-state is mixed first, which is much more expensive than the other state functions.
+integer `cut` stands for the sites `1:cut` and is named after them, the site `k` alone being
+`SubRenyi2([k])`. On a pure representation, a cut is as cheap as `EntanglementEntropy`, while
+positions mix the state first, which is much more expensive.
 
 # Examples
 
@@ -553,7 +518,6 @@ state is mixed first, which is much more expensive than the other state function
 """
 SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(st, pos))
 
-# a cut stands for the sites on its left, as for MutualInfoRenyi2
 SubRenyi2(cut::Int) =
     StateFunc("SubRenyi2($(compact_positions(1:cut)))", st -> renyi2(st, cut))
 
@@ -586,14 +550,12 @@ EntanglementEntropy(cut, spectrum) = StateFunc("EntanglementEntropy($cut,$spectr
     MutualInfoRenyi2([positions...])
 
 a state function measuring the Rényi-2 mutual information between the sites at `positions`
-and the rest, see `mutual_info_renyi2`. An integer is a cut: `MutualInfoRenyi2(k)` stands for
-the sites `1:k` and is named after them, as `compact_positions` writes them: `MutualInfoRenyi2(1:3)` for `k = 3`,
-`MutualInfoRenyi2(1,2)` for `k = 2`.
+and the rest, see `mutual_info_renyi2`. An integer `cut` stands for the sites `1:cut` and is
+named after them: `MutualInfoRenyi2(1:3)` for `cut = 3`, `MutualInfoRenyi2(1,2)` for
+`cut = 2`.
 """
 MutualInfoRenyi2(part) = StateFunc("MutualInfoRenyi2($(compact_positions(part)))", st -> mutual_info_renyi2(st, part))
 
-# named after the sites on the left of the cut: MutualInfoRenyi2(3) was named as the one site
-# part [3], a different quantity
 MutualInfoRenyi2(cut::Int) =
     StateFunc("MutualInfoRenyi2($(compact_positions(1:cut)))", st -> mutual_info_renyi2(st, cut))
 
@@ -601,15 +563,14 @@ MutualInfoRenyi2(cut::Int) =
     reference_on(st, ref)
 
 the reference state `ref` put on the system of the measured state `st`, weakened first to
-what `st` conserves, since a simulation may weaken its state after the reference was built.
-Weakening is exact and costs nothing when the two already conserve the same. A reference
-conserving less than `st` is refused.
+what `st` conserves, a simulation possibly weakening its state after `ref` was built; a
+reference conserving less than `st` is refused
 """
 function reference_on(st::AbstractState, ref::State)
     target = symmetries(st.system)
     source = symmetries(ref.system)
-    # weakening the measured state instead would convert the whole state of the simulation at
-    # every measurement
+    # the reference rather than the measured state, which would be converted at every
+    # measurement
     for (name, strong) in target.names
         k = findfirst(q -> q[1] == name, source.names)
         if isnothing(k) || (strong && !source.names[k][2])
@@ -624,13 +585,10 @@ end
 """
     Fidelity(ref)
 
-a state function measuring the fidelity with the reference state `ref`, see `fidelity`.
-
-`ref` is put on the system of the measured state, which `fidelity` requires: a measurement is
-written before the system the simulation runs on exists. It is weakened first to what that
-state conserves, so that it can still be measured after a `Weaken` phase. Between two mixed
-representations it is refused, see `fidelity`, at the first measurement and not when the
-phase is written.
+a state function measuring the fidelity with the reference state `ref`, see `fidelity`. `ref`
+is put on the system of the measured state, weakened to what it conserves, so that it can still
+be measured after a `Weaken` phase. Between two mixed representations it is refused, see
+`fidelity`, at the first measurement.
 
 # Examples
 
@@ -641,12 +599,12 @@ Fidelity(ref::State) = StateFunc("Fidelity", st -> fidelity(st, reference_on(st,
 """
     Overlap(ref)
 
-a state function measuring the inner product with the reference state `ref`, that is
-``\\langle ref | \\psi \\rangle`` on a pure representation, see `inner`. Unlike `Fidelity`
-it is not normalised, and it is declared `ComplexValue`, so it is written in two columns.
-`ref` is put on the system of the measured state, as for `Fidelity`, and must be in its
-representation: on a mixed one the product is ``\\mathrm{tr}(ref^\\dagger \\rho)``, and a
-reference of the other representation is refused, at the first measurement.
+a state function measuring the inner product with the reference state `ref`,
+``\\langle ref | \\psi \\rangle`` on a pure representation and
+``\\mathrm{tr}(ref^\\dagger \\rho)`` on a mixed one, see `inner`. Unlike `Fidelity` it is not
+normalised, and it is a `ComplexValue`, written in two columns. `ref` is put on the system of
+the measured state as for `Fidelity`, and a reference of the other representation is refused
+at the first measurement.
 
 # Examples
 
@@ -658,13 +616,9 @@ Overlap(ref::State) = ComplexValue(StateFunc("Overlap", st -> inner(reference_on
     Variance(hamiltonian)
 
 a state function measuring the variance of the energy of `hamiltonian`, zero exactly when
-the state is one of its eigenstates, see `variance`. It needs a pure representation, and is
-refused on a mixed one at the first measurement.
-
-The MPO is built at every measurement, since the system the simulation runs on does not
-exist when the measurement is written. That is cheap next to the variance itself, which
-costs a `dmrg` sweep: ask for it in `final_measurements` or under a large `measurements_period`, not
-at every sweep.
+the state is one of its eigenstates, see `variance`. A mixed representation is refused at the
+first measurement. It costs a `dmrg` sweep: ask for it in `final_measurements` or under
+a large `measurements_period`.
 
 # Examples
 
@@ -709,8 +663,7 @@ dropped_hint(_) = ""
 
 the value `x` of a measurement given its kind: its real part, its imaginary part, or a complex
 number even when `x` is real, so that the values of a measurement have one type whatever the
-state. A dropped part larger than rounding is reported with `@warn`, which `output` sends to
-the log of the simulation.
+state. A dropped part larger than rounding is reported with `@warn`.
 """
 kept_value(o::Declared, name, x, t) = kept_value(o.kind, name, x, t, dropped_hint(o.obs))
 
@@ -727,7 +680,7 @@ function kept_value(kind::ValueKind, name, x::Number, t, hint)
 end
 
 function kept_value(kind::ValueKind, name, x::AbstractArray, t, hint)
-    # the empty value of a symbol the running algorithm does not provide keeps its type
+    # the empty value of a symbol not given keeps its type
     if isempty(x)
         return x
     end
@@ -785,9 +738,8 @@ part_value(o, args...; kwargs...) = last(get_val(o, args...; kwargs...))
 """
     written_part(o, x, t)
 
-the value `x` of a part of a `Check` as written, given its kind, except that an imaginary
-part stays a complex number: on the line of its check a part has no name of its own, so no
-`Im(name)` to say that a number is an imaginary part.
+the value `x` of a part of a `Check` as written given its kind, except that an imaginary part
+stays a complex number, a part having no `Im(name)` of its own on the line of its check
 """
 function written_part(o::Declared, x, t)
     y = kept_value(o, only(measure_names(o.obs)), x, t)
@@ -806,13 +758,11 @@ on_numbers(f, x::AbstractArray) = map(y -> on_numbers(f, y), x)
 on_numbers(_, x) = x
 
 function get_val(o::Check, v::Dict, st::AbstractState, t::Number; kwargs...)
-    # compared as computed: the kind of a part decides how it is written, and what it drops
-    # must not decide whether the check passes, a complex reference given as a function of
-    # time, real unless declared otherwise, for instance
+    # compared as computed: what the kind of a part drops must not decide whether the check
+    # passes
     v1 = part_value(o.obs1, v, st, t; kwargs...)
     v2 = part_value(o.obs2, v, st, t; kwargs...)
-    # a symbol not given here has an empty value, which nothing compares to: the check is as
-    # empty, unless it was asked to pass, which it cannot do that way
+    # a symbol not given here has an empty value, which nothing compares to
     if isempty(v1) || isempty(v2)
         if !isnothing(o.tol)
             error("Check $(o.name) has nothing to compare, a symbol it measures not being given here")
@@ -823,9 +773,8 @@ function get_val(o::Check, v::Dict, st::AbstractState, t::Number; kwargs...)
     if !isnothing(o.tol) && d > o.tol
         error("Check $(o.name) failed with values $v1, $v2 and difference $d")
     end
-    # a vector literal would convert the three to a common type, a real reference or the
-    # distance to a complex number, and change the columns they take. `map` leaves each as
-    # it is and narrows the container the way reading it back from a checkpoint does
+    # not a vector literal, which would convert the three to a common type and change their
+    # columns: `map` narrows the container as reading it back from a checkpoint does
     return o.name => map(identity, Any[written_part(o.obs1, v1, t), written_part(o.obs2, v2, t), d])
 end
 
@@ -835,15 +784,13 @@ end
     measure(state, ::Vector{Measure}[, t]; kwargs...)
 
 the measurements asked for on `state` at simulation time `t`, 0 by default: a measurement or
-a vector of them gives a vector of pairs `name => value`, one per measurement, and a vector of
-`Measure` one such vector per set. It is more efficient to ask for all measurements in one
-call.
+a vector of them gives a vector of pairs `name => value`, and a vector of `Measure` one such
+vector per set. Asking for all measurements in one call is more efficient.
 
-Each value is given the kind of its measurement, see `RealValue`: a real number, a complex
-number, or the imaginary part of a purely imaginary one under the name `Im(name)`. `expect`,
-`expect1` and `expect2` give the values as they are computed. A `Symbol` takes its value
-from the keyword argument of that name, and is empty without one: the phases pass `sweep`, and
-`energy` for a dmrg search.
+Each value has the kind of its measurement, see `RealValue`, while `expect`, `expect1` and
+`expect2` give values as computed. A `Symbol` takes its value from the keyword argument of
+that name, and is empty without one: the phases pass `sweep`, `energy` for a dmrg search, and
+`beta` and `log_trace` for `thermal_state`.
 
 # Examples
 
