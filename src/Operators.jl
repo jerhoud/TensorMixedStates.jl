@@ -5,6 +5,7 @@
 export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState
+export depolarizing_dissipator, depolarizing_gate
 export named, parity
 export dag, ⊗, isfermionic, hasfermionic, map_sites
 
@@ -1016,6 +1017,49 @@ struct SetState <: GenericOp{Mixed, 1}
 end
 
 isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state))
+
+
+# Depolarization
+
+"""
+    tensor_power(a, n)
+
+the tensor product of `n` copies of the generic operator `a`, `a` itself for `n = 1`
+"""
+tensor_power(a::GenericOp, n::Int) = reduce(⊗, fill(a, n))
+
+"""
+    depolarizing_dissipator(γ, n = 1)
+
+the Lindblad generator depolarizing `n` sites together at rate `γ`, for an evolver, on sites
+of any type: ``\\rho \\mapsto \\gamma\\,(\\mathrm{tr}_S(\\rho) \\otimes I/d^n - \\rho)``.
+Evolving under it for a time `t` is `depolarizing_gate(1 - exp(-γt), n)`. It is refused on
+sites conserving something strongly.
+
+# Examples
+
+    evolver = -im * H + sum(depolarizing_dissipator(0.1)(i) for i in 1:10)
+"""
+depolarizing_dissipator(γ::Real, n::Int = 1) =
+    γ * (tensor_power(SetState("FullyMixed"), n) - Gate(tensor_power(Id, n)))
+
+"""
+    depolarizing_gate(p, n = 1)
+
+the channel depolarizing `n` sites together with probability `p`, for a gate, on sites of any
+type: ``\\rho \\mapsto (1 - p)\\,\\rho + p\\,\\mathrm{tr}_S(\\rho) \\otimes I/d^n``, on a qubit
+`(1 - 3p/4) * Gate(Id) + p/4 * (Gate(X) + Gate(Y) + Gate(Z))`. It is
+`Gate(Id) + depolarizing_dissipator(p, n)`. Two sites depolarized together are not two sites
+depolarized each on its own, `depolarizing_gate(p) ⊗ depolarizing_gate(p)`. It is refused on
+sites conserving something strongly.
+
+# Examples
+
+    Gates(gates = prod(depolarizing_gate(0.01)(i) for i in 1:10))
+    apply(depolarizing_gate(0.02, 2)(1, 2) * controlled(Z)(1, 2), ρ)
+"""
+depolarizing_gate(p::Real, n::Int = 1) =
+    Gate(tensor_power(Id, n)) + depolarizing_dissipator(p, n)
 
 
 ############## Operator functions ###########

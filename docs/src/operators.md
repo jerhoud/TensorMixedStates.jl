@@ -59,6 +59,9 @@ Noisy gates can be defined using the `Gate` constructor, for example
 noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
 ```
 
+The depolarizing channel of sites of any type is [`depolarizing_gate`](@ref), and its Lindblad
+generator, for an evolver, [`depolarizing_dissipator`](@ref).
+
 And they define observables
 
 ```@example operators
@@ -87,6 +90,8 @@ Proj
 Dissipator
 Gate
 SetState
+depolarizing_gate
+depolarizing_dissipator
 Left
 Right
 Evolver

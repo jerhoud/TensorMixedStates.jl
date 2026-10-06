@@ -653,6 +653,28 @@ end
     @test norm(apply(make_mpo(f, depolarizing2(2, 4)), f) - apply(depolarizing2(2, 4), f)) < 1e-12
 end
 
+@testset "Depolarization" begin
+    # the channel on any site, compared with the Pauli form on qubits, and the generator, whose
+    # evolution for a time t is the channel of probability 1 - exp(-γt)
+    p, γ, t = 0.4, 0.7, 0.5
+    paulis = (Id, X, Y, Z)
+    q = mix(RandomState{Pure}(System(3, Qubit()), 4))
+    one_site = (1 - 3p / 4) * Gate(Id) + p / 4 * (Gate(X) + Gate(Y) + Gate(Z))
+    @test norm(apply(depolarizing_gate(p)(2), q) - apply(one_site(2), q)) < 1e-12
+    two_sites = (1 - p) * Gate(Id ⊗ Id) + p / 16 * sum(Gate(a ⊗ b) for a in paulis for b in paulis)
+    @test norm(apply(depolarizing_gate(p, 2)(1, 3), q) - apply(two_sites(1, 3), q)) < 1e-12
+    s = State{Mixed}(System(2, Spin(1)), "1")
+    @test expect(apply(depolarizing_gate(p)(1), s), Proj("1")(1)) ≈ 1 - p + p / 3
+    for (ρ, n, sites) in [(mix(RandomState{Pure}(System(3, Spin(1)), 4)), 1, (2,)), (q, 2, (1, 3))]
+        evolved = tdvp(depolarizing_dissipator(γ, n)(sites...), t, ρ; nsteps = 20,
+                       limits = Limits(maxdim = 100))
+        @test norm(evolved - apply(depolarizing_gate(1 - exp(-γ * t), n)(sites...), ρ)) < 1e-10
+    end
+    strong_sys = System(2, Qubit(conserve = strong(N)))
+    @test_throws "conserving it strongly forbids" apply(depolarizing_gate(p)(1),
+                                                        State{Mixed}(strong_sys, "Up"))
+end
+
 @testset "Periods below one mean never" begin
     # one rule for every period of the library: `measurements_period`, `expand_period`,
     # `hermitianize_period`, and the `checkpoint_interval` covered in checkpoint.jl.
