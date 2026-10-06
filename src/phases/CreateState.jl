@@ -55,9 +55,8 @@ CreateState{R}(sites, state; kwargs...) where R =
 """
     as_representation(sim, R, ::State)
 
-the given state in representation `R`, for a `CreateState` handed a `State` rather than a
-description. A pure state is mixed if `R` is `Mixed`; a mixed state is refused if `R` is
-`Pure`, since it holds no purification to go back to.
+the given state in representation `R`, for a `CreateState` handed a `State`: a pure state is
+mixed if `R` is `Mixed`, a mixed state refused if `R` is `Pure`
 """
 as_representation(::Simulation, ::Type{R}, state::State{R}) where R = state
 function as_representation(sim::Simulation, ::Type{Mixed}, state::State{Pure})
@@ -86,8 +85,6 @@ function run_phase(sim::Simulation, phase::CreateState{R}) where {R <: PM}
             error("CreateState cannot randomize a State into a mixed state: give a description " *
                   "of the state, whose purification it is drawn from")
         end
-        # `type` is what the phase was asked for, so a State given in the other
-        # representation is converted rather than silently kept as it is
         state = as_representation(sim, R, phase.state)
         if phase.randomize ≠ 0
             state = RandomState(state, phase.randomize)

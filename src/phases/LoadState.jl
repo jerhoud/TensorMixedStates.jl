@@ -33,8 +33,7 @@ end
 
 function run_phase(sim::Simulation, phase::LoadState)
     st = load_state(in_dir(sim.checkpoint.dir, phase.file), phase.statename)
-    # a state read back is not truncated without limits of its own, which a representation of
-    # one's own need not support
+    # not truncated at the default limits, which a representation of one's own need not support
     return Simulation(sim, phase.limits == Limits() ? st : truncate(st; phase.limits))
 end
 
