@@ -1,5 +1,5 @@
-# The observers given to tdvp, dmrg and approx_W, which output measurements every given number of
-# steps, log the progress, and stop the algorithm when the simulation is asked to stop.
+# The observers given to the solvers, which output measurements every given number of steps,
+# log the progress, and stop the solver when the simulation is asked to stop.
 
 export TdvpObserver, DmrgObserver, ApproxWObserver, ThermalObserver
 
@@ -72,9 +72,11 @@ takes them, on the normalized state every `period` sweeps and on the sweep the t
 stops at; a `period` below one means only then. It also logs every sweep and, within
 `runTMS`, stops the search when the simulation is asked to stop.
 
-The other arguments serve a search resumed from a checkpoint: `done` is the number of sweeps
-already done, `energy` the energy of the last of them, which the first sweep is compared with,
-and `nsweeps` the sweeps of the whole phase, which a stop on the tolerance records as done.
+The other arguments serve a search resumed from a checkpoint:
+
+- `done`: the number of sweeps already done
+- `energy`: the energy of the last of them, which the first sweep is compared with
+- `nsweeps`: the sweeps of the whole phase, which a stop on the tolerance records as done
 
 # Examples
 
@@ -95,15 +97,12 @@ end
 """
     sweep_commit!(sim, state, time, sweep; carried)
 
-close a sweep of the phase being run, once its measurements and its log are written: commit
-it, with the value `carried` the phase carries to its next sweep, see `Commit`, write the commit
-if a checkpoint is due or a stop is asked for, and return whether the solver has to stop.
-
-This order keeps a checkpoint and the outputs in step, so it lives here rather than in each
-observer: what is written after the commit is written again by the resumed run, and what is
-written before it is kept. The sweep is committed only in a phase that has read its resume
-point, see `resume_step`; in any other the commit stays the start of the phase, while a
-stop and an interrupt are honoured all the same.
+close a sweep once its measurements and its log are written: commit it with the value
+`carried` to its next sweep, see `Commit`, write the checkpoint if one is due or a stop is
+asked for, and return whether the solver has to stop. This order keeps a checkpoint and the
+outputs in step: what is written before the commit is kept on resume, what is written after
+it is written again. The sweep is committed only in a phase that has read its resume point, see
+`resume_step`, a stop being honoured in any phase.
 """
 function sweep_commit!(sim::Simulation, state::AbstractState, t::Number, sweep::Int;
                        carried = nothing)
@@ -125,11 +124,10 @@ end
 """
     sweep_done!(observer; sweep, state, current_time, kwargs...)
 
-the end of a sweep of `tdvp` or `approx_W`, once all its work is done, expansion and
-hermitianization included, returning whether the solver has to stop. The observers of the
-package write the measurements and the log of the sweep and then commit it, see
-`sweep_commit!`, so that a checkpoint holds exactly what is written up to it. Any other
-observer is handed the sweep as ITensorMPS hands it one, `measure!` then `checkdone!`.
+the end of a sweep of `tdvp`, `approx_W` or `thermal_state`, all its work done, returning
+whether the solver has to stop. The observers of the package write the measurements and the
+log of the sweep, then commit it, see `sweep_commit!`; any other observer gets `measure!`
+then `checkdone!`, as from ITensorMPS.
 """
 function sweep_done!(o; kwargs...)
     measure!(o; kwargs...)
@@ -167,32 +165,28 @@ function sweep_done!(o::ThermalObserver; sweep, state, beta, log_trace, kwargs..
         output(Simulation(o.sim, st), o.measurements; sweep, beta, log_trace)
     end
     log_message(o.sim, "beta $(round(beta; digits=8))")
-    # the simulation time does not move, and the logarithm of the trace is carried in the
-    # commit, as the energy of a dmrg sweep is, for a resumed computation to go on from it
+    # log_trace is carried in the commit for a resumed computation to go on from it
     return sweep_commit!(o.sim, st, o.sim.time, sweep; carried = log_trace)
 end
 
 function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
-    # ITensorMPS counts the sweeps of a resumed run from 1 again, and what is measured, logged
-    # and checkpointed goes by those of the phase, as it does for tdvp and approx_W. The
-    # energy is compared with the sweep before, which a resumed phase reads from the
-    # checkpoint, so that it stops where the uninterrupted run stops
+    # ITensorMPS counts the sweeps of a resumed search from 1: those of the phase are measured,
+    # logged and checkpointed, and the energy of the sweep before, read from the checkpoint,
+    # makes a resumed search stop where an uninterrupted one does
     s = sweep + o.done
     stop = !isnothing(o.energy) && abs(o.energy - energy) < o.tol
-    # normalized as the solver normalizes what it returns: an eigenvector of L†L has norm one
-    # and a sign of its own, and a steady state checkpointed on its last sweep, whose resume
-    # does not run the solver, was handed on and saved as it was, of trace -1.33. Normalizing
-    # makes a new MPS, dmrg going on with the next sweep in its own
+    # normalized as the solver normalizes what it returns, an eigenvector of L†L having a sign
+    # of its own: a search resumed after its last sweep hands this state on without running
+    # the solver. normalize makes a new MPS, leaving that of dmrg untouched
     st = normalize(State(o.sim.state, psi))
-    # a stop asked for is not a reason to measure: the uninterrupted run did not measure a
-    # sweep its period skips, and the resumed one continues after it
+    # a stop asked for is no reason to measure: the resumed run continues after this sweep,
+    # which the uninterrupted run measures only when due
     if stop || sweep_due(o.period, s)
         output(Simulation(o.sim, st), o.measurements; energy, sweep = s)
     end
     log_message(o.sim, "sweep $s")
     o.energy = energy
-    # a dmrg sweep does not change the simulation time, so the sweep count is what a resume
-    # needs, and a stop on the tolerance records the phase as done, not to be run again
+    # a stop on the tolerance records the phase as done, not to be run again on resume
     if sweep_commit!(o.sim, st, o.sim.time, stop ? o.nsweeps : s; carried = energy)
         stop = true
     end
