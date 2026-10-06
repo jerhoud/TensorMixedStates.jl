@@ -9,8 +9,7 @@ export AbstractState, State, mix, maxlinkdim, Limits
 the caches a `State` keeps for measurements, each filled on first use: the local tensors,
 the environments from the left and from the right, the trace, and the weakened form of a
 state conserving something strongly. `lock` is held while they are filled, so that several
-threads may measure one state: one found a cache sized and not yet filled, and failed on an
-`UndefRefError`. It is reentrant, filling a cache filling others.
+threads may measure one state; it is reentrant, filling a cache filling others.
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -28,20 +27,17 @@ PreObs() = PreObs([], [], [], [], [], ReentrantLock())
 the truncation limits of an MPS.
 
 # Fields
-- `cutoff`: the largest truncation error allowed, the weight of the discarded singular values,
-  the sum of their squares relative to that of all; the default `eps()`, about 2.2e-16, the
-  default of the solvers of ITensorMPS, discards the singular values below about 1.5e-8 of the
-  norm, which rounding leaves and which would otherwise swell the bond dimension, and `0`
-  discards nothing
+- `cutoff`: the largest truncation error allowed, the sum of the squares of the discarded
+  singular values relative to that of all; the default `eps()` discards the singular values
+  below about 1.5e-8 of the norm, which rounding leaves, and `0` discards nothing
 - `maxdim`: the maximum bond dimension
 - `mindim`: the minimum bond dimension; the default `1` means no minimum, and a smaller value
   is taken as `1`
 
 For `tdvp`, `approx_W`, `dmrg`, `steady_state` and the phases built on them, any field may
-be a vector, one value per step of an evolution or per sweep of a search:
-`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. A vector
-shorter than the number of steps or sweeps is continued with its last value, as in ITensor. Elsewhere, as in `apply`, `truncate` or a sum of states, the fields are
-single values.
+be a vector, one value per step or per sweep, continued with its last value:
+`Limits(cutoff = 1e-14, maxdim = [2, 4, 8])` starts small and lets the state grow. Elsewhere,
+as in `apply`, `truncate` or a sum of states, the fields are single values.
 
 # Examples
 
@@ -53,9 +49,8 @@ struct Limits
     cutoff::Union{Float64, Vector{Float64}}
     maxdim::Union{Int, Vector{Int}}
     mindim::Union{Int, Vector{Int}}
-    # a bond has a dimension of one at least, which is what ITensors takes for no minimum:
-    # told less, it truncates a spectrum of zeros past its first value, so that a gate of
-    # several sites taking a state to zero, or the sum of two zero states, raised a BoundsError
+    # at least one, which ITensors takes for no minimum: with less, it keeps nothing of a
+    # spectrum of zeros, and a state taken to zero, by a gate for instance, fails
     Limits(cutoff, maxdim, mindim) = new(cutoff, maxdim, at_least_one(mindim))
 end
 
@@ -70,20 +65,17 @@ float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
 """
     int_dims(x, what)
 
-the bond dimension `x`, an integer or a vector of them, as `Int`, which `Limits` holds: an
-`Int32` raised a `MethodError`. Anything else, a float included, is refused by a message naming
-`what`, a bond dimension being an integer.
+the bond dimension `x`, an integer or a vector of them, as `Int`; anything else, a float
+included, is refused by a message naming `what`.
 """
 int_dims(x::Integer, _) = Int(x)
 int_dims(x::AbstractVector{<:Integer}, _) = Vector{Int}(x)
 int_dims(x, what) = error("$what is an integer, or a vector of them, not $(repr(x))")
 
-# a cutoff is a real number, and `cutoff = 0` has to be accepted as one: a field whose type
-# is a union is not converted to, so `@kwdef` refused it
+# not `@kwdef`: a field whose type is a union is not converted to, and `cutoff = 0` must pass
 Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1) =
     Limits(float_cutoff(cutoff), int_dims(maxdim, "maxdim"), int_dims(mindim, "mindim"))
 
-# printed as the call that builds it, the fields left at their default omitted
 function show(io::IO, l::Limits)
     default = Limits()
     given = [string(f, " = ", repr(getfield(l, f))) for f in fieldnames(Limits)
@@ -103,9 +95,8 @@ at_least_one(m::Vector{Int}) = max.(m, 1)
     sweep_value(x, sweep)
     sweep_limits(::Limits, sweep)
 
-the value of the per sweep schedule `x` on the given sweep, and the `Limits` holding those
-values. A plain value covers every sweep; a vector shorter than the number of sweeps is
-continued with its last value, as in ITensor.
+the value of the per sweep schedule `x` on the given sweep, a vector being continued with its
+last value, and the `Limits` holding those values.
 """
 sweep_value(x, ::Int) = x
 sweep_value(x::Vector, sweep::Int) = x[min(sweep, length(x))]
@@ -116,9 +107,8 @@ sweep_limits(l::Limits, sweep::Int) =
 """
     sweep_due(period, sweep)
 
-whether something asked for every `period` sweeps is due on this one. A period below one
-means never: `mod(sweep, 0)` would raise a division by zero, and a negative period would make
-it due every `-period` sweeps. `checkpoint_due` applies the same rule.
+whether something asked for every `period` sweeps is due on this one, a period below one
+meaning never.
 """
 sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
 
@@ -127,9 +117,9 @@ sweep_due(period::Int, sweep::Int) = period ≥ 1 && mod(sweep, period) == 0
 
 the supertype of the states a `Simulation` holds: `State`, and the states of a
 `Representation` an extension defines. Such a state has a field `system`, the `System` of its
-physical sites, which need not be the one the representation keeps its tensors on, and
-methods of the functions it supports: `expect`, `expect1` and `expect2`, which `measure`
-calls, `apply` for gates, `write_state` and `read_state` to be saved, see [Extending TMS](@ref).
+physical sites, and methods of the functions it supports: `expect`, `expect1` and `expect2`,
+which `measure` calls, `apply` for gates, `write_state` and `read_state` to be saved, see
+[Extending TMS](@ref).
 """
 abstract type AbstractState end
 
@@ -145,11 +135,10 @@ for `R = Mixed`.
 
 The local states are given as a vector, one per site, or as a single one for every site. A
 local state is a name, the number of a basis state counted from 0, a vector of amplitudes, a
-function of the site, the `AbstractSite` and not its position, giving one of those, or, in
-mixed representation only, a density matrix.
-A vector of numbers is always the amplitudes of one local state, given to every site: basis
-numbers site by site are written `Any[0, 1, 0]`. A string such as `"1"` is a name, which a site
-reads by its own rule, see `string_state`: most read it as that basis number, but `Spin` reads
+function of the `AbstractSite` (not of its position) giving one of those, or, in mixed
+representation only, a density matrix. A vector of numbers is always the amplitudes of one
+local state, given to every site: basis numbers site by site are written `Any[0, 1, 0]`. A
+string such as `"1"` is a name, read by the rule of the site, see `string_state`: `Spin` reads
 it as a value of ``S_z`` and `Electron` has no such name.
 
 # Fields
@@ -171,8 +160,8 @@ it as a value of ``S_z`` and `Electron` has no such name.
 # Operations
 
 States can be added, subtracted, multiplied and divided by numbers. The two states of a sum
-or a difference must be on the same system. It takes truncation limits as
-`+(a, b; limits = Limits(maxdim = 100))`, by default those of `Limits()`.
+or a difference must be on the same system, and it takes truncation limits as
+`+(a, b; limits = Limits(maxdim = 100))` (default `Limits()`).
 """
 struct State{R <: PM} <: AbstractState
     system::System
@@ -217,9 +206,8 @@ make_one_state(::Pure, ::Index, ::Index, ::Matrix, _, _) =
     error("cannot use a mixed local state to create a pure local state")
 make_one_state(::Mixed, i::Index, k::Index, v::Vector, what, site::AbstractSite) =
     make_one_state(Mixed(), i, k, v * v', what, site)
-# the density matrix is laid on the ket and the bra and only then gathered, never written
-# straight onto the mixed index: combining charged indices merges and sorts their sectors,
-# so the flat order of the mixed basis is not the order of the matrix
+# laid on the ket and the bra, then combined, never written straight onto the mixed index:
+# combining charged indices sorts their sectors, so the mixed basis is not in matrix order
 function make_one_state(::Mixed, i::Index, k::Index, m::Matrix, what, site::AbstractSite)
     b, c = mixer(i, k, site)
     return charged_state(on_legs(m, [i], [dag(b')])..., what, site) * c
@@ -229,8 +217,8 @@ end
     state_links(ts)
 
 the link indices, of dimension one, of the product state of the tensors `ts`. With charges,
-each carries the charge of the sites on its left, so that the flux of the state is its sector;
-they are daggered, as ITensorMPS does for its own product states, so that the pieces contract.
+each carries the charge of the sites on its left, so that the flux of the state is its sector,
+and is daggered so that the pieces contract.
 """
 function state_links(ts::Vector{ITensor})
     n = length(ts)
@@ -260,8 +248,7 @@ function make_state(type::PM, system::System, states::Vector)
         st[1] = ts[1]
     else
         l = state_links(ts)
-        # `onehot` rather than `ITensor(1, l)`: the latter asks for a tensor of zero flux,
-        # which a link carrying a charge has no block for
+        # `onehot`: `ITensor(1, l)` asks for a zero flux, which a charged link has no block for
         st[1] = ts[1] * onehot(l[1] => 1)
         for i in 2:n-1
             st[i] = ts[i] * onehot(dag(l[i-1]) => 1) * onehot(l[i] => 1)
@@ -278,8 +265,7 @@ function State{R}(system::System, states::Vector) where R
     return State{R}(system, make_state(R(), system, states))
 end
 
-# the local state repeated on every site, in a list of type Any: `fill(3, n)` is a Vector{Int},
-# which the method below took for the amplitudes of a single site
+# a list of type Any: a `Vector{Int}` would be taken for the amplitudes of a single site
 State{R}(system::System, state) where R =
     State{R}(system, Any[ state for _ in 1:length(system) ])
 
@@ -292,12 +278,9 @@ State(state::State{R}, st::MPS) where R =
 """
     State(::System, ::State)
 
-the same state on the given system, whose sites must be those of the state.
-
-Every `System` has ITensor indices of its own, so states built on two systems cannot be
-contracted together even when their sites are the same, and `inner` and the fidelities refuse
-them. This puts a state, read from disk or built before a run for instance, on the system of
-another. It mirrors `State(state, mps)`, which keeps the system and takes a new MPS.
+the same state on the given system, whose sites must be those of the state. Every `System`
+has indices of its own, so `inner` and the fidelities refuse states built on two systems, even
+of the same sites: this puts a state, read from disk for instance, on the system of another.
 
 # Examples
 
@@ -309,10 +292,8 @@ function State(system::System, st::State{R}) where R
               "$(st.system.sites) and the system given has $(system.sites)")
     end
     m = replace_siteinds(st.state, SysIndex{R}(system, 1:length(system)))
-    # other indices leave the values of the tensors, and so their orthogonality, which
-    # replace_siteinds forgets: expect, which does not contract the sites it knows to be
-    # orthogonal, then rounded otherwise, and a resumed run did not write the file of the
-    # uninterrupted one
+    # replace_siteinds forgets the orthogonality, by which expect skips contractions: without
+    # it, the results round differently
     ITensorMPS.set_ortho_lims!(m, ITensorMPS.ortho_lims(st.state))
     return State{R}(system, m)
 end
@@ -349,13 +330,12 @@ mix(state::State{Mixed}) = state
 function mix(state::State{Pure})
     n = length(state)
     system = state.system
-    # densified so that a tensor left diagonal by a decomposition becomes an ordinary one,
-    # which a charged state must not be: `dense` would throw its sectors away
+    # `dense` makes ordinary a tensor left diagonal by a decomposition, but would drop the
+    # sectors of a charged state
     st = hasqns(state.state) ? state.state : dense(state.state)
-    # the bra is a starred copy of the whole tensor, links included: a link carries the same
-    # charges as the sites, and starring one half of a tensor while leaving the other alone
-    # would have the two count in different ways. One copy per index, kept here, so that the
-    # link starred on the right of a site is the same index on the left of the next
+    # the bra stars the whole tensor, links included, or links and sites would count charges
+    # differently; one relabeller, so that a link starred on the right of a site is the same
+    # index on the left of the next
     starred = relabeller(i -> star(i, strong_names(system)))
     bra(t) = relabel(t, starred)
     v = Vector{ITensor}(undef, n)
@@ -366,13 +346,10 @@ function mix(state::State{Pure})
         mt = t * dag(bra(t')) * combinerto(midx, idx, dag(starred(idx'))) * left
         if i < n
             rlink = commonind(t, st[i+1])
-            # the combined link is taken from the combiner rather than named in advance:
-            # combining charged indices merges and sorts their sectors, and only the
-            # combiner knows which ones come out and in what order
+            # the combined link is the one of the combiner, which sorts charged sectors
             right = combiner(rlink, dag(starred(rlink')); tags = "Link,l=$i")
             mt *= right
-            # the two ends of a link point in opposite directions, so the site on its right
-            # gets the daggered combiner. Without charges this is the same tensor
+            # the other end of the link points the other way
             left = dag(right)
         end
         v[i] = mt
@@ -389,20 +366,16 @@ the same state on a system conserving less, `target` naming what it must still c
 `conserve` is given. Without a target, every strong quantity becomes weak or, when none is
 strong, every quantity is dropped: repeated, it goes from strong to weak to nothing.
 
-The levels hold the same physics and differ in how the tensors are cut into blocks. Strong
-keeps the charges of ket and bra apart: the blocks are finest and the state lies in a single
-sector. Weak keeps their difference: the state may spread over sectors. Nothing gives plain
-tensors.
-
-Weakening is a step of a simulation: a phase may evolve under a strong symmetry, which every
-dissipator commuting with the charge allows, and the next one under a weak one, where a jump
-moving the charge is possible.
-There is no way back, since the finer blocks cannot be recovered, and a target asking for more
-than the state has is refused.
+The levels hold the same physics and differ in how the tensors are cut into blocks: strong
+keeps the charges of ket and bra apart and the state lies in a single sector, weak keeps their
+difference and the state may spread over sectors, nothing gives plain tensors. A phase may thus
+evolve under a strong symmetry and the next one under a weak one, where a jump moving the
+charge is possible. There is no way back, and a target asking for more than the state has is
+refused.
 
 The system built is a new one, so two states weakened separately must be put on one system,
-see `State(::System, ::State)`, before `inner` compares them. A `Simulation` is weakened the
-same way, through its state.
+see `State(::System, ::State)`, before `inner` compares them. A `Simulation` is weakened
+through its state.
 
 # Examples
 
@@ -425,11 +398,10 @@ function weaken(state::State{R}, target::Conserved) where R
         if !is_charged(weak)
             return State{Pure}(weak, replace_siteinds(dense(state.state), SysIndex{Pure}(weak, 1:n)))
         end
-        # the pure index keeps its flat order, that of the basis, through the relabelling, and
-        # the tensors only have to be put on the indices of the new system, unless a site that
-        # conserves nothing left is cut into a single block there, where the relabelling keeps
-        # one block per basis state. One relabeller for all the tensors, or the two ends of a
-        # link would each get a new index of their own and the state would come apart
+        # one relabeller for all the tensors, or the two ends of a link would get different
+        # indices. The relabelling keeps the basis order; only a site left conserving nothing
+        # needs a map, the new system giving it a single block where the relabelling keeps one
+        # per basis state
         return State{Pure}(weak, MPS(map(1:n) do i
             t = relabel(state.state[i], relab)
             old, new = relab(SysIndex{Pure}(system, i)), SysIndex{Pure}(weak, i)
@@ -437,8 +409,7 @@ function weaken(state::State{R}, target::Conserved) where R
         end))
     end
     if !is_charged(weak)
-        # an ITensor holds either charged indices or plain ones, so the last rung densifies
-        # first and then permutes, the two orders having nothing in common
+        # an ITensor holds either charged indices or plain ones: densify, then permute
         return State{Mixed}(weak,
             MPS([ dense(state.state[i]) * m for (i, m) in enumerate(dense_maps(system, weak)) ]))
     end
