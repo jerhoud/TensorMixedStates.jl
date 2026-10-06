@@ -128,6 +128,9 @@ end
     # index, as for State
     @test trace(RandomState{Mixed}(System(3, Qubit()), [1., 0.], 4)) ≈ 1
     @test trace(RandomState{Mixed}(System(3, Qubit()), 1, 4)) ≈ 1
+    # a vector of local states of the wrong length is refused with the sizes of the system
+    @test_throws "system (3) and states (2)" RandomState{Mixed}(System(3, Qubit()),
+                                                                ["Up", "Dn"], 4)
 
     # randomizing a state of one site leaves the one it was given alone: its tensor was
     # written in place when the element type already matched, and its cache went stale

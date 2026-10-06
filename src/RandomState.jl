@@ -95,7 +95,14 @@ end
 the local states of a purification on the doubled system, `states` on each half, for a
 system of `n` sites.
 """
-double(states::Vector, ::Int) = [ states ; states ]
+function double(states::Vector, n::Int)
+    # refused here, where `State` would give the sizes of the doubled system
+    if length(states) ≠ n
+        error("incompatible sizes between system ($n) and states ($(length(states)))")
+    end
+    return [ states ; states ]
+end
+
 # a list of type Any, as in `State`: a `Vector{Int}` would be taken for the amplitudes of a
 # single site
 double(states, n::Int) = Any[ states for _ in 1:2n ]
