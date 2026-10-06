@@ -6,8 +6,7 @@ export runTMS, SimData, stopped
 """
     check_threading(threading)
 
-refuse a `threading` of `SimData` other than `nothing`, `:auto`, `:dense` and `:blocks` when
-the simulation is described, rather than when its phases start.
+refuse a `threading` of `SimData` other than `nothing`, `:auto`, `:dense` and `:blocks`
 """
 function check_threading(threading)
     if !(threading in (nothing, :auto, :dense, :blocks))
@@ -26,8 +25,7 @@ the description of a simulation, which `runTMS` runs.
 - `name`: the name of the simulation, and of the directory its results are written to
 - `phases`: the phases of the simulation, see `AbstractPhase`, as a vector which may contain
   vectors to any depth and is flattened. The first phase must create the state, as
-  `CreateState` and `LoadState` do, see `TensorMixedStates.creates_state`, the
-  simulation having no state before it
+  `CreateState` and `LoadState` do, see `TensorMixedStates.creates_state`
 - `description`: the text of the `description` file of the simulation (default `""`)
 - `time_start`: the initial simulation time (default 0.)
 - `final_measurements`: the measurements to make at the end of the simulation, see `output`
@@ -37,19 +35,17 @@ the description of a simulation, which `runTMS` runs.
 - `data_format`: the C like format of the measured values written (default
   `$default_data_format`)
 - `checkpoint_interval`: seconds between two checkpoints (default 0, no periodic checkpoint;
-  a stop or an interrupt still writes one, so that the simulation can be resumed)
+  a stop or an interrupt still writes one)
 - `max_time`: seconds after which the simulation stops cleanly (default `Inf`)
 - `threading`: how the tensor contractions are threaded, see `set_threading`: `:dense`
-  (default), `:blocks`, `:auto`, which chooses the mode before each phase from the system of
-  the state, `:dense` until there is one, or `nothing`, which leaves the settings of the
-  process as they are. The settings in force before the run are put back when `runTMS`
-  returns
+  (default), `:blocks`, `:auto`, chosen before each phase from the system of the state,
+  `:dense` before there is one, or `nothing`, leaving the settings of the process as they are.
+  The settings before the run are put back when `runTMS` returns
 
-A checkpoint is written in the directory of the simulation, and `runTMS` resumes from it on
-its own when it finds one. The simulation stops cleanly, writing a checkpoint, when
-`max_time` is past, when the file `<name>/stop` appears, or on an interrupt. Run with the
-`output` of `runTMS`, it has no directory: only `max_time` stops it, and no checkpoint is
-written.
+The simulation stops cleanly, writing a checkpoint in its directory that `runTMS` resumes
+from, when `max_time` is past, when the file `<name>/stop` appears, or on an interrupt. Run
+with the `output` of `runTMS`, it has no directory: only `max_time` stops it, and no
+checkpoint is written.
 
 # Examples
 
@@ -75,9 +71,7 @@ written.
     max_time::Real = Inf
     threading::Union{Nothing, Symbol} = :dense
     phases
-    # the phases are flattened once, here, so that everything downstream works on a single
-    # list: the phase loop and the position a checkpoint records. Neither has to remember to
-    # do it, and the two cannot disagree on what the phases of a simulation are.
+    # flattened once, here, so that the phase loop and the position a checkpoint records agree
     SimData(description, name, time_start, final_measurements, time_format, data_format,
             checkpoint_interval, max_time, threading, phases) =
         new(description, name, time_start, final_measurements, time_format, data_format,
@@ -88,9 +82,8 @@ end
 """
     flatten_phases(phases)
 
-the phases given as nested vectors, as is convenient when a program builds them in pieces,
-flattened into a single list by `SimData`. A phase then has one well defined position, which
-is what a checkpoint records.
+the phases given as nested vectors, flattened into a single list, where a phase has the
+position a checkpoint records
 """
 flatten_phases(p::Vector) = reduce(vcat, map(flatten_phases, p); init = [])
 flatten_phases(p) = [p]
@@ -98,9 +91,8 @@ flatten_phases(p) = [p]
 """
     check_phases(phases)
 
-refuse an object among the phases that is not one, see `check_is_phase`, when the simulation is
-written rather than when it reaches it: corrected then, it could not resume its checkpoint,
-which belongs to a simulation of other phases.
+refuse, when the simulation is written, an object among the phases that is not one, see
+`check_is_phase`: a program corrected later could not resume its checkpoint
 """
 function check_phases(phases::Vector)
     foreach(check_is_phase, phases)
@@ -110,9 +102,7 @@ end
 """
     check_first_phase(phases)
 
-refuse a first phase that does not create the state, see `creates_state`. A simulation starts
-without a state, which every other phase transforms: it would fail on `nothing` deep inside its
-solver.
+refuse a first phase that does not create the state, see `creates_state`
 """
 function check_first_phase(phases::Vector)
     if isempty(phases) || !creates_state(first(phases))
@@ -122,13 +112,8 @@ function check_first_phase(phases::Vector)
     return phases
 end
 
-# A `SimData` has the shape of a phase — `name`, `time_start`, `final_measurements` — because
-# `runTMS` runs the top level one through `log_phase` like any other phase, which is where
-# the first line of the log comes from. That makes `run_phase(::Simulation, ::SimData)`
-# reachable for a `SimData` sitting inside `phases`, and there it silently misbehaves: the
-# loop it opens shares the phase counter of the loop around it, so it skips every phase
-# whose index is below the one the outer loop had reached. Phases are grouped with plain
-# vectors, which flatten properly, so this is refused rather than half supported.
+# A `SimData` has the fields of a phase, `runTMS` running it through `log_phase`, but within
+# `phases` its loop would share the phase counter of the loop around it and skip phases.
 flatten_phases(sd::SimData) =
     error("the SimData \"$(sd.name)\" cannot be a phase of another simulation, " *
           "nest plain vectors instead")
@@ -154,9 +139,9 @@ show(io::IO, s::SimData) =
     same_program(dir, src_path)
 
 whether the checkpoint of the directory `dir` may be resumed by the program `src_path`
-given the arguments `ARGS`: the same, byte for byte, as its copy `prog.jl`, given the same
-arguments as those `prog_args.json` holds, none when it is absent. A program with no file, run
-from the REPL, has nothing to compare and is always accepted.
+given the arguments `ARGS`: the same, byte for byte, as `prog.jl`, given the arguments
+`prog_args.json` holds, none when it is absent. A program with no file, run from the REPL, is
+always accepted.
 """
 function same_program(dir, src_path)
     if isnothing(src_path) || src_path == ""
@@ -171,10 +156,9 @@ end
     live_marker(text)
 
 whether the file `running` holding `text`, the machine and the process of a run, marks a run
-that may still be going on. Not when it names a process of this machine that no longer exists,
-which ended without removing it, killed for instance, or this very process, whose number the
-dead one had. A file naming another machine, or naming none, as written before this version,
-is taken as live, there being no way to tell.
+that may still be going on: not when it names a process of this machine that no longer exists,
+or this very process, whose number the dead one had. A file naming another machine, or none, is
+taken as live.
 """
 function live_marker(text::AbstractString)
     parts = split(text)
@@ -211,10 +195,9 @@ end
     resume_system(phases, phase, sites)
 
 the system the state of a checkpoint taken at the start of the phase `phase`, or in it, is put
-back on: the one an uninterrupted run has it on, that of the last phase creating the state
-before that phase, see `phase_system`, when it has the `sites` of the state, and otherwise
-`nothing`, the state then coming back on a system of its own. A measurement comparing with a state built on that system before
-the run, which `inner` and the fidelities require to share it, failed on every resume.
+back on: that of the last phase creating the state before it, see `phase_system`, when it has
+the `sites` of the state, `nothing` otherwise, the state then coming back on a system of its
+own
 """
 function resume_system(phases::Vector, phase::Int, sites)
     i = findlast(creates_state, phases[1:min(phase - 1, end)])
@@ -229,10 +212,10 @@ end
     stopped(sim)
 
 whether the simulation `runTMS` returned stopped before the end of its phases, at `max_time`,
-on the file `stop` or on an interrupt, rather than completed: it is then resumed by running it
-again, see [High Level Interface](@ref). Within a phase of one's own, whether the run is
-stopping, its solver or its steps having stopped for a checkpoint: the phase leaves out then
-what it writes at its end, which its resume writes.
+on the file `stop` or on an interrupt: it is resumed by running it again, see
+[High Level Interface](@ref). Within a phase of one's own, whether the run is stopping, its
+solver or its steps having stopped for a checkpoint: the phase then leaves out what it writes
+at its end, which its resume writes.
 
 # Examples
 
@@ -258,25 +241,22 @@ if it was written by another program, or one given other arguments, see [Resumin
 - `output`: a stream to redirect everything to, `stdout` or `devnull` for instance, instead of
   writing a directory
 
-With a directory, an interrupt is a clean stop: a checkpoint is written and `runTMS` returns
-instead of killing the program. For that, Ctrl-C raises `InterruptException` during the run,
-a process wide setting that is given back the default Julia applies when `runTMS` returns.
+With a directory, an interrupt is a clean stop: a checkpoint is written and `runTMS` returns.
+For that, Ctrl-C raises `InterruptException` during the run, a process wide setting put back
+to the default of Julia when `runTMS` returns.
 
-`runTMS` is meant to be called once at a time in a process. It sets the threading of the
-contractions for the whole process, unless its `SimData` has `threading = nothing`, and a
-`CreateState` with a `seed` reseeds the global random generator. With a directory, it also
-changes the Ctrl-C behaviour for the duration of the run. Two simulations run at once in the
-same process, in parallel or one calling the other, would fight over all of these: run them
-in separate processes. Passing `output` only spares the Ctrl-C behaviour. The working
-directory of the process is left as it is: the files of the simulation are written in its
-directory by their full path.
+`runTMS` is meant to run one simulation at a time in a process: it sets for the whole process
+the threading of the contractions (unless `threading = nothing`), the global random generator
+(for a `CreateState` with a `seed`) and, with a directory, the behaviour of Ctrl-C. Run
+simultaneous simulations, in parallel or one calling the other, in separate processes. The
+working directory of the process is left as it is.
 """
 function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, output::Union{Nothing, IO} = nothing)
     live = isnothing(output)
     if live && (restart || clean)
         name = sim_data.name
-        # "." or an ancestor of the current directory was emptied, the program included,
-        # before rm failed on the directory itself. A link is removed without its target
+        # rm would empty the current directory, the program included, before failing; a link
+        # is removed without its target
         if ispath(name) && !islink(name) &&
            startswith(joinpath(realpath(pwd()), ""), joinpath(realpath(name), ""))
             error("cannot remove \"$name\", which contains the current directory")
@@ -287,9 +267,8 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         return
     end
     saved_threading = isnothing(sim_data.threading) ? nothing : ThreadingState()
-    # whether the run has taken its directory, which the way out undoes and no further: a
-    # directory that could not be made had the marker `error` written and a file `running`
-    # removed in the directory of the caller
+    # whether the run has taken its directory: only then does the way out write `error` and
+    # remove `running`
     started = false
     # the empty name would be the working directory itself
     if live && isempty(sim_data.name)
@@ -298,8 +277,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
     dir = live ? abspath(sim_data.name) : ""
     file(name) = joinpath(dir, name)
     try
-        # set at once, so that the stamp records the settings the run starts with: `:auto`
-        # starts dense, having no state to choose from yet
+        # set at once, for the stamp: `:auto` starts dense, with no state to choose from
         if !isnothing(sim_data.threading)
             set_threading(sim_data.threading == :auto ? :dense : sim_data.threading)
         end
@@ -310,9 +288,7 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
         stale = nothing
         if live
             mkpath(dir)
-            # refused before anything is written or loaded: the directory holds the results of
-            # another simulation, whose program, description and markers were overwritten,
-            # and its state may need site types this program does not load
+            # refused before anything is written or loaded, the directory holding another run
             if isfile(file("running"))
                 marker = read(file("running"), String)
                 if live_marker(marker)
@@ -330,12 +306,10 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             end
             started = true
             write(file("running"), "$(gethostname()) $(getpid())\n")
-            # a stop left over from the previous run would stop this one immediately, and the
-            # marker of a failed run would go on describing this one once it has succeeded
+            # left over from the previous run
             rm(file("stop"); force = true)
             rm(file("error"); force = true)
-            # scripts exit straight away on an interrupt, which would lose the state.
-            # asking for an exception instead lets the simulation checkpoint and quit.
+            # an exception rather than an exit, so that the run writes its checkpoint
             Base.exit_on_sigint(false)
             if sim_data.description ≠ ""
                 write(file("description"), sim_data.description)
@@ -345,13 +319,12 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     TensorMixedStates $(pkgversion(TensorMixedStates))
                     Date $(now())
                     """ * threading_stamp(sim_data.threading))
-            # the copy run again is the program already there, which cp refused to copy onto
-            # itself
+            # cp refuses to copy the program onto itself, when it is the copy that is run
             if !isnothing(src_path) && src_path ≠ ""
                 if !(isfile(file("prog.jl")) && samefile(src_path, file("prog.jl")))
                     cp(src_path, file("prog.jl"); force = true)
                 end
-                # none is written as no file, and the file of a run that had some is removed
+                # no arguments, no file, as `same_program` reads it
                 if isempty(ARGS)
                     rm(file("prog_args.json"); force = true)
                 else
@@ -368,8 +341,8 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             if live && has_checkpoint(dir)
                 system(phase, sites) = resume_system(sim_data.phases, phase, sites)
                 k = load_checkpoint(dir, system)
-                # put back before anything is written: a destination is created on first use,
-                # which would empty a file the checkpoint continues
+                # before anything is written: a destination created on first use would empty a
+                # file the checkpoint continues
                 shortened = restore_outputs!(sim.outputs, k.outputs)
                 c.generation = k.generation
                 log_message(sim, "Resuming from checkpoint: phase $(k.phase), sweep $(k.sweep), simulation time $(k.time)")
@@ -377,9 +350,8 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
                     log_message(sim, "Warning: $name is shorter than at the checkpoint, the lines " *
                                      "it lost are not written again")
                 end
-                # the resume point is the last commit from the start, so that an interrupt
-                # before the phase it belongs to has begun writes it back as it was, rather
-                # than the state it holds as the start of that phase
+                # also the last commit, so that an interrupt before its phase has begun writes
+                # it back as it was
                 c.resume = Commit(k.phase, k.sweep, k.phase_time, k.time, k.state, k.carried,
                                   output_marks(sim.outputs))
                 c.last = c.resume
@@ -387,46 +359,38 @@ function runTMS(sim_data::SimData; restart::Bool=false, clean::Bool=false, outpu
             try
                 sim = log_phase(sim, sim_data)
             catch e
-                # an interrupt is a request to stop cleanly, anything else is a real failure.
-                # Without a directory nothing can be saved and nothing resumed, so the
-                # interrupt goes on to the caller, as it would outside `runTMS`
+                # an interrupt is a clean stop, unless there is no directory to save in
                 if !(e isa InterruptException) || isempty(c.dir)
                     rethrow()
                 end
                 log_message(sim, "\n***** Interrupted, writing a checkpoint *****")
-                # the last commit, whatever was written since: the checkpoint and the outputs
-                # it resumes are those of one moment
+                # the last commit, whatever was written since, so that the checkpoint and the
+                # outputs it resumes are those of one moment
                 write_checkpoint(c, sim.outputs)
                 k = c.last
                 if !isnothing(k) && k.state isa AbstractState
-                    # the returned simulation must carry what was reached, not what the phase
-                    # was handed when it started
+                    # what was reached, not what the phase was handed
                     sim = Simulation(sim, k.state, k.time)
                 end
                 c.stopping = true
             end
         finally
-            # a failing phase must not take away what was collected before it: the json
-            # destinations are only written when the files are closed, so that has to
-            # happen on the way out of an exception too
+            # on a failure too: the json destinations are only written when the files are
+            # closed
             close_sim_files(sim)
         end
         return sim
     catch
-        # all the catch has of its own: the marker of a run that failed
         if started
             touch(file("error"))
         end
         rethrow()
     finally
-        # leaving the simulation, by whichever way, is described here and nowhere else, so
-        # that a step added later cannot be put on one path and forgotten on the other
+        # what the run set up is undone here only, whichever way it is left
         if started
             rm(file("running"); force = true)
-            # the flag is process wide and would otherwise change how Ctrl-C behaves for
-            # everything the caller runs afterwards. There is no way to read it back, so
-            # what goes back is the default Julia itself applies: on in a script, off in
-            # the REPL and in a session started with `-i`
+            # process wide and impossible to read back: the default of Julia goes back, on in
+            # a script, off in the REPL and with `-i`
             Base.exit_on_sigint(!isinteractive())
         end
         # process wide as well, and read back before the run
@@ -471,11 +435,9 @@ a checkpoint.
 function log_phase(sim::Simulation, phases::Vector; threading = nothing)
     c = sim.checkpoint
     r = c.resume
-    # a resumed run starts again from the state and the time of its checkpoint, past the phases
-    # it had completed. Put back here rather than where the checkpoint is read, since the
-    # `time_start` of the simulation is applied in between, and a checkpoint written after the
-    # last phase resumes none, the final measurements then still having to be taken at the
-    # time the simulation reached
+    # the state and time of a checkpoint are put back here, after the `time_start` of the
+    # simulation is applied: a checkpoint written after the last phase resumes none, and the
+    # final measurements take the time it reached
     if isnothing(r)
         commit!(c, sim.outputs, 1, 0, sim.time, sim.time, sim.state)
     else
@@ -490,22 +452,17 @@ function log_phase(sim::Simulation, phases::Vector; threading = nothing)
         # consumed by the phase it belongs to, whether it read it or not
         c.resume = nothing
         if c.stopping
-            # what a stopped run hands back is what it resumes from: the state and the time
-            # of its last commit, the start of the phase when that one commits no sweep
+            # a stopped run hands back what it resumes from, its last commit
             sim = Simulation(sim, c.last.state, c.last.time)
             log_stop(sim, i; within = true)
             break
         end
-        # the next phase is the one to resume from, committed at a clean boundary. Marked here
-        # also so that an interrupt falling after the last phase, in the final measurements,
-        # still checkpoints what the simulation reached
+        # committed after the last phase too, for an interrupt in the final measurements
         commit!(c, sim.outputs, i + 1, 0, sim.time, sim.time, sim.state)
         stop = stop_requested(c)
         if stop || checkpoint_due(c) || (i == length(phases) && (c.interval > 0 || c.generation ≠ 0))
-            # the last phase done, a checkpoint records it whether one is due or not, so that
-            # running the simulation again resumes past every phase and does nothing. Without
-            # periodic checkpoints, only when one is on the disk, left by a stop: the next run
-            # would resume from it and compute the end of the simulation again
+            # after the last phase, so that a new run does nothing; without periodic
+            # checkpoints, only when one is on the disk, which a new run would resume
             write_checkpoint(c, sim.outputs)
         end
         if stop
@@ -533,10 +490,9 @@ end
 """
     check_is_phase(phase)
 
-refuse an object that is not a subtype of `AbstractPhase`, or has not the three fields every
-phase is read through, `name`, `time_start` and `final_measurements`, so that it says so instead of
-failing with a `FieldError` in the middle of a run. A missing `run_phase` method is then
-reported by the fallback of `run_phase`.
+refuse an object that is not a subtype of `AbstractPhase`, or lacks one of the fields `name`,
+`time_start` and `final_measurements`; a missing method is reported by the fallback of
+`run_phase`
 """
 function check_is_phase(phase)
     if !(phase isa AbstractPhase)
@@ -559,8 +515,7 @@ function log_phase(sim::Simulation, phase)
     end
     td = @timed begin
         sim = run_phase(sim, phase)
-        # a phase stopped for a checkpoint takes its final measurements when it is resumed and
-        # finished, from the state an uninterrupted run takes them from
+        # a phase stopped for a checkpoint takes its final measurements once resumed
         if !sim.checkpoint.stopping
             output(sim, phase.final_measurements)
         end
