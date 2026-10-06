@@ -1,7 +1,5 @@
-# How the tensor contractions of ITensors are threaded: threading_settings, which reads the
-# settings of the process they depend on, ThreadingState, those of them a program can change,
-# and set_threading, which applies a ThreadingState, or the dense or the block sparse mode,
-# chosen by hand or from what a system conserves.
+# How the tensor contractions of ITensors are threaded: threading_settings reads it,
+# ThreadingState holds what a program can change of it, set_threading applies it.
 
 export set_threading, threading_settings, ThreadingState
 
@@ -29,9 +27,8 @@ threading_settings() =
 """
     threading_mode(system)
 
-the mode of `set_threading` suited to `system`: `:blocks` when it conserves something, its
-tensors being then block sparse, and Julia has several threads to run the blocks on, `:dense`
-otherwise.
+the mode of `set_threading` suited to `system`: `:blocks` when it conserves something and
+Julia has several threads, `:dense` otherwise
 """
 threading_mode(system::System) =
     isempty(symmetries(system).names) || Threads.nthreads() == 1 ? :dense : :blocks
@@ -39,12 +36,15 @@ threading_mode(system::System) =
 """
     ThreadingState(; blas, strided, blocksparse)
 
-how the tensor contractions are threaded, in what a program can change: the threads of BLAS,
-which runs the products of dense matrices, those of Strided, which ITensors uses for the dense
-permutations, and whether ITensors multithreads the contractions of block sparse tensors.
+how the tensor contractions are threaded, in what a program can change, see
+`threading_settings`:
 
-`ThreadingState()` is the threading in force, and a field left out takes the value in force.
-`set_threading` applies one, returning the one it replaces.
+- `blas`: the threads of BLAS, which runs the products of dense matrices
+- `strided`: the threads of Strided, which ITensors uses for the dense permutations
+- `blocksparse`: whether ITensors multithreads the contractions of block sparse tensors
+
+A field left out takes the value in force, so that `ThreadingState()` is the threading in
+force. `set_threading` applies one, returning the one it replaces.
 
 # Examples
 
@@ -70,7 +70,7 @@ show(io::IO, s::ThreadingState) =
     default_blas_threads()
 
 the threads Julia gives BLAS when it starts: those an environment variable of OpenBLAS asks
-for, or else one for every two threads of the processor, as many on an Apple processor.
+for, or else one for every two threads of the processor, one for each on an Apple processor
 """
 function default_blas_threads()
     for name in ("OPENBLAS_NUM_THREADS", "GOTO_NUM_THREADS", "OMP_NUM_THREADS")
@@ -91,27 +91,24 @@ end
     set_threading(state)
     set_threading(sim)
 
-set how ITensors threads the tensor contractions, and return the threading it replaces, a
-`ThreadingState`, which `set_threading` takes back. The threading is given as a
-`ThreadingState`, or as one of two modes:
+set how ITensors threads the tensor contractions, and return the `ThreadingState` it
+replaces. The threading is given as a `ThreadingState`, or as one of two modes:
 
-- `:dense`: no block sparse multithreading, BLAS running each product of dense matrices on its
-  threads, and Strided, which ITensors uses for the dense permutations, on a single one, as
-  ITensors recommends. Started with Julia, Strided has as many threads as Julia has, which
-  compete with those of BLAS and can slow down a calculation on dense tensors considerably.
-  BLAS keeps its threads, except after `:blocks`, where it gets back those Julia starts it
-  with. `SimData` applies this mode by default, and a program calling the
-  functions of TMS directly should start with `set_threading(:dense)`;
+- `:dense`: no block sparse multithreading, BLAS on its threads, Strided on a single one, as
+  ITensors recommends: started with Julia, Strided has as many threads as Julia, which
+  compete with those of BLAS and can slow down dense contractions considerably. BLAS keeps its
+  threads, except after `:blocks`, where it gets back those Julia starts it with. `SimData`
+  applies this mode by default, and a program calling the functions of TMS directly should
+  start with `set_threading(:dense)`;
 - `:blocks`: block sparse multithreading on the threads of Julia, BLAS and Strided on a single
-  thread, for the many products of blocks of a system that conserves something. Julia has to
-  be started with several threads, `julia --threads=N` or `julia -t N`: on a single one,
-  everything runs on one core, and ITensors warns.
+  thread, for a system that conserves something. Julia has to be started with several
+  threads, `julia -t N`: on a single one, everything runs on one core, and ITensors warns.
 
 Given a system, a state or a simulation, the mode is `:blocks` when the system conserves
-something and Julia has several threads, `:dense` otherwise: which of the two is faster
-depends on the calculation and on the BLAS library, see [Threads and performance](@ref).
-These are settings of the process, which last until they are changed; the threads of Julia and
-of its garbage collector are not among them, being fixed when Julia starts.
+something and Julia has several threads, `:dense` otherwise; which is faster depends on the
+calculation, see [Threads and performance](@ref). These settings of the process last until
+they are changed; the threads of Julia and of its garbage collector, fixed when Julia starts,
+are not among them.
 
 # Examples
 
