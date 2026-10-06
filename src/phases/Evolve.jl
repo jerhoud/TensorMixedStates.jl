@@ -16,12 +16,11 @@ abstract type Algo end
 
 the tdvp algorithm, for the `algo` field of `Evolve`, see `tdvp`.
 
-- `expand_period`: enlarge the bond dimension of the state by a global Krylov expansion before the
-  first step and then every `expand_period` steps (default 0, never)
-- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
-  never)
-- `krylov`: the parameters of the Krylov exponentiation of each local step, see `Krylov`
-  (default `Krylov()`)
+- `expand_period`: enlarge the bond dimension by a global Krylov expansion before the first
+  step and then every `expand_period` steps, see `tdvp` (default 0, never)
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
+  (default 0, never)
+- `krylov`: the Krylov exponentiation of each local step, see `Krylov` (default `Krylov()`)
 
 # Examples
 
@@ -44,8 +43,8 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
 
 - `order`: the order of the approximation, from 1 to 4, required
 - `w`: 1 or 2 for WI or WII (default 2)
-- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps (default 0,
-  never)
+- `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
+  (default 0, never)
 - `apply_algo`: the algorithm of the product of the state by each MPO, `"densitymatrix"`
   (default) or `"naive"`, see `approx_W`
 
@@ -61,8 +60,8 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
     w::Int = 2
     hermitianize_period::Int = 0
     apply_algo::String = "densitymatrix"
-    # checked when the phase is written rather than when it runs: corrected then, the program
-    # would no longer be the one that wrote its checkpoint
+    # checked when the phase is written: a program corrected later could not resume its
+    # checkpoint
     function ApproxW(order, w, hermitianize_period, apply_algo)
         check_w_approx(order, w)
         check_apply_algo(apply_algo)
@@ -70,8 +69,7 @@ of the given order, for the `algo` field of `Evolve`, see `approx_W`.
     end
 end
 
-# an algorithm is printed on one line, field by field, read from its type as a phase is, so
-# that a field added to it shows up in the log and in `prog.jl` with nothing else to change
+# the fields are read from the type, as for a phase
 show(io::IO, s::Algo) =
     print(io, nameof(typeof(s)), "(",
           join(("$f = $(repr(getfield(s, f)))" for f in fieldnames(typeof(s))), ", "), ")")
@@ -91,11 +89,11 @@ a phase of time evolution.
   whole number of steps, and taken with the sign of the duration (the phase is skipped when
   that number is zero)
 - `algo`: the algorithm, `Tdvp(...)` or `ApproxW(...)`
-- `evolver`: `-im * H` for a hamiltonian `H`, plus dissipators for a mixed state, or
+- `evolver`: `-im * H` for a Hamiltonian `H`, plus dissipators for a mixed state, or
   `evolvers => coefs` for a time dependent one, see the `coefs` option of `tdvp`
 - `measurements`: the measurements to make during the evolution, see `output` (default `[]`),
-  after every `measurements_period` time steps. The state the phase starts from is not measured
-  here: the `final_measurements` of the phase before measure it
+  after every `measurements_period` time steps; the state the phase starts from is not
+  measured, which the `final_measurements` of the phase before do
 - `measurements_period`: the number of time steps between two measurements (default 1)
 
 # Examples
@@ -120,9 +118,6 @@ a phase of time evolution.
         if iszero(time_step)
             error("the time step of an Evolve cannot be zero")
         end
-        # a single term and its function of time, written without the vectors, which failed on
-        # a MethodError at the first step, and a function per term, which only the first step
-        # checked
         if evolver isa Pair
             ops, fs = evolver
             if !(ops isa AbstractVector) && !(fs isa AbstractVector)
@@ -140,18 +135,16 @@ end
 """
     evolve(algo, state, sim, phase; evolver, coefs, nsteps, kwargs...)
 
-the simulation `sim` once the `Evolve` phase `phase` has evolved its state `state` with the
-algorithm `algo`, in `nsteps` steps covering `phase.duration`: `evolver` is the evolver of the
-phase, and `coefs` the functions of time of a time dependent one, or `nothing`. The state is
-given apart from the simulation so that a method is chosen by its type as well as by that of
-the algorithm.
+the simulation `sim` once the `Evolve` phase `phase` has evolved `state` with `algo`, in
+`nsteps` steps covering `phase.duration`: `evolver` is the evolver of the phase, and `coefs`
+the functions of time of a time dependent one, or `nothing`. The state is given apart from the
+simulation so that a method is chosen by its type as well as by that of the algorithm.
 
-An algorithm of an extension, or an algorithm for the state of an extension, comes with a
-method of its own. It is called before the phase has read its resume point, so that a method
-can read it with `resume_step`, or run its steps with `run_steps`, which resumes, stops and
-checkpoints them; `output(sim, phase.measurements; sweep)` writes the measurements of the phase,
-every `phase.measurements_period` steps. Such a method takes `kwargs...` after the keywords it
-uses, so that a keyword a later version of TMS passes does not break it.
+An algorithm of one's own, or one for a state of one's own, comes with a method. It is called
+before the phase has read its resume point: it reads it with `resume_step`, or runs its steps
+with `run_steps`; `output(sim, phase.measurements; sweep)` writes the measurements of the phase,
+every `phase.measurements_period` steps. It takes `kwargs...` after the keywords it uses, so
+that a keyword a later version of TMS passes does not break it.
 """
 function evolve(algo::Tdvp, state::State, sim::Simulation, phase::Evolve; evolver, coefs,
                 nsteps)
@@ -177,16 +170,14 @@ evolve(algo, state, ::Simulation, ::Evolve; kwargs...) =
     error("TensorMixedStates.evolve has no method for $(typeof(algo)) on a $(typeof(state))")
 
 function run_phase(sim::Simulation, phase::Evolve)
-    # the duration gives the direction, and a step of the other sign is adjusted as one that
-    # does not divide it: of the opposite sign, it made no step while the time went on
+    # the duration gives the direction, a step of the other sign being adjusted like any other
     nsteps = round(Int, abs(phase.duration / phase.time_step))
     if nsteps == 0
         log_message(sim, "Skipping an evolution of $(phase.duration), shorter than half a " *
                          "time step")
         return sim
     end
-    # the step is adjusted rather than the duration, so that the phase ends where it was asked
-    # to: a duration of 1 in steps of 0.3 stopped at 0.9
+    # the step is adjusted rather than the duration, so that the phase ends where asked
     duration = phase.duration
     if !(duration / nsteps ≈ phase.time_step)
         log_message(sim, "Taking a time step of $(duration / nsteps) rather than " *
