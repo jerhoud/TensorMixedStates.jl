@@ -781,9 +781,13 @@ function expect1(state::State, op)
 end
 
 
-function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
-    # the cross terms below pick their branch and their swap sign on the parity of the first
-    # operator alone, which takes the second to have the same
+"""
+    check_pair_parities(ops)
+
+refuse a pair of operators of different fermionic parities, whose product is odd: `expect2`
+picks the branch and the swap sign of a pair on the parity of its first operator alone
+"""
+function check_pair_parities(ops)
     for (o1, o2) in ops
         if isfermionic(o1) ≠ isfermionic(o2)
             error("cannot correlate $o1 and $o2: one is fermionic and the other is not, " *
@@ -791,6 +795,60 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
                   "of a pair must have the same fermionic parity")
         end
     end
+end
+
+"""
+    closed_row(state, e, a, i)
+
+the operator `a` placed on site `i` of the expector `e`, with its string when it is fermionic,
+and the result completed on each later site `j`, that site left open for a second operator
+"""
+function closed_row(state::State, e::Expector, a::SimpleOp, i::Int)
+    ferm = isfermionic(a)
+    env = expectfactor(state, e, obs_at(state, ferm ? a * F : a, i), i)
+    n = length(state)
+    row = Vector{ITensor}(undef, n)
+    for j in i+1:n
+        row[j] = zipend(state, zipto(state, env, j)).t
+        if j < n
+            next = ferm ? tensor_obs(state, F(j)) : identity_at(state, j)
+            env = zipto(state, expectfactor(state, env, next, j), j + 1)
+        end
+    end
+    return row
+end
+
+# on a pure state, the operator of site i is placed at once and the environment carried to the
+# right is closed: left open, it carries the ket and the bra of site i, a factor of the dimension
+# squared at every step, for one environment per operator. On a mixed state the environment is
+# a vector, which an open site costs little, and the method below shares it between all pairs
+function expect2(state::State{Pure}, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
+    check_pair_parities(ops)
+    state = weak_form(state)
+    n = length(state)
+    scale = real(trace(state))
+    firsts = unique([first.(ops); last.(ops)])
+    r = Matrix{Any}(undef, n, n)
+    for i in 1:n
+        e = zipto(state, Expector(), i)
+        e = Expector(e.pos, e.t / scale)
+        t = zipend(state, e).t
+        r[i, i] = map(((o1, o2),) -> expect1_one(state, o1 * o2, i, t), ops)
+        rows = Dict(a => closed_row(state, e, a, i) for a in firsts)
+        for j in i+1:n
+            r[i, j] = map(((o1, o2),) -> scalar(rows[o1][j] * obs_at(state, o2, j)), ops)
+            # swapping two fermionic operators costs a sign
+            r[j, i] = map(ops) do (o1, o2)
+                v = scalar(rows[o2][j] * obs_at(state, o1, j))
+                isfermionic(o1) ? -v : v
+            end
+        end
+    end
+    return unroll(r)
+end
+
+function expect2(state::State{Mixed}, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
+    check_pair_parities(ops)
     state = weak_form(state)
     oplist = [first.(ops) ; last.(ops)]
     need_fermionic = any(isfermionic, oplist)

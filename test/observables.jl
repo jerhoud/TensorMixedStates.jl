@@ -96,8 +96,11 @@ end
     m = expect2(st, [(N, N), (dag(C), C)])
     @test m[1] ≈ expect2(st, (N, N)) atol=1e-10
     @test m[2] ≈ ref atol=1e-10
-    # the mixed representation must agree with the pure one
+    # the mixed representation must agree with the pure one, computed by another algorithm
     @test expect2(mix(st), (dag(C), C)) ≈ ref atol=1e-8
+    b = RandomState{Pure}(System(4, Boson(3)), 4)
+    @test all(expect2(b, [(A, dag(A)), (N, A), (dag(A), N)]) .≈
+              expect2(mix(b), [(A, dag(A)), (N, A), (dag(A), N)]))
     # expect normalises its argument itself, so an operator already put through simplify
     # and the same product written directly must agree, and both must match the reference.
     # What simplify inserts here is the Jordan-Wigner strings (Multi_F for two sites or

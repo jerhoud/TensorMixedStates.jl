@@ -275,6 +275,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
   now takes 0.02 s and 0.05 s, the WI approximation as much; WII goes from 6.8 s and 8.5 s
   to 5.7 s and 6.0 s, the rest being its exponentials. A time dependent evolver builds them
   at every step.
+- `expect2` of a pure state places the operator of each site at once and carries a closed
+  environment, where the site left open made each step cost the square of its dimension more.
+  On 16 sites at bond dimension 32, it went from 0.26 s to 0.05 s for `Boson(4)`, from 0.07 s
+  to 0.04 s for fermions, and is as fast for qubits; a mixed state keeps its algorithm.
 - `mutual_info_renyi2` of a pure state and positions is twice the `renyi2` of the part, the
   two parts sharing their spectrum, which takes one partial trace of the mixed state rather
   than two and the purity of the whole: three to five times faster on 12 to 16 qubits. On
