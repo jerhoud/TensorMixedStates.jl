@@ -536,38 +536,45 @@ For more details see the reference or the inline help.
 
 ## Checking the accuracy
 
-Three approximations set the error of a result, and the user chooses all three: the truncation
-of the states, given by `limits`, the time step of an evolution, and the convergence of a
-search, the sweeps of `dmrg` and `steady_state`. A result can be trusted once it no longer
-moves when each of them is improved: larger limits, a smaller time step, more sweeps. The
-measurements taken along a run tell which of them limits the accuracy.
+Three main approximations set the error of a result, and the user chooses all three: the
+truncation of the states, given by `limits`, the time step of an evolution or of
+`thermal_state`, and the convergence of a search, the sweeps of `dmrg` and `steady_state`. A
+result can be trusted once it no longer moves when each of them is improved: larger limits, a
+smaller time step, more sweeps. The measurements taken along a run tell which of them limits
+the accuracy. Two more have defaults: the tolerance of the Krylov method of each local step,
+see `Krylov`, and the truncation `mpo_limits` of the ``L^\dagger L`` of `steady_state`, none by
+default; truncated, it makes the value `steady_state` returns the residual of the truncated
+operator.
 
 ### Truncation
 
 `MaxLinkdim` tells when the bond dimension reaches `maxdim`, from which point the results
 depend on it, and `EntanglementEntropy(cut)`, the operator space entanglement entropy on a
-mixed state, shows the entanglement that makes the bond dimension grow. `Limits()` only
-discards what rounding leaves: the truncation that makes a computation affordable is a choice,
-checked by running again with a larger `maxdim` and a smaller `cutoff`.
+mixed state, shows the entanglement that makes the bond dimension grow. A truncation by
+`cutoff` shows in neither, and only running again tells it. `Limits()` discards the singular
+values below about 1.5e-8 of the norm, which keeps rounding from making the bond dimension
+grow and may leave an error of that order: the truncation that makes a computation affordable
+is a choice, checked by running again with a larger `maxdim` and a smaller `cutoff`.
 
 ### Time step
 
 An evolution is checked by halving its time step, and by comparing `Tdvp` with `ApproxW`,
 whose errors have different origins. `ApproxW` of order `k` makes an error of order
 ``\tau^k`` in the time step ``\tau`` when the evolver does not depend on time. When it does,
-`tdvp` and `ApproxW` of order 1 or 2 take its functions at the middle of each step, which
-limits them to an error of order ``\tau^2``, while `ApproxW` of order 3 or 4 keeps the order
-of its approximation, see [Time dependent evolvers](@ref). `tdvp` projects the evolution on the states of the bond dimension the
-state has, its steps on two sites letting that dimension grow: from a state of small bond
-dimension, as a product state, or for `thermal_state`, compare with `expand_period = 1`, which
-enlarges the bond dimension by a global Krylov expansion before each step.
+`tdvp` and `ApproxW` of order 1 or 2 take its functions at the middle of each step, which caps
+them at order 2, while `ApproxW` of order 3 or 4 keeps the order of its approximation, see
+[Time dependent evolvers](@ref). `tdvp` projects the evolution on the states of the bond
+dimension the state has, its steps on two sites letting that dimension grow: from a state of
+small bond dimension, as a product state, or for `thermal_state`, compare with
+`expand_period = 1`, which enlarges the bond dimension by a global Krylov expansion before
+each step. A thermal state has checks of its own, see [Thermal states](@ref).
 
 ### Indicators of a density matrix
 
 The exact density matrix is hermitian under a Lindbladian, under gates and noisy gates, which
 act on both of its sides, and for a thermal or a steady state, and its trace stays one when the
-evolution preserves the trace, as a Lindbladian does. What deviates from that is error, which three state functions measure along
-a run:
+evolution preserves the trace, as a Lindbladian does. What deviates from that is error, which
+three state functions measure along a run:
 
 - `TraceError`, ``1 - \mathrm{tr}\,\rho``, the drift of the trace. Expectation values are
   divided by the trace, which hides the drift but not the error it comes from.
@@ -583,20 +590,33 @@ a run:
   matrix: it has lost its positivity, which nothing in a matrix product state guarantees,
   unless `HermiticityError` shows that it has lost its hermiticity.
 
+### Conserved quantities
+
+A quantity declared conserved on the sites, see [Conserving a quantity](@ref), keeps the
+errors out of the sectors the exact state never reaches: the tensors have no blocks there, so
+that neither truncation nor rounding can put anything in them. A pure state keeps its charge
+exactly, a mixed state under a weak symmetry keeps no coherence between two sectors, and
+under a strong one stays in its sector. A quantity the exact evolution conserves without its
+being declared, as the energy under a Hamiltonian, which no site can declare, is still a
+check: its drift along a run is error, though its constancy proves nothing.
+
 ### Searches
 
-`dmrg` runs all its sweeps and, in a `GroundState` phase, stops earlier once the energy
-changes by less than `tol` between two sweeps, which a search stuck in a metastable state does
-as well: `Variance(hamiltonian)`, zero exactly for an eigenstate, checks the state found, see
-`variance`.
+`dmrg` runs all its sweeps and, in a `GroundState` or a `SteadyState` phase, stops earlier
+once the energy changes by less than `tol` between two sweeps, which a search stuck in a
+metastable state does as well. `Variance(hamiltonian)`, zero exactly for an eigenstate, checks
+the state found, see `variance`, but does not tell the ground state from another eigenstate,
+which searches from other states, or in other sectors, do. Extrapolating the energy to
+zero variance as `maxdim` grows estimates the exact energy, and the error of the last one.
 
 The value `steady_state` returns, the residual ``\|L\rho\|^2`` for ``\rho`` of unit
-Hilbert-Schmidt norm, is zero for a steady state, and so is the `HermiticityError` of the state
-it finds, about which it warns above `1e-6`. A state that is not hermitian comes from a search
-that has not converged, or from a Lindbladian with several steady states, of which dmrg returns
-any combination: one in each sector of a quantity that its hamiltonian and its jump operators
-all commute with, for instance. The one a system reaches depends on the state it starts from:
-it is the limit of its evolution in time, when that converges, which `tdvp` gives. When the
-quantity is one a site can conserve, declaring it `strong` keeps `steady_state` in the sector of
-the starting state, see [Conserving a quantity](@ref). A hermitian state does not prove the
-steady state unique.
+Hilbert-Schmidt norm, is zero for a steady state. The state it finds is hermitian when the
+steady state is unique and the search has converged, and it warns when its `HermiticityError`
+exceeds `1e-6`: a state that is not hermitian comes from a search that has not converged, or
+from a Lindbladian with several steady states, of which dmrg returns any combination: one in
+each sector of a quantity that its Hamiltonian and its jump operators all commute with, for
+instance. The one a system reaches depends on the state it starts from: it is the limit of
+its evolution in time, when that converges, which `tdvp` gives. When the quantity is one a
+site can conserve, declaring it `strong` keeps `steady_state` in the sector of the starting
+state, see [Conserving a quantity](@ref). A hermitian state does not prove the steady state
+unique.
