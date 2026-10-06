@@ -11,7 +11,7 @@ function data_to_frame(data::Dict)
         return DataFrame(time = [])
     end
     # a measurement named time or event keeps its column, renamed time_1 or event_1; sorted by
-    # name, the order of a dictionary changing from one process to the next
+    # name, the order of a dictionary depending on the order its keys were inserted in
     dfs = [DataFrame("event" => identity.(val["events"]), "time" => identity.(val["times"]),
                      key => identity.(val["data"]); makeunique = true)
            for (key, val) in sort!(collect(data); by = first)]
