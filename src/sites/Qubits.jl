@@ -29,9 +29,8 @@ the site type of a qubit, a two level system, whose basis is `"Up"`, `"Dn"`.
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
 - `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators, half the Pauli operators, and
                        ``S^2``
-- `N`                : the number of excitations, ``1/2 - S_z``, equal to `Proj(1)` and to
-                       ``(1 - Z)/2``: `"Dn"` is the occupied state, `Sm` creates an excitation
-                       and `Sp` destroys one. `Qubit(conserve = N)` conserves what
+- `N`                : the number of excitations, ``(1 - Z)/2``: `"Dn"` is the occupied state
+                       and `Sm` creates an excitation. `Qubit(conserve = N)` conserves what
                        `Qubit(conserve = 2Sz)` does, with charges 0 and 1 rather than ±1
 - `H, S, T, Swap`    : the Hadamard, S, T and Swap gates
 - `Phase(t)`         : the phase gate
@@ -94,9 +93,7 @@ controlled_name(a::Op) = "controlled($a)"
     controlled_type(op)
 
 the default `OpType` of `controlled(op)`: that of an `Operator`, and `plain_op` for an
-expression. A controlled fermionic operator is plain too, as it acts on several sites, which
-no fermionic `Operator` can: `simplify` replaces it by its expression, where the
-Jordan-Wigner string is inserted.
+expression or a fermionic `Operator`, no fermionic `Operator` acting on several sites
 """
 controlled_type(a::Operator) = a.type == fermionic_op ? plain_op : a.type
 controlled_type(a::Op) = plain_op
@@ -105,10 +102,12 @@ controlled_type(a::Op) = plain_op
     controlled(op; name, type)
 
 the gate applying `op` to the following sites when the first one, a qubit, is in the state
-`"1"`, and nothing otherwise. Its name defaults to `"C"` followed by the name of `op` when it
-is a named operator, `CZ` for `controlled(Z)`, and to `"controlled(op)"` otherwise. Its
-`OpType` defaults to that of a named operator, `plain_op` for a fermionic one, and to
-`plain_op` otherwise.
+`"1"`, and nothing otherwise.
+
+- `name`: its name (default `"C"` followed by the name of a named operator, `CZ` for
+  `controlled(Z)`, and `"controlled(op)"` otherwise)
+- `type`: its `OpType` (default that of a named operator other than fermionic, and `plain_op`
+  otherwise)
 
 # Examples
 
@@ -119,9 +118,8 @@ is a named operator, `CZ` for `controlled(Z)`, and to `"controlled(op)"` otherwi
 controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op), type = controlled_type(op)) where N =
     Operator{N+1}(name, Proj(0) ⊗ IdentityOp(op) + Proj(1) ⊗ op, type)
 
-# written with factors of a definite charge, which an MPO places one by one: X ⊗ X + Y ⊗ Y is
-# the same operator, but X and Y carry no charge of their own. dag(Sp) rather than Sm, which
-# the test of `measure` for a real value does not know to be the adjoint of Sp
+# factors of a definite charge, which X ⊗ X + Y ⊗ Y lacks, and dag(Sp) rather than Sm, which
+# `measure` does not know to be its adjoint when it tests for a real value
 """
     Swap
 
@@ -159,10 +157,9 @@ end
 """
     create_graph_state(graph; kwargs...)
 
-the phases building the graph state of `graph`, see `graph_state`, for `SimData` and `runTMS`:
-a `CreateState` of qubits all in `"+"`, then a `Gates` phase applying `controlled(Z)` on every
-edge, which receives the keyword arguments. They come as a list, which `SimData` accepts
-wherever a phase is expected.
+the phases building the graph state of `graph`, see `graph_state`: a `CreateState` of qubits
+all in `"+"`, then a `Gates` phase applying `controlled(Z)` on every edge, which receives the
+keyword arguments. `SimData` accepts this list wherever a phase is expected.
 
 # Examples
 

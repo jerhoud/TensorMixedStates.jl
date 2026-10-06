@@ -31,8 +31,6 @@ struct Qboson <: AbstractSite
     q::Float64
     dim::Int
     conserve::String
-    # `A` takes the square root of 1 - q^n on each level n, which Qboson(1.5, 3) made negative,
-    # failing only when `A` was first computed
     Qboson(q::Real, dim::Int, conserve::AbstractString) =
         if dim < 1
             error("a Qboson has 1 level at least, not $dim")

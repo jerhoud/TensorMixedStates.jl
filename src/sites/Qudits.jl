@@ -16,9 +16,7 @@ relation ``Z_d X_d = \\omega X_d Z_d``.
 
 `Qudit(2)` is the qubit: `Zd` and `Xd` are the Pauli `Z` and `X`, `Hd` and `S` the Hadamard and
 phase gates. `Zd` and `Xd` are named apart because for ``d > 2`` they are not involutions.
-
-`Hd`, `S` and `Sumd` generate the Clifford group, the unitaries mapping the operators generated
-by `Zd` and `Xd` onto themselves by conjugation.
+`Hd`, `S` and `Sumd` generate the Clifford group.
 
 # Examples
 
@@ -61,8 +59,7 @@ dim(a::Qudit) = a.dim
     ],
     plain_op =>
     [
-        # a function of N rather than its matrix, so that as a conserved quantity it carries its
-        # modulus: on a qubit the eigenvalues ±1 were read as integers, and their sum conserved
+        # a function of N, so that as a conserved quantity it carries its modulus
         Zd = s -> dim(s) == 1 ? ones(ComplexF64, 1, 1) : mod(N, dim(s)),
         Xd = s -> [ mod(i - j - 1, dim(s)) == 0 ? 1.0 + 0im : 0.0im
                     for i in 1:dim(s), j in 1:dim(s) ],
@@ -80,9 +77,8 @@ dim(a::Qudit) = a.dim
     Sumd(d)
 
 the generalized controlled not of two qudits of dimension `d`,
-``|i, j\\rangle \\mapsto |i, i + j \\mod d\\rangle``; `Sumd(2)` is the CNOT. It is built as
-the expression ``\\sum_i P_i \\otimes X_d^i`` rather than as a matrix, so that it can be used
-in a hamiltonian as well as applied as a gate.
+``|i, j\\rangle \\mapsto |i, i + j \\mod d\\rangle``; `Sumd(2)` is the CNOT. It is the
+expression ``\\sum_i P_i \\otimes X_d^i``, usable in a Hamiltonian as well as a gate.
 
 # Examples
 

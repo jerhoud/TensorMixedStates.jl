@@ -33,16 +33,13 @@ differ.
 
 - `Sp, Sm`           : the ``S^+`` and ``S^-`` operators
 - `Sx, Sy, Sz, S2`   : the ``S_x``, ``S_y``, ``S_z`` operators and ``S^2``
-- `N`                : the number of excitations above the state of maximal ``S_z``,
-                       ``s - S_z``, as in the Holstein-Primakoff mapping. Its eigenvalues are
-                       integers for every spin, so `Spin(3/2, conserve = N)` conserves what
-                       `Spin(3/2, conserve = 2Sz)` does without the doubling. As for a qubit,
-                       `Sm` raises it
+- `N`                : the number of excitations ``s - S_z``, integer for every spin:
+                       `Spin(3/2, conserve = N)` conserves what `Spin(3/2, conserve = 2Sz)`
+                       does, without the doubling. As for a qubit, `Sm` raises it
 """
 struct Spin <: AbstractSite
     s::Float64
     conserve::String
-    # a negative spin was taken, of dimension 2s + 1, 0 or less
     Spin(s::Number, conserve::AbstractString) =
         if isinteger(2 * s) && s ≥ 0
             new(s, conserve)
