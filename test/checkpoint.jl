@@ -404,7 +404,8 @@ end
             sim_data = SimData(; name = "ctime", phases, checkpoint_interval = 1e-9)
             runTMS(sim_data)
             k = TensorMixedStates.load_checkpoint("ctime")
-            data = TensorMixedStates.restore_series(k.outputs["data"]["d"])
+            p = only(p for p in k.outputs if p["kind"] == "data" && p["name"] == "d")
+            data = TensorMixedStates.restore_series(p["series"])
             @test only(data["Z(1)"]["times"]) == 0.5im
             @test k.phase_time == 0.5im
             # and a checkpoint of an earlier version is refused: its values do not say which
@@ -529,7 +530,7 @@ end
             write("known", "kept\ncut back\n")
             sim = Simulation(nothing)
             TensorMixedStates.restore_outputs!(sim.outputs,
-                Dict("files" => Dict("known" => Dict("text" => 5)), "data" => Dict()))
+                [Dict("name" => "known", "kind" => "text", "position" => 5)])
             println(get_sim_file(sim, "late"), "new")
             println(get_sim_file(sim, "known"), "more")
             TensorMixedStates.close_sim_files(sim)
@@ -550,7 +551,8 @@ end
             runTMS(SimData(; name = "nonfinite", phases, checkpoint_interval = 1e-9))
             @test only(TensorMixedStates.JSON.parsefile("nonfinite/out.json")["Inf"]["data"]) == "Inf"
             k = TensorMixedStates.load_checkpoint("nonfinite")
-            data = TensorMixedStates.restore_series(k.outputs["data"]["d"])
+            p = only(p for p in k.outputs if p["kind"] == "data" && p["name"] == "d")
+            data = TensorMixedStates.restore_series(p["series"])
             @test isnan(only(data["NaN"]["data"]))
             @test only(data["-Inf"]["data"]) == -Inf
         end
@@ -1360,7 +1362,7 @@ end
             @test isfile("good.json")
             # one that fails as it is closed does not keep the others from being written
             o = sim.outputs
-            o.files["nodir/late.json"] = TensorMixedStates.JsonFile("nodir/late.json",
+            o.destinations["nodir/late.json"] = TensorMixedStates.JsonFile("nodir/late.json",
                                                                      TensorMixedStates.Series())
             for k in 1:3
                 output(sim, "after$k.json" => Z(1))
@@ -1479,9 +1481,9 @@ end
     c = C()
     sim = Simulation(nothing; checkpoint = c)
     TensorMixedStates.commit!(c, sim.outputs, 2, 0, 0., 0., nothing)
-    c.resume = TensorMixedStates.Commit(2, 4, 0., 0., nothing, -1.5, (files = Dict(), data = Dict()))
+    c.resume = TensorMixedStates.Commit(2, 4, 0., 0., nothing, -1.5, Dict())
     @test resume_step(sim) == (4, -1.5)
     @test resume_step(sim) == (0, nothing)
-    c.resume = TensorMixedStates.Commit(3, 4, 0., 0., nothing, nothing, (files = Dict(), data = Dict()))
+    c.resume = TensorMixedStates.Commit(3, 4, 0., 0., nothing, nothing, Dict())
     @test resume_step(sim) == (0, nothing)                         # another phase
 end

@@ -93,7 +93,7 @@ end
 
 function Base.getproperty(s::Simulation, f::Symbol)
     if f === :data
-        return getfield(s, :outputs).data
+        return data_series(getfield(s, :outputs))
     end
     return getfield(s, f)
 end

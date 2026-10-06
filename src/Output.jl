@@ -38,14 +38,13 @@ function output(sim::Simulation, measurements::Vector; kwargs...)
     vals = Logging.with_logger(SimLogger(sim, Logging.current_logger())) do
         measure(sim.state, Measure.(last.(measurements)), sim.time; kwargs...)
     end
-    # one event per series for the whole call, which data_to_frame makes one row: two pairs
-    # going to one Data made two
+    # one event per destination for the whole call, which data_to_frame makes one row: two
+    # pairs going to one Data made two
     events = IdDict()
     for (v, name) in zip(vals, first.(measurements))
         check_destination(sim, name)
         d = destination(sim.outputs, name)
-        event = d isa Union{JsonFile, DataStore} ?
-            get!(() -> next_event(d.series), events, d.series) : nothing
+        event = get!(() -> new_event(d), events, d)
         emit!(d, sim.outputs.formats, sim.time, v; event)
     end
 end
