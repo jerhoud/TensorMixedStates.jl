@@ -13,22 +13,19 @@ const checkpoint_file_version = 4
 """
     Commit
 
-a point a simulation can be resumed from, taken at once by `commit!` at the end of a sweep or
-at a phase boundary, once everything the uninterrupted run writes before that point is
-written. A checkpoint is a commit written down and nothing else, so whatever happens between
-a commit and its writing, an interrupt included, the checkpoint holds the state, the counts
-and the outputs of one and the same moment.
+a point a simulation can be resumed from, taken by `commit!` at the end of a sweep or at a
+phase boundary, once everything the uninterrupted run writes before that point is written. A
+checkpoint writes a commit and nothing else, so that it holds the state, the counts and the
+outputs of one and the same moment.
 
 - `phase`:      index of the phase to resume, one past the last when the run is over
 - `sweep`:      sweeps of that phase done
 - `phase_time`: simulation time the phase started from, which its solver counts sweeps from
 - `time`:       simulation time reached
 - `state`:      the state reached, `nothing` before the first phase has made one
-- `carried`:    the value the phase carries from one step to the next: the energy of the last
-                dmrg sweep, which a resumed search compares its first sweep with, the
-                logarithm of the trace `thermal_state` has reached, which a resumed
-                computation goes on summing, or the value of a phase of one's own, see
-                `run_steps`
+- `carried`:    the value the phase carries from one step to the next, as the energy of the
+                last dmrg sweep or the logarithm of the trace `thermal_state` has reached,
+                see `run_steps`
 - `reached`:    how far every destination had got, see `output_marks`
 """
 struct Commit
@@ -45,9 +42,9 @@ end
     Checkpointer(dir = ""; interval = 0, max_time = Inf)
 
 the checkpointing machinery of a simulation, created by `runTMS` and carried by the
-`Simulation`, so that the solvers reach it through their observers. A simulation stops
-cleanly when `max_time` seconds have passed and, with a directory, when the file `stop`
-appears in it or on an interrupt; with a directory, a checkpoint is written first.
+`Simulation`. A simulation stops cleanly when `max_time` seconds have passed and, with a
+directory, when the file `stop` appears in it or on an interrupt; with a directory, a
+checkpoint is written first.
 
 # Fields
 
@@ -101,17 +98,16 @@ stop_requested(c::Checkpointer) =
 """
     checkpoint_due(::Checkpointer)
 
-whether a periodic checkpoint is due. An interval of zero or less means none, the rule
-`sweep_due` applies to the sweep counters: a negative one would otherwise keep the next
-checkpoint in the past and write the whole state on every sweep.
+whether a periodic checkpoint is due, an interval of zero or less meaning none, as for
+`sweep_due`
 """
 checkpoint_due(c::Checkpointer) = c.interval > 0 && time() ≥ c.next
 
 """
     commit!(::Checkpointer, ::Outputs, phase, sweep, phase_time, time, state; carried)
 
-record a point the simulation can be resumed from, see `Commit`. How far the destinations
-have got is read here, at the same moment as the rest.
+record a point the simulation can be resumed from, see `Commit`, with how far the
+destinations have got at that same moment
 """
 commit!(c::Checkpointer, o::Outputs, phase::Int, sweep::Int, phase_time::Number, t::Number,
         state::Union{Nothing, AbstractState}; carried = nothing) =
@@ -120,11 +116,9 @@ commit!(c::Checkpointer, o::Outputs, phase::Int, sweep::Int, phase_time::Number,
 """
     check_carried(x, step)
 
-refuse the value `x` that the step `step` of `run_steps` carries when a checkpoint would not
-give it back as it is, of the same type: json holds no symbol, tuple or float of another width,
-a dictionary comes back with string keys, an object as a dictionary of its fields. A resumed run
-went on with that other value, or failed on it, possibly days later; the step is refused at
-once.
+refuse the value `x` carried by step `step` of `run_steps` when a checkpoint would not give it
+back equal and of the same type: a symbol, a tuple, a float of another width, a dictionary
+whose keys are not strings, an object
 """
 function check_carried(x, step::Int)
     back = try
@@ -166,13 +160,11 @@ state_file(g::Int) = "checkpoint-$g.h5"
 
 write the last commit down. The state goes to whichever of `checkpoint-1.h5` and
 `checkpoint-2.h5` the checkpoint on the disk does not name, and the metadata, which names it,
-is renamed into place last. That rename alone changes which checkpoint is on the disk, so a
-crash at any point leaves the previous checkpoint or this one, whole, and never pairs a new
-state with the previous counts.
+is renamed into place last, so that a crash at any point leaves the previous checkpoint or
+this one, whole.
 
-Nothing is written without a directory, nor before the first phase has made a state, and a
-commit already on the disk is not written again: a phase that commits none of its sweeps is
-checkpointed at its start however long it runs, see `resume_step`.
+Nothing is written without a directory, before the first phase has made a state, or for a
+commit already on the disk.
 """
 function write_checkpoint(c::Checkpointer, o::Outputs)
     k = c.last
@@ -193,8 +185,7 @@ function write_checkpoint(c::Checkpointer, o::Outputs)
                 "phase" => k.phase,
                 "sweep" => k.sweep,
                 "carried" => checkpoint_value(k.carried),
-                # through `checkpoint_value`, as the times of the destinations, so that a
-                # complex time with no imaginary part stays complex and keeps its two columns
+                # so that a complex time with no imaginary part stays complex
                 "phase_time" => checkpoint_value(k.phase_time),
                 "time" => checkpoint_value(k.time),
                 "state" => file,
@@ -220,11 +211,11 @@ has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
 """
     load_checkpoint(dir[, system])
 
-read the checkpoint of the given directory, as a named tuple of the fields of the commit it
-records (`phase`, `sweep`, `phase_time`, `time`, `state`, `carried`), the `outputs` to put back with `restore_outputs!`, and the `generation` of its
-state file. Its state comes back on the system `system(phase, sites)` gives, from the phase of
-the commit and the sites of the state, or on a system of its own when that is `nothing`. A
-checkpoint of another version, or whose state file is missing, is refused.
+read the checkpoint of `dir`, as a named tuple of the fields of its commit (`phase`, `sweep`,
+`phase_time`, `time`, `state`, `carried`), the `outputs` to put back with `restore_outputs!`
+and the `generation` of its state file. The state comes back on the system
+`system(phase, sites)` gives, or on a system of its own when that is `nothing`. A checkpoint
+of another version, or whose state file is missing, is refused.
 """
 function load_checkpoint(dir::String, system = (_, _) -> nothing)
     meta = JSON.parsefile(checkpoint_json(dir))
@@ -250,14 +241,9 @@ end
     resume_schedule(x, done)
 
 the tail of a per sweep schedule, of `noise` or of the fields of a `Limits`, for a dmrg
-resuming at sweep `done + 1`, which would otherwise start the schedule over. A schedule that
-runs out is continued with its last value, as ITensor does; a plain value is returned as it
-is.
-
-This is for `dmrg` alone, which is handed the whole schedule and counts its sweeps from 1 on
-every call. The evolution solvers keep the sweep numbers of the phase across a resume and
-pick their value sweep by sweep with `sweep_limits`, so a tail would skip part of the
-schedule twice.
+resuming at sweep `done + 1`, a schedule that runs out being continued with its last value,
+as ITensor does; a plain value is returned as it is. For `dmrg` alone: the evolution solvers
+keep the sweep numbers across a resume, see `sweep_limits`.
 """
 resume_schedule(x, ::Int) = x
 resume_schedule(x::Vector, done::Int) =
