@@ -539,10 +539,13 @@ end
     lind = -im * h + sum(Dissipator(N)(i) for i in 1:4)
     lim = Limits(maxdim = 32)
     start(site) = State{Mixed}(System(4, site), ["Occ", "Emp", "Occ", "Emp"])
-    @test_logs (:warn, r"not unique") steady_state(lind, start(Fermion()); nsweeps = 10,
-                                                   limits = lim)
-    _, ρ = @test_logs steady_state(lind, start(Fermion(conserve = strong(N))); nsweeps = 10,
-                                   limits = lim)
+    # other warnings may come, those of KrylovKit in its oldest versions for instance
+    @test_logs (:warn, r"not unique") match_mode = :any steady_state(lind, start(Fermion());
+                                                                     nsweeps = 10, limits = lim)
+    logs, (_, ρ) = Test.collect_test_logs() do
+        steady_state(lind, start(Fermion(conserve = strong(N))); nsweeps = 10, limits = lim)
+    end
+    @test !any(l -> occursin("not unique", string(l.message)), logs)
     @test expect1(ρ, N) ≈ fill(0.5, 4)
     @test trace(ρ) ≈ 1
 end

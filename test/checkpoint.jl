@@ -1036,12 +1036,15 @@ end
         cd(dir) do
             write("clash", "")
             write("running", "mine")
+            # compared with pwd itself: on Windows it may give the short form of a name, which
+            # realpath expands
+            here = pwd()
             phases = [CreateState{Pure}(1, Qubit(), "Up")]
             for (name, err) in (("clash", Base.IOError), ("", "needs a name"))
                 @test_throws err runTMS(SimData(; name, phases))
                 @test !isfile("error")
                 @test read("running", String) == "mine"
-                @test pwd() == realpath(dir)
+                @test pwd() == here
             end
         end
     end
