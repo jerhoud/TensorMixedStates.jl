@@ -1,21 +1,20 @@
-# The GroundState phase, which searches the ground state of a hamiltonian by dmrg.
+# The GroundState phase, which searches the ground state of a Hamiltonian by dmrg.
 
 export GroundState
 
 """
     GroundState(; hamiltonian, limits, nsweeps, noise, tol, measurements, options...)
 
-a phase that searches the ground state of a hamiltonian by dmrg, see `dmrg`, on a pure state.
+a phase that searches the ground state of a Hamiltonian by dmrg, see `dmrg`, on a pure state.
 
 # Fields
 
 - `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
-- `hamiltonian`: the hamiltonian whose ground state is searched
+- `hamiltonian`: the Hamiltonian whose ground state is searched
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
-- `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
-  `Krylov()`)
+- `krylov`: the Krylov search of each local step, see `Krylov` (default `Krylov()`)
 - `measurements`: the measurements to make during the search, see `output` (default `[]`)
 - `measurements_period`: the number of sweeps between two measurements (default 1)
 - `tol`: the search stops when the energy changes by less than this from one sweep to

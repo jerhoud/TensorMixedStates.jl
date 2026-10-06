@@ -5,10 +5,9 @@
     run_search(solve, sim, phase, what, final_line)
 
 run a phase that searches a state by dmrg, `GroundState` or `SteadyState`, `solve(sim;
-options...)` calling its solver: from the sweep a resumed run had reached, with a
-`DmrgObserver`, the log saying `what` is being done and, unless the run stops for a
-checkpoint, the line `final_line(e)` with the value reached. A search whose checkpoint fell on
-its last sweep has only that line left to write, with the value the checkpoint recorded.
+options...)` calling its solver from the sweep a resumed run had reached, logging `what` and,
+unless the run stops for a checkpoint, `final_line(e)` with the value reached, that recorded by
+the checkpoint when no sweep is left
 """
 function run_search(solve, sim::Simulation, phase, what::String, final_line)
     done, e = resume_step(sim)

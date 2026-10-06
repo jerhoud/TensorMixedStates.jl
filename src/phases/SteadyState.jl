@@ -11,14 +11,14 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 
 - `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
 - `lindbladian`: the Lindbladian ``L`` whose steady state is searched, of the form
-  `-im * hamiltonian + dissipators`
+  `-im * H + dissipators` for a Hamiltonian `H`
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`)
 - `mpo_algo`: the algorithm computing ``L^\\dagger L``, `"naive"` (default) or `"zipup"`
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
-- `krylov`: the parameters of the Krylov search of each local step, see `Krylov` (default
-  `Krylov(dim = 8, maxiter = 3)`, see `steady_state`)
+- `krylov`: the Krylov search of each local step, see `Krylov` (default
+  `Krylov(dim = 8, maxiter = 3)`)
 - `measurements`: the measurements to make during the search, see `output` (default `[]`)
 - `measurements_period`: the number of sweeps between two measurements (default 1)
 - `tol`: the search stops when the dmrg energy changes by less than this from one sweep
@@ -47,8 +47,7 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
     measurements = []
     measurements_period::Int = 1
     tol::Real = 0.
-    # a noise is stored as the Float64 dmrg takes, as in GroundState, and mpo_algo is checked
-    # when the phase is written, as the fields of ApproxW
+    # the noise is stored as in GroundState, mpo_algo checked as the fields of ApproxW
     function SteadyState(name, time_start, final_measurements, lindbladian, mpo_limits, mpo_algo,
                          limits, nsweeps, noise::Union{Real, AbstractVector{<:Real}}, krylov,
                          measurements, measurements_period, tol)

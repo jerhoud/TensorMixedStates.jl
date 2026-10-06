@@ -1,4 +1,4 @@
-# The Thermalize phase, which takes a mixed state towards the thermal state of a hamiltonian.
+# The Thermalize phase, which takes a mixed state towards the thermal state of a Hamiltonian.
 
 export Thermalize
 
@@ -9,14 +9,12 @@ export Thermalize
 a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``,
 normalized to trace one, by tdvp in imaginary time, see `thermal_state`. After
 `CreateState{Mixed}(…, "FullyMixed")`, the state at infinite temperature, it gives the thermal
-state ``e^{-\\beta H}/Z``; a state that commutes with ``H`` gives the thermal state restricted
-to what it describes, as `fully_mixed` the canonical one. The time of the simulation does not
-move.
+state ``e^{-\\beta H}/Z``. The time of the simulation does not move.
 
 # Fields
 
 - `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
-- `hamiltonian`: the hamiltonian ``H``
+- `hamiltonian`: the Hamiltonian ``H``
 - `beta`: the inverse temperature ``\\beta``
 - `beta_step`: the step of `beta`, adjusted to the nearest one that divides `beta` into a whole
   number of steps, and taken with the sign of `beta` (the phase is skipped when that number is
@@ -26,9 +24,8 @@ move.
 - `limits`: constraints on the state, see `Limits` (default `Limits()`)
 - `measurements`: the measurements to make during the phase, see `output` (default `[]`), after
   every `measurements_period` steps. The symbols `:beta` and `:log_trace` take the inverse
-  temperature reached and the logarithm of the trace the state would have without being
-  normalized, ``\\log Z - \\sum_i \\log d_i`` from `"FullyMixed"`, ``d_i`` being the dimension
-  of site `i`, see `thermal_state`
+  temperature reached and the logarithm of the trace before normalization, see
+  `thermal_state`
 - `measurements_period`: the number of steps between two measurements (default 1)
 
 # Examples
