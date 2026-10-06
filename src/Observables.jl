@@ -10,12 +10,8 @@ export entanglement_entropy, entanglement_by_sector, partial_trace, mutual_info_
     weak_form(state)
 
 the state measurements run on: `state` itself, or, for a mixed state conserving something
-strongly, `weaken(state)`, computed once and kept with it.
-
-Under a strong symmetry the ket and the bra carry charges of their own, so the trace is not a
-product of one vector per site; under the weak one it is. Weakening is exact, so no
-expectation value changes, and an operator measurable on the strong state is measurable on
-the weak one.
+strongly, `weaken(state)`, computed once and kept with it. Only the weak form has a trace
+with one vector per site; weakening changes no expectation value.
 """
 weak_form(state::State{Pure}) = state
 
@@ -35,9 +31,8 @@ end
 """
     strong_measured(i)
 
-raise the error for site `i` of a strongly conserving state measured without going through
-`weak_form`, which is a bug: only `weak_form` gives such a state a trace with one vector per
-site.
+raise the bug error for site `i` of a strongly conserving state measured without going
+through `weak_form`
 """
 strong_measured(i::Int) =
     error("bug: site $i of a strongly conserving state measured without going through weak_form")
@@ -45,9 +40,8 @@ strong_measured(i::Int) =
 """
     on_trace(state, t, i)
 
-the tensor `t` of a pure operator on site `i` carried onto the mixed index of the state
-there, so that contracting it with the density matrix applies the operator and traces the
-site out.
+the tensor `t` of a pure operator on site `i` carried onto the mixed index there, so that
+contracting it with the density matrix applies the operator and traces the site out
 """
 function on_trace(state::State{Mixed}, t::ITensor, i::Int)
     s = state.system
@@ -57,7 +51,7 @@ function on_trace(state::State{Mixed}, t::ITensor, i::Int)
     if b !== j
         strong_measured(i)
     end
-    # daggered so that the result meets the `k` of the state and not another copy of it
+    # daggered to meet the `k` of the state
     return t * dag(c)
 end
 
@@ -65,10 +59,8 @@ end
     identity_at(state, i)
 
 the tensor measuring the identity on site `i`, see `tensor_obs`: the identity of the site on a
-pure state; on a mixed one, the trace over the site, which, contracted with the tensor of the
-density matrix there, leaves only the links, the state conserving nothing strongly, see
-`weak_form`. A placed identity has no site, while `expect1` and `expect2`, which close an
-environment on a given site, need its tensor there: the site comes from them.
+pure state, the trace over the site on a mixed one, conserving nothing strongly, see
+`weak_form`
 """
 function identity_at(state::State{Pure}, i::Int)
     j = SysIndex{Pure}(state.system, i)
@@ -83,9 +75,8 @@ end
 """
     tensor_obs(state, o)
 
-the tensor measuring the one site operator `o`, possibly times a coefficient, on `state`: the
-tensor of the operator on a pure representation; on a mixed one, the tensor that, contracted
-with the density matrix on that site, applies `o` and traces the site out, see `on_trace`.
+the tensor measuring the one site operator `o`, possibly times a coefficient, on `state`: that
+of the operator on a pure representation, carried by `on_trace` on a mixed one
 """
 tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
     tensor(state.system, ind)
@@ -93,8 +84,7 @@ tensor_obs(state::State{Pure}, ind::AtIndex{Pure, 1}) =
 tensor_obs(state::State{Mixed}, ind::AtIndex{Pure, 1}) =
     on_trace(state, tensor(state.system, ind), only(ind.index))
 
-# `(c * A)(i)` keeps its coefficient outside the AtIndex, so it has to be taken off here:
-# everything downstream of `tensor_obs` works on the one site tensor alone
+# `(c * A)(i)` keeps its coefficient outside the AtIndex
 tensor_obs(state::State, a::ScalarOp{Pure, Indexed, 1}) =
     a.coef * tensor_obs(state, a.arg)
 
@@ -102,8 +92,7 @@ tensor_obs(state::State, a::ScalarOp{Pure, Indexed, 1}) =
     obs_at(state, op, i)
 
 the tensor measuring the one site operator `op` on site `i`, see `tensor_obs`, a multiple of the
-identity included, see `identity_at`: `(2X)^2`, simplified to `4Id`, went to `tensor_obs`, which
-an identity, placed on no site, has no method of.
+identity included, see `identity_at`
 """
 obs_at(state::State, op::SimpleOp, i::Int) =
     scalararg(op) isa IdentityOp ? scalarcoef(op) * identity_at(state, i) : tensor_obs(state, op(i))
@@ -112,25 +101,23 @@ obs_at(state::State, op::SimpleOp, i::Int) =
     tensor_dag(state, i)
 
 the tensor on site `i` of the adjoint of the density matrix, for a state conserving nothing
-strongly, see `dag`.
+strongly, see `dag`
 """
 function tensor_dag(state::State, i::Int)
     s = state.system
     j = SysIndex{Pure}(s, i)
     k = SysIndex{Mixed}(s, i)
     c = last(mixer(j, k, s[i]))
-    # the conjugate is spread back over the two indices, the ket and the bra are exchanged,
-    # and the pair is gathered again: that transposition is what turns a conjugate into an
-    # adjoint. The exchange is a renaming rather than a second combiner in the other order,
-    # which would ask for a mixed index of the opposite charge
+    # ket and bra exchanged by renaming: a combiner in the other order would ask for a mixed
+    # index of the opposite charge
     return replaceinds(dag(state.state[i]) * c, (dag(j), j'), (dag(j'), j)) * c
 end
 
 """
     cached!(create!, v, state)
 
-the cache `v` of `state`, filled by `create!(v, state)` on first use, under the lock of the
-caches, see `PreObs`. Once filled it never changes, and is read without it.
+the cache `v` of `state`, filled by `create!(v, state)` on first use under the lock of
+`PreObs`; once filled it never changes, and is read without the lock
 """
 function cached!(create!, v, state)
     lock(state.preobs.lock) do
@@ -144,8 +131,7 @@ end
 """
     create_loc!(l, state)
 
-fill `l` with what `get_loc` returns for every site. A pure state has none: asking for it is
-a bug.
+fill `l` with what `get_loc` returns for every site, mixed states only
 """
 create_loc!(_, ::State{Pure}) = error("bug: get_loc on pure states")
 function create_loc!(l, state::State{Mixed})
@@ -160,16 +146,16 @@ end
 """
     get_loc(state, i)
 
-the tensor of the density matrix on site `i` with that site traced out, see `identity_at`.
-Those of all sites are computed on first use and kept with the state. Mixed states only.
+the tensor of the density matrix on site `i` with that site traced out, cached for all sites
+on first use, mixed states only
 """
 get_loc(state::State, i::Int) = cached!(create_loc!, state.preobs.loc, state)[i]
 
 """
     create_right!(r, state)
 
-fill `r` with what `get_right` returns for every site. On a pure state, the sites from
-`rightlim` on, being right orthogonal, are not contracted: their environment is the identity.
+fill `r` with what `get_right` returns for every site; on a pure state, the right orthogonal
+sites from `rightlim` on give the identity, uncontracted
 """
 function create_right!(r, state::State{Pure})
     st = state.state
@@ -202,9 +188,8 @@ end
 """
     get_right(state, i)
 
-the environment on the right of site `i`: the sites after `i` contracted, traced out on a
-mixed state, ket with bra on a pure one, where the bra of site `i` is included as well.
-Those of all sites are computed on first use and kept with the state.
+the environment on the right of site `i`: the sites after `i` traced out on a mixed state,
+ket with bra on a pure one, the bra of site `i` included; cached for all sites on first use
 """
 get_right(state::State, i::Int) = cached!(create_right!, state.preobs.right, state)[i]
 
@@ -228,12 +213,9 @@ end
 """
     trace(::State)
 
-the trace of the density matrix, which should be one. On a pure representation it is the
-squared norm of the state, the trace of ``|\\psi\\rangle\\langle\\psi|``. It is computed
-once and kept with the state.
-
-It is a complex number whenever the tensors of the state are, after an evolution for
-instance: its imaginary part is then numerical error, and `Trace` measures the real part.
+the trace of the density matrix, which should be one, the squared norm of the state on a pure
+representation. It is complex when the tensors of the state are, after an evolution for
+instance, its imaginary part being numerical error; `Trace` measures the real part.
 """
 function trace(state::State)
     state = weak_form(state)
@@ -244,8 +226,8 @@ end
     extend_left!(l, state, i)
 
 extend `l`, which holds what `get_left` returns for its first sites, the first one at least,
-up to site `i`. On a pure state, the sites up to `leftlim`, being left orthogonal, are not
-contracted: their environment is the identity.
+up to site `i`; on a pure state, the left orthogonal sites up to `leftlim` give the identity,
+uncontracted
 """
 function extend_left!(l, state::State{Pure}, i::Int)
     st = state.state
@@ -255,9 +237,8 @@ function extend_left!(l, state::State{Pure}, i::Int)
     for k in j+1:i
         llink = commonind(st[k-1], st[k])
         v = if k <= ll
-            # what the branch below leaves: the link of the ket as st[k-1] holds it, and that
-            # of the bra daggered and primed. The other way round, which only charges tell
-            # apart, it did not contract with st[k]
+            # the directions the branch below leaves, the ket link as st[k-1] holds it and the
+            # bra one daggered and primed: only charges tell the other way round apart
             delta(llink, dag(llink)')
         else
             l[k-1] * identity_at(state, k-1) * dag(st[k-1]')
@@ -280,14 +261,13 @@ end
 """
     get_left(state, i)
 
-the environment on the left of site `i`: the sites before `i` contracted, traced out on a mixed
-state, ket with bra on a pure one, followed by the tensor of the state on `i`. It is not
-divided by the trace, which the measurements built on it divide by when they normalize, so
-that the same environments serve both. Computed up to `i` on demand and kept with the state.
+the environment on the left of site `i`: the sites before `i` traced out on a mixed state, ket
+with bra on a pure one, times the tensor of the state on `i`, not divided by the trace;
+computed up to `i` on demand and cached
 """
 function get_left(state::State, i::Int)
     l = state.preobs.left
-    # read under the lock as well, the vector growing as it is extended, see `PreObs`
+    # read under the lock too, the vector growing as it is extended
     return lock(state.preobs.lock) do
         if isempty(l)
             push!(l, state.state[1])
@@ -303,7 +283,7 @@ end
     trace2(::State)
 
 the purity ``\\mathrm{tr}(\\rho^2)`` of the density matrix normalised to trace one: 1 for a
-pure state, less for a mixed one. On a pure representation it is 1 without computation.
+pure state, less for a mixed one.
 """
 trace2(::State{Pure}) = 1.
 trace2(state::State{Mixed}) = (norm(state.state) / real(trace(state))) ^ 2
@@ -311,9 +291,8 @@ trace2(state::State{Mixed}) = (norm(state.state) / real(trace(state))) ^ 2
 """
     norm(::State)
 
-the norm of the state, which should be one on a pure representation. On a mixed one it is
-the Hilbert-Schmidt norm of the density matrix, ``\\sqrt{\\mathrm{tr}(\\rho^\\dagger\\rho)}``,
-and not its trace.
+the norm of the state, which should be one on a pure representation, and on a mixed one the
+Hilbert-Schmidt norm ``\\sqrt{\\mathrm{tr}(\\rho^\\dagger\\rho)}``, not the trace.
 """
 norm(state::State) = norm(state.state)
 
@@ -321,25 +300,23 @@ norm(state::State) = norm(state.state)
 """
     normalize(::State)
 
-the state rescaled to norm one on a pure representation, to trace one on a mixed one, the
-trace being taken as its real part, see `expect`.
+the state rescaled to norm one on a pure representation, to a trace of real part one on a
+mixed one.
 """
 normalize(state::State{Pure}) =
     State(state, normalize(state.state))
 normalize(state::State{Mixed}) =
     State(state, state.state / real(trace(state)))
 
-# LinearAlgebra has methods of these for any argument, which tried to iterate the state of a
-# representation of one's own that has none of its own
+# the LinearAlgebra fallbacks would iterate a representation of one's own
 norm(state::AbstractState) = throw(MethodError(norm, (state,)))
 normalize(state::AbstractState) = throw(MethodError(normalize, (state,)))
 
 """
     check_same_system(a, b)
 
-refuse two states that do not share their `System`. The indices of a `System` are drawn
-afresh, so two systems have none in common even when their sites match, and `ITensorMPS`
-would still contract the states, on a deprecated fallback that matches by position and warns.
+refuse two states that do not share their `System`, whose indices differ even when their
+sites match
 """
 function check_same_system(a::State, b::State)
     if a.system !== b.system
@@ -355,16 +332,13 @@ end
     inner(a::State, op, b::State)
     dot(a::State, op, b::State)
 
-the inner product of two states of the same system and representation, `dot` being an alias
-of `inner`, and given an operator placed on sites `op`, the matrix element of `op` between
-them, ``\\langle a | op | b \\rangle``, a superoperator on mixed representations.
+the inner product of two states, ``\\langle a | b \\rangle`` on pure representations,
+``\\mathrm{tr}(a^\\dagger b)`` on mixed ones, not normalised (see `fidelity`); given an
+operator placed on sites `op`, a superoperator on mixed representations, the matrix element
+``\\langle a | op | b \\rangle``. `dot` is an alias of `inner`.
 
-On pure representations this is the overlap ``\\langle a | b \\rangle``, the first argument
-conjugated. On mixed ones it is the Hilbert-Schmidt product ``\\mathrm{tr}(a^\\dagger b)``.
-Neither is normalised: divide by the norms, or use `fidelity`.
-
-The two states must share their `System`, see `State(::System, ::State)`. A pure and a mixed
-representation are refused.
+The two states must share their `System`, see `State(::System, ::State)`, and their
+representation.
 
 # Examples
 
@@ -377,14 +351,12 @@ function inner(a::State{R}, b::State{R}) where R
     return dot(a.state, b.state)
 end
 
-# Both orders are spelled out on purpose: a catch-all `inner(::State, ::State)` is what Julia
-# picks over the diagonal method above, so it would capture the matching pairs as well.
+# both orders spelled out: Julia would pick a catch-all `inner(::State, ::State)` over the
+# diagonal method above, for matching pairs as well
 """
     different_representations()
 
-refuse an inner product between a pure and a mixed representation: one is a vector of the
-Hilbert space, the other of the space of operators on it, so there is no product to take.
-Refused with a message rather than left to a `MethodError`, which names no way out.
+refuse an inner product between a pure and a mixed representation
 """
 different_representations() =
     error("no inner product between a pure and a mixed representation. Mix the pure " *
@@ -397,7 +369,7 @@ dot(a::State, b::State) = inner(a, b)
 
 function inner(a::State{R}, op::IndexedOp{R}, b::State{R}) where R
     check_same_system(a, b)
-    # checked on the operator as it was written, as expect does
+    # on the operator as written, see `expect`
     check_indices(a.system, op)
     return inner(a.state', make_mpo(b, op), b.state)
 end
@@ -408,14 +380,11 @@ dot(a::AbstractState, b::AbstractState) = throw(MethodError(dot, (a, b)))
 """
     fidelity(a, b)
 
-the fidelity of two states of the same system, between 0 and 1, whatever the norms and
-traces of the arguments.
-
-On two pure representations this is ``|\\langle a | b \\rangle|^2``; on a pure and a mixed
-one, in either order, ``\\langle \\psi | \\rho | \\psi \\rangle``. Two mixed representations
-are refused: their Uhlmann fidelity ``(\\mathrm{tr}\\sqrt{\\sqrt{\\rho}\\sigma\\sqrt{\\rho}})^2``
-needs the spectrum of a density operator, out of reach for a matrix product state. Use
-`hs_fidelity` there.
+the fidelity of two states of the same system, between 0 and 1, whatever their norms and
+traces: ``|\\langle a | b \\rangle|^2`` on two pure representations,
+``\\langle \\psi | \\rho | \\psi \\rangle`` on a pure and a mixed one, in either order. Two
+mixed representations are refused, their Uhlmann fidelity being out of reach for a matrix
+product state: use `hs_fidelity`.
 
 # Examples
 
@@ -430,8 +399,6 @@ fidelity(p::State{Pure}, r::State{Mixed}) =
 
 fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
 
-# said here rather than left to a `MethodError`, which names no way out. The docstring
-# above carries the reasoning, the message only has to point at it
 fidelity(::State{Mixed}, ::State{Mixed}) =
     error("no fidelity between two mixed representations, it needs the spectrum of a " *
           "density operator. Use hs_fidelity")
@@ -440,12 +407,8 @@ fidelity(::State{Mixed}, ::State{Mixed}) =
     hs_fidelity(a::State{Mixed}, b::State{Mixed})
 
 the normalised Hilbert-Schmidt overlap of two mixed states of the same system,
-``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``: the cosine between the two
-density matrices seen as vectors, 1 exactly when they are proportional.
-
-This is **not** the Uhlmann fidelity, which is out of reach for a matrix product state, see
-`fidelity`, but a cheaper indicator of how close two mixed states are, for instance an
-evolution and a reference density matrix.
+``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``, 1 exactly when they are
+proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 """
 hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (norm(a) * norm(b))
@@ -464,7 +427,7 @@ function dag(state::State{Mixed})
     if isempty(strong_names(s))
         return State(state, MPS([ tensor_dag(state, i) for i in 1:n ]))
     end
-    # `conj` rather than `dag`: the directions stay, only the charges are relabelled
+    # `conj`: the directions stay, only the charges are relabelled
     relab = relabeller(i -> adjoint_index(i, strong_names(s)))
     return State(state, MPS([ relabel(conj(state.state[i]), relab) * m
                               for (i, m) in enumerate(adj_maps(s, relab)) ]))
@@ -488,8 +451,8 @@ hermitianize(state::State{Mixed}; limits::Limits=Limits()) =
 """
     hermiticity(::State)
 
-how Hermitian the density matrix is, as it should be, from 0 when it is anti-Hermitian to 1
-when it is Hermitian:
+how Hermitian the density matrix is, from 0 when it is anti-Hermitian to 1 when it is
+Hermitian, as it should be:
 ``1/2 + \\mathrm{Re}\\,\\mathrm{tr}(\\rho^2)/(2\\,\\mathrm{tr}(\\rho^\\dagger\\rho))``. 1 on a
 pure representation.
 """
@@ -503,21 +466,15 @@ hermiticity(state::State{Mixed}) =
     renyi2(::State, cut::Int)
 
 the Rényi entropy of order 2, ``-\\log \\mathrm{tr}(\\rho^2)``, of the state, 0 on a pure
-representation.
-
-Given positions, that of the state reduced to those sites, which on a pure state measures how
-much they are entangled with the rest. A pure state is then mixed first, which is much more
-expensive, since a partial trace needs a density matrix. Empty positions give 0, as the cut
-0 does. A cut stands for the sites `1:cut`, from 0 to the number of sites; on a pure state it
-is read off the entanglement spectrum, as cheap as `entanglement_entropy`.
+representation; given positions, or a cut standing for the sites `1:cut` (from 0 to the
+number of sites), that of the state reduced to those sites, 0 when there is none. On a pure
+state, positions mix it first, which is much more expensive, while a cut is as cheap as
+`entanglement_entropy`.
 """
 renyi2(::State{Pure}) = 0.
 renyi2(state::State{Mixed}) = -log(trace2(state))
 
-# a number read off a partial trace gives nothing away, so unlike `partial_trace` itself this
-# goes through the weak form of a strongly conserving state. No site: the state reduced to
-# nothing is its trace, a number, which has no entropy, where `partial_trace` refuses to give
-# a state of no site
+# the weak form, which `partial_trace` does not take on its own, is fine for a number
 function renyi2(state::State{Mixed}, a::AbstractVector{Int})
     if isempty(a)
         return 0.0
@@ -525,8 +482,6 @@ function renyi2(state::State{Mixed}, a::AbstractVector{Int})
     return renyi2(partial_trace(weak_form(state), a; keep = true))
 end
 
-# a subsystem of a pure state is not pure, so this is an entanglement measure rather than
-# 0. There is no cheap route for an arbitrary subset: a partial trace needs a density matrix.
 function renyi2(state::State{Pure}, a::AbstractVector{Int})
     if isempty(a)
         return 0.0
@@ -534,16 +489,15 @@ function renyi2(state::State{Pure}, a::AbstractVector{Int})
     return renyi2(mix(state), a)
 end
 
-# positions given in a vector of another element type, `[]` or `Any[1, 3]`, are taken as the
-# integers they are, rather than met with no method at the first measurement
+# positions in a vector of another element type, `[]` or `Any[1, 3]`
 renyi2(state::State, a::AbstractVector) = renyi2(state, Vector{Int}(a))
 
 """
     unroll(x)
 
 turn an array of results over the sites, or pairs of sites, each holding one value per
-operator, into one such array per operator, arranged as the operators were given. An array
-of numbers is returned as it is.
+operator, into one such array per operator, arranged as the operators; an array of numbers is
+returned as it is
 """
 unroll(x) =
     if x[1] isa Number
@@ -563,9 +517,8 @@ unroll(x) =
     Expector()
 
 an expectation value being contracted from left to right: `t` holds the sites up to `pos`,
-the tensor of the state on `pos` included, with the site of `pos` left open for the operator
-placed there, if only the identity, before moving on. `Expector()` is the empty one, at
-`pos = 0`.
+the tensor of the state on `pos` included, its site left open for an operator.
+`Expector()` is the empty one, at `pos = 0`.
 """
 struct Expector
     pos::Int
@@ -579,9 +532,8 @@ Expector() =
 """
     zipto(state, a, i)
 
-the expector `a` carried to site `i`, at or after `a.pos`: the sites in between are traced
-out and the tensor of the state on `i` is added, its site left open. From the empty expector
-this is `get_left(state, i)`.
+the expector `a` carried to site `i`, at or after `a.pos`, see `zip_between`; from the empty
+expector, `get_left(state, i)`
 """
 function zipto(state::State, a::Expector, i::Int)
     if a.pos == 0
@@ -595,9 +547,8 @@ end
 """
     zip_between(state, t, from, to)
 
-the contraction `t` of an expector at `from`, its operator placed there, carried to `to`: the
-site `from` closed, the sites in between traced out, and the tensor of the state on `to`
-added, its site left open
+the contraction `t` of an expector at `from`, its operator placed there, carried to `to`, the
+sites in between traced out and the site of `to` left open
 """
 function zip_between(state::State{Pure}, t::ITensor, from::Int, to::Int)
     st = state.state
@@ -619,7 +570,7 @@ end
 """
     zipend(state, a)
 
-the expector `a` completed with the environment on the right of `a.pos`, see `get_right`.
+the expector `a` completed with the environment on the right of `a.pos`, see `get_right`
 """
 zipend(state::State, a::Expector) =
     Expector(a.pos, a.t * get_right(state, a.pos))
@@ -629,9 +580,8 @@ zipend(state::State, a::Expector) =
     expectfactor(state, a, o)
     expectfactor(state, a, t, i)
 
-the expector `a` carried to the site of the one site operator `o`, and multiplied there by
-the tensor measuring it, see `tensor_obs`; or carried to site `i` and multiplied by `t`. A
-`Multi_F` places `F` on each of its sites.
+the expector `a` carried to the site of the one site operator `o` and multiplied by the tensor
+measuring it, or to site `i` and multiplied by `t`; a `Multi_F` places `F` on each of its sites
 """
 expectfactor(state::State, a::Expector, o::AtIndex) =
     expectfactor(state, a, tensor_obs(state, o), only(o.index))
@@ -652,8 +602,7 @@ end
     times_piece(state, t, o, k)
 
 the expector tensor `t`, carried to site `k`, times the piece `o` of a com measured there, see
-`obs_at`. On a pure state the identity, the most frequent piece of a com, only renames the
-index of the site, which is much cheaper than contracting a delta.
+`obs_at`; on a pure state the identity only renames the index of the site
 """
 times_piece(state::State{Pure}, t::ITensor, o::SimpleOp, k::Int) =
     if scalararg(o) isa IdentityOp
@@ -671,25 +620,18 @@ times_piece(state::State{Mixed}, t::ITensor, o::SimpleOp, k::Int) =
     expect_norm(state, coef, factors)
     expect_norm(state, coef, com)
 
-`expect` without the simplification nor the normalization: ``\\mathrm{tr}(A\\rho)``, or
-``\\langle\\psi|A|\\psi\\rangle``, of an operator already in the form `simplify` gives, or the
-array of those of an array of them; given `coef` and `factors`, that of their product, and given
-a com, that of the com times `coef`. A com is
-contracted from left to right with one expector per channel: a channel opens on `get_left`,
-goes from site to site by `zip_between` and closes on `get_right`. `measure` calls it on
-operators `make_obs` has simplified once and for all.
+`expect` without the simplification nor the normalization, on an operator already in the
+form `simplify` gives, or an array of them; given `coef` and `factors`, or `coef` and a com,
+that of their product. A com is contracted with one expector per channel.
 """
 function expect_norm(state::State, coef::Number, subs::Vector{<:IndexedOp{Pure}})
     if coef == 0.
         return 0.
     end
     state = weak_form(state)
-    # every expectation value reaches this leaf, `measure` included, which calls
-    # `expect_norm` rather than `expect`. Checking here covers them all at the cost of a
-    # few integer comparisons per term, nothing next to the contractions below
+    # every expectation value reaches this leaf, `measure` included
     foreach(o -> check_indices(state.system, o), subs)
     foreach(o -> check_one_site(o, "expect"), subs)
-    # the identity has no site, and the trace is what it gives
     subs = filter(o -> !(o isa IdentityOp), subs)
     if isempty(subs)
         return coef * trace(state)
@@ -719,8 +661,7 @@ function expect_norm(state::State, coef::Number, a::ComOp{Pure})
             if r == 0
                 total += scalar(t * get_right(state, k))
             else
-                # out of place: a piece may share its storage with `get_left`, cached with the
-                # state, which adding in place would corrupt
+                # out of place: a piece may share its storage with the cache of `get_left`
                 next[r] = isnothing(next[r]) ? t : next[r] + t
             end
         end
@@ -736,19 +677,14 @@ expect_norm(state::State, coef::Number, a::IndexedOp{Pure}) =
     expect(state, obs; normalize = true)
 
 the expectation value of `obs`, an operator placed on sites, or the array of those of an
-array of them. It is divided by the trace of the state, its squared norm on a pure
-representation, so the state need not be normalised. On a mixed representation the trace is
-taken as its real part, its imaginary part being numerical error on a density matrix.
+array of them, divided by the real part of the trace of the state (its squared norm on a pure
+representation). With `normalize = false` it is not divided: ``\\mathrm{tr}(A\\rho)``, or
+``\\langle\\psi|A|\\psi\\rangle``, as needed by a non Hermitian ``B\\rho`` made with `Left` or
+`Right` in a correlation at two times, whose trace may be complex or zero.
 
-With `normalize = false` it is not divided: ``\\mathrm{tr}(A\\rho)``, or
-``\\langle\\psi|A|\\psi\\rangle``, as it is. This is what an operator made non Hermitian by
-`Left` or `Right` needs, ``B\\rho`` in a correlation at two times for instance, whose trace
-has an imaginary part of its own or is zero.
-
-`obs` is simplified first, so its factors may be given in any order and the Jordan-Wigner
-strings of fermionic operators are inserted for you. An operator not placed on sites, `X`
-rather than `X(1)`, is refused, `expect1` measuring it on every site, and so is a
-superoperator.
+`obs` is simplified first: its factors may come in any order and the Jordan-Wigner strings
+of fermionic operators are inserted for you. An operator not placed on sites, `X` rather
+than `X(1)`, is refused (see `expect1`), and so is a superoperator.
 
 A representation of one's own measures operators through `expect`, see
 [Representations of one's own](@ref).
@@ -760,9 +696,8 @@ A representation of one's own measures operators through `expect`, see
     expect(state, C(3)*dag(C)(1))
 """
 function expect(state::State, op::Op; normalize::Bool = true)
-    # on the operator as it was written, as make_mpo and apply do: simplify places an identity
-    # on the first site whatever site it was given, and its Jordan-Wigner strings would be
-    # named in the message rather than what the caller wrote
+    # before simplify, which moves an identity to the first site and adds Jordan-Wigner
+    # strings
     check_indices(state.system, op)
     v = expect_norm(state, simplify(op))
     return normalize ? v / real(trace(state)) : v
@@ -783,7 +718,7 @@ expect_norm(state::State, op::SumOp{Pure, Indexed}) =
         expect_norm(state, p)
     end
 
-# said here rather than left to the method below, which would try to iterate the operator
+# before the method below, which would iterate the operator
 expect_norm(::State, a::Op{Mixed}) =
     error("expect takes an observable, and $a is a superoperator acting on a density matrix")
 
@@ -800,15 +735,13 @@ expect_norm(state::State, op) =
     expect1_one(state, op, i, t)
 
 the expectation value of the one site operator `op` on site `i`, or the array of those of an
-array of operators, `t` being the state contracted on every site with that of `i` left open.
-A fermionic operator is refused: its expectation value vanishes on any state of definite
-fermion parity.
+array of operators, `t` being the state contracted on every site with that of `i` left open;
+a fermionic operator is refused, see `expect1`
 """
 expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =
     if isfermionic(op)
-        # this is a refusal, not a gap to fill: implementing it would add a path whose
-        # only correct answer is zero, and would silently open the branch `expect2` picks
-        # on the parity of its first operator
+        # a refusal, not a gap to fill: its only correct answer is zero, and implementing it
+        # would silently open the branch `expect2` picks on the parity of its first operator
         error("expect1 does not take a fermionic operator: its expectation value is odd, " *
               "so it vanishes on any state of definite fermion parity. If you really " *
               "want it on a state that superposes parities, ask for it site by site " *
@@ -817,7 +750,6 @@ expect1_one(state::State, op::SimpleOp, i::Int, t::ITensor) =
         scalar(t * obs_at(state, op, i))
     end
 
-# said here rather than by the MethodError of `length` the method below raised on it
 expect1_one(::State, a::IndexedOp, ::Int, ::ITensor) =
     error("expect1 measures an operator on every site, X rather than X(1): measure $a with expect")
 
@@ -831,12 +763,9 @@ expect1_one(state::State, ops, i::Int, t::ITensor) =
     expect1(state, op)
 
 the expectation values of the one site operator `op` on every site, as a vector indexed by
-site, or, for an array of operators, an array of such vectors arranged as the operators. They
-are normalised as by `expect`.
-
-A fermionic operator is refused: its expectation value vanishes on any state of definite
-fermion parity. On a state superposing parities, measure it site by site with
-`expect(state, op(i))`.
+site, or, for an array of operators, an array of such vectors arranged as the operators,
+normalised as by `expect`. A fermionic operator is refused, its expectation value vanishing
+on any state of definite parity: on a state superposing parities, use `expect(state, op(i))`.
 
 # Examples
 
@@ -853,10 +782,8 @@ end
 
 
 function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
-    # the cross terms below pick their branch on the parity of the first operator alone,
-    # and the sign a swap costs takes the second to have the same one. A pair mixing the
-    # two is refused here rather than left to the diagonal, which rejects it today only
-    # because `expect1_one` has no fermionic case of its own.
+    # the cross terms below pick their branch and their swap sign on the parity of the first
+    # operator alone, which takes the second to have the same
     for (o1, o2) in ops
         if isfermionic(o1) ≠ isfermionic(o2)
             error("cannot correlate $o1 and $o2: one is fermionic and the other is not, " *
@@ -869,14 +796,10 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
     need_fermionic = any(isfermionic, oplist)
     need_non_fermionic = any(x->!isfermionic(x), oplist)
     n = length(state)
-    # `Matrix{Any}` is said out loud rather than left to the bare `Matrix(undef, ...)`,
-    # which means the same thing without showing it. The element type is not known before a
-    # cell is computed, since it follows what `scalar` returns for this state, and `unroll`
-    # rebuilds a concretely typed result at the end, so the untyped container stays internal
+    # the element type follows what `scalar` returns; `unroll` gives a concretely typed result
     r = Matrix{Any}(undef, n, n)
     scale = real(trace(state))
     for i in 1:n
-        # divided by the trace once, every correlation of site i being built on it
         e = zipto(state, Expector(), i)
         lnf = Expector(e.pos, e.t / scale)
         t = zipend(state, lnf).t
@@ -887,8 +810,8 @@ function expect2(state::State, ops::Vector{<:Tuple{SimpleOp, SimpleOp}})
         for j in i+1:n
             enf = need_non_fermionic ? zipend(state, zipto(state, lnf, j)) : lnf
             ef = need_fermionic ? zipend(state, zipto(state, lf, j)) : lf
-            # the expectation value of a(i) * b(j), a and b of the same parity: a fermionic
-            # a takes its string through the F of its site
+            # a and b of the same parity: a fermionic a takes its string through the F of
+            # its site
             correlation(a, b) =
                 isfermionic(a) ?
                     scalar(ef.t * tensor_obs(state, (a * F)(i)) * obs_at(state, b, j)) :
@@ -915,13 +838,10 @@ end
     expect2(state, (o1, o2))
     expect2(state, [(o1, o2), ...])
 
-the correlations of a pair of one site operators on every pair of sites: the matrix whose
-entry `(i, j)` is the expectation value of `o1(i) * o2(j)`, the diagonal being that of
-`(o1 * o2)(i)`. For a vector of pairs, a vector of such matrices. They are normalised as by
-`expect`.
-
-The two operators of a pair must both be fermionic or both not, their product being odd
-otherwise; the Jordan-Wigner strings of fermionic ones are inserted for you.
+the matrix whose entry `(i, j)` is the expectation value of `o1(i) * o2(j)`, normalised as by
+`expect`, the diagonal being that of `(o1 * o2)(i)`; for a vector of pairs, a vector of such
+matrices. The two operators of a pair must both be fermionic or both not; the Jordan-Wigner
+strings are inserted for you.
 
 # Examples
 
@@ -931,30 +851,22 @@ otherwise; the Jordan-Wigner strings of fermionic ones are inserted for you.
 expect2(state::State, ops::Tuple{SimpleOp, SimpleOp}) =
     expect2(state, [ops])[1]
 
-# a pair of operators placed on sites, or anything else that is not a pair of operators of one
-# site, said here rather than by a MethodError
 expect2(::State, ops) =
     error("expect2 correlates two operators on every pair of sites, (X, Y) rather than " *
           "(X(1), Y(2)): measure X(1) * Y(2) with expect")
 
 """
-    variance(::State{Pure}, hamiltonian)
-    variance(::State{Pure}, ::MPO)
+    variance(state::State{Pure}, hamiltonian)
+    variance(state::State{Pure}, ::MPO)
 
 the variance of the energy, ``\\langle H^2 \\rangle - \\langle H \\rangle^2``, zero exactly
-when the state is an eigenstate of the hamiltonian. The state need not be normalised, and a
-mixed representation is refused.
+when the state is an eigenstate of the Hamiltonian: the convergence check of a ground state
+search, one stuck in a metastable state also ceasing to progress, but with a large variance.
+The state need not be normalised, and a mixed representation is refused. The Hamiltonian may
+be given as its `make_mpo(state, hamiltonian)`, to build it once.
 
-This is the convergence check of a ground state search. The `tol` of `GroundState`
-stops when the energy no longer progresses between two sweeps, which a search stuck in a
-metastable state also does, with a large variance. Extrapolating the energy to zero variance
-over several bond dimensions also gives an error bar.
-
-``H^2`` is never formed: its terms are the products of pairs of those of `H`, and the product
-of the MPO of `H` by itself has the square of its bond dimension. What is computed is
-``\\langle H\\psi | H\\psi \\rangle``, with the MPO of `H` on either side, at the cost of a
-`dmrg` sweep at the same bond dimension: this belongs in `final_measurements`, or under a large
-`measurements_period`, rather than at every sweep. Pass an `MPO` to reuse one already built.
+It costs about a `dmrg` sweep at the same bond dimension: it belongs in
+`final_measurements`, or under a large `measurements_period`.
 
 # Examples
 
@@ -965,9 +877,7 @@ of the MPO of `H` by itself has the square of its bond dimension. What is comput
 function variance(state::State{Pure}, mpo::MPO)
     st = state.state
     n2 = real(dot(st, st))
-    # the bra is primed because that is the form `inner` wants: contracting the mpo with
-    # the ket leaves the site indices primed, and `inner(x, A, y)` with an unprimed `x`
-    # takes a fallback that ITensorMPS deprecated and says it will turn into an error
+    # the bra primed: unprimed, `inner` takes a deprecated fallback
     e = real(inner(prime(st), mpo, st)) / n2
     e2 = real(inner(mpo, st, mpo, st)) / n2
     return e2 - e^2
@@ -975,9 +885,6 @@ end
 
 variance(state::State{Pure}, h) = variance(state, make_mpo(state, h))
 
-# a hamiltonian on a density matrix does not have this reading, and the quantity that
-# plays the part is already there: `steady_state` optimises on ``L^\\dagger L`` and returns
-# ``\\|L\\rho\\|^2``, which is zero exactly when the state is stationary
 variance(::State{Mixed}, _) =
     error("variance needs a pure representation. On a mixed one steady_state returns " *
           "the equivalent for a Lindbladian")
@@ -1004,9 +911,8 @@ end
 """
     shannon_entropy(p)
 
-the entropy ``-\\sum_i p_i \\log p_i`` of the probabilities `p`. A probability of exactly zero,
-which a singular value kept by a `mindim` above the Schmidt rank gives, adds nothing, where
-`0 * log(0)` would make it NaN.
+the entropy ``-\\sum_i p_i \\log p_i`` of the probabilities `p`, a zero probability, which a
+`mindim` above the Schmidt rank gives, adding nothing rather than NaN
 """
 shannon_entropy(p) = -sum(x * log(x) for x in p if x > 0)
 
@@ -1017,9 +923,7 @@ the entanglement entropy and spectrum read off the singular values `S` of a cut,
 `entanglement_entropy` returns them
 """
 function entropy_spectrum(S::ITensor)
-    # sorted, because ITensors reads the singular values off the diagonal, and on the block
-    # sparse tensor of a state that conserves something that diagonal runs block by block:
-    # the spectrum would come out grouped by sector rather than decreasing
+    # sorted: with conserved quantities the diagonal runs block by block
     sp = sort([ S[i,i]^2 for i in 1:dim(S, 1) ]; rev = true)
     sp /= sum(sp)
     return (shannon_entropy(sp), sp)
@@ -1028,14 +932,10 @@ end
 """
     entanglement_entropy(state, cut::Int)
 
-the entanglement entropy across the cut between sites `cut` and `cut + 1`, together with the
-spectrum it is computed from: the eigenvalues of the reduced density matrix of the sites up
-to `cut`, that is the squared singular values of the cut normalised to sum to one, in
-decreasing order.
-
-`cut` runs from 1 to the number of sites; the last cut leaves nothing on its right and
-always gives 0. On a mixed representation the same computation, on the density matrix seen
-as a vector, gives the operator space entanglement entropy (OSEE).
+the entanglement entropy across the cut between sites `cut` and `cut + 1`, and the spectrum
+it is computed from, the eigenvalues of the reduced density matrix of the sites up to `cut`
+in decreasing order. `cut` runs from 1 to the number of sites, the last one giving 0. On a
+mixed representation, this is the operator space entanglement entropy (OSEE).
 
 # Examples
 
@@ -1046,16 +946,13 @@ entanglement_entropy(state::State, cut::Int) = entropy_spectrum(cut_svd(state, c
 """
     entanglement_by_sector(state::State{Pure}, cut::Int)
 
-the entanglement across the cut between sites `cut` and `cut + 1`, resolved by the charge the
-sites up to `cut` carry: a `Dict` from each charge, a `QN` as `flux` gives it, to the named
-tuple `(weight, entropy, spectrum)`, `weight` being the probability of that charge and
-`entropy` and `spectrum` those of the reduced density matrix restricted to it and normalised,
-the spectrum in decreasing order.
-
-The entanglement entropy is `Σ weight * entropy - Σ weight * log(weight)`, the second sum,
-the number entropy, coming from the charge fluctuating across the cut. A state conserving
-nothing has the single sector `QN()`. `QN` comes from ITensors, `using ITensors: QN`. A mixed
-representation is refused.
+the entanglement across the cut between sites `cut` and `cut + 1`, resolved by the charge of
+the sites up to `cut`: a `Dict` from each charge, a `QN` (`using ITensors: QN`), to
+`(weight, entropy, spectrum)`, the probability of that charge and the entropy and decreasing
+spectrum of the reduced density matrix restricted to it and normalised. The entanglement
+entropy is `Σ weight * entropy - Σ weight * log(weight)`, the second sum being the number
+entropy. A state conserving nothing has the single sector `QN()`; a mixed representation is
+refused.
 
 # Examples
 
@@ -1070,7 +967,7 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
         ee, sp = entropy_spectrum(S)
         return Dict(QN() => (weight = 1.0, entropy = ee, spectrum = sp))
     end
-    # U carries no flux, so what flows into it through `u` is what the sites up to `cut` hold
+    # U carrying no flux, what flows through `u` is what the sites up to `cut` hold
     if flux(U) ≠ QN()
         error("bug: the left factor of a cut carries $(flux(U)), so its sectors cannot be read")
     end
@@ -1086,7 +983,7 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
                                   Tuple{Float64, Float64, Vector{Float64}}}}()
     for (q, sq) in squares
         w = sum(sq)
-        # a sector the decomposition kept with nothing in it has no probability of occurring
+        # a sector kept with nothing in it
         if w == 0
             continue
         end
@@ -1119,14 +1016,11 @@ end
     trace_signs(state, keep)
 
 the state whose partial trace keeping the sites `keep` is the reduced state of `state`, its
-fermionic signs included. In the Jordan-Wigner basis a fermion traced out has to be moved past
-every fermion kept on its right, each one giving a sign: the reduced state is the trace of
-``U \\rho U^\\dagger``, ``U = (-1)^{\\sum n_l n_k}``, with `l` running over the fermionic sites
-traced out and `k` over the fermionic sites kept on their right, and `n` the parity of a site.
-``U \\rho U^\\dagger`` is the product of the state by an MPO of bond dimension 2, which carries
-the parity of the fermions traced out on the left: a site traced out projects on each parity,
-on the side of the ket alone, being traced afterwards, and a site kept takes `Gate(F)` when that
-parity is odd. A state needing no sign is given back as it is.
+fermionic signs included: ``U \\rho U^\\dagger``, ``U = (-1)^{\\sum n_l n_k}``, `l` running
+over the fermionic sites traced out, `k` over the fermionic sites kept on their right, and `n`
+the parity of a site. It is the product by an MPO of bond dimension 2 carrying the parity
+traced out on the left, projected on the ket side alone for a site traced out. A state
+needing no sign is given back as it is.
 """
 function trace_signs(state::State{Mixed}, keep)
     sys = state.system
@@ -1171,16 +1065,14 @@ end
 """
     partial_trace(state, positions::AbstractVector{Int} [; keep = false])
 
-the state with the sites at `positions` traced out, or, with `keep = true`, all the others.
-The result is a mixed state on a new system made of the sites kept, in their order, and it
-has the trace of `state`. It keeps the fermionic signs: an operator of the sites kept has on it
-the expectation value it has on `state`, its Jordan-Wigner strings crossing the fermions traced
-out. Tracing out a fermionic site with fermionic sites kept on its right may double the bond
-dimension of the result.
+the state with the sites at `positions` traced out, or, with `keep = true`, all the others: a
+mixed state on a new system made of the sites kept, in their order, with the trace of
+`state`. An operator of the sites kept has on it the expectation value it has on `state`,
+fermionic signs included; tracing out a fermionic site with fermionic sites kept on its
+right may double the bond dimension.
 
-A pure representation is refused, the reduced state being mixed in general: use `mix(state)`
-first. So is a state conserving something strongly, the reduced state spreading over several
-sectors: weaken it first. Tracing out every site is refused too.
+A pure representation is refused (use `mix(state)` first), so is a state conserving
+something strongly (weaken it first), and so is tracing out every site.
 
 # Examples
 
@@ -1193,8 +1085,7 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keep::Bool
               "spreads over several sectors: weaken it first, giving up the strong symmetry")
     end
     n = length(state)
-    # a position the state does not have would be silently ignored when tracing, the filter
-    # below never meeting it, and would raise a BoundsError when keeping
+    # the filter below would silently ignore a position the state does not have
     check_positions(state, pos, "partial_trace")
     if keep
         kept_sites = sort(unique(pos))
@@ -1212,9 +1103,7 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keep::Bool
     t = Vector{ITensor}(undef, kn)
     for (i, k) in enumerate(kept_sites)
         if i == 1
-            # the sites on the left traced out, without the 1/trace the left environment of
-            # expect carries: a partial trace keeps the trace of the state, and a traceless
-            # state gave NaN
+            # not divided by the trace, which the result keeps and which may be zero
             x = ITensor(1.)
             for l in 1:k-1
                 x *= get_loc(state, l)
@@ -1241,18 +1130,15 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keep::Bool
     return State{Mixed}(kept, MPS(t))
 end
 
-# a partial trace needs a density matrix: the reduced state of a subsystem is mixed in
-# general, so there is nothing to hand back in pure representation. `renyi2` and
-# `mutual_info_renyi2` mix on their own because they return a number; this one returns a
-# state, and changing its representation behind the caller's back would be a surprise
+# not mixed behind the caller's back as in `renyi2`, the result being a state
 partial_trace(::State{Pure}, ::AbstractVector{Int}; kwargs...) =
     error("partial_trace needs a mixed representation, use mix(state) first")
 
 """
     check_cut(state, cut, what)
 
-refuse a cut the state does not have, `what` naming the function it was given to: `cut` counts
-the sites on its left, from 0 to the number of sites, and at either end one part is empty.
+refuse a cut the state does not have, `what` naming the function given it, `cut` counting the
+sites on its left, from 0 to the number of sites
 """
 function check_cut(state::State, cut::Int, what)
     n = length(state)
@@ -1263,8 +1149,6 @@ function check_cut(state::State, cut::Int, what)
     return nothing
 end
 
-# a cut, the sites `1:cut`, as `mutual_info_renyi2` takes it. At either end one part is
-# empty: nothing, which has no entropy, or the whole state
 function renyi2(state::State, cut::Int)
     check_cut(state, cut, "renyi2")
     if cut == 0
@@ -1275,8 +1159,7 @@ function renyi2(state::State, cut::Int)
     return renyi2(state, collect(1:cut))
 end
 
-# the sites on the left of a cut share their Schmidt spectrum with the rest: their entropy is
-# read off it, as `mutual_info_renyi2` does, rather than from a partial trace of a mix
+# read off the Schmidt spectrum rather than from a partial trace of a mix
 function renyi2(state::State{Pure}, cut::Int)
     check_cut(state, cut, "renyi2")
     if cut == 0 || cut == length(state)
@@ -1289,8 +1172,7 @@ end
     parts_renyi2(state, a)
 
 ``S_2(A) + S_2(B) - S_2(A \\cup B)`` for part A at the positions `a` and B the rest, neither
-of them empty. On a pure state it is ``2 S_2(A)``, which takes a single partial trace of the
-mixed state.
+of them empty; ``2 S_2(A)`` on a pure state
 """
 function parts_renyi2(state::State{Mixed}, a::AbstractVector{Int})
     w = weak_form(state)
@@ -1306,20 +1188,17 @@ parts_renyi2(state::State{Pure}, a::AbstractVector{Int}) = 2 * renyi2(state, a)
     mutual_info_renyi2(state::State, a::AbstractVector{Int})
 
 the Rényi-2 analogue of the mutual information between two parts of the state,
-``S_2(A) + S_2(B) - S_2(A \\cup B)``, which unlike the mutual information can be negative on a
-mixed state. Part A is given by its positions, or by a cut, sites `1:cut`, from 0 to the number
-of sites; part B is the rest. Positions that are empty, or cover every site, give 0.
+``S_2(A) + S_2(B) - S_2(A \\cup B)``, which can be negative on a mixed state. Part A is given
+by its positions, or by a cut, sites `1:cut`, from 0 to the number of sites; part B is the
+rest. An empty part gives 0.
 
-On a pure state the two parts share their spectrum, and it is twice the `renyi2` of part A:
-for a cut, read off the entanglement spectrum, it costs no more than `entanglement_entropy`,
-and for positions the state is mixed first, which is much more expensive. For fermions this
-holds for a state of definite parity, as every physical one is, see `RandomState`.
+On a pure state it is twice the `renyi2` of part A, with the same costs, the result holding
+for fermions on a state of definite parity, see `RandomState`.
 """
 function mutual_info_renyi2(state::State, a::AbstractVector{Int})
     n = length(state)
     check_positions(state, a, "mutual_info_renyi2")
-    # a part that is all the system or nothing shares nothing with the rest, which has no site
-    # for partial_trace to keep
+    # partial_trace would have no site to keep
     k = length(unique(a))
     if k == 0 || k == n
         return 0.0
@@ -1332,15 +1211,13 @@ function mutual_info_renyi2(state::State, cut::Int)
     return mutual_info_renyi2(state, collect(1:cut))
 end
 
-# a pure state has no entropy of its own, and the two sides of a cut share their Schmidt
-# spectrum, so the mutual information is just twice the renyi2 entropy of either side. The cut
-# is checked here for the message to name this function
+# the cut checked here for the message to name this function
 function mutual_info_renyi2(state::State{Pure}, cut::Int)
     check_cut(state, cut, "mutual_info_renyi2")
     return 2 * renyi2(state, cut)
 end
 
-# as for `renyi2`, positions in a vector of another element type are taken as integers
+# positions in a vector of another element type
 mutual_info_renyi2(state::State, a::AbstractVector) = mutual_info_renyi2(state, Vector{Int}(a))
 
 
@@ -1348,8 +1225,8 @@ mutual_info_renyi2(state::State, a::AbstractVector) = mutual_info_renyi2(state, 
 """
     draw(p, d, rnd)
 
-the outcome among `0:d-1` that `rnd` falls on, `p(x)` being the probability of `x`: the first
-whose cumulated probability exceeds `rnd`, the last one taking what the others leave
+the first outcome among `0:d-1` whose cumulated probability exceeds `rnd`, `p(x)` being the
+probability of `x`, the last one taking what the others leave
 """
 function draw(p, d::Int, rnd)
     ptot = 0.
@@ -1366,10 +1243,9 @@ end
     sample(::State [; rng])
     sample(::State, pos::Int [; rng])
 
-a random outcome of measuring the state in the computational basis, outcomes being numbered
-from 0: a vector with one outcome per site, drawn with the correlations between sites, or,
-given `pos`, the outcome of that site alone, the others being traced out. `rng` is the random
-number generator, the global one by default.
+a random outcome, numbered from 0, of measuring the state in the computational basis: a vector
+with one outcome per site, or, given `pos`, the outcome of that site alone. `rng` is the random
+number generator (default the global one).
 
 # Examples
 
@@ -1387,7 +1263,7 @@ function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
     t = st[pos] / norm(st[pos])
     r = rand(rng)
     ind = siteind(st, pos)
-    # the conjugate leg, which on a charged site is the direction the tensor takes
+    # the conjugate leg, the direction the tensor takes on a charged site
     return draw(dim(ind), r) do x
         tx = t * onehot(dag(ind) => x + 1)
         real(scalar(tx * dag(tx)))
@@ -1419,9 +1295,7 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
         x = draw(i -> real(scalar(a * tensor_obs(state, Proj(i)(pos)) * r)), d, rnd)
         result[pos] = x
         l = a * tensor_obs(state, Proj(x)(pos))
-        # rescaled, the probabilities of the sites to come being ratios: as it was, it carried
-        # the probability of the outcomes drawn so far, which fell below the smallest float
-        # after some 1074 qubits, every later site being then drawn in its last state
+        # rescaled, the probabilities to come being ratios: it would underflow on long chains
         l /= norm(l)
     end
     return result
