@@ -1,4 +1,4 @@
-# Graphs as lists of edges, line, circle, complete or square lattice, for building hamiltonians
+# Graphs as lists of edges, line, circle, complete or square lattice, for building Hamiltonians
 # and graph states.
 
 export graph_base_size, line_graph, circle_graph, complete_graph, square_lattice
@@ -6,10 +6,8 @@ export graph_base_size, line_graph, circle_graph, complete_graph, square_lattice
 """
     graph_base_size(::Vector{Tuple{Int, Int}})
 
-the largest vertex of a graph, which is the number of sites a system needs to host it, 0 for
-a graph without edges. It is neither the size of the graph, its number of edges, nor its
-order, its number of vertices: a vertex may be in no edge, and the system still has to hold
-that site.
+the largest vertex of a graph, the number of sites a system needs to host it, 0 for a graph
+without edges. It is not the number of vertices: a vertex may be in no edge.
 
 # Examples
 
@@ -58,8 +56,7 @@ complete_graph(n::Int) =
 
 the `nx` by `ny` square lattice, as a vector of edges, its sites numbered along a snake
 running down the columns: the first column top to bottom, the second bottom to top, and so on.
-The chain thus runs through the lattice column by column, in a band `ny` sites wide: vertical
-bonds join consecutive sites and horizontal ones are at most `2ny - 1` sites apart. Put the short side in `ny`, since it
+Horizontal bonds join sites at most `2ny - 1` apart: put the short side in `ny`, since it
 bounds the bond dimension. With a single argument the lattice is `n` by `n`.
 
 # Examples
