@@ -5,6 +5,7 @@ export trace, trace2, norm, normalize, hermitianize, hermiticity, renyi2
 export inner, dot, fidelity, hs_fidelity
 export expect, expect1, expect2
 export entanglement_entropy, entanglement_by_sector, partial_trace, mutual_info_renyi2, sample, variance
+export reduced_density_matrix, vonneumann_entropy
 
 """
     weak_form(state)
@@ -1219,6 +1220,69 @@ end
 # not mixed behind the caller's back as in `renyi2`, the result being a state
 partial_trace(::State{Pure}, ::AbstractVector{Int}; kwargs...) =
     error("partial_trace needs a mixed representation, use mix(state) first")
+
+"""
+    reduced_density_matrix(state, positions)
+
+the density matrix of the sites at `positions`, the others traced out, as a matrix of trace
+one on the basis of the product states of those sites, taken in their order, ordered as `kron`
+orders them, the first site varying the slowest, as for `dense_state`. On fermionic sites it is
+written in the Jordan-Wigner basis of the sites kept alone, so that `tr(ρ * matrix(op, ...))`
+is the expectation value of `op` placed on them. A pure state is mixed first, which squares
+its bond dimension: it is meant for a few sites, the matrix having the square of their
+dimension as its number of elements.
+
+# Examples
+
+    ρ = reduced_density_matrix(state, [2, 5])
+"""
+function reduced_density_matrix(state::State{Mixed}, pos::AbstractVector{Int})
+    check_positions(state, pos, "reduced_density_matrix")
+    if isempty(pos)
+        return ones(1, 1)
+    end
+    r = partial_trace(weak_form(state), pos; keep = true)
+    sys = r.system
+    t = prod(r.state)
+    js = Index[]
+    bs = Index[]
+    # each mixed index split back into its ket and its bra
+    for i in 1:length(sys)
+        j = SysIndex{Pure}(sys, i)
+        b, c = mixer(j, SysIndex{Mixed}(sys, i), sys[i])
+        t *= dag(c)
+        push!(js, j)
+        push!(bs, b)
+    end
+    d = prod(dim, js)
+    m = reshape(Array(dense(t), reverse(js)..., reverse(dag.(prime.(bs)))...), d, d)
+    return m / tr(m)
+end
+
+reduced_density_matrix(state::State{Pure}, pos::AbstractVector{Int}) =
+    reduced_density_matrix(mix(state), pos)
+
+# positions in a vector of another element type, `[]` or `Any[1, 3]`
+reduced_density_matrix(state::State, pos::AbstractVector) =
+    reduced_density_matrix(state, Vector{Int}(pos))
+
+"""
+    vonneumann_entropy(state, positions)
+
+the von Neumann entropy ``-\\mathrm{tr}\\,\\rho_A \\log \\rho_A`` of the sites at `positions`,
+``\\rho_A`` being their `reduced_density_matrix`, 0 when there is none; the eigenvalues of
+zero or below, which an approximate state may have, are left out. On a pure state and the
+sites `1:cut`, `entanglement_entropy(state, cut)` gives the same, at a far lower cost and for
+any number of sites.
+
+# Examples
+
+    vonneumann_entropy(state, [2, 5])
+"""
+function vonneumann_entropy(state::State, pos::AbstractVector)
+    λ = eigvals(Hermitian(reduced_density_matrix(state, pos)))
+    return sum((-x * log(x) for x in λ if x > 0); init = 0.0)
+end
 
 """
     check_cut(state, cut, what)

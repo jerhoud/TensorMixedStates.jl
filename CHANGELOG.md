@@ -29,6 +29,9 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `amplitude_damping_gate(p)` and `thermal_relaxation_gate(T1, T2, t)` for qubits, the decay
   of an excitation and the relaxation of times T1 and T2, with their Lindblad generators
   `amplitude_damping_dissipator(γ)` and `thermal_relaxation_dissipator(T1, T2)`.
+- `reduced_density_matrix(state, positions)`, the density matrix of a few sites, and
+  `vonneumann_entropy(state, positions)`, with the measurements `ReducedDensityMatrix` and
+  `VonNeumannEntropy`.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.
 - `Dephase(A)`, the measurement of `A` whose result is not read, and `dephasing_gate(p, A)` and
   `dephasing_dissipator(γ, A)`, the dephasing channel in the eigenbasis of `A`, or in the basis

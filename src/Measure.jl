@@ -2,7 +2,7 @@
 # of their values, and measure, which computes a whole set of them at once.
 
 export StateFunc, TimeFunc, Check, Measure, Trace, TraceError, Trace2, Purity, Norm, Hermiticity, HermiticityError, Renyi2, SubRenyi2
-export EntanglementEntropy, MutualInfoRenyi2, measure
+export EntanglementEntropy, MutualInfoRenyi2, ReducedDensityMatrix, VonNeumannEntropy, measure
 export MaxLinkdim, MemoryUsage
 export Fidelity, Overlap, Variance
 export RealValue, ImaginaryValue, ComplexValue
@@ -521,6 +521,33 @@ SubRenyi2(pos) = StateFunc("SubRenyi2($(compact_positions(pos)))", st -> renyi2(
 
 SubRenyi2(cut::Int) =
     StateFunc("SubRenyi2($(compact_positions(1:cut)))", st -> renyi2(st, cut))
+
+"""
+    ReducedDensityMatrix([positions...])
+
+a state function measuring the density matrix of the sites at `positions`, a complex matrix,
+see `reduced_density_matrix`.
+
+# Examples
+
+    measurements = "rho.json" => ReducedDensityMatrix([1, 2])
+"""
+ReducedDensityMatrix(pos) =
+    ComplexValue(StateFunc("ReducedDensityMatrix($(compact_positions(pos)))",
+                           st -> reduced_density_matrix(st, pos)))
+
+"""
+    VonNeumannEntropy([positions...])
+
+a state function measuring the von Neumann entropy of the sites at `positions`, see
+`vonneumann_entropy`.
+
+# Examples
+
+    measurements = "data" => [VonNeumannEntropy([1]), VonNeumannEntropy([1, 2])]
+"""
+VonNeumannEntropy(pos) =
+    StateFunc("VonNeumannEntropy($(compact_positions(pos)))", st -> vonneumann_entropy(st, pos))
 
 """
     EntanglementEntropy(cut)

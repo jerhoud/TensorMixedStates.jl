@@ -544,6 +544,48 @@ end
     @test maxlinkdim(partial_trace(ρ, [3, 4])) ≤ maxlinkdim(ρ)
 end
 
+@testset "Reduced density matrix and von Neumann entropy" begin
+    # tr(ρ_A M) is the expectation value of the operator whose matrix on the kept sites is M,
+    # in the order of the sites and the Jordan-Wigner basis of the kept sites alone, which
+    # also checks the order of kets and bras with operators that are not hermitian
+    LA = TensorMixedStates.LinearAlgebra
+    q = RandomState{Pure}(System(4, Qubit()), 4)
+    ρ = reduced_density_matrix(q, [1, 3])
+    @test LA.tr(ρ) ≈ 1
+    @test LA.ishermitian(round.(ρ; digits = 12))
+    for (a, b) in [(X, Z), (Sp, Sm), (Y, Id), (Sm, Sp)]
+        m = matrix(a ⊗ b, Qubit(), Qubit())
+        @test LA.tr(ρ * m) ≈ expect(q, a(1) * b(3)) atol = 1e-12
+    end
+    @test reduced_density_matrix(mix(q), [1, 3]) ≈ ρ
+    @test reduced_density_matrix(q, Any[3, 1]) ≈ ρ
+    s = RandomState{Pure}(System([Qubit(), Spin(1), Qubit()]), 4)
+    ρs = reduced_density_matrix(s, [2, 3])
+    @test size(ρs) == (6, 6)
+    m = matrix(Sp ⊗ X, Spin(1), Qubit())
+    @test LA.tr(ρs * m) ≈ expect(s, Sp(2) * X(3)) atol = 1e-12
+    f = RandomState{Pure}(System(4, Fermion()), 4)
+    ρf = reduced_density_matrix(f, [1, 3])
+    for (a, b) in [(dag(C), C), (C, C), (N, dag(C))]
+        m = matrix(a ⊗ b, Fermion(), Fermion())
+        @test LA.tr(ρf * m) ≈ expect(f, a(1) * b(3)) atol = 1e-12
+    end
+    strong_ρ = State{Mixed}(System(3, Fermion(conserve = strong(N))), ["Occ", "Emp", "Occ"])
+    @test real(LA.diag(reduced_density_matrix(strong_ρ, [1, 2]))) ≈ [0, 0, 1, 0]
+    @test reduced_density_matrix(q, []) == ones(1, 1)
+    @test_throws "given site 5, which the state does not have" reduced_density_matrix(q, [5])
+    # the entropy of half a Bell pair is log 2, that of the pair 0, and on a cut it is the
+    # entanglement entropy
+    bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
+    @test vonneumann_entropy(bell, [1]) ≈ log(2)
+    @test abs(vonneumann_entropy(bell, [1, 2])) < 1e-12
+    @test vonneumann_entropy(q, 1:2) ≈ first(entanglement_entropy(q, 2))
+    @test vonneumann_entropy(q, []) === 0.0
+    values = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
+    @test values["ReducedDensityMatrix(1,3)"] ≈ ρ
+    @test values["VonNeumannEntropy(1)"] ≈ vonneumann_entropy(q, [1])
+end
+
 @testset "A random fermionic oracle" begin
     # every implementation of the Jordan-Wigner strings checked on random products against
     # the dense matrices of the strings written out: simplify, through expect on a pure and on

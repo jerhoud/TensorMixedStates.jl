@@ -42,13 +42,15 @@ There are some state functions predefined:
 |:---|:---|
 | `Trace` | the trace of the density matrix |
 | `TraceError` | `1 - trace`, to monitor how far the trace drifts |
-| `Trace2`, `Purity` | the trace of the square of the density matrix divided by the square of its trace, 1 on a pure state |
+| `Trace2`, `Purity` | ``\mathrm{tr}(\rho^\dagger\rho)/(\mathrm{tr}\,\rho)^2``, ``\mathrm{tr}(\rho^2)`` for a density matrix of trace one, 1 on a pure state |
 | `Norm` | the norm of the state |
 | `Hermiticity` | 1 for a Hermitian density matrix, down to 0 for an anti-Hermitian one |
 | `HermiticityError` | `1 - hermiticity` |
 | `Renyi2` | the Rényi entropy of order 2 of the state |
 | `SubRenyi2(sites)`, `SubRenyi2(cut)` | the Rényi entropy of order 2 of the sites given, or of those up to the cut, an integer |
 | `MutualInfoRenyi2(sites)`, `MutualInfoRenyi2(cut)` | the Rényi-2 mutual information between the sites given, or those up to the cut, an integer, and the rest |
+| `VonNeumannEntropy(sites)` | the von Neumann entropy of the sites given, from their reduced density matrix |
+| `ReducedDensityMatrix(sites)` | the density matrix of the sites given, a complex matrix, see `reduced_density_matrix` |
 | `EntanglementEntropy(cut)` | the entanglement entropy across the cut between sites `cut` and `cut+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
 | `EntanglementEntropy(cut, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
 | `Fidelity(ref)` | the fidelity with the reference state `ref`, refused between two mixed representations |
@@ -149,6 +151,8 @@ entanglement_entropy
 entanglement_by_sector
 renyi2
 mutual_info_renyi2
+reduced_density_matrix
+vonneumann_entropy
 Trace
 TraceError
 Trace2
@@ -162,6 +166,8 @@ Fidelity
 Overlap
 Variance
 MutualInfoRenyi2
+VonNeumannEntropy
+ReducedDensityMatrix
 EntanglementEntropy
 MaxLinkdim
 MemoryUsage
