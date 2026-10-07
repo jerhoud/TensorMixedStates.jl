@@ -1515,6 +1515,64 @@ function involution(system::System, op::IndexedOp{Pure})
 end
 
 """
+    counting(system, op, what)
+
+the sites of `op` and, for each, twice the eigenvalues of its part on that site, as integers,
+with the projectors on their eigenspaces, when `op` is a sum of operators of one site on two
+sites at least, each of half integer eigenvalues and diagonal on a system conserving
+something; `nothing` otherwise. `what` names the caller in the refusals.
+"""
+function counting(system::System, op::IndexedOp{Pure}, what::String)
+    check_indices(system, op)
+    c = scalarcoef(op)
+    parts = Dict{Int, Vector{SimpleOp}}()
+    for x in sumsubs(scalararg(op))
+        a = scalararg(x)
+        if !(a isa AtIndex && length(a.index) == 1)
+            return nothing
+        end
+        push!(get!(parts, only(a.index), SimpleOp[]), c * scalarcoef(x) * a.op)
+    end
+    sites = sort(collect(keys(parts)))
+    if length(sites) < 2
+        return nothing
+    end
+    locals = map(sites) do i
+        m = matrix(sum(parts[i]), system[i])
+        if is_charged(system) && !nearly(m, Diagonal(diag(m)))
+            return nothing
+        end
+        values, ps = eigenspaces(m, matrix(F, system[i]), what, op)
+        if any(λ -> abs(2λ - round(2λ)) > 2 * spectral_tol(values), values)
+            return nothing
+        end
+        return (round.(Int, 2 .* values), ps)
+    end
+    return any(isnothing, locals) ? nothing : (sites, locals)
+end
+
+"""
+    counting_probabilities(state, sites, locals)
+
+the totals, twice the values of the sum that `counting` describes, with their probabilities, in
+increasing order: the totals reached lie within `K` successive integers, whose probabilities are
+read off the mean values of the `K` products over the sites of ``e^{2i\\pi k t/K}``, `t` twice
+the value on the site
+"""
+function counting_probabilities(state::State, sites, locals)
+    totals = foldl((s, l) -> Set(x + t for x in s for t in first(l)), locals; init = Set(0))
+    t0, t1 = extrema(totals)
+    K = t1 - t0 + 1
+    φ = map(0:K-1) do k
+        phase(t, p) = Operator{1}("Count$k", sum(cis(2π * k * u / K) * q for (u, q) in zip(t, p)),
+                                  plain_op)
+        expect(state, prod(phase(l...)(i) for (i, l) in zip(sites, locals)))
+    end
+    return [ T => real(sum(φ[k+1] * cis(-2π * k * T / K) for k in 0:K-1)) / K
+             for T in sort(collect(totals)) ]
+end
+
+"""
     probabilities(state, pos)
     probabilities(state, op)
 
@@ -1522,14 +1580,16 @@ the results of measuring site `pos`, or the Hermitian operator `op` placed on a 
 their probabilities, as pairs `result => probability` in increasing order, those of zero
 probability included: the numbers of the basis states, counted from 0, or the eigenvalues of
 `op`, to rounding. On fermionic sites `op` must commute with the parity of its sites. Its
-matrix on them is diagonalized, its size being the product of their dimensions, except for a
-product of involutions, as a string of Pauli operators, measured on any number of sites by
-its mean value.
+matrix on them is diagonalized, its size being the product of their dimensions, except for two
+kinds of operators measured on any number of sites: a product of involutions, as a string of
+Pauli operators, by its mean value, and a sum of operators of one site with half integer
+eigenvalues, as the number of particles of a region, by the mean values of products of phases.
 
 # Examples
 
     probabilities(state, 3)
     probabilities(state, Z(1) * Z(2))
+    probabilities(state, sum(N(i) for i in 1:10))
 """
 function probabilities(state::State, op::IndexedOp{Pure})
     inv = involution(state.system, op)
@@ -1538,6 +1598,10 @@ function probabilities(state::State, op::IndexedOp{Pure})
         m = real(expect(state, P))
         ps = [ -c => (1 - m) / 2, c => (1 + m) / 2 ]
         return c > 0 ? ps : reverse(ps)
+    end
+    cnt = counting(state.system, op, "probabilities")
+    if !isnothing(cnt)
+        return [ T / 2 => p for (T, p) in counting_probabilities(state, cnt...) ]
     end
     sites, values, ps = measured_spectrum(state.system, op, "probabilities")
     return [ λ => p for (λ, p) in zip(values, outcome_probabilities(state, sites, ps)) ]
@@ -1682,6 +1746,66 @@ function project_parity(state::State{Mixed}, P, s; limits::Limits)
 end
 
 """
+    count_mpo(state, sites, locals, T, side)
+
+the MPO of the projector on the total `T` of the sum that `counting` describes, acting by
+`side`, `Left` or `Right` on a density matrix, `identity` on a pure state: its bond carries the
+totals of the sites on its left that can still reach `T`
+"""
+function count_mpo(state::State{R}, sites, locals, T::Int, side) where R
+    sys = state.system
+    n = length(sys)
+    at = Dict(i => k for (k, i) in enumerate(sites))
+    steps(i) = haskey(at, i) ? first(locals[at[i]]) : [0]
+    reached = [ Set(0) ]
+    for i in 1:n
+        push!(reached, Set(s + t for s in reached[i] for t in steps(i)))
+    end
+    bonds = Vector{Vector{Int}}(undef, n + 1)
+    bonds[n+1] = [T]
+    for i in n:-1:1
+        bonds[i] = sort([ s for s in reached[i] if any(t -> (s + t) in bonds[i+1], steps(i)) ])
+    end
+    links = [ is_charged(sys) ? Index([QN() => length(b)]; tags = "Count,l=$(i-1)") :
+              Index(length(b), "Count,l=$(i-1)") for (i, b) in enumerate(bonds) ]
+    ts = map(1:n) do i
+        idx = SysIndex{R}(sys, i)
+        a = site_array(ComplexF64, idx, links[i], links[i+1])
+        right = Dict(s => q for (q, s) in enumerate(bonds[i+1]))
+        blocks = if haskey(at, i)
+            [ (t, site_matrix(tensor(sys, side(Operator{1}("Count", p, selfadjoint_op))(i)), idx))
+              for (t, p) in zip(locals[at[i]]...) ]
+        else
+            [ (0, Matrix{ComplexF64}(I, dim(idx), dim(idx))) ]
+        end
+        for (p, s) in enumerate(bonds[i]), (t, m) in blocks
+            q = get(right, s + t, nothing)
+            if !isnothing(q)
+                add_block!(a, p, q, m)
+            end
+        end
+        return site_tensor(a, idx, links[i], links[i+1])
+    end
+    ts[1] *= onehot(links[1] => 1)
+    ts[n] *= onehot(dag(links[n+1]) => 1)
+    return MPO(ts)
+end
+
+"""
+    project_count(state, sites, locals, T; limits)
+
+the state projected on the total `T` of the sum that `counting` describes, and normalized: a
+density matrix is projected on its ket, then on its bra
+"""
+project_count(state::State{Pure}, sites, locals, T; limits::Limits) =
+    normalize(apply(count_mpo(state, sites, locals, T, identity), state; limits))
+
+function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
+    σ = apply(count_mpo(state, sites, locals, T, Left), state; limits)
+    return normalize(apply(count_mpo(σ, sites, locals, T, Right), σ; limits))
+end
+
+"""
     collapse(state, pos [; rng])
     collapse(state, op [; rng, limits])
 
@@ -1690,8 +1814,9 @@ the state it leaves, `(x, state)`: `x` is drawn with its probability, see `proba
 the state is projected onto it and normalized. The projection on several sites is a gate,
 truncated by `limits` (default `Limits()`), with the Jordan-Wigner strings of the fermionic
 sites lying between them; for a product of involutions, the state plus its image by the
-product, which at most doubles the bond dimension, or quadruples it on a density matrix. `rng`
-is the random number generator (default the global one).
+product, which at most doubles the bond dimension, or quadruples it on a density matrix; for a
+sum of operators of one site, an MPO whose bond carries the partial sums, as many as its
+dimension. `rng` is the random number generator (default the global one).
 
 # Examples
 
@@ -1706,6 +1831,12 @@ function collapse(state::State, op::IndexedOp{Pure}; rng = Random.default_rng(),
         c, P = inv
         s = rand(rng) < (1 + real(expect(state, P))) / 2 ? 1 : -1
         return (s * c, project_parity(state, P, s; limits))
+    end
+    cnt = counting(state.system, op, "collapse")
+    if !isnothing(cnt)
+        ts = counting_probabilities(state, cnt...)
+        T = first(ts[draw(x -> last(ts[x + 1]), length(ts), rand(rng)) + 1])
+        return (T / 2, project_count(state, cnt..., T; limits))
     end
     sites, values, ps = measured_spectrum(state.system, op, "collapse")
     probs = outcome_probabilities(state, sites, ps)

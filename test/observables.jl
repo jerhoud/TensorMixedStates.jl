@@ -752,6 +752,58 @@ end
     @test real(expect(after, N(1) + N(2) + N(3))) ≈ 1
 end
 
+@testset "Measuring a sum of operators of one site" begin
+    # its totals, integers or half integers, are counted on any number of sites, in agreement
+    # with the matrix of the operator on a few, and its projection by an MPO carrying the
+    # partial sums with the projector on its eigenspace
+    rng = Xoshiro(20261010)
+    TMS = TensorMixedStates
+    dense(st, op) = (r = TMS.measured_spectrum(st.system, op, "dense");
+                     collect(zip(r[2], TMS.outcome_probabilities(st, r[1], r[3]))))
+    ψ = RandomState{Pure}(System(6, Qubit()), 6)
+    s = RandomState{Pure}(System([Qubit(), Spin(1), Qubit(), Spin(3/2)]), 6)
+    for (st, op) in [(ψ, N(1) + N(3) + N(5)), (ψ, Sz(1) + Sz(2) + Sz(4)), (ψ, X(1) + X(2) + X(3)),
+                     (ψ, 2 * (N(2) - N(6))), (s, Sz(1) + Sz(2) + Sz(3) + Sz(4))], x in (st, mix(st))
+        @test !isnothing(TMS.counting(x.system, op, "test"))
+        ps, ds = probabilities(x, op), dense(x, op)
+        @test first.(ps) ≈ first.(ds)
+        @test last.(ps) ≈ last.(ds) atol = 1e-12
+    end
+    op = N(1) + N(3) + N(5)
+    r = TMS.measured_spectrum(ψ.system, op, "dense")
+    projected(st, v) = normalize(apply(Operator{3}("P", r[3][findfirst(≈(v), r[2])],
+                                                   selfadjoint_op)(1, 3, 5), st))
+    for st in (ψ, mix(ψ)), _ in 1:3
+        v, after = collapse(st, op; rng)
+        @test norm(after - projected(st, v)) < 1e-12
+    end
+    # on twenty sites, the number of particles of the region becomes sharp
+    big = RandomState{Pure}(System(30, Qubit()), 8)
+    NA = sum(N(i) for i in 6:25)
+    ps = probabilities(big, NA)
+    @test sum(last.(ps)) ≈ 1
+    @test sum(first.(ps) .* last.(ps)) ≈ real(expect(big, NA))
+    v, after = collapse(big, NA; rng)
+    @test real(expect(after, NA)) ≈ v
+    @test real(expect(after, NA * NA)) ≈ v^2
+    # on charged fermions, the total stays, and on a strong symmetry
+    f = RandomState(State{Pure}(System(8, Fermion(conserve = N)),
+                                ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]), 6)
+    Nf = sum(N(i) for i in 2:6)
+    @test last(last(probabilities(f, Nf))) ≈ 0 atol = 1e-12
+    for st in (f, mix(f))
+        v, after = collapse(st, Nf; rng)
+        @test real(expect(after, Nf)) ≈ v
+        @test real(expect(after, sum(N(i) for i in 1:8))) ≈ 4
+        @test real(trace(after)) ≈ 1
+    end
+    fs = mix(apply(sqrt(Swap)(1, 2),
+                   State{Pure}(System(3, Qubit(conserve = strong(N))), ["Dn", "Up", "Dn"])))
+    v, after = collapse(fs, N(1) + N(3); rng)
+    @test real(expect(after, N(1) + N(3))) ≈ v
+    @test real(trace(after)) ≈ 1
+end
+
 @testset "Logarithmic negativity" begin
     # log 2 for a Bell pair, and for the Werner state p Bell + (1 - p) I/4, the depolarization
     # of the pair, log((1 + 3p)/2) above p = 1/3, separable below; the partial transpose of
