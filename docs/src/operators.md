@@ -91,6 +91,7 @@ Operator
 Operator{N}(::String, ::Union{Matrix, Function, GenericOp{Pure, N}}, ::OpType, ::AbstractSite, ::AbstractSite...) where N
 ⊗(::GenericOp{R, N}, ::GenericOp{R, M}) where {R, N, M}
 Proj
+Basis
 Dissipator
 Gate
 SetState

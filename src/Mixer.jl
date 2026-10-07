@@ -431,6 +431,48 @@ function matrix(a::Operator, site::AbstractSite...)
     return checked_type(a, a.type, m, sites)
 end
 
+"""
+    spectral_tol(values)
+
+the distance below which two eigenvalues of an operator whose eigenvalues are `values` are one,
+see `rounding_tol`
+"""
+spectral_tol(values) = rounding_tol * max(1, maximum(abs, values))
+
+"""
+    eigenspaces(a, site, what)
+
+the eigenvalues of the Hermitian operator `a` on `site`, increasing, and the projectors on
+their eigenspaces, eigenvalues equal to rounding gathered into one, given by their mean; `what`
+names the caller in the refusals
+"""
+function eigenspaces(a::SimpleOp, site::AbstractSite, what::String)
+    m = matrix(a, site)
+    if !nearly(m, m')
+        error("$what needs a Hermitian operator, which $a is not on $site")
+    end
+    f = matrix(F, site)
+    if !nearly(f * m, m * f)
+        error("$what needs an operator commuting with the fermionic parity, which $a does " *
+              "not on $site")
+    end
+    e = eigen(Hermitian(complex(m)))
+    tol = spectral_tol(e.values)
+    d = dim(site)
+    values = Float64[]
+    ps = Matrix{ComplexF64}[]
+    start = 1
+    for k in 1:d
+        if k == d || e.values[k+1] - e.values[start] > tol
+            v = e.vectors[:, start:k]
+            push!(values, sum(e.values[start:k]) / (k - start + 1))
+            push!(ps, v * v')
+            start = k + 1
+        end
+    end
+    return values, ps
+end
+
 function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     st = state(site, a.state)
     if !(st isa Vector)
@@ -501,36 +543,9 @@ function matrix(a::SetState, site::AbstractSite)
     return vec(m) * transpose(vec(identity_operator(site)))
 end
 
-# ρ ↦ Σ P ρ P over the eigenprojectors of the operator, its eigenvalues equal to rounding
-# gathered into one eigenspace
-function matrix(a::Dephase, site::AbstractSite)
-    d = dim(site)
-    if isnothing(a.arg)
-        ps = [ (v = zeros(d); v[k] = 1; v * v') for k in 1:d ]
-    else
-        m = matrix(a.arg, site)
-        if !nearly(m, m')
-            error("Dephase needs a Hermitian operator, which $(a.arg) is not on $site")
-        end
-        f = matrix(F, site)
-        if !nearly(f * m, m * f)
-            error("Dephase needs an operator commuting with the fermionic parity, which " *
-                  "$(a.arg) does not on $site")
-        end
-        e = eigen(Hermitian(complex(m)))
-        tol = rounding_tol * max(1, maximum(abs, e.values))
-        ps = Matrix{ComplexF64}[]
-        start = 1
-        for k in 1:d
-            if k == d || e.values[k+1] - e.values[start] > tol
-                v = e.vectors[:, start:k]
-                push!(ps, v * v')
-                start = k + 1
-            end
-        end
-    end
-    return sum(kron(conj(p), p) for p in ps)
-end
+# ρ ↦ Σ P ρ P over the eigenprojectors of the operator, see `eigenspaces`
+matrix(a::Dephase, site::AbstractSite) =
+    sum(kron(conj(p), p) for p in last(eigenspaces(a.arg, site, "Dephase")))
 
 """
     checked_matrix(a, sites, js)

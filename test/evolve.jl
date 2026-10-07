@@ -743,6 +743,9 @@ end
     coherence = named([ i == 2 && j == 3 ? 1. : 0. for i in 1:4, j in 1:4 ], "UpDn")
     @test expect(apply(Dephase(Ntot)(1), e), coherence(1)) ≈ 0.5
     @test abs(expect(apply(Dephase()(1), e), coherence(1))) < 1e-12
+    # without an operator, the eigenbasis of Basis, the basis of the site
+    @test Dephase() == Dephase(Basis)
+    @test repr(Dephase()) == "Dephase(Basis)"
     # diagonal in the charges, it passes a strong conservation
     strong_q = State{Mixed}(System(2, Qubit(conserve = strong(N))), "Up")
     @test trace(apply(dephasing_gate(0.3)(1), strong_q)) ≈ 1

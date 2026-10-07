@@ -125,6 +125,19 @@ end
     @test flux(Sp, Spin(1, conserve = N)) == TensorMixedStates.ITensors.QN("N", -1)
 end
 
+@testset "Basis numbers the basis states of every site" begin
+    # it is N on the sites counting a single kind of excitation, and is defined on the others
+    # and on a site of one's own as well
+    for site in (Qubit(), Fermion(), Boson(4), Qboson(0.1, 4), Qudit(5), Spin(3/2))
+        @test matrix(Basis, site) ≈ matrix(N, site)
+    end
+    numbers(d) = [ i == j ? i - 1. : 0. for i in 1:d, j in 1:d ]
+    @test matrix(Basis, Electron()) ≈ numbers(4)
+    @test matrix(Basis, Tj()) ≈ numbers(3)
+    @test matrix(Basis, Dummit()) ≈ numbers(2)
+    @test flux(Basis, Electron(conserve = (Ntot, 2Sz))) == TensorMixedStates.ITensors.QN()
+end
+
 @testset "Fermion measuring" begin
     @test_pm test_phases(CreateState{type}(1, Fermion(), "1";
         final_measurements = check(N(1), 1)))

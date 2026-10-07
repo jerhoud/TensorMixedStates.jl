@@ -4,7 +4,7 @@
 
 export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Op, Operator, Id, F, Proj, Gate, Dissipator, Evolver, Left, Right, SetState, Dephase
+export Op, Operator, Id, F, Proj, Basis, Gate, Dissipator, Evolver, Left, Right, SetState, Dephase
 export relaxing_dissipator, relaxing_gate, depolarizing_dissipator, depolarizing_gate
 export dephasing_dissipator, dephasing_gate
 export named, parity
@@ -701,6 +701,22 @@ end
 isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
 
 
+############ Basis ################
+
+"""
+    Basis
+
+the operator numbering the basis states of a site, ``\\mathrm{diag}(0, 1, \\dots, d - 1)``,
+defined on every site type: its eigenbasis is the basis of the site. On a `Qubit`, a `Fermion`,
+a `Boson`, a `Qboson`, a `Qudit` or a `Spin`, it is `N`.
+
+# Examples
+
+    Dephase(Basis)(3)
+"""
+const Basis = Operator{1}("Basis", s -> diagm(Float64.(0:dim(s) - 1)), selfadjoint_op)
+
+
 ############ AtIndex ################
 
 """
@@ -1031,8 +1047,8 @@ the superoperator dephasing a site in the basis of the eigenspaces of the Hermit
 `A`, ``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``, ``P_\\lambda`` being the
 projector on the eigenspace of `A` of eigenvalue ``\\lambda``: the measurement of `A` whose
 result is not read. It erases the coherences between eigenspaces and keeps those within one.
-Without `A`, it dephases in the basis of the site. On a fermionic site, `A` must commute with
-the parity.
+Without `A`, it is `Dephase(Basis)`, which dephases in the basis of the site. On a fermionic
+site, `A` must commute with the parity.
 
 # Examples
 
@@ -1040,9 +1056,8 @@ the parity.
     Dephase(Ntot)(2)        # on an Electron, keeps the coherence of Up and Dn
 """
 struct Dephase <: GenericOp{Mixed, 1}
-    arg::Union{Nothing, GenericOp{Pure, 1}}
-    Dephase() = new(nothing)
-    Dephase(arg::GenericOp{Pure, 1}) = new(arg)
+    arg::GenericOp{Pure, 1}
+    Dephase(arg::GenericOp{Pure, 1} = Basis) = new(arg)
 end
 
 Dephase(a::IndexedOp) =
@@ -1050,12 +1065,11 @@ Dephase(a::IndexedOp) =
           "Dephase(N)(1) rather than Dephase(N(1))")
 
 show(io::IO, a::Dephase) =
-    isnothing(a.arg) ? print(io, "Dephase()") : paren(io, 1000, 0) do io
+    paren(io, 1000, 0) do io
         show_func(io, "Dephase", a.arg)
     end
 
-isless(a::Dephase, b::Dephase) =
-    isless(isnothing(a.arg) ? (0,) : (1, a.arg), isnothing(b.arg) ? (0,) : (1, b.arg))
+isless(a::Dephase, b::Dephase) = isless(a.arg, b.arg)
 
 
 # Relaxation
@@ -1154,35 +1168,34 @@ depolarizing_gate(p::Real, n::Int = 1) = relaxing_gate(p, n, "FullyMixed")
 # Dephasing
 
 """
-    dephasing_dissipator(γ[, A])
+    dephasing_dissipator(γ, A = Basis)
 
-the Lindblad generator dephasing a site at rate `γ` in the eigenbasis of `A`, or in the basis
-of the site, for an evolver: ``\\gamma\\,(\\Delta - \\mathrm{Id})``, `Δ` being `Dephase(A)`.
-Every coherence between two eigenspaces decays at the same rate `γ`, where `Dissipator(A)`
-damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant eigenvalues: the two agree
-when `A` has two eigenvalues, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`. Evolving
-under it for a time `t` is `dephasing_gate(1 - exp(-γt), A)`.
+the Lindblad generator dephasing a site at rate `γ` in the eigenbasis of `A`, by default the
+basis of the site, for an evolver: ``\\gamma\\,(\\Delta - \\mathrm{Id})``, `Δ` being
+`Dephase(A)`. Every coherence between two eigenspaces decays at the same rate `γ`, where
+`Dissipator(A)` damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant
+eigenvalues: the two agree when `A` has two eigenvalues, `Dissipator(Z)` being
+`dephasing_dissipator(2, Z)`. Evolving under it for a time `t` is
+`dephasing_gate(1 - exp(-γt), A)`.
 
 # Examples
 
     evolver = -im * H + sum(dephasing_dissipator(0.1)(i) for i in 1:10)
 """
-dephasing_dissipator(γ::Real) = γ * (Dephase() - Gate(Id))
-dephasing_dissipator(γ::Real, a::GenericOp{Pure, 1}) = γ * (Dephase(a) - Gate(Id))
+dephasing_dissipator(γ::Real, a::GenericOp{Pure, 1} = Basis) = γ * (Dephase(a) - Gate(Id))
 
 """
-    dephasing_gate(p[, A])
+    dephasing_gate(p, A = Basis)
 
-the channel dephasing a site with probability `p` in the eigenbasis of `A`, or in the basis of
-the site, for a gate: ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being `Dephase(A)`. It is
-`Gate(Id) + dephasing_dissipator(p, A)`.
+the channel dephasing a site with probability `p` in the eigenbasis of `A`, by default the
+basis of the site, for a gate: ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being
+`Dephase(A)`. It is `Gate(Id) + dephasing_dissipator(p, A)`.
 
 # Examples
 
     Gates(gates = prod(dephasing_gate(0.01)(i) for i in 1:10))
 """
-dephasing_gate(p::Real) = (1 - p) * Gate(Id) + p * Dephase()
-dephasing_gate(p::Real, a::GenericOp{Pure, 1}) = (1 - p) * Gate(Id) + p * Dephase(a)
+dephasing_gate(p::Real, a::GenericOp{Pure, 1} = Basis) = (1 - p) * Gate(Id) + p * Dephase(a)
 
 
 ############## Operator functions ###########
