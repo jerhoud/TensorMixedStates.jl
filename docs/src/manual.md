@@ -253,7 +253,11 @@ Many operations are defined on generic operators:
 - `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``.
 - `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the dissipator whose jump operator, `Sp`, the ``S^+`` operator, flips a qubit toward up
 - `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply a ``\sigma_x`` gate 10 percent of the time.
-- `Proj` represents an operator that projects on the given state, for example `Proj("Up")` projects qubits on the up state.
+- `Proj` represents an operator that projects on the given state, for example `Proj("Up")`
+  projects qubits on the up state, or on an eigenspace, `Proj(Sz => 0)` projecting a spin 1 on
+  the state of zero ``S_z``.
+- `Basis` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
+  is the basis of the site.
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`
 - `controlled` for qubits makes controlled gates: `CX = controlled(X)`
 
@@ -531,20 +535,37 @@ We can also measure properties of the state as a whole, with state functions suc
 `Trace`, `Purity`, `EntanglementEntropy(cut)` or `Fidelity(ref)`: the
 [Measurements](measurements.md) page has the table of them all.
 
-A few sites can be looked at together: `reduced_density_matrix(state, positions)` gives their
-density matrix, from which `vonneumann_entropy` gives their entropy and `log_negativity` the
+A few sites can be looked at together: `ReducedDensityMatrix(positions)` measures their
+density matrix, `VonNeumannEntropy(positions)` their entropy and `LogNegativity(a, b)` the
 entanglement between two parts of them, which on a mixed state the entropy no longer tells.
 Both are ``\log 2`` for one qubit of a Bell pair:
 
 ```@example manual
 mybell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
-vonneumann_entropy(mybell, [1]), log_negativity(mybell, [1], [2])
+measure(mybell, [VonNeumannEntropy([1]), LogNegativity([1], [2])])
 ```
 
 We can also ask for several measurements at the same time
 
 ```@example manual
 results = measure(mystate, [X, X(2)Z(3), (X, Y), Trace, MemoryUsage])
+```
+
+A measurement can also be drawn, as in an experiment: `probabilities(state, op)` gives the
+results of measuring an operator placed on sites with their probabilities, `sample(state, op)`
+draws one, and `collapse(state, op)` draws one and gives the state projected onto it. Any
+Hermitian operator of a few sites can be measured, and on any number of sites a string of
+Pauli operators or the number of particles of a region. The parity of two qubits in `"+"` is
+±1 with probability 1/2, and either result leaves an entangled pair:
+
+```@example manual
+mytwo = State{Pure}(System(2, Qubit()), "+")
+probabilities(mytwo, Z(1) * Z(2))
+```
+
+```@example manual
+myparity, mypair = collapse(mytwo, Z(1) * Z(2))
+myparity, measure(mypair, X(1)X(2))
 ```
 
 For more details see the reference or the inline help.
