@@ -441,24 +441,24 @@ spectral_tol(values) = rounding_tol * max(1, maximum(abs, values))
 
 """
     eigenspaces(a, site, what)
+    eigenspaces(m, f, what, a, on = "")
 
-the eigenvalues of the Hermitian operator `a` on `site`, increasing, and the projectors on
-their eigenspaces, eigenvalues equal to rounding gathered into one, given by their mean; `what`
-names the caller in the refusals
+the eigenvalues of the Hermitian operator `a` on `site`, or of its matrix `m`, increasing, and
+the projectors on their eigenspaces, eigenvalues equal to rounding gathered into one, given by
+their mean; `a` is refused when it is not Hermitian or does not commute with the fermionic
+parity, `f` the matrix of the parity, `what` naming the caller in the refusals
 """
-function eigenspaces(a::SimpleOp, site::AbstractSite, what::String)
-    m = matrix(a, site)
+function eigenspaces(m::AbstractMatrix, f::AbstractMatrix, what::String, a, on::String = "")
     if !nearly(m, m')
-        error("$what needs a Hermitian operator, which $a is not on $site")
+        error("$what needs a Hermitian operator, which $a is not$on")
     end
-    f = matrix(F, site)
     if !nearly(f * m, m * f)
         error("$what needs an operator commuting with the fermionic parity, which $a does " *
-              "not on $site")
+              "not$on")
     end
     e = eigen(Hermitian(complex(m)))
     tol = spectral_tol(e.values)
-    d = dim(site)
+    d = size(m, 1)
     values = Float64[]
     ps = Matrix{ComplexF64}[]
     start = 1
@@ -472,6 +472,9 @@ function eigenspaces(a::SimpleOp, site::AbstractSite, what::String)
     end
     return values, ps
 end
+
+eigenspaces(a::SimpleOp, site::AbstractSite, what::String) =
+    eigenspaces(matrix(a, site), matrix(F, site), what, a, " on $site")
 
 """
     eigenprojector(a, λ, site)

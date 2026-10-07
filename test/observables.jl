@@ -605,6 +605,99 @@ end
     end
 end
 
+@testset "Measuring a site" begin
+    # the result is drawn with its probability, and the state left is the state projected onto
+    # it and normalized, which the outcome on one half of a Bell pair fixes on the other
+    rng = Xoshiro(20261007)
+    plus = State{Pure}(System(2, Qubit()), "+")
+    ps = probabilities(plus, 1)
+    @test first.(ps) == [0, 1]
+    @test last.(ps) ≈ [0.5, 0.5]
+    ps = probabilities(plus, X(1))
+    @test first.(ps) ≈ [-1, 1]
+    @test last.(ps) ≈ [0, 1] atol = 1e-12
+    @test sample(plus, X(1); rng) ≈ 1
+    @test first(collapse(plus, 1; rng)) isa Int
+    bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(2, Qubit()), "Up"))
+    for st in (bell, mix(bell)), _ in 1:10
+        x, s = collapse(st, 1; rng)
+        @test real(expect(s, Z(2))) ≈ (x == 0 ? 1 : -1)
+        @test real(trace(s)) ≈ 1
+    end
+    r = RandomState{Pure}(System(4, Qubit()), 4)
+    for st in (r, mix(r)), _ in 1:4
+        x, s = collapse(st, 2; rng)
+        @test norm(s - normalize(apply(Proj(x)(2), st))) < 1e-12
+        λ, s = collapse(st, X(3); rng)
+        @test norm(s - normalize(apply(Proj(X => λ)(3), st))) < 1e-12
+    end
+    up = State{Mixed}(System(1, Qubit()), "Up")
+    @test count(≈(1), [ sample(up, X(1); rng) for _ in 1:2000 ]) / 2000 ≈ 0.5 atol = 0.05
+    # Ntot does not tell Up from Dn, whose coherence the measurement keeps
+    e = State{Pure}(System(1, Electron()), [[0., 1., 1., 0.] / sqrt(2)])
+    for st in (e, mix(e))
+        λ, s = collapse(st, Ntot(1); rng)
+        @test λ ≈ 1
+        @test norm(s - st) < 1e-12
+    end
+    # on a strong symmetry, and on a simulation, which keeps its time
+    fs = mix(apply(sqrt(Swap)(1, 2), State{Pure}(System(2, Qubit(conserve = strong(N))), ["Dn", "Up"])))
+    x, s = collapse(fs, 1; rng)
+    @test real(expect(s, N(1))) ≈ x
+    @test real(expect(s, N(1) + N(2))) ≈ 1
+    x, sim = collapse(Simulation(bell; time = 2.), 1; rng)
+    @test sim.time == 2.
+    @test real(expect(sim.state, Z(2))) ≈ (x == 0 ? 1 : -1)
+end
+
+@testset "Measuring an operator of several sites" begin
+    rng = Xoshiro(20261008)
+    # a parity measured on |++> leaves a Bell pair, and Swap tells the singlet from the triplets
+    plus = State{Pure}(System(2, Qubit()), "+")
+    ps = probabilities(plus, Z(1) * Z(2))
+    @test first.(ps) ≈ [-1, 1]
+    @test last.(ps) ≈ [0.5, 0.5]
+    for st in (plus, mix(plus))
+        s, after = collapse(st, Z(1) * Z(2); rng)
+        @test real(expect(after, Z(1) * Z(2))) ≈ s
+        @test real(expect(after, X(1) * X(2))) ≈ 1
+    end
+    @test last.(probabilities(State{Pure}(System(2, Qubit()), ["Up", "Dn"]), Swap(1, 2))) ≈ [0.5, 0.5]
+    # the number of excitations of three sites, from the diagonal of their density matrix
+    r = RandomState{Pure}(System(5, Qubit()), 4)
+    ρ = reduced_density_matrix(r, [1, 3, 5])
+    counts = zeros(4)
+    for (i, b) in enumerate(Iterators.product(0:1, 0:1, 0:1))
+        counts[sum(b) + 1] += real(ρ[i, i])
+    end
+    ps = probabilities(r, N(1) + N(3) + N(5))
+    @test first.(ps) ≈ 0:3
+    @test last.(ps) ≈ counts
+    # a hop over site 2, of spectrum -1, 0, 1: its projectors are polynomials of it, which
+    # make_mpo places with their Jordan-Wigner strings, and so must the projection
+    f = RandomState(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp"]), 4)
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    projs = Dict(-1 => (h * h - h) / 2, 0 => Id(1) - h * h, 1 => (h * h + h) / 2)
+    for (λ, p) in probabilities(f, h)
+        @test p ≈ real(expect(f, projs[round(Int, λ)])) atol = 1e-12
+    end
+    for st in (f, mix(f)), _ in 1:6
+        λ, s = collapse(st, h; rng)
+        ref = normalize(apply(make_mpo(f, projs[round(Int, λ)]), f))
+        @test norm(s - (st isa State{Mixed} ? mix(ref) : ref)) < 1e-10
+    end
+    # an operator moving a charge has probabilities, but no projection on a conserving system
+    q = State{Pure}(System(3, Qubit(conserve = N)), ["Up", "Dn", "Up"])
+    @test last.(probabilities(q, X(1))) ≈ [0.5, 0.5]
+    @test first(collapse(q, Z(1) * Z(2); rng)) ≈ -1
+    @test_throws "no definite flux" collapse(q, X(1); rng)
+    @test_throws "commuting with the fermionic parity" probabilities(f, (C + dag(C))(1))
+    @test_throws "needs a Hermitian operator" probabilities(plus, Sp(1) * Z(2))
+    @test_throws "needs an operator placed on sites" probabilities(plus, Id(1))
+    @test_throws "which the system does not have" sample(plus, X(7))
+    @test_throws "which the state does not have" collapse(plus, 3)
+end
+
 @testset "Logarithmic negativity" begin
     # log 2 for a Bell pair, and for the Werner state p Bell + (1 - p) I/4, the depolarization
     # of the pair, log((1 + 3p)/2) above p = 1/3, separable below; the partial transpose of

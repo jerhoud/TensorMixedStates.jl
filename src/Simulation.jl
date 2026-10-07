@@ -52,9 +52,9 @@ to, as for `runTMS`. The second gives `sim` another state, and possibly another 
 its destinations and its checkpoint.
 
 A `Simulation` is immutable: the functions acting on it return a new one. `length`,
-`maxlinkdim`, `truncate`, `mix`, `weaken`, `apply`, `partial_trace`, `PreMPO`, `tdvp`,
-`approx_W`, `dmrg`, `steady_state`, `thermal_state` and `set_threading` take a `Simulation`
-as they take a `State`. The measurement functions do not: measure a simulation with `output`,
+`maxlinkdim`, `truncate`, `mix`, `weaken`, `apply`, `partial_trace`, `collapse`, `PreMPO`,
+`tdvp`, `approx_W`, `dmrg`, `steady_state`, `thermal_state` and `set_threading` take a
+`Simulation` as they take a `State`. The measurement functions do not: measure a simulation with `output`,
 or its state with `measure(sim.state, measurements, sim.time)`.
 
 # Fields
@@ -195,3 +195,8 @@ PreMPO(sim::Simulation, args...) = PreMPO(sim.state, args...)
 
 partial_trace(sim::Simulation, pos; kwargs...) =
     Simulation(sim, partial_trace(sim.state, pos; kwargs...))
+
+function collapse(sim::Simulation, args...; kwargs...)
+    x, st = collapse(sim.state, args...; kwargs...)
+    return (x, Simulation(sim, st))
+end

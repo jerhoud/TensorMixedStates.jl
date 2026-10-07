@@ -148,6 +148,8 @@ expect1
 expect2
 variance
 sample(::State{Pure})
+probabilities
+collapse
 entanglement_entropy
 entanglement_by_sector
 renyi2

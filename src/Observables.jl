@@ -1,10 +1,11 @@
 # What is computed on a state: traces, norms, inner products and fidelities, expectation values
-# and correlations, entropies, partial traces and sampling.
+# and correlations, entropies, partial traces, sampling and the measurement of a site.
 
 export trace, trace2, norm, normalize, hermitianize, hermiticity, renyi2
 export inner, dot, fidelity, hs_fidelity
 export expect, expect1, expect2
 export entanglement_entropy, entanglement_by_sector, partial_trace, mutual_info_renyi2, sample, variance
+export collapse, probabilities
 export reduced_density_matrix, vonneumann_entropy, log_negativity
 
 """
@@ -1440,6 +1441,75 @@ mutual_info_renyi2(state::State, a::AbstractVector) = mutual_info_renyi2(state, 
 
 
 """
+    op_sites(op)
+
+the sites the operator `op`, placed on sites, acts on, in increasing order
+"""
+op_sites(a::AtIndex) = sort(collect(a.index))
+op_sites(a::Union{SumOp, ProdOp}) = sort(unique(reduce(vcat, map(op_sites, a.subs); init = Int[])))
+op_sites(a::ScalarOp) = op_sites(a.arg)
+op_sites(::IdentityOp) = Int[]
+
+"""
+    measured_spectrum(system, op, what)
+
+the sites of `system` the Hermitian operator `op` acts on, its eigenvalues and the projectors
+on its eigenspaces, matrices on those sites in the Jordan-Wigner basis of those sites alone,
+as for `reduced_density_matrix`, see `eigenspaces`; `what` names the caller in the refusals
+"""
+function measured_spectrum(system::System, op::IndexedOp{Pure}, what::String)
+    sites = op_sites(op)
+    if isempty(sites)
+        error("$what needs an operator placed on sites, which $op is not")
+    end
+    check_indices(system, op)
+    ss = AbstractSite[ system[k] for k in sites ]
+    # conserving nothing, so that an operator moving a charge has a matrix too
+    small = weaken(System(ss), ())
+    mpo = make_mpo(State{Pure}(small, 0), map_sites(k -> findfirst(==(k), sites), op))
+    js = [ SysIndex{Pure}(small, k) for k in eachindex(sites) ]
+    d = prod(dim, js)
+    m = reshape(Array(prod(mpo), reverse(prime.(js))..., reverse(js)...), d, d)
+    values, ps = eigenspaces(m, foldl(kron, [ matrix(F, s) for s in ss ]), what, op)
+    return sites, values, ps
+end
+
+"""
+    outcome_probabilities(state, sites, ps)
+
+the probability of each projector of `ps`, a matrix on `sites` as `measured_spectrum` gives it
+"""
+function outcome_probabilities(state::State, sites, ps)
+    ρ = reduced_density_matrix(state, sites)
+    return [ real(sum(ρ .* transpose(p))) for p in ps ]
+end
+
+"""
+    probabilities(state, pos)
+    probabilities(state, op)
+
+the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
+their probabilities, as pairs `result => probability` in increasing order, those of zero
+probability included: the numbers of the basis states, counted from 0, or the eigenvalues of
+`op`, to rounding. On fermionic sites `op` must commute with the parity of its sites. Its
+matrix on them is diagonalized, its size being the product of their dimensions.
+
+# Examples
+
+    probabilities(state, 3)
+    probabilities(state, Z(1) * Z(2))
+"""
+function probabilities(state::State, op::IndexedOp{Pure})
+    sites, values, ps = measured_spectrum(state.system, op, "probabilities")
+    return [ λ => p for (λ, p) in zip(values, outcome_probabilities(state, sites, ps)) ]
+end
+
+function probabilities(state::State, pos::Int)
+    check_positions(state, [pos], "probabilities")
+    return [ Int(x) => p for (x, p) in probabilities(state, Basis(pos)) ]
+end
+
+"""
     draw(p, d, rnd)
 
 the first outcome among `0:d-1` whose cumulated probability exceeds `rnd`, `p(x)` being the
@@ -1459,15 +1529,18 @@ end
 """
     sample(::State [; rng])
     sample(::State, pos::Int [; rng])
+    sample(::State, op [; rng])
 
 a random outcome, numbered from 0, of measuring the state in the computational basis: a vector
-with one outcome per site, or, given `pos`, the outcome of that site alone. `rng` is the random
-number generator (default the global one).
+with one outcome per site, or, given `pos`, the outcome of that site alone; or, given a
+Hermitian operator placed on a few sites, one of its eigenvalues, see `probabilities`. The state
+is left as it is, see `collapse`. `rng` is the random number generator (default the global one).
 
 # Examples
 
     sample(state)
     sample(state, 3)
+    sample(state, Z(1) * Z(2))
 """
 function sample(state::State{Pure}; rng = Random.default_rng())
     st = orthogonalize(state.state, 1)
@@ -1516,4 +1589,76 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
         l /= norm(l)
     end
     return result
+end
+
+function sample(state::State, op::IndexedOp{Pure}; rng = Random.default_rng())
+    ps = probabilities(state, op)
+    return first(ps[draw(x -> last(ps[x + 1]), length(ps), rand(rng)) + 1])
+end
+
+"""
+    project_site(state, pos, p, prob)
+
+the state projected by the projector `p` of site `pos`, of probability `prob`, and normalized,
+its bonds left untouched
+"""
+function project_site(state::State{Pure}, pos::Int, p, _)
+    st = orthogonalize(state.state, pos)
+    t = noprime(tensor(state.system, p(pos)) * st[pos])
+    st[pos] = t / norm(t)
+    return State(state, st)
+end
+
+function project_site(state::State{Mixed}, pos::Int, p, prob)
+    st = copy(state.state)
+    # tr(PρP) = tr(Pρ) for a projector: no trace to compute
+    st[pos] = noprime(tensor(state.system, Gate(p)(pos)) * st[pos]) / (prob * real(trace(state)))
+    return State(state, st)
+end
+
+"""
+    needs_strings(system, sites)
+
+whether a gate on `sites`, in increasing order, needs the Jordan-Wigner strings of fermionic
+sites lying between them, see `strung_function`
+"""
+function needs_strings(system::System, sites)
+    odd(i) = matrix(F, system[i]) != I
+    return any(k -> k ∉ sites && odd(k) && any(s -> s < k && odd(s), sites),
+               first(sites)+1:last(sites)-1)
+end
+
+"""
+    collapse(state, pos [; rng])
+    collapse(state, op [; rng, limits])
+
+the result of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, and
+the state it leaves, `(x, state)`: `x` is drawn with its probability, see `probabilities`, and
+the state is projected onto it and normalized. The projection on several sites is a gate,
+truncated by `limits` (default `Limits()`), with the Jordan-Wigner strings of the fermionic
+sites lying between them. `rng` is the random number generator (default the global one).
+
+# Examples
+
+    x, state = collapse(state, 3)
+    λ, state = collapse(state, X(3))
+    s, state = collapse(state, Z(1) * Z(2); limits = Limits(maxdim = 100))
+"""
+function collapse(state::State, op::IndexedOp{Pure}; rng = Random.default_rng(),
+                  limits::Limits = Limits())
+    sites, values, ps = measured_spectrum(state.system, op, "collapse")
+    probs = outcome_probabilities(state, sites, ps)
+    k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1
+    p = Operator{length(sites)}("Proj($op => $(values[k]))", ps[k], selfadjoint_op)
+    if length(sites) == 1
+        return (values[k], project_site(state, only(sites), p, probs[k]))
+    end
+    g = needs_strings(state.system, sites) ? strung_function(p, Tuple(sites)) : p(sites...)
+    return (values[k], normalize(apply(g, state; limits)))
+end
+
+function collapse(state::State, pos::Int; rng = Random.default_rng())
+    check_positions(state, [pos], "collapse")
+    x, st = collapse(state, Basis(pos); rng)
+    return (Int(x), st)
 end

@@ -724,6 +724,7 @@ a `Boson`, a `Qboson`, a `Qudit` or a `Spin`, it is `N`.
 # Examples
 
     Dephase(Basis)(3)
+    collapse(state, Basis(3))
 """
 const Basis = Operator{1}("Basis", s -> diagm(Float64.(0:dim(s) - 1)), selfadjoint_op)
 
