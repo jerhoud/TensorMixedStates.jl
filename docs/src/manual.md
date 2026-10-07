@@ -451,7 +451,8 @@ eigenvalues; they agree on a qubit, `Dissipator(Z)` being `dephasing_dissipator(
 The relaxation, and so the depolarization, changes the charges and is refused on sites
 conserving something strongly, where a dephasing in the eigenbasis of an operator commuting
 with the charge, as `N`, is accepted. Any other channel is a sum of gates, `Gate(K)` being
-``\rho \mapsto K \rho K^\dagger``.
+``\rho \mapsto K \rho K^\dagger``, or the evolution under a Lindbladian `L` of a few sites
+for a time `t`, `exp(t * L)`.
 
 On a qubit, `"Up"` is ``|0\rangle`` and `"Dn"` ``|1\rangle``, the excitation `N` counts: the
 decay of an excitation, from `"Dn"` to `"Up"`, is `Dissipator(Sp)`, and `Dissipator(Sm)`, which

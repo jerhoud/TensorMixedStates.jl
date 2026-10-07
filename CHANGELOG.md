@@ -21,6 +21,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `a ≈ b` for two operators placed on sites.
 - `⊗` of superoperators, for channels of several sites, as
   `SetState("FullyMixed") ⊗ SetState("FullyMixed")`.
+- `exp` of a superoperator, as `exp(t * Dissipator(Sm))`, the channel of its evolution for a
+  time `t`.
 - `relaxing_gate` and `relaxing_dissipator`, the relaxation of sites towards a state, and
   `depolarizing_gate` and `depolarizing_dissipator`.
 - `amplitude_damping_gate` and `thermal_relaxation_gate` for qubits, with their dissipators.

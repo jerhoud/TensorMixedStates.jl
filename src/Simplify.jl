@@ -372,10 +372,10 @@ simplify_dag(a::ComOp{Pure}) = map_pieces(simplify_dag, Pure, a)
 """
     simplify_exp(a)
 
-the exponential of the simplified pure operator `a`: `cosh(c) * Id + sinh(c) * X` when `a` is
+the exponential of the simplified operator `a`: `cosh(c) * Id + sinh(c) * X` when `a` is
 `c * X` with `X` an involution, `exp(a)` otherwise.
 """
-function simplify_exp(a::GenericOp{Pure, N}) where N
+function simplify_exp(a::GenericOp)
     c = scalarcoef(a)
     s = prodsubs(a)
     if length(s) == 1 && is_involution(s[1])
@@ -399,7 +399,8 @@ by an expression are replaced by it.
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
 simplify_ind(a::IdentityOp, index...) = a(index...)
 simplify_ind(a::Union{JW_F, Proj, JW, SetState, Dephase}, index...) = a(index...)
-simplify_ind(a::ExpOp, index...) = place_function(a, index...)
+simplify_ind(a::ExpOp{Pure}, index...) = place_function(a, index...)
+simplify_ind(a::ExpOp{Mixed}, index...) = simplify(a)(index...)
 simplify_ind(a::ModOp, index...) = place_function(a, index...)
 
 """

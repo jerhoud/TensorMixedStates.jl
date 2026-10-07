@@ -800,6 +800,37 @@ end
     @test_throws "Dephase(N)(1) rather than Dephase(N(1))" Dephase(N(1))
 end
 
+@testset "Exponentials of superoperators" begin
+    # exp(t * L) is the channel of the evolution under L for a time t: the closed forms of the
+    # channels, and tdvp, exact under a generator of one site
+    γ, t = 0.7, 0.5
+    @test matrix(exp(t * dephasing_dissipator(γ)), Qubit()) ≈
+          matrix(dephasing_gate(1 - exp(-γ * t)), Qubit())
+    @test matrix(exp(t * amplitude_damping_dissipator(γ)), Qubit()) ≈
+          matrix(amplitude_damping_gate(1 - exp(-γ * t)), Qubit())
+    q = mix(RandomState{Pure}(System(3, Qubit()), 4))
+    @test norm(apply(exp(t * Dissipator(Sm))(2), q) -
+               tdvp(Dissipator(Sm)(2), t, q; nsteps = 20)) < 1e-10
+    # of two sites, the Hamiltonian written with Left and Right, against tdvp on two sites,
+    # whose block holds the whole evolution
+    h = X ⊗ X + 0.5 * (Z ⊗ Id + Id ⊗ Z)
+    l2 = Left(-im * h) + Right(-im * h) + Dissipator(Sm) ⊗ Left(Id) + Left(Id) ⊗ Dissipator(Sm)
+    lp = -im * (X(1) * X(2) + 0.5 * (Z(1) + Z(2))) + Dissipator(Sm)(1) + Dissipator(Sm)(2)
+    ρ = mix(RandomState{Pure}(System(2, Qubit()), 2))
+    lim = Limits(cutoff = 0)
+    @test norm(apply(exp(t * l2)(1, 2), ρ; limits = lim) -
+               tdvp(lp, t, ρ; nsteps = 4, limits = lim)) < 1e-10
+    # the identity, an involution, through cosh and sinh
+    @test norm(apply(exp(0.5 * Left(Id))(1), q) - exp(0.5) * q) < 1e-12
+    # a fermionic jump has none, its strings on both sides of ρ; the number of fermions has
+    # one, on a site conserving it
+    @test_throws "has no exponential" exp(t * Dissipator(C))
+    f = State{Mixed}(System(3, Fermion(conserve = N)), ["Occ", "Emp", "Occ"])
+    f = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2), f)
+    @test norm(apply(exp(t * Dissipator(N))(2), f) - tdvp(Dissipator(N)(2), t, f; nsteps = 20)) <
+          1e-10
+end
+
 @testset "Periods below one mean never" begin
     # one rule for every period of the library: `measurements_period`, `expand_period`,
     # `hermitianize_period`, and the `checkpoint_interval` covered in checkpoint.jl.

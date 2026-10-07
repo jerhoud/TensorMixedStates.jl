@@ -1357,21 +1357,13 @@ isless(a::GenPowOp, b::GenPowOp) =
 # ExpOp
 
 """
-    struct ExpOp{N} <: GenericOp{Pure, N}
+    struct ExpOp{R, N} <: GenericOp{R, N}
 
-the exponential of a generic operator on pure states, see `exp`.
+the exponential of a generic operator, see `exp`.
 """
-struct ExpOp{N} <: GenericOp{Pure, N}
-    arg::GenericOp{Pure, N}
+struct ExpOp{R, N} <: GenericOp{R, N}
+    arg::GenericOp{R, N}
 end
-
-"""
-    exp(::GenericOp{Pure})
-
-the exponential ``e^A`` of a generic operator on pure states. That of a fermionic operator has
-no definite parity, and `isfermionic` refuses it.
-"""
-exp(a::GenericOp{Pure}) = ExpOp(a)
 
 show(io::IO, a::ExpOp) =
     paren(io, 1000, 0) do io
@@ -1610,6 +1602,31 @@ function hasfermionic(a::Op)
         end
     end
     return false
+end
+
+"""
+    exp(::GenericOp)
+
+the exponential ``e^A`` of a generic operator. That of a fermionic operator on pure states has
+no definite parity, and `isfermionic` refuses it. That of a superoperator, `exp(t * L)` for a
+Lindbladian `L`, is the channel of its evolution for a time `t`; it is refused when `L` holds
+a fermionic operator, whose Jordan-Wigner strings do not commute with it.
+
+# Examples
+
+    exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
+    exp(0.1 * Dissipator(Sm))
+"""
+exp(a::GenericOp{Pure}) = ExpOp(a)
+
+function exp(a::GenericOp{Mixed})
+    # placed, it would take strings on both sides of the density matrix, as for a non integer
+    # power, see GenPowOp
+    if hasfermionic(a)
+        error("$a has no exponential: the Jordan-Wigner strings of its fermionic operators " *
+              "do not commute with it")
+    end
+    return ExpOp(a)
 end
 
 
