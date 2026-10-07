@@ -36,7 +36,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
   site type: `Dephase()` is `Dephase(Basis)`.
 - `Proj(A => λ)`, the projector on the eigenspace of eigenvalue `λ` of `A`.
 - `probabilities(state, op)`, `sample(state, op)` and `collapse(state, op)`, the measurement of
-  a Hermitian operator placed on a few sites: its eigenvalues with their probabilities, one of
+  a Hermitian operator placed on a few sites, or of a product of involutions, as a string of
+  Pauli operators, on any number of sites: its eigenvalues with their probabilities, one of
   them drawn, or one drawn with the state projected onto it; given a site `pos` in place of
   `op`, `probabilities` and `collapse` measure it in its basis.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.

@@ -1485,6 +1485,36 @@ function outcome_probabilities(state::State, sites, ps)
 end
 
 """
+    involution(system, op)
+
+`(c, P)` when `op` is `c P`, `c` real and not zero and `P` a product of involutions of one site
+on distinct sites, two at least, see `is_involution`, each diagonal on a system conserving
+something; `nothing` otherwise
+"""
+function involution(system::System, op::IndexedOp{Pure})
+    check_indices(system, op)
+    c = scalarcoef(op)
+    fs = IndexedOp{Pure}[]
+    for x in prodsubs(scalararg(op))
+        c *= scalarcoef(x)
+        a = scalararg(x)
+        if !(a isa AtIndex && length(a.index) == 1 && is_involution(a.op))
+            return nothing
+        end
+        push!(fs, a)
+    end
+    sites = [ only(a.index) for a in fs ]
+    if length(sites) < 2 || !allunique(sites) || !isreal(c) || iszero(c)
+        return nothing
+    end
+    diagonal(a) = (m = matrix(a.op, system[only(a.index)]); nearly(m, Diagonal(diag(m))))
+    if is_charged(system) && !all(diagonal, fs)
+        return nothing
+    end
+    return (float(real(c)), ProdOp(fs))
+end
+
+"""
     probabilities(state, pos)
     probabilities(state, op)
 
@@ -1492,7 +1522,9 @@ the results of measuring site `pos`, or the Hermitian operator `op` placed on a 
 their probabilities, as pairs `result => probability` in increasing order, those of zero
 probability included: the numbers of the basis states, counted from 0, or the eigenvalues of
 `op`, to rounding. On fermionic sites `op` must commute with the parity of its sites. Its
-matrix on them is diagonalized, its size being the product of their dimensions.
+matrix on them is diagonalized, its size being the product of their dimensions, except for a
+product of involutions, as a string of Pauli operators, measured on any number of sites by
+its mean value.
 
 # Examples
 
@@ -1500,6 +1532,13 @@ matrix on them is diagonalized, its size being the product of their dimensions.
     probabilities(state, Z(1) * Z(2))
 """
 function probabilities(state::State, op::IndexedOp{Pure})
+    inv = involution(state.system, op)
+    if !isnothing(inv)
+        c, P = inv
+        m = real(expect(state, P))
+        ps = [ -c => (1 - m) / 2, c => (1 + m) / 2 ]
+        return c > 0 ? ps : reverse(ps)
+    end
     sites, values, ps = measured_spectrum(state.system, op, "probabilities")
     return [ λ => p for (λ, p) in zip(values, outcome_probabilities(state, sites, ps)) ]
 end
@@ -1629,6 +1668,20 @@ function needs_strings(system::System, sites)
 end
 
 """
+    project_parity(state, P, s; limits)
+
+the state projected by ``(1 + sP)/2``, `P` an involution and `s` its eigenvalue ±1, and
+normalized: a density matrix is projected on its ket, then on its bra
+"""
+project_parity(state::State{Pure}, P, s; limits::Limits) =
+    normalize(+(state, s * apply(P, state); limits))
+
+function project_parity(state::State{Mixed}, P, s; limits::Limits)
+    σ = +(state, s * apply(Left(P), state); limits)
+    return normalize(+(σ, s * apply(Right(P), σ); limits))
+end
+
+"""
     collapse(state, pos [; rng])
     collapse(state, op [; rng, limits])
 
@@ -1636,7 +1689,9 @@ the result of measuring site `pos`, or the Hermitian operator `op` placed on a f
 the state it leaves, `(x, state)`: `x` is drawn with its probability, see `probabilities`, and
 the state is projected onto it and normalized. The projection on several sites is a gate,
 truncated by `limits` (default `Limits()`), with the Jordan-Wigner strings of the fermionic
-sites lying between them. `rng` is the random number generator (default the global one).
+sites lying between them; for a product of involutions, the state plus its image by the
+product, which at most doubles the bond dimension, or quadruples it on a density matrix. `rng`
+is the random number generator (default the global one).
 
 # Examples
 
@@ -1646,6 +1701,12 @@ sites lying between them. `rng` is the random number generator (default the glob
 """
 function collapse(state::State, op::IndexedOp{Pure}; rng = Random.default_rng(),
                   limits::Limits = Limits())
+    inv = involution(state.system, op)
+    if !isnothing(inv)
+        c, P = inv
+        s = rand(rng) < (1 + real(expect(state, P))) / 2 ? 1 : -1
+        return (s * c, project_parity(state, P, s; limits))
+    end
     sites, values, ps = measured_spectrum(state.system, op, "collapse")
     probs = outcome_probabilities(state, sites, ps)
     k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1

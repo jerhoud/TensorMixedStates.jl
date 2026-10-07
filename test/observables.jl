@@ -698,6 +698,60 @@ end
     @test_throws "which the state does not have" collapse(plus, 3)
 end
 
+@testset "Measuring a product of involutions" begin
+    # measured by its mean value on any number of sites, it agrees with the matrix of the
+    # operator on a few, and its projection, the state plus its image, with (1 + sP)/2
+    rng = Xoshiro(20261009)
+    TMS = TensorMixedStates
+    dense(st, op) = (r = TMS.measured_spectrum(st.system, op, "dense");
+                     collect(zip(r[2], TMS.outcome_probabilities(st, r[1], r[3]))))
+    ψ = RandomState{Pure}(System(6, Qubit()), 6)
+    for op in (Z(1) * X(3) * Y(5), -2 * Z(1) * Z(2), X(2) * X(3) * X(4) * X(5)), st in (ψ, mix(ψ))
+        @test !isnothing(TMS.involution(st.system, op))
+        ps, ds = probabilities(st, op), dense(st, op)
+        @test first.(ps) ≈ first.(ds)
+        @test last.(ps) ≈ last.(ds)
+    end
+    P = Z(1) * X(3) * Y(5)
+    projected(λ) = normalize(apply(make_mpo(ψ, (Id(1) + λ * P) / 2), ψ))
+    for _ in 1:4
+        λ, after = collapse(ψ, P; rng)
+        @test norm(after - projected(λ)) < 1e-12
+        λ, after = collapse(mix(ψ), P; rng)
+        @test norm(after - mix(projected(λ))) < 1e-12
+    end
+    p = last(last(probabilities(ψ, P)))
+    @test count(_ -> first(collapse(ψ, P; rng)) > 0, 1:1000) / 1000 ≈ p atol = 0.05
+    # on twenty sites, the bond dimension at most doubles
+    big = RandomState{Pure}(System(20, Qubit()), 8)
+    string20 = prod(X(i) for i in 1:2:20) * prod(Z(i) for i in 2:2:20)
+    s, after = collapse(big, string20; rng)
+    @test real(expect(after, string20)) ≈ s
+    @test maxlinkdim(after) ≤ 2 * maxlinkdim(big)
+    # a diagonal one on a conserving system, a parity of fermions, and a strong symmetry
+    q = RandomState(State{Pure}(System(6, Qubit(conserve = N)),
+                                ["Up", "Dn", "Up", "Dn", "Up", "Dn"]), 4)
+    Pz = Z(1) * Z(4) * Z(6)
+    @test last.(probabilities(q, Pz)) ≈ last.(dense(q, Pz))
+    @test isnothing(TMS.involution(q.system, X(1) * X(2)))
+    s, after = collapse(q, Pz; rng)
+    @test real(expect(after, Pz)) ≈ s
+    f = RandomState(State{Pure}(System(5, Fermion(conserve = N)),
+                                ["Occ", "Emp", "Occ", "Emp", "Occ"]), 4)
+    Pf = F(1) * F(3) * F(4)
+    @test last.(probabilities(f, Pf)) ≈ last.(dense(f, Pf))
+    for st in (f, mix(f))
+        s, after = collapse(st, Pf; rng)
+        @test real(expect(after, Pf)) ≈ s
+        @test real(trace(after)) ≈ 1
+    end
+    fs = mix(apply(sqrt(Swap)(1, 2),
+                   State{Pure}(System(3, Qubit(conserve = strong(N))), ["Dn", "Up", "Up"])))
+    s, after = collapse(fs, Z(1) * Z(2); rng)
+    @test real(trace(after)) ≈ 1
+    @test real(expect(after, N(1) + N(2) + N(3))) ≈ 1
+end
+
 @testset "Logarithmic negativity" begin
     # log 2 for a Bell pair, and for the Werner state p Bell + (1 - p) I/4, the depolarization
     # of the pair, log((1 + 3p)/2) above p = 1/3, separable below; the partial transpose of
