@@ -31,8 +31,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `probabilities`, `sample(state, op)` and `collapse`, the measurement of a site or of an
   operator placed on sites, its result drawn or given.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.
-- `Dephase(A)`, the measurement of `A` whose result is not read, with `dephasing_gate` and
-  `dephasing_dissipator`.
+- `Dephase(A)`, the measurement of `A`, of one site or several, whose result is not read, with
+  `dephasing_gate` and `dephasing_dissipator`.
 - `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
   `steady_state`, `Tdvp`, `GroundState` and `SteadyState` take as `krylov`.
 - `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or

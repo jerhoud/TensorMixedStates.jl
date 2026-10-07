@@ -1062,21 +1062,23 @@ isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state)
     Dephase()
     Dephase(A)
 
-the superoperator dephasing a site in the basis of the eigenspaces of the Hermitian operator
-`A`, ``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``, ``P_\\lambda`` being the
-projector on the eigenspace of `A` of eigenvalue ``\\lambda``: the measurement of `A` whose
-result is not read. It erases the coherences between eigenspaces and keeps those within one.
-Without `A`, it is `Dephase(Basis)`, which dephases in the basis of the site. On a fermionic
-site, `A` must commute with the parity.
+the superoperator dephasing in the basis of the eigenspaces of the Hermitian operator `A`, of
+one site or several, ``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``,
+``P_\\lambda`` being the projector on the eigenspace of `A` of eigenvalue ``\\lambda``: the
+measurement of `A` whose result is not read. It erases the coherences between eigenspaces and
+keeps those within one. Without `A`, it is `Dephase(Basis)`, which dephases in the basis of
+the site. On several sites it is applied as a gate. On fermionic sites, `A` must commute with
+the parity.
 
 # Examples
 
     Dephase()(3)
     Dephase(Ntot)(2)        # on an Electron, keeps the coherence of Up and Dn
+    Dephase(Z ⊗ Z)(1, 2)    # the parity of two qubits, not read
 """
-struct Dephase <: GenericOp{Mixed, 1}
-    arg::GenericOp{Pure, 1}
-    Dephase(arg::GenericOp{Pure, 1} = Basis) = new(arg)
+struct Dephase{N} <: GenericOp{Mixed, N}
+    arg::GenericOp{Pure, N}
+    Dephase(arg::GenericOp{Pure, N} = Basis) where N = new{N}(arg)
 end
 
 Dephase(a::IndexedOp) =
@@ -1195,13 +1197,16 @@ basis of the site, for an evolver: ``\\gamma\\,(\\Delta - \\mathrm{Id})``, `Δ` 
 `Dissipator(A)` damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant
 eigenvalues: the two agree when `A` has two eigenvalues, `Dissipator(Z)` being
 `dephasing_dissipator(2, Z)`. Evolving under it for a time `t` is
-`dephasing_gate(1 - exp(-γt), A)`.
+`dephasing_gate(1 - exp(-γt), A)`. For `A` of several sites, which an MPO cannot hold, the
+generator is `γ` times the sum of `Dissipator(P)` over the projectors on its eigenspaces, each
+`named(Proj(A => λ), name, sites...)`.
 
 # Examples
 
     evolver = -im * H + sum(dephasing_dissipator(0.1)(i) for i in 1:10)
 """
-dephasing_dissipator(γ::Real, a::GenericOp{Pure, 1} = Basis) = γ * (Dephase(a) - Gate(Id))
+dephasing_dissipator(γ::Real, a::GenericOp{Pure, N} = Basis) where N =
+    γ * (Dephase(a) - Gate(tensor_power(Id, N)))
 
 """
     dephasing_gate(p, A = Basis)
@@ -1214,7 +1219,8 @@ basis of the site, for a gate: ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` be
 
     Gates(gates = prod(dephasing_gate(0.01)(i) for i in 1:10))
 """
-dephasing_gate(p::Real, a::GenericOp{Pure, 1} = Basis) = (1 - p) * Gate(Id) + p * Dephase(a)
+dephasing_gate(p::Real, a::GenericOp{Pure, N} = Basis) where N =
+    (1 - p) * Gate(tensor_power(Id, N)) + p * Dephase(a)
 
 
 ############## Operator functions ###########

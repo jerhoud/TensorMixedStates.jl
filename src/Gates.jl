@@ -93,6 +93,24 @@ function order_signs(sites, index)
 end
 
 """
+    laid_with_strings(a, index)
+
+the operator `a` of several sites as an operator of the sites `index` in their order, see
+`order_signs`, and the product `K` of the parity signs that gives it the strings of the sites
+in between, see `strung_function`
+"""
+function laid_with_strings(a, index)
+    function laid(sites...)
+        d = order_signs(sites, index)
+        return d .* matrix(a, sites...) .* transpose(d)
+    end
+    g = Operator{length(index)}(repr(a), laid, plain_op)
+    k = ProdOp(IndexedOp{Pure}[ parity_sign(s, j) for j in min(index...)+1:max(index...)-1
+                                if j ∉ index for s in index if s < j ])
+    return g, k
+end
+
+"""
     strung_function(a, index)
 
 the gate of the function `a` of an even fermionic operator, placed on the sites `index`: its
@@ -106,14 +124,7 @@ function strung_function(a, index)
     if fermion_parity(a, false) ≠ 0
         return a(index...)
     end
-    n = length(index)
-    function laid(sites...)
-        d = order_signs(sites, index)
-        return d .* matrix(a, sites...) .* transpose(d)
-    end
-    g = Operator{n}(repr(a), laid, plain_op)
-    k = ProdOp(IndexedOp{Pure}[ parity_sign(s, j) for j in min(index...)+1:max(index...)-1
-                                if j ∉ index for s in index if s < j ])
+    g, k = laid_with_strings(a, index)
     return k * g(index...) * k
 end
 
@@ -147,6 +158,12 @@ expand_placed(a::Right, index) = sided(Right, expand_gate(a.arg(index...)))
 function expand_placed(a::Gate, index)
     e = expand_gate(a.arg(index...))
     return ProdOp([sided(Left, e), sided(Right, e)])
+end
+# Σ Gate(K Π K) = Gate(K) Σ Gate(Π) Gate(K), the same K giving every projector its strings
+function expand_placed(a::Dephase, index)
+    g, k = laid_with_strings(a.arg, index)
+    gk = build_gate(k)
+    return gk * Dephase(g)(index...) * gk
 end
 expand_placed(a, index) = a(index...)
 

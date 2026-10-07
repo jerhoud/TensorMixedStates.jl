@@ -768,6 +768,25 @@ end
     end
 end
 
+@testset "Dephasing as the average of the collapses" begin
+    # the measurement whose result is not read is the average of the states its results leave,
+    # with the strings of the fermionic sites in between and the order of the sites
+    averaged(st, op) = sum(p * s for (p, s) in (collapse(st, op => λ)
+                                                 for (λ, q) in probabilities(st, op) if q > 1e-14))
+    ρ = mix(RandomState{Pure}(System(4, Qubit()), 4))
+    @test norm(apply(Dephase(Z ⊗ Z)(1, 3), ρ) - averaged(ρ, Z(1) * Z(3))) < 1e-12
+    @test norm(apply(Dephase(Swap)(2, 4), ρ) - averaged(ρ, Swap(2, 4))) < 1e-12
+    f = mix(RandomState(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp"]), 4))
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    j = im * (dag(C)(1) * C(3) - dag(C)(3) * C(1))
+    hop = dag(C) ⊗ C - C ⊗ dag(C)
+    current = im * (dag(C) ⊗ C + C ⊗ dag(C))
+    for (D, op) in [(Dephase(hop)(1, 3), h), (Dephase(hop)(3, 1), h),
+                    (Dephase(current)(1, 3), j), (Dephase(current)(3, 1), j)]
+        @test norm(apply(D, f) - averaged(f, op)) < 1e-12
+    end
+end
+
 @testset "Measuring a product of involutions" begin
     # measured by its mean value on any number of sites, it agrees with the matrix of the
     # operator on a few, and its projection, the state plus its image, with (1 + sP)/2

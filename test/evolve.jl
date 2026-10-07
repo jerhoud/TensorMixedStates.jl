@@ -746,6 +746,19 @@ end
     # without an operator, the eigenbasis of Basis, the basis of the site
     @test Dephase() == Dephase(Basis)
     @test repr(Dephase()) == "Dephase(Basis)"
+    # of several sites, as a gate: the parity of two qubits of |++> not read leaves mixed the two
+    # Bell pairs of X1X2 = 1; in an evolver, the dissipators of its projectors
+    pp = State{Mixed}(System(2, Qubit()), "+")
+    @test Dephase(Z ⊗ Z) isa GenericOp{Mixed, 2}
+    @test repr(Dephase(Z ⊗ Z)) == "Dephase(Z⊗Z)"
+    dz = apply(Dephase(Z ⊗ Z)(1, 2), pp)
+    @test real(expect(dz, X(1) * X(2))) ≈ 1
+    @test abs(expect(dz, Z(1) * Z(2))) < 1e-12
+    @test abs(expect(dz, X(1))) < 1e-12
+    @test real(expect(apply(dephasing_gate(0.3, Z ⊗ Z)(1, 2), pp), X(1))) ≈ 0.7
+    @test matrix(dephasing_dissipator(1.0, Z ⊗ Z), Qubit()) ≈
+          matrix(sum(Dissipator(Proj(Z ⊗ Z => λ)) for λ in (-1, 1)), Qubit())
+    @test_throws "acts on several sites at once" make_mpo(pp, Dephase(Z ⊗ Z)(1, 2))
     # diagonal in the charges, it passes a strong conservation
     strong_q = State{Mixed}(System(2, Qubit(conserve = strong(N))), "Up")
     @test trace(apply(dephasing_gate(0.3)(1), strong_q)) ≈ 1

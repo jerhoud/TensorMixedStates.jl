@@ -568,9 +568,18 @@ function matrix(a::SetState, site::AbstractSite)
     return vec(m) * transpose(vec(identity_operator(site)))
 end
 
-# ρ ↦ Σ P ρ P over the eigenprojectors of the operator, see `eigenspaces`
-matrix(a::Dephase, site::AbstractSite) =
-    sum(kron(conj(p), p) for p in last(eigenspaces(a.arg, site, "Dephase")))
+# ρ ↦ Σ P ρ P over the eigenprojectors of the operator, see `eigenspaces`; on several sites
+# the gates of the projectors lay out the kets and the bras of the sites
+function matrix(a::Dephase, given::AbstractSite...)
+    sites = expand_sites(a, given)
+    if length(sites) == 1
+        return sum(kron(conj(p), p) for p in last(eigenspaces(a.arg, only(sites), "Dephase")))
+    end
+    f = foldl(kron, [ matrix(F, s) for s in sites ])
+    ps = last(eigenspaces(matrix(a.arg, sites...), f, "Dephase", a.arg, " on $(join(sites, " ⊗ "))"))
+    n = length(sites)
+    return sum(matrix(Gate(Operator{n}("P", p, selfadjoint_op)), sites...) for p in ps)
+end
 
 """
     checked_matrix(a, sites, js)
