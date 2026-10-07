@@ -473,7 +473,25 @@ function eigenspaces(a::SimpleOp, site::AbstractSite, what::String)
     return values, ps
 end
 
+"""
+    eigenprojector(a, λ, site)
+
+the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `site`, `λ`
+matching an eigenvalue to rounding, see `eigenspaces`
+"""
+function eigenprojector(a::SimpleOp, λ::Real, site::AbstractSite)
+    values, ps = eigenspaces(a, site, "Proj")
+    k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
+    if isnothing(k)
+        error("$λ is not an eigenvalue of $a on $site, whose eigenvalues are $(join(values, ", "))")
+    end
+    return ps[k]
+end
+
 function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
+    if a.state isa Pair
+        return eigenprojector(a.state.first, a.state.second, site)
+    end
     st = state(site, a.state)
     if !(st isa Vector)
         error("Proj can only project on a pure state, \"$(a.state)\" is a mixed state")

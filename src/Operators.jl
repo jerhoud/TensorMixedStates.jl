@@ -237,6 +237,7 @@ exactly when the states are `==`
 state_key(x::Int) = (1, x)
 state_key(x::AbstractString) = (2, x)
 state_key(x::AbstractArray) = (3, size(x), [ (real(y), imag(y)) for y in vec(x) ])
+state_key(x::Pair) = (4, x.first, x.second)
 
 ############### Operator ###############
 
@@ -682,21 +683,31 @@ isless(a::Multi_F, b::Multi_F) =
 
 """
     Proj(state)
+    Proj(A => λ)
 
 the projector ``|s\\rangle\\langle s|`` on a pure state of one site, given by its name, by
 its vector in the basis of the site, taken as it is without normalization, or by the number
-of a basis state, counted from 0. On a fermionic site, the state must have a definite parity.
+of a basis state, counted from 0; or the projector on the eigenspace of eigenvalue `λ` of the
+Hermitian operator `A`, `λ` being refused if it is not an eigenvalue. On a fermionic site, the
+state must have a definite parity and `A` must commute with the parity.
 
 # Examples
 
     Proj("Up")
     Proj([1, 0])
-    Proj(1)       # the second basis state
+    Proj(1)           # the second basis state
+    Proj(Sz => 0)     # on a Spin(1), the state of Sz = 0
+    Proj(Ntot => 1)   # on an Electron, Up and Dn
 """
 struct Proj <: SimpleOp
-    state::Union{Int, String, Vector}
+    state::Union{Int, String, Vector, Pair{<:SimpleOp, <:Real}}
     Proj(state::Union{Int, String, Vector}) = new(no_signed_zero(state))
+    Proj(p::Pair{<:SimpleOp, <:Real}) = new(first(p) => no_signed_zero(last(p)))
 end
+
+Proj(p::Pair{<:IndexedOp, <:Real}) =
+    error("cannot project on an eigenspace of $(first(p)), which is placed on sites: write " *
+          "Proj(N => 1)(3) rather than Proj(N(3) => 1)")
 
 isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
 

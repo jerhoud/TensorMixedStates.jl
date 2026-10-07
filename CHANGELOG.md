@@ -34,6 +34,7 @@ on the page "Extending TMS", are experimental and may still change in a version 
   measurements `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`.
 - `Basis`, the operator numbering the basis states of a site, `diag(0, 1, …, d - 1)`, on every
   site type: `Dephase()` is `Dephase(Basis)`.
+- `Proj(A => λ)`, the projector on the eigenspace of eigenvalue `λ` of `A`.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.
 - `Dephase(A)`, the measurement of `A` whose result is not read, and `dephasing_gate(p, A)` and
   `dephasing_dissipator(γ, A)`, the dephasing channel in the eigenbasis of `A`, or in the basis

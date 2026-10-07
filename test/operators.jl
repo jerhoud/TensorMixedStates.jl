@@ -140,10 +140,34 @@ end
     # `matrix` refuses a projector on a mixed state, so every one is self adjoint, and its
     # adjoint simplifies to it whatever it projects on. `measure` relies on this to find
     # that a projector gives real values
-    for p in (Proj("Up"), Proj(1), Proj([1, im] / √2))
+    for p in (Proj("Up"), Proj(1), Proj([1, im] / √2), Proj(X => -1))
         @test simplify(dag(p)) == p
         @test matrix(dag(p), Qubit()) ≈ matrix(p, Qubit())
     end
+end
+
+@testset "Projector on an eigenspace" begin
+    # the eigenvalue is matched to rounding: eigen gives those of Sx on a spin 1 as
+    # -0.9999999999999984, about 1e-15 and 0.9999999999999999
+    s = Spin(1)
+    v = [1., 0., -1.] / √2
+    @test matrix(Proj(Sx => 0), s) ≈ v * v'
+    @test sum(matrix(Proj(Sx => λ), s) for λ in -1:1) ≈ identity_operator(3)
+    # an eigenspace of several states, which the projector on a state cannot give
+    @test matrix(Proj(Ntot => 1), Electron()) ≈ matrix(Proj("Up") + Proj("Dn"), Electron())
+    @test matrix(Proj(Basis => 1), Qubit()) ≈ matrix(Proj(1), Qubit())
+    # equal, and ordered among the other projectors, by its operator and its eigenvalue
+    @test Proj(X => -1) == Proj(X => -1.0)
+    @test hash(Proj(X => -1)) == hash(Proj(X => -1.0))
+    @test hash(Proj(X => -0.0)) == hash(Proj(X => 0.0))
+    @test length(sort([Proj(X => 1), Proj(1), Proj(X => -1), Proj("Up"), Proj(Z => 1)])) == 5
+    # of a definite charge when the operator is
+    @test flux(Proj(N => 1), Qubit(conserve = N)) == TensorMixedStates.ITensors.QN("N", 0)
+    @test_throws "no definite flux" flux(Proj(X => 1), Qubit(conserve = N))
+    @test_throws "0.5 is not an eigenvalue of Sx" matrix(Proj(Sx => 0.5), s)
+    @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp => 1), Qubit())
+    @test_throws "commuting with the fermionic parity" matrix(Proj(C + dag(C) => 1), Fermion())
+    @test_throws "Proj(N => 1)(3) rather than Proj(N(3) => 1)" Proj(X(3) => 1)
 end
 
 @testset "Non integer powers of a scaled operator" begin
