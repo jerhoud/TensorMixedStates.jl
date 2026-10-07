@@ -87,13 +87,42 @@ function tdvp_step(mpo, dt, st, state, sweep, expand_period, hermitianize_period
 end
 
 """
+    tdvp_steps(mpo_at, t, state; options...)
+
+the evolution of `tdvp`, `mpo_at(τ)` giving the MPO of the step whose middle is at time `τ`
+"""
+function tdvp_steps(mpo_at::Function, t::Number, state::State;
+    observer! = NoObserver(), expand_period = 0, hermitianize_period = 0, nsteps = 1,
+    first_step = 1, time_start = zero(t), limits::Limits=Limits(), krylov::Krylov = Krylov())
+    check_nsteps(nsteps)
+    st = state.state
+    dt = t / nsteps
+    # eager: KrylovKit tests convergence after every vector rather than once its space is
+    # full, which the short local steps of tdvp reach with far fewer products
+    updater_kwargs = (; eager = true, krylov_kwargs(krylov)...)
+    for sweep in first_step:nsteps
+        current_time = time_start + sweep * dt
+        mpo = mpo_at(current_time - dt / 2)
+        st = tdvp_step(mpo, dt, st, state, sweep, expand_period, hermitianize_period,
+                       sweep_limits(limits, sweep), updater_kwargs)
+        # after the whole step, hermitianization included, so that a checkpoint holds the
+        # state the measurements saw
+        if sweep_done!(observer!; sweep, state = st, current_time, mpo)
+            break
+        end
+    end
+    return State(state, st)
+end
+
+"""
     tdvp(evolver, t, ::State; options...)
     tdvp(evolver, t, ::Simulation; options...)
 
 evolve a state, or a simulation, for a time `t` by tdvp, in `nsteps` steps of `t / nsteps`.
 `evolver` is `-im * H` for a Hamiltonian `H`, plus dissipators for a mixed state, or its
-`PreMPO(state, evolver)`, to prepare it once for several calls. A simulation comes back with
-its time advanced by `t`.
+`PreMPO(state, evolver)`, to prepare it once for several calls, or an MPO, as its
+`make_mpo(state, evolver)`, which takes no `coefs`. A simulation comes back with its time
+advanced by `t`.
 
 # Options
 
@@ -117,36 +146,15 @@ its time advanced by `t`.
 
     tdvp(-im * H, 1., state; nsteps = 10, limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
-function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
-    observer! = NoObserver(), coefs=nothing, expand_period = 0, hermitianize_period = 0,
-    nsteps = 1, first_step = 1, time_start = zero(t), limits::Limits=Limits(),
-    krylov::Krylov = Krylov()) where {R <: PM}
+tdvp(mpo::MPO, t::Number, state::State; kwargs...) = tdvp_steps(_ -> mpo, t, state; kwargs...)
+
+function tdvp(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing,
+              kwargs...) where {R <: PM}
     check_pre_system(pre, state)
-    check_nsteps(nsteps)
-    time_dep = !isnothing(coefs)
-    st = state.state
-    dt = t / nsteps
-    # eager: KrylovKit tests convergence after every vector rather than once its space is
-    # full, which the short local steps of tdvp reach with far fewer products
-    updater_kwargs = (; eager = true, krylov_kwargs(krylov)...)
-    if !time_dep
-        mpo = make_mpo(pre)
+    if isnothing(coefs)
+        return tdvp(make_mpo(pre), t, state; kwargs...)
     end
-    for sweep in first_step:nsteps
-        current_time = time_start + sweep * dt
-        if time_dep
-            tf = current_time - dt / 2
-            mpo = make_mpo(pre, map(f->f(tf), coefs))
-        end
-        st = tdvp_step(mpo, dt, st, state, sweep, expand_period, hermitianize_period,
-                       sweep_limits(limits, sweep), updater_kwargs)
-        # after the whole step, hermitianization included, so that a checkpoint holds the
-        # state the measurements saw
-        if sweep_done!(observer!; sweep, state = st, current_time, mpo)
-            break
-        end
-    end
-    return State(state, st)
+    return tdvp_steps(τ -> make_mpo(pre, map(f -> f(τ), coefs)), t, state; kwargs...)
 end
 
 tdvp(op, t::Number, state::State; kwargs...) =
@@ -364,9 +372,9 @@ end
     steady_state(lindbladian, ::Simulation; options...)
 
 the steady state of a Lindbladian ``L``, `-im * H` plus dissipators, or its
-`PreMPO(state, lindbladian)`, by dmrg on ``L^\\dagger L`` from the given mixed state, returned
-with trace one as `(value, state)` or `(value, simulation)`, `value` being the energy dmrg
-reaches, zero for a steady state.
+`PreMPO(state, lindbladian)` or its `make_mpo(state, lindbladian)`, by dmrg on
+``L^\\dagger L`` from the given mixed state, returned with trace one as `(value, state)` or
+`(value, simulation)`, `value` being the energy dmrg reaches, zero for a steady state.
 
 A Lindbladian may have several steady states, one in each sector of a quantity it conserves
 for instance, and dmrg returns any combination of them, in general not a density matrix. The
@@ -395,16 +403,11 @@ steady state is not unique, see [Checking the accuracy](@ref).
     value, rho = steady_state(-im * H + D, rho; nsweeps = 10,
                               limits = Limits(maxdim = [10, 20, 50]))
 """
-steady_state(op::IndexedOp{Mixed}, state::State{Mixed}; kwargs...) =
-    steady_state(PreMPO(state, op), state; kwargs...)
-
-function steady_state(pre::PreMPO{Mixed}, state::State{Mixed};
+function steady_state(l::MPO, state::State{Mixed};
     limits::Limits = Limits(), nsweeps::Int = 1, first_sweep::Int = 1,
     observer! = NoObserver(), mpo_limits::Limits = Limits(), mpo_algo::String = "naive",
     noise = 0., krylov::Krylov = Krylov(dim = 8, maxiter = 3))
-    check_pre_system(pre, state)
     check_mpo_algo(mpo_algo)
-    l = make_mpo(pre)
     # the naive algorithm truncates only when asked to, the others take no such option
     extra = mpo_algo == "naive" ? (; truncate = mpo_limits != Limits()) : (;)
     l2 = apply(replaceprime(dag(l)', 2=>0), l;
@@ -421,6 +424,14 @@ function steady_state(pre::PreMPO{Mixed}, state::State{Mixed};
     return (e, ρ)
 end
 
+function steady_state(pre::PreMPO{Mixed}, state::State{Mixed}; kwargs...)
+    check_pre_system(pre, state)
+    return steady_state(make_mpo(pre), state; kwargs...)
+end
+
+steady_state(op::IndexedOp{Mixed}, state::State{Mixed}; kwargs...) =
+    steady_state(PreMPO(state, op), state; kwargs...)
+
 """
     thermal_state(hamiltonian, beta, ::State; options...)
     thermal_state(hamiltonian, beta, ::Simulation; options...)
@@ -435,7 +446,9 @@ From `"FullyMixed"`, it gives the thermal state ``e^{-\\beta H}/Z``, and `log_tr
 ``\\log Z - \\sum_i \\log d_i``, ``d_i`` being the dimension of site `i`. A state commuting
 with ``H`` gives the thermal state restricted to what it describes: `fully_mixed(system, N => m)`
 the canonical state of `m` particles, a product state of populations ``e^{\\beta\\mu n_i}``
-the grand canonical state at chemical potential ``\\mu``. A pure state is refused.
+the grand canonical state at chemical potential ``\\mu``. A pure state is refused. The
+Hamiltonian may be given as its `PreMPO(state, hamiltonian)` or its
+`make_mpo(state, hamiltonian)`, built on the mixed state.
 
 # Options
 
@@ -457,15 +470,15 @@ the grand canonical state at chemical potential ``\\mu``. A pure state is refuse
     log_trace, rho = thermal_state(H, 2.0, State{Mixed}(system, "FullyMixed"); nsteps = 20,
                                    limits = Limits(cutoff = 1e-12, maxdim = 64))
 """
-function thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mixed};
+function thermal_state(h::MPO, beta::Real, state::State{Mixed};
     observer! = NoObserver(), nsteps::Int = 1, first_step::Int = 1, log_trace::Real = 0.,
     expand_period::Int = 0, hermitianize_period::Int = 0, limits::Limits = Limits(),
     krylov::Krylov = Krylov())
     check_nsteps(nsteps)
     dbeta = beta / nsteps
-    # on a mixed state, -H/2 becomes its Evolver, ρ ↦ -(Hρ + ρH)/2, the generator of
-    # e^{-βH/2} ρ e^{-βH/2}
-    mpo = make_mpo(state, -hamiltonian / 2)
+    # on a mixed state, the MPO of H is that of its Evolver, ρ ↦ Hρ + ρH, and -1/2 of it the
+    # generator of e^{-βH/2} ρ e^{-βH/2}
+    mpo = -h / 2
     updater_kwargs = (; eager = true, krylov_kwargs(krylov)...)
     # a continued computation is not normalized again, which would change its rounding
     st = first_step == 1 ? normalize(state).state : state.state
@@ -486,7 +499,15 @@ function thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mi
     return (log_trace, State(state, st))
 end
 
-thermal_state(::IndexedOp{Pure}, ::Real, ::State{Pure}; kwargs...) =
+function thermal_state(pre::PreMPO{Mixed}, beta::Real, state::State{Mixed}; kwargs...)
+    check_pre_system(pre, state)
+    return thermal_state(make_mpo(pre), beta, state; kwargs...)
+end
+
+thermal_state(hamiltonian::IndexedOp{Pure}, beta::Real, state::State{Mixed}; kwargs...) =
+    thermal_state(make_mpo(state, hamiltonian), beta, state; kwargs...)
+
+thermal_state(::Union{IndexedOp{Pure}, PreMPO, MPO}, ::Real, ::State{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
 
 tdvp(op, t::Number, sim::Simulation; kwargs...) =

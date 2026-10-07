@@ -653,11 +653,13 @@ end
     # the two modes of negative energy filled, -2cos(π/5) - 2cos(2π/5)
     @test e ≈ -sqrt(5)
     z = real(first(steady_state(lind, mix(start(Fermion())); nsweeps = 2, limits = lim)))
-    # an operator prepared once, as the solvers take it, for the system it was prepared on
+    # an operator prepared once, or built as an MPO, as the solvers take it, for the system
+    # it was prepared on
     s0 = start(Fermion())
     @test first(dmrg(PreMPO(s0, h), s0; nsweeps = 3, limits = lim)) ≈ e
     ρ0 = mix(s0)
     @test real(first(steady_state(PreMPO(ρ0, lind), ρ0; nsweeps = 2, limits = lim))) ≈ z atol = 1e-10
+    @test real(first(steady_state(make_mpo(ρ0, lind), ρ0; nsweeps = 2, limits = lim))) ≈ z atol = 1e-10
     @test_throws "prepared on another System" dmrg(PreMPO(start(Fermion()), h), s0; nsweeps = 1)
     for site in (Fermion(conserve = N), Fermion(conserve = strong(N)))
         @test first(dmrg(h, start(site); nsweeps = 3, limits = lim)) ≈ e

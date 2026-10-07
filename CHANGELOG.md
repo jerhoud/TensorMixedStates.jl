@@ -38,7 +38,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or
   `"naive"`.
 - `noise` for `SteadyState`, as for `GroundState`.
-- `dmrg` and `steady_state` take a `PreMPO`, as `tdvp` and `approx_W` do.
+- `dmrg`, `steady_state` and `thermal_state` take a `PreMPO`, as `tdvp` and `approx_W` do.
+- `tdvp`, `steady_state` and `thermal_state` take an MPO, as `dmrg` does.
 - `Left(A)` and `Right(A)` of an operator already placed on sites, `Left(X(1) * Z(3))` being
   `Left(X)(1) * Left(Z)(3)`.
 - `expect(state, op; normalize = false)`, not divided by the trace, for an operator made non
@@ -246,6 +247,7 @@ Clearer refusals, where a call failed on a `MethodError` or deep inside ITensors
   without `using DataFrames`, a float given to `Limits`, a quantity given twice to `conserve`
   or `weaken`, and a site of parameters out of their range, as `Spin(-1/2)`.
 - `hermitianize` of a pure state takes `limits` only, where it ignored any keyword.
+- An MPO given to `approx_W`, `make_mpo` or `PreMPO`, which overflowed the stack.
 
 ## [1.6.0] - 2026-09-30
 

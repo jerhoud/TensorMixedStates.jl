@@ -81,8 +81,8 @@ end
     # the exponential of its dense hamiltonian, the trace included
     n, β = 4, 1.3
     h = -sum(Z(i) * Z(i+1) for i in 1:n-1) - 0.7 * sum(X(i) for i in 1:n)
-    l, ρ = thermal_state(h, β, State{Mixed}(System(n, Qubit()), "FullyMixed"); nsteps = 13,
-                         limits = lim)
+    ρ0 = State{Mixed}(System(n, Qubit()), "FullyMixed")
+    l, ρ = thermal_state(h, β, ρ0; nsteps = 13, limits = lim)
     dense = -sum(on(z, i, n) * on(z, i+1, n) for i in 1:n-1) - 0.7 * sum(on(x, i, n) for i in 1:n)
     g = exp(-β * dense)
     @test real(expect(ρ, h)) ≈ tr(g * dense) / tr(g) atol = 1e-6
@@ -90,6 +90,12 @@ end
     @test trace2(ρ) ≈ tr(g * g) / tr(g)^2 atol = 1e-7
     @test l ≈ log(tr(g) / 2^n) atol = 1e-7
     @test trace(ρ) ≈ 1
+    # the Hamiltonian prepared, or built as an MPO, on the mixed state
+    for hp in (PreMPO(ρ0, h), make_mpo(ρ0, h))
+        lp, ρp = thermal_state(hp, β, ρ0; nsteps = 13, limits = lim)
+        @test lp ≈ l
+        @test norm(ρp - ρ) < 1e-12
+    end
 
     # free fermions against Fermi-Dirac, <c†_i c_j> = [(e^{βh} + 1)^{-1}]_{ji}
     n, β = 8, 1.5
@@ -144,6 +150,9 @@ end
                                                  algo = ApproxW(order = 2))
     @test_throws "needs a mixed representation" thermal_state(h, 1.,
                                                               State{Pure}(System(n, Qubit()), "Up"))
+    stp = State{Pure}(System(n, Qubit()), "Up")
+    @test_throws "needs a mixed representation" thermal_state(PreMPO(stp, h), 1., stp)
+    @test_throws "needs a mixed representation" thermal_state(make_mpo(stp, h), 1., stp)
     @test_throws "nsteps is 0" thermal_state(h, 1., State{Mixed}(System(n, Qubit()), "FullyMixed");
                                              nsteps = 0)
 end
@@ -481,6 +490,31 @@ end
     st = State{Pure}(System(2, Qubit()), "Up")
     @test_throws MethodError tdvp(-im * Z(1), 0.1, st; maxdim = 4)
     @test_throws MethodError approx_W(-im * Z(1), 0.1, st; order = 1, maxdim = 4)
+end
+
+@testset "An evolution under an MPO" begin
+    # the Heisenberg picture: Z(2), written as a mixed state, evolved under the adjoint of the
+    # MPO of L, built as steady_state builds it, gives <Z(2)> at time t from ρ0
+    n, t, nsteps = 4, 0.5, 20
+    sys = System(n, Qubit())
+    h = -sum(Z(i) * Z(i+1) for i in 1:n-1) - sum(X(i) for i in 1:n)
+    L = -im * h + sum(0.3 * Dissipator(Sm)(i) for i in 1:n)
+    ρ0 = State{Mixed}(sys, ["Up", "+", "Dn", "i"])
+    z = State{Mixed}(sys, [i == 2 ? [1. 0.; 0. -1.] : [1. 0.; 0. 1.] for i in 1:n])
+    adj = TensorMixedStates.replaceprime(dag(make_mpo(ρ0, L))', 2 => 0)
+    zt = tdvp(adj, t, z; nsteps)
+    @test inner(zt, ρ0) ≈ expect(tdvp(L, t, ρ0; nsteps), Z(2)) atol = 1e-8
+    # the same adjoint written with Left and Right, Right(dag(Sm)) being A ↦ A Sm
+    ladj = im * h + sum(0.3 * (Left(dag(Sm))(i) * Right(dag(Sm))(i)
+                               - 0.5 * Left(dag(Sm) * Sm)(i) - 0.5 * Right(dag(Sm) * Sm)(i))
+                        for i in 1:n)
+    @test norm(zt - tdvp(ladj, t, z; nsteps)) < 1e-12 * norm(zt)
+
+    # time functions need the terms, which an MPO no longer has, as approx_W does
+    m = make_mpo(ρ0, L)
+    @test_throws MethodError tdvp(m, t, ρ0; coefs = [s -> 1.])
+    @test_throws "not an MPO" approx_W(m, t, ρ0; order = 2, w = 2)
+    @test_throws "not an MPO" make_mpo(ρ0, m)
 end
 
 @testset "Noisy gates" begin

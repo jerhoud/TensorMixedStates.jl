@@ -184,6 +184,10 @@ function PreMPO(state::State{R}, a) where R
     return PreMPO!(PreMPO{R}(state.system, n), s isa Vector ? map(gather, s) : gather(s))
 end
 
+PreMPO(::State, ::Union{MPO, Vector{MPO}}) =
+    error("an operator is needed here, not an MPO: approx_W builds its MPOs from the terms " *
+          "of the operator")
+
 """
     mpo_eltype(::PreMPO)
 
