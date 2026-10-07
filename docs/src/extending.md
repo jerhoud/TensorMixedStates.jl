@@ -16,8 +16,10 @@ own:
     [representations](@ref "Representations of one's own") of one's own, and the functions
     they name, are experimental. They were written for extensions still to come, quantum
     trajectories, purifications or adapters of other libraries, and may change in a version
-    2.x when the first of these shows what they lack. The site types, the operators and the
-    measurements of one's own are not concerned.
+    2.x when the first of these shows what they lack. Their names are not exported: a program
+    imports those it uses, as with `using TensorMixedStates: AbstractPhase, run_steps`, and
+    adds a method to a function under its full name, as `TensorMixedStates.run_phase`. The
+    site types, the operators and the measurements of one's own are not concerned.
 
 ## Site types of one's own
 
@@ -180,16 +182,17 @@ A measurement of your own is a [`StateFunc`](@ref), a function of the state, or 
 
 ## [Phases of one's own](@id own-phases)
 
-A phase of your own is a subtype of [`AbstractPhase`](@ref) with the three fields every phase has,
-`name`, `time_start` and `final_measurements`, and a method of [`TensorMixedStates.run_phase`](@ref)
-for it, which returns the simulation the phase leaves behind. The full name is needed,
-`run_phase` not being exported. The phases of the library are written the same way, each in a
-file of `src/phases`, and make as many examples.
-Written as a loop with [`run_steps`](@ref), the phase is checkpointed, stopped and resumed between two
-steps, as those of the library are between two sweeps:
+A phase of your own is a subtype of [`TensorMixedStates.AbstractPhase`](@ref) with the three
+fields every phase has, `name`, `time_start` and `final_measurements`, and a method of
+[`TensorMixedStates.run_phase`](@ref) for it, which returns the simulation the phase leaves
+behind. The full name is needed, `run_phase` not being exported. The phases of the library are
+written the same way, each in a file of `src/phases`, and make as many examples.
+Written as a loop with [`TensorMixedStates.run_steps`](@ref), the phase is checkpointed,
+stopped and resumed between two steps, as those of the library are between two sweeps:
 
 ```julia
 using TensorMixedStates, .Qubits
+using TensorMixedStates: AbstractPhase, run_steps
 
 Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "Kicks"
@@ -223,28 +226,30 @@ of [`TensorMixedStates.creates_state`](@ref), which lets it be the first phase o
 and gives the system it creates the state on by one of
 [`TensorMixedStates.phase_system`](@ref), on which a resumed run puts the state of its
 checkpoint back. Within a phase, [`stopped`](@ref) tells whether the run is stopping,
-[`resume_time`](@ref) the time a resumed phase goes on from and [`committed_time`](@ref) the time
-of the last step committed, which a phase stopped in its course has reached, and
-`save_state(file, name, sim)` saves the state, refusing a file of the simulation, as its
-checkpoint.
+[`TensorMixedStates.resume_time`](@ref) the time a resumed phase goes on from and
+[`TensorMixedStates.committed_time`](@ref) the time of the last step committed, which a phase
+stopped in its course has reached, and `save_state(file, name, sim)` saves the state, refusing
+a file of the simulation, as its checkpoint.
 
 A value the steps carry from one to the next, a sum, a count or the `UInt64` a random number
 generator is made of, is given to `run_steps` as `carry`: each step receives it and returns it
-updated with the simulation, and a resumed run gets it back, see [`run_steps`](@ref), which
-refuses a value a checkpoint would not give back as it is. A phase evolving
-one step at a time prepares its evolver once with [`PreMPO`](@ref), which the solvers take in
-place of the operator.
+updated with the simulation, and a resumed run gets it back, see
+[`TensorMixedStates.run_steps`](@ref), which refuses a value a checkpoint would not give back as
+it is. A phase evolving one step at a time prepares its evolver once with [`PreMPO`](@ref),
+which the solvers take in place of the operator.
 
 ## Algorithms of one's own
 
 An `Evolve` phase hands the evolution of its state to [`TensorMixedStates.evolve`](@ref), whose method
 is chosen by the type of its algorithm and by that of the state. An algorithm of your own is a
-subtype of [`Algo`](@ref) with a method for the states it evolves, which returns the simulation it
-leaves behind. The method is called before the phase has read its resume point, so that a loop
-written with `run_steps` is checkpointed, stopped and resumed between two steps:
+subtype of [`TensorMixedStates.Algo`](@ref) with a method for the states it evolves, which
+returns the simulation it leaves behind. The method is called before the phase has read its
+resume point, so that a loop written with `run_steps` is checkpointed, stopped and resumed
+between two steps:
 
 ```julia
 using TensorMixedStates, .Qubits
+using TensorMixedStates: Algo, run_steps
 
 struct Stepwise <: Algo end     # tdvp, one step at a time
 
@@ -273,11 +278,12 @@ one, `nothing` otherwise, which `tdvp` takes as they are. The method ends its ke
 
 ## Representations of one's own
 
-A representation of your own is a subtype of [`Representation`](@ref), which `CreateState`
-takes as its `type`, and needs nothing more. Its states are of a type of your own, a subtype of
-[`AbstractState`](@ref) with a field `system` holding the `System` of their physical sites.
-TMS reads it to save a state, to choose the threading, to log what a `Weaken` phase changes,
-and to put the reference of `Fidelity` or `Overlap` on the system of the measured state.
+A representation of your own is a subtype of [`TensorMixedStates.Representation`](@ref), which
+`CreateState` takes as its `type`, and needs nothing more. Its states are of a type of your
+own, a subtype of [`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the
+`System` of their physical sites. TMS reads it to save a state, to choose the threading, to log
+what a `Weaken` phase changes, and to put the reference of `Fidelity` or `Overlap` on the
+system of the measured state.
 
 That system need not be the one the representation keeps its tensors on: a mixed state held as
 a pure state on a doubled system, a purification, has the system of its physical sites in

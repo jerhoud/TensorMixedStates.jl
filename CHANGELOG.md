@@ -89,6 +89,8 @@ Renamed, see "Upgrading from 1.x":
 Simulations:
 
 - A phase of one's own is a subtype of `AbstractPhase`, which `SimData` checks.
+- `run_steps`, `resume_step` and `Algo` are no longer exported, the interfaces of one's own
+  being experimental: write `TensorMixedStates.run_steps`, or import it.
 - `runTMS` leaves the working directory as it is: a relative name of a destination, of
   `SaveState` or of `LoadState` is still taken in the directory of the simulation, but a file a
   phase of one's own opens with `open` is taken in the working directory.

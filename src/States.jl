@@ -1,7 +1,7 @@
 # States, MPS on a system in the pure or the mixed representation: product states built from
 # local states, the truncation limits, mixing a pure state and weakening a state.
 
-export AbstractState, State, mix, maxlinkdim, Limits
+export State, mix, maxlinkdim, Limits
 
 """
     struct PreObs

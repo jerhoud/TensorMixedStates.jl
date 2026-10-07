@@ -10,7 +10,8 @@ state already mixed is only truncated.
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `limits`: constraints on the mixed state, see `Limits` (default `Limits()`)
 
 # Examples

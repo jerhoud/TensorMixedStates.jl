@@ -18,13 +18,13 @@ data_to_frame
 ## Phases
 
 ```@docs
-AbstractPhase
+TensorMixedStates.AbstractPhase
 CreateState
 LoadState
 SaveState
 ToMixed
 Evolve
-Algo
+TensorMixedStates.Algo
 Tdvp
 ApproxW
 Gates
@@ -43,10 +43,10 @@ How to use them is explained in [Extending TMS](@ref).
 TensorMixedStates.run_phase
 TensorMixedStates.creates_state
 TensorMixedStates.phase_system
-run_steps
-resume_step
-resume_time
-committed_time
+TensorMixedStates.run_steps
+TensorMixedStates.resume_step
+TensorMixedStates.resume_time
+TensorMixedStates.committed_time
 close_sim_files
 TensorMixedStates.evolve
 TensorMixedStates.write_state

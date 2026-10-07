@@ -9,7 +9,8 @@ a phase that applies gates to the state.
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `gates`: the gates to apply
 - `limits`: the truncations made while applying a gate of several sites, see `apply` (default
   `Limits()`)

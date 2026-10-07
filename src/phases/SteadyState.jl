@@ -9,7 +9,8 @@ a phase that searches the steady state of a Lindbladian, see `steady_state`, on 
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `lindbladian`: the Lindbladian ``L`` whose steady state is searched, of the form
   `-im * H + dissipators` for a Hamiltonian `H`
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default `Limits()`)

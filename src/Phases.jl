@@ -2,8 +2,6 @@
 # one's own: AbstractPhase, run_phase, the resumption of a phase where it stopped, and the
 # phases creating the state.
 
-export AbstractPhase, resume_step, resume_time, committed_time, run_steps
-
 """
     abstract type AbstractPhase
 
@@ -138,6 +136,8 @@ unfinished one being run again whole on a resume. A step must not call `resume_s
 `run_steps` has called.
 
 # Examples
+
+    using TensorMixedStates: run_steps
 
     TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
         run_steps(sim, p.nkicks) do sim, k

@@ -23,9 +23,9 @@ the description of a simulation, which `runTMS` runs.
 # Fields
 
 - `name`: the name of the simulation, and of the directory its results are written to
-- `phases`: the phases of the simulation, see `AbstractPhase`, as a vector which may contain
-  vectors to any depth and is flattened. The first phase must create the state, as
-  `CreateState` and `LoadState` do, see `TensorMixedStates.creates_state`
+- `phases`: the phases of the simulation, see `TensorMixedStates.AbstractPhase`, as a vector
+  which may contain vectors to any depth and is flattened. The first phase must create the
+  state, as `CreateState` and `LoadState` do, see `TensorMixedStates.creates_state`
 - `description`: the text of the `description` file of the simulation (default `""`)
 - `time_start`: the initial simulation time (default 0.)
 - `final_measurements`: the measurements to make at the end of the simulation, see `output`
@@ -496,8 +496,9 @@ refuse an object that is not a subtype of `AbstractPhase`, or lacks one of the f
 """
 function check_is_phase(phase)
     if !(phase isa AbstractPhase)
-        error("$(typeof(phase)) is not a phase: a phase is a subtype of AbstractPhase, with the " *
-              "fields name, time_start and final_measurements and a method of run_phase")
+        error("$(typeof(phase)) is not a phase: a phase is a subtype of " *
+              "TensorMixedStates.AbstractPhase, with the fields name, time_start and " *
+              "final_measurements and a method of TensorMixedStates.run_phase")
     end
     for f in (:name, :time_start, :final_measurements)
         if hasfield(typeof(phase), f)

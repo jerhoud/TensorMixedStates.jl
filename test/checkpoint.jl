@@ -6,6 +6,8 @@
 # change the working directory of the process while they run, which is safe as long as the
 # test groups stay sequential.
 
+using TensorMixedStates: AbstractPhase, resume_step, run_steps
+
 """
 phases exercising a resume, along with the three counters arming them. A counter fires
 when it counts down to zero and then stays disarmed, `0` never fires and a negative value
@@ -127,7 +129,7 @@ end
 
 @testset "A phase descends from AbstractPhase" begin
     # refused when the simulation is written, a struct with the fields of a phase included
-    @test_throws "a phase is a subtype of AbstractPhase" SimData(phases = [
+    @test_throws "a phase is a subtype of TensorMixedStates.AbstractPhase" SimData(phases = [
         CreateState{Pure}(2, Qubit(), "Up"), Lookalike("x", nothing, [])])
     # and printed as those of the library are, field by field
     @test startswith(repr(Kicks()), "\nKicks(\n    name = \"kicks\"")

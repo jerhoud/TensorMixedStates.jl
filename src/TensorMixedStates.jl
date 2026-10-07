@@ -18,6 +18,9 @@ import ITensorMPS: maxlinkdim, apply, state, expect, normalize, checkdone!, tdvp
 using ITensors, ITensorMPS, Printf, Dates, JSON, Random, LinearAlgebra, HDF5
 import Logging
 
+# The names of the experimental interfaces of one's own, phases, algorithms and
+# representations, are not exported, see docs/src/extending.md
+
 # Core
 include("Operators.jl")
 include("Sites.jl")

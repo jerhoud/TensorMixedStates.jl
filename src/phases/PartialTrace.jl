@@ -10,7 +10,8 @@ a phase that traces out the sites at `positions` or, with `keep = true`, all the
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `positions`: the sites to trace out, or to keep
 - `keep`: whether `positions` are the sites to keep rather than those to trace out (default
   `false`)

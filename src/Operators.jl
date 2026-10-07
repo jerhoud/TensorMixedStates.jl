@@ -2,7 +2,7 @@
 # states or on density matrices, and how they are built, combined, compared and printed, before
 # any site or state is involved.
 
-export Representation, Pure, Mixed, GenericOp, IndexedOp, SimpleOp
+export Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
 export Op, Operator, Id, F, Proj, Basis, Gate, Dissipator, Evolver, Left, Right, SetState, Dephase
 export relaxing_dissipator, relaxing_gate, depolarizing_dissipator, depolarizing_gate

@@ -7,6 +7,8 @@
 # tests the same code would run when included and show nothing. A representation or an
 # algorithm of its own needs no such thing and is checked here directly.
 
+using TensorMixedStates: AbstractState, Algo, Representation, run_steps
+
 """
     run_with_packages(script, dir)
 

@@ -12,14 +12,14 @@ SysIndex
 ## States
 
 ```@docs
-Representation
+TensorMixedStates.Representation
 Pure
 Mixed
 Limits
 State
 State(::System, ::State)
-AbstractState
-length(::AbstractState)
+TensorMixedStates.AbstractState
+length(::TensorMixedStates.AbstractState)
 maxlinkdim(::State)
 mix
 truncate(::State)

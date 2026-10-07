@@ -62,10 +62,12 @@ to ITensorMPS: `cutoff`, `maxdim` and `mindim` are given through
 
 ## Phases of your own
 
-A phase of your own is now a subtype of [`AbstractPhase`](@ref), and its field of final
-measurements is `final_measurements`:
+A phase of your own is now a subtype of [`TensorMixedStates.AbstractPhase`](@ref), and its
+field of final measurements is `final_measurements`:
 
 ```julia
+using TensorMixedStates: AbstractPhase
+
 Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "kicks"
     time_start = nothing
@@ -77,6 +79,10 @@ end
 `SimData` refuses a struct that is not a subtype of `AbstractPhase`. The union `Phases` of the
 phase types of the library is gone, `AbstractPhase` taking its place. See
 [Extending TMS](@ref) for what a phase of your own can do in 2.0.
+
+`run_steps`, `resume_step` and `Algo` are no longer exported, the interfaces of one's own
+being experimental: import them, as with `using TensorMixedStates: run_steps`, or write them
+in full.
 
 ## Defaults that changed
 

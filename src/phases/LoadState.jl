@@ -10,7 +10,8 @@ a phase that loads the state from an HDF5 file written by `SaveState` or `save_s
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `file`: the name of the HDF5 file to read from, taken in the simulation directory when it is
   relative: a state another simulation saved is found under `../othername/`
 - `statename`: the name under which the state is stored in the file

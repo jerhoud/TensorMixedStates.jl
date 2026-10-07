@@ -1,7 +1,7 @@
 # The Evolve phase, which evolves the state in time, and the algorithms it takes, Tdvp and
 # ApproxW, with the methods of evolve that run them.
 
-export Algo, Tdvp, ApproxW, Evolve
+export Tdvp, ApproxW, Evolve
 
 """
     abstract type Algo
@@ -82,7 +82,8 @@ a phase of time evolution.
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `limits`: constraints on the state, see `Limits` (default `Limits()`)
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one that divides the duration into a

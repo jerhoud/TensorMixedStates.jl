@@ -13,9 +13,11 @@ or `LoadState`.
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
-- `type`: the representation of the state, `Pure()` or `Mixed()`, or a `Representation` an
-  extension defines, together with the method of `run_phase` creating its state
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
+- `type`: the representation of the state, `Pure()` or `Mixed()`, or a
+  `TensorMixedStates.Representation` an extension defines, together with the method of
+  `run_phase` creating its state
 - `system`: the `System` of the state, unused when `state` is a `State`
 - `state`: a description of the state, or a `State`, which is mixed if `type` asks for it (a
   mixed one cannot be made pure)

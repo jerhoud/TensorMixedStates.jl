@@ -13,7 +13,8 @@ state ``e^{-\\beta H}/Z``. The time of the simulation does not move.
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `hamiltonian`: the Hamiltonian ``H``
 - `beta`: the inverse temperature ``\\beta``
 - `beta_step`: the step of `beta`, adjusted to the nearest one that divides `beta` into a whole

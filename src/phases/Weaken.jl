@@ -11,7 +11,8 @@ the next one continue under a weak one, where a jump that moves the charge becom
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `target`: what the state must still conserve, as `weaken` takes it (default `nothing`, one
   level down: every strong quantity made weak or, when none is strong, every quantity
   dropped)

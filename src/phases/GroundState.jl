@@ -9,7 +9,8 @@ a phase that searches the ground state of a Hamiltonian by dmrg, see `dmrg`, on 
 
 # Fields
 
-- `name`, `time_start`, `final_measurements`: the fields every phase has, see `AbstractPhase`
+- `name`, `time_start`, `final_measurements`: the fields every phase has, see
+  `TensorMixedStates.AbstractPhase`
 - `hamiltonian`: the Hamiltonian whose ground state is searched
 - `limits`: constraints on the state, see `Limits`, required
 - `nsweeps`: the maximum number of sweeps, required
