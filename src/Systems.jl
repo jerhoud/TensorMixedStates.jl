@@ -210,10 +210,15 @@ check_indices(::System, _) = nothing
 
 refuse a factor acting on several sites at once, which `what`, an MPO or `expect`, cannot
 place: what `simplify` leaves of an operator of several sites defined by a matrix or a
-function and created without its sites.
+function and created without its sites, or a superoperator of several sites, as `Dephase`.
 """
 function check_one_site(a, what)
     if a isa AtIndex && length(a.index) > 1
+        if a.op isa GenericOp{Mixed}
+            error("$a acts on several sites at once, which $what cannot place: apply it as a " *
+                  "gate, or write it with Gate, Dissipator, Left or Right of operators created " *
+                  "with their sites, see dephasing_dissipator")
+        end
         error("$a acts on several sites at once, which $what cannot place: apply it as a gate, " *
               "write it as an expression of one site operators, or create it with the sites " *
               "it acts on, Operator{N}(name, m, type, sites...), which splits it into one")

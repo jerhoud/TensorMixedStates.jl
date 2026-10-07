@@ -1191,9 +1191,9 @@ depolarizing_gate(p::Real, n::Int = 1) = relaxing_gate(p, n, "FullyMixed")
 """
     dephasing_dissipator(γ, A = Basis)
 
-the Lindblad generator dephasing a site at rate `γ` in the eigenbasis of `A`, by default the
-basis of the site, for an evolver: ``\\gamma\\,(\\Delta - \\mathrm{Id})``, `Δ` being
-`Dephase(A)`. Every coherence between two eigenspaces decays at the same rate `γ`, where
+the Lindblad generator dephasing at rate `γ` in the eigenbasis of `A`, by default the basis of
+the site, for an evolver: ``\\gamma\\,(\\Delta - \\mathrm{Id})``, `Δ` being `Dephase(A)`.
+Every coherence between two eigenspaces decays at the same rate `γ`, where
 `Dissipator(A)` damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant
 eigenvalues: the two agree when `A` has two eigenvalues, `Dissipator(Z)` being
 `dephasing_dissipator(2, Z)`. Evolving under it for a time `t` is
@@ -1204,6 +1204,8 @@ generator is `γ` times the sum of `Dissipator(P)` over the projectors on its ei
 # Examples
 
     evolver = -im * H + sum(dephasing_dissipator(0.1)(i) for i in 1:10)
+    P(λ) = named(Proj(Z ⊗ Z => λ), "P\$λ", Qubit())      # the parity of two qubits
+    evolver = -im * H + 0.1 * sum(Dissipator(P(λ))(1, 2) for λ in (-1, 1))
 """
 dephasing_dissipator(γ::Real, a::GenericOp{Pure, N} = Basis) where N =
     γ * (Dephase(a) - Gate(tensor_power(Id, N)))
@@ -1211,13 +1213,14 @@ dephasing_dissipator(γ::Real, a::GenericOp{Pure, N} = Basis) where N =
 """
     dephasing_gate(p, A = Basis)
 
-the channel dephasing a site with probability `p` in the eigenbasis of `A`, by default the
-basis of the site, for a gate: ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being
-`Dephase(A)`. It is `Gate(Id) + dephasing_dissipator(p, A)`.
+the channel dephasing with probability `p` in the eigenbasis of `A`, by default the basis of
+the site, for a gate: ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being `Dephase(A)`. It is
+`Gate(Id) + dephasing_dissipator(p, A)`.
 
 # Examples
 
     Gates(gates = prod(dephasing_gate(0.01)(i) for i in 1:10))
+    apply(dephasing_gate(0.1, Z ⊗ Z)(1, 2), ρ)      # the parity of two qubits
 """
 dephasing_gate(p::Real, a::GenericOp{Pure, N} = Basis) where N =
     (1 - p) * Gate(tensor_power(Id, N)) + p * Dephase(a)

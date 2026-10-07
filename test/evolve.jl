@@ -758,7 +758,7 @@ end
     @test real(expect(apply(dephasing_gate(0.3, Z ⊗ Z)(1, 2), pp), X(1))) ≈ 0.7
     @test matrix(dephasing_dissipator(1.0, Z ⊗ Z), Qubit()) ≈
           matrix(sum(Dissipator(Proj(Z ⊗ Z => λ)) for λ in (-1, 1)), Qubit())
-    @test_throws "acts on several sites at once" make_mpo(pp, Dephase(Z ⊗ Z)(1, 2))
+    @test_throws "see dephasing_dissipator" make_mpo(pp, Dephase(Z ⊗ Z)(1, 2))
     # diagonal in the charges, it passes a strong conservation
     strong_q = State{Mixed}(System(2, Qubit(conserve = strong(N))), "Up")
     @test trace(apply(dephasing_gate(0.3)(1), strong_q)) ≈ 1
