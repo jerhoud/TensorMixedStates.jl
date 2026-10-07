@@ -139,7 +139,7 @@ expand_placed(a::ProdOp{R}, index) where R =
 expand_placed(a::SumOp{R}, index) where R =
     SumOp(IndexedOp{R}[ expand_gate(o(index...)) for o in a.subs ])
 expand_placed(a::IntPowOp, index) = ProdOp(fill(expand_gate(a.arg(index...)), a.expo))
-expand_placed(a::Union{ExpOp, GenPowOp{Pure}, ModOp}, index) = strung_function(a, index)
+expand_placed(a::Union{ExpOp, GenPowOp{Pure}, ModOp, Proj}, index) = strung_function(a, index)
 expand_placed(a::Operator, index) = a.expr isa Op ? expand_gate(a.expr(index...)) : a(index...)
 expand_placed(a::DagOp, index) = placed_dag(expand_gate(a.arg(index...)))
 expand_placed(a::Left, index) = sided(Left, expand_gate(a.arg(index...)))

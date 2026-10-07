@@ -168,6 +168,17 @@ end
     @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp => 1), Qubit())
     @test_throws "commuting with the fermionic parity" matrix(Proj(C + dag(C) => 1), Fermion())
     @test_throws "Proj(N => 1)(3) rather than Proj(N(3) => 1)" Proj(X(3) => 1)
+    # of several sites, the singlet and the spin 2 of two spins one, which named writes as a
+    # sum of products; printed as before, whatever its number of sites
+    @test Proj("Up") isa SimpleOp
+    @test Proj(Swap => -1) isa GenericOp{Pure, 2}
+    @test repr(Proj("Up")) == "Proj(\"Up\")"
+    @test repr(Proj(Swap => -1)) == "Proj(Swap => -1)"
+    @test matrix(Proj(Swap => -1), Qubit()) ≈ matrix((Id ⊗ Id - Swap) / 2, Qubit())
+    SS = Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz
+    @test matrix(named(Proj(SS => 1), "P2", s), s) ≈ matrix(SS / 2 + SS * SS / 6 + (Id ⊗ Id) / 3, s)
+    @test_throws "0.5 is not an eigenvalue of Swap on Qubit() ⊗ Qubit()" matrix(Proj(Swap => 0.5), Qubit())
+    @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp ⊗ Sm => 0), Qubit())
 end
 
 @testset "Non integer powers of a scaled operator" begin

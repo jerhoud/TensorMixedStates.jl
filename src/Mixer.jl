@@ -477,24 +477,28 @@ eigenspaces(a::SimpleOp, site::AbstractSite, what::String) =
     eigenspaces(matrix(a, site), matrix(F, site), what, a, " on $site")
 
 """
-    eigenprojector(a, λ, site)
+    eigenprojector(a, λ, sites...)
 
-the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `site`, `λ`
-matching an eigenvalue to rounding, see `eigenspaces`
+the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `sites`,
+`λ` matching an eigenvalue to rounding, see `eigenspaces`
 """
-function eigenprojector(a::SimpleOp, λ::Real, site::AbstractSite)
-    values, ps = eigenspaces(a, site, "Proj")
+function eigenprojector(a::GenericOp{Pure}, λ::Real, sites::AbstractSite...)
+    on = join(sites, " ⊗ ")
+    f = foldl(kron, [ matrix(F, s) for s in sites ])
+    values, ps = eigenspaces(matrix(a, sites...), f, "Proj", a, " on $on")
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
     if isnothing(k)
-        error("$λ is not an eigenvalue of $a on $site, whose eigenvalues are $(join(values, ", "))")
+        error("$λ is not an eigenvalue of $a on $on, whose eigenvalues are $(join(values, ", "))")
     end
     return ps[k]
 end
 
-function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
+function matrix(a::Proj, given::AbstractSite...)
+    sites = expand_sites(a, given)
     if a.state isa Pair
-        return eigenprojector(a.state.first, a.state.second, site)
+        return eigenprojector(a.state.first, a.state.second, sites...)
     end
+    site = only(sites)
     st = state(site, a.state)
     if !(st isa Vector)
         error("Proj can only project on a pure state, \"$(a.state)\" is a mixed state")

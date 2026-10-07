@@ -310,6 +310,16 @@ end
     @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
 end
 
+@testset "The AKLT hamiltonian as a sum of projectors" begin
+    # P2 projects two spins one on their total spin 2, which the AKLT state holds on no pair
+    n = 6
+    P2 = named(Proj(Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz => 1), "P2", Spin(1))
+    h = sum(P2(i, i + 1) for i in 1:n-1)
+    @test real(expect(aklt_state(System(n, Spin(1)); left = "Up", right = "Up"), h)) ≈ 0 atol = 1e-12
+    e, _ = dmrg(h, RandomState{Pure}(System(n, Spin(1)), 8); nsweeps = 10, limits = Limits(maxdim = 30))
+    @test e ≈ 0 atol = 1e-10
+end
+
 @testset "Fully mixed states of a sector" begin
     LA = TensorMixedStates.LinearAlgebra
     strong = TensorMixedStates.strong

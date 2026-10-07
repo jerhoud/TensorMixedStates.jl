@@ -688,26 +688,33 @@ isless(a::Multi_F, b::Multi_F) =
 the projector ``|s\\rangle\\langle s|`` on a pure state of one site, given by its name, by
 its vector in the basis of the site, taken as it is without normalization, or by the number
 of a basis state, counted from 0; or the projector on the eigenspace of eigenvalue `λ` of the
-Hermitian operator `A`, `λ` being refused if it is not an eigenvalue. On a fermionic site, the
-state must have a definite parity and `A` must commute with the parity.
+Hermitian operator `A`, of one site or several, `λ` being refused if it is not an eigenvalue.
+On several sites it is applied as a gate, and `named(Proj(A => λ), name, sites...)` writes it
+as a sum of products, for a Hamiltonian or a measurement. On a fermionic site, the state must
+have a definite parity and `A` must commute with the parity.
 
 # Examples
 
     Proj("Up")
     Proj([1, 0])
-    Proj(1)           # the second basis state
-    Proj(Sz => 0)     # on a Spin(1), the state of Sz = 0
-    Proj(Ntot => 1)   # on an Electron, Up and Dn
+    Proj(1)            # the second basis state
+    Proj(Sz => 0)      # on a Spin(1), the state of Sz = 0
+    Proj(Ntot => 1)    # on an Electron, Up and Dn
+    Proj(Swap => -1)   # on two qubits, the singlet
+    named(Proj(Sx⊗Sx + Sy⊗Sy + Sz⊗Sz => 1), "P2", Spin(1))   # spin 2 of two spins 1
 """
-struct Proj <: SimpleOp
-    state::Union{Int, String, Vector, Pair{<:SimpleOp, <:Real}}
-    Proj(state::Union{Int, String, Vector}) = new(no_signed_zero(state))
-    Proj(p::Pair{<:SimpleOp, <:Real}) = new(first(p) => no_signed_zero(last(p)))
+struct Proj{N} <: GenericOp{Pure, N}
+    state::Union{Int, String, Vector, Pair{<:GenericOp{Pure}, <:Real}}
+    Proj(state::Union{Int, String, Vector}) = new{1}(no_signed_zero(state))
+    Proj(p::Pair{<:GenericOp{Pure, N}, <:Real}) where N = new{N}(first(p) => no_signed_zero(last(p)))
 end
 
 Proj(p::Pair{<:IndexedOp, <:Real}) =
     error("cannot project on an eigenspace of $(first(p)), which is placed on sites: write " *
           "Proj(N => 1)(3) rather than Proj(N(3) => 1)")
+
+# the default would print the number of sites, Proj{1}("Up"), in the names of measurements
+show(io::IO, a::Proj) = show_func(io, "Proj", [a.state])
 
 isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
 
@@ -1578,6 +1585,11 @@ its tensor holding no string on the sites in between. A factor of no definite pa
 `C + N`, answers true.
 """
 hasfermionic(a::GenericOp{Pure, 1}) = fermion_parity(a, false) ≠ 0
+
+# a projector on an eigenspace of fermionic operators of several sites, whose matrix lacks the
+# strings of the sites in between, see `strung_function`
+hasfermionic(a::Proj) = a.state isa Pair && hasfermionic(first(a.state))
+hasfermionic(::Proj{1}) = false
 
 function hasfermionic(a::Op)
     for f in fieldnames(typeof(a))

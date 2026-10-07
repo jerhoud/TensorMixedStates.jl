@@ -398,7 +398,7 @@ by an expression are replaced by it.
 """
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
 simplify_ind(a::IdentityOp, index...) = a(index...)
-simplify_ind(a::Union{JW_F, Proj, JW, SetState, Dephase}, index) = a(index)
+simplify_ind(a::Union{JW_F, Proj, JW, SetState, Dephase}, index...) = a(index...)
 simplify_ind(a::ExpOp, index...) = place_function(a, index...)
 simplify_ind(a::ModOp, index...) = place_function(a, index...)
 

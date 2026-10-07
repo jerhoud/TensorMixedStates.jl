@@ -27,7 +27,7 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `reduced_density_matrix`, `vonneumann_entropy` and `log_negativity` of a few sites, with
   their measurements.
 - `Basis`, the operator numbering the basis states of any site.
-- `Proj(A => λ)`, the projector on an eigenspace of `A`.
+- `Proj(A => λ)`, the projector on an eigenspace of `A`, of one site or several.
 - `probabilities`, `sample(state, op)` and `collapse`, the measurement of a site or of an
   operator placed on sites, its result drawn or given.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.

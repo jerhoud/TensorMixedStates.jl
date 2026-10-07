@@ -745,6 +745,29 @@ end
     @test_throws "which the state does not have" collapse(up, 3 => 0)
 end
 
+@testset "Projector of several sites" begin
+    # applied as a gate, with the Jordan-Wigner strings of the sites in between, the order of
+    # its sites included; written as a sum of products by named, to be measured
+    ud = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
+    @test real(expect(ud, named(Proj(Swap => -1), "Singlet", Qubit())(1, 2))) ≈ 0.5
+    for st in (ud, mix(ud))
+        @test real(expect(normalize(apply(Proj(Swap => -1)(1, 2), st)), Swap(1, 2))) ≈ -1
+    end
+    @test_throws "acts on several sites at once" expect(ud, Proj(Swap => -1)(1, 2))
+    f = RandomState(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp"]), 4)
+    projected(a, λ) = normalize(apply(make_mpo(f, (a * a + λ * a) / 2), f))
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    j = im * (dag(C)(1) * C(3) - dag(C)(3) * C(1))
+    hop = dag(C) ⊗ C - C ⊗ dag(C)
+    current = im * (dag(C) ⊗ C + C ⊗ dag(C))
+    for (g, ref) in [(Proj(hop => 1)(1, 3), projected(h, 1)), (Proj(hop => 1)(3, 1), projected(h, 1)),
+                     (Proj(current => 1)(1, 3), projected(j, 1)),
+                     (Proj(current => 1)(3, 1), projected(j, -1))]
+        @test norm(normalize(apply(g, f)) - ref) < 1e-12
+        @test norm(normalize(apply(g, mix(f))) - mix(ref)) < 1e-12
+    end
+end
+
 @testset "Measuring a product of involutions" begin
     # measured by its mean value on any number of sites, it agrees with the matrix of the
     # operator on a few, and its projection, the state plus its image, with (1 + sP)/2
