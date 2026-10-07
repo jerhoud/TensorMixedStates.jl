@@ -1103,13 +1103,13 @@ end
     trace_signs(state, keep)
 
 the state whose partial trace keeping the sites `keep` is the reduced state of `state`, its
-fermionic signs included: ``U \\rho U^\\dagger``, ``U = (-1)^{\\sum n_l n_k}``, `l` running
-over the fermionic sites traced out, `k` over the fermionic sites kept on their right, and `n`
-the parity of a site. It is the product by an MPO of bond dimension 2 carrying the parity
-traced out on the left, projected on the ket side alone for a site traced out. A state
-needing no sign is given back as it is.
+fermionic signs included: ``U \\rho U^\\dagger``, or ``U |\\psi\\rangle`` on a pure state,
+``U = (-1)^{\\sum n_l n_k}``, `l` running over the fermionic sites traced out, `k` over the
+fermionic sites kept on their right, and `n` the parity of a site. It is the product by an MPO
+of bond dimension 2 carrying the parity traced out on the left, projected on the ket side
+alone for a site traced out. A state needing no sign is given back as it is.
 """
-function trace_signs(state::State{Mixed}, keep)
+function trace_signs(state::State{R}, keep) where R
     sys = state.system
     n = length(sys)
     odd = [ matrix(F, sys[i]) != I for i in 1:n ]
@@ -1118,10 +1118,11 @@ function trace_signs(state::State{Mixed}, keep)
     end
     links = [ is_charged(sys) ? Index([QN() => 2]; tags = "Parity,l=$i") : Index(2, "Parity,l=$i")
               for i in 0:n ]
-    projs = [ Left((Id + F) / 2), Left((Id - F) / 2) ]
+    projs = [ (Id + F) / 2, (Id - F) / 2 ]
+    sign, projs = R === Mixed ? (Gate(F), Left.(projs)) : (F, projs)
     mps = state.state
     ts = map(1:n) do i
-        idx = SysIndex{Mixed}(sys, i)
+        idx = SysIndex{R}(sys, i)
         l, r = links[i], links[i+1]
         a = site_array(Float64, idx, l, r)
         id = Matrix{Float64}(I, dim(idx), dim(idx))
@@ -1129,7 +1130,7 @@ function trace_signs(state::State{Mixed}, keep)
             if !odd[i]
                 add_block!(a, p, p, id)
             elseif i in keep
-                add_block!(a, p, p, p == 1 ? id : site_matrix(tensor(sys, Gate(F)(i)), idx))
+                add_block!(a, p, p, p == 1 ? id : site_matrix(tensor(sys, sign(i)), idx))
             else
                 for q in 1:2
                     add_block!(a, p, xor(p - 1, q - 1) + 1, site_matrix(tensor(sys, projs[q](i)), idx))
@@ -1228,9 +1229,8 @@ the density matrix of the sites at `positions`, the others traced out, as a matr
 one on the basis of the product states of those sites, taken in their order, ordered as `kron`
 orders them, the first site varying the slowest, as for `dense_state`. On fermionic sites it is
 written in the Jordan-Wigner basis of the sites kept alone, so that `tr(ρ * matrix(op, ...))`
-is the expectation value of `op` placed on them. A pure state is mixed first, which squares
-its bond dimension: it is meant for a few sites, the matrix having the square of their
-dimension as its number of elements.
+is the expectation value of `op` placed on them. It is meant for a few sites, the matrix
+having the square of their dimension as its number of elements.
 
 # Examples
 
@@ -1259,8 +1259,30 @@ function reduced_density_matrix(state::State{Mixed}, pos::AbstractVector{Int})
     return m / tr(m)
 end
 
-reduced_density_matrix(state::State{Pure}, pos::AbstractVector{Int}) =
-    reduced_density_matrix(mix(state), pos)
+# the ket contracted with the bra, the sites kept left open on both sides
+function reduced_density_matrix(state::State{Pure}, pos::AbstractVector{Int})
+    check_positions(state, pos, "reduced_density_matrix")
+    if isempty(pos)
+        return ones(1, 1)
+    end
+    keep = sort(unique(pos))
+    state = trace_signs(state, keep)
+    st = state.state
+    t = get_left(state, first(keep))
+    for k in first(keep):last(keep)
+        if k > first(keep)
+            t *= st[k]
+        end
+        if k ∉ keep
+            t *= identity_at(state, k)
+        end
+        t *= k == last(keep) ? get_right(state, k) : dag(st[k]')
+    end
+    js = [ SysIndex{Pure}(state.system, k) for k in keep ]
+    d = prod(dim, js)
+    m = reshape(Array(dense(t), reverse(js)..., reverse(dag.(prime.(js)))...), d, d)
+    return m / tr(m)
+end
 
 # positions in a vector of another element type, `[]` or `Any[1, 3]`
 reduced_density_matrix(state::State, pos::AbstractVector) =

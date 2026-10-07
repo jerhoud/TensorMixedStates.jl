@@ -586,6 +586,25 @@ end
     @test values["VonNeumannEntropy(1)"] ≈ vonneumann_entropy(q, [1])
 end
 
+@testset "Reduced density matrix of a pure state" begin
+    # contracted on the pure state, it is the one of its mixed representation, fermionic signs
+    # included: sites kept on both sides of sites traced out, and a site traced out first
+    for (st, positions) in [
+            (RandomState{Pure}(System(6, Qubit()), 8), [[6], [5, 2], [1, 3, 6]]),
+            (RandomState(State{Pure}(System(6, Fermion(conserve = N)),
+                                     ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]), 8),
+             [[2, 4], [2, 3, 5]]),
+            (RandomState(State{Pure}(System(4, Electron(conserve = (Ntot, 2Sz))),
+                                     ["Up", "Dn", "Emp", "UpDn"]), 6),
+             [[1, 3], [2, 4]]),
+            (RandomState{Pure}(System([Qubit(), Fermion(), Boson(3), Fermion(), Qubit()]), 6),
+             [[2, 4], [1, 3, 5]])]
+        for pos in positions
+            @test reduced_density_matrix(st, pos) ≈ reduced_density_matrix(mix(st), pos)
+        end
+    end
+end
+
 @testset "Logarithmic negativity" begin
     # log 2 for a Bell pair, and for the Werner state p Bell + (1 - p) I/4, the depolarization
     # of the pair, log((1 + 3p)/2) above p = 1/3, separable below; the partial transpose of
