@@ -1573,133 +1573,6 @@ function counting_probabilities(state::State, sites, locals)
 end
 
 """
-    probabilities(state, pos)
-    probabilities(state, op)
-
-the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
-their probabilities, as pairs `result => probability` in increasing order, those of zero
-probability included: the numbers of the basis states, counted from 0, or the eigenvalues of
-`op`, to rounding. On fermionic sites `op` must commute with the parity of its sites. Its
-matrix on them is diagonalized, its size being the product of their dimensions, except for two
-kinds of operators measured on any number of sites: a product of involutions, as a string of
-Pauli operators, by its mean value, and a sum of operators of one site with half integer
-eigenvalues, as the number of particles of a region, by the mean values of products of phases.
-
-# Examples
-
-    probabilities(state, 3)
-    probabilities(state, Z(1) * Z(2))
-    probabilities(state, sum(N(i) for i in 1:10))
-"""
-function probabilities(state::State, op::IndexedOp{Pure})
-    inv = involution(state.system, op)
-    if !isnothing(inv)
-        c, P = inv
-        m = real(expect(state, P))
-        ps = [ -c => (1 - m) / 2, c => (1 + m) / 2 ]
-        return c > 0 ? ps : reverse(ps)
-    end
-    cnt = counting(state.system, op, "probabilities")
-    if !isnothing(cnt)
-        return [ T / 2 => p for (T, p) in counting_probabilities(state, cnt...) ]
-    end
-    sites, values, ps = measured_spectrum(state.system, op, "probabilities")
-    return [ λ => p for (λ, p) in zip(values, outcome_probabilities(state, sites, ps)) ]
-end
-
-function probabilities(state::State, pos::Int)
-    check_positions(state, [pos], "probabilities")
-    return [ Int(x) => p for (x, p) in probabilities(state, Basis(pos)) ]
-end
-
-"""
-    draw(p, d, rnd)
-
-the first outcome among `0:d-1` whose cumulated probability exceeds `rnd`, `p(x)` being the
-probability of `x`, the last one taking what the others leave
-"""
-function draw(p, d::Int, rnd)
-    ptot = 0.
-    for x in 0:d - 2
-        ptot += p(x)
-        if rnd < ptot
-            return x
-        end
-    end
-    return d - 1
-end
-
-"""
-    sample(::State [; rng])
-    sample(::State, pos::Int [; rng])
-    sample(::State, op [; rng])
-
-a random outcome, numbered from 0, of measuring the state in the computational basis: a vector
-with one outcome per site, or, given `pos`, the outcome of that site alone; or, given a
-Hermitian operator placed on a few sites, one of its eigenvalues, see `probabilities`. The state
-is left as it is, see `collapse`. `rng` is the random number generator (default the global one).
-
-# Examples
-
-    sample(state)
-    sample(state, 3)
-    sample(state, Z(1) * Z(2))
-"""
-function sample(state::State{Pure}; rng = Random.default_rng())
-    st = orthogonalize(state.state, 1)
-    st[1] /= norm(st[1])
-    return sample(rng, st) .- 1
-end
-
-function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
-    st = orthogonalize(state.state, pos)
-    t = st[pos] / norm(st[pos])
-    r = rand(rng)
-    ind = siteind(st, pos)
-    # the conjugate leg, the direction the tensor takes on a charged site
-    return draw(dim(ind), r) do x
-        tx = t * onehot(dag(ind) => x + 1)
-        real(scalar(tx * dag(tx)))
-    end
-end
-
-function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
-    state = weak_form(state)
-    sys = state.system
-    l = get_left(state, pos) / real(trace(state))
-    r = get_right(state, pos)
-    d = dim(SysIndex{Pure}(sys, pos))
-    rnd = rand(rng)
-    return draw(x -> real(scalar(l * tensor_obs(state, Proj(x)(pos)) * r)), d, rnd)
-end
-
-function sample(state::State{Mixed}; rng = Random.default_rng())
-    state = weak_form(state)
-    sys = state.system
-    n = length(state)
-    result = Vector{Int}(undef, n)
-    l = ITensor(1.)
-    for pos in 1:n
-        a = l * state.state[pos]
-        r = get_right(state, pos)
-        d = dim(SysIndex{Pure}(sys, pos))
-        tot = real(scalar(a * identity_at(state, pos) * r))
-        rnd = rand(rng) * tot
-        x = draw(i -> real(scalar(a * tensor_obs(state, Proj(i)(pos)) * r)), d, rnd)
-        result[pos] = x
-        l = a * tensor_obs(state, Proj(x)(pos))
-        # rescaled, the probabilities to come being ratios: it would underflow on long chains
-        l /= norm(l)
-    end
-    return result
-end
-
-function sample(state::State, op::IndexedOp{Pure}; rng = Random.default_rng())
-    ps = probabilities(state, op)
-    return first(ps[draw(x -> last(ps[x + 1]), length(ps), rand(rng)) + 1])
-end
-
-"""
     project_site(state, pos, p, prob)
 
 the state projected by the projector `p` of site `pos`, of probability `prob`, and normalized,
@@ -1806,16 +1679,172 @@ function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
 end
 
 """
+    measurement(state, op, what)
+
+the results of measuring the Hermitian operator `op`, in increasing order, their probabilities,
+and the function `(k, limits) -> state` projecting the state on the `k`-th of them and
+normalizing it, as a product of involutions, a sum of operators of one site or through the
+matrix of `op`; `what` names the caller in the refusals
+"""
+function measurement(state::State, op::IndexedOp{Pure}, what::String)
+    inv = involution(state.system, op)
+    if !isnothing(inv)
+        c, P = inv
+        m = real(expect(state, P))
+        signs = c > 0 ? [-1, 1] : [1, -1]
+        return (c .* signs, (1 .+ signs .* m) ./ 2,
+                (k, limits) -> project_parity(state, P, signs[k]; limits))
+    end
+    cnt = counting(state.system, op, what)
+    if !isnothing(cnt)
+        ts = counting_probabilities(state, cnt...)
+        return (first.(ts) ./ 2, last.(ts),
+                (k, limits) -> project_count(state, cnt..., first(ts[k]); limits))
+    end
+    sites, values, ps = measured_spectrum(state.system, op, what)
+    probs = outcome_probabilities(state, sites, ps)
+    function project(k, limits)
+        p = Operator{length(sites)}("Proj($op => $(values[k]))", ps[k], selfadjoint_op)
+        if length(sites) == 1
+            return project_site(state, only(sites), p, probs[k])
+        end
+        g = needs_strings(state.system, sites) ? strung_function(p, Tuple(sites)) : p(sites...)
+        return normalize(apply(g, state; limits))
+    end
+    return (values, probs, project)
+end
+
+"""
+    probabilities(state, pos)
+    probabilities(state, op)
+
+the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
+their probabilities, as pairs `result => probability` in increasing order, those of zero
+probability included: the numbers of the basis states, counted from 0, or the eigenvalues of
+`op`, to rounding. On fermionic sites `op` must commute with the parity of its sites. Its
+matrix on them is diagonalized, its size being the product of their dimensions, except for two
+kinds of operators measured on any number of sites: a product of involutions, as a string of
+Pauli operators, by its mean value, and a sum of operators of one site with half integer
+eigenvalues, as the number of particles of a region, by the mean values of products of phases.
+
+# Examples
+
+    probabilities(state, 3)
+    probabilities(state, Z(1) * Z(2))
+    probabilities(state, sum(N(i) for i in 1:10))
+"""
+function probabilities(state::State, op::IndexedOp{Pure})
+    values, probs, _ = measurement(state, op, "probabilities")
+    return [ λ => p for (λ, p) in zip(values, probs) ]
+end
+
+function probabilities(state::State, pos::Int)
+    check_positions(state, [pos], "probabilities")
+    return [ Int(x) => p for (x, p) in probabilities(state, Basis(pos)) ]
+end
+
+"""
+    draw(p, d, rnd)
+
+the first outcome among `0:d-1` whose cumulated probability exceeds `rnd`, `p(x)` being the
+probability of `x`, the last one taking what the others leave
+"""
+function draw(p, d::Int, rnd)
+    ptot = 0.
+    for x in 0:d - 2
+        ptot += p(x)
+        if rnd < ptot
+            return x
+        end
+    end
+    return d - 1
+end
+
+"""
+    sample(::State [; rng])
+    sample(::State, pos::Int [; rng])
+    sample(::State, op [; rng])
+
+a random outcome, numbered from 0, of measuring the state in the computational basis: a vector
+with one outcome per site, or, given `pos`, the outcome of that site alone; or, given a
+Hermitian operator placed on a few sites, one of its eigenvalues, see `probabilities`. The state
+is left as it is, see `collapse`. `rng` is the random number generator (default the global one).
+
+# Examples
+
+    sample(state)
+    sample(state, 3)
+    sample(state, Z(1) * Z(2))
+"""
+function sample(state::State{Pure}; rng = Random.default_rng())
+    st = orthogonalize(state.state, 1)
+    st[1] /= norm(st[1])
+    return sample(rng, st) .- 1
+end
+
+function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
+    st = orthogonalize(state.state, pos)
+    t = st[pos] / norm(st[pos])
+    r = rand(rng)
+    ind = siteind(st, pos)
+    # the conjugate leg, the direction the tensor takes on a charged site
+    return draw(dim(ind), r) do x
+        tx = t * onehot(dag(ind) => x + 1)
+        real(scalar(tx * dag(tx)))
+    end
+end
+
+function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
+    state = weak_form(state)
+    sys = state.system
+    l = get_left(state, pos) / real(trace(state))
+    r = get_right(state, pos)
+    d = dim(SysIndex{Pure}(sys, pos))
+    rnd = rand(rng)
+    return draw(x -> real(scalar(l * tensor_obs(state, Proj(x)(pos)) * r)), d, rnd)
+end
+
+function sample(state::State{Mixed}; rng = Random.default_rng())
+    state = weak_form(state)
+    sys = state.system
+    n = length(state)
+    result = Vector{Int}(undef, n)
+    l = ITensor(1.)
+    for pos in 1:n
+        a = l * state.state[pos]
+        r = get_right(state, pos)
+        d = dim(SysIndex{Pure}(sys, pos))
+        tot = real(scalar(a * identity_at(state, pos) * r))
+        rnd = rand(rng) * tot
+        x = draw(i -> real(scalar(a * tensor_obs(state, Proj(i)(pos)) * r)), d, rnd)
+        result[pos] = x
+        l = a * tensor_obs(state, Proj(x)(pos))
+        # rescaled, the probabilities to come being ratios: it would underflow on long chains
+        l /= norm(l)
+    end
+    return result
+end
+
+function sample(state::State, op::IndexedOp{Pure}; rng = Random.default_rng())
+    ps = probabilities(state, op)
+    return first(ps[draw(x -> last(ps[x + 1]), length(ps), rand(rng)) + 1])
+end
+
+"""
     collapse(state, pos [; rng])
     collapse(state, op [; rng, limits])
+    collapse(state, pos => x)
+    collapse(state, op => λ [; limits])
 
 the result of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, and
 the state it leaves, `(x, state)`: `x` is drawn with its probability, see `probabilities`, and
-the state is projected onto it and normalized. The projection on several sites is a gate,
-truncated by `limits` (default `Limits()`), with the Jordan-Wigner strings of the fermionic
-sites lying between them; for a product of involutions, the state plus its image by the
-product, which at most doubles the bond dimension, or quadruples it on a density matrix; for a
-sum of operators of one site, an MPO whose bond carries the partial sums, as many as its
+the state is projected onto it and normalized. Given the result as a pair, `pos => x` or
+`op => λ`, it returns its probability and the state projected onto it, `(p, state)`, a result
+that is not possible or of zero probability being refused. The projection on several sites is
+a gate, truncated by `limits` (default `Limits()`), with the Jordan-Wigner strings of the
+fermionic sites lying between them; for a product of involutions, the state plus its image by
+the product, which at most doubles the bond dimension, or quadruples it on a density matrix;
+for a sum of operators of one site, an MPO whose bond carries the partial sums, as many as its
 dimension. `rng` is the random number generator (default the global one).
 
 # Examples
@@ -1823,34 +1852,36 @@ dimension. `rng` is the random number generator (default the global one).
     x, state = collapse(state, 3)
     λ, state = collapse(state, X(3))
     s, state = collapse(state, Z(1) * Z(2); limits = Limits(maxdim = 100))
+    p, state = collapse(state, Z(1) * Z(2) => 1)
 """
 function collapse(state::State, op::IndexedOp{Pure}; rng = Random.default_rng(),
                   limits::Limits = Limits())
-    inv = involution(state.system, op)
-    if !isnothing(inv)
-        c, P = inv
-        s = rand(rng) < (1 + real(expect(state, P))) / 2 ? 1 : -1
-        return (s * c, project_parity(state, P, s; limits))
-    end
-    cnt = counting(state.system, op, "collapse")
-    if !isnothing(cnt)
-        ts = counting_probabilities(state, cnt...)
-        T = first(ts[draw(x -> last(ts[x + 1]), length(ts), rand(rng)) + 1])
-        return (T / 2, project_count(state, cnt..., T; limits))
-    end
-    sites, values, ps = measured_spectrum(state.system, op, "collapse")
-    probs = outcome_probabilities(state, sites, ps)
+    values, probs, project = measurement(state, op, "collapse")
     k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1
-    p = Operator{length(sites)}("Proj($op => $(values[k]))", ps[k], selfadjoint_op)
-    if length(sites) == 1
-        return (values[k], project_site(state, only(sites), p, probs[k]))
-    end
-    g = needs_strings(state.system, sites) ? strung_function(p, Tuple(sites)) : p(sites...)
-    return (values[k], normalize(apply(g, state; limits)))
+    return (values[k], project(k, limits))
 end
 
 function collapse(state::State, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "collapse")
     x, st = collapse(state, Basis(pos); rng)
     return (Int(x), st)
+end
+
+function collapse(state::State, result::Pair{<:IndexedOp{Pure}, <:Real}; limits::Limits = Limits())
+    op, λ = result
+    values, probs, project = measurement(state, op, "collapse")
+    k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
+    if isnothing(k)
+        error("$λ is not a result of measuring $op, whose results are $(join(values, ", "))")
+    end
+    if probs[k] ≤ 0
+        error("collapse cannot project on the result $λ of $op, of probability $(probs[k])")
+    end
+    return (probs[k], project(k, limits))
+end
+
+function collapse(state::State, result::Pair{Int, Int})
+    pos, x = result
+    check_positions(state, [pos], "collapse")
+    return collapse(state, Basis(pos) => x)
 end

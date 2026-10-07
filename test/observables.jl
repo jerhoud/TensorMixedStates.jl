@@ -698,6 +698,53 @@ end
     @test_throws "which the state does not have" collapse(plus, 3)
 end
 
+@testset "Collapse on a given result" begin
+    # the probability of the result and the state projected onto it, on each way of measuring:
+    # the result post-selected
+    plus = State{Pure}(System(2, Qubit()), "+")
+    for st in (plus, mix(plus))
+        p, after = collapse(st, Z(1) * Z(2) => -1)
+        @test p ≈ 0.5
+        @test real(expect(after, Z(1) * Z(2))) ≈ -1
+        @test real(expect(after, X(1) * X(2))) ≈ 1
+    end
+    ψ = RandomState{Pure}(System(6, Qubit()), 6)
+    P = Z(1) * X(3) * Y(5)
+    op = N(1) + N(3) + N(5)
+    r = TensorMixedStates.measured_spectrum(ψ.system, op, "dense")
+    for st in (ψ, mix(ψ))
+        for (s, q) in probabilities(st, P)
+            p, after = collapse(st, P => s)
+            ref = normalize(apply(make_mpo(ψ, (Id(1) + s * P) / 2), ψ))
+            @test p ≈ q
+            @test norm(after - (st isa State{Mixed} ? mix(ref) : ref)) < 1e-12
+        end
+        for (v, q) in probabilities(st, op)
+            p, after = collapse(st, op => v)
+            k = findfirst(≈(v), r[2])
+            @test p ≈ q
+            @test norm(after - normalize(apply(Operator{3}("P", r[3][k], selfadjoint_op)(1, 3, 5), st))) < 1e-12
+        end
+    end
+    p, singlet = collapse(State{Pure}(System(2, Qubit()), ["Up", "Dn"]), Swap(1, 2) => -1)
+    @test p ≈ 0.5
+    @test real(expect(singlet, Swap(1, 2))) ≈ -1
+    bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(2, Qubit()), "Up"))
+    for st in (bell, mix(bell))
+        p, after = collapse(st, 1 => 1)
+        @test p ≈ 0.5
+        @test real(expect(after, Z(2))) ≈ -1
+    end
+    p, sim = collapse(Simulation(bell; time = 3.), 2 => 0)
+    @test p ≈ 0.5
+    @test sim.time == 3.
+    up = State{Pure}(System(2, Qubit()), "Up")
+    @test_throws "0.5 is not a result of measuring X(1)" collapse(plus, X(1) => 0.5)
+    @test_throws "of probability" collapse(up, Z(1) => -1)
+    @test_throws "is not a result" collapse(up, 1 => 2)
+    @test_throws "which the state does not have" collapse(up, 3 => 0)
+end
+
 @testset "Measuring a product of involutions" begin
     # measured by its mean value on any number of sites, it agrees with the matrix of the
     # operator on a few, and its projection, the state plus its image, with (1 + sP)/2

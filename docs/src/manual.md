@@ -568,6 +568,14 @@ myparity, mypair = collapse(mytwo, Z(1) * Z(2))
 myparity, measure(mypair, X(1)X(2))
 ```
 
+Given the result, `collapse(state, op => λ)` returns its probability and the state projected
+onto it, which post-selects it:
+
+```@example manual
+myprob, mypair = collapse(mytwo, Z(1) * Z(2) => -1)
+myprob, measure(mypair, [Z(1)Z(2), X(1)X(2)])
+```
+
 For more details see the reference or the inline help.
 
 ## Checking the accuracy
