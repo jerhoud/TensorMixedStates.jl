@@ -17,34 +17,22 @@ on the page "Extending TMS", are experimental and may still change in a version 
 
 ### Added
 
-- `compact`, which writes an operator so that its MPO has the least bond dimension a
-  triangular MPO can have, its terms gathered into coms printed `com(sites,linkdims)`: on
-  `sum(Z(i)Z(j) for i in 1:39 for j in i+1:40)` the bond dimension goes from 402 to 3.
+- `compact`, which writes an operator so that its MPO has the least bond dimension.
 - `a ≈ b` for two operators placed on sites.
 - `⊗` of superoperators, for channels of several sites, as
   `SetState("FullyMixed") ⊗ SetState("FullyMixed")`.
-- `relaxing_gate(p, n, state)` and `relaxing_dissipator(γ, n, state)`, the relaxation of `n`
-  sites of any type towards `state`, or towards a state per site, and its Lindblad generator,
-  and `depolarizing_gate(p, n)` and `depolarizing_dissipator(γ, n)`, towards `"FullyMixed"`.
-- `amplitude_damping_gate(p)` and `thermal_relaxation_gate(T1, T2, t)` for qubits, the decay
-  of an excitation and the relaxation of times T1 and T2, with their Lindblad generators
-  `amplitude_damping_dissipator(γ)` and `thermal_relaxation_dissipator(T1, T2)`.
-- `reduced_density_matrix(state, positions)`, the density matrix of a few sites,
-  `vonneumann_entropy(state, positions)` and `log_negativity(state, a, b)`, with the
-  measurements `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`.
-- `Basis`, the operator numbering the basis states of a site, `diag(0, 1, …, d - 1)`, on every
-  site type: `Dephase()` is `Dephase(Basis)`.
-- `Proj(A => λ)`, the projector on the eigenspace of eigenvalue `λ` of `A`.
-- `probabilities(state, op)`, `sample(state, op)` and `collapse(state, op)`, the measurement of
-  a Hermitian operator placed on a few sites, or on any number of sites of a product of
-  involutions, as a string of Pauli operators, or of a sum of operators of one site with half
-  integer eigenvalues, as the number of particles of a region: its eigenvalues with their
-  probabilities, one of them drawn, or one drawn with the state projected onto it; given a site
-  `pos` in place of `op`, `probabilities` and `collapse` measure it in its basis.
+- `relaxing_gate` and `relaxing_dissipator`, the relaxation of sites towards a state, and
+  `depolarizing_gate` and `depolarizing_dissipator`.
+- `amplitude_damping_gate` and `thermal_relaxation_gate` for qubits, with their dissipators.
+- `reduced_density_matrix`, `vonneumann_entropy` and `log_negativity` of a few sites, with
+  their measurements.
+- `Basis`, the operator numbering the basis states of any site.
+- `Proj(A => λ)`, the projector on an eigenspace of `A`.
+- `probabilities`, `sample(state, op)` and `collapse`, the measurement of a site or of an
+  operator placed on sites.
 - `SetState` takes the number of a basis state, as `Proj` and `State` do.
-- `Dephase(A)`, the measurement of `A` whose result is not read, and `dephasing_gate(p, A)` and
-  `dephasing_dissipator(γ, A)`, the dephasing channel in the eigenbasis of `A`, or in the basis
-  of the site, and its Lindblad generator.
+- `Dephase(A)`, the measurement of `A` whose result is not read, with `dephasing_gate` and
+  `dephasing_dissipator`.
 - `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
   `steady_state`, `Tdvp`, `GroundState` and `SteadyState` take as `krylov`.
 - `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or
