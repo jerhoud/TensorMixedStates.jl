@@ -32,8 +32,8 @@ include("Simplify.jl")
 include("Compact.jl")
 
 # Low Level interface
-include("Gates.jl")
 include("Mpo.jl")
+include("Gates.jl")
 include("Observables.jl")
 include("Measure.jl")
 include("RandomState.jl")

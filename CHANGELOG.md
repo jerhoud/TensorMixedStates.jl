@@ -167,6 +167,8 @@ Performance:
 
 Results that were wrong without a message:
 
+- `Reset`, on a fermionic site with fermionic sites on its left, changed the sign of the
+  correlations across it, or erased them: it lacked their Jordan-Wigner strings.
 - A projector on a fermionic site needs a state of definite parity: a named one was taken as
   even whatever its parity, and one on a vector of no definite parity was placed without
   string.

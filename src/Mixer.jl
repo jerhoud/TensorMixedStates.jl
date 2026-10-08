@@ -565,6 +565,12 @@ end
 function matrix(a::Reset, site::AbstractSite)
     v = state(site, a.state)
     m = v isa Matrix ? v : v * v'
+    # the strings of `strung_resets` hold for a state with no coherence between the parities
+    f = matrix(F, site)
+    if f != I && !nearly(f * m * f, m)
+        error("$(repr(a.state)) mixes the two fermionic parities on $site, which a Reset of a " *
+              "fermionic site does not allow")
+    end
     return vec(m) * transpose(vec(identity_operator(site)))
 end
 

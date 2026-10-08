@@ -157,6 +157,97 @@ adapt_representation(::Type{R}, a::Vector) where R = map(x -> adapt_representati
 adapt_representation(::Type{R}, a) where R = a
 
 """
+    odd_sites(system)
+
+for each site of `system`, whether it is fermionic, its `F` not being the identity
+"""
+odd_sites(sys::System) = [ matrix(F, sys[i]) != I for i in 1:length(sys) ]
+
+"""
+    strung_resets(frame, odd, op)
+
+the operator `op` with each operator placed on sites that holds a `Reset` replaced by
+`frame(x, odd)`, `odd` telling which sites are fermionic, see `odd_sites`: the matrix of a
+`Reset` is laid on its site alone, without the Jordan-Wigner strings of the fermionic sites on
+its left that a change of parity takes. A product or a tensor product holding a `Reset` is
+split into its factors first. An operator holding both a `Reset` and a fermionic operator,
+whose strings `simplify` would add to those of the frame, is refused, and so is a com, which
+has no room for a string.
+"""
+strung_resets(frame, odd, a::Vector) = [ strung_resets(frame, odd, x) for x in a ]
+strung_resets(frame, odd, a::SumOp{R, Indexed, 1}) where R =
+    SumOp(IndexedOp{R}[ strung_resets(frame, odd, x) for x in a.subs ])
+strung_resets(frame, odd, a::ProdOp{R, Indexed, 1}) where R =
+    ProdOp(IndexedOp{R}[ strung_resets(frame, odd, x) for x in a.subs ])
+strung_resets(frame, odd, a::ScalarOp{R, Indexed, 1}) where R =
+    a.coef * strung_resets(frame, odd, a.arg)
+
+function strung_resets(frame, odd, a::AtIndex{R}) where R
+    if !hasreset(a.op)
+        return a
+    elseif a.op isa TensorOp
+        factors = IndexedOp{R}[ o(a.index[p]...)
+                                for (o, p) in zip(a.op.subs, factor_sites(a.op)) ]
+        return strung_resets(frame, odd, ProdOp(factors))
+    elseif a.op isa ProdOp
+        return strung_resets(frame, odd, ProdOp(IndexedOp{R}[ o(a.index...) for o in a.op.subs ]))
+    elseif hasfermionic(a.op)
+        error("cannot place $a on fermionic sites: it holds a Reset and a fermionic operator, " *
+              "whose Jordan-Wigner strings differ")
+    end
+    return frame(a, odd)
+end
+
+function strung_resets(frame, odd, a::ComOp)
+    for (j, pieces) in enumerate(a.pieces)
+        k = a.start + j - 1
+        if odd[k] && any(odd[1:k-1]) && any(p -> hasreset(p[3]), pieces)
+            error("a Reset on a fermionic site cannot be laid from an operator gathered by " *
+                  "compact: give the operator before compact")
+        end
+    end
+    return a
+end
+
+strung_resets(frame, odd, a) = a
+
+"""
+    needs_strings(a, odd)
+
+whether the operator `a`, placed on sites, has a fermionic site with fermionic sites on its
+left outside it, `odd` telling which sites are fermionic, see `odd_sites`
+"""
+needs_strings(a::AtIndex, odd) =
+    any(s -> odd[s] && any(l -> odd[l] && l ∉ a.index, 1:s-1), a.index)
+
+"""
+    parity_parts(a, odd)
+
+the operator `a`, holding a `Reset` and placed on a fermionic site `i` with fermionic sites on
+its left, written `A(i) + S * B(i)`, `A` and `B` the parts of `a` that keep and that change the
+parity of the site, and `S` the string `Left(F) * Right(F)` of the sites before `i`, see
+`strung_resets`. A sum of several sites is split into its terms, any other operator of several
+sites being left to `compact_simplified`, which refuses it.
+"""
+function parity_parts(a::AtIndex{Mixed, N}, odd) where N
+    if N > 1
+        if a.op isa SumOp
+            terms = IndexedOp{Mixed}[ o(a.index...) for o in a.op.subs ]
+            return strung_resets(parity_parts, odd, SumOp(terms))
+        end
+        return a
+    end
+    if !needs_strings(a, odd)
+        return a
+    end
+    i = only(a.index)
+    flipped = Left(F) * a.op * Left(F)
+    keeping = ((a.op + flipped) / 2)(i)
+    changing = ((a.op - flipped) / 2)(i)
+    return keeping + Multi_F{Mixed}(1, i - 1, true, true) * changing
+end
+
+"""
     PreMPO(::State, op)
 
 the operator `op` prepared for the representation of the state, to be turned into an MPO by
@@ -179,7 +270,12 @@ function PreMPO(state::State{R}, a) where R
     # before `simplify`, so that a message names the operator as written
     check_indices(state.system, a)
     n = a isa Vector ? length(a) : 1
-    s = removeMulti(simplify(adapt_representation(R, a)))
+    b = adapt_representation(R, a)
+    odd = odd_sites(state.system)
+    if any(odd) && any(hasreset, b isa Vector ? b : [b])
+        b = strung_resets(parity_parts, odd, b)
+    end
+    s = removeMulti(simplify(b))
     gather(x) = compact_simplified(x, rounding_tol, "an MPO")
     return PreMPO!(PreMPO{R}(state.system, n), s isa Vector ? map(gather, s) : gather(s))
 end

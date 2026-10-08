@@ -1040,7 +1040,8 @@ counted from 0, its vector or its density matrix: ``\\rho \\mapsto \\sigma \\oti
 the density matrix of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a
 matrix is taken as it is, without normalization, as for `Proj`. It acts on mixed states only,
 and is refused on a site conserving something strongly, which it does not preserve: `weaken`
-the state first.
+the state first. On a fermionic site, the other sites keep their correlations, fermionic signs
+included, and `state` must not mix the two parities.
 
 # Examples
 
@@ -1603,6 +1604,36 @@ function hasfermionic(a::Op)
     end
     return false
 end
+
+"""
+    holds(pred, op)
+
+whether `op`, or an operator it holds wherever it sits, satisfies `pred`
+"""
+function holds(pred, a::Op)
+    if pred(a)
+        return true
+    end
+    for f in fieldnames(typeof(a))
+        x = getfield(a, f)
+        if x isa Op && holds(pred, x)
+            return true
+        elseif x isa Vector && any(y -> y isa Op && holds(pred, y), x)
+            return true
+        end
+    end
+    return false
+end
+
+# the entries of a com are kept in tuples
+holds(pred, a::ComOp) = pred(a) || any(p -> holds(pred, p[3]), Iterators.flatten(a.pieces))
+
+"""
+    hasreset(op)
+
+whether an operator holds a `Reset`, wherever it sits
+"""
+hasreset(a::Op) = holds(x -> x isa Reset, a)
 
 """
     exp(::GenericOp)

@@ -15,56 +15,6 @@ function check_apply_algo(apply_algo::String)
 end
 
 """
-    apply(op, ::State; limits::Limits)
-    apply(mpo, ::State; limits::Limits, apply_algo)
-    apply(op, ::Simulation; limits::Limits)
-
-the state, or the simulation, with the gates `op`, or the MPO `mpo`, from `make_mpo`, applied.
-A product of gates acts as the operator it denotes, its rightmost factor first; applying all
-the gates in a single call is much more efficient. A pure gate `A` applied to a mixed state
-acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: on a pure state,
-apply its MPO, `make_mpo(state, op)`, instead; on a mixed state that MPO is not a gate.
-
-- `limits`: the truncation of each gate of several sites, on the bonds it spans or crosses,
-  the other bonds and the gates of one site being left untouched, or of the whole result for
-  an MPO (default `Limits()`)
-- `apply_algo`: for an MPO, the algorithm of its product with the state, `"densitymatrix"`
-  (default) or `"naive"`
-
-# Examples
-
-    apply(controlled(Z)(1, 3) * H(2) * controlled(X)(3, 4), state)
-"""
-function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
-    # before any rewriting, so that a site out of the system is named as the caller wrote it
-    check_indices(state.system, a)
-    # prepared first: build_gate distributes over the product removeMulti leaves, down to the
-    # one site factors it knows how to lift
-    return apply(build_gate(prepare_gate(a)), state; kwargs...)
-end
-
-apply(a::IndexedOp{Mixed}, ::State{Pure}; kwargs...) =
-    error("$a acts on a density matrix, which a pure state is not: apply it to mix(state)")
-
-function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
-    check_indices(state.system, a)
-    coef, ops = make_ops(state.system, prepare_gate(a))
-    # ITensorMPS applies a list of gates first to last, and the factors of a product act
-    # right to left: A*B is B applied first
-    st = apply(reverse(ops), state.state; move_sites_back_between_gates=false,
-            limits.cutoff, limits.maxdim, limits.mindim)
-    # the coefficient is carried apart: a gate made only of identities places no tensor
-    return State(state, coef == 1 ? st : coef * st)
-end
-
-function apply(mpo::MPO, state::State; limits::Limits=Limits(),
-               apply_algo::String = "densitymatrix")
-    check_apply_algo(apply_algo)
-    return State(state, apply(mpo, state.state; alg = apply_algo, limits.cutoff, limits.maxdim,
-                              limits.mindim))
-end
-    
-"""
     parity_sign
 
 the gate ``(-1)^{p_1 p_2}`` of two sites, `p` being the fermionic parity of a site, which gives
@@ -271,3 +221,90 @@ make_ops(s::System, a::AtIndex) = (1, [ tensor(s, a) ])
 # a factor that contributes no tensor must not leave the gate list untyped: ITensorMPS.product
 # has no method for a Vector{Any}
 make_ops(::System, ::IdentityOp) = (1, ITensor[])
+
+"""
+    apply_gates(op, state, limits)
+
+the state with the gates `op` applied, see `apply`, a `Reset` being laid without strings
+"""
+function apply_gates(a::IndexedOp{R}, state::State{R}, limits::Limits) where R
+    coef, ops = make_ops(state.system, prepare_gate(a))
+    # ITensorMPS applies a list of gates first to last, and the factors of a product act
+    # right to left: A*B is B applied first
+    st = apply(reverse(ops), state.state; move_sites_back_between_gates=false,
+            limits.cutoff, limits.maxdim, limits.mindim)
+    # the coefficient is carried apart: a gate made only of identities places no tensor
+    return State(state, coef == 1 ? st : coef * st)
+end
+
+"""
+    apply(op, ::State; limits::Limits)
+    apply(mpo, ::State; limits::Limits, apply_algo)
+    apply(op, ::Simulation; limits::Limits)
+
+the state, or the simulation, with the gates `op`, or the MPO `mpo`, from `make_mpo`, applied.
+A product of gates acts as the operator it denotes, its rightmost factor first; applying all
+the gates in a single call is much more efficient. A pure gate `A` applied to a mixed state
+acts as ``\\rho \\mapsto A \\rho A^\\dagger``, see `Gate`. A sum is refused: on a pure state,
+apply its MPO, `make_mpo(state, op)`, instead; on a mixed state that MPO is not a gate.
+
+- `limits`: the truncation of each gate of several sites, on the bonds it spans or crosses,
+  the other bonds and the gates of one site being left untouched, or of the whole result for
+  an MPO and for a `Reset` of a fermionic site, which is applied as its MPO (default
+  `Limits()`)
+- `apply_algo`: for an MPO, the algorithm of its product with the state, `"densitymatrix"`
+  (default) or `"naive"`
+
+# Examples
+
+    apply(controlled(Z)(1, 3) * H(2) * controlled(X)(3, 4), state)
+"""
+function apply(mpo::MPO, state::State; limits::Limits=Limits(),
+               apply_algo::String = "densitymatrix")
+    check_apply_algo(apply_algo)
+    return State(state, apply(mpo, state.state; alg = apply_algo, limits.cutoff, limits.maxdim,
+                              limits.mindim))
+end
+
+apply(a::IndexedOp{Mixed}, ::State{Pure}; kwargs...) =
+    error("$a acts on a density matrix, which a pure state is not: apply it to mix(state)")
+
+function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
+    check_indices(state.system, a)
+    odd = odd_sites(state.system)
+    if !any(odd) || !hasreset(a)
+        return apply_gates(a, state, limits)
+    end
+    # a Reset that needs strings is applied as its MPO, see `parity_parts`, the gates between
+    # as gates, right to left
+    b = strung_resets((x, _) -> x, odd, a)
+    st = state
+    pending = IndexedOp{R}[]
+    for x in reverse(prodsubs(b))
+        if !(x isa AtIndex && hasreset(x.op) && needs_strings(x, odd))
+            pushfirst!(pending, x)
+            continue
+        end
+        if length(x.index) > 1 && !(x.op isa SumOp)
+            error("cannot apply $x: a Reset in a function of several sites cannot take the " *
+                  "Jordan-Wigner strings of the fermionic sites on its left")
+        end
+        if !isempty(pending)
+            st = apply_gates(ProdOp(pending), st, limits)
+            empty!(pending)
+        end
+        st = apply(make_mpo(st, x), st; limits)
+    end
+    if !isempty(pending)
+        st = apply_gates(ProdOp(pending), st, limits)
+    end
+    return scalarcoef(b) == 1 ? st : scalarcoef(b) * st
+end
+
+function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
+    # before any rewriting, so that a site out of the system is named as the caller wrote it
+    check_indices(state.system, a)
+    # prepared first: build_gate distributes over the product removeMulti leaves, down to the
+    # one site factors it knows how to lift
+    return apply(build_gate(prepare_gate(a)), state; kwargs...)
+end

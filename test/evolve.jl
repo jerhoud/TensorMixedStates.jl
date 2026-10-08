@@ -730,6 +730,63 @@ end
     @test depolarizing_gate(p, 2) == reset_gate(p, 2, "FullyMixed")
 end
 
+@testset "Reset on fermions" begin
+    # the reset of a fermionic site keeps the correlations of the other sites across it, which
+    # its matrix, laid with no Jordan-Wigner string, changed: compared with its Kraus operators,
+    # whose strings simplify inserts
+    kraus = Dict("Emp" => [(1, Gate(Id - N)), (1, Gate(C))],
+                 "Occ" => [(1, Gate(N)), (1, Gate(dag(C)))],
+                 "FullyMixed" => [(0.5, Gate(Id - N)), (0.5, Gate(C)), (0.5, Gate(N)),
+                                  (0.5, Gate(dag(C)))])
+    exact(s, i, ρ) = sum(c * apply(g(i), ρ) for (c, g) in kraus[s])
+    q, γ, t = 0.3, 0.7, 0.5
+    sys = System(4, Fermion())
+    configs = [ collect(v) for v in Iterators.product(fill(["Emp", "Occ"], 4)...) ]
+    function sector(k)
+        s = sum(randn(ComplexF64) * State{Pure}(sys, v) for v in configs if count(==("Occ"), v) == k)
+        return s / norm(s)
+    end
+    ρ = 0.7 * mix(sector(2)) + 0.3 * mix(sector(1))
+    for s in ["Emp", "Occ", "FullyMixed"], i in 1:4
+        @test norm(apply(Reset(s)(i), ρ) - exact(s, i, ρ)) < 1e-12
+    end
+    @test norm(apply(reset_gate(q, "Occ")(3), ρ) - ((1 - q) * ρ + q * exact("Occ", 3, ρ))) < 1e-12
+    @test norm(apply(depolarizing_gate(q, 2)(2, 4), ρ) -
+               ((1 - q) * ρ + q * exact("FullyMixed", 2, exact("FullyMixed", 4, ρ)))) < 1e-12
+    @test norm(apply((Reset("Occ") ⊗ Reset("Emp"))(3, 2), ρ) -
+               exact("Emp", 2, exact("Occ", 3, ρ))) < 1e-12
+    @test norm(apply(Gate(C)(1) * Reset("Occ")(3), ρ) - apply(Gate(C)(1), exact("Occ", 3, ρ))) <
+          1e-12
+    @test norm(apply(exp(t * reset_dissipator(γ, "Emp"))(3), ρ) -
+               apply(reset_gate(1 - exp(-γ * t), "Emp")(3), ρ)) < 1e-12
+    # the generator, through its MPO, against the channel
+    for (generator, channel) in
+            [(reset_dissipator(γ, "Occ")(2), reset_gate(1 - exp(-γ * t), "Occ")(2)),
+             (depolarizing_dissipator(γ, 2)(2, 4), depolarizing_gate(1 - exp(-γ * t), 2)(2, 4))]
+        evolved = tdvp(generator, t, ρ; nsteps = 20, limits = Limits(maxdim = 100))
+        @test norm(evolved - apply(channel, ρ)) < 1e-10
+    end
+    # a qubit between the fermions takes no sign
+    mixed_sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
+    m = mix((State{Pure}(mixed_sys, ["Occ", "Up", "Occ", "Emp"]) +
+             State{Pure}(mixed_sys, ["Emp", "Dn", "Occ", "Occ"])) / sqrt(2))
+    @test norm(apply(Reset("Emp")(3), m) - exact("Emp", 3, m)) < 1e-12
+    # on an Electron, whose parity is that of both spins: the other sites keep their state
+    esys = System(3, Electron())
+    e = mix((State{Pure}(esys, ["Up", "Up", "Emp"]) + State{Pure}(esys, ["Emp", "Up", "Up"])) /
+            sqrt(2))
+    @test norm(partial_trace(apply(Reset("Emp")(2), e), [2]) - partial_trace(e, [2])) < 1e-12
+    evolved = tdvp(reset_dissipator(γ, "Dn")(2), t, e; nsteps = 20, limits = Limits(maxdim = 100))
+    @test norm(partial_trace(evolved, [2]) - partial_trace(e, [2])) < 1e-10
+    @test_throws "mixes the two fermionic parities" apply(Reset([1., 1.] / sqrt(2))(2), ρ)
+    @test_throws "holds a Reset and a fermionic operator" apply((0.5 * Gate(C) +
+                                                                 0.5 * Reset("Emp"))(2), ρ)
+    @test_throws "a Reset in a function of several sites" apply(
+        exp(t * reset_dissipator(γ, 2, "Emp"))(2, 4), ρ)
+    @test_throws "give the operator before compact" make_mpo(ρ, compact(
+        reset_dissipator(γ, 2, "Emp")(2, 4)))
+end
+
 @testset "Qubit decay and relaxation" begin
     # the decay goes from "Dn", the excitation N counts, to "Up", the coherences keeping
     # sqrt(1 - p); the relaxation of times T1 and T2 is that decay and a dephasing, which
