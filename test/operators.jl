@@ -123,12 +123,12 @@ end
     @test matrix(simplify(Proj(1) + Proj("Up")), Qubit()) ≈ identity_operator(2)
     @test isless(Evolver(X(1)), Evolver(Y(1)))
     @test !isless(Evolver(Y(1)), Evolver(X(1)))
-    # a SetState holds a number, a name, a vector or a matrix, and two of them have to be
+    # a Reset holds a number, a name, a vector or a matrix, and two of them have to be
     # ordered whatever they hold: there is no order between those types, nor between two matrices
-    @test isless(SetState("Dn"), SetState("Up"))
-    @test length(sort([SetState("Up"), SetState([1., 0.]), SetState("Dn"),
-                       SetState([1. 0. ; 0. 0.]), SetState(1)])) == 5
-    @test matrix(SetState(1), Qubit()) == matrix(SetState("Dn"), Qubit())
+    @test isless(Reset("Dn"), Reset("Up"))
+    @test length(sort([Reset("Up"), Reset([1., 0.]), Reset("Dn"),
+                       Reset([1. 0. ; 0. 0.]), Reset(1)])) == 5
+    @test matrix(Reset(1), Qubit()) == matrix(Reset("Dn"), Qubit())
     # the ranking puts the types in the order it declares
     @test isless(Id, X)                     # Identity before Operator
     @test isless(X(1), Gate(X)(1))          # AtIndex before Gate
@@ -351,7 +351,7 @@ end
     # charges sort its sectors, and an operator on several charged sites not at all
     strong = TensorMixedStates.strong
     f, fq, fs = Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N))
-    for op in (Left(C), Right(C), Gate(C), Dissipator(C), SetState("Occ"))
+    for op in (Left(C), Right(C), Gate(C), Dissipator(C), Reset("Occ"))
         @test matrix(op, fq) == matrix(op, f)
         @test matrix(op, fs) == matrix(op, f)
     end
@@ -811,13 +811,13 @@ end
     @test length(Set([a, b])) == 1
     @test isequal(((X + Z)^complex(-0.0, 0.5)).expo, 0.5im)
     # and so in every number an operator stores: the matrix of an Operator, the state of a
-    # Proj or of a SetState
+    # Proj or of a Reset
     m(x) = Operator{1}("M", [1.0 x; 0.0 1.0], plain_op)
     @test hash(m(-0.0)) == hash(m(0.0))
     p, q = Proj([1.0, -0.0]), Proj([1.0, 0.0])
     @test hash(p) == hash(q)
     @test !(isless(p, q) || isless(q, p))
-    @test hash(SetState([1.0 -0.0; 0.0 0.0])) == hash(SetState([1.0 0.0; 0.0 0.0]))
+    @test hash(Reset([1.0 -0.0; 0.0 0.0])) == hash(Reset([1.0 0.0; 0.0 0.0]))
     # a projector is ordered by its values, which tie where `==` holds: its printed form told
     # [1, 0] and [1.0, 0.0] apart, and [1, 1] sorted between the two
     g(v) = exp(im * Proj(v) ⊗ X)(1, 2)

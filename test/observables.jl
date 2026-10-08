@@ -1356,7 +1356,7 @@ end
     both(s -> mutual_info_renyi2(mix(s), 2))
     both(s -> trace(apply(Gate(F)(1), mix(s))))
     both(s -> trace(apply(Dissipator(N)(2), mix(s))))
-    both(s -> expect(apply(SetState("Occ")(2), mix(s)), N(2)))
+    both(s -> expect(apply(Reset("Occ")(2), mix(s)), N(2)))
 end
 
 @testset "A mixed state built without going through mix" begin

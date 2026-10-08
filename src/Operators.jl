@@ -4,8 +4,8 @@
 
 export Pure, Mixed, GenericOp, IndexedOp, SimpleOp
 export OpType, plain_op, fermionic_op, selfadjoint_op, involution_op
-export Op, Operator, Id, F, Proj, Basis, Gate, Dissipator, Evolver, Left, Right, SetState, Dephase
-export relaxing_dissipator, relaxing_gate, depolarizing_dissipator, depolarizing_gate
+export Op, Operator, Id, F, Proj, Basis, Gate, Dissipator, Evolver, Left, Right, Reset, Dephase
+export reset_dissipator, reset_gate, depolarizing_dissipator, depolarizing_gate
 export dephasing_dissipator, dephasing_gate
 export named, parity
 export dag, ⊗, isfermionic, hasfermionic, map_sites
@@ -231,7 +231,7 @@ no_signed_zero(x) = x
 """
     state_key(state)
 
-the key a `Proj` or a `SetState` is ordered by, total, complex numbers included, and tying
+the key a `Proj` or a `Reset` is ordered by, total, complex numbers included, and tying
 exactly when the states are `==`
 """
 state_key(x::Int) = (1, x)
@@ -593,7 +593,7 @@ product.
 
     mycontrolled(op) = Proj("Up") ⊗ Id + Proj("Dn") ⊗ op     # op of one site
     Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
-    FM = SetState("FullyMixed")
+    FM = Reset("FullyMixed")
     depolarizing2(p) = (1 - p) * Gate(Id ⊗ Id) + p * (FM ⊗ FM)
 
 """
@@ -1030,10 +1030,10 @@ show(io::IO, a::Gate) =
 isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
 
 
-# SetState
+# Reset
 
 """
-    SetState(state)
+    Reset(state)
 
 the superoperator resetting a site to `state`, given by its name, the number of a basis state
 counted from 0, its vector or its density matrix: ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, where ``\\sigma`` is
@@ -1044,16 +1044,16 @@ the state first.
 
 # Examples
 
-    SetState("Up")(3)
-    SetState(0)(3)
-    SetState([0.3 0. ; 0. 0.7])(3)
+    Reset("Up")(3)
+    Reset(0)(3)
+    Reset([0.3 0. ; 0. 0.7])(3)
 """
-struct SetState <: GenericOp{Mixed, 1}
+struct Reset <: GenericOp{Mixed, 1}
     state::Union{Int, String, Vector, Matrix}
-    SetState(state::Union{Int, String, Vector, Matrix}) = new(no_signed_zero(state))
+    Reset(state::Union{Int, String, Vector, Matrix}) = new(no_signed_zero(state))
 end
 
-isless(a::SetState, b::SetState) = isless(state_key(a.state), state_key(b.state))
+isless(a::Reset, b::Reset) = isless(state_key(a.state), state_key(b.state))
 
 
 # Dephase
@@ -1093,7 +1093,7 @@ show(io::IO, a::Dephase) =
 isless(a::Dephase, b::Dephase) = isless(a.arg, b.arg)
 
 
-# Relaxation
+# Resetting
 
 """
     tensor_power(a, n)
@@ -1109,48 +1109,48 @@ tensor_power(a::GenericOp, n::Int) = reduce(⊗, fill(a, n))
 the number of sites and the superoperator resetting them, to `state` each or to a state per
 site, a vector of numbers being the amplitudes of a single state, as for `State`
 """
-resets(n::Int, state) = (n, tensor_power(SetState(state), n))
+resets(n::Int, state) = (n, tensor_power(Reset(state), n))
 resets(state) = resets(1, state)
-resets(states::Vector) = (length(states), reduce(⊗, [ SetState(s) for s in states ]))
+resets(states::Vector) = (length(states), reduce(⊗, [ Reset(s) for s in states ]))
 resets(states::Vector{<:Number}) = resets(1, states)
 
 """
-    relaxing_dissipator(γ, state)
-    relaxing_dissipator(γ, n, state)
-    relaxing_dissipator(γ, [state1, state2, ...])
+    reset_dissipator(γ, state)
+    reset_dissipator(γ, n, state)
+    reset_dissipator(γ, [state1, state2, ...])
 
-the Lindblad generator relaxing a site, `n` sites, or as many sites as states, at rate `γ`
-towards `state`, or towards a state per site, for an evolver, on sites of any type:
-``\\gamma\\,(\\sigma \\otimes \\mathrm{tr}_S(\\rho) - \\rho)``, see `SetState`, the sites
-relaxing together. A state is given as for `SetState`, and a vector of numbers is the amplitudes
-of a single state. Evolving under it for a time `t` is `relaxing_gate(1 - exp(-γt), ...)`. It is
+the Lindblad generator resetting a site, `n` sites, or as many sites as states, at rate `γ`
+to `state`, or to a state per site, for an evolver, on sites of any type:
+``\\gamma\\,(\\sigma \\otimes \\mathrm{tr}_S(\\rho) - \\rho)``, see `Reset`, the sites
+being reset together. A state is given as for `Reset`, and a vector of numbers is the amplitudes
+of a single state. Evolving under it for a time `t` is `reset_gate(1 - exp(-γt), ...)`. It is
 refused on sites conserving something strongly.
 
 # Examples
 
-    evolver = -im * H + sum(relaxing_dissipator(0.1, "Up")(i) for i in 1:10)
+    evolver = -im * H + sum(reset_dissipator(0.1, "Up")(i) for i in 1:10)
 """
-function relaxing_dissipator(γ::Real, s...)
+function reset_dissipator(γ::Real, s...)
     n, r = resets(s...)
     return γ * (r - Gate(tensor_power(Id, n)))
 end
 
 """
-    relaxing_gate(p, state)
-    relaxing_gate(p, n, state)
-    relaxing_gate(p, [state1, state2, ...])
+    reset_gate(p, state)
+    reset_gate(p, n, state)
+    reset_gate(p, [state1, state2, ...])
 
-the channel relaxing a site, `n` sites, or as many sites as states, with probability `p` towards
-`state`, or towards a state per site, for a gate, on sites of any type, the sites relaxing
-together: ``(1 - p)\\,\\rho + p\\,\\sigma \\otimes \\mathrm{tr}_S(\\rho)``, the reset of
-`SetState` taking place with probability `p`. It is `Gate(Id) + relaxing_dissipator(p, ...)`.
+the channel resetting a site, `n` sites, or as many sites as states, with probability `p` to
+`state`, or to a state per site, for a gate, on sites of any type, the sites being reset
+together: ``(1 - p)\\,\\rho + p\\,\\sigma \\otimes \\mathrm{tr}_S(\\rho)``, `Reset` taking
+place with probability `p`. It is `Gate(Id) + reset_dissipator(p, ...)`.
 
 # Examples
 
-    relaxing_gate(0.1, "Up")(3)
-    relaxing_gate(0.1, ["Up", "Dn"])(1, 2)
+    reset_gate(0.1, "Up")(3)
+    reset_gate(0.1, ["Up", "Dn"])(1, 2)
 """
-function relaxing_gate(p::Real, s...)
+function reset_gate(p::Real, s...)
     n, r = resets(s...)
     return (1 - p) * Gate(tensor_power(Id, n)) + p * r
 end
@@ -1159,7 +1159,7 @@ end
     depolarizing_dissipator(γ, n = 1)
 
 the Lindblad generator depolarizing `n` sites together at rate `γ`, for an evolver:
-`relaxing_dissipator(γ, n, "FullyMixed")`, ``\\rho \\mapsto \\gamma\\,(\\mathrm{tr}_S(\\rho)
+`reset_dissipator(γ, n, "FullyMixed")`, ``\\rho \\mapsto \\gamma\\,(\\mathrm{tr}_S(\\rho)
 \\otimes I/d^n - \\rho)``. Evolving under it for a time `t` is `depolarizing_gate(1 - exp(-γt),
 n)`.
 
@@ -1167,12 +1167,12 @@ n)`.
 
     evolver = -im * H + sum(depolarizing_dissipator(0.1)(i) for i in 1:10)
 """
-depolarizing_dissipator(γ::Real, n::Int = 1) = relaxing_dissipator(γ, n, "FullyMixed")
+depolarizing_dissipator(γ::Real, n::Int = 1) = reset_dissipator(γ, n, "FullyMixed")
 
 """
     depolarizing_gate(p, n = 1)
 
-the channel depolarizing `n` sites together with probability `p`, for a gate: `relaxing_gate(p,
+the channel depolarizing `n` sites together with probability `p`, for a gate: `reset_gate(p,
 n, "FullyMixed")`, ``\\rho \\mapsto (1 - p)\\,\\rho + p\\,\\mathrm{tr}_S(\\rho) \\otimes
 I/d^n``, on a qubit `(1 - 3p/4) * Gate(Id) + p/4 * (Gate(X) + Gate(Y) + Gate(Z))`. Two sites
 depolarized together are not two sites depolarized each on its own, `depolarizing_gate(p) ⊗
@@ -1183,7 +1183,7 @@ depolarizing_gate(p)`.
     Gates(gates = prod(depolarizing_gate(0.01)(i) for i in 1:10))
     apply(depolarizing_gate(0.02, 2)(1, 2) * controlled(Z)(1, 2), ρ)
 """
-depolarizing_gate(p::Real, n::Int = 1) = relaxing_gate(p, n, "FullyMixed")
+depolarizing_gate(p::Real, n::Int = 1) = reset_gate(p, n, "FullyMixed")
 
 
 # Dephasing
@@ -1680,7 +1680,7 @@ ranking(::Dissipator) = 12
 ranking(::Evolver) = 13
 ranking(::Left) = 14
 ranking(::Right) = 15
-ranking(::SetState) = 16
+ranking(::Reset) = 16
 ranking(::Dephase) = 17
 
 ranking(::ScalarOp) = 20

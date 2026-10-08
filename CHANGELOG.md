@@ -20,10 +20,10 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `compact`, which writes an operator so that its MPO has the least bond dimension.
 - `a ≈ b` for two operators placed on sites.
 - `⊗` of superoperators, for channels of several sites, as
-  `SetState("FullyMixed") ⊗ SetState("FullyMixed")`.
+  `Reset("FullyMixed") ⊗ Reset("FullyMixed")`.
 - `exp` of a superoperator, as `exp(t * Dissipator(Sm))`, the channel of its evolution for a
   time `t`.
-- `relaxing_gate` and `relaxing_dissipator`, the relaxation of sites towards a state, and
+- `reset_gate` and `reset_dissipator`, the reset of sites to a state, and
   `depolarizing_gate` and `depolarizing_dissipator`.
 - `amplitude_damping_gate` and `thermal_relaxation_gate` for qubits, with their dissipators.
 - `reduced_density_matrix`, `vonneumann_entropy` and `log_negativity` of a few sites, with
@@ -32,7 +32,7 @@ on the page "Extending TMS", are experimental and may still change in a version 
 - `Proj(A => λ)`, the projector on an eigenspace of `A`, of one site or several.
 - `probabilities`, `sample(state, op)` and `collapse`, the measurement of a site or of an
   operator placed on sites, its result drawn or given.
-- `SetState` takes the number of a basis state, as `Proj` and `State` do.
+- `Reset` takes the number of a basis state, as `Proj` and `State` do.
 - `Dephase(A)`, the measurement of `A`, of one site or several, whose result is not read, with
   `dephasing_gate` and `dephasing_dissipator`.
 - `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
@@ -80,6 +80,7 @@ Renamed, see "Upgrading from 1.x":
 - The fields `measures`, `final_measures` and `measures_period` of the phases and of `SimData`
   are `measurements`, `final_measurements` and `measurements_period`.
 - `log_msg` is `log_message`, and `has_fermionic` is `hasfermionic`.
+- `SetState` is `Reset`.
 - `partial_trace(state, positions; keep = true)` keeps the sites at `positions`, rather than
   `keepers`, and `PartialTrace` takes the same `positions` and `keep` rather than
   `trace_positions` or `keep_positions`.

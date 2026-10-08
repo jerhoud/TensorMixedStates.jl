@@ -24,6 +24,7 @@ start it again with `runTMS(sim_data; restart = true)`.
 | `PartialTrace(keep_positions = p)` | `PartialTrace(positions = p, keep = true)` |
 | `has_fermionic` | `hasfermionic` |
 | `log_msg` | `log_message` |
+| `SetState` | `Reset` |
 
 `dmrg`, `steady_state`, `GroundState` and `SteadyState` keep `nsweeps`: they count sweeps,
 where `tdvp` and `approx_W` count time steps. The phase `Evolve` is given its `duration` and

@@ -58,30 +58,30 @@ TensorMixedStates.dim(::Guarded) = 2
     ],
 ])
 
-@testset "SetState" begin
+@testset "Reset" begin
     sys = System(3, Qubit())
     st = State{Mixed}(sys, ["Dn", "FullyMixed", "+"])  # arbitrary starting local states
 
-    # SetState overwrites the site regardless of its previous (mixed) content
-    st2 = apply(SetState("Up")(1), st)
+    # Reset overwrites the site regardless of its previous (mixed) content
+    st2 = apply(Reset("Up")(1), st)
     @test expect1(st2, Z)[1] ≈ 1
 
-    st3 = apply(SetState("Dn")(2), st)
+    st3 = apply(Reset("Dn")(2), st)
     @test expect1(st3, Z)[2] ≈ -1
 
     # other sites are left untouched
     @test expect1(st3, Z)[[1, 3]] ≈ expect1(st, Z)[[1, 3]]
 
-    # SetState also accepts a named mixed state ("FullyMixed" resolves to a density matrix)
-    st4 = apply(SetState("FullyMixed")(1), st)
+    # Reset also accepts a named mixed state ("FullyMixed" resolves to a density matrix)
+    st4 = apply(Reset("FullyMixed")(1), st)
     @test expect1(st4, Z)[1] ≈ 0 atol=1e-12
 
-    # SetState is trace-preserving
+    # Reset is trace-preserving
     @test trace(st4) ≈ 1
 
-    # SetState also accepts an explicit (mixed) density matrix, not just a named state
+    # Reset also accepts an explicit (mixed) density matrix, not just a named state
     p0 = 0.3
-    st5 = apply(SetState([p0 0. ; 0. 1 - p0])(1), st)
+    st5 = apply(Reset([p0 0. ; 0. 1 - p0])(1), st)
     @test expect1(st5, Z)[1] ≈ 2p0 - 1
     @test trace(st5) ≈ 1
 end
@@ -142,16 +142,16 @@ end
     end
 end
 
-@testset "SetState under a strong symmetry" begin
+@testset "Reset under a strong symmetry" begin
     # resetting a site moves the charge of one side of the density matrix only, which a strong
     # symmetry forbids: it kept the block of charge zero alone, a state of trace zero
     ss = System(2, Fermion(conserve = strong(N)))
     ρs = mix(State{Pure}(ss, ["Occ", "Emp"]))
-    @test_throws "strongly forbids" apply(SetState("Emp")(1), ρs)
-    @test_throws "strongly forbids" make_mpo(ρs, SetState("Emp")(1))
+    @test_throws "strongly forbids" apply(Reset("Emp")(1), ρs)
+    @test_throws "strongly forbids" make_mpo(ρs, Reset("Emp")(1))
     # conserved weakly, it resets the site as it does without charges
     ρw = mix(State{Pure}(System(2, Fermion(conserve = N)), ["Occ", "Emp"]))
-    r = apply(SetState("Emp")(1), ρw)
+    r = apply(Reset("Emp")(1), ρw)
     @test trace(r) ≈ 1
     @test expect(r, N(1)) ≈ 0 atol = 1e-12
 end

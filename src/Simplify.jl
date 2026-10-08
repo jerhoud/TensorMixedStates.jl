@@ -398,7 +398,7 @@ by an expression are replaced by it.
 """
 simplify_ind(a::ScalarOp, index...) = a.coef * simplify_ind(a.arg, index...)
 simplify_ind(a::IdentityOp, index...) = a(index...)
-simplify_ind(a::Union{JW_F, Proj, JW, SetState, Dephase}, index...) = a(index...)
+simplify_ind(a::Union{JW_F, Proj, JW, Reset, Dephase}, index...) = a(index...)
 simplify_ind(a::ExpOp{Pure}, index...) = place_function(a, index...)
 simplify_ind(a::ExpOp{Mixed}, index...) = simplify(a)(index...)
 simplify_ind(a::ModOp, index...) = place_function(a, index...)
@@ -476,7 +476,7 @@ simplify(a::SumOp) = simplify_sum(map(simplify, a.subs))
 simplify(a::TensorOp{R, N}) where {R, N} = TensorOp{R, N}(simplify.(a.subs))
 
 # a com is built by `compact` from simplified terms
-simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, SetState, Dephase, ComOp}) = a
+simplify(a::Union{IdentityOp, JW_F, Proj, JW, Operator, Multi_F, Reset, Dephase, ComOp}) = a
 
 simplify(a::Union{IntPowOp, GenPowOp}) = power(simplify(a.arg), a.expo)
 simplify(a::ExpOp) = simplify_exp(simplify(a.arg))

@@ -662,7 +662,7 @@ end
     # `(A ⊗ B)(i, j)` is `A(i) * B(j)` for superoperators too, an operator on pure states being
     # its gate, so that a channel of several sites is written once and placed anywhere
     p = 0.4
-    FM = SetState("FullyMixed")
+    FM = Reset("FullyMixed")
     paulis = (Id, X, Y, Z)
     depolarizing2 = (1 - p) * Gate(Id ⊗ Id) + p * (FM ⊗ FM)
     pauli_form = (1 - p) * Gate(Id ⊗ Id) + p / 16 * sum(Gate(a ⊗ b) for a in paulis for b in paulis)
@@ -673,14 +673,14 @@ end
     end
     @test norm(apply(make_mpo(ρ, depolarizing2(1, 3)), ρ) - apply(depolarizing2(1, 3), ρ)) < 1e-12
     @test X ⊗ FM == Gate(X) ⊗ FM
-    @test norm(apply((X ⊗ SetState("Up"))(1, 3), ρ) - apply(Gate(X)(1) * SetState("Up")(3), ρ)) <
+    @test norm(apply((X ⊗ Reset("Up"))(1, 3), ρ) - apply(Gate(X)(1) * Reset("Up")(3), ρ)) <
           1e-12
     w = mix(State{Pure}(System(3, Qubit(conserve = N)), ["Up", "Dn", "Up"]))
     @test norm(apply((Gate(Sp) ⊗ Gate(Sm))(2, 3), w) - apply(Gate(Sp)(2) * Gate(Sm)(3), w)) < 1e-12
     # on fermions, the strings are inserted factor by factor, in either order of the sites
     f = mix(RandomState{Pure}(System(4, Fermion()), 4))
     for (g, s) in [(Gate(C) ⊗ Gate(dag(C)), (1, 3)), (Gate(C) ⊗ Gate(dag(C)), (3, 1)),
-                   (FM ⊗ FM, (1, 3)), (C ⊗ SetState("Emp"), (1, 3))]
+                   (FM ⊗ FM, (1, 3)), (C ⊗ Reset("Emp"), (1, 3))]
         ref = apply(prod(o(i) for (o, i) in zip((g.subs...,), s)), f)
         @test norm(apply(g(s...), f) - ref) < 1e-12
     end
@@ -709,26 +709,25 @@ end
                                                         State{Mixed}(strong_sys, "Up"))
 end
 
-@testset "Relaxation" begin
-    # the reset of SetState with probability p, towards a state, n times the same state or a
-    # state per site, and its generator, whose evolution for a time t is the channel of
-    # probability 1 - exp(-γt)
+@testset "Reset channels" begin
+    # Reset with probability p, to a state, n times the same state or a state per site, and its
+    # generator, whose evolution for a time t is the channel of probability 1 - exp(-γt)
     p, γ, t = 0.4, 0.7, 0.5
     q = mix(RandomState{Pure}(System(3, Qubit()), 4))
     applied(g) = apply(g, q)
-    @test norm(applied(relaxing_gate(p, "Up")(2)) -
-               applied(((1 - p) * Gate(Id) + p * SetState("Up"))(2))) < 1e-12
-    each = (1 - p) * Gate(Id ⊗ Id) + p * (SetState("Up") ⊗ SetState("Dn"))
-    @test norm(applied(relaxing_gate(p, ["Up", "Dn"])(1, 3)) - applied(each(1, 3))) < 1e-12
-    by_number = applied(relaxing_gate(p, 2, 0)(1, 3))
-    @test norm(by_number - applied(relaxing_gate(p, ["Up", "Up"])(1, 3))) < 1e-12
+    @test norm(applied(reset_gate(p, "Up")(2)) -
+               applied(((1 - p) * Gate(Id) + p * Reset("Up"))(2))) < 1e-12
+    each = (1 - p) * Gate(Id ⊗ Id) + p * (Reset("Up") ⊗ Reset("Dn"))
+    @test norm(applied(reset_gate(p, ["Up", "Dn"])(1, 3)) - applied(each(1, 3))) < 1e-12
+    by_number = applied(reset_gate(p, 2, 0)(1, 3))
+    @test norm(by_number - applied(reset_gate(p, ["Up", "Up"])(1, 3))) < 1e-12
     # a vector of numbers is the amplitudes of a single state, as for State
-    by_vector = applied(relaxing_gate(p, [0., 1.])(2))
-    @test norm(by_vector - applied(relaxing_gate(p, "Dn")(2))) < 1e-12
-    evolved = tdvp(relaxing_dissipator(γ, "Up")(2), t, q; nsteps = 20,
+    by_vector = applied(reset_gate(p, [0., 1.])(2))
+    @test norm(by_vector - applied(reset_gate(p, "Dn")(2))) < 1e-12
+    evolved = tdvp(reset_dissipator(γ, "Up")(2), t, q; nsteps = 20,
                    limits = Limits(maxdim = 64))
-    @test norm(evolved - applied(relaxing_gate(1 - exp(-γ * t), "Up")(2))) < 1e-10
-    @test depolarizing_gate(p, 2) == relaxing_gate(p, 2, "FullyMixed")
+    @test norm(evolved - applied(reset_gate(1 - exp(-γ * t), "Up")(2))) < 1e-10
+    @test depolarizing_gate(p, 2) == reset_gate(p, 2, "FullyMixed")
 end
 
 @testset "Qubit decay and relaxation" begin

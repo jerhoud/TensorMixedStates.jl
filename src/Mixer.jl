@@ -562,7 +562,7 @@ end
 
 # ρ ↦ m tr(ρ), the ket varying fastest; under a strong symmetry, where resetting a site moves
 # the charge of one side only, `lay` refuses it
-function matrix(a::SetState, site::AbstractSite)
+function matrix(a::Reset, site::AbstractSite)
     v = state(site, a.state)
     m = v isa Matrix ? v : v * v'
     return vec(m) * transpose(vec(identity_operator(site)))

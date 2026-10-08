@@ -300,7 +300,7 @@ end
         System(2, Qubit()), [1., 0., 0.])
     @test_throws "a 3×3 density matrix cannot be one of Qubit()" State{Mixed}(
         System(2, Qubit()), [1. 0. 0. ; 0. 0. 0. ; 0. 0. 0.])
-    @test_throws "a state of 3 components" apply(SetState([1., 0., 0.])(1),
+    @test_throws "a state of 3 components" apply(Reset([1., 0., 0.])(1),
                                                  State{Mixed}(System(2, Qubit()), "Up"))
 end
 
@@ -786,7 +786,7 @@ end
         sys = System(3, site)
         p(v) = State{Pure}(sys, v)
         ρ = mix((p(["Occ", "Emp", "Occ"]) + 0.5 * p(["Emp", "Occ", "Occ"])) / sqrt(1.25))
-        ρ = apply(SetState("Emp")(3), ρ)
+        ρ = apply(Reset("Emp")(3), ρ)
         [expect(ρ, N(i)) for i in 1:3]
     end
 
