@@ -51,11 +51,8 @@ dim(a::Spin) = Int(2 * a.s + 1)
 @def_operators Spin [
     Sp = s -> [ i == j - 1 ? sqrt(s.s * (s.s + 1) - (s.s - i + 1) * (s.s - i)) : 0.
                 for i in 1:dim(s), j in 1:dim(s) ],
-    Sm = dag(Sp),
     Sz = s -> [ i == j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
     N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
-    Sx = (Sp + Sm) / 2,
-    Sy = (Sp - Sm) / (2im),
     S2 = s -> s.s * (s.s + 1) * Id,
 ]
 

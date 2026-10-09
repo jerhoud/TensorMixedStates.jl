@@ -92,6 +92,20 @@ TensorMixedStates.dim(::Misparity) = 2
 
 TensorMixedStates.fermion_parities(::Misparity) = (0, 2)
 
+# a site type declaring Sp and Sz only, and one declaring A only, which get the relations declared
+# once for every site type
+struct Spinner <: AbstractSite end
+
+TensorMixedStates.dim(::Spinner) = 2
+
+@def_operators Spinner [ Sp = [0. 1. ; 0. 0.], Sz = [0.5 0. ; 0. -0.5] ]
+
+struct Laddered <: AbstractSite end
+
+TensorMixedStates.dim(::Laddered) = 3
+
+@def_operators Laddered [ A = [0. 1. 0. ; 0. 0. √2 ; 0. 0. 0.] ]
+
 @testset "The spin of a qubit" begin
     @test norm(matrix(Sx^2 + Sy^2 + Sz^2 - S2, Qubit())) ≈ 0 atol = 1e-12
     @test_skip "the measurements of Qubit measuring"        # couche 5
@@ -186,6 +200,32 @@ end
     @test_skip "Swap refused between a site conserving N and one conserving nothing"   # couche 2
     @test_throws "of one type and one dimension" matrix(Swap, Qubit(), Fermion())
     @test_throws "of one type and one dimension" matrix(Swap, Boson(3), Boson(4))
+end
+
+@testset "Relations declared once for every site type" begin
+    # a site type declaring Sp and Sz gets Sm, Sx, Sy and S2, one declaring A gets Q and P
+    @test matrix(Sm, Spinner()) == [0. 0. ; 1. 0.]
+    @test matrix(Sx, Spinner()) ≈ matrix(Sx, Qubit())
+    @test matrix(Sy, Spinner()) ≈ matrix(Sy, Qubit())
+    @test matrix(S2, Spinner()) ≈ 0.75 * matrix(Id, Spinner())
+    @test matrix(Q, Laddered()) ≈ matrix(Q, Boson(3))
+    @test matrix(P, Laddered()) ≈ matrix(P, Boson(3))
+    # and so do the site types of the library
+    for (site, ops) in ((Qubit(), (Sm, Sx, Sy, S2)), (Spin(3/2), (Sm, Sx, Sy, S2)),
+                        (Electron(), (Sm, Sx, Sy, S2, Nup, Ndn, Ntot)),
+                        (Tj(), (Sm, Sx, Sy, S2, Nup, Ndn, Ntot)),
+                        (Boson(4), (Q, P)), (Qboson(0.5, 4), (Q, P)))
+        for op in ops
+            @test size(matrix(op, site)) == (dim(site), dim(site))
+        end
+    end
+    @test matrix(Ntot, Electron()) ≈ matrix(Nup + Ndn, Electron())
+    # the declaration of a site type wins over the relation, and a relation holds only where
+    # what it is made of is declared, the check at first use leaving it alone
+    @test matrix(S2, Spin(1)) == 2 * matrix(Id, Spin(1))
+    @test_throws "operator Sp is not defined for site Fermion" matrix(Sx, Fermion())
+    @test_ok System(2, Spinner())
+    @test_ok System(2, Fermion())
 end
 
 @testset "Spin measuring" begin

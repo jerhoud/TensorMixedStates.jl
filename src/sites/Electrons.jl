@@ -73,25 +73,18 @@ string_state(::Electron, ::String) = nothing
         0  0  0  0
         0  0  0  0
     ],
-    Sm = dag(Sp),
-    Nup = dag(Cup) * Cup,
-    Ndn = dag(Cdn) * Cdn,
     Nupdn = Float64[
         0 0 0 0
         0 0 0 0
         0 0 0 0
         0 0 0 1
     ],
-    Ntot = Nup + Ndn,
     Sz = 0.5 * [
         0  0  0  0
         0  1  0  0
         0  0 -1  0
         0  0  0  0
     ],
-    Sx = (Sp + Sm) / 2,
-    Sy = (Sp - Sm) / (2im),
-    S2 = Sx^2 + Sy^2 + Sz^2,
 ]
 
 fermion_species(::Electron) = (Cup, Cdn)

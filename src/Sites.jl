@@ -304,3 +304,26 @@ macro create_site_module(name, symbols)
     mod = Expr(:module, true, name, block)
     return esc(Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), __source__, doc, mod))
 end
+
+############### Relations declared once for every site type ###############
+
+# what the relations below are made of, each site type defining it in its own way
+const Sp = Operator{1}("Sp")
+const Sz = Operator{1}("Sz")
+const A = Operator{1}("A")
+const Cup = Operator{1}("Cup")
+const Cdn = Operator{1}("Cdn")
+
+# a relation holds on a site type declaring what it is made of, and a declaration of the same
+# name by the site type wins over it
+@def_operators AbstractSite [
+    Sm = dag(Sp),
+    Sx = (Sp + Sm) / 2,
+    Sy = (Sp - Sm) / (2im),
+    S2 = Sx^2 + Sy^2 + Sz^2,
+    Q = (A + dag(A)) / √2,
+    P = (A - dag(A)) / (im * √2),
+    Nup = dag(Cup) * Cup,
+    Ndn = dag(Cdn) * Cdn,
+    Ntot = Nup + Ndn,
+]

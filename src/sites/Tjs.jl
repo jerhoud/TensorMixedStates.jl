@@ -65,18 +65,11 @@ string_state(::Tj, ::String) = nothing
         0  0  1
         0  0  0
     ],
-    Sm = dag(Sp),
-    Nup = dag(Cup) * Cup,
-    Ndn = dag(Cdn) * Cdn,
-    Ntot = Nup + Ndn,
     Sz = 0.5 * [
         0  0  0
         0  1  0
         0  0 -1
     ],
-    Sx = (Sp + Sm) / 2,
-    Sy = (Sp - Sm) / (2im),
-    S2 = Sx^2 + Sy^2 + Sz^2,
 ]
 
 @create_site_module(Tjs, [Tj, Cup, Cdn, Nup, Ndn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])

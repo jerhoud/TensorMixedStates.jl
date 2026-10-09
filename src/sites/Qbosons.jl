@@ -47,8 +47,6 @@ dim(a::Qboson) = a.dim
 @def_operators Qboson [
     N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
     A = s -> [ i == j - 1 ? sqrt(1 - s.q^i) : 0. for i in 1:dim(s), j in 1:dim(s) ],
-    Q = (A + dag(A)) / √2,
-    P = (A - dag(A)) / (im * √2),
 ]
 
 @create_site_module(Qbosons, [Qboson, N, A, Q, P])
