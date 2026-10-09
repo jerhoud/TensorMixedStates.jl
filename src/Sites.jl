@@ -197,7 +197,10 @@ refuse to declare the operator `name` when the name already stands for something
 the operator of that name each site type defines
 """
 check_shared_operator(existing, name::String) =
-    if !(existing isa Operator{1} && existing.name == name && isnothing(existing.expr))
+    if existing isa Operator{1} && existing.name == name && !isnothing(existing.expr)
+        error("cannot declare operator $name: the name already stands for an operator with " *
+              "a definition of its own")
+    elseif !(existing isa Operator{1} && existing.name == name)
         error("cannot declare operator $name: the name already stands for $(repr(existing))")
     end
 
