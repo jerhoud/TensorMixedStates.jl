@@ -94,8 +94,6 @@ function matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite, sites::Abstrac
     return Matrix{Float64}(I, d, d)
 end
 
-matrix(::JW_F, site::AbstractSite) = diagm(Float64[ (-1)^p for p in fermion_parities(site) ])
-
 function matrix(a::Operator, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
     if isnothing(a.expr)

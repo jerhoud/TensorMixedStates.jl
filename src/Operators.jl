@@ -4,7 +4,7 @@
 # `scale`, `power` and `obs_name`.
 
 export Pure, Mixed, Op, GenericOp, IndexedOp, SimpleOp
-export Operator, Id, F, Proj, named, parity, dag, ⊗, tensor, map_sites
+export Operator, Id, Proj, named, parity, dag, ⊗, tensor, map_sites
 
 ############# Types ################
 
@@ -327,23 +327,6 @@ function under a name in ASCII.
 ⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
 const tensor = ⊗
 
-############# The parity operator ##############
-
-"""
-    JW_F
-
-the type of `F`
-"""
-struct JW_F <: SimpleOp end
-
-"""
-    F
-
-the fermionic parity of a site, ``(-1)^p`` on a basis state of parity `p`, see
-`fermion_parities`: the identity on a site that is not fermionic.
-"""
-const F = JW_F()
-
 ############ Proj ################
 
 """
@@ -434,8 +417,6 @@ struct IntPowOp{R, N} <: GenericOp{R, N}
         a = scalararg(arg)
         if n == 0 || a isa IdentityOp
             return scale(c^n, IdentityOp{R, Generic, N}())
-        elseif a isa JW_F
-            return scale(c^n, iseven(n) ? IdentityOp{R, Generic, N}() : a)
         elseif n == 1
             return arg
         elseif a isa IntPowOp
@@ -627,7 +608,6 @@ the rank of the type of an operator: operators of different types are ordered by
 of one type by their own `isless`
 """
 ranking(::IdentityOp) = 1
-ranking(::JW_F) = 2
 ranking(::Operator) = 3
 ranking(::Proj) = 5
 ranking(::AtIndex) = 10
@@ -643,7 +623,6 @@ ranking(::GenPowOp) = 34
 
 isless(a::Operator, b::Operator) = isless(a.name, b.name)
 isless(::IdentityOp, ::IdentityOp) = false
-isless(::JW_F, ::JW_F) = false
 isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
 isless(a::AtIndex, b::AtIndex) = isless((a.index, a.op), (b.index, b.op))
 isless(a::ScalarOp, b::ScalarOp) =
@@ -756,7 +735,6 @@ end
 show(io::IO, op::Operator) = print(io, op.name)
 show(io::IO, ::IdentityOp{Pure, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
 show(io::IO, ::IdentityOp{Pure, Indexed}) = print(io, "Id")
-show(io::IO, ::JW_F) = print(io, "F")
 show(io::IO, a::Proj) = show_func(io, "Proj", [a.state])
 show(io::IO, ind::AtIndex) = show_func(io, repr(ind.op; context = :precedence => 500), collect(ind.index))
 

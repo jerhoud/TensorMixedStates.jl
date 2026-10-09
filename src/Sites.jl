@@ -2,7 +2,7 @@
 # states and operators declared for its type, which become ordinary methods.
 
 export AbstractSite, dim, fermion_parities, fermion_species, string_state
-export Level, @def_states, @def_operators, @create_site_module
+export Level, F, @def_states, @def_operators, @create_site_module
 
 """
     abstract type AbstractSite
@@ -61,6 +61,14 @@ defined on every site type.
     Proj(Level => 2)
 """
 const Level = Operator{1}("Level", s -> diagm(Float64.(0:dim(s) - 1)))
+
+"""
+    F
+
+the fermionic parity of a site, ``(-1)^p`` on a basis state of parity `p`, see
+`fermion_parities`: the identity on a site that is not fermionic.
+"""
+const F = Operator{1}("F", s -> diagm(Float64[ (-1)^p for p in fermion_parities(s) ]))
 
 """
     operator_definition(site, ::Val{name})
