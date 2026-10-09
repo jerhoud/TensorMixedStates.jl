@@ -529,6 +529,12 @@ end
     @test X^10000 == Id
     @test X^10001 == X
     @test (2X)^3 == 8X
+    # an integer coefficient is stored as a float, whose products do not wrap around as those
+    # of integers silently do: (2X)^64 was 0Id, and prod(2Sz(i) for i in 1:63) measured -1 on
+    # sites up
+    @test (2X)^64 == 2.0^64 * Id
+    two = State{Pure}(System(2, q), "Up")
+    @test expect(two, (2^32 * Sz(1)) * (2^32 * Sz(2))) ≈ 2.0^62
     @test simplify(Sz^2 * Sz) == Sz^3
     for (a, s) in [(X^3, q), ((X + Y)^3, q), (Sz^2, s1), ((Sp + Sm)^3, s1),
                    ((C + dag(C))^2, fe), (C^3, fe), (dag((X + im * Y)^2), q)]
@@ -755,11 +761,21 @@ end
     # a name is a column header: it has to denote the operator measured. The right operand of
     # * and ⊗ and the base of ^ lost their parentheses, and so did rational numbers
     for op in (X ⊗ (Y * Z), (Y * Z) ⊗ X, (X ⊗ Y) * (Z ⊗ Z), (X^0.5)^0.5, (1//2) * X,
-               X^(1//2), (-1.0 + 0im) * X, 0.5im * X, (X + Z)^0.5, X(1) * Y(2))
+               X^(1//2), (-1.0 + 0im) * X, 0.5im * X, (X + Z)^0.5, X(1) * Y(2), 2X,
+               (1 + 2im) * X, (1.5 - 2im) * X, 1e16 * X)
         @test eval(Meta.parse(TensorMixedStates.obs_name(op))) == op
     end
     @test TensorMixedStates.obs_name(X ⊗ (Y * Z)) == "X⊗(Y*Z)"
     @test TensorMixedStates.obs_name((X^0.5)^0.5) == "(X^0.5)^0.5"
+    # an integer coefficient, stored as a float, prints as the integer it was, as long as a
+    # float stands for a single integer: the names of measurements and of conserved quantities
+    # stay those of 1.6.0
+    @test repr(2X) == "2X"
+    @test repr((1 + 2im) * X) == "(1 + 2im)X"
+    @test TensorMixedStates.obs_name((1 + 2im) * X) == "(1+2im)X"
+    @test TensorMixedStates.obs_name(-im * (2X(1) + Z(2))) == "-2im*X(1)-im*Z(2)"
+    @test TensorMixedStates.obs_name(2Sz) == "2Sz"
+    @test repr(1e16 * X) == "1.0e16X"
 end
 
 @testset "Long sums and products print compactly" begin

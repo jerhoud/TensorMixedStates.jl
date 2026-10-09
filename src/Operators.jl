@@ -127,10 +127,27 @@ function show_func(io::IO, name, args, kwargs=(;))
 end
 
 """
+    as_integer(a)
+
+the coefficient `a` as the integer it stands for when it is a float of integer value, or a
+complex number of two, below `maxintfloat`; `a` itself otherwise. An integer coefficient is
+stored as a float, see `float_coef`, and prints as it was written.
+"""
+as_integer(a::Float64) = isinteger(a) && abs(a) < maxintfloat(Float64) ? Int(a) : a
+
+function as_integer(a::ComplexF64)
+    r, i = as_integer(real(a)), as_integer(imag(a))
+    return r isa Int && i isa Int ? complex(r, i) : a
+end
+
+as_integer(a::Number) = a
+
+"""
     print_coef(io, a)
 
 print the number `a` as the coefficient in front of an operator: nothing for 1, `-` for -1,
-`2im*` for an imaginary number, a rational or a complex number in parentheses
+`2im*` for an imaginary number, a rational or a complex number in parentheses, a float of
+integer value as that integer, see `as_integer`
 """
 print_coef(io::IO, a::Number) =
 if a ≠ 1
@@ -143,13 +160,13 @@ if a ≠ 1
             print_coef(io, imag(a))
             print(io, "im*")
         else
-            print(io, "(", a, ")")
+            print(io, "(", as_integer(a), ")")
         end
     elseif isa(a, Rational)
         # (1//2)X and not 1//2X, which reads 1//(2X)
         print(io, "(", a, ")")
     else
-        print(io, a)
+        print(io, as_integer(a))
     end
 end
 
@@ -384,11 +401,21 @@ isless(a::SumOp, b::SumOp) = isless(a.subs, b.subs)
 ################ Product by a number #############
 
 """
+    float_coef(x)
+
+the number `x` as an operator stores it as its coefficient: an integer of fixed width, or a
+complex number of them, as a float, whose products cannot wrap around as those of such
+integers silently do, `(2X)^64` having been `0Id`. Any other number is kept as it is.
+"""
+float_coef(x::Union{Bool, Base.BitInteger, Complex{<:Union{Bool, Base.BitInteger}}}) = float(x)
+float_coef(x::Number) = x
+
+"""
     struct ScalarOp{R, T, N} <: Op{R, T, N}
 
 a number times an operator, the operator never a `ScalarOp` itself: `2 * (3X)` is `6X`. A
 coefficient of 1 gives the operator, of 0 gives `0 * Id`, and a number times a sum multiplies
-each term.
+each term. An integer coefficient is stored as a float, see `float_coef`.
 """
 struct ScalarOp{R, T, N} <: Op{R, T, N}
     coef::Number
@@ -401,7 +428,7 @@ struct ScalarOp{R, T, N} <: Op{R, T, N}
         elseif arg isa SumOp
             SumOp(map(x -> coef * x, arg.subs))
         else
-            new{R, T, N}(no_signed_zero(coef * scalarcoef(arg)), scalararg(arg))
+            new{R, T, N}(no_signed_zero(float_coef(coef * scalarcoef(arg))), scalararg(arg))
         end
 end
 

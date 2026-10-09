@@ -10,6 +10,11 @@ the reference article.
 
 ## [Unreleased]
 
+### Changed
+
+- A float coefficient of integer value prints as that integer, `2.0X` as `2X`, which renames a
+  measurement written with one: an integer coefficient is now stored as a float, see Fixed.
+
 ### Fixed
 
 - `partial_trace`, the `PartialTrace` phase, and through it `renyi2`, `mutual_info_renyi2`,
@@ -40,6 +45,8 @@ the reference article.
   state of complex trace, and is written as its real and imaginary parts, each its own term.
 - The docstrings of `approx_W` and `ApproxW` say that a time dependent evolver, its functions
   taken at the middle of each step, limits the order to 2: orders 3 and 4 converge as order 2.
+- An integer coefficient is stored as a float, whose products do not wrap around:
+  `prod(2Sz(i) for i in 1:63)` measured -1 on sites up, and `(2X)^64` was `0Id`.
 
 ## [1.6.0] - 2026-09-30
 
