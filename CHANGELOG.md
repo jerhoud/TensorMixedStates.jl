@@ -18,6 +18,8 @@ the reference article.
   state, a probability falling below the smallest float.
 - `state` and `matrix` give a copy of the array a site declares, which changing changed it for
   everyone.
+- A state can be measured from several threads at once, where its caches, filled with no
+  lock, made measurements fail and could crash Julia.
 
 ## [1.6.0] - 2026-09-30
 

@@ -107,3 +107,16 @@ end
         quietly(() -> set_threading(start))
     end
 end
+
+@testset "Measuring one state from several threads" begin
+    # its caches were filled on demand with no lock: a thread found one sized and not yet
+    # filled, and failed on an UndefRefError. Each state below is fresh, its caches empty,
+    # pure and mixed, and on a single thread of Julia the tasks still run one after the other
+    ψ = RandomState{Pure}(System(12, Qubit()), 8)
+    ops = [Z(i) * Z(j) for i in 1:12 for j in i+1:12]
+    ref = [expect(State(ψ, ψ.state), o) for o in ops]
+    for s in (State(ψ, ψ.state), mix(State(ψ, ψ.state)))
+        got = fetch.([Threads.@spawn expect(s, o) for o in ops])
+        @test got ≈ ref
+    end
+end

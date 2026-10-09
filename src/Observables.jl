@@ -24,8 +24,10 @@ function weak_form(state::State{Mixed})
         return state
     end
     w = state.preobs.weak
-    if isempty(w)
-        push!(w, weaken(state))
+    lock(state.preobs.lock) do
+        if isempty(w)
+            push!(w, weaken(state))
+        end
     end
     return only(w)
 end
@@ -126,11 +128,14 @@ end
 """
     cached!(create!, v, state)
 
-the cache `v` of `state`, filled by `create!(v, state)` on first use
+the cache `v` of `state`, filled by `create!(v, state)` on first use under the lock of
+`PreObs`; once filled it never changes, and is read without the lock
 """
 function cached!(create!, v, state)
-    if isempty(v)
-        create!(v, state)
+    lock(state.preobs.lock) do
+        if isempty(v)
+            create!(v, state)
+        end
     end
     return v
 end
@@ -280,13 +285,16 @@ of the state on `i`. Computed up to `i` on demand and kept with the state.
 """
 function get_left(state::State, i::Int)
     l = state.preobs.left
-    if isempty(l)
-        push!(l, state.state[1] / real(trace(state)))
+    # read under the lock too, the vector growing as it is extended
+    return lock(state.preobs.lock) do
+        if isempty(l)
+            push!(l, state.state[1] / real(trace(state)))
+        end
+        if length(l) < i
+            extend_left!(l, state, i)
+        end
+        l[i]
     end
-    if length(l) < i
-        extend_left!(l, state, i)
-    end
-    return l[i]
 end
 
 """
