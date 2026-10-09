@@ -4,6 +4,18 @@
 export tdvp, dmrg, approx_W, steady_state
 
 """
+    check_nsweeps(nsweeps)
+
+refuse an evolution in less than one step: it made no step, while a simulation took the time
+on, and `approx_W` divided its duration by zero
+"""
+function check_nsweeps(nsweeps)
+    if nsweeps < 1
+        error("an evolution takes at least one step, and nsweeps is $nsweeps")
+    end
+end
+
+"""
     tdvp(evolver, t, ::State; options...)
     tdvp(evolver, t, ::Simulation; options...)
 
@@ -37,6 +49,7 @@ state. A simulation comes back with its time advanced by `t`.
 function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
     observer! = NoObserver(), coefs=nothing, n_expand = 0, n_hermitianize = 0,
     nsweeps = 1, first_sweep = 1, time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
+    check_nsweeps(nsweeps)
     time_dep = !isnothing(coefs)
     st = state.state
     dt = t / nsweeps
@@ -199,6 +212,7 @@ advanced by `t`.
 function approx_W(pre::PreMPO{R}, t::Number, state::State{R}; coefs = nothing, n_hermitianize::Int = 0,
     nsweeps::Int = 1, first_sweep::Int = 1, order::Int, w::Int = 2, observer! = NoObserver(),
     time_start = zero(t), limits::Limits=Limits(), kwargs...) where {R <: PM}
+    check_nsweeps(nsweeps)
     st = state.state
     dt = t / nsweeps
     time_dep = !isnothing(coefs)

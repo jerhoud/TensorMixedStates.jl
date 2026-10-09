@@ -32,6 +32,8 @@ the reference article.
   that is not self adjoint, which `simplify` squared to the identity.
 - A `SteadyState` checkpointed on its last sweep hands on a state of trace one once resumed,
   where it handed on the eigenvector dmrg gives, of trace 1.39 in a test.
+- An `Evolve` whose duration and time step have opposite signs evolves over its duration,
+  where it made no step; `tdvp` and `approx_W` refuse `nsweeps` below one.
 
 ## [1.6.0] - 2026-09-30
 
