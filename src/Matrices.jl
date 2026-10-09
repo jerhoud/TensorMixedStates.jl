@@ -1,6 +1,7 @@
 # The matrix of an operator on sites and the vector or density matrix of a local state, which
 # call each other: a projector on a named state needs its vector, and an eigenstate `A => λ`
-# the matrix of `A`.
+# the matrix of `A`. The later layers also use `expand_sites`, `check_size`, `eigenspaces`,
+# `nearly`, `rounding_tol` and `spectral_tol`.
 
 export matrix
 

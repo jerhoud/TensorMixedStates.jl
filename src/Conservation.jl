@@ -1,6 +1,8 @@
 # What a site conserves: the charges read off the conserved operators, kept typed in the site,
 # strong or weak, the relabellings of the charges they need, and the check of a site at its
-# first use.
+# first use. The later layers lay matrices on charged indices with `conserved`, `strong_names`,
+# `star`, `basis_charges`, `has_definite_flux`, `charged_itensor`, `common_charge`,
+# `charge_flux`, `weak_qn` and `adjoint_index`.
 
 export Conservation, conserving, strong, symmetries, weaken, flux
 

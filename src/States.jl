@@ -1,6 +1,8 @@
 # States, MPS on a system in the pure or the mixed representation: the truncation limits,
 # product states built from local states, sums of states, mixing a pure state, weakening a
-# state, and the norm, the trace and the inner product.
+# state, and the norm, the trace and the inner product. The later layers go between the pure
+# and the mixed representations with `combinerto`, `mixer`, `relabel`, `relabeller`,
+# `element_maps` and `on_legs`, and the measurements fill the cache `preobs` of a state.
 
 export State, Limits, mix, maxlinkdim, trace, norm, normalize, inner, dot
 

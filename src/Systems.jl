@@ -1,5 +1,5 @@
 # Systems, the sites a state lives on, compared by their content, and the ITensor indices of
-# their sites, whose identities derive from that content.
+# their sites, whose identities derive from that content. The later layers also use `is_charged`.
 
 export System, siteind, siteinds
 

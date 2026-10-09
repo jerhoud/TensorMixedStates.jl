@@ -1,5 +1,6 @@
 # save_state and load_state, which write a state to a file and read it back with its system, the
-# sites being rebuilt from their recorded fields.
+# sites being rebuilt from their recorded fields. A checkpoint reads the sites alone with
+# `saved_sites`.
 
 export save_state, load_state
 

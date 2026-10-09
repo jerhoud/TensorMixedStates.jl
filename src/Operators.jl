@@ -1,5 +1,7 @@
 # The algebra of operators on pure states: their types, generic or placed on sites, and how
-# they are built, combined, compared and printed, before any site is involved.
+# they are built, combined, compared and printed, before any site is involved. The later layers
+# walk an expression with `scalarcoef`, `scalararg`, `sumsubs`, `prodsubs`, `factor_sites`,
+# `scale`, `power` and `obs_name`.
 
 export Pure, Mixed, Op, GenericOp, IndexedOp, SimpleOp
 export Operator, Id, F, Proj, named, parity, dag, ⊗, tensor, map_sites
