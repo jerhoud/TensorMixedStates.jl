@@ -276,6 +276,15 @@ end
     # a sum, and a function of one on several sites has no room for a string
     @test_throws "makes it a sum" apply(Dissipator(C)(3), ρ)
     @test_throws "cannot be inserted" apply(exp(-0.3im * (dag(C) ⊗ C + C ⊗ dag(C)))(3, 4), st)
+    # a gate of several sites defined by a matrix is kept whole, and a string commutes with it
+    # only if it covers none of its sites, or all of them and the gate is even. It used to be
+    # moved past it, which changed the sign of a branch of the state
+    sw = Operator{2}("Sw", [1. 0. 0. 0. ; 0. 0. 1. 0. ; 0. 1. 0. 0. ; 0. 0. 0. 1.], involution_op)
+    xz = Operator{2}("XZ", kron([0. 1. ; 1. 0.], [1. 0. ; 0. -1.]), involution_op)
+    for (a, b) in [(dag(C)(1) * dag(C)(4), sw(1, 2)), (C(3), xz(1, 2))]
+        @test norm(apply(a * b, st) - apply(a, apply(b, st))) < 1e-12
+        @test norm(mix(apply(a * b, st)) - apply(a * b, ρ)) < 1e-12
+    end
     # a term of coefficient zero leaves the parity of a gate alone, where it made one a sum of
     # fermionic and non fermionic operators, and a gate whose terms all vanish makes the state
     # null, as a gate that annihilates it does, where it was refused

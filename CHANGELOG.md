@@ -26,6 +26,8 @@ the reference article.
   `Gate(C + dag(C))^0.5`, is refused on any site but the first, where an MPO placed it wrong.
 - A tensor product with a fermionic factor of several sites, as `named(C ⊗ N, "CN")`, was
   taken as even: its adjoint, its matrix and its dissipator were wrong.
+- A gate of fermionic operators and of an operator of several sites defined by a matrix, as
+  `C(1) * C(4) * M(1, 2)`, gave a wrong state, a string being moved past part of `M`.
 
 ## [1.6.0] - 2026-09-30
 

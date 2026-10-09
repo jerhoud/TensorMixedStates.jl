@@ -12,9 +12,10 @@ the operator `op` in a normal form, as the functions building an MPO compute it.
 Operators of several sites defined by an expression are replaced by it, products of sums are
 expanded, coefficients and like factors are gathered, and fermionic operators of one site get
 their Jordan-Wigner strings. A placed operator thus becomes a sum of products of one site
-operators ordered by site, which is what `PreMPO` expects; a function of an operator of
-several sites, such as its exponential, is kept whole. A collection of operators is
-simplified element by element.
+operators ordered by site, which is what `PreMPO` expects. An operator of several sites that
+cannot be developed, a function of one, such as its exponential, or one defined by a matrix
+and created without its sites, is kept whole, and keeps its place with respect to the
+Jordan-Wigner strings. A collection of operators is simplified element by element.
 
 # Examples
 
@@ -47,36 +48,16 @@ distribute(terms::Vector...) =
     vec([ collect(reverse(p)) for p in Iterators.product(reverse(terms)...) ])
 
 """
-    string_side(a, b)
-
-where the placed operator `a` lies with respect to the string `b`, by its first site: `:before`
-it, `:after` it, or `:inside` it. An operator of several sites starting on the first site of
-the string is before it.
-"""
-function string_side(a::AtIndex{R, N}, b::Multi_F{R}) where {R, N}
-    i = min(a.index...)
-    if i < b.start || (N > 1 && i == b.start)
-        return :before
-    elseif i > b.stop
-        return :after
-    end
-    return :inside
-end
-
-"""
     split_string(b, a, string_first)
 
-the string `b` split around the operator `a`, whose first site `i` is inside it: the string up
-to `i - 1`, then `a` and the rest of the string. For an operator of one site, the `F` of its
-site is taken apart and put before `a` when `string_first` is true, the string having come
-first in the product, and after it otherwise.
+the string `b` split around the operator `a`, placed on a site `i` inside it: the string up to
+`i - 1`, the `F` of site `i` and `a`, and the rest of the string. The `F` is put before `a`
+when `string_first` is true, the string having come first in the product, and after it
+otherwise.
 """
-function split_string(b::Multi_F{R}, a::AtIndex{R, N}, string_first::Bool) where {R, N}
-    i = min(a.index...)
+function split_string(b::Multi_F{R}, a::AtIndex{R, 1}, string_first::Bool) where R
+    i = only(a.index)
     piece(start, stop) = Multi_F{R}(start, stop, b.left, b.right)
-    if N > 1
-        return [piece(b.start, i - 1), a, piece(i, b.stop)]
-    end
     return string_first ? [piece(b.start, i - 1), piece(i, i), a, piece(i + 1, b.stop)] :
                           [piece(b.start, i - 1), a, piece(i, i), piece(i + 1, b.stop)]
 end
@@ -282,8 +263,8 @@ end
 what replaces the product `a * b` of two placed operators or strings `Multi_F`, one step of the
 sort by site of an indexed product: an empty list when the pair stays as it is, the pair
 swapped when it is out of order, a single factor for two operators on the same sites or two
-adjacent strings, and a string split around an operator it overlaps. The sort takes, for
-instance, `X(1) * Z(2) * Y(1)` to `(X * Y)(1) * Z(2)`, and `C(3) * C(5)`, that is
+adjacent strings, and a string split around an operator of one site inside it. The sort
+takes, for instance, `X(1) * Z(2) * Y(1)` to `(X * Y)(1) * Z(2)`, and `C(3) * C(5)`, that is
 `Multi_F(1, 2) * JW(C)(3) * Multi_F(1, 4) * JW(C)(5)`, to `(JW(C) * F)(3) * F(4) * JW(C)(5)`.
 """
 orderprod(a::AtIndex, b::AtIndex) =
@@ -295,15 +276,22 @@ orderprod(a::AtIndex, b::AtIndex) =
         []
     end
 
-function orderprod(a::AtIndex{R}, b::Multi_F{R}) where R
-    side = string_side(a, b)
-    return side == :before ? [] : side == :after ? [b, a] : split_string(b, a, false)
+function orderprod(a::AtIndex{R, 1}, b::Multi_F{R}) where R
+    i = only(a.index)
+    return i < b.start ? [] : i > b.stop ? [b, a] : split_string(b, a, false)
 end
 
-function orderprod(b::Multi_F{R}, a::AtIndex{R}) where R
-    side = string_side(a, b)
-    return side == :before ? [a, b] : side == :after ? [] : split_string(b, a, true)
+function orderprod(b::Multi_F{R}, a::AtIndex{R, 1}) where R
+    i = only(a.index)
+    return i < b.start ? [a, b] : i > b.stop ? [] : split_string(b, a, true)
 end
+
+# a factor of several sites is never moved past a string, which commutes with it only if it
+# holds all of its sites or none of them, and the factor is even in the first case. What is
+# left of one after simplify is refused by an MPO and by expect, see check_one_site, and
+# applied by a gate in the order of its factors
+orderprod(::AtIndex{R}, ::Multi_F{R}) where R = []
+orderprod(::Multi_F{R}, ::AtIndex{R}) where R = []
 
 function orderprod(a::Multi_F{R}, b::Multi_F{R}) where R
     piece(s, start, stop) = Multi_F{R}(start, stop, s.left, s.right)
