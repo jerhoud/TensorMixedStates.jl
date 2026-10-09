@@ -67,6 +67,16 @@ TensorMixedStates.dim(::Interrupter) = 2
 
 TensorMixedStates.string_state(::Interrupter, ::String) = throw(InterruptException())
 
+# a fermionic site with a named state of no definite parity
+struct ParityProbe <: AbstractSite end
+
+TensorMixedStates.dim(::ParityProbe) = 2
+
+@def_states(ParityProbe(), [ "Emp" => [1., 0.], "Occ" => [0., 1.], "Plus" => [1., 1.] / √2 ])
+
+@def_operators(ParityProbe(), [ fermionic_op => [ Cq = [0. 1. ; 0. 0.] ],
+                                involution_op => [ F = Float64[1 0 ; 0 -1] ] ])
+
 @testset "Qubit measuring" begin
     @test_pm test_phases(CreateState{type}(1, Qubit(), "Z+"; 
         final_measures = check([X(1), Y(1), Z(1)], [0, 0, 1])))
@@ -323,6 +333,14 @@ end
     @test_throws "F is not an involution on Dummit2()" @def_operators(Dummit2(),
         [ involution_op => [ F = [1. 0. ; 0. 2.] ] ])
     @test !haskey(lib, (Dummit2, "F"))
+end
+
+@testset "A projector on a named state of no definite fermionic parity" begin
+    # simplify takes a named projector as even: on "Plus", F crossed it as if they commuted,
+    # and (F * Proj("Plus"))(1) gave the conjugate of its value
+    φ = State{Pure}(System(1, ParityProbe()), [0.6, 0.8im])
+    @test_throws "no definite fermionic parity" expect(φ, (F * Proj("Plus"))(1))
+    @test expect(φ, (F * Proj("Occ"))(1)) ≈ -0.64
 end
 
 @testset "Index tags" begin

@@ -433,6 +433,12 @@ function matrix(a::Proj, site::AbstractSite, ::AbstractSite...)
     if !(st isa Vector)
         error("Proj can only project on a pure state, \"$(a.state)\" is a mixed state")
     end
+    # a projector takes no Jordan-Wigner string, and `simplify` takes a named one as even
+    f = matrix(F, site)
+    if f != I && !(nearly(f * st, st) || nearly(f * st, -st))
+        error("$(repr(a.state)) has no definite fermionic parity on $site, which a projector " *
+              "of a fermionic site needs")
+    end
     return st * adjoint(st)
 end
 

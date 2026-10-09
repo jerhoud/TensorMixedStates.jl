@@ -642,7 +642,7 @@ isless(a::Multi_F, b::Multi_F) =
 
 the projector ``|s\\rangle\\langle s|`` on a pure state of one site, given by its name, by
 its vector in the basis of the site, taken as it is without normalization, or by the number
-of a basis state, counted from 0.
+of a basis state, counted from 0. On a fermionic site, the state must have a definite parity.
 
 # Examples
 
@@ -1276,9 +1276,8 @@ fermion_parity(::Op, ::Bool) = 0
 fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
 fermion_parity(a::Operator, ::Bool) = a.type == fermionic_op ? 1 : 0
 fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
-# a projector on a basis state, given by its index or by a name, is even: the named states of
-# the fermionic sites are all basis states, which a site defined outside the package is taken
-# to follow
+# a projector given by its index or by a name is even, its matrix refusing a state of no
+# definite parity on a fermionic site
 fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
 
 function fermion_parity(a::ProdOp, strung::Bool)

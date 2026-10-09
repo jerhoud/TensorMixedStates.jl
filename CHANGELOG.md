@@ -20,6 +20,8 @@ the reference article.
   everyone.
 - A state can be measured from several threads at once, where its caches, filled with no
   lock, made measurements fail and could crash Julia.
+- A projector on a fermionic site refuses a state of no definite parity, which was taken as
+  even when named and placed without string when given as a vector.
 
 ## [1.6.0] - 2026-09-30
 

@@ -165,17 +165,22 @@ end
     end
 end
 
-@testset "A projector on a state of mixed fermionic parity" begin
-    # the F of a string is not commuted across it, which would drop a sign
+@testset "A projector on a fermionic site has a definite parity" begin
+    # a projector takes no string: one on a state of mixed parity, whose odd part needs one,
+    # is refused, and P(3) differed from P^0.5(3), which took it
     fe = Fermion()
     st = RandomState{Pure}(System(3, fe), 4)
     idx = [ SysIndex{Pure}(st.system, k) for k in 1:3 ]
     psi = reshape(Array(reduce(*, [st.state[k] for k in 1:3]), reverse(idx)...), 8)
     ev(m) = psi' * m * psi / (psi' * psi)
     c, f, id = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
-    p = Proj([1., 1.] / sqrt(2))
+    pv = Proj([1., 1.] / sqrt(2))
+    @test_throws "no definite fermionic parity" expect(st, C(3) * pv(1))
+    @test_throws "no definite fermionic parity" expect(st, pv(3))
+    @test_throws "no definite fermionic parity" expect(st, (pv^0.5)(3))
+    p = Proj([0., 1.])
     @test matrix(simplify(F * p), fe) ≈ matrix(F * p, fe)
-    pm = kron([0.5 0.5 ; 0.5 0.5], id, id)
+    pm = kron([0. 0. ; 0. 1.], id, id)
     c3 = kron(f, f, c)
     @test expect(st, C(3) * p(1)) ≈ ev(c3 * pm)
     @test expect(st, p(1) * C(3)) ≈ ev(pm * c3)
