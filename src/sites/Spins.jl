@@ -59,10 +59,25 @@ dim(a::Spin) = Int(2 * a.s + 1)
     S2 = s -> s.s * (s.s + 1) * Id,
 ]
 
+"""
+    rational_value(s)
+
+the number the string `s` writes as an integer or a fraction, `"1"`, `"-3/2"`, or `nothing`
+"""
+function rational_value(s::AbstractString)
+    parts = split(s, '/')
+    if length(parts) > 2
+        return nothing
+    end
+    n = tryparse(Int, parts[1])
+    d = length(parts) == 2 ? tryparse(Int, parts[2]) : 1
+    return isnothing(n) || isnothing(d) || d == 0 ? nothing : n // d
+end
+
 # the eigenstates of Sx and Sy are rotations of those of Sz, exp(-iπ/2 Sy) and exp(iπ/2 Sx)
 function string_state(a::Spin, st::String)
     axis, value = !isempty(st) && st[1] in ('X', 'Y', 'Z') ? (st[1], st[nextind(st, 1):end]) : ('Z', st)
-    m = tryparse(Rational{Int}, value)
+    m = rational_value(value)
     if isnothing(m) || !isinteger(a.s - m) || abs(m) > a.s
         return nothing
     end
