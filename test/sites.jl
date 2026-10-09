@@ -220,6 +220,13 @@ end
         end
     end
     @test matrix(Ntot, Electron()) ≈ matrix(Nup + Ndn, Electron())
+    # S2 is written (Sp * Sm + Sm * Sp) / 2 + Sz^2, which is Sx^2 + Sy^2 + Sz^2 and real where Sp
+    # and Sz are
+    for site in (Qubit(), Electron(), Tj(), Spinner())
+        @test matrix(S2, site) isa Matrix{Float64}
+        @test matrix(S2, site) ≈ matrix(Sx^2 + Sy^2 + Sz^2, site)
+    end
+    @test matrix(S2, Qubit()) == 0.75 * matrix(Id, Qubit())
     # the declaration of a site type wins over the relation, and a relation holds only where
     # what it is made of is declared, the check at first use leaving it alone
     @test matrix(S2, Spin(1)) == 2 * matrix(Id, Spin(1))
