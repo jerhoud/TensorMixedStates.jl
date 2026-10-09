@@ -129,6 +129,65 @@ end
     @test expect(r, N(1)) ≈ 0 atol = 1e-12
 end
 
+@testset "SetState on fermions" begin
+    # the reset of a fermionic site keeps the correlations of the other sites across it, which
+    # its matrix, laid with no Jordan-Wigner string, changed: compared with its Kraus operators,
+    # whose strings simplify inserts
+    kraus = Dict("Emp" => [(1, Gate(Id - N)), (1, Gate(C))],
+                 "Occ" => [(1, Gate(N)), (1, Gate(dag(C)))],
+                 "FullyMixed" => [(0.5, Gate(Id - N)), (0.5, Gate(C)), (0.5, Gate(N)),
+                                  (0.5, Gate(dag(C)))])
+    exact(s, i, ρ) = sum(c * apply(g(i), ρ) for (c, g) in kraus[s])
+    rng = Xoshiro(20261009)
+    q, γ, t = 0.3, 0.7, 0.5
+    sys = System(4, Fermion())
+    configs = [ collect(v) for v in Iterators.product(fill(["Emp", "Occ"], 4)...) ]
+    function sector(k)
+        s = sum(randn(rng, ComplexF64) * State{Pure}(sys, v) for v in configs
+                if count(==("Occ"), v) == k)
+        return s / norm(s)
+    end
+    ρ = 0.7 * mix(sector(2)) + 0.3 * mix(sector(1))
+    for s in ["Emp", "Occ", "FullyMixed"], i in 1:4
+        @test norm(apply(SetState(s)(i), ρ) - exact(s, i, ρ)) < 1e-12
+    end
+    @test norm(apply(SetState("Occ")(3) * SetState("Emp")(2), ρ) -
+               exact("Occ", 3, exact("Emp", 2, ρ))) < 1e-12
+    @test norm(apply(Gate(C)(1) * SetState("Occ")(3), ρ) - apply(Gate(C)(1), exact("Occ", 3, ρ))) <
+          1e-12
+    @test norm(apply(make_mpo(ρ, (1 - q) * Gate(Id)(3) + q * SetState("Occ")(3)), ρ) -
+               ((1 - q) * ρ + q * exact("Occ", 3, ρ))) < 1e-12
+    # the generator, through its MPO, against the channel
+    p = 1 - exp(-γ * t)
+    evolved = tdvp(γ * (SetState("Occ")(2) - Gate(Id)(2)), t, ρ; nsweeps = 20,
+                   limits = Limits(maxdim = 100))
+    @test norm(evolved - ((1 - p) * ρ + p * exact("Occ", 2, ρ))) < 1e-10
+    # a qubit between the fermions takes no sign
+    mixed_sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
+    m = mix((State{Pure}(mixed_sys, ["Occ", "Up", "Occ", "Emp"]) +
+             State{Pure}(mixed_sys, ["Emp", "Dn", "Occ", "Occ"])) / sqrt(2))
+    @test norm(apply(SetState("Emp")(3), m) - exact("Emp", 3, m)) < 1e-12
+    # on an Electron, whose parity is that of both spins, a hopping across the site is kept
+    esys = System(3, Electron())
+    e = mix((State{Pure}(esys, ["Up", "Up", "Emp"]) + State{Pure}(esys, ["Emp", "Up", "Up"])) /
+            sqrt(2))
+    hop = dag(Cup)(1) * Cup(3)
+    @test expect(apply(SetState("Emp")(2), e), hop) ≈ expect(e, hop)
+    # the resets of a chain conserving nothing leave a product state, the singular values of
+    # rounding cut rather than kept by the default cutoff
+    chain = System(6, Fermion())
+    ψ = State{Pure}(chain, [isodd(j) ? "Occ" : "Emp" for j in 1:6])
+    h = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:5)
+    r = mix(tdvp(-im * h, 0.6, ψ; nsweeps = 6, limits = Limits(maxdim = 8, cutoff = 1e-12)))
+    for i in 2:6
+        r = apply(SetState("Emp")(i), r)
+    end
+    @test maxlinkdim(r) == 1
+    @test_throws "mixes the two fermionic parities" apply(SetState([1., 1.] / sqrt(2))(2), ρ)
+    @test_throws "holds a SetState and a fermionic operator" apply((0.5 * Gate(C) +
+                                                                    0.5 * SetState("Emp"))(2), ρ)
+end
+
 @testset "Loading a partial trace of a charged system" begin
     # it keeps charged indices on the sites that conserve nothing, and loading has to rebuild
     # the pure ones in that mode

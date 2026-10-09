@@ -914,7 +914,8 @@ matrix: ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, where ``\\sigm
 the density matrix of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a
 matrix is taken as it is, without normalization, as for `Proj`. It acts on mixed states only,
 and is refused on a site conserving something strongly, which it does not preserve: `weaken`
-the state first.
+the state first. On a fermionic site, the other sites keep their correlations, fermionic signs
+included, and `state` must not mix the two parities.
 
 # Examples
 
@@ -1363,6 +1364,26 @@ function has_fermionic(a::Op)
         if x isa Op && has_fermionic(x)
             return true
         elseif x isa Vector && any(y -> y isa Op && has_fermionic(y), x)
+            return true
+        end
+    end
+    return false
+end
+
+"""
+    has_setstate(op)
+
+whether an operator holds a `SetState`, wherever it sits
+"""
+function has_setstate(a::Op)
+    if a isa SetState
+        return true
+    end
+    for f in fieldnames(typeof(a))
+        x = getfield(a, f)
+        if x isa Op && has_setstate(x)
+            return true
+        elseif x isa Vector && any(y -> y isa Op && has_setstate(y), x)
             return true
         end
     end

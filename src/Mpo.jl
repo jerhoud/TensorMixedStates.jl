@@ -127,6 +127,74 @@ adapt_representation(::Type{R}, a::Vector) where R = map(x -> adapt_representati
 adapt_representation(::Type{R}, a) where R = a
 
 """
+    odd_sites(system)
+
+for each site of `system`, whether it is fermionic, its `F` not being the identity
+"""
+odd_sites(sys::System) = [ matrix(F, sys[i]) != I for i in 1:length(sys) ]
+
+"""
+    needs_strings(a, odd)
+
+whether the operator `a`, placed on sites, has a fermionic site with fermionic sites on its
+left outside it, `odd` telling which sites are fermionic, see `odd_sites`
+"""
+needs_strings(a::AtIndex, odd) =
+    any(s -> odd[s] && any(l -> odd[l] && l ∉ a.index, 1:s-1), a.index)
+
+"""
+    strung_setstates(frame, odd, op)
+
+the operator `op` with each operator placed on a site that holds a `SetState` replaced by
+`frame(x, odd)`, `odd` telling which sites are fermionic, see `odd_sites`: the matrix of a
+`SetState` is laid on its site alone, without the Jordan-Wigner strings of the fermionic sites
+on its left that a change of parity takes. A product on one site holding a `SetState` is split
+into its factors first. An operator holding both a `SetState` and a fermionic operator, on a
+site that needs strings, see `needs_strings`, is refused: `simplify` would add the strings of
+the fermionic operator to those of the frame.
+"""
+strung_setstates(frame, odd, a::Vector) = [ strung_setstates(frame, odd, x) for x in a ]
+strung_setstates(frame, odd, a::SumOp{R, Indexed, 1}) where R =
+    SumOp(IndexedOp{R}[ strung_setstates(frame, odd, x) for x in a.subs ])
+strung_setstates(frame, odd, a::ProdOp{R, Indexed, 1}) where R =
+    ProdOp(IndexedOp{R}[ strung_setstates(frame, odd, x) for x in a.subs ])
+strung_setstates(frame, odd, a::ScalarOp{R, Indexed, 1}) where R =
+    a.coef * strung_setstates(frame, odd, a.arg)
+
+function strung_setstates(frame, odd, a::AtIndex{R}) where R
+    if !has_setstate(a.op)
+        return a
+    elseif a.op isa ProdOp
+        return strung_setstates(frame, odd, ProdOp(IndexedOp{R}[ o(a.index...) for o in a.op.subs ]))
+    elseif has_fermionic(a.op) && needs_strings(a, odd)
+        error("cannot place $a on fermionic sites: it holds a SetState and a fermionic " *
+              "operator, whose Jordan-Wigner strings differ")
+    end
+    return frame(a, odd)
+end
+
+strung_setstates(frame, odd, a) = a
+
+"""
+    parity_parts(a, odd)
+
+the operator `a`, holding a `SetState` and placed on a fermionic site `i` with fermionic sites
+on its left, written `A(i) + S * B(i)`, `A` and `B` the parts of `a` that keep and that change
+the parity of the site, and `S` the string `Left(F) * Right(F)` of the sites before `i`, see
+`strung_setstates`.
+"""
+function parity_parts(a::AtIndex{Mixed, 1}, odd)
+    if !needs_strings(a, odd)
+        return a
+    end
+    i = only(a.index)
+    flipped = Left(F) * a.op * Left(F)
+    keeping = ((a.op + flipped) / 2)(i)
+    changing = ((a.op - flipped) / 2)(i)
+    return keeping + Multi_F{Mixed}(1, i - 1, true, true) * changing
+end
+
+"""
     PreMPO(::State, op)
 
 the operator `op` preprocessed for the representation of the state, to be turned into an MPO
@@ -148,7 +216,12 @@ function PreMPO(state::State{R}, a) where R
     # and not what `simplify` made of it
     check_indices(state.system, a)
     n = a isa Vector ? length(a) : 1
-    return PreMPO!(PreMPO{R}(state.system, n), removeMulti(simplify(adapt_representation(R, a))))
+    b = adapt_representation(R, a)
+    odd = any(has_setstate, b isa Vector ? b : [b]) ? odd_sites(state.system) : Bool[]
+    if any(odd)
+        b = strung_setstates(parity_parts, odd, b)
+    end
+    return PreMPO!(PreMPO{R}(state.system, n), removeMulti(simplify(b)))
 end
 
 """

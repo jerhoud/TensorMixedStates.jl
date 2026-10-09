@@ -18,7 +18,8 @@ see `make_mpo`.
 `limits` (default `Limits()`, no truncation) constrains the truncations made while a gate of
 several sites is applied, on the bond it spans and on those crossed to bring its sites
 together; a gate of one site, and the other bonds, are not truncated. An MPO truncates the
-whole result.
+whole result, and so does a `SetState` of a fermionic site with fermionic sites on its left,
+which is applied as its MPO, with a cutoff of `eps()` at least.
 
 # Examples
 
@@ -33,8 +34,12 @@ function apply(a::IndexedOp{Pure}, state::State{Mixed}; kwargs...)
     return apply(Gate(prepare_gate(a)), state; kwargs...)
 end
 
-function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
-    check_indices(state.system, a)
+"""
+    apply_gates(op, state, limits)
+
+the state with the gates `op` applied, see `apply`, a `SetState` being laid without strings
+"""
+function apply_gates(a::IndexedOp{R}, state::State{R}, limits::Limits) where R
     coef, ops = make_ops(state.system, prepare_gate(a))
     # ITensorMPS applies a list of gates first to last, and the factors of a product act
     # right to left: A*B is B applied first
@@ -44,6 +49,37 @@ function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where 
     # whose factors are all identities places no tensor at all and there would be nothing
     # to lay it on: `2Id(1)` then went through leaving the state unscaled
     return State(state, coef == 1 ? st : coef * st)
+end
+
+function apply(a::IndexedOp{R}, state::State{R}; limits::Limits=Limits()) where R
+    check_indices(state.system, a)
+    odd = has_setstate(a) ? odd_sites(state.system) : Bool[]
+    if !any(odd)
+        return apply_gates(a, state, limits)
+    end
+    # a SetState that needs strings is applied as its MPO, see `parity_parts`, the gates
+    # between as gates, right to left
+    b = strung_setstates((x, _) -> x, odd, a)
+    st = state
+    pending = IndexedOp{R}[]
+    for x in reverse(prodsubs(b))
+        if !(x isa AtIndex && has_setstate(x.op) && needs_strings(x, odd))
+            pushfirst!(pending, x)
+            continue
+        end
+        if !isempty(pending)
+            st = apply_gates(ProdOp(pending), st, limits)
+            empty!(pending)
+        end
+        # under a cutoff of zero, the default, the MPO keeps the singular values of rounding,
+        # and the bond dimension grew with each reset: it is cut at eps() at least
+        cut = limits.cutoff == 0 ? Limits(eps(), limits.maxdim, limits.mindim) : limits
+        st = apply(make_mpo(st, x), st; limits = cut)
+    end
+    if !isempty(pending)
+        st = apply_gates(ProdOp(pending), st, limits)
+    end
+    return scalarcoef(b) == 1 ? st : scalarcoef(b) * st
 end
 
 apply(mpo::MPO, state::State; limits::Limits=Limits()) =

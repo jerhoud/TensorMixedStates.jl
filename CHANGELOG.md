@@ -51,6 +51,8 @@ the reference article.
   came back as another type, or with JSON 0.21 as a wrong number above `typemax(Int64)`.
 - The values of one call of `output` sent to one `Data` by several pairs make one event, one
   row of `data_to_frame`, rather than one per pair.
+- `SetState`, on a fermionic site with fermionic sites on its left, changed the sign of the
+  correlations across it, or erased them: it lacked their Jordan-Wigner strings.
 
 ## [1.6.0] - 2026-09-30
 
