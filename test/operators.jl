@@ -27,6 +27,15 @@ end
     @test matrix(TMS.SumOp(TMS.Op{Pure, TMS.Generic, 1}[]), f) == zeros(2, 2)
 end
 
+@testset "A matrix is taken on one site at least" begin
+    # which every method of matrix asks for: given none, the refusal came from the factor the
+    # recursion reached, X for 2X, or as a MethodError on F
+    for a in (X, 2X, exp(X), X * Y, X ⊗ Y, F, 2F, F * X, Id, Proj("Up"), Proj(X => 1))
+        @test_throws MethodError matrix(a)
+    end
+    @test_throws "X acts on 1 site and was given 2" matrix(X, Qubit(), Qubit())
+end
+
 @testset "Global ordering of operators" begin
     # `isless(::Op, ::Op)` ranks the types first and, for two of the same rank, asks `isless`
     # again on the pair. A type with a ranking but no `isless` of its own therefore recurses on

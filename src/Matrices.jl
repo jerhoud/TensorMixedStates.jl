@@ -35,7 +35,7 @@ the `n` sites `what` acts on, a single site standing for `n` identical ones
 function expand_sites(what, n::Int, sites)
     ss = length(sites) == 1 ? fill(only(sites), n) : collect(AbstractSite, sites)
     if length(ss) ≠ n
-        error("$what acts on $n sites and was given $(length(sites))")
+        error("$what acts on $n site$(n == 1 ? "" : "s") and was given $(length(sites))")
     end
     return ss
 end
@@ -72,7 +72,7 @@ parity_of(m::AbstractMatrix, f::AbstractMatrix) =
     end
 
 """
-    matrix(op, site...)
+    matrix(op, site, sites...)
 
 the matrix of the generic operator `op` on the given sites, a single one standing for several
 identical ones, the last site varying fastest. A tensor product of fermionic factors holds the
@@ -88,13 +88,13 @@ matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
     matrix(a(site, sites...), site, sites...)
 
-matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite...) =
-    identity_operator(prod(dim, expand_sites(a, site)))
+matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite, sites::AbstractSite...) =
+    identity_operator(prod(dim, expand_sites(a, (site, sites...))))
 
 matrix(::JW_F, site::AbstractSite) = diagm(Float64[ (-1)^p for p in fermion_parities(site) ])
 
-function matrix(a::Operator, site::AbstractSite...)
-    sites = expand_sites(a, site)
+function matrix(a::Operator, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
     if isnothing(a.expr)
         def = operator_definition(only(sites), Val(Symbol(a.name)))
         if isnothing(def)
@@ -105,33 +105,37 @@ function matrix(a::Operator, site::AbstractSite...)
     return check_size("operator $(a.name)", matrix(a.expr, sites...), sites)
 end
 
-function matrix(a::Proj, given::AbstractSite...)
-    sites = expand_sites(a, given)
+function matrix(a::Proj, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
     if a.state isa Pair
         return eigenprojector(a.state.first, a.state.second, sites...)
     end
-    site = only(sites)
-    v = local_state(site, a.state)
+    v = local_state(only(sites), a.state)
     if !(v isa Vector)
-        error("Proj projects on a pure state, and $(repr(a.state)) is mixed on $site")
+        error("Proj projects on a pure state, and $(repr(a.state)) is mixed on $(only(sites))")
     end
     return v * v'
 end
 
-matrix(a::ScalarOp, site::AbstractSite...) = a.coef * matrix(a.arg, site...)
+matrix(a::ScalarOp, site::AbstractSite, sites::AbstractSite...) =
+    a.coef * matrix(a.arg, site, sites...)
 
-matrix(a::ProdOp, site::AbstractSite...) = prod(matrix(o, site...) for o in a.subs)
+matrix(a::ProdOp, site::AbstractSite, sites::AbstractSite...) =
+    prod(matrix(o, site, sites...) for o in a.subs)
 
-matrix(a::SumOp, site::AbstractSite...) = sum(matrix(o, site...) for o in a.subs)
+matrix(a::SumOp, site::AbstractSite, sites::AbstractSite...) =
+    sum(matrix(o, site, sites...) for o in a.subs)
 
-matrix(a::ExpOp, site::AbstractSite...) = exp(matrix(a.arg, site...))
+matrix(a::ExpOp, site::AbstractSite, sites::AbstractSite...) = exp(matrix(a.arg, site, sites...))
 
-matrix(a::ModOp, site::AbstractSite...) = exp(2im * π * matrix(a.arg, site...) / a.modulus)
+matrix(a::ModOp, site::AbstractSite, sites::AbstractSite...) =
+    exp(2im * π * matrix(a.arg, site, sites...) / a.modulus)
 
-matrix(a::IntPowOp, site::AbstractSite...) = matrix(a.arg, site...) ^ a.expo
+matrix(a::IntPowOp, site::AbstractSite, sites::AbstractSite...) =
+    matrix(a.arg, site, sites...) ^ a.expo
 
-function matrix(a::GenPowOp, site::AbstractSite...)
-    m = matrix(a.arg, site...)
+function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
+    m = matrix(a.arg, site, sites...)
     r = rank(m)
     if real(a.expo) ≤ 0 && r < size(m, 1)
         error("$a does not exist: $(a.arg) is not invertible")
@@ -146,12 +150,13 @@ function matrix(a::GenPowOp, site::AbstractSite...)
     return Matrix(m ^ a.expo)
 end
 
-matrix(a::DagOp, site::AbstractSite...) = collect(adjoint(matrix(a.arg, site...)))
+matrix(a::DagOp, site::AbstractSite, sites::AbstractSite...) =
+    collect(adjoint(matrix(a.arg, site, sites...)))
 
 # (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): a factor on fermionic sites takes their
 # parity for each odd factor after it, and a factor of no definite parity there is refused
-function matrix(a::TensorOp{Pure}, site::AbstractSite...)
-    sites = expand_sites(a, site)
+function matrix(a::TensorOp{Pure}, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
     pos = factor_sites(a)
     fs = [ foldl(kron, [ matrix(F, s) for s in sites[p] ]) for p in pos ]
     ms = [ matrix(o, sites[p]...) for (o, p) in zip(a.subs, pos) ]
