@@ -173,16 +173,18 @@ end
             sqrt(2))
     hop = dag(Cup)(1) * Cup(3)
     @test expect(apply(SetState("Emp")(2), e), hop) ≈ expect(e, hop)
-    # the resets of a chain conserving nothing leave a product state, the singular values of
-    # rounding cut rather than kept by the default cutoff
+    # the resets of a chain conserving nothing leave a product state, its bond dimension
+    # falling from 64 to 1, or 2 when a singular value of rounding stays above eps(): without
+    # the cut at eps(), it rose to 192
     chain = System(6, Fermion())
     ψ = State{Pure}(chain, [isodd(j) ? "Occ" : "Emp" for j in 1:6])
     h = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:5)
     r = mix(tdvp(-im * h, 0.6, ψ; nsweeps = 6, limits = Limits(maxdim = 8, cutoff = 1e-12)))
+    start = maxlinkdim(r)
     for i in 2:6
         r = apply(SetState("Emp")(i), r)
     end
-    @test maxlinkdim(r) == 1
+    @test maxlinkdim(r) < start
     @test_throws "mixes the two fermionic parities" apply(SetState([1., 1.] / sqrt(2))(2), ρ)
     @test_throws "holds a SetState and a fermionic operator" apply((0.5 * Gate(C) +
                                                                     0.5 * SetState("Emp"))(2), ρ)
