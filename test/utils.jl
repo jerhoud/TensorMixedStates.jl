@@ -3,6 +3,10 @@
 # exist by the time the group files are parsed. The helpers of 1.x the later layers need are
 # in v1/utils.jl until those layers come.
 
+# the package and ITensors under short names, for what a test reaches that is not exported
+const TMS = TensorMixedStates
+const IT = TensorMixedStates.ITensors
+
 """
 test whether a statement executes without throwing an exception
 """

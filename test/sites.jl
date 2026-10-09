@@ -4,9 +4,6 @@
 # An assertion that needs a later layer is kept as `@test_skip`, marked with that layer; the
 # testsets of later layers are still in v1/sites.jl.
 
-const TMS = TensorMixedStates
-const IT = TensorMixedStates.ITensors
-
 # the conserved quantities of a site, as tuples
 charges(site) = [ (q.name, q.modulus, q.charges, q.strong) for q in TMS.conserved(site).quantities ]
 

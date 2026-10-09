@@ -227,7 +227,6 @@ end
 end
 
 @testset "States under a strong symmetry" begin
-    IT = TensorMixedStates.ITensors
     sys = System(3, Fermion(conserve = strong(N)))
     conf = ["Occ", "Emp", "Occ"]
     # the state lives in one sector on the ket side and in the same one on the bra side
