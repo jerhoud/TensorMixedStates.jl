@@ -496,7 +496,8 @@ function state(site::AbstractSite, a::Union{Vector, Matrix})
         error("a $(size(a, 1))×$(size(a, 2)) density matrix cannot be one of $site, whose " *
               "dimension is $d")
     end
-    return a
+    # a copy: the array belongs to the declaration
+    return copy(a)
 end
 
 state(site::AbstractSite, a::Function) = state(site, a(site))

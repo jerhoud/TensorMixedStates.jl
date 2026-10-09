@@ -286,6 +286,13 @@ end
     @test state(Qubit(), "FullyMixed") == [0.5 0. ; 0. 0.5]
     @test_throws "state Zorglub is not defined for site Declarer" state(Declarer(), "Zorglub")
     @test_throws InterruptException state(Interrupter(), "Up")
+    # a copy of what the site declares, which changing changed it for every one
+    v = state(Qubit(), "Up")
+    v[1], v[2] = 0, 1
+    @test state(Qubit(), "Up") == [1, 0]
+    m = matrix(X, Qubit())
+    m[1, 2] = 5
+    @test matrix(X, Qubit()) == [0 1 ; 1 0]
 end
 
 @testset "Custom site type" begin

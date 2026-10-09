@@ -16,6 +16,8 @@ the reference article.
   `SubRenyi2` and `MutualInfoRenyi2`, keep the fermionic signs of the sites traced out.
 - `sample` of a mixed state drew every site after about the 1074th of a chain in its last
   state, a probability falling below the smallest float.
+- `state` and `matrix` give a copy of the array a site declares, which changing changed it for
+  everyone.
 
 ## [1.6.0] - 2026-09-30
 

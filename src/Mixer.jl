@@ -397,7 +397,8 @@ function matrix(a::Union{TensorOp, Left, Right}, site::AbstractSite...)
     return reshape(Array(t, reverse(outs)..., reverse(ins)...), d, d)
 end
 
-matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = a
+# a copy: changing it would change the declared operator
+matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
 
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
     matrix(a(site, sites...), site, sites...)
