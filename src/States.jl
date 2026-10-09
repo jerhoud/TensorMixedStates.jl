@@ -3,7 +3,7 @@
 # state, and the norm, the trace and the inner product. The later layers go between the pure
 # and the mixed representations with `combinerto`, `mixer`, `relabel`, `relabeller`,
 # `element_maps` and `on_legs`, give limits to ITensors with `truncation`, and the measurements
-# fill the cache `preobs` of a state.
+# fill the cache `preobs` of a state with `cached!`, measuring on `weak_form`.
 
 export State, Limits, mix, maxlinkdim, trace, norm, normalize, inner, dot
 
@@ -106,6 +106,21 @@ struct PreObs
 end
 
 PreObs() = PreObs([], [], [], [], [], ReentrantLock())
+
+"""
+    cached!(create!, v, state)
+
+the cache `v` of `state`, filled by `create!(v, state)` on first use under the lock of
+`PreObs`; once filled it never changes, and is read without the lock
+"""
+function cached!(create!, v, state)
+    lock(state.preobs.lock) do
+        if isempty(v)
+            create!(v, state)
+        end
+    end
+    return v
+end
 
 """
     State{R}(system, states)
@@ -527,22 +542,41 @@ norm ``\\sqrt{\\mathrm{tr}(\\rho^\\dagger\\rho)}``, not the trace.
 norm(state::State) = norm(state.state)
 
 """
+    weak_form(state)
+
+the state measurements run on: `state` itself, or, for a mixed state conserving something
+strongly, `weaken(state)`, computed once and kept with it. Under a strong symmetry an element
+|m⟩⟨m| has no charge of its own, and weakening changes no expectation value.
+"""
+weak_form(state::State{Pure}) = state
+
+weak_form(state::State{Mixed}) =
+    if isempty(strong_names(state.system))
+        state
+    else
+        only(cached!((w, s) -> push!(w, weaken(s)), state.preobs.weak, state))
+    end
+
+"""
     trace(::State)
 
-the trace of the density matrix, or the squared norm of a pure state.
+the trace of the density matrix, or the squared norm of a pure state, computed once and kept
+with the state.
 """
-trace(state::State{Pure}) = inner(state.state, state.state)
+trace(state::State{Pure}) =
+    only(cached!((t, s) -> push!(t, inner(s.state, s.state)), state.preobs.trace, state))
 
-# under a strong symmetry an element |m⟩⟨m| has no charge of its own: the trace is taken on
-# the weak form
 function trace(state::State{Mixed})
-    s = isempty(strong_names(state.system)) ? state : weaken(state)
-    t = ITensor(1.)
-    for i in 1:length(s)
-        e = ket_bras(s.system, i)
-        t = t * s.state[i] * dag(sum(e(m, m) for m in 1:dim(s.system[i])))
+    t = cached!(state.preobs.trace, state) do t, state
+        s = weak_form(state)
+        x = ITensor(1.)
+        for i in 1:length(s)
+            e = ket_bras(s.system, i)
+            x = x * s.state[i] * dag(sum(e(m, m) for m in 1:dim(s.system[i])))
+        end
+        push!(t, scalar(x))
     end
-    return scalar(t)
+    return only(t)
 end
 
 """

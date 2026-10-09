@@ -250,6 +250,21 @@ end
     @test_ok State{Mixed}(System(3, Fermion(conserve = N)), [0.3 0.; 0. 0.7])
 end
 
+@testset "The trace is kept with the state" begin
+    # computed once, under the lock of the state, with the weak form a state conserving
+    # something strongly is measured on
+    ρ = mix(State{Pure}(System(3, Fermion(conserve = strong(N))), ["Occ", "Emp", "Occ"]))
+    @test isempty(ρ.preobs.trace) && isempty(ρ.preobs.weak)
+    @test trace(ρ) ≈ 1
+    @test length(ρ.preobs.trace) == 1
+    @test only(ρ.preobs.weak).system == weaken(ρ).system
+    ψ = random_state(Pure, System(4, Qubit()), 4)
+    @test trace(ψ) ≈ norm(ψ)^2
+    @test only(ψ.preobs.trace) === trace(ψ)
+    # a state built from it starts with caches of its own
+    @test isempty(normalize(ψ).preobs.trace)
+end
+
 @testset "A random state needs a sector" begin
     sys = System(4, Fermion(conserve = N))
     conf = ["Occ", "Emp", "Occ", "Emp"]
