@@ -553,6 +553,20 @@ end
     @test_ok apply(sqrt(Swap)(1, 2) * dag(C)(3), sf)
 end
 
+@testset "A non integer power of a fermionic superoperator" begin
+    # after the first site, the strings its fermionic operators take on both sides of the
+    # density matrix do not commute with the power, which was taken without them
+    ρ = mix(RandomState{Pure}(System(3, Fermion()), 4))
+    G = Gate(C + dag(C))
+    @test_throws "do not commute with its power" make_mpo(ρ, (G^0.5)(3))
+    @test_throws "do not commute with its power" make_mpo(ρ, (Left(C + dag(C))^0.5)(2))
+    # on the first site, and an even one anywhere, it is a square root
+    for (g, i) in ((G, 1), (Gate(N), 3))
+        p = make_mpo(ρ, (g^0.5)(i))
+        @test norm(apply(p, apply(p, ρ)) - apply(g(i), ρ)) < 1e-12
+    end
+end
+
 @testset "The identity is one value of each kind" begin
     # every construction of an identity gives the same value, told by its type alone: on
     # several sites, on a density matrix, and placed, where it has no site, being the identity

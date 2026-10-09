@@ -435,7 +435,16 @@ function simplify_ind(a::GenPowOp{Pure}, index...)
     return scalarcoef(g) * place_function(p, index...)
 end
 
-simplify_ind(a::GenPowOp{Mixed}, index...) = simplify(a)(index...)
+# placed whole, without the strings its fermionic operators take on both sides of the density
+# matrix after the first site, which do not commute with the power
+function simplify_ind(a::GenPowOp{Mixed}, index...)
+    if length(index) == 1 && only(index) > 1 && has_fermionic(a)
+        error("cannot place $a on site $(only(index)): the Jordan-Wigner strings of its " *
+              "fermionic operators do not commute with its power")
+    end
+    return simplify(a)(index...)
+end
+
 simplify_ind(a::DagOp, index...) = simplify_dag(simplify_ind(a.arg, index...))
 simplify_ind(a::Left, index...) = sided(Left, simplify_ind(a.arg, index...))
 simplify_ind(a::Right, index...) = sided(Right, simplify_ind(a.arg, index...))

@@ -22,6 +22,8 @@ the reference article.
   lock, made measurements fail and could crash Julia.
 - A projector on a fermionic site refuses a state of no definite parity, which was taken as
   even when named and placed without string when given as a vector.
+- A non integer power of a superoperator holding a fermionic operator, as
+  `Gate(C + dag(C))^0.5`, is refused on any site but the first, where an MPO placed it wrong.
 
 ## [1.6.0] - 2026-09-30
 
