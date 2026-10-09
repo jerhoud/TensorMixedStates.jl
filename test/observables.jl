@@ -417,6 +417,37 @@ end
     @test abs(trace(partial_trace(stm - stm, [1]))) < 1e-12
 end
 
+@testset "A partial trace keeps the fermionic signs" begin
+    # a fermion traced out has to be moved past the fermions kept on its right, which the
+    # trace of the spins forgot: on (|110⟩ + |011⟩)/√2 the hopping from 3 to 1 crosses the
+    # fermion of site 2, and gave +1/2 on the reduced state instead of -1/2
+    fe = Fermion()
+    s3 = System(3, fe)
+    ρ = mix(normalize(State{Pure}(s3, ["Occ", "Occ", "Emp"]) + State{Pure}(s3, ["Emp", "Occ", "Occ"])))
+    @test expect(partial_trace(ρ, [2]), dag(C)(1) * C(2)) ≈ expect(ρ, dag(C)(1) * C(3)) ≈ -0.5
+    # a state of no definite parity takes the sign on a single fermionic operator as well
+    ρ = mix(normalize(State{Pure}(s3, ["Emp", "Occ", "Emp"]) + State{Pure}(s3, ["Emp", "Occ", "Occ"])))
+    @test expect(partial_trace(ρ, [1, 2]), C(1) + dag(C)(1)) ≈ expect(ρ, C(3) + dag(C)(3)) ≈ -1
+    # the reduced state is the right one: every operator of the sites kept has on it the value
+    # it has on the state. With sites traced out on both sides, the entropies of the trace of
+    # the spins were wrong too, for a state of definite parity
+    ρ = mix(RandomState(State{Pure}(System(5, Fermion(conserve = N)),
+                                    ["Occ", "Occ", "Emp", "Emp", "Occ"]), 4))
+    red = partial_trace(ρ, [1, 4]; keepers = true)
+    odd = (C, dag(C))
+    for a in (Id, N, C, dag(C)), b in (Id, N, C, dag(C))
+        if (a in odd) == (b in odd)
+            @test expect(red, a(1) * b(2)) ≈ expect(ρ, a(1) * b(4)) atol = 1e-12
+        end
+    end
+    es = System(3, Electron())
+    ρ = mix(RandomState{Pure}(es, 4))
+    @test expect(partial_trace(ρ, [2]), dag(Cdn)(1) * Cup(2)) ≈ expect(ρ, dag(Cdn)(1) * Cup(3))
+    # no fermion kept on the right of one traced out: no sign, and the bond dimension stays
+    ρ = mix(RandomState{Pure}(System(4, fe), 4))
+    @test maxlinkdim(partial_trace(ρ, [3, 4])) ≤ maxlinkdim(ρ)
+end
+
 @testset "Measurements that were refused" begin
     # a part that is all the system or nothing shares nothing with the rest
     ρ = mix(RandomState{Pure}(System(3, Qubit()), 2))

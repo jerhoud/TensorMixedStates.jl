@@ -10,7 +10,10 @@ the reference article.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- `partial_trace`, the `PartialTrace` phase, and through it `renyi2`, `mutual_info_renyi2`,
+  `SubRenyi2` and `MutualInfoRenyi2`, keep the fermionic signs of the sites traced out.
 
 ## [1.6.0] - 2026-09-30
 

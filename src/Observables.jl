@@ -1002,11 +1002,67 @@ function check_positions(state::State, pos, what)
 end
 
 """
+    trace_signs(state, keep)
+
+the state whose partial trace keeping the sites `keep` is the reduced state of `state`, its
+fermionic signs included. In the Jordan-Wigner basis a fermion traced out has to be moved past
+every fermion kept on its right, each one giving a sign: the reduced state is the trace of
+``U \\rho U^\\dagger``, ``U = (-1)^{\\sum n_l n_k}``, with `l` running over the fermionic sites
+traced out and `k` over the fermionic sites kept on their right, and `n` the parity of a site.
+``U \\rho U^\\dagger`` is the product of the state by an MPO of bond dimension 2, which carries
+the parity of the fermions traced out on the left: a site traced out projects on each parity,
+on the side of the ket alone, being traced afterwards, and a site kept takes `Gate(F)` when that
+parity is odd. A state needing no sign is given back as it is.
+"""
+function trace_signs(state::State{Mixed}, keep)
+    sys = state.system
+    n = length(sys)
+    odd = [ matrix(F, sys[i]) != I for i in 1:n ]
+    if !any(l -> odd[l] && l ∉ keep && any(k -> odd[k] && k > l, keep), 1:n)
+        return state
+    end
+    links = [ is_charged(sys) ? Index([QN() => 2]; tags = "Parity,l=$i") : Index(2, "Parity,l=$i")
+              for i in 0:n ]
+    projs = [ Left((Id + F) / 2), Left((Id - F) / 2) ]
+    mps = state.state
+    ts = map(1:n) do i
+        idx = SysIndex{Mixed}(sys, i)
+        l, r = links[i], links[i+1]
+        w = ITensor(idx', dag(idx), dag(l), r)
+        id = delta(dag(idx), idx')
+        for p in 1:2
+            if !odd[i]
+                add_block!(w, l, p, r, p, id, idx)
+            elseif i in keep
+                add_block!(w, l, p, r, p, p == 1 ? id : tensor(sys, Gate(F)(i)), idx)
+            else
+                for q in 1:2
+                    add_block!(w, l, p, r, xor(p - 1, q - 1) + 1, tensor(sys, projs[q](i)), idx)
+                end
+            end
+        end
+        return noprime(w * mps[i])
+    end
+    # no fermion on the left of the first site, and either parity on the right of the last
+    ts[1] *= onehot(links[1] => 1)
+    ts[n] *= onehot(dag(links[n+1]) => 1) + onehot(dag(links[n+1]) => 2)
+    for i in 1:n-1
+        c = combiner(commonind(mps[i], mps[i+1]), links[i+1]; tags = "Link,l=$i")
+        ts[i] *= c
+        ts[i+1] *= dag(c)
+    end
+    return State(state, MPS(ts))
+end
+
+"""
     partial_trace(state, positions::AbstractVector{Int} [; keepers = false])
 
 the state with the sites at `positions` traced out, or, with `keepers = true`, all the others.
 The result is a mixed state on a new system made of the sites kept, in their order, and it
-has the trace of `state`.
+has the trace of `state`. It keeps the fermionic signs: an operator of the sites kept has on it
+the expectation value it has on `state`, its Jordan-Wigner strings crossing the fermions traced
+out. Tracing out a fermionic site with fermionic sites kept on its right may double the bond
+dimension of the result.
 
 A pure representation is refused, the reduced state being mixed in general: use `mix(state)`
 first. So is a state conserving something strongly, the reduced state spreading over several
@@ -1035,6 +1091,7 @@ function partial_trace(state::State{Mixed}, pos::AbstractVector{Int}; keepers::B
     if kn == 0
         error("partial_trace cannot trace all sites of a state")
     end
+    state = trace_signs(state, keep)
     mps = state.state
     sys = state.system
     j = 0
