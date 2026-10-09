@@ -590,6 +590,37 @@ end
     end
 end
 
+@testset "A resumed steady state has trace one" begin
+    # the eigenvector dmrg gives has norm one and a sign of its own, and the solver normalizes
+    # it only when it returns. A steady state checkpointed on its last sweep, whose resume
+    # does not run the solver, was handed to the next phases and saved with a trace of 1.39
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            lind = -im * (X(1) + 0.7 * X(2) + Z(1) * Z(2)) + Dissipator(Sm)(1) + Dissipator(Sp)(2)
+            phases = [CreateState{Mixed}(3, Qubit(), "Up"),
+                      SteadyState(lindbladian = lind, nsweeps = 4,
+                                  limits = Limits(cutoff = 1e-12, maxdim = 32),
+                                  measures = "data" => [stopper_at(stop_in)]),
+                      Evolve(duration = 0.2, time_step = 0.1, algo = Tdvp(), evolver = lind,
+                             limits = Limits(cutoff = 1e-12, maxdim = 32)),
+                      SaveState(file = "saved.h5")]
+            ref = runTMS(SimData(; name = "ref", phases))
+            for k in (4, 2)
+                stop_in[] = k
+                sim_data = SimData(; name = "chk$k", phases, checkpoint_interval = 1e-9)
+                stopped = runTMS(sim_data)
+                @test stop_in[] == 0
+                @test trace(stopped.state) ≈ 1
+                sim = runTMS(sim_data)
+                @test trace(sim.state) ≈ 1
+                @test trace(load_state("chk$k/saved.h5", "state")) ≈ 1
+                @test expect1(sim.state, Z) ≈ expect1(ref.state, Z)
+            end
+        end
+    end
+end
+
 @testset "A resumed dmrg with a measurement period" begin
     # a deadline already past stops every run after one sweep or one phase. A stop measured a
     # sweep its period skips, the line of a checkpointed sweep was cut from the log, and a

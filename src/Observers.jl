@@ -144,19 +144,21 @@ function checkdone!(o::DmrgObserver; energy, sweep, psi, kwargs...)
     # checkpoint, so that it stops where the uninterrupted run stops
     s = sweep + o.done
     stop = !isnothing(o.energy) && abs(o.energy - energy) < o.tol
+    # normalized as the solver normalizes what it returns: an eigenvector of L†L has norm one
+    # and a sign of its own, and a steady state checkpointed on its last sweep, whose resume
+    # does not run the solver, was handed on and saved as it was. Normalizing makes a new MPS,
+    # dmrg going on with the next sweep in its own
+    st = normalize(State(o.sim.state, psi))
     # a stop asked for is not a reason to measure: the uninterrupted run did not measure a
     # sweep its period skips, and the resumed one continues after it
     if stop || sweep_due(o.period, s)
-        st = normalize(State(o.sim.state, psi))
         output(Simulation(o.sim, st), o.measurements; energy, sweep = s)
     end
     log_msg(o.sim, "sweep $s")
     o.energy = energy
-    # a dmrg sweep does not change the simulation time, so the state is committed as it is
-    # and the sweep count is what a resume needs. The state is copied, dmrg going on with the
-    # next sweep in the same MPS, and a stop on the tolerance records the phase as done, not
-    # to be run again
-    if sweep_commit!(o.sim, State(o.sim.state, copy(psi)), o.sim.time, stop ? o.nsweeps : s; energy)
+    # a dmrg sweep does not change the simulation time, so the sweep count is what a resume
+    # needs, and a stop on the tolerance records the phase as done, not to be run again
+    if sweep_commit!(o.sim, st, o.sim.time, stop ? o.nsweeps : s; energy)
         stop = true
     end
     return stop

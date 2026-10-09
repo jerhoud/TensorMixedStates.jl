@@ -30,6 +30,8 @@ the reference article.
   `C(1) * C(4) * M(1, 2)`, gave a wrong state, a string being moved past part of `M`.
 - `named` refuses a matrix that does not satisfy its `type`, as a matrix declared an involution
   that is not self adjoint, which `simplify` squared to the identity.
+- A `SteadyState` checkpointed on its last sweep hands on a state of trace one once resumed,
+  where it handed on the eigenvector dmrg gives, of trace 1.39 in a test.
 
 ## [1.6.0] - 2026-09-30
 
