@@ -160,6 +160,34 @@ end
     @test_throws "F is not declared" @macroexpand @def_operators Dummit2 [ F = [1. 0. ; 0. -1.] ]
 end
 
+@testset "Swap exchanges the states of two sites of one type" begin
+    # the permutation of the two states on every site type, a sign coming between two odd ones
+    for site in (Qubit(), Qudit(3), Boson(4), Spin(1))
+        d = dim(site)
+        m = matrix(Swap, site)
+        for i in 1:d, j in 1:d
+            v = zeros(d^2)
+            v[(i - 1) * d + j] = 1
+            w = zeros(d^2)
+            w[(j - 1) * d + i] = 1
+            @test m * v == w
+        end
+    end
+    q = Qubit()
+    @test matrix(Swap, q) ≈ matrix((Id ⊗ Id + Z ⊗ Z) / 2 + Sp ⊗ Sm + Sm ⊗ Sp, q)
+    # the fermionic swap exchanges the modes, a string included: P (C ⊗ Id) P is Id ⊗ C
+    for (site, c) in ((Fermion(), C), (Electron(), Cup), (Electron(), Cdn), (Tj(), Cdn))
+        p = matrix(Swap, site)
+        @test p * matrix(c ⊗ Id, site) * p ≈ matrix(Id ⊗ c, site)
+    end
+    # its matrix knows no charge, and placed on a system it keeps the charges only when both
+    # sites carry the same ones
+    @test matrix(Swap, Fermion(conserve = N), Fermion()) == matrix(Swap, Fermion())
+    @test_skip "Swap refused between a site conserving N and one conserving nothing"   # couche 2
+    @test_throws "of one type and one dimension" matrix(Swap, Qubit(), Fermion())
+    @test_throws "of one type and one dimension" matrix(Swap, Boson(3), Boson(4))
+end
+
 @testset "Spin measuring" begin
     @test norm(matrix(Sx^2 + Sy^2 + Sz^2 - S2, Spin(5/2))) ≈ 0 atol = 1e-12
     @test norm(matrix(Sx^2 + Sy^2 + Sz^2 - S2, Spin(4))) ≈ 0 atol = 1e-12

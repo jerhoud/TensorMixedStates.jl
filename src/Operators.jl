@@ -342,7 +342,7 @@ of one site or several.
     Proj("Up")
     Proj(Level => 1)       # the second basis state
     Proj(Sz => 0)          # on a Spin(1), the state of Sz = 0
-    Proj(Swap => -1)       # on two qubits, the singlet
+    Proj(Swap => -1)       # the antisymmetric part of two sites, the singlet of two qubits
 """
 struct Proj{N} <: GenericOp{Pure, N}
     state::Union{String, Vector, Function, Pair{<:GenericOp{Pure}, <:Real}}

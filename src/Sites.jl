@@ -2,7 +2,7 @@
 # states and operators declared for its type, which become ordinary methods.
 
 export AbstractSite, dim, fermion_parities, fermion_species, string_state
-export Level, F, @def_states, @def_operators, @create_site_module
+export Level, F, Swap, @def_states, @def_operators, @create_site_module
 
 """
     abstract type AbstractSite
@@ -69,6 +69,39 @@ the fermionic parity of a site, ``(-1)^p`` on a basis state of parity `p`, see
 `fermion_parities`: the identity on a site that is not fermionic.
 """
 const F = Operator{1}("F", s -> diagm(Float64[ (-1)^p for p in fermion_parities(s) ]))
+
+"""
+    swap_matrix(a, b)
+
+the matrix of `Swap` on the sites `a` and `b`, refused when they are not of one type and one
+dimension
+"""
+function swap_matrix(a::AbstractSite, b::AbstractSite)
+    d = dim(a)
+    if typeof(a) ≠ typeof(b) || dim(b) ≠ d
+        error("Swap exchanges the states of two sites of one type and one dimension, not those " *
+              "of $a and $b")
+    end
+    p = fermion_parities(a)
+    m = zeros(d^2, d^2)
+    for i in 1:d, j in 1:d
+        m[(j - 1) * d + i, (i - 1) * d + j] = (-1)^(p[i] * p[j])
+    end
+    return m
+end
+
+"""
+    Swap
+
+the exchange of the states of two sites of one type, ``|a, b\\rangle \\mapsto (-1)^{p_a p_b}
+|b, a\\rangle``, the sign coming between two odd states, see `fermion_parities`.
+
+# Examples
+
+    Swap(1, 2)
+    Proj(Swap => -1)       # the antisymmetric part of two sites
+"""
+const Swap = Operator{2}("Swap", swap_matrix)
 
 """
     operator_definition(site, ::Val{name})

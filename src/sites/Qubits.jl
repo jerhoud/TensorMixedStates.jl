@@ -34,7 +34,7 @@ values ±1, so `conserve = Z` conserves the magnetization, as `2Sz` does; its pa
                        ``S^2``
 - `N`                : the number of excitations, ``(1 - Z)/2``: `"Dn"` is the occupied state
                        and `Sm` creates an excitation
-- `H, S, T, Swap`    : the Hadamard, S, T and Swap gates
+- `H, S, T`          : the Hadamard, S and T gates
 - `Phase(t)`         : the phase gate
 - `controlled(gate)` : the controlled gate
 """
@@ -96,15 +96,6 @@ the gate applying `op` to the following sites when the first one, a qubit, is in
 controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op)) where N =
     Operator{N+1}(name, Proj(Level => 0) ⊗ IdentityOp(op) + Proj(Level => 1) ⊗ op)
 
-# factors of a definite charge, which X ⊗ X + Y ⊗ Y lacks, and dag(Sp) rather than Sm, which
-# `measure` does not know to be its adjoint when it tests for a real value
-"""
-    Swap
-
-the gate exchanging the states of two qubits.
-"""
-const Swap = Operator{2}("Swap", (Id ⊗ Id + Z ⊗ Z) / 2 + Sp ⊗ dag(Sp) + dag(Sp) ⊗ Sp)
-
 """
     Phase(t)
 
@@ -113,4 +104,4 @@ the phase gate of a qubit, ``\\mathrm{diag}(1, e^{it})``.
 Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)])
 
 @create_site_module(Qubits, [Qubit, controlled, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm, H, S, T,
-                             Swap, Phase])
+                             Phase])
