@@ -347,7 +347,7 @@ end
     @test charges(Electron(conserve = (Ntot, 2Sz))) ==
         [("2Sz", 1, [0, 1, -1, 0], false), ("Ntot", 1, [0, 1, 1, 2], false)]
     @test isempty(charges(Qubit()))
-    # the modulus of Zd read off its spectrum, the eigenvalues being roots of unity
+    # the modulus of Zd coming from its definition, mod(N, d)
     for d in (3, 5, 8)
         @test charges(Qudit(d, conserve = Zd)) == [("Zd", d, collect(0:d-1), false)]
     end
@@ -357,6 +357,9 @@ end
     @test_throws "is not diagonal" Spin(1, conserve = Sx)
     @test_throws "2Sz rather than Sz" Spin(1/2, conserve = Sz)
     @test_throws "already carries a charge modulo" Qudit(3, conserve = mod(Zd, 2))
+    # a unitary given by its matrix is not read off its spectrum: its charge and the modulus
+    # are written with mod
+    @test_throws "a charge modulo m is written mod(Q, m)" Qubit(conserve = S)
     # decision 18: the charges are typed, so a name may hold any character but a final star,
     # which names the bra of a strong quantity
     for name in ("a%2", "a:b", "a;b", "a!")

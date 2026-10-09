@@ -25,10 +25,9 @@ short(x::Real) = round(x; sigdigits = 2)
     site_charges(op, site)
 
 the modulus and the charge of each basis state of `site` for the conserved quantity `op`, as
-`(modulus, charges)`. `op` is diagonal on the site, with eigenvalues either integers, taken as
-the charges, or roots of unity, the charge being the exponent and the modulus read off the
-denominators. On ±1, where both readings apply, the integer one wins, and `parity` asks for the
-other.
+`(modulus, charges)`. `op` is a charge, diagonal on the site with integer eigenvalues, or a charge
+modulo `m`, written `mod(Q, m)` or `parity(Q)`: the expression carries the modulus, which the
+spectrum is never asked for.
 """
 function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
     # a renamed operator, or one declared for the site, reads its charges off its definition,
@@ -52,24 +51,12 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
               "cannot be a conserved quantity: a charge is carried by each basis state")
     end
     to_int = maximum(max(abs(imag(x)), abs(real(x) - round(real(x)))) for x in d)
-    if to_int ≤ tol
-        return (1, Int.(round.(real.(d))))
+    if to_int > tol
+        error("the eigenvalues of $op on site $(typeof(site)) miss the integers by " *
+              "$(short(to_int)), so they are not charges. Half integer ones are written " *
+              "doubled, 2Sz rather than Sz, and a charge modulo m is written mod(Q, m)")
     end
-    to_circle = maximum(abs(abs(x) - 1) for x in d)
-    if to_circle ≤ tol
-        θ = angle.(d) ./ (2π)
-        modulus = reduce(lcm, denominator.(rationalize.(Int, θ; tol = 1e-8)))
-        q = Int.(round.(θ .* modulus))
-        to_root = maximum(abs.([exp(2im * π * k / modulus) for k in q] .- d))
-        if to_root > tol
-            error("the eigenvalues of $op on site $(typeof(site)) are on the unit circle " *
-                  "but miss the roots of unity by $(short(to_root)), so they are not charges")
-        end
-        return (modulus, mod.(q, modulus))
-    end
-    error("the eigenvalues of $op on site $(typeof(site)) miss the integers by " *
-          "$(short(to_int)) and the unit circle by $(short(to_circle)), so they are not " *
-          "charges. Half integer ones are written doubled, 2Sz rather than Sz")
+    return (1, Int.(round.(real.(d))))
 end
 
 site_charges(op::GenericOp{Pure}, ::AbstractSite) =
