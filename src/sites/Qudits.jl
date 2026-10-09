@@ -1,5 +1,5 @@
 # The Qudit site type, a level system of any dimension with the generalized Pauli operators,
-# with its operators and the gate Sumd, gathered in the module Qudits.
+# with its operators and the gate Sum, gathered in the module Qudits.
 
 export Qudits
 
@@ -10,7 +10,7 @@ the site type of a qudit, a `dim` level system carrying the generalized Pauli op
 
 Writing ``d`` for the dimension and ``\\omega = e^{2i\\pi/d}``, the clock operator acts as
 ``Z|n\\rangle = \\omega^n |n\\rangle`` and the shift operator as
-``X|n\\rangle = |n+1 \\mod d\\rangle``. `H`, `S` and `Sumd` generate the Clifford group. `X`,
+``X|n\\rangle = |n+1 \\mod d\\rangle``. `H`, `S` and `Sum` generate the Clifford group. `X`,
 `Z`, `H` and `S` are those of `Qubit` for ``d = 2``.
 
 # Examples
@@ -29,7 +29,7 @@ Writing ``d`` for the dimension and ``\\omega = e^{2i\\pi/d}``, the clock operat
 - `X`  : the shift operator
 - `H`  : the Fourier operator, or generalized Hadamard gate
 - `S`  : the phase operator, of order ``d`` for odd ``d`` and ``2d`` for even ``d``
-- `Sumd(d)` : the generalized controlled not of two qudits, see `Sumd`
+- `Sum` : the generalized controlled not of two qudits, see `Sum`
 """
 struct Qudit <: AbstractSite
     dim::Int
@@ -62,15 +62,16 @@ dim(a::Qudit) = a.dim
 ]
 
 """
-    Sumd(d)
+    Sum
 
-the generalized controlled not of two qudits of dimension `d`,
-``|i, j\\rangle \\mapsto |i, i + j \\mod d\\rangle``; `Sumd(2)` is the CNOT.
+the generalized controlled not of two qudits, ``|i, j\\rangle \\mapsto |i, i + j \\mod d\\rangle``,
+``d`` being the dimension of the second, read on the sites it is placed on; on two `Qudit(2)`
+it is the CNOT.
 
 # Examples
 
-    Sumd(3)(1, 2)
+    Sum(1, 2)
 """
-Sumd(d::Int) = Operator{2}("Sumd($d)", sum(Proj(Level => i) ⊗ X^i for i in 0:d-1))
+const Sum = Operator{2}("Sum", (a, _) -> sum(Proj(Level => i) ⊗ X^i for i in 0:dim(a)-1))
 
-@create_site_module(Qudits, [Qudit, N, Z, X, H, S, Sumd])
+@create_site_module(Qudits, [Qudit, N, Z, X, H, S, Sum])

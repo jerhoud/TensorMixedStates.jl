@@ -226,13 +226,18 @@ end
     @test matrix(S, Qudit(2)) ≈ matrix(Qubits.S, Qubit())
     @test matrix(X, Qudit(1)) == ones(1, 1)
     @test matrix(Z, Qudit(1)) == ones(1, 1)
-    @test matrix(Sumd(2), Qudit(2), Qudit(2)) ≈ matrix(controlled(X), Qubit(), Qubit())
-    # Sum adds the level of the first qudit to the second, modulo d
-    m = matrix(Sumd(3), Qudit(3))
+    @test matrix(Sum, Qudit(2), Qudit(2)) ≈ matrix(controlled(X), Qubit(), Qubit())
+    # Sum adds the level of the first qudit to the second, modulo the dimension of the second,
+    # which it reads on its sites
+    m = matrix(Sum, Qudit(3))
     for i in 0:2, j in 0:2
         @test m[3i + mod(i + j, 3) + 1, 3i + j + 1] ≈ 1
     end
-    @test_skip "the states Sumd and Z act on, through apply and expect"     # couche 2
+    m = matrix(Sum, Qudit(2), Qudit(3))
+    for i in 0:1, j in 0:2
+        @test m[3i + mod(i + j, 3) + 1, 3i + j + 1] ≈ 1
+    end
+    @test_skip "the states Sum and Z act on, through apply and expect"     # couche 2
 end
 
 @testset "Unknown operator and state names" begin
