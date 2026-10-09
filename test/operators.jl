@@ -48,7 +48,7 @@ end
     # a Proj holds a name, a vector or an eigenspace, which have no order between them
     # (decision 20: a number is not a state)
     @test length(sort([Proj("1"), Proj("Up"), Proj([1., 0.]), Proj("0")])) == 4
-    @test_skip matrix(simplify(Proj("1") + Proj("Up")), Qubit()) ≈ identity_operator(2)   # couche 2
+    @test_skip matrix(simplify(Proj("1") + Proj("Up")), Qubit()) ≈ matrix(Id, Qubit())   # couche 2
     @test_skip "the order of channels and generators, a Reset holding a name, a vector or a matrix"   # couche 2
     # the ranking puts the types in the order it declares
     @test isless(Id, X)                     # Identity before Operator
@@ -69,7 +69,7 @@ end
     s = Spin(1)
     v = [1., 0., -1.] / √2
     @test matrix(Proj(Sx => 0), s) ≈ v * v'
-    @test sum(matrix(Proj(Sx => λ), s) for λ in -1:1) ≈ identity_operator(3)
+    @test sum(matrix(Proj(Sx => λ), s) for λ in -1:1) ≈ matrix(Id, s)
     # an eigenspace of several states, which the projector on a state cannot give
     @test matrix(Proj(Ntot => 1), Electron()) ≈ matrix(Proj("Up") + Proj("Dn"), Electron())
     @test matrix(Proj(Level => 1), Qubit()) ≈ matrix(Proj("1"), Qubit())       # decision 20

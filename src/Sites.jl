@@ -1,7 +1,7 @@
 # Site types: what every site provides, its dimension, the parity of its basis states, and the
 # states and operators declared for its type, which become ordinary methods.
 
-export AbstractSite, dim, fermion_parities, fermion_species, string_state, identity_operator
+export AbstractSite, dim, fermion_parities, fermion_species, string_state
 export Level, @def_states, @def_operators, @create_site_module
 
 """
@@ -28,15 +28,6 @@ abstract type AbstractSite end
 the dimension of the Hilbert space of a site, which every site type defines.
 """
 dim(site::AbstractSite) = error("dim not implemented on site $site")
-
-"""
-    identity_operator(site)
-    identity_operator(dim::Int)
-
-the identity matrix of a site, or of dimension `dim`.
-"""
-identity_operator(dim::Int) = Matrix{Float64}(I, dim, dim)
-identity_operator(site::AbstractSite) = identity_operator(dim(site))
 
 """
     fermion_parities(site)
@@ -110,7 +101,7 @@ the states every site has, as functions of the site, looked up after those the s
 or names by its rule: `"FullyMixed"`, the density matrix proportional to the identity
 """
 const common_states = Dict{String, Function}(
-    "FullyMixed" => s -> identity_operator(s) / dim(s),
+    "FullyMixed" => s -> Matrix{Float64}(I, dim(s), dim(s)) / dim(s),
 )
 
 """

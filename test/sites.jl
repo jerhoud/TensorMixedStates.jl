@@ -149,7 +149,7 @@ end
     @test matrix(F, Tj()) == [1. 0 0 ; 0 -1 0 ; 0 0 -1]
     @test matrix(F, Oddling()) == [1. 0. ; 0. -1.]
     for site in (Qubit(), Boson(3), Spin(1), Qudit(3), Qboson(0.1, 3), Dummit())
-        @test matrix(F, site) == identity_operator(site)
+        @test matrix(F, site) == matrix(Id, site)
     end
     @test matrix(Fdn, Electron()) ≈ matrix(Fup * F, Electron())
     @test fermion_species(Oddling()) == (Co,)

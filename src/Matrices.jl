@@ -88,8 +88,10 @@ matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
     matrix(a(site, sites...), site, sites...)
 
-matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite, sites::AbstractSite...) =
-    identity_operator(prod(dim, expand_sites(a, (site, sites...))))
+function matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite, sites::AbstractSite...)
+    d = prod(dim, expand_sites(a, (site, sites...)))
+    return Matrix{Float64}(I, d, d)
+end
 
 matrix(::JW_F, site::AbstractSite) = diagm(Float64[ (-1)^p for p in fermion_parities(site) ])
 

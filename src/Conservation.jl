@@ -696,7 +696,7 @@ function check_declarations(site::AbstractSite)
     if !isnothing(species)
         cs = [ matrix(c, site) for c in species ]
         f = matrix(F, site)
-        id = identity_operator(site)
+        id = Matrix{Float64}(I, d, d)
         for (a, x) in enumerate(cs), (b, y) in enumerate(cs)
             car = norm(x * y' + y' * x - (a == b ? id : zero(id))) + norm(x * y + y * x)
             if car > rounding_tol * d || !nearly(f * x * f, -x)
