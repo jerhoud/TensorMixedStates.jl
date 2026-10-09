@@ -1,4 +1,4 @@
-using TensorMixedStates
+using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
 using Test, Random
 
 # Every source of randomness in the suite is pinned, so that a run can be reproduced and a
@@ -8,8 +8,7 @@ using Test, Random
 # Note that a fixed seed pins the stream for one Julia version, not across versions.
 Random.seed!(20260920)
 
-# the helpers of utils.jl come back with the first group ported, being written on the types of
-# version 1
+include("utils.jl")
 
 """
 the groups of tests, each one lives in the file of the same name, whose header comment
@@ -17,7 +16,7 @@ says what belongs there. To add a group, create the file and add its name here. 
 written from its lowest layer up: a group comes back here once its tests are ported, and the
 files of the others are the tests of 1.x still to port.
 """
-const GROUPS = String[]
+const GROUPS = ["building"]
 
 # without arguments everything runs, otherwise only the groups given on the command
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`
