@@ -328,12 +328,32 @@ same_system(a::State, b::State) =
 (a::State / b::Number) = inv(b) * a
 -(a::State) = -1 * a
 
+"""
+    aligned_links(a, b)
+
+the MPS `b` with each link pointing as that of `a`: a link reversed has its charges negated,
+so that both tensors keep their flux, with no data moved. A direct sum asks for it.
+"""
+function aligned_links(a::MPS, b::MPS)
+    b = copy(b)
+    for k in 1:length(b)-1
+        la, lb = linkind(a, k), linkind(b, k)
+        if hasqns(lb) && dir(la) ≠ dir(lb)
+            f = Index(id(lb), [ -q => d for (q, d) in space(lb) ], dir(dag(lb)), tags(lb), plev(lb))
+            flip(i) = i == lb ? (dir(i) == dir(lb) ? f : dag(f)) : i
+            b[k] = relabel(b[k], flip)
+            b[k+1] = relabel(b[k+1], flip)
+        end
+    end
+    return b
+end
+
 # a direct sum, exact, then truncated with respect to the result: the default algorithm of
 # ITensorMPS cuts on the density matrices of the terms, which loses what is left of two close
 # states once subtracted
 function +(a::State{R}, b::State{R}; limits::Limits = Limits()) where R
     same_system(a, b)
-    s = +(a.state, b.state; alg = "directsum")
+    s = +(a.state, aligned_links(a.state, b.state); alg = "directsum")
     return State(a, truncate(s; limits.cutoff, limits.maxdim, limits.mindim))
 end
 
