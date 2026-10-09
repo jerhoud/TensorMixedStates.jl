@@ -94,7 +94,8 @@ density matrix: search the ground state of the pure state, then `mix` it.
 # Options
 
 - `nsweeps`: the last sweep to do, that is the number of sweeps of the whole run (default 1)
-- `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished
+- `first_sweep`: the sweep to start from (default 1), to continue a search left unfinished;
+  past `nsweeps`, no sweep is done and the energy is that of the state given
 - `limits`: constraints on the state, see `Limits`, which may give one value per sweep
   (default `Limits()`, none)
 - `noise`: the noise to apply, a number or one value per sweep (default 0)
@@ -112,6 +113,12 @@ function dmrg(mpo::MPO, state::State; nsweeps = 1, first_sweep = 1, observer! = 
     # its per sweep schedules. `tdvp` and `approx_W` drive their own loop and keep the
     # sweep numbers of the run instead, which is why only this one has to adapt.
     done = first_sweep - 1
+    # no sweep left, for a search resumed after its last one: the energy is that of the state
+    # given, where ITensorMPS, asked for no sweep, gave 0
+    if done ≥ nsweeps
+        st = state.state
+        return (real(inner(st', mpo, st) / inner(st, st)), state)
+    end
     lim = resume_schedule(limits, done)
     e, st = dmrg(mpo, state.state; outputlevel = 0, nsweeps = nsweeps - done,
                  observer = observer!, lim.cutoff, lim.maxdim, lim.mindim,

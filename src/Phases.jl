@@ -21,9 +21,9 @@ A phase of your own driving a solver starts it at `first_sweep = done + 1`, and 
 `energy` and its `nsweeps` to a `DmrgObserver`, which records a search stopped by its tolerance
 as having done them all. The phase has to skip the solver when `done` has reached `nsweeps`, as
 a search stopped by its tolerance or checkpointed on its last sweep has: run again for no
-sweep, `dmrg` would give an energy of 0 rather than `energy`. A loop of your own is best
-written with `run_steps`, which calls this for it and must then not have it called again
-within its steps.
+sweep, `dmrg` would give the energy of the state given rather than `energy`. A loop of your
+own is best written with `run_steps`, which calls this for it and must then not have it
+called again within its steps.
 """
 function resume_step(sim::Simulation)
     c = sim.checkpoint

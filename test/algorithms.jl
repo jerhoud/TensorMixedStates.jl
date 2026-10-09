@@ -213,6 +213,16 @@ end
     @test_ok dmrg(sum(Left(Z)(i) + Right(Z)(i) for i in 1:2), ρ; nsweeps = 2, limits = lim)
 end
 
+@testset "dmrg with no sweep left" begin
+    # a search resumed after its last sweep is asked for none, on which ITensorMPS gave an
+    # energy of 0: it is that of the state given
+    h = -sum(Z(i) for i in 1:2) - 0.5 * X(1)
+    st = State{Pure}(System(2, Qubit()), "Up")
+    e, s = dmrg(h, st; nsweeps = 2, first_sweep = 3)
+    @test e ≈ real(expect(st, h))
+    @test s === st
+end
+
 @testset "Ground and steady states on a charged system" begin
     strong = TensorMixedStates.strong
     h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)

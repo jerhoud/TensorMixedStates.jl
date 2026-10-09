@@ -34,6 +34,8 @@ the reference article.
   where it handed on the eigenvector dmrg gives, of trace 1.39 in a test.
 - An `Evolve` whose duration and time step have opposite signs evolves over its duration,
   where it made no step; `tdvp` and `approx_W` refuse `nsweeps` below one.
+- `dmrg` with no sweep left, its `first_sweep` past `nsweeps`, gives the energy of the state
+  it is given, where it gave 0.
 
 ## [1.6.0] - 2026-09-30
 
