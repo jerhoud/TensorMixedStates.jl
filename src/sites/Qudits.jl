@@ -9,13 +9,14 @@ export Qudits
 the site type of a qudit, a `dim` level system carrying the generalized Pauli operators.
 
 Writing ``d`` for the dimension and ``\\omega = e^{2i\\pi/d}``, the clock operator acts as
-``Z_d|n\\rangle = \\omega^n |n\\rangle`` and the shift operator as
-``X_d|n\\rangle = |n+1 \\mod d\\rangle``. `Hd`, `S` and `Sumd` generate the Clifford group.
+``Z|n\\rangle = \\omega^n |n\\rangle`` and the shift operator as
+``X|n\\rangle = |n+1 \\mod d\\rangle``. `H`, `S` and `Sumd` generate the Clifford group. `X`,
+`Z`, `H` and `S` are those of `Qubit` for ``d = 2``.
 
 # Examples
 
     Qudit(3)
-    Qudit(3, conserve = Zd)     # the Zd symmetry of the clock model
+    Qudit(3, conserve = Z)      # the Z3 symmetry of the clock model
 
 # States
 
@@ -24,9 +25,9 @@ Writing ``d`` for the dimension and ``\\omega = e^{2i\\pi/d}``, the clock operat
 # Operators
 
 - `N`  : the level operator, `diag(0, 1, ..., d-1)`
-- `Zd` : the clock operator
-- `Xd` : the shift operator
-- `Hd` : the Fourier operator, or generalized Hadamard gate
+- `Z`  : the clock operator, `mod(N, d)`
+- `X`  : the shift operator
+- `H`  : the Fourier operator, or generalized Hadamard gate
 - `S`  : the phase operator, of order ``d`` for odd ``d`` and ``2d`` for even ``d``
 - `Sumd(d)` : the generalized controlled not of two qudits, see `Sumd`
 """
@@ -48,11 +49,11 @@ dim(a::Qudit) = a.dim
 @def_operators Qudit [
     N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
     # a function of N, so that as a conserved quantity it carries its modulus
-    Zd = s -> dim(s) == 1 ? ones(ComplexF64, 1, 1) : mod(N, dim(s)),
-    Xd = s -> [ mod(i - j - 1, dim(s)) == 0 ? 1.0 + 0im : 0.0im
-                for i in 1:dim(s), j in 1:dim(s) ],
-    Hd = s -> [ exp(2im * π * (i - 1) * (j - 1) / dim(s)) / √dim(s)
-                for i in 1:dim(s), j in 1:dim(s) ],
+    Z = s -> dim(s) == 1 ? ones(ComplexF64, 1, 1) : mod(N, dim(s)),
+    X = s -> [ mod(i - j - 1, dim(s)) == 0 ? 1.0 + 0im : 0.0im
+               for i in 1:dim(s), j in 1:dim(s) ],
+    H = s -> [ exp(2im * π * (i - 1) * (j - 1) / dim(s)) / √dim(s)
+               for i in 1:dim(s), j in 1:dim(s) ],
     S = s -> begin
         d = dim(s)
         τ = exp(1im * π * (d^2 + 1) / d)      # a square root of ω
@@ -70,6 +71,6 @@ the generalized controlled not of two qudits of dimension `d`,
 
     Sumd(3)(1, 2)
 """
-Sumd(d::Int) = Operator{2}("Sumd($d)", sum(Proj(Level => i) ⊗ Xd^i for i in 0:d-1))
+Sumd(d::Int) = Operator{2}("Sumd($d)", sum(Proj(Level => i) ⊗ X^i for i in 0:d-1))
 
-@create_site_module(Qudits, [Qudit, N, Zd, Xd, Hd, S, Sumd])
+@create_site_module(Qudits, [Qudit, N, Z, X, H, S, Sumd])

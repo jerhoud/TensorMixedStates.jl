@@ -213,10 +213,10 @@ end
     @test flux(Sm, Qubit(conserve = 2Sz)) == IT.QN("2Sz", -2)
 
     # the difference is taken modulo the charge, without which the shift operator, which
-    # generates the very symmetry Zd records, would be refused on its wrap around
-    @test flux(Zd, Qudit(3, conserve = Zd)) == IT.QN("Zd", 0, 3)
-    @test flux(Xd, Qudit(3, conserve = Zd)) == IT.QN("Zd", 1, 3)
-    @test flux(Xd^2, Qudit(3, conserve = Zd)) == IT.QN("Zd", 2, 3)
+    # generates the very symmetry Z records, would be refused on its wrap around
+    @test flux(Z, Qudit(3, conserve = Z)) == IT.QN("Z", 0, 3)
+    @test flux(X, Qudit(3, conserve = Z)) == IT.QN("Z", 1, 3)
+    @test flux(X^2, Qudit(3, conserve = Z)) == IT.QN("Z", 2, 3)
     @test flux(A, Boson(4, conserve = parity(N))) == IT.QN("parity(N)", 1, 2)
 
     # several charges at once
@@ -226,7 +226,7 @@ end
     # an operator raising and lowering at once carries no flux, and the message says which
     # two differences it found
     @test_throws "differing by 2Sz=2 and by 2Sz=-2" flux(X, Qubit(conserve = 2Sz))
-    @test_throws "no definite flux" flux(Hd, Qudit(3, conserve = Zd))
+    @test_throws "no definite flux" flux(H, Qudit(3, conserve = Z))
     # under parity the same X is fine, the two differences becoming one modulo 2
     @test flux(X, Qubit(conserve = parity(2Sz))) == IT.QN("parity(2Sz)", 0, 2)
 

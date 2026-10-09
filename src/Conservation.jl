@@ -63,7 +63,7 @@ site_charges(op::GenericOp{Pure}, ::AbstractSite) =
     error("a conserved quantity acts on one site, and $op acts on several")
 
 # a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: those
-# of Zd^2 on Qudit(4), all ±1, would be read as integers
+# of Z^2 on Qudit(4), all ±1, would be read as integers
 function site_charges(a::Union{IntPowOp{Pure, 1}, GenPowOp{Pure, 1}, DagOp{1}}, site::AbstractSite;
                       tol::Float64 = charge_tol)
     p = a isa DagOp ? -1 : a.expo
@@ -583,7 +583,7 @@ than one way is refused.
 # Examples
 
     flux(N, Fermion(conserve = N))        # QN("N",0)
-    flux(Xd, Qudit(3, conserve = Zd))     # QN("Zd",1,3)
+    flux(X, Qudit(3, conserve = Z))       # QN("Z",1,3)
 """
 flux(op::SimpleOp, site::AbstractSite; tol::Float64 = rounding_tol) =
     charge_flux(matrix(op, site), op, site; tol)

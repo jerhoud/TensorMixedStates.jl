@@ -199,8 +199,8 @@ end
     for d in (2, 3, 5)
         s = Qudit(d)
         ω = exp(2im * π / d)
-        z = matrix(Zd, s)
-        x = matrix(Xd, s)
+        z = matrix(Z, s)
+        x = matrix(X, s)
         id = matrix(Id, s)
         @test z^d ≈ id
         @test x^d ≈ id
@@ -208,7 +208,7 @@ end
         @test x * x' ≈ id
         @test z * x ≈ ω * (x * z)
         @test matrix(N, s) ≈ [ i == j ? i - 1. : 0. for i in 1:d, j in 1:d ]
-        h = matrix(Hd, s)
+        h = matrix(H, s)
         @test h * h' ≈ id
         @test h^4 ≈ id
         @test h * x * inv(h) ≈ z
@@ -220,19 +220,19 @@ end
         @test a ≈ (a[findfirst(!=(0), a)] / b[findfirst(!=(0), a)]) * b
         @test p^(isodd(d) ? d : 2d) ≈ id
     end
-    @test matrix(Zd, Qudit(2)) ≈ matrix(Z, Qubit())
-    @test matrix(Xd, Qudit(2)) ≈ matrix(X, Qubit())
-    @test matrix(Hd, Qudit(2)) ≈ matrix(H, Qubit())
+    @test matrix(Z, Qudit(2)) ≈ matrix(Z, Qubit())
+    @test matrix(X, Qudit(2)) ≈ matrix(X, Qubit())
+    @test matrix(H, Qudit(2)) ≈ matrix(H, Qubit())
     @test matrix(S, Qudit(2)) ≈ matrix(Qubits.S, Qubit())
-    @test matrix(Xd, Qudit(1)) == ones(1, 1)
-    @test matrix(Zd, Qudit(1)) == ones(1, 1)
+    @test matrix(X, Qudit(1)) == ones(1, 1)
+    @test matrix(Z, Qudit(1)) == ones(1, 1)
     @test matrix(Sumd(2), Qudit(2), Qudit(2)) ≈ matrix(controlled(X), Qubit(), Qubit())
     # Sum adds the level of the first qudit to the second, modulo d
     m = matrix(Sumd(3), Qudit(3))
     for i in 0:2, j in 0:2
         @test m[3i + mod(i + j, 3) + 1, 3i + j + 1] ≈ 1
     end
-    @test_skip "the states Sumd and Zd act on, through apply and expect"     # couche 2
+    @test_skip "the states Sumd and Z act on, through apply and expect"     # couche 2
 end
 
 @testset "Unknown operator and state names" begin
@@ -323,10 +323,10 @@ end
 
 @testset "Declaring a conserved quantity" begin
     # a power or the adjoint of a charge modulo d is one modulo d
-    @test charges(Qudit(2, conserve = dag(Zd))) == [("dag(Zd)", 2, [0, 1], false)]
-    @test charges(Qudit(4, conserve = Zd^2)) == [("Zd^2", 4, [0, 2, 0, 2], false)]
-    @test flux(Xd, Qudit(2, conserve = dag(Zd))) == IT.QN("dag(Zd)", 1, 2)
-    @test_skip "an MPO of Xd ⊗ Xd on Qudit(4, conserve = Zd^2)"                # couche 2
+    @test charges(Qudit(2, conserve = dag(Z))) == [("dag(Z)", 2, [0, 1], false)]
+    @test charges(Qudit(4, conserve = Z^2)) == [("Z^2", 4, [0, 2, 0, 2], false)]
+    @test flux(X, Qudit(2, conserve = dag(Z))) == IT.QN("dag(Z)", 1, 2)
+    @test_skip "an MPO of X ⊗ X on Qudit(4, conserve = Z^2)"                # couche 2
     @test charges(Boson(3, conserve = N^2)) == [("N^2", 1, [0, 1, 4], false)]
     # a quantity given twice is refused
     @test_throws "Ntot is given twice in conserve" Electron(conserve = (Ntot, Ntot))
@@ -347,16 +347,16 @@ end
     @test charges(Electron(conserve = (Ntot, 2Sz))) ==
         [("2Sz", 1, [0, 1, -1, 0], false), ("Ntot", 1, [0, 1, 1, 2], false)]
     @test isempty(charges(Qubit()))
-    # the modulus of Zd coming from its definition, mod(N, d)
+    # the modulus of Z coming from its definition, mod(N, d)
     for d in (3, 5, 8)
-        @test charges(Qudit(d, conserve = Zd)) == [("Zd", d, collect(0:d-1), false)]
+        @test charges(Qudit(d, conserve = Z)) == [("Z", d, collect(0:d-1), false)]
     end
-    @test charges(Qudit(2, conserve = Zd)) == [("Zd", 2, [0, 1], false)]
-    @test TMS.site_charges(Zd, Qudit(2)) == (2, [0, 1])
+    @test charges(Qudit(2, conserve = Z)) == [("Z", 2, [0, 1], false)]
+    @test TMS.site_charges(Z, Qudit(2)) == (2, [0, 1])
     # what cannot be a charge
     @test_throws "is not diagonal" Spin(1, conserve = Sx)
     @test_throws "2Sz rather than Sz" Spin(1/2, conserve = Sz)
-    @test_throws "already carries a charge modulo" Qudit(3, conserve = mod(Zd, 2))
+    @test_throws "already carries a charge modulo" Qudit(3, conserve = mod(Z, 2))
     # a unitary given by its matrix is not read off its spectrum: its charge and the modulus
     # are written with mod
     @test_throws "a charge modulo m is written mod(Q, m)" Qubit(conserve = S)
@@ -367,14 +367,14 @@ end
     end
     @test_throws "a name ending in *" Boson(3, conserve = named(N, "a*"))
     # one name for two moduli on the same system
-    @test_throws "modulo 2 on one site and modulo 3" System([Qudit(2, conserve = Zd), Qudit(3, conserve = Zd)])
+    @test_throws "modulo 2 on one site and modulo 3" System([Qudit(2, conserve = Z), Qudit(3, conserve = Z)])
     # a conserved quantity is carried by one site
     @test_throws "acting on one site" Fermion(conserve = Swap)
     @test_throws "acting on one site" Qubit(conserve = mod(Swap, 2))
     # the four cases, read directly
     @test TMS.site_charges(N, Fermion()) == (1, [0, 1])
     @test TMS.site_charges(parity(N), Boson(4)) == (2, [0, 1, 0, 1])
-    @test TMS.site_charges(Zd, Qudit(3)) == (3, [0, 1, 2])
+    @test TMS.site_charges(Z, Qudit(3)) == (3, [0, 1, 2])
     @test TMS.site_charges(Pd, Dummit()) == (2, [0, 1])
     # the string of versions 1 and 2 is read back as it was written
     @test TMS.decode_conserve("2Sz:0,1,-1,0;Ntot:0,1,1,2") == TMS.conserved(Electron(conserve = (Ntot, 2Sz)))
@@ -427,8 +427,8 @@ end
     # reordered: parity on a boson gives 0, 1, 0, 1
     s2 = System(2, Boson(4, conserve = parity(N)))
     @test sec(siteind(Pure, s2, 1)) == [IT.QN("parity(N)", c, 2) => 1 for c in (0, 1, 0, 1)]
-    s3 = System(2, Qudit(3, conserve = Zd))
-    @test sec(siteind(Pure, s3, 1)) == [IT.QN("Zd", c, 3) => 1 for c in 0:2]
+    s3 = System(2, Qudit(3, conserve = Z))
+    @test sec(siteind(Pure, s3, 1)) == [IT.QN("Z", c, 3) => 1 for c in 0:2]
     s4 = System(2, Electron(conserve = (Ntot, 2Sz)))
     @test length(sec(siteind(Pure, s4, 1))) == 4
     @test dim(siteind(Pure, s4, 1)) == 4
