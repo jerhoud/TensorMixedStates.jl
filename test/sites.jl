@@ -151,7 +151,10 @@ end
     for site in (Qubit(), Boson(3), Spin(1), Qudit(3), Qboson(0.1, 3), Dummit())
         @test matrix(F, site) == matrix(Id, site)
     end
-    @test matrix(Fdn, Electron()) ≈ matrix(Fup * F, Electron())
+    # F is the product of the parities of the two spins, parity(Nup) and parity(Ndn)
+    for site in (Electron(), Tj())
+        @test matrix(F, site) ≈ matrix(parity(Nup) * parity(Ndn), site)
+    end
     @test fermion_species(Oddling()) == (Co,)
     @test fermion_species(Qubit()) === nothing
     @test_throws "F is not declared" @macroexpand @def_operators Dummit2 [ F = [1. 0. ; 0. -1.] ]

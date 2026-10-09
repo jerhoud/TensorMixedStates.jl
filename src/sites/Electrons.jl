@@ -33,8 +33,6 @@ the site type of an electron orbital, of dimension 4, whose basis is `"Emp"`, `"
 - `Sx, Sy, Sz, Sp, Sm`    : the spin operators
 - `S2`                    : the total spin squared of the site, `3/4 (Ntot - 2 Nupdn)`
 - `F`                     : the fermionic parity, ``(-1)^{N_{tot}}``
-- `Fup, Fdn`              : the partial parities, ``(-1)^{N_\\uparrow}`` and
-                            ``(-1)^{N_\\downarrow}``
 """
 struct Electron <: AbstractSite
     conserve::Conservation
@@ -69,13 +67,6 @@ string_state(::Electron, ::String) = nothing
         0 0 0 0
         0 0 0 0
     ],
-    Fup = Float64[
-        1  0  0  0
-        0 -1  0  0
-        0  0  1  0
-        0  0  0 -1
-    ],
-    Fdn = Fup * F,
     Sp = Float64[
         0  0  0  0
         0  0  1  0
@@ -105,5 +96,4 @@ string_state(::Electron, ::String) = nothing
 
 fermion_species(::Electron) = (Cup, Cdn)
 
-@create_site_module(Electrons, [Electron, Cup, Cdn, Fup, Fdn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz,
-                                Sp, Sm, S2])
+@create_site_module(Electrons, [Electron, Cup, Cdn, Nup, Ndn, Nupdn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])

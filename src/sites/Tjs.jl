@@ -29,8 +29,6 @@ whose basis is `"Emp"`, `"Up"`, `"Dn"`.
 - `Sx, Sy, Sz, Sp, Sm`    : the spin operators
 - `S2`                    : the total spin squared of the site, `3/4 Ntot`
 - `F`                     : the fermionic parity, ``(-1)^{N_{tot}}``
-- `Fup, Fdn`              : the partial parities, ``(-1)^{N_\\uparrow}`` and
-                            ``(-1)^{N_\\downarrow}``
 """
 struct Tj <: AbstractSite
     conserve::Conservation
@@ -62,12 +60,6 @@ string_state(::Tj, ::String) = nothing
         0 0 0
         0 0 0
     ],
-    Fup = Float64[
-        1  0  0
-        0 -1  0
-        0  0  1
-    ],
-    Fdn = Fup * F,
     Sp = Float64[
         0  0  0
         0  0  1
@@ -87,4 +79,4 @@ string_state(::Tj, ::String) = nothing
     S2 = Sx^2 + Sy^2 + Sz^2,
 ]
 
-@create_site_module(Tjs, [Tj, Cup, Cdn, Fup, Fdn, Nup, Ndn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])
+@create_site_module(Tjs, [Tj, Cup, Cdn, Nup, Ndn, Ntot, Sx, Sy, Sz, Sp, Sm, S2])
