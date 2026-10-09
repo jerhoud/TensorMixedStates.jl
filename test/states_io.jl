@@ -324,10 +324,12 @@ end
 end
 
 @testset "Printing Limits" begin
-    # printed as the call that builds it, the fields left at their default omitted, so that
+    # printed as the call that builds it, the fields left nothing omitted, so that
     # the text evaluates back to the same fields
     @test repr(Limits()) == "Limits()"
     @test repr(Limits(cutoff = 1e-10, maxdim = 50)) == "Limits(cutoff = 1.0e-10, maxdim = 50)"
+    # a value given is printed, the default of a function included
+    @test repr(Limits(cutoff = eps())) == "Limits(cutoff = $(eps()))"
     for l in [Limits(), Limits(cutoff = 1e-10, maxdim = 50), Limits(maxdim = [10, 20, 50]),
               Limits(cutoff = 1e-14, maxdim = 100, mindim = 10)]
         @test eval(Meta.parse(repr(l))) == l

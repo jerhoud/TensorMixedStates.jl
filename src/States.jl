@@ -2,14 +2,16 @@
 # product states built from local states, sums of states, mixing a pure state, weakening a
 # state, and the norm, the trace and the inner product. The later layers go between the pure
 # and the mixed representations with `combinerto`, `mixer`, `relabel`, `relabeller`,
-# `element_maps` and `on_legs`, and the measurements fill the cache `preobs` of a state.
+# `element_maps` and `on_legs`, give limits to ITensors with `truncation`, and the measurements
+# fill the cache `preobs` of a state.
 
 export State, Limits, mix, maxlinkdim, trace, norm, normalize, inner, dot
 
 """
-    Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1)
+    Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing)
 
-the truncation limits of an MPS.
+the truncation limits of an MPS, a field left `nothing` taking the default of the function the
+limits are given to, which its docstring states.
 
 - `cutoff`: the largest truncation error allowed, the sum of the squares of the discarded
   singular values relative to that of all; `eps()` discards what rounding leaves, `0` nothing
@@ -22,12 +24,12 @@ continued with its last value.
 # Examples
 
     Limits(cutoff = 1e-14, maxdim = 100)
-    Limits(cutoff = 1e-14, maxdim = [10, 20, 50, 100])
+    Limits(maxdim = [10, 20, 50, 100])
 """
 struct Limits
-    cutoff::Union{Float64, Vector{Float64}}
-    maxdim::Union{Int, Vector{Int}}
-    mindim::Union{Int, Vector{Int}}
+    cutoff::Union{Nothing, Float64, Vector{Float64}}
+    maxdim::Union{Nothing, Int, Vector{Int}}
+    mindim::Union{Nothing, Int, Vector{Int}}
     # at least one, which ITensors takes for no minimum: with less, it keeps nothing of a
     # spectrum of zeros
     Limits(cutoff, maxdim, mindim) = new(cutoff, maxdim, at_least_one(mindim))
@@ -40,30 +42,42 @@ the minimum bond dimension `m`, or each value of a vector of them, raised to 1 i
 """
 at_least_one(m::Int) = max(m, 1)
 at_least_one(m::Vector{Int}) = max.(m, 1)
+at_least_one(::Nothing) = nothing
 
 """
     float_cutoff(x)
     int_dims(x, what)
 
 the cutoff `x` as `Float64`, and the bond dimension `x` as `Int`, a float refused by a message
-naming `what`, each possibly a vector
+naming `what`, each possibly a vector, and `nothing` left as it is
 """
 float_cutoff(x::Real) = Float64(x)
 float_cutoff(x::AbstractVector{<:Real}) = Vector{Float64}(x)
+float_cutoff(::Nothing) = nothing
 int_dims(x::Integer, _) = Int(x)
 int_dims(x::AbstractVector{<:Integer}, _) = Vector{Int}(x)
+int_dims(::Nothing, _) = nothing
 int_dims(x, what) = error("$what is an integer, or a vector of them, not $(repr(x))")
 
-Limits(; cutoff = eps(), maxdim = typemax(Int), mindim = 1) =
+Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing) =
     Limits(float_cutoff(cutoff), int_dims(maxdim, "maxdim"), int_dims(mindim, "mindim"))
+
+"""
+    truncation(limits; cutoff = eps(), maxdim = typemax(Int), mindim = 1)
+
+the keywords `cutoff`, `maxdim` and `mindim` of a truncation by ITensors, a field of `limits` left
+`nothing` taking the default given, that of the function the limits are given to
+"""
+truncation(l::Limits; cutoff = eps(), maxdim = typemax(Int), mindim = 1) =
+    (cutoff = something(l.cutoff, cutoff), maxdim = something(l.maxdim, maxdim),
+     mindim = something(l.mindim, mindim))
 
 (a::Limits == b::Limits) = (a.cutoff, a.maxdim, a.mindim) == (b.cutoff, b.maxdim, b.mindim)
 hash(a::Limits, h::UInt) = hash((a.cutoff, a.maxdim, a.mindim), hash(Limits, h))
 
 function show(io::IO, l::Limits)
-    default = Limits()
     given = [ string(f, " = ", repr(getfield(l, f))) for f in fieldnames(Limits)
-              if getfield(l, f) != getfield(default, f) ]
+              if !isnothing(getfield(l, f)) ]
     print(io, "Limits(", join(given, ", "), ")")
 end
 
@@ -106,7 +120,8 @@ function of the site giving one of those. A vector of numbers is the amplitudes 
 state. `State(state, mps)` is a new state on the same system.
 
 States can be added, subtracted, and multiplied or divided by numbers; a sum takes truncation
-limits as `+(a, b; limits = Limits(maxdim = 100))`.
+limits as `+(a, b; limits = Limits(maxdim = 100))`, by default `cutoff = eps()`, which discards
+what rounding leaves.
 
 # Examples
 
@@ -356,7 +371,7 @@ end
 function +(a::State{R}, b::State{R}; limits::Limits = Limits()) where R
     same_system(a, b)
     s = +(a.state, aligned_links(a.state, b.state); alg = "directsum")
-    return State(a, truncate(s; limits.cutoff, limits.maxdim, limits.mindim))
+    return State(a, truncate(s; truncation(limits)...))
 end
 
 -(a::State{R}, b::State{R}; limits::Limits = Limits()) where R = +(a, -b; limits)
@@ -364,14 +379,15 @@ end
 """
     truncate(::State; limits::Limits)
 
-the state with its MPS truncated to `limits`.
+the state with its MPS truncated to `limits`, by default `cutoff = eps()`, which discards what
+rounding leaves.
 
 # Examples
 
     truncate(state; limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
 truncate(state::State; limits::Limits) =
-    State(state, truncate(state.state; limits.cutoff, limits.maxdim, limits.mindim))
+    State(state, truncate(state.state; truncation(limits)...))
 
 """
     mix(::State)

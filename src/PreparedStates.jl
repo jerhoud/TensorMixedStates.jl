@@ -111,7 +111,7 @@ function dense_mps(a::AbstractArray, idx, sites, limits::Limits; combiners = ITe
     for c in combiners
         t *= c
     end
-    return MPS(t, sites; limits.cutoff, limits.maxdim, limits.mindim)
+    return MPS(t, sites; truncation(limits)...)
 end
 
 """
@@ -120,8 +120,8 @@ end
 
 the pure state of `system` of vector `ψ`, or the mixed state of density matrix `ρ`,
 normalized, on the basis of product states ordered as `kron` orders them, the first site
-varying the slowest. Its MPS is decomposed from the whole array and truncated to `limits`. On a
-system carrying charges, a state of no definite charge is refused.
+varying the slowest. Its MPS is decomposed from the whole array and truncated to `limits`, by
+default `cutoff = eps()`. On a system carrying charges, a state of no definite charge is refused.
 
 # Examples
 
@@ -208,8 +208,9 @@ end
 the pure state ``\\sum_k c_k |s^k_1 s^k_2 \\dots s^k_n\\rangle`` of `terms`, pairs `c => states`
 of a coefficient and the local pure states of a product state, given by their names or their
 vectors, one for every site or one for all of them, normalized. It is exact, of bond dimension
-the number of terms of nonzero coefficient, truncated to `limits` when they are given. On a
-system conserving something, the product states of these terms must have the same charge.
+the number of terms of nonzero coefficient, truncated to `limits` when they are given, by
+default `cutoff = 0`. On a system conserving something, the product states of these terms must
+have the same charge.
 
 # Examples
 
@@ -219,7 +220,10 @@ system conserving something, the product states of these terms must have the sam
 """
 function superposition(system::System, terms::AbstractVector{<:Pair}; limits::Limits = Limits())
     st = normalize(State{Pure}(system, product_sum(Pure, system, terms)))
-    return limits == Limits() ? st : truncate(st; limits)
+    if limits == Limits()
+        return st
+    end
+    return State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
 end
 
 """
@@ -229,7 +233,7 @@ the mixed state ``\\sum_k p_k \\rho^k_1 \\otimes \\dots \\otimes \\rho^k_n`` of 
 `p => states` of a weight, real and not negative, and the local states of a product state, pure
 or mixed, given by their names, their vectors or their density matrices, one for every site or
 one for all of them, normalized to trace one. It is exact, of bond dimension the number of
-terms of nonzero weight, truncated to `limits` when they are given.
+terms of nonzero weight, truncated to `limits` when they are given, by default `cutoff = 0`.
 
 # Examples
 
@@ -242,7 +246,10 @@ function mixture(system::System, terms::AbstractVector{<:Pair}; limits::Limits =
         end
     end
     st = normalize(State{Mixed}(system, product_sum(Mixed, system, terms)))
-    return limits == Limits() ? st : truncate(st; limits)
+    if limits == Limits()
+        return st
+    end
+    return State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
 end
 
 """
