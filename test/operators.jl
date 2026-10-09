@@ -289,6 +289,13 @@ end
     @test_throws "whose dimension is 3" matrix(Operator{1}("Fn", s -> [1. 0 ; 0 1]), s1)
 end
 
+@testset "tensor is ⊗ under a name in ASCII" begin
+    @test tensor === ⊗
+    @test tensor(X, Y) == X ⊗ Y
+    @test tensor(X, Y, Z, X) == ((X ⊗ Y) ⊗ Z) ⊗ X
+    @test tensor(System(1, Qubit()), System(2, Qubit())) == System(3, Qubit())
+end
+
 @testset "The matrix of a tensor product of fermions" begin
     # (A ⊗ B) on consecutive sites is A(1) * B(2), Jordan-Wigner strings included: its matrix
     # is checked against the explicit c₁ = c ⊗ 1, c₂ = F ⊗ c and c₃ = F ⊗ F ⊗ c

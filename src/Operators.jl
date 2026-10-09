@@ -315,7 +315,8 @@ end
     tensor(op1, op2, ...)
 
 the tensor product of generic operators, acting on the sites of `op1` followed by those of
-`op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `\\otimes`.
+`op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `\\otimes`, and `tensor` is the same
+function under a name in ASCII.
 
 # Examples
 
@@ -323,8 +324,8 @@ the tensor product of generic operators, acting on the sites of `op1` followed b
 """
 (a::GenericOp{R, N} ⊗ b::GenericOp{R, M}) where {R, N, M} =
     TensorOp{R, N + M}([tensorsubs(a) ; tensorsubs(b)])
-tensor(a::GenericOp, b::GenericOp) = a ⊗ b
-tensor(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = tensor(a ⊗ b, c, d...)
+⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
+const tensor = ⊗
 
 ############# The parity operator ##############
 

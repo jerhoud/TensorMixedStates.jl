@@ -102,8 +102,6 @@ the system of the sites of the first followed by those of the second.
 """
 (sys1::System ⊗ sys2::System) = System([sys1.sites ; sys2.sites])
 
-tensor(sys1::System, sys2::System) = sys1 ⊗ sys2
-
 """
     index_id(system, i, R)
 
