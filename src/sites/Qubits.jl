@@ -6,13 +6,16 @@ export Qubits
 """
     Qubit(; conserve = ())
 
-the site type of a qubit, a two level system, whose basis is `"Up"`, `"Dn"`.
+the site type of a qubit, a two level system, whose basis is `"Up"`, `"Dn"`. `Z` is a charge of
+values ±1, so `conserve = Z` conserves the magnetization, as `2Sz` does; its parity is
+`parity(N)`.
 
 # Examples
 
     Qubit()
     Qubit(conserve = N)      # the number of excitations
     Qubit(conserve = 2Sz)    # the same conservation, in spin language
+    Qubit(conserve = parity(N))
 
 # States
 
