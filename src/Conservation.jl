@@ -59,12 +59,12 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
     return (1, Int.(round.(real.(d))))
 end
 
-site_charges(op::GenericOp{Pure}, ::AbstractSite) =
+site_charges(op::GenericOp{IsOperator}, ::AbstractSite) =
     error("a conserved quantity acts on one site, and $op acts on several")
 
 # a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: those
 # of Z^2 on Qudit(4), all ±1, would be read as integers
-function site_charges(a::Union{IntPowOp{Pure, 1}, GenPowOp{Pure, 1}, DagOp{1}}, site::AbstractSite;
+function site_charges(a::Union{IntPowOp{IsOperator, 1}, GenPowOp{IsOperator, 1}, DagOp{1}}, site::AbstractSite;
                       tol::Float64 = charge_tol)
     p = a isa DagOp ? -1 : a.expo
     if isreal(p) && isinteger(real(p))
@@ -588,7 +588,7 @@ than one way is refused.
 flux(op::SimpleOp, site::AbstractSite; tol::Float64 = rounding_tol) =
     charge_flux(matrix(op, site), op, site; tol)
 
-flux(op::GenericOp{Pure}, ::AbstractSite) =
+flux(op::GenericOp{IsOperator}, ::AbstractSite) =
     error("flux is only defined for one site operators, and $op acts on several")
 
 ############### Sites as values ###############

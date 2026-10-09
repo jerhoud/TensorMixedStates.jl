@@ -3,7 +3,7 @@
 # walk an expression with `scalarcoef`, `scalararg`, `sumsubs`, `prodsubs`, `factor_sites`,
 # `scale`, `power` and `obs_name`.
 
-export Pure, Mixed, Op, GenericOp, IndexedOp, SimpleOp
+export Pure, Mixed, OpKind, IsOperator, IsChannel, IsGenerator, Op, GenericOp, IndexedOp, SimpleOp
 export Operator, Id, Proj, named, parity, dag, ⊗, tensor, map_sites
 
 ############# Types ################
@@ -19,7 +19,7 @@ abstract type Representation end
 """
     abstract type PM <: Representation
 
-the supertype of `Pure` and `Mixed`, which parametrize operators as well as states
+the supertype of `Pure` and `Mixed`, the representations of a state this package defines
 """
 abstract type PM <: Representation end
 
@@ -48,33 +48,48 @@ struct Generic <: GI end
 struct Indexed <: GI end
 
 """
-    Op{R <: PM, T <: GI, N}
+    abstract type OpKind
+    IsOperator
+    IsChannel
+    IsGenerator
 
-the supertype of all operators: `R` the representation of the states they act on, `T`
+the kinds of operators: `IsOperator` for an operator, a linear map of the states of its sites;
+`IsChannel` for a channel, a completely positive map of density matrices; `IsGenerator` for a
+generator, the Lindblad generator of an evolution
+"""
+abstract type OpKind end
+struct IsOperator <: OpKind end
+struct IsChannel <: OpKind end
+struct IsGenerator <: OpKind end
+
+"""
+    Op{K <: OpKind, T <: GI, N}
+
+the supertype of all operators: `K` their kind, `IsOperator`, `IsChannel` or `IsGenerator`, `T`
 `Generic` or `Indexed`, `N` the number of sites of a generic operator, 1 for a placed one.
 """
-abstract type Op{R <: PM, T <: GI, N} end
+abstract type Op{K <: OpKind, T <: GI, N} end
 
 """
-    GenericOp{R, N}
+    GenericOp{K, N}
 
-the operators not yet placed on sites, `Op{R, Generic, N}`.
+the operators not yet placed on sites, `Op{K, Generic, N}`.
 """
-const GenericOp{R, N} = Op{R, Generic, N}
+const GenericOp{K, N} = Op{K, Generic, N}
 
 """
-    IndexedOp{R}
+    IndexedOp{K}
 
-the operators placed on sites, `Op{R, Indexed, 1}`.
+the operators placed on sites, `Op{K, Indexed, 1}`.
 """
-const IndexedOp{R} = Op{R, Indexed, 1}
+const IndexedOp{K} = Op{K, Indexed, 1}
 
 """
     SimpleOp
 
-the generic operators of one site on pure states, `GenericOp{Pure, 1}`.
+the generic operators of one site, `GenericOp{IsOperator, 1}`.
 """
-const SimpleOp = GenericOp{Pure, 1}
+const SimpleOp = GenericOp{IsOperator, 1}
 
 """
     no_signed_zero(x)
@@ -100,31 +115,32 @@ expression of other operators, or `nothing` for an operator each site type decla
     Operator{1}("Z", [1 0 ; 0 -1])
     Operator{2}("Swap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
 """
-struct Operator{N} <: GenericOp{Pure, N}
+struct Operator{N} <: GenericOp{IsOperator, N}
     name::String
-    expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}}
-    Operator{N}(name::String, expr::Union{Nothing, Matrix, Function, GenericOp{Pure, N}} = nothing) where N =
+    expr::Union{Nothing, Matrix, Function, GenericOp{IsOperator, N}}
+    Operator{N}(name::String,
+                expr::Union{Nothing, Matrix, Function, GenericOp{IsOperator, N}} = nothing) where N =
         new{N}(name, no_signed_zero(expr))
 end
 
 ############ Identity ############
 
 """
-    IdentityOp{R, T, N}
+    IdentityOp{K, T, N}
 
 the identity, one value for each kind of operator, so that every way of writing it, as
 `Id ⊗ Id` or `Id(3)`, is recognized by its type. Placed, it has no site.
 """
-struct IdentityOp{R, T, N} <: Op{R, T, N} end
+struct IdentityOp{K, T, N} <: Op{K, T, N} end
 
-IdentityOp(::Op{R, T, N}) where {R, T, N} = IdentityOp{R, T, N}()
+IdentityOp(::Op{K, T, N}) where {K, T, N} = IdentityOp{K, T, N}()
 
 """
     Id
 
 the identity operator, defined on every site type.
 """
-const Id = IdentityOp{Pure, Generic, 1}()
+const Id = IdentityOp{IsOperator, Generic, 1}()
 
 ################ Numbers and sums #############
 
@@ -138,14 +154,14 @@ float_coef(x::Union{Bool, Base.BitInteger, Complex{<:Union{Bool, Base.BitInteger
 float_coef(x::Number) = x
 
 """
-    ScalarOp{R, T, N}
+    ScalarOp{K, T, N}
 
 a number times an operator, never itself a `ScalarOp`: `2 * (3X)` is `6X`. It is built by
 `scale`.
 """
-struct ScalarOp{R, T, N} <: Op{R, T, N}
+struct ScalarOp{K, T, N} <: Op{K, T, N}
     coef::Number
-    arg::Op{R, T, N}
+    arg::Op{K, T, N}
 end
 
 """
@@ -165,17 +181,17 @@ scalararg(a::ScalarOp) = a.arg
 scalararg(a::Op) = a
 
 """
-    SumOp{R, T, N}
+    SumOp{K, T, N}
 
 a sum of operators, nested sums flattened and terms of coefficient zero left out. An empty
 sum is `0 * Id`, a sum of one term that term.
 """
-struct SumOp{R, T, N} <: Op{R, T, N}
-    subs::Vector{<:Op{R, T, N}}
-    function SumOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
+struct SumOp{K, T, N} <: Op{K, T, N}
+    subs::Vector{<:Op{K, T, N}}
+    function SumOp(subs::Vector{<:Op{K, T, N}}) where {K, T, N}
         # in one pass: a sum built term by term, as `sum` of a generator does, copies its terms
         # at each one
-        s = Op{R, T, N}[]
+        s = Op{K, T, N}[]
         for x in subs
             if x isa SumOp
                 append!(s, x.subs)
@@ -184,11 +200,11 @@ struct SumOp{R, T, N} <: Op{R, T, N}
             end
         end
         if isempty(s)
-            return scale(0., IdentityOp{R, T, N}())
+            return scale(0., IdentityOp{K, T, N}())
         elseif length(s) == 1
             return s[1]
         else
-            return new{R, T, N}(s)
+            return new{K, T, N}(s)
         end
     end
 end
@@ -199,15 +215,15 @@ end
 the operator `a` times the number `c`: `a` itself for 1, `0 * Id` for 0, each term multiplied
 for a sum
 """
-scale(c::Number, a::Op{R, T, N}) where {R, T, N} =
+scale(c::Number, a::Op{K, T, N}) where {K, T, N} =
     if c == 0
-        ScalarOp{R, T, N}(0., IdentityOp{R, T, N}())
+        ScalarOp{K, T, N}(0., IdentityOp{K, T, N}())
     elseif c == 1
         a
     elseif a isa SumOp
         SumOp(map(x -> scale(c, x), a.subs))
     else
-        ScalarOp{R, T, N}(no_signed_zero(float_coef(c * scalarcoef(a))), scalararg(a))
+        ScalarOp{K, T, N}(no_signed_zero(float_coef(c * scalarcoef(a))), scalararg(a))
     end
 
 """
@@ -222,27 +238,27 @@ sumsubs(a::Op) = [a]
 (a::Op * b::Number) = scale(b, a)
 (a::Op / b::Number) = scale(inv(b), a)
 -(a::Op) = scale(-1, a)
-(a::Op{R, T, N} + b::Op{R, T, N}) where {R, T, N} = SumOp([a, b])
+(a::Op{K, T, N} + b::Op{K, T, N}) where {K, T, N} = SumOp([a, b])
 (a::Op - b::Op) = a + (-b)
 
 ############### Products ###############
 
 """
-    ProdOp{R, T, N}
+    ProdOp{K, T, N}
 
 a product of operators, nested products flattened and the coefficients of the factors
 gathered in front of it. An empty product is `Id`, a product of one factor that factor.
 """
-struct ProdOp{R, T, N} <: Op{R, T, N}
-    subs::Vector{<:Op{R, T, N}}
-    function ProdOp(subs::Vector{<:Op{R, T, N}}) where {R, T, N}
+struct ProdOp{K, T, N} <: Op{K, T, N}
+    subs::Vector{<:Op{K, T, N}}
+    function ProdOp(subs::Vector{<:Op{K, T, N}}) where {K, T, N}
         c = prod(scalarcoef.(subs); init = 1)
         if isempty(subs)
-            return scale(c, IdentityOp{R, T, N}())
+            return scale(c, IdentityOp{K, T, N}())
         end
         flat(x) = x isa ProdOp ? x.subs : x isa ScalarOp ? flat(x.arg) : [x]
         s = reduce(vcat, flat.(subs))
-        return scale(c, length(s) == 1 ? s[1] : new{R, T, N}(s))
+        return scale(c, length(s) == 1 ? s[1] : new{K, T, N}(s))
     end
 end
 
@@ -256,28 +272,28 @@ prodsubs(a::ProdOp) = a.subs
 prodsubs(a::ScalarOp) = prodsubs(a.arg)
 prodsubs(a::Op) = [a]
 
-(a::Op{R, T, N} * b::Op{R, T, N}) where {R, T, N} = ProdOp([a, b])
+(a::Op{K, T, N} * b::Op{K, T, N}) where {K, T, N} = ProdOp([a, b])
 
 ############### Tensor products ############
 
 """
-    TensorOp{R, N}
+    TensorOp{K, N}
 
 a tensor product of generic operators acting on `N` sites, the sum of theirs, the
 coefficients of the factors gathered in front of it
 """
-struct TensorOp{R, N} <: GenericOp{R, N}
-    subs::Vector{<:GenericOp{R}}
-    TensorOp{R, N}(subs::Vector{<:GenericOp{R}}) where {R, N} =
+struct TensorOp{K, N} <: GenericOp{K, N}
+    subs::Vector{<:GenericOp{K}}
+    TensorOp{K, N}(subs::Vector{<:GenericOp{K}}) where {K, N} =
         if length(subs) == 1
             subs[1]
         else
             c = prod(scalarcoef.(subs))
             s = scalararg.(subs)
             if all(x -> x isa IdentityOp, s)
-                return scale(c, IdentityOp{R, Generic, N}())
+                return scale(c, IdentityOp{K, Generic, N}())
             end
-            scale(c, new{R, N}(s))
+            scale(c, new{K, N}(s))
         end
 end
 
@@ -294,7 +310,7 @@ tensorsubs(a::GenericOp) = [a]
 
 the number of sites the generic operator `a` acts on
 """
-nsites(::GenericOp{R, N}) where {R, N} = N
+nsites(::GenericOp{K, N}) where {K, N} = N
 
 """
     factor_sites(a::TensorOp)
@@ -322,8 +338,8 @@ function under a name in ASCII.
 
     Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
 """
-(a::GenericOp{R, N} ⊗ b::GenericOp{R, M}) where {R, N, M} =
-    TensorOp{R, N + M}([tensorsubs(a) ; tensorsubs(b)])
+(a::GenericOp{K, N} ⊗ b::GenericOp{K, M}) where {K, N, M} =
+    TensorOp{K, N + M}([tensorsubs(a) ; tensorsubs(b)])
 ⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
 const tensor = ⊗
 
@@ -344,10 +360,11 @@ of one site or several.
     Proj(Sz => 0)          # on a Spin(1), the state of Sz = 0
     Proj(Swap => -1)       # the antisymmetric part of two sites, the singlet of two qubits
 """
-struct Proj{N} <: GenericOp{Pure, N}
-    state::Union{String, Vector, Function, Pair{<:GenericOp{Pure}, <:Real}}
+struct Proj{N} <: GenericOp{IsOperator, N}
+    state::Union{String, Vector, Function, Pair{<:GenericOp{IsOperator}, <:Real}}
     Proj(state::Union{String, Vector, Function}) = new{1}(no_signed_zero(state))
-    Proj(p::Pair{<:GenericOp{Pure, N}, <:Real}) where N = new{N}(first(p) => no_signed_zero(last(p)))
+    Proj(p::Pair{<:GenericOp{IsOperator, N}, <:Real}) where N =
+        new{N}(first(p) => no_signed_zero(last(p)))
 end
 
 Proj(n::Integer) =
@@ -360,25 +377,25 @@ Proj(p::Pair{<:IndexedOp, <:Real}) =
 ############ AtIndex ################
 
 """
-    AtIndex{R, N}
+    AtIndex{K, N}
 
 an operator placed on sites, as `X(1)` or `Swap(2, 4)`, on distinct sites
 """
-struct AtIndex{R, N} <: IndexedOp{R}
-    op::GenericOp{R, N}
+struct AtIndex{K, N} <: IndexedOp{K}
+    op::GenericOp{K, N}
     index::NTuple{N, Int}
-    function AtIndex(op::GenericOp{R, N}, index::NTuple{N, Int}) where {R, N}
+    function AtIndex(op::GenericOp{K, N}, index::NTuple{N, Int}) where {K, N}
         if !allunique(index)
             error("$op acts on $N sites and cannot be placed on $index, which repeats a site")
         end
         if scalararg(op) isa IdentityOp
-            return scale(scalarcoef(op), IdentityOp{R, Indexed, 1}())
+            return scale(scalarcoef(op), IdentityOp{K, Indexed, 1}())
         end
-        return scale(scalarcoef(op), new{R, N}(scalararg(op), index))
+        return scale(scalarcoef(op), new{K, N}(scalararg(op), index))
     end
 end
 
-(op::GenericOp{R, N})(index::Vararg{Int, N}) where {R, N} = AtIndex(op, index)
+(op::GenericOp{K, N})(index::Vararg{Int, N}) where {K, N} = AtIndex(op, index)
 
 """
     map_sites(f, op)
@@ -402,34 +419,34 @@ whether the exponent `p` is an integer of zero or above, whatever its type
 is_natural(p::Number) = isreal(p) && isinteger(real(p)) && real(p) ≥ 0
 
 """
-    IntPowOp{R, N}
-    GenPowOp{R, N}
+    IntPowOp{K, N}
+    GenPowOp{K, N}
 
 the powers of an operator: `IntPowOp` for an integer exponent of zero or above, the product
 kept whole; `GenPowOp` for any other, the principal power, from which only the modulus of a
 coefficient comes out
 """
-struct IntPowOp{R, N} <: GenericOp{R, N}
-    arg::GenericOp{R, N}
+struct IntPowOp{K, N} <: GenericOp{K, N}
+    arg::GenericOp{K, N}
     expo::Int
-    function IntPowOp(arg::GenericOp{R, N}, n::Int) where {R, N}
+    function IntPowOp(arg::GenericOp{K, N}, n::Int) where {K, N}
         c = scalarcoef(arg)
         a = scalararg(arg)
         if n == 0 || a isa IdentityOp
-            return scale(c^n, IdentityOp{R, Generic, N}())
+            return scale(c^n, IdentityOp{K, Generic, N}())
         elseif n == 1
             return arg
         elseif a isa IntPowOp
             return scale(c^n, IntPowOp(a.arg, a.expo * n))
         end
-        return scale(c^n, new{R, N}(a, n))
+        return scale(c^n, new{K, N}(a, n))
     end
 end
 
-struct GenPowOp{R, N} <: GenericOp{R, N}
-    arg::GenericOp{R, N}
+struct GenPowOp{K, N} <: GenericOp{K, N}
+    arg::GenericOp{K, N}
     expo::Number
-    function GenPowOp(arg::GenericOp{R, N}, p::Number) where {R, N}
+    function GenPowOp(arg::GenericOp{K, N}, p::Number) where {K, N}
         c = scalarcoef(arg)
         a = scalararg(arg)
         m = abs(c)
@@ -440,7 +457,7 @@ struct GenPowOp{R, N} <: GenericOp{R, N}
             # phase would turn the eigenvalues across its cut and stays inside
             return scale(m^p, GenPowOp(scale(c / m, a), p))
         end
-        return new{R, N}(arg, no_signed_zero(p))
+        return new{K, N}(arg, no_signed_zero(p))
     end
 end
 
@@ -460,7 +477,7 @@ Base.literal_pow(::typeof(^), a::Op, ::Val{p}) where p = a ^ p
 # integer power, its product
 (a::AtIndex ^ p::Number) = power(a.op, p)(a.index...)
 
-(a::IdentityOp{R, Indexed} ^ ::Number) where R = a
+(a::IdentityOp{K, Indexed} ^ ::Number) where K = a
 
 (a::IndexedOp ^ p::Number) =
     if !is_natural(p)
@@ -479,12 +496,12 @@ the principal square root of a generic operator, `op^0.5`
 sqrt(a::GenericOp) = a ^ 0.5
 
 """
-    ExpOp{R, N}
+    ExpOp{K, N}
 
 the exponential of a generic operator, see `exp`
 """
-struct ExpOp{R, N} <: GenericOp{R, N}
-    arg::GenericOp{R, N}
+struct ExpOp{K, N} <: GenericOp{K, N}
+    arg::GenericOp{K, N}
 end
 
 """
@@ -496,18 +513,18 @@ the exponential of a generic operator.
 
     exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
 """
-exp(a::GenericOp{Pure}) = ExpOp(a)
+exp(a::GenericOp{IsOperator}) = ExpOp(a)
 
 """
     DagOp{N}
 
 the adjoint of a generic operator on pure states, see `dag`
 """
-struct DagOp{N} <: GenericOp{Pure, N}
-    arg::GenericOp{Pure, N}
+struct DagOp{N} <: GenericOp{IsOperator, N}
+    arg::GenericOp{IsOperator, N}
     DagOp(arg::DagOp) = arg.arg
-    DagOp(arg::ScalarOp{Pure, Generic}) = scale(conj(arg.coef), DagOp(arg.arg))
-    DagOp(arg::GenericOp{Pure, N}) where N = new{N}(arg)
+    DagOp(arg::ScalarOp{IsOperator, Generic}) = scale(conj(arg.coef), DagOp(arg.arg))
+    DagOp(arg::GenericOp{IsOperator, N}) where N = new{N}(arg)
 end
 
 """
@@ -519,17 +536,17 @@ the adjoint of a generic operator on pure states.
 
     dag(C) * C
 """
-dag(a::GenericOp{Pure}) = DagOp(a)
+dag(a::GenericOp{IsOperator}) = DagOp(a)
 
 """
     ModOp{N}
 
 an operator `A` taken modulo an integer `m` of at least 2, ``e^{2i\\pi A/m}``, see `mod`
 """
-struct ModOp{N} <: GenericOp{Pure, N}
-    arg::GenericOp{Pure, N}
+struct ModOp{N} <: GenericOp{IsOperator, N}
+    arg::GenericOp{IsOperator, N}
     modulus::Int
-    ModOp(arg::GenericOp{Pure, N}, modulus::Int) where N =
+    ModOp(arg::GenericOp{IsOperator, N}, modulus::Int) where N =
         if modulus < 2
             error("a modulus is at least 2, got $modulus")
         else
@@ -543,7 +560,7 @@ end
 the operator ``e^{2i\\pi A/m}``. Conserved, `conserve = mod(N, 3)` gives the charges
 ``n \\bmod 3``, added modulo 3 over the sites.
 """
-mod(a::GenericOp{Pure}, m::Int) = ModOp(a, m)
+mod(a::GenericOp{IsOperator}, m::Int) = ModOp(a, m)
 
 """
     parity(A)
@@ -554,7 +571,7 @@ the operator ``(-1)^A``, `mod(A, 2)`: conserved, a charge of ``\\mathbb{Z}_2``.
 
     Fermion(conserve = parity(N))
 """
-parity(a::GenericOp{Pure}) = ModOp(a, 2)
+parity(a::GenericOp{IsOperator}) = ModOp(a, 2)
 
 ############### Naming ###############
 
@@ -571,7 +588,7 @@ two quantities apart.
     named([1 1 ; 1 -1] / √2, "MyH")
     Fermion(conserve = named(N, "Nf"))
 """
-named(op::GenericOp{Pure, N}, name::String) where N = Operator{N}(name, op)
+named(op::GenericOp{IsOperator, N}, name::String) where N = Operator{N}(name, op)
 named(def::Union{Matrix, Function}, name::String) = Operator{1}(name, def)
 
 # an operator broadcasts as a single value, as in `Level .=> bits`
@@ -733,8 +750,8 @@ function paren(f, io::IO, out_prec::Int, in_prec::Int = out_prec)
 end
 
 show(io::IO, op::Operator) = print(io, op.name)
-show(io::IO, ::IdentityOp{Pure, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
-show(io::IO, ::IdentityOp{Pure, Indexed}) = print(io, "Id")
+show(io::IO, ::IdentityOp{IsOperator, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
+show(io::IO, ::IdentityOp{IsOperator, Indexed}) = print(io, "Id")
 show(io::IO, a::Proj) = show_func(io, "Proj", [a.state])
 show(io::IO, ind::AtIndex) = show_func(io, repr(ind.op; context = :precedence => 500), collect(ind.index))
 

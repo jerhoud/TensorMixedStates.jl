@@ -89,7 +89,7 @@ matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
     matrix(a(site, sites...), site, sites...)
 
-function matrix(a::IdentityOp{Pure, Generic}, site::AbstractSite, sites::AbstractSite...)
+function matrix(a::IdentityOp{IsOperator, Generic}, site::AbstractSite, sites::AbstractSite...)
     d = prod(dim, expand_sites(a, (site, sites...)))
     return Matrix{Float64}(I, d, d)
 end
@@ -156,7 +156,7 @@ matrix(a::DagOp, site::AbstractSite, sites::AbstractSite...) =
 
 # (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): a factor on fermionic sites takes their
 # parity for each odd factor after it, and a factor of no definite parity there is refused
-function matrix(a::TensorOp{Pure}, site::AbstractSite, others::AbstractSite...)
+function matrix(a::TensorOp{IsOperator}, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
     pos = factor_sites(a)
     fs = [ foldl(kron, [ matrix(F, s) for s in sites[p] ]) for p in pos ]
@@ -213,7 +213,7 @@ end
 
 the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `sites`
 """
-function eigenprojector(a::GenericOp{Pure}, λ::Real, sites::AbstractSite...)
+function eigenprojector(a::GenericOp{IsOperator}, λ::Real, sites::AbstractSite...)
     on = " on " * join(sites, " ⊗ ")
     values, ps = eigenspaces(matrix(a, sites...), "Proj", a, on)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)

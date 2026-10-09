@@ -89,7 +89,7 @@ the gate applying `op` to the following sites when the first one, a qubit, is in
     Toffoli = controlled(controlled(X))
     CZ(1, 2)
 """
-controlled(op::GenericOp{Pure, N}; name::String = controlled_name(op)) where N =
+controlled(op::GenericOp{IsOperator, N}; name::String = controlled_name(op)) where N =
     Operator{N+1}(name, Proj(Level => 0) ⊗ IdentityOp(op) + Proj(Level => 1) ⊗ op)
 
 """

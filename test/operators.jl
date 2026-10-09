@@ -24,7 +24,7 @@ end
     @test matrix(0 * X, q) ≈ zeros(2, 2)
     g = 0.0
     @test matrix(g * C + g * dag(C), f) == zeros(2, 2)
-    @test matrix(TMS.SumOp(TMS.Op{Pure, TMS.Generic, 1}[]), f) == zeros(2, 2)
+    @test matrix(TMS.SumOp(TMS.Op{IsOperator, TMS.Generic, 1}[]), f) == zeros(2, 2)
 end
 
 @testset "A matrix is taken on one site at least" begin
@@ -90,7 +90,7 @@ end
     # of several sites, the singlet and the spin 2 of two spins one, printed as before whatever
     # its number of sites
     @test Proj("Up") isa SimpleOp
-    @test Proj(Swap => -1) isa GenericOp{Pure, 2}
+    @test Proj(Swap => -1) isa GenericOp{IsOperator, 2}
     @test repr(Proj("Up")) == "Proj(\"Up\")"
     @test repr(Proj(Swap => -1)) == "Proj(Swap => -1)"
     @test matrix(Proj(Swap => -1), Qubit()) ≈ matrix((Id ⊗ Id - Swap) / 2, Qubit())
