@@ -158,7 +158,8 @@ end
 time evolution by WI or WII approximations of the exponential, combined into an approximation
 of the given order, for the `algo` field of `Evolve`, see `approx_W`.
 
-- `order`: the order of the approximation, from 1 to 4, required
+- `order`: the order of the approximation, from 1 to 4, required; 2 at most for a time
+  dependent evolver
 - `w`: 1 or 2 for WI or WII (default 2)
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)

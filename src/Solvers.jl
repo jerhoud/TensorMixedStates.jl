@@ -195,7 +195,8 @@ advanced by `t`.
 
 # Options
 
-- `order`: the order of the approximation, from 1 to 4, required
+- `order`: the order of the approximation, from 1 to 4, required; 2 at most with `coefs`, the
+  time functions being taken at the middle of each step
 - `w`: 1 or 2 for WI or WII (default 2)
 - `nsweeps`: the number of steps (default 1)
 - `first_sweep`: the step to start from (default 1), to continue an evolution left unfinished:
@@ -204,7 +205,7 @@ advanced by `t`.
 - `time_start`: the simulation time the evolution starts from (default 0, and the time of
   the simulation for a `Simulation`)
 - `coefs`: for a vector of evolvers, the functions of time they are multiplied by, taken at
-  the middle of each step
+  the middle of each step, with real values on a mixed state
 - `n_hermitianize`: make a mixed state hermitian every `n_hermitianize` steps (default 0,
   never)
 - `limits`: constraints on the state, see `Limits`, which may give one value per step

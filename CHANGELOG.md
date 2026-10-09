@@ -38,6 +38,8 @@ the reference article.
   it is given, where it gave 0.
 - On a mixed state the time functions of an evolver take real values: a complex one gave a
   state of complex trace, and is written as its real and imaginary parts, each its own term.
+- The docstrings of `approx_W` and `ApproxW` say that a time dependent evolver, its functions
+  taken at the middle of each step, limits the order to 2: orders 3 and 4 converge as order 2.
 
 ## [1.6.0] - 2026-09-30
 
