@@ -49,6 +49,8 @@ the reference article.
   `prod(2Sz(i) for i in 1:63)` measured -1 on sites up, and `(2X)^64` was `0Id`.
 - A checkpoint gives back an integer measurement other than an `Int` with its type, where it
   came back as another type, or with JSON 0.21 as a wrong number above `typemax(Int64)`.
+- The values of one call of `output` sent to one `Data` by several pairs make one event, one
+  row of `data_to_frame`, rather than one per pair.
 
 ## [1.6.0] - 2026-09-30
 
