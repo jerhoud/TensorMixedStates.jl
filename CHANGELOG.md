@@ -10,6 +10,10 @@ the reference article.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.6.1] - 2026-10-09
+
 ### Changed
 
 - A float coefficient of integer value prints as that integer, `2.0X` as `2X`, which renames a

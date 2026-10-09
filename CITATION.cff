@@ -20,8 +20,8 @@ authors:
 repository-code: https://github.com/jerhoud/TensorMixedStates.jl
 url: https://jerhoud.github.io/TensorMixedStates.jl
 license: GPL-3.0-or-later
-version: 1.6.0
-date-released: '2026-09-30'
+version: 1.6.1
+date-released: '2026-10-09'
 keywords:
   - quantum physics
   - open quantum systems
