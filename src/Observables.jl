@@ -1297,6 +1297,8 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
         x = draw(i -> real(scalar(a * tensor_obs(state, Proj(i)(pos)) * r)), d, rnd)
         result[pos] = x
         l = a * tensor_obs(state, Proj(x)(pos))
+        # rescaled, the probabilities to come being ratios: it would underflow on long chains
+        l /= norm(l)
     end
     return result
 end

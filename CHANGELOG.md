@@ -14,6 +14,8 @@ the reference article.
 
 - `partial_trace`, the `PartialTrace` phase, and through it `renyi2`, `mutual_info_renyi2`,
   `SubRenyi2` and `MutualInfoRenyi2`, keep the fermionic signs of the sites traced out.
+- `sample` of a mixed state drew every site after about the 1074th of a chain in its last
+  state, a probability falling below the smallest float.
 
 ## [1.6.0] - 2026-09-30
 
