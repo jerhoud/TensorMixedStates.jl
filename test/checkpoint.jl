@@ -425,6 +425,40 @@ end
     end
 end
 
+@testset "Integers other than Int survive a resume" begin
+    # json reads an integer back as an Int64 or a BigInt, and JSON 0.21 above typemax(Int64)
+    # as a wrong number: the checkpoint writes it with its type, so that the resumed run hands
+    # back the values an uninterrupted one gives
+    mktempdir() do dir
+        cd(dir) do
+            stop_in = Ref(0)
+            ints = [Int32(7), typemax(UInt64) - UInt64(12345), big(2)^70]
+            measures = ["data" => [X(1), stopper_at(stop_in)], Data("d") => ints]
+            phases = [CreateState{Pure}(2, Qubit(), "X+"),
+                      Evolve(duration = 0.6, time_step = 0.1, algo = Tdvp(),
+                             evolver = -im * Z(1),
+                             limits = Limits(maxdim = 10, cutoff = 1e-15); measures)]
+            ref = runTMS(SimData(; name = "ref", phases))
+            stop_in[] = 3
+            sim_data = SimData(; name = "chk", phases, checkpoint_interval = 1e-9)
+            runTMS(sim_data)
+            @test stop_in[] == 0
+            sim = runTMS(sim_data)
+            for (name, whole) in ref.data["d"]
+                resumed = sim.data["d"][name]["data"]
+                @test map(typeof, resumed) == map(typeof, whole["data"])
+                @test resumed == whole["data"]
+            end
+        end
+    end
+    # and a vector of them keeps its element type
+    json = TensorMixedStates.JSON
+    words = UInt64[7, typemax(UInt64)]
+    back = TensorMixedStates.restored_value(json.parse(json.json(TensorMixedStates.checkpoint_value(words))))
+    @test back isa Vector{UInt64}
+    @test back == words
+end
+
 @testset "Running a completed simulation again" begin
     # with periodic checkpoints on, one is written after the last phase, so that the run
     # resumes past every phase: nothing is computed again and the files stay as they were

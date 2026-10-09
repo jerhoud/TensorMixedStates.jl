@@ -40,15 +40,26 @@ json_value(x) = x
 
 `x` encoded for a checkpoint, which `restored_value` decodes. Json holds neither complex
 numbers, nor matrices (one comes back as the vector of its columns), nor floats that are not
-finite, so these are wrapped in a dictionary saying what they are: a resumed run then hands
-back the values an uninterrupted one would.
+finite, nor integers other than `Int` (one comes back as an `Int64` or a `BigInt`, and with
+JSON 0.21 above `typemax(Int64)` as a wrong number), so these are wrapped in a dictionary
+saying what they are: a resumed run then hands back the values an uninterrupted one would.
 """
 checkpoint_value(x::AbstractFloat) = isfinite(x) ? x : Dict("float" => string(x))
+checkpoint_value(x::Union{Base.BitInteger, BigInt}) = Dict("integer" => string(x), "type" => string(typeof(x)))
+checkpoint_value(x::Int) = x
 checkpoint_value(x::Complex) = Dict("complex" => [checkpoint_value(real(x)), checkpoint_value(imag(x))])
 checkpoint_value(x::AbstractMatrix) = Dict("matrix" => [ checkpoint_value(x[i, :]) for i in axes(x, 1) ])
 checkpoint_value(x::AbstractArray) = map(checkpoint_value, x)
 checkpoint_value(x::AbstractDict) = Dict(k => checkpoint_value(v) for (k, v) in x)
 checkpoint_value(x) = x
+
+"""
+    checkpoint_integers
+
+the integer types a checkpoint writes with their name, see `checkpoint_value`
+"""
+const checkpoint_integers = Dict(string(T) => T for T in (Int8, Int16, Int32, Int64, Int128, UInt8,
+                                                           UInt16, UInt32, UInt64, UInt128, BigInt))
 
 """
     restored_value(x)
@@ -62,6 +73,8 @@ function restored_value(x::AbstractDict)
         return complex(r, i)
     elseif haskey(x, "float")
         return parse(Float64, x["float"])
+    elseif haskey(x, "integer")
+        return parse(checkpoint_integers[x["type"]], x["integer"])
     elseif haskey(x, "matrix")
         return stack(restored_value.(x["matrix"]); dims = 1)
     end

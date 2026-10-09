@@ -47,6 +47,8 @@ the reference article.
   taken at the middle of each step, limits the order to 2: orders 3 and 4 converge as order 2.
 - An integer coefficient is stored as a float, whose products do not wrap around:
   `prod(2Sz(i) for i in 1:63)` measured -1 on sites up, and `(2X)^64` was `0Id`.
+- A checkpoint gives back an integer measurement other than an `Int` with its type, where it
+  came back as another type, or with JSON 0.21 as a wrong number above `typemax(Int64)`.
 
 ## [1.6.0] - 2026-09-30
 
