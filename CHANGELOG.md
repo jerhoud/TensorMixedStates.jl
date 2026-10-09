@@ -24,6 +24,8 @@ the reference article.
   even when named and placed without string when given as a vector.
 - A non integer power of a superoperator holding a fermionic operator, as
   `Gate(C + dag(C))^0.5`, is refused on any site but the first, where an MPO placed it wrong.
+- A tensor product with a fermionic factor of several sites, as `named(C ⊗ N, "CN")`, was
+  taken as even: its adjoint, its matrix and its dissipator were wrong.
 
 ## [1.6.0] - 2026-09-30
 

@@ -1259,7 +1259,9 @@ isfermionic(a::GenPowOp) =
 """
     fermion_parity(a, strung)
 
-the parity of an operator of one site: `0` if even, `1` if odd, `nothing` if it has none. It
+the parity of an operator: `0` if even, `1` if odd, `nothing` if it has none. An operator of
+several sites has that of the product of its pieces placed: a tensor product the sum of the
+parities of its factors, an operator defined by an expression that of its expression. It
 serves `jw_parity` and `has_fermionic`, which ask two different questions, told apart by
 `strung`:
 
@@ -1274,13 +1276,24 @@ serves `jw_parity` and `has_fermionic`, which ask two different questions, told 
 """
 fermion_parity(::Op, ::Bool) = 0
 fermion_parity(::JW, strung::Bool) = strung ? 1 : 0
-fermion_parity(a::Operator, ::Bool) = a.type == fermionic_op ? 1 : 0
+# an operator of several sites cannot be declared fermionic: one defined by an expression has
+# its parity, one defined by a matrix or a function is taken as even, its matrix being laid
+# with no Jordan-Wigner string
+fermion_parity(a::Operator{N}, strung::Bool) where N =
+    if a.type == fermionic_op
+        1
+    elseif N > 1 && a.expr isa Op
+        fermion_parity(a.expr, strung)
+    else
+        0
+    end
 fermion_parity(a::Union{ScalarOp, DagOp}, strung::Bool) = fermion_parity(a.arg, strung)
 # a projector given by its index or by a name is even, its matrix refusing a state of no
 # definite parity on a fermionic site
 fermion_parity(a::Proj, strung::Bool) = strung && a.state isa Vector ? nothing : 0
 
-function fermion_parity(a::ProdOp, strung::Bool)
+# a tensor product placed is the product of its factors placed, see ⊗
+function fermion_parity(a::Union{ProdOp, TensorOp}, strung::Bool)
     ps = map(x -> fermion_parity(x, strung), a.subs)
     return any(isnothing, ps) ? nothing : mod(sum(ps), 2)
 end
@@ -1330,8 +1343,8 @@ end
 """
     jw_parity(a)
 
-how a factor of a product on one site behaves when the `F` of that site crosses it: `0` if it
-commutes with `F`, `1` if it anticommutes, `nothing` if neither.
+how a factor of a product behaves when the `F` of its sites cross it: `0` if it commutes with
+them, `1` if it anticommutes, `nothing` if neither.
 
 A fermionic operator and its Jordan-Wigner transform are odd, any other operator is taken as
 even, the convention the strings rest on, and a composite factor gets the parity of its pieces.

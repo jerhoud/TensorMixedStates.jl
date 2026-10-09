@@ -484,6 +484,22 @@ end
     st = State{Pure}(System(3, fe), ["Occ", "Emp", "Emp"])
     @test expect(st, e(1, 2)) ≈ exp(-0.3)
     @test expect(st, e(1, 3)) ≈ exp(-0.3)
+
+    # a factor of several sites has the parity of its pieces placed, a renamed expression as
+    # well as a tensor product. Both were taken as even, which lost the sign of the adjoint and
+    # the strings of the matrix, and made a dissipator change the trace
+    cn = named(C ⊗ N, "CN")
+    a2 = C ⊗ Id + Id ⊗ C
+    ψ = RandomState{Pure}(System(4, fe), 4)
+    for a in (cn ⊗ cn, a2 ⊗ a2)
+        aψ = apply(make_mpo(ψ, a(1, 2, 3, 4)), ψ)
+        @test expect(ψ, dag(a)(1, 2, 3, 4) * a(1, 2, 3, 4)) ≈ norm(aψ)^2
+    end
+    @test matrix(C ⊗ cn, fe) ≈ matrix(C ⊗ C ⊗ N, fe)
+    @test matrix(C ⊗ a2, fe) ≈ matrix(C ⊗ C ⊗ Id + C ⊗ Id ⊗ C, fe)
+    @test_throws "no definite fermionic parity" matrix(C ⊗ (C ⊗ Id + N ⊗ Id), fe)
+    ρ = mix(RandomState{Pure}(System(4, fe), 4))
+    @test abs(trace(apply(make_mpo(ρ, Dissipator(cn ⊗ cn)(1, 2, 3, 4)), ρ))) < 1e-12
 end
 
 @testset "Products differing by their last factor are gathered" begin
