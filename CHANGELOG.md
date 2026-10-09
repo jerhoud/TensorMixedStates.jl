@@ -254,6 +254,52 @@ Clearer refusals, where a call failed on a `MethodError` or deep inside ITensors
 - `hermitianize` of a pure state takes `limits` only, where it ignored any keyword.
 - An MPO given to `approx_W`, `make_mpo` or `PreMPO`, which overflowed the stack.
 
+## [1.6.1] - 2026-10-09
+
+### Changed
+
+- A float coefficient of integer value prints as that integer, `2.0X` as `2X`, which renames a
+  measurement written with one: an integer coefficient is now stored as a float, see Fixed.
+
+### Fixed
+
+- `partial_trace`, the `PartialTrace` phase, and through it `renyi2`, `mutual_info_renyi2`,
+  `SubRenyi2` and `MutualInfoRenyi2`, keep the fermionic signs of the sites traced out.
+- `sample` of a mixed state drew every site after about the 1074th of a chain in its last
+  state, a probability falling below the smallest float.
+- `state` and `matrix` give a copy of the array a site declares, which changing changed it for
+  everyone.
+- A state can be measured from several threads at once, where its caches, filled with no
+  lock, made measurements fail and could crash Julia.
+- A projector on a fermionic site refuses a state of no definite parity, which was taken as
+  even when named and placed without string when given as a vector.
+- A non integer power of a superoperator holding a fermionic operator, as
+  `Gate(C + dag(C))^0.5`, is refused on any site but the first, where an MPO placed it wrong.
+- A tensor product with a fermionic factor of several sites, as `named(C ⊗ N, "CN")`, was
+  taken as even: its adjoint, its matrix and its dissipator were wrong.
+- A gate of fermionic operators and of an operator of several sites defined by a matrix, as
+  `C(1) * C(4) * M(1, 2)`, gave a wrong state, a string being moved past part of `M`.
+- `named` refuses a matrix that does not satisfy its `type`, as a matrix declared an involution
+  that is not self adjoint, which `simplify` squared to the identity.
+- A `SteadyState` checkpointed on its last sweep hands on a state of trace one once resumed,
+  where it handed on the eigenvector dmrg gives, of trace 1.39 in a test.
+- An `Evolve` whose duration and time step have opposite signs evolves over its duration,
+  where it made no step; `tdvp` and `approx_W` refuse `nsweeps` below one.
+- `dmrg` with no sweep left, its `first_sweep` past `nsweeps`, gives the energy of the state
+  it is given, where it gave 0.
+- On a mixed state the time functions of an evolver take real values: a complex one gave a
+  state of complex trace, and is written as its real and imaginary parts, each its own term.
+- The docstrings of `approx_W` and `ApproxW` say that a time dependent evolver, its functions
+  taken at the middle of each step, limits the order to 2: orders 3 and 4 converge as order 2.
+- An integer coefficient is stored as a float, whose products do not wrap around:
+  `prod(2Sz(i) for i in 1:63)` measured -1 on sites up, and `(2X)^64` was `0Id`.
+- A checkpoint gives back an integer measurement other than an `Int` with its type, where it
+  came back as another type, or with JSON 0.21 as a wrong number above `typemax(Int64)`.
+- The values of one call of `output` sent to one `Data` by several pairs make one event, one
+  row of `data_to_frame`, rather than one per pair.
+- `SetState`, on a fermionic site with fermionic sites on its left, changed the sign of the
+  correlations across it, or erased them: it lacked their Jordan-Wigner strings.
+
 ## [1.6.0] - 2026-09-30
 
 This release adds exported names, among them `set_threading`, `run_steps` and
