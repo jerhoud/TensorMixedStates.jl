@@ -407,8 +407,15 @@ function matrix_type(m::AbstractMatrix, sites = AbstractSite[], what = "the matr
     error("$what has no definite fermionic parity on $(only(sites)): write it with C and dag(C)")
 end
 
-named(m::Matrix, name::String; type::OpType = matrix_type(m)) =
-    Operator{1}(name, m, type)
+function named(m::Matrix, name::String; type::OpType = matrix_type(m))
+    # checked at once, simplify relying on the type before any matrix is computed; parity
+    # needs the F of a site, where it is checked
+    v = violation(type, m, nothing)
+    if !isnothing(v)
+        error("$name is declared $type but $v")
+    end
+    return Operator{1}(name, m, type)
+end
 
 named(f::Function, name::String; type::OpType = plain_op) =
     Operator{1}(name, f, type)

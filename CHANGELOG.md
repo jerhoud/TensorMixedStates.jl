@@ -28,6 +28,8 @@ the reference article.
   taken as even: its adjoint, its matrix and its dissipator were wrong.
 - A gate of fermionic operators and of an operator of several sites defined by a matrix, as
   `C(1) * C(4) * M(1, 2)`, gave a wrong state, a string being moved past part of `M`.
+- `named` refuses a matrix that does not satisfy its `type`, as a matrix declared an involution
+  that is not self adjoint, which `simplify` squared to the identity.
 
 ## [1.6.0] - 2026-09-30
 
