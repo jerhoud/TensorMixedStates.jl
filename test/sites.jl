@@ -80,6 +80,12 @@ TensorMixedStates.dim(::Misdeclared) = 2
 
 @def_states Misdeclared [ "Big" => [1., 0., 0.] ]
 
+struct Misoperated <: AbstractSite end
+
+TensorMixedStates.dim(::Misoperated) = 2
+
+@def_operators Misoperated [ Big = [1. 0. 0. ; 0. 1. 0. ; 0. 0. 1.] ]
+
 struct Misparity <: AbstractSite end
 
 TensorMixedStates.dim(::Misparity) = 2
@@ -297,6 +303,7 @@ end
     @test_throws "a literal string" @macroexpand @def_states Dummit2 [ name => [0., 1.] ]
     # the declarations of a site are checked at its first use, in a system
     @test_throws "a state of 3 components cannot be one of Misdeclared()" System(2, Misdeclared())
+    @test_throws "operator Big is given by a 3×3 matrix and cannot act on Misoperated()" System(2, Misoperated())
     @test_throws "fermion_parities gives [0, 2]" System(2, Misparity())
     @test_ok System(2, Oddling())
 end

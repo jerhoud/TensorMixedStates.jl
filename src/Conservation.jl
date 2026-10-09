@@ -690,7 +690,7 @@ function check_declarations(site::AbstractSite)
         local_state(site, name)
     end
     for name in declared_names(operator_definition, site)
-        check_size("operator $name", matrix(Operator{1}(name), site), [site])
+        matrix(Operator{1}(name), site)
     end
     species = fermion_species(site)
     if !isnothing(species)

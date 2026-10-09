@@ -272,7 +272,12 @@ end
     @test matrix(Operator{1}("Ex", exp(0.3im * X)), q) ≈ matrix(exp(0.3im * X), q)
     @test matrix(Operator{1}("Fs", s -> matrix(Sz, s)), s1) ≈ matrix(Sz, s1)
     @test matrix(Operator{1}("Cf", C), fe) ≈ matrix(C, fe)
+    # what cannot be: sites of another number, or a matrix, or a function of the sites, of a size
+    # other than theirs
     @test_throws "acts on 2 sites and was given 3" matrix(Operator{2}("A", msw), q, q, q)
+    @test_throws "whose dimension is 6" matrix(Operator{2}("A", msw), s1, q)
+    @test_throws "whose dimension is 3" matrix(Operator{1}("A", [1. 0 ; 0 1]), s1)
+    @test_throws "whose dimension is 3" matrix(Operator{1}("Fn", s -> [1. 0 ; 0 1]), s1)
 end
 
 @testset "The matrix of a tensor product of fermions" begin
@@ -440,6 +445,7 @@ end
     @test matrix(named([1 1; 1 -1] / √2, "MyH"), Qubit()) ≈ [1 1; 1 -1] / √2
     @test matrix(named(s -> [0. 1.; 1. 0.], "Fx"), Qubit()) == [0. 1.; 1. 0.]
     @test matrix(named(Sp + Sm, "Sx2"), Spin(1)) ≈ 2 * matrix(Sx, Spin(1))
+    @test_throws "given by a 3×3 matrix and cannot act on Qubit()" matrix(named(rand(3, 3), "R"), Qubit())
     # an operator of several sites is given its number of sites, a single site then standing for
     # as many as it acts on, and it can be measured
     sw = matrix(Swap, Qubit())

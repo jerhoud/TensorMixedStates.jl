@@ -100,9 +100,9 @@ function matrix(a::Operator, site::AbstractSite...)
         if isnothing(def)
             error("operator $(a.name) is not defined for site $(typeof(only(sites)))")
         end
-        return matrix(def, sites...)
+        return check_size("operator $(a.name)", matrix(def, sites...), sites)
     end
-    return matrix(a.expr, sites...)
+    return check_size("operator $(a.name)", matrix(a.expr, sites...), sites)
 end
 
 function matrix(a::Proj, given::AbstractSite...)
