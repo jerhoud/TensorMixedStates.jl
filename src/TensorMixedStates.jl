@@ -29,6 +29,9 @@ include("PreparedStates.jl")
 include("RandomStates.jl")
 include("Io.jl")
 
+# Operators on a system
+include("Split.jl")
+
 # Site types
 include("sites/Qubits.jl")
 include("sites/Fermions.jl")
