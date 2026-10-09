@@ -111,6 +111,26 @@ end
         coefs = [t -> 1.0, t -> 1.0, t -> 1.0])
 end
 
+@testset "Time functions take real values on a mixed state" begin
+    # a complex value multiplied rho A† by itself rather than by its conjugate, which gave a
+    # mixed state of complex trace. On a pure state it means what it says and is taken
+    hs = -im * [X(1), -Y(1), Z(1) * Z(2) + X(2)]
+    ψ = State{Pure}(System(2, Qubit()), ["Up", "X+"])
+    cplx = [t -> cis(3t), t -> 0.0, t -> 1.0]
+    @test_throws "take real values on a mixed state" tdvp(hs, 1.0, mix(ψ); coefs = cplx)
+    @test_throws "take real values on a mixed state" approx_W(hs, 1.0, mix(ψ); coefs = cplx, order = 2)
+    @test_ok tdvp(hs, 1.0, ψ; coefs = cplx)
+    # a drive, Ω(exp(iωt)σ+ + exp(-iωt)σ-), written with the real and imaginary parts of its
+    # functions: evolving the mixed state is mixing the evolved pure state, the hamiltonian not
+    # commuting at different times. Tdvp is exact at full bond dimension, the tolerance of
+    # ApproxW is its error measured here
+    coefs = [t -> cos(3t), t -> sin(3t), t -> 1.0]
+    for (ev, tol) in [(st -> tdvp(hs, 1.0, st; coefs, nsweeps = 50), 1e-11),
+                      (st -> approx_W(hs, 1.0, st; coefs, nsweeps = 50, order = 4), 1e-7)]
+        @test norm(ev(mix(ψ)) - mix(ev(ψ))) < tol
+    end
+end
+
 @testset "An evolution ends where it was asked to" begin
     # the step is adjusted to divide the duration: a duration of 1 in steps of 0.3 stopped at
     # 0.9, and one shorter than half a step ran no step at all

@@ -36,6 +36,8 @@ the reference article.
   where it made no step; `tdvp` and `approx_W` refuse `nsweeps` below one.
 - `dmrg` with no sweep left, its `first_sweep` past `nsweeps`, gives the energy of the state
   it is given, where it gave 0.
+- On a mixed state the time functions of an evolver take real values: a complex one gave a
+  state of complex trace, and is written as its real and imaginary parts, each its own term.
 
 ## [1.6.0] - 2026-09-30
 

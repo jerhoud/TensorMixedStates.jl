@@ -20,11 +20,21 @@ end
 """
     check_coefs(pre, coefs)
 
-refuse `coefs` unless it holds one value per time function of `pre`.
+refuse `coefs` unless it holds one value per time function of `pre`, real on a mixed state: a
+pure term lifted for a mixed state, ``A \\rho + \\rho A^\\dagger``, would need a complex value
+on one side and its conjugate on the other.
 """
-function check_coefs(pre::PreMPO, coefs)
+function check_coefs(pre::PreMPO{R}, coefs) where R
     if length(coefs) ≠ pre.nterms
         error("an evolver of $(pre.nterms) terms takes as many time functions, got $(length(coefs))")
+    end
+    if R === Mixed
+        for (k, c) in enumerate(coefs)
+            if !isreal(c)
+                error("time functions take real values on a mixed state, and term $k got $c: " *
+                      "write f * A as real(f) * A + imag(f) * (im * A)")
+            end
+        end
     end
 end
 

@@ -55,6 +55,9 @@ nothing # hide
 ```
 
 `hs` is passed to `tdvp` or `approx_W` as usual, and `coefs` as the keyword argument `coefs`.
+On a mixed state the time functions take real values: a complex one is written as its real
+and imaginary parts, each with its own term,
+``f(t) A = \mathrm{Re} f(t)\, A + \mathrm{Im} f(t)\, (i A)``.
 With a `Simulation`, `t` is the simulation time; with a `State`, the evolution starts from the
 time given by the keyword argument `time_start`, 0 by default:
 
