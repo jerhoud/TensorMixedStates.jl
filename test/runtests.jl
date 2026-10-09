@@ -16,7 +16,7 @@ says what belongs there. To add a group, create the file and add its name here. 
 written from its lowest layer up: a group comes back here once its tests are ported, and the
 files of the others are the tests of 1.x still to port.
 """
-const GROUPS = ["building", "sites", "states_io"]
+const GROUPS = ["building", "operators", "sites", "states_io"]
 
 # without arguments everything runs, otherwise only the groups given on the command
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`
