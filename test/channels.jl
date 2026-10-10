@@ -5,8 +5,10 @@
 # The invariant to prefer is that the matrix of a channel or a generator is the map it stands
 # for, written on vec(ρ) in an order spelled out here element by element, so that the tests do
 # not depend on how TMS lays it out; on a pure state, that a pure channel acts as its Kraus
-# operator. Their descent onto a density matrix, their MPO there and their application to it
-# come with the later steps of layer 2.
+# operator; on a system, that the terms of a channel or a generator give the superoperator
+# built from the matrices of the operators it is made of on the whole system, Jordan-Wigner
+# strings included. Their MPO on a density matrix and their application to it come with the
+# later steps of layer 2.
 
 """
 the identity matrix of dimension `d`
@@ -24,6 +26,21 @@ mixed_vec(ρ, d1, d2) =
 the vector of a pure state in the full basis, site 1 most significant, not normalised
 """
 full_vector(st::State{Pure}) = vec(Array(prod(st.state), reverse(siteinds(Pure, st.system))...))
+
+"""
+the matrix of the placed channel or generator `a` on the whole of `sys`, from its terms
+"""
+superop(sys, a) = TMS.system_matrix(Mixed, sys, TMS.lower(sys, a))
+
+"""
+the matrix of the placed operator `k` on the whole of `sys`, from its terms
+"""
+fock(sys, k) = TMS.system_matrix(Pure, sys, TMS.lower(sys, k))
+
+"""
+the sites of `sys` in order
+"""
+all_sites(sys) = [ sys[i] for i in 1:length(sys) ]
 
 @testset "Channels and generators in their normal form" begin
     # a gate and a dissipator take the modulus squared of a coefficient, a gate distributes over
@@ -322,4 +339,87 @@ end
     @test matrix(Evolver(TMS.pure_part(idg)), Qubit()) ≈ matrix(idg, Qubit())
     @test_throws "holds a dissipator, which a pure state cannot follow" make_mpo(ψ,
         -im * X(1) + Dissipator(Sm)(1))
+end
+
+@testset "Gates, evolvers and dissipators on a density matrix" begin
+    # each is made of the operators it holds on each side of the density matrix, their strings
+    # included, on sites apart
+    sided = TMS.sided
+    fs, qs = System(3, Fermion()), System(3, Qubit())
+    for (sys, k) in [(fs, C(1) + 0.5 * dag(C)(3)), (fs, dag(C)(1) * C(3) + N(2)),
+                     (qs, X(1) * Y(3) + 0.3 * Z(2)), (fs, C(2)), (fs, (C ⊗ dag(C))(3, 1))]
+        K, ss = fock(sys, k), all_sites(sys)
+        i, m = one(K), K' * K
+        @test superop(sys, Gate(k)) ≈ sided(K, K', ss)
+        @test superop(sys, Evolver(k)) ≈ sided(K, i, ss) + sided(i, K', ss)
+        @test superop(sys, Dissipator(k)) ≈ sided(K, K', ss) - (sided(m, i, ss) + sided(i, m, ss)) / 2
+    end
+    # a Hamiltonian added to a dissipator
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    H, c1, ss = fock(fs, h), fock(fs, C(1)), all_sites(fs)
+    i, m = one(H), c1' * c1
+    @test superop(fs, -im * h + Dissipator(C)(1)) ≈
+        sided(-im * H, i, ss) + sided(i, im * H, ss) + sided(c1, c1', ss) - (sided(m, i, ss) + sided(i, m, ss)) / 2
+end
+
+@testset "Resets and dephasings on a density matrix" begin
+    sided, LA = TMS.sided, TMS.LinearAlgebra
+    fs, qs = System(3, Fermion()), System(3, Qubit())
+    # on sites with no string, the reset of a site alone
+    @test superop(qs, Reset("Up")(2)) ≈ kron(eye(4), matrix(Reset("Up"), Qubit()), eye(4))
+    # a fermion between fermions reset to a state of eigenvalues λ and eigenvectors v: the sum of
+    # the gates of its Kraus operators |v⟩⟨i|, each with the strings of its parity
+    for (st, σ) in [("Occ", [0. 0. ; 0. 1.]), ("FullyMixed", [0.5 0. ; 0. 0.5])]
+        e = LA.eigen(LA.Hermitian(σ))
+        ks = [ λ => fock(fs, Operator{1}("K", v * [ j == i ? 1. : 0. for j in 1:2 ]')(2))
+               for (λ, v) in zip(e.values, eachcol(e.vectors)) for i in 1:2 ]
+        @test superop(fs, Reset(st)(2)) ≈ sum(λ * sided(k, k', all_sites(fs)) for (λ, k) in ks)
+    end
+    # a dephasing on sites apart, the sum of the gates of its projectors
+    for (sys, a) in [(qs, Z ⊗ Z), (fs, im * (C + dag(C)) ⊗ (C + dag(C))), (fs, N ⊗ N)]
+        vals = TMS.eigenspaces(matrix(a, sys[1], sys[3]), "", "")[1]
+        ps = [ fock(sys, Proj(a => λ)(1, 3)) for λ in vals ]
+        @test superop(sys, Dephase(a)(1, 3)) ≈ sum(sided(p, p, all_sites(sys)) for p in ps)
+    end
+end
+
+@testset "The exponential of a generator on sites apart" begin
+    # exp(t * L)(i, j) is the exponential of L(i, j): its superoperator, split into
+    # superoperators of one site, takes the strings of its kets and of its bras
+    fs = System(3, Fermion())
+    t = 0.4
+    for L in [-im * (dag(C) ⊗ C - C ⊗ dag(C)) + Dissipator(C ⊗ Id) + Dissipator(Id ⊗ C),
+              Evolver(0.3 * (C ⊗ Id + dag(C) ⊗ N)) + Dissipator(Id ⊗ C)]
+        for index in ((1, 3), (2, 1))
+            @test superop(fs, exp(t * L)(index...)) ≈ exp(t * superop(fs, L(index...)))
+        end
+    end
+    @test superop(fs, (Gate(C)^2)(2)) ≈ superop(fs, Gate(C)(2))^2
+end
+
+@testset "The dissipator of a channel on sites apart" begin
+    # its channel minus half the anticommutator of the sum of the K†K, read off the trace
+    sided = TMS.sided
+    for (sys, Φ) in [(System(3, Qubit()), (Gate(X) ⊗ Reset("Up"))(1, 3)),
+                     (System(3, Fermion()), (Gate(C) ⊗ Reset("Emp"))(1, 3))]
+        S, ss = superop(sys, Φ), all_sites(sys)
+        m = TMS.kraus_sum(S, ss)
+        i = one(m)
+        @test superop(sys, Dissipator(Φ)) ≈ S - (sided(m, i, ss) + sided(i, m, ss)) / 2
+    end
+end
+
+@testset "The trace on a system" begin
+    # tr ρ is the row of vec(I) in the order of the sites, which a channel keeping the trace
+    # leaves and a generator sends to zero
+    fs = System(3, Fermion())
+    t = transpose(foldl(kron, fill(vec(eye(2)), 3)))
+    @test norm(t * superop(fs, -im * (dag(C)(1) * C(3) + dag(C)(3) * C(1)) + Dissipator(C(1) + C(3)))) < 1e-12
+    @test t * superop(fs, reset_gate(0.3, "Emp")(2) * Gate((C + dag(C))(1)) * depolarizing_gate(0.2, 2)(1, 3)) ≈ t
+end
+
+@testset "A channel or a generator refused on a system" begin
+    @test_throws "carries no definite charge of N" TMS.lower(System(2, Qubit(conserve = N)), Dephase(X ⊗ X)(1, 2))
+    @test_throws "acts on site 5, which the system does not have" TMS.lower(System(3, Qubit()), Gate(X)(5))
+    @test_throws "acts on site 4, which the system does not have" TMS.lower(System(3, Qubit()), Dissipator(X(1) + X(4)))
 end

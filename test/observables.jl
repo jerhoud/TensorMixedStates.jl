@@ -317,7 +317,7 @@ end
     u, v = random_state(Pure, q, 3), random_state(Pure, q, 3)
     m = X(1) * Z(3) + 0.3 * Y(2) + Swap(2, 4)
     du, dv = dense_vector(u) * norm(u), dense_vector(v) * norm(v)
-    @test inner(u, m, v) ≈ du' * TMS.system_matrix(q, TMS.lower(q, m)) * dv
+    @test inner(u, m, v) ≈ du' * TMS.system_matrix(Pure, q, TMS.lower(q, m)) * dv
     @test dot(u, m, v) ≈ inner(u, m, v)
     # between two density matrices a pure operator is either its gate or its generator
     @test_throws "is ambiguous" inner(mix(u), X(1), mix(v))

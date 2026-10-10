@@ -10,7 +10,7 @@
 """
 the dense matrix of the operator `op` on the sites of `st`, from its terms
 """
-exact(st::State, op) = TMS.system_matrix(st.system, TMS.lower(st.system, op))
+exact(st::State, op) = TMS.system_matrix(Pure, st.system, TMS.lower(st.system, op))
 
 """
 the dense matrix of the MPO `make_mpo` builds for `op` on the sites of `st`, `coefs` being the

@@ -351,45 +351,45 @@ end
     # the link: three for Swap, as its expression has, and eight for the projector of the AKLT
     # chain, where its expression takes twelve, the same with a charge conserved
     msw = [1. 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1]
-    sw = TMS.split_matrix("Sw", msw, [q, q])
+    sw = TMS.split_matrix(Pure, "Sw", msw, [q, q])
     @test exact(sw, msw, [q, q]) && crossing(sw) == 3
     ss = Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz
     mp2 = matrix(ss / 2 + ss * ss / 6 + (Id ⊗ Id) / 3, s1)
-    p2 = TMS.split_matrix("P2", mp2, [s1, s1])
+    p2 = TMS.split_matrix(Pure, "P2", mp2, [s1, s1])
     @test exact(p2, mp2, [s1, s1]) && crossing(p2) == 8
     s1q = Spin(1, conserve = Sz)
-    p2q = TMS.split_matrix("P2", mp2, [s1q, s1q])
+    p2q = TMS.split_matrix(Pure, "P2", mp2, [s1q, s1q])
     @test exact(p2q, mp2, [s1q, s1q]) && crossing(p2q) == 8
     # sites that differ, and more than two of them: no term spans more sites than it acts on
     mk = matrix(Sz ⊗ X + Sp ⊗ Z + 0.3 * Sx ⊗ Id, s1, q)
-    @test exact(TMS.split_matrix("K", mk, [s1, q]), mk, [s1, q])
+    @test exact(TMS.split_matrix(Pure, "K", mk, [s1, q]), mk, [s1, q])
     m3 = matrix(X ⊗ Z ⊗ Y + Z ⊗ Id ⊗ Z + 0.5 * Id ⊗ X ⊗ Id + 0.2 * Id ⊗ Id ⊗ Id, q)
-    t3 = TMS.split_matrix("T3", m3, [q, q, q])
+    t3 = TMS.split_matrix(Pure, "T3", m3, [q, q, q])
     @test exact(t3, m3, [q, q, q]) && spans(t3) == [Int[], [1, 2, 3], [1, 3], [2]]
     # real factors for a real operator, even given as a complex matrix
-    rsw = TMS.split_matrix("Sw", complex(msw), [q, q])
+    rsw = TMS.split_matrix(Pure, "Sw", complex(msw), [q, q])
     @test all(f -> isnothing(f) || eltype(f) <: Real, (f for (_, fs) in rsw for f in fs))
     rxx = matrix(exp(-0.3im * (X ⊗ X)), q)
-    @test exact(TMS.split_matrix("R", rxx, [q, q]), rxx, [q, q])
+    @test exact(TMS.split_matrix(Pure, "R", rxx, [q, q]), rxx, [q, q])
     # a charge taken modulo, and an operator of no definite charge
     bp = Boson(4, conserve = parity(N))
     mb = matrix(A ⊗ dag(A) + dag(A) ⊗ A + 0.5 * (A * A) ⊗ N, Boson(4))
-    @test exact(TMS.split_matrix("Bp", mb, [bp, bp]), mb, [bp, bp])
+    @test exact(TMS.split_matrix(Pure, "Bp", mb, [bp, bp]), mb, [bp, bp])
     qn = Qubit(conserve = N)
-    @test_throws "no definite charge of N" TMS.split_matrix("XX", matrix(X ⊗ X, q), [qn, qn])
+    @test_throws "no definite charge of N" TMS.split_matrix(Pure, "XX", matrix(X ⊗ X, q), [qn, qn])
 
     # on fermions the matrix holds the strings between its sites, which the split takes out:
     # C ⊗ dag(C), refused by 1.x, is a single term, and the string that C on the second site
     # lays on the first is no factor there
     hop = matrix(C ⊗ dag(C), fe)
-    ts = TMS.split_matrix("H", hop, [fe, fe])
+    ts = TMS.split_matrix(Pure, "H", hop, [fe, fe])
     @test exact(ts, hop, [fe, fe]) && length(ts) == 1
     c2 = matrix(Id ⊗ C, fe)
-    ts = TMS.split_matrix("C2", c2, [fe, fe])
+    ts = TMS.split_matrix(Pure, "C2", c2, [fe, fe])
     @test exact(ts, c2, [fe, fe]) && spans(ts) == [[2]]
     # an operator of no definite parity has its two parts split apart
     ic = matrix(Id ⊗ Id, fe) + c2
-    ts = TMS.split_matrix("IC", ic, [fe, fe])
+    ts = TMS.split_matrix(Pure, "IC", ic, [fe, fe])
     @test exact(ts, ic, [fe, fe]) && spans(ts) == [Int[], [2]]
     # the fermionic Swap, a function of fermionic operators, three fermionic sites, a site of
     # another type between two, two species on a site, and a charge conserved
@@ -401,7 +401,7 @@ end
                        (matrix(C ⊗ X ⊗ dag(C), fe, q, fe), [fe, q, fe]),
                        (matrix(dag(Cup) ⊗ Cup + dag(Cdn) ⊗ Cdn + Ntot ⊗ Ntot, el), [el, el]),
                        (hop, [fn, fn])]
-        @test exact(TMS.split_matrix("M", m, sites), m, sites)
+        @test exact(TMS.split_matrix(Pure, "M", m, sites), m, sites)
     end
 end
 
@@ -490,8 +490,8 @@ end
     # their sites as far as they (anti)commute, and merges those sharing a site, the sites of
     # one among those of the other, when they can be brought together, which leaves fewer terms
     # to develop and the operator unchanged
-    plain(sys, op) = TMS.system_matrix(sys, TMS.reduced(TMS.op_terms(sys, op, ())))
-    same(sys, op) = TMS.system_matrix(sys, TMS.lower(sys, op)) ≈ plain(sys, op)
+    plain(sys, op) = TMS.system_matrix(Pure, sys, TMS.reduced(TMS.op_terms(sys, op, ())))
+    same(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op)) ≈ plain(sys, op)
     nterms(sys, op) = length(TMS.lower(sys, op))
     q, fe = Qubit(), Fermion()
     s5, f4, f5 = System(5, q), System(4, fe), System(5, fe)

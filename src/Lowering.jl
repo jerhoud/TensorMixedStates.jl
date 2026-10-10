@@ -1,7 +1,9 @@
 # The descent of an operator placed on sites onto a system: a first pass that develops nothing,
 # gathering the factors of each product, then the list of its terms, each a coefficient times
 # one matrix per site, the Jordan-Wigner strings laid, which the MPO, expect and the
-# measurements start from, and apply for a factor it cannot apply as a dense block.
+# measurements start from, and apply for a factor it cannot apply as a dense block. A channel or
+# a generator descends the same way onto the density matrices of the sites, each matrix that of
+# a superoperator of one site.
 
 """
     check_index(system, i, a)
@@ -27,12 +29,15 @@ check_indices(system::System, a::Union{SumOp, ProdOp}) =
     foreach(x -> check_indices(system, x), a.subs)
 check_indices(system::System, a::ScalarOp) = check_indices(system, a.arg)
 check_indices(::System, ::IdentityOp) = nothing
+check_indices(system::System, a::Union{Gate{Indexed}, Dissipator{Indexed}, Evolver{Indexed}}) =
+    check_indices(system, a.arg)
 
 """
     Term
 
 a term of an operator on a system: `coef` times the tensor product of `blocks`, the matrix of
-the term on each site it acts on, sorted by site, the identity on the others
+the term on each site it acts on, sorted by site, the identity on the others. The term of a
+superoperator has the matrices of superoperators of one site, see `matrix`.
 """
 struct Term
     coef::Number
@@ -86,12 +91,41 @@ the adjoint of a term, site by site
 dag(t::Term) = Term(conj(t.coef), [ i => collect(m') for (i, m) in t.blocks ])
 
 """
-    one_site_terms(system, i, m)
+    identity_term()
+
+the term of the identity, with no block
+"""
+identity_term() = Term(1., Pair{Int, Matrix}[])
+
+"""
+    sided_term(t, u)
+
+the term of the superoperator ``\\rho \\mapsto T\\rho U^\\dagger`` of the terms `t` and `u` of
+operators, site by site
+"""
+function sided_term(t::Term, u::Term)
+    dt, du = Dict(t.blocks), Dict(u.blocks)
+    blocks = map(sort!(collect(union(keys(dt), keys(du))))) do i
+        a, b = get(dt, i, nothing), get(du, i, nothing)
+        if isnothing(a)
+            a = one(b)
+        elseif isnothing(b)
+            b = one(a)
+        end
+        return i => kron(conj(b), a)
+    end
+    return Term(t.coef * conj(u.coef), blocks)
+end
+
+"""
+    one_site_terms(R, system, i, m)
 
 the terms of the operator of matrix `m` on site `i` of `system`: on a fermionic site, its part
-of each parity, the odd one with `F` on the fermionic sites before `i`
+of each parity, the odd one with `F` on the fermionic sites before `i`. For `Mixed`, `m` is the
+matrix of a superoperator, whose part of parity `a` on the kets and `b` on the bras takes
+``\\rho \\mapsto F^a \\rho F^b`` on the fermionic sites before `i`.
 """
-function one_site_terms(system::System, i::Int, m::AbstractMatrix)
+function one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix)
     f = matrix(F, system[i])
     p = parity_of(m, f)
     if p == 0
@@ -100,29 +134,60 @@ function one_site_terms(system::System, i::Int, m::AbstractMatrix)
         strings = [ j => f for j in 1:i-1 for f in (matrix(F, system[j]),) if f ≠ I ]
         return [ Term(1., [ strings ; i => m ]) ]
     end
-    return [ one_site_terms(system, i, (m + f * m * f) / 2) ;
-             one_site_terms(system, i, (m - f * m * f) / 2) ]
+    return [ one_site_terms(Pure, system, i, (m + f * m * f) / 2) ;
+             one_site_terms(Pure, system, i, (m - f * m * f) / 2) ]
 end
+
+function one_site_terms(::Type{Mixed}, system::System, i::Int, m::AbstractMatrix)
+    f = matrix(F, system[i])
+    if f == I
+        return [ Term(1., [ i => m ]) ]
+    end
+    l, r = kron(one(f), f), kron(f, one(f))
+    terms = Term[]
+    for a in 0:1, b in 0:1
+        x = (m + (-1)^a * l * m * l) / 2
+        x = (x + (-1)^b * r * x * r) / 2
+        if norm(x) ≤ rounding_tol * norm(m)
+            continue
+        end
+        strings = [ j => kron(g^b, g^a) for j in 1:i-1 for g in (matrix(F, system[j]),)
+                    if g ≠ I && a + b > 0 ]
+        push!(terms, Term(1., [ strings ; i => x ]))
+    end
+    return terms
+end
+
+"""
+    block_rep(op)
+
+the representation whose matrices the terms of `op` have: `Pure` for an operator, `Mixed` for a
+channel or a generator
+"""
+block_rep(::GenericOp{IsOperator}) = Pure
+block_rep(::GenericOp) = Mixed
 
 """
     matrix_terms(system, op, index)
 
 the terms of the operator `op` taken by its matrix on the sites `index` of `system`: on one
 site, see `one_site_terms`; on several, the terms of `split_matrix`, each a product of
-operators of one site in the order of `index`
+operators of one site in the order of `index`. A channel or a generator gives those of its
+superoperator.
 """
-function matrix_terms(system::System, a::GenericOp{IsOperator}, index)
+function matrix_terms(system::System, a::GenericOp, index)
+    R = block_rep(a)
     sites = [ system[i] for i in index ]
     m = matrix(a, sites...)
     if length(index) == 1
-        return one_site_terms(system, only(index), m)
+        return one_site_terms(R, system, only(index), m)
     end
     terms = Term[]
-    for (c, fs) in split_matrix(string(a(index...)), m, sites)
+    for (c, fs) in split_matrix(R, string(a(index...)), m, sites)
         ts = [ Term(c, Pair{Int, Matrix}[]) ]
         for (i, f) in zip(index, fs)
             if !isnothing(f)
-                ts = products(ts, one_site_terms(system, i, f))
+                ts = products(ts, one_site_terms(R, system, i, f))
             end
         end
         append!(terms, ts)
@@ -131,29 +196,68 @@ function matrix_terms(system::System, a::GenericOp{IsOperator}, index)
 end
 
 """
+    pure_terms(system, k, index)
+
+the terms of the operator `k`, generic and placed on the sites `index`, or placed, its products
+gathered first, see `gathered`
+"""
+pure_terms(system::System, k::GenericOp{IsOperator}, index) = reduced(op_terms(system, k, index))
+pure_terms(system::System, k::IndexedOp{IsOperator}, _) =
+    reduced(op_terms(system, gathered(system, k), ()))
+
+"""
     op_terms(system, op, index)
 
 the terms of the operator `op` on `system`, as it is written: sums and products distributed, a
 generic operator placed on the sites `index`. A tensor product is the product of its factors
 placed, `(A ⊗ B)(i, j) = A(i) * B(j)`, a named expression is its expression, and any other
-operator is taken by its matrix, see `matrix_terms`.
+operator is taken by its matrix, see `matrix_terms`. A channel or a generator gives the terms
+of its superoperator: those of a gate, an evolver or a dissipator are made of the terms of
+their operators on each side of the density matrix, see `sided_term`.
 """
-op_terms(system::System, a::SumOp{IsOperator}, index) =
+op_terms(system::System, a::SumOp, index) =
     reduce(vcat, (op_terms(system, x, index) for x in a.subs))
-op_terms(system::System, a::ProdOp{IsOperator}, index) =
+op_terms(system::System, a::ProdOp, index) =
     foldl(products, (op_terms(system, x, index) for x in a.subs))
-op_terms(system::System, a::ScalarOp{IsOperator}, index) =
-    scaled(a.coef, op_terms(system, a.arg, index))
-op_terms(::System, ::IdentityOp{IsOperator}, _) = [ Term(1., Pair{Int, Matrix}[]) ]
-op_terms(system::System, a::AtIndex{IsOperator}, _) = op_terms(system, a.op, a.index)
-op_terms(system::System, a::TensorOp{IsOperator}, index) =
+op_terms(system::System, a::ScalarOp, index) = scaled(a.coef, op_terms(system, a.arg, index))
+op_terms(::System, ::IdentityOp, _) = [ identity_term() ]
+op_terms(system::System, a::AtIndex, _) = op_terms(system, a.op, a.index)
+op_terms(system::System, a::TensorOp, index) =
     foldl(products, (op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a))))
 op_terms(system::System, a::DagOp, index) = map(dag, op_terms(system, a.arg, index))
 op_terms(system::System, a::Operator, index) =
     a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)
-op_terms(system::System, a::Union{Proj, ExpOp{IsOperator}, IntPowOp{IsOperator},
-                                  GenPowOp{IsOperator}, ModOp}, index) =
+op_terms(system::System, a::Union{Proj, ExpOp, IntPowOp, GenPowOp{IsOperator}, ModOp, Reset,
+                                  Dephase}, index) =
     matrix_terms(system, a, index)
+
+function op_terms(system::System, a::Gate, index)
+    ts = pure_terms(system, a.arg, index)
+    return Term[ sided_term(t, u) for t in ts for u in ts ]
+end
+
+function op_terms(system::System, a::Evolver, index)
+    ts = pure_terms(system, a.arg, index)
+    one = identity_term()
+    return Term[ [ sided_term(t, one) for t in ts ] ; [ sided_term(one, t) for t in ts ] ]
+end
+
+# ρ ↦ Σ K ρ K† - {M, ρ}/2, M = Σ K†K, from the terms of L, or those of a channel and the M they
+# give block by block, a tensor product of superoperators giving the tensor product of their M
+function op_terms(system::System, a::Dissipator, index)
+    if a.arg isa Op{IsOperator}
+        ts = pure_terms(system, a.arg, index)
+        jumps = Term[ sided_term(t, u) for t in ts for u in ts ]
+        m = reduced(products(map(dag, ts), ts))
+    else
+        jumps = op_terms(system, a.arg, index)
+        m = reduced([ Term(t.coef, [ i => kraus_sum(b, [system[i]]) for (i, b) in t.blocks ])
+                      for t in jumps ])
+    end
+    one = identity_term()
+    return Term[ jumps ; scaled(-0.5, [ [ sided_term(x, one) for x in m ] ;
+                                        [ sided_term(one, x) for x in m ] ]) ]
+end
 
 """
     reduced(terms)
@@ -225,12 +329,14 @@ function check_flux(system::System, a, terms::Vector{Term})
 end
 
 """
-    system_matrix(system, terms)
+    system_matrix(R, system, terms)
 
-the matrix of a sum of terms on the whole of `system`, the last site varying fastest
+the matrix of a sum of terms on the whole of `system`, the last site varying fastest, those of
+a superoperator for `Mixed`, see `matrix`
 """
-function system_matrix(system::System, ts::Vector{Term})
-    ids = [ Matrix{Float64}(I, dim(system[k]), dim(system[k])) for k in 1:length(system) ]
+function system_matrix(::Type{R}, system::System, ts::Vector{Term}) where R
+    ids = [ Matrix{Float64}(I, block_dim(R, system[k]), block_dim(R, system[k]))
+            for k in 1:length(system) ]
     d = prod(size(m, 1) for m in ids)
     return sum((t.coef * foldl(kron, [ get(Dict(t.blocks), k, ids[k]) for k in eachindex(ids) ])
                 for t in ts); init = zeros(d, d))
@@ -286,7 +392,7 @@ function matrix_on(system::System, a::AtIndex, sites)
     end
     sub = System([ system[i] for i in sites ])
     position = Dict(i => k for (k, i) in enumerate(sites))
-    return system_matrix(sub, op_terms(sub, map_sites(i -> position[i], a), ()))
+    return system_matrix(Pure, sub, op_terms(sub, map_sites(i -> position[i], a), ()))
 end
 
 """
@@ -427,7 +533,8 @@ end
 
 the terms of the operator `op`, placed on sites, on `system`, see `Term`, once its products are
 gathered, see `gathered`: the Jordan-Wigner strings are laid on the fermionic sites, and the
-operator is refused on a charged system when it has no definite flux
+operator is refused on a charged system when it has no definite flux. A channel or a generator
+gives the terms of its superoperator on the density matrices of the sites.
 """
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
@@ -435,4 +542,9 @@ function lower(system::System, a::IndexedOp{IsOperator})
     terms = reduced(op_terms(system, gathered(system, a), ()))
     check_flux(system, a, terms)
     return terms
+end
+
+function lower(system::System, a::IndexedOp{<:Union{IsChannel, IsGenerator}})
+    check_indices(system, a)
+    return reduced(op_terms(system, a, ()))
 end
