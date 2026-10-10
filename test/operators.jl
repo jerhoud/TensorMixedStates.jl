@@ -443,6 +443,42 @@ end
     @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(s3, X(5))
 end
 
+@testset "Products gathered before the descent" begin
+    # the first pass of the descent develops nothing: it merges the factors of a product that
+    # share a site, the sites of one among those of the other, when they can be brought
+    # together, which leaves fewer terms to develop and the operator unchanged
+    plain(sys, op) = TMS.system_matrix(sys, TMS.reduced(TMS.op_terms(sys, op, ())))
+    same(sys, op) = TMS.system_matrix(sys, TMS.lower(sys, op)) ≈ plain(sys, op)
+    nterms(sys, op) = length(TMS.lower(sys, op))
+    q, fe = Qubit(), Fermion()
+    s5, f4, f5 = System(5, q), System(4, fe), System(5, fe)
+    @test TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2)) == X(5)
+    @test nterms(s5, Swap(1, 2) * Z(1) * Z(2) * Swap(1, 2)) == 1
+    @test TMS.gathered(s5, Swap(1, 2) * Swap(2, 1)) isa TMS.IdentityOp
+    @test TMS.gathered(f5, Swap(1, 3) * Swap(3, 1)) isa TMS.IdentityOp
+    @test TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2) + Swap(3, 4) * Z(1) * Swap(3, 4)) ==
+          X(5) + Z(1)
+    # two odd factors that change places take a sign
+    g = TMS.gathered(f4, C(1) * C(2) * dag(C)(1))
+    @test TMS.scalarcoef(g) == -1 && first(TMS.prodsubs(g)) == C(2)
+    # a factor linked to both keeps them apart, and a merge that would give more terms is
+    # refused: the two hops would merge into n₁(1 - n₄), cut into 4 terms by its identity parts
+    @test TMS.gathered(s5, Swap(1, 2) * Swap(2, 3) * Swap(1, 2)) == Swap(1, 2) * Swap(2, 3) * Swap(1, 2)
+    hops = (dag(C) ⊗ C)(1, 4) * Swap(2, 3) * (dag(C) ⊗ C)(4, 1)
+    @test TMS.gathered(f5, hops) == hops && nterms(f5, hops) == 4
+
+    # the result is a normal form, which the pass leaves as it is, two factors competing for
+    # one partner included, and the operator stays the same
+    for (sys, op) in [(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)), (s5, X(1) * Swap(2, 3) * Swap(1, 2) * X(1)),
+                      (s5, Z(1) * Swap(1, 2) * Y(1) * Swap(2, 3) * X(2)), (f4, C(1) * C(2) * dag(C)(1)),
+                      (f5, N(2) * C(5) * N(2) * dag(C)(2)), (f5, hops)]
+        g = TMS.gathered(sys, op)
+        @test TMS.gathered(sys, g) == g
+        @test same(sys, op)
+    end
+    @test TMS.gathered(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)) == Swap(2, 3) * Swap(1, 2) * Swap(3, 4)
+end
+
 @testset "tensor is ⊗ under a name in ASCII" begin
     @test tensor === ⊗
     @test tensor(X, Y) == X ⊗ Y
