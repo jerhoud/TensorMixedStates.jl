@@ -31,7 +31,7 @@ end
     for sys in (S ⊗ S ⊗ S, S ⊗ U ⊗ S, S ⊗ (S ⊗ S))
         @test allunique(siteinds(Pure, sys))
         @test allunique(siteinds(Mixed, sys))
-        @test_skip expect(apply(X(3), State{Pure}(sys, "Up")), Z(3)) ≈ -1     # couche 2
+        @test expect(apply(X(3), State{Pure}(sys, "Up")), Z(3)) ≈ -1
     end
 end
 
@@ -78,7 +78,7 @@ end
     s = sum(randn(rng) * State{Pure}(sys, rand(rng, ["Up", "Dn"], 20)) for _ in 1:9)
     # a field left nothing takes the default of the function, eps() for a sum
     @test Limits().cutoff === nothing
-    @test_skip maxlinkdim(apply(prod(controlled(Z)(i, i + 1) for i in 1:19), s)) == maxlinkdim(s)  # couche 2
+    @test maxlinkdim(apply(prod(controlled(Z)(i, i + 1) for i in 1:19), s)) == maxlinkdim(s)
     @test_skip maxlinkdim(tdvp(-im * sum(Z(i) for i in 1:20), 0.1, s)) == maxlinkdim(s)          # couche 4
     # a weight of 1e-18 is below the default cutoff, and a cutoff of zero keeps everything
     up, dn = State{Pure}(System(6, Qubit()), "Up"), State{Pure}(System(6, Qubit()), "Dn")
@@ -181,7 +181,7 @@ end
     q = State{Pure}(System(3, Qubit()), "Up")
     z = 0 * q
     @test norm(z - z) == 0
-    @test_skip norm(apply((Sp ⊗ Sp)(1, 2), q)) == 0        # couche 2
+    @test norm(apply((Sp ⊗ Sp)(1, 2), q)) == 0
     sys = System(6, Qubit())
     st = random_state(Pure, sys, 8)
     # `mindim` is the floor the cutoff is not allowed to cross, and `maxdim` keeps the last

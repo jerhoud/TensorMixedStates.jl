@@ -14,7 +14,7 @@ module TensorMixedStates
 import Base: *, +, -, /, ^, exp, sqrt, mod, show, isless, ==, hash, length, getindex, truncate
 import LinearAlgebra: norm, normalize, dot
 import ITensors: dag, dim, matrix, flux, inner, siteind, siteinds
-import ITensorMPS: maxlinkdim, expect
+import ITensorMPS: maxlinkdim, expect, apply
 
 using ITensors, ITensorMPS, LinearAlgebra, Random, HDF5
 
@@ -35,6 +35,7 @@ include("Lowering.jl")
 include("Compact.jl")
 include("Mpo.jl")
 include("Expect.jl")
+include("Apply.jl")
 
 # Site types
 include("sites/Qubits.jl")

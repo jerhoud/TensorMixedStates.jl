@@ -197,7 +197,8 @@ end
     # its matrix knows no charge, and placed on a system it keeps the charges only when both
     # sites carry the same ones
     @test matrix(Swap, Fermion(conserve = N), Fermion()) == matrix(Swap, Fermion())
-    @test_skip "Swap refused between a site conserving N and one conserving nothing"   # couche 2
+    mixed = State{Pure}(System([Fermion(conserve = N), Fermion()]), ["Occ", "Emp"])
+    @test_throws "carries no definite charge of N" make_mpo(mixed, Swap(1, 2))
     @test_throws "of one type and one dimension" matrix(Swap, Qubit(), Fermion())
     @test_throws "of one type and one dimension" matrix(Swap, Boson(3), Boson(4))
 end
@@ -312,7 +313,10 @@ end
     for i in 0:1, j in 0:2
         @test m[3i + mod(i + j, 3) + 1, 3i + j + 1] ≈ 1
     end
-    @test_skip "the states Sum and Z act on, through apply and expect"     # couche 2
+    # on states: Sum adds the level of the first qudit to the second, and Z is the phase of the level
+    st = apply(Sum(1, 2), State{Pure}(System(2, Qudit(3)), ["1", "2"]))
+    @test expect1(st, N) ≈ [1, 0]
+    @test expect(State{Pure}(System(1, Qudit(3)), "1"), Z(1)) ≈ exp(2im * π / 3)
 end
 
 @testset "Unknown operator and state names" begin
@@ -375,7 +379,8 @@ end
     @test Dummits.Dummit === Dummit
     @test Dummits.N === N
     @test N === Bosons.N
-    @test_skip "the measurements of N on Dummit and Boson"                      # couche 2
+    @test real(expect1(State{Pure}(System(2, Dummit()), "1"), N)) ≈ [1, 1]
+    @test real(expect1(State{Pure}(System(2, Boson(4)), ["1", "3"]), N)) ≈ [1, 3]
     # a name standing for an operator with a definition of its own cannot be declared
     @test_throws "definition of its own" @def_operators Dummit2 [ Renamed = [0. 0. ; 0. 1.] ]
     @test_throws "operator Renamed is not defined for site Dummit2" matrix(Operator{1}("Renamed"), Dummit2())
@@ -406,7 +411,9 @@ end
     @test charges(Qudit(2, conserve = dag(Z))) == [("dag(Z)", 2, [0, 1], false)]
     @test charges(Qudit(4, conserve = Z^2)) == [("Z^2", 4, [0, 2, 0, 2], false)]
     @test flux(X, Qudit(2, conserve = dag(Z))) == IT.QN("dag(Z)", 1, 2)
-    @test_skip "an MPO of X ⊗ X on Qudit(4, conserve = Z^2)"                # couche 2
+    # X changes Z^2 by 2 modulo 4 whatever the level, so X ⊗ X keeps it
+    z2 = State{Pure}(System(3, Qudit(4, conserve = Z^2)), "0")
+    @test maxlinkdim(make_mpo(z2, sum((X ⊗ X)(i, i + 1) for i in 1:2))) == 3
     @test charges(Boson(3, conserve = N^2)) == [("N^2", 1, [0, 1, 4], false)]
     # a quantity given twice is refused
     @test_throws "Ntot is given twice in conserve" Electron(conserve = (Ntot, Ntot))
@@ -420,7 +427,8 @@ end
     @test charges(Fermion(conserve = named(N, "Nf"))) == [("Nf", 1, [0, 1], false)]
     # a renamed quantity keeps the modulus of what it renames
     @test charges(Fermion(conserve = named(parity(N), "P"))) == [("P", 2, [0, 1], false)]
-    @test_skip "a pairing term in an MPO under named(parity(N))"              # couche 2
+    paired = State{Pure}(System(4, Fermion(conserve = named(parity(N), "P"))), "Emp")
+    @test_ok make_mpo(paired, sum(C(i) * C(i + 1) + dag(C)(i + 1) * dag(C)(i) for i in 1:3))
     @test charges(Boson(6, conserve = mod(N, 3))) == [("mod(N,3)", 3, [0, 1, 2, 0, 1, 2], false)]
     @test charges(Spin(1, conserve = Sz)) == [("Sz", 1, [1, 0, -1], false)]
     @test charges(Spin(1/2, conserve = 2Sz)) == [("2Sz", 1, [1, -1], false)]

@@ -1,9 +1,10 @@
 # Expectation values: expect, through the descent and the compaction, expect1 and expect2 with
-# their fast paths, and inner(a, op, b), checked against dense matrices written with explicit
-# Jordan-Wigner strings.
+# their fast paths, inner(a, op, b), and apply on pure states, checked against dense matrices
+# written with explicit Jordan-Wigner strings.
 #
 # The testsets of 1.x on the other measurements, sampling, partial traces, entropies and the
-# gates are still in v1/observables.jl; their assertions on expectation values are here.
+# channels are still in v1/observables.jl; their assertions on expectation values and on apply
+# to pure states are here.
 
 """
 the matrix, on `n` sites `site`, of the product of operators of one site `factors`, pairs
@@ -27,6 +28,11 @@ function exact_fermionic_correlations(state::State{Pure}, site)
     psi = dense_vector(state)
     return [ psi' * jw_matrix(site, n, [dag(C) => i, C => j]) * psi for i in 1:n, j in 1:n ]
 end
+
+"""
+the vector of the pure state `st` in the full basis, site 1 most significant, not normalised
+"""
+raw_vector(st::State{Pure}) = vec(Array(IT.dense(prod(st.state)), reverse(siteinds(Pure, st.system))...))
 
 """
 the dense matrix of the MPO of `op` on the sites of the pure state `st`
@@ -163,6 +169,11 @@ end
     @test expect1(st, X) ≈ expect1(normalize(st), X)
     @test expect(st, Z(1) * Z(3)) ≈ expect(normalize(st), Z(1) * Z(3))
     @test expect2(st, (X, X)) ≈ expect2(normalize(st), (X, X))
+    # the same built by two gates that are not unitary, as 1.x did: Sp|+> = |0>/sqrt(2)
+    sp = apply(Sp(3) * Sp(1), State{Pure}(sys, "+"))
+    @test trace(sp) ≈ 0.25
+    @test expect1(sp, Z) ≈ [1., 0., 1., 0., 0., 0.] atol = 1e-12
+    @test expect2(sp, (X, X)) ≈ expect2(normalize(sp), (X, X))
     # on a charged state the shortcut has arrows to respect
     q = State{Pure}(System(4, Qubit(conserve = N)), ["Up", "Up", "Dn", "Dn"])
     a = State(q, TMS.ITensorMPS.orthogonalize(q.state, 3))
@@ -216,11 +227,36 @@ end
     ρ = mix(ψ)
     v = dense_vector(ψ)
     value(d) = v' * d * v
+    w = raw_vector(ψ)
     for _ in 1:30
         o, d = product(n)
         @test expect(ψ, o) ≈ value(d) atol = 1e-10
         @test expect(ρ, o) ≈ value(d) atol = 1e-10
         @test mpo_matrix(ψ, o) ≈ d atol = 1e-10
+        @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10
+    end
+    # a function of an even product applied as a gate, on sites in any order and apart
+    odd = singles[[1, 2, 4]]
+    for _ in 1:10
+        fs = Any[ rand(odd), rand(odd) ]
+        if rand(Bool)
+            insert!(fs, rand(1:3), singles[3])
+        end
+        sites = TMS.Random.randperm(n)[1:length(fs)]
+        a = reduce(⊗, first.(fs))
+        da = prod(f[2](s, n) for (f, s) in zip(fs, sites))
+        g = exp(0.3 * a - 0.3 * dag(a))(sites...)
+        @test raw_vector(apply(g, ψ)) ≈ exp(0.3 * da - 0.3 * da') * w atol = 1e-10
+    end
+    # and on electrons, whose parity counts both spins
+    el = Electron()
+    mu, md, mfe, mie = matrix(Cup, el), matrix(Cdn, el), matrix(F, el), matrix(Id, el)
+    ce(j, m) = foldl(kron, [ k < j ? mfe : k == j ? m : mie for k in 1:3 ])
+    ψe = random_state(Pure, System(3, el), 4)
+    ge = exp(-0.4im * (dag(Cup) ⊗ Cdn + dag(dag(Cup) ⊗ Cdn)))
+    for (i, j) in [(1, 3), (3, 1), (1, 2)]
+        h = ce(i, mu)' * ce(j, md) + ce(j, md)' * ce(i, mu)
+        @test raw_vector(apply(ge(i, j), ψe)) ≈ exp(-0.4im * h) * raw_vector(ψe) atol = 1e-10
     end
     for (a, da) in singles, (b, db) in singles
         ref = [ value(i == j ? da(i, n) * db(i, n) : da(i, n) * db(j, n)) for i in 1:n, j in 1:n ]
@@ -243,6 +279,37 @@ end
         ref = prod(d(s, m) for ((_, _, d), s) in zip(fs, starts))
         @test matrix(reduce(⊗, first.(fs)), fe) ≈ ref atol = 1e-12
     end
+end
+
+@testset "apply cuts a product into pieces" begin
+    # a product is applied factor by factor, never developed: a hundred Swaps, whose product
+    # developed would have about 4^100 terms
+    q = System(5, Qubit())
+    st = State{Pure}(q, ["Dn", "Up", "Up", "Up", "Up"])
+    swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
+    op = prod(swaps)
+    @test length(last(TMS.pieces(q, op))) == 100
+    one_by_one = foldl((s, g) -> apply(g, s), reverse(swaps); init = st)
+    @test norm(apply(op, st) - one_by_one) < 1e-10
+    # factors of one site of definite parity gather into one piece, across factors they
+    # commute with, so that their strings compensate
+    fe = System(5, Fermion())
+    @test length(last(TMS.pieces(fe, dag(C)(3) * N(1) * C(5)))) == 1
+    @test length(last(TMS.pieces(fe, C(1) * Swap(2, 3) * dag(C)(4)))) == 2
+    # a dense block on its sites when it lays no string elsewhere, its MPO otherwise, and
+    # gates of one site for a single term
+    h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
+    action(op) = first(TMS.piece_action(fe, op, false))
+    @test length(action(exp(-0.4im * h)(1, 2))) == 1
+    @test action(exp(-0.4im * h)(1, 3)) isa TMS.ITensorMPS.MPO
+    @test action((C + N)(3)) isa TMS.ITensorMPS.MPO
+    @test length(action(C(4))) == 4
+    # a product that vanishes gives the null state, and an MPO is applied as it is
+    ψ = random_state(Pure, fe, 4)
+    @test norm(apply(C(2) * C(2), ψ)) == 0
+    mpo = make_mpo(ψ, dag(C)(1) * C(3) + N(2))
+    @test norm(apply(mpo, ψ) - apply(dag(C)(1) * C(3) + N(2), ψ)) < 1e-10
+    @test_throws "apply_algo is" apply(mpo, ψ; apply_algo = "fit")
 end
 
 @testset "Inner products with an operator" begin

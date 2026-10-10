@@ -277,7 +277,27 @@ end
     rxx = exp(-0.3im * (X ⊗ X))
     @test matrix(Operator{2}("R", rxx), q) ≈ matrix(rxx, q)
     @test matrix(Operator{2}("Y2", matrix(Y ⊗ Sp, q)), q) ≈ matrix(Y ⊗ Sp, q)
-    @test_skip "the MPO, expect and apply of an operator of several sites given by a matrix"   # couche 2
+    # its MPO, expect and apply act as the matrix it was given by, on sites in any order, and on
+    # a system mixing its sites
+    chain(op) = sum(op(i, i + 1) for i in 1:3)
+    st = random_state(Pure, System(4, q), 4)
+    sw = Operator{2}("Sw", msw)
+    @test maxlinkdim(make_mpo(st, chain(sw))) == maxlinkdim(make_mpo(st, chain(Swap)))
+    @test norm(apply(make_mpo(st, chain(sw)), st) - apply(make_mpo(st, chain(Swap)), st)) < 1e-12
+    st1 = random_state(Pure, System(4, s1), 4)
+    p2 = Operator{2}("P2", mp2)
+    # the eight terms of the projector of the AKLT chain across a link, and the two channels
+    # of the term not yet begun and of the term finished
+    @test maxlinkdim(make_mpo(st1, chain(p2))) == 10
+    for (i, j) in [(1, 3), (4, 2), (2, 1)]
+        @test expect(st1, p2(i, j)) ≈ expect(st1, p2e(i, j))
+        @test norm(apply(p2(i, j), st1) - apply(p2e(i, j), st1)) < 1e-12
+    end
+    k = Operator{2}("K", mk)
+    sk = random_state(Pure, System([s1, q, s1, q]), 4)
+    for (i, j) in [(1, 2), (3, 2), (1, 4)]
+        @test norm(apply(k(i, j), sk) - apply(make_mpo(sk, k(i, j)), sk)) < 1e-12
+    end
     # a single site, a fermionic one included
     @test matrix(Operator{1}("Ex", exp(0.3im * X)), q) ≈ matrix(exp(0.3im * X), q)
     @test matrix(Operator{1}("Fs", s -> matrix(Sz, s)), s1) ≈ matrix(Sz, s1)
