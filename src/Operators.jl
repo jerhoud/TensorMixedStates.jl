@@ -166,7 +166,8 @@ check_coef(::Type{IsGenerator}, c::Number) =
     if isreal(c)
         real(c)
     else
-        error("a generator takes real coefficients, not $c: write -im * H + Dissipator(L), H an operator")
+        error("a generator takes real coefficients, not $c: write -im * H + Dissipator(L), H an " *
+              "operator")
     end
 
 check_coef(::Type{IsChannel}, c::Number) =
@@ -579,7 +580,8 @@ followed by those of `op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `
 (a::GenericOp{K, N} ⊗ b::GenericOp{K, M}) where {K, N, M} =
     TensorOp{K, N + M}([tensorsubs(a) ; tensorsubs(b)])
 (a::GenericOp{IsGenerator} ⊗ b::GenericOp{IsGenerator}) =
-    error("generators are added, not multiplied: $a ⊗ $b, placed as a product, is not a generator")
+    error("generators are added, not multiplied: $a ⊗ $b, placed as a product, is not a " *
+          "generator")
 (a::GenericOp{IsOperator} ⊗ b::GenericOp{IsChannel}) = Gate(a) ⊗ b
 (a::GenericOp{IsChannel} ⊗ b::GenericOp{IsOperator}) = a ⊗ Gate(b)
 ⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
@@ -776,6 +778,35 @@ is_pure(::Union{Reset, Dephase, Dissipator, SumOp{IsChannel}}) = false
 is_pure(a::Union{SumOp{IsGenerator}, ProdOp, TensorOp}) = all(is_pure, a.subs)
 is_pure(a::Union{ScalarOp, IntPowOp, ExpOp}) = is_pure(a.arg)
 is_pure(a::AtIndex) = is_pure(a.op)
+
+"""
+    pure_part(a)
+
+the operator `K` of the generator `a` with no dissipator,
+``\\rho \\mapsto K\\rho + \\rho K^\\dagger``
+"""
+pure_part(a::Evolver) = a.arg
+pure_part(::IdentityOp{IsGenerator, T, N}) where {T, N} = scale(0.5, IdentityOp{IsOperator, T, N}())
+pure_part(a::ScalarOp{IsGenerator}) = scale(a.coef, pure_part(a.arg))
+pure_part(a::SumOp{IsGenerator, T, N}) where {T, N} =
+    SumOp(Op{IsOperator, T, N}[ pure_part(x) for x in a.subs ])
+pure_part(a::AtIndex{IsGenerator}) = AtIndex(pure_part(a.op), a.index)
+
+"""
+    kraus(a)
+
+the Kraus operator of the channel `a` of a single one: `K` for `Gate(K)`, ``e^{K}`` for the
+exponential of `Evolver(K)`
+"""
+kraus(a::Gate) = a.arg
+kraus(::IdentityOp{IsChannel, T, N}) where {T, N} = IdentityOp{IsOperator, T, N}()
+kraus(a::ScalarOp{IsChannel}) = scale(sqrt(a.coef), kraus(a.arg))
+kraus(a::ProdOp{IsChannel, T, N}) where {T, N} =
+    ProdOp(Op{IsOperator, T, N}[ kraus(x) for x in a.subs ])
+kraus(a::TensorOp{IsChannel}) = reduce(⊗, map(kraus, a.subs))
+kraus(a::IntPowOp{IsChannel}) = kraus(a.arg)^a.expo
+kraus(a::ExpOp{IsChannel}) = exp(pure_part(a.arg))
+kraus(a::AtIndex{IsChannel}) = AtIndex(kraus(a.op), a.index)
 
 ############### Naming ###############
 

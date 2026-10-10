@@ -8,7 +8,9 @@ export PreMPO, make_mpo
 
 the operator `op`, placed on sites, laid on the system of `state` as the pieces of its MPO,
 its terms compacted into as few channels as a triangular MPO can have; `make_mpo` builds the
-MPO from it. A vector of operators gives each its own time function, see `make_mpo`.
+MPO from it. A vector of operators gives each its own time function, see `make_mpo`. On a pure
+state, a generator with no dissipator, ``\\rho \\mapsto K\\rho + \\rho K^\\dagger``, gives
+the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``.
 """
 struct PreMPO{R <: PM}
     system::System
@@ -90,6 +92,19 @@ function lay_terms!(pre::PreMPO, terms::Vector{Term}, ref::Int)
     return pre
 end
 
+"""
+    followed_operator(a)
+
+the operator `K` a pure state follows as ``d\\psi/dt = K\\psi`` under the generator `a`,
+refused when `a` holds a dissipator
+"""
+function followed_operator(a::IndexedOp{IsGenerator})
+    if !is_pure(a)
+        error("$a holds a dissipator, which a pure state cannot follow: mix the state")
+    end
+    return pure_part(a)
+end
+
 PreMPO(state::State{Pure}, a::IndexedOp{IsOperator}) =
     lay_terms!(PreMPO{Pure}(state.system), lower(state.system, a), 1)
 
@@ -100,6 +115,10 @@ function PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsOperator}})
     end
     return pre
 end
+
+PreMPO(state::State{Pure}, a::IndexedOp{IsGenerator}) = PreMPO(state, followed_operator(a))
+PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsGenerator}}) =
+    PreMPO(state, map(followed_operator, as))
 
 """
     mpo_eltype(::PreMPO)

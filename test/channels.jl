@@ -1,10 +1,12 @@
 # Channels and generators: their normal forms, their algebra and what it refuses, their matrices
-# on the density matrices of sites, their purity, and the library of noises.
+# on the density matrices of sites, their purity, the library of noises, and the pure ones on
+# pure states.
 #
 # The invariant to prefer is that the matrix of a channel or a generator is the map it stands
 # for, written on vec(ρ) in an order spelled out here element by element, so that the tests do
-# not depend on how TMS lays it out. Their descent onto a system, their MPO and their
-# application to a state come with the later steps of layer 2.
+# not depend on how TMS lays it out; on a pure state, that a pure channel acts as its Kraus
+# operator. Their descent onto a density matrix, their MPO there and their application to it
+# come with the later steps of layer 2.
 
 """
 the identity matrix of dimension `d`
@@ -17,6 +19,11 @@ of channels: the last site fastest and, on each site, the ket faster than the br
 """
 mixed_vec(ρ, d1, d2) =
     vec([ ρ[(k1 - 1) * d2 + k2, (b1 - 1) * d2 + b2] for k2 in 1:d2, b2 in 1:d2, k1 in 1:d1, b1 in 1:d1 ])
+
+"""
+the vector of a pure state in the full basis, site 1 most significant, not normalised
+"""
+full_vector(st::State{Pure}) = vec(Array(prod(st.state), reverse(siteinds(Pure, st.system))...))
 
 @testset "Channels and generators in their normal form" begin
     # a gate and a dissipator take the modulus squared of a coefficient, a gate distributes over
@@ -264,4 +271,55 @@ end
     x7 = reduce(⊗, fill(X, 7))
     @test_throws "needs a dense matrix of dimension 16384" matrix(exp(Dissipator(x7)), q)
     @test_throws "needs a dense matrix of dimension 16384" matrix(Dephase(x7), q)
+end
+
+@testset "Pure channels on pure states" begin
+    # a channel of a single Kraus operator K takes |ψ⟩⟨ψ| to K|ψ⟩⟨ψ|K†, the pure state K|ψ⟩,
+    # each form of a channel giving its K
+    q = Qubit()
+    ψ = random_state(Pure, System(4, q), 4)
+    for (Φ, K) in [(Gate(X)(2), X(2)), (Gate(X(1) + Z(3)), X(1) + Z(3)),
+                   (0.25 * Gate(S)(1) * Gate(H)(4), 0.5 * S(1) * H(4)), (Gate(Id)(2), Id(1)),
+                   ((Gate(X) ⊗ Gate(Y))(1, 3), (X ⊗ Y)(1, 3)), ((Gate(H)^3)(2), (H^3)(2)),
+                   (exp(0.3 * Evolver(-im * (X ⊗ X)))(2, 3), exp(0.3 * (-im * (X ⊗ X)))(2, 3)),
+                   (exp(0.2 * (-im * X + Evolver(Id)))(1), exp(0.2 * (-im * X + Id))(1))]
+        @test TMS.kraus(Φ) == K
+        @test norm(apply(Φ, ψ) - apply(K, ψ)) < 1e-12
+    end
+    # and so against the dense vector
+    x, h, i = matrix(X, q), matrix(H, q), matrix(Id, q)
+    v = full_vector(ψ)
+    @test full_vector(apply(0.25 * Gate(X)(1) * Gate(H)(3), ψ)) ≈ 0.5 * kron(x, i, h, i) * v
+    @test full_vector(apply(exp(0.3 * Evolver(-im * (X ⊗ X)))(2, 3), ψ)) ≈
+        kron(i, exp(-0.3im * kron(x, x)), i) * v
+    # on fermions, the strings of the Kraus operator
+    φ = random_state(Pure, System(4, Fermion()), 4)
+    for (Φ, K) in [(Gate(C)(1) * Gate(dag(C))(3), C(1) * dag(C)(3)),
+                   (Gate(C(2) + dag(C)(4)), C(2) + dag(C)(4)), ((Gate(C) ⊗ Gate(C))(1, 3), (C ⊗ C)(1, 3))]
+        @test norm(apply(Φ, φ) - apply(K, φ)) < 1e-12
+    end
+    # a mixture, a reset, a generator have no single Kraus operator, and a channel no matrix
+    # element between two pure states
+    @test_throws "has more than one Kraus operator" apply(Reset("Up")(1), ψ)
+    @test_throws "has more than one Kraus operator" apply(0.9 * Gate(Id)(1) + 0.1 * Gate(X)(1), ψ)
+    @test_throws "and Dissipator(X)(1) is a generator" apply(Dissipator(X)(1), ψ)
+    @test_throws "and Evolver(X)(1) is a generator" apply(Evolver(X)(1), ψ)
+    @test_throws MethodError inner(ψ, Gate(X)(1), ψ)
+end
+
+@testset "The MPO of a pure generator on a pure state" begin
+    # a pure state follows the operator K of a generator with no dissipator, dψ/dt = Kψ
+    ψ = random_state(Pure, System(3, Qubit()), 4)
+    L = -im * (X(1) * X(2) + Z(3)) + Evolver(0.1 * Z)(2)
+    K = -im * (X(1) * X(2) + Z(3)) + 0.1 * Z(2)
+    @test TMS.pure_part(L) == K
+    @test norm(make_mpo(ψ, L) - make_mpo(ψ, K)) < 1e-12
+    @test norm(make_mpo(PreMPO(ψ, [L, Evolver(X)(1)]), [1., 0.5]) -
+               make_mpo(PreMPO(ψ, [K, X(1)]), [1., 0.5])) < 1e-12
+    # the identity of generators, ρ ↦ ρ, is the evolver of half the identity
+    idg = TMS.IdentityOp{IsGenerator, TMS.Generic, 1}()
+    @test TMS.pure_part(idg) == 0.5 * Id
+    @test matrix(Evolver(TMS.pure_part(idg)), Qubit()) ≈ matrix(idg, Qubit())
+    @test_throws "holds a dissipator, which a pure state cannot follow" make_mpo(ψ,
+        -im * X(1) + Dissipator(Sm)(1))
 end

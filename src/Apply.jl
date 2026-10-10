@@ -1,5 +1,6 @@
 # apply on pure states: a product of operators applied factor by factor, right to left, never
-# developed, each piece as a dense block on its sites, as one-site gates, or through its MPO.
+# developed, each piece as a dense block on its sites, as one-site gates, or through its MPO. A
+# channel of a single Kraus operator is applied as that operator.
 
 export apply
 
@@ -156,8 +157,8 @@ end
 the pure state with the operator `op`, placed on sites, applied, or the MPO `mpo` from
 `make_mpo`. A product acts as the operator it denotes, its rightmost factor first, factor by
 factor and never developed; each factor is applied as a dense block on its sites, or through
-its MPO when it is too large or lays Jordan-Wigner strings on other sites. The state is not
-normalised.
+its MPO when it is too large or lays Jordan-Wigner strings on other sites. A channel of a
+single Kraus operator `K`, as `Gate(K)`, is applied as `K`. The state is not normalised.
 
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole
   state for an MPO, `cutoff = eps()` by default
@@ -196,6 +197,17 @@ function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Li
     flush!()
     return State(state, coef == 1 ? st : coef * st)
 end
+
+function apply(a::IndexedOp{IsChannel}, state::State{Pure}; limits::Limits = Limits())
+    if !is_pure(a)
+        error("$a has more than one Kraus operator, which a pure state cannot take: apply it to " *
+              "mix(state)")
+    end
+    return apply(kraus(a), state; limits)
+end
+
+apply(a::IndexedOp{IsGenerator}, ::State{Pure}; limits::Limits = Limits()) =
+    error("apply takes an operator or a channel, and $a is a generator")
 
 function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "densitymatrix")
     check_apply_algo(apply_algo)
