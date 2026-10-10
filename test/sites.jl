@@ -327,7 +327,7 @@ end
     @test_throws "a state of 3 components cannot be one of Qubit()" State{Pure}(System(2, Qubit()), [1., 0., 0.])
     @test_throws "a 3×3 density matrix cannot be one of Qubit()" State{Mixed}(
         System(2, Qubit()), [1. 0. 0. ; 0. 0. 0. ; 0. 0. 0.])
-    @test_skip "a Reset to a state of 3 components on a qubit"                  # couche 2
+    @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset([1., 0., 0.]), Qubit())
 end
 
 @testset "A state a site declares is the one used" begin

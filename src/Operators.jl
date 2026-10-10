@@ -1,10 +1,11 @@
-# The algebra of operators on pure states: their types, generic or placed on sites, and how
-# they are built, combined, compared and printed, before any site is involved. The later layers
-# walk an expression with `scalarcoef`, `scalararg`, `sumsubs`, `prodsubs`, `factor_sites`,
-# `scale`, `power` and `obs_name`.
+# The algebra of operators, channels and generators: their types, generic or placed on sites,
+# and how they are built, combined, compared and printed, before any site is involved. The later
+# layers walk an expression with `scalarcoef`, `scalararg`, `sumsubs`, `prodsubs`,
+# `factor_sites`, `scale`, `power`, `is_pure` and `obs_name`.
 
 export Pure, Mixed, OpKind, IsOperator, IsChannel, IsGenerator, Op, GenericOp, IndexedOp, SimpleOp
-export Operator, Id, Proj, named, parity, dag, ⊗, tensor, map_sites
+export Operator, Id, Proj, Gate, Reset, Dephase, Dissipator, Evolver, named, parity, dag, ⊗,
+    tensor, map_sites
 
 ############# Types ################
 
@@ -154,6 +155,28 @@ float_coef(x::Union{Bool, Base.BitInteger, Complex{<:Union{Bool, Base.BitInteger
 float_coef(x::Number) = x
 
 """
+    check_coef(K, c)
+
+the number `c` as a coefficient of an operator of kind `K`: any number for an operator, a real
+one for a generator, a real one of zero or above for a channel
+"""
+check_coef(::Type{IsOperator}, c::Number) = c
+
+check_coef(::Type{IsGenerator}, c::Number) =
+    if isreal(c)
+        real(c)
+    else
+        error("a generator takes real coefficients, not $c: write -im * H + Dissipator(L), H an operator")
+    end
+
+check_coef(::Type{IsChannel}, c::Number) =
+    if isreal(c) && real(c) ≥ 0
+        real(c)
+    else
+        error("a channel takes weights of zero or above, not $c")
+    end
+
+"""
     ScalarOp{K, T, N}
 
 a number times an operator, never itself a `ScalarOp`: `2 * (3X)` is `6X`. It is built by
@@ -213,10 +236,11 @@ end
     scale(c, a)
 
 the operator `a` times the number `c`: `a` itself for 1, `0 * Id` for 0, each term multiplied
-for a sum
+for a sum, `c` checked by `check_coef`
 """
-scale(c::Number, a::Op{K, T, N}) where {K, T, N} =
-    if c == 0
+function scale(c::Number, a::Op{K, T, N}) where {K, T, N}
+    c = check_coef(K, c)
+    return if c == 0
         ScalarOp{K, T, N}(0., IdentityOp{K, T, N}())
     elseif c == 1
         a
@@ -225,6 +249,7 @@ scale(c::Number, a::Op{K, T, N}) where {K, T, N} =
     else
         ScalarOp{K, T, N}(no_signed_zero(float_coef(c * scalarcoef(a))), scalararg(a))
     end
+end
 
 """
     sumsubs(a)
@@ -233,13 +258,6 @@ the terms of a sum, an operator that is not a sum being its only term
 """
 sumsubs(a::SumOp) = a.subs
 sumsubs(a::Op) = [a]
-
-(a::Number * b::Op) = scale(a, b)
-(a::Op * b::Number) = scale(b, a)
-(a::Op / b::Number) = scale(inv(b), a)
--(a::Op) = scale(-1, a)
-(a::Op{K, T, N} + b::Op{K, T, N}) where {K, T, N} = SumOp([a, b])
-(a::Op - b::Op) = a + (-b)
 
 ############### Products ###############
 
@@ -271,8 +289,6 @@ its only factor
 prodsubs(a::ProdOp) = a.subs
 prodsubs(a::ScalarOp) = prodsubs(a.arg)
 prodsubs(a::Op) = [a]
-
-(a::Op{K, T, N} * b::Op{K, T, N}) where {K, T, N} = ProdOp([a, b])
 
 ############### Tensor products ############
 
@@ -325,23 +341,6 @@ function factor_sites(a::TensorOp)
         start:stop
     end
 end
-
-"""
-    op1 ⊗ op2
-    tensor(op1, op2, ...)
-
-the tensor product of generic operators, acting on the sites of `op1` followed by those of
-`op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `\\otimes`, and `tensor` is the same
-function under a name in ASCII.
-
-# Examples
-
-    Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
-"""
-(a::GenericOp{K, N} ⊗ b::GenericOp{K, M}) where {K, N, M} =
-    TensorOp{K, N + M}([tensorsubs(a) ; tensorsubs(b)])
-⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
-const tensor = ⊗
 
 ############ Proj ################
 
@@ -397,6 +396,140 @@ end
 
 (op::GenericOp{K, N})(index::Vararg{Int, N}) where {K, N} = AtIndex(op, index)
 
+############## Channels and generators ###########
+
+"""
+    Gate(A)
+
+the channel ``\\rho \\mapsto A\\rho A^\\dagger`` of the operator `A`, generic or placed on
+sites: `Gate(X(1))` is `Gate(X)(1)`, `Gate(c * A)` is `abs2(c) * Gate(A)`, and the gate of a
+product is the product of the gates. Channels combine with weights of zero or above, which is
+how a noisy gate is written. An operator multiplied by a channel, or in a tensor product with
+one, becomes its gate.
+
+# Examples
+
+    0.9 * Gate(Id) + 0.1 * Gate(X)      # X with probability 0.1
+    Gate(X(1) + X(2))
+"""
+struct Gate{T, N} <: Op{IsChannel, T, N}
+    arg::Op{IsOperator, T, N}
+    function Gate(a::Op{IsOperator, T, N}) where {T, N}
+        c, x = abs2(scalarcoef(a)), scalararg(a)
+        if x isa IdentityOp
+            return scale(c, IdentityOp{IsChannel, T, N}())
+        elseif x isa AtIndex
+            return scale(c, AtIndex(Gate(x.op), x.index))
+        elseif x isa ProdOp
+            return scale(c, ProdOp(Op{IsChannel, T, N}[ Gate(y) for y in x.subs ]))
+        end
+        return scale(c, new{T, N}(x))
+    end
+end
+
+"""
+    Reset(state)
+
+the channel resetting a site to the local state `state`, given as `State` takes it,
+``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, ``\\sigma`` the density matrix
+of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a matrix is taken as it
+is, without normalization.
+
+# Examples
+
+    Reset("Up")(3)
+    Reset(Level => 0)(3)
+    Reset([0.3 0. ; 0. 0.7])(3)
+"""
+struct Reset <: GenericOp{IsChannel, 1}
+    state::Union{String, Vector, Matrix, Function, Pair{<:SimpleOp, <:Real}}
+    Reset(state::Union{String, Vector, Matrix, Function}) = new(no_signed_zero(state))
+    Reset(p::Pair{<:SimpleOp, <:Real}) = new(first(p) => no_signed_zero(last(p)))
+end
+
+Reset(n::Integer) =
+    error("a number does not denote a state: write Reset(\"$n\") or Reset(Level => $n)")
+
+"""
+    Dephase(A)
+
+the channel dephasing in the eigenbasis of the Hermitian operator `A`, of one site or several,
+``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``, ``P_\\lambda`` the projector
+on the eigenspace of `A` of eigenvalue ``\\lambda``: the measurement of `A` whose result is not
+read. It erases the coherences between eigenspaces and keeps those within one.
+
+# Examples
+
+    Dephase(Level)(3)       # in the basis of the site
+    Dephase(Ntot)(2)        # on an Electron, keeps the coherence of Up and Dn
+    Dephase(Z ⊗ Z)(1, 2)    # the parity of two qubits, not read
+"""
+struct Dephase{N} <: GenericOp{IsChannel, N}
+    arg::GenericOp{IsOperator, N}
+    Dephase(arg::GenericOp{IsOperator, N}) where N = new{N}(arg)
+end
+
+Dephase(a::IndexedOp{IsOperator}) =
+    error("cannot dephase in the eigenbasis of $a, which is placed on sites: write " *
+          "Dephase(N)(1) rather than Dephase(N(1))")
+
+"""
+    Dissipator(L)
+    Dissipator(Φ)
+
+the Lindblad dissipator of the jump operator `L`, generic or placed on sites,
+``\\rho \\mapsto L\\rho L^\\dagger - \\frac{1}{2}\\{L^\\dagger L, \\rho\\}``, or that of
+the channel `Φ`, the sum of those of its Kraus operators, ``\\Phi - \\mathrm{id}`` for `Φ`
+preserving the trace. `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`, and
+`Dissipator(Sm(1))` is `Dissipator(Sm)(1)`.
+
+# Examples
+
+    Dissipator(Sm)(1)
+    Dissipator(Sm(1) + Sm(2))           # a collective decay
+    0.1 * Dissipator(Reset("Up"))(3)
+"""
+struct Dissipator{T, N} <: Op{IsGenerator, T, N}
+    arg::Op{<:Union{IsOperator, IsChannel}, T, N}
+    function Dissipator(a::Op{<:Union{IsOperator, IsChannel}, T, N}) where {T, N}
+        x = scalararg(a)
+        c = a isa Op{IsOperator} ? abs2(scalarcoef(a)) : scalarcoef(a)
+        if x isa IdentityOp
+            return scale(0, IdentityOp{IsGenerator, T, N}())
+        elseif x isa Gate
+            return scale(c, Dissipator(x.arg))
+        elseif x isa AtIndex
+            return scale(c, AtIndex(Dissipator(x.op), x.index))
+        end
+        return scale(c, new{T, N}(x))
+    end
+end
+
+"""
+    Evolver(K)
+
+the generator ``\\rho \\mapsto K\\rho + \\rho K^\\dagger`` of the operator `K`, generic or
+placed on sites, ``d\\psi/dt = K\\psi`` on a pure state: for `K = -im * H`, the Hamiltonian
+part ``-i[H, \\rho]`` of a generator. An operator added to a generator becomes its
+`Evolver`. A real coefficient comes out of it, a complex one stays inside.
+
+# Examples
+
+    -im * H + Dissipator(Sm)(1)         # Evolver(-im * H) + Dissipator(Sm)(1)
+"""
+struct Evolver{T, N} <: Op{IsGenerator, T, N}
+    arg::Op{IsOperator, T, N}
+    function Evolver(a::Op{IsOperator, T, N}) where {T, N}
+        c, x = scalarcoef(a), scalararg(a)
+        if x isa AtIndex
+            return AtIndex(Evolver(scale(c, x.op)), x.index)
+        elseif isreal(c)
+            return scale(real(c), new{T, N}(x))
+        end
+        return new{T, N}(a)
+    end
+end
+
 """
     map_sites(f, op)
 
@@ -408,6 +541,49 @@ map_sites(f, a::SumOp) = SumOp(map(x -> map_sites(f, x), a.subs))
 map_sites(f, a::ProdOp) = ProdOp(map(x -> map_sites(f, x), a.subs))
 map_sites(f, a::ScalarOp) = scale(a.coef, map_sites(f, a.arg))
 map_sites(_, a::IdentityOp) = a
+map_sites(f, a::Gate{Indexed}) = Gate(map_sites(f, a.arg))
+map_sites(f, a::Dissipator{Indexed}) = Dissipator(map_sites(f, a.arg))
+map_sites(f, a::Evolver{Indexed}) = Evolver(map_sites(f, a.arg))
+
+############## Arithmetic ###########
+
+(a::Number * b::Op) = scale(a, b)
+(a::Op * b::Number) = scale(b, a)
+(a::Op / b::Number) = scale(inv(b), a)
+-(a::Op) = scale(-1, a)
+(a::Op{K, T, N} + b::Op{K, T, N}) where {K, T, N} = SumOp([a, b])
+(a::Op - b::Op) = a + (-b)
+(a::Op{K, T, N} * b::Op{K, T, N}) where {K, T, N} = ProdOp([a, b])
+
+(a::Op{IsGenerator, T, N} * b::Op{IsGenerator, T, N}) where {T, N} =
+    error("generators are added, not multiplied: $a * $b is not a generator")
+
+# an operator beside a generator is its Hamiltonian part, beside a channel its gate
+(a::Op{IsOperator, T, N} + b::Op{IsGenerator, T, N}) where {T, N} = Evolver(a) + b
+(a::Op{IsGenerator, T, N} + b::Op{IsOperator, T, N}) where {T, N} = a + Evolver(b)
+(a::Op{IsOperator, T, N} * b::Op{IsChannel, T, N}) where {T, N} = Gate(a) * b
+(a::Op{IsChannel, T, N} * b::Op{IsOperator, T, N}) where {T, N} = a * Gate(b)
+
+"""
+    op1 ⊗ op2
+    tensor(op1, op2, ...)
+
+the tensor product of generic operators, or of channels, acting on the sites of `op1`
+followed by those of `op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `\\otimes`, and
+`tensor` is the same function under a name in ASCII.
+
+# Examples
+
+    Rxy(t) = exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
+"""
+(a::GenericOp{K, N} ⊗ b::GenericOp{K, M}) where {K, N, M} =
+    TensorOp{K, N + M}([tensorsubs(a) ; tensorsubs(b)])
+(a::GenericOp{IsGenerator} ⊗ b::GenericOp{IsGenerator}) =
+    error("generators are added, not multiplied: $a ⊗ $b, placed as a product, is not a generator")
+(a::GenericOp{IsOperator} ⊗ b::GenericOp{IsChannel}) = Gate(a) ⊗ b
+(a::GenericOp{IsChannel} ⊗ b::GenericOp{IsOperator}) = a ⊗ Gate(b)
+⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
+const tensor = ⊗
 
 ############## Functions of an operator ###########
 
@@ -468,6 +644,16 @@ end
 """
 power(a::GenericOp, p::Number) = is_natural(p) ? IntPowOp(a, Int(real(p))) : GenPowOp(a, p)
 
+power(a::GenericOp{IsChannel}, p::Number) =
+    if is_natural(p)
+        IntPowOp(a, Int(real(p)))
+    else
+        error("$a has no power $p: only the integer powers of a channel are channels")
+    end
+
+power(a::GenericOp{IsGenerator}, ::Number) =
+    error("$a has no power: generators are added, not multiplied")
+
 (a::GenericOp ^ p::Number) = power(a, p)
 
 # a literal negative exponent would go through `inv`, which an operator has no method of
@@ -498,22 +684,26 @@ sqrt(a::GenericOp) = a ^ 0.5
 """
     ExpOp{K, N}
 
-the exponential of a generic operator, see `exp`
+the exponential of a generic operator, of kind `K`: an operator for an operator, a channel for
+a generator, see `exp`
 """
 struct ExpOp{K, N} <: GenericOp{K, N}
-    arg::GenericOp{K, N}
+    arg::GenericOp{<:Union{IsOperator, IsGenerator}, N}
 end
 
 """
     exp(::GenericOp)
 
-the exponential of a generic operator.
+the exponential of a generic operator, or of a generic generator, the channel of the evolution
+it generates.
 
 # Examples
 
     exp(-im * t * (X ⊗ X + Y ⊗ Y) / 4)
+    exp(t * (-im * (X ⊗ X) + Dissipator(Sm ⊗ Sm)))
 """
-exp(a::GenericOp{IsOperator}) = ExpOp(a)
+exp(a::GenericOp{IsOperator, N}) where N = ExpOp{IsOperator, N}(a)
+exp(a::GenericOp{IsGenerator, N}) where N = ExpOp{IsChannel, N}(a)
 
 """
     DagOp{N}
@@ -573,6 +763,20 @@ the operator ``(-1)^A``, `mod(A, 2)`: conserved, a charge of ``\\mathbb{Z}_2``.
 """
 parity(a::GenericOp{IsOperator}) = ModOp(a, 2)
 
+############### Purity ###############
+
+"""
+    is_pure(a)
+
+whether the channel or generator `a` acts on pure states: a channel of a single Kraus operator,
+a generator with no dissipator. A sum of channels is taken as a mixture.
+"""
+is_pure(::Union{IdentityOp, Gate, Evolver}) = true
+is_pure(::Union{Reset, Dephase, Dissipator, SumOp{IsChannel}}) = false
+is_pure(a::Union{SumOp{IsGenerator}, ProdOp, TensorOp}) = all(is_pure, a.subs)
+is_pure(a::Union{ScalarOp, IntPowOp, ExpOp}) = is_pure(a.arg)
+is_pure(a::AtIndex) = is_pure(a.op)
+
 ############### Naming ###############
 
 """
@@ -627,6 +831,7 @@ of one type by their own `isless`
 ranking(::IdentityOp) = 1
 ranking(::Operator) = 3
 ranking(::Proj) = 5
+ranking(::Reset) = 6
 ranking(::AtIndex) = 10
 ranking(::ScalarOp) = 20
 ranking(::ProdOp) = 21
@@ -637,16 +842,26 @@ ranking(::ExpOp) = 31
 ranking(::DagOp) = 32
 ranking(::ModOp) = 33
 ranking(::GenPowOp) = 34
+ranking(::Gate) = 35
+ranking(::Dephase) = 36
+ranking(::Dissipator) = 37
+ranking(::Evolver) = 38
 
 isless(a::Operator, b::Operator) = isless(a.name, b.name)
 isless(::IdentityOp, ::IdentityOp) = false
 isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
+isless(a::Reset, b::Reset) = isless(state_key(a.state), state_key(b.state))
 isless(a::AtIndex, b::AtIndex) = isless((a.index, a.op), (b.index, b.op))
 isless(a::ScalarOp, b::ScalarOp) =
     isless((a.arg, real(a.coef), imag(a.coef)), (b.arg, real(b.coef), imag(b.coef)))
 isless(a::Union{SumOp, ProdOp, TensorOp}, b::Union{SumOp, ProdOp, TensorOp}) = isless(a.subs, b.subs)
 isless(a::IntPowOp, b::IntPowOp) = isless((a.arg, a.expo), (b.arg, b.expo))
-isless(a::Union{ExpOp, DagOp}, b::Union{ExpOp, DagOp}) = isless(a.arg, b.arg)
+isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
+isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
+isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
+isless(a::Dephase, b::Dephase) = isless(a.arg, b.arg)
+isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
+isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
 isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
 # an exponent may be complex, which has no order: its two parts are compared
 isless(a::GenPowOp, b::GenPowOp) =
@@ -752,7 +967,15 @@ end
 show(io::IO, op::Operator) = print(io, op.name)
 show(io::IO, ::IdentityOp{IsOperator, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
 show(io::IO, ::IdentityOp{IsOperator, Indexed}) = print(io, "Id")
+show(io::IO, ::IdentityOp{IsChannel, Generic, N}) where N =
+    print(io, "Gate(", join(fill("Id", N), "⊗"), ")")
+show(io::IO, ::IdentityOp{IsChannel, Indexed}) = print(io, "Gate(Id)")
+# ρ ↦ ρ, as a generator
+show(io::IO, ::IdentityOp{IsGenerator, Generic, N}) where N =
+    print(io, "Evolver(0.5", join(fill("Id", N), "⊗"), ")")
+show(io::IO, ::IdentityOp{IsGenerator, Indexed}) = print(io, "Evolver(0.5Id)")
 show(io::IO, a::Proj) = show_func(io, "Proj", [a.state])
+show(io::IO, a::Reset) = show_func(io, "Reset", [a.state])
 show(io::IO, ind::AtIndex) = show_func(io, repr(ind.op; context = :precedence => 500), collect(ind.index))
 
 show(io::IO, a::ScalarOp) =
@@ -809,6 +1032,11 @@ show(io::IO, a::ExpOp) =
 show(io::IO, a::DagOp) =
     paren(io, 1000, 0) do io
         show_func(io, "dag", a.arg)
+    end
+
+show(io::IO, a::Union{Gate, Dephase, Dissipator, Evolver}) =
+    paren(io, 1000, 0) do io
+        show_func(io, nameof(typeof(a)), a.arg)
     end
 
 show(io::IO, a::ModOp) =

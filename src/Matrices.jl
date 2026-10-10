@@ -1,7 +1,7 @@
-# The matrix of an operator on sites and the vector or density matrix of a local state, which
-# call each other: a projector on a named state needs its vector, and an eigenstate `A => λ`
-# the matrix of `A`. The later layers also use `expand_sites`, `check_size`, `eigenspaces`,
-# `nearly`, `rounding_tol` and `spectral_tol`.
+# The matrix of an operator, a channel or a generator on sites and the vector or density matrix
+# of a local state, which call each other: a projector on a named state needs its vector, and an
+# eigenstate `A => λ` the matrix of `A`. The later layers also use `expand_sites`, `check_size`,
+# `eigenspaces`, `nearly`, `rounding_tol` and `spectral_tol`.
 
 export matrix
 
@@ -73,16 +73,141 @@ parity_of(m::AbstractMatrix, f::AbstractMatrix) =
     end
 
 """
+    dense_max
+
+the largest dimension of the dense matrix of a function of an operator, or of a superoperator,
+built on sites: beyond, it is refused rather than exhausting memory
+"""
+const dense_max = 4096
+
+"""
+    check_dense(a, sites)
+
+refuse the matrix of the function `a` on `sites` when its dimension, that of the states of the
+sites or, for a channel or a generator, of their density matrices, is beyond `dense_max`
+"""
+function check_dense(a::GenericOp{K}, sites) where K
+    ss = expand_sites(a, sites)
+    d = prod(dim, ss)^(K === IsOperator ? 1 : 2)
+    if d > dense_max
+        error("$a on $(length(ss)) sites needs a dense matrix of dimension $d, beyond the " *
+              "$dense_max TMS builds")
+    end
+end
+
+"""
+    eigenspaces(m, what, a, on = "")
+
+the eigenvalues of the Hermitian matrix `m` of `a`, increasing, and the projectors on their
+eigenspaces, eigenvalues equal to rounding gathered into one, `what` naming the caller in the
+refusal of a matrix that is not Hermitian
+"""
+function eigenspaces(m::AbstractMatrix, what::String, a, on::String = "")
+    if !nearly(m, m')
+        error("$what needs a Hermitian operator, which $a is not$on")
+    end
+    # real projectors for a real operator, which give real tensors, cheaper to contract
+    e = eltype(m) <: Real ? eigen(Symmetric(m)) : eigen(Hermitian(m))
+    tol = spectral_tol(e.values)
+    d = size(m, 1)
+    values = Float64[]
+    ps = Matrix{eltype(e.vectors)}[]
+    start = 1
+    for k in 1:d
+        if k == d || e.values[k+1] - e.values[start] > tol
+            v = e.vectors[:, start:k]
+            push!(values, sum(e.values[start:k]) / (k - start + 1))
+            push!(ps, v * v')
+            start = k + 1
+        end
+    end
+    return values, ps
+end
+
+"""
+    mixed_order(dims)
+
+the positions in vec(ρ), ρ a density matrix of sites of dimensions `dims`, of its elements in
+the order of the matrices of channels and generators, see `matrix`
+"""
+function mixed_order(dims)
+    n = length(dims)
+    ds = reverse(dims)
+    # vec(ρ) as the kets, then the bras, each from the last site to the first
+    axes = reshape(1:prod(dims)^2, ds..., ds...)
+    return vec(permutedims(axes, vec(permutedims([1:n (n + 1):2n]))))
+end
+
+"""
+    sided(a, b, sites)
+
+the matrix of the map ρ ↦ a ρ b of the density matrices of `sites`, see `matrix`
+"""
+function sided(a::AbstractMatrix, b::AbstractMatrix, sites)
+    o = mixed_order(map(dim, sites))
+    return kron(transpose(b), a)[o, o]
+end
+
+"""
+    kraus_sum(m, sites)
+
+the sum of ``K^\\dagger K`` over the Kraus operators ``K`` of the channel of matrix `m` on
+`sites`: the ``M`` such that ``\\mathrm{tr}\\,\\Phi(\\rho) = \\mathrm{tr}(M\\rho)``
+"""
+function kraus_sum(m::AbstractMatrix, sites)
+    d = prod(dim, sites)
+    o = mixed_order(map(dim, sites))
+    # the row of the trace after the channel, which holds the transpose of M
+    r = transpose(m) * vec(Matrix{Float64}(I, d, d))[o]
+    return Matrix(transpose(reshape(r[invperm(o)], d, d)))
+end
+
+"""
+    strung_kron(a, ms, strings)
+
+the matrix of the tensor product `a` of factors of matrices `ms`: `(A₁ ⊗ … ⊗ Aₙ)` on
+consecutive sites is `A₁(1)…Aₙ(n)`, so a factor on fermionic sites takes each of its
+`strings`, one per grading of its sites, for each factor after it odd in that grading, and a
+factor of no definite parity there is refused
+"""
+function strung_kron(a::TensorOp, ms::Vector, strings::Vector)
+    ps = [ [ parity_of(m, f) for f in fs ] for (m, fs) in zip(ms, strings) ]
+    strung = map(eachindex(ms)) do k
+        m = ms[k]
+        for (g, f) in enumerate(strings[k])
+            if f == I
+                continue
+            end
+            rest = [ p[g] for p in ps[k+1:end] ]
+            j = findfirst(isnothing, rest)
+            if !isnothing(j)
+                error("$a has a factor of no definite fermionic parity, $(a.subs[k+j]), after a " *
+                      "fermionic site" *
+                      (a isa TensorOp{IsOperator} ? ": write it as a sum of tensor products" : ""))
+            elseif isodd(sum(rest; init = 0))
+                m = m * f
+            end
+        end
+        m
+    end
+    return foldl(kron, strung)
+end
+
+"""
     matrix(op, site, sites...)
 
 the matrix of the generic operator `op` on the given sites, a single one standing for several
 identical ones, the last site varying fastest. A tensor product of fermionic factors holds the
 Jordan-Wigner strings between them: the matrix of `C ⊗ dag(C)` is that of `C(1) * dag(C)(2)`.
+A channel or a generator acts on the density matrices ρ of the sites: its matrix is that of
+the map of vec(ρ), the last site varying fastest and, on each site, the ket faster than the
+bra.
 
 # Examples
 
     matrix(X, Qubit())
     matrix(X ⊗ A, Qubit(), Boson(2))
+    matrix(Gate(X), Qubit())
 """
 matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
 
@@ -91,6 +216,12 @@ matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
 
 function matrix(a::IdentityOp{IsOperator, Generic}, site::AbstractSite, sites::AbstractSite...)
     d = prod(dim, expand_sites(a, (site, sites...)))
+    return Matrix{Float64}(I, d, d)
+end
+
+function matrix(a::IdentityOp{<:Union{IsChannel, IsGenerator}, Generic}, site::AbstractSite,
+                sites::AbstractSite...)
+    d = prod(dim, expand_sites(a, (site, sites...)))^2
     return Matrix{Float64}(I, d, d)
 end
 
@@ -127,15 +258,23 @@ matrix(a::ProdOp, site::AbstractSite, sites::AbstractSite...) =
 matrix(a::SumOp, site::AbstractSite, sites::AbstractSite...) =
     sum(matrix(o, site, sites...) for o in a.subs)
 
-matrix(a::ExpOp, site::AbstractSite, sites::AbstractSite...) = exp(matrix(a.arg, site, sites...))
+function matrix(a::ExpOp, site::AbstractSite, sites::AbstractSite...)
+    check_dense(a, (site, sites...))
+    return exp(matrix(a.arg, site, sites...))
+end
 
-matrix(a::ModOp, site::AbstractSite, sites::AbstractSite...) =
-    exp(2im * π * matrix(a.arg, site, sites...) / a.modulus)
+function matrix(a::ModOp, site::AbstractSite, sites::AbstractSite...)
+    check_dense(a, (site, sites...))
+    return exp(2im * π * matrix(a.arg, site, sites...) / a.modulus)
+end
 
-matrix(a::IntPowOp, site::AbstractSite, sites::AbstractSite...) =
-    matrix(a.arg, site, sites...) ^ a.expo
+function matrix(a::IntPowOp, site::AbstractSite, sites::AbstractSite...)
+    check_dense(a, (site, sites...))
+    return matrix(a.arg, site, sites...) ^ a.expo
+end
 
 function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
+    check_dense(a, (site, sites...))
     m = matrix(a.arg, site, sites...)
     r = rank(m)
     if real(a.expo) ≤ 0 && r < size(m, 1)
@@ -154,58 +293,64 @@ end
 matrix(a::DagOp, site::AbstractSite, sites::AbstractSite...) =
     collect(adjoint(matrix(a.arg, site, sites...)))
 
-# (A₁ ⊗ … ⊗ Aₙ) on consecutive sites is A₁(1)…Aₙ(n): a factor on fermionic sites takes their
-# parity for each odd factor after it, and a factor of no definite parity there is refused
+# the string of a factor is the parity of its sites, see `strung_kron`
 function matrix(a::TensorOp{IsOperator}, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
     pos = factor_sites(a)
-    fs = [ foldl(kron, [ matrix(F, s) for s in sites[p] ]) for p in pos ]
     ms = [ matrix(o, sites[p]...) for (o, p) in zip(a.subs, pos) ]
-    ps = [ parity_of(m, f) for (m, f) in zip(ms, fs) ]
-    strung = map(eachindex(ms)) do k
-        rest = ps[k+1:end]
-        j = findfirst(isnothing, rest)
-        if fs[k] == I
-            ms[k]
-        elseif !isnothing(j)
-            error("$a has a factor of no definite fermionic parity, $(a.subs[k+j]), after a " *
-                  "fermionic site: write it as a sum of tensor products")
-        elseif isodd(sum(rest; init = 0))
-            ms[k] * fs[k]
-        else
-            ms[k]
-        end
-    end
-    return foldl(kron, strung)
+    return strung_kron(a, ms, [ [ foldl(kron, [ matrix(F, s) for s in sites[p] ]) ] for p in pos ])
 end
 
-"""
-    eigenspaces(m, what, a, on = "")
+# the strings of a factor are the parity of its sites on the kets and on the bras
+function matrix(a::TensorOp{IsChannel}, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
+    pos = factor_sites(a)
+    ms = [ matrix(o, sites[p]...) for (o, p) in zip(a.subs, pos) ]
+    strings = map(pos) do p
+        f = foldl(kron, [ matrix(F, s) for s in sites[p] ])
+        [ sided(f, one(f), sites[p]), sided(one(f), f, sites[p]) ]
+    end
+    return strung_kron(a, ms, strings)
+end
 
-the eigenvalues of the Hermitian matrix `m` of `a`, increasing, and the projectors on their
-eigenspaces, eigenvalues equal to rounding gathered into one, `what` naming the caller in the
-refusal of a matrix that is not Hermitian
-"""
-function eigenspaces(m::AbstractMatrix, what::String, a, on::String = "")
-    if !nearly(m, m')
-        error("$what needs a Hermitian operator, which $a is not$on")
+function matrix(a::Gate{Generic}, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
+    k = matrix(a.arg, sites...)
+    return sided(k, k', sites)
+end
+
+function matrix(a::Reset, site::AbstractSite, others::AbstractSite...)
+    s = only(expand_sites(a, (site, others...)))
+    v = local_state(s, a.state)
+    σ = v isa Vector ? v * v' : v
+    return vec(σ) * transpose(vec(Matrix{Float64}(I, dim(s), dim(s))))
+end
+
+function matrix(a::Dephase, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
+    check_dense(a, sites)
+    _, ps = eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg, " on " * join(sites, " ⊗ "))
+    return sum(sided(p, p, sites) for p in ps)
+end
+
+# the dissipator of a channel is the sum of those of its Kraus operators K, which take the sum
+# of the K†K
+function matrix(a::Dissipator{Generic}, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
+    if a.arg isa GenericOp{IsOperator}
+        l = matrix(a.arg, sites...)
+        g, m = sided(l, l', sites), l' * l
+    else
+        g = matrix(a.arg, sites...)
+        m = kraus_sum(g, sites)
     end
-    # real projectors for a real operator, which give real tensors, cheaper to contract
-    e = eltype(m) <: Real ? eigen(Symmetric(m)) : eigen(Hermitian(m))
-    tol = spectral_tol(e.values)
-    d = size(m, 1)
-    values = Float64[]
-    ps = Matrix{eltype(e.vectors)}[]
-    start = 1
-    for k in 1:d
-        if k == d || e.values[k+1] - e.values[start] > tol
-            v = e.vectors[:, start:k]
-            push!(values, sum(e.values[start:k]) / (k - start + 1))
-            push!(ps, v * v')
-            start = k + 1
-        end
-    end
-    return values, ps
+    return g - (sided(m, one(m), sites) + sided(one(m), m, sites)) / 2
+end
+
+function matrix(a::Evolver{Generic}, site::AbstractSite, others::AbstractSite...)
+    sites = expand_sites(a, (site, others...))
+    k = matrix(a.arg, sites...)
+    return sided(k, one(k), sites) + sided(one(k), k', sites)
 end
 
 """
@@ -214,6 +359,7 @@ end
 the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `sites`
 """
 function eigenprojector(a::GenericOp{IsOperator}, λ::Real, sites::AbstractSite...)
+    check_dense(a, sites)
     on = " on " * join(sites, " ⊗ ")
     values, ps = eigenspaces(matrix(a, sites...), "Proj", a, on)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)

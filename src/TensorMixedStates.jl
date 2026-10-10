@@ -22,6 +22,7 @@ using ITensors, ITensorMPS, LinearAlgebra, Random, HDF5
 include("Operators.jl")
 include("Sites.jl")
 include("Matrices.jl")
+include("Noise.jl")
 include("Conservation.jl")
 include("Systems.jl")
 include("States.jl")

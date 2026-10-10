@@ -50,9 +50,20 @@ end
     # (decision 20: a number is not a state)
     @test length(sort([Proj("1"), Proj("Up"), Proj([1., 0.]), Proj("0")])) == 4
     @test_skip matrix(simplify(Proj("1") + Proj("Up")), Qubit()) ≈ matrix(Id, Qubit())   # couche 2
-    @test_skip "the order of channels and generators, a Reset holding a name, a vector or a matrix"   # couche 2
+    for (a, b) in [(Gate(X), Gate(Y)), (Dephase(X), Dephase(Y)), (Dissipator(X), Dissipator(Y)),
+                   (Evolver(X(1)), Evolver(Y(1))), (Reset("Dn"), Reset("Up"))]
+        @test isless(a, b) && !isless(b, a)
+    end
+    # a Reset holds a name, a vector, a matrix or an eigenspace, which have no order between them
+    @test length(sort([Reset("Up"), Reset([1., 0.]), Reset("Dn"), Reset([1. 0. ; 0. 0.]),
+                       Reset(Level => 1)])) == 5
+    # two of the same type but of different kinds compare by what they hold, without recursing
+    @test isless(exp(X), exp(Dissipator(X))) || isless(exp(Dissipator(X)), exp(X))
     # the ranking puts the types in the order it declares
     @test isless(Id, X)                     # Identity before Operator
+    @test isless(X(1), Gate(X)(1))          # AtIndex before Gate
+    @test isless(Gate(X)(1), Dissipator(X)(1))
+    @test isless(Dissipator(X)(1), Evolver(X(1)))
 end
 
 @testset "A projector is self adjoint" begin
@@ -141,6 +152,13 @@ end
                    (exp(X * Y), exp(X * Y)),                            # ExpOp
                    (parity(X * Y), parity(X * Y)),                      # ModOp
                    (Proj(X => 1), Proj(X => 1.0)),                      # Proj
+                   (Gate(X + Y), Gate(X + Y)),                          # Gate
+                   (Gate(X(1) + Y(2)), Gate(X(1) + Y(2))),
+                   (Reset([1. 0. ; 0. 0.]), Reset([1. 0. ; 0. 0.])),    # Reset
+                   (Dephase(X ⊗ Y), Dephase(X ⊗ Y)),                    # Dephase
+                   (Dissipator(X * Y), Dissipator(X * Y)),              # Dissipator
+                   (Evolver(X(1) * Y(2)), Evolver(X(1) * Y(2))),        # Evolver
+                   (exp(Dissipator(X)), exp(Dissipator(X))),            # ExpOp of a generator
                    # an Operator built afresh each call, whose expr is a matrix for one
                    # and a whole expression for the other
                    (Phase(0.3), Phase(0.3)),
@@ -149,7 +167,7 @@ end
         @test hash(a) == hash(b)
         @test length(Set([a, b])) == 1
     end
-    @test_skip "the channels and generators, and a product simplify gave strings"   # couche 2
+    @test_skip "a product the descent gave strings"   # couche 2
     # and operators that differ must keep differing
     @test length(Set([X(1) * Y(2), X(1) * Z(2)])) == 2
     # what it is for: a product shared by two measurements is asked for only once
@@ -240,7 +258,10 @@ end
     f, fq, fs = Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N))
     @test matrix(C, fq) == matrix(C, f)
     @test matrix(C, fs) == matrix(C, f)
-    @test_skip "the matrix of a channel or a generator on a charged site, read off its mixed index"   # couche 2
+    for op in (Gate(C), Dissipator(C), Evolver(C), Reset("Occ"), Dephase(N))
+        @test matrix(op, fq) == matrix(op, f)
+        @test matrix(op, fs) == matrix(op, f)
+    end
     e, eq = Electron(), Electron(conserve = (Ntot, 2Sz))
     @test matrix(Ntot ⊗ Sz, eq, eq) == matrix(Ntot ⊗ Sz, e, e)
     b, bq = Boson(4), Boson(4, conserve = parity(N))
@@ -253,6 +274,7 @@ end
     # a single site stands for as many identical ones as the operator needs
     q = Qubit()
     @test matrix(Swap, q) == matrix(Swap, q, q)
+    @test matrix(Gate(Swap), q) == matrix(Gate(Swap), q, q)
 end
 
 @testset "Operators of several sites given by a matrix" begin
@@ -622,7 +644,16 @@ end
     # several sites, and placed, where it has no site, being the identity of the whole system
     q = Qubit()
     @test Id ⊗ Id isa TMS.IdentityOp
-    @test_skip "the identity of channels and generators, Gate(Id) and its powers"   # couche 2
+    @test Gate(Id) isa TMS.IdentityOp{IsChannel}
+    @test Gate(Id ⊗ Id) == Gate(Id) ⊗ Gate(Id) == Id ⊗ Gate(Id)
+    @test Gate(Id)^2 == Gate(Id)
+    @test Gate(3Id) == 9 * Gate(Id)
+    @test Gate(Id(2)) == Gate(Id)(1)
+    # a dissipator of the identity is zero, an evolver of it twice the identity
+    @test iszero(TMS.scalarcoef(Dissipator(Id)))
+    @test iszero(TMS.scalarcoef(Dissipator(2 * Id(1))))
+    @test iszero(TMS.scalarcoef(Dissipator(Gate(Id))))
+    @test matrix(Evolver(Id), q) ≈ 2 * matrix(Gate(Id), q)
     @test Id(3) == Id(1)
     @test (Id ⊗ Id)(1, 3) == Id(2)
     @test (Id ⊗ Id)^3 == Id ⊗ Id
@@ -706,7 +737,7 @@ end
     p, q = Proj([1.0, -0.0]), Proj([1.0, 0.0])
     @test hash(p) == hash(q)
     @test !(isless(p, q) || isless(q, p))
-    @test_skip hash(Reset([1.0 -0.0; 0.0 0.0])) == hash(Reset([1.0 0.0; 0.0 0.0]))   # couche 2
+    @test hash(Reset([1.0 -0.0; 0.0 0.0])) == hash(Reset([1.0 0.0; 0.0 0.0]))
     # a projector is ordered by its values, which tie where `==` holds: its printed form told
     # [1, 0] and [1.0, 0.0] apart, and [1, 1] sorted between the two
     g(v) = exp(im * Proj(v) ⊗ X)(1, 2)
@@ -720,6 +751,13 @@ end
     for op in (X ⊗ (Y * Z), (Y * Z) ⊗ X, (X ⊗ Y) * (Z ⊗ Z), (X^0.5)^0.5, (1//2) * X,
                X^(1//2), (-1.0 + 0im) * X, 0.5im * X, (X + Z)^0.5, X(1) * Y(2), 2.0X,
                (1 + 2im) * X, (1.5 - 2im) * X, 1e16 * X)
+        @test eval(Meta.parse(TMS.obs_name(op))) == op
+    end
+    # and so do channels and generators
+    for op in (0.9 * Gate(Id) + 0.1 * Gate(X), Gate(X(1) + Y(2)), Reset("Up")(1),
+               Reset([0.5 0. ; 0. 0.5])(2), Dephase(Z ⊗ Z)(1, 2), Dissipator(Reset(Level => 0)),
+               -im * X(1) * X(2) + Dissipator(Sm)(1), 0.5 * Dissipator(Sm(1) + Sm(2)),
+               exp(0.1 * (-im * (X ⊗ X) + Dissipator(Sm ⊗ Sm))), Gate(Id ⊗ Id))
         @test eval(Meta.parse(TMS.obs_name(op))) == op
     end
     @test TMS.obs_name(X ⊗ (Y * Z)) == "X⊗(Y*Z)"
@@ -757,6 +795,8 @@ end
     # the factors keep their order, and so the sign of a product of fermionic operators
     @test map_sites(twice, C(3) * dag(C)(1)) == C(6) * dag(C)(2)
     @test map_sites(twice, C(3) * dag(C)(1)) ≠ dag(C)(2) * C(6)
-    @test_skip map_sites(twice, Gate(X)(1) - im * Z(2)) ≈ Gate(X)(2) - im * Z(4)   # couche 2
+    # a channel and a generator, with what they hold placed
+    @test map_sites(twice, Gate(X(1) + Z(2)) * Gate(Y)(1)) == Gate(X(2) + Z(4)) * Gate(Y)(2)
+    @test map_sites(twice, -im * Z(2) + Dissipator(X(1) + Y(3))) == -im * Z(4) + Dissipator(X(2) + Y(6))
     @test_throws "repeats a site" map_sites(i -> 1, Swap(1, 2))
 end
