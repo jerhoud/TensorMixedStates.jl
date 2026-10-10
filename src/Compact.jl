@@ -1,0 +1,432 @@
+# The compaction of the terms of an operator on a system into a block of channels, as few on each
+# link as the rank of the operator across it once its parts acting as the identity on either
+# side are taken out. Copied from 1.x, the atoms of a site being the blocks the terms have there,
+# compared through their matrices.
+
+"""
+    add!(d, k, x)
+
+add `x` to the value of `d` at `k`, zero when absent, and return `d`
+"""
+function add!(d::AbstractDict, k, x)
+    d[k] = get(d, k, zero(x)) + x
+    return d
+end
+
+"""
+    interpolative(rows, scales, tol)
+
+the positions of the rows kept among `rows`, in increasing order, and the coefficients `t`
+expressing every row in terms of them, `rows[i] ≈ sum(t[i, j] * rows[kept[j]])`.
+
+The row of largest residual is taken first, as long as that residual exceeds `tol` times the
+scale of its row; a row, or a coefficient, under that bound is dropped. This pivoting keeps
+the coefficients bounded.
+"""
+function interpolative(rows::Vector{Vector{T}}, scales::Vector{<:Real}, tol::Real) where T
+    n = length(rows)
+    res = copy.(rows)
+    # the rows that are neither negligible nor taken yet
+    cand = [ i for i in 1:n if norm(rows[i]) > tol * scales[i] ]
+    basis = Vector{T}[]
+    kept = Int[]
+    while true
+        best, bestnorm = 0, zero(real(T))
+        for i in cand
+            ν = norm(res[i])
+            if ν > tol * scales[i] && ν > bestnorm
+                best, bestnorm = i, ν
+            end
+        end
+        if best == 0
+            break
+        end
+        # orthogonalized again: the residuals were updated one vector at a time
+        v = copy(res[best])
+        for b in basis
+            v .-= dot(b, v) .* b
+        end
+        q = v ./ norm(v)
+        push!(basis, q)
+        push!(kept, best)
+        filter!(≠(best), cand)
+        for i in cand
+            res[i] .-= dot(q, res[i]) .* q
+        end
+    end
+    k = length(kept)
+    # triangular in the order the rows were taken: the coefficients of a row are its
+    # projections solved against it, not the projections themselves
+    r = [ dot(basis[a], rows[kept[b]]) for a in 1:k, b in 1:k ]
+    knorms = [ norm(rows[i]) for i in kept ]
+    t = zeros(T, n, k)
+    for (a, i) in enumerate(kept)
+        t[i, a] = one(T)
+    end
+    for i in cand
+        c = [ dot(basis[a], rows[i]) for a in 1:k ]
+        for a in k:-1:1
+            for b in a+1:k
+                c[a] -= r[a, b] * c[b]
+            end
+            c[a] /= r[a, a]
+        end
+        for a in 1:k
+            if abs(c[a]) * knorms[a] > tol * scales[i]
+                t[i, a] = c[a]
+            end
+        end
+    end
+    order = sortperm(kept)
+    return kept[order], t[:, order]
+end
+
+"""
+    dense_rows(entries)
+
+the sorted keys the dictionaries `entries` hold, and the dictionaries as dense rows over them
+"""
+function dense_rows(entries::Vector{Dict{K, T}}) where {K, T}
+    ks = sort!(unique!(K[ k for e in entries for k in keys(e) ]))
+    pos = Dict(k => i for (i, k) in enumerate(ks))
+    rows = Vector{T}[ zeros(T, length(ks)) for _ in entries ]
+    for (g, e) in zip(rows, entries), (k, x) in e
+        g[pos[k]] = x
+    end
+    return ks, rows
+end
+
+"""
+    Combination{T}
+
+an operator of one site as a combination of the atoms of its site, numbered from 1, the
+identity being 0, with coefficients of type `T`
+"""
+const Combination{T} = Dict{Int, T}
+
+"""
+    SitePieces{T}
+
+the pieces of a site of a block of channels: each pair of channels `(l, r)` mapped to the
+combination laid there, `l == 0` for a term opening on the site, `r == 0` for one closing
+"""
+const SitePieces{T} = Dict{Tuple{Int, Int}, Combination{T}}
+
+"""
+    struct ComBlock{T}
+
+a block of channels being built or reduced: `pieces[k]` holds those of the `k`-th site from
+`start`, `atoms[k]` the matrices of the atoms of that site, and `dims[k]` is the number of
+channels of the link on the right of that site.
+"""
+struct ComBlock{T}
+    start::Int
+    dims::Vector{Int}
+    pieces::Vector{SitePieces{T}}
+    atoms::Vector{Vector{Matrix{T}}}
+end
+
+"""
+    direct_pass(terms, atoms, T, tol)
+
+the block of channels of the terms of several sites `terms`, each given by its coefficient and
+its factors in the order of their sites, as `(site, atom)`, `atoms[site]` holding the matrices
+of the atoms of each site and `T` being the type of the coefficients.
+
+Built from left to right: on each site, the channels on the left continued by the identity or
+an atom, and the terms beginning there, are rows over the suffixes of the terms; the rows
+`interpolative` keeps are the channels on the right, and the coefficients of all the rows the
+pieces of the site. A term opens on its first site and closes on its last, and the channels
+are independent on their left, leaving `right_sweep` to reduce dependent suffixes.
+"""
+function direct_pass(terms, atoms, ::Type{T}, tol::Real) where T
+    # the suffixes of the terms, nodes (site, atom, rest) of a tree the terms share
+    nodes = Tuple{Int, Int, Int}[]
+    node_ids = Dict{Tuple{Int, Int, Int}, Int}()
+    starts = Dict{Int, Vector{Tuple{T, Int, Int}}}()
+    for (c, fs) in terms
+        rest = 0
+        for p in length(fs):-1:2
+            key = (fs[p]..., rest)
+            rest = get!(node_ids, key) do
+                push!(nodes, key)
+                length(nodes)
+            end
+        end
+        s, a = fs[1]
+        push!(get!(starts, s, Tuple{T, Int, Int}[]), (T(c), a, rest))
+    end
+    first_site = minimum(keys(starts))
+    last_site = maximum(first(last(fs)) for (_, fs) in terms)
+    n = last_site - first_site + 1
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    dims = zeros(Int, n)
+    # the channels of the link on the left, over the suffixes `cols`
+    q = Vector{T}[]
+    cols = Int[]
+    for (j, k) in enumerate(first_site:last_site)
+        m = length(q)
+        rows = Dict{Tuple{Int, Int}, Dict{Int, T}}()
+        for r in 1:m, (x, v) in zip(q[r], cols)
+            if iszero(x)
+                continue
+            end
+            s, a, rest = nodes[v]
+            if s == k
+                if rest == 0
+                    add!(get!(Combination{T}, pieces[j], (r, 0)), a, x)
+                else
+                    add!(get!(Dict{Int, T}, rows, (r, a)), rest, x)
+                end
+            else
+                add!(get!(Dict{Int, T}, rows, (r, 0)), v, x)
+            end
+        end
+        for (c, a, rest) in get(starts, k, Tuple{T, Int, Int}[])
+            add!(get!(Dict{Int, T}, rows, (0, a)), rest, c)
+        end
+        # the channels continued first, in order, then the terms beginning here
+        rowkeys = sort!(collect(keys(rows)); by = x -> (x[1] == 0 ? m + 1 : x[1], x[2]))
+        newcols, grows = dense_rows([ rows[key] for key in rowkeys ])
+        # a row continuing a channel is measured against all the channel holds, so that a
+        # remainder of rounding is not taken for a channel of its own; the pieces of the site
+        # hold only the closings yet
+        content = zeros(real(T), m)
+        for ((r, _), comb) in pieces[j], (_, x) in sort!(collect(comb); by = first)
+            content[r] += abs2(x)
+        end
+        for (key, g) in zip(rowkeys, grows)
+            if key[1] > 0
+                content[key[1]] += real(dot(g, g))
+            end
+        end
+        scales = [ key[1] > 0 ? sqrt(content[key[1]]) : norm(g) for (key, g) in zip(rowkeys, grows) ]
+        kept, t = interpolative(grows, scales, tol)
+        for (i, (r, a)) in enumerate(rowkeys), p in eachindex(kept)
+            if !iszero(t[i, p])
+                add!(get!(Combination{T}, pieces[j], (r, p)), a, t[i, p])
+            end
+        end
+        q = grows[kept]
+        cols = newcols
+        dims[j] = length(kept)
+    end
+    if pop!(dims) ≠ 0
+        error("bug: channels left open on the last site of the terms")
+    end
+    return ComBlock{T}(first_site, dims, pieces, [ get(atoms, k, Matrix{T}[]) for k in first_site:last_site ])
+end
+
+"""
+    on_basis!(b, tol)
+
+write the pieces of the block `b`, and return it, on a basis of each site: the identity and the
+parts of the atoms of the site orthogonal to it, as few as they span. Each atom being the
+identity times its trace over the dimension plus that part, the identity is taken out of every
+piece as far as it goes, which `push_identities!` then moves out of the openings and the
+closings. A coefficient under `tol` times its whole combination is dropped.
+"""
+function on_basis!(b::ComBlock{T}, tol::Real) where T
+    for (j, atoms) in enumerate(b.atoms)
+        if isempty(atoms)
+            continue
+        end
+        d = size(atoms[1], 1)
+        τ = [ tr(m) / d for m in atoms ]
+        parts = [ m - x * I for (m, x) in zip(atoms, τ) ]
+        kept, t = interpolative(vec.(parts), norm.(atoms), tol)
+        basis = parts[kept]
+        norms = [ sqrt(d); norm.(basis) ]
+        written = SitePieces{T}()
+        for (lr, comb) in b.pieces[j]
+            out = Combination{T}()
+            for (a, x) in sort!(collect(comb); by = first)
+                if a == 0
+                    add!(out, 0, x)
+                    continue
+                end
+                if !iszero(τ[a])
+                    add!(out, 0, x * τ[a])
+                end
+                for p in eachindex(kept)
+                    if !iszero(t[a, p])
+                        add!(out, p, x * t[a, p])
+                    end
+                end
+            end
+            scale = sqrt(sum(abs2(x) * (a == 0 ? d : norm(atoms[a])^2) for (a, x) in comb; init = 0.0))
+            filter!(p -> abs(last(p)) * norms[first(p) + 1] > tol * scale, out)
+            if !isempty(out)
+                written[lr] = out
+            end
+        end
+        b.pieces[j] = written
+        b.atoms[j] = basis
+    end
+    return b
+end
+
+"""
+    push_identities!(b)
+
+take the identity out of the openings of the block `b`, from left to right, and return the
+terms of one site this leaves, a combination for each site of `b`: `α` times the identity
+opening channel `r` becomes `α` times each piece leaving `r` on the next site, an opening
+there, which may hold the identity in turn, or a term of one site when the piece closes.
+"""
+function push_identities!(b::ComBlock{T}) where T
+    singles = [ Combination{T}() for _ in b.pieces ]
+    for j in 1:length(b.pieces) - 1
+        opened = sort!([ (r, pop!(comb, 0)) for ((l, r), comb) in b.pieces[j] if l == 0 && haskey(comb, 0) ];
+                       by = first)
+        filter!(p -> !isempty(last(p)), b.pieces[j])
+        for (r, α) in opened, ((l, s), comb) in sort!(collect(b.pieces[j + 1]); by = first)
+            if l == r
+                to = s == 0 ? singles[j + 1] : get!(Combination{T}, b.pieces[j + 1], (0, s))
+                for (a, x) in comb
+                    add!(to, a, α * x)
+                end
+            end
+        end
+    end
+    return singles
+end
+
+"""
+    left_sweep!(b, tol)
+
+reduce the block `b`, from left to right, to channels whose left operators are independent,
+and return it, a channel that is a combination of the others being merged into them on the
+next site
+"""
+function left_sweep!(b::ComBlock{T}, tol::Real) where T
+    for j in 1:length(b.pieces) - 1
+        m = b.dims[j]
+        entries = [ Dict{Tuple{Int, Int}, T}() for _ in 1:m ]
+        for ((l, r), comb) in b.pieces[j], (a, x) in comb
+            if r > 0
+                entries[r][(l, a)] = x
+            end
+        end
+        _, rows = dense_rows(entries)
+        kept, t = interpolative(rows, norm.(rows), tol)
+        if length(kept) == m
+            continue
+        end
+        here = SitePieces{T}()
+        for ((l, r), comb) in b.pieces[j]
+            p = r == 0 ? 0 : findfirst(==(r), kept)
+            if !isnothing(p)
+                here[(l, p)] = comb
+            end
+        end
+        next = SitePieces{T}()
+        for ((l, r), comb) in sort!(collect(b.pieces[j + 1]); by = first)
+            if l == 0
+                next[(l, r)] = comb
+                continue
+            end
+            for p in eachindex(kept)
+                if !iszero(t[l, p])
+                    d = get!(Combination{T}, next, (p, r))
+                    for (a, x) in comb
+                        add!(d, a, t[l, p] * x)
+                    end
+                end
+            end
+        end
+        b.pieces[j] = here
+        b.pieces[j + 1] = next
+        b.dims[j] = length(kept)
+    end
+    return b
+end
+
+"""
+    mirror(b)
+
+the block `b` read from right to left, the piece `(l, r)` of a site becoming `(r, l)`. `start`
+is kept, which `left_sweep!` does not read, so that mirroring twice gives `b` back.
+"""
+mirror(b::ComBlock{T}) where T =
+    ComBlock{T}(b.start, reverse(b.dims),
+                [ SitePieces{T}((r, l) => c for ((l, r), c) in p) for p in reverse(b.pieces) ],
+                reverse(b.atoms))
+
+"""
+    right_sweep(b, tol)
+
+the block `b` reduced, from right to left, to channels whose right operators are independent,
+by `left_sweep!` on its mirror. After `left_sweep!` or `direct_pass`, the channels of each
+link are then as few as the rank of the coupling across it.
+"""
+right_sweep(b::ComBlock, tol::Real) = mirror(left_sweep!(mirror(b), tol))
+
+"""
+    combination_matrix(b, j, comb, d)
+
+the matrix of the combination `comb` of the atoms of the `j`-th site of the block `b`, a site
+of dimension `d`
+"""
+function combination_matrix(b::ComBlock{T}, j::Int, comb::Combination{T}, d::Int) where T
+    m = zeros(T, d, d)
+    for (a, x) in comb
+        if a == 0
+            m += x * I
+        else
+            m += x * b.atoms[j][a]
+        end
+    end
+    return m
+end
+
+"""
+    compacted(system, terms)
+
+the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
+site, and the block of channels of its terms of several sites, `nothing` when it has none,
+reduced with the matrices of the sites, see `on_basis!`: the identity is moved out of its
+openings and its closings, see `push_identities!`, into terms of one site, and the sweeps then
+reduce what these relations made dependent.
+"""
+function compacted(system::System, terms::Vector{Term})
+    T = float(promote_type(Float64, (typeof(t.coef) for t in terms)...,
+                           (eltype(m) for t in terms for (_, m) in t.blocks)...))
+    constant = zero(T)
+    singles = Dict{Int, Matrix{T}}()
+    atoms = Dict{Int, Vector{Matrix{T}}}()
+    atom_ids = Dict{Tuple{Int, Matrix}, Int}()
+    multi = Tuple{T, Vector{Tuple{Int, Int}}}[]
+    for t in terms
+        if isempty(t.blocks)
+            constant += t.coef
+        elseif length(t.blocks) == 1
+            k, m = only(t.blocks)
+            add!(singles, k, T.(t.coef * m))
+        else
+            fs = map(t.blocks) do (k, m)
+                id = get!(atom_ids, (k, m)) do
+                    push!(get!(atoms, k, Matrix{T}[]), T.(m))
+                    length(atoms[k])
+                end
+                (k, id)
+            end
+            push!(multi, (T(t.coef), fs))
+        end
+    end
+    if isempty(multi)
+        return constant, singles, nothing
+    end
+    b = on_basis!(direct_pass(multi, atoms, T, rounding_tol), rounding_tol)
+    opened = push_identities!(b)
+    m = mirror(b)
+    closed = push_identities!(m)
+    b = right_sweep(left_sweep!(mirror(m), rounding_tol), rounding_tol)
+    for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
+        if !isempty(comb)
+            k = b.start + j - 1
+            add!(singles, k, combination_matrix(b, j, comb, dim(system[k])))
+        end
+    end
+    return constant, singles, b
+end

@@ -32,6 +32,8 @@ include("Io.jl")
 # Operators on a system
 include("Split.jl")
 include("Lowering.jl")
+include("Compact.jl")
+include("Mpo.jl")
 
 # Site types
 include("sites/Qubits.jl")
