@@ -253,7 +253,7 @@ end
     for site in (Electron(conserve = strong(Ntot)), Tj(conserve = strong(Ntot)))
         st = State{Mixed}(System(2, site), ["MixedSpin", "↑|↓"])
         @test trace(st) ≈ 1
-        @test_skip real(expect(st, Ntot(1))) ≈ 1          # couche 2
+        @test real(expect(st, Ntot(1))) ≈ 1
         @test_skip real(trace2(st)) ≈ 1 / 4                # couche 3
         @test_throws "spreads over several charges" State{Mixed}(System(2, site), "FullyMixed")
     end

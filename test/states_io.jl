@@ -60,14 +60,14 @@ TensorMixedStates.dim(::Guarded) = 2
     sys = System([Kindly(:sz, true, "a label", 3, 1.5, nothing), Fermion(conserve = strong(N))])
     ρ = mix(State{Pure}(sys, Any[[1., 0.], "Occ"]))
     @test trace(ρ) ≈ 1
-    @test_skip expect(ρ, N(2)) ≈ 1                         # couche 2
+    @test expect(ρ, N(2)) ≈ 1
     @test_ok weaken(ρ, ())
 end
 
 @testset "A site rebuilt from its fields must keep the constructor taking them" begin
     sys = System([Guarded(conserve = strong(N)), Guarded(conserve = strong(N))])
     st = State{Pure}(sys, Any[[0., 1.], [1., 0.]])
-    @test_skip expect(st, N(1)) ≈ 1                        # couche 2
+    @test expect(st, N(1)) ≈ 1
     @test_throws "Guarded must keep its constructor Guarded(conserve) for its conserved" weaken(st, ())
     mktempdir() do dir
         file = joinpath(dir, "guarded.h5")
@@ -88,8 +88,8 @@ end
     lp = load_state(file, "pure")
     @test lp isa State{Pure}
     @test length(lp) == 4
-    @test_skip expect1(lp, Z) ≈ expect1(stp, Z)            # couche 2
-    @test_skip expect1(lp, X) ≈ expect1(stp, X)            # couche 2
+    @test expect1(lp, Z) ≈ expect1(stp, Z)
+    @test expect1(lp, X) ≈ expect1(stp, X)
     @test lp.system == sys
     @test inner(stp, lp) ≈ 1
 
@@ -98,19 +98,19 @@ end
     save_state(file, "mixed", stm)
     lm = load_state(file, "mixed")
     @test lm isa State{Mixed}
-    @test_skip expect1(lm, Z) ≈ expect1(stm, Z)            # couche 2
+    @test expect1(lm, Z) ≈ expect1(stm, Z)
     @test trace(lm) ≈ 1
     @test inner(stm, lm) ≈ 1
 
     # both states are still readable
-    @test_skip expect1(load_state(file, "pure"), Z) ≈ expect1(stp, Z)     # couche 2
+    @test expect1(load_state(file, "pure"), Z) ≈ expect1(stp, Z)
     @test inner(stp, load_state(file, "pure")) ≈ 1
 
     # saving under a name already used replaces the state
     save_state(file, "pure", State{Pure}(System(2, Qubit()), "Dn"))
     lp2 = load_state(file, "pure")
     @test length(lp2) == 2
-    @test_skip expect1(lp2, Z) ≈ [-1, -1]                  # couche 2
+    @test expect1(lp2, Z) ≈ [-1, -1]
     @test inner(State{Pure}(System(2, Qubit()), "Dn"), lp2) ≈ 1
 
     # sites with parameters are rebuilt identically
@@ -168,7 +168,7 @@ end
     @test b.system == sys
     @test inner(a, b) ≈ norm(a)^2
     @test_skip fidelity(a, b) ≈ 1                          # couche 3
-    @test_skip expect1(b, Z) ≈ expect1(a, Z)               # couche 2
+    @test expect1(b, Z) ≈ expect1(a, Z)
 
     # and the same for a mixed state
     m = mix(a)
@@ -226,16 +226,16 @@ end
     @test p isa State{Pure}
     @test length(p) == 4
     @test p.system.sites == [Qubit(), Boson(4), Spin(3/2), Qboson(0.1, 3)]
-    @test_skip expect(p, Z(1)) ≈ 1                         # couche 2
-    @test_skip expect(p, N(2)) ≈ 2                         # couche 2
-    @test_skip expect(p, Sz(3)) ≈ 0.5                      # couche 2
+    @test expect(p, Z(1)) ≈ 1
+    @test expect(p, N(2)) ≈ 2
+    @test expect(p, Sz(3)) ≈ 0.5
     @test inner(State{Pure}(p.system, ["Up", "2", "1/2", "1"]), p) ≈ 1
 
     m = load_state(file, "mixed")
     @test m isa State{Mixed}
     @test m.system.sites == p.system.sites
     @test trace(m) ≈ 1
-    @test_skip expect(m, Z(1)) ≈ 1                         # couche 2
+    @test expect(m, Z(1)) ≈ 1
     @test inner(mix(State{Pure}(m.system, ["Up", "2", "1/2", "1"])), m) ≈ 1
 
     # a file of an unknown version is still refused, by a message naming what is accepted.
@@ -258,22 +258,22 @@ end
     e = load_state(file, "electrons")
     @test e isa State{Pure}
     @test e.system.sites == fill(Electron(conserve = (Ntot, 2Sz)), 2)
-    @test_skip real(expect1(e, Nup)) ≈ [1, 0]              # couche 2
-    @test_skip real(expect1(e, Ndn)) ≈ [0, 1]              # couche 2
+    @test real(expect1(e, Nup)) ≈ [1, 0]
+    @test real(expect1(e, Ndn)) ≈ [0, 1]
     @test inner(State{Pure}(e.system, ["Up", "Dn"]), e) ≈ 1
 
     ρ = load_state(file, "fermions_strong")
     @test ρ isa State{Mixed}
     @test ρ.system.sites == fill(Fermion(conserve = strong(N)), 2)
-    @test_skip real(expect1(ρ, N)) ≈ [0.8, 0.2]            # couche 2
-    @test_skip expect(ρ, dag(C)(1) * C(2)) ≈ 0.4           # couche 2
+    @test real(expect1(ρ, N)) ≈ [0.8, 0.2]
+    @test expect(ρ, dag(C)(1) * C(2)) ≈ 0.4
     @test trace(ρ) ≈ 1
     ψ = (State{Pure}(ρ.system, ["Occ", "Emp"]) + 0.5 * State{Pure}(ρ.system, ["Emp", "Occ"])) / sqrt(1.25)
     @test inner(mix(ψ), ρ) ≈ 1
 
     k = load_state(file, "kindly")
     @test k.system.sites[1] == Kindly(:none, true, "a", 3, 0.5, nothing)
-    @test_skip expect(k, Z(2)) ≈ 1                         # couche 2
+    @test expect(k, Z(2)) ≈ 1
     @test inner(State{Pure}(k.system, ["1", "Up"]), k) ≈ 1
 end
 
@@ -309,7 +309,7 @@ end
         @test lp isa State{Pure}
         @test lp.system.sites == sys.sites
         @test flux(lp.state) == flux(stp.state)
-        @test_skip expect1(lp, N) ≈ expect1(stp, N)        # couche 2
+        @test expect1(lp, N) ≈ expect1(stp, N)
         @test inner(stp, lp) ≈ 1
 
         stm = mix(stp)
@@ -318,7 +318,7 @@ end
         @test lm isa State{Mixed}
         @test flux(lm.state) == flux(stm.state)
         @test trace(lm) ≈ 1
-        @test_skip expect1(lm, N) ≈ expect1(stm, N)        # couche 2
+        @test expect1(lm, N) ≈ expect1(stm, N)
         @test inner(stm, lm) ≈ 1
     end
 end

@@ -61,21 +61,16 @@ end
 
 add to `pre`, and return it, the terms of an operator, compacted, see `compacted`, taking the
 time function `ref`: the constant on the first site, the terms of one site on their site, and
-the channels of the terms of several sites numbered after those their links already have. A
-term of one site that rounding left in place of zero is dropped.
+the channels of the terms of several sites numbered after those their links already have
 """
 function lay_terms!(pre::PreMPO, terms::Vector{Term}, ref::Int)
     sys = pre.system
-    scale = maximum(t -> abs(t.coef) * prod(norm(m) for (_, m) in t.blocks; init = 1.0), terms;
-                    init = 0.0)
     constant, singles, b = compacted(sys, terms)
     if !iszero(constant)
         add_term!(pre, 1, 1, 1, Matrix(constant * I, dim(sys[1]), dim(sys[1])), ref)
     end
     for k in sort!(collect(keys(singles)))
-        if norm(singles[k]) > rounding_tol * scale
-            add_term!(pre, k, 1, 1, singles[k], ref)
-        end
+        add_term!(pre, k, 1, 1, singles[k], ref)
     end
     if isnothing(b)
         return pre

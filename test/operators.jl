@@ -510,8 +510,8 @@ end
     @test matrix(Operator{2}("H2", h * h), fe) ≈ hm^2
     e = Operator{2}("E", exp(-0.3 * (h * h)))
     @test matrix(e, fe) ≈ exp(-0.3 * hm^2)
-    @test_skip expect(State{Pure}(System(3, fe), ["Occ", "Emp", "Emp"]), e(1, 2)) ≈ exp(-0.3)   # couche 2
-    @test_skip expect(State{Pure}(System(3, fe), ["Occ", "Emp", "Emp"]), e(1, 3)) ≈ exp(-0.3)   # couche 2
+    @test expect(State{Pure}(System(3, fe), ["Occ", "Emp", "Emp"]), e(1, 2)) ≈ exp(-0.3)
+    @test expect(State{Pure}(System(3, fe), ["Occ", "Emp", "Emp"]), e(1, 3)) ≈ exp(-0.3)
 
     # a factor of several sites has the parity of its pieces placed, a renamed expression as
     # well as a tensor product. Both were taken as even, which lost the sign of the adjoint and
@@ -543,7 +543,7 @@ end
     # sites up, and (2X)^-1 raised the DomainError of a negative power of an integer
     @test (2X)^64 == 2.0^64 * X^64
     @test (2X)^-1 == 0.5 * X^-1
-    @test_skip expect(State{Pure}(System(2, q), "Up"), (2^32 * Sz(1)) * (2^32 * Sz(2))) ≈ 2.0^62   # couche 2
+    @test expect(State{Pure}(System(2, q), "Up"), (2^32 * Sz(1)) * (2^32 * Sz(2))) ≈ 2.0^62
     @test_skip simplify(Sz^2 * Sz) == Sz^3                  # couche 2
     for (a, s) in [(X^3, q), ((X + Y)^3, q), (Sz^2, s1), ((Sp + Sm)^3, s1),
                    ((C + dag(C))^2, fe), (C^3, fe), (dag((X + im * Y)^2), q)]
@@ -554,8 +554,8 @@ end
     # a phase stays inside: the principal square root of -Z has i on its eigenvalue -1
     @test matrix(sqrt(-Z), q) ≈ [im 0 ; 0 1]
     up = State{Pure}(System(2, q), "Up")
-    @test_skip expect(up, sqrt(-Z)(1)) ≈ im                 # couche 2
-    @test_skip expect(up, ((im * X)^0.5)(1)) ≈ matrix((im * X)^0.5, q)[1, 1]   # couche 2
+    @test expect(up, sqrt(-Z)(1)) ≈ im
+    @test expect(up, ((im * X)^0.5)(1)) ≈ matrix((im * X)^0.5, q)[1, 1]
     @test matrix(X^(0.5im), q) ≈ matrix(X, q)^(0.5im)
     # a power that does not exist is refused, where Julia gives zero for C^0.5
     @test_throws "does not exist" matrix(sqrt(C), fe)
@@ -577,9 +577,9 @@ end
     @test X(1)^0.5 == (X^0.5)(1)
     @test (X(1) + Z(2))^2 == (X(1) + Z(2)) * (X(1) + Z(2))
     st = random_state(Pure, System(3, q), 4)
-    @test_skip expect(st, X(1)^2) ≈ 1                       # couche 2
-    @test_skip expect(st, (X(1) + Z(2))^2) ≈ expect(st, (X(1) + Z(2)) * (X(1) + Z(2)))   # couche 2
-    @test_skip expect(st, X(1)^0.5) ≈ expect(st, (X^0.5)(1))   # couche 2
+    @test expect(st, X(1)^2) ≈ 1
+    @test expect(st, (X(1) + Z(2))^2) ≈ expect(st, (X(1) + Z(2)) * (X(1) + Z(2)))
+    @test expect(st, X(1)^0.5) ≈ expect(st, (X^0.5)(1))
     @test_throws "has no power 0.5 once placed" (X(1) + Z(2))^0.5
 
     # a non integer power of several sites is kept whole, as exp is: it is refused where it
@@ -605,23 +605,23 @@ end
     @test X(3)^0 == Id(1)
     @test Id(2)^0.5 == Id(1)
     st = random_state(Pure, System(3, q), 2)
-    @test_skip expect(st, Id(2) - X(2) * X(2)) ≈ 0 atol = 1e-12   # couche 2
+    @test expect(st, Id(2) - X(2) * X(2)) ≈ 0 atol = 1e-12
     # it is its own adjoint, and so measured as real, a number as any expectation value is
     @test_skip last(only(measure(st, Id(2)))) === 1.0       # couche 3
     # its tensor, where one is needed, goes on the site the caller names
-    @test_skip expect1(st, Id) ≈ ones(3)                    # couche 2
-    @test_skip expect1(mix(st), Id) ≈ ones(3)               # couche 2
-    @test_skip expect2(st, (Id, X))[1, 3] ≈ expect(st, X(3))   # couche 2
+    @test expect1(st, Id) ≈ ones(3)
+    @test expect1(mix(st), Id) ≈ ones(3)
+    @test expect2(st, (Id, X))[1, 3] ≈ expect(st, X(3))
     @test_skip "the MPO of X(1) * X(2) + 0.5 * Id(3), a product by 2Id(2) applied, a gate of Id"   # couche 2
     # having no site, the identity is the identity of any system, whatever site it was given
-    @test_skip expect(st, Id(5)) ≈ 1                        # couche 2
+    @test expect(st, Id(5)) ≈ 1
 end
 
 @testset "Operators of several sites that were refused" begin
     # a renamed operator is its definition, developed as the definition itself is
     q = Qubit()
     st = State{Pure}(System(2, q), ["Up", "Dn"])
-    @test_skip expect(st, named(exp(-0.3im * Swap), "R")(1, 2)) ≈ expect(st, exp(-0.3im * Swap)(1, 2))   # couche 2
+    @test expect(st, named(exp(-0.3im * Swap), "R")(1, 2)) ≈ expect(st, exp(-0.3im * Swap)(1, 2))
     # one site given for identical ones, a function of the sites included
     zx = Operator{2}("ZX", (a, b) -> kron(matrix(Z, a), matrix(X, b)))
     @test matrix(zx, q) ≈ kron(matrix(Z, q), matrix(X, q))
@@ -657,7 +657,7 @@ end
     sw = matrix(Swap, Qubit())
     s1 = Operator{2}("MySwap", sw)
     @test matrix(s1, Qubit()) ≈ sw
-    @test_skip expect(State{Pure}(System(2, Qubit()), ["Up", "X+"]), s1(1, 2)) ≈ 0.5   # couche 2
+    @test expect(State{Pure}(System(2, Qubit()), ["Up", "X+"]), s1(1, 2)) ≈ 0.5
 end
 
 @testset "Signed zeros" begin

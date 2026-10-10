@@ -387,9 +387,12 @@ the terms of an operator on `system` as its constant, its terms of one site, a m
 site, and the block of channels of its terms of several sites, `nothing` when it has none,
 reduced with the matrices of the sites, see `on_basis!`: the identity is moved out of its
 openings and its closings, see `push_identities!`, into terms of one site, and the sweeps then
-reduce what these relations made dependent.
+reduce what these relations made dependent. A term of one site that rounding left in place of
+zero is dropped.
 """
 function compacted(system::System, terms::Vector{Term})
+    scale = maximum(t -> abs(t.coef) * prod(norm(m) for (_, m) in t.blocks; init = 1.0), terms;
+                    init = 0.0)
     T = float(promote_type(Float64, (typeof(t.coef) for t in terms)...,
                            (eltype(m) for t in terms for (_, m) in t.blocks)...))
     constant = zero(T)
@@ -415,7 +418,7 @@ function compacted(system::System, terms::Vector{Term})
         end
     end
     if isempty(multi)
-        return constant, singles, nothing
+        return constant, filter(p -> norm(last(p)) > rounding_tol * scale, singles), nothing
     end
     b = on_basis!(direct_pass(multi, atoms, T, rounding_tol), rounding_tol)
     opened = push_identities!(b)
@@ -428,5 +431,5 @@ function compacted(system::System, terms::Vector{Term})
             add!(singles, k, combination_matrix(b, j, comb, dim(system[k])))
         end
     end
-    return constant, singles, b
+    return constant, filter(p -> norm(last(p)) > rounding_tol * scale, singles), b
 end
