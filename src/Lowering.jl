@@ -306,21 +306,70 @@ function reduced(terms::Vector{Term})
 end
 
 """
-    check_flux(system, a, terms)
+    strong_refusal(what, names)
+
+refuse `what`, which changes the strongly conserved `names` by different amounts from one part
+to another, mixing the sectors a strong symmetry keeps apart
+"""
+strong_refusal(what, names) =
+    error("$what changes $(join(names, ", ")) by different amounts from one part to another, " *
+          "which conserving it strongly forbids: drop `strong` or weaken the state")
+
+"""
+    mixed_flux(m, what, site)
+
+the flux on the mixed index of `site` of the matrix `m` of the superoperator `what`, refused
+when it has none: as changing a strongly conserved charge by different amounts, which would mix
+the sectors a strong symmetry keeps apart, or as having no definite charge at all
+"""
+function mixed_flux(m::AbstractMatrix, what, site::AbstractSite)
+    qs = conserved(site).quantities
+    if isempty(qs)
+        return QN()
+    end
+    small = rounding_tol * norm(m)
+    found = unique(g.q for (g, x) in zip(element_grades(Mixed, site), vec(m)) if abs(x) > small)
+    if length(found) ≤ 1
+        return isempty(found) ? QN() : only(found)
+    end
+    st = strong_names(site)
+    if !isempty(st) && allequal(weak_qn(q, st, String[]) for q in found)
+        strong_refusal(what, st)
+    end
+    error("$what carries no definite charge of $(join(unique(q.name for q in qs), ", ")), so it " *
+          "cannot act on $site")
+end
+
+"""
+    block_flux(R, m, what, site)
+
+the flux of the matrix `m` of a term of `what` on `site`, that of an operator for `Pure`, of a
+superoperator for `Mixed`
+"""
+block_flux(::Type{Pure}, m::AbstractMatrix, what, site::AbstractSite) = charge_flux(m, what, site)
+block_flux(::Type{Mixed}, m::AbstractMatrix, what, site::AbstractSite) = mixed_flux(m, what, site)
+
+"""
+    check_flux(R, system, a, terms)
 
 refuse the operator `a` on a charged `system` when a block of its terms has no definite flux,
-or when its terms do not all change the charges by the same amount
+or when its terms do not all change the charges by the same amount, the matrices being those
+of superoperators for `R = Mixed`
 """
-function check_flux(system::System, a, terms::Vector{Term})
+function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
     if !is_charged(system)
         return nothing
     end
+    st = strong_names(system)
     total = nothing
     for t in terms
-        q = sum((charge_flux(m, a, system[i]) for (i, m) in t.blocks); init = QN())
+        q = sum((block_flux(R, m, a, system[i]) for (i, m) in t.blocks); init = QN())
         if isnothing(total)
             total = q
         elseif q ≠ total
+            if !isempty(st) && weak_qn(q, st, String[]) == weak_qn(total, st, String[])
+                strong_refusal(a, st)
+            end
             error("the terms of $a change the charges by $total and by $q, so it has no " *
                   "definite flux and cannot act on a system that conserves them")
         end
@@ -534,17 +583,19 @@ end
 the terms of the operator `op`, placed on sites, on `system`, see `Term`, once its products are
 gathered, see `gathered`: the Jordan-Wigner strings are laid on the fermionic sites, and the
 operator is refused on a charged system when it has no definite flux. A channel or a generator
-gives the terms of its superoperator on the density matrices of the sites.
+gives the terms of its superoperator on the density matrices of the sites, refused likewise.
 """
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
     check_indices(system, a)
     terms = reduced(op_terms(system, gathered(system, a), ()))
-    check_flux(system, a, terms)
+    check_flux(Pure, system, a, terms)
     return terms
 end
 
 function lower(system::System, a::IndexedOp{<:Union{IsChannel, IsGenerator}})
     check_indices(system, a)
-    return reduced(op_terms(system, a, ()))
+    terms = reduced(op_terms(system, a, ()))
+    check_flux(Mixed, system, a, terms)
+    return terms
 end

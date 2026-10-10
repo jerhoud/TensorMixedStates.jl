@@ -381,16 +381,17 @@ function combination_matrix(b::ComBlock{T}, j::Int, comb::Combination{T}, d::Int
 end
 
 """
-    compacted(system, terms)
+    compacted(R, system, terms)
 
 the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
-site, and the block of channels of its terms of several sites, `nothing` when it has none,
+site, and the block of channels of its terms of several sites, `nothing` when it has none, the
+matrices being those of superoperators for `R = Mixed`,
 reduced with the matrices of the sites, see `on_basis!`: the identity is moved out of its
 openings and its closings, see `push_identities!`, into terms of one site, and the sweeps then
 reduce what these relations made dependent. A term of one site that rounding left in place of
 zero is dropped.
 """
-function compacted(system::System, terms::Vector{Term})
+function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
     scale = maximum(t -> abs(t.coef) * prod(norm(m) for (_, m) in t.blocks; init = 1.0), terms;
                     init = 0.0)
     T = float(promote_type(Float64, (typeof(t.coef) for t in terms)...,
@@ -428,7 +429,7 @@ function compacted(system::System, terms::Vector{Term})
     for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
         if !isempty(comb)
             k = b.start + j - 1
-            add!(singles, k, combination_matrix(b, j, comb, dim(system[k])))
+            add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
         end
     end
     return constant, filter(p -> norm(last(p)) > rounding_tol * scale, singles), b

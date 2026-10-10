@@ -7,8 +7,10 @@
 # not depend on how TMS lays it out; on a pure state, that a pure channel acts as its Kraus
 # operator; on a system, that the terms of a channel or a generator give the superoperator
 # built from the matrices of the operators it is made of on the whole system, Jordan-Wigner
-# strings included. Their MPO on a density matrix and their application to it come with the
-# later steps of layer 2.
+# strings included, and that its MPO applied to a density matrix, read back through the
+# combiners of the mixed indices, gives that map written on dense matrices, whatever order the
+# charges give those indices. Their application to a density matrix without an MPO comes with
+# the last step of layer 2.
 
 """
 the identity matrix of dimension `d`
@@ -41,6 +43,39 @@ fock(sys, k) = TMS.system_matrix(Pure, sys, TMS.lower(sys, k))
 the sites of `sys` in order
 """
 all_sites(sys) = [ sys[i] for i in 1:length(sys) ]
+
+"""
+the dense matrix of the MPO of `a` on the mixed state `ρ`, `coefs` the values of the time
+functions of a vector, its rows and columns in the order of the elements of the density
+matrices, see `TMS.mixed_elements`
+"""
+function laid_mixed(ρ::State{Mixed}, a, coefs = [1.])
+    sys = ρ.system
+    idx = siteinds(Mixed, sys)
+    t = prod(make_mpo(PreMPO(ρ, a), coefs))
+    m = Array(IT.dense(t), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
+    d = prod(IT.dim.(idx))
+    p = foldl(kron, [ eye(IT.dim(idx[k]))[:, TMS.mixed_elements(sys, k)] for k in 1:length(sys) ])
+    return p * reshape(m, d, d) * p'
+end
+
+"""
+the density matrix of the mixed state `ρ`, its rows the kets and its columns the bras, site 1
+most significant, read through the combiners its mixed indices are made with
+"""
+function ket_bra_matrix(ρ::State{Mixed})
+    sys = ρ.system
+    t = prod(ρ.state)
+    js = siteinds(Pure, sys)
+    bs = IT.Index[]
+    for i in 1:length(sys)
+        b, c = TMS.mixer(js[i], siteind(Mixed, sys, i), sys[i])
+        t *= IT.dag(c)
+        push!(bs, b')
+    end
+    d = prod(IT.dim.(js))
+    return reshape(Array(IT.dense(t), reverse(js)..., reverse(bs)...), d, d)
+end
 
 @testset "Channels and generators in their normal form" begin
     # a gate and a dissipator take the modulus squared of a coefficient, a gate distributes over
@@ -422,4 +457,68 @@ end
     @test_throws "carries no definite charge of N" TMS.lower(System(2, Qubit(conserve = N)), Dephase(X ⊗ X)(1, 2))
     @test_throws "acts on site 5, which the system does not have" TMS.lower(System(3, Qubit()), Gate(X)(5))
     @test_throws "acts on site 4, which the system does not have" TMS.lower(System(3, Qubit()), Dissipator(X(1) + X(4)))
+end
+
+@testset "The MPO of a channel or a generator on a density matrix" begin
+    fs = System(3, Fermion())
+    ρ = State{Mixed}(fs, "FullyMixed")
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    l = -im * (dag(C) ⊗ C - C ⊗ dag(C)) + Dissipator(C ⊗ Id) + Dissipator(Id ⊗ C)
+    for a in [-im * h + Dissipator(C)(1) + 0.5 * Dissipator(dag(C)(2)), Gate(C(1) + C(3)),
+              Reset("Occ")(2), Dephase(im * (C + dag(C)) ⊗ (C + dag(C)))(1, 3), exp(0.4 * l)(1, 3),
+              reset_gate(0.3, "Emp")(2) * Gate(C)(1)]
+        @test laid_mixed(ρ, a) ≈ superop(fs, a)
+    end
+    # an operator given for a density matrix is its evolver, and a vector takes time functions
+    @test laid_mixed(ρ, h) ≈ superop(fs, Evolver(h))
+    @test laid_mixed(ρ, [-im * h, Dissipator(C)(2)], [0.5, 2.]) ≈
+        superop(fs, -0.5im * h + 2 * Dissipator(C)(2))
+    # as few channels as a triangular MPO of the superoperator can have, on sites of dimension d²
+    qs = System(5, Qubit())
+    hq = sum(X(i) * X(i + 1) + 0.3 * Z(i) for i in 1:4)
+    L = -im * hq + sum(Dissipator(sqrt(0.1) * Sm)(i) for i in 1:5) + Dissipator(X ⊗ X)(1, 3)
+    ρq = State{Mixed}(qs, "FullyMixed")
+    S = superop(qs, L)
+    @test laid_mixed(ρq, L) ≈ S
+    @test PreMPO(ρq, L).linkdims .- 1 == least_channels(S, fill(4, 5))
+end
+
+@testset "The MPO applied to a density matrix, its sites charged or not" begin
+    # the density matrix read back is the map applied to the one it was made from, written on
+    # dense matrices
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    for site in (Fermion(), Fermion(conserve = N))
+        sys = System(3, site)
+        ρ = random_state(Mixed, sys, ["Occ", "Emp", "Occ"], 3)
+        r = ket_bra_matrix(ρ)
+        H, k = fock(sys, h), fock(sys, C(1) + C(3))
+        d(c) = c * r * c' - (c' * c * r + r * c' * c) / 2
+        after(a) = ket_bra_matrix(apply(make_mpo(ρ, a), ρ))
+        @test after(Gate(C(1) + C(3))) ≈ k * r * k'
+        @test after(-im * h + Dissipator(C)(1) + Dissipator(dag(C)(2))) ≈
+            -im * (H * r - r * H) + d(fock(sys, C(1))) + d(fock(sys, dag(C)(2)))
+        @test after(h) ≈ H * r + r * H
+        ks = [ fock(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
+        @test after(Reset("Emp")(2)) ≈ sum(k * r * k' for k in ks)
+    end
+end
+
+@testset "A channel or a generator under a strong symmetry" begin
+    ss = System(2, Fermion(conserve = strong(N)))
+    ρ = mix(random_state(State{Pure}(ss, ["Occ", "Emp"]), 2))
+    r = ket_bra_matrix(ρ)
+    n1 = fock(ss, N(1))
+    # a jump commuting with the charge is what a strong symmetry asks for
+    @test ket_bra_matrix(apply(make_mpo(ρ, Dissipator(N)(1)), ρ)) ≈
+        n1 * r * n1 - (n1 * n1 * r + r * n1 * n1) / 2
+    # one changing it in some parts and not in others would mix the sectors it keeps apart
+    @test_throws "changes N by different amounts from one part to another, which conserving it strongly forbids" make_mpo(ρ, Reset("Emp")(1))
+    @test_throws "drop `strong` or weaken the state" make_mpo(ρ,
+        -im * (dag(C)(1) * C(2) + dag(C)(2) * C(1)) + Dissipator(C)(1))
+    # a jump of no definite charge is refused for what it lacks, weak or strong
+    for site in (Boson(3, conserve = N), Boson(3, conserve = strong(N)))
+        ρb = mix(State{Pure}(System(2, site), "1"))
+        @test_throws "carries no definite charge of N" make_mpo(ρb, Gate(Q)(1))
+        @test_throws "carries no definite charge of N" make_mpo(ρb, Dissipator(Q)(1))
+    end
 end

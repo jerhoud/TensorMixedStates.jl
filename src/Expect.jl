@@ -312,7 +312,7 @@ placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
 """
 function expect(state::State, a::IndexedOp{IsOperator})
     state = weak_form(state)
-    constant, singles, b = compacted(state.system, lower(state.system, a))
+    constant, singles, b = compacted(Pure, state.system, lower(state.system, a))
     v = constant * trace(state)
     for k in sort!(collect(keys(singles)))
         v += scalar(get_left(state, k) * obs_tensor(state, singles[k], k) * get_right(state, k))

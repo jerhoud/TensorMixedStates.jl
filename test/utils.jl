@@ -45,3 +45,23 @@ function dense_matrix(ρ::State{Mixed})
     perm = vcat([2k - 1 for k in 1:n], [2k for k in 1:n])
     return reshape(permutedims(reshape(v, ntuple(_ -> 2, 2n)...), perm), 2^n, 2^n)
 end
+
+"""
+the least number of memory channels, those besides the term not yet begun and the term
+finished, that a triangular MPO of the operator of dense matrix `h` can have on each link, the
+sites having the dimensions `ds`: the rank of `h` across the link once its parts that are the
+identity on the left or on the right are taken out
+"""
+function least_channels(h::AbstractMatrix, ds::Vector{Int})
+    LA = TMS.LinearAlgebra
+    n = length(ds)
+    return map(1:n-1) do k
+        dl, dr = prod(ds[1:k]), prod(ds[k+1:n])
+        m = reshape(permutedims(reshape(h, dr, dl, dr, dl), (2, 4, 1, 3)), dl^2, dr^2)
+        vl = vec(Matrix{eltype(m)}(LA.I, dl, dl)) / sqrt(dl)
+        vr = vec(Matrix{eltype(m)}(LA.I, dr, dr)) / sqrt(dr)
+        m = m - vl * (vl' * m)
+        m = m - (m * vr) * vr'
+        count(>(1e-10 * norm(h)), LA.svdvals(m))
+    end
+end

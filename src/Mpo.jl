@@ -1,7 +1,30 @@
 # The MPO of an operator on the system of a state: PreMPO, which lays its terms, compacted, site
-# by site, and make_mpo, which builds the MPO from it.
+# by site, and make_mpo, which builds the MPO from it. On a mixed state, the MPO of a channel or
+# a generator, its superoperator laid on the mixed indices.
 
 export PreMPO, make_mpo
+
+"""
+    mixed_elements(system, i)
+
+the element of the density matrix of site `i` of `system` at each position of its mixed index,
+numbered as in the matrices of superoperators, the ket faster
+"""
+function mixed_elements(system::System, i::Int)
+    k = siteind(Mixed, system, i)
+    e = ket_bras(system, i)
+    d = dim(system[i])
+    return invperm(vec([ findfirst(!iszero, Array(e(m, n), k)) for m in 1:d, n in 1:d ]))
+end
+
+"""
+    block_orders(R, system)
+
+the order on the index of each site of the elements of the matrix of an operator there: none
+to take for `Pure`, see `mixed_elements` for `Mixed`
+"""
+block_orders(::Type{Pure}, ::System) = Vector{Int}[]
+block_orders(::Type{Mixed}, system::System) = [ mixed_elements(system, i) for i in 1:length(system) ]
 
 """
     PreMPO(state, op)
@@ -10,7 +33,8 @@ the operator `op`, placed on sites, laid on the system of `state` as the pieces 
 its terms compacted into as few channels as a triangular MPO can have; `make_mpo` builds the
 MPO from it. A vector of operators gives each its own time function, see `make_mpo`. On a pure
 state, a generator with no dissipator, ``\\rho \\mapsto K\\rho + \\rho K^\\dagger``, gives
-the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``.
+the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``. On a mixed state, a channel
+or a generator gives the MPO of its superoperator, and an operator `K` that of `Evolver(K)`.
 """
 struct PreMPO{R <: PM}
     system::System
@@ -20,21 +44,34 @@ struct PreMPO{R <: PM}
     # the number of time functions the terms take, one per operator of a vector: it cannot be
     # counted from `terms`, a whole operator vanishing on its sites
     nterms::Int
+    orders::Vector{Vector{Int}}
     function PreMPO{R}(system::System, nterms::Int = 1) where R
         n = length(system)
         return new{R}(system, fill(1, n - 1),
-                      [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms)
+                      [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms,
+                      block_orders(R, system))
     end
 end
+
+"""
+    on_index(pre, k, m)
+
+the matrix `m` of an operator on site `k`, its rows and columns in the order of the index of
+the site, see `block_orders`
+"""
+on_index(::PreMPO{Pure}, ::Int, m::Matrix) = m
+on_index(pre::PreMPO{Mixed}, k::Int, m::Matrix) = m[pre.orders[k], pre.orders[k]]
 
 """
     add_term!(pre, k, l, r, m, ref)
 
 add to site `k` of `pre`, and return it, the piece of matrix `m` going from channel `l` to
-channel `r` and taking the time function `ref`, with its tensor on the index of the site
+channel `r` and taking the time function `ref`, with its tensor on the index of the site, both
+in the order of that index
 """
 function add_term!(pre::PreMPO{R}, k::Int, l::Int, r::Int, m::Matrix, ref::Int) where R
     idx = siteind(R, pre.system, k)
+    m = on_index(pre, k, m)
     push!(pre.terms[k], (l, r, charged_itensor(m, [idx', dag(idx)]), ref, m))
     return pre
 end
@@ -65,11 +102,12 @@ add to `pre`, and return it, the terms of an operator, compacted, see `compacted
 time function `ref`: the constant on the first site, the terms of one site on their site, and
 the channels of the terms of several sites numbered after those their links already have
 """
-function lay_terms!(pre::PreMPO, terms::Vector{Term}, ref::Int)
+function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
     sys = pre.system
-    constant, singles, b = compacted(sys, terms)
+    constant, singles, b = compacted(R, sys, terms)
     if !iszero(constant)
-        add_term!(pre, 1, 1, 1, Matrix(constant * I, dim(sys[1]), dim(sys[1])), ref)
+        d = block_dim(R, sys[1])
+        add_term!(pre, 1, 1, 1, Matrix(constant * I, d, d), ref)
     end
     for k in sort!(collect(keys(singles)))
         add_term!(pre, k, 1, 1, singles[k], ref)
@@ -84,7 +122,7 @@ function lay_terms!(pre::PreMPO, terms::Vector{Term}, ref::Int)
         ld[k] += b.dims[j]
     end
     for (j, k) in enumerate(ks), ((l, r), comb) in sort!(collect(b.pieces[j]); by = first)
-        m = combination_matrix(b, j, comb, dim(sys[k]))
+        m = combination_matrix(b, j, comb, block_dim(R, sys[k]))
         if !iszero(m)
             add_term!(pre, k, l == 0 ? 1 : offs[j-1] + l, r == 0 ? 1 : offs[j] + r, m, ref)
         end
@@ -105,6 +143,14 @@ function followed_operator(a::IndexedOp{IsGenerator})
     return pure_part(a)
 end
 
+"""
+    superoperator(a)
+
+the channel or the generator `a`, an operator given for a density matrix being its evolver
+"""
+superoperator(a::IndexedOp{IsOperator}) = Evolver(a)
+superoperator(a::IndexedOp) = a
+
 PreMPO(state::State{Pure}, a::IndexedOp{IsOperator}) =
     lay_terms!(PreMPO{Pure}(state.system), lower(state.system, a), 1)
 
@@ -119,6 +165,17 @@ end
 PreMPO(state::State{Pure}, a::IndexedOp{IsGenerator}) = PreMPO(state, followed_operator(a))
 PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsGenerator}}) =
     PreMPO(state, map(followed_operator, as))
+
+PreMPO(state::State{Mixed}, a::IndexedOp) =
+    lay_terms!(PreMPO{Mixed}(state.system), lower(state.system, superoperator(a)), 1)
+
+function PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp})
+    pre = PreMPO{Mixed}(state.system, length(as))
+    for (ref, a) in enumerate(as)
+        lay_terms!(pre, lower(state.system, superoperator(a)), ref)
+    end
+    return pre
+end
 
 """
     mpo_eltype(::PreMPO)
@@ -272,6 +329,7 @@ value of each time function, one real number per operator (default `[1.]`, a sin
 # Examples
 
     mpo = make_mpo(state, sum(Z(i) * Z(i + 1) for i in 1:9))
+    mpo = make_mpo(ρ, -im * sum(Z(i) * Z(i + 1) for i in 1:9) + sum(Dissipator(Sm)(i) for i in 1:10))
 """
 function make_mpo(pre::PreMPO{R}, coefs::AbstractVector = [1.]) where R
     coefs = check_coefs(pre, coefs)
