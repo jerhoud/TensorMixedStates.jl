@@ -319,42 +319,6 @@ up to a sign when both are odd.
 dependent((sa, pa), (sb, pb)) = !isdisjoint(sa, sb) || !(pa == 0 || pb == 0 || pa == pb == 1)
 
 """
-    brought_together(info, i, j)
-
-the order of the factors of a product, given by their `(sites, parity)`, that brings factor `j`
-right after factor `i`: the factors between that depend on `i`, directly or through others, go
-after `j`, the others before `i`. `nothing` when one of the former also depends on `j`.
-"""
-function brought_together(info, i::Int, j::Int)
-    after = Int[]
-    for k in i+1:j-1
-        if dependent(info[i], info[k]) || any(l -> dependent(info[l], info[k]), after)
-            push!(after, k)
-        end
-    end
-    if any(l -> dependent(info[l], info[j]), after)
-        return nothing
-    end
-    return [ 1:i-1 ; setdiff(i+1:j-1, after) ; i ; j ; after ; j+1:length(info) ]
-end
-
-"""
-    order_sign(order, parities)
-
-the sign that putting the factors of a product in `order` brings, -1 for each pair of odd
-factors that change places
-"""
-function order_sign(order, parities)
-    s = 1
-    for x in eachindex(order), y in x+1:length(order)
-        if order[x] > order[y] && parities[order[x]] == 1 && parities[order[y]] == 1
-            s = -s
-        end
-    end
-    return s
-end
-
-"""
     term_count(system, op)
 
 the number of terms of the placed operator `op` on `system`
@@ -362,37 +326,66 @@ the number of terms of the placed operator `op` on `system`
 term_count(system::System, a::IndexedOp{IsOperator}) = length(reduced(op_terms(system, a, ())))
 
 """
-    merge_once!(system, factors, refused)
+    sort_factors!(fs, info)
 
-merge one pair of the factors of a product: two factors sharing a site, the sites of one among
-those of the other, that can be brought together, see `brought_together`, and whose merge, see
-`merged`, gives no more terms than they do, a pair whose merge would go into `refused`. Return
-the number the product gets multiplied by, or `nothing` when no pair can be merged.
+sort the factors `fs` of a product, and their `(sites, parity)` in `info`, by their sites as
+far as they (anti)commute, see `dependent`, a factor going back past a neighbour of larger
+sites, and return the sign that brings, -1 for each pair of odd factors that change places
 """
-function merge_once!(system::System, fs::Vector{IndexedOp{IsOperator}}, refused)
-    info = [ (sites_of(x), parity_on(system, x)) for x in fs ]
-    for j in eachindex(fs), i in j-1:-1:1
-        a, b = fs[i], fs[j]
-        sa, sb = first(info[i]), first(info[j])
-        if !(a isa AtIndex && b isa AtIndex) || isdisjoint(sa, sb) ||
-           !(issubset(sa, sb) || issubset(sb, sa)) || (a, b) in refused
-            continue
+function sort_factors!(fs, info)
+    sign = 1
+    key(k) = sort(first(info[k]))
+    for k in 2:length(fs)
+        for j in k:-1:2
+            if !(key(j - 1) > key(j)) || dependent(info[j - 1], info[j])
+                break
+            end
+            if info[j - 1][2] == 1 && info[j][2] == 1
+                sign = -sign
+            end
+            fs[j - 1], fs[j] = fs[j], fs[j - 1]
+            info[j - 1], info[j] = info[j], info[j - 1]
         end
-        order = brought_together(info, i, j)
-        if isnothing(order)
-            continue
+    end
+    return sign
+end
+
+"""
+    merge_one!(system, fs, info, refused)
+
+merge into an earlier factor of the product `fs`, see `merged`, one later factor sharing one of
+its sites, the sites of one among those of the other, which goes back next to it past factors
+it (anti)commutes with, provided the merge gives no more terms than the two factors, see
+`term_count`; a pair whose merge would give more goes into `refused`. Return the number the
+product gets multiplied by, or `nothing` when no pair can be merged.
+"""
+function merge_one!(system::System, fs, info, refused)
+    for j in 2:length(fs)
+        for i in j-1:-1:1
+            # factor j goes back past those between, which it must (anti)commute with
+            if i < j - 1 && dependent(info[i + 1], info[j])
+                break
+            end
+            a, b = fs[i], fs[j]
+            sa, sb = first(info[i]), first(info[j])
+            if !(a isa AtIndex && b isa AtIndex) || isdisjoint(sa, sb) ||
+               !(issubset(sa, sb) || issubset(sb, sa)) || (a, b) in refused
+                continue
+            end
+            m = merged(system, a, b)
+            if m isa AtIndex && term_count(system, m) > term_count(system, a) * term_count(system, b)
+                push!(refused, (a, b))
+                continue
+            end
+            sign = info[j][2] == 1 ? (-1)^count(k -> info[k][2] == 1, i+1:j-1) : 1
+            deleteat!(fs, j)
+            if m isa AtIndex
+                fs[i] = m
+                return sign
+            end
+            deleteat!(fs, i)
+            return sign * scalarcoef(m)
         end
-        m = merged(system, a, b)
-        if m isa AtIndex && term_count(system, m) > term_count(system, a) * term_count(system, b)
-            push!(refused, (a, b))
-            continue
-        end
-        sign = order_sign(order, last.(info))
-        k = findfirst(==(i), order)
-        rest = fs[order]
-        empty!(fs)
-        append!(fs, rest[1:k-1], m isa AtIndex ? [m] : [], rest[k+2:end])
-        return m isa AtIndex ? sign : sign * scalarcoef(m)
     end
     return nothing
 end
@@ -400,10 +393,11 @@ end
 """
     gathered(system, op)
 
-the placed operator `op` rewritten without developing anything, into a normal form where no
-pair of factors of a product can still be merged, see `merge_once!`. Merges aside, the order of
-a product is kept, and sums are gathered term by term. The normal form is not unique, and an
-operator in normal form is left as it is.
+the placed operator `op` rewritten without developing anything, into a normal form: in each
+product, the factors are sorted by their sites as far as they (anti)commute, see
+`sort_factors!`, and two factors sharing a site are merged where they can be, see
+`merge_one!`, until nothing moves. Sums are gathered term by term, and an operator in normal
+form is left as it is.
 """
 gathered(system::System, a::SumOp{IsOperator, Indexed}) =
     SumOp([ gathered(system, x) for x in a.subs ])
@@ -417,7 +411,9 @@ function gathered(system::System, a::ProdOp{IsOperator, Indexed})
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(p) if !(x isa IdentityOp) ]
     refused = Set{Tuple{IndexedOp{IsOperator}, IndexedOp{IsOperator}}}()
     while coef ≠ 0
-        c = merge_once!(system, fs, refused)
+        info = [ (sites_of(x), parity_on(system, x)) for x in fs ]
+        coef *= sort_factors!(fs, info)
+        c = merge_one!(system, fs, info, refused)
         if isnothing(c)
             break
         end

@@ -444,9 +444,10 @@ end
 end
 
 @testset "Products gathered before the descent" begin
-    # the first pass of the descent develops nothing: it merges the factors of a product that
-    # share a site, the sites of one among those of the other, when they can be brought
-    # together, which leaves fewer terms to develop and the operator unchanged
+    # the first pass of the descent develops nothing: it sorts the factors of a product by
+    # their sites as far as they (anti)commute, and merges those sharing a site, the sites of
+    # one among those of the other, when they can be brought together, which leaves fewer terms
+    # to develop and the operator unchanged
     plain(sys, op) = TMS.system_matrix(sys, TMS.reduced(TMS.op_terms(sys, op, ())))
     same(sys, op) = TMS.system_matrix(sys, TMS.lower(sys, op)) ≈ plain(sys, op)
     nterms(sys, op) = length(TMS.lower(sys, op))
@@ -460,15 +461,19 @@ end
           X(5) + Z(1)
     # two odd factors that change places take a sign
     g = TMS.gathered(f4, C(1) * C(2) * dag(C)(1))
-    @test TMS.scalarcoef(g) == -1 && first(TMS.prodsubs(g)) == C(2)
+    @test TMS.scalarcoef(g) == -1 && last(TMS.prodsubs(g)) == C(2)
+    # a factor goes back past one that commutes with it, even placed between its sites
+    g = TMS.gathered(s5, Swap(1, 3) * X(2) * Z(3))
+    @test length(TMS.prodsubs(g)) == 2 && last(TMS.prodsubs(g)) == X(2)
     # a factor linked to both keeps them apart, and a merge that would give more terms is
     # refused: the two hops would merge into n₁(1 - n₄), cut into 4 terms by its identity parts
     @test TMS.gathered(s5, Swap(1, 2) * Swap(2, 3) * Swap(1, 2)) == Swap(1, 2) * Swap(2, 3) * Swap(1, 2)
     hops = (dag(C) ⊗ C)(1, 4) * Swap(2, 3) * (dag(C) ⊗ C)(4, 1)
-    @test TMS.gathered(f5, hops) == hops && nterms(f5, hops) == 4
+    @test TMS.gathered(f5, hops) == (dag(C) ⊗ C)(1, 4) * (dag(C) ⊗ C)(4, 1) * Swap(2, 3)
+    @test nterms(f5, hops) == 4
 
-    # the result is a normal form, which the pass leaves as it is, two factors competing for
-    # one partner included, and the operator stays the same
+    # the result is a normal form, which the pass leaves as it is, and the operator stays the
+    # same
     for (sys, op) in [(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)), (s5, X(1) * Swap(2, 3) * Swap(1, 2) * X(1)),
                       (s5, Z(1) * Swap(1, 2) * Y(1) * Swap(2, 3) * X(2)), (f4, C(1) * C(2) * dag(C)(1)),
                       (f5, N(2) * C(5) * N(2) * dag(C)(2)), (f5, hops)]
