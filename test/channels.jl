@@ -9,8 +9,7 @@
 # built from the matrices of the operators it is made of on the whole system, Jordan-Wigner
 # strings included, and that its MPO applied to a density matrix, read back through the
 # combiners of the mixed indices, gives that map written on dense matrices, whatever order the
-# charges give those indices. Their application to a density matrix without an MPO comes with
-# the last step of layer 2.
+# charges give those indices, and so does applying them to it.
 
 """
 the identity matrix of dimension `d`
@@ -521,4 +520,75 @@ end
         @test_throws "carries no definite charge of N" make_mpo(ρb, Gate(Q)(1))
         @test_throws "carries no definite charge of N" make_mpo(ρb, Dissipator(Q)(1))
     end
+end
+
+@testset "Channels and generators applied to a density matrix" begin
+    # the density matrix read back is the map applied, written on dense matrices: a gate as its
+    # operator on both sides, any other factor as a dense block or through its MPO, on sites
+    # charged or not, the states entangled so that no result vanishes
+    LA = TMS.LinearAlgebra
+    h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
+    hp = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    for site in (Fermion(), Fermion(conserve = N))
+        sys = System(4, site)
+        ρ = mix(random_state(State{Pure}(sys, ["Occ", "Emp", "Occ", "Emp"]), 3)) +
+            mix(random_state(State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"]), 3))
+        r = ket_bra_matrix(ρ)
+        after(a) = ket_bra_matrix(apply(a, ρ))
+        k = fock(sys, C(1) * dag(C)(3) + 0.5 * N(2))
+        @test after(Gate(C(1) * dag(C)(3) + 0.5 * N(2))) ≈ k * r * k'
+        k = fock(sys, C(2) * dag(C)(4))
+        @test after(Gate(C)(2) * Gate(dag(C))(4)) ≈ k * r * k'
+        # an operator applied to a density matrix is its gate
+        u = fock(sys, exp(-0.4im * h)(1, 3))
+        @test after(exp(-0.4im * h)(1, 3)) ≈ u * r * u'
+        ks = [ fock(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
+        reset(x) = sum(k * x * k' for k in ks)
+        @test after(Reset("Emp")(2)) ≈ reset(r)
+        k = fock(sys, C(1) + C(3))
+        @test after(reset_gate(0.3, "Emp")(2) * Gate(C(1) + C(3))) ≈
+            0.7 * k * r * k' + 0.3 * reset(k * r * k')
+        ps = [ fock(sys, Proj(N ⊗ N => λ)(1, 3)) for λ in (0., 1.) ]
+        @test after(Dephase(N ⊗ N)(1, 3)) ≈ sum(p * r * p for p in ps)
+        H, c1 = fock(sys, hp), fock(sys, C(1))
+        @test after(-im * hp + Dissipator(C)(1)) ≈
+            -im * (H * r - r * H) + c1 * r * c1' - (c1' * c1 * r + r * c1' * c1) / 2
+        @test after(0.5 * Gate(Id)(1)) ≈ 0.5 * r
+        # inner(a, Φ, b) is tr(a† Φ(b))
+        ρ2 = mix(random_state(State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"]), 2))
+        @test inner(ρ2, Gate(C(1) + C(3)), ρ) ≈ LA.tr(ket_bra_matrix(ρ2)' * k * r * k')
+    end
+end
+
+@testset "Larger channels on a density matrix" begin
+    # a dephasing on 6 qubits, beyond dense_limit, through its MPO
+    qs = System(6, Qubit())
+    ρ = random_state(Mixed, qs, 3)
+    r = ket_bra_matrix(ρ)
+    z = fock(qs, prod(Z(i) for i in 1:6))
+    ps = [ (eye(64) + s * z) / 2 for s in (1, -1) ]
+    @test ket_bra_matrix(apply(Dephase(reduce(⊗, fill(Z, 6)))(1, 2, 3, 4, 5, 6), ρ)) ≈
+        sum(p * r * p for p in ps)
+    # a hundred gates, applied one by one, never developed
+    q5 = System(5, Qubit())
+    ρ5 = mix(State{Pure}(q5, ["Dn", "Up", "Up", "Up", "Up"]))
+    swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
+    @test norm(apply(prod(swaps), ρ5) - foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)) < 1e-10
+    # bosons of dimension 8, a gate acting on the kets and on the bras apart
+    bs = System(2, Boson(8))
+    ρb = random_state(Mixed, bs, 2)
+    rb = ket_bra_matrix(ρb)
+    g = exp(-0.2im * (A ⊗ dag(A) + dag(A) ⊗ A))(1, 2)
+    u = fock(bs, g)
+    @test ket_bra_matrix(apply(g, ρb)) ≈ u * rb * u'
+end
+
+@testset "Channels applied under a strong symmetry" begin
+    ss = System(3, Fermion(conserve = strong(N)))
+    ρ = mix(random_state(State{Pure}(ss, ["Occ", "Emp", "Occ"]), 2))
+    r = ket_bra_matrix(ρ)
+    k, n2 = fock(ss, dag(C)(1) * C(3)), fock(ss, N(2))
+    @test ket_bra_matrix(apply(Gate(dag(C)(1) * C(3)), ρ)) ≈ k * r * k'
+    @test ket_bra_matrix(apply(Dissipator(N)(2), ρ)) ≈ n2 * r * n2 - (n2 * n2 * r + r * n2 * n2) / 2
+    @test_throws "conserving it strongly forbids" apply(Reset("Emp")(1), ρ)
 end

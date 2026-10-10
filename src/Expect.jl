@@ -634,10 +634,16 @@ expect2(::State, _; kwargs...) =
     dot(a::State, op, b::State)
 
 ``\\langle a | op | b \\rangle`` for the operator `op`, placed on sites, between two pure states of
-one system, not normalised, through the MPO of `op`. Between two density matrices a pure
-operator is ambiguous, and refused.
+one system, not normalised, through the MPO of `op`. Between two density matrices, for a
+channel or a generator, ``\\mathrm{tr}(a^\\dagger\\, op(b))``; a pure operator is ambiguous
+there, and refused.
 """
 function inner(a::State{Pure}, op::IndexedOp{IsOperator}, b::State{Pure})
+    same_system(a, b)
+    return inner(a.state', make_mpo(b, op), b.state)
+end
+
+function inner(a::State{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}}, b::State{Mixed})
     same_system(a, b)
     return inner(a.state', make_mpo(b, op), b.state)
 end

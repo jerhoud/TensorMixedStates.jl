@@ -1,6 +1,8 @@
 # apply on pure states: a product of operators applied factor by factor, right to left, never
 # developed, each piece as a dense block on its sites, as one-site gates, or through its MPO. A
-# channel of a single Kraus operator is applied as that operator.
+# channel of a single Kraus operator is applied as that operator. On mixed states, the factors
+# of a channel likewise: a gate as its operator on the kets and its conjugate on the bras, any
+# other channel or a generator as a dense block on the mixed indices or through its MPO.
 
 export apply
 
@@ -66,22 +68,21 @@ function stays_on(system::System, m::AbstractMatrix, sites)
 end
 
 """
-    block_gate(system, m, sites)
+    gate_on(m, idx)
 
-the tensor of the gate of matrix `m` on `sites`
+the tensor of the gate of matrix `m` acting on the indices `idx`, the last varying fastest
 """
-function block_gate(system::System, m::AbstractMatrix, sites)
-    idx = [ siteind(Pure, system, k) for k in sites ]
+function gate_on(m::AbstractMatrix, idx)
     a, inds = on_legs(Matrix(m), [ i' for i in idx ], [ dag(i) for i in idx ])
     return charged_itensor(a, inds)
 end
 
 """
-    term_gates(system, t)
+    term_blocks(t)
 
-the gates of one site of the term `t`, its coefficient left out
+the blocks of the term `t`, its coefficient left out, as pairs of a matrix and of its sites
 """
-term_gates(system::System, t::Term) = [ block_gate(system, m, [k]) for (k, m) in t.blocks ]
+term_blocks(t::Term) = [ (m, [k]) for (k, m) in t.blocks ]
 
 """
     pieces(system, op)
@@ -125,8 +126,9 @@ end
 """
     piece_action(system, p, run)
 
-how `apply` applies the piece `p`: `(gates, number)`, the gates and the number they bring, or
-`(mpo, number)`. A run of factors of one site is a single term, applied as gates of one site.
+how `apply` applies the piece `p`: `(blocks, number)`, dense blocks to apply as gates, pairs of
+a matrix and of its sites, and the number they bring, or `(terms, 1)`, its terms to apply
+through their MPO. A run of factors of one site is a single term, applied as gates of one site.
 Any other piece on at most two sites, or on sites of dimensions of product at most
 `dense_limit`, laying no string elsewhere, is a dense block; otherwise it is developed, and
 goes through its MPO, or through gates of one site when it is a single term.
@@ -136,29 +138,114 @@ function piece_action(system::System, p::IndexedOp{IsOperator}, run::Bool)
     if !run && (length(sites) ≤ 2 || prod(dim(system[k]) for k in sites) ≤ dense_limit)
         m = piece_matrix(system, p, sites)
         if stays_on(system, m, sites)
-            return [ block_gate(system, m, sites) ], 1
+            return [ (m, sites) ], 1
         end
     end
     terms = lower(system, p)
     if isempty(terms)
-        return ITensor[], 0
+        return Tuple{Matrix, Vector{Int}}[], 0
     elseif length(terms) == 1
         t = only(terms)
-        return term_gates(system, t), t.coef
+        return term_blocks(t), t.coef
     end
-    pre = lay_terms!(PreMPO{Pure}(system), terms, 1)
-    return make_mpo(pre), 1
+    return terms, 1
 end
 
 """
-    apply(op, state::State{Pure}; limits = Limits())
+    gate_terms(terms)
+
+the terms of the superoperator ``\\rho \\mapsto K\\rho K^\\dagger`` of the operator `K` of
+terms `terms`
+"""
+gate_terms(ts::Vector{Term}) = Term[ sided_term(t, u) for t in ts for u in ts ]
+
+"""
+    channel_factors(a)
+
+the factors of the channel or the generator `a`, its coefficient left out, those of the
+identity dropped, and each run of gates as the product of their operators, a gate of a product
+being the product of the gates: an operator stands for its gate
+"""
+function channel_factors(a::IndexedOp)
+    fs = IndexedOp[]
+    for x in prodsubs(a)
+        k = x isa Gate ? x.arg :
+            x isa AtIndex && x.op isa Gate ? AtIndex(x.op.arg, x.index) : nothing
+        if x isa IdentityOp
+            continue
+        elseif isnothing(k)
+            push!(fs, x)
+        elseif !isempty(fs) && last(fs) isa IndexedOp{IsOperator}
+            fs[end] = last(fs) * k
+        else
+            push!(fs, k)
+        end
+    end
+    return fs
+end
+
+"""
+    mixed_block(system, terms, sites)
+
+the matrix of the superoperator of terms `terms`, acting on `sites` alone, on the mixed indices
+of those sites, see `mixed_elements`
+"""
+function mixed_block(system::System, terms::Vector{Term}, sites)
+    orders = Dict(k => mixed_elements(system, k) for k in sites)
+    return sum(terms) do t
+        bs = Dict(t.blocks)
+        t.coef * foldl(kron, [ haskey(bs, k) ? bs[k][orders[k], orders[k]] :
+                                   Matrix{Float64}(I, dim(system[k])^2, dim(system[k])^2)
+                               for k in sites ])
+    end
+end
+
+"""
+    bra_legs(system)
+
+an index for the bra of each site, standing in for the one its mixed index combines while
+`separated` keeps them apart: of prime level zero, so that the gates of `apply` act on it
+"""
+function bra_legs(system::System)
+    return map(1:length(system)) do i
+        b, _ = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
+        noprime(sim(dag(b')))
+    end
+end
+
+"""
+    separated(system, st, bras)
+    joined(system, st, bras)
+
+the MPS `st` of a density matrix with the mixed index of each site split into its ket and its
+bra, the bra on `bras`, and the reverse
+"""
+function separated(system::System, st::MPS, bras)
+    return MPS([ begin
+                     b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
+                     replaceind(st[i] * dag(c), dag(b'), bras[i])
+                 end for i in 1:length(system) ])
+end
+
+function joined(system::System, st::MPS, bras)
+    return MPS([ begin
+                     b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
+                     replaceind(st[i], bras[i], dag(b')) * c
+                 end for i in 1:length(system) ])
+end
+
+"""
+    apply(op, state; limits = Limits())
     apply(mpo::MPO, state; limits = Limits(), apply_algo = "densitymatrix")
 
-the pure state with the operator `op`, placed on sites, applied, or the MPO `mpo` from
+the state with the operator `op`, placed on sites, applied, or the MPO `mpo` from
 `make_mpo`. A product acts as the operator it denotes, its rightmost factor first, factor by
 factor and never developed; each factor is applied as a dense block on its sites, or through
-its MPO when it is too large or lays Jordan-Wigner strings on other sites. A channel of a
-single Kraus operator `K`, as `Gate(K)`, is applied as `K`. The state is not normalised.
+its MPO when it is too large or lays Jordan-Wigner strings on other sites. On a pure state, a
+channel of a single Kraus operator `K`, as `Gate(K)`, is applied as `K`. On a mixed state, a
+channel is applied factor by factor in the same way, `Gate(K)` as `K` on the kets and its
+conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives `L(ρ)`. The
+state is not normalised.
 
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole
   state for an MPO, `cutoff = eps()` by default
@@ -169,6 +256,7 @@ single Kraus operator `K`, as `Gate(K)`, is applied as `K`. The state is not nor
 
     apply(controlled(Z)(1, 3) * H(2) * controlled(X)(3, 4), state)
     apply(exp(-0.1im * (X ⊗ X + Y ⊗ Y))(2, 5), state)
+    apply(depolarizing_gate(0.01, 2)(1, 2) * controlled(X)(1, 2), ρ)
 """
 function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Limits())
     sys = state.system
@@ -187,11 +275,12 @@ function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Li
         coef *= c
         if coef == 0
             return State(state, 0 * state.state)
-        elseif action isa MPO
+        elseif action isa Vector{Term}
             flush!()
-            st = apply(action, st; alg = "densitymatrix", tr...)
+            st = apply(make_mpo(lay_terms!(PreMPO{Pure}(sys), action, 1)), st;
+                       alg = "densitymatrix", tr...)
         else
-            append!(gates, action)
+            append!(gates, [ gate_on(m, [ siteind(Pure, sys, k) for k in ks ]) for (m, ks) in action ])
         end
     end
     flush!()
@@ -208,6 +297,73 @@ end
 
 apply(a::IndexedOp{IsGenerator}, ::State{Pure}; limits::Limits = Limits()) =
     error("apply takes an operator or a channel, and $a is a generator")
+
+apply(a::IndexedOp{IsOperator}, state::State{Mixed}; limits::Limits = Limits()) =
+    apply(Gate(a), state; limits)
+
+function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed};
+               limits::Limits = Limits())
+    sys = state.system
+    check_indices(sys, a)
+    tr = truncation(limits)
+    coef = scalarcoef(a)
+    bras = bra_legs(sys)
+    st = state.state
+    # the gates waiting to be applied, on the mixed indices or on the kets and the bras apart
+    gates = ITensor[]
+    apart = false
+    flush!() =
+        if !isempty(gates)
+            st = apart ? joined(sys, apply(gates, separated(sys, st, bras);
+                                           move_sites_back_between_gates = false, tr...), bras) :
+                         apply(gates, st; move_sites_back_between_gates = false, tr...)
+            empty!(gates)
+        end
+    queue!(gs, on_split) = begin
+        if apart ≠ on_split
+            flush!()
+            apart = on_split
+        end
+        append!(gates, gs)
+    end
+    for f in reverse(channel_factors(scalararg(a)))
+        if f isa IndexedOp{IsOperator}
+            c, ps = pieces(sys, f)
+            coef *= abs2(c)
+            for (p, run) in reverse(ps)
+                action, c = piece_action(sys, p, run)
+                coef *= abs2(c)
+                if action isa Vector{Term}
+                    flush!()
+                    st = apply(make_mpo(lay_terms!(PreMPO{Mixed}(sys), gate_terms(action), 1)), st;
+                               alg = "densitymatrix", tr...)
+                else
+                    queue!([ g for (m, ks) in action
+                           for g in (gate_on(m, [ siteind(Pure, sys, k) for k in ks ]),
+                                     gate_on(conj(m), bras[ks])) ], true)
+                end
+            end
+        else
+            terms = lower(sys, f)
+            ks = sort!(unique(k for t in terms for (k, _) in t.blocks))
+            if isempty(ks)
+                coef *= sum(t.coef for t in terms; init = 0.)
+            elseif prod(dim(sys[k])^2 for k in ks) ≤ dense_limit
+                queue!([ gate_on(mixed_block(sys, terms, ks), [ siteind(Mixed, sys, k) for k in ks ]) ],
+                       false)
+            else
+                flush!()
+                st = apply(make_mpo(lay_terms!(PreMPO{Mixed}(sys), terms, 1)), st;
+                           alg = "densitymatrix", tr...)
+            end
+        end
+        if coef == 0
+            return State(state, 0 * state.state)
+        end
+    end
+    flush!()
+    return State(state, coef == 1 ? st : coef * st)
+end
 
 function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "densitymatrix")
     check_apply_algo(apply_algo)
