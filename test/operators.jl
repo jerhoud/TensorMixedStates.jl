@@ -1,6 +1,6 @@
 # The algebra of operators: building, comparing, ordering and printing them, their matrix on
-# sites, the Jordan-Wigner strings of a tensor product included, and the split of an operator
-# of several sites into factors of one site.
+# sites, the Jordan-Wigner strings of a tensor product included, the split of an operator of
+# several sites into factors of one site, and the descent of an operator onto a system.
 #
 # An assertion that needs a later layer is kept as `@test_skip`, marked with that layer, those
 # of `simplify`, internal from layer 2 on (decision 2), among them. The testsets of `simplify`,
@@ -361,6 +361,86 @@ end
                        (hop, [fn, fn])]
         @test exact(TMS.split_matrix("M", m, sites), m, sites)
     end
+end
+
+@testset "The descent of an operator onto a system" begin
+    # the descent writes a placed operator as terms, each a coefficient and one matrix per site,
+    # the Jordan-Wigner strings laid: their sum is checked against the explicit matrix of each
+    # factor of one site and of definite parity, F ⊗ … ⊗ F ⊗ a ⊗ 1 ⊗ … for an odd one
+    sites(sys) = [ sys[k] for k in 1:length(sys) ]
+    identity_on(sys) = foldl(kron, [ matrix(Id, s) for s in sites(sys) ])
+    whole(sys, t) =
+        foldl(kron, [ get(Dict(t.blocks), k, matrix(Id, s)) for (k, s) in enumerate(sites(sys)) ])
+    lowered(sys, op) =
+        sum((t.coef * whole(sys, t) for t in TMS.lower(sys, op)); init = 0 * identity_on(sys))
+    function jw(sys, j, a)
+        odd = TMS.parity_of(a, matrix(F, sys[j])) == 1
+        return foldl(kron, [ k < j && odd ? matrix(F, s) : k == j ? a : matrix(Id, s)
+                             for (k, s) in enumerate(sites(sys)) ])
+    end
+    q, fe, el = Qubit(), Fermion(), Electron()
+    x, y, z = matrix(X, q), matrix(Y, q), matrix(Z, q)
+    s3 = System(3, q)
+    @test lowered(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw(s3, 1, x) + 2 * jw(s3, 2, z) * jw(s3, 3, y)
+
+    # fermions: a hop over a fermion, a product written backwards, and Swap or a placed tensor
+    # product on sites in decreasing order, which need no sign of reordering
+    s4 = System(4, fe)
+    c = matrix(C, fe)
+    cd, n = collect(c'), c' * c
+    hop = jw(s4, 1, cd) * jw(s4, 3, c) + jw(s4, 3, cd) * jw(s4, 1, c)
+    @test lowered(s4, dag(C)(1) * C(3) + dag(C)(3) * C(1)) ≈ hop
+    @test lowered(s4, C(3) * dag(C)(1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
+    sw = identity_on(s4) - jw(s4, 1, n) - jw(s4, 3, n) + hop
+    @test lowered(s4, Swap(1, 3)) ≈ sw
+    @test lowered(s4, Swap(3, 1)) ≈ sw
+    @test lowered(s4, (C ⊗ dag(C))(3, 1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
+    @test lowered(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw(s4, 4, c) * jw(s4, 2, n) * jw(s4, 1, cd)
+    @test lowered(s4, dag(C ⊗ C)(1, 2)) ≈ (jw(s4, 1, c) * jw(s4, 2, c))'
+    # a function of several fermionic sites, placed both ways, with a fermion between them
+    h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
+    @test lowered(s4, exp(-0.3 * (h * h))(1, 3)) ≈ exp(-0.3 * hop^2)
+    @test lowered(s4, exp(-0.3 * (h * h))(3, 1)) ≈ exp(-0.3 * hop^2)
+    # a block of no definite parity is split into its even and odd parts, which 1.x refused
+    @test lowered(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
+    @test lowered(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
+    # strings on the fermionic sites only, and two species on a site
+    sm = System([fe, q, fe])
+    @test lowered(sm, C(1) * X(2) * dag(C)(3)) ≈ jw(sm, 1, c) * jw(sm, 2, x) * jw(sm, 3, cd)
+    se = System(3, el)
+    cu, cn, nt = matrix(Cup, el), matrix(Cdn, el), matrix(Ntot, el)
+    @test lowered(se, dag(Cup)(1) * Cup(3) + dag(Cdn)(3) * Cdn(1) + (Ntot ⊗ Ntot)(2, 3)) ≈
+          jw(se, 1, collect(cu')) * jw(se, 3, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn) +
+          jw(se, 2, nt) * jw(se, 3, nt)
+    @test lowered(se, (dag(Cup) ⊗ Cup + dag(Cdn) ⊗ Cdn)(3, 1)) ≈
+          jw(se, 3, collect(cu')) * jw(se, 1, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn)
+    # an operator of several sites given by a function of its sites
+    q3 = Qudit(3)
+    @test lowered(System(2, q3), Qudits.Sum(1, 2)) ≈ matrix(Qudits.Sum, q3, q3)
+
+    # the reduction: an identity goes into the coefficient, a product that vanishes drops its
+    # term, blocks equal up to a coefficient are gathered, and a real operator keeps real terms
+    s2 = System(2, q)
+    terms(op) = [ (t.coef, first.(t.blocks)) for t in TMS.lower(s2, op) ]
+    @test terms(X(1) * X(1)) == [(1., Int[])]
+    @test terms(X(1) * Y(1)) == [(im, [1])]
+    @test only(TMS.lower(s2, X(1) * Y(1))).blocks == [1 => z]
+    @test terms(X(1) + X(1)) == [(2., [1])]
+    @test isempty(terms(X(1) - X(1))) && isempty(terms(Sp(1) * Sp(1)))
+    yy = only(TMS.lower(s2, Y(1) * Y(2)))
+    @test yy.coef === -1. && all(m -> eltype(m) == Float64, last.(yy.blocks))
+    # the strings of a hop cancel on its left: each term stays on its two sites
+    chain = TMS.lower(System(6, fe), sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:5))
+    @test sort([ first.(t.blocks) for t in chain ]) == sort([ [i, i + 1] for i in 1:5 for _ in 1:2 ])
+
+    # on a charged system, every block has a definite flux and every term the same one
+    fn = Fermion(conserve = N)
+    hops = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    @test lowered(System(3, fn), hops) ≈ lowered(System(3, fe), hops)
+    @test_throws "change the charges by" TMS.lower(System(3, fn), C(1) + dag(C)(2))
+    @test_throws "no definite flux" TMS.lower(System(2, Qubit(conserve = N)), X(1))
+    # a site the system does not have, named as written
+    @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(s3, X(5))
 end
 
 @testset "tensor is ⊗ under a name in ASCII" begin
