@@ -312,6 +312,23 @@ end
     @test_throws "apply_algo is" apply(mpo, ψ; apply_algo = "fit")
 end
 
+@testset "A result that vanishes on charged sites" begin
+    # ITensors cannot factorise a tensor of charged indices that is exactly zero, which has no
+    # block: whatever takes a state there gives the null state, through gates of one site or of
+    # several, near or far apart, or through an MPO
+    sys = System(5, Fermion(conserve = N))
+    ψ = State{Pure}(sys, ["Emp", "Occ", "Emp", "Occ", "Emp"])
+    h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
+    for a in ((C ⊗ C)(1, 2), (C ⊗ C)(1, 4), C(1) * Swap(1, 3), C(1) + C(3),
+              exp(-0.3im * h)(1, 3) * (C ⊗ C)(1, 3))
+        @test norm(apply(a, ψ)) == 0
+    end
+    @test norm(apply(make_mpo(ψ, C(1) + C(3)), ψ)) == 0
+    @test norm(apply((Sp ⊗ Sp)(1, 2), State{Pure}(System(3, Qubit(conserve = N)), "Up"))) == 0
+    # and what does not vanish is left as it was
+    @test norm(apply((dag(C) ⊗ C)(1, 2), ψ)) ≈ 1
+end
+
 @testset "Inner products with an operator" begin
     q = System(4, Qubit())
     u, v = random_state(Pure, q, 3), random_state(Pure, q, 3)

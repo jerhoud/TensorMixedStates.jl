@@ -592,3 +592,11 @@ end
     @test ket_bra_matrix(apply(Dissipator(N)(2), ρ)) ≈ n2 * r * n2 - (n2 * n2 * r + r * n2 * n2) / 2
     @test_throws "conserving it strongly forbids" apply(Reset("Emp")(1), ρ)
 end
+
+@testset "A channel taking a density matrix to zero on charged sites" begin
+    # the null state, as for a pure state, see observables.jl
+    ρ = mix(State{Pure}(System(5, Fermion(conserve = N)), ["Emp", "Occ", "Emp", "Occ", "Emp"]))
+    @test norm(apply(Gate((C ⊗ C)(1, 2)), ρ)) == 0
+    @test norm(apply(Gate(C(1) + C(3)), ρ)) == 0
+    @test norm(apply(Gate(dag(C)(1) * C(2)), ρ)) ≈ 1
+end
