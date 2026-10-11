@@ -138,6 +138,17 @@ products(as::Vector{Term}, bs::Vector{Term}) =
     Term[ t for t in (a * b for a in as for b in bs) if !isnothing(t) ]
 
 """
+    reduced_products(as, bs)
+
+the terms of the product of two sums of terms, gathered when there are several, see `reduced`,
+so that the terms of a long product do not multiply with its factors
+"""
+function reduced_products(as::Vector{Term}, bs::Vector{Term})
+    ts = products(as, bs)
+    return length(ts) > 1 ? reduced(ts) : ts
+end
+
+"""
     scaled(c, terms)
 
 the terms with their coefficients multiplied by `c`
@@ -329,12 +340,13 @@ their operators on each side of the density matrix, see `sided_term`.
 op_terms(system::System, a::SumOp, index) =
     reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
 op_terms(system::System, a::ProdOp, index) =
-    foldl(products, (op_terms(system, x, index) for x in a.subs))
+    foldl(reduced_products, (op_terms(system, x, index) for x in a.subs))
 op_terms(system::System, a::ScalarOp, index) = scaled(a.coef, op_terms(system, a.arg, index))
 op_terms(::System, ::IdentityOp, _) = [ identity_term() ]
 op_terms(system::System, a::AtIndex, _) = op_terms(system, a.op, a.index)
 op_terms(system::System, a::TensorOp, index) =
-    foldl(products, (op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a))))
+    foldl(reduced_products,
+          (op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a))))
 op_terms(system::System, a::DagOp, index) = map(dag, op_terms(system, a.arg, index))
 op_terms(system::System, a::Operator, index) =
     a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)
@@ -370,12 +382,21 @@ function op_terms(system::System, a::Dissipator, index)
 end
 
 """
+    snapped(x, q)
+
+the number `x` rounded to a multiple of `q`, a power of two, so that numbers equal up to rounding
+become equal while exact ones, as 1 or 0.5, stay as they are
+"""
+snapped(x::Real, q::Real) = round(x / q) * q
+snapped(x::Complex, q::Real) = complex(snapped(real(x), q), snapped(imag(x), q))
+
+"""
     reduced(terms)
 
 the terms with each block equal to a multiple of the identity taken out, every other block
-divided by its first element above rounding, that element going into the coefficient, a term
-that vanishes on a site dropped, and the terms of the same blocks gathered, a real coefficient
-kept real
+divided by its first element above rounding, that element going into the coefficient, and its
+elements rounded to a grid of rounding, see `snapped`, a term that vanishes on a site dropped,
+and the terms of the same blocks gathered, a real coefficient kept real
 """
 function reduced(terms::Vector{Term})
     out = Term[]
@@ -397,6 +418,7 @@ function reduced(terms::Vector{Term})
             coef *= m[k]
             b = m / m[k]
             b[k] = 1
+            b = snapped.(b, exp2(floor(log2(rounding_tol * norm(b)))))
             if eltype(b) <: Complex && all(x -> iszero(imag(x)), b)
                 b = real(b)
             end

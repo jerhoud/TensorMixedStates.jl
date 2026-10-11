@@ -510,6 +510,23 @@ end
     @test all(t -> length(t.blocks) == 2 && last(first.(t.blocks)) == first(first.(t.blocks)) + 1, ts)
 end
 
+@testset "A long product gathered factor by factor" begin
+    # the terms of a product are gathered after each factor, so that they do not multiply with
+    # its factors: a Trotter product of 16 factors of two terms each has the four terms I, Z1Z2,
+    # Z2Z3 and Z1Z3, not 2^16 before they are gathered
+    q = Qubit()
+    q3 = System(3, q)
+    zz = exp(-0.1im * (Z ⊗ Z))
+    ts = TMS.lower(q3, prod(isodd(i) ? zz(1, 2) : zz(2, 3) for i in 1:16))
+    @test length(ts) == 4
+    i2, u = matrix(Id, q), matrix(zz, q, q)
+    @test TMS.system_matrix(Pure, q3, ts) ≈ prod(isodd(i) ? kron(u, i2) : kron(i2, u) for i in 1:16)
+    # blocks equal up to rounding are one block
+    z, zr = [1. 0. ; 0. -1.], [1. 0. ; 0. -0.9999999999999998]
+    term(m) = TMS.Term(1., [1 => m], [0], Int[], Int[])
+    @test length(TMS.reduced([term(z), term(zr), term(complex(z) .+ 1e-17im)])) == 1
+end
+
 @testset "Products gathered before the descent" begin
     # the first pass of the descent develops nothing: it sorts the factors of a product by
     # their sites as far as they (anti)commute, and merges those sharing a site, the sites of
