@@ -527,6 +527,10 @@ end
     @test sec(siteind(Pure, s5, 2)) == [IT.QN() => 2]
     @test TMS.is_charged(s5)
     @test !TMS.is_charged(s0)
+    # read once off the sites when the system is built, with the names conserved strongly
+    @test TMS.strong_names(s5) == String[] && TMS.strong_names(s0) == String[]
+    s6 = System([Electron(conserve = strong(Ntot)), Qubit(), Fermion(conserve = N)])
+    @test TMS.is_charged(s6) && TMS.strong_names(s6) == ["Ntot"]
 end
 
 @testset "Weakening to the same symmetries" begin

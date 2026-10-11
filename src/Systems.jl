@@ -20,10 +20,15 @@ struct System
     sites::Vector{<:AbstractSite}
     # the hash of the sites, from which the indices take their identities
     key::UInt
+    # read once off the sites, see `is_charged` and `strong_names`
+    charged::Bool
+    strong::Vector{String}
     function System(sites::Vector{<:AbstractSite})
         foreach(check_site, unique(sites))
         check_charges(sites)
-        return new(sites, hash(sites))
+        charged = any(s -> !isempty(conserved(s).quantities), sites)
+        strong = unique(String[ x for s in sites for x in strong_names(s) ])
+        return new(sites, hash(sites), charged, strong)
     end
 end
 
@@ -44,24 +49,19 @@ length(system::System) = length(system.sites)
 show(io::IO, s::System) = print(io, "System($(s.sites))")
 
 """
-    is_charged(sites)
     is_charged(system)
 
-whether a system of those sites carries quantum numbers, that is whether any of them conserves
+whether the system carries quantum numbers, that is whether any of its sites conserves
 something, which makes every index of the system charged
 """
-is_charged(sites) = any(s -> !isempty(conserved(s).quantities), sites)
-is_charged(system::System) = is_charged(system.sites)
+is_charged(system::System) = system.charged
 
 """
-    strong_names(sites)
     strong_names(::System)
 
-the names of the quantities the sites, or the sites of the system, conserve strongly
+the names of the quantities the sites of the system conserve strongly
 """
-strong_names(sites::AbstractVector{<:AbstractSite}) =
-    unique(String[ x for s in sites for x in strong_names(s) ])
-strong_names(system::System) = strong_names(system.sites)
+strong_names(system::System) = system.strong
 
 symmetries(system::System) =
     Conserved(unique(Tuple{String, Bool}[ x for s in system.sites for x in symmetries(s).names ]))
