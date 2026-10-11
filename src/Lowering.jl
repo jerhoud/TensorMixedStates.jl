@@ -64,6 +64,16 @@ whether site `k` lies on the string `s`, see `Term`
 on_string(s::Vector{Int}, k::Int) = isodd(searchsortedlast(s, k))
 
 """
+    crossing_sign(kets, bras, blocks, parities)
+
+the sign the strings `kets` and `bras` bring crossing `blocks`, pairs of a site and a matrix, of
+parities `parities`: -1 for each block odd on the side of a string over its site, `F A = -A F`
+"""
+crossing_sign(kets::Vector{Int}, bras::Vector{Int}, blocks, parities) =
+    (-1)^count((isodd(p) && on_string(kets, k)) ⊻ (isodd(p >> 1) && on_string(bras, k))
+               for ((k, _), p) in zip(blocks, parities))
+
+"""
     xor_strings(s, t)
 
 the string of `F` on the sites where one of the strings `s` and `t` lies and not the other: the
@@ -103,19 +113,14 @@ the product of two terms, site by site, `nothing` when it vanishes on a site. Th
 function (a::Term * b::Term)
     da, db = Dict(a.blocks), Dict(b.blocks)
     pa, pb = Dict(zip(first.(a.blocks), a.parities)), Dict(zip(first.(b.blocks), b.parities))
-    sign = 1
-    for (k, p) in zip(first.(b.blocks), b.parities)
-        if (isodd(p) && on_string(a.kets, k)) ⊻ (isodd(p >> 1) && on_string(a.bras, k))
-            sign = -sign
-        end
-    end
     blocks = Pair{Int, Matrix}[]
     parities = Int[]
     for i in sort!(collect(union(keys(da), keys(db))))
         x, y = get(da, i, nothing), get(db, i, nothing)
+        # a site without a block is even there
+        push!(parities, get(pa, i, 0) ⊻ get(pb, i, 0))
         if isnothing(x) || isnothing(y)
             push!(blocks, i => something(x, y))
-            push!(parities, isnothing(x) ? pb[i] : pa[i])
             continue
         end
         m = x * y
@@ -124,10 +129,70 @@ function (a::Term * b::Term)
             return nothing
         end
         push!(blocks, i => m)
-        push!(parities, pa[i] ⊻ pb[i])
     end
+    sign = crossing_sign(a.kets, a.bras, b.blocks, b.parities)
     return Term(sign * a.coef * b.coef, blocks, parities, xor_strings(a.kets, b.kets),
                 xor_strings(a.bras, b.bras))
+end
+
+"""
+    snapped(x, q)
+
+the number `x` rounded to a multiple of `q`, a power of two, so that numbers equal up to rounding
+become equal while exact ones, as 1 or 0.5, stay as they are
+"""
+snapped(x::Real, q::Real) = round(x / q) * q
+snapped(x::Complex, q::Real) = complex(snapped(real(x), q), snapped(imag(x), q))
+
+"""
+    reduced(terms)
+
+the terms with each block equal to a multiple of the identity taken out, every other block
+divided by its first element above rounding, that element going into the coefficient, and its
+elements rounded to a grid of rounding, see `snapped`, a term that vanishes on a site dropped,
+and the terms of the same blocks gathered, a real coefficient kept real
+"""
+function reduced(terms::Vector{Term})
+    out = Term[]
+    seen = Dict{Tuple{Vector{Pair{Int, Matrix}}, Vector{Int}, Vector{Int}}, Int}()
+    for t in terms
+        coef = t.coef
+        blocks = Pair{Int, Matrix}[]
+        parities = Int[]
+        for ((i, m), p) in zip(t.blocks, t.parities)
+            λ = tr(m) / size(m, 1)
+            if iszero(m)
+                coef = 0
+                break
+            elseif nearly(m, Matrix(λ * I, size(m)))
+                coef *= λ
+                continue
+            end
+            k = findfirst(x -> abs(x) > rounding_tol * norm(m), m)
+            coef *= m[k]
+            b = m / m[k]
+            b[k] = 1
+            b = snapped.(b, exp2(floor(log2(rounding_tol * norm(b)))))
+            if eltype(b) <: Complex && all(x -> iszero(imag(x)), b)
+                b = real(b)
+            end
+            push!(blocks, i => no_signed_zero(b))
+            push!(parities, p)
+        end
+        if coef == 0
+            continue
+        end
+        key = (blocks, t.kets, t.bras)
+        j = get(seen, key, 0)
+        if j == 0
+            push!(out, Term(coef, blocks, parities, t.kets, t.bras))
+            seen[key] = length(out)
+        else
+            out[j] = Term(out[j].coef + coef, blocks, parities, t.kets, t.bras)
+        end
+    end
+    return [ Term(isreal(t.coef) ? real(t.coef) : t.coef, t.blocks, t.parities, t.kets, t.bras)
+             for t in out if t.coef ≠ 0 ]
 end
 
 """
@@ -139,27 +204,22 @@ products(as::Vector{Term}, bs::Vector{Term}) =
     Term[ t for t in (a * b for a in as for b in bs) if !isnothing(t) ]
 
 """
-    reduced_products(as, bs)
-
-the terms of the product of two sums of terms, gathered when there are several, see `reduced`,
-so that the terms of a long product do not multiply with its factors
-"""
-function reduced_products(as::Vector{Term}, bs::Vector{Term})
-    ts = products(as, bs)
-    return length(ts) > 1 ? reduced(ts) : ts
-end
-
-"""
     tree_products(lists)
 
 the terms of the product of the sums of terms `lists`, in their order, multiplied two by two as
-a balanced tree, see `reduced_products`: a product of `n` factors of one site copies each block
-about `log2(n)` times, where multiplying them in a row copies it up to `n` times
+a balanced tree and gathered at each level, see `reduced`: the terms of a long product do not
+multiply with its factors, and a product of `n` factors of one site copies each block about
+`log2(n)` times, where multiplying them in a row copies it up to `n` times
 """
 function tree_products(lists::Vector)
     while length(lists) > 1
-        lists = [ k < length(lists) ? reduced_products(lists[k], lists[k + 1]) : lists[k]
-                  for k in 1:2:length(lists) ]
+        lists = map(1:2:length(lists)) do k
+            if k == length(lists)
+                return lists[k]
+            end
+            ts = products(lists[k], lists[k + 1])
+            return length(ts) > 1 ? reduced(ts) : ts
+        end
     end
     return only(lists)
 end
@@ -178,11 +238,9 @@ scaled(c::Number, ts::Vector{Term}) =
 the adjoint of a term of an operator, site by site: ``(AF)^\\dagger = FA^\\dagger``, a sign for
 each odd block under its string
 """
-function dag(t::Term)
-    odd = count(isodd(p) && on_string(t.kets, k) for ((k, _), p) in zip(t.blocks, t.parities))
-    return Term((-1)^odd * conj(t.coef), [ i => collect(m') for (i, m) in t.blocks ], t.parities,
-                t.kets, t.bras)
-end
+dag(t::Term) =
+    Term(crossing_sign(t.kets, Int[], t.blocks, t.parities) * conj(t.coef),
+         [ i => collect(m') for (i, m) in t.blocks ], t.parities, t.kets, t.bras)
 
 """
     identity_term()
@@ -364,8 +422,8 @@ together, and a sign for an odd block under the string of the bras
 function trace_dual(system::System, t::Term)
     blocks = [ i => kraus_sum(b, [system[i]]) for (i, b) in t.blocks ]
     parities = [ (p & 1) ⊻ (p >> 1) for p in t.parities ]
-    odd = count(isodd(p) && on_string(t.bras, i) for ((i, _), p) in zip(blocks, parities))
-    return Term((-1)^odd * t.coef, blocks, parities, xor_strings(t.kets, t.bras), Int[])
+    return Term(crossing_sign(t.bras, Int[], blocks, parities) * t.coef, blocks, parities,
+                xor_strings(t.kets, t.bras), Int[])
 end
 
 """
@@ -416,66 +474,6 @@ function op_terms(system::System, a::Dissipator, index)
     one = identity_term()
     return Term[ jumps ; scaled(-0.5, [ [ sided_term(x, one) for x in m ] ;
                                         [ sided_term(one, x) for x in m ] ]) ]
-end
-
-"""
-    snapped(x, q)
-
-the number `x` rounded to a multiple of `q`, a power of two, so that numbers equal up to rounding
-become equal while exact ones, as 1 or 0.5, stay as they are
-"""
-snapped(x::Real, q::Real) = round(x / q) * q
-snapped(x::Complex, q::Real) = complex(snapped(real(x), q), snapped(imag(x), q))
-
-"""
-    reduced(terms)
-
-the terms with each block equal to a multiple of the identity taken out, every other block
-divided by its first element above rounding, that element going into the coefficient, and its
-elements rounded to a grid of rounding, see `snapped`, a term that vanishes on a site dropped,
-and the terms of the same blocks gathered, a real coefficient kept real
-"""
-function reduced(terms::Vector{Term})
-    out = Term[]
-    seen = Dict{Tuple{Vector{Pair{Int, Matrix}}, Vector{Int}, Vector{Int}}, Int}()
-    for t in terms
-        coef = t.coef
-        blocks = Pair{Int, Matrix}[]
-        parities = Int[]
-        for ((i, m), p) in zip(t.blocks, t.parities)
-            λ = tr(m) / size(m, 1)
-            if iszero(m)
-                coef = 0
-                break
-            elseif nearly(m, Matrix(λ * I, size(m)))
-                coef *= λ
-                continue
-            end
-            k = findfirst(x -> abs(x) > rounding_tol * norm(m), m)
-            coef *= m[k]
-            b = m / m[k]
-            b[k] = 1
-            b = snapped.(b, exp2(floor(log2(rounding_tol * norm(b)))))
-            if eltype(b) <: Complex && all(x -> iszero(imag(x)), b)
-                b = real(b)
-            end
-            push!(blocks, i => no_signed_zero(b))
-            push!(parities, p)
-        end
-        if coef == 0
-            continue
-        end
-        key = (blocks, t.kets, t.bras)
-        j = get(seen, key, 0)
-        if j == 0
-            push!(out, Term(coef, blocks, parities, t.kets, t.bras))
-            seen[key] = length(out)
-        else
-            out[j] = Term(out[j].coef + coef, blocks, parities, t.kets, t.bras)
-        end
-    end
-    return [ Term(isreal(t.coef) ? real(t.coef) : t.coef, t.blocks, t.parities, t.kets, t.bras)
-             for t in out if t.coef ≠ 0 ]
 end
 
 """
@@ -560,8 +558,13 @@ function system_matrix(::Type{R}, system::System, ts::Vector{Term}) where R
     ids = [ Matrix{Float64}(I, block_dim(R, system[k]), block_dim(R, system[k]))
             for k in 1:length(system) ]
     d = prod(size(m, 1) for m in ids)
-    return sum((t.coef * foldl(kron, [ get(Dict(t.blocks), k, ids[k]) for k in eachindex(ids) ])
-                for t in (laid_strings(R, system, x) for x in ts)); init = zeros(d, d))
+    total = zeros(d, d)
+    for x in ts
+        t = laid_strings(R, system, x)
+        bs = Dict(t.blocks)
+        total += t.coef * foldl(kron, [ get(bs, k, ids[k]) for k in eachindex(ids) ])
+    end
+    return total
 end
 
 """
@@ -642,7 +645,7 @@ end
 
 the number of terms of the placed operator `op` on `system`
 """
-term_count(system::System, a::IndexedOp{IsOperator}) = length(reduced(op_terms(system, a, ())))
+term_count(system::System, a::IndexedOp{IsOperator}) = length(pure_terms(system, a, ()))
 
 """
     count_add!(tree, k, x)
@@ -911,7 +914,7 @@ gives the terms of its superoperator on the density matrices of the sites, refus
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
     check_indices(system, a)
-    terms = reduced(op_terms(system, gathered(system, a), ()))
+    terms = pure_terms(system, a, ())
     check_flux(Pure, system, a, terms)
     return terms
 end
