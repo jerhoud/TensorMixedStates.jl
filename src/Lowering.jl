@@ -233,6 +233,14 @@ string_matrix(::Type{Mixed}, f::AbstractMatrix, g::Int) =
     kron(isodd(g >> 1) ? f : one(f), isodd(g) ? f : one(f))
 
 """
+    gate_terms(terms)
+
+the terms of the superoperator ``\\rho \\mapsto K\\rho K^\\dagger`` of the operator `K` of
+terms `terms`, see `sided_term`
+"""
+gate_terms(ts::Vector{Term}) = Term[ sided_term(t, u) for t in ts for u in ts ]
+
+"""
     laid_strings(R, system, t)
 
 the term `t` with its strings laid as blocks, `F` on the fermionic sites of `system` they lie
@@ -386,10 +394,7 @@ op_terms(system::System, a::Union{Proj, ExpOp, IntPowOp, GenPowOp{IsOperator}, M
                                   Dephase}, index) =
     matrix_terms(system, a, index)
 
-function op_terms(system::System, a::Gate, index)
-    ts = pure_terms(system, a.arg, index)
-    return Term[ sided_term(t, u) for t in ts for u in ts ]
-end
+op_terms(system::System, a::Gate, index) = gate_terms(pure_terms(system, a.arg, index))
 
 function op_terms(system::System, a::Evolver, index)
     ts = pure_terms(system, a.arg, index)
@@ -402,7 +407,7 @@ end
 function op_terms(system::System, a::Dissipator, index)
     if a.arg isa Op{IsOperator}
         ts = pure_terms(system, a.arg, index)
-        jumps = Term[ sided_term(t, u) for t in ts for u in ts ]
+        jumps = gate_terms(ts)
         m = reduced(products(map(dag, ts), ts))
     else
         jumps = op_terms(system, a.arg, index)
@@ -633,15 +638,6 @@ function merged(system::System, a::AtIndex, b::AtIndex)
 end
 
 """
-    dependent((sites_a, parity_a), (sites_b, parity_b))
-
-whether two factors of a product may not change places: they share a site, or one has no
-definite parity and the other is odd or has none. Two factors on other sites otherwise commute,
-up to a sign when both are odd.
-"""
-dependent((sa, pa), (sb, pb)) = !isdisjoint(sa, sb) || !(pa == 0 || pb == 0 || pa == pb == 1)
-
-"""
     term_count(system, op)
 
 the number of terms of the placed operator `op` on `system`
@@ -740,10 +736,12 @@ end
     sort_factors!(fs, info)
 
 sort the factors `fs` of a product, and their `(sites, parity)` in `info`, by their sites as
-far as they (anti)commute, see `dependent`, and return the sign that brings, -1 for each pair
-of odd factors that change places: of the factors whose dependencies before them are placed, the
-one of smallest sites goes next, so that products differing only by the order of factors that
-(anti)commute take one form
+far as they (anti)commute, and return the sign that brings, -1 for each pair of odd factors that
+change places: of the factors whose dependencies before them are placed, the one of smallest
+sites goes next, so that products differing only by the order of factors that (anti)commute
+take one form. Two factors depend on each other when they share a site, or when one has no
+definite parity and the other is odd or has none; on other sites, they commute, up to a sign
+when both are odd.
 """
 function sort_factors!(fs, info)
     n = length(fs)
@@ -802,7 +800,7 @@ end
     merged_pass(system, fs, info, refused)
 
 the factors of the product `fs`, of `(sites, parity)` `info`, each merged, from left to right,
-into the nearest earlier one it does not (anti)commute with, see `dependent`, if it shares a
+into the nearest earlier one it does not (anti)commute with, see `sort_factors!`, if it shares a
 site with it, the sites of one among those of the other, see `merged`, and the merge gives no
 more terms than the two factors, see `term_count`, a pair giving more going into `refused`.
 Return the factors left with their info, the number the product gets multiplied by, -1 for

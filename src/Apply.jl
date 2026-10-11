@@ -110,7 +110,8 @@ function pieces(system::System, a::IndexedOp{IsOperator})
         end
         sx, px = sites_of(x), parity_on(system, x)
         joins = x isa AtIndex && length(x.index) == 1 && !isnothing(px)
-        # it reaches the last run when it (anti)commutes with every piece after it, see `dependent`
+        # it reaches the last run when it (anti)commutes with every piece after it, see
+        # `sort_factors!`
         if joins && run > 0 && isdisjoint(sx, after) && (px == 0 || !none)
             if px == 1 && isodd(odd)
                 coef = -coef
@@ -324,14 +325,6 @@ function gate_mpo(g::ITensor, idx::Vector{<:Index})
     end
     return MPO(ts)
 end
-
-"""
-    gate_terms(terms)
-
-the terms of the superoperator ``\\rho \\mapsto K\\rho K^\\dagger`` of the operator `K` of
-terms `terms`
-"""
-gate_terms(ts::Vector{Term}) = Term[ sided_term(t, u) for t in ts for u in ts ]
 
 """
     channel_factors(a)
