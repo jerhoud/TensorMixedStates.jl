@@ -214,8 +214,8 @@ function save_state(filename::String, statename::String, state::AbstractState)
         g["modules"] = [ join(fullname(parentmodule(typeof(s))), ".") for s in sites ]
         g["types"] = [ string(nameof(typeof(s))) for s in sites ]
         g["nparams"] = [ length(fieldnames(typeof(s))) for s in sites ]
-        g["pkinds"] = reduce(vcat, first.(ps); init = String[])
-        g["params"] = reduce(vcat, last.(ps); init = String[])
+        g["pkinds"] = String[ x for p in ps for x in first(p) ]
+        g["params"] = String[ x for p in ps for x in last(p) ]
         write_conservations(g, sites)
         write_state(g, state)
     end

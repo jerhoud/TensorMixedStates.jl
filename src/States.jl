@@ -422,7 +422,8 @@ function mix(state::State{Pure})
     # the bra stars the whole tensor, links included, or links and sites would count charges
     # differently; one relabeller, so that a link starred on the right of a site is the same
     # index on the left of the next
-    starred = relabeller(i -> star(i, strong_names(system)))
+    names = strong_names(system)
+    starred = relabeller(i -> star(i, names))
     bra(t) = relabel(t, starred)
     v = Vector{ITensor}(undef, n)
     left = ITensor(1)

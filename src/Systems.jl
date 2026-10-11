@@ -60,12 +60,11 @@ is_charged(system::System) = is_charged(system.sites)
 the names of the quantities the sites, or the sites of the system, conserve strongly
 """
 strong_names(sites::AbstractVector{<:AbstractSite}) =
-    unique(reduce(vcat, map(strong_names, sites); init = String[]))
+    unique(String[ x for s in sites for x in strong_names(s) ])
 strong_names(system::System) = strong_names(system.sites)
 
 symmetries(system::System) =
-    Conserved(unique(reduce(vcat, [ symmetries(s).names for s in system.sites ];
-                            init = Tuple{String, Bool}[])))
+    Conserved(unique(Tuple{String, Bool}[ x for s in system.sites for x in symmetries(s).names ]))
 
 """
     weaken(::System)
