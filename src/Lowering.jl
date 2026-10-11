@@ -1,6 +1,6 @@
 # The descent of an operator placed on sites onto a system: a first pass that develops nothing,
 # gathering the factors of each product, then the list of its terms, each a coefficient times
-# one matrix per site, the Jordan-Wigner strings laid, which the MPO, expect and the
+# one matrix per site, the Jordan-Wigner strings kept apart, which the MPO, expect and the
 # measurements start from, and apply for a factor it cannot apply as a dense block. A channel or
 # a generator descends the same way onto the density matrices of the sites, each matrix that of
 # a superoperator of one site.
@@ -37,15 +37,16 @@ check_indices(system::System, a::Union{Gate{Indexed}, Dissipator{Indexed}, Evolv
 
 a term of an operator on a system: `coef` times the tensor product of `blocks`, the matrix of
 the term on each site it acts on, sorted by site, the identity on the others, each followed by
-the Jordan-Wigner strings of the term there, which the descent keeps apart until it lays them,
-see `laid_strings`. The term of a superoperator has the matrices of superoperators of one site,
-see `matrix`, and a string on the kets, ``\\rho \\mapsto F\\rho``, and one on the bras,
-``\\rho \\mapsto \\rho F``.
+the Jordan-Wigner strings of the term there, which the descent keeps apart, laid as blocks by
+what needs them, see `laid_strings`. The term of a superoperator has the matrices of
+superoperators of one site, see `matrix`, and a string on the kets, ``\\rho \\mapsto F\\rho``,
+and one on the bras, ``\\rho \\mapsto \\rho F``.
 
 - `parities`: the parity of each block, that of the kets plus twice that of the bras for a
   superoperator, which gives the sign of a string crossing it
 - `kets`, `bras`: the strings, as the sorted sites where their parity changes: `F` on the sites
-  from the first to the second excluded, from the third to the fourth, and so on
+  from the first to the second excluded, from the third to the fourth, and so on. Each of these
+  sites is site 1 or a site where the term has a block, which `compacted` relies on.
 """
 struct Term
     coef::Number
@@ -215,6 +216,23 @@ function sided_term(t::Term, u::Term)
 end
 
 """
+    strings_on(t, k)
+
+the strings of the term `t` on site `k`, that on the kets plus twice that on the bras
+"""
+strings_on(t::Term, k::Int) = on_string(t.kets, k) + 2on_string(t.bras, k)
+
+"""
+    string_matrix(R, f, g)
+
+the matrix of the strings `g`, see `strings_on`, on a site whose `F` has the matrix `f`: `F`
+for an operator, ``\\rho \\mapsto F^a \\rho F^b`` for a superoperator, `R = Mixed`
+"""
+string_matrix(::Type{Pure}, f::AbstractMatrix, g::Int) = isodd(g) ? f : one(f)
+string_matrix(::Type{Mixed}, f::AbstractMatrix, g::Int) =
+    kron(isodd(g >> 1) ? f : one(f), isodd(g) ? f : one(f))
+
+"""
     laid_strings(R, system, t)
 
 the term `t` with its strings laid as blocks, `F` on the fermionic sites of `system` they lie
@@ -229,11 +247,11 @@ function laid_strings(::Type{R}, system::System, t::Term) where R
     ends = [ t.kets ; t.bras ]
     for k in minimum(ends):maximum(ends) - 1
         f = matrix(F, system[k])
-        a, b = on_string(t.kets, k), on_string(t.bras, k)
-        if f == I || !(a || b)
+        g = strings_on(t, k)
+        if f == I || g == 0
             continue
         end
-        s = R === Pure ? f : kron(b ? f : one(f), a ? f : one(f))
+        s = string_matrix(R, f, g)
         bs[k] = haskey(bs, k) ? bs[k] * s : s
         ps[k] = get(ps, k, 0)
     end
@@ -731,16 +749,14 @@ end
     lower(system, op)
 
 the terms of the operator `op`, placed on sites, on `system`, see `Term`, once its products are
-gathered, see `gathered`: the Jordan-Wigner strings, kept apart while the terms are developed,
-are laid on the fermionic sites at the end, and the operator is refused on a charged system
-when it has no definite flux. A channel or a generator
+gathered, see `gathered`, their Jordan-Wigner strings kept apart, see `laid_strings`, the
+operator refused on a charged system when it has no definite flux. A channel or a generator
 gives the terms of its superoperator on the density matrices of the sites, refused likewise.
 """
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
     check_indices(system, a)
     terms = reduced(op_terms(system, gathered(system, a), ()))
-    terms = reduced([ laid_strings(Pure, system, t) for t in terms ])
     check_flux(Pure, system, a, terms)
     return terms
 end
@@ -748,7 +764,6 @@ end
 function lower(system::System, a::IndexedOp{<:Union{IsChannel, IsGenerator}})
     check_indices(system, a)
     terms = reduced(op_terms(system, a, ()))
-    terms = reduced([ laid_strings(Mixed, system, t) for t in terms ])
     check_flux(Mixed, system, a, terms)
     return terms
 end

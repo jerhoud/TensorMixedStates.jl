@@ -145,7 +145,7 @@ function piece_action(system::System, p::IndexedOp{IsOperator}, run::Bool)
     if isempty(terms)
         return Tuple{Matrix, Vector{Int}}[], 0
     elseif length(terms) == 1
-        t = only(terms)
+        t = laid_strings(Pure, system, only(terms))
         return term_blocks(t), t.coef
     end
     return terms, 1
@@ -458,11 +458,12 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
             end
         else
             terms = lower(system, f)
-            ks = sort!(unique(k for t in terms for (k, _) in t.blocks))
+            laid = [ laid_strings(Mixed, system, t) for t in terms ]
+            ks = sort!(unique(k for t in laid for (k, _) in t.blocks))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif prod(dim(system[k])^2 for k in ks) ≤ dense_limit
-                block = gate_on(mixed_block(system, terms, ks), [ siteind(Mixed, system, k) for k in ks ])
+                block = gate_on(mixed_block(system, laid, ks), [ siteind(Mixed, system, k) for k in ks ])
                 add_gates!(steps, [block], [ks], false)
             else
                 push!(steps, terms)

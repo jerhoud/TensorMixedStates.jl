@@ -482,6 +482,20 @@ end
     @test PreMPO(ρq, L).linkdims .- 1 == least_channels(S, fill(4, 5))
 end
 
+@testset "Strings carried by the channels on a density matrix" begin
+    # the strings of the kets and of the bras, laid on the blocks of a term only, carried by the
+    # channels between them, the identity on the qubit
+    sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
+    ρ = State{Mixed}(sys, "FullyMixed")
+    h = dag(C)(1) * C(4) + dag(C)(4) * C(1)
+    for a in [-im * h + sum(Dissipator(C)(j) for j in (1, 3, 4)) + Dissipator(dag(C)(1) * C(4)) + Dissipator(X)(2),
+              Reset("Occ")(4) * Gate(C(1) + C(3))]
+        S = superop(sys, a)
+        @test laid_mixed(ρ, a) ≈ S
+        @test PreMPO(ρ, a).linkdims .- 1 == least_channels(S, fill(4, 4))
+    end
+end
+
 @testset "The MPO applied to a density matrix, its sites charged or not" begin
     # the density matrix read back is the map applied to the one it was made from, written on
     # dense matrices

@@ -407,14 +407,15 @@ end
 
 @testset "The descent of an operator onto a system" begin
     # the descent writes a placed operator as terms, each a coefficient and one matrix per site,
-    # the Jordan-Wigner strings laid: their sum is checked against the explicit matrix of each
-    # factor of one site and of definite parity, F ⊗ … ⊗ F ⊗ a ⊗ 1 ⊗ … for an odd one
+    # the Jordan-Wigner strings apart: their sum, the strings laid, is checked against the
+    # explicit matrix of each factor of one site and of definite parity, F ⊗ … ⊗ F ⊗ a ⊗ 1 ⊗ …
+    # for an odd one
     sites(sys) = [ sys[k] for k in 1:length(sys) ]
     identity_on(sys) = foldl(kron, [ matrix(Id, s) for s in sites(sys) ])
     whole(sys, t) =
         foldl(kron, [ get(Dict(t.blocks), k, matrix(Id, s)) for (k, s) in enumerate(sites(sys)) ])
-    lowered(sys, op) =
-        sum((t.coef * whole(sys, t) for t in TMS.lower(sys, op)); init = 0 * identity_on(sys))
+    lowered(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t)) for t in TMS.lower(sys, op));
+                           init = 0 * identity_on(sys))
     function jw(sys, j, a)
         odd = TMS.parity_of(a, matrix(F, sys[j])) == 1
         return foldl(kron, [ k < j && odd ? matrix(F, s) : k == j ? a : matrix(Id, s)

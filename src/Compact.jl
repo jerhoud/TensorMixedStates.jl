@@ -127,22 +127,24 @@ struct ComBlock{T}
 end
 
 """
-    direct_pass(terms, atoms, T, tol)
+    direct_pass(terms, atoms, strings, T, tol)
 
 the block of channels of the terms of several sites `terms`, each given by its coefficient and
-its factors in the order of their sites, as `(site, atom)`, `atoms[site]` holding the matrices
-of the atoms of each site and `T` being the type of the coefficients.
+its factors in the order of their sites, as `(site, atom, g)`, `g` being the strings of the term
+on the sites between the factor before and this one, `strings(k, g)` their atom on site `k`, 0
+for the identity, `atoms[site]` holding the matrices of the atoms of each site and `T` being
+the type of the coefficients.
 
-Built from left to right: on each site, the channels on the left continued by the identity or
-an atom, and the terms beginning there, are rows over the suffixes of the terms; the rows
-`interpolative` keeps are the channels on the right, and the coefficients of all the rows the
-pieces of the site. A term opens on its first site and closes on its last, and the channels
+Built from left to right: on each site, the channels on the left continued by an atom, or by
+the strings of their terms where these have no factor, and the terms beginning there, are rows
+over the suffixes of the terms; the rows `interpolative` keeps are the channels on the right,
+and the coefficients of all the rows the pieces of the site. A term opens on its first site and closes on its last, and the channels
 are independent on their left, leaving `right_sweep` to reduce dependent suffixes.
 """
-function direct_pass(terms, atoms, ::Type{T}, tol::Real) where T
-    # the suffixes of the terms, nodes (site, atom, rest) of a tree the terms share
-    nodes = Tuple{Int, Int, Int}[]
-    node_ids = Dict{Tuple{Int, Int, Int}, Int}()
+function direct_pass(terms, atoms, strings, ::Type{T}, tol::Real) where T
+    # the suffixes of the terms, nodes (site, atom, strings before, rest) of a tree the terms share
+    nodes = Tuple{Int, Int, Int, Int}[]
+    node_ids = Dict{Tuple{Int, Int, Int, Int}, Int}()
     starts = Dict{Int, Vector{Tuple{T, Int, Int}}}()
     for (c, fs) in terms
         rest = 0
@@ -153,7 +155,7 @@ function direct_pass(terms, atoms, ::Type{T}, tol::Real) where T
                 length(nodes)
             end
         end
-        s, a = fs[1]
+        s, a, _ = fs[1]
         push!(get!(starts, s, Tuple{T, Int, Int}[]), (T(c), a, rest))
     end
     first_site = minimum(keys(starts))
@@ -171,7 +173,7 @@ function direct_pass(terms, atoms, ::Type{T}, tol::Real) where T
             if iszero(x)
                 continue
             end
-            s, a, rest = nodes[v]
+            s, a, g, rest = nodes[v]
             if s == k
                 if rest == 0
                     add!(get!(Combination{T}, pieces[j], (r, 0)), a, x)
@@ -179,7 +181,7 @@ function direct_pass(terms, atoms, ::Type{T}, tol::Real) where T
                     add!(get!(Dict{Int, T}, rows, (r, a)), rest, x)
                 end
             else
-                add!(get!(Dict{Int, T}, rows, (r, 0)), v, x)
+                add!(get!(Dict{Int, T}, rows, (r, strings(k, g))), v, x)
             end
         end
         for (c, a, rest) in get(starts, k, Tuple{T, Int, Int}[])
@@ -390,11 +392,54 @@ their number
 normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
 
 """
+    next_fermions(system)
+
+for each site `k` of `system`, the first site from `k` on whose `F` is not the identity,
+`length(system) + 1` when there is none
+"""
+function next_fermions(system::System)
+    n = length(system)
+    next = fill(n + 1, n + 1)
+    for k in n:-1:1
+        next[k] = matrix(F, system[k]) == I ? next[k + 1] : k
+    end
+    return next
+end
+
+"""
+    string_factors(R, system, t, next)
+
+the factors of the term `t`, as `(site, matrix, g)`: its blocks with its strings laid on them,
+see `laid_strings`, and `g` the strings it has on the sites between the factor before and this
+one, see `strings_on`, the same all the way since a string changes only on a block or on site
+1, and 0 when none of those sites is fermionic. A string from site 1 takes a factor of its own
+on the first fermionic site, `next` being given by `next_fermions`.
+"""
+function string_factors(::Type{R}, system::System, t::Term, next::Vector{Int}) where R
+    fs = Tuple{Int, Matrix, Int}[]
+    k = next[1]
+    if !isempty(t.blocks) && k < first(first(t.blocks)) && strings_on(t, k) ≠ 0
+        push!(fs, (k, string_matrix(R, matrix(F, system[k]), strings_on(t, k)), 0))
+    end
+    for (k, m) in t.blocks
+        g = 0
+        if !isempty(fs)
+            j = first(last(fs))
+            g = next[j + 1] < k ? strings_on(t, j) : 0
+        end
+        f, s = matrix(F, system[k]), strings_on(t, k)
+        push!(fs, (k, f == I || s == 0 ? m : m * string_matrix(R, f, s), g))
+    end
+    return fs
+end
+
+"""
     compacted(R, system, terms)
 
 the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
 site, and the block of channels of its terms of several sites, `nothing` when it has none, the
-matrices being those of superoperators for `R = Mixed`,
+matrices being those of superoperators for `R = Mixed`, their strings laid on the way, see
+`string_factors`,
 reduced with the matrices of the sites, see `on_basis!`: the identity is moved out of its
 openings and its closings, see `push_identities!`, into terms of one site, and the sweeps then
 reduce what these relations made dependent. A term of one site that rounding left in place of
@@ -409,28 +454,32 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
     singles = Dict{Int, Matrix{T}}()
     atoms = Dict{Int, Vector{Matrix{T}}}()
     atom_ids = Dict{Tuple{Int, Matrix}, Int}()
-    multi = Tuple{T, Vector{Tuple{Int, Int}}}[]
+    # the number of the atom of the matrix `m` on site `k`, from 1
+    atom(k, m) = get!(atom_ids, (k, m)) do
+        push!(get!(atoms, k, Matrix{T}[]), T.(m))
+        length(atoms[k])
+    end
+    next = next_fermions(system)
+    # the atom of the strings `g` on site `k`, where a term crosses it without a factor
+    string_ids = Dict{Tuple{Int, Int}, Int}()
+    string_atom(k, g) = g == 0 || next[k] ≠ k ? 0 :
+        get!(() -> atom(k, string_matrix(R, matrix(F, system[k]), g)), string_ids, (k, g))
+    multi = Tuple{T, Vector{Tuple{Int, Int, Int}}}[]
     for t in terms
-        if isempty(t.blocks)
+        fs = string_factors(R, system, t, next)
+        if isempty(fs)
             constant += t.coef
-        elseif length(t.blocks) == 1
-            k, m = only(t.blocks)
+        elseif length(fs) == 1
+            k, m, _ = only(fs)
             add!(singles, k, T.(t.coef * m))
         else
-            fs = map(t.blocks) do (k, m)
-                id = get!(atom_ids, (k, m)) do
-                    push!(get!(atoms, k, Matrix{T}[]), T.(m))
-                    length(atoms[k])
-                end
-                (k, id)
-            end
-            push!(multi, (T(t.coef), fs))
+            push!(multi, (T(t.coef), [ (k, atom(k, m), g) for (k, m, g) in fs ]))
         end
     end
     if isempty(multi)
         return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), nothing
     end
-    b = on_basis!(direct_pass(multi, atoms, T, rounding_tol), rounding_tol)
+    b = on_basis!(direct_pass(multi, atoms, string_atom, T, rounding_tol), rounding_tol)
     opened = push_identities!(b)
     m = mirror(b)
     closed = push_identities!(m)

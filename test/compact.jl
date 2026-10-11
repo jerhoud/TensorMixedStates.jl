@@ -121,6 +121,20 @@ end
     @test memory_channels(s, h) == least_channels(exact(s, h), [3, 3, 3]) == [3, 3]
 end
 
+@testset "Strings carried by the channels" begin
+    # a term keeps its strings apart down to the compaction, which lays them on its blocks only:
+    # a channel crossing a site without a block carries them there, F on a fermion and the
+    # identity on a qubit
+    n = 6
+    sf = State{Pure}(System(n, Fermion()), "Emp")
+    @test all(t -> length(t.blocks) == 2, TMS.lower(sf.system, dag(C)(1) * C(n) + dag(C)(n) * C(1)))
+    check_mpo(sf, sum(dag(C)(i) * C(j) + dag(C)(j) * C(i) for i in 1:n for j in i+1:n))
+    check_mpo(sf, C(5) + dag(C)(2) * N(4) * C(6) + C(1) * N(3))
+    sys = System([Qubit(), Fermion(), Qubit(), Qubit(), Fermion(), Fermion()])
+    sm = State{Pure}(sys, ["Up", "Emp", "Up", "Up", "Emp", "Emp"])
+    check_mpo(sm, dag(C)(2) * C(6) + dag(C)(6) * C(2) + X(1) * C(5) + C(6) + X(3) * C(2) * X(4))
+end
+
 @testset "A time dependent operator" begin
     n = 5
     st = State{Pure}(System(n, Qubit()), "Up")
