@@ -219,20 +219,46 @@ function sites_back(ψ::MPS, st::MPS, tr)
 end
 
 """
-    applied_gates(gates, st, tr)
+    gates_applied(gates, on, st, tr)
 
-the MPS `st` with `gates` applied, truncated by `tr`, or the null state when the result
-vanishes, see `guarded`: on a failure on charged indices, the gates are applied again one by
-one, so that the one taking the state to zero is found
+the MPS `st` with each gate of `gates` applied in turn on its sites `on`, given rather than looked
+for as ITensorMPS does at a cost of order `n` per gate: a gate of one site is contracted with
+the tensor of its site, any other applied by ITensorMPS on the positions its sites have then,
+truncated by `tr`, the sites it brings next to each other left there, see `sites_back`
 """
-function applied_gates(gates::Vector{ITensor}, st::MPS, tr)
+function gates_applied(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS, tr)
+    # the site at each position and the position of each site
+    at = collect(1:length(st))
+    pos = collect(1:length(st))
+    for (g, ks) in zip(gates, on)
+        ns = sort([ pos[k] for k in ks ])
+        if length(ns) == 1
+            st[only(ns)] = apply(g, st[only(ns)])
+            continue
+        end
+        st = apply(g, st, ns; move_sites_back = false, tr...)
+        # the sites of the gate now next to each other from the first, the others of the window
+        # after them, each group in its order
+        window = ns[1]:ns[end]
+        at[window] = [ at[ns] ; [ at[p] for p in window if !(p in ns) ] ]
+        pos[at[window]] = window
+    end
+    return st
+end
+
+"""
+    applied_gates(gates, on, st, tr)
+
+the MPS `st` with `gates` applied on their sites `on`, see `gates_applied`, truncated by `tr`,
+or the null state when the result vanishes, see `guarded`: on a failure on charged indices, the
+gates are applied again one by one, so that the one taking the state to zero is found
+"""
+function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS, tr)
     if vanished(st)
         return st
     end
     try
-        moved = apply(gates, copy(st); move_sites_back_between_gates = false, move_sites_back = false,
-                      tr...)
-        return sites_back(st, moved, tr)
+        return sites_back(st, gates_applied(gates, on, copy(st), tr), tr)
     catch
         if !any(hasqns, st)
             rethrow()
@@ -344,30 +370,32 @@ function joined(system::System, st::MPS, bras::Dict{Int, Index}, sites)
 end
 
 """
-    GateBatch(gates, apart, sites)
+    GateBatch(gates, on, apart, sites)
 
-a step of `apply`: gates applied together, acting on `sites`, on the indices of the state or,
-when `apart`, on the kets and the bras of a density matrix split apart on those sites, see
-`separated`
+a step of `apply`: gates applied together, each on its sites `on`, on the indices of the state
+or, when `apart`, on the kets and the bras of a density matrix split apart on all their sites
+`sites`, see `separated`
 """
 struct GateBatch
     gates::Vector{ITensor}
+    on::Vector{Vector{Int}}
     apart::Bool
     sites::Vector{Int}
 end
 
 """
-    add_gates!(steps, gates, apart, sites)
+    add_gates!(steps, gates, on, apart)
 
-append `gates`, acting on `sites`, to the steps of `apply`, joining them to the last step when
-it is a batch of the same kind
+append `gates`, each on its sites `on`, to the steps of `apply`, joining them to the last step
+when it is a batch of the same kind
 """
-function add_gates!(steps::Vector, gates::Vector{ITensor}, apart::Bool, sites)
+function add_gates!(steps::Vector, gates::Vector{ITensor}, on::Vector{Vector{Int}}, apart::Bool)
     if !isempty(steps) && last(steps) isa GateBatch && last(steps).apart == apart
         append!(last(steps).gates, gates)
-        union!(last(steps).sites, sites)
+        append!(last(steps).on, on)
+        union!(last(steps).sites, (k for ks in on for k in ks))
     else
-        push!(steps, GateBatch(gates, apart, unique(sites)))
+        push!(steps, GateBatch(gates, on, apart, unique(k for ks in on for k in ks)))
     end
     return steps
 end
@@ -391,7 +419,7 @@ function pure_steps(system::System, a::IndexedOp{IsOperator})
             push!(steps, action)
         else
             gates = [ gate_on(m, [ siteind(Pure, system, k) for k in ks ]) for (m, ks) in action ]
-            add_gates!(steps, gates, false, (k for (_, ks) in action for k in ks))
+            add_gates!(steps, gates, [ collect(ks) for (_, ks) in action ], false)
         end
     end
     return coef, steps
@@ -424,7 +452,8 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
                               for g in (gate_on(m, [ siteind(Pure, system, k) for k in ks ]),
                                         gate_on(conj(m), [ bra_leg!(bras, system, k)
                                                            for k in ks ])) ]
-                    add_gates!(steps, gates, true, (k for (_, ks) in action for k in ks))
+                    on = [ collect(ks) for (_, ks) in action for _ in 1:2 ]
+                    add_gates!(steps, gates, on, true)
                 end
             end
         else
@@ -433,8 +462,8 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif prod(dim(system[k])^2 for k in ks) ≤ dense_limit
-                add_gates!(steps, [ gate_on(mixed_block(system, terms, ks),
-                                            [ siteind(Mixed, system, k) for k in ks ]) ], false, ks)
+                block = gate_on(mixed_block(system, terms, ks), [ siteind(Mixed, system, k) for k in ks ])
+                add_gates!(steps, [block], [ks], false)
             else
                 push!(steps, terms)
             end
@@ -460,9 +489,9 @@ function applied_steps(::Type{R}, system::System, st::MPS, steps, tr,
             applied_mpo(make_mpo(lay_terms!(PreMPO{R}(system), step, 1)), st, tr)
         elseif step.apart
             kets_bras = separated(system, st, bras, step.sites)
-            joined(system, applied_gates(step.gates, kets_bras, tr), bras, step.sites)
+            joined(system, applied_gates(step.gates, step.on, kets_bras, tr), bras, step.sites)
         else
-            applied_gates(step.gates, st, tr)
+            applied_gates(step.gates, step.on, st, tr)
         end
     end
     return st
