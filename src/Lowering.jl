@@ -469,6 +469,14 @@ strong_refusal(what, names) =
           "which conserving it strongly forbids: drop `strong` or weaken the state")
 
 """
+    only_strong(names, charges)
+
+whether the `charges` differ only by the quantities `names`, conserved strongly: what a strong
+symmetry alone keeps apart
+"""
+only_strong(names, qs) = !isempty(names) && allequal(weak_qn(q, names, String[]) for q in qs)
+
+"""
     mixed_flux(m, what, site)
 
 the flux on the mixed index of `site` of the matrix `m` of the superoperator `what`, refused
@@ -486,7 +494,7 @@ function mixed_flux(m::AbstractMatrix, what, site::AbstractSite)
         return isempty(found) ? QN() : only(found)
     end
     st = strong_names(site)
-    if !isempty(st) && allequal(weak_qn(q, st, String[]) for q in found)
+    if only_strong(st, found)
         strong_refusal(what, st)
     end
     error("$what carries no definite charge of $(join(unique(q.name for q in qs), ", ")), so it " *
@@ -520,7 +528,7 @@ function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
         if isnothing(total)
             total = q
         elseif q ≠ total
-            if !isempty(st) && weak_qn(q, st, String[]) == weak_qn(total, st, String[])
+            if only_strong(st, (q, total))
                 strong_refusal(a, st)
             end
             error("the terms of $a change the charges by $total and by $q, so it has no " *

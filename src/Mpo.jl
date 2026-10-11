@@ -198,18 +198,19 @@ mpo_eltype(pre::PreMPO) =
 """
     charge_mismatch(system, a, b, shown)
 
-raise the error for an operator on `system` whose terms do not all carry the same charge, `a`
-and `b` being the charges of two of them, printed when `shown`, or of two partial terms
-entering the same channel
+raise the error for an MPO on `system` whose terms do not all carry the same charge, those of
+an operator or of the operators of a vector, `a` and `b` being the charges of two of them,
+printed when `shown`, or of two partial terms entering the same channel; when they differ only
+by quantities conserved strongly, that of `strong_refusal`
 """
 function charge_mismatch(sys::System, a::QN, b::QN, shown::Bool)
     st = strong_names(sys)
-    only_strong = !isempty(st) && weak_qn(a, st, String[]) == weak_qn(b, st, String[])
-    error("the terms of this operator do not all carry the same charge, " *
+    if only_strong(st, (a, b))
+        strong_refusal("the MPO", st)
+    end
+    error("the terms of the MPO do not all carry the same charge, " *
           (shown ? "$(-a) and $(-b), " : "") *
-          (only_strong ?
-              "which only a strong symmetry tells apart: drop `strong` or weaken the state" :
-              "so it has no definite flux and cannot be put on a system that conserves it"))
+          "so it has no definite flux and cannot be put on a system that conserves it")
 end
 
 """
