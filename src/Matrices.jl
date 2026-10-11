@@ -73,6 +73,20 @@ parity_of(m::AbstractMatrix, f::AbstractMatrix) =
     end
 
 """
+    graded_parts(m, f)
+
+the parts of each fermionic parity of the matrix `m` of an operator of one site, `f` the parity
+of the site: pairs `(p, part)`, a single one for an operator of definite parity
+"""
+function graded_parts(m::AbstractMatrix, f::AbstractMatrix)
+    p = parity_of(m, f)
+    if !isnothing(p)
+        return [ (p, m) ]
+    end
+    return [ (0, (m + f * m * f) / 2), (1, (m - f * m * f) / 2) ]
+end
+
+"""
     dense_max
 
 the largest dimension of the dense matrix of a function of an operator, or of a superoperator,

@@ -333,35 +333,17 @@ of each parity, the odd one with `F` on the fermionic sites before `i`. For `Mix
 matrix of a superoperator, whose part of parity `a` on the kets and `b` on the bras takes
 ``\\rho \\mapsto F^a \\rho F^b`` on the fermionic sites before `i`.
 """
-function one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix)
-    f = matrix(F, system[i])
-    p = parity_of(m, f)
-    if p == 0
-        return [ Term(1., [ i => m ], [0], Int[], Int[]) ]
-    elseif p == 1
-        return [ Term(1., [ i => m ], [1], prefix(i), Int[]) ]
-    end
-    return [ one_site_terms(Pure, system, i, (m + f * m * f) / 2) ;
-             one_site_terms(Pure, system, i, (m - f * m * f) / 2) ]
-end
+one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix) =
+    [ Term(1., [ i => x ], [p], p == 1 ? prefix(i) : Int[], Int[])
+      for (p, x) in graded_parts(m, matrix(F, system[i])) ]
 
 function one_site_terms(::Type{Mixed}, system::System, i::Int, m::AbstractMatrix)
     f = matrix(F, system[i])
-    if f == I
-        return [ Term(1., [ i => m ], [0], Int[], Int[]) ]
-    end
-    l, r = kron(one(f), f), kron(f, one(f))
-    terms = Term[]
-    for a in 0:1, b in 0:1
-        x = (m + (-1)^a * l * m * l) / 2
-        x = (x + (-1)^b * r * x * r) / 2
-        if norm(x) ≤ rounding_tol * norm(m)
-            continue
-        end
-        push!(terms, Term(1., [ i => x ], [a + 2b], a == 1 ? prefix(i) : Int[],
-                          b == 1 ? prefix(i) : Int[]))
-    end
-    return terms
+    # the parity of the kets, then that of the bras
+    kets, bras = kron(one(f), f), kron(f, one(f))
+    return [ Term(1., [ i => y ], [a + 2b], a == 1 ? prefix(i) : Int[],
+                  b == 1 ? prefix(i) : Int[])
+             for (a, x) in graded_parts(m, kets) for (b, y) in graded_parts(x, bras) ]
 end
 
 """

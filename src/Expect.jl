@@ -438,20 +438,6 @@ function defined_sites(system::System, a::GenericOp)
 end
 
 """
-    graded_parts(m, f)
-
-the parts of each fermionic parity of the matrix `m` of an operator of one site, `f` the parity
-of the site: pairs `(p, part)`, a single one for an operator of definite parity
-"""
-function graded_parts(m::AbstractMatrix, f::AbstractMatrix)
-    p = parity_of(m, f)
-    if !isnothing(p)
-        return [ (p, m) ]
-    end
-    return [ (0, (m + f * m * f) / 2), (1, (m - f * m * f) / 2) ]
-end
-
-"""
     site_value(state, m, i)
 
 the expectation value, not divided by the trace, of the operator of matrix `m` on site `i`, its
