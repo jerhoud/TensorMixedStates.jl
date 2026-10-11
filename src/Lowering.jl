@@ -609,7 +609,8 @@ parity_on(::System, ::IdentityOp) = 0
     matrix_on(system, op, sites)
 
 the matrix of the operator `op`, placed on some of `sites`, on all of them in that order, the
-Jordan-Wigner strings between them included
+Jordan-Wigner strings between them included, its products and sums taken as matrices, nothing
+developed
 """
 function matrix_on(system::System, a::AtIndex, sites)
     if collect(a.index) == collect(sites)
@@ -618,6 +619,15 @@ function matrix_on(system::System, a::AtIndex, sites)
     sub = System([ system[i] for i in sites ])
     position = Dict(i => k for (k, i) in enumerate(sites))
     return system_matrix(Pure, sub, op_terms(sub, map_sites(i -> position[i], a), ()))
+end
+
+matrix_on(system::System, a::ProdOp, sites) = prod(matrix_on(system, x, sites) for x in a.subs)
+matrix_on(system::System, a::SumOp, sites) = sum(matrix_on(system, x, sites) for x in a.subs)
+matrix_on(system::System, a::ScalarOp, sites) = a.coef * matrix_on(system, a.arg, sites)
+
+function matrix_on(system::System, ::IdentityOp, sites)
+    d = prod(dim(system[k]) for k in sites)
+    return Matrix{Float64}(I, d, d)
 end
 
 """
