@@ -1,7 +1,8 @@
 # The compaction of the terms of an operator on a system into a block of channels, as few on each
 # link as the rank of the operator across it once its parts acting as the identity on either
-# side are taken out. Copied from 1.x, the atoms of a site being the blocks the terms have there,
-# compared through their matrices.
+# side are taken out. The atoms of a site are the matrices the terms have there, their strings
+# laid on them, and those of the strings of the terms crossing it without a factor, compared
+# through their matrices.
 
 """
     add!(d, k, x)
@@ -127,21 +128,23 @@ struct ComBlock{T}
 end
 
 """
-    direct_pass(terms, atoms, strings, T, tol)
+    direct_pass(terms, strings, tol)
 
-the block of channels of the terms of several sites `terms`, each given by its coefficient and
-its factors in the order of their sites, as `(site, atom, g)`, `g` being the strings of the term
-on the sites between the factor before and this one, `strings(k, g)` their atom on site `k`, 0
-for the identity, `atoms[site]` holding the matrices of the atoms of each site and `T` being
-the type of the coefficients.
+the first site, the numbers of channels and the pieces of the block of channels of the terms of
+several sites `terms`, see `ComBlock`, each given by its coefficient and its factors in the
+order of their sites, as `(site, atom, g)`, `g` being the strings of the term on the sites
+between the factor before and this one, `strings(k, g)` their atom on site `k`, 0 for the
+identity.
 
 Built from left to right: on each site, the channels on the left continued by an atom, or by
 the strings of their terms where these have no factor, and the terms beginning there, are rows
 over the suffixes of the terms; the rows `interpolative` keeps are the channels on the right,
-and the coefficients of all the rows the pieces of the site. A term opens on its first site and closes on its last, and the channels
-are independent on their left, leaving `right_sweep` to reduce dependent suffixes.
+and the coefficients of all the rows the pieces of the site. A term opens on its first site and
+closes on its last, and the channels are independent on their left, leaving the sweeps of
+`compacted` to reduce dependent suffixes.
 """
-function direct_pass(terms, atoms, strings, ::Type{T}, tol::Real) where T
+function direct_pass(terms::Vector{Tuple{T, Vector{Tuple{Int, Int, Int}}}}, strings,
+                     tol::Real) where T
     # the suffixes of the terms, nodes (site, atom, strings before, rest) of a tree the terms share
     nodes = Tuple{Int, Int, Int, Int}[]
     node_ids = Dict{Tuple{Int, Int, Int, Int}, Int}()
@@ -156,7 +159,7 @@ function direct_pass(terms, atoms, strings, ::Type{T}, tol::Real) where T
             end
         end
         s, a, _ = fs[1]
-        push!(get!(starts, s, Tuple{T, Int, Int}[]), (T(c), a, rest))
+        push!(get!(starts, s, Tuple{T, Int, Int}[]), (c, a, rest))
     end
     first_site = minimum(keys(starts))
     last_site = maximum(first(last(fs)) for (_, fs) in terms)
@@ -194,8 +197,8 @@ function direct_pass(terms, atoms, strings, ::Type{T}, tol::Real) where T
         # remainder of rounding is not taken for a channel of its own; the pieces of the site
         # hold only the closings yet
         content = zeros(real(T), m)
-        for ((r, _), comb) in pieces[j], (_, x) in sort!(collect(comb); by = first)
-            content[r] += abs2(x)
+        for ((r, _), comb) in pieces[j]
+            content[r] += sum(abs2, values(comb))
         end
         for (key, g) in zip(rowkeys, grows)
             if key[1] > 0
@@ -216,7 +219,7 @@ function direct_pass(terms, atoms, strings, ::Type{T}, tol::Real) where T
     if pop!(dims) ≠ 0
         error("bug: channels left open on the last site of the terms")
     end
-    return ComBlock{T}(first_site, dims, pieces, [ get(atoms, k, Matrix{T}[]) for k in first_site:last_site ])
+    return first_site, dims, pieces
 end
 
 """
@@ -279,15 +282,22 @@ there, which may hold the identity in turn, or a term of one site when the piece
 function push_identities!(b::ComBlock{T}) where T
     singles = [ Combination{T}() for _ in b.pieces ]
     for j in 1:length(b.pieces) - 1
-        opened = sort!([ (r, pop!(comb, 0)) for ((l, r), comb) in b.pieces[j] if l == 0 && haskey(comb, 0) ];
-                       by = first)
+        # the identity of each opening, taken out
+        opened = Dict{Int, T}()
+        for ((l, r), comb) in b.pieces[j]
+            if l == 0 && haskey(comb, 0)
+                opened[r] = pop!(comb, 0)
+            end
+        end
         filter!(p -> !isempty(last(p)), b.pieces[j])
-        for (r, α) in opened, ((l, s), comb) in sort!(collect(b.pieces[j + 1]); by = first)
-            if l == r
-                to = s == 0 ? singles[j + 1] : get!(Combination{T}, b.pieces[j + 1], (0, s))
-                for (a, x) in comb
-                    add!(to, a, α * x)
-                end
+        for ((l, s), comb) in sort!(collect(b.pieces[j + 1]); by = first)
+            α = get(opened, l, nothing)
+            if isnothing(α)
+                continue
+            end
+            to = s == 0 ? singles[j + 1] : get!(Combination{T}, b.pieces[j + 1], (0, s))
+            for (a, x) in comb
+                add!(to, a, α * x)
             end
         end
     end
@@ -356,15 +366,6 @@ mirror(b::ComBlock{T}) where T =
                 reverse(b.atoms))
 
 """
-    right_sweep(b, tol)
-
-the block `b` reduced, from right to left, to channels whose right operators are independent,
-by `left_sweep!` on its mirror. After `left_sweep!` or `direct_pass`, the channels of each
-link are then as few as the rank of the coupling across it.
-"""
-right_sweep(b::ComBlock, tol::Real) = mirror(left_sweep!(mirror(b), tol))
-
-"""
     combination_matrix(b, j, comb, d)
 
 the matrix of the combination `comb` of the atoms of the `j`-th site of the block `b`, a site
@@ -423,18 +424,20 @@ end
 
 the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
 site, and the block of channels of its terms of several sites, `nothing` when it has none, the
-matrices being those of superoperators for `R = Mixed`, their strings laid on the way, see
-`string_factors`,
-reduced with the matrices of the sites, see `on_basis!`: the identity is moved out of its
-openings and its closings, see `push_identities!`, into terms of one site, and the sweeps then
-reduce what these relations made dependent. A term of one site that rounding left in place of
-zero is dropped, the terms measured by `normalized_norm`.
+matrices being those of superoperators for `R = Mixed`. The strings of the terms are laid on
+their factors, see `string_factors`, and carried by the channels between them. The block, built
+by `direct_pass`, is written on a basis of each site, see `on_basis!`, the identity moved out of
+its openings and its closings into terms of one site, see `push_identities!`, and the sweeps,
+`left_sweep!` from the left then on its mirror from the right, reduce what these relations made
+dependent: each link is left with as few channels as the rank of the coupling across it. A term
+of one site that rounding left in place of zero is dropped, the terms measured by
+`normalized_norm`.
 """
 function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
     scale = maximum(t -> abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0),
                     terms; init = 0.0)
-    T = float(promote_type(Float64, (typeof(t.coef) for t in terms)...,
-                           (eltype(m) for t in terms for (_, m) in t.blocks)...))
+    T = promote_type(Float64, (typeof(t.coef) for t in terms)...,
+                     (eltype(m) for t in terms for (_, m) in t.blocks)...)
     constant = zero(T)
     singles = Dict{Int, Matrix{T}}()
     atoms = Dict{Int, Vector{Matrix{T}}}()
@@ -460,18 +463,23 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
             push!(multi, (T(t.coef), [ (k, atom(k, m), g) for (k, m, g) in fs ]))
         end
     end
-    if isempty(multi)
-        return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), nothing
-    end
-    b = on_basis!(direct_pass(multi, atoms, string_atom, T, rounding_tol), rounding_tol)
-    opened = push_identities!(b)
-    m = mirror(b)
-    closed = push_identities!(m)
-    b = right_sweep(left_sweep!(mirror(m), rounding_tol), rounding_tol)
-    for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
-        if !isempty(comb)
-            k = b.start + j - 1
-            add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
+    b = nothing
+    if !isempty(multi)
+        start, dims, pieces = direct_pass(multi, string_atom, rounding_tol)
+        # the atoms read after the pass, which adds those of the strings
+        b = ComBlock{T}(start, dims, pieces,
+                        [ get(atoms, k, Matrix{T}[]) for k in start:start + length(pieces) - 1 ])
+        b = on_basis!(b, rounding_tol)
+        opened = push_identities!(b)
+        m = mirror(b)
+        closed = push_identities!(m)
+        b = left_sweep!(mirror(m), rounding_tol)
+        b = mirror(left_sweep!(mirror(b), rounding_tol))
+        for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
+            if !isempty(comb)
+                k = b.start + j - 1
+                add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
+            end
         end
     end
     return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), b

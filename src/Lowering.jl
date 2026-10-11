@@ -46,7 +46,7 @@ and one on the bras, ``\\rho \\mapsto \\rho F``.
   superoperator, which gives the sign of a string crossing it
 - `kets`, `bras`: the strings, as the sorted sites where their parity changes: `F` on the sites
   from the first to the second excluded, from the third to the fourth, and so on. Each of these
-  sites is site 1 or a site where the term has a block, which `compacted` relies on.
+  sites is site 1 or a site where the term has a block, which `string_factors` relies on.
 """
 struct Term
     coef::Number
