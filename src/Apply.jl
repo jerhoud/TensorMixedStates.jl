@@ -1,8 +1,10 @@
 # apply on pure states: a product of operators applied factor by factor, right to left, never
 # developed, each piece as a dense block on its sites, as one-site gates, or through its MPO. A
 # channel of a single Kraus operator is applied as that operator. On mixed states, the factors
-# of a channel likewise: a gate as its operator on the kets and its conjugate on the bras, any
-# other channel or a generator as a dense block on the mixed indices or through its MPO.
+# of a channel likewise: a gate as its operator on the kets then on the bras, through its MPO
+# made to act on the mixed indices, any other channel or a generator as a dense block on the
+# mixed indices or through its MPO. A gate never brings sites together: on sites apart, it goes
+# through its MPO on the sites between.
 
 export apply
 
@@ -208,49 +210,21 @@ function vanishing_gate(g::ITensor, st::MPS)
 end
 
 """
-    sites_back(st, at, tr)
-
-the MPS `st`, whose position `n` holds the site `at[n]` after gates that moved its sites, with
-each site back at its place, the swaps truncated by `tr`: only the window of the positions that
-moved is reordered, the sites outside it staying in place, where ITensorMPS reorders all of them
-at a cost of order `n²`
-"""
-function sites_back(st::MPS, at::Vector{Int}, tr)
-    moved = findall(n -> at[n] ≠ n, eachindex(at))
-    if isempty(moved)
-        return st
-    end
-    lo, hi = extrema(moved)
-    return movesites(st, [ n => at[n] for n in lo:hi ]; tr...)
-end
-
-"""
     gates_applied(gates, on, st, tr)
 
-the MPS `st` with each gate of `gates` applied in turn on its sites `on`, given rather than looked
-for as ITensorMPS does at a cost of order `n` per gate: a gate of one site is contracted with
-the tensor of its site, any other applied by ITensorMPS on the positions its sites have then,
-truncated by `tr`, the sites it brings next to each other left there; and the site at each
-position, see `sites_back`
+the MPS `st` with each gate of `gates` applied in turn on its consecutive sites `on`, given
+rather than looked for as ITensorMPS does at a cost of order `n` per gate: a gate of one site
+is contracted with the tensor of its site, any other applied by ITensorMPS, truncated by `tr`
 """
 function gates_applied(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS, tr)
-    # the site at each position and the position of each site
-    at = collect(1:length(st))
-    pos = collect(1:length(st))
     for (g, ks) in zip(gates, on)
-        ns = sort([ pos[k] for k in ks ])
-        if length(ns) == 1
-            st[only(ns)] = apply(g, st[only(ns)])
-            continue
+        if length(ks) == 1
+            st[only(ks)] = apply(g, st[only(ks)])
+        else
+            st = apply(g, st, ks; tr...)
         end
-        st = apply(g, st, ns; move_sites_back = false, tr...)
-        # the sites of the gate now next to each other from the first, the others of the window
-        # after them, each group in its order
-        window = ns[1]:ns[end]
-        at[window] = [ at[ns] ; [ at[p] for p in window if !(p in ns) ] ]
-        pos[at[window]] = window
     end
-    return st, at
+    return st
 end
 
 """
@@ -262,7 +236,7 @@ gates are applied again one by one, so that the one taking the state to zero is 
 """
 function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS, tr)
     try
-        return sites_back(gates_applied(gates, on, copy(st), tr)..., tr)
+        return gates_applied(gates, on, copy(st), tr)
     catch
         if !any(hasqns, st)
             rethrow()
@@ -327,7 +301,8 @@ applied_window(mpo::MPO, lo::Int, st::MPS, tr) =
 
 the MPO of the gate `g` on the consecutive sites of indices `idx`, from the first site it acts
 on to the last: `g` decomposed on its sites by singular value decompositions, which leave the
-least links, and the identity on the sites between
+least links, and on the sites between the identity of the link alone, which leaves the index
+of the site as it is
 """
 function gate_mpo(g::ITensor, idx::Vector{<:Index})
     on = [ s for s in idx if hasind(g, s) ]
@@ -343,8 +318,7 @@ function gate_mpo(g::ITensor, idx::Vector{<:Index})
             link = j < length(m) ? commonind(m[j], m[j + 1]) : nothing
         else
             next = sim(link)
-            # dense blocks: ITensors cannot multiply two diagonal tensors with charges
-            push!(ts, denseblocks(delta(dag(link), next)) * denseblocks(delta(s', dag(s))))
+            push!(ts, denseblocks(delta(dag(link), next)))
             link = next
         end
     end
@@ -401,57 +375,13 @@ function mixed_block(system::System, terms::Vector{Term}, sites)
 end
 
 """
-    bra_leg!(bras, system, i)
+    GateBatch(gates, on)
 
-the index standing for the bra of site `i` of `system` while `separated` keeps it apart from
-the ket, of prime level zero so that the gates of `apply` act on it, made once and kept in
-`bras`
-"""
-bra_leg!(bras::Dict{Int, Index}, system::System, i::Int) =
-    get!(bras, i) do
-        b, _ = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
-        noprime(sim(dag(b')))
-    end
-
-"""
-    separated(system, st, bras, sites)
-    joined(system, st, bras, sites)
-
-the MPS `st` of a density matrix with the mixed index of each of `sites` split into its ket and
-its bra, the bra on `bras`, and the reverse, the other sites left as they are. A combiner
-contracted with the site of a tensor changes the basis of that site only, so the limits of
-orthogonality of `st` stay true.
-"""
-function separated(system::System, st::MPS, bras::Dict{Int, Index}, sites)
-    ts = [ st[i] for i in 1:length(st) ]
-    for i in sites
-        b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
-        ts[i] = replaceind(ts[i] * dag(c), dag(b'), bra_leg!(bras, system, i))
-    end
-    return MPS(ts; ortho_lims = ortho_lims(st))
-end
-
-function joined(system::System, st::MPS, bras::Dict{Int, Index}, sites)
-    ts = [ st[i] for i in 1:length(st) ]
-    for i in sites
-        b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
-        ts[i] = replaceind(ts[i], bras[i], dag(b')) * c
-    end
-    return MPS(ts; ortho_lims = ortho_lims(st))
-end
-
-"""
-    GateBatch(gates, on, apart, sites)
-
-a step of `apply`: gates applied together, each on its sites `on`, on the indices of the state
-or, when `apart`, on the kets and the bras of a density matrix split apart on all their sites
-`sites`, see `separated`
+a step of `apply`: gates applied together, each on its consecutive sites `on`
 """
 struct GateBatch
     gates::Vector{ITensor}
     on::Vector{Vector{Int}}
-    apart::Bool
-    sites::Vector{Int}
 end
 
 """
@@ -466,18 +396,17 @@ struct GateMPO
 end
 
 """
-    add_gates!(steps, gates, on, apart)
+    add_gates!(steps, gates, on)
 
-append `gates`, each on its sites `on`, to the steps of `apply`, joining them to the last step
-when it is a batch of the same kind
+append `gates`, each on its consecutive sites `on`, to the steps of `apply`, joining them to the
+last step when it is a batch of gates
 """
-function add_gates!(steps::Vector, gates::Vector{ITensor}, on::Vector{Vector{Int}}, apart::Bool)
-    if !isempty(steps) && last(steps) isa GateBatch && last(steps).apart == apart
+function add_gates!(steps::Vector, gates::Vector{ITensor}, on::Vector{Vector{Int}})
+    if !isempty(steps) && last(steps) isa GateBatch
         append!(last(steps).gates, gates)
         append!(last(steps).on, on)
-        union!(last(steps).sites, (k for ks in on for k in ks))
     else
-        push!(steps, GateBatch(gates, on, apart, unique(k for ks in on for k in ks)))
+        push!(steps, GateBatch(gates, on))
     end
     return steps
 end
@@ -488,6 +417,79 @@ end
 whether the increasing `sites` leave others between them
 """
 spread(ks) = last(ks) - first(ks) ≥ length(ks)
+
+"""
+    block_step!(steps, R, system, m, sites)
+
+append to the steps of `apply` the dense block `m` on the increasing `sites`, on the indices of
+representation `R`: a gate on consecutive sites, the MPO of the gate on sites apart, see
+`GateMPO`
+"""
+function block_step!(steps::Vector, ::Type{R}, system::System, m::AbstractMatrix, ks) where R
+    if spread(ks)
+        idx = [ siteind(R, system, k) for k in first(ks):last(ks) ]
+        push!(steps, GateMPO(gate_mpo(gate_on(m, idx[ks .- first(ks) .+ 1]), idx), first(ks)))
+    else
+        add_gates!(steps, [ gate_on(m, [ siteind(R, system, k) for k in ks ]) ], [ collect(ks) ])
+    end
+    return steps
+end
+
+"""
+    lifted(system, w, k, left)
+
+the tensor `w` of an MPO on the ket index of site `k` of `system`, made to act on its mixed
+index: ``\\rho \\mapsto W\\rho`` when `left`, ``\\rho \\mapsto \\rho W^\\dagger`` otherwise,
+whose links carry the opposite charges; a tensor without the site, the identity there, stays so
+"""
+function lifted(system::System, w::ITensor, k::Int, left::Bool)
+    s, x = siteind(Pure, system, k), siteind(Mixed, system, k)
+    if !hasind(w, s)
+        # the identity on the site, see `gate_mpo`
+        return left ? w : dag(w)
+    end
+    links = [ i for i in inds(w) if i ∉ (s, s') ]
+    a = Array(w, s', dag(s), links...)
+    d = dim(s)
+    one = Matrix{eltype(a)}(I, d, d)
+    o = mixed_elements(system, k)
+    b = zeros(eltype(a), d^2, d^2, size(a)[3:end]...)
+    for c in CartesianIndices(size(a)[3:end])
+        m = a[:, :, c]
+        b[:, :, c] = (left ? kron(one, m) : kron(conj(m), one))[o, o]
+    end
+    return charged_itensor(b, [ x', dag(x), (left ? links : dag.(links))... ])
+end
+
+"""
+    gate_steps!(steps, system, m, sites)
+
+append to the steps of `apply` on a density matrix the gate of matrix `m` on the increasing
+`sites`: on one site its superoperator, ``\\rho \\mapsto m\\rho m^\\dagger``, as a gate; on
+several, ``\\rho \\mapsto m\\rho`` then ``\\rho \\mapsto \\rho m^\\dagger``, the MPO of `m`,
+see `gate_mpo`, made to act on the mixed indices, see `lifted`, each of the links of `m`: on
+consecutive sites of dimensions small enough, see `dense_limit`, contracted into one gate
+"""
+function gate_steps!(steps::Vector, system::System, m::AbstractMatrix, ks)
+    if length(ks) == 1
+        k = only(ks)
+        o = mixed_elements(system, k)
+        add_gates!(steps, [ gate_on(kron(conj(m), m)[o, o], [ siteind(Mixed, system, k) ]) ], [ [k] ])
+        return steps
+    end
+    lo = first(ks)
+    idx = [ siteind(Pure, system, k) for k in lo:last(ks) ]
+    w = gate_mpo(gate_on(m, idx[ks .- lo .+ 1]), idx)
+    for left in (true, false)
+        ts = [ lifted(system, w[j], lo + j - 1, left) for j in eachindex(w) ]
+        if !spread(ks) && prod(dim(system[k])^2 for k in ks) ≤ dense_limit
+            add_gates!(steps, [ prod(ts) ], [ collect(ks) ])
+        else
+            push!(steps, GateMPO(MPO(ts), lo))
+        end
+    end
+    return steps
+end
 
 """
     pure_steps(system, op)
@@ -506,30 +508,24 @@ function pure_steps(system::System, a::IndexedOp{IsOperator})
             break
         elseif action isa Vector{Term}
             push!(steps, action)
-        elseif length(action) == 1 && spread(last(only(action)))
-            m, ks = only(action)
-            idx = [ siteind(Pure, system, k) for k in first(ks):last(ks) ]
-            push!(steps, GateMPO(gate_mpo(gate_on(m, idx[ks .- first(ks) .+ 1]), idx), first(ks)))
         else
-            gates = [ gate_on(m, [ siteind(Pure, system, k) for k in ks ]) for (m, ks) in action ]
-            add_gates!(steps, gates, [ collect(ks) for (_, ks) in action ], false)
+            foreach(((m, ks),) -> block_step!(steps, Pure, system, m, ks), action)
         end
     end
     return coef, steps
 end
 
 """
-    mixed_steps(system, op, bras)
+    mixed_steps(system, op)
 
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
-generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate as
-its operator on the kets and its conjugate on the bras, made in `bras`, see `bra_leg!`, piece by
-piece, any other factor as a dense block on the mixed indices, or the terms of either to apply
-through their MPO
+generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
+by piece, see `gate_steps!`, any other factor as a dense block on the mixed indices, see
+`block_step!`, or the terms of either to apply through their MPO
 """
-function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
+function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
-    steps = Union{GateBatch, Vector{Term}}[]
+    steps = Union{GateBatch, GateMPO, Vector{Term}}[]
     for f in reverse(channel_factors(scalararg(a)))
         if f isa IndexedOp{IsOperator}
             c, ps = pieces(system, f)
@@ -540,13 +536,7 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
                 if action isa Vector{Term}
                     push!(steps, gate_terms(action))
                 else
-                    # K on the kets, its conjugate on the bras
-                    gates = [ g for (m, ks) in action
-                              for g in (gate_on(m, [ siteind(Pure, system, k) for k in ks ]),
-                                        gate_on(conj(m), [ bra_leg!(bras, system, k)
-                                                           for k in ks ])) ]
-                    on = [ collect(ks) for (_, ks) in action for _ in 1:2 ]
-                    add_gates!(steps, gates, on, true)
+                    foreach(((m, ks),) -> gate_steps!(steps, system, m, ks), action)
                 end
             end
         else
@@ -556,8 +546,7 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif prod(dim(system[k])^2 for k in ks) ≤ dense_limit
-                block = gate_on(mixed_block(system, laid, ks), [ siteind(Mixed, system, k) for k in ks ])
-                add_gates!(steps, [block], [ks], false)
+                block_step!(steps, Mixed, system, mixed_block(system, laid, ks), ks)
             else
                 push!(steps, terms)
             end
@@ -570,14 +559,13 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
 end
 
 """
-    applied_steps(R, system, st, steps, limits, bras = nothing)
+    applied_steps(R, system, st, steps, limits)
 
 the MPS `st` of a state of representation `R` with the steps of `apply` applied in order, each
-truncated to `limits`, see `applied_mpo` for an MPO, the MPOs built as they come, the gates of a
-density matrix split apart on their sites, the bras on `bras`
+truncated to `limits`, the MPOs built as they come and applied on the sites they act on, see
+`applied_window`
 """
-function applied_steps(::Type{R}, system::System, st::MPS, steps, limits::Limits,
-                       bras = Dict{Int, Index}()) where R
+function applied_steps(::Type{R}, system::System, st::MPS, steps, limits::Limits) where R
     tr = truncation(limits)
     for step in steps
         st = if step isa Vector{Term}
@@ -586,9 +574,6 @@ function applied_steps(::Type{R}, system::System, st::MPS, steps, limits::Limits
             isnothing(w) ? 0 * st : applied_window(window_mpo(pre, [1.], w), first(w), st, tr)
         elseif step isa GateMPO
             applied_window(step.mpo, step.lo, st, tr)
-        elseif step.apart
-            kets_bras = separated(system, st, bras, step.sites)
-            joined(system, applied_gates(step.gates, step.on, kets_bras, tr), bras, step.sites)
         else
             applied_gates(step.gates, step.on, st, tr)
         end
@@ -651,12 +636,11 @@ function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed
                limits::Limits = Limits())
     sys = state.system
     check_indices(sys, a)
-    bras = Dict{Int, Index}()
-    coef, steps = mixed_steps(sys, a, bras)
+    coef, steps = mixed_steps(sys, a)
     if coef == 0
         return State(state, 0 * state.state)
     end
-    st = applied_steps(Mixed, sys, state.state, steps, limits, bras)
+    st = applied_steps(Mixed, sys, state.state, steps, limits)
     return State(state, coef == 1 ? st : coef * st)
 end
 

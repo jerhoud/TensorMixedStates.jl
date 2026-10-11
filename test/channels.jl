@@ -597,22 +597,64 @@ end
     ρ5 = mix(State{Pure}(q5, ["Dn", "Up", "Up", "Up", "Up"]))
     swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
     @test norm(apply(prod(swaps), ρ5) - foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)) < 1e-10
-    # and gates far apart, on the kets and the bras apart, leave the sites in their places
+    # and gates far apart leave the sites in their places
     ρf = random_state(Mixed, System(6, Fermion()), 3)
     @test TMS.ITensorMPS.siteinds(apply(Gate((C ⊗ dag(C))(1, 5)) * Gate(Swap(2, 6)), ρf).state) ==
         TMS.ITensorMPS.siteinds(ρf.state)
-    # a batch over part of the chain, split apart on its sites alone, is the gates one by one
+    # a product of gates is the gates applied one by one
     ρg = random_state(Mixed, System(8, Fermion()), 3)
     g1, g2 = Gate((C ⊗ dag(C))(2, 6)), Gate(Swap(3, 5))
     g3 = Gate(exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(4, 7))
     @test norm(apply(g1 * g2 * g3, ρg) - apply(g1, apply(g2, apply(g3, ρg)))) < 1e-12
-    # bosons of dimension 8, a gate acting on the kets and on the bras apart
+    # bosons of dimension 8, whose gate on two sites is too large to be contracted: its MPO,
+    # on the kets then on the bras
     bs = System(2, Boson(8))
     ρb = random_state(Mixed, bs, 2)
     rb = ket_bra_matrix(ρb)
     g = exp(-0.2im * (A ⊗ dag(A) + dag(A) ⊗ A))(1, 2)
     u = fock(bs, g)
     @test ket_bra_matrix(apply(g, ρb)) ≈ u * rb * u'
+end
+
+@testset "Gates on a density matrix, on the kets then on the bras" begin
+    # a gate of several sites acts on the kets, then on the bras, through its MPO made to act on
+    # the mixed indices: one gate on consecutive sites, its MPO on the sites between otherwise; a
+    # gate of one site as its superoperator; another channel on sites apart through its MPO
+    function same(ρ, a, k)
+        r = ket_bra_matrix(ρ)
+        return norm(ket_bra_matrix(apply(a, ρ)) - k * r * k') ≤ 1e-12 * max(1, norm(k * r * k'))
+    end
+    kinds(ρ, a) = typeof.(last(TMS.mixed_steps(ρ.system, a)))
+    qs = System(6, Qubit())
+    ρ = random_state(Mixed, qs, 4)
+    g4 = exp(-0.3im * (X ⊗ X + Y ⊗ Y + Z ⊗ Z))
+    for op in [controlled(X)(2, 5), controlled(X)(3, 4), g4(1, 6), g4(2, 3), H(3),
+               controlled(controlled(X))(1, 3, 6), controlled(X)(1, 5) * H(2) * g4(3, 4)]
+        @test same(ρ, Gate(op), fock(qs, op))
+    end
+    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.GateMPO, TMS.GateMPO]
+    @test kinds(ρ, Gate(controlled(X)(3, 4))) == [TMS.GateBatch]
+    @test kinds(ρ, Gate(H(3))) == [TMS.GateBatch]
+    ps = [ fock(qs, Proj(Z ⊗ Z => λ)(1, 4)) for λ in (1., -1.) ]
+    r = ket_bra_matrix(ρ)
+    @test ket_bra_matrix(apply(Dephase(Z ⊗ Z)(1, 4), ρ)) ≈ sum(p * r * p for p in ps)
+    @test kinds(ρ, Dephase(Z ⊗ Z)(1, 4)) == [TMS.GateMPO]
+    # fermions, charged or not, and bosons
+    hop = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
+    for site in (Fermion(), Fermion(conserve = N))
+        fs = System(5, site)
+        ρf = mix(random_state(State{Pure}(fs, ["Occ", "Emp", "Occ", "Emp", "Occ"]), 3)) +
+             mix(random_state(State{Pure}(fs, ["Emp", "Occ", "Occ", "Emp", "Occ"]), 3))
+        for op in [hop(1, 2), hop(2, 4), (C ⊗ N)(1, 4), C(1) * dag(C)(3) + 0.5 * N(2)]
+            @test same(ρf, Gate(op), fock(fs, op))
+        end
+    end
+    bs = System(4, Boson(4))
+    ρb = random_state(Mixed, bs, 3)
+    bh = exp(-0.2im * (dag(A) ⊗ A + dag(dag(A) ⊗ A)))
+    for op in [bh(1, 2), bh(1, 4)]
+        @test same(ρb, Gate(op), fock(bs, op))
+    end
 end
 
 @testset "Channels applied under a strong symmetry" begin
