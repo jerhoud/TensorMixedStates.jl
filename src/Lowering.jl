@@ -649,31 +649,6 @@ the number of terms of the placed operator `op` on `system`
 term_count(system::System, a::IndexedOp{IsOperator}) = length(reduced(op_terms(system, a, ())))
 
 """
-    sort_factors!(fs, info)
-
-sort the factors `fs` of a product, and their `(sites, parity)` in `info`, by their sites as
-far as they (anti)commute, see `dependent`, a factor going back past a neighbour of larger
-sites, and return the sign that brings, -1 for each pair of odd factors that change places
-"""
-function sort_factors!(fs, info)
-    sign = 1
-    key(k) = sort(first(info[k]))
-    for k in 2:length(fs)
-        for j in k:-1:2
-            if !(key(j - 1) > key(j)) || dependent(info[j - 1], info[j])
-                break
-            end
-            if info[j - 1][2] == 1 && info[j][2] == 1
-                sign = -sign
-            end
-            fs[j - 1], fs[j] = fs[j], fs[j - 1]
-            info[j - 1], info[j] = info[j], info[j - 1]
-        end
-    end
-    return sign
-end
-
-"""
     count_add!(tree, k, x)
 
 add `x` to the count of position `k` of `tree`, a Fenwick tree of counts
@@ -721,6 +696,106 @@ function last_counted(tree::Vector{Int})
         step >>= 1
     end
     return k + 1
+end
+
+"""
+    heap_push!(h, x, less)
+    heap_pop!(h, less)
+
+add `x` to the binary heap `h` ordered by `less`, or take its least element out
+"""
+function heap_push!(h::Vector, x, less)
+    push!(h, x)
+    i = length(h)
+    while i > 1 && less(h[i], h[i >> 1])
+        h[i], h[i >> 1] = h[i >> 1], h[i]
+        i >>= 1
+    end
+    return h
+end
+
+function heap_pop!(h::Vector, less)
+    top, x = h[1], pop!(h)
+    if !isempty(h)
+        h[1] = x
+        i = 1
+        while true
+            m = i
+            for c in (2i, 2i + 1)
+                if c ≤ length(h) && less(h[c], h[m])
+                    m = c
+                end
+            end
+            if m == i
+                break
+            end
+            h[i], h[m] = h[m], h[i]
+            i = m
+        end
+    end
+    return top
+end
+
+"""
+    sort_factors!(fs, info)
+
+sort the factors `fs` of a product, and their `(sites, parity)` in `info`, by their sites as
+far as they (anti)commute, see `dependent`, and return the sign that brings, -1 for each pair
+of odd factors that change places: of the factors whose dependencies before them are placed, the
+one of smallest sites goes next, so that products differing only by the order of factors that
+(anti)commute take one form
+"""
+function sort_factors!(fs, info)
+    n = length(fs)
+    order_keys = [ sort(sites) for (sites, _) in info ]
+    # the factors each one waits for, enough for all it depends on: the last one on each of its
+    # sites, the last of no definite parity for an odd one or one of none, and the odd ones
+    # since for one of none
+    waits = zeros(Int, n)
+    next = [ Int[] for _ in 1:n ]
+    last_on = Dict{Int, Int}()
+    none, odds = 0, Int[]
+    for (j, (sites, p)) in enumerate(info)
+        before = Set{Int}(last_on[k] for k in sites if haskey(last_on, k))
+        if p ≠ 0 && none > 0
+            push!(before, none)
+        end
+        if isnothing(p)
+            union!(before, odds)
+            none, odds = j, Int[]
+        elseif p == 1
+            push!(odds, j)
+        end
+        foreach(k -> push!(next[k], j), before)
+        waits[j] = length(before)
+        foreach(k -> last_on[k] = j, sites)
+    end
+    less(a, b) = (order_keys[a], a) < (order_keys[b], b)
+    ready = Int[]
+    foreach(j -> heap_push!(ready, j, less), findall(iszero, waits))
+    order = Int[]
+    while !isempty(ready)
+        j = heap_pop!(ready, less)
+        push!(order, j)
+        for k in next[j]
+            waits[k] -= 1
+            if waits[k] == 0
+                heap_push!(ready, k, less)
+            end
+        end
+    end
+    # -1 for each pair of odd factors in the other order, counted in a Fenwick tree
+    placed, swaps, tree = 0, 0, zeros(Int, n)
+    for j in order
+        if info[j][2] == 1
+            swaps += placed - count_to(tree, j)
+            count_add!(tree, j, 1)
+            placed += 1
+        end
+    end
+    copyto!(fs, fs[order])
+    copyto!(info, info[order])
+    return isodd(swaps) ? -1 : 1
 end
 
 """

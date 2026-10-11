@@ -587,6 +587,15 @@ end
     @test length(fs) == 1000 && TMS.scalarcoef(g) == 1
     @test all(k -> TMS.sites_of(fs[k]) == [k] && matrix(fs[k].op, q) ≈ -im * matrix(Y, q), 1:1000)
     @test same(f5, C(1) * dag(C)(2) * C(3) * N(4) * dag(C)(1) * C(2) * N(3))
+
+    # the sort places, of the factors whose dependencies are placed, the one of smallest sites:
+    # one form for products differing only by the order of factors that (anti)commute, a
+    # product written backwards sorted, with a sign for the odd factors that change places
+    @test TMS.gathered(s5, Swap(4, 5) * controlled(X)(2, 5) * X(3)) ==
+          TMS.gathered(s5, Swap(4, 5) * X(3) * controlled(X)(2, 5)) == X(3) * Swap(4, 5) * controlled(X)(2, 5)
+    @test TMS.gathered(System(1000, q), prod(X(i) for i in 1000:-1:1)) == prod(X(i) for i in 1:1000)
+    g = TMS.gathered(f4, C(3) * C(2) * C(1))
+    @test TMS.scalarcoef(g) == -1 && TMS.prodsubs(TMS.scalararg(g)) == [C(1), C(2), C(3)]
 end
 
 @testset "tensor is ⊗ under a name in ASCII" begin
