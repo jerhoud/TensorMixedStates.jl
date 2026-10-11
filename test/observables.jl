@@ -291,6 +291,10 @@ end
     @test length(last(TMS.pieces(q, op))) == 100
     one_by_one = foldl((s, g) -> apply(g, s), reverse(swaps); init = st)
     @test norm(apply(op, st) - one_by_one) < 1e-10
+    # gates far apart move sites, which come back to their places
+    ψ = random_state(Pure, System(8, Fermion()), 4)
+    far = (C ⊗ dag(C))(2, 7) * Swap(1, 5) * exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(3, 8)
+    @test TMS.ITensorMPS.siteinds(apply(far, ψ).state) == TMS.ITensorMPS.siteinds(ψ.state)
     # factors of one site of definite parity gather into one piece, across factors they
     # commute with, so that their strings compensate
     fe = System(5, Fermion())

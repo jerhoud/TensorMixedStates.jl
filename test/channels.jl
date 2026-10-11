@@ -574,6 +574,10 @@ end
     ρ5 = mix(State{Pure}(q5, ["Dn", "Up", "Up", "Up", "Up"]))
     swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
     @test norm(apply(prod(swaps), ρ5) - foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)) < 1e-10
+    # and gates far apart, on the kets and the bras apart, leave the sites in their places
+    ρf = random_state(Mixed, System(6, Fermion()), 3)
+    @test TMS.ITensorMPS.siteinds(apply(Gate((C ⊗ dag(C))(1, 5)) * Gate(Swap(2, 6)), ρf).state) ==
+        TMS.ITensorMPS.siteinds(ρf.state)
     # bosons of dimension 8, a gate acting on the kets and on the bras apart
     bs = System(2, Boson(8))
     ρb = random_state(Mixed, bs, 2)

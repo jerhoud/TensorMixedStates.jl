@@ -201,6 +201,24 @@ function vanishing_gate(g::ITensor, st::MPS)
 end
 
 """
+    sites_back(ψ, st, tr)
+
+the MPS `st`, made from `ψ` by gates that moved its sites, with each site back where it is in
+`ψ`, the swaps truncated by `tr`: only the window of the positions that moved is reordered, the
+sites outside it staying in place, where ITensorMPS reorders all of them at a cost of order `n²`
+"""
+function sites_back(ψ::MPS, st::MPS, tr)
+    place = Dict(i => k for k in 1:length(ψ) for i in siteinds(ψ, k))
+    now = [ place[first(siteinds(st, n))] for n in 1:length(st) ]
+    moved = findall(n -> now[n] ≠ n, eachindex(now))
+    if isempty(moved)
+        return st
+    end
+    lo, hi = extrema(moved)
+    return movesites(st, [ n => now[n] for n in lo:hi ]; tr...)
+end
+
+"""
     applied_gates(gates, st, tr)
 
 the MPS `st` with `gates` applied, truncated by `tr`, or the null state when the result
@@ -212,7 +230,9 @@ function applied_gates(gates::Vector{ITensor}, st::MPS, tr)
         return st
     end
     try
-        return apply(gates, copy(st); move_sites_back_between_gates = false, tr...)
+        moved = apply(gates, copy(st); move_sites_back_between_gates = false, move_sites_back = false,
+                      tr...)
+        return sites_back(st, moved, tr)
     catch
         if !any(hasqns, st)
             rethrow()
