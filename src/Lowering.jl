@@ -599,8 +599,9 @@ parity_on(::System, ::IdentityOp) = 0
     matrix_on(system, op, sites)
 
 the matrix of the operator `op`, placed on some of `sites`, on all of them in that order, the
-Jordan-Wigner strings between them included, its products and sums taken as matrices, nothing
-developed
+Jordan-Wigner strings between them included: its products and sums taken as matrices, a factor
+on exactly `sites` by its matrix, any other by its terms on these sites alone, see
+`system_matrix`
 """
 function matrix_on(system::System, a::AtIndex, sites)
     if collect(a.index) == collect(sites)

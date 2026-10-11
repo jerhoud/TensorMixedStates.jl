@@ -432,10 +432,11 @@ end
     gate_steps!(steps, R, system, m, sites)
 
 append to the steps of `apply` the gate of matrix `m` on the increasing `sites`: on a pure
-state, `R = Pure`, as a dense block, see `block_step!`; on a density matrix, on one site its superoperator, ``\\rho \\mapsto m\\rho m^\\dagger``, as a gate; on
-several, ``\\rho \\mapsto m\\rho`` then ``\\rho \\mapsto \\rho m^\\dagger``, the MPO of `m`,
-see `gate_mpo`, made to act on the mixed indices, see `lifted`, each of the links of `m`: on
-consecutive sites of dimensions small enough, see `dense_limit`, contracted into one gate
+state, `R = Pure`, as a dense block, see `block_step!`. On a density matrix, on one site, its
+superoperator ``\\rho \\mapsto m\\rho m^\\dagger`` as a block; on several,
+``\\rho \\mapsto m\\rho`` then ``\\rho \\mapsto \\rho m^\\dagger``, each the MPO of `m`, see
+`gate_mpo`, made to act on the mixed indices, see `lifted`: one gate on consecutive sites small
+enough, see `dense_enough`, an MPO on its sites otherwise
 """
 gate_steps!(steps::Vector, ::Type{Pure}, system::System, m::AbstractMatrix, ks) =
     block_step!(steps, Pure, system, m, ks)
