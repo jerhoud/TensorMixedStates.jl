@@ -199,13 +199,13 @@ function guarded(f, vanishes, st::MPS)
 end
 
 """
-    vanishing_gate(g, st)
+    vanishing_gate(g, sites, st)
 
-whether the gate `g` takes the MPS `st` exactly to zero: the norm of `g` on the block of the
-sites it acts on, `st` orthogonalised on the first of them
+whether the gate `g` on the consecutive `sites` takes the MPS `st` exactly to zero: the norm of
+`g` on the block of these sites, `st` orthogonalised on the first of them
 """
-function vanishing_gate(g::ITensor, st::MPS)
-    a, b = extrema(findsites(st, g))
+function vanishing_gate(g::ITensor, ks::Vector{Int}, st::MPS)
+    a, b = extrema(ks)
     o = orthogonalize(st, a)
     return iszero(norm(g * prod(o[k] for k in a:b)))
 end
@@ -243,8 +243,8 @@ function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS,
             rethrow()
         end
     end
-    for g in gates
-        st = guarded(s -> apply(g, s; tr...), s -> vanishing_gate(g, s), st)
+    for (g, ks) in zip(gates, on)
+        st = guarded(s -> gates_applied([g], [ks], s, tr), s -> vanishing_gate(g, ks, s), st)
     end
     return st
 end
