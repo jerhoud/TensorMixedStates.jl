@@ -350,6 +350,7 @@ end
     @test only(steps(exp(-0.4im * h)(1, 3))) isa TMS.WindowMPO
     @test only(steps((C + N)(3))) isa TMS.WindowMPO
     @test length(only(steps(C(4))).gates) == 4
+    @test length(only(steps((C + dag(C))(3) * named(N + 2Id, "G")(5))).gates) == 4
     # a product that vanishes gives the null state, and an MPO is applied as it is
     ψ = random_state(Pure, fe, 4)
     @test norm(apply(C(2) * C(2), ψ)) == 0

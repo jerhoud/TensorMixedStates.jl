@@ -413,13 +413,15 @@ end
 
 the terms of the operator `op` on `system`, as it is written: sums and products distributed, a
 generic operator placed on the sites `index`. A tensor product is the product of its factors
-placed, `(A ⊗ B)(i, j) = A(i) * B(j)`, a named expression is its expression, and any other
-operator is taken by its matrix, see `matrix_terms`. A channel or a generator gives the terms
-of its superoperator: those of a gate, an evolver or a dissipator are made of the terms of
-their operators on each side of the density matrix, see `sided_term`.
+placed, `(A ⊗ B)(i, j) = A(i) * B(j)`, and a named expression is its expression. A generic sum
+or a named expression of one site is taken by its matrix instead, a term for each parity rather
+than one for each operand, and so is any other operator, see `matrix_terms`. A channel or a
+generator gives the terms of its superoperator: those of a gate, an evolver or a dissipator are
+made of the terms of their operators on each side of the density matrix, see `sided_term`.
 """
 op_terms(system::System, a::SumOp, index) =
     reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
+op_terms(system::System, a::SumOp{IsOperator, Generic, 1}, index) = matrix_terms(system, a, index)
 op_terms(system::System, a::ProdOp, index) =
     tree_products([ op_terms(system, x, index) for x in a.subs ])
 op_terms(system::System, a::ScalarOp, index) = scaled(a.coef, op_terms(system, a.arg, index))
@@ -428,8 +430,8 @@ op_terms(system::System, a::AtIndex, _) = op_terms(system, a.op, a.index)
 op_terms(system::System, a::TensorOp, index) =
     tree_products([ op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a)) ])
 op_terms(system::System, a::DagOp, index) = map(dag, op_terms(system, a.arg, index))
-op_terms(system::System, a::Operator, index) =
-    a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)
+op_terms(system::System, a::Operator{N}, index) where N =
+    N > 1 && a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)
 op_terms(system::System, a::Union{Proj, ExpOp, IntPowOp, GenPowOp{IsOperator}, ModOp, Reset,
                                   Dephase}, index) =
     matrix_terms(system, a, index)

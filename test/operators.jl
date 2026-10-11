@@ -447,6 +447,15 @@ end
     # a block of no definite parity is split into its even and odd parts, which 1.x refused
     @test lowered(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
     @test lowered(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
+    # a sum or a named expression of one site is taken by its matrix, a term for each parity,
+    # so that a product of them does not grow with the number of its factors
+    nterms(sys, op) = length(TMS.lower(sys, op))
+    xz, m = named(X + Z, "XZ"), named(C + dag(C), "M")
+    @test nterms(s3, (X + Z)(2)) == nterms(s3, xz(2)) == 1
+    @test nterms(s3, xz(1) * xz(2) * xz(3)) == nterms(s3, ((X + Z) ⊗ (X + Z))(1, 3)) == 1
+    @test lowered(s3, xz(1) * xz(3)) ≈ jw(s3, 1, x + z) * jw(s3, 3, x + z)
+    @test nterms(s4, m(3)) == 1 && nterms(s4, (C + N)(2)) == 2
+    @test lowered(s4, m(3)) ≈ jw(s4, 3, c + cd)
     # strings on the fermionic sites only, and two species on a site
     sm = System([fe, q, fe])
     @test lowered(sm, C(1) * X(2) * dag(C)(3)) ≈ jw(sm, 1, c) * jw(sm, 2, x) * jw(sm, 3, cd)
@@ -481,6 +490,7 @@ end
     hops = dag(C)(1) * C(3) + dag(C)(3) * C(1)
     @test lowered(System(3, fn), hops) ≈ lowered(System(3, fe), hops)
     @test_throws "change the charges by" TMS.lower(System(3, fn), C(1) + dag(C)(2))
+    @test_throws "no definite flux" TMS.lower(System(3, fn), (C + dag(C))(2))
     @test_throws "no definite flux" TMS.lower(System(2, Qubit(conserve = N)), X(1))
     # a site the system does not have, named as written
     @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(s3, X(5))
