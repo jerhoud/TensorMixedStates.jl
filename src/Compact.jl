@@ -100,8 +100,8 @@ end
 """
     Combination{T}
 
-an operator of one site as a combination of the atoms of its site, numbered from 1, the
-identity being 0, with coefficients of type `T`
+an operator of one site as a combination of the matrices of its site in a block of channels,
+see `ComBlock`, numbered from 1, the identity being 0, with coefficients of type `T`
 """
 const Combination{T} = Dict{Int, T}
 
@@ -116,9 +116,10 @@ const SitePieces{T} = Dict{Tuple{Int, Int}, Combination{T}}
 """
     struct ComBlock{T}
 
-a block of channels being built or reduced: `pieces[k]` holds those of the `k`-th site from
-`start`, `atoms[k]` the matrices of the atoms of that site, and `dims[k]` is the number of
-channels of the link on the right of that site.
+a block of channels: `pieces[k]` holds those of the `k`-th site from `start`, `atoms[k]` the
+matrices their combinations number on that site, its atoms, and their basis once `on_basis!` has
+written the pieces on it, and `dims[k]` is the number of channels of the link on the right of
+that site, for every site but the last.
 """
 struct ComBlock{T}
     start::Int
@@ -140,8 +141,9 @@ Built from left to right: on each site, the channels on the left continued by an
 the strings of their terms where these have no factor, and the terms beginning there, are rows
 over the suffixes of the terms; the rows `interpolative` keeps are the channels on the right,
 and the coefficients of all the rows the pieces of the site. A term opens on its first site and
-closes on its last, and the channels are independent on their left, leaving the sweeps of
-`compacted` to reduce dependent suffixes.
+closes on its last. The atoms are taken as independent: the relations `on_basis!` finds between
+them, and the identity `push_identities!` moves out, leave channels dependent on either side,
+which the sweeps of `compacted` reduce.
 """
 function direct_pass(terms::Vector{Tuple{T, Vector{Tuple{Int, Int, Int}}}}, strings,
                      tol::Real) where T
@@ -239,7 +241,8 @@ function on_basis!(b::ComBlock{T}, tol::Real) where T
         d = size(atoms[1], 1)
         τ = [ tr(m) / d for m in atoms ]
         parts = [ m - x * I for (m, x) in zip(atoms, τ) ]
-        kept, t = interpolative(vec.(parts), norm.(atoms), tol)
+        anorms = norm.(atoms)
+        kept, t = interpolative(vec.(parts), anorms, tol)
         basis = parts[kept]
         norms = [ sqrt(d); norm.(basis) ]
         written = SitePieces{T}()
@@ -259,7 +262,7 @@ function on_basis!(b::ComBlock{T}, tol::Real) where T
                     end
                 end
             end
-            scale = sqrt(sum(abs2(x) * (a == 0 ? d : norm(atoms[a])^2) for (a, x) in comb; init = 0.0))
+            scale = sqrt(sum(abs2(x) * (a == 0 ? d : anorms[a]^2) for (a, x) in comb; init = 0.0))
             filter!(p -> abs(last(p)) * norms[first(p) + 1] > tol * scale, out)
             if !isempty(out)
                 written[lr] = out
@@ -357,8 +360,9 @@ end
 """
     mirror(b)
 
-the block `b` read from right to left, the piece `(l, r)` of a site becoming `(r, l)`. `start`
-is kept, which `left_sweep!` does not read, so that mirroring twice gives `b` back.
+the block `b` read from right to left, the piece `(l, r)` of a site becoming `(r, l)`, its
+combinations shared. `start` is kept, which `push_identities!` and `left_sweep!` do not read, so
+that mirroring twice gives `b` back.
 """
 mirror(b::ComBlock{T}) where T =
     ComBlock{T}(b.start, reverse(b.dims),
@@ -471,9 +475,9 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
                         [ get(atoms, k, Matrix{T}[]) for k in start:start + length(pieces) - 1 ])
         b = on_basis!(b, rounding_tol)
         opened = push_identities!(b)
-        m = mirror(b)
-        closed = push_identities!(m)
-        b = left_sweep!(mirror(m), rounding_tol)
+        b = mirror(b)
+        closed = push_identities!(b)
+        b = left_sweep!(mirror(b), rounding_tol)
         b = mirror(left_sweep!(mirror(b), rounding_tol))
         for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
             if !isempty(comb)
