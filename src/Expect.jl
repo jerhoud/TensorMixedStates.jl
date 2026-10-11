@@ -521,7 +521,7 @@ function pair_parity(sys::System, (o1, o2), sites)
 end
 
 """
-    mirror(state, (o1, o2), sites, parity)
+    swap_rule(state, (o1, o2), sites, parity)
 
 the function giving the entry `(j, i)`, `j > i`, of the pair `(o1, o2)` from its entry `(i, j)`,
 or `nothing`: for `o1 == o2`, the same value, of opposite sign when `parity` is odd, the two
@@ -529,7 +529,7 @@ sites being different; on a pure state, for `o2` the adjoint of `o1` on every si
 its conjugate, `(o1(i) o2(j))†` being `o1(j) o2(i)`. On a mixed state, which truncation leaves
 only nearly hermitian, the second is computed.
 """
-function mirror(state::State, (o1, o2), sites, parity::Int)
+function swap_rule(state::State, (o1, o2), sites, parity::Int)
     sys = state.system
     if o1 == o2
         return parity == 1 ? (-) : identity
@@ -571,7 +571,7 @@ in `sites`, each pair being defined on all of them with one parity there, its en
 function fast_pairs!(r, state::State{Pure}, pairs, parities, sites)
     sys = state.system
     scale = real(trace(state))
-    mirrors = [ mirror(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
+    rules = [ swap_rule(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
     upto = maximum(sites)
     for i in sites
         e = zipto(state, Expector(), i)
@@ -581,7 +581,7 @@ function fast_pairs!(r, state::State{Pure}, pairs, parities, sites)
         # the rows of an operator placed on i, shared by the pairs it opens
         rows = Dict{Tuple{SimpleOp, Int}, Vector{ITensor}}()
         row(o, q) = get!(() -> closed_row(state, e, matrix(o, sys[i]), i, q, upto), rows, (o, q))
-        for (k, ((o1, o2), q, m)) in enumerate(zip(pairs, parities, mirrors))
+        for (k, ((o1, o2), q, m)) in enumerate(zip(pairs, parities, rules))
             r[k][i, i] = scalar(t * obs_tensor(state, matrix(o1 * o2, sys[i]), i))
             if isempty(later)
                 continue
@@ -607,7 +607,7 @@ end
 function fast_pairs!(r, state::State{Mixed}, pairs, parities, sites)
     sys = state.system
     scale = real(trace(state))
-    mirrors = [ mirror(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
+    rules = [ swap_rule(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
     need = unique(parities)
     f(k) = matrix(F, sys[k])
     upto = maximum(sites)
@@ -627,7 +627,7 @@ function fast_pairs!(r, state::State{Mixed}, pairs, parities, sites)
                 correlation(a, b, q) =
                     scalar(ends[q].t * obs_tensor(state, q == 1 ? matrix(a, sys[i]) * f(i) : matrix(a, sys[i]), i) *
                            obs_tensor(state, matrix(b, sys[j]), j))
-                for (k, ((o1, o2), q, m)) in enumerate(zip(pairs, parities, mirrors))
+                for (k, ((o1, o2), q, m)) in enumerate(zip(pairs, parities, rules))
                     v = correlation(o1, o2, q)
                     r[k][i, j] = v
                     if !isnothing(m)
