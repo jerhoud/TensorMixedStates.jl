@@ -381,6 +381,15 @@ function combination_matrix(b::ComBlock{T}, j::Int, comb::Combination{T}, d::Int
 end
 
 """
+    normalized_norm(m)
+
+the Hilbert-Schmidt norm of the matrix `m` over that of the identity, 1 for any unitary, so
+that the norm of a tensor product, the product of those of its factors, does not grow with
+their number
+"""
+normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
+
+"""
     compacted(R, system, terms)
 
 the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
@@ -389,11 +398,11 @@ matrices being those of superoperators for `R = Mixed`,
 reduced with the matrices of the sites, see `on_basis!`: the identity is moved out of its
 openings and its closings, see `push_identities!`, into terms of one site, and the sweeps then
 reduce what these relations made dependent. A term of one site that rounding left in place of
-zero is dropped.
+zero is dropped, the terms measured by `normalized_norm`.
 """
 function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
-    scale = maximum(t -> abs(t.coef) * prod(norm(m) for (_, m) in t.blocks; init = 1.0), terms;
-                    init = 0.0)
+    scale = maximum(t -> abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0),
+                    terms; init = 0.0)
     T = float(promote_type(Float64, (typeof(t.coef) for t in terms)...,
                            (eltype(m) for t in terms for (_, m) in t.blocks)...))
     constant = zero(T)
@@ -419,7 +428,7 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
         end
     end
     if isempty(multi)
-        return constant, filter(p -> norm(last(p)) > rounding_tol * scale, singles), nothing
+        return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), nothing
     end
     b = on_basis!(direct_pass(multi, atoms, T, rounding_tol), rounding_tol)
     opened = push_identities!(b)
@@ -432,5 +441,5 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
             add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
         end
     end
-    return constant, filter(p -> norm(last(p)) > rounding_tol * scale, singles), b
+    return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), b
 end

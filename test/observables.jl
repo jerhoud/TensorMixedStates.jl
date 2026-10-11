@@ -211,6 +211,23 @@ end
     end
 end
 
+@testset "Terms of one site next to a term over many sites" begin
+    # the terms of one site are not taken for rounding next to a term whose norm of Frobenius
+    # grows with its number of sites
+    q = State{Pure}(System(100, Qubit()), "Up")
+    h = sum([ Z(i) for i in 1:100 ]) + prod([ X(i) for i in 1:100 ])
+    @test expect(q, h) ≈ 100
+    @test inner(q, h, q) ≈ 100
+    # a periodic Hubbard chain, whose hopping across the edge has a string over every site
+    n, u = 50, 4.
+    e = State{Pure}(System(n, Electron()), "UpDn")
+    bonds = [ (i, mod1(i + 1, n)) for i in 1:n ]
+    h = -sum([ dag(c)(i) * c(j) + dag(c)(j) * c(i) for c in (Cup, Cdn) for (i, j) in bonds ]) +
+        u * sum([ Nupdn(i) for i in 1:n ])
+    @test expect(e, h) ≈ u * n
+    @test inner(e, h, e) ≈ u * n
+end
+
 @testset "A random fermionic oracle" begin
     # the Jordan-Wigner strings checked on random products against the dense matrices of the
     # strings written out, through expect on a pure and on a mixed state, the MPO, expect2 and
