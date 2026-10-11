@@ -23,9 +23,9 @@ nearly(a, b) = norm(a - b) ≤ rounding_tol * max(norm(a), norm(b))
 """
     spectral_tol(values)
 
-the distance below which two eigenvalues among `values` are one
+the distance below which two eigenvalues among `values` are one, relative to the largest
 """
-spectral_tol(values) = rounding_tol * max(1, maximum(abs, values))
+spectral_tol(values) = rounding_tol * maximum(abs, values)
 
 """
     expand_sites(what, n, sites)

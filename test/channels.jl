@@ -165,6 +165,9 @@ end
     out = reshape(matrix(Dephase(Ntot), e) * vec(ρ), 4, 4)
     n = real(TMS.LinearAlgebra.diag(matrix(Ntot, e)))
     @test out ≈ [ n[i] == n[j] ? ρ[i, j] : 0 for i in 1:4, j in 1:4 ]
+    # the eigenvalues are told apart relative to the largest, however small the operator
+    @test matrix(Dephase(1e-14 * Z), q) ≈ matrix(Dephase(Z), q)
+    @test matrix(Proj(1e-14 * Z => -1e-14), q) ≈ matrix(Proj(Z => -1), q)
     @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset([1., 0., 0.]), q)
     @test_throws "a number does not denote a state" Reset(1)
     @test_throws "write Dephase(N)(1) rather than Dephase(N(1))" Dephase(N(1))
