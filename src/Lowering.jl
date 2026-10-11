@@ -327,7 +327,7 @@ of its superoperator: those of a gate, an evolver or a dissipator are made of th
 their operators on each side of the density matrix, see `sided_term`.
 """
 op_terms(system::System, a::SumOp, index) =
-    reduce(vcat, (op_terms(system, x, index) for x in a.subs))
+    reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
 op_terms(system::System, a::ProdOp, index) =
     foldl(products, (op_terms(system, x, index) for x in a.subs))
 op_terms(system::System, a::ScalarOp, index) = scaled(a.coef, op_terms(system, a.arg, index))
