@@ -1,7 +1,8 @@
 # The expectation values of operators on a state: expect, through the descent and the
 # compaction, expect1 and expect2, for an operator of one site on every site or a pair of them
 # on every pair of sites, with their fast paths, and inner(a, op, b). The environments on the
-# left and on the right of each site are kept in the cache `preobs` of the state.
+# left and on the right of each site, and those on the left carrying the Jordan-Wigner string,
+# are kept in the cache `preobs` of the state.
 
 export expect, expect1, expect2
 
@@ -173,6 +174,63 @@ function get_left(state::State, i::Int)
         end
         if length(l) < i
             extend_left!(l, state, i)
+        end
+        l[i]
+    end
+end
+
+"""
+    string_at(state, i)
+
+the tensor measuring the Jordan-Wigner string `F` on site `i`, the identity on a site that is
+not fermionic
+"""
+function string_at(state::State, i::Int)
+    f = matrix(F, state.system[i])
+    return f == I ? identity_at(state, i) : obs_tensor(state, f, i)
+end
+
+"""
+    extend_strung!(l, state, i)
+
+extend `l`, which holds what `get_strung_left` returns for its first sites, the first one at
+least, up to site `i`
+"""
+function extend_strung!(l, state::State{Pure}, i::Int)
+    st = state.state
+    j = length(l)
+    resize!(l, i)
+    for k in j+1:i
+        l[k] = l[k-1] * string_at(state, k-1) * dag(st[k-1]') * st[k]
+    end
+    return l
+end
+
+function extend_strung!(l, state::State{Mixed}, i::Int)
+    st = state.state
+    j = length(l)
+    resize!(l, i)
+    for k in j+1:i
+        l[k] = l[k-1] * string_at(state, k-1) * st[k]
+    end
+    return l
+end
+
+"""
+    get_strung_left(state, i)
+
+the environment on the left of site `i` as `get_left` gives it, with the Jordan-Wigner string
+`F` on every site before `i`, which an odd operator on `i` takes; computed up to `i` on demand
+and cached
+"""
+function get_strung_left(state::State, i::Int)
+    l = state.preobs.strung
+    return lock(state.preobs.lock) do
+        if isempty(l)
+            push!(l, state.state[1])
+        end
+        if length(l) < i
+            extend_strung!(l, state, i)
         end
         l[i]
     end
@@ -384,9 +442,9 @@ end
 
 the expectation values of the operator of one site `op` on every site, normalised as by
 `expect`: a vector indexed by site, `missing` where `op` is not defined, or, for an array of
-operators, an array of such vectors arranged as the operators. An operator that is even on a
-site is measured there on the density matrix of the site, any other through `expect`, with its
-Jordan-Wigner string.
+operators, an array of such vectors arranged as the operators. The even part of the operator on
+a site is measured there on the density matrix of the site, its odd part with the Jordan-Wigner
+string on the sites before, both from environments the state keeps.
 
 # Examples
 
@@ -407,13 +465,20 @@ function expect1(state::State, ops::AbstractArray{<:SimpleOp})
                 return missing
             end
             m = matrix(o, sys[i])
-            if parity_of(m, matrix(F, sys[i])) ≠ 0
-                return expect(state, o(i))
+            f = matrix(F, sys[i])
+            p = parity_of(m, f)
+            v = 0.
+            if p ≠ 1
+                if isnothing(locals[i])
+                    locals[i] = get_left(state, i) * get_right(state, i)
+                end
+                v += scalar(locals[i] * obs_tensor(state, p == 0 ? m : (m + f * m * f) / 2, i))
             end
-            if isnothing(locals[i])
-                locals[i] = get_left(state, i) * get_right(state, i)
+            if p ≠ 0
+                odd = p == 1 ? m : (m - f * m * f) / 2
+                v += scalar(get_strung_left(state, i) * obs_tensor(state, odd, i) * get_right(state, i))
             end
-            return scalar(locals[i] * obs_tensor(state, m, i)) / scale
+            return v / scale
         end
     end
 end

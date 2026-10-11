@@ -61,6 +61,14 @@ end
     # expect with their strings; on a state superposing the two parities they do not vanish
     @test expect1(st, C) ≈ [ expect(st, C(i)) for i in 1:n ]
     @test maximum(abs, expect1(st, C)) > 1e-3
+    # the odd part with the string the state keeps, the even part on the site: an operator of no
+    # definite parity, several operators at once, a second call on the same state, a mixed state
+    @test expect1(st, C + N) ≈ [ expect(st, (C + N)(i)) for i in 1:n ]
+    e = expect1(st, [C, N, dag(C)])
+    @test e[3] ≈ [ expect(st, dag(C)(i)) for i in 1:n ] && e[2] ≈ expect1(st, N)
+    @test expect1(st, dag(C) + 0.5N) ≈ [ expect(st, (dag(C) + 0.5N)(i)) for i in 1:n ]
+    ρ = random_state(Mixed, System(n, fe), 3)
+    @test expect1(ρ, C + N) ≈ [ expect(ρ, (C + N)(i)) for i in 1:n ]
     @test expect2(st, (dag(C), N)) ≈
           [ i == j ? expect(st, (dag(C) * N)(i)) : expect(st, dag(C)(i) * N(j)) for i in 1:n, j in 1:n ]
     # pairs of both parities in one call do not disturb each other

@@ -93,19 +93,20 @@ abstract type AbstractState end
     PreObs
 
 the caches a `State` keeps for measurements, filled on first use under `lock`: the local
-tensors, the environments from the left and from the right, the trace, and the weakened form
-of a state conserving something strongly
+tensors, the environments from the left and from the right, those from the left carrying the
+Jordan-Wigner string, the trace, and the weakened form of a state conserving something strongly
 """
 struct PreObs
     loc::Vector{ITensor}
     left::Vector{ITensor}
     right::Vector{ITensor}
+    strung::Vector{ITensor}
     trace::Vector{Number}
     weak::Vector{Any}
     lock::ReentrantLock
 end
 
-PreObs() = PreObs([], [], [], [], [], ReentrantLock())
+PreObs() = PreObs([], [], [], [], [], [], ReentrantLock())
 
 """
     cached!(create!, v, state)
