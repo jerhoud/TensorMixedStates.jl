@@ -448,9 +448,10 @@ function gate_steps!(steps::Vector, ::Type{Mixed}, system::System, m::AbstractMa
     end
     lo = first(ks)
     w = gate_mpo(Pure, system, m, ks)
+    one_gate = !spread(ks) && dense_enough(Mixed, system, ks)
     for left in (true, false)
         ts = [ lifted(system, w[j], lo + j - 1, left) for j in eachindex(w) ]
-        if !spread(ks) && dense_enough(Mixed, system, ks)
+        if one_gate
             add_gate!(steps, prod(ts), ks)
         else
             push!(steps, WindowMPO(MPO(ts), lo))
