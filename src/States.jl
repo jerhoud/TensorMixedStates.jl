@@ -14,7 +14,8 @@ the truncation limits of an MPS, a field left `nothing` taking the default of th
 limits are given to, which its docstring states.
 
 - `cutoff`: the largest truncation error allowed, the sum of the squares of the discarded
-  singular values relative to that of all; `eps()` discards what rounding leaves, `0` nothing
+  singular values relative to that of all, so that singular values up to `√cutoff` of the norm
+  go: `1e-26` discards what rounding leaves, those below `1e-13` of the norm, `0` nothing
 - `maxdim`: the maximum bond dimension
 - `mindim`: the minimum bond dimension
 
@@ -63,12 +64,13 @@ Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing) =
     Limits(float_cutoff(cutoff), int_dims(maxdim, "maxdim"), int_dims(mindim, "mindim"))
 
 """
-    truncation(limits; cutoff = eps(), maxdim = typemax(Int), mindim = 1)
+    truncation(limits; cutoff = rounding_tol^2, maxdim = typemax(Int), mindim = 1)
 
 the keywords `cutoff`, `maxdim` and `mindim` of a truncation by ITensors, a field of `limits` left
-`nothing` taking the default given, that of the function the limits are given to
+`nothing` taking the default given, that of the function the limits are given to: by default,
+the singular values below `rounding_tol` of the norm go, what rounding leaves
 """
-truncation(l::Limits; cutoff = eps(), maxdim = typemax(Int), mindim = 1) =
+truncation(l::Limits; cutoff = rounding_tol^2, maxdim = typemax(Int), mindim = 1) =
     (cutoff = something(l.cutoff, cutoff), maxdim = something(l.maxdim, maxdim),
      mindim = something(l.mindim, mindim))
 
@@ -136,7 +138,7 @@ function of the site giving one of those. A vector of numbers is the amplitudes 
 state. `State(state, mps)` is a new state on the same system.
 
 States can be added, subtracted, and multiplied or divided by numbers; a sum takes truncation
-limits as `+(a, b; limits = Limits(maxdim = 100))`, by default `cutoff = eps()`, which discards
+limits as `+(a, b; limits = Limits(maxdim = 100))`, by default `cutoff = 1e-26`, which discards
 what rounding leaves.
 
 # Examples
@@ -395,7 +397,7 @@ end
 """
     truncate(::State; limits::Limits)
 
-the state with its MPS truncated to `limits`, by default `cutoff = eps()`, which discards what
+the state with its MPS truncated to `limits`, by default `cutoff = 1e-26`, which discards what
 rounding leaves.
 
 # Examples

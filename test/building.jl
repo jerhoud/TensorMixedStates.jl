@@ -76,14 +76,22 @@ end
     rng = TensorMixedStates.Random.Xoshiro(3)
     sys = System(20, Qubit())
     s = sum(randn(rng) * State{Pure}(sys, rand(rng, ["Up", "Dn"], 20)) for _ in 1:9)
-    # a field left nothing takes the default of the function, eps() for a sum
+    # a field left nothing takes the default of the function, 1e-26 for a sum
     @test Limits().cutoff === nothing
     @test maxlinkdim(apply(prod(controlled(Z)(i, i + 1) for i in 1:19), s)) == maxlinkdim(s)
     @test_skip maxlinkdim(tdvp(-im * sum(Z(i) for i in 1:20), 0.1, s)) == maxlinkdim(s)          # couche 4
-    # a weight of 1e-18 is below the default cutoff, and a cutoff of zero keeps everything
+    # a weight of 1e-28 is below the default cutoff, one of 1e-18 is not, and a cutoff of zero
+    # keeps everything
     up, dn = State{Pure}(System(6, Qubit()), "Up"), State{Pure}(System(6, Qubit()), "Dn")
-    @test maxlinkdim(up + 1e-9 * dn) == 1
-    @test maxlinkdim(+(up, 1e-9 * dn; limits = Limits(cutoff = 0))) ≥ 2
+    @test maxlinkdim(up + 1e-14 * dn) == 1
+    @test maxlinkdim(up + 1e-9 * dn) == 2
+    @test maxlinkdim(+(up, 1e-14 * dn; limits = Limits(cutoff = 0))) ≥ 2
+    # an MPO applied by "densitymatrix" cuts at eps() by default, below which its density
+    # matrices are rounding, and by "naive" at 1e-26
+    q2 = State{Pure}(System(2, Qubit()), "Up")
+    mpo = make_mpo(q2, Id(1) + 1e-9 * X(1) * X(2))
+    @test maxlinkdim(apply(mpo, q2)) == 1
+    @test maxlinkdim(apply(mpo, q2; apply_algo = "naive")) == 2
 end
 
 @testset "Random states" begin
@@ -169,7 +177,7 @@ end
     @test_throws "mindim is an integer" Limits(mindim = [1.5])
     # a field left nothing takes the default of the function given the limits, field by field
     @test Limits() == Limits(cutoff = nothing, maxdim = nothing, mindim = nothing)
-    @test TMS.truncation(Limits(maxdim = 5)) == (cutoff = eps(), maxdim = 5, mindim = 1)
+    @test TMS.truncation(Limits(maxdim = 5)) == (cutoff = TMS.rounding_tol^2, maxdim = 5, mindim = 1)
     @test TMS.truncation(Limits(maxdim = 5); cutoff = 0.).cutoff === 0.0
     @test TMS.truncation(Limits(cutoff = 1e-8); cutoff = 0.).cutoff === 1e-8
     # superposition is exact by default, where a cutoff of eps() given, which the limits by

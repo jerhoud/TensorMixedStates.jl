@@ -121,7 +121,7 @@ end
 the pure state of `system` of vector `ψ`, or the mixed state of density matrix `ρ`,
 normalized, on the basis of product states ordered as `kron` orders them, the first site
 varying the slowest. Its MPS is decomposed from the whole array and truncated to `limits`, by
-default `cutoff = eps()`. On a system carrying charges, a state of no definite charge is refused.
+default `cutoff = 1e-26`. On a system carrying charges, a state of no definite charge is refused.
 
 # Examples
 

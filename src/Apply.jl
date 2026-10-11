@@ -278,14 +278,17 @@ function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS,
 end
 
 """
-    applied_mpo(mpo, st, tr; alg = "densitymatrix")
+    applied_mpo(mpo, st, limits; alg = "densitymatrix")
 
-the MPS `st` with `mpo` applied by the algorithm `alg`, truncated by `tr`, or the null state
+the MPS `st` with `mpo` applied by the algorithm `alg`, truncated to `limits`, or the null state
 when the result vanishes, see `guarded`, which ``\\langle A\\psi | A\\psi \\rangle`` tells
-exactly
+exactly. The cutoff is `eps()` by default for `"densitymatrix"`, whose density matrices give the
+squares of the singular values only to `eps()` of the largest: below, it would keep rounding.
 """
-applied_mpo(mpo::MPO, st::MPS, tr; alg::String = "densitymatrix") =
-    guarded(s -> apply(mpo, s; alg, tr...), s -> iszero(inner(mpo, s, mpo, s)), st)
+function applied_mpo(mpo::MPO, st::MPS, limits::Limits; alg::String = "densitymatrix")
+    tr = alg == "densitymatrix" ? truncation(limits; cutoff = eps()) : truncation(limits)
+    return guarded(s -> apply(mpo, s; alg, tr...), s -> iszero(inner(mpo, s, mpo, s)), st)
+end
 
 """
     gate_terms(terms)
@@ -484,17 +487,18 @@ function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
 end
 
 """
-    applied_steps(R, system, st, steps, tr, bras = nothing)
+    applied_steps(R, system, st, steps, limits, bras = nothing)
 
 the MPS `st` of a state of representation `R` with the steps of `apply` applied in order, each
-truncated by `tr`, the MPOs built as they come, the gates of a density matrix split apart on
-their sites, the bras on `bras`
+truncated to `limits`, see `applied_mpo` for an MPO, the MPOs built as they come, the gates of a
+density matrix split apart on their sites, the bras on `bras`
 """
-function applied_steps(::Type{R}, system::System, st::MPS, steps, tr,
+function applied_steps(::Type{R}, system::System, st::MPS, steps, limits::Limits,
                        bras = Dict{Int, Index}()) where R
+    tr = truncation(limits)
     for step in steps
         st = if step isa Vector{Term}
-            applied_mpo(make_mpo(lay_terms!(PreMPO{R}(system), step, 1)), st, tr)
+            applied_mpo(make_mpo(lay_terms!(PreMPO{R}(system), step, 1)), st, limits)
         elseif step.apart
             kets_bras = separated(system, st, bras, step.sites)
             joined(system, applied_gates(step.gates, step.on, kets_bras, tr), bras, step.sites)
@@ -518,8 +522,10 @@ channel is applied factor by factor in the same way, `Gate(K)` as `K` on the ket
 conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives `L(ρ)`. The
 state is not normalised.
 
-- `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole
-  state for an MPO, `cutoff = eps()` by default
+- `limits`: the truncation of the bonds a gate of several sites crosses, `cutoff = 1e-26` by
+  default, or of the whole state for an MPO, `cutoff = eps()` by default with
+  `"densitymatrix"`, whose density matrices give the squares of the singular values only to
+  `eps()` of the largest, and `1e-26` with `"naive"`
 - `apply_algo`: for an MPO, the algorithm of its product with the state, `"densitymatrix"` or
   `"naive"`
 
@@ -536,7 +542,7 @@ function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Li
     if coef == 0
         return State(state, 0 * state.state)
     end
-    st = applied_steps(Pure, sys, state.state, steps, truncation(limits))
+    st = applied_steps(Pure, sys, state.state, steps, limits)
     return State(state, coef == 1 ? st : coef * st)
 end
 
@@ -563,11 +569,11 @@ function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed
     if coef == 0
         return State(state, 0 * state.state)
     end
-    st = applied_steps(Mixed, sys, state.state, steps, truncation(limits), bras)
+    st = applied_steps(Mixed, sys, state.state, steps, limits, bras)
     return State(state, coef == 1 ? st : coef * st)
 end
 
 function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "densitymatrix")
     check_apply_algo(apply_algo)
-    return State(state, applied_mpo(mpo, state.state, truncation(limits); alg = apply_algo))
+    return State(state, applied_mpo(mpo, state.state, limits; alg = apply_algo))
 end
