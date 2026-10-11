@@ -483,6 +483,9 @@ end
     S = superop(qs, L)
     @test laid_mixed(ρq, L) ≈ S
     @test PreMPO(ρq, L).linkdims .- 1 == least_channels(S, fill(4, 5))
+    # the order of the mixed index, read once for each kind of site
+    sys = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N), Boson(3, conserve = N), Qubit()])
+    @test TMS.block_orders(Mixed, sys) == [ TMS.mixed_elements(sys, i) for i in 1:5 ]
 end
 
 @testset "Strings carried by the channels on a density matrix" begin

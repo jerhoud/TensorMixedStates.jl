@@ -21,10 +21,15 @@ end
     block_orders(R, system)
 
 the order on the index of each site of the elements of the matrix of an operator there: none
-to take for `Pure`, see `mixed_elements` for `Mixed`
+to take for `Pure`, see `mixed_elements` for `Mixed`, read once for each kind of site, which
+alone gives it
 """
 block_orders(::Type{Pure}, ::System) = Vector{Int}[]
-block_orders(::Type{Mixed}, system::System) = [ mixed_elements(system, i) for i in 1:length(system) ]
+
+function block_orders(::Type{Mixed}, system::System)
+    orders = Dict{AbstractSite, Vector{Int}}()
+    return [ get!(() -> mixed_elements(system, i), orders, system[i]) for i in 1:length(system) ]
+end
 
 """
     PreMPO(state, op)
