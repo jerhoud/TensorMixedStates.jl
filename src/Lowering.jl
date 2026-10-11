@@ -674,53 +674,135 @@ function sort_factors!(fs, info)
 end
 
 """
-    merge_one!(system, fs, info, refused)
+    count_add!(tree, k, x)
 
-merge into an earlier factor of the product `fs`, see `merged`, one later factor sharing one of
-its sites, the sites of one among those of the other, which goes back next to it past factors
-it (anti)commutes with, provided the merge gives no more terms than the two factors, see
-`term_count`; a pair whose merge would give more goes into `refused`. Return the number the
-product gets multiplied by, or `nothing` when no pair can be merged.
+add `x` to the count of position `k` of `tree`, a Fenwick tree of counts
 """
-function merge_one!(system::System, fs, info, refused)
-    for j in 2:length(fs)
-        for i in j-1:-1:1
-            # factor j goes back past those between, which it must (anti)commute with
-            if i < j - 1 && dependent(info[i + 1], info[j])
-                break
-            end
-            a, b = fs[i], fs[j]
-            sa, sb = first(info[i]), first(info[j])
-            if !(a isa AtIndex && b isa AtIndex) || isdisjoint(sa, sb) ||
-               !(issubset(sa, sb) || issubset(sb, sa)) || (a, b) in refused
-                continue
-            end
-            m = merged(system, a, b)
-            if m isa AtIndex && term_count(system, m) > term_count(system, a) * term_count(system, b)
-                push!(refused, (a, b))
-                continue
-            end
-            sign = info[j][2] == 1 ? (-1)^count(k -> info[k][2] == 1, i+1:j-1) : 1
-            deleteat!(fs, j)
-            if m isa AtIndex
-                fs[i] = m
-                return sign
-            end
-            deleteat!(fs, i)
-            return sign * scalarcoef(m)
+function count_add!(tree::Vector{Int}, k::Int, x::Int)
+    while k ≤ length(tree)
+        tree[k] += x
+        k += k & -k
+    end
+    return tree
+end
+
+"""
+    count_to(tree, k)
+
+the sum of the counts of the positions 1 to `k` of the Fenwick tree `tree`
+"""
+function count_to(tree::Vector{Int}, k::Int)
+    c = 0
+    while k > 0
+        c += tree[k]
+        k -= k & -k
+    end
+    return c
+end
+
+"""
+    last_counted(tree)
+
+the last position of the Fenwick tree `tree` of counts 0 or 1 whose count is 1, 0 when there is
+none
+"""
+function last_counted(tree::Vector{Int})
+    c = count_to(tree, length(tree))
+    if c == 0
+        return 0
+    end
+    # the last position whose sum up to it is under c
+    k, step = 0, prevpow(2, length(tree))
+    while step > 0
+        if k + step ≤ length(tree) && tree[k + step] < c
+            k += step
+            c -= tree[k]
+        end
+        step >>= 1
+    end
+    return k + 1
+end
+
+"""
+    merged_pass(system, fs, info, refused)
+
+the factors of the product `fs`, of `(sites, parity)` `info`, each merged, from left to right,
+into the nearest earlier one it does not (anti)commute with, see `dependent`, if it shares a
+site with it, the sites of one among those of the other, see `merged`, and the merge gives no
+more terms than the two factors, see `term_count`, a pair giving more going into `refused`.
+Return the factors left with their info, the number the product gets multiplied by, -1 for
+each odd factor an odd one goes back past, and whether anything merged. That nearest factor is
+read off the last factor on each site and the last odd one and the last one of no definite
+parity, counted in Fenwick trees.
+"""
+function merged_pass(system::System, fs, info, refused)
+    n = length(fs)
+    out = Union{Nothing, IndexedOp{IsOperator}}[]
+    oinfo = Tuple{Vector{Int}, Union{Nothing, Int}}[]
+    on_site = Dict{Int, Vector{Int}}()
+    odd, none = zeros(Int, n), zeros(Int, n)
+    coef, changed = 1, false
+    # the last factor still there on site s
+    function last_on(s)
+        ks = get!(Vector{Int}, on_site, s)
+        while !isempty(ks) && isnothing(out[last(ks)])
+            pop!(ks)
+        end
+        return isempty(ks) ? 0 : last(ks)
+    end
+    function tally!(k, p, x)
+        if isnothing(p)
+            count_add!(none, k, x)
+        elseif p == 1
+            count_add!(odd, k, x)
         end
     end
-    return nothing
+    for (x, (sx, px)) in zip(fs, info)
+        i = maximum(last_on, sx; init = 0)
+        blocking = px == 0 ? 0 : max(last_counted(none), px == 1 ? 0 : last_counted(odd))
+        if i > 0 && i ≥ blocking && out[i] isa AtIndex && x isa AtIndex &&
+           (issubset(oinfo[i][1], sx) || issubset(sx, oinfo[i][1])) && (out[i], x) ∉ refused
+            a = out[i]
+            m = merged(system, a, x)
+            if m isa AtIndex && term_count(system, m) > term_count(system, a) * term_count(system, x)
+                push!(refused, (a, x))
+            else
+                changed = true
+                if px == 1 && isodd(count_to(odd, n) - count_to(odd, i))
+                    coef = -coef
+                end
+                tally!(i, oinfo[i][2], -1)
+                if m isa AtIndex
+                    sm, pm = sites_of(m), parity_on(system, m)
+                    for s in setdiff(sm, oinfo[i][1])
+                        push!(on_site[s], i)
+                    end
+                    out[i], oinfo[i] = m, (sm, pm)
+                    tally!(i, pm, 1)
+                else
+                    out[i] = nothing
+                    coef *= scalarcoef(m)
+                end
+                continue
+            end
+        end
+        push!(out, x)
+        push!(oinfo, (sx, px))
+        foreach(s -> push!(get!(Vector{Int}, on_site, s), length(out)), sx)
+        tally!(length(out), px, 1)
+    end
+    kept = [ k for k in eachindex(out) if !isnothing(out[k]) ]
+    return IndexedOp{IsOperator}[ out[k] for k in kept ], oinfo[kept], coef, changed
 end
 
 """
     gathered(system, op)
 
 the placed operator `op` rewritten without developing anything, into a normal form: in each
-product, the factors are sorted by their sites as far as they (anti)commute, see
-`sort_factors!`, and two factors sharing a site are merged where they can be, see
-`merge_one!`, until nothing moves. Sums are gathered term by term, and an operator in normal
-form is left as it is.
+product, two factors sharing a site are merged where they can be, see `merged_pass`, until
+nothing merges, then the factors are sorted by their sites as far as they (anti)commute, see
+`sort_factors!`. Sums are gathered term by term, and an operator in normal form is left as it
+is.
 """
 gathered(system::System, a::SumOp{IsOperator, Indexed}) =
     SumOp([ gathered(system, x) for x in a.subs ])
@@ -732,16 +814,16 @@ function gathered(system::System, a::ProdOp{IsOperator, Indexed})
     p = ProdOp(IndexedOp{IsOperator}[ gathered(system, x) for x in a.subs ])
     coef = scalarcoef(p)
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(p) if !(x isa IdentityOp) ]
+    info = [ (sites_of(x), parity_on(system, x)) for x in fs ]
     refused = Set{Tuple{IndexedOp{IsOperator}, IndexedOp{IsOperator}}}()
     while coef ≠ 0
-        info = [ (sites_of(x), parity_on(system, x)) for x in fs ]
-        coef *= sort_factors!(fs, info)
-        c = merge_one!(system, fs, info, refused)
-        if isnothing(c)
+        fs, info, c, changed = merged_pass(system, fs, info, refused)
+        coef *= c
+        if !changed
             break
         end
-        coef *= c
     end
+    coef *= sort_factors!(fs, info)
     return scale(coef, ProdOp(fs))
 end
 

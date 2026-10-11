@@ -578,6 +578,15 @@ end
         @test same(sys, op)
     end
     @test TMS.gathered(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)) == Swap(2, 3) * Swap(1, 2) * Swap(3, 4)
+
+    # each factor merges into the nearest earlier one it does not commute with, in one pass:
+    # two Pauli strings on 1000 sites give one factor per site, X * Z = -im * Y, and an odd
+    # factor going back past odd ones takes their sign
+    g = TMS.gathered(System(1000, q), prod(X(i) for i in 1:1000) * prod(Z(i) for i in 1:1000))
+    fs = TMS.prodsubs(TMS.scalararg(g))
+    @test length(fs) == 1000 && TMS.scalarcoef(g) == 1
+    @test all(k -> TMS.sites_of(fs[k]) == [k] && matrix(fs[k].op, q) ≈ -im * matrix(Y, q), 1:1000)
+    @test same(f5, C(1) * dag(C)(2) * C(3) * N(4) * dag(C)(1) * C(2) * N(3))
 end
 
 @testset "tensor is ⊗ under a name in ASCII" begin
