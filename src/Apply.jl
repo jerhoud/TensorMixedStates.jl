@@ -378,12 +378,13 @@ struct GateBatch
 end
 
 """
-    GateMPO
+    WindowMPO
 
-a step of `apply`: the MPO of a gate on sites apart, see `gate_mpo`, applied from site `lo` on,
-see `applied_window`, which costs less than bringing the sites together
+a step of `apply`: an MPO applied on the sites from `lo` on alone, see `applied_window`, that of
+the terms of a piece, or of a gate on sites apart, see `gate_mpo`, which costs less than
+bringing the sites together
 """
-struct GateMPO
+struct WindowMPO
     mpo::MPO
     lo::Int
 end
@@ -405,6 +406,23 @@ function add_gates!(steps::Vector, gates::Vector{ITensor}, on::Vector{Vector{Int
 end
 
 """
+    mpo_step!(steps, R, system, terms)
+
+append to the steps of `apply` the MPO of `terms`, on the indices of representation `R`, on the
+sites it acts on, see `mpo_window`, and return the number that brings: 0 when it acts nowhere,
+the operator being zero, 1 otherwise
+"""
+function mpo_step!(steps::Vector, ::Type{R}, system::System, terms::Vector{Term}) where R
+    pre = lay_terms!(PreMPO{R}(system), terms, 1)
+    w = mpo_window(pre)
+    if isnothing(w)
+        return 0
+    end
+    push!(steps, WindowMPO(window_mpo(pre, [1.], w), first(w)))
+    return 1
+end
+
+"""
     spread(sites)
 
 whether the increasing `sites` leave others between them
@@ -416,12 +434,12 @@ spread(ks) = last(ks) - first(ks) ≥ length(ks)
 
 append to the steps of `apply` the dense block `m` on the increasing `sites`, on the indices of
 representation `R`: a gate on consecutive sites, the MPO of the gate on sites apart, see
-`GateMPO`
+`WindowMPO`
 """
 function block_step!(steps::Vector, ::Type{R}, system::System, m::AbstractMatrix, ks) where R
     if spread(ks)
         idx = [ siteind(R, system, k) for k in first(ks):last(ks) ]
-        push!(steps, GateMPO(gate_mpo(gate_on(m, idx[ks .- first(ks) .+ 1]), idx), first(ks)))
+        push!(steps, WindowMPO(gate_mpo(gate_on(m, idx[ks .- first(ks) .+ 1]), idx), first(ks)))
     else
         add_gates!(steps, [ gate_on(m, [ siteind(R, system, k) for k in ks ]) ], [ collect(ks) ])
     end
@@ -465,10 +483,8 @@ consecutive sites of dimensions small enough, see `dense_limit`, contracted into
 """
 function gate_steps!(steps::Vector, system::System, m::AbstractMatrix, ks)
     if length(ks) == 1
-        k = only(ks)
-        o = mixed_elements(system, k)
-        add_gates!(steps, [ gate_on(kron(conj(m), m)[o, o], [ siteind(Mixed, system, k) ]) ], [ [k] ])
-        return steps
+        o = mixed_elements(system, only(ks))
+        return block_step!(steps, Mixed, system, kron(conj(m), m)[o, o], ks)
     end
     lo = first(ks)
     idx = [ siteind(Pure, system, k) for k in lo:last(ks) ]
@@ -478,7 +494,7 @@ function gate_steps!(steps::Vector, system::System, m::AbstractMatrix, ks)
         if !spread(ks) && prod(dim(system[k])^2 for k in ks) ≤ dense_limit
             add_gates!(steps, [ prod(ts) ], [ collect(ks) ])
         else
-            push!(steps, GateMPO(MPO(ts), lo))
+            push!(steps, WindowMPO(MPO(ts), lo))
         end
     end
     return steps
@@ -488,19 +504,19 @@ end
     pure_steps(system, op)
 
 the number a pure state is multiplied by and the steps of `apply` for the operator `op`, from
-its rightmost piece to its leftmost, see `pieces`: batches of gates, the MPO of a gate on sites
-apart, and the terms of a piece to apply through its MPO
+its rightmost piece to its leftmost, see `pieces`: each piece a dense block, see `block_step!`,
+or its terms through their MPO on the sites they act on, see `mpo_step!`
 """
 function pure_steps(system::System, a::IndexedOp{IsOperator})
     coef, ps = pieces(system, a)
-    steps = Union{GateBatch, GateMPO, Vector{Term}}[]
+    steps = Union{GateBatch, WindowMPO}[]
     for (p, run) in reverse(ps)
         action, c = piece_action(system, p, run)
         coef *= c
         if coef == 0
             break
         elseif action isa Vector{Term}
-            push!(steps, action)
+            coef *= mpo_step!(steps, Pure, system, action)
         else
             foreach(((m, ks),) -> block_step!(steps, Pure, system, m, ks), action)
         end
@@ -514,11 +530,11 @@ end
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
 by piece, see `gate_steps!`, any other factor as a dense block on the mixed indices, see
-`block_step!`, or the terms of either to apply through their MPO
+`block_step!`, or the terms of either through their MPO, see `mpo_step!`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
-    steps = Union{GateBatch, GateMPO, Vector{Term}}[]
+    steps = Union{GateBatch, WindowMPO}[]
     for f in reverse(channel_factors(scalararg(a)))
         if f isa IndexedOp{IsOperator}
             c, ps = pieces(system, f)
@@ -527,7 +543,7 @@ function mixed_steps(system::System, a::IndexedOp)
                 action, c = piece_action(system, p, run)
                 coef *= abs2(c)
                 if action isa Vector{Term}
-                    push!(steps, gate_terms(action))
+                    coef *= mpo_step!(steps, Mixed, system, gate_terms(action))
                 else
                     foreach(((m, ks),) -> gate_steps!(steps, system, m, ks), action)
                 end
@@ -541,7 +557,7 @@ function mixed_steps(system::System, a::IndexedOp)
             elseif prod(dim(system[k])^2 for k in ks) ≤ dense_limit
                 block_step!(steps, Mixed, system, mixed_block(system, laid, ks), ks)
             else
-                push!(steps, terms)
+                coef *= mpo_step!(steps, Mixed, system, terms)
             end
         end
         if coef == 0
@@ -552,24 +568,16 @@ function mixed_steps(system::System, a::IndexedOp)
 end
 
 """
-    applied_steps(R, system, st, steps, limits)
+    applied_steps(st, steps, limits)
 
-the MPS `st` of a state of representation `R` with the steps of `apply` applied in order, each
-truncated to `limits`, the MPOs built as they come and applied on the sites they act on, see
-`applied_window`
+the MPS `st` with the steps of `apply` applied in order, each truncated to `limits`: batches of
+gates, see `applied_gates`, and MPOs on the sites they act on, see `applied_window`
 """
-function applied_steps(::Type{R}, system::System, st::MPS, steps, limits::Limits) where R
+function applied_steps(st::MPS, steps, limits::Limits)
     tr = truncation(limits)
     for step in steps
-        st = if step isa Vector{Term}
-            pre = lay_terms!(PreMPO{R}(system), step, 1)
-            w = mpo_window(pre)
-            isnothing(w) ? 0 * st : applied_window(window_mpo(pre, [1.], w), first(w), st, tr)
-        elseif step isa GateMPO
-            applied_window(step.mpo, step.lo, st, tr)
-        else
-            applied_gates(step.gates, step.on, st, tr)
-        end
+        st = step isa WindowMPO ? applied_window(step.mpo, step.lo, st, tr) :
+                                  applied_gates(step.gates, step.on, st, tr)
     end
     return st
 end
@@ -607,7 +615,7 @@ function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Li
     if coef == 0
         return State(state, 0 * state.state)
     end
-    st = applied_steps(Pure, sys, state.state, steps, limits)
+    st = applied_steps(state.state, steps, limits)
     return State(state, coef == 1 ? st : coef * st)
 end
 
@@ -633,7 +641,7 @@ function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed
     if coef == 0
         return State(state, 0 * state.state)
     end
-    st = applied_steps(Mixed, sys, state.state, steps, limits)
+    st = applied_steps(state.state, steps, limits)
     return State(state, coef == 1 ? st : coef * st)
 end
 

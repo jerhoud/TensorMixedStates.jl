@@ -632,13 +632,13 @@ end
                controlled(controlled(X))(1, 3, 6), controlled(X)(1, 5) * H(2) * g4(3, 4)]
         @test same(ρ, Gate(op), fock(qs, op))
     end
-    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.GateMPO, TMS.GateMPO]
+    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.WindowMPO, TMS.WindowMPO]
     @test kinds(ρ, Gate(controlled(X)(3, 4))) == [TMS.GateBatch]
     @test kinds(ρ, Gate(H(3))) == [TMS.GateBatch]
     ps = [ fock(qs, Proj(Z ⊗ Z => λ)(1, 4)) for λ in (1., -1.) ]
     r = ket_bra_matrix(ρ)
     @test ket_bra_matrix(apply(Dephase(Z ⊗ Z)(1, 4), ρ)) ≈ sum(p * r * p for p in ps)
-    @test kinds(ρ, Dephase(Z ⊗ Z)(1, 4)) == [TMS.GateMPO]
+    @test kinds(ρ, Dephase(Z ⊗ Z)(1, 4)) == [TMS.WindowMPO]
     # fermions, charged or not, and bosons
     hop = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
     for site in (Fermion(), Fermion(conserve = N))

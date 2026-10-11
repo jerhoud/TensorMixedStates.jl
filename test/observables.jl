@@ -374,7 +374,7 @@ end
                controlled(X)(1, 6) * H(3) * controlled(Z)(2, 8) * X(5)]
         @test same(q, op)
     end
-    @test only(last(TMS.pure_steps(q.system, controlled(X)(2, 7)))) isa TMS.GateMPO
+    @test only(last(TMS.pure_steps(q.system, controlled(X)(2, 7)))) isa TMS.WindowMPO
     @test only(last(TMS.pure_steps(q.system, controlled(X)(2, 3)))) isa TMS.GateBatch
     hop = exp(-0.7im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
     f = random_state(Pure, System(7, Fermion()), 4)
