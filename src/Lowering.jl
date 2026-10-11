@@ -149,6 +149,21 @@ function reduced_products(as::Vector{Term}, bs::Vector{Term})
 end
 
 """
+    tree_products(lists)
+
+the terms of the product of the sums of terms `lists`, in their order, multiplied two by two as
+a balanced tree, see `reduced_products`: a product of `n` factors of one site copies each block
+about `log2(n)` times, where multiplying them in a row copies it up to `n` times
+"""
+function tree_products(lists::Vector)
+    while length(lists) > 1
+        lists = [ k < length(lists) ? reduced_products(lists[k], lists[k + 1]) : lists[k]
+                  for k in 1:2:length(lists) ]
+    end
+    return only(lists)
+end
+
+"""
     scaled(c, terms)
 
 the terms with their coefficients multiplied by `c`
@@ -340,13 +355,12 @@ their operators on each side of the density matrix, see `sided_term`.
 op_terms(system::System, a::SumOp, index) =
     reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
 op_terms(system::System, a::ProdOp, index) =
-    foldl(reduced_products, (op_terms(system, x, index) for x in a.subs))
+    tree_products([ op_terms(system, x, index) for x in a.subs ])
 op_terms(system::System, a::ScalarOp, index) = scaled(a.coef, op_terms(system, a.arg, index))
 op_terms(::System, ::IdentityOp, _) = [ identity_term() ]
 op_terms(system::System, a::AtIndex, _) = op_terms(system, a.op, a.index)
 op_terms(system::System, a::TensorOp, index) =
-    foldl(reduced_products,
-          (op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a))))
+    tree_products([ op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a)) ])
 op_terms(system::System, a::DagOp, index) = map(dag, op_terms(system, a.arg, index))
 op_terms(system::System, a::Operator, index) =
     a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)

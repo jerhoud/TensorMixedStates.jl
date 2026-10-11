@@ -521,6 +521,17 @@ end
     @test length(ts) == 4
     i2, u = matrix(Id, q), matrix(zz, q, q)
     @test TMS.system_matrix(Pure, q3, ts) ≈ prod(isodd(i) ? kron(u, i2) : kron(i2, u) for i in 1:16)
+    # multiplied two by two, the factors keeping their order and their strings: a string of Z on
+    # many sites, and a fermionic product against the matrices of its factors placed
+    @test only(TMS.lower(System(500, q), prod(Z(i) for i in 1:500))).blocks ==
+          [ i => matrix(Z, q) for i in 1:500 ]
+    fe = Fermion()
+    f, c, n, id = matrix(F, fe), matrix(C, fe), matrix(N, fe), matrix(Id, fe)
+    placed(m, k, odd) = foldl(kron, [ j < k ? (odd ? f : id) : j == k ? m : id for j in 1:8 ])
+    op = C(1) * N(2) * dag(C)(3) * C(5) * N(6) * dag(C)(8) * (C + dag(C))(4) * N(7)
+    m = placed(c, 1, true) * placed(n, 2, false) * placed(c', 3, true) * placed(c, 5, true) *
+        placed(n, 6, false) * placed(c', 8, true) * placed(c + c', 4, true) * placed(n, 7, false)
+    @test TMS.system_matrix(Pure, System(8, fe), TMS.lower(System(8, fe), op)) ≈ m
     # blocks equal up to rounding are one block
     z, zr = [1. 0. ; 0. -1.], [1. 0. ; 0. -0.9999999999999998]
     term(m) = TMS.Term(1., [1 => m], [0], Int[], Int[])
