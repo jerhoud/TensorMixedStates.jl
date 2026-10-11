@@ -176,20 +176,20 @@ vanished(st::MPS) = any(t -> iszero(norm(t)), st)
     guarded(f, vanishes, st)
 
 the MPS `f(st)`, gates or an MPO applied to `st` by ITensorMPS, or the null state when the
-result vanishes: `st` itself when it is already null, which ITensors would fail on, and when
-`f` fails on charged indices, `0 * st` if `vanishes(st)` tells exactly that the result is
-zero; any other failure is raised again. `f` is given a copy, which a failure may leave half
-changed.
+result vanishes: when `f` fails on charged indices, `st` itself if it is already null, which
+ITensors fails on, and `0 * st` if `vanishes(st)` tells exactly that the result is zero; any
+other failure is raised again. `f` is given a copy, which a failure may leave half changed.
 """
 function guarded(f, vanishes, st::MPS)
-    if vanished(st)
-        return st
-    end
     try
         return f(copy(st))
     catch
-        if any(hasqns, st) && vanishes(st)
-            return 0 * st
+        if any(hasqns, st)
+            if vanished(st)
+                return st
+            elseif vanishes(st)
+                return 0 * st
+            end
         end
         rethrow()
     end
@@ -208,21 +208,20 @@ function vanishing_gate(g::ITensor, st::MPS)
 end
 
 """
-    sites_back(ψ, st, tr)
+    sites_back(st, at, tr)
 
-the MPS `st`, made from `ψ` by gates that moved its sites, with each site back where it is in
-`ψ`, the swaps truncated by `tr`: only the window of the positions that moved is reordered, the
-sites outside it staying in place, where ITensorMPS reorders all of them at a cost of order `n²`
+the MPS `st`, whose position `n` holds the site `at[n]` after gates that moved its sites, with
+each site back at its place, the swaps truncated by `tr`: only the window of the positions that
+moved is reordered, the sites outside it staying in place, where ITensorMPS reorders all of them
+at a cost of order `n²`
 """
-function sites_back(ψ::MPS, st::MPS, tr)
-    place = Dict(i => k for k in 1:length(ψ) for i in siteinds(ψ, k))
-    now = [ place[first(siteinds(st, n))] for n in 1:length(st) ]
-    moved = findall(n -> now[n] ≠ n, eachindex(now))
+function sites_back(st::MPS, at::Vector{Int}, tr)
+    moved = findall(n -> at[n] ≠ n, eachindex(at))
     if isempty(moved)
         return st
     end
     lo, hi = extrema(moved)
-    return movesites(st, [ n => now[n] for n in lo:hi ]; tr...)
+    return movesites(st, [ n => at[n] for n in lo:hi ]; tr...)
 end
 
 """
@@ -231,7 +230,8 @@ end
 the MPS `st` with each gate of `gates` applied in turn on its sites `on`, given rather than looked
 for as ITensorMPS does at a cost of order `n` per gate: a gate of one site is contracted with
 the tensor of its site, any other applied by ITensorMPS on the positions its sites have then,
-truncated by `tr`, the sites it brings next to each other left there, see `sites_back`
+truncated by `tr`, the sites it brings next to each other left there; and the site at each
+position, see `sites_back`
 """
 function gates_applied(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS, tr)
     # the site at each position and the position of each site
@@ -250,7 +250,7 @@ function gates_applied(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS,
         at[window] = [ at[ns] ; [ at[p] for p in window if !(p in ns) ] ]
         pos[at[window]] = window
     end
-    return st
+    return st, at
 end
 
 """
@@ -261,11 +261,8 @@ or the null state when the result vanishes, see `guarded`: on a failure on charg
 gates are applied again one by one, so that the one taking the state to zero is found
 """
 function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS, tr)
-    if vanished(st)
-        return st
-    end
     try
-        return sites_back(st, gates_applied(gates, on, copy(st), tr), tr)
+        return sites_back(gates_applied(gates, on, copy(st), tr)..., tr)
     catch
         if !any(hasqns, st)
             rethrow()
