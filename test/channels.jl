@@ -600,3 +600,23 @@ end
     @test norm(apply(Gate(C(1) + C(3)), ρ)) == 0
     @test norm(apply(Gate(dag(C)(1) * C(2)), ρ)) ≈ 1
 end
+
+@testset "Strings kept apart on a density matrix" begin
+    # channels that are not gates between fermionic gates far apart, developed for their
+    # superoperator, their strings on the kets and on the bras laid at the end, give the product
+    # of the superoperators of their factors
+    fs = System(4, Fermion())
+    ss = all_sites(fs)
+    l = Dissipator(C ⊗ Id) + Evolver(-im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
+    for a in [Gate(C)(1) * Reset("Emp")(2) * Gate(dag(C))(4),
+              Gate(C(4)) * exp(0.3 * l)(2, 3) * Gate(dag(C)(1)),
+              Gate(C)(4) * reset_gate(0.4, "Occ")(3) * Gate(C)(1)]
+        @test superop(fs, a) ≈ TMS.scalarcoef(a) * prod(superop(fs, f) for f in TMS.prodsubs(a))
+    end
+    # and the dissipator of such a product, its M read off the strings of both sides
+    Φ = Gate(C)(1) * Reset("Emp")(2) * Gate(dag(C))(4)
+    S = superop(fs, Φ)
+    m = TMS.kraus_sum(S, ss)
+    i = one(m)
+    @test superop(fs, Dissipator(Φ)) ≈ S - (TMS.sided(m, i, ss) + TMS.sided(i, m, ss)) / 2
+end

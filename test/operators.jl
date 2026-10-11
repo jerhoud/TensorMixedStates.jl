@@ -485,6 +485,31 @@ end
     @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(s3, X(5))
 end
 
+@testset "Strings kept apart while the terms are developed" begin
+    # the strings of the odd factors are laid only at the end: products whose strings cross
+    # blocks of both parities, in both orders, and an adjoint, give the matrix of the operator
+    # built from the matrices of its factors placed
+    fe = Fermion()
+    fs = System(5, fe)
+    f, c, n, id = matrix(F, fe), matrix(C, fe), matrix(N, fe), matrix(Id, fe)
+    placed(m, k, odd) = foldl(kron, [ j < k ? (odd ? f : id) : j == k ? m : id for j in 1:5 ])
+    sw = kron(id, matrix(Swap, fe, fe), id, id)
+    for (op, m) in [(dag(C)(1) * N(3) * C(5), placed(c', 1, true) * placed(n, 3, false) * placed(c, 5, true)),
+                    (C(5) * dag(C)(2) * C(3) * dag(C)(4),
+                     placed(c, 5, true) * placed(c', 2, true) * placed(c, 3, true) * placed(c', 4, true)),
+                    ((C + dag(C))(2) * C(4) * N(1),
+                     placed(c + c', 2, true) * placed(c, 4, true) * placed(n, 1, false)),
+                    (C(1) * Swap(2, 3) * dag(C)(4), placed(c, 1, true) * sw * placed(c', 4, true)),
+                    (dag(C ⊗ Id ⊗ C)(1, 2, 4), (placed(c, 1, true) * placed(c, 4, true))')]
+        @test TMS.system_matrix(Pure, fs, TMS.lower(fs, op)) ≈ m
+    end
+    # and so a hopping on a long chain takes no string outside the sites it hops between
+    long = System(1000, fe)
+    ts = TMS.lower(long, sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:999))
+    @test length(ts) == 1998
+    @test all(t -> length(t.blocks) == 2 && last(first.(t.blocks)) == first(first.(t.blocks)) + 1, ts)
+end
+
 @testset "Products gathered before the descent" begin
     # the first pass of the descent develops nothing: it sorts the factors of a product by
     # their sites as far as they (anti)commute, and merges those sharing a site, the sites of

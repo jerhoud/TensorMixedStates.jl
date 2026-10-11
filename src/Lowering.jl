@@ -36,26 +36,85 @@ check_indices(system::System, a::Union{Gate{Indexed}, Dissipator{Indexed}, Evolv
     Term
 
 a term of an operator on a system: `coef` times the tensor product of `blocks`, the matrix of
-the term on each site it acts on, sorted by site, the identity on the others. The term of a
-superoperator has the matrices of superoperators of one site, see `matrix`.
+the term on each site it acts on, sorted by site, the identity on the others, each followed by
+the Jordan-Wigner strings of the term there, which the descent keeps apart until it lays them,
+see `laid_strings`. The term of a superoperator has the matrices of superoperators of one site,
+see `matrix`, and a string on the kets, ``\\rho \\mapsto F\\rho``, and one on the bras,
+``\\rho \\mapsto \\rho F``.
+
+- `parities`: the parity of each block, that of the kets plus twice that of the bras for a
+  superoperator, which gives the sign of a string crossing it
+- `kets`, `bras`: the strings, as the sorted sites where their parity changes: `F` on the sites
+  from the first to the second excluded, from the third to the fourth, and so on
 """
 struct Term
     coef::Number
     blocks::Vector{Pair{Int, Matrix}}
+    parities::Vector{Int}
+    kets::Vector{Int}
+    bras::Vector{Int}
 end
+
+"""
+    on_string(s, k)
+
+whether site `k` lies on the string `s`, see `Term`
+"""
+on_string(s::Vector{Int}, k::Int) = isodd(searchsortedlast(s, k))
+
+"""
+    xor_strings(s, t)
+
+the string of `F` on the sites where one of the strings `s` and `t` lies and not the other: the
+sites where its parity changes are those where one of theirs does
+"""
+function xor_strings(s::Vector{Int}, t::Vector{Int})
+    out = Int[]
+    i, j = 1, 1
+    while i ≤ length(s) || j ≤ length(t)
+        if j > length(t) || (i ≤ length(s) && s[i] < t[j])
+            push!(out, s[i])
+            i += 1
+        elseif i > length(s) || t[j] < s[i]
+            push!(out, t[j])
+            j += 1
+        else
+            i += 1
+            j += 1
+        end
+    end
+    return out
+end
+
+"""
+    prefix(i)
+
+the string of `F` on the sites before site `i`
+"""
+prefix(i::Int) = i > 1 ? [1, i] : Int[]
 
 """
     a * b
 
-the product of two terms, site by site, `nothing` when it vanishes on a site
+the product of two terms, site by site, `nothing` when it vanishes on a site. The strings of
+`a` cross the blocks of `b`, each odd one under them bringing a sign, `F A = -A F`.
 """
 function (a::Term * b::Term)
     da, db = Dict(a.blocks), Dict(b.blocks)
+    pa, pb = Dict(zip(first.(a.blocks), a.parities)), Dict(zip(first.(b.blocks), b.parities))
+    sign = 1
+    for (k, p) in zip(first.(b.blocks), b.parities)
+        if (isodd(p) && on_string(a.kets, k)) ⊻ (isodd(p >> 1) && on_string(a.bras, k))
+            sign = -sign
+        end
+    end
     blocks = Pair{Int, Matrix}[]
+    parities = Int[]
     for i in sort!(collect(union(keys(da), keys(db))))
         x, y = get(da, i, nothing), get(db, i, nothing)
         if isnothing(x) || isnothing(y)
             push!(blocks, i => something(x, y))
+            push!(parities, isnothing(x) ? pb[i] : pa[i])
             continue
         end
         m = x * y
@@ -64,8 +123,10 @@ function (a::Term * b::Term)
             return nothing
         end
         push!(blocks, i => m)
+        push!(parities, pa[i] ⊻ pb[i])
     end
-    return Term(a.coef * b.coef, blocks)
+    return Term(sign * a.coef * b.coef, blocks, parities, xor_strings(a.kets, b.kets),
+                xor_strings(a.bras, b.bras))
 end
 
 """
@@ -81,31 +142,40 @@ products(as::Vector{Term}, bs::Vector{Term}) =
 
 the terms with their coefficients multiplied by `c`
 """
-scaled(c::Number, ts::Vector{Term}) = [ Term(c * t.coef, t.blocks) for t in ts ]
+scaled(c::Number, ts::Vector{Term}) =
+    [ Term(c * t.coef, t.blocks, t.parities, t.kets, t.bras) for t in ts ]
 
 """
     dag(::Term)
 
-the adjoint of a term, site by site
+the adjoint of a term of an operator, site by site: ``(AF)^\\dagger = FA^\\dagger``, a sign for
+each odd block under its string
 """
-dag(t::Term) = Term(conj(t.coef), [ i => collect(m') for (i, m) in t.blocks ])
+function dag(t::Term)
+    odd = count(isodd(p) && on_string(t.kets, k) for ((k, _), p) in zip(t.blocks, t.parities))
+    return Term((-1)^odd * conj(t.coef), [ i => collect(m') for (i, m) in t.blocks ], t.parities,
+                t.kets, t.bras)
+end
 
 """
     identity_term()
 
 the term of the identity, with no block
 """
-identity_term() = Term(1., Pair{Int, Matrix}[])
+identity_term() = Term(1., Pair{Int, Matrix}[], Int[], Int[], Int[])
 
 """
     sided_term(t, u)
 
 the term of the superoperator ``\\rho \\mapsto T\\rho U^\\dagger`` of the terms `t` and `u` of
-operators, site by site
+operators, site by site, the strings of `t` on the kets and those of `u` on the bras: Left and
+Right commute, so no sign comes
 """
 function sided_term(t::Term, u::Term)
     dt, du = Dict(t.blocks), Dict(u.blocks)
-    blocks = map(sort!(collect(union(keys(dt), keys(du))))) do i
+    pt, pu = Dict(zip(first.(t.blocks), t.parities)), Dict(zip(first.(u.blocks), u.parities))
+    sites = sort!(collect(union(keys(dt), keys(du))))
+    blocks = map(sites) do i
         a, b = get(dt, i, nothing), get(du, i, nothing)
         if isnothing(a)
             a = one(b)
@@ -114,7 +184,35 @@ function sided_term(t::Term, u::Term)
         end
         return i => kron(conj(b), a)
     end
-    return Term(t.coef * conj(u.coef), blocks)
+    parities = [ get(pt, i, 0) + 2get(pu, i, 0) for i in sites ]
+    return Term(t.coef * conj(u.coef), blocks, parities, t.kets, u.kets)
+end
+
+"""
+    laid_strings(R, system, t)
+
+the term `t` with its strings laid as blocks, `F` on the fermionic sites of `system` they lie
+on, after the block there, ``\\rho \\mapsto F^a \\rho F^b`` for a superoperator, `R = Mixed`
+"""
+function laid_strings(::Type{R}, system::System, t::Term) where R
+    if isempty(t.kets) && isempty(t.bras)
+        return t
+    end
+    bs = Dict(t.blocks)
+    ps = Dict(zip(first.(t.blocks), t.parities))
+    ends = [ t.kets ; t.bras ]
+    for k in minimum(ends):maximum(ends) - 1
+        f = matrix(F, system[k])
+        a, b = on_string(t.kets, k), on_string(t.bras, k)
+        if f == I || !(a || b)
+            continue
+        end
+        s = R === Pure ? f : kron(b ? f : one(f), a ? f : one(f))
+        bs[k] = haskey(bs, k) ? bs[k] * s : s
+        ps[k] = get(ps, k, 0)
+    end
+    sites = sort!(collect(keys(bs)))
+    return Term(t.coef, [ k => bs[k] for k in sites ], [ ps[k] for k in sites ], Int[], Int[])
 end
 
 """
@@ -129,10 +227,9 @@ function one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix)
     f = matrix(F, system[i])
     p = parity_of(m, f)
     if p == 0
-        return [ Term(1., [ i => m ]) ]
+        return [ Term(1., [ i => m ], [0], Int[], Int[]) ]
     elseif p == 1
-        strings = [ j => f for j in 1:i-1 for f in (matrix(F, system[j]),) if f ≠ I ]
-        return [ Term(1., [ strings ; i => m ]) ]
+        return [ Term(1., [ i => m ], [1], prefix(i), Int[]) ]
     end
     return [ one_site_terms(Pure, system, i, (m + f * m * f) / 2) ;
              one_site_terms(Pure, system, i, (m - f * m * f) / 2) ]
@@ -141,7 +238,7 @@ end
 function one_site_terms(::Type{Mixed}, system::System, i::Int, m::AbstractMatrix)
     f = matrix(F, system[i])
     if f == I
-        return [ Term(1., [ i => m ]) ]
+        return [ Term(1., [ i => m ], [0], Int[], Int[]) ]
     end
     l, r = kron(one(f), f), kron(f, one(f))
     terms = Term[]
@@ -151,9 +248,8 @@ function one_site_terms(::Type{Mixed}, system::System, i::Int, m::AbstractMatrix
         if norm(x) ≤ rounding_tol * norm(m)
             continue
         end
-        strings = [ j => kron(g^b, g^a) for j in 1:i-1 for g in (matrix(F, system[j]),)
-                    if g ≠ I && a + b > 0 ]
-        push!(terms, Term(1., [ strings ; i => x ]))
+        push!(terms, Term(1., [ i => x ], [a + 2b], a == 1 ? prefix(i) : Int[],
+                          b == 1 ? prefix(i) : Int[]))
     end
     return terms
 end
@@ -184,7 +280,7 @@ function matrix_terms(system::System, a::GenericOp, index)
     end
     terms = Term[]
     for (c, fs) in split_matrix(R, string(a(index...)), m, sites)
-        ts = [ Term(c, Pair{Int, Matrix}[]) ]
+        ts = scaled(c, [ identity_term() ])
         for (i, f) in zip(index, fs)
             if !isnothing(f)
                 ts = products(ts, one_site_terms(R, system, i, f))
@@ -199,11 +295,26 @@ end
     pure_terms(system, k, index)
 
 the terms of the operator `k`, generic and placed on the sites `index`, or placed, its products
-gathered first, see `gathered`
+gathered first, see `gathered`, their strings not laid
 """
 pure_terms(system::System, k::GenericOp{IsOperator}, index) = reduced(op_terms(system, k, index))
 pure_terms(system::System, k::IndexedOp{IsOperator}, _) =
     reduced(op_terms(system, gathered(system, k), ()))
+
+"""
+    trace_dual(system, t)
+
+the term of the operator `M` the term `t` of a superoperator takes the trace through,
+``\\mathrm{tr}\\,t(\\rho) = \\mathrm{tr}(M\\rho)``, block by block: a block on the strings
+``\\rho \\mapsto F^a \\rho F^b`` gives ``F^b M F^a``, its string that of the kets and the bras
+together, and a sign for an odd block under the string of the bras
+"""
+function trace_dual(system::System, t::Term)
+    blocks = [ i => kraus_sum(b, [system[i]]) for (i, b) in t.blocks ]
+    parities = [ (p & 1) ⊻ (p >> 1) for p in t.parities ]
+    odd = count(isodd(p) && on_string(t.bras, i) for ((i, _), p) in zip(blocks, parities))
+    return Term((-1)^odd * t.coef, blocks, parities, xor_strings(t.kets, t.bras), Int[])
+end
 
 """
     op_terms(system, op, index)
@@ -251,8 +362,7 @@ function op_terms(system::System, a::Dissipator, index)
         m = reduced(products(map(dag, ts), ts))
     else
         jumps = op_terms(system, a.arg, index)
-        m = reduced([ Term(t.coef, [ i => kraus_sum(b, [system[i]]) for (i, b) in t.blocks ])
-                      for t in jumps ])
+        m = reduced(map(t -> trace_dual(system, t), jumps))
     end
     one = identity_term()
     return Term[ jumps ; scaled(-0.5, [ [ sided_term(x, one) for x in m ] ;
@@ -269,11 +379,12 @@ kept real
 """
 function reduced(terms::Vector{Term})
     out = Term[]
-    seen = Dict{Vector{Pair{Int, Matrix}}, Int}()
+    seen = Dict{Tuple{Vector{Pair{Int, Matrix}}, Vector{Int}, Vector{Int}}, Int}()
     for t in terms
         coef = t.coef
         blocks = Pair{Int, Matrix}[]
-        for (i, m) in t.blocks
+        parities = Int[]
+        for ((i, m), p) in zip(t.blocks, t.parities)
             λ = tr(m) / size(m, 1)
             if iszero(m)
                 coef = 0
@@ -290,19 +401,22 @@ function reduced(terms::Vector{Term})
                 b = real(b)
             end
             push!(blocks, i => no_signed_zero(b))
+            push!(parities, p)
         end
         if coef == 0
             continue
         end
-        j = get(seen, blocks, 0)
+        key = (blocks, t.kets, t.bras)
+        j = get(seen, key, 0)
         if j == 0
-            push!(out, Term(coef, blocks))
-            seen[blocks] = length(out)
+            push!(out, Term(coef, blocks, parities, t.kets, t.bras))
+            seen[key] = length(out)
         else
-            out[j] = Term(out[j].coef + coef, blocks)
+            out[j] = Term(out[j].coef + coef, blocks, parities, t.kets, t.bras)
         end
     end
-    return [ Term(isreal(t.coef) ? real(t.coef) : t.coef, t.blocks) for t in out if t.coef ≠ 0 ]
+    return [ Term(isreal(t.coef) ? real(t.coef) : t.coef, t.blocks, t.parities, t.kets, t.bras)
+             for t in out if t.coef ≠ 0 ]
 end
 
 """
@@ -381,14 +495,14 @@ end
     system_matrix(R, system, terms)
 
 the matrix of a sum of terms on the whole of `system`, the last site varying fastest, those of
-a superoperator for `Mixed`, see `matrix`
+a superoperator for `Mixed`, see `matrix`, their strings laid
 """
 function system_matrix(::Type{R}, system::System, ts::Vector{Term}) where R
     ids = [ Matrix{Float64}(I, block_dim(R, system[k]), block_dim(R, system[k]))
             for k in 1:length(system) ]
     d = prod(size(m, 1) for m in ids)
     return sum((t.coef * foldl(kron, [ get(Dict(t.blocks), k, ids[k]) for k in eachindex(ids) ])
-                for t in ts); init = zeros(d, d))
+                for t in (laid_strings(R, system, x) for x in ts)); init = zeros(d, d))
 end
 
 """
@@ -581,14 +695,16 @@ end
     lower(system, op)
 
 the terms of the operator `op`, placed on sites, on `system`, see `Term`, once its products are
-gathered, see `gathered`: the Jordan-Wigner strings are laid on the fermionic sites, and the
-operator is refused on a charged system when it has no definite flux. A channel or a generator
+gathered, see `gathered`: the Jordan-Wigner strings, kept apart while the terms are developed,
+are laid on the fermionic sites at the end, and the operator is refused on a charged system
+when it has no definite flux. A channel or a generator
 gives the terms of its superoperator on the density matrices of the sites, refused likewise.
 """
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
     check_indices(system, a)
     terms = reduced(op_terms(system, gathered(system, a), ()))
+    terms = reduced([ laid_strings(Pure, system, t) for t in terms ])
     check_flux(Pure, system, a, terms)
     return terms
 end
@@ -596,6 +712,7 @@ end
 function lower(system::System, a::IndexedOp{<:Union{IsChannel, IsGenerator}})
     check_indices(system, a)
     terms = reduced(op_terms(system, a, ()))
+    terms = reduced([ laid_strings(Mixed, system, t) for t in terms ])
     check_flux(Mixed, system, a, terms)
     return terms
 end
