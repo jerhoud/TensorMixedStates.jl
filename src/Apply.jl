@@ -151,32 +151,41 @@ function piece_action(system::System, p::IndexedOp{IsOperator}, run::Bool)
     return terms, 1
 end
 
+# A workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
+# zero, having no block: when the result of applying gates or an MPO vanishes, the SVD, the QR
+# or the eigen of ITensorMPS fails, and so does any later step on that null state. The functions
+# below apply them in place of ITensorMPS, giving the null state in that case, so that apply is
+# written as it would be without the bug.
+
 """
     vanished(st)
 
-whether the MPS `st` is the null state for having a tensor of zero, as a gate of one site can
-leave it, which ITensors then fails to factorise on charged indices
+whether the MPS `st` is the null state for having a tensor of zero, as a gate of one site or a
+null result of the functions below leaves it
 """
 vanished(st::MPS) = any(t -> iszero(norm(t)), st)
 
 """
     guarded(f, vanishes, st)
 
-the MPS `f(st)`, gates or an MPO applied to `st` by ITensorMPS, or `nothing` when the result
-vanishes: ITensors cannot factorise a tensor of charged indices that is exactly zero, which has
-no block, so a failure on charged indices is checked with `vanishes(st)`, exact, and raised
-again otherwise. `f` is given a copy, which a failure may leave half changed.
+the MPS `f(st)`, gates or an MPO applied to `st` by ITensorMPS, or the null state when the
+result vanishes: `st` itself when it is already null, which ITensors would fail on, and when
+`f` fails on charged indices, `0 * st` if `vanishes(st)` tells exactly that the result is
+zero; any other failure is raised again. `f` is given a copy, which a failure may leave half
+changed.
 """
 function guarded(f, vanishes, st::MPS)
-    r = try
-        f(copy(st))
+    if vanished(st)
+        return st
+    end
+    try
+        return f(copy(st))
     catch
         if any(hasqns, st) && vanishes(st)
-            return nothing
+            return 0 * st
         end
         rethrow()
     end
-    return vanished(r) ? nothing : r
 end
 
 """
@@ -194,14 +203,16 @@ end
 """
     applied_gates(gates, st, tr)
 
-the MPS `st` with `gates` applied, truncated by `tr`, or `nothing` when the result vanishes,
-see `guarded`: on a failure on charged indices, the gates are applied again one by one, so that
-the one taking the state to zero is found
+the MPS `st` with `gates` applied, truncated by `tr`, or the null state when the result
+vanishes, see `guarded`: on a failure on charged indices, the gates are applied again one by
+one, so that the one taking the state to zero is found
 """
 function applied_gates(gates::Vector{ITensor}, st::MPS, tr)
+    if vanished(st)
+        return st
+    end
     try
-        r = apply(gates, copy(st); move_sites_back_between_gates = false, tr...)
-        return vanished(r) ? nothing : r
+        return apply(gates, copy(st); move_sites_back_between_gates = false, tr...)
     catch
         if !any(hasqns, st)
             rethrow()
@@ -209,9 +220,6 @@ function applied_gates(gates::Vector{ITensor}, st::MPS, tr)
     end
     for g in gates
         st = guarded(s -> apply(g, s; tr...), s -> vanishing_gate(g, s), st)
-        if isnothing(st)
-            return nothing
-        end
     end
     return st
 end
@@ -219,8 +227,9 @@ end
 """
     applied_mpo(mpo, st, tr; alg = "densitymatrix")
 
-the MPS `st` with `mpo` applied by the algorithm `alg`, truncated by `tr`, or `nothing` when
-the result vanishes, see `guarded`, which ``\\langle A\\psi | A\\psi \\rangle`` tells exactly
+the MPS `st` with `mpo` applied by the algorithm `alg`, truncated by `tr`, or the null state
+when the result vanishes, see `guarded`, which ``\\langle A\\psi | A\\psi \\rangle`` tells
+exactly
 """
 applied_mpo(mpo::MPO, st::MPS, tr; alg::String = "densitymatrix") =
     guarded(s -> apply(mpo, s; alg, tr...), s -> iszero(inner(mpo, s, mpo, s)), st)
@@ -309,6 +318,124 @@ function joined(system::System, st::MPS, bras)
 end
 
 """
+    GateBatch(gates, apart)
+
+a step of `apply`: gates applied together, on the indices of the state or, when `apart`, on
+the kets and the bras of a density matrix split apart, see `separated`
+"""
+struct GateBatch
+    gates::Vector{ITensor}
+    apart::Bool
+end
+
+"""
+    add_gates!(steps, gates, apart)
+
+append `gates` to the steps of `apply`, joining them to the last step when it is a batch of the
+same kind
+"""
+function add_gates!(steps::Vector, gates::Vector{ITensor}, apart::Bool)
+    if !isempty(steps) && last(steps) isa GateBatch && last(steps).apart == apart
+        append!(last(steps).gates, gates)
+    else
+        push!(steps, GateBatch(gates, apart))
+    end
+    return steps
+end
+
+"""
+    pure_steps(system, op)
+
+the number a pure state is multiplied by and the steps of `apply` for the operator `op`, from
+its rightmost piece to its leftmost, see `pieces`: batches of gates, and the terms of a piece
+to apply through its MPO
+"""
+function pure_steps(system::System, a::IndexedOp{IsOperator})
+    coef, ps = pieces(system, a)
+    steps = Union{GateBatch, Vector{Term}}[]
+    for (p, run) in reverse(ps)
+        action, c = piece_action(system, p, run)
+        coef *= c
+        if coef == 0
+            break
+        elseif action isa Vector{Term}
+            push!(steps, action)
+        else
+            gates = [ gate_on(m, [ siteind(Pure, system, k) for k in ks ]) for (m, ks) in action ]
+            add_gates!(steps, gates, false)
+        end
+    end
+    return coef, steps
+end
+
+"""
+    mixed_steps(system, op, bras)
+
+the number a density matrix is multiplied by and the steps of `apply` for the channel or the
+generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate as
+its operator on the kets and its conjugate on the bras `bras`, piece by piece, any other factor
+as a dense block on the mixed indices, or the terms of either to apply through their MPO
+"""
+function mixed_steps(system::System, a::IndexedOp, bras)
+    coef = scalarcoef(a)
+    steps = Union{GateBatch, Vector{Term}}[]
+    for f in reverse(channel_factors(scalararg(a)))
+        if f isa IndexedOp{IsOperator}
+            c, ps = pieces(system, f)
+            coef *= abs2(c)
+            for (p, run) in reverse(ps)
+                action, c = piece_action(system, p, run)
+                coef *= abs2(c)
+                if action isa Vector{Term}
+                    push!(steps, gate_terms(action))
+                else
+                    # K on the kets, its conjugate on the bras
+                    gates = [ g for (m, ks) in action
+                              for g in (gate_on(m, [ siteind(Pure, system, k) for k in ks ]),
+                                        gate_on(conj(m), bras[ks])) ]
+                    add_gates!(steps, gates, true)
+                end
+            end
+        else
+            terms = lower(system, f)
+            ks = sort!(unique(k for t in terms for (k, _) in t.blocks))
+            if isempty(ks)
+                coef *= sum(t.coef for t in terms; init = 0.)
+            elseif prod(dim(system[k])^2 for k in ks) ≤ dense_limit
+                add_gates!(steps, [ gate_on(mixed_block(system, terms, ks),
+                                            [ siteind(Mixed, system, k) for k in ks ]) ], false)
+            else
+                push!(steps, terms)
+            end
+        end
+        if coef == 0
+            break
+        end
+    end
+    return coef, steps
+end
+
+"""
+    applied_steps(R, system, st, steps, tr, bras = nothing)
+
+the MPS `st` of a state of representation `R` with the steps of `apply` applied in order, each
+truncated by `tr`, the MPOs built as they come, the gates of a density matrix split apart on
+the bras `bras`
+"""
+function applied_steps(::Type{R}, system::System, st::MPS, steps, tr, bras = nothing) where R
+    for step in steps
+        st = if step isa Vector{Term}
+            applied_mpo(make_mpo(lay_terms!(PreMPO{R}(system), step, 1)), st, tr)
+        elseif step.apart
+            joined(system, applied_gates(step.gates, separated(system, st, bras), tr), bras)
+        else
+            applied_gates(step.gates, st, tr)
+        end
+    end
+    return st
+end
+
+"""
     apply(op, state; limits = Limits())
     apply(mpo::MPO, state; limits = Limits(), apply_algo = "densitymatrix")
 
@@ -335,43 +462,11 @@ state is not normalised.
 function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Limits())
     sys = state.system
     check_indices(sys, a)
-    tr = truncation(limits)
-    coef, ps = pieces(sys, a)
-    # A workaround of ITensors, which cannot factorise a tensor of charged indices that is
-    # exactly zero, having no block: when the result vanishes, the SVD, QR or eigen of
-    # ITensorMPS fails, before or after applying. Gates and MPOs are therefore applied through
-    # applied_gates and applied_mpo, which tell that case apart exactly, see `guarded`, and give
-    # `nothing` for the null state: `st` is then `nothing`, and nothing more can be applied to it.
-    st = state.state
-    gates = ITensor[]
-    flush!() =
-        if !isempty(gates)
-            st = applied_gates(gates, st, tr)
-            empty!(gates)
-        end
-    for (p, run) in reverse(ps)
-        action, c = piece_action(sys, p, run)
-        coef *= c
-        if coef == 0
-            return State(state, 0 * state.state)
-        elseif action isa Vector{Term}
-            flush!()
-            # the gates just flushed may have taken the state to zero
-            if !isnothing(st)
-                st = applied_mpo(make_mpo(lay_terms!(PreMPO{Pure}(sys), action, 1)), st, tr)
-            end
-        else
-            append!(gates, [ gate_on(m, [ siteind(Pure, sys, k) for k in ks ]) for (m, ks) in action ])
-        end
-        # the null state, see above, which ITensors would fail on with the next factors
-        if isnothing(st)
-            return State(state, 0 * state.state)
-        end
-    end
-    flush!()
-    if isnothing(st)
+    coef, steps = pure_steps(sys, a)
+    if coef == 0
         return State(state, 0 * state.state)
     end
+    st = applied_steps(Pure, sys, state.state, steps, truncation(limits))
     return State(state, coef == 1 ? st : coef * st)
 end
 
@@ -393,84 +488,16 @@ function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed
                limits::Limits = Limits())
     sys = state.system
     check_indices(sys, a)
-    tr = truncation(limits)
-    coef = scalarcoef(a)
     bras = bra_legs(sys)
-    # `st` becomes `nothing` when the result vanishes, a workaround of ITensors failing on a
-    # tensor of charged indices that is exactly zero, as in apply on a pure state
-    st = state.state
-    # the gates waiting to be applied, on the mixed indices or on the kets and the bras apart
-    gates = ITensor[]
-    apart = false
-    flush!() =
-        if !isempty(gates)
-            if apart
-                s = applied_gates(gates, separated(sys, st, bras), tr)
-                st = isnothing(s) ? nothing : joined(sys, s, bras)
-            else
-                st = applied_gates(gates, st, tr)
-            end
-            empty!(gates)
-        end
-    queue!(gs, on_split) = begin
-        if apart ≠ on_split
-            flush!()
-            apart = on_split
-        end
-        append!(gates, gs)
-    end
-    for f in reverse(channel_factors(scalararg(a)))
-        if f isa IndexedOp{IsOperator}
-            c, ps = pieces(sys, f)
-            coef *= abs2(c)
-            for (p, run) in reverse(ps)
-                action, c = piece_action(sys, p, run)
-                coef *= abs2(c)
-                if action isa Vector{Term}
-                    flush!()
-                    # the gates just flushed may have taken the state to zero
-                    if !isnothing(st)
-                        st = applied_mpo(make_mpo(lay_terms!(PreMPO{Mixed}(sys), gate_terms(action), 1)),
-                                         st, tr)
-                    end
-                else
-                    queue!([ g for (m, ks) in action
-                           for g in (gate_on(m, [ siteind(Pure, sys, k) for k in ks ]),
-                                     gate_on(conj(m), bras[ks])) ], true)
-                end
-            end
-        else
-            terms = lower(sys, f)
-            ks = sort!(unique(k for t in terms for (k, _) in t.blocks))
-            if isempty(ks)
-                coef *= sum(t.coef for t in terms; init = 0.)
-            elseif prod(dim(sys[k])^2 for k in ks) ≤ dense_limit
-                queue!([ gate_on(mixed_block(sys, terms, ks), [ siteind(Mixed, sys, k) for k in ks ]) ],
-                       false)
-            else
-                flush!()
-                # the gates just flushed may have taken the state to zero
-                if !isnothing(st)
-                    st = applied_mpo(make_mpo(lay_terms!(PreMPO{Mixed}(sys), terms, 1)), st, tr)
-                end
-            end
-        end
-        # the null state, which ITensors would fail on with the next factors
-        if coef == 0 || isnothing(st)
-            return State(state, 0 * state.state)
-        end
-    end
-    flush!()
-    if isnothing(st)
+    coef, steps = mixed_steps(sys, a, bras)
+    if coef == 0
         return State(state, 0 * state.state)
     end
+    st = applied_steps(Mixed, sys, state.state, steps, truncation(limits), bras)
     return State(state, coef == 1 ? st : coef * st)
 end
 
 function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "densitymatrix")
     check_apply_algo(apply_algo)
-    # `nothing` for a result that vanishes, which ITensors fails on with charged indices, see
-    # `applied_mpo`
-    st = applied_mpo(mpo, state.state, truncation(limits); alg = apply_algo)
-    return State(state, isnothing(st) ? 0 * state.state : st)
+    return State(state, applied_mpo(mpo, state.state, truncation(limits); alg = apply_algo))
 end
