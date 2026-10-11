@@ -12,7 +12,8 @@ export apply
     dense_limit
 
 the largest product of the dimensions of the sites of a piece of more than two sites that
-`apply` takes as a dense block; beyond, the piece goes through its MPO
+`apply` takes as a dense block, and of their squares for a block on the mixed indices of a
+density matrix; beyond, it goes through its MPO
 """
 const dense_limit = 1024
 
@@ -79,13 +80,6 @@ function gate_on(m::AbstractMatrix, idx)
     a, inds = on_legs(Matrix(m), [ i' for i in idx ], [ dag(i) for i in idx ])
     return charged_itensor(a, inds)
 end
-
-"""
-    term_blocks(t)
-
-the blocks of the term `t`, its coefficient left out, as pairs of a matrix and of its sites
-"""
-term_blocks(t::Term) = [ (m, [k]) for (k, m) in t.blocks ]
 
 """
     pieces(system, op)
@@ -156,7 +150,7 @@ function piece_action(system::System, p::IndexedOp{IsOperator}, run::Bool)
         return Tuple{Matrix, Vector{Int}}[], 0
     elseif length(terms) == 1
         t = laid_strings(Pure, system, only(terms))
-        return term_blocks(t), t.coef
+        return [ (m, [k]) for (k, m) in t.blocks ], t.coef
     end
     return terms, 1
 end
@@ -583,6 +577,20 @@ function applied_steps(st::MPS, steps, limits::Limits)
 end
 
 """
+    applied(state, coef, steps, limits)
+
+the state with the steps of `apply` applied, see `applied_steps`, and multiplied by `coef`, the
+null state when `coef` is zero
+"""
+function applied(state::State, coef::Number, steps, limits::Limits)
+    if coef == 0
+        return State(state, 0 * state.state)
+    end
+    st = applied_steps(state.state, steps, limits)
+    return State(state, coef == 1 ? st : coef * st)
+end
+
+"""
     apply(op, state; limits = Limits())
     apply(mpo::MPO, state; limits = Limits(), apply_algo = "naive")
 
@@ -609,14 +617,8 @@ state is not normalised.
     apply(depolarizing_gate(0.01, 2)(1, 2) * controlled(X)(1, 2), ρ)
 """
 function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Limits())
-    sys = state.system
-    check_indices(sys, a)
-    coef, steps = pure_steps(sys, a)
-    if coef == 0
-        return State(state, 0 * state.state)
-    end
-    st = applied_steps(state.state, steps, limits)
-    return State(state, coef == 1 ? st : coef * st)
+    check_indices(state.system, a)
+    return applied(state, pure_steps(state.system, a)..., limits)
 end
 
 function apply(a::IndexedOp{IsChannel}, state::State{Pure}; limits::Limits = Limits())
@@ -635,14 +637,8 @@ apply(a::IndexedOp{IsOperator}, state::State{Mixed}; limits::Limits = Limits()) 
 
 function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed};
                limits::Limits = Limits())
-    sys = state.system
-    check_indices(sys, a)
-    coef, steps = mixed_steps(sys, a)
-    if coef == 0
-        return State(state, 0 * state.state)
-    end
-    st = applied_steps(state.state, steps, limits)
-    return State(state, coef == 1 ? st : coef * st)
+    check_indices(state.system, a)
+    return applied(state, mixed_steps(state.system, a)..., limits)
 end
 
 function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "naive")
