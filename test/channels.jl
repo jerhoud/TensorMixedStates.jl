@@ -578,6 +578,11 @@ end
     ρf = random_state(Mixed, System(6, Fermion()), 3)
     @test TMS.ITensorMPS.siteinds(apply(Gate((C ⊗ dag(C))(1, 5)) * Gate(Swap(2, 6)), ρf).state) ==
         TMS.ITensorMPS.siteinds(ρf.state)
+    # a batch over part of the chain, split apart on its sites alone, is the gates one by one
+    ρg = random_state(Mixed, System(8, Fermion()), 3)
+    g1, g2 = Gate((C ⊗ dag(C))(2, 6)), Gate(Swap(3, 5))
+    g3 = Gate(exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(4, 7))
+    @test norm(apply(g1 * g2 * g3, ρg) - apply(g1, apply(g2, apply(g3, ρg)))) < 1e-12
     # bosons of dimension 8, a gate acting on the kets and on the bras apart
     bs = System(2, Boson(8))
     ρb = random_state(Mixed, bs, 2)

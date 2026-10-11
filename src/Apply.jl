@@ -304,61 +304,70 @@ function mixed_block(system::System, terms::Vector{Term}, sites)
 end
 
 """
-    bra_legs(system)
+    bra_leg!(bras, system, i)
 
-an index for the bra of each site, standing in for the one its mixed index combines while
-`separated` keeps them apart: of prime level zero, so that the gates of `apply` act on it
+the index standing for the bra of site `i` of `system` while `separated` keeps it apart from
+the ket, of prime level zero so that the gates of `apply` act on it, made once and kept in
+`bras`
 """
-function bra_legs(system::System)
-    return map(1:length(system)) do i
+bra_leg!(bras::Dict{Int, Index}, system::System, i::Int) =
+    get!(bras, i) do
         b, _ = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
         noprime(sim(dag(b')))
     end
+
+"""
+    separated(system, st, bras, sites)
+    joined(system, st, bras, sites)
+
+the MPS `st` of a density matrix with the mixed index of each of `sites` split into its ket and
+its bra, the bra on `bras`, and the reverse, the other sites left as they are. A combiner
+contracted with the site of a tensor changes the basis of that site only, so the limits of
+orthogonality of `st` stay true.
+"""
+function separated(system::System, st::MPS, bras::Dict{Int, Index}, sites)
+    ts = [ st[i] for i in 1:length(st) ]
+    for i in sites
+        b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
+        ts[i] = replaceind(ts[i] * dag(c), dag(b'), bra_leg!(bras, system, i))
+    end
+    return MPS(ts; ortho_lims = ortho_lims(st))
+end
+
+function joined(system::System, st::MPS, bras::Dict{Int, Index}, sites)
+    ts = [ st[i] for i in 1:length(st) ]
+    for i in sites
+        b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
+        ts[i] = replaceind(ts[i], bras[i], dag(b')) * c
+    end
+    return MPS(ts; ortho_lims = ortho_lims(st))
 end
 
 """
-    separated(system, st, bras)
-    joined(system, st, bras)
+    GateBatch(gates, apart, sites)
 
-the MPS `st` of a density matrix with the mixed index of each site split into its ket and its
-bra, the bra on `bras`, and the reverse
-"""
-function separated(system::System, st::MPS, bras)
-    return MPS([ begin
-                     b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
-                     replaceind(st[i] * dag(c), dag(b'), bras[i])
-                 end for i in 1:length(system) ])
-end
-
-function joined(system::System, st::MPS, bras)
-    return MPS([ begin
-                     b, c = mixer(siteind(Pure, system, i), siteind(Mixed, system, i), system[i])
-                     replaceind(st[i], bras[i], dag(b')) * c
-                 end for i in 1:length(system) ])
-end
-
-"""
-    GateBatch(gates, apart)
-
-a step of `apply`: gates applied together, on the indices of the state or, when `apart`, on
-the kets and the bras of a density matrix split apart, see `separated`
+a step of `apply`: gates applied together, acting on `sites`, on the indices of the state or,
+when `apart`, on the kets and the bras of a density matrix split apart on those sites, see
+`separated`
 """
 struct GateBatch
     gates::Vector{ITensor}
     apart::Bool
+    sites::Vector{Int}
 end
 
 """
-    add_gates!(steps, gates, apart)
+    add_gates!(steps, gates, apart, sites)
 
-append `gates` to the steps of `apply`, joining them to the last step when it is a batch of the
-same kind
+append `gates`, acting on `sites`, to the steps of `apply`, joining them to the last step when
+it is a batch of the same kind
 """
-function add_gates!(steps::Vector, gates::Vector{ITensor}, apart::Bool)
+function add_gates!(steps::Vector, gates::Vector{ITensor}, apart::Bool, sites)
     if !isempty(steps) && last(steps) isa GateBatch && last(steps).apart == apart
         append!(last(steps).gates, gates)
+        union!(last(steps).sites, sites)
     else
-        push!(steps, GateBatch(gates, apart))
+        push!(steps, GateBatch(gates, apart, unique(sites)))
     end
     return steps
 end
@@ -382,7 +391,7 @@ function pure_steps(system::System, a::IndexedOp{IsOperator})
             push!(steps, action)
         else
             gates = [ gate_on(m, [ siteind(Pure, system, k) for k in ks ]) for (m, ks) in action ]
-            add_gates!(steps, gates, false)
+            add_gates!(steps, gates, false, (k for (_, ks) in action for k in ks))
         end
     end
     return coef, steps
@@ -393,10 +402,11 @@ end
 
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate as
-its operator on the kets and its conjugate on the bras `bras`, piece by piece, any other factor
-as a dense block on the mixed indices, or the terms of either to apply through their MPO
+its operator on the kets and its conjugate on the bras, made in `bras`, see `bra_leg!`, piece by
+piece, any other factor as a dense block on the mixed indices, or the terms of either to apply
+through their MPO
 """
-function mixed_steps(system::System, a::IndexedOp, bras)
+function mixed_steps(system::System, a::IndexedOp, bras::Dict{Int, Index})
     coef = scalarcoef(a)
     steps = Union{GateBatch, Vector{Term}}[]
     for f in reverse(channel_factors(scalararg(a)))
@@ -412,8 +422,9 @@ function mixed_steps(system::System, a::IndexedOp, bras)
                     # K on the kets, its conjugate on the bras
                     gates = [ g for (m, ks) in action
                               for g in (gate_on(m, [ siteind(Pure, system, k) for k in ks ]),
-                                        gate_on(conj(m), bras[ks])) ]
-                    add_gates!(steps, gates, true)
+                                        gate_on(conj(m), [ bra_leg!(bras, system, k)
+                                                           for k in ks ])) ]
+                    add_gates!(steps, gates, true, (k for (_, ks) in action for k in ks))
                 end
             end
         else
@@ -423,7 +434,7 @@ function mixed_steps(system::System, a::IndexedOp, bras)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif prod(dim(system[k])^2 for k in ks) ≤ dense_limit
                 add_gates!(steps, [ gate_on(mixed_block(system, terms, ks),
-                                            [ siteind(Mixed, system, k) for k in ks ]) ], false)
+                                            [ siteind(Mixed, system, k) for k in ks ]) ], false, ks)
             else
                 push!(steps, terms)
             end
@@ -440,14 +451,16 @@ end
 
 the MPS `st` of a state of representation `R` with the steps of `apply` applied in order, each
 truncated by `tr`, the MPOs built as they come, the gates of a density matrix split apart on
-the bras `bras`
+their sites, the bras on `bras`
 """
-function applied_steps(::Type{R}, system::System, st::MPS, steps, tr, bras = nothing) where R
+function applied_steps(::Type{R}, system::System, st::MPS, steps, tr,
+                       bras = Dict{Int, Index}()) where R
     for step in steps
         st = if step isa Vector{Term}
             applied_mpo(make_mpo(lay_terms!(PreMPO{R}(system), step, 1)), st, tr)
         elseif step.apart
-            joined(system, applied_gates(step.gates, separated(system, st, bras), tr), bras)
+            kets_bras = separated(system, st, bras, step.sites)
+            joined(system, applied_gates(step.gates, kets_bras, tr), bras, step.sites)
         else
             applied_gates(step.gates, st, tr)
         end
@@ -508,7 +521,7 @@ function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed
                limits::Limits = Limits())
     sys = state.system
     check_indices(sys, a)
-    bras = bra_legs(sys)
+    bras = Dict{Int, Index}()
     coef, steps = mixed_steps(sys, a, bras)
     if coef == 0
         return State(state, 0 * state.state)
