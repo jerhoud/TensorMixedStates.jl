@@ -89,11 +89,12 @@ in full.
 
 Some results change without any edit of the program:
 
-- **The default truncation.** `Limits()` has the cutoff `eps()`, about 2.2e-16, the default
-  of the solvers of ITensorMPS, rather than 0. It discards the singular values below about
-  1.5e-8 of the norm, which removes the noise of rounding that made the bond dimension grow;
-  the bond dimensions of a run with the default limits are smaller. `Limits(cutoff = 0)`
-  keeps everything. A serious simulation chooses its own limits in any case.
+- **The default truncation.** `Limits()` has the cutoff `1e-26` rather than 0. It discards the
+  singular values below about 1e-13 of the norm, which removes the noise of rounding that made
+  the bond dimension grow; the bond dimensions of a run with the default limits are smaller.
+  `Limits(cutoff = 0)` keeps everything. A serious simulation chooses its own limits in any case.
+- **`apply` of an MPO** takes `"naive"`, the exact product truncated, rather than
+  `"densitymatrix"`, whose error may stay near 1e-8: `apply_algo = "densitymatrix"` gives it back.
 - **`steady_state`** and `SteadyState` solve each local step with `Krylov(dim = 8,
   maxiter = 3)` by default, which reaches steady states the former default stalled before:
   the results of a steady state search change, for the better.

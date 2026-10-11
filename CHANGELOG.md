@@ -37,8 +37,8 @@ on the page "Extending TMS", are experimental and may still change in a version 
   `dephasing_gate` and `dephasing_dissipator`.
 - `Krylov`, the parameters of the Krylov method of each local step, which `tdvp`, `dmrg`,
   `steady_state`, `Tdvp`, `GroundState` and `SteadyState` take as `krylov`.
-- `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` (default) or
-  `"naive"`.
+- `apply_algo` for `approx_W`, `ApproxW` and `apply` of an MPO: `"densitymatrix"` or `"naive"`,
+  the default of `apply`.
 - `noise` for `SteadyState`, as for `GroundState`.
 - `dmrg`, `steady_state` and `thermal_state` take a `PreMPO`, as `tdvp` and `approx_W` do.
 - `tdvp`, `steady_state` and `thermal_state` take an MPO, as `dmrg` does.
@@ -115,11 +115,12 @@ Simulations:
 
 Results:
 
-- The default cutoff of `Limits` is `eps()`, the default of ITensorMPS, rather than 0, which
-  kept the singular values of rounding: a sum of nine product states of twenty qubits had a
-  bond dimension of 2304 rather than 9. Every function and phase whose `limits` default to
-  `Limits()` is concerned, and `graph_state`, which took a cutoff of 1e-16. `Limits(cutoff = 0)`
-  truncates nothing.
+- The default cutoff of `Limits` is `1e-26`, rather than 0, which kept the singular values of
+  rounding: a sum of nine product states of twenty qubits had a bond dimension of 2304 rather
+  than 9. Every function and phase whose `limits` default to `Limits()` is concerned, and
+  `graph_state`, which took a cutoff of 1e-16. `Limits(cutoff = 0)` truncates nothing.
+- `apply` of an MPO takes `"naive"` by default, where `"densitymatrix"` could leave an error
+  near 1e-8.
 - `approx_W` of order 3 or 4 keeps its order under a time dependent evolver, each step being
   the commutator-free Magnus integrator of order 4, at twice the cost: it was of order 2.
 - `steady_state` and `SteadyState` search each local step with `Krylov(dim = 8, maxiter = 3)`,

@@ -179,8 +179,8 @@ lim = Limits(cutoff = 1e-10, maxdim = 50)
 ```
 
 Any of the arguments may be omitted: `maxdim` and `mindim` then impose nothing, and the
-default `cutoff`, `eps()`, only discards what rounding leaves, the singular values below about
-`1.5e-8` of the norm, while `cutoff = 0` discards nothing. The truncation is a choice to be
+default `cutoff`, `1e-26`, only discards what rounding leaves, the singular values below about
+`1e-13` of the norm, while `cutoff = 0` discards nothing. The truncation is a choice to be
 checked, see [Checking the accuracy](@ref).
 
 A third parameter, `mindim`, sets the bond dimension the truncation is not allowed to go below, as in `Limits(cutoff = 1e-10, maxdim = 50, mindim = 4)`. `maxdim` takes precedence when the two conflict.
@@ -597,7 +597,7 @@ operator.
 depend on it, and `EntanglementEntropy(cut)`, the operator space entanglement entropy on a
 mixed state, shows the entanglement that makes the bond dimension grow. A truncation by
 `cutoff` shows in neither, and only running again tells it. `Limits()` discards the singular
-values below about 1.5e-8 of the norm, which keeps rounding from making the bond dimension
+values below about 1e-13 of the norm, which keeps rounding from making the bond dimension
 grow and may leave an error of that order: the truncation that makes a computation affordable
 is a choice, checked by running again with a larger `maxdim` and a smaller `cutoff`.
 
