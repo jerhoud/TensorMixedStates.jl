@@ -278,14 +278,14 @@ function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS,
 end
 
 """
-    applied_mpo(mpo, st, limits; alg = "densitymatrix")
+    applied_mpo(mpo, st, limits; alg = "naive")
 
 the MPS `st` with `mpo` applied by the algorithm `alg`, truncated to `limits`, or the null state
 when the result vanishes, see `guarded`, which ``\\langle A\\psi | A\\psi \\rangle`` tells
 exactly. The cutoff is `eps()` by default for `"densitymatrix"`, whose density matrices give the
 squares of the singular values only to `eps()` of the largest: below, it would keep rounding.
 """
-function applied_mpo(mpo::MPO, st::MPS, limits::Limits; alg::String = "densitymatrix")
+function applied_mpo(mpo::MPO, st::MPS, limits::Limits; alg::String = "naive")
     tr = alg == "densitymatrix" ? truncation(limits; cutoff = eps()) : truncation(limits)
     return guarded(s -> apply(mpo, s; alg, tr...), s -> iszero(inner(mpo, s, mpo, s)), st)
 end
@@ -511,7 +511,7 @@ end
 
 """
     apply(op, state; limits = Limits())
-    apply(mpo::MPO, state; limits = Limits(), apply_algo = "densitymatrix")
+    apply(mpo::MPO, state; limits = Limits(), apply_algo = "naive")
 
 the state with the operator `op`, placed on sites, applied, or the MPO `mpo` from
 `make_mpo`. A product acts as the operator it denotes, its rightmost factor first, factor by
@@ -522,12 +522,12 @@ channel is applied factor by factor in the same way, `Gate(K)` as `K` on the ket
 conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives `L(ρ)`. The
 state is not normalised.
 
-- `limits`: the truncation of the bonds a gate of several sites crosses, `cutoff = 1e-26` by
-  default, or of the whole state for an MPO, `cutoff = eps()` by default with
-  `"densitymatrix"`, whose density matrices give the squares of the singular values only to
-  `eps()` of the largest, and `1e-26` with `"naive"`
-- `apply_algo`: for an MPO, the algorithm of its product with the state, `"densitymatrix"` or
-  `"naive"`
+- `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole state
+  for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density
+  matrices give the squares of the singular values only to `eps()` of the largest
+- `apply_algo`: for an MPO, the algorithm of its product with the state: `"naive"`, the exact
+  product truncated, or `"densitymatrix"`, faster when it truncates much, but whose error may
+  stay near `1e-8`, see Camaño, Epperly and Tropp, arXiv:2504.06475
 
 # Examples
 
@@ -573,7 +573,7 @@ function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed
     return State(state, coef == 1 ? st : coef * st)
 end
 
-function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "densitymatrix")
+function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "naive")
     check_apply_algo(apply_algo)
     return State(state, applied_mpo(mpo, state.state, limits; alg = apply_algo))
 end

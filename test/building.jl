@@ -86,12 +86,12 @@ end
     @test maxlinkdim(up + 1e-14 * dn) == 1
     @test maxlinkdim(up + 1e-9 * dn) == 2
     @test maxlinkdim(+(up, 1e-14 * dn; limits = Limits(cutoff = 0))) ≥ 2
-    # an MPO applied by "densitymatrix" cuts at eps() by default, below which its density
-    # matrices are rounding, and by "naive" at 1e-26
+    # an MPO is applied by "naive" by default, cut at 1e-26, and by "densitymatrix" at eps(),
+    # below which its density matrices are rounding
     q2 = State{Pure}(System(2, Qubit()), "Up")
     mpo = make_mpo(q2, Id(1) + 1e-9 * X(1) * X(2))
-    @test maxlinkdim(apply(mpo, q2)) == 1
-    @test maxlinkdim(apply(mpo, q2; apply_algo = "naive")) == 2
+    @test maxlinkdim(apply(mpo, q2)) == 2
+    @test maxlinkdim(apply(mpo, q2; apply_algo = "densitymatrix")) == 1
 end
 
 @testset "Random states" begin
