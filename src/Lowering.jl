@@ -624,23 +624,31 @@ function matrix_on(system::System, ::IdentityOp, sites)
 end
 
 """
+    placed_matrix(m, magnitude, name, sites)
+
+the operator `name` of matrix `m` placed on `sites`, or a number when `m` vanishes next to
+`magnitude`, the size of what it was computed from, or is a multiple of the identity
+"""
+function placed_matrix(m::AbstractMatrix, magnitude::Real, name::String, sites)
+    λ = tr(m) / size(m, 1)
+    if norm(m) ≤ rounding_tol * magnitude
+        return scale(0, IdentityOp{IsOperator, Indexed, 1}())
+    elseif nearly(m, Matrix(λ * I, size(m)))
+        return scale(λ, IdentityOp{IsOperator, Indexed, 1}())
+    end
+    return Operator{length(sites)}(name, m)(sites...)
+end
+
+"""
     merged(system, a, b)
 
 the product `a * b` of two placed operators, the sites of one among those of the other, as one
-operator given by its matrix on the sites of the larger, or as a number when that matrix is a
-multiple of the identity
+operator given by its matrix on the sites of the larger, see `placed_matrix`
 """
 function merged(system::System, a::AtIndex, b::AtIndex)
     sites = length(a.index) ≥ length(b.index) ? a.index : b.index
     x, y = matrix_on(system, a, sites), matrix_on(system, b, sites)
-    m = x * y
-    λ = tr(m) / size(m, 1)
-    if norm(m) ≤ rounding_tol * norm(x) * norm(y)
-        return scale(0, IdentityOp(a))
-    elseif nearly(m, Matrix(λ * I, size(m)))
-        return scale(λ, IdentityOp(a))
-    end
-    return Operator{length(sites)}("($(a * b))", m)(sites...)
+    return placed_matrix(x * y, norm(x) * norm(y), "($(a * b))", sites)
 end
 
 """
@@ -880,11 +888,18 @@ end
 the placed operator `op` rewritten without developing anything, into a normal form: in each
 product, two factors sharing a site are merged where they can be, see `merged_pass`, until
 nothing merges, then the factors are sorted by their sites as far as they (anti)commute, see
-`sort_factors!`. Sums are gathered term by term, and an operator in normal form is left as it
-is.
+`sort_factors!`. Sums are gathered term by term, a sum on a single site becoming the operator
+of its matrix, as a merged product does, and an operator in normal form is left as it is.
 """
-gathered(system::System, a::SumOp{IsOperator, Indexed}) =
-    SumOp([ gathered(system, x) for x in a.subs ])
+function gathered(system::System, a::SumOp{IsOperator, Indexed})
+    s = SumOp([ gathered(system, x) for x in a.subs ])
+    sites = sites_of(s)
+    if !(s isa SumOp) || length(sites) ≠ 1
+        return s
+    end
+    ms = [ matrix_on(system, x, sites) for x in s.subs ]
+    return placed_matrix(sum(ms), sum(norm, ms), "($s)", sites)
+end
 gathered(system::System, a::ScalarOp{IsOperator, Indexed}) =
     scale(a.coef, gathered(system, a.arg))
 gathered(::System, a::Union{AtIndex{IsOperator}, IdentityOp{IsOperator, Indexed}}) = a

@@ -606,6 +606,20 @@ end
     @test TMS.gathered(System(1000, q), prod(X(i) for i in 1000:-1:1)) == prod(X(i) for i in 1:1000)
     g = TMS.gathered(f4, C(3) * C(2) * C(1))
     @test TMS.scalarcoef(g) == -1 && TMS.prodsubs(TMS.scalararg(g)) == [C(1), C(2), C(3)]
+
+    # a sum on a single site is taken by its matrix, as a merged product, so that a product of
+    # such sums is one term, and it merges with the factors of its site
+    @test TMS.gathered(s5, Id(2) + Z(2)) isa TMS.AtIndex
+    projector = prod(Id(i) + Z(i) for i in 1:5)
+    odd_sums = (C(2) + dag(C)(2)) * (C(4) + dag(C)(4))
+    mixed = (Id(2) + C(2)) * dag(C)(1) * (N(3) + 2Id(3)) * C(4)
+    @test nterms(s5, projector) == nterms(s5, X(1) * (Id(1) + Z(1)) * Y(2)) == 1
+    @test nterms(f5, odd_sums) == 1 && nterms(f5, mixed) == 2
+    @test nterms(s5, (Sx(1) - (Sp(1) + Sm(1)) / 2) * X(2)) == 0
+    for (sys, op) in [(s5, projector), (s5, X(1) * (Id(1) + Z(1)) * Y(2)), (f5, odd_sums), (f5, mixed)]
+        @test same(sys, op)
+    end
+    @test_throws "no definite flux" TMS.lower(System(3, Fermion(conserve = N)), C(2) + dag(C)(2))
 end
 
 @testset "tensor is ⊗ under a name in ASCII" begin
