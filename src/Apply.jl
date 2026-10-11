@@ -118,34 +118,6 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     return coef, [ (ProdOp(p), r) for (p, r) in zip(ps, runs) ]
 end
 
-"""
-    piece_action(system, p, run)
-
-how `apply` applies the piece `p`: `(blocks, number)`, dense blocks to apply as gates, pairs of
-a matrix and of its sites, and the number they bring, or `(terms, 1)`, its terms to apply
-through their MPO. A piece on at most two sites, or small enough, see `dense_enough`, laying no
-string elsewhere, is a dense block, unless it is a run of factors of one site; otherwise it is
-developed, and goes through gates of one site when it gives a single term, as a run usually
-does, through its MPO otherwise.
-"""
-function piece_action(system::System, p::IndexedOp{IsOperator}, run::Bool)
-    sites = sort(sites_of(p))
-    if !run && (length(sites) ≤ 2 || dense_enough(Pure, system, sites))
-        m = matrix_on(system, p, sites)
-        if stays_on(system, m, sites)
-            return [ (m, sites) ], 1
-        end
-    end
-    terms = lower(system, p)
-    if isempty(terms)
-        return Tuple{Matrix, Vector{Int}}[], 0
-    elseif length(terms) == 1
-        t = laid_strings(Pure, system, only(terms))
-        return [ (m, [k]) for (k, m) in t.blocks ], t.coef
-    end
-    return terms, 1
-end
-
 # A workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
 # zero, having no block: when the result of applying gates or an MPO vanishes, the SVD, the QR
 # or the eigen of ITensorMPS fails, and so does any later step on that null state. The functions
@@ -487,24 +459,48 @@ function gate_steps!(steps::Vector, ::Type{Mixed}, system::System, m::AbstractMa
 end
 
 """
+    piece_steps!(steps, R, system, p, run)
+
+append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
+operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
+they bring. A piece on at most two sites, or small enough, see `dense_enough`, laying no string
+elsewhere, is a dense block, see `gate_steps!`, unless it is a run; otherwise it is developed,
+and goes through gates of one site when it gives a single term, as a run usually does, through
+the MPO of its terms otherwise, see `mpo_step!`, on a density matrix those of
+``\\rho \\mapsto K\\rho K^\\dagger``, see `gate_terms`
+"""
+function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
+                      run::Bool) where R
+    sites = sort(sites_of(p))
+    if !run && (length(sites) ≤ 2 || dense_enough(Pure, system, sites))
+        m = matrix_on(system, p, sites)
+        if stays_on(system, m, sites)
+            gate_steps!(steps, R, system, m, sites)
+            return 1
+        end
+    end
+    terms = lower(system, p)
+    if length(terms) == 1
+        t = laid_strings(Pure, system, only(terms))
+        foreach(((k, m),) -> gate_steps!(steps, R, system, m, [k]), t.blocks)
+        return t.coef
+    end
+    return mpo_step!(steps, R, system, R === Mixed ? gate_terms(terms) : terms)
+end
+
+"""
     operator_steps!(steps, R, system, op)
 
 append to the steps of `apply` on a state of representation `R` those of the operator `op`,
-from its rightmost piece to its leftmost, see `pieces`, and return the number the pieces bring:
-each piece as a gate, see `gate_steps!`, or the terms of its gate through their MPO, see
-`mpo_step!`, on a density matrix those of ``\\rho \\mapsto K\\rho K^\\dagger``, see `gate_terms`
+piece by piece from its rightmost to its leftmost, see `pieces` and `piece_steps!`, and return
+the number they bring
 """
 function operator_steps!(steps::Vector, ::Type{R}, system::System, a::IndexedOp{IsOperator}) where R
     coef, ps = pieces(system, a)
     for (p, run) in reverse(ps)
-        action, c = piece_action(system, p, run)
-        coef *= c
+        coef *= piece_steps!(steps, R, system, p, run)
         if coef == 0
             break
-        elseif action isa Vector{Term}
-            coef *= mpo_step!(steps, R, system, R === Mixed ? gate_terms(action) : action)
-        else
-            foreach(((m, ks),) -> gate_steps!(steps, R, system, m, ks), action)
         end
     end
     return coef

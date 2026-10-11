@@ -345,11 +345,11 @@ end
     # a dense block on its sites when it lays no string elsewhere, its MPO otherwise, and
     # gates of one site for a single term
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
-    action(op) = first(TMS.piece_action(fe, op, false))
-    @test length(action(exp(-0.4im * h)(1, 2))) == 1
-    @test action(exp(-0.4im * h)(1, 3)) isa Vector{TMS.Term}
-    @test action((C + N)(3)) isa Vector{TMS.Term}
-    @test length(action(C(4))) == 4
+    steps(op) = last(TMS.pure_steps(fe, op))
+    @test length(only(steps(exp(-0.4im * h)(1, 2))).gates) == 1
+    @test only(steps(exp(-0.4im * h)(1, 3))) isa TMS.WindowMPO
+    @test only(steps((C + N)(3))) isa TMS.WindowMPO
+    @test length(only(steps(C(4))).gates) == 4
     # a product that vanishes gives the null state, and an MPO is applied as it is
     ψ = random_state(Pure, fe, 4)
     @test norm(apply(C(2) * C(2), ψ)) == 0
