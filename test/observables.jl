@@ -71,6 +71,17 @@ end
     @test expect1(ρ, C + N) ≈ [ expect(ρ, (C + N)(i)) for i in 1:n ]
     @test expect2(st, (dag(C), N)) ≈
           [ i == j ? expect(st, (dag(C) * N)(i)) : expect(st, dag(C)(i) * N(j)) for i in 1:n, j in 1:n ]
+    # any other pair row by row, each part of definite parity with its string: no definite parity,
+    # a mixed state, and operators defined on some of the sites only
+    pairwise(x, o1, o2, on1, on2) =
+        [ (i in on1 && j in on2) ? expect(x, i == j ? (o1 * o2)(i) : o1(i) * o2(j)) : missing
+          for i in 1:length(x.system), j in 1:length(x.system) ]
+    same(a, b) = all(ismissing(x) ? ismissing(y) : isapprox(x, y; atol = 1e-12) for (x, y) in zip(a, b))
+    @test same(expect2(st, (C + N, dag(C) + N)), pairwise(st, C + N, dag(C) + N, 1:n, 1:n))
+    ρ = random_state(Mixed, System(n, fe), 3)
+    @test same(expect2(ρ, (N, C)), pairwise(ρ, N, C, 1:n, 1:n))
+    fb = random_state(Pure, System([fe, Boson(3), fe, Boson(3), fe]), 4)
+    @test same(expect2(fb, (C, N)), pairwise(fb, C, N, [1, 3, 5], 1:5))
     # pairs of both parities in one call do not disturb each other
     m = expect2(st, [(N, N), (dag(C), C), (dag(C), N)])
     @test m[1] ≈ expect2(st, (N, N)) atol = 1e-10

@@ -438,6 +438,32 @@ function defined_sites(system::System, a::GenericOp)
 end
 
 """
+    graded_parts(m, f)
+
+the parts of each fermionic parity of the matrix `m` of an operator of one site, `f` the parity
+of the site: pairs `(p, part)`, a single one for an operator of definite parity
+"""
+function graded_parts(m::AbstractMatrix, f::AbstractMatrix)
+    p = parity_of(m, f)
+    if !isnothing(p)
+        return [ (p, m) ]
+    end
+    return [ (0, (m + f * m * f) / 2), (1, (m - f * m * f) / 2) ]
+end
+
+"""
+    site_value(state, m, i)
+
+the expectation value, not divided by the trace, of the operator of matrix `m` on site `i`, its
+odd part with the Jordan-Wigner string on the sites before
+"""
+function site_value(state::State, m::AbstractMatrix, i::Int)
+    left(p) = p == 0 ? get_left(state, i) : get_strung_left(state, i)
+    return sum(scalar(left(p) * obs_tensor(state, part, i) * get_right(state, i))
+               for (p, part) in graded_parts(m, matrix(F, state.system[i])))
+end
+
+"""
     expect1(state, op)
 
 the expectation values of the operator of one site `op` on every site, normalised as by
@@ -464,19 +490,17 @@ function expect1(state::State, ops::AbstractArray{<:SimpleOp})
             if !(i in on)
                 return missing
             end
-            m = matrix(o, sys[i])
-            f = matrix(F, sys[i])
-            p = parity_of(m, f)
             v = 0.
-            if p ≠ 1
+            for (p, part) in graded_parts(matrix(o, sys[i]), matrix(F, sys[i]))
+                if p == 1
+                    v += scalar(get_strung_left(state, i) * obs_tensor(state, part, i) *
+                                get_right(state, i))
+                    continue
+                end
                 if isnothing(locals[i])
                     locals[i] = get_left(state, i) * get_right(state, i)
                 end
-                v += scalar(locals[i] * obs_tensor(state, p == 0 ? m : (m + f * m * f) / 2, i))
-            end
-            if p ≠ 0
-                odd = p == 1 ? m : (m - f * m * f) / 2
-                v += scalar(get_strung_left(state, i) * obs_tensor(state, odd, i) * get_right(state, i))
+                v += scalar(locals[i] * obs_tensor(state, part, i))
             end
             return v / scale
         end
@@ -640,6 +664,55 @@ function fast_pairs!(r, state::State{Mixed}, pairs, parities, sites)
 end
 
 """
+    general_pairs!(r, state, (o1, o2), on1, on2)
+
+fill the entries `(i, j)` of the matrix `r` of the pair `(o1, o2)`, for `i` in `on1` and `j` in
+`on2`, whatever the parities of the two operators, and return `r`. The part of parity `p1` of
+`o1` on `i` and that of parity `p2` of `o2` on a later `j` take the string `F` before `i` when
+`p1 + p2` is odd, the part on `i` followed by `F^p2`, and `F^p2` between `i` and `j`: one row
+of `closed_row` for each. An entry with `j` before `i` is that of the pair written the other way
+round, with the sign of swapping two odd parts.
+"""
+function general_pairs!(r, state::State, (o1, o2), on1, on2)
+    sys = state.system
+    scale = real(trace(state))
+    parts(o, k) = graded_parts(matrix(o, sys[k]), matrix(F, sys[k]))
+    for i in on1, j in on2
+        r[i, j] = i == j ? site_value(state, matrix(o1 * o2, sys[i]), i) / scale : 0
+    end
+    # the rows of `a` on an earlier site, closed by `b` on each later one; written the other way
+    # round, `b(j) a(i)` is `(-1)^(p q) a(i) b(j)` for parts of parities p and q
+    function rows!(a, b, ona, onb, swapped)
+        upto = maximum(onb; init = 0)
+        for i in ona
+            later = filter(>(i), onb)
+            if isempty(later)
+                continue
+            end
+            closing = Dict(j => parts(b, j) for j in later)
+            for (p, x) in parts(a, i), q in unique(q for j in later for (q, _) in closing[j])
+                left = isodd(p + q) ? get_strung_left(state, i) : get_left(state, i)
+                row = closed_row(state, Expector(i, left / scale), x, i, q, upto)
+                for j in later, (q2, y) in closing[j]
+                    if q2 ≠ q
+                        continue
+                    end
+                    v = scalar(row[j] * obs_tensor(state, y, j))
+                    if swapped
+                        r[j, i] += isodd(p * q) ? -v : v
+                    else
+                        r[i, j] += v
+                    end
+                end
+            end
+        end
+    end
+    rows!(o1, o2, on1, on2, false)
+    rows!(o2, o1, on2, on1, true)
+    return r
+end
+
+"""
     expect2(state, (o1, o2); sites)
     expect2(state, [(o1, o2), ...]; sites)
 
@@ -648,7 +721,7 @@ the matrix whose entry `(i, j)` is the expectation value of `o1(i) * o2(j)`, nor
 default), `missing` elsewhere and where `o1` is not defined on `i` or `o2` on `j`; for a
 vector of pairs, a vector of such matrices. The Jordan-Wigner strings are laid for you. A pair
 whose operators have one and the same parity on all those sites is measured by sharing the
-environments of each site, any other through `expect`.
+environments of each site, any other row by row, each part of definite parity with its string.
 
 # Examples
 
@@ -674,9 +747,7 @@ function expect2(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
             push!(parities, q)
             continue
         end
-        for i in on1, j in on2
-            r[k][i, j] = expect(state, i == j ? (o1 * o2)(i) : o1(i) * o2(j))
-        end
+        general_pairs!(r[k], state, (o1, o2), on1, on2)
     end
     if !isempty(fast)
         rs = fast_pairs!([ r[k] for k in fast ], state, pairs[fast], parities, sites)
