@@ -178,13 +178,15 @@ function product_sum(::Type{R}, system::System, terms) where R
     coefs = first.(terms[kept])
     locals = locals[kept]
     charged = hasqns(locals[1][1])
-    if charged && !allequal(sum(flux, ts) for ts in locals)
+    # the charge of the sites up to each one, for each term
+    partial = charged ? [ accumulate(+, flux.(ts)) for ts in locals ] : nothing
+    if charged && !allequal(last.(partial))
         error("the terms have different charges: the sum has no definite charge, which a " *
               "system conserving it cannot hold")
     end
     # each link carries, daggered, the charge of the sites on its left
     links = map(1:n-1) do k
-        charged ? dag(Index([ sum(flux, ts[1:k]) => 1 for ts in locals ]...; tags = "Link,l=$k")) :
+        charged ? dag(Index([ p[k] => 1 for p in partial ]...; tags = "Link,l=$k")) :
                   Index(length(kept); tags = "Link,l=$k")
     end
     its = map(1:n) do k
