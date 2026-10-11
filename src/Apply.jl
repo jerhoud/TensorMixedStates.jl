@@ -288,6 +288,70 @@ function applied_mpo(mpo::MPO, st::MPS, limits::Limits; alg::String = "naive")
 end
 
 """
+    window_contracted(mpo, lo, st)
+
+the MPS `st` with the tensors of its sites from `lo` on contracted with those of `mpo`, their
+links joined, the others left as they are, `st` orthogonalised on `lo` first: the exact product
+of `mpo` on these sites, whose orthogonality limits are left around them
+"""
+function window_contracted(mpo::MPO, lo::Int, st::MPS)
+    ψ = orthogonalize(st, lo)
+    ts = [ noprime(mpo[j] * ψ[lo + j - 1]) for j in eachindex(mpo) ]
+    for j in 1:length(mpo) - 1
+        k = lo + j - 1
+        c = combiner(commonind(ψ[k], ψ[k + 1]), commonind(mpo[j], mpo[j + 1]); tags = "Link,l=$k")
+        ts[j] *= c
+        ts[j + 1] *= dag(c)
+    end
+    for (j, t) in enumerate(ts)
+        ψ[lo + j - 1] = t
+    end
+    set_ortho_lims!(ψ, lo:lo + length(mpo) - 1)
+    return ψ
+end
+
+"""
+    applied_window(mpo, lo, st, tr)
+
+the MPS `st` with `mpo` applied to its sites from `lo` on alone, see `window_contracted`, these
+sites truncated by `tr` in one sweep, the exact product truncated as with `"naive"`, at a cost
+that does not grow with the other sites; the null state when the result vanishes, see
+`guarded`, which the norm of the exact product tells exactly
+"""
+applied_window(mpo::MPO, lo::Int, st::MPS, tr) =
+    guarded(s -> truncate!(window_contracted(mpo, lo, s); site_range = lo:lo + length(mpo) - 1, tr...),
+            s -> iszero(norm(window_contracted(mpo, lo, s))), st)
+
+"""
+    gate_mpo(g, idx)
+
+the MPO of the gate `g` on the consecutive sites of indices `idx`, from the first site it acts
+on to the last: `g` decomposed on its sites by singular value decompositions, which leave the
+least links, and the identity on the sites between
+"""
+function gate_mpo(g::ITensor, idx::Vector{<:Index})
+    on = [ s for s in idx if hasind(g, s) ]
+    m = MPO(g, on; cutoff = rounding_tol^2)
+    ts = ITensor[]
+    link = nothing
+    j = 0
+    for s in idx
+        if hasind(g, s)
+            j += 1
+            t = isnothing(link) ? m[j] : replaceind(m[j], commonind(m[j - 1], m[j]) => link)
+            push!(ts, t)
+            link = j < length(m) ? commonind(m[j], m[j + 1]) : nothing
+        else
+            next = sim(link)
+            # dense blocks: ITensors cannot multiply two diagonal tensors with charges
+            push!(ts, denseblocks(delta(dag(link), next)) * denseblocks(delta(s', dag(s))))
+            link = next
+        end
+    end
+    return MPO(ts)
+end
+
+"""
     gate_terms(terms)
 
 the terms of the superoperator ``\\rho \\mapsto K\\rho K^\\dagger`` of the operator `K` of
@@ -391,6 +455,17 @@ struct GateBatch
 end
 
 """
+    GateMPO
+
+a step of `apply`: the MPO of a gate on sites apart, see `gate_mpo`, applied from site `lo` on,
+see `applied_window`, which costs less than bringing the sites together
+"""
+struct GateMPO
+    mpo::MPO
+    lo::Int
+end
+
+"""
     add_gates!(steps, gates, on, apart)
 
 append `gates`, each on its sites `on`, to the steps of `apply`, joining them to the last step
@@ -408,15 +483,22 @@ function add_gates!(steps::Vector, gates::Vector{ITensor}, on::Vector{Vector{Int
 end
 
 """
+    spread(sites)
+
+whether the increasing `sites` leave others between them
+"""
+spread(ks) = last(ks) - first(ks) ≥ length(ks)
+
+"""
     pure_steps(system, op)
 
 the number a pure state is multiplied by and the steps of `apply` for the operator `op`, from
-its rightmost piece to its leftmost, see `pieces`: batches of gates, and the terms of a piece
-to apply through its MPO
+its rightmost piece to its leftmost, see `pieces`: batches of gates, the MPO of a gate on sites
+apart, and the terms of a piece to apply through its MPO
 """
 function pure_steps(system::System, a::IndexedOp{IsOperator})
     coef, ps = pieces(system, a)
-    steps = Union{GateBatch, Vector{Term}}[]
+    steps = Union{GateBatch, GateMPO, Vector{Term}}[]
     for (p, run) in reverse(ps)
         action, c = piece_action(system, p, run)
         coef *= c
@@ -424,6 +506,10 @@ function pure_steps(system::System, a::IndexedOp{IsOperator})
             break
         elseif action isa Vector{Term}
             push!(steps, action)
+        elseif length(action) == 1 && spread(last(only(action)))
+            m, ks = only(action)
+            idx = [ siteind(Pure, system, k) for k in first(ks):last(ks) ]
+            push!(steps, GateMPO(gate_mpo(gate_on(m, idx[ks .- first(ks) .+ 1]), idx), first(ks)))
         else
             gates = [ gate_on(m, [ siteind(Pure, system, k) for k in ks ]) for (m, ks) in action ]
             add_gates!(steps, gates, [ collect(ks) for (_, ks) in action ], false)
@@ -495,7 +581,11 @@ function applied_steps(::Type{R}, system::System, st::MPS, steps, limits::Limits
     tr = truncation(limits)
     for step in steps
         st = if step isa Vector{Term}
-            applied_mpo(make_mpo(lay_terms!(PreMPO{R}(system), step, 1)), st, limits)
+            pre = lay_terms!(PreMPO{R}(system), step, 1)
+            w = mpo_window(pre)
+            isnothing(w) ? 0 * st : applied_window(window_mpo(pre, [1.], w), first(w), st, tr)
+        elseif step isa GateMPO
+            applied_window(step.mpo, step.lo, st, tr)
         elseif step.apart
             kets_bras = separated(system, st, bras, step.sites)
             joined(system, applied_gates(step.gates, step.on, kets_bras, tr), bras, step.sites)

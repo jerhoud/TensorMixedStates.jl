@@ -574,6 +574,9 @@ end
         @test after(-im * hp + Dissipator(C)(1)) ≈
             -im * (H * r - r * H) + c1 * r * c1' - (c1' * c1 * r + r * c1' * c1) / 2
         @test after(0.5 * Gate(Id)(1)) ≈ 0.5 * r
+        # through its MPO on the sites it acts on alone, the first one left out
+        kh = fock(sys, dag(C)(2) * C(4) + dag(C)(4) * C(2))
+        @test after(Gate(dag(C)(2) * C(4) + dag(C)(4) * C(2))) ≈ kh * r * kh'
         # inner(a, Φ, b) is tr(a† Φ(b))
         ρ2 = mix(random_state(State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"]), 2))
         @test inner(ρ2, Gate(C(1) + C(3)), ρ) ≈ LA.tr(ket_bra_matrix(ρ2)' * k * r * k')

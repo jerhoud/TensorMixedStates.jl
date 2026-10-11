@@ -104,15 +104,18 @@ end
     lay_terms!(pre, terms, ref)
 
 add to `pre`, and return it, the terms of an operator, compacted, see `compacted`, taking the
-time function `ref`: the constant on the first site, the terms of one site on their site, and
-the channels of the terms of several sites numbered after those their links already have
+time function `ref`: the constant on the first site of the others, so that the MPO is the
+identity outside their sites, see `mpo_window`, the terms of one site on their site, and the
+channels of the terms of several sites numbered after those their links already have
 """
 function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
     sys = pre.system
     constant, singles, b = compacted(R, sys, terms)
     if !iszero(constant)
-        d = block_dim(R, sys[1])
-        add_term!(pre, 1, 1, 1, Matrix(constant * I, d, d), ref)
+        ks = [ collect(keys(singles)) ; isnothing(b) ? Int[] : [b.start] ]
+        k = isempty(ks) ? 1 : minimum(ks)
+        d = block_dim(R, sys[k])
+        add_term!(pre, k, 1, 1, Matrix(constant * I, d, d), ref)
     end
     for k in sort!(collect(keys(singles)))
         add_term!(pre, k, 1, 1, singles[k], ref)
@@ -324,25 +327,29 @@ site_tensor(a::Array{<:Number, 4}, idx::Index, llink::Index, rlink::Index) =
     ITensor(a, idx', dag(idx), dag(llink), rlink)
 
 """
-    make_mpo(::PreMPO[, coefs])
-    make_mpo(::State, op)
+    mpo_window(pre)
 
-the MPO of the operator `op` on the system of the state, given with the state or as
-`PreMPO(state, op)`. For a vector of operators, built from its `PreMPO`, `coefs` holds the
-value of each time function, one real number per operator (default `[1.]`, a single operator).
-
-# Examples
-
-    mpo = make_mpo(state, sum(Z(i) * Z(i + 1) for i in 1:9))
-    mpo = make_mpo(ρ, -im * sum(Z(i) * Z(i + 1) for i in 1:9) + sum(Dissipator(Sm)(i) for i in 1:10))
+the sites from the first to the last on which `pre` has pieces, outside which its MPO is the
+identity, `nothing` when it has none
 """
-function make_mpo(pre::PreMPO{R}, coefs::AbstractVector = [1.]) where R
-    coefs = check_coefs(pre, coefs)
+function mpo_window(pre::PreMPO)
+    ks = findall(!isempty, pre.terms)
+    return isempty(ks) ? nothing : first(ks):last(ks)
+end
+
+"""
+    window_mpo(pre, coefs, sites)
+
+the MPO of `pre`, `coefs` the values of its time functions, on the consecutive `sites` alone,
+its outer links fixed on the term not yet begun and on the term finished, see `close_ends`: that
+of the whole system restricted to `sites` when it is the identity outside, see `mpo_window`
+"""
+function window_mpo(pre::PreMPO{R}, coefs::Vector{Float64}, sites::UnitRange{Int}) where R
     sys = pre.system
     elt = mpo_eltype(pre)
     dims = channel_counts(pre)
     links = mpo_links(pre, coefs, mpo_charges, 1)
-    ts = map(1:length(sys)) do i
+    ts = map(sites) do i
         idx = siteind(R, sys, i)
         llink, rlink = links[i], links[i+1]
         a = site_array(elt, idx, llink, rlink)
@@ -363,7 +370,23 @@ function make_mpo(pre::PreMPO{R}, coefs::AbstractVector = [1.]) where R
         end
         return site_tensor(a, idx, llink, rlink)
     end
-    return close_ends(ts, links, 2)
+    return close_ends(ts, links[first(sites):last(sites)+1], 2)
 end
+
+"""
+    make_mpo(::PreMPO[, coefs])
+    make_mpo(::State, op)
+
+the MPO of the operator `op` on the system of the state, given with the state or as
+`PreMPO(state, op)`. For a vector of operators, built from its `PreMPO`, `coefs` holds the
+value of each time function, one real number per operator (default `[1.]`, a single operator).
+
+# Examples
+
+    mpo = make_mpo(state, sum(Z(i) * Z(i + 1) for i in 1:9))
+    mpo = make_mpo(ρ, -im * sum(Z(i) * Z(i + 1) for i in 1:9) + sum(Dissipator(Sm)(i) for i in 1:10))
+"""
+make_mpo(pre::PreMPO, coefs::AbstractVector = [1.]) =
+    window_mpo(pre, check_coefs(pre, coefs), 1:length(pre.system))
 
 make_mpo(state::State, a) = make_mpo(PreMPO(state, a))

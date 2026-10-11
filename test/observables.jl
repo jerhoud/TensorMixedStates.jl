@@ -358,6 +358,38 @@ end
     @test_throws "apply_algo is" apply(mpo, ψ; apply_algo = "fit")
 end
 
+@testset "Gates on sites apart, and MPOs on the sites they act on" begin
+    # a gate on sites apart goes through its MPO, decomposed by singular value decompositions,
+    # the identity on the sites between, rather than bringing its sites together; a piece
+    # developed goes through its MPO on the sites it acts on alone, from site 1 when its strings
+    # start there; a single term, its strings laid, through gates of one site
+    exact(st, op) = TMS.system_matrix(Pure, st.system, TMS.lower(st.system, op)) * raw_vector(st)
+    function same(st, op)
+        e = exact(st, op)
+        return norm(raw_vector(apply(op, st)) - e) ≤ 1e-12 * max(1, norm(e))
+    end
+    q = random_state(Pure, System(8, Qubit()), 4)
+    g4 = exp(-0.3im * (X ⊗ X + Y ⊗ Y + Z ⊗ Z))
+    for op in [controlled(X)(2, 7), g4(1, 8), controlled(controlled(X))(1, 4, 8),
+               controlled(X)(1, 6) * H(3) * controlled(Z)(2, 8) * X(5)]
+        @test same(q, op)
+    end
+    @test only(last(TMS.pure_steps(q.system, controlled(X)(2, 7)))) isa TMS.GateMPO
+    @test only(last(TMS.pure_steps(q.system, controlled(X)(2, 3)))) isa TMS.GateBatch
+    hop = exp(-0.7im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
+    f = random_state(Pure, System(7, Fermion()), 4)
+    fq = apply(prod(hop(k, k + 1) for k in (1, 3, 5, 2, 4, 6)),
+               State{Pure}(System(7, Fermion(conserve = N)), [ isodd(k) ? "Occ" : "Emp" for k in 1:7 ]))
+    for st in (f, fq), op in [hop(2, 6), C(2) + 0.5 * C(5), (C ⊗ N)(1, 4), (N ⊗ C)(2, 5),
+                              C(3) * dag(C)(6) * C(7)]
+        @test same(st, op)
+    end
+    @test same(f, (C + dag(C))(4))
+    # a result that vanishes through the MPO on its sites, on charged sites
+    z = State{Pure}(System(5, Fermion(conserve = N)), ["Occ", "Emp", "Emp", "Emp", "Occ"])
+    @test norm(apply(C(2) + C(3), z)) == 0
+end
+
 @testset "A result that vanishes on charged sites" begin
     # ITensors cannot factorise a tensor of charged indices that is exactly zero, which has no
     # block: whatever takes a state there gives the null state, through gates of one site or of
