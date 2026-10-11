@@ -336,6 +336,12 @@ end
     fe = System(5, Fermion())
     @test length(last(TMS.pieces(fe, dag(C)(3) * N(1) * C(5)))) == 1
     @test length(last(TMS.pieces(fe, C(1) * Swap(2, 3) * dag(C)(4)))) == 2
+    # but not across a factor of no definite parity, and across an odd one with a sign
+    @test length(last(TMS.pieces(fe, C(1) * (C + N)(2) * dag(C)(4) * N(5)))) == 3
+    ψ = random_state(Pure, fe, 4)
+    for op in [C(1) * (C ⊗ N)(2, 3) * dag(C)(4), C(1) * (C + N)(2) * dag(C)(4) * N(5)]
+        @test norm(apply(op, ψ) - apply(make_mpo(ψ, op), ψ)) < 1e-10
+    end
     # a dense block on its sites when it lays no string elsewhere, its MPO otherwise, and
     # gates of one site for a single term
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)

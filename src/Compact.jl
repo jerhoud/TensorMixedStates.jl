@@ -392,32 +392,17 @@ their number
 normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
 
 """
-    next_fermions(system)
-
-for each site `k` of `system`, the first site from `k` on whose `F` is not the identity,
-`length(system) + 1` when there is none
-"""
-function next_fermions(system::System)
-    n = length(system)
-    next = fill(n + 1, n + 1)
-    for k in n:-1:1
-        next[k] = matrix(F, system[k]) == I ? next[k + 1] : k
-    end
-    return next
-end
-
-"""
-    string_factors(R, system, t, next)
+    string_factors(R, system, t)
 
 the factors of the term `t`, as `(site, matrix, g)`: its blocks with its strings laid on them,
 see `laid_strings`, and `g` the strings it has on the sites between the factor before and this
 one, see `strings_on`, the same all the way since a string changes only on a block or on site
 1, and 0 when none of those sites is fermionic. A string from site 1 takes a factor of its own
-on the first fermionic site, `next` being given by `next_fermions`.
+on the first fermionic site.
 """
-function string_factors(::Type{R}, system::System, t::Term, next::Vector{Int}) where R
+function string_factors(::Type{R}, system::System, t::Term) where R
     fs = Tuple{Int, Matrix, Int}[]
-    k = next[1]
+    k = next_fermion(system, 1)
     if !isempty(t.blocks) && k < first(first(t.blocks)) && strings_on(t, k) ≠ 0
         push!(fs, (k, string_matrix(R, matrix(F, system[k]), strings_on(t, k)), 0))
     end
@@ -425,7 +410,7 @@ function string_factors(::Type{R}, system::System, t::Term, next::Vector{Int}) w
         g = 0
         if !isempty(fs)
             j = first(last(fs))
-            g = next[j + 1] < k ? strings_on(t, j) : 0
+            g = next_fermion(system, j + 1) < k ? strings_on(t, j) : 0
         end
         f, s = matrix(F, system[k]), strings_on(t, k)
         push!(fs, (k, f == I || s == 0 ? m : m * string_matrix(R, f, s), g))
@@ -459,14 +444,13 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
         push!(get!(atoms, k, Matrix{T}[]), T.(m))
         length(atoms[k])
     end
-    next = next_fermions(system)
     # the atom of the strings `g` on site `k`, where a term crosses it without a factor
     string_ids = Dict{Tuple{Int, Int}, Int}()
-    string_atom(k, g) = g == 0 || next[k] ≠ k ? 0 :
+    string_atom(k, g) = g == 0 || next_fermion(system, k) ≠ k ? 0 :
         get!(() -> atom(k, string_matrix(R, matrix(F, system[k]), g)), string_ids, (k, g))
     multi = Tuple{T, Vector{Tuple{Int, Int, Int}}}[]
     for t in terms
-        fs = string_factors(R, system, t, next)
+        fs = string_factors(R, system, t)
         if isempty(fs)
             constant += t.coef
         elseif length(fs) == 1

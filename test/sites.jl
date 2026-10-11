@@ -531,6 +531,9 @@ end
     @test TMS.strong_names(s5) == String[] && TMS.strong_names(s0) == String[]
     s6 = System([Electron(conserve = strong(Ntot)), Qubit(), Fermion(conserve = N)])
     @test TMS.is_charged(s6) && TMS.strong_names(s6) == ["Ntot"]
+    # and its fermionic sites, the first from each site on
+    @test [ TMS.next_fermion(s6, k) for k in 1:4 ] == [1, 3, 3, 4]
+    @test TMS.next_fermion(System(3, Qubit()), 1) == 4
 end
 
 @testset "Weakening to the same symmetries" begin

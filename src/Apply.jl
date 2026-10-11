@@ -52,17 +52,18 @@ its sites after each fermionic site between them that is not one of them
 """
 function stays_on(system::System, m::AbstractMatrix, sites)
     fs = [ matrix(F, system[k]) for k in sites ]
-    fermionic(k) = matrix(F, system[k]) ≠ I
-    if any(fermionic, 1:first(sites)-1) && parity_of(m, foldl(kron, fs)) ≠ 0
+    if next_fermion(system, 1) < first(sites) && parity_of(m, foldl(kron, fs)) ≠ 0
         return false
     end
-    for t in first(sites)+1:last(sites)-1
-        if !(t in sites) && fermionic(t)
+    t = next_fermion(system, first(sites) + 1)
+    while t < last(sites)
+        if !(t in sites)
             p = foldl(kron, [ k > t ? f : one(f) for (k, f) in zip(sites, fs) ])
             if !nearly(p * m * p, m)
                 return false
             end
         end
+        t = next_fermion(system, t + 1)
     end
     return true
 end
@@ -96,28 +97,34 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
     coef = scalarcoef(g)
     ps = Vector{IndexedOp{IsOperator}}[]
-    info = Tuple{Vector{Int}, Union{Nothing, Int}}[]
     runs = Bool[]
+    # the last run of factors of one site, and the pieces after it, each of one factor: their
+    # sites, how many are odd, and whether one has no definite parity
+    run = 0
+    after, odd, none = Set{Int}(), 0, false
     for x in prodsubs(scalararg(g))
         if x isa IdentityOp
             continue
         end
         sx, px = sites_of(x), parity_on(system, x)
         joins = x isa AtIndex && length(x.index) == 1 && !isnothing(px)
-        # the last run of factors of one site this one can reach
-        j = joins ? findlast(runs) : nothing
-        if !isnothing(j) && all(k -> !dependent(info[k], (sx, px)), j+1:length(ps))
-            for k in j+1:length(ps)
-                if info[k][2] == 1 && px == 1
-                    coef = -coef
-                end
+        # it reaches the last run when it (anti)commutes with every piece after it, see `dependent`
+        if joins && run > 0 && isdisjoint(sx, after) && (px == 0 || !none)
+            if px == 1 && isodd(odd)
+                coef = -coef
             end
-            push!(ps[j], x)
-            info[j] = (union(info[j][1], sx), mod(info[j][2] + px, 2))
+            push!(ps[run], x)
+            continue
+        end
+        push!(ps, [x])
+        push!(runs, joins)
+        if joins
+            run = length(ps)
+            after, odd, none = Set{Int}(), 0, false
         else
-            push!(ps, [x])
-            push!(info, (sx, px))
-            push!(runs, joins)
+            union!(after, sx)
+            odd += px == 1
+            none |= isnothing(px)
         end
     end
     return coef, [ (ProdOp(p), r) for (p, r) in zip(ps, runs) ]

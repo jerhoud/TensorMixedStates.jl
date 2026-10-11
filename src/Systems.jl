@@ -20,15 +20,21 @@ struct System
     sites::Vector{<:AbstractSite}
     # the hash of the sites, from which the indices take their identities
     key::UInt
-    # read once off the sites, see `is_charged` and `strong_names`
+    # read once off the sites, see `is_charged`, `strong_names` and `next_fermion`
     charged::Bool
     strong::Vector{String}
+    fermions::Vector{Int}
     function System(sites::Vector{<:AbstractSite})
         foreach(check_site, unique(sites))
         check_charges(sites)
         charged = any(s -> !isempty(conserved(s).quantities), sites)
         strong = unique(String[ x for s in sites for x in strong_names(s) ])
-        return new(sites, hash(sites), charged, strong)
+        n = length(sites)
+        fermions = fill(n + 1, n + 1)
+        for k in n:-1:1
+            fermions[k] = any(isodd, fermion_parities(sites[k])) ? k : fermions[k + 1]
+        end
+        return new(sites, hash(sites), charged, strong, fermions)
     end
 end
 
@@ -62,6 +68,13 @@ is_charged(system::System) = system.charged
 the names of the quantities the sites of the system conserve strongly
 """
 strong_names(system::System) = system.strong
+
+"""
+    next_fermion(system, k)
+
+the first fermionic site of `system` from site `k` on, `length(system) + 1` when there is none
+"""
+next_fermion(system::System, k::Int) = system.fermions[k]
 
 symmetries(system::System) =
     Conserved(unique(Tuple{String, Bool}[ x for s in system.sites for x in symmetries(s).names ]))
