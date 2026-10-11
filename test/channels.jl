@@ -418,6 +418,11 @@ end
         ps = [ fock(sys, Proj(a => λ)(1, 3)) for λ in vals ]
         @test superop(sys, Dephase(a)(1, 3)) ≈ sum(sided(p, p, all_sites(sys)) for p in ps)
     end
+    # on an Electron, whose parity is that of both spins, the reset of a site leaves the others
+    # in their state, which their partial trace shows
+    es = System(3, Electron())
+    e = mix((State{Pure}(es, ["Up", "Up", "Emp"]) + State{Pure}(es, ["Emp", "Up", "Up"])) / sqrt(2))
+    @test norm(partial_trace(apply(Reset("Emp")(2), e), [2]) - partial_trace(e, [2])) < 1e-12
 end
 
 @testset "The exponential of a generator on sites apart" begin

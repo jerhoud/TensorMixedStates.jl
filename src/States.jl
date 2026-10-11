@@ -562,6 +562,16 @@ weak_form(state::State{Mixed}) =
     end
 
 """
+    trace_at(system, i)
+
+the tensor taking the trace of a density matrix over site `i` of `system`, on its mixed index
+"""
+function trace_at(system::System, i::Int)
+    e = ket_bras(system, i)
+    return dag(sum(e(m, m) for m in 1:dim(system[i])))
+end
+
+"""
     trace(::State)
 
 the trace of the density matrix, or the squared norm of a pure state, computed once and kept
@@ -575,12 +585,39 @@ function trace(state::State{Mixed})
         s = weak_form(state)
         x = ITensor(1.)
         for i in 1:length(s)
-            e = ket_bras(s.system, i)
-            x = x * s.state[i] * dag(sum(e(m, m) for m in 1:dim(s.system[i])))
+            x = x * s.state[i] * trace_at(s.system, i)
         end
         push!(t, scalar(x))
     end
     return only(t)
+end
+
+"""
+    traced(state, kept)
+
+the mixed `state` with its sites outside the increasing positions `kept` traced out, on the
+system of the sites kept, its indices densified when these conserve nothing; no fermionic sign
+is taken, see `partial_trace`. Nothing is divided by the trace nor truncated: a cut would leave
+a trace off the one of `state` and negative eigenvalues.
+"""
+function traced(state::State{Mixed}, kept::AbstractVector{Int})
+    system = System(state.system.sites[kept])
+    loc(i) = state.state[i] * trace_at(state.system, i)
+    # the sites on either side of those kept traced out from the ends inwards, and those
+    # between two sites kept gathered before going into the first
+    ts = [ state.state[k] for k in kept ]
+    ts[1] = foldl((t, i) -> t * loc(i), 1:first(kept)-1; init = ITensor(1.)) * ts[1]
+    for j in 1:length(kept)-1
+        if kept[j + 1] > kept[j] + 1
+            ts[j] *= prod(loc(i) for i in kept[j]+1:kept[j+1]-1)
+        end
+    end
+    ts[end] *= foldr((i, t) -> loc(i) * t, last(kept)+1:length(state); init = ITensor(1.))
+    mps = MPS(ts)
+    if hasqns(ts[1]) && !is_charged(system)
+        mps = dense(mps)
+    end
+    return State{Mixed}(system, replace_siteinds(mps, siteinds(Mixed, system)))
 end
 
 """

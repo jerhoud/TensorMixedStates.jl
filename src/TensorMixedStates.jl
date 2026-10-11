@@ -37,6 +37,7 @@ include("Compact.jl")
 include("Mpo.jl")
 include("Expect.jl")
 include("Apply.jl")
+include("PartialTrace.jl")
 
 # Site types
 include("sites/Qubits.jl")

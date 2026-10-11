@@ -335,3 +335,16 @@ end
         @test eval(Meta.parse(repr(l))) == l
     end
 end
+
+@testset "Loading a partial trace of a charged system" begin
+    # the qubit kept conserves nothing: its partial trace is densified, and a file holds it as
+    # any state conserving nothing
+    file = joinpath(mktempdir(), "traced.h5")
+    sq = System([Qubit(), Fermion(conserve = N)])
+    ρ = partial_trace(mix(State{Pure}(sq, ["+", "Occ"])), [1]; keep = true)
+    save_state(file, "traced", ρ)
+    lt = load_state(file, "traced")
+    @test lt.system == System(1, Qubit())
+    @test trace(lt) ≈ 1
+    @test expect(lt, X(1)) ≈ expect(ρ, X(1)) ≈ 1
+end

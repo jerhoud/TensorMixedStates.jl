@@ -2,9 +2,9 @@
 # their fast paths, inner(a, op, b), and apply on pure states, checked against dense matrices
 # written with explicit Jordan-Wigner strings.
 #
-# The testsets of 1.x on the other measurements, sampling, partial traces, entropies and the
-# channels are still in v1/observables.jl; their assertions on expectation values and on apply
-# to pure states are here.
+# The testsets of 1.x on the other measurements, sampling, entropies and the channels are still
+# in v1/observables.jl; their assertions on expectation values, on apply to pure states and on
+# partial traces are here.
 
 """
 the matrix, on `n` sites `site`, of the product of operators of one site `factors`, pairs
@@ -230,8 +230,8 @@ end
 
 @testset "A random fermionic oracle" begin
     # the Jordan-Wigner strings checked on random products against the dense matrices of the
-    # strings written out, through expect on a pure and on a mixed state, the MPO, expect2 and
-    # the matrix of a tensor product. In the dense basis C(j) is F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and
+    # strings written out, through expect on a pure and on a mixed state, the MPO, expect2, the
+    # matrix of a tensor product and partial_trace. In the dense basis C(j) is F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and
     # any other operator is written from those, so that the reference knows nothing of the
     # package
     fe = Fermion()
@@ -241,21 +241,22 @@ end
                 (N, (j, n) -> cd(j, n)' * cd(j, n)),
                 (C + 2dag(C), (j, n) -> cd(j, n) + 2cd(j, n)') ]
     count = Ref(0)
-    # a factor on the sites 1:n, as an operator and as its dense matrix: an operator of one
-    # site, or a tensor product of two, renamed or not, on two sites in either order
-    function factor(n)
+    # a factor on the positions 1:m, as an operator and as its dense matrix on the n sites of
+    # the state, `site` taking a position to its site: an operator of one site, or a tensor
+    # product of two, renamed or not, on two positions in either order
+    function factor(m, site, n)
         a, da = rand(singles)
-        i = rand(1:n)
-        if rand(Bool)
-            return a(i), da(i, n)
+        i = rand(1:m)
+        if m == 1 || rand(Bool)
+            return a(i), da(site(i), n)
         end
         b, db = rand(singles)
-        j = rand(setdiff(1:n, i))
+        j = rand(setdiff(1:m, i))
         t = rand(Bool) ? a ⊗ b : named(a ⊗ b, "T$(count[] += 1)")
-        return t(i, j), da(i, n) * db(j, n)
+        return t(i, j), da(site(i), n) * db(site(j), n)
     end
-    function product(n)
-        fs = [ factor(n) for _ in 1:rand(1:3) ]
+    function product(m, site, n)
+        fs = [ factor(m, site, n) for _ in 1:rand(1:3) ]
         return prod(first.(fs)), prod(last.(fs))
     end
     n = 4
@@ -265,11 +266,14 @@ end
     value(d) = v' * d * v
     w = raw_vector(ψ)
     for _ in 1:30
-        o, d = product(n)
+        o, d = product(n, identity, n)
         @test expect(ψ, o) ≈ value(d) atol = 1e-10
         @test expect(ρ, o) ≈ value(d) atol = 1e-10
         @test mpo_matrix(ψ, o) ≈ d atol = 1e-10
         @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10
+        keep = sort(TMS.Random.randperm(n)[1:rand(1:3)])
+        o, d = product(length(keep), p -> keep[p], n)
+        @test expect(partial_trace(ρ, keep; keep = true), o) ≈ value(d) atol = 1e-10
     end
     # a function of an even product applied as a gate, on sites in any order and apart
     odd = singles[[1, 2, 4]]
@@ -458,6 +462,10 @@ end
     # a correlation whose two ends do not conserve the charge is measured all the same, the
     # two shifts it brings cancelling
     both(x -> [ expect(x, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    # tracing out part of the sites is refused, what is left being a mixture over several
+    # sectors, which a state keeping the two charges apart cannot hold (decision 16)
+    @test_throws "weaken it first" partial_trace(s, [1, 3])
+    @test expect(partial_trace(weaken(s), [1, 3]), N(1)) ≈ expect(partial_trace(w, [1, 3]), N(1))
 end
 
 @testset "Sites where an operator is not defined, and chosen sites" begin
@@ -475,6 +483,49 @@ end
     @test count(ismissing, m) == 25 - 9
     @test m[3, 1] ≈ expect(ψf, dag(C)(3) * C(1)) && m[4, 4] ≈ expect(ψf, N(4))
     @test_throws "acts on site 9, which the system does not have" expect2(ψf, (N, N); sites = [1, 9])
+end
+
+@testset "A partial trace keeps the fermionic signs" begin
+    # a fermion traced out is moved past the fermions kept on its right: on
+    # (|110⟩ + |011⟩)/√2 the hopping from 3 to 1 crosses the fermion of site 2, and gives -1/2
+    # on the reduced state as on the state
+    fe = Fermion()
+    s3 = System(3, fe)
+    ρ = mix(normalize(State{Pure}(s3, ["Occ", "Occ", "Emp"]) + State{Pure}(s3, ["Emp", "Occ", "Occ"])))
+    @test expect(partial_trace(ρ, [2]), dag(C)(1) * C(2)) ≈ expect(ρ, dag(C)(1) * C(3)) ≈ -0.5
+    # a state of no definite parity takes the sign on a single fermionic operator as well
+    ρ = mix(normalize(State{Pure}(s3, ["Emp", "Occ", "Emp"]) + State{Pure}(s3, ["Emp", "Occ", "Occ"])))
+    @test expect(partial_trace(ρ, [1, 2]), C(1) + dag(C)(1)) ≈ expect(ρ, C(3) + dag(C)(3)) ≈ -1
+    # every product of two operators of the sites kept, sites traced out on both sides of a
+    # charged system
+    ρ = mix(random_state(State{Pure}(System(5, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp", "Occ"]), 4))
+    red = partial_trace(ρ, [1, 4]; keep = true)
+    @test red.system == System(2, Fermion(conserve = N))
+    for a in (Id, N, C, dag(C)), b in (Id, N, C, dag(C))
+        @test expect(red, a(1) * b(2)) ≈ expect(ρ, a(1) * b(4)) atol = 1e-12
+    end
+    # two species on a site
+    ρ = mix(random_state(Pure, System(3, Electron()), 4))
+    @test expect(partial_trace(ρ, [2]), dag(Cdn)(1) * Cup(2)) ≈ expect(ρ, dag(Cdn)(1) * Cup(3))
+    # no fermion kept on the right of one traced out: no sign, and the bond dimension stays
+    ρ = mix(random_state(Pure, System(4, fe), 4))
+    @test maxlinkdim(partial_trace(ρ, [3, 4])) ≤ maxlinkdim(ρ)
+end
+
+@testset "A partial trace keeps the trace, and what it refuses" begin
+    # nothing is divided by the trace, which a state of trace zero keeps
+    ρ = mix(random_state(Pure, System(4, Qubit()), 4))
+    for k in ([1], [2], [4], [1, 3])
+        @test trace(partial_trace(2 * ρ, k)) ≈ 2 * trace(ρ)
+    end
+    @test abs(trace(partial_trace(ρ - ρ, [1]))) < 1e-12
+    @test length(partial_trace(ρ, 1:3; keep = true)) == 3
+    # a position the state does not have, every site traced out, and a pure state, which is not
+    # mixed behind the caller's back
+    @test_throws "given site 5, which the state does not have" partial_trace(ρ, [5])
+    @test_throws "given site 0" partial_trace(ρ, [0, 1]; keep = true)
+    @test_throws "every site" partial_trace(ρ, 1:4)
+    @test_throws "use mix(state) first" partial_trace(random_state(Pure, System(4, Qubit()), 4), [1, 2])
 end
 
 @testset "What expect refuses" begin

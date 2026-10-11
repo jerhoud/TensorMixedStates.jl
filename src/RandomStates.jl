@@ -61,25 +61,6 @@ function refuse_strong(system::System)
     end
 end
 
-"""
-    trace_ancillas(state, system)
-
-the mixed `state` of a purification with its sites after those of `system` traced out, put on
-`system`: the ancillas lie on the right, so no fermionic sign comes in. Nothing is truncated: a
-cut would leave a trace off one and negative eigenvalues.
-"""
-function trace_ancillas(state::State{Mixed}, system::System)
-    n = length(system)
-    t = ITensor(1.)
-    for i in length(state):-1:n+1
-        e = ket_bras(state.system, i)
-        t = state.state[i] * dag(sum(e(m, m) for m in 1:dim(state.system[i]))) * t
-    end
-    ts = [ state.state[i] for i in 1:n ]
-    ts[n] *= t
-    return State{Mixed}(system, replace_siteinds(MPS(ts), siteinds(Mixed, system)))
-end
-
 function random_state(::Type{Mixed}, system::System, linkdims::Int;
                       rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
     refuse_strong(system)
@@ -89,7 +70,8 @@ function random_state(::Type{Mixed}, system::System, linkdims::Int;
               "random_state(Mixed, system, states, linkdims)")
     end
     purification = random_state(Pure, system ⊗ system, isqrt(linkdims); rng, eltype)
-    return trace_ancillas(mix(purification), system)
+    # the ancillas lie on the right, so that tracing them out takes no fermionic sign
+    return traced(mix(purification), 1:length(system))
 end
 
 """
@@ -113,5 +95,5 @@ function random_state(::Type{Mixed}, system::System, states, linkdims::Int;
                       rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
     refuse_strong(system)
     start = State{Pure}(system ⊗ system, double(states, length(system)))
-    return trace_ancillas(mix(random_state(start, isqrt(linkdims); rng, eltype)), system)
+    return traced(mix(random_state(start, isqrt(linkdims); rng, eltype)), 1:length(system))
 end
