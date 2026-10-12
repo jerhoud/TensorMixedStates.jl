@@ -735,6 +735,13 @@ end
     # and so is an operator on several sites, which no one site check sees
     ψ = State{Pure}(System(2, Qubit(conserve = N)), "Up")
     @test_throws "carries no definite charge of N" make_mpo(ψ, exp(-0.3im * (X ⊗ X))(1, 2))
+    # applied, its dense gate is refused in the same words, where the message of ITensors came
+    # out, "Fluxes not all equal"
+    for st in (ψ, mix(ψ))
+        @test_throws "carries no definite charge of N" apply(exp(-0.3im * (X ⊗ X))(1, 2), st)
+        @test_throws "no definite flux" apply((X ⊗ Id)(1, 2), st)
+    end
+    @test norm(apply(Swap(1, 2), ψ)) ≈ 1
 end
 
 @testset "Operators on several sites of a charged system" begin

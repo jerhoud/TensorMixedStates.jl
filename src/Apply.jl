@@ -63,6 +63,17 @@ function stays_on(system::System, m::AbstractMatrix, sites)
 end
 
 """
+    definite_on(system, m, sites)
+
+whether the operator of matrix `m` on `sites` changes their charges by a definite amount, which
+a dense gate on charged indices needs; always so on a system conserving nothing
+"""
+function definite_on(system::System, m::AbstractMatrix, sites)
+    idx = [ siteind(Pure, system, k) for k in sites ]
+    return has_definite_flux(on_legs(Matrix(m), [ i' for i in idx ], [ dag(i) for i in idx ])...)
+end
+
+"""
     gate_on(m, idx)
 
 the tensor of the gate of matrix `m` acting on the indices `idx`, the last varying fastest
@@ -434,8 +445,10 @@ end
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
 operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
 they bring. A piece on at most two sites, or small enough, see `dense_enough`, laying no string
-elsewhere, is a dense block, see `gate_steps!`, unless it is a run; otherwise it is developed,
-and goes through gates of one site when it gives a single term, as a run usually does, through
+elsewhere and changing the charges by a definite amount, see `definite_on`, is a dense block,
+see `gate_steps!`, unless it is a run; otherwise it is developed, the descent refusing it when
+the charges change by no definite amount, and goes through gates of one site when it gives a
+single term, as a run usually does, through
 the MPO of its terms otherwise, see `mpo_step!`, on a density matrix those of
 ``\\rho \\mapsto K\\rho K^\\dagger``, see `gate_terms`
 """
@@ -444,7 +457,7 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     sites = sort(sites_of(p))
     if !run && (length(sites) ≤ 2 || dense_enough(Pure, system, sites))
         m = matrix_on(system, p, sites)
-        if stays_on(system, m, sites)
+        if stays_on(system, m, sites) && definite_on(system, m, sites)
             gate_steps!(steps, R, system, m, sites)
             return 1
         end
