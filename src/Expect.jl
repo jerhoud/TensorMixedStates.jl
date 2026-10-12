@@ -355,8 +355,9 @@ end
 """
     expect(state, op)
 
-the expectation value of the operator `op`, placed on sites, or the array of those of an
-array of them, divided by the real part of the trace of the state: ``\\langle\\psi|op|\\psi\\rangle
+the expectation value of the operator `op`, placed on sites, or the array or the tuple of
+those of an array or a tuple of them, on the state of an extension as well, divided by the real
+part of the trace of the state: ``\\langle\\psi|op|\\psi\\rangle
 / \\langle\\psi|\\psi\\rangle`` on a pure state, ``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a
 mixed one. Its factors may come in any order, act on several sites, and the Jordan-Wigner
 strings of fermionic operators are laid for you. A channel, a generator and an operator not
@@ -381,7 +382,7 @@ function expect(state::State, a::IndexedOp{IsOperator})
     return v / real(trace(state))
 end
 
-expect(state::State, ops::Union{AbstractArray, Tuple}) = map(o -> expect(state, o), ops)
+expect(state::AbstractState, ops::Union{AbstractArray, Tuple}) = map(o -> expect(state, o), ops)
 
 expect(::State, a::Op{IsChannel}) = error("expect takes an observable, and $a is a channel")
 

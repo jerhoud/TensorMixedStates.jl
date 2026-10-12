@@ -79,6 +79,15 @@ struct Unwritable <: AbstractState
     system::System
 end
 
+@testset "What a state of one's own has no method of" begin
+    # LinearAlgebra takes any argument for these, and they failed on iterate
+    st = Unwritable(System(2, Qubit()))
+    @test_throws "no method matching norm(::Unwritable)" norm(st)
+    @test_throws "no method matching normalize(::Unwritable)" normalize(st)
+    @test_throws "no method matching dot(::Unwritable, ::Unwritable)" dot(st, st)
+    @test_skip "measure(st, Norm) refused the same way"     # couche 3
+end
+
 # A representation of one's own: a state wrapping a pure `State`, which goes through the state
 # files like a `State`
 struct WrappedState <: AbstractState
@@ -185,6 +194,11 @@ end
     ops = [dag(C)(3) * C(1), C(1) * dag(C)(3), N(1) * N(3) + 0.5 * dag(C)(2) * C(3)]
     @test [ expect(wide, o) for o in ops ] ≈ [ expect(st, o) for o in ops ]
     @test_skip [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]   # couche 3
+    @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
+    # a tuple of operators gives a tuple of values, on a State as on a state of one's own
+    pair = (N(2), C(1) * dag(C)(3))
+    @test expect(st, pair) isa Tuple
+    @test collect(expect(wide, pair)) ≈ collect(expect(st, pair))
     mktempdir() do dir
         file = joinpath(dir, "wide.h5")
         save_state(file, "wide", wide)

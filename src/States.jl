@@ -590,6 +590,10 @@ norm ``\\sqrt{\\mathrm{tr}(\\rho^\\dagger\\rho)}``, not the trace.
 """
 norm(state::State) = norm(state.state)
 
+# LinearAlgebra takes any argument for norm, normalize and dot, and failed on iterate for a state
+# of an extension that defines none of them, rather than saying so
+norm(state::AbstractState) = throw(MethodError(norm, (state,)))
+
 """
     weak_form(state)
 
@@ -674,6 +678,8 @@ mixed one.
 normalize(state::State{Pure}) = State(state, normalize(state.state))
 normalize(state::State{Mixed}) = State(state, state.state / real(trace(state)))
 
+normalize(state::AbstractState) = throw(MethodError(normalize, (state,)))
+
 """
     inner(a::State, b::State)
     dot(a::State, b::State)
@@ -692,3 +698,5 @@ inner(::State{Mixed}, ::State{Pure}) =
     error("no inner product between a pure and a mixed representation: mix the pure one")
 
 dot(a::State, b::State) = inner(a, b)
+
+dot(a::AbstractState, b::AbstractState) = throw(MethodError(dot, (a, b)))
