@@ -208,7 +208,10 @@ end
     @test matrix(Gate(C ⊗ N ⊗ C), f) ≈ matrix(Gate(C) ⊗ Gate(N) ⊗ Gate(C), f)
     # a reset keeps the parity of nothing on its kets, but strings on both sides cancel in it
     @test matrix(Reset("Emp") ⊗ Gate(C), f) ≈ kron(matrix(Reset("Emp"), f), matrix(Gate(C), f))
-    @test_throws "no definite fermionic parity" matrix(Gate(C) ⊗ Reset("Emp"), f)
+    # and a channel of no definite parity after a fermionic site is the sum of its parts that
+    # have one: a reset, the sum of the gates of its Kraus operators |Emp⟩⟨i|, one even, one odd
+    ks = [ Operator{1}("K$i", [ j == 1 && k == i ? 1. : 0. for j in 1:2, k in 1:2 ]) for i in 1:2 ]
+    @test matrix(Gate(C) ⊗ Reset("Emp"), f) ≈ sum(matrix(Gate(C ⊗ k), f) for k in ks)
 end
 
 @testset "The dissipator of a channel" begin
@@ -803,10 +806,13 @@ end
     @test norm(apply(Reset(v)(2), ρ) - sum(apply(Gate(k)(2), ρ) for k in ks)) < 1e-12
     @test norm(apply((0.5 * Gate(C) + 0.5 * Reset("Emp"))(2), ρ) -
                (0.5 * apply(Gate(C)(2), ρ) + 0.5 * exact("Emp", 2, ρ))) < 1e-12
-    # a function of a reset of several sites is still refused, its second factor having no
-    # definite parity after a fermionic site, as in C ⊗ Reset("Emp"); compact is gone
-    @test_throws "a factor of no definite fermionic parity, Reset(\"Emp\")" apply(
-        exp(t * reset_dissipator(γ, 2, "Emp"))(2, 4), ρ)
+    # and a function of a reset of several sites, which was refused, its second factor having
+    # no definite parity after a fermionic site: a reset being idempotent, its evolution is the
+    # reset with probability 1 - exp(-γt), on sites apart as well; compact is gone
+    @test norm(apply(exp(t * reset_dissipator(γ, 2, "Emp"))(2, 4), ρ) -
+               apply(reset_gate(1 - exp(-γ * t), 2, "Emp")(2, 4), ρ)) < 1e-12
+    @test norm(apply(exp(t * depolarizing_dissipator(γ, 2))(1, 3), ρ) -
+               apply(depolarizing_gate(1 - exp(-γ * t), 2)(1, 3), ρ)) < 1e-12
 end
 
 @testset "Qubit decay and relaxation" begin

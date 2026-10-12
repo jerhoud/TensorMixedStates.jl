@@ -177,34 +177,38 @@ function kraus_sum(m::AbstractMatrix, sites)
 end
 
 """
-    strung_kron(a, ms, strings)
+    definite_parts(m, strings)
 
-the matrix of the tensor product `a` of factors of matrices `ms`: `(A₁ ⊗ … ⊗ Aₙ)` on
-consecutive sites is `A₁(1)…Aₙ(n)`, so a factor on fermionic sites takes each of its
-`strings`, one per grading of its sites, for each factor after it odd in that grading, and a
-factor of no definite parity there is refused
+the parts of the matrix `m`, each of definite parity in every grading of `strings`, whose sum
+is `m`, see `graded_parts`
 """
-function strung_kron(a::TensorOp, ms::Vector, strings::Vector)
-    ps = [ [ parity_of(m, f) for f in fs ] for (m, fs) in zip(ms, strings) ]
-    strung = map(eachindex(ms)) do k
-        m = ms[k]
-        for (g, f) in enumerate(strings[k])
-            if f == I
-                continue
+definite_parts(m::AbstractMatrix, strings::Vector) =
+    foldl((ps, f) -> [ y for x in ps for (_, y) in graded_parts(x, f) ], strings; init = [m])
+
+"""
+    strung_kron(ms, strings)
+
+the matrix of a tensor product of factors of matrices `ms`: `(A₁ ⊗ … ⊗ Aₙ)` on consecutive
+sites is `A₁(1)…Aₙ(n)`, so a factor on fermionic sites takes each of its `strings`, one per
+grading of its sites, for each factor after it odd in that grading. A factor after the first of
+no definite parity is the sum of its parts that have one, see `definite_parts`, and the
+product the sum of the products of these parts
+"""
+function strung_kron(ms::Vector, strings::Vector)
+    parts = [ k == 1 ? [m] : definite_parts(m, fs) for (k, (m, fs)) in enumerate(zip(ms, strings)) ]
+    return sum(Iterators.product(parts...)) do c
+        ps = [ [ parity_of(m, f) for f in fs ] for (m, fs) in zip(c, strings) ]
+        strung = map(eachindex(c)) do k
+            m = c[k]
+            for (g, f) in enumerate(strings[k])
+                if f ≠ I && isodd(sum(p[g] for p in ps[k+1:end]; init = 0))
+                    m = m * f
+                end
             end
-            rest = [ p[g] for p in ps[k+1:end] ]
-            j = findfirst(isnothing, rest)
-            if !isnothing(j)
-                error("$a has a factor of no definite fermionic parity, $(a.subs[k+j]), after a " *
-                      "fermionic site" *
-                      (a isa TensorOp{IsOperator} ? ": write it as a sum of tensor products" : ""))
-            elseif isodd(sum(rest; init = 0))
-                m = m * f
-            end
+            m
         end
-        m
+        foldl(kron, strung)
     end
-    return foldl(kron, strung)
 end
 
 """
@@ -312,7 +316,7 @@ function matrix(a::TensorOp{IsOperator}, site::AbstractSite, others::AbstractSit
     sites = expand_sites(a, (site, others...))
     pos = factor_sites(a)
     ms = [ matrix(o, sites[p]...) for (o, p) in zip(a.subs, pos) ]
-    return strung_kron(a, ms, [ [ foldl(kron, [ matrix(F, s) for s in sites[p] ]) ] for p in pos ])
+    return strung_kron(ms, [ [ foldl(kron, [ matrix(F, s) for s in sites[p] ]) ] for p in pos ])
 end
 
 # the strings of a factor are the parity of its sites on the kets and on the bras
@@ -324,7 +328,7 @@ function matrix(a::TensorOp{IsChannel}, site::AbstractSite, others::AbstractSite
         f = foldl(kron, [ matrix(F, s) for s in sites[p] ])
         [ sided(f, one(f), sites[p]), sided(one(f), f, sites[p]) ]
     end
-    return strung_kron(a, ms, strings)
+    return strung_kron(ms, strings)
 end
 
 function matrix(a::Gate{Generic}, site::AbstractSite, others::AbstractSite...)

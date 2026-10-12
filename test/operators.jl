@@ -741,8 +741,9 @@ end
     @test matrix((C + N) ⊗ C, fe) ≈ kron(c + c' * c, id) * c2
     @test matrix(C ⊗ Id ⊗ dag(C), fe) ≈ kron(c, id, id) * kron(f, f, c)'
     @test matrix(dag(C ⊗ C), fe) ≈ -matrix(dag(C) ⊗ dag(C), fe)
-    # a factor of no definite parity after a fermionic site makes the product a sum
-    @test_throws "no definite fermionic parity" matrix(C ⊗ (C + N), fe)
+    # a factor of no definite parity after a fermionic site is the sum of its parts that have
+    # one, which 1.x refused: C ⊗ (C + N) is C ⊗ C + C ⊗ N
+    @test matrix(C ⊗ (C + N), fe) ≈ c1 * c2 + c1 * kron(id, c' * c)
 
     # an operator of several sites given by such an expression is the operator the expression
     # stands for (decision 2: with no type)
@@ -767,7 +768,7 @@ end
     end
     @test matrix(C ⊗ cn, fe) ≈ matrix(C ⊗ C ⊗ N, fe)
     @test matrix(C ⊗ a2, fe) ≈ matrix(C ⊗ C ⊗ Id + C ⊗ Id ⊗ C, fe)
-    @test_throws "no definite fermionic parity" matrix(C ⊗ (C ⊗ Id + N ⊗ Id), fe)
+    @test matrix(C ⊗ (C ⊗ Id + N ⊗ Id), fe) ≈ matrix(C ⊗ C ⊗ Id + C ⊗ N ⊗ Id, fe)
     ρ = mix(random_state(Pure, System(4, fe), 4))
     @test abs(trace(apply(make_mpo(ρ, Dissipator(cn ⊗ cn)(1, 2, 3, 4)), ρ))) < 1e-12
 end
