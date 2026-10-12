@@ -30,7 +30,7 @@ function prepared_evolver(state::State,
                           (ops, fs)::Pair{<:Union{AbstractVector, PreMPO}, <:AbstractVector})
     pre = ops isa PreMPO ? check_pre(ops, state) : PreMPO(state, [ o for o in ops ])
     if length(fs) ≠ pre.nterms
-        error("an evolver of $(pre.nterms) terms takes as many functions of time, " *
+        error("an evolver of $(pre.nterms) terms takes as many time functions, " *
               "got $(length(fs))")
     end
     return (pre, collect(fs))

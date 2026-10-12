@@ -245,9 +245,9 @@ end
     # too few raised a BoundsError on an internal vector in 1.x, and too many were ignored
     hs = [-im * Z(1), -im * Z(2)]
     st = State{Pure}(System(2, Qubit()), "X+")
-    @test_throws "an evolver of 2 terms takes as many functions of time, got 1" evolve(
+    @test_throws "an evolver of 2 terms takes as many time functions, got 1" evolve(
         hs => [t -> 1.], 0.1, st)
-    @test_throws "an evolver of 2 terms takes as many functions of time, got 3" evolve(
+    @test_throws "an evolver of 2 terms takes as many time functions, got 3" evolve(
         hs => [t -> 1., t -> 1., t -> 1.], 0.1, st)
     # the PreMPO of a vector given with no functions
     @test_throws "an evolver of 2 terms takes as many time functions, got 1" evolve(
