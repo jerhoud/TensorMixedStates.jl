@@ -549,11 +549,12 @@ end
     @test_throws "changes N by different amounts from one part to another, which conserving it strongly forbids" make_mpo(ρ, Reset("Emp")(1))
     @test_throws "drop `strong` or weaken the state" make_mpo(ρ,
         -im * (dag(C)(1) * C(2) + dag(C)(2) * C(1)) + Dissipator(C)(1))
-    # a jump of no definite charge is refused for what it lacks, weak or strong
+    # a jump of no definite charge is refused for what it lacks, weak or strong, its parts of
+    # each charge changing it by amounts that differ
     for site in (Boson(3, conserve = N), Boson(3, conserve = strong(N)))
         ρb = mix(State{Pure}(System(2, site), "1"))
-        @test_throws "carries no definite charge of N" make_mpo(ρb, Gate(Q)(1))
-        @test_throws "carries no definite charge of N" make_mpo(ρb, Dissipator(Q)(1))
+        @test_throws "so it has no definite flux" make_mpo(ρb, Gate(Q)(1))
+        @test_throws "so it has no definite flux" make_mpo(ρb, Dissipator(Q)(1))
     end
 end
 

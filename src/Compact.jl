@@ -388,15 +388,6 @@ function combination_matrix(b::ComBlock{T}, j::Int, comb::Combination{T}, d::Int
 end
 
 """
-    normalized_norm(m)
-
-the Hilbert-Schmidt norm of the matrix `m` over that of the identity, 1 for any unitary, so
-that the norm of a tensor product, the product of those of its factors, does not grow with
-their number
-"""
-normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
-
-"""
     string_factors(R, system, t)
 
 the factors of the term `t`, as `(site, matrix, g)`: its blocks with its strings laid on them,

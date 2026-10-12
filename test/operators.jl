@@ -398,9 +398,9 @@ end
         a, b = prod(make_mpo(ρ, p(p2))), prod(make_mpo(ρ, p(p2e)))
         @test norm(a - b) < 1e-12 * norm(b)
     end
-    # on sites that conserve, every factor of the split carries a definite charge, which the
-    # expression written with Sx and Sy does not, and the operator acts on the same sites
-    # weakened
+    # on sites that conserve, every factor of the split carries a definite charge, and so do
+    # the parts of each charge of Sx and Sy in the expression, whose terms connecting other
+    # charges cancel (1.x refused it); the operator acts on the same sites weakened
     s1q = Spin(1, conserve = Sz)
     p2q = Operator{2}("P2q", mp2)
     conf(sys) = normalize(State{Pure}(sys, ["1", "0", "-1", "0"]) +
@@ -409,7 +409,8 @@ end
     @test expect(stq, chain(p2q)) ≈ expect(std, chain(p2e))
     @test expect(weaken(stq, ()), chain(p2q)) ≈ expect(std, chain(p2e))
     @test maxlinkdim(make_mpo(stq, chain(p2q))) == 10
-    @test_throws "no definite flux" make_mpo(stq, chain(p2e))
+    @test expect(stq, chain(p2e)) ≈ expect(std, chain(p2e))
+    @test maxlinkdim(make_mpo(stq, chain(p2e))) == 10
     # on fermionic sites, the factors of a matrix are crossed by the strings of other operators
     # as those of its expression are; one that does not commute with F, which 1.x refused, is
     # split in the next testset
@@ -593,6 +594,51 @@ end
     @test_throws "no definite flux" TMS.lower(System(2, Qubit(conserve = N)), X(1))
     # a site the system does not have, named as written
     @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(s3, X(5))
+end
+
+@testset "Operators of no definite charge in an expression that has one" begin
+    # on a site that conserves something, a block is split into its parts of each charge, so
+    # that the Heisenberg coupling written with Sx and Sy, whose terms S⁺S⁺ and S⁻S⁻ cancel
+    # between SxSx and SySy, is the one written with Sp and Sm; 1.x refused it
+    heis(n) = sum(Sx(i) * Sx(i + 1) + Sy(i) * Sy(i + 1) + Sz(i) * Sz(i + 1) for i in 1:n-1)
+    paired(n) = sum((Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz)(i, i + 1) for i in 1:n-1)
+    ladder(n) = sum((Sp(i) * Sm(i + 1) + Sm(i) * Sp(i + 1)) / 2 + Sz(i) * Sz(i + 1) for i in 1:n-1)
+    for (site, conf) in [(Qubit(conserve = N), ["Up", "Dn", "Up", "Dn"]),
+                         (Spin(1, conserve = 2Sz), ["1", "-1", "0", "0"])]
+        sc = random_state(State{Pure}(System(4, site), conf), 4)
+        sp = weaken(sc, ())
+        for h in (heis(4), paired(4))
+            @test expect(sc, h) ≈ expect(sp, h)
+            @test expect(sc, h) ≈ expect(sc, ladder(4))
+            @test length(TMS.lower(sc.system, h)) == length(TMS.lower(sc.system, ladder(4)))
+            @test maxlinkdim(make_mpo(sc, h)) == maxlinkdim(make_mpo(sp, h))
+        end
+    end
+    # spins turned by an angle: the terms of other charges cancel up to rounding only, and are
+    # dropped as rounding
+    θ = 0.37
+    u, v = cos(θ) * Sx + sin(θ) * Sy, -sin(θ) * Sx + cos(θ) * Sy
+    sq = random_state(State{Pure}(System(4, Qubit(conserve = N)), ["Up", "Dn", "Up", "Dn"]), 4)
+    @test expect(sq, sum(u(i) * u(i + 1) + v(i) * v(i + 1) for i in 1:3)) ≈
+          expect(sq, sum(Sx(i) * Sx(i + 1) + Sy(i) * Sy(i + 1) for i in 1:3))
+    # electrons, a spin exchange beside a hopping, and a density matrix under a strong symmetry
+    exch = sum(Sx(i) * Sx(i + 1) + Sy(i) * Sy(i + 1) + dag(Cup)(i) * Cup(i + 1) +
+               dag(Cup)(i + 1) * Cup(i) for i in 1:2)
+    se = random_state(State{Pure}(System(3, Electron(conserve = (Ntot, 2Sz))),
+                                  ["Up", "Dn", "UpDn"]), 4)
+    sep = weaken(se, ())
+    @test expect(se, exch) ≈ expect(sep, exch)
+    ρ = mix(State{Pure}(System(4, Qubit(conserve = strong(N))), ["Up", "Dn", "Up", "Dn"]))
+    @test expect(ρ, heis(4)) ≈ -0.75
+    @test abs(trace(apply(make_mpo(ρ, -im * heis(4)), ρ))) < 1e-12
+    # what does not conserve the charge is refused all the same, and a product of factors on
+    # distinct sites, which cancels nothing, before it is developed: 2^30 terms otherwise
+    @test_throws "no definite flux" expect(sq, X(1))
+    @test_throws "no definite flux" expect(sq, Sx(1) * Sx(2))
+    big = System(30, Qubit(conserve = N))
+    @test_throws "no definite flux" TMS.lower(big, prod(X(i) for i in 1:30))
+    @test expect(sq, (Sx(1) * Sx(2) + Sy(1) * Sy(2)) * Z(3)) ≈
+          expect(sq, (Sp(1) * Sm(2) + Sm(1) * Sp(2)) * Z(3)) / 2
 end
 
 @testset "Strings kept apart while the terms are developed" begin

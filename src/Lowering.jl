@@ -326,24 +326,53 @@ function laid_strings(::Type{R}, system::System, t::Term) where R
 end
 
 """
+    grade_parts(R, m, site)
+
+the parts of the matrix `m` on `site`, of an operator for `Pure` or of a superoperator for
+`Mixed`, each made of its elements of one grade, see `element_grades`, as pairs `(p, part)`, `p`
+the fermionic parity of the part: `m` alone when its elements have a single grade. What
+rounding leaves of another grade is dropped, as charged indices drop it
+"""
+function grade_parts(::Type{R}, m::AbstractMatrix, site::AbstractSite) where R
+    gs = element_grades(R, site)
+    small = rounding_tol * norm(m)
+    found = unique(g for (g, x) in zip(gs, vec(m)) if abs(x) > small)
+    if length(found) ≤ 1
+        return [ (isempty(found) ? 0 : only(found).p, m) ]
+    end
+    return [ (g.p, reshape([ h == g ? x : zero(x) for (h, x) in zip(gs, vec(m)) ], size(m)))
+             for g in found ]
+end
+
+"""
     one_site_terms(R, system, i, m)
 
 the terms of the operator of matrix `m` on site `i` of `system`: on a fermionic site, its part
 of each parity, the odd one with `F` on the fermionic sites before `i`. For `Mixed`, `m` is the
 matrix of a superoperator, whose part of parity `a` on the kets and `b` on the bras takes
-``\\rho \\mapsto F^a \\rho F^b`` on the fermionic sites before `i`.
+``\\rho \\mapsto F^a \\rho F^b`` on the fermionic sites before `i`. On a site conserving
+something, its part of each grade, charge and parity, see `grade_parts`: a block connecting
+several charges, as that of `Sx`, gives terms of definite charge, which a sum may cancel.
 """
-one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix) =
-    [ Term(1., [ i => x ], [p], p == 1 ? prefix(i) : Int[], Int[])
-      for (p, x) in graded_parts(m, matrix(F, system[i])) ]
+function one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix)
+    site = system[i]
+    parts = isempty(conserved(site).quantities) ? graded_parts(m, matrix(F, site)) :
+                                                  grade_parts(Pure, m, site)
+    return [ Term(1., [ i => x ], [p], p == 1 ? prefix(i) : Int[], Int[]) for (p, x) in parts ]
+end
 
 function one_site_terms(::Type{Mixed}, system::System, i::Int, m::AbstractMatrix)
-    f = matrix(F, system[i])
-    # the parity of the kets, then that of the bras
-    kets, bras = kron(one(f), f), kron(f, one(f))
-    return [ Term(1., [ i => y ], [a + 2b], a == 1 ? prefix(i) : Int[],
-                  b == 1 ? prefix(i) : Int[])
-             for (a, x) in graded_parts(m, kets) for (b, y) in graded_parts(x, bras) ]
+    site = system[i]
+    parts = if isempty(conserved(site).quantities)
+        f = matrix(F, site)
+        # the parity of the kets, then that of the bras
+        kets, bras = kron(one(f), f), kron(f, one(f))
+        [ (a + 2b, y) for (a, x) in graded_parts(m, kets) for (b, y) in graded_parts(x, bras) ]
+    else
+        grade_parts(Mixed, m, site)
+    end
+    return [ Term(1., [ i => x ], [p], isodd(p) ? prefix(i) : Int[], p ≥ 2 ? prefix(i) : Int[])
+             for (p, x) in parts ]
 end
 
 """
@@ -513,31 +542,42 @@ block_flux(::Type{Pure}, m::AbstractMatrix, what, site::AbstractSite) = charge_f
 block_flux(::Type{Mixed}, m::AbstractMatrix, what, site::AbstractSite) = mixed_flux(m, what, site)
 
 """
+    normalized_norm(m)
+
+the Hilbert-Schmidt norm of the matrix `m` over that of the identity, 1 for any unitary, so
+that the norm of a tensor product, the product of those of its factors, does not grow with
+their number
+"""
+normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
+
+"""
     check_flux(R, system, a, terms)
 
-refuse the operator `a` on a charged `system` when a block of its terms has no definite flux,
-or when its terms do not all change the charges by the same amount, the matrices being those
-of superoperators for `R = Mixed`
+the terms of the operator `a` on a charged `system`, the matrices being those of superoperators
+for `R = Mixed`, refused when a block has no definite flux or when the terms do not all change
+the charges by the same amount. A term of rounding size next to the largest one, what is left
+of a sum cancelling up to rounding, is dropped rather than counted, the size of a term being
+its coefficient times the normalized norms of its blocks, see `normalized_norm`.
 """
 function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
     if !is_charged(system)
-        return nothing
+        return terms
     end
-    st = strong_names(system)
-    total = nothing
-    for t in terms
-        q = sum((block_flux(R, m, a, system[i]) for (i, m) in t.blocks); init = QN())
-        if isnothing(total)
-            total = q
-        elseif q ≠ total
-            if only_strong(st, (q, total))
-                strong_refusal(a, st)
-            end
-            error("the terms of $a change the charges by $total and by $q, so it has no " *
-                  "definite flux and cannot act on a system that conserves them")
+    fluxes = [ sum((block_flux(R, m, a, system[i]) for (i, m) in t.blocks); init = QN())
+               for t in terms ]
+    sizes = [ abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0)
+              for t in terms ]
+    small = rounding_tol * maximum(sizes; init = 0.)
+    main = unique(q for (q, s) in zip(fluxes, sizes) if s > small)
+    if length(main) > 1
+        st = strong_names(system)
+        if only_strong(st, main)
+            strong_refusal(a, st)
         end
+        error("the terms of $a change the charges by $(main[1]) and by $(main[2]), so it has " *
+              "no definite flux and cannot act on a system that conserves them")
     end
-    return nothing
+    return [ t for (t, q) in zip(terms, fluxes) if isempty(main) || q == only(main) ]
 end
 
 """
@@ -932,14 +972,20 @@ gives the terms of its superoperator on the density matrices of the sites, refus
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
     check_indices(system, a)
-    terms = pure_terms(system, a, ())
-    check_flux(Pure, system, a, terms)
-    return terms
+    g = gathered(system, a)
+    p = scalararg(g)
+    if is_charged(system) && p isa ProdOp && allunique(reduce(vcat, map(sites_of, p.subs)))
+        # a product of factors on distinct sites cancels nothing: a factor changing the charges
+        # by different amounts is refused before the product multiplies its terms
+        parts = [ check_flux(Pure, system, a, reduced(op_terms(system, x, ()))) for x in p.subs ]
+        terms = reduced(scaled(scalarcoef(g), tree_products(parts)))
+    else
+        terms = reduced(op_terms(system, g, ()))
+    end
+    return check_flux(Pure, system, a, terms)
 end
 
 function lower(system::System, a::IndexedOp{<:Union{IsChannel, IsGenerator}})
     check_indices(system, a)
-    terms = reduced(op_terms(system, a, ()))
-    check_flux(Mixed, system, a, terms)
-    return terms
+    return check_flux(Mixed, system, a, reduced(op_terms(system, a, ())))
 end
