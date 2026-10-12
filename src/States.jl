@@ -383,13 +383,58 @@ function aligned_links(a::MPS, b::MPS)
     return b
 end
 
+# A workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
+# zero, having no block: when a result vanishes, the difference of two equal states or gates
+# annihilating a state, the SVD, the QR or the eigen of ITensorMPS fails, and so does any later
+# step on that null state. The functions below run such a step and give the null state in that
+# case, so that the code is written as it would be without the bug.
+
+"""
+    vanished(st)
+
+whether the MPS `st` is the null state for having a tensor of zero, as a gate of one site or a
+null result of `guarded` leaves it
+"""
+vanished(st::MPS) = any(t -> iszero(norm(t)), st)
+
+"""
+    guarded(f, vanishes, st)
+
+the MPS `f(st)`, a step of ITensorMPS on `st`, or the null state when the result vanishes:
+when `f` fails on charged indices, `st` itself if it is already null, which ITensors fails on,
+and `0 * st` if `vanishes(st)` tells exactly that the result is zero; any other failure is
+raised again. `f` is given a copy, which a failure may leave half changed.
+"""
+function guarded(f, vanishes, st::MPS)
+    try
+        return f(copy(st))
+    catch
+        if any(hasqns, st)
+            if vanished(st)
+                return st
+            elseif vanishes(st)
+                return 0 * st
+            end
+        end
+        rethrow()
+    end
+end
+
+"""
+    vanishes_exactly(st)
+
+whether the MPS `st` is exactly zero, read on its last site once orthogonalised there, where a
+truncation starts
+"""
+vanishes_exactly(st::MPS) = iszero(norm(orthogonalize(st, length(st))[end]))
+
 # a direct sum, exact, then truncated with respect to the result: the default algorithm of
 # ITensorMPS cuts on the density matrices of the terms, which loses what is left of two close
-# states once subtracted
+# states once subtracted; two equal states give the null state, see `guarded`
 function +(a::State{R}, b::State{R}; limits::Limits = Limits()) where R
     same_system(a, b)
     s = +(a.state, aligned_links(a.state, b.state); alg = "directsum")
-    return State(a, truncate(s; truncation(limits)...))
+    return State(a, guarded(st -> truncate(st; truncation(limits)...), vanishes_exactly, s))
 end
 
 -(a::State{R}, b::State{R}; limits::Limits = Limits()) where R = +(a, -b; limits)

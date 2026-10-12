@@ -118,42 +118,10 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     return coef, [ (ProdOp(p), r) for (p, r) in zip(ps, runs) ]
 end
 
-# A workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
-# zero, having no block: when the result of applying gates or an MPO vanishes, the SVD, the QR
-# or the eigen of ITensorMPS fails, and so does any later step on that null state. The functions
-# below apply them in place of ITensorMPS, giving the null state in that case, so that apply is
-# written as it would be without the bug.
-
-"""
-    vanished(st)
-
-whether the MPS `st` is the null state for having a tensor of zero, as a gate of one site or a
-null result of the functions below leaves it
-"""
-vanished(st::MPS) = any(t -> iszero(norm(t)), st)
-
-"""
-    guarded(f, vanishes, st)
-
-the MPS `f(st)`, gates or an MPO applied to `st` by ITensorMPS, or the null state when the
-result vanishes: when `f` fails on charged indices, `st` itself if it is already null, which
-ITensors fails on, and `0 * st` if `vanishes(st)` tells exactly that the result is zero; any
-other failure is raised again. `f` is given a copy, which a failure may leave half changed.
-"""
-function guarded(f, vanishes, st::MPS)
-    try
-        return f(copy(st))
-    catch
-        if any(hasqns, st)
-            if vanished(st)
-                return st
-            elseif vanishes(st)
-                return 0 * st
-            end
-        end
-        rethrow()
-    end
-end
+# The workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
+# zero, see `guarded`: the functions below apply gates or an MPO in place of ITensorMPS, giving
+# the null state when the result vanishes, so that apply is written as it would be without the
+# bug.
 
 """
     vanishing_gate(g, sites, st)

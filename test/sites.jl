@@ -867,11 +867,14 @@ end
         # on a density matrix it is lifted with Evolver, H ρ + ρ H, whose trace is twice <H>
         @test trace(apply(make_mpo(mix(s), hop * hop), mix(s))) ≈ 2 * expect(s, hop * hop)
     end
-    s = random_state(State{Pure}(System(4, Fermion()), conf), 4)
     same(st, a, b) = @test norm(apply(make_mpo(st, a), st) - apply(make_mpo(st, b), st)) < 1e-12
-    same(s, C(1) * C(1) + N(2), N(2))
-    same(s, C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
-    same(mix(s), C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
+    for site in (Fermion(conserve = N), Fermion())
+        s = random_state(State{Pure}(System(4, site), conf), 4)
+        same(s, C(1) * C(1) + N(2), N(2))
+        same(s, C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
+        same(mix(s), C(1) * C(1) * N(3) + N(1) * N(3), N(1) * N(3))
+    end
+    s = random_state(State{Pure}(System(4, Fermion()), conf), 4)
     # what is dropped is what vanishes on the site at hand: the square of a fermionic operator
     # is not zero when it is a Majorana one, and the same Sp squares to zero on a spin 1/2 and
     # not on a spin 1

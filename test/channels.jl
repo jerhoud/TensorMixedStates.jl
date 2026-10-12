@@ -695,6 +695,9 @@ end
     end
     @test norm(apply(make_mpo(ρ, depolarizing2(1, 3)), ρ) - apply(depolarizing2(1, 3), ρ)) < 1e-12
     @test norm(apply((X ⊗ Reset("Up"))(1, 3), ρ) - apply(Gate(X)(1) * Reset("Up")(3), ρ)) < 1e-12
+    # on a charged system, where the difference of two equal states is exactly zero
+    w = mix(State{Pure}(System(3, Qubit(conserve = N)), ["Up", "Dn", "Up"]))
+    @test norm(apply((Gate(Sp) ⊗ Gate(Sm))(2, 3), w) - apply(Gate(Sp)(2) * Gate(Sm)(3), w)) < 1e-12
     # on fermions, the strings are laid factor by factor, in either order of the sites; C ⊗
     # Reset("Emp"), whose Reset has no definite parity after a fermionic site, is refused, see
     # "The tensor product of channels on fermions"

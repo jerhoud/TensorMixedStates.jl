@@ -75,6 +75,16 @@ end
         b = +(a, δ * c; limits = Limits(cutoff = 0))
         @test norm(a - b) ≈ δ rtol = 1e-3
     end
+    # and the difference of two equal states on charged sites is the null state, which ITensors
+    # cannot truncate, its tensors having no block left
+    fermions = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
+    for s in (State{Pure}(System(3, Qubit(conserve = N)), ["Up", "Dn", "Up"]),
+              random_state(fermions, 4))
+        @test norm(s - s) < 1e-12
+        @test norm(s + (-1) * s) < 1e-12
+        @test norm(mix(s) - mix(s)) < 1e-12
+        @test norm(s - 1.0000001 * s) ≈ 1e-7 * norm(s) rtol = 1e-6
+    end
 end
 
 @testset "The default limits cut the noise of rounding" begin
