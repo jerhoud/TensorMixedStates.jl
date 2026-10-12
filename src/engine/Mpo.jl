@@ -50,11 +50,15 @@ struct PreMPO{R <: PM}
     # counted from `terms`, a whole operator vanishing on its sites
     nterms::Int
     orders::Vector{Vector{Int}}
+    # the last MPOs built for each method of the solvers, with what they were built for, see
+    # `cached_mpos`
+    cache::Dict{Symbol, Tuple{Any, Any}}
+    lock::ReentrantLock
     function PreMPO{R}(system::System, nterms::Int = 1) where R
         n = length(system)
         return new{R}(system, fill(1, n - 1),
                       [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms,
-                      block_orders(R, system))
+                      block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock())
     end
 end
 
@@ -391,3 +395,20 @@ make_mpo(pre::PreMPO, coefs::AbstractVector = [1.]) =
     window_mpo(pre, check_coefs(pre, coefs), 1:length(pre.system))
 
 make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
+
+"""
+    cached_mpos(build, pre, method, key)
+
+the MPOs `build()` gives for the solver `method` and the parameters `key`, kept in `pre` for the
+next call: only the last ones of each method, other parameters replacing them
+"""
+function cached_mpos(build, pre::PreMPO, method::Symbol, key)
+    lock(pre.lock) do
+        k, v = get(pre.cache, method, (nothing, nothing))
+        if isnothing(v) || !isequal(k, key)
+            v = build()
+            pre.cache[method] = (key, v)
+        end
+        return v
+    end
+end
