@@ -1,8 +1,9 @@
-# States prepared by applying gates to a product state, graph states, dimer states, Slater
-# determinants and Fermi seas, and the graphs they are built on.
+# Prepared states: those written as an exact MPS, GHZ, Dicke, W and AKLT states, the fully
+# mixed state of a sector, states from their MPS tensors, dense vector or density matrix,
+# superpositions and mixtures; and those built by applying gates to a product state, graph
+# states, dimer states, Slater determinants and Fermi seas, with the graphs they are built on.
 #
-# The testsets of 1.x on the prepared states of layer 1 checked with expect are still in
-# v1/algorithms.jl.
+# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
 
 # a site holding a fermion beside a level of its own, which its annihilation operator leaves
 # alone: two states have no fermion, and no single vacuum
@@ -15,6 +16,173 @@ TensorMixedStates.fermion_parities(::Doubled) = (0, 1, 0, 1)
 @def_operators Doubled [ Cd = [0. 1. 0. 0. ; 0. 0. 0. 0. ; 0. 0. 0. 1. ; 0. 0. 0. 0.] ]
 
 TensorMixedStates.fermion_species(::Doubled) = (Cd,)
+
+@testset "GHZ states" begin
+    g = ghz_state(System(6, Qubit()), "Up", "Dn")
+    @test maxlinkdim(g) == 2
+    @test dense_vector(g) ≈ [ k == 1 || k == 64 ? 1 / sqrt(2) : 0 for k in 1:64 ]
+    @test expect(g, prod(X(i) for i in 1:6)) ≈ 1
+    @test real(expect(ghz_state(System(1, Qubit()), "Up", "Dn"), X(1))) ≈ 1
+    @test norm(ghz_state(System(5, Qudit(3)), "0", "1", "2")) ≈ 1
+    # electrons of either spin, which conserving their number allows, both product states having
+    # the same, but not up and down qubits counted by N
+    @test expect(ghz_state(System(4, Electron(conserve = Ntot)), "Up", "Dn"), Sz(1) * Sz(4)) ≈ 0.25
+    @test_throws "no definite charge" ghz_state(System(4, Qubit(conserve = N)), "Up", "Dn")
+    @test_throws "one local state at least" ghz_state(System(4, Qubit()))
+end
+
+@testset "States from the tensors of their MPS and from their dense vector" begin
+    LA = TensorMixedStates.LinearAlgebra
+    # the cluster state, against the graph state of a chain
+    A = zeros(2, 2, 2)
+    for l in 1:2, s in 1:2
+        A[l, s, s] = l == s == 2 ? -1 : 1
+    end
+    c = mps_state(System(6, Qubit()), [ A[1:1, :, :], fill(A, 4)..., sum(A; dims = 3) ])
+    @test maxlinkdim(c) == 2
+    @test abs(LA.dot(dense_vector(c), dense_vector(graph_state(line_graph(6))))) ≈ 1
+    @test_throws "3 tensors cannot" mps_state(System(4, Qubit()), [A[1:1, :, :], A, sum(A; dims = 3)])
+    @test_throws "left dimension of 2 where 1" mps_state(System(2, Qubit()), [A, sum(A; dims = 3)])
+    @test_throws "right dimension of 2" mps_state(System(2, Qubit()), [A[1:1, :, :], A])
+    @test_throws "3 states for a site of dimension 2" mps_state(System(2, Qubit()),
+                                                                [zeros(1, 3, 1), zeros(1, 2, 1)])
+    # a pure state, and one of definite charge on fermions conserving it
+    ψ = [ sin(3k) + im * cos(5k) for k in 1:32 ]
+    @test dense_vector(dense_state(System(5, Qubit()), ψ)) ≈ ψ / LA.norm(ψ)
+    φ = [ count_ones(b) == 2 ? sin(3b) : 0. for b in 0:15 ]
+    dc = dense_state(System(4, Fermion(conserve = N)), φ)
+    @test sum(expect1(dc, N)) ≈ 2
+    @test dense_vector(dc) ≈ φ / LA.norm(φ)
+    @test maxlinkdim(dense_state(System(8, Qubit()), kron(fill([1., 1.], 8)...))) == 1
+    @test_throws "no definite charge" dense_state(System(4, Fermion(conserve = N)), ones(16))
+    @test_throws "cannot be a state of 16" dense_state(System(4, Qubit()), ones(8))
+    # a density matrix, against the expectations it gives
+    M = [ sin(k + 2l) + im * cos(3k - l) for k in 1:8, l in 1:8 ]
+    ρ = M * M' / LA.tr(M * M')
+    m = dense_state(System(3, Qubit()), ρ)
+    z, x, id = [1 0 ; 0 -1], [0 1 ; 1 0], [1 0 ; 0 1]
+    @test expect(m, Z(1) * Z(3)) ≈ real(LA.tr(ρ * kron(z, id, z)))
+    @test expect(m, X(2) * Z(3)) ≈ real(LA.tr(ρ * kron(id, x, z)))
+    @test_skip trace2(m) ≈ real(LA.tr(ρ * ρ))                   # couche 3
+    # on fermions, a coherence within a sector, under weak and strong conservations: the hop
+    # c†₁c₂, written with its string, F on site 1
+    ρf = [ 0 0 0 0 ; 0 0.5 0.3im 0 ; 0 -0.3im 0.5 0 ; 0 0 0 0 ]
+    cm, fm, im2 = [0. 1. ; 0. 0.], [1. 0. ; 0. -1.], [1. 0. ; 0. 1.]
+    hop = kron(cm', im2) * kron(fm, cm)
+    for site in (Fermion(conserve = N), Fermion(conserve = TMS.strong(N)))
+        mf = dense_state(System(2, site), ρf)
+        @test expect(mf, dag(C)(1) * C(2)) ≈ LA.tr(ρf * hop)
+    end
+    @test_throws "no definite charge" dense_state(System(2, Fermion(conserve = N)), ones(4, 4))
+    @test_throws "size (4, 4) cannot" dense_state(System(3, Qubit()), ones(4, 4))
+end
+
+@testset "Superpositions and mixtures of product states" begin
+    up, dn = [1., 0.], [0., 1.]
+    s = superposition(System(4, Qubit()), [1 => ["Up", "Dn", "Up", "Dn"],
+                                           -1 => ["Dn", "Up", "Dn", "Up"], 0.5im => "+"])
+    ref = kron(up, dn, up, dn) - kron(dn, up, dn, up) + 0.5im * kron(fill([1., 1.] / sqrt(2), 4)...)
+    @test abs(TensorMixedStates.LinearAlgebra.dot(dense_vector(s), ref / norm(ref))) ≈ 1
+    @test maxlinkdim(s) == 3
+    # on charged sites, the terms of the same charge
+    sc = superposition(System(4, Fermion(conserve = N)),
+                       [1 => ["Occ", "Emp", "Occ", "Emp"], 2 => ["Emp", "Occ", "Emp", "Occ"]])
+    @test expect(sc, N(1)) ≈ 0.2
+    @test_throws "no definite charge" superposition(System(4, Fermion(conserve = N)),
+                                                    [1 => "Occ", 1 => "Emp"])
+    # a term of zero coefficient has no channel and no say in the charge
+    @test maxlinkdim(superposition(System(4, Qubit()), [1 => "Up", 0 => "Dn"])) == 1
+    @test expect(superposition(System(4, Fermion(conserve = N)), [1 => "Occ", 0 => "Emp"]), N(1)) ≈ 1
+    @test_throws "a nonzero term" superposition(System(4, Qubit()), [0 => "Up", 0 => "Dn"])
+    @test_throws "a nonzero term" mixture(System(4, Qubit()), [0 => "Up"])
+    @test_throws "cannot be one of 4 sites" superposition(System(4, Qubit()), [1 => "Up", 0 => ["Dn"]])
+    @test maxlinkdim(superposition(System(8, Qubit()), [ k => isodd(k) ? "Up" : "Dn" for k in 1:10 ];
+                                   limits = Limits(maxdim = 1))) == 1
+    # a classical ensemble of two Néel states, and one of mixed local states
+    m = mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
+    @test_skip trace2(m) ≈ 0.5                                  # couche 3
+    @test expect(m, Z(1) * Z(2)) ≈ -1
+    mm = mixture(System(2, Qubit()), [1 => ["FullyMixed", "Up"], 3 => [[0.5 0.5 ; 0.5 0.5], "Dn"]])
+    @test expect(mm, Z(2)) ≈ -0.5
+    @test expect(mm, X(1)) ≈ 0.75
+    @test_throws "real and not negative" mixture(System(2, Qubit()), [-1 => "Up"])
+end
+
+@testset "Dicke and W states" begin
+    d = dicke_state(System(5, Qubit()), 2, "Up", "Dn")
+    @test maxlinkdim(d) == 3
+    @test dense_vector(d) ≈ [ count_ones(b) == 2 ? 1 / sqrt(10) : 0. for b in 0:31 ]
+    # every product state of a Dicke state has the same charge
+    dc = dicke_state(System(8, Qubit(conserve = N)), 4, "Up", "Dn")
+    @test sum(expect1(dc, N)) ≈ 4
+    @test expect1(w_state(System(6, Qubit()), "Up", "Dn"), Z) ≈ fill(2 / 3, 6)
+    @test expect1(dicke_state(System(3, Qubit()), 0, "Up", "Dn"), Z) ≈ [1, 1, 1]
+    @test expect1(dicke_state(System(3, Qubit()), 3, "Up", "Dn"), Z) ≈ [-1, -1, -1]
+    @test_throws "do not fit on 3 sites" dicke_state(System(3, Qubit()), 4, "Up", "Dn")
+    LA = TensorMixedStates.LinearAlgebra
+    # a wave packet of one excitation, a site of zero amplitude included
+    up, dn = [1., 0.], [0., 1.]
+    φ = [1, 2im, 0, -1]
+    w = w_state(System(4, Qubit()), "Up", "Dn", φ)
+    ref = sum(φ[j] * kron([ k == j ? dn : up for k in 1:4 ]...) for j in 1:4)
+    @test dense_vector(w) ≈ ref / LA.norm(ref)
+    @test maxlinkdim(w) == 2
+    @test sum(expect1(w_state(System(6, Qubit(conserve = N)), "Up", "Dn", 1:6), Z)) ≈ 4
+    @test_throws "a nonzero amplitude" w_state(System(3, Qubit()), "Up", "Dn", zeros(3))
+    @test_throws "2 amplitudes for 3 sites" w_state(System(3, Qubit()), "Up", "Dn", [1, 1])
+end
+
+@testset "AKLT states" begin
+    # an exact ground state whatever the virtual spins at the ends, which set the total Sz
+    n = 10
+    ss(i) = Sz(i) * Sz(i+1) + (Sp(i) * Sm(i+1) + Sm(i) * Sp(i+1)) / 2
+    h = sum(ss(i) + ss(i) * ss(i) / 3 for i in 1:n-1)
+    for site in (Spin(1), Spin(1, conserve = Sz)), (l, r, sz) in (("Up", "Up", 0), ("Up", "Dn", 1))
+        a = aklt_state(System(n, site); left = l, right = r)
+        @test maxlinkdim(a) == 2
+        @test expect(a, h) ≈ -2 * (n - 1) / 3
+        @test_skip variance(a, h) ≈ 0 atol = 1e-10              # couche 3
+        @test sum(expect1(a, Sz)) ≈ sz atol = 1e-12
+    end
+    @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
+end
+
+@testset "The AKLT hamiltonian as a sum of projectors" begin
+    # P2 projects two spins one on their total spin 2, which the AKLT state holds on no pair.
+    # named takes no site any more (decision 2): the projector is read on the sites it is
+    # placed on
+    n = 6
+    P2 = named(Proj(Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz => 1), "P2")
+    h = sum(P2(i, i + 1) for i in 1:n-1)
+    @test real(expect(aklt_state(System(n, Spin(1)); left = "Up", right = "Up"), h)) ≈ 0 atol = 1e-12
+    @test_skip "dmrg finds the ground energy 0 from a random state"   # couche 4
+end
+
+@testset "Fully mixed states of a sector" begin
+    strong = TMS.strong
+    # the projector on the sector over its dimension, whatever the sites conserve
+    n, m = 6, 2
+    for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
+        ρ = fully_mixed(System(n, site), N => m)
+        @test trace(ρ) ≈ 1
+        @test_skip trace2(ρ) ≈ 1 / binomial(n, m)                # couche 3
+        @test expect(ρ, N(2)) ≈ m / n
+        @test expect(ρ, N(1) * N(4)) ≈ m * (m - 1) / (n * (n - 1))
+        @test maxlinkdim(ρ) == m + 1
+    end
+    # two quantities, the second a half integer, under a strong conservation: 36 states of four
+    # electrons on four sites with no magnetization
+    ρ = fully_mixed(System(4, Electron(conserve = (strong(Ntot), 2Sz))), Ntot => 4, Sz => 0)
+    @test_skip trace2(ρ) ≈ 1 / 36                                # couche 3
+    @test trace(ρ) ≈ 1
+    @test sum(expect1(ρ, Sz)) ≈ 0 atol = 1e-12
+    @test_skip "the canonical thermal state of fermions hopping, which thermal_state reaches from it"   # couche 4
+
+    @test_throws "no basis state of the system has N = 5" fully_mixed(System(4, Fermion()), N => 5)
+    @test_throws "not diagonal" fully_mixed(System(4, Qubit()), X => 2)
+    @test_throws "does not fix the charges" fully_mixed(
+        System(4, Electron(conserve = (strong(Ntot), 2Sz))), Sz => 0)
+end
 
 @testset "Graph utilities" begin
     @test line_graph(4) == [(1, 2), (2, 3), (3, 4)]

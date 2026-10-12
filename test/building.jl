@@ -258,6 +258,29 @@ end
     @test_ok State{Mixed}(System(3, Fermion(conserve = N)), [0.3 0.; 0. 0.7])
 end
 
+@testset "A mixed state built without going through mix" begin
+    # its local matrix used to be written straight onto the mixed index. That index is a
+    # combination, and combining charged indices merges and sorts their sectors, so the
+    # flat order of its basis is not the order of the matrix: the diagonal landed off the
+    # diagonal, where the charges annihilate it, and the state came out with a trace of
+    # zero and no complaint
+    direct(site) = State{Mixed}(System(3, site), ["2", "0", "1"])
+    bd, bq = direct(Boson(4)), direct(Boson(4, conserve = N))
+    @test trace(bd) ≈ 1
+    @test trace(bq) ≈ 1
+    @test [ expect(bq, N(k)) for k in 1:3 ] ≈ [2, 0, 1]
+    @test [ expect(bq, N(k)) for k in 1:3 ] ≈ [ expect(bd, N(k)) for k in 1:3 ]
+
+    # a density matrix given as a matrix goes the same way, and a diagonal one is a
+    # mixture over sectors, which the charges allow
+    rho = [0.1 0. 0. 0.; 0. 0.2 0. 0.; 0. 0. 0.3 0.; 0. 0. 0. 0.4]
+    md = State{Mixed}(System(2, Boson(4)), rho)
+    mq = State{Mixed}(System(2, Boson(4, conserve = N)), rho)
+    @test trace(mq) ≈ 1
+    @test expect(mq, N(1)) ≈ 2
+    @test expect(mq, N(1)) ≈ expect(md, N(1))
+end
+
 @testset "The trace is kept with the state" begin
     # computed once, under the lock of the state, with the weak form a state conserving
     # something strongly is measured on
