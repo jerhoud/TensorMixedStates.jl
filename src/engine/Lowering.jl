@@ -496,8 +496,9 @@ refuse `what`, which changes the strongly conserved `names` by different amounts
 to another, mixing the sectors a strong symmetry keeps apart
 """
 strong_refusal(what, names) =
-    error("$what changes $(join(names, ", ")) by different amounts from one part to another, " *
-          "which conserving it strongly forbids: drop `strong` or weaken the state")
+    throw(FluxError("$what changes $(join(names, ", ")) by different amounts from one part to " *
+                    "another, which conserving it strongly forbids: drop `strong` or weaken " *
+                    "the state"))
 
 """
     only_strong(names, charges)
@@ -528,8 +529,8 @@ function mixed_flux(m::AbstractMatrix, what, site::AbstractSite)
     if only_strong(st, found)
         strong_refusal(what, st)
     end
-    error("$what carries no definite charge of $(join(unique(q.name for q in qs), ", ")), so it " *
-          "cannot act on $site")
+    names = join(unique(q.name for q in qs), ", ")
+    throw(FluxError("$what carries no definite charge of $names, so it cannot act on $site"))
 end
 
 """
@@ -555,9 +556,9 @@ normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
 
 the terms of the operator `a` on a charged `system`, the matrices being those of superoperators
 for `R = Mixed`, refused when a block has no definite flux or when the terms do not all change
-the charges by the same amount. A term of rounding size next to the largest one, what is left
-of a sum cancelling up to rounding, is dropped rather than counted, the size of a term being
-its coefficient times the normalized norms of its blocks, see `normalized_norm`.
+the charges by the same amount, see `FluxError`. A term of rounding size next to the largest
+one, what is left of a sum cancelling up to rounding, is dropped rather than counted, the size
+of a term being its coefficient times the normalized norms of its blocks, see `normalized_norm`.
 """
 function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
     if !is_charged(system)
@@ -574,8 +575,8 @@ function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
         if only_strong(st, main)
             strong_refusal(a, st)
         end
-        error("the terms of $a change the charges by $(main[1]) and by $(main[2]), so it has " *
-              "no definite flux and cannot act on a system that conserves them")
+        throw(FluxError("the terms of $a change the charges by $(main[1]) and by $(main[2]), so " *
+                        "it has no definite flux and cannot act on a system that conserves them"))
     end
     return [ t for (t, q) in zip(terms, fluxes) if isempty(main) || q == only(main) ]
 end

@@ -13,7 +13,8 @@ Lindbladian evolution and noisy gates act.
 """
 module TensorMixedStates
 
-import Base: *, +, -, /, ^, exp, sqrt, mod, show, isless, ==, hash, length, getindex, truncate
+import Base: *, +, -, /, ^, exp, sqrt, mod, show, showerror, isless, ==, hash, length, getindex,
+             truncate
 import LinearAlgebra: norm, normalize, dot
 import ITensors: dag, dim, matrix, flux, inner, siteind, siteinds
 import ITensorMPS: maxlinkdim, expect, apply, sample

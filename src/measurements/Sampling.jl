@@ -222,7 +222,14 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
     projectors = [ Operator{length(sites)}("Proj($op => $λ)", p)(sites...)
                    for (λ, p) in zip(values, ps) ]
     probs = [ real(expect(state, p)) for p in projectors ]
-    return (values, probs, (k, limits) -> normalize(apply(projectors[k], state; limits)))
+    function project(k, limits)
+        if !definite_on(system, ps[k], sites)
+            error("the result $(values[k]) of $op leaves the state without definite charges: " *
+                  "collapse weaken(state, ()) instead")
+        end
+        return normalize(apply(projectors[k], state; limits))
+    end
+    return (values, probs, project)
 end
 
 """
@@ -249,7 +256,7 @@ function probabilities(state::State, op::IndexedOp{IsOperator})
     return [ λ => p for (λ, p) in zip(values, probs) ]
 end
 
-function probabilities(state::State, pos::Integer)
+function probabilities(state::State, pos::Int)
     check_positions(state, [pos], "probabilities")
     return [ round(Int, x) => p for (x, p) in probabilities(state, Level(pos)) ]
 end
@@ -301,7 +308,7 @@ function sample(state::State{Pure}; rng = Random.default_rng())
     return sample(rng, st) .- 1
 end
 
-function sample(state::State{Pure}, pos::Integer; rng = Random.default_rng())
+function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "sample")
     st = orthogonalize(state.state, pos)
     t = st[pos] / norm(st[pos])
@@ -313,7 +320,7 @@ function sample(state::State{Pure}, pos::Integer; rng = Random.default_rng())
     end
 end
 
-function sample(state::State{Mixed}, pos::Integer; rng = Random.default_rng())
+function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "sample")
     state = weak_form(state)
     l = get_left(state, pos) / real(trace(state))
@@ -362,8 +369,9 @@ normalized. The projection on several sites is truncated by `limits`, `Limits()`
 for a product of involutions, the state plus its image by the product, which at most doubles
 the bond dimension, or quadruples it on a density matrix; for a sum of operators of one site,
 an MPO whose bond carries the partial sums, as many as its dimension; otherwise the projector,
-with the Jordan-Wigner strings of the fermionic sites between its sites. `rng` is the random
-number generator, the global one by default.
+with the Jordan-Wigner strings of the fermionic sites between its sites, refused when it
+leaves the state without definite charges, on a system conserving them, see `weaken`. `rng` is
+the random number generator, the global one by default.
 
 # Examples
 
@@ -379,7 +387,7 @@ function collapse(state::State, op::IndexedOp{IsOperator}; rng = Random.default_
     return (result = values[k], probability = probs[k], state = project(k, limits))
 end
 
-function collapse(state::State, pos::Integer; rng = Random.default_rng())
+function collapse(state::State, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "collapse")
     r = collapse(state, Level(pos); rng)
     return (result = round(Int, r.result), probability = r.probability, state = r.state)
@@ -399,7 +407,7 @@ function collapse(state::State, result::Pair{<:IndexedOp{IsOperator}, <:Real};
     return (result = values[k], probability = probs[k], state = project(k, limits))
 end
 
-function collapse(state::State, result::Pair{<:Integer, <:Real})
+function collapse(state::State, result::Pair{Int, <:Real})
     pos, x = result
     check_positions(state, [pos], "collapse")
     r = collapse(state, Level(pos) => x)

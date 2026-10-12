@@ -3,7 +3,7 @@
 # state, and the norm, the trace and the inner product. The later layers go between the pure
 # and the mixed representations with `combinerto`, `mixer`, `relabel`, `relabeller`,
 # `element_maps` and `on_legs`, give limits to ITensors with `truncation`, and the measurements
-# fill the cache `preobs` of a state with `cached!`, measuring on `weak_form`.
+# fill the cache `preobs` of a state with `cached!`, measuring on `weak_form` or `plain_form`.
 
 export State, Limits, mix, maxlinkdim, trace, norm, normalize, inner, dot
 
@@ -97,7 +97,7 @@ abstract type AbstractState end
 the caches a `State` keeps for measurements, filled on first use under `lock`: the local
 tensors, the environments from the left and from the right, those from the left carrying the
 Jordan-Wigner string, the trace, the weakened form of a state conserving something strongly,
-and the adjoint of a density matrix
+the state conserving nothing, and the adjoint of a density matrix
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -106,11 +106,12 @@ struct PreObs
     strung::Vector{ITensor}
     trace::Vector{Number}
     weak::Vector{Any}
+    plain::Vector{Any}
     adjoint::Vector{Any}
     lock::ReentrantLock
 end
 
-PreObs() = PreObs([], [], [], [], [], [], [], ReentrantLock())
+PreObs() = PreObs([], [], [], [], [], [], [], [], ReentrantLock())
 
 """
     cached!(create!, v, state)
@@ -435,6 +436,10 @@ vanishes_exactly(st::MPS) = iszero(norm(orthogonalize(st, length(st))[end]))
 # states once subtracted; two equal states give the null state, see `guarded`
 function +(a::State{R}, b::State{R}; limits::Limits = Limits()) where R
     same_system(a, b)
+    if length(a) == 1
+        # nothing to truncate, and the direct sum needs links
+        return State(a, MPS([ a.state[1] + b.state[1] ]))
+    end
     s = +(a.state, aligned_links(a.state, b.state); alg = "directsum")
     return State(a, guarded(st -> truncate(st; truncation(limits)...), vanishes_exactly, s))
 end
@@ -613,6 +618,19 @@ weak_form(state::State{Mixed}) =
         state
     else
         only(cached!((w, s) -> push!(w, weaken(s)), state.preobs.weak, state))
+    end
+
+"""
+    plain_form(state)
+
+the state on its system conserving nothing, see `weaken`, computed once and kept: where an
+operator changing the charges by no definite amount is measured
+"""
+plain_form(state::State) =
+    if !is_charged(state.system)
+        state
+    else
+        only(cached!((p, s) -> push!(p, weaken(s, ())), state.preobs.plain, state))
     end
 
 """

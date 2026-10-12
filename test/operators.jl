@@ -631,10 +631,11 @@ end
     ρ = mix(State{Pure}(System(4, Qubit(conserve = strong(N))), ["Up", "Dn", "Up", "Dn"]))
     @test expect(ρ, heis(4)) ≈ -0.75
     @test abs(trace(apply(make_mpo(ρ, -im * heis(4)), ρ))) < 1e-12
-    # what does not conserve the charge is refused all the same, and a product of factors on
-    # distinct sites, which cancels nothing, before it is developed: 2^30 terms otherwise
-    @test_throws "no definite flux" expect(sq, X(1))
-    @test_throws "no definite flux" expect(sq, Sx(1) * Sx(2))
+    # what does not conserve the charge is refused by the descent, and a product of factors on
+    # distinct sites, which cancels nothing, before it is developed: 2^30 terms otherwise. expect
+    # measures it on the state conserving nothing
+    @test_throws "no definite flux" TMS.lower(sq.system, Sx(1) * Sx(2))
+    @test expect(sq, Sx(1) * Sx(2)) ≈ expect(weaken(sq, ()), Sx(1) * Sx(2))
     big = System(30, Qubit(conserve = N))
     @test_throws "no definite flux" TMS.lower(big, prod(X(i) for i in 1:30))
     @test expect(sq, (Sx(1) * Sx(2) + Sy(1) * Sy(2)) * Z(3)) ≈

@@ -360,8 +360,10 @@ those of an array or a tuple of them, on the state of an extension as well, divi
 part of the trace of the state: ``\\langle\\psi|op|\\psi\\rangle
 / \\langle\\psi|\\psi\\rangle`` on a pure state, ``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a
 mixed one. Its factors may come in any order, act on several sites, and the Jordan-Wigner
-strings of fermionic operators are laid for you. A channel, a generator and an operator not
-placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
+strings of fermionic operators are laid for you. On a system conserving charges, an operator
+changing them by no definite amount is measured on the state conserving nothing, see `weaken`.
+A channel, a generator and an operator not placed on sites, `X` rather than `X(1)`, see
+`expect1`, are refused.
 
 # Examples
 
@@ -371,7 +373,16 @@ placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
 """
 function expect(state::State, a::IndexedOp{IsOperator})
     state = weak_form(state)
-    constant, singles, b = compacted(Pure, state.system, lower(state.system, a))
+    terms = try
+        lower(state.system, a)
+    catch e
+        if !(e isa FluxError)
+            rethrow()
+        end
+        state = plain_form(state)
+        lower(state.system, a)
+    end
+    constant, singles, b = compacted(Pure, state.system, terms)
     v = constant * trace(state)
     for k in sort!(collect(keys(singles)))
         v += scalar(get_left(state, k) * obs_tensor(state, singles[k], k) * get_right(state, k))
@@ -451,6 +462,27 @@ function site_value(state::State, m::AbstractMatrix, i::Int)
 end
 
 """
+    definite_on(system, m, sites)
+
+whether the operator of matrix `m` on `sites` changes their charges by a definite amount, which
+a tensor on charged indices needs; always so on a system conserving nothing
+"""
+function definite_on(system::System, m::AbstractMatrix, sites)
+    idx = [ siteind(Pure, system, k) for k in sites ]
+    return has_definite_flux(on_legs(Matrix(m), [ i' for i in idx ], [ dag(i) for i in idx ])...)
+end
+
+"""
+    definite_everywhere(system, ops, sites)
+
+whether each operator of one site of `ops` changes the charges by a definite amount on each site
+of `sites` where it is defined, see `definite_on`
+"""
+definite_everywhere(system::System, ops, sites) =
+    !is_charged(system) || all(definite_on(system, matrix(o, system[i]), [i])
+                               for o in ops for i in intersect(sites, defined_sites(system, o)))
+
+"""
     expect1(state, op)
 
 the expectation values of the operator of one site `op` on every site, normalised as by
@@ -466,6 +498,9 @@ string on the sites before, both from environments the state keeps.
 """
 function expect1(state::State, ops::AbstractArray{<:SimpleOp})
     state = weak_form(state)
+    if !definite_everywhere(state.system, ops, 1:length(state))
+        state = plain_form(state)
+    end
     sys = state.system
     n = length(sys)
     scale = real(trace(state))
@@ -724,6 +759,10 @@ function expect2(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
         check_index(sys, i, "expect2")
     end
     sites = sort!(unique(collect(sites)))
+    if !definite_everywhere(sys, [ o for p in pairs for o in p ], sites)
+        state = plain_form(state)
+        sys = state.system
+    end
     r = [ Matrix{Union{Missing, Number}}(missing, n, n) for _ in pairs ]
     fast, parities = Int[], Int[]
     for (k, (o1, o2)) in enumerate(pairs)

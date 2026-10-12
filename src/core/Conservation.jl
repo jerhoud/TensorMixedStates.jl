@@ -2,7 +2,7 @@
 # strong or weak, the relabellings of the charges they need, and the check of a site at its
 # first use. The later layers lay matrices on charged indices with `conserved`, `strong_names`,
 # `star`, `basis_charges`, `has_definite_flux`, `charged_itensor`, `common_charge`,
-# `charge_flux`, `weak_qn` and `adjoint_index`.
+# `charge_flux`, `FluxError`, `weak_qn` and `adjoint_index`.
 
 export Conservation, conserving, strong, symmetries, weaken, flux
 
@@ -546,9 +546,21 @@ a list of `(name, value, modulus)` charges as an error message shows it, `Ntot=-
 show_charges(d) = join(["$name=$val" for (name, val, _) in d], ",")
 
 """
+    FluxError(msg)
+
+the refusal of an operator that changes the conserved charges by no definite amount, which
+`expect` answers by measuring it on the state conserving nothing
+"""
+struct FluxError <: Exception
+    msg::String
+end
+
+showerror(io::IO, e::FluxError) = print(io, e.msg)
+
+"""
     charge_flux(m, what, site)
 
-the flux of the matrix `m` of `what` on `site`, refused when it has none
+the flux of the matrix `m` of `what` on `site`, refused when it has none, see `FluxError`
 """
 function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = rounding_tol)
     qs = conserved(site).quantities
@@ -566,8 +578,9 @@ function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = roundin
         if isnothing(found)
             found = d
         elseif d ≠ found
-            error("$what on site $(typeof(site)) connects charges differing by " *
-                  "$(show_charges(found)) and by $(show_charges(d)), so it has no definite flux")
+            throw(FluxError("$what on site $(typeof(site)) connects charges differing by " *
+                            "$(show_charges(found)) and by $(show_charges(d)), so it has no " *
+                            "definite flux"))
         end
     end
     return isnothing(found) ? QN() : QN(found...)

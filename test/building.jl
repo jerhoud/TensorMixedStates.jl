@@ -87,6 +87,18 @@ end
     end
 end
 
+@testset "A sum of states of one site" begin
+    # the direct sum needs links, which a state of one site does not have
+    sys = System(1, Qubit())
+    u, d = State{Pure}(sys, "Up"), State{Pure}(sys, "Dn")
+    @test norm(u + u) ≈ 2
+    @test norm(u - u) < 1e-12
+    @test norm(mix(u) - mix(u)) < 1e-12
+    @test real(expect(normalize(u + d), X(1))) ≈ 1
+    c = State{Pure}(System(1, Fermion(conserve = N)), "Occ")
+    @test norm(c - c) < 1e-12
+end
+
 @testset "The default limits cut the noise of rounding" begin
     rng = TensorMixedStates.Random.Xoshiro(3)
     sys = System(20, Qubit())

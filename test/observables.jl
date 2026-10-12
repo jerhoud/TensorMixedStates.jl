@@ -872,6 +872,14 @@ end
     both(s -> expect2(s, (N, N)))
     both(s -> expect2(s, (dag(C), C)))
     both(s -> [ expect(s, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    # an operator changing the charges by no definite amount is measured on the state conserving
+    # nothing
+    γ, η = C + dag(C), C - dag(C)
+    @test abs(expect(q, η(1) * γ(3))) > 0.1
+    both(s -> expect(s, η(1) * γ(3)))
+    both(s -> expect1(s, γ))
+    both(s -> expect2(s, (η, γ)))
+    both(s -> last.(probabilities(s, γ(2))))
     both(s -> norm(s))
     both(s -> entanglement_entropy(s, 2)[1])
     both(s -> collect(entanglement_entropy(s, 2)[2]))
@@ -882,6 +890,8 @@ end
     both(s -> hermiticity(mix(s)))
     both(s -> expect(mix(s), N(2)))
     both(s -> expect2(mix(s), (dag(C), C)))
+    both(s -> expect(mix(s), η(1) * γ(3)))
+    both(s -> expect2(mix(s), (γ, N)))
     both(s -> trace(partial_trace(mix(s), [1, 3])))
     both(s -> mutual_info_renyi2(mix(s), 1:2))                     # the cut 2 (decision 9.2)
     both(s -> trace(apply(Gate(F)(1), mix(s))))
@@ -910,6 +920,7 @@ end
     # a correlation whose two ends do not conserve the charge is measured all the same, the
     # two shifts it brings cancelling
     both(x -> [ expect(x, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    both(x -> expect(x, (C - dag(C))(1) * (C + dag(C))(3)))
     both(x -> trace(apply(Dissipator(N)(2), x)))
     # the adjoint exchanges ket and bra, which swaps the two charges a strong symmetry keeps
     # apart. It relabels the charges so that the exchange becomes a permutation of zero flux
@@ -1222,10 +1233,15 @@ end
         ref = normalize(apply(make_mpo(f, projs[round(Int, λ)]), f))
         @test norm(s - (st isa State{Mixed} ? mix(ref) : ref)) < 1e-10
     end
-    # an operator moving a charge has no projection on a conserving system
+    # an operator moving a charge is measured on the state conserving nothing, but the state it
+    # leaves has no definite charges, which a conserving system cannot hold
     q = State{Pure}(System(3, Qubit(conserve = N)), ["Up", "Dn", "Up"])
     @test collapse(q, Z(1) * Z(2); rng).result ≈ -1
-    @test_throws "no definite flux" collapse(q, X(1); rng)
+    @test last.(probabilities(q, X(1))) ≈ [0.5, 0.5]
+    @test last.(probabilities(mix(q), X(1))) ≈ [0.5, 0.5]
+    @test_throws "collapse weaken(state, ()) instead" collapse(q, X(1); rng)
+    @test_throws "collapse weaken(state, ()) instead" collapse(mix(q), X(1) => 1)
+    @test collapse(weaken(q, ()), X(1) => 1).probability ≈ 0.5
     # 1.x refused an operator not commuting with the fermionic parity, now measured, see
     # "Measuring an operator of no definite fermionic parity"
     @test_throws "needs a Hermitian operator" probabilities(plus, Sp(1) * Z(2))
@@ -1468,6 +1484,22 @@ end
     @test_throws "acts on site 3, which the system does not have" expect(ψ, X(3))
     # an operator of several sites, which 1.x refused in expect, is measured
     @test expect(ψ, Swap(1, 2)) ≈ 1
+end
+
+@testset "An operator changing the charges by no definite amount" begin
+    # measured on the state conserving nothing, where a product of such operators stays a single
+    # term, rather than a sum over the charges each factor moves
+    sys = System(2, Qubit(conserve = N))
+    b = normalize(State{Pure}(sys, ["Up", "Dn"]) + State{Pure}(sys, ["Dn", "Up"]))
+    for st in (b, mix(b))
+        @test expect(st, X(1) * X(2)) ≈ 1
+        @test abs(expect(st, X(1))) < 1e-12
+        @test expect2(st, (X, X)) ≈ ones(2, 2)
+    end
+    up = State{Pure}(System(20, Qubit(conserve = N)), "Up")
+    @test abs(expect(up, prod(X(i) for i in 1:20))) < 1e-12
+    # apply keeps refusing it, its result having no definite charges
+    @test_throws "no definite flux" apply(X(1), b)
 end
 
 @testset "Site indices out of the system" begin

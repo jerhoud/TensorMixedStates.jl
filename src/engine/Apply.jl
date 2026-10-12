@@ -63,17 +63,6 @@ function stays_on(system::System, m::AbstractMatrix, sites)
 end
 
 """
-    definite_on(system, m, sites)
-
-whether the operator of matrix `m` on `sites` changes their charges by a definite amount, which
-a dense gate on charged indices needs; always so on a system conserving nothing
-"""
-function definite_on(system::System, m::AbstractMatrix, sites)
-    idx = [ siteind(Pure, system, k) for k in sites ]
-    return has_definite_flux(on_legs(Matrix(m), [ i' for i in idx ], [ dag(i) for i in idx ])...)
-end
-
-"""
     gate_on(m, idx)
 
 the tensor of the gate of matrix `m` acting on the indices `idx`, the last varying fastest
