@@ -353,6 +353,83 @@ function expect_block(state::State, b::ComBlock)
 end
 
 """
+    measured_terms(system, op)
+
+the terms of the operator `op` on `system`, see `lower`, and the system they are on: `system`
+itself or, when `op` changes the charges by no definite amount, see `FluxError`, the same sites
+conserving nothing, where its terms are measured on the state conserving nothing, see
+`plain_form`
+"""
+function measured_terms(system::System, a::IndexedOp{IsOperator})
+    try
+        return lower(system, a), system
+    catch e
+        if !(e isa FluxError)
+            rethrow()
+        end
+    end
+    plain = weaken(system, ())
+    return lower(plain, a), plain
+end
+
+"""
+    term_size(t)
+
+the coefficient of the term `t` times the operator norms of its blocks, which bounds the
+expectation values of the term on a normalized state
+"""
+term_size(t::Term) = abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks; init = 1.0)
+
+"""
+    PreparedOp
+
+an operator placed on sites made ready to be measured on the states of a system, see
+`prepare_op`: its constant, its terms of one site and its block of several, see `compacted`, on
+the system or, when `plain`, on the same sites conserving nothing, and `scale`, the sum of the
+sizes of its terms, see `term_size`, which bounds its expectation values
+"""
+struct PreparedOp
+    plain::Bool
+    constant::Number
+    singles::Dict
+    block::Union{Nothing, ComBlock}
+    scale::Float64
+end
+
+PreparedOp(on::System, terms::Vector{Term}, plain::Bool) =
+    PreparedOp(plain, compacted(Pure, on, terms)..., sum(term_size, terms; init = 0.0))
+
+"""
+    prepare_op(system, op)
+
+the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`
+"""
+function prepare_op(system::System, a::IndexedOp{IsOperator})
+    terms, on = measured_terms(system, a)
+    return PreparedOp(on, terms, on !== system)
+end
+
+"""
+    prepared_value(state, p)
+
+the expectation value of the operator `p` prepared by `prepare_op` on the system of `state`,
+which `weak_form` gives, divided by the real part of its trace
+"""
+function prepared_value(state::State, p::PreparedOp)
+    if p.plain
+        state = plain_form(state)
+    end
+    v = p.constant * trace(state)
+    for k in sort!(collect(keys(p.singles)))
+        v += scalar(get_left(state, k) * obs_tensor(state, p.singles[k], k) * get_right(state, k))
+    end
+    if !isnothing(p.block)
+        v += expect_block(state, p.block)
+    end
+    return v / real(trace(state))
+end
+
+"""
     expect(state, op)
 
 the expectation value of the operator `op`, placed on sites, or the array or the tuple of
@@ -373,24 +450,7 @@ A channel, a generator and an operator not placed on sites, `X` rather than `X(1
 """
 function expect(state::State, a::IndexedOp{IsOperator})
     state = weak_form(state)
-    terms = try
-        lower(state.system, a)
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-        state = plain_form(state)
-        lower(state.system, a)
-    end
-    constant, singles, b = compacted(Pure, state.system, terms)
-    v = constant * trace(state)
-    for k in sort!(collect(keys(singles)))
-        v += scalar(get_left(state, k) * obs_tensor(state, singles[k], k) * get_right(state, k))
-    end
-    if !isnothing(b)
-        v += expect_block(state, b)
-    end
-    return v / real(trace(state))
+    return prepared_value(state, prepare_op(state.system, a))
 end
 
 expect(state::AbstractState, ops::Union{AbstractArray, Tuple}) = map(o -> expect(state, o), ops)
@@ -489,7 +549,8 @@ the expectation values of the operator of one site `op` on every site, normalise
 `expect`: a vector indexed by site, `missing` where `op` is not defined, or, for an array of
 operators, an array of such vectors arranged as the operators. The even part of the operator on
 a site is measured there on the density matrix of the site, its odd part with the Jordan-Wigner
-string on the sites before, both from environments the state keeps.
+string on the sites before, both from environments the state keeps. On the state of an
+extension, each value is measured by its `expect`.
 
 # Examples
 
@@ -529,14 +590,24 @@ function expect1(state::State, ops::AbstractArray{<:SimpleOp})
     end
 end
 
-expect1(state::State, op::SimpleOp) = only(expect1(state, [op]))
+# on the state of an extension, through its expect
+function expect1(state::AbstractState, ops::AbstractArray{<:SimpleOp})
+    n = length(state)
+    return map(ops) do o
+        on = defined_sites(state.system, o)
+        return [ i in on ? expect(state, o(i)) : missing for i in 1:n ]
+    end
+end
 
-expect1(::State, a::IndexedOp) =
+expect1(state::AbstractState, op::SimpleOp) = only(expect1(state, [op]))
+
+expect1(::AbstractState, a::IndexedOp) =
     error("expect1 measures an operator on every site, X rather than X(1): measure $a with expect")
 
-expect1(::State, a::Op) = error("expect1 measures an operator of one site, and $a is not one")
+expect1(::AbstractState, a::Op) =
+    error("expect1 measures an operator of one site, and $a is not one")
 
-function expect1(state::State, ops::AbstractArray)
+function expect1(state::AbstractState, ops::AbstractArray)
     for o in ops
         if !(o isa SimpleOp)
             expect1(state, o)
@@ -744,6 +815,7 @@ default), `missing` elsewhere and where `o1` is not defined on `i` or `o2` on `j
 vector of pairs, a vector of such matrices. The Jordan-Wigner strings are laid for you. A pair
 whose operators have one and the same parity on all those sites is measured by sharing the
 environments of each site, any other row by row, each part of definite parity with its string.
+On the state of an extension, each entry is measured by its `expect`.
 
 # Examples
 
@@ -784,10 +856,28 @@ function expect2(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
     return [ map(identity, m) for m in r ]
 end
 
-expect2(state::State, pair::Tuple{SimpleOp, SimpleOp}; kwargs...) =
+# on the state of an extension, through its expect
+function expect2(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+                 sites::AbstractVector{Int} = 1:length(state))
+    sys = state.system
+    n = length(sys)
+    for i in sites
+        check_index(sys, i, "expect2")
+    end
+    return map(pairs) do (o1, o2)
+        r = Matrix{Union{Missing, Number}}(missing, n, n)
+        on1, on2 = intersect(sites, defined_sites(sys, o1)), intersect(sites, defined_sites(sys, o2))
+        for i in on1, j in on2
+            r[i, j] = expect(state, i == j ? (o1 * o2)(i) : o1(i) * o2(j))
+        end
+        return map(identity, r)
+    end
+end
+
+expect2(state::AbstractState, pair::Tuple{SimpleOp, SimpleOp}; kwargs...) =
     only(expect2(state, [pair]; kwargs...))
 
-expect2(::State, _; kwargs...) =
+expect2(::AbstractState, _; kwargs...) =
     error("expect2 correlates two operators on every pair of sites, (X, Y) rather than " *
           "(X(1), Y(2)): measure X(1) * Y(2) with expect")
 
