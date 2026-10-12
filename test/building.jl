@@ -5,8 +5,7 @@
 # testsets of the runner and of the solvers that were here in 1.x are in v1/building.jl.
 
 @testset "Aqua" begin
-    # JSON is a dependency of the outputs of the runner, which comes with layer 5
-    Aqua.test_all(TensorMixedStates; stale_deps = (ignore = [:JSON],))
+    Aqua.test_all(TensorMixedStates)
 end
 
 @testset "System building" begin

@@ -14,12 +14,13 @@ Lindbladian evolution and noisy gates act.
 module TensorMixedStates
 
 import Base: *, +, -, /, ^, exp, sqrt, mod, show, showerror, isless, ==, hash, length, getindex,
-             getproperty, propertynames, truncate
+             getproperty, propertynames, truncate, open, close
 import LinearAlgebra: norm, normalize, dot
 import ITensors: dag, dim, matrix, flux, inner, siteind, siteinds
 import ITensorMPS: maxlinkdim, expect, apply, sample
 
 using ITensors, ITensorMPS, LinearAlgebra, Random, HDF5
+import Printf, JSON
 
 # Sites, systems and states
 include("core/Operators.jl")
@@ -48,6 +49,7 @@ include("engine/GateStates.jl")
 include("measurements/Measurements.jl")
 include("measurements/Sampling.jl")
 include("measurements/Measure.jl")
+include("measurements/Outputs.jl")
 
 # Site types
 include("sites/Qubits.jl")
