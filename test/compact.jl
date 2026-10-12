@@ -147,6 +147,33 @@ end
     @test_throws "time functions take real values" make_mpo(pre, [1., im])
 end
 
+@testset "Measuring a compacted operator" begin
+    # what is left of measuring a com once coms go: expect measures an operator through its
+    # compaction, which measure is to share (decision 7a), and gives the value of the dense
+    # operator on a pure state, a mixed one and fermions
+    n = 5
+    h = sum(0.6^(j - i) * (X(i) * X(j) + N(i) * N(j)) + 0.3^(j - i) * Z(i) * Z(j)
+            for i in 1:n for j in i+1:n) + 0.7 * sum(Z(i) for i in 1:n)
+    ψ = random_state(Pure, System(n, Qubit()), 4)
+    v = dense_vector(ψ)
+    @test isapprox(expect(ψ, h), v' * exact(ψ, h) * v; rtol = 1e-12)
+    @test_skip isapprox(last(only(measure(ψ, h))), expect(ψ, h); rtol = 1e-12)   # couche 3
+    @test_skip isapprox(variance(ψ, h), real(v' * exact(ψ, h)^2 * v) - real(expect(ψ, h))^2;
+                        rtol = 1e-10, atol = 1e-12)                            # couche 3
+    LA = TMS.LinearAlgebra
+    ρ = random_state(Mixed, System(n, Qubit()), 4)
+    r = dense_matrix(ρ)
+    @test isapprox(expect(ρ, h), LA.tr(r * exact(ρ, h)) / LA.tr(r); rtol = 1e-12)
+    hf = sum(0.5^(j - i) * (dag(C)(i) * C(j) + dag(C)(j) * C(i)) + 0.2 * N(i) * N(j)
+             for i in 1:n for j in i+1:n)
+    ψf = random_state(Pure, System(n, Fermion()), 4)
+    vf = dense_vector(ψf)
+    @test isapprox(expect(ψf, hf), vf' * exact(ψf, hf) * vf; rtol = 1e-12)
+    # the kind of the values is found on the operator
+    @test_skip last(only(measure(ψf, hf))) isa Real                            # couche 3
+    @test_skip last(only(measure(ψf, hf))) ≈ real(expect(ψf, hf)) rtol = 1e-12  # couche 3
+end
+
 @testset "The constant, the zero operator, the charges and the element type" begin
     st = State{Pure}(System(3, Qubit()), "Up")
     @test iszero(laid(st, X(1) - X(1)))

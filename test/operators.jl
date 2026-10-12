@@ -2,11 +2,12 @@
 # sites, the Jordan-Wigner strings of a tensor product included, the split of an operator of
 # several sites into factors of one site, and the descent of an operator onto a system.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer, those
-# of `simplify`, internal from layer 2 on (decision 2), among them. The testsets of `simplify`,
-# of the superoperators, of the lowering onto a system and of the classification by OpType,
-# which decision 2 removes, are still in v1/operators.jl; their assertions of the first layer
-# are here.
+# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
+# `simplify` and `≈` between operators being internal from layer 2 on (decision 2b), what they
+# checked is checked by value through the descent, on the matrix of the operator placed on a
+# small system, and the written forms they reached are dropped. The testsets of the
+# superoperators, of the lowering onto a system and of the classification by OpType, which
+# decision 2 removes, are still in v1/operators.jl; their assertions of the first layer are here.
 
 @testset "The adjoint is an involution" begin
     # which only shows on operators that are not self adjoint
@@ -26,6 +27,53 @@ end
     g = 0.0
     @test matrix(g * C + g * dag(C), f) == zeros(2, 2)
     @test matrix(TMS.SumOp(TMS.Op{IsOperator, TMS.Generic, 1}[]), f) == zeros(2, 2)
+end
+
+@testset "Operator simplification" begin
+    # the descent, in place of simplify (decision 2b), must never change the operator it stands
+    # for: its terms give the matrix of the operator. Of the normal forms simplify reached,
+    # written forms, only those of a product are kept, which `gathered` gives
+    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
+    q, f = Qubit(), Fermion()
+    s1, s2 = System(1, q), System(2, q)
+    for a in [X * X, X * Y, X + Y, 2X, 0 * X, X - X, X^2, X^3, sqrt(X * X), (X + Y)^2,
+              dag(S), dag(X * Y), dag(X + im * Y), dag(dag(X)), exp(im * X),
+              Id * X, X * Id, (X + Y) * Z, (2X) * (3Y), H * H, S * S, T * T,
+              Proj("0") + Proj("1")]                                    # decision 20
+        @test lowered(s1, a(1)) ≈ matrix(a, q)
+    end
+    for a in [X ⊗ Y, Swap, Swap * Swap, (X ⊗ Y) * (Y ⊗ X), controlled(X), X ⊗ Id + Id ⊗ X]
+        @test lowered(s2, a(1, 2)) ≈ matrix(a, q, q)
+    end
+    # and an integer power of a channel, the composition repeated, by the terms of its
+    # superoperator. Left and Right are gone (decision 1), and a channel has no non integer
+    # power nor a generator any, which channels.jl checks
+    for a in [Gate(X)^2, (0.9 * Gate(Id) + 0.1 * Gate(X))^3]
+        @test TMS.system_matrix(Mixed, s1, TMS.lower(s1, a(1))) ≈ matrix(a, q)
+    end
+    # an F crossing a factor takes the sign of its parity, a sum of odd operators included,
+    # and stops before a factor that has none. Placed after a fermion, the odd part of the
+    # operator takes the string there
+    sf = System(2, f)
+    fm, id = matrix(F, f), matrix(Id, f)
+    for a in [F * C, F * dag(C), F * (C + dag(C)), (C + dag(C)) * F, F * (2C + im * dag(C)),
+              F * C * F, F * (C * N), F * (C + N), F * exp(N), F * C^3]
+        m = matrix(a, f)
+        @test lowered(sf, a(2)) ≈ kron(id, (m + fm * m * fm) / 2) + kron(fm, (m - fm * m * fm) / 2)
+    end
+    # the adjoint of a non integer power, which is not the power of the adjoint as soon as
+    # the operator has a negative eigenvalue
+    for a in [dag(sqrt(X)), dag(Sz^0.5), dag((X + Y)^0.3), dag(sqrt(N)), dag(X^3)]
+        @test lowered(s1, a(1)) ≈ matrix(a, q)
+    end
+    # a run collapsing to the identity leaves its two neighbours adjacent, and they have to be
+    # merged in their turn: placed, the factors of a site merge into one, a multiple of the
+    # identity going into the coefficient
+    @test TMS.gathered(s1, X(1) * X(1)) isa TMS.IdentityOp
+    @test TMS.gathered(s1, X(1) * Id(1)) == X(1)
+    @test TMS.gathered(s1, X(1) * Y(1) * Y(1) * X(1)) isa TMS.IdentityOp
+    @test TMS.gathered(s1, X(1) * Y(1) * Z(1) * Z(1) * Y(1) * X(1)) isa TMS.IdentityOp
+    @test TMS.gathered(s1, Z(1) * X(1) * X(1) * Z(1) * Y(1)) == Y(1)
 end
 
 @testset "A matrix is taken on one site at least" begin
@@ -49,7 +97,10 @@ end
     # a Proj holds a name, a vector or an eigenspace, which have no order between them
     # (decision 20: a number is not a state)
     @test length(sort([Proj("1"), Proj("Up"), Proj([1., 0.]), Proj("0")])) == 4
-    @test_skip matrix(simplify(Proj("1") + Proj("Up")), Qubit()) ≈ matrix(Id, Qubit())   # couche 2
+    # and their sum, which simplify had to sort, is the identity once placed
+    s1 = System(1, Qubit())
+    @test TMS.system_matrix(Pure, s1, TMS.lower(s1, Proj("1")(1) + Proj("Up")(1))) ≈
+          matrix(Id, Qubit())
     for (a, b) in [(Gate(X), Gate(Y)), (Dephase(X), Dephase(Y)), (Dissipator(X), Dissipator(Y)),
                    (Evolver(X(1)), Evolver(Y(1))), (Reset("Dn"), Reset("Up"))]
         @test isless(a, b) && !isless(b, a)
@@ -68,9 +119,11 @@ end
 
 @testset "A projector is self adjoint" begin
     # `matrix` refuses a projector on a mixed state, so every one is self adjoint, and its
-    # adjoint simplifies to it whatever it projects on (decision 20: Proj("1"), not Proj(1))
+    # adjoint, placed, is it whatever it projects on (decision 20: Proj("1"), not Proj(1))
+    s1 = System(1, Qubit())
     for p in (Proj("Up"), Proj("1"), Proj([1, im] / √2), Proj(X => -1))
-        @test_skip simplify(dag(p)) == p                    # couche 2
+        @test TMS.system_matrix(Pure, s1, TMS.lower(s1, dag(p)(1))) ≈
+              TMS.system_matrix(Pure, s1, TMS.lower(s1, p(1)))
         @test matrix(dag(p), Qubit()) ≈ matrix(p, Qubit())
     end
 end
@@ -115,22 +168,24 @@ end
 @testset "Non integer powers of a scaled operator" begin
     # the power is the principal one. A positive coefficient comes out of it unchanged, any
     # other phase does not and stays inside, only the modulus coming out: a negative one is
-    # the phase -1, and so is -1 + 0im. The power decides this when it is built and simplify
-    # when a sum collapses into a scaled operator afterwards, and the two have to reach the
-    # same form
+    # the phase -1, and so is -1 + 0im. The power decides this when it is built, and the power
+    # of a sum that is a scaled operator, which it does not see, has to give the same matrix
+    # once placed (decision 2b: the descent in place of simplify)
+    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q = Qubit()
+    s1 = System(1, q)
     for (c, a) in [(-1., -X - X), (im, im * X + im * X), (2., 2X + 2X),
                    (1. + im, (1 + im) * X + (1 + im) * X),
                    (-1. + 0im, (-1. + 0im) * X + (-1. + 0im) * X)]
-        @test_skip simplify(a^0.5) == (2c * X)^0.5          # couche 2
+        @test lowered(s1, (a^0.5)(1)) ≈ lowered(s1, ((2c * X)^0.5)(1))
         @test matrix((2c * X)^0.5, q) ≈ sqrt(2c * matrix(X, q))
     end
     @test (2X)^0.5 == sqrt(2.) * X^0.5
     @test (-2X)^0.5 == sqrt(2.) * (-X)^0.5
     # the sign really does leave the coefficient for the operator
-    @test_skip string(simplify((-X - X)^0.5)) == string(sqrt(2.) * (-X)^0.5)   # couche 2
+    @test lowered(s1, ((-X - X)^0.5)(1)) ≈ sqrt(2.) * lowered(s1, ((-X)^0.5)(1))
     # an integer exponent needs none of this care
-    @test_skip simplify((-X - X)^2) == 4Id                  # couche 2
+    @test lowered(s1, ((-X - X)^2)(1)) ≈ lowered(s1, 4Id(1))
 end
 
 @testset "Operators as dictionary keys" begin
@@ -167,7 +222,13 @@ end
         @test hash(a) == hash(b)
         @test length(Set([a, b])) == 1
     end
-    @test_skip "a product the descent gave strings"   # couche 2
+    # and so is a product the descent gathered, sorted with a sign: 1.x hashed the product
+    # simplify gave strings, which the descent keeps apart in its terms (decision 2b)
+    f3 = System(3, Fermion())
+    a, b = TMS.gathered(f3, C(3) * dag(C)(1)), TMS.gathered(f3, C(3) * dag(C)(1))
+    @test a == b
+    @test hash(a) == hash(b)
+    @test length(Set([a, b])) == 1
     # and operators that differ must keep differing
     @test length(Set([X(1) * Y(2), X(1) * Z(2)])) == 2
     # what it is for: a product shared by two measurements is asked for only once
@@ -185,13 +246,16 @@ end
         [i == j ? exp(2im * π * mod(i - 1, 3) / 3) : 0im for i in 1:6, j in 1:6]
     @test matrix(parity(N), b) ≈ matrix(mod(N, 2), b)
 
-    # simplify must never change the operator it stands for
+    # the descent must never change the operator it stands for (decision 2b: in place of
+    # simplify)
+    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
+    sb = System(1, b)
     for a in [parity(N), mod(N, 3), dag(parity(N)), dag(mod(N, 3)), parity(2N), parity(N)^2]
-        @test_skip matrix(simplify(a), b) ≈ matrix(a, b)    # couche 2
+        @test lowered(sb, a(1)) ≈ matrix(a, b)
     end
 
     # the adjoint puts the sign into the operator instead of leaving a dag outside
-    @test_skip matrix(simplify(dag(mod(N, 3))), b) ≈ adjoint(matrix(mod(N, 3), b))    # couche 2
+    @test lowered(sb, dag(mod(N, 3))(1)) ≈ adjoint(matrix(mod(N, 3), b))
     @test matrix(dag(mod(N, 3)), b) ≈ adjoint(matrix(mod(N, 3), b))
     @test matrix(dag(dag(mod(N, 3))), b) ≈ matrix(mod(N, 3), b)
 
@@ -211,7 +275,10 @@ end
     @test matrix(named(N, "Nf"), f) ≈ matrix(N, f)
     @test repr(named(N, "Nf")) == "Nf"
     @test repr(named(N, "Nf")(3)) == "Nf(3)"
-    @test_skip matrix(simplify(named(N, "Nf")), f) ≈ matrix(N, f)    # couche 2
+    # and placed, it is N, without a string
+    f3 = System(3, f)
+    @test TMS.system_matrix(Pure, f3, TMS.lower(f3, named(N, "Nf")(2))) ≈
+          TMS.system_matrix(Pure, f3, TMS.lower(f3, N(2)))
     # an expression has no name of its own and can be renamed too
     @test matrix(named(2Sz, "SzA"), Spin(1/2)) ≈ matrix(2Sz, Spin(1/2))
     # decision 2: a renamed operator has no type, the lowering reading its fermionic parity off
@@ -315,10 +382,42 @@ end
         @test expect(st1, p2(i, j)) ≈ expect(st1, p2e(i, j))
         @test norm(apply(p2(i, j), st1) - apply(p2e(i, j), st1)) < 1e-12
     end
+    # which the twelve terms of the expression come down to once compacted
+    @test maxlinkdim(make_mpo(st1, chain(p2e))) == 10
+    @test norm(apply(make_mpo(st1, chain(p2)), st1) - apply(make_mpo(st1, chain(p2e)), st1)) < 1e-12
     k = Operator{2}("K", mk)
     sk = random_state(Pure, System([s1, q, s1, q]), 4)
     for (i, j) in [(1, 2), (3, 2), (1, 4)]
         @test norm(apply(k(i, j), sk) - apply(make_mpo(sk, k(i, j)), sk)) < 1e-12
+    end
+    # a density matrix, with the operator in a gate, a dissipator and a hamiltonian. The MPOs
+    # are compared whole on three sites, relative to their norm, of 10 to 20: the split of the
+    # matrix and the development of the expression differ by rounding, up to 1.4e-12
+    ρ = mix(State{Pure}(System(3, s1), "0"))
+    for p in (x -> Gate(x)(1, 3), x -> Dissipator(x)(2, 3), x -> -im * x(1, 2))
+        a, b = prod(make_mpo(ρ, p(p2))), prod(make_mpo(ρ, p(p2e)))
+        @test norm(a - b) < 1e-12 * norm(b)
+    end
+    # on sites that conserve, every factor of the split carries a definite charge, which the
+    # expression written with Sx and Sy does not, and the operator acts on the same sites
+    # weakened
+    s1q = Spin(1, conserve = Sz)
+    p2q = Operator{2}("P2q", mp2)
+    conf(sys) = normalize(State{Pure}(sys, ["1", "0", "-1", "0"]) +
+                          0.5 * State{Pure}(sys, ["0", "1", "0", "-1"]))
+    stq, std = conf(System(4, s1q)), conf(System(4, s1))
+    @test expect(stq, chain(p2q)) ≈ expect(std, chain(p2e))
+    @test expect(weaken(stq, ()), chain(p2q)) ≈ expect(std, chain(p2e))
+    @test maxlinkdim(make_mpo(stq, chain(p2q))) == 10
+    @test_throws "no definite flux" make_mpo(stq, chain(p2e))
+    # on fermionic sites, the factors of a matrix are crossed by the strings of other operators
+    # as those of its expression are; one that does not commute with F, which 1.x refused, is
+    # split in the next testset
+    nn = Operator{2}("NN", matrix(N ⊗ N, fe))
+    nne = Operator{2}("NNe", N ⊗ N)
+    sf = random_state(Pure, System(4, fe), 4)
+    for p in (x -> x(1, 3), x -> C(4) * x(1, 3) * dag(C)(2), x -> dag(C)(1) * x(4, 2) * C(3))
+        @test expect(sf, p(nn)) ≈ expect(sf, p(nne))
     end
     # a single site, a fermionic one included
     @test matrix(Operator{1}("Ex", exp(0.3im * X)), q) ≈ matrix(exp(0.3im * X), q)
@@ -661,11 +760,31 @@ end
     # the strings of the matrix, and made a dissipator change the trace
     cn = named(C ⊗ N, "CN")
     a2 = C ⊗ Id + Id ⊗ C
-    @test_skip "the norm of a(1, 2, 3, 4) applied to a state, for cn ⊗ cn and a2 ⊗ a2"   # couche 2
+    ψ = random_state(Pure, System(4, fe), 4)
+    for a in (cn ⊗ cn, a2 ⊗ a2)
+        aψ = apply(make_mpo(ψ, a(1, 2, 3, 4)), ψ)
+        @test expect(ψ, dag(a)(1, 2, 3, 4) * a(1, 2, 3, 4)) ≈ norm(aψ)^2
+    end
     @test matrix(C ⊗ cn, fe) ≈ matrix(C ⊗ C ⊗ N, fe)
     @test matrix(C ⊗ a2, fe) ≈ matrix(C ⊗ C ⊗ Id + C ⊗ Id ⊗ C, fe)
     @test_throws "no definite fermionic parity" matrix(C ⊗ (C ⊗ Id + N ⊗ Id), fe)
-    @test_skip "a dissipator of cn ⊗ cn keeps the trace"     # couche 2
+    ρ = mix(random_state(Pure, System(4, fe), 4))
+    @test abs(trace(apply(make_mpo(ρ, Dissipator(cn ⊗ cn)(1, 2, 3, 4)), ρ))) < 1e-12
+end
+
+@testset "Products differing by their last factor are gathered" begin
+    # P*X(i) + P*Y(i) is P*(X+Y)(i): the terms of an odd sum of one site share their
+    # Jordan-Wigner string, and the MPO carries each product once, the sum written either way.
+    # The descent keeps such terms apart, the compaction gathering them: the factors simplify
+    # left, which 1.x counted, have no counterpart (decision 2b). The operator must not change
+    st = random_state(Pure, System(5, Fermion()), 2)
+    @test maxlinkdim(make_mpo(st, sum((C + dag(C))(i) for i in 1:5))) == 3
+    @test maxlinkdim(make_mpo(st, sum(C(i) + dag(C)(i) for i in 1:5))) == 3
+    sq = random_state(Pure, System(3, Qubit()), 2)
+    a = X(1) * Z(2) + X(1) * Y(2)
+    @test maxlinkdim(make_mpo(sq, a)) == 3
+    @test norm(apply(make_mpo(sq, a), sq) - apply(make_mpo(sq, X(1) * Z(2)), sq) -
+               apply(make_mpo(sq, X(1) * Y(2)), sq)) < 1e-12
 end
 
 @testset "Powers" begin
@@ -677,6 +796,7 @@ end
     # other is the principal power, a function of the operator as exp is, of which only the
     # modulus of a coefficient comes out. Decision 2: an involution is not reduced, its matrix
     # saying what it is
+    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q, fe, s1 = Qubit(), Fermion(), Spin(1)
     @test matrix(X^10000, q) ≈ matrix(Id, q)
     @test matrix(X^10001, q) ≈ matrix(X, q)
@@ -687,10 +807,11 @@ end
     @test (2X)^64 == 2.0^64 * X^64
     @test (2X)^-1 == 0.5 * X^-1
     @test expect(State{Pure}(System(2, q), "Up"), (2^32 * Sz(1)) * (2^32 * Sz(2))) ≈ 2.0^62
-    @test_skip simplify(Sz^2 * Sz) == Sz^3                  # couche 2
+    # placed, the descent gives the matrix of that product
+    @test lowered(System(1, s1), (Sz^2 * Sz)(1)) ≈ lowered(System(1, s1), (Sz^3)(1))
     for (a, s) in [(X^3, q), ((X + Y)^3, q), (Sz^2, s1), ((Sp + Sm)^3, s1),
                    ((C + dag(C))^2, fe), (C^3, fe), (dag((X + im * Y)^2), q)]
-        @test_skip matrix(simplify(a), s) ≈ matrix(a, s)    # couche 2
+        @test lowered(System(1, s), a(1)) ≈ matrix(a, s)
     end
     @test matrix(dag((X + im * Y)^2), q) ≈ matrix((X + im * Y)^2, q)'
 
@@ -705,14 +826,16 @@ end
     @test_throws "does not exist" matrix(Proj("0")^(-0.5), q)     # decision 20
 
     # powers of the same operator merge, and what they give leaves no coefficient inside the
-    # product nor an F out of its place
-    @test_skip simplify((-X)^0.5 * (-X)^0.5) == -X          # couche 2
-    @test_skip simplify(X^0.5 * X^0.5) == X                 # couche 2
-    @test_skip simplify(F^0.5 * F^0.5 * C) == simplify(F * C)   # couche 2
+    # product nor an F out of its place, which the matrices of the products placed show, after
+    # a fermion for F
+    s2, f2 = System(2, q), System(2, fe)
+    @test lowered(s2, ((-X)^0.5 * (-X)^0.5)(1)) ≈ lowered(s2, -X(1))
+    @test lowered(s2, (X^0.5 * X^0.5)(1)) ≈ lowered(s2, X(1))
+    @test lowered(f2, (F^0.5 * F^0.5 * C)(2)) ≈ lowered(f2, (F * C)(2))
     # and placed, a merge giving a multiple of the identity leaves only its coefficient: -Id
     # stayed in the product, which the sort by site then failed on
     a = ((im * X)^0.5)(1) * ((im * X)^1.5)(1)
-    @test_skip simplify(a * Z(2)) == simplify(Z(2) * a) == simplify(-Z(2))   # couche 2
+    @test lowered(s2, a * Z(2)) ≈ lowered(s2, Z(2) * a) ≈ lowered(s2, -Z(2))
 
     # a placed operator takes powers, an integer one of anything placed and any one of an
     # operator on its sites
@@ -725,14 +848,35 @@ end
     @test expect(st, X(1)^0.5) ≈ expect(st, (X^0.5)(1))
     @test_throws "has no power 0.5 once placed" (X(1) + Z(2))^0.5
 
-    # a non integer power of several sites is kept whole, as exp is: it is refused where it
-    # would have to be split, and applied as a gate, a fermion beside it included
-    @test_skip "a non integer power of several sites refused by expect and applied as a gate"   # couche 2
-    # a string is not moved past a factor of several sites kept whole, which it commutes with
-    # only if the factor is even. A factor with no string in the way is still sorted
+    # a non integer power of several sites is applied as a gate, a fermion beside it included.
+    # 1.x kept it whole, as exp, and refused it where it had to be split: decision 2 splits
+    # it, so that expect measures it
+    ψ = dense_vector(st)
+    @test expect(st, sqrt(Swap)(1, 2)) ≈ ψ' * kron(matrix(sqrt(Swap), q, q), matrix(Id, q)) * ψ
+    sys = System([q, q, fe])
+    sf = State{Pure}(sys, ["Up", "Dn", "Emp"])
+    op = sqrt(Swap)(1, 2) * dag(C)(3)
+    @test dense_vector(apply(op, sf)) ≈ lowered(sys, op) * dense_vector(sf)
+    # a string crosses a factor of several sites with the sign of its parity: this one, odd on
+    # site 1, gives the opposite of the product in the other order, which 1.x took as equal. A
+    # factor with no string in the way is still sorted
+    f4 = System(4, fe)
     xi = Operator{2}("XI", kron([0. 1. ; 1. 0.], [1. 0. ; 0. 1.]))
-    @test_skip !(xi(1, 2) * dag(C)(4) ≈ dag(C)(4) * xi(1, 2))   # couche 2
-    @test_skip xi(1, 2) * N(4) ≈ N(4) * xi(1, 2)            # couche 2
+    fwd, bwd = lowered(f4, xi(1, 2) * dag(C)(4)), lowered(f4, dag(C)(4) * xi(1, 2))
+    @test !(fwd ≈ bwd) && fwd ≈ -bwd
+    @test lowered(f4, xi(1, 2) * N(4)) ≈ lowered(f4, N(4) * xi(1, 2))
+    @test TMS.gathered(f4, N(4) * xi(1, 2)) == xi(1, 2) * N(4)
+end
+
+@testset "A function of a projector takes no string" begin
+    # a projector is even, and so is a function of it: split and given a string, (P^0.5)(3)
+    # differed from P(3) although P^0.5 is P
+    st = random_state(Pure, System(3, Fermion()), 4)
+    P = Proj([0., 1.])
+    for i in 1:3
+        @test expect(st, (P^0.5)(i)) ≈ expect(st, P(i))
+        @test expect(st, exp(0.7im * P)(i)) ≈ expect(st, Id(i) + (exp(0.7im) - 1) * P(i))
+    end
 end
 
 @testset "The identity is one value of each kind" begin
@@ -764,7 +908,14 @@ end
     @test expect1(st, Id) ≈ ones(3)
     @test expect1(mix(st), Id) ≈ ones(3)
     @test expect2(st, (Id, X))[1, 3] ≈ expect(st, X(3))
-    @test_skip "the MPO of X(1) * X(2) + 0.5 * Id(3), a product by 2Id(2) applied, a gate of Id"   # couche 2
+    # and in an MPO, a product applied and a gate on a density matrix
+    h = X(1) * X(2) + 0.5 * Id(3)
+    @test real(inner(st.state', make_mpo(st, h), st.state)) / real(inner(st.state, st.state)) ≈
+          real(expect(st, h))
+    @test norm(apply(2Id(2) * X(1), st) - 2 * apply(X(1), st)) < 1e-12
+    @test trace(apply(Gate(Id)(2), mix(st))) ≈ 1
+    # an evolver of -im times it, -iρ + iρ, has no term once placed
+    @test isempty(TMS.lower(System(1, q), Evolver(-im * Id(1))))
     # having no site, the identity is the identity of any system, whatever site it was given
     @test expect(st, Id(5)) ≈ 1
 end
@@ -819,7 +970,13 @@ end
     c1 = -1 * (0.0 - 1.0im)       # -0.0 + 1.0im
     c3 = -1 * (0.0 - 2.0im)       # -0.0 + 2.0im
     f(c) = exp(c * X ⊗ X)(1, 2)
-    @test_skip simplify(f(c1) - f(1.0im) + f(c3)) == simplify(f(c3))   # couche 2
+    # the descent, in place of simplify (decision 2b), gathers the terms its matrices give,
+    # which a signed zero must not keep apart
+    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
+    s2 = System(2, Qubit())
+    fs = f(c1) - f(1.0im) + f(c3)
+    @test lowered(s2, fs) ≈ lowered(s2, f(c3))
+    @test length(TMS.lower(s2, fs)) == length(TMS.lower(s2, f(c3)))
     # the coefficient of a product is 0.25 - 0.0im
     a = (-0.5im * X(1)) * (0.5im * Y(2))
     b = 0.25 * X(1) * Y(2)
@@ -837,7 +994,9 @@ end
     # a projector is ordered by its values, which tie where `==` holds: its printed form told
     # [1, 0] and [1.0, 0.0] apart, and [1, 1] sorted between the two
     g(v) = exp(im * Proj(v) ⊗ X)(1, 2)
-    @test_skip simplify(g([1, 0]) - g([1.0, 0.0]) + g([1, 1])) == simplify(g([1, 1]))   # couche 2
+    gs = g([1, 0]) - g([1.0, 0.0]) + g([1, 1])
+    @test lowered(s2, gs) ≈ lowered(s2, g([1, 1]))
+    @test length(TMS.lower(s2, gs)) == length(TMS.lower(s2, g([1, 1])))
     @test isless(Proj("1"), Proj("Up")) && isless(Proj("Up"), Proj([1, 0]))      # decision 20
 end
 
