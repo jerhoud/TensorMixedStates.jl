@@ -722,7 +722,12 @@ end
     @test norm(apply(depolarizing_gate(p, 2)(1, 3), q) - apply(two_sites(1, 3), q)) < 1e-12
     s = State{Mixed}(System(2, Spin(1)), "1")
     @test expect(apply(depolarizing_gate(p)(1), s), Proj("1")(1)) ≈ 1 - p + p / 3
-    @test_skip "the generator through tdvp against the channel, on Spin(1) and two qubits"   # couche 4
+    γ, t = 0.7, 0.5
+    for (ρ, n, sites) in [(mix(random_state(Pure, System(3, Spin(1)), 4)), 1, (2,)), (q, 2, (1, 3))]
+        evolved = evolve(depolarizing_dissipator(γ, n)(sites...), t, ρ; nsteps = 20,
+                         limits = Limits(maxdim = 100))
+        @test norm(evolved - apply(depolarizing_gate(1 - exp(-γ * t), n)(sites...), ρ)) < 1e-10
+    end
     strong_sys = System(2, Qubit(conserve = strong(N)))
     @test_throws "conserving it strongly forbids" apply(depolarizing_gate(p)(1),
                                                         State{Mixed}(strong_sys, "Up"))
@@ -761,7 +766,9 @@ end
     # a vector of numbers is the amplitudes of a single state, as for State
     by_vector = applied(reset_gate(p, [0., 1.])(2))
     @test norm(by_vector - applied(reset_gate(p, "Dn")(2))) < 1e-12
-    @test_skip "the generator through tdvp against the channel"   # couche 4
+    γ, t = 0.7, 0.5
+    evolved = evolve(reset_dissipator(γ, "Up")(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
+    @test norm(evolved - applied(reset_gate(1 - exp(-γ * t), "Up")(2))) < 1e-10
     @test depolarizing_gate(p, 2) == reset_gate(p, 2, "FullyMixed")
 end
 
@@ -794,14 +801,25 @@ end
           1e-12
     @test norm(apply(exp(t * reset_dissipator(γ, "Emp"))(3), ρ) -
                apply(reset_gate(1 - exp(-γ * t), "Emp")(3), ρ)) < 1e-12
-    @test_skip "the generators through tdvp against the channels"   # couche 4
+    # the generator, through its MPO, against the channel
+    for (generator, channel) in
+            [(reset_dissipator(γ, "Occ")(2), reset_gate(1 - exp(-γ * t), "Occ")(2)),
+             (depolarizing_dissipator(γ, 2)(2, 4), depolarizing_gate(1 - exp(-γ * t), 2)(2, 4))]
+        evolved = evolve(generator, t, ρ; nsteps = 20, limits = Limits(maxdim = 100))
+        @test norm(evolved - apply(channel, ρ)) < 1e-10
+    end
     # a qubit between the fermions takes no sign
     mixed_sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
     m = mix((State{Pure}(mixed_sys, ["Occ", "Up", "Occ", "Emp"]) +
              State{Pure}(mixed_sys, ["Emp", "Dn", "Occ", "Occ"])) / sqrt(2))
     @test norm(apply(Reset("Emp")(3), m) - exact("Emp", 3, m)) < 1e-12
-    # on an Electron, see "Resets and dephasings on a density matrix"
-    @test_skip "the reset generator through tdvp leaves the other sites of an Electron"   # couche 4
+    # on an Electron, whose parity is that of both spins, the reset generator leaves the other
+    # sites in their state, see "Resets and dephasings on a density matrix"
+    esys = System(3, Electron())
+    e = mix((State{Pure}(esys, ["Up", "Up", "Emp"]) + State{Pure}(esys, ["Emp", "Up", "Up"])) /
+            sqrt(2))
+    evolved = evolve(reset_dissipator(γ, "Dn")(2), t, e; nsteps = 20, limits = Limits(maxdim = 100))
+    @test norm(partial_trace(evolved, [2]) - partial_trace(e, [2])) < 1e-10
     # decision 2: the descent lays the strings of each parity, so that a reset to a state of no
     # definite parity, against its Kraus operators |v⟩⟨i|, and a mixture of a reset and a
     # fermionic gate, which 1.x refused, are applied
@@ -829,9 +847,13 @@ end
     @test trace(decayed) ≈ 1
     @test expect(decayed, N(1)) ≈ 0.64 * (1 - p)
     @test expect(decayed, X(1)) ≈ 2 * 0.48 * sqrt(1 - p)
-    @test_skip "amplitude_damping_dissipator through tdvp against the gate"   # couche 4
-    t, T1, T2 = 0.5, 2., 1.5
-    @test_skip "thermal_relaxation_dissipator through tdvp against the gate"   # couche 4
+    γ, t, T1, T2 = 0.7, 0.5, 2., 1.5
+    by_rate = evolve(amplitude_damping_dissipator(γ)(1), t, mix(ψ); nsteps = 20,
+                     limits = Limits(maxdim = 16))
+    @test norm(by_rate - apply(amplitude_damping_gate(1 - exp(-γ * t))(1), mix(ψ))) < 1e-10
+    by_times = evolve(thermal_relaxation_dissipator(T1, T2)(1), t, mix(ψ); nsteps = 20,
+                      limits = Limits(maxdim = 16))
+    @test norm(by_times - apply(thermal_relaxation_gate(T1, T2, t)(1), mix(ψ))) < 1e-10
     # read on the channel, where 1.x read them on the evolution
     relaxed = apply(thermal_relaxation_gate(T1, T2, t)(1), mix(ψ))
     @test expect(relaxed, N(1)) ≈ 0.64 * exp(-t / T1)
@@ -852,7 +874,13 @@ end
     @test expect(apply(Dephase(N)(1), b), N(1)) ≈ expect(b, N(1))
     @test norm(apply(make_mpo(b, dephasing_gate(0.3)(1)), b) - apply(dephasing_gate(0.3)(1), b)) <
           1e-12
-    @test_skip "dephasing_dissipator through tdvp, against the gate and Dissipator(Z)"   # couche 4
+    γ, t = 0.7, 0.5
+    evolved = evolve(dephasing_dissipator(γ)(1), t, b; nsteps = 20, limits = Limits(maxdim = 100))
+    @test norm(evolved - apply(dephasing_gate(1 - exp(-γ * t))(1), b)) < 1e-10
+    q = mix(random_state(Pure, System(3, Qubit()), 4))
+    by_rate = evolve(dephasing_dissipator(2, Z)(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
+    by_dissipator = evolve(Dissipator(Z)(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
+    @test norm(by_rate - by_dissipator) < 1e-10
     @test dephasing_gate(0.3) == dephasing_gate(0.3, Level)
     # on an electron, Ntot does not tell Up from Dn
     e = mix(State{Pure}(System(1, Electron()), [[0., 1., 1., 0.] / sqrt(2)]))
@@ -886,9 +914,17 @@ end
     # "The exponential of a generator is the channel of its evolution"
     t = 0.5
     q = mix(random_state(Pure, System(3, Qubit()), 4))
-    @test_skip norm(apply(exp(t * Dissipator(Sm))(2), q) -
-                    tdvp(Dissipator(Sm)(2), t, q; nsteps = 20)) < 1e-10   # couche 4
-    @test_skip "exp(t * L)(1, 2) of two qubits against tdvp, its block the whole evolution"   # couche 4
+    @test norm(apply(exp(t * Dissipator(Sm))(2), q) - evolve(Dissipator(Sm)(2), t, q; nsteps = 20)) <
+          1e-10
+    # of two sites, against tdvp on two sites, whose block holds the whole evolution; the
+    # Hamiltonian written with ⊗, where 1.x wrote it with Left and Right (decision 1)
+    h = X ⊗ X + 0.5 * (Z ⊗ Id + Id ⊗ Z)
+    l2 = -im * h + Dissipator(Sm ⊗ Id) + Dissipator(Id ⊗ Sm)
+    lp = -im * (X(1) * X(2) + 0.5 * (Z(1) + Z(2))) + Dissipator(Sm)(1) + Dissipator(Sm)(2)
+    ρ = mix(random_state(Pure, System(2, Qubit()), 2))
+    lim = Limits(cutoff = 0)
+    @test norm(apply(exp(t * l2)(1, 2), ρ; limits = lim) - evolve(lp, t, ρ; nsteps = 4, limits = lim)) <
+          1e-10
     # the identity through cosh and sinh, Evolver(Id) being twice the identity (Left(Id) is gone,
     # decision 1)
     @test norm(apply(exp(0.25 * Evolver(Id))(1), q) - exp(0.5) * q) < 1e-12
@@ -902,8 +938,8 @@ end
     # the number of fermions has one, on a site conserving it: a dephasing at rate 1/2
     f = State{Mixed}(System(3, Fermion(conserve = N)), ["Occ", "Emp", "Occ"])
     f = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2), f)
-    @test_skip norm(apply(exp(t * Dissipator(N))(2), f) -
-                    tdvp(Dissipator(N)(2), t, f; nsteps = 20)) < 1e-10   # couche 4
+    @test norm(apply(exp(t * Dissipator(N))(2), f) - evolve(Dissipator(N)(2), t, f; nsteps = 20)) <
+          1e-10
     @test norm(apply(exp(t * Dissipator(N))(2), f) - apply(dephasing_gate(1 - exp(-t / 2))(2), f)) <
           1e-12
 end

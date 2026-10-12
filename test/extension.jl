@@ -227,6 +227,103 @@ end
     end
 end
 
+# An evolution of one's own: each step by the exponential of the dense matrix of the MPO of the
+# evolver, its time functions read at the middle of the step, exact on a small system
+struct DenseStep <: EvolutionAlgorithm end
+
+function TensorMixedStates.evolve_step(::DenseStep, pre::PreMPO, coefs, state::State{R}, time, dt,
+                                       step, limits) where R
+    mpo = isnothing(coefs) ? make_mpo(pre) : make_mpo(pre, [ f(time + dt / 2) for f in coefs ])
+    s = siteinds(R, state.system)
+    u = exp(dt * prod(mpo), [ i' for i in s ], s)
+    return State(state, TensorMixedStates.ITensorMPS.MPS(IT.noprime(u * prod(state.state)), s))
+end
+
+# one that records what each step is given and multiplies the state by `factor`
+struct StepRecorder <: EvolutionAlgorithm
+    calls::Vector{Any}
+    factor::Float64
+end
+
+StepRecorder(factor = 1.) = StepRecorder([], factor)
+
+function TensorMixedStates.evolve_step(a::StepRecorder, pre, coefs, state, time, dt, step, limits)
+    push!(a.calls, (time, dt, step, limits.maxdim, isnothing(coefs) ? nothing : [ f(time) for f in coefs ]))
+    return a.factor * state
+end
+
+# one that has no step
+struct Stepless <: EvolutionAlgorithm end
+
+# A search of one's own: the lowest eigenvector of the dense matrix of the MPO
+struct DenseSearch <: SearchAlgorithm end
+
+function TensorMixedStates.search(::DenseSearch, mpo, state::State{R}, limits; sweep_done = nothing,
+                                  krylov = Krylov(), done = 0, energy = nothing) where R
+    LA = TensorMixedStates.LinearAlgebra
+    s = siteinds(R, state.system)
+    d = prod(IT.dim.(s))
+    f = LA.eigen(LA.Hermitian(reshape(Array(prod(mpo), [ i' for i in s ]..., s...), d, d)))
+    st = TensorMixedStates.ITensorMPS.MPS(IT.ITensor(f.vectors[:, 1], s...), s)
+    return (f.values[1], State(state, st))
+end
+
 @testset "An algorithm of one's own" begin
     @test_skip "tdvp step by step through run_steps, resumed as the uninterrupted run"   # couche 5
+    # an evolution of one's own goes through evolve and thermalize, which give each step the
+    # PreMPO of the evolver, its time functions, the time, the step, its number and its limits.
+    # Tdvp, at full bond dimension, is exact on three sites, see evolve.jl
+    sys = System(3, Qubit())
+    h = X(1) * X(2) + Z(2) * Z(3) + 0.5 * sum(Z(i) for i in 1:3)
+    ψ = State{Pure}(sys, ["Up", "+", "Dn"])
+    lim = Limits(cutoff = 0)
+    for (st, ev) in [(ψ, -im * h), (mix(ψ), -im * h + Dissipator(sqrt(0.3) * Sm)(1))]
+        @test norm(evolve(ev, 0.5, st; algo = DenseStep()) - evolve(ev, 0.5, st; nsteps = 4, limits = lim)) <
+              1e-10
+    end
+    hs = [-im * X(1) * X(2), -im * sum(Z(i) for i in 1:3)]
+    fs = [t -> 1., t -> cos(2t)]
+    @test norm(evolve(hs => fs, 0.5, ψ; algo = DenseStep(), nsteps = 5) -
+               evolve(hs => fs, 0.5, ψ; nsteps = 5, limits = lim)) < 1e-10
+    # thermalize, against e^{-βH}/Z
+    x, z, o = [0. 1. ; 1. 0.], [1. 0. ; 0. -1.], [1. 0. ; 0. 1.]
+    hd = kron(x, x, o) + kron(o, z, z) + 0.5 * (kron(z, o, o) + kron(o, z, o) + kron(o, o, z))
+    g = exp(-1.2 * hd)
+    trg = sum(g[k, k] for k in 1:8)
+    ρ0 = State{Mixed}(sys, "FullyMixed")
+    l, ρ = thermalize(h, 1.2, ρ0; algo = DenseStep(), nsteps = 2)
+    @test l ≈ log(trg / 8)
+    @test norm(ρ - dense_state(sys, g / trg)) < 1e-10
+    # what each step is given
+    rec = StepRecorder()
+    st = evolve(-im * h, 0.75, ψ; algo = rec, nsteps = 3, time = 1., step = 5,
+                limits = Limits(maxdim = [1, 2, 3, 4, 5, 6, 7]))
+    @test rec.calls == [(1., 0.25, 5, 5, nothing), (1.25, 0.25, 6, 6, nothing), (1.5, 0.25, 7, 7, nothing)]
+    @test norm(st - ψ) < 1e-14
+    rec = StepRecorder()
+    evolve([-im * h] => [t -> 2t], 0.5, ψ; algo = rec, nsteps = 2)
+    @test rec.calls == [(0., 0.25, 1, nothing, [0.]), (0.25, 0.25, 2, nothing, [0.5])]
+    # by thermalize, steps of -dβ/2 from a time 0, the state brought back to trace one and its
+    # trace added to the logarithm
+    rec = StepRecorder(2.)
+    l, ρ = thermalize(h, 0.75, ρ0; algo = rec, nsteps = 3, step = 2)
+    @test rec.calls == [ (0., -0.125, k, nothing, nothing) for k in 2:4 ]
+    @test l ≈ 3 * log(2)
+    @test norm(ρ - ρ0) < 1e-14
+    @test_throws "the trace of the state reached -1.0 at step 2 of thermalize: take smaller steps" thermalize(
+        h, 0.75, ρ0; algo = StepRecorder(-1.), step = 2)
+    @test_throws MethodError evolve(-im * h, 0.5, ψ; algo = Stepless())
+
+    # a search of one's own goes through ground_state and steady_state
+    LA = TensorMixedStates.LinearAlgebra
+    e, gs = ground_state(h, ψ; algo = DenseSearch())
+    @test e ≈ minimum(LA.eigvals(LA.Symmetric(hd)))
+    @test real(expect(gs, h)) ≈ e
+    @test norm(gs) ≈ 1
+    Ω, γ = 0.8, 0.5
+    L = sum(-im * Ω / 2 * X(i) + Dissipator(sqrt(γ) * Sm)(i) for i in 1:2)
+    v, ρ = steady_state(L, State{Mixed}(System(2, Qubit()), "FullyMixed"); algo = DenseSearch())
+    @test abs(v) < 1e-12
+    @test trace(ρ) ≈ 1
+    @test real(expect1(ρ, Z)) ≈ fill(-γ^2 / (γ^2 + 2Ω^2), 2)
 end

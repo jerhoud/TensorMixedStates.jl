@@ -2,7 +2,9 @@
 # truncation, plus Aqua. What a state measures belongs to sites.jl.
 #
 # An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
-# testsets of the runner and of the solvers that were here in 1.x are in v1/building.jl.
+# testsets of the runner that were here in 1.x are in v1/building.jl; those of the noise and of
+# the Krylov parameters of the solvers are in searches.jl, the phases that take them in
+# v1/building.jl.
 
 @testset "Aqua" begin
     Aqua.test_all(TensorMixedStates)
@@ -105,7 +107,7 @@ end
     # a field left nothing takes the default of the function, 1e-26 for a sum
     @test Limits().cutoff === nothing
     @test maxlinkdim(apply(prod(controlled(Z)(i, i + 1) for i in 1:19), s)) == maxlinkdim(s)
-    @test_skip maxlinkdim(tdvp(-im * sum(Z(i) for i in 1:20), 0.1, s)) == maxlinkdim(s)          # couche 4
+    @test maxlinkdim(evolve(-im * sum(Z(i) for i in 1:20), 0.1, s)) == maxlinkdim(s)
     # a weight of 1e-28 is below the default cutoff, one of 1e-18 is not, and a cutoff of zero
     # keeps everything
     up, dn = State{Pure}(System(6, Qubit()), "Up"), State{Pure}(System(6, Qubit()), "Dn")

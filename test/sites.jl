@@ -866,7 +866,11 @@ end
         @test norm(make_mpo(s, g * C(1) + g * dag(C)(2))) == 0
         @test maxlinkdim(make_mpo(s, C(1) * C(1) * N(3) + N(1) * N(3))) ==
               maxlinkdim(make_mpo(s, N(1) * N(3)))
-        @test_skip "make_approx_W1 and W2 of C(1) * C(1) * N(3) + N(1) * N(3)"     # couche 4
+        # the approximations WI and WII are built from the same terms
+        for w in (TMS.make_approx_W1, TMS.make_approx_W2)
+            ev(a) = apply(w(PreMPO(s, -im * a), 0.1), s)
+            @test norm(ev(C(1) * C(1) * N(3) + N(1) * N(3)) - ev(N(1) * N(3))) < 1e-12
+        end
         # the square of a hopping hamiltonian, which the naive route to a variance forms, holds
         # such terms: each hopping term squared puts C twice on one site
         hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)

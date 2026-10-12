@@ -725,13 +725,15 @@ end
     m = make_mpo(st, h)
     @test norm(apply(m, st; apply_algo = "naive") - apply(m, st)) < 1e-12
     @test norm(apply(m, st; apply_algo = "densitymatrix") - apply(m, st)) < 1e-12
-    @test_skip "approx_W with apply_algo = \"naive\" against the default"   # couche 4
+    up = State{Pure}(System(n, Qubit()), "Up")
+    w(apply_algo) = evolve(-im * h, 0.5, up; algo = ApproxW(; order = 2, apply_algo), nsteps = 5)
+    @test norm(w("naive") - w("densitymatrix")) < 1e-12
     # "fit" needs a number of sweeps of its own, "zipup" is missing for a state from the lowest
     # ITensorMPS accepted, and a name that is none of them is refused too
     for alg in ("fit", "zipup", "exact")
         @test_throws "apply_algo is" apply(m, st; apply_algo = alg)
+        @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = alg)
     end
-    @test_skip "approx_W refuses them"                       # couche 4
     @test_skip "an ApproxW phase hands them on"              # couche 5
 end
 
@@ -905,7 +907,14 @@ end
 
     # what it is for: a converged ground state, whose energy is the lowest eigenvalue of the
     # dense hamiltonian, has a variance the energy alone cannot show
-    @test_skip "dmrg finds the ground energy, with a variance below 1e-8 and that of r"   # couche 4
+    e, gs = ground_state(h, random_state(Pure, sys, 16); algo = Dmrg(nsweeps = 12),
+                         limits = Limits(cutoff = 1e-14, maxdim = 32))
+    on(m, i) = kron([ k == i ? m : [1. 0. ; 0. 1.] for k in 1:6 ]...)
+    dense = -sum(on([1. 0. ; 0. -1.], i) * on([1. 0. ; 0. -1.], i + 1) for i in 1:5) -
+            sum(on([0. 1. ; 1. 0.], i) for i in 1:6)
+    @test e ≈ minimum(TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Symmetric(dense))) atol = 1e-10
+    @test variance(gs, h) < 1e-8
+    @test variance(gs, h) < variance(r, h)
 
     # as a measurement, on the random state where 1.x took the ground state
     @test first(only(measure(r, Variance(h)))) == "Variance"

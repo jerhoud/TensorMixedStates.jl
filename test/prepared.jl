@@ -155,7 +155,9 @@ end
     P2 = named(Proj(Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz => 1), "P2")
     h = sum(P2(i, i + 1) for i in 1:n-1)
     @test real(expect(aklt_state(System(n, Spin(1)); left = "Up", right = "Up"), h)) ≈ 0 atol = 1e-12
-    @test_skip "dmrg finds the ground energy 0 from a random state"   # couche 4
+    e, _ = ground_state(h, random_state(Pure, System(n, Spin(1)), 8); algo = Dmrg(nsweeps = 10),
+                        limits = Limits(maxdim = 30))
+    @test e ≈ 0 atol = 1e-10
 end
 
 @testset "Fully mixed states of a sector" begin
@@ -176,7 +178,20 @@ end
     @test purity(ρ) ≈ 1 / 36
     @test trace(ρ) ≈ 1
     @test sum(expect1(ρ, Sz)) ≈ 0 atol = 1e-12
-    @test_skip "the canonical thermal state of fermions hopping, which thermal_state reaches from it"   # couche 4
+    # the canonical thermal state of fermions hopping, which thermalize reaches from it
+    LA = TMS.LinearAlgebra
+    n, m, β = 4, 2, 0.9
+    h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:n-1) + 0.4 * N(1)
+    c(j) = foldl(kron, [ k < j ? [1. 0. ; 0. -1.] : k == j ? [0. 1. ; 0. 0.] : [1. 0. ; 0. 1.]
+                         for k in 1:n ])
+    dense = -sum(c(i)' * c(i+1) + c(i+1)' * c(i) for i in 1:n-1) + 0.4 * c(1)' * c(1)
+    sector = LA.Diagonal(Float64.(round.(LA.diag(sum(c(i)' * c(i) for i in 1:n))) .== m))
+    g = exp(-β * dense) * sector
+    for site in (Fermion(conserve = N), Fermion(conserve = strong(N)))
+        _, ρ = thermalize(h, β, fully_mixed(System(n, site), N => m); nsteps = 18,
+                          limits = Limits(cutoff = 1e-14, maxdim = 64))
+        @test real(expect(ρ, h)) ≈ LA.tr(g * dense) / LA.tr(g) atol = 1e-5
+    end
 
     @test_throws "no basis state of the system has N = 5" fully_mixed(System(4, Fermion()), N => 5)
     @test_throws "not diagonal" fully_mixed(System(4, Qubit()), X => 2)
