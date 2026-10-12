@@ -96,7 +96,8 @@ abstract type AbstractState end
 
 the caches a `State` keeps for measurements, filled on first use under `lock`: the local
 tensors, the environments from the left and from the right, those from the left carrying the
-Jordan-Wigner string, the trace, and the weakened form of a state conserving something strongly
+Jordan-Wigner string, the trace, the weakened form of a state conserving something strongly,
+and the adjoint of a density matrix
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -105,10 +106,11 @@ struct PreObs
     strung::Vector{ITensor}
     trace::Vector{Number}
     weak::Vector{Any}
+    adjoint::Vector{Any}
     lock::ReentrantLock
 end
 
-PreObs() = PreObs([], [], [], [], [], [], ReentrantLock())
+PreObs() = PreObs([], [], [], [], [], [], [], ReentrantLock())
 
 """
     cached!(create!, v, state)
@@ -491,24 +493,26 @@ function mix(state::State{Pure})
 end
 
 """
-    element_map(to, from, i, f)
+    element_map(to, from, i, f; swap = false)
 
 the tensor pairing each element ``|m\\rangle\\langle n|`` of site `i` of the system `from`,
-passed through `f`, with the same element of `to`
+passed through `f`, with the same element of `to`, or with ``|n\\rangle\\langle m|`` when
+`swap` is true
 """
-function element_map(to::System, from::System, i::Int, f)
+function element_map(to::System, from::System, i::Int, f; swap::Bool = false)
     d = dim(siteind(Pure, from, i))
     to_element, from_element = ket_bras(to, i), ket_bras(from, i)
-    return sum(to_element(m, n) * dag(f(from_element(m, n))) for m in 1:d, n in 1:d)
+    return sum(to_element((swap ? (n, m) : (m, n))...) * dag(f(from_element(m, n)))
+               for m in 1:d, n in 1:d)
 end
 
 """
-    element_maps(to, from, f)
+    element_maps(to, from, f; swap = false)
 
 `element_map` on every site, built once for the sites alike and carried onto the indices of
 the others
 """
-function element_maps(to::System, from::System, f)
+function element_maps(to::System, from::System, f; swap::Bool = false)
     # the mixed index of site `i` in `to`, and the one `f` puts in place of that of `from`
     ends(i) = (siteind(Mixed, to, i), only(inds(f(onehot(siteind(Mixed, from, i) => 1)))))
     first_alike = Dict{Any, Int}()
@@ -517,7 +521,8 @@ function element_maps(to::System, from::System, f)
         key = (space(siteind(Pure, to, i)), space(siteind(Pure, from, i)),
                strong_names(to[i]), strong_names(from[i]))
         k = get!(first_alike, key, i)
-        push!(maps, k == i ? element_map(to, from, i, f) : replaceinds(maps[k], ends(k), ends(i)))
+        push!(maps, k == i ? element_map(to, from, i, f; swap) :
+                             replaceinds(maps[k], ends(k), ends(i)))
     end
     return maps
 end

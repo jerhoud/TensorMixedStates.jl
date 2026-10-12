@@ -167,7 +167,7 @@ end
     b = load_state(file, "a")
     @test b.system == sys
     @test inner(a, b) ≈ norm(a)^2
-    @test_skip fidelity(a, b) ≈ 1                          # couche 3
+    @test fidelity(a, b) ≈ 1
     @test expect1(b, Z) ≈ expect1(a, Z)
 
     # and the same for a mixed state
@@ -176,7 +176,7 @@ end
     lm = load_state(file, "m")
     @test lm.system == sys
     @test inner(m, lm) ≈ inner(m, m)
-    @test_skip hs_fidelity(m, lm) ≈ 1                      # couche 3
+    @test hs_fidelity(m, lm) ≈ 1
 end
 
 @testset "Site fields of every kind" begin

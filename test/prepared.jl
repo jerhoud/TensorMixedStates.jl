@@ -63,7 +63,7 @@ end
     z, x, id = [1 0 ; 0 -1], [0 1 ; 1 0], [1 0 ; 0 1]
     @test expect(m, Z(1) * Z(3)) ≈ real(LA.tr(ρ * kron(z, id, z)))
     @test expect(m, X(2) * Z(3)) ≈ real(LA.tr(ρ * kron(id, x, z)))
-    @test_skip trace2(m) ≈ real(LA.tr(ρ * ρ))                   # couche 3
+    @test purity(m) ≈ real(LA.tr(ρ * ρ))                         # trace2 in 1.x
     # on fermions, a coherence within a sector, under weak and strong conservations: the hop
     # c†₁c₂, written with its string, F on site 1
     ρf = [ 0 0 0 0 ; 0 0.5 0.3im 0 ; 0 -0.3im 0.5 0 ; 0 0 0 0 ]
@@ -100,7 +100,7 @@ end
                                    limits = Limits(maxdim = 1))) == 1
     # a classical ensemble of two Néel states, and one of mixed local states
     m = mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
-    @test_skip trace2(m) ≈ 0.5                                  # couche 3
+    @test purity(m) ≈ 0.5                                        # trace2 in 1.x
     @test expect(m, Z(1) * Z(2)) ≈ -1
     mm = mixture(System(2, Qubit()), [1 => ["FullyMixed", "Up"], 3 => [[0.5 0.5 ; 0.5 0.5], "Dn"]])
     @test expect(mm, Z(2)) ≈ -0.5
@@ -141,7 +141,7 @@ end
         a = aklt_state(System(n, site); left = l, right = r)
         @test maxlinkdim(a) == 2
         @test expect(a, h) ≈ -2 * (n - 1) / 3
-        @test_skip variance(a, h) ≈ 0 atol = 1e-10              # couche 3
+        @test variance(a, h) ≈ 0 atol = 1e-10
         @test sum(expect1(a, Sz)) ≈ sz atol = 1e-12
     end
     @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
@@ -165,7 +165,7 @@ end
     for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
         ρ = fully_mixed(System(n, site), N => m)
         @test trace(ρ) ≈ 1
-        @test_skip trace2(ρ) ≈ 1 / binomial(n, m)                # couche 3
+        @test purity(ρ) ≈ 1 / binomial(n, m)                     # trace2 in 1.x
         @test expect(ρ, N(2)) ≈ m / n
         @test expect(ρ, N(1) * N(4)) ≈ m * (m - 1) / (n * (n - 1))
         @test maxlinkdim(ρ) == m + 1
@@ -173,7 +173,7 @@ end
     # two quantities, the second a half integer, under a strong conservation: 36 states of four
     # electrons on four sites with no magnetization
     ρ = fully_mixed(System(4, Electron(conserve = (strong(Ntot), 2Sz))), Ntot => 4, Sz => 0)
-    @test_skip trace2(ρ) ≈ 1 / 36                                # couche 3
+    @test purity(ρ) ≈ 1 / 36
     @test trace(ρ) ≈ 1
     @test sum(expect1(ρ, Sz)) ≈ 0 atol = 1e-12
     @test_skip "the canonical thermal state of fermions hopping, which thermal_state reaches from it"   # couche 4

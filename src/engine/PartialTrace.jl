@@ -19,17 +19,32 @@ function check_positions(state::State, positions, what)
 end
 
 """
+    sign_blocks(R, system, i, f)
+
+the matrix, on the index of site `i` of `system` in the representation `R`, of the parity `f`
+of the site taken on both sides, ``\\rho \\mapsto f\\rho f``, and the function giving that of a
+projector `p` taken on the kets alone, ``\\rho \\mapsto p\\rho``: `f` and `p` themselves on a
+pure state
+"""
+sign_blocks(::Type{Pure}, ::System, ::Int, f::AbstractMatrix) = (f, p -> p)
+
+function sign_blocks(::Type{Mixed}, system::System, i::Int, f::AbstractMatrix)
+    o = mixed_elements(system, i)
+    return (kron(f, f)[o, o], p -> kron(one(p), p)[o, o])
+end
+
+"""
     trace_signs(state, kept)
 
-the density matrix whose partial trace keeping the increasing positions `kept` is the reduced
-state of `state`, its fermionic signs included: ``U\\rho U^\\dagger``,
-``U = (-1)^{\\sum n_l n_k}``, `l` running over the fermionic sites traced out, `k` over the
-fermionic sites kept on their right, and `n` the parity of a site. It is the product by an MPO
-whose links, of dimension 2, carry the parity traced out on the left, read on the ket side alone
-of a site traced out, which the trace makes that of the bra. A state needing no sign is given
-back as it is.
+the state whose partial trace keeping the increasing positions `kept` is the reduced state of
+`state`, its fermionic signs included: ``U\\rho U^\\dagger``, or ``U|\\psi\\rangle`` on a pure
+state, ``U = (-1)^{\\sum n_l n_k}``, `l` running over the fermionic sites traced out, `k` over
+the fermionic sites kept on their right, and `n` the parity of a site. It is the product by an
+MPO whose links, of dimension 2, carry the parity traced out on the left, read on the ket side
+alone of a site traced out, which the trace makes that of the bra. A state needing no sign is
+given back as it is.
 """
-function trace_signs(state::State{Mixed}, kept)
+function trace_signs(state::State{R}, kept) where R
     system = state.system
     n = length(system)
     fermionic(i) = next_fermion(system, i) == i
@@ -42,21 +57,22 @@ function trace_signs(state::State{Mixed}, kept)
                                    Index(2; tags = "Parity,l=$i") for i in 0:n ]
     st = state.state
     ts = map(1:n) do i
-        x = siteind(Mixed, system, i)
+        x = siteind(R, system, i)
         d = dim(system[i])
         one = Matrix{Float64}(I, d, d)
         f = matrix(F, system[i])
-        o = mixed_elements(system, i)
-        # the superoperators taking the parity p carried in to the parity carried out
-        a = zeros(d^2, d^2, 2, 2)
+        both, on_kets = sign_blocks(R, system, i, f)
+        id = Matrix{Float64}(I, dim(x), dim(x))
+        # the maps taking the parity p carried in to the parity carried out
+        a = zeros(dim(x), dim(x), 2, 2)
         for p in 1:2
             if !fermionic(i)
-                a[:, :, p, p] = kron(one, one)
+                a[:, :, p, p] = id
             elseif insorted(i, kept)
-                a[:, :, p, p] = (p == 1 ? kron(one, one) : kron(f, f))[o, o]
+                a[:, :, p, p] = p == 1 ? id : both
             else
                 for q in 0:1
-                    a[:, :, p, xor(p - 1, q) + 1] = kron(one, (one + (-1)^q * f) / 2)[o, o]
+                    a[:, :, p, xor(p - 1, q) + 1] = on_kets((one + (-1)^q * f) / 2)
                 end
             end
         end
@@ -72,7 +88,7 @@ function trace_signs(state::State{Mixed}, kept)
         ts[i] *= c
         ts[i + 1] *= dag(c)
     end
-    return State{Mixed}(system, MPS(ts))
+    return State{R}(system, MPS(ts))
 end
 
 """

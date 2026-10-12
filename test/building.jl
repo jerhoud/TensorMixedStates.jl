@@ -145,13 +145,13 @@ end
         m = dense_matrix(ρ)
         @test LA.tr(m) ≈ 1
         @test minimum(LA.eigvals(LA.Hermitian((m + m') / 2))) > -1e-12
-        @test_skip fidelity(ρ, State{Pure}(sys, "Up"))      # couche 3
+        @test_ok fidelity(ρ, State{Pure}(sys, "Up"))
     end
     sq = System(4, Fermion(conserve = N))
     conf = ["Occ", "Emp", "Occ", "Emp"]
     ρq = random_state(Mixed, sq, conf, 4)
     @test ρq.system == sq
-    @test_skip fidelity(ρq, State{Pure}(sq, conf))           # couche 3
+    @test_ok fidelity(ρq, State{Pure}(sq, conf))
     # the local state of the purification may be given once, as for State
     @test trace(random_state(Mixed, System(3, Qubit()), [1., 0.], 4)) ≈ 1
     @test trace(random_state(Mixed, System(3, Qubit()), Level => 1, 4)) ≈ 1
@@ -327,8 +327,8 @@ end
     @test_throws "name the local states its purification starts from" random_state(Mixed, sys, 4)
     m = random_state(Mixed, sys, conf, 16)
     @test trace(m) ≈ 1
-    @test_skip hermiticity(m) ≈ 1                         # couche 3
-    @test_skip real(trace2(m)) < 1                        # couche 3
+    @test hermiticity(m) ≈ 1
+    @test real(purity(m)) < 1                             # trace2 in 1.x
     @test flux(m.state) == flux(mix(p).state)
     # conserving strongly leaves no room for it
     @test_throws "cannot hold" random_state(Mixed, System(4, Fermion(conserve = strong(N))), conf, 16)
@@ -348,23 +348,23 @@ end
     end
     numbers(s) = [ real(trace(s)), real(expect(s, N(2))),
                    real(expect(s, dag(C)(1) * dag(C)(2) * C(3) * C(4))) ]
-    purities(s) = [ real(trace2(s)), real(hermiticity(s)) ]
+    purities(s) = [ real(purity(s)), real(hermiticity(s)) ]   # trace2 in 1.x
     reference = numbers(build(Fermion()))
 
     x = build(Fermion(conserve = strong(N)))
     @test symmetries(x.system) == TensorMixedStates.Conserved([("N", true)])
     @test numbers(x) ≈ reference
-    @test_skip purities(x) ≈ purities(build(Fermion()))   # couche 3
+    @test purities(x) ≈ purities(build(Fermion()))
 
     x = weaken(x)
     @test symmetries(x.system) == TensorMixedStates.Conserved([("N", false)])
     @test numbers(x) ≈ reference
-    @test_skip purities(x) ≈ purities(build(Fermion()))   # couche 3
+    @test purities(x) ≈ purities(build(Fermion()))
 
     x = weaken(x)
     @test !TensorMixedStates.is_charged(x.system)
     @test numbers(x) ≈ reference
-    @test_skip purities(x) ≈ purities(build(Fermion()))   # couche 3
+    @test purities(x) ≈ purities(build(Fermion()))
     @test norm(x - build(Fermion())) < 1e-12
 
     # nothing left to weaken gives the state back, so it is always safe to call
@@ -411,7 +411,7 @@ end
     z = weaken(z)
     @test !TensorMixedStates.is_charged(z.system)
     @test shifted(z) ≈ reference
-    @test_skip real(trace2(z)) ≈ real(trace2(plain))     # couche 3
+    @test real(purity(z)) ≈ real(purity(plain))
     @test norm(z - plain) < 1e-12
 end
 
@@ -430,6 +430,6 @@ end
         @test norm(weaken(w, ()) - plain) < 1e-12
         ρw = weaken(mix(ψ), target)
         @test norm(weaken(ρw, ()) - mix(plain)) < 1e-12
-        @test_skip fidelity(ρw, w) ≈ 1                    # couche 3
+        @test fidelity(ρw, w) ≈ 1
     end
 end

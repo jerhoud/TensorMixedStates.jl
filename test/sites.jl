@@ -311,7 +311,7 @@ end
         @test real(expect(st, Ntot(1))) ≈ 1
         @test real(expect(st, Nup(2))) ≈ 0.5
         @test abs(expect(st, Sz(1))) < 1e-14
-        @test_skip real(trace2(st)) ≈ 1 / 4                # couche 3
+        @test real(purity(st)) ≈ 1 / 4                     # trace2 in 1.x
         @test_throws "spreads over several charges" State{Mixed}(System(2, site), "FullyMixed")
     end
 end

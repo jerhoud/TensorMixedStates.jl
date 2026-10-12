@@ -158,8 +158,8 @@ end
     v = dense_vector(ψ)
     @test isapprox(expect(ψ, h), v' * exact(ψ, h) * v; rtol = 1e-12)
     @test_skip isapprox(last(only(measure(ψ, h))), expect(ψ, h); rtol = 1e-12)   # couche 3
-    @test_skip isapprox(variance(ψ, h), real(v' * exact(ψ, h)^2 * v) - real(expect(ψ, h))^2;
-                        rtol = 1e-10, atol = 1e-12)                            # couche 3
+    @test isapprox(variance(ψ, h), real(v' * exact(ψ, h)^2 * v) - real(expect(ψ, h))^2;
+                   rtol = 1e-10, atol = 1e-12)
     LA = TMS.LinearAlgebra
     ρ = random_state(Mixed, System(n, Qubit()), 4)
     r = dense_matrix(ρ)

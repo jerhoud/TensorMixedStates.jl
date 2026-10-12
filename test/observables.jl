@@ -1,10 +1,12 @@
 # Expectation values: expect, through the descent and the compaction, expect1 and expect2 with
 # their fast paths, inner(a, op, b), and apply on pure states, checked against dense matrices
-# written with explicit Jordan-Wigner strings.
+# written with explicit Jordan-Wigner strings. And the measurements of a state that are not
+# expectation values: purity, hermiticity, entropies, reduced density matrices, negativity,
+# fidelities and variance.
 #
-# The testsets of 1.x on the other measurements, sampling, entropies and the channels are still
-# in v1/observables.jl; their assertions on expectation values, on inner products, on apply and
-# on partial traces are here, with those of v1/building.jl on sites out of the system and of
+# The testsets of 1.x on measure, sampling and the channels are still in v1/observables.jl;
+# their assertions on expectation values, on inner products, on apply, on partial traces and on
+# the functions above are here, with those of v1/building.jl on sites out of the system and of
 # v1/threading.jl on measuring from several threads.
 #
 # An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
@@ -227,6 +229,169 @@ end
     @test expect(st, p(1) * C(3)) ≈ ev(kron([0. 0. ; 0. 1.], id, id) * cs[3])
 end
 
+@testset "Entanglement and entropies" begin
+    L2 = log(2)
+    s2 = System(2, Qubit())
+    s4 = System(4, Qubit())
+    # a bond dimension above the Schmidt rank keeps singular values of exactly zero, whose
+    # 0 * log(0) made the entropy NaN; a product state on links of dimension 3, where 1.x took
+    # one from dmrg with a mindim of 3
+    up = zeros(3, 2, 3)
+    up[1, 1, 1] = 1
+    g = mps_state(s4, [up[1:1, :, :], up, up, up[:, :, 1:1]])
+    @test entanglement_entropy(g, 2)[1] ≈ 0 atol=1e-12
+    bell = (State{Pure}(s2, "Up") + State{Pure}(s2, "Dn")) / sqrt(2)
+    ghz = (State{Pure}(s4, "Up") + State{Pure}(s4, "Dn")) / sqrt(2)
+    product = State{Pure}(s4, "Up")
+    fullymixed = State{Mixed}(s4, "FullyMixed")
+
+    # a maximally entangled pair carries one bit, with a flat spectrum
+    e, spectrum = entanglement_entropy(bell, 1)
+    @test e ≈ L2
+    @test spectrum ≈ [0.5, 0.5]
+    # a GHZ state carries that same one bit wherever it is cut
+    for cut in 1:3
+        @test entanglement_entropy(ghz, cut)[1] ≈ L2
+    end
+    # the cut is on the right of the site, so the last site separates the whole state from
+    # nothing, and a position outside the chain is no cut at all
+    @test entanglement_entropy(ghz, 4)[1] ≈ 0 atol=1e-12
+    @test_throws "entanglement entropy at site 0 of a 4 site state" entanglement_entropy(ghz, 0)
+    @test_throws "entanglement entropy at site 5 of a 4 site state" entanglement_entropy(ghz, 5)
+    # a product state carries none
+    e, spectrum = entanglement_entropy(product, 2)
+    @test e ≈ 0 atol=1e-12
+    @test spectrum ≈ [1.]
+
+    # a pure state stays pure, whichever representation holds it (trace2 in 1.x)
+    for st in [bell, ghz, mix(ghz)]
+        @test purity(st) ≈ 1
+        @test renyi2(st) ≈ 0 atol=1e-12
+    end
+    # but one of its sites, seen alone, is maximally mixed
+    @test renyi2(mix(ghz), [1]) ≈ L2
+    @test renyi2(mix(ghz), [1, 2]) ≈ L2
+    # and the pure representation must answer the same: a subsystem of a pure state is not
+    # pure, so this is an entanglement measure and not the 0. the whole state gives
+    @test renyi2(ghz, [1]) ≈ L2
+    @test renyi2(ghz, [1, 2]) ≈ L2
+    @test renyi2(ghz, [1, 3]) ≈ L2                  # the sites need not be contiguous
+    @test renyi2(product, [1, 2]) ≈ 0 atol=1e-12
+    # across a cut the mutual information is twice it, the cut 1 of 1.x written as the
+    # positions 1:1 (decision 9.2)
+    @test mutual_info_renyi2(bell, 1:1) ≈ 2 * renyi2(bell, [1])
+
+    # the infinite temperature state of n qubits has purity 2^-n and entropy n log 2
+    @test purity(fullymixed) ≈ 1 / 16
+    @test renyi2(fullymixed) ≈ 4L2
+    @test renyi2(fullymixed, [1]) ≈ L2
+    @test hermiticity(fullymixed) ≈ 1
+
+    # mutual information: 2 log 2 for GHZ, none between independent halves, the cut 2 of 1.x
+    # written as the positions 1:2 (decision 9.2)
+    @test mutual_info_renyi2(ghz, 1:2) ≈ 2L2
+    @test mutual_info_renyi2(mix(ghz), 1:2) ≈ 2L2
+    @test mutual_info_renyi2(fullymixed, 1:2) ≈ 0 atol=1e-12
+
+    # on a pure state the mutual information of a leading block is read from the entanglement
+    # spectrum rather than from partial traces: both routes must agree, on a state whose
+    # spectrum is not degenerate, a random one where 1.x took one evolved by tdvp
+    k = 5
+    spread = random_state(Pure, System(k, Qubit()), 4)
+    for cut in 1:k - 1
+        @test mutual_info_renyi2(spread, 1:cut) ≈ mutual_info_renyi2(mix(spread), 1:cut)
+        # the leading block given as a range, the cut of 1.x (decision 9.2), and as a list
+        @test mutual_info_renyi2(spread, 1:cut) ≈ mutual_info_renyi2(spread, collect(1:cut))
+    end
+    # a non contiguous part of a pure state is twice its entropy as well, one partial trace
+    # standing for the two parts and the whole of the mixed state
+    @test mutual_info_renyi2(spread, [1, 3]) ≈ mutual_info_renyi2(mix(spread), [1, 3])
+    # and so on fermions, for a state of definite parity
+    ψf = random_state(State{Pure}(System(6, Fermion(conserve = parity(N))), "Emp"), 8)
+    @test mutual_info_renyi2(ψf, [2, 5]) ≈ mutual_info_renyi2(mix(ψf), [2, 5])
+
+    # the same quantities as measurements must agree with the functions, the cuts written as
+    # positions (decision 9.2)
+    m(state, f) = only(last.(measure(state, Measure(f))))
+    @test_skip m(ghz, Trace) ≈ 1                                    # couche 3
+    @test_skip m(ghz, Norm) ≈ 1                                     # couche 3
+    @test_skip m(ghz, Trace2) ≈ 1                                   # couche 3
+    @test_skip m(ghz, Purity) ≈ 1                                   # couche 3
+    @test_skip m(ghz, Renyi2) ≈ 0 atol=1e-12                        # couche 3
+    @test_skip m(ghz, Hermiticity) ≈ 1                              # couche 3
+    @test_skip m(ghz, TraceError) ≈ 0 atol=1e-12                    # couche 3
+    @test_skip m(ghz, HermiticityError) ≈ 0 atol=1e-12              # couche 3
+    @test_skip m(ghz, MaxLinkdim) == 2                              # couche 3
+    @test_skip m(ghz, EntanglementEntropy(2)) ≈ L2                  # couche 3
+    @test_skip m(fullymixed, Purity) ≈ 1 / 16                       # couche 3
+    @test_skip m(fullymixed, Renyi2) ≈ 4L2                          # couche 3
+    @test_skip m(mix(ghz), SubRenyi2([1])) ≈ L2                     # couche 3
+    @test_skip m(ghz, MutualInfoRenyi2(1:2)) ≈ 2L2                  # couche 3
+    @test_skip m(mix(ghz), MutualInfoRenyi2(1:2)) ≈ 2L2             # couche 3
+    @test_skip MutualInfoRenyi2(1:2).name == "MutualInfoRenyi2(1,2)"   # couche 3
+    # MutualInfoRenyi2(3), of the cut 3, was named as the one site part [3], so that the two
+    # could not be measured together
+    st4 = random_state(Pure, System(4, Qubit()), 3)
+    r() = Dict(measure(st4, [MutualInfoRenyi2(1:3), MutualInfoRenyi2([3])]))
+    @test_skip r()["MutualInfoRenyi2(1:3)"] ≈ mutual_info_renyi2(st4, [1, 2, 3])   # couche 3
+    @test_skip r()["MutualInfoRenyi2(3)"] ≈ mutual_info_renyi2(st4, [3])           # couche 3
+    # the spectrum asked for is written whole, the eigenvalues beyond the bond dimension at the
+    # cut being zeros, so that the rows of a file keep their width
+    v() = last(only(measure(State{Pure}(System(3, Qubit()), "Up"), EntanglementEntropy(1, 4))))
+    @test_skip length(v()) == 5                                     # couche 3
+    @test_skip v()[3:5] == zeros(3)                                 # couche 3
+end
+
+@testset "Entanglement resolved by sector" begin
+    # the sectors add up to the entanglement entropy, the charge fluctuating between the two
+    # sides bringing the number entropy on top of what each sector holds
+    total(d) = sum(v.weight * v.entropy for v in values(d)) -
+               sum(v.weight * log(v.weight) for v in values(d))
+    f = System(4, Fermion(conserve = N))
+    p(v) = State{Pure}(f, v)
+    st = (p(["Occ", "Emp", "Emp", "Occ"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
+    for pos in 1:4
+        @test total(entanglement_by_sector(st, pos)) ≈ first(entanglement_entropy(st, pos))
+    end
+
+    # cut after one site, the charge on the left is either one particle or none
+    d = entanglement_by_sector(st, 1)
+    @test sort(collect(keys(d)); by = string) == [IT.QN("N", 0), IT.QN("N", 1)]
+    @test d[IT.QN("N", 1)].weight ≈ 0.8
+    @test d[IT.QN("N", 0)].weight ≈ 0.2
+    # cut after two, it is one particle in both terms, and the entanglement lives inside it
+    d = entanglement_by_sector(st, 2)
+    @test collect(keys(d)) == [IT.QN("N", 1)]
+    @test d[IT.QN("N", 1)].weight ≈ 1
+    @test d[IT.QN("N", 1)].spectrum ≈ [0.8, 0.2]
+    @test d[IT.QN("N", 1)].entropy ≈ first(entanglement_entropy(st, 2))
+
+    # several quantities at once, and a charge modulo 2 over a basis whose charges repeat
+    e = System(3, Electron(conserve = (Ntot, 2Sz)))
+    q(v) = State{Pure}(e, v)
+    se = (q(["Up", "Dn", "Emp"]) + 0.5 * q(["UpDn", "Emp", "Emp"])) / sqrt(1.25)
+    d = entanglement_by_sector(se, 1)
+    @test d[IT.QN(("Ntot", 1), ("2Sz", 1))].weight ≈ 0.8
+    @test d[IT.QN(("Ntot", 2), ("2Sz", 0))].weight ≈ 0.2
+    b = System(3, Boson(4, conserve = parity(N)))
+    r(v) = State{Pure}(b, v)
+    d = entanglement_by_sector((r(["1", "2", "0"]) + 0.5 * r(["0", "3", "0"])) / sqrt(1.25), 1)
+    @test d[IT.QN("parity(N)", 1, 2)].weight ≈ 0.8
+    @test d[IT.QN("parity(N)", 0, 2)].weight ≈ 0.2
+
+    # without charges there is a single sector holding the whole spectrum
+    fd = System(4, Fermion())
+    pd(v) = State{Pure}(fd, v)
+    sd = (pd(["Occ", "Emp", "Emp", "Occ"]) + 0.5 * pd(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
+    d = entanglement_by_sector(sd, 2)
+    @test collect(keys(d)) == [IT.QN()]
+    @test d[IT.QN()].spectrum ≈ last(entanglement_entropy(sd, 2))
+
+    # a mixed representation is refused, its links pairing the charge of a ket with a bra
+    @test_throws "takes a pure state" entanglement_by_sector(mix(st), 1)
+    @test_throws "between 1 and 4" entanglement_by_sector(st, 5)
+end
+
 @testset "Composed operators as measurements" begin
     # a measurement may be any operator of one site and not just a named one, named by how it
     # prints
@@ -276,6 +441,59 @@ end
     @test TMS.ITensorMPS.leftlim(a.state) ≥ 1
     @test expect1(a, N) ≈ [0., 0., 1., 1.] atol = 1e-12
     @test expect(a, N(3) * N(4)) ≈ 1
+end
+
+@testset "Positions given as a range" begin
+    # the position arguments took a `Vector{Int}` and nothing else, so a range was refused
+    # by a `MethodError`. The name of the measurement was built happily by
+    # `compact_positions`, so the failure came only when the measurement was taken. The
+    # partial trace of a range, and its refusal of a pure state, are in "A partial trace keeps
+    # the trace, and what it refuses"
+    sys = System(6, Qubit())
+    stp = random_state(Pure, sys, 4)
+    stm = mix(stp)
+    @test renyi2(stm, 1:3) ≈ renyi2(stm, [1, 2, 3])
+    @test renyi2(stp, 1:3) ≈ renyi2(stp, [1, 2, 3])
+    @test mutual_info_renyi2(stm, 1:3) ≈ mutual_info_renyi2(stm, [1, 2, 3])
+    # `measure` hands back a vector of name => value pairs, one per measurement
+    @test_skip last(only(measure(stm, SubRenyi2(1:3)))) ≈ renyi2(stm, [1, 2, 3])   # couche 3
+    @test_skip last(only(measure(stm, MutualInfoRenyi2(1:3)))) ≈
+               mutual_info_renyi2(stm, [1, 2, 3])                                   # couche 3
+end
+
+@testset "A cut at either end" begin
+    # a cut at 0 gave 0 on a mixed state and an error about the entanglement entropy on a
+    # pure one, and a negative cut was taken for an empty part on a mixed state. The cuts of
+    # 1.x are the positions 1:cut (decision 9.2): the cuts 0 and 3 an empty part and the
+    # whole state, the cuts -1 and 4 sites the state does not have
+    ψ = random_state(Pure, System(3, Qubit()), 2)
+    for st in (ψ, mix(ψ))
+        @test mutual_info_renyi2(st, 1:0) == 0
+        @test mutual_info_renyi2(st, 1:3) == 0
+        @test_throws "mutual_info_renyi2 was given site -1" mutual_info_renyi2(st, [-1])
+        @test_throws "mutual_info_renyi2 was given site 4" mutual_info_renyi2(st, 1:4)
+    end
+
+    # SubRenyi2(3) was accepted and failed when measured: a leading block, on a pure state, is
+    # read off the spectrum
+    for cut in 1:2
+        @test renyi2(ψ, 1:cut) ≈ renyi2(mix(ψ), collect(1:cut))
+        @test renyi2(mix(ψ), 1:cut) ≈ renyi2(mix(ψ), collect(1:cut))
+    end
+    @test renyi2(ψ, 1:0) == 0
+    # no site has no entropy, as the cut 0, where partial_trace refused to keep nothing
+    @test renyi2(ψ, Int[]) == 0
+    @test renyi2(mix(ψ), Int[]) == 0
+    @test_skip last(only(measure(ψ, SubRenyi2(Int[])))) == 0          # couche 3
+    # positions in a vector of another element type failed at the first measurement
+    @test_skip last(only(measure(ψ, SubRenyi2([])))) == 0             # couche 3
+    @test renyi2(ψ, Any[1, 2]) ≈ renyi2(ψ, [1, 2])
+    @test mutual_info_renyi2(ψ, Any[1]) ≈ mutual_info_renyi2(ψ, [1])
+    @test mutual_info_renyi2(ψ, []) == 0
+    @test renyi2(mix(ψ), 1:3) ≈ renyi2(mix(ψ))
+    @test_throws "renyi2 was given site 4" renyi2(ψ, 1:4)
+    @test_skip SubRenyi2(1:2).name == "SubRenyi2(1,2)"                         # couche 3
+    @test_skip last(only(measure(ψ, SubRenyi2(1:2)))) ≈ renyi2(mix(ψ), [1, 2])  # couche 3
 end
 
 @testset "Measuring a multiple of the identity" begin
@@ -566,27 +784,63 @@ end
     @test imag(inner(icplx, plus)) ≉ 0                    # the test would be empty otherwise
 
     # fidelity is normalised, so neither the norm nor the trace of its arguments matters
-    @test_skip fidelity(plus, mixup) ≈ 0.5                                  # couche 3
-    @test_skip fidelity(plus, plus) ≈ 1                                     # couche 3
-    @test_skip fidelity(up, dn) ≈ 0 atol = 1e-14                            # couche 3
-    @test_skip fidelity(3 * plus, 2 * mixup) ≈ fidelity(plus, mixup)        # couche 3
+    @test fidelity(plus, mixup) ≈ 0.5
+    @test fidelity(plus, plus) ≈ 1
+    @test fidelity(up, dn) ≈ 0 atol = 1e-14
+    @test fidelity(3 * plus, 2 * mixup) ≈ fidelity(plus, mixup)
     # against a mixed representation, in either order
     fm = State{Mixed}(sys, "FullyMixed")
-    @test_skip fidelity(plus, mix(mixup)) ≈ fidelity(plus, mixup)           # couche 3
-    @test_skip fidelity(mix(mixup), plus) ≈ fidelity(plus, mixup)           # couche 3
-    @test_skip fidelity(up, fm) ≈ 1/8                                       # couche 3
-    @test_skip fidelity(2 * up, fm) ≈ 1/8                                   # couche 3
+    @test fidelity(plus, mix(mixup)) ≈ fidelity(plus, mixup)
+    @test fidelity(mix(mixup), plus) ≈ fidelity(plus, mixup)
+    @test fidelity(up, fm) ≈ 1/8
+    @test fidelity(2 * up, fm) ≈ 1/8
     # the normalised Hilbert-Schmidt overlap of two mixed states
-    @test_skip hs_fidelity(mix(plus), mix(plus)) ≈ 1                        # couche 3
-    @test_skip hs_fidelity(mix(plus), mix(mixup)) ≈ fidelity(plus, mixup)   # couche 3
-    @test_skip hs_fidelity(mix(up), fm) ≈ √2/4                              # couche 3
-    @test_skip hs_fidelity(2 * mix(up), 3 * fm) ≈ hs_fidelity(mix(up), fm)  # couche 3
+    @test hs_fidelity(mix(plus), mix(plus)) ≈ 1
+    @test hs_fidelity(mix(plus), mix(mixup)) ≈ fidelity(plus, mixup)
+    @test hs_fidelity(mix(up), fm) ≈ √2/4
+    @test hs_fidelity(2 * mix(up), 3 * fm) ≈ hs_fidelity(mix(up), fm)
 
     # a pure and a mixed representation are vectors of different spaces
     @test_throws "pure and a mixed representation" inner(plus, fm)
     @test_throws "pure and a mixed representation" inner(fm, plus)
     # and two mixed ones have no fidelity, the refusal naming hs_fidelity
-    @test_skip "fidelity(fm, mix(plus)) refused, pointing to hs_fidelity"  # couche 3
+    @test_throws "no fidelity between two mixed" fidelity(fm, mix(plus))
+    @test_throws "hs_fidelity" fidelity(fm, mix(plus))
+end
+
+@testset "Energy variance" begin
+    sys = System(6, Qubit())
+    ising = -sum(Z(i) * Z(i+1) for i in 1:5)
+    field = -sum(X(i) for i in 1:6)
+    h = ising + field
+
+    # zero exactly on an eigenstate, whichever one
+    @test variance(State{Pure}(sys, "Up"), ising) ≈ 0 atol = 1e-12
+    @test variance(State{Pure}(sys, ["Up", "Dn", "Up", "Dn", "Up", "Dn"]), ising) ≈ 0 atol = 1e-12
+    @test variance(State{Pure}(sys, "+"), field) ≈ 0 atol = 1e-12
+    # |+...+> is an eigenstate of the field but not of the couplings. <ZZ> is zero there and
+    # so are the cross terms, so the variance is the number of couplings
+    @test variance(State{Pure}(sys, "+"), h) ≈ 5
+
+    # against the naive route, the one that forms H^2 and that the implementation avoids
+    r = random_state(Pure, sys, 8)
+    @test variance(r, h) ≈ real(expect(r, h * h)) - real(expect(r, h))^2
+    # neither the norm nor a phase of the state changes it
+    @test variance(3r, h) ≈ variance(r, h)
+    @test variance(im * r, h) ≈ variance(r, h)
+    # an mpo already built gives the same answer
+    @test variance(r, make_mpo(r, h)) ≈ variance(r, h)
+
+    # what it is for: a converged ground state, whose energy is the lowest eigenvalue of the
+    # dense hamiltonian, has a variance the energy alone cannot show
+    @test_skip "dmrg finds the ground energy, with a variance below 1e-8 and that of r"   # couche 4
+
+    # as a measurement, on the random state where 1.x took the ground state
+    @test_skip first(only(measure(r, Variance(h)))) == "Variance"          # couche 3
+    @test_skip last(only(measure(r, Variance(h)))) ≈ variance(r, h)        # couche 3
+
+    # a hamiltonian on a density matrix has no variance in this sense
+    @test_throws "needs a pure representation" variance(mix(r), h)
 end
 
 @testset "Observables do not depend on the charges" begin
@@ -607,17 +861,17 @@ end
     both(s -> expect2(s, (dag(C), C)))
     both(s -> [ expect(s, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
     both(s -> norm(s))
-    @test_skip both(s -> entanglement_entropy(s, 2)[1])            # couche 3
-    @test_skip both(s -> collect(entanglement_entropy(s, 2)[2]))   # couche 3
+    both(s -> entanglement_entropy(s, 2)[1])
+    both(s -> collect(entanglement_entropy(s, 2)[2]))
 
     both(s -> trace(mix(s)))
-    @test_skip both(s -> trace2(mix(s)))                           # couche 3
-    @test_skip both(s -> renyi2(mix(s)))                           # couche 3
-    @test_skip both(s -> hermiticity(mix(s)))                      # couche 3
+    both(s -> purity(mix(s)))                                      # trace2 in 1.x
+    both(s -> renyi2(mix(s)))
+    both(s -> hermiticity(mix(s)))
     both(s -> expect(mix(s), N(2)))
     both(s -> expect2(mix(s), (dag(C), C)))
     both(s -> trace(partial_trace(mix(s), [1, 3])))
-    @test_skip both(s -> mutual_info_renyi2(mix(s), 2))            # couche 3
+    both(s -> mutual_info_renyi2(mix(s), 1:2))                     # the cut 2 (decision 9.2)
     both(s -> trace(apply(Gate(F)(1), mix(s))))
     both(s -> trace(apply(Dissipator(N)(2), mix(s))))
     both(s -> expect(apply(Reset("Occ")(2), mix(s)), N(2)))
@@ -636,30 +890,44 @@ end
     both(f) = @test isapprox(f(w), f(s); atol = 1e-12)
     @test trace(s) ≈ 1
     both(trace)
-    @test_skip both(trace2)                                        # couche 3
+    both(purity)                                                   # trace2 in 1.x
     both(x -> expect(x, N(2)))
     both(x -> expect1(x, N))
     both(x -> expect2(x, (dag(C), C)))
-    @test_skip both(hermiticity)                                   # couche 3
+    both(hermiticity)
     # a correlation whose two ends do not conserve the charge is measured all the same, the
     # two shifts it brings cancelling
     both(x -> [ expect(x, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
     both(x -> trace(apply(Dissipator(N)(2), x)))
     # the adjoint exchanges ket and bra, which swaps the two charges a strong symmetry keeps
-    # apart; checked as well on a state that is not Hermitian, holding a coherence between
-    # sites 1 and 3
-    @test_skip hermiticity(s) ≈ 1                                  # couche 3
-    @test_skip trace(hermitianize(s)) ≈ 1                          # couche 3
-    @test_skip flux(dag(s).state) == flux(s.state)                 # couche 3
-    @test_skip "dag of a state that is not Hermitian, weak and strong"    # couche 3
+    # apart. It relabels the charges so that the exchange becomes a permutation of zero flux
+    @test hermiticity(s) ≈ 1
+    @test trace(hermitianize(s)) ≈ 1
+    @test flux(dag(s).state) == flux(s.state)
+    # on a Hermitian state the adjoint is invisible, so it is checked on one that is not,
+    # holding a coherence between sites 1 and 3 that an off diagonal observable reads
+    function skew(site)
+        sys = System(4, site)
+        p(v) = State{Pure}(sys, v)
+        c1, c2 = ["Occ", "Emp", "Emp", "Occ"], ["Emp", "Emp", "Occ", "Occ"]
+        a, b = p(c1) + 0.7im * p(c2), p(c2) - 0.4 * p(c1)
+        return State(mix(a), mix(a).state + 0.6im * mix(b).state)
+    end
+    ws, ss = skew(Fermion(conserve = N)), skew(Fermion(conserve = strong(N)))
+    adjoint_numbers(x) = [ expect(dag(x), dag(C)(1) * C(3)), expect(dag(x), N(3)),
+                           inner(dag(x), x) ]
+    @test isapprox(adjoint_numbers(ws), adjoint_numbers(ss); atol = 1e-12)
+    @test abs(expect(dag(ss), dag(C)(1) * C(3))) > 0.1
+    @test expect(dag(ss), dag(C)(1) * C(3)) ≈ conj(expect(ss, dag(C)(3) * C(1)))
+    @test hermiticity(ss) < 0.99
     # tracing out part of the sites is refused, what is left being a mixture over several
     # sectors, which a state keeping the two charges apart cannot hold (decision 16)
     @test_throws "weaken it first" partial_trace(s, [1, 3])
     @test expect(partial_trace(weaken(s), [1, 3]), N(1)) ≈ expect(partial_trace(w, [1, 3]), N(1))
     # a number read off a partial trace is measured all the same, through the weak form
-    @test_skip both(x -> renyi2(x, [1, 2]))                        # couche 3
-    @test_skip both(x -> mutual_info_renyi2(x, [1, 2]))            # couche 3
-    @test_skip both(x -> mutual_info_renyi2(x, 2))                 # couche 3
+    both(x -> renyi2(x, [1, 2]))
+    # which is also the cut 2 of 1.x, mutual_info_renyi2(x, 2) (decision 9.2)
+    both(x -> mutual_info_renyi2(x, [1, 2]))
 end
 
 @testset "Sites where an operator is not defined, and chosen sites" begin
@@ -722,6 +990,90 @@ end
     @test_throws "use mix(state) first" partial_trace(random_state(Pure, System(4, Qubit()), 4), [1, 2])
 end
 
+@testset "Reduced density matrix and von Neumann entropy" begin
+    # tr(ρ_A M) is the expectation value of the operator whose matrix on the kept sites is M,
+    # in the order of the sites and the Jordan-Wigner basis of the kept sites alone, which
+    # also checks the order of kets and bras with operators that are not hermitian
+    LA = TensorMixedStates.LinearAlgebra
+    q = random_state(Pure, System(4, Qubit()), 4)
+    ρ = reduced_density_matrix(q, [1, 3])
+    @test LA.tr(ρ) ≈ 1
+    @test LA.ishermitian(round.(ρ; digits = 12))
+    for (a, b) in [(X, Z), (Sp, Sm), (Y, Id), (Sm, Sp)]
+        m = matrix(a ⊗ b, Qubit(), Qubit())
+        @test LA.tr(ρ * m) ≈ expect(q, a(1) * b(3)) atol = 1e-12
+    end
+    @test reduced_density_matrix(mix(q), [1, 3]) ≈ ρ
+    @test reduced_density_matrix(q, Any[3, 1]) ≈ ρ
+    s = random_state(Pure, System([Qubit(), Spin(1), Qubit()]), 4)
+    ρs = reduced_density_matrix(s, [2, 3])
+    @test size(ρs) == (6, 6)
+    m = matrix(Sp ⊗ X, Spin(1), Qubit())
+    @test LA.tr(ρs * m) ≈ expect(s, Sp(2) * X(3)) atol = 1e-12
+    f = random_state(Pure, System(4, Fermion()), 4)
+    ρf = reduced_density_matrix(f, [1, 3])
+    for (a, b) in [(dag(C), C), (C, C), (N, dag(C))]
+        m = matrix(a ⊗ b, Fermion(), Fermion())
+        @test LA.tr(ρf * m) ≈ expect(f, a(1) * b(3)) atol = 1e-12
+    end
+    strong_ρ = State{Mixed}(System(3, Fermion(conserve = strong(N))), ["Occ", "Emp", "Occ"])
+    @test real(LA.diag(reduced_density_matrix(strong_ρ, [1, 2]))) ≈ [0, 0, 1, 0]
+    @test reduced_density_matrix(q, []) == ones(1, 1)
+    @test_throws "given site 5, which the state does not have" reduced_density_matrix(q, [5])
+    # the entropy of half a Bell pair is log 2, that of the pair 0, and on a cut it is the
+    # entanglement entropy
+    bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
+    @test vonneumann_entropy(bell, [1]) ≈ log(2)
+    @test abs(vonneumann_entropy(bell, [1, 2])) < 1e-12
+    @test vonneumann_entropy(q, 1:2) ≈ first(entanglement_entropy(q, 2))
+    @test vonneumann_entropy(q, []) === 0.0
+    measured() = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
+    @test_skip measured()["ReducedDensityMatrix(1,3)"] ≈ ρ                        # couche 3
+    @test_skip measured()["VonNeumannEntropy(1)"] ≈ vonneumann_entropy(q, [1])    # couche 3
+end
+
+@testset "Reduced density matrix of a pure state" begin
+    # contracted on the pure state, it is the one of its mixed representation, fermionic signs
+    # included: sites kept on both sides of sites traced out, and a site traced out first
+    for (st, positions) in [
+            (random_state(Pure, System(6, Qubit()), 8), [[6], [5, 2], [1, 3, 6]]),
+            (random_state(State{Pure}(System(6, Fermion(conserve = N)),
+                                      ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]), 8),
+             [[2, 4], [2, 3, 5]]),
+            (random_state(State{Pure}(System(4, Electron(conserve = (Ntot, 2Sz))),
+                                      ["Up", "Dn", "Emp", "UpDn"]), 6),
+             [[1, 3], [2, 4]]),
+            (random_state(Pure, System([Qubit(), Fermion(), Boson(3), Fermion(), Qubit()]), 6),
+             [[2, 4], [1, 3, 5]])]
+        for pos in positions
+            @test reduced_density_matrix(st, pos) ≈ reduced_density_matrix(mix(st), pos)
+        end
+    end
+end
+
+@testset "Logarithmic negativity" begin
+    # log 2 for a Bell pair, and for the Werner state p Bell + (1 - p) I/4, the depolarization
+    # of the pair, log((1 + 3p)/2) above p = 1/3, separable below; the partial transpose of
+    # either part gives the same, which lets a part without fermionic site take it
+    bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
+    @test log_negativity(bell, [1], [2]) ≈ log(2)
+    @test abs(log_negativity(bell, [1], [3])) < 1e-12
+    for p in [0.6, 0.2]
+        werner = apply(depolarizing_gate(1 - p, 2)(1, 2), mix(bell))
+        @test log_negativity(werner, [1], [2]) ≈ max(0, log((1 + 3p) / 2)) atol = 1e-12
+    end
+    q = random_state(Pure, System(4, Qubit()), 4)
+    @test log_negativity(q, [1], [3, 4]) ≈ log_negativity(q, [3, 4], [1])
+    s = random_state(Pure, System([Fermion(), Qubit(), Fermion()]), 4)
+    @test log_negativity(s, [1], [2]) ≈ log_negativity(s, [2], [1])
+    @test_throws "a part without fermionic sites" log_negativity(s, [1], [3])
+    @test_throws "sites in both parts" log_negativity(q, [1, 2], [2])
+    @test log_negativity(q, [], [2]) == 0
+    measured() = only(measure(bell, LogNegativity([1], [2])))
+    @test_skip first(measured()) == "LogNegativity(1;2)"            # couche 3
+    @test_skip last(measured()) ≈ log(2)                            # couche 3
+end
+
 @testset "What expect refuses" begin
     ψ = State{Pure}(System(2, Qubit()), "Up")
     @test_throws "expect takes an operator placed on sites, such as X(1)" expect(ψ, X)
@@ -770,7 +1122,7 @@ end
     @test_throws "whose dimension is 2" make_mpo(st, b3(1))
     @test_throws "whose dimension is 2" apply(b3(1), st)
     @test_throws "whose dimension is 4" apply(Operator{2}("B9", ones(9, 9))(1, 2), st)
-    @test_skip "renyi2(stm, [2, 7]) refused"                # couche 3
+    @test_throws "does not have" renyi2(stm, [2, 7])
     # an operator placed on no site, or a channel, is refused by expect by name rather than by a
     # MethodError about iterating it
     @test_throws "such as Swap(1,2) rather than Swap" expect(st, Swap)
