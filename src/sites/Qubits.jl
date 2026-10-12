@@ -100,6 +100,25 @@ the phase gate of a qubit, ``\\mathrm{diag}(1, e^{it})``.
 Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)])
 
 """
+    graph_state(graph; limits = Limits())
+
+the graph state of `graph`, a list of edges: the pure state of `graph_base_size(graph)` qubits
+all in `"+"`, to which `controlled(Z)` is applied on every edge, truncated by `limits`.
+
+# Examples
+
+    graph_state(complete_graph(10); limits = Limits(maxdim = 10))
+"""
+function graph_state(g::Vector{Tuple{Int, Int}}; limits::Limits = Limits())
+    if isempty(g)
+        error("graph_state needs a graph with edges, which give its qubits")
+    end
+    state = State{Pure}(System(graph_base_size(g), Qubit()), "+")
+    CZ = controlled(Z)
+    return apply(prod(CZ(i, j) for (i, j) in g), state; limits)
+end
+
+"""
     thermal_relaxation_check(T1, T2)
 
 refuse times `T1` and `T2` that are not positive, or a `T2` above `2T1`, which would ask for a
@@ -149,5 +168,6 @@ function thermal_relaxation_gate(T1::Real, T2::Real, t::Real)
     return exp(t * thermal_relaxation_dissipator(T1, T2))
 end
 
-@create_site_module(Qubits, [Qubit, controlled, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm, H, S, T,
-                             Phase, thermal_relaxation_dissipator, thermal_relaxation_gate])
+@create_site_module(Qubits, [Qubit, controlled, graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm,
+                             H, S, T, Phase, thermal_relaxation_dissipator,
+                             thermal_relaxation_gate])
