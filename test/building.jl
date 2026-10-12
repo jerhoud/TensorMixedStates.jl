@@ -148,12 +148,14 @@ end
     # a vector of local states of the wrong length is refused with the sizes of the system
     @test_throws "system (3) and states (2)" random_state(Mixed, System(3, Qubit()), ["Up", "Dn"], 4)
     # randomizing a state of one site leaves the one it was given alone: its tensor was
-    # written in place when the element type already matched
+    # written in place when the element type already matched, and its cache went stale
     for (elt, s) in [(Float64, State{Pure}(System(1, Qubit()), "Up")),
                      (ComplexF64, random_state(Pure, System(1, Qubit()), 1))]
         t = copy(s.state[1])
+        z = expect(s, Z(1))
         random_state(s, 2; eltype = elt)
         @test norm(s.state[1] - t) < 1e-14
+        @test expect(s, Z(1)) ≈ z
     end
 end
 
@@ -324,8 +326,9 @@ end
 end
 
 @testset "The ladder of symmetries" begin
-    # weakening walks strong, then weak, then nothing, and stops there; every rung holds the
-    # same physics
+    # weakening walks strong, then weak, then nothing, and stops there. Every rung holds the
+    # same physics, so every rung must give the numbers a system conserving nothing gives,
+    # including a four point correlator, which is what a chain sized on a guess got wrong
     conf = ["Occ", "Emp", "Occ", "Emp"]
     build(site) = begin
         sys = System(4, site)
@@ -333,23 +336,25 @@ end
         s = p(conf) + 0.5 * p(reverse(conf))
         return mix(s / norm(s))
     end
-    numbers(s) = [ real(trace(s)), real(expect(s, N(2))), real(trace2(s)),
-                   real(hermiticity(s)),
+    numbers(s) = [ real(trace(s)), real(expect(s, N(2))),
                    real(expect(s, dag(C)(1) * dag(C)(2) * C(3) * C(4))) ]
-    reference = real(trace(build(Fermion())))
+    purities(s) = [ real(trace2(s)), real(hermiticity(s)) ]
+    reference = numbers(build(Fermion()))
 
     x = build(Fermion(conserve = strong(N)))
     @test symmetries(x.system) == TensorMixedStates.Conserved([("N", true)])
-    @test real(trace(x)) ≈ reference
-    @test_skip numbers(x) ≈ numbers(build(Fermion()))     # couche 3
+    @test numbers(x) ≈ reference
+    @test_skip purities(x) ≈ purities(build(Fermion()))   # couche 3
 
     x = weaken(x)
     @test symmetries(x.system) == TensorMixedStates.Conserved([("N", false)])
-    @test real(trace(x)) ≈ reference
+    @test numbers(x) ≈ reference
+    @test_skip purities(x) ≈ purities(build(Fermion()))   # couche 3
 
     x = weaken(x)
     @test !TensorMixedStates.is_charged(x.system)
-    @test real(trace(x)) ≈ reference
+    @test numbers(x) ≈ reference
+    @test_skip purities(x) ≈ purities(build(Fermion()))   # couche 3
     @test norm(x - build(Fermion())) < 1e-12
 
     # nothing left to weaken gives the state back, so it is always safe to call
@@ -359,6 +364,7 @@ end
     y = build(Fermion(conserve = strong(N)))
     @test weaken(y, symmetries(y.system)) === y
     @test norm(weaken(y, ()) - build(Fermion())) < 1e-12
+    @test numbers(weaken(y, N)) ≈ reference
     @test norm(weaken(weaken(y, N), ()) - build(Fermion())) < 1e-12
 
     # a quantity may be dropped or asked for less strongly, never invented nor strengthened
@@ -373,21 +379,29 @@ end
         "(2Sz, strong(Ntot))"
     @test repr(symmetries(System(2, Fermion()))) == "()"
 
-    # a site conserving nothing, put first, does not hide what the others conserve
+    # a site conserving nothing, put first, used to hide what the others conserve: weakening
+    # then gave the state back untouched, still charged, and refused `N` as a target
     mixed_sites(site) = begin
         sys = System([Qubit(); fill(site, 4)])
         p(v) = State{Pure}(sys, ["Up"; v])
         s = p(conf) + 0.5 * p(reverse(conf))
         return mix(s / norm(s))
     end
+    shifted(s) = [ real(trace(s)), real(expect(s, N(3))),
+                   real(expect(s, dag(C)(2) * dag(C)(3) * C(4) * C(5))) ]
     plain = mixed_sites(Fermion())
+    reference = shifted(plain)
     z = mixed_sites(Fermion(conserve = strong(N)))
     @test repr(symmetries(z.system)) == "strong(N)"
+    @test shifted(weaken(z, N)) ≈ reference
     @test norm(weaken(weaken(z, N), ()) - plain) < 1e-12
     z = weaken(z)
     @test repr(symmetries(z.system)) == "N"
+    @test shifted(z) ≈ reference
     z = weaken(z)
     @test !TensorMixedStates.is_charged(z.system)
+    @test shifted(z) ≈ reference
+    @test_skip real(trace2(z)) ≈ real(trace2(plain))     # couche 3
     @test norm(z - plain) < 1e-12
 end
 

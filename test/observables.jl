@@ -3,8 +3,11 @@
 # written with explicit Jordan-Wigner strings.
 #
 # The testsets of 1.x on the other measurements, sampling, entropies and the channels are still
-# in v1/observables.jl; their assertions on expectation values, on apply to pure states and on
-# partial traces are here.
+# in v1/observables.jl; their assertions on expectation values, on inner products, on apply and
+# on partial traces are here, with those of v1/building.jl on sites out of the system and of
+# v1/threading.jl on measuring from several threads.
+#
+# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
 
 """
 the matrix, on `n` sites `site`, of the product of operators of one site `factors`, pairs
@@ -131,6 +134,51 @@ end
     end
 end
 
+@testset "Superoperators of placed operators, unnormalized expectations and matrix elements" begin
+    # decision 1: Left and Right are gone, a placed operator a acts on a density matrix as
+    # Gate(a), ρ ↦ aρa†, or Evolver(a), ρ ↦ aρ + ρa†. A sum with its strings and its
+    # coefficients, against the pure state: tr(b aρa†) = <ψ|a† b a|ψ> and
+    # tr(b (aρ + ρa†)) = <ψ|b a|ψ> + <ψ|a† b|ψ>, expect times the trace being tr(b σ)
+    sys = System(4, Fermion())
+    ψ = random_state(Pure, sys, 4)
+    ρ = mix(ψ)
+    a = dag(C)(1) * C(3) + 0.5im * N(2)
+    adjoint_a = dag(C)(3) * C(1) - 0.5im * N(2)
+    b = dag(C)(3) * C(1) + N(4)
+    σ = apply(make_mpo(ρ, Gate(a)), ρ)
+    @test trace(σ) * expect(σ, b) ≈ inner(ψ, adjoint_a * b * a, ψ)
+    σ = apply(make_mpo(ρ, Evolver(a)), ρ)
+    @test trace(σ) * expect(σ, b) ≈ inner(ψ, b * a, ψ) + inner(ψ, adjoint_a * b, ψ)
+    # the product of the gates of one site is the gate of the product, strings included
+    @test norm(apply(Gate(dag(C))(1) * Gate(C)(3), ρ) - mix(apply(dag(C)(1) * C(3), ψ))) < 1e-12
+
+    # `normalize = false` is gone: the value not divided by the trace is expect times the trace
+    @test expect(2 * ρ, 3 * Id(1)) * trace(2 * ρ) ≈ 6
+    @test expect(2 * ψ, N(1)) * trace(2 * ψ) ≈ 4 * expect(ψ, N(1))
+    # 1.x measured c₁ρ, of trace zero, unnormalized. Without Left, its substance is the gate of
+    # c₁, tr(X c₁ρc₁†) = tr(c₁† X c₁ρ), on sites charged weakly and strongly too, where the
+    # evolver c₁ρ + ρc₁† has no definite flux
+    for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
+        s = System(4, site)
+        φ = mix(normalize(State{Pure}(s, ["Occ", "Emp", "Occ", "Emp"]) +
+                          0.5 * State{Pure}(s, ["Emp", "Occ", "Occ", "Emp"])))
+        σ = apply(Gate(C(1)), φ)
+        @test trace(σ) ≈ expect(φ, N(1))
+        @test trace(σ) * expect(σ, [Id(1), N(3)]) ≈ [0.8, 0.8]
+        if TMS.is_charged(s)
+            @test_throws "no definite flux" make_mpo(φ, Evolver(C(1)))
+        end
+    end
+
+    # the matrix element of an operator between two states, and of a channel between two mixed
+    # ones: <<mix(u)| Gate(X) |mix(v)>> = |<u|X|v>|^2
+    q = System(4, Qubit())
+    u, v = random_state(Pure, q, 3), random_state(Pure, q, 3)
+    m = X(1) * Z(3) + 0.3 * Y(2)
+    @test inner(u, m, v) ≈ inner(u, apply(make_mpo(v, m), v))
+    @test inner(mix(u), Gate(X)(1), mix(v)) ≈ abs2(inner(u, X(1), v))
+end
+
 @testset "The adjoint of a tensor product of fermions" begin
     # (A ⊗ B)(i, j) is A(i) * B(j), whose adjoint reverses the factors: two fermions
     # anticommute, so dag(C ⊗ C) is the opposite of dag(C) ⊗ dag(C)
@@ -139,9 +187,14 @@ end
         @test expect(st, dag(C ⊗ C)(i, j)) ≈ conj(expect(st, C(i) * C(j)))
         @test expect(st, dag(dag(C) ⊗ C)(i, j)) ≈ conj(expect(st, dag(C)(i) * C(j)))
     end
-    # a hopping term written with its adjoint is self adjoint
+    # a hopping term written with its adjoint is self adjoint, and the dissipator of a
+    # fermionic jump preserves the trace
     h = dag(C) ⊗ C
     @test abs(imag(expect(st, sum((h + dag(h))(i, i + 1) for i in 1:2)))) < 1e-12
+    ρ = mix(st)
+    for l in (C ⊗ C, dag(C) ⊗ C, C ⊗ dag(C))
+        @test abs(trace(apply(make_mpo(ρ, Dissipator(l)(1, 2)), ρ))) < 1e-12
+    end
 end
 
 @testset "Functions of a fermionic operator" begin
@@ -172,6 +225,30 @@ end
     p = Proj([0., 1.])
     @test expect(st, C(3) * p(1)) ≈ ev(cs[3] * kron([0. 0. ; 0. 1.], id, id))
     @test expect(st, p(1) * C(3)) ≈ ev(kron([0. 0. ; 0. 1.], id, id) * cs[3])
+end
+
+@testset "Composed operators as measurements" begin
+    # a measurement may be any operator of one site and not just a named one, named by how it
+    # prints
+    sys = System(3, Qubit())
+    st = State{Pure}(sys, ["X+", "Y+", "Z+"])
+    colnames(o) = first.(measure(st, Measure([o]), 0.))
+    # a channel is not an observable, and expect says so (decision 1: Left(X)(1) in 1.x)
+    @test_throws "is a channel" expect(mix(st), Gate(X)(1))
+    @test_skip colnames(X) == ["X"]                         # couche 3
+    @test_skip colnames(X * Y) == ["X*Y"]                   # couche 3
+    @test_skip colnames(2X) == ["2X"]                       # couche 3
+    @test_skip colnames(X + Y) == ["X+Y"]                   # couche 3
+    @test_skip colnames(dag(S)) == ["dag(S)"]               # couche 3
+    @test_skip colnames(Id) == ["Id"]                       # couche 3
+    @test_skip colnames((Id, X)) == ["IdX"]                 # couche 3
+    @test_skip colnames((X, Y)) == ["XY"]                   # couche 3
+    # a coefficient rides outside the operator that `(c * A)(i)` builds, so it has to come off
+    # where the tensor of one site is made and not only where the name is
+    @test expect1(st, 2X) ≈ 2 * expect1(st, X)
+    @test expect1(mix(st), 2X) ≈ 2 * expect1(mix(st), X)
+    @test expect1(st, 0.5 * (X + Y)) ≈ 0.5 * (expect1(st, X) + expect1(st, Y))
+    @test expect2(st, (2X, 3Y)) ≈ 6 * expect2(st, (X, Y))
 end
 
 @testset "Expectation values on an unnormalised state" begin
@@ -228,12 +305,40 @@ end
     @test inner(e, h, e) ≈ u * n
 end
 
+@testset "Projector of several sites" begin
+    # applied as a gate, with the Jordan-Wigner strings of the sites in between, the order of
+    # its sites included; renamed by named, which takes no site (decision 2)
+    ud = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
+    @test real(expect(ud, named(Proj(Swap => -1), "Singlet")(1, 2))) ≈ 0.5
+    for st in (ud, mix(ud))
+        @test real(expect(normalize(apply(Proj(Swap => -1)(1, 2), st)), Swap(1, 2))) ≈ -1
+    end
+    # 1.x refused to measure it as acting on several sites at once; the descent splits its
+    # matrix on its sites (decision 2)
+    @test expect(ud, Proj(Swap => -1)(1, 2)) ≈ 0.5
+    fs = System(4, Fermion(conserve = N))
+    f = random_state(State{Pure}(fs, ["Occ", "Occ", "Emp", "Emp"]), 4)
+    projected(a, λ) = normalize(apply(make_mpo(f, (a * a + λ * a) / 2), f))
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    j = im * (dag(C)(1) * C(3) - dag(C)(3) * C(1))
+    hop = dag(C) ⊗ C - C ⊗ dag(C)
+    current = im * (dag(C) ⊗ C + C ⊗ dag(C))
+    for (g, ref) in [(Proj(hop => 1)(1, 3), projected(h, 1)),
+                     (Proj(hop => 1)(3, 1), projected(h, 1)),
+                     (Proj(current => 1)(1, 3), projected(j, 1)),
+                     (Proj(current => 1)(3, 1), projected(j, -1))]
+        @test norm(normalize(apply(g, f)) - ref) < 1e-12
+        @test norm(normalize(apply(g, mix(f))) - mix(ref)) < 1e-12
+    end
+end
+
 @testset "A random fermionic oracle" begin
     # the Jordan-Wigner strings checked on random products against the dense matrices of the
-    # strings written out, through expect on a pure and on a mixed state, the MPO, expect2, the
-    # matrix of a tensor product and partial_trace. In the dense basis C(j) is F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and
-    # any other operator is written from those, so that the reference knows nothing of the
-    # package
+    # strings written out, through expect on a pure and on a mixed state, the MPO, apply on a
+    # pure and on a mixed state, the gates of functions of several sites, expect2, the matrix
+    # of a tensor product and partial_trace. In the dense basis C(j) is
+    # F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and any other operator is written from those, so that the
+    # reference knows nothing of the package
     fe = Fermion()
     mc, mf, mi = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
     cd(j, n) = foldl(kron, [ k < j ? mf : k == j ? mc : mi for k in 1:n ])
@@ -271,6 +376,7 @@ end
         @test expect(ρ, o) ≈ value(d) atol = 1e-10
         @test mpo_matrix(ψ, o) ≈ d atol = 1e-10
         @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10
+        @test norm(apply(o, ρ) - mix(apply(o, ψ))) < 1e-10
         keep = sort(TMS.Random.randperm(n)[1:rand(1:3)])
         o, d = product(length(keep), p -> keep[p], n)
         @test expect(partial_trace(ρ, keep; keep = true), o) ≈ value(d) atol = 1e-10
@@ -287,6 +393,7 @@ end
         da = prod(f[2](s, n) for (f, s) in zip(fs, sites))
         g = exp(0.3 * a - 0.3 * dag(a))(sites...)
         @test raw_vector(apply(g, ψ)) ≈ exp(0.3 * da - 0.3 * da') * w atol = 1e-10
+        @test norm(apply(g, ρ) - mix(apply(g, ψ))) < 1e-10
     end
     # and on electrons, whose parity counts both spins
     el = Electron()
@@ -360,7 +467,25 @@ end
     @test norm(apply(C(2) * C(2), ψ)) == 0
     mpo = make_mpo(ψ, dag(C)(1) * C(3) + N(2))
     @test norm(apply(mpo, ψ) - apply(dag(C)(1) * C(3) + N(2), ψ)) < 1e-10
-    @test_throws "apply_algo is" apply(mpo, ψ; apply_algo = "fit")
+end
+
+@testset "The algorithms of the product of an MPO by a state" begin
+    # without truncation, "naive", the default, and "densitymatrix" give the exact product; on
+    # a random state, where 1.x took one evolved by tdvp
+    n = 4
+    h = sum(X(i) * X(i + 1) for i in 1:n - 1)
+    st = random_state(Pure, System(n, Qubit()), 4)
+    m = make_mpo(st, h)
+    @test norm(apply(m, st; apply_algo = "naive") - apply(m, st)) < 1e-12
+    @test norm(apply(m, st; apply_algo = "densitymatrix") - apply(m, st)) < 1e-12
+    @test_skip "approx_W with apply_algo = \"naive\" against the default"   # couche 4
+    # "fit" needs a number of sweeps of its own, "zipup" is missing for a state from the lowest
+    # ITensorMPS accepted, and a name that is none of them is refused too
+    for alg in ("fit", "zipup", "exact")
+        @test_throws "apply_algo is" apply(m, st; apply_algo = alg)
+    end
+    @test_skip "approx_W refuses them"                       # couche 4
+    @test_skip "an ApproxW phase hands them on"              # couche 5
 end
 
 @testset "Gates on sites apart, and MPOs on the sites they act on" begin
@@ -423,6 +548,47 @@ end
     @test_throws "is ambiguous" inner(mix(u), X(1), mix(v))
 end
 
+@testset "Inner products and fidelities" begin
+    sys = System(3, Qubit())
+    up    = State{Pure}(sys, "Up")
+    dn    = State{Pure}(sys, "Dn")
+    plus  = State{Pure}(sys, "+")
+    mixup = State{Pure}(sys, ["+", "+", "Up"])
+    icplx = State{Pure}(sys, ["i", "+", "+"])
+
+    # <+++|++Up> = 1 * 1 * <+|Up> = 1/sqrt(2)
+    @test inner(plus, mixup) ≈ 1/√2
+    @test dot(plus, mixup) == inner(plus, mixup)          # dot is an alias
+    @test inner(plus, plus) ≈ 1
+    @test inner(up, dn) ≈ 0 atol = 1e-14
+    # the first argument is the one conjugated
+    @test inner(icplx, plus) ≈ conj(inner(plus, icplx))
+    @test imag(inner(icplx, plus)) ≉ 0                    # the test would be empty otherwise
+
+    # fidelity is normalised, so neither the norm nor the trace of its arguments matters
+    @test_skip fidelity(plus, mixup) ≈ 0.5                                  # couche 3
+    @test_skip fidelity(plus, plus) ≈ 1                                     # couche 3
+    @test_skip fidelity(up, dn) ≈ 0 atol = 1e-14                            # couche 3
+    @test_skip fidelity(3 * plus, 2 * mixup) ≈ fidelity(plus, mixup)        # couche 3
+    # against a mixed representation, in either order
+    fm = State{Mixed}(sys, "FullyMixed")
+    @test_skip fidelity(plus, mix(mixup)) ≈ fidelity(plus, mixup)           # couche 3
+    @test_skip fidelity(mix(mixup), plus) ≈ fidelity(plus, mixup)           # couche 3
+    @test_skip fidelity(up, fm) ≈ 1/8                                       # couche 3
+    @test_skip fidelity(2 * up, fm) ≈ 1/8                                   # couche 3
+    # the normalised Hilbert-Schmidt overlap of two mixed states
+    @test_skip hs_fidelity(mix(plus), mix(plus)) ≈ 1                        # couche 3
+    @test_skip hs_fidelity(mix(plus), mix(mixup)) ≈ fidelity(plus, mixup)   # couche 3
+    @test_skip hs_fidelity(mix(up), fm) ≈ √2/4                              # couche 3
+    @test_skip hs_fidelity(2 * mix(up), 3 * fm) ≈ hs_fidelity(mix(up), fm)  # couche 3
+
+    # a pure and a mixed representation are vectors of different spaces
+    @test_throws "pure and a mixed representation" inner(plus, fm)
+    @test_throws "pure and a mixed representation" inner(fm, plus)
+    # and two mixed ones have no fidelity, the refusal naming hs_fidelity
+    @test_skip "fidelity(fm, mix(plus)) refused, pointing to hs_fidelity"  # couche 3
+end
+
 @testset "Observables do not depend on the charges" begin
     # the same physics on sites that declare a conserved quantity and on sites that do not
     function chain(site)
@@ -433,14 +599,28 @@ end
         return s / norm(s)
     end
     d, q = chain(Fermion()), chain(Fermion(conserve = N))
+    # an absolute tolerance, several of these being exactly zero, as the trace of a dissipator
     both(f) = @test isapprox(f(d), f(q); atol = 1e-12)
     both(s -> expect(s, N(2)))
     both(s -> expect1(s, N))
     both(s -> expect2(s, (N, N)))
     both(s -> expect2(s, (dag(C), C)))
     both(s -> [ expect(s, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    both(s -> norm(s))
+    @test_skip both(s -> entanglement_entropy(s, 2)[1])            # couche 3
+    @test_skip both(s -> collect(entanglement_entropy(s, 2)[2]))   # couche 3
+
+    both(s -> trace(mix(s)))
+    @test_skip both(s -> trace2(mix(s)))                           # couche 3
+    @test_skip both(s -> renyi2(mix(s)))                           # couche 3
+    @test_skip both(s -> hermiticity(mix(s)))                      # couche 3
     both(s -> expect(mix(s), N(2)))
     both(s -> expect2(mix(s), (dag(C), C)))
+    both(s -> trace(partial_trace(mix(s), [1, 3])))
+    @test_skip both(s -> mutual_info_renyi2(mix(s), 2))            # couche 3
+    both(s -> trace(apply(Gate(F)(1), mix(s))))
+    both(s -> trace(apply(Dissipator(N)(2), mix(s))))
+    both(s -> expect(apply(Reset("Occ")(2), mix(s)), N(2)))
 end
 
 @testset "Observables do not depend on the kind of symmetry" begin
@@ -456,16 +636,30 @@ end
     both(f) = @test isapprox(f(w), f(s); atol = 1e-12)
     @test trace(s) ≈ 1
     both(trace)
+    @test_skip both(trace2)                                        # couche 3
     both(x -> expect(x, N(2)))
     both(x -> expect1(x, N))
     both(x -> expect2(x, (dag(C), C)))
+    @test_skip both(hermiticity)                                   # couche 3
     # a correlation whose two ends do not conserve the charge is measured all the same, the
     # two shifts it brings cancelling
     both(x -> [ expect(x, dag(C)(i) * C(j)) for i in 1:4, j in 1:4 ])
+    both(x -> trace(apply(Dissipator(N)(2), x)))
+    # the adjoint exchanges ket and bra, which swaps the two charges a strong symmetry keeps
+    # apart; checked as well on a state that is not Hermitian, holding a coherence between
+    # sites 1 and 3
+    @test_skip hermiticity(s) ≈ 1                                  # couche 3
+    @test_skip trace(hermitianize(s)) ≈ 1                          # couche 3
+    @test_skip flux(dag(s).state) == flux(s.state)                 # couche 3
+    @test_skip "dag of a state that is not Hermitian, weak and strong"    # couche 3
     # tracing out part of the sites is refused, what is left being a mixture over several
     # sectors, which a state keeping the two charges apart cannot hold (decision 16)
     @test_throws "weaken it first" partial_trace(s, [1, 3])
     @test expect(partial_trace(weaken(s), [1, 3]), N(1)) ≈ expect(partial_trace(w, [1, 3]), N(1))
+    # a number read off a partial trace is measured all the same, through the weak form
+    @test_skip both(x -> renyi2(x, [1, 2]))                        # couche 3
+    @test_skip both(x -> mutual_info_renyi2(x, [1, 2]))            # couche 3
+    @test_skip both(x -> mutual_info_renyi2(x, 2))                 # couche 3
 end
 
 @testset "Sites where an operator is not defined, and chosen sites" begin
@@ -538,4 +732,74 @@ end
     @test_throws "acts on site 3, which the system does not have" expect(ψ, X(3))
     # an operator of several sites, which 1.x refused in expect, is measured
     @test expect(ψ, Swap(1, 2)) ≈ 1
+end
+
+@testset "Site indices out of the system" begin
+    # nothing between writing X(10) and contracting its tensor compared that number with the
+    # size of the system, and each path an indexed operator can take used to report a
+    # BoundsError on an internal vector
+    sys = System(4, Qubit())
+    st = State{Pure}(sys, "Up")
+    stm = mix(st)
+    # the three entries, and both bounds
+    for op in (X(5), X(0), X(-1))
+        @test_throws "does not have" expect(st, op)
+        @test_throws "does not have" make_mpo(st, op)
+        @test_throws "does not have" apply(op, st)
+    end
+    @test_skip "measure refuses X(5), X(0) and X(-1)"       # couche 3
+    # the message names the factor at fault and the size of the system
+    @test_throws "X(5) acts on site 5" expect(st, X(5))
+    @test_throws "it has 4 sites" expect(st, X(5))
+    # inside a product and inside a sum, the offending factor is the one named
+    @test_throws "Z(9) acts on site 9" expect(st, Z(1) * Z(9))
+    @test_throws "Z(7) acts on site 7" make_mpo(st, Z(1) * Z(2) + Z(3) * Z(7))
+    # an operator of several sites is checked on each of its sites
+    @test_throws "Swap(1,9) acts on site 9" apply(Swap(1, 9), st)
+    # a time dependent evolver is a vector of terms, each one checked
+    @test_throws "acts on site 6" PreMPO(st, [-im * X(1), -im * X(6)])
+    # and a mixed representation goes through the same entries
+    @test_throws "acts on site 8" expect(stm, X(8))
+    @test_throws "acts on site 8" make_mpo(stm, Dissipator(Sm)(8))
+    # an operator acting on several sites at once, which 1.x refused, is split on its sites by
+    # the descent (decision 2), see operators.jl
+    # a matrix of the wrong size for its site is refused by a message naming the operator and
+    # the site, on the three paths. It failed on a DimensionMismatch from reshape
+    b3 = Operator{1}("B3", [1. 0. 0. ; 0. 1. 0. ; 0. 0. 1.])
+    @test_throws "B3 is given by a 3×3 matrix and cannot act on Qubit()" expect(st, b3(1))
+    @test_throws "whose dimension is 2" make_mpo(st, b3(1))
+    @test_throws "whose dimension is 2" apply(b3(1), st)
+    @test_throws "whose dimension is 4" apply(Operator{2}("B9", ones(9, 9))(1, 2), st)
+    @test_skip "renyi2(stm, [2, 7]) refused"                # couche 3
+    # an operator placed on no site, or a channel, is refused by expect by name rather than by a
+    # MethodError about iterating it
+    @test_throws "such as Swap(1,2) rather than Swap" expect(st, Swap)
+    @test_throws "expect takes an observable, and Gate(X) is a channel" expect(stm, Gate(X))
+
+    # what is inside the system is untouched
+    @test_ok expect(st, X(4) * Z(1))
+    @test_ok make_mpo(st, sum(Z(i) * Z(i+1) for i in 1:3))
+    @test_ok apply(Swap(1, 4), st)
+
+    # a failed measurement used to leave the preobs cache longer than the state, with
+    # undefined entries, so a second call on the same state met an UndefRefError rather than
+    # the error it deserved
+    s2 = State{Pure}(sys, "+")
+    @test_throws "does not have" expect(s2, X(9))
+    @test length(s2.preobs.left) ≤ length(s2)
+    @test_throws "does not have" expect(s2, X(9))
+    @test expect(s2, X(3)) ≈ 1
+end
+
+@testset "Measuring one state from several threads" begin
+    # its caches were filled on demand with no lock: a thread found one sized and not yet
+    # filled, and failed on an UndefRefError. Each state below is fresh, its caches empty,
+    # pure and mixed, and on a single thread of Julia the tasks still run one after the other
+    ψ = random_state(Pure, System(12, Qubit()), 8)
+    ops = [Z(i) * Z(j) for i in 1:12 for j in i+1:12]
+    ref = [expect(State(ψ, ψ.state), o) for o in ops]
+    for s in (State(ψ, ψ.state), mix(State(ψ, ψ.state)))
+        got = fetch.([Threads.@spawn expect(s, o) for o in ops])
+        @test got ≈ ref
+    end
 end
