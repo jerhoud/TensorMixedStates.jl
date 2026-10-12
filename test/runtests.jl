@@ -1,5 +1,5 @@
 using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
-using Test, Random
+using Test, Random, Aqua
 
 # Every source of randomness in the suite is pinned, so that a run can be reproduced and a
 # failure cannot come and go. This covers `RandomState`, which draws from the global
@@ -16,8 +16,8 @@ says what belongs there. To add a group, create the file and add its name here. 
 written from its lowest layer up: a group comes back here once its tests are ported, and the
 files of the others are the tests of 1.x still to port.
 """
-const GROUPS = ["building", "channels", "compact", "observables", "operators", "prepared", "sites",
-                "states_io"]
+const GROUPS = ["building", "channels", "compact", "extension", "observables", "operators",
+                "prepared", "sites", "states_io"]
 
 # without arguments everything runs, otherwise only the groups given on the command
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`

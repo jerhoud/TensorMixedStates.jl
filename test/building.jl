@@ -1,8 +1,13 @@
 # Building the basic objects: System, State and random states, and the limits of a
-# truncation. What a state measures belongs to sites.jl.
+# truncation, plus Aqua. What a state measures belongs to sites.jl.
 #
 # An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
 # testsets of the runner and of the solvers that were here in 1.x are in v1/building.jl.
+
+@testset "Aqua" begin
+    # JSON is a dependency of the outputs of the runner, which comes with layer 5
+    Aqua.test_all(TensorMixedStates; stale_deps = (ignore = [:JSON],))
+end
 
 @testset "System building" begin
     @test_ok System(1, Qubit())
