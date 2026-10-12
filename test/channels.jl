@@ -10,6 +10,8 @@
 # strings included, and that its MPO applied to a density matrix, read back through the
 # combiners of the mixed indices, gives that map written on dense matrices, whatever order the
 # charges give those indices, and so does applying them to it.
+#
+# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
 
 """
 the identity matrix of dimension `d`
@@ -246,6 +248,7 @@ end
     @test exp(Dissipator(X)) isa TMS.ExpOp{IsChannel}
     @test ev(Evolver(-im * (X + 0.3Z))) ≈ matrix(Gate(exp(-im * t * (X + 0.3Z))), q)
     @test ev(amplitude_damping_dissipator(γ)) ≈ matrix(amplitude_damping_gate(p), q)
+    @test ev(dephasing_dissipator(γ)) ≈ matrix(dephasing_gate(p), q)
     @test ev(reset_dissipator(γ, ["Up", "Dn"])) ≈ matrix(reset_gate(p, ["Up", "Dn"]), q)
     @test ev(depolarizing_dissipator(γ, 2)) ≈ matrix(depolarizing_gate(p, 2), q)
     @test ev(dephasing_dissipator(γ, Z ⊗ Z)) ≈ matrix(dephasing_gate(p, Z ⊗ Z), q)
@@ -464,6 +467,10 @@ end
     @test_throws "carries no definite charge of N" TMS.lower(System(2, Qubit(conserve = N)), Dephase(X ⊗ X)(1, 2))
     @test_throws "acts on site 5, which the system does not have" TMS.lower(System(3, Qubit()), Gate(X)(5))
     @test_throws "acts on site 4, which the system does not have" TMS.lower(System(3, Qubit()), Dissipator(X(1) + X(4)))
+    # an operator applied to a density matrix is checked as its gate, as it was written, not as
+    # the factors its strings are laid into, which named Gate(F)(5) for C(9) in 1.x
+    ρ = mix(State{Pure}(System(4, Fermion()), "Emp"))
+    @test_throws "Gate(C)(9) acts on site 9, which the system does not have" apply(C(9), ρ)
 end
 
 @testset "The MPO of a channel or a generator on a density matrix" begin
@@ -586,6 +593,309 @@ end
         ρ2 = mix(random_state(State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"]), 2))
         @test inner(ρ2, Gate(C(1) + C(3)), ρ) ≈ LA.tr(ket_bra_matrix(ρ2)' * k * r * k')
     end
+end
+
+@testset "Noisy gates" begin
+    # a mixture of gates leaves one qubit fully mixed, and two qubits mixed with the correlation
+    # ZZ they keep (through test_phases in 1.x; the purity tr ρ², Trace2 there, is inner(ρ, ρ))
+    ρ = apply((0.5 * Gate(Id) + 0.5 * Gate(X))(1), State{Mixed}(System(1, Qubit()), "Up"))
+    @test norm([expect(ρ, X(1)), expect(ρ, Y(1)), expect(ρ, Z(1))]) < 1e-12
+    @test inner(ρ, ρ) ≈ 0.5
+    ρ = apply((0.5 * Gate(Id ⊗ Id) + 0.5 * Gate(X ⊗ X))(1, 2),
+              State{Mixed}(System(2, Qubit()), "Up"))
+    @test norm([expect1(ρ, X); expect1(ρ, Y); expect1(ρ, Z)]) < 1e-12
+    @test inner(ρ, ρ) ≈ 0.5
+    @test expect(ρ, Z(1) * Z(2)) ≈ 1
+    # a power of a noisy gate goes into an MPO as well, and the two must agree (Left(X)^2 is gone
+    # with Left, decision 1)
+    ρ = mix(State{Pure}(System(2, Qubit()), ["Up", "+"]))
+    for a in [(Gate(X)^2)(1), ((0.9 * Gate(Id) + 0.1 * Gate(X))^3)(1)]
+        @test norm(apply(a, ρ) - apply(make_mpo(ρ, a), ρ)) < 1e-12
+    end
+    # a power that is not an integer is no channel, which 1.x applied
+    @test_throws "Gate(H) has no power 0.5" Gate(H)^0.5
+end
+
+@testset "A product of gates is the operator it denotes" begin
+    # its rightmost factor acts first, as in make_mpo and expect, and on a density matrix a gate
+    # g acts as g ρ g†, what mixing the pure result gives, on qubits and beside a fermion
+    q = State{Pure}(System(2, Qubit()), ["Up", "X+"])
+    qf = State{Pure}(System([Qubit(), Fermion()]), ["X+", "Emp"])
+    for (st, g) in [(q, Swap(1, 2) * X(1)), (q, X(1) * Swap(1, 2)), (q, Sp(2) * Sm(2)),
+                    (qf, Sp(1) * Sm(1) * dag(C)(2)), (qf, dag(C)(2) * Sm(1) * Sp(1))]
+        @test norm(apply(g, st) - apply(make_mpo(st, g), st)) < 1e-12
+        @test norm(apply(g, mix(st)) - mix(apply(g, st))) < 1e-12
+    end
+end
+
+@testset "Fermionic gates" begin
+    # the two branches differ in the parity of sites 1 and 2, which makes the string acting
+    # further right observable instead of a global phase
+    fe = Fermion()
+    sys = System(4, fe)
+    st = normalize(State{Pure}(sys, ["1", "0", "1", "0"]) + State{Pure}(sys, ["0", "0", "1", "0"]))
+    ρ = mix(st)
+    # mixing the result of the pure application gives what applying it to ρ gives
+    for a in [C(3), dag(C)(4) * C(3)]
+        @test norm(mix(apply(a, st)) - apply(a, ρ)) < 1e-12
+    end
+    # a fermionic operator inside a gate takes its string, which 1.x built from the bare matrices
+    # (Left(C) and Right(C) are gone, decision 1)
+    for a in [Gate(C)(3), Gate(C ⊗ dag(C))(3, 4), Gate(C + dag(C))(3)]
+        @test norm(apply(a, ρ) - apply(make_mpo(ρ, a), ρ)) < 1e-12
+    end
+    # decision 2: the descent lays the strings, so that a dissipator of a fermionic operator and a
+    # function of an odd operator, of several sites or on site 1, which 1.x refused, are applied,
+    # here against the dense matrices of c₁ = c ⊗ 1 ⊗ 1 ⊗ 1 and c₃ = F ⊗ F ⊗ c ⊗ 1
+    c, f, id = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
+    c1, c3 = kron(c, id, id, id), kron(f, f, c, id)
+    r, v = ket_bra_matrix(ρ), full_vector(st)
+    @test ket_bra_matrix(apply(Dissipator(C)(3), ρ)) ≈
+        c3 * r * c3' - (c3' * c3 * r + r * c3' * c3) / 2
+    @test full_vector(apply(exp(0.3 * (C ⊗ Id + Id ⊗ C))(1, 3), st)) ≈ exp(0.3 * (c1 + c3)) * v
+    @test full_vector(apply(exp(0.3 * (C + dag(C)))(1), st)) ≈ exp(0.3 * (c1 + c1')) * v
+    # a gate of several sites defined by a matrix is kept whole, and a string covering only some
+    # of its sites does not commute with it: moved past it in 1.x, it changed the sign of the
+    # branch where the gate moves a fermion onto site 2 (involution_op is gone, decision 2)
+    sw = Operator{2}("Sw", [1. 0. 0. 0. ; 0. 0. 1. 0. ; 0. 1. 0. 0. ; 0. 0. 0. 1.])
+    a = dag(C)(1) * dag(C)(4) * sw(1, 2)
+    @test norm(apply(a, st) - apply(dag(C)(1), apply(dag(C)(4), apply(sw(1, 2), st)))) < 1e-12
+    @test norm(mix(apply(a, st)) - apply(a, ρ)) < 1e-12
+    # a term of coefficient zero leaves the parity of a gate alone, where it made one a sum of
+    # fermionic and non fermionic operators, and a gate whose terms all vanish makes the state
+    # null, as a gate that annihilates it does, where 1.x refused it
+    g = 0.0
+    @test norm(apply((g * C + dag(C))(4), st) - apply(dag(C)(4), st)) < 1e-12
+    @test norm(apply((g * C + g * dag(C))(4), st)) == 0
+    @test trace(apply(0 * X(1), mix(State{Pure}(System(2, Qubit()), "Up")))) == 0
+    # a factor contributing no tensor, and Swap, defined by an expression, which developed would
+    # be a sum, alone or beside a fermionic factor
+    @test_ok apply(Id(1) * X(2), State{Pure}(System(2, Qubit()), "Up"))
+    @test_ok apply(Swap(1, 2) * Swap(3, 4), State{Pure}(System(4, Qubit()), "Up"))
+    sq = State{Pure}(System([Qubit(), Qubit(), Fermion()]), ["Up", "Dn", "0"])
+    @test norm(apply(Swap(1, 2) * dag(C)(3), sq) - apply(Swap(1, 2), apply(dag(C)(3), sq))) < 1e-12
+end
+
+@testset "Tensor products of superoperators" begin
+    # (A ⊗ B)(i, j) is A(i) * B(j) for channels too, an operator being its gate, so that a
+    # channel of several sites is written once and placed anywhere: two qubits depolarized
+    # together against the Pauli form, on sites apart and reversed, and through the MPO
+    p = 0.4
+    FM = Reset("FullyMixed")
+    paulis = (Id, X, Y, Z)
+    depolarizing2 = (1 - p) * Gate(Id ⊗ Id) + p * (FM ⊗ FM)
+    pauli_form = (1 - p) * Gate(Id ⊗ Id) + p / 16 * sum(Gate(a ⊗ b) for a in paulis for b in paulis)
+    ρ = mix(random_state(Pure, System(3, Qubit()), 4))
+    for s in [(1, 2), (1, 3), (3, 1)]
+        @test norm(apply(depolarizing2(s...), ρ) - apply(pauli_form(s...), ρ)) < 1e-12
+    end
+    @test norm(apply(make_mpo(ρ, depolarizing2(1, 3)), ρ) - apply(depolarizing2(1, 3), ρ)) < 1e-12
+    @test norm(apply((X ⊗ Reset("Up"))(1, 3), ρ) - apply(Gate(X)(1) * Reset("Up")(3), ρ)) < 1e-12
+    # on fermions, the strings are laid factor by factor, in either order of the sites; C ⊗
+    # Reset("Emp"), whose Reset has no definite parity after a fermionic site, is refused, see
+    # "The tensor product of channels on fermions"
+    f = mix(random_state(Pure, System(4, Fermion()), 4))
+    for (g, s) in [(Gate(C) ⊗ Gate(dag(C)), (1, 3)), (Gate(C) ⊗ Gate(dag(C)), (3, 1)),
+                   (FM ⊗ FM, (1, 3))]
+        ref = apply(prod(o(i) for (o, i) in zip((g.subs...,), s)), f)
+        @test norm(apply(g(s...), f) - ref) < 1e-12
+    end
+    @test norm(apply(make_mpo(f, depolarizing2(2, 4)), f) - apply(depolarizing2(2, 4), f)) < 1e-12
+end
+
+@testset "Depolarization" begin
+    # the channel on any site, compared with the Pauli form on qubits, and the generator, whose
+    # evolution for a time t is the channel of probability 1 - exp(-γt)
+    p = 0.4
+    paulis = (Id, X, Y, Z)
+    q = mix(random_state(Pure, System(3, Qubit()), 4))
+    one_site = (1 - 3p / 4) * Gate(Id) + p / 4 * (Gate(X) + Gate(Y) + Gate(Z))
+    @test norm(apply(depolarizing_gate(p)(2), q) - apply(one_site(2), q)) < 1e-12
+    two_sites = (1 - p) * Gate(Id ⊗ Id) + p / 16 * sum(Gate(a ⊗ b) for a in paulis for b in paulis)
+    @test norm(apply(depolarizing_gate(p, 2)(1, 3), q) - apply(two_sites(1, 3), q)) < 1e-12
+    s = State{Mixed}(System(2, Spin(1)), "1")
+    @test expect(apply(depolarizing_gate(p)(1), s), Proj("1")(1)) ≈ 1 - p + p / 3
+    @test_skip "the generator through tdvp against the channel, on Spin(1) and two qubits"   # couche 4
+    strong_sys = System(2, Qubit(conserve = strong(N)))
+    @test_throws "conserving it strongly forbids" apply(depolarizing_gate(p)(1),
+                                                        State{Mixed}(strong_sys, "Up"))
+end
+
+@testset "Reset" begin
+    # a reset overwrites its site whatever it held, mixed or not, to a named state or to a
+    # density matrix, leaves the other sites as they were and keeps the trace
+    st = State{Mixed}(System(3, Qubit()), ["Dn", "FullyMixed", "+"])
+    @test expect1(apply(Reset("Up")(1), st), Z)[1] ≈ 1
+    st3 = apply(Reset("Dn")(2), st)
+    @test expect1(st3, Z)[2] ≈ -1
+    @test expect1(st3, Z)[[1, 3]] ≈ expect1(st, Z)[[1, 3]]
+    st4 = apply(Reset("FullyMixed")(1), st)
+    @test expect1(st4, Z)[1] ≈ 0 atol = 1e-12
+    @test trace(st4) ≈ 1
+    p0 = 0.3
+    st5 = apply(Reset([p0 0. ; 0. 1 - p0])(1), st)
+    @test expect1(st5, Z)[1] ≈ 2p0 - 1
+    @test trace(st5) ≈ 1
+end
+
+@testset "Reset channels" begin
+    # reset with probability p, to a state, n times the same state or a state per site, and its
+    # generator, whose evolution for a time t is the channel of probability 1 - exp(-γt)
+    p = 0.4
+    q = mix(random_state(Pure, System(3, Qubit()), 4))
+    applied(g) = apply(g, q)
+    @test norm(applied(reset_gate(p, "Up")(2)) -
+               applied(((1 - p) * Gate(Id) + p * Reset("Up"))(2))) < 1e-12
+    each = (1 - p) * Gate(Id ⊗ Id) + p * (Reset("Up") ⊗ Reset("Dn"))
+    @test norm(applied(reset_gate(p, ["Up", "Dn"])(1, 3)) - applied(each(1, 3))) < 1e-12
+    # (decision 20: a level is given as Level => 0, a number denoting no state)
+    by_level = applied(reset_gate(p, 2, Level => 0)(1, 3))
+    @test norm(by_level - applied(reset_gate(p, ["Up", "Up"])(1, 3))) < 1e-12
+    # a vector of numbers is the amplitudes of a single state, as for State
+    by_vector = applied(reset_gate(p, [0., 1.])(2))
+    @test norm(by_vector - applied(reset_gate(p, "Dn")(2))) < 1e-12
+    @test_skip "the generator through tdvp against the channel"   # couche 4
+    @test depolarizing_gate(p, 2) == reset_gate(p, 2, "FullyMixed")
+end
+
+@testset "Reset on fermions" begin
+    # the reset of a fermionic site keeps the correlations of the other sites across it, which
+    # its matrix, laid with no Jordan-Wigner string, changed in 1.x: compared with its Kraus
+    # operators, each gate taking its strings
+    kraus = Dict("Emp" => [(1, Gate(Id - N)), (1, Gate(C))],
+                 "Occ" => [(1, Gate(N)), (1, Gate(dag(C)))],
+                 "FullyMixed" => [(0.5, Gate(Id - N)), (0.5, Gate(C)), (0.5, Gate(N)),
+                                  (0.5, Gate(dag(C)))])
+    exact(s, i, ρ) = sum(c * apply(g(i), ρ) for (c, g) in kraus[s])
+    q, γ, t = 0.3, 0.7, 0.5
+    sys = System(4, Fermion())
+    configs = [ collect(v) for v in Iterators.product(fill(["Emp", "Occ"], 4)...) ]
+    function sector(k)
+        s = sum(randn(ComplexF64) * State{Pure}(sys, v) for v in configs if count(==("Occ"), v) == k)
+        return s / norm(s)
+    end
+    ρ = 0.7 * mix(sector(2)) + 0.3 * mix(sector(1))
+    for s in ["Emp", "Occ", "FullyMixed"], i in 1:4
+        @test norm(apply(Reset(s)(i), ρ) - exact(s, i, ρ)) < 1e-12
+    end
+    @test norm(apply(reset_gate(q, "Occ")(3), ρ) - ((1 - q) * ρ + q * exact("Occ", 3, ρ))) < 1e-12
+    @test norm(apply(depolarizing_gate(q, 2)(2, 4), ρ) -
+               ((1 - q) * ρ + q * exact("FullyMixed", 2, exact("FullyMixed", 4, ρ)))) < 1e-12
+    @test norm(apply((Reset("Occ") ⊗ Reset("Emp"))(3, 2), ρ) -
+               exact("Emp", 2, exact("Occ", 3, ρ))) < 1e-12
+    @test norm(apply(Gate(C)(1) * Reset("Occ")(3), ρ) - apply(Gate(C)(1), exact("Occ", 3, ρ))) <
+          1e-12
+    @test norm(apply(exp(t * reset_dissipator(γ, "Emp"))(3), ρ) -
+               apply(reset_gate(1 - exp(-γ * t), "Emp")(3), ρ)) < 1e-12
+    @test_skip "the generators through tdvp against the channels"   # couche 4
+    # a qubit between the fermions takes no sign
+    mixed_sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
+    m = mix((State{Pure}(mixed_sys, ["Occ", "Up", "Occ", "Emp"]) +
+             State{Pure}(mixed_sys, ["Emp", "Dn", "Occ", "Occ"])) / sqrt(2))
+    @test norm(apply(Reset("Emp")(3), m) - exact("Emp", 3, m)) < 1e-12
+    # on an Electron, see "Resets and dephasings on a density matrix"
+    @test_skip "the reset generator through tdvp leaves the other sites of an Electron"   # couche 4
+    # decision 2: the descent lays the strings of each parity, so that a reset to a state of no
+    # definite parity, against its Kraus operators |v⟩⟨i|, and a mixture of a reset and a
+    # fermionic gate, which 1.x refused, are applied
+    v = [1., 1.] / sqrt(2)
+    ks = [ Operator{1}("K", v * [ j == i ? 1. : 0. for j in 1:2 ]') for i in 1:2 ]
+    @test norm(apply(Reset(v)(2), ρ) - sum(apply(Gate(k)(2), ρ) for k in ks)) < 1e-12
+    @test norm(apply((0.5 * Gate(C) + 0.5 * Reset("Emp"))(2), ρ) -
+               (0.5 * apply(Gate(C)(2), ρ) + 0.5 * exact("Emp", 2, ρ))) < 1e-12
+    # a function of a reset of several sites is still refused, its second factor having no
+    # definite parity after a fermionic site, as in C ⊗ Reset("Emp"); compact is gone
+    @test_throws "a factor of no definite fermionic parity, Reset(\"Emp\")" apply(
+        exp(t * reset_dissipator(γ, 2, "Emp"))(2, 4), ρ)
+end
+
+@testset "Qubit decay and relaxation" begin
+    # the decay goes from "Dn", the excitation N counts, to "Up", the coherences keeping
+    # sqrt(1 - p); the relaxation of times T1 and T2 is that decay and a dephasing, which
+    # commute, so that the generator for a time t gives the product of their channels
+    p = 0.3
+    ψ = State{Pure}(System(2, Qubit()), [[0.6, 0.8], "Up"])
+    decayed = apply(amplitude_damping_gate(p)(1), mix(ψ))
+    @test trace(decayed) ≈ 1
+    @test expect(decayed, N(1)) ≈ 0.64 * (1 - p)
+    @test expect(decayed, X(1)) ≈ 2 * 0.48 * sqrt(1 - p)
+    @test_skip "amplitude_damping_dissipator through tdvp against the gate"   # couche 4
+    t, T1, T2 = 0.5, 2., 1.5
+    @test_skip "thermal_relaxation_dissipator through tdvp against the gate"   # couche 4
+    # read on the channel, where 1.x read them on the evolution
+    relaxed = apply(thermal_relaxation_gate(T1, T2, t)(1), mix(ψ))
+    @test expect(relaxed, N(1)) ≈ 0.64 * exp(-t / T1)
+    @test expect(relaxed, X(1)) ≈ 2 * 0.48 * exp(-t / T2)
+    @test_throws "no relaxation reaches" thermal_relaxation_gate(1., 3., t)
+    @test_throws "must be positive" thermal_relaxation_dissipator(0., 1.)
+    @test_throws "between 0 and 1" amplitude_damping_gate(1.5)
+end
+
+@testset "Dephasing" begin
+    # Dephase(A) erases the coherences between the eigenspaces of A and keeps those within one;
+    # its generator damps them all at one rate, where Dissipator(A) depends on the eigenvalues.
+    # Dephase() and Basis are gone: Level, the basis of the site, is the default of
+    # dephasing_gate and dephasing_dissipator
+    b = mix(State{Pure}(System(2, Boson(4)), [[1., 1., 1., 0.] / sqrt(3), "0"]))
+    @test norm(apply(Dephase(Level)(1), b) - apply(Dephase(N)(1), b)) < 1e-12
+    @test abs(expect(apply(Dephase(N)(1), b), A(1))) < 1e-12
+    @test expect(apply(Dephase(N)(1), b), N(1)) ≈ expect(b, N(1))
+    @test norm(apply(make_mpo(b, dephasing_gate(0.3)(1)), b) - apply(dephasing_gate(0.3)(1), b)) <
+          1e-12
+    @test_skip "dephasing_dissipator through tdvp, against the gate and Dissipator(Z)"   # couche 4
+    @test dephasing_gate(0.3) == dephasing_gate(0.3, Level)
+    # on an electron, Ntot does not tell Up from Dn
+    e = mix(State{Pure}(System(1, Electron()), [[0., 1., 1., 0.] / sqrt(2)]))
+    coherence = named([ i == 2 && j == 3 ? 1. : 0. for i in 1:4, j in 1:4 ], "UpDn")
+    @test expect(apply(Dephase(Ntot)(1), e), coherence(1)) ≈ 0.5
+    @test abs(expect(apply(Dephase(Level)(1), e), coherence(1))) < 1e-12
+    # of several sites, as a gate: the parity of two qubits of |++⟩ not read leaves mixed the two
+    # Bell pairs of X1X2 = 1; in a generator, the dissipators of its projectors (decision 1: a
+    # channel, where 1.x had a GenericOp{Mixed, 2})
+    pp = State{Mixed}(System(2, Qubit()), "+")
+    @test Dephase(Z ⊗ Z) isa GenericOp{IsChannel, 2}
+    @test repr(Dephase(Z ⊗ Z)) == "Dephase(Z⊗Z)"
+    dz = apply(Dephase(Z ⊗ Z)(1, 2), pp)
+    @test real(expect(dz, X(1) * X(2))) ≈ 1
+    @test abs(expect(dz, Z(1) * Z(2))) < 1e-12
+    @test abs(expect(dz, X(1))) < 1e-12
+    @test real(expect(apply(dephasing_gate(0.3, Z ⊗ Z)(1, 2), pp), X(1))) ≈ 0.7
+    @test matrix(dephasing_dissipator(1.0, Z ⊗ Z), Qubit()) ≈
+          matrix(sum(Dissipator(Proj(Z ⊗ Z => λ)) for λ in (-1, 1)), Qubit())
+    # decision 2: its matrix is split into factors of one site, so that its MPO, which 1.x
+    # refused, pointing to dephasing_dissipator, gives the channel
+    @test norm(apply(make_mpo(pp, Dephase(Z ⊗ Z)(1, 2)), pp) - dz) < 1e-12
+    # diagonal in the charges, it passes a strong conservation
+    strong_q = State{Mixed}(System(2, Qubit(conserve = strong(N))), "Up")
+    @test trace(apply(dephasing_gate(0.3)(1), strong_q)) ≈ 1
+    @test_throws "Dephase needs a Hermitian operator" apply(Dephase(Sp)(1), pp)
+end
+
+@testset "Exponentials of superoperators" begin
+    # exp(t * L) is the channel of the evolution under L for a time t; its closed forms are in
+    # "The exponential of a generator is the channel of its evolution"
+    t = 0.5
+    q = mix(random_state(Pure, System(3, Qubit()), 4))
+    @test_skip norm(apply(exp(t * Dissipator(Sm))(2), q) -
+                    tdvp(Dissipator(Sm)(2), t, q; nsteps = 20)) < 1e-10   # couche 4
+    @test_skip "exp(t * L)(1, 2) of two qubits against tdvp, its block the whole evolution"   # couche 4
+    # the identity through cosh and sinh, Evolver(Id) being twice the identity (Left(Id) is gone,
+    # decision 1)
+    @test norm(apply(exp(0.25 * Evolver(Id))(1), q) - exp(0.5) * q) < 1e-12
+    # decision 2: a fermionic jump, its strings on both sides of ρ, has one, which 1.x refused:
+    # the amplitude damping of the fermion, against its Kraus operators
+    @test exp(t * Dissipator(C)) isa TMS.ExpOp{IsChannel}
+    pd = 1 - exp(-t)
+    fs = mix(random_state(Pure, System(3, Fermion()), 4))
+    @test norm(apply(exp(t * Dissipator(C))(2), fs) -
+               apply((Gate(Id - (1 - sqrt(1 - pd)) * N) + pd * Gate(C))(2), fs)) < 1e-12
+    # the number of fermions has one, on a site conserving it: a dephasing at rate 1/2
+    f = State{Mixed}(System(3, Fermion(conserve = N)), ["Occ", "Emp", "Occ"])
+    f = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2), f)
+    @test_skip norm(apply(exp(t * Dissipator(N))(2), f) -
+                    tdvp(Dissipator(N)(2), t, f; nsteps = 20)) < 1e-10   # couche 4
+    @test norm(apply(exp(t * Dissipator(N))(2), f) - apply(dephasing_gate(1 - exp(-t / 2))(2), f)) <
+          1e-12
 end
 
 @testset "Larger channels on a density matrix" begin
