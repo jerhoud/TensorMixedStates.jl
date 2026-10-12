@@ -776,8 +776,8 @@ end
         [expect(s, Swap(2, 3)); inner(s.state', make_mpo(s, swaps), s.state);
          expect(s, controlled(Swap)(1, 2, 3)); trace(apply(make_mpo(mix(s), swaps), mix(s)))]
     end
-    @test_skip last(only(measure(swapped(Qubit(conserve = N)), Swap(1, 2)))) ≈
-        last(only(measure(swapped(Qubit()), Swap(1, 2))))                   # couche 3
+    @test last(only(measure(swapped(Qubit(conserve = N)), Swap(1, 2)))) ≈
+        last(only(measure(swapped(Qubit()), Swap(1, 2))))
     same(Qubit(conserve = strong(N)), Qubit()) do site
         ρ = mix(swapped(site))
         trace(apply(make_mpo(ρ, swaps), ρ))

@@ -231,9 +231,8 @@ end
     @test length(Set([a, b])) == 1
     # and operators that differ must keep differing
     @test length(Set([X(1) * Y(2), X(1) * Z(2)])) == 2
-    # what it is for: a product shared by two measurements is asked for only once
-    @test_skip length(Set(TMS.get_prods(State{Pure}(System(3, Qubit()), "Up"),
-                                        Measure([X(1) * Y(2) + Z(1), X(1) * Y(2) + Z(3)])))) == 3   # couche 3
+    # 1.x asked a product shared by two measurements once, through get_prods; measure prepares
+    # each operator by its compaction, as expect does (decision 7a)
 end
 
 @testset "Modulo and parity operators" begin
@@ -951,7 +950,8 @@ end
     st = random_state(Pure, System(3, q), 2)
     @test expect(st, Id(2) - X(2) * X(2)) ≈ 0 atol = 1e-12
     # it is its own adjoint, and so measured as real, a number as any expectation value is
-    @test_skip last(only(measure(st, Id(2)))) === 1.0       # couche 3
+    @test last(only(measure(st, Id(2)))) === 1.0
+    @test last(only(measure(mix(st), Id(2)))) === 1.0
     # its tensor, where one is needed, goes on the site the caller names
     @test expect1(st, Id) ≈ ones(3)
     @test expect1(mix(st), Id) ≈ ones(3)

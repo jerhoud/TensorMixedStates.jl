@@ -85,7 +85,7 @@ end
     @test_throws "no method matching norm(::Unwritable)" norm(st)
     @test_throws "no method matching normalize(::Unwritable)" normalize(st)
     @test_throws "no method matching dot(::Unwritable, ::Unwritable)" dot(st, st)
-    @test_skip "measure(st, Norm) refused the same way"     # couche 3
+    @test_throws "no method matching norm(::Unwritable)" measure(st, Norm)
 end
 
 # A representation of one's own: a state wrapping a pure `State`, which goes through the state
@@ -193,8 +193,26 @@ end
     wide = apply(gates, wide)
     ops = [dag(C)(3) * C(1), C(1) * dag(C)(3), N(1) * N(3) + 0.5 * dag(C)(2) * C(3)]
     @test [ expect(wide, o) for o in ops ] ≈ [ expect(st, o) for o in ops ]
-    @test_skip [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]   # couche 3
+    # measure goes through its expect, the values of a Hermitian operator real there too
+    @test [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]
+    @test last(only(measure(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)))) isa Float64
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
+    # expect1 and expect2 measure each value through its expect, on all sites or chosen ones, where
+    # in 1.x a representation of one's own defined its own, and so does measure for an operator of
+    # one site and a pair
+    @test expect1(wide, N) ≈ expect1(st, N)
+    @test expect1(wide, [N, C]) ≈ expect1(st, [N, C])
+    @test expect2(wide, (dag(C), C)) ≈ expect2(st, (dag(C), C))
+    @test expect2(wide, [(N, N), (C, C)]) ≈ expect2(st, [(N, N), (C, C)])
+    m = expect2(wide, (dag(C), C); sites = [1, 3])
+    @test count(ismissing, m) == 5 && m[3, 1] ≈ expect(st, dag(C)(3) * C(1))
+    @test_throws "expect2 acts on site 9, which the system does not have" expect2(wide, (N, N);
+                                                                                sites = [1, 9])
+    vals = measure(wide, [N, (dag(C), C), (N, N)])
+    @test first.(vals) == ["N", "(dag(C), C)", "(N, N)"]
+    @test last(vals[1]) isa Vector{Float64} && last(vals[1]) ≈ expect1(st, N)
+    @test last(vals[2]) isa Matrix{ComplexF64} && last(vals[2]) ≈ expect2(st, (dag(C), C))
+    @test last(vals[3]) isa Matrix{Float64} && last(vals[3]) ≈ expect2(st, (N, N))
     # a tuple of operators gives a tuple of values, on a State as on a state of one's own
     pair = (N(2), C(1) * dag(C)(3))
     @test expect(st, pair) isa Tuple
