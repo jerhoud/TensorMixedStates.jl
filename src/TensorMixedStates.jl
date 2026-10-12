@@ -1,6 +1,7 @@
 # The module TensorMixedStates: what it imports from its dependencies, and its source files in
-# the order they are read. Version 2 is written from its lowest layer up, the code of 1.x
-# staying on the branch dev.
+# the order they are read, a directory for each layer: core/ for sites, systems and states,
+# engine/ for the operators on a system, then the site types in sites/. Version 2 is written from
+# its lowest layer up, the code of 1.x staying on the branch dev.
 
 """
     TensorMixedStates
@@ -19,27 +20,27 @@ import ITensorMPS: maxlinkdim, expect, apply
 using ITensors, ITensorMPS, LinearAlgebra, Random, HDF5
 
 # Sites, systems and states
-include("Operators.jl")
-include("Sites.jl")
-include("Matrices.jl")
-include("Noise.jl")
-include("Conservation.jl")
-include("Systems.jl")
-include("States.jl")
-include("PreparedStates.jl")
-include("RandomStates.jl")
-include("Io.jl")
+include("core/Operators.jl")
+include("core/Sites.jl")
+include("core/Matrices.jl")
+include("core/Noise.jl")
+include("core/Conservation.jl")
+include("core/Systems.jl")
+include("core/States.jl")
+include("core/PreparedStates.jl")
+include("core/RandomStates.jl")
+include("core/Io.jl")
+include("core/Graphs.jl")
 
 # Operators on a system
-include("Split.jl")
-include("Lowering.jl")
-include("Compact.jl")
-include("Mpo.jl")
-include("Expect.jl")
-include("Apply.jl")
-include("PartialTrace.jl")
-include("Graphs.jl")
-include("GateStates.jl")
+include("engine/Split.jl")
+include("engine/Lowering.jl")
+include("engine/Compact.jl")
+include("engine/Mpo.jl")
+include("engine/Expect.jl")
+include("engine/Apply.jl")
+include("engine/PartialTrace.jl")
+include("engine/GateStates.jl")
 
 # Site types
 include("sites/Qubits.jl")
