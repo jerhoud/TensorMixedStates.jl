@@ -270,15 +270,8 @@ gathered in front of it. An empty product is `Id`, a product of one factor that 
 """
 struct ProdOp{K, T, N} <: Op{K, T, N}
     subs::Vector{<:Op{K, T, N}}
-    function ProdOp(subs::Vector{<:Op{K, T, N}}) where {K, T, N}
-        c = prod(scalarcoef.(subs); init = 1)
-        if isempty(subs)
-            return scale(c, IdentityOp{K, T, N}())
-        end
-        flat(x) = x isa ProdOp ? x.subs : x isa ScalarOp ? flat(x.arg) : [x]
-        s = reduce(vcat, flat.(subs))
-        return scale(c, length(s) == 1 ? s[1] : new{K, T, N}(s))
-    end
+    # the factors as they are given, which ProdOp(subs) below flattens first
+    ProdOp{K, T, N}(subs::Vector{<:Op{K, T, N}}) where {K, T, N} = new{K, T, N}(subs)
 end
 
 """
@@ -290,6 +283,15 @@ its only factor
 prodsubs(a::ProdOp) = a.subs
 prodsubs(a::ScalarOp) = prodsubs(a.arg)
 prodsubs(a::Op) = [a]
+
+function ProdOp(subs::Vector{<:Op{K, T, N}}) where {K, T, N}
+    c = prod(scalarcoef.(subs); init = 1)
+    if isempty(subs)
+        return scale(c, IdentityOp{K, T, N}())
+    end
+    s = reduce(vcat, prodsubs.(subs))
+    return scale(c, length(s) == 1 ? s[1] : ProdOp{K, T, N}(s))
+end
 
 ############### Tensor products ############
 
