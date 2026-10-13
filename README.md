@@ -65,23 +65,23 @@ The `Mixed` of `CreateState{Mixed}` is what makes the state a density matrix, an
 `Dissipator` terms added to the hamiltonian are what turn the evolution into a Lindblad equation. The run writes a
 `dissipative_ising` directory: `log` for what happened, `data` for the measurements,
 `description` and `stamp` for what was asked and when, and `prog.jl`, a copy of the script
-that produced it. The magnetization on the six sites and the purity, after the first time
-step and at the end of the evolution:
+that produced it. `data` is a table, a line naming its columns and then a line per time step:
+the magnetization on the six sites and the purity, here after the first step and at the end of
+the evolution:
 
 ```
-Z        0.1    0.94098941    0.94117682   0.94117682   0.94117682   0.94117682    0.94098941
-Purity   0.1    0.78980701
+time  Z(1)          Z(2)         Z(3)         Z(4)         Z(5)         Z(6)          Purity
+0.1   0.94098941    0.94117682   0.94117682   0.94117682   0.94117682   0.94098941    0.78980701
 ...
-Z        2     -0.095182096  -0.19011196  -0.14498043  -0.14498043  -0.19011196   -0.095182096
-Purity   2      0.1086794
+2    -0.095182095  -0.19011196  -0.14498043  -0.14498042  -0.19011196  -0.095182096   0.1086794
 ```
 
 The qubits start pure and pointing up; by the end the magnetization has reversed and the
 purity has fallen to 0.11, which is a state no pure state code could have represented.
 
-Everything is available directly too, without the phases: build a `State`, call `tdvp` or
-`dmrg` on it, and read `expect1`, `expect2` or `entanglement_entropy` off the result. The
-manual covers both styles, and [`examples/`](examples) holds twelve working scripts.
+Everything is available directly too, without the phases: build a `State`, call `evolve` or
+`ground_state` on it, and `measure` the result. The manual covers both styles, and
+[`examples/`](examples) holds twelve working scripts.
 
 ## Documentation
 
