@@ -159,21 +159,6 @@ function rebuild_site(t::Type{<:AbstractSite}, values, why::String)
 end
 
 """
-    declaration_names(name, what)
-
-the names a declaration gives, from a literal string or a vector of them, refused otherwise:
-a declaration becomes methods when the macro expands
-"""
-function declaration_names(name, what::String)
-    if name isa String
-        return [name]
-    elseif name isa Expr && name.head == :vect && all(x -> x isa String, name.args)
-        return String.(name.args)
-    end
-    error("@$what names a state by a literal string or a vector of them, not $name")
-end
-
-"""
     declared_type(t, what)
 
 the site type a declaration is for, refused when given as a site, as version 1 did
@@ -210,7 +195,16 @@ macro def_states(t, defs)
         if !(d isa Expr && d.head == :call && d.args[1] == :(=>))
             error("@def_states takes declarations name => definition, not $d")
         end
-        for name in declaration_names(d.args[2], "def_states")
+        # literal names, a declaration becoming methods when the macro expands
+        names = d.args[2]
+        if names isa String
+            names = [names]
+        elseif names isa Expr && names.head == :vect && all(x -> x isa String, names.args)
+            names = String.(names.args)
+        else
+            error("@def_states names a state by a literal string or a vector of them, not $names")
+        end
+        for name in names
             if name in seen
                 error("@def_states declares the state $name twice")
             end

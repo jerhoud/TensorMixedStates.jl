@@ -1,6 +1,6 @@
 # The matrix of an operator, a channel or a generator on sites and the vector or density matrix
 # of a local state, which call each other: a projector on a named state needs its vector, and an
-# eigenstate `A => λ` the matrix of `A`. The later layers also use `expand_sites`, `check_size`,
+# eigenstate `A => λ` the matrix of `A`. The later layers also use `expand_sites`,
 # `eigenspaces`, `nearly`, `rounding_tol` and `spectral_tol`.
 
 export matrix
@@ -42,20 +42,6 @@ function expand_sites(what, n::Int, sites)
 end
 
 expand_sites(a::GenericOp, sites) = expand_sites(a, nsites(a), sites)
-
-"""
-    check_size(what, m, sites)
-
-the matrix `m` of `what`, refused when its size is not the dimension of `sites`
-"""
-function check_size(what, m::AbstractMatrix, sites)
-    n = prod(dim, sites)
-    if size(m) ≠ (n, n)
-        error("$what is given by a $(size(m, 1))×$(size(m, 2)) matrix and cannot act on " *
-              "$(join(sites, " ⊗ ")), whose dimension is $n")
-    end
-    return m
-end
 
 """
     parity_of(m, f)
@@ -245,14 +231,20 @@ end
 
 function matrix(a::Operator, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
-    if isnothing(a.expr)
+    def = a.expr
+    if isnothing(def)
         def = operator_definition(only(sites), Val(Symbol(a.name)))
         if isnothing(def)
             error("operator $(a.name) is not defined for site $(typeof(only(sites)))")
         end
-        return check_size("operator $(a.name)", matrix(def, sites...), sites)
     end
-    return check_size("operator $(a.name)", matrix(a.expr, sites...), sites)
+    m = matrix(def, sites...)
+    n = prod(dim, sites)
+    if size(m) ≠ (n, n)
+        error("operator $(a.name) is given by a $(size(m, 1))×$(size(m, 2)) matrix and cannot " *
+              "act on $(join(sites, " ⊗ ")), whose dimension is $n")
+    end
+    return m
 end
 
 function matrix(a::Proj, site::AbstractSite, others::AbstractSite...)
