@@ -68,12 +68,14 @@ show(io::IO, a::Union{EvolutionAlgorithm, SearchAlgorithm}) =
 """
     Tdvp(; krylov = Krylov(), expand_period = 0, hermitianize_period = 0)
 
-time evolution by tdvp, for `evolve` and `thermalize`.
+time evolution by tdvp, for `evolve` and `thermalize`. The bond dimension is enlarged by a global
+Krylov expansion before any step that starts from a state whose largest bond dimension is below
+`min(5, maxdim)`, as a product state: tdvp is held to the bonds of the state it starts from, and
+would leave the error of the first steps, 5e-5 instead of 1e-7 on a Heisenberg chain.
 
 - `krylov`: the Krylov exponentiation of each local step, see `Krylov`
-- `expand_period`: enlarge the bond dimension by a global Krylov expansion before the first step
-  and then every `expand_period` steps (default 0, never): from a product state, the bond of
-  tdvp cannot grow by itself
+- `expand_period`: also enlarge it before the first step and then every `expand_period` steps
+  (default 0, never)
 - `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
   (default 0, never)
 
@@ -121,7 +123,7 @@ const w_approx_coefs = Vector{ComplexF64}[
 ]
 
 """
-    ApproxW(; order, w = 2, apply_algo = "densitymatrix", hermitianize_period = 0)
+    ApproxW(; order, w = 2, apply_algo = "naive", hermitianize_period = 0)
 
 time evolution by the WI or WII approximations of the exponential of the evolver, combined into
 an approximation of the given order, for `evolve` and `thermalize`.
@@ -131,9 +133,10 @@ an approximation of the given order, for `evolve` and `thermalize`.
   energies by about ``e^{0.03\\,d\\beta\\,\\Delta E}``, `ΔE` the width of the spectrum: unstable
   unless `dβ ΔE` is small, where orders 1 to 3 only go forwards
 - `w`: 1 or 2 for WI or WII (default 2)
-- `apply_algo`: the algorithm of the product of the state by each MPO, `"densitymatrix"`
-  (default, the fastest at equal accuracy, with the cutoff `eps()` it needs) or `"naive"`, see
-  `apply`
+- `apply_algo`: the algorithm of the product of the state by each MPO, see `apply`: `"naive"`
+  (default), exact then truncated, or `"densitymatrix"`, faster at large bond dimensions without
+  conservation (2.4x at 128 on a Heisenberg chain) but with the cutoff `eps()` it needs, which
+  stops the error near 1e-7 and lets it grow with the number of steps
 - `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
   (default 0, never): from order 2, the complex fractions of the step keep a density matrix
   hermitian only up to the order of the approximation
@@ -160,7 +163,7 @@ struct ApproxW <: EvolutionAlgorithm
     end
 end
 
-ApproxW(; order::Int, w::Int = 2, apply_algo::String = "densitymatrix",
+ApproxW(; order::Int, w::Int = 2, apply_algo::String = "naive",
         hermitianize_period::Int = 0) = ApproxW(order, w, apply_algo, hermitianize_period)
 
 """

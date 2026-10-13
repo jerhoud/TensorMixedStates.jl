@@ -45,6 +45,43 @@ prepared_evolver(::State, ::PreMPO) =
 prepared_evolver(::State, x) = error("$(repr(x)) is not an evolver")
 
 """
+    expanded(state, mpo)
+
+the state enlarged by a global Krylov expansion under `mpo`, its Krylov vectors computed as `apply`
+computes a product, "naive" and truncated at rounding alone: truncated to one more than the bond
+dimension of the state, the default of ITensorMPS, they keep nothing of some charged states, as
+FullyMixed. The other options are those of ITensorMPS. An expansion only enlarges the
+basis of the step, which goes on without it, with a warning: the state is kept as it is when
+ITensorMPS fails on charged indices, as on a state that `mpo` maps onto itself, and when the
+expansion changed it beyond rounding, as it does near its cutoff (3e-5 on a mixed product state
+under a term of weight 1e-3)
+"""
+function expanded(state::State, mpo::MPO)
+    st = state.state
+    e = try
+        expand(st, mpo; alg = "global_krylov",
+               apply_kwargs = (; alg = "naive", truncation(Limits())...))
+    catch err
+        if !any(hasqns, st)
+            rethrow()
+        end
+        @warn "the expansion before a tdvp step failed on charged indices " *
+              "($(nameof(typeof(err)))), as on a state the evolver maps onto itself: the step " *
+              "goes on without it"
+        return state
+    end
+    new = State(state, e)
+    δ = norm(new - state) / norm(state)
+    if δ > rounding_tol
+        δ = round(δ; sigdigits = 2)
+        @warn "the expansion before a tdvp step changed the state by $δ, beyond rounding: the " *
+              "step goes on without it"
+        return state
+    end
+    return new
+end
+
+"""
     evolve_step(algo, pre, coefs, state, time, dt, step, limits)
 
 the state after one step of `dt` from `time` by the method `algo`, under the evolver `pre`,
@@ -56,15 +93,15 @@ function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number,
                      step::Int, limits::Limits)
     mpo = isnothing(coefs) ? cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing) :
                              make_mpo(pre, [ f(time + dt / 2) for f in coefs ])
-    st = state.state
+    tr = truncation(limits)
     # before the step: from a state of small bond dimension, a product state, an expansion after
-    # the first step comes too late, which leaves an error of order dt
-    if due(algo.expand_period, step - 1)
-        st = expand(st, mpo; alg = "global_krylov")
+    # the step comes too late, which leaves an error of order dt
+    if maxlinkdim(state) < min(5, tr.maxdim) || due(algo.expand_period, step - 1)
+        state = expanded(state, mpo)
     end
     # eager: KrylovKit tests convergence after every vector rather than once its space is full,
     # which the short local steps of tdvp reach with far fewer products
-    st = tdvp(mpo, dt, st; nsweeps = 1, truncation(limits)...,
+    st = tdvp(mpo, dt, state.state; nsweeps = 1, tr...,
               updater_kwargs = (; eager = true, krylov_kwargs(algo.krylov)...))
     state = State(state, st)
     if due(algo.hermitianize_period, step)

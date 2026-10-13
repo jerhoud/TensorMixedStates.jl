@@ -188,12 +188,13 @@ end
     # so that each spin precesses at a rate known exactly and a function matched with the wrong
     # term shows at once. The middle of the step, and the two Gauss points of the Magnus
     # integrator of ApproxW of order 4, are exact on functions of degree one, and so are tdvp
-    # and WII on these terms: what is left is rounding, and on a mixed state the cutoff of the
-    # hundred MPOs ApproxW builds, about 1e-13
+    # and WII on these terms: what is left is rounding, on a mixed state the cutoff of the
+    # hundred MPOs ApproxW builds, about 1e-13, and for tdvp the expansions of the state before
+    # each of the hundred steps, each changing it by rounding_tol at most, 3e-13 in all
     hs = [-im * Z(1), -im * Z(2)]
     fs = [t -> 1., t -> t]
     lim = Limits(maxdim = 10, cutoff = 1e-15)
-    for (algo, tol) in [(Tdvp(), 1e-13), (ApproxW(order = 4, w = 2), 1e-12)], R in (Pure, Mixed)
+    for (algo, tol) in [(Tdvp(), 1e-12), (ApproxW(order = 4, w = 2), 1e-12)], R in (Pure, Mixed)
         st = evolve(hs => fs, 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps = 100, limits = lim)
         @test real(expect(st, [X(1), Y(1), X(2), Y(2)])) ≈ [cos(2), sin(2), cos(1), sin(1)] atol = tol
     end
@@ -204,8 +205,8 @@ end
     # lifted to the mixed representation
     ρ = mix(State{Pure}(System(2, Qubit()), "X+"))
     st = evolve(PreMPO(ρ, hs) => fs, 1., ρ; nsteps = 100)
-    @test real(expect(st, X(1))) ≈ cos(2.) atol = 1e-13
-    @test real(expect(st, X(2))) ≈ cos(1.) atol = 1e-13
+    @test real(expect(st, X(1))) ≈ cos(2.) atol = 1e-12
+    @test real(expect(st, X(2))) ≈ cos(1.) atol = 1e-12
 end
 
 @testset "Time dependent evolvers against the exact evolution" begin
@@ -405,14 +406,13 @@ end
         @test norm(evolve(-im * h, 0.2, half; algo, nsteps = 2, step = 3, limits = lim(sched)) -
                    scheduled) < 1e-12
     end
-    # and the periods of the methods, counted from `step`: on the ring of "An expansion before
-    # the first step", whose first step from a product state needs the expansion before it, an
-    # expansion every 3 steps comes before steps 1 and 4, not before step 2
+    # on the ring of "An expansion before the first step", whose first step from a product
+    # state needs the expansion before it, tdvp expands a state of bond dimension below
+    # min(5, maxdim) before any step, whatever its number, the periods coming on top of that
     ring = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6))
-    x1(step) = real(expect(evolve(ring, 0.1, st0; algo = Tdvp(expand_period = 3), step,
-                                  limits = lim(8)), X(1)))
-    @test x1(4) ≈ x1(1)
-    @test abs(x1(2) - x1(1)) > 1e-2
+    x1(step; algo = Tdvp()) = real(expect(evolve(ring, 0.1, st0; algo, step, limits = lim(8)), X(1)))
+    @test x1(2) ≈ x1(1)
+    @test x1(4; algo = Tdvp(expand_period = 3)) ≈ x1(1)
     # a mixed state made hermitian after step 3, which an evolution resumed at step 3 keeps,
     # and one started again at step 1 does not
     ρ0 = mix(State{Pure}(System(4, Qubit()), "X+"))
@@ -497,6 +497,31 @@ end
         @test real(expect(st, X(1))) ≈ 0.48881258418 atol = 1e-8
         @test real(expect(st, Z(1) * Z(6))) ≈ -0.51118741582 atol = 1e-8
     end
+end
+
+@testset "The expansion before a step of tdvp" begin
+    # tdvp expands a state whose bond dimension is below min(5, maxdim) before any step, the
+    # default Tdvp() included: on the ring above, the same values as with expand_period
+    ring = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6))
+    st = @test_logs evolve(ring, 1., State{Pure}(System(6, Qubit()), "X+"); nsteps = 10,
+                           limits = Limits(maxdim = 8, cutoff = 1e-14))
+    @test real(expect(st, X(1))) ≈ 0.48881258418 atol = 1e-8
+    # from FullyMixed on a system conserving N, where the Krylov vectors of ITensorMPS, truncated
+    # to one more than the bond dimension, kept nothing and expand failed
+    h = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:3)
+    ρ = State{Mixed}(System(4, Qubit(conserve = N)), "FullyMixed")
+    @test_logs thermalize(h, 0.1, ρ; limits = Limits(maxdim = 16))
+    # the expansion is dropped, with a warning, when expand fails on charged indices, as on a
+    # state the evolver maps onto itself, and when it changes the state beyond rounding, as on a
+    # mixed product state under a term of small weight: the step is then exact all the same
+    up = mix(State{Pure}(System(4, Qubit(conserve = N)), "Up"))
+    st = @test_logs (:warn, r"failed on charged indices \(BoundsError\)") evolve(
+        -im * h, 0.1, up; limits = Limits(maxdim = 16))
+    @test real(expect(st, Z(1))) ≈ 1
+    ρx = mix(State{Pure}(System(2, Qubit()), "X+"))
+    st = @test_logs (:warn, r"changed the state by .*, beyond rounding") evolve(
+        -im * (Z(1) + 1e-3 * Z(2)), 0.01, ρx; limits = Limits(maxdim = 10))
+    @test real(expect(st, X(2))) ≈ cos(2e-5) atol = 1e-14
 end
 
 @testset "Ising chain" begin
@@ -645,8 +670,8 @@ end
     @test repr(Tdvp(krylov = Krylov(tol = 1e-10), expand_period = 2)) ==
           "Tdvp(krylov = Krylov(tol = 1.0e-10), expand_period = 2, hermitianize_period = 0)"
     @test repr(ApproxW(order = 4)) ==
-          "ApproxW(order = 4, w = 2, apply_algo = \"densitymatrix\", hermitianize_period = 0)"
-    @test ApproxW(order = 3, w = 1, apply_algo = "naive").apply_algo == "naive"
+          "ApproxW(order = 4, w = 2, apply_algo = \"naive\", hermitianize_period = 0)"
+    @test ApproxW(order = 3, w = 1, apply_algo = "densitymatrix").apply_algo == "densitymatrix"
     @test Tdvp() isa EvolutionAlgorithm && ApproxW(order = 1) isa EvolutionAlgorithm
     # the order and the approximation are checked when the method is written, not at its first
     # step, and the order has no default
