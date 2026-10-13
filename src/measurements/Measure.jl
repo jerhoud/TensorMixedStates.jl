@@ -100,6 +100,20 @@ end
 show(io::IO, m::StateMeasurement) = print(io, m.name)
 
 """
+    ContextMeasurement(name, f, reads)
+
+a measurement of the library, written under `name`, that the function `f` of the context gives,
+reading the values `reads`, as a reference state named in the simulation
+"""
+struct ContextMeasurement
+    name::String
+    f::Function
+    reads::Vector{Symbol}
+end
+
+show(io::IO, m::ContextMeasurement) = print(io, m.name)
+
+"""
     on_state(name, f)
 
 the measurement of the library `name` that `f`, a function of the state, gives, with nothing
@@ -307,26 +321,46 @@ function reference_on(state::AbstractState, ref::State, what::String)
 end
 
 """
+    on_named(what, name, f)
+
+the measurement `what` of the state against the reference named `name`, `f(state, ref)`, the
+reference weakened to what the state conserves, `missing` while there is none
+"""
+on_named(what::String, name::Symbol, f) = ContextMeasurement(what, function (c)
+    ref = getproperty(c, name)
+    return ismissing(ref) ? missing : f(c.state, reference_on(c.state, ref, what))
+end, [name])
+
+"""
     Fidelity(ref)
+    Fidelity(name)
 
 the measurement of the fidelity with the reference state `ref`, see `fidelity`, `ref` being
-weakened to what the measured state conserves
+weakened to what the measured state conserves; given a `name`, the reference is the value of
+that name, a state named in the simulation, `missing` while there is none
 """
 Fidelity(ref::State) = StateMeasurement("Fidelity", function (state)
     r = reference_on(state, ref, "Fidelity")
     return st -> fidelity(st, r)
 end)
 
+Fidelity(name::Symbol) = on_named("Fidelity", name, (st, r) -> fidelity(st, r))
+
 """
     Overlap(ref)
+    Overlap(name)
 
 the measurement of the inner product with the reference state `ref`, see `inner`, `ref` being
-weakened to what the measured state conserves
+weakened to what the measured state conserves; given a `name`, the reference is the value of
+that name, as for `Fidelity`
 """
 Overlap(ref::State) = StateMeasurement("Overlap", function (state)
     r = reference_on(state, ref, "Overlap")
     return st -> inner(r, st)
 end)
+
+Overlap(name::Symbol) = on_named("Overlap", name, (st, r) -> inner(r, st))
+
 
 """
     variance_of(state, op)
@@ -360,6 +394,7 @@ measurement(a::IndexedOp{IsOperator}) = a
 measurement(a::SimpleOp) = a
 measurement(p::Tuple{SimpleOp, SimpleOp}) = p
 measurement(m::StateMeasurement) = m
+measurement(m::ContextMeasurement) = m
 measurement(s::Symbol) = s
 
 measurement(::Function) =
@@ -403,7 +438,7 @@ for a pair, the name of a measurement of the library, a symbol as itself
 """
 entry_name(a::Op) = obs_name(a)
 entry_name((a, b)::Tuple{SimpleOp, SimpleOp}) = "($(obs_name(a)), $(obs_name(b)))"
-entry_name(m::StateMeasurement) = m.name
+entry_name(m::Union{StateMeasurement, ContextMeasurement}) = m.name
 entry_name(s::Symbol) = string(s)
 
 """
@@ -563,6 +598,7 @@ end
 
 prepared_entry(state::AbstractState, m::StateMeasurement) = OnState(m.prepare(state))
 prepared_entry(::AbstractState, f::Function) = f
+prepared_entry(::AbstractState, m::ContextMeasurement) = m.f
 prepared_entry(::AbstractState, s::Symbol) = s
 
 """

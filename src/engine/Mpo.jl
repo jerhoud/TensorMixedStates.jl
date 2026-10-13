@@ -54,11 +54,14 @@ struct PreMPO{R <: PM}
     # `cached_mpos`
     cache::Dict{Symbol, Tuple{Any, Any}}
     lock::ReentrantLock
+    # for a pure state, a bound of the width of the spectrum of the operator, see `term_width`
+    width::Base.RefValue{Float64}
     function PreMPO{R}(system::System, nterms::Int = 1) where R
         n = length(system)
         return new{R}(system, fill(1, n - 1),
                       [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms,
-                      block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock())
+                      block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock(),
+                      Ref(0.))
     end
 end
 
@@ -105,6 +108,26 @@ function check_coefs(pre::PreMPO, coefs::AbstractVector)
 end
 
 """
+    term_width(t)
+
+a bound of the width of the spectrum of ``(t + t^\\dagger)/2`` for the term `t` of an operator on
+a pure state: the bounds of its terms add up to one of a Hermitian operator, by the inequalities
+of Weyl. It is exact for a term of at most two sites, as `apply` takes them dense, and twice
+the norm of the term beyond; a Jordan-Wigner string, of eigenvalues ±1, makes it twice the norm
+of the term without it, and a constant has none
+"""
+function term_width(t::Term)
+    if isempty(t.blocks)
+        return 0.
+    elseif length(t.blocks) > 2
+        return 2abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks)
+    end
+    m = t.coef * foldl(kron, [ m for (_, m) in t.blocks ])
+    λ = eigvals(Hermitian((m + m') / 2))
+    return isempty(t.kets) ? last(λ) - first(λ) : 2maximum(abs, λ)
+end
+
+"""
     lay_terms!(pre, terms, ref)
 
 add to `pre`, and return it, the terms of an operator, compacted, see `compacted`, taking the
@@ -113,6 +136,9 @@ identity outside their sites, see `mpo_window`, the terms of one site on their s
 channels of the terms of several sites numbered after those their links already have
 """
 function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
+    if R === Pure
+        pre.width[] += sum(term_width, terms; init = 0.)
+    end
     sys = pre.system
     constant, singles, b = compacted(R, sys, terms)
     if !iszero(constant)

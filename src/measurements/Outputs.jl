@@ -100,13 +100,26 @@ end
 
 open(d::TextFile) = TextTable(open(d.path, "w"), Printf.Format(d.format), d.path, nothing, nothing)
 
-function open(d::TextFile, mark::AbstractDict)
-    io = open(d.path, "r+")
-    truncate(io, mark["position"])
+"""
+    reopened(path, position)
+
+the file `path` opened at `position`, what was written after it removed; a file shorter than
+that, cut or removed by hand, is continued as it is, with a warning
+"""
+function reopened(path::String, position::Integer)
+    io = open(path, isfile(path) ? "r+" : "w")
+    if filesize(path) < position
+        @warn "$path is shorter than at the checkpoint, the lines it lost are not written again"
+    else
+        truncate(io, position)
+    end
     seekend(io)
-    return TextTable(io, Printf.Format(d.format), d.path, Vector{String}(mark["names"]),
-                     [ Vector{String}(c) for c in mark["columns"] ])
+    return io
 end
+
+open(d::TextFile, mark::AbstractDict) =
+    TextTable(reopened(d.path, mark["position"]), Printf.Format(d.format), d.path,
+              Vector{String}(mark["names"]), [ Vector{String}(c) for c in mark["columns"] ])
 
 open(d::Stream) = TextTable(d.io, Printf.Format(d.format), nothing, nothing, nothing)
 
@@ -243,13 +256,7 @@ struct JsonLines
 end
 
 open(d::JsonFile) = JsonLines(open(d.path, "w"))
-
-function open(d::JsonFile, mark::Integer)
-    io = open(d.path, "r+")
-    truncate(io, mark)
-    seekend(io)
-    return JsonLines(io)
-end
+open(d::JsonFile, mark::Integer) = JsonLines(reopened(d.path, mark))
 
 close(o::JsonLines) = close(o.io)
 
@@ -305,10 +312,29 @@ struct DataRows
     rows::Vector{Vector{Pair{String, Any}}}
 end
 
+"""
+    RowsMark(rows, n)
+
+the mark of a `Data`, its first `n` rows: the rows themselves, which only grow, rather than a
+copy, which a run marking every step would make of all its rows each time
+"""
+struct RowsMark
+    rows::Vector{Vector{Pair{String, Any}}}
+    n::Int
+end
+
+"""
+    kept(m)
+
+the mark `m` as it is kept beyond the run, a `RowsMark` holding its rows alone
+"""
+kept(m::RowsMark) = RowsMark(m.rows[1:m.n], m.n)
+kept(m) = m
+
 open(::Data) = DataRows(Vector{Pair{String, Any}}[])
-open(::Data, rows::AbstractVector) = DataRows(rows)
+open(::Data, m::RowsMark) = DataRows(m.rows[1:m.n])
 close(::DataRows) = nothing
-resume_mark(o::DataRows) = copy(o.rows)
+resume_mark(o::DataRows) = RowsMark(o.rows, length(o.rows))
 
 function write_row(o::DataRows, time, row)
     push!(o.rows, Pair{String, Any}[ "time" => time ; row ])
