@@ -38,7 +38,8 @@ N => m)` the canonical state of `m` particles, a product state of populations
 ``e^{\\beta\\mu n_i}`` the grand canonical state at chemical potential ``\\mu``. The
 Hamiltonian may be given as its `PreMPO` on the mixed state, prepared once and keeping its MPOs.
 `step` is the number of the first step, for the periods of the method and for `limits`, which
-may give one value per step. A pure state is refused.
+may give one value per step; from a later step, the state is taken as a computation left it, of
+trace one, and not normalized again. A pure state is refused.
 
 # Examples
 
@@ -52,7 +53,11 @@ function thermalize(hamiltonian, beta::Real, state::State{Mixed};
         error("thermalize takes at least one step, and nsteps is $nsteps")
     end
     pre = prepared_operator(state, hamiltonian)
-    state = normalize(state)
+    # a continued computation is not normalized again, which would change its rounding, and the
+    # basis an expansion picks with it
+    if step == 1
+        state = normalize(state)
+    end
     log_trace = 0.
     for k in 0:nsteps - 1
         state, l = thermal_step(algo, pre, state, beta / nsteps, step + k,

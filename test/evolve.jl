@@ -149,13 +149,12 @@ end
     # so that each spin precesses at a rate known exactly and a function matched with the wrong
     # term shows at once. The middle of the step, and the two Gauss points of the Magnus
     # integrator of ApproxW of order 4, are exact on functions of degree one, and so are tdvp
-    # and WII on these terms: what is left is rounding, on a mixed state the cutoff of the
-    # hundred MPOs ApproxW builds, about 1e-13, and for tdvp the expansions of the state before
-    # each of the hundred steps, each changing it by rounding_tol at most, 3e-13 in all
+    # and WII on these terms: what is left is rounding, and on a mixed state the cutoff of the
+    # hundred MPOs ApproxW builds, about 1e-13
     hs = [-im * Z(1), -im * Z(2)]
     fs = [t -> 1., t -> t]
     lim = Limits(maxdim = 10, cutoff = 1e-15)
-    for (algo, tol) in [(Tdvp(), 1e-12), (ApproxW(order = 4, w = 2), 1e-12)], R in (Pure, Mixed)
+    for (algo, tol) in [(Tdvp(), 1e-13), (ApproxW(order = 4, w = 2), 1e-12)], R in (Pure, Mixed)
         st = evolve(hs => fs, 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps = 100, limits = lim)
         @test real(expect(st, [X(1), Y(1), X(2), Y(2)])) ≈ [cos(2), sin(2), cos(1), sin(1)] atol = tol
     end
@@ -166,8 +165,8 @@ end
     # lifted to the mixed representation
     ρ = mix(State{Pure}(System(2, Qubit()), "X+"))
     st = evolve(PreMPO(ρ, hs) => fs, 1., ρ; nsteps = 100)
-    @test real(expect(st, X(1))) ≈ cos(2.) atol = 1e-12
-    @test real(expect(st, X(2))) ≈ cos(1.) atol = 1e-12
+    @test real(expect(st, X(1))) ≈ cos(2.) atol = 1e-13
+    @test real(expect(st, X(2))) ≈ cos(1.) atol = 1e-13
 end
 
 @testset "Time dependent evolvers against the exact evolution" begin
@@ -472,17 +471,28 @@ end
     h = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:3)
     ρ = State{Mixed}(System(4, Qubit(conserve = N)), "FullyMixed")
     @test_logs thermalize(h, 0.1, ρ; limits = Limits(maxdim = 16))
+    # on a mixed product state under a term of small weight, expand changed the state by 2.4e-5,
+    # the vectors it adds not quite orthogonal to its basis: the state written again in the
+    # enlarged bonds is exact, and so is the step
+    ρx = mix(State{Pure}(System(2, Qubit()), "X+"))
+    m = make_mpo(ρx, -im * (Z(1) + 1e-3 * Z(2)))
+    @test norm(TMS.expanded(ρx, m) - ρx) < 1e-14
+    st = @test_logs evolve(-im * (Z(1) + 1e-3 * Z(2)), 0.01, ρx; limits = Limits(maxdim = 10))
+    @test real(expect(st, X(2))) ≈ cos(2e-5) atol = 1e-14
+    # and on a mixed state of fermions, where the enlarged bonds miss about 1e-13 of the state a
+    # bond, within the precision of the expansion, kept: from FullyMixed in 10 steps, against the
+    # same thermal state in 80
+    tv = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) + 0.5 * N(i) * N(i + 1) for i in 1:5)
+    f = State{Mixed}(System(6, Fermion(conserve = N)), "FullyMixed")
+    _, ρ10 = @test_logs thermalize(tv, 2., f; nsteps = 10, limits = Limits(maxdim = 64))
+    _, ρ80 = thermalize(tv, 2., f; nsteps = 80, limits = Limits(maxdim = 64))
+    @test real(expect(ρ10, tv)) ≈ real(expect(ρ80, tv)) atol = 1e-6
     # the expansion is dropped, with a warning, when expand fails on charged indices, as on a
-    # state the evolver maps onto itself, and when it changes the state beyond rounding, as on a
-    # mixed product state under a term of small weight: the step is then exact all the same
+    # state the evolver maps onto itself: the step is then exact all the same
     up = mix(State{Pure}(System(4, Qubit(conserve = N)), "Up"))
     st = @test_logs (:warn, r"failed on charged indices \(BoundsError\)") evolve(
         -im * h, 0.1, up; limits = Limits(maxdim = 16))
     @test real(expect(st, Z(1))) ≈ 1
-    ρx = mix(State{Pure}(System(2, Qubit()), "X+"))
-    st = @test_logs (:warn, r"changed the state by .*, beyond rounding") evolve(
-        -im * (Z(1) + 1e-3 * Z(2)), 0.01, ρx; limits = Limits(maxdim = 10))
-    @test real(expect(st, X(2))) ≈ cos(2e-5) atol = 1e-14
 end
 
 @testset "Ising chain" begin
