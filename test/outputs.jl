@@ -285,5 +285,4 @@ end
         @test [ TMS.JSON.parse(l)["time"] for l in readlines(joinpath(dir, "r.json")) ] == [1, 2, 4]
         @test [ last(first(r)) for r in TMS.data_rows(o2, "r") ] == [1, 2, 4]
     end
-    @test_skip "the marks saved in a checkpoint and the outputs of a resumed simulation"   # couche 5
 end

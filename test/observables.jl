@@ -734,7 +734,12 @@ end
         @test_throws "apply_algo is" apply(m, st; apply_algo = alg)
         @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = alg)
     end
-    @test_skip "an ApproxW phase hands them on"              # couche 5
+    # and an Evolve phase with ApproxW hands it on, as evolve does
+    sim = runTMS(SimData(phases = [CreateState{Pure}(n, Qubit(), "Up"),
+                                   Evolve(evolver = -im * h, duration = 0.5, time_step = 0.1,
+                                          algo = ApproxW(order = 2, apply_algo = "densitymatrix"))]);
+                 output = devnull)
+    @test norm(sim.state - w("densitymatrix")) < 1e-12
 end
 
 @testset "Gates on sites apart, and MPOs on the sites they act on" begin
@@ -848,8 +853,18 @@ end
     @test first(only(measure(st, Overlap(ref)))) == "Overlap"
     @test last(only(measure(st, Overlap(ref)))) ≈ 1/√2
     @test last(only(measure(mix(st), Fidelity(ref)))) ≈ 0.5
-    # and through a run, where the system does not exist until the phase creates it
-    @test_skip "Fidelity and Overlap measured by a phase creating the state"   # couche 5
+    # and through a run, where the system does not exist until the phase creates it, or with a
+    # reference the run names, missing until there is one
+    sim = runTMS(SimData(phases = [CreateState{Pure}(3, Qubit(), ["+", "+", "Up"];
+                                                     final_measurements = Data("d") => [
+                                                         Fidelity(ref), Overlap(ref), "named" => Fidelity(:ref)]),
+                                   CopyState(:state => :ref; final_measurements = Data("d") => [
+                                                 Fidelity(ref), Overlap(ref), "named" => Fidelity(:ref)])]);
+                 output = devnull)
+    first_row, second_row = sim.data["d"]
+    @test last.(first_row[2:3]) ≈ [0.5, 1/√2]
+    @test ismissing(last(first_row[4]))
+    @test last(second_row[4]) ≈ 1
 
     # a reference built before the state was weakened is weakened in its turn to what the state
     # conserves, on a system mixing sites that conserve and sites that do not as well
@@ -1283,13 +1298,12 @@ end
         @test p ≈ 1
         @test abs(expect(s, (dag(Cup) * Cdn)(1))) ≈ 0.5
     end
-    # on a strong symmetry, and on a simulation, which keeps its time
+    # on a strong symmetry
     fs = mix(apply(sqrt(Swap)(1, 2),
                    State{Pure}(System(2, Qubit(conserve = strong(N))), ["Dn", "Up"])))
     x, _, s = collapse(fs, 1; rng)
     @test real(expect(s, N(1))) ≈ x
     @test real(expect(s, N(1) + N(2))) ≈ 1
-    @test_skip collapse(Simulation(bell; time = 2.), 1; rng).state.time == 2.     # couche 5
 end
 
 @testset "Measuring an operator of several sites" begin
@@ -1419,8 +1433,6 @@ end
     @test x === 1
     @test p ≈ 0.5
     @test real(expect(after, Z(2))) ≈ -1
-    @test_skip collapse(Simulation(bell; time = 3.), 2 => 0).probability ≈ 0.5    # couche 5
-    @test_skip collapse(Simulation(bell; time = 3.), 2 => 0).state.time == 3.     # couche 5
     up = State{Pure}(System(2, Qubit()), "Up")
     @test_throws "0.5 is not a result of measuring X(1)" collapse(plus, X(1) => 0.5)
     @test_throws "of probability" collapse(up, Z(1) => -1)

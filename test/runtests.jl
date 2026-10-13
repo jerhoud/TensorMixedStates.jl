@@ -17,7 +17,7 @@ written from its lowest layer up: a group comes back here once its tests are por
 files of the others are the tests of 1.x still to port.
 """
 const GROUPS = ["building", "channels", "compact", "evolve", "extension", "observables", "operators",
-                "outputs", "prepared", "searches", "sites", "states_io"]
+                "outputs", "prepared", "runner", "searches", "sites", "states_io"]
 
 # without arguments everything runs, otherwise only the groups given on the command
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`

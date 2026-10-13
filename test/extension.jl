@@ -7,8 +7,8 @@
 # tests the same code would run when included and show nothing. A representation of its own
 # needs no such thing and is checked here directly.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
-# algorithms of one's own of 1.x, which run in phases, are in v1/extension.jl.
+# The algorithms and the phases of one's own run by runTMS are here too, their resume with the
+# others in runner.jl.
 
 using TensorMixedStates: AbstractState
 
@@ -102,6 +102,33 @@ function TensorMixedStates.read_state(::Type{WrappedState}, g, sites)
     return WrappedState(inner.system, inner)
 end
 
+# phases of one's own creating a WrappedState and turning its first qubit, step by step
+Base.@kwdef struct CreateWrapped <: TensorMixedStates.AbstractPhase
+    name::String = "wrapped"
+    time_start = nothing
+    final_measurements = []
+end
+
+TensorMixedStates.creates_state(::CreateWrapped) = true
+
+function TensorMixedStates.run_phase(::CreateWrapped, sim::Simulation, ::Int)
+    st = State{Pure}(System(3, Qubit()), "Up")
+    return Simulation(sim, WrappedState(st.system, st))
+end
+
+Base.@kwdef struct TurnWrapped <: TensorMixedStates.AbstractPhase
+    name::String = "turn"
+    time_start = nothing
+    final_measurements = []
+    measurements = []
+end
+
+TensorMixedStates.prepare_phase(p::TurnWrapped, _) = p
+TensorMixedStates.step_count(::TurnWrapped) = 3
+TensorMixedStates.run_step(::TurnWrapped, sim, _) =
+    Simulation(sim, WrappedState(sim.state.system, apply(exp(-0.4im * X)(1), sim.state.inner)),
+               sim.time + 1)
+
 # a state whose type has a parameter, which a state file does not record: write_state writes it
 # in the group and a method of read_state for the type without parameters reads it back
 struct Tagged{T} <: AbstractState
@@ -135,7 +162,21 @@ end
 @testset "A representation of one's own" begin
     sys = System(3, Qubit())
     st = WrappedState(sys, apply(X(1) * H(2), State{Pure}(sys, "Up")))
-    @test_skip "CreateState and Gates of a representation of one's own, measured and resumed"   # couche 5
+    # run by phases of one's own, measured, and resumed through its state files
+    mktempdir() do dir
+        cd(dir) do
+            z = "z" => c -> real(expect(c.state.inner, Z(1)))
+            phases = [CreateWrapped(), TurnWrapped(measurements = "z" => z)]
+            ref = runTMS(SimData(; name = "ref", phases))
+            sim = runTMS(SimData(; name = "chk", phases); max_time = -1)
+            while stopped(sim)
+                sim = runTMS(SimData(; name = "chk", phases); max_time = -1)
+            end
+            @test sim.state isa WrappedState
+            @test read("chk/z", String) == read("ref/z", String)
+            @test sim.time == 3
+        end
+    end
     mktempdir() do dir
         file = joinpath(dir, "wrapped.h5")
         save_state(file, "w", st)
@@ -269,7 +310,6 @@ function TensorMixedStates.search(::DenseSearch, mpo, state::State{R}, limits; s
 end
 
 @testset "An algorithm of one's own" begin
-    @test_skip "tdvp step by step through run_steps, resumed as the uninterrupted run"   # couche 5
     # an evolution of one's own goes through evolve and thermalize, which give each step the
     # PreMPO of the evolver, its time functions, the time, the step, its number and its limits.
     # Tdvp, at full bond dimension, is exact on three sites, see evolve.jl
@@ -280,6 +320,18 @@ end
     for (st, ev) in [(ψ, -im * h), (mix(ψ), -im * h + Dissipator(sqrt(0.3) * Sm)(1))]
         @test norm(evolve(ev, 0.5, st; algo = DenseStep()) - evolve(ev, 0.5, st; nsteps = 4, limits = lim)) <
               1e-10
+    end
+    # and an Evolve phase, resumed after each step as the uninterrupted run
+    mktempdir() do dir
+        cd(dir) do
+            phases = [CreateState{Pure}(3, Qubit(), ["Up", "+", "Dn"]),
+                      Evolve(evolver = -im * h, duration = 0.4, time_step = 0.1, algo = DenseStep(),
+                             measurements = "data" => [X(1), Z])]
+            runTMS(SimData(; name = "ref", phases))
+            while stopped(runTMS(SimData(; name = "chk", phases); max_time = -1))
+            end
+            @test read("chk/data", String) == read("ref/data", String)
+        end
     end
     hs = [-im * X(1) * X(2), -im * sum(Z(i) for i in 1:3)]
     fs = [t -> 1., t -> cos(2t)]

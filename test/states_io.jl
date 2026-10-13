@@ -131,13 +131,13 @@ end
 
     # SaveState and LoadState phases, the check fails if the state is not restored
     file2 = joinpath(dir, "phases.h5")
-    @test_skip test_phases([                               # couche 5
+    @test_ok runTMS(SimData(phases = [
         CreateState{Pure}(3, Qubit(), ["Up", "Dn", "Up"]),
         SaveState(file = file2, statename = "st"),
         CreateState{Pure}(1, Qubit(), "Dn"),
         LoadState(file = file2, statename = "st",
-            final_measurements = check(Z, [1, -1, 1])),
-    ])
+                  final_measurements = "" => ["z" => c -> Check(real(expect1(c.state, Z)), [1, -1, 1];
+                                                                tol = 1e-12)])]); output = devnull)
 end
 
 @testset "A state file with its conserved quantities unsorted" begin

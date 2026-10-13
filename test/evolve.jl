@@ -216,7 +216,13 @@ end
     # a single term with its function is written with the vectors
     @test_throws "is not an evolver" evolve(-im * Z(1) => [t -> 1.], 0.1, st)
     @test real(expect(evolve([-im * Z(1)] => [t -> 2.], 0.4, st), X(1))) ≈ cos(1.6)
-    @test_skip "a single term with its function in an Evolve phase"   # couche 5
+    # which an Evolve phase writes A => f as well
+    run(evolver) = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "X+"),
+                                            Evolve(; evolver, duration = 0.4, time_step = 0.1)]);
+                          output = devnull)
+    @test real(expect(run(-im * Z(1) => (t -> 2.)).state, X(1))) ≈ cos(1.6)
+    @test real(expect(run([-im * Z(1)] => [t -> 2.]).state, X(1))) ≈ cos(1.6)
+    @test_throws "is not an evolver" run(-im * Z(1) => [t -> 1.])
 end
 
 @testset "Time functions take real values" begin
@@ -409,7 +415,28 @@ end
         @test l1 + l2 ≈ l
         @test norm(rest - whole) < 1e-12
     end
-    @test_skip "an Evolve phase ends where it was asked to, its step adjusted to the duration"   # couche 5
+    # an Evolve phase takes the step dividing its duration into the nearest whole number of
+    # steps, ends where it was asked to, and skips a duration shorter than half a step
+    function steps(duration, time_step)
+        io = IOBuffer()
+        sim = runTMS(SimData(time_start = 1., phases = [
+            CreateState{Pure}(2, Qubit(), "X+"),
+            Evolve(evolver = -im * Z(1), duration = duration, time_step = time_step,
+                   measurements = Data("t") => :step)]); output = io)
+        return sim, [ last(first(r)) for r in get(sim.data, "t", []) ], String(take!(io))
+    end
+    sim, times, log = steps(1., 0.3)
+    @test sim.time == 2.
+    @test times ≈ [4/3, 5/3, 2.]
+    @test occursin("Taking a step of 0.3333333333333333 rather than 0.3 to cover 1.0 in 3 steps", log)
+    sim, times, _ = steps(-1., 0.5)
+    @test sim.time == 0. && times ≈ [0.5, 0.]
+    @test real(expect(sim.state, X(1))) ≈ cos(2.)
+    sim, times, log = steps(0.1, 0.3)
+    @test sim.time == 1. && isempty(times)
+    @test occursin("Skipping an evolution of 0.1, shorter than half a step", log)
+    @test_throws "the time step of an Evolve cannot be zero" Evolve(evolver = -im * Z(1), duration = 1.,
+                                                                     time_step = 0)
 end
 
 @testset "Periods below one mean never" begin
@@ -431,7 +458,12 @@ end
         @test norm(evolve(ev, 0.3, ρ; algo = ApproxW(order = 2, hermitianize_period = period),
                           nsteps = 3) - plain) < 1e-14
     end
-    @test_skip "measurements_period counted in a Data destination"   # couche 5
+    # the measurements of an Evolve phase every measurements_period steps, from its start
+    sim = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "X+"),
+                                   Evolve(evolver = -im * Z(1), duration = 1., time_step = 0.1,
+                                          measurements = Data("p") => :step, measurements_period = 3)]);
+                 output = devnull)
+    @test [ last(r[2]) for r in sim.data["p"] ] == [3, 6, 9]
 end
 
 @testset "Hermitianizing a mixed state" begin
@@ -556,7 +588,12 @@ end
     # KrylovKit warns at each step that it has not converged
     _, poor = Test.collect_test_logs(() -> evolved(Krylov(dim = 1, maxiter = 1)))
     @test precession_error(poor) > 1e-2
-    @test_skip "a Tdvp phase hands them on"   # couche 5
+    # and so does an Evolve phase, KrylovKit warning outside of the log of the run
+    _, sim = Test.collect_test_logs(() -> runTMS(SimData(phases = [
+        CreateState{Pure}(2, Qubit(), "X+"),
+        Evolve(evolver = -im * Z(1), duration = 1., time_step = 0.1, limits = lim,
+               algo = Tdvp(krylov = Krylov(dim = 1, maxiter = 1)))]); output = devnull))
+    @test precession_error(sim.state) > 1e-2
 end
 
 @testset "Evolving a state that carries charges" begin
@@ -797,7 +834,17 @@ end
         push!(es, real(expect(ρ, h)))
     end
     @test maximum(abs((ls[k+2] - ls[k]) / 0.1 + es[k]) for k in 1:19) < 5e-3
-    @test_skip "the Thermalize phase, its measurements of beta and log_trace, the time left alone"   # couche 5
+    # which a Thermalize phase gives as :beta and :log_trace, the time left alone; it normalizes
+    # at its first step only, where thermalize does at each call
+    sim = runTMS(SimData(time_start = 1.5, phases = [
+        CreateState{Mixed}(n, Qubit(), "FullyMixed"),
+        Thermalize(hamiltonian = h, beta = 1., beta_step = 0.05, limits = lim,
+                   measurements = Data("th") => [:beta, :log_trace])]); output = devnull)
+    rows = sim.data["th"]
+    @test [ last(r[2]) for r in rows ] ≈ 0.05:0.05:1.
+    @test [ last(r[3]) for r in rows ] ≈ ls[2:end]
+    @test all(last(r[1]) == 1.5 for r in rows) && sim.time == 1.5
+    @test sim.log_trace ≈ ls[end] && sim.beta == 1.
 end
 
 @testset "What thermalize refuses" begin
@@ -817,5 +864,10 @@ end
         PreMPO(State{Mixed}(System(3, Qubit()), "FullyMixed"), Z(1)), 1., ρ)
     @test_throws "thermalize takes at least one step, and nsteps is 0" thermalize(h, 1., ρ; nsteps = 0)
     @test_throws MethodError thermalize(h, 1., ρ; maxdim = 4)
-    @test_skip "a Thermalize phase of a step of zero"   # couche 5
+    # and a Thermalize phase, a step of zero when it is written, a pure state when it runs
+    @test_throws "the beta_step of a Thermalize cannot be zero" Thermalize(hamiltonian = h, beta = 1.,
+                                                                         beta_step = 0)
+    @test_throws "a thermal state needs a mixed representation" runTMS(SimData(phases = [
+        CreateState{Pure}(n, Qubit(), "Up"),
+        Thermalize(hamiltonian = h, beta = 1., beta_step = 0.5)]); output = devnull)
 end

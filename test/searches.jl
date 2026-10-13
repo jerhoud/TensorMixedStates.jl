@@ -59,7 +59,8 @@ end
     lim = Limits(cutoff = 1e-14, maxdim = 32)
     function sweeps(algo; kwargs...)
         seen = []
-        e, st = TMS.search(algo, mpo, r, lim; sweep_done = (k, e, st) -> push!(seen, (k, e, st)),
+        e, st = TMS.search(algo, mpo, r, lim;
+                           sweep_done = (k, e, st, stop) -> push!(seen, (k, e, st, stop)),
                            kwargs...)
         return e, st, seen
     end
@@ -70,22 +71,28 @@ end
     @test abs(seen[k][2] - seen[k-1][2]) < 1e-10
     @test abs(seen[k-1][2] - seen[k-2][2]) ≥ 1e-10
     @test seen[k][2] ≈ e
+    # the last sweep says that the search ends there, which a phase commits as its end
+    @test last.(seen) == [ falses(k - 1) ; true ]
     # the state of each sweep is normalized, as the one returned
     @test norm(seen[k][3]) ≈ 1
     @test norm(seen[k][3] - st) < 1e-12
-    # with no tolerance, every sweep is made
+    # with no tolerance, every sweep is made, the last one ending the search
     @test first.(last(sweeps(Dmrg(nsweeps = 5)))) == 1:5
+    @test last.(last(sweeps(Dmrg(nsweeps = 5)))) == [ falses(4) ; true ]
     @test first(ground_state(h, r; algo = Dmrg(nsweeps = 20, tol = 1e-10), limits = lim)) ≈ e
 end
 
 @testset "A search resumed after some of its sweeps" begin
     # a search resumed after its last sweep is asked for none, on which ITensorMPS gave an
-    # energy of 0: it is that of the state given
+    # energy of 0: it is that of its last sweep, as the search it resumes gave it, or else that
+    # of the state given
     h = -sum(Z(i) for i in 1:2) - 0.5 * X(1)
     st = State{Pure}(System(2, Qubit()), "Up")
     e, s = TMS.search(Dmrg(nsweeps = 2), make_mpo(st, h), st, Limits(); done = 2)
     @test e ≈ real(expect(st, h))
     @test norm(s - st) < 1e-14
+    @test first(TMS.search(Dmrg(nsweeps = 2), make_mpo(st, h), st, Limits(); done = 2,
+                           energy = -1.5)) == -1.5
     # the sweeps are counted after those made, and take the rest of the schedules: the bond
     # dimension of the last sweep, 4, where a search of one sweep keeps the first, 1
     n = 4
@@ -96,7 +103,7 @@ end
     for done in 0:2
         seen = Int[]
         _, s = TMS.search(Dmrg(nsweeps = 3), mpo, up, lim; done,
-                          sweep_done = (k, _, _) -> push!(seen, k))
+                          sweep_done = (k, _, _, _) -> push!(seen, k))
         @test seen == done+1:3
         @test maxlinkdim(s) > 1
     end
@@ -112,10 +119,9 @@ end
     for (energy, count) in ((e0, 1), (nothing, 2))
         seen = Int[]
         TMS.search(Dmrg(nsweeps = 10, tol = 1e-8), mpo, gs, Limits(maxdim = 8); done = 3, energy,
-                   sweep_done = (k, _, _) -> push!(seen, k))
+                   sweep_done = (k, _, _, _) -> push!(seen, k))
         @test seen == 4:3+count
     end
-    @test_skip "a GroundState phase resumed after a checkpoint"   # couche 5
 end
 
 @testset "Steady state" begin
@@ -222,7 +228,22 @@ end
     _, ρ = steady_state(L, ρ0; algo = Dmrg(nsweeps = 2, krylov = Krylov(dim = 1, maxiter = 1)),
                         limits = lim)
     @test real(expect1(ρ, Z)) ≈ [0, 0] atol = 1e-12
-    @test_skip "the GroundState and SteadyState phases hand them on"   # couche 5
+    # which the GroundState and SteadyState phases hand on, the latter with the same defaults
+    sim = runTMS(SimData(phases = [
+        CreateState{Pure}(n, Qubit(), "Up"),
+        GroundState(hamiltonian = h, algo = Dmrg(nsweeps = 3, krylov = Krylov(dim = 1)), limits = lim)]);
+        output = devnull)
+    @test sim.energy ≈ 0 atol = 1e-12
+    sim = runTMS(SimData(phases = [
+        CreateState{Mixed}(2, Qubit(), "FullyMixed"),
+        SteadyState(lindbladian = L, algo = Dmrg(nsweeps = 2, krylov = Krylov(dim = 1, maxiter = 1)),
+                    limits = lim)]); output = devnull)
+    @test real(expect1(sim.state, Z)) ≈ [0, 0] atol = 1e-12
+    L2 = -im * (X(1) + 0.7 * X(2)) + Dissipator(Sm)(1)
+    sim = runTMS(SimData(phases = [CreateState{Mixed}(2, Qubit(), "FullyMixed"),
+                                   SteadyState(lindbladian = L2, algo = Dmrg(nsweeps = 3), limits = lim)]);
+                 output = devnull)
+    @test norm(sim.state - last(steady_state(L2, ρ0; algo = Dmrg(nsweeps = 3), limits = lim))) < 1e-12
 
     # a field left nothing takes the default of the method, field by field: KrylovKit's prefixed
     # for dmrg, and dim = 8 and maxiter = 3 for steady_state, which Krylov(tol = …) keeps where
@@ -339,7 +360,12 @@ end
         h, ρ; algo)
     @test_throws "steady_state searches a density matrix: mix the state" steady_state(
         Dissipator(Sm)(1), st; algo)
-    @test_skip "a GroundState phase on a mixed state"   # couche 5
+    # and so do the phases
+    @test_throws "GroundState searches a pure state" runTMS(SimData(phases = [
+        CreateState{Mixed}(2, Qubit(), "Up"), GroundState(; hamiltonian = h, algo)]); output = devnull)
+    @test_throws "SteadyState searches a density matrix" runTMS(SimData(phases = [
+        CreateState{Pure}(2, Qubit(), "Up"), SteadyState(; lindbladian = Dissipator(Sm)(1), algo)]);
+        output = devnull)
     # an MPO, a PreMPO of another system or of the other representation, and what is no operator
     msg = "the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO"
     @test_throws msg ground_state(make_mpo(st, h), st; algo)
@@ -359,4 +385,52 @@ end
     # the options of ITensorMPS are not passed on, `outputlevel` included
     @test_throws MethodError ground_state(X(1) * X(2), st; algo, outputlevel = 1)
     @test_throws MethodError steady_state(Dissipator(Sm)(1), ρ; algo, outputlevel = 1)
+end
+
+@testset "Excited states" begin
+    # the bound of the width of the spectrum, by the inequalities of Weyl, term by term: exact on
+    # a term of two sites, a constant counting for nothing, a positive term for its largest
+    # eigenvalue, a hopping and its adjoint for the width of their sum, a term of more sites by
+    # the norms of its blocks
+    n = 6
+    sys = System(n, Qubit())
+    up = State{Pure}(sys, "Up")
+    heis = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:n-1)
+    @test PreMPO(up, heis).width[] ≈ 6(n - 1)
+    @test PreMPO(up, heis + 2.0 * Id(1)).width[] ≈ 6(n - 1)
+    @test PreMPO(up, 2 * N(1) * N(2)).width[] ≈ 2
+    @test PreMPO(up, Z(1) * Z(2) * Z(3)).width[] ≈ 2
+    @test PreMPO(State{Pure}(System(4, Fermion()), "Emp"),
+                 dag(C)(1) * C(3) + dag(C)(3) * C(1)).width[] ≈ 2
+    # the lowest eigenstates in turn, each orthogonal to those before, the energy that of the
+    # Hamiltonian alone, against its spectrum
+    H = heis + 0.3 * sum(Z(i) for i in 1:n)
+    LA = TMS.LinearAlgebra
+    E = LA.eigvals(LA.Hermitian(Matrix(TMS.system_matrix(Pure, sys, TMS.lower(sys, H)))))
+    @test PreMPO(up, H).width[] ≥ E[end] - E[1]
+    r = random_state(Pure, sys, 4; rng = Xoshiro(1))
+    lim = Limits(maxdim = 32)
+    algo = Dmrg(nsweeps = 40, tol = 1e-13)
+    e0, g = ground_state(H, r; algo, limits = lim)
+    e1, x = ground_state(H, r; algo, limits = lim, orthogonal_to = [g])
+    @test e0 ≈ E[1]
+    @test e1 ≈ E[2] atol = 1e-9
+    @test e1 ≈ real(expect(x, H))
+    @test abs2(inner(g, x)) < 1e-12
+    # the next one, with a weight above its gap, and one below, which falls back on the ground
+    # state and warns
+    e2, _ = ground_state(H, r; algo, limits = lim, orthogonal_to = [g, x], weight = 2(E[3] - E[1]))
+    @test e2 ≈ E[3] atol = 1e-9
+    @test_logs (:warn, r"keeps an overlap of .* the weight .* is below the gap") match_mode = :any ground_state(
+        H, r; algo, limits = lim, orthogonal_to = [g], weight = 0.1 * (E[2] - E[1]))
+    # a state of another sector of charge is orthogonal already, and left out
+    qs = System(n, Qubit(conserve = N))
+    a = State{Pure}(qs, [ isodd(i) ? "Up" : "Dn" for i in 1:n ])
+    b = State{Pure}(qs, "Up")
+    pre = PreMPO(a, heis)
+    @test isempty(TMS.orthogonal_args(a, pre, [b], nothing))
+    @test TMS.orthogonal_args(a, pre, [a], nothing).weight == pre.width[]
+    @test TMS.orthogonal_args(a, pre, [a], 0.5).weight == 0.5
+    @test_throws "on another system" ground_state(heis, a; algo, orthogonal_to = [up])
+    @test_throws "orthogonal to pure states, not to a" ground_state(heis, a; algo, orthogonal_to = [mix(a)])
 end
