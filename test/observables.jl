@@ -870,7 +870,7 @@ end
         @test last(only(measure(weaken(p), Overlap(p)))) ≈ 1
     end
     # and a pure reference on a state dropping part of what it conserves, a site left conserving
-    # nothing being cut into a single block on a system still charged (v1/building.jl)
+    # nothing being cut into a single block on a system still charged, as 1.x tested it
     sys = System([Qubit(conserve = N), Boson(3, conserve = named(N, "Nb")),
                   Boson(3, conserve = named(N, "Nb")), Qubit(conserve = N)])
     p(v) = State{Pure}(sys, v)
