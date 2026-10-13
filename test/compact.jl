@@ -4,9 +4,8 @@
 # The invariant to prefer is that the MPO stands for the operator it was made from: it gives the
 # dense matrix of its terms. Bond dimensions are checked against the least any triangular MPO of
 # the operator can have, computed here from the dense operator alone, so that the tests do not
-# depend on how the compaction gets there. The testsets of 1.x on compact and its coms are still
-# in v1/compact.jl; the MPO of channels and generators on a density matrix is tested in
-# channels.jl.
+# depend on how the compaction gets there. The MPO of channels and generators on a density matrix is
+# tested in channels.jl.
 
 """
 the dense matrix of the operator `op` on the sites of `st`, from its terms

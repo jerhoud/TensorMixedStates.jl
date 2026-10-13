@@ -5,14 +5,8 @@
 # fidelities and variance. And the projective measurements: probabilities, sample and collapse,
 # their fast paths checked against the dense one. And measure: the lists of measurements, their
 # names, the kinds of their values, what they refuse, the measurements of the library, the
-# functions of a context with the Check they return, and the preparation a Measure keeps.
-#
-# The testsets of 1.x on the channels are still in v1/observables.jl; its assertions on
-# expectation values, on measure, on inner products, on apply, on partial traces and on the
-# functions above are here, with those of v1/building.jl on sites out of the system and of
-# v1/threading.jl on measuring from several threads.
-#
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
+# functions of a context with the Check they return, and the preparation a Measure keeps. The
+# channels are tested in channels.jl.
 
 """
 the matrix, on `n` sites `site`, of the product of operators of one site `factors`, pairs

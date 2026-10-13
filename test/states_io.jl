@@ -1,9 +1,8 @@
 # Getting data in and out: saving a state to a file and reading it back, with a round trip
 # check whenever possible, and printing what has to read back.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
-# testsets of resetting a site, of the partial trace and of the output of a simulation are still
-# in v1/states_io.jl.
+# Resetting a site is tested in channels.jl, the partial trace in observables.jl and the output
+# of a simulation in outputs.jl and runner.jl.
 
 # Sites whose fields are not all numbers, which version 1 of the state file format could not
 # carry, writing every field as a Float64. The fields cover every kind a state file accepts but

@@ -1,10 +1,8 @@
 # Building the basic objects: System, State and random states, and the limits of a
 # truncation, plus Aqua. What a state measures belongs to sites.jl.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
-# testsets of the runner that were here in 1.x are in v1/building.jl; those of the noise and of
-# the Krylov parameters of the solvers are in searches.jl, the phases that take them in
-# v1/building.jl.
+# The phases that make the state, run by runTMS, are in runner.jl; the noise and the Krylov
+# parameters of the solvers in searches.jl.
 
 @testset "Aqua" begin
     Aqua.test_all(TensorMixedStates)

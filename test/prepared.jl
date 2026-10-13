@@ -2,8 +2,6 @@
 # mixed state of a sector, states from their MPS tensors, dense vector or density matrix,
 # superpositions and mixtures; and those built by applying gates to a product state, graph
 # states, dimer states, Slater determinants and Fermi seas, with the graphs they are built on.
-#
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
 
 # a site holding a fermion beside a level of its own, which its annihilation operator leaves
 # alone: two states have no fermion, and no single vacuum

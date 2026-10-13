@@ -175,6 +175,14 @@ end
             @test sim.state isa WrappedState
             @test read("chk/z", String) == read("ref/z", String)
             @test sim.time == 3
+            # LoadState reads it back, not truncated at the default limits, which it has no
+            # method for, and :auto chooses the threading from its system
+            save_state("w.h5", "w", st)
+            sim = runTMS(SimData(name = "load", phases = [LoadState(file = "../w.h5", statename = "w")]);
+                         threading = :auto)
+            @test sim.state isa WrappedState
+            @test_throws MethodError runTMS(SimData(name = "cut", phases = [
+                LoadState(file = "../w.h5", statename = "w", limits = Limits(maxdim = 2))]))
         end
     end
     mktempdir() do dir

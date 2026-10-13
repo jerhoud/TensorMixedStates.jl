@@ -10,8 +10,6 @@
 # strings included, and that its MPO applied to a density matrix, read back through the
 # combiners of the mixed indices, gives that map written on dense matrices, whatever order the
 # charges give those indices, and so does applying them to it.
-#
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
 
 """
 the identity matrix of dimension `d`
@@ -1054,4 +1052,16 @@ end
     m = TMS.kraus_sum(S, ss)
     i = one(m)
     @test superop(fs, Dissipator(Φ)) ≈ S - (TMS.sided(m, i, ss) + TMS.sided(i, m, ss)) / 2
+end
+
+@testset "A factor holding the identity on a density matrix" begin
+    # (Id + Z)(1) * Z(2) stands for Z(2) + Z(1) * Z(2) in the channel and the generator it makes,
+    # its part of one site laid on that site, as for a pure state (compact.jl), where 1.x tested
+    # it through Left
+    ρ = random_state(Mixed, System(3, Qubit()), 4; rng = Xoshiro(20261013))
+    a = ((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)
+    b = Z(2) + Z(1) * Z(2)
+    for op in (Gate, Evolver)
+        @test norm(apply(make_mpo(ρ, op(a)), ρ) - apply(make_mpo(ρ, op(b)), ρ)) < 1e-12
+    end
 end

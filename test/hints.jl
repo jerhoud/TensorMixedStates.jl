@@ -74,3 +74,17 @@ end
     @test occursin("takes no type and no sites",
                    message(() -> Operator{1}("A", [1. 0.; 0. 1.], 1, Qubit())))
 end
+
+@testset "data_to_frame without DataFrames" begin
+    # in a process that has not loaded DataFrames, the error says to load it
+    script = """
+        using TensorMixedStates
+        try
+            data_to_frame(Dict())
+        catch e
+            print(sprint(showerror, e))
+        end
+        """
+    out = read(`$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no -e $script`, String)
+    @test occursin("data_to_frame needs the DataFrames package: run using DataFrames", out)
+end

@@ -1,7 +1,6 @@
 # Helpers shared by every test group. Nothing here runs a test by itself: this file is
 # included before the groups, outside of the global testset, so that the macros it defines
-# exist by the time the group files are parsed. The helpers of 1.x the later layers need are
-# in v1/utils.jl until those layers come.
+# exist by the time the group files are parsed.
 
 # the package and ITensors under short names, for what a test reaches that is not exported
 const TMS = TensorMixedStates

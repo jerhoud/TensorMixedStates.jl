@@ -358,6 +358,27 @@ end
         # the copy of the program runs again
         with_args(() -> include(joinpath(pwd(), "sim", "prog.jl")), String[])
         @test !isfile("sim/error")
+        # a directory that lost its program is another program
+        mv("sim/prog.jl", "saved.jl")
+        @test_throws "written by another program" run_prog()
+        mv("saved.jl", "sim/prog.jl")
+        # the arguments are kept, a run without them refused, a fresh start without them
+        # removing those of the run before
+        rm("sim"; recursive = true)
+        run_prog(["x"])
+        @test TMS.JSON.parsefile("sim/prog_args.json") == ["x"]
+        @test_throws "written by another program" run_prog()
+        rm("sim/checkpoint.json")
+        run_prog()
+        @test !isfile("sim/prog_args.json")
+        # with no program file, from the REPL, nothing is compared and the checkpoint resumed
+        write("sim/prog.jl", "something else")
+        task_local_storage(:SOURCE_PATH, nothing) do
+            runTMS(SimData(name = "sim", phases = [CreateState{Pure}(2, Qubit(), "Dn"),
+                                                   Gates(gates = X(1))]); max_time = -1)
+        end
+        @test !isfile("sim/error")
+        @test read("sim/prog.jl", String) == "something else"
     end
 end
 
@@ -501,6 +522,9 @@ end
         end
         stamp = readlines("sim/stamp")
         @test "Threading nothing" in stamp && "Checkpoint interval 1.0e9" in stamp
+        @test "Julia threads $(Threads.nthreads())" in stamp && "CPU threads $(Sys.CPU_THREADS)" in stamp
+        @test any(l -> startswith(l, "BLAS ") && endswith(l, " threads"), stamp)
+        @test any(l -> startswith(l, "Block sparse multithreading "), stamp)
         # the seed is written, and drawn when none is given
         seed = only(l for l in stamp if startswith(l, "Seed "))
         runTMS(SimData(name = "other", phases = phases[1:1]))
@@ -746,5 +770,219 @@ end
         @test count("WARNING: Check c failed", read("warn/log", String)) == 4
         @test_logs (:info, "simulation \"out\" done, 4 warnings in its output") runTMS(
             SimData(name = "out", phases = [phases[1], warned]); output = devnull)
+    end
+end
+
+# a phase of one's own with a parameter, which its printing shows
+struct Valued{N} <: AbstractPhase
+    name::String
+    time_start
+    final_measurements
+end
+
+TMS.run_phase(::Valued, sim::Simulation, ::Int) = sim
+
+@testset "Printing phases and simulations" begin
+    @test startswith(repr(Valued{3}("valued", nothing, [])), "\nValued{3}(")
+    @test startswith(repr(CreateState{Mixed}(2, Qubit(), "Up")), "\nCreateState{Mixed}(")
+    @test occursin("phases =", repr(SimData(phases = [CreateState{Mixed}(2, Qubit(), "Up"),
+                                                     Valued{3}("valued", nothing, [])])))
+end
+
+@testset "The phases that make and transform the state" begin
+    in_tmp() do
+        run(phases; kwargs...) = runTMS(SimData(; phases, kwargs...); output = devnull)
+        # a State given to CreateState, mixed if asked, a mixed one not made pure, and a random
+        # state without a system
+        pure = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
+        @test run([CreateState(type = Mixed(), state = pure)]).state isa State{Mixed}
+        @test_throws "asked for a pure state but given a mixed one" run(
+            [CreateState(type = Pure(), state = mix(pure))])
+        @test_throws "a system and randomize" run([CreateState(type = Pure(), randomize = 10)])
+        @test_throws "cannot randomize a State into a mixed state" run(
+            [CreateState(type = Mixed(), state = pure, randomize = 4)])
+        # its time_start, and a random mixed state drawn in a sector
+        @test run([CreateState{Pure}(2, Qubit(), "Up"; time_start = 1.)]).time == 1.
+        conf = ["Occ", "Emp", "Occ", "Emp"]
+        s = run([CreateState{Mixed}(4, Fermion(conserve = N), conf; randomize = 4)]).state
+        @test s isa State{Mixed} && maxlinkdim(s) ≤ 4
+        # ToMixed truncates a state already mixed
+        @test maxlinkdim(run([CreateState{Mixed}(4, Qubit(), "Up"; randomize = 16),
+                              ToMixed(limits = Limits(maxdim = 2))]).state) ≤ 2
+        # a mixed GHZ state, then the partial trace keeping three of its sites
+        sys = System(6, Qubit())
+        ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))
+        check(name, f, ref) = name => c -> Check(f(c.state), ref; tol = 1e-10)
+        sim = run([CreateState(type = Mixed(), state = ghz, final_measurements = "" => [
+                       check("purity", purity, 1), check("x", st -> real(expect(st, prod(X(i) for i in 1:6))), 1)]),
+                   PartialTrace(positions = [2, 3, 5], keep = true, final_measurements = "" => [
+                       check("z", st -> real(expect1(st, Z)), zeros(3)),
+                       check("zz", st -> real(expect2(st, (Z, Z))), ones(3, 3))])])
+        @test length(sim.state) == 3
+        # dephasing allows a strong symmetry and loss does not: weakening in between gives what
+        # a weak symmetry gives from the start
+        h = -sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)
+        dephasing = -im * h + sum(Dissipator(sqrt(0.3) * N)(i) for i in 1:4)
+        loss = -im * h + Dissipator(sqrt(0.2) * C)(2)
+        ev(evolver) = Evolve(; evolver, duration = 0.5, time_step = 0.05,
+                             limits = Limits(cutoff = 1e-12, maxdim = 32))
+        chain(site, middle) = run([CreateState{Mixed}(4, site, conf), ev(dephasing), middle...,
+                                   ev(loss)]).state
+        numbers(s) = [ real(trace(s)) ; real.(expect1(s, N)) ; expect(s, dag(C)(1) * C(3)) ]
+        reference = numbers(chain(Fermion(conserve = N), []))
+        s = chain(Fermion(conserve = strong(N)), [Weaken()])
+        @test repr(symmetries(s.system)) == "N"
+        @test numbers(s) ≈ reference
+        s = chain(Fermion(conserve = strong(N)), [Weaken(target = ())])
+        @test !TMS.is_charged(s.system)
+        @test numbers(s) ≈ reference
+        @test_throws "drop `strong`" chain(Fermion(conserve = strong(N)), [])
+    end
+end
+
+@testset "A complex time, and checkpoints of another version" begin
+    in_tmp() do
+        # a complex time, of no imaginary part, keeps its two columns across a resume
+        stop_in = Ref(0)
+        phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                  Gates(gates = X(1), time_start = complex(0.5),
+                        final_measurements = "data" => [Z(1), stopper(stop_in)]),
+                  Gates(gates = X(1), final_measurements = "data" => [Z(1), stopper(stop_in)])]
+        runTMS(SimData(; name = "ref", phases))
+        @test startswith(readlines("ref/data")[1], "Re(time)\tIm(time)")
+        stop_in[] = 1
+        sd = SimData(; name = "chk", phases)
+        @test stopped(runTMS(sd))
+        k, _, _ = TMS.load_checkpoint(abspath("chk"))
+        @test k.time === complex(0.5) && k.phase == 3
+        @test !stopped(runTMS(sd))
+        @test read("chk/data", String) == read("ref/data", String)
+        # a checkpoint of another layout, or of another minor version of Julia, is refused
+        stop_in[] = 1
+        runTMS(SimData(; name = "old", phases))
+        meta = "old/checkpoint.json"
+        text = read(meta, String)
+        write(meta, replace(text, "\"version\":5" => "\"version\":4"))
+        @test_throws "has the layout 4 of another version" runTMS(SimData(; name = "old", phases))
+        write(meta, replace(text, "\"julia\":\"$VERSION\"" => "\"julia\":\"1.9.0\""))
+        @test_throws "written by Julia 1.9.0" runTMS(SimData(; name = "old", phases))
+    end
+end
+
+@testset "A checkpoint is replaced whole" begin
+    # a crash while a checkpoint is written leaves the one before it: the state file of the
+    # other generation, half written, is not read, and is written again
+    in_tmp() do
+        stop_in = Ref(0)
+        phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                  Kicks(measurements = "data" => [Z(1), stopper(stop_in)])]
+        runTMS(SimData(; name = "ref", phases))
+        stop_in[] = 2
+        sd = SimData(; name = "chk", phases)
+        runTMS(sd)
+        g = TMS.load_checkpoint(abspath("chk"))[2]
+        write(joinpath("chk", TMS.state_file(3 - g)), "left half written")
+        stop_in[] = 1
+        runTMS(sd)
+        runTMS(sd)
+        @test read("chk/data", String) == read("ref/data", String)
+    end
+end
+
+@testset "Every kind of destination and of value survives a resume" begin
+    # a text file is continued from where it was, a JSON Lines file too, and the rows of a Data,
+    # held by the checkpoint, come back with their types, complex numbers and matrices included;
+    # an interrupt in the final measurements of a phase of no steps resumes from the phase before
+    in_tmp() do
+        stop_in, fail_in = Ref(0), Ref(0)
+        breaker = "breaker" => function (_)
+            if fail_in[] > 0
+                fail_in[] -= 1
+                if fail_in[] == 0
+                    throw(InterruptException())
+                end
+            end
+            return 0.0
+        end
+        ms = [Sp(1), (X, Z), (Sp, Sm)]
+        measurements = ["data" => [ms ; stopper(stop_in)], "out.json" => ms, Data("d") => ms]
+        phases = [CreateState{Pure}(2, Qubit(), "X+"),
+                  Evolve(evolver = -im * (Z(1) + X(1) * X(2)), duration = 0.6, time_step = 0.1,
+                         limits = Limits(maxdim = 10, cutoff = 1e-15); measurements),
+                  Gates(gates = Z(1)),
+                  Gates(gates = X(1), final_measurements = "final" => [X(1), breaker])]
+        ref = runTMS(SimData(; name = "ref", phases))
+        stop_in[] = 3
+        sd = SimData(; name = "chk", phases)
+        @test stopped(runTMS(sd))
+        fail_in[] = 1
+        @test stopped(runTMS(sd))
+        @test fail_in[] == 0
+        sim = runTMS(sd)
+        @test !stopped(sim)
+        for f in ("data", "out.json", "final")
+            @test read("chk/$f", String) == read("ref/$f", String)
+        end
+        resumed, whole = sim.data["d"], ref.data["d"]
+        @test length(resumed) == length(whole)
+        @test all(map(r -> map(typeof ∘ last, r), resumed) .== map(r -> map(typeof ∘ last, r), whole))
+        @test all(isapprox(last(a), last(b)) for (ra, rb) in zip(resumed, whole) for (a, b) in zip(ra, rb))
+    end
+end
+
+@testset "Nested phases, a dmrg resumed with a measurement period, the log and the files" begin
+    in_tmp() do
+        # nested vectors of phases are the flat list, resumed after each step alike
+        k1 = Kicks(nkicks = 2, measurements = "data" => [Z(1), :step])
+        flat = SimData(name = "flat", phases = [CreateState{Pure}(2, Qubit(), "Up"), k1, k1, k1])
+        nested = SimData(name = "nested", phases = [[CreateState{Pure}(2, Qubit(), "Up")], [k1, [k1]], k1])
+        runTMS(flat)
+        run_through(nested; max_time = -1)
+        @test read("nested/data", String) == read("flat/data", String)
+        # a search resumed after each sweep logs the same sweeps, the last one included, which
+        # its last step commits as the end of the phase
+        h = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.8 * sum(X(i) for i in 1:4)
+        phases = [CreateState{Pure}(4, Qubit(), "Up"),
+                  GroundState(hamiltonian = h, algo = Dmrg(nsweeps = 5),
+                              limits = Limits(maxdim = 8, cutoff = 1e-14),
+                              measurements = "data" => [Z(1), :step], measurements_period = 2)]
+        runTMS(SimData(; name = "gref", phases))
+        run_through(SimData(; name = "gchk", phases); max_time = -1)
+        @test read("gchk/data", String) == read("gref/data", String)
+        steps(f) = [ parse(Int, m[1]) for m in eachmatch(r"\nstep (\d+), ", read(f, String)) ]
+        energies(f) = [ parse(Float64, m[1]) for m in eachmatch(r", energy (\S+)\n", read(f, String)) ]
+        @test steps("gchk/log") == steps("gref/log") == 1:5
+        @test energies("gchk/log") ≈ energies("gref/log")
+        # the time a resume logs is the one the checkpoint reached
+        stop_in = Ref(2)
+        sd = SimData(name = "time", phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                                              Kicks(measurements = "data" => [Z(1), stopper(stop_in)])])
+        runTMS(sd)
+        runTMS(sd)
+        m = match(r"Resuming from the checkpoint: phase 2, step 2, time (\S+)", read("time/log", String))
+        @test parse(Float64, m[1]) ≈ 0.2
+        # with its checkpoints, the directory holds the files of the simulation and its outputs only
+        runTMS(SimData(name = "all", phases = [CreateState{Pure}(2, Qubit(), "Up"), k1]);
+               checkpoint_interval = 1e-9)
+        @test issubset(setdiff(readdir("all"), ["data"]), TMS.simulation_files)
+        @test "checkpoint.json" in readdir("all")
+        for file in ("stop", "checkpoint.json", "./running")
+            @test_throws "a file of the simulation directory" runTMS(SimData(name = "b",
+                phases = [CreateState{Pure}(2, Qubit(), "Up")], final_measurements = file => Z(1)))
+        end
+    end
+end
+
+@testset "The warnings of a run" begin
+    # a warning of the package goes to the log of the run, a warning of one's own to the logger
+    # of the caller, as the line of the end does
+    in_tmp() do
+        warned = Kicks(nkicks = 1, measurements = "c" => [
+            "c" => c -> Check(1., 2.; tol = 0.5, warn = true),
+            "u" => c -> (@warn "from the user"; 0.)])
+        @test_logs (:warn, "from the user") (:info, r"simulation \"w\" done") runTMS(
+            SimData(name = "w", phases = [CreateState{Pure}(2, Qubit(), "Up"), warned]))
+        @test occursin("WARNING: Check c failed", read("w/log", String))
+        @test !occursin("from the user", read("w/log", String))
     end
 end

@@ -5,9 +5,8 @@
 # An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
 # `simplify` and `≈` between operators being internal from layer 2 on (decision 2b), what they
 # checked is checked by value through the descent, on the matrix of the operator placed on a
-# small system, and the written forms they reached are dropped. The testsets of the
-# superoperators, of the lowering onto a system and of the classification by OpType, which
-# decision 2 removes, are still in v1/operators.jl; their assertions of the first layer are here.
+# small system, and the written forms they reached are dropped. The superoperators are
+# tested in channels.jl, the lowering onto a system in compact.jl.
 
 @testset "The adjoint is an involution" begin
     # which only shows on operators that are not self adjoint

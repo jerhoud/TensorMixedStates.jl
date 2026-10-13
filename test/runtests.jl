@@ -17,9 +17,7 @@ include("utils.jl")
 
 """
 the groups of tests, each one lives in the file of the same name, whose header comment
-says what belongs there. To add a group, create the file and add its name here. Version 2 is
-written from its lowest layer up: a group comes back here once its tests are ported, and the
-files of the others are the tests of 1.x still to port.
+says what belongs there. To add a group, create the file and add its name here.
 """
 const GROUPS = ["building", "channels", "compact", "evolve", "extension", "hints", "observables",
                 "operators", "outputs", "prepared", "runner", "searches", "sites", "states_io"]

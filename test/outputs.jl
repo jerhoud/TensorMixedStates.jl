@@ -2,8 +2,7 @@
 # files, Data and data_to_frame, the destinations of other packages, and the marks a resumed run
 # reopens them at, all through Outputs, the object a simulation will keep.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. What
-# goes through runTMS, the log and the redirection of the output of 1.x is in v1/states_io.jl.
+# What goes through runTMS, the log and the redirection of the output, is in runner.jl.
 
 using DataFrames
 

@@ -11,9 +11,9 @@
 # accurate a method is on its problem: as tight as the method allows, but not at the floating
 # point floor, where rounding differs with the BLAS build.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
-# phases of 1.x, Evolve and Thermalize run by runTMS, are in v1/evolve.jl; the gates and the
-# channels applied to states, there in 1.x, are in channels.jl.
+# The phases Evolve and Thermalize are tested here as far as their computation goes, their
+# resume in runner.jl; the gates and the channels applied to states, there in 1.x, are in
+# channels.jl.
 
 """
 the matrix `m` of one qubit on site `i` of `n` qubits, site 1 most significant

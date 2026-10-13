@@ -3,10 +3,8 @@
 # steady states known exactly; the tolerance that stops the sweeps, a search resumed after some
 # of its sweeps, the noise and the limits of each sweep, the parameters of the Krylov method and
 # their defaults field by field, the MPOs a PreMPO keeps, and what the searches refuse. The
-# searches of one's own are in extension.jl.
-#
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer. The
-# phases of 1.x, GroundState and SteadyState run by runTMS, are in v1/algorithms.jl.
+# searches of one's own are in extension.jl, the phases GroundState and SteadyState resumed in
+# runner.jl.
 
 @testset "Dmrg" begin
     # from a random state, the ground state of a field, every spin up
