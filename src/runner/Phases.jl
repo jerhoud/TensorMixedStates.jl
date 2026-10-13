@@ -145,12 +145,14 @@ end
     step_line(sim, phase, k)
 
 the line the log takes at the end of step `k` of `phase`: its number, the time, and the values
-the phase provides
+the phase provides, but for states
 """
-step_line(sim::Simulation, phase, k::Int) =
-    join([ "step $k, time $(sim.time)" ;
-           [ "$name $(getfield(sim, :values)[name])" for name in provided_values(phase)
-             if haskey(getfield(sim, :values), name) ] ], ", ")
+function step_line(sim::Simulation, phase, k::Int)
+    values = getfield(sim, :values)
+    return join([ "step $k, time $(sim.time)" ;
+                  [ "$name $(values[name])" for name in provided_values(phase)
+                    if haskey(values, name) && !(values[name] isa AbstractState) ] ], ", ")
+end
 
 """
     TensorMixedStates.step_done(sim, phase, k; last = false)

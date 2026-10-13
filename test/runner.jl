@@ -674,3 +674,53 @@ end
         @test read("chk/end", String) == read("ref/end", String)
     end
 end
+
+@testset "Update" begin
+    in_tmp() do
+        # a value set, a state kept and removed, the time changed, each by an assignment
+        phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                  Update(c -> c.ground = c.state; provides = [:ground]),
+                  Gates(gates = X(1)),
+                  Update(c -> c.x = real(expect(c.state, Z(1))); provides = [:x],
+                         final_measurements = "kept" => [:x, Fidelity(:ground)]),
+                  Update(c -> begin
+                      c.ground = nothing
+                      c.time = 5.
+                  end; final_measurements = "removed" => [:x, Fidelity(:ground)])]
+        sim = runTMS(SimData(; name = "sim", phases))
+        @test sim.x ≈ -1
+        @test !haskey(getfield(sim, :values), :ground)
+        @test sim.time == 5.
+        @test parse.(Float64, split(readlines("sim/kept")[2])) ≈ [0, -1, 0] atol = 1e-12
+        @test split(readlines("sim/removed")[2], '\t')[3] == ""
+        # a value measured that no Update provides, and the names the run reserves
+        @test_throws "reads y" SimData(phases = [phases[1], Update(c -> c.y = 1)],
+                                       final_measurements = "f" => :y)
+        @test_throws "a name the run reserves" Update(c -> nothing; provides = [:rng])
+        @test_throws "step cannot be changed" runTMS(SimData(name = "res", phases = [phases[1],
+                                                                 Update(c -> c.step = 3)]))
+        # a failure leaves the simulation without what the function had changed
+        @test_throws "half done" runTMS(SimData(name = "fail", phases = [phases[1],
+            Update(c -> begin
+                c.state = apply(X(1), c.state)
+                error("half done")
+            end)]))
+        # step by step: kicks measured at random every second step, output and log_message
+        # within, resumed after each step as the uninterrupted run
+        kick = exp(-0.4im * X)(1)
+        steps = Update(nsteps = 6, provides = [:m], measurements = "kicks" => [:m, :step, Z(1)],
+                       measurements_period = 2) do c
+            c.m, _, c.state = collapse(apply(kick, c.state), Z(1); rng = c.rng)
+            output(c, "inside" => [:step, Z(1)])
+            log_message(c, "kicked at step $(c.step + 1)")
+        end
+        sd(name) = SimData(; name, seed = 5, phases = [phases[1], steps], final_measurements = "m" => :m)
+        ref = runTMS(sd("ref"))
+        @test length(readlines("ref/kicks")) == 4
+        @test occursin("kicked at step 6", read("ref/log", String))
+        run_through(sd("chk"); max_time = -1)
+        for f in ("kicks", "inside", "m")
+            @test read("chk/$f", String) == read("ref/$f", String)
+        end
+    end
+end

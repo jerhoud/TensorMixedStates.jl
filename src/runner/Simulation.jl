@@ -119,6 +119,44 @@ propertynames(sim::Simulation) = (:state, :time, :data, keys(getfield(sim, :valu
 show(io::IO, sim::Simulation) = print(io, "Simulation($(sim.state), $(sim.time), ...)")
 
 """
+    Editing(sim)
+    Simulation(c)
+
+the simulation `sim` open to changes, as `Update` hands it to its function, read as a
+`Simulation` and changed by assignments: `c.state = st`, `c.time = t`, `c.x = v` for a value,
+`c.x = nothing` removing it; and the simulation it makes once changed
+"""
+mutable struct Editing
+    state::Union{Nothing, AbstractState}
+    time::Number
+    values::Dict{Symbol, Any}
+    run::RunData
+end
+
+Editing(sim::Simulation) =
+    Editing(sim.state, sim.time, copy(getfield(sim, :values)), getfield(sim, :run))
+
+Simulation(c::Editing) =
+    Simulation(getfield(c, :state), getfield(c, :time), getfield(c, :values), getfield(c, :run))
+
+getproperty(c::Editing, name::Symbol) = getproperty(Simulation(c), name)
+
+propertynames(c::Editing) = propertynames(Simulation(c))
+
+function setproperty!(c::Editing, name::Symbol, x)
+    if name === :state || name === :time
+        setfield!(c, name, x)
+    elseif name in reserved_values
+        error("$name cannot be changed, a name the run reserves")
+    elseif isnothing(x)
+        delete!(getfield(c, :values), name)
+    else
+        getfield(c, :values)[name] = x
+    end
+    return x
+end
+
+"""
     stopped(sim)
 
 whether the run `runTMS` returned stopped before the end of its phases, at `max_time`, on the
@@ -175,8 +213,6 @@ refused.
     output(sim, "magnetization" => [X, Z(1)])
     output(sim, [ "energy" => :energy, Data("purity") => Purity ])
 """
-output(sim::Simulation, p::Pair) = output(sim, [p])
-
 function output(sim::Simulation, list::AbstractVector)
     if isempty(list)
         return nothing
@@ -189,13 +225,16 @@ function output(sim::Simulation, list::AbstractVector)
     return nothing
 end
 
+output(c::Editing, list::AbstractVector) = output(Simulation(c), list)
+output(sim::Union{Simulation, Editing}, p::Pair) = output(sim, [p])
+
 """
     log_message(sim, text)
 
 write the line `text` to the log of the simulation, or to the stream its output is redirected
 to, at once
 """
-function log_message(sim::Simulation, text)
+function log_message(sim::Union{Simulation, Editing}, text)
     log_line(getfield(sim, :run), text)
     return nothing
 end

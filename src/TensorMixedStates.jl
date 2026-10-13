@@ -15,7 +15,7 @@ Lindbladian evolution and noisy gates act.
 module TensorMixedStates
 
 import Base: *, +, -, /, ^, exp, sqrt, mod, show, showerror, isless, ==, hash, length, getindex,
-             getproperty, propertynames, truncate, open, close
+             getproperty, setproperty!, propertynames, truncate, open, close
 import LinearAlgebra: norm, normalize, dot
 import ITensors: dag, dim, matrix, flux, inner, siteind, siteinds
 import ITensorMPS: maxlinkdim, expect, apply, sample
@@ -68,6 +68,7 @@ include("runner/Phases.jl")
 include("runner/Run.jl")
 include("runner/phases/CreateState.jl")
 include("runner/phases/LoadState.jl")
+include("runner/phases/Update.jl")
 include("runner/phases/Transforms.jl")
 include("runner/phases/Solvers.jl")
 
