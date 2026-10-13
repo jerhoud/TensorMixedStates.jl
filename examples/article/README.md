@@ -10,5 +10,10 @@ integration does not run them. To try one out quickly, cut its sizes down: `MAXD
 near the top of each script, and the number of sites, the duration and the time step near
 the end.
 
+They are written for TensorMixedStates 2.0, where the article used version 1.2.8. Some defaults
+have changed since: tdvp enlarges the bonds before a step from a state of small bond dimension,
+`ApproxW` multiplies by its MPOs exactly before truncating, and the default cutoff discards
+only rounding, so their results may differ slightly from the published ones.
+
 The shorter examples of [`../high_level`](../high_level) are the ones to read first to see
 what the code looks like.

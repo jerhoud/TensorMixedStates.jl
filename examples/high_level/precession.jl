@@ -5,8 +5,10 @@ limits = Limits(
     maxdim = 100,
 )
 
-measurements = "data" => [ X, Y, Z, Check("check_cos", X(1), t->cos(2t))]
-    
+# the first qubit, starting along x, precesses as cos(2t), which the check compares with
+measurements = "data" => [X, Y, Z,
+    "check_cos" => c -> Check(real(expect(c.state, X(1))), cos(2c.time); tol = 1e-8)]
+
 
 phases(n) = [
     CreateState(

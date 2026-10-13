@@ -20,7 +20,7 @@ Rzz(ϕ) = exp(-im * ϕ * Z ⊗ Z)
 
 
 # A function depending on the system size producing a vector of output specifications file => data
-# each entry in the data file have the format: data_name simulation_time data1 data2 ... 
+# each data file is a table: a line naming its columns, then a line per time measured
 output(n) = [
     "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at mid point and first 4 eigenvalues
     "purity.dat" => Purity, # purity of the density matrix
@@ -81,13 +81,14 @@ noise = 0.02
 
 # run the simulation
 # this creates a file directory whose name was given above 
-# the "restart" parameter erase the previous directory with the same name if present 
+# running the script again resumes a run that was stopped, from its checkpoint; a file
+#   restart put in the directory starts it over
 # creates a description file as specified before
 # copy this script to "prog.jl"
 # while running a "running" file is present
 # a "stamp" file gives versions of julia, TMS and the current date
 # a "log" file describing the progress of the simulation is created
 # results file are created ("OSEE.dat", "purity.dat", "trace.dat", "bond_dim.dat")
-runTMS(sim_data(n, ϕ, steps, noise); restart = true)
+runTMS(sim_data(n, ϕ, steps, noise))
 
 # we could call runTMS several times in one script with different parameters

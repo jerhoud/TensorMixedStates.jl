@@ -7,7 +7,7 @@
 # phase weakens it first. The weak symmetry that is left still has the density matrix commute
 # with the number, but lets the state spread over several sectors.
 #
-# The sizes are small, the two evolutions taking about half a minute together once compiled.
+# The sizes are small, the two evolutions taking under ten seconds together once compiled.
 # The article used n = 40, maxdim = 200 and a duration of 4.
 
 using TensorMixedStates, .Fermions
@@ -69,4 +69,4 @@ sim_data(n) = SimData(
     ],
 )
 
-runTMS(sim_data(n); restart = true)
+runTMS(sim_data(n))

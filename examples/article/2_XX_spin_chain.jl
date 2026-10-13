@@ -13,7 +13,7 @@ limits = Limits(
 )
 
 # A function depending on the system size producing a vector of output specifications file => data
-# each entry in the data files have the format: data_name simulation_time data1 data2 ... 
+# each data file is a table: a line naming its columns, then a line per time measured
 output(n) = [
     "mag.dat" => Sz, # magnetization for all sites
     "current.dat" => 2(X(1)Y(2)-Y(1)X(2)), # measure of "current" between site 1 and 2
@@ -95,7 +95,8 @@ alg = 2 # W2 order 4
 
 # run the simulation
 # this creates a file directory whose name was given above 
-# the "restart" parameter erase the previous directory with the same name if present 
+# running the script again resumes a run that was stopped, from its checkpoint; a file
+#   restart put in the directory starts it over
 # creates a description file as specified before
 # copy this script to "prog.jl"
 # while running a "running" file is present
@@ -103,6 +104,6 @@ alg = 2 # W2 order 4
 # a "log" file describing the progress of the simulation is created
 # results file are created ("mag.dat", "current.dat", "OSEE.dat", "purity.dat",
 #   "trace.dat", "bond_dim.dat")
-runTMS(sim_data(n, step, duration, alg, eL, eR, muL, muR); restart = true)
+runTMS(sim_data(n, step, duration, alg, eL, eR, muL, muR))
 
 # we could call runTMS several times in one script with different parameters

@@ -14,7 +14,7 @@ limits = Limits(
 )
 
 # A function depending on the system size producing a vector of output specifications file => data
-# each entry in the data files have the format: data_name simulation_time data1 data2 ... 
+# each data file is a table: a line naming its columns, then a line per time measured
 output(n) = [
     "density.dat" => N, # occupation number for all sites
     "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at midpoint and 4 eignevalues 
@@ -92,7 +92,8 @@ time_step = 0.05
 
 # run the simulation
 # this creates a file directory whose name was given above 
-# the "restart" parameter erase the previous directory with the same name if present 
+# running the script again resumes a run that was stopped, from its checkpoint; a file
+#   restart put in the directory starts it over
 # creates a description file as specified before
 # copy this script to "prog.jl"
 # while running a "running" file is present
@@ -100,6 +101,6 @@ time_step = 0.05
 # a "log" file describing the progress of the simulation is created
 # results file are created ("density.dat", "OSEE.dat", "purity.dat",
 #   "trace.dat", "bond_dim.dat")
-runTMS(sim_data(gamma, n, time_step, alg); restart = true)
+runTMS(sim_data(gamma, n, time_step, alg))
 
 # we could call runTMS several times in one script with different parameters

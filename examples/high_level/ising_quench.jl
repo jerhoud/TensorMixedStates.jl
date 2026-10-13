@@ -69,4 +69,4 @@ sim_data(J,h,n) = SimData(
 n=8
 J=1.0
 h=-1.0
-runTMS(sim_data(J,h,n),restart=true)
+runTMS(sim_data(J, h, n))

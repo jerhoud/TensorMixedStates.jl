@@ -9,8 +9,8 @@ simdata(n, c) = SimData(
     # A vector of Phase objects describing the steps of the simulation
 
     phases = [
-        # a call to a phase creator to build a complete graph state
-        create_graph_state(complete_graph(n); limits = Limits(cutoff=1e-14)),
+        # a phase creating the state, the graph state of the complete graph
+        CreateState(type = Pure(), state = graph_state(complete_graph(n); limits = Limits(cutoff = 1e-14))),
         # a phase to switch to mixed representation
         ToMixed(),
         # a phase for Lindblad evolution
@@ -37,7 +37,8 @@ simdata(n, c) = SimData(
 
 # run the simulation
 # this creates a file directory whose name was given above 
-# the "restart" parameter erase the previous directory with the same name if present 
+# running the script again resumes a run that was stopped, from its checkpoint; a file
+#   restart put in the directory starts it over
 # creates a description file as specified before
 # copy this script to "prog.jl"
 # while running a "running" file is present
