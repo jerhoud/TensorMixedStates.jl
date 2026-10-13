@@ -724,3 +724,27 @@ end
         end
     end
 end
+
+@testset "What a phase refuses when it is written, and what the console shows" begin
+    @test_throws "GroundState needs its search method: algo = Dmrg(nsweeps = 10)" GroundState(
+        hamiltonian = Z(1))
+    @test_throws "SteadyState needs its search method" SteadyState(lindbladian = Dissipator(Sm)(1))
+    @test_throws "mpo_algo is \"naive\" or \"zipup\", not \"zipp\"" SteadyState(
+        lindbladian = Dissipator(Sm)(1), algo = Dmrg(nsweeps = 1), mpo_algo = "zipp")
+    in_tmp() do
+        # a line once the run returns, where its results are, whether it stopped, and the
+        # warnings its log received
+        phases = [CreateState{Pure}(2, Qubit(), "Up"), Kicks(measurements = "data" => Z(1))]
+        @test_logs (:info, "simulation \"sim\" done, results in $(abspath("sim"))") runTMS(
+            SimData(; name = "sim", phases))
+        @test_logs (:info, "simulation \"stop\" stopped before phase \"kicks\": run it again to " *
+                           "resume it, results in $(abspath("stop"))") runTMS(
+            SimData(; name = "stop", phases); max_time = -1)
+        warned = Kicks(measurements = "c" => ["c" => c -> Check(1., 2.; tol = 0.5, warn = true)])
+        @test_logs (:info, r"simulation \"warn\" done, results in .*warn, 4 warnings in its log$") runTMS(
+            SimData(name = "warn", phases = [phases[1], warned]))
+        @test count("WARNING: Check c failed", read("warn/log", String)) == 4
+        @test_logs (:info, "simulation \"out\" done, 4 warnings in its output") runTMS(
+            SimData(name = "out", phases = [phases[1], warned]); output = devnull)
+    end
+end

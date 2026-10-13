@@ -237,12 +237,17 @@ a phase that searches the ground state of a Hamiltonian from the pure state, see
     time_start::Union{Nothing, Number} = nothing
     final_measurements = []
     hamiltonian
-    algo::SearchAlgorithm
+    algo::SearchAlgorithm = nothing
     limits::Limits = Limits()
     orthogonal_to::Vector = []
     weight::Union{Nothing, Real} = nothing
     measurements = []
     measurements_period::Int = 1
+    # the method, which has no default, asked for with what to write
+    GroundState(name, time_start, final_measurements, hamiltonian, algo, limits, orthogonal_to,
+                weight, measurements, measurements_period) =
+        new(name, time_start, final_measurements, hamiltonian, search_algo(algo, "GroundState"),
+            limits, orthogonal_to, weight, measurements, measurements_period)
 end
 
 provided_values(::GroundState) = (:energy,)
@@ -289,12 +294,18 @@ for a steady state, and the state measured after a sweep having trace one.
     time_start::Union{Nothing, Number} = nothing
     final_measurements = []
     lindbladian
-    algo::SearchAlgorithm
+    algo::SearchAlgorithm = nothing
     limits::Limits = Limits()
     mpo_limits::Limits = Limits()
     mpo_algo::String = "naive"
     measurements = []
     measurements_period::Int = 1
+    # refused when the phase is written, as the fields of Evolve and ApproxW, the method asked for
+    # with what to write
+    SteadyState(name, time_start, final_measurements, lindbladian, algo, limits, mpo_limits,
+                mpo_algo, measurements, measurements_period) =
+        new(name, time_start, final_measurements, lindbladian, search_algo(algo, "SteadyState"),
+            limits, mpo_limits, check_mpo_algo(mpo_algo), measurements, measurements_period)
 end
 
 provided_values(::SteadyState) = (:energy,)

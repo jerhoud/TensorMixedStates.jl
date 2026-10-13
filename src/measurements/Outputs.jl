@@ -355,15 +355,6 @@ order they first come, each value as it was measured, `missing` in a row without
 """
 function data_to_frame end
 
-# data_to_frame lives in DataFramesExt: without DataFrames, its MethodError says so
-function __init__()
-    Base.Experimental.register_error_hint(MethodError) do io, e, _, _
-        if e.f === data_to_frame && isnothing(Base.get_extension(@__MODULE__, :DataFramesExt))
-            print(io, "\ndata_to_frame needs the DataFrames package: run using DataFrames")
-        end
-    end
-end
-
 """
     Outputs(; dir = "", format = "%.8g")
 

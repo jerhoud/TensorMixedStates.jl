@@ -351,9 +351,10 @@ end
     st = State{Pure}(System(2, Qubit()), "Up")
     ρ = mix(random_state(Pure, System(2, Qubit()), 2))
     algo = Dmrg(nsweeps = 2)
-    # the method has no default
-    @test_throws UndefKeywordError ground_state(h, st)
-    @test_throws UndefKeywordError steady_state(Dissipator(Sm)(1), ρ)
+    # the method has no default, which the refusal writes
+    @test_throws "ground_state needs its search method: algo = Dmrg(nsweeps = 10)" ground_state(h, st)
+    @test_throws "steady_state needs its search method: algo = Dmrg(nsweeps = 10)" steady_state(
+        Dissipator(Sm)(1), ρ)
     # a Hamiltonian on a mixed state, of which dmrg would minimise ρ ↦ Hρ + ρH with no
     # guarantee of ending on a density matrix, and a Lindbladian on a pure state
     @test_throws "ground_state searches a pure state: search it pure and mix it" ground_state(

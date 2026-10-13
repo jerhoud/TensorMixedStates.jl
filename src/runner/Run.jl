@@ -413,18 +413,25 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
 end
 
 """
+    stop_place(c, phases)
+
+where a run stops, from its last commit
+"""
+function stop_place(c::Checkpointer, phases::Vector)
+    k = c.last
+    return k.phase > length(phases) ? "after the last phase" :
+           k.step == 0 ? "before phase \"$(phases[k.phase].name)\"" :
+           "after step $(k.step) of phase \"$(phases[k.phase].name)\""
+end
+
+"""
     stop_line(c, phases)
 
-the line logging where a run stops, from its last commit
+the line logging where a run stops
 """
-function stop_line(c::Checkpointer, phases::Vector)
-    k = c.last
-    at = k.phase > length(phases) ? "after the last phase" :
-         k.step == 0 ? "before phase \"$(phases[k.phase].name)\"" :
-         "after step $(k.step) of phase \"$(phases[k.phase].name)\""
-    return isempty(c.dir) ? "***** Stopping $at, with no directory to resume from *****" :
-                            "***** Stopping $at, the simulation can be resumed *****"
-end
+stop_line(c::Checkpointer, phases::Vector) =
+    isempty(c.dir) ? "***** Stopping $(stop_place(c, phases)), with no directory to resume from *****" :
+                     "***** Stopping $(stop_place(c, phases)), the simulation can be resumed *****"
 
 """
     output_final(sim, sd)
@@ -432,6 +439,24 @@ end
 the final measurements of the simulation
 """
 output_final(sim::Simulation, sd::SimData) = output(sim, sd.final_measurements)
+
+"""
+    summary_line(sd, run)
+
+the line the console takes once a run returns: whether it ended or stopped, where its results
+are, and how many warnings its log received
+"""
+function summary_line(sd::SimData, run::RunData)
+    at = stop_place(run.checkpointer, sd.phases)
+    state = !run.stopped ? "done" :
+            isempty(run.dir) ? "stopped $at, with no directory to resume from" :
+            "stopped $at: run it again to resume it"
+    where = isempty(run.dir) ? "" : ", results in $(run.dir)"
+    n = run.warnings
+    warned = n == 0 ? "" : isempty(run.dir) ? ", $n warning$(n == 1 ? "" : "s") in its output" :
+             ", $n warning$(n == 1 ? "" : "s") in its log"
+    return "simulation \"$(sd.name)\" $state$where$warned"
+end
 
 """
     error_line(run, sd, e)
@@ -573,7 +598,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             commit!(sim, 1, 0)
         end
         start, done, ended = resume ? (commit.phase, commit.step, commit.last) : (1, 0, false)
-        return Logging.with_logger(SimLogger(run, Logging.current_logger())) do
+        sim = Logging.with_logger(SimLogger(run, Logging.current_logger())) do
             if resume
                 log_line(run, "\nResuming from the checkpoint: phase $(commit.phase), step " *
                               "$(commit.step), time $(commit.time)")
@@ -600,6 +625,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             end
             return sim
         end
+        # what a program, or an AI running it, reads without opening the log
+        @info summary_line(sd, run)
+        return sim
     catch e
         if started
             write(file("error"), error_line(run, sd, e) * "\n")

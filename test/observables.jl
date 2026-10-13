@@ -1860,13 +1860,20 @@ end
     @test value(e, (Cup + dag(Cup), Cdn + dag(Cdn))) isa Matrix{ComplexF64}
 
     # the measurements of the library and the functions give their values as they are computed
-    # (decision 7): Trace keeps its imaginary part, which is what it is measured for, and Overlap
-    # is complex on a complex state, as inner gives it, where 1.x made it complex on any state
+    # (decision 7), Trace keeping its imaginary part, which is what it is measured for; but Trace,
+    # TraceDeviation, Overlap and ReducedDensityMatrix are complex on any state, a real one
+    # included, where a text file would otherwise refuse its columns once the state turns complex
     ρ2 = (1 + 1im) * mix(State{Pure}(System(2, Qubit()), "+"))
     @test value(ρ2, Trace) ≈ 1 + 1im
     @test value(ρ2, TraceDeviation) ≈ -1im
     @test value(ph, Overlap(ph)) isa ComplexF64
-    @test value(up, Overlap(up)) isa Float64
+    @test value(up, Overlap(up)) isa ComplexF64
+    ρup = mix(up)
+    @test value(ρup, Trace) isa ComplexF64
+    @test value(up, Trace) isa ComplexF64
+    @test value(ρup, TraceDeviation) isa ComplexF64
+    @test value(ρup, ReducedDensityMatrix([1])) isa Matrix{ComplexF64}
+    @test value(ρup, ReducedDensityMatrix([1])) ≈ [1 0; 0 0]
     sp = @test_logs value(ph, "sp" => c -> expect(c.state, Sp(1)))
     @test sp isa ComplexF64
 end

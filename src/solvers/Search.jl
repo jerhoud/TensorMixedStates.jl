@@ -76,6 +76,19 @@ function search(algo::Dmrg, mpo::MPO, state::State, limits::Limits; sweep_done =
 end
 
 """
+    search_algo(algo, what)
+
+the search method `algo` of `what`, which has no default, refused with what to write when it is
+not given
+"""
+function search_algo(algo, what::String)
+    if isnothing(algo)
+        error("$what needs its search method: algo = Dmrg(nsweeps = 10), for instance")
+    end
+    return algo
+end
+
+"""
     prepared_operator(state, op)
 
 the `PreMPO` of the operator `op` of a search on `state`, or `op` itself when it is one
@@ -157,9 +170,10 @@ them. The energy is that of the Hamiltonian alone.
                                  limits = Limits(maxdim = [10, 20, 50]))
     e1, excited = ground_state(H, state; algo = Dmrg(nsweeps = 20), orthogonal_to = [ground])
 """
-function ground_state(hamiltonian, state::State{Pure}; algo::SearchAlgorithm,
+function ground_state(hamiltonian, state::State{Pure}; algo::Union{Nothing, SearchAlgorithm} = nothing,
                       limits::Limits = Limits(), orthogonal_to::AbstractVector = State{Pure}[],
                       weight::Union{Nothing, Real} = nothing)
+    algo = search_algo(algo, "ground_state")
     pre = prepared_operator(state, hamiltonian)
     args = orthogonal_args(state, pre, orthogonal_to, weight)
     e, st = search(algo, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing), state, limits; args...)
@@ -171,15 +185,25 @@ ground_state(_, ::State{Mixed}; kwargs...) =
     error("ground_state searches a pure state: search it pure and mix it")
 
 """
+    check_mpo_algo(mpo_algo)
+
+refuse an algorithm of the product ``L^\\dagger L`` other than `"naive"` and `"zipup"`
+"""
+function check_mpo_algo(mpo_algo::String)
+    if mpo_algo ∉ ("naive", "zipup")
+        error("mpo_algo is \"naive\" or \"zipup\", not $(repr(mpo_algo))")
+    end
+    return mpo_algo
+end
+
+"""
     squared_lindbladian(pre, mpo_limits, mpo_algo)
 
 the MPO of ``L^\\dagger L`` for the Lindbladian of `pre`, computed by `mpo_algo` and truncated by
 `mpo_limits`, kept in `pre`
 """
 function squared_lindbladian(pre::PreMPO{Mixed}, mpo_limits::Limits, mpo_algo::String)
-    if mpo_algo ∉ ("naive", "zipup")
-        error("mpo_algo is \"naive\" or \"zipup\", not $(repr(mpo_algo))")
-    end
+    check_mpo_algo(mpo_algo)
     return cached_mpos(pre, :squared_lindbladian, (mpo_limits, mpo_algo)) do
         l = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
         # the naive algorithm truncates only when asked to, the others take no such option
@@ -240,9 +264,10 @@ unique.
     value, rho = steady_state(-im * H + D, rho; algo = Dmrg(nsweeps = 10),
                               limits = Limits(maxdim = [10, 20, 50]))
 """
-function steady_state(lindbladian, state::State{Mixed}; algo::SearchAlgorithm,
+function steady_state(lindbladian, state::State{Mixed}; algo::Union{Nothing, SearchAlgorithm} = nothing,
                       limits::Limits = Limits(), mpo_limits::Limits = Limits(),
                       mpo_algo::String = "naive")
+    algo = search_algo(algo, "steady_state")
     l2 = squared_lindbladian(prepared_operator(state, lindbladian), mpo_limits, mpo_algo)
     return steady_result(search(algo, l2, state, limits; krylov = steady_krylov)...)
 end

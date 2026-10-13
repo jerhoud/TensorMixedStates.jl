@@ -176,16 +176,18 @@ const Purity = on_state("Purity", purity)
 """
     Trace
 
-the measurement of the trace of the state, see `trace`, with its imaginary part
+the measurement of the trace of the state, see `trace`, with its imaginary part: a complex
+number, whatever the state, so that its columns do not change during a run
 """
-const Trace = on_state("Trace", trace)
+const Trace = on_state("Trace", st -> complex(trace(st)))
 
 """
     TraceDeviation
 
-the measurement of `1 - trace(state)`, see `Trace`, which numerical errors tend to move
+the measurement of `1 - trace(state)`, see `Trace`, which numerical errors tend to move, a
+complex number as `Trace`
 """
-const TraceDeviation = on_state("TraceDeviation", st -> 1 - trace(st))
+const TraceDeviation = on_state("TraceDeviation", st -> complex(1 - trace(st)))
 
 """
     Norm
@@ -255,10 +257,11 @@ MutualInfoRenyi2(positions::AbstractVector) =
     ReducedDensityMatrix(positions)
 
 the measurement of the density matrix of the sites at `positions`, see
-`reduced_density_matrix`
+`reduced_density_matrix`, a complex matrix whatever the state, as `Trace`
 """
 ReducedDensityMatrix(positions::AbstractVector) =
-    on_positions("ReducedDensityMatrix", reduced_density_matrix, positions)
+    on_positions("ReducedDensityMatrix", (st, p) -> complex(reduced_density_matrix(st, p)),
+                 positions)
 
 """
     VonNeumannEntropy(positions)
@@ -351,15 +354,15 @@ Fidelity(name::Symbol) = on_named("Fidelity", name, (st, r) -> fidelity(st, r))
     Overlap(name)
 
 the measurement of the inner product with the reference state `ref`, see `inner`, `ref` being
-weakened to what the measured state conserves; given a `name`, the reference is the value of
-that name, as for `Fidelity`
+weakened to what the measured state conserves, a complex number whatever the states, as
+`Trace`; given a `name`, the reference is the value of that name, as for `Fidelity`
 """
 Overlap(ref::State) = StateMeasurement("Overlap", function (state)
     r = reference_on(state, ref, "Overlap")
-    return st -> inner(r, st)
+    return st -> complex(inner(r, st))
 end)
 
-Overlap(name::Symbol) = on_named("Overlap", name, (st, r) -> inner(r, st))
+Overlap(name::Symbol) = on_named("Overlap", name, (st, r) -> complex(inner(r, st)))
 
 
 """

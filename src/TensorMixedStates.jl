@@ -1,9 +1,9 @@
 # The module TensorMixedStates: what it imports from its dependencies, and its source files in
 # the order they are read, a directory for each layer: core/ for sites, systems and states,
 # engine/ for the operators on a system, measurements/ for what is measured and written,
-# solvers/ for the evolutions and the searches, runner/ for the simulations runTMS runs, then
-# the site types in sites/. Version 2 is
-# written from its lowest layer up, the code of 1.x staying on the branch dev.
+# solvers/ for the evolutions and the searches, runner/ for the simulations runTMS runs, the
+# site types in sites/, then the hints Julia prints after an error. Version 2 is written from its
+# lowest layer up, the code of 1.x staying on the branch dev.
 
 """
     TensorMixedStates
@@ -81,5 +81,8 @@ include("sites/Electrons.jl")
 include("sites/Tjs.jl")
 include("sites/Qbosons.jl")
 include("sites/Qudits.jl")
+
+# The hints of the errors of a program written for 1.x
+include("Hints.jl")
 
 end

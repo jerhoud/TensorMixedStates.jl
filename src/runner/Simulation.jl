@@ -26,7 +26,8 @@ const reserved_values = (:state, :time, :step, :rng, :data)
 
 what the simulations of a run share: its directory, empty for a run whose output is redirected
 to the stream `redirect`, its outputs, its log, its checkpointing, the values its phases
-provide, the phase being run and the time it started from, and whether it stopped
+provide, the phase being run and the time it started from, whether it stopped, and the warnings
+its log received
 """
 mutable struct RunData
     dir::String
@@ -38,10 +39,11 @@ mutable struct RunData
     phase::Int
     phase_time::Number
     stopped::Bool
+    warnings::Int
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided) =
-    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false)
+    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false, 0)
 
 """
     Simulation(sim, state[, time = sim.time]; values...)
@@ -274,6 +276,7 @@ Logging.catch_exceptions(l::SimLogger) = Logging.catch_exceptions(l.parent)
 function Logging.handle_message(l::SimLogger, level, message, _module, group, id, file, line;
                                 kwargs...)
     if simulation_warning(level, _module)
+        l.run.warnings += 1
         log_line(l.run, "WARNING: $message")
     elseif level >= Logging.min_enabled_level(l.parent)
         # the level of this logger is the lower of the two: the parent's is checked again
