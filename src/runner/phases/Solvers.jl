@@ -205,7 +205,6 @@ function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result; args...
         reached[] = step_done(Simulation(sim, result(st); energy = e), phase, k; last = ends)
     e, st = search(phase.algo, mpo, sim.state, phase.limits; sweep_done = hook, done, energy,
                    args...)
-    log_message(sim, "Done, the energy is $e")
     return Simulation(reached[], result(st); energy = e)
 end
 
