@@ -2,7 +2,7 @@
 # the order they are read, a directory for each layer: core/ for sites, systems and states,
 # engine/ for the operators on a system, measurements/ for what is measured and written,
 # solvers/ for the evolutions and the searches, runner/ for the simulations runTMS runs, the
-# site types in sites/, then the hints Julia prints after an error. Version 2 is written from its
+# site types in sites/, the hints Julia prints after an error, then the precompilation workload. Version 2 is written from its
 # lowest layer up, the code of 1.x staying on the branch dev.
 
 """
@@ -84,5 +84,8 @@ include("sites/Qudits.jl")
 
 # The hints of the errors of a program written for 1.x
 include("Hints.jl")
+
+# What precompilation runs, so that a first script does not wait for it to compile
+include("Precompile.jl")
 
 end
