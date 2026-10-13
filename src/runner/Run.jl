@@ -399,6 +399,10 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         sim = td.value
         log_message(sim, "***** Ending phase \"$(phase.name)\" after $(round(td.time; digits = 3)) " *
                          "seconds, $(Base.format_bytes(td.bytes)) allocated *****")
+        # absent before Julia 1.11; it includes the recompilation
+        if haskey(td, :compile_time)
+            log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) seconds")
+        end
         commit!(sim, i + 1, 0)
         stop = stop_requested(c)
         if stop || checkpoint_due(c) ||
