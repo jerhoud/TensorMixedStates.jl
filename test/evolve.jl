@@ -63,21 +63,6 @@ function mpo_dense(st::State{Pure}, mpo)
     return reshape(a, d, d)
 end
 
-@testset "Simple evolve" begin
-    # a qubit precessing from X+: X(t) = cos 2t and Y(t) = sin 2t. WII is exact on a term of
-    # one site, WI of order one; the two tolerances at 1e-14 in 1.x failed on Julia 1.10 by
-    # 1.3e-14, rounding noise
-    lim = Limits(maxdim = 10, cutoff = 1e-15)
-    for (algo, nsteps, tol) in [(Tdvp(), 10, 1e-13),
-                                (ApproxW(order = 1, w = 1), 100, 0.03),
-                                (ApproxW(order = 4, w = 1), 100, 1e-10),
-                                (ApproxW(order = 1, w = 2), 100, 1e-13),
-                                (ApproxW(order = 4, w = 2), 100, 1e-13)], R in (Pure, Mixed)
-        st = evolve(-im * Z(1), 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps, limits = lim)
-        @test real(expect(st, [X(1), Y(1)])) ≈ [cos(2), sin(2)] atol = tol
-    end
-end
-
 @testset "Dissipative evolve" begin
     lim = Limits(maxdim = 10, cutoff = 1e-15)
     # a qubit damped towards Up while it precesses, from X+: X(t) = e^{-γt/2} cos 2t,
@@ -111,46 +96,22 @@ end
     end
 end
 
-@testset "Multi evolve" begin
-    lim = Limits(maxdim = 10, cutoff = 1e-15)
-    for (algo, nsteps, tol) in [(Tdvp(), 10, 1e-13),
-                                (ApproxW(order = 1, w = 1), 100, 0.03),
-                                (ApproxW(order = 4, w = 1), 100, 1e-10),
-                                (ApproxW(order = 1, w = 2), 100, 0.03),
-                                (ApproxW(order = 4, w = 2), 100, 1e-10)], R in (Pure, Mixed)
-        st = evolve(-im * Z(1) * Z(2), 1., State{R}(System(2, Qubit()), ["X+", "Z-"]); algo, nsteps,
-                    limits = lim)
-        @test real(expect(st, [X(1), Y(1), Z(2)])) ≈ [cos(2), -sin(2), -1] atol = tol
-    end
-end
-
-@testset "Complex evolve" begin
-    lim = Limits(maxdim = 10, cutoff = 1e-15)
-    for (algo, nsteps, tol) in [(Tdvp(), 10, 1e-13),
-                                (ApproxW(order = 1, w = 1), 100, 0.04),
-                                (ApproxW(order = 4, w = 1), 100, 3e-9),
-                                (ApproxW(order = 1, w = 2), 100, 0.04),
-                                (ApproxW(order = 4, w = 2), 100, 2e-9)], R in (Pure, Mixed)
-        st = evolve(-im * (Z(2)Z(4) + Z(3)Z(1) + Z(3)Z(5)), 1.,
-                    State{R}(System(5, Qubit()), ["X+", "Z+", "Z-", "X+", "X+"]); algo, nsteps,
-                    limits = lim)
-        @test real(expect(st, [Y(1), Y(4), Y(5)])) ≈ sin(2) * [-1., 1., -1.] atol = tol
-    end
-end
-
 @testset "Each method against the exact evolution" begin
-    # a chain of three qubits, coupled and in fields along Z and X, evolved for a time 1 from a
-    # product state, pure and under a decay and a dephasing, against the exponential of its
-    # dense Hamiltonian or Lindbladian, with no truncation, so that what is left is the error
-    # of the method. Tdvp, at full bond dimension, is exact; ApproxW converges at its order,
-    # its error divided by about 2^order when the step is halved, WII being the more accurate
+    # a chain of three qubits, coupled between neighbours and between the two ends across the
+    # middle one, in fields along Z and X, evolved for a time 1 from a product state, pure and
+    # under a decay and a dephasing, against the exponential of its dense Hamiltonian or
+    # Lindbladian, with no truncation, so that what is left is the error of the method. Tdvp,
+    # at full bond dimension, is exact; ApproxW converges at its order, its error divided by
+    # about 2^order when the step is halved, WII being the more accurate
     n, t = 3, 1.
     sys = System(n, Qubit())
     x, y, z = [0. 1. ; 1. 0.], [0. -im ; im 0.], [1. 0. ; 0. -1.]
     sm = [0. 0. ; 1. 0.]
-    h = sum(X(i) * X(i + 1) for i in 1:n-1) + 0.7 * sum(Z(i) for i in 1:n) + 0.3 * X(1)
+    h = sum(X(i) * X(i + 1) for i in 1:n-1) + 0.5 * Z(1) * Z(3) + 0.7 * sum(Z(i) for i in 1:n) +
+        0.3 * X(1)
     hd = sum(on_qubit(x, i, n) * on_qubit(x, i + 1, n) for i in 1:n-1) +
-         0.7 * sum(on_qubit(z, i, n) for i in 1:n) + 0.3 * on_qubit(x, 1, n)
+         0.5 * on_qubit(z, 1, n) * on_qubit(z, 3, n) + 0.7 * sum(on_qubit(z, i, n) for i in 1:n) +
+         0.3 * on_qubit(x, 1, n)
     jumps = [sqrt(0.4) * on_qubit(sm, 1, n), sqrt(0.3) * on_qubit(z, 3, n)]
     dissipators = Dissipator(sqrt(0.4) * Sm)(1) + Dissipator(sqrt(0.3) * Z)(3)
     ψ = State{Pure}(sys, ["Up", "+", "Dn"])
