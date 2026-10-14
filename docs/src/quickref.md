@@ -62,7 +62,7 @@ operator of several sites, `X ⊗ X`, placed by `(X ⊗ X)(2, 5)`; `exp`, `sqrt`
 | amplitude damping | `amplitude_damping_gate(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
 | depolarization | `depolarizing_gate(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_gate(4p/3)` |
 | a product of gates | the rightmost factor acts first |
-| values measured | real for a Hermitian operator, complex otherwise; `Trace` complex |
+| values measured | by `measure`, real for a Hermitian operator, complex otherwise, `Trace` complex; by `expect`, `expect1` and `trace`, complex as soon as the state is: `real(expect(ψ, ham))` |
 
 ## Solvers
 
@@ -87,10 +87,12 @@ sweeps: a result is trusted once it does not move when each is improved, see
 
 ```julia
 measure(ψt, [X(1) * X(10), Z, (X, X), Purity, EntanglementEntropy(5)])
-# pairs: an operator on sites, an operator of one site on every site, a correlation matrix,
-# measurements of the state
+# a vector of pairs name => value, even for one measurement: an operator on sites gives a
+# number, an operator of one site one pair "Z" => [a value per site], a pair a correlation matrix
 measure(ψt, ["E" => c -> real(expect(c.state, ham)), "t" => c -> c.time]; time = 1.0)
+# one value at a time
 expect(ψt, X(1) * X(10)); expect1(ψt, Z); expect2(ψt, (X, X))
+purity(ρt); maxlinkdim(ψt); entanglement_entropy(ψt, 5)  # (entropy, spectrum)
 probabilities(ψt, Z(1) * Z(2)); sample(ψt, Z(1)); collapse(ψt, Z(1))  # (result, probability, state)
 ```
 

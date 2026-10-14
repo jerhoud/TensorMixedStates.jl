@@ -65,8 +65,12 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
   of the square of the bond dimension of `ψ`: from a ground state of bond dimension 100, a
   density matrix of 10000, which no machine evolves. Truncate `ψ` first, or start mixed.
 - `H`, `X`, `S`, `T`, `N` are operators of `Qubits`: do not name variables after them.
-- `measure` returns pairs `name => value`; the value of a Hermitian operator is real, of any
-  other complex; `Trace` is complex.
+- `measure` returns a vector of pairs `name => value`, even for one measurement, and an
+  operator of one site, `Z`, gives one pair `"Z" => [a value per site]`. The value of a
+  Hermitian operator is real, of any other complex; `Trace` is complex. For one number call
+  the function: `expect(ψ, X(1) * X(2))`, `expect1(ψ, Z)`, `purity(ρ)`,
+  `entanglement_entropy(ψ, cut)`, which returns `(entropy, spectrum)`. `expect`, `expect1` and
+  `trace` are complex as soon as the state is, even for a Hermitian operator: take `real`.
 - `ground_state` and `steady_state` need `algo = Dmrg(nsweeps = …)`; there is no `dmrg`,
   `tdvp` or `approx_W` function in version 2. An error on a name of version 1 ends with a line
   saying what to write instead.
