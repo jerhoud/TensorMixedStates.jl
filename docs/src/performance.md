@@ -56,18 +56,21 @@ as it is.
 The `stamp` file of a simulation records all these settings, so that the running times of two
 runs can be compared.
 
-On a laptop with four cores and an Intel processor, for ground state searches and time
-evolutions of chains at bond dimensions from 64 to 768, the running times changed as follows:
+On a laptop with four cores, an Intel i7-8650U, for two sweeps of `Dmrg` and two steps of
+`Tdvp` on a Heisenberg chain of 20 sites, at bond dimensions 64, 256 and 768, the running times
+changed as follows, each setting run once, two runs of the same setting differing by up to 6 %:
 
 | | dense tensors | block sparse tensors |
 |:---|:---|:---|
-| `--threads=auto` with `:dense`, rather than `julia` alone | −2 to −11 % | −8 to −14 % |
-| MKL rather than OpenBLAS | −6 to −21 % | −5 to −14 % |
-| Strided left on the threads of Julia, rather than on one as `:dense` puts it | +1 to +61 % | no effect |
-| `:blocks` rather than `:dense`, with OpenBLAS | +20 to +65 % | −19 to +1 % |
-| `:blocks` rather than `:dense`, with MKL | +35 to +67 % | −1 to +31 % |
+| `--threads=auto` with `:dense`, rather than `julia` alone | −22 to +4 % | −25 to −5 % |
+| MKL rather than OpenBLAS | −18 to −2 % | −6 to +6 % |
+| Strided left on the threads of Julia, rather than on one as `:dense` puts it | −9 to +6 % | −7 to +8 % |
+| `:blocks` rather than `:dense`, with OpenBLAS | −7 to +60 % | −9 to +47 % |
+| `:blocks` rather than `:dense`, with MKL | +43 to +71 % | +19 to +48 % |
 
-Strided weighs most at moderate bond dimensions, and hardly at all from 512 on.
+The threads of Julia gain from the bond dimension 256 on, MKL most at the smallest, 64, and
+`:blocks` costs most on dense tensors; leaving Strided on the threads of Julia changes nothing
+beyond the scatter of the runs.
 
 The documentations of Julia and of ITensors agree that the way to find the best settings is to
 try them on a few sweeps of your own calculation.
@@ -94,5 +97,5 @@ MKL is not distributed for macOS nor for ARM machines, where OpenBLAS is the onl
 A sum written with a generator, `sum(Z(i) * Z(j) for (i, j) in g)`, is built term by term,
 each term copying the sum so far, so that its cost grows as the square of the number of terms.
 Written with brackets, `sum([Z(i) * Z(j) for (i, j) in g])`, it is the sum of a vector, which
-Julia adds by halves: the 79800 terms of the pairs of 400 sites take 0.4 s rather than 15 s.
+Julia adds by halves: the 79800 terms of the pairs of 400 sites take 0.6 s rather than 18 s.
 Below a few thousand terms, the two are alike.
