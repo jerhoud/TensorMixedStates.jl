@@ -161,6 +161,8 @@ holds simulations written with the high level interface:
   trajectory written with an `Update` phase;
 - `thermal_phase.jl`: the thermal states of an XXZ chain over a range of temperatures, written as
   JSON Lines;
+- `two_time_correlations.jl`: the correlations at two times of an Ising chain, two states
+  evolved together by one `Evolve` and measured by `Overlap`;
 - `complete_graph_tdvp.jl`: a complete graph state decaying under dissipation, evolved with
   `Tdvp`;
 - `fermion_chain_conserved.jl`: a fermion chain with dephasing conserving its number of

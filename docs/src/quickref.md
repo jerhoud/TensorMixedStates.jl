@@ -112,7 +112,10 @@ runTMS(SimData(
 ```
 
 Other phases: `ToMixed`, `Weaken`, `PartialTrace`, `Gates`, `Thermalize`, `SteadyState`,
-`SaveState`, `LoadState`, `Update`. A destination is a file name (a table), `"name.jsonl"` (JSON
+`SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on a named state by `on = :φ`,
+and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list `:φ => [Z, Purity]` measures
+the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
+site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file name (a table), `"name.jsonl"` (JSON
 Lines), `"stdout"`, or `Data("name")` (kept in `sim.data`, `data_to_frame`). Running the program
 again resumes a stopped run from its checkpoint; `runTMS(sd; max_time, checkpoint_interval)`
 or the variables `TMS_MAX_TIME`, `TMS_CHECKPOINT_INTERVAL` set them; a file `restart` in the

@@ -57,6 +57,7 @@ The library measures the state as a whole:
 | `EntanglementEntropy(cut, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
 | `Fidelity(ref)` | the fidelity with the reference state `ref`, or with the state of that name in a simulation, `Fidelity(:ground)` |
 | `Overlap(ref)` | the inner product with the reference state `ref`, a complex number, or with a state named in a simulation |
+| `Overlap(ref, op)` | the matrix element ``\langle ref \vert op \vert state \rangle`` of two pure states, or its vector for an operator of one site on every site, the correlations at two times of a reference evolved with the state |
 | `Variance(op)` | the variance of the operator `op` |
 | `MaxLinkdim` | the maximum bond dimension of the state |
 | `MemoryUsage` | the memory the state occupies in bytes, the caches of the measurements included |
@@ -72,6 +73,15 @@ for instance. A symbol stands for the value of that name:
 ```@example measurements
 measure(mystate, ["half_trace" => c -> trace(c.state) / 2, "cos" => c -> cos(2c.time), :energy];
         time = 0.3, energy = -1.5)
+```
+
+A list given after the name of a state, `:φ => [Z, (X, X), Purity]`, measures the state of that
+name with all of the above, its measurements named after it, `φ.Z`, `φ.(X, X)` and `φ.Purity`,
+as their columns are:
+
+```@example measurements
+measure(mystate, [Z(1), :reference => [Z(1), Purity]];
+        reference = State{Pure}(System(4, Qubit()), "Dn"))
 ```
 
 In a simulation, the values are those its phases provide: `:step` the number of steps the

@@ -25,6 +25,13 @@ The following phases are available:
   measurements and the phases after it, a search of excited states for instance
 - `Update`: change the simulation by a function of your own, in a few steps
 
+A phase acts on the state of the simulation, `:state`, or on the state named by its field `on`,
+`GroundState(…; on = :ground)`, which leaves the others as they are; `Evolve` and `Gates` take
+several names, `on = [:state, :φ]`, evolving each state alike, the time advancing once, as the
+correlations at two times need, see the example `examples/high_level/two_time_correlations.jl`.
+The measurements read `:state`, and a named state by a list `:φ => [...]`, see
+[Measurements](measurements.md).
+
 With these phases we define a `SimData` object that describes the simulation and finally, we call
 
 ```julia
