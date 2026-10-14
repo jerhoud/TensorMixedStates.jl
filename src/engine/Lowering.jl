@@ -232,12 +232,9 @@ the terms with their coefficients multiplied by `c`
 scaled(c::Number, ts::Vector{Term}) =
     [ Term(c * t.coef, t.blocks, t.parities, t.kets, t.bras) for t in ts ]
 
-"""
-    dag(::Term)
-
-the adjoint of a term of an operator, site by site: ``(AF)^\\dagger = FA^\\dagger``, a sign for
-each odd block under its string
-"""
+# the adjoint of a term of an operator, site by site, (AF)† = FA†, a sign for each odd block
+# under its string; a comment, not a docstring, which would put a method of no user in the
+# reference of the exported dag
 dag(t::Term) =
     Term(crossing_sign(t.kets, Int[], t.blocks, t.parities) * conj(t.coef),
          [ i => collect(m') for (i, m) in t.blocks ], t.parities, t.kets, t.bras)
