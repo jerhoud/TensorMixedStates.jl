@@ -125,7 +125,46 @@ holds the sixteen Julia examples the notes use, some of them written with TMS.
 
 Working examples are in the folder
 [`examples`](https://github.com/jerhoud/TensorMixedStates.jl/tree/main/examples) of the
-repository, all of them written with the high level interface.
+repository, in three folders.
+
+The folder [`low_level`](https://github.com/jerhoud/TensorMixedStates.jl/tree/main/examples/low_level)
+holds computations written directly, each checking its result against an exact value:
+
+- `spin_one_chain.jl`: the ground state and the first excitation of the spin one Heisenberg
+  chain, as an excited state and as the ground state of a sector;
+- `free_fermions.jl`: the Fermi sea of a hopping chain and the correlations of its ground state,
+  conserving the number of fermions;
+- `domain_wall_quench.jl`: a domain wall melting in an XX chain, with `Tdvp`, `ApproxW` and half
+  the time step;
+- `driven_damped_qubits.jl`: qubits driven and decaying, relaxing to their steady state, found
+  also by `steady_state`;
+- `thermal_state.jl`: the thermal state of an Ising chain, its energy and its partition function;
+- `noisy_ghz.jl`: a GHZ state made by a circuit and depolarized, its fidelity, the statistics of
+  its parity, and a post-selection;
+- `entanglement.jl`: entropies, reduced density matrix, negativity and mutual information on GHZ
+  and Werner states;
+- `strong_then_weak.jl`: fermions dephasing under a strong symmetry, then losing particles under
+  a weak one.
+
+The folder [`high_level`](https://github.com/jerhoud/TensorMixedStates.jl/tree/main/examples/high_level)
+holds simulations written with the high level interface:
+
+- `dmrg.jl`: a ground state search with `GroundState`, stopped by its tolerance;
+- `excited_states.jl`: the ground state and the first excited state of the frustrated chain at
+  its Majumdar-Ghosh point, through a named state;
+- `ising_quench.jl`: a quench of an Ising chain with periodic boundary conditions, evolved
+  with `ApproxW`;
+- `precession.jl`: qubits precessing in a field, checked against the exact solution with a
+  `Check`;
+- `gates.jl`: gates applied to a state with the `Gates` phase;
+- `measured_trajectory.jl`: a chain of qubits kicked and measured at each step, a quantum
+  trajectory written with an `Update` phase;
+- `thermal_phase.jl`: the thermal states of an XXZ chain over a range of temperatures, written as
+  JSON Lines;
+- `complete_graph_tdvp.jl`: a complete graph state decaying under dissipation, evolved with
+  `Tdvp`;
+- `fermion_chain_conserved.jl`: a fermion chain with dephasing conserving its number of
+  particles strongly, then weakly once a loss is added.
 
 The folder [`article`](https://github.com/jerhoud/TensorMixedStates.jl/tree/main/examples/article)
 holds the six examples of the reference article:
@@ -139,20 +178,6 @@ holds the six examples of the reference article:
 - `5_Complete_graph_decoherence.jl`: the graph state of a complete graph decaying under
   dissipation;
 - `6_Brickwall.jl`: a brickwall circuit of `Rxx` and `Rzz` gates with depolarizing noise.
-
-The folder [`high_level`](https://github.com/jerhoud/TensorMixedStates.jl/tree/main/examples/high_level)
-holds shorter ones:
-
-- `dmrg.jl`: a ground state search with `GroundState`, stopped by its tolerance;
-- `ising_quench.jl`: a quench of an Ising chain with periodic boundary conditions, evolved
-  with `ApproxW`;
-- `precession.jl`: qubits precessing in a field, checked against the exact solution with a
-  `Check`;
-- `gates.jl`: gates applied to a state with the `Gates` phase;
-- `complete_graph_tdvp.jl`: a complete graph state decaying under dissipation, evolved with
-  `Tdvp`;
-- `fermion_chain_conserved.jl`: a fermion chain with dephasing conserving its number of
-  particles strongly, then weakly once a loss is added.
 
 ## References
 

@@ -81,7 +81,7 @@ purity has fallen to 0.11, which is a state no pure state code could have repres
 
 Everything is available directly too, without the phases: build a `State`, call `evolve` or
 `ground_state` on it, and `measure` the result. The manual covers both styles, and
-[`examples/`](examples) holds twelve working scripts.
+[`examples/`](examples) holds twenty-three working scripts.
 
 ## Documentation
 

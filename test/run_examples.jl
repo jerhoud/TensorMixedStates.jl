@@ -1,4 +1,6 @@
-# Runs the examples of `examples/high_level`, to catch the day one of them stops working.
+# Runs the examples of `examples/high_level` and `examples/low_level`, to catch the day one of
+# them stops working, or, the low level ones checking their results against exact values, starts
+# giving a wrong result.
 #
 # This is not a test group: it is absent from `GROUPS` in `runtests.jl` and the suite does
 # not run it. A step of its own in CI does, on one job of the matrix, because it costs
@@ -17,20 +19,26 @@
 using TensorMixedStates
 using Test
 
-const EXAMPLES = ["dmrg", "gates", "precession", "ising_quench", "complete_graph_tdvp",
-                  "fermion_chain_conserved"]
-const EXAMPLE_DIR = normpath(joinpath(@__DIR__, "..", "examples", "high_level"))
+const EXAMPLES = [
+    "high_level" => ["dmrg", "gates", "precession", "ising_quench", "complete_graph_tdvp",
+                     "fermion_chain_conserved", "excited_states", "measured_trajectory",
+                     "thermal_phase"],
+    "low_level" => ["spin_one_chain", "free_fermions", "domain_wall_quench",
+                    "driven_damped_qubits", "thermal_state", "noisy_ghz", "entanglement",
+                    "strong_then_weak"],
+]
+const EXAMPLE_DIR = normpath(joinpath(@__DIR__, "..", "examples"))
 
 cd(mktempdir()) do
     @testset verbose = true "examples" begin
-        for name in EXAMPLES
-            @testset "$name" begin
+        for (dir, names) in EXAMPLES, name in names
+            @testset "$dir/$name" begin
                 t = @elapsed @eval module $(Symbol("Example_", name))
-                    include($(joinpath(EXAMPLE_DIR, name * ".jl")))
+                    include($(joinpath(EXAMPLE_DIR, dir, name * ".jl")))
                 end
                 # reached only if the example ran to the end without throwing
                 @test true
-                println("    $name ran in $(round(t; digits = 1)) s")
+                println("    $dir/$name ran in $(round(t; digits = 1)) s")
             end
         end
     end
