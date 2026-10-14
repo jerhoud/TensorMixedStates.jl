@@ -4,27 +4,32 @@ TMS can be extended without touching its code, from a script or from a package o
 own:
 
 - [site types](@ref "Site types of one's own"), with their states and operators;
-- operators and measurements, see [`named`](@ref) and [`StateFunc`](@ref);
+- operators and measurements, see [`named`](@ref), [`Operator`](@ref) and the functions of the
+  context that [`measure`](@ref) takes;
 - [phases](@ref own-phases) of a simulation;
-- [algorithms](@ref "Algorithms of one's own") of time evolution;
-- [representations](@ref "Representations of one's own") of a state, with a state type of
-  their own.
+- [methods](@ref "Methods of one's own") of evolution and of search;
+- [destinations](@ref "Destinations of one's own") of the measurements;
+- [states](@ref "States of one's own") of a representation of their own.
 
 !!! warning "Experimental"
     The interfaces of the [phases](@ref own-phases), the
-    [algorithms](@ref "Algorithms of one's own") and the
-    [representations](@ref "Representations of one's own") of one's own, and the functions
-    they name, are experimental. They were written for extensions still to come, quantum
-    trajectories, purifications or adapters of other libraries, and may change in a version
-    2.x when the first of these shows what they lack. Their names are not exported: a program
-    imports those it uses, as with `using TensorMixedStates: AbstractPhase, run_steps`, and
-    adds a method to a function under its full name, as `TensorMixedStates.run_phase`. The
-    site types, the operators and the measurements of one's own are not concerned.
+    [methods](@ref "Methods of one's own"), the
+    [destinations](@ref "Destinations of one's own") and the
+    [states](@ref "States of one's own") of one's own, and the functions they name, are
+    experimental. They were written for extensions still to come, quantum trajectories,
+    purifications or adapters of other libraries, and may change in a version 2.x when the
+    first of these shows what they lack. The functions they name are not exported: a program
+    adds a method to a function under its full name, as `TensorMixedStates.run_phase`, and
+    imports a type it uses, as with `using TensorMixedStates: AbstractPhase`. The site types,
+    the operators and the measurements of one's own are not concerned.
 
 ## Site types of one's own
 
-To define a new site type, you need to define a new subtype of [`AbstractSite`](@ref) and define [`dim`](@ref) and possibly [`string_state`](@ref) on it (to overload do not forget to use the full name e.g. `TensorMixedStates.dim`). Then define its specific states and operators using [`@def_states`](@ref) and [`@def_operators`](@ref).
-Don't forget to define the [`F`](@ref) operator for fermionic sites.
+A site type is a subtype of [`AbstractSite`](@ref) that defines [`dim`](@ref), declares its
+states and its operators with [`@def_states`](@ref) and [`@def_operators`](@ref), and, if it is
+fermionic, gives the parity of its basis states by [`fermion_parities`](@ref), from which its
+`F` is derived. A method is added to a function of TMS under its full name,
+`TensorMixedStates.dim`.
 
 An atom with a ground state, an excited one and a Rydberg one, driven from one to the next and
 decaying from the Rydberg state, with an interaction between Rydberg atoms side by side:
@@ -35,63 +40,54 @@ using TensorMixedStates
 struct Atom <: AbstractSite end          # a ground state g, an excited one e, a Rydberg one r
 TensorMixedStates.dim(::Atom) = 3        # the full name, to add a method to dim
 
-@def_states(Atom(), [
+@def_states Atom [
     "G" => [1., 0., 0.],
     "E" => [0., 1., 0.],
     "R" => [0., 0., 1.],
-])
+]
 
-@def_operators(Atom(), [
-    plain_op => [
-        Sge = [0. 1. 0. ; 0. 0. 0. ; 0. 0. 0.],     # |g><e|
-        Ser = [0. 0. 0. ; 0. 0. 1. ; 0. 0. 0.],     # |e><r|
-    ],
-    selfadjoint_op => [
-        Nr = [0. 0. 0. ; 0. 0. 0. ; 0. 0. 1.],      # the Rydberg population
-    ],
-])
+@def_operators Atom [
+    Sge = [0. 1. 0. ; 0. 0. 0. ; 0. 0. 0.],     # |g><e|
+    Ser = [0. 0. 0. ; 0. 0. 1. ; 0. 0. 0.],     # |e><r|
+    Nr = [0. 0. 0. ; 0. 0. 0. ; 0. 0. 1.],      # the Rydberg population
+]
 
 hamiltonian = sum(Sge(i) + dag(Sge)(i) + Ser(i) + dag(Ser)(i) for i in 1:4) +
               sum(Nr(i) * Nr(i + 1) for i in 1:3)
 myrho = State{Mixed}(System(4, Atom()), "G")
-mystate = tdvp(-im * hamiltonian + sum(Dissipator(Ser)(i) for i in 1:4), 0.5, myrho;
-               nsteps = 5)
+mystate = evolve(-im * hamiltonian + sum(Dissipator(Ser)(i) for i in 1:4), 0.5, myrho;
+                 nsteps = 5)
 measure(mystate, [Nr, Trace])
 ```
 
-The operators declared are constants of the module the declaration is in. Declared in a module
-of your own, the site type and the operator names are exported for the programs that use it.
+The names of the operators become constants of the module the declaration is in, the first time
+they are declared, which a package exports with its site type.
 
 ### Conserved quantities
 
-A site type may carry a field named `conserve`, of type `String`, recording the quantities it
-conserves. Declare it only if your site can have some: a site type that cannot simply leaves
-it out and conserves nothing, which is why the field is optional rather than part of the
-interface.
-
-You do not fill it by hand. Give your site a keyword constructor in the manner of the ones of
-this package, which reads the operators the user names and records the charges they give on
-each basis state:
+A site type that can conserve quantities records them in a field `conserve` of type
+[`Conservation`](@ref), which its keyword constructor fills with [`conserving`](@ref), reading
+the charges the operators the user names give on each basis state:
 
 ```julia
 struct MySite <: AbstractSite
-    conserve::String
+    conserve::Conservation
 end
 
-MySite(; conserve = ()) = MySite(conserve_string(MySite(""), conserve))
+MySite(; conserve = ()) = conserving(MySite; conserve)
 ```
 
 A conserved quantity is an operator of your site, diagonal, whose eigenvalues are either all
-integers or all roots of unity. `MySite(conserve = N)` and `MySite(conserve = (N, 2Sz))` are
-then written the same way as for the site types of this package.
+integers or all roots of unity. `MySite(conserve = N)` and `MySite(conserve = (strong(N), 2Sz))`
+are then written as for the site types of this package. A site type that cannot conserve
+anything leaves the field out.
 
 ### The fields of a site
 
 A site is rebuilt from the values of its fields, in their order, by `MySite(values...)`: when a
-state file, which records them, is read, and when a `Weaken` phase changes what the site
-conserves. Julia gives this constructor to every struct, unless an inner constructor replaces
-it, in which case one taking all the fields in their order has to be kept. For the states on
-your site to be saved, its fields must be numbers, booleans, symbols, strings or `nothing`.
+state file, which records them, is read, and when `weaken` changes what the site conserves.
+Julia gives this constructor to every struct, unless an inner constructor replaces it, in which
+case one taking all the fields in their order has to be kept.
 
 ### Free fermions
 
@@ -105,13 +101,16 @@ Slater determinants and Fermi seas, its local state `"0"` being the one with no 
 Site types are meant to share operator names: `N` means the same thing for a `Fermion`, a
 `Boson`, a `Qboson` and a `Qudit`, and each of them gives it its own matrix. Your own site
 can join in, and there is nothing to do for that: name your operator `N` and
-`@def_operators` will register your matrix for your site under that name.
+`@def_operators` declares your matrix for your site under that name.
 
-What happens behind the scenes is that a name becomes a `const` of your module the first
-time it is declared, and only then. A name that is already in scope, because you loaded a
-site module exporting it or because you declared it for an earlier site of your own, is
-registered for the new site and left bound as it is. So the name goes on standing for one
-single operator, and the sites already using it are undisturbed.
+A name becomes a `const` of your module the first time it is declared, and only then. A name
+that is already in scope, because you loaded a site module exporting it or because you
+declared it for an earlier site of your own, is declared for the new site and left bound as it
+is, so that it goes on standing for one single operator. A name already standing for something
+else, an operator with a definition of its own or anything that is not an operator, is
+refused. A declaration is a method of the site type: declaring the same name again for the same
+site type replaces the first declaration, with the warning Julia gives when a method is
+overwritten in a script, and an error when a package is precompiled.
 
 Which name to share is a question of how many there are to count. A site with a single
 number of particles calls it `N`, as `Fermion`, `Boson`, `Qboson`, `Qudit`, `Qubit` and
@@ -119,80 +118,46 @@ number of particles calls it `N`, as `Fermion`, `Boson`, `Qboson`, `Qudit`, `Qub
 with `Nup`, `Ndn` and `Ntot`, where a bare `N` would leave the reader guessing which one it
 meant.
 
-The counterpart is that the declarations have to agree. Declaring `N` as `plain_op` when a
-site already in scope declared it `selfadjoint_op` is refused, with a message saying so,
-rather than quietly changing what `N` means for every site using it. If you want different
-properties, you want a different name. A name already taken by something that is not an
-operator at all is refused in the same way.
-
 !!! note "Overloading `dim`"
     `dim` follows a different rule, being a function rather than a name you declare: it is
     exported by `TensorMixedStates`, so `dim(::MySite) = 2` would try to define a new
     function of your own instead of adding a method. This is why it has to be written
-    `TensorMixedStates.dim(::MySite) = 2`, and the same goes for `string_state`.
+    `TensorMixedStates.dim(::MySite) = 2`, and the same goes for `string_state` and
+    `fermion_parities`.
 
 ## Operators and measurements of one's own
 
-An operator of your own is defined with [`named`](@ref), from a matrix, a function of the
-sites or an expression, or with [`Operator`](@ref) for one of several sites. Its type, which
-`simplify` reasons with, see [`OpType`](@ref), is read off its matrix: here an involution.
+An operator of your own is defined with [`named`](@ref), from a matrix, a function of the site
+or an expression of operators, or with [`Operator`](@ref), which takes the number of its sites:
 
 ```@example extending
 using TensorMixedStates, .Qubits
 
 myop = named([1 1 ; 1 -1] / √2, "MyOp")
-myop.type
+myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1])
+expect(State{Pure}(System(2, Qubit()), ["Up", "+"]), myswap(1, 2) * myop(1))
 ```
 
-A type given to `named` with a matrix is checked against it at once, as far as it can be
-without a site, and any type is checked against the matrix of the operator when that matrix is
-laid on a site. `simplify` relies on the type before, squaring an involution to the identity
-for instance, so a wrong type given to a function or an expression gives a wrong result.
+Placed on sites, it is measured, applied or put in an evolver as any other. A matrix of several
+sites is read in the basis of the sites as it is: on fermionic sites, it carries no
+Jordan-Wigner string, and an operator moving fermions between sites is written with `C` and
+`dag(C)` instead.
 
-A matrix of several sites given alone does not say how many sites it acts on, which is then
-given in braces, with the type:
-
-```@example extending
-myswap = Operator{2}("MySwap", [1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], involution_op)
-myswap(4, 7)
-```
-
-Such an operator, or a function of an operator of several sites, as
-`exp(-im * t * (X⊗X + Y⊗Y) / 4)`, can only be applied as a gate. To measure it or to put it
-in a hamiltonian, give the sites it acts on when creating it, one per index or a single one
-for identical sites, whose number is then read off the size of the matrix:
-
-```@example extending
-myswap2 = named([1 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1], "MySwap2", Qubit())
-```
-
-It is then split into a sum of products of one site operators, which becomes its definition,
-the way `Swap` is defined by an expression:
-
-```@example extending
-myswap2.expr
-```
-
-The factors carry a definite charge of what their sites conserve. On a fermionic site the
-matrix has to commute with `F`, since it is taken as it is, with no Jordan-Wigner string:
-an operator moving fermions between sites is written with `C` and `dag(C)` instead.
-
-A measurement of your own is a [`StateFunc`](@ref), a function of the state, or a
-[`TimeFunc`](@ref), a function of the simulation time.
+A measurement of your own is a function of the context, `"name" => c -> f(c.state)`, see
+[`measure`](@ref), which may read the time, `c.time`, and the values of the simulation.
 
 ## [Phases of one's own](@id own-phases)
 
 A phase of your own is a subtype of [`TensorMixedStates.AbstractPhase`](@ref) with the three
-fields every phase has, `name`, `time_start` and `final_measurements`, and a method of
-[`TensorMixedStates.run_phase`](@ref) for it, which returns the simulation the phase leaves
-behind. The full name is needed, `run_phase` not being exported. The phases of the library are
-written the same way, each in a file of `src/phases`, and make as many examples.
-Written as a loop with [`TensorMixedStates.run_steps`](@ref), the phase is checkpointed,
-stopped and resumed between two steps, as those of the library are between two sweeps:
+fields every phase has, `name`, `time_start` and `final_measurements`. A phase made of steps
+gives [`TensorMixedStates.prepare_phase`](@ref), what its steps need, `step_count`, their
+number, and `run_step`, which makes one step and returns the simulation it leaves: the run
+measures, checkpoints, stops and resumes it between two steps, as it does the phases of the
+library. A field `measurements`, with `measurements_period`, is measured after the steps:
 
 ```julia
 using TensorMixedStates, .Qubits
-using TensorMixedStates: AbstractPhase, run_steps
+using TensorMixedStates: AbstractPhase
 
 Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "Kicks"
@@ -202,13 +167,10 @@ Base.@kwdef struct Kicks <: AbstractPhase
     measurements = []
 end
 
-TensorMixedStates.run_phase(sim::Simulation, p::Kicks) =
-    run_steps(sim, p.nkicks) do sim, k
-        sim = apply(exp(-0.3im * X)(1), sim)                # the kick
-        sim = Simulation(sim, sim.state, sim.time + 0.1)    # and the time it takes
-        output(sim, p.measurements; sweep = k)                  # k for the :sweep measurement
-        return sim
-    end
+TensorMixedStates.prepare_phase(p::Kicks, _) = p
+TensorMixedStates.step_count(p::Kicks) = p.nkicks
+TensorMixedStates.run_step(::Kicks, sim, _) =
+    Simulation(sim, apply(exp(-0.3im * X)(1), sim.state), sim.time + 0.1)
 
 runTMS(SimData(name = "kicks", phases = [
     CreateState{Pure}(2, Qubit(), "Up"),
@@ -216,120 +178,103 @@ runTMS(SimData(name = "kicks", phases = [
 ]))
 ```
 
-Within the method, `output` measures the simulation, `log_message` writes to its log and
-`get_sim_file` gives a file of the simulation to write anything else to, which is cut back on
-a resume as the others are. A phase driving a solver is described with
-[`TensorMixedStates.run_phase`](@ref).
+`Simulation(sim, state, time; values...)` gives the simulation another state, and possibly
+another time and values, and `sim.rng` is the generator of random numbers of the run, which
+its checkpoints keep. A phase of a single call gives instead
+[`TensorMixedStates.run_phase`](@ref), called with the number of steps a resumed run has already
+done, and calls [`TensorMixedStates.step_done`](@ref) at the end of each of its steps, which
+measures, checkpoints and stops the run there.
 
 A phase creating the state, the adapter of another library for instance, says so by a method
 of [`TensorMixedStates.creates_state`](@ref), which lets it be the first phase of a simulation,
-and gives the system it creates the state on by one of
-[`TensorMixedStates.phase_system`](@ref), on which a resumed run puts the state of its
-checkpoint back. Within a phase, [`stopped`](@ref) tells whether the run is stopping,
-[`TensorMixedStates.resume_time`](@ref) the time a resumed phase goes on from and
-[`TensorMixedStates.committed_time`](@ref) the time of the last step committed, which a phase
-stopped in its course has reached, and `save_state(file, name, sim)` saves the state, refusing
-a file of the simulation, as its checkpoint.
+and a phase providing values to the measurements, as `:energy`, names them by a method of
+[`TensorMixedStates.provided_values`](@ref). Within a phase, `output` measures the simulation
+and `log_message` writes to its log. A function changing the simulation in a few steps, without
+a type of its own, is an [`Update`](@ref) phase.
 
-A value the steps carry from one to the next, a sum, a count or the `UInt64` a random number
-generator is made of, is given to `run_steps` as `carry`: each step receives it and returns it
-updated with the simulation, and a resumed run gets it back, see
-[`TensorMixedStates.run_steps`](@ref), which refuses a value a checkpoint would not give back as
-it is. A phase evolving one step at a time prepares its evolver once with [`PreMPO`](@ref),
-which the solvers take in place of the operator.
+## Methods of one's own
 
-## Algorithms of one's own
-
-An `Evolve` phase hands the evolution of its state to [`TensorMixedStates.evolve`](@ref), whose method
-is chosen by the type of its algorithm and by that of the state. An algorithm of your own is a
-subtype of [`TensorMixedStates.Algo`](@ref) with a method for the states it evolves, which
-returns the simulation it leaves behind. The method is called before the phase has read its
-resume point, so that a loop written with `run_steps` is checkpointed, stopped and resumed
-between two steps:
+An evolution goes through [`TensorMixedStates.evolve_step`](@ref), whose method is chosen by the
+type of its `algo`: a method of evolution of your own is a subtype of
+[`EvolutionAlgorithm`](@ref) with a method of `evolve_step`, which makes one step, and which
+`evolve`, `thermalize` and their phases then take as they take `Tdvp`. Two steps of `Tdvp` of
+half the length make one:
 
 ```julia
 using TensorMixedStates, .Qubits
-using TensorMixedStates: Algo, run_steps
 
-struct Stepwise <: Algo end     # tdvp, one step at a time
+struct HalfSteps <: EvolutionAlgorithm end
 
-function TensorMixedStates.evolve(::Stepwise, ::State, sim::Simulation, phase::Evolve;
-                                  evolver, coefs, nsteps, kwargs...)
-    dt = phase.duration / nsteps
-    return run_steps(sim, nsteps) do sim, k
-        sim = tdvp(evolver, dt, sim; coefs, phase.limits)
-        if mod(k, phase.measurements_period) == 0
-            output(sim, phase.measurements; sweep = k)
-        end
-        return sim
-    end
+function TensorMixedStates.evolve_step(::HalfSteps, pre, coefs, state, time, dt, step, limits)
+    half = TensorMixedStates.evolve_step(Tdvp(), pre, coefs, state, time, dt / 2, step, limits)
+    return TensorMixedStates.evolve_step(Tdvp(), pre, coefs, half, time + dt / 2, dt / 2, step,
+                                         limits)
 end
 
-runTMS(SimData(name = "stepwise", phases = [
+evolve(-im * sum(X(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "Up");
+       algo = HalfSteps(), nsteps = 5)
+```
+
+A search goes through [`TensorMixedStates.search`](@ref) in the same way: a method of search of
+your own is a subtype of [`SearchAlgorithm`](@ref) with a method of `search`, which
+`ground_state`, `steady_state` and their phases then take as they take `Dmrg`.
+
+## Destinations of one's own
+
+A destination of the measurements is a subtype of [`Destination`](@ref), compared by value,
+which `open` opens once and which is then given each row of values by
+[`TensorMixedStates.write_row`](@ref), and closed at the end of the run. A destination printing
+the time and the values on a line:
+
+```julia
+using TensorMixedStates, .Qubits
+
+struct Line <: Destination end
+struct OpenLine end
+
+Base.open(::Line) = OpenLine()
+Base.close(::OpenLine) = nothing
+TensorMixedStates.write_row(::OpenLine, time, row) = println(time, ": ", join(last.(row), ", "))
+
+runTMS(SimData(name = "line", phases = [
     CreateState{Pure}(2, Qubit(), "Up"),
-    Evolve(duration = 1., time_step = 0.1, algo = Stepwise(), evolver = -im * X(1),
-           measurements = "data" => Z(1)),
+    Gates(gates = X(1), final_measurements = Line() => [Z(1), Z(2)]),
 ]))
 ```
 
-`evolver` is the evolver of the phase, and `coefs` the functions of time of a time dependent
-one, `nothing` otherwise, which `tdvp` takes as they are. The method ends its keywords with
-`kwargs...`, see [Keywords of the methods you give](@ref extending-keywords).
+[`TensorMixedStates.check_list`](@ref) refuses a list of measurements it cannot take before
+anything is measured, and [`TensorMixedStates.resume_mark`](@ref), with `open(destination,
+mark)`, lets a resumed run go on where the checkpoint left it, rather than start anew.
 
-## Representations of one's own
+## States of one's own
 
-A representation of your own is a subtype of [`TensorMixedStates.Representation`](@ref), which
-`CreateState` takes as its `type`, and needs nothing more. Its states are of a type of your
-own, a subtype of [`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the
-`System` of their physical sites. TMS reads it to save a state, to choose the threading, to log
-what a `Weaken` phase changes, and to put the reference of `Fidelity` or `Overlap` on the
-system of the measured state.
+A state of your own, of a representation of its own, is a subtype of
+[`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of its
+physical sites, which a phase of your own creates, see [Phases of one's own](@ref own-phases).
+TMS reads that system to save the state, to choose the threading, to log what weakening
+changes, and to put the reference of `Fidelity` or `Overlap` on the system of the measured
+state. It need not be the one the state keeps its tensors on: a mixed state held as a pure state
+on a doubled system, a purification, has the system of its physical sites in `system`, and the
+doubled one in a field of its own.
 
-That system need not be the one the representation keeps its tensors on: a mixed state held as
-a pure state on a doubled system, a purification, has the system of its physical sites in
-`system`, and the doubled one in a field of its own.
+The phases and the measurements reach the state through the methods you give:
 
-The phases and the measurements reach these states through the methods you give:
-
-- `TensorMixedStates.run_phase(sim, phase::CreateState{MyRepresentation})` creates the state
-  from the fields of the phase;
-- `expect(state, op::IndexedOp)`, `expect1(state, ops)` and `expect2(state, pairs)` compute
-  what `measure`, and so `output`, asks for: the expectation value of an operator placed on
-  sites, normalised by the trace, those of one site operators on every site, and the
-  correlations of pairs of them. The operator is given as the user wrote it, on the physical
-  sites, its factors in any order and without the Jordan-Wigner strings of fermionic
-  operators, which [`map_sites`](@ref) places on another system. `measure` gives all the
-  operators it measures at once to `expect(state, ops)`, which calls the method of one
-  operator on each, unless you give one for `ops::Vector{<:IndexedOp}` that computes them
-  together;
-- `apply(gates, state; limits, kwargs...)` applies the gates of a `Gates` phase;
-- `TensorMixedStates.evolve(algo, state, sim, phase; evolver, coefs, nsteps, kwargs...)`
-  evolves the state
-  in an `Evolve` phase, for each algorithm it supports;
+- `expect(state, op::IndexedOp)` computes the expectation value of an operator placed on
+  sites, normalised by the trace, which `measure`, and so `output`, asks for, those of the
+  operators of one site and of the pairs of them included. The operator is given as the user
+  wrote it, on the physical sites, which [`map_sites`](@ref) places on another system;
+- `apply(op::IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
 - `TensorMixedStates.write_state(group, state)` and
-  `TensorMixedStates.read_state(::Type{MyState}, group, sites, system)` save the state and read
-  it back, for `SaveState`, `LoadState` and the checkpoints: the first writes its tensors in the
-  HDF5 group, where its type and its sites are already written, and the second rebuilds it from
-  them, on `system` when that is not `nothing`. The type is written by its name alone: a type
-  with parameters writes them in the group as well, and is read back by a method for the type
-  without them, `read_state(::Type{<:MyState}, group, sites, system)`. A state holding a
-  `State`, on the physical sites or on a system of its own, writes it in a subgroup,
-  `write_state(create_group(group, "inner"), inner)`, `create_group` coming from HDF5, and
-  reads it back with `read_state(State{Pure}, group["inner"], sites, nothing)`, given the sites
-  it lies on. Whatever else the state needs to go on as it would have, the state of a random
-  number generator for instance, is written in the group as numbers or arrays of them.
+  `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
+  for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes
+  in the HDF5 group, where its type and its sites are already written, and the second rebuilds
+  it from them. The type is written by its name alone: a type with parameters writes them in
+  the group as well, and is read back by a method for the type without them,
+  `read_state(::Type{<:MyState}, group, sites)`. A state holding a `State` writes it in a
+  subgroup, `write_state(create_group(group, "inner"), inner)`, `create_group` coming from
+  HDF5, and reads it back with `read_state(State{Pure}, group["inner"], sites)`, given the
+  sites it lies on.
 
-The other phases go through `truncate`, `mix`, `partial_trace`, `weaken`, `dmrg` and
-`steady_state`, and the state functions of the measurements through `trace`, `norm`,
-`entanglement_entropy` and the like. A state gets what its type has a method for, and a phase or
-a measurement it does not support raises a `MethodError`. `LoadState` goes through `truncate`
-only when it is given limits.
-
-## [Keywords of the methods you give](@id extending-keywords)
-
-A method you give for a function TMS calls with keywords, `evolve`, `apply` or
-`truncate(state; limits)`, ends its keywords with `kwargs...`, as `Stepwise` above does, even
-when it uses every keyword it is given. A later version of TMS may pass one more keyword, the
-generator of random numbers of a trajectory for instance, and Julia refuses a keyword that a
-method does not declare: a method declaring only those it uses would then fail, where one
-taking `kwargs...` ignores what it does not need.
+The measurements of the library go through `trace`, `norm`, `entanglement_entropy` and the
+like: a state gets what its type has a method for, and a measurement or a phase it does not
+support raises a `MethodError`.

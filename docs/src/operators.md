@@ -125,7 +125,7 @@ tensor
 ## Operators on another system
 
 A representation of one's own that keeps its tensors on another system, see
-[Representations of one's own](@ref), places the operators it measures or applies there with
+[States of one's own](@ref), places the operators it measures or applies there with
 `map_sites`.
 
 ```@docs
