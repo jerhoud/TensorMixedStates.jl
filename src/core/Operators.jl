@@ -95,7 +95,7 @@ const SimpleOp = GenericOp{IsOperator, 1}
 """
     no_signed_zero(x)
 
-`x` with its signed zeros made positive: `-0.0 == 0.0`, but `isless` and `hash` tell them
+`x` with its signed zeros made positive: `-0.0 == 0.0`, but `isequal` and `hash` tell them
 apart
 """
 no_signed_zero(x::Union{AbstractFloat, Complex{<:AbstractFloat}}) = x + zero(x)
@@ -847,64 +847,6 @@ Base.broadcastable(a::Op) = Ref(a)
 
 hash(a::Op, h::UInt) =
     foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
-
-################## Order ###############
-
-"""
-    state_key(state)
-
-the key a projector is ordered by, total and tying exactly when the states are `==`
-"""
-state_key(x::AbstractString) = (1, x, 0)
-state_key(x::AbstractArray) = (2, string(size(x)), [ (real(y), imag(y)) for y in vec(x) ])
-state_key(x::Pair) = (3, x.first, x.second)
-state_key(x::Function) = (4, string(objectid(x)), 0)
-
-"""
-    ranking(a)
-
-the rank of the type of an operator: operators of different types are ordered by it, those
-of one type by their own `isless`
-"""
-ranking(::IdentityOp) = 1
-ranking(::Operator) = 3
-ranking(::Proj) = 5
-ranking(::Reset) = 6
-ranking(::AtIndex) = 10
-ranking(::ScalarOp) = 20
-ranking(::ProdOp) = 21
-ranking(::SumOp) = 22
-ranking(::TensorOp) = 23
-ranking(::IntPowOp) = 30
-ranking(::ExpOp) = 31
-ranking(::DagOp) = 32
-ranking(::ModOp) = 33
-ranking(::GenPowOp) = 34
-ranking(::Gate) = 35
-ranking(::Dephase) = 36
-ranking(::Dissipator) = 37
-ranking(::Evolver) = 38
-
-isless(a::Operator, b::Operator) = isless(a.name, b.name)
-isless(::IdentityOp, ::IdentityOp) = false
-isless(a::Proj, b::Proj) = isless(state_key(a.state), state_key(b.state))
-isless(a::Reset, b::Reset) = isless(state_key(a.state), state_key(b.state))
-isless(a::AtIndex, b::AtIndex) = isless((a.index, a.op), (b.index, b.op))
-isless(a::ScalarOp, b::ScalarOp) =
-    isless((a.arg, real(a.coef), imag(a.coef)), (b.arg, real(b.coef), imag(b.coef)))
-isless(a::Union{SumOp, ProdOp, TensorOp}, b::Union{SumOp, ProdOp, TensorOp}) = isless(a.subs, b.subs)
-isless(a::IntPowOp, b::IntPowOp) = isless((a.arg, a.expo), (b.arg, b.expo))
-isless(a::ExpOp, b::ExpOp) = isless(a.arg, b.arg)
-isless(a::DagOp, b::DagOp) = isless(a.arg, b.arg)
-isless(a::Gate, b::Gate) = isless(a.arg, b.arg)
-isless(a::Dephase, b::Dephase) = isless(a.arg, b.arg)
-isless(a::Dissipator, b::Dissipator) = isless(a.arg, b.arg)
-isless(a::Evolver, b::Evolver) = isless(a.arg, b.arg)
-isless(a::ModOp, b::ModOp) = isless((a.arg, a.modulus), (b.arg, b.modulus))
-# an exponent may be complex, which has no order: its two parts are compared
-isless(a::GenPowOp, b::GenPowOp) =
-    isless((a.arg, real(a.expo), imag(a.expo)), (b.arg, real(b.expo), imag(b.expo)))
-isless(a::Op, b::Op) = isless((ranking(a), a), (ranking(b), b))
 
 ############## Printing ###############
 

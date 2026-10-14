@@ -1,4 +1,4 @@
-# The algebra of operators: building, comparing, ordering and printing them, their matrix on
+# The algebra of operators: building, comparing and printing them, their matrix on
 # sites, the Jordan-Wigner strings of a tensor product included, the split of an operator of
 # several sites into factors of one site, and the descent of an operator onto a system.
 #
@@ -84,38 +84,6 @@ end
     @test_throws "X acts on 1 site and was given 2" matrix(X, Qubit(), Qubit())
 end
 
-@testset "Global ordering of operators" begin
-    # `isless(::Op, ::Op)` ranks the types first and, for two of the same rank, asks `isless`
-    # again on the pair. A type with a ranking but no `isless` of its own therefore recurses on
-    # itself instead of comparing anything
-    for (a, b) in [(exp(X), exp(Y)), (dag(X), dag(Y)), (parity(X), parity(Y)), (X^2, Y^2),
-                   (X^0.5, Y^0.5), (X ⊗ Y, Y ⊗ X), (X + Y, Y + Z), (X * Y, Y * Z), (2X, 2Y),
-                   (X(1), X(2)), (Proj("Dn"), Proj("Up"))]
-        @test isless(a, b) && !isless(b, a)
-    end
-    # a Proj holds a name, a vector or an eigenspace, which have no order between them
-    # (decision 20: a number is not a state)
-    @test length(sort([Proj("1"), Proj("Up"), Proj([1., 0.]), Proj("0")])) == 4
-    # and their sum, which simplify had to sort, is the identity once placed
-    s1 = System(1, Qubit())
-    @test TMS.system_matrix(Pure, s1, TMS.lower(s1, Proj("1")(1) + Proj("Up")(1))) ≈
-          matrix(Id, Qubit())
-    for (a, b) in [(Gate(X), Gate(Y)), (Dephase(X), Dephase(Y)), (Dissipator(X), Dissipator(Y)),
-                   (Evolver(X(1)), Evolver(Y(1))), (Reset("Dn"), Reset("Up"))]
-        @test isless(a, b) && !isless(b, a)
-    end
-    # a Reset holds a name, a vector, a matrix or an eigenspace, which have no order between them
-    @test length(sort([Reset("Up"), Reset([1., 0.]), Reset("Dn"), Reset([1. 0. ; 0. 0.]),
-                       Reset(Level => 1)])) == 5
-    # two of the same type but of different kinds compare by what they hold, without recursing
-    @test isless(exp(X), exp(Dissipator(X))) || isless(exp(Dissipator(X)), exp(X))
-    # the ranking puts the types in the order it declares
-    @test isless(Id, X)                     # Identity before Operator
-    @test isless(X(1), Gate(X)(1))          # AtIndex before Gate
-    @test isless(Gate(X)(1), Dissipator(X)(1))
-    @test isless(Dissipator(X)(1), Evolver(X(1)))
-end
-
 @testset "A projector is self adjoint" begin
     # `matrix` refuses a projector on a mixed state, so every one is self adjoint, and its
     # adjoint, placed, is it whatever it projects on (decision 20: Proj("1"), not Proj(1))
@@ -125,6 +93,9 @@ end
               TMS.system_matrix(Pure, s1, TMS.lower(s1, p(1)))
         @test matrix(dag(p), Qubit()) ≈ matrix(p, Qubit())
     end
+    # projectors on states given in two ways add up, placed, to the identity
+    @test TMS.system_matrix(Pure, s1, TMS.lower(s1, Proj("1")(1) + Proj("Up")(1))) ≈
+          matrix(Id, Qubit())
 end
 
 @testset "Projector on an eigenspace" begin
@@ -137,11 +108,10 @@ end
     # an eigenspace of several states, which the projector on a state cannot give
     @test matrix(Proj(Ntot => 1), Electron()) ≈ matrix(Proj("Up") + Proj("Dn"), Electron())
     @test matrix(Proj(Level => 1), Qubit()) ≈ matrix(Proj("1"), Qubit())       # decision 20
-    # equal, and ordered among the other projectors, by its operator and its eigenvalue
+    # equal by its operator and its eigenvalue, and hashed alike
     @test Proj(X => -1) == Proj(X => -1.0)
     @test hash(Proj(X => -1)) == hash(Proj(X => -1.0))
     @test hash(Proj(X => -0.0)) == hash(Proj(X => 0.0))
-    @test length(sort([Proj(X => 1), Proj("1"), Proj(X => -1), Proj("Up"), Proj(Z => 1)])) == 5
     # of a definite charge when the operator is
     @test flux(Proj(N => 1), Qubit(conserve = N)) == IT.QN("N", 0)
     @test_throws "no definite flux" flux(Proj(X => 1), Qubit(conserve = N))
@@ -1034,9 +1004,9 @@ end
 end
 
 @testset "Signed zeros" begin
-    # -0.0 and 0.0 are equal to `==` but not to `isless` or `hash`: simplify, which sorts the
-    # terms before merging the equal ones, left a pair apart when a third term sorted between
-    # them, and measure computed an expectation value twice
+    # -0.0 and 0.0 are equal to `==` but not to `isequal` or `hash`: simplify of 1.x, which
+    # sorted the terms before merging the equal ones, left a pair apart when a third term sorted
+    # between them, and measure computed an expectation value twice
     c1 = -1 * (0.0 - 1.0im)       # -0.0 + 1.0im
     c3 = -1 * (0.0 - 2.0im)       # -0.0 + 2.0im
     f(c) = exp(c * X ⊗ X)(1, 2)
@@ -1059,15 +1029,13 @@ end
     @test hash(m(-0.0)) == hash(m(0.0))
     p, q = Proj([1.0, -0.0]), Proj([1.0, 0.0])
     @test hash(p) == hash(q)
-    @test !(isless(p, q) || isless(q, p))
     @test hash(Reset([1.0 -0.0; 0.0 0.0])) == hash(Reset([1.0 0.0; 0.0 0.0]))
-    # a projector is ordered by its values, which tie where `==` holds: its printed form told
-    # [1, 0] and [1.0, 0.0] apart, and [1, 1] sorted between the two
+    # projectors on vectors equal by `==` are gathered by the descent: its printed form told
+    # [1, 0] and [1.0, 0.0] apart
     g(v) = exp(im * Proj(v) ⊗ X)(1, 2)
     gs = g([1, 0]) - g([1.0, 0.0]) + g([1, 1])
     @test lowered(s2, gs) ≈ lowered(s2, g([1, 1]))
     @test length(TMS.lower(s2, gs)) == length(TMS.lower(s2, g([1, 1])))
-    @test isless(Proj("1"), Proj("Up")) && isless(Proj("Up"), Proj([1, 0]))      # decision 20
 end
 
 @testset "Printing reads back as the operator" begin
