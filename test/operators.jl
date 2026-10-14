@@ -857,6 +857,9 @@ end
     @test matrix(exp(-40 * N)^0.1, Boson(3)) ≈ matrix(exp(-4 * N), Boson(3))
     @test matrix(exp(-20 * N)^0.5, Boson(2)) ≈ matrix(exp(-10 * N), Boson(2))
     @test matrix((Id + 0.99999999 * Z)^0.5, q) ≈ sqrt.(matrix(Id + 0.99999999 * Z, q))
+    # nor one that is not diagonal, whose eigenvalue 0 was looked for even at full rank
+    h = X ⊗ X + Z ⊗ Id
+    @test matrix(exp(-7 * h)^0.5, q, q) ≈ matrix(exp(-3.5 * h), q, q)
     # the zero operator, a multiple of the identity, gave NaN for a power of real part ≤ 0
     @test_throws "0Id is not invertible" (0 * X)^-1
     @test_throws "0Id is not invertible" (0 * X)^(0.5im)

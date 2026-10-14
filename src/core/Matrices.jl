@@ -296,22 +296,24 @@ function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
         end
         return diagm((eltype(d) <: Real && any(<(0), d) ? complex(d) : d) .^ p)
     end
-    n = size(m, 1)
-    r = rank(m)
-    if real(p) ≤ 0 && r < n
-        error("$a does not exist: $(a.arg) is not invertible")
-    elseif real(p) > 0 && r ≠ rank(m * m)
-        error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
-    end
     # any other one has its eigenvalues to rounding, a 0 coming out as about ±1e-17, whose power
     # is far from 0, and Julia fails on the logarithm of a singular matrix: the power is taken on
     # m + q, q the projector on the kernel along the range, which is m on the range and the
     # identity on the kernel, and the kernel is then sent back to 0
+    n, r = size(m, 1), rank(m)
     q = zeros(n, n)
     if r < n
+        if real(p) ≤ 0
+            error("$a does not exist: $(a.arg) is not invertible")
+        end
         f = svd(m)
         k = f.V[:, r+1:n]
-        q = k * inv([k f.U[:, 1:r]])[1:n-r, :]
+        kr = [k f.U[:, 1:r]]
+        # the kernel and the range span the space unless the eigenvalue 0 is defective
+        if rank(kr) < n
+            error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
+        end
+        q = k * inv(kr)[1:n-r, :]
     end
     b = m + q
     # Julia 1.10 refuses a non integer power of a real diagonal matrix with a negative entry,
