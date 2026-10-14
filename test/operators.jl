@@ -870,6 +870,17 @@ end
     # a power that does not exist is refused, where Julia gives zero for C^0.5
     @test_throws "does not exist" matrix(sqrt(C), fe)
     @test_throws "does not exist" matrix(Proj("0")^(-0.5), q)     # decision 20
+    # the eigenvalue 0 of an operator that is not diagonal comes out of rounding as about
+    # ±1e-17, whose power is far from 0: (Sx^2)^0.1 was off by 0.03. And Julia, taking the
+    # logarithm of a singular matrix, failed on a complex exponent or an operator not normal
+    @test norm(matrix((Sx^2)^0.1, s1) - matrix(Sx^2, s1)) < 1e-13
+    @test norm(matrix(Proj(Swap => -1)^0.1, q, q) - matrix(Proj(Swap => -1), q, q)) < 1e-13
+    sp = random_state(Pure, System(2, s1), 3)
+    @test expect(sp, ((Sx^2)^0.1)(2)) ≈ expect(sp, (Sx^2)(2)) atol = 1e-13
+    @test matrix(Proj("+")^(0.5 + 0.5im), q) ≈ matrix(Proj("+"), q)
+    idem = Operator{1}("Idem", [1. 1. ; 0. 0.])
+    @test matrix(idem^0.1, q) ≈ [1. 1. ; 0. 0.]
+    @test matrix(idem^(1 + 1im), q) ≈ [1. 1. ; 0. 0.]
 
     # powers of the same operator merge, and what they give leaves no coefficient inside the
     # product nor an F out of its place, which the matrices of the products placed show, after

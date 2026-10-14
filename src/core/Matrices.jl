@@ -286,18 +286,30 @@ end
 function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
     check_dense(a, (site, sites...))
     m = matrix(a.arg, site, sites...)
+    n = size(m, 1)
     r = rank(m)
-    if real(a.expo) ≤ 0 && r < size(m, 1)
+    if real(a.expo) ≤ 0 && r < n
         error("$a does not exist: $(a.arg) is not invertible")
     elseif real(a.expo) > 0 && r ≠ rank(m * m)
         error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
     end
+    # the eigenvalues 0 come out of rounding as about ±1e-17, whose power is far from 0, and
+    # Julia fails on the logarithm of a singular matrix: the power is taken on m + q, q the
+    # projector on the kernel along the range, which is m on the range and the identity on the
+    # kernel, and the kernel is then sent back to 0
+    q = zeros(n, n)
+    if r < n
+        f = svd(m)
+        k = f.V[:, r+1:n]
+        q = k * inv([k f.U[:, 1:r]])[1:n-r, :]
+    end
+    b = m + q
     # Julia 1.10 refuses a non integer power of a real diagonal matrix with a negative entry,
     # and `Matrix` unwraps the Symmetric or Hermitian it may return
-    if eltype(m) <: Real && isdiag(m) && any(<(0), diag(m))
-        return Matrix(complex(m) ^ a.expo)
+    if eltype(b) <: Real && isdiag(b) && any(<(0), diag(b))
+        b = complex(b)
     end
-    return Matrix(m ^ a.expo)
+    return Matrix(b ^ a.expo) * (I - q)
 end
 
 matrix(a::DagOp, site::AbstractSite, sites::AbstractSite...) =
