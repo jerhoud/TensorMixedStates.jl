@@ -99,6 +99,7 @@ Operator
 ⊗(::GenericOp{K, N}, ::GenericOp{K, M}) where {K, N, M}
 Proj
 Level
+Swap
 Dissipator
 Gate
 Reset
