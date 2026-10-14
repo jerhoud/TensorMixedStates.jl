@@ -3,20 +3,28 @@
 TensorMixedStates (TMS) is a Julia library to make simulations of closed or open quantum
 systems using Matrix Product States representations.
 
+Version 2.0 is a rewrite of the library: a program written for 1.x needs the edits listed in
+[Upgrading from 1.x](@ref).
+
 ## Features
 
 - Pure states and, for open systems, density matrices, both represented as matrix product
   states.
 - A rich set of sites and operators, easily extended by the user, with a very expressive
-  syntax for observables, gates, Hamiltonians and Lindbladians.
-- Ground states with DMRG, Hamiltonian and Lindbladian evolution with TDVP and with the WI and
-  WII approximations, steady states, and thermal states by evolution in imaginary time.
-- Prepared states: GHZ, Dicke and W states, singlets on pairs of sites, the AKLT state, Slater
-  determinants and Fermi seas of free fermions, and the fully mixed states of a sector.
-- Gates, noisy gates included.
+  syntax for observables, gates, channels, Hamiltonians and Lindbladians.
+- Ground states and excited states with DMRG, Hamiltonian and Lindbladian evolution with TDVP
+  and with the WI and WII approximations, steady states, and thermal states by evolution in
+  imaginary time.
+- Prepared states: GHZ, Dicke and W states, graph states, singlets on pairs of sites, the AKLT
+  state, Slater determinants and Fermi seas of free fermions, and the fully mixed states of a
+  sector.
+- Gates and channels, noisy gates included, and the measurement of a state with its
+  probabilities, its samples and its collapse.
+- Measurements of expectation values, correlations, entanglement entropies, purities, fidelities
+  and reduced density matrices.
 - Conserved quantities, with weak and strong symmetries for open systems.
 - An optional high level interface, which writes a simulation in a few lines, with its
-  measurements, its output files and checkpoints.
+  measurements, its output files and checkpoints, from which an interrupted simulation resumes.
 
 Being based on ITensor, TMS delivers high performance computations, and uses the cores of
 the machine, see [Threads and performance](@ref).
@@ -33,7 +41,7 @@ To install TMS in Julia, launch the Julia interface (by typing `julia` on the co
 
 The `]` switches the prompt to the package manager of Julia.
 
-After downloading TMS, Julia will automatically compile and install it. This process usually takes a couple of minutes and requires no interaction on the user's part.
+After downloading TMS, Julia will automatically compile and install it. This process takes several minutes the first time, and requires no interaction on the user's part.
 
 ## A first example
 
@@ -46,8 +54,8 @@ using TensorMixedStates, .Qubits
 n = 10
 mysystem = System(n, Qubit(conserve = parity(N)))
 hamiltonian = -sum(X(i)X(i + 1) for i in 1:n-1) - 0.5 * sum(Z(i) for i in 1:n)
-energy, ground = dmrg(hamiltonian, State{Pure}(mysystem, "Up"); nsweeps = 10,
-                      limits = Limits(maxdim = 20))
+energy, ground = ground_state(hamiltonian, State{Pure}(mysystem, "Up");
+                              algo = Dmrg(nsweeps = 10), limits = Limits(maxdim = 20))
 measure(ground, [X(1)X(n), Z])
 ```
 
@@ -87,8 +95,8 @@ You can have access to inline documentation on TMS at the Julia prompt simply by
 ?runTMS
 ```
 
-For a function TMS shares with ITensorMPS, as `tdvp`, `dmrg`, `expect` or `normalize`, the
-help shows that of ITensorMPS first, then that of TMS.
+For a function TMS shares with ITensorMPS, as `expect` or `sample`, the help shows that of
+ITensorMPS first, then that of TMS.
 
 For this to work you must have first imported TMS with
 
