@@ -34,7 +34,7 @@ struct System
         for k in n:-1:1
             fermions[k] = any(isodd, fermion_parities(sites[k])) ? k : fermions[k + 1]
         end
-        return new(sites, hash(sites), charged, strong, fermions)
+        return new(copy(sites), hash(sites), charged, strong, fermions)
     end
 end
 

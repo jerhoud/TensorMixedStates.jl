@@ -31,6 +31,11 @@ end
     @test siteinds(Mixed, System(3, Qubit())) == siteinds(Mixed, System(3, Qubit()))
     @test System(3, Qubit()) ≠ System(3, Qubit(conserve = N))
     @test System([Boson(4)]) ≠ System([Boson(5)])
+    # a system keeps its own copy of the sites it is given
+    v = TMS.AbstractSite[Qubit(), Qubit()]
+    s = System(v)
+    v[1] = Boson(3)
+    @test s[1] == Qubit()
     S, U = System(2, Qubit()), System(1, Qubit())
     for sys in (S ⊗ S ⊗ S, S ⊗ U ⊗ S, S ⊗ (S ⊗ S))
         @test allunique(siteinds(Pure, sys))
