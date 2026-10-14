@@ -286,17 +286,27 @@ end
 function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
     check_dense(a, (site, sites...))
     m = matrix(a.arg, site, sites...)
+    p = a.expo
+    # a diagonal matrix holds its eigenvalues exactly, its zeros among them; Julia 1.10 refuses
+    # a non integer power of a negative real, which a complex takes
+    if isdiag(m)
+        d = diag(m)
+        if real(p) ≤ 0 && any(iszero, d)
+            error("$a does not exist: $(a.arg) is not invertible")
+        end
+        return diagm((eltype(d) <: Real && any(<(0), d) ? complex(d) : d) .^ p)
+    end
     n = size(m, 1)
     r = rank(m)
-    if real(a.expo) ≤ 0 && r < n
+    if real(p) ≤ 0 && r < n
         error("$a does not exist: $(a.arg) is not invertible")
-    elseif real(a.expo) > 0 && r ≠ rank(m * m)
+    elseif real(p) > 0 && r ≠ rank(m * m)
         error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
     end
-    # the eigenvalues 0 come out of rounding as about ±1e-17, whose power is far from 0, and
-    # Julia fails on the logarithm of a singular matrix: the power is taken on m + q, q the
-    # projector on the kernel along the range, which is m on the range and the identity on the
-    # kernel, and the kernel is then sent back to 0
+    # any other one has its eigenvalues to rounding, a 0 coming out as about ±1e-17, whose power
+    # is far from 0, and Julia fails on the logarithm of a singular matrix: the power is taken on
+    # m + q, q the projector on the kernel along the range, which is m on the range and the
+    # identity on the kernel, and the kernel is then sent back to 0
     q = zeros(n, n)
     if r < n
         f = svd(m)
@@ -309,7 +319,7 @@ function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
     if eltype(b) <: Real && isdiag(b) && any(<(0), diag(b))
         b = complex(b)
     end
-    return Matrix(b ^ a.expo) * (I - q)
+    return Matrix(b ^ p) * (I - q)
 end
 
 matrix(a::DagOp, site::AbstractSite, sites::AbstractSite...) =

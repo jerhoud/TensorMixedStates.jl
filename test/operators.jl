@@ -851,6 +851,12 @@ end
     idem = Operator{1}("Idem", [1. 1. ; 0. 0.])
     @test matrix(idem^0.1, q) ≈ [1. 1. ; 0. 0.]
     @test matrix(idem^(1 + 1im), q) ≈ [1. 1. ; 0. 0.]
+    # a diagonal operator takes the power of its entries, exactly: exp(-40N)^0.1 lost its
+    # eigenvalues below 1e-16 of the largest, and an operator of condition above 4e7 was refused
+    # as having a defective eigenvalue 0
+    @test matrix(exp(-40 * N)^0.1, Boson(3)) ≈ matrix(exp(-4 * N), Boson(3))
+    @test matrix(exp(-20 * N)^0.5, Boson(2)) ≈ matrix(exp(-10 * N), Boson(2))
+    @test matrix((Id + 0.99999999 * Z)^0.5, q) ≈ sqrt.(matrix(Id + 0.99999999 * Z, q))
     # the zero operator, a multiple of the identity, gave NaN for a power of real part ≤ 0
     @test_throws "0Id is not invertible" (0 * X)^-1
     @test_throws "0Id is not invertible" (0 * X)^(0.5im)
