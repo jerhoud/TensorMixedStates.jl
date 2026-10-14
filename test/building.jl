@@ -36,6 +36,12 @@ end
     s = System(v)
     v[1] = Boson(3)
     @test s[1] == Qubit()
+    # and its key, from which the indices take their identities, reads every site: Julia's hash
+    # of a long vector skips some, so that two systems shared their indices
+    a = [isodd(i) ? Qubit() : Boson(3) for i in 1:100000]
+    b = copy(a)
+    b[50000] = Boson(4)
+    @test System(a).key ≠ System(b).key
     S, U = System(2, Qubit()), System(1, Qubit())
     for sys in (S ⊗ S ⊗ S, S ⊗ U ⊗ S, S ⊗ (S ⊗ S))
         @test allunique(siteinds(Pure, sys))

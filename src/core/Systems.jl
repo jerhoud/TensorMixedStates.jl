@@ -18,7 +18,7 @@ quantities cannot live together on one system are refused.
 """
 struct System
     sites::Vector{<:AbstractSite}
-    # the hash of the sites, from which the indices take their identities
+    # the hash of every site, from which the indices take their identities
     key::UInt
     # read once off the sites, see `is_charged`, `strong_names` and `next_fermion`
     charged::Bool
@@ -34,7 +34,9 @@ struct System
         for k in n:-1:1
             fermions[k] = any(isodd, fermion_parities(sites[k])) ? k : fermions[k + 1]
         end
-        return new(copy(sites), hash(sites), charged, strong, fermions)
+        # Julia's hash of a long vector reads only some of its elements
+        key = foldl((h, s) -> hash(s, h), sites; init = hash(length(sites)))
+        return new(copy(sites), key, charged, strong, fermions)
     end
 end
 
