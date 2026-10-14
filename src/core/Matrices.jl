@@ -429,20 +429,20 @@ function local_state(site::AbstractSite, p::Pair{<:SimpleOp, <:Real})
     return pr / tr(pr)
 end
 
-function local_state(site::AbstractSite, v::Vector{<:Number})
+function local_state(site::AbstractSite, v::AbstractVector{<:Number})
     if length(v) ≠ dim(site)
         error("a state of $(length(v)) components cannot be one of $site, whose dimension is $(dim(site))")
     end
-    return copy(v)
+    return Vector(v)
 end
 
-function local_state(site::AbstractSite, m::Matrix{<:Number})
+function local_state(site::AbstractSite, m::AbstractMatrix{<:Number})
     d = dim(site)
     if size(m) ≠ (d, d)
         error("a $(size(m, 1))×$(size(m, 2)) density matrix cannot be one of $site, whose " *
               "dimension is $d")
     end
-    return copy(m)
+    return Matrix(m)
 end
 
 local_state(site::AbstractSite, f::Function) = local_state(site, f(site))

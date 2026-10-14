@@ -1003,6 +1003,15 @@ end
     @test expect(State{Pure}(System(2, Qubit()), ["Up", "X+"]), s1(1, 2)) ≈ 0.5
 end
 
+@testset "A state is given by an array of any type" begin
+    # a view or a Diagonal, given to Proj or Reset or returned by a function of the site
+    LA = TMS.LinearAlgebra
+    q = Qubit()
+    @test matrix(Proj(view([0., 1., 5.], 1:2)), q) ≈ matrix(Proj("Dn"), q)
+    @test matrix(Reset(LA.Diagonal([0., 1.])), q) ≈ matrix(Reset("Dn"), q)
+    @test TMS.local_state(q, s -> LA.Diagonal([0.5, 0.5])) == [0.5 0. ; 0. 0.5]
+end
+
 @testset "Signed zeros" begin
     # -0.0 and 0.0 are equal to `==` but not to `isequal` or `hash`: simplify of 1.x, which
     # sorted the terms before merging the equal ones, left a pair apart when a third term sorted

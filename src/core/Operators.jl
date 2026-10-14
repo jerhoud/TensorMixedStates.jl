@@ -364,7 +364,8 @@ of one site or several.
 """
 struct Proj{N} <: GenericOp{IsOperator, N}
     state::Union{String, Vector, Function, Pair{<:GenericOp{IsOperator}, <:Real}}
-    Proj(state::Union{String, Vector, Function}) = new{1}(no_signed_zero(state))
+    Proj(state::Union{String, AbstractVector, Function}) =
+        new{1}(no_signed_zero(state isa AbstractVector ? Vector(state) : state))
     Proj(p::Pair{<:GenericOp{IsOperator, N}, <:Real}) where N =
         new{N}(first(p) => no_signed_zero(last(p)))
 end
@@ -447,7 +448,8 @@ is, without normalization.
 """
 struct Reset <: GenericOp{IsChannel, 1}
     state::Union{String, Vector, Matrix, Function, Pair{<:SimpleOp, <:Real}}
-    Reset(state::Union{String, Vector, Matrix, Function}) = new(no_signed_zero(state))
+    Reset(state::Union{String, AbstractVector, AbstractMatrix, Function}) =
+        new(no_signed_zero(state isa AbstractArray ? Array(state) : state))
     Reset(p::Pair{<:SimpleOp, <:Real}) = new(first(p) => no_signed_zero(last(p)))
 end
 
