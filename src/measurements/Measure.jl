@@ -629,11 +629,14 @@ const imaginary_tol = 1e-8
     real_value(x, scale, name, time)
 
 the real part of the value `x` of the Hermitian measurement `name`, element by element, with a
-warning when the imaginary part dropped is beyond rounding next to `scale`
+warning when the imaginary part dropped is beyond rounding next to `scale`, of the group
+`:imaginary_part` and carrying `measurement`, `imaginary` and `time`, so that a logger may
+gather such warnings
 """
 function real_value(x::Number, scale, name, time)
     if abs(imag(x)) > imaginary_tol * scale
-        @warn "the imaginary part of $name, Hermitian, is $(imag(x))" time
+        @warn("the imaginary part of a Hermitian measurement is beyond rounding, dropped",
+              measurement = name, imaginary = imag(x), time, _group = :imaginary_part)
     end
     return real(x)
 end

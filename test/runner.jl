@@ -986,3 +986,26 @@ end
         @test !occursin("from the user", read("w/log", String))
     end
 end
+
+@testset "The imaginary parts dropped in a run" begin
+    # the imaginary parts of Hermitian measurements a run drops make one warning, with how many
+    # and the largest, at the end of each phase, after the measurements that end the run, or
+    # before it stops, rather than a line each
+    ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
+    sd(name) = SimData(; name, final_measurements = "f" => X(1), phases = [
+        CreateState(type = Mixed(), state = ρ),
+        Update(c -> nothing; nsteps = 3, measurements = "x" => [X, X(1)])])
+    summaries(log) = [ (parse(Int, m[1]), parse(Float64, m[2]), m[3], m[4]) for m in eachmatch(
+        r"WARNING: (\d+) imaginary parts? of Hermitian measurements beyond rounding dropped, the largest (\S+), of (.+) at time (\S+)\n",
+        read(log, String)) ]
+    in_tmp() do
+        @test_logs (:info, r"simulation \"im\" done, .*, 2 warnings in its log") runTMS(sd("im"))
+        s = summaries("im/log")
+        @test [ (n, name, t) for (n, _, name, t) in s ] == [(6, "X", "0.0"), (1, "X(1)", "0.0")]
+        @test all(x -> x[2] ≈ 0.6, s)
+        @test !occursin("is beyond rounding, dropped", read("im/log", String))
+        # a run stopped and resumed reports what each of its parts dropped
+        run_through(sd("resumed"); max_time = -1)
+        @test sum(first, summaries("resumed/log")) == 7
+    end
+end

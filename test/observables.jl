@@ -1888,26 +1888,33 @@ end
     # a density matrix that is not Hermitian gives the Hermitian X an imaginary part of 0.6
     ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
     @test expect(ρ, X(1)) ≈ 0.6im
-    x = @test_logs (:warn, "the imaginary part of X(1), Hermitian, is 0.6") last(
-        only(measure(ρ, X(1))))
+    msg = "the imaginary part of a Hermitian measurement is beyond rounding, dropped"
+    x = @test_logs (:warn, msg) last(only(measure(ρ, X(1))))
     @test x isa Float64 && x == 0
-    @test_logs (:warn, "the imaginary part of X, Hermitian, is 0.6") measure(ρ, X)
-    # with the time, when measure is given one
+    # the warning carries the measurement, the imaginary part and the time, in a group of its own,
+    # which a run gathers into one warning
     logs, _ = Test.collect_test_logs(() -> measure(ρ, X(1); time = 2.))
+    @test only(logs).group === :imaginary_part
+    @test only(logs).kwargs[:measurement] == "X(1)"
+    @test only(logs).kwargs[:imaginary] ≈ 0.6
     @test only(logs).kwargs[:time] == 2.
+    # the measurements a call warns about, one warning for each value
+    function warned(f)
+        logs, _ = Test.collect_test_logs(f)
+        @test all(l -> l.message == msg && l.group === :imaginary_part, logs)
+        return [ l.kwargs[:measurement] for l in logs ]
+    end
+    @test warned(() -> measure(ρ, X)) == ["X"]
     # the same imaginary part next to an operator a hundred million times larger is rounding,
     # the value being nearly 0.6i all the same, and next to one a million times larger it is not
     @test_logs measure(ρ, X(1) + 1e8 * Z(1))
-    @test_logs (:warn, r"the imaginary part of X\(1\)\+1000000Z\(1\), Hermitian") measure(
-        ρ, X(1) + 1e6 * Z(1))
+    @test warned(() -> measure(ρ, X(1) + 1e6 * Z(1))) == ["X(1)+1000000Z(1)"]
     # a state that is not normalised, whose trace is not real
     ρ2 = (1 + 1im) * mix(State{Pure}(System(2, Qubit()), "+"))
-    @test_logs (:warn, r"the imaginary part of X\(1\), Hermitian") measure(ρ2, X(1))
+    @test warned(() -> measure(ρ2, X(1))) == ["X(1)"]
     # each value of an operator of one site and of a pair is checked
-    w = (:warn, r"the imaginary part of X, Hermitian")
-    @test_logs w w measure(ρ2, X)
-    w = (:warn, r"the imaginary part of \(X, X\), Hermitian")
-    @test_logs w w w w measure(ρ2, (X, X))
+    @test warned(() -> measure(ρ2, X)) == ["X", "X"]
+    @test warned(() -> measure(ρ2, (X, X))) == fill("(X, X)", 4)
 end
 
 @testset "A Measure keeps its preparation" begin

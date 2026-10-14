@@ -26,8 +26,9 @@ const reserved_values = (:state, :time, :step, :rng, :data)
 
 what the simulations of a run share: its directory, empty for a run whose output is redirected
 to the stream `redirect`, its outputs, its log, its checkpointing, the values its phases
-provide, the phase being run and the time it started from, whether it stopped, and the warnings
-its log received
+provide, the phase being run and the time it started from, whether it stopped, the warnings its
+log received, and the imaginary parts of Hermitian measurements dropped and not yet reported, how
+many and the largest, as `(imaginary part, measurement, time)`
 """
 mutable struct RunData
     dir::String
@@ -40,10 +41,12 @@ mutable struct RunData
     phase_time::Number
     stopped::Bool
     warnings::Int
+    dropped::Int
+    largest::Union{Nothing, Tuple}
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided) =
-    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false, 0)
+    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false, 0, 0, nothing)
 
 """
     Simulation(sim, state[, time = sim.time]; values...)
@@ -230,6 +233,11 @@ end
 output(c::Editing, list::AbstractVector) = output(Simulation(c), list)
 output(sim::Union{Simulation, Editing}, p::Pair) = output(sim, [p])
 
+function log_line(run::RunData, text)
+    println(run.log, text)
+    flush(run.log)
+end
+
 """
     log_message(sim, text)
 
@@ -241,16 +249,32 @@ function log_message(sim::Union{Simulation, Editing}, text)
     return nothing
 end
 
-function log_line(run::RunData, text)
-    println(run.log, text)
-    flush(run.log)
+"""
+    report_dropped(run)
+
+one warning in the log for the imaginary parts of Hermitian measurements dropped since the last
+one, how many and the largest, which a run gathers rather than writing a line for each
+"""
+function report_dropped(run::RunData)
+    if run.dropped > 0
+        x, name, time = run.largest
+        n = run.dropped
+        at = isnothing(time) ? "" : " at time $time"
+        log_line(run, "WARNING: $n imaginary part$(n == 1 ? "" : "s") of Hermitian measurements " *
+                      "beyond rounding dropped, the largest $x, of $name$at")
+        run.warnings += 1
+        run.dropped = 0
+        run.largest = nothing
+    end
+    return nothing
 end
 
 """
     SimLogger(run, parent)
 
-the logger of a run: the warnings of this package go to its log, everything else to `parent`,
-the logger in place
+the logger of a run: the warnings of this package go to its log, those of the imaginary parts
+dropped by measurements gathered for `report_dropped`, everything else to `parent`, the logger
+in place
 """
 struct SimLogger <: Logging.AbstractLogger
     run::RunData
@@ -275,7 +299,14 @@ Logging.catch_exceptions(l::SimLogger) = Logging.catch_exceptions(l.parent)
 
 function Logging.handle_message(l::SimLogger, level, message, _module, group, id, file, line;
                                 kwargs...)
-    if simulation_warning(level, _module)
+    if simulation_warning(level, _module) && group === :imaginary_part
+        run = l.run
+        x = kwargs[:imaginary]
+        if isnothing(run.largest) || abs(x) > abs(first(run.largest))
+            run.largest = (x, kwargs[:measurement], kwargs[:time])
+        end
+        run.dropped += 1
+    elseif simulation_warning(level, _module)
         l.run.warnings += 1
         log_line(l.run, "WARNING: $message")
     elseif level >= Logging.min_enabled_level(l.parent)

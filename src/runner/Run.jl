@@ -397,6 +397,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
             sim
         end
         sim = td.value
+        report_dropped(run)
         log_message(sim, "***** Ending phase \"$(phase.name)\" after $(round(td.time; digits = 3)) " *
                          "seconds, $(Base.format_bytes(td.bytes)) allocated *****")
         # absent before Julia 1.11; it includes the recompilation
@@ -613,10 +614,12 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             try
                 sim = run_phases(sim, sd.phases, start, done, ended, threading)
                 output_final(sim, sd)
+                report_dropped(run)
             catch e
                 if !(e isa StopRun || (e isa InterruptException && live))
                     rethrow()
                 end
+                report_dropped(run)
                 if e isa InterruptException
                     log_line(run, "\n***** Interrupted, writing a checkpoint *****")
                     write_checkpoint(c)
@@ -634,6 +637,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         return sim
     catch e
         if started
+            if !isnothing(run)
+                report_dropped(run)
+            end
             write(file("error"), error_line(run, sd, e) * "\n")
             println(logio, "\n" * error_line(run, sd, e))
             flush(logio)
