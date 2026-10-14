@@ -104,6 +104,15 @@ For this to work you must have first imported TMS with
 using TensorMixedStates
 ```
 
+### For AI assistants
+
+An AI asked to compute with TMS finds the library on one page in [Quick reference](@ref),
+shipped with the package as `docs/src/quickref.md`, the map of the documentation in
+[`llms.txt`](https://jerhoud.github.io/TensorMixedStates.jl/stable/llms.txt), and a skill for
+coding agents, its workflow, conventions and traps, in the folder
+[`skills/tensormixedstates`](https://github.com/jerhoud/TensorMixedStates.jl/tree/main/skills/tensormixedstates)
+of the repository.
+
 ### Learning about matrix product states
 
 For an introduction to matrix product states and tensor networks, see the lecture notes of the
