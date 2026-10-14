@@ -150,7 +150,7 @@ state of one site, `dimer_state` puts a singlet on each pair of sites
 given, `aklt_state` is the ground state of the AKLT chain of spins one, and `fully_mixed` the
 fully mixed state of a sector, here of 3 fermions. The Slater determinants and the Fermi seas
 of free fermions are built by `slater_state` and `fermi_sea`, see [Fermions](@ref), and the
-thermal states by `thermal_state`, see [Thermal states](@ref manual-thermal-states). Each is a `State`, which
+thermal states by `thermalize`, see [Thermal states](@ref manual-thermal-states). Each is a `State`, which
 `CreateState` takes as its `state`, see [Prepared states](@ref) for the details.
 
 ## Conserved quantities
@@ -225,8 +225,8 @@ represents the ``\sigma_x`` Pauli operator applied to the system site number 3. 
 Note that all predefined operator names start with a capital letter, so it is better to keep your own identifiers lowercase to prevent name collisions with them.
 
 Lowercase is not a safe harbour by itself, though. `using TensorMixedStates` also brings in
-seventy lowercase names, among them `state`, `output`, `measure`, `trace`, `dim`,
-`matrix`, `tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
+more than eighty lowercase names, among them `output`, `measure`, `trace`, `dim`, `matrix`,
+`tensor`, `apply`, `norm` and `sample`. Assigning to one of them at the top level
 of your program shadows the function for the rest of the file, and if you happen to have
 used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
 `cannot assign a value to imported variable`. There is no such issue inside a function,
@@ -256,8 +256,8 @@ Many operations are defined on generic operators:
 - `Proj` represents an operator that projects on the given state, for example `Proj("Up")`
   projects qubits on the up state, or on an eigenspace, `Proj(Sz => 0)` projecting a spin 1 on
   the state of zero ``S_z``.
-- `Basis` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
-  is the basis of the site.
+- `Level` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
+  is the basis of the site, and `Level => n` the basis state `n`, counted from 0.
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`
 - `controlled` for qubits makes controlled gates: `CX = controlled(X)`
 
@@ -284,10 +284,6 @@ Rxy(0.2)(2, 5)
 ```@example manual
 myop(3)
 ```
-
-An operator of several sites that is a function of an operator, as the exponential in `Rxy`,
-can only be applied as a gate, unless it is created with the sites it acts on, see
-[Operators and measurements of one's own](@ref).
 
 ### Fermions
 
@@ -342,15 +338,15 @@ keyword argument `limits` constrains the truncations made along the way.
 
 ### Ground states
 
-The ground state of a hamiltonian is computed by `dmrg`, from a starting state, here a random
-state of bond dimension 8. It returns the energy and the ground state, which can then be
-measured. For the Ising chain in a transverse field
+The ground state of a hamiltonian is computed by `ground_state`, from a starting state, here
+a random state of bond dimension 8, by the method `algo`, `Dmrg`. It returns the energy and the
+ground state, which can then be measured. For the Ising chain in a transverse field
 
 ```@example manual
 mysystem = System(10, Qubit())
 hamiltonian = -sum(Z(i)Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10)
-energy, ground = dmrg(hamiltonian, RandomState{Pure}(mysystem, 8); nsweeps = 10,
-                      limits = Limits(maxdim = 20))
+energy, ground = ground_state(hamiltonian, random_state(Pure, mysystem, 8);
+                              algo = Dmrg(nsweeps = 10), limits = Limits(maxdim = 20))
 energy
 ```
 
@@ -358,13 +354,30 @@ energy
 measure(ground, X)
 ```
 
-`nsweeps` is the number of sweeps, passes of dmrg along the chain and back, and `limits` may
-give one value per sweep, as in `Limits(maxdim = [10, 20, 50])`.
+`nsweeps` is the number of sweeps, passes of dmrg along the chain and back, `Dmrg(tol = …)`
+stops the search earlier once the energy changes less than `tol` between two sweeps, and
+`limits` may give one value per sweep, as in `Limits(maxdim = [10, 20, 50])`.
+
+Given eigenstates found before, `orthogonal_to`, the search gives the lowest eigenstate
+orthogonal to them, an excited state: here the first excited state, and the gap
+
+```@example manual
+energy1, excited = ground_state(hamiltonian, random_state(Pure, mysystem, 8);
+                                algo = Dmrg(nsweeps = 20), limits = Limits(maxdim = 20),
+                                orthogonal_to = [ground])
+energy1 - energy
+```
+
+A penalty, `weight` times the projectors on the states given, is added to the hamiltonian for
+that. It must exceed the gap between the state searched and each of them, and its default, a
+bound of the width of the spectrum, always does but slows the convergence, which a weight just
+above the gap speeds up, see `ground_state`.
 
 ### Time evolution
 
-Time evolution is done by `tdvp` or `approx_W`, which take an evolver, the time to evolve for
-and the state. The evolver follows the convention
+Time evolution is done by `evolve`, which takes an evolver, the time to evolve for and the
+state, and the method as `algo`, `Tdvp()` by default, or `ApproxW`. The evolver follows the
+convention
 
 ```julia
 evolver = -im * hamiltonian + dissipators
@@ -385,8 +398,8 @@ starting in `"+"` precess, with ``\langle \sigma_x \rangle = \cos 2t``, which is
 ``\cos 1 \approx 0.5403`` at ``t = 0.5``:
 
 ```@example manual
-myevolved = tdvp(-im * sum(Z(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "+");
-                 nsteps = 10)
+myevolved = evolve(-im * sum(Z(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "+");
+                   nsteps = 10)
 measure(myevolved, X)
 ```
 
@@ -397,18 +410,17 @@ state decay from up to down, with ``\langle \sigma_z \rangle = 2e^{-t} - 1``, wh
 
 ```@example manual
 myrho = State{Mixed}(System(4, Qubit()), "Up")
-mydecayed = tdvp(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsteps = 10)
+mydecayed = evolve(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsteps = 10)
 measure(mydecayed, Z)
 ```
 
-`approx_W` approximates the exponential of the evolver over a step by MPOs, built from the
-approximations WI or WII of Zaletel et al. It is called the same way, with in addition the
-order of its approximation, from 1 to 4, and `w`, 1 or 2 for WI or WII, for which
-`order = 4, w = 2` is usually a good choice:
+`ApproxW` approximates the exponential of the evolver over a step by MPOs, built from the
+approximations WI or WII of Zaletel et al. It is given the order of its approximation, from 1
+to 4, and `w`, 1 or 2 for WI or WII, for which `order = 4, w = 2` is usually a good choice:
 
 ```@example manual
-mydecayed = approx_W(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; order = 4, w = 2,
-                     nsteps = 10)
+mydecayed = evolve(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho;
+                   algo = ApproxW(order = 4, w = 2), nsteps = 10)
 measure(mydecayed, Z)
 ```
 
@@ -423,7 +435,8 @@ place with probability `p`, and as a generator `…_dissipator(γ, …)`, of rat
 - [`reset_gate`](@ref)`(p, state)` resets a site to `state`, see `Reset`; with `n`,
   `reset_gate(p, n, state)` resets `n` sites together, and `reset_gate(p, [s1, s2])`
   each site to its state;
-- [`depolarizing_gate`](@ref)`(p, n)` is the reset to `"FullyMixed"`;
+- [`depolarizing_gate`](@ref)`(p, n)` is the reset to `"FullyMixed"`: on a qubit, the channel
+  applying each Pauli operator with probability `p/3` is `depolarizing_gate(4p/3)`;
 - [`dephasing_gate`](@ref)`(p, A)` erases the coherences between the eigenspaces of `A`, or
   in the basis of the site without `A`, see `Dephase`.
 
@@ -433,7 +446,7 @@ Dephasing qubits in `"+"` at rate 1 gives ``\langle \sigma_x \rangle = e^{-t}``,
 
 ```@example manual
 myplus = State{Mixed}(System(2, Qubit()), "+")
-mydephased = tdvp(sum(dephasing_dissipator(1.0)(i) for i in 1:2), 0.5, myplus; nsteps = 10)
+mydephased = evolve(sum(dephasing_dissipator(1.0)(i) for i in 1:2), 0.5, myplus; nsteps = 10)
 measure(mydephased, X)
 ```
 
@@ -473,22 +486,22 @@ to trace one. A Lindbladian may have several steady states, see
 
 ```@example manual
 value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for i in 1:4),
-                               myrho; nsweeps = 10)
+                               myrho; algo = Dmrg(nsweeps = 10))
 measure(mysteady, Z)
 ```
 
 ### [Thermal states](@id manual-thermal-states)
 
-`thermal_state` takes a mixed state ``\rho`` to ``e^{-\beta H/2} \rho \, e^{-\beta H/2}``,
-normalized, by tdvp in imaginary time. From `"FullyMixed"`, the state at infinite temperature,
+`thermalize` takes a mixed state ``\rho`` to ``e^{-\beta H/2} \rho \, e^{-\beta H/2}``,
+normalized, by an evolution in imaginary time, by `Tdvp` unless its `algo` says otherwise. From `"FullyMixed"`, the state at infinite temperature,
 it gives the thermal state ``e^{-\beta H}/Z``. It returns the logarithm of the trace the state
 would have without being normalized, here ``\log Z - 4 \log 2``, and the state. Qubits in the
 field ``H = -\sum_i \sigma_z^i`` have ``\langle \sigma_z \rangle = \tanh \beta``, which is
 ``0.4621`` at ``\beta = 0.5``, and ``\log Z - 4 \log 2 = 4 \log \cosh \beta \approx 0.4805``:
 
 ```@example manual
-mylog, mythermal = thermal_state(-sum(Z(i) for i in 1:4), 0.5,
-                                 State{Mixed}(System(4, Qubit()), "FullyMixed"); nsteps = 10)
+mylog, mythermal = thermalize(-sum(Z(i) for i in 1:4), 0.5,
+                              State{Mixed}(System(4, Qubit()), "FullyMixed"); nsteps = 10)
 mylog
 ```
 
@@ -527,12 +540,11 @@ result = measure(mystate, (X, Y))
 will give the matrix of the ``\langle \psi | \sigma_x^i \sigma_y^j | \psi \rangle``, complex
 since its diagonal is ``\langle \sigma_x \sigma_y \rangle = i \langle \sigma_z \rangle``
 
-Fermionic operators follow two rules. A single one given for every site, as `C`, is refused by
-`measure` and `expect1`, since its value vanishes on every state of definite parity; placed on
-a site, as `C(3)`, it is accepted, for a state that superposes parities. In a correlation, as
-`(dag(C), C)`, the two operators must be both fermionic or both not.
+A fermionic operator is measured as any other, its Jordan-Wigner strings laid for it, in a
+correlation as `(dag(C), C)` too. A single one, as `C(3)`, has a value only on a state that
+superposes parities, and vanishes on any other.
 
-We can also measure properties of the state as a whole, with state functions such as
+We can also measure properties of the state as a whole, with measurements such as
 `Trace`, `Purity`, `EntanglementEntropy(cut)` or `Fidelity(ref)`: the
 [Measurements](measurements.md) page has the table of them all.
 
@@ -554,7 +566,8 @@ results = measure(mystate, [X, X(2)Z(3), (X, Y), Trace, MemoryUsage])
 
 A measurement can also be drawn, as in an experiment: `probabilities(state, op)` gives the
 results of measuring an operator placed on sites with their probabilities, `sample(state, op)`
-draws one, and `collapse(state, op)` draws one and gives the state projected onto it. Any
+draws one, and `collapse(state, op)` draws one and gives it with its probability and the state
+projected onto it, `(result, probability, state)`. Any
 Hermitian operator of a few sites can be measured, and on any number of sites a string of
 Pauli operators or the number of particles of a region. The parity of two qubits in `"+"` is
 ±1 with probability 1/2, and either result leaves an entangled pair:
@@ -565,15 +578,15 @@ probabilities(mytwo, Z(1) * Z(2))
 ```
 
 ```@example manual
-myparity, mypair = collapse(mytwo, Z(1) * Z(2))
+myparity, myprob, mypair = collapse(mytwo, Z(1) * Z(2))
 myparity, measure(mypair, X(1)X(2))
 ```
 
-Given the result, `collapse(state, op => λ)` returns its probability and the state projected
-onto it, which post-selects it:
+Given the result, `collapse(state, op => λ)` returns the same, the state projected onto that
+result, which post-selects it:
 
 ```@example manual
-myprob, mypair = collapse(mytwo, Z(1) * Z(2) => -1)
+_, myprob, mypair = collapse(mytwo, Z(1) * Z(2) => -1)
 myprob, measure(mypair, [Z(1)Z(2), X(1)X(2)])
 ```
 
@@ -583,7 +596,7 @@ For more details see the reference or the inline help.
 
 Three main approximations set the error of a result, and the user chooses all three: the
 truncation of the states, given by `limits`, the time step of an evolution or of
-`thermal_state`, and the convergence of a search, the sweeps of `dmrg` and `steady_state`. A
+`thermalize`, and the convergence of a search, the sweeps of its `Dmrg`. A
 result can be trusted once it no longer moves when each of them is improved: larger limits, a
 smaller time step, more sweeps. The measurements taken along a run tell which of them limits
 the accuracy. Two more have defaults: the tolerance of the Krylov method of each local step,
@@ -606,34 +619,35 @@ is a choice, checked by running again with a larger `maxdim` and a smaller `cuto
 An evolution is checked by halving its time step, and by comparing `Tdvp` with `ApproxW`,
 whose errors have different origins. `ApproxW` of order `k` makes an error of order
 ``\tau^k`` in the time step ``\tau`` when the evolver does not depend on time. When it does,
-`tdvp` and `ApproxW` of order 1 or 2 take its functions at the middle of each step, which caps
+`Tdvp` and `ApproxW` of order 1 or 2 take its functions at the middle of each step, which caps
 them at order 2, while `ApproxW` of order 3 or 4 keeps the order of its approximation, see
-[Time dependent evolvers](@ref). `tdvp` projects the evolution on the states of the bond
-dimension the state has, its steps on two sites letting that dimension grow: from a state of
-small bond dimension, as a product state, or for `thermal_state`, compare with
-`expand_period = 1`, which enlarges the bond dimension by a global Krylov expansion before
-each step. A thermal state has checks of its own, see [Thermal states](@ref).
+[Time dependent evolvers](@ref). `Tdvp` projects the evolution on the states of the bond
+dimension the state has, its steps on two sites letting that dimension grow, and it enlarges
+the bonds of a state whose bond dimension is below 5 by a global Krylov expansion before a
+step: from a state of small bond dimension, as a product state, or for `thermalize`, compare
+with `expand_period = 1`, which expands before every step. A thermal state has checks of its
+own, see [Thermal states](@ref).
 
 ### Indicators of a density matrix
 
 The exact density matrix is hermitian under a Lindbladian, under gates and noisy gates, which
 act on both of its sides, and for a thermal or a steady state, and its trace stays one when the
 evolution preserves the trace, as a Lindbladian does. What deviates from that is error, which
-three state functions measure along a run:
+three measurements of the state follow along a run:
 
-- `TraceError`, ``1 - \mathrm{tr}\,\rho``, the drift of the trace. Expectation values are
+- `TraceDeviation`, ``1 - \mathrm{tr}\,\rho``, the drift of the trace. Expectation values are
   divided by the trace, which hides the drift but not the error it comes from.
-- `HermiticityError`, the squared norm of the anti-hermitian part of ``\rho``, relative to
-  that of ``\rho``. That part being error, the square root of `HermiticityError` is a lower
+- `HermiticityDeviation`, the squared norm of the anti-hermitian part of ``\rho``, relative to
+  that of ``\rho``. That part being error, the square root of `HermiticityDeviation` is a lower
   bound of the error relative to the norm of ``\rho``, in the Hilbert-Schmidt norm: a value of
   `1e-6` proves an error of `1e-3` at least. It bounds the error from below only, an error
   without an anti-hermitian part going unseen. `hermitianize_period` removes the
-  anti-hermitian part, and with it what `HermiticityError` shows: measure it before deciding
+  anti-hermitian part, and with it what `HermiticityDeviation` shows: measure it before deciding
   to hermitianize.
 - `Purity`, ``\mathrm{tr}(\rho^\dagger \rho) / (\mathrm{tr}\,\rho)^2``, lies between ``1/D``
   and 1 for a density matrix of dimension ``D``. Above 1, the state is no longer a density
   matrix: it has lost its positivity, which nothing in a matrix product state guarantees,
-  unless `HermiticityError` shows that it has lost its hermiticity.
+  unless `HermiticityDeviation` shows that it has lost its hermiticity.
 
 ### Conserved quantities
 
@@ -647,8 +661,8 @@ check: its drift along a run is error, though its constancy proves nothing.
 
 ### Searches
 
-`dmrg` runs all its sweeps and, in a `GroundState` or a `SteadyState` phase, stops earlier
-once the energy changes by less than `tol` between two sweeps, which a search stuck in a
+A search runs the sweeps of its `Dmrg`, and stops earlier once the energy changes by less than
+its `tol` between two sweeps, which a search stuck in a
 metastable state does as well. `Variance(hamiltonian)`, zero exactly for an eigenstate, checks
 the state found, see `variance`, but does not tell the ground state from another eigenstate,
 which searches from other states, or in other sectors, do. Extrapolating the energy to
@@ -656,12 +670,12 @@ zero variance as `maxdim` grows estimates the exact energy, and the error of the
 
 The value `steady_state` returns, the residual ``\|L\rho\|^2`` for ``\rho`` of unit
 Hilbert-Schmidt norm, is zero for a steady state. The state it finds is hermitian when the
-steady state is unique and the search has converged, and it warns when its `HermiticityError`
+steady state is unique and the search has converged, and it warns when its `HermiticityDeviation`
 exceeds `1e-6`: a state that is not hermitian comes from a search that has not converged, or
 from a Lindbladian with several steady states, of which dmrg returns any combination: one in
 each sector of a quantity that its Hamiltonian and its jump operators all commute with, for
 instance. The one a system reaches depends on the state it starts from: it is the limit of
-its evolution in time, when that converges, which `tdvp` gives. When the quantity is one a
+its evolution in time, when that converges, which `evolve` gives. When the quantity is one a
 site can conserve, declaring it `strong` keeps `steady_state` in the sector of the starting
 state, see [Conserving a quantity](@ref). A hermitian state does not prove the steady state
 unique.
