@@ -64,7 +64,15 @@ its Lindblad generator, for an evolver, [`reset_dissipator`](@ref); to the fully
 state, it is the depolarization, [`depolarizing_gate`](@ref) and
 [`depolarizing_dissipator`](@ref). The dephasing channel and its
 generator are [`dephasing_gate`](@ref) and [`dephasing_dissipator`](@ref), built on
-[`Dephase`](@ref).
+[`Dephase`](@ref), and the decay of the excitations an operator destroys,
+[`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref).
+
+Two conventions differ from one text to another. `depolarizing_gate(p)` replaces the state of a
+site by the fully mixed one with probability `p`, ``(1 - p)\rho + p\,I/d``: on a qubit, the
+channel ``(1 - p)\rho + \frac{p}{3}(X \rho X + Y \rho Y + Z \rho Z)``, which applies each
+Pauli operator with probability ``p/3``, is `depolarizing_gate(4p/3)`. On a qubit, `"Up"` is
+``|0\rangle`` and `"Dn"` is ``|1\rangle``, the excitation that `N` counts and that `Sp`
+destroys: `amplitude_damping_gate` and `amplitude_damping_dissipator` take `"Dn"` to `"Up"`.
 
 And they define observables
 
@@ -88,10 +96,9 @@ Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`,
 
 ```@docs
 Operator
-Operator{N}(::String, ::Union{Matrix, Function, GenericOp{Pure, N}}, ::OpType, ::AbstractSite, ::AbstractSite...) where N
-⊗(::GenericOp{R, N}, ::GenericOp{R, M}) where {R, N, M}
+⊗(::GenericOp{K, N}, ::GenericOp{K, M}) where {K, N, M}
 Proj
-Basis
+Level
 Dissipator
 Gate
 Reset
@@ -102,20 +109,17 @@ depolarizing_gate
 depolarizing_dissipator
 dephasing_gate
 dephasing_dissipator
-Left
-Right
+amplitude_damping_gate
+amplitude_damping_dissipator
 Evolver
 named
 parity
-mod(::GenericOp{Pure}, ::Int)
-dag(::GenericOp{Pure})
-exp(::GenericOp{Pure})
+mod(::GenericOp{IsOperator}, ::Int)
+dag(::GenericOp{IsOperator})
+exp(::GenericOp{IsOperator})
 sqrt(::GenericOp)
-isfermionic
-hasfermionic
 matrix
 tensor
-simplify
 ```
 
 ## Operators on another system
@@ -135,12 +139,8 @@ operating on operators.
 
 ```@docs
 Op
+OpKind
 GenericOp
 IndexedOp
 SimpleOp
-OpType
-plain_op
-fermionic_op
-selfadjoint_op
-involution_op
 ```

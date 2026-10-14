@@ -5,9 +5,6 @@
 ```@docs
 AbstractSite
 dim(::AbstractSite)
-Index(::AbstractSite)
-state(::AbstractSite, ::String)
-identity_operator
 ```
 
 The state `"FullyMixed"` represents the infinite temperature mixed state, that is a density matrix proportional to the identity matrix.
@@ -34,9 +31,6 @@ Phase
 Swap
 controlled
 graph_state
-create_graph_state
-amplitude_damping_gate
-amplitude_damping_dissipator
 thermal_relaxation_gate
 thermal_relaxation_dissipator
 ```
@@ -131,7 +125,6 @@ using .Qudits
 ```@docs
 TensorMixedStates.Qudits
 Qudit
-Sumd
 ```
 
 ## Conservation
@@ -139,6 +132,8 @@ Sumd
 What conserving a quantity means and costs is explained in [Conserving a quantity](@ref).
 
 ```@docs
+Conservation
+conserving(::Type{<:AbstractSite}, ::Vararg{Any})
 strong
 flux
 symmetries
@@ -152,7 +147,8 @@ How to define a site type of your own, its states and its operators is explained
 
 ```@docs
 string_state
-conserve_string
+fermion_parities(::AbstractSite)
+fermion_species(::AbstractSite)
 show(::IO, ::AbstractSite)
 @def_states
 @def_operators

@@ -1,10 +1,11 @@
 # Measurements
 
-## Kinds of measurements
+## What is measured
 
-`measure` takes operators, state functions, symbols, checks, numbers or functions of the
-time, and strings, which are written as a label with no value. The examples below use a four
-qubit state
+`measure(state, measurements; time, values...)` returns the measurements, in their order, as
+pairs `name => value`. A measurement is an operator, a measurement of the library, a symbol, or
+a function of the context, each possibly named, and a list of them is a vector or a `Measure`,
+which keeps what it prepares for the next call. The examples below use a four qubit state
 
 ```@setup measurements
 using TensorMixedStates
@@ -18,131 +19,97 @@ using TensorMixedStates, .Qubits
 mystate = State{Mixed}(System(4, Qubit()), ["+", "Up", "+", "Dn"])
 ```
 
-With an indexed operator, we get the expectation of the corresponding observable
+With an operator placed on sites, we get its expectation value
 
 ```@example measurements
 measure(mystate, X(1)X(3)Z(4))
 ```
 
-With a generic operator (acting on one site only), we get the expectation of the operator on each site
+With an operator of one site, its expectation value on each site
 
 ```@example measurements
 measure(mystate, X)
 ```
 
-With a couple of generic operators, we get the correlation matrix of those observables
+With a pair of operators of one site, the matrix of their correlations
 
 ```@example measurements
 measure(mystate, (X, Y))
 ```
 
-There are some state functions predefined:
+The library measures the state as a whole:
 
-| state function | value |
+| measurement | value |
 |:---|:---|
-| `Trace` | the trace of the density matrix |
-| `TraceError` | `1 - trace`, to monitor how far the trace drifts |
-| `Trace2`, `Purity` | ``\mathrm{tr}(\rho^\dagger\rho)/(\mathrm{tr}\,\rho)^2``, ``\mathrm{tr}(\rho^2)`` for a density matrix of trace one, 1 on a pure state |
+| `Trace` | the trace of the state, a complex number |
+| `TraceDeviation` | `1 - trace`, which numerical errors tend to move, a complex number |
+| `Purity` | ``\mathrm{tr}(\rho^\dagger\rho)/(\mathrm{tr}\,\rho)^2``, ``\mathrm{tr}(\rho^2)`` for a density matrix of trace one, 1 on a pure state |
 | `Norm` | the norm of the state |
 | `Hermiticity` | 1 for a Hermitian density matrix, down to 0 for an anti-Hermitian one |
-| `HermiticityError` | `1 - hermiticity` |
+| `HermiticityDeviation` | `1 - hermiticity`, the squared norm of the anti-Hermitian part relative to that of the whole |
 | `Renyi2` | the Rényi entropy of order 2 of the state |
-| `SubRenyi2(sites)`, `SubRenyi2(cut)` | the Rényi entropy of order 2 of the sites given, or of those up to the cut, an integer |
-| `MutualInfoRenyi2(sites)`, `MutualInfoRenyi2(cut)` | the Rényi-2 mutual information between the sites given, or those up to the cut, an integer, and the rest |
-| `VonNeumannEntropy(sites)` | the von Neumann entropy of the sites given, from their reduced density matrix |
-| `ReducedDensityMatrix(sites)` | the density matrix of the sites given, a complex matrix, see `reduced_density_matrix` |
-| `LogNegativity(sites_a, sites_b)` | the logarithmic negativity between the sites of `sites_a` and those of `sites_b` |
+| `SubRenyi2(positions)` | the Rényi entropy of order 2 of the sites at `positions`, `1:k` for the first `k` |
+| `MutualInfoRenyi2(positions)` | the Rényi-2 mutual information between the sites at `positions` and the others |
+| `VonNeumannEntropy(positions)` | the von Neumann entropy of the sites at `positions`, from their reduced density matrix |
+| `ReducedDensityMatrix(positions)` | the density matrix of the sites at `positions`, a complex matrix, see `reduced_density_matrix` |
+| `LogNegativity(positions_a, positions_b)` | the logarithmic negativity between the sites of `positions_a` and those of `positions_b` |
 | `EntanglementEntropy(cut)` | the entanglement entropy across the cut between sites `cut` and `cut+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
 | `EntanglementEntropy(cut, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
-| `Fidelity(ref)` | the fidelity with the reference state `ref`, refused between two mixed representations |
-| `Overlap(ref)` | the inner product with the reference state `ref` |
-| `Variance(hamiltonian)` | the variance of the energy of `hamiltonian`, on a pure representation |
-| `MaxLinkdim` | the maximum bond dimension of the representation |
+| `Fidelity(ref)` | the fidelity with the reference state `ref`, or with the state of that name in a simulation, `Fidelity(:ground)` |
+| `Overlap(ref)` | the inner product with the reference state `ref`, a complex number, or with a state named in a simulation |
+| `Variance(op)` | the variance of the operator `op` |
+| `MaxLinkdim` | the maximum bond dimension of the state |
 | `MemoryUsage` | the memory the state occupies in bytes, the caches of the measurements included |
 
-They are used like this
+```@example measurements
+measure(mystate, [Trace, Purity, EntanglementEntropy(2)])
+```
+
+Anything else is measured by a function of the context `c`, named: `c.state` is the state,
+`c.time` the time given to `measure`, and the other values given to it are read as `c.energy`,
+for instance. A symbol stands for the value of that name:
 
 ```@example measurements
-measure(mystate, TraceError)
+measure(mystate, ["half_trace" => c -> trace(c.state) / 2, "cos" => c -> cos(2c.time), :energy];
+        time = 0.3, energy = -1.5)
 ```
 
-New state functions may be defined by
+In a simulation, the values are those its phases provide: `:step` the number of steps the
+phase has done, the sweeps of a search, `:energy` the energy of each sweep of `GroundState`, and
+for `SteadyState` the eigenvalue of ``L^\dagger L``, zero for a steady state, and `:beta` and `:log_trace` the inverse temperature
+and the logarithm of the trace of `Thermalize`, see `thermalize`. A state named in a
+simulation, by `CopyState` for instance, is a value as well, and `Update` provides the values it
+declares. A measurement reading a value that no phase provides is refused when the simulation is
+written, see `SimData`.
+
+A function of the context may return a `Check`, which compares a value with a reference:
 
 ```@example measurements
-stfunc = StateFunc("half_trace", st -> trace(st) / 2)
+measure(mystate, "check" => c -> Check(real(expect(c.state, X(1))), 1.0; tol = 1e-8))
 ```
 
-A function of the time given as a measurement, as `t -> cos(2t)`, is written under the name
-`"func"`; [`TimeFunc`](@ref) gives it a name of its own.
+The value is then the value, the reference and their distance, and a distance beyond `tol` is an
+error, or only a warning with `warn = true`. Without `tol`, the three are recorded and nothing
+is refused.
 
-Some quantities produced by the algorithm itself, rather than computed from the state, are
-asked for with a symbol
+## Real and complex values
 
-```julia
-measurements = "sweeps.dat" => :sweep
-```
-
-`:sweep` is the sweep number and is available in every phase that sweeps, that is `Evolve`,
-`GroundState`, `SteadyState` and `Thermalize`, and in a phase of your own that passes it to `output`, as
-`output(sim, measurements; sweep = k)`. `:energy` is the current energy and is available in
-`GroundState` and `SteadyState`, where it is the value dmrg minimises, zero at the steady
-state. `:beta` and `:log_trace` are available in `Thermalize`: the inverse temperature and the
-logarithm of the trace each step reaches, see `thermal_state`. Asking for a symbol that the running algorithm does not provide is not an error: the
-measurement produces an empty value, so `:energy` in an `Evolve` phase writes its name and
-the time with no value in a file, and empty values in a json file or a `Data` object. The
-symbols are given to the `measurements` of a phase, not to its `final_measurements`, which are taken
-once it is over: the energy a `GroundState` ends with is measured as the last line of its
-`measurements`, or as the expectation value of its hamiltonian.
-
-Checks can be performed (useful for coherence tests)
-
-```julia
-measure(mystate, Check("purity", Purity, 1))            # the two values and their distance
-measure(mystate, Check("purity", Purity, 1, 1e-8))      # an error if the distance is above 1e-8
-measure(mystate, Check("cos", X(1), t -> cos(2t)), 0.3) # against a function of time, at t = 0.3
-```
-
-The two measurements compared may be operators, state functions, constants, vectors or
-functions of time, like `t -> cos(2t)`, in which case the simulation time must be given to
-`measure` as its third argument. They may be symbols as well: a check on a symbol that is not
-given has empty values, and is an error when it has a tolerance, having nothing to pass.
-
-## Real, imaginary and complex values
-
-Each value is given the kind its measurement calls for. An operator is real when it is self
-adjoint, like `X(1)` or `Z(1)Z(2) + X(1)`, purely imaginary when its adjoint is its opposite,
-like `dag(C)(1)C(2) - dag(C)(2)C(1)`, and complex otherwise, like `Sp(1)`. A correlation
-matrix takes one kind for all its entries, so `(X, Y)`, whose diagonal is
-``\langle XY \rangle = i \langle Z \rangle``, is complex. A state function or a function of
-time is real, except `Overlap`, and a number takes the kind of its type. `Trace` and
-`TraceError` thus give the real part of the trace, the imaginary part being a numerical
-error, see [`TraceError`](@ref).
-
-A real value is written in one column, its imaginary part, which is rounding, being dropped.
-An imaginary one is written in one column too, as its imaginary part, under the name
-`Im(name)`, and a complex one in two, its real part then its imaginary part. A part dropped
-that is more than rounding is reported in the log.
-
-The test giving the kind of an operator is symbolic and only says real or imaginary when it
-can prove it, so what it misses comes out complex: `Sp(1)Sm(2) + Sm(1)Sp(2)`, for instance,
-which is real. `RealValue`, `ImaginaryValue` and `ComplexValue` declare the kind by hand, as
-they do for a state function whose values are complex
-
-```julia
-measurements = "data" => [RealValue(Sp(1)Sm(2) + Sm(1)Sp(2)), ComplexValue(stfunc)]
-```
+The value of an operator is real when the operator is Hermitian, which is tested numerically,
+and complex otherwise, whatever the state, so that the columns of a file do not change during a
+run. A pair `(A, B)` is Hermitian when `A` and `B` are, commute on a site and are not both
+fermionic: `(X, Y)`, whose diagonal is ``\langle XY \rangle = i \langle Z \rangle``, is
+complex. The imaginary part of the value of a Hermitian operator is dropped, with a warning when
+it is more than rounding, which a density matrix that lost its hermiticity gives; a simulation
+gathers these warnings into one at the end of each phase. `Trace`, `TraceDeviation`, `Overlap`
+and `ReducedDensityMatrix` are complex, the other measurements of the library real, and a
+function of the context gives what it returns.
 
 ## Reference
 
 ```@docs
 measure
-StateFunc
-TimeFunc
 Check
 Measure
-RealValue
-ImaginaryValue
-ComplexValue
 expect
 expect1
 expect2
@@ -158,12 +125,11 @@ reduced_density_matrix
 vonneumann_entropy
 log_negativity
 Trace
-TraceError
-Trace2
+TraceDeviation
 Purity
 Norm
 Hermiticity
-HermiticityError
+HermiticityDeviation
 Renyi2
 SubRenyi2
 Fidelity
@@ -181,48 +147,44 @@ MemoryUsage
 ## [Output](@id measure-output)
 
 `output` takes measurements and writes them to destinations, as the phases of `runTMS` do with
-their `measurements`, given as pairs `destination => measurements`.
+their `measurements`, given as pairs `destination => measurements`. The destinations are
 
-There are three types of destinations:
-
-- filenames: writes the specified measurements to the given file as they are made. Special filenames are "stdout" (or "-"), "stderr", "" (for devnull). The files `runTMS` writes itself in the simulation directory cannot be destinations: `log`, `stop`, `error`, `running`, `stamp`, `description`, `prog.jl`, `prog_args.json` and the checkpoint files
-
-  ```julia
-  "file.dat" => X
-  ```
-
-  The lines of the measurements of a file follow each other, each with its own number of
-  columns. A file holding a single measurement other than a matrix is a regular table, its
-  name, the time and its values on every line, as a reader of tables such as CSV.jl expects;
-  a matrix, a correlation `(X, Y)` for instance, is better kept in a json file or a `Data`
-  object.
-
-- json filenames: filenames ending in ".json" are treated differently: data is accumulated during the simulation and written at the end in the JSON format.
+- a file name: a text table, a line naming the columns, then a line per time measured, the
+  numbers written with the format of the simulation, `SimData(format = "%.8g")` by default. A
+  file holds one list of measurements, and another list needs another file.
 
   ```julia
-  "file.json" => [Purity, X(2)Z(3), (X, Y)]
+  "magnetization" => [X, Z(1)]
   ```
 
-- Data object: data is accumulated during the simulation and stored in the `data` field of the `Simulation` object returned by `runTMS`. This is useful for analyzing the data inside the program.
+- `"stdout"` or `"-"`, and `"stderr"`: a text table on the stream, written again with its new
+  columns when the list changes; `""` writes nothing.
+
+- a file name ending in `.json` or `.jsonl`: JSON Lines, an object for each time measured, the
+  time and each measurement under its name, a vector as an array, a matrix as the array of its
+  rows and a complex number as an object, as `{"time":0.1,"X":[0.5,0.5],"Trace":{"re":1.0,"im":0.0}}`.
 
   ```julia
-  Data("mydata") => [TraceError, X(1), Y]
+  "data.jsonl" => [Purity, X(2)Z(3), (X, Y)]
   ```
 
-A complex value takes two columns in a file, its real part then its imaginary part, a json
-file writes it as `{"re": …, "im": …}`, and a `Data` object holds it as a complex number. Which
-values are complex is described in [Real, imaginary and complex values](@ref).
+- `Data(name)`: the rows are kept in memory, in the `data` of the `Simulation` that `runTMS`
+  returns, which `data_to_frame` turns into a `DataFrame`.
 
-A json file and a `Data` object hold each measurement under the name a file writes in its
-first column, `"X(1)"` or `"sweep"` for `:sweep`, and for each one the lists `"times"`, `"data"`
-and `"events"`: the time of each value, the value, and its event, the number of the measurement
-set it belongs to. Events are counted for each destination, one each time it is written, and
-values measured together share one. They are what tells measurement sets apart when the time
-does not: it stays the same over the sweeps of a ground state search or over the gates of a
-circuit, and repeats once a phase sets it back. A matrix is written in a json file as the
-list of its rows, as a file writes it row by row.
+  ```julia
+  Data("mydata") => [TraceDeviation, X(1), Y]
+  ```
 
-The `data_to_frame` function can be used on the result to get a `DataFrame` object, with one row per event (the `DataFrames` package must be imported first)
+- a `Destination` of one's own.
+
+The columns of a table are `time`, then a column per value: the name of the measurement, as
+`X(1)*X(3)` for an operator placed on sites, `X(i)` for each site of an operator of one site,
+`X(i)Y(j)` for each pair of sites of a pair, `m(i)` and `m(i,j)` when they are named `m`,
+`m[i]` and `m[i,j]` for the entries of a vector or of a matrix of another measurement, and
+`m.field` for those of a named tuple. A complex value takes the two columns `Re(m)` and
+`Im(m)`. The files `runTMS` writes itself in the directory of the simulation cannot be
+destinations: `log`, `stop`, `restart`, `error`, `running`, `stamp`, `description`, `prog.jl`,
+`prog_args.json` and the checkpoint files.
 
 ```julia
 mysim = runTMS(simdata)
@@ -232,4 +194,5 @@ df = data_to_frame(mysim.data["mydata"])
 ```@docs
 output
 log_message
+Destination
 ```

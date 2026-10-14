@@ -6,7 +6,7 @@
 System
 length(::System)
 ⊗(::System, ::System)
-SysIndex
+siteind(::Type{Pure}, ::System, ::Int64)
 ```
 
 ## States
@@ -17,14 +17,13 @@ Pure
 Mixed
 Limits
 State
-State(::System, ::State)
 TensorMixedStates.AbstractState
 length(::TensorMixedStates.AbstractState)
 maxlinkdim(::State)
 mix
 truncate(::State)
-trace(::State)
-trace2
+trace(::State{Pure})
+purity(::State{Pure})
 norm(::State)
 normalize(::State{Pure})
 dag(::State{Pure})
@@ -33,7 +32,7 @@ hermiticity
 inner
 fidelity
 hs_fidelity
-RandomState
+random_state
 partial_trace
 ```
 
@@ -42,14 +41,14 @@ partial_trace
 Besides the product states the local states give, TMS builds states with an exact MPS of small
 bond dimension, as the superpositions and the mixtures of product states, the GHZ, Dicke and W
 states, the states of singlets on pairs of sites, the
-fully mixed state of a sector, from which [`thermal_state`](@ref) gives the canonical thermal
+fully mixed state of a sector, from which [`thermalize`](@ref) gives the canonical thermal
 state, the Slater determinants of free fermions, and the Fermi sea
 of a quadratic hamiltonian, on sites of `Fermion` or `Electron`, beside sites of other types if
 need be, an impurity for instance. Any other state of which one knows the tensors of an MPS is
 built by `mps_state`, and a state small enough to be written down, by its dense vector or
 density matrix, with `dense_state`.
 The graph states of qubits are built by [`graph_state`](@ref), the AKLT state of spins one by
-[`aklt_state`](@ref), and the thermal states by [`thermal_state`](@ref).
+[`aklt_state`](@ref), and the thermal states by [`thermalize`](@ref).
 
 ```@docs
 mps_state

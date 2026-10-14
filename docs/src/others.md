@@ -21,8 +21,7 @@ directly.
 
 ### How the MPO is built, and what it costs
 
-Before building an MPO, TMS compacts the operator, see [`compact`](@ref): its terms of several
-sites are gathered into blocks of channels in which they share what they have in common, and
+When it builds an MPO, TMS compacts the operator: its terms of several sites are gathered into blocks of channels in which they share what they have in common, and
 the operators of each site are compared through their matrices on the sites of the system, so
 that `X*Y` and `im * Z` on a qubit, or `N` and `(1 - Z) / 2`, are known to be related. The MPO
 keeps the triangular form: one channel runs along the chain for the terms not yet started,
@@ -53,14 +52,12 @@ Two things follow from it in practice:
   combination of other ones and of the identity there, as `N` when `Z` is used too, or `N` with
   the Jordan-Wigner strings `F` of fermions: part of a term then goes to terms of fewer sites,
   and the approximations change, while remaining of the same order.
-- `measure` compacts the operators it measures, once for all its measurements. `expect`
-  measures an operator as it is given, term by term: on a long ranged operator measured many
-  times, calling `compact` once beforehand saves most of the cost.
+- `expect` prepares the operator it measures, compacted, at each call, and a `Measure` keeps
+  that preparation for the calls of `measure` that follow: on a long ranged operator measured
+  many times, a `Measure` built once saves most of the cost, as a `PreMPO` does for the MPO of
+  an evolver.
 
 ```@docs
 PreMPO
-compact
 make_mpo
-make_approx_W1
-make_approx_W2
 ```
