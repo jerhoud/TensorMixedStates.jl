@@ -4,7 +4,7 @@
 export CreateState
 
 """
-    CreateState(; type, system, state, randomize, name, time_start, final_measurements)
+    CreateState(; type, system, state, randomize, on, name, time_start, final_measurements)
     CreateState{Pure|Mixed}(n, site, state; options...)
     CreateState{Pure|Mixed}(sites, state; options...)
 
@@ -19,6 +19,8 @@ or `LoadState`.
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
   see `random_state` (default 0, none): a pure state randomized from `state`, a mixed one drawn
   from a purification starting from it, or without `state` any state of the system
+- `on`: the name the state created takes, see `CopyState` (default `:state`): only a phase
+  creating `:state` may be the first of a simulation
 
 # Examples
 
@@ -35,6 +37,7 @@ or `LoadState`.
     system::Union{Nothing, System} = nothing
     state = nothing
     randomize::Int = 0
+    on::Symbol = :state
 end
 
 CreateState{R}(n::Int, site::AbstractSite, state; kwargs...) where R =
@@ -42,7 +45,8 @@ CreateState{R}(n::Int, site::AbstractSite, state; kwargs...) where R =
 CreateState{R}(sites::Vector{<:AbstractSite}, state; kwargs...) where R =
     CreateState(; type = R(), system = System(sites), state, kwargs...)
 
-creates_state(::CreateState) = true
+creates_state(phase::CreateState) = phase.on === :state
+provided_values(phase::CreateState) = phase.on === :state ? () : (phase.on,)
 
 """
     as_representation(R, state)
@@ -80,5 +84,5 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     else
         random_state(State{Pure}(phase.system, phase.state), n; rng)
     end
-    return Simulation(sim, state)
+    return with_state(sim, phase.on, state)
 end

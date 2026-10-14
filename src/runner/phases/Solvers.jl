@@ -21,7 +21,7 @@ end
 
 """
     Evolve(; evolver, duration, time_step, algo = Tdvp(), limits, measurements,
-             measurements_period, name, time_start, final_measurements)
+             measurements_period, on, name, time_start, final_measurements)
 
 a phase of time evolution, see `evolve`.
 
@@ -37,6 +37,9 @@ a phase of time evolution, see `evolve`.
 - `measurements`: the measurements made after every `measurements_period` steps (default 1),
   see `output`; the state the phase starts from is measured by the final measurements of the
   phase before
+- `on`: the name of the state the phase evolves, see `CopyState`, or a vector of names, the
+  states of one system and one representation evolved together under the evolver, the time
+  advancing once, for two time correlations for instance (default `:state`)
 
 # Examples
 
@@ -54,8 +57,9 @@ a phase of time evolution, see `evolve`.
     limits::Limits = Limits()
     measurements = []
     measurements_period::Int = 1
+    on::Union{Symbol, Vector{Symbol}} = :state
     function Evolve(name, time_start, final_measurements, evolver, duration, time_step, algo,
-                    limits, measurements, measurements_period)
+                    limits, measurements, measurements_period, on)
         if iszero(time_step)
             error("the time step of an Evolve cannot be zero")
         end
@@ -65,15 +69,16 @@ a phase of time evolution, see `evolve`.
             evolver = [first(evolver)] => [last(evolver)]
         end
         return new(name, time_start, final_measurements, evolver, duration, time_step, algo,
-                   limits, measurements, measurements_period)
+                   limits, measurements, measurements_period, on)
     end
 end
 
 """
-    EvolveSteps(algo, pre, coefs, limits, nsteps, start, duration)
+    EvolveSteps(algo, pre, coefs, limits, nsteps, start, duration, on)
 
 an `Evolve` prepared: its method, the `PreMPO` of its evolver and its time functions, its
-limits, its number of steps, the time it starts from and its duration
+limits, its number of steps, the time it starts from, its duration and the names of the states
+it evolves
 """
 struct EvolveSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}, C}
     algo::A
@@ -83,16 +88,25 @@ struct EvolveSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}, C}
     nsteps::Int
     start::Number
     duration::Number
+    on::Vector{Symbol}
 end
 
 function prepare_phase(phase::Evolve, sim::Simulation)
+    names = state_names(phase.on)
     n = step_number(phase.duration, phase.time_step, "an evolution", sim)
     if n == 0
-        return EvolveSteps(phase.algo, nothing, nothing, phase.limits, 0, sim.time, phase.duration)
+        return EvolveSteps(phase.algo, nothing, nothing, phase.limits, 0, sim.time, phase.duration,
+                           names)
     end
-    log_message(sim, "Evolving the state from time $(sim.time) to $(sim.time + phase.duration)")
-    pre, coefs = prepared_evolver(sim.state, phase.evolver)
-    return EvolveSteps(phase.algo, pre, coefs, phase.limits, n, sim.time, phase.duration)
+    states = [ state_named(sim, name) for name in names ]
+    # one PreMPO for all, which is that of a representation and of a system
+    if any(st -> typeof(st) ≠ typeof(states[1]) || st.system ≠ states[1].system, states)
+        error("the states an Evolve evolves together need one system and one representation")
+    end
+    what = names == [:state] ? "the state" : "the states " * join(names, ", ")
+    log_message(sim, "Evolving $what from time $(sim.time) to $(sim.time + phase.duration)")
+    pre, coefs = prepared_evolver(states[1], phase.evolver)
+    return EvolveSteps(phase.algo, pre, coefs, phase.limits, n, sim.time, phase.duration, names)
 end
 
 step_count(e::EvolveSteps) = e.nsteps
@@ -100,14 +114,17 @@ step_count(e::EvolveSteps) = e.nsteps
 # the times of the steps are those of evolve, the last one the end asked for
 function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
-    st = evolve_step(e.algo, e.pre, e.coefs, sim.state, e.start + (k - 1) * dt, dt, k,
-                     step_limits(e.limits, k))
-    return Simulation(sim, st, k == e.nsteps ? e.start + e.duration : e.start + k * dt)
+    for name in e.on
+        st = evolve_step(e.algo, e.pre, e.coefs, state_named(sim, name), e.start + (k - 1) * dt,
+                         dt, k, step_limits(e.limits, k))
+        sim = with_state(sim, name, st)
+    end
+    return Simulation(sim, sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt)
 end
 
 """
     Thermalize(; hamiltonian, beta, beta_step, algo = Tdvp(), limits, measurements,
-                 measurements_period, name, time_start, final_measurements)
+                 measurements_period, on, name, time_start, final_measurements)
 
 a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``,
 normalized to trace one, by an evolution in imaginary time, see `thermalize`: from
@@ -123,6 +140,7 @@ before normalization, see `thermalize`.
 - `algo`: the method, see `EvolutionAlgorithm`
 - `limits`: the limits of the state, see `Limits`
 - `measurements`: the measurements made after every `measurements_period` steps (default 1)
+- `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
 # Examples
 
@@ -141,23 +159,24 @@ before normalization, see `thermalize`.
     limits::Limits = Limits()
     measurements = []
     measurements_period::Int = 1
+    on::Symbol = :state
     function Thermalize(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
-                        limits, measurements, measurements_period)
+                        limits, measurements, measurements_period, on)
         if iszero(beta_step)
             error("the beta_step of a Thermalize cannot be zero")
         end
         return new(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
-                   limits, measurements, measurements_period)
+                   limits, measurements, measurements_period, on)
     end
 end
 
 provided_values(::Thermalize) = (:beta, :log_trace)
 
 """
-    ThermalSteps(algo, pre, limits, nsteps, beta)
+    ThermalSteps(algo, pre, limits, nsteps, beta, on)
 
 a `Thermalize` prepared: its method, the `PreMPO` of its Hamiltonian on the mixed state, its
-limits, its number of steps and the inverse temperature it reaches
+limits, its number of steps, the inverse temperature it reaches and the name of its state
 """
 struct ThermalSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}}
     algo::A
@@ -165,28 +184,30 @@ struct ThermalSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}}
     limits::Limits
     nsteps::Int
     beta::Real
+    on::Symbol
 end
 
 function prepare_phase(phase::Thermalize, sim::Simulation)
-    if !(sim.state isa State{Mixed})
+    state = state_named(sim, phase.on)
+    if !(state isa State{Mixed})
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
     n = step_number(phase.beta, phase.beta_step, "a thermalization", sim)
     if n == 0
-        return ThermalSteps(phase.algo, nothing, phase.limits, 0, phase.beta)
+        return ThermalSteps(phase.algo, nothing, phase.limits, 0, phase.beta, phase.on)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
-    return ThermalSteps(phase.algo, prepared_operator(sim.state, phase.hamiltonian), phase.limits,
-                        n, phase.beta)
+    return ThermalSteps(phase.algo, prepared_operator(state, phase.hamiltonian), phase.limits,
+                        n, phase.beta, phase.on)
 end
 
 step_count(t::ThermalSteps) = t.nsteps
 
 # as thermalize: normalized at the first step only, the logarithms of the traces added up
 function run_step(t::ThermalSteps, sim::Simulation, k::Int)
-    state = k == 1 ? normalize(sim.state) : sim.state
+    state = k == 1 ? normalize(state_named(sim, t.on)) : state_named(sim, t.on)
     st, l = thermal_step(t.algo, t.pre, state, t.beta / t.nsteps, k, step_limits(t.limits, k))
-    return Simulation(sim, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
+    return with_state(sim, t.on, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
                       log_trace = (k == 1 ? 0. : sim.log_trace) + l)
 end
 
@@ -194,23 +215,24 @@ end
     run_search(phase, sim, done, mpo, result; args...)
 
 run the search of `phase`, `GroundState` or `SteadyState`, of the lowest eigenvector of `mpo`
-from the state of `sim`, its first `done` sweeps done, each sweep ending with `step_done` on
-the state `result` makes of the eigenvector, and return the simulation with that state and the
-value `:energy`; `args` are the other keywords of `search`
+from the state `phase.on` of `sim`, its first `done` sweeps done, each sweep ending with
+`step_done` on the state `result` makes of the eigenvector, and return the simulation with that
+state and the value `:energy`; `args` are the other keywords of `search`
 """
 function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result; args...)
     energy = done == 0 ? nothing : sim.energy
     reached = Ref(sim)
     hook(k, e, st, ends) =
-        reached[] = step_done(Simulation(sim, result(st); energy = e), phase, k; last = ends)
-    e, st = search(phase.algo, mpo, sim.state, phase.limits; sweep_done = hook, done, energy,
-                   args...)
-    return Simulation(reached[], result(st); energy = e)
+        reached[] = step_done(with_state(sim, phase.on, result(st); energy = e), phase, k;
+                              last = ends)
+    e, st = search(phase.algo, mpo, state_named(sim, phase.on), phase.limits; sweep_done = hook,
+                   done, energy, args...)
+    return with_state(reached[], phase.on, result(st); energy = e)
 end
 
 """
     GroundState(; hamiltonian, algo, limits, orthogonal_to, weight, measurements,
-                  measurements_period, name, time_start, final_measurements)
+                  measurements_period, on, name, time_start, final_measurements)
 
 a phase that searches the ground state of a Hamiltonian from the pure state, see
 `ground_state`, or an excited state, the value `:energy` taking the energy of each sweep.
@@ -223,6 +245,7 @@ a phase that searches the ground state of a Hamiltonian from the pure state, see
 - `orthogonal_to`: the eigenstates the state searched is orthogonal to, by their names in the
   simulation, see `CopyState`, or given, and `weight`, see `ground_state` (default none)
 - `measurements`: the measurements made after every `measurements_period` sweeps (default 1)
+- `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
 # Examples
 
@@ -242,33 +265,35 @@ a phase that searches the ground state of a Hamiltonian from the pure state, see
     weight::Union{Nothing, Real} = nothing
     measurements = []
     measurements_period::Int = 1
+    on::Symbol = :state
     # the method, which has no default, asked for with what to write
     GroundState(name, time_start, final_measurements, hamiltonian, algo, limits, orthogonal_to,
-                weight, measurements, measurements_period) =
+                weight, measurements, measurements_period, on) =
         new(name, time_start, final_measurements, hamiltonian, search_algo(algo, "GroundState"),
-            limits, orthogonal_to, weight, measurements, measurements_period)
+            limits, orthogonal_to, weight, measurements, measurements_period, on)
 end
 
 provided_values(::GroundState) = (:energy,)
 
 function run_phase(phase::GroundState, sim::Simulation, done::Int)
-    if !(sim.state isa State{Pure})
+    state = state_named(sim, phase.on)
+    if !(state isa State{Pure})
         error("GroundState searches a pure state: search it pure and mix it")
     end
-    pre = prepared_operator(sim.state, phase.hamiltonian)
+    pre = prepared_operator(state, phase.hamiltonian)
     ms = [ m isa Symbol ? state_named(sim, m) : m for m in phase.orthogonal_to ]
-    args = orthogonal_args(sim.state, pre, ms, phase.weight)
+    args = orthogonal_args(state, pre, ms, phase.weight)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
     sim = run_search(phase, sim, done, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing),
                      identity; args...)
-    check_orthogonal(sim.state, args)
+    check_orthogonal(state_named(sim, phase.on), args)
     return sim
 end
 
 """
     SteadyState(; lindbladian, algo, limits, mpo_limits, mpo_algo, measurements,
-                  measurements_period, name, time_start, final_measurements)
+                  measurements_period, on, name, time_start, final_measurements)
 
 a phase that searches the steady state of a Lindbladian from the mixed state, see
 `steady_state`, the value `:energy` taking the eigenvalue of ``L^\\dagger L`` of each sweep, 0
@@ -282,6 +307,7 @@ for a steady state, and the state measured after a sweep having trace one.
 - `mpo_limits`, `mpo_algo`: the truncation and the algorithm of the MPO of ``L^\\dagger L``,
   see `steady_state`
 - `measurements`: the measurements made after every `measurements_period` sweeps (default 1)
+- `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
 # Examples
 
@@ -299,24 +325,26 @@ for a steady state, and the state measured after a sweep having trace one.
     mpo_algo::String = "naive"
     measurements = []
     measurements_period::Int = 1
+    on::Symbol = :state
     # refused when the phase is written, as the fields of Evolve and ApproxW, the method asked for
     # with what to write
     SteadyState(name, time_start, final_measurements, lindbladian, algo, limits, mpo_limits,
-                mpo_algo, measurements, measurements_period) =
+                mpo_algo, measurements, measurements_period, on) =
         new(name, time_start, final_measurements, lindbladian, search_algo(algo, "SteadyState"),
-            limits, mpo_limits, check_mpo_algo(mpo_algo), measurements, measurements_period)
+            limits, mpo_limits, check_mpo_algo(mpo_algo), measurements, measurements_period, on)
 end
 
 provided_values(::SteadyState) = (:energy,)
 
 function run_phase(phase::SteadyState, sim::Simulation, done::Int)
-    if !(sim.state isa State{Mixed})
+    state = state_named(sim, phase.on)
+    if !(state isa State{Mixed})
         error("SteadyState searches a density matrix: mix the state first, see ToMixed")
     end
-    l2 = squared_lindbladian(prepared_operator(sim.state, phase.lindbladian), phase.mpo_limits,
+    l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits,
                              phase.mpo_algo)
     log_message(sim, "Searching the steady state")
     sim = run_search(phase, sim, done, l2, st -> st / trace(st); krylov = steady_krylov)
-    steady_result(sim.energy, sim.state)
+    steady_result(sim.energy, state_named(sim, phase.on))
     return sim
 end

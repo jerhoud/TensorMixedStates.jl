@@ -177,6 +177,36 @@ file `stop` or on an interrupt: running it again resumes it
 stopped(sim::Simulation) = getfield(sim, :run).stopped
 
 """
+    state_named(sim, name)
+
+the state of the simulation named `name`, `:state` the current one
+"""
+function state_named(sim::Simulation, name::Symbol)
+    st = name === :state ? sim.state : get(getfield(sim, :values), name, nothing)
+    if !(st isa AbstractState)
+        error("the simulation has no state named $name")
+    end
+    return st
+end
+
+"""
+    with_state(sim, name, state; values...)
+
+the simulation with `state` under the name `name`, `:state` the current one, and the `values`
+"""
+with_state(sim::Simulation, name::Symbol, state; values...) =
+    name === :state ? Simulation(sim, state; values...) :
+                      Simulation(sim, sim.state; (name => state,)..., values...)
+
+"""
+    state_names(on)
+
+the names of the states a phase acts on, its field `on` a name or a vector of them
+"""
+state_names(on::Symbol) = [on]
+state_names(on::Vector{Symbol}) = on
+
+"""
     run_destination(run, d)
 
 where the run writes what goes to `d`: the stream of a redirected run for a name, `d` otherwise,

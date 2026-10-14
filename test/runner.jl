@@ -506,6 +506,64 @@ end
     end
 end
 
+@testset "Phases acting on a named state" begin
+    # a phase given on acts on the state of that name and leaves the others, Gates and Evolve
+    # given several names acting on each alike, the time advancing once; a list :name => [...]
+    # measures that state, its columns prefixed by its name
+    in_tmp() do
+        h = -Z(1) * Z(2) - Z(2) * Z(3) - 0.8 * (X(1) + X(2) + X(3))
+        lim = Limits(maxdim = 8, cutoff = 1e-14)
+        phases = [CreateState{Pure}(3, Qubit(), "Up"),
+                  CreateState{Pure}(3, Qubit(), "+"; on = :plus),
+                  Gates(gates = X(2), on = [:state, :plus]),
+                  Evolve(evolver = -im * h, duration = 0.3, time_step = 0.1, limits = lim,
+                         on = [:state, :plus],
+                         measurements = "data" => [Z(1), :plus => [Z(1), (X, X)]]),
+                  CopyState(:state => :g),
+                  GroundState(hamiltonian = h, algo = Dmrg(nsweeps = 6), limits = lim, on = :g,
+                              measurements = "search" => [:energy])]
+        sim = runTMS(SimData(; name = "ref", phases))
+        up = apply(X(2), State{Pure}(System(3, Qubit()), "Up"))
+        plus = apply(X(2), State{Pure}(System(3, Qubit()), "+"))
+        @test sim.time ≈ 0.3
+        @test fidelity(sim.state, evolve(-im * h, 0.3, up; nsteps = 3, limits = lim)) ≈ 1
+        @test fidelity(sim.plus, evolve(-im * h, 0.3, plus; nsteps = 3, limits = lim)) ≈ 1
+        e, _ = ground_state(h, up; algo = Dmrg(nsweeps = 6), limits = lim)
+        @test real(expect(sim.g, h)) ≈ e
+        @test split(readlines("ref/data")[1], '\t')[1:4] == ["time", "Z(1)", "plus.Z(1)", "plus.X(1)X(1)"]
+        # resumed after each step as the uninterrupted run
+        run_through(SimData(; name = "chk", phases); max_time = -1)
+        @test read("chk/data", String) == read("ref/data", String)
+        # the others take one name: a mixed state, weakened, thermalized and traced out
+        f = ["Occ", "Emp", "Occ"]
+        sim = runTMS(SimData(name = "one", phases = [
+            CreateState{Pure}(3, Qubit(), "Up"),
+            CreateState{Pure}(3, Fermion(conserve = strong(N)), f; on = :f),
+            ToMixed(on = :f),
+            Weaken(on = :f),
+            CreateState{Mixed}(3, Qubit(), "FullyMixed"; on = :hot),
+            Thermalize(hamiltonian = h, beta = 0.4, beta_step = 0.2, limits = lim, on = :hot),
+            CopyState(:hot => :steady),
+            SteadyState(lindbladian = -im * h + Dissipator(Sm)(1), algo = Dmrg(nsweeps = 2),
+                        limits = lim, on = :steady),
+            PartialTrace(positions = [3], on = :hot)]))
+        @test sim.state isa State{Pure} && real(expect(sim.state, Z(1))) ≈ 1
+        @test sim.f isa State{Mixed} && symmetries(sim.f.system) == (N,)
+        @test length(sim.hot) == 2
+        _, thermal = thermalize(h, 0.4, State{Mixed}(System(3, Qubit()), "FullyMixed"); nsteps = 2,
+                                limits = lim)
+        @test hs_fidelity(partial_trace(thermal, [3]), sim.hot) ≈ 1
+        @test sim.steady isa State{Mixed}
+        # a state to be created first, and several states of one system and representation only
+        @test_throws "the first phase must create the state" SimData(phases = [
+            CreateState{Pure}(3, Qubit(), "Up"; on = :x)])
+        @test_throws "one system and one representation" runTMS(SimData(phases = [
+            CreateState{Pure}(3, Qubit(), "Up"), CreateState{Mixed}(3, Qubit(), "Up"; on = :m),
+            Evolve(evolver = -im * h, duration = 0.1, time_step = 0.1, on = [:state, :m])]);
+            output = devnull)
+    end
+end
+
 @testset "The settings of a launch" begin
     in_tmp() do
         phases = [CreateState{Pure}(2, Qubit(), "Up"),

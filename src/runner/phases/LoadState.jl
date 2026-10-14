@@ -11,27 +11,6 @@ the path of `file`, relative to the directory of the simulation
 in_dir(sim::Simulation, file::String) = joinpath(getfield(sim, :run).dir, file)
 
 """
-    state_named(sim, name)
-
-the state of the simulation named `name`, `:state` the current one
-"""
-function state_named(sim::Simulation, name::Symbol)
-    st = name === :state ? sim.state : get(getfield(sim, :values), name, nothing)
-    if !(st isa AbstractState)
-        error("the simulation has no state named $name")
-    end
-    return st
-end
-
-"""
-    with_state(sim, name, state)
-
-the simulation with `state` under the name `name`, `:state` the current one
-"""
-with_state(sim::Simulation, name::Symbol, state) =
-    name === :state ? Simulation(sim, state) : Simulation(sim, sim.state; (name => state,)...)
-
-"""
     LoadState(; file, statename = "state", limits, on = :state, name, time_start,
                 final_measurements)
 
