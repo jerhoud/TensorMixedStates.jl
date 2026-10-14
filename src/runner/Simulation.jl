@@ -129,7 +129,8 @@ show(io::IO, sim::Simulation) = print(io, "Simulation($(sim.state), $(sim.time),
 
 the simulation `sim` open to changes, as `Update` hands it to its function, read as a
 `Simulation` and changed by assignments: `c.state = st`, `c.time = t`, `c.x = v` for a value,
-`c.x = nothing` removing it; and the simulation it makes once changed
+`c.x = nothing` removing it, `c.state = nothing` the state, before a phase creating another;
+and the simulation it makes once changed
 """
 mutable struct Editing
     state::Union{Nothing, AbstractState}
@@ -149,7 +150,11 @@ getproperty(c::Editing, name::Symbol) = getproperty(Simulation(c), name)
 propertynames(c::Editing) = propertynames(Simulation(c))
 
 function setproperty!(c::Editing, name::Symbol, x)
-    if name === :state || name === :time
+    if name === :state && !(x isa Union{Nothing, AbstractState})
+        error("c.state takes a state, or nothing to remove it, not a $(typeof(x))")
+    elseif name === :time && !(x isa Number)
+        error("c.time takes a number, not a $(typeof(x))")
+    elseif name === :state || name === :time
         setfield!(c, name, x)
     elseif name in reserved_values
         error("$name cannot be changed, a name the run reserves")
@@ -251,6 +256,8 @@ refused.
 function output(sim::Simulation, list::AbstractVector)
     if isempty(list)
         return nothing
+    elseif isnothing(sim.state)
+        error("the simulation has no state to measure: a phase must create one first")
     end
     run = getfield(sim, :run)
     items = [ run_destination(run, first(p)) => last(p) for p in list ]

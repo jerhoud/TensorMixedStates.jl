@@ -805,6 +805,16 @@ end
             @test read("chk/$f", String) == read("ref/$f", String)
         end
     end
+    # the state removed, for another phase to create one, and what is not a state or a time refused
+    start = CreateState{Pure}(2, Qubit(), "Up")
+    sim = runTMS(SimData(phases = [start, Update(c -> (c.state = nothing)), start]); output = devnull)
+    @test sim.state isa State{Pure}
+    @test_throws "has no state to measure" runTMS(SimData(phases = [start,
+        Update(c -> (c.state = nothing); measurements = "-" => Z(1))]); output = devnull)
+    @test_throws "c.state takes a state, or nothing to remove it, not a Int64" runTMS(
+        SimData(phases = [start, Update(c -> (c.state = 0))]); output = devnull)
+    @test_throws "c.time takes a number" runTMS(
+        SimData(phases = [start, Update(c -> (c.time = "now"))]); output = devnull)
 end
 
 @testset "What a phase refuses when it is written, and what the console shows" begin
