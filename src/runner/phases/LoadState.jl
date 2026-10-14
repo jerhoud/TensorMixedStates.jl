@@ -41,7 +41,6 @@ a phase that loads a state from an HDF5 file written by `SaveState` or `save_sta
     on::Symbol = :state
 end
 
-creates_state(phase::LoadState) = phase.on === :state
 provided_values(phase::LoadState) = phase.on === :state ? () : (phase.on,)
 
 function run_phase(phase::LoadState, sim::Simulation, ::Int)

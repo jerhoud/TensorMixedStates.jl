@@ -8,8 +8,7 @@ export CreateState
     CreateState{Pure|Mixed}(n, site, state; options...)
     CreateState{Pure|Mixed}(sites, state; options...)
 
-a phase that creates the state of the simulation. The first phase of a simulation is this one
-or `LoadState`.
+a phase that creates the state of the simulation.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -19,8 +18,7 @@ or `LoadState`.
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
   see `random_state` (default 0, none): a pure state randomized from `state`, a mixed one drawn
   from a purification starting from it, or without `state` any state of the system
-- `on`: the name the state created takes, see `CopyState` (default `:state`): only a phase
-  creating `:state` may be the first of a simulation
+- `on`: the name the state created takes, see `CopyState` (default `:state`)
 
 # Examples
 
@@ -45,7 +43,6 @@ CreateState{R}(n::Int, site::AbstractSite, state; kwargs...) where R =
 CreateState{R}(sites::Vector{<:AbstractSite}, state; kwargs...) where R =
     CreateState(; type = R(), system = System(sites), state, kwargs...)
 
-creates_state(phase::CreateState) = phase.on === :state
 provided_values(phase::CreateState) = phase.on === :state ? () : (phase.on,)
 
 """

@@ -185,9 +185,7 @@ its checkpoints keep. A phase of a single call gives instead
 done, and calls [`TensorMixedStates.step_done`](@ref) at the end of each of its steps, which
 measures, checkpoints and stops the run there.
 
-A phase creating the state, the adapter of another library for instance, says so by a method
-of [`TensorMixedStates.creates_state`](@ref), which lets it be the first phase of a simulation,
-and a phase providing values to the measurements, as `:energy`, names them by a method of
+A phase providing values to the measurements, as `:energy`, names them by a method of
 [`TensorMixedStates.provided_values`](@ref). Within a phase, `output` measures the simulation
 and `log_message` writes to its log. A function changing the simulation in a few steps, without
 a type of its own, is an [`Update`](@ref) phase.

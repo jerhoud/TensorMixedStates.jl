@@ -83,8 +83,7 @@ the description of a simulation, which `runTMS` runs.
 
 - `name`: the name of the simulation, and of the directory its results are written to
 - `phases`: the phases, see `TensorMixedStates.AbstractPhase`, as a vector which may contain
-  vectors to any depth, flattened; the first one creates the state, as `CreateState` and
-  `LoadState` do
+  vectors to any depth, flattened
 - `description`: the text of the file `description` of the simulation (default `""`)
 - `time_start`: the time the simulation starts at (default 0)
 - `final_measurements`: the measurements made at the end, see `output` (default `[]`)
@@ -118,9 +117,6 @@ struct SimData
     provided::Vector{Symbol}
     function SimData(name, description, time_start, final_measurements, format, seed, phases)
         ps = map(check_phase, flatten_phases(phases))
-        if isempty(ps) || !creates_state(first(ps))
-            error("the first phase must create the state, as CreateState and LoadState do")
-        end
         provided = check_values(ps, final_measurements)
         return new(name, description, time_start, final_measurements, check_format(format), seed,
                    ps, provided)

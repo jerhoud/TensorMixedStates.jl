@@ -42,7 +42,6 @@ How to use them is explained in [Extending TMS](@ref).
 TensorMixedStates.prepare_phase
 TensorMixedStates.run_phase
 TensorMixedStates.step_done
-TensorMixedStates.creates_state
 TensorMixedStates.provided_values
 TensorMixedStates.evolve_step
 TensorMixedStates.search

@@ -107,8 +107,13 @@ end
     phases = [CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1))]
     # nested vectors are flattened
     @test length(SimData(phases = [phases[1], [[phases[2]], phases[2]]]).phases) == 3
-    # the first phase creates the state, and every phase is one
-    @test_throws "must create the state" SimData(phases = [Gates(gates = X(1))])
+    # every phase is one; a state missing is refused by the first phase that needs it, an Update
+    # may create the state
+    @test_throws "has no state named state" runTMS(SimData(phases = [Gates(gates = X(1))]);
+                                                   output = devnull)
+    st = State{Pure}(System(2, Qubit()), "Up")
+    @test runTMS(SimData(phases = [Update(c -> (c.state = st)), phases[2]]);
+                 output = devnull).state isa State{Pure}
     @test_throws "is not a phase" SimData(phases = [phases; 3])
     @test_throws "is not a phase" SimData(phases = [phases; SimData(; phases)])
     @test_throws "has no field name" SimData(phases = [phases; NoFields()])
@@ -548,15 +553,16 @@ end
                         limits = lim, on = :steady),
             PartialTrace(positions = [3], on = :hot)]))
         @test sim.state isa State{Pure} && real(expect(sim.state, Z(1))) ≈ 1
-        @test sim.f isa State{Mixed} && symmetries(sim.f.system) == (N,)
+        @test sim.f isa State{Mixed} && string(symmetries(sim.f.system)) == "N"
         @test length(sim.hot) == 2
         _, thermal = thermalize(h, 0.4, State{Mixed}(System(3, Qubit()), "FullyMixed"); nsteps = 2,
                                 limits = lim)
         @test hs_fidelity(partial_trace(thermal, [3]), sim.hot) ≈ 1
         @test sim.steady isa State{Mixed}
-        # a state to be created first, and several states of one system and representation only
-        @test_throws "the first phase must create the state" SimData(phases = [
-            CreateState{Pure}(3, Qubit(), "Up"; on = :x)])
+        # a named state created first, and several states of one system and representation only
+        @test runTMS(SimData(phases = [CreateState{Pure}(3, Qubit(), "+"; on = :x),
+                                       CreateState{Pure}(3, Qubit(), "Up")]);
+                     output = devnull).x isa State{Pure}
         @test_throws "one system and one representation" runTMS(SimData(phases = [
             CreateState{Pure}(3, Qubit(), "Up"), CreateState{Mixed}(3, Qubit(), "Up"; on = :m),
             Evolve(evolver = -im * h, duration = 0.1, time_step = 0.1, on = [:state, :m])]);

@@ -24,8 +24,7 @@ logging it, applying its `time_start` and making its final measurements:
   `TensorMixedStates.step_done` wherever it can stop
 
 A phase providing values to the measurements, as `:energy`, declares them with a method of
-`TensorMixedStates.provided_values`, and a phase creating the state with one of
-`TensorMixedStates.creates_state`.
+`TensorMixedStates.provided_values`.
 """
 abstract type AbstractPhase end
 
@@ -44,14 +43,6 @@ function show(io::IO, s::AbstractPhase)
         print(io, "\n    ", f, " = ", repr(getfield(s, f)), i < length(fs) ? "," : ")")
     end
 end
-
-"""
-    TensorMixedStates.creates_state(phase)
-
-whether `phase` gives the simulation a state of its own, as `CreateState` and `LoadState` do,
-false by default. A simulation starts with such a phase.
-"""
-creates_state(_) = false
 
 """
     TensorMixedStates.provided_values(phase)

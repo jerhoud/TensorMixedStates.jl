@@ -109,8 +109,6 @@ Base.@kwdef struct CreateWrapped <: TensorMixedStates.AbstractPhase
     final_measurements = []
 end
 
-TensorMixedStates.creates_state(::CreateWrapped) = true
-
 function TensorMixedStates.run_phase(::CreateWrapped, sim::Simulation, ::Int)
     st = State{Pure}(System(3, Qubit()), "Up")
     return Simulation(sim, WrappedState(st.system, st))
