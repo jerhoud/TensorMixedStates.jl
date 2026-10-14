@@ -56,6 +56,22 @@ end
         (() -> runTMS(SimData(; phases); restart = true), "cleanTMS(sim_data)"),
         (() -> CreateState{Pure}(2, Qubit(), "Up"; seed = 1), "SimData(seed"),
         (() -> expect(st, Z(1); normalize = false), "multiply the value by trace(state)"),
+        # those 1.6 had, which the development of 2.0 had renamed before
+        (() -> SimData(; phases, final_measures = []), "final_measures became final_measurements"),
+        (() -> GroundState(hamiltonian = h, algo, measures = "d" => [Z]),
+         "measures became measurements"),
+        (() -> GroundState(hamiltonian = h, tolerance = 1e-8), "algo = Dmrg(nsweeps"),
+        (() -> Dmrg(nsweeps = 2, hamiltonian = h), "the phase is GroundState(hamiltonian"),
+        (() -> Tdvp(n_expand = 2), "n_expand became expand_period"),
+        (() -> ApproxW(order = 2, n_hermitianize = 1), "hermitianize_period"),
+        (() -> evolve(-im * h, 0.1, st; nsweeps = 2), "nsweeps became nsteps"),
+        (() -> evolve(-im * h, 0.1, st; first_sweep = 2), "first_sweep became step"),
+        (() -> steady_state(Dissipator(Sm)(1), ρ; algo, alg = "naive"), "alg became mpo_algo"),
+        (() -> partial_trace(ρ, [1]; keepers = true), "keepers became keep"),
+        (() -> PartialTrace(trace_positions = [1]), "trace_positions became positions"),
+        (() -> PartialTrace(keep_positions = [1]), "positions = p, keep = true"),
+        (() -> load_state("state.h5", "s"; system = st.system), "systems with the same sites"),
+        (() -> controlled(X; type = 1), "type was removed"),
     ]
     for (f, h) in cases
         @test occursin("TensorMixedStates 2.0", message(f)) && occursin(h, message(f))
@@ -73,6 +89,19 @@ end
     @test occursin("returns the Check", message(() -> Check("name", Z(1), 1.)))
     @test occursin("takes no type and no sites",
                    message(() -> Operator{1}("A", [1. 0.; 0. 1.], 1, Qubit())))
+    @test occursin("output(Simulation(sim, sim.state; energy = e), list)",
+                   message(() -> output(sim, [Z(1)]; energy = 1.)))
+    @test occursin("variance(state, op)", message(() -> variance(Z(1), st)))
+    @test occursin("SubRenyi2(1:k)", message(() -> SubRenyi2(1)))
+    @test occursin("renyi2(state, 1:k)", message(() -> renyi2(st, 1)))
+    @test occursin("matrix(X, site)", message(() -> matrix("X", Qubit())))
+    @test occursin("systems with the same sites are equal", message(() -> State(st.system, st)))
+    # the positions of PartialTrace are asked for by an error of their own, which leaves the
+    # keywords of 1.x to their hints
+    @test occursin("PartialTrace needs positions", message(() -> PartialTrace()))
+    # the steps a list of measurements reads
+    @test occursin("the :sweep of 1.x is :step", message(() -> SimData(phases = [
+        CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1), final_measurements = "d" => [:sweep])])))
 end
 
 @testset "data_to_frame without DataFrames" begin

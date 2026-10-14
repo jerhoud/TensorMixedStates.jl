@@ -77,8 +77,17 @@ operators of the phases after this one refer to.
     name::String = "Computing partial trace"
     time_start::Union{Nothing, Number} = nothing
     final_measurements = []
-    positions::Vector{Int}
+    positions::Vector{Int} = nothing
     keep::Bool = false
+    # the positions, which have no default, asked for by an error of their own: Julia attaches no
+    # hint to the error of a keyword missing, which a keyword of 1.x left unread would raise
+    function PartialTrace(name, time_start, final_measurements, positions, keep)
+        if isnothing(positions)
+            error("PartialTrace needs positions, the sites to trace out, or with keep = true " *
+                  "those to keep")
+        end
+        return new(name, time_start, final_measurements, positions, keep)
+    end
 end
 
 run_phase(phase::PartialTrace, sim::Simulation, ::Int) =
