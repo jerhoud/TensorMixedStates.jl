@@ -58,7 +58,7 @@ operator of several sites, `X ⊗ X`, placed by `(X ⊗ X)(2, 5)`; `exp`, `sqrt`
 |:---|:---|
 | the evolver | `-im * H` plus dissipators: ``d\psi/dt = -iH\psi``, ``\hbar = 1`` |
 | a jump operator | `Dissipator(L)`, ``L\rho L^\dagger - \frac12\{L^\dagger L, \rho\}``; `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`, so a rate ``\gamma`` is `γ * Dissipator(L)` |
-| qubit states | `"Up"` = ``|0\rangle``, `"Dn"` = ``|1\rangle``; `Z` is +1 on `"Up"`; `N` counts `"Dn"`; `Sp` takes `"Dn"` to `"Up"` |
+| qubit states | `"Up"` = ``\vert 0\rangle``, `"Dn"` = ``\vert 1\rangle``; `Z` is +1 on `"Up"`; `N` counts `"Dn"`; `Sp` takes `"Dn"` to `"Up"` |
 | amplitude damping | `amplitude_damping_gate(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
 | depolarization | `depolarizing_gate(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_gate(4p/3)` |
 | a product of gates | the rightmost factor acts first |
