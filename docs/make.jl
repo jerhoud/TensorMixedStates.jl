@@ -21,6 +21,7 @@ makedocs(
         "quickref.md",
         "correspondence.md",
         "manual.md",
+        "accuracy.md",
         "simulations.md",
         "conservation.md",
         "performance.md",
