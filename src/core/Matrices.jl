@@ -436,7 +436,7 @@ end
 local_state(site::AbstractSite, f::Function) = local_state(site, f(site))
 
 local_state(::AbstractSite, n::Number) =
-    error("a number does not denote a state: write \"$n\" or Level => $n")
+    error("a number does not denote a state: the basis state $n, counted from 0, is Level => $n")
 
 local_state(site::AbstractSite, x) =
     error("$(repr(x)) is not a local state of $site: give a name, A => λ, a vector, a density " *

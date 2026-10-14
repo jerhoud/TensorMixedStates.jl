@@ -370,7 +370,8 @@ struct Proj{N} <: GenericOp{IsOperator, N}
 end
 
 Proj(n::Integer) =
-    error("a number does not denote a state: write Proj(\"$n\") or Proj(Level => $n)")
+    error("a number does not denote a state: the projector on the basis state $n, counted from " *
+          "0, is Proj(Level => $n)")
 
 Proj(p::Pair{<:IndexedOp, <:Real}) =
     error("cannot project on an eigenspace of $(first(p)), which is placed on sites: write " *
@@ -451,7 +452,8 @@ struct Reset <: GenericOp{IsChannel, 1}
 end
 
 Reset(n::Integer) =
-    error("a number does not denote a state: write Reset(\"$n\") or Reset(Level => $n)")
+    error("a number does not denote a state: the reset to the basis state $n, counted from 0, " *
+          "is Reset(Level => $n)")
 
 """
     Dephase(A)

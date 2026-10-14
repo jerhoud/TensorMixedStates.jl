@@ -102,6 +102,10 @@ end
     # the steps a list of measurements reads
     @test occursin("the :sweep of 1.x is :step", message(() -> SimData(phases = [
         CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1), final_measurements = "d" => [:sweep])])))
+    # a local state given as a number, as 1.x took it, is the basis state of that number
+    @test occursin("is Level => 1", message(() -> State{Pure}(st.system, 1)))
+    @test occursin("is Proj(Level => 1)", message(() -> Proj(1)))
+    @test occursin("is Reset(Level => 1)", message(() -> Reset(1)))
 end
 
 @testset "data_to_frame without DataFrames" begin
