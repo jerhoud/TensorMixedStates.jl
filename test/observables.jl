@@ -891,6 +891,29 @@ end
         sq, Overlap(State{Pure}(System(2, Qubit()), "Up")))
 end
 
+@testset "A named state measured, and the matrix elements of Overlap" begin
+    # a list :name => [...] measures the state of that name with everything measure takes, its
+    # names prefixed by the name of the state, nested lists included
+    sys = System(4, Qubit())
+    a = random_state(Pure, sys, 4; rng = Xoshiro(1))
+    b = random_state(Pure, sys, 4; rng = Xoshiro(2))
+    r = measure(a, [Z(1), :b => [Z, (X, X), Purity, "e" => c -> c.time, :a => [Z(2)]]];
+                time = 0.5, a, b)
+    @test first.(r) == ["Z(1)", "b.Z", "b.(X, X)", "b.Purity", "b.e", "b.a.Z(2)"]
+    @test last(r[2]) ≈ real(expect1(b, Z))
+    @test last(r[3]) ≈ real(expect2(b, (X, X)))
+    @test last(r[5]) == 0.5
+    @test last(r[6]) ≈ real(expect(a, Z(2)))
+    # a run refuses a named state that no phase provides
+    @test_throws "reads nowhere" SimData(phases = [CreateState{Pure}(2, Qubit(), "Up";
+        final_measurements = "d" => [:nowhere => [Z]])])
+    # the matrix elements <ref|op|state> of two pure states, a vector for an operator of one site
+    @test last(only(measure(a, Overlap(:b, X(1) * Z(3)); b))) ≈ inner(b, apply(X(1) * Z(3), a))
+    @test last(only(measure(a, Overlap(:a, X(1) * Z(3)); a))) ≈ expect(a, X(1) * Z(3))
+    @test last(only(measure(a, Overlap(b, Z)))) ≈ [ inner(b, apply(Z(i), a)) for i in 1:4 ]
+    @test_throws "matrix element of two pure states" measure(mix(a), Overlap(:b, Z); b = mix(b))
+end
+
 @testset "Energy variance" begin
     sys = System(6, Qubit())
     ising = -sum(Z(i) * Z(i+1) for i in 1:5)

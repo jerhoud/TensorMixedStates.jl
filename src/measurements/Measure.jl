@@ -114,6 +114,28 @@ end
 show(io::IO, m::ContextMeasurement) = print(io, m.name)
 
 """
+    OnNamed(state, entry)
+
+the measurement `entry` made on the state named `state`, as a list `:φ => [Z, Purity]` gives
+it, its value `missing` while there is no such state
+"""
+struct OnNamed
+    state::Symbol
+    entry
+end
+
+"""
+    measurement_reads(m)
+
+the values the measurement `m` reads: a symbol itself, a measurement of the library reading a
+named state that name, a measurement of a named state that name and what it reads
+"""
+measurement_reads(s::Symbol) = [s]
+measurement_reads(m::ContextMeasurement) = m.reads
+measurement_reads(m::OnNamed) = [m.state; measurement_reads(m.entry)]
+measurement_reads(_) = Symbol[]
+
+"""
     on_state(name, f)
 
 the measurement of the library `name` that `f`, a function of the state, gives, with nothing
@@ -350,12 +372,40 @@ end)
 Fidelity(name::Symbol) = on_named("Fidelity", name, (st, r) -> fidelity(st, r))
 
 """
-    Overlap(ref)
-    Overlap(name)
+    matrix_element(ref, op, state)
+
+``\\langle ref | op | state \\rangle`` for two pure states, with an operator placed on sites, or
+the vector of its values on each site for an operator of one site, `missing` where it is not
+defined
+"""
+function matrix_element(ref::State, op, state::State)
+    if !(ref isa State{Pure} && state isa State{Pure})
+        error("Overlap with an operator is the matrix element of two pure states")
+    end
+    if op isa SimpleOp
+        on = defined_sites(state.system, op)
+        return [ i in on ? complex(inner(ref, apply(op(i), state))) : missing
+                 for i in 1:length(state) ]
+    end
+    return complex(inner(ref, apply(op, state)))
+end
+
+"""
+    Overlap(ref[, op])
+    Overlap(name[, op])
 
 the measurement of the inner product with the reference state `ref`, see `inner`, `ref` being
 weakened to what the measured state conserves, a complex number whatever the states, as
-`Trace`; given a `name`, the reference is the value of that name, as for `Fidelity`
+`Trace`; given a `name`, the reference is the value of that name, as for `Fidelity`. With an
+operator, the matrix element ``\\langle ref | op | state \\rangle`` of two pure states, of an
+operator placed on sites, or the vector of those of an operator of one site on every site: from
+a reference `A|ψ⟩` evolved with the state `|ψ⟩`, the correlations ``\\langle A^\\dagger(0) op(t)
+\\rangle`` at two times.
+
+# Examples
+
+    Overlap(:excited)
+    Overlap(:kicked, Z)            # ⟨kicked|Z_i|state⟩ for every site i
 """
 Overlap(ref::State) = StateMeasurement("Overlap", function (state)
     r = reference_on(state, ref, "Overlap")
@@ -363,6 +413,15 @@ Overlap(ref::State) = StateMeasurement("Overlap", function (state)
 end)
 
 Overlap(name::Symbol) = on_named("Overlap", name, (st, r) -> complex(inner(r, st)))
+
+Overlap(ref::State, op::Union{IndexedOp{IsOperator}, SimpleOp}) =
+    StateMeasurement("Overlap", function (state)
+        r = reference_on(state, ref, "Overlap")
+        return st -> matrix_element(r, op, st)
+    end)
+
+Overlap(name::Symbol, op::Union{IndexedOp{IsOperator}, SimpleOp}) =
+    on_named("Overlap", name, (st, r) -> matrix_element(r, op, st))
 
 
 """
@@ -398,6 +457,7 @@ measurement(a::SimpleOp) = a
 measurement(p::Tuple{SimpleOp, SimpleOp}) = p
 measurement(m::StateMeasurement) = m
 measurement(m::ContextMeasurement) = m
+measurement(m::OnNamed) = m
 measurement(s::Symbol) = s
 
 measurement(::Function) =
@@ -454,6 +514,8 @@ holds flattened, a matrix row by row, each named as given or by `entry_name`, an
 entries(x::AbstractVector) = reduce(vcat, [ entries(y) for y in x ]; init = Pair{String, Any}[])
 entries(x::AbstractMatrix) = entries(vec(permutedims(x)))
 entries((name, x)::Pair{String}) = Pair{String, Any}[ name => named_measurement(x) ]
+entries((state, x)::Pair{Symbol}) =
+    Pair{String, Any}[ "$state.$n" => OnNamed(state, m) for (n, m) in entries(x) ]
 
 function entries(x)
     m = measurement(x)
@@ -474,6 +536,8 @@ it is measured on and keeps that preparation. Each measurement is one of
 - a symbol, `:energy`, the value of that name given to `measure`
 - `"name" => m`, `m` one of these or a function of the context `c`: `c.state`, `c.time` and the
   values given to `measure`, `c.energy`
+- `:φ => list`, the measurements of the list made on the state named `φ`, a value given to
+  `measure`, their names prefixed by `φ.`
 
 A vector, or a `Measure`, inside the list stands for its measurements. Two measurements of a
 list cannot share a name.
@@ -550,6 +614,19 @@ struct OnState
 end
 
 """
+    OnNamedItem(state, entry, measure)
+
+a measurement of a named state as `measure` prepares it: the name of the state, the measurement,
+and the `Measure` of it, made at its first value under the name of the measurement, which keeps
+its preparation for the system of that state
+"""
+mutable struct OnNamedItem
+    state::Symbol
+    entry
+    measure::Union{Nothing, Measure}
+end
+
+"""
     is_hermitian(system, terms, scale)
 
 whether the operator of the `terms` on `system` is Hermitian: their difference with their
@@ -603,6 +680,7 @@ prepared_entry(state::AbstractState, m::StateMeasurement) = OnState(m.prepare(st
 prepared_entry(::AbstractState, f::Function) = f
 prepared_entry(::AbstractState, m::ContextMeasurement) = m.f
 prepared_entry(::AbstractState, s::Symbol) = s
+prepared_entry(::AbstractState, m::OnNamed) = OnNamedItem(m.state, m.entry, nothing)
 
 """
     prepared(m, state)
@@ -680,6 +758,18 @@ function entry_value(f::Function, name, c::Context, _)
 end
 
 entry_value(s::Symbol, _, c::Context, _) = getproperty(c, s)
+
+function entry_value(it::OnNamedItem, name, c::Context, _)
+    state = getproperty(c, it.state)
+    if ismissing(state)
+        return missing
+    end
+    if isnothing(it.measure)
+        it.measure = Measure(Pair{String, Any}[ name => it.entry ])
+    end
+    values = getfield(c, :values)
+    return last(only(measure(state, it.measure; time = getfield(c, :time), values...)))
+end
 
 """
     measure(state, measurements; time, values...)

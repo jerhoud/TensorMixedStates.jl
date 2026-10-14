@@ -54,8 +54,7 @@ function check_values(phases::Vector, final_measurements)
               [ p.measurements for p in phases if hasfield(typeof(p), :measurements) ] ]
     for l in lists, p in measurement_lists(l)
         for (name, m) in as_measure(last(p)).entries
-            reads = m isa Symbol ? [m] : m isa ContextMeasurement ? m.reads : Symbol[]
-            for r in reads
+            for r in measurement_reads(m)
                 if r ∉ provided && r ∉ (:step, :rng)
                     of_1x = r === :sweep ? ": the :sweep of 1.x is :step" : ""
                     error("the measurement $name reads $r, a value that no phase of the " *

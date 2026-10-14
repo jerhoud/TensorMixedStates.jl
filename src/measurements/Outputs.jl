@@ -195,11 +195,16 @@ cells!(out, col, x, _) = push!(out, col => replace(string(x), r"[\t\r\n]" => " "
 
 the cells of the value `x` of the measurement `m` named `name`, see `cells!`: an operator of one
 site on site `i` under `name(i)`, a pair on sites `i` and `j` under `A(i)B(j)`, or `name(i,j)`
-when it is named
+when it is named, and a measurement of the state named `φ` under the cells it has on its own,
+prefixed by `φ.`
 """
 function entry_cells(name::String, m, x, f)
     out = Pair{String, String}[]
-    if m isa SimpleOp && x isa AbstractVector
+    if m isa OnNamed
+        prefix = "$(m.state)."
+        inner = entry_cells(String(chopprefix(name, prefix)), m.entry, x, f)
+        return [ prefix * c => v for (c, v) in inner ]
+    elseif m isa SimpleOp && x isa AbstractVector
         for (i, y) in enumerate(x)
             cells!(out, "$name($i)", y, f)
         end
