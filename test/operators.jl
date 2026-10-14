@@ -1019,6 +1019,10 @@ end
     # the sites the operator is given
     @test matrix(named([1 1; 1 -1] / √2, "MyH"), Qubit()) ≈ [1 1; 1 -1] / √2
     @test matrix(named(s -> [0. 1.; 1. 0.], "Fx"), Qubit()) == [0. 1.; 1. 0.]
+    # a matrix of any type, an adjoint or a Diagonal, given or returned by a function
+    @test matrix(named(TMS.LinearAlgebra.Diagonal([1., -1.]), "D"), Qubit()) == [1. 0.; 0. -1.]
+    @test matrix(named([0. 1.; 0. 0.]', "Ad"), Qubit()) == [0. 0.; 1. 0.]
+    @test matrix(named(s -> [0. 1.; 0. 0.]', "Adf"), Qubit()) == [0. 0.; 1. 0.]
     @test matrix(named(Sp + Sm, "Sx2"), Spin(1)) ≈ 2 * matrix(Sx, Spin(1))
     @test_throws "given by a 3×3 matrix and cannot act on Qubit()" matrix(named(rand(3, 3), "R"), Qubit())
     # an operator of several sites is given its number of sites, a single site then standing for

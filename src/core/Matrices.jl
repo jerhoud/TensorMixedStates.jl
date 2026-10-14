@@ -213,7 +213,7 @@ bra.
     matrix(X ⊗ A, Qubit(), Boson(2))
     matrix(Gate(X), Qubit())
 """
-matrix(a::Matrix, ::AbstractSite, ::AbstractSite...) = copy(a)
+matrix(a::AbstractMatrix, ::AbstractSite, ::AbstractSite...) = Matrix(a)
 
 matrix(a::Function, site::AbstractSite, sites::AbstractSite...) =
     matrix(a(site, sites...), site, sites...)

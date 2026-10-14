@@ -120,8 +120,8 @@ struct Operator{N} <: GenericOp{IsOperator, N}
     name::String
     expr::Union{Nothing, Matrix, Function, GenericOp{IsOperator, N}}
     Operator{N}(name::String,
-                expr::Union{Nothing, Matrix, Function, GenericOp{IsOperator, N}} = nothing) where N =
-        new{N}(name, no_signed_zero(expr))
+                expr::Union{Nothing, AbstractMatrix, Function, GenericOp{IsOperator, N}} = nothing) where N =
+        new{N}(name, no_signed_zero(expr isa AbstractMatrix ? Matrix(expr) : expr))
 end
 
 ############ Identity ############
@@ -831,7 +831,7 @@ two quantities apart.
     Fermion(conserve = named(N, "Nf"))
 """
 named(op::GenericOp{IsOperator, N}, name::String) where N = Operator{N}(name, op)
-named(def::Union{Matrix, Function}, name::String) = Operator{1}(name, def)
+named(def::Union{AbstractMatrix, Function}, name::String) = Operator{1}(name, def)
 
 # an operator broadcasts as a single value, as in `Level .=> bits`
 Base.broadcastable(a::Op) = Ref(a)
