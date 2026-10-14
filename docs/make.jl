@@ -18,6 +18,7 @@ makedocs(
     modules = [TensorMixedStates],
     pages = [
         "index.md",
+        "quickref.md",
         "manual.md",
         "simulations.md",
         "conservation.md",

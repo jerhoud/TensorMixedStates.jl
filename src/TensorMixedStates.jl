@@ -11,6 +11,19 @@
 a library for simulating closed and open quantum systems with matrix product states. A state
 is either pure, its wave function as an MPS, or mixed, its density matrix as an MPS, on which
 Lindbladian evolution and noisy gates act.
+
+    using TensorMixedStates, .Qubits
+    sys = System(10, Qubit())
+    ham = -sum(Z(i) * Z(i + 1) for i in 1:9) - 0.5 * sum(X(i) for i in 1:10)
+    E, ψ = ground_state(ham, random_state(Pure, sys, 8); algo = Dmrg(nsweeps = 10))
+    ρ = evolve(-im * ham + sum(Dissipator(sqrt(0.1) * Sm)(i) for i in 1:10), 1.0, mix(ψ);
+               nsteps = 20, limits = Limits(maxdim = 64))
+    measure(ρ, [Z, X(1) * X(10), Purity])
+
+The evolver is `-im * ham` plus dissipators, `"Up"` is ``|0\rangle`` on a qubit, and a value
+is real for a Hermitian operator. The page "Quick reference" of the documentation, shipped with
+the package as `joinpath(pkgdir(TensorMixedStates), "docs", "src", "quickref.md")`, gives the
+whole library on one page, and "Upgrading from 1.x" what changed since version 1.
 """
 module TensorMixedStates
 
