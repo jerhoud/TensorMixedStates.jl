@@ -1,111 +1,192 @@
 # Upgrading from 1.x
 
-Version 2.0 renames and removes a few names, so that the whole interface follows the same
-rules, and changes some defaults. A program written for 1.x may need the edits below, most of
-them mechanical: a name it still uses is refused with an `UndefVarError`, a `MethodError` or
-an error on an unsupported keyword, rather than being taken for something else.
+TensorMixedStates 2.0 is a rewrite of the package. What it computes is the same, but its
+interface was made smaller and uniform, so that a program written for 1.x needs edits, most of
+them mechanical, which this page lists from version 1.6. A name or a keyword that 2.0 removed,
+renamed or moved is refused with an error rather than taken for something else, and for most of
+them the error Julia prints ends with a line beginning with `TensorMixedStates 2.0:` that says
+what to write instead.
 
-The files written by `save_state` or `SaveState` with 1.x are read by 2.0. The checkpoints are
-not: a run interrupted under 1.x cannot be resumed under 2.0. Finish it before upgrading, or
-start it again with `runTMS(sim_data; restart = true)`.
+## Saved states and checkpoints
 
-## Renamed
+The states saved by `save_state` or `SaveState` with 1.x are read by 2.0. The checkpoints are
+not: 2.0 refuses to resume a simulation stopped under 1.x. Finish it with 1.x, or start it over,
+by putting a file named `restart` in its directory or by calling `cleanTMS(sim_data)` before
+`runTMS`.
 
-| 1.x | 2.0 |
+## A program converted
+
+These lines of the manual of 1.6 compute a ground state, three evolutions and a steady state:
+
+```julia
+energy, ground = dmrg(hamiltonian, RandomState{Pure}(mysystem, 8); nsweeps = 10,
+                      limits = Limits(maxdim = 20))
+myevolved = tdvp(-im * sum(Z(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "+");
+                 nsweeps = 10)
+mydecayed = tdvp(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsweeps = 10)
+mydecayed = approx_W(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; order = 4, w = 2,
+                     nsweeps = 10)
+value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for i in 1:4),
+                               myrho; nsweeps = 10)
+```
+
+With 2.0, they are written
+
+```julia
+energy, ground = ground_state(hamiltonian, random_state(Pure, mysystem, 8);
+                              algo = Dmrg(nsweeps = 10), limits = Limits(maxdim = 20))
+myevolved = evolve(-im * sum(Z(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "+");
+                   nsteps = 10)
+mydecayed = evolve(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho; nsteps = 10)
+mydecayed = evolve(sum(Dissipator(Sm)(i) for i in 1:4), 1.0, myrho;
+                   algo = ApproxW(order = 4, w = 2), nsteps = 10)
+value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for i in 1:4),
+                               myrho; algo = Dmrg(nsweeps = 10))
+```
+
+and they give the same results: the same ground state energy, -12.381489999654791, and the
+same expectation values to 1e-14.
+
+## Solvers
+
+The solvers are four functions, `evolve`, `ground_state`, `steady_state` and `thermalize`,
+each given its method as `algo`, see [Algorithms](algorithms.md). The options of a method are
+the fields of `algo`, and no option is passed on to ITensorMPS any more: the truncation is given
+by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov method by
+`krylov = Krylov(…)`.
+
+| 1.6 | 2.0 |
 |:----|:----|
-| `measures`, `final_measures`, `measures_period` (fields of the phases) | `measurements`, `final_measurements`, `measurements_period` |
-| `final_measures` (field of `SimData`) | `final_measurements` |
-| `tolerance` (`GroundState`, `SteadyState`) | `tol` |
-| `n_expand`, `n_hermitianize` (`Tdvp`, `ApproxW`, `tdvp`, `approx_W`, `thermal_state`) | `expand_period`, `hermitianize_period` |
-| `tdvp(...; nsweeps, first_sweep)`, `approx_W(...; nsweeps, first_sweep)` | `nsteps`, `first_step` |
+| `tdvp(evolver, t, state; nsweeps = n)` | `evolve(evolver, t, state; nsteps = n)`, `algo = Tdvp()` by default |
+| `approx_W(evolver, t, state; order, w, nsweeps = n)` | `evolve(evolver, t, state; algo = ApproxW(order, w), nsteps = n)` |
+| `Tdvp(n_expand, n_hermitianize)`, `ApproxW(n_hermitianize)` | `Tdvp(expand_period, hermitianize_period)`, `ApproxW(hermitianize_period)` |
+| `first_sweep = k` | `step = k`, `time` the time the evolution starts at, `duration` and `nsteps` those of the steps left |
+| `coefs` of an evolver depending on time | `[A, B] => [f, g]`, real functions of the time |
+| `time_start` | `time` |
+| `dmrg(H, state; nsweeps, noise)` | `ground_state(H, state; algo = Dmrg(nsweeps, noise, tol))` |
+| `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(nsweeps), mpo_algo)` |
+| `RandomState{Pure}(system, d)` | `random_state(Pure, system, d)`, `random_state(Mixed, system, d)` or `random_state(state, d)` |
+| `TdvpObserver`, `ApproxWObserver`, `DmrgObserver`, `observer!` | call the solver step by step and measure between the calls, or measure in a phase |
+| `make_approx_W1`, `make_approx_W2` | not exported: `TensorMixedStates.make_approx_W1` |
+
+`Dmrg` has no default number of sweeps, which `dmrg` took as 1. `ground_state` no longer takes
+an MPO: give the operator, or its `PreMPO(state, operator)`, prepared once for several calls. A
+mixed state is refused by `ground_state`: search the pure state and mix it.
+
+## Measurements
+
+| 1.6 | 2.0 |
+|:----|:----|
+| `measure(state, list, t)` | `measure(state, list; time = t)` |
+| `StateFunc("name", f)` | `"name" => c -> f(c.state)` |
+| `TimeFunc("name", f)` | `"name" => c -> f(c.time)` |
+| `RealValue`, `ImaginaryValue` | `"name" => c -> real(expect(c.state, op))`, `imag(…)` |
+| `ComplexValue` | removed: the value of an operator that is not Hermitian is complex |
+| `Check("name", obs1, obs2, tol)` | `"name" => c -> Check(a, b; tol)`, the values `a` and `b` computed from `c`, as `expect(c.state, op)` |
+| `trace2`, `Trace2` | `purity`, `Purity` |
+| `TraceError`, `HermiticityError` | `TraceDeviation`, `HermiticityDeviation` |
+| `EE(cut)` | `EntanglementEntropy(cut)` |
+| `Linkdim` | `MaxLinkdim` |
+| `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
+| `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
 | `variance(h, state)` | `variance(state, h)` |
-| `partial_trace(state, positions; keepers = true)` | `partial_trace(state, positions; keep = true)` |
+| `partial_trace(state, positions; keepers)` | `partial_trace(state, positions; keep)` |
+| `:sweep` in a list of measurements | `:step` |
+
+The value of a Hermitian operator is real, its imaginary part dropped with a warning when it is
+more than rounding, and that of an operator that is not Hermitian is complex, whatever the state:
+the columns of a file do not depend on it. For the same reason, `Trace` is complex.
+
+A list of measurements given to `measure` is one list: `measure(state, [Measure(…),
+Measure(…)])` measures the two as one, where 1.x returned a group for each.
+
+## Simulations
+
+| 1.6 | 2.0 |
+|:----|:----|
+| `measures`, `final_measures`, `measures_period` | `measurements`, `final_measurements`, `measurements_period` |
+| `GroundState(nsweeps, noise, tolerance)` | `GroundState(algo = Dmrg(nsweeps, noise, tol))`, `algo` being required |
+| `SteadyState(nsweeps, tolerance)` | `SteadyState(algo = Dmrg(nsweeps, tol))`, `algo` being required |
+| `Dmrg(…)`, the phase | `GroundState(…)`: `Dmrg` is now the method of a search |
 | `PartialTrace(trace_positions = p)` | `PartialTrace(positions = p)` |
 | `PartialTrace(keep_positions = p)` | `PartialTrace(positions = p, keep = true)` |
-| `has_fermionic` | `hasfermionic` |
+| `CreateState(seed = s)` | `SimData(seed = s)`, the draws of every phase using the generator of the run |
+| `SimData(time_format, data_format)` | `SimData(format)`, for every number written |
+| `SimData(checkpoint_interval, max_time, threading)` | `runTMS(sim_data; checkpoint_interval, max_time, threading)`, or the variables `TMS_CHECKPOINT_INTERVAL`, `TMS_MAX_TIME`, `TMS_THREADING` |
+| `runTMS(sim_data; restart = true)` | a file `restart` in the directory, or `cleanTMS(sim_data)` before `runTMS` |
+| `runTMS(sim_data; clean = true)` | `cleanTMS(sim_data)` |
+| `SetState(state)` | `Reset(state)`, a channel: at a rate `γ` in an evolver, `γ * Dissipator(Reset(state))` |
 | `log_msg` | `log_message` |
-| `SetState` | `Reset` |
-
-`dmrg`, `steady_state`, `GroundState` and `SteadyState` keep `nsweeps`: they count sweeps,
-where `tdvp` and `approx_W` count time steps. The phase `Evolve` is given its `duration` and
-its `time_step` as before.
-
-For instance, a phase written for 1.x as
-
-```julia
-Evolve(duration = 2., time_step = 0.1, algo = Tdvp(n_expand = 5), evolver = -im * H,
-       measures = "data" => [X, Z], measures_period = 2)
-```
-
-is written for 2.0 as
-
-```julia
-Evolve(duration = 2., time_step = 0.1, algo = Tdvp(expand_period = 5), evolver = -im * H,
-       measurements = "data" => [X, Z], measurements_period = 2)
-```
-
-## Removed
-
-These names were deprecated since 1.2.0 or 1.3.0:
-
-| 1.x | 2.0 |
-|:----|:----|
-| `EE` | `EntanglementEntropy` |
-| `Linkdim` | `MaxLinkdim` |
-| `Mutual_Info_Renyi2` | `MutualInfoRenyi2` |
+| `output(sim, list; energy = e)` | `output(Simulation(sim, sim.state; energy = e), list)` |
+| `get_sim_file`, `close_sim_files` | `output(sim, destination => list)`, or a `Destination` of one's own; `runTMS` closes the files |
 | `DataToFrame` | `data_to_frame` |
-| `Dmrg` | `GroundState` |
-| `steady_state(...; alg)` | `steady_state(...; mpo_algo)` |
+| `Simulation(state; …)`, a function given a `Simulation` | the functions take the state, `sim.state`; a `Simulation` is made by `runTMS` |
+| `create_graph_state` | `CreateState(type = Pure(), state = graph_state(graph))` |
 
-`tdvp`, `approx_W`, `dmrg` and `steady_state` no longer pass the options they do not know on
-to ITensorMPS: `cutoff`, `maxdim` and `mindim` are given through
-`limits = Limits(cutoff = ..., maxdim = ..., mindim = ...)`.
+The data files are tables: a line naming the columns, then a line per time measured.
+`sim.data` holds the rows of each `Data` destination, which `data_to_frame` turns into a table
+as it did those of 1.x.
 
-## Phases of your own
+A phase of one's own is a subtype of `TensorMixedStates.AbstractPhase`, which replaces the
+union `Phases`, with the fields `name`, `time_start` and `final_measurements`, and it runs by
+`run_phase(phase, sim, done)`, or step by step by `prepare_phase`, `step_count` and `run_step`,
+see [Extending TMS](extending.md). `run_steps`, `resume_step` and `Algo` are gone,
+`EvolutionAlgorithm` and `SearchAlgorithm` taking the place of the last.
 
-A phase of your own is now a subtype of [`TensorMixedStates.AbstractPhase`](@ref), and its
-field of final measurements is `final_measurements`:
+## Operators, sites and states
 
-```julia
-using TensorMixedStates: AbstractPhase
-
-Base.@kwdef struct Kicks <: AbstractPhase
-    name::String = "kicks"
-    time_start = nothing
-    final_measurements = []
-    nkicks::Int = 4
-end
-```
-
-`SimData` refuses a struct that is not a subtype of `AbstractPhase`. The union `Phases` of the
-phase types of the library is gone, `AbstractPhase` taking its place. See
-[Extending TMS](@ref) for what a phase of your own can do in 2.0.
-
-`run_steps`, `resume_step` and `Algo` are no longer exported, the interfaces of one's own
-being experimental: import them, as with `using TensorMixedStates: run_steps`, or write them
-in full.
+| 1.6 | 2.0 |
+|:----|:----|
+| `@def_operators(site, [type => [name = matrix, …]])` | `@def_operators T [name = matrix, …]`, `T` the site type |
+| `Operator{N}(name, definition, type)` | `Operator{N}(name, definition)` |
+| `OpType`, `plain_op`, `fermionic_op`, `selfadjoint_op`, `involution_op` | removed: the parity of an operator comes from `fermion_parities` of its site |
+| `isfermionic`, `has_fermionic` | removed, as above |
+| `named(…; type)`, `controlled(op; type)` | without `type` |
+| `Left(A)`, `Right(A)` | the channel `Gate(A)`, ``\rho \to A \rho A^\dagger``, or the generator `Evolver(K)`, ``\rho \to K \rho + \rho K^\dagger`` |
+| `identity_operator` | `Id`, and `matrix(Id, site)` for its matrix |
+| `matrix("X", site)` | `matrix(X, site)` |
+| `Fup`, `Fdn` of `Electron` and `Tj` | `parity(Nup)`, `parity(Ndn)` |
+| `Zd`, `Xd`, `Hd`, `Sumd` of `Qudit` | `Z`, `X`, `H`, `Sum` of `Qudits` |
+| `Qubits.Swap` | `Swap`, exported by TensorMixedStates for two sites of any one type |
+| a local state given as a number `n`, as `Proj(1)` | `Level => n`, the basis state `n` counted from 0, as `Proj(Level => 1)` |
+| `conserve_string` | `conserving(T; conserve)`, in the keyword constructor of a site type |
+| `state(site, name)` | `TensorMixedStates.local_state(site, name)` |
+| `Index(site)`, `SysIndex`, `system.pure_indices` | `siteind(Pure, system, i)`, `siteinds(Pure, system)` |
+| `State(system, state)` | removed: systems with the same sites are equal |
+| `load_state(file, name; system)` | `load_state(file, name)` |
+| `simplify`, `compact` | removed: an operator is lowered on the system it acts on, and its MPO compacted when it is built |
 
 ## Defaults that changed
 
-Some results change without any edit of the program:
+Some results change without any edit beyond those above:
 
-- **The default truncation.** `Limits()` has the cutoff `1e-26` rather than 0. It discards the
-  singular values below about 1e-13 of the norm, which removes the noise of rounding that made
-  the bond dimension grow; the bond dimensions of a run with the default limits are smaller.
-  `Limits(cutoff = 0)` keeps everything. A serious simulation chooses its own limits in any case.
-- **`apply` of an MPO** takes `"naive"`, the exact product truncated, rather than
-  `"densitymatrix"`, whose error may stay near 1e-8: `apply_algo = "densitymatrix"` gives it back.
-- **`steady_state`** and `SteadyState` solve each local step with `Krylov(dim = 8,
-  maxiter = 3)` by default, which reaches steady states the former default stalled before:
-  the results of a steady state search change, for the better.
-- **`tdvp`** tests the convergence of each local exponentiation after every Krylov vector: it
-  is several times faster, the states agreeing with those of 1.x to about 1e-13.
-- **The MPOs** of the operators are compacted, with fewer channels for the same operator, and
-  the approximations WI and WII of `approx_W` change at the order of their error.
-- **The time functions** of a time dependent evolver take real values: a complex function is
-  written as two terms, its real and its imaginary parts.
-- **`Gate`** refuses an operator already placed on sites: `Gate(X)(1)` rather than
-  `Gate(X(1))`.
-- **`data_to_frame`** orders its columns by the names of the measurements.
-
-The changelog of the package lists every change, the additions of 2.0 included.
+- **The truncation.** A field of `Limits` left out takes the default of the function the limits
+  are given to, almost everywhere the cutoff `1e-26`, which discards the singular values below
+  1e-13 of the norm, what rounding leaves, where 1.x kept everything. The bond dimensions are
+  smaller, the results differing at the level of rounding. `Limits(maxdim = 50)` truncates at
+  `1e-26` as well, and `Limits(cutoff = 0)` keeps everything.
+- **`Tdvp`** enlarges the bonds of a state whose bond dimension is below both 5 and `maxdim`
+  before a step, which makes an evolution from a product state much more precise, and
+  `expand_period` adds such expansions periodically. It tests the convergence of each local
+  exponentiation after every Krylov vector, where 1.x waited for the Krylov space to be full.
+- **`ApproxW`** multiplies by its MPOs exactly before truncating, `apply_algo = "naive"`, where
+  1.x used `"densitymatrix"`, and its approximation WII, `w = 2`, is built after Zaletel et al.:
+  its results change at the order of the error of the method, with smaller bond dimensions.
+  With an evolver depending on time, the orders 3 and 4 use the commutator-free Magnus
+  integrator of order 4 of Blanes and Moan, where 1.x read the time functions at the middle of
+  each step.
+- **`steady_state`** and `SteadyState` solve each local problem with `Krylov(dim = 8,
+  maxiter = 3)`, which the spectrum of ``L^\dagger L``, crowded near zero, needs, where 1.x
+  took those of ITensorMPS, 3 and 1: they converge where the searches of 1.x could stall.
+  `Krylov(dim = 3, maxiter = 1)` with `Limits(cutoff = 0)` gives the results of 1.x again.
+- **The values measured.** Whether an operator is Hermitian is decided numerically: an operator
+  1.x could not prove Hermitian, as `Sp(1)Sm(2) + Sm(1)Sp(2)`, has a real value, and an
+  anti-Hermitian one its complex value, where 1.x gave its imaginary part as `Im(name)`. A pair
+  of operators is named `(X, Y)`, where 1.x named it `XY`.
+- **The files.** Every number is written with `SimData(format = "%.8g")`, the time included,
+  which 1.x wrote with four digits. The `.json` files are JSON Lines, an object per time.
+- **`runTMS`** no longer changes the working directory: a relative path in the code of a phase
+  is taken from the directory `runTMS` was called in, where 1.x ran in that of the simulation.
+- **`data_to_frame`** orders its columns as the measurements were first made.
+- **The random draws** of a run use its own generator, seeded by `SimData(seed)`, or by a seed
+  drawn and written in `stamp`, and kept by its checkpoints.
