@@ -19,6 +19,7 @@ makedocs(
     pages = [
         "index.md",
         "quickref.md",
+        "correspondence.md",
         "manual.md",
         "simulations.md",
         "conservation.md",
