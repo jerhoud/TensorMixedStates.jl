@@ -686,6 +686,13 @@ end
     @test charges(Electron(conserve = (strong(Ntot), 2Sz))) ==
         [("2Sz", 1, [0, 1, -1, 0], false), ("Ntot", 1, [0, 1, 1, 2], true)]
     @test TMS.decode_conserve("N!:0,1") == TMS.conserved(Fermion(conserve = strong(N)))
+    # a name ending in a character of several bytes, inside which the star or the ! was cut
+    nu = Fermion(conserve = strong(named(N, "N↑")))
+    @test TMS.decode_conserve("N↑!:0,1") == TMS.conserved(nu)
+    @test TMS.decode_conserve("N↑%2:0,1").quantities[1].name == "N↑"
+    ρu = mix(State{Pure}(System(2, nu), ["Occ", "Emp"]))
+    @test expect(ρu, N(1)) ≈ 1
+    @test trace(weaken(ρu)) ≈ 1
     @test repr(Fermion(conserve = strong(N))) == "Fermion(conserve = strong(N))"
     @test repr(Electron(conserve = (strong(Ntot), 2Sz))) == "Electron(conserve = (2Sz, strong(Ntot)))"
     # nothing changes on the pure side

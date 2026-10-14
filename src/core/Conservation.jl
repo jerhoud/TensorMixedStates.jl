@@ -425,7 +425,7 @@ the charge group, so every tensor on a relabelled index stays consistent with no
 function weak_qn(q::QN, collapse, drop)
     vals = Tuple{String, Int, Int}[]
     for (nm, v, m) in qn_components(q)
-        base = endswith(nm, "*") ? nm[1:end-1] : nm
+        base = endswith(nm, "*") ? nm[1:prevind(nm, end)] : nm
         if base in drop
             continue
         end
@@ -474,7 +474,7 @@ the charge, or the index, relabelled for the adjoint, `names` being the quantiti
 strongly: `(X, X*)` becomes `(-X*, -X)`, a weak quantity is negated
 """
 adjoint_qn(q::QN, names) =
-    QN([ (endswith(n, "*") ? n[1:end-1] : n in names ? n * "*" : n, -v, m)
+    QN([ (endswith(n, "*") ? n[1:prevind(n, end)] : n in names ? n * "*" : n, -v, m)
          for (n, v, m) in qn_components(q) ]...)
 
 adjoint_index(i::Index, names) = hasqns(i) ? map_charges(q -> adjoint_qn(q, names), i) : i

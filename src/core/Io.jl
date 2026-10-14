@@ -148,14 +148,14 @@ function decode_conserve(s::AbstractString)
         if isnothing(i)
             error("a site records \"$part\" as a conserved quantity, which has no charges")
         end
-        head, tail = part[1:i-1], part[i+1:end]
+        head, tail = part[1:prevind(part, i)], part[i+1:end]
         st = endswith(head, '!')
         if st
-            head = head[1:end-1]
+            head = head[1:prevind(head, end)]
         end
         j = findlast(==('%'), head)
         name, modulus = isnothing(j) ? (String(head), 1) :
-                        (String(head[1:j-1]), parse(Int, head[j+1:end]))
+                        (String(head[1:prevind(head, j)]), parse(Int, head[j+1:end]))
         Quantity(name, modulus, parse.(Int, split(tail, ',')), st)
     end
     return Conservation(Vector{Quantity}(qs))
