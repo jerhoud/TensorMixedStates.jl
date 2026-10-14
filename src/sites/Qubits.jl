@@ -1,5 +1,5 @@
-# The Qubit site type, its states and operators and the controlled gates, gathered in the
-# module Qubits.
+# The Qubit site type, its states and operators, its gates and its graph states, gathered in
+# the module Qubits.
 
 export Qubits
 
@@ -36,7 +36,6 @@ values ±1, so `conserve = Z` conserves the magnetization, as `2Sz` does; its pa
                        and `Sm` creates an excitation
 - `H, S, T`          : the Hadamard, S and T gates
 - `Phase(t)`         : the phase gate
-- `controlled(gate)` : the controlled gate
 """
 struct Qubit <: AbstractSite
     conserve::Conservation
@@ -66,31 +65,6 @@ dim(::Qubit) = 2
     S = [1. 0. ; 0. im],
     T = [1. 0. ; 0. (1 + im) / √2],
 ]
-
-"""
-    controlled_name(op)
-
-the default name of `controlled(op)`: `C` followed by the name of an `Operator`, as `CZ`, and
-`controlled(op)` for an expression
-"""
-controlled_name(a::Operator) = "C" * a.name
-controlled_name(a::Op) = "controlled($a)"
-
-"""
-    controlled(op; name)
-
-the gate applying `op` to the following sites when the first one, a qubit, is in the state
-`"1"`, and nothing otherwise. Its name is `"C"` followed by the name of a named operator,
-`CZ` for `controlled(Z)`, and `"controlled(op)"` otherwise.
-
-# Examples
-
-    CZ = controlled(Z)
-    Toffoli = controlled(controlled(X))
-    CZ(1, 2)
-"""
-controlled(op::GenericOp{IsOperator, N}; name::String = controlled_name(op)) where N =
-    Operator{N+1}(name, Proj(Level => 0) ⊗ IdentityOp(op) + Proj(Level => 1) ⊗ op)
 
 """
     Phase(t)
@@ -168,6 +142,6 @@ function thermal_relaxation_gate(T1::Real, T2::Real, t::Real)
     return exp(t * thermal_relaxation_dissipator(T1, T2))
 end
 
-@create_site_module(Qubits, [Qubit, controlled, graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm,
+@create_site_module(Qubits, [Qubit, graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm,
                              H, S, T, Phase, thermal_relaxation_dissipator,
                              thermal_relaxation_gate])

@@ -28,7 +28,6 @@ using .Qubits
 TensorMixedStates.Qubits
 Qubit
 Phase
-controlled
 graph_state
 thermal_relaxation_gate
 thermal_relaxation_dissipator

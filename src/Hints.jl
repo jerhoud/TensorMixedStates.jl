@@ -91,6 +91,8 @@ const renamed_names = Dict{Symbol, String}(
     :Fdn => "Fdn was removed: write parity(Ndn)",
     :Swap => "Swap is no longer in Qubits: TensorMixedStates exports it, for two sites of any " *
              "one type",
+    :controlled => "controlled is no longer in Qubits: TensorMixedStates exports it, for a " *
+                   "first site of any type",
     :Zd => "Zd became Z of Qudits",
     :Xd => "Xd became X of Qudits",
     :Hd => "Hd became H of Qudits",

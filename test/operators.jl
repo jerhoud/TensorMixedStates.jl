@@ -978,6 +978,11 @@ end
     # a fermionic operator controlled is its expression (decision 20: Proj("0"), not Proj(0))
     fe = Fermion()
     @test matrix(controlled(C), q, fe) ≈ matrix(Proj("0") ⊗ Id + Proj("1") ⊗ C, q, fe)
+    # a control of any type leaves the others as they are on its level 0 and applies the
+    # operator on any other: a gate on a qutrit as well
+    m = matrix(controlled(X), Qudit(3), q)
+    @test m * m' ≈ TMS.LinearAlgebra.I(6)
+    @test m ≈ cat(matrix(Id, q), matrix(X, q), matrix(X, q); dims = (1, 2))
 end
 
 @testset "Every operator of the libraries has its matrix" begin

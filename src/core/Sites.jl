@@ -2,7 +2,7 @@
 # states and operators declared for its type, which become ordinary methods.
 
 export AbstractSite, dim, fermion_parities, fermion_species, string_state
-export Level, F, Swap, @def_states, @def_operators, @create_site_module
+export Level, F, Swap, controlled, @def_states, @def_operators, @create_site_module
 
 """
     abstract type AbstractSite
@@ -102,6 +102,32 @@ the exchange of the states of two sites of one type, ``|a, b\\rangle \\mapsto (-
     Proj(Swap => -1)       # the antisymmetric part of two sites
 """
 const Swap = Operator{2}("Swap", swap_matrix)
+
+"""
+    controlled_name(op)
+
+the default name of `controlled(op)`: `C` followed by the name of an `Operator`, as `CZ`, and
+`controlled(op)` for an expression
+"""
+controlled_name(a::Operator) = "C" * a.name
+controlled_name(a::Op) = "controlled($a)"
+
+"""
+    controlled(op; name)
+
+the gate leaving the following sites as they are when the first one is in its first basis
+state, `Level => 0`, and applying `op` to them otherwise: on a qubit, `op` when the first is in
+`"Dn"`, `"1"`. Its name is `"C"` followed by the name of a named operator, `CZ` for
+`controlled(Z)`, and `"controlled(op)"` otherwise.
+
+# Examples
+
+    CZ = controlled(Z)
+    Toffoli = controlled(controlled(X))
+    CZ(1, 2)
+"""
+controlled(op::GenericOp{IsOperator, N}; name::String = controlled_name(op)) where N =
+    Operator{N+1}(name, Proj(Level => 0) ⊗ IdentityOp(op) + (Id - Proj(Level => 0)) ⊗ op)
 
 """
     operator_definition(site, ::Val{name})

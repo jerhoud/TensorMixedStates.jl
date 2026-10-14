@@ -100,6 +100,7 @@ Operator
 Proj
 Level
 Swap
+controlled
 Dissipator
 Gate
 Reset

@@ -259,7 +259,8 @@ Many operations are defined on generic operators:
 - `Level` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
   is the basis of the site, and `Level => n` the basis state `n`, counted from 0.
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`
-- `controlled` for qubits makes controlled gates: `CX = controlled(X)`
+- `controlled` makes controlled gates, which do nothing when their first site is in its first
+  basis state, `Level => 0`, as `"Up"` for a qubit: `CX = controlled(X)`
 
 For example one can define the Rxy 2-site operator by
 

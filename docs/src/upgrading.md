@@ -147,7 +147,7 @@ see [Extending TMS](extending.md). `run_steps`, `resume_step` and `Algo` are gon
 | `matrix("X", site)` | `matrix(X, site)` |
 | `Fup`, `Fdn` of `Electron` and `Tj` | `parity(Nup)`, `parity(Ndn)` |
 | `Zd`, `Xd`, `Hd`, `Sumd` of `Qudit` | `Z`, `X`, `H`, `Sum` of `Qudits` |
-| `Qubits.Swap` | `Swap`, exported by TensorMixedStates for two sites of any one type |
+| `Qubits.Swap`, `Qubits.controlled` | `Swap` and `controlled`, exported by TensorMixedStates for sites of any type |
 | a local state given as a number `n`, as `Proj(1)` | `Level => n`, the basis state `n` counted from 0, as `Proj(Level => 1)` |
 | `conserve_string` | `conserving(T; conserve)`, in the keyword constructor of a site type |
 | `state(site, name)` | `TensorMixedStates.local_state(site, name)` |
