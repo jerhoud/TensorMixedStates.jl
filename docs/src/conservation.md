@@ -127,9 +127,10 @@ Ten steps of `Tdvp` on the fermion chain with dephasing of the example
 
 |  | no charge | `conserve = N` | `conserve = strong(N)` |
 |---|---|---|---|
-| 8 sites, `maxdim = 32` | 21.7 s | 23.0 s | 40.5 s |
-| 12 sites, `maxdim = 64` | 208.9 s | 80.8 s | 121.8 s |
+| 8 sites, `maxdim = 32` | 5.9 s | 5.5 s | 8.0 s |
+| 12 sites, `maxdim = 64` | 55.0 s | 24.4 s | 21.4 s |
 
-At 8 sites the charges bring nothing; at 12 the weak form is 2.6 times faster than no charge
-at all. The strong form is the slower of the two here: what it offers is physical rather than
-speed, a state confined to one sector and a jump moving the charge refused.
+At 8 sites the charges bring nothing, and the strong form is slower; at 12 the weak form is 2.3
+times faster than no charge at all, and the strong form 2.6 times. The gain grows with the size
+of the tensors, and what the strong form offers besides is physical, a state confined to one
+sector and a jump moving the charge refused.
