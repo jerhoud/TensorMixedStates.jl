@@ -20,19 +20,19 @@ it starts: they cannot be added from within a program.
 OpenBLAS for the products of dense matrices, is often faster, see [BLAS backend](@ref). This
 choice is independent of the two others.
 
-**The mode.** The `threading` field of `SimData`, or `set_threading`, chooses how the
-contractions use the threads of Julia:
+**The mode.** The `threading` keyword of `runTMS`, or the environment variable
+`TMS_THREADING`, or `set_threading`, chooses how the contractions use the threads of Julia:
 
 - `:dense`: BLAS runs each product of matrices on several threads, and Strided, which ITensors
   uses for the permutations of dense tensors, runs on a single one, as ITensors recommends.
   Julia starts Strided on as many threads as it has itself, where they compete with those of
-  BLAS. `SimData` applies this mode by default; a program calling the functions of TMS directly
+  BLAS. `runTMS` applies this mode by default; a program calling the functions of TMS directly
   should start with `set_threading(:dense)`;
 - `:blocks` asks ITensors to run the products of the blocks of block sparse tensors in parallel
   on the threads of Julia, BLAS running each of them on a single thread. The tensors of a
   system are block sparse when it conserves something, see [Conserving a quantity](@ref), so
   this mode is meant for such systems: it is worth trying on them, with OpenBLAS above all;
-- `:auto`, for `SimData` only, chooses before each phase: `:blocks` when the system of the
+- `:auto`, for `runTMS` only, chooses before each phase: `:blocks` when the system of the
   state conserves something and Julia has several threads, `:dense` otherwise and until there
   is a state.
   `set_threading(mysystem)` makes the same choice once.
@@ -45,7 +45,7 @@ set_threading(:dense)          # first thing in a program calling the functions 
 old = set_threading(:blocks)   # set_threading returns the threading it replaces,
 set_threading(old)             # which it takes back
 
-SimData(name = "my_simulation", threading = :blocks, phases = [...])
+runTMS(sim_data; threading = :blocks)
 ```
 
 The threading `set_threading` returns is a `ThreadingState`, which gives the threads of BLAS and

@@ -21,6 +21,9 @@ The following phases are available:
   imaginary time
 - `SaveState`: write the state to disk in an HDF5 file
 - `LoadState`: read back a state written by `SaveState`
+- `CopyState`: keep a copy of the state under a name, or put a named one back, for the
+  measurements and the phases after it, a search of excited states for instance
+- `Update`: change the simulation by a function of your own, in a few steps
 
 With these phases we define a `SimData` object that describes the simulation and finally, we call
 
@@ -30,15 +33,14 @@ runTMS(simdata)
 
 which executes the simulation.
 
-Phases that sweep take their measurements at every step by default. The
-`measurements_period` field of `Evolve`, `GroundState`, `SteadyState` and `Thermalize` raises that
-interval:
+Phases made of steps, the steps of an evolution or the sweeps of a search, take their
+measurements after every step by default. The `measurements_period` field of `Evolve`,
+`GroundState`, `SteadyState`, `Thermalize` and `Update` raises that interval:
 `measurements_period = 10` measures one step out of ten, which is what long runs usually want.
 
 The `phases` field is a list, but that list may contain lists, to any depth, and is
 flattened before the simulation starts. This is meant for programs that build their phases
-in pieces, a helper returning the several phases it needs rather than a single one, as
-`create_graph_state` does.
+in pieces, a helper returning the several phases it needs rather than a single one.
 
 ## Examples
 
@@ -68,15 +70,15 @@ runTMS(SimData(
 ))
 ```
 
-The magnetization on the six sites and the purity after the first time step and at the end
-of the run, `Evolve` measuring after each step:
+The file `data` is a table, a line naming its columns and then a line per time step, `Evolve`
+measuring after each step: the magnetization on the six sites and the purity, here after the
+first step and at the end of the run,
 
 ```
-Z        0.1    0.94098941    0.94117682   0.94117682   0.94117682   0.94117682    0.94098941
-Purity   0.1    0.78980701
+time  Z(1)          Z(2)         Z(3)         Z(4)         Z(5)         Z(6)          Purity
+0.1   0.94098941    0.94117682   0.94117682   0.94117682   0.94117682   0.94098941    0.78980701
 ...
-Z        2     -0.095182096  -0.19011196  -0.14498043  -0.14498043  -0.19011196   -0.095182096
-Purity   2      0.1086794
+2    -0.095182095  -0.19011196  -0.14498043  -0.14498042  -0.19011196  -0.095182096   0.1086794
 ```
 
 The qubits start pure and pointing up; by the end the magnetization has reversed and the
@@ -120,41 +122,49 @@ runTMS(sim_data(40, 1., 0.05))
 `runTMS` creates a directory named after the `name` field of the `SimData` object and writes
 the files of the simulation there: a relative file name, of a destination or of `SaveState`
 and `LoadState`, is taken there. The working directory of the process does not change, so a
-file opened by a phase of your own with a relative name is taken from it: write it with
-`get_sim_file`, which also cuts it back on a resume. The directory holds in particular:
+file opened by a phase of your own with a relative name is taken from it. The directory holds
+in particular:
 
 - `log`: the progression of the computation;
 - `prog.jl`: a copy of the script;
 - `prog_args.json`: the command line arguments it was given, if any;
 - `description`: the content of the `description` field of the `SimData` object;
-- `stamp`: the versions, the date, the BLAS library and the thread settings of the run;
+- `stamp`: the versions, the date, the seed of the random draws, the BLAS library and the
+  thread settings of the run;
 - `running`: present during the computation, naming the machine and the process running it.
   `runTMS` refuses to start in a directory where another run may be going on. A file left by
   a process of the same machine that no longer exists, killed for instance, is replaced with
   a warning in the log; any other is removed by hand;
-- `error`: an empty file created in case of error.
+- `error`: the error that ended the run, if one did.
 
-`runTMS` takes three keyword arguments:
+When `runTMS` returns, a line on the console says whether the simulation is done or stopped,
+where its results are and how many warnings its log holds, which a program, or an AI running it,
+reads without opening the log.
 
-- `restart` (default `false`): erase the directory before starting;
-- `clean` (default `false`): erase the directory and do not run the simulation;
+A file `restart` put in the directory makes the next run start over, erasing the directory
+first, and `cleanTMS(sim_data)` erases it at once. `runTMS` takes four keyword arguments:
+
+- `max_time` and `checkpoint_interval`, see [Long runs, checkpoints and stopping](@ref);
+- `threading`, see [Threads and performance](@ref);
 - `output` (default `nothing`): if set, create neither the directory nor the files `runTMS`
   writes in it, and redirect all output to the given stream, `stdout` or `devnull` for
   instance. A `SaveState` still writes its file, in the current directory.
+
+The random draws of the phases use the generator of the run, seeded by `SimData(seed = …)`, or
+by a seed drawn when there is none and written in `stamp`.
 
 ## Long runs, checkpoints and stopping
 
 A simulation meant to run for hours or days can save its progress, so that a crash, a
 batch system killing the job, or a deliberate stop does not throw the computation away.
-Two fields of `SimData` control it.
+Two keyword arguments of `runTMS` control it, or the environment variables
+`TMS_CHECKPOINT_INTERVAL` and `TMS_MAX_TIME`, which a batch script sets without editing the
+program.
 
 ```julia
-SimData(
-    name = "my_simulation",
-    checkpoint_interval = 600,       # seconds between two checkpoints
-    max_time = 3.5 * 3600,           # stop cleanly after this long
-    phases = [...],
-)
+runTMS(sim_data;
+       checkpoint_interval = 600,    # seconds between two checkpoints
+       max_time = 3.5 * 3600)        # stop cleanly after this long
 ```
 
 `checkpoint_interval` is the time between two saves; `0`, the default, means no periodic save.
@@ -164,11 +174,13 @@ the simulation writes a checkpoint and returns instead of carrying on. Set it co
 of your batch job, since a checkpoint is only taken between two sweeps, two steps or two
 phases: a sweep that lasts ten minutes delays the stop by up to ten minutes.
 
-A checkpoint is written in the simulation directory, the state to `checkpoint-1.h5` or
-`checkpoint-2.h5` and the rest to `checkpoint.json`, which names the state file. The state
-goes to the file the previous checkpoint does not use, and `checkpoint.json` is moved into
-place last, so an interruption at any point of the save leaves the previous checkpoint
-intact.
+A checkpoint is written in the simulation directory, the state and the rest of the
+simulation, its time, its values and where its files were, to `checkpoint-1.h5` or
+`checkpoint-2.h5`, and `checkpoint.json` names that file. It goes to the file the previous
+checkpoint does not use, and `checkpoint.json` is moved into place last, so an interruption at
+any point of the save leaves the previous checkpoint intact. A checkpoint is refused when it
+was written in the layout of another version of TensorMixedStates, or by another minor version of
+Julia.
 
 Without a directory, when `runTMS` is given `output`, nothing is saved: an interrupt goes on
 to the caller, and `max_time` stops the simulation with a message saying that it cannot be
@@ -177,7 +189,7 @@ resumed.
 ### Resuming
 
 `runTMS` resumes on its own: run the same program again and it picks up where it left off,
-skipping the phases that were finished and restarting the interrupted one at the sweep it
+skipping the phases that were finished and restarting the interrupted one at the step it
 had reached. There is nothing to pass and nothing to change in the program. A checkpoint is
 also written after the last phase, when periodic checkpoints are on or when one is already on
 the disk, left by a stop, so that running the program once more after the simulation
@@ -186,28 +198,27 @@ completed does nothing. A simulation that never wrote one runs again from the st
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption
 are not duplicated. The result is the same file as an uninterrupted run would have
-produced. A json file and a `Data` object are put back as they were at the checkpoint, the
-values measured after it dropped. The log is the exception: it keeps the history of every run, so what an
+produced. A `Data` object is put back as it was at the checkpoint, the values measured after
+it dropped. The log is the exception: it keeps the history of every run, so what an
 interrupted run wrote after its last checkpoint stays, with the line saying why it stopped,
 followed by the line marking the resume and by the steps done again from the checkpoint.
 
-Use `restart = true` to ignore an existing checkpoint and start over, as it erases the
-directory.
+A file `restart` in the directory makes the run ignore an existing checkpoint and start over,
+erasing the directory.
 
-The random number generator is not part of a checkpoint, so after a resume the random draws,
-of a `CreateState` with `randomize` or of a measurement calling `sample`, differ from those of
-the uninterrupted run: the results are as valid, but they are not the same numbers. A
-`CreateState` that the resume runs again applies its `seed` again and draws the same state,
-while one finished before the resume point does not, and samples measured during an evolution
-are not reproduced.
+The generator of the random draws of the run is part of a checkpoint, so that a resumed run
+draws the same numbers as the uninterrupted one, in a `CreateState` with `randomize`, or in a
+measurement or a phase drawing with `c.rng` or `sim.rng`. A draw made with another generator,
+the global one of Julia for instance, is not reproduced.
 
 A checkpoint is resumed only by the program that wrote it: the program run must be the same,
 byte for byte, as the copy `prog.jl` in the directory, and be given the same command line
 arguments, which `prog_args.json` holds when there are some. Editing the program and running it again under the
 same name thus reports an error instead of quietly continuing something else. To resume with
 the edited program all the same, more time or other threads for instance, copy it onto
-`prog.jl`, and its arguments into `prog_args.json`; to start over, pass `restart = true` or
-give the simulation another name. Only these two files are compared: a change in a file the
+`prog.jl`, and its arguments into `prog_args.json`, or set the environment variable
+`TMS_ACCEPT_PROGRAM=1`; to start over, put a file `restart` in the directory or give the
+simulation another name. Only these two files are compared: a change in a file the
 program includes, or in a parameter it reads elsewhere, from an environment variable or a data
 file, goes unseen. A simulation run from the REPL, with no program file, is always resumed.
 
@@ -247,34 +258,36 @@ it by default.
 
 ### What can be resumed inside a phase
 
-`Evolve`, `GroundState`, `SteadyState` and `Thermalize` are resumed at the sweep they reached, and a phase
-of your own written with `run_steps` at the step it reached, see [Phases of one's own](@ref own-phases).
+`Evolve`, `GroundState`, `SteadyState`, `Thermalize` and `Update` are resumed at the step or
+the sweep they reached, and a phase of your own made of steps at the step it reached, see
+[Phases of one's own](@ref own-phases).
 The other phases are short enough to be replayed, and a checkpoint is taken between phases
 whenever one is due.
 
-The exception is `Gates`, which hands its whole list of gates to the tensor network library
-in one go and therefore cannot be cut in the middle. A deep circuit is better written as
+The exception is `Gates`, which applies its whole product of gates in one go and therefore
+cannot be cut in the middle. A deep circuit is better written as
 several `Gates` phases, which gives resume points at no cost.
 
 ## Measurements
 
 Measurements are specified in the `measurements` field of `Evolve`, `GroundState`,
-`SteadyState` and `Thermalize`, taken as the phase sweeps, and in the `final_measurements` field of every phase and
-of `SimData`, taken at its end. They take the form of a pair or list of pairs.
+`SteadyState`, `Thermalize` and `Update`, taken after its steps, and in the
+`final_measurements` field of every phase and of `SimData`, taken at its end. They take the form of a pair or list of pairs.
 
 ```julia
 measurements = destination => measurements
 measurements = [ dest1 => meas1, dest2 => meas2, ...]
 ```
 
-The possible measurements are described on the [Measurements](measurements.md) page. A
-destination is a file, a json file or a `Data` object, which keeps the values in the program;
+The possible measurements are described on the [Measurements](measurements.md) page, the
+values the phases provide, `:step` or `:energy`, included. A destination is a file, a JSON Lines
+file or a `Data` object, which keeps the values in the program;
 the destinations and the format of what they hold are described in
 [Output](@ref measure-output).
 
 For more information, see the reference or inline help for each phase, `SimData` and `runTMS`.
 
-## Phases, algorithms and representations of one's own
+## Phases, methods, destinations and states of one's own
 
-Phases, time evolution algorithms and representations of a state of your own are described
+Phases, methods of evolution and of search, destinations and states of your own are described
 in [Extending TMS](@ref).
