@@ -578,7 +578,8 @@ function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = roundin
         if isnothing(found)
             found = d
         elseif d ≠ found
-            throw(FluxError("$what on site $(typeof(site)) connects charges differing by " *
+            throw(FluxError("$(obs_name(what)) on site $(typeof(site)) connects charges " *
+                            "differing by " *
                             "$(show_charges(found)) and by $(show_charges(d)), so it has no " *
                             "definite flux"))
         end

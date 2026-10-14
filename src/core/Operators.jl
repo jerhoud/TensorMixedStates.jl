@@ -1086,7 +1086,8 @@ show(io::IO, a::ModOp) =
 """
     obs_name(op)
 
-the default name of a measurement or of a conserved quantity: the compact printed form of the
-operator
+the compact printed form of the operator, a long sum or product cut down to its first and its
+last terms: the default name of a measurement or of a conserved quantity, and how an error
+message names an operator
 """
 obs_name(op) = sprint(print, op; context = :compact => true)
