@@ -250,7 +250,7 @@ end
 function matrix(a::Proj, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
     if a.state isa Pair
-        return eigenprojector(a.state.first, a.state.second, sites...)
+        return eigenprojector(a.state.first, a.state.second, "Proj", sites...)
     end
     v = local_state(only(sites), a.state)
     if !(v isa Vector)
@@ -389,14 +389,15 @@ function matrix(a::Evolver{Generic}, site::AbstractSite, others::AbstractSite...
 end
 
 """
-    eigenprojector(a, λ, sites...)
+    eigenprojector(a, λ, what, sites...)
 
-the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `sites`
+the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `a` on `sites`,
+`what` naming the caller in the refusal of an operator that is not Hermitian
 """
-function eigenprojector(a::GenericOp{IsOperator}, λ::Real, sites::AbstractSite...)
+function eigenprojector(a::GenericOp{IsOperator}, λ::Real, what::String, sites::AbstractSite...)
     check_dense(a, sites)
     on = " on " * join(sites, " ⊗ ")
-    values, ps = eigenspaces(matrix(a, sites...), "Proj", a, on)
+    values, ps = eigenspaces(matrix(a, sites...), what, a, on)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
     if isnothing(k)
         error("$λ is not an eigenvalue of $a$on, whose eigenvalues are $(join(values, ", "))")
@@ -432,7 +433,7 @@ end
 # state takes; any other eigenstate is the uniform mixture of its eigenspace
 function local_state(site::AbstractSite, p::Pair{<:SimpleOp, <:Real})
     m = matrix(first(p), site)
-    pr = eigenprojector(first(p), last(p), site)
+    pr = eigenprojector(first(p), last(p), "A local state A => λ", site)
     k = findfirst(x -> abs(x - 1) ≤ rounding_tol, real(diag(pr)))
     if isdiag(m) && !isnothing(k) && nearly(pr, pr[:, k:k] * pr[k:k, :])
         v = fill(0., dim(site))

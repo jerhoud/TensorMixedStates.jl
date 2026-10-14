@@ -117,6 +117,7 @@ end
     @test_throws "no definite flux" flux(Proj(X => 1), Qubit(conserve = N))
     @test_throws "0.5 is not an eigenvalue of Sx" matrix(Proj(Sx => 0.5), s)
     @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp => 1), Qubit())
+    @test_throws "A local state A => λ needs a Hermitian operator" TMS.local_state(Qubit(), (X * Z) => 1)
     # decision 2: an operator of no definite fermionic parity has its projectors, their strings
     # being laid by the lowering
     @test matrix(Proj(C + dag(C) => 1), Fermion()) ≈ [1. 1. ; 1. 1.] / 2
