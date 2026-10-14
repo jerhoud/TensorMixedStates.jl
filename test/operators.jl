@@ -881,6 +881,9 @@ end
     idem = Operator{1}("Idem", [1. 1. ; 0. 0.])
     @test matrix(idem^0.1, q) ≈ [1. 1. ; 0. 0.]
     @test matrix(idem^(1 + 1im), q) ≈ [1. 1. ; 0. 0.]
+    # the zero operator, a multiple of the identity, gave NaN for a power of real part ≤ 0
+    @test_throws "0Id is not invertible" (0 * X)^-1
+    @test_throws "0Id is not invertible" (0 * X)^(0.5im)
 
     # powers of the same operator merge, and what they give leaves no coefficient inside the
     # product nor an F out of its place, which the matrices of the products placed show, after

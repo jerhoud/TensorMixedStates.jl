@@ -633,6 +633,9 @@ struct GenPowOp{K, N} <: GenericOp{K, N}
         a = scalararg(arg)
         m = abs(c)
         if a isa IdentityOp
+            if iszero(c) && real(p) ≤ 0
+                error("$(new{K, N}(arg, p)) does not exist: $arg is not invertible")
+            end
             return scale(complex(c)^p, a)
         elseif !iszero(m) && !isone(m)
             # the modulus commutes with everything and leaves the logarithm exactly, the
