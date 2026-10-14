@@ -316,9 +316,10 @@ function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
         q = k * inv(kr)[1:n-r, :]
     end
     b = m + q
-    # Julia 1.10 refuses a non integer power of a real diagonal matrix with a negative entry,
-    # and `Matrix` unwraps the Symmetric or Hermitian it may return
-    if eltype(b) <: Real && isdiag(b) && any(<(0), diag(b))
+    # Julia skips the complex Schur form of a real upper triangular matrix and fails on the
+    # complex powers of its negative eigenvalues (LinearAlgebra.jl#1767); `Matrix` unwraps the
+    # Symmetric or Hermitian it may return
+    if eltype(b) <: Real && istriu(b) && any(<(0), diag(b))
         b = complex(b)
     end
     return Matrix(b ^ p) * (I - q)

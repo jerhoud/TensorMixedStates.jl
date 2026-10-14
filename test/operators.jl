@@ -860,6 +860,11 @@ end
     # nor one that is not diagonal, whose eigenvalue 0 was looked for even at full rank
     h = X ⊗ X + Z ⊗ Id
     @test matrix(exp(-7 * h)^0.5, q, q) ≈ matrix(exp(-3.5 * h), q, q)
+    # a real upper triangular operator with a negative eigenvalue, on which the power of Julia
+    # fails
+    e = TMS.LinearAlgebra.eigen(matrix(Sp + Sz, q))
+    principal = e.vectors * TMS.LinearAlgebra.Diagonal(complex.(e.values) .^ 0.3) / e.vectors
+    @test matrix((Sp + Sz)^0.3, q) ≈ principal
     # the zero operator, a multiple of the identity, gave NaN for a power of real part ≤ 0
     @test_throws "0Id is not invertible" (0 * X)^-1
     @test_throws "0Id is not invertible" (0 * X)^(0.5im)
