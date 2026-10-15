@@ -831,7 +831,8 @@ function measure(state::AbstractState, m::Measure; time::Union{Nothing, Number} 
     end
     items = prepared(m, state)
     for it in items
-        if it isa Symbol && !haskey(given, it)
+        # the time is given apart from the values, and read as they are
+        if it isa Symbol && !haskey(given, it) && (it ≠ :time || isnothing(time))
             error("measure was given no value of $it: measure(state, measurements; $it = …)")
         end
     end

@@ -1790,6 +1790,9 @@ end
     @test last(r[4]) == [:energy, :state, :time]
     # a complex time, as 1.x took
     @test last(only(measure(st, "t" => c -> c.time; time = 0.5im))) == 0.5im
+    # the symbol :time reads it as a symbol reads a value, where it was refused as not given
+    @test measure(st, [:time]; time = 0.5) == ["time" => 0.5]
+    @test_throws "measure was given no value of time" measure(st, [:time])
     # what it reads and was not given is refused when it is read: the time, which has no default
     # (layer 3, question 3), and a value
     @test_throws "this measurement reads the time, which measure was not given" measure(
