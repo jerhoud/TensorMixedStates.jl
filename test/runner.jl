@@ -755,8 +755,9 @@ end
         E = LA.eigvals(LA.Hermitian(Matrix(TMS.system_matrix(Pure, sys, TMS.lower(sys, H)))))
         @test ref.energy ≈ E[2] atol = 1e-9
         @test abs2(inner(ref.ground, ref.state)) < 1e-12
-        # the weight by default, 3 bonds of 3 terms of width 2 and 4 fields of width 0.6
-        @test occursin("Searching an excited state, of weight 20.4", read("ref/log", String))
+        # the weight by default, 1.1 times the bound: 3 bonds of 3 terms of width 2 and 4 fields of
+        # width 0.6
+        @test occursin("Searching an excited state, of weight 22.44", read("ref/log", String))
         run_through(sd("chk"); max_time = -1)
         @test read("chk/excited", String) == read("ref/excited", String)
         @test read("chk/end", String) == read("ref/end", String)

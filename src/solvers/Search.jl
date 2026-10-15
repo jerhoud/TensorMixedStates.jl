@@ -144,8 +144,9 @@ prepared_operator(::State, x) = error("$(repr(x)) is not an operator or its PreM
 the keywords of `search` for a state orthogonal to the pure states `orthogonal_to`, on the system
 of `state`, none when there are none: the states of another sector of charge than `state` are
 left out, orthogonal to it already, the others normalized, so that `weight` multiplies their
-projectors, and the weight is by default the bound of the width of the spectrum of the
-Hamiltonian of `pre`, see `term_width`, above any gap between its eigenvalues
+projectors, and the weight is by default 1.1 times the bound of the width of the spectrum of the
+Hamiltonian of `pre`, see `term_width`, above any gap between its eigenvalues even when the
+bound is exact, as on a spectrum of two levels
 """
 function orthogonal_args(state::State{Pure}, pre::PreMPO{Pure}, orthogonal_to::AbstractVector,
                          weight::Union{Nothing, Real})
@@ -160,23 +161,25 @@ function orthogonal_args(state::State{Pure}, pre::PreMPO{Pure}, orthogonal_to::A
             push!(ms, normalize(m))
         end
     end
-    return isempty(ms) ? (;) : (; orthogonal_to = ms, weight = something(weight, pre.width[]))
+    return isempty(ms) ? (;) : (; orthogonal_to = ms, weight = something(weight, 1.1 * pre.width[]))
 end
 
 """
-    check_orthogonal(state, args)
+    check_orthogonal(state, args, weight)
 
 warn when `state`, found by a search orthogonal to other states, see `orthogonal_args`, keeps
-an overlap with one of them beyond the precision of the numbers: a weight below the gap, or a
-search that has not converged
+an overlap with one of them beyond the precision of the numbers: a weight not above the gap, or
+a search that has not converged; `weight` is the one given, `nothing` for the default
 """
-function check_orthogonal(state::State{Pure}, args::NamedTuple)
+function check_orthogonal(state::State{Pure}, args::NamedTuple, weight::Union{Nothing, Real})
     for m in get(args, :orthogonal_to, State{Pure}[])
         p = abs2(inner(m, state))
         if p > sqrt(eps())
+            given = isnothing(weight) ? " (the default)" : ""
             @warn "the state found keeps an overlap of $(round(p; sigdigits = 2)) with a state " *
-                  "of orthogonal_to: the weight $(args.weight) is below the gap, or the search " *
-                  "has not converged"
+                  "of orthogonal_to: the weight $(args.weight)$given does not exceed the gap, or " *
+                  "the search has not converged: give a larger weight, as weight = " *
+                  "$(2 * args.weight), or more sweeps"
         end
     end
 end
@@ -194,8 +197,8 @@ refused: search the pure state and mix it; the steady state of a Lindbladian is 
 Given `orthogonal_to`, eigenstates of the Hamiltonian found before, the search gives the
 lowest eigenstate orthogonal to them, an excited state, `weight` times their projectors being
 added to the Hamiltonian; it must exceed the gap between the state searched and each of them,
-and is by default a bound of the width of the spectrum, sure but slow to converge, a weight just
-above the gap converging faster. Its precision is that of the states given, and the penalty is
+and is by default 1.1 times a bound of the width of the spectrum, sure but slow to converge, a
+weight just above the gap converging faster. Its precision is that of the states given, and the penalty is
 exact only for eigenstates. A warning says when the state found keeps an overlap with one of
 them. The energy is that of the Hamiltonian alone.
 
@@ -212,7 +215,7 @@ function ground_state(hamiltonian, state::State{Pure}; algo::Union{Nothing, Sear
     pre = prepared_operator(state, hamiltonian)
     args = orthogonal_args(state, pre, orthogonal_to, weight)
     e, st = search(algo, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing), state, limits; args...)
-    check_orthogonal(st, args)
+    check_orthogonal(st, args, weight)
     return (e, st)
 end
 

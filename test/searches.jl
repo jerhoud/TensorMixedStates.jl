@@ -352,8 +352,7 @@ end
     e, g = ground_state(h, ψ; algo = Dmrg(nsweeps = 2))
     @test e ≈ -sqrt(1.25)
     @test real(expect(g, h)) ≈ e
-    @test first(ground_state(h, ψ; algo = Dmrg(nsweeps = 2), orthogonal_to = [g], weight = 3)) ≈
-          sqrt(1.25)
+    @test first(ground_state(h, ψ; algo = Dmrg(nsweeps = 2), orthogonal_to = [g])) ≈ sqrt(1.25)
     # in the sector of the state: on a qubit conserving N, Up is alone in its own
     @test first(ground_state(Z(1), State{Pure}(System(1, Qubit(conserve = N)), "Up");
                              algo = Dmrg(nsweeps = 2))) ≈ 1
@@ -460,15 +459,22 @@ end
     # state and warns
     e2, _ = ground_state(H, r; algo, limits = lim, orthogonal_to = [g, x], weight = 2(E[3] - E[1]))
     @test e2 ≈ E[3] atol = 1e-9
-    @test_logs (:warn, r"keeps an overlap of .* the weight .* is below the gap") match_mode = :any ground_state(
+    @test_logs (:warn, r"the weight .* does not exceed the gap, .*: give a larger weight") match_mode = :any ground_state(
         H, r; algo, limits = lim, orthogonal_to = [g], weight = 0.1 * (E[2] - E[1]))
+    # the default, 1.1 times the bound, above the gap when the bound is exact, where the bound
+    # itself tied the ground state penalized with the excited one: a hopping in the sector of
+    # one particle, of levels -1 and 1, gave 0 by the mixture of the two
+    two = State{Pure}(System(2, Fermion(conserve = N)), ["Occ", "Emp"])
+    hop = dag(C)(1) * C(2) + dag(C)(2) * C(1)
+    _, g2 = ground_state(hop, two; algo = Dmrg(nsweeps = 4))
+    @test first(ground_state(hop, two; algo = Dmrg(nsweeps = 4), orthogonal_to = [g2])) ≈ 1
     # a state of another sector of charge is orthogonal already, and left out
     qs = System(n, Qubit(conserve = N))
     a = State{Pure}(qs, [ isodd(i) ? "Up" : "Dn" for i in 1:n ])
     b = State{Pure}(qs, "Up")
     pre = PreMPO(a, heis)
     @test isempty(TMS.orthogonal_args(a, pre, [b], nothing))
-    @test TMS.orthogonal_args(a, pre, [a], nothing).weight == pre.width[]
+    @test TMS.orthogonal_args(a, pre, [a], nothing).weight ≈ 1.1 * pre.width[]
     @test TMS.orthogonal_args(a, pre, [a], 0.5).weight == 0.5
     @test_throws "on another system" ground_state(heis, a; algo, orthogonal_to = [up])
     @test_throws "orthogonal to pure states, not to a" ground_state(heis, a; algo, orthogonal_to = [mix(a)])

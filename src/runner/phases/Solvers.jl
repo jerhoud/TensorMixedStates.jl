@@ -287,7 +287,7 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
                      "Searching an excited state, of weight $(args.weight)")
     sim = run_search(phase, sim, done, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing),
                      identity; args...)
-    check_orthogonal(state_named(sim, phase.on), args)
+    check_orthogonal(state_named(sim, phase.on), args, phase.weight)
     return sim
 end
 

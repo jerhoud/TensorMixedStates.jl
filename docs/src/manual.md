@@ -370,9 +370,9 @@ energy1 - energy
 ```
 
 A penalty, `weight` times the projectors on the states given, is added to the hamiltonian for
-that. It must exceed the gap between the state searched and each of them, and its default, a
-bound of the width of the spectrum, always does but slows the convergence, which a weight just
-above the gap speeds up, see `ground_state`.
+that. It must exceed the gap between the state searched and each of them, and its default, 1.1
+times a bound of the width of the spectrum, always does but slows the convergence, which a
+weight just above the gap speeds up, see `ground_state`.
 
 ### Time evolution
 
