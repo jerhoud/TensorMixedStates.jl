@@ -1615,6 +1615,14 @@ end
         @test first.(ps) ≈ [-√2, √2]
         @test last.(ps) ≈ last.(dense_probabilities(st, γγ))
     end
+    # an impossible total has a probability of zero, which the sum of Fourier left at ±1e-14,
+    # and collapse refuses it, where it projected on nothing
+    f = random_state(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp"]), 4)
+    total = N(1) + N(2) + N(3) + N(4)
+    for st in (f, mix(f))
+        @test all(((t, p),) -> t == 2 ? p ≈ 1 : p == 0, probabilities(st, total))
+        @test_throws "of probability 0.0" collapse(st, total => 3)
+    end
 end
 
 @testset "What expect refuses" begin

@@ -204,6 +204,9 @@ the descent lays; `what` names the caller in the refusals
 """
 function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
     nonzero_trace(state, what)
+    # a probability below rounding, of either sign, as a sum of Fourier leaves for an impossible
+    # result, is zero
+    zeroed(probs) = [ abs(p) ≤ rounding_tol ? zero(p) : p for p in probs ]
     system = state.system
     check_indices(system, op)
     inv = involution(system, op)
@@ -211,13 +214,13 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
         c, P = inv
         m = real(expect(state, P))
         signs = c > 0 ? [-1, 1] : [1, -1]
-        return (c .* signs, (1 .+ signs .* m) ./ 2,
+        return (c .* signs, zeroed((1 .+ signs .* m) ./ 2),
                 (k, limits) -> project_parity(state, P, signs[k]; limits))
     end
     cnt = counting(system, op, what)
     if !isnothing(cnt)
         ts = counting_probabilities(state, cnt...)
-        return (first.(ts) ./ 2, last.(ts),
+        return (first.(ts) ./ 2, zeroed(last.(ts)),
                 (k, limits) -> project_count(state, cnt..., first(ts[k]); limits))
     end
     sites, values, ps = measured_spectrum(system, op, what)
@@ -231,7 +234,7 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
         end
         return normalize(apply(projectors[k], state; limits))
     end
-    return (values, probs, project)
+    return (values, zeroed(probs), project)
 end
 
 """
@@ -240,7 +243,7 @@ end
 
 the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
 their probabilities, as pairs `result => probability` in increasing order, those of zero
-probability included: the levels of the site, counted from 0, or the eigenvalues of `op`, to
+probability included, a probability below rounding being zero: the levels of the site, counted from 0, or the eigenvalues of `op`, to
 rounding. The matrix of `op` on its sites is diagonalized, its size being the product of their
 dimensions, except for two kinds of operators measured on any number of sites: a product of
 involutions, as a string of Pauli operators, by its mean value, and a sum of operators of one
