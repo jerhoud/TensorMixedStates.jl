@@ -54,11 +54,19 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
         error("the last tensor has a right dimension of $(size(tensors[n], 3)) where 1 is expected")
     end
     s = siteinds(Pure, system)
+    tensors = collect(tensors)
     links = if is_charged(system)
         # none on a site conserving nothing, whose index has a single sector of charge zero
         charge(k, j) = isempty(conserved(system[k]).quantities) ? QN() : basis_charges(system[k])[j]
-        partial = QN[ QN() ]
+        partial = Union{Nothing, QN}[ QN() ]
         map(1:n) do k
+            # the elements leaving a link state no element reaches multiply a zero amplitude:
+            # they are dropped, so that the charge any of them would carry is not checked
+            unreached = findall(isnothing, partial)
+            if !isempty(unreached)
+                tensors[k] = copy(tensors[k])
+                tensors[k][unreached, :, :] .= 0
+            end
             A = tensors[k]
             next = Vector{Union{Nothing, QN}}(nothing, size(A, 3))
             for l in axes(A, 1), j in axes(A, 2), r in axes(A, 3)
@@ -72,10 +80,10 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
                     end
                 end
             end
-            # a link state no element reaches carries nothing: any charge will do
-            partial = QN[ something(q, QN()) for q in next ]
-            # the charges of the left part taken out: each tensor but the last has no flux
-            Index([ -q => 1 for q in partial ]...; tags = "Link,l=$k")
+            partial = next
+            # the charges of the left part taken out: each tensor but the last has no flux; a
+            # link state no element reaches carries nothing, any charge will do
+            Index([ -something(q, QN()) => 1 for q in partial ]...; tags = "Link,l=$k")
         end
     else
         [ Index(size(tensors[k], 3); tags = "Link,l=$k") for k in 1:n ]

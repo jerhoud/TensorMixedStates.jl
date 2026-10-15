@@ -126,6 +126,9 @@ end
     @test dense_vector(w) ≈ ref / LA.norm(ref)
     @test maxlinkdim(w) == 2
     @test sum(expect1(w_state(System(6, Qubit(conserve = N)), "Up", "Dn", 1:6), Z)) ≈ 4
+    # a first amplitude zero leaves a link state that no element reaches, whose charge, any,
+    # was checked against the elements leaving it, which multiply that zero
+    @test expect1(w_state(System(3, Qubit(conserve = N)), "Up", "Dn", [0, 1, 1]), N) ≈ [0, 0.5, 0.5]
     @test_throws "a nonzero amplitude" w_state(System(3, Qubit()), "Up", "Dn", zeros(3))
     @test_throws "2 amplitudes for 3 sites" w_state(System(3, Qubit()), "Up", "Dn", [1, 1])
 end
