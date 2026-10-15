@@ -1047,6 +1047,12 @@ end
     @test norm(apply(Gate((C ⊗ C)(1, 2)), ρ)) == 0
     @test norm(apply(Gate(C(1) + C(3)), ρ)) == 0
     @test norm(apply(Gate(dag(C)(1) * C(2)), ρ)) ≈ 1
+    # and an operator given by a zero matrix, which ITensors failed to factorise into an MPO,
+    # on a density matrix as on a pure state
+    z = Operator{2}("Z0", zeros(4, 4))
+    ψ = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
+    @test norm(apply(z(1, 3), ψ)) == 0
+    @test norm(apply(z(1, 2), mix(ψ))) == 0
 end
 
 @testset "Strings kept apart on a density matrix" begin

@@ -436,7 +436,7 @@ end
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
 operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
-they bring. A piece on at most two sites, or small enough, see `dense_enough`, laying no string
+they bring, 0 for a dense piece that is zero. A piece on at most two sites, or small enough, see `dense_enough`, laying no string
 elsewhere and changing the charges by a definite amount, see `definite_on`, is a dense block,
 see `gate_steps!`, unless it is a run; otherwise it is developed, the descent refusing it when
 the charges change by no definite amount, and goes through gates of one site when it gives a
@@ -449,7 +449,10 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     sites = sort(sites_of(p))
     if !run && (length(sites) ≤ 2 || dense_enough(Pure, system, sites))
         m = matrix_on(system, p, sites)
-        if stays_on(system, m, sites) && definite_on(system, m, sites)
+        # the null state, which ITensors cannot factorise into an MPO on charged sites
+        if iszero(m)
+            return 0
+        elseif stays_on(system, m, sites) && definite_on(system, m, sites)
             gate_steps!(steps, R, system, m, sites)
             return 1
         end
