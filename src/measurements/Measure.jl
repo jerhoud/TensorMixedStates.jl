@@ -446,8 +446,8 @@ Overlap(name::Symbol, op::Union{IndexedOp{IsOperator}, SimpleOp}) =
     variance_of(state, op)
 
 the function measuring the variance of `op` on the states of the system of `state`, its MPO
-built once; `variance` refuses here, before any measurement, a representation it does not
-take
+built once, or by the `variance` of the state of an extension; a mixed state is refused here,
+before any measurement
 """
 function variance_of(state::State{Pure}, op)
     mpo = try
@@ -463,7 +463,9 @@ function variance_of(state::State{Pure}, op)
     return st -> variance(st, mpo)
 end
 
-variance_of(state::AbstractState, op) = variance(state, op)
+variance_of(state::State{Mixed}, op) = variance(state, op)
+
+variance_of(::AbstractState, op) = st -> variance(st, op)
 
 """
     Variance(op)

@@ -203,6 +203,17 @@ end
     end
 end
 
+TensorMixedStates.variance(st::WrappedState, op) = variance(st.inner, op)
+
+@testset "The measurements of the library on a state of one's own" begin
+    # measured by the functions it defines, each state anew, where Variance failed to convert
+    # the value of the state it was prepared on into a function
+    sys = System(3, Qubit())
+    m = Measure([Variance(X(2))])
+    @test abs(last(only(measure(WrappedState(sys, apply(H(2), State{Pure}(sys, "Up"))), m)))) < 1e-12
+    @test last(only(measure(WrappedState(sys, State{Pure}(sys, "Up")), m))) ≈ 1
+end
+
 # A representation on another system: a pure state whose physical sites are the odd sites of a
 # doubled system, each followed by an ancilla left empty, as a purification interleaves them.
 # It receives the operators as written and places them on its system with map_sites.
