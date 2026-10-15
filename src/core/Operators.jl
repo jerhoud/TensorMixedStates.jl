@@ -438,7 +438,9 @@ end
 the channel resetting a site to the local state `state`, given as `State` takes it,
 ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, ``\\sigma`` the density matrix
 of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a matrix is taken as it
-is, without normalization.
+is, without normalization. On a fermionic site this holds on states of definite parity: on the
+others, an odd operator `O` of the other sites takes the value of
+``\\langle F\\rangle_\\sigma F_i O``, ``F_i`` the parity of the site.
 
 # Examples
 
