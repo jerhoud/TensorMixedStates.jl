@@ -498,7 +498,8 @@ The first three are overridden by the environment variables `TMS_MAX_TIME`,
 `TMS_CHECKPOINT_INTERVAL` and `TMS_THREADING`, `TMS_MAX_TIME=3600 julia prog.jl` for instance.
 The run also stops, writing a checkpoint, when the file `stop` appears in its directory, and on
 an interrupt. Runs may be nested or run on several threads: the outermost one sets the threading
-and the behaviour of Ctrl-C, which the last to end puts back.
+and the behaviour of Ctrl-C, which the last to end puts back, and an interrupt stops a nested run
+and the runs it is in, each resuming where it was.
 """
 function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0,
                 threading::Union{Nothing, Symbol} = :dense, output::Union{Nothing, IO} = nothing)
@@ -627,6 +628,10 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                 end
                 log_line(run, stop_line(c, sd.phases))
                 run.stopped = true
+                # a nested run passes the interrupt on, so that the run it is in stops as well
+                if e isa InterruptException && !outermost
+                    rethrow()
+                end
                 # what the run resumes from, its last commit
                 k = c.last
                 sim = Simulation(k.state, k.time, k.values, run)

@@ -634,6 +634,34 @@ end
     end
 end
 
+@testset "An interrupt in a nested run" begin
+    # stops the run it is in as well, which resumes the nested one where it was, where the outer
+    # run went on with the result of the nested one cut short, and ended
+    in_tmp() do
+        armed = Ref(false)
+        breaker = "b" => function (c)
+            if armed[] && c.time > 0.05
+                armed[] = false
+                throw(InterruptException())
+            end
+            return 0.0
+        end
+        inner = SimData(name = "inner", phases = [CreateState{Pure}(1, Qubit(), "Up"),
+                        Evolve(evolver = -im * X(1), duration = 0.4, time_step = 0.1,
+                               measurements = "d" => [Z(1), breaker])])
+        outer(name) = SimData(; name, phases = [CreateState{Pure}(1, Qubit(), "Up"),
+                              Update(provides = [:z]) do c
+                                  c.z = real(expect(runTMS(inner).state, Z(1)))
+                              end], final_measurements = "f" => [:z])
+        @test runTMS(outer("ref")).z ≈ cos(0.8)
+        rm("inner"; recursive = true)
+        armed[] = true
+        @test stopped(runTMS(outer("int")))
+        @test runTMS(outer("int")).z ≈ cos(0.8)
+        @test read("int/f", String) == read("ref/f", String)
+    end
+end
+
 @testset "Schedules of the sweeps and of the steps across a resume" begin
     # a resumed search takes the rest of its schedules, and an evolution reads them at the step
     # it runs: a schedule started over would truncate a state the uninterrupted run kept
