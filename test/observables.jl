@@ -1658,6 +1658,10 @@ end
     # of the strong symmetry, as one of one site does
     @test_throws "which conserving it strongly forbids" TMS.lower(System(3, Fermion(conserve = strong(N))),
                                                                   exp(0.3 * Dissipator(C ⊗ C))(1, 2))
+    # and so does variance, where it was refused, and its measurement
+    @test variance(b, X(1)) ≈ 1
+    @test variance(b, X(1) + X(2)) ≈ 4
+    @test last(only(measure(b, [Variance(X(1))]))) ≈ 1
     # apply keeps refusing it, its result having no definite charges
     @test_throws "no definite flux" apply(X(1), b)
 end

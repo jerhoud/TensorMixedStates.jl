@@ -464,8 +464,9 @@ hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     variance(state::State{Pure}, mpo::MPO)
 
 the variance ``\\langle H^2\\rangle - \\langle H\\rangle^2`` of the operator `op`, or of the
-operator of `mpo`, on the pure `state`, which need not be normalised. A mixed representation
-is refused.
+operator of `mpo`, on the pure `state`, which need not be normalised, an operator changing the
+charges by no definite amount being measured on the state conserving nothing, as by `expect`. A
+mixed representation is refused.
 
 # Examples
 
@@ -480,7 +481,17 @@ function variance(state::State{Pure}, mpo::MPO)
     return e2 - e^2
 end
 
-variance(state::State{Pure}, op) = variance(state, make_mpo(state, op))
+function variance(state::State{Pure}, op)
+    mpo = try
+        make_mpo(state, op)
+    catch e
+        e isa FluxError || rethrow()
+        # an operator changing the charges by no definite amount is measured on the state
+        # conserving nothing, as expect does
+        return variance(plain_form(state), op)
+    end
+    return variance(state, mpo)
+end
 
 variance(::State{Mixed}, _) =
     error("variance needs a pure representation. On a mixed one steady_state returns " *
