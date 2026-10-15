@@ -204,6 +204,8 @@ end
 end
 
 TensorMixedStates.variance(st::WrappedState, op) = variance(st.inner, op)
+TensorMixedStates.renyi2(st::WrappedState, positions::AbstractVector) = renyi2(st.inner, positions)
+TensorMixedStates.entanglement_entropy(st::WrappedState, cut::Int) = entanglement_entropy(st.inner, cut)
 
 @testset "The measurements of the library on a state of one's own" begin
     # measured by the functions it defines, each state anew, where Variance failed to convert
@@ -212,6 +214,11 @@ TensorMixedStates.variance(st::WrappedState, op) = variance(st.inner, op)
     m = Measure([Variance(X(2))])
     @test abs(last(only(measure(WrappedState(sys, apply(H(2), State{Pure}(sys, "Up"))), m)))) < 1e-12
     @test last(only(measure(WrappedState(sys, State{Pure}(sys, "Up")), m))) ≈ 1
+    # and its positions checked on it, which only a State had a method for: a Bell pair on sites
+    # 2 and 3
+    bell = WrappedState(sys, apply(controlled(X)(2, 3) * H(2), State{Pure}(sys, "Up")))
+    @test last.(measure(bell, [SubRenyi2([3]), EntanglementEntropy(2)])) ≈ [log(2), log(2)]
+    @test_throws "SubRenyi2 was given site 4" measure(bell, [SubRenyi2([4])])
 end
 
 # A representation on another system: a pure state whose physical sites are the odd sites of a

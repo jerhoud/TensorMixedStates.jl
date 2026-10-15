@@ -8,7 +8,7 @@ export partial_trace
 
 refuse a position of `positions` the state does not have, `what` naming the function given it
 """
-function check_positions(state::State, positions, what)
+function check_positions(state::AbstractState, positions, what)
     n = length(state)
     for p in positions
         if !(1 ≤ p ≤ n)
