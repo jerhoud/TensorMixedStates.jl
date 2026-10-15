@@ -38,6 +38,30 @@ function ITensorMPS.checkdone!(o::SweepHook; energy, sweep, psi, kwargs...)
 end
 
 """
+    lowest_on_site(mpo, state, orthogonal_to, weight)
+
+the search of `search` on a single site, which dmrg of ITensorMPS does not take: the lowest
+eigenvector, normalized, of the matrix of `mpo` plus `weight` times the projectors of the states
+of `orthogonal_to`, among the states of the sector of charge of `state`, and its energy, that of
+`mpo` alone
+"""
+function lowest_on_site(mpo::MPO, state::State, orthogonal_to::Vector{State{Pure}}, weight::Real)
+    x = state.state[1]
+    s = only(inds(x))
+    h = mpo[1]
+    for m in orthogonal_to
+        y = m.state[1]
+        h += weight * prime(y) * dag(y)
+    end
+    sector = [ k for k in 1:dim(s) if flux(onehot(s => k)) == flux(x) ]
+    λ = eigen(Hermitian(Array(h, s', s)[sector, sector]))
+    v = zeros(eltype(λ.vectors), dim(s))
+    v[sector] = λ.vectors[:, 1]
+    y = ITensor(v, s)
+    return (real(scalar(dag(prime(y)) * mpo[1] * y)), State(state, MPS([y])))
+end
+
+"""
     search(algo, mpo, state, limits; sweep_done = nothing, krylov = Krylov(), done = 0,
            energy = nothing[, orthogonal_to, weight])
 
@@ -50,8 +74,9 @@ resumed after `done` sweeps takes the rest of the schedules, `energy` being that
 sweep, which it returns when no sweep is left. Given `orthogonal_to`, pure states on the system
 of `state`, the search is that of the lowest eigenvector orthogonal to them, which dmrg makes
 by adding `weight` times their projectors to `mpo`, the energy being that of `mpo` alone. A
-`SearchAlgorithm` of one's own adds a method, taking these two keywords only if it searches
-excited states.
+single site, which dmrg does not take, is diagonalized whole, in one sweep, see
+`lowest_on_site`. A `SearchAlgorithm` of one's own adds a method, taking these two keywords only
+if it searches excited states.
 """
 function search(algo::Dmrg, mpo::MPO, state::State, limits::Limits; sweep_done = nothing,
                 krylov::Krylov = Krylov(), done::Int = 0, energy = nothing,
@@ -62,6 +87,13 @@ function search(algo::Dmrg, mpo::MPO, state::State, limits::Limits; sweep_done =
     if done ≥ algo.nsweeps
         st = normalize(state)
         return (something(energy, real(inner(st.state', mpo, st.state))), st)
+    end
+    if length(state) == 1
+        e, st = lowest_on_site(mpo, state, orthogonal_to, weight)
+        if !isnothing(sweep_done)
+            sweep_done(done + 1, e, st, true)
+        end
+        return (e, st)
     end
     # ITensorMPS counts its sweeps from 1: a resumed search asks for those it has left, with the
     # tail of its schedules

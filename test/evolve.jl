@@ -697,6 +697,22 @@ end
     end
 end
 
+@testset "A single site" begin
+    # which tdvp of ITensorMPS does not take: the step exponentiates the site whole, exact for an
+    # evolver that does not depend on time or commutes with itself at all times
+    one = System(1, Qubit())
+    ψ = State{Pure}(one, "X+")
+    @test real(expect(evolve(-im * Z(1), 0.5, ψ; nsteps = 5), X(1))) ≈ cos(1)
+    @test real(expect(evolve([-im * Z(1)] => [t -> 2t], 0.5, ψ; nsteps = 5), X(1))) ≈ cos(0.5)
+    # a decaying qubit, from Up
+    ρ = evolve(Dissipator(sqrt(0.5) * Sm)(1), 1.0, mix(State{Pure}(one, "Up")); nsteps = 4)
+    @test real(expect(ρ, Z(1))) ≈ 2exp(-0.5) - 1
+    # and thermalize, from the fully mixed state
+    l, ρβ = thermalize(Z(1), 0.7, State{Mixed}(one, "FullyMixed"))
+    @test l ≈ log(cosh(0.7))
+    @test real(expect(ρβ, Z(1))) ≈ -tanh(0.7)
+end
+
 @testset "What evolve refuses" begin
     st = State{Pure}(System(2, Qubit()), "Up")
     ρ = mix(st)

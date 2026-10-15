@@ -120,10 +120,16 @@ function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number,
     if length(state) > 1 && (small || due(algo.expand_period, step - 1))
         state = expanded(state, mpo)
     end
-    # eager: KrylovKit tests convergence after every vector rather than once its space is full,
-    # which the short local steps of tdvp reach with far fewer products
-    st = tdvp(mpo, dt, state.state; nsweeps = 1, tr...,
-              updater_kwargs = (; eager = true, krylov_kwargs(algo.krylov)...))
+    st = if length(state) == 1
+        # tdvp of ITensorMPS takes two sites at least
+        w = mpo[1]
+        MPS([ noprime(exp(dt * w, inds(w; plev = 1), inds(w; plev = 0)) * state.state[1]) ])
+    else
+        # eager: KrylovKit tests convergence after every vector rather than once its space is
+        # full, which the short local steps of tdvp reach with far fewer products
+        tdvp(mpo, dt, state.state; nsweeps = 1, tr...,
+             updater_kwargs = (; eager = true, krylov_kwargs(algo.krylov)...))
+    end
     state = State(state, st)
     if due(algo.hermitianize_period, step)
         state = hermitianize(state; limits)

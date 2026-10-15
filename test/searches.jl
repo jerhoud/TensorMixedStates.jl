@@ -125,7 +125,7 @@ end
 @testset "Steady state" begin
     # driven decaying qubits, H = Ω/2 X and a decay of rate γ down to Dn by Sm: the optical
     # Bloch equations give ⟨Z⟩ = -γ²/(γ² + 2Ω²), ⟨Y⟩ = 2γΩ/(γ² + 2Ω²) and ⟨X⟩ = 0, on two
-    # qubits, dmrg needing two sites at least
+    # qubits
     Ω, γ = 0.8, 0.5
     L = sum(-im * Ω / 2 * X(i) + Dissipator(sqrt(γ) * Sm)(i) for i in 1:2)
     v, ρ = steady_state(L, State{Mixed}(System(2, Qubit()), "FullyMixed"); algo = Dmrg(nsweeps = 10))
@@ -342,6 +342,33 @@ end
     for nsweeps in (0, -1)
         @test_throws "a search takes at least one sweep, and nsweeps is $nsweeps" Dmrg(; nsweeps)
     end
+end
+
+@testset "A single site" begin
+    # which dmrg of ITensorMPS does not take: the site is diagonalized whole, in one sweep
+    one = System(1, Qubit())
+    ψ = State{Pure}(one, "X+")
+    h = Z(1) + 0.5 * X(1)
+    e, g = ground_state(h, ψ; algo = Dmrg(nsweeps = 2))
+    @test e ≈ -sqrt(1.25)
+    @test real(expect(g, h)) ≈ e
+    @test first(ground_state(h, ψ; algo = Dmrg(nsweeps = 2), orthogonal_to = [g], weight = 3)) ≈
+          sqrt(1.25)
+    # in the sector of the state: on a qubit conserving N, Up is alone in its own
+    @test first(ground_state(Z(1), State{Pure}(System(1, Qubit(conserve = N)), "Up");
+                             algo = Dmrg(nsweeps = 2))) ≈ 1
+    # the optical Bloch equations of a driven decaying qubit
+    Ω, γ = 0.8, 0.5
+    v, ρ = steady_state(-im * Ω / 2 * X(1) + Dissipator(sqrt(γ) * Sm)(1),
+                        State{Mixed}(one, "FullyMixed"); algo = Dmrg(nsweeps = 2))
+    @test abs(v) < 1e-12
+    @test real(expect(ρ, Z(1))) ≈ -γ^2 / (γ^2 + 2Ω^2)
+    @test real(expect(ρ, Y(1))) ≈ 2γ * Ω / (γ^2 + 2Ω^2)
+    # the sweep a phase measures
+    sweeps = []
+    TMS.search(Dmrg(nsweeps = 3), make_mpo(ψ, h), ψ, Limits();
+               sweep_done = (k, e, st, ends) -> push!(sweeps, (k, ends)))
+    @test sweeps == [(1, true)]
 end
 
 @testset "What the searches refuse" begin
