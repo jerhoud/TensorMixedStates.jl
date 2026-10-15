@@ -463,10 +463,11 @@ hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     variance(state::State{Pure}, op)
     variance(state::State{Pure}, mpo::MPO)
 
-the variance ``\\langle H^2\\rangle - \\langle H\\rangle^2`` of the operator `op`, or of the
-operator of `mpo`, on the pure `state`, which need not be normalised, an operator changing the
-charges by no definite amount being measured on the state conserving nothing, as by `expect`. A
-mixed representation is refused.
+the variance ``\\langle H^\\dagger H\\rangle - |\\langle H\\rangle|^2`` of the operator `op`,
+``\\langle H^2\\rangle - \\langle H\\rangle^2`` for a Hermitian one, or of the operator of `mpo`,
+on the pure `state`, which need not be normalised, an operator changing the charges by no
+definite amount being measured on the state conserving nothing, as by `expect`. A mixed
+representation is refused.
 
 # Examples
 
@@ -476,9 +477,9 @@ function variance(state::State{Pure}, mpo::MPO)
     st = state.state
     n2 = nonzero_trace(state, "variance")
     # the bra primed: unprimed, `inner` takes a deprecated fallback
-    e = real(inner(prime(st), mpo, st)) / n2
+    e = inner(prime(st), mpo, st) / n2
     e2 = real(inner(mpo, st, mpo, st)) / n2
-    return e2 - e^2
+    return e2 - abs2(e)
 end
 
 function variance(state::State{Pure}, op)

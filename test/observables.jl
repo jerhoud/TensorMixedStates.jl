@@ -946,6 +946,10 @@ end
     @test variance(im * r, h) ≈ variance(r, h)
     # an mpo already built gives the same answer
     @test variance(r, make_mpo(r, h)) ≈ variance(r, h)
+    # of an operator that is not Hermitian, the squared norm of (H - ⟨H⟩)|ψ⟩, where i h gave
+    # ⟨h²⟩ - Re(⟨i h⟩)², that is ⟨h²⟩: the variance of h for i h, twice that for (1 + i) h
+    @test variance(r, im * h) ≈ variance(r, h)
+    @test variance(r, (1 + im) * h) ≈ 2variance(r, h)
 
     # what it is for: a converged ground state, whose energy is the lowest eigenvalue of the
     # dense hamiltonian, has a variance the energy alone cannot show
