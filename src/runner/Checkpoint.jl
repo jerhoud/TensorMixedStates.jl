@@ -164,7 +164,8 @@ function write_checkpoint(c::Checkpointer)
                            "time" => string(k.time),
                            "state" => state_file(g)))
     end
-    mv(tmp, checkpoint_json(c.dir); force = true)
+    # at once, where the mv of Julia 1.10 removes checkpoint.json before renaming
+    Base.Filesystem.rename(tmp, checkpoint_json(c.dir))
     rm(joinpath(c.dir, state_file(3 - g)); force = true)
     c.generation = g
     c.written = k
