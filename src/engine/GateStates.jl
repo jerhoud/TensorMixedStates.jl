@@ -36,7 +36,11 @@ the state of a singlet ``(|ab\\rangle - |ba\\rangle)/\\sqrt{2}`` on each pair `(
 `pairs`, `a` on `i` in the first term, of the local pure states `a` and `b`, given by their
 names or their vectors and orthonormal: `"Up"` and `"Dn"` for spins one half. The sites in no
 pair take the local state `others`, one for all of them or a vector of one for each, which
-they then need.
+they then need. On fermionic sites, when `a` and `b` are of different parities, ``|ba\\rangle``
+is ``|ab\\rangle`` with the fermion moved from one site of the pair to the other by a hopping
+``c^\\dagger c``, whose string gives it the sign of the occupied sites between: the singlet of
+fermions, which differs from that of the products of local vectors when the pair spans
+occupied sites.
 
 The pairs need not be neighbours: pairs of neighbours give the Majumdar-Ghosh state, of bond
 dimension 2, and nested pairs `(i, n + 1 - i)` the rainbow state, of bond dimension
