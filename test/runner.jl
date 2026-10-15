@@ -1068,7 +1068,7 @@ end
     ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
     sd(name) = SimData(; name, final_measurements = "f" => X(1), phases = [
         CreateState(type = Mixed(), state = ρ),
-        Update(c -> nothing; nsteps = 3, measurements = "x" => [X, X(1)])])
+        Update(c -> nothing; nsteps = 3, measurements = "x.json" => [X, X(1)])])
     summaries(log) = [ (parse(Int, m[1]), parse(Float64, m[2]), m[3], m[4]) for m in eachmatch(
         r"WARNING: (\d+) imaginary parts? of Hermitian measurements beyond rounding dropped, the largest (\S+), of (.+) at time (\S+)\n",
         read(log, String)) ]

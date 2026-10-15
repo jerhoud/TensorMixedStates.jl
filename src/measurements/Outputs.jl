@@ -233,8 +233,14 @@ function put_row!(t::TextTable, time, m::Measure, row)
             error("$what not fit the columns $(t.path) took at its first line: a value changing " *
                   "its cells, as one missing at first, needs a .json file")
         end
+        names = reduce(vcat, columns)
+        twice = findfirst(c -> count(==(c), names) > 1, names)
+        if !isnothing(twice)
+            error("two columns of $(something(t.path, "the table")) would be named $(names[twice]): " *
+                  "give one of the measurements a name of its own, as \"name\" => op")
+        end
         t.columns = columns
-        println(t.io, join(reduce(vcat, columns), '\t'))
+        println(t.io, join(names, '\t'))
     end
     println(t.io, join([ last(c) for p in parts for c in p ], '\t'))
     flush(t.io)

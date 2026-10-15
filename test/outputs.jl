@@ -92,6 +92,15 @@ Base.close(::PickyOpen) = nothing
         @test readlines(joinpath(dir, "m.dat")) ==
               ["Re(time)\tIm(time)\tn(1)\tn(2)\tZ(1)\ts", "0.300\t0.200\t\t1.000\t1.000\ta b c"]
     end
+    # two columns of one name, an operator of one site and the same placed on a site, which
+    # gave a header naming X(1) twice
+    mktempdir() do dir
+        o = TMS.Outputs(; dir)
+        ψ = State{Pure}(System(2, Qubit()), "+")
+        @test_throws "x.dat would be named X(1)" TMS.output!(o, ψ, "x.dat" => [X, X(1)]; time = 0)
+        @test_throws "would be named Re(Sp(1))" TMS.output!(o, ψ, "stdout" => [Sp, Sp(1)]; time = 0)
+        TMS.close!(o)
+    end
     # one format, for the time and the values, writing one number
     @test_throws "the format \"%d %d\" does not write one number" TMS.Outputs(; format = "%d %d")
     @test_throws "does not write one number" TMS.Outputs(; format = "no number")
