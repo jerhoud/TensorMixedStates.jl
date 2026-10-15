@@ -130,18 +130,23 @@ write the last commit down. Its state and the values that are states go to which
 `checkpoint-1.h5` and `checkpoint-2.h5` the checkpoint on the disk does not name, with the rest
 of the commit serialized, and `checkpoint.json`, which names it, is renamed into place last, so
 that a crash at any point leaves the previous checkpoint or this one, whole. Nothing is written
-without a directory, before a phase has made a state, or for a commit already on the disk.
+without a directory, for a commit holding no state, as before the first phase, or for a commit
+already on the disk.
 """
 function write_checkpoint(c::Checkpointer)
     k = c.last
-    if isempty(c.dir) || isnothing(k) || isnothing(k.state) || k === c.written
+    if isempty(c.dir) || isnothing(k) || k === c.written ||
+       (isnothing(k.state) && !any(v -> v isa AbstractState, values(k.values)))
         c.next = time() + c.interval
         return nothing
     end
     g = c.generation == 1 ? 2 : 1
     file = joinpath(c.dir, state_file(g))
     rm(file; force = true)
-    save_state(file, "state", k.state)
+    # none after a CopyState that moved it away, the named states holding the simulation
+    if !isnothing(k.state)
+        save_state(file, "state", k.state)
+    end
     rest = Dict{Symbol, Any}()
     for (name, v) in k.values
         if v isa AbstractState
@@ -211,7 +216,7 @@ function load_checkpoint(dir::String)
         values[name] = load_state(file, state_name(name))
     end
     marks = Dict{Destination, Any}(rooted(d, dir) => m for (d, m) in k.marks)
-    commit = Commit(k.phase, k.step, k.last, k.phase_time, k.time, load_state(file, "state"), values,
-                    marks)
+    state = h5open(f -> haskey(f, "state"), file, "r") ? load_state(file, "state") : nothing
+    commit = Commit(k.phase, k.step, k.last, k.phase_time, k.time, state, values, marks)
     return (commit, meta["state"] == state_file(2) ? 2 : 1, k.seed)
 end

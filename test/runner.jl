@@ -662,6 +662,20 @@ end
     end
 end
 
+@testset "A phase on a named state, the current one moved away" begin
+    # the commits hold the named state alone, where they were not written: a run stopped there
+    # resumed an older checkpoint, and never ended with max_time = -1
+    in_tmp() do
+        phases = [CreateState{Pure}(2, Qubit(), "Up"), CopyState(:state => :a; move = true),
+                  Evolve(evolver = -im * X(1), duration = 0.3, time_step = 0.1, on = :a),
+                  CopyState(:a => :state; move = true)]
+        sd(name) = SimData(; name, phases, final_measurements = "f" => Z(1))
+        @test real(expect(runTMS(sd("ref")).state, Z(1))) ≈ cos(0.6)
+        run_through(sd("chk"); max_time = -1)
+        @test read("chk/f", String) == read("ref/f", String)
+    end
+end
+
 @testset "Schedules of the sweeps and of the steps across a resume" begin
     # a resumed search takes the rest of its schedules, and an evolution reads them at the step
     # it runs: a schedule started over would truncate a state the uninterrupted run kept
