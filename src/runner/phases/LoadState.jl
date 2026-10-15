@@ -57,7 +57,8 @@ under the same name.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
-- `file`: the HDF5 file, taken in the directory of the simulation when it is relative
+- `file`: the HDF5 file, taken in the directory of the simulation when it is relative, not one
+  of the files of the simulation, as `log`, which the run refuses before it starts
 - `statename`: the name of the state in the file
 - `on`: the state saved, `:state` the current one, or one the simulation named
 
@@ -74,11 +75,9 @@ under the same name.
     on::Symbol = :state
 end
 
+phase_files(phase::SaveState) = (phase.file,)
+
 function run_phase(phase::SaveState, sim::Simulation, ::Int)
-    if !isempty(getfield(sim, :run).dir) && normpath(phase.file) in simulation_files
-        error("cannot save to $(phase.file), a file of the simulation directory: choose " *
-              "another name")
-    end
     save_state(in_dir(sim, phase.file), phase.statename, state_named(sim, phase.on))
     return sim
 end

@@ -486,6 +486,21 @@ end
         # without a directory, every name goes to the stream
         @test_ok runTMS(SimData(name = "c", phases = [start], final_measurements = "log" => Z(1));
                         output = devnull)
+        # refused before any phase runs, where a final measurement, a SaveState, a second list of a
+        # text file were refused when the run got there
+        ran = Ref(false)
+        mark = Update(c -> (ran[] = true; nothing))
+        up(m) = Update(c -> nothing; measurements = m)
+        for phases in ([start, mark, SaveState(file = "log")],
+                       [start, mark, up("data" => Z(1)), up("data" => X(1))])
+            @test_throws r"a file of the simulation directory|another needs another file" runTMS(
+                SimData(; name = "e", phases))
+        end
+        @test_throws "cannot write to stamp" runTMS(SimData(name = "e", phases = [start, mark],
+                                                            final_measurements = "stamp" => Z(1)))
+        @test !ran[]
+        @test_ok runTMS(SimData(name = "g", phases = [start, up("data" => Z(1)), up("./data" => Z(1)),
+                                                      up("d.json" => X(1)), up("d.json" => Z(1))]))
         # two names of one file are one destination
         runTMS(SimData(name = "d", phases = [start, Gates(gates = X(1),
                                                          final_measurements = ["data" => X(1), "./data" => X(1)])]))

@@ -67,6 +67,39 @@ function check_values(phases::Vector, final_measurements)
 end
 
 """
+    check_destinations(phases, final_measurements)
+
+refuse, before a run with a directory starts rather than when it writes there, a file of the
+simulation directory as the destination of a list of measurements of the phases or of the final
+measurements, or as a file a phase writes, see `phase_files` and `simulation_files`, and a text
+file given two lists, as one holds one list
+"""
+function check_destinations(phases::Vector, final_measurements)
+    for p in phases, f in phase_files(p)
+        if normpath(f) in simulation_files
+            error("cannot save to $f, a file of the simulation directory: choose another name")
+        end
+    end
+    lists = [ final_measurements ;
+              [ p.final_measurements for p in phases ] ;
+              [ p.measurements for p in phases if hasfield(typeof(p), :measurements) ] ]
+    held = Dict{String, Vector{String}}()
+    for l in lists, (d, m) in measurement_lists(l)
+        if !(d isa AbstractString) || d in ("stdout", "-", "stderr", "")
+            continue
+        elseif normpath(d) in simulation_files
+            error("cannot write to $d, a file of the simulation directory: choose another name")
+        elseif last(splitext(d)) in (".json", ".jsonl")
+            continue
+        end
+        names = first.(as_measure(m).entries)
+        if get!(held, normpath(d), names) ≠ names
+            error("$d holds the list $(join(held[normpath(d)], ", ")), and another needs another file")
+        end
+    end
+end
+
+"""
     check_format(format)
 
 refuse a Printf format that does not write one number
@@ -484,7 +517,9 @@ run the simulation, see `SimData`, in a directory named after it, and return the
 it ends with. A checkpoint found in the directory is resumed from, if it was written by the same
 program, `prog.jl` in the directory, given the same arguments: copying an edited program there,
 or setting `TMS_ACCEPT_PROGRAM=1`, resumes it with that one. A file `restart` in the directory
-starts the simulation over, and `cleanTMS` removes the directory.
+starts the simulation over, and `cleanTMS` removes the directory. A destination that is a file of
+the directory, as `log` or `stamp`, or a text file given two lists, is refused before the run
+starts.
 
 - `max_time`: seconds after which the run stops, writing a checkpoint
 - `checkpoint_interval`: seconds between two checkpoints, 0 for those of a stop only
@@ -511,6 +546,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     live = isnothing(output)
     if live && isempty(sd.name)
         error("a simulation run in a directory needs a name, that of its directory")
+    end
+    if live
+        check_destinations(sd.phases, sd.final_measurements)
     end
     dir = live ? abspath(sd.name) : ""
     file(name) = joinpath(dir, name)

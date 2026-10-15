@@ -54,6 +54,14 @@ instance, none by default. A measurement of a value that no phase provides is re
 provided_values(_) = ()
 
 """
+    phase_files(phase)
+
+the files `phase` writes in the directory of the simulation besides its measurements, the file of
+a `SaveState`, none by default, checked before the run, see `check_destinations`
+"""
+phase_files(_) = ()
+
+"""
     TensorMixedStates.prepare_phase(phase, sim)
     TensorMixedStates.step_count(prepared)
     TensorMixedStates.run_step(prepared, sim, k)
