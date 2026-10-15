@@ -108,8 +108,9 @@ function aklt_state(system::System; left = "Up", right = "Up")
     end
     edge(v) = v == "Up" ? [1., 0.] : v == "Dn" ? [0., 1.] : v
     l, r = edge(left), edge(right)
-    # in the basis of Spin(1), m = 1, 0, -1, and of the virtual spins, up then down
-    A = zeros(2, 3, 2)
+    # in the basis of Spin(1), m = 1, 0, -1, and of the virtual spins, up then down, of the
+    # element type of the edges for every tensor, which mps_state takes
+    A = zeros(promote_type(Float64, eltype(l), eltype(r)), 2, 3, 2)
     A[1, 1, 2] = sqrt(2 / 3)
     A[1, 2, 1], A[2, 2, 2] = -sqrt(1 / 3), sqrt(1 / 3)
     A[2, 3, 1] = -sqrt(2 / 3)

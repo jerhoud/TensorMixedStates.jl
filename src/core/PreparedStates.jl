@@ -311,11 +311,13 @@ function dicke_mps(system::System, k::Int, a, b, amplitudes::AbstractVector{<:Nu
     end
     # the numbers of sites in b on the left of a link that can still reach k
     reach(j) = max(0, k - (n - j)):min(j, k)
+    # one element type for every tensor, which mps_state takes
+    vs = [ (local_vector(system[j], a), amplitudes[j] * local_vector(system[j], b)) for j in 1:n ]
+    T = mapreduce(((va, vb),) -> promote_type(eltype(va), eltype(vb)), promote_type, vs; init = Bool)
     tensors = map(1:n) do j
-        va, vb = local_vector(system[j], a), amplitudes[j] * local_vector(system[j], b)
+        va, vb = vs[j]
         left, right = reach(j - 1), reach(j)
-        A = zeros(promote_type(eltype(va), eltype(vb)), length(left), dim(system[j]),
-                  length(right))
+        A = zeros(T, length(left), dim(system[j]), length(right))
         for (p, c) in enumerate(left), (q, d) in enumerate(right)
             if d == c
                 A[p, :, q] = va

@@ -129,6 +129,8 @@ end
     # a first amplitude zero leaves a link state that no element reaches, whose charge, any,
     # was checked against the elements leaving it, which multiply that zero
     @test expect1(w_state(System(3, Qubit(conserve = N)), "Up", "Dn", [0, 1, 1]), N) ≈ [0, 0.5, 0.5]
+    # amplitudes real on some sites and complex on others gave tensors of two element types
+    @test expect1(w_state(System(3, Qubit()), "Up", "Dn", Number[1, 1im, 1]), N) ≈ fill(1 / 3, 3)
     @test_throws "a nonzero amplitude" w_state(System(3, Qubit()), "Up", "Dn", zeros(3))
     @test_throws "2 amplitudes for 3 sites" w_state(System(3, Qubit()), "Up", "Dn", [1, 1])
 end
@@ -145,6 +147,8 @@ end
         @test variance(a, h) ≈ 0 atol = 1e-10
         @test sum(expect1(a, Sz)) ≈ sz atol = 1e-12
     end
+    # a complex edge beside the real bulk gave tensors of two element types
+    @test expect(aklt_state(System(n, Spin(1)); left = [0.6, 0.8im]), h) ≈ -2 * (n - 1) / 3
     @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
 end
 
