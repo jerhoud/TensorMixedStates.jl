@@ -40,6 +40,10 @@ indices `siteinds(Pure, system)`, and its algorithms call those of ITensorMPS. W
 the density matrix, held as an MPS too, the operators written as expressions rather than
 `OpSum`, the Lindbladians, the channels, the measurements and the simulations.
 
+A state caches what it computes from its MPS: a function of ITensorMPS changing an MPS in place,
+as `orthogonalize!` or `truncate!`, must not be applied to `state.state`, and `State(state, mps)`
+makes the state of a changed copy.
+
 | ITensors and ITensorMPS | TMS |
 |:---|:---|
 | `s = siteinds("Qubit", n)` | `System(n, Qubit())` |
