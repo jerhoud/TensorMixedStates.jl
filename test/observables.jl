@@ -32,22 +32,6 @@ function exact_fermionic_correlations(state::State{Pure}, site)
 end
 
 """
-the vector of the pure state `st` in the full basis, site 1 most significant, not normalised
-"""
-raw_vector(st::State{Pure}) = vec(Array(IT.dense(prod(st.state)), reverse(siteinds(Pure, st.system))...))
-
-"""
-the dense matrix of the MPO of `op` on the sites of the pure state `st`
-"""
-function mpo_matrix(st::State{Pure}, op)
-    idx = siteinds(Pure, st.system)
-    a = Array(IT.dense(prod(make_mpo(st, op))), [ i' for i in reverse(idx) ]...,
-              [ IT.dag(i) for i in reverse(idx) ]...)
-    d = prod(IT.dim.(idx))
-    return reshape(a, d, d)
-end
-
-"""
 the results of measuring `op` on `st` with their probabilities, as pairs, through the reduced
 density matrix on the sites of `op` and the projectors on the eigenspaces of its matrix there:
 the reference the fast paths of probabilities are checked against

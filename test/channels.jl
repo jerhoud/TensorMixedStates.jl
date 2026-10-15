@@ -24,11 +24,6 @@ mixed_vec(ρ, d1, d2) =
     vec([ ρ[(k1 - 1) * d2 + k2, (b1 - 1) * d2 + b2] for k2 in 1:d2, b2 in 1:d2, k1 in 1:d1, b1 in 1:d1 ])
 
 """
-the vector of a pure state in the full basis, site 1 most significant, not normalised
-"""
-full_vector(st::State{Pure}) = vec(Array(prod(st.state), reverse(siteinds(Pure, st.system))...))
-
-"""
 the matrix of the placed channel or generator `a` on the whole of `sys`, from its terms
 """
 superop(sys, a) = TMS.system_matrix(Mixed, sys, TMS.lower(sys, a))
@@ -56,24 +51,6 @@ function laid_mixed(ρ::State{Mixed}, a, coefs = [1.])
     d = prod(IT.dim.(idx))
     p = foldl(kron, [ eye(IT.dim(idx[k]))[:, TMS.mixed_elements(sys, k)] for k in 1:length(sys) ])
     return p * reshape(m, d, d) * p'
-end
-
-"""
-the density matrix of the mixed state `ρ`, its rows the kets and its columns the bras, site 1
-most significant, read through the combiners its mixed indices are made with
-"""
-function ket_bra_matrix(ρ::State{Mixed})
-    sys = ρ.system
-    t = prod(ρ.state)
-    js = siteinds(Pure, sys)
-    bs = IT.Index[]
-    for i in 1:length(sys)
-        b, c = TMS.mixer(js[i], siteind(Mixed, sys, i), sys[i])
-        t *= IT.dag(c)
-        push!(bs, b')
-    end
-    d = prod(IT.dim.(js))
-    return reshape(Array(IT.dense(t), reverse(js)..., reverse(bs)...), d, d)
 end
 
 @testset "Channels and generators in their normal form" begin
@@ -346,9 +323,9 @@ end
     end
     # and so against the dense vector
     x, h, i = matrix(X, q), matrix(H, q), matrix(Id, q)
-    v = full_vector(ψ)
-    @test full_vector(apply(0.25 * Gate(X)(1) * Gate(H)(3), ψ)) ≈ 0.5 * kron(x, i, h, i) * v
-    @test full_vector(apply(exp(0.3 * Evolver(-im * (X ⊗ X)))(2, 3), ψ)) ≈
+    v = raw_vector(ψ)
+    @test raw_vector(apply(0.25 * Gate(X)(1) * Gate(H)(3), ψ)) ≈ 0.5 * kron(x, i, h, i) * v
+    @test raw_vector(apply(exp(0.3 * Evolver(-im * (X ⊗ X)))(2, 3), ψ)) ≈
         kron(i, exp(-0.3im * kron(x, x)), i) * v
     # on fermions, the strings of the Kraus operator
     φ = random_state(Pure, System(4, Fermion()), 4)
@@ -657,11 +634,11 @@ end
     # here against the dense matrices of c₁ = c ⊗ 1 ⊗ 1 ⊗ 1 and c₃ = F ⊗ F ⊗ c ⊗ 1
     c, f, id = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
     c1, c3 = kron(c, id, id, id), kron(f, f, c, id)
-    r, v = ket_bra_matrix(ρ), full_vector(st)
+    r, v = ket_bra_matrix(ρ), raw_vector(st)
     @test ket_bra_matrix(apply(Dissipator(C)(3), ρ)) ≈
         c3 * r * c3' - (c3' * c3 * r + r * c3' * c3) / 2
-    @test full_vector(apply(exp(0.3 * (C ⊗ Id + Id ⊗ C))(1, 3), st)) ≈ exp(0.3 * (c1 + c3)) * v
-    @test full_vector(apply(exp(0.3 * (C + dag(C)))(1), st)) ≈ exp(0.3 * (c1 + c1')) * v
+    @test raw_vector(apply(exp(0.3 * (C ⊗ Id + Id ⊗ C))(1, 3), st)) ≈ exp(0.3 * (c1 + c3)) * v
+    @test raw_vector(apply(exp(0.3 * (C + dag(C)))(1), st)) ≈ exp(0.3 * (c1 + c1')) * v
     # a gate of several sites defined by a matrix is kept whole, and a string covering only some
     # of its sites does not commute with it: moved past it in 1.x, it changed the sign of the
     # branch where the gate moves a fermion onto site 2 (involution_op is gone, decision 2)

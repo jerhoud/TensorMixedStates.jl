@@ -35,6 +35,11 @@ function dense_vector(state::State{Pure})
 end
 
 """
+the vector of the pure state `st` in the full basis, site 1 most significant, not normalised
+"""
+raw_vector(st::State{Pure}) = vec(Array(IT.dense(prod(st.state)), reverse(siteinds(Pure, st.system))...))
+
+"""
 the density matrix of a mixed state of qubits in the full basis, site 1 most significant. Only
 usable on small systems.
 """
@@ -43,6 +48,35 @@ function dense_matrix(ρ::State{Mixed})
     v = Array(prod(ρ.state), reverse(siteinds(Mixed, ρ.system))...)
     perm = vcat([2k - 1 for k in 1:n], [2k for k in 1:n])
     return reshape(permutedims(reshape(v, ntuple(_ -> 2, 2n)...), perm), 2^n, 2^n)
+end
+
+"""
+the density matrix of the mixed state `ρ`, its rows the kets and its columns the bras, site 1
+most significant, read through the combiners its mixed indices are made with
+"""
+function ket_bra_matrix(ρ::State{Mixed})
+    sys = ρ.system
+    t = prod(ρ.state)
+    js = siteinds(Pure, sys)
+    bs = IT.Index[]
+    for i in 1:length(sys)
+        b, c = TMS.mixer(js[i], siteind(Mixed, sys, i), sys[i])
+        t *= IT.dag(c)
+        push!(bs, b')
+    end
+    d = prod(IT.dim.(js))
+    return reshape(Array(IT.dense(t), reverse(js)..., reverse(bs)...), d, d)
+end
+
+"""
+the dense matrix of the MPO of `op` on the sites of the pure state `st`
+"""
+function mpo_matrix(st::State{Pure}, op)
+    idx = siteinds(Pure, st.system)
+    a = Array(IT.dense(prod(make_mpo(st, op))), [ i' for i in reverse(idx) ]...,
+              [ IT.dag(i) for i in reverse(idx) ]...)
+    d = prod(IT.dim.(idx))
+    return reshape(a, d, d)
 end
 
 """
