@@ -378,7 +378,7 @@ end
         PreMPO(ρ, h), st; algo)
     @test_throws "the PreMPO was prepared on a state of the other representation" steady_state(
         PreMPO(st, h), ρ; algo)
-    @test_throws "3 is not an operator to search the state of" ground_state(3, st; algo)
+    @test_throws "3 is not an operator or its PreMPO" ground_state(3, st; algo)
     @test_throws "mpo_algo is \"naive\" or \"zipup\", not \"fit\"" steady_state(
         Dissipator(Sm)(1), ρ; algo, mpo_algo = "fit")
     # the options of ITensorMPS are not passed on, `outputlevel` included

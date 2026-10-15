@@ -870,6 +870,8 @@ end
     @test_throws "the PreMPO was prepared on another system than that of the state" thermalize(
         PreMPO(State{Mixed}(System(3, Qubit()), "FullyMixed"), Z(1)), 1., ρ)
     @test_throws "thermalize takes at least one step, and nsteps is 0" thermalize(h, 1., ρ; nsteps = 0)
+    # a Hamiltonian depending on time, refused by a message that spoke of a search
+    @test_throws "is not an operator or its PreMPO" thermalize([Z(1)] => [t -> 1.], 1., ρ)
     @test_throws MethodError thermalize(h, 1., ρ; maxdim = 4)
     # and a Thermalize phase, a step of zero when it is written, a pure state when it runs
     @test_throws "the beta_step of a Thermalize cannot be zero" Thermalize(hamiltonian = h, beta = 1.,

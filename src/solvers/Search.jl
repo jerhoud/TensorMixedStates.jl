@@ -91,7 +91,8 @@ end
 """
     prepared_operator(state, op)
 
-the `PreMPO` of the operator `op` of a search on `state`, or `op` itself when it is one
+the `PreMPO` of the operator `op` of a search or of `thermalize` on `state`, or `op` itself when
+it is one
 """
 prepared_operator(state::State, a::IndexedOp) = PreMPO(state, a)
 prepared_operator(state::State{R}, pre::PreMPO{R}) where {R <: PM} = check_pre(pre, state)
@@ -102,7 +103,7 @@ prepared_operator(::State, ::PreMPO) =
 prepared_operator(::State, ::MPO) =
     error("the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO")
 
-prepared_operator(::State, x) = error("$(repr(x)) is not an operator to search the state of")
+prepared_operator(::State, x) = error("$(repr(x)) is not an operator or its PreMPO")
 
 """
     orthogonal_args(state, pre, orthogonal_to, weight)
