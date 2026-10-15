@@ -658,6 +658,16 @@ end
     m = placed(c, 1, true) * placed(n, 2, false) * placed(c', 3, true) * placed(c, 5, true) *
         placed(n, 6, false) * placed(c', 8, true) * placed(c + c', 4, true) * placed(n, 7, false)
     @test TMS.system_matrix(Pure, System(8, fe), TMS.lower(System(8, fe), op)) ≈ m
+    # a tensor product in a product is the product of its factors: merged whole, Z(1) * TX on 10
+    # qubits took 100 s through its dense matrix, and placed in any order on fermions it equals
+    # the product of the matrices of its factors
+    tx = foldl(⊗, fill(X, 12))
+    @test length(TMS.lower(System(12, q), Z(1) * tx(1:12...))) == 1
+    @test expect(State{Pure}(System(12, q), ["Y+" ; fill("+", 11)]), Z(1) * tx(1:12...)) ≈ im
+    f4 = System(4, fe)
+    mat(o) = TMS.system_matrix(Pure, f4, TMS.lower(f4, o))
+    fs = [(C ⊗ C)(1, 3), dag(C)(3), (dag(C) ⊗ N ⊗ C)(2, 1, 4), C(1)]
+    @test mat(prod(fs)) ≈ prod(mat.(fs))
     # blocks equal up to rounding are one block
     z, zr = [1. 0. ; 0. -1.], [1. 0. ; 0. -0.9999999999999998]
     term(m) = TMS.Term(1., [1 => m], [0], Int[], Int[])
@@ -687,10 +697,13 @@ end
     g = TMS.gathered(s5, Swap(1, 3) * X(2) * Z(3))
     @test length(TMS.prodsubs(g)) == 2 && last(TMS.prodsubs(g)) == X(2)
     # a factor linked to both keeps them apart, and a merge that would give more terms is
-    # refused: the two hops would merge into n₁(1 - n₄), cut into 4 terms by its identity parts
+    # refused
     @test TMS.gathered(s5, Swap(1, 2) * Swap(2, 3) * Swap(1, 2)) == Swap(1, 2) * Swap(2, 3) * Swap(1, 2)
+    # a tensor product is taken as the product of its factors: the two hops merge site by site,
+    # into n₁ and 1 - n₄ beside the swap, where merged whole into n₁(1 - n₄) of two sites they
+    # would be cut into more terms by its identity parts
     hops = (dag(C) ⊗ C)(1, 4) * Swap(2, 3) * (dag(C) ⊗ C)(4, 1)
-    @test TMS.gathered(f5, hops) == (dag(C) ⊗ C)(1, 4) * (dag(C) ⊗ C)(4, 1) * Swap(2, 3)
+    @test length(TMS.prodsubs(TMS.gathered(f5, hops))) == 3
     @test nterms(f5, hops) == 4
 
     # the result is a normal form, which the pass leaves as it is, and the operator stays the

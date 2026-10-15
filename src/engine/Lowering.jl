@@ -922,12 +922,28 @@ function merged_pass(system::System, fs, info, refused)
 end
 
 """
+    as_product(a)
+
+the placed operator `a`, a placed tensor product being taken as the product of its factors
+placed, `(A ⊗ B)(i, j) == A(i) * B(j)`
+"""
+as_product(a::AtIndex{IsOperator}) =
+    if a.op isa TensorOp
+        ProdOp(IndexedOp{IsOperator}[ as_product(o(a.index[r]...))
+                                      for (o, r) in zip(a.op.subs, factor_sites(a.op)) ])
+    else
+        a
+    end
+as_product(a) = a
+
+"""
     gathered(system, op)
 
 the placed operator `op` rewritten without developing anything, into a normal form: in each
-product, two factors sharing a site are merged where they can be, see `merged_pass`, until
-nothing merges, then the factors are sorted by their sites as far as they (anti)commute, see
-`sort_factors!`. Sums are gathered term by term, a sum on a single site becoming the operator
+product, a tensor product is taken as the product of its factors, see `as_product`, which then
+merge one by one rather than through the dense matrix of the whole, two factors sharing a site
+are merged where they can be, see `merged_pass`, until nothing merges, then the factors are
+sorted by their sites as far as they (anti)commute, see `sort_factors!`. Sums are gathered term by term, a sum on a single site becoming the operator
 of its matrix, as a merged product does, and an operator in normal form is left as it is.
 """
 function gathered(system::System, a::SumOp{IsOperator, Indexed})
@@ -944,7 +960,7 @@ gathered(system::System, a::ScalarOp{IsOperator, Indexed}) =
 gathered(::System, a::Union{AtIndex{IsOperator}, IdentityOp{IsOperator, Indexed}}) = a
 
 function gathered(system::System, a::ProdOp{IsOperator, Indexed})
-    p = ProdOp(IndexedOp{IsOperator}[ gathered(system, x) for x in a.subs ])
+    p = ProdOp(IndexedOp{IsOperator}[ gathered(system, as_product(x)) for x in a.subs ])
     coef = scalarcoef(p)
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(p) if !(x isa IdentityOp) ]
     info = [ (sites_of(x), parity_on(system, x)) for x in fs ]
