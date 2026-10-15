@@ -166,9 +166,11 @@ function write_checkpoint(c::Checkpointer)
     end
     # at once, where the mv of Julia 1.10 removes checkpoint.json before renaming
     Base.Filesystem.rename(tmp, checkpoint_json(c.dir))
-    rm(joinpath(c.dir, state_file(3 - g)); force = true)
+    # before the other generation goes: a checkpoint written again after an interrupt there goes
+    # over that one, not over the one checkpoint.json names
     c.generation = g
     c.written = k
+    rm(joinpath(c.dir, state_file(3 - g)); force = true)
     c.next = time() + c.interval
     return nothing
 end
