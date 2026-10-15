@@ -680,6 +680,24 @@ the number of terms of the placed operator `op` on `system`
 term_count(system::System, a::IndexedOp{IsOperator}) = length(pure_terms(system, a, ()))
 
 """
+    more_terms(system, m, a, x)
+
+whether the factor `m`, the merge of the factors `a` and `x`, has more terms on `system` than
+`a` and `x` together; counted on the system conserving nothing when one of them has no definite
+charge, as a merge may have on its way to a product that has one
+"""
+function more_terms(system::System, m, a, x)
+    counts(sys) = (term_count(sys, m), term_count(sys, a), term_count(sys, x))
+    cm, ca, cx = try
+        counts(system)
+    catch e
+        e isa FluxError || rethrow()
+        counts(weaken(system, ()))
+    end
+    return cm > ca * cx
+end
+
+"""
     count_add!(tree, k, x)
 
 add `x` to the count of position `k` of `tree`, a Fenwick tree of counts
@@ -872,7 +890,7 @@ function merged_pass(system::System, fs, info, refused)
            (issubset(oinfo[i][1], sx) || issubset(sx, oinfo[i][1])) && (out[i], x) ∉ refused
             a = out[i]
             m = merged(system, a, x)
-            if m isa AtIndex && term_count(system, m) > term_count(system, a) * term_count(system, x)
+            if m isa AtIndex && more_terms(system, m, a, x)
                 push!(refused, (a, x))
             else
                 changed = true

@@ -1635,6 +1635,10 @@ end
     # and so is an operator of several sites given by its matrix, whose split refused it with an
     # error that expect did not take for a FluxError
     @test expect(b, Operator{2}("XX", matrix(X ⊗ X, Qubit(), Qubit()))(1, 2)) ≈ 1
+    # a product of definite charge whose gathering merges two factors into one of none, which
+    # was refused, the merge being counted on the charged system
+    @test expect(b, X(1) * Swap(1, 2) * X(2)) ≈ expect(b, Swap(1, 2)) ≈ 1
+    @test norm(evolve(-im * X(1) * Swap(1, 2) * X(2), 0.1, b)) ≈ 1
     # under a strong symmetry, a channel of several sites given by its matrix gets the refusal
     # of the strong symmetry, as one of one site does
     @test_throws "which conserving it strongly forbids" TMS.lower(System(3, Fermion(conserve = strong(N))),
