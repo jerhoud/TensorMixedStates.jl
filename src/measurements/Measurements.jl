@@ -14,7 +14,7 @@ the purity ``\\mathrm{tr}(\\rho^\\dagger\\rho) / (\\mathrm{tr}\\,\\rho)^2``, whi
 mixed one, above 1 only for a matrix that is not positive or not Hermitian.
 """
 purity(::State{Pure}) = 1.
-purity(state::State{Mixed}) = (norm(state.state) / real(trace(state)))^2
+purity(state::State{Mixed}) = (norm(state.state) / nonzero_trace(state, "purity"))^2
 
 """
     adjoint_tensor(state, i)
@@ -75,7 +75,7 @@ pure representation.
 """
 hermiticity(::State{Pure}) = 1.
 hermiticity(state::State{Mixed}) =
-    0.5 + 0.5 * real(dot(state.state, dag(state).state)) / norm(state.state)^2
+    0.5 + 0.5 * real(dot(state.state, dag(state).state)) / nonzero_norm(state, "hermiticity")^2
 
 """
     cut_svd(state, cut)
@@ -90,6 +90,7 @@ function cut_svd(state::State, cut::Int)
         error("cannot compute the entanglement entropy at site $cut of a $n site state, the " *
               "cut is on the right of a site so it must be between 1 and $n")
     end
+    nonzero_norm(state, "an entanglement entropy")
     s = orthogonalize(state.state, cut)
     U, S = svd(s[cut], (linkinds(s, cut - 1)..., siteinds(s, cut)...))
     return U, S
@@ -430,9 +431,11 @@ product state: use `hs_fidelity`.
 
     fidelity(state, ground_state)
 """
-fidelity(a::State{Pure}, b::State{Pure}) = abs2(inner(a, b)) / (norm(a)^2 * norm(b)^2)
+fidelity(a::State{Pure}, b::State{Pure}) =
+    abs2(inner(a, b)) / (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
 
-fidelity(p::State{Pure}, r::State{Mixed}) = real(inner(mix(p), r)) / (norm(p)^2 * real(trace(r)))
+fidelity(p::State{Pure}, r::State{Mixed}) =
+    real(inner(mix(p), r)) / (nonzero_trace(p, "fidelity") * nonzero_trace(r, "fidelity"))
 
 fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
 
@@ -447,7 +450,8 @@ the normalised Hilbert-Schmidt overlap of two mixed states of the same system,
 ``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``, 1 exactly when they are
 proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 """
-hs_fidelity(a::State{Mixed}, b::State{Mixed}) = real(inner(a, b)) / (norm(a) * norm(b))
+hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
+    real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
 """
     variance(state::State{Pure}, op)
@@ -463,7 +467,7 @@ is refused.
 """
 function variance(state::State{Pure}, mpo::MPO)
     st = state.state
-    n2 = real(dot(st, st))
+    n2 = nonzero_trace(state, "variance")
     # the bra primed: unprimed, `inner` takes a deprecated fallback
     e = real(inner(prime(st), mpo, st)) / n2
     e2 = real(inner(mpo, st, mpo, st)) / n2

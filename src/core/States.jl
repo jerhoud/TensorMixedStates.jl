@@ -470,7 +470,7 @@ rounding leaves.
     truncate(state; limits = Limits(cutoff = 1e-10, maxdim = 50))
 """
 truncate(state::State; limits::Limits) =
-    State(state, truncate(state.state; truncation(limits)...))
+    State(state, guarded(st -> truncate(st; truncation(limits)...), vanishes_exactly, state.state))
 
 """
     mix(::State)
@@ -678,6 +678,29 @@ function trace(state::State{Mixed})
 end
 
 """
+    nonzero_trace(state, what)
+    nonzero_norm(state, what)
+
+the real part of the trace, or the norm, of `state`, by which `what` divides, refused when it
+is zero, as for the null state an operator annihilating a state leaves
+"""
+function nonzero_trace(state::State, what)
+    t = real(trace(state))
+    if iszero(t)
+        error("$what divides by the trace of the state, which is zero, as for the null state")
+    end
+    return t
+end
+
+function nonzero_norm(state::State, what)
+    n = norm(state.state)
+    if iszero(n)
+        error("$what divides by the norm of the state, which is zero, as for the null state")
+    end
+    return n
+end
+
+"""
     traced(state, kept)
 
 the mixed `state` with its sites outside the increasing positions `kept` traced out, on the
@@ -711,8 +734,12 @@ end
 the state rescaled to norm one on a pure representation, to a trace of real part one on a
 mixed one.
 """
-normalize(state::State{Pure}) = State(state, normalize(state.state))
-normalize(state::State{Mixed}) = State(state, state.state / real(trace(state)))
+function normalize(state::State{Pure})
+    nonzero_trace(state, "normalize")
+    return State(state, normalize(state.state))
+end
+
+normalize(state::State{Mixed}) = State(state, state.state / nonzero_trace(state, "normalize"))
 
 normalize(state::AbstractState) = throw(MethodError(normalize, (state,)))
 

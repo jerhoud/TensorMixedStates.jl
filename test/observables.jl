@@ -2066,3 +2066,42 @@ end
     @test_throws "interrupted" TMS.cached!((w, _) -> (resize!(w, 3); error("interrupted")), v, ψ)
     @test isempty(v)
 end
+
+@testset "The null state" begin
+    # which an operator annihilating a state leaves, and ITensors fails on its charged tensors
+    # of zero: every linear operation gives it back, and every one dividing by its norm or its
+    # trace refuses it, where they failed deep in ITensors or gave NaN. A new operation goes here
+    hop = dag(C)(1) * C(2) + dag(C)(2) * C(1)
+    refused = [normalize, s -> expect(s, N(1)), s -> expect1(s, N), s -> expect2(s, (N, N)),
+               s -> measure(s, [N(1)]), s -> entanglement_entropy(s, 2),
+               s -> probabilities(s, N(1)), s -> sample(s), s -> sample(s, 1),
+               s -> collapse(s, N(1))]
+    for sys in (System(4, Fermion(conserve = N)), System(4, Fermion()))
+        ψ = State{Pure}(sys, ["Occ", "Emp", "Occ", "Emp"])
+        for st in (ψ, mix(ψ))
+            z = apply(C(2), st)
+            @test norm(z) == 0
+            @test norm(truncate(z; limits = Limits(maxdim = 2))) == 0
+            @test norm(z + st) ≈ norm(st)
+            @test norm(apply(dag(C)(1) * C(3), z)) == 0
+            @test norm(apply((dag(C) ⊗ C)(1, 4), z)) == 0
+            @test norm(evolve(-im * hop, 0.1, z)) == 0
+            @test norm(evolve(-im * hop, 0.1, z; algo = ApproxW(order = 2))) == 0
+            f = tempname() * ".h5"
+            save_state(f, "z", z)
+            @test norm(load_state(f, "z")) == 0
+            for g in refused
+                @test_throws "which is zero, as for the null state" g(z)
+            end
+        end
+        z = apply(C(2), ψ)
+        @test norm(mix(z)) == 0
+        @test_throws "which is zero, as for the null state" fidelity(z, ψ)
+        @test_throws "which is zero, as for the null state" variance(z, N(1))
+        zm = apply(C(2), mix(ψ))
+        @test norm(partial_trace(zm, [1, 2])) == 0
+        @test_throws "which is zero, as for the null state" purity(zm)
+        @test_throws "which is zero, as for the null state" hermiticity(zm)
+        @test_throws "which is zero, as for the null state" hs_fidelity(zm, mix(ψ))
+    end
+end

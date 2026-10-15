@@ -419,7 +419,7 @@ function prepared_value(state::State, p::PreparedOp)
     if !isnothing(p.block)
         v += expect_block(state, p.block)
     end
-    return v / real(trace(state))
+    return v / nonzero_trace(state, "expect")
 end
 
 """
@@ -560,7 +560,7 @@ function expect1(state::State, ops::AbstractArray{<:SimpleOp})
     end
     sys = state.system
     n = length(sys)
-    scale = real(trace(state))
+    scale = nonzero_trace(state, "expect1")
     # the density matrix of each site, shared by the operators measured there
     locals = Vector{Union{Nothing, ITensor}}(nothing, n)
     return map(ops) do o
@@ -673,7 +673,7 @@ in `sites`, each pair being defined on all of them with one parity there, its en
 """
 function fast_pairs!(r, state::State{Pure}, pairs, parities, sites)
     sys = state.system
-    scale = real(trace(state))
+    scale = nonzero_trace(state, "expect2")
     rules = [ swap_rule(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
     upto = maximum(sites)
     for i in sites
@@ -709,7 +709,7 @@ end
 
 function fast_pairs!(r, state::State{Mixed}, pairs, parities, sites)
     sys = state.system
-    scale = real(trace(state))
+    scale = nonzero_trace(state, "expect2")
     rules = [ swap_rule(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
     need = unique(parities)
     f(k) = matrix(F, sys[k])
@@ -764,7 +764,7 @@ round, with the sign of swapping two odd parts.
 """
 function general_pairs!(r, state::State, (o1, o2), on1, on2)
     sys = state.system
-    scale = real(trace(state))
+    scale = nonzero_trace(state, "expect2")
     parts(o, k) = graded_parts(matrix(o, sys[k]), matrix(F, sys[k]))
     for i in on1, j in on2
         r[i, j] = i == j ? site_value(state, matrix(o1 * o2, sys[i]), i) / scale : 0

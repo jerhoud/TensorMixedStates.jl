@@ -203,6 +203,7 @@ projectors on the eigenspaces of its matrix, placed on its sites, whose Jordan-W
 the descent lays; `what` names the caller in the refusals
 """
 function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
+    nonzero_trace(state, what)
     system = state.system
     check_indices(system, op)
     inv = involution(system, op)
@@ -304,6 +305,7 @@ default.
     sample(state, Z(1) * Z(2))
 """
 function sample(state::State{Pure}; rng = Random.default_rng())
+    nonzero_trace(state, "sample")
     st = orthogonalize(state.state, 1)
     st[1] /= norm(st[1])
     return sample(rng, st) .- 1
@@ -311,6 +313,7 @@ end
 
 function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "sample")
+    nonzero_trace(state, "sample")
     st = orthogonalize(state.state, pos)
     t = st[pos] / norm(st[pos])
     ind = siteind(Pure, state.system, pos)
@@ -324,7 +327,7 @@ end
 function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "sample")
     state = weak_form(state)
-    l = get_left(state, pos) / real(trace(state))
+    l = get_left(state, pos) / nonzero_trace(state, "sample")
     r = get_right(state, pos)
     d = dim(state.system[pos])
     return draw(x -> real(scalar(l * obs_tensor(state, level_projector(d, x), pos) * r)), d,
@@ -332,6 +335,7 @@ function sample(state::State{Mixed}, pos::Int; rng = Random.default_rng())
 end
 
 function sample(state::State{Mixed}; rng = Random.default_rng())
+    nonzero_trace(state, "sample")
     state = weak_form(state)
     n = length(state)
     result = Vector{Int}(undef, n)

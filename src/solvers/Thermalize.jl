@@ -13,7 +13,7 @@ by one step of the method `algo`, `pre` being the `PreMPO` of `H` on the mixed s
 function thermal_step(algo::EvolutionAlgorithm, pre::PreMPO{Mixed}, state::State{Mixed},
                       dbeta::Real, step::Int, limits::Limits)
     state = evolve_step(algo, pre, nothing, state, 0., -dbeta / 2, step, limits)
-    t = real(trace(state))
+    t = nonzero_trace(state, "thermalize")
     if !(t > 0)
         error("the trace of the state reached $t at step $step of thermalize: take smaller steps " *
               "or larger limits")

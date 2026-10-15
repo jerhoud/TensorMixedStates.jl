@@ -107,6 +107,10 @@ one's own adds a method.
 """
 function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number, dt::Number,
                      step::Int, limits::Limits)
+    # an evolution leaves the null state null, which ITensors fails on
+    if vanished(state.state)
+        return state
+    end
     mpo = isnothing(coefs) ? cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing) :
                              make_mpo(pre, [ f(time + dt / 2) for f in coefs ])
     tr = truncation(limits)
@@ -129,6 +133,9 @@ end
 
 function evolve_step(algo::ApproxW, pre::PreMPO, coefs, state::State, time::Number, dt::Number,
                      step::Int, limits::Limits)
+    if vanished(state.state)
+        return state
+    end
     mpos = if isnothing(coefs)
         cached_mpos(() -> approx_W_mpos(pre, dt, algo), pre, :approx_W, (algo.order, algo.w, dt))
     else
