@@ -672,6 +672,11 @@ end
     z, zr = [1. 0. ; 0. -1.], [1. 0. ; 0. -0.9999999999999998]
     term(m) = TMS.Term(1., [1 => m], [0], Int[], Int[])
     @test length(TMS.reduced([term(z), term(zr), term(complex(z) .+ 1e-17im)])) == 1
+    # and their values are not rounded: a phase on each of four sites was measured off by
+    # 2.6e-13, its blocks snapped to a grid of 2^-43
+    ph = Operator{1}("Ph", TMS.LinearAlgebra.Diagonal([1, exp(2π * im * 4 / 9)]))
+    @test abs(expect(State{Pure}(System(4, fe), "Occ"), prod(ph(i) for i in 1:4)) -
+              exp(2π * im * 16 / 9)) < 1e-14
 end
 
 @testset "Products gathered before the descent" begin

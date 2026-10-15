@@ -136,25 +136,53 @@ function (a::Term * b::Term)
 end
 
 """
-    snapped(x, q)
+    representatives(blocks)
 
-the number `x` rounded to a multiple of `q`, a power of two, so that numbers equal up to rounding
-become equal while exact ones, as 1 or 0.5, stay as they are
+for each of the matrices `blocks`, the first of them in an order of their own equal to it up to
+rounding, see `nearly`, or itself, so that blocks equal up to rounding become one, their values
+untouched. They are sorted by their projection on fixed random weights, which matrices equal up
+to rounding have within a window of the width of rounding, each compared with the
+representatives of those of its window before it alone
 """
-snapped(x::Real, q::Real) = round(x / q) * q
-snapped(x::Complex, q::Real) = complex(snapped(real(x), q), snapped(imag(x), q))
+function representatives(blocks::Vector{Matrix})
+    reps = similar(blocks)
+    for n in unique(length.(blocks))
+        group = findall(b -> length(b) == n, blocks)
+        # fixed, so that an operator always gives the same MPO, and drawn from a generator of
+        # their own, which leaves the draws of the user as they are
+        w = randn(Xoshiro(20261015), 2n)
+        p = [ sum(w[j] * real(b[j]) + w[n + j] * imag(b[j]) for j in 1:n) for b in blocks[group] ]
+        δ = norm(w) * rounding_tol * maximum(norm, blocks[group])
+        order = sortperm(p)
+        for (a, g) in enumerate(order)
+            i = group[g]
+            reps[i] = blocks[i]
+            for c in a-1:-1:1
+                if p[g] - p[order[c]] > δ
+                    break
+                end
+                r = reps[group[order[c]]]
+                if size(r) == size(blocks[i]) && nearly(blocks[i], r)
+                    reps[i] = r
+                    break
+                end
+            end
+        end
+    end
+    return reps
+end
 
 """
     reduced(terms)
 
 the terms with each block equal to a multiple of the identity taken out, every other block
-divided by its first element above rounding, that element going into the coefficient, and its
-elements rounded to a grid of rounding, see `snapped`, a term that vanishes on a site dropped,
-and the terms of the same blocks gathered, a real coefficient kept real
+divided by its first element above rounding, that element going into the coefficient, and made
+real when its imaginary part is of rounding, a term that vanishes on a site dropped, the blocks
+equal up to rounding made one, see `representatives`, and the terms of the same blocks
+gathered, a real coefficient kept real
 """
 function reduced(terms::Vector{Term})
-    out = Term[]
-    seen = Dict{Tuple{Vector{Pair{Int, Matrix}}, Vector{Int}, Vector{Int}}, Int}()
+    normed = Tuple{Number, Vector{Pair{Int, Matrix}}, Vector{Int}, Term}[]
     for t in terms
         coef = t.coef
         blocks = Pair{Int, Matrix}[]
@@ -172,15 +200,28 @@ function reduced(terms::Vector{Term})
             coef *= m[k]
             b = m / m[k]
             b[k] = 1
-            b = snapped.(b, exp2(floor(log2(rounding_tol * norm(b)))))
-            if eltype(b) <: Complex && all(x -> iszero(imag(x)), b)
+            # rounding between charges, which an eigendecomposition leaves behind, is no charge
+            b[abs.(b) .≤ rounding_tol * norm(b)] .= 0
+            # as the phases a split by singular values leaves on its factors, see `split_matrix`
+            if eltype(b) <: Complex && all(x -> abs(imag(x)) ≤ rounding_tol * norm(b), b)
                 b = real(b)
             end
-            push!(blocks, i => no_signed_zero(b))
+            push!(blocks, i => b)
             push!(parities, p)
         end
-        if coef == 0
-            continue
+        if coef ≠ 0
+            push!(normed, (coef, blocks, parities, t))
+        end
+    end
+    reps = no_signed_zero.(representatives(Matrix[ m for (_, bs, _, _) in normed for (_, m) in bs ]))
+    out = Term[]
+    seen = Dict{Tuple{Vector{Pair{Int, Matrix}}, Vector{Int}, Vector{Int}}, Int}()
+    r = 0
+    for (coef, bs, parities, t) in normed
+        blocks = Pair{Int, Matrix}[]
+        for (i, _) in bs
+            r += 1
+            push!(blocks, i => reps[r])
         end
         key = (blocks, t.kets, t.bras)
         j = get(seen, key, 0)
