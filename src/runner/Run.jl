@@ -559,7 +559,9 @@ The first three are overridden by the environment variables `TMS_MAX_TIME`,
 The run also stops, writing a checkpoint, when the file `stop` appears in its directory, and on
 an interrupt. Runs may be nested or run on several threads: the outermost one sets the threading
 and the behaviour of Ctrl-C, which the last to end puts back, and an interrupt stops a nested run
-and the runs it is in, each resuming where it was.
+and the runs it is in, each resuming where it was. A nested run, as in an `Update`, is done again
+when the run it is in resumes, the same way with `output = devnull` and a `seed` only: in a
+directory of its own, it resumes its checkpoint or starts over, a seed drawn anew.
 """
 function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0,
                 threading::Union{Nothing, Symbol} = :dense, output::Union{Nothing, IO} = nothing)
