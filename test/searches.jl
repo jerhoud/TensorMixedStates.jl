@@ -379,6 +379,10 @@ end
     @test_throws "the PreMPO was prepared on a state of the other representation" steady_state(
         PreMPO(st, h), ρ; algo)
     @test_throws "3 is not an operator or its PreMPO" ground_state(3, st; algo)
+    # the null state, which failed in KrylovKit
+    @test_throws "the search divides by the norm of the state, which is zero, as for the null state" ground_state(
+        h, 0 * st; algo)
+    @test_throws "as for the null state" steady_state(Dissipator(Sm)(1), 0 * ρ; algo)
     @test_throws "mpo_algo is \"naive\" or \"zipup\", not \"fit\"" steady_state(
         Dissipator(Sm)(1), ρ; algo, mpo_algo = "fit")
     # the options of ITensorMPS are not passed on, `outputlevel` included

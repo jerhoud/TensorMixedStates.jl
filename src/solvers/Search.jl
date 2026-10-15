@@ -56,6 +56,7 @@ excited states.
 function search(algo::Dmrg, mpo::MPO, state::State, limits::Limits; sweep_done = nothing,
                 krylov::Krylov = Krylov(), done::Int = 0, energy = nothing,
                 orthogonal_to::Vector{State{Pure}} = State{Pure}[], weight::Real = 0.)
+    nonzero_norm(state, "the search")
     # ITensorMPS, asked for no sweep, gives an energy of 0; a resumed search gives back that of its
     # last sweep, as the search it resumes
     if done ≥ algo.nsweeps
