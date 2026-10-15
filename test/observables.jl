@@ -2041,3 +2041,12 @@ end
     end
     @test length(m.prepared) == 2
 end
+
+@testset "A cache whose filling fails is left empty" begin
+    # a Ctrl-C while a cache was filled left it sized and half filled, which the next
+    # measurement of the state took for filled, failing on an UndefRefError
+    ψ = State{Pure}(System(2, Qubit()), "Up")
+    v = Any[]
+    @test_throws "interrupted" TMS.cached!((w, _) -> (resize!(w, 3); error("interrupted")), v, ψ)
+    @test isempty(v)
+end

@@ -132,9 +132,8 @@ uncontracted
 function extend_left!(l, state::State{Pure}, i::Int)
     st = state.state
     ll = ITensorMPS.leftlim(st) + 1
-    j = length(l)
-    resize!(l, i)
-    for k in j+1:i
+    # pushed one by one: an interruption leaves what is there complete
+    for k in length(l)+1:i
         llink = commonind(st[k-1], st[k])
         v = if k <= ll
             # the directions the branch below leaves, the ket link as st[k-1] holds it and the
@@ -143,17 +142,15 @@ function extend_left!(l, state::State{Pure}, i::Int)
         else
             l[k-1] * identity_at(state, k-1) * dag(st[k-1]')
         end
-        l[k] = v * st[k]
+        push!(l, v * st[k])
     end
     return l
 end
 
 function extend_left!(l, state::State{Mixed}, i::Int)
     st = state.state
-    j = length(l)
-    resize!(l, i)
-    for k in j+1:i
-        l[k] = l[k-1] * identity_at(state, k-1) * st[k]
+    for k in length(l)+1:i
+        push!(l, l[k-1] * identity_at(state, k-1) * st[k])
     end
     return l
 end
@@ -198,20 +195,16 @@ least, up to site `i`
 """
 function extend_strung!(l, state::State{Pure}, i::Int)
     st = state.state
-    j = length(l)
-    resize!(l, i)
-    for k in j+1:i
-        l[k] = l[k-1] * string_at(state, k-1) * dag(st[k-1]') * st[k]
+    for k in length(l)+1:i
+        push!(l, l[k-1] * string_at(state, k-1) * dag(st[k-1]') * st[k])
     end
     return l
 end
 
 function extend_strung!(l, state::State{Mixed}, i::Int)
     st = state.state
-    j = length(l)
-    resize!(l, i)
-    for k in j+1:i
-        l[k] = l[k-1] * string_at(state, k-1) * st[k]
+    for k in length(l)+1:i
+        push!(l, l[k-1] * string_at(state, k-1) * st[k])
     end
     return l
 end

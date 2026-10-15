@@ -124,12 +124,18 @@ PreObs() = PreObs([], [], [], [], [], [], [], [], ReentrantLock())
     cached!(create!, v, state)
 
 the cache `v` of `state`, filled by `create!(v, state)` on first use under the lock of
-`PreObs`; once filled it never changes, and is read without the lock
+`PreObs`; once filled it never changes, and is read without the lock. Emptied when the filling
+fails, by an interruption included, rather than left half filled for the next reading
 """
 function cached!(create!, v, state)
     lock(state.preobs.lock) do
         if isempty(v)
-            create!(v, state)
+            try
+                create!(v, state)
+            catch
+                empty!(v)
+                rethrow()
+            end
         end
     end
     return v
