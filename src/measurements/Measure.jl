@@ -372,6 +372,25 @@ end)
 Fidelity(name::Symbol) = on_named("Fidelity", name, (st, r) -> fidelity(st, r))
 
 """
+    applied_element(ref, op, state)
+
+``\\langle ref | op | state \\rangle`` for the operator `op` placed on sites, applied to `state`,
+or between the states conserving nothing when it changes the charges by no definite amount, as
+`expect` takes it
+"""
+function applied_element(ref::State{Pure}, a::IndexedOp{IsOperator}, state::State{Pure})
+    applied = try
+        apply(a, state)
+    catch e
+        if !(e isa FluxError)
+            rethrow()
+        end
+        return complex(inner(plain_form(ref), apply(a, plain_form(state))))
+    end
+    return complex(inner(ref, applied))
+end
+
+"""
     matrix_element(ref, op, state)
 
 ``\\langle ref | op | state \\rangle`` for two pure states, with an operator placed on sites, or
@@ -384,10 +403,9 @@ function matrix_element(ref::State, op, state::State)
     end
     if op isa SimpleOp
         on = defined_sites(state.system, op)
-        return [ i in on ? complex(inner(ref, apply(op(i), state))) : missing
-                 for i in 1:length(state) ]
+        return [ i in on ? applied_element(ref, op(i), state) : missing for i in 1:length(state) ]
     end
-    return complex(inner(ref, apply(op, state)))
+    return applied_element(ref, op, state)
 end
 
 """

@@ -1670,6 +1670,12 @@ end
     @test variance(b, X(1)) ≈ 1
     @test variance(b, X(1) + X(2)) ≈ 4
     @test last(only(measure(b, [Variance(X(1))]))) ≈ 1
+    # and so are its matrix elements, by inner and Overlap, which were refused: X(1)|b⟩ holds
+    # |↓↓⟩ with the amplitude 1/√2, and so does X(2)|b⟩
+    dd = State{Pure}(sys, ["Dn", "Dn"])
+    @test inner(dd, X(1), b) ≈ 1 / √2
+    @test last(only(measure(b, [Overlap(dd, X(1))]))) ≈ 1 / √2
+    @test last(only(measure(b, [Overlap(dd, X)]))) ≈ fill(1 / √2, 2)
     # apply keeps refusing it, its result having no definite charges
     @test_throws "no definite flux" apply(X(1), b)
 end
