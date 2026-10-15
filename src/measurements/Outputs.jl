@@ -230,7 +230,8 @@ function put_row!(t::TextTable, time, m::Measure, row)
         if !isnothing(t.path) && !isnothing(t.columns)
             k = findfirst(k -> columns[k] ≠ t.columns[k], eachindex(columns))
             what = k == 1 ? "the time does" : "the values of $(first(row[k - 1])) do"
-            error("$what not fit the columns $(t.path) took at its first line")
+            error("$what not fit the columns $(t.path) took at its first line: a value changing " *
+                  "its cells, as one missing at first, needs a .json file")
         end
         t.columns = columns
         println(t.io, join(reduce(vcat, columns), '\t'))

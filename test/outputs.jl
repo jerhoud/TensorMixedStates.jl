@@ -118,6 +118,10 @@ end
             o, ψ, "v.dat" => ["v" => c -> c.v]; time = 1, v = [1., 2im])
         @test_throws "the time does not fit the columns" TMS.output!(
             o, ψ, "v.dat" => ["v" => c -> c.v]; time = 1im, v = [1., 2.])
+        # a value missing at first, as that of a state named later, is sent to a JSON Lines file
+        TMS.output!(o, ψ, "w.dat" => ["w" => c -> c.w]; time = 0, w = missing)
+        @test_throws "as one missing at first, needs a .json file" TMS.output!(
+            o, ψ, "w.dat" => ["w" => c -> c.w]; time = 1, w = 1im)
         TMS.close!(o)
         @test readlines(joinpath(dir, "a.dat")) == ["time\tX(1)", "0\t0", "2\t0"]
         @test isempty(readlines(joinpath(dir, "b.dat")))

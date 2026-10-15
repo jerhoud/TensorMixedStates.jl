@@ -161,7 +161,9 @@ their `measurements`, given as pairs `destination => measurements`. The destinat
 
 - a file name: a text table, a line naming the columns, then a line per time measured, the
   numbers written with the format of the simulation, `SimData(format = "%.8g")` by default. A
-  file holds one list of measurements, and another list needs another file.
+  file holds one list of measurements, and another list needs another file. Its columns are
+  those of its first line: a value that changes its cells later, as that of a state named after
+  it, missing at first, needs a JSON Lines file.
 
   ```julia
   "magnetization" => [X, Z(1)]
