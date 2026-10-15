@@ -485,7 +485,9 @@ function variance(state::State{Pure}, op)
     mpo = try
         make_mpo(state, op)
     catch e
-        e isa FluxError || rethrow()
+        if !(e isa FluxError)
+            rethrow()
+        end
         # an operator changing the charges by no definite amount is measured on the state
         # conserving nothing, as expect does
         return variance(plain_form(state), op)

@@ -732,7 +732,9 @@ function more_terms(system::System, m, a, x)
     cm, ca, cx = try
         counts(system)
     catch e
-        e isa FluxError || rethrow()
+        if !(e isa FluxError)
+            rethrow()
+        end
         counts(weaken(system, ()))
     end
     return cm > ca * cx

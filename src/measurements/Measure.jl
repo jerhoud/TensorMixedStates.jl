@@ -435,7 +435,9 @@ function variance_of(state::State{Pure}, op)
     mpo = try
         make_mpo(state, op)
     catch e
-        e isa FluxError || rethrow()
+        if !(e isa FluxError)
+            rethrow()
+        end
         # measured on the state conserving nothing, as variance does
         p = make_mpo(plain_form(state), op)
         return st -> variance(plain_form(st), p)

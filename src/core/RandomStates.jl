@@ -42,7 +42,9 @@ function random_state(state::State{Pure}, linkdims::Int;
         st[i] = try
             ITensors.convert_eltype(eltype, copy(st[i]))
         catch e
-            e isa InexactError || rethrow()
+            if !(e isa InexactError)
+                rethrow()
+            end
             error("a state of complex amplitudes is not randomised into one of eltype $eltype")
         end
     end
