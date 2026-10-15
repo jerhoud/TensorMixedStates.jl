@@ -74,7 +74,8 @@ E1, ex = ground_state(ham, random_state(Pure, sys, 8); algo = Dmrg(nsweeps = 20)
 ψt = evolve(-im * ham, 1.0, gs; nsteps = 20, limits = lim)        # algo = Tdvp() by default
 ρt = evolve(L, 1.0, mix(gs); algo = ApproxW(order = 4), nsteps = 20, limits = lim)
 v, ρs = steady_state(L, mix(gs); algo = Dmrg(nsweeps = 10), limits = lim)
-logZ, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, limits = lim)
+lt, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, limits = lim)
+                                                                # lt = log Z - Σ log dᵢ
 ψg = apply(gates, State{Pure}(sys, "Up"); limits = lim)
 ```
 
