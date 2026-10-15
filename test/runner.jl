@@ -125,6 +125,10 @@ end
     @test_ok SimData(phases = [phases; GroundState(hamiltonian = Z(1), algo = Dmrg(nsweeps = 1))],
                      final_measurements = "f" => :energy)
     @test_throws "does not write one number" SimData(; phases, format = "%s %s")
+    # a negative seed, which Julia 1.10 refused once the run had started
+    @test_throws "the seed of a simulation is an integer of zero or above, got -1" SimData(;
+        phases, seed = -1)
+    @test SimData(; phases, seed = 0).seed == 0
     # the reserved names
     @test_throws "a name the run reserves" CopyState(:state => :rng)
     @test_throws "under another name" CopyState(:a => :a)

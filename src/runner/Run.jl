@@ -88,8 +88,9 @@ the description of a simulation, which `runTMS` runs.
 - `time_start`: the time the simulation starts at (default 0)
 - `final_measurements`: the measurements made at the end, see `output` (default `[]`)
 - `format`: the Printf format of the numbers written to text files (default `"%.8g"`)
-- `seed`: the seed of the random number generator of the run, `sim.rng`, drawn at random by
-  default and written in the file `stamp`, so that a run can be made again
+- `seed`: the seed of the random number generator of the run, `sim.rng`, an integer of zero or
+  above, drawn at random by default and written in the file `stamp`, so that a run can be made
+  again
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`.
@@ -116,6 +117,10 @@ struct SimData
     phases::Vector{Any}
     provided::Vector{Symbol}
     function SimData(name, description, time_start, final_measurements, format, seed, phases)
+        # which Julia 1.10 refuses
+        if !isnothing(seed) && seed < 0
+            error("the seed of a simulation is an integer of zero or above, got $seed")
+        end
         ps = map(check_phase, flatten_phases(phases))
         provided = check_values(ps, final_measurements)
         return new(name, description, time_start, final_measurements, check_format(format), seed,
