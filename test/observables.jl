@@ -1083,6 +1083,11 @@ end
     @test expect1(ψ, N) ≈ [ expect(ψ, N(i)) for i in 1:3 ]
     xx = expect2(ψ, (N, X))
     @test count(ismissing, xx) == 6 && xx[1, 2] ≈ expect(ψ, N(1) * X(2))
+    # an operator given by its matrix is defined on the sites of its dimension only, where it was
+    # taken as defined everywhere and failed on a boson
+    φ = random_state(Pure, System([Qubit(), Boson(3), Qubit()]), 2)
+    mx = expect1(φ, named([0 1 ; 1 0], "MyX"))
+    @test ismissing(mx[2]) && mx[1] ≈ expect(φ, X(1)) && mx[3] ≈ expect(φ, X(3))
     # and so does measure, X being Hermitian where it is defined, and N and X not commuting on
     # the qubit
     v, vv = last.(measure(ψ, [X, (N, X)]))

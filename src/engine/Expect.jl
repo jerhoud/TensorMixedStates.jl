@@ -460,11 +460,14 @@ expect(::State, a::GenericOp{IsOperator, N}) where N =
     defined_on(op, site)
 
 whether the generic operator `op` is defined on `site`: every operator it is made of, and every
-operator their definitions are made of, is declared there, and every state it projects on
+operator their definitions are made of, is declared there, every state it projects on, and a
+matrix it is given by is of the dimension of the site
 """
-function defined_on(a::Operator, site::AbstractSite)
+function defined_on(a::Operator{N}, site::AbstractSite) where N
     if a.expr isa GenericOp
         return defined_on(a.expr, site)
+    elseif a.expr isa Matrix
+        return size(a.expr, 1) == dim(site)^N
     elseif !isnothing(a.expr)
         return true
     end
