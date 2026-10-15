@@ -45,8 +45,9 @@ propertynames(c::Context) = (:state, :time, keys(getfield(c, :values))...)
 
 what a measurement written as a function returns to compare `value` with `reference`, numbers
 or arrays of one shape: `measure` gives `(value, reference, difference)`, the difference being
-`norm(value - reference)`, and refuses a difference beyond `tol`, or only warns with
-`warn = true`. Without `tol`, the three are recorded and nothing is refused.
+`norm(value - reference)` over the entries both have, `missing` when one misses an entry the
+other has, and refuses a difference beyond `tol` or missing, or only warns with `warn = true`.
+Without `tol`, the three are recorded and nothing is refused.
 
 # Examples
 
@@ -70,13 +71,17 @@ was given no time, refused or warned about when the check fails
 """
 function checked(name::String, ch::Check, time)
     a, b = ch.value, ch.reference
-    if size(a) ≠ size(b)
-        error("Check $name compares values of different shapes, $(size(a)) and $(size(b))")
+    shape(x) = x isa AbstractArray ? size(x) : ()
+    if shape(a) ≠ shape(b)
+        error("Check $name compares values of different shapes, $(shape(a)) and $(shape(b))")
     end
-    d = norm(a - b)
-    if !isnothing(ch.tol) && d > ch.tol
+    same = ismissing.(a) == ismissing.(b)
+    d = same ? sqrt(sum(abs2, skipmissing(a isa AbstractArray ? a .- b : [a - b]); init = 0.0)) :
+               missing
+    if !isnothing(ch.tol) && (!same || d > ch.tol)
         when = isnothing(time) ? "" : " at time $time"
-        message = "Check $name failed$when: $a and $b differ by $d, beyond tol = $(ch.tol)"
+        message = same ? "Check $name failed$when: $a and $b differ by $d, beyond tol = $(ch.tol)" :
+                         "Check $name failed$when: $a and $b miss different entries"
         if ch.warn
             @warn message
         else

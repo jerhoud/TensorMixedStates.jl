@@ -1829,6 +1829,14 @@ end
     @test_throws "Check chk compares values of different shapes, (2,) and (1, 2)" measure(
         st, "chk" => c -> Check([1.0, 2.0], [1.0 2.0]))
     @test_throws "different shapes, () and (1,)" measure(st, "chk" => c -> Check(1.0, [1.0]; tol = 1))
+    # entries missing on both sides, as where an operator is not defined, are left out, where a
+    # tol failed on a TypeError, and entries missing on one side alone fail it
+    qf = State{Pure}(System([Qubit(), Fermion()]), ["+", "Emp"])
+    ch = last(only(measure(qf, "chk" => c -> Check(expect1(c.state, X), [0.5, missing]; tol = 1))))
+    @test ch.value[1] ≈ 1 && ismissing(ch.value[2]) && ch.difference ≈ 0.5
+    @test_throws "and [1.0, 2.0] miss different entries" measure(
+        qf, "chk" => c -> Check([1.0, missing], [1.0, 2.0]; tol = 1))
+    @test ismissing(last(only(measure(qf, "chk" => c -> Check(missing, 1.0)))).difference)
     # a value not given, which 1.x compared as an empty value, failing on a MethodError: the
     # function reading it is refused, and given the value, the Check compares it
     @test_throws "this measurement reads energy" measure(st, "e" => c -> Check(c.energy, -1.0))
