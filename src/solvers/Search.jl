@@ -110,8 +110,9 @@ prepared_operator(::State, x) = error("$(repr(x)) is not an operator or its PreM
 
 the keywords of `search` for a state orthogonal to the pure states `orthogonal_to`, on the system
 of `state`, none when there are none: the states of another sector of charge than `state` are
-left out, orthogonal to it already, and the weight is by default the bound of the width of the
-spectrum of the Hamiltonian of `pre`, see `term_width`, above any gap between its eigenvalues
+left out, orthogonal to it already, the others normalized, so that `weight` multiplies their
+projectors, and the weight is by default the bound of the width of the spectrum of the
+Hamiltonian of `pre`, see `term_width`, above any gap between its eigenvalues
 """
 function orthogonal_args(state::State{Pure}, pre::PreMPO{Pure}, orthogonal_to::AbstractVector,
                          weight::Union{Nothing, Real})
@@ -123,7 +124,7 @@ function orthogonal_args(state::State{Pure}, pre::PreMPO{Pure}, orthogonal_to::A
             error("a state of orthogonal_to is on another system than that of the state")
         end
         if ITensorMPS.flux(m.state) == ITensorMPS.flux(state.state)
-            push!(ms, m)
+            push!(ms, normalize(m))
         end
     end
     return isempty(ms) ? (;) : (; orthogonal_to = ms, weight = something(weight, pre.width[]))

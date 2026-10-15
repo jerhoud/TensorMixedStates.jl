@@ -420,6 +420,11 @@ end
     @test e1 ≈ E[2] atol = 1e-9
     @test e1 ≈ real(expect(x, H))
     @test abs2(inner(g, x)) < 1e-12
+    # a state of another norm is taken normalized, where its squared norm scaled the penalty:
+    # 0.1g fell back on the ground state, the warning reading a weight and an overlap a hundred
+    # times off; the null state is refused
+    @test first(ground_state(H, r; algo, limits = lim, orthogonal_to = [0.1 * g])) ≈ E[2] atol = 1e-9
+    @test_throws "as for the null state" ground_state(H, r; algo, orthogonal_to = [0 * g])
     # the next one, with a weight above its gap, and one below, which falls back on the ground
     # state and warns
     e2, _ = ground_state(H, r; algo, limits = lim, orthogonal_to = [g, x], weight = 2(E[3] - E[1]))
