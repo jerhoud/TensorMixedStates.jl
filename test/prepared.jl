@@ -91,6 +91,11 @@ end
     # a term of zero coefficient has no channel and no say in the charge
     @test maxlinkdim(superposition(System(4, Qubit()), [1 => "Up", 0 => "Dn"])) == 1
     @test expect(superposition(System(4, Fermion(conserve = N)), [1 => "Occ", 0 => "Emp"]), N(1)) ≈ 1
+    # normalized once truncated, as they say: they were normalized before
+    terms = [1 => ["Up", "Dn", "Up", "Dn"], 0.8 => ["Dn", "Up", "Dn", "Up"], 0.3 => ["Up", "Up", "Dn", "Dn"]]
+    @test norm(superposition(System(4, Qubit()), terms; limits = Limits(maxdim = 1))) ≈ 1
+    @test trace(mixture(System(4, Qubit()), [ abs(c) => s for (c, s) in terms ];
+                        limits = Limits(maxdim = 1))) ≈ 1
     @test_throws "a nonzero term" superposition(System(4, Qubit()), [0 => "Up", 0 => "Dn"])
     @test_throws "a nonzero term" mixture(System(4, Qubit()), [0 => "Up"])
     @test_throws "cannot be one of 4 sites" superposition(System(4, Qubit()), [1 => "Up", 0 => ["Dn"]])

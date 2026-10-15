@@ -229,11 +229,11 @@ have the same charge.
     superposition(System(6, Qubit()), [1 => "Up", 1 => "Dn"])     # the GHZ state
 """
 function superposition(system::System, terms::AbstractVector{<:Pair}; limits::Limits = Limits())
-    st = normalize(State{Pure}(system, product_sum(Pure, system, terms)))
-    if limits == Limits()
-        return st
+    st = State{Pure}(system, product_sum(Pure, system, terms))
+    if limits ≠ Limits()
+        st = State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
     end
-    return State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
+    return normalize(st)
 end
 
 """
@@ -255,11 +255,11 @@ function mixture(system::System, terms::AbstractVector{<:Pair}; limits::Limits =
             error("the weights of a mixture are real and not negative, and $p is not")
         end
     end
-    st = normalize(State{Mixed}(system, product_sum(Mixed, system, terms)))
-    if limits == Limits()
-        return st
+    st = State{Mixed}(system, product_sum(Mixed, system, terms))
+    if limits ≠ Limits()
+        st = State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
     end
-    return State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
+    return normalize(st)
 end
 
 """
