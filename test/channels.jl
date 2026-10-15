@@ -380,6 +380,12 @@ end
     @test matrix(Evolver(TMS.pure_part(idg)), Qubit()) ≈ matrix(idg, Qubit())
     @test_throws "holds a dissipator, which a pure state cannot follow" make_mpo(ψ,
         -im * X(1) + Dissipator(Sm)(1))
+    # a channel is refused as such, and an operator beside a generator is taken, where both
+    # failed on a MethodError
+    @test_throws "is a channel, which acts on a density matrix" make_mpo(ψ, Gate(X(1)))
+    @test_throws "is a channel, which acts on a density matrix" evolve(Gate(X(1)), 0.1, ψ)
+    @test norm(make_mpo(PreMPO(ψ, [-im * X(1), Evolver(-im * Z(2))]), [1., 0.5]) -
+               make_mpo(PreMPO(ψ, [-im * X(1), -im * Z(2)]), [1., 0.5])) < 1e-12
 end
 
 @testset "Gates, evolvers and dissipators on a density matrix" begin

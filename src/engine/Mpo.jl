@@ -175,7 +175,7 @@ end
     followed_operator(a)
 
 the operator `K` a pure state follows as ``d\\psi/dt = K\\psi`` under the generator `a`,
-refused when `a` holds a dissipator
+refused when `a` holds a dissipator; an operator is itself, and a channel is refused
 """
 function followed_operator(a::IndexedOp{IsGenerator})
     if !is_pure(a)
@@ -183,6 +183,10 @@ function followed_operator(a::IndexedOp{IsGenerator})
     end
     return pure_part(a)
 end
+
+followed_operator(a::IndexedOp{IsOperator}) = a
+followed_operator(a::IndexedOp{IsChannel}) =
+    error("$a is a channel, which acts on a density matrix: mix the state")
 
 """
     superoperator(a)
@@ -203,9 +207,9 @@ function PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsOperator}})
     return pre
 end
 
-PreMPO(state::State{Pure}, a::IndexedOp{IsGenerator}) = PreMPO(state, followed_operator(a))
-PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsGenerator}}) =
-    PreMPO(state, map(followed_operator, as))
+PreMPO(state::State{Pure}, a::IndexedOp) = PreMPO(state, followed_operator(a))
+PreMPO(state::State{Pure}, as::Vector{<:IndexedOp}) =
+    PreMPO(state, IndexedOp{IsOperator}[ followed_operator(a) for a in as ])
 
 PreMPO(state::State{Mixed}, a::IndexedOp) =
     lay_terms!(PreMPO{Mixed}(state.system), lower(state.system, superoperator(a)), 1)
