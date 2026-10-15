@@ -371,17 +371,19 @@ function block_step!(steps::Vector, ::Type{R}, system::System, m::AbstractMatrix
 end
 
 """
-    lifted(system, w, k, left)
+    lifted(system, w, k, left, bra)
 
 the tensor `w` of an MPO on the ket index of site `k` of `system`, made to act on its mixed
 index: ``\\rho \\mapsto W\\rho`` when `left`, ``\\rho \\mapsto \\rho W^\\dagger`` otherwise,
-whose links carry the opposite charges; a tensor without the site, the identity there, stays so
+whose links carry the opposite charges, relabelled by `bra`, a `relabeller` the tensors of one
+MPO share, to the starred names the bra takes under a strong symmetry; a tensor without the
+site, the identity there, stays so
 """
-function lifted(system::System, w::ITensor, k::Int, left::Bool)
+function lifted(system::System, w::ITensor, k::Int, left::Bool, bra)
     s, x = siteind(Pure, system, k), siteind(Mixed, system, k)
     if !hasind(w, s)
         # the identity on the site, see `gate_mpo`
-        return left ? w : dag(w)
+        return left ? w : relabel(dag(w), bra)
     end
     links = [ i for i in inds(w) if i ∉ (s, s') ]
     a = Array(w, s', dag(s), links...)
@@ -393,7 +395,7 @@ function lifted(system::System, w::ITensor, k::Int, left::Bool)
         m = a[:, :, c]
         b[:, :, c] = (left ? kron(one, m) : kron(conj(m), one))[o, o]
     end
-    return charged_itensor(b, [ x', dag(x), (left ? links : dag.(links))... ])
+    return charged_itensor(b, [ x', dag(x), (left ? links : dag.(bra.(links)))... ])
 end
 
 """
@@ -417,8 +419,9 @@ function gate_steps!(steps::Vector, ::Type{Mixed}, system::System, m::AbstractMa
     lo = first(ks)
     w = gate_mpo(Pure, system, m, ks)
     one_gate = !spread(ks) && dense_enough(Mixed, system, ks)
+    bra = relabeller(i -> star(i, strong_names(system)))
     for left in (true, false)
-        ts = [ lifted(system, w[j], lo + j - 1, left) for j in eachindex(w) ]
+        ts = [ lifted(system, w[j], lo + j - 1, left, bra) for j in eachindex(w) ]
         if one_gate
             add_gate!(steps, prod(ts), ks)
         else

@@ -185,9 +185,10 @@ project_count(state::State{Pure}, sites, locals, T; limits::Limits) =
 
 function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
     w = count_mpo(state.system, sites, locals, T)
+    bra = relabeller(i -> star(i, strong_names(state.system)))
     for left in (true, false)
-        state = apply(MPO([ lifted(state.system, w[k], k, left) for k in eachindex(w) ]), state;
-                      limits)
+        state = apply(MPO([ lifted(state.system, w[k], k, left, bra) for k in eachindex(w) ]),
+                      state; limits)
     end
     return normalize(state)
 end

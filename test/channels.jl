@@ -1030,6 +1030,15 @@ end
     @test ket_bra_matrix(apply(Gate(dag(C)(1) * C(3)), ρ)) ≈ k * r * k'
     @test ket_bra_matrix(apply(Dissipator(N)(2), ρ)) ≈ n2 * r * n2 - (n2 * n2 * r + r * n2 * n2) / 2
     @test_throws "conserving it strongly forbids" apply(Reset("Emp")(1), ρ)
+    # a gate of several sites moving a charge between them, whose links on the side of the bras
+    # take their starred names, where they kept those of the kets
+    g = exp(-0.37im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
+    for op in (g(1, 2), g(2, 1), Swap(1, 2))
+        kg = fock(ss, op)
+        @test ket_bra_matrix(apply(op, ρ)) ≈ kg * r * kg'
+    end
+    ρq = mix(State{Pure}(System(3, Qubit(conserve = strong(N))), ["Up", "Dn", "Up"]))
+    @test expect(apply(Swap(1, 2), ρq), [N(1), N(2), N(3)]) ≈ [1, 0, 0]
 end
 
 @testset "A channel taking a density matrix to zero on charged sites" begin
