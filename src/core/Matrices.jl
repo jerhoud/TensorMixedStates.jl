@@ -317,8 +317,9 @@ function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
     end
     b = m + q
     # Julia skips the complex Schur form of a real upper triangular matrix and fails on the
-    # complex powers of its negative eigenvalues (LinearAlgebra.jl#1767); `Matrix` unwraps the
-    # Symmetric or Hermitian it may return
+    # complex powers of its negative eigenvalues (LinearAlgebra.jl#1767, fixed by #1777 for the
+    # coming 1.10, 1.13 and 1.14: needed while versions without the fix are taken); `Matrix`
+    # unwraps the Symmetric or Hermitian it may return
     if eltype(b) <: Real && istriu(b) && any(<(0), diag(b))
         b = complex(b)
     end
