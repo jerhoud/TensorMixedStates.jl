@@ -649,6 +649,25 @@ end
     end
 end
 
+@testset "A run of this process on the directory of a run going on" begin
+    # refused as a run of another process is, where the file running, naming this process, was
+    # taken for one a dead process left: the inner run wrote over the log of the outer one and
+    # removed its file running
+    in_tmp() do
+        start = CreateState{Pure}(1, Qubit(), "Up")
+        inner = Update(c -> (runTMS(SimData(name = "sim", phases = [start])); nothing))
+        @test_throws "is the directory of another run of this process, going on" runTMS(
+            SimData(name = "sim", phases = [start, inner]))
+        # and so is removing it from within
+        clean = Update(c -> (cleanTMS("other"); nothing))
+        @test_throws "is the directory of a run of this process, going on" runTMS(
+            SimData(name = "other", phases = [start, clean]))
+        # the directories are given back, failed runs included
+        @test isempty(TMS.active_runs.dirs)
+        @test_ok runTMS(SimData(name = "sim", phases = [start]))
+    end
+end
+
 @testset "An interrupt in a nested run" begin
     # stops the run it is in as well, which resumes the nested one where it was, where the outer
     # run went on with the result of the nested one cut short, and ended

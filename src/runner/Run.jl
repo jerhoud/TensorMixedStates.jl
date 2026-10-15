@@ -195,12 +195,44 @@ function same_program(dir::String, src_path)
 end
 
 """
+    active_runs
+
+the runs going on in the process, the directories they hold and the threading before the first
+of them, under a lock: only the outermost run sets the threading and the behaviour of Ctrl-C,
+which the last to end puts back, and a directory is held by one run of the process at a time,
+see `claim_directory`
+"""
+const active_runs = (count = Ref(0), threading = Ref{Union{Nothing, ThreadingState}}(nothing),
+                     dirs = Set{String}(), lock = ReentrantLock())
+
+"""
+    claim_directory(dir)
+
+take the directory `dir` for a run, refused when another run of the process holds it, a nested
+one or one on another thread, whose file `running`, naming this process, would be taken for one
+a dead process left, see `live_marker`
+"""
+function claim_directory(dir::String)
+    lock(active_runs.lock) do
+        if dir in active_runs.dirs
+            error("$dir is the directory of another run of this process, going on: give each run " *
+                  "a name of its own")
+        end
+        push!(active_runs.dirs, dir)
+    end
+    return nothing
+end
+
+release_directory(dir::String) = lock(() -> delete!(active_runs.dirs, dir), active_runs.lock)
+
+"""
     live_marker(text)
 
 whether the file `running` holding `text`, the machine, the process and the time a run started,
 marks a run that may still be going on: not when it names a process of this machine that no
-longer exists, or this very process, whose number the dead one had. A file naming another
-machine is taken as live, there being no way to know.
+longer exists, or this very process, whose number the dead one had, the runs of this process
+holding their directories apart, see `claim_directory`. A file naming another machine is taken
+as live, there being no way to know.
 """
 function live_marker(text::AbstractString)
     parts = split(text)
@@ -265,6 +297,9 @@ function cleanTMS(name::AbstractString)
     end
     check_removable(name)
     if isdir(name)
+        if lock(() -> abspath(name) in active_runs.dirs, active_runs.lock)
+            error("$(abspath(name)) is the directory of a run of this process, going on")
+        end
         check_unlocked(abspath(name))
     end
     rm(name; recursive = true, force = true)
@@ -338,16 +373,6 @@ function threading_stamp(mode)
         CPU threads $(Sys.CPU_THREADS)
         """
 end
-
-"""
-    active_runs
-
-the runs going on in the process and the threading before the first of them, under a lock:
-only the outermost run sets the threading and the behaviour of Ctrl-C, which the last to end
-puts back
-"""
-const active_runs = (count = Ref(0), threading = Ref{Union{Nothing, ThreadingState}}(nothing),
-                     lock = ReentrantLock())
 
 function enter_run()
     lock(active_runs.lock) do
@@ -557,6 +582,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     threading = outermost ? threading : nothing
     # whether the run has taken its directory: only then does the way out write `error` and
     # remove `running`
+    claimed = false
     started = false
     logio = devnull
     run = nothing
@@ -567,6 +593,8 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         stale = nothing
         resume = false
         if live
+            claim_directory(dir)
+            claimed = true
             if isdir(dir)
                 stale = check_unlocked(dir)
                 if isfile(file("restart"))
@@ -698,6 +726,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         end
         if started
             rm(file("running"); force = true)
+        end
+        if claimed
+            release_directory(dir)
         end
         leave_run()
     end
