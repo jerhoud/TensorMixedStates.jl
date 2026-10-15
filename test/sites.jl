@@ -716,7 +716,7 @@ end
     @test_throws "strongly on one site and weakly on another" System(
         [Fermion(conserve = N), Fermion(conserve = strong(N))])
     @test_ok System(2, Electron(conserve = (strong(Ntot), strong(2Sz))))
-    @test_throws "of the four components" System(
+    @test_throws "of the 4 components" System(
         [Electron(conserve = (strong(Ntot), strong(2Sz))), Fermion(conserve = N)])
     @test_ok System(2, Fermion(conserve = strong(N)))
     @test_ok System([Fermion(conserve = strong(N)), Qubit(), Fermion(conserve = strong(N))])

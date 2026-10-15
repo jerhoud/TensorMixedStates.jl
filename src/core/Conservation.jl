@@ -356,7 +356,8 @@ end
 
 refuse sites whose conserved quantities cannot live together on one system: one name strong
 on a site and weak on another, or of two moduli; a starred name of a strong quantity naming
-another; more than the four components ITensors allows, a strong quantity taking two
+another; more than the components ITensors allows, `ITensors.maxQNs`, a strong quantity taking
+two
 """
 function check_charges(sites::Vector{<:AbstractSite})
     kind = Dict{String, Bool}()
@@ -380,9 +381,9 @@ function check_charges(sites::Vector{<:AbstractSite})
         end
     end
     n = sum(st -> st ? 2 : 1, values(kind); init = 0)
-    if n > 4
-        error("these sites conserve $(length(kind)) quantities, which take $n of the four " *
-              "components ITensors allows, a strong one costing two")
+    if n > ITensors.maxQNs
+        error("these sites conserve $(length(kind)) quantities, which take $n of the " *
+              "$(ITensors.maxQNs) components ITensors allows, a strong one costing two")
     end
     return nothing
 end
