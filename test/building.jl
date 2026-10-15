@@ -150,6 +150,9 @@ end
     @test eltype(random_state(Pure, sys, 4).state[1]) == ComplexF64
     @test eltype(random_state(Pure, sys, 4; eltype = Float64).state[1]) == Float64
     @test eltype(random_state(st, 4; eltype = Float64).state[1]) == Float64
+    # a complex state is refused clearly, where ITensors raised an InexactError
+    @test_throws "of complex amplitudes is not randomised" random_state(
+        State{Pure}(System(3, Qubit()), [0.6, 0.8im]), 2; eltype = Float64)
     # decision 13: a generator of one's own draws the same state twice
     rng(k) = TensorMixedStates.Random.Xoshiro(k)
     @test norm(random_state(Pure, sys, 4; rng = rng(5)) - random_state(Pure, sys, 4; rng = rng(5))) < 1e-14

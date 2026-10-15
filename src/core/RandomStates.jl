@@ -38,8 +38,13 @@ function random_state(state::State{Pure}, linkdims::Int;
     st = copy(state.state)
     for i in eachindex(st)
         # copied: convert_eltype may hand back the same tensor, which randomizeMPS! may write
-        # in place
-        st[i] = ITensors.convert_eltype(eltype, copy(st[i]))
+        # in place; only the conversion tells whether complex amplitudes are complex indeed
+        st[i] = try
+            ITensors.convert_eltype(eltype, copy(st[i]))
+        catch e
+            e isa InexactError || rethrow()
+            error("a state of complex amplitudes is not randomised into one of eltype $eltype")
+        end
     end
     ITensorMPS.randomizeMPS!(rng, eltype, st, siteinds(Pure, state.system), linkdims)
     return State{Pure}(state.system, st)
