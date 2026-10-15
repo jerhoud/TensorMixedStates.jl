@@ -28,7 +28,7 @@ prepared_evolver(state::State{R}, pre::PreMPO{R}) where {R <: PM} = (check_pre(p
 
 function prepared_evolver(state::State,
                           (ops, fs)::Pair{<:Union{AbstractVector, PreMPO}, <:AbstractVector})
-    pre = ops isa PreMPO ? check_pre(ops, state) : PreMPO(state, [ o for o in ops ])
+    pre = ops isa PreMPO ? first(prepared_evolver(state, ops)) : PreMPO(state, [ o for o in ops ])
     if length(fs) ≠ pre.nterms
         error("an evolver of $(pre.nterms) terms takes as many time functions, " *
               "got $(length(fs))")

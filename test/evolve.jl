@@ -716,6 +716,13 @@ end
         PreMPO(ρ, -im * X(1)), 0.1, st)
     @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
         PreMPO(st, -im * X(1)), 0.1, ρ)
+    # with its functions, where it ran into ITensors, or gave a broken state by ApproxW
+    for algo in (Tdvp(), ApproxW(order = 1))
+        @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
+            PreMPO(st, [-im * X(1)]) => [t -> 1.], 0.1, ρ; algo)
+        @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
+            PreMPO(ρ, [-im * X(1)]) => [t -> 1.], 0.1, st; algo)
+    end
     same = PreMPO(State{Pure}(System(2, Qubit()), "Dn"), -im * X(1))
     @test real(expect(evolve(same, 0.4, st; nsteps = 4), Z(1))) ≈ cos(0.8)
     @test_throws "3 is not an evolver" evolve(3, 0.1, st)
