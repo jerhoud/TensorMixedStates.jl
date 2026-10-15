@@ -221,19 +221,19 @@ renyi2(state::State, positions::AbstractVector) = renyi2(state, Vector{Int}(posi
 
 the Rényi entropy of order 2 of the state reduced to the increasing positions `kept`, some of
 the sites and not all: a block at an end of a pure state from the Schmidt spectrum of its cut,
-which its complement shares
+read on the state carrying the signs of the fermionic sites traced out, whose plain reduction is
+the fermionic one, see `trace_signs`
 """
 part_renyi2(state::State{Mixed}, kept::Vector{Int}) =
     renyi2(partial_trace(weak_form(state), kept; keep = true))
 
 function part_renyi2(state::State{Pure}, kept::Vector{Int})
     n = length(state)
-    if kept == 1:last(kept)
-        return -log(sum(abs2, last(entanglement_entropy(state, last(kept)))))
-    elseif kept == first(kept):n
-        return -log(sum(abs2, last(entanglement_entropy(state, first(kept) - 1))))
+    cut = kept == 1:last(kept) ? last(kept) : kept == first(kept):n ? first(kept) - 1 : nothing
+    if isnothing(cut)
+        return part_renyi2(mix(state), kept)
     end
-    return part_renyi2(mix(state), kept)
+    return -log(sum(abs2, last(entanglement_entropy(trace_signs(state, kept), cut))))
 end
 
 """
@@ -242,7 +242,8 @@ end
 the Rényi-2 analogue of the mutual information between two parts of the state,
 ``S_2(A) + S_2(B) - S_2(A \\cup B)``, which can be negative on a mixed state: part A at
 `positions`, part B the rest. An empty part gives 0. On a pure state it is twice the `renyi2`
-of part A, at the same cost, the result holding for fermions on a state of definite parity.
+of part A, at the same cost, but on fermions, whose state may have no definite parity, where
+it is the sum of the `renyi2` of the two parts.
 
 # Examples
 
@@ -265,14 +266,19 @@ mutual_info_renyi2(state::State, positions::AbstractVector) =
     parts_renyi2(state, kept)
 
 ``S_2(A) + S_2(B) - S_2(A \\cup B)`` for part A at the increasing positions `kept` and B the
-rest, neither of them empty; ``2 S_2(A)`` on a pure state
+rest, neither of them empty; ``2 S_2(A)`` on a pure state, but on fermions, where the signs of
+the sites traced out make ``S_2(B)`` another value on a state of no definite parity
 """
 function parts_renyi2(state::State{Mixed}, kept::Vector{Int})
     w = weak_form(state)
     return renyi2(partial_trace(w, kept; keep = true)) + renyi2(partial_trace(w, kept)) - renyi2(w)
 end
 
-parts_renyi2(state::State{Pure}, kept::Vector{Int}) = 2 * part_renyi2(state, kept)
+function parts_renyi2(state::State{Pure}, kept::Vector{Int})
+    a = part_renyi2(state, kept)
+    n = length(state)
+    return next_fermion(state.system, 1) > n ? 2a : a + part_renyi2(state, setdiff(1:n, kept))
+end
 
 """
     unit_trace(m)

@@ -317,6 +317,16 @@ end
     # and so on fermions, for a state of definite parity
     ψf = random_state(State{Pure}(System(6, Fermion(conserve = parity(N))), "Emp"), 8)
     @test mutual_info_renyi2(ψf, [2, 5]) ≈ mutual_info_renyi2(mix(ψf), [2, 5])
+    # and of no definite parity, a part on the right taking the signs of the fermionic sites
+    # traced out on its left, which its Schmidt spectrum missed
+    sf = System(2, Fermion())
+    ψp = normalize(sum(State{Pure}(sf, c) for c in (["Emp", "Emp"], ["Emp", "Occ"],
+                                                    ["Occ", "Emp"], ["Occ", "Occ"])))
+    @test renyi2(ψp, [2]) ≈ renyi2(mix(ψp), [2]) ≈ L2
+    @test last(only(measure(ψp, [SubRenyi2([2])]))) ≈ L2
+    ψr = random_state(Pure, System(4, Fermion()), 4)
+    @test renyi2(ψr, [3, 4]) ≈ renyi2(mix(ψr), [3, 4])
+    @test mutual_info_renyi2(ψr, [1, 2]) ≈ mutual_info_renyi2(mix(ψr), [1, 2])
 
     # the same quantities as measurements must agree with the functions, the cuts written as
     # positions (decision 9.2)
