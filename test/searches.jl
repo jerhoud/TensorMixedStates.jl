@@ -401,6 +401,10 @@ end
     @test PreMPO(up, Z(1) * Z(2) * Z(3)).width[] ≈ 2
     @test PreMPO(State{Pure}(System(4, Fermion()), "Emp"),
                  dag(C)(1) * C(3) + dag(C)(3) * C(1)).width[] ≈ 2
+    # the string on the site of the first block counts, which a Majorana operator, odd and of no
+    # definite form, shows: i a(1) a(3) is Y ⊗ Z ⊗ X, of width 2, where the bound was 0
+    a = C + dag(C)
+    @test PreMPO(State{Pure}(System(4, Fermion()), "Emp"), im * a(1) * a(3)).width[] ≈ 2
     # the lowest eigenstates in turn, each orthogonal to those before, the energy that of the
     # Hamiltonian alone, against its spectrum
     H = heis + 0.3 * sum(Z(i) for i in 1:n)

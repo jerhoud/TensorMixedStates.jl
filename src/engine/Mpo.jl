@@ -108,21 +108,24 @@ function check_coefs(pre::PreMPO, coefs::AbstractVector)
 end
 
 """
-    term_width(t)
+    term_width(system, t)
 
 a bound of the width of the spectrum of ``(t + t^\\dagger)/2`` for the term `t` of an operator on
-a pure state: the bounds of its terms add up to one of a Hermitian operator, by the inequalities
-of Weyl. It is exact for a term of at most two sites, as `apply` takes them dense, and twice
-the norm of the term beyond; a Jordan-Wigner string, of eigenvalues ±1, makes it twice the norm
-of the term without it, and a constant has none
+a pure state of `system`: the bounds of its terms add up to one of a Hermitian operator, by the
+inequalities of Weyl. It is exact for a term of at most two sites, as `apply` takes them dense,
+and twice the norm of the term beyond; with a Jordan-Wigner string, it is twice the largest
+eigenvalue, in absolute value, of the Hermitian part of the term with the `F` of the string on
+the site of its first block, the `F` of the sites between, ±1, changing nothing; a constant
+has none
 """
-function term_width(t::Term)
+function term_width(system::System, t::Term)
     if isempty(t.blocks)
         return 0.
     elseif length(t.blocks) > 2
         return 2abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks)
     end
-    m = t.coef * foldl(kron, [ m for (_, m) in t.blocks ])
+    m = t.coef * foldl(kron, [ on_string(t.kets, k) ? m * matrix(F, system[k]) : m
+                               for (k, m) in t.blocks ])
     λ = eigvals(Hermitian((m + m') / 2))
     return isempty(t.kets) ? last(λ) - first(λ) : 2maximum(abs, λ)
 end
@@ -137,7 +140,7 @@ channels of the terms of several sites numbered after those their links already 
 """
 function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
     if R === Pure
-        pre.width[] += sum(term_width, terms; init = 0.)
+        pre.width[] += sum(t -> term_width(pre.system, t), terms; init = 0.)
     end
     sys = pre.system
     constant, singles, b = compacted(R, sys, terms)
