@@ -1632,6 +1632,13 @@ end
     end
     up = State{Pure}(System(20, Qubit(conserve = N)), "Up")
     @test abs(expect(up, prod(X(i) for i in 1:20))) < 1e-12
+    # and so is an operator of several sites given by its matrix, whose split refused it with an
+    # error that expect did not take for a FluxError
+    @test expect(b, Operator{2}("XX", matrix(X ⊗ X, Qubit(), Qubit()))(1, 2)) ≈ 1
+    # under a strong symmetry, a channel of several sites given by its matrix gets the refusal
+    # of the strong symmetry, as one of one site does
+    @test_throws "which conserving it strongly forbids" TMS.lower(System(3, Fermion(conserve = strong(N))),
+                                                                  exp(0.3 * Dissipator(C ⊗ C))(1, 2))
     # apply keeps refusing it, its result having no definite charges
     @test_throws "no definite flux" apply(X(1), b)
 end

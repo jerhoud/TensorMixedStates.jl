@@ -487,25 +487,6 @@ function op_terms(system::System, a::Dissipator, index)
 end
 
 """
-    strong_refusal(what, names)
-
-refuse `what`, which changes the strongly conserved `names` by different amounts from one part
-to another, mixing the sectors a strong symmetry keeps apart
-"""
-strong_refusal(what, names) =
-    throw(FluxError("$(obs_name(what)) changes $(join(names, ", ")) by different amounts from " *
-                    "one part to another, which conserving it strongly forbids: drop `strong` " *
-                    "or weaken the state"))
-
-"""
-    only_strong(names, charges)
-
-whether the `charges` differ only by the quantities `names`, conserved strongly: what a strong
-symmetry alone keeps apart
-"""
-only_strong(names, qs) = !isempty(names) && allequal(weak_qn(q, names, String[]) for q in qs)
-
-"""
     mixed_flux(m, what, site)
 
 the flux on the mixed index of `site` of the matrix `m` of the superoperator `what`, refused
