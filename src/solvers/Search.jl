@@ -68,7 +68,7 @@ function search(algo::Dmrg, mpo::MPO, state::State, limits::Limits; sweep_done =
     hook = SweepHook(algo.tol, energy, done, algo.nsweeps, state, excited ? mpo : nothing,
                      sweep_done)
     kwargs = (; outputlevel = 0, nsweeps = algo.nsweeps - done, observer = hook,
-              truncation(later_steps(limits, done))..., noise = later_steps(algo.noise, done),
+              truncation(later_steps(limits, done); sweeps = true)..., noise = later_steps(algo.noise, done),
               krylov_kwargs(algo.krylov, krylov, "eigsolve_")...)
     e, st = excited ? dmrg(mpo, [ m.state for m in orthogonal_to ], state.state; weight, kwargs...) :
                       dmrg(mpo, state.state; kwargs...)

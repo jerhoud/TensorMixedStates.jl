@@ -64,15 +64,22 @@ Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing) =
     Limits(float_cutoff(cutoff), int_dims(maxdim, "maxdim"), int_dims(mindim, "mindim"))
 
 """
-    truncation(limits; cutoff = rounding_tol^2, maxdim = typemax(Int), mindim = 1)
+    truncation(limits; sweeps = false, cutoff = rounding_tol^2, maxdim = typemax(Int), mindim = 1)
 
 the keywords `cutoff`, `maxdim` and `mindim` of a truncation by ITensors, a field of `limits` left
 `nothing` taking the default given, that of the function the limits are given to: by default,
-the singular values below `rounding_tol` of the norm go, what rounding leaves
+the singular values below `rounding_tol` of the norm go, what rounding leaves. A field holding a
+vector, a value per sweep, is passed on only with `sweeps = true`, for the sweeps of dmrg
 """
-truncation(l::Limits; cutoff = rounding_tol^2, maxdim = typemax(Int), mindim = 1) =
-    (cutoff = something(l.cutoff, cutoff), maxdim = something(l.maxdim, maxdim),
-     mindim = something(l.mindim, mindim))
+function truncation(l::Limits; sweeps::Bool = false, cutoff = rounding_tol^2,
+                    maxdim = typemax(Int), mindim = 1)
+    if !sweeps && any(x -> x isa AbstractVector, (l.cutoff, l.maxdim, l.mindim))
+        error("limits holding vectors, a value per step or sweep, are for the evolutions and " *
+              "searches only: $l")
+    end
+    return (cutoff = something(l.cutoff, cutoff), maxdim = something(l.maxdim, maxdim),
+            mindim = something(l.mindim, mindim))
+end
 
 (a::Limits == b::Limits) = (a.cutoff, a.maxdim, a.mindim) == (b.cutoff, b.maxdim, b.mindim)
 hash(a::Limits, h::UInt) = hash((a.cutoff, a.maxdim, a.mindim), hash(Limits, h))

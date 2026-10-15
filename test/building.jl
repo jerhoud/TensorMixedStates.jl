@@ -150,6 +150,10 @@ end
     @test eltype(random_state(Pure, sys, 4).state[1]) == ComplexF64
     @test eltype(random_state(Pure, sys, 4; eltype = Float64).state[1]) == Float64
     @test eltype(random_state(st, 4; eltype = Float64).state[1]) == Float64
+    # limits holding vectors, for the steps of an evolution or the sweeps of a search, are
+    # refused elsewhere, where ITensors raised a MethodError
+    @test_throws "are for the evolutions and searches only" truncate(
+        random_state(Pure, System(4, Qubit()), 4); limits = Limits(cutoff = [1e-10, 1e-12]))
     # a complex state is refused clearly, where ITensors raised an InexactError
     @test_throws "of complex amplitudes is not randomised" random_state(
         State{Pure}(System(3, Qubit()), [0.6, 0.8im]), 2; eltype = Float64)
