@@ -244,18 +244,21 @@ end
     @test_ok System(2, Fermion())
 end
 
-@testset "Fermion measuring" begin
-    # N on the states named by their level, pure and mixed
+@testset "The numbers of particles on the basis states" begin
+    # on the states named by their level or by what they hold, pure and mixed
+    for (site, states, ops, values) in [
+            (Fermion(), ["0", "1"], [N], [[0, 1]]),
+            (Boson(4), ["0", "1", "2", "3"], [N], [[0, 1, 2, 3]]),
+            (Qboson(0.1, 4), ["0", "1", "2", "3"], [N], [[0, 1, 2, 3]]),
+            (Electron(), ["Emp", "Up", "Dn", "UpDn"], [Nup, Ndn, Nupdn, Ntot],
+             [[0, 1, 0, 1], [0, 0, 1, 1], [0, 0, 0, 1], [0, 1, 1, 2]]),
+            (Tj(), ["Emp", "Up", "Dn"], [Nup, Ndn, Ntot],
+             [[0, 1, 0], [0, 0, 1], [0, 1, 1]])], rep in (identity, mix)
+        @test expect1(rep(State{Pure}(System(length(states), site), states)), ops) ≈ values
+    end
+    # and on a system of one site
     for rep in (identity, mix)
         @test expect(rep(State{Pure}(System(1, Fermion()), "1")), N(1)) ≈ 1
-        @test expect1(rep(State{Pure}(System(2, Fermion()), ["0", "1"])), N) ≈ [0, 1]
-    end
-end
-
-@testset "Boson measuring" begin
-    for rep in (identity, mix)
-        st = rep(State{Pure}(System(4, Boson(4)), ["0", "1", "2", "3"]))
-        @test expect1(st, N) ≈ [0, 1, 2, 3]
     end
 end
 
@@ -286,21 +289,6 @@ end
     end
 end
 
-@testset "Electron measuring" begin
-    for rep in (identity, mix)
-        st = rep(State{Pure}(System(4, Electron()), ["Emp", "Up", "Dn", "UpDn"]))
-        @test expect1(st, [Nup, Ndn, Nupdn, Ntot]) ≈
-            [[0, 1, 0, 1], [0, 0, 1, 1], [0, 0, 0, 1], [0, 1, 1, 2]]
-    end
-end
-
-@testset "Tj measuring" begin
-    for rep in (identity, mix)
-        st = rep(State{Pure}(System(3, Tj()), ["Emp", "Up", "Dn"]))
-        @test expect1(st, [Nup, Ndn, Ntot]) ≈ [[0, 1, 0], [0, 0, 1], [0, 1, 1]]
-    end
-end
-
 @testset "One electron of fully mixed spin" begin
     for site in (Electron(conserve = strong(Ntot)), Tj(conserve = strong(Ntot)))
         st = State{Mixed}(System(2, site), ["MixedSpin", "↑|↓"])
@@ -321,13 +309,6 @@ end
     @test_throws "1 - q^n < 0" Qboson(-2.0, 3)
     @test dim(Spin(0)) == 1
     @test matrix(A, Qboson(-2.0, 2)) ≈ [0 sqrt(3); 0 0]
-end
-
-@testset "Qboson measuring" begin
-    for rep in (identity, mix)
-        st = rep(State{Pure}(System(4, Qboson(0.1, 4)), ["0", "1", "2", "3"]))
-        @test expect1(st, N) ≈ [0, 1, 2, 3]
-    end
 end
 
 @testset "State mixing" begin
