@@ -491,7 +491,8 @@ checked_measurement(::Check) =
 checked_measurement(::Tuple) =
     error("a pair measured on every pair of sites is (X, Y), two operators of one site")
 
-checked_measurement(::AbstractArray) = error("a name goes before one measurement, not before a list")
+checked_measurement(::AbstractArray) =
+    error("a name goes before one measurement, not before a list")
 
 checked_measurement(a::GenericOp{IsOperator}) =
     error("$(obs_name(a)) acts on several sites, and is measured placed on them")
@@ -805,10 +806,11 @@ the measurements on `state`, a `Measure` or what one is built from, as a vector 
 operator of one site a vector indexed by site and a pair a matrix, as `expect1` and `expect2`
 give them, made real when the operator, or each product of the pair, is Hermitian, with a
 warning when the imaginary part dropped is beyond rounding, and complex otherwise; any other
-value is given as it is computed, a `Check` as `(value, reference, difference)`. `time` and the `values` are what a
-measurement written as a function reads as `c.time` and `c.energy`, and what a symbol stands
-for, a symbol of the list without a value being refused before anything is measured. A
-`Measure` keeps its preparation, which a list given as it is makes anew at each call.
+value is given as it is computed, a `Check` as `(value, reference, difference)`. `time` and
+the `values` are what a measurement written as a function reads as `c.time` and `c.energy`,
+and what a symbol stands for, a symbol of the list without a value being refused before
+anything is measured. A `Measure` keeps its preparation, which a list given as it is makes
+anew at each call.
 
 # Examples
 

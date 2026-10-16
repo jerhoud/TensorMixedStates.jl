@@ -246,12 +246,13 @@ end
 
 the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
 their probabilities, as pairs `result => probability` in increasing order, those of zero
-probability included, a probability below rounding being zero: the levels of the site, counted from 0, or the eigenvalues of `op`, to
-rounding. The matrix of `op` on its sites is diagonalized, its size being the product of their
-dimensions, except for two kinds of operators measured on any number of sites: a product of
-involutions, as a string of Pauli operators, by its mean value, and a sum of operators of one
-site with half integer eigenvalues, as the number of particles of a region, by the mean values
-of products of phases.
+probability included, a probability below rounding being zero: the levels of the site,
+counted from 0, or the eigenvalues of `op`, to rounding. The matrix of `op` on its sites is
+diagonalized, its size being the product of their dimensions, except for two kinds of
+operators measured on any number of sites: a product of involutions, as a string of Pauli
+operators, by its mean value, and a sum of operators of one site with half integer
+eigenvalues, as the number of particles of a region, by the mean values of products of
+phases.
 
 # Examples
 

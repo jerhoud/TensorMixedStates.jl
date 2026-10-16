@@ -236,8 +236,9 @@ function put_row!(t::TextTable, time, m::Measure, row)
         names = reduce(vcat, columns)
         twice = findfirst(c -> count(==(c), names) > 1, names)
         if !isnothing(twice)
-            error("two columns of $(something(t.path, "the table")) would be named $(names[twice]): " *
-                  "give one of the measurements a name of its own, as \"name\" => op")
+            error("two columns of $(something(t.path, "the table")) would be named " *
+                  "$(names[twice]): give one of the measurements a name of its own, as " *
+                  "\"name\" => op")
         end
         t.columns = columns
         println(t.io, join(names, '\t'))

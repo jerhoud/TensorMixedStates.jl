@@ -10,7 +10,8 @@ the `UndefVarError` of a program written for 1.x
 """
 const renamed_names = Dict{Symbol, String}(
     :tdvp => "tdvp became evolve(evolver, duration, state; algo = Tdvp(), nsteps)",
-    :approx_W => "approx_W became evolve(evolver, duration, state; algo = ApproxW(order = 4), nsteps)",
+    :approx_W => "approx_W became evolve(evolver, duration, state; " *
+                 "algo = ApproxW(order = 4), nsteps)",
     :dmrg => "dmrg became ground_state(hamiltonian, state; algo = Dmrg(nsweeps = 10))",
     :thermal_state => "thermal_state became thermalize(hamiltonian, beta, state; nsteps), which " *
                       "returns (log_trace, state)",
@@ -19,9 +20,10 @@ const renamed_names = Dict{Symbol, String}(
     :StateFunc => "StateFunc was removed: a list of measurements takes \"name\" => c -> f(c.state)",
     :TimeFunc => "TimeFunc was removed: a list of measurements takes \"name\" => c -> f(c.time)",
     :RealValue => "RealValue was removed: write \"name\" => c -> real(expect(c.state, op))",
-    :ImaginaryValue => "ImaginaryValue was removed: write \"name\" => c -> imag(expect(c.state, op))",
-    :ComplexValue => "ComplexValue was removed: the value of an operator that is not Hermitian is " *
-                     "complex",
+    :ImaginaryValue => "ImaginaryValue was removed: write " *
+                       "\"name\" => c -> imag(expect(c.state, op))",
+    :ComplexValue => "ComplexValue was removed: the value of an operator that is not " *
+                     "Hermitian is complex",
     :trace2 => "trace2 became purity",
     :EE => "EE became EntanglementEntropy",
     :Linkdim => "Linkdim became MaxLinkdim",
@@ -56,10 +58,13 @@ const renamed_names = Dict{Symbol, String}(
     :OpType => "the types of operators were removed: write @def_operators T [name = matrix, …] " *
                "and Operator{N}(name, definition)",
     :plain_op => "the types of operators were removed: write @def_operators T [name = matrix, …]",
-    :fermionic_op => "the types of operators were removed: write @def_operators T [name = matrix, " *
-                     "…], the parity of an operator is found from fermion_parities of the site",
-    :selfadjoint_op => "the types of operators were removed: write @def_operators T [name = matrix, …]",
-    :involution_op => "the types of operators were removed: write @def_operators T [name = matrix, …]",
+    :fermionic_op => "the types of operators were removed: write @def_operators T " *
+                     "[name = matrix, …], the parity of an operator is found from " *
+                     "fermion_parities of the site",
+    :selfadjoint_op => "the types of operators were removed: write @def_operators T " *
+                       "[name = matrix, …]",
+    :involution_op => "the types of operators were removed: write @def_operators T " *
+                      "[name = matrix, …]",
     :isfermionic => "isfermionic was removed: the parity of an operator is found from " *
                     "fermion_parities of its sites",
     :hasfermionic => "hasfermionic was removed: the parity of an operator is found from " *
@@ -107,8 +112,9 @@ write instead, which Julia shows after the `MethodError` of a call written for 1
 """
 const moved_keywords = let
     search_algo = "the search method is algo = Dmrg(nsweeps = …, tol = …, noise = …, krylov = …)"
-    evolve_algo = "the method is algo = Tdvp(krylov = …, expand_period = …, hermitianize_period = …) " *
-                  "or ApproxW(order = …, w = …, apply_algo = …, hermitianize_period = …)"
+    evolve_algo = "the method is algo = Tdvp(krylov = …, expand_period = …, " *
+                  "hermitianize_period = …) or ApproxW(order = …, w = …, apply_algo = …, " *
+                  "hermitianize_period = …)"
     observers = "the observers were removed: call the function step by step and measure between " *
                 "the calls, or measure in a phase"
     d = Dict{Tuple{Any, Symbol}, String}()
@@ -264,7 +270,8 @@ function __init__()
     Base.Experimental.register_error_hint(UndefVarError) do io, e
         h = get(renamed_names, e.var, nothing)
         if !isnothing(h)
-            print(io, "\nTensorMixedStates 2.0: ", h, " (see Upgrading from 1.x in its documentation)")
+            print(io, "\nTensorMixedStates 2.0: ", h,
+                  " (see Upgrading from 1.x in its documentation)")
         end
     end
     Base.Experimental.register_error_hint(method_hint, MethodError)

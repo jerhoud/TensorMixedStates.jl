@@ -73,7 +73,8 @@ end
 
 # the eigenstates of Sx and Sy are rotations of those of Sz, exp(-iπ/2 Sy) and exp(iπ/2 Sx)
 function string_state(a::Spin, st::String)
-    axis, value = !isempty(st) && st[1] in ('X', 'Y', 'Z') ? (st[1], st[nextind(st, 1):end]) : ('Z', st)
+    axis, value = !isempty(st) && st[1] in ('X', 'Y', 'Z') ? (st[1], st[nextind(st, 1):end]) :
+                                                              ('Z', st)
     m = rational_value(value)
     if isnothing(m) || !isinteger(a.s - m) || abs(m) > a.s
         return nothing
