@@ -42,6 +42,17 @@ measurement_lists(v::AbstractVector) = v
 measurement_lists(x) = error("$(repr(x)) is not a list of measurements, destination => measurements")
 
 """
+    run_lists(phases, final_measurements)
+
+the lists of measurements of a simulation, as pairs `destination => measurements`: its final
+ones, those of the end of each phase and those of their steps, see `measurement_lists`
+"""
+run_lists(phases::Vector, final_measurements) =
+    [ p for l in [ final_measurements ; [ q.final_measurements for q in phases ] ;
+                   [ q.measurements for q in phases if hasfield(typeof(q), :measurements) ] ]
+      for p in measurement_lists(l) ]
+
+"""
     check_values(phases, final_measurements)
 
 refuse a value measured by one of the lists of the phases, or by the final measurements, that no
@@ -49,10 +60,7 @@ phase provides, see `provided_values`, and return the names of those they provid
 """
 function check_values(phases::Vector, final_measurements)
     provided = unique(Symbol[ v for p in phases for v in provided_values(p) ])
-    lists = [ final_measurements ;
-              [ p.final_measurements for p in phases ] ;
-              [ p.measurements for p in phases if hasfield(typeof(p), :measurements) ] ]
-    for l in lists, p in measurement_lists(l)
+    for p in run_lists(phases, final_measurements)
         for (name, m) in as_measure(last(p)).entries
             for r in measurement_reads(m)
                 if r ∉ provided && r ∉ (:step, :rng)
@@ -105,11 +113,8 @@ function check_destinations(phases::Vector, final_measurements)
             error("cannot save to $f, a file of the simulation directory: choose another name")
         end
     end
-    lists = [ final_measurements ;
-              [ p.final_measurements for p in phases ] ;
-              [ p.measurements for p in phases if hasfield(typeof(p), :measurements) ] ]
     held = Dict{String, Vector{String}}()
-    for l in lists, (d, m) in measurement_lists(l)
+    for (d, m) in run_lists(phases, final_measurements)
         if !(d isa AbstractString) || d in ("stdout", "-", "stderr", "")
             continue
         elseif normpath(d) in simulation_files
