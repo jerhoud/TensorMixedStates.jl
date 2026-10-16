@@ -331,20 +331,10 @@ function add_gate!(steps::Vector, g::ITensor, ks)
 end
 
 """
-    mpo_step!(steps, R, system, terms)
-
-append to the steps of `apply` the MPO of `terms`, on the indices of representation `R`, on the
-sites it acts on, see `mpo_window`, and return the number that brings: 0 when it acts nowhere,
-the operator being zero, 1 otherwise
-"""
-mpo_step!(steps::Vector, ::Type{R}, system::System, terms::Vector{Term}) where R =
-    pre_step!(steps, laid(system, [from_terms(R, system, "a piece", terms)]))
-
-"""
     pre_step!(steps, pre)
 
-append to the steps of `apply` the MPO of `pre` on the sites it acts on, see `mpo_step!`, and
-return the number that brings
+append to the steps of `apply` the MPO of `pre` on the sites it acts on, see `mpo_window`, and
+return the number that brings: 0 when it acts nowhere, the operator being zero, 1 otherwise
 """
 function pre_step!(steps::Vector, pre::PreMPO)
     w = mpo_window(pre)
@@ -440,17 +430,28 @@ function gate_steps!(steps::Vector, ::Type{Mixed}, system::System, m::AbstractMa
 end
 
 """
+    one_site_gates!(steps, R, system, t)
+
+append to the steps of `apply` the blocks of the term `t` of an operator, its strings laid, as
+gates of one site, see `gate_steps!`, and return its coefficient
+"""
+function one_site_gates!(steps::Vector, ::Type{R}, system::System, t::Term) where R
+    t = laid_strings(Pure, system, t)
+    foreach(((k, m),) -> gate_steps!(steps, R, system, m, [k]), t.blocks)
+    return t.coef
+end
+
+"""
     piece_steps!(steps, R, system, p, run)
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
 operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
-they bring, 0 for a dense piece that is zero. A piece on at most two sites, or small enough, see `dense_enough`, laying no string
-elsewhere and changing the charges by a definite amount, see `definite_on`, is a dense block,
-see `gate_steps!`, unless it is a run; otherwise it is developed, the descent refusing it when
-the charges change by no definite amount, and goes through gates of one site when it gives a
-single term, as a run usually does, through
-the MPO of its terms otherwise, see `mpo_step!`, on a density matrix those of
-``\\rho \\mapsto K\\rho K^\\dagger``, see `gate_terms`
+they bring, 0 for a dense piece that is zero. A piece on at most two sites, or small enough, see
+`dense_enough`, laying no string elsewhere and changing the charges by a definite amount, see
+`definite_on`, is a dense block, see `gate_steps!`, unless it is a run; otherwise it goes
+through gates of one site when it has a single term, as a run usually does, and through its MPO
+otherwise, see `compacted_op`, on a density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``,
+see `compacted_super`
 """
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
                       run::Bool) where R
@@ -466,22 +467,18 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
         end
     end
     check_indices(system, p)
-    g = gathered(system, p)
-    # a product of sums that would develop into more terms than its factors have, or, on a
-    # density matrix, Kρ K† of many terms
-    if R === Pure && any(by_blocks, gathered_summands(g))
-        return pre_step!(steps, laid(system, [compacted_op(system, p)]))
-    elseif R === Mixed && many_terms(g)
-        sides = (compacted_op(system, p; side = :left), compacted_op(system, p; side = :right))
-        return pre_step!(steps, laid(system, [product(sides...)]))
+    if R === Pure
+        c = compacted_op(system, p)
+        if !isnothing(c.terms) && length(c.terms) == 1
+            return one_site_gates!(steps, Pure, system, only(c.terms))
+        end
+        return pre_step!(steps, laid(system, [c]))
     end
-    terms = lower(system, p, g)
+    terms = lower(system, p)
     if length(terms) == 1
-        t = laid_strings(Pure, system, only(terms))
-        foreach(((k, m),) -> gate_steps!(steps, R, system, m, [k]), t.blocks)
-        return t.coef
+        return one_site_gates!(steps, Mixed, system, only(terms))
     end
-    return mpo_step!(steps, R, system, R === Mixed ? gate_terms(terms) : terms)
+    return pre_step!(steps, laid(system, [compacted_super(system, Gate(p))]))
 end
 
 """
@@ -519,7 +516,7 @@ end
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
 by piece, see `gate_steps!`, any other factor as a dense block on the mixed indices, see
-`block_step!`, or the terms of either through their MPO, see `mpo_step!`
+`block_step!`, or either through its MPO, see `compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
@@ -528,15 +525,14 @@ function mixed_steps(system::System, a::IndexedOp)
         if f isa IndexedOp{IsOperator}
             coef *= abs2(operator_steps!(steps, Mixed, system, f))
         else
-            terms = lower(system, f)
-            laid = [ laid_strings(Mixed, system, t) for t in terms ]
-            ks = sort!(unique(k for t in laid for (k, _) in t.blocks))
+            terms = [ laid_strings(Mixed, system, t) for t in lower(system, f) ]
+            ks = sort!(unique(k for t in terms for (k, _) in t.blocks))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif dense_enough(Mixed, system, ks)
-                block_step!(steps, Mixed, system, mixed_block(system, laid, ks), ks)
+                block_step!(steps, Mixed, system, mixed_block(system, terms, ks), ks)
             else
-                coef *= mpo_step!(steps, Mixed, system, terms)
+                coef *= pre_step!(steps, laid(system, [compacted_super(system, f)]))
             end
         end
         if coef == 0
