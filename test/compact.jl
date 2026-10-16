@@ -187,10 +187,11 @@ end
     @test eltype(make_mpo(st, X(1) + Y(2))[1]) == ComplexF64
 end
 
-@testset "The product and the adjoint of PreMPOs" begin
+@testset "The algebra of PreMPOs" begin
     # the MPO of a product, built from those of its factors, stands for the product and has the
-    # least channels, where developing it would give the product of the numbers of their terms;
-    # on qubits, on fermions with their strings and on charged fermions, and the adjoint
+    # least channels, where developing it would give the product of the numbers of their terms,
+    # and so does that of a linear combination; on qubits, on fermions with their strings and on
+    # charged fermions, and the adjoint
     function dense(pre)
         R = pre isa PreMPO{Pure} ? Pure : Mixed
         idx = siteinds(R, pre.system)
@@ -210,10 +211,23 @@ end
                   N(1) + dag(C)(4) * C(1)])]
         pres = [ PreMPO(st, op) for op in ops ]
         ds = dense.(pres)
+        dims = [ IT.dim(i) for i in siteinds(Pure, st.system) ]
         p = prod(pres)
         @test norm(dense(p) - prod(ds)) < 1e-12 * norm(prod(ds))
-        @test p.linkdims .- 1 == least_channels(prod(ds), [ IT.dim(i) for i in siteinds(Pure, st.system) ])
+        @test p.linkdims .- 1 == least_channels(prod(ds), dims)
         @test norm(dense(pres[1]') - ds[1]') < 1e-12 * norm(ds[1])
+        s = pres[1] + 0.5 * pres[2] - pres[3] / 2
+        S = ds[1] + 0.5 * ds[2] - ds[3] / 2
+        @test norm(dense(s) - S) < 1e-12 * norm(S)
+        @test s.linkdims .- 1 == least_channels(S, dims)
+        @test norm(dense(sum(pres)) - sum(ds)) < 1e-12 * norm(sum(ds))
+        @test norm(dense(-2im * pres[1]) + 2im * ds[1]) < 1e-12 * norm(ds[1])
+        z = pres[1] - pres[1]
+        @test all(==(1), z.linkdims) && norm(dense(z)) < 1e-14
+        # the bounds add, a complex coefficient giving twice its norm for the width
+        @test s.norm[] ≈ pres[1].norm[] + 0.5 * pres[2].norm[] + 0.5 * pres[3].norm[]
+        @test s.width[] ≈ pres[1].width[] + 0.5 * pres[2].width[] + 0.5 * pres[3].width[]
+        @test (2im * pres[1]).width[] ≈ 4 * pres[1].norm[]
     end
     # what cancels but for rounding opens no channel: an identity pushed onto an opening, in a
     # product that is 0.7 (0.1 + 0.2 - 0.3) (1 - X1) Z2 Z3, a product of pieces, M² = 0 on a
@@ -243,11 +257,15 @@ end
     ρ = mix(q)
     l1, l2 = PreMPO(ρ, -im * X(1) * X(2) + Dissipator(Sm)(3)), PreMPO(ρ, Dissipator(Z)(2) + Dissipator(Sp)(4))
     @test norm(dense(l1 * l2) - dense(l1) * dense(l2)) < 1e-12 * norm(dense(l1)) * norm(dense(l2))
+    @test norm(dense(l1 - 2 * l2) - (dense(l1) - 2 * dense(l2))) < 1e-12 * norm(dense(l1))
     # what is refused: two systems, two representations, several time functions
     @test_throws "the PreMPOs of a product are on two systems" PreMPO(q, X(1)) * PreMPO(f, N(1))
     @test_throws "the PreMPOs of a product are of two representations" PreMPO(q, X(1)) * l1
     @test_throws "a PreMPO of several time functions is not multiplied" PreMPO(q, [X(1), Z(2)]) *
                                                                          PreMPO(q, X(1))
+    @test_throws "the PreMPOs of a sum are on two systems" PreMPO(q, X(1)) + PreMPO(f, N(1))
+    @test_throws "the PreMPOs of a sum are of two representations" PreMPO(q, X(1)) - l1
+    @test_throws "a PreMPO of several time functions is not added or scaled" 2 * PreMPO(q, [X(1), Z(2)])
     # the bound of the norm, the sum of the sizes of the terms, multiplies, and that of the width
     # of the spectrum of a product is twice it, which gives a search of excited states its weight:
     # H shifted, so that H² has no level of two

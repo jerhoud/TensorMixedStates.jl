@@ -41,11 +41,10 @@ state, a generator with no dissipator, ``\\rho \\mapsto K\\rho + \\rho K^\\dagge
 the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``. On a mixed state, a channel
 or a generator gives the MPO of its superoperator, and an operator `K` that of `Evolver(K)`.
 
-`pre'` is the `PreMPO` of the adjoint, and `a * b` that of the product of the operators of two
-`PreMPO`s of one system, each of a single time function, the product of a list being
-`prod(PreMPO(state, op) for op in ops)`: built with as few channels as its rank across each
-link, at a cost linear in the number of sites, where the terms of the product grow as the product
-of theirs.
+`pre'`, `a * b`, `a + b`, `a - b`, `c * a` and `sum(v)`, of `PreMPO`s of one system each of a
+single time function, are the `PreMPO`s of the adjoint, of the product and of the linear
+combinations of their operators: built with as few channels as their rank across each link, at a
+cost linear in the number of sites, where the terms of a product grow as the product of theirs.
 """
 struct PreMPO{R <: PM}
     system::System
@@ -310,6 +309,79 @@ function (a::PreMPO{R} * b::PreMPO{R}) where {R <: PM}
 end
 
 (::PreMPO * ::PreMPO) = error("the PreMPOs of a product are of two representations")
+
+"""
+    combined(pres, coefs)
+
+the terms of one site, a matrix for each site, and the block of channels, reduced, see
+`reduced_block`, of the sum of the operators of the `PreMPO`s `pres`, of a single time function
+each, times `coefs`: the channels of a link those of all of them side by side, a coefficient on
+the openings of its `PreMPO`
+"""
+function combined(pres::Vector{<:PreMPO{R}}, coefs::Vector{<:Number}) where R
+    sys = first(pres).system
+    n = length(sys)
+    T = ComplexF64
+    # the channels of the i-th PreMPO on link k numbered after those of the ones before
+    offsets = [ cumsum([ 0; [ p.linkdims[k] - 1 for p in pres ] ]) for k in 1:n-1 ]
+    singles = Dict{Int, Matrix{T}}()
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    atoms = [ Matrix{T}[] for _ in 1:n ]
+    for k in 1:n
+        ids = Dict{Matrix{T}, Int}()
+        for (i, (p, c)) in enumerate(zip(pres, coefs)), ((from, to), m) in site_moves(p, k)
+            if iszero(c) || (from == to && from in (0, -1))
+                continue
+            elseif from == 0 && to == -1
+                add!(singles, k, c * m)
+                continue
+            end
+            x = get!(ids, m) do
+                push!(atoms[k], m)
+                return length(atoms[k])
+            end
+            l = from == 0 ? 0 : offsets[k-1][i] + from - 1
+            r = to == -1 ? 0 : offsets[k][i] + to - 1
+            add!(get!(Combination{T}, pieces[k], (l, r)), x, from == 0 ? T(c) : one(T))
+        end
+    end
+    block = n == 1 ? nothing :
+            reduced_block(R, sys, ComBlock{T}(1, last.(offsets), pieces, atoms), singles)
+    return singles, block
+end
+
+"""
+    linear_combination(pres, coefs)
+
+the `PreMPO` of the sum of the operators of `pres` times `coefs`, see `combined`: the bound of
+its norm is the sum of theirs times the coefficients, and that of the width of its spectrum the
+sum of theirs, by the inequalities of Weyl, a complex coefficient `c` giving `2|c|` times the
+norm, the width of the Hermitian part of an operator being at most twice its norm
+"""
+function linear_combination(pres::Vector{<:PreMPO{R}}, coefs::Vector{<:Number}) where R
+    sys = first(pres).system
+    if any(p -> p.system ≠ sys, pres)
+        error("the PreMPOs of a sum are on two systems")
+    elseif any(p -> p.nterms ≠ 1, pres)
+        error("a PreMPO of several time functions is not added or scaled")
+    end
+    out = lay_compacted!(PreMPO{R}(sys), zero(ComplexF64), combined(pres, coefs)..., 1)
+    out.norm[] = sum(abs(c) * p.norm[] for (p, c) in zip(pres, coefs))
+    out.width[] = sum(isreal(c) ? abs(c) * p.width[] : 2abs(c) * p.norm[] for (p, c) in zip(pres, coefs))
+    return out
+end
+
+(a::PreMPO{R} + b::PreMPO{R}) where {R <: PM} = linear_combination([a, b], [1, 1])
+(a::PreMPO{R} - b::PreMPO{R}) where {R <: PM} = linear_combination([a, b], [1, -1])
+(::PreMPO + ::PreMPO) = error("the PreMPOs of a sum are of two representations")
+(::PreMPO - ::PreMPO) = error("the PreMPOs of a sum are of two representations")
+(c::Number * a::PreMPO) = linear_combination([a], [c])
+(a::PreMPO * c::Number) = c * a
+(a::PreMPO / c::Number) = inv(c) * a
+-(a::PreMPO) = -1 * a
+# reduced once, where `+` would reduce each partial sum
+Base.sum(pres::AbstractVector{<:PreMPO{R}}) where {R <: PM} =
+    linear_combination(collect(pres), ones(length(pres)))
 
 """
     followed_operator(a)
