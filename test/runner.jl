@@ -419,7 +419,8 @@ end
             write("sim/running", "elsewhere 12 2026-10-13T12:00:00\n")
             @test_throws "started 2026-10-13T12:00:00" runTMS(SimData(; name = "sim", phases))
         finally
-            kill(p)
+            # a SIGTERM now and then left it running
+            kill(p, Base.SIGKILL)
         end
         # a process of this machine that has ended, or this very one, whose number it had
         q = run(`$julia -e "sleep(1)"`; wait = false)
