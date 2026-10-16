@@ -40,6 +40,12 @@ MPO from it. A vector of operators gives each its own time function, see `make_m
 state, a generator with no dissipator, ``\\rho \\mapsto K\\rho + \\rho K^\\dagger``, gives
 the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``. On a mixed state, a channel
 or a generator gives the MPO of its superoperator, and an operator `K` that of `Evolver(K)`.
+
+`pre'` is the `PreMPO` of the adjoint, and `a * b` that of the product of the operators of two
+`PreMPO`s of one system, each of a single time function, the product of a list being
+`prod(PreMPO(state, op) for op in ops)`: built with as few channels as its rank across each
+link, at a cost linear in the number of sites, where the terms of the product grow as the product
+of theirs.
 """
 struct PreMPO{R <: PM}
     system::System
@@ -56,12 +62,14 @@ struct PreMPO{R <: PM}
     lock::ReentrantLock
     # for a pure state, a bound of the width of the spectrum of the operator, see `term_width`
     width::Base.RefValue{Float64}
+    # a bound of the norm of the operator, see `term_size`, which a product multiplies
+    norm::Base.RefValue{Float64}
     function PreMPO{R}(system::System, nterms::Int = 1) where R
         n = length(system)
         return new{R}(system, fill(1, n - 1),
                       [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms,
                       block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock(),
-                      Ref(0.))
+                      Ref(0.), Ref(0.))
     end
 end
 
@@ -106,6 +114,14 @@ function check_coefs(pre::PreMPO, coefs::AbstractVector)
     end
     return Vector{Float64}(coefs)
 end
+
+"""
+    term_size(t)
+
+the coefficient of the term `t` times the operator norms of its blocks, which bounds its norm,
+the strings of `F` changing none, and so the expectation values of the term on a normalized state
+"""
+term_size(t::Term) = abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks; init = 1.0)
 
 """
     term_width(system, t)
@@ -178,6 +194,7 @@ function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
     if R === Pure
         pre.width[] += sum(t -> term_width(pre.system, t), terms; init = 0.)
     end
+    pre.norm[] += sum(term_size, terms; init = 0.)
     return lay_compacted!(pre, compacted(R, pre.system, terms)..., ref)
 end
 
@@ -214,59 +231,84 @@ function site_moves(pre::PreMPO{R}, k::Int) where R
 end
 
 """
-    adjoint_product(pre)
+    adjoint(pre)
 
-the `PreMPO` of ``A^\\dagger A`` for the operator `A` of `pre`, of a single time function: the
-channels of a link the pairs of its states in ``A^\\dagger`` and in `A`, see `site_moves`, the
-pieces the products of theirs, the block reduced as that of the terms would be, see
-`reduced_block`, to as few channels as the rank of ``A^\\dagger A`` across each link, at a cost
-linear in the number of sites where the terms of ``A^\\dagger A`` grow as its square
+the `PreMPO` of the adjoint of the operator of `pre`, its pieces taken adjoint
 """
-function adjoint_product(pre::PreMPO{R}) where R
-    if pre.nterms ≠ 1
-        error("bug: the product of a PreMPO of $(pre.nterms) time functions")
+function Base.adjoint(pre::PreMPO{R}) where R
+    out = PreMPO{R}(pre.system, pre.nterms)
+    out.linkdims .= pre.linkdims
+    for k in eachindex(pre.terms), (l, r, _, ref, m) in pre.terms[k]
+        add_term!(out, k, l, r, collect(natural(pre, k, m)'), ref)
     end
-    sys = pre.system
+    out.width[] = pre.width[]
+    out.norm[] = pre.norm[]
+    return out
+end
+
+"""
+    a * b
+
+the `PreMPO` of the product of the operators of `a` and `b`, of one system and representation
+and of a single time function each: the channels of a link the pairs of its states in `a` and
+in `b`, see `site_moves`, the pieces the products of theirs, the block reduced as that of the
+terms would be, see `reduced_block`, to as few channels as the rank of the product across each
+link, at a cost linear in the number of sites where the terms of the product grow as the
+product of theirs. The bound of its norm is the product of theirs, and that of the width of its
+spectrum, which a search of excited states takes for its weight, twice that, the width of the
+Hermitian part of an operator being at most twice its norm.
+"""
+function (a::PreMPO{R} * b::PreMPO{R}) where {R <: PM}
+    if a.system ≠ b.system
+        error("the PreMPOs of a product are on two systems")
+    elseif a.nterms ≠ 1 || b.nterms ≠ 1
+        error("a PreMPO of several time functions is not multiplied")
+    end
+    sys = a.system
     n = length(sys)
     T = ComplexF64
     ends = ((0, 0), (-1, -1))
     channels = map(1:n-1) do k
-        s = [0; 2:pre.linkdims[k]; -1]
-        pairs = [ (a, b) for a in s for b in s if (a, b) ∉ ends ]
+        sa, sb = [0; 2:a.linkdims[k]; -1], [0; 2:b.linkdims[k]; -1]
+        pairs = [ (x, y) for x in sa for y in sb if (x, y) ∉ ends ]
         return Dict(p => i for (i, p) in enumerate(pairs))
     end
     singles = Dict{Int, Matrix{T}}()
     pieces = [ SitePieces{T}() for _ in 1:n ]
     atoms = [ Matrix{T}[] for _ in 1:n ]
     for k in 1:n
-        moves = site_moves(pre, k)
         ids = Dict{Matrix{T}, Int}()
-        for ((a1, b1), m1) in moves, ((a2, b2), m2) in moves
+        for ((a1, b1), m1) in site_moves(a, k), ((a2, b2), m2) in site_moves(b, k)
             from, to = (a1, a2), (b1, b2)
             # nothing comes from the left of the first site, nothing open goes past the last
             if (from == to && from in ends) || (k == 1 && from ≠ (0, 0)) || (k == n && to ≠ (-1, -1))
                 continue
             end
-            m = m1' * m2
+            m = m1 * m2
             if iszero(m)
                 continue
             elseif from == (0, 0) && to == (-1, -1)
                 add!(singles, k, m)
                 continue
             end
-            a = get!(ids, m) do
+            x = get!(ids, m) do
                 push!(atoms[k], m)
                 return length(atoms[k])
             end
             l = from == (0, 0) ? 0 : channels[k-1][from]
             r = to == (-1, -1) ? 0 : channels[k][to]
-            add!(get!(Combination{T}, pieces[k], (l, r)), a, one(T))
+            add!(get!(Combination{T}, pieces[k], (l, r)), x, one(T))
         end
     end
-    b = n == 1 ? nothing :
-        reduced_block(R, sys, ComBlock{T}(1, [ length(c) for c in channels ], pieces, atoms), singles)
-    return lay_compacted!(PreMPO{R}(sys), zero(T), singles, b, 1)
+    block = n == 1 ? nothing :
+            reduced_block(R, sys, ComBlock{T}(1, [ length(c) for c in channels ], pieces, atoms), singles)
+    out = lay_compacted!(PreMPO{R}(sys), zero(T), singles, block, 1)
+    out.norm[] = a.norm[] * b.norm[]
+    out.width[] = 2out.norm[]
+    return out
 end
+
+(::PreMPO * ::PreMPO) = error("the PreMPOs of a product are of two representations")
 
 """
     followed_operator(a)

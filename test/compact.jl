@@ -186,3 +186,59 @@ end
     @test eltype(make_mpo(st, Y(1) * Y(2))[1]) == Float64
     @test eltype(make_mpo(st, X(1) + Y(2))[1]) == ComplexF64
 end
+
+@testset "The product and the adjoint of PreMPOs" begin
+    # the MPO of a product, built from those of its factors, stands for the product and has the
+    # least channels, where developing it would give the product of the numbers of their terms;
+    # on qubits, on fermions with their strings and on charged fermions, and the adjoint
+    function dense(pre)
+        R = pre isa PreMPO{Pure} ? Pure : Mixed
+        idx = siteinds(R, pre.system)
+        a = Array(IT.dense(prod(make_mpo(pre))), [ i' for i in reverse(idx) ]...,
+                  [ IT.dag(i) for i in reverse(idx) ]...)
+        return reshape(a, prod(IT.dim.(idx)), prod(IT.dim.(idx)))
+    end
+    q = State{Pure}(System(5, Qubit()), "Up")
+    f = State{Pure}(System(4, Fermion()), "Emp")
+    cf = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
+    for (st, ops) in [
+            (q, [sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) for i in 1:4) + 0.3 * Z(2),
+                 sum(Z(i) * Z(i + 2) for i in 1:3) + X(1), 0.5 * X(3) * Y(5) + Z(1)]),
+            (f, [sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) + 0.4 * (C + dag(C))(2),
+                 C(1) * C(4) + 0.3 * N(3), dag(C)(2) + 0.2 * C(3) * N(1)]),
+            (cf, [sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3), dag(C)(2) * C(4),
+                  N(1) + dag(C)(4) * C(1)])]
+        pres = [ PreMPO(st, op) for op in ops ]
+        ds = dense.(pres)
+        p = prod(pres)
+        @test norm(dense(p) - prod(ds)) < 1e-12 * norm(prod(ds))
+        @test p.linkdims .- 1 == least_channels(prod(ds), [ IT.dim(i) for i in siteinds(Pure, st.system) ])
+        @test norm(dense(pres[1]') - ds[1]') < 1e-12 * norm(ds[1])
+    end
+    # superoperators compose
+    ρ = mix(q)
+    l1, l2 = PreMPO(ρ, -im * X(1) * X(2) + Dissipator(Sm)(3)), PreMPO(ρ, Dissipator(Z)(2) + Dissipator(Sp)(4))
+    @test norm(dense(l1 * l2) - dense(l1) * dense(l2)) < 1e-12 * norm(dense(l1)) * norm(dense(l2))
+    # what is refused: two systems, two representations, several time functions
+    @test_throws "the PreMPOs of a product are on two systems" PreMPO(q, X(1)) * PreMPO(f, N(1))
+    @test_throws "the PreMPOs of a product are of two representations" PreMPO(q, X(1)) * l1
+    @test_throws "a PreMPO of several time functions is not multiplied" PreMPO(q, [X(1), Z(2)]) *
+                                                                         PreMPO(q, X(1))
+    # the bound of the norm, the sum of the sizes of the terms, multiplies, and that of the width
+    # of the spectrum of a product is twice it, which gives a search of excited states its weight:
+    # H shifted, so that H² has no level of two
+    two = State{Pure}(System(2, Qubit()), "Up")
+    h = PreMPO(two, Z(1) + 0.4 * X(1) * X(2) + 0.2 * Z(2) + 0.3 * Id(1))
+    @test h.norm[] ≈ 1.9
+    h2 = h * h
+    @test h2.norm[] ≈ 1.9^2 && h2.width[] ≈ 2 * 1.9^2
+    E = TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Hermitian(dense(h2)))
+    @test h2.width[] ≥ E[end] - E[1]
+    # H conserves Z1Z2, and the lowest level of H² is not in the sector of "Up": the searches
+    # start from "+"
+    plus = State{Pure}(two.system, "+")
+    algo = Dmrg(nsweeps = 10, tol = 1e-13)
+    e0, g = ground_state(h2, plus; algo)
+    @test e0 ≈ E[1] atol = 1e-10
+    @test first(ground_state(h2, plus; algo, orthogonal_to = [g])) ≈ E[2] atol = 1e-8
+end

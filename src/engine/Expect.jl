@@ -366,14 +366,6 @@ function measured_terms(system::System, a::IndexedOp{IsOperator})
 end
 
 """
-    term_size(t)
-
-the coefficient of the term `t` times the operator norms of its blocks, which bounds the
-expectation values of the term on a normalized state
-"""
-term_size(t::Term) = abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks; init = 1.0)
-
-"""
     PreparedOp
 
 an operator placed on sites made ready to be measured on the states of a system, see

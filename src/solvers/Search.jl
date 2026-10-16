@@ -227,11 +227,12 @@ ground_state(::Any, ::State{Mixed}; kwargs...) =
     squared_lindbladian(pre, mpo_limits)
 
 the MPO of ``L^\\dagger L`` for the Lindbladian of `pre`, with as few channels as its rank across
-each link, see `adjoint_product`, truncated by `mpo_limits` when they are given, kept in `pre`
+each link, see the product of PreMPOs `*`, truncated by `mpo_limits` when they are given, kept in
+`pre`
 """
 function squared_lindbladian(pre::PreMPO{Mixed}, mpo_limits::Limits)
     return cached_mpos(pre, :squared_lindbladian, mpo_limits) do
-        m = make_mpo(adjoint_product(pre))
+        m = make_mpo(pre' * pre)
         mpo_limits == Limits() ? m : ITensorMPS.truncate(m; truncation(mpo_limits)...)
     end
 end
