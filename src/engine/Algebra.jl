@@ -66,6 +66,16 @@ struct CompactedOp{R}
 end
 
 """
+    op_eltype(c)
+
+the type of the values of the operator compacted `c`, `Float64` at least: real for a real
+operator, whose MPO is real, cheaper to contract
+"""
+op_eltype(c::CompactedOp) =
+    promote_type(Float64, typeof(c.constant), (eltype(m) for m in values(c.singles))...,
+                 isnothing(c.block) ? Float64 : eltype(c.block))
+
+"""
     zero_op(R, system)
 
 the operator zero compacted on `system`, of no term
@@ -111,20 +121,21 @@ identity going from 0 to 0 and from -1 to -1, the constant a term of one site on
 """
 function site_moves(c::CompactedOp{R}, k::Int) where R
     d = block_dim(R, c.system[k])
-    id = Matrix{ComplexF64}(I, d, d)
-    moves = Dict{Tuple{Int, Int}, Matrix{ComplexF64}}((0, 0) => id, (-1, -1) => id)
+    T = op_eltype(c)
+    id = Matrix{T}(I, d, d)
+    moves = Dict{Tuple{Int, Int}, Matrix{T}}((0, 0) => id, (-1, -1) => id)
     if k == 1 && !iszero(c.constant)
         add!(moves, (0, -1), c.constant * id)
     end
     if haskey(c.singles, k)
-        add!(moves, (0, -1), Matrix{ComplexF64}(c.singles[k]))
+        add!(moves, (0, -1), Matrix{T}(c.singles[k]))
     end
     b = c.block
     if !isnothing(b) && b.start ≤ k < b.start + length(b.pieces)
         j = k - b.start + 1
         for ((l, r), comb) in b.pieces[j]
             add!(moves, (l == 0 ? 0 : l, r == 0 ? -1 : r),
-                 Matrix{ComplexF64}(combination_matrix(b, j, comb, d)))
+                 Matrix{T}(combination_matrix(b, j, comb, d)))
         end
     end
     return moves
@@ -198,7 +209,7 @@ function product(a::CompactedOp{R}, b::CompactedOp{R}, limits::Limits = Limits()
         return zero_op(R, sys)
     end
     n = length(sys)
-    T = ComplexF64
+    T = promote_type(op_eltype(a), op_eltype(b))
     ends = ((0, 0), (-1, -1))
     channels = map(1:n-1) do k
         sa, sb = [0; 1:channel_count(a, k); -1], [0; 1:channel_count(b, k); -1]
@@ -250,7 +261,7 @@ function combined(sys::System, parts::Vector{<:Tuple{CompactedOp{R}, Number}},
         flux_refusal(sys, what, fluxes)
     end
     n = length(sys)
-    T = ComplexF64
+    T = promote_type((op_eltype(c) for (c, _) in kept)..., (typeof(x) for (_, x) in kept)...)
     # the channels of the i-th operator on link k numbered after those of the ones before
     offsets = [ cumsum([ 0; [ channel_count(c, k) for (c, _) in kept ] ]) for k in 1:n-1 ]
     # the moves of each operator but the identity, its coefficient on its openings
@@ -274,8 +285,7 @@ function power(c::CompactedOp{R}, p::Integer) where R
     if p < 0
         error("a PreMPO has no power $p: it has no inverse")
     elseif p == 0
-        return CompactedOp{R}(c.system, one(ComplexF64), Dict{Int, Matrix}(), nothing, 1.0, 0.0,
-                              QN(), nothing)
+        return CompactedOp{R}(c.system, 1.0, Dict{Int, Matrix}(), nothing, 1.0, 0.0, QN(), nothing)
     elseif p == 1
         return c
     end

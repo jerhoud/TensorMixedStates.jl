@@ -128,6 +128,9 @@ struct ComBlock{T}
     atoms::Vector{Vector{Matrix{T}}}
 end
 
+# the type of the coefficients and of the atoms of a block
+Base.eltype(::ComBlock{T}) where T = T
+
 """
     direct_pass(terms, strings, tol)
 
