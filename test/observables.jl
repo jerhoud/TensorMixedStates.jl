@@ -1217,6 +1217,10 @@ end
     @test real(LA.diag(reduced_density_matrix(strong_ρ, [1, 2]))) ≈ [0, 0, 1, 0]
     @test reduced_density_matrix(q, []) == ones(1, 1)
     @test_throws "given site 5, which the state does not have" reduced_density_matrix(q, [5])
+    # beyond dense_max, refused rather than exhausting memory
+    for st in (State{Pure}(System(13, Qubit()), "Up"), State{Mixed}(System(13, Qubit()), "Up"))
+        @test_throws "of dimension 8192, beyond the 4096 TMS builds" reduced_density_matrix(st, 1:13)
+    end
     # the entropy of half a Bell pair is log 2, that of the pair 0, and on a cut it is the
     # entanglement entropy
     bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))

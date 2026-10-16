@@ -295,6 +295,21 @@ function unit_trace(m::AbstractMatrix)
 end
 
 """
+    check_reduced(state, kept)
+
+refuse the density matrix of the sites at the positions `kept` of `state` when its dimension,
+the product of theirs, is beyond `dense_max`, rather than exhausting memory
+"""
+function check_reduced(state::State, kept)
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float(dim(state.system[k])) for k in kept)
+    if d > dense_max
+        error("reduced_density_matrix of $(length(kept)) sites needs a dense matrix of dimension " *
+              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
+    end
+end
+
+"""
     reduced_density_matrix(state, positions)
 
 the density matrix of the sites at `positions`, the others traced out, as a matrix of trace
@@ -302,8 +317,8 @@ one on the basis of the product states of those sites, taken in their order, ord
 orders them, the first site varying the slowest, as for `dense_state`. On fermionic sites it is
 written in the Jordan-Wigner basis of the sites kept alone, so that `tr(ρ * matrix(op, ...))`
 is the expectation value of `op` placed on them. It is meant for a few sites, the matrix
-having the square of their dimension as its number of elements. A state of trace zero is
-refused.
+having the square of their dimension as its number of elements, and refused beyond the
+dimension `dense_max`, 4096. A state of trace zero is refused.
 
 # Examples
 
@@ -314,6 +329,7 @@ function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{I
     if isempty(positions)
         return ones(1, 1)
     end
+    check_reduced(state, unique(positions))
     r = partial_trace(weak_form(state), positions; keep = true)
     system = r.system
     t = prod(r.state)
@@ -366,6 +382,7 @@ function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{In
         return ones(1, 1)
     end
     kept = sort!(unique(collect(positions)))
+    check_reduced(state, kept)
     state = trace_signs(state, kept)
     # the dense matrix of many sites has as many indices as ITensors warns about, from 14
     t = ITensors.@disable_warn_order kept_contraction(state, kept)
