@@ -903,3 +903,26 @@ end
         CreateState{Pure}(n, Qubit(), "Up"),
         Thermalize(hamiltonian = h, beta = 1., beta_step = 0.5)]); output = devnull)
 end
+
+@testset "An evolution under its MPO truncated" begin
+    # mpo_limits truncates the MPO of the evolver, see PreMPO, in its triangular form, which
+    # ApproxW reads: given an operator, a PreMPO truncated already, or a PreMPO to truncate, the
+    # same evolution, near the exact one; and so for thermalize
+    n = 8
+    sys = System(n, Qubit())
+    h = sum(Z(i) * Z(j) / (j - i)^2 for i in 1:n for j in i+1:n) + sum(0.5 * X(i) for i in 1:n)
+    ψ = random_state(Pure, sys, 4; rng = Xoshiro(20261016))
+    lim = Limits(cutoff = 1e-6)
+    pre = PreMPO(ψ, -im * h; limits = lim)
+    @test pre.linkdims .- 1 == [1, 2, 3, 3, 3, 2, 1]
+    for algo in (ApproxW(order = 2), Tdvp())
+        a = raw_vector(evolve(pre, 0.2, ψ; nsteps = 4, algo))
+        @test norm(a - raw_vector(evolve(-im * h, 0.2, ψ; nsteps = 4, algo))) < 1e-4
+        @test raw_vector(evolve(-im * h, 0.2, ψ; nsteps = 4, algo, mpo_limits = lim)) ≈ a
+        @test raw_vector(evolve(PreMPO(ψ, -im * h), 0.2, ψ; nsteps = 4, algo, mpo_limits = lim)) ≈ a
+    end
+    ρ = State{Mixed}(sys, "FullyMixed")
+    l0, ρ0 = thermalize(h, 0.5, ρ; nsteps = 5)
+    l1, ρ1 = thermalize(h, 0.5, ρ; nsteps = 5, mpo_limits = lim)
+    @test abs(l1 - l0) < 1e-4
+end

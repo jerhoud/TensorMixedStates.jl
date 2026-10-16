@@ -38,6 +38,8 @@ version 2.x.
 - `cleanTMS`, `stopped`, and `Krylov`, the parameters of the Krylov method of each local step.
 - The algebra of `PreMPO`s: `pre'`, `a * b`, `a ^ p`, `a + b`, `a - b`, `c * a` and `sum(v)`, each
   with as few channels as its rank.
+- `limits` of `PreMPO`, and `mpo_limits` of `ground_state`, `evolve`, `thermalize` and their phases,
+  which truncate the MPO in its triangular form, the one `ApproxW` needs.
 - A quick reference, pages for users of QuTiP or ITensors and on choosing and checking the
   parameters, and a skill for AI agents in `skills/tensormixedstates`.
 
@@ -51,7 +53,8 @@ version 2.x.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
 - `steady_state` builds the MPO of ``L^\dagger L`` from that of ``L`` with as few channels as its
-  rank, where the product of the MPOs had the square of their bond dimension.
+  rank, where the product of the MPOs had the square of their bond dimension, and its
+  `mpo_limits` truncate it in its triangular form.
 - A product of sums that would develop into more terms than its factors have, as a moment `H^4`,
   and on a density matrix a gate or a dissipator of an operator of many terms, are built from the
   MPOs of their factors, at a cost linear in the number of sites.

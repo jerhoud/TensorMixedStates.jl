@@ -407,16 +407,157 @@ function combination_matrix(b::ComBlock{T}, j::Int, comb::Combination{T}, d::Int
 end
 
 """
-    reduced_block(R, system, b, singles)
+    kept_channels(s, t)
+
+how many of the singular values `s`, in decreasing order, a truncation `t`, see `truncation`,
+keeps on a link: those whose squares the cutoff does not cover, relative to the sum of all, at
+most `maxdim` and at least `mindim` less the two channels of the terms not yet begun and
+finished
+"""
+function kept_channels(s::AbstractVector{<:Real}, t::NamedTuple)
+    total = sum(abs2, s; init = 0.0)
+    k, dropped = length(s), 0.0
+    while k > 0 && dropped + s[k]^2 ≤ t.cutoff * total
+        dropped += s[k]^2
+        k -= 1
+    end
+    return clamp(k, min(max(t.mindim - 2, 0), length(s)), max(t.maxdim - 2, 0))
+end
+
+"""
+    truncated_block(b, ds, limits)
+
+the block of channels `b`, reduced, see `reduced_block`, truncated by `limits` in its triangular
+form, `ds` the dimensions of its sites. Written on an orthonormal basis of each site, the
+identity first, for ``\\langle A, B\\rangle = \\mathrm{tr}(A^\\dagger B)/d``, its channels are
+made orthonormal from the left by QR decompositions, then cut from the right by singular value
+decompositions: the singular values of a link are those of the part of the operator acting on
+both sides of it, which `limits` truncates as the bonds of a state, see `kept_channels`.
+"""
+function truncated_block(b::ComBlock{T}, ds::Vector{Int}, limits::Limits) where T
+    t = truncation(limits)
+    n = length(b.pieces)
+    # each piece as its coefficients on the orthonormal basis of its site, the identity first
+    bases = Vector{Vector{Matrix{T}}}(undef, n)
+    pieces = [ Dict{Tuple{Int, Int}, Vector{T}}() for _ in 1:n ]
+    for j in 1:n
+        d, atoms = ds[j], b.atoms[j]
+        r = zeros(T, 0, 0)
+        bases[j] = Matrix{T}[]
+        if !isempty(atoms)
+            f = LinearAlgebra.qr(reduce(hcat, [ vec(m) for m in atoms ]) / sqrt(d))
+            q = Matrix(f.Q)
+            bases[j] = [ sqrt(d) * reshape(q[:, p], d, d) for p in axes(q, 2) ]
+            r = f.R
+        end
+        for (lr, comb) in b.pieces[j]
+            x = zeros(T, length(atoms))
+            for (a, c) in comb
+                if a > 0
+                    x[a] = c
+                end
+            end
+            pieces[j][lr] = [ get(comb, 0, zero(T)); r * x ]
+        end
+    end
+    dims = copy(b.dims)
+    width(j) = 1 + length(bases[j])
+    # from the left, each link of orthonormal channels, what they carried passed to the next site
+    for j in 1:n-1
+        if dims[j] == 0
+            continue
+        end
+        w, nl = width(j), j == 1 ? 1 : dims[j-1] + 1
+        x = zeros(T, nl * w, dims[j])
+        for ((l, r), v) in pieces[j]
+            if r > 0
+                x[l * w .+ (1:w), r] = v
+            end
+        end
+        f = LinearAlgebra.qr(x)
+        q, c = Matrix(f.Q), f.R
+        here = Dict(lr => v for (lr, v) in pieces[j] if last(lr) == 0)
+        for p in 1:size(q, 2), l in 0:nl-1
+            v = q[l * w .+ (1:w), p]
+            if !iszero(v)
+                here[(l, p)] = v
+            end
+        end
+        next = Dict{Tuple{Int, Int}, Vector{T}}()
+        for ((l, s), v) in pieces[j+1]
+            if l == 0
+                next[(l, s)] = v
+                continue
+            end
+            for p in 1:size(q, 2)
+                if !iszero(c[p, l])
+                    next[(p, s)] = get(next, (p, s), zeros(T, length(v))) + c[p, l] * v
+                end
+            end
+        end
+        pieces[j], pieces[j+1] = here, next
+        dims[j] = size(q, 2)
+    end
+    # from the right, each link cut to the singular values `limits` keeps, the rest of the
+    # decomposition passed to the site before
+    for j in n-1:-1:1
+        if dims[j] == 0
+            continue
+        end
+        w, nr = width(j + 1), j + 1 == n ? 1 : dims[j+1] + 1
+        y = zeros(T, dims[j], nr * w)
+        for ((c, s), v) in pieces[j+1]
+            if c > 0
+                y[c, s * w .+ (1:w)] = v
+            end
+        end
+        f = svd(y)
+        k = kept_channels(f.S, t)
+        here = Dict(lr => v for (lr, v) in pieces[j+1] if first(lr) == 0)
+        for p in 1:k, s in 0:nr-1
+            v = f.Vt[p, s * w .+ (1:w)]
+            if !iszero(v)
+                here[(p, s)] = v
+            end
+        end
+        prev = Dict{Tuple{Int, Int}, Vector{T}}()
+        for ((l, c), v) in pieces[j]
+            if c == 0
+                prev[(l, c)] = v
+                continue
+            end
+            for p in 1:k
+                u = f.U[c, p] * f.S[p]
+                if !iszero(u)
+                    prev[(l, p)] = get(prev, (l, p), zeros(T, length(v))) + u * v
+                end
+            end
+        end
+        pieces[j], pieces[j+1] = prev, here
+        dims[j] = k
+    end
+    out = [ SitePieces{T}() for _ in 1:n ]
+    for j in 1:n, (lr, v) in pieces[j]
+        comb = Combination{T}(i - 1 => x for (i, x) in enumerate(v) if !iszero(x))
+        if !isempty(comb)
+            out[j][lr] = comb
+        end
+    end
+    return ComBlock{T}(b.start, dims, out, bases)
+end
+
+"""
+    reduced_block(R, system, b, singles, limits = Limits())
 
 the block of channels `b`, built with its atoms taken as independent, written on a basis of each
 site, see `on_basis!`, the identity moved out of its openings and its closings, see
 `push_identities!`, into the terms of one site `singles`, a matrix for each site, and reduced by
 the sweeps, `left_sweep!` from the left then on its mirror from the right, to as few channels on
-each link as the rank of the coupling across it
+each link as the rank of the coupling across it; truncated by `limits` when they are given, see
+`truncated_block`
 """
 function reduced_block(::Type{R}, system::System, b::ComBlock{T},
-                       singles::Dict{Int, Matrix{T}}) where {R, T}
+                       singles::Dict{Int, Matrix{T}}, limits::Limits = Limits()) where {R, T}
     b = on_basis!(b, rounding_tol)
     opened = push_identities!(b, rounding_tol)
     b = mirror(b)
@@ -428,6 +569,10 @@ function reduced_block(::Type{R}, system::System, b::ComBlock{T},
             k = b.start + j - 1
             add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
         end
+    end
+    if limits ≠ Limits()
+        ds = [ block_dim(R, system[k]) for k in b.start .+ (0:length(b.pieces) - 1) ]
+        b = truncated_block(b, ds, limits)
     end
     return b
 end
@@ -460,17 +605,18 @@ function string_factors(::Type{R}, system::System, t::Term) where R
 end
 
 """
-    compacted(R, system, terms)
+    compacted(R, system, terms, limits = Limits())
 
 the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
 site, and the block of channels of its terms of several sites, `nothing` when it has none, the
 matrices being those of superoperators for `R = Mixed`. The strings of the terms are laid on
 their factors, see `string_factors`, and carried by the channels between them. The block, built
 by `direct_pass`, is reduced to as few channels on each link as the rank of the coupling across
-it, see `reduced_block`. A term of one site that rounding left in place of zero is dropped, the
-terms measured by `normalized_norm`.
+it, see `reduced_block`, and truncated by `limits`. A term of one site that rounding left in
+place of zero is dropped, the terms measured by `normalized_norm`.
 """
-function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
+function compacted(::Type{R}, system::System, terms::Vector{Term},
+                   limits::Limits = Limits()) where R
     scale = maximum(t -> abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0),
                     terms; init = 0.0)
     T = promote_type(Float64, (typeof(t.coef) for t in terms)...,
@@ -506,7 +652,7 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
         # the atoms read after the pass, which adds those of the strings
         b = ComBlock{T}(start, dims, pieces,
                         [ get(atoms, k, Matrix{T}[]) for k in start:start + length(pieces) - 1 ])
-        b = reduced_block(R, system, b, singles)
+        b = reduced_block(R, system, b, singles, limits)
     end
     return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), b
 end

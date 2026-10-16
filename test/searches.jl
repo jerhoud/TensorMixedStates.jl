@@ -499,3 +499,24 @@ end
     @test_throws "on another system" ground_state(heis, a; algo, orthogonal_to = [up])
     @test_throws "orthogonal to pure states, not to a" ground_state(heis, a; algo, orthogonal_to = [mix(a)])
 end
+
+@testset "Searches with their MPO truncated" begin
+    # mpo_limits truncates the MPO of the Hamiltonian, see PreMPO: the ground energy of the
+    # truncated operator, near the exact one, the same whether the Hamiltonian or its PreMPO is
+    # given, which keeps what it is truncated to for the searches after
+    n = 8
+    sys = System(n, Qubit())
+    h = sum(Z(i) * Z(j) / (j - i)^2 for i in 1:n for j in i+1:n) + sum(0.5 * X(i) for i in 1:n)
+    ψ = random_state(Pure, sys, 4; rng = Xoshiro(20261016))
+    algo = Dmrg(nsweeps = 8)
+    lim = Limits(cutoff = 1e-6)
+    e0, _ = ground_state(h, ψ; algo)
+    e1, _ = ground_state(h, ψ; algo, mpo_limits = lim)
+    @test 1e-6 < abs(e1 - e0) < 1e-3
+    pre = PreMPO(ψ, h)
+    @test first(ground_state(pre, ψ; algo, mpo_limits = lim)) ≈ e1
+    key, t = pre.cache[:truncated]
+    @test key == lim && t.linkdims .- 1 == [1, 2, 3, 3, 3, 2, 1]
+    ground_state(pre, ψ; algo, mpo_limits = lim)
+    @test last(pre.cache[:truncated]) === t
+end

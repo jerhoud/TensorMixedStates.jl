@@ -318,3 +318,47 @@ end
     @test_throws "so it has no definite flux" PreMPO(cf, (ad * hop)^2 + N(1))
 end
 
+@testset "An MPO truncated in its triangular form" begin
+    # limits cut, across each link, the singular values of the part of the operator acting on both
+    # sides, for the Hilbert-Schmidt norm normalized on each site, as those of a bond of a state:
+    # those of a power law fall off, cut by the cutoff or by maxdim, the bond dimension of the MPO
+    # being two more than its channels; the cutoff of rounding leaves the operator itself, on
+    # fermions with their strings and on a superoperator, and each time function is cut apart
+    function dense(pre, coefs = [1.])
+        rep = pre isa PreMPO{Pure} ? Pure : Mixed
+        idx = siteinds(rep, pre.system)
+        # the 16 indices of 8 sites, which ITensors warns about from 14
+        whole = IT.@disable_warn_order prod(make_mpo(pre, coefs))
+        t = Array(IT.dense(whole), [ i' for i in reverse(idx) ]...,
+                  [ IT.dag(i) for i in reverse(idx) ]...)
+        return reshape(t, prod(IT.dim.(idx)), prod(IT.dim.(idx)))
+    end
+    nnorm(m) = norm(m) / sqrt(size(m, 1))
+    n = 8
+    q = State{Pure}(System(n, Qubit()), "Up")
+    h = sum(Z(i) * Z(j) / (j - i)^2 for i in 1:n for j in i+1:n) + sum(0.5 * X(i) for i in 1:n)
+    full = dense(PreMPO(q, h))
+    @test PreMPO(q, h).linkdims .- 1 == [1, 2, 3, 4, 3, 2, 1]
+    for (limits, links, error) in [(Limits(cutoff = 1e-14), [1, 2, 3, 4, 3, 2, 1], 1e-14),
+                                   (Limits(cutoff = 1e-6), [1, 2, 3, 3, 3, 2, 1], 1e-4),
+                                   (Limits(maxdim = 5), [1, 2, 3, 3, 3, 2, 1], 1e-4)]
+        p = PreMPO(q, h; limits)
+        @test p.linkdims .- 1 == links
+        @test nnorm(dense(p) - full) < error * nnorm(full)
+    end
+    f = State{Pure}(System(5, Fermion()), "Emp")
+    hf = sum((dag(C)(i) * C(j) + dag(C)(j) * C(i)) / (j - i) for i in 1:5 for j in i+1:5) +
+         0.3 * (C + dag(C))(3)
+    @test nnorm(dense(PreMPO(f, hf; limits = Limits(cutoff = 1e-24))) - dense(PreMPO(f, hf))) < 1e-13
+    ρ = State{Mixed}(System(4, Qubit()), "Up")
+    L = -im * sum(Z(i) * Z(j) / (j - i)^2 for i in 1:4 for j in i+1:4) + Dissipator(sum(Sm(i) for i in 1:4))
+    @test nnorm(dense(PreMPO(ρ, L; limits = Limits(cutoff = 1e-24))) - dense(PreMPO(ρ, L))) < 1e-13
+    pv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)])
+    tv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)];
+                limits = Limits(cutoff = 1e-6))
+    @test sum(tv.linkdims) < sum(pv.linkdims)
+    for c in ([1., 0.], [0., 1.], [0.3, 0.7])
+        @test nnorm(dense(tv, c) - dense(pv, c)) < 1e-4 * nnorm(dense(pv, c))
+        @test nnorm(dense(TMS.truncated(pv, Limits(cutoff = 1e-6)), c) - dense(tv, c)) < 1e-12 * nnorm(dense(pv, c))
+    end
+end

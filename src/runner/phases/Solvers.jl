@@ -20,7 +20,7 @@ function step_number(span::Number, step::Number, what::String, sim::Simulation)
 end
 
 """
-    Evolve(; evolver, duration, time_step, algo = Tdvp(), limits, measurements,
+    Evolve(; evolver, duration, time_step, algo = Tdvp(), limits, mpo_limits, measurements,
              measurements_period, on, name, time_start, final_measurements)
 
 a phase of time evolution, see `evolve`.
@@ -34,6 +34,7 @@ a phase of time evolution, see `evolve`.
   number of steps, and taken with the sign of the duration (no step when that number is zero)
 - `algo`: the method, see `EvolutionAlgorithm`
 - `limits`: the limits of the state, see `Limits`
+- `mpo_limits`: the truncation of the MPO of the evolver, see `PreMPO` (default none)
 - `measurements`: the measurements made after every `measurements_period` steps (default 1),
   see `output`; the state the phase starts from is measured by the final measurements of the
   phase before
@@ -55,11 +56,12 @@ a phase of time evolution, see `evolve`.
     time_step::Number
     algo::EvolutionAlgorithm = Tdvp()
     limits::Limits = Limits()
+    mpo_limits::Limits = Limits()
     measurements = []
     measurements_period::Int = 1
     on::Union{Symbol, Vector{Symbol}} = :state
     function Evolve(name, time_start, final_measurements, evolver, duration, time_step, algo,
-                    limits, measurements, measurements_period, on)
+                    limits, mpo_limits, measurements, measurements_period, on)
         if iszero(time_step)
             error("the time step of an Evolve cannot be zero")
         end
@@ -69,7 +71,7 @@ a phase of time evolution, see `evolve`.
             evolver = [first(evolver)] => [last(evolver)]
         end
         return new(name, time_start, final_measurements, evolver, duration, time_step, algo,
-                   limits, measurements, measurements_period, on)
+                   limits, mpo_limits, measurements, measurements_period, on)
     end
 end
 
@@ -105,7 +107,7 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     end
     what = names == [:state] ? "the state" : "the states " * join(names, ", ")
     log_message(sim, "Evolving $what from time $(sim.time) to $(sim.time + phase.duration)")
-    pre, coefs = prepared_evolver(states[1], phase.evolver)
+    pre, coefs = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
     return EvolveSteps(phase.algo, pre, coefs, phase.limits, n, sim.time, phase.duration, names)
 end
 
@@ -123,7 +125,7 @@ function run_step(e::EvolveSteps, sim::Simulation, k::Int)
 end
 
 """
-    Thermalize(; hamiltonian, beta, beta_step, algo = Tdvp(), limits, measurements,
+    Thermalize(; hamiltonian, beta, beta_step, algo = Tdvp(), limits, mpo_limits, measurements,
                  measurements_period, on, name, time_start, final_measurements)
 
 a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``,
@@ -140,6 +142,7 @@ leaves the state normalized only.
 - `beta_step`: its step, adjusted as the time step of `Evolve`
 - `algo`: the method, see `EvolutionAlgorithm`
 - `limits`: the limits of the state, see `Limits`
+- `mpo_limits`: the truncation of the MPO of the Hamiltonian, see `PreMPO` (default none)
 - `measurements`: the measurements made after every `measurements_period` steps (default 1)
 - `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
@@ -158,16 +161,17 @@ leaves the state normalized only.
     beta_step::Real
     algo::EvolutionAlgorithm = Tdvp()
     limits::Limits = Limits()
+    mpo_limits::Limits = Limits()
     measurements = []
     measurements_period::Int = 1
     on::Symbol = :state
     function Thermalize(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
-                        limits, measurements, measurements_period, on)
+                        limits, mpo_limits, measurements, measurements_period, on)
         if iszero(beta_step)
             error("the beta_step of a Thermalize cannot be zero")
         end
         return new(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
-                   limits, measurements, measurements_period, on)
+                   limits, mpo_limits, measurements, measurements_period, on)
     end
 end
 
@@ -200,8 +204,8 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
         return ThermalSteps(phase.algo, nothing, phase.limits, 1, 0., phase.on)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
-    return ThermalSteps(phase.algo, prepared_operator(state, phase.hamiltonian), phase.limits,
-                        n, phase.beta, phase.on)
+    pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
+    return ThermalSteps(phase.algo, pre, phase.limits, n, phase.beta, phase.on)
 end
 
 step_count(t::ThermalSteps) = t.nsteps
@@ -243,7 +247,7 @@ function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check; 
 end
 
 """
-    GroundState(; hamiltonian, algo, limits, orthogonal_to, weight, measurements,
+    GroundState(; hamiltonian, algo, limits, mpo_limits, orthogonal_to, weight, measurements,
                   measurements_period, on, name, time_start, final_measurements)
 
 a phase that searches the ground state of a Hamiltonian from the pure state, see
@@ -254,6 +258,7 @@ a phase that searches the ground state of a Hamiltonian from the pure state, see
 - `hamiltonian`: the Hamiltonian
 - `algo`: the method, see `SearchAlgorithm`
 - `limits`: the limits of the sweeps, see `Limits`, which may give one value per sweep
+- `mpo_limits`: the truncation of the MPO of the Hamiltonian, see `PreMPO` (default none)
 - `orthogonal_to`: the eigenstates the state searched is orthogonal to, by their names in the
   simulation, see `CopyState`, or given, and `weight`, see `ground_state` (default none)
 - `measurements`: the measurements made after every `measurements_period` sweeps (default 1)
@@ -273,16 +278,17 @@ a phase that searches the ground state of a Hamiltonian from the pure state, see
     hamiltonian
     algo::SearchAlgorithm = nothing
     limits::Limits = Limits()
+    mpo_limits::Limits = Limits()
     orthogonal_to::Vector = []
     weight::Union{Nothing, Real} = nothing
     measurements = []
     measurements_period::Int = 1
     on::Symbol = :state
     # the method, which has no default, asked for with what to write
-    GroundState(name, time_start, final_measurements, hamiltonian, algo, limits, orthogonal_to,
-                weight, measurements, measurements_period, on) =
+    GroundState(name, time_start, final_measurements, hamiltonian, algo, limits, mpo_limits,
+                orthogonal_to, weight, measurements, measurements_period, on) =
         new(name, time_start, final_measurements, hamiltonian, search_algo(algo, "GroundState"),
-            limits, orthogonal_to, weight, measurements, measurements_period, on)
+            limits, mpo_limits, orthogonal_to, weight, measurements, measurements_period, on)
 end
 
 provided_values(::GroundState) = (:energy,)
@@ -292,7 +298,7 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     if !(state isa State{Pure})
         error("GroundState searches a pure state: search it pure and mix it")
     end
-    pre = prepared_operator(state, phase.hamiltonian)
+    pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
     ms = [ m isa Symbol ? state_named(sim, m) : m for m in phase.orthogonal_to ]
     args = orthogonal_args(state, pre, ms, phase.weight)
     log_message(sim, isempty(args) ? "Searching the ground state" :
@@ -314,7 +320,7 @@ for a steady state, and the state measured after a sweep having trace one.
 - `lindbladian`: the Lindbladian ``L``, `-im * H` plus dissipators
 - `algo`: the method, see `SearchAlgorithm`
 - `limits`: the limits of the sweeps, see `Limits`
-- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L``, see `steady_state`
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L``, see `PreMPO` (default none)
 - `measurements`: the measurements made after every `measurements_period` sweeps (default 1)
 - `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 

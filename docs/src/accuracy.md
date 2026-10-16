@@ -30,9 +30,9 @@ truncation of the states, given by `limits`, the time step of an evolution or of
 result can be trusted once it no longer moves when each of them is improved: larger limits, a
 smaller time step, more sweeps. The measurements taken along a run tell which of them limits
 the accuracy. Two more have defaults: the tolerance of the Krylov method of each local step,
-see `Krylov`, and the truncation `mpo_limits` of the ``L^\dagger L`` of `steady_state`, none by
-default; truncated, it makes the value `steady_state` returns the residual of the truncated
-operator.
+see `Krylov`, and the truncation `mpo_limits` of the MPO of the operator of a solver, ``L^\dagger
+L`` for `steady_state`, none by default: truncated, a result is that of the truncated operator,
+and the value `steady_state` returns its residual.
 
 ### Truncation
 

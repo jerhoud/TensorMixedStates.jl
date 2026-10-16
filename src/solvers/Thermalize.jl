@@ -22,7 +22,8 @@ function thermal_step(algo::EvolutionAlgorithm, pre::PreMPO{Mixed}, state::State
 end
 
 """
-    thermalize(hamiltonian, beta, state; algo = Tdvp(), nsteps = 1, limits = Limits(), step = 1)
+    thermalize(hamiltonian, beta, state; algo = Tdvp(), nsteps = 1, limits = Limits(),
+               mpo_limits = Limits(), step = 1)
 
 the mixed state ``\\rho``, normalized to trace one, taken to
 ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}`` by an evolution in imaginary time in `nsteps` steps
@@ -36,7 +37,8 @@ From `"FullyMixed"`, it gives the thermal state ``e^{-\\beta H}/Z``, and `log_tr
 with ``H`` gives the thermal state restricted to what it describes: `fully_mixed(system,
 N => m)` the canonical state of `m` particles, a product state of populations
 ``e^{\\beta\\mu n_i}`` the grand canonical state at chemical potential ``\\mu``. The
-Hamiltonian may be given as its `PreMPO` on the mixed state, prepared once and keeping its MPOs.
+Hamiltonian may be given as its `PreMPO` on the mixed state, prepared once and keeping its MPOs,
+and `mpo_limits` truncates its MPO, see `PreMPO` (default none).
 `step` is the number of the first step, for the periods of the method and for `limits`, which
 may give one value per step; from a later step, the state is taken as a computation left it, of
 trace one, and not normalized again. A pure state is refused.
@@ -48,11 +50,11 @@ trace one, and not normalized again. A pure state is refused.
 """
 function thermalize(hamiltonian, beta::Real, state::State{Mixed};
                     algo::EvolutionAlgorithm = Tdvp(), nsteps::Int = 1,
-                    limits::Limits = Limits(), step::Int = 1)
+                    limits::Limits = Limits(), mpo_limits::Limits = Limits(), step::Int = 1)
     if nsteps < 1
         error("thermalize takes at least one step, and nsteps is $nsteps")
     end
-    pre = prepared_operator(state, hamiltonian)
+    pre = prepared_operator(state, hamiltonian, mpo_limits)
     # a continued computation is not normalized again, which would change its rounding, and the
     # basis an expansion picks with it
     if step == 1

@@ -1201,3 +1201,23 @@ end
         @test sum(first, summaries("resumed/log")) == 7
     end
 end
+
+@testset "The phases of the solvers with their MPO truncated" begin
+    # mpo_limits of GroundState, Evolve and Thermalize truncate the MPO of their operators as the
+    # solvers do
+    n = 6
+    h = sum(Z(i) * Z(j) / (j - i)^2 for i in 1:n for j in i+1:n) + sum(0.5 * X(i) for i in 1:n)
+    lim = Limits(cutoff = 1e-6)
+    algo = Dmrg(nsweeps = 6)
+    cd(mktempdir()) do
+        sim = runTMS(SimData(name = "trunc", phases = [CreateState{Pure}(n, Qubit(), "Up"),
+                             GroundState(; hamiltonian = h, algo, mpo_limits = lim),
+                             CopyState(:state => :ground),
+                             Evolve(evolver = -im * h, duration = 0.2, time_step = 0.1, mpo_limits = lim),
+                             ToMixed(), Thermalize(hamiltonian = h, beta = 0.2, beta_step = 0.1,
+                                                   mpo_limits = lim)]))
+        e, g = ground_state(h, State{Pure}(sim.ground.system, "Up"); algo, mpo_limits = lim)
+        @test sim.energy ≈ e
+        @test abs(inner(sim.ground, g)) ≈ 1 atol = 1e-8
+    end
+end

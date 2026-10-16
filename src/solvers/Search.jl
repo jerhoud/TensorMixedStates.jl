@@ -122,21 +122,24 @@ function search_algo(algo, what::String)
 end
 
 """
-    prepared_operator(state, op)
+    prepared_operator(state, op, mpo_limits = Limits())
 
 the `PreMPO` of the operator `op` of a search or of `thermalize` on `state`, or `op` itself when
-it is one
+it is one, truncated by `mpo_limits`, see `truncated_once`
 """
-prepared_operator(state::State, a::IndexedOp) = PreMPO(state, a)
-prepared_operator(state::State{R}, pre::PreMPO{R}) where {R <: PM} = check_pre(pre, state)
+prepared_operator(state::State, a::IndexedOp, mpo_limits::Limits = Limits()) =
+    PreMPO(state, a; limits = mpo_limits)
+prepared_operator(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
+    truncated_once(check_pre(pre, state), mpo_limits)
 
-prepared_operator(::State, ::PreMPO) =
+prepared_operator(::State, ::PreMPO, ::Limits = Limits()) =
     error("the PreMPO was prepared on a state of the other representation")
 
-prepared_operator(::State, ::MPO) =
+prepared_operator(::State, ::MPO, ::Limits = Limits()) =
     error("the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO")
 
-prepared_operator(::State, x) = error("$(repr(x)) is not an operator or its PreMPO")
+prepared_operator(::State, x, ::Limits = Limits()) =
+    error("$(repr(x)) is not an operator or its PreMPO")
 
 """
     orthogonal_args(state, pre, orthogonal_to, weight)
@@ -185,12 +188,14 @@ function check_orthogonal(state::State{Pure}, args::NamedTuple, weight::Union{No
 end
 
 """
-    ground_state(hamiltonian, state; algo, limits = Limits(), orthogonal_to = [], weight = nothing)
+    ground_state(hamiltonian, state; algo, limits = Limits(), mpo_limits = Limits(),
+                 orthogonal_to = [], weight = nothing)
 
 the ground state of the Hamiltonian, searched from the pure `state` by the method `algo`, see
 `SearchAlgorithm`, as `(energy, state)`. The Hamiltonian may be given as its
 `PreMPO(state, hamiltonian)`, prepared once for several searches and keeping its MPO. `limits`,
-see `Limits`, may give one value per sweep, with a default cutoff of `1e-26`. A mixed state is
+see `Limits`, may give one value per sweep, with a default cutoff of `1e-26`, and `mpo_limits`
+truncates the MPO of the Hamiltonian, see `PreMPO` (default none). A mixed state is
 refused: search the pure state and mix it; the steady state of a Lindbladian is given by
 `steady_state`.
 
@@ -209,10 +214,11 @@ them. The energy is that of the Hamiltonian alone.
     e1, excited = ground_state(H, state; algo = Dmrg(nsweeps = 20), orthogonal_to = [ground])
 """
 function ground_state(hamiltonian, state::State{Pure}; algo::Union{Nothing, SearchAlgorithm} = nothing,
-                      limits::Limits = Limits(), orthogonal_to::AbstractVector = State{Pure}[],
+                      limits::Limits = Limits(), mpo_limits::Limits = Limits(),
+                      orthogonal_to::AbstractVector = State{Pure}[],
                       weight::Union{Nothing, Real} = nothing)
     algo = search_algo(algo, "ground_state")
-    pre = prepared_operator(state, hamiltonian)
+    pre = prepared_operator(state, hamiltonian, mpo_limits)
     args = orthogonal_args(state, pre, orthogonal_to, weight)
     e, st = search(algo, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing), state, limits; args...)
     check_orthogonal(st, args, weight)
@@ -227,15 +233,12 @@ ground_state(::Any, ::State{Mixed}; kwargs...) =
     squared_lindbladian(pre, mpo_limits)
 
 the MPO of ``L^\\dagger L`` for the Lindbladian of `pre`, with as few channels as its rank across
-each link, see the product of PreMPOs `*`, truncated by `mpo_limits` when they are given, kept in
+each link, see the product of PreMPOs `*`, truncated by `mpo_limits`, see `product`, kept in
 `pre`
 """
-function squared_lindbladian(pre::PreMPO{Mixed}, mpo_limits::Limits)
-    return cached_mpos(pre, :squared_lindbladian, mpo_limits) do
-        m = make_mpo(pre' * pre)
-        mpo_limits == Limits() ? m : ITensorMPS.truncate(m; truncation(mpo_limits)...)
-    end
-end
+squared_lindbladian(pre::PreMPO{Mixed}, mpo_limits::Limits) =
+    cached_mpos(() -> make_mpo(product(pre', pre, mpo_limits)), pre, :squared_lindbladian,
+                mpo_limits)
 
 """
     steady_krylov
@@ -273,7 +276,7 @@ channels as its rank across each link. The Lindbladian may be given as its
 `PreMPO(state, lindbladian)`, prepared once and keeping the MPO of ``L^\\dagger L``.
 
 - `limits`: the limits of the sweeps, see `Limits`, with a default cutoff of `1e-26`
-- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default none)
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L``, see `PreMPO` (default none)
 
 The Krylov search of `Dmrg` takes `dim = 8` and `maxiter = 3` by default, which the spectrum of
 ``L^\\dagger L``, crowded near zero, needs. A Lindbladian may have several steady states, one in
