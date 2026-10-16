@@ -661,15 +661,13 @@ function is_hermitian(system::System, terms::Vector{Term}, scale::Real)
 end
 
 """
-    hermitian_blocks(system, c)
+    hermitian_blocks(c)
 
-whether the operator compacted `c` on `system`, see `compacted_op`, is Hermitian: its `PreMPO`
-minus that of its adjoint vanishes, see `vanishes`
+whether the operator compacted `c`, see `compacted_op`, is Hermitian: zero, or of no flux, an
+adjoint changing the charges the other way, and minus its adjoint vanishing, see `vanishes`
 """
-function hermitian_blocks(system::System, c::CompactedOp)
-    pre = laid(Pure, system, c)
-    return vanishes(pre - pre')
-end
+hermitian_blocks(c::CompactedOp) =
+    isnothing(c.flux) || (c.flux == QN() && vanishes(combined([c, c'], [1, -1])))
 
 """
     prepared_entry(state, m)
@@ -682,7 +680,7 @@ function prepared_entry(state::AbstractState, a::IndexedOp{IsOperator})
     system = state isa State ? weak_form(state).system : state.system
     c, on = measured_compacted(system, a)
     p = PreparedOp(c, on !== system)
-    h = isnothing(c.terms) ? hermitian_blocks(on, c) : is_hermitian(on, c.terms, p.scale)
+    h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(on, c.terms, p.scale)
     return OpValue(p, a, h)
 end
 

@@ -338,7 +338,7 @@ sites it acts on, see `mpo_window`, and return the number that brings: 0 when it
 the operator being zero, 1 otherwise
 """
 mpo_step!(steps::Vector, ::Type{R}, system::System, terms::Vector{Term}) where R =
-    pre_step!(steps, lay_terms!(PreMPO{R}(system), terms, 1))
+    pre_step!(steps, laid(system, [from_terms(R, system, "a piece", terms)]))
 
 """
     pre_step!(steps, pre)
@@ -470,10 +470,9 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     # a product of sums that would develop into more terms than its factors have, or, on a
     # density matrix, Kρ K† of many terms
     if R === Pure && any(by_blocks, gathered_summands(g))
-        return pre_step!(steps, laid(Pure, system, compacted_op(system, p)))
+        return pre_step!(steps, laid(system, [compacted_op(system, p)]))
     elseif R === Mixed && many_terms(g)
-        l, r = sided(system, p, true), sided(system, p, false)
-        return pre_step!(steps, laid(Mixed, system, l) * laid(Mixed, system, r))
+        return pre_step!(steps, laid(system, [product(sided(system, p, true), sided(system, p, false))]))
     end
     terms = lower(system, p, g)
     if length(terms) == 1

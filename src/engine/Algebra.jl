@@ -1,0 +1,510 @@
+# The operators compacted on a system, see `CompactedOp`, in which an operator is measured and
+# laid as an MPO, and their algebra: the adjoint, the product, the linear combinations and the
+# powers, each reduced to as few channels as its rank, see `reduced_block`. An operator is
+# compacted from its terms, but for the products of sums that would develop into many terms,
+# made of the compactions of their factors multiplied, and so are the gates and the dissipators
+# of operators of many terms, from the sides of these.
+
+"""
+    term_size(t)
+
+the coefficient of the term `t` times the operator norms of its blocks, which bounds its norm,
+the strings of `F` changing none, and so the expectation values of the term on a normalized state
+"""
+term_size(t::Term) = abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks; init = 1.0)
+
+"""
+    term_width(system, t)
+
+a bound of the width of the spectrum of ``(t + t^\\dagger)/2`` for the term `t` of an operator on
+a pure state of `system`: the bounds of its terms add up to one of a Hermitian operator, by the
+inequalities of Weyl. It is exact for a term of at most two sites, as `apply` takes them dense,
+and twice the norm of the term beyond; with a Jordan-Wigner string, it is twice the largest
+eigenvalue, in absolute value, of the Hermitian part of the term with the `F` of the string on
+the site of its first block, the `F` of the sites between, ±1, changing nothing; a constant
+has none
+"""
+function term_width(system::System, t::Term)
+    if isempty(t.blocks)
+        return 0.
+    elseif length(t.blocks) > 2
+        return 2abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks)
+    end
+    m = t.coef * foldl(kron, [ on_string(t.kets, k) ? m * matrix(F, system[k]) : m
+                               for (k, m) in t.blocks ])
+    λ = eigvals(Hermitian((m + m') / 2))
+    return isempty(t.kets) ? last(λ) - first(λ) : 2maximum(abs, λ)
+end
+
+"""
+    terms_flux(R, system, a, terms)
+
+the flux of the terms of the operator `a`, all the same once checked, see `check_flux`:
+`nothing` when there is none, and no charge on a system conserving nothing
+"""
+terms_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R =
+    isempty(terms) ? nothing : is_charged(system) ? term_flux(R, system, a, first(terms)) : QN()
+
+"""
+    CompactedOp{R}
+
+an operator compacted on `system`, see `compacted`, a superoperator for `R = Mixed`: its
+constant, its terms of one site, a matrix for each site, and its block of channels, the bounds of
+its norm and of the width of its spectrum, see `term_size` and `term_width`, its flux, `nothing`
+when it has no term, and its terms when it was made of them alone. Each time function of a
+`PreMPO` holds one.
+"""
+struct CompactedOp{R}
+    system::System
+    constant::Number
+    singles::Dict{Int, Matrix}
+    block::Union{Nothing, ComBlock}
+    norm::Float64
+    width::Float64
+    flux::Union{Nothing, QN}
+    terms::Union{Nothing, Vector{Term}}
+end
+
+"""
+    zero_op(R, system)
+
+the operator zero compacted on `system`, of no term
+"""
+zero_op(::Type{R}, system::System) where R =
+    CompactedOp{R}(system, 0, Dict{Int, Matrix}(), nothing, 0.0, 0.0, nothing, nothing)
+
+"""
+    from_terms(R, system, a, terms, limits = Limits())
+
+the operator `a` compacted on `system` from its `terms`, see `compacted`, truncated by `limits`,
+the bounds of its norm and of its width the sums of those of its terms, the width that of a pure
+state alone, `a` naming the operator in the refusals
+"""
+function from_terms(::Type{R}, system::System, a, terms::Vector{Term},
+                    limits::Limits = Limits()) where R
+    width = R === Pure ? sum(t -> term_width(system, t), terms; init = 0.0) : 0.0
+    return CompactedOp{R}(system, compacted(R, system, terms, limits)...,
+                          sum(term_size, terms; init = 0.0), width,
+                          terms_flux(R, system, a, terms), terms)
+end
+
+"""
+    channel_count(c, k)
+
+the number of channels of the block of `c` on the link on the right of site `k`, none outside
+the block
+"""
+function channel_count(c::CompactedOp, k::Int)
+    b = c.block
+    if isnothing(b) || !(b.start ≤ k < b.start + length(b.pieces) - 1)
+        return 0
+    end
+    return b.dims[k - b.start + 1]
+end
+
+"""
+    site_moves(c, k)
+
+the moves of the operator compacted `c` on site `k`, as their matrices, between the states of
+the links on either side: a channel, 0 the term not yet begun or -1 the term finished, the
+identity going from 0 to 0 and from -1 to -1, the constant a term of one site on the first site
+"""
+function site_moves(c::CompactedOp{R}, k::Int) where R
+    d = block_dim(R, c.system[k])
+    id = Matrix{ComplexF64}(I, d, d)
+    moves = Dict{Tuple{Int, Int}, Matrix{ComplexF64}}((0, 0) => id, (-1, -1) => id)
+    if k == 1 && !iszero(c.constant)
+        add!(moves, (0, -1), c.constant * id)
+    end
+    if haskey(c.singles, k)
+        add!(moves, (0, -1), Matrix{ComplexF64}(c.singles[k]))
+    end
+    b = c.block
+    if !isnothing(b) && b.start ≤ k < b.start + length(b.pieces)
+        j = k - b.start + 1
+        for ((l, r), comb) in b.pieces[j]
+            add!(moves, (l == 0 ? 0 : l, r == 0 ? -1 : r),
+                 Matrix{ComplexF64}(combination_matrix(b, j, comb, d)))
+        end
+    end
+    return moves
+end
+
+"""
+    adjoint(c)
+
+the adjoint of the operator compacted `c`, its pieces taken adjoint, of the opposite flux
+"""
+function Base.adjoint(c::CompactedOp{R}) where R
+    b = c.block
+    block = isnothing(b) ? nothing :
+        ComBlock(b.start, copy(b.dims),
+                 [ typeof(p)(lr => typeof(comb)(a => conj(x) for (a, x) in comb) for (lr, comb) in p)
+                   for p in b.pieces ],
+                 [ [ collect(m') for m in atoms ] for atoms in b.atoms ])
+    return CompactedOp{R}(c.system, conj(c.constant),
+                          Dict{Int, Matrix}(k => collect(m') for (k, m) in c.singles), block,
+                          c.norm, c.width, isnothing(c.flux) ? nothing : -c.flux, nothing)
+end
+
+"""
+    product(a, b, limits = Limits())
+
+the product of the operators compacted `a` and `b`, of one system: the channels of a link the
+pairs of its states in `a` and in `b`, see `site_moves`, the pieces the products of theirs, the
+block reduced, see `reduced_block`, to as few channels as the rank of the product across each
+link and truncated by `limits`, at a cost linear in the number of sites where the terms of the
+product grow as the product of theirs. The bound of its norm is the product of theirs, and that
+of the width of its spectrum twice that, the width of the Hermitian part of an operator being at
+most twice its norm.
+"""
+function product(a::CompactedOp{R}, b::CompactedOp{R}, limits::Limits = Limits()) where R
+    sys = a.system
+    if isnothing(a.flux) || isnothing(b.flux)
+        return zero_op(R, sys)
+    end
+    n = length(sys)
+    T = ComplexF64
+    ends = ((0, 0), (-1, -1))
+    channels = map(1:n-1) do k
+        sa, sb = [0; 1:channel_count(a, k); -1], [0; 1:channel_count(b, k); -1]
+        pairs = [ (x, y) for x in sa for y in sb if (x, y) ∉ ends ]
+        return Dict(p => i for (i, p) in enumerate(pairs))
+    end
+    singles = Dict{Int, Matrix{T}}()
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    atoms = [ Matrix{T}[] for _ in 1:n ]
+    for k in 1:n
+        ids = Dict{Matrix{T}, Int}()
+        for ((a1, b1), m1) in site_moves(a, k), ((a2, b2), m2) in site_moves(b, k)
+            from, to = (a1, a2), (b1, b2)
+            # nothing comes from the left of the first site, nothing open goes past the last
+            if (from == to && from in ends) || (k == 1 && from ≠ (0, 0)) ||
+               (k == n && to ≠ (-1, -1))
+                continue
+            end
+            m = m1 * m2
+            # a product vanishing but for rounding, which would be an atom of its own
+            if norm(m) ≤ rounding_tol * norm(m1) * norm(m2)
+                continue
+            elseif from == (0, 0) && to == (-1, -1)
+                add!(singles, k, m)
+                continue
+            end
+            x = get!(ids, m) do
+                push!(atoms[k], m)
+                return length(atoms[k])
+            end
+            l = from == (0, 0) ? 0 : channels[k-1][from]
+            r = to == (-1, -1) ? 0 : channels[k][to]
+            add!(get!(Combination{T}, pieces[k], (l, r)), x, one(T))
+        end
+    end
+    block = n == 1 ? nothing :
+            reduced_block(R, sys, ComBlock{T}(1, [ length(c) for c in channels ], pieces, atoms),
+                          singles, limits)
+    bound = a.norm * b.norm
+    return CompactedOp{R}(sys, zero(T), singles, block, bound, 2bound, a.flux + b.flux, nothing)
+end
+
+"""
+    combined(cs, coefs, limits = Limits())
+
+the sum of the operators compacted `cs`, of one system, times `coefs`: the channels of a link
+those of all of them side by side, the coefficient of each on its openings, the block reduced,
+see `reduced_block`, and truncated by `limits`. The bound of its norm is the sum of theirs times
+the coefficients, and that of the width of its spectrum the sum of theirs, by the inequalities
+of Weyl, a complex coefficient `c` giving `2|c|` times the norm. Refused when they change the
+charges by different amounts.
+"""
+function combined(cs::Vector{<:CompactedOp{R}}, coefs::Vector{<:Number},
+                  limits::Limits = Limits()) where R
+    sys = first(cs).system
+    kept = [ (c, x) for (c, x) in zip(cs, coefs) if !iszero(x) && !isnothing(c.flux) ]
+    if isempty(kept)
+        return zero_op(R, sys)
+    end
+    fluxes = unique(c.flux for (c, _) in kept)
+    if length(fluxes) > 1
+        flux_refusal(sys, "the sum", fluxes)
+    end
+    n = length(sys)
+    T = ComplexF64
+    # the channels of the i-th operator on link k numbered after those of the ones before
+    offsets = [ cumsum([ 0; [ channel_count(c, k) for (c, _) in kept ] ]) for k in 1:n-1 ]
+    singles = Dict{Int, Matrix{T}}()
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    atoms = [ Matrix{T}[] for _ in 1:n ]
+    for k in 1:n
+        ids = Dict{Matrix{T}, Int}()
+        for (i, (c, x)) in enumerate(kept), ((from, to), m) in site_moves(c, k)
+            if from == to && from in (0, -1)
+                continue
+            elseif from == 0 && to == -1
+                add!(singles, k, x * m)
+                continue
+            end
+            a = get!(ids, m) do
+                push!(atoms[k], m)
+                return length(atoms[k])
+            end
+            l = from == 0 ? 0 : offsets[k-1][i] + from
+            r = to == -1 ? 0 : offsets[k][i] + to
+            add!(get!(Combination{T}, pieces[k], (l, r)), a, from == 0 ? T(x) : one(T))
+        end
+    end
+    block = n == 1 ? nothing :
+            reduced_block(R, sys, ComBlock{T}(1, last.(offsets), pieces, atoms), singles, limits)
+    return CompactedOp{R}(sys, zero(T), singles, block, sum(abs(x) * c.norm for (c, x) in kept),
+                          sum(isreal(x) ? abs(x) * c.width : 2abs(x) * c.norm for (c, x) in kept),
+                          only(fluxes), nothing)
+end
+
+"""
+    power(c, p)
+
+the `p`-th power of the operator compacted `c` by squaring, the power 4 being `(c c)(c c)`, two
+products, and the power 0 the identity
+"""
+function power(c::CompactedOp{R}, p::Integer) where R
+    if p < 0
+        error("a PreMPO has no power $p: it has no inverse")
+    elseif p == 0
+        return CompactedOp{R}(c.system, one(ComplexF64), Dict{Int, Matrix}(), nothing, 1.0, 0.0,
+                              QN(), nothing)
+    elseif p == 1
+        return c
+    end
+    h = power(c, p ÷ 2)
+    s = product(h, h)
+    return isodd(p) ? product(s, c) : s
+end
+
+"""
+    vanishes(c)
+
+whether the operator compacted `c` is zero but for rounding: no term, or no channel and terms
+of one site of rounding size next to the bound of its norm
+"""
+vanishes(c::CompactedOp) = isnothing(c.flux) ||
+    ((isnothing(c.block) || all(iszero, c.block.dims)) && abs(c.constant) ≤ rounding_tol * c.norm &&
+     all(m -> normalized_norm(m) ≤ rounding_tol * c.norm, values(c.singles)))
+
+"""
+    term_estimate(a)
+
+the number of terms of the placed operator `a` developed as it is written, a bound, terms that
+merge counted apart
+"""
+term_estimate(a::SumOp) = sum(term_estimate, a.subs)
+term_estimate(a::ProdOp) = prod(term_estimate, a.subs)
+term_estimate(a::ScalarOp) = term_estimate(a.arg)
+term_estimate(::Op) = 1
+
+"""
+    by_blocks(a)
+
+whether the placed operator `a`, gathered, see `gathered`, is a product whose terms would
+outnumber those of its factors together, see `term_estimate`, so that it is better made of the
+compactions of its factors multiplied, see `compacted_op`
+"""
+function by_blocks(a::IndexedOp)
+    p = scalararg(a)
+    if !(p isa ProdOp)
+        return false
+    end
+    counts = term_estimate.(p.subs)
+    return prod(counts) > sum(counts)
+end
+
+"""
+    gathered_summands(g)
+
+the operators the placed operator `g`, gathered, see `gathered`, is the sum of, its coefficient
+left out
+"""
+function gathered_summands(g::IndexedOp)
+    s = scalararg(g)
+    return s isa SumOp ? s.subs : [s]
+end
+
+"""
+    blocked_product(fs, factor)
+
+the product of the operators `fs`, `factor(f)` giving the compaction of the factor `f`, equal
+factors in a row raised by squaring, see `power`
+"""
+function blocked_product(fs, factor)
+    c = nothing
+    k = 1
+    while k ≤ length(fs)
+        run = findfirst(f -> f ≠ fs[k], fs[k:end])
+        n = isnothing(run) ? length(fs) - k + 1 : run - 1
+        p = power(factor(fs[k]), n)
+        c = isnothing(c) ? p : product(c, p)
+        k += n
+    end
+    return c
+end
+
+"""
+    add_part!(parts, c, coef)
+
+add to `parts` the operator compacted `c` times `coef`, unless it vanishes, see `vanishes`: a
+product of definite fluxes that vanishes has none
+"""
+function add_part!(parts::Vector, c::CompactedOp, coef::Number)
+    if !vanishes(c)
+        push!(parts, (c, coef))
+    end
+    return parts
+end
+
+"""
+    assembled(R, system, a, parts, limits)
+
+the operator `a` compacted on `system` from its `parts`, an operator compacted and a coefficient
+each, added in one reduction truncated by `limits`, see `combined`: refused, see `flux_refusal`,
+when they change the charges by different amounts
+"""
+function assembled(::Type{R}, system::System, a, parts::Vector, limits::Limits) where R
+    fluxes = unique(c.flux for (c, _) in parts)
+    if length(fluxes) > 1
+        flux_refusal(system, a, fluxes)
+    end
+    return isempty(parts) ? zero_op(R, system) :
+                            combined([ c for (c, _) in parts ], [ x for (_, x) in parts ], limits)
+end
+
+"""
+    compacted_op(system, op, limits = Limits())
+
+the operator `op`, placed on sites, compacted on `system` and truncated by `limits`, see
+`truncated_block`: from its terms, see `lower`, but for its products that would develop into
+more terms than their factors have, see `by_blocks`. Those are made of the compactions of their
+factors, made the same way, multiplied, equal factors in a row by squaring, see `power`, and
+added to that of the rest in one reduction, see `assembled`. Refused when it changes the charges
+by no definite amount, see `FluxError`.
+"""
+function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits = Limits())
+    check_indices(system, a)
+    g = gathered(system, a)
+    summands = gathered_summands(g)
+    if !any(by_blocks, summands)
+        return from_terms(Pure, system, a, lower(system, a, g), limits)
+    end
+    parts = Tuple{CompactedOp{Pure}, Number}[]
+    rest = filter(x -> !by_blocks(x), summands)
+    if !isempty(rest)
+        add_part!(parts, compacted_op(system, SumOp(rest)), scalarcoef(g))
+    end
+    for x in filter(by_blocks, summands)
+        add_part!(parts, blocked_product(prodsubs(scalararg(x)), f -> compacted_op(system, f)),
+                  scalarcoef(g) * scalarcoef(x))
+    end
+    return assembled(Pure, system, a, parts, limits)
+end
+
+"""
+    sided(system, op, left)
+
+the operator `op`, placed on sites, compacted on `system`, see `compacted_op`, as the
+superoperator ``\\rho \\mapsto op\\,\\rho`` when `left` and ``\\rho \\mapsto \\rho\\,op^\\dagger``
+otherwise, see `sided_term`: a product that would develop made of the sides of its factors
+multiplied in the same order on both sides, ``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger)
+A^\\dagger``
+"""
+function sided(system::System, a::IndexedOp{IsOperator}, left::Bool)
+    check_indices(system, a)
+    g = gathered(system, a)
+    summands = gathered_summands(g)
+    if !any(by_blocks, summands)
+        one = identity_term()
+        ts = [ left ? sided_term(t, one) : sided_term(one, t) for t in lower(system, a, g) ]
+        return from_terms(Mixed, system, a, check_flux(Mixed, system, a, ts))
+    end
+    side(c) = left ? c : conj(c)
+    parts = Tuple{CompactedOp{Mixed}, Number}[]
+    rest = filter(x -> !by_blocks(x), summands)
+    if !isempty(rest)
+        add_part!(parts, sided(system, SumOp(rest), left), side(scalarcoef(g)))
+    end
+    for x in filter(by_blocks, summands)
+        add_part!(parts, blocked_product(prodsubs(scalararg(x)), f -> sided(system, f, left)),
+                  side(scalarcoef(g) * scalarcoef(x)))
+    end
+    return assembled(Mixed, system, a, parts, Limits())
+end
+
+"""
+    many_terms(k)
+
+whether the placed operator `k` has more than two terms, or a product that would develop into
+more terms than its factors have, see `by_blocks`, so that a gate or a dissipator of `k` is
+better made of its sides, see `compacted_super`
+"""
+many_terms(k::IndexedOp) = term_estimate(k) > 2 || any(by_blocks, gathered_summands(k))
+
+"""
+    super_by_blocks(a)
+
+whether the superoperator `a`, placed on sites, is better made of the sides of its operators,
+see `compacted_super`: a gate or a dissipator of an operator of many terms, see `many_terms`, an
+evolver of one with a product that would develop, or a product of channels whose terms would
+outnumber those of its factors together, a gate of `k` having the square of the terms of `k`
+"""
+function super_by_blocks(a::IndexedOp)
+    s = scalararg(a)
+    if s isa Union{Gate{Indexed}, Dissipator{Indexed}}
+        return s.arg isa IndexedOp{IsOperator} && many_terms(s.arg)
+    elseif s isa Evolver{Indexed}
+        return any(by_blocks, gathered_summands(s.arg))
+    elseif s isa ProdOp
+        counts = [ scalararg(x) isa Gate{Indexed} ? term_estimate(scalararg(x).arg)^2 : 1
+                   for x in s.subs ]
+        return prod(counts) > sum(counts)
+    end
+    return false
+end
+
+"""
+    compacted_super(system, a, limits = Limits())
+
+the superoperator `a`, a channel or a generator placed on sites, compacted on `system` and
+truncated by `limits`, see `truncated_block`: from its terms, see `lower`, but for what is better
+made of the sides of its operators, see `super_by_blocks` and `sided`, multiplied, the adjoint of
+a side being the side of the adjoint. The evolver of `K` is ``K\\rho + \\rho K^\\dagger``, its
+gate ``K\\rho K^\\dagger``, the dissipator of `L` ``L\\rho L^\\dagger - (L^\\dagger L\\rho + \\rho
+L^\\dagger L)/2``, and a product of channels that of their compactions.
+"""
+function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits())
+    check_indices(system, a)
+    c, s = scalarcoef(a), scalararg(a)
+    summands = s isa SumOp ? s.subs : [s]
+    if !any(super_by_blocks, summands)
+        return from_terms(Mixed, system, a, lower(system, a), limits)
+    end
+    parts = Tuple{CompactedOp{Mixed}, Number}[]
+    rest = filter(x -> !super_by_blocks(x), summands)
+    if !isempty(rest)
+        add_part!(parts, compacted_super(system, SumOp(rest)), c)
+    end
+    for x in filter(super_by_blocks, summands)
+        y, k = scalararg(x), c * scalarcoef(x)
+        if y isa ProdOp
+            add_part!(parts, blocked_product(y.subs, f -> compacted_super(system, f)), k)
+            continue
+        end
+        l, r = sided(system, y.arg, true), sided(system, y.arg, false)
+        if y isa Evolver
+            add_part!(add_part!(parts, l, k), r, k)
+        elseif y isa Gate
+            add_part!(parts, product(l, r), k)
+        else
+            add_part!(parts, product(l, r), k)
+            add_part!(parts, product(l', l), -k / 2)
+            add_part!(parts, product(r', r), -k / 2)
+        end
+    end
+    return assembled(Mixed, system, a, parts, limits)
+end

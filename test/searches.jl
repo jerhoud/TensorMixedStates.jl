@@ -445,22 +445,22 @@ end
     sys = System(n, Qubit())
     up = State{Pure}(sys, "Up")
     heis = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:n-1)
-    @test PreMPO(up, heis).width[] ≈ 6(n - 1)
-    @test PreMPO(up, heis + 2.0 * Id(1)).width[] ≈ 6(n - 1)
-    @test PreMPO(up, 2 * N(1) * N(2)).width[] ≈ 2
-    @test PreMPO(up, Z(1) * Z(2) * Z(3)).width[] ≈ 2
+    @test PreMPO(up, heis).width ≈ 6(n - 1)
+    @test PreMPO(up, heis + 2.0 * Id(1)).width ≈ 6(n - 1)
+    @test PreMPO(up, 2 * N(1) * N(2)).width ≈ 2
+    @test PreMPO(up, Z(1) * Z(2) * Z(3)).width ≈ 2
     @test PreMPO(State{Pure}(System(4, Fermion()), "Emp"),
-                 dag(C)(1) * C(3) + dag(C)(3) * C(1)).width[] ≈ 2
+                 dag(C)(1) * C(3) + dag(C)(3) * C(1)).width ≈ 2
     # the string on the site of the first block counts, which a Majorana operator, odd and of no
     # definite form, shows: i a(1) a(3) is Y ⊗ Z ⊗ X, of width 2, where the bound was 0
     a = C + dag(C)
-    @test PreMPO(State{Pure}(System(4, Fermion()), "Emp"), im * a(1) * a(3)).width[] ≈ 2
+    @test PreMPO(State{Pure}(System(4, Fermion()), "Emp"), im * a(1) * a(3)).width ≈ 2
     # the lowest eigenstates in turn, each orthogonal to those before, the energy that of the
     # Hamiltonian alone, against its spectrum
     H = heis + 0.3 * sum(Z(i) for i in 1:n)
     LA = TMS.LinearAlgebra
     E = LA.eigvals(LA.Hermitian(Matrix(TMS.system_matrix(Pure, sys, TMS.lower(sys, H)))))
-    @test PreMPO(up, H).width[] ≥ E[end] - E[1]
+    @test PreMPO(up, H).width ≥ E[end] - E[1]
     r = random_state(Pure, sys, 4; rng = Xoshiro(1))
     lim = Limits(maxdim = 32)
     algo = Dmrg(nsweeps = 40, tol = 1e-13)
@@ -494,7 +494,7 @@ end
     b = State{Pure}(qs, "Up")
     pre = PreMPO(a, heis)
     @test isempty(TMS.orthogonal_args(a, pre, [b], nothing))
-    @test TMS.orthogonal_args(a, pre, [a], nothing).weight ≈ 1.1 * pre.width[]
+    @test TMS.orthogonal_args(a, pre, [a], nothing).weight ≈ 1.1 * pre.width
     @test TMS.orthogonal_args(a, pre, [a], 0.5).weight == 0.5
     @test_throws "on another system" ground_state(heis, a; algo, orthogonal_to = [up])
     @test_throws "orthogonal to pure states, not to a" ground_state(heis, a; algo, orthogonal_to = [mix(a)])

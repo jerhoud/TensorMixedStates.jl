@@ -225,9 +225,9 @@ end
         z = pres[1] - pres[1]
         @test all(==(1), z.linkdims) && norm(dense(z)) < 1e-14
         # the bounds add, a complex coefficient giving twice its norm for the width
-        @test s.norm[] ≈ pres[1].norm[] + 0.5 * pres[2].norm[] + 0.5 * pres[3].norm[]
-        @test s.width[] ≈ pres[1].width[] + 0.5 * pres[2].width[] + 0.5 * pres[3].width[]
-        @test (2im * pres[1]).width[] ≈ 4 * pres[1].norm[]
+        @test s.norm ≈ pres[1].norm + 0.5 * pres[2].norm + 0.5 * pres[3].norm
+        @test s.width ≈ pres[1].width + 0.5 * pres[2].width + 0.5 * pres[3].width
+        @test (2im * pres[1]).width ≈ 4 * pres[1].norm
     end
     # what cancels but for rounding opens no channel: an identity pushed onto an opening, in a
     # product that is 0.7 (0.1 + 0.2 - 0.3) (1 - X1) Z2 Z3, a product of pieces, M² = 0 on a
@@ -271,15 +271,15 @@ end
     # H shifted, so that H² has no level of two
     two = State{Pure}(System(2, Qubit()), "Up")
     h = PreMPO(two, Z(1) + 0.4 * X(1) * X(2) + 0.2 * Z(2) + 0.3 * Id(1))
-    @test h.norm[] ≈ 1.9
+    @test h.norm ≈ 1.9
     h2 = h * h
-    @test h2.norm[] ≈ 1.9^2 && h2.width[] ≈ 2 * 1.9^2
+    @test h2.norm ≈ 1.9^2 && h2.width ≈ 2 * 1.9^2
     # a power by squaring, the power 0 the identity, a negative one refused
     @test norm(dense(h^5) - dense(h)^5) < 1e-12 * norm(dense(h))^5
     @test dense(h^0) ≈ TMS.LinearAlgebra.I(4)
     @test_throws "a PreMPO has no power -1: it has no inverse" h^-1
     E = TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Hermitian(dense(h2)))
-    @test h2.width[] ≥ E[end] - E[1]
+    @test h2.width ≥ E[end] - E[1]
     # H conserves Z1Z2, and the lowest level of H² is not in the sector of "Up": the searches
     # start from "+"
     plus = State{Pure}(two.system, "+")

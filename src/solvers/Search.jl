@@ -164,7 +164,7 @@ function orthogonal_args(state::State{Pure}, pre::PreMPO{Pure}, orthogonal_to::A
             push!(ms, normalize(m))
         end
     end
-    return isempty(ms) ? (;) : (; orthogonal_to = ms, weight = something(weight, 1.1 * pre.width[]))
+    return isempty(ms) ? (;) : (; orthogonal_to = ms, weight = something(weight, 1.1 * pre.width))
 end
 
 """
