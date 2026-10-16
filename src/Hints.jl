@@ -188,6 +188,16 @@ and a value or of a name and a type depending on its version
 keyword_names(kwargs) = Symbol[ first(k) for k in kwargs ]
 
 """
+    takes_simulation(f)
+
+whether a method of `f` takes a `Simulation`, the error of a call to it being then no
+`Simulation` given for a state
+"""
+takes_simulation(f) =
+    any(m -> any(t -> t isa Type && t <: Simulation, Base.unwrap_unionall(m.sig).parameters[2:end]),
+        methods(f))
+
+"""
     method_hint(io, e, argtypes, kwargs)
 
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
@@ -207,13 +217,15 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     types = collect(argtypes)
     if f === data_to_frame && isnothing(Base.get_extension(@__MODULE__, :DataFramesExt))
         print(io, "\ndata_to_frame needs the DataFrames package: run using DataFrames")
+    elseif f === data_to_frame && length(types) == 1 && types[1] <: Simulation
+        print(io, "\ndata_to_frame takes the rows of a Data: data_to_frame(sim.data[\"name\"])")
     elseif f === Simulation && length(types) == 1 && types[1] <: AbstractState
         print(io, "\nTensorMixedStates 2.0: a Simulation is made by runTMS; outside a run, call " *
                   "the functions on the state")
     elseif f === output && !isempty(kwargs)
         print(io, "\nTensorMixedStates 2.0: output measures with the values of the simulation, " *
                   "output(Simulation(sim, sim.state; energy = e), list)")
-    elseif any(t -> t isa Type && t <: Simulation, types)
+    elseif any(t -> t isa Type && t <: Simulation, types) && !takes_simulation(f)
         print(io, "\nTensorMixedStates 2.0: the functions take a state, sim.state, and " *
                   "Simulation(sim, state) gives the simulation another one")
     elseif f === ITensorMPS.tdvp || f === ITensorMPS.dmrg

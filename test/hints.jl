@@ -84,6 +84,8 @@ end
     st = State{Pure}(System(2, Qubit()), "Up")
     sim = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "Up")]); output = devnull)
     @test occursin("the functions take a state, sim.state", message(() -> apply(X(1), sim)))
+    # not for a function taking the simulation, whose other argument is wrong
+    @test !occursin("sim.state", message(() -> output(sim, Z(1))))
     @test occursin("a Simulation is made by runTMS", message(() -> Simulation(st)))
     @test occursin("measure(state, list; time = t)", message(() -> measure(st, [Z(1)], 0.3)))
     @test occursin("returns the Check", message(() -> Check("name", Z(1), 1.)))

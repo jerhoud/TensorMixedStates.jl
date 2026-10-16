@@ -238,6 +238,15 @@ end
     TMS.output!(o, ψ, Data("c") => Sp(1); time = 1)
     TMS.close!(o)
     @test last(only(TMS.data_rows(o, "c"))[2]) isa ComplexF64
+    # the simulation given for its rows: the hint says what it takes, where it said that the
+    # functions take a state
+    sim = runTMS(SimData(phases = [CreateState{Pure}(1, Qubit(), "Up")]); output = devnull)
+    hint = try
+        data_to_frame(sim)
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("data_to_frame(sim.data[\"name\"])", hint) && !occursin("sim.state", hint)
 end
 
 @testset "A destination of another package" begin
