@@ -110,6 +110,28 @@ mpo_matrix(st::State{R}, m::TMS.ITensorMPS.MPO) where R <: TMS.PM =
 mpo_matrix(st::State, op) = mpo_matrix(PreMPO(st, op))
 
 """
+    in_tmp(f)
+
+`f()` with a temporary directory as working directory
+"""
+in_tmp(f) = mktempdir(dir -> cd(f, dir))
+
+"""
+    run_through(sd; kwargs...)
+
+the simulation `sd` run again and again until it is not stopped
+"""
+function run_through(sd; kwargs...)
+    for _ in 1:500
+        sim = runTMS(sd; kwargs...)
+        if !stopped(sim)
+            return sim
+        end
+    end
+    error("the simulation did not end")
+end
+
+"""
 the least number of memory channels, those besides the term not yet begun and the term
 finished, that a triangular MPO of the operator of dense matrix `h` can have on each link, the
 sites having the dimensions `ds`: the rank of `h` across the link once its parts that are the

@@ -161,27 +161,22 @@ end
     sys = System(3, Qubit())
     st = WrappedState(sys, apply(X(1) * H(2), State{Pure}(sys, "Up")))
     # run by phases of one's own, measured, and resumed through its state files
-    mktempdir() do dir
-        cd(dir) do
-            z = "z" => c -> real(expect(c.state.inner, Z(1)))
-            phases = [CreateWrapped(), TurnWrapped(measurements = "z" => z)]
-            ref = runTMS(SimData(; name = "ref", phases))
-            sim = runTMS(SimData(; name = "chk", phases); max_time = -1)
-            while stopped(sim)
-                sim = runTMS(SimData(; name = "chk", phases); max_time = -1)
-            end
-            @test sim.state isa WrappedState
-            @test read("chk/z", String) == read("ref/z", String)
-            @test sim.time == 3
-            # LoadState reads it back, not truncated at the default limits, which it has no
-            # method for, and :auto chooses the threading from its system
-            save_state("w.h5", "w", st)
-            sim = runTMS(SimData(name = "load", phases = [LoadState(file = "../w.h5", statename = "w")]);
-                         threading = :auto)
-            @test sim.state isa WrappedState
-            @test_throws MethodError runTMS(SimData(name = "cut", phases = [
-                LoadState(file = "../w.h5", statename = "w", limits = Limits(maxdim = 2))]))
-        end
+    in_tmp() do
+        z = "z" => c -> real(expect(c.state.inner, Z(1)))
+        phases = [CreateWrapped(), TurnWrapped(measurements = "z" => z)]
+        ref = runTMS(SimData(; name = "ref", phases))
+        sim = run_through(SimData(; name = "chk", phases); max_time = -1)
+        @test sim.state isa WrappedState
+        @test read("chk/z", String) == read("ref/z", String)
+        @test sim.time == 3
+        # LoadState reads it back, not truncated at the default limits, which it has no
+        # method for, and :auto chooses the threading from its system
+        save_state("w.h5", "w", st)
+        sim = runTMS(SimData(name = "load", phases = [LoadState(file = "../w.h5", statename = "w")]);
+                     threading = :auto)
+        @test sim.state isa WrappedState
+        @test_throws MethodError runTMS(SimData(name = "cut", phases = [
+            LoadState(file = "../w.h5", statename = "w", limits = Limits(maxdim = 2))]))
     end
     mktempdir() do dir
         file = joinpath(dir, "wrapped.h5")
@@ -345,16 +340,13 @@ end
               1e-10
     end
     # and an Evolve phase, resumed after each step as the uninterrupted run
-    mktempdir() do dir
-        cd(dir) do
-            phases = [CreateState{Pure}(3, Qubit(), ["Up", "+", "Dn"]),
-                      Evolve(evolver = -im * h, duration = 0.4, time_step = 0.1, algo = DenseStep(),
-                             measurements = "data" => [X(1), Z])]
-            runTMS(SimData(; name = "ref", phases))
-            while stopped(runTMS(SimData(; name = "chk", phases); max_time = -1))
-            end
-            @test read("chk/data", String) == read("ref/data", String)
-        end
+    in_tmp() do
+        phases = [CreateState{Pure}(3, Qubit(), ["Up", "+", "Dn"]),
+                  Evolve(evolver = -im * h, duration = 0.4, time_step = 0.1, algo = DenseStep(),
+                         measurements = "data" => [X(1), Z])]
+        runTMS(SimData(; name = "ref", phases))
+        run_through(SimData(; name = "chk", phases); max_time = -1)
+        @test read("chk/data", String) == read("ref/data", String)
     end
     hs = [-im * X(1) * X(2), -im * sum(Z(i) for i in 1:3)]
     fs = [t -> 1., t -> cos(2t)]

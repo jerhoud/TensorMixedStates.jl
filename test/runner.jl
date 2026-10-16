@@ -37,28 +37,6 @@ stopper(n::Ref{Int}) = "stopper" => function (_)
     return 0.0
 end
 
-"""
-    in_tmp(f)
-
-`f()` with a temporary directory as working directory
-"""
-in_tmp(f) = mktempdir(dir -> cd(f, dir))
-
-"""
-    run_through(sd; kwargs...)
-
-the simulation `sd` run again and again until it is not stopped
-"""
-function run_through(sd; kwargs...)
-    for _ in 1:500
-        sim = runTMS(sd; kwargs...)
-        if !stopped(sim)
-            return sim
-        end
-    end
-    error("the simulation did not end")
-end
-
 # a phase of one's own made of steps: kicks on the first qubit, each taking 0.1 of time
 Base.@kwdef struct Kicks <: AbstractPhase
     name::String = "kicks"
@@ -1210,7 +1188,7 @@ end
     h = sum(Z(i) * Z(j) / (j - i)^2 for i in 1:n for j in i+1:n) + sum(0.5 * X(i) for i in 1:n)
     lim = Limits(cutoff = 1e-6)
     algo = Dmrg(nsweeps = 6)
-    cd(mktempdir()) do
+    in_tmp() do
         sim = runTMS(SimData(name = "trunc", phases = [CreateState{Pure}(n, Qubit(), "Up"),
                              GroundState(; hamiltonian = h, algo, mpo_limits = lim),
                              CopyState(:state => :ground),
