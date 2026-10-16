@@ -459,13 +459,13 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
         if !isnothing(c.terms) && length(c.terms) == 1
             return one_site_gates!(steps, Pure, system, only(c.terms))
         end
-        return pre_step!(steps, laid(system, [c]))
+        return pre_step!(steps, PreMPO(system, [c]))
     end
     terms = lower(system, p)
     if length(terms) == 1
         return one_site_gates!(steps, Mixed, system, only(terms))
     end
-    return pre_step!(steps, laid(system, [compacted_super(system, Gate(p))]))
+    return pre_step!(steps, PreMPO(system, [compacted_super(system, Gate(p))]))
 end
 
 """
@@ -520,7 +520,7 @@ function mixed_steps(system::System, a::IndexedOp)
                 m = system_matrix(Mixed, system, terms, ks, [ mixed_elements(system, k) for k in ks ])
                 block_step!(steps, Mixed, system, m, ks)
             else
-                coef *= pre_step!(steps, laid(system, [compacted_super(system, f)]))
+                coef *= pre_step!(steps, PreMPO(system, [compacted_super(system, f)]))
             end
         end
         if coef == 0

@@ -73,7 +73,7 @@ dissipators of operators of many terms from the sides ``K\\rho`` and ``\\rho K^\
 """
 struct PreMPO{R <: PM}
     system::System
-    # the operator of each time function, compacted, which its pieces lay, see `laid`
+    # the operator of each time function, compacted, which its pieces lay, see `lay_compacted!`
     parts::Vector{CompactedOp{R}}
     linkdims::Vector{Int}
     # the pieces on each site, see `add_piece!`
@@ -87,13 +87,6 @@ struct PreMPO{R <: PM}
     width::Float64
     # a bound of the norm of the operator, see `term_size`
     norm::Float64
-    # no piece laid yet, see `laid`
-    function PreMPO{R}(system::System, parts::Vector{CompactedOp{R}}) where R
-        n = length(system)
-        return new{R}(system, parts, fill(1, n - 1), [ Piece[] for _ in 1:n ],
-                      block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock(),
-                      sum(c -> c.width, parts; init = 0.0), sum(c -> c.norm, parts; init = 0.0))
-    end
 end
 
 """
@@ -175,14 +168,14 @@ function lay_compacted!(pre::PreMPO{R}, c::CompactedOp{R}, ref::Int) where R
     return pre
 end
 
-"""
-    laid(system, parts)
-
-the `PreMPO` on `system` of the operators compacted `parts`, one per time function, laid in
-their order, see `lay_compacted!`
-"""
-function laid(system::System, parts::Vector{CompactedOp{R}}) where R
-    pre = PreMPO{R}(system, parts)
+# the PreMPO on `system` of the operators compacted `parts`, one per time function, laid in their
+# order, see `lay_compacted!`; a comment, not a docstring, which would put a method of no user in
+# the reference of the exported PreMPO
+function PreMPO(system::System, parts::Vector{CompactedOp{R}}) where R
+    n = length(system)
+    pre = PreMPO{R}(system, parts, fill(1, n - 1), [ Piece[] for _ in 1:n ],
+                    block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock(),
+                    sum(c -> c.width, parts; init = 0.0), sum(c -> c.norm, parts; init = 0.0))
     for (ref, c) in enumerate(parts)
         lay_compacted!(pre, c, ref)
     end
@@ -214,7 +207,7 @@ end
 
 the `PreMPO` of the adjoint of the operator of `pre`, each time function apart
 """
-Base.adjoint(pre::PreMPO) = laid(pre.system, [ c' for c in pre.parts ])
+Base.adjoint(pre::PreMPO) = PreMPO(pre.system, [ c' for c in pre.parts ])
 
 """
     a * b
@@ -233,7 +226,7 @@ and of a single time function each, see `product`
 """
 function product(a::PreMPO{R}, b::PreMPO{R}, limits::Limits) where R
     x, y = single_part([a, b], "product")
-    return laid(a.system, [product(x, y, limits)])
+    return PreMPO(a.system, [product(x, y, limits)])
 end
 
 """
@@ -243,7 +236,7 @@ the `PreMPO` of the sum of the operators of `pres` times `coefs`, see `combined`
 """
 function linear_combination(pres::Vector{<:PreMPO{R}}, coefs::Vector{<:Number}) where R
     sys = first(pres).system
-    return laid(sys, [combined(sys, collect(zip(single_part(pres, "sum"), coefs)))])
+    return PreMPO(sys, [combined(sys, collect(zip(single_part(pres, "sum"), coefs)))])
 end
 
 (a::PreMPO{R} + b::PreMPO{R}) where {R <: PM} = linear_combination([a, b], [1, 1])
@@ -265,7 +258,7 @@ the `PreMPO` of the `p`-th power of the operator of `a` by squaring, `a^4` being
 products, and `a^0` the identity, see `power`
 """
 (a::PreMPO{R} ^ p::Integer) where {R <: PM} =
-    laid(a.system, [power(only(single_part([a], "product")), p)])
+    PreMPO(a.system, [power(only(single_part([a], "product")), p)])
 
 # a literal negative exponent would go through `inv`, which a PreMPO has no method of
 Base.literal_pow(::typeof(^), a::PreMPO, ::Val{p}) where p = a ^ p
@@ -295,19 +288,14 @@ the channel or the generator `a`, an operator given for a density matrix being i
 superoperator(a::IndexedOp{IsOperator}) = Evolver(a)
 superoperator(a::IndexedOp) = a
 
-PreMPO(state::State{Pure}, a::IndexedOp{IsOperator}; limits::Limits = Limits()) =
-    laid(state.system, [compacted_op(state.system, a, limits)])
-PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsOperator}}; limits::Limits = Limits()) =
-    laid(state.system, CompactedOp{Pure}[ compacted_op(state.system, a, limits) for a in as ])
-PreMPO(state::State{Pure}, a::IndexedOp; limits::Limits = Limits()) =
-    PreMPO(state, followed_operator(a); limits)
+# a single operator being a vector of one
+PreMPO(state::State, a::IndexedOp; limits::Limits = Limits()) = PreMPO(state, [a]; limits)
 PreMPO(state::State{Pure}, as::Vector{<:IndexedOp}; limits::Limits = Limits()) =
-    PreMPO(state, IndexedOp{IsOperator}[ followed_operator(a) for a in as ]; limits)
-PreMPO(state::State{Mixed}, a::IndexedOp; limits::Limits = Limits()) =
-    laid(state.system, [compacted_super(state.system, superoperator(a), limits)])
+    PreMPO(state.system,
+           CompactedOp{Pure}[ compacted_op(state.system, followed_operator(a), limits) for a in as ])
 PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp}; limits::Limits = Limits()) =
-    laid(state.system,
-         CompactedOp{Mixed}[ compacted_super(state.system, superoperator(a), limits) for a in as ])
+    PreMPO(state.system,
+           CompactedOp{Mixed}[ compacted_super(state.system, superoperator(a), limits) for a in as ])
 
 """
     truncated(pre, limits)
@@ -319,7 +307,7 @@ function truncated(pre::PreMPO, limits::Limits)
     if limits == Limits()
         return pre
     end
-    return laid(pre.system, [ combined(pre.system, [(c, 1)], limits) for c in pre.parts ])
+    return PreMPO(pre.system, [ combined(pre.system, [(c, 1)], limits) for c in pre.parts ])
 end
 
 """
