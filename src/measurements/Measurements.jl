@@ -318,8 +318,9 @@ function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{I
     system = r.system
     t = prod(r.state)
     js, bs = Index[], Index[]
-    # each mixed index split back into its ket and its bra
-    for i in 1:length(system)
+    # each mixed index split back into its ket and its bra, the dense matrix of many sites
+    # having as many indices as ITensors warns about, from 14
+    ITensors.@disable_warn_order for i in 1:length(system)
         j = siteind(Pure, system, i)
         b, c = mixer(j, siteind(Mixed, system, i), system[i])
         t *= dag(c)
@@ -330,14 +331,21 @@ function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{I
     return unit_trace(reshape(Array(dense(t), reverse(js)..., reverse(dag.(prime.(bs)))...), d, d))
 end
 
-# the ket contracted with the bra, the sites kept left open on both sides
-function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int})
-    check_positions(state, positions, "reduced_density_matrix")
-    if isempty(positions)
-        return ones(1, 1)
+"""
+    kept_contraction(state, kept)
+
+the tensor of the density matrix of the sites at the increasing positions `kept` of the pure
+`state`, its kets on the indices of the sites and its bras on their primes: for a block of
+consecutive sites, ``MM^\\dagger``, `M` the block of the state orthogonalised on it, whose
+environments are then the identity, of the dimensions of the sites times ``\\chi^2``; otherwise
+the ket contracted with the bra from left to right, the sites kept left open on both sides
+"""
+function kept_contraction(state::State{Pure}, kept::Vector{Int})
+    if kept == first(kept):last(kept)
+        st = orthogonalize(state.state, first(kept))
+        m = prod(st[k] for k in kept)
+        return m * dag(prime(m, [ siteind(Pure, state.system, k) for k in kept ]))
     end
-    kept = sort(unique(positions))
-    state = trace_signs(state, kept)
     st = state.state
     t = get_left(state, first(kept))
     for k in first(kept):last(kept)
@@ -349,6 +357,18 @@ function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{In
         end
         t *= k == last(kept) ? get_right(state, k) : dag(st[k]')
     end
+    return t
+end
+
+function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int})
+    check_positions(state, positions, "reduced_density_matrix")
+    if isempty(positions)
+        return ones(1, 1)
+    end
+    kept = sort!(unique(collect(positions)))
+    state = trace_signs(state, kept)
+    # the dense matrix of many sites has as many indices as ITensors warns about, from 14
+    t = ITensors.@disable_warn_order kept_contraction(state, kept)
     js = [ siteind(Pure, state.system, k) for k in kept ]
     d = prod(dim, js)
     return unit_trace(reshape(Array(dense(t), reverse(js)..., reverse(dag.(prime.(js)))...), d, d))

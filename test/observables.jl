@@ -1223,17 +1223,18 @@ end
 
 @testset "Reduced density matrix of a pure state" begin
     # contracted on the pure state, it is the one of its mixed representation, fermionic signs
-    # included: sites kept on both sides of sites traced out, and a site traced out first
+    # included: sites kept on both sides of sites traced out, a site traced out first, and
+    # blocks of consecutive sites, from the block of the state orthogonalised on it
     for (st, positions) in [
-            (random_state(Pure, System(6, Qubit()), 8), [[6], [5, 2], [1, 3, 6]]),
+            (random_state(Pure, System(6, Qubit()), 8), [[6], [5, 2], [1, 3, 6], [3, 4, 5]]),
             (random_state(State{Pure}(System(6, Fermion(conserve = N)),
                                       ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]), 8),
-             [[2, 4], [2, 3, 5]]),
+             [[2, 4], [2, 3, 5], [2, 3], [4, 5, 6]]),
             (random_state(State{Pure}(System(4, Electron(conserve = (Ntot, 2Sz))),
                                       ["Up", "Dn", "Emp", "UpDn"]), 6),
-             [[1, 3], [2, 4]]),
+             [[1, 3], [2, 4], [2, 3]]),
             (random_state(Pure, System([Qubit(), Fermion(), Boson(3), Fermion(), Qubit()]), 6),
-             [[2, 4], [1, 3, 5]])]
+             [[2, 4], [1, 3, 5], [2, 3, 4]])]
         for pos in positions
             @test reduced_density_matrix(st, pos) ≈ reduced_density_matrix(mix(st), pos)
         end
