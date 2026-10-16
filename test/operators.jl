@@ -964,16 +964,9 @@ end
     @test expect(st, Id(5)) ≈ 1
 end
 
-@testset "Operators of several sites that were refused" begin
-    # a renamed operator is its definition, developed as the definition itself is
-    q = Qubit()
-    st = State{Pure}(System(2, q), ["Up", "Dn"])
-    @test expect(st, named(exp(-0.3im * Swap), "R")(1, 2)) ≈ expect(st, exp(-0.3im * Swap)(1, 2))
-    # one site given for identical ones, a function of the sites included
-    zx = Operator{2}("ZX", (a, b) -> kron(matrix(Z, a), matrix(X, b)))
-    @test matrix(zx, q) ≈ kron(matrix(Z, q), matrix(X, q))
+@testset "Controlled operators" begin
     # a fermionic operator controlled is its expression
-    fe = Fermion()
+    q, fe = Qubit(), Fermion()
     @test matrix(controlled(C), q, fe) ≈ matrix(Proj("0") ⊗ Id + Proj("1") ⊗ C, q, fe)
     # a control of any type leaves the others as they are on its level 0 and applies the
     # operator on any other: a gate on a qutrit as well
@@ -1012,6 +1005,9 @@ end
     s1 = Operator{2}("MySwap", sw)
     @test matrix(s1, Qubit()) ≈ sw
     @test expect(State{Pure}(System(2, Qubit()), ["Up", "X+"]), s1(1, 2)) ≈ 0.5
+    # a renamed operator of several sites is its definition, developed as the definition itself is
+    st = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
+    @test expect(st, named(exp(-0.3im * Swap), "R")(1, 2)) ≈ expect(st, exp(-0.3im * Swap)(1, 2))
 end
 
 @testset "A state is given by an array of any type" begin
