@@ -148,6 +148,40 @@ function Base.adjoint(c::CompactedOp{R}) where R
 end
 
 """
+    from_moves(R, system, T, dims, moves, limits)
+
+the terms of one site and the block of channels of the operator compacted on `system` whose
+pieces on each site `k` are `moves(k)`, as `(l, r, m, x)`: `x` times the matrix `m` from channel
+`l` of the link on the left to channel `r` of the link on the right, `dims` their numbers, 0 for
+an opening or a closing, a term of one site when both are; the matrices of each site numbered as
+its atoms, the block reduced, see `reduced_block`, and truncated by `limits`
+"""
+function from_moves(::Type{R}, sys::System, ::Type{T}, dims::Vector{Int}, moves,
+                    limits::Limits) where {R, T}
+    n = length(sys)
+    singles = Dict{Int, Matrix{T}}()
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    atoms = [ Matrix{T}[] for _ in 1:n ]
+    for k in 1:n
+        ids = Dict{Matrix{T}, Int}()
+        for (l, r, m, x) in moves(k)
+            if l == 0 && r == 0
+                add!(singles, k, x * m)
+                continue
+            end
+            a = get!(ids, m) do
+                push!(atoms[k], m)
+                return length(atoms[k])
+            end
+            add!(get!(Combination{T}, pieces[k], (l, r)), a, T(x))
+        end
+    end
+    block = n == 1 ? nothing :
+            reduced_block(R, sys, ComBlock{T}(1, dims, pieces, atoms), singles, limits)
+    return singles, block
+end
+
+"""
     product(a, b, limits = Limits())
 
 the product of the operators compacted `a` and `b`, of one system: the channels of a link the
@@ -171,11 +205,8 @@ function product(a::CompactedOp{R}, b::CompactedOp{R}, limits::Limits = Limits()
         pairs = [ (x, y) for x in sa for y in sb if (x, y) ∉ ends ]
         return Dict(p => i for (i, p) in enumerate(pairs))
     end
-    singles = Dict{Int, Matrix{T}}()
-    pieces = [ SitePieces{T}() for _ in 1:n ]
-    atoms = [ Matrix{T}[] for _ in 1:n ]
-    for k in 1:n
-        ids = Dict{Matrix{T}, Int}()
+    function moves(k)
+        out = Tuple{Int, Int, Matrix{T}, T}[]
         for ((a1, b1), m1) in site_moves(a, k), ((a2, b2), m2) in site_moves(b, k)
             from, to = (a1, a2), (b1, b2)
             # nothing comes from the left of the first site, nothing open goes past the last
@@ -185,24 +216,14 @@ function product(a::CompactedOp{R}, b::CompactedOp{R}, limits::Limits = Limits()
             end
             m = m1 * m2
             # a product vanishing but for rounding, which would be an atom of its own
-            if norm(m) ≤ rounding_tol * norm(m1) * norm(m2)
-                continue
-            elseif from == (0, 0) && to == (-1, -1)
-                add!(singles, k, m)
-                continue
+            if norm(m) > rounding_tol * norm(m1) * norm(m2)
+                push!(out, (from == (0, 0) ? 0 : channels[k-1][from],
+                            to == (-1, -1) ? 0 : channels[k][to], m, one(T)))
             end
-            x = get!(ids, m) do
-                push!(atoms[k], m)
-                return length(atoms[k])
-            end
-            l = from == (0, 0) ? 0 : channels[k-1][from]
-            r = to == (-1, -1) ? 0 : channels[k][to]
-            add!(get!(Combination{T}, pieces[k], (l, r)), x, one(T))
         end
+        return out
     end
-    block = n == 1 ? nothing :
-            reduced_block(R, sys, ComBlock{T}(1, [ length(c) for c in channels ], pieces, atoms),
-                          singles, limits)
+    singles, block = from_moves(R, sys, T, [ length(c) for c in channels ], moves, limits)
     bound = a.norm * b.norm
     return CompactedOp{R}(sys, zero(T), singles, block, bound, 2bound, a.flux + b.flux, nothing)
 end
@@ -232,29 +253,12 @@ function combined(cs::Vector{<:CompactedOp{R}}, coefs::Vector{<:Number},
     T = ComplexF64
     # the channels of the i-th operator on link k numbered after those of the ones before
     offsets = [ cumsum([ 0; [ channel_count(c, k) for (c, _) in kept ] ]) for k in 1:n-1 ]
-    singles = Dict{Int, Matrix{T}}()
-    pieces = [ SitePieces{T}() for _ in 1:n ]
-    atoms = [ Matrix{T}[] for _ in 1:n ]
-    for k in 1:n
-        ids = Dict{Matrix{T}, Int}()
-        for (i, (c, x)) in enumerate(kept), ((from, to), m) in site_moves(c, k)
-            if from == to && from in (0, -1)
-                continue
-            elseif from == 0 && to == -1
-                add!(singles, k, x * m)
-                continue
-            end
-            a = get!(ids, m) do
-                push!(atoms[k], m)
-                return length(atoms[k])
-            end
-            l = from == 0 ? 0 : offsets[k-1][i] + from
-            r = to == -1 ? 0 : offsets[k][i] + to
-            add!(get!(Combination{T}, pieces[k], (l, r)), a, from == 0 ? T(x) : one(T))
-        end
-    end
-    block = n == 1 ? nothing :
-            reduced_block(R, sys, ComBlock{T}(1, last.(offsets), pieces, atoms), singles, limits)
+    # the moves of each operator but the identity, its coefficient on its openings
+    moves(k) = [ (from == 0 ? 0 : offsets[k-1][i] + from, to == -1 ? 0 : offsets[k][i] + to, m,
+                  from == 0 ? T(x) : one(T))
+                 for (i, (c, x)) in enumerate(kept) for ((from, to), m) in site_moves(c, k)
+                 if !(from == to && from in (0, -1)) ]
+    singles, block = from_moves(R, sys, T, last.(offsets), moves, limits)
     return CompactedOp{R}(sys, zero(T), singles, block, sum(abs(x) * c.norm for (c, x) in kept),
                           sum(isreal(x) ? abs(x) * c.width : 2abs(x) * c.norm for (c, x) in kept),
                           only(fluxes), nothing)
