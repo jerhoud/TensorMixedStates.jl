@@ -947,8 +947,9 @@ the placed operator `op` rewritten without developing anything, into a normal fo
 product, a tensor product is taken as the product of its factors, see `as_product`, which then
 merge one by one rather than through the dense matrix of the whole, two factors sharing a site
 are merged where they can be, see `merged_pass`, until nothing merges, then the factors are
-sorted by their sites as far as they (anti)commute, see `sort_factors!`. Sums are gathered term by term, a sum on a single site becoming the operator
-of its matrix, as a merged product does, and an operator in normal form is left as it is.
+sorted by their sites as far as they (anti)commute, see `sort_factors!`. Sums are gathered term
+by term, a sum on a single site becoming the operator of its matrix, as a merged product does,
+and an operator in normal form is left as it is.
 """
 function gathered(system::System, a::SumOp{IsOperator, Indexed})
     s = SumOp([ gathered(system, x) for x in a.subs ])

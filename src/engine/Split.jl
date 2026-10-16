@@ -83,8 +83,9 @@ function string_signs(::Type{Pure}, sites::Vector{<:AbstractSite})
     p = [ fermion_parities(s) for s in sites ]
     js = eachindex(d)
     return map(CartesianIndices(Tuple(d .^ 2))) do c
-        odd = string_odd([ p[j][mod1(c[j], d[j])] for j in js ], [ p[j][cld(c[j], d[j])] for j in js ])
-        return odd ? -1 : 1
+        outs = [ p[j][mod1(c[j], d[j])] for j in js ]
+        ins = [ p[j][cld(c[j], d[j])] for j in js ]
+        return string_odd(outs, ins) ? -1 : 1
     end
 end
 
@@ -211,7 +212,8 @@ function split_matrix(::Type{R}, name, m::AbstractMatrix, sites::Vector{<:Abstra
                             [ k for j in 1:n for k in (n - j + 1, 2n - j + 1) ]),
                 Tuple(d .^ 2)) .* string_signs(R, sites)
     grades = [ element_grades(R, s) for s in sites ]
-    totals = unique(sum(grades[k][c[k]] for k in 1:n) for c in CartesianIndices(x) if abs(x[c]) > tol)
+    totals = unique(sum(grades[k][c[k]] for k in 1:n)
+                    for c in CartesianIndices(x) if abs(x[c]) > tol)
     # a FluxError, which expect answers by measuring on the state conserving nothing
     qs = unique(g.q for g in totals)
     if length(qs) > 1

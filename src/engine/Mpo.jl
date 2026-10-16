@@ -119,7 +119,8 @@ end
 """
 function check_coefs(pre::PreMPO, coefs::AbstractVector)
     if length(coefs) ≠ length(pre.parts)
-        error("an evolver of $(length(pre.parts)) terms takes as many time functions, got $(length(coefs))")
+        error("an evolver of $(length(pre.parts)) terms takes as many time functions, got " *
+              "$(length(coefs))")
     end
     for (k, c) in enumerate(coefs)
         if !(c isa Real)
@@ -290,12 +291,17 @@ superoperator(a::IndexedOp) = a
 
 # a single operator being a vector of one
 PreMPO(state::State, a::IndexedOp; limits::Limits = Limits()) = PreMPO(state, [a]; limits)
-PreMPO(state::State{Pure}, as::Vector{<:IndexedOp}; limits::Limits = Limits()) =
-    PreMPO(state.system,
-           CompactedOp{Pure}[ compacted_op(state.system, followed_operator(a), limits) for a in as ])
-PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp}; limits::Limits = Limits()) =
-    PreMPO(state.system,
-           CompactedOp{Mixed}[ compacted_super(state.system, superoperator(a), limits) for a in as ])
+function PreMPO(state::State{Pure}, as::Vector{<:IndexedOp}; limits::Limits = Limits())
+    sys = state.system
+    parts = CompactedOp{Pure}[ compacted_op(sys, followed_operator(a), limits) for a in as ]
+    return PreMPO(sys, parts)
+end
+
+function PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp}; limits::Limits = Limits())
+    sys = state.system
+    parts = CompactedOp{Mixed}[ compacted_super(sys, superoperator(a), limits) for a in as ]
+    return PreMPO(sys, parts)
+end
 
 """
     truncated(pre, limits)
@@ -510,7 +516,8 @@ value of each time function, one real number per operator (default `[1.]`, a sin
 # Examples
 
     mpo = make_mpo(state, sum(Z(i) * Z(i + 1) for i in 1:9))
-    mpo = make_mpo(ρ, -im * sum(Z(i) * Z(i + 1) for i in 1:9) + sum(Dissipator(Sm)(i) for i in 1:10))
+    mpo = make_mpo(ρ, -im * sum(Z(i) * Z(i + 1) for i in 1:9) +
+                      sum(Dissipator(Sm)(i) for i in 1:10))
 """
 make_mpo(pre::PreMPO, coefs::AbstractVector = [1.]) =
     window_mpo(pre, check_coefs(pre, coefs), 1:length(pre.system))

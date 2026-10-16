@@ -210,7 +210,8 @@ function direct_pass(terms::Vector{Tuple{T, Vector{Tuple{Int, Int, Int}}}}, stri
                 content[key[1]] += real(dot(g, g))
             end
         end
-        scales = [ key[1] > 0 ? sqrt(content[key[1]]) : norm(g) for (key, g) in zip(rowkeys, grows) ]
+        scales = [ key[1] > 0 ? sqrt(content[key[1]]) : norm(g)
+                   for (key, g) in zip(rowkeys, grows) ]
         kept, t = interpolative(grows, scales, tol)
         for (i, (r, a)) in enumerate(rowkeys), p in eachindex(kept)
             if !iszero(t[i, p])

@@ -221,9 +221,11 @@ sites truncated by `tr` in one sweep, the exact product truncated as with `"naiv
 that does not grow with the other sites; the null state when the result vanishes, see
 `guarded`, which the norm of the exact product tells exactly
 """
-applied_window(mpo::MPO, lo::Int, st::MPS, tr) =
-    guarded(s -> truncate!(window_contracted(mpo, lo, s); site_range = lo:lo + length(mpo) - 1, tr...),
-            s -> iszero(norm(window_contracted(mpo, lo, s))), st)
+function applied_window(mpo::MPO, lo::Int, st::MPS, tr)
+    sites = lo:lo + length(mpo) - 1
+    return guarded(s -> truncate!(window_contracted(mpo, lo, s); site_range = sites, tr...),
+                   s -> iszero(norm(window_contracted(mpo, lo, s))), st)
+end
 
 """
     gate_mpo(R, system, m, sites)
@@ -510,7 +512,8 @@ function mixed_steps(system::System, a::IndexedOp)
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif dense_enough(Mixed, system, ks)
-                m = system_matrix(Mixed, system, terms, ks, [ mixed_elements(system, k) for k in ks ])
+                orders = [ mixed_elements(system, k) for k in ks ]
+                m = system_matrix(Mixed, system, terms, ks, orders)
                 block_step!(steps, Mixed, system, m, ks)
             else
                 coef *= pre_step!(steps, PreMPO(system, [compacted_super(system, f)]))

@@ -16,7 +16,8 @@ state conserving nothing strongly, see `weak_form`
 function on_trace(state::State{Mixed}, t::ITensor, i::Int)
     s = state.system
     if !isempty(strong_names(s[i]))
-        error("bug: site $i of a strongly conserving state measured without going through weak_form")
+        error("bug: site $i of a strongly conserving state measured without going through " *
+              "weak_form")
     end
     j = siteind(Pure, s, i)
     c = last(mixer(j, siteind(Mixed, s, i), s[i]))
@@ -376,15 +377,14 @@ end
 """
     expect(state, op)
 
-the expectation value of the operator `op`, placed on sites, or the array or the tuple of
-those of an array or a tuple of them, on the state of an extension as well, divided by the real
-part of the trace of the state: ``\\langle\\psi|op|\\psi\\rangle
-/ \\langle\\psi|\\psi\\rangle`` on a pure state, ``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a
-mixed one. Its factors may come in any order, act on several sites, and the Jordan-Wigner
-strings of fermionic operators are laid for you. On a system conserving charges, an operator
-changing them by no definite amount is measured on the state conserving nothing, see `weaken`.
-A channel, a generator and an operator not placed on sites, `X` rather than `X(1)`, see
-`expect1`, are refused.
+the expectation value of the operator `op`, placed on sites, or the array or the tuple of those
+of an array or a tuple of them, on the state of an extension as well, divided by the real part
+of the trace of the state: ``\\langle\\psi|op|\\psi\\rangle / \\langle\\psi|\\psi\\rangle`` on a
+pure state, ``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a mixed one. Its factors may
+come in any order, act on several sites, and the Jordan-Wigner strings of fermionic operators
+are laid for you. On a system conserving charges, an operator changing them by no definite
+amount is measured on the state conserving nothing, see `weaken`. A channel, a generator and an
+operator not placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
 
 # Examples
 
@@ -587,7 +587,8 @@ function swap_rule(state::State, (o1, o2), sites, parity::Int)
     sys = state.system
     if o1 == o2
         return parity == 1 ? (-) : identity
-    elseif state isa State{Pure} && all(i -> nearly(matrix(o2, sys[i]), collect(matrix(o1, sys[i])')), sites)
+    elseif state isa State{Pure} &&
+           all(i -> nearly(matrix(o2, sys[i]), collect(matrix(o1, sys[i])')), sites)
         return conj
     end
     return nothing
@@ -678,9 +679,11 @@ function fast_pairs!(r, state::State{Mixed}, pairs, parities, sites)
         for j in i+1:upto
             if j in sites
                 ends = Dict(q => zipend(state, zipto(state, env[q], j)) for q in need)
-                correlation(a, b, q) =
-                    scalar(ends[q].t * obs_tensor(state, q == 1 ? matrix(a, sys[i]) * f(i) : matrix(a, sys[i]), i) *
-                           obs_tensor(state, matrix(b, sys[j]), j))
+                function correlation(a, b, q)
+                    x = q == 1 ? matrix(a, sys[i]) * f(i) : matrix(a, sys[i])
+                    return scalar(ends[q].t * obs_tensor(state, x, i) *
+                                  obs_tensor(state, matrix(b, sys[j]), j))
+                end
                 for (k, ((o1, o2), q, m)) in enumerate(zip(pairs, parities, rules))
                     v = correlation(o1, o2, q)
                     r[k][i, j] = v
@@ -785,7 +788,8 @@ function expect2(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
     r = [ Matrix{Union{Missing, Number}}(missing, n, n) for _ in pairs ]
     fast, parities = Int[], Int[]
     for (k, (o1, o2)) in enumerate(pairs)
-        on1, on2 = intersect(sites, defined_sites(sys, o1)), intersect(sites, defined_sites(sys, o2))
+        on1 = intersect(sites, defined_sites(sys, o1))
+        on2 = intersect(sites, defined_sites(sys, o2))
         q = on1 == on2 == sites ? pair_parity(sys, (o1, o2), sites) : nothing
         if !isnothing(q)
             push!(fast, k)
@@ -813,7 +817,8 @@ function expect2(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}
     end
     return map(pairs) do (o1, o2)
         r = Matrix{Union{Missing, Number}}(missing, n, n)
-        on1, on2 = intersect(sites, defined_sites(sys, o1)), intersect(sites, defined_sites(sys, o2))
+        on1 = intersect(sites, defined_sites(sys, o1))
+        on2 = intersect(sites, defined_sites(sys, o2))
         for i in on1, j in on2
             r[i, j] = expect(state, i == j ? (o1 * o2)(i) : o1(i) * o2(j))
         end
