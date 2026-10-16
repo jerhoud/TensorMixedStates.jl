@@ -143,7 +143,7 @@ end
                    rtol = 1e-10, atol = 1e-12)
     LA = TMS.LinearAlgebra
     ρ = random_state(Mixed, System(n, Qubit()), 4)
-    r = dense_matrix(ρ)
+    r = ket_bra_matrix(ρ)
     @test isapprox(expect(ρ, h), LA.tr(r * lowered(ρ.system, h)) / LA.tr(r); rtol = 1e-12)
     @test isapprox(last(only(measure(ρ, h))), real(expect(ρ, h)); rtol = 1e-12)
     hf = sum(0.5^(j - i) * (dag(C)(i) * C(j) + dag(C)(j) * C(i)) + 0.2 * N(i) * N(j)

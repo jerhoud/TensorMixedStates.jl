@@ -497,7 +497,7 @@ end
     # K ρ K† of many terms applied to a density matrix
     k = hq + 0.5 * X(1) * Z(3)
     ρ = random_state(Mixed, qs, 2; rng = Xoshiro(20261016))
-    @test dense_matrix(apply(k, ρ)) ≈ lowered(qs, k) * dense_matrix(ρ) * lowered(qs, k)'
+    @test ket_bra_matrix(apply(k, ρ)) ≈ lowered(qs, k) * ket_bra_matrix(ρ) * lowered(qs, k)'
 end
 
 @testset "Strings carried by the channels on a density matrix" begin

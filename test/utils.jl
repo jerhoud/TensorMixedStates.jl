@@ -25,29 +25,17 @@ macro test_pm(a)
 end
 
 """
-the vector of a pure state in the full basis, site 1 most significant, normalised. Only usable
-on small systems.
-"""
-function dense_vector(state::State{Pure})
-    idx = siteinds(Pure, state.system)
-    psi = vec(Array(prod(state.state), reverse(idx)...))
-    return psi / norm(psi)
-end
-
-"""
 the vector of the pure state `st` in the full basis, site 1 most significant, not normalised
 """
 raw_vector(st::State{Pure}) = vec(Array(IT.dense(prod(st.state)), reverse(siteinds(Pure, st.system))...))
 
 """
-the density matrix of a mixed state of qubits in the full basis, site 1 most significant. Only
+the vector of the pure state `st` in the full basis, site 1 most significant, normalised. Only
 usable on small systems.
 """
-function dense_matrix(ρ::State{Mixed})
-    n = length(ρ.system)
-    v = Array(prod(ρ.state), reverse(siteinds(Mixed, ρ.system))...)
-    perm = vcat([2k - 1 for k in 1:n], [2k for k in 1:n])
-    return reshape(permutedims(reshape(v, ntuple(_ -> 2, 2n)...), perm), 2^n, 2^n)
+function dense_vector(st::State{Pure})
+    v = raw_vector(st)
+    return v / norm(v)
 end
 
 """

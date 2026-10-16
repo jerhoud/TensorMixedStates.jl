@@ -171,7 +171,7 @@ end
     for d in [4, 10, 12]
         ρ = random_state(Mixed, sys, d)
         @test ρ.system == sys
-        m = dense_matrix(ρ)
+        m = ket_bra_matrix(ρ)
         @test LA.tr(m) ≈ 1
         @test minimum(LA.eigvals(LA.Hermitian((m + m') / 2))) > -1e-12
         @test_ok fidelity(ρ, State{Pure}(sys, "Up"))
