@@ -47,12 +47,12 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
     tol *= max(1, maximum(abs, d))
     off = norm(m - Diagonal(d))
     if off > tol
-        error("$op is not diagonal on site $(typeof(site)), off by $(short(off)), so it " *
-              "cannot be a conserved quantity: a charge is carried by each basis state")
+        error("$(obs_name(op)) is not diagonal on site $(typeof(site)), off by $(short(off)), " *
+              "so it cannot be a conserved quantity: a charge is carried by each basis state")
     end
     to_int = maximum(max(abs(imag(x)), abs(real(x) - round(real(x)))) for x in d)
     if to_int > tol
-        error("the eigenvalues of $op on site $(typeof(site)) miss the integers by " *
+        error("the eigenvalues of $(obs_name(op)) on site $(typeof(site)) miss the integers by " *
               "$(short(to_int)), so they are not charges. Half integer ones are written " *
               "doubled, 2Sz rather than Sz, and a charge modulo m is written mod(Q, m)")
     end
@@ -60,7 +60,7 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
 end
 
 site_charges(op::GenericOp{IsOperator}, ::AbstractSite) =
-    error("a conserved quantity acts on one site, and $op acts on several")
+    error("a conserved quantity acts on one site, and $(obs_name(op)) acts on several")
 
 # a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: those
 # of Z^2 on Qudit(4), all ±1, would be read as integers
@@ -88,7 +88,7 @@ end
 function site_charges(a::ModOp{1}, site::AbstractSite; tol::Float64 = charge_tol)
     m, q = site_charges(a.arg, site; tol)
     if m ≠ 1
-        error("cannot take $(a.arg) modulo $(a.modulus) on site $(typeof(site)): it " *
+        error("cannot take $(obs_name(a.arg)) modulo $(a.modulus) on site $(typeof(site)): it " *
               "already carries a charge modulo $m")
     end
     return (a.modulus, mod.(q, a.modulus))
@@ -150,7 +150,8 @@ conserved separately, which gives finer blocks, and a state lives in a single se
 """
 strong(a::SimpleOp) = Strong(a)
 strong(a::Strong) = a
-strong(a) = error("a conserved quantity is one operator acting on one site, and $a is not")
+strong(a) =
+    error("a conserved quantity is one operator acting on one site, and $(obs_name(a)) is not")
 
 function Conservation(site::AbstractSite, spec)
     ops = spec isa Tuple ? collect(spec) : [spec]
@@ -163,7 +164,8 @@ function Conservation(site::AbstractSite, spec)
     qs = map(ops) do o
         op = o isa Strong ? o.arg : o
         if !(op isa SimpleOp)
-            error("a conserved quantity is one operator acting on one site, and $op is not")
+            error("a conserved quantity is one operator acting on one site, and " *
+                  "$(obs_name(op)) is not")
         end
         modulus, charges = site_charges(op, site)
         name = obs_name(op)
@@ -265,7 +267,7 @@ function spec_names(spec::Tuple)
 end
 spec_names(a::Strong) = [ (obs_name(a.arg), true) ]
 spec_names(a::SimpleOp) = [ (obs_name(a), false) ]
-spec_names(a) = error("$a does not name a conserved quantity")
+spec_names(a) = error("$(obs_name(a)) does not name a conserved quantity")
 
 """
     symmetries(::AbstractSite)
@@ -637,7 +639,7 @@ flux(op::SimpleOp, site::AbstractSite; tol::Float64 = rounding_tol) =
     charge_flux(matrix(op, site), op, site; tol)
 
 flux(op::GenericOp{IsOperator}, ::AbstractSite) =
-    error("flux is only defined for one site operators, and $op acts on several")
+    error("flux is only defined for one site operators, and $(obs_name(op)) acts on several")
 
 ############### Sites as values ###############
 

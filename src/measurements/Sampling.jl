@@ -13,13 +13,13 @@ alone, see `eigenspaces`; `what` names the caller in the refusals
 function measured_spectrum(system::System, op::IndexedOp{IsOperator}, what::String)
     sites = sort(sites_of(op))
     if isempty(sites)
-        error("$what needs an operator placed on sites, which $op is not")
+        error("$what needs an operator placed on sites, which $(obs_name(op)) is not")
     end
     # a Float64, which does not wrap around as an Int does on many sites
     d = prod(float(dim(system[k])) for k in sites)
     if d > dense_max
-        error("$what of $op needs its matrix on its $(length(sites)) sites, of dimension " *
-              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
+        error("$what of $(obs_name(op)) needs its matrix on its $(length(sites)) sites, of " *
+              "dimension $(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
     end
     on = " on " * join([ system[k] for k in sites ], " ⊗ ")
     values, ps = eigenspaces(matrix_on(system, op, sites), what, op, on)
@@ -232,8 +232,8 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
     probs = [ real(expect(state, p)) for p in projectors ]
     function project(k, limits)
         if !definite_on(system, ps[k], sites)
-            error("the result $(values[k]) of $op leaves the state without definite charges: " *
-                  "collapse weaken(state, ()) instead")
+            error("the result $(values[k]) of $(obs_name(op)) leaves the state without " *
+                  "definite charges: collapse weaken(state, ()) instead")
         end
         return normalize(apply(projectors[k], state; limits))
     end
@@ -410,10 +410,12 @@ function collapse(state::State, result::Pair{<:IndexedOp{IsOperator}, <:Real};
     values, probs, project = measurement(state, op, "collapse")
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
     if isnothing(k)
-        error("$λ is not a result of measuring $op, whose results are $(join(values, ", "))")
+        error("$λ is not a result of measuring $(obs_name(op)), whose results are " *
+              "$(join(values, ", "))")
     end
     if probs[k] ≤ 0
-        error("collapse cannot project on the result $λ of $op, of probability $(probs[k])")
+        error("collapse cannot project on the result $λ of $(obs_name(op)), of probability " *
+              "$(probs[k])")
     end
     return (result = values[k], probability = probs[k], state = project(k, limits))
 end

@@ -165,8 +165,8 @@ function (d::DecayEnd)(site::AbstractSite)
     tol = spectral_tol(e.values)
     steady = findall(λ -> abs(λ) ≤ tol, e.values)
     if length(steady) ≠ 1 || any(λ -> abs(λ) > tol && real(λ) ≥ -tol, e.values)
-        error("$(Dissipator(d.jump)) does not take every state of $site to a single one, so its " *
-              "amplitude damping has no probability 1")
+        error("$(obs_name(Dissipator(d.jump))) does not take every state of $site to a single " *
+              "one, so its amplitude damping has no probability 1")
     end
     σ = reshape(e.vectors[:, only(steady)], dim(site), dim(site))
     return σ / tr(σ)

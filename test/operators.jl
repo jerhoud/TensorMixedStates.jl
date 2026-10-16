@@ -1122,6 +1122,17 @@ end
     @test TMS.obs_name(prod(Z(i) for i in 1:6) * (X(1) + X(2))) ==
         "Z(1)*Z(2)*Z(3)*...*Z(6)*(X(1)+X(2))"
     @test TMS.obs_name(X(1) + 2p) == "X(1)+2Z(1)*Z(2)*Z(3)*...*Z(9)*Z(10)"
+
+    t = reduce(⊗, fill(Z, 10))
+    @test TMS.obs_name(t) == "Z⊗Z⊗Z⊗...⊗Z⊗Z"
+    @test eval(Meta.parse(repr(t))) == t
+    # a placed operator keeps the compact form, and so does its list of sites
+    @test TMS.obs_name(t((1:10)...)) == "(Z⊗Z⊗Z⊗...⊗Z⊗Z)(1,2,3,...,9,10)"
+    @test eval(Meta.parse(repr(t((1:10)...)))) == t((1:10)...)
+    @test TMS.obs_name(reduce(⊗, fill(Z, 6))((1:6)...)) == "(Z⊗Z⊗Z⊗Z⊗Z⊗Z)(1,2,3,4,5,6)"
+    # an error message names an operator in this form
+    zs = sum(Z(i) for i in 1:10)
+    @test_throws "eigenspace of Z(1)+Z(2)+Z(3)+...+Z(9)+Z(10), which" Proj(zs => 2)
 end
 
 @testset "map_sites moves the factors of an operator" begin

@@ -13,7 +13,7 @@ refuse the site `i` of the operator `a` when `system` has no such site
 function check_index(system::System, i::Int, a)
     n = length(system)
     if i < 1 || i > n
-        error("$a acts on site $i, which the system does not have: it has $n sites")
+        error("$(obs_name(a)) acts on site $i, which the system does not have: it has $n sites")
     end
     return nothing
 end

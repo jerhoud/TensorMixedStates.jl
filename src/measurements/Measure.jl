@@ -494,9 +494,9 @@ checked_measurement(::Tuple) =
 checked_measurement(::AbstractArray) = error("a name goes before one measurement, not before a list")
 
 checked_measurement(a::GenericOp{IsOperator}) =
-    error("$a acts on several sites, and is measured placed on them")
+    error("$(obs_name(a)) acts on several sites, and is measured placed on them")
 
-checked_measurement(a::Op) = error("measure takes observables, and $a is not one")
+checked_measurement(a::Op) = error("measure takes observables, and $(obs_name(a)) is not one")
 
 checked_measurement(x) = error("$(repr(x)) is not a measurement")
 

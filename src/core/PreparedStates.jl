@@ -384,7 +384,7 @@ function fully_mixed(system::System, quantities::Pair...)
         ms = [ matrix(op, system[k]) for (op, _) in quantities ]
         for (m, (op, _)) in zip(ms, quantities)
             if !isdiag(m)
-                error("$op is not diagonal on the basis of $(system[k])")
+                error("$(obs_name(op)) is not diagonal on the basis of $(system[k])")
             end
         end
         [ Tuple(key(real(m[j, j])) for m in ms) for j in 1:dim(system[k]) ]
@@ -399,7 +399,7 @@ function fully_mixed(system::System, quantities::Pair...)
     end
     if !(Tuple(0. for _ in quantities) in needed[1])
         error("no basis state of the system has " *
-              join(("$op = $v" for (op, v) in quantities), ", "))
+              join(("$(obs_name(op)) = $v" for (op, v) in quantities), ", "))
     end
     projector(d, j) = [ a == j && b == j ? 1. : 0. for a in 1:d, b in 1:d ]
     locals = [ [ make_one_state(Mixed, system, k, projector(dim(system[k]), j))

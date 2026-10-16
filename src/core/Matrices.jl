@@ -36,7 +36,8 @@ the `n` sites `what` acts on, a single site standing for `n` identical ones
 function expand_sites(what, n::Int, sites)
     ss = length(sites) == 1 ? fill(only(sites), n) : collect(AbstractSite, sites)
     if length(ss) ≠ n
-        error("$what acts on $n site$(n == 1 ? "" : "s") and was given $(length(sites))")
+        error("$(obs_name(what)) acts on $n site$(n == 1 ? "" : "s") and was given " *
+              "$(length(sites))")
     end
     return ss
 end
@@ -91,7 +92,7 @@ function check_dense(a::GenericOp{K}, sites) where K
     # a Float64, which does not wrap around as an Int does on many sites
     d = prod(float ∘ dim, ss)^(K === IsOperator ? 1 : 2)
     if d > dense_max
-        error("$a on $(length(ss)) sites needs a dense matrix of dimension " *
+        error("$(obs_name(a)) on $(length(ss)) sites needs a dense matrix of dimension " *
               "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
     end
 end
@@ -105,7 +106,7 @@ refusal of a matrix that is not Hermitian
 """
 function eigenspaces(m::AbstractMatrix, what::String, a, on::String = "")
     if !nearly(m, m')
-        error("$what needs a Hermitian operator, which $a is not$on")
+        error("$what needs a Hermitian operator, which $(obs_name(a)) is not$on")
     end
     # real projectors for a real operator, which give real tensors, cheaper to contract
     e = eltype(m) <: Real ? eigen(Symmetric(m)) : eigen(Hermitian(m))
@@ -296,7 +297,7 @@ function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
     if isdiag(m)
         d = diag(m)
         if real(p) ≤ 0 && any(iszero, d)
-            error("$a does not exist: $(a.arg) is not invertible")
+            error("$(obs_name(a)) does not exist: $(obs_name(a.arg)) is not invertible")
         end
         return diagm((eltype(d) <: Real && any(<(0), d) ? complex(d) : d) .^ p)
     end
@@ -308,14 +309,15 @@ function matrix(a::GenPowOp, site::AbstractSite, sites::AbstractSite...)
     q = zeros(n, n)
     if r < n
         if real(p) ≤ 0
-            error("$a does not exist: $(a.arg) is not invertible")
+            error("$(obs_name(a)) does not exist: $(obs_name(a.arg)) is not invertible")
         end
         f = svd(m)
         k = f.V[:, r+1:n]
         kr = [k f.U[:, 1:r]]
         # the kernel and the range span the space unless the eigenvalue 0 is defective
         if rank(kr) < n
-            error("$a does not exist: the eigenvalue 0 of $(a.arg) is defective, as for C^0.5")
+            error("$(obs_name(a)) does not exist: the eigenvalue 0 of $(obs_name(a.arg)) is " *
+                  "defective, as for C^0.5")
         end
         q = k * inv(kr)[1:n-r, :]
     end
@@ -405,7 +407,8 @@ function eigenprojector(a::GenericOp{IsOperator}, λ::Real, what::String, sites:
     values, ps = eigenspaces(matrix(a, sites...), what, a, on)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
     if isnothing(k)
-        error("$λ is not an eigenvalue of $a$on, whose eigenvalues are $(join(values, ", "))")
+        error("$λ is not an eigenvalue of $(obs_name(a))$on, whose eigenvalues are " *
+              "$(join(values, ", "))")
     end
     return ps[k]
 end

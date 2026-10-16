@@ -102,6 +102,15 @@ no_signed_zero(x::Union{AbstractFloat, Complex{<:AbstractFloat}}) = x + zero(x)
 no_signed_zero(x::AbstractArray) = map(no_signed_zero, x)
 no_signed_zero(x) = x
 
+"""
+    obs_name(op)
+
+the compact printed form of the operator, a long sum, product, tensor product or list of sites
+cut down to its first and its last elements: the default name of a measurement or of a
+conserved quantity, and how an error message names an operator
+"""
+obs_name(op) = sprint(print, op; context = :compact => true)
+
 ############### Operator ###############
 
 """
@@ -375,8 +384,8 @@ Proj(n::Integer) =
           "0, is Proj(Level => $n)")
 
 Proj(p::Pair{<:IndexedOp, <:Real}) =
-    error("cannot project on an eigenspace of $(first(p)), which is placed on sites: write " *
-          "Proj(N => 1)(3) rather than Proj(N(3) => 1)")
+    error("cannot project on an eigenspace of $(obs_name(first(p))), which is placed on sites: " *
+          "write Proj(N => 1)(3) rather than Proj(N(3) => 1)")
 
 ############ AtIndex ################
 
@@ -390,7 +399,8 @@ struct AtIndex{K, N} <: IndexedOp{K}
     index::NTuple{N, Int}
     function AtIndex(op::GenericOp{K, N}, index::NTuple{N, Int}) where {K, N}
         if !allunique(index)
-            error("$op acts on $N sites and cannot be placed on $index, which repeats a site")
+            error("$(obs_name(op)) acts on $N sites and cannot be placed on $index, which " *
+                  "repeats a site")
         end
         if scalararg(op) isa IdentityOp
             return scale(scalarcoef(op), IdentityOp{K, Indexed, 1}())
@@ -479,7 +489,7 @@ struct Dephase{N} <: GenericOp{IsChannel, N}
 end
 
 Dephase(a::IndexedOp{IsOperator}) =
-    error("cannot dephase in the eigenbasis of $a, which is placed on sites: write " *
+    error("cannot dephase in the eigenbasis of $(obs_name(a)), which is placed on sites: write " *
           "Dephase(N)(1) rather than Dephase(N(1))")
 
 """
@@ -565,7 +575,8 @@ map_sites(f, a::Evolver{Indexed}) = Evolver(map_sites(f, a.arg))
 (a::Op{K, T, N} * b::Op{K, T, N}) where {K, T, N} = ProdOp([a, b])
 
 (a::Op{IsGenerator, T, N} * b::Op{IsGenerator, T, N}) where {T, N} =
-    error("generators are added, not multiplied: $a * $b is not a generator")
+    error("generators are added, not multiplied: $(obs_name(a)) * $(obs_name(b)) is not a " *
+          "generator")
 
 # an operator beside a generator is its Hamiltonian part, beside a channel its gate
 (a::Op{IsOperator, T, N} + b::Op{IsGenerator, T, N}) where {T, N} = Evolver(a) + b
@@ -588,8 +599,8 @@ followed by those of `op2`: `(A ⊗ B)(i, j)` is `A(i) * B(j)`. `⊗` is typed `
 (a::GenericOp{K, N} ⊗ b::GenericOp{K, M}) where {K, N, M} =
     TensorOp{K, N + M}([tensorsubs(a) ; tensorsubs(b)])
 (a::GenericOp{IsGenerator} ⊗ b::GenericOp{IsGenerator}) =
-    error("generators are added, not multiplied: $a ⊗ $b, placed as a product, is not a " *
-          "generator")
+    error("generators are added, not multiplied: $(obs_name(a)) ⊗ $(obs_name(b)), placed as a " *
+          "product, is not a generator")
 (a::GenericOp{IsOperator} ⊗ b::GenericOp{IsChannel}) = Gate(a) ⊗ b
 (a::GenericOp{IsChannel} ⊗ b::GenericOp{IsOperator}) = a ⊗ Gate(b)
 ⊗(a::GenericOp, b::GenericOp, c::GenericOp, d::GenericOp...) = foldl(⊗, (a, b, c, d...))
@@ -638,7 +649,8 @@ struct GenPowOp{K, N} <: GenericOp{K, N}
         m = abs(c)
         if a isa IdentityOp
             if iszero(c) && real(p) ≤ 0
-                error("$(new{K, N}(arg, p)) does not exist: $arg is not invertible")
+                error("$(obs_name(new{K, N}(arg, p))) does not exist: $(obs_name(arg)) is not " *
+                      "invertible")
             end
             return scale(complex(c)^p, a)
         elseif !iszero(m) && !isone(m)
@@ -661,11 +673,11 @@ power(a::GenericOp{IsChannel}, p::Number) =
     if is_natural(p)
         IntPowOp(a, Int(real(p)))
     else
-        error("$a has no power $p: only the integer powers of a channel are channels")
+        error("$(obs_name(a)) has no power $p: only the integer powers of a channel are channels")
     end
 
 power(a::GenericOp{IsGenerator}, ::Number) =
-    error("$a has no power: generators are added, not multiplied")
+    error("$(obs_name(a)) has no power: generators are added, not multiplied")
 
 (a::GenericOp ^ p::Number) = power(a, p)
 
@@ -680,7 +692,8 @@ Base.literal_pow(::typeof(^), a::Op, ::Val{p}) where p = a ^ p
 
 (a::IndexedOp ^ p::Number) =
     if !is_natural(p)
-        error("$a has no power $p once placed: take the power of the operator before placing it")
+        error("$(obs_name(a)) has no power $p once placed: take the power of the operator " *
+              "before placing it")
     elseif iszero(p)
         IdentityOp(a)
     else
@@ -948,6 +961,17 @@ function paren(f, io::IO, out_prec::Int, in_prec::Int = out_prec)
     end
 end
 
+"""
+    shortened(io, xs)
+
+`xs`, cut down to its first three and its last two elements around `"..."` when `io` is
+compact and `xs` has more than six
+"""
+function shortened(io::IO, xs::AbstractVector)
+    n = length(xs)
+    return n > 6 && get(io, :compact, false) ? [xs[1:3]; "..."; xs[n-1:n]] : xs
+end
+
 show(io::IO, op::Operator) = print(io, op.name)
 show(io::IO, ::IdentityOp{IsOperator, Generic, N}) where N = print(io, join(fill("Id", N), "⊗"))
 show(io::IO, ::IdentityOp{IsOperator, Indexed}) = print(io, "Id")
@@ -960,7 +984,10 @@ show(io::IO, ::IdentityOp{IsGenerator, Generic, N}) where N =
 show(io::IO, ::IdentityOp{IsGenerator, Indexed}) = print(io, "Evolver(0.5Id)")
 show(io::IO, a::Proj) = show_func(io, "Proj", [a.state])
 show(io::IO, a::Reset) = show_func(io, "Reset", [a.state])
-show(io::IO, ind::AtIndex) = show_func(io, repr(ind.op; context = :precedence => 500), collect(ind.index))
+function show(io::IO, ind::AtIndex)
+    print(IOContext(io, :precedence => 500), ind.op)
+    print(io, "(", join(shortened(io, collect(ind.index)), ","), ")")
+end
 
 show(io::IO, a::ScalarOp) =
     paren(io, Base.operator_precedence(:*)) do io
@@ -988,17 +1015,12 @@ show(io::IO, a::SumOp) =
 
 show(io::IO, a::ProdOp) =
     paren(io, Base.operator_precedence(:*)) do io
-        n = length(a.subs)
-        if n > 6 && get(io, :compact, false)
-            infix(io, [a.subs[1:3]; "..."; a.subs[n-1:n]], "*")
-        else
-            infix(io, a.subs, "*")
-        end
+        infix(io, shortened(io, a.subs), "*")
     end
 
 show(io::IO, a::TensorOp) =
     paren(io, Base.operator_precedence(:⊗)) do io
-        infix(io, a.subs, "⊗")
+        infix(io, shortened(io, a.subs), "⊗")
     end
 
 show(io::IO, a::Union{IntPowOp, GenPowOp}) =
@@ -1031,12 +1053,3 @@ show(io::IO, a::ModOp) =
             show_func(io, "mod", [a.arg, a.modulus])
         end
     end
-
-"""
-    obs_name(op)
-
-the compact printed form of the operator, a long sum or product cut down to its first and its
-last terms: the default name of a measurement or of a conserved quantity, and how an error
-message names an operator
-"""
-obs_name(op) = sprint(print, op; context = :compact => true)

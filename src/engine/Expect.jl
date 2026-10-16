@@ -392,13 +392,15 @@ end
 
 expect(state::AbstractState, ops::Union{AbstractArray, Tuple}) = map(o -> expect(state, o), ops)
 
-expect(::State, a::Op{IsChannel}) = error("expect takes an observable, and $a is a channel")
+expect(::State, a::Op{IsChannel}) =
+    error("expect takes an observable, and $(obs_name(a)) is a channel")
 
-expect(::State, a::Op{IsGenerator}) = error("expect takes an observable, and $a is a generator")
+expect(::State, a::Op{IsGenerator}) =
+    error("expect takes an observable, and $(obs_name(a)) is a generator")
 
 expect(::State, a::GenericOp{IsOperator, N}) where N =
-    error("expect takes an operator placed on sites, such as $(a((1:N)...)) rather than $a, " *
-          "and expect1 measures an operator of one site on every site")
+    error("expect takes an operator placed on sites, such as $(obs_name(a((1:N)...))) rather " *
+          "than $(obs_name(a)), and expect1 measures an operator of one site on every site")
 
 """
     defined_on(op, site)
@@ -444,7 +446,7 @@ when there is none
 function defined_sites(system::System, a::GenericOp)
     sites = [ i for i in 1:length(system) if defined_on(a, system[i]) ]
     if isempty(sites)
-        error("$a is defined on no site of $system")
+        error("$(obs_name(a)) is defined on no site of $system")
     end
     return sites
 end
@@ -542,10 +544,11 @@ end
 expect1(state::AbstractState, op::SimpleOp) = only(expect1(state, [op]))
 
 expect1(::AbstractState, a::IndexedOp) =
-    error("expect1 measures an operator on every site, X rather than X(1): measure $a with expect")
+    error("expect1 measures an operator on every site, X rather than X(1): measure " *
+          "$(obs_name(a)) with expect")
 
 expect1(::AbstractState, a::Op) =
-    error("expect1 measures an operator of one site, and $a is not one")
+    error("expect1 measures an operator of one site, and $(obs_name(a)) is not one")
 
 function expect1(state::AbstractState, ops::AbstractArray)
     for o in ops
@@ -847,8 +850,10 @@ function inner(a::State{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}}, 
     return inner(a.state', make_mpo(b, op), b.state)
 end
 
-inner(::State{Mixed}, op::IndexedOp{IsOperator}, ::State{Mixed}) =
-    error("between density matrices the operator $op is ambiguous: write Gate($op) for the map " *
-          "ρ ↦ KρK† or Evolver($op) for ρ ↦ Kρ + ρK†")
+function inner(::State{Mixed}, op::IndexedOp{IsOperator}, ::State{Mixed})
+    name = obs_name(op)
+    error("between density matrices the operator $name is ambiguous: write Gate($name) for the " *
+          "map ρ ↦ KρK† or Evolver($name) for ρ ↦ Kρ + ρK†")
+end
 
 dot(a::State, op::IndexedOp, b::State) = inner(a, op, b)

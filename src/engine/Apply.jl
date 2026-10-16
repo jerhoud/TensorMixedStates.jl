@@ -582,14 +582,14 @@ end
 
 function apply(a::IndexedOp{IsChannel}, state::State{Pure}; limits::Limits = Limits())
     if !is_pure(a)
-        error("$a has more than one Kraus operator, which a pure state cannot take: apply it to " *
-              "mix(state)")
+        error("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot " *
+              "take: apply it to mix(state)")
     end
     return apply(kraus(a), state; limits)
 end
 
 apply(a::IndexedOp{IsGenerator}, ::State{Pure}; limits::Limits = Limits()) =
-    error("apply takes an operator or a channel, and $a is a generator")
+    error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
 
 apply(a::IndexedOp{IsOperator}, state::State{Mixed}; limits::Limits = Limits()) =
     apply(Gate(a), state; limits)

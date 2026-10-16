@@ -272,14 +272,14 @@ refused when `a` holds a dissipator; an operator is itself, and a channel is ref
 """
 function followed_operator(a::IndexedOp{IsGenerator})
     if !is_pure(a)
-        error("$a holds a dissipator, which a pure state cannot follow: mix the state")
+        error("$(obs_name(a)) holds a dissipator, which a pure state cannot follow: mix the state")
     end
     return pure_part(a)
 end
 
 followed_operator(a::IndexedOp{IsOperator}) = a
 followed_operator(a::IndexedOp{IsChannel}) =
-    error("$a is a channel, which acts on a density matrix: mix the state")
+    error("$(obs_name(a)) is a channel, which acts on a density matrix: mix the state")
 
 """
     superoperator(a)
