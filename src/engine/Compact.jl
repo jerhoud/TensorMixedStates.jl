@@ -380,16 +380,22 @@ function left_sweep!(b::ComBlock{T}, tol::Real) where T
 end
 
 """
+    mirrored(pieces)
+
+the pieces of the sites of a block of channels read from right to left, the piece `(l, r)` of a
+site becoming `(r, l)`, its value shared
+"""
+mirrored(pieces::Vector{<:AbstractDict}) =
+    [ typeof(p)((r, l) => c for ((l, r), c) in p) for p in reverse(pieces) ]
+
+"""
     mirror(b)
 
-the block `b` read from right to left, the piece `(l, r)` of a site becoming `(r, l)`, its
-combinations shared. `start` is kept, which `push_identities!` and `left_sweep!` do not read, so
-that mirroring twice gives `b` back.
+the block `b` read from right to left, see `mirrored`. `start` is kept, which `push_identities!`
+and `left_sweep!` do not read, so that mirroring twice gives `b` back.
 """
 mirror(b::ComBlock{T}) where T =
-    ComBlock{T}(b.start, reverse(b.dims),
-                [ SitePieces{T}((r, l) => c for ((l, r), c) in p) for p in reverse(b.pieces) ],
-                reverse(b.atoms))
+    ComBlock{T}(b.start, reverse(b.dims), mirrored(b.pieces), reverse(b.atoms))
 
 """
     combination_matrix(b, j, comb, d)
@@ -428,14 +434,64 @@ function kept_channels(s::AbstractVector{<:Real}, t::NamedTuple)
 end
 
 """
+    channel_sweep!(pieces, dims, widths, decompose)
+
+sweep from left to right the pieces of a block of channels written on the orthonormal bases of
+its sites, see `truncated_block`, `widths` the sizes of these bases and `dims` the numbers of
+channels of the links, updated, and return the pieces: on each link, the matrix `x` of the
+pieces entering it, its rows the channels on the left and the basis of the site, its columns
+the channels of the link, is written `x ≈ q * c` by `decompose(x)`, the orthonormal columns of
+`q` being its new channels and `c` passed to the pieces leaving them on the next site
+"""
+function channel_sweep!(pieces::Vector{Dict{Tuple{Int, Int}, Vector{T}}}, dims::Vector{Int},
+                        widths::Vector{Int}, decompose) where T
+    for j in eachindex(dims)
+        if dims[j] == 0
+            continue
+        end
+        w, nl = widths[j], j == 1 ? 1 : dims[j-1] + 1
+        x = zeros(T, nl * w, dims[j])
+        for ((l, r), v) in pieces[j]
+            if r > 0
+                x[l * w .+ (1:w), r] = v
+            end
+        end
+        q, c = decompose(x)
+        here = Dict(lr => v for (lr, v) in pieces[j] if last(lr) == 0)
+        for p in axes(q, 2), l in 0:nl-1
+            v = q[l * w .+ (1:w), p]
+            if !iszero(v)
+                here[(l, p)] = v
+            end
+        end
+        next = Dict{Tuple{Int, Int}, Vector{T}}()
+        for ((l, s), v) in pieces[j+1]
+            if l == 0
+                next[(l, s)] = v
+                continue
+            end
+            for p in axes(q, 2)
+                if !iszero(c[p, l])
+                    next[(p, s)] = get(next, (p, s), zeros(T, length(v))) + c[p, l] * v
+                end
+            end
+        end
+        pieces[j], pieces[j+1] = here, next
+        dims[j] = size(q, 2)
+    end
+    return pieces
+end
+
+"""
     truncated_block(b, ds, limits)
 
 the block of channels `b`, reduced, see `reduced_block`, truncated by `limits` in its triangular
 form, `ds` the dimensions of its sites. Written on an orthonormal basis of each site, the
 identity first, for ``\\langle A, B\\rangle = \\mathrm{tr}(A^\\dagger B)/d``, its channels are
 made orthonormal from the left by QR decompositions, then cut from the right by singular value
-decompositions: the singular values of a link are those of the part of the operator acting on
-both sides of it, which `limits` truncates as the bonds of a state, see `kept_channels`.
+decompositions, on its mirror, see `channel_sweep!`: the singular values of a link are those of
+the part of the operator acting on both sides of it, which `limits` truncates as the bonds of a
+state, see `kept_channels`.
 """
 function truncated_block(b::ComBlock{T}, ds::Vector{Int}, limits::Limits) where T
     t = truncation(limits)
@@ -463,82 +519,24 @@ function truncated_block(b::ComBlock{T}, ds::Vector{Int}, limits::Limits) where 
             pieces[j][lr] = [ get(comb, 0, zero(T)); r * x ]
         end
     end
-    dims = copy(b.dims)
-    width(j) = 1 + length(bases[j])
     # from the left, each link of orthonormal channels, what they carried passed to the next site
-    for j in 1:n-1
-        if dims[j] == 0
-            continue
-        end
-        w, nl = width(j), j == 1 ? 1 : dims[j-1] + 1
-        x = zeros(T, nl * w, dims[j])
-        for ((l, r), v) in pieces[j]
-            if r > 0
-                x[l * w .+ (1:w), r] = v
-            end
-        end
+    function orthonormal(x)
         f = LinearAlgebra.qr(x)
-        q, c = Matrix(f.Q), f.R
-        here = Dict(lr => v for (lr, v) in pieces[j] if last(lr) == 0)
-        for p in 1:size(q, 2), l in 0:nl-1
-            v = q[l * w .+ (1:w), p]
-            if !iszero(v)
-                here[(l, p)] = v
-            end
-        end
-        next = Dict{Tuple{Int, Int}, Vector{T}}()
-        for ((l, s), v) in pieces[j+1]
-            if l == 0
-                next[(l, s)] = v
-                continue
-            end
-            for p in 1:size(q, 2)
-                if !iszero(c[p, l])
-                    next[(p, s)] = get(next, (p, s), zeros(T, length(v))) + c[p, l] * v
-                end
-            end
-        end
-        pieces[j], pieces[j+1] = here, next
-        dims[j] = size(q, 2)
+        return Matrix(f.Q), f.R
     end
     # from the right, each link cut to the singular values `limits` keeps, the rest of the
     # decomposition passed to the site before
-    for j in n-1:-1:1
-        if dims[j] == 0
-            continue
-        end
-        w, nr = width(j + 1), j + 1 == n ? 1 : dims[j+1] + 1
-        y = zeros(T, dims[j], nr * w)
-        for ((c, s), v) in pieces[j+1]
-            if c > 0
-                y[c, s * w .+ (1:w)] = v
-            end
-        end
-        f = svd(y)
+    function cut(x)
+        f = svd(x)
         k = kept_channels(f.S, t)
-        here = Dict(lr => v for (lr, v) in pieces[j+1] if first(lr) == 0)
-        for p in 1:k, s in 0:nr-1
-            v = f.Vt[p, s * w .+ (1:w)]
-            if !iszero(v)
-                here[(p, s)] = v
-            end
-        end
-        prev = Dict{Tuple{Int, Int}, Vector{T}}()
-        for ((l, c), v) in pieces[j]
-            if c == 0
-                prev[(l, c)] = v
-                continue
-            end
-            for p in 1:k
-                u = f.U[c, p] * f.S[p]
-                if !iszero(u)
-                    prev[(l, p)] = get(prev, (l, p), zeros(T, length(v))) + u * v
-                end
-            end
-        end
-        pieces[j], pieces[j+1] = prev, here
-        dims[j] = k
+        return f.U[:, 1:k], Diagonal(f.S[1:k]) * f.Vt[1:k, :]
     end
+    widths = [ 1 + length(x) for x in bases ]
+    dims = copy(b.dims)
+    channel_sweep!(pieces, dims, widths, orthonormal)
+    rdims = reverse(dims)
+    pieces = mirrored(channel_sweep!(mirrored(pieces), rdims, reverse(widths), cut))
+    dims = reverse(rdims)
     out = [ SitePieces{T}() for _ in 1:n ]
     for j in 1:n, (lr, v) in pieces[j]
         comb = Combination{T}(i - 1 => x for (i, x) in enumerate(v) if !iszero(x))
