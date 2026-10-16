@@ -385,33 +385,15 @@ end
 """
     one_site_terms(R, system, i, m)
 
-the terms of the operator of matrix `m` on site `i` of `system`: on a fermionic site, its part
-of each parity, the odd one with `F` on the fermionic sites before `i`. For `Mixed`, `m` is the
-matrix of a superoperator, whose part of parity `a` on the kets and `b` on the bras takes
-``\\rho \\mapsto F^a \\rho F^b`` on the fermionic sites before `i`. On a site conserving
-something, its part of each grade, charge and parity, see `grade_parts`: a block connecting
-several charges, as that of `Sx`, gives terms of definite charge, which a sum may cancel.
+the terms of the operator of matrix `m` on site `i` of `system`, its part of each grade, charge
+and parity, see `grade_parts`, an odd part taking `F` on the fermionic sites before `i`: for
+`Mixed`, `m` is the matrix of a superoperator, whose part of parity `a` on the kets and `b` on
+the bras takes ``\\rho \\mapsto F^a \\rho F^b`` there. A block connecting several charges, as
+that of `Sx`, gives terms of definite charge, which a sum may cancel.
 """
-function one_site_terms(::Type{Pure}, system::System, i::Int, m::AbstractMatrix)
-    site = system[i]
-    parts = isempty(conserved(site).quantities) ? graded_parts(m, matrix(F, site)) :
-                                                  grade_parts(Pure, m, site)
-    return [ Term(1., [ i => x ], [p], p == 1 ? prefix(i) : Int[], Int[]) for (p, x) in parts ]
-end
-
-function one_site_terms(::Type{Mixed}, system::System, i::Int, m::AbstractMatrix)
-    site = system[i]
-    parts = if isempty(conserved(site).quantities)
-        f = matrix(F, site)
-        # the parity of the kets, then that of the bras
-        kets, bras = kron(one(f), f), kron(f, one(f))
-        [ (a + 2b, y) for (a, x) in graded_parts(m, kets) for (b, y) in graded_parts(x, bras) ]
-    else
-        grade_parts(Mixed, m, site)
-    end
-    return [ Term(1., [ i => x ], [p], isodd(p) ? prefix(i) : Int[], p ≥ 2 ? prefix(i) : Int[])
-             for (p, x) in parts ]
-end
+one_site_terms(::Type{R}, system::System, i::Int, m::AbstractMatrix) where R =
+    [ Term(1., [ i => x ], [p], isodd(p) ? prefix(i) : Int[], p ≥ 2 ? prefix(i) : Int[])
+      for (p, x) in grade_parts(R, m, system[i]) ]
 
 """
     block_rep(op)
