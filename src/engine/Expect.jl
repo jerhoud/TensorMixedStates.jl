@@ -322,16 +322,6 @@ function expect_block(state::State, b::ComBlock)
 end
 
 """
-    measured_compacted(system, op)
-
-the operator `op` compacted on `system`, see `compacted_op`, or, when it changes the charges by
-no definite amount, see `FluxError`, on the same sites conserving nothing, where it is measured
-on the state conserving nothing, see `plain_form`
-"""
-measured_compacted(system::System, a::IndexedOp{IsOperator}) =
-    or_on_plain(s -> compacted_op(s, a), system)
-
-"""
     PreparedOp
 
 an operator placed on sites made ready to be measured on the states of a system, see
@@ -346,10 +336,13 @@ end
 """
     prepare_op(system, op)
 
-the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`
+the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`: compacted
+on `system`, see `compacted_op`, or, when it changes the charges by no definite amount, see
+`FluxError`, on the same sites conserving nothing, where it is measured on the state conserving
+nothing, see `plain_form`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
-    c = measured_compacted(system, a)
+    c = or_on_plain(s -> compacted_op(s, a), system)
     return PreparedOp(c, c.system !== system)
 end
 

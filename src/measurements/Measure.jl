@@ -677,10 +677,9 @@ the measurement `m` made ready for the states of the representation and of the s
 staying as it is
 """
 function prepared_entry(state::AbstractState, a::IndexedOp{IsOperator})
-    system = state isa State ? weak_form(state).system : state.system
-    c = measured_compacted(system, a)
+    p = prepare_op(state isa State ? weak_form(state).system : state.system, a)
+    c = p.op
     h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
-    p = PreparedOp(c, c.system !== system)
     return OpValue(p, a, h)
 end
 
