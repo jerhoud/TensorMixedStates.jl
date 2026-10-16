@@ -1411,6 +1411,9 @@ end
     # 1.x refused an operator not commuting with the fermionic parity, now measured, see
     # "Measuring an operator of no definite fermionic parity"
     @test_throws "needs a Hermitian operator" probabilities(plus, Sp(1) * Z(2))
+    # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
+    up64, xx = State{Pure}(System(64, Qubit()), "Up"), sum(X(i) * X(i + 1) for i in 1:63)
+    @test_throws "of dimension 18446744073709551616, beyond the 4096" probabilities(up64, xx)
     @test_throws "needs an operator placed on sites" probabilities(plus, Id(1))
     @test_throws "which the system does not have" sample(plus, X(7))
     @test_throws "which the state does not have" collapse(plus, 3)

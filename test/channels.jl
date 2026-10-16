@@ -306,6 +306,10 @@ end
     x7 = reduce(⊗, fill(X, 7))
     @test_throws "needs a dense matrix of dimension 16384" matrix(exp(Dissipator(x7)), q)
     @test_throws "needs a dense matrix of dimension 16384" matrix(Dephase(x7), q)
+    # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
+    x64, x32 = reduce(⊗, fill(X, 64)), reduce(⊗, fill(X, 32))
+    @test_throws "needs a dense matrix of dimension 18446744073709551616" matrix(exp(-im * x64), q)
+    @test_throws "needs a dense matrix of dimension 18446744073709551616" matrix(Dephase(x32), q)
 end
 
 @testset "Pure channels on pure states" begin
@@ -964,6 +968,13 @@ end
     ps = [ (eye(64) + s * z) / 2 for s in (1, -1) ]
     @test ket_bra_matrix(apply(Dephase(reduce(⊗, fill(Z, 6)))(1, 2, 3, 4, 5, 6), ρ)) ≈
         sum(p * r * p for p in ps)
+    # and a collective dissipator on 40 qubits, its result traceless, whose block of dimension
+    # 4^40 an Int wrapped around to 0, taking it for dense, as 2^64 for a sum on 64 qubits
+    @test !TMS.dense_enough(Mixed, System(32, Qubit()), 1:32)
+    @test !TMS.dense_enough(Pure, System(64, Qubit()), 1:64)
+    q40 = State{Mixed}(System(40, Qubit()), "Up")
+    @test abs(trace(apply(Dissipator(sum(Sm(i) for i in 1:40)), q40))) < 1e-10
+    @test norm(apply(sum(X(i) for i in 1:64), State{Pure}(System(64, Qubit()), "Up")))^2 ≈ 64
     # a hundred gates, applied one by one, never developed
     q5 = System(5, Qubit())
     ρ5 = mix(State{Pure}(q5, ["Dn", "Up", "Up", "Up", "Up"]))

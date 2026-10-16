@@ -23,7 +23,10 @@ const dense_limit = 1024
 whether a block on `sites` of `system`, on the indices of representation `R`, is small enough
 to be dense, see `dense_limit`
 """
-dense_enough(::Type{R}, system::System, ks) where R = prod(block_dim(R, system[k]) for k in ks) ≤ dense_limit
+function dense_enough(::Type{R}, system::System, ks) where R
+    # a Float64, which does not wrap around as an Int does on many sites
+    return prod(float(block_dim(R, system[k])) for k in ks) ≤ dense_limit
+end
 
 """
     check_apply_algo(apply_algo)

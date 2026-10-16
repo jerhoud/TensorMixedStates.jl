@@ -88,10 +88,11 @@ sites or, for a channel or a generator, of their density matrices, is beyond `de
 """
 function check_dense(a::GenericOp{K}, sites) where K
     ss = expand_sites(a, sites)
-    d = prod(dim, ss)^(K === IsOperator ? 1 : 2)
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float ∘ dim, ss)^(K === IsOperator ? 1 : 2)
     if d > dense_max
-        error("$a on $(length(ss)) sites needs a dense matrix of dimension $d, beyond the " *
-              "$dense_max TMS builds")
+        error("$a on $(length(ss)) sites needs a dense matrix of dimension " *
+              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
     end
 end
 

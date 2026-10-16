@@ -15,10 +15,11 @@ function measured_spectrum(system::System, op::IndexedOp{IsOperator}, what::Stri
     if isempty(sites)
         error("$what needs an operator placed on sites, which $op is not")
     end
-    d = prod(dim(system[k]) for k in sites)
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float(dim(system[k])) for k in sites)
     if d > dense_max
-        error("$what of $op needs its matrix on its $(length(sites)) sites, of dimension $d, " *
-              "beyond the $dense_max TMS builds")
+        error("$what of $op needs its matrix on its $(length(sites)) sites, of dimension " *
+              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
     end
     on = " on " * join([ system[k] for k in sites ], " ⊗ ")
     values, ps = eigenspaces(matrix_on(system, op, sites), what, op, on)
