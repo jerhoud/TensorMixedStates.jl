@@ -472,7 +472,8 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     if R === Pure && any(by_blocks, gathered_summands(g))
         return pre_step!(steps, laid(system, [compacted_op(system, p)]))
     elseif R === Mixed && many_terms(g)
-        return pre_step!(steps, laid(system, [product(sided(system, p, true), sided(system, p, false))]))
+        sides = (compacted_op(system, p; side = :left), compacted_op(system, p; side = :right))
+        return pre_step!(steps, laid(system, [product(sides...)]))
     end
     terms = lower(system, p, g)
     if length(terms) == 1

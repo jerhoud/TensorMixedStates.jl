@@ -139,8 +139,8 @@ function Base.adjoint(c::CompactedOp{R}) where R
     b = c.block
     block = isnothing(b) ? nothing :
         ComBlock(b.start, copy(b.dims),
-                 [ typeof(p)(lr => typeof(comb)(a => conj(x) for (a, x) in comb) for (lr, comb) in p)
-                   for p in b.pieces ],
+                 [ typeof(p)(lr => typeof(comb)(a => conj(x) for (a, x) in comb)
+                             for (lr, comb) in p) for p in b.pieces ],
                  [ [ collect(m') for m in atoms ] for atoms in b.atoms ])
     return CompactedOp{R}(c.system, conj(c.constant),
                           Dict{Int, Matrix}(k => collect(m') for (k, m) in c.singles), block,
@@ -287,7 +287,8 @@ whether the operator compacted `c` is zero but for rounding: no term, or no chan
 of one site of rounding size next to the bound of its norm
 """
 vanishes(c::CompactedOp) = isnothing(c.flux) ||
-    ((isnothing(c.block) || all(iszero, c.block.dims)) && abs(c.constant) ≤ rounding_tol * c.norm &&
+    ((isnothing(c.block) || all(iszero, c.block.dims)) &&
+     abs(c.constant) ≤ rounding_tol * c.norm &&
      all(m -> normalized_norm(m) ≤ rounding_tol * c.norm, values(c.singles)))
 
 """
@@ -377,63 +378,45 @@ function assembled(::Type{R}, system::System, a, parts::Vector, limits::Limits) 
 end
 
 """
-    compacted_op(system, op, limits = Limits())
+    compacted_op(system, op, limits = Limits(); side = nothing)
 
 the operator `op`, placed on sites, compacted on `system` and truncated by `limits`, see
 `truncated_block`: from its terms, see `lower`, but for its products that would develop into
 more terms than their factors have, see `by_blocks`. Those are made of the compactions of their
 factors, made the same way, multiplied, equal factors in a row by squaring, see `power`, and
-added to that of the rest in one reduction, see `assembled`. Refused when it changes the charges
-by no definite amount, see `FluxError`.
+added to that of the rest in one reduction, see `assembled`. With `side`, `:left` or `:right`,
+the superoperator ``\\rho \\mapsto op\\,\\rho`` or ``\\rho \\mapsto \\rho\\,op^\\dagger``, see
+`sided_term`, a product made of the sides of its factors in the same order on both sides,
+``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger) A^\\dagger``. Refused when it changes the
+charges by no definite amount, see `FluxError`.
 """
-function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits = Limits())
+function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits = Limits();
+                      side::Union{Nothing, Symbol} = nothing)
     check_indices(system, a)
     g = gathered(system, a)
     summands = gathered_summands(g)
+    R = isnothing(side) ? Pure : Mixed
     if !any(by_blocks, summands)
-        return from_terms(Pure, system, a, lower(system, a, g), limits)
+        terms = lower(system, a, g)
+        if !isnothing(side)
+            one = identity_term()
+            sides = [ side == :left ? sided_term(t, one) : sided_term(one, t) for t in terms ]
+            terms = check_flux(Mixed, system, a, sides)
+        end
+        return from_terms(R, system, a, terms, limits)
     end
-    parts = Tuple{CompactedOp{Pure}, Number}[]
+    # the side of the right takes the adjoint of the operator, and so of its coefficients
+    coef(x) = side == :right ? conj(x) : x
+    parts = Tuple{CompactedOp{R}, Number}[]
     rest = filter(x -> !by_blocks(x), summands)
     if !isempty(rest)
-        add_part!(parts, compacted_op(system, SumOp(rest)), scalarcoef(g))
+        add_part!(parts, compacted_op(system, SumOp(rest); side), coef(scalarcoef(g)))
     end
     for x in filter(by_blocks, summands)
-        add_part!(parts, blocked_product(prodsubs(scalararg(x)), f -> compacted_op(system, f)),
-                  scalarcoef(g) * scalarcoef(x))
+        factors = blocked_product(prodsubs(scalararg(x)), f -> compacted_op(system, f; side))
+        add_part!(parts, factors, coef(scalarcoef(g) * scalarcoef(x)))
     end
-    return assembled(Pure, system, a, parts, limits)
-end
-
-"""
-    sided(system, op, left)
-
-the operator `op`, placed on sites, compacted on `system`, see `compacted_op`, as the
-superoperator ``\\rho \\mapsto op\\,\\rho`` when `left` and ``\\rho \\mapsto \\rho\\,op^\\dagger``
-otherwise, see `sided_term`: a product that would develop made of the sides of its factors
-multiplied in the same order on both sides, ``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger)
-A^\\dagger``
-"""
-function sided(system::System, a::IndexedOp{IsOperator}, left::Bool)
-    check_indices(system, a)
-    g = gathered(system, a)
-    summands = gathered_summands(g)
-    if !any(by_blocks, summands)
-        one = identity_term()
-        ts = [ left ? sided_term(t, one) : sided_term(one, t) for t in lower(system, a, g) ]
-        return from_terms(Mixed, system, a, check_flux(Mixed, system, a, ts))
-    end
-    side(c) = left ? c : conj(c)
-    parts = Tuple{CompactedOp{Mixed}, Number}[]
-    rest = filter(x -> !by_blocks(x), summands)
-    if !isempty(rest)
-        add_part!(parts, sided(system, SumOp(rest), left), side(scalarcoef(g)))
-    end
-    for x in filter(by_blocks, summands)
-        add_part!(parts, blocked_product(prodsubs(scalararg(x)), f -> sided(system, f, left)),
-                  side(scalarcoef(g) * scalarcoef(x)))
-    end
-    return assembled(Mixed, system, a, parts, Limits())
+    return assembled(R, system, a, parts, limits)
 end
 
 """
@@ -472,10 +455,10 @@ end
 
 the superoperator `a`, a channel or a generator placed on sites, compacted on `system` and
 truncated by `limits`, see `truncated_block`: from its terms, see `lower`, but for what is better
-made of the sides of its operators, see `super_by_blocks` and `sided`, multiplied, the adjoint of
-a side being the side of the adjoint. The evolver of `K` is ``K\\rho + \\rho K^\\dagger``, its
-gate ``K\\rho K^\\dagger``, the dissipator of `L` ``L\\rho L^\\dagger - (L^\\dagger L\\rho + \\rho
-L^\\dagger L)/2``, and a product of channels that of their compactions.
+made of the sides of its operators, see `super_by_blocks` and `compacted_op`, multiplied, the
+adjoint of a side being the side of the adjoint. The evolver of `K` is ``K\\rho + \\rho
+K^\\dagger``, its gate ``K\\rho K^\\dagger``, the dissipator of `L` ``L\\rho L^\\dagger -
+(L^\\dagger L\\rho + \\rho L^\\dagger L)/2``, and a product of channels that of their compactions.
 """
 function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits())
     check_indices(system, a)
@@ -495,7 +478,7 @@ function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits()
             add_part!(parts, blocked_product(y.subs, f -> compacted_super(system, f)), k)
             continue
         end
-        l, r = sided(system, y.arg, true), sided(system, y.arg, false)
+        l, r = compacted_op(system, y.arg; side = :left), compacted_op(system, y.arg; side = :right)
         if y isa Evolver
             add_part!(add_part!(parts, l, k), r, k)
         elseif y isa Gate
