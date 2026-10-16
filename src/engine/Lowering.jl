@@ -330,6 +330,18 @@ function sided_term(t::Term, u::Term)
 end
 
 """
+    side_terms(side, terms)
+
+the terms of the superoperator ``\\rho \\mapsto K\\rho``, for `side = :left`, or
+``\\rho \\mapsto \\rho K^\\dagger``, for `:right`, of the operator `K` of terms `terms`, see
+`sided_term`
+"""
+function side_terms(side::Symbol, ts::Vector{Term})
+    one = identity_term()
+    return Term[ side == :left ? sided_term(t, one) : sided_term(one, t) for t in ts ]
+end
+
+"""
     strings_on(t, k)
 
 the strings of the term `t` on site `k`, that on the kets plus twice that on the bras
@@ -504,8 +516,7 @@ op_terms(system::System, a::Gate, index) = gate_terms(pure_terms(system, a.arg, 
 
 function op_terms(system::System, a::Evolver, index)
     ts = pure_terms(system, a.arg, index)
-    one = identity_term()
-    return Term[ [ sided_term(t, one) for t in ts ] ; [ sided_term(one, t) for t in ts ] ]
+    return Term[ side_terms(:left, ts) ; side_terms(:right, ts) ]
 end
 
 # ρ ↦ Σ K ρ K† - {M, ρ}/2, M = Σ K†K, from the terms of L, or those of a channel and the M they
@@ -519,9 +530,7 @@ function op_terms(system::System, a::Dissipator, index)
         jumps = op_terms(system, a.arg, index)
         m = reduced(map(t -> trace_dual(system, t), jumps))
     end
-    one = identity_term()
-    return Term[ jumps ; scaled(-0.5, [ [ sided_term(x, one) for x in m ] ;
-                                        [ sided_term(one, x) for x in m ] ]) ]
+    return Term[ jumps ; scaled(-0.5, [ side_terms(:left, m) ; side_terms(:right, m) ]) ]
 end
 
 """

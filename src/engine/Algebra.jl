@@ -386,7 +386,7 @@ more terms than their factors have, see `by_blocks`. Those are made of the compa
 factors, made the same way, multiplied, equal factors in a row by squaring, see `power`, and
 added to that of the rest in one reduction, see `assembled`. With `side`, `:left` or `:right`,
 the superoperator ``\\rho \\mapsto op\\,\\rho`` or ``\\rho \\mapsto \\rho\\,op^\\dagger``, see
-`sided_term`, a product made of the sides of its factors in the same order on both sides,
+`side_terms`, a product made of the sides of its factors in the same order on both sides,
 ``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger) A^\\dagger``. Refused when it changes the
 charges by no definite amount, see `FluxError`.
 """
@@ -399,9 +399,7 @@ function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits =
     if !any(by_blocks, summands)
         terms = lower(system, a, g)
         if !isnothing(side)
-            one = identity_term()
-            sides = [ side == :left ? sided_term(t, one) : sided_term(one, t) for t in terms ]
-            terms = check_flux(Mixed, system, a, sides)
+            terms = check_flux(Mixed, system, a, side_terms(side, terms))
         end
         return from_terms(R, system, a, terms, limits)
     end
