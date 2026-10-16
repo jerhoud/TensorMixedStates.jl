@@ -144,12 +144,14 @@ function count_mpo(system::System, sites, locals, T::Int)
     links = [ is_charged(system) ? Index(QN() => length(b); tags = "Count,l=$(i - 1)") :
                                    Index(length(b); tags = "Count,l=$(i - 1)")
               for (i, b) in enumerate(bonds) ]
+    # real for real projectors, which keep a real state real
+    T = promote_type(Float64, (eltype(p) for (_, ps) in locals for p in ps)...)
     ts = map(1:n) do i
         x = siteind(Pure, system, i)
         d = dim(x)
         right = Dict(s => q for (q, s) in enumerate(bonds[i + 1]))
         blocks = haskey(at, i) ? collect(zip(locals[at[i]]...)) : [ (0, Matrix{Float64}(I, d, d)) ]
-        a = zeros(ComplexF64, d, d, length(bonds[i]), length(bonds[i + 1]))
+        a = zeros(T, d, d, length(bonds[i]), length(bonds[i + 1]))
         for (p, s) in enumerate(bonds[i]), (t, m) in blocks
             q = get(right, s + t, nothing)
             if !isnothing(q)

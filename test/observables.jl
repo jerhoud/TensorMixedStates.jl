@@ -1469,6 +1469,13 @@ end
         @test real(expect(after, Z(1) * Z(2))) ≈ -1
         @test real(expect(after, X(1) * X(2))) ≈ 1
     end
+    # the projector of a count keeps a real state real, where it made it complex
+    plus4 = State{Pure}(System(4, Qubit()), "+")
+    for st in (plus4, mix(plus4))
+        r = collapse(st, sum(Z(i) for i in 1:4) => 2)
+        @test r.probability ≈ 1/4
+        @test eltype(r.state.state[1]) == Float64
+    end
     ψ = random_state(Pure, System(6, Qubit()), 6)
     P = Z(1) * X(3) * Y(5)
     op = N(1) + N(3) + N(5)
