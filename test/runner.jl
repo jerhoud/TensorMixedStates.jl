@@ -704,6 +704,19 @@ end
     end
 end
 
+@testset "Phases before the first state" begin
+    # their commits, holding values alone, are written, where nothing was: a run stopped there
+    # started over, and never ended with max_time = -1
+    in_tmp() do
+        phases = [Update(c -> (c.x = rand(c.rng)); provides = [:x]),
+                  CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1))]
+        sd(name) = SimData(; name, phases, seed = 3, final_measurements = "f" => [:x, Z(1)])
+        runTMS(sd("ref"))
+        run_through(sd("chk"); max_time = -1)
+        @test read("chk/f", String) == read("ref/f", String)
+    end
+end
+
 @testset "A phase on a named state, the current one moved away" begin
     # the commits hold the named state alone, where they were not written: a run stopped there
     # resumed an older checkpoint, and never ended with max_time = -1
