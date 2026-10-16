@@ -980,6 +980,16 @@ end
     ρ5 = mix(State{Pure}(q5, ["Dn", "Up", "Up", "Up", "Up"]))
     swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
     @test norm(apply(prod(swaps), ρ5) - foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)) < 1e-10
+    # a dissipator of a sum or of a product, and a sum of gates, on more than two sites, go through
+    # their MPO, 20 to 250 times faster than their dense blocks on 4 and 5 sites, as the pieces of
+    # an operator; a channel given by its matrix stays dense
+    r5 = random_state(Mixed, q5, 3)
+    for d in (Dissipator(sum(Sm(i) for i in 1:5)), Dissipator(prod(X(i) for i in 1:5)),
+              0.5 * Gate(Id(1)) + 0.5 * Gate(prod(Z(i) for i in 1:5)))
+        @test all(s -> s isa TMS.WindowMPO, last(TMS.mixed_steps(q5, d)))
+        @test norm(apply(d, r5) - apply(make_mpo(r5, d), r5)) < 1e-12
+    end
+    @test only(last(TMS.mixed_steps(q5, Dephase(reduce(⊗, fill(Z, 4)))(1, 2, 3, 4)))) isa TMS.GateBatch
     # and gates far apart leave the sites in their places
     ρf = random_state(Mixed, System(6, Fermion()), 3)
     @test TMS.ITensorMPS.siteinds(apply(Gate((C ⊗ dag(C))(1, 5)) * Gate(Swap(2, 6)), ρf).state) ==

@@ -497,8 +497,10 @@ end
 
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
-by piece, see `gate_steps!`, any other factor as a dense block on the mixed indices, see
-`block_step!`, or either through its MPO, see `compacted_super`
+by piece, see `gate_steps!`; any other factor small enough, see `dense_enough`, on at most two
+sites or given by its matrix there, as a dense block on the mixed indices, see `block_step!`, as
+the pieces of an operator, see `piece_steps!`, and through its MPO otherwise, see
+`compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
@@ -511,7 +513,7 @@ function mixed_steps(system::System, a::IndexedOp)
             ks = sort!(unique(b.site for t in terms for b in t.blocks))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
-            elseif dense_enough(Mixed, system, ks)
+            elseif (length(ks) ≤ 2 || f isa AtIndex) && dense_enough(Mixed, system, ks)
                 orders = [ mixed_elements(system, k) for k in ks ]
                 m = system_matrix(Mixed, system, terms, ks, orders)
                 block_step!(steps, Mixed, system, m, ks)
