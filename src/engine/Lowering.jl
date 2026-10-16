@@ -572,6 +572,14 @@ their number
 normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
 
 """
+    normalized_size(t)
+
+the coefficient of the term `t` times the normalized norms of its blocks, see `normalized_norm`,
+next to which what rounding leaves of a sum of terms is measured
+"""
+normalized_size(t::Term) = abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0)
+
+"""
     term_flux(R, system, a, t)
 
 the amount the term `t` of the operator `a` changes the charges of `system` by, the sum of the
@@ -603,16 +611,15 @@ end
 the terms of the operator `a` on a charged `system`, the matrices being those of superoperators
 for `R = Mixed`, refused when a block has no definite flux or when the terms do not all change
 the charges by the same amount, see `FluxError`. A term of rounding size next to the largest
-one, what is left of a sum cancelling up to rounding, is dropped rather than counted, the size
-of a term being its coefficient times the normalized norms of its blocks, see `normalized_norm`.
+one, what is left of a sum cancelling up to rounding, is dropped rather than counted, see
+`normalized_size`.
 """
 function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
     if !is_charged(system)
         return terms
     end
     fluxes = [ term_flux(R, system, a, t) for t in terms ]
-    sizes = [ abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0)
-              for t in terms ]
+    sizes = normalized_size.(terms)
     small = rounding_tol * maximum(sizes; init = 0.)
     main = unique(q for (q, s) in zip(fluxes, sizes) if s > small)
     if length(main) > 1

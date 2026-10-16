@@ -613,12 +613,11 @@ matrices being those of superoperators for `R = Mixed`. The strings of the terms
 their factors, see `string_factors`, and carried by the channels between them. The block, built
 by `direct_pass`, is reduced to as few channels on each link as the rank of the coupling across
 it, see `reduced_block`, and truncated by `limits`. A term of one site that rounding left in
-place of zero is dropped, the terms measured by `normalized_norm`.
+place of zero is dropped, the terms measured by `normalized_size`.
 """
 function compacted(::Type{R}, system::System, terms::Vector{Term},
                    limits::Limits = Limits()) where R
-    scale = maximum(t -> abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0),
-                    terms; init = 0.0)
+    scale = maximum(normalized_size, terms; init = 0.0)
     T = promote_type(Float64, (typeof(t.coef) for t in terms)...,
                      (eltype(m) for t in terms for (_, m) in t.blocks)...)
     constant = zero(T)
