@@ -10,15 +10,12 @@
 
 """
 the matrix, on `n` sites `site`, of the product of operators of one site `factors`, pairs
-`op => i` in the order of the product, written with explicit Jordan-Wigner strings: an odd
-operator on site `i` carries `F` on every site before it. Independent of the descent, so it can
-be used as a reference for it.
+`op => i` in the order of the product, written with explicit Jordan-Wigner strings, see
+`jw_placed`. Independent of the descent, so it can be used as a reference for it.
 """
 function jw_matrix(site, n, factors)
-    mf, id = matrix(F, site), matrix(Id, site)
-    odd(a) = TMS.parity_of(matrix(a, site), mf) == 1
-    placed(a, j) = foldl(kron, [ k == j ? matrix(a, site) : (k < j && odd(a) ? mf : id) for k in 1:n ])
-    return prod(placed(a, j) for (a, j) in factors)
+    sys = System(n, site)
+    return prod(jw_placed(sys, j, matrix(a, site)) for (a, j) in factors)
 end
 
 """
@@ -599,11 +596,11 @@ end
     # F ⊗ … ⊗ F ⊗ c ⊗ 1 ⊗ … ⊗ 1, and any other operator is written from those, so that the
     # reference knows nothing of the package
     fe = Fermion()
-    mc, mf, mi = matrix(C, fe), matrix(F, fe), matrix(Id, fe)
-    cd(j, n) = foldl(kron, [ k < j ? mf : k == j ? mc : mi for k in 1:n ])
-    singles = [ (C, (j, n) -> cd(j, n)), (dag(C), (j, n) -> cd(j, n)'),
-                (N, (j, n) -> cd(j, n)' * cd(j, n)),
-                (C + 2dag(C), (j, n) -> cd(j, n) + 2cd(j, n)') ]
+    mc = matrix(C, fe)
+    cj(j, n) = jw_placed(System(n, fe), j, mc)
+    singles = [ (C, (j, n) -> cj(j, n)), (dag(C), (j, n) -> cj(j, n)'),
+                (N, (j, n) -> cj(j, n)' * cj(j, n)),
+                (C + 2dag(C), (j, n) -> cj(j, n) + 2cj(j, n)') ]
     count = Ref(0)
     # a factor on the positions 1:m, as an operator and as its dense matrix on the n sites of
     # the state, `site` taking a position to its site: an operator of one site, or a tensor
@@ -656,8 +653,8 @@ end
     end
     # and on electrons, whose parity counts both spins
     el = Electron()
-    mu, md, mfe, mie = matrix(Cup, el), matrix(Cdn, el), matrix(F, el), matrix(Id, el)
-    ce(j, m) = foldl(kron, [ k < j ? mfe : k == j ? m : mie for k in 1:3 ])
+    mu, md = matrix(Cup, el), matrix(Cdn, el)
+    ce(j, m) = jw_placed(System(3, el), j, m)
     ψe = random_state(Pure, System(3, el), 4)
     ge = exp(-0.4im * (dag(Cup) ⊗ Cdn + dag(dag(Cup) ⊗ Cdn)))
     for (i, j) in [(1, 3), (3, 1), (1, 2)]

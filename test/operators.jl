@@ -470,56 +470,51 @@ end
                       for (k, s) in enumerate(sys.sites) ])
     summed(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t)) for t in TMS.lower(sys, op));
                            init = 0 * identity_on(sys))
-    function jw(sys, j, a)
-        odd = TMS.parity_of(a, matrix(F, sys[j])) == 1
-        return foldl(kron, [ k < j && odd ? matrix(F, s) : k == j ? a : matrix(Id, s)
-                             for (k, s) in enumerate(sys.sites) ])
-    end
     q, fe, el = Qubit(), Fermion(), Electron()
     x, y, z = matrix(X, q), matrix(Y, q), matrix(Z, q)
     s3 = System(3, q)
-    @test summed(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw(s3, 1, x) + 2 * jw(s3, 2, z) * jw(s3, 3, y)
+    @test summed(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw_placed(s3, 1, x) + 2 * jw_placed(s3, 2, z) * jw_placed(s3, 3, y)
 
     # fermions: a hop over a fermion, a product written backwards, and Swap or a placed tensor
     # product on sites in decreasing order, which need no sign of reordering
     s4 = System(4, fe)
     c = matrix(C, fe)
     cd, n = collect(c'), c' * c
-    hop = jw(s4, 1, cd) * jw(s4, 3, c) + jw(s4, 3, cd) * jw(s4, 1, c)
+    hop = jw_placed(s4, 1, cd) * jw_placed(s4, 3, c) + jw_placed(s4, 3, cd) * jw_placed(s4, 1, c)
     @test summed(s4, dag(C)(1) * C(3) + dag(C)(3) * C(1)) ≈ hop
-    @test summed(s4, C(3) * dag(C)(1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
-    sw = identity_on(s4) - jw(s4, 1, n) - jw(s4, 3, n) + hop
+    @test summed(s4, C(3) * dag(C)(1)) ≈ jw_placed(s4, 3, c) * jw_placed(s4, 1, cd)
+    sw = identity_on(s4) - jw_placed(s4, 1, n) - jw_placed(s4, 3, n) + hop
     @test summed(s4, Swap(1, 3)) ≈ sw
     @test summed(s4, Swap(3, 1)) ≈ sw
-    @test summed(s4, (C ⊗ dag(C))(3, 1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
-    @test summed(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw(s4, 4, c) * jw(s4, 2, n) * jw(s4, 1, cd)
-    @test summed(s4, dag(C ⊗ C)(1, 2)) ≈ (jw(s4, 1, c) * jw(s4, 2, c))'
+    @test summed(s4, (C ⊗ dag(C))(3, 1)) ≈ jw_placed(s4, 3, c) * jw_placed(s4, 1, cd)
+    @test summed(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw_placed(s4, 4, c) * jw_placed(s4, 2, n) * jw_placed(s4, 1, cd)
+    @test summed(s4, dag(C ⊗ C)(1, 2)) ≈ (jw_placed(s4, 1, c) * jw_placed(s4, 2, c))'
     # a function of several fermionic sites, placed both ways, with a fermion between them
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
     @test summed(s4, exp(-0.3 * (h * h))(1, 3)) ≈ exp(-0.3 * hop^2)
     @test summed(s4, exp(-0.3 * (h * h))(3, 1)) ≈ exp(-0.3 * hop^2)
     # a block of no definite parity is split into its even and odd parts
-    @test summed(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
-    @test summed(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
+    @test summed(s4, (C + N)(2)) ≈ jw_placed(s4, 2, c) + jw_placed(s4, 2, n)
+    @test summed(s4, exp(C)(2)) ≈ identity_on(s4) + jw_placed(s4, 2, c)
     # a sum or a named expression of one site is taken by its matrix, a term for each parity,
     # so that a product of them does not grow with the number of its factors
     nterms(sys, op) = length(TMS.lower(sys, op))
     xz, m = named(X + Z, "XZ"), named(C + dag(C), "M")
     @test nterms(s3, (X + Z)(2)) == nterms(s3, xz(2)) == 1
     @test nterms(s3, xz(1) * xz(2) * xz(3)) == nterms(s3, ((X + Z) ⊗ (X + Z))(1, 3)) == 1
-    @test summed(s3, xz(1) * xz(3)) ≈ jw(s3, 1, x + z) * jw(s3, 3, x + z)
+    @test summed(s3, xz(1) * xz(3)) ≈ jw_placed(s3, 1, x + z) * jw_placed(s3, 3, x + z)
     @test nterms(s4, m(3)) == 1 && nterms(s4, (C + N)(2)) == 2
-    @test summed(s4, m(3)) ≈ jw(s4, 3, c + cd)
+    @test summed(s4, m(3)) ≈ jw_placed(s4, 3, c + cd)
     # strings on the fermionic sites only, and two species on a site
     sm = System([fe, q, fe])
-    @test summed(sm, C(1) * X(2) * dag(C)(3)) ≈ jw(sm, 1, c) * jw(sm, 2, x) * jw(sm, 3, cd)
+    @test summed(sm, C(1) * X(2) * dag(C)(3)) ≈ jw_placed(sm, 1, c) * jw_placed(sm, 2, x) * jw_placed(sm, 3, cd)
     se = System(3, el)
     cu, cn, nt = matrix(Cup, el), matrix(Cdn, el), matrix(Ntot, el)
     @test summed(se, dag(Cup)(1) * Cup(3) + dag(Cdn)(3) * Cdn(1) + (Ntot ⊗ Ntot)(2, 3)) ≈
-          jw(se, 1, collect(cu')) * jw(se, 3, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn) +
-          jw(se, 2, nt) * jw(se, 3, nt)
+          jw_placed(se, 1, collect(cu')) * jw_placed(se, 3, cu) + jw_placed(se, 3, collect(cn')) * jw_placed(se, 1, cn) +
+          jw_placed(se, 2, nt) * jw_placed(se, 3, nt)
     @test summed(se, (dag(Cup) ⊗ Cup + dag(Cdn) ⊗ Cdn)(3, 1)) ≈
-          jw(se, 3, collect(cu')) * jw(se, 1, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn)
+          jw_placed(se, 3, collect(cu')) * jw_placed(se, 1, cu) + jw_placed(se, 3, collect(cn')) * jw_placed(se, 1, cn)
     # an operator of several sites given by a function of its sites
     q3 = Qudit(3)
     @test summed(System(2, q3), Qudits.Sum(1, 2)) ≈ matrix(Qudits.Sum, q3, q3)
@@ -603,16 +598,16 @@ end
     # built from the matrices of its factors placed
     fe = Fermion()
     fs = System(5, fe)
-    f, c, n, id = matrix(F, fe), matrix(C, fe), matrix(N, fe), matrix(Id, fe)
-    placed(m, k, odd) = foldl(kron, [ j < k ? (odd ? f : id) : j == k ? m : id for j in 1:5 ])
+    c, n, id = matrix(C, fe), matrix(N, fe), matrix(Id, fe)
+    placed(m, k) = jw_placed(fs, k, m)
     sw = kron(id, matrix(Swap, fe, fe), id, id)
-    for (op, m) in [(dag(C)(1) * N(3) * C(5), placed(c', 1, true) * placed(n, 3, false) * placed(c, 5, true)),
+    for (op, m) in [(dag(C)(1) * N(3) * C(5), placed(c', 1) * placed(n, 3) * placed(c, 5)),
                     (C(5) * dag(C)(2) * C(3) * dag(C)(4),
-                     placed(c, 5, true) * placed(c', 2, true) * placed(c, 3, true) * placed(c', 4, true)),
+                     placed(c, 5) * placed(c', 2) * placed(c, 3) * placed(c', 4)),
                     ((C + dag(C))(2) * C(4) * N(1),
-                     placed(c + c', 2, true) * placed(c, 4, true) * placed(n, 1, false)),
-                    (C(1) * Swap(2, 3) * dag(C)(4), placed(c, 1, true) * sw * placed(c', 4, true)),
-                    (dag(C ⊗ Id ⊗ C)(1, 2, 4), (placed(c, 1, true) * placed(c, 4, true))')]
+                     placed(c + c', 2) * placed(c, 4) * placed(n, 1)),
+                    (C(1) * Swap(2, 3) * dag(C)(4), placed(c, 1) * sw * placed(c', 4)),
+                    (dag(C ⊗ Id ⊗ C)(1, 2, 4), (placed(c, 1) * placed(c, 4))')]
         @test lowered(fs, op) ≈ m
     end
     # and so a hopping on a long chain takes no string outside the sites it hops between
@@ -638,12 +633,13 @@ end
     @test only(TMS.lower(System(500, q), prod(Z(i) for i in 1:500))).blocks ==
           [ TMS.Block(i, matrix(Z, q), 0) for i in 1:500 ]
     fe = Fermion()
-    f, c, n, id = matrix(F, fe), matrix(C, fe), matrix(N, fe), matrix(Id, fe)
-    placed(m, k, odd) = foldl(kron, [ j < k ? (odd ? f : id) : j == k ? m : id for j in 1:8 ])
+    f8 = System(8, fe)
+    c, n = matrix(C, fe), matrix(N, fe)
+    placed(m, k) = jw_placed(f8, k, m)
     op = C(1) * N(2) * dag(C)(3) * C(5) * N(6) * dag(C)(8) * (C + dag(C))(4) * N(7)
-    m = placed(c, 1, true) * placed(n, 2, false) * placed(c', 3, true) * placed(c, 5, true) *
-        placed(n, 6, false) * placed(c', 8, true) * placed(c + c', 4, true) * placed(n, 7, false)
-    @test lowered(System(8, fe), op) ≈ m
+    m = placed(c, 1) * placed(n, 2) * placed(c', 3) * placed(c, 5) *
+        placed(n, 6) * placed(c', 8) * placed(c + c', 4) * placed(n, 7)
+    @test lowered(f8, op) ≈ m
     # a tensor product in a product is the product of its factors: merged whole, Z(1) * TX on 10
     # qubits took 100 s through its dense matrix, and placed in any order on fermions it equals
     # the product of the matrices of its factors

@@ -191,8 +191,7 @@ end
     LA = TMS.LinearAlgebra
     n, m, β = 4, 2, 0.9
     h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:n-1) + 0.4 * N(1)
-    c(j) = foldl(kron, [ k < j ? [1. 0. ; 0. -1.] : k == j ? [0. 1. ; 0. 0.] : [1. 0. ; 0. 1.]
-                         for k in 1:n ])
+    c(j) = jw_placed(System(n, Fermion()), j, matrix(C, Fermion()))
     dense = -sum(c(i)' * c(i+1) + c(i+1)' * c(i) for i in 1:n-1) + 0.4 * c(1)' * c(1)
     sector = LA.Diagonal(Float64.(round.(LA.diag(sum(c(i)' * c(i) for i in 1:n))) .== m))
     g = exp(-β * dense) * sector

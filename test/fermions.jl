@@ -5,19 +5,6 @@
 # operators.jl and compact.jl, and each operation in its own group.
 
 """
-the matrix on the whole of `system`, site 1 most significant, of the matrix `m` of site `k`, its
-odd part carrying `F` on every site before `k`
-"""
-function jw_placed(system, k, m)
-    sites = [ system[i] for i in 1:length(system) ]
-    f = matrix(F, sites[k])
-    id(i) = matrix(Id, sites[i])
-    laid(a, strings) = foldl(kron, [ i < k ? (strings ? matrix(F, sites[i]) : id(i)) :
-                                     i == k ? a : id(i) for i in eachindex(sites) ])
-    return laid((m + f * m * f) / 2, false) + laid((m - f * m * f) / 2, true)
-end
-
-"""
 the matrix on the whole of `system` of the matrix `m` of the sites `on`, in their order, written
 in the Jordan-Wigner basis of those sites alone: each element of `m`, a product of elements of
 one site, taken to the product of the same elements placed on the whole system, see `jw_placed`

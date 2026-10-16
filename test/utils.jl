@@ -81,6 +81,19 @@ the dense superoperator of the placed channel or generator `a` on the whole of t
 superop(sys::System, a) = TMS.system_matrix(Mixed, sys, TMS.lower(sys, a))
 
 """
+the matrix on the whole of `system`, site 1 most significant, of the matrix `m` of site `k`, its
+odd part carrying `F` on every site before `k`
+"""
+function jw_placed(system, k, m)
+    sites = system.sites
+    f = matrix(F, sites[k])
+    id(i) = matrix(Id, sites[i])
+    laid(a, strings) = foldl(kron, [ i < k ? (strings ? matrix(F, sites[i]) : id(i)) :
+                                     i == k ? a : id(i) for i in eachindex(sites) ])
+    return laid((m + f * m * f) / 2, false) + laid((m - f * m * f) / 2, true)
+end
+
+"""
     mpo_matrix(m::MPO, idx)
     mpo_matrix(pre::PreMPO, coefs = [1.])
     mpo_matrix(st::State, m::MPO)
