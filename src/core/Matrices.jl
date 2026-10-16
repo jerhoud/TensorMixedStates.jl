@@ -453,7 +453,8 @@ end
 
 function local_state(site::AbstractSite, v::AbstractVector{<:Number})
     if length(v) ≠ dim(site)
-        error("a state of $(length(v)) components cannot be one of $site, whose dimension is $(dim(site))")
+        error("a state of $(length(v)) components cannot be one of $site, whose dimension is " *
+              "$(dim(site))")
     end
     return Vector(v)
 end

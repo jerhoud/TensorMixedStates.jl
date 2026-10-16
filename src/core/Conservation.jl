@@ -64,8 +64,8 @@ site_charges(op::GenericOp{IsOperator}, ::AbstractSite) =
 
 # a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: those
 # of Z^2 on Qudit(4), all ±1, would be read as integers
-function site_charges(a::Union{IntPowOp{IsOperator, 1}, GenPowOp{IsOperator, 1}, DagOp{1}}, site::AbstractSite;
-                      tol::Float64 = charge_tol)
+function site_charges(a::Union{IntPowOp{IsOperator, 1}, GenPowOp{IsOperator, 1}, DagOp{1}},
+                      site::AbstractSite; tol::Float64 = charge_tol)
     p = a isa DagOp ? -1 : a.expo
     if isreal(p) && isinteger(real(p))
         mq = try
@@ -170,7 +170,8 @@ function Conservation(site::AbstractSite, spec)
         modulus, charges = site_charges(op, site)
         name = obs_name(op)
         if endswith(name, '*')
-            error("cannot conserve $name: a name ending in * is that of the bra of a strong quantity")
+            error("cannot conserve $name: a name ending in * is that of the bra of a strong " *
+                  "quantity")
         end
         limit = ITensors.SmallStrings.smallLength - (o isa Strong ? 1 : 0)
         if length(name) > limit
@@ -280,7 +281,8 @@ prints as `conserve` is given and can be given back to `weaken`.
 
     symmetries(System(4, Electron(conserve = (strong(Ntot), 2Sz))))   # (2Sz, strong(Ntot))
 """
-symmetries(site::AbstractSite) = Conserved([ (q.name, q.strong) for q in conserved(site).quantities ])
+symmetries(site::AbstractSite) =
+    Conserved([ (q.name, q.strong) for q in conserved(site).quantities ])
 
 """
     one_step_down(c::Conserved)
@@ -525,8 +527,8 @@ end
 
 whether the array `a` on the indices `inds` carries a definite charge, up to rounding
 """
-has_definite_flux(a::AbstractArray, inds) =
-    !any(hasqns, inds) || !isnothing(common_charge(a, map(index_charges, inds), rounding_tol * norm(a)))
+has_definite_flux(a::AbstractArray, inds) = !any(hasqns, inds) ||
+    !isnothing(common_charge(a, map(index_charges, inds), rounding_tol * norm(a)))
 
 """
     charged_itensor(a, inds)
@@ -609,15 +611,16 @@ function charge_flux(m::Matrix, what, site::AbstractSite; tol::Float64 = roundin
         if abs(m[i, j]) ≤ small
             continue
         end
-        d = [ (q.name, q.modulus == 1 ? q.charges[i] - q.charges[j] : mod(q.charges[i] - q.charges[j], q.modulus), q.modulus)
-              for q in qs ]
+        d = map(qs) do q
+            δ = q.charges[i] - q.charges[j]
+            (q.name, q.modulus == 1 ? δ : mod(δ, q.modulus), q.modulus)
+        end
         if isnothing(found)
             found = d
         elseif d ≠ found
             throw(FluxError("$(obs_name(what)) on site $(typeof(site)) connects charges " *
-                            "differing by " *
-                            "$(show_charges(found)) and by $(show_charges(d)), so it has no " *
-                            "definite flux"))
+                            "differing by $(show_charges(found)) and by $(show_charges(d)), " *
+                            "so it has no definite flux"))
         end
     end
     return isnothing(found) ? QN() : QN(found...)
@@ -648,7 +651,8 @@ flux(op::GenericOp{IsOperator}, ::AbstractSite) =
     typeof(a) == typeof(b) && all(f -> getfield(a, f) == getfield(b, f), fieldnames(typeof(a)))
 
 hash(a::AbstractSite, h::UInt) =
-    foldl((h, f) -> hash(no_signed_zero(getfield(a, f)), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
+    foldl((h, f) -> hash(no_signed_zero(getfield(a, f)), h), fieldnames(typeof(a));
+          init = hash(typeof(a), h))
 
 show(io::IO, c::Conserved) =
     if isempty(c.names)

@@ -52,7 +52,8 @@ function random_state(state::State{Pure}, linkdims::Int;
     return State{Pure}(state.system, st)
 end
 
-random_state(::State{Mixed}, ::Int; kwargs...) = error("randomising a mixed state is not implemented")
+random_state(::State{Mixed}, ::Int; kwargs...) =
+    error("randomising a mixed state is not implemented")
 
 """
     refuse_strong(system)

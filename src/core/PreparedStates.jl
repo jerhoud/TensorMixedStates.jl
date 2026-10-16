@@ -313,7 +313,8 @@ function dicke_mps(system::System, k::Int, a, b, amplitudes::AbstractVector{<:Nu
     reach(j) = max(0, k - (n - j)):min(j, k)
     # one element type for every tensor, which mps_state takes
     vs = [ (local_vector(system[j], a), amplitudes[j] * local_vector(system[j], b)) for j in 1:n ]
-    T = mapreduce(((va, vb),) -> promote_type(eltype(va), eltype(vb)), promote_type, vs; init = Bool)
+    T = mapreduce(((va, vb),) -> promote_type(eltype(va), eltype(vb)), promote_type, vs;
+                  init = Bool)
     tensors = map(1:n) do j
         va, vb = vs[j]
         left, right = reach(j - 1), reach(j)
@@ -342,7 +343,8 @@ single excitation, of bond dimension 2.
 # Examples
 
     w_state(System(10, Qubit()), "Up", "Dn")
-    w_state(System(40, Qubit()), "Up", "Dn", [ exp(-(j - 10)^2 / 8 + im * π / 2 * j) for j in 1:40 ])
+    w_state(System(40, Qubit()), "Up", "Dn",
+            [ exp(-(j - 10)^2 / 8 + im * π / 2 * j) for j in 1:40 ])
 """
 w_state(system::System, a, b) = dicke_state(system, 1, a, b)
 

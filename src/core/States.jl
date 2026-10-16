@@ -347,7 +347,8 @@ end
 
 function State{R}(system::System, states::Vector) where R
     if length(system) ≠ length(states)
-        error("incompatible sizes between system ($(length(system))) and states ($(length(states)))")
+        error("incompatible sizes between system ($(length(system))) and states " *
+              "($(length(states)))")
     end
     return State{R}(system, make_state(R, system, states))
 end
@@ -592,13 +593,14 @@ function weaken(state::State{R}, target::Conserved) where {R <: PM}
     if !is_charged(weak)
         # densifying lays the blocks out in the order of the charges, which the maps permute
         # to the order of a plain combiner
-        return State{Mixed}(weak, MPS([ dense(state.state[i]) * m
-                                        for (i, m) in enumerate(element_maps(weak, system, dense)) ]))
+        maps = element_maps(weak, system, dense)
+        return State{Mixed}(weak, MPS([ dense(state.state[i]) * m for (i, m) in enumerate(maps) ]))
     end
     # beyond renaming, the maps regroup the blocks, which the two mixed indices order
     # differently
+    maps = element_maps(weak, system, t -> relabel(t, relab))
     return State{Mixed}(weak, MPS([ relabel(state.state[i], relab) * m
-                                    for (i, m) in enumerate(element_maps(weak, system, t -> relabel(t, relab))) ]))
+                                    for (i, m) in enumerate(maps) ]))
 end
 
 weaken(state::State, spec) = weaken(state, Conserved(spec_names(spec)))

@@ -128,8 +128,8 @@ expression of other operators, or `nothing` for an operator each site type decla
 struct Operator{N} <: GenericOp{IsOperator, N}
     name::String
     expr::Union{Nothing, Matrix, Function, GenericOp{IsOperator, N}}
-    Operator{N}(name::String,
-                expr::Union{Nothing, AbstractMatrix, Function, GenericOp{IsOperator, N}} = nothing) where N =
+    Operator{N}(name::String, expr::Union{Nothing, AbstractMatrix, Function,
+                                          GenericOp{IsOperator, N}} = nothing) where N =
         new{N}(name, no_signed_zero(expr isa AbstractMatrix ? Matrix(expr) : expr))
 end
 
@@ -902,31 +902,31 @@ print the number `a` in front of an operator: nothing for 1, `-` for -1, `2im*` 
 imaginary number, a rational or a complex number in parentheses
 """
 print_coef(io::IO, a::Number) =
-if a ≠ 1
-    if a == -1
-        print(io, "-")
-    elseif isa(a, Complex)
-        if imag(a) == 0
-            print_coef(io, real(a))
-        elseif real(a) == 0
-            print_coef(io, imag(a))
-            print(io, "im*")
-        elseif isfinite(a)
-            print(io, "(")
-            print_number(io, real(a))
-            print(io, imag(a) < 0 ? " - " : " + ")
-            print_number(io, abs(imag(a)))
-            print(io, "im)")
-        else
+    if a ≠ 1
+        if a == -1
+            print(io, "-")
+        elseif isa(a, Complex)
+            if imag(a) == 0
+                print_coef(io, real(a))
+            elseif real(a) == 0
+                print_coef(io, imag(a))
+                print(io, "im*")
+            elseif isfinite(a)
+                print(io, "(")
+                print_number(io, real(a))
+                print(io, imag(a) < 0 ? " - " : " + ")
+                print_number(io, abs(imag(a)))
+                print(io, "im)")
+            else
+                print(io, "(", a, ")")
+            end
+        elseif isa(a, Rational)
+            # (1//2)X and not 1//2X, which reads 1//(2X)
             print(io, "(", a, ")")
+        else
+            print_number(io, a)
         end
-    elseif isa(a, Rational)
-        # (1//2)X and not 1//2X, which reads 1//(2X)
-        print(io, "(", a, ")")
-    else
-        print_number(io, a)
     end
-end
 
 """
     infix(io, subs, op)
