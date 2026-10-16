@@ -122,26 +122,6 @@ function search_algo(algo, what::String)
 end
 
 """
-    prepared_operator(state, op, mpo_limits = Limits())
-
-the `PreMPO` of the operator `op` of a search or of `thermalize` on `state`, or `op` itself when
-it is one, truncated by `mpo_limits`, see `truncated_once`
-"""
-prepared_operator(state::State, a::IndexedOp, mpo_limits::Limits = Limits()) =
-    PreMPO(state, a; limits = mpo_limits)
-prepared_operator(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
-    truncated_once(check_pre(pre, state), mpo_limits)
-
-prepared_operator(::State, ::PreMPO, ::Limits = Limits()) =
-    error("the PreMPO was prepared on a state of the other representation")
-
-prepared_operator(::State, ::MPO, ::Limits = Limits()) =
-    error("the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO")
-
-prepared_operator(::State, x, ::Limits = Limits()) =
-    error("$(repr(x)) is not an operator or its PreMPO")
-
-"""
     orthogonal_args(state, pre, orthogonal_to, weight)
 
 the keywords of `search` for a state orthogonal to the pure states `orthogonal_to`, on the system

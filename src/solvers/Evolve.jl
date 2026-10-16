@@ -26,21 +26,39 @@ function check_pre(pre::PreMPO, state::State)
 end
 
 """
+    prepared_operator(state, op, mpo_limits = Limits())
+
+the `PreMPO` of the operator `op` of a solver on `state`, or `op` itself when it is one,
+truncated by `mpo_limits`, see `truncated_once`
+"""
+prepared_operator(state::State, a::IndexedOp, mpo_limits::Limits = Limits()) =
+    PreMPO(state, a; limits = mpo_limits)
+prepared_operator(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
+    truncated_once(check_pre(pre, state), mpo_limits)
+
+prepared_operator(::State, ::PreMPO, ::Limits = Limits()) =
+    error("the PreMPO was prepared on a state of the other representation")
+
+prepared_operator(::State, ::MPO, ::Limits = Limits()) =
+    error("the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO")
+
+prepared_operator(::State, x, ::Limits = Limits()) =
+    error("$(repr(x)) is not an operator or its PreMPO")
+
+"""
     prepared_evolver(state, evolver, mpo_limits = Limits())
 
-the `PreMPO` of the evolver of `state`, truncated by `mpo_limits`, see `truncated`, and its time
-functions, `nothing` for an evolver that does not depend on time: an operator, its `PreMPO`, or
-a vector of operators, or its `PreMPO`, paired with as many functions of time, `[A, B] => [f, g]`
+the `PreMPO` of the evolver of `state`, see `prepared_operator`, and its time functions,
+`nothing` for an evolver that does not depend on time: an operator, its `PreMPO`, or a vector of
+operators, or its `PreMPO`, paired with as many functions of time, `[A, B] => [f, g]`
 """
-prepared_evolver(state::State, a::IndexedOp, mpo_limits::Limits = Limits()) =
-    (PreMPO(state, a; limits = mpo_limits), nothing)
-prepared_evolver(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
-    (truncated_once(check_pre(pre, state), mpo_limits), nothing)
+prepared_evolver(state::State, a::Union{IndexedOp, PreMPO, MPO}, mpo_limits::Limits = Limits()) =
+    (prepared_operator(state, a, mpo_limits), nothing)
 
 function prepared_evolver(state::State,
                           (ops, fs)::Pair{<:Union{AbstractVector, PreMPO}, <:AbstractVector},
                           mpo_limits::Limits = Limits())
-    pre = ops isa PreMPO ? first(prepared_evolver(state, ops, mpo_limits)) :
+    pre = ops isa PreMPO ? prepared_operator(state, ops, mpo_limits) :
                            PreMPO(state, [ o for o in ops ]; limits = mpo_limits)
     if length(fs) ≠ length(pre.parts)
         error("an evolver of $(length(pre.parts)) terms takes as many time functions, " *
@@ -48,12 +66,6 @@ function prepared_evolver(state::State,
     end
     return (pre, collect(fs))
 end
-
-prepared_evolver(::State, ::MPO, ::Limits = Limits()) =
-    error("the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO")
-
-prepared_evolver(::State, ::PreMPO, ::Limits = Limits()) =
-    error("the PreMPO was prepared on a state of the other representation")
 
 prepared_evolver(::State, x, ::Limits = Limits()) = error("$(repr(x)) is not an evolver")
 
