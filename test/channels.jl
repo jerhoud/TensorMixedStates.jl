@@ -24,21 +24,6 @@ mixed_vec(ρ, d1, d2) =
     vec([ ρ[(k1 - 1) * d2 + k2, (b1 - 1) * d2 + b2] for k2 in 1:d2, b2 in 1:d2, k1 in 1:d1, b1 in 1:d1 ])
 
 """
-the matrix of the placed channel or generator `a` on the whole of `sys`, from its terms
-"""
-superop(sys, a) = TMS.system_matrix(Mixed, sys, TMS.lower(sys, a))
-
-"""
-the matrix of the placed operator `k` on the whole of `sys`, from its terms
-"""
-fock(sys, k) = TMS.system_matrix(Pure, sys, TMS.lower(sys, k))
-
-"""
-the sites of `sys` in order
-"""
-all_sites(sys) = [ sys[i] for i in 1:length(sys) ]
-
-"""
 the dense matrix of the MPO of `a` on the mixed state `ρ`, `coefs` the values of the time
 functions of a vector, its rows and columns in the order of the elements of the density
 matrices, see `TMS.mixed_elements`
@@ -376,7 +361,7 @@ end
     fs, qs = System(3, Fermion()), System(3, Qubit())
     for (sys, k) in [(fs, C(1) + 0.5 * dag(C)(3)), (fs, dag(C)(1) * C(3) + N(2)),
                      (qs, X(1) * Y(3) + 0.3 * Z(2)), (fs, C(2)), (fs, (C ⊗ dag(C))(3, 1))]
-        K, ss = fock(sys, k), all_sites(sys)
+        K, ss = lowered(sys, k), sys.sites
         i, m = one(K), K' * K
         @test superop(sys, Gate(k)) ≈ sided(K, K', ss)
         @test superop(sys, Evolver(k)) ≈ sided(K, i, ss) + sided(i, K', ss)
@@ -384,7 +369,7 @@ end
     end
     # a Hamiltonian added to a dissipator
     h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
-    H, c1, ss = fock(fs, h), fock(fs, C(1)), all_sites(fs)
+    H, c1, ss = lowered(fs, h), lowered(fs, C(1)), fs.sites
     i, m = one(H), c1' * c1
     @test superop(fs, -im * h + Dissipator(C)(1)) ≈
         sided(-im * H, i, ss) + sided(i, im * H, ss) + sided(c1, c1', ss) - (sided(m, i, ss) + sided(i, m, ss)) / 2
@@ -399,15 +384,15 @@ end
     # the gates of its Kraus operators |v⟩⟨i|, each with the strings of its parity
     for (st, σ) in [("Occ", [0. 0. ; 0. 1.]), ("FullyMixed", [0.5 0. ; 0. 0.5])]
         e = LA.eigen(LA.Hermitian(σ))
-        ks = [ λ => fock(fs, Operator{1}("K", v * [ j == i ? 1. : 0. for j in 1:2 ]')(2))
+        ks = [ λ => lowered(fs, Operator{1}("K", v * [ j == i ? 1. : 0. for j in 1:2 ]')(2))
                for (λ, v) in zip(e.values, eachcol(e.vectors)) for i in 1:2 ]
-        @test superop(fs, Reset(st)(2)) ≈ sum(λ * sided(k, k', all_sites(fs)) for (λ, k) in ks)
+        @test superop(fs, Reset(st)(2)) ≈ sum(λ * sided(k, k', fs.sites) for (λ, k) in ks)
     end
     # a dephasing on sites apart, the sum of the gates of its projectors
     for (sys, a) in [(qs, Z ⊗ Z), (fs, im * (C + dag(C)) ⊗ (C + dag(C))), (fs, N ⊗ N)]
         vals = TMS.eigenspaces(matrix(a, sys[1], sys[3]), "", "")[1]
-        ps = [ fock(sys, Proj(a => λ)(1, 3)) for λ in vals ]
-        @test superop(sys, Dephase(a)(1, 3)) ≈ sum(sided(p, p, all_sites(sys)) for p in ps)
+        ps = [ lowered(sys, Proj(a => λ)(1, 3)) for λ in vals ]
+        @test superop(sys, Dephase(a)(1, 3)) ≈ sum(sided(p, p, sys.sites) for p in ps)
     end
     # on an Electron, whose parity is that of both spins, the reset of a site leaves the others
     # in their state, which their partial trace shows
@@ -435,7 +420,7 @@ end
     sided = TMS.sided
     for (sys, Φ) in [(System(3, Qubit()), (Gate(X) ⊗ Reset("Up"))(1, 3)),
                      (System(3, Fermion()), (Gate(C) ⊗ Reset("Emp"))(1, 3))]
-        S, ss = superop(sys, Φ), all_sites(sys)
+        S, ss = superop(sys, Φ), sys.sites
         m = TMS.kraus_sum(S, ss)
         i = one(m)
         @test superop(sys, Dissipator(Φ)) ≈ S - (sided(m, i, ss) + sided(i, m, ss)) / 2
@@ -515,7 +500,7 @@ end
     # K ρ K† of many terms applied to a density matrix
     k = hq + 0.5 * X(1) * Z(3)
     ρ = random_state(Mixed, qs, 2; rng = Xoshiro(20261016))
-    @test dense_matrix(apply(k, ρ)) ≈ fock(qs, k) * dense_matrix(ρ) * fock(qs, k)'
+    @test dense_matrix(apply(k, ρ)) ≈ lowered(qs, k) * dense_matrix(ρ) * lowered(qs, k)'
 end
 
 @testset "Strings carried by the channels on a density matrix" begin
@@ -540,14 +525,14 @@ end
         sys = System(3, site)
         ρ = random_state(Mixed, sys, ["Occ", "Emp", "Occ"], 3)
         r = ket_bra_matrix(ρ)
-        H, k = fock(sys, h), fock(sys, C(1) + C(3))
+        H, k = lowered(sys, h), lowered(sys, C(1) + C(3))
         d(c) = c * r * c' - (c' * c * r + r * c' * c) / 2
         after(a) = ket_bra_matrix(apply(make_mpo(ρ, a), ρ))
         @test after(Gate(C(1) + C(3))) ≈ k * r * k'
         @test after(-im * h + Dissipator(C)(1) + Dissipator(dag(C)(2))) ≈
-            -im * (H * r - r * H) + d(fock(sys, C(1))) + d(fock(sys, dag(C)(2)))
+            -im * (H * r - r * H) + d(lowered(sys, C(1))) + d(lowered(sys, dag(C)(2)))
         @test after(h) ≈ H * r + r * H
-        ks = [ fock(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
+        ks = [ lowered(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
         @test after(Reset("Emp")(2)) ≈ sum(k * r * k' for k in ks)
     end
 end
@@ -556,7 +541,7 @@ end
     ss = System(2, Fermion(conserve = strong(N)))
     ρ = mix(random_state(State{Pure}(ss, ["Occ", "Emp"]), 2))
     r = ket_bra_matrix(ρ)
-    n1 = fock(ss, N(1))
+    n1 = lowered(ss, N(1))
     # a jump commuting with the charge is what a strong symmetry asks for
     @test ket_bra_matrix(apply(make_mpo(ρ, Dissipator(N)(1)), ρ)) ≈
         n1 * r * n1 - (n1 * n1 * r + r * n1 * n1) / 2
@@ -586,27 +571,27 @@ end
             mix(random_state(State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"]), 3))
         r = ket_bra_matrix(ρ)
         after(a) = ket_bra_matrix(apply(a, ρ))
-        k = fock(sys, C(1) * dag(C)(3) + 0.5 * N(2))
+        k = lowered(sys, C(1) * dag(C)(3) + 0.5 * N(2))
         @test after(Gate(C(1) * dag(C)(3) + 0.5 * N(2))) ≈ k * r * k'
-        k = fock(sys, C(2) * dag(C)(4))
+        k = lowered(sys, C(2) * dag(C)(4))
         @test after(Gate(C)(2) * Gate(dag(C))(4)) ≈ k * r * k'
         # an operator applied to a density matrix is its gate
-        u = fock(sys, exp(-0.4im * h)(1, 3))
+        u = lowered(sys, exp(-0.4im * h)(1, 3))
         @test after(exp(-0.4im * h)(1, 3)) ≈ u * r * u'
-        ks = [ fock(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
+        ks = [ lowered(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
         reset(x) = sum(k * x * k' for k in ks)
         @test after(Reset("Emp")(2)) ≈ reset(r)
-        k = fock(sys, C(1) + C(3))
+        k = lowered(sys, C(1) + C(3))
         @test after(reset_gate(0.3, "Emp")(2) * Gate(C(1) + C(3))) ≈
             0.7 * k * r * k' + 0.3 * reset(k * r * k')
-        ps = [ fock(sys, Proj(N ⊗ N => λ)(1, 3)) for λ in (0., 1.) ]
+        ps = [ lowered(sys, Proj(N ⊗ N => λ)(1, 3)) for λ in (0., 1.) ]
         @test after(Dephase(N ⊗ N)(1, 3)) ≈ sum(p * r * p for p in ps)
-        H, c1 = fock(sys, hp), fock(sys, C(1))
+        H, c1 = lowered(sys, hp), lowered(sys, C(1))
         @test after(-im * hp + Dissipator(C)(1)) ≈
             -im * (H * r - r * H) + c1 * r * c1' - (c1' * c1 * r + r * c1' * c1) / 2
         @test after(0.5 * Gate(Id)(1)) ≈ 0.5 * r
         # through its MPO on the sites it acts on alone, the first one left out
-        kh = fock(sys, dag(C)(2) * C(4) + dag(C)(4) * C(2))
+        kh = lowered(sys, dag(C)(2) * C(4) + dag(C)(4) * C(2))
         @test after(Gate(dag(C)(2) * C(4) + dag(C)(4) * C(2))) ≈ kh * r * kh'
         # inner(a, Φ, b) is tr(a† Φ(b))
         ρ2 = mix(random_state(State{Pure}(sys, ["Emp", "Occ", "Occ", "Emp"]), 2))
@@ -958,7 +943,7 @@ end
     qs = System(6, Qubit())
     ρ = random_state(Mixed, qs, 3)
     r = ket_bra_matrix(ρ)
-    z = fock(qs, prod(Z(i) for i in 1:6))
+    z = lowered(qs, prod(Z(i) for i in 1:6))
     ps = [ (eye(64) + s * z) / 2 for s in (1, -1) ]
     @test ket_bra_matrix(apply(Dephase(reduce(⊗, fill(Z, 6)))(1, 2, 3, 4, 5, 6), ρ)) ≈
         sum(p * r * p for p in ps)
@@ -999,7 +984,7 @@ end
     ρb = random_state(Mixed, bs, 2)
     rb = ket_bra_matrix(ρb)
     g = exp(-0.2im * (A ⊗ dag(A) + dag(A) ⊗ A))(1, 2)
-    u = fock(bs, g)
+    u = lowered(bs, g)
     @test ket_bra_matrix(apply(g, ρb)) ≈ u * rb * u'
 end
 
@@ -1017,12 +1002,12 @@ end
     g4 = exp(-0.3im * (X ⊗ X + Y ⊗ Y + Z ⊗ Z))
     for op in [controlled(X)(2, 5), controlled(X)(3, 4), g4(1, 6), g4(2, 3), H(3),
                controlled(controlled(X))(1, 3, 6), controlled(X)(1, 5) * H(2) * g4(3, 4)]
-        @test same(ρ, Gate(op), fock(qs, op))
+        @test same(ρ, Gate(op), lowered(qs, op))
     end
     @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.WindowMPO, TMS.WindowMPO]
     @test kinds(ρ, Gate(controlled(X)(3, 4))) == [TMS.GateBatch]
     @test kinds(ρ, Gate(H(3))) == [TMS.GateBatch]
-    ps = [ fock(qs, Proj(Z ⊗ Z => λ)(1, 4)) for λ in (1., -1.) ]
+    ps = [ lowered(qs, Proj(Z ⊗ Z => λ)(1, 4)) for λ in (1., -1.) ]
     r = ket_bra_matrix(ρ)
     @test ket_bra_matrix(apply(Dephase(Z ⊗ Z)(1, 4), ρ)) ≈ sum(p * r * p for p in ps)
     @test kinds(ρ, Dephase(Z ⊗ Z)(1, 4)) == [TMS.WindowMPO]
@@ -1033,14 +1018,14 @@ end
         ρf = mix(random_state(State{Pure}(fs, ["Occ", "Emp", "Occ", "Emp", "Occ"]), 3)) +
              mix(random_state(State{Pure}(fs, ["Emp", "Occ", "Occ", "Emp", "Occ"]), 3))
         for op in [hop(1, 2), hop(2, 4), (C ⊗ N)(1, 4), C(1) * dag(C)(3) + 0.5 * N(2)]
-            @test same(ρf, Gate(op), fock(fs, op))
+            @test same(ρf, Gate(op), lowered(fs, op))
         end
     end
     bs = System(4, Boson(4))
     ρb = random_state(Mixed, bs, 3)
     bh = exp(-0.2im * (dag(A) ⊗ A + dag(dag(A) ⊗ A)))
     for op in [bh(1, 2), bh(1, 4)]
-        @test same(ρb, Gate(op), fock(bs, op))
+        @test same(ρb, Gate(op), lowered(bs, op))
     end
 end
 
@@ -1048,7 +1033,7 @@ end
     ss = System(3, Fermion(conserve = strong(N)))
     ρ = mix(random_state(State{Pure}(ss, ["Occ", "Emp", "Occ"]), 2))
     r = ket_bra_matrix(ρ)
-    k, n2 = fock(ss, dag(C)(1) * C(3)), fock(ss, N(2))
+    k, n2 = lowered(ss, dag(C)(1) * C(3)), lowered(ss, N(2))
     @test ket_bra_matrix(apply(Gate(dag(C)(1) * C(3)), ρ)) ≈ k * r * k'
     @test ket_bra_matrix(apply(Dissipator(N)(2), ρ)) ≈ n2 * r * n2 - (n2 * n2 * r + r * n2 * n2) / 2
     @test_throws "conserving it strongly forbids" apply(Reset("Emp")(1), ρ)
@@ -1056,7 +1041,7 @@ end
     # take their starred names, where they kept those of the kets
     g = exp(-0.37im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
     for op in (g(1, 2), g(2, 1), Swap(1, 2))
-        kg = fock(ss, op)
+        kg = lowered(ss, op)
         @test ket_bra_matrix(apply(op, ρ)) ≈ kg * r * kg'
     end
     ρq = mix(State{Pure}(System(3, Qubit(conserve = strong(N))), ["Up", "Dn", "Up"]))
@@ -1082,7 +1067,7 @@ end
     # superoperator, their strings on the kets and on the bras laid at the end, give the product
     # of the superoperators of their factors
     fs = System(4, Fermion())
-    ss = all_sites(fs)
+    ss = fs.sites
     l = Dissipator(C ⊗ Id) + Evolver(-im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
     for a in [Gate(C)(1) * Reset("Emp")(2) * Gate(dag(C))(4),
               Gate(C(4)) * exp(0.3 * l)(2, 3) * Gate(dag(C)(1)),

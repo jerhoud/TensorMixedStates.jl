@@ -459,7 +459,7 @@ end
     # Hamiltonian alone, against its spectrum
     H = heis + 0.3 * sum(Z(i) for i in 1:n)
     LA = TMS.LinearAlgebra
-    E = LA.eigvals(LA.Hermitian(Matrix(TMS.system_matrix(Pure, sys, TMS.lower(sys, H)))))
+    E = LA.eigvals(LA.Hermitian(Matrix(lowered(sys, H))))
     @test PreMPO(up, H).width ≥ E[end] - E[1]
     r = random_state(Pure, sys, 4; rng = Xoshiro(1))
     lim = Limits(maxdim = 32)

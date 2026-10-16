@@ -69,6 +69,18 @@ function ket_bra_matrix(ρ::State{Mixed})
 end
 
 """
+the dense matrix of the placed operator `op` on the whole of the system `sys`, from the terms
+of its descent
+"""
+lowered(sys::System, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
+
+"""
+the dense superoperator of the placed channel or generator `a` on the whole of the system
+`sys`, from the terms of its descent
+"""
+superop(sys::System, a) = TMS.system_matrix(Mixed, sys, TMS.lower(sys, a))
+
+"""
 the dense matrix of the MPO of `op` on the sites of the pure state `st`
 """
 function mpo_matrix(st::State{Pure}, op)

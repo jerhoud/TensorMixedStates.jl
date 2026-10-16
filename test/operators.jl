@@ -29,7 +29,6 @@ end
 @testset "Operator simplification" begin
     # the descent must never change the operator it stands for: its terms give the matrix of the
     # operator. The only written form checked is that of a product, which `gathered` gives
-    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q, f = Qubit(), Fermion()
     s1, s2 = System(1, q), System(2, q)
     for a in [X * X, X * Y, X + Y, 2X, 0 * X, X - X, X^2, X^3, sqrt(X * X), (X + Y)^2,
@@ -45,7 +44,7 @@ end
     # superoperator. A channel has no non integer power nor a generator any, which channels.jl
     # checks
     for a in [Gate(X)^2, (0.9 * Gate(Id) + 0.1 * Gate(X))^3]
-        @test TMS.system_matrix(Mixed, s1, TMS.lower(s1, a(1))) ≈ matrix(a, q)
+        @test superop(s1, a(1)) ≈ matrix(a, q)
     end
     # an F crossing a factor takes the sign of its parity, a sum of odd operators included,
     # and stops before a factor that has none. Placed after a fermion, the odd part of the
@@ -86,13 +85,11 @@ end
     # adjoint, placed, is it whatever it projects on
     s1 = System(1, Qubit())
     for p in (Proj("Up"), Proj("1"), Proj([1, im] / √2), Proj(X => -1))
-        @test TMS.system_matrix(Pure, s1, TMS.lower(s1, dag(p)(1))) ≈
-              TMS.system_matrix(Pure, s1, TMS.lower(s1, p(1)))
+        @test lowered(s1, dag(p)(1)) ≈ lowered(s1, p(1))
         @test matrix(dag(p), Qubit()) ≈ matrix(p, Qubit())
     end
     # projectors on states given in two ways add up, placed, to the identity
-    @test TMS.system_matrix(Pure, s1, TMS.lower(s1, Proj("1")(1) + Proj("Up")(1))) ≈
-          matrix(Id, Qubit())
+    @test lowered(s1, Proj("1")(1) + Proj("Up")(1)) ≈ matrix(Id, Qubit())
 end
 
 @testset "Projector on an eigenspace" begin
@@ -138,7 +135,6 @@ end
     # the phase -1, and so is -1 + 0im. The power decides this when it is built, and the power
     # of a sum that is a scaled operator, which it does not see, has to give the same matrix
     # once placed
-    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q = Qubit()
     s1 = System(1, q)
     for (c, a) in [(-1., -X - X), (im, im * X + im * X), (2., 2X + 2X),
@@ -210,7 +206,6 @@ end
     @test matrix(parity(N), b) ≈ matrix(mod(N, 2), b)
 
     # the descent must never change the operator it stands for
-    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     sb = System(1, b)
     for a in [parity(N), mod(N, 3), dag(parity(N)), dag(mod(N, 3)), parity(2N), parity(N)^2]
         @test lowered(sb, a(1)) ≈ matrix(a, b)
@@ -238,8 +233,7 @@ end
     @test repr(named(N, "Nf")(3)) == "Nf(3)"
     # and placed, it is N, without a string
     f3 = System(3, f)
-    @test TMS.system_matrix(Pure, f3, TMS.lower(f3, named(N, "Nf")(2))) ≈
-          TMS.system_matrix(Pure, f3, TMS.lower(f3, N(2)))
+    @test lowered(f3, named(N, "Nf")(2)) ≈ lowered(f3, N(2))
     # an expression has no name of its own and can be renamed too
     @test matrix(named(2Sz, "SzA"), Spin(1/2)) ≈ matrix(2Sz, Spin(1/2))
     # the lowering reads the fermionic parity of a renamed operator off its matrix, so that one
@@ -470,22 +464,21 @@ end
     # the Jordan-Wigner strings apart: their sum, the strings laid, is checked against the
     # explicit matrix of each factor of one site and of definite parity, F ⊗ … ⊗ F ⊗ a ⊗ 1 ⊗ …
     # for an odd one
-    sites(sys) = [ sys[k] for k in 1:length(sys) ]
-    identity_on(sys) = foldl(kron, [ matrix(Id, s) for s in sites(sys) ])
+    identity_on(sys) = foldl(kron, [ matrix(Id, s) for s in sys.sites ])
     whole(sys, t) =
         foldl(kron, [ get(Dict(b.site => b.m for b in t.blocks), k, matrix(Id, s))
-                      for (k, s) in enumerate(sites(sys)) ])
-    lowered(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t)) for t in TMS.lower(sys, op));
+                      for (k, s) in enumerate(sys.sites) ])
+    summed(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t)) for t in TMS.lower(sys, op));
                            init = 0 * identity_on(sys))
     function jw(sys, j, a)
         odd = TMS.parity_of(a, matrix(F, sys[j])) == 1
         return foldl(kron, [ k < j && odd ? matrix(F, s) : k == j ? a : matrix(Id, s)
-                             for (k, s) in enumerate(sites(sys)) ])
+                             for (k, s) in enumerate(sys.sites) ])
     end
     q, fe, el = Qubit(), Fermion(), Electron()
     x, y, z = matrix(X, q), matrix(Y, q), matrix(Z, q)
     s3 = System(3, q)
-    @test lowered(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw(s3, 1, x) + 2 * jw(s3, 2, z) * jw(s3, 3, y)
+    @test summed(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw(s3, 1, x) + 2 * jw(s3, 2, z) * jw(s3, 3, y)
 
     # fermions: a hop over a fermion, a product written backwards, and Swap or a placed tensor
     # product on sites in decreasing order, which need no sign of reordering
@@ -493,43 +486,43 @@ end
     c = matrix(C, fe)
     cd, n = collect(c'), c' * c
     hop = jw(s4, 1, cd) * jw(s4, 3, c) + jw(s4, 3, cd) * jw(s4, 1, c)
-    @test lowered(s4, dag(C)(1) * C(3) + dag(C)(3) * C(1)) ≈ hop
-    @test lowered(s4, C(3) * dag(C)(1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
+    @test summed(s4, dag(C)(1) * C(3) + dag(C)(3) * C(1)) ≈ hop
+    @test summed(s4, C(3) * dag(C)(1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
     sw = identity_on(s4) - jw(s4, 1, n) - jw(s4, 3, n) + hop
-    @test lowered(s4, Swap(1, 3)) ≈ sw
-    @test lowered(s4, Swap(3, 1)) ≈ sw
-    @test lowered(s4, (C ⊗ dag(C))(3, 1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
-    @test lowered(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw(s4, 4, c) * jw(s4, 2, n) * jw(s4, 1, cd)
-    @test lowered(s4, dag(C ⊗ C)(1, 2)) ≈ (jw(s4, 1, c) * jw(s4, 2, c))'
+    @test summed(s4, Swap(1, 3)) ≈ sw
+    @test summed(s4, Swap(3, 1)) ≈ sw
+    @test summed(s4, (C ⊗ dag(C))(3, 1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
+    @test summed(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw(s4, 4, c) * jw(s4, 2, n) * jw(s4, 1, cd)
+    @test summed(s4, dag(C ⊗ C)(1, 2)) ≈ (jw(s4, 1, c) * jw(s4, 2, c))'
     # a function of several fermionic sites, placed both ways, with a fermion between them
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
-    @test lowered(s4, exp(-0.3 * (h * h))(1, 3)) ≈ exp(-0.3 * hop^2)
-    @test lowered(s4, exp(-0.3 * (h * h))(3, 1)) ≈ exp(-0.3 * hop^2)
+    @test summed(s4, exp(-0.3 * (h * h))(1, 3)) ≈ exp(-0.3 * hop^2)
+    @test summed(s4, exp(-0.3 * (h * h))(3, 1)) ≈ exp(-0.3 * hop^2)
     # a block of no definite parity is split into its even and odd parts
-    @test lowered(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
-    @test lowered(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
+    @test summed(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
+    @test summed(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
     # a sum or a named expression of one site is taken by its matrix, a term for each parity,
     # so that a product of them does not grow with the number of its factors
     nterms(sys, op) = length(TMS.lower(sys, op))
     xz, m = named(X + Z, "XZ"), named(C + dag(C), "M")
     @test nterms(s3, (X + Z)(2)) == nterms(s3, xz(2)) == 1
     @test nterms(s3, xz(1) * xz(2) * xz(3)) == nterms(s3, ((X + Z) ⊗ (X + Z))(1, 3)) == 1
-    @test lowered(s3, xz(1) * xz(3)) ≈ jw(s3, 1, x + z) * jw(s3, 3, x + z)
+    @test summed(s3, xz(1) * xz(3)) ≈ jw(s3, 1, x + z) * jw(s3, 3, x + z)
     @test nterms(s4, m(3)) == 1 && nterms(s4, (C + N)(2)) == 2
-    @test lowered(s4, m(3)) ≈ jw(s4, 3, c + cd)
+    @test summed(s4, m(3)) ≈ jw(s4, 3, c + cd)
     # strings on the fermionic sites only, and two species on a site
     sm = System([fe, q, fe])
-    @test lowered(sm, C(1) * X(2) * dag(C)(3)) ≈ jw(sm, 1, c) * jw(sm, 2, x) * jw(sm, 3, cd)
+    @test summed(sm, C(1) * X(2) * dag(C)(3)) ≈ jw(sm, 1, c) * jw(sm, 2, x) * jw(sm, 3, cd)
     se = System(3, el)
     cu, cn, nt = matrix(Cup, el), matrix(Cdn, el), matrix(Ntot, el)
-    @test lowered(se, dag(Cup)(1) * Cup(3) + dag(Cdn)(3) * Cdn(1) + (Ntot ⊗ Ntot)(2, 3)) ≈
+    @test summed(se, dag(Cup)(1) * Cup(3) + dag(Cdn)(3) * Cdn(1) + (Ntot ⊗ Ntot)(2, 3)) ≈
           jw(se, 1, collect(cu')) * jw(se, 3, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn) +
           jw(se, 2, nt) * jw(se, 3, nt)
-    @test lowered(se, (dag(Cup) ⊗ Cup + dag(Cdn) ⊗ Cdn)(3, 1)) ≈
+    @test summed(se, (dag(Cup) ⊗ Cup + dag(Cdn) ⊗ Cdn)(3, 1)) ≈
           jw(se, 3, collect(cu')) * jw(se, 1, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn)
     # an operator of several sites given by a function of its sites
     q3 = Qudit(3)
-    @test lowered(System(2, q3), Qudits.Sum(1, 2)) ≈ matrix(Qudits.Sum, q3, q3)
+    @test summed(System(2, q3), Qudits.Sum(1, 2)) ≈ matrix(Qudits.Sum, q3, q3)
 
     # the reduction: an identity goes into the coefficient, a product that vanishes drops its
     # term, blocks equal up to a coefficient are gathered, and a real operator keeps real terms
@@ -550,7 +543,7 @@ end
     # on a charged system, every block has a definite flux and every term the same one
     fn = Fermion(conserve = N)
     hops = dag(C)(1) * C(3) + dag(C)(3) * C(1)
-    @test lowered(System(3, fn), hops) ≈ lowered(System(3, fe), hops)
+    @test summed(System(3, fn), hops) ≈ summed(System(3, fe), hops)
     @test_throws "change the charges by" TMS.lower(System(3, fn), C(1) + dag(C)(2))
     @test_throws "no definite flux" TMS.lower(System(3, fn), (C + dag(C))(2))
     @test_throws "no definite flux" TMS.lower(System(2, Qubit(conserve = N)), X(1))
@@ -620,7 +613,7 @@ end
                      placed(c + c', 2, true) * placed(c, 4, true) * placed(n, 1, false)),
                     (C(1) * Swap(2, 3) * dag(C)(4), placed(c, 1, true) * sw * placed(c', 4, true)),
                     (dag(C ⊗ Id ⊗ C)(1, 2, 4), (placed(c, 1, true) * placed(c, 4, true))')]
-        @test TMS.system_matrix(Pure, fs, TMS.lower(fs, op)) ≈ m
+        @test lowered(fs, op) ≈ m
     end
     # and so a hopping on a long chain takes no string outside the sites it hops between
     long = System(1000, fe)
@@ -650,7 +643,7 @@ end
     op = C(1) * N(2) * dag(C)(3) * C(5) * N(6) * dag(C)(8) * (C + dag(C))(4) * N(7)
     m = placed(c, 1, true) * placed(n, 2, false) * placed(c', 3, true) * placed(c, 5, true) *
         placed(n, 6, false) * placed(c', 8, true) * placed(c + c', 4, true) * placed(n, 7, false)
-    @test TMS.system_matrix(Pure, System(8, fe), TMS.lower(System(8, fe), op)) ≈ m
+    @test lowered(System(8, fe), op) ≈ m
     # a tensor product in a product is the product of its factors: merged whole, Z(1) * TX on 10
     # qubits took 100 s through its dense matrix, and placed in any order on fermions it equals
     # the product of the matrices of its factors
@@ -658,7 +651,7 @@ end
     @test length(TMS.lower(System(12, q), Z(1) * tx(1:12...))) == 1
     @test expect(State{Pure}(System(12, q), ["Y+" ; fill("+", 11)]), Z(1) * tx(1:12...)) ≈ im
     f4 = System(4, fe)
-    mat(o) = TMS.system_matrix(Pure, f4, TMS.lower(f4, o))
+    mat(o) = lowered(f4, o)
     fs = [(C ⊗ C)(1, 3), dag(C)(3), (dag(C) ⊗ N ⊗ C)(2, 1, 4), C(1)]
     @test mat(prod(fs)) ≈ prod(mat.(fs))
     # blocks equal up to rounding are one block
@@ -678,7 +671,7 @@ end
     # one among those of the other, when they can be brought together, which leaves fewer terms
     # to develop and the operator unchanged
     plain(sys, op) = TMS.system_matrix(Pure, sys, TMS.reduced(TMS.op_terms(sys, op, ())))
-    same(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op)) ≈ plain(sys, op)
+    same(sys, op) = lowered(sys, op) ≈ plain(sys, op)
     nterms(sys, op) = length(TMS.lower(sys, op))
     q, fe = Qubit(), Fermion()
     s5, f4, f5 = System(5, q), System(4, fe), System(5, fe)
@@ -824,7 +817,6 @@ end
     # other is the principal power, a function of the operator as exp is, of which only the
     # modulus of a coefficient comes out. An involution is not reduced, its matrix
     # saying what it is
-    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q, fe, s1 = Qubit(), Fermion(), Spin(1)
     @test matrix(X^10000, q) ≈ matrix(Id, q)
     @test matrix(X^10001, q) ≈ matrix(X, q)
@@ -1043,7 +1035,6 @@ end
     c3 = -1 * (0.0 - 2.0im)       # -0.0 + 2.0im
     f(c) = exp(c * X ⊗ X)(1, 2)
     # the descent gathers the terms its matrices give, which a signed zero must not keep apart
-    lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     s2 = System(2, Qubit())
     fs = f(c1) - f(1.0im) + f(c3)
     @test lowered(s2, fs) ≈ lowered(s2, f(c3))

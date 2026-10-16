@@ -8,11 +8,6 @@
 # tested in channels.jl.
 
 """
-the dense matrix of the operator `op` on the sites of `st`, from its terms
-"""
-exact(st::State, op) = TMS.system_matrix(Pure, st.system, TMS.lower(st.system, op))
-
-"""
 the dense matrix of the MPO `make_mpo` builds for `op` on the sites of `st`, `coefs` being the
 values of the time functions of a vector of operators
 """
@@ -34,7 +29,7 @@ check that the MPO of `op` on the sites of `st` stands for `op` and has the leas
 triangular MPO of `op` can have there
 """
 function check_mpo(st::State, op)
-    h = exact(st, op)
+    h = lowered(st.system, op)
     least = least_channels(h, [ IT.dim(i) for i in siteinds(Pure, st.system) ])
     @test norm(laid(st, op) - h) < 1e-12 * norm(h)
     @test memory_channels(st, op) == least
@@ -77,11 +72,11 @@ end
     # (Id + Z)(1) * Z(2) stands for Z(2) + Z(1) * Z(2), its part of one site laid on that site
     st = State{Pure}(System(3, Qubit()), "Up")
     a = ((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)
-    @test laid(st, a) ≈ exact(st, Z(2) + Z(1) * Z(2))
+    @test laid(st, a) ≈ lowered(st.system, Z(2) + Z(1) * Z(2))
     check_mpo(st, a)
     sf = State{Pure}(System(4, Fermion()), "Emp")
     r = ((Id + 0.25N)^0.5)(3)
-    @test laid(sf, r * r * dag(C)(1) * C(4)) ≈ exact(sf, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
+    @test laid(sf, r * r * dag(C)(1) * C(4)) ≈ lowered(sf.system, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
 end
 
 @testset "An MPO of fermions, spins, electrons and bosons" begin
@@ -116,8 +111,8 @@ end
     # one operator on sites of two types: Sp*Sp vanishes on a qubit and not on a spin 1
     h = (Sp * Sp)(1) * Sx(3) + Sz(1) * Sz(3) + Sp(1) * Sm(3)
     q, s = State{Pure}(System(3, Qubit()), "Up"), State{Pure}(System(3, Spin(1)), "1")
-    @test memory_channels(q, h) == least_channels(exact(q, h), [2, 2, 2]) == [2, 2]
-    @test memory_channels(s, h) == least_channels(exact(s, h), [3, 3, 3]) == [3, 3]
+    @test memory_channels(q, h) == least_channels(lowered(q.system, h), [2, 2, 2]) == [2, 2]
+    @test memory_channels(s, h) == least_channels(lowered(s.system, h), [3, 3, 3]) == [3, 3]
 end
 
 @testset "Strings carried by the channels" begin
@@ -139,7 +134,7 @@ end
     st = State{Pure}(System(n, Qubit()), "Up")
     h1 = sum(0.6^(j - i) * (X(i) * X(j) + N(i) * N(j)) for i in 1:n for j in i+1:n)
     h2 = sum(Z(i) * Z(i + 1) for i in 1:n-1) + sum(X(i) for i in 1:n)
-    h = exact(st, 0.3 * h1 - 1.2 * h2)
+    h = lowered(st.system, 0.3 * h1 - 1.2 * h2)
     @test norm(laid(st, [h1, h2], [0.3, -1.2]) - h) < 1e-12 * norm(h)
     pre = PreMPO(st, [h1, h2])
     @test_throws "takes as many time functions" make_mpo(pre, [1.])
@@ -154,20 +149,20 @@ end
             for i in 1:n for j in i+1:n) + 0.7 * sum(Z(i) for i in 1:n)
     ψ = random_state(Pure, System(n, Qubit()), 4)
     v = dense_vector(ψ)
-    @test isapprox(expect(ψ, h), v' * exact(ψ, h) * v; rtol = 1e-12)
+    @test isapprox(expect(ψ, h), v' * lowered(ψ.system, h) * v; rtol = 1e-12)
     @test isapprox(last(only(measure(ψ, h))), expect(ψ, h); rtol = 1e-12)
-    @test isapprox(variance(ψ, h), real(v' * exact(ψ, h)^2 * v) - real(expect(ψ, h))^2;
+    @test isapprox(variance(ψ, h), real(v' * lowered(ψ.system, h)^2 * v) - real(expect(ψ, h))^2;
                    rtol = 1e-10, atol = 1e-12)
     LA = TMS.LinearAlgebra
     ρ = random_state(Mixed, System(n, Qubit()), 4)
     r = dense_matrix(ρ)
-    @test isapprox(expect(ρ, h), LA.tr(r * exact(ρ, h)) / LA.tr(r); rtol = 1e-12)
+    @test isapprox(expect(ρ, h), LA.tr(r * lowered(ρ.system, h)) / LA.tr(r); rtol = 1e-12)
     @test isapprox(last(only(measure(ρ, h))), real(expect(ρ, h)); rtol = 1e-12)
     hf = sum(0.5^(j - i) * (dag(C)(i) * C(j) + dag(C)(j) * C(i)) + 0.2 * N(i) * N(j)
              for i in 1:n for j in i+1:n)
     ψf = random_state(Pure, System(n, Fermion()), 4)
     vf = dense_vector(ψf)
-    @test isapprox(expect(ψf, hf), vf' * exact(ψf, hf) * vf; rtol = 1e-12)
+    @test isapprox(expect(ψf, hf), vf' * lowered(ψf.system, hf) * vf; rtol = 1e-12)
     # the kind of the value is found on the operator, Hermitian and so real, its difference with
     # its adjoint compacting to nothing
     @test last(only(measure(ψf, hf))) isa Real
@@ -177,7 +172,7 @@ end
 @testset "The constant, the zero operator, the charges and the element type" begin
     st = State{Pure}(System(3, Qubit()), "Up")
     @test iszero(laid(st, X(1) - X(1)))
-    @test laid(st, 2 * Id(1) + X(2)) ≈ exact(st, 2 * Id(1) + X(2))
+    @test laid(st, 2 * Id(1) + X(2)) ≈ lowered(st.system, 2 * Id(1) + X(2))
     # an operator whose terms change the charges differently is refused
     sn = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
     @test_throws "change the charges by" make_mpo(sn, C(1) + dag(C)(3))
@@ -319,7 +314,7 @@ end
     # on charged fermions: a product that vanishes, (Σ C†)² being 0, does not count its flux
     # beside N(1), and a sum of two fluxes is refused
     ad = sum(dag(C)(i) for i in 1:4)
-    @test norm(laid(cf, ad^2 * hop + N(1)) - exact(cf, N(1))) < 1e-12
+    @test norm(laid(cf, ad^2 * hop + N(1)) - lowered(cf.system, N(1))) < 1e-12
     @test_throws "so it has no definite flux" PreMPO(cf, (ad * hop)^2 + N(1))
 end
 

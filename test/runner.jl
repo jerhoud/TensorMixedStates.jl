@@ -872,7 +872,7 @@ end
         sd(name) = SimData(; name, phases, seed = 3, final_measurements = "end" => [:energy, Z])
         ref = runTMS(sd("ref"))
         LA, sys = TMS.LinearAlgebra, ref.state.system
-        E = LA.eigvals(LA.Hermitian(Matrix(TMS.system_matrix(Pure, sys, TMS.lower(sys, H)))))
+        E = LA.eigvals(LA.Hermitian(Matrix(lowered(sys, H))))
         @test ref.energy ≈ E[2] atol = 1e-9
         @test abs2(inner(ref.ground, ref.state)) < 1e-12
         # the weight by default, 1.1 times the bound: 3 bonds of 3 terms of width 2 and 4 fields of

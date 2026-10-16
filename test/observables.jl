@@ -425,10 +425,9 @@ end
 @testset "Products of sums measured from the PreMPOs of their factors" begin
     # a product of sums that would develop into many terms, as a moment of an observable, is
     # measured from the PreMPOs of its factors multiplied, real when it is Hermitian
-    exact(st, op) = TMS.system_matrix(Pure, st.system, TMS.lower(st.system, op))
-    ev(st, op) = (ψ = raw_vector(st); ψ' * exact(st, op) * ψ / (ψ' * ψ))
+    ev(st, op) = (ψ = raw_vector(st); ψ' * lowered(st.system, op) * ψ / (ψ' * ψ))
     function check(st, op, hermitian)
-        @test expect(st, op) ≈ ev(st, op) atol = 1e-12 * TMS.LinearAlgebra.opnorm(exact(st, op))
+        @test expect(st, op) ≈ ev(st, op) atol = 1e-12 * TMS.LinearAlgebra.opnorm(lowered(st.system, op))
         @test (last(only(measure(st, [op]))) isa Real) == hermitian
     end
     q = random_state(Pure, System(5, Qubit()), 4; rng = Xoshiro(20261016))
@@ -452,7 +451,7 @@ end
     nf = (ad * hop)^2 + N(1)
     @test expect(cf, nf) ≈ ev(TMS.plain_form(cf), nf)
     # applied to a pure state
-    @test raw_vector(apply(ham^2 + ham, q)) ≈ exact(q, ham^2 + ham) * raw_vector(q)
+    @test raw_vector(apply(ham^2 + ham, q)) ≈ lowered(q.system, ham^2 + ham) * raw_vector(q)
 end
 
 @testset "Expectation values on an unnormalised state" begin
@@ -760,9 +759,8 @@ end
     # the identity on the sites between, rather than bringing its sites together; a piece
     # developed goes through its MPO on the sites it acts on alone, from site 1 when its strings
     # start there; a single term, its strings laid, through gates of one site
-    exact(st, op) = TMS.system_matrix(Pure, st.system, TMS.lower(st.system, op)) * raw_vector(st)
     function same(st, op)
-        e = exact(st, op)
+        e = lowered(st.system, op) * raw_vector(st)
         return norm(raw_vector(apply(op, st)) - e) ≤ 1e-12 * max(1, norm(e))
     end
     q = random_state(Pure, System(8, Qubit()), 4)
@@ -809,7 +807,7 @@ end
     u, v = random_state(Pure, q, 3), random_state(Pure, q, 3)
     m = X(1) * Z(3) + 0.3 * Y(2) + Swap(2, 4)
     du, dv = dense_vector(u) * norm(u), dense_vector(v) * norm(v)
-    @test inner(u, m, v) ≈ du' * TMS.system_matrix(Pure, q, TMS.lower(q, m)) * dv
+    @test inner(u, m, v) ≈ du' * lowered(q, m) * dv
     @test dot(u, m, v) ≈ inner(u, m, v)
     # between two density matrices a pure operator is either its gate or its generator
     @test_throws "is ambiguous" inner(mix(u), X(1), mix(v))
