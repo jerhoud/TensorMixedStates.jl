@@ -553,12 +553,13 @@ end
 
 the state with the operator `op`, placed on sites, applied, or the MPO `mpo` from
 `make_mpo`. A product acts as the operator it denotes, its rightmost factor first, factor by
-factor and never developed; each factor is applied as a dense block on its sites, or through
-its MPO when it is too large or lays Jordan-Wigner strings on other sites. On a pure state, a
-channel of a single Kraus operator `K`, as `Gate(K)`, is applied as `K`. On a mixed state, a
-channel is applied factor by factor in the same way, `Gate(K)` as `K` on the kets and its
-conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives `L(ρ)`. The
-state is not normalised.
+factor and never developed: a factor on at most two sites, or given by its matrix on its sites,
+is applied as a dense block there, any other through its MPO, which costs less for a sum or a
+product on more sites, as for a factor too large or laying Jordan-Wigner strings on other
+sites. On a pure state, a channel of a single Kraus operator `K`, as `Gate(K)`, is applied as
+`K`. On a mixed state, a channel is applied factor by factor in the same way, `Gate(K)` as `K`
+on the kets and its conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L`
+gives `L(ρ)`. The state is not normalised.
 
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole state
   for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density
