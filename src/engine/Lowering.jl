@@ -619,20 +619,26 @@ function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
 end
 
 """
-    system_matrix(R, system, terms)
+    system_matrix(R, system, terms, sites = 1:length(system), orders = nothing)
 
-the matrix of a sum of terms on the whole of `system`, the last site varying fastest, those of
-a superoperator for `Mixed`, see `matrix`, their strings laid
+the matrix of a sum of terms on `sites` of `system`, which hold all their blocks, the last site
+varying fastest, their strings laid, that of a superoperator for `Mixed`, see `matrix`, the
+elements of each site in the order `orders` gives for it, as on its mixed index, see
+`mixed_elements`
 """
-function system_matrix(::Type{R}, system::System, ts::Vector{Term}) where R
-    ids = [ Matrix{Float64}(I, block_dim(R, system[k]), block_dim(R, system[k]))
-            for k in 1:length(system) ]
+function system_matrix(::Type{R}, system::System, ts::Vector{Term}, sites = 1:length(system),
+                       orders = nothing) where R
+    ids = [ Matrix{Float64}(I, block_dim(R, system[k]), block_dim(R, system[k])) for k in sites ]
     d = prod(size(m, 1) for m in ids)
     total = zeros(d, d)
     for x in ts
         t = laid_strings(R, system, x)
         bs = Dict(b.site => b.m for b in t.blocks)
-        total += t.coef * foldl(kron, [ get(bs, k, ids[k]) for k in eachindex(ids) ])
+        ms = [ get(bs, k, ids[j]) for (j, k) in enumerate(sites) ]
+        if !isnothing(orders)
+            ms = [ m[o, o] for (m, o) in zip(ms, orders) ]
+        end
+        total += t.coef * foldl(kron, ms)
     end
     return total
 end

@@ -277,22 +277,6 @@ function channel_factors(a::IndexedOp)
 end
 
 """
-    mixed_block(system, terms, sites)
-
-the matrix of the superoperator of terms `terms`, acting on `sites` alone, on the mixed indices
-of those sites, see `mixed_elements`
-"""
-function mixed_block(system::System, terms::Vector{Term}, sites)
-    orders = Dict(k => mixed_elements(system, k) for k in sites)
-    return sum(terms) do t
-        bs = Dict(b.site => b.m for b in t.blocks)
-        t.coef * foldl(kron, [ haskey(bs, k) ? bs[k][orders[k], orders[k]] :
-                                   Matrix{Float64}(I, dim(system[k])^2, dim(system[k])^2)
-                               for k in sites ])
-    end
-end
-
-"""
     GateBatch(gates, on)
 
 a step of `apply`: gates applied together, each on its consecutive sites `on`
@@ -530,7 +514,8 @@ function mixed_steps(system::System, a::IndexedOp)
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif dense_enough(Mixed, system, ks)
-                block_step!(steps, Mixed, system, mixed_block(system, terms, ks), ks)
+                m = system_matrix(Mixed, system, terms, ks, [ mixed_elements(system, k) for k in ks ])
+                block_step!(steps, Mixed, system, m, ks)
             else
                 coef *= pre_step!(steps, laid(system, [compacted_super(system, f)]))
             end
