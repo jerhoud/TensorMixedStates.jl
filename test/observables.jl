@@ -851,6 +851,14 @@ end
     @test fidelity(mix(mixup), plus) ≈ fidelity(plus, mixup)
     @test fidelity(up, fm) ≈ 1/8
     @test fidelity(2 * up, fm) ≈ 1/8
+    # contracted site by site, where mix(ψ) had bonds of the square of those of ψ, on charged
+    # fermions and under a strong symmetry
+    for fs in (System(6, Fermion(conserve = N)), System(6, Fermion(conserve = strong(N))))
+        conf = ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]
+        ψ, φ = random_state(State{Pure}(fs, conf), 4), random_state(State{Pure}(fs, conf), 3)
+        ρ = 0.3 * mix(φ) + 0.7 * mix(ψ)
+        @test fidelity(ψ, ρ) ≈ real(inner(mix(ψ), ρ)) / (norm(ψ)^2 * real(trace(ρ)))
+    end
     # the normalised Hilbert-Schmidt overlap of two mixed states
     @test hs_fidelity(mix(plus), mix(plus)) ≈ 1
     @test hs_fidelity(mix(plus), mix(mixup)) ≈ fidelity(plus, mixup)

@@ -445,6 +445,27 @@ function log_negativity(state::State, a::AbstractVector, b::AbstractVector)
 end
 
 """
+    pure_on_mixed(p, r)
+
+``\\langle p|r|p\\rangle`` for the pure state `p` and the density matrix `r` of one system,
+contracted site by site with the tensors of `mix(p)` conjugated, their links left apart: the
+contraction holds ``\\chi_p^2\\chi_r`` numbers where the MPS of `mix(p)` has bonds of ``\\chi_p^2``
+"""
+function pure_on_mixed(p::State{Pure}, r::State{Mixed})
+    sys = r.system
+    starred = relabeller(i -> star(i, strong_names(sys)))
+    st = hasqns(p.state) ? p.state : dense(p.state)
+    t = ITensor(1.)
+    for i in 1:length(sys)
+        j = siteind(Pure, sys, i)
+        # the combiner of `mix`, the bra starred whole
+        c = combinerto(siteind(Mixed, sys, i), j, dag(starred(j')))
+        t = t * r.state[i] * dag(c) * dag(st[i]) * relabel(st[i]', starred)
+    end
+    return scalar(t)
+end
+
+"""
     fidelity(a, b)
 
 the fidelity of two states of the same system, between 0 and 1, whatever their norms and
@@ -461,7 +482,7 @@ fidelity(a::State{Pure}, b::State{Pure}) =
     abs2(inner(a, b)) / (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
 
 fidelity(p::State{Pure}, r::State{Mixed}) =
-    real(inner(mix(p), r)) / (nonzero_trace(p, "fidelity") * nonzero_trace(r, "fidelity"))
+    real(pure_on_mixed(p, r)) / (nonzero_trace(p, "fidelity") * nonzero_trace(r, "fidelity"))
 
 fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
 
