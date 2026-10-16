@@ -128,8 +128,11 @@ end
 """
     mixed_order(dims)
 
-the positions in vec(ρ), ρ a density matrix of sites of dimensions `dims`, of its elements in
-the order of the matrices of channels and generators, see `matrix`
+the permutation `o` from `vec(ρ)`, the density matrix `ρ` of sites of dimensions `dims` read
+column by column, to the order of the matrices of channels and generators, see `matrix`: the
+elements `(k, b)` of each site, the ket `k` faster than the bra `b`, the last site fastest as in
+`kron`. `vec(ρ)[o]` is `ρ` in that order, and `S[o, o]` the matrix of a map whose matrix on
+`vec(ρ)` is `S`.
 """
 function mixed_order(dims)
     n = length(dims)
