@@ -229,25 +229,25 @@ function product(a::CompactedOp{R}, b::CompactedOp{R}, limits::Limits = Limits()
 end
 
 """
-    combined(cs, coefs, limits = Limits())
+    combined(system, parts, limits = Limits(), what = "the sum")
 
-the sum of the operators compacted `cs`, of one system, times `coefs`: the channels of a link
-those of all of them side by side, the coefficient of each on its openings, the block reduced,
-see `reduced_block`, and truncated by `limits`. The bound of its norm is the sum of theirs times
-the coefficients, and that of the width of its spectrum the sum of theirs, by the inequalities
-of Weyl, a complex coefficient `c` giving `2|c|` times the norm. Refused when they change the
-charges by different amounts.
+the sum of the operators compacted on `system` of `parts`, pairs of an operator and its
+coefficient: the channels of a link those of all of them side by side, the coefficient of each
+on its openings, the block reduced, see `reduced_block`, and truncated by `limits`. The bound of
+its norm is the sum of theirs times the coefficients, and that of the width of its spectrum the
+sum of theirs, by the inequalities of Weyl, a complex coefficient `c` giving `2|c|` times the
+norm. Refused when they change the charges by different amounts, see `flux_refusal`, `what`
+naming the operator.
 """
-function combined(cs::Vector{<:CompactedOp{R}}, coefs::Vector{<:Number},
-                  limits::Limits = Limits()) where R
-    sys = first(cs).system
-    kept = [ (c, x) for (c, x) in zip(cs, coefs) if !iszero(x) && !isnothing(c.flux) ]
+function combined(sys::System, parts::Vector{<:Tuple{CompactedOp{R}, Number}},
+                  limits::Limits = Limits(), what = "the sum") where R
+    kept = [ (c, x) for (c, x) in parts if !iszero(x) && !isnothing(c.flux) ]
     if isempty(kept)
         return zero_op(R, sys)
     end
     fluxes = unique(c.flux for (c, _) in kept)
     if length(fluxes) > 1
-        flux_refusal(sys, "the sum", fluxes)
+        flux_refusal(sys, what, fluxes)
     end
     n = length(sys)
     T = ComplexF64
@@ -355,8 +355,8 @@ end
 """
     add_part!(parts, c, coef)
 
-add to `parts` the operator compacted `c` times `coef`, unless it vanishes, see `vanishes`: a
-product of definite fluxes that vanishes has none
+add to `parts`, to be summed by `combined`, the operator compacted `c` times `coef`, unless it
+vanishes, see `vanishes`: a product of definite fluxes that vanishes has none
 """
 function add_part!(parts::Vector, c::CompactedOp, coef::Number)
     if !vanishes(c)
@@ -366,29 +366,13 @@ function add_part!(parts::Vector, c::CompactedOp, coef::Number)
 end
 
 """
-    assembled(R, system, a, parts, limits)
-
-the operator `a` compacted on `system` from its `parts`, an operator compacted and a coefficient
-each, added in one reduction truncated by `limits`, see `combined`: refused, see `flux_refusal`,
-when they change the charges by different amounts
-"""
-function assembled(::Type{R}, system::System, a, parts::Vector, limits::Limits) where R
-    fluxes = unique(c.flux for (c, _) in parts)
-    if length(fluxes) > 1
-        flux_refusal(system, a, fluxes)
-    end
-    return isempty(parts) ? zero_op(R, system) :
-                            combined([ c for (c, _) in parts ], [ x for (_, x) in parts ], limits)
-end
-
-"""
     compacted_op(system, op, limits = Limits(); side = nothing)
 
 the operator `op`, placed on sites, compacted on `system` and truncated by `limits`, see
 `truncated_block`: from its terms, see `lower`, but for its products that would develop into
 more terms than their factors have, see `by_blocks`. Those are made of the compactions of their
 factors, made the same way, multiplied, equal factors in a row by squaring, see `power`, and
-added to that of the rest in one reduction, see `assembled`. With `side`, `:left` or `:right`,
+added to that of the rest in one reduction, see `combined`. With `side`, `:left` or `:right`,
 the superoperator ``\\rho \\mapsto op\\,\\rho`` or ``\\rho \\mapsto \\rho\\,op^\\dagger``, see
 `side_terms`, a product made of the sides of its factors in the same order on both sides,
 ``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger) A^\\dagger``. Refused when it changes the
@@ -418,7 +402,7 @@ function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits =
         factors = blocked_product(prodsubs(scalararg(x)), f -> compacted_op(system, f; side))
         add_part!(parts, factors, coef(scalarcoef(g) * scalarcoef(x)))
     end
-    return assembled(R, system, a, parts, limits)
+    return combined(system, parts, limits, a)
 end
 
 """
@@ -491,5 +475,5 @@ function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits()
             add_part!(parts, product(r', r), -k / 2)
         end
     end
-    return assembled(Mixed, system, a, parts, limits)
+    return combined(system, parts, limits, a)
 end

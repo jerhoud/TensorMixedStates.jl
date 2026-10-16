@@ -667,7 +667,7 @@ whether the operator compacted `c`, see `compacted_op`, is Hermitian: zero, or o
 adjoint changing the charges the other way, and minus its adjoint vanishing, see `vanishes`
 """
 hermitian_blocks(c::CompactedOp) =
-    isnothing(c.flux) || (c.flux == QN() && vanishes(combined([c, c'], [1, -1])))
+    isnothing(c.flux) || (c.flux == QN() && vanishes(combined(c.system, [(c, 1), (c', -1)])))
 
 """
     prepared_entry(state, m)

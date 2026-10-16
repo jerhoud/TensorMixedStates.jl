@@ -241,8 +241,10 @@ end
 
 the `PreMPO` of the sum of the operators of `pres` times `coefs`, see `combined`
 """
-linear_combination(pres::Vector{<:PreMPO{R}}, coefs::Vector{<:Number}) where R =
-    laid(first(pres).system, [combined(single_part(pres, "sum"), coefs)])
+function linear_combination(pres::Vector{<:PreMPO{R}}, coefs::Vector{<:Number}) where R
+    sys = first(pres).system
+    return laid(sys, [combined(sys, collect(zip(single_part(pres, "sum"), coefs)))])
+end
 
 (a::PreMPO{R} + b::PreMPO{R}) where {R <: PM} = linear_combination([a, b], [1, 1])
 (a::PreMPO{R} - b::PreMPO{R}) where {R <: PM} = linear_combination([a, b], [1, -1])
@@ -313,8 +315,12 @@ PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp}; limits::Limits = Limits()) 
 `pre` truncated by `limits`, see `truncated_block`, each of its time functions apart, the
 bounds of its norm and of its width kept, and `pre` itself for `Limits()`
 """
-truncated(pre::PreMPO, limits::Limits) =
-    limits == Limits() ? pre : laid(pre.system, [ combined([c], [1], limits) for c in pre.parts ])
+function truncated(pre::PreMPO, limits::Limits)
+    if limits == Limits()
+        return pre
+    end
+    return laid(pre.system, [ combined(pre.system, [(c, 1)], limits) for c in pre.parts ])
+end
 
 """
     mpo_eltype(::PreMPO)
