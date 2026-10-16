@@ -544,13 +544,10 @@ function mixed_flux(m::AbstractMatrix, what, site::AbstractSite)
     if length(found) ≤ 1
         return isempty(found) ? QN() : only(found)
     end
-    st = strong_names(site)
-    if only_strong(st, found)
-        strong_refusal(what, st)
-    end
     names = join(unique(q.name for q in qs), ", ")
-    throw(FluxError("$(obs_name(what)) carries no definite charge of $names, so it cannot act " *
-                    "on $site"))
+    charge_refusal(what, strong_names(site), found,
+                   "$(obs_name(what)) carries no definite charge of $names, so it cannot act " *
+                   "on $site")
 end
 
 """
@@ -595,15 +592,11 @@ refuse the operator `a`, whose parts change the charges of `system` by the diffe
 `fluxes`, see `FluxError`, or by amounts differing only in what it conserves strongly, see
 `strong_refusal`
 """
-function flux_refusal(system::System, a, fluxes)
-    st = strong_names(system)
-    if only_strong(st, fluxes)
-        strong_refusal(a, st)
-    end
-    throw(FluxError("the terms of $(obs_name(a)) change the charges by $(fluxes[1]) and by " *
-                    "$(fluxes[2]), so " *
-                    "it has no definite flux and cannot act on a system that conserves them"))
-end
+flux_refusal(system::System, a, fluxes) =
+    charge_refusal(a, strong_names(system), fluxes,
+                   "the terms of $(obs_name(a)) change the charges by $(fluxes[1]) and by " *
+                   "$(fluxes[2]), so it has no definite flux and cannot act on a system that " *
+                   "conserves them")
 
 """
     check_flux(R, system, a, terms)

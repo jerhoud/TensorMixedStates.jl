@@ -578,6 +578,20 @@ symmetry alone keeps apart
 only_strong(names, qs) = !isempty(names) && allequal(weak_qn(q, names, String[]) for q in qs)
 
 """
+    charge_refusal(what, strong, charges, message)
+
+refuse `what`, whose parts carry the different `charges`: as mixing the sectors a strong
+symmetry keeps apart when they differ only by the quantities `strong`, see `strong_refusal`,
+by the `FluxError` of `message` otherwise
+"""
+function charge_refusal(what, strong, charges, message::String)
+    if only_strong(strong, charges)
+        strong_refusal(what, strong)
+    end
+    throw(FluxError(message))
+end
+
+"""
     charge_flux(m, what, site)
 
 the flux of the matrix `m` of `what` on `site`, refused when it has none, see `FluxError`

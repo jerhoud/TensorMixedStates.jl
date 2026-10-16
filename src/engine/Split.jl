@@ -215,13 +215,10 @@ function split_matrix(::Type{R}, name, m::AbstractMatrix, sites::Vector{<:Abstra
     # a FluxError, which expect answers by measuring on the state conserving nothing
     qs = unique(g.q for g in totals)
     if length(qs) > 1
-        st = unique(String[ x for s in sites for x in strong_names(s) ])
-        if only_strong(st, qs)
-            strong_refusal(name, st)
-        end
         names = unique(q.name for s in sites for q in conserved(s).quantities)
-        throw(FluxError("$name carries no definite charge of $(join(names, ", ")), so it cannot " *
-                        "act on $(join(sites, " ⊗ "))"))
+        charge_refusal(name, unique(String[ x for s in sites for x in strong_names(s) ]), qs,
+                       "$name carries no definite charge of $(join(names, ", ")), so it cannot " *
+                       "act on $(join(sites, " ⊗ "))")
     end
     terms = Tuple{Number, Vector{Union{Nothing, Matrix}}}[]
     for on in Iterators.product(fill((false, true), n)...)
