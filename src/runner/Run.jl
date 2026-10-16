@@ -39,7 +39,8 @@ a vector of pairs
 """
 measurement_lists(p::Pair) = [p]
 measurement_lists(v::AbstractVector) = v
-measurement_lists(x) = error("$(repr(x)) is not a list of measurements, destination => measurements")
+measurement_lists(x) =
+    error("$(repr(x)) is not a list of measurements, destination => measurements")
 
 """
     run_lists(phases, final_measurements)
@@ -124,7 +125,8 @@ function check_destinations(phases::Vector, final_measurements)
         end
         names = first.(as_measure(m).entries)
         if get!(held, normpath(d), names) ≠ names
-            error("$d holds the list $(join(held[normpath(d)], ", ")), and another needs another file")
+            error("$d holds the list $(join(held[normpath(d)], ", ")), and another needs " *
+                  "another file")
         end
     end
 end
@@ -437,8 +439,8 @@ set the threading of the run before a phase: `:dense` or `:blocks` as asked, or 
 mode suited to the system of the state, once there is one; a change is logged
 """
 function adapt_threading(sim::Simulation, threading)
-    mode = threading == :auto ? (isnothing(sim.state) ? nothing : threading_mode(sim.state.system)) :
-           threading
+    mode = threading ≠ :auto ? threading :
+           isnothing(sim.state) ? nothing : threading_mode(sim.state.system)
     if isnothing(mode)
         return nothing
     end
@@ -489,8 +491,9 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         end
         sim = td.value
         report_dropped(run)
-        log_message(sim, "***** Ending phase \"$(phase.name)\" after $(round(td.time; digits = 3)) " *
-                         "seconds, $(Base.format_bytes(td.bytes)) allocated *****")
+        log_message(sim, "***** Ending phase \"$(phase.name)\" after " *
+                         "$(round(td.time; digits = 3)) seconds, " *
+                         "$(Base.format_bytes(td.bytes)) allocated *****")
         # absent before Julia 1.11; it includes the recompilation
         if haskey(td, :compile_time)
             log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) seconds")
@@ -518,9 +521,10 @@ end
 
 the line logging where a run stops
 """
-stop_line(c::Checkpointer, phases::Vector) =
-    isempty(c.dir) ? "***** Stopping $(stop_place(c, phases)), with no directory to resume from *****" :
-                     "***** Stopping $(stop_place(c, phases)), the simulation can be resumed *****"
+function stop_line(c::Checkpointer, phases::Vector)
+    then = isempty(c.dir) ? "with no directory to resume from" : "the simulation can be resumed"
+    return "***** Stopping $(stop_place(c, phases)), $then *****"
+end
 
 """
     output_final(sim, sd)
@@ -557,7 +561,8 @@ the time of its last commit
 function error_line(run, sd::SimData, e)
     k = isnothing(run) ? nothing : run.checkpointer.last
     where = isnothing(run) || run.phase == 0 ? "" :
-            " in phase $(run.phase) \"$(sd.phases[run.phase].name)\", last committed at time $(k.time)"
+            " in phase $(run.phase) \"$(sd.phases[run.phase].name)\", last committed at time " *
+            "$(k.time)"
     return "ERROR$where: " * sprint(showerror, e)
 end
 

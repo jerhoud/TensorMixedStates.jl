@@ -73,7 +73,8 @@ Checkpointer(dir::String, seed::Integer; interval::Real = 0, max_time::Real = In
 
 whether the run should stop now: its deadline is past, or the file `stop` is in its directory
 """
-stop_requested(c::Checkpointer) = time() ≥ c.deadline || (!isempty(c.dir) && isfile(joinpath(c.dir, "stop")))
+stop_requested(c::Checkpointer) =
+    time() ≥ c.deadline || (!isempty(c.dir) && isfile(joinpath(c.dir, "stop")))
 
 """
     checkpoint_due(c)
@@ -108,7 +109,8 @@ back, so that a checkpoint still resumes once the directory has moved
 """
 relative(d::TextFile, dir::String) = TextFile(relative(d.path, dir), d.format)
 relative(d::JsonFile, dir::String) = JsonFile(relative(d.path, dir))
-relative(path::String, dir::String) = startswith(path, joinpath(dir, "")) ? relpath(path, dir) : path
+relative(path::String, dir::String) =
+    startswith(path, joinpath(dir, "")) ? relpath(path, dir) : path
 relative(d, _) = d
 
 rooted(d::TextFile, dir::String) = TextFile(rooted(d.path, dir), d.format)
@@ -154,9 +156,9 @@ function write_checkpoint(c::Checkpointer)
         end
     end
     io = IOBuffer()
+    marks = Dict{Destination, Any}(relative(d, c.dir) => kept(m) for (d, m) in k.marks)
     serialize(io, (; c.seed, k.phase, k.step, k.last, k.phase_time, k.time, values = rest,
-                   states = [ name for (name, v) in k.values if v isa AbstractState ],
-                   marks = Dict{Destination, Any}(relative(d, c.dir) => kept(m) for (d, m) in k.marks)))
+                   states = [ name for (name, v) in k.values if v isa AbstractState ], marks))
     # the file made here when no state was saved there
     h5open(file, "cw") do f
         f["commit"] = take!(io)

@@ -190,7 +190,8 @@ function run_phase(phase::AbstractPhase, sim::Simulation, done::Int)
               "TensorMixedStates.prepare_phase, so runTMS does not know how to run it")
     end
     # called for the phase and the state as they are, see output
-    p = invokelatest(prepare_phase, phase, Simulation(sim, sim.state, getfield(sim, :run).phase_time))
+    at_start = Simulation(sim, sim.state, getfield(sim, :run).phase_time)
+    p = invokelatest(prepare_phase, phase, at_start)
     for k in done + 1:invokelatest(step_count, p)
         sim = step_done(invokelatest(run_step, p, sim, k), phase, k)
     end

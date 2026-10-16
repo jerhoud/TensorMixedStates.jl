@@ -14,7 +14,8 @@ function step_number(span::Number, step::Number, what::String, sim::Simulation)
     if n == 0
         log_message(sim, "Skipping $what of $span, shorter than half a step")
     elseif !(span / n ≈ step)
-        log_message(sim, "Taking a step of $(span / n) rather than $step to cover $span in $n steps")
+        log_message(sim, "Taking a step of $(span / n) rather than $step to cover $span in " *
+                         "$n steps")
     end
     return n
 end
