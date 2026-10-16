@@ -275,14 +275,15 @@ function on_basis!(b::ComBlock{T}, tol::Real) where T
 end
 
 """
-    push_identities!(b)
+    push_identities!(b, tol)
 
 take the identity out of the openings of the block `b`, from left to right, and return the
 terms of one site this leaves, a combination for each site of `b`: `α` times the identity
 opening channel `r` becomes `α` times each piece leaving `r` on the next site, an opening
-there, which may hold the identity in turn, or a term of one site when the piece closes.
+there, which may hold the identity in turn, or a term of one site when the piece closes. A
+coefficient summed to under `tol` times the magnitudes it sums is dropped.
 """
-function push_identities!(b::ComBlock{T}) where T
+function push_identities!(b::ComBlock{T}, tol::Real) where T
     singles = [ Combination{T}() for _ in b.pieces ]
     for j in 1:length(b.pieces) - 1
         # the identity of each opening, taken out
@@ -293,16 +294,25 @@ function push_identities!(b::ComBlock{T}) where T
             end
         end
         filter!(p -> !isempty(last(p)), b.pieces[j])
+        sizes = Dict{Int, Dict{Int, real(T)}}()
         for ((l, s), comb) in sort!(collect(b.pieces[j + 1]); by = first)
             α = get(opened, l, nothing)
             if isnothing(α)
                 continue
             end
             to = s == 0 ? singles[j + 1] : get!(Combination{T}, b.pieces[j + 1], (0, s))
+            z = get!(() -> Dict{Int, real(T)}(a => abs(x) for (a, x) in to), sizes, s)
             for (a, x) in comb
                 add!(to, a, α * x)
+                add!(z, a, abs(α * x))
             end
         end
+        # a remainder of rounding where the sum cancels, which would make a channel of its own
+        for (s, z) in sizes
+            to = s == 0 ? singles[j + 1] : b.pieces[j + 1][(0, s)]
+            filter!(p -> abs(last(p)) > tol * z[first(p)], to)
+        end
+        filter!(p -> !isempty(last(p)), b.pieces[j + 1])
     end
     return singles
 end
@@ -312,7 +322,7 @@ end
 
 reduce the block `b`, from left to right, to channels whose left operators are independent,
 and return it, a channel that is a combination of the others being merged into them on the
-next site
+next site, where a coefficient summed to under `tol` times the magnitudes it sums is dropped
 """
 function left_sweep!(b::ComBlock{T}, tol::Real) where T
     for j in 1:length(b.pieces) - 1
@@ -336,6 +346,7 @@ function left_sweep!(b::ComBlock{T}, tol::Real) where T
             end
         end
         next = SitePieces{T}()
+        sizes = Dict{Tuple{Int, Int}, Dict{Int, real(T)}}()
         for ((l, r), comb) in sort!(collect(b.pieces[j + 1]); by = first)
             if l == 0
                 next[(l, r)] = comb
@@ -344,12 +355,20 @@ function left_sweep!(b::ComBlock{T}, tol::Real) where T
             for p in eachindex(kept)
                 if !iszero(t[l, p])
                     d = get!(Combination{T}, next, (p, r))
+                    z = get!(Dict{Int, real(T)}, sizes, (p, r))
                     for (a, x) in comb
                         add!(d, a, t[l, p] * x)
+                        add!(z, a, abs(t[l, p] * x))
                     end
                 end
             end
         end
+        # a remainder of rounding where the sum cancels, which `interpolative`, measuring each row
+        # against itself, would keep as a channel of its own on the next link
+        for (pr, z) in sizes
+            filter!(q -> abs(last(q)) > tol * z[first(q)], next[pr])
+        end
+        filter!(q -> !isempty(last(q)), next)
         b.pieces[j] = here
         b.pieces[j + 1] = next
         b.dims[j] = length(kept)
@@ -399,9 +418,9 @@ each link as the rank of the coupling across it
 function reduced_block(::Type{R}, system::System, b::ComBlock{T},
                        singles::Dict{Int, Matrix{T}}) where {R, T}
     b = on_basis!(b, rounding_tol)
-    opened = push_identities!(b)
+    opened = push_identities!(b, rounding_tol)
     b = mirror(b)
-    closed = push_identities!(b)
+    closed = push_identities!(b, rounding_tol)
     b = left_sweep!(mirror(b), rounding_tol)
     b = mirror(left_sweep!(mirror(b), rounding_tol))
     for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))

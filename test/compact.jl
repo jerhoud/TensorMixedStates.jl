@@ -215,6 +215,30 @@ end
         @test p.linkdims .- 1 == least_channels(prod(ds), [ IT.dim(i) for i in siteinds(Pure, st.system) ])
         @test norm(dense(pres[1]') - ds[1]') < 1e-12 * norm(ds[1])
     end
+    # what cancels but for rounding opens no channel: an identity pushed onto an opening, in a
+    # product that is 0.7 (0.1 + 0.2 - 0.3) (1 - X1) Z2 Z3, a product of pieces, M² = 0 on a
+    # spin 1, and the merges of the sweeps, in random products of fermions
+    q3 = State{Pure}(System(3, Qubit()), "Up")
+    p = PreMPO(q3, (0.1 + 0.2) * X(1) * Z(2) * Z(3) + 0.3 * Z(2) * Z(3)) * PreMPO(q3, 0.7 * X(1) - 0.7 * Id(1))
+    @test p.linkdims == [1, 1] && norm(dense(p)) < 1e-15
+    rot = [cos(1) -sin(1) 0; sin(1) cos(1) 0; 0 0 1] * [cos(2) 0 sin(2); 0 1 0; -sin(2) 0 cos(2)]
+    M = Operator{1}("M", rot * [0. 1. 0.; 0. 0. 0.; 0. 0. 0.] * rot')
+    s2 = State{Pure}(System(2, Spin(1)), "0")
+    p = PreMPO(s2, M(1) * Sz(2)) * PreMPO(s2, M(1) * Sx(2))
+    @test p.linkdims == [1] && norm(dense(p)) < 1e-15
+    rng = Xoshiro(20261016)
+    for _ in 1:10
+        ops = [ sum(round(2rand(rng) - 1; digits = 3) *
+                    prod(rand(rng, [C, dag(C), N])(i) for i in sort(randperm(rng, 4)[1:rand(rng, 1:3)]))
+                    for _ in 1:rand(rng, 2:6)) for _ in 1:3 ]
+        pres = [ PreMPO(f, op) for op in ops ]
+        ds = dense.(pres)
+        p = prod(pres)
+        scale = prod(norm.(ds))
+        @test norm(dense(p) - prod(ds)) < 1e-12 * scale
+        least = norm(prod(ds)) < 1e-12 * scale ? [0, 0, 0] : least_channels(prod(ds), [2, 2, 2, 2])
+        @test p.linkdims .- 1 == least
+    end
     # superoperators compose
     ρ = mix(q)
     l1, l2 = PreMPO(ρ, -im * X(1) * X(2) + Dissipator(Sm)(3)), PreMPO(ρ, Dissipator(Z)(2) + Dissipator(Sp)(4))

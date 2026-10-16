@@ -285,7 +285,8 @@ function (a::PreMPO{R} * b::PreMPO{R}) where {R <: PM}
                 continue
             end
             m = m1 * m2
-            if iszero(m)
+            # a product vanishing but for rounding, which would be an atom of its own
+            if norm(m) ≤ rounding_tol * norm(m1) * norm(m2)
                 continue
             elseif from == (0, 0) && to == (-1, -1)
                 add!(singles, k, m)
