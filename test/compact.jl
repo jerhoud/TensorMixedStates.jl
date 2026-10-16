@@ -311,6 +311,12 @@ end
     # a product of factors of one term each, or of two factors of two terms, keeps its terms
     @test !TMS.by_blocks(TMS.gathered(q.system, (X(1) + Z(2)) * (X(3) + Z(4))))
     @test !TMS.by_blocks(TMS.gathered(f.system, dag(C)(1) * C(3) * N(4)))
+    # the estimates in Float64: a projector on a code space of 64 stabilizers has 2^64 terms,
+    # which an Int wrapped around to 0, the product being developed
+    p64 = prod((Id(2i - 1) + Z(2i - 1) * Z(2i)) / 2 for i in 1:64)
+    q128 = State{Pure}(System(128, Qubit()), "Up")
+    @test TMS.by_blocks(TMS.gathered(q128.system, p64))
+    @test expect(q128, p64) ≈ 1
     # on charged fermions: a product that vanishes, (Σ C†)² being 0, does not count its flux
     # beside N(1), and a sum of two fluxes is refused
     ad = sum(dag(C)(i) for i in 1:4)

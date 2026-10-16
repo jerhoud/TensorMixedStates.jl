@@ -309,12 +309,13 @@ vanishes(c::CompactedOp) = isnothing(c.flux) ||
     term_estimate(a)
 
 the number of terms of the placed operator `a` developed as it is written, a bound, terms that
-merge counted apart
+merge counted apart, as a `Float64`, which does not wrap around as an `Int` does on a product of
+many sums
 """
 term_estimate(a::SumOp) = sum(term_estimate, a.subs)
 term_estimate(a::ProdOp) = prod(term_estimate, a.subs)
 term_estimate(a::ScalarOp) = term_estimate(a.arg)
-term_estimate(::Op) = 1
+term_estimate(::Op) = 1.0
 
 """
     by_blocks(a)
@@ -439,7 +440,7 @@ function super_by_blocks(a::IndexedOp)
     elseif s isa Evolver{Indexed}
         return any(by_blocks, addends(s.arg))
     elseif s isa ProdOp
-        counts = [ scalararg(x) isa Gate{Indexed} ? term_estimate(scalararg(x).arg)^2 : 1
+        counts = [ scalararg(x) isa Gate{Indexed} ? term_estimate(scalararg(x).arg)^2 : 1.0
                    for x in s.subs ]
         return prod(counts) > sum(counts)
     end
