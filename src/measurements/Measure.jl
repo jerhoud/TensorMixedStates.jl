@@ -464,51 +464,51 @@ each system
 Variance(op) = StateMeasurement("Variance", state -> variance_of(state, op))
 
 """
-    measurement(x)
+    checked_measurement(x)
 
 `x` checked to be a measurement: an operator placed on sites, an operator of one site, a pair
 of them, a measurement of the library, or a symbol; anything else is refused
 """
-measurement(a::IndexedOp{IsOperator}) = a
-measurement(a::SimpleOp) = a
-measurement(p::Tuple{SimpleOp, SimpleOp}) = p
-measurement(m::StateMeasurement) = m
-measurement(m::ContextMeasurement) = m
-measurement(m::OnNamed) = m
-measurement(s::Symbol) = s
+checked_measurement(a::IndexedOp{IsOperator}) = a
+checked_measurement(a::SimpleOp) = a
+checked_measurement(p::Tuple{SimpleOp, SimpleOp}) = p
+checked_measurement(m::StateMeasurement) = m
+checked_measurement(m::ContextMeasurement) = m
+checked_measurement(m::OnNamed) = m
+checked_measurement(s::Symbol) = s
 
-measurement(::Function) =
+checked_measurement(::Function) =
     error("a measurement written as a function needs a name: \"name\" => c -> …")
 
-measurement(x::Number) = error("a constant is not a measurement: write \"name\" => c -> $x")
+checked_measurement(x::Number) = error("a constant is not a measurement: write \"name\" => c -> $x")
 
-measurement(x::String) =
+checked_measurement(x::String) =
     error("\"$x\" is not a measurement: a name goes before one, \"$x\" => measurement")
 
-measurement(::Check) =
+checked_measurement(::Check) =
     error("a Check is returned by a measurement written as a function: \"name\" => c -> Check(…)")
 
-measurement(::Tuple) =
+checked_measurement(::Tuple) =
     error("a pair measured on every pair of sites is (X, Y), two operators of one site")
 
-measurement(::AbstractArray) = error("a name goes before one measurement, not before a list")
+checked_measurement(::AbstractArray) = error("a name goes before one measurement, not before a list")
 
-measurement(a::GenericOp{IsOperator}) =
+checked_measurement(a::GenericOp{IsOperator}) =
     error("$a acts on several sites, and is measured placed on them")
 
-measurement(a::Op) = error("measure takes observables, and $a is not one")
+checked_measurement(a::Op) = error("measure takes observables, and $a is not one")
 
-measurement(x) = error("$(repr(x)) is not a measurement")
+checked_measurement(x) = error("$(repr(x)) is not a measurement")
 
 """
     named_measurement(x)
 
 `x` checked to be what may follow a name: a function of the context, or a measurement, see
-`measurement`; told apart by its value, a vector of named measurements having pairs of type
-`Pair{String, Any}`
+`checked_measurement`; told apart by its value, a vector of named measurements having pairs of
+type `Pair{String, Any}`
 """
 named_measurement(f::Function) = f
-named_measurement(x) = measurement(x)
+named_measurement(x) = checked_measurement(x)
 
 """
     entry_name(m)
@@ -526,7 +526,7 @@ entry_name(s::Symbol) = string(s)
 
 the measurements of `list` as pairs `name => measurement`, the vectors and the `Measure` it
 holds flattened, a matrix row by row, each named as given or by `entry_name`, and checked, see
-`measurement`
+`checked_measurement`
 """
 entries(x::AbstractVector) = reduce(vcat, [ entries(y) for y in x ]; init = Pair{String, Any}[])
 entries(x::AbstractMatrix) = entries(vec(permutedims(x)))
@@ -535,7 +535,7 @@ entries((state, x)::Pair{Symbol}) =
     Pair{String, Any}[ "$state.$n" => OnNamed(state, m) for (n, m) in entries(x) ]
 
 function entries(x)
-    m = measurement(x)
+    m = checked_measurement(x)
     return Pair{String, Any}[ entry_name(m) => m ]
 end
 
