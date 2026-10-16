@@ -21,7 +21,7 @@ vec(\\rho)``
 """
 function dense_lindbladian(h, ls = [])
     d = size(h, 1)
-    id = Matrix{ComplexF64}(TMS.LinearAlgebra.I, d, d)
+    id = Matrix{ComplexF64}(LA.I, d, d)
     g = -im * (kron(id, h) - kron(transpose(h), id))
     for l in ls
         g += kron(conj(l), l) - 0.5 * (kron(id, l' * l) + kron(transpose(l' * l), id))
@@ -69,7 +69,7 @@ end
     g = dense_lindbladian(h, [sqrt(0.3) * kron(z, o), sqrt(0.2) * kron(o, [0. 1. ; 0. 0.])])
     ψ = kron([1., 1.] / sqrt(2), [1., 0.])
     r = reshape(exp(g) * vec(ψ * ψ'), 4, 4)
-    tr = TMS.LinearAlgebra.tr
+    tr = LA.tr
     ref = real([tr(r * kron(x, o)), tr(r * kron(o, z)), tr(r * kron(y, x))])
     ev2 = -im * (X(1) * X(2) + 0.7 * Z(1)) + Dissipator(sqrt(0.3) * Z)(1) + Dissipator(sqrt(0.2) * Sp)(2)
     ρ2 = State{Mixed}(System(2, Qubit()), ["X+", "Up"])
@@ -737,7 +737,6 @@ end
 
 @testset "Thermal states" begin
     lim = Limits(cutoff = 1e-14, maxdim = 64)
-    LA = TMS.LinearAlgebra
     tr = LA.tr
     x, y, z = [0. 1. ; 1. 0.], [0. -im ; im 0.], [1. 0. ; 0. -1.]
 

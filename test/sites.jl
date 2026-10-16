@@ -450,7 +450,7 @@ end
     # neither fails nor disturbs the site it came from, and the name goes on standing for one
     # and the same operator
     @test matrix(N, Dummit()) == [0. 0. ; 0. 1.]
-    @test matrix(N, Boson(4)) ≈ TMS.LinearAlgebra.diagm(0:3)
+    @test matrix(N, Boson(4)) ≈ LA.diagm(0:3)
     @test Dummits.Dummit === Dummit
     @test Dummits.N === N
     @test N === Bosons.N

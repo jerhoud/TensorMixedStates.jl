@@ -36,7 +36,7 @@ the reference the fast paths of probabilities are checked against
 function dense_probabilities(st::State, op)
     sites, values, ps = TMS.measured_spectrum(st.system, op, "dense")
     ρ = reduced_density_matrix(st, sites)
-    return [ λ => real(TMS.LinearAlgebra.tr(ρ * p)) for (λ, p) in zip(values, ps) ]
+    return [ λ => real(LA.tr(ρ * p)) for (λ, p) in zip(values, ps) ]
 end
 
 @testset "Fermionic correlations" begin
@@ -424,7 +424,7 @@ end
     # measured from the PreMPOs of its factors multiplied, real when it is Hermitian
     ev(st, op) = (ψ = raw_vector(st); ψ' * lowered(st.system, op) * ψ / (ψ' * ψ))
     function check(st, op, hermitian)
-        @test expect(st, op) ≈ ev(st, op) atol = 1e-12 * TMS.LinearAlgebra.opnorm(lowered(st.system, op))
+        @test expect(st, op) ≈ ev(st, op) atol = 1e-12 * LA.opnorm(lowered(st.system, op))
         @test (last(only(measure(st, [op]))) isa Real) == hermitian
     end
     q = random_state(Pure, System(5, Qubit()), 4; rng = Xoshiro(20261016))
@@ -633,7 +633,7 @@ end
         @test mpo_matrix(ψ, o) ≈ d atol = 1e-10
         @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10
         @test norm(apply(o, ρ) - mix(apply(o, ψ))) < 1e-10
-        keep = sort(TMS.Random.randperm(n)[1:rand(1:3)])
+        keep = sort(randperm(n)[1:rand(1:3)])
         o, d = product(length(keep), p -> keep[p], n)
         @test expect(partial_trace(ρ, keep; keep = true), o) ≈ value(d) atol = 1e-10
     end
@@ -644,7 +644,7 @@ end
         if rand(Bool)
             insert!(fs, rand(1:3), singles[3])
         end
-        sites = TMS.Random.randperm(n)[1:length(fs)]
+        sites = randperm(n)[1:length(fs)]
         a = reduce(⊗, first.(fs))
         da = prod(f[2](s, n) for (f, s) in zip(fs, sites))
         g = exp(0.3 * a - 0.3 * dag(a))(sites...)
@@ -970,7 +970,7 @@ end
     z, x = [1. 0. ; 0. -1.], [0. 1. ; 1. 0.]
     dense = -sum(on_qubit(z, i, 6) * on_qubit(z, i + 1, 6) for i in 1:5) -
             sum(on_qubit(x, i, 6) for i in 1:6)
-    @test e ≈ minimum(TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Symmetric(dense))) atol = 1e-10
+    @test e ≈ minimum(LA.eigvals(LA.Symmetric(dense))) atol = 1e-10
     @test variance(gs, h) < 1e-8
     @test variance(gs, h) < variance(r, h)
 
@@ -1177,7 +1177,6 @@ end
     # tr(ρ_A M) is the expectation value of the operator whose matrix on the kept sites is M,
     # in the order of the sites and the Jordan-Wigner basis of the kept sites alone, which
     # also checks the order of kets and bras with operators that are not hermitian
-    LA = TensorMixedStates.LinearAlgebra
     q = random_state(Pure, System(4, Qubit()), 4)
     ρ = reduced_density_matrix(q, [1, 3])
     @test LA.tr(ρ) ≈ 1

@@ -2,9 +2,11 @@
 # included before the groups, outside of the global testset, so that the macros it defines
 # exist by the time the group files are parsed.
 
-# the package and ITensors under short names, for what a test reaches that is not exported
+# the package, ITensors and LinearAlgebra under short names, for what a test reaches that is
+# not exported
 const TMS = TensorMixedStates
 const IT = TensorMixedStates.ITensors
+const LA = TensorMixedStates.LinearAlgebra
 
 """
 test whether a statement executes without throwing an exception
@@ -138,7 +140,6 @@ sites having the dimensions `ds`: the rank of `h` across the link once its parts
 identity on the left or on the right are taken out
 """
 function least_channels(h::AbstractMatrix, ds::Vector{Int})
-    LA = TMS.LinearAlgebra
     n = length(ds)
     return map(1:n-1) do k
         dl, dr = prod(ds[1:k]), prod(ds[k+1:n])

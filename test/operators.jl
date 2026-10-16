@@ -656,7 +656,7 @@ end
     @test length(TMS.reduced([term(z), term(zr), term(complex(z) .+ 1e-17im)])) == 1
     # and their values are not rounded: a phase on each of four sites was measured off by
     # 2.6e-13, its blocks snapped to a grid of 2^-43
-    ph = Operator{1}("Ph", TMS.LinearAlgebra.Diagonal([1, exp(2π * im * 4 / 9)]))
+    ph = Operator{1}("Ph", LA.Diagonal([1, exp(2π * im * 4 / 9)]))
     @test abs(expect(State{Pure}(System(4, fe), "Occ"), prod(ph(i) for i in 1:4)) -
               exp(2π * im * 16 / 9)) < 1e-14
 end
@@ -862,8 +862,8 @@ end
     @test matrix(exp(-7 * h)^0.5, q, q) ≈ matrix(exp(-3.5 * h), q, q)
     # a real upper triangular operator with a negative eigenvalue, on which the power of Julia
     # fails
-    e = TMS.LinearAlgebra.eigen(matrix(Sp + Sz, q))
-    principal = e.vectors * TMS.LinearAlgebra.Diagonal(complex.(e.values) .^ 0.3) / e.vectors
+    e = LA.eigen(matrix(Sp + Sz, q))
+    principal = e.vectors * LA.Diagonal(complex.(e.values) .^ 0.3) / e.vectors
     @test matrix((Sp + Sz)^0.3, q) ≈ principal
     # the zero operator, a multiple of the identity, gave NaN for a power of real part ≤ 0
     @test_throws "0Id is not invertible" (0 * X)^-1
@@ -971,7 +971,7 @@ end
     # a control of any type leaves the others as they are on its level 0 and applies the
     # operator on any other: a gate on a qutrit as well
     m = matrix(controlled(X), Qudit(3), q)
-    @test m * m' ≈ TMS.LinearAlgebra.I(6)
+    @test m * m' ≈ LA.I(6)
     @test m ≈ cat(matrix(Id, q), matrix(X, q), matrix(X, q); dims = (1, 2))
 end
 
@@ -994,7 +994,7 @@ end
     @test matrix(named([1 1; 1 -1] / √2, "MyH"), Qubit()) ≈ [1 1; 1 -1] / √2
     @test matrix(named(s -> [0. 1.; 1. 0.], "Fx"), Qubit()) == [0. 1.; 1. 0.]
     # a matrix of any type, an adjoint or a Diagonal, given or returned by a function
-    @test matrix(named(TMS.LinearAlgebra.Diagonal([1., -1.]), "D"), Qubit()) == [1. 0.; 0. -1.]
+    @test matrix(named(LA.Diagonal([1., -1.]), "D"), Qubit()) == [1. 0.; 0. -1.]
     @test matrix(named([0. 1.; 0. 0.]', "Ad"), Qubit()) == [0. 0.; 1. 0.]
     @test matrix(named(s -> [0. 1.; 0. 0.]', "Adf"), Qubit()) == [0. 0.; 1. 0.]
     @test matrix(named(Sp + Sm, "Sx2"), Spin(1)) ≈ 2 * matrix(Sx, Spin(1))
@@ -1012,7 +1012,6 @@ end
 
 @testset "A state is given by an array of any type" begin
     # a view or a Diagonal, given to Proj or Reset or returned by a function of the site
-    LA = TMS.LinearAlgebra
     q = Qubit()
     @test matrix(Proj(view([0., 1., 5.], 1:2)), q) ≈ matrix(Proj("Dn"), q)
     @test matrix(Reset(LA.Diagonal([0., 1.])), q) ≈ matrix(Reset("Dn"), q)

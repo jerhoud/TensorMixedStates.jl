@@ -63,7 +63,7 @@ end
 @testset "A sum of states keeps its bond dimension" begin
     # the eigenvalues rounding leaves were kept as states by the sum: nine product states of
     # twenty qubits had a bond dimension of 2304
-    rng = TensorMixedStates.Random.Xoshiro(3)
+    rng = Xoshiro(3)
     sys = System(20, Qubit())
     cfgs = [ rand(rng, ["Up", "Dn"], 20) for _ in 1:12 ]
     cs = randn(rng, 12)
@@ -77,7 +77,7 @@ end
     # a direct sum, then a truncation judged on the result. The sum of ITensorMPS
     # cut on the density matrices of the terms, and norm(a - b) saw no relative difference
     # below about 1e-7
-    rng = TensorMixedStates.Random.Xoshiro(1)
+    rng = Xoshiro(1)
     sys = System(20, Qubit())
     a = random_state(Pure, sys, 8; rng)
     c = random_state(Pure, sys, 8; rng)
@@ -110,7 +110,7 @@ end
 end
 
 @testset "The default limits cut the noise of rounding" begin
-    rng = TensorMixedStates.Random.Xoshiro(3)
+    rng = Xoshiro(3)
     sys = System(20, Qubit())
     s = sum(randn(rng) * State{Pure}(sys, rand(rng, ["Up", "Dn"], 20)) for _ in 1:9)
     # a field left nothing takes the default of the function, 1e-26 for a sum
@@ -158,7 +158,7 @@ end
     @test_throws "of complex amplitudes is not randomised" random_state(
         State{Pure}(System(3, Qubit()), [0.6, 0.8im]), 2; eltype = Float64)
     # a generator of one's own draws the same state twice
-    rng(k) = TensorMixedStates.Random.Xoshiro(k)
+    rng(k) = Xoshiro(k)
     @test norm(random_state(Pure, sys, 4; rng = rng(5)) - random_state(Pure, sys, 4; rng = rng(5))) < 1e-14
     @test norm(random_state(Mixed, sys, 4; rng = rng(5)) - random_state(Mixed, sys, 4; rng = rng(5))) < 1e-14
 end
@@ -166,7 +166,6 @@ end
 @testset "A random mixed state is a state of its system" begin
     # traced from its purification with nothing truncated, it has a trace of one and no
     # negative eigenvalue, and lives on the system it was drawn for
-    LA = TensorMixedStates.LinearAlgebra
     sys = System(4, Qubit())
     for d in [4, 10, 12]
         ρ = random_state(Mixed, sys, d)

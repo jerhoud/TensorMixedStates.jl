@@ -141,7 +141,6 @@ end
     @test isapprox(last(only(measure(ψ, h))), expect(ψ, h); rtol = 1e-12)
     @test isapprox(variance(ψ, h), real(v' * lowered(ψ.system, h)^2 * v) - real(expect(ψ, h))^2;
                    rtol = 1e-10, atol = 1e-12)
-    LA = TMS.LinearAlgebra
     ρ = random_state(Mixed, System(n, Qubit()), 4)
     r = ket_bra_matrix(ρ)
     @test isapprox(expect(ρ, h), LA.tr(r * lowered(ρ.system, h)) / LA.tr(r); rtol = 1e-12)
@@ -251,9 +250,9 @@ end
     @test h2.norm ≈ 1.9^2 && h2.width ≈ 2 * 1.9^2
     # a power by squaring, the power 0 the identity, a negative one refused
     @test norm(mpo_matrix(h^5) - mpo_matrix(h)^5) < 1e-12 * norm(mpo_matrix(h))^5
-    @test mpo_matrix(h^0) ≈ TMS.LinearAlgebra.I(4)
+    @test mpo_matrix(h^0) ≈ LA.I(4)
     @test_throws "a PreMPO has no power -1: it has no inverse" h^-1
-    E = TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Hermitian(mpo_matrix(h2)))
+    E = LA.eigvals(LA.Hermitian(mpo_matrix(h2)))
     @test h2.width ≥ E[end] - E[1]
     # H conserves Z1Z2, and the lowest level of H² is not in the sector of "Up": the searches
     # start from "+"

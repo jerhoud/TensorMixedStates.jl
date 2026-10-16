@@ -14,7 +14,7 @@
 """
 the identity matrix of dimension `d`
 """
-eye(d) = Matrix{Float64}(TMS.LinearAlgebra.I, d, d)
+eye(d) = Matrix{Float64}(LA.I, d, d)
 
 """
 vec(ρ) of a density matrix of two sites of dimensions `d1` and `d2` in the order of the matrices
@@ -122,7 +122,7 @@ end
     e = Electron()
     ρ = randn(ComplexF64, 4, 4)
     out = reshape(matrix(Dephase(Ntot), e) * vec(ρ), 4, 4)
-    n = real(TMS.LinearAlgebra.diag(matrix(Ntot, e)))
+    n = real(LA.diag(matrix(Ntot, e)))
     @test out ≈ [ n[i] == n[j] ? ρ[i, j] : 0 for i in 1:4, j in 1:4 ]
     # the eigenvalues are told apart relative to the largest, however small the operator
     @test matrix(Dephase(1e-14 * Z), q) ≈ matrix(Dephase(Z), q)
@@ -238,7 +238,7 @@ end
     ρ = zeros(d, d)
     ρ[n + 1, n + 1] = 1
     out = reshape(matrix(amplitude_damping_gate(p, A), b) * vec(ρ), d, d)
-    @test real(TMS.LinearAlgebra.diag(out))[1:n + 1] ≈ [ binomial(n, k) * (1 - p)^k * p^(n - k) for k in 0:n ]
+    @test real(LA.diag(out))[1:n + 1] ≈ [ binomial(n, k) * (1 - p)^k * p^(n - k) for k in 0:n ]
     # with p = 1, an infinite time, the reset to the state the decay ends in, refused when there
     # is none
     @test matrix(amplitude_damping_gate(1.), q) ≈ matrix(Reset("Up"), q)
@@ -373,7 +373,7 @@ end
 end
 
 @testset "Resets and dephasings on a density matrix" begin
-    sided, LA = TMS.sided, TMS.LinearAlgebra
+    sided = TMS.sided
     fs, qs = System(3, Fermion()), System(3, Qubit())
     # on sites with no string, the reset of a site alone
     @test superop(qs, Reset("Up")(2)) ≈ kron(eye(4), matrix(Reset("Up"), Qubit()), eye(4))
@@ -559,7 +559,6 @@ end
     # the density matrix read back is the map applied, written on dense matrices: a gate as its
     # operator on both sides, any other factor as a dense block or through its MPO, on sites
     # charged or not, the states entangled so that no result vanishes
-    LA = TMS.LinearAlgebra
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
     hp = dag(C)(1) * C(3) + dag(C)(3) * C(1)
     for site in (Fermion(), Fermion(conserve = N))

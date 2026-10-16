@@ -30,7 +30,6 @@ TensorMixedStates.fermion_species(::Doubled) = (Cd,)
 end
 
 @testset "States from the tensors of their MPS and from their dense vector" begin
-    LA = TensorMixedStates.LinearAlgebra
     # the cluster state, against the graph state of a chain
     A = zeros(2, 2, 2)
     for l in 1:2, s in 1:2
@@ -80,7 +79,7 @@ end
     s = superposition(System(4, Qubit()), [1 => ["Up", "Dn", "Up", "Dn"],
                                            -1 => ["Dn", "Up", "Dn", "Up"], 0.5im => "+"])
     ref = kron(up, dn, up, dn) - kron(dn, up, dn, up) + 0.5im * kron(fill([1., 1.] / sqrt(2), 4)...)
-    @test abs(TensorMixedStates.LinearAlgebra.dot(dense_vector(s), ref / norm(ref))) ≈ 1
+    @test abs(LA.dot(dense_vector(s), ref / norm(ref))) ≈ 1
     @test maxlinkdim(s) == 3
     # on charged sites, the terms of the same charge
     sc = superposition(System(4, Fermion(conserve = N)),
@@ -122,7 +121,6 @@ end
     @test expect1(dicke_state(System(3, Qubit()), 0, "Up", "Dn"), Z) ≈ [1, 1, 1]
     @test expect1(dicke_state(System(3, Qubit()), 3, "Up", "Dn"), Z) ≈ [-1, -1, -1]
     @test_throws "do not fit on 3 sites" dicke_state(System(3, Qubit()), 4, "Up", "Dn")
-    LA = TensorMixedStates.LinearAlgebra
     # a wave packet of one excitation, a site of zero amplitude included
     up, dn = [1., 0.], [0., 1.]
     φ = [1, 2im, 0, -1]
@@ -188,7 +186,6 @@ end
     @test trace(ρ) ≈ 1
     @test sum(expect1(ρ, Sz)) ≈ 0 atol = 1e-12
     # the canonical thermal state of fermions hopping, which thermalize reaches from it
-    LA = TMS.LinearAlgebra
     n, m, β = 4, 2, 0.9
     h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:n-1) + 0.4 * N(1)
     c(j) = jw_placed(System(n, Fermion()), j, matrix(C, Fermion()))
@@ -262,7 +259,6 @@ end
 end
 
 @testset "Slater determinants and Fermi seas" begin
-    LA = TensorMixedStates.LinearAlgebra
     orth(n, m) = Matrix(LA.qr(randn(ComplexF64, n, m)).Q)[:, 1:m]
 
     # the amplitude of each configuration is the determinant of the orbitals on its sites, in

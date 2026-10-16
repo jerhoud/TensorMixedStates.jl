@@ -319,7 +319,6 @@ struct DenseSearch <: SearchAlgorithm end
 
 function TensorMixedStates.search(::DenseSearch, mpo, state::State{R}, limits; sweep_done = nothing,
                                   krylov = Krylov(), done = 0, energy = nothing) where R
-    LA = TensorMixedStates.LinearAlgebra
     s = siteinds(R, state.system)
     d = prod(IT.dim.(s))
     f = LA.eigen(LA.Hermitian(reshape(Array(prod(mpo), [ i' for i in s ]..., s...), d, d)))
@@ -382,7 +381,6 @@ end
     @test_throws MethodError evolve(-im * h, 0.5, ψ; algo = Stepless())
 
     # a search of one's own goes through ground_state and steady_state
-    LA = TensorMixedStates.LinearAlgebra
     e, gs = ground_state(h, ψ; algo = DenseSearch())
     @test e ≈ minimum(LA.eigvals(LA.Symmetric(hd)))
     @test real(expect(gs, h)) ≈ e

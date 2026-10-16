@@ -849,7 +849,7 @@ end
                               measurements = "excited" => [:energy, Z(1)])]
         sd(name) = SimData(; name, phases, seed = 3, final_measurements = "end" => [:energy, Z])
         ref = runTMS(sd("ref"))
-        LA, sys = TMS.LinearAlgebra, ref.state.system
+        sys = ref.state.system
         E = LA.eigvals(LA.Hermitian(Matrix(lowered(sys, H))))
         @test ref.energy ≈ E[2] atol = 1e-9
         @test abs2(inner(ref.ground, ref.state)) < 1e-12

@@ -20,7 +20,6 @@ end
 @testset "Ground state against exact diagonalization" begin
     # a transverse field Ising chain, whose ground state is the lowest eigenvector of its dense
     # Hamiltonian, with a variance the energy alone cannot show
-    LA = TMS.LinearAlgebra
     n = 6
     sys = System(n, Qubit())
     x, z = [0. 1. ; 1. 0.], [1. 0. ; 0. -1.]
@@ -298,7 +297,6 @@ end
     # built from that of L with as few channels as its rank across each link, where the product
     # of the MPOs had the square of their bond dimension: 64 on the first, 121 in the middle of the
     # second, fermions of no definite parity, whose strings the product carries
-    LA = TMS.LinearAlgebra
     xxz = -im * (sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + 0.5 * Z(i) * Z(i + 1) for i in 1:4) +
                  0.3 * sum(Z(i) for i in 1:5)) + sum(Dissipator(Sm)(i) + 0.2 * Dissipator(Z)(i) for i in 1:5)
     fermions = -im * (sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) +
@@ -454,7 +452,6 @@ end
     # the lowest eigenstates in turn, each orthogonal to those before, the energy that of the
     # Hamiltonian alone, against its spectrum
     H = heis + 0.3 * sum(Z(i) for i in 1:n)
-    LA = TMS.LinearAlgebra
     E = LA.eigvals(LA.Hermitian(Matrix(lowered(sys, H))))
     @test PreMPO(up, H).width ≥ E[end] - E[1]
     r = random_state(Pure, sys, 4; rng = Xoshiro(1))

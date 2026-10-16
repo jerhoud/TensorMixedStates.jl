@@ -46,7 +46,7 @@ function jw_reduced(system, ρ, kept)
         u[x, y] = 1
         return u
     end
-    return [ TMS.LinearAlgebra.tr(ρ * jw_embedded(system, kept, unit(y, x))) for x in 1:d, y in 1:d ]
+    return [ LA.tr(ρ * jw_embedded(system, kept, unit(y, x))) for x in 1:d, y in 1:d ]
 end
 
 """
@@ -103,7 +103,6 @@ end
         ("fermions", System(4, Fermion())), ("electrons", System(3, Electron())),
         ("t-J sites", System(3, Tj())),
         ("a qubit among fermions", System([Fermion(), Qubit(), Electron(), Fermion()]))]
-    LA = TMS.LinearAlgebra
     rng = Xoshiro(20261015)
     n = length(sys)
     ψ = random_state(Pure, sys, 4; rng)
@@ -280,7 +279,6 @@ end
 @testset "Slater determinants" begin
     # the product of the creation operators of the orbitals, written with their strings, on the
     # vacuum, up to a global phase
-    LA = TMS.LinearAlgebra
     rng = Xoshiro(20261015)
     orbitals(n, k) = Matrix(LA.qr(randn(rng, ComplexF64, n, k)).Q)[:, 1:k]
     vacuum(sys) = foldl(kron, [ (e = zeros(dim(sys[i])); e[1] = 1; e) for i in 1:length(sys) ])
