@@ -11,9 +11,9 @@ export apply
 """
     dense_limit
 
-the largest product of the dimensions of the sites of a piece of more than two sites that
-`apply` takes as a dense block, and of their squares for a block on the mixed indices of a
-density matrix; beyond, it goes through its MPO
+the largest product of the dimensions of the sites of a factor of more than two sites given by
+its matrix there that `apply` takes as a dense block, see `piece_steps!`, and of their squares
+for a block on the mixed indices of a density matrix; beyond, it goes through its MPO
 """
 const dense_limit = 1024
 
@@ -433,9 +433,10 @@ end
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
 operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
-they bring, 0 for a dense piece that is zero. A piece on at most two sites, or small enough, see
-`dense_enough`, laying no string elsewhere and changing the charges by a definite amount, see
-`definite_on`, is a dense block, see `gate_steps!`, unless it is a run; otherwise it goes
+they bring, 0 for a dense piece that is zero. A piece on at most two sites, or a factor given by
+its matrix on its sites small enough, see `dense_enough`, laying no string elsewhere and changing
+the charges by a definite amount, see `definite_on`, is a dense block, see `gate_steps!`, unless
+it is a run: a sum or a product on more sites costs less through its MPO. Otherwise it goes
 through gates of one site when it has a single term, as a run usually does, and through its MPO
 otherwise, see `compacted_op`, on a density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``,
 see `compacted_super`
@@ -443,7 +444,7 @@ see `compacted_super`
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
                       run::Bool) where R
     sites = sort(sites_of(p))
-    if !run && (length(sites) ≤ 2 || dense_enough(Pure, system, sites))
+    if !run && (length(sites) ≤ 2 || (p isa AtIndex && dense_enough(Pure, system, sites)))
         m = matrix_on(system, p, sites)
         # the null state, which ITensors cannot factorise into an MPO on charged sites
         if iszero(m)
