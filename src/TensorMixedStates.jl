@@ -52,6 +52,7 @@ include("core/Graphs.jl")
 
 # Operators on a system
 include("engine/Split.jl")
+include("engine/Ordering.jl")
 include("engine/Lowering.jl")
 include("engine/Compact.jl")
 include("engine/Mpo.jl")
