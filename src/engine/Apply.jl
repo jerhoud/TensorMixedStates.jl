@@ -453,19 +453,11 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
             return 1
         end
     end
-    check_indices(system, p)
-    if R === Pure
-        c = compacted_op(system, p)
-        if !isnothing(c.terms) && length(c.terms) == 1
-            return one_site_gates!(steps, Pure, system, only(c.terms))
-        end
-        return pre_step!(steps, PreMPO(system, [c]))
+    c = compacted_op(system, p)
+    if !isnothing(c.terms) && length(c.terms) == 1
+        return one_site_gates!(steps, R, system, only(c.terms))
     end
-    terms = lower(system, p)
-    if length(terms) == 1
-        return one_site_gates!(steps, Mixed, system, only(terms))
-    end
-    return pre_step!(steps, PreMPO(system, [compacted_super(system, Gate(p))]))
+    return pre_step!(steps, PreMPO(system, [R === Pure ? c : compacted_super(system, Gate(p))]))
 end
 
 """
