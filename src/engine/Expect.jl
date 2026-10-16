@@ -123,60 +123,6 @@ ket with bra on a pure one, the bra of site `i` included; cached for all sites o
 get_right(state::State, i::Int) = cached!(create_right!, state.preobs.right, state)[i]
 
 """
-    extend_left!(l, state, i)
-
-extend `l`, which holds what `get_left` returns for its first sites, the first one at least,
-up to site `i`; on a pure state, the left orthogonal sites up to `leftlim` give the identity,
-uncontracted
-"""
-function extend_left!(l, state::State{Pure}, i::Int)
-    st = state.state
-    ll = ITensorMPS.leftlim(st) + 1
-    # pushed one by one: an interruption leaves what is there complete
-    for k in length(l)+1:i
-        llink = commonind(st[k-1], st[k])
-        v = if k <= ll
-            # the directions the branch below leaves, the ket link as st[k-1] holds it and the
-            # bra one daggered and primed: only charges tell the other way round apart
-            delta(llink, dag(llink)')
-        else
-            l[k-1] * identity_at(state, k-1) * dag(st[k-1]')
-        end
-        push!(l, v * st[k])
-    end
-    return l
-end
-
-function extend_left!(l, state::State{Mixed}, i::Int)
-    st = state.state
-    for k in length(l)+1:i
-        push!(l, l[k-1] * identity_at(state, k-1) * st[k])
-    end
-    return l
-end
-
-"""
-    get_left(state, i)
-
-the environment on the left of site `i`: the sites before `i` traced out on a mixed state, ket
-with bra on a pure one, times the tensor of the state on `i`, not divided by the trace;
-computed up to `i` on demand and cached
-"""
-function get_left(state::State, i::Int)
-    l = state.preobs.left
-    # read under the lock too, the vector growing as it is extended
-    return lock(state.preobs.lock) do
-        if isempty(l)
-            push!(l, state.state[1])
-        end
-        if length(l) < i
-            extend_left!(l, state, i)
-        end
-        l[i]
-    end
-end
-
-"""
     string_at(state, i)
 
 the tensor measuring the Jordan-Wigner string `F` on site `i`, the identity on a site that is
@@ -188,26 +134,66 @@ function string_at(state::State, i::Int)
 end
 
 """
-    extend_strung!(l, state, i)
+    extend_left!(l, state, i, at)
 
-extend `l`, which holds what `get_strung_left` returns for its first sites, the first one at
-least, up to site `i`
+extend `l`, which holds the environments on the left of the first sites, the first one at
+least, up to site `i`, `at(state, k)` measuring each site before: the identity, see
+`identity_at`, or the string, see `string_at`; on a pure state, the left orthogonal sites up to
+`leftlim` give the identity, uncontracted, for the identity
 """
-function extend_strung!(l, state::State{Pure}, i::Int)
+function extend_left!(l, state::State{Pure}, i::Int, at)
     st = state.state
+    ll = at === identity_at ? ITensorMPS.leftlim(st) + 1 : 0
+    # pushed one by one: an interruption leaves what is there complete
     for k in length(l)+1:i
-        push!(l, l[k-1] * string_at(state, k-1) * dag(st[k-1]') * st[k])
+        v = if k <= ll
+            llink = commonind(st[k-1], st[k])
+            # the directions the branch below leaves, the ket link as st[k-1] holds it and the
+            # bra one daggered and primed: only charges tell the other way round apart
+            delta(llink, dag(llink)')
+        else
+            l[k-1] * at(state, k-1) * dag(st[k-1]')
+        end
+        push!(l, v * st[k])
     end
     return l
 end
 
-function extend_strung!(l, state::State{Mixed}, i::Int)
+function extend_left!(l, state::State{Mixed}, i::Int, at)
     st = state.state
     for k in length(l)+1:i
-        push!(l, l[k-1] * string_at(state, k-1) * st[k])
+        push!(l, l[k-1] * at(state, k-1) * st[k])
     end
     return l
 end
+
+"""
+    left_environment(state, l, at, i)
+
+the environment on the left of site `i` kept in the cache `l` of `state`, computed up to `i` on
+demand, see `extend_left!`
+"""
+function left_environment(state::State, l::Vector, at, i::Int)
+    # read under the lock too, the vector growing as it is extended
+    return lock(state.preobs.lock) do
+        if isempty(l)
+            push!(l, state.state[1])
+        end
+        if length(l) < i
+            extend_left!(l, state, i, at)
+        end
+        l[i]
+    end
+end
+
+"""
+    get_left(state, i)
+
+the environment on the left of site `i`: the sites before `i` traced out on a mixed state, ket
+with bra on a pure one, times the tensor of the state on `i`, not divided by the trace;
+computed up to `i` on demand and cached
+"""
+get_left(state::State, i::Int) = left_environment(state, state.preobs.left, identity_at, i)
 
 """
     get_strung_left(state, i)
@@ -216,18 +202,7 @@ the environment on the left of site `i` as `get_left` gives it, with the Jordan-
 `F` on every site before `i`, which an odd operator on `i` takes; computed up to `i` on demand
 and cached
 """
-function get_strung_left(state::State, i::Int)
-    l = state.preobs.strung
-    return lock(state.preobs.lock) do
-        if isempty(l)
-            push!(l, state.state[1])
-        end
-        if length(l) < i
-            extend_strung!(l, state, i)
-        end
-        l[i]
-    end
-end
+get_strung_left(state::State, i::Int) = left_environment(state, state.preobs.strung, string_at, i)
 
 """
     Expector(pos, t)
