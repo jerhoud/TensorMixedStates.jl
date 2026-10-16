@@ -224,30 +224,15 @@ ground_state(::Any, ::State{Mixed}; kwargs...) =
     error("ground_state searches a pure state: search it pure and mix it")
 
 """
-    check_mpo_algo(mpo_algo)
+    squared_lindbladian(pre, mpo_limits)
 
-refuse an algorithm of the product ``L^\\dagger L`` other than `"naive"` and `"zipup"`
+the MPO of ``L^\\dagger L`` for the Lindbladian of `pre`, with as few channels as its rank across
+each link, see `adjoint_product`, truncated by `mpo_limits` when they are given, kept in `pre`
 """
-function check_mpo_algo(mpo_algo::String)
-    if mpo_algo ∉ ("naive", "zipup")
-        error("mpo_algo is \"naive\" or \"zipup\", not $(repr(mpo_algo))")
-    end
-    return mpo_algo
-end
-
-"""
-    squared_lindbladian(pre, mpo_limits, mpo_algo)
-
-the MPO of ``L^\\dagger L`` for the Lindbladian of `pre`, computed by `mpo_algo` and truncated by
-`mpo_limits`, kept in `pre`
-"""
-function squared_lindbladian(pre::PreMPO{Mixed}, mpo_limits::Limits, mpo_algo::String)
-    check_mpo_algo(mpo_algo)
-    return cached_mpos(pre, :squared_lindbladian, (mpo_limits, mpo_algo)) do
-        l = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
-        # the naive algorithm truncates only when asked to, the others take no such option
-        extra = mpo_algo == "naive" ? (; truncate = mpo_limits ≠ Limits()) : (;)
-        apply(replaceprime(dag(l)', 2 => 0), l; truncation(mpo_limits)..., alg = mpo_algo, extra...)
+function squared_lindbladian(pre::PreMPO{Mixed}, mpo_limits::Limits)
+    return cached_mpos(pre, :squared_lindbladian, mpo_limits) do
+        m = make_mpo(adjoint_product(pre))
+        mpo_limits == Limits() ? m : ITensorMPS.truncate(m; truncation(mpo_limits)...)
     end
 end
 
@@ -277,18 +262,17 @@ function steady_result(value, state::State{Mixed})
 end
 
 """
-    steady_state(lindbladian, state; algo, limits = Limits(), mpo_limits = Limits(),
-                 mpo_algo = "naive")
+    steady_state(lindbladian, state; algo, limits = Limits(), mpo_limits = Limits())
 
 the steady state of the Lindbladian ``L``, `-im * H` plus dissipators, the lowest eigenvector
 of ``L^\\dagger L`` searched from the mixed `state` by the method `algo`, see
 `SearchAlgorithm`, as `(value, state)` with trace one, `value` being the eigenvalue reached,
-zero for a steady state. The Lindbladian may be given as its `PreMPO(state, lindbladian)`,
-prepared once and keeping the MPO of ``L^\\dagger L``.
+zero for a steady state. The MPO of ``L^\\dagger L``, built from that of ``L``, has as few
+channels as its rank across each link. The Lindbladian may be given as its
+`PreMPO(state, lindbladian)`, prepared once and keeping the MPO of ``L^\\dagger L``.
 
 - `limits`: the limits of the sweeps, see `Limits`, with a default cutoff of `1e-26`
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L`` (default none)
-- `mpo_algo`: the algorithm of the product ``L^\\dagger L``, `"naive"` or `"zipup"`
 
 The Krylov search of `Dmrg` takes `dim = 8` and `maxiter = 3` by default, which the spectrum of
 ``L^\\dagger L``, crowded near zero, needs. A Lindbladian may have several steady states, one in
@@ -304,10 +288,9 @@ unique.
                               limits = Limits(maxdim = [10, 20, 50]))
 """
 function steady_state(lindbladian, state::State{Mixed}; algo::Union{Nothing, SearchAlgorithm} = nothing,
-                      limits::Limits = Limits(), mpo_limits::Limits = Limits(),
-                      mpo_algo::String = "naive")
+                      limits::Limits = Limits(), mpo_limits::Limits = Limits())
     algo = search_algo(algo, "steady_state")
-    l2 = squared_lindbladian(prepared_operator(state, lindbladian), mpo_limits, mpo_algo)
+    l2 = squared_lindbladian(prepared_operator(state, lindbladian), mpo_limits)
     return steady_result(search(algo, l2, state, limits; krylov = steady_krylov)...)
 end
 

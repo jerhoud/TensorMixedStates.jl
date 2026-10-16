@@ -302,8 +302,8 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
 end
 
 """
-    SteadyState(; lindbladian, algo, limits, mpo_limits, mpo_algo, measurements,
-                  measurements_period, on, name, time_start, final_measurements)
+    SteadyState(; lindbladian, algo, limits, mpo_limits, measurements, measurements_period, on,
+                  name, time_start, final_measurements)
 
 a phase that searches the steady state of a Lindbladian from the mixed state, see
 `steady_state`, the value `:energy` taking the eigenvalue of ``L^\\dagger L`` of each sweep, 0
@@ -314,8 +314,7 @@ for a steady state, and the state measured after a sweep having trace one.
 - `lindbladian`: the Lindbladian ``L``, `-im * H` plus dissipators
 - `algo`: the method, see `SearchAlgorithm`
 - `limits`: the limits of the sweeps, see `Limits`
-- `mpo_limits`, `mpo_algo`: the truncation and the algorithm of the MPO of ``L^\\dagger L``,
-  see `steady_state`
+- `mpo_limits`: the truncation of the MPO of ``L^\\dagger L``, see `steady_state`
 - `measurements`: the measurements made after every `measurements_period` sweeps (default 1)
 - `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
@@ -332,16 +331,15 @@ for a steady state, and the state measured after a sweep having trace one.
     algo::SearchAlgorithm = nothing
     limits::Limits = Limits()
     mpo_limits::Limits = Limits()
-    mpo_algo::String = "naive"
     measurements = []
     measurements_period::Int = 1
     on::Symbol = :state
     # refused when the phase is written, as the fields of Evolve and ApproxW, the method asked for
     # with what to write
     SteadyState(name, time_start, final_measurements, lindbladian, algo, limits, mpo_limits,
-                mpo_algo, measurements, measurements_period, on) =
+                measurements, measurements_period, on) =
         new(name, time_start, final_measurements, lindbladian, search_algo(algo, "SteadyState"),
-            limits, mpo_limits, check_mpo_algo(mpo_algo), measurements, measurements_period, on)
+            limits, mpo_limits, measurements, measurements_period, on)
 end
 
 provided_values(::SteadyState) = (:energy,)
@@ -351,8 +349,7 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     if !(state isa State{Mixed})
         error("SteadyState searches a density matrix: mix the state first, see ToMixed")
     end
-    l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits,
-                             phase.mpo_algo)
+    l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits)
     log_message(sim, "Searching the steady state")
     return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result;
                       krylov = steady_krylov)

@@ -64,7 +64,8 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 | `coefs` of an evolver depending on time | `[A, B] => [f, g]`, real functions of the time |
 | `time_start` | `time` |
 | `dmrg(H, state; nsweeps, noise)` | `ground_state(H, state; algo = Dmrg(nsweeps, noise, tol))` |
-| `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(nsweeps), mpo_algo)` |
+| `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(nsweeps))` |
+| `mpo_algo` of `steady_state` and `SteadyState` | none: the MPO of ``L^\dagger L`` is built from that of ``L`` with as few channels as its rank, `mpo_limits` truncating it if given |
 | `RandomState{Pure}(system, d)` | `random_state(Pure, system, d)`, `random_state(Mixed, system, d)` or `random_state(state, d)` |
 | `TdvpObserver`, `ApproxWObserver`, `DmrgObserver`, `observer!` | call the solver step by step and measure between the calls, or measure in a phase |
 | `make_approx_W1`, `make_approx_W2` | not exported: `TensorMixedStates.make_approx_W1` |

@@ -388,6 +388,32 @@ function combination_matrix(b::ComBlock{T}, j::Int, comb::Combination{T}, d::Int
 end
 
 """
+    reduced_block(R, system, b, singles)
+
+the block of channels `b`, built with its atoms taken as independent, written on a basis of each
+site, see `on_basis!`, the identity moved out of its openings and its closings, see
+`push_identities!`, into the terms of one site `singles`, a matrix for each site, and reduced by
+the sweeps, `left_sweep!` from the left then on its mirror from the right, to as few channels on
+each link as the rank of the coupling across it
+"""
+function reduced_block(::Type{R}, system::System, b::ComBlock{T},
+                       singles::Dict{Int, Matrix{T}}) where {R, T}
+    b = on_basis!(b, rounding_tol)
+    opened = push_identities!(b)
+    b = mirror(b)
+    closed = push_identities!(b)
+    b = left_sweep!(mirror(b), rounding_tol)
+    b = mirror(left_sweep!(mirror(b), rounding_tol))
+    for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
+        if !isempty(comb)
+            k = b.start + j - 1
+            add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
+        end
+    end
+    return b
+end
+
+"""
     string_factors(R, system, t)
 
 the factors of the term `t`, as `(site, matrix, g)`: its blocks with its strings laid on them,
@@ -421,12 +447,9 @@ the terms of an operator on `system` as its constant, its terms of one site, a m
 site, and the block of channels of its terms of several sites, `nothing` when it has none, the
 matrices being those of superoperators for `R = Mixed`. The strings of the terms are laid on
 their factors, see `string_factors`, and carried by the channels between them. The block, built
-by `direct_pass`, is written on a basis of each site, see `on_basis!`, the identity moved out of
-its openings and its closings into terms of one site, see `push_identities!`, and the sweeps,
-`left_sweep!` from the left then on its mirror from the right, reduce what these relations made
-dependent: each link is left with as few channels as the rank of the coupling across it. A term
-of one site that rounding left in place of zero is dropped, the terms measured by
-`normalized_norm`.
+by `direct_pass`, is reduced to as few channels on each link as the rank of the coupling across
+it, see `reduced_block`. A term of one site that rounding left in place of zero is dropped, the
+terms measured by `normalized_norm`.
 """
 function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
     scale = maximum(t -> abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0),
@@ -464,18 +487,7 @@ function compacted(::Type{R}, system::System, terms::Vector{Term}) where R
         # the atoms read after the pass, which adds those of the strings
         b = ComBlock{T}(start, dims, pieces,
                         [ get(atoms, k, Matrix{T}[]) for k in start:start + length(pieces) - 1 ])
-        b = on_basis!(b, rounding_tol)
-        opened = push_identities!(b)
-        b = mirror(b)
-        closed = push_identities!(b)
-        b = left_sweep!(mirror(b), rounding_tol)
-        b = mirror(left_sweep!(mirror(b), rounding_tol))
-        for (j, comb) in enumerate(mergewith(+, s, c) for (s, c) in zip(opened, reverse(closed)))
-            if !isempty(comb)
-                k = b.start + j - 1
-                add!(singles, k, combination_matrix(b, j, comb, block_dim(R, system[k])))
-            end
-        end
+        b = reduced_block(R, system, b, singles)
     end
     return constant, filter(p -> normalized_norm(last(p)) > rounding_tol * scale, singles), b
 end

@@ -947,8 +947,6 @@ end
     @test_throws "GroundState needs its search method: algo = Dmrg(nsweeps = 10)" GroundState(
         hamiltonian = Z(1))
     @test_throws "SteadyState needs its search method" SteadyState(lindbladian = Dissipator(Sm)(1))
-    @test_throws "mpo_algo is \"naive\" or \"zipup\", not \"zipp\"" SteadyState(
-        lindbladian = Dissipator(Sm)(1), algo = Dmrg(nsweeps = 1), mpo_algo = "zipp")
     in_tmp() do
         # a line once the run returns, where its results are, whether it stopped, and the
         # warnings its log received

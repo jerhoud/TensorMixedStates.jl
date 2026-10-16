@@ -48,6 +48,8 @@ version 2.x.
 - The value of a Hermitian operator is real, and that of any other complex, whatever the state.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
+- `steady_state` builds the MPO of ``L^\dagger L`` from that of ``L`` with as few channels as its
+  rank, where the product of the MPOs had the square of their bond dimension.
 
 ### Removed
 
@@ -62,6 +64,7 @@ version 2.x.
   files.
 - The names deprecated since 1.2.0 and 1.3.0: `EE`, `Linkdim`, `Mutual_Info_Renyi2` and
   `DataToFrame`.
+- `mpo_algo` of `steady_state` and `SteadyState`, the method of the product of the MPOs.
 
 ## [1.6.1] - 2026-10-09
 

@@ -294,6 +294,32 @@ end
     end
 end
 
+@testset "The MPO of L†L" begin
+    # built from that of L with as few channels as its rank across each link, where the product
+    # of the MPOs had the square of their bond dimension: 64 on the first, 121 in the middle of the
+    # second, fermions of no definite parity, whose strings the product carries
+    LA = TMS.LinearAlgebra
+    function mixed_matrix(m, idx)
+        a = Array(IT.dense(prod(m)), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
+        return reshape(a, prod(IT.dim.(idx)), prod(IT.dim.(idx)))
+    end
+    xxz = -im * (sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + 0.5 * Z(i) * Z(i + 1) for i in 1:4) +
+                 0.3 * sum(Z(i) for i in 1:5)) + sum(Dissipator(Sm)(i) + 0.2 * Dissipator(Z)(i) for i in 1:5)
+    fermions = -im * (sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) +
+                      0.4 * (C + dag(C))(2) + 0.3 * C(1) * C(4) + 0.3 * dag(C)(4) * dag(C)(1)) +
+               Dissipator(C)(1) + 0.5 * Dissipator(dag(C))(4) + 0.2 * Dissipator(N)(2)
+    for (sys, L, fewest) in [(System(5, Qubit()), xxz, [17, 25, 25, 17]),
+                             (System(4, Fermion()), fermions, [17, 55, 16])]
+        pre = PreMPO(random_state(Mixed, sys, 4), L)
+        idx = siteinds(Mixed, sys)
+        l = mixed_matrix(make_mpo(pre), idx)
+        l2 = TMS.squared_lindbladian(pre, Limits())
+        @test norm(mixed_matrix(l2, idx) - l' * l) ≤ 1e-12 * norm(l' * l)
+        @test TMS.ITensorMPS.linkdims(l2) == least_channels(l' * l, [ IT.dim(i) for i in idx ]) .+ 2 ==
+              fewest
+    end
+end
+
 @testset "The MPOs kept in the PreMPO" begin
     # ground_state keeps the MPO of the Hamiltonian, which a second search takes again, and
     # steady_state that of L†L for its limits and its algorithm
@@ -311,20 +337,16 @@ end
     pl = PreMPO(ρ0, L)
     _, ρ1 = steady_state(pl, ρ0; algo = Dmrg(nsweeps = 4))
     key, l2 = pl.cache[:squared_lindbladian]
-    @test key == (Limits(), "naive")
+    @test key == Limits()
     _, ρ2 = steady_state(pl, ρ0; algo = Dmrg(nsweeps = 4))
     @test last(pl.cache[:squared_lindbladian]) === l2
     @test norm(ρ1 - ρ2) < 1e-10
-    # another truncation of L†L, or another algorithm of the product, builds it again, the MPO
-    # of L being kept
-    l = last(pl.cache[:mpo])
-    for (mpo_limits, mpo_algo) in [(Limits(cutoff = 1e-14), "naive"), (Limits(), "zipup")]
-        _, ρ3 = steady_state(pl, ρ0; algo = Dmrg(nsweeps = 4), mpo_limits, mpo_algo)
-        @test first(pl.cache[:squared_lindbladian]) == (mpo_limits, mpo_algo)
-        @test last(pl.cache[:squared_lindbladian]) !== l2
-        @test norm(ρ3 - ρ1) < 1e-8
-    end
-    @test last(pl.cache[:mpo]) === l
+    # another truncation of L†L builds it again
+    mpo_limits = Limits(cutoff = 1e-14)
+    _, ρ3 = steady_state(pl, ρ0; algo = Dmrg(nsweeps = 4), mpo_limits)
+    @test first(pl.cache[:squared_lindbladian]) == mpo_limits
+    @test last(pl.cache[:squared_lindbladian]) !== l2
+    @test norm(ρ3 - ρ1) < 1e-8
 end
 
 @testset "The methods and their parameters" begin
@@ -409,8 +431,6 @@ end
     @test_throws "the search divides by the norm of the state, which is zero, as for the null state" ground_state(
         h, 0 * st; algo)
     @test_throws "as for the null state" steady_state(Dissipator(Sm)(1), 0 * ρ; algo)
-    @test_throws "mpo_algo is \"naive\" or \"zipup\", not \"fit\"" steady_state(
-        Dissipator(Sm)(1), ρ; algo, mpo_algo = "fit")
     # the options of ITensorMPS are not passed on, `outputlevel` included
     @test_throws MethodError ground_state(X(1) * X(2), st; algo, outputlevel = 1)
     @test_throws MethodError steady_state(Dissipator(Sm)(1), ρ; algo, outputlevel = 1)

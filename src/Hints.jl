@@ -168,7 +168,10 @@ const moved_keywords = let
     end
     d[(PartialTrace, :trace_positions)] = "trace_positions became positions"
     d[(PartialTrace, :keep_positions)] = "keep_positions = p became positions = p, keep = true"
-    d[(steady_state, :alg)] = "alg became mpo_algo"
+    for (f, k) in ((steady_state, :alg), (steady_state, :mpo_algo), (SteadyState, :mpo_algo))
+        d[(f, k)] = "$k was removed: the MPO of L†L is built from that of L with as few " *
+                    "channels as its rank, mpo_limits truncating it if given"
+    end
     d[(partial_trace, :keepers)] = "keepers became keep"
     d[(load_state, :system)] = "system was removed: systems with the same sites are equal"
     for f in (named, controlled)

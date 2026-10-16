@@ -131,19 +131,16 @@ function term_width(system::System, t::Term)
 end
 
 """
-    lay_terms!(pre, terms, ref)
+    lay_compacted!(pre, constant, singles, b, ref)
 
-add to `pre`, and return it, the terms of an operator, compacted, see `compacted`, taking the
-time function `ref`: the constant on the first site of the others, so that the MPO is the
-identity outside their sites, see `mpo_window`, the terms of one site on their site, and the
-channels of the terms of several sites numbered after those their links already have
+add to `pre`, and return it, an operator compacted, see `compacted`, taking the time function
+`ref`: the constant on the first site of the others, so that the MPO is the identity outside
+their sites, see `mpo_window`, the terms of one site `singles` on their site, and the channels
+of the block `b` numbered after those their links already have
 """
-function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
-    if R === Pure
-        pre.width[] += sum(t -> term_width(pre.system, t), terms; init = 0.)
-    end
+function lay_compacted!(pre::PreMPO{R}, constant::Number, singles::AbstractDict,
+                        b::Union{Nothing, ComBlock}, ref::Int) where R
     sys = pre.system
-    constant, singles, b = compacted(R, sys, terms)
     if !iszero(constant)
         ks = [ collect(keys(singles)) ; isnothing(b) ? Int[] : [b.start] ]
         k = isempty(ks) ? 1 : minimum(ks)
@@ -169,6 +166,106 @@ function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
         end
     end
     return pre
+end
+
+"""
+    lay_terms!(pre, terms, ref)
+
+add to `pre`, and return it, the terms of an operator, compacted, see `compacted` and
+`lay_compacted!`, taking the time function `ref`
+"""
+function lay_terms!(pre::PreMPO{R}, terms::Vector{Term}, ref::Int) where R
+    if R === Pure
+        pre.width[] += sum(t -> term_width(pre.system, t), terms; init = 0.)
+    end
+    return lay_compacted!(pre, compacted(R, pre.system, terms)..., ref)
+end
+
+"""
+    natural(pre, k, m)
+
+the matrix `m` of site `k` of `pre`, in the order of the index of the site, back in the order of
+the site, see `on_index`
+"""
+natural(::PreMPO{Pure}, ::Int, m::Matrix) = m
+
+function natural(pre::PreMPO{Mixed}, k::Int, m::Matrix)
+    n = similar(m)
+    n[pre.orders[k], pre.orders[k]] = m
+    return n
+end
+
+"""
+    site_moves(pre, k)
+
+the pieces of site `k` of `pre`, of a single time function, as the matrices, in the order of the
+site, of the moves between the states of the links on either side: a channel, 0 the term not
+yet begun or -1 the term finished, the identity going from 0 to 0 and from -1 to -1, see
+`window_mpo`
+"""
+function site_moves(pre::PreMPO{R}, k::Int) where R
+    d = block_dim(R, pre.system[k])
+    id = Matrix{ComplexF64}(I, d, d)
+    moves = Dict{Tuple{Int, Int}, Matrix{ComplexF64}}((0, 0) => id, (-1, -1) => id)
+    for (l, r, _, _, m) in pre.terms[k]
+        add!(moves, (l == 1 ? 0 : l, r == 1 ? -1 : r), natural(pre, k, m))
+    end
+    return moves
+end
+
+"""
+    adjoint_product(pre)
+
+the `PreMPO` of ``A^\\dagger A`` for the operator `A` of `pre`, of a single time function: the
+channels of a link the pairs of its states in ``A^\\dagger`` and in `A`, see `site_moves`, the
+pieces the products of theirs, the block reduced as that of the terms would be, see
+`reduced_block`, to as few channels as the rank of ``A^\\dagger A`` across each link, at a cost
+linear in the number of sites where the terms of ``A^\\dagger A`` grow as its square
+"""
+function adjoint_product(pre::PreMPO{R}) where R
+    if pre.nterms ≠ 1
+        error("bug: the product of a PreMPO of $(pre.nterms) time functions")
+    end
+    sys = pre.system
+    n = length(sys)
+    T = ComplexF64
+    ends = ((0, 0), (-1, -1))
+    channels = map(1:n-1) do k
+        s = [0; 2:pre.linkdims[k]; -1]
+        pairs = [ (a, b) for a in s for b in s if (a, b) ∉ ends ]
+        return Dict(p => i for (i, p) in enumerate(pairs))
+    end
+    singles = Dict{Int, Matrix{T}}()
+    pieces = [ SitePieces{T}() for _ in 1:n ]
+    atoms = [ Matrix{T}[] for _ in 1:n ]
+    for k in 1:n
+        moves = site_moves(pre, k)
+        ids = Dict{Matrix{T}, Int}()
+        for ((a1, b1), m1) in moves, ((a2, b2), m2) in moves
+            from, to = (a1, a2), (b1, b2)
+            # nothing comes from the left of the first site, nothing open goes past the last
+            if (from == to && from in ends) || (k == 1 && from ≠ (0, 0)) || (k == n && to ≠ (-1, -1))
+                continue
+            end
+            m = m1' * m2
+            if iszero(m)
+                continue
+            elseif from == (0, 0) && to == (-1, -1)
+                add!(singles, k, m)
+                continue
+            end
+            a = get!(ids, m) do
+                push!(atoms[k], m)
+                return length(atoms[k])
+            end
+            l = from == (0, 0) ? 0 : channels[k-1][from]
+            r = to == (-1, -1) ? 0 : channels[k][to]
+            add!(get!(Combination{T}, pieces[k], (l, r)), a, one(T))
+        end
+    end
+    b = n == 1 ? nothing :
+        reduced_block(R, sys, ComBlock{T}(1, [ length(c) for c in channels ], pieces, atoms), singles)
+    return lay_compacted!(PreMPO{R}(sys), zero(T), singles, b, 1)
 end
 
 """
