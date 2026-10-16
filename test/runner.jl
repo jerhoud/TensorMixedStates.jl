@@ -704,6 +704,24 @@ end
     end
 end
 
+@testset "The warning of a search stopped at its last sweep" begin
+    # made before the step of the last sweep, which may stop the run, where a resumed run, which
+    # skips the phase ended there, lost it: an excited state of a weight below the gap
+    in_tmp() do
+        H = -Z(1) - Z(2) - Z(3) + 0.4 * (X(1) * X(2) + X(2) * X(3))
+        phases = [CreateState{Pure}(3, Qubit(), "Up"),
+                  GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 3)),
+                  CopyState(:state => :ground),
+                  CreateState{Pure}(3, Qubit(), ["Up", "Dn", "Dn"]),
+                  GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 3), orthogonal_to = [:ground],
+                              weight = 0.1)]
+        warned(name) = count(l -> occursin("keeps an overlap", l), readlines("$name/log"))
+        runTMS(SimData(name = "ref", phases = phases))
+        run_through(SimData(name = "chk", phases = phases); max_time = -1)
+        @test warned("ref") == warned("chk") == 1
+    end
+end
+
 @testset "Phases before the first state" begin
     # their commits, holding values alone, are written, where nothing was: a run stopped there
     # started over, and never ended with max_time = -1

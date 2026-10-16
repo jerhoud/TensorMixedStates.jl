@@ -218,19 +218,25 @@ function run_step(t::ThermalSteps, sim::Simulation, k::Int)
 end
 
 """
-    run_search(phase, sim, done, mpo, result; args...)
+    run_search(phase, sim, done, mpo, result, check; args...)
 
 run the search of `phase`, `GroundState` or `SteadyState`, of the lowest eigenvector of `mpo`
 from the state `phase.on` of `sim`, its first `done` sweeps done, each sweep ending with
 `step_done` on the state `result` makes of the eigenvector, and return the simulation with that
-state and the value `:energy`; `args` are the other keywords of `search`
+state and the value `:energy`; `check(energy, state)` warns about the state of the last sweep,
+before its step, and `args` are the other keywords of `search`
 """
-function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result; args...)
+function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check; args...)
     energy = done == 0 ? nothing : sim.energy
     reached = Ref(sim)
-    hook(k, e, st, ends) =
-        reached[] = step_done(with_state(sim, phase.on, result(st); energy = e), phase, k;
-                              last = ends)
+    function hook(k, e, st, ends)
+        r = result(st)
+        # before the step, which may stop the run: a resumed run skips the phase ended there
+        if ends
+            check(e, r)
+        end
+        reached[] = step_done(with_state(sim, phase.on, r; energy = e), phase, k; last = ends)
+    end
     e, st = search(phase.algo, mpo, state_named(sim, phase.on), phase.limits; sweep_done = hook,
                    done, energy, args...)
     return with_state(reached[], phase.on, result(st); energy = e)
@@ -291,10 +297,8 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     args = orthogonal_args(state, pre, ms, phase.weight)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
-    sim = run_search(phase, sim, done, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing),
-                     identity; args...)
-    check_orthogonal(state_named(sim, phase.on), args, phase.weight)
-    return sim
+    return run_search(phase, sim, done, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing),
+                      identity, (_, st) -> check_orthogonal(st, args, phase.weight); args...)
 end
 
 """
@@ -350,7 +354,6 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits,
                              phase.mpo_algo)
     log_message(sim, "Searching the steady state")
-    sim = run_search(phase, sim, done, l2, st -> st / trace(st); krylov = steady_krylov)
-    steady_result(sim.energy, state_named(sim, phase.on))
-    return sim
+    return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result;
+                      krylov = steady_krylov)
 end
