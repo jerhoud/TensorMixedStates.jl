@@ -589,17 +589,18 @@ on the first fermionic site.
 function string_factors(::Type{R}, system::System, t::Term) where R
     fs = Tuple{Int, Matrix, Int}[]
     k = next_fermion(system, 1)
-    if !isempty(t.blocks) && k < first(first(t.blocks)) && strings_on(t, k) ≠ 0
+    if !isempty(t.blocks) && k < first(t.blocks).site && strings_on(t, k) ≠ 0
         push!(fs, (k, string_matrix(R, matrix(F, system[k]), strings_on(t, k)), 0))
     end
-    for (k, m) in t.blocks
+    for b in t.blocks
+        k = b.site
         g = 0
         if !isempty(fs)
             j = first(last(fs))
             g = next_fermion(system, j + 1) < k ? strings_on(t, j) : 0
         end
         f, s = matrix(F, system[k]), strings_on(t, k)
-        push!(fs, (k, f == I || s == 0 ? m : m * string_matrix(R, f, s), g))
+        push!(fs, (k, f == I || s == 0 ? b.m : b.m * string_matrix(R, f, s), g))
     end
     return fs
 end
@@ -619,7 +620,7 @@ function compacted(::Type{R}, system::System, terms::Vector{Term},
                    limits::Limits = Limits()) where R
     scale = maximum(normalized_size, terms; init = 0.0)
     T = promote_type(Float64, (typeof(t.coef) for t in terms)...,
-                     (eltype(m) for t in terms for (_, m) in t.blocks)...)
+                     (eltype(b.m) for t in terms for b in t.blocks)...)
     constant = zero(T)
     singles = Dict{Int, Matrix{T}}()
     atoms = Dict{Int, Vector{Matrix{T}}}()

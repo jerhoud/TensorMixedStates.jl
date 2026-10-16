@@ -482,7 +482,8 @@ end
     sites(sys) = [ sys[k] for k in 1:length(sys) ]
     identity_on(sys) = foldl(kron, [ matrix(Id, s) for s in sites(sys) ])
     whole(sys, t) =
-        foldl(kron, [ get(Dict(t.blocks), k, matrix(Id, s)) for (k, s) in enumerate(sites(sys)) ])
+        foldl(kron, [ get(Dict(b.site => b.m for b in t.blocks), k, matrix(Id, s))
+                      for (k, s) in enumerate(sites(sys)) ])
     lowered(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t)) for t in TMS.lower(sys, op));
                            init = 0 * identity_on(sys))
     function jw(sys, j, a)
@@ -542,17 +543,18 @@ end
     # the reduction: an identity goes into the coefficient, a product that vanishes drops its
     # term, blocks equal up to a coefficient are gathered, and a real operator keeps real terms
     s2 = System(2, q)
-    terms(op) = [ (t.coef, first.(t.blocks)) for t in TMS.lower(s2, op) ]
+    terms(op) = [ (t.coef, [ b.site for b in t.blocks ]) for t in TMS.lower(s2, op) ]
     @test terms(X(1) * X(1)) == [(1., Int[])]
     @test terms(X(1) * Y(1)) == [(im, [1])]
-    @test only(TMS.lower(s2, X(1) * Y(1))).blocks == [1 => z]
+    @test only(TMS.lower(s2, X(1) * Y(1))).blocks == [TMS.Block(1, z, 0)]
     @test terms(X(1) + X(1)) == [(2., [1])]
     @test isempty(terms(X(1) - X(1))) && isempty(terms(Sp(1) * Sp(1)))
     yy = only(TMS.lower(s2, Y(1) * Y(2)))
-    @test yy.coef === -1. && all(m -> eltype(m) == Float64, last.(yy.blocks))
+    @test yy.coef === -1. && all(b -> eltype(b.m) == Float64, yy.blocks)
     # the strings of a hop cancel on its left: each term stays on its two sites
     chain = TMS.lower(System(6, fe), sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:5))
-    @test sort([ first.(t.blocks) for t in chain ]) == sort([ [i, i + 1] for i in 1:5 for _ in 1:2 ])
+    @test sort([ [ b.site for b in t.blocks ] for t in chain ]) ==
+          sort([ [i, i + 1] for i in 1:5 for _ in 1:2 ])
 
     # on a charged system, every block has a definite flux and every term the same one
     fn = Fermion(conserve = N)
@@ -633,7 +635,7 @@ end
     long = System(1000, fe)
     ts = TMS.lower(long, sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:999))
     @test length(ts) == 1998
-    @test all(t -> length(t.blocks) == 2 && last(first.(t.blocks)) == first(first.(t.blocks)) + 1, ts)
+    @test all(t -> length(t.blocks) == 2 && t.blocks[2].site == t.blocks[1].site + 1, ts)
 end
 
 @testset "A long product gathered factor by factor" begin
@@ -650,7 +652,7 @@ end
     # multiplied two by two, the factors keeping their order and their strings: a string of Z on
     # many sites, and a fermionic product against the matrices of its factors placed
     @test only(TMS.lower(System(500, q), prod(Z(i) for i in 1:500))).blocks ==
-          [ i => matrix(Z, q) for i in 1:500 ]
+          [ TMS.Block(i, matrix(Z, q), 0) for i in 1:500 ]
     fe = Fermion()
     f, c, n, id = matrix(F, fe), matrix(C, fe), matrix(N, fe), matrix(Id, fe)
     placed(m, k, odd) = foldl(kron, [ j < k ? (odd ? f : id) : j == k ? m : id for j in 1:8 ])
@@ -670,7 +672,7 @@ end
     @test mat(prod(fs)) ≈ prod(mat.(fs))
     # blocks equal up to rounding are one block
     z, zr = [1. 0. ; 0. -1.], [1. 0. ; 0. -0.9999999999999998]
-    term(m) = TMS.Term(1., [1 => m], [0], Int[], Int[])
+    term(m) = TMS.Term(1., [TMS.Block(1, m, 0)], Int[], Int[])
     @test length(TMS.reduced([term(z), term(zr), term(complex(z) .+ 1e-17im)])) == 1
     # and their values are not rounded: a phase on each of four sites was measured off by
     # 2.6e-13, its blocks snapped to a grid of 2^-43

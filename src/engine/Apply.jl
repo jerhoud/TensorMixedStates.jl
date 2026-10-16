@@ -285,7 +285,7 @@ of those sites, see `mixed_elements`
 function mixed_block(system::System, terms::Vector{Term}, sites)
     orders = Dict(k => mixed_elements(system, k) for k in sites)
     return sum(terms) do t
-        bs = Dict(t.blocks)
+        bs = Dict(b.site => b.m for b in t.blocks)
         t.coef * foldl(kron, [ haskey(bs, k) ? bs[k][orders[k], orders[k]] :
                                    Matrix{Float64}(I, dim(system[k])^2, dim(system[k])^2)
                                for k in sites ])
@@ -437,7 +437,7 @@ gates of one site, see `gate_steps!`, and return its coefficient
 """
 function one_site_gates!(steps::Vector, ::Type{R}, system::System, t::Term) where R
     t = laid_strings(Pure, system, t)
-    foreach(((k, m),) -> gate_steps!(steps, R, system, m, [k]), t.blocks)
+    foreach(b -> gate_steps!(steps, R, system, b.m, [b.site]), t.blocks)
     return t.coef
 end
 
@@ -526,7 +526,7 @@ function mixed_steps(system::System, a::IndexedOp)
             coef *= abs2(operator_steps!(steps, Mixed, system, f))
         else
             terms = [ laid_strings(Mixed, system, t) for t in lower(system, f) ]
-            ks = sort!(unique(k for t in terms for (k, _) in t.blocks))
+            ks = sort!(unique(b.site for t in terms for b in t.blocks))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif dense_enough(Mixed, system, ks)

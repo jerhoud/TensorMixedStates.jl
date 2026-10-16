@@ -11,7 +11,7 @@
 the coefficient of the term `t` times the operator norms of its blocks, which bounds its norm,
 the strings of `F` changing none, and so the expectation values of the term on a normalized state
 """
-term_size(t::Term) = abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks; init = 1.0)
+term_size(t::Term) = abs(t.coef) * prod(opnorm(b.m) for b in t.blocks; init = 1.0)
 
 """
     term_width(system, t)
@@ -28,10 +28,10 @@ function term_width(system::System, t::Term)
     if isempty(t.blocks)
         return 0.
     elseif length(t.blocks) > 2
-        return 2abs(t.coef) * prod(opnorm(m) for (_, m) in t.blocks)
+        return 2abs(t.coef) * prod(opnorm(b.m) for b in t.blocks)
     end
-    m = t.coef * foldl(kron, [ on_string(t.kets, k) ? m * matrix(F, system[k]) : m
-                               for (k, m) in t.blocks ])
+    m = t.coef * foldl(kron, [ on_string(t.kets, b.site) ? b.m * matrix(F, system[b.site]) : b.m
+                               for b in t.blocks ])
     λ = eigvals(Hermitian((m + m') / 2))
     return isempty(t.kets) ? last(λ) - first(λ) : 2maximum(abs, λ)
 end
