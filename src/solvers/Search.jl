@@ -219,7 +219,8 @@ function ground_state(hamiltonian, state::State{Pure}; algo::Union{Nothing, Sear
     return (e, st)
 end
 
-ground_state(_, ::State{Mixed}; kwargs...) =
+# ::Any rather than _, which Julia 1.10 refuses before keywords
+ground_state(::Any, ::State{Mixed}; kwargs...) =
     error("ground_state searches a pure state: search it pure and mix it")
 
 """
@@ -310,5 +311,6 @@ function steady_state(lindbladian, state::State{Mixed}; algo::Union{Nothing, Sea
     return steady_result(search(algo, l2, state, limits; krylov = steady_krylov)...)
 end
 
-steady_state(_, ::State{Pure}; kwargs...) =
+# ::Any rather than _, which Julia 1.10 refuses before keywords
+steady_state(::Any, ::State{Pure}; kwargs...) =
     error("steady_state searches a density matrix: mix the state")

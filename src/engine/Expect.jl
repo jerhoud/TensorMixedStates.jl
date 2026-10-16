@@ -873,7 +873,8 @@ end
 expect2(state::AbstractState, pair::Tuple{SimpleOp, SimpleOp}; kwargs...) =
     only(expect2(state, [pair]; kwargs...))
 
-expect2(::AbstractState, _; kwargs...) =
+# ::Any rather than _, which Julia 1.10 refuses before keywords
+expect2(::AbstractState, ::Any; kwargs...) =
     error("expect2 correlates two operators on every pair of sites, (X, Y) rather than " *
           "(X(1), Y(2)): measure X(1) * Y(2) with expect")
 

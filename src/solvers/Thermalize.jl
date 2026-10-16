@@ -67,5 +67,6 @@ function thermalize(hamiltonian, beta::Real, state::State{Mixed};
     return (log_trace, state)
 end
 
-thermalize(_, ::Real, ::State{Pure}; kwargs...) =
+# ::Any rather than _, which Julia 1.10 refuses before keywords
+thermalize(::Any, ::Real, ::State{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation: mix the state first")
