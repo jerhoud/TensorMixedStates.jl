@@ -484,6 +484,36 @@ end
     @test TMS.block_orders(Mixed, sys) == [ TMS.mixed_elements(sys, i) for i in 1:5 ]
 end
 
+@testset "Superoperators made of the sides of their operators" begin
+    # a gate or a dissipator of an operator of many terms, an evolver of a product that would
+    # develop and a product of such gates are made of the sides Kρ and ρK† of their operators
+    # multiplied: the superoperator itself, with the least channels; on qubits, on fermions with
+    # their strings and on fermions conserving N weakly and strongly
+    qs, fs = System(5, Qubit()), System(4, Fermion())
+    cs, ss = System(4, Fermion(conserve = N)), System(4, Fermion(conserve = strong(N)))
+    hq = sum(X(i) * X(i + 1) for i in 1:4) + sum(0.3 * Z(i) for i in 1:5)
+    hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)
+    loss = Dissipator(sum(C(i) for i in 1:4))
+    for (sys, a) in [(qs, -im * hq + Dissipator(sum(Sm(i) for i in 1:5))), (qs, Dissipator(hq)),
+                     (qs, Evolver(-im * hq^2)), (qs, Gate(hq)), (qs, Gate(hq^2)),
+                     (fs, -im * hop + loss), (fs, Gate(hop)), (fs, Dissipator(hop + 0.4 * C(2))),
+                     (cs, -im * hop + loss), (ss, -im * hop + Dissipator(sum(N(i) for i in 1:4)))]
+        ρ = State{Mixed}(sys, sys === qs || sys === fs ? "FullyMixed" : ["Occ", "Emp", "Occ", "Emp"])
+        @test any(TMS.super_by_blocks, TMS.gathered_summands(a))
+        S = superop(sys, a)
+        @test laid_mixed(ρ, a) ≈ S
+        @test PreMPO(ρ, a).linkdims .- 1 == least_channels(S, fill(4, length(sys)))
+    end
+    # a gate of two terms keeps its terms, and a loss under a strong symmetry is refused as by
+    # its terms
+    @test !TMS.super_by_blocks(Gate(X(1) * X(2) + Z(3)))
+    @test_throws "changes N by different amounts" PreMPO(State{Mixed}(ss, ["Occ", "Emp", "Occ", "Emp"]), loss)
+    # K ρ K† of many terms applied to a density matrix
+    k = hq + 0.5 * X(1) * Z(3)
+    ρ = random_state(Mixed, qs, 2; rng = Xoshiro(20261016))
+    @test dense_matrix(apply(k, ρ)) ≈ fock(qs, k) * dense_matrix(ρ) * fock(qs, k)'
+end
+
 @testset "Strings carried by the channels on a density matrix" begin
     # the strings of the kets and of the bras, laid on the blocks of a term only, carried by the
     # channels between them, the identity on the qubit

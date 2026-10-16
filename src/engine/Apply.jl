@@ -467,9 +467,13 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     end
     check_indices(system, p)
     g = gathered(system, p)
-    # a product of sums that would develop into more terms than its factors have
+    # a product of sums that would develop into more terms than its factors have, or, on a
+    # density matrix, Kρ K† of many terms
     if R === Pure && any(by_blocks, gathered_summands(g))
-        return pre_step!(steps, laid(system, compacted_op(system, p)))
+        return pre_step!(steps, laid(Pure, system, compacted_op(system, p)))
+    elseif R === Mixed && many_terms(g)
+        l, r = sided(system, p, true), sided(system, p, false)
+        return pre_step!(steps, laid(Mixed, system, l) * laid(Mixed, system, r))
     end
     terms = lower(system, p, g)
     if length(terms) == 1

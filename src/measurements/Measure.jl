@@ -684,7 +684,7 @@ whether the operator compacted `c` on `system`, see `compacted_op`, is Hermitian
 minus that of its adjoint vanishes, see `vanishes`
 """
 function hermitian_blocks(system::System, c::CompactedOp)
-    pre = laid(system, c)
+    pre = laid(Pure, system, c)
     return vanishes(pre - pre')
 end
 

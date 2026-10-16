@@ -46,7 +46,8 @@ each of a single time function, are the `PreMPO`s of the adjoint, of the product
 and of the linear combinations of their operators: built with as few channels as their rank
 across each link, at a cost linear in the number of sites, where the terms of a product grow as
 the product of theirs. `PreMPO(state, op)` builds so the products of sums of `op` that would
-develop into more terms than their factors have.
+develop into more terms than their factors have, and, on a mixed state, its gates and
+dissipators of operators of many terms from the sides ``K\\rho`` and ``\\rho K^\\dagger`` of these.
 """
 struct PreMPO{R <: PM}
     system::System
@@ -474,15 +475,90 @@ struct CompactedOp
 end
 
 """
-    laid(system, c)
+    laid(R, system, c)
 
-the `PreMPO`, of a single time function, of the operator compacted `c` on `system`
+the `PreMPO`, of a single time function, of the operator compacted `c` on `system`, see
+`compacted_op`, a superoperator for `R = Mixed`, see `compacted_super`
 """
-function laid(system::System, c::CompactedOp)
-    pre = lay_compacted!(PreMPO{Pure}(system), c.constant, c.singles, c.block, 1)
+function laid(::Type{R}, system::System, c::CompactedOp) where R
+    pre = lay_compacted!(PreMPO{R}(system), c.constant, c.singles, c.block, 1)
     pre.norm[] = c.norm
     pre.width[] = c.width
     return pre
+end
+
+"""
+    terms_flux(R, system, a, terms)
+
+the flux of the terms of the operator `a`, all the same once checked, see `check_flux`:
+`nothing` when there is none, and no charge on a system conserving nothing
+"""
+terms_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R =
+    isempty(terms) ? nothing : is_charged(system) ? term_flux(R, system, a, first(terms)) : QN()
+
+"""
+    blocked_product(fs, factor)
+
+the `PreMPO` of the product of the operators `fs` and its flux, `factor(f)` giving those of
+the factor `f`, equal factors in a row raised by squaring, see `^`; `nothing` when a factor or
+the product vanishes, a product of definite fluxes that vanishes having none
+"""
+function blocked_product(fs, factor)
+    pre, flux = nothing, QN()
+    k = 1
+    while k ≤ length(fs)
+        run = findfirst(f -> f ≠ fs[k], fs[k:end])
+        n = isnothing(run) ? length(fs) - k + 1 : run - 1
+        p, q = factor(fs[k])
+        if isnothing(q)
+            return nothing
+        end
+        p = p ^ n
+        pre = isnothing(pre) ? p : pre * p
+        flux = sum(fill(q, n); init = flux)
+        k += n
+    end
+    return vanishes(pre) ? nothing : (pre, flux)
+end
+
+"""
+    add_part!(parts, part, coef)
+    add_part!(parts, R, system, c, coef)
+
+add to `parts` the `PreMPO` and the flux `part`, times `coef`, or those of the operator
+compacted `c` on `system`, see `laid`: nothing when it vanishes
+"""
+function add_part!(parts::Vector, part, coef::Number)
+    if !isnothing(part)
+        push!(parts, (first(part), coef, last(part)))
+    end
+    return parts
+end
+
+add_part!(parts::Vector, ::Type{R}, system::System, c::CompactedOp, coef::Number) where R =
+    add_part!(parts, isnothing(c.flux) ? nothing : (laid(R, system, c), c.flux), coef)
+
+"""
+    assembled(system, a, parts)
+
+the operator `a` on `system` compacted, see `CompactedOp`, from its `parts`, a `PreMPO`, a
+coefficient and a flux each, added in one reduction, see `combined`: refused when they change
+the charges by different amounts, see `flux_refusal`
+"""
+function assembled(system::System, a, parts::Vector)
+    fluxes = unique(last.(parts))
+    if length(fluxes) > 1
+        flux_refusal(system, a, fluxes)
+    elseif isempty(parts)
+        return CompactedOp(zero(ComplexF64), Dict{Int, Matrix{ComplexF64}}(), nothing, 0.0, 0.0,
+                           nothing, nothing)
+    end
+    pres, coefs = first.(parts), [ c for (_, c, _) in parts ]
+    singles, block = combined(pres, coefs)
+    return CompactedOp(zero(ComplexF64), singles, block,
+                       sum(abs(c) * p.norm[] for (p, c) in zip(pres, coefs)),
+                       sum(isreal(c) ? abs(c) * p.width[] : 2abs(c) * p.norm[] for (p, c) in zip(pres, coefs)),
+                       only(fluxes), nothing)
 end
 
 """
@@ -501,57 +577,134 @@ function compacted_op(system::System, a::IndexedOp{IsOperator})
     summands = gathered_summands(g)
     if !any(by_blocks, summands)
         terms = lower(system, a, g)
-        flux = isempty(terms) ? nothing :
-               is_charged(system) ? term_flux(Pure, system, a, first(terms)) : QN()
         return CompactedOp(compacted(Pure, system, terms)..., sum(term_size, terms; init = 0.0),
-                           sum(t -> term_width(system, t), terms; init = 0.0), flux, terms)
+                           sum(t -> term_width(system, t), terms; init = 0.0),
+                           terms_flux(Pure, system, a, terms), terms)
     end
-    parts, coefs, fluxes = PreMPO{Pure}[], Number[], QN[]
+    parts = Tuple{PreMPO{Pure}, Number, QN}[]
     rest = filter(x -> !by_blocks(x), summands)
     if !isempty(rest)
-        c = compacted_op(system, SumOp(rest))
-        if !isnothing(c.flux)
-            push!(parts, laid(system, c))
-            push!(coefs, scalarcoef(g))
-            push!(fluxes, c.flux)
-        end
+        add_part!(parts, Pure, system, compacted_op(system, SumOp(rest)), scalarcoef(g))
     end
+    factor(f) = (c = compacted_op(system, f); (laid(Pure, system, c), c.flux))
     for x in filter(by_blocks, summands)
-        fs = prodsubs(scalararg(x))
-        pre, flux = nothing, QN()
-        k = 1
-        while k ≤ length(fs)
-            run = findfirst(f -> f ≠ fs[k], fs[k:end])
-            n = isnothing(run) ? length(fs) - k + 1 : run - 1
-            c = compacted_op(system, fs[k])
-            if isnothing(c.flux)
-                pre = nothing
-                break
-            end
-            p = laid(system, c) ^ n
-            pre = isnothing(pre) ? p : pre * p
-            flux = sum(fill(c.flux, n); init = flux)
-            k += n
+        add_part!(parts, blocked_product(prodsubs(scalararg(x)), factor), scalarcoef(g) * scalarcoef(x))
+    end
+    return assembled(system, a, parts)
+end
+
+"""
+    sided(system, op, left)
+
+the operator `op`, placed on sites, compacted on `system`, see `compacted_op`, as the
+superoperator ``\\rho \\mapsto op\\,\\rho`` when `left` and ``\\rho \\mapsto \\rho\\,op^\\dagger``
+otherwise, see `sided_term`: a product that would develop made of the sides of its factors
+multiplied in the same order on both sides, ``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger)
+A^\\dagger``
+"""
+function sided(system::System, a::IndexedOp{IsOperator}, left::Bool)
+    check_indices(system, a)
+    g = gathered(system, a)
+    summands = gathered_summands(g)
+    if !any(by_blocks, summands)
+        one = identity_term()
+        ts = [ left ? sided_term(t, one) : sided_term(one, t) for t in lower(system, a, g) ]
+        terms = check_flux(Mixed, system, a, ts)
+        return CompactedOp(compacted(Mixed, system, terms)..., sum(term_size, terms; init = 0.0),
+                           0.0, terms_flux(Mixed, system, a, terms), terms)
+    end
+    side(c) = left ? c : conj(c)
+    parts = Tuple{PreMPO{Mixed}, Number, QN}[]
+    rest = filter(x -> !by_blocks(x), summands)
+    if !isempty(rest)
+        add_part!(parts, Mixed, system, sided(system, SumOp(rest), left), side(scalarcoef(g)))
+    end
+    factor(f) = (c = sided(system, f, left); (laid(Mixed, system, c), c.flux))
+    for x in filter(by_blocks, summands)
+        add_part!(parts, blocked_product(prodsubs(scalararg(x)), factor),
+                  side(scalarcoef(g) * scalarcoef(x)))
+    end
+    return assembled(system, a, parts)
+end
+
+"""
+    many_terms(k)
+
+whether the placed operator `k` has more than two terms, or a product that would develop into
+more terms than its factors have, see `by_blocks`, so that a gate or a dissipator of `k` is
+better made of its sides, see `compacted_super`
+"""
+many_terms(k::IndexedOp) = term_estimate(k) > 2 || any(by_blocks, gathered_summands(k))
+
+"""
+    super_by_blocks(a)
+
+whether the superoperator `a`, placed on sites, is better made of the sides of its operators,
+see `compacted_super`: a gate or a dissipator of an operator of many terms, see `many_terms`, an
+evolver of one with a product that would develop, or a product of channels whose terms would
+outnumber those of its factors together, a gate of `k` having the square of the terms of `k`
+"""
+function super_by_blocks(a::IndexedOp)
+    s = scalararg(a)
+    if s isa Union{Gate{Indexed}, Dissipator{Indexed}}
+        return s.arg isa IndexedOp{IsOperator} && many_terms(s.arg)
+    elseif s isa Evolver{Indexed}
+        return any(by_blocks, gathered_summands(s.arg))
+    elseif s isa ProdOp
+        counts = [ scalararg(x) isa Gate{Indexed} ? term_estimate(scalararg(x).arg)^2 : 1
+                   for x in s.subs ]
+        return prod(counts) > sum(counts)
+    end
+    return false
+end
+
+"""
+    compacted_super(system, a)
+
+the superoperator `a`, a channel or a generator placed on sites, compacted on `system`, see
+`CompactedOp`: from its terms, see `lower`, but for what is better made of the sides of its
+operators, see `super_by_blocks` and `sided`, multiplied, the adjoint of a side being the side
+of the adjoint: the evolver of `K` is ``K\\rho + \\rho K^\\dagger``, its gate ``K\\rho
+K^\\dagger``, the dissipator of `L` ``L\\rho L^\\dagger - (L^\\dagger L\\rho + \\rho L^\\dagger
+L)/2``, and a product of channels that of their compactions
+"""
+function compacted_super(system::System, a::IndexedOp)
+    check_indices(system, a)
+    c, s = scalarcoef(a), scalararg(a)
+    summands = s isa SumOp ? s.subs : [s]
+    if !any(super_by_blocks, summands)
+        terms = lower(system, a)
+        return CompactedOp(compacted(Mixed, system, terms)..., sum(term_size, terms; init = 0.0),
+                           0.0, terms_flux(Mixed, system, a, terms), terms)
+    end
+    parts = Tuple{PreMPO{Mixed}, Number, QN}[]
+    rest = filter(x -> !super_by_blocks(x), summands)
+    if !isempty(rest)
+        add_part!(parts, Mixed, system, compacted_super(system, SumOp(rest)), c)
+    end
+    side(k, left) = (x = sided(system, k, left); isnothing(x.flux) ? nothing : (laid(Mixed, system, x), x.flux))
+    for x in filter(super_by_blocks, summands)
+        y, k = scalararg(x), c * scalarcoef(x)
+        if y isa ProdOp
+            add_part!(parts, blocked_product(y.subs, f -> (z = compacted_super(system, f);
+                                                           (laid(Mixed, system, z), z.flux))), k)
+            continue
         end
-        # a product of definite fluxes that vanishes has none
-        if !isnothing(pre) && !vanishes(pre)
-            push!(parts, pre)
-            push!(coefs, scalarcoef(g) * scalarcoef(x))
-            push!(fluxes, flux)
+        l, r = side(y.arg, true), side(y.arg, false)
+        if isnothing(l)
+            continue
+        elseif y isa Evolver
+            add_part!(add_part!(parts, l, k), r, k)
+        elseif y isa Gate
+            add_part!(parts, (first(l) * first(r), last(l) + last(r)), k)
+        else
+            (pl, ql), (pr, qr) = l, r
+            add_part!(parts, (pl * pr, ql + qr), k)
+            add_part!(parts, (pl' * pl, ql - ql), -k / 2)
+            add_part!(parts, (pr' * pr, qr - qr), -k / 2)
         end
     end
-    if length(unique(fluxes)) > 1
-        flux_refusal(system, a, unique(fluxes))
-    end
-    if isempty(parts)
-        return CompactedOp(zero(ComplexF64), Dict{Int, Matrix{ComplexF64}}(), nothing, 0.0, 0.0,
-                           nothing, nothing)
-    end
-    singles, block = combined(parts, coefs)
-    return CompactedOp(zero(ComplexF64), singles, block,
-                       sum(abs(c) * p.norm[] for (p, c) in zip(parts, coefs)),
-                       sum(isreal(c) ? abs(c) * p.width[] : 2abs(c) * p.norm[] for (p, c) in zip(parts, coefs)),
-                       first(fluxes), nothing)
+    return assembled(system, a, parts)
 end
 
 """
@@ -580,7 +733,7 @@ superoperator(a::IndexedOp{IsOperator}) = Evolver(a)
 superoperator(a::IndexedOp) = a
 
 PreMPO(state::State{Pure}, a::IndexedOp{IsOperator}) =
-    laid(state.system, compacted_op(state.system, a))
+    laid(Pure, state.system, compacted_op(state.system, a))
 
 function PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsOperator}})
     pre = PreMPO{Pure}(state.system, length(as))
@@ -598,12 +751,14 @@ PreMPO(state::State{Pure}, as::Vector{<:IndexedOp}) =
     PreMPO(state, IndexedOp{IsOperator}[ followed_operator(a) for a in as ])
 
 PreMPO(state::State{Mixed}, a::IndexedOp) =
-    lay_terms!(PreMPO{Mixed}(state.system), lower(state.system, superoperator(a)), 1)
+    laid(Mixed, state.system, compacted_super(state.system, superoperator(a)))
 
 function PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp})
     pre = PreMPO{Mixed}(state.system, length(as))
     for (ref, a) in enumerate(as)
-        lay_terms!(pre, lower(state.system, superoperator(a)), ref)
+        c = compacted_super(state.system, superoperator(a))
+        lay_compacted!(pre, c.constant, c.singles, c.block, ref)
+        pre.norm[] += c.norm
     end
     return pre
 end
