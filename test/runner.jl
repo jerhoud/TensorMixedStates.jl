@@ -129,6 +129,14 @@ end
     @test_throws "the seed of a simulation is an integer of zero or above, got -1" SimData(;
         phases, seed = -1)
     @test SimData(; phases, seed = 0).seed == 0
+    # a state named by a name the run reserves, refused when the run reached the phase, and a
+    # state named twice in on, which an Evolve evolved twice a step, its clock once
+    @test_throws "CreateState cannot name a state time, a name the run reserves" SimData(
+        phases = [phases; CreateState{Pure}(2, Qubit(), "Up"; on = :time)])
+    @test_throws "ToMixed cannot name a state rng, a name the run reserves" SimData(
+        phases = [phases; ToMixed(on = :rng)])
+    @test_throws "Evolve names the state state twice in its on" SimData(phases = [phases;
+        Evolve(evolver = -im * X(1), duration = 0.1, time_step = 0.1, on = [:state, :state])])
     # the reserved names
     @test_throws "a name the run reserves" CopyState(:state => :rng)
     @test_throws "under another name" CopyState(:a => :a)

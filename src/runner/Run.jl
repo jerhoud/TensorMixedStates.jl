@@ -67,6 +67,31 @@ function check_values(phases::Vector, final_measurements)
 end
 
 """
+    check_names(phases)
+
+refuse, when the `SimData` is written rather than when the run reaches the phase, a phase naming a
+state by a name the run reserves, see `reserved_values`, `:state` aside, and one naming a state
+twice in its `on`, which would act on it twice
+"""
+function check_names(phases::Vector)
+    for p in phases
+        names = hasfield(typeof(p), :on) && p.on isa Union{Symbol, Vector{Symbol}} ?
+                state_names(p.on) : Symbol[]
+        for n in [ names ; collect(provided_values(p)) ]
+            if n ≠ :state && n in reserved_values
+                error("$(nameof(typeof(p))) cannot name a state $n, a name the run reserves")
+            end
+        end
+        for n in names
+            if count(==(n), names) > 1
+                error("$(nameof(typeof(p))) names the state $n twice in its on, which would act " *
+                      "on it twice")
+            end
+        end
+    end
+end
+
+"""
     check_destinations(phases, final_measurements)
 
 refuse, before a run with a directory starts rather than when it writes there, a file of the
@@ -126,7 +151,8 @@ the description of a simulation, which `runTMS` runs.
   again
 
 A measurement of a value that no phase provides is refused here, see
-`TensorMixedStates.provided_values`.
+`TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
+in the `on` of a phase.
 
 # Examples
 
@@ -156,6 +182,7 @@ struct SimData
         end
         ps = map(check_phase, flatten_phases(phases))
         provided = check_values(ps, final_measurements)
+        check_names(ps)
         return new(name, description, time_start, final_measurements, check_format(format), seed,
                    ps, provided)
     end
