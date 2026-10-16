@@ -130,7 +130,8 @@ a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\
 normalized to trace one, by an evolution in imaginary time, see `thermalize`: from
 `"FullyMixed"`, the thermal state ``e^{-\\beta H}/Z``. The time does not move. It provides the
 values `:beta`, the inverse temperature reached, and `:log_trace`, the logarithm of the trace
-before normalization, see `thermalize`.
+before normalization, see `thermalize`: 0 both for a `beta` shorter than half a step, which
+leaves the state normalized only.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -175,8 +176,9 @@ provided_values(::Thermalize) = (:beta, :log_trace)
 """
     ThermalSteps(algo, pre, limits, nsteps, beta, on)
 
-a `Thermalize` prepared: its method, the `PreMPO` of its Hamiltonian on the mixed state, its
-limits, its number of steps, the inverse temperature it reaches and the name of its state
+a `Thermalize` prepared: its method, the `PreMPO` of its Hamiltonian on the mixed state,
+`nothing` for one shorter than half a step, made of a step that normalizes only, its limits, its
+number of steps, the inverse temperature it reaches and the name of its state
 """
 struct ThermalSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}}
     algo::A
@@ -193,8 +195,9 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
     n = step_number(phase.beta, phase.beta_step, "a thermalization", sim)
+    # a step that only normalizes, giving the values all the same
     if n == 0
-        return ThermalSteps(phase.algo, nothing, phase.limits, 0, phase.beta, phase.on)
+        return ThermalSteps(phase.algo, nothing, phase.limits, 1, 0., phase.on)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
     return ThermalSteps(phase.algo, prepared_operator(state, phase.hamiltonian), phase.limits,
@@ -206,6 +209,9 @@ step_count(t::ThermalSteps) = t.nsteps
 # as thermalize: normalized at the first step only, the logarithms of the traces added up
 function run_step(t::ThermalSteps, sim::Simulation, k::Int)
     state = k == 1 ? normalize(state_named(sim, t.on)) : state_named(sim, t.on)
+    if isnothing(t.pre)
+        return with_state(sim, t.on, state; beta = 0., log_trace = 0.)
+    end
     st, l = thermal_step(t.algo, t.pre, state, t.beta / t.nsteps, k, step_limits(t.limits, k))
     return with_state(sim, t.on, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
                       log_trace = (k == 1 ? 0. : sim.log_trace) + l)

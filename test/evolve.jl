@@ -868,6 +868,13 @@ end
     @test [ last(r[3]) for r in rows ] ≈ ls[2:end]
     @test all(last(r[1]) == 1.5 for r in rows) && sim.time == 1.5
     @test sim.log_trace ≈ ls[end] && sim.beta == 1.
+    # shorter than half a step, it evolves nothing and still normalizes and gives the values, 0,
+    # where it gave neither
+    sim = runTMS(SimData(phases = [CreateState{Mixed}(n, Qubit(), "FullyMixed"),
+                                   Update(c -> (c.state = 2 * c.state)),
+                                   Thermalize(hamiltonian = h, beta = 0.02, beta_step = 0.05)]);
+                 output = devnull)
+    @test sim.beta == 0 && sim.log_trace == 0 && trace(sim.state) ≈ 1
 end
 
 @testset "What thermalize refuses" begin
