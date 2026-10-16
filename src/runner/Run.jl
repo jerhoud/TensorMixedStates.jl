@@ -491,14 +491,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
             log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) seconds")
         end
         commit!(sim, i + 1, 0)
-        stop = stop_requested(c)
-        if stop || checkpoint_due(c) ||
-           (i == length(phases) && (c.interval > 0 || c.generation ≠ 0))
-            write_checkpoint(c)
-        end
-        if stop
-            throw(StopRun())
-        end
+        checkpoint_or_stop(run; force = i == length(phases) && (c.interval > 0 || c.generation ≠ 0))
     end
     return sim
 end

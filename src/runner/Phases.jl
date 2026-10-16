@@ -124,14 +124,15 @@ function commit!(sim::Simulation, phase::Int, step::Int; last::Bool = false)
 end
 
 """
-    checkpoint_or_stop(run)
+    checkpoint_or_stop(run; force = false)
 
-write the last commit when a checkpoint is due or a stop requested, and stop then, see `StopRun`
+write the last commit when a checkpoint is due, a stop requested, or with `force`, and stop then,
+see `StopRun`
 """
-function checkpoint_or_stop(run::RunData)
+function checkpoint_or_stop(run::RunData; force::Bool = false)
     c = run.checkpointer
     stop = stop_requested(c)
-    if stop || checkpoint_due(c)
+    if stop || force || checkpoint_due(c)
         write_checkpoint(c)
     end
     if stop
