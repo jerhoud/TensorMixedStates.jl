@@ -101,10 +101,14 @@ function search(algo::Dmrg, mpo::MPO, state::State, limits::Limits; sweep_done =
     hook = SweepHook(algo.tol, energy, done, algo.nsweeps, state, excited ? mpo : nothing,
                      sweep_done)
     kwargs = (; outputlevel = 0, nsweeps = algo.nsweeps - done, observer = hook,
-              truncation(later_steps(limits, done); sweeps = true)..., noise = later_steps(algo.noise, done),
+              truncation(later_steps(limits, done); sweeps = true)...,
+              noise = later_steps(algo.noise, done),
               krylov_kwargs(algo.krylov, krylov, "eigsolve_")...)
-    e, st = excited ? dmrg(mpo, [ m.state for m in orthogonal_to ], state.state; weight, kwargs...) :
-                      dmrg(mpo, state.state; kwargs...)
+    e, st = if excited
+        dmrg(mpo, [ m.state for m in orthogonal_to ], state.state; weight, kwargs...)
+    else
+        dmrg(mpo, state.state; kwargs...)
+    end
     return (excited ? hook.energy : e, normalize(State(state, st)))
 end
 
@@ -179,11 +183,11 @@ truncates the MPO of the Hamiltonian, see `PreMPO` (default none). A mixed state
 refused: search the pure state and mix it; the steady state of a Lindbladian is given by
 `steady_state`.
 
-Given `orthogonal_to`, eigenstates of the Hamiltonian found before, the search gives the
-lowest eigenstate orthogonal to them, an excited state, `weight` times their projectors being
-added to the Hamiltonian; it must exceed the gap between the state searched and each of them,
-and is by default 1.1 times a bound of the width of the spectrum, sure but slow to converge, a
-weight just above the gap converging faster. Its precision is that of the states given, and the penalty is
+Given `orthogonal_to`, eigenstates of the Hamiltonian found before, the search gives the lowest
+eigenstate orthogonal to them, an excited state, `weight` times their projectors being added to
+the Hamiltonian; it must exceed the gap between the state searched and each of them, and is by
+default 1.1 times a bound of the width of the spectrum, sure but slow to converge, a weight just
+above the gap converging faster. Its precision is that of the states given, and the penalty is
 exact only for eigenstates. A warning says when the state found keeps an overlap with one of
 them. The energy is that of the Hamiltonian alone.
 
@@ -193,14 +197,15 @@ them. The energy is that of the Hamiltonian alone.
                                  limits = Limits(maxdim = [10, 20, 50]))
     e1, excited = ground_state(H, state; algo = Dmrg(nsweeps = 20), orthogonal_to = [ground])
 """
-function ground_state(hamiltonian, state::State{Pure}; algo::Union{Nothing, SearchAlgorithm} = nothing,
-                      limits::Limits = Limits(), mpo_limits::Limits = Limits(),
-                      orthogonal_to::AbstractVector = State{Pure}[],
+function ground_state(hamiltonian, state::State{Pure};
+                      algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
+                      mpo_limits::Limits = Limits(), orthogonal_to::AbstractVector = State{Pure}[],
                       weight::Union{Nothing, Real} = nothing)
     algo = search_algo(algo, "ground_state")
     pre = prepared_operator(state, hamiltonian, mpo_limits)
     args = orthogonal_args(state, pre, orthogonal_to, weight)
-    e, st = search(algo, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing), state, limits; args...)
+    mpo = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
+    e, st = search(algo, mpo, state, limits; args...)
     check_orthogonal(st, args, weight)
     return (e, st)
 end
@@ -271,8 +276,9 @@ unique.
     value, rho = steady_state(-im * H + D, rho; algo = Dmrg(nsweeps = 10),
                               limits = Limits(maxdim = [10, 20, 50]))
 """
-function steady_state(lindbladian, state::State{Mixed}; algo::Union{Nothing, SearchAlgorithm} = nothing,
-                      limits::Limits = Limits(), mpo_limits::Limits = Limits())
+function steady_state(lindbladian, state::State{Mixed};
+                      algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
+                      mpo_limits::Limits = Limits())
     algo = search_algo(algo, "steady_state")
     l2 = squared_lindbladian(prepared_operator(state, lindbladian), mpo_limits)
     return steady_result(search(algo, l2, state, limits; krylov = steady_krylov)...)
