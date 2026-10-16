@@ -42,8 +42,8 @@ function prepared_evolver(state::State,
                           mpo_limits::Limits = Limits())
     pre = ops isa PreMPO ? first(prepared_evolver(state, ops, mpo_limits)) :
                            PreMPO(state, [ o for o in ops ]; limits = mpo_limits)
-    if length(fs) ≠ pre.nterms
-        error("an evolver of $(pre.nterms) terms takes as many time functions, " *
+    if length(fs) ≠ pre.nfunctions
+        error("an evolver of $(pre.nfunctions) terms takes as many time functions, " *
               "got $(length(fs))")
     end
     return (pre, collect(fs))

@@ -33,11 +33,11 @@ function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs::AbstractVector = [1.
         llink, rlink = links[i], links[i+1]
         a = site_array(elt, idx, llink, rlink)
         add_block!(a, 1, 1, Matrix{elt}(I, dim(idx), dim(idx)))
-        for (l, r, _, ref, m) in pre.terms[i]
-            c = coefs[ref]
+        for p in pre.pieces[i]
+            c = coefs[p.ref]
             if c ≠ 0
                 # the coefficient and the time step on the closing piece alone, as in make_mpo
-                add_block!(a, l, r, m, r == 1 ? c * tau : one(c))
+                add_block!(a, p.from, p.to, p.m, p.to == 1 ? c * tau : one(c))
             end
         end
         return site_tensor(a, idx, llink, rlink)
@@ -85,11 +85,11 @@ function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs::AbstractVector = [1.
         ldim, rdim = dims[i], dims[i+1]
         k = dim(idx)
         v = Matrix{Union{Nothing, Matrix{elt}}}(nothing, ldim, rdim)
-        for (l, r, _, ref, u) in pre.terms[i]
-            c = coefs[ref]
+        for p in pre.pieces[i]
+            l, r, c = p.from, p.to, coefs[p.ref]
             if c ≠ 0
                 # the coefficient and the time step on the closing piece alone, as in make_mpo
-                m = (r == 1 ? c * tau : one(c)) * u
+                m = (r == 1 ? c * tau : one(c)) * p.m
                 v[l, r] = isnothing(v[l, r]) ? m : v[l, r] + m
             end
         end

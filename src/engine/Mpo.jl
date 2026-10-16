@@ -32,6 +32,23 @@ function block_orders(::Type{Mixed}, system::System)
 end
 
 """
+    Piece
+
+a piece of an MPO laid on a site of a `PreMPO`, see `add_piece!`: its matrix `m`, in the order of
+the index of the site, from the channel `from` of the link on its left to the channel `to` of
+that on its right, `1` being the term not yet begun on the left and the term finished on the
+right, see `window_mpo`, taking the time function `ref`, and the charge it carries, see
+`block_flux`, which `mpo_charges` reads
+"""
+struct Piece
+    from::Int
+    to::Int
+    ref::Int
+    m::Matrix
+    flux::QN
+end
+
+"""
     PreMPO(state, op; limits = Limits())
 
 the operator `op`, placed on sites, laid on the system of `state` as the pieces of its MPO,
@@ -57,11 +74,11 @@ dissipators of operators of many terms from the sides ``K\\rho`` and ``\\rho K^\
 struct PreMPO{R <: PM}
     system::System
     linkdims::Vector{Int}
-    # the pieces on each site, see `add_term!`
-    terms::Vector{Vector{Tuple{Int, Int, ITensor, Int, Matrix}}}
-    # the number of time functions the terms take, one per operator of a vector: it cannot be
-    # counted from `terms`, a whole operator vanishing on its sites
-    nterms::Int
+    # the pieces on each site, see `add_piece!`
+    pieces::Vector{Vector{Piece}}
+    # the number of time functions the pieces take, one per operator of a vector: it cannot be
+    # counted from `pieces`, a whole operator vanishing on its sites
+    nfunctions::Int
     orders::Vector{Vector{Int}}
     # the last MPOs built for each method of the solvers, with what they were built for, see
     # `cached_mpos`
@@ -71,10 +88,9 @@ struct PreMPO{R <: PM}
     width::Base.RefValue{Float64}
     # a bound of the norm of the operator, see `term_size`, which a product multiplies
     norm::Base.RefValue{Float64}
-    function PreMPO{R}(system::System, nterms::Int = 1) where R
+    function PreMPO{R}(system::System, nfunctions::Int = 1) where R
         n = length(system)
-        return new{R}(system, fill(1, n - 1),
-                      [ Tuple{Int, Int, ITensor, Int, Matrix}[] for _ in 1:n ], nterms,
+        return new{R}(system, fill(1, n - 1), [ Piece[] for _ in 1:n ], nfunctions,
                       block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock(),
                       Ref(0.), Ref(0.))
     end
@@ -90,16 +106,15 @@ on_index(::PreMPO{Pure}, ::Int, m::Matrix) = m
 on_index(pre::PreMPO{Mixed}, k::Int, m::Matrix) = m[pre.orders[k], pre.orders[k]]
 
 """
-    add_term!(pre, k, l, r, m, ref)
+    add_piece!(pre, k, l, r, m, ref)
 
-add to site `k` of `pre`, and return it, the piece of matrix `m` going from channel `l` to
-channel `r` and taking the time function `ref`, with its tensor on the index of the site, both
-in the order of that index
+add to site `k` of `pre`, and return it, the piece of matrix `m`, in the order of the site, going
+from channel `l` to channel `r` and taking the time function `ref`, see `Piece`
 """
-function add_term!(pre::PreMPO{R}, k::Int, l::Int, r::Int, m::Matrix, ref::Int) where R
-    idx = siteind(R, pre.system, k)
-    m = on_index(pre, k, m)
-    push!(pre.terms[k], (l, r, charged_itensor(m, [idx', dag(idx)]), ref, m))
+function add_piece!(pre::PreMPO{R}, k::Int, l::Int, r::Int, m::Matrix, ref::Int) where R
+    sys = pre.system
+    flux = is_charged(sys) ? block_flux(R, m, "the MPO", sys[k]) : QN()
+    push!(pre.pieces[k], Piece(l, r, ref, on_index(pre, k, m), flux))
     return pre
 end
 
@@ -110,8 +125,8 @@ end
 `pre`
 """
 function check_coefs(pre::PreMPO, coefs::AbstractVector)
-    if length(coefs) ≠ pre.nterms
-        error("an evolver of $(pre.nterms) terms takes as many time functions, got $(length(coefs))")
+    if length(coefs) ≠ pre.nfunctions
+        error("an evolver of $(pre.nfunctions) terms takes as many time functions, got $(length(coefs))")
     end
     for (k, c) in enumerate(coefs)
         if !(c isa Real)
@@ -168,10 +183,10 @@ function lay_compacted!(pre::PreMPO{R}, constant::Number, singles::AbstractDict,
         ks = [ collect(keys(singles)) ; isnothing(b) ? Int[] : [b.start] ]
         k = isempty(ks) ? 1 : minimum(ks)
         d = block_dim(R, sys[k])
-        add_term!(pre, k, 1, 1, Matrix(constant * I, d, d), ref)
+        add_piece!(pre, k, 1, 1, Matrix(constant * I, d, d), ref)
     end
     for k in sort!(collect(keys(singles)))
-        add_term!(pre, k, 1, 1, singles[k], ref)
+        add_piece!(pre, k, 1, 1, singles[k], ref)
     end
     if isnothing(b)
         return pre
@@ -185,7 +200,7 @@ function lay_compacted!(pre::PreMPO{R}, constant::Number, singles::AbstractDict,
     for (j, k) in enumerate(ks), ((l, r), comb) in sort!(collect(b.pieces[j]); by = first)
         m = combination_matrix(b, j, comb, block_dim(R, sys[k]))
         if !iszero(m)
-            add_term!(pre, k, l == 0 ? 1 : offs[j-1] + l, r == 0 ? 1 : offs[j] + r, m, ref)
+            add_piece!(pre, k, l == 0 ? 1 : offs[j-1] + l, r == 0 ? 1 : offs[j] + r, m, ref)
         end
     end
     return pre
@@ -231,8 +246,8 @@ function site_moves(pre::PreMPO{R}, k::Int) where R
     d = block_dim(R, pre.system[k])
     id = Matrix{ComplexF64}(I, d, d)
     moves = Dict{Tuple{Int, Int}, Matrix{ComplexF64}}((0, 0) => id, (-1, -1) => id)
-    for (l, r, _, _, m) in pre.terms[k]
-        add!(moves, (l == 1 ? 0 : l, r == 1 ? -1 : r), natural(pre, k, m))
+    for p in pre.pieces[k]
+        add!(moves, (p.from == 1 ? 0 : p.from, p.to == 1 ? -1 : p.to), natural(pre, k, p.m))
     end
     return moves
 end
@@ -243,10 +258,10 @@ end
 the `PreMPO` of the adjoint of the operator of `pre`, its pieces taken adjoint
 """
 function Base.adjoint(pre::PreMPO{R}) where R
-    out = PreMPO{R}(pre.system, pre.nterms)
+    out = PreMPO{R}(pre.system, pre.nfunctions)
     out.linkdims .= pre.linkdims
-    for k in eachindex(pre.terms), (l, r, _, ref, m) in pre.terms[k]
-        add_term!(out, k, l, r, collect(natural(pre, k, m)'), ref)
+    for k in eachindex(pre.pieces), p in pre.pieces[k]
+        add_piece!(out, k, p.from, p.to, collect(natural(pre, k, p.m)'), p.ref)
     end
     out.width[] = pre.width[]
     out.norm[] = pre.norm[]
@@ -277,7 +292,7 @@ Hermitian part of an operator being at most twice its norm.
 function product(a::PreMPO{R}, b::PreMPO{R}, limits::Limits) where R
     if a.system ≠ b.system
         error("the PreMPOs of a product are on two systems")
-    elseif a.nterms ≠ 1 || b.nterms ≠ 1
+    elseif a.nfunctions ≠ 1 || b.nfunctions ≠ 1
         error("a PreMPO of several time functions is not multiplied")
     end
     sys = a.system
@@ -380,7 +395,7 @@ function linear_combination(pres::Vector{<:PreMPO{R}}, coefs::Vector{<:Number}) 
     sys = first(pres).system
     if any(p -> p.system ≠ sys, pres)
         error("the PreMPOs of a sum are on two systems")
-    elseif any(p -> p.nterms ≠ 1, pres)
+    elseif any(p -> p.nfunctions ≠ 1, pres)
         error("a PreMPO of several time functions is not added or scaled")
     end
     out = lay_compacted!(PreMPO{R}(sys), zero(ComplexF64), combined(pres, coefs)..., 1)
@@ -460,7 +475,7 @@ next to the bound of its norm
 """
 vanishes(pre::PreMPO) = all(==(1), pre.linkdims) &&
     all(normalized_norm(m) ≤ rounding_tol * pre.norm[]
-        for ts in pre.terms for (_, _, _, _, m) in ts)
+        for ps in pre.pieces for p in ps for m in (p.m,))
 
 """
     gathered_summands(g)
@@ -799,13 +814,13 @@ function truncated(pre::PreMPO{R}, limits::Limits) where R
     if limits == Limits()
         return pre
     end
-    out = PreMPO{R}(pre.system, pre.nterms)
-    for ref in 1:pre.nterms
+    out = PreMPO{R}(pre.system, pre.nfunctions)
+    for ref in 1:pre.nfunctions
         part = PreMPO{R}(pre.system)
         part.linkdims .= pre.linkdims
-        for k in eachindex(pre.terms), (l, r, _, f, m) in pre.terms[k]
-            if f == ref
-                add_term!(part, k, l, r, natural(pre, k, m), 1)
+        for k in eachindex(pre.pieces), p in pre.pieces[k]
+            if p.ref == ref
+                add_piece!(part, k, p.from, p.to, natural(pre, k, p.m), 1)
             end
         end
         lay_compacted!(out, zero(ComplexF64), combined([part], [1], limits)..., ref)
@@ -822,7 +837,7 @@ the element type of the tensors of the MPO built from `pre`, `Float64` at least,
 real matrices, the coefficients being real
 """
 mpo_eltype(pre::PreMPO) =
-    promote_type(Float64, mapreduce(t -> eltype(t[5]), promote_type, Iterators.flatten(pre.terms);
+    promote_type(Float64, mapreduce(p -> eltype(p.m), promote_type, Iterators.flatten(pre.pieces);
                                     init = Bool))
 
 """
@@ -862,12 +877,12 @@ Terms whose time function is zero are left out.
 """
 function mpo_charges(pre::PreMPO, coefs::Vector{Float64})
     n = length(pre.system)
-    tm = pre.terms
     q = [ Union{Nothing, QN}[ QN(); fill(nothing, d) ] for d in channel_counts(pre) ]
     total = nothing
     for i in 1:n
-        for (l, r, u, ref, _) in tm[i]
-            if coefs[ref] == 0
+        for p in pre.pieces[i]
+            l, r = p.from, p.to
+            if coefs[p.ref] == 0
                 continue
             end
             left = q[i][l]
@@ -876,7 +891,7 @@ function mpo_charges(pre::PreMPO, coefs::Vector{Float64})
             end
             # the link loses what the operator carries, which is the sign that makes the
             # tensor of the site a flux of zero once its two ends are oriented
-            c = left - flux(u)
+            c = left - p.flux
             if r == 1
                 if !isnothing(total) && total ≠ c
                     charge_mismatch(pre.system, total, c, true)
@@ -964,7 +979,7 @@ the sites from the first to the last on which `pre` has pieces, outside which it
 identity, `nothing` when it has none
 """
 function mpo_window(pre::PreMPO)
-    ks = findall(!isempty, pre.terms)
+    ks = findall(!isempty, pre.pieces)
     return isempty(ks) ? nothing : first(ks):last(ks)
 end
 
@@ -987,15 +1002,15 @@ function window_mpo(pre::PreMPO{R}, coefs::Vector{Float64}, sites::UnitRange{Int
         id = Matrix{elt}(I, dim(idx), dim(idx))
         add_block!(a, 1, 1, id)
         add_block!(a, 1 + dims[i], 1 + dims[i+1], id)
-        for (l, r, _, ref, m) in pre.terms[i]
-            c = coefs[ref]
+        for p in pre.pieces[i]
+            c = coefs[p.ref]
             if c ≠ 0
                 # the coefficient of a term goes on its closing piece alone, the only one
-                # with r == 1
-                if r == 1
-                    add_block!(a, l, 1 + dims[i+1], m, c)
+                # with p.to == 1
+                if p.to == 1
+                    add_block!(a, p.from, 1 + dims[i+1], p.m, c)
                 else
-                    add_block!(a, l, r, m)
+                    add_block!(a, p.from, p.to, p.m)
                 end
             end
         end
