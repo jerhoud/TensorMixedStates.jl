@@ -147,9 +147,8 @@ end
 end
 
 @testset "Measuring a compacted operator" begin
-    # what is left of measuring a com once coms go: expect measures an operator through its
-    # compaction, which measure shares (decision 7a), and gives the value of the dense
-    # operator on a pure state, a mixed one and fermions
+    # expect measures an operator through its compaction, which measure shares, and gives the
+    # value of the dense operator on a pure state, a mixed one and fermions
     n = 5
     h = sum(0.6^(j - i) * (X(i) * X(j) + N(i) * N(j)) + 0.3^(j - i) * Z(i) * Z(j)
             for i in 1:n for j in i+1:n) + 0.7 * sum(Z(i) for i in 1:n)
@@ -170,7 +169,7 @@ end
     vf = dense_vector(ψf)
     @test isapprox(expect(ψf, hf), vf' * exact(ψf, hf) * vf; rtol = 1e-12)
     # the kind of the value is found on the operator, Hermitian and so real, its difference with
-    # its adjoint compacting to nothing (decision 7)
+    # its adjoint compacting to nothing
     @test last(only(measure(ψf, hf))) isa Real
     @test last(only(measure(ψf, hf))) ≈ real(expect(ψf, hf)) rtol = 1e-12
 end

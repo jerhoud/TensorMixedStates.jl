@@ -54,7 +54,7 @@ TensorMixedStates.dim(::Guarded) = 2
 @def_operators Guarded [ N = [0. 0. ; 0. 1.] ]
 
 @testset "Weakening beside a site whose conserve field is not a Conservation" begin
-    # decision 18: such a site conserves nothing, and weakening, which the trace of a state
+    # such a site conserves nothing, and weakening, which the trace of a state
     # conserving something strongly goes through, leaves it as it is
     sys = System([Kindly(:sz, true, "a label", 3, 1.5, nothing), Fermion(conserve = strong(N))])
     ρ = mix(State{Pure}(sys, Any[[1., 0.], "Occ"]))
@@ -80,7 +80,7 @@ end
     file = joinpath(dir, "states.h5")
 
     # pure state round trip, read back on a system of the same sites, so it compares with the
-    # state saved (decision 15)
+    # state saved
     sys = System(4, Qubit())
     stp = State{Pure}(sys, ["Up", "Dn", "+", "i"])
     save_state(file, "pure", stp)
@@ -141,8 +141,8 @@ end
 
 @testset "A state file with its conserved quantities unsorted" begin
     # version 2 recorded them as a string, in the order of their declaration before they were
-    # sorted: the state read back sat on sites no longer equal to those built now. Decision 18:
-    # the file is the version 2 reference, its quantities put out of order
+    # sorted: the state read back sat on sites no longer equal to those built now. The file is
+    # the version 2 reference, its quantities put out of order
     file = joinpath(mktempdir(), "old.h5")
     TMS.HDF5.h5open(joinpath(@__DIR__, "reference", "state_v2.h5"), "r") do src
         TMS.HDF5.h5open(file, "w") do dst
@@ -156,7 +156,7 @@ end
 end
 
 @testset "A state read back compares with the one saved" begin
-    # decision 15: read back, the state lands on a system equal to the one it was saved from,
+    # read back, the state lands on a system equal to the one it was saved from,
     # whose indices it shares, so the two compare without being put on a system
     dir = mktempdir()
     file = joinpath(dir, "onto.h5")
@@ -198,7 +198,7 @@ end
     @test l.system.sites == st.system.sites
 
     # the first field is named conserve without being one, being a Symbol and not a
-    # Conservation. A site carrying such a field conserves nothing (decision 18)
+    # Conservation. A site carrying such a field conserves nothing
     @test TMS.conserved(site) == Conservation()
 
     # a field of an unsupported kind is refused by a message naming the site and the field,

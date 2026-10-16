@@ -61,7 +61,7 @@ end
     z, x, id = [1 0 ; 0 -1], [0 1 ; 1 0], [1 0 ; 0 1]
     @test expect(m, Z(1) * Z(3)) ≈ real(LA.tr(ρ * kron(z, id, z)))
     @test expect(m, X(2) * Z(3)) ≈ real(LA.tr(ρ * kron(id, x, z)))
-    @test purity(m) ≈ real(LA.tr(ρ * ρ))                         # trace2 in 1.x
+    @test purity(m) ≈ real(LA.tr(ρ * ρ))
     # on fermions, a coherence within a sector, under weak and strong conservations: the hop
     # c†₁c₂, written with its string, F on site 1
     ρf = [ 0 0 0 0 ; 0 0.5 0.3im 0 ; 0 -0.3im 0.5 0 ; 0 0 0 0 ]
@@ -103,7 +103,7 @@ end
                                    limits = Limits(maxdim = 1))) == 1
     # a classical ensemble of two Néel states, and one of mixed local states
     m = mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
-    @test purity(m) ≈ 0.5                                        # trace2 in 1.x
+    @test purity(m) ≈ 0.5
     @test expect(m, Z(1) * Z(2)) ≈ -1
     mm = mixture(System(2, Qubit()), [1 => ["FullyMixed", "Up"], 3 => [[0.5 0.5 ; 0.5 0.5], "Dn"]])
     @test expect(mm, Z(2)) ≈ -0.5
@@ -159,8 +159,7 @@ end
 
 @testset "The AKLT hamiltonian as a sum of projectors" begin
     # P2 projects two spins one on their total spin 2, which the AKLT state holds on no pair.
-    # named takes no site any more (decision 2): the projector is read on the sites it is
-    # placed on
+    # named takes no site: the projector is read on the sites it is placed on
     n = 6
     P2 = named(Proj(Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz => 1), "P2")
     h = sum(P2(i, i + 1) for i in 1:n-1)
@@ -177,7 +176,7 @@ end
     for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
         ρ = fully_mixed(System(n, site), N => m)
         @test trace(ρ) ≈ 1
-        @test purity(ρ) ≈ 1 / binomial(n, m)                     # trace2 in 1.x
+        @test purity(ρ) ≈ 1 / binomial(n, m)
         @test expect(ρ, N(2)) ≈ m / n
         @test expect(ρ, N(1) * N(4)) ≈ m * (m - 1) / (n * (n - 1))
         @test maxlinkdim(ρ) == m + 1
@@ -251,8 +250,7 @@ end
 
 @testset "Graph states" begin
     # the graph state of the complete graph of 4 vertices, pure and mixed: no Pauli of one site
-    # has a value, its stabilizers have 1, and so does every Y Y. 1.x checked it through
-    # create_graph_state, whose phases come with layer 5
+    # has a value, its stabilizers have 1, and so does every Y Y
     ψ = graph_state(complete_graph(4))
     for s in (ψ, mix(ψ))
         for a in (X, Y, Z)

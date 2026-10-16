@@ -23,8 +23,8 @@ end
 end
 
 @testset "Systems of the same sites are one system" begin
-    # decision 15: the indices derive from the content, so two systems of the same sites have
-    # the same indices, and the halves of S ⊗ S differ by their position
+    # the indices derive from the content, so two systems of the same sites have the same
+    # indices, and the halves of S ⊗ S differ by their position
     @test System(3, Qubit()) == System(3, Qubit())
     @test hash(System(3, Qubit())) == hash(System(3, Qubit()))
     @test siteinds(Pure, System(3, Qubit())) == siteinds(Pure, System(3, Qubit()))
@@ -74,7 +74,7 @@ end
 end
 
 @testset "A difference sees what the two states differ by" begin
-    # decision 21: a direct sum, then a truncation judged on the result. The sum of ITensorMPS
+    # a direct sum, then a truncation judged on the result. The sum of ITensorMPS
     # cut on the density matrices of the terms, and norm(a - b) saw no relative difference
     # below about 1e-7
     rng = TensorMixedStates.Random.Xoshiro(1)
@@ -157,7 +157,7 @@ end
     # a complex state is refused clearly, where ITensors raised an InexactError
     @test_throws "of complex amplitudes is not randomised" random_state(
         State{Pure}(System(3, Qubit()), [0.6, 0.8im]), 2; eltype = Float64)
-    # decision 13: a generator of one's own draws the same state twice
+    # a generator of one's own draws the same state twice
     rng(k) = TensorMixedStates.Random.Xoshiro(k)
     @test norm(random_state(Pure, sys, 4; rng = rng(5)) - random_state(Pure, sys, 4; rng = rng(5))) < 1e-14
     @test norm(random_state(Mixed, sys, 4; rng = rng(5)) - random_state(Mixed, sys, 4; rng = rng(5))) < 1e-14
@@ -199,7 +199,7 @@ end
 end
 
 @testset "A number is not a local state" begin
-    # decision 20: a basis state is named, "1" or Level => 1, a number standing for nothing
+    # a basis state is named, "1" or Level => 1, a number standing for nothing
     sys = System(3, Qubit())
     @test norm(State{Pure}(sys, Level => 1) - State{Pure}(sys, [0., 1.])) < 1e-12
     @test norm(State{Mixed}(sys, Level => 1) - State{Mixed}(sys, [0., 1.])) < 1e-12
@@ -248,8 +248,8 @@ end
 end
 
 @testset "States of systems of the same sites compare" begin
-    # decision 15: a state built on a system, saved and read back, or built on another system
-    # of the same sites, contracts with the others; one of other sites is refused
+    # a state built on a system, saved and read back, or built on another system of the same
+    # sites, contracts with the others; one of other sites is refused
     for R in (Pure, Mixed)
         a = random_state(R, System(3, Qubit()), 4)
         b = State{R}(System(3, Qubit()), "Up")
@@ -357,7 +357,7 @@ end
     m = random_state(Mixed, sys, conf, 16)
     @test trace(m) ≈ 1
     @test hermiticity(m) ≈ 1
-    @test real(purity(m)) < 1                             # trace2 in 1.x
+    @test real(purity(m)) < 1
     @test flux(m.state) == flux(mix(p).state)
     # conserving strongly leaves no room for it
     @test_throws "cannot hold" random_state(Mixed, System(4, Fermion(conserve = strong(N))), conf, 16)
@@ -377,7 +377,7 @@ end
     end
     numbers(s) = [ real(trace(s)), real(expect(s, N(2))),
                    real(expect(s, dag(C)(1) * dag(C)(2) * C(3) * C(4))) ]
-    purities(s) = [ real(purity(s)), real(hermiticity(s)) ]   # trace2 in 1.x
+    purities(s) = [ real(purity(s)), real(hermiticity(s)) ]
     reference = numbers(build(Fermion()))
 
     x = build(Fermion(conserve = strong(N)))

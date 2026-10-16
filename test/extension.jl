@@ -35,7 +35,7 @@ end
     # @def_states and @def_operators used to fill dictionaries of TensorMixedStates, which a
     # package writes into while it is precompiled and which Julia does not keep: once loaded,
     # the package had its site type and its operator names, but neither states nor matrices.
-    # They now declare on the site type (decision 19)
+    # They now declare on the site type
     mktempdir() do dir
         src = joinpath(dir, "SiteProbe", "src")
         mkpath(src)
@@ -262,9 +262,8 @@ end
     @test [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]
     @test last(only(measure(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)))) isa Float64
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
-    # expect1 and expect2 measure each value through its expect, on all sites or chosen ones, where
-    # in 1.x a representation of one's own defined its own, and so does measure for an operator of
-    # one site and a pair
+    # expect1 and expect2 measure each value through its expect, on all sites or chosen ones, and
+    # so does measure for an operator of one site and a pair
     @test expect1(wide, N) ≈ expect1(st, N)
     @test expect1(wide, [N, C]) ≈ expect1(st, [N, C])
     @test expect2(wide, (dag(C), C)) ≈ expect2(st, (dag(C), C))
@@ -285,7 +284,7 @@ end
     mktempdir() do dir
         file = joinpath(dir, "wide.h5")
         save_state(file, "wide", wide)
-        # read back on a system of the same sites, which it compares with (decision 15)
+        # read back on a system of the same sites, which it compares with
         back = load_state(file, "wide")
         @test back isa InterleavedState && back.system == sys
         @test [ expect(back, o) for o in ops ] ≈ [ expect(st, o) for o in ops ]

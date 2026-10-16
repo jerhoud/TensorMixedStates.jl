@@ -2,11 +2,9 @@
 # sites, the Jordan-Wigner strings of a tensor product included, the split of an operator of
 # several sites into factors of one site, and the descent of an operator onto a system.
 #
-# An assertion that needs a later layer is kept as `@test_skip`, marked with that layer.
-# `simplify` and `≈` between operators being internal from layer 2 on (decision 2b), what they
-# checked is checked by value through the descent, on the matrix of the operator placed on a
-# small system, and the written forms they reached are dropped. The superoperators are
-# tested in channels.jl, the lowering onto a system in compact.jl.
+# An operator is checked by value, through the matrix its descent gives on a small system,
+# rather than by the form it is written in. The superoperators are tested in channels.jl, the
+# lowering onto a system in compact.jl.
 
 @testset "The adjoint is an involution" begin
     # which only shows on operators that are not self adjoint
@@ -29,24 +27,23 @@ end
 end
 
 @testset "Operator simplification" begin
-    # the descent, in place of simplify (decision 2b), must never change the operator it stands
-    # for: its terms give the matrix of the operator. Of the normal forms simplify reached,
-    # written forms, only those of a product are kept, which `gathered` gives
+    # the descent must never change the operator it stands for: its terms give the matrix of the
+    # operator. The only written form checked is that of a product, which `gathered` gives
     lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q, f = Qubit(), Fermion()
     s1, s2 = System(1, q), System(2, q)
     for a in [X * X, X * Y, X + Y, 2X, 0 * X, X - X, X^2, X^3, sqrt(X * X), (X + Y)^2,
               dag(S), dag(X * Y), dag(X + im * Y), dag(dag(X)), exp(im * X),
               Id * X, X * Id, (X + Y) * Z, (2X) * (3Y), H * H, S * S, T * T,
-              Proj("0") + Proj("1")]                                    # decision 20
+              Proj("0") + Proj("1")]
         @test lowered(s1, a(1)) ≈ matrix(a, q)
     end
     for a in [X ⊗ Y, Swap, Swap * Swap, (X ⊗ Y) * (Y ⊗ X), controlled(X), X ⊗ Id + Id ⊗ X]
         @test lowered(s2, a(1, 2)) ≈ matrix(a, q, q)
     end
     # and an integer power of a channel, the composition repeated, by the terms of its
-    # superoperator. Left and Right are gone (decision 1), and a channel has no non integer
-    # power nor a generator any, which channels.jl checks
+    # superoperator. A channel has no non integer power nor a generator any, which channels.jl
+    # checks
     for a in [Gate(X)^2, (0.9 * Gate(Id) + 0.1 * Gate(X))^3]
         @test TMS.system_matrix(Mixed, s1, TMS.lower(s1, a(1))) ≈ matrix(a, q)
     end
@@ -86,7 +83,7 @@ end
 
 @testset "A projector is self adjoint" begin
     # `matrix` refuses a projector on a mixed state, so every one is self adjoint, and its
-    # adjoint, placed, is it whatever it projects on (decision 20: Proj("1"), not Proj(1))
+    # adjoint, placed, is it whatever it projects on
     s1 = System(1, Qubit())
     for p in (Proj("Up"), Proj("1"), Proj([1, im] / √2), Proj(X => -1))
         @test TMS.system_matrix(Pure, s1, TMS.lower(s1, dag(p)(1))) ≈
@@ -107,7 +104,7 @@ end
     @test sum(matrix(Proj(Sx => λ), s) for λ in -1:1) ≈ matrix(Id, s)
     # an eigenspace of several states, which the projector on a state cannot give
     @test matrix(Proj(Ntot => 1), Electron()) ≈ matrix(Proj("Up") + Proj("Dn"), Electron())
-    @test matrix(Proj(Level => 1), Qubit()) ≈ matrix(Proj("1"), Qubit())       # decision 20
+    @test matrix(Proj(Level => 1), Qubit()) ≈ matrix(Proj("1"), Qubit())
     # equal by its operator and its eigenvalue, and hashed alike
     @test Proj(X => -1) == Proj(X => -1.0)
     @test hash(Proj(X => -1)) == hash(Proj(X => -1.0))
@@ -118,8 +115,8 @@ end
     @test_throws "0.5 is not an eigenvalue of Sx" matrix(Proj(Sx => 0.5), s)
     @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp => 1), Qubit())
     @test_throws "A local state A => λ needs a Hermitian operator" TMS.local_state(Qubit(), (X * Z) => 1)
-    # decision 2: an operator of no definite fermionic parity has its projectors, their strings
-    # being laid by the lowering
+    # an operator of no definite fermionic parity has its projectors, their strings being laid
+    # by the lowering
     @test matrix(Proj(C + dag(C) => 1), Fermion()) ≈ [1. 1. ; 1. 1.] / 2
     @test_throws "Proj(N => 1)(3) rather than Proj(N(3) => 1)" Proj(X(3) => 1)
     # of several sites, the singlet and the spin 2 of two spins one, printed as before whatever
@@ -140,7 +137,7 @@ end
     # other phase does not and stays inside, only the modulus coming out: a negative one is
     # the phase -1, and so is -1 + 0im. The power decides this when it is built, and the power
     # of a sum that is a scaled operator, which it does not see, has to give the same matrix
-    # once placed (decision 2b: the descent in place of simplify)
+    # once placed
     lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q = Qubit()
     s1 = System(1, q)
@@ -192,8 +189,7 @@ end
         @test hash(a) == hash(b)
         @test length(Set([a, b])) == 1
     end
-    # and so is a product the descent gathered, sorted with a sign: 1.x hashed the product
-    # simplify gave strings, which the descent keeps apart in its terms (decision 2b)
+    # and so is a product the descent gathered, sorted with a sign
     f3 = System(3, Fermion())
     a, b = TMS.gathered(f3, C(3) * dag(C)(1)), TMS.gathered(f3, C(3) * dag(C)(1))
     @test a == b
@@ -201,8 +197,6 @@ end
     @test length(Set([a, b])) == 1
     # and operators that differ must keep differing
     @test length(Set([X(1) * Y(2), X(1) * Z(2)])) == 2
-    # 1.x asked a product shared by two measurements once, through get_prods; measure prepares
-    # each operator by its compaction, as expect does (decision 7a)
 end
 
 @testset "Modulo and parity operators" begin
@@ -215,8 +209,7 @@ end
         [i == j ? exp(2im * π * mod(i - 1, 3) / 3) : 0im for i in 1:6, j in 1:6]
     @test matrix(parity(N), b) ≈ matrix(mod(N, 2), b)
 
-    # the descent must never change the operator it stands for (decision 2b: in place of
-    # simplify)
+    # the descent must never change the operator it stands for
     lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     sb = System(1, b)
     for a in [parity(N), mod(N, 3), dag(parity(N)), dag(mod(N, 3)), parity(2N), parity(N)^2]
@@ -228,12 +221,11 @@ end
     @test matrix(dag(mod(N, 3)), b) ≈ adjoint(matrix(mod(N, 3), b))
     @test matrix(dag(dag(mod(N, 3))), b) ≈ matrix(mod(N, 3), b)
 
-    # (-1)^N is hermitian, whatever form simplify settles on
+    # (-1)^N is hermitian
     @test matrix(parity(N), b) ≈ adjoint(matrix(parity(N), b))
 
     @test_throws "a modulus is at least 2, got 1" mod(N, 1)
-    # decision 2: an operator of no definite fermionic parity has its parity operator,
-    # exp(iπC) = 1 + iπC
+    # an operator of no definite fermionic parity has its parity operator, exp(iπC) = 1 + iπC
     @test matrix(parity(C), f) ≈ [1 im * π ; 0 1]
 end
 
@@ -250,8 +242,8 @@ end
           TMS.system_matrix(Pure, f3, TMS.lower(f3, N(2)))
     # an expression has no name of its own and can be renamed too
     @test matrix(named(2Sz, "SzA"), Spin(1/2)) ≈ matrix(2Sz, Spin(1/2))
-    # decision 2: a renamed operator has no type, the lowering reading its fermionic parity off
-    # its matrix, so one of no definite parity is named as any other
+    # the lowering reads the fermionic parity of a renamed operator off its matrix, so that one
+    # of no definite parity is named as any other
     @test matrix(named(C + N, "x"), f) ≈ matrix(C + N, f)
 end
 
@@ -314,9 +306,8 @@ end
 end
 
 @testset "Operators of several sites given by a matrix" begin
-    # what was left of splitting them on their sites once their sites go: the matrix of an
-    # operator given by a matrix, a function of the sites or an expression is what it was given
-    # (decision 2: an operator has no type, and its sites are those of its matrix)
+    # the matrix of an operator given by a matrix, a function of the sites or an expression is
+    # what it was given, its sites those of its matrix
     q, s1, fe = Qubit(), Spin(1), Fermion()
     msw = [1. 0 0 0 ; 0 0 1 0 ; 0 1 0 0 ; 0 0 0 1]
     @test matrix(Operator{2}("Sw", msw), q) ≈ msw
@@ -369,7 +360,7 @@ end
     end
     # on sites that conserve, every factor of the split carries a definite charge, and so do
     # the parts of each charge of Sx and Sy in the expression, whose terms connecting other
-    # charges cancel (1.x refused it); the operator acts on the same sites weakened
+    # charges cancel; the operator acts on the same sites weakened
     s1q = Spin(1, conserve = Sz)
     p2q = Operator{2}("P2q", mp2)
     conf(sys) = normalize(State{Pure}(sys, ["1", "0", "-1", "0"]) +
@@ -381,8 +372,8 @@ end
     @test expect(stq, chain(p2e)) ≈ expect(std, chain(p2e))
     @test maxlinkdim(make_mpo(stq, chain(p2e))) == 10
     # on fermionic sites, the factors of a matrix are crossed by the strings of other operators
-    # as those of its expression are; one that does not commute with F, which 1.x refused, is
-    # split in the next testset
+    # as those of its expression are; one that does not commute with F is split in the next
+    # testset
     nn = Operator{2}("NN", matrix(N ⊗ N, fe))
     nne = Operator{2}("NNe", N ⊗ N)
     sf = random_state(Pure, System(4, fe), 4)
@@ -448,8 +439,8 @@ end
     @test_throws "no definite charge of N" TMS.split_matrix(Pure, "XX", matrix(X ⊗ X, q), [qn, qn])
 
     # on fermions the matrix holds the strings between its sites, which the split takes out:
-    # C ⊗ dag(C), refused by 1.x, is a single term, and the string that C on the second site
-    # lays on the first is no factor there
+    # C ⊗ dag(C) is a single term, and the string that C on the second site lays on the first is
+    # no factor there
     hop = matrix(C ⊗ dag(C), fe)
     ts = TMS.split_matrix(Pure, "H", hop, [fe, fe])
     @test exact(ts, hop, [fe, fe]) && length(ts) == 1
@@ -514,7 +505,7 @@ end
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
     @test lowered(s4, exp(-0.3 * (h * h))(1, 3)) ≈ exp(-0.3 * hop^2)
     @test lowered(s4, exp(-0.3 * (h * h))(3, 1)) ≈ exp(-0.3 * hop^2)
-    # a block of no definite parity is split into its even and odd parts, which 1.x refused
+    # a block of no definite parity is split into its even and odd parts
     @test lowered(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
     @test lowered(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
     # a sum or a named expression of one site is taken by its matrix, a term for each parity,
@@ -570,7 +561,7 @@ end
 @testset "Operators of no definite charge in an expression that has one" begin
     # on a site that conserves something, a block is split into its parts of each charge, so
     # that the Heisenberg coupling written with Sx and Sy, whose terms S⁺S⁺ and S⁻S⁻ cancel
-    # between SxSx and SySy, is the one written with Sp and Sm; 1.x refused it
+    # between SxSx and SySy, is the one written with Sp and Sm
     heis(n) = sum(Sx(i) * Sx(i + 1) + Sy(i) * Sy(i + 1) + Sz(i) * Sz(i + 1) for i in 1:n-1)
     paired(n) = sum((Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz)(i, i + 1) for i in 1:n-1)
     ladder(n) = sum((Sp(i) * Sm(i + 1) + Sm(i) * Sp(i + 1)) / 2 + Sz(i) * Sz(i + 1) for i in 1:n-1)
@@ -778,11 +769,11 @@ end
     @test matrix(C ⊗ Id ⊗ dag(C), fe) ≈ kron(c, id, id) * kron(f, f, c)'
     @test matrix(dag(C ⊗ C), fe) ≈ -matrix(dag(C) ⊗ dag(C), fe)
     # a factor of no definite parity after a fermionic site is the sum of its parts that have
-    # one, which 1.x refused: C ⊗ (C + N) is C ⊗ C + C ⊗ N
+    # one: C ⊗ (C + N) is C ⊗ C + C ⊗ N
     @test matrix(C ⊗ (C + N), fe) ≈ c1 * c2 + c1 * kron(id, c' * c)
 
     # an operator of several sites given by such an expression is the operator the expression
-    # stands for (decision 2: with no type)
+    # stands for
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
     hm = c1' * c2 + c2' * c1
     @test matrix(h, fe) ≈ hm
@@ -812,8 +803,8 @@ end
 @testset "Products differing by their last factor are gathered" begin
     # P*X(i) + P*Y(i) is P*(X+Y)(i): the terms of an odd sum of one site share their
     # Jordan-Wigner string, and the MPO carries each product once, the sum written either way.
-    # The descent keeps such terms apart, the compaction gathering them: the factors simplify
-    # left, which 1.x counted, have no counterpart (decision 2b). The operator must not change
+    # The descent keeps such terms apart, the compaction gathering them. The operator must not
+    # change
     st = random_state(Pure, System(5, Fermion()), 2)
     @test maxlinkdim(make_mpo(st, sum((C + dag(C))(i) for i in 1:5))) == 3
     @test maxlinkdim(make_mpo(st, sum(C(i) + dag(C)(i) for i in 1:5))) == 3
@@ -831,7 +822,7 @@ end
     @test (Id + 0.5X)^-1 == (Id + 0.5X)^p
     # an integer power is a product, with the adjoint and the strings of that product; any
     # other is the principal power, a function of the operator as exp is, of which only the
-    # modulus of a coefficient comes out. Decision 2: an involution is not reduced, its matrix
+    # modulus of a coefficient comes out. An involution is not reduced, its matrix
     # saying what it is
     lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     q, fe, s1 = Qubit(), Fermion(), Spin(1)
@@ -860,7 +851,7 @@ end
     @test matrix(X^(0.5im), q) ≈ matrix(X, q)^(0.5im)
     # a power that does not exist is refused, where Julia gives zero for C^0.5
     @test_throws "does not exist" matrix(sqrt(C), fe)
-    @test_throws "does not exist" matrix(Proj("0")^(-0.5), q)     # decision 20
+    @test_throws "does not exist" matrix(Proj("0")^(-0.5), q)
     # the eigenvalue 0 of an operator that is not diagonal comes out of rounding as about
     # ±1e-17, whose power is far from 0: (Sx^2)^0.1 was off by 0.03. And Julia, taking the
     # logarithm of a singular matrix, failed on a complex exponent or an operator not normal
@@ -913,9 +904,8 @@ end
     @test expect(st, X(1)^0.5) ≈ expect(st, (X^0.5)(1))
     @test_throws "has no power 0.5 once placed" (X(1) + Z(2))^0.5
 
-    # a non integer power of several sites is applied as a gate, a fermion beside it included.
-    # 1.x kept it whole, as exp, and refused it where it had to be split: decision 2 splits
-    # it, so that expect measures it
+    # a non integer power of several sites is applied as a gate, a fermion beside it included,
+    # and split, so that expect measures it
     ψ = dense_vector(st)
     @test expect(st, sqrt(Swap)(1, 2)) ≈ ψ' * kron(matrix(sqrt(Swap), q, q), matrix(Id, q)) * ψ
     sys = System([q, q, fe])
@@ -994,7 +984,7 @@ end
     # one site given for identical ones, a function of the sites included
     zx = Operator{2}("ZX", (a, b) -> kron(matrix(Z, a), matrix(X, b)))
     @test matrix(zx, q) ≈ kron(matrix(Z, q), matrix(X, q))
-    # a fermionic operator controlled is its expression (decision 20: Proj("0"), not Proj(0))
+    # a fermionic operator controlled is its expression
     fe = Fermion()
     @test matrix(controlled(C), q, fe) ≈ matrix(Proj("0") ⊗ Id + Proj("1") ⊗ C, q, fe)
     # a control of any type leaves the others as they are on its level 0 and applies the
@@ -1005,8 +995,7 @@ end
 end
 
 @testset "Every operator of the libraries has its matrix" begin
-    # what is left of checking the type of an operator against its matrix, which decision 2
-    # removes: F, which every parity is read against, squares to the identity
+    # F, which every parity is read against, squares to the identity
     for s in (Qubit(), Fermion(), Electron(), Tj(), Boson(3))
         @test matrix(F, s)^2 ≈ matrix(Id, s)
     end
@@ -1020,8 +1009,7 @@ end
 end
 
 @testset "named defines an operator" begin
-    # decision 2: an operator has no type, and named takes no site, the matrix being read on
-    # the sites the operator is given
+    # named takes no site, the matrix being read on the sites the operator is given
     @test matrix(named([1 1; 1 -1] / √2, "MyH"), Qubit()) ≈ [1 1; 1 -1] / √2
     @test matrix(named(s -> [0. 1.; 1. 0.], "Fx"), Qubit()) == [0. 1.; 1. 0.]
     # a matrix of any type, an adjoint or a Diagonal, given or returned by a function
@@ -1048,14 +1036,13 @@ end
 end
 
 @testset "Signed zeros" begin
-    # -0.0 and 0.0 are equal to `==` but not to `isequal` or `hash`: simplify of 1.x, which
-    # sorted the terms before merging the equal ones, left a pair apart when a third term sorted
-    # between them, and measure computed an expectation value twice
+    # -0.0 and 0.0 are equal to `==` but not to `isequal` or `hash`, which in 1.x left two equal
+    # terms apart when a third one sorted between them, and measure computed an expectation
+    # value twice
     c1 = -1 * (0.0 - 1.0im)       # -0.0 + 1.0im
     c3 = -1 * (0.0 - 2.0im)       # -0.0 + 2.0im
     f(c) = exp(c * X ⊗ X)(1, 2)
-    # the descent, in place of simplify (decision 2b), gathers the terms its matrices give,
-    # which a signed zero must not keep apart
+    # the descent gathers the terms its matrices give, which a signed zero must not keep apart
     lowered(sys, op) = TMS.system_matrix(Pure, sys, TMS.lower(sys, op))
     s2 = System(2, Qubit())
     fs = f(c1) - f(1.0im) + f(c3)
@@ -1068,7 +1055,7 @@ end
     @test length(Set([a, b])) == 1
     @test isequal(((X + Z)^complex(-0.0, 0.5)).expo, 0.5im)
     # and so in every number an operator stores: the matrix of an Operator, the state of a
-    # Proj or of a Reset (decision 2: an Operator has no type)
+    # Proj or of a Reset
     m(x) = Operator{1}("M", [1.0 x; 0.0 1.0])
     @test hash(m(-0.0)) == hash(m(0.0))
     p, q = Proj([1.0, -0.0]), Proj([1.0, 0.0])
@@ -1136,7 +1123,7 @@ end
 end
 
 @testset "map_sites moves the factors of an operator" begin
-    # compared as they are built, ≈ on operators needing simplify
+    # compared as they are built
     twice(i) = 2i
     @test map_sites(twice, X(1) * Y(2)) == X(2) * Y(4)
     @test map_sites(twice, 0.5 * Swap(1, 3) + Z(2) - 3 * Id(1)) == 0.5 * Swap(2, 6) + Z(4) - 3 * Id(1)

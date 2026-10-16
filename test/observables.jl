@@ -54,8 +54,8 @@ end
     @test [ ref[i, i] for i in 1:n ] ≈ expect1(st, N)
     @test expect2(st, (dag(C), C)) ≈ ref atol = 1e-10
     @test expect2(st, (C, dag(C))) ≈ [ i == j ? 1 - ref[i, i] : -ref[j, i] for i in 1:n, j in 1:n ] atol = 1e-10
-    # an odd operator, and a pair of mixed parities, which 1.x refused, are measured through
-    # expect with their strings; on a state superposing the two parities they do not vanish
+    # an odd operator and a pair of mixed parities are measured through expect with their
+    # strings; on a state superposing the two parities they do not vanish
     @test expect1(st, C) ≈ [ expect(st, C(i)) for i in 1:n ]
     @test maximum(abs, expect1(st, C)) > 1e-3
     # the odd part with the string the state keeps, the even part on the site: an operator of no
@@ -129,10 +129,10 @@ end
 end
 
 @testset "Superoperators of placed operators, unnormalized expectations and matrix elements" begin
-    # decision 1: Left and Right are gone, a placed operator a acts on a density matrix as
-    # Gate(a), ρ ↦ aρa†, or Evolver(a), ρ ↦ aρ + ρa†. A sum with its strings and its
-    # coefficients, against the pure state: tr(b aρa†) = <ψ|a† b a|ψ> and
-    # tr(b (aρ + ρa†)) = <ψ|b a|ψ> + <ψ|a† b|ψ>, expect times the trace being tr(b σ)
+    # a placed operator a acts on a density matrix as Gate(a), ρ ↦ aρa†, or Evolver(a),
+    # ρ ↦ aρ + ρa†. A sum with its strings and its coefficients, against the pure state:
+    # tr(b aρa†) = <ψ|a† b a|ψ> and tr(b (aρ + ρa†)) = <ψ|b a|ψ> + <ψ|a† b|ψ>, expect times the
+    # trace being tr(b σ)
     sys = System(4, Fermion())
     ψ = random_state(Pure, sys, 4)
     ρ = mix(ψ)
@@ -146,12 +146,11 @@ end
     # the product of the gates of one site is the gate of the product, strings included
     @test norm(apply(Gate(dag(C))(1) * Gate(C)(3), ρ) - mix(apply(dag(C)(1) * C(3), ψ))) < 1e-12
 
-    # `normalize = false` is gone: the value not divided by the trace is expect times the trace
+    # the value not divided by the trace is expect times the trace
     @test expect(2 * ρ, 3 * Id(1)) * trace(2 * ρ) ≈ 6
     @test expect(2 * ψ, N(1)) * trace(2 * ψ) ≈ 4 * expect(ψ, N(1))
-    # 1.x measured c₁ρ, of trace zero, unnormalized. Without Left, its substance is the gate of
-    # c₁, tr(X c₁ρc₁†) = tr(c₁† X c₁ρ), on sites charged weakly and strongly too, where the
-    # evolver c₁ρ + ρc₁† has no definite flux
+    # the gate of c₁ gives tr(X c₁ρc₁†) = tr(c₁† X c₁ρ), on sites charged weakly and strongly
+    # too, where the evolver c₁ρ + ρc₁† has no definite flux
     for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
         s = System(4, site)
         φ = mix(normalize(State{Pure}(s, ["Occ", "Emp", "Occ", "Emp"]) +
@@ -211,7 +210,7 @@ end
         # a non integer power is a function of the operator too
         @test expect(st, (g^0.5)(i)) ≈ ev(b^0.5)
     end
-    # a projector of no definite parity, which 1.x refused, has its odd part strung
+    # a projector of no definite parity has its odd part strung
     pr = [1. 1. ; 1. 1.] / 2
     @test expect(st, C(3) * Proj([1., 1.] / sqrt(2))(1)) ≈ ev(cs[3] * kron(pr, id, id))
     pe, po = (pr + f * pr * f) / 2, (pr - f * pr * f) / 2
@@ -226,8 +225,7 @@ end
     s2 = System(2, Qubit())
     s4 = System(4, Qubit())
     # a bond dimension above the Schmidt rank keeps singular values of exactly zero, whose
-    # 0 * log(0) made the entropy NaN; a product state on links of dimension 3, where 1.x took
-    # one from dmrg with a mindim of 3
+    # 0 * log(0) made the entropy NaN: a product state on links of dimension 3
     up = zeros(3, 2, 3)
     up[1, 1, 1] = 1
     g = mps_state(s4, [up[1:1, :, :], up, up, up[:, :, 1:1]])
@@ -255,7 +253,7 @@ end
     @test e ≈ 0 atol=1e-12
     @test spectrum ≈ [1.]
 
-    # a pure state stays pure, whichever representation holds it (trace2 in 1.x)
+    # a pure state stays pure, whichever representation holds it
     for st in [bell, ghz, mix(ghz)]
         @test purity(st) ≈ 1
         @test renyi2(st) ≈ 0 atol=1e-12
@@ -269,8 +267,7 @@ end
     @test renyi2(ghz, [1, 2]) ≈ L2
     @test renyi2(ghz, [1, 3]) ≈ L2                  # the sites need not be contiguous
     @test renyi2(product, [1, 2]) ≈ 0 atol=1e-12
-    # across a cut the mutual information is twice it, the cut 1 of 1.x written as the
-    # positions 1:1 (decision 9.2)
+    # across a cut the mutual information is twice it
     @test mutual_info_renyi2(bell, 1:1) ≈ 2 * renyi2(bell, [1])
 
     # the infinite temperature state of n qubits has purity 2^-n and entropy n log 2
@@ -279,20 +276,19 @@ end
     @test renyi2(fullymixed, [1]) ≈ L2
     @test hermiticity(fullymixed) ≈ 1
 
-    # mutual information: 2 log 2 for GHZ, none between independent halves, the cut 2 of 1.x
-    # written as the positions 1:2 (decision 9.2)
+    # mutual information: 2 log 2 for GHZ, none between independent halves
     @test mutual_info_renyi2(ghz, 1:2) ≈ 2L2
     @test mutual_info_renyi2(mix(ghz), 1:2) ≈ 2L2
     @test mutual_info_renyi2(fullymixed, 1:2) ≈ 0 atol=1e-12
 
     # on a pure state the mutual information of a leading block is read from the entanglement
     # spectrum rather than from partial traces: both routes must agree, on a state whose
-    # spectrum is not degenerate, a random one where 1.x took one evolved by tdvp
+    # spectrum is not degenerate, a random one
     k = 5
     spread = random_state(Pure, System(k, Qubit()), 4)
     for cut in 1:k - 1
         @test mutual_info_renyi2(spread, 1:cut) ≈ mutual_info_renyi2(mix(spread), 1:cut)
-        # the leading block given as a range, the cut of 1.x (decision 9.2), and as a list
+        # the leading block given as a range and as a list
         @test mutual_info_renyi2(spread, 1:cut) ≈ mutual_info_renyi2(spread, collect(1:cut))
     end
     # a non contiguous part of a pure state is twice its entropy as well, one partial trace
@@ -312,13 +308,10 @@ end
     @test renyi2(ψr, [3, 4]) ≈ renyi2(mix(ψr), [3, 4])
     @test mutual_info_renyi2(ψr, [1, 2]) ≈ mutual_info_renyi2(mix(ψr), [1, 2])
 
-    # the same quantities as measurements must agree with the functions, the cuts written as
-    # positions (decision 9.2)
+    # the same quantities as measurements must agree with the functions
     m(state, f) = only(last.(measure(state, Measure(f))))
     @test m(ghz, Trace) ≈ 1
     @test m(ghz, Norm) ≈ 1
-    # Trace2, the exact duplicate of Purity, is gone (decision 7b), and TraceError and
-    # HermiticityError, named like exceptions, are TraceDeviation and HermiticityDeviation
     @test m(ghz, Purity) ≈ 1
     @test m(ghz, Renyi2) ≈ 0 atol=1e-12
     @test m(ghz, Hermiticity) ≈ 1
@@ -407,7 +400,7 @@ end
     sys = System(3, Qubit())
     st = State{Pure}(sys, ["X+", "Y+", "Z+"])
     colnames(o) = first.(measure(st, [o]))
-    # a channel is not an observable, and expect says so (decision 1: Left(X)(1) in 1.x)
+    # a channel is not an observable, and expect says so
     @test_throws "is a channel" expect(mix(st), Gate(X)(1))
     @test_throws "measure takes observables, and Gate(X)(1) is not one" measure(mix(st), Gate(X)(1))
     @test colnames(X) == ["X"]
@@ -416,7 +409,7 @@ end
     @test colnames(X + Y) == ["X+Y"]
     @test colnames(dag(S)) == ["dag(S)"]
     @test colnames(Id) == ["Id"]
-    # a pair is named (A, B), where 1.x glued the two names, IdX and XY (layer 3, question 7)
+    # a pair is named (A, B)
     @test colnames((Id, X)) == ["(Id, X)"]
     @test colnames((X, Y)) == ["(X, Y)"]
     # an operator placed on sites by its compact printed form
@@ -476,7 +469,7 @@ end
     @test expect1(st, X) ≈ expect1(normalize(st), X)
     @test expect(st, Z(1) * Z(3)) ≈ expect(normalize(st), Z(1) * Z(3))
     @test expect2(st, (X, X)) ≈ expect2(normalize(st), (X, X))
-    # the same built by two gates that are not unitary, as 1.x did: Sp|+> = |0>/sqrt(2)
+    # the same built by two gates that are not unitary: Sp|+> = |0>/sqrt(2)
     sp = apply(Sp(3) * Sp(1), State{Pure}(sys, "+"))
     @test trace(sp) ≈ 0.25
     @test expect1(sp, Z) ≈ [1., 0., 1., 0., 0., 0.] atol = 1e-12
@@ -509,9 +502,9 @@ end
 
 @testset "A cut at either end" begin
     # a cut at 0 gave 0 on a mixed state and an error about the entanglement entropy on a
-    # pure one, and a negative cut was taken for an empty part on a mixed state. The cuts of
-    # 1.x are the positions 1:cut (decision 9.2): the cuts 0 and 3 an empty part and the
-    # whole state, the cuts -1 and 4 sites the state does not have
+    # pure one, and a negative cut was taken for an empty part on a mixed state. A leading block
+    # is given by its positions: 1:0 and 1:3 are an empty part and the whole state, -1 and 4
+    # sites the state does not have
     ψ = random_state(Pure, System(3, Qubit()), 2)
     for st in (ψ, mix(ψ))
         @test mutual_info_renyi2(st, 1:0) == 0
@@ -539,7 +532,7 @@ end
     @test mutual_info_renyi2(ψ, []) == 0
     @test renyi2(mix(ψ), 1:3) ≈ renyi2(mix(ψ))
     @test_throws "renyi2 was given site 4" renyi2(ψ, 1:4)
-    # the cut 2 of 1.x, SubRenyi2(2), written as the positions 1:2 (decision 9.2)
+    # the leading block of two sites, named by its positions
     @test SubRenyi2(1:2).name == "SubRenyi2(1,2)"
     @test last(only(measure(ψ, SubRenyi2(1:2)))) ≈ renyi2(mix(ψ), [1, 2])
 end
@@ -575,14 +568,13 @@ end
 
 @testset "Projector of several sites" begin
     # applied as a gate, with the Jordan-Wigner strings of the sites in between, the order of
-    # its sites included; renamed by named, which takes no site (decision 2)
+    # its sites included; renamed by named, which takes no site
     ud = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
     @test real(expect(ud, named(Proj(Swap => -1), "Singlet")(1, 2))) ≈ 0.5
     for st in (ud, mix(ud))
         @test real(expect(normalize(apply(Proj(Swap => -1)(1, 2), st)), Swap(1, 2))) ≈ -1
     end
-    # 1.x refused to measure it as acting on several sites at once; the descent splits its
-    # matrix on its sites (decision 2)
+    # measured, the descent splitting its matrix on its sites
     @test expect(ud, Proj(Swap => -1)(1, 2)) ≈ 0.5
     fs = System(4, Fermion(conserve = N))
     f = random_state(State{Pure}(fs, ["Occ", "Occ", "Emp", "Emp"]), 4)
@@ -738,8 +730,8 @@ end
 end
 
 @testset "The algorithms of the product of an MPO by a state" begin
-    # without truncation, "naive", the default, and "densitymatrix" give the exact product; on
-    # a random state, where 1.x took one evolved by tdvp
+    # without truncation, "naive", the default, and "densitymatrix" give the exact product, on
+    # a random state
     n = 4
     h = sum(X(i) * X(i + 1) for i in 1:n - 1)
     st = random_state(Pure, System(n, Qubit()), 4)
@@ -905,7 +897,7 @@ end
         @test last(only(measure(weaken(p), Overlap(p)))) ≈ 1
     end
     # and a pure reference on a state dropping part of what it conserves, a site left conserving
-    # nothing being cut into a single block on a system still charged, as 1.x tested it
+    # nothing being cut into a single block on a system still charged
     sys = System([Qubit(conserve = N), Boson(3, conserve = named(N, "Nb")),
                   Boson(3, conserve = named(N, "Nb")), Qubit(conserve = N)])
     p(v) = State{Pure}(sys, v)
@@ -987,7 +979,7 @@ end
     @test variance(gs, h) < 1e-8
     @test variance(gs, h) < variance(r, h)
 
-    # as a measurement, on the random state where 1.x took the ground state
+    # as a measurement
     @test first(only(measure(r, Variance(h)))) == "Variance"
     @test last(only(measure(r, Variance(h)))) ≈ variance(r, h)
 
@@ -1043,7 +1035,7 @@ end
     both(s -> collect(entanglement_entropy(s, 2)[2]))
 
     both(s -> trace(mix(s)))
-    both(s -> purity(mix(s)))                                      # trace2 in 1.x
+    both(s -> purity(mix(s)))
     both(s -> renyi2(mix(s)))
     both(s -> hermiticity(mix(s)))
     both(s -> expect(mix(s), N(2)))
@@ -1051,7 +1043,7 @@ end
     both(s -> expect(mix(s), η(1) * γ(3)))
     both(s -> expect2(mix(s), (γ, N)))
     both(s -> trace(partial_trace(mix(s), [1, 3])))
-    both(s -> mutual_info_renyi2(mix(s), 1:2))                     # the cut 2 (decision 9.2)
+    both(s -> mutual_info_renyi2(mix(s), 1:2))
     both(s -> trace(apply(Gate(F)(1), mix(s))))
     both(s -> trace(apply(Dissipator(N)(2), mix(s))))
     both(s -> expect(apply(Reset("Occ")(2), mix(s)), N(2)))
@@ -1070,7 +1062,7 @@ end
     both(f) = @test isapprox(f(w), f(s); atol = 1e-12)
     @test trace(s) ≈ 1
     both(trace)
-    both(purity)                                                   # trace2 in 1.x
+    both(purity)
     both(x -> expect(x, N(2)))
     both(x -> expect1(x, N))
     both(x -> expect2(x, (dag(C), C)))
@@ -1105,12 +1097,11 @@ end
     @test expect(dag(ss), dag(C)(1) * C(3)) ≈ conj(expect(ss, dag(C)(3) * C(1)))
     @test hermiticity(ss) < 0.99
     # tracing out part of the sites is refused, what is left being a mixture over several
-    # sectors, which a state keeping the two charges apart cannot hold (decision 16)
+    # sectors, which a state keeping the two charges apart cannot hold
     @test_throws "weaken it first" partial_trace(s, [1, 3])
     @test expect(partial_trace(weaken(s), [1, 3]), N(1)) ≈ expect(partial_trace(w, [1, 3]), N(1))
     # a number read off a partial trace is measured all the same, through the weak form
     both(x -> renyi2(x, [1, 2]))
-    # which is also the cut 2 of 1.x, mutual_info_renyi2(x, 2) (decision 9.2)
     both(x -> mutual_info_renyi2(x, [1, 2]))
 end
 
@@ -1327,8 +1318,7 @@ end
 @testset "Measuring a site" begin
     # the result is drawn with its probability, and the state left is the state projected onto
     # it and normalized, which the outcome on one half of a Bell pair fixes on the other.
-    # collapse returns the triple (result, probability, state), where 1.x returned the pair
-    # (result, state) (decision 9.1)
+    # collapse returns the triple (result, probability, state)
     rng = Xoshiro(20261007)
     plus = State{Pure}(System(2, Qubit()), "+")
     ps = probabilities(plus, 1)
@@ -1346,7 +1336,7 @@ end
         @test real(expect(s, Z(2))) ≈ (x == 0 ? 1 : -1)
         @test real(trace(s)) ≈ 1
     end
-    # the projector on a level is Proj(Level => x), a number denoting no state (decision 20)
+    # the projector on a level is Proj(Level => x), a number denoting no state
     r = random_state(Pure, System(4, Qubit()), 4)
     for st in (r, mix(r)), _ in 1:4
         x, _, s = collapse(st, 2; rng)
@@ -1375,7 +1365,7 @@ end
 @testset "Measuring an operator of several sites" begin
     # the results and their probabilities from the eigenspaces of the matrix of the operator on
     # its sites, and the projection by its projectors placed there; collapse returns the triple
-    # (result, probability, state), where 1.x returned the pair (result, state) (decision 9.1)
+    # (result, probability, state)
     rng = Xoshiro(20261008)
     # a parity measured on |++> leaves a Bell pair, and Swap tells the singlet from the triplets
     plus = State{Pure}(System(2, Qubit()), "+")
@@ -1421,8 +1411,8 @@ end
     @test_throws "collapse weaken(state, ()) instead" collapse(q, X(1); rng)
     @test_throws "collapse weaken(state, ()) instead" collapse(mix(q), X(1) => 1)
     @test collapse(weaken(q, ()), X(1) => 1).probability ≈ 0.5
-    # 1.x refused an operator not commuting with the fermionic parity, now measured, see
-    # "Measuring an operator of no definite fermionic parity"
+    # an operator that is not Hermitian is refused, one not commuting with the fermionic parity
+    # measured, see "Measuring an operator of no definite fermionic parity"
     @test_throws "needs a Hermitian operator" probabilities(plus, Sp(1) * Z(2))
     # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
     up64, xx = State{Pure}(System(64, Qubit()), "Up"), sum(X(i) * X(i + 1) for i in 1:63)
@@ -1436,10 +1426,10 @@ end
 end
 
 @testset "Measuring an operator of no definite fermionic parity" begin
-    # 1.x refused it; the projectors of the dense path are placed as operators, whose strings the
-    # descent lays: on a state superposing the two parities the results of a Majorana operator,
-    # ±1, have the probabilities its mean value gives, and the state projected on one of them
-    # has it as mean value, in the pure and in the mixed representation
+    # the projectors of the dense path are placed as operators, whose strings the descent lays:
+    # on a state superposing the two parities the results of a Majorana operator, ±1, have the
+    # probabilities its mean value gives, and the state projected on one of them has it as mean
+    # value, in the pure and in the mixed representation
     φ = random_state(Pure, System(4, Fermion()), 4)
     γ3 = (C + dag(C))(3)
     @test abs(expect(φ, γ3)) > 1e-3
@@ -1459,8 +1449,7 @@ end
 
 @testset "Collapse on a given result" begin
     # the probability of the result and the state projected onto it, on each way of measuring:
-    # the result post-selected. collapse returns the triple (result, probability, state), where
-    # 1.x returned the pair (probability, state) (decision 9.1)
+    # the result post-selected. collapse returns the triple (result, probability, state)
     plus = State{Pure}(System(2, Qubit()), "+")
     for st in (plus, mix(plus))
         s, p, after = collapse(st, Z(1) * Z(2) => -1)
@@ -1504,7 +1493,7 @@ end
         @test p ≈ 0.5
         @test real(expect(after, Z(2))) ≈ -1
     end
-    # the level given as a real, where 1.x took a Pair{Int, Int}
+    # the level given as a real
     x, p, after = collapse(bell, 1 => 1.0)
     @test x === 1
     @test p ≈ 0.5
@@ -1520,7 +1509,7 @@ end
 @testset "Dephasing as the average of the collapses" begin
     # the measurement whose result is not read is the average of the states its results leave,
     # with the strings of the fermionic sites in between and the order of the sites; collapse
-    # returns the triple (result, probability, state) (decision 9.1)
+    # returns the triple (result, probability, state)
     averaged(st, op) = sum(c.probability * c.state for c in (collapse(st, op => λ)
                                                             for (λ, q) in probabilities(st, op)
                                                             if q > 1e-14))
@@ -1542,7 +1531,7 @@ end
 @testset "Measuring a product of involutions" begin
     # measured by its mean value on any number of sites, it agrees with the matrix of the
     # operator on a few, and its projection, the state plus its image, with (1 + sP)/2;
-    # collapse returns the triple (result, probability, state) (decision 9.1)
+    # collapse returns the triple (result, probability, state)
     rng = Xoshiro(20261009)
     ψ = random_state(Pure, System(6, Qubit()), 6)
     for op in (Z(1) * X(3) * Y(5), -2 * Z(1) * Z(2), X(2) * X(3) * X(4) * X(5)), st in (ψ, mix(ψ))
@@ -1605,7 +1594,7 @@ end
     # its totals, integers or half integers, are counted on any number of sites, in agreement
     # with the matrix of the operator on a few, and its projection by an MPO carrying the
     # partial sums with the projector on its eigenspace; collapse returns the triple
-    # (result, probability, state) (decision 9.1)
+    # (result, probability, state)
     rng = Xoshiro(20261010)
     ψ = random_state(Pure, System(6, Qubit()), 6)
     s = random_state(Pure, System([Qubit(), Spin(1), Qubit(), Spin(3/2)]), 6)
@@ -1677,7 +1666,7 @@ end
     @test_throws "(X, Y) rather than (X(1), Y(2))" expect2(ψ, (X(1), X(2)))
     @test_throws "(X, Y) rather than (X(1), Y(2))" expect2(ψ, [(X, X), (X(1), X(2))])
     @test_throws "acts on site 3, which the system does not have" expect(ψ, X(3))
-    # an operator of several sites, which 1.x refused in expect, is measured
+    # an operator of several sites is measured
     @test expect(ψ, Swap(1, 2)) ≈ 1
 end
 
@@ -1726,11 +1715,10 @@ end
 
 @testset "measure and its lists of measurements" begin
     # measure gives the pairs name => value of a list in its order, always a vector, even for one
-    # measurement, rather than a bare value whose type would depend on the argument, which
-    # decision 7 rejected (c). A list holds operators placed on sites, measured by expect,
-    # operators of one site, by expect1, pairs of them, by expect2, the measurements of the
-    # library, symbols, the values of their names given to measure, and named functions of the
-    # context
+    # measurement, rather than a bare value whose type would depend on the argument. A list
+    # holds operators placed on sites, measured by expect, operators of one site, by expect1,
+    # pairs of them, by expect2, the measurements of the library, symbols, the values of their
+    # names given to measure, and named functions of the context
     st = State{Pure}(System(3, Qubit()), ["X+", "Y+", "Z+"])
     r = measure(st, [X, (X, Y), Z(1) * Z(2), Purity, "E" => c -> c.time, :energy];
                 time = 1.5, energy = -3.2)
@@ -1751,8 +1739,8 @@ end
     @test first.(measure(st, m; energy = 2)) == ["X", "(X, Y)", "Z(1)*Z(2)", "Purity", "E"]
     @test last(last(measure(st, m; energy = 2))) == 2
     # vectors and Measures in a list stand for their measurements, a matrix row by row, so that a
-    # list can be built from parts: two Measures make one list, where 1.x gave one vector of pairs
-    # for each, and a view is a vector, which 1.x took for a single measurement
+    # list can be built from parts: two Measures make one list, and a view is a vector, which
+    # 1.x took for a single measurement
     @test first.(measure(st, [[X(1), Z(2)], Measure(Y(1), (Z, Z)), [X(2) Y(2); Z(3) X(3)]])) ==
           ["X(1)", "Z(2)", "Y(1)", "(Z, Z)", "X(2)", "Y(2)", "Z(3)", "X(3)"]
     @test first.(measure(st, [Measure(X(1)), Measure(Z(1), Y(1))])) == ["X(1)", "Z(1)", "Y(1)"]
@@ -1767,7 +1755,7 @@ end
     # in a vector of named measurements, which Julia types Vector{Pair{String, Any}}, a named
     # function is told by its value, not by the type of its pair
     @test first.(measure(st, ["a" => X(1), "f" => c -> 1])) == ["a", "f"]
-    # two measurements of a list cannot share a name (decision 6a)
+    # two measurements of a list cannot share a name
     @test_throws "several measurements are named \"X(1)\": name them apart" Measure(X(1), X(1))
     @test_throws "named \"X(1)\"" Measure([X(1), [X(1)]])
     @test_throws "named \"X\"" Measure(X, "X" => Z(1))
@@ -1777,14 +1765,14 @@ end
 
 @testset "What a list of measurements refuses" begin
     st = State{Pure}(System(3, Qubit()), "Up")
-    # when it is built (layer 3, question 2): a function needs a name, a constant and a label are
+    # when it is built: a function needs a name, a constant and a label are
     # no measurements, a Check is returned by a function, a pair is made of two operators of one
     # site, an operator of several sites is placed, and a channel or a generator is no observable
     @test_throws "a measurement written as a function needs a name: \"name\" => c -> …" (
         Measure(c -> 1))
     @test_throws "a constant is not a measurement: write \"name\" => c -> 1.5" Measure(1.5)
     @test_throws "a constant is not a measurement" Measure("a" => 1)
-    # a range of numbers as well, which 1.x measured as the vector of its constants
+    # a range of numbers as well
     @test_throws "a constant is not a measurement" measure(st, [1:2])
     @test_throws "\"label\" is not a measurement: a name goes before one" Measure("label")
     @test_throws "\"b\" is not a measurement" Measure("a" => "b")
@@ -1809,8 +1797,8 @@ end
     @test_throws "LogNegativity was given site 7" measure(st, LogNegativity([1], [7]))
     @test_throws "ReducedDensityMatrix was given site 4" measure(st, ReducedDensityMatrix([1, 4]))
     @test_throws "is defined on no site" measure(st, C)
-    # a symbol of the list needs its value, which 1.x left empty (layer 3, question 3), and is
-    # refused before anything is measured
+    # a symbol of the list needs its value, which 1.x left empty, and is refused before
+    # anything is measured
     called = Ref(false)
     @test_throws "measure was given no value of energy: measure(state, measurements; energy = …)" (
         measure(st, ["f" => c -> (called[] = true), :energy]))
@@ -1821,8 +1809,7 @@ end
 
 @testset "Functions of the context and Check" begin
     # a measurement of one's own is a named function of the context c, which reads c.state,
-    # c.time and the values given to measure by their names (decision 6b), where 1.x had
-    # StateFunc and TimeFunc
+    # c.time and the values given to measure by their names
     st = State{Pure}(System(3, Qubit()), "+")
     r = measure(st, ["x" => c -> real(expect(c.state, X(1))), "t" => c -> 2c.time,
                      "e" => c -> c.energy, "n" => c -> sort!(collect(propertynames(c)))];
@@ -1832,13 +1819,13 @@ end
     @test last(r[2]) == 1
     @test last(r[3]) == -1
     @test last(r[4]) == [:energy, :state, :time]
-    # a complex time, as 1.x took
+    # a complex time
     @test last(only(measure(st, "t" => c -> c.time; time = 0.5im))) == 0.5im
     # the symbol :time reads it as a symbol reads a value, where it was refused as not given
     @test measure(st, [:time]; time = 0.5) == ["time" => 0.5]
     @test_throws "measure was given no value of time" measure(st, [:time])
-    # what it reads and was not given is refused when it is read: the time, which has no default
-    # (layer 3, question 3), and a value
+    # what it reads and was not given is refused when it is read: the time, which has no
+    # default, and a value
     @test_throws "this measurement reads the time, which measure was not given" measure(
         st, "t" => c -> c.time)
     @test_throws "measure(state, measurements; time = t)" measure(st, "t" => c -> c.time)
@@ -1848,9 +1835,8 @@ end
     sp = @test_logs last(only(measure(ph, "sp" => c -> expect(c.state, Sp(1)))))
     @test sp ≈ exp(0.7im) / 2
 
-    # a Check is what such a function returns to compare a value with a reference (decision 6b),
-    # where 1.x had a measurement Check(name, a, b, tol): measure gives the value, the reference
-    # and the norm of their difference
+    # a Check is what such a function returns to compare a value with a reference: measure gives
+    # the value, the reference and the norm of their difference
     ch = last(only(measure(st, "chk" => c -> Check(expect(c.state, X(1)), 1; tol = 1e-10))))
     @test keys(ch) == (:value, :reference, :difference)
     @test ch.value ≈ 1 && ch.reference == 1 && ch.difference < 1e-10
@@ -1893,11 +1879,9 @@ end
 
 @testset "Real and complex values" begin
     # the value of a Hermitian operator is real, decided numerically on its lowered terms when the
-    # list is prepared, that of any other complex, whatever the element type of the state
-    # (decision 7): a real value is a Float64 on a complex state, a complex one a ComplexF64 on a
-    # real state. 1.x decided by a symbolic test, which took Sp(1)Sm(2) + Sm(1)Sp(2) for complex,
-    # wrote an imaginary value under Im(name), and had RealValue, ImaginaryValue and ComplexValue
-    # declare a kind, which are gone
+    # list is prepared, that of any other complex, whatever the element type of the state: a
+    # real value is a Float64 on a complex state, a complex one a ComplexF64 on a real state.
+    # 1.x decided by a symbolic test, which took Sp(1)Sm(2) + Sm(1)Sp(2) for complex
     value(st, m) = last(only(measure(st, m)))
     up = State{Pure}(System(2, Qubit()), "Up")
     ph = apply(Phase(0.7)(1), State{Pure}(System(2, Qubit()), "+"))
@@ -1975,8 +1959,8 @@ end
     @test value(e, (Cup + dag(Cup), Ndn)) ≈ real(expect2(e, (Cup + dag(Cup), Ndn)))
     @test value(e, (Cup + dag(Cup), Cdn + dag(Cdn))) isa Matrix{ComplexF64}
 
-    # the measurements of the library and the functions give their values as they are computed
-    # (decision 7), Trace keeping its imaginary part, which is what it is measured for; but Trace,
+    # the measurements of the library and the functions give their values as they are computed,
+    # Trace keeping its imaginary part, which is what it is measured for; but Trace,
     # TraceDeviation, Overlap and ReducedDensityMatrix are complex on any state, a real one
     # included, where a text file would otherwise refuse its columns once the state turns complex
     ρ2 = (1 + 1im) * mix(State{Pure}(System(2, Qubit()), "+"))
@@ -1997,7 +1981,7 @@ end
 @testset "The imaginary part dropped" begin
     # the imaginary part of the value of a Hermitian operator is dropped with a warning when it is
     # beyond rounding next to the scale of the operator, the sum over its terms of |coef| times
-    # the operator norms of its blocks, and not next to the value (layer 3, question 4): a value
+    # the operator norms of its blocks, and not next to the value: a value
     # zero up to rounding is not warned about
     up = State{Pure}(System(2, Qubit()), "Up")
     @test (@test_logs measure(up, X(1))) == ["X(1)" => 0.0]
@@ -2042,7 +2026,7 @@ end
 @testset "A Measure keeps its preparation" begin
     # a Measure is prepared once for each representation and system it is measured on, and
     # measuring again reuses that preparation, where a list given as it is is prepared at each
-    # call (decision 5)
+    # call
     ψ = random_state(Pure, System(4, Qubit()), 4)
     m = Measure(X, (X, Y), Z(1) * Z(2), Purity)
     @test isempty(m.prepared)
@@ -2050,7 +2034,7 @@ end
     p = only(values(m.prepared))
     @test measure(ψ, m) == a
     @test only(values(m.prepared)) === p
-    # another state on an equal system shares it, a system being its content (decision 15)
+    # another state on an equal system shares it, a system being its content
     measure(random_state(Pure, System(4, Qubit()), 2), m)
     @test length(m.prepared) == 1
     # the mixed representation and another system have their own
@@ -2088,8 +2072,6 @@ end
     # and a mixed representation goes through the same entries
     @test_throws "acts on site 8" expect(stm, X(8))
     @test_throws "acts on site 8" make_mpo(stm, Dissipator(Sm)(8))
-    # an operator acting on several sites at once, which 1.x refused, is split on its sites by
-    # the descent (decision 2), see operators.jl
     # a matrix of the wrong size for its site is refused by a message naming the operator and
     # the site, on the three paths. It failed on a DimensionMismatch from reshape
     b3 = Operator{1}("B3", [1. 0. 0. ; 0. 1. 0. ; 0. 0. 1.])

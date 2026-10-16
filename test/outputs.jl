@@ -49,9 +49,9 @@ TMS.write_row(::PickyOpen, _, _) = nothing
 Base.close(::PickyOpen) = nothing
 
 @testset "The columns of a text table" begin
-    # the time then each measurement (decision 8): an operator of one site on each site, a pair
+    # the time then each measurement: an operator of one site on each site, a pair
     # on each pair of sites, A(i)B(j) or c(i,j) when it is named, a complex value in two columns,
-    # an integer as it is, a Check in three (layer 3, step 4)
+    # an integer as it is, a Check in three
     mktempdir() do dir
         o = TMS.Outputs(; dir)
         ψ = State{Pure}(System(2, Qubit()), "+")
@@ -108,7 +108,7 @@ end
 
 @testset "A file holds one list" begin
     # its columns are fixed by its first line: another list is refused before anything is
-    # measured, and values of another shape when they are written (decision 8)
+    # measured, and values of another shape when they are written
     mktempdir() do dir
         o = TMS.Outputs(; dir)
         ψ = State{Pure}(System(2, Qubit()), "Up")
@@ -176,7 +176,7 @@ end
 @testset "JSON Lines" begin
     # one object per call, the time then the measurements in their order, nested as measure gives
     # them: a complex number {"re", "im"}, missing null, a float that is not finite a string, a
-    # Check an object, and another list in the same file (decision 8)
+    # Check an object, and another list in the same file
     mktempdir() do dir
         o = TMS.Outputs(; dir)
         ψ = State{Pure}(System(2, Qubit()), "+")

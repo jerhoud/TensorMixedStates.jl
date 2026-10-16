@@ -7,13 +7,12 @@
 # the algorithms of one's own in extension.jl.
 #
 # The references are dense matrices written here with kron, sharing no code with the package,
-# or exact values of 1.x computed by the scripts of test/reference. A tolerance says how
+# or exact values computed by the scripts of test/reference. A tolerance says how
 # accurate a method is on its problem: as tight as the method allows, but not at the floating
 # point floor, where rounding differs with the BLAS build.
 #
 # The phases Evolve and Thermalize are tested here as far as their computation goes, their
-# resume in runner.jl; the gates and the channels applied to states, there in 1.x, are in
-# channels.jl.
+# resume in runner.jl; the gates and the channels applied to states are in channels.jl.
 
 """
 the matrix `m` of one qubit on site `i` of `n` qubits, site 1 most significant

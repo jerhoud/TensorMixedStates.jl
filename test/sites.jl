@@ -165,7 +165,7 @@ end
 end
 
 @testset "The parity of a site gives F" begin
-    # decision 19: F is no longer declared, the parities of the basis states give it
+    # F is not declared: the parities of the basis states give it
     @test matrix(F, Fermion()) == [1. 0. ; 0. -1.]
     @test matrix(F, Electron()) == [1. 0 0 0 ; 0 -1 0 0 ; 0 0 -1 0 ; 0 0 0 1]
     @test matrix(F, Tj()) == [1. 0 0 ; 0 -1 0 ; 0 0 -1]
@@ -308,7 +308,7 @@ end
         @test real(expect(st, Ntot(1))) ≈ 1
         @test real(expect(st, Nup(2))) ≈ 0.5
         @test abs(expect(st, Sz(1))) < 1e-14
-        @test real(purity(st)) ≈ 1 / 4                     # trace2 in 1.x
+        @test real(purity(st)) ≈ 1 / 4
         @test_throws "spreads over several charges" State{Mixed}(System(2, site), "FullyMixed")
     end
 end
@@ -432,7 +432,7 @@ end
     @test ls(Declarer(), "1") == [0., 1.]
     @test ls(Qubit(), "FullyMixed") == [0.5 0. ; 0. 0.5]
     @test_throws "state Zorglub is not defined for site Declarer" ls(Declarer(), "Zorglub")
-    # decision 20: an error of the rule of names is no longer taken for a name it does not read
+    # an error of the rule of names is not taken for a name it does not read
     @test_throws InterruptException ls(Interrupter(), "Up")
     # a copy of what the site declares, which changing changed it for everyone
     v = ls(Qubit(), "Up")
@@ -445,7 +445,7 @@ end
 
 @testset "Local states" begin
     ls = TMS.local_state
-    # decision 20: A => λ is an eigenstate; a basis vector for a diagonal operator and a simple
+    # A => λ is an eigenstate; a basis vector for a diagonal operator and a simple
     # eigenvalue, the uniform mixture of the eigenspace otherwise
     @test ls(Qudit(4), Level => 2) == [0., 0., 1., 0.]
     @test ls(Spin(1), Sz => -1) == [0., 0., 1.]
@@ -542,7 +542,7 @@ end
     # a unitary given by its matrix is not read off its spectrum: its charge and the modulus
     # are written with mod
     @test_throws "a charge modulo m is written mod(Q, m)" Qubit(conserve = S)
-    # decision 18: the charges are typed, so a name may hold any character but a final star,
+    # the charges are typed, so a name may hold any character but a final star,
     # which names the bra of a strong quantity
     for name in ("a%2", "a:b", "a;b", "a!")
         @test charges(Boson(3, conserve = named(N, name))) == [(name, 1, [0, 1, 2], false)]
@@ -631,11 +631,10 @@ end
 end
 
 @testset "Operator tensors on a charged system" begin
-    # the ITensor of an operator on a system is internal (decision 2): what 1.x read on its flux
-    # is read on what the operator does. Rounding between charges, which an eigendecomposition
-    # leaves behind, is not a charge, and the flux of an operator and its placement agree on it.
-    # What counts as rounding is relative to the operator, so that a very small one is not taken
-    # for the zero operator, which carries no charge
+    # the flux of an operator is read on what it does on the system. Rounding between charges,
+    # which an eigendecomposition leaves behind, is not a charge, and the flux of an operator
+    # and its placement agree on it. What counts as rounding is relative to the operator, so
+    # that a very small one is not taken for the zero operator, which carries no charge
     b = Boson(5, conserve = parity(N))
     g = exp(0.2 * (A^2 + dag(A)^2) + 0.1 * N)
     @test flux(g, b) == IT.QN("parity(N)", 0, 2)
@@ -801,8 +800,7 @@ end
 
     # charges that do not increase along the basis, with a channel and generators. The
     # dissipator is added to the state rather than applied alone, what it gives on its own
-    # having no trace. Left and Right being gone (decision 1), Evolver, K ρ + ρ K†, acts on
-    # both sides where they acted on one each
+    # having no trace. Evolver, K ρ + ρ K†, acts on both sides
     same(Boson(4, conserve = parity(N)), Boson(4)) do site
         sys = System(3, site)
         p(v) = State{Pure}(sys, v)
@@ -851,8 +849,6 @@ end
     # the refusal names the quantity even when the first site of the operator conserves nothing
     hyb = mix(State{Pure}(System([Qubit(), Fermion(conserve = strong(N))]), ["Up", "Occ"]))
     @test_throws "changes N by different amounts" apply(Dissipator(X ⊗ C)(1, 2), hyb)
-    # `tensor` being ⊗ now, the ITensor of an operator given only its sites is internal, and
-    # what 1.x read on it, one index for its sites and its flux, is not ported
 end
 
 @testset "A term vanishing on its site" begin
@@ -920,7 +916,7 @@ end
              (Electron(conserve = (Ntot, 2Sz)), Electron(),     "Up",  Ntot),
              (Tj(conserve = (Ntot, 2Sz)),       Tj(),           "Up",  Ntot),
              (Qboson(0.1, 4, conserve = N),     Qboson(0.1, 4), "2",   N),
-             (Qudit(4, conserve = Z),           Qudit(4),       "1",   Z))    # Zd is Z now
+             (Qudit(4, conserve = Z),           Qudit(4),       "1",   Z))
     for (charged, dense, st, op) in cases, rep in (identity, mix)
         state(site) = rep(State{Pure}(System(3, site), fill(st, 3)))
         @test expect(state(charged), op(2)) ≈ expect(state(dense), op(2))
