@@ -429,6 +429,39 @@ end
     @test expect2(st, (2X, 3Y)) ≈ 6 * expect2(st, (X, Y))
 end
 
+@testset "Products of sums measured from the PreMPOs of their factors" begin
+    # a product of sums that would develop into many terms, as a moment of an observable, is
+    # measured from the PreMPOs of its factors multiplied, real when it is Hermitian
+    exact(st, op) = TMS.system_matrix(Pure, st.system, TMS.lower(st.system, op))
+    ev(st, op) = (ψ = raw_vector(st); ψ' * exact(st, op) * ψ / (ψ' * ψ))
+    function check(st, op, hermitian)
+        @test expect(st, op) ≈ ev(st, op) atol = 1e-12 * TMS.LinearAlgebra.opnorm(exact(st, op))
+        @test (last(only(measure(st, [op]))) isa Real) == hermitian
+    end
+    q = random_state(Pure, System(5, Qubit()), 4; rng = Xoshiro(20261016))
+    mag = sum(Z(i) for i in 1:5)
+    ham = sum(X(i) * X(i + 1) for i in 1:4) + sum(0.3 * Z(i) for i in 1:5)
+    check(q, mag^4, true)
+    check(q, (ham^2 + ham)^2, true)
+    check(q, ham * mag * ham, true)
+    check(q, ham * mag, false)
+    check(q, 2im * ham^2 + mag, false)
+    f = random_state(Pure, System(4, Fermion()), 4; rng = Xoshiro(20261016))
+    hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)
+    γ = sum(c * (C + dag(C))(i) for (i, c) in enumerate([0.3, 0.7, 1.1, 0.13]))
+    check(f, (hop + γ)^3, true)
+    # on charged fermions: a product of definite flux, and one of none, measured on the state
+    # conserving nothing
+    cf = random_state(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"]), 4;
+                      rng = Xoshiro(20261016))
+    ad = sum(dag(C)(i) for i in 1:4)
+    check(cf, sum(N(i) for i in 1:4)^3 + hop^2, true)
+    nf = (ad * hop)^2 + N(1)
+    @test expect(cf, nf) ≈ ev(TMS.plain_form(cf), nf)
+    # applied to a pure state
+    @test raw_vector(apply(ham^2 + ham, q)) ≈ exact(q, ham^2 + ham) * raw_vector(q)
+end
+
 @testset "Expectation values on an unnormalised state" begin
     # the environments do not carry the normalisation, which expect applies once at the end:
     # a state of norm 1/2 whose orthogonality centre is on site 4, so that the shortcut of the

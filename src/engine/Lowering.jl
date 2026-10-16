@@ -572,6 +572,32 @@ their number
 normalized_norm(m::AbstractMatrix) = norm(m) / sqrt(size(m, 1))
 
 """
+    term_flux(R, system, a, t)
+
+the amount the term `t` of the operator `a` changes the charges of `system` by, the sum of the
+fluxes of its blocks, refused when one has none, see `block_flux`
+"""
+term_flux(::Type{R}, system::System, a, t::Term) where R =
+    sum((block_flux(R, m, a, system[i]) for (i, m) in t.blocks); init = QN())
+
+"""
+    flux_refusal(system, a, fluxes)
+
+refuse the operator `a`, whose parts change the charges of `system` by the different amounts
+`fluxes`, see `FluxError`, or by amounts differing only in what it conserves strongly, see
+`strong_refusal`
+"""
+function flux_refusal(system::System, a, fluxes)
+    st = strong_names(system)
+    if only_strong(st, fluxes)
+        strong_refusal(a, st)
+    end
+    throw(FluxError("the terms of $(obs_name(a)) change the charges by $(fluxes[1]) and by " *
+                    "$(fluxes[2]), so " *
+                    "it has no definite flux and cannot act on a system that conserves them"))
+end
+
+"""
     check_flux(R, system, a, terms)
 
 the terms of the operator `a` on a charged `system`, the matrices being those of superoperators
@@ -584,20 +610,13 @@ function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
     if !is_charged(system)
         return terms
     end
-    fluxes = [ sum((block_flux(R, m, a, system[i]) for (i, m) in t.blocks); init = QN())
-               for t in terms ]
+    fluxes = [ term_flux(R, system, a, t) for t in terms ]
     sizes = [ abs(t.coef) * prod(normalized_norm(m) for (_, m) in t.blocks; init = 1.0)
               for t in terms ]
     small = rounding_tol * maximum(sizes; init = 0.)
     main = unique(q for (q, s) in zip(fluxes, sizes) if s > small)
     if length(main) > 1
-        st = strong_names(system)
-        if only_strong(st, main)
-            strong_refusal(a, st)
-        end
-        throw(FluxError("the terms of $(obs_name(a)) change the charges by $(main[1]) and by " *
-                        "$(main[2]), so " *
-                        "it has no definite flux and cannot act on a system that conserves them"))
+        flux_refusal(system, a, main)
     end
     return [ t for (t, q) in zip(terms, fluxes) if isempty(main) || q == only(main) ]
 end
@@ -1030,7 +1049,11 @@ gives the terms of its superoperator on the density matrices of the sites, refus
 function lower(system::System, a::IndexedOp{IsOperator})
     # before any rewriting, so that a message names the operator as it was written
     check_indices(system, a)
-    g = gathered(system, a)
+    return lower(system, a, gathered(system, a))
+end
+
+# from `g`, the operator `a` gathered
+function lower(system::System, a::IndexedOp{IsOperator}, g::IndexedOp{IsOperator})
     p = scalararg(g)
     if is_charged(system) && p isa ProdOp && allunique(reduce(vcat, map(sites_of, p.subs)))
         # a product of factors on distinct sites cancels nothing: a factor changing the charges

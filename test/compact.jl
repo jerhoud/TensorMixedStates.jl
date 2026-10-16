@@ -274,6 +274,10 @@ end
     @test h.norm[] ≈ 1.9
     h2 = h * h
     @test h2.norm[] ≈ 1.9^2 && h2.width[] ≈ 2 * 1.9^2
+    # a power by squaring, the power 0 the identity, a negative one refused
+    @test norm(dense(h^5) - dense(h)^5) < 1e-12 * norm(dense(h))^5
+    @test dense(h^0) ≈ TMS.LinearAlgebra.I(4)
+    @test_throws "a PreMPO has no power -1: it has no inverse" h^-1
     E = TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Hermitian(dense(h2)))
     @test h2.width[] ≥ E[end] - E[1]
     # H conserves Z1Z2, and the lowest level of H² is not in the sector of "Up": the searches
@@ -284,3 +288,33 @@ end
     @test e0 ≈ E[1] atol = 1e-10
     @test first(ground_state(h2, plus; algo, orthogonal_to = [g])) ≈ E[2] atol = 1e-8
 end
+
+@testset "Products of sums made of the PreMPOs of their factors" begin
+    # PreMPO(state, op) builds a product that would develop into more terms than its factors have
+    # from their PreMPOs multiplied, equal factors by squaring: the MPO of the operator, with the
+    # least channels, as from its terms; on qubits, on fermions with their strings and on
+    # charged fermions
+    q = State{Pure}(System(5, Qubit()), "Up")
+    mag = sum(Z(i) for i in 1:5)
+    ham = sum(X(i) * X(i + 1) for i in 1:4) + sum(0.3 * Z(i) for i in 1:5)
+    f = State{Pure}(System(4, Fermion()), "Emp")
+    hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)
+    γ = sum(c * (C + dag(C))(i) for (i, c) in enumerate([0.3, 0.7, 1.1, 0.13]))
+    cf = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
+    ntot = sum(N(i) for i in 1:4)
+    for (st, op) in [(q, mag^4), (q, ham^3), (q, (ham^2 + ham)^2), (q, ham * mag * ham),
+                     (q, 2im * ham^2 + mag), (f, hop^2 + γ^3), (f, (hop + γ)^3),
+                     (cf, ntot^3 + hop^2)]
+        @test any(TMS.by_blocks, TMS.gathered_summands(TMS.gathered(st.system, op)))
+        check_mpo(st, op)
+    end
+    # a product of factors of one term each, or of two factors of two terms, keeps its terms
+    @test !TMS.by_blocks(TMS.gathered(q.system, (X(1) + Z(2)) * (X(3) + Z(4))))
+    @test !TMS.by_blocks(TMS.gathered(f.system, dag(C)(1) * C(3) * N(4)))
+    # on charged fermions: a product that vanishes, (Σ C†)² being 0, does not count its flux
+    # beside N(1), and a sum of two fluxes is refused
+    ad = sum(dag(C)(i) for i in 1:4)
+    @test norm(laid(cf, ad^2 * hop + N(1)) - exact(cf, N(1))) < 1e-12
+    @test_throws "so it has no definite flux" PreMPO(cf, (ad * hop)^2 + N(1))
+end
+

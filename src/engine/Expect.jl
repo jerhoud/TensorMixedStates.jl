@@ -346,32 +346,31 @@ function expect_block(state::State, b::ComBlock)
 end
 
 """
-    measured_terms(system, op)
+    measured_compacted(system, op)
 
-the terms of the operator `op` on `system`, see `lower`, and the system they are on: `system`
+the operator `op` compacted on `system`, see `compacted_op`, and the system it is on: `system`
 itself or, when `op` changes the charges by no definite amount, see `FluxError`, the same sites
-conserving nothing, where its terms are measured on the state conserving nothing, see
-`plain_form`
+conserving nothing, where it is measured on the state conserving nothing, see `plain_form`
 """
-function measured_terms(system::System, a::IndexedOp{IsOperator})
+function measured_compacted(system::System, a::IndexedOp{IsOperator})
     try
-        return lower(system, a), system
+        return compacted_op(system, a), system
     catch e
         if !(e isa FluxError)
             rethrow()
         end
     end
     plain = weaken(system, ())
-    return lower(plain, a), plain
+    return compacted_op(plain, a), plain
 end
 
 """
     PreparedOp
 
 an operator placed on sites made ready to be measured on the states of a system, see
-`prepare_op`: its constant, its terms of one site and its block of several, see `compacted`, on
-the system or, when `plain`, on the same sites conserving nothing, and `scale`, the sum of the
-sizes of its terms, see `term_size`, which bounds its expectation values
+`prepare_op`: its constant, its terms of one site and its block of several, see `compacted_op`,
+on the system or, when `plain`, on the same sites conserving nothing, and `scale`, the bound of
+its norm, which bounds its expectation values
 """
 struct PreparedOp
     plain::Bool
@@ -381,8 +380,7 @@ struct PreparedOp
     scale::Float64
 end
 
-PreparedOp(on::System, terms::Vector{Term}, plain::Bool) =
-    PreparedOp(plain, compacted(Pure, on, terms)..., sum(term_size, terms; init = 0.0))
+PreparedOp(c::CompactedOp, plain::Bool) = PreparedOp(plain, c.constant, c.singles, c.block, c.norm)
 
 """
     prepare_op(system, op)
@@ -390,8 +388,8 @@ PreparedOp(on::System, terms::Vector{Term}, plain::Bool) =
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
-    terms, on = measured_terms(system, a)
-    return PreparedOp(on, terms, on !== system)
+    c, on = measured_compacted(system, a)
+    return PreparedOp(c, on !== system)
 end
 
 """

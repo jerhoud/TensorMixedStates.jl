@@ -41,10 +41,12 @@ state, a generator with no dissipator, ``\\rho \\mapsto K\\rho + \\rho K^\\dagge
 the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``. On a mixed state, a channel
 or a generator gives the MPO of its superoperator, and an operator `K` that of `Evolver(K)`.
 
-`pre'`, `a * b`, `a + b`, `a - b`, `c * a` and `sum(v)`, of `PreMPO`s of one system each of a
-single time function, are the `PreMPO`s of the adjoint, of the product and of the linear
-combinations of their operators: built with as few channels as their rank across each link, at a
-cost linear in the number of sites, where the terms of a product grow as the product of theirs.
+`pre'`, `a * b`, `a ^ p`, `a + b`, `a - b`, `c * a` and `sum(v)`, of `PreMPO`s of one system
+each of a single time function, are the `PreMPO`s of the adjoint, of the product, of the power
+and of the linear combinations of their operators: built with as few channels as their rank
+across each link, at a cost linear in the number of sites, where the terms of a product grow as
+the product of theirs. `PreMPO(state, op)` builds so the products of sums of `op` that would
+develop into more terms than their factors have.
 """
 struct PreMPO{R <: PM}
     system::System
@@ -384,6 +386,175 @@ Base.sum(pres::AbstractVector{<:PreMPO{R}}) where {R <: PM} =
     linear_combination(collect(pres), ones(length(pres)))
 
 """
+    a ^ p
+
+the `PreMPO` of the `p`-th power of the operator of `a` by squaring, `a^4` being `(a * a)^2`, two
+products, and `a^0` the identity
+"""
+function (a::PreMPO{R} ^ p::Integer) where {R <: PM}
+    if p < 0
+        error("a PreMPO has no power $p: it has no inverse")
+    elseif p == 0
+        id = lay_compacted!(PreMPO{R}(a.system), one(ComplexF64), Dict{Int, Matrix}(), nothing, 1)
+        id.norm[] = 1.0
+        return id
+    elseif p == 1
+        return a
+    end
+    h = a ^ (p ÷ 2)
+    return isodd(p) ? h * h * a : h * h
+end
+
+# a literal negative exponent would go through `inv`, which a PreMPO has no method of
+Base.literal_pow(::typeof(^), a::PreMPO, ::Val{p}) where p = a ^ p
+
+"""
+    term_estimate(a)
+
+the number of terms of the placed operator `a` developed as it is written, a bound, terms that
+merge counted apart
+"""
+term_estimate(a::SumOp) = sum(term_estimate, a.subs)
+term_estimate(a::ProdOp) = prod(term_estimate, a.subs)
+term_estimate(a::ScalarOp) = term_estimate(a.arg)
+term_estimate(::Op) = 1
+
+"""
+    by_blocks(a)
+
+whether the placed operator `a`, gathered, see `gathered`, is a product whose terms would
+outnumber those of its factors together, see `term_estimate`, so that it is better made of the
+`PreMPO`s of its factors multiplied, see `compacted_op`
+"""
+function by_blocks(a::IndexedOp)
+    p = scalararg(a)
+    if !(p isa ProdOp)
+        return false
+    end
+    counts = term_estimate.(p.subs)
+    return prod(counts) > sum(counts)
+end
+
+"""
+    vanishes(pre)
+
+whether the operator of `pre` is zero but for rounding: no channel and pieces of rounding size
+next to the bound of its norm
+"""
+vanishes(pre::PreMPO) = all(==(1), pre.linkdims) &&
+    all(normalized_norm(m) ≤ rounding_tol * pre.norm[] for ts in pre.terms for (_, _, _, _, m) in ts)
+
+"""
+    gathered_summands(g)
+
+the operators the placed operator `g`, gathered, see `gathered`, is the sum of, its coefficient
+left out
+"""
+function gathered_summands(g::IndexedOp)
+    s = scalararg(g)
+    return s isa SumOp ? s.subs : [s]
+end
+
+"""
+    CompactedOp
+
+an operator placed on sites compacted on a system, see `compacted_op`: its constant, its terms of
+one site and its block of several, see `compacted`, the bounds of its norm and of the width of its
+spectrum, see `term_size` and `term_width`, its flux, `nothing` when it has no term, and its terms
+when it was made of them alone
+"""
+struct CompactedOp
+    constant::Number
+    singles::Dict
+    block::Union{Nothing, ComBlock}
+    norm::Float64
+    width::Float64
+    flux::Union{Nothing, QN}
+    terms::Union{Nothing, Vector{Term}}
+end
+
+"""
+    laid(system, c)
+
+the `PreMPO`, of a single time function, of the operator compacted `c` on `system`
+"""
+function laid(system::System, c::CompactedOp)
+    pre = lay_compacted!(PreMPO{Pure}(system), c.constant, c.singles, c.block, 1)
+    pre.norm[] = c.norm
+    pre.width[] = c.width
+    return pre
+end
+
+"""
+    compacted_op(system, op)
+
+the operator `op`, placed on sites, compacted on `system`, see `CompactedOp`: from its terms,
+see `lower`, but for its products that would develop into more terms than their factors have,
+see `by_blocks`. Those are made of the `PreMPO`s of their factors, compacted the same way and
+multiplied, equal factors in a row by squaring, see `^`, and added to that of the rest in one
+reduction, see `combined`. Refused when it changes the charges by no definite amount, see
+`FluxError`.
+"""
+function compacted_op(system::System, a::IndexedOp{IsOperator})
+    check_indices(system, a)
+    g = gathered(system, a)
+    summands = gathered_summands(g)
+    if !any(by_blocks, summands)
+        terms = lower(system, a, g)
+        flux = isempty(terms) ? nothing :
+               is_charged(system) ? term_flux(Pure, system, a, first(terms)) : QN()
+        return CompactedOp(compacted(Pure, system, terms)..., sum(term_size, terms; init = 0.0),
+                           sum(t -> term_width(system, t), terms; init = 0.0), flux, terms)
+    end
+    parts, coefs, fluxes = PreMPO{Pure}[], Number[], QN[]
+    rest = filter(x -> !by_blocks(x), summands)
+    if !isempty(rest)
+        c = compacted_op(system, SumOp(rest))
+        if !isnothing(c.flux)
+            push!(parts, laid(system, c))
+            push!(coefs, scalarcoef(g))
+            push!(fluxes, c.flux)
+        end
+    end
+    for x in filter(by_blocks, summands)
+        fs = prodsubs(scalararg(x))
+        pre, flux = nothing, QN()
+        k = 1
+        while k ≤ length(fs)
+            run = findfirst(f -> f ≠ fs[k], fs[k:end])
+            n = isnothing(run) ? length(fs) - k + 1 : run - 1
+            c = compacted_op(system, fs[k])
+            if isnothing(c.flux)
+                pre = nothing
+                break
+            end
+            p = laid(system, c) ^ n
+            pre = isnothing(pre) ? p : pre * p
+            flux = sum(fill(c.flux, n); init = flux)
+            k += n
+        end
+        # a product of definite fluxes that vanishes has none
+        if !isnothing(pre) && !vanishes(pre)
+            push!(parts, pre)
+            push!(coefs, scalarcoef(g) * scalarcoef(x))
+            push!(fluxes, flux)
+        end
+    end
+    if length(unique(fluxes)) > 1
+        flux_refusal(system, a, unique(fluxes))
+    end
+    if isempty(parts)
+        return CompactedOp(zero(ComplexF64), Dict{Int, Matrix{ComplexF64}}(), nothing, 0.0, 0.0,
+                           nothing, nothing)
+    end
+    singles, block = combined(parts, coefs)
+    return CompactedOp(zero(ComplexF64), singles, block,
+                       sum(abs(c) * p.norm[] for (p, c) in zip(parts, coefs)),
+                       sum(isreal(c) ? abs(c) * p.width[] : 2abs(c) * p.norm[] for (p, c) in zip(parts, coefs)),
+                       first(fluxes), nothing)
+end
+
+"""
     followed_operator(a)
 
 the operator `K` a pure state follows as ``d\\psi/dt = K\\psi`` under the generator `a`,
@@ -409,12 +580,15 @@ superoperator(a::IndexedOp{IsOperator}) = Evolver(a)
 superoperator(a::IndexedOp) = a
 
 PreMPO(state::State{Pure}, a::IndexedOp{IsOperator}) =
-    lay_terms!(PreMPO{Pure}(state.system), lower(state.system, a), 1)
+    laid(state.system, compacted_op(state.system, a))
 
 function PreMPO(state::State{Pure}, as::Vector{<:IndexedOp{IsOperator}})
     pre = PreMPO{Pure}(state.system, length(as))
     for (ref, a) in enumerate(as)
-        lay_terms!(pre, lower(state.system, a), ref)
+        c = compacted_op(state.system, a)
+        lay_compacted!(pre, c.constant, c.singles, c.block, ref)
+        pre.norm[] += c.norm
+        pre.width[] += c.width
     end
     return pre
 end

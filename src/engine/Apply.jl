@@ -337,8 +337,16 @@ append to the steps of `apply` the MPO of `terms`, on the indices of representat
 sites it acts on, see `mpo_window`, and return the number that brings: 0 when it acts nowhere,
 the operator being zero, 1 otherwise
 """
-function mpo_step!(steps::Vector, ::Type{R}, system::System, terms::Vector{Term}) where R
-    pre = lay_terms!(PreMPO{R}(system), terms, 1)
+mpo_step!(steps::Vector, ::Type{R}, system::System, terms::Vector{Term}) where R =
+    pre_step!(steps, lay_terms!(PreMPO{R}(system), terms, 1))
+
+"""
+    pre_step!(steps, pre)
+
+append to the steps of `apply` the MPO of `pre` on the sites it acts on, see `mpo_step!`, and
+return the number that brings
+"""
+function pre_step!(steps::Vector, pre::PreMPO)
     w = mpo_window(pre)
     if isnothing(w)
         return 0
@@ -457,7 +465,13 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
             return 1
         end
     end
-    terms = lower(system, p)
+    check_indices(system, p)
+    g = gathered(system, p)
+    # a product of sums that would develop into more terms than its factors have
+    if R === Pure && any(by_blocks, gathered_summands(g))
+        return pre_step!(steps, laid(system, compacted_op(system, p)))
+    end
+    terms = lower(system, p, g)
     if length(terms) == 1
         t = laid_strings(Pure, system, only(terms))
         foreach(((k, m),) -> gate_steps!(steps, R, system, m, [k]), t.blocks)

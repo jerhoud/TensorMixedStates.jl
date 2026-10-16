@@ -678,6 +678,17 @@ function is_hermitian(system::System, terms::Vector{Term}, scale::Real)
 end
 
 """
+    hermitian_blocks(system, c)
+
+whether the operator compacted `c` on `system`, see `compacted_op`, is Hermitian: its `PreMPO`
+minus that of its adjoint vanishes, see `vanishes`
+"""
+function hermitian_blocks(system::System, c::CompactedOp)
+    pre = laid(system, c)
+    return vanishes(pre - pre')
+end
+
+"""
     prepared_entry(state, m)
 
 the measurement `m` made ready for the states of the representation and of the system of
@@ -686,9 +697,10 @@ staying as it is
 """
 function prepared_entry(state::AbstractState, a::IndexedOp{IsOperator})
     system = state isa State ? weak_form(state).system : state.system
-    terms, on = measured_terms(system, a)
-    p = PreparedOp(on, terms, on !== system)
-    return OpValue(p, a, is_hermitian(on, terms, p.scale))
+    c, on = measured_compacted(system, a)
+    p = PreparedOp(c, on !== system)
+    h = isnothing(c.terms) ? hermitian_blocks(on, c) : is_hermitian(on, c.terms, p.scale)
+    return OpValue(p, a, h)
 end
 
 function prepared_entry(state::AbstractState, o::SimpleOp)
