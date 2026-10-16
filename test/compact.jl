@@ -8,18 +8,6 @@
 # tested in channels.jl.
 
 """
-the dense matrix of the MPO `make_mpo` builds for `op` on the sites of `st`, `coefs` being the
-values of the time functions of a vector of operators
-"""
-function laid(st::State, op, coefs = [1.])
-    idx = siteinds(Pure, st.system)
-    t = prod(make_mpo(PreMPO(st, op), coefs))
-    a = Array(IT.dense(t), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
-    d = prod(IT.dim.(idx))
-    return reshape(a, d, d)
-end
-
-"""
 the number of memory channels of each link of the MPO PreMPO lays `op` as on `st`
 """
 memory_channels(st::State, op) = PreMPO(st, op).linkdims .- 1
@@ -31,7 +19,7 @@ triangular MPO of `op` can have there
 function check_mpo(st::State, op)
     h = lowered(st.system, op)
     least = least_channels(h, [ IT.dim(i) for i in siteinds(Pure, st.system) ])
-    @test norm(laid(st, op) - h) < 1e-12 * norm(h)
+    @test norm(mpo_matrix(st, op) - h) < 1e-12 * norm(h)
     @test memory_channels(st, op) == least
 end
 
@@ -72,11 +60,11 @@ end
     # (Id + Z)(1) * Z(2) stands for Z(2) + Z(1) * Z(2), its part of one site laid on that site
     st = State{Pure}(System(3, Qubit()), "Up")
     a = ((Id + Z)^0.5)(1) * ((Id + Z)^0.5)(1) * Z(2)
-    @test laid(st, a) ≈ lowered(st.system, Z(2) + Z(1) * Z(2))
+    @test mpo_matrix(st, a) ≈ lowered(st.system, Z(2) + Z(1) * Z(2))
     check_mpo(st, a)
     sf = State{Pure}(System(4, Fermion()), "Emp")
     r = ((Id + 0.25N)^0.5)(3)
-    @test laid(sf, r * r * dag(C)(1) * C(4)) ≈ lowered(sf.system, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
+    @test mpo_matrix(sf, r * r * dag(C)(1) * C(4)) ≈ lowered(sf.system, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
 end
 
 @testset "An MPO of fermions, spins, electrons and bosons" begin
@@ -135,7 +123,7 @@ end
     h1 = sum(0.6^(j - i) * (X(i) * X(j) + N(i) * N(j)) for i in 1:n for j in i+1:n)
     h2 = sum(Z(i) * Z(i + 1) for i in 1:n-1) + sum(X(i) for i in 1:n)
     h = lowered(st.system, 0.3 * h1 - 1.2 * h2)
-    @test norm(laid(st, [h1, h2], [0.3, -1.2]) - h) < 1e-12 * norm(h)
+    @test norm(mpo_matrix(PreMPO(st, [h1, h2]), [0.3, -1.2]) - h) < 1e-12 * norm(h)
     pre = PreMPO(st, [h1, h2])
     @test_throws "takes as many time functions" make_mpo(pre, [1.])
     @test_throws "time functions take real values" make_mpo(pre, [1., im])
@@ -171,8 +159,8 @@ end
 
 @testset "The constant, the zero operator, the charges and the element type" begin
     st = State{Pure}(System(3, Qubit()), "Up")
-    @test iszero(laid(st, X(1) - X(1)))
-    @test laid(st, 2 * Id(1) + X(2)) ≈ lowered(st.system, 2 * Id(1) + X(2))
+    @test iszero(mpo_matrix(st, X(1) - X(1)))
+    @test mpo_matrix(st, 2 * Id(1) + X(2)) ≈ lowered(st.system, 2 * Id(1) + X(2))
     # an operator whose terms change the charges differently is refused
     sn = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
     @test_throws "change the charges by" make_mpo(sn, C(1) + dag(C)(3))
@@ -186,13 +174,6 @@ end
     # least channels, where developing it would give the product of the numbers of their terms,
     # and so does that of a linear combination; on qubits, on fermions with their strings and on
     # charged fermions, and the adjoint
-    function dense(pre)
-        R = pre isa PreMPO{Pure} ? Pure : Mixed
-        idx = siteinds(R, pre.system)
-        a = Array(IT.dense(prod(make_mpo(pre))), [ i' for i in reverse(idx) ]...,
-                  [ IT.dag(i) for i in reverse(idx) ]...)
-        return reshape(a, prod(IT.dim.(idx)), prod(IT.dim.(idx)))
-    end
     q = State{Pure}(System(5, Qubit()), "Up")
     f = State{Pure}(System(4, Fermion()), "Emp")
     cf = State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"])
@@ -204,20 +185,20 @@ end
             (cf, [sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3), dag(C)(2) * C(4),
                   N(1) + dag(C)(4) * C(1)])]
         pres = [ PreMPO(st, op) for op in ops ]
-        ds = dense.(pres)
+        ds = mpo_matrix.(pres)
         dims = [ IT.dim(i) for i in siteinds(Pure, st.system) ]
         p = prod(pres)
-        @test norm(dense(p) - prod(ds)) < 1e-12 * norm(prod(ds))
+        @test norm(mpo_matrix(p) - prod(ds)) < 1e-12 * norm(prod(ds))
         @test p.linkdims .- 1 == least_channels(prod(ds), dims)
-        @test norm(dense(pres[1]') - ds[1]') < 1e-12 * norm(ds[1])
+        @test norm(mpo_matrix(pres[1]') - ds[1]') < 1e-12 * norm(ds[1])
         s = pres[1] + 0.5 * pres[2] - pres[3] / 2
         S = ds[1] + 0.5 * ds[2] - ds[3] / 2
-        @test norm(dense(s) - S) < 1e-12 * norm(S)
+        @test norm(mpo_matrix(s) - S) < 1e-12 * norm(S)
         @test s.linkdims .- 1 == least_channels(S, dims)
-        @test norm(dense(sum(pres)) - sum(ds)) < 1e-12 * norm(sum(ds))
-        @test norm(dense(-2im * pres[1]) + 2im * ds[1]) < 1e-12 * norm(ds[1])
+        @test norm(mpo_matrix(sum(pres)) - sum(ds)) < 1e-12 * norm(sum(ds))
+        @test norm(mpo_matrix(-2im * pres[1]) + 2im * ds[1]) < 1e-12 * norm(ds[1])
         z = pres[1] - pres[1]
-        @test all(==(1), z.linkdims) && norm(dense(z)) < 1e-14
+        @test all(==(1), z.linkdims) && norm(mpo_matrix(z)) < 1e-14
         # the bounds add, a complex coefficient giving twice its norm for the width
         @test s.norm ≈ pres[1].norm + 0.5 * pres[2].norm + 0.5 * pres[3].norm
         @test s.width ≈ pres[1].width + 0.5 * pres[2].width + 0.5 * pres[3].width
@@ -228,30 +209,30 @@ end
     # spin 1, and the merges of the sweeps, in random products of fermions
     q3 = State{Pure}(System(3, Qubit()), "Up")
     p = PreMPO(q3, (0.1 + 0.2) * X(1) * Z(2) * Z(3) + 0.3 * Z(2) * Z(3)) * PreMPO(q3, 0.7 * X(1) - 0.7 * Id(1))
-    @test p.linkdims == [1, 1] && norm(dense(p)) < 1e-15
+    @test p.linkdims == [1, 1] && norm(mpo_matrix(p)) < 1e-15
     rot = [cos(1) -sin(1) 0; sin(1) cos(1) 0; 0 0 1] * [cos(2) 0 sin(2); 0 1 0; -sin(2) 0 cos(2)]
     M = Operator{1}("M", rot * [0. 1. 0.; 0. 0. 0.; 0. 0. 0.] * rot')
     s2 = State{Pure}(System(2, Spin(1)), "0")
     p = PreMPO(s2, M(1) * Sz(2)) * PreMPO(s2, M(1) * Sx(2))
-    @test p.linkdims == [1] && norm(dense(p)) < 1e-15
+    @test p.linkdims == [1] && norm(mpo_matrix(p)) < 1e-15
     rng = Xoshiro(20261016)
     for _ in 1:10
         ops = [ sum(round(2rand(rng) - 1; digits = 3) *
                     prod(rand(rng, [C, dag(C), N])(i) for i in sort(randperm(rng, 4)[1:rand(rng, 1:3)]))
                     for _ in 1:rand(rng, 2:6)) for _ in 1:3 ]
         pres = [ PreMPO(f, op) for op in ops ]
-        ds = dense.(pres)
+        ds = mpo_matrix.(pres)
         p = prod(pres)
         scale = prod(norm.(ds))
-        @test norm(dense(p) - prod(ds)) < 1e-12 * scale
+        @test norm(mpo_matrix(p) - prod(ds)) < 1e-12 * scale
         least = norm(prod(ds)) < 1e-12 * scale ? [0, 0, 0] : least_channels(prod(ds), [2, 2, 2, 2])
         @test p.linkdims .- 1 == least
     end
     # superoperators compose
     ρ = mix(q)
     l1, l2 = PreMPO(ρ, -im * X(1) * X(2) + Dissipator(Sm)(3)), PreMPO(ρ, Dissipator(Z)(2) + Dissipator(Sp)(4))
-    @test norm(dense(l1 * l2) - dense(l1) * dense(l2)) < 1e-12 * norm(dense(l1)) * norm(dense(l2))
-    @test norm(dense(l1 - 2 * l2) - (dense(l1) - 2 * dense(l2))) < 1e-12 * norm(dense(l1))
+    @test norm(mpo_matrix(l1 * l2) - mpo_matrix(l1) * mpo_matrix(l2)) < 1e-12 * norm(mpo_matrix(l1)) * norm(mpo_matrix(l2))
+    @test norm(mpo_matrix(l1 - 2 * l2) - (mpo_matrix(l1) - 2 * mpo_matrix(l2))) < 1e-12 * norm(mpo_matrix(l1))
     # what is refused: two systems, two representations, several time functions
     @test_throws "the PreMPOs of a product are on two systems" PreMPO(q, X(1)) * PreMPO(f, N(1))
     @test_throws "the PreMPOs of a product are of two representations" PreMPO(q, X(1)) * l1
@@ -269,10 +250,10 @@ end
     h2 = h * h
     @test h2.norm ≈ 1.9^2 && h2.width ≈ 2 * 1.9^2
     # a power by squaring, the power 0 the identity, a negative one refused
-    @test norm(dense(h^5) - dense(h)^5) < 1e-12 * norm(dense(h))^5
-    @test dense(h^0) ≈ TMS.LinearAlgebra.I(4)
+    @test norm(mpo_matrix(h^5) - mpo_matrix(h)^5) < 1e-12 * norm(mpo_matrix(h))^5
+    @test mpo_matrix(h^0) ≈ TMS.LinearAlgebra.I(4)
     @test_throws "a PreMPO has no power -1: it has no inverse" h^-1
-    E = TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Hermitian(dense(h2)))
+    E = TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Hermitian(mpo_matrix(h2)))
     @test h2.width ≥ E[end] - E[1]
     # H conserves Z1Z2, and the lowest level of H² is not in the sector of "Up": the searches
     # start from "+"
@@ -314,7 +295,7 @@ end
     # on charged fermions: a product that vanishes, (Σ C†)² being 0, does not count its flux
     # beside N(1), and a sum of two fluxes is refused
     ad = sum(dag(C)(i) for i in 1:4)
-    @test norm(laid(cf, ad^2 * hop + N(1)) - lowered(cf.system, N(1))) < 1e-12
+    @test norm(mpo_matrix(cf, ad^2 * hop + N(1)) - lowered(cf.system, N(1))) < 1e-12
     @test_throws "so it has no definite flux" PreMPO(cf, (ad * hop)^2 + N(1))
 end
 
@@ -324,41 +305,32 @@ end
     # those of a power law fall off, cut by the cutoff or by maxdim, the bond dimension of the MPO
     # being two more than its channels; the cutoff of rounding leaves the operator itself, on
     # fermions with their strings and on a superoperator, and each time function is cut apart
-    function dense(pre, coefs = [1.])
-        rep = pre isa PreMPO{Pure} ? Pure : Mixed
-        idx = siteinds(rep, pre.system)
-        # the 16 indices of 8 sites, which ITensors warns about from 14
-        whole = IT.@disable_warn_order prod(make_mpo(pre, coefs))
-        t = Array(IT.dense(whole), [ i' for i in reverse(idx) ]...,
-                  [ IT.dag(i) for i in reverse(idx) ]...)
-        return reshape(t, prod(IT.dim.(idx)), prod(IT.dim.(idx)))
-    end
     nnorm(m) = norm(m) / sqrt(size(m, 1))
     n = 8
     q = State{Pure}(System(n, Qubit()), "Up")
     h = sum(Z(i) * Z(j) / (j - i)^2 for i in 1:n for j in i+1:n) + sum(0.5 * X(i) for i in 1:n)
-    full = dense(PreMPO(q, h))
+    full = mpo_matrix(PreMPO(q, h))
     @test PreMPO(q, h).linkdims .- 1 == [1, 2, 3, 4, 3, 2, 1]
     for (limits, links, error) in [(Limits(cutoff = 1e-14), [1, 2, 3, 4, 3, 2, 1], 1e-14),
                                    (Limits(cutoff = 1e-6), [1, 2, 3, 3, 3, 2, 1], 1e-4),
                                    (Limits(maxdim = 5), [1, 2, 3, 3, 3, 2, 1], 1e-4)]
         p = PreMPO(q, h; limits)
         @test p.linkdims .- 1 == links
-        @test nnorm(dense(p) - full) < error * nnorm(full)
+        @test nnorm(mpo_matrix(p) - full) < error * nnorm(full)
     end
     f = State{Pure}(System(5, Fermion()), "Emp")
     hf = sum((dag(C)(i) * C(j) + dag(C)(j) * C(i)) / (j - i) for i in 1:5 for j in i+1:5) +
          0.3 * (C + dag(C))(3)
-    @test nnorm(dense(PreMPO(f, hf; limits = Limits(cutoff = 1e-24))) - dense(PreMPO(f, hf))) < 1e-13
+    @test nnorm(mpo_matrix(PreMPO(f, hf; limits = Limits(cutoff = 1e-24))) - mpo_matrix(PreMPO(f, hf))) < 1e-13
     ρ = State{Mixed}(System(4, Qubit()), "Up")
     L = -im * sum(Z(i) * Z(j) / (j - i)^2 for i in 1:4 for j in i+1:4) + Dissipator(sum(Sm(i) for i in 1:4))
-    @test nnorm(dense(PreMPO(ρ, L; limits = Limits(cutoff = 1e-24))) - dense(PreMPO(ρ, L))) < 1e-13
+    @test nnorm(mpo_matrix(PreMPO(ρ, L; limits = Limits(cutoff = 1e-24))) - mpo_matrix(PreMPO(ρ, L))) < 1e-13
     pv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)])
     tv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)];
                 limits = Limits(cutoff = 1e-6))
     @test sum(tv.linkdims) < sum(pv.linkdims)
     for c in ([1., 0.], [0., 1.], [0.3, 0.7])
-        @test nnorm(dense(tv, c) - dense(pv, c)) < 1e-4 * nnorm(dense(pv, c))
-        @test nnorm(dense(TMS.truncated(pv, Limits(cutoff = 1e-6)), c) - dense(tv, c)) < 1e-12 * nnorm(dense(pv, c))
+        @test nnorm(mpo_matrix(tv, c) - mpo_matrix(pv, c)) < 1e-4 * nnorm(mpo_matrix(pv, c))
+        @test nnorm(mpo_matrix(TMS.truncated(pv, Limits(cutoff = 1e-6)), c) - mpo_matrix(tv, c)) < 1e-12 * nnorm(mpo_matrix(pv, c))
     end
 end

@@ -299,10 +299,6 @@ end
     # of the MPOs had the square of their bond dimension: 64 on the first, 121 in the middle of the
     # second, fermions of no definite parity, whose strings the product carries
     LA = TMS.LinearAlgebra
-    function mixed_matrix(m, idx)
-        a = Array(IT.dense(prod(m)), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
-        return reshape(a, prod(IT.dim.(idx)), prod(IT.dim.(idx)))
-    end
     xxz = -im * (sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + 0.5 * Z(i) * Z(i + 1) for i in 1:4) +
                  0.3 * sum(Z(i) for i in 1:5)) + sum(Dissipator(Sm)(i) + 0.2 * Dissipator(Z)(i) for i in 1:5)
     fermions = -im * (sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) +
@@ -312,9 +308,9 @@ end
                              (System(4, Fermion()), fermions, [17, 55, 16])]
         pre = PreMPO(random_state(Mixed, sys, 4), L)
         idx = siteinds(Mixed, sys)
-        l = mixed_matrix(make_mpo(pre), idx)
+        l = mpo_matrix(make_mpo(pre), idx)
         l2 = TMS.squared_lindbladian(pre, Limits())
-        @test norm(mixed_matrix(l2, idx) - l' * l) ≤ 1e-12 * norm(l' * l)
+        @test norm(mpo_matrix(l2, idx) - l' * l) ≤ 1e-12 * norm(l' * l)
         @test TMS.ITensorMPS.linkdims(l2) == least_channels(l' * l, [ IT.dim(i) for i in idx ]) .+ 2 ==
               fewest
     end

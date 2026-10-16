@@ -52,16 +52,6 @@ function runge_kutta(f, y0, t0, t1, nsteps)
     return y
 end
 
-"""
-the dense matrix of the MPO `mpo` on the sites of the pure state `st`, site 1 most significant
-"""
-function mpo_dense(st::State{Pure}, mpo)
-    idx = siteinds(Pure, st.system)
-    d = prod(IT.dim.(idx))
-    a = Array(IT.dense(prod(mpo)), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
-    return reshape(a, d, d)
-end
-
 @testset "Dissipative evolve" begin
     lim = Limits(maxdim = 10, cutoff = 1e-15)
     # a qubit damped towards Up while it precesses, from X+: X(t) = e^{-γt/2} cos 2t,
@@ -290,7 +280,7 @@ end
     x, y, z, o = (matrix(a, q) for a in (X, Y, Z, Id))
     id8 = kron(o, o, o)
     τ, h, J, K = 0.1, 0.7, 0.4, 0.3
-    w(st, op) = mpo_dense(st, TMS.make_approx_W2(PreMPO(st, op), τ))
+    w(st, op) = mpo_matrix(st, TMS.make_approx_W2(PreMPO(st, op), τ))
     st2, st3 = State{Pure}(System(2, q), "Up"), State{Pure}(System(3, q), "Up")
     # a term of one site that a coupling goes through, commuting with it
     @test norm(w(st3, h * Z(2) + J * X(1) * X(3)) -
@@ -318,12 +308,12 @@ end
               [ (randn(rng) * pauli()(i) * pauli()(j) * pauli()(k), i:k)
                 for (i, j, k) in ((1, 2, 4), (2, 3, 5)) ] ]
     h = sum(first, terms)
-    ds = [ mpo_dense(st, make_mpo(st, t)) for (t, _) in terms ]
+    ds = [ mpo_matrix(st, make_mpo(st, t)) for (t, _) in terms ]
     crossing(a, b) = max(first(a), first(b)) < min(last(a), last(b))
     c2 = sum(ds[x] * ds[y] for x in eachindex(terms), y in eachindex(terms)
              if crossing(last(terms[x]), last(terms[y]))) / 2
-    hd = mpo_dense(st, make_mpo(st, h))
-    err(τ) = exp(τ * hd) - mpo_dense(st, TMS.make_approx_W2(PreMPO(st, h), τ))
+    hd = mpo_matrix(st, make_mpo(st, h))
+    err(τ) = exp(τ * hd) - mpo_matrix(st, TMS.make_approx_W2(PreMPO(st, h), τ))
     τ = 1e-3
     @test norm((8 * err(τ / 2) - err(τ)) / τ^2 - c2) < 1e-3 * norm(c2)
 end
@@ -341,7 +331,7 @@ end
     hd = sum(0.7^(j - i) * (on(N, i) * on(N, j) + on(Z, i) * on(Z, j)) for i in 1:n for j in i+1:n) +
          0.4 * sum(on(X, i) for i in 1:n)
     for w in (TMS.make_approx_W1, TMS.make_approx_W2)
-        err(τ) = norm(mpo_dense(st, w(PreMPO(st, -im * h), τ)) - exp(-im * τ * hd))
+        err(τ) = norm(mpo_matrix(st, w(PreMPO(st, -im * h), τ)) - exp(-im * τ * hd))
         @test 3.5 < err(1e-3) / err(5e-4) < 4.5
     end
 end

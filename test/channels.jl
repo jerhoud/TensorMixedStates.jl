@@ -31,11 +31,8 @@ matrices, see `TMS.mixed_elements`
 function laid_mixed(ρ::State{Mixed}, a, coefs = [1.])
     sys = ρ.system
     idx = siteinds(Mixed, sys)
-    t = prod(make_mpo(PreMPO(ρ, a), coefs))
-    m = Array(IT.dense(t), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
-    d = prod(IT.dim.(idx))
     p = foldl(kron, [ eye(IT.dim(idx[k]))[:, TMS.mixed_elements(sys, k)] for k in 1:length(sys) ])
-    return p * reshape(m, d, d) * p'
+    return p * mpo_matrix(PreMPO(ρ, a), coefs) * p'
 end
 
 @testset "Channels and generators in their normal form" begin

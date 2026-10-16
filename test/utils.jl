@@ -81,15 +81,27 @@ the dense superoperator of the placed channel or generator `a` on the whole of t
 superop(sys::System, a) = TMS.system_matrix(Mixed, sys, TMS.lower(sys, a))
 
 """
-the dense matrix of the MPO of `op` on the sites of the pure state `st`
+    mpo_matrix(m::MPO, idx)
+    mpo_matrix(pre::PreMPO, coefs = [1.])
+    mpo_matrix(st::State, m::MPO)
+    mpo_matrix(st::State, op)
+
+the dense matrix, site 1 most significant, of the MPO `m` on the indices `idx` of its sites, of
+the MPO of `pre` for the values `coefs` of its time functions, or of the MPO `m` or the MPO of
+`op` on the sites of `st`
 """
-function mpo_matrix(st::State{Pure}, op)
-    idx = siteinds(Pure, st.system)
-    a = Array(IT.dense(prod(make_mpo(st, op))), [ i' for i in reverse(idx) ]...,
-              [ IT.dag(i) for i in reverse(idx) ]...)
+function mpo_matrix(m::TMS.ITensorMPS.MPO, idx)
+    # the 16 indices of 8 sites, which ITensors warns about from 14
+    t = IT.@disable_warn_order prod(m)
+    a = Array(IT.dense(t), [ i' for i in reverse(idx) ]..., [ IT.dag(i) for i in reverse(idx) ]...)
     d = prod(IT.dim.(idx))
     return reshape(a, d, d)
 end
+mpo_matrix(pre::PreMPO{R}, coefs = [1.]) where R =
+    mpo_matrix(make_mpo(pre, coefs), siteinds(R, pre.system))
+mpo_matrix(st::State{R}, m::TMS.ITensorMPS.MPO) where R <: TMS.PM =
+    mpo_matrix(m, siteinds(R, st.system))
+mpo_matrix(st::State, op) = mpo_matrix(PreMPO(st, op))
 
 """
 the least number of memory channels, those besides the term not yet begun and the term
