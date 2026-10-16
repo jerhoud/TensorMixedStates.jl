@@ -111,7 +111,8 @@ end
     @test_throws "no definite flux" flux(Proj(X => 1), Qubit(conserve = N))
     @test_throws "0.5 is not an eigenvalue of Sx" matrix(Proj(Sx => 0.5), s)
     @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp => 1), Qubit())
-    @test_throws "A local state A => λ needs a Hermitian operator" TMS.local_state(Qubit(), (X * Z) => 1)
+    @test_throws "A local state A => λ needs a Hermitian operator" TMS.local_state(
+        Qubit(), (X * Z) => 1)
     # an operator of no definite fermionic parity has its projectors, their strings being laid
     # by the lowering
     @test matrix(Proj(C + dag(C) => 1), Fermion()) ≈ [1. 1. ; 1. 1.] / 2
@@ -125,7 +126,8 @@ end
     @test matrix(Proj(Swap => -1), Qubit()) ≈ matrix((Id ⊗ Id - Swap) / 2, Qubit())
     SS = Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz
     @test matrix(named(Proj(SS => 1), "P2"), s) ≈ matrix(SS / 2 + SS * SS / 6 + (Id ⊗ Id) / 3, s)
-    @test_throws "0.5 is not an eigenvalue of Swap on Qubit() ⊗ Qubit()" matrix(Proj(Swap => 0.5), Qubit())
+    @test_throws "0.5 is not an eigenvalue of Swap on Qubit() ⊗ Qubit()" matrix(
+        Proj(Swap => 0.5), Qubit())
     @test_throws "Proj needs a Hermitian operator" matrix(Proj(Sp ⊗ Sm => 0), Qubit())
 end
 
@@ -468,53 +470,54 @@ end
     whole(sys, t) =
         foldl(kron, [ get(Dict(b.site => b.m for b in t.blocks), k, matrix(Id, s))
                       for (k, s) in enumerate(sys.sites) ])
-    summed(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t)) for t in TMS.lower(sys, op));
-                           init = 0 * identity_on(sys))
+    summed(sys, op) = sum((t.coef * whole(sys, TMS.laid_strings(Pure, sys, t))
+                           for t in TMS.lower(sys, op)); init = 0 * identity_on(sys))
+    jw = jw_placed
     q, fe, el = Qubit(), Fermion(), Electron()
     x, y, z = matrix(X, q), matrix(Y, q), matrix(Z, q)
     s3 = System(3, q)
-    @test summed(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw_placed(s3, 1, x) + 2 * jw_placed(s3, 2, z) * jw_placed(s3, 3, y)
+    @test summed(s3, X(1) + 2 * Z(2) * Y(3)) ≈ jw(s3, 1, x) + 2 * jw(s3, 2, z) * jw(s3, 3, y)
 
     # fermions: a hop over a fermion, a product written backwards, and Swap or a placed tensor
     # product on sites in decreasing order, which need no sign of reordering
     s4 = System(4, fe)
     c = matrix(C, fe)
     cd, n = collect(c'), c' * c
-    hop = jw_placed(s4, 1, cd) * jw_placed(s4, 3, c) + jw_placed(s4, 3, cd) * jw_placed(s4, 1, c)
+    hop = jw(s4, 1, cd) * jw(s4, 3, c) + jw(s4, 3, cd) * jw(s4, 1, c)
     @test summed(s4, dag(C)(1) * C(3) + dag(C)(3) * C(1)) ≈ hop
-    @test summed(s4, C(3) * dag(C)(1)) ≈ jw_placed(s4, 3, c) * jw_placed(s4, 1, cd)
-    sw = identity_on(s4) - jw_placed(s4, 1, n) - jw_placed(s4, 3, n) + hop
+    @test summed(s4, C(3) * dag(C)(1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
+    sw = identity_on(s4) - jw(s4, 1, n) - jw(s4, 3, n) + hop
     @test summed(s4, Swap(1, 3)) ≈ sw
     @test summed(s4, Swap(3, 1)) ≈ sw
-    @test summed(s4, (C ⊗ dag(C))(3, 1)) ≈ jw_placed(s4, 3, c) * jw_placed(s4, 1, cd)
-    @test summed(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw_placed(s4, 4, c) * jw_placed(s4, 2, n) * jw_placed(s4, 1, cd)
-    @test summed(s4, dag(C ⊗ C)(1, 2)) ≈ (jw_placed(s4, 1, c) * jw_placed(s4, 2, c))'
+    @test summed(s4, (C ⊗ dag(C))(3, 1)) ≈ jw(s4, 3, c) * jw(s4, 1, cd)
+    @test summed(s4, (C ⊗ N ⊗ dag(C))(4, 2, 1)) ≈ jw(s4, 4, c) * jw(s4, 2, n) * jw(s4, 1, cd)
+    @test summed(s4, dag(C ⊗ C)(1, 2)) ≈ (jw(s4, 1, c) * jw(s4, 2, c))'
     # a function of several fermionic sites, placed both ways, with a fermion between them
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
     @test summed(s4, exp(-0.3 * (h * h))(1, 3)) ≈ exp(-0.3 * hop^2)
     @test summed(s4, exp(-0.3 * (h * h))(3, 1)) ≈ exp(-0.3 * hop^2)
     # a block of no definite parity is split into its even and odd parts
-    @test summed(s4, (C + N)(2)) ≈ jw_placed(s4, 2, c) + jw_placed(s4, 2, n)
-    @test summed(s4, exp(C)(2)) ≈ identity_on(s4) + jw_placed(s4, 2, c)
+    @test summed(s4, (C + N)(2)) ≈ jw(s4, 2, c) + jw(s4, 2, n)
+    @test summed(s4, exp(C)(2)) ≈ identity_on(s4) + jw(s4, 2, c)
     # a sum or a named expression of one site is taken by its matrix, a term for each parity,
     # so that a product of them does not grow with the number of its factors
     nterms(sys, op) = length(TMS.lower(sys, op))
     xz, m = named(X + Z, "XZ"), named(C + dag(C), "M")
     @test nterms(s3, (X + Z)(2)) == nterms(s3, xz(2)) == 1
     @test nterms(s3, xz(1) * xz(2) * xz(3)) == nterms(s3, ((X + Z) ⊗ (X + Z))(1, 3)) == 1
-    @test summed(s3, xz(1) * xz(3)) ≈ jw_placed(s3, 1, x + z) * jw_placed(s3, 3, x + z)
+    @test summed(s3, xz(1) * xz(3)) ≈ jw(s3, 1, x + z) * jw(s3, 3, x + z)
     @test nterms(s4, m(3)) == 1 && nterms(s4, (C + N)(2)) == 2
-    @test summed(s4, m(3)) ≈ jw_placed(s4, 3, c + cd)
+    @test summed(s4, m(3)) ≈ jw(s4, 3, c + cd)
     # strings on the fermionic sites only, and two species on a site
     sm = System([fe, q, fe])
-    @test summed(sm, C(1) * X(2) * dag(C)(3)) ≈ jw_placed(sm, 1, c) * jw_placed(sm, 2, x) * jw_placed(sm, 3, cd)
+    @test summed(sm, C(1) * X(2) * dag(C)(3)) ≈ jw(sm, 1, c) * jw(sm, 2, x) * jw(sm, 3, cd)
     se = System(3, el)
     cu, cn, nt = matrix(Cup, el), matrix(Cdn, el), matrix(Ntot, el)
     @test summed(se, dag(Cup)(1) * Cup(3) + dag(Cdn)(3) * Cdn(1) + (Ntot ⊗ Ntot)(2, 3)) ≈
-          jw_placed(se, 1, collect(cu')) * jw_placed(se, 3, cu) + jw_placed(se, 3, collect(cn')) * jw_placed(se, 1, cn) +
-          jw_placed(se, 2, nt) * jw_placed(se, 3, nt)
+          jw(se, 1, collect(cu')) * jw(se, 3, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn) +
+          jw(se, 2, nt) * jw(se, 3, nt)
     @test summed(se, (dag(Cup) ⊗ Cup + dag(Cdn) ⊗ Cdn)(3, 1)) ≈
-          jw_placed(se, 3, collect(cu')) * jw_placed(se, 1, cu) + jw_placed(se, 3, collect(cn')) * jw_placed(se, 1, cn)
+          jw(se, 3, collect(cu')) * jw(se, 1, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn)
     # an operator of several sites given by a function of its sites
     q3 = Qudit(3)
     @test summed(System(2, q3), Qudits.Sum(1, 2)) ≈ matrix(Qudits.Sum, q3, q3)
@@ -543,7 +546,8 @@ end
     @test_throws "no definite flux" TMS.lower(System(3, fn), (C + dag(C))(2))
     @test_throws "no definite flux" TMS.lower(System(2, Qubit(conserve = N)), X(1))
     # a site the system does not have, named as written
-    @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(s3, X(5))
+    @test_throws "X(5) acts on site 5, which the system does not have: it has 3 sites" TMS.lower(
+        s3, X(5))
 end
 
 @testset "Operators of no definite charge in an expression that has one" begin
@@ -685,7 +689,8 @@ end
     @test length(TMS.prodsubs(g)) == 2 && last(TMS.prodsubs(g)) == X(2)
     # a factor linked to both keeps them apart, and a merge that would give more terms is
     # refused
-    @test TMS.gathered(s5, Swap(1, 2) * Swap(2, 3) * Swap(1, 2)) == Swap(1, 2) * Swap(2, 3) * Swap(1, 2)
+    linked = Swap(1, 2) * Swap(2, 3) * Swap(1, 2)
+    @test TMS.gathered(s5, linked) == linked
     # a tensor product is taken as the product of its factors: the two hops merge site by site,
     # into n₁ and 1 - n₄ beside the swap, where merged whole into n₁(1 - n₄) of two sites they
     # would be cut into more terms by its identity parts
@@ -695,14 +700,17 @@ end
 
     # the result is a normal form, which the pass leaves as it is, and the operator stays the
     # same
-    for (sys, op) in [(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)), (s5, X(1) * Swap(2, 3) * Swap(1, 2) * X(1)),
-                      (s5, Z(1) * Swap(1, 2) * Y(1) * Swap(2, 3) * X(2)), (f4, C(1) * C(2) * dag(C)(1)),
-                      (f5, N(2) * C(5) * N(2) * dag(C)(2)), (f5, hops)]
+    for (sys, op) in [(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)),
+                      (s5, X(1) * Swap(2, 3) * Swap(1, 2) * X(1)),
+                      (s5, Z(1) * Swap(1, 2) * Y(1) * Swap(2, 3) * X(2)),
+                      (f4, C(1) * C(2) * dag(C)(1)), (f5, N(2) * C(5) * N(2) * dag(C)(2)),
+                      (f5, hops)]
         g = TMS.gathered(sys, op)
         @test TMS.gathered(sys, g) == g
         @test same(sys, op)
     end
-    @test TMS.gathered(s5, Swap(2, 3) * Swap(1, 2) * Swap(3, 4)) == Swap(2, 3) * Swap(1, 2) * Swap(3, 4)
+    sorted = Swap(2, 3) * Swap(1, 2) * Swap(3, 4)
+    @test TMS.gathered(s5, sorted) == sorted
 
     # each factor merges into the nearest earlier one it does not commute with, in one pass:
     # two Pauli strings on 1000 sites give one factor per site, X * Z = -im * Y, and an odd
@@ -717,7 +725,8 @@ end
     # one form for products differing only by the order of factors that (anti)commute, a
     # product written backwards sorted, with a sign for the odd factors that change places
     @test TMS.gathered(s5, Swap(4, 5) * controlled(X)(2, 5) * X(3)) ==
-          TMS.gathered(s5, Swap(4, 5) * X(3) * controlled(X)(2, 5)) == X(3) * Swap(4, 5) * controlled(X)(2, 5)
+          TMS.gathered(s5, Swap(4, 5) * X(3) * controlled(X)(2, 5)) ==
+          X(3) * Swap(4, 5) * controlled(X)(2, 5)
     @test TMS.gathered(System(1000, q), prod(X(i) for i in 1000:-1:1)) == prod(X(i) for i in 1:1000)
     g = TMS.gathered(f4, C(3) * C(2) * C(1))
     @test TMS.scalarcoef(g) == -1 && TMS.prodsubs(TMS.scalararg(g)) == [C(1), C(2), C(3)]
@@ -731,7 +740,8 @@ end
     @test nterms(s5, projector) == nterms(s5, X(1) * (Id(1) + Z(1)) * Y(2)) == 1
     @test nterms(f5, odd_sums) == 1 && nterms(f5, mixed) == 2
     @test nterms(s5, (Sx(1) - (Sp(1) + Sm(1)) / 2) * X(2)) == 0
-    for (sys, op) in [(s5, projector), (s5, X(1) * (Id(1) + Z(1)) * Y(2)), (f5, odd_sums), (f5, mixed)]
+    for (sys, op) in [(s5, projector), (s5, X(1) * (Id(1) + Z(1)) * Y(2)), (f5, odd_sums),
+                      (f5, mixed)]
         @test same(sys, op)
     end
     @test_throws "no definite flux" TMS.lower(System(3, Fermion(conserve = N)), C(2) + dag(C)(2))
@@ -998,7 +1008,8 @@ end
     @test matrix(named([0. 1.; 0. 0.]', "Ad"), Qubit()) == [0. 0.; 1. 0.]
     @test matrix(named(s -> [0. 1.; 0. 0.]', "Adf"), Qubit()) == [0. 0.; 1. 0.]
     @test matrix(named(Sp + Sm, "Sx2"), Spin(1)) ≈ 2 * matrix(Sx, Spin(1))
-    @test_throws "given by a 3×3 matrix and cannot act on Qubit()" matrix(named(rand(3, 3), "R"), Qubit())
+    r3 = named(rand(3, 3), "R")
+    @test_throws "given by a 3×3 matrix and cannot act on Qubit()" matrix(r3, Qubit())
     # an operator of several sites is given its number of sites, a single site then standing for
     # as many as it acts on, and it can be measured
     sw = matrix(Swap, Qubit())
@@ -1108,12 +1119,14 @@ end
     # compared as they are built
     twice(i) = 2i
     @test map_sites(twice, X(1) * Y(2)) == X(2) * Y(4)
-    @test map_sites(twice, 0.5 * Swap(1, 3) + Z(2) - 3 * Id(1)) == 0.5 * Swap(2, 6) + Z(4) - 3 * Id(1)
+    @test map_sites(twice, 0.5 * Swap(1, 3) + Z(2) - 3 * Id(1)) ==
+          0.5 * Swap(2, 6) + Z(4) - 3 * Id(1)
     # the factors keep their order, and so the sign of a product of fermionic operators
     @test map_sites(twice, C(3) * dag(C)(1)) == C(6) * dag(C)(2)
     @test map_sites(twice, C(3) * dag(C)(1)) ≠ dag(C)(2) * C(6)
     # a channel and a generator, with what they hold placed
     @test map_sites(twice, Gate(X(1) + Z(2)) * Gate(Y)(1)) == Gate(X(2) + Z(4)) * Gate(Y)(2)
-    @test map_sites(twice, -im * Z(2) + Dissipator(X(1) + Y(3))) == -im * Z(4) + Dissipator(X(2) + Y(6))
+    @test map_sites(twice, -im * Z(2) + Dissipator(X(1) + Y(3))) ==
+          -im * Z(4) + Dissipator(X(2) + Y(6))
     @test_throws "repeats a site" map_sites(i -> 1, Swap(1, 2))
 end

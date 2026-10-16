@@ -67,11 +67,12 @@ end
     sys = System([Guarded(conserve = strong(N)), Guarded(conserve = strong(N))])
     st = State{Pure}(sys, Any[[0., 1.], [1., 0.]])
     @test expect(st, N(1)) ≈ 1
-    @test_throws "Guarded must keep its constructor Guarded(conserve) for its conserved" weaken(st, ())
+    kept = "Guarded must keep its constructor Guarded(conserve)"
+    @test_throws "$kept for its conserved" weaken(st, ())
     mktempdir() do dir
         file = joinpath(dir, "guarded.h5")
         save_state(file, "g", st)
-        @test_throws "Guarded must keep its constructor Guarded(conserve) for a state file" load_state(file, "g")
+        @test_throws "$kept for a state file" load_state(file, "g")
     end
 end
 
@@ -134,9 +135,9 @@ end
         CreateState{Pure}(3, Qubit(), ["Up", "Dn", "Up"]),
         SaveState(file = file2, statename = "st"),
         CreateState{Pure}(1, Qubit(), "Dn"),
-        LoadState(file = file2, statename = "st",
-                  final_measurements = "" => ["z" => c -> Check(real(expect1(c.state, Z)), [1, -1, 1];
-                                                                tol = 1e-12)])]); output = devnull)
+        LoadState(file = file2, statename = "st", final_measurements = "" => [
+            "z" => c -> Check(real(expect1(c.state, Z)), [1, -1, 1]; tol = 1e-12)])]);
+        output = devnull)
 end
 
 @testset "A state file with its conserved quantities unsorted" begin
@@ -267,7 +268,8 @@ end
     @test real(expect1(ρ, N)) ≈ [0.8, 0.2]
     @test expect(ρ, dag(C)(1) * C(2)) ≈ 0.4
     @test trace(ρ) ≈ 1
-    ψ = (State{Pure}(ρ.system, ["Occ", "Emp"]) + 0.5 * State{Pure}(ρ.system, ["Emp", "Occ"])) / sqrt(1.25)
+    p(v) = State{Pure}(ρ.system, v)
+    ψ = (p(["Occ", "Emp"]) + 0.5 * p(["Emp", "Occ"])) / sqrt(1.25)
     @test inner(mix(ψ), ρ) ≈ 1
 
     k = load_state(file, "kindly")
@@ -290,7 +292,8 @@ end
     @test ρ isa State{Mixed}
     @test ρ.system.sites == fill(Fermion(conserve = strong(parity(N))), 2)
     @test trace(ρ) ≈ 1
-    ψ = (State{Pure}(ρ.system, ["Emp", "Emp"]) + 0.5 * State{Pure}(ρ.system, ["Occ", "Occ"])) / sqrt(1.25)
+    p(v) = State{Pure}(ρ.system, v)
+    ψ = (p(["Emp", "Emp"]) + 0.5 * p(["Occ", "Occ"])) / sqrt(1.25)
     @test inner(mix(ψ), ρ) ≈ 1
 end
 

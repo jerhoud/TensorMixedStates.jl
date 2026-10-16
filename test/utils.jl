@@ -29,7 +29,8 @@ end
 """
 the vector of the pure state `st` in the full basis, site 1 most significant, not normalised
 """
-raw_vector(st::State{Pure}) = vec(Array(IT.dense(prod(st.state)), reverse(siteinds(Pure, st.system))...))
+raw_vector(st::State{Pure}) =
+    vec(Array(IT.dense(prod(st.state)), reverse(siteinds(Pure, st.system))...))
 
 """
 the vector of the pure state `st` in the full basis, site 1 most significant, normalised. Only

@@ -167,7 +167,8 @@ end
     TMS.output!(o, ψ, s => ["v" => c -> c.v]; time = 4, v = [1.])
     @test String(take!(io)) ==
           "time\tX(1)\n0\t0\ntime\tZ(1)\n1\t1\n2\t1\ntime\tv[1]\tv[2]\n3\t1\t2\ntime\tv[1]\n4\t1\n"
-    @test_throws "Check chk failed" TMS.output!(o, ψ, "" => ["chk" => c -> Check(1., 2.; tol = 0.1)])
+    @test_throws "Check chk failed" TMS.output!(o, ψ,
+                                                "" => ["chk" => c -> Check(1., 2.; tol = 0.1)])
     TMS.close!(o)
     @test isopen(io)
     @test isopen(stdout)
@@ -275,8 +276,8 @@ end
         @test recordings["a"].closed
     end
     # anything else is not a destination
-    @test_throws "3 is not a destination" TMS.output!(TMS.Outputs(), State{Pure}(System(1, Qubit()), "Up"),
-                                                       3 => Z(1))
+    up = State{Pure}(System(1, Qubit()), "Up")
+    @test_throws "3 is not a destination" TMS.output!(TMS.Outputs(), up, 3 => Z(1))
 end
 
 @testset "Resuming the outputs" begin
@@ -302,7 +303,8 @@ end
         @test_throws "the values of s do not fit" TMS.output!(
             o2, ψ, "r.dat" => list; time = 5, step = [1, 2])
         TMS.close!(o2)
-        @test readlines(joinpath(dir, "r.dat")) == ["time\tZ(1)\ts", "1\t1\t1", "2\t1\t2", "4\t1\t4"]
+        @test readlines(joinpath(dir, "r.dat")) ==
+              ["time\tZ(1)\ts", "1\t1\t1", "2\t1\t2", "4\t1\t4"]
         @test [ TMS.JSON.parse(l)["time"] for l in readlines(joinpath(dir, "r.json")) ] == [1, 2, 4]
         @test [ last(first(r)) for r in TMS.data_rows(o2, "r") ] == [1, 2, 4]
     end

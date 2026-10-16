@@ -41,11 +41,12 @@ end
     st = State{Pure}(System(2, Qubit()), "Up")
     ρ = mix(st)
     algo = Dmrg(nsweeps = 2)
+    L = Dissipator(Sm)(1)
     cases = [
         (() -> GroundState(hamiltonian = h, nsweeps = 3), "algo = Dmrg(nsweeps"),
-        (() -> SteadyState(lindbladian = Dissipator(Sm)(1), tol = 1e-5), "algo = Dmrg(nsweeps"),
+        (() -> SteadyState(lindbladian = L, tol = 1e-5), "algo = Dmrg(nsweeps"),
         (() -> ground_state(h, st; nsweeps = 3), "algo = Dmrg(nsweeps"),
-        (() -> steady_state(Dissipator(Sm)(1), ρ; algo, first_sweep = 2), "phase resumes its search"),
+        (() -> steady_state(L, ρ; algo, first_sweep = 2), "phase resumes its search"),
         (() -> evolve(-im * h, 0.1, st; order = 2), "ApproxW(order"),
         (() -> evolve(-im * h, 0.1, st; time_start = 1.), "time_start became time"),
         (() -> evolve(-im * h, 0.1, st; coefs = [t -> 1]), "[A, B] => [f, g]"),
@@ -66,9 +67,9 @@ end
         (() -> ApproxW(order = 2, n_hermitianize = 1), "hermitianize_period"),
         (() -> evolve(-im * h, 0.1, st; nsweeps = 2), "nsweeps became nsteps"),
         (() -> evolve(-im * h, 0.1, st; first_sweep = 2), "first_sweep became step"),
-        (() -> steady_state(Dissipator(Sm)(1), ρ; algo, alg = "naive"), "alg was removed: the MPO of L†L"),
-        (() -> steady_state(Dissipator(Sm)(1), ρ; algo, mpo_algo = "naive"), "mpo_algo was removed"),
-        (() -> SteadyState(lindbladian = Dissipator(Sm)(1), algo, mpo_algo = "naive"), "mpo_algo was removed"),
+        (() -> steady_state(L, ρ; algo, alg = "naive"), "alg was removed: the MPO of L†L"),
+        (() -> steady_state(L, ρ; algo, mpo_algo = "naive"), "mpo_algo was removed"),
+        (() -> SteadyState(lindbladian = L, algo, mpo_algo = "naive"), "mpo_algo was removed"),
         (() -> partial_trace(ρ, [1]; keepers = true), "keepers became keep"),
         (() -> PartialTrace(trace_positions = [1]), "trace_positions became positions"),
         (() -> PartialTrace(keep_positions = [1]), "positions = p, keep = true"),
@@ -105,7 +106,8 @@ end
     @test occursin("PartialTrace needs positions", message(() -> PartialTrace()))
     # the steps a list of measurements reads
     @test occursin("the :sweep of 1.x is :step", message(() -> SimData(phases = [
-        CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1), final_measurements = "d" => [:sweep])])))
+        CreateState{Pure}(2, Qubit(), "Up"),
+        Gates(gates = X(1), final_measurements = "d" => [:sweep])])))
     # a local state given as a number, as 1.x took it, is the basis state of that number
     @test occursin("is Level => 1", message(() -> State{Pure}(st.system, 1)))
     @test occursin("is Proj(Level => 1)", message(() -> Proj(1)))
@@ -122,6 +124,7 @@ end
             print(sprint(showerror, e))
         end
         """
-    out = read(`$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no -e $script`, String)
+    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no -e $script`
+    out = read(cmd, String)
     @test occursin("data_to_frame needs the DataFrames package: run using DataFrames", out)
 end

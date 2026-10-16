@@ -38,7 +38,8 @@ end
     c = mps_state(System(6, Qubit()), [ A[1:1, :, :], fill(A, 4)..., sum(A; dims = 3) ])
     @test maxlinkdim(c) == 2
     @test abs(LA.dot(dense_vector(c), dense_vector(graph_state(line_graph(6))))) ≈ 1
-    @test_throws "3 tensors cannot" mps_state(System(4, Qubit()), [A[1:1, :, :], A, sum(A; dims = 3)])
+    @test_throws "3 tensors cannot" mps_state(System(4, Qubit()),
+                                              [A[1:1, :, :], A, sum(A; dims = 3)])
     @test_throws "left dimension of 2 where 1" mps_state(System(2, Qubit()), [A, sum(A; dims = 3)])
     @test_throws "right dimension of 2" mps_state(System(2, Qubit()), [A[1:1, :, :], A])
     @test_throws "3 states for a site of dimension 2" mps_state(System(2, Qubit()),
@@ -89,19 +90,23 @@ end
                                                     [1 => "Occ", 1 => "Emp"])
     # a term of zero coefficient has no channel and no say in the charge
     @test maxlinkdim(superposition(System(4, Qubit()), [1 => "Up", 0 => "Dn"])) == 1
-    @test expect(superposition(System(4, Fermion(conserve = N)), [1 => "Occ", 0 => "Emp"]), N(1)) ≈ 1
+    @test expect(superposition(System(4, Fermion(conserve = N)), [1 => "Occ", 0 => "Emp"]),
+                 N(1)) ≈ 1
     # normalized once truncated, as they say: they were normalized before
-    terms = [1 => ["Up", "Dn", "Up", "Dn"], 0.8 => ["Dn", "Up", "Dn", "Up"], 0.3 => ["Up", "Up", "Dn", "Dn"]]
+    terms = [1 => ["Up", "Dn", "Up", "Dn"], 0.8 => ["Dn", "Up", "Dn", "Up"],
+             0.3 => ["Up", "Up", "Dn", "Dn"]]
     @test norm(superposition(System(4, Qubit()), terms; limits = Limits(maxdim = 1))) ≈ 1
     @test trace(mixture(System(4, Qubit()), [ abs(c) => s for (c, s) in terms ];
                         limits = Limits(maxdim = 1))) ≈ 1
     @test_throws "a nonzero term" superposition(System(4, Qubit()), [0 => "Up", 0 => "Dn"])
     @test_throws "a nonzero term" mixture(System(4, Qubit()), [0 => "Up"])
-    @test_throws "cannot be one of 4 sites" superposition(System(4, Qubit()), [1 => "Up", 0 => ["Dn"]])
-    @test maxlinkdim(superposition(System(8, Qubit()), [ k => isodd(k) ? "Up" : "Dn" for k in 1:10 ];
-                                   limits = Limits(maxdim = 1))) == 1
+    @test_throws "cannot be one of 4 sites" superposition(System(4, Qubit()),
+                                                          [1 => "Up", 0 => ["Dn"]])
+    alternate = [ k => isodd(k) ? "Up" : "Dn" for k in 1:10 ]
+    @test maxlinkdim(superposition(System(8, Qubit()), alternate; limits = Limits(maxdim = 1))) == 1
     # a classical ensemble of two Néel states, and one of mixed local states
-    m = mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
+    m = mixture(System(4, Qubit()),
+                [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
     @test purity(m) ≈ 0.5
     @test expect(m, Z(1) * Z(2)) ≈ -1
     mm = mixture(System(2, Qubit()), [1 => ["FullyMixed", "Up"], 3 => [[0.5 0.5 ; 0.5 0.5], "Dn"]])
@@ -161,7 +166,8 @@ end
     n = 6
     P2 = named(Proj(Sx ⊗ Sx + Sy ⊗ Sy + Sz ⊗ Sz => 1), "P2")
     h = sum(P2(i, i + 1) for i in 1:n-1)
-    @test real(expect(aklt_state(System(n, Spin(1)); left = "Up", right = "Up"), h)) ≈ 0 atol = 1e-12
+    a = aklt_state(System(n, Spin(1)); left = "Up", right = "Up")
+    @test real(expect(a, h)) ≈ 0 atol = 1e-12
     e, _ = ground_state(h, random_state(Pure, System(n, Spin(1)), 8); algo = Dmrg(nsweeps = 10),
                         limits = Limits(maxdim = 30))
     @test e ≈ 0 atol = 1e-10
@@ -229,8 +235,10 @@ end
     # periodic conditions: the bonds closing a direction come after the others, twice for a
     # direction of length 2, as in circle_graph. A cylinder keeps the bound on the bonds, and on
     # a torus every site has four neighbours
-    @test square_lattice(3, 2; yperiodic = true) == [square_lattice(3, 2) ; [(1, 2), (3, 4), (5, 6)]]
-    @test square_lattice(2, 3; xperiodic = true) == [square_lattice(2, 3) ; [(1, 6), (2, 5), (3, 4)]]
+    @test square_lattice(3, 2; yperiodic = true) ==
+          [square_lattice(3, 2) ; [(1, 2), (3, 4), (5, 6)]]
+    @test square_lattice(2, 3; xperiodic = true) ==
+          [square_lattice(2, 3) ; [(1, 6), (2, 5), (3, 4)]]
     @test square_lattice(3; yperiodic = true) == square_lattice(3, 3; yperiodic = true)
     for (nx, ny) in [(3, 3), (4, 3), (5, 4)]
         cylinder = square_lattice(nx, ny; yperiodic = true)
@@ -320,8 +328,8 @@ end
     @test_throws "not free" fermi_sea(System(4, Fermion()), free + N(1) * N(2), 2)
     @test_throws "not free" fermi_sea(System(4, Fermion()),
                                       free + C(1) * C(2) + dag(C)(2) * dag(C)(1), 2)
-    @test_throws "not free" fermi_sea(System(4, Electron()),
-                                      hop(Cup, 4) + dag(Cup)(1) * Cdn(1) + dag(Cdn)(1) * Cup(1), 1, 1)
+    flip = dag(Cup)(1) * Cdn(1) + dag(Cdn)(1) * Cup(1)
+    @test_throws "not free" fermi_sea(System(4, Electron()), hop(Cup, 4) + flip, 1, 1)
     @test_throws "take as many numbers" fermi_sea(System(4, Electron()), hop(Cup, 4), 1)
     @test_throws "not orthonormal" slater_state(System(4, Fermion()), ones(4, 1))
     @test_throws "holds no free fermions" slater_state(System(4, Qubit()), orth(4, 1))
@@ -349,7 +357,8 @@ end
     # an impurity in a Fermi sea, which a term acting on it or coupling it would make not free
     hf = -sum(dag(C)(i) * C(j) + dag(C)(j) * C(i) for (i, j) in [(1, 2), (2, 4), (4, 5)])
     ψ = fermi_sea(sys, hf, 2; others = "Up")
-    @test real(expect(ψ, hf)) ≈ sum(LA.eigvals([ abs(i - j) == 1 ? -1. : 0. for i in 1:4, j in 1:4 ])[1:2])
+    hopping = [ abs(i - j) == 1 ? -1. : 0. for i in 1:4, j in 1:4 ]
+    @test real(expect(ψ, hf)) ≈ sum(LA.eigvals(hopping)[1:2])
     @test expect(ψ, Z(3)) ≈ 1
     @test_throws "acts on the sites holding none" fermi_sea(sys, hf + Z(3), 2; others = "Up")
     @test_throws "not free" fermi_sea(sys, hf + X(3) * N(1), 2; others = "Up")

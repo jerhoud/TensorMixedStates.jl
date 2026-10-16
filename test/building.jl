@@ -159,8 +159,10 @@ end
         State{Pure}(System(3, Qubit()), [0.6, 0.8im]), 2; eltype = Float64)
     # a generator of one's own draws the same state twice
     rng(k) = Xoshiro(k)
-    @test norm(random_state(Pure, sys, 4; rng = rng(5)) - random_state(Pure, sys, 4; rng = rng(5))) < 1e-14
-    @test norm(random_state(Mixed, sys, 4; rng = rng(5)) - random_state(Mixed, sys, 4; rng = rng(5))) < 1e-14
+    for R in (Pure, Mixed)
+        draw() = random_state(R, sys, 4; rng = rng(5))
+        @test norm(draw() - draw()) < 1e-14
+    end
 end
 
 @testset "A random mixed state is a state of its system" begin
@@ -184,7 +186,8 @@ end
     @test trace(random_state(Mixed, System(3, Qubit()), [1., 0.], 4)) ≈ 1
     @test trace(random_state(Mixed, System(3, Qubit()), Level => 1, 4)) ≈ 1
     # a vector of local states of the wrong length is refused with the sizes of the system
-    @test_throws "system (3) and states (2)" random_state(Mixed, System(3, Qubit()), ["Up", "Dn"], 4)
+    @test_throws "system (3) and states (2)" random_state(
+        Mixed, System(3, Qubit()), ["Up", "Dn"], 4)
     # randomizing a state of one site leaves the one it was given alone: its tensor was
     # written in place when the element type already matched, and its cache went stale
     for (elt, s) in [(Float64, State{Pure}(System(1, Qubit()), "Up")),
@@ -222,7 +225,8 @@ end
     @test_throws "mindim is an integer" Limits(mindim = [1.5])
     # a field left nothing takes the default of the function given the limits, field by field
     @test Limits() == Limits(cutoff = nothing, maxdim = nothing, mindim = nothing)
-    @test TMS.truncation(Limits(maxdim = 5)) == (cutoff = TMS.rounding_tol^2, maxdim = 5, mindim = 1)
+    @test TMS.truncation(Limits(maxdim = 5)) ==
+          (cutoff = TMS.rounding_tol^2, maxdim = 5, mindim = 1)
     @test TMS.truncation(Limits(maxdim = 5); cutoff = 0.).cutoff === 0.0
     @test TMS.truncation(Limits(cutoff = 1e-8); cutoff = 0.).cutoff === 1e-8
     # superposition is exact by default, where a cutoff of eps() given, which the limits by
@@ -359,8 +363,9 @@ end
     @test real(purity(m)) < 1
     @test flux(m.state) == flux(mix(p).state)
     # conserving strongly leaves no room for it
-    @test_throws "cannot hold" random_state(Mixed, System(4, Fermion(conserve = strong(N))), conf, 16)
-    @test_throws "conserving something strongly" random_state(Mixed, System(2, Fermion(conserve = strong(N))), 4)
+    strongly(n) = System(n, Fermion(conserve = strong(N)))
+    @test_throws "cannot hold" random_state(Mixed, strongly(4), conf, 16)
+    @test_throws "conserving something strongly" random_state(Mixed, strongly(2), 4)
 end
 
 @testset "The ladder of symmetries" begin

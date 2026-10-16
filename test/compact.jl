@@ -33,7 +33,8 @@ end
               sum(0.6^(j - i) * Z(i) * Z(j) for i in 1:n for j in i+1:n) + sum(X(i) for i in 1:n),
               sum(0.6^(j - i) * Z(i) * Z(j) for i in 1:n for j in i+1:n) + 2 * Id(1),
               sum(Z(i) * Z(j) for i in 1:n for j in i+1:min(n, i + 2)),
-              sum(c[i, j] * c[j, k] * X(i) * Y(j) * Z(k) for i in 1:n for j in i+1:n for k in j+1:n),
+              sum(c[i, j] * c[j, k] * X(i) * Y(j) * Z(k)
+                  for i in 1:n for j in i+1:n for k in j+1:n),
               # a term the triangular form cuts where a smaller Schmidt rank would not
               X(1) * Y(2) + X(1) * Y(2) * Z(5),
               sum(Swap(i, i + 1) for i in 1:n-1)]
@@ -52,8 +53,8 @@ end
     end
     @test memory_channels(st3, (X * Y)(1) * Z(3) + Z(1) * X(3)) == [1, 1]
     @test memory_channels(st3, N(1) * N(3) + Z(1) * Z(3)) == [1, 1]
-    @test memory_channels(st, sum(0.7^(j - i) * (N(i) * N(j) + Z(i) * Z(j)) for i in 1:n for j in i+1:n)) ==
-          fill(1, n - 1)
+    nz = sum(0.7^(j - i) * (N(i) * N(j) + Z(i) * Z(j)) for i in 1:n for j in i+1:n)
+    @test memory_channels(st, nz) == fill(1, n - 1)
 end
 
 @testset "A factor holding the identity" begin
@@ -64,7 +65,8 @@ end
     check_mpo(st, a)
     sf = State{Pure}(System(4, Fermion()), "Emp")
     r = ((Id + 0.25N)^0.5)(3)
-    @test mpo_matrix(sf, r * r * dag(C)(1) * C(4)) ≈ lowered(sf.system, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
+    @test mpo_matrix(sf, r * r * dag(C)(1) * C(4)) ≈
+          lowered(sf.system, (Id(3) + 0.25N(3)) * dag(C)(1) * C(4))
 end
 
 @testset "An MPO of fermions, spins, electrons and bosons" begin
@@ -72,17 +74,22 @@ end
     hf = sum(0.5^(j - i) * (dag(C)(i) * C(j) + dag(C)(j) * C(i)) + 0.3^(j - i) * N(i) * N(j)
              for i in 1:n for j in i+1:n)
     check_mpo(State{Pure}(System(n, Fermion()), "Emp"), hf)
-    check_mpo(State{Pure}(System(n, Fermion(conserve = N)), [ isodd(i) ? "Occ" : "Emp" for i in 1:n ]), hf)
+    alternate = [ isodd(i) ? "Occ" : "Emp" for i in 1:n ]
+    check_mpo(State{Pure}(System(n, Fermion(conserve = N)), alternate), hf)
     # an odd operator, its strings in a channel of their own
     check_mpo(State{Pure}(System(n, Fermion()), "Emp"), C(3) + 0.5 * dag(C)(5))
     m = 4
-    hs = sum(0.7^(j - i) * (Sp(i) * Sm(j) + Sm(i) * Sp(j) + 0.5 * Sz(i) * Sz(j)) for i in 1:m for j in i+1:m)
-    check_mpo(State{Pure}(System(m, Spin(1, conserve = 2Sz)), [ isodd(i) ? "1" : "-1" for i in 1:m ]), hs)
+    hs = sum(0.7^(j - i) * (Sp(i) * Sm(j) + Sm(i) * Sp(j) + 0.5 * Sz(i) * Sz(j))
+             for i in 1:m for j in i+1:m)
+    neel = [ isodd(i) ? "1" : "-1" for i in 1:m ]
+    check_mpo(State{Pure}(System(m, Spin(1, conserve = 2Sz)), neel), hs)
     k = 3
-    he = sum(0.5^(j - i) * (dag(Cup)(i) * Cup(j) + dag(Cup)(j) * Cup(i) + dag(Cdn)(i) * Cdn(j) + dag(Cdn)(j) * Cdn(i)) +
-             0.2^(j - i) * Ntot(i) * Ntot(j) for i in 1:k for j in i+1:k) + sum(0.3 * Nup(i) * Ndn(i) for i in 1:k)
+    he = sum(0.5^(j - i) * (dag(Cup)(i) * Cup(j) + dag(Cup)(j) * Cup(i) + dag(Cdn)(i) * Cdn(j) +
+                            dag(Cdn)(j) * Cdn(i)) + 0.2^(j - i) * Ntot(i) * Ntot(j)
+             for i in 1:k for j in i+1:k) + sum(0.3 * Nup(i) * Ndn(i) for i in 1:k)
     check_mpo(State{Pure}(System(k, Electron()), "Emp"), he)
-    hb = sum(0.5^(j - i) * (dag(A)(i) * A(j) + dag(A)(j) * A(i)) + N(i) * N(j) for i in 1:k for j in i+1:k)
+    hb = sum(0.5^(j - i) * (dag(A)(i) * A(j) + dag(A)(j) * A(i)) + N(i) * N(j)
+             for i in 1:k for j in i+1:k)
     check_mpo(State{Pure}(System(k, Boson(3)), "0"), hb)
 end
 
@@ -179,7 +186,8 @@ end
     for (st, ops) in [
             (q, [sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) for i in 1:4) + 0.3 * Z(2),
                  sum(Z(i) * Z(i + 2) for i in 1:3) + X(1), 0.5 * X(3) * Y(5) + Z(1)]),
-            (f, [sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) + 0.4 * (C + dag(C))(2),
+            (f, [sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) +
+                 0.4 * (C + dag(C))(2),
                  C(1) * C(4) + 0.3 * N(3), dag(C)(2) + 0.2 * C(3) * N(1)]),
             (cf, [sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3), dag(C)(2) * C(4),
                   N(1) + dag(C)(4) * C(1)])]
@@ -207,7 +215,8 @@ end
     # product that is 0.7 (0.1 + 0.2 - 0.3) (1 - X1) Z2 Z3, a product of pieces, M² = 0 on a
     # spin 1, and the merges of the sweeps, in random products of fermions
     q3 = State{Pure}(System(3, Qubit()), "Up")
-    p = PreMPO(q3, (0.1 + 0.2) * X(1) * Z(2) * Z(3) + 0.3 * Z(2) * Z(3)) * PreMPO(q3, 0.7 * X(1) - 0.7 * Id(1))
+    p = PreMPO(q3, (0.1 + 0.2) * X(1) * Z(2) * Z(3) + 0.3 * Z(2) * Z(3)) *
+        PreMPO(q3, 0.7 * X(1) - 0.7 * Id(1))
     @test p.linkdims == [1, 1] && norm(mpo_matrix(p)) < 1e-15
     rot = [cos(1) -sin(1) 0; sin(1) cos(1) 0; 0 0 1] * [cos(2) 0 sin(2); 0 1 0; -sin(2) 0 cos(2)]
     M = Operator{1}("M", rot * [0. 1. 0.; 0. 0. 0.; 0. 0. 0.] * rot')
@@ -217,7 +226,8 @@ end
     rng = Xoshiro(20261016)
     for _ in 1:10
         ops = [ sum(round(2rand(rng) - 1; digits = 3) *
-                    prod(rand(rng, [C, dag(C), N])(i) for i in sort(randperm(rng, 4)[1:rand(rng, 1:3)]))
+                    prod(rand(rng, [C, dag(C), N])(i)
+                         for i in sort(randperm(rng, 4)[1:rand(rng, 1:3)]))
                     for _ in 1:rand(rng, 2:6)) for _ in 1:3 ]
         pres = [ PreMPO(f, op) for op in ops ]
         ds = mpo_matrix.(pres)
@@ -229,17 +239,19 @@ end
     end
     # superoperators compose
     ρ = mix(q)
-    l1, l2 = PreMPO(ρ, -im * X(1) * X(2) + Dissipator(Sm)(3)), PreMPO(ρ, Dissipator(Z)(2) + Dissipator(Sp)(4))
-    @test norm(mpo_matrix(l1 * l2) - mpo_matrix(l1) * mpo_matrix(l2)) < 1e-12 * norm(mpo_matrix(l1)) * norm(mpo_matrix(l2))
-    @test norm(mpo_matrix(l1 - 2 * l2) - (mpo_matrix(l1) - 2 * mpo_matrix(l2))) < 1e-12 * norm(mpo_matrix(l1))
+    l1 = PreMPO(ρ, -im * X(1) * X(2) + Dissipator(Sm)(3))
+    l2 = PreMPO(ρ, Dissipator(Z)(2) + Dissipator(Sp)(4))
+    d1, d2 = mpo_matrix(l1), mpo_matrix(l2)
+    @test norm(mpo_matrix(l1 * l2) - d1 * d2) < 1e-12 * norm(d1) * norm(d2)
+    @test norm(mpo_matrix(l1 - 2 * l2) - (d1 - 2 * d2)) < 1e-12 * norm(d1)
     # what is refused: two systems, two representations, several time functions
     @test_throws "the PreMPOs of a product are on two systems" PreMPO(q, X(1)) * PreMPO(f, N(1))
     @test_throws "the PreMPOs of a product are of two representations" PreMPO(q, X(1)) * l1
-    @test_throws "a PreMPO of several time functions is not multiplied" PreMPO(q, [X(1), Z(2)]) *
-                                                                         PreMPO(q, X(1))
+    vq = PreMPO(q, [X(1), Z(2)])
+    @test_throws "a PreMPO of several time functions is not multiplied" vq * PreMPO(q, X(1))
     @test_throws "the PreMPOs of a sum are on two systems" PreMPO(q, X(1)) + PreMPO(f, N(1))
     @test_throws "the PreMPOs of a sum are of two representations" PreMPO(q, X(1)) - l1
-    @test_throws "a PreMPO of several time functions is not added or scaled" 2 * PreMPO(q, [X(1), Z(2)])
+    @test_throws "a PreMPO of several time functions is not added or scaled" 2 * vq
     # the bound of the norm, the sum of the sizes of the terms, multiplies, and that of the width
     # of the spectrum of a product is twice it, which gives a search of excited states its weight:
     # H shifted, so that H² has no level of two
@@ -320,16 +332,19 @@ end
     f = State{Pure}(System(5, Fermion()), "Emp")
     hf = sum((dag(C)(i) * C(j) + dag(C)(j) * C(i)) / (j - i) for i in 1:5 for j in i+1:5) +
          0.3 * (C + dag(C))(3)
-    @test nnorm(mpo_matrix(PreMPO(f, hf; limits = Limits(cutoff = 1e-24))) - mpo_matrix(PreMPO(f, hf))) < 1e-13
+    rounding = Limits(cutoff = 1e-24)
+    @test nnorm(mpo_matrix(PreMPO(f, hf; limits = rounding)) - mpo_matrix(PreMPO(f, hf))) < 1e-13
     ρ = State{Mixed}(System(4, Qubit()), "Up")
-    L = -im * sum(Z(i) * Z(j) / (j - i)^2 for i in 1:4 for j in i+1:4) + Dissipator(sum(Sm(i) for i in 1:4))
-    @test nnorm(mpo_matrix(PreMPO(ρ, L; limits = Limits(cutoff = 1e-24))) - mpo_matrix(PreMPO(ρ, L))) < 1e-13
+    L = -im * sum(Z(i) * Z(j) / (j - i)^2 for i in 1:4 for j in i+1:4) +
+        Dissipator(sum(Sm(i) for i in 1:4))
+    @test nnorm(mpo_matrix(PreMPO(ρ, L; limits = rounding)) - mpo_matrix(PreMPO(ρ, L))) < 1e-13
     pv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)])
     tv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)];
                 limits = Limits(cutoff = 1e-6))
     @test sum(tv.linkdims) < sum(pv.linkdims)
     for c in ([1., 0.], [0., 1.], [0.3, 0.7])
         @test nnorm(mpo_matrix(tv, c) - mpo_matrix(pv, c)) < 1e-4 * nnorm(mpo_matrix(pv, c))
-        @test nnorm(mpo_matrix(TMS.truncated(pv, Limits(cutoff = 1e-6)), c) - mpo_matrix(tv, c)) < 1e-12 * nnorm(mpo_matrix(pv, c))
+        @test nnorm(mpo_matrix(TMS.truncated(pv, Limits(cutoff = 1e-6)), c) - mpo_matrix(tv, c)) <
+              1e-12 * nnorm(mpo_matrix(pv, c))
     end
 end

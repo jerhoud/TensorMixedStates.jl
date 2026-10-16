@@ -48,7 +48,8 @@ end
 
 TMS.prepare_phase(p::Kicks, _) = p
 TMS.step_count(p::Kicks) = p.nkicks
-TMS.run_step(::Kicks, sim, _) = Simulation(sim, apply(exp(-0.3im * X)(1), sim.state), sim.time + 0.1)
+TMS.run_step(::Kicks, sim, _) =
+    Simulation(sim, apply(exp(-0.3im * X)(1), sim.state), sim.time + 0.1)
 
 # what is not a phase, lacking its fields, and a phase that has no way to run
 struct NoFields <: AbstractPhase end
@@ -98,8 +99,8 @@ end
     # a value measured that no phase provides
     @test_throws "reads energy" SimData(; phases, final_measurements = "f" => :energy)
     @test_throws "reads ground" SimData(; phases, final_measurements = "f" => Fidelity(:ground))
-    @test_ok SimData(phases = [phases; CopyState(:state => :ground)],
-                     final_measurements = "f" => [Fidelity(:ground), :step, "r" => c -> rand(c.rng)])
+    measured = "f" => [Fidelity(:ground), :step, "r" => c -> rand(c.rng)]
+    @test_ok SimData(phases = [phases; CopyState(:state => :ground)], final_measurements = measured)
     @test_ok SimData(phases = [phases; GroundState(hamiltonian = Z(1), algo = Dmrg(nsweeps = 1))],
                      final_measurements = "f" => :energy)
     @test_throws "does not write one number" SimData(; phases, format = "%s %s")
@@ -424,7 +425,8 @@ end
         # simulation, LoadState reading there too
         @test pwd() == here
         @test isfile("sim/s.h5") && !isfile("s.h5")
-        runTMS(SimData(name = "second", phases = [LoadState(file = "../sim/s.h5"), SaveState(file = "t.h5")]))
+        runTMS(SimData(name = "second",
+                       phases = [LoadState(file = "../sim/s.h5"), SaveState(file = "t.h5")]))
         @test isfile("second/t.h5")
         # a file restart starts the simulation over, and goes with the directory
         touch("sim/old")
@@ -445,7 +447,8 @@ end
             mkpath("x")
             touch("x/restart")
             cd("x") do
-                @test_throws "contains the current directory" runTMS(SimData(name = ".", phases = phases[1:1]))
+                @test_throws "contains the current directory" runTMS(
+                    SimData(name = ".", phases = phases[1:1]))
             end
         end
         @test isfile("sub/precious")
@@ -486,11 +489,12 @@ end
         @test_throws "cannot write to stamp" runTMS(SimData(name = "e", phases = [start, mark],
                                                             final_measurements = "stamp" => Z(1)))
         @test !ran[]
-        @test_ok runTMS(SimData(name = "g", phases = [start, up("data" => Z(1)), up("./data" => Z(1)),
-                                                      up("d.json" => X(1)), up("d.json" => Z(1))]))
+        @test_ok runTMS(SimData(name = "g", phases = [start, up("data" => Z(1)),
+                                                      up("./data" => Z(1)), up("d.json" => X(1)),
+                                                      up("d.json" => Z(1))]))
         # two names of one file are one destination
-        runTMS(SimData(name = "d", phases = [start, Gates(gates = X(1),
-                                                         final_measurements = ["data" => X(1), "./data" => X(1)])]))
+        twice = Gates(gates = X(1), final_measurements = ["data" => X(1), "./data" => X(1)])
+        runTMS(SimData(name = "d", phases = [start, twice]))
         @test length(readlines("d/data")) == 3
     end
 end
@@ -541,7 +545,8 @@ end
         @test fidelity(sim.plus, evolve(-im * h, 0.3, plus; nsteps = 3, limits = lim)) ≈ 1
         e, _ = ground_state(h, up; algo = Dmrg(nsweeps = 6), limits = lim)
         @test real(expect(sim.g, h)) ≈ e
-        @test split(readlines("ref/data")[1], '\t')[1:4] == ["time", "Z(1)", "plus.Z(1)", "plus.X(1)X(1)"]
+        @test split(readlines("ref/data")[1], '\t')[1:4] ==
+              ["time", "Z(1)", "plus.Z(1)", "plus.X(1)X(1)"]
         # resumed after each step as the uninterrupted run
         run_through(SimData(; name = "chk", phases); max_time = -1)
         @test read("chk/data", String) == read("ref/data", String)
@@ -585,14 +590,16 @@ end
         @test stopped(withenv(() -> runTMS(sd), "TMS_MAX_TIME" => "-1"))
         @test occursin("Max time -1.0", read("sim/stamp", String))
         @test_throws "TMS_MAX_TIME is \"soon\"" withenv(() -> runTMS(sd), "TMS_MAX_TIME" => "soon")
-        @test_throws "TMS_THREADING is \"many\"" withenv(() -> runTMS(sd), "TMS_THREADING" => "many")
+        @test_throws "TMS_THREADING is \"many\"" withenv(() -> runTMS(sd),
+                                                         "TMS_THREADING" => "many")
         @test_throws "unknown threading" runTMS(sd; threading = :many)
         withenv("TMS_THREADING" => "nothing", "TMS_CHECKPOINT_INTERVAL" => "1e9") do
             run_through(sd)
         end
         stamp = readlines("sim/stamp")
         @test "Threading nothing" in stamp && "Checkpoint interval 1.0e9" in stamp
-        @test "Julia threads $(Threads.nthreads())" in stamp && "CPU threads $(Sys.CPU_THREADS)" in stamp
+        @test "Julia threads $(Threads.nthreads())" in stamp
+        @test "CPU threads $(Sys.CPU_THREADS)" in stamp
         @test any(l -> startswith(l, "BLAS ") && endswith(l, " threads"), stamp)
         @test any(l -> startswith(l, "Block sparse multithreading "), stamp)
         # the seed is written, and drawn when none is given
@@ -837,7 +844,8 @@ end
     # GroundState orthogonal to the states the simulation named, resumed after each sweep as the
     # uninterrupted run
     in_tmp() do
-        H = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:3) + 0.3 * sum(Z(i) for i in 1:4)
+        H = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:3) +
+            0.3 * sum(Z(i) for i in 1:4)
         algo = Dmrg(nsweeps = 30, tol = 1e-12)
         lim = Limits(maxdim = 16)
         phases = [CreateState{Pure}(4, Qubit(), "Up"; randomize = 4),
@@ -901,7 +909,8 @@ end
             output(c, "inside" => [:step, Z(1)])
             log_message(c, "kicked at step $(c.step + 1)")
         end
-        sd(name) = SimData(; name, seed = 5, phases = [phases[1], steps], final_measurements = "m" => :m)
+        sd(name) = SimData(; name, seed = 5, phases = [phases[1], steps],
+                           final_measurements = "m" => :m)
         ref = runTMS(sd("ref"))
         @test length(readlines("ref/kicks")) == 4
         @test occursin("kicked at step 6", read("ref/log", String))
@@ -912,7 +921,8 @@ end
     end
     # the state removed, for another phase to create one, and what is not a state or a time refused
     start = CreateState{Pure}(2, Qubit(), "Up")
-    sim = runTMS(SimData(phases = [start, Update(c -> (c.state = nothing)), start]); output = devnull)
+    sim = runTMS(SimData(phases = [start, Update(c -> (c.state = nothing)), start]);
+                 output = devnull)
     @test sim.state isa State{Pure}
     @test_throws "has no state to measure" runTMS(SimData(phases = [start,
         Update(c -> (c.state = nothing); measurements = "-" => Z(1))]); output = devnull)
@@ -936,8 +946,8 @@ end
                            "resume it, results in $(abspath("stop"))") runTMS(
             SimData(; name = "stop", phases); max_time = -1)
         warned = Kicks(measurements = "c" => ["c" => c -> Check(1., 2.; tol = 0.5, warn = true)])
-        @test_logs (:info, r"simulation \"warn\" done, results in .*warn, 4 warnings in its log$") runTMS(
-            SimData(name = "warn", phases = [phases[1], warned]))
+        done = r"simulation \"warn\" done, results in .*warn, 4 warnings in its log$"
+        @test_logs (:info, done) runTMS(SimData(name = "warn", phases = [phases[1], warned]))
         @test count("WARNING: Check c failed", read("warn/log", String)) == 4
         @test_logs (:info, "simulation \"out\" done, 4 warnings in its output") runTMS(
             SimData(name = "out", phases = [phases[1], warned]); output = devnull)
@@ -984,8 +994,9 @@ end
         sys = System(6, Qubit())
         ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))
         check(name, f, ref) = name => c -> Check(f(c.state), ref; tol = 1e-10)
+        xs = prod(X(i) for i in 1:6)
         sim = run([CreateState(type = Mixed(), state = ghz, final_measurements = "" => [
-                       check("purity", purity, 1), check("x", st -> real(expect(st, prod(X(i) for i in 1:6))), 1)]),
+                       check("purity", purity, 1), check("x", st -> real(expect(st, xs)), 1)]),
                    PartialTrace(positions = [2, 3, 5], keep = true, final_measurements = "" => [
                        check("z", st -> real(expect1(st, Z)), zeros(3)),
                        check("zz", st -> real(expect2(st, (Z, Z))), ones(3, 3))])])
@@ -1096,8 +1107,10 @@ end
         end
         resumed, whole = sim.data["d"], ref.data["d"]
         @test length(resumed) == length(whole)
-        @test all(map(r -> map(typeof ∘ last, r), resumed) .== map(r -> map(typeof ∘ last, r), whole))
-        @test all(isapprox(last(a), last(b)) for (ra, rb) in zip(resumed, whole) for (a, b) in zip(ra, rb))
+        types(rows) = map(r -> map(typeof ∘ last, r), rows)
+        @test all(types(resumed) .== types(whole))
+        @test all(isapprox(last(a), last(b))
+                  for (ra, rb) in zip(resumed, whole) for (a, b) in zip(ra, rb))
     end
 end
 
@@ -1106,7 +1119,8 @@ end
         # nested vectors of phases are the flat list, resumed after each step alike
         k1 = Kicks(nkicks = 2, measurements = "data" => [Z(1), :step])
         flat = SimData(name = "flat", phases = [CreateState{Pure}(2, Qubit(), "Up"), k1, k1, k1])
-        nested = SimData(name = "nested", phases = [[CreateState{Pure}(2, Qubit(), "Up")], [k1, [k1]], k1])
+        nested = SimData(name = "nested",
+                         phases = [[CreateState{Pure}(2, Qubit(), "Up")], [k1, [k1]], k1])
         runTMS(flat)
         run_through(nested; max_time = -1)
         @test read("nested/data", String) == read("flat/data", String)
@@ -1121,16 +1135,19 @@ end
         run_through(SimData(; name = "gchk", phases); max_time = -1)
         @test read("gchk/data", String) == read("gref/data", String)
         steps(f) = [ parse(Int, m[1]) for m in eachmatch(r"\nstep (\d+), ", read(f, String)) ]
-        energies(f) = [ parse(Float64, m[1]) for m in eachmatch(r", energy (\S+)\n", read(f, String)) ]
+        energies(f) = [ parse(Float64, m[1])
+                        for m in eachmatch(r", energy (\S+)\n", read(f, String)) ]
         @test steps("gchk/log") == steps("gref/log") == 1:5
         @test energies("gchk/log") ≈ energies("gref/log")
         # the time a resume logs is the one the checkpoint reached
         stop_in = Ref(2)
-        sd = SimData(name = "time", phases = [CreateState{Pure}(2, Qubit(), "Up"),
-                                              Kicks(measurements = "data" => [Z(1), stopper(stop_in)])])
+        sd = SimData(name = "time",
+                     phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                               Kicks(measurements = "data" => [Z(1), stopper(stop_in)])])
         runTMS(sd)
         runTMS(sd)
-        m = match(r"Resuming from the checkpoint: phase 2, step 2, time (\S+)", read("time/log", String))
+        m = match(r"Resuming from the checkpoint: phase 2, step 2, time (\S+)",
+                  read("time/log", String))
         @test parse(Float64, m[1]) ≈ 0.2
         # with its checkpoints, the directory holds the files of the simulation and its outputs only
         runTMS(SimData(name = "all", phases = [CreateState{Pure}(2, Qubit(), "Up"), k1]);
@@ -1166,9 +1183,10 @@ end
     sd(name) = SimData(; name, final_measurements = "f" => X(1), phases = [
         CreateState(type = Mixed(), state = ρ),
         Update(c -> nothing; nsteps = 3, measurements = "x.json" => [X, X(1)])])
-    summaries(log) = [ (parse(Int, m[1]), parse(Float64, m[2]), m[3], m[4]) for m in eachmatch(
-        r"WARNING: (\d+) imaginary parts? of Hermitian measurements beyond rounding dropped, the largest (\S+), of (.+) at time (\S+)\n",
-        read(log, String)) ]
+    dropped = Regex("WARNING: (\\d+) imaginary parts? of Hermitian measurements beyond rounding " *
+                    "dropped, the largest (\\S+), of (.+) at time (\\S+)\\n")
+    summaries(log) = [ (parse(Int, m[1]), parse(Float64, m[2]), m[3], m[4])
+                       for m in eachmatch(dropped, read(log, String)) ]
     in_tmp() do
         @test_logs (:info, r"simulation \"im\" done, .*, 2 warnings in its log") runTMS(sd("im"))
         s = summaries("im/log")
@@ -1192,7 +1210,8 @@ end
         sim = runTMS(SimData(name = "trunc", phases = [CreateState{Pure}(n, Qubit(), "Up"),
                              GroundState(; hamiltonian = h, algo, mpo_limits = lim),
                              CopyState(:state => :ground),
-                             Evolve(evolver = -im * h, duration = 0.2, time_step = 0.1, mpo_limits = lim),
+                             Evolve(evolver = -im * h, duration = 0.2, time_step = 0.1,
+                                    mpo_limits = lim),
                              ToMixed(), Thermalize(hamiltonian = h, beta = 0.2, beta_step = 0.1,
                                                    mpo_limits = lim)]))
         e, g = ground_state(h, State{Pure}(sim.ground.system, "Up"); algo, mpo_limits = lim)

@@ -172,8 +172,8 @@ end
         # LoadState reads it back, not truncated at the default limits, which it has no
         # method for, and :auto chooses the threading from its system
         save_state("w.h5", "w", st)
-        sim = runTMS(SimData(name = "load", phases = [LoadState(file = "../w.h5", statename = "w")]);
-                     threading = :auto)
+        load = LoadState(file = "../w.h5", statename = "w")
+        sim = runTMS(SimData(name = "load", phases = [load]); threading = :auto)
         @test sim.state isa WrappedState
         @test_throws MethodError runTMS(SimData(name = "cut", phases = [
             LoadState(file = "../w.h5", statename = "w", limits = Limits(maxdim = 2))]))
@@ -200,14 +200,16 @@ end
 
 TensorMixedStates.variance(st::WrappedState, op) = variance(st.inner, op)
 TensorMixedStates.renyi2(st::WrappedState, positions::AbstractVector) = renyi2(st.inner, positions)
-TensorMixedStates.entanglement_entropy(st::WrappedState, cut::Int) = entanglement_entropy(st.inner, cut)
+TensorMixedStates.entanglement_entropy(st::WrappedState, cut::Int) =
+    entanglement_entropy(st.inner, cut)
 
 @testset "The measurements of the library on a state of one's own" begin
     # measured by the functions it defines, each state anew, where Variance failed to convert
     # the value of the state it was prepared on into a function
     sys = System(3, Qubit())
     m = Measure([Variance(X(2))])
-    @test abs(last(only(measure(WrappedState(sys, apply(H(2), State{Pure}(sys, "Up"))), m)))) < 1e-12
+    plus = WrappedState(sys, apply(H(2), State{Pure}(sys, "Up")))
+    @test abs(last(only(measure(plus, m)))) < 1e-12
     @test last(only(measure(WrappedState(sys, State{Pure}(sys, "Up")), m))) ≈ 1
     # and its positions checked on it, which only a State had a method for: a Bell pair on sites
     # 2 and 3
@@ -307,7 +309,8 @@ end
 StepRecorder(factor = 1.) = StepRecorder([], factor)
 
 function TensorMixedStates.evolve_step(a::StepRecorder, pre, coefs, state, time, dt, step, limits)
-    push!(a.calls, (time, dt, step, limits.maxdim, isnothing(coefs) ? nothing : [ f(time) for f in coefs ]))
+    values = isnothing(coefs) ? nothing : [ f(time) for f in coefs ]
+    push!(a.calls, (time, dt, step, limits.maxdim, values))
     return a.factor * state
 end
 
@@ -335,8 +338,8 @@ end
     ψ = State{Pure}(sys, ["Up", "+", "Dn"])
     lim = Limits(cutoff = 0)
     for (st, ev) in [(ψ, -im * h), (mix(ψ), -im * h + Dissipator(sqrt(0.3) * Sm)(1))]
-        @test norm(evolve(ev, 0.5, st; algo = DenseStep()) - evolve(ev, 0.5, st; nsteps = 4, limits = lim)) <
-              1e-10
+        exact = evolve(ev, 0.5, st; nsteps = 4, limits = lim)
+        @test norm(evolve(ev, 0.5, st; algo = DenseStep()) - exact) < 1e-10
     end
     # and an Evolve phase, resumed after each step as the uninterrupted run
     in_tmp() do
@@ -364,7 +367,8 @@ end
     rec = StepRecorder()
     st = evolve(-im * h, 0.75, ψ; algo = rec, nsteps = 3, time = 1., step = 5,
                 limits = Limits(maxdim = [1, 2, 3, 4, 5, 6, 7]))
-    @test rec.calls == [(1., 0.25, 5, 5, nothing), (1.25, 0.25, 6, 6, nothing), (1.5, 0.25, 7, 7, nothing)]
+    @test rec.calls ==
+          [(1., 0.25, 5, 5, nothing), (1.25, 0.25, 6, 6, nothing), (1.5, 0.25, 7, 7, nothing)]
     @test norm(st - ψ) < 1e-14
     rec = StepRecorder()
     evolve([-im * h] => [t -> 2t], 0.5, ψ; algo = rec, nsteps = 2)
@@ -376,8 +380,8 @@ end
     @test rec.calls == [ (0., -0.125, k, nothing, nothing) for k in 2:4 ]
     @test l ≈ 3 * log(2)
     @test norm(ρ - ρ0) < 1e-14
-    @test_throws "the trace of the state reached -1.0 at step 2 of thermalize: take smaller steps" thermalize(
-        h, 0.75, ρ0; algo = StepRecorder(-1.), step = 2)
+    msg = "the trace of the state reached -1.0 at step 2 of thermalize: take smaller steps"
+    @test_throws msg thermalize(h, 0.75, ρ0; algo = StepRecorder(-1.), step = 2)
     @test_throws MethodError evolve(-im * h, 0.5, ψ; algo = Stepless())
 
     # a search of one's own goes through ground_state and steady_state

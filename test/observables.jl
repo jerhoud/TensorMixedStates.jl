@@ -38,7 +38,8 @@ end
     @test ref ≈ ref'
     @test [ ref[i, i] for i in 1:n ] ≈ expect1(st, N)
     @test expect2(st, (dag(C), C)) ≈ ref atol = 1e-10
-    @test expect2(st, (C, dag(C))) ≈ [ i == j ? 1 - ref[i, i] : -ref[j, i] for i in 1:n, j in 1:n ] atol = 1e-10
+    flipped = [ i == j ? 1 - ref[i, i] : -ref[j, i] for i in 1:n, j in 1:n ]
+    @test expect2(st, (C, dag(C))) ≈ flipped atol = 1e-10
     # an odd operator and a pair of mixed parities are measured through expect with their
     # strings; on a state superposing the two parities they do not vanish
     @test expect1(st, C) ≈ [ expect(st, C(i)) for i in 1:n ]
@@ -52,13 +53,15 @@ end
     ρ = random_state(Mixed, System(n, fe), 3)
     @test expect1(ρ, C + N) ≈ [ expect(ρ, (C + N)(i)) for i in 1:n ]
     @test expect2(st, (dag(C), N)) ≈
-          [ i == j ? expect(st, (dag(C) * N)(i)) : expect(st, dag(C)(i) * N(j)) for i in 1:n, j in 1:n ]
+          [ i == j ? expect(st, (dag(C) * N)(i)) : expect(st, dag(C)(i) * N(j))
+            for i in 1:n, j in 1:n ]
     # any other pair row by row, each part of definite parity with its string: no definite parity,
     # a mixed state, and operators defined on some of the sites only
     pairwise(x, o1, o2, on1, on2) =
         [ (i in on1 && j in on2) ? expect(x, i == j ? (o1 * o2)(i) : o1(i) * o2(j)) : missing
           for i in 1:length(x.system), j in 1:length(x.system) ]
-    same(a, b) = all(ismissing(x) ? ismissing(y) : isapprox(x, y; atol = 1e-12) for (x, y) in zip(a, b))
+    same(a, b) = all(ismissing(x) ? ismissing(y) : isapprox(x, y; atol = 1e-12)
+                     for (x, y) in zip(a, b))
     @test same(expect2(st, (C + N, dag(C) + N)), pairwise(st, C + N, dag(C) + N, 1:n, 1:n))
     ρ = random_state(Mixed, System(n, fe), 3)
     @test same(expect2(ρ, (N, C)), pairwise(ρ, N, C, 1:n, 1:n))
@@ -87,8 +90,9 @@ end
         @test expect(st, dag(C)(1) * C(1 + d)) ≈ ref[1, 1 + d] atol = 1e-10
         @test expect(stm, dag(C)(1) * C(1 + d)) ≈ ref[1, 1 + d] atol = 1e-8
         @test expect(st, C(1 + d) * dag(C)(1)) ≈ -ref[1, 1 + d] atol = 1e-10
-        @test expect(st, C(1 + d) * (C + dag(C))(1)) ≈ exact([C => 1 + d, (C + dag(C)) => 1]) atol = 1e-10
-        @test expect(stm, C(1 + d) * (C + dag(C))(1)) ≈ exact([C => 1 + d, (C + dag(C)) => 1]) atol = 1e-8
+        crossed = exact([C => 1 + d, (C + dag(C)) => 1])
+        @test expect(st, C(1 + d) * (C + dag(C))(1)) ≈ crossed atol = 1e-10
+        @test expect(stm, C(1 + d) * (C + dag(C))(1)) ≈ crossed atol = 1e-8
         @test expect(st, C(1 + d) * named(dag(C), "Cd")(1)) ≈ -ref[1, 1 + d] atol = 1e-10
         @test expect(st, dag(C)(1) * named(2C, "C2")(1 + d)) ≈ 2ref[1, 1 + d] atol = 1e-10
     end
@@ -199,7 +203,8 @@ end
     pr = [1. 1. ; 1. 1.] / 2
     @test expect(st, C(3) * Proj([1., 1.] / sqrt(2))(1)) ≈ ev(cs[3] * kron(pr, id, id))
     pe, po = (pr + f * pr * f) / 2, (pr - f * pr * f) / 2
-    @test expect(st, Proj([1., 1.] / sqrt(2))(2) * C(3)) ≈ ev((kron(id, pe, id) + kron(f, po, id)) * cs[3])
+    @test expect(st, Proj([1., 1.] / sqrt(2))(2) * C(3)) ≈
+          ev((kron(id, pe, id) + kron(f, po, id)) * cs[3])
     p = Proj([0., 1.])
     @test expect(st, C(3) * p(1)) ≈ ev(cs[3] * kron([0. 0. ; 0. 1.], id, id))
     @test expect(st, p(1) * C(3)) ≈ ev(kron([0. 0. ; 0. 1.], id, id) * cs[3])
@@ -429,8 +434,8 @@ end
     check(f, (hop + γ)^3, true)
     # on charged fermions: a product of definite flux, and one of none, measured on the state
     # conserving nothing
-    cf = random_state(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"]), 4;
-                      rng = Xoshiro(20261016))
+    cf = random_state(State{Pure}(System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"]),
+                      4; rng = Xoshiro(20261016))
     ad = sum(dag(C)(i) for i in 1:4)
     check(cf, sum(N(i) for i in 1:4)^3 + hop^2, true)
     nf = (ad * hop)^2 + N(1)
@@ -732,9 +737,10 @@ end
         @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = alg)
     end
     # and an Evolve phase with ApproxW hands it on, as evolve does
+    dm = ApproxW(order = 2, apply_algo = "densitymatrix")
     sim = runTMS(SimData(phases = [CreateState{Pure}(n, Qubit(), "Up"),
                                    Evolve(evolver = -im * h, duration = 0.5, time_step = 0.1,
-                                          algo = ApproxW(order = 2, apply_algo = "densitymatrix"))]);
+                                          algo = dm)]);
                  output = devnull)
     @test norm(sim.state - w("densitymatrix")) < 1e-12
 end
@@ -758,8 +764,9 @@ end
     @test only(last(TMS.pure_steps(q.system, controlled(X)(2, 3)))) isa TMS.GateBatch
     hop = exp(-0.7im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
     f = random_state(Pure, System(7, Fermion()), 4)
+    alternate = [ isodd(k) ? "Occ" : "Emp" for k in 1:7 ]
     fq = apply(prod(hop(k, k + 1) for k in (1, 3, 5, 2, 4, 6)),
-               State{Pure}(System(7, Fermion(conserve = N)), [ isodd(k) ? "Occ" : "Emp" for k in 1:7 ]))
+               State{Pure}(System(7, Fermion(conserve = N)), alternate))
     for st in (f, fq), op in [hop(2, 6), C(2) + 0.5 * C(5), (C ⊗ N)(1, 4), (N ⊗ C)(2, 5),
                               C(3) * dag(C)(6) * C(7)]
         @test same(st, op)
@@ -859,11 +866,10 @@ end
     @test last(only(measure(mix(st), Fidelity(ref)))) ≈ 0.5
     # and through a run, where the system does not exist until the phase creates it, or with a
     # reference the run names, missing until there is one
+    fidelities() = Data("d") => [Fidelity(ref), Overlap(ref), "named" => Fidelity(:ref)]
     sim = runTMS(SimData(phases = [CreateState{Pure}(3, Qubit(), ["+", "+", "Up"];
-                                                     final_measurements = Data("d") => [
-                                                         Fidelity(ref), Overlap(ref), "named" => Fidelity(:ref)]),
-                                   CopyState(:state => :ref; final_measurements = Data("d") => [
-                                                 Fidelity(ref), Overlap(ref), "named" => Fidelity(:ref)])]);
+                                                     final_measurements = fidelities()),
+                                   CopyState(:state => :ref; final_measurements = fidelities())]);
                  output = devnull)
     first_row, second_row = sim.data["d"]
     @test last.(first_row[2:3]) ≈ [0.5, 1/√2]
@@ -1115,7 +1121,8 @@ end
     m = expect2(ψf, (dag(C), C); sites = [1, 3, 4])
     @test count(ismissing, m) == 25 - 9
     @test m[3, 1] ≈ expect(ψf, dag(C)(3) * C(1)) && m[4, 4] ≈ expect(ψf, N(4))
-    @test_throws "acts on site 9, which the system does not have" expect2(ψf, (N, N); sites = [1, 9])
+    @test_throws "acts on site 9, which the system does not have" expect2(
+        ψf, (N, N); sites = [1, 9])
 end
 
 @testset "A partial trace keeps the fermionic signs" begin
@@ -1124,14 +1131,16 @@ end
     # on the reduced state as on the state
     fe = Fermion()
     s3 = System(3, fe)
-    ρ = mix(normalize(State{Pure}(s3, ["Occ", "Occ", "Emp"]) + State{Pure}(s3, ["Emp", "Occ", "Occ"])))
+    p(v) = State{Pure}(s3, v)
+    ρ = mix(normalize(p(["Occ", "Occ", "Emp"]) + p(["Emp", "Occ", "Occ"])))
     @test expect(partial_trace(ρ, [2]), dag(C)(1) * C(2)) ≈ expect(ρ, dag(C)(1) * C(3)) ≈ -0.5
     # a state of no definite parity takes the sign on a single fermionic operator as well
-    ρ = mix(normalize(State{Pure}(s3, ["Emp", "Occ", "Emp"]) + State{Pure}(s3, ["Emp", "Occ", "Occ"])))
+    ρ = mix(normalize(p(["Emp", "Occ", "Emp"]) + p(["Emp", "Occ", "Occ"])))
     @test expect(partial_trace(ρ, [1, 2]), C(1) + dag(C)(1)) ≈ expect(ρ, C(3) + dag(C)(3)) ≈ -1
     # every product of two operators of the sites kept, sites traced out on both sides of a
     # charged system
-    ρ = mix(random_state(State{Pure}(System(5, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp", "Occ"]), 4))
+    charged = State{Pure}(System(5, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp", "Occ"])
+    ρ = mix(random_state(charged, 4))
     red = partial_trace(ρ, [1, 4]; keep = true)
     @test red.system == System(2, Fermion(conserve = N))
     for a in (Id, N, C, dag(C)), b in (Id, N, C, dag(C))
@@ -1158,7 +1167,8 @@ end
     @test_throws "given site 5, which the state does not have" partial_trace(ρ, [5])
     @test_throws "given site 0" partial_trace(ρ, [0, 1]; keep = true)
     @test_throws "every site" partial_trace(ρ, 1:4)
-    @test_throws "use mix(state) first" partial_trace(random_state(Pure, System(4, Qubit()), 4), [1, 2])
+    ψ = random_state(Pure, System(4, Qubit()), 4)
+    @test_throws "use mix(state) first" partial_trace(ψ, [1, 2])
 end
 
 @testset "Reduced density matrix and von Neumann entropy" begin
@@ -1192,7 +1202,8 @@ end
     @test_throws "given site 5, which the state does not have" reduced_density_matrix(q, [5])
     # beyond dense_max, refused rather than exhausting memory
     for st in (State{Pure}(System(13, Qubit()), "Up"), State{Mixed}(System(13, Qubit()), "Up"))
-        @test_throws "of dimension 8192, beyond the 4096 TMS builds" reduced_density_matrix(st, 1:13)
+        @test_throws "of dimension 8192, beyond the 4096 TMS builds" reduced_density_matrix(
+            st, 1:13)
     end
     # the entropy of half a Bell pair is log 2, that of the pair 0, and on a cut it is the
     # entanglement entropy
@@ -1289,8 +1300,8 @@ end
     @test norm(evolve(-im * X(1) * Swap(1, 2) * X(2), 0.1, b)) ≈ 1
     # under a strong symmetry, a channel of several sites given by its matrix gets the refusal
     # of the strong symmetry, as one of one site does
-    @test_throws "which conserving it strongly forbids" TMS.lower(System(3, Fermion(conserve = strong(N))),
-                                                                  exp(0.3 * Dissipator(C ⊗ C))(1, 2))
+    @test_throws "which conserving it strongly forbids" TMS.lower(
+        System(3, Fermion(conserve = strong(N))), exp(0.3 * Dissipator(C ⊗ C))(1, 2))
     # and so does variance, where it was refused, and its measurement
     @test variance(b, X(1)) ≈ 1
     @test variance(b, X(1) + X(2)) ≈ 4
@@ -1374,16 +1385,18 @@ end
     @test_throws "Swap acts on several sites, and is measured placed on them" Measure(Swap)
     @test_throws "measure takes observables, and Gate(X)(1) is not one" Measure(Gate(X)(1))
     @test_throws "measure takes observables, and Gate(X) is not one" Measure(Gate(X))
-    @test_throws "measure takes observables, and Dissipator(X)(1) is not one" Measure(Dissipator(X)(1))
+    @test_throws "measure takes observables, and Dissipator(X)(1) is not one" Measure(
+        Dissipator(X)(1))
     @test_throws "a name goes before one measurement, not before a list" Measure("a" => [X, Y])
     @test_throws "nothing is not a measurement" Measure(nothing)
     @test_throws "is not a measurement" Measure(st)
     # when it is prepared on the system of the state, before anything is measured: a site the
     # system does not have, for an operator and for a measurement of the library, and an operator
     # of one site defined on none
-    @test_throws "X(4) acts on site 4, which the system does not have: it has 3 sites" measure(st, X(4))
-    @test_throws "SubRenyi2 was given site 5, which the state does not have: it has 3 sites" measure(
-        st, SubRenyi2([5]))
+    @test_throws "X(4) acts on site 4, which the system does not have: it has 3 sites" measure(
+        st, X(4))
+    @test_throws("SubRenyi2 was given site 5, which the state does not have: it has 3 sites",
+                 measure(st, SubRenyi2([5])))
     @test_throws "EntanglementEntropy was given site 4" measure(st, EntanglementEntropy(4))
     @test_throws "EntanglementEntropy was given site 0" measure(st, EntanglementEntropy(0, 2))
     @test_throws "LogNegativity was given site 7" measure(st, LogNegativity([1], [7]))
@@ -1421,7 +1434,8 @@ end
     @test_throws "this measurement reads the time, which measure was not given" measure(
         st, "t" => c -> c.time)
     @test_throws "measure(state, measurements; time = t)" measure(st, "t" => c -> c.time)
-    @test_throws "this measurement reads foo, which measure was not given" measure(st, "f" => c -> c.foo)
+    @test_throws "this measurement reads foo, which measure was not given" measure(
+        st, "f" => c -> c.foo)
     # its value is given as it is computed, a complex one with no warning
     ph = apply(Phase(0.7)(1), State{Pure}(System(2, Qubit()), "+"))
     sp = @test_logs last(only(measure(ph, "sp" => c -> expect(c.state, Sp(1)))))
@@ -1442,7 +1456,8 @@ end
     # the values, their difference and tol, or only warned about with warn = true
     far(; kwargs...) = "chk" => c -> Check(1.0, 1.001; tol = 1e-6, kwargs...)
     @test_throws "Check chk failed: 1.0 and 1.001 differ by" measure(st, far())
-    @test_throws "Check chk failed at time 2.5: 1.0 and 1.001 differ by" measure(st, far(); time = 2.5)
+    @test_throws "Check chk failed at time 2.5: 1.0 and 1.001 differ by" measure(
+        st, far(); time = 2.5)
     @test_throws "beyond tol = 1.0e-6" measure(st, far())
     failed = r"^Check chk failed: 1\.0 and 1\.001 differ by .*, beyond tol = 1\.0e-6$"
     ch = @test_logs (:warn, failed) last(only(measure(st, far(warn = true))))
@@ -1453,7 +1468,8 @@ end
     # values of different shapes are refused, tol or not
     @test_throws "Check chk compares values of different shapes, (2,) and (1, 2)" measure(
         st, "chk" => c -> Check([1.0, 2.0], [1.0 2.0]))
-    @test_throws "different shapes, () and (1,)" measure(st, "chk" => c -> Check(1.0, [1.0]; tol = 1))
+    @test_throws "different shapes, () and (1,)" measure(
+        st, "chk" => c -> Check(1.0, [1.0]; tol = 1))
     # entries missing on both sides, as where an operator is not defined, are left out, where a
     # tol failed on a TypeError, and entries missing on one side alone fail it
     qf = State{Pure}(System([Qubit(), Fermion()]), ["+", "Emp"])

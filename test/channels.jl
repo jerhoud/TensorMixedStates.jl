@@ -21,7 +21,8 @@ vec(ρ) of a density matrix of two sites of dimensions `d1` and `d2` in the orde
 of channels: the last site fastest and, on each site, the ket faster than the bra
 """
 mixed_vec(ρ, d1, d2) =
-    vec([ ρ[(k1 - 1) * d2 + k2, (b1 - 1) * d2 + b2] for k2 in 1:d2, b2 in 1:d2, k1 in 1:d1, b1 in 1:d1 ])
+    vec([ ρ[(k1 - 1) * d2 + k2, (b1 - 1) * d2 + b2]
+          for k2 in 1:d2, b2 in 1:d2, k1 in 1:d1, b1 in 1:d1 ])
 
 """
 the dense matrix of the MPO of `a` on the mixed state `ρ`, `coefs` the values of the time
@@ -111,7 +112,8 @@ end
         mm = m' * m
         @test matrix(Gate(op), s) ≈ kron(conj(m), m)
         @test matrix(Evolver(op), s) ≈ kron(i, m) + kron(conj(m), i)
-        @test matrix(Dissipator(op), s) ≈ kron(conj(m), m) - (kron(i, mm) + kron(transpose(mm), i)) / 2
+        @test matrix(Dissipator(op), s) ≈
+              kron(conj(m), m) - (kron(i, mm) + kron(transpose(mm), i)) / 2
     end
     # a reset gives its state whatever the state it acts on, a dephasing erases the coherences
     # between the eigenspaces and keeps those within one
@@ -192,7 +194,8 @@ end
         @test t1 * matrix(c, q) ≈ t1
     end
     @test t2 * matrix(reset_gate(0.3, ["Up", "Dn"]), q) ≈ t2
-    @test transpose(vec(eye(3))) * matrix(amplitude_damping_gate(0.3, A), b) ≈ transpose(vec(eye(3)))
+    t3 = transpose(vec(eye(3)))
+    @test t3 * matrix(amplitude_damping_gate(0.3, A), b) ≈ t3
     for g in (-im * X + Dissipator(Sm), reset_dissipator(0.4, "Up"), dephasing_dissipator(0.2),
               depolarizing_dissipator(0.3), amplitude_damping_dissipator(0.5),
               thermal_relaxation_dissipator(5., 3.))
@@ -214,7 +217,8 @@ end
     @test ev(dephasing_dissipator(γ, Z ⊗ Z)) ≈ matrix(dephasing_gate(p, Z ⊗ Z), q)
     @test ev(thermal_relaxation_dissipator(5., 3.)) ≈ matrix(thermal_relaxation_gate(5., 3., t), q)
     b = Boson(5)
-    @test matrix(exp(t * amplitude_damping_dissipator(γ, A)), b) ≈ matrix(amplitude_damping_gate(p, A), b)
+    @test matrix(exp(t * amplitude_damping_dissipator(γ, A)), b) ≈
+          matrix(amplitude_damping_gate(p, A), b)
 end
 
 @testset "The library of noises" begin
@@ -224,16 +228,19 @@ end
     @test matrix(depolarizing_gate(p), q) ≈
         matrix((1 - 3p/4) * Gate(Id) + p/4 * (Gate(X) + Gate(Y) + Gate(Z)), q)
     @test matrix(Dissipator(Z), q) ≈ matrix(dephasing_dissipator(2, Z), q)
-    @test matrix(amplitude_damping_gate(p), q) ≈ matrix(Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(Sp), q)
+    @test matrix(amplitude_damping_gate(p), q) ≈
+        matrix(Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(Sp), q)
     @test matrix(thermal_relaxation_gate(5., 3., 0.4), q) ≈
-        matrix(dephasing_gate(1 - exp(-0.4 * (1/3 - 1/10))) * amplitude_damping_gate(1 - exp(-0.4 / 5)), q)
+        matrix(dephasing_gate(1 - exp(-0.4 * (1/3 - 1/10))) *
+               amplitude_damping_gate(1 - exp(-0.4 / 5)), q)
     # sites reset together, or each to its state, a vector of numbers being one state
     @test reset_gate(p, ["Up", "Dn"]) == (1 - p) * Gate(Id ⊗ Id) + p * Reset("Up") ⊗ Reset("Dn")
     @test reset_gate(p, 2, "Up") == (1 - p) * Gate(Id ⊗ Id) + p * Reset("Up") ⊗ Reset("Up")
     @test reset_gate(p, [1., 0.]) == (1 - p) * Gate(Id) + p * Reset([1., 0.])
     # amplitude damping on other sites: the same Kraus operators on a fermion, and on a boson
     # each photon lost on its own, the number of those left binomial
-    @test matrix(amplitude_damping_gate(p, C), f) ≈ matrix(Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(C), f)
+    @test matrix(amplitude_damping_gate(p, C), f) ≈
+        matrix(Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(C), f)
     n, d = 4, 6
     ρ = zeros(d, d)
     ρ[n + 1, n + 1] = 1
@@ -247,7 +254,8 @@ end
     @test matrix(amplitude_damping_gate(1.), q) ≈ matrix(Gate(Id - N) + Gate(Sp), q)
     @test matrix(amplitude_damping_gate(1., A), b) ≈ matrix(Reset("0"), b)
     @test matrix(amplitude_damping_gate(1.), Spin(1)) ≈ matrix(Reset(Level => 0), Spin(1))
-    @test_throws "does not take every state of Electron() to a single one" matrix(amplitude_damping_gate(1.), Electron())
+    @test_throws "does not take every state of Electron() to a single one" matrix(
+        amplitude_damping_gate(1.), Electron())
     @test matrix(thermal_relaxation_gate(5., 3., 1e4), q) ≈ matrix(Reset("Up"), q)
     # parameters out of their domain
     for g in (() -> reset_gate(1.5, "Up"), () -> depolarizing_gate(-0.1), () -> dephasing_gate(2.),
@@ -284,7 +292,8 @@ end
     x13 = reduce(⊗, fill(X, 13))
     @test_throws "needs a dense matrix of dimension 8192" matrix(exp(-im * x13), q)
     @test_throws "needs a dense matrix of dimension 8192" matrix(x13^2, q)
-    @test_throws "needs a dense matrix of dimension 8192" matrix(Proj(reduce(⊗, fill(Z, 13)) => 1), q)
+    z13 = reduce(⊗, fill(Z, 13))
+    @test_throws "needs a dense matrix of dimension 8192" matrix(Proj(z13 => 1), q)
     x7 = reduce(⊗, fill(X, 7))
     @test_throws "needs a dense matrix of dimension 16384" matrix(exp(Dissipator(x7)), q)
     @test_throws "needs a dense matrix of dimension 16384" matrix(Dephase(x7), q)
@@ -316,7 +325,8 @@ end
     # on fermions, the strings of the Kraus operator
     φ = random_state(Pure, System(4, Fermion()), 4)
     for (Φ, K) in [(Gate(C)(1) * Gate(dag(C))(3), C(1) * dag(C)(3)),
-                   (Gate(C(2) + dag(C)(4)), C(2) + dag(C)(4)), ((Gate(C) ⊗ Gate(C))(1, 3), (C ⊗ C)(1, 3))]
+                   (Gate(C(2) + dag(C)(4)), C(2) + dag(C)(4)),
+                   ((Gate(C) ⊗ Gate(C))(1, 3), (C ⊗ C)(1, 3))]
         @test norm(apply(Φ, φ) - apply(K, φ)) < 1e-12
     end
     # a mixture, a reset, a generator have no single Kraus operator, and a channel no matrix
@@ -362,14 +372,16 @@ end
         i, m = one(K), K' * K
         @test superop(sys, Gate(k)) ≈ sided(K, K', ss)
         @test superop(sys, Evolver(k)) ≈ sided(K, i, ss) + sided(i, K', ss)
-        @test superop(sys, Dissipator(k)) ≈ sided(K, K', ss) - (sided(m, i, ss) + sided(i, m, ss)) / 2
+        @test superop(sys, Dissipator(k)) ≈
+              sided(K, K', ss) - (sided(m, i, ss) + sided(i, m, ss)) / 2
     end
     # a Hamiltonian added to a dissipator
     h = dag(C)(1) * C(3) + dag(C)(3) * C(1)
     H, c1, ss = lowered(fs, h), lowered(fs, C(1)), fs.sites
     i, m = one(H), c1' * c1
     @test superop(fs, -im * h + Dissipator(C)(1)) ≈
-        sided(-im * H, i, ss) + sided(i, im * H, ss) + sided(c1, c1', ss) - (sided(m, i, ss) + sided(i, m, ss)) / 2
+        sided(-im * H, i, ss) + sided(i, im * H, ss) + sided(c1, c1', ss) -
+        (sided(m, i, ss) + sided(i, m, ss)) / 2
 end
 
 @testset "Resets and dephasings on a density matrix" begin
@@ -429,14 +441,18 @@ end
     # leaves and a generator sends to zero
     fs = System(3, Fermion())
     t = transpose(foldl(kron, fill(vec(eye(2)), 3)))
-    @test norm(t * superop(fs, -im * (dag(C)(1) * C(3) + dag(C)(3) * C(1)) + Dissipator(C(1) + C(3)))) < 1e-12
-    @test t * superop(fs, reset_gate(0.3, "Emp")(2) * Gate((C + dag(C))(1)) * depolarizing_gate(0.2, 2)(1, 3)) ≈ t
+    L = -im * (dag(C)(1) * C(3) + dag(C)(3) * C(1)) + Dissipator(C(1) + C(3))
+    @test norm(t * superop(fs, L)) < 1e-12
+    Φ = reset_gate(0.3, "Emp")(2) * Gate((C + dag(C))(1)) * depolarizing_gate(0.2, 2)(1, 3)
+    @test t * superop(fs, Φ) ≈ t
 end
 
 @testset "A channel or a generator refused on a system" begin
-    @test_throws "carries no definite charge of N" TMS.lower(System(2, Qubit(conserve = N)), Dephase(X ⊗ X)(1, 2))
-    @test_throws "acts on site 5, which the system does not have" TMS.lower(System(3, Qubit()), Gate(X)(5))
-    @test_throws "acts on site 4, which the system does not have" TMS.lower(System(3, Qubit()), Dissipator(X(1) + X(4)))
+    q2, q3 = System(2, Qubit(conserve = N)), System(3, Qubit())
+    @test_throws "carries no definite charge of N" TMS.lower(q2, Dephase(X ⊗ X)(1, 2))
+    @test_throws "acts on site 5, which the system does not have" TMS.lower(q3, Gate(X)(5))
+    @test_throws "acts on site 4, which the system does not have" TMS.lower(
+        q3, Dissipator(X(1) + X(4)))
     # an operator applied to a density matrix is checked as its gate, as it was written, not as
     # the factors its strings are laid into, which named Gate(F)(5) for C(9) in 1.x
     ρ = mix(State{Pure}(System(4, Fermion()), "Emp"))
@@ -466,7 +482,8 @@ end
     @test laid_mixed(ρq, L) ≈ S
     @test PreMPO(ρq, L).linkdims .- 1 == least_channels(S, fill(4, 5))
     # the order of the mixed index, read once for each kind of site
-    sys = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N), Boson(3, conserve = N), Qubit()])
+    sys = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N), Boson(3, conserve = N),
+                  Qubit()])
     @test TMS.block_orders(Mixed, sys) == [ TMS.mixed_elements(sys, i) for i in 1:5 ]
 end
 
@@ -484,7 +501,8 @@ end
                      (qs, Evolver(-im * hq^2)), (qs, Gate(hq)), (qs, Gate(hq^2)),
                      (fs, -im * hop + loss), (fs, Gate(hop)), (fs, Dissipator(hop + 0.4 * C(2))),
                      (cs, -im * hop + loss), (ss, -im * hop + Dissipator(sum(N(i) for i in 1:4)))]
-        ρ = State{Mixed}(sys, sys === qs || sys === fs ? "FullyMixed" : ["Occ", "Emp", "Occ", "Emp"])
+        start = sys === qs || sys === fs ? "FullyMixed" : ["Occ", "Emp", "Occ", "Emp"]
+        ρ = State{Mixed}(sys, start)
         @test any(TMS.super_by_blocks, TMS.addends(a))
         S = superop(sys, a)
         @test laid_mixed(ρ, a) ≈ S
@@ -493,7 +511,8 @@ end
     # a gate of two terms keeps its terms, and a loss under a strong symmetry is refused as by
     # its terms
     @test !TMS.super_by_blocks(Gate(X(1) * X(2) + Z(3)))
-    @test_throws "changes N by different amounts" PreMPO(State{Mixed}(ss, ["Occ", "Emp", "Occ", "Emp"]), loss)
+    @test_throws "changes N by different amounts" PreMPO(
+        State{Mixed}(ss, ["Occ", "Emp", "Occ", "Emp"]), loss)
     # K ρ K† of many terms applied to a density matrix
     k = hq + 0.5 * X(1) * Z(3)
     ρ = random_state(Mixed, qs, 2; rng = Xoshiro(20261016))
@@ -506,7 +525,8 @@ end
     sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
     ρ = State{Mixed}(sys, "FullyMixed")
     h = dag(C)(1) * C(4) + dag(C)(4) * C(1)
-    for a in [-im * h + sum(Dissipator(C)(j) for j in (1, 3, 4)) + Dissipator(dag(C)(1) * C(4)) + Dissipator(X)(2),
+    for a in [-im * h + sum(Dissipator(C)(j) for j in (1, 3, 4)) + Dissipator(dag(C)(1) * C(4)) +
+                  Dissipator(X)(2),
               Reset("Occ")(4) * Gate(C(1) + C(3))]
         S = superop(sys, a)
         @test laid_mixed(ρ, a) ≈ S
@@ -529,7 +549,8 @@ end
         @test after(-im * h + Dissipator(C)(1) + Dissipator(dag(C)(2))) ≈
             -im * (H * r - r * H) + d(lowered(sys, C(1))) + d(lowered(sys, dag(C)(2)))
         @test after(h) ≈ H * r + r * H
-        ks = [ lowered(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
+        ks = [ lowered(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2))
+               for i in 1:2 ]
         @test after(Reset("Emp")(2)) ≈ sum(k * r * k' for k in ks)
     end
 end
@@ -543,7 +564,8 @@ end
     @test ket_bra_matrix(apply(make_mpo(ρ, Dissipator(N)(1)), ρ)) ≈
         n1 * r * n1 - (n1 * n1 * r + r * n1 * n1) / 2
     # one changing it in some parts and not in others would mix the sectors it keeps apart
-    @test_throws "changes N by different amounts from one part to another, which conserving it strongly forbids" make_mpo(ρ, Reset("Emp")(1))
+    @test_throws("changes N by different amounts from one part to another, which conserving it " *
+                 "strongly forbids", make_mpo(ρ, Reset("Emp")(1)))
     @test_throws "drop `strong` or weaken the state" make_mpo(ρ,
         -im * (dag(C)(1) * C(2) + dag(C)(2) * C(1)) + Dissipator(C)(1))
     # a jump of no definite charge is refused for what it lacks, weak or strong, its parts of
@@ -574,7 +596,8 @@ end
         # an operator applied to a density matrix is its gate
         u = lowered(sys, exp(-0.4im * h)(1, 3))
         @test after(exp(-0.4im * h)(1, 3)) ≈ u * r * u'
-        ks = [ lowered(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2)) for i in 1:2 ]
+        ks = [ lowered(sys, Operator{1}("K", [1., 0.] * [ j == i ? 1. : 0. for j in 1:2 ]')(2))
+               for i in 1:2 ]
         reset(x) = sum(k * x * k' for k in ks)
         @test after(Reset("Emp")(2)) ≈ reset(r)
         k = lowered(sys, C(1) + C(3))
@@ -779,7 +802,8 @@ end
     sys = System(4, Fermion())
     configs = [ collect(v) for v in Iterators.product(fill(["Emp", "Occ"], 4)...) ]
     function sector(k)
-        s = sum(randn(ComplexF64) * State{Pure}(sys, v) for v in configs if count(==("Occ"), v) == k)
+        s = sum(randn(ComplexF64) * State{Pure}(sys, v)
+                for v in configs if count(==("Occ"), v) == k)
         return s / norm(s)
     end
     ρ = 0.7 * mix(sector(2)) + 0.3 * mix(sector(1))
@@ -905,8 +929,8 @@ end
     # "The exponential of a generator is the channel of its evolution"
     t = 0.5
     q = mix(random_state(Pure, System(3, Qubit()), 4))
-    @test norm(apply(exp(t * Dissipator(Sm))(2), q) - evolve(Dissipator(Sm)(2), t, q; nsteps = 20)) <
-          1e-10
+    evolved = evolve(Dissipator(Sm)(2), t, q; nsteps = 20)
+    @test norm(apply(exp(t * Dissipator(Sm))(2), q) - evolved) < 1e-10
     # of two sites, against tdvp on two sites, whose block holds the whole evolution, the
     # Hamiltonian written with ⊗
     h = X ⊗ X + 0.5 * (Z ⊗ Id + Id ⊗ Z)
@@ -914,8 +938,8 @@ end
     lp = -im * (X(1) * X(2) + 0.5 * (Z(1) + Z(2))) + Dissipator(Sm)(1) + Dissipator(Sm)(2)
     ρ = mix(random_state(Pure, System(2, Qubit()), 2))
     lim = Limits(cutoff = 0)
-    @test norm(apply(exp(t * l2)(1, 2), ρ; limits = lim) - evolve(lp, t, ρ; nsteps = 4, limits = lim)) <
-          1e-10
+    evolved = evolve(lp, t, ρ; nsteps = 4, limits = lim)
+    @test norm(apply(exp(t * l2)(1, 2), ρ; limits = lim) - evolved) < 1e-10
     # the identity through cosh and sinh, Evolver(Id) being twice the identity
     @test norm(apply(exp(0.25 * Evolver(Id))(1), q) - exp(0.5) * q) < 1e-12
     # a fermionic jump, its strings on both sides of ρ, has one: the amplitude damping of the
@@ -954,7 +978,8 @@ end
     q5 = System(5, Qubit())
     ρ5 = mix(State{Pure}(q5, ["Dn", "Up", "Up", "Up", "Up"]))
     swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
-    @test norm(apply(prod(swaps), ρ5) - foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)) < 1e-10
+    one_by_one = foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)
+    @test norm(apply(prod(swaps), ρ5) - one_by_one) < 1e-10
     # a dissipator of a sum or of a product, and a sum of gates, on more than two sites, go through
     # their MPO, 20 to 250 times faster than their dense blocks on 4 and 5 sites, as the pieces of
     # an operator; a channel given by its matrix stays dense
@@ -964,7 +989,8 @@ end
         @test all(s -> s isa TMS.WindowMPO, last(TMS.mixed_steps(q5, d)))
         @test norm(apply(d, r5) - apply(make_mpo(r5, d), r5)) < 1e-12
     end
-    @test only(last(TMS.mixed_steps(q5, Dephase(reduce(⊗, fill(Z, 4)))(1, 2, 3, 4)))) isa TMS.GateBatch
+    z4 = Dephase(reduce(⊗, fill(Z, 4)))(1, 2, 3, 4)
+    @test only(last(TMS.mixed_steps(q5, z4))) isa TMS.GateBatch
     # and gates far apart leave the sites in their places
     ρf = random_state(Mixed, System(6, Fermion()), 3)
     @test TMS.ITensorMPS.siteinds(apply(Gate((C ⊗ dag(C))(1, 5)) * Gate(Swap(2, 6)), ρf).state) ==

@@ -127,7 +127,8 @@ end
             @test ket_bra_matrix(apply(Gate(o), ρ)) ≈ d * R0 * d' atol = 1e-10 rtol = 1e-10
             @test inner(ψ, o, ψ) ≈ w' * d * w atol = 1e-10 rtol = 1e-10
             h, dh = o + o_dag, d + d'
-            @test variance(ψ, h) ≈ real(v' * dh * dh * v - (v' * dh * v)^2) atol = 1e-10 rtol = 1e-10
+            var = real(v' * dh * dh * v - (v' * dh * v)^2)
+            @test variance(ψ, h) ≈ var atol = 1e-10 rtol = 1e-10
             @test last(only(measure(ψ, [h]))) ≈ real(v' * dh * v) atol = 1e-10 rtol = 1e-10
             # the bound of the width of the spectrum the search of excited states reads
             λ = LA.eigvals(LA.Hermitian(dh))
@@ -171,7 +172,8 @@ end
 
     @testset "Parts of the state" begin
         S2(r) = -log(real(LA.tr(r * r)))
-        SvN(r) = -sum(x * log(x) for x in LA.eigvals(LA.Hermitian((r + r') / 2)) if x > 0; init = 0.0)
+        SvN(r) = -sum(x * log(x) for x in LA.eigvals(LA.Hermitian((r + r') / 2)) if x > 0;
+                      init = 0.0)
         full = v * v'
         for m in 1:2^n - 2
             kept = [ k for k in 1:n if isodd(m >> (k - 1)) ]
@@ -245,8 +247,9 @@ end
                 @test ket_bra_matrix(after) ≈ sum(e * R0 * e' for e in kraus) atol = 1e-10
                 # its docstring: an odd operator of another site takes the value of ⟨F⟩_σ F_k O
                 for j in setdiff(fermionic, k)
-                    @test expect(after, c(j)(j)) ≈ (-1)^fermion_parities(sys[k])[l] *
-                                                   LA.tr(R * placed(F, k) * placed(c(j), j)) atol = 1e-10
+                    taken = (-1)^fermion_parities(sys[k])[l] *
+                            LA.tr(R * placed(F, k) * placed(c(j), j))
+                    @test expect(after, c(j)(j)) ≈ taken atol = 1e-10
                 end
             end
         end
@@ -255,8 +258,8 @@ end
     @testset "Evolution" begin
         i, j = first(fermionic), last(fermionic)
         ci, cj = c(i), c(j)
-        H = dag(ci)(i) * cj(j) + dag(cj)(j) * ci(i) + 0.7 * (ci(i) * cj(j) + dag(cj)(j) * dag(ci)(i)) +
-            0.4 * (ci + dag(ci))(i)
+        H = dag(ci)(i) * cj(j) + dag(cj)(j) * ci(i) +
+            0.7 * (ci(i) * cj(j) + dag(cj)(j) * dag(ci)(i)) + 0.4 * (ci + dag(ci))(i)
         Ci, Cj = placed(ci, i), placed(cj, j)
         dH = Ci' * Cj + Cj' * Ci + 0.7 * (Ci * Cj + Cj' * Ci') + 0.4 * (Ci + Ci')
         @test raw_vector(evolve(-im * H, 0.3, ψ; nsteps = 3)) ≈ exp(-0.3im * dH) * w atol = 1e-9
@@ -270,8 +273,8 @@ end
             id = Matrix{Float64}(LA.I, D, D)
             sup = -im * (kron(id, dH) - kron(transpose(dH), id)) + kron(conj(Cj), Cj) -
                   (kron(id, loss) + kron(transpose(loss), id)) / 2
-            @test vec(ket_bra_matrix(evolve(L, 0.3, ρ; nsteps = 3))) ≈ exp(0.3 * sup) * vec(R0) atol =
-                  1e-9
+            evolved = ket_bra_matrix(evolve(L, 0.3, ρ; nsteps = 3))
+            @test vec(evolved) ≈ exp(0.3 * sup) * vec(R0) atol = 1e-9
         end
     end
 end

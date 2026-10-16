@@ -28,7 +28,8 @@ end
             sum(on_qubit(x, i, n) for i in 1:n)
     f = LA.eigen(LA.Symmetric(dense))
     r = random_state(Pure, sys, 16)
-    e, gs = ground_state(h, r; algo = Dmrg(nsweeps = 12), limits = Limits(cutoff = 1e-14, maxdim = 32))
+    e, gs = ground_state(h, r; algo = Dmrg(nsweeps = 12),
+                         limits = Limits(cutoff = 1e-14, maxdim = 32))
     @test e ≈ f.values[1] atol = 1e-10
     @test e ≈ real(expect(gs, h))
     @test abs(f.vectors[:, 1]' * dense_vector(gs)) ≈ 1 atol = 1e-10
@@ -43,7 +44,8 @@ end
     # 2cos(2π/5), from a state of two fermions, the number being conserved by the hopping
     h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)
     st = State{Pure}(System(4, Fermion()), ["Occ", "Emp", "Occ", "Emp"])
-    @test first(ground_state(h, st; algo = Dmrg(nsweeps = 3), limits = Limits(maxdim = 16))) ≈ -sqrt(5)
+    @test first(ground_state(h, st; algo = Dmrg(nsweeps = 3), limits = Limits(maxdim = 16))) ≈
+          -sqrt(5)
 end
 
 @testset "The tolerance stops the sweeps" begin
@@ -109,7 +111,8 @@ end
     @test later([1, 2, 3], 1) == [2, 3]
     @test later([1, 2, 3], 5) == [3]
     @test later(0.5, 3) == 0.5
-    @test later(Limits(cutoff = 1e-10, maxdim = [1, 2, 3]), 2) == Limits(cutoff = 1e-10, maxdim = [3])
+    @test later(Limits(cutoff = 1e-10, maxdim = [1, 2, 3]), 2) ==
+          Limits(cutoff = 1e-10, maxdim = [3])
     # the energy of the last sweep made is compared with that of the first one resumed: from
     # the ground state, one sweep is enough to stop, where two are needed without it
     e0, gs = ground_state(hx, up; algo = Dmrg(nsweeps = 4), limits = Limits(maxdim = 8))
@@ -127,7 +130,8 @@ end
     # qubits
     Ω, γ = 0.8, 0.5
     L = sum(-im * Ω / 2 * X(i) + Dissipator(sqrt(γ) * Sm)(i) for i in 1:2)
-    v, ρ = steady_state(L, State{Mixed}(System(2, Qubit()), "FullyMixed"); algo = Dmrg(nsweeps = 10))
+    v, ρ = steady_state(L, State{Mixed}(System(2, Qubit()), "FullyMixed");
+                        algo = Dmrg(nsweeps = 10))
     @test abs(v) < 1e-12
     @test real(expect1(ρ, Z)) ≈ fill(-γ^2 / (γ^2 + 2Ω^2), 2) atol = 1e-10
     @test real(expect1(ρ, Y)) ≈ fill(2γ * Ω / (γ^2 + 2Ω^2), 2) atol = 1e-10
@@ -136,8 +140,9 @@ end
     @test hermiticity(ρ) ≈ 1
 
     # pumped and damped
-    v, ρ = steady_state(Dissipator(Sp)(1) + Dissipator(Sm)(2), State{Mixed}(System(2, Qubit()), "+");
-                        algo = Dmrg(nsweeps = 20), limits = Limits(cutoff = 1e-10, maxdim = 10))
+    v, ρ = steady_state(Dissipator(Sp)(1) + Dissipator(Sm)(2),
+                        State{Mixed}(System(2, Qubit()), "+"); algo = Dmrg(nsweeps = 20),
+                        limits = Limits(cutoff = 1e-10, maxdim = 10))
     @test real(expect1(ρ, X)) ≈ zeros(2) atol = 1e-10
     @test real(expect1(ρ, Y)) ≈ zeros(2) atol = 1e-10
     @test real(expect1(ρ, Z)) ≈ [1, -1] atol = 1e-10
@@ -148,19 +153,21 @@ end
     # from a random state, a chain coupled along Z, every spin pumped up. The tolerances of these
     # searches hid in 1.x an error of the default Krylov search of ITensorMPS, 1e-5 here, which
     # the default of steady_state resolves, see "The Krylov parameters reach the searches"
-    _, ρ = steady_state(-im * (-sum(Z(i) * Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5),
-                        random_state(Mixed, System(5, Qubit()), 10); algo = Dmrg(nsweeps = 40),
-                        limits = Limits(maxdim = 10, cutoff = 1e-10))
+    pumped = -im * (-sum(Z(i) * Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5)
+    _, ρ = steady_state(pumped, random_state(Mixed, System(5, Qubit()), 10);
+                        algo = Dmrg(nsweeps = 40), limits = Limits(maxdim = 10, cutoff = 1e-10))
     @test real(expect1(ρ, X)) ≈ zeros(5) atol = 1e-8
     @test real(expect1(ρ, Y)) ≈ zeros(5) atol = 1e-8
     @test real(expect1(ρ, Z)) ≈ ones(5) atol = 1e-8
 
     # an XX chain pumped at one end and damped at the other, which carries a current
-    _, ρ = steady_state(-im * sum(X(i) * X(i+1) + Y(i) * Y(i+1) for i in 1:3) +
-                        Dissipator(Sp)(1) + Dissipator(Sm)(4), State{Mixed}(System(4, Qubit()), "FullyMixed");
+    xx = -im * sum(X(i) * X(i+1) + Y(i) * Y(i+1) for i in 1:3) +
+         Dissipator(Sp)(1) + Dissipator(Sm)(4)
+    _, ρ = steady_state(xx, State{Mixed}(System(4, Qubit()), "FullyMixed");
                         algo = Dmrg(nsweeps = 200), limits = Limits(cutoff = 1e-10, maxdim = 10))
     @test real(expect1(ρ, Z)) ≈ [1 / 17, 0., 0., -1 / 17] atol = 1e-7
-    @test real(expect(ρ, [2 * (X(i) * Y(i+1) - Y(i) * X(i+1)) for i in 1:3])) ≈ fill(16 / 17, 3) atol = 1e-7
+    currents = [2 * (X(i) * Y(i+1) - Y(i) * X(i+1)) for i in 1:3]
+    @test real(expect(ρ, currents)) ≈ fill(16 / 17, 3) atol = 1e-7
 end
 
 @testset "A steady state that is not unique" begin
@@ -178,8 +185,8 @@ end
     start(site) = State{Mixed}(System(4, site), ["Occ", "Emp", "Occ", "Emp"])
     one = State{Mixed}(System(4, Fermion()), ["Occ", "Emp", "Emp", "Emp"])
     # other warnings may come, those of KrylovKit in its oldest versions for instance
-    @test_logs (:warn, r"not unique") match_mode = :any steady_state(lind, start(Fermion()) + im * one;
-                                                                     algo, limits = lim)
+    @test_logs (:warn, r"not unique") match_mode = :any steady_state(
+        lind, start(Fermion()) + im * one; algo, limits = lim)
     logs, (_, ρ) = Test.collect_test_logs() do
         steady_state(lind, start(Fermion(conserve = strong(N))); algo, limits = lim)
     end
@@ -228,19 +235,23 @@ end
     # which the GroundState and SteadyState phases hand on, the latter with the same defaults
     sim = runTMS(SimData(phases = [
         CreateState{Pure}(n, Qubit(), "Up"),
-        GroundState(hamiltonian = h, algo = Dmrg(nsweeps = 3, krylov = Krylov(dim = 1)), limits = lim)]);
+        GroundState(hamiltonian = h, algo = Dmrg(nsweeps = 3, krylov = Krylov(dim = 1)),
+                    limits = lim)]);
         output = devnull)
     @test sim.energy ≈ 0 atol = 1e-12
     sim = runTMS(SimData(phases = [
         CreateState{Mixed}(2, Qubit(), "FullyMixed"),
-        SteadyState(lindbladian = L, algo = Dmrg(nsweeps = 2, krylov = Krylov(dim = 1, maxiter = 1)),
-                    limits = lim)]); output = devnull)
+        SteadyState(lindbladian = L, limits = lim,
+                    algo = Dmrg(nsweeps = 2, krylov = Krylov(dim = 1, maxiter = 1)))]);
+        output = devnull)
     @test real(expect1(sim.state, Z)) ≈ [0, 0] atol = 1e-12
     L2 = -im * (X(1) + 0.7 * X(2)) + Dissipator(Sm)(1)
     sim = runTMS(SimData(phases = [CreateState{Mixed}(2, Qubit(), "FullyMixed"),
-                                   SteadyState(lindbladian = L2, algo = Dmrg(nsweeps = 3), limits = lim)]);
+                                   SteadyState(lindbladian = L2, algo = Dmrg(nsweeps = 3),
+                                               limits = lim)]);
                  output = devnull)
-    @test norm(sim.state - last(steady_state(L2, ρ0; algo = Dmrg(nsweeps = 3), limits = lim))) < 1e-12
+    _, direct = steady_state(L2, ρ0; algo = Dmrg(nsweeps = 3), limits = lim)
+    @test norm(sim.state - direct) < 1e-12
 
     # a field left nothing takes the default of the method, field by field: KrylovKit's prefixed
     # for dmrg, and dim = 8 and maxiter = 3 for steady_state, which Krylov(tol = …) keeps where
@@ -272,7 +283,8 @@ end
     function start(site)
         sys = System(4, site)
         p(v) = State{Pure}(sys, v)
-        return (p(["Occ", "Emp", "Occ", "Emp"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
+        s = p(["Occ", "Emp", "Occ", "Emp"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])
+        return s / sqrt(1.25)
     end
     # dmrg searches inside the sector its starting state lives in, and steady_state builds the
     # MPO of L†L, whose flux is zero whenever that of L is. Both must land where the
@@ -285,11 +297,12 @@ end
     # an operator prepared once, for the system it was prepared on
     @test first(ground_state(PreMPO(s0, h), s0; algo = Dmrg(nsweeps = 3), limits = lim)) ≈ e
     ρ0 = mix(s0)
-    @test real(first(steady_state(PreMPO(ρ0, lind), ρ0; algo = Dmrg(nsweeps = 2), limits = lim))) ≈ z atol = 1e-10
+    v = first(steady_state(PreMPO(ρ0, lind), ρ0; algo = Dmrg(nsweeps = 2), limits = lim))
+    @test real(v) ≈ z atol = 1e-10
     for site in (Fermion(conserve = N), Fermion(conserve = strong(N)))
         @test first(ground_state(h, start(site); algo = Dmrg(nsweeps = 3), limits = lim)) ≈ e
-        @test real(first(steady_state(lind, mix(start(site)); algo = Dmrg(nsweeps = 2), limits = lim))) ≈
-              z atol = 1e-10
+        v = first(steady_state(lind, mix(start(site)); algo = Dmrg(nsweeps = 2), limits = lim))
+        @test real(v) ≈ z atol = 1e-10
     end
 end
 
@@ -298,7 +311,8 @@ end
     # of the MPOs had the square of their bond dimension: 64 on the first, 121 in the middle of the
     # second, fermions of no definite parity, whose strings the product carries
     xxz = -im * (sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + 0.5 * Z(i) * Z(i + 1) for i in 1:4) +
-                 0.3 * sum(Z(i) for i in 1:5)) + sum(Dissipator(Sm)(i) + 0.2 * Dissipator(Z)(i) for i in 1:5)
+                 0.3 * sum(Z(i) for i in 1:5)) +
+          sum(Dissipator(Sm)(i) + 0.2 * Dissipator(Z)(i) for i in 1:5)
     fermions = -im * (sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) +
                       0.4 * (C + dag(C))(2) + 0.3 * C(1) * C(4) + 0.3 * dag(C)(4) * dag(C)(1)) +
                Dissipator(C)(1) + 0.5 * Dissipator(dag(C))(4) + 0.2 * Dissipator(N)(2)
@@ -309,8 +323,8 @@ end
         l = mpo_matrix(make_mpo(pre), idx)
         l2 = TMS.squared_lindbladian(pre, Limits())
         @test norm(mpo_matrix(l2, idx) - l' * l) ≤ 1e-12 * norm(l' * l)
-        @test TMS.ITensorMPS.linkdims(l2) == least_channels(l' * l, [ IT.dim(i) for i in idx ]) .+ 2 ==
-              fewest
+        @test TMS.ITensorMPS.linkdims(l2) ==
+              least_channels(l' * l, [ IT.dim(i) for i in idx ]) .+ 2 == fewest
     end
 end
 
@@ -349,7 +363,8 @@ end
     @test repr(Dmrg(nsweeps = 3, noise = [1e-6, 0], krylov = Krylov(dim = 8), tol = 1e-10)) ==
           "Dmrg(nsweeps = 3, noise = [1.0e-6, 0.0], krylov = Krylov(dim = 8), tol = 1.0e-10)"
     @test repr(Krylov()) == "Krylov()"
-    @test repr(Krylov(dim = 8, maxiter = 3, tol = 1e-10)) == "Krylov(dim = 8, maxiter = 3, tol = 1.0e-10)"
+    @test repr(Krylov(dim = 8, maxiter = 3, tol = 1e-10)) ==
+          "Krylov(dim = 8, maxiter = 3, tol = 1.0e-10)"
     # a tolerance is a real number, an integer one included
     @test Krylov(tol = 1).tol === 1.
     @test Dmrg(nsweeps = 2, tol = 1).tol === 1.
@@ -392,7 +407,8 @@ end
     ρ = mix(random_state(Pure, System(2, Qubit()), 2))
     algo = Dmrg(nsweeps = 2)
     # the method has no default, which the refusal writes
-    @test_throws "ground_state needs its search method: algo = Dmrg(nsweeps = 10)" ground_state(h, st)
+    @test_throws "ground_state needs its search method: algo = Dmrg(nsweeps = 10)" ground_state(
+        h, st)
     @test_throws "steady_state needs its search method: algo = Dmrg(nsweeps = 10)" steady_state(
         Dissipator(Sm)(1), ρ)
     # a Hamiltonian on a mixed state, of which dmrg would minimise ρ ↦ Hρ + ρH with no
@@ -403,7 +419,8 @@ end
         Dissipator(Sm)(1), st; algo)
     # and so do the phases
     @test_throws "GroundState searches a pure state" runTMS(SimData(phases = [
-        CreateState{Mixed}(2, Qubit(), "Up"), GroundState(; hamiltonian = h, algo)]); output = devnull)
+        CreateState{Mixed}(2, Qubit(), "Up"), GroundState(; hamiltonian = h, algo)]);
+        output = devnull)
     @test_throws "SteadyState searches a density matrix" runTMS(SimData(phases = [
         CreateState{Pure}(2, Qubit(), "Up"), SteadyState(; lindbladian = Dissipator(Sm)(1), algo)]);
         output = devnull)
@@ -422,8 +439,8 @@ end
         PreMPO(st, h), ρ; algo)
     @test_throws "3 is not an operator or its PreMPO" ground_state(3, st; algo)
     # the null state, which failed in KrylovKit
-    @test_throws "the search divides by the norm of the state, which is zero, as for the null state" ground_state(
-        h, 0 * st; algo)
+    null = "the search divides by the norm of the state, which is zero, as for the null state"
+    @test_throws null ground_state(h, 0 * st; algo)
     @test_throws "as for the null state" steady_state(Dissipator(Sm)(1), 0 * ρ; algo)
     # the options of ITensorMPS are not passed on, `outputlevel` included
     @test_throws MethodError ground_state(X(1) * X(2), st; algo, outputlevel = 1)
@@ -466,13 +483,15 @@ end
     # a state of another norm is taken normalized, where its squared norm scaled the penalty:
     # 0.1g fell back on the ground state, the warning reading a weight and an overlap a hundred
     # times off; the null state is refused
-    @test first(ground_state(H, r; algo, limits = lim, orthogonal_to = [0.1 * g])) ≈ E[2] atol = 1e-9
+    @test first(ground_state(H, r; algo, limits = lim, orthogonal_to = [0.1 * g])) ≈
+          E[2] atol = 1e-9
     @test_throws "as for the null state" ground_state(H, r; algo, orthogonal_to = [0 * g])
     # the next one, with a weight above its gap, and one below, which falls back on the ground
     # state and warns
     e2, _ = ground_state(H, r; algo, limits = lim, orthogonal_to = [g, x], weight = 2(E[3] - E[1]))
     @test e2 ≈ E[3] atol = 1e-9
-    @test_logs (:warn, r"the weight .* does not exceed the gap, .*: give a larger weight") match_mode = :any ground_state(
+    below = r"the weight .* does not exceed the gap, .*: give a larger weight"
+    @test_logs (:warn, below) match_mode = :any ground_state(
         H, r; algo, limits = lim, orthogonal_to = [g], weight = 0.1 * (E[2] - E[1]))
     # the default, 1.1 times the bound, above the gap when the bound is exact, where the bound
     # itself tied the ground state penalized with the excited one: a hopping in the sector of
@@ -490,7 +509,8 @@ end
     @test TMS.orthogonal_args(a, pre, [a], nothing).weight ≈ 1.1 * pre.width
     @test TMS.orthogonal_args(a, pre, [a], 0.5).weight == 0.5
     @test_throws "on another system" ground_state(heis, a; algo, orthogonal_to = [up])
-    @test_throws "orthogonal to pure states, not to a" ground_state(heis, a; algo, orthogonal_to = [mix(a)])
+    @test_throws "orthogonal to pure states, not to a" ground_state(heis, a; algo,
+                                                                    orthogonal_to = [mix(a)])
 end
 
 @testset "Searches with their MPO truncated" begin

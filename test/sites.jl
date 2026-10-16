@@ -378,7 +378,7 @@ end
     for i in 0:1, j in 0:2
         @test m[3i + mod(i + j, 3) + 1, 3i + j + 1] ≈ 1
     end
-    # on states: Sum adds the level of the first qudit to the second, and Z is the phase of the level
+    # on states: Sum adds the level of the first qudit to the second, Z is the phase of the level
     st = apply(Sum(1, 2), State{Pure}(System(2, Qudit(3)), ["1", "2"]))
     @test expect1(st, N) ≈ [1, 0]
     @test expect(State{Pure}(System(1, Qudit(3)), "1"), Z(1)) ≈ exp(2im * π / 3)
@@ -397,12 +397,13 @@ end
 @testset "Unknown operator and state names" begin
     @test_throws "operator X is not defined for site Boson" matrix(X, Boson(3))
     @test_throws "operator A is not defined for site Fermion" matrix(A, Fermion())
-    @test_throws "state Zorglub is not defined for site Qubit" State{Pure}(System(2, Qubit()), "Zorglub")
-    @test_throws "state Zorglub is not defined for site Dummit" State{Pure}(System(2, Dummit()), "Zorglub")
-    @test_throws "a state of 3 components cannot be one of Qubit()" State{Pure}(System(2, Qubit()), [1., 0., 0.])
+    q2, d2, three = System(2, Qubit()), System(2, Dummit()), [1., 0., 0.]
+    @test_throws "state Zorglub is not defined for site Qubit" State{Pure}(q2, "Zorglub")
+    @test_throws "state Zorglub is not defined for site Dummit" State{Pure}(d2, "Zorglub")
+    @test_throws "a state of 3 components cannot be one of Qubit()" State{Pure}(q2, three)
     @test_throws "a 3×3 density matrix cannot be one of Qubit()" State{Mixed}(
-        System(2, Qubit()), [1. 0. 0. ; 0. 0. 0. ; 0. 0. 0.])
-    @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset([1., 0., 0.]), Qubit())
+        q2, [1. 0. 0. ; 0. 0. 0. ; 0. 0. 0.])
+    @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset(three), Qubit())
 end
 
 @testset "A state a site declares is the one used" begin
@@ -458,15 +459,20 @@ end
     @test real(expect1(State{Pure}(System(2, Boson(4)), ["1", "3"]), N)) ≈ [1, 3]
     # a name standing for an operator with a definition of its own cannot be declared
     @test_throws "definition of its own" @def_operators Dummit2 [ Renamed = [0. 0. ; 0. 1.] ]
-    @test_throws "operator Renamed is not defined for site Dummit2" matrix(Operator{1}("Renamed"), Dummit2())
+    renamed = Operator{1}("Renamed")
+    @test_throws "operator Renamed is not defined for site Dummit2" matrix(renamed, Dummit2())
     # declarations take the type, and a name once
-    @test_throws "takes the site type, not a site" @macroexpand @def_states Dummit2() [ "1" => [0., 1.] ]
-    @test_throws "declares the operator X twice" @macroexpand @def_operators Dummit2 [ X = [0. 1. ; 1. 0.], X = [0. 1. ; 1. 0.] ]
-    @test_throws "declares the state 1 twice" @macroexpand @def_states Dummit2 [ "1" => [0., 1.], ["0", "1"] => [1., 0.] ]
+    @test_throws "takes the site type, not a site" @macroexpand @def_states Dummit2() [
+        "1" => [0., 1.] ]
+    @test_throws "declares the operator X twice" @macroexpand @def_operators Dummit2 [
+        X = [0. 1. ; 1. 0.], X = [0. 1. ; 1. 0.] ]
+    @test_throws "declares the state 1 twice" @macroexpand @def_states Dummit2 [
+        "1" => [0., 1.], ["0", "1"] => [1., 0.] ]
     @test_throws "a literal string" @macroexpand @def_states Dummit2 [ name => [0., 1.] ]
     # the declarations of a site are checked at its first use, in a system
     @test_throws "a state of 3 components cannot be one of Misdeclared()" System(2, Misdeclared())
-    @test_throws "operator Big is given by a 3×3 matrix and cannot act on Misoperated()" System(2, Misoperated())
+    @test_throws "operator Big is given by a 3×3 matrix and cannot act on Misoperated()" System(
+        2, Misoperated())
     @test_throws "fermion_parities gives [0, 2]" System(2, Misparity())
     @test_ok System(2, Oddling())
 end
@@ -530,7 +536,8 @@ end
     end
     @test_throws "a name ending in *" Boson(3, conserve = named(N, "a*"))
     # one name for two moduli on the same system
-    @test_throws "modulo 2 on one site and modulo 3" System([Qudit(2, conserve = Z), Qudit(3, conserve = Z)])
+    @test_throws "modulo 2 on one site and modulo 3" System([Qudit(2, conserve = Z),
+                                                            Qudit(3, conserve = Z)])
     # a conserved quantity is carried by one site
     @test_throws "acting on one site" Fermion(conserve = Swap)
     @test_throws "acting on one site" Qubit(conserve = mod(Swap, 2))
@@ -540,7 +547,8 @@ end
     @test TMS.site_charges(Z, Qudit(3)) == (3, [0, 1, 2])
     @test TMS.site_charges(Pd, Dummit()) == (2, [0, 1])
     # the string of versions 1 and 2 is read back as it was written
-    @test TMS.decode_conserve("2Sz:0,1,-1,0;Ntot:0,1,1,2") == TMS.conserved(Electron(conserve = (Ntot, 2Sz)))
+    @test TMS.decode_conserve("2Sz:0,1,-1,0;Ntot:0,1,1,2") ==
+          TMS.conserved(Electron(conserve = (Ntot, 2Sz)))
     @test TMS.decode_conserve("") == Conservation()
     # a site prints under the names of its charges
     @test repr(Qubit()) == "Qubit()"
@@ -585,7 +593,8 @@ end
     s1 = System(2, Fermion(conserve = N))
     @test sec(siteind(Pure, s1, 1)) == [IT.QN("N", 0) => 1, IT.QN("N", 1) => 1]
     # the mixed index carries differences of charges: |m><n| has q(m) - q(n)
-    @test sec(siteind(Mixed, s1, 1)) == [IT.QN("N", -1) => 1, IT.QN("N", 0) => 2, IT.QN("N", 1) => 1]
+    @test sec(siteind(Mixed, s1, 1)) ==
+          [IT.QN("N", -1) => 1, IT.QN("N", 0) => 2, IT.QN("N", 1) => 1]
     # blocks are not merged, or a basis whose equal charges are not contiguous would be
     # reordered: parity on a boson gives 0, 1, 0, 1
     s2 = System(2, Boson(4, conserve = parity(N)))
@@ -674,7 +683,8 @@ end
     @test expect(ρu, N(1)) ≈ 1
     @test trace(weaken(ρu)) ≈ 1
     @test repr(Fermion(conserve = strong(N))) == "Fermion(conserve = strong(N))"
-    @test repr(Electron(conserve = (strong(Ntot), 2Sz))) == "Electron(conserve = (2Sz, strong(Ntot)))"
+    @test repr(Electron(conserve = (strong(Ntot), 2Sz))) ==
+          "Electron(conserve = (2Sz, strong(Ntot)))"
     # nothing changes on the pure side
     @test IT.space(siteind(Pure, System(1, Fermion(conserve = strong(N))), 1)) ==
         IT.space(siteind(Pure, System(1, Fermion(conserve = N)), 1))

@@ -71,7 +71,8 @@ end
     r = reshape(exp(g) * vec(ψ * ψ'), 4, 4)
     tr = LA.tr
     ref = real([tr(r * kron(x, o)), tr(r * kron(o, z)), tr(r * kron(y, x))])
-    ev2 = -im * (X(1) * X(2) + 0.7 * Z(1)) + Dissipator(sqrt(0.3) * Z)(1) + Dissipator(sqrt(0.2) * Sp)(2)
+    ev2 = -im * (X(1) * X(2) + 0.7 * Z(1)) + Dissipator(sqrt(0.3) * Z)(1) +
+          Dissipator(sqrt(0.2) * Sp)(2)
     ρ2 = State{Mixed}(System(2, Qubit()), ["X+", "Up"])
     for (algo, tol) in [(Tdvp(), 1e-11), (ApproxW(order = 4, w = 2), 1e-7),
                         (ApproxW(order = 4, w = 1), 1e-7)]
@@ -120,7 +121,8 @@ end
     # terms of one site, whose exponential WII takes exactly, as it takes the dissipators of one
     # site, where WI is of order one
     h1 = 0.7 * sum(Z(i) for i in 1:n) + 0.3 * X(1) + 0.5 * Y(2)
-    hd1 = 0.7 * sum(on_qubit(z, i, n) for i in 1:n) + 0.3 * on_qubit(x, 1, n) + 0.5 * on_qubit(y, 2, n)
+    hd1 = 0.7 * sum(on_qubit(z, i, n) for i in 1:n) + 0.3 * on_qubit(x, 1, n) +
+          0.5 * on_qubit(y, 2, n)
     for (st, ev, exact) in [(ψ, -im * h1, exact_pure(hd1)),
                             (mix(ψ), -im * h1 + dissipators, exact_mixed(hd1, jumps))]
         @test norm(evolve(ev, t, st; algo = ApproxW(order = 1), limits = lim) - exact) < 1e-12
@@ -138,9 +140,11 @@ end
     hs = [-im * Z(1), -im * Z(2)]
     fs = [t -> 1., t -> t]
     lim = Limits(maxdim = 10, cutoff = 1e-15)
+    precessed = [cos(2), sin(2), cos(1), sin(1)]
     for (algo, tol) in [(Tdvp(), 1e-13), (ApproxW(order = 4, w = 2), 1e-12)], R in (Pure, Mixed)
-        st = evolve(hs => fs, 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps = 100, limits = lim)
-        @test real(expect(st, [X(1), Y(1), X(2), Y(2)])) ≈ [cos(2), sin(2), cos(1), sin(1)] atol = tol
+        st = evolve(hs => fs, 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps = 100,
+                    limits = lim)
+        @test real(expect(st, [X(1), Y(1), X(2), Y(2)])) ≈ precessed atol = tol
     end
     # read from `time`: from 1, Z(2) turns by 3 over a time 1
     st = evolve(hs => fs, 1., State{Pure}(System(2, Qubit()), "X+"); nsteps = 10, time = 1.)
@@ -173,12 +177,14 @@ end
     v = dense_vector(ψ)
     t0, t = 0.3, 1.
     exact_pure = dense_state(sys, runge_kutta((s, y) -> -im * hd(s) * y, v, t0, t0 + t, 10000))
-    lind = [-im * ops[1] + 0.2 * (Dissipator(Sm)(1) + Dissipator(Sm)(2)), -im * ops[2], -im * ops[3]]
+    lind = [-im * ops[1] + 0.2 * (Dissipator(Sm)(1) + Dissipator(Sm)(2)), -im * ops[2],
+            -im * ops[3]]
     r = runge_kutta((s, y) -> dense_lindbladian(hd(s), jumps) * y, vec(v * v'), t0, t0 + t, 10000)
     exact_mixed = dense_state(sys, reshape(r, 4, 4))
     lim = Limits(cutoff = 0)
     for (st, ev, exact) in [(ψ, -im .* ops, exact_pure), (mix(ψ), lind, exact_mixed)]
-        err(algo, nsteps) = norm(evolve(ev => fs, t, st; algo, nsteps, time = t0, limits = lim) - exact)
+        err(algo, nsteps) =
+            norm(evolve(ev => fs, t, st; algo, nsteps, time = t0, limits = lim) - exact)
         @test abs(log2(err(Tdvp(), 16) / err(Tdvp(), 32)) - 2) < 0.4
         for order in 1:4
             @test abs(log2(err(ApproxW(; order), 16) / err(ApproxW(; order), 32)) - order) < 0.4
@@ -223,7 +229,8 @@ end
     # exact at full bond dimension, which a cutoff of zero keeps, and the tolerance of ApproxW
     # is its error measured here
     fs = [t -> cos(3t), t -> sin(3t), t -> 1.]
-    for (algo, lim, tol) in [(Tdvp(), Limits(cutoff = 0), 1e-11), (ApproxW(order = 4), Limits(), 1e-7)]
+    for (algo, lim, tol) in [(Tdvp(), Limits(cutoff = 0), 1e-11),
+                             (ApproxW(order = 4), Limits(), 1e-7)]
         ev(st) = evolve(hs => fs, 1., st; algo, nsteps = 50, limits = lim)
         @test norm(ev(mix(ψ)) - mix(ev(ψ))) < tol
     end
@@ -323,8 +330,8 @@ end
     h = sum(0.7^(j - i) * (N(i) * N(j) + Z(i) * Z(j)) for i in 1:n for j in i+1:n) +
         0.4 * sum(X(i) for i in 1:n)
     on(a, i) = on_qubit(matrix(a, q), i, n)
-    hd = sum(0.7^(j - i) * (on(N, i) * on(N, j) + on(Z, i) * on(Z, j)) for i in 1:n for j in i+1:n) +
-         0.4 * sum(on(X, i) for i in 1:n)
+    hd = sum(0.7^(j - i) * (on(N, i) * on(N, j) + on(Z, i) * on(Z, j))
+             for i in 1:n for j in i+1:n) + 0.4 * sum(on(X, i) for i in 1:n)
     for w in (TMS.make_approx_W1, TMS.make_approx_W2)
         err(τ) = norm(mpo_matrix(st, w(PreMPO(st, -im * h), τ)) - exp(-im * τ * hd))
         @test 3.5 < err(1e-3) / err(5e-4) < 4.5
@@ -342,7 +349,8 @@ end
     sched = [2, 4, 4, 8]
     lim(m) = Limits(cutoff = 1e-14, maxdim = m)
     for algo in (Tdvp(), ApproxW(order = 1))
-        chained = foldl((st, m) -> evolve(-im * h, 0.1, st; algo, limits = lim(m)), sched; init = st0)
+        chained = foldl((st, m) -> evolve(-im * h, 0.1, st; algo, limits = lim(m)), sched;
+                        init = st0)
         scheduled = evolve(-im * h, 0.4, st0; algo, nsteps = 4, limits = lim(sched))
         @test maxlinkdim(scheduled) == maxlinkdim(chained)
         @test expect1(scheduled, Z) ≈ expect1(chained, Z)
@@ -360,7 +368,8 @@ end
     # state needs the expansion before it, tdvp expands a state of bond dimension below
     # min(5, maxdim) before any step, whatever its number, the periods coming on top of that
     ring = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6))
-    x1(step; algo = Tdvp()) = real(expect(evolve(ring, 0.1, st0; algo, step, limits = lim(8)), X(1)))
+    x1(step; algo = Tdvp()) =
+        real(expect(evolve(ring, 0.1, st0; algo, step, limits = lim(8)), X(1)))
     @test x1(2) ≈ x1(1)
     @test x1(4; algo = Tdvp(expand_period = 3)) ≈ x1(1)
     # a mixed state made hermitian after step 3, which an evolution resumed at step 3 keeps,
@@ -372,7 +381,8 @@ end
                  ApproxW(order = 2, hermitianize_period = 3))
         whole = evolve(ev, 0.4, ρ0; algo, nsteps = 4, limits = lim(16))
         half = evolve(ev, 0.2, ρ0; algo, nsteps = 2, limits = lim(16))
-        @test norm(evolve(ev, 0.2, half; algo, nsteps = 2, step = 3, limits = lim(16)) - whole) < 1e-12
+        rest = evolve(ev, 0.2, half; algo, nsteps = 2, step = 3, limits = lim(16))
+        @test norm(rest - whole) < 1e-12
     end
     algo = ApproxW(order = 2, hermitianize_period = 3)
     whole = evolve(ev, 0.4, ρ0; algo, nsteps = 4, limits = lim(16))
@@ -412,15 +422,16 @@ end
     sim, times, log = steps(1., 0.3)
     @test sim.time == 2.
     @test times ≈ [4/3, 5/3, 2.]
-    @test occursin("Taking a step of 0.3333333333333333 rather than 0.3 to cover 1.0 in 3 steps", log)
+    @test occursin("Taking a step of 0.3333333333333333 rather than 0.3 to cover 1.0 in 3 steps",
+                   log)
     sim, times, _ = steps(-1., 0.5)
     @test sim.time == 0. && times ≈ [0.5, 0.]
     @test real(expect(sim.state, X(1))) ≈ cos(2.)
     sim, times, log = steps(0.1, 0.3)
     @test sim.time == 1. && isempty(times)
     @test occursin("Skipping an evolution of 0.1, shorter than half a step", log)
-    @test_throws "the time step of an Evolve cannot be zero" Evolve(evolver = -im * Z(1), duration = 1.,
-                                                                     time_step = 0)
+    @test_throws "the time step of an Evolve cannot be zero" Evolve(
+        evolver = -im * Z(1), duration = 1., time_step = 0)
 end
 
 @testset "Periods below one mean never" begin
@@ -445,7 +456,8 @@ end
     # the measurements of an Evolve phase every measurements_period steps, from its start
     sim = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "X+"),
                                    Evolve(evolver = -im * Z(1), duration = 1., time_step = 0.1,
-                                          measurements = Data("p") => :step, measurements_period = 3)]);
+                                          measurements = Data("p") => :step,
+                                          measurements_period = 3)]);
                  output = devnull)
     @test [ last(r[2]) for r in sim.data["p"] ] == [3, 6, 9]
 end
@@ -466,9 +478,9 @@ end
     # one, left the tangent space through Z(6)Z(1), and the expansion, coming after it in 1.x,
     # left an error of order the time step, 0.016 on X(1), whatever expand_period. The values
     # are exact, computed by test/reference/ising_ed.jl
+    ring = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6))
     for expand_period in (1, 2)
-        st = evolve(-im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6)),
-                    1., State{Pure}(System(6, Qubit()), "X+"); algo = Tdvp(; expand_period),
+        st = evolve(ring, 1., State{Pure}(System(6, Qubit()), "X+"); algo = Tdvp(; expand_period),
                     nsteps = 10, limits = Limits(maxdim = 8, cutoff = 1e-14))
         @test real(expect(st, X(1))) ≈ 0.48881258418 atol = 1e-8
         @test real(expect(st, Z(1) * Z(6))) ≈ -0.51118741582 atol = 1e-8
@@ -517,8 +529,8 @@ end
     # tolerance is therefore the error of the evolution below, about 2e-8, and not the
     # precision of the references. The last one is analytic: the product of all X commutes with
     # the Hamiltonian and starts at 1, so it stays at 1
-    st = evolve(-im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6)), 1.,
-                State{Pure}(System(6, Qubit()), "X+"); algo = ApproxW(order = 4, w = 2),
+    ring = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6))
+    st = evolve(ring, 1., State{Pure}(System(6, Qubit()), "X+"); algo = ApproxW(order = 4, w = 2),
                 nsteps = 50, limits = Limits(maxdim = 8))
     re(ops) = real(expect(st, ops))
     @test re([X(i) for i in 1:6]) ≈ fill(0.48881258418, 6) atol = 1e-7
@@ -527,7 +539,8 @@ end
     @test re([Z(1)Z(2), Z(2)Z(3), Z(1)Z(6)]) ≈ fill(-0.51118741582, 3) atol = 1e-7
     @test re([Y(1)Y(2), Y(2)Y(3), Y(1)Y(6)]) ≈ fill(-0.2518341076, 3) atol = 1e-7
     @test re([X(1)X(2), X(2)X(3), X(1)X(6)]) ≈ fill(0.1123126174, 3) atol = 1e-7
-    @test re([X(1)X(2)X(3)X(4), X(2)X(3)X(4)X(5), X(4)X(5)X(6)X(1)]) ≈ fill(0.1123126174, 3) atol = 1e-7
+    fours = [X(1)X(2)X(3)X(4), X(2)X(3)X(4)X(5), X(4)X(5)X(6)X(1)]
+    @test re(fours) ≈ fill(0.1123126174, 3) atol = 1e-7
     @test first(entanglement_entropy(st, 3)) ≈ 1.15220908566 atol = 1e-7
     @test re(X(1)X(2)X(3)X(4)X(5)X(6)) ≈ 1 atol = 1e-8
 end
@@ -542,7 +555,8 @@ end
     @test real(expect1(ρ, N)) ≈ [0.0125582080327, 0.063008590052, 0.1950187333854, 0.063008590052,
                                  0.0125582080327] atol = 1e-6
     @test expect(ρ, [dag(C)(3) * C(i) for i in 1:5]) ≈
-          [-0.023529279887, -0.0783682258151im, 0.1950187333854, -0.0783682258151im, -0.023529279887] atol = 1e-6
+          [-0.023529279887, -0.0783682258151im, 0.1950187333854, -0.0783682258151im,
+           -0.023529279887] atol = 1e-6
     @test purity(ρ) ≈ 0.5256648672193 atol = 1e-6
 end
 
@@ -555,7 +569,8 @@ end
     ρ = evolve(-im * sum(A(i) * dag(A)(i+1) + dag(A)(i) * A(i+1) for i in 1:3) +
                Dissipator(2 * sqrt(0.1) * dag(A))(2), 0.3, State{Mixed}(System(4, Boson(7)), "0");
                algo = ApproxW(order = 4, w = 2), nsteps = 3, limits = Limits(maxdim = 16))
-    @test real(expect1(ρ, N)) ≈ [0.0036328913502, 0.1200236303285, 0.0035680174576, 4.86613106e-5] atol = 1e-5
+    @test real(expect1(ρ, N)) ≈
+          [0.0036328913502, 0.1200236303285, 0.0035680174576, 4.86613106e-5] atol = 1e-5
     @test expect(ρ, [dag(A)(2) * A(i) for i in 1:4]) ≈
           [-0.0180013634952im, 0.1200236303285, -0.0178675798942im, -0.0017865872242] atol = 1e-5
     @test purity(ρ) ≈ 0.7965328475916 atol = 1e-5
@@ -603,7 +618,8 @@ end
     # WI and WII share one channel between the term not begun and the term finished, so they
     # need a generator of zero flux. One that moved the charge would not keep the state in its
     # sector, which is why this is a refusal and not a gap
-    @test_throws "need an operator of zero flux" evolve(dag(C)(1), 0.1, start(Fermion(conserve = N), false);
+    charged = start(Fermion(conserve = N), false)
+    @test_throws "need an operator of zero flux" evolve(dag(C)(1), 0.1, charged;
                                                         algo = ApproxW(order = 2), limits = lim)
 end
 
@@ -671,7 +687,8 @@ end
     for order in (0, 5)
         @test_throws "ApproxW has orders 1 to 4, not $order" ApproxW(; order)
     end
-    @test_throws "ApproxW has the approximations WI and WII, w = 1 or 2, not 3" ApproxW(order = 2, w = 3)
+    @test_throws "ApproxW has the approximations WI and WII, w = 1 or 2, not 3" ApproxW(
+        order = 2, w = 3)
     for alg in ("fit", "zipup", "exact")
         @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = alg)
     end
@@ -701,9 +718,9 @@ end
     st = State{Pure}(System(2, Qubit()), "Up")
     ρ = mix(st)
     # an MPO, which has lost the terms the methods build their MPOs from
+    msg = "the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO"
     for s in (st, ρ)
-        @test_throws "the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO" evolve(
-            make_mpo(s, -im * X(1)), 0.1, s)
+        @test_throws msg evolve(make_mpo(s, -im * X(1)), 0.1, s)
     end
     # a PreMPO of another system, or of the other representation, alone or with its functions;
     # a system of the same sites is the same system
@@ -751,7 +768,8 @@ end
             0.7 * sum(on_qubit(x, i, n) for i in 1:n)
     g = exp(-β * dense)
     @test real(expect(ρ, h)) ≈ tr(g * dense) / tr(g) atol = 1e-6
-    @test real(expect(ρ, X(1) * X(3))) ≈ tr(g * on_qubit(x, 1, n) * on_qubit(x, 3, n)) / tr(g) atol = 1e-7
+    xx = on_qubit(x, 1, n) * on_qubit(x, 3, n)
+    @test real(expect(ρ, X(1) * X(3))) ≈ tr(g * xx) / tr(g) atol = 1e-7
     @test purity(ρ) ≈ tr(g * g) / tr(g)^2 atol = 1e-7
     @test l ≈ log(tr(g) / 2^n) atol = 1e-7
     @test trace(ρ) ≈ 1
@@ -789,8 +807,8 @@ end
     # the trace one in its real part: from order 2, the complex fractions of the step keep the
     # state hermitian only up to the order of the approximation, see "Hermitianizing a mixed
     # state"
-    for (order, nsteps, tol, etol) in [(1, 64, 0.05, 0.01), (2, 32, 2e-3, 3e-4), (3, 16, 1e-5, 1e-4),
-                                       (4, 16, 1e-6, 2e-6)]
+    for (order, nsteps, tol, etol) in [(1, 64, 0.05, 0.01), (2, 32, 2e-3, 3e-4),
+                                       (3, 16, 1e-5, 1e-4), (4, 16, 1e-6, 2e-6)]
         lw, ρw = thermalize(h, β, ρ0; nsteps, algo = ApproxW(; order), limits = lim)
         @test lw ≈ log(tr(g) / 2^n) atol = tol
         @test real(expect(ρw, h)) ≈ tr(g * dense) / tr(g) atol = etol
@@ -875,13 +893,14 @@ end
         PreMPO(st, h), 1., ρ)
     @test_throws "the PreMPO was prepared on another system than that of the state" thermalize(
         PreMPO(State{Mixed}(System(3, Qubit()), "FullyMixed"), Z(1)), 1., ρ)
-    @test_throws "thermalize takes at least one step, and nsteps is 0" thermalize(h, 1., ρ; nsteps = 0)
+    @test_throws "thermalize takes at least one step, and nsteps is 0" thermalize(
+        h, 1., ρ; nsteps = 0)
     # a Hamiltonian depending on time, refused by a message that spoke of a search
     @test_throws "is not an operator or its PreMPO" thermalize([Z(1)] => [t -> 1.], 1., ρ)
     @test_throws MethodError thermalize(h, 1., ρ; maxdim = 4)
     # and a Thermalize phase, a step of zero when it is written, a pure state when it runs
-    @test_throws "the beta_step of a Thermalize cannot be zero" Thermalize(hamiltonian = h, beta = 1.,
-                                                                         beta_step = 0)
+    @test_throws "the beta_step of a Thermalize cannot be zero" Thermalize(
+        hamiltonian = h, beta = 1., beta_step = 0)
     @test_throws "a thermal state needs a mixed representation" runTMS(SimData(phases = [
         CreateState{Pure}(n, Qubit(), "Up"),
         Thermalize(hamiltonian = h, beta = 1., beta_step = 0.5)]); output = devnull)
