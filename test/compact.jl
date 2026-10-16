@@ -305,7 +305,7 @@ end
     for (st, op) in [(q, mag^4), (q, ham^3), (q, (ham^2 + ham)^2), (q, ham * mag * ham),
                      (q, 2im * ham^2 + mag), (f, hop^2 + γ^3), (f, (hop + γ)^3),
                      (cf, ntot^3 + hop^2)]
-        @test any(TMS.by_blocks, TMS.gathered_summands(TMS.gathered(st.system, op)))
+        @test any(TMS.by_blocks, TMS.addends(TMS.gathered(st.system, op)))
         check_mpo(st, op)
     end
     # a product of factors of one term each, or of two factors of two terms, keeps its terms

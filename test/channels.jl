@@ -503,7 +503,7 @@ end
                      (fs, -im * hop + loss), (fs, Gate(hop)), (fs, Dissipator(hop + 0.4 * C(2))),
                      (cs, -im * hop + loss), (ss, -im * hop + Dissipator(sum(N(i) for i in 1:4)))]
         ρ = State{Mixed}(sys, sys === qs || sys === fs ? "FullyMixed" : ["Occ", "Emp", "Occ", "Emp"])
-        @test any(TMS.super_by_blocks, TMS.gathered_summands(a))
+        @test any(TMS.super_by_blocks, TMS.addends(a))
         S = superop(sys, a)
         @test laid_mixed(ρ, a) ≈ S
         @test PreMPO(ρ, a).linkdims .- 1 == least_channels(S, fill(4, length(sys)))

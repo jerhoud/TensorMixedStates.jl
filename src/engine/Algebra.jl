@@ -333,13 +333,13 @@ function by_blocks(a::IndexedOp)
 end
 
 """
-    gathered_summands(g)
+    addends(a)
 
-the operators the placed operator `g`, gathered, see `gathered`, is the sum of, its coefficient
-left out
+the operators the placed operator `a` is the sum of, its coefficient left out, `a` itself when it
+is no sum
 """
-function gathered_summands(g::IndexedOp)
-    s = scalararg(g)
+function addends(a::IndexedOp)
+    s = scalararg(a)
     return s isa SumOp ? s.subs : [s]
 end
 
@@ -392,7 +392,7 @@ function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits =
                       side::Union{Nothing, Symbol} = nothing)
     check_indices(system, a)
     g = gathered(system, a)
-    summands = gathered_summands(g)
+    summands = addends(g)
     R = isnothing(side) ? Pure : Mixed
     if !any(by_blocks, summands)
         terms = lower(system, a, g)
@@ -422,7 +422,7 @@ whether the placed operator `k` has more than two terms, or a product that would
 more terms than its factors have, see `by_blocks`, so that a gate or a dissipator of `k` is
 better made of its sides, see `compacted_super`
 """
-many_terms(k::IndexedOp) = term_estimate(k) > 2 || any(by_blocks, gathered_summands(k))
+many_terms(k::IndexedOp) = term_estimate(k) > 2 || any(by_blocks, addends(k))
 
 """
     super_by_blocks(a)
@@ -437,7 +437,7 @@ function super_by_blocks(a::IndexedOp)
     if s isa Union{Gate{Indexed}, Dissipator{Indexed}}
         return s.arg isa IndexedOp{IsOperator} && many_terms(s.arg)
     elseif s isa Evolver{Indexed}
-        return any(by_blocks, gathered_summands(s.arg))
+        return any(by_blocks, addends(s.arg))
     elseif s isa ProdOp
         counts = [ scalararg(x) isa Gate{Indexed} ? term_estimate(scalararg(x).arg)^2 : 1
                    for x in s.subs ]
@@ -458,8 +458,8 @@ K^\\dagger``, its gate ``K\\rho K^\\dagger``, the dissipator of `L` ``L\\rho L^\
 """
 function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits())
     check_indices(system, a)
-    c, s = scalarcoef(a), scalararg(a)
-    summands = s isa SumOp ? s.subs : [s]
+    c = scalarcoef(a)
+    summands = addends(a)
     if !any(super_by_blocks, summands)
         return from_terms(Mixed, system, a, lower(system, a), limits)
     end
@@ -477,10 +477,10 @@ function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits()
         l, r = compacted_op(system, y.arg; side = :left), compacted_op(system, y.arg; side = :right)
         if y isa Evolver
             add_part!(add_part!(parts, l, k), r, k)
-        elseif y isa Gate
-            add_part!(parts, product(l, r), k)
-        else
-            add_part!(parts, product(l, r), k)
+            continue
+        end
+        add_part!(parts, product(l, r), k)
+        if y isa Dissipator
             add_part!(parts, product(l', l), -k / 2)
             add_part!(parts, product(r', r), -k / 2)
         end
