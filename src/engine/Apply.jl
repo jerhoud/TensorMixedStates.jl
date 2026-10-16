@@ -237,7 +237,8 @@ identity of the link alone, which leaves the index of the site as it is
 """
 function gate_mpo(::Type{R}, system::System, m::AbstractMatrix, ks) where R
     idx = [ siteind(R, system, k) for k in ks ]
-    w = MPO(gate_on(m, idx), idx; cutoff = rounding_tol^2)
+    # a dense gate of many sites has as many indices as ITensors warns about, from 14
+    w = ITensors.@disable_warn_order MPO(gate_on(m, idx), idx; cutoff = rounding_tol^2)
     ts = ITensor[]
     link = nothing
     j = 0
