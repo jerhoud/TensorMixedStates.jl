@@ -525,7 +525,8 @@ stop_line(c::Checkpointer, phases::Vector) =
 """
     output_final(sim, sd)
 
-the final measurements of the simulation
+the final measurements of the simulation, for `runTMS`, whose keyword `output` hides the function
+`output` there
 """
 output_final(sim::Simulation, sd::SimData) = output(sim, sd.final_measurements)
 
