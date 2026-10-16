@@ -15,11 +15,6 @@
 # resume in runner.jl; the gates and the channels applied to states are in channels.jl.
 
 """
-the matrix `m` of one qubit on site `i` of `n` qubits, site 1 most significant
-"""
-on_qubit(m, i, n) = kron([ k == i ? m : [1. 0. ; 0. 1.] for k in 1:n ]...)
-
-"""
 the dense generator of ``\\rho \\mapsto -i[h, \\rho] + \\sum_l l \\rho l^\\dagger - \\{l^\\dagger
 l, \\rho\\}/2`` on `vec(ρ)`, stacked by columns, so that ``vec(a \\rho b) = (b^T \\otimes a)
 vec(\\rho)``
@@ -327,7 +322,7 @@ end
     st = State{Pure}(System(n, q), "Up")
     h = sum(0.7^(j - i) * (N(i) * N(j) + Z(i) * Z(j)) for i in 1:n for j in i+1:n) +
         0.4 * sum(X(i) for i in 1:n)
-    on(a, i) = kron([ k == i ? matrix(a, q) : matrix(Id, q) for k in 1:n ]...)
+    on(a, i) = on_qubit(matrix(a, q), i, n)
     hd = sum(0.7^(j - i) * (on(N, i) * on(N, j) + on(Z, i) * on(Z, j)) for i in 1:n for j in i+1:n) +
          0.4 * sum(on(X, i) for i in 1:n)
     for w in (TMS.make_approx_W1, TMS.make_approx_W2)

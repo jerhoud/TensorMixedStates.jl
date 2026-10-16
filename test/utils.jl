@@ -94,6 +94,11 @@ function jw_placed(system, k, m)
 end
 
 """
+the matrix `m` of one qubit on site `i` of `n` qubits, site 1 most significant
+"""
+on_qubit(m, i, n) = kron([ k == i ? m : [1. 0. ; 0. 1.] for k in 1:n ]...)
+
+"""
     mpo_matrix(m::MPO, idx)
     mpo_matrix(pre::PreMPO, coefs = [1.])
     mpo_matrix(st::State, m::MPO)

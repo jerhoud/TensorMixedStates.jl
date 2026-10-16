@@ -967,9 +967,9 @@ end
     # dense hamiltonian, has a variance the energy alone cannot show
     e, gs = ground_state(h, random_state(Pure, sys, 16); algo = Dmrg(nsweeps = 12),
                          limits = Limits(cutoff = 1e-14, maxdim = 32))
-    on(m, i) = kron([ k == i ? m : [1. 0. ; 0. 1.] for k in 1:6 ]...)
-    dense = -sum(on([1. 0. ; 0. -1.], i) * on([1. 0. ; 0. -1.], i + 1) for i in 1:5) -
-            sum(on([0. 1. ; 1. 0.], i) for i in 1:6)
+    z, x = [1. 0. ; 0. -1.], [0. 1. ; 1. 0.]
+    dense = -sum(on_qubit(z, i, 6) * on_qubit(z, i + 1, 6) for i in 1:5) -
+            sum(on_qubit(x, i, 6) for i in 1:6)
     @test e ≈ minimum(TMS.LinearAlgebra.eigvals(TMS.LinearAlgebra.Symmetric(dense))) atol = 1e-10
     @test variance(gs, h) < 1e-8
     @test variance(gs, h) < variance(r, h)

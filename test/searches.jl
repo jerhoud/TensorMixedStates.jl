@@ -24,9 +24,9 @@ end
     n = 6
     sys = System(n, Qubit())
     x, z = [0. 1. ; 1. 0.], [1. 0. ; 0. -1.]
-    on(m, i) = kron([ k == i ? m : [1. 0. ; 0. 1.] for k in 1:n ]...)
     h = -sum(Z(i) * Z(i + 1) for i in 1:n-1) - sum(X(i) for i in 1:n)
-    dense = -sum(on(z, i) * on(z, i + 1) for i in 1:n-1) - sum(on(x, i) for i in 1:n)
+    dense = -sum(on_qubit(z, i, n) * on_qubit(z, i + 1, n) for i in 1:n-1) -
+            sum(on_qubit(x, i, n) for i in 1:n)
     f = LA.eigen(LA.Symmetric(dense))
     r = random_state(Pure, sys, 16)
     e, gs = ground_state(h, r; algo = Dmrg(nsweeps = 12), limits = Limits(cutoff = 1e-14, maxdim = 32))
