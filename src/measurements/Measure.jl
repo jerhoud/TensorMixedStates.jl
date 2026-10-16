@@ -383,17 +383,8 @@ Fidelity(name::Symbol) = on_named("Fidelity", name, (st, r) -> fidelity(st, r))
 or between the states conserving nothing when it changes the charges by no definite amount, as
 `expect` takes it
 """
-function applied_element(ref::State{Pure}, a::IndexedOp{IsOperator}, state::State{Pure})
-    applied = try
-        apply(a, state)
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-        return complex(inner(plain_form(ref), apply(a, plain_form(state))))
-    end
-    return complex(inner(ref, applied))
-end
+applied_element(ref::State{Pure}, a::IndexedOp{IsOperator}, state::State{Pure}) =
+    or_on_plain((r, s) -> complex(inner(r, apply(a, s))), ref, state)
 
 """
     matrix_element(ref, op, state)
@@ -455,17 +446,9 @@ built once, or by the `variance` of the state of an extension; a mixed state is 
 before any measurement
 """
 function variance_of(state::State{Pure}, op)
-    mpo = try
-        make_mpo(state, op)
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-        # measured on the state conserving nothing, as variance does
-        p = make_mpo(plain_form(state), op)
-        return st -> variance(plain_form(st), p)
-    end
-    return st -> variance(st, mpo)
+    on, mpo = or_on_plain(s -> (s, make_mpo(s, op)), state)
+    # the states to come measured on the same form as `state`
+    return on === state ? (st -> variance(st, mpo)) : (st -> variance(plain_form(st), mpo))
 end
 
 variance_of(state::State{Mixed}, op) = variance(state, op)

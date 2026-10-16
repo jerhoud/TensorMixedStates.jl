@@ -740,6 +740,32 @@ the number of terms of the placed operator `op` on `system`
 term_count(system::System, a::IndexedOp{IsOperator}) = length(pure_terms(system, a, ()))
 
 """
+    or_on_plain(f, xs...)
+
+`f(xs...)`, or, when that refuses an operator changing the charges by no definite amount, see
+`FluxError`, `f` of the states or the systems `xs` conserving nothing, see `conserving_nothing`
+"""
+function or_on_plain(f, xs...)
+    try
+        return f(xs...)
+    catch e
+        if !(e isa FluxError)
+            rethrow()
+        end
+    end
+    return f(map(conserving_nothing, xs)...)
+end
+
+"""
+    conserving_nothing(x)
+
+the state `x` conserving nothing, see `plain_form`, or the system `x` with the same sites
+conserving nothing
+"""
+conserving_nothing(x::State) = plain_form(x)
+conserving_nothing(x::System) = weaken(x, ())
+
+"""
     more_terms(system, m, a, x)
 
 whether the factor `m`, the merge of the factors `a` and `x`, has more terms on `system` than
@@ -747,15 +773,7 @@ whether the factor `m`, the merge of the factors `a` and `x`, has more terms on 
 charge, as a merge may have on its way to a product that has one
 """
 function more_terms(system::System, m, a, x)
-    counts(sys) = (term_count(sys, m), term_count(sys, a), term_count(sys, x))
-    cm, ca, cx = try
-        counts(system)
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-        counts(weaken(system, ()))
-    end
+    cm, ca, cx = or_on_plain(s -> (term_count(s, m), term_count(s, a), term_count(s, x)), system)
     return cm > ca * cx
 end
 

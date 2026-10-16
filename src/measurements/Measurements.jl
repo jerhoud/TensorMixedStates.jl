@@ -482,19 +482,7 @@ function variance(state::State{Pure}, mpo::MPO)
     return e2 - abs2(e)
 end
 
-function variance(state::State{Pure}, op)
-    mpo = try
-        make_mpo(state, op)
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-        # an operator changing the charges by no definite amount is measured on the state
-        # conserving nothing, as expect does
-        return variance(plain_form(state), op)
-    end
-    return variance(state, mpo)
-end
+variance(state::State{Pure}, op) = or_on_plain(st -> variance(st, make_mpo(st, op)), state)
 
 variance(::State{Mixed}, _) =
     error("variance needs a pure representation. On a mixed one steady_state returns " *

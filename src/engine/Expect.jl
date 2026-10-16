@@ -352,17 +352,8 @@ the operator `op` compacted on `system`, see `compacted_op`, and the system it i
 itself or, when `op` changes the charges by no definite amount, see `FluxError`, the same sites
 conserving nothing, where it is measured on the state conserving nothing, see `plain_form`
 """
-function measured_compacted(system::System, a::IndexedOp{IsOperator})
-    try
-        return compacted_op(system, a), system
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-    end
-    plain = weaken(system, ())
-    return compacted_op(plain, a), plain
-end
+measured_compacted(system::System, a::IndexedOp{IsOperator}) =
+    or_on_plain(s -> (compacted_op(s, a), s), system)
 
 """
     PreparedOp
@@ -880,15 +871,7 @@ operator is ambiguous there, and refused.
 """
 function inner(a::State{Pure}, op::IndexedOp{IsOperator}, b::State{Pure})
     same_system(a, b)
-    mpo = try
-        make_mpo(b, op)
-    catch e
-        if !(e isa FluxError)
-            rethrow()
-        end
-        return inner(plain_form(a), op, plain_form(b))
-    end
-    return inner(a.state', mpo, b.state)
+    return or_on_plain((x, y) -> inner(x.state', make_mpo(y, op), y.state), a, b)
 end
 
 function inner(a::State{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}}, b::State{Mixed})
