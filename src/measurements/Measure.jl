@@ -678,9 +678,9 @@ staying as it is
 """
 function prepared_entry(state::AbstractState, a::IndexedOp{IsOperator})
     system = state isa State ? weak_form(state).system : state.system
-    c, on = measured_compacted(system, a)
-    p = PreparedOp(c, on !== system)
-    h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(on, c.terms, p.scale)
+    c = measured_compacted(system, a)
+    h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
+    p = PreparedOp(c, c.system !== system)
     return OpValue(p, a, h)
 end
 
@@ -768,7 +768,7 @@ holding the values of `expect1` and of `expect2` for the operators and the pairs
 function entry_value(it::OpValue, name, c::Context, _)
     state = c.state
     x = state isa State ? prepared_value(weak_form(state), it.prepared) : expect(state, it.op)
-    return it.hermitian ? real_value(x, it.prepared.scale, name, getfield(c, :time)) :
+    return it.hermitian ? real_value(x, it.prepared.op.norm, name, getfield(c, :time)) :
                           complex_value(x)
 end
 

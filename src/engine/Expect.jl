@@ -323,30 +323,24 @@ end
 """
     measured_compacted(system, op)
 
-the operator `op` compacted on `system`, see `compacted_op`, and the system it is on: `system`
-itself or, when `op` changes the charges by no definite amount, see `FluxError`, the same sites
-conserving nothing, where it is measured on the state conserving nothing, see `plain_form`
+the operator `op` compacted on `system`, see `compacted_op`, or, when it changes the charges by
+no definite amount, see `FluxError`, on the same sites conserving nothing, where it is measured
+on the state conserving nothing, see `plain_form`
 """
 measured_compacted(system::System, a::IndexedOp{IsOperator}) =
-    or_on_plain(s -> (compacted_op(s, a), s), system)
+    or_on_plain(s -> compacted_op(s, a), system)
 
 """
     PreparedOp
 
 an operator placed on sites made ready to be measured on the states of a system, see
-`prepare_op`: its constant, its terms of one site and its block of several, see `compacted_op`,
-on the system or, when `plain`, on the same sites conserving nothing, and `scale`, the bound of
-its norm, which bounds its expectation values
+`prepare_op`: compacted, see `CompactedOp`, the bound of its norm bounding its expectation
+values, on the system or, when `plain`, on the same sites conserving nothing
 """
 struct PreparedOp
+    op::CompactedOp{Pure}
     plain::Bool
-    constant::Number
-    singles::Dict
-    block::Union{Nothing, ComBlock}
-    scale::Float64
 end
-
-PreparedOp(c::CompactedOp, plain::Bool) = PreparedOp(plain, c.constant, c.singles, c.block, c.norm)
 
 """
     prepare_op(system, op)
@@ -354,8 +348,8 @@ PreparedOp(c::CompactedOp, plain::Bool) = PreparedOp(plain, c.constant, c.single
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
-    c, on = measured_compacted(system, a)
-    return PreparedOp(c, on !== system)
+    c = measured_compacted(system, a)
+    return PreparedOp(c, c.system !== system)
 end
 
 """
@@ -368,12 +362,13 @@ function prepared_value(state::State, p::PreparedOp)
     if p.plain
         state = plain_form(state)
     end
-    v = p.constant * trace(state)
-    for k in sort!(collect(keys(p.singles)))
-        v += scalar(get_left(state, k) * obs_tensor(state, p.singles[k], k) * get_right(state, k))
+    c = p.op
+    v = c.constant * trace(state)
+    for k in sort!(collect(keys(c.singles)))
+        v += scalar(get_left(state, k) * obs_tensor(state, c.singles[k], k) * get_right(state, k))
     end
-    if !isnothing(p.block)
-        v += expect_block(state, p.block)
+    if !isnothing(c.block)
+        v += expect_block(state, c.block)
     end
     return v / nonzero_trace(state, "expect")
 end
