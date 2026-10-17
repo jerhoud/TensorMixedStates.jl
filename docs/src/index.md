@@ -136,8 +136,8 @@ holds computations written directly, each checking its result against an exact v
   conserving the number of fermions;
 - `domain_wall_quench.jl`: a domain wall melting in an XX chain, with `Tdvp`, `ApproxW` and half
   the time step;
-- `driven_damped_qubits.jl`: qubits driven and decaying, relaxing to their steady state, found
-  also by `steady_state`;
+- `driven_damped_qubits.jl`: qubits driven and jumping from up to down, relaxing to their
+  steady state, found also by `steady_state`;
 - `thermal_state.jl`: the thermal state of an Ising chain, its energy and its partition function;
 - `noisy_ghz.jl`: a GHZ state made by a circuit and depolarized, its fidelity, the statistics of
   its parity, and a post-selection;

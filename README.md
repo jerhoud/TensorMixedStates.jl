@@ -36,16 +36,16 @@ TMS requires Julia 1.10.5 or later. Note the `]`, which enters the package manag
 
 What TMS is for is open systems: the state it carries is the density matrix, so dissipation
 is written directly into the evolution rather than approximated away. Here six qubits evolve
-under a transverse field Ising hamiltonian while each one decays, and the high level
-interface describes the run as a list of phases, executes them, takes the measurements and
-writes everything to disk.
+under a transverse field Ising hamiltonian while each one jumps from up to down, and the high
+level interface describes the run as a list of phases, executes them, takes the measurements
+and writes everything to disk.
 
 ```julia
 using TensorMixedStates, .Qubits
 
 runTMS(SimData(
     name = "dissipative_ising",
-    description = "six qubits under a transverse field Ising hamiltonian, each decaying at rate 0.2",
+    description = "six qubits under a transverse field Ising hamiltonian, each jumping from up to down",
     phases = [
         CreateState{Mixed}(6, Qubit(), "Up"),
         Evolve(

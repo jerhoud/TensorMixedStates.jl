@@ -52,16 +52,16 @@ in pieces, a helper returning the several phases it needs rather than a single o
 ## Examples
 
 TMS is made for open systems, so here is one: six qubits evolving under a transverse
-field Ising hamiltonian while each of them decays. `CreateState{Mixed}` is what makes the
-state a density matrix, and the `Dissipator` terms added to the hamiltonian are what turn
-the evolution into a Lindblad equation.
+field Ising hamiltonian while each of them jumps from up to down. `CreateState{Mixed}` is what
+makes the state a density matrix, and the `Dissipator` terms added to the hamiltonian are what
+turn the evolution into a Lindblad equation.
 
 ```julia
 using TensorMixedStates, .Qubits
 
 runTMS(SimData(
     name = "dissipative_ising",
-    description = "six qubits under a transverse field Ising hamiltonian, each decaying at rate 0.2",
+    description = "six qubits under a transverse field Ising hamiltonian, each jumping from up to down",
     phases = [
         CreateState{Mixed}(6, Qubit(), "Up"),
         Evolve(

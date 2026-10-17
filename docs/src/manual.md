@@ -407,7 +407,7 @@ measure(myevolved, X)
 
 `nsteps` is the number of steps, each of length `t / nsteps`, and `limits` constrains the
 state as before. With no hamiltonian and `Dissipator(Sm)` on each site, the qubits of a mixed
-state decay from up to down, with ``\langle \sigma_z \rangle = 2e^{-t} - 1``, which is
+state go from up to down, with ``\langle \sigma_z \rangle = 2e^{-t} - 1``, which is
 ``-0.2642`` at ``t = 1``:
 
 ```@example manual
@@ -483,8 +483,8 @@ starting from a mixed state, by running dmrg on ``L^\dagger L``. It returns two 
 residual ``\|L\rho\|^2``, for ``\rho`` of unit Hilbert-Schmidt norm, which is zero at a true
 steady state and tells how well the search converged, and the steady state itself, normalized
 to trace one. A Lindbladian may have several steady states, see
-[Checking the accuracy](@ref). Qubits decaying toward down at rate 1 and pumped toward up at rate
-0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
+[Checking the accuracy](@ref). Qubits jumping from up to down at rate 1 and from down to up at
+rate 0.5 settle at ``\langle \sigma_z \rangle = -1/3``:
 
 ```@example manual
 value, mysteady = steady_state(sum(Dissipator(Sm)(i) + 0.5Dissipator(Sp)(i) for i in 1:4),
