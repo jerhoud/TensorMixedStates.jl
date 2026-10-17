@@ -482,6 +482,18 @@ end
     S = superop(qs, L)
     @test laid_mixed(ρq, L) ≈ S
     @test PreMPO(ρq, L).linkdims .- 1 == least_channels(S, fill(4, 5))
+    # channels given by a generic matrix on three sites, whose split left a factor beginning with
+    # a remainder of rounding: divided by it, a block of norm 1e13 made its coefficient look like
+    # rounding, which the compaction dropped
+    g = randn(Xoshiro(1), ComplexF64, 8, 8)
+    G = Operator{3}("G", (g + g') / 2)
+    q3 = System(3, Qubit())
+    for a in (Dephase(G), exp(0.1 * Dissipator(G)))
+        @test mpo_matrix(State{Mixed}(q3, "FullyMixed"), a(1, 2, 3)) ≈
+            matrix(a, Qubit(), Qubit(), Qubit())
+        @test all(b -> maximum(abs, b.m) ≤ 2 + 1e-12,
+                  [ b for t in TMS.lower(q3, a(1, 2, 3)) for b in t.blocks ])
+    end
     # the order of the mixed index, read once for each kind of site
     sys = System([Fermion(conserve = N), Qubit(), Fermion(conserve = N), Boson(3, conserve = N),
                   Qubit()])

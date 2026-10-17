@@ -203,10 +203,10 @@ end
     reduced(terms)
 
 the terms with each block equal to a multiple of the identity taken out, every other block
-divided by its first element above rounding, that element going into the coefficient, and made
-real when its imaginary part is of rounding, a term that vanishes on a site dropped, the blocks
-equal up to rounding made one, see `representatives`, and the terms of the same blocks
-gathered, a real coefficient kept real
+divided by its first element of at least half its largest, that element going into the
+coefficient, and made real when its imaginary part is of rounding, a term that vanishes on a
+site dropped, the blocks equal up to rounding made one, see `representatives`, and the terms
+of the same blocks gathered, a real coefficient kept real
 """
 function reduced(terms::Vector{Term})
     normed = Tuple{Number, Vector{Block}, Term}[]
@@ -223,7 +223,10 @@ function reduced(terms::Vector{Term})
                 coef *= λ
                 continue
             end
-            k = findfirst(e -> abs(e) > rounding_tol * norm(m), m)
+            # a pivot of rounding would make the block huge and its coefficient look like
+            # rounding, which the compaction drops
+            big = maximum(abs, m)
+            k = findfirst(e -> abs(e) ≥ big / 2, m)
             coef *= m[k]
             b = m / m[k]
             b[k] = 1
