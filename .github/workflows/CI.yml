@@ -30,9 +30,9 @@ jobs:
           - {os: ubuntu-latest, arch: x64, version: 'pre'}
           # Apple Silicon: reachable since MKL stopped being a hard dependency
           - {os: macos-latest, arch: aarch64, version: '1'}
-          # Windows: test/checkpoint.jl is the only group that touches the disk, changing
-          # the working directory and leaving files behind, which is where a difference
-          # would show. Whether it actually does had never been tried
+          # Windows: the groups runner, outputs and states_io write directories and files,
+          # checkpoints, locks and state files among them, which is where a difference
+          # would show
           - {os: windows-latest, arch: x64, version: '1'}
           # Julia started as the documentation recommends, julia --threads=auto: the block
           # sparse mode and the choices of the :auto threading only happen with several
