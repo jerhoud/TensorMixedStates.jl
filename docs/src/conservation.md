@@ -30,8 +30,8 @@ message naming the culprit rather than discovered in the middle of a run.
 A **state** lives in one sector. `Fermion(conserve = N)` takes `"Occ"` and `"Emp"` and refuses
 `[1, 1] / √2`, which superposes two numbers of particles and so has no number of its own.
 
-An **operator** must carry a definite charge, its flux, which is the difference between the
-charges of the states it connects. [`flux`](@ref) gives it:
+An **operator** acting on the state must carry a definite charge, its flux, which is the
+difference between the charges of the states it connects. [`flux`](@ref) gives it:
 
 ```jldoctest
 julia> using TensorMixedStates, .Fermions
@@ -47,14 +47,19 @@ QN("N",-1)
 ```
 
 `X` connects the two states of a qubit in both directions at once, so under
-`Qubit(conserve = N)` it has no flux and is refused. Under `Qubit(conserve = parity(N))` it
-has one, `QN("parity(N)",1,2)`, the two differences becoming the same one modulo 2.
+`Qubit(conserve = N)` it has no flux: `apply`, `collapse`, an evolution or a search refuse it.
+Under `Qubit(conserve = parity(N))` it has one, `QN("parity(N)",1,2)`, the two differences
+becoming the same one modulo 2.
 
 The flux is asked of every factor of one site, and not only of the whole operator: each
 factor becomes a tensor of its own. `Sx(1) * Sx(2) + Sy(1) * Sy(2)` conserves the
 magnetisation as a whole, but under `Spin(1, conserve = 2Sz)` its factors have none, and it is
 refused. Written with factors of a definite flux, as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 2`, it
 is accepted.
+
+An operator of no definite charge can still be measured: `expect`, `expect1`, `expect2`,
+`measure`, `probabilities` and `sample` take its value on the state conserving nothing, see
+[`weaken`](@ref).
 
 ## Weak and strong symmetries
 

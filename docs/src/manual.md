@@ -165,7 +165,8 @@ nothing # hide
 
 The tensors are then block sparse, which makes a large computation smaller and faster, and in
 exchange the state stays in the sector it was built in: a local state such as `[1, 1] / √2`,
-which superposes two numbers of particles, is refused, and so is an operator of no definite charge.
+which superposes two numbers of particles, is refused, and so is an operator of no definite
+charge acting on the state, which can still be measured.
 For a mixed state, a quantity may also be conserved strongly, `Fermion(conserve = strong(N))`.
 All of this is described in [Conserving a quantity](@ref).
 
