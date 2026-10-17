@@ -78,7 +78,7 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
 
 ## Long runs
 
-For a run of hours, write it as a simulation, `runTMS(SimData(name, phases = [...]))`, see the
-quick reference: it writes its measurements as tables in a directory, keeps checkpoints and
-resumes when run again. The line it prints at the end says whether it is done and how many
+For a run of hours, write it as a simulation, `runTMS(SimData(name = "…", phases = [...]))`,
+see the quick reference: it writes its measurements as tables in a directory, keeps checkpoints
+and resumes when run again. The line it prints at the end says whether it is done and how many
 warnings its `log` holds; read them.

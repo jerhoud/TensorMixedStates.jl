@@ -58,13 +58,13 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 | 1.6 | 2.0 |
 |:----|:----|
 | `tdvp(evolver, t, state; nsweeps = n)` | `evolve(evolver, t, state; nsteps = n)`, `algo = Tdvp()` by default |
-| `approx_W(evolver, t, state; order, w, nsweeps = n)` | `evolve(evolver, t, state; algo = ApproxW(order, w), nsteps = n)` |
-| `Tdvp(n_expand, n_hermitianize)`, `ApproxW(n_hermitianize)` | `Tdvp(expand_period, hermitianize_period)`, `ApproxW(hermitianize_period)` |
+| `approx_W(evolver, t, state; order, w, nsweeps = n)` | `evolve(evolver, t, state; algo = ApproxW(; order, w), nsteps = n)` |
+| `Tdvp(n_expand, n_hermitianize)`, `ApproxW(n_hermitianize)` | `Tdvp(; expand_period, hermitianize_period)`, `ApproxW(; order, hermitianize_period)` |
 | `first_sweep = k` | `step = k`, `time` the time the evolution starts at, `duration` and `nsteps` those of the steps left |
 | `coefs` of an evolver depending on time | `[A, B] => [f, g]`, real functions of the time |
 | `time_start` | `time` |
-| `dmrg(H, state; nsweeps, noise)` | `ground_state(H, state; algo = Dmrg(nsweeps, noise, tol))` |
-| `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(nsweeps))` |
+| `dmrg(H, state; nsweeps, noise)` | `ground_state(H, state; algo = Dmrg(; nsweeps, noise, tol))` |
+| `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(; nsweeps))` |
 | `mpo_algo` of `steady_state` and `SteadyState` | none: the MPO of ``L^\dagger L`` is built from that of ``L`` with as few channels as its rank, `mpo_limits` truncating it if given |
 | `RandomState{Pure}(system, d)` | `random_state(Pure, system, d)`, `random_state(Mixed, system, d)` or `random_state(state, d)` |
 | `TdvpObserver`, `ApproxWObserver`, `DmrgObserver`, `observer!` | call the solver step by step and measure between the calls, or measure in a phase |
@@ -106,13 +106,13 @@ Measure(…)])` measures the two as one, where 1.x returned a group for each.
 | 1.6 | 2.0 |
 |:----|:----|
 | `measures`, `final_measures`, `measures_period` | `measurements`, `final_measurements`, `measurements_period` |
-| `GroundState(nsweeps, noise, tolerance)` | `GroundState(algo = Dmrg(nsweeps, noise, tol))`, `algo` being required |
-| `SteadyState(nsweeps, tolerance)` | `SteadyState(algo = Dmrg(nsweeps, tol))`, `algo` being required |
+| `GroundState(nsweeps, noise, tolerance)` | `GroundState(algo = Dmrg(; nsweeps, noise, tol))`, `algo` being required |
+| `SteadyState(nsweeps, tolerance)` | `SteadyState(algo = Dmrg(; nsweeps, tol))`, `algo` being required |
 | `Dmrg(…)`, the phase | `GroundState(…)`: `Dmrg` is now the method of a search |
 | `PartialTrace(trace_positions = p)` | `PartialTrace(positions = p)` |
 | `PartialTrace(keep_positions = p)` | `PartialTrace(positions = p, keep = true)` |
 | `CreateState(seed = s)` | `SimData(seed = s)`, the draws of every phase using the generator of the run |
-| `SimData(time_format, data_format)` | `SimData(format)`, for every number written |
+| `SimData(time_format, data_format)` | `SimData(; format)`, for every number written |
 | `SimData(checkpoint_interval, max_time, threading)` | `runTMS(sim_data; checkpoint_interval, max_time, threading)`, or the variables `TMS_CHECKPOINT_INTERVAL`, `TMS_MAX_TIME`, `TMS_THREADING` |
 | `runTMS(sim_data; restart = true)` | a file `restart` in the directory, or `cleanTMS(sim_data)` before `runTMS` |
 | `runTMS(sim_data; clean = true)` | `cleanTMS(sim_data)` |
@@ -189,5 +189,5 @@ Some results change without any edit beyond those above:
 - **`runTMS`** no longer changes the working directory: a relative path in the code of a phase
   is taken from the directory `runTMS` was called in, where 1.x ran in that of the simulation.
 - **`data_to_frame`** orders its columns as the measurements were first made.
-- **The random draws** of a run use its own generator, seeded by `SimData(seed)`, or by a seed
+- **The random draws** of a run use its own generator, seeded by `SimData(; seed)`, or by a seed
   drawn and written in `stamp`, and kept by its checkpoints.

@@ -4,7 +4,7 @@
 
 Three parameters set the error of a result, and the user chooses all three: the truncation of
 the states, `limits`, the time step of an evolution, `nsteps` or `time_step`, and the number of
-sweeps of a search, `Dmrg(nsweeps)`. No value is right in general; the way to choose them is
+sweeps of a search, `Dmrg(; nsweeps)`. No value is right in general; the way to choose them is
 the same everywhere:
 
 1. Start small: a `maxdim` the machine handles in seconds, the default `cutoff`, which only

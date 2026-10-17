@@ -20,8 +20,8 @@ operator `c` of `mesolve` is `Dissipator(c)` in an evolver.
 | `tensor(sigmaz(), sigmaz())` acting on qubits `i` and `j` | `Z(i) * Z(j)` |
 | `mesolve(H, ρ0, tlist, c_ops = [c1, c2], e_ops = [o])` | `evolve(-im * H + Dissipator(c1) + Dissipator(c2), t, ρ0; nsteps)`, then `measure(ρ, o)` |
 | `sesolve(H, ψ0, tlist)` | `evolve(-im * H, t, ψ0; nsteps)` |
-| `steadystate(H, c_ops)` | `steady_state(-im * H + sum(Dissipator.(c_ops)), ρ; algo = Dmrg(nsweeps))` |
-| `H.groundstate()` | `ground_state(H, ψ; algo = Dmrg(nsweeps))` |
+| `steadystate(H, c_ops)` | `steady_state(-im * H + sum(Dissipator.(c_ops)), ρ; algo = Dmrg(; nsweeps))` |
+| `H.groundstate()` | `ground_state(H, ψ; algo = Dmrg(; nsweeps))` |
 | `expect(o, ρ)` | `expect(ρ, o)`, or `measure(ρ, o)` |
 | `ρ.ptrace([0, 2])` | `partial_trace(ρ, [1, 3]; keep = true)`, sites counted from 1 |
 | `entropy_vn(ρ.ptrace([0]))` | `vonneumann_entropy(ρ, [1])` |
@@ -50,7 +50,7 @@ makes the state of a changed copy.
 | `MPS(s, "0")` | `State{Pure}(System(n, Qubit()), "Up")` |
 | `random_mps(s; linkdims = 8)` | `random_state(Pure, system, 8)` |
 | `os = OpSum(); os += "Z", 1, "Z", 2; MPO(os, s)` | `Z(1) * Z(2)`, made an MPO when it is used, or `make_mpo(state, op)` |
-| `dmrg(H, ψ0; nsweeps, maxdim, cutoff)` | `ground_state(H, ψ0; algo = Dmrg(nsweeps), limits = Limits(maxdim, cutoff))` |
+| `dmrg(H, ψ0; nsweeps, maxdim, cutoff)` | `ground_state(H, ψ0; algo = Dmrg(; nsweeps), limits = Limits(; maxdim, cutoff))` |
 | `tdvp(H, -im * t, ψ0; nsteps)` | `evolve(-im * H, t, ψ0; nsteps)` |
 | `expect(ψ, "Z")`, `correlation_matrix(ψ, "Z", "Z")` | `expect1(ψ, Z)`, `expect2(ψ, (Z, Z))`, or `measure(ψ, [Z, (Z, Z)])` |
 | `apply(gates, ψ; cutoff)` | `apply(gates, ψ; limits)`, the gates written as operators, `controlled(X)(1, 2) * H(1)` |
