@@ -308,8 +308,8 @@ is read in the basis of the sites as it is, with no string.
 
 A function of an even fermionic operator of several sites, as the exponential of a hopping
 term, `exp(-0.1im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 5)`, is applied as a gate with its
-strings, on sites in any order and apart. A function of an odd operator mixes the two
-parities and is refused.
+strings, on sites in any order and apart. A function of an odd operator, as `exp(C)`, mixes
+the two parities: it is split into its even part and its odd part, which takes the strings.
 
 The ground state of free fermions, the Fermi sea of a quadratic hamiltonian, is built at once
 by `fermi_sea`, here with three fermions, and any Slater determinant by `slater_state`, see
