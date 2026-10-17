@@ -471,10 +471,11 @@ for a time `t`, `exp(t * L)`.
 
 On a qubit, `"Up"` is ``|0\rangle`` and `"Dn"` ``|1\rangle``, the excitation `N` counts: the
 decay of an excitation, from `"Dn"` to `"Up"`, is `Dissipator(Sp)`, and `Dissipator(Sm)`, which
-takes `"Up"` to `"Dn"` in the evolution above, excites. The module `Qubits` gives the decay as
-[`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref), and the relaxation
-of times ``T_1`` and ``T_2`` of a qubit, its decay and its dephasing, as
-[`thermal_relaxation_gate`](@ref) and [`thermal_relaxation_dissipator`](@ref).
+takes `"Up"` to `"Dn"` in the evolution above, excites. The decay is given for sites of any type
+by [`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref), of the
+excitations an operator destroys, `Sp` by default, and the relaxation of times ``T_1`` and
+``T_2`` of a qubit, its decay and its dephasing, by [`thermal_relaxation_gate`](@ref) and
+[`thermal_relaxation_dissipator`](@ref) of the module `Qubits`.
 
 ### Steady states
 
