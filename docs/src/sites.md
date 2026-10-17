@@ -123,6 +123,7 @@ using .Qudits
 ```@docs
 TensorMixedStates.Qudits
 Qudit
+Sum
 ```
 
 ## Conservation
