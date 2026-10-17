@@ -6,7 +6,7 @@ which makes a large computation smaller and faster, see [What it saves](@ref). I
 state is confined to the sector it was built in.
 
 The quantity is named by one of the site's own operators, which has to be diagonal with
-eigenvalues that are either all integers or all roots of unity:
+integer eigenvalues, or by such an operator modulo an integer, `mod(Q, m)` or `parity(Q)`:
 
 ```julia
 Fermion(conserve = N)                  # the number of particles

@@ -77,10 +77,10 @@ end
 MySite(; conserve = ()) = conserving(MySite; conserve)
 ```
 
-A conserved quantity is an operator of your site, diagonal, whose eigenvalues are either all
-integers or all roots of unity. `MySite(conserve = N)` and `MySite(conserve = (strong(N), 2Sz))`
-are then written as for the site types of this package. A site type that cannot conserve
-anything leaves the field out.
+A conserved quantity is an operator of your site, diagonal with integer eigenvalues, or such
+an operator modulo an integer, `mod(Q, m)` or `parity(Q)`. `MySite(conserve = N)` and
+`MySite(conserve = (strong(N), 2Sz))` are then written as for the site types of this package. A
+site type that cannot conserve anything leaves the field out.
 
 ### The fields of a site
 
