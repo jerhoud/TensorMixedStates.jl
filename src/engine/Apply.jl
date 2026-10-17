@@ -499,9 +499,9 @@ end
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
 by piece, see `gate_steps!`; any other factor small enough, see `dense_enough`, on at most two
-sites or given by its matrix there, as a dense block on the mixed indices, see `block_step!`, as
-the pieces of an operator, see `piece_steps!`, and through its MPO otherwise, see
-`compacted_super`
+sites or given by its matrix there, but for a dephasing made of the gates of its projectors,
+see `projector_gates`, as a dense block on the mixed indices, see `block_step!`, as the pieces
+of an operator, see `piece_steps!`, and through its MPO otherwise, see `compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
@@ -512,9 +512,11 @@ function mixed_steps(system::System, a::IndexedOp)
         else
             terms = [ laid_strings(Mixed, system, t) for t in lower(system, f) ]
             ks = sort!(unique(b.site for t in terms for b in t.blocks))
+            by_matrix = f isa AtIndex &&
+                (!(f.op isa Dephase) || isnothing(projector_gates(system, f.op, f.index)))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
-            elseif (length(ks) ≤ 2 || f isa AtIndex) && dense_enough(Mixed, system, ks)
+            elseif (length(ks) ≤ 2 || by_matrix) && dense_enough(Mixed, system, ks)
                 orders = [ mixed_elements(system, k) for k in ks ]
                 m = system_matrix(Mixed, system, terms, ks, orders)
                 block_step!(steps, Mixed, system, m, ks)
@@ -560,7 +562,8 @@ product on more sites, as for a factor too large or laying Jordan-Wigner strings
 sites. On a pure state, a channel of a single Kraus operator `K`, as `Gate(K)`, is applied as
 `K`. On a mixed state, a channel is applied factor by factor in the same way, `Gate(K)` as `K`
 on the kets and its conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L`
-gives `L(ρ)`. The state is not normalised.
+gives `L(ρ)`, a dephasing of more than two sites through the MPO of the gates of its
+projectors when they have few terms. The state is not normalised.
 
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole state
   for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density

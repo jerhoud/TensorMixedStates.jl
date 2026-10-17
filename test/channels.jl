@@ -981,17 +981,22 @@ end
     swaps = [ Swap(mod1(i, 4), mod1(i, 4) + 1) for i in 1:100 ]
     one_by_one = foldl((s, g) -> apply(g, s), reverse(swaps); init = ρ5)
     @test norm(apply(prod(swaps), ρ5) - one_by_one) < 1e-10
-    # a dissipator of a sum or of a product, and a sum of gates, on more than two sites, go through
-    # their MPO, 20 to 250 times faster than their dense blocks on 4 and 5 sites, as the pieces of
-    # an operator; a channel given by its matrix stays dense
+    # a dissipator of a sum or of a product, a sum of gates and a dephasing made of the gates of
+    # its projectors, on more than two sites, go through their MPO, 20 to 250 times faster than
+    # their dense blocks on 4 and 5 sites, as the pieces of an operator; a channel given by its
+    # matrix stays dense, and so does a dephasing whose projectors have too many terms
     r5 = random_state(Mixed, q5, 3)
     for d in (Dissipator(sum(Sm(i) for i in 1:5)), Dissipator(prod(X(i) for i in 1:5)),
-              0.5 * Gate(Id(1)) + 0.5 * Gate(prod(Z(i) for i in 1:5)))
+              0.5 * Gate(Id(1)) + 0.5 * Gate(prod(Z(i) for i in 1:5)),
+              Dephase(reduce(⊗, fill(Z, 5)))(1, 2, 3, 4, 5))
         @test all(s -> s isa TMS.WindowMPO, last(TMS.mixed_steps(q5, d)))
         @test norm(apply(d, r5) - apply(make_mpo(r5, d), r5)) < 1e-12
     end
-    z4 = Dephase(reduce(⊗, fill(Z, 4)))(1, 2, 3, 4)
-    @test only(last(TMS.mixed_steps(q5, z4))) isa TMS.GateBatch
+    zsum = Operator{4}("Zsum", sum(reduce(⊗, [ i == j ? Z : Id for j in 1:4 ]) for i in 1:4))
+    @test isnothing(TMS.projector_gates(q5, Dephase(zsum), (1, 2, 3, 4)))
+    for d in (exp(0.1 * Dissipator(reduce(⊗, fill(Z, 4))))(1, 2, 3, 4), Dephase(zsum)(1, 2, 3, 4))
+        @test only(last(TMS.mixed_steps(q5, d))) isa TMS.GateBatch
+    end
     # and gates far apart leave the sites in their places
     ρf = random_state(Mixed, System(6, Fermion()), 3)
     @test TMS.ITensorMPS.siteinds(apply(Gate((C ⊗ dag(C))(1, 5)) * Gate(Swap(2, 6)), ρf).state) ==
