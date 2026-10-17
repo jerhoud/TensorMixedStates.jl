@@ -29,7 +29,7 @@ a phase of time evolution, see `evolve`.
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
 - `evolver`: `-im * H` for a Hamiltonian `H`, plus dissipators for a mixed state, or for an
-  evolver depending on time `[A, B] => [f, g]`, or `A => f`, see `evolve`
+  evolver depending on time `[A, B] => [f, g]`, see `evolve`, or `A => f` for a single term
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one dividing the duration into a whole
   number of steps, and taken with the sign of the duration (no step when that number is zero)
