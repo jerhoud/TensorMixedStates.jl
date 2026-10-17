@@ -74,7 +74,7 @@ after it: what it prepares may depend on the system of the state, not on the sta
 
 # Examples
 
-    struct Kicks <: AbstractPhase
+    struct Kicks <: TensorMixedStates.AbstractPhase
         name::String
         time_start
         final_measurements
