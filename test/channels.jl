@@ -449,7 +449,8 @@ end
 
 @testset "A channel or a generator refused on a system" begin
     q2, q3 = System(2, Qubit(conserve = N)), System(3, Qubit())
-    @test_throws "carries no definite charge of N" TMS.lower(q2, Dephase(X ⊗ X)(1, 2))
+    @test_throws "Dephase(X⊗X)(1,2) carries no definite charge of N" TMS.lower(
+        q2, Dephase(X ⊗ X)(1, 2))
     @test_throws "acts on site 5, which the system does not have" TMS.lower(q3, Gate(X)(5))
     @test_throws "acts on site 4, which the system does not have" TMS.lower(
         q3, Dissipator(X(1) + X(4)))

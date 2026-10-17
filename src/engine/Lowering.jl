@@ -432,14 +432,14 @@ block_rep(::GenericOp{IsOperator}) = Pure
 block_rep(::GenericOp) = Mixed
 
 """
-    matrix_terms(system, op, index)
+    matrix_terms(system, op, index; name)
 
 the terms of the operator `op` taken by its matrix on the sites `index` of `system`: on one
 site, see `one_site_terms`; on several, the terms of `split_matrix`, each a product of
-operators of one site in the order of `index`. A channel or a generator gives those of its
-superoperator.
+operators of one site in the order of `index`, `name` naming it in a refusal. A channel or a
+generator gives those of its superoperator.
 """
-function matrix_terms(system::System, a::GenericOp, index)
+function matrix_terms(system::System, a::GenericOp, index; name::String = string(a(index...)))
     R = block_rep(a)
     sites = [ system[i] for i in index ]
     m = matrix(a, sites...)
@@ -447,7 +447,7 @@ function matrix_terms(system::System, a::GenericOp, index)
         return one_site_terms(R, system, only(index), m)
     end
     terms = Term[]
-    for (c, fs) in split_matrix(R, string(a(index...)), m, sites)
+    for (c, fs) in split_matrix(R, name, m, sites)
         ts = scaled(c, [ identity_term() ])
         for (i, f) in zip(index, fs)
             if !isnothing(f)
@@ -493,7 +493,8 @@ placed, `(A ⊗ B)(i, j) = A(i) * B(j)`, and a named expression is its expressio
 or a named expression of one site is taken by its matrix instead, a term for each parity rather
 than one for each operand, and so is any other operator, see `matrix_terms`. A channel or a
 generator gives the terms of its superoperator: those of a gate, an evolver or a dissipator are
-made of the terms of their operators on each side of the density matrix, see `sided_term`.
+made of the terms of their operators on each side of the density matrix, see `sided_term`, and
+those of a dephasing are the gates of its projectors when they are few, see `projector_gates`.
 """
 op_terms(system::System, a::SumOp, index) =
     reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
@@ -508,11 +509,40 @@ op_terms(system::System, a::TensorOp, index) =
 op_terms(system::System, a::DagOp, index) = map(dag, op_terms(system, a.arg, index))
 op_terms(system::System, a::Operator{N}, index) where N =
     N > 1 && a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)
-op_terms(system::System, a::Union{Proj, ExpOp, IntPowOp, GenPowOp{IsOperator}, ModOp, Reset,
-                                  Dephase}, index) =
+op_terms(system::System, a::Union{Proj, ExpOp, IntPowOp, GenPowOp{IsOperator}, ModOp, Reset},
+         index) =
     matrix_terms(system, a, index)
 
 op_terms(system::System, a::Gate, index) = gate_terms(pure_terms(system, a.arg, index))
+
+# the projectors are split as operators, of dimension d, where the superoperator, of dimension
+# d², took a minute to split on six qubits
+"""
+    projector_gates(system, a, index)
+
+the terms of the dephasing `a` on the sites `index` of `system` as the gates of its projectors,
+`nothing` on a single site or when they would outnumber the dimension of its superoperator, as
+for an operator given by a generic matrix
+"""
+function projector_gates(system::System, a::Dephase, index)
+    if length(index) == 1
+        return nothing
+    end
+    sites = [ system[i] for i in index ]
+    values, _ = eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg,
+                            " on " * join(sites, " ⊗ "))
+    name = string(a(index...))
+    tss = [ reduced(matrix_terms(system, Proj(a.arg => λ), index; name)) for λ in values ]
+    if sum(ts -> length(ts)^2, tss) > prod(s -> dim(s)^2, sites)
+        return nothing
+    end
+    return reduce(vcat, map(gate_terms, tss))
+end
+
+function op_terms(system::System, a::Dephase, index)
+    ts = projector_gates(system, a, index)
+    return isnothing(ts) ? matrix_terms(system, a, index) : ts
+end
 
 function op_terms(system::System, a::Evolver, index)
     ts = pure_terms(system, a.arg, index)
