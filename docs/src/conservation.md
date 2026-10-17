@@ -92,7 +92,8 @@ takes a single one, so at most two quantities can be declared strong.
 
 A quantity is thus conserved at one of three levels: strongly, weakly, or not at all.
 [`symmetries`](@ref) tells which, in the form a declaration takes, and [`weaken`](@ref) takes a
-state, a system or a simulation down to a lower level, building the system it lands on:
+state or a system down to a lower level, building the system it lands on, as the phase `Weaken`
+does in a simulation:
 
 ```jldoctest
 julia> using TensorMixedStates, .Electrons
