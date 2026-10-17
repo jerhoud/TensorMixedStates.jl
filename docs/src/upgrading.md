@@ -149,7 +149,8 @@ of the last.
 | `identity_operator` | `Id`, and `matrix(Id, site)` for its matrix |
 | `matrix("X", site)` | `matrix(X, site)` |
 | `Fup`, `Fdn` of `Electron` and `Tj` | `parity(Nup)`, `parity(Ndn)` |
-| `Zd`, `Xd`, `Hd`, `Sumd` of `Qudit` | `Z`, `X`, `H`, `Sum` of `Qudits` |
+| `Zd`, `Xd`, `Hd`, `Sumd` of `Qudit` | `Z`, `X` of `Qudits`, `H`, `Sum` of `Circuits` |
+| `H`, `S`, `T`, `Phase` of `Qubits` | in the module `Circuits`: `using .Circuits` |
 | `Qubits.Swap`, `Qubits.controlled` | `Swap` and `controlled`, exported by TensorMixedStates for sites of any type |
 | a local state given as a number `n`, as `Proj(1)` | `Level => n`, the basis state `n` counted from 0, as `Proj(Level => 1)` |
 | `conserve_string` | `conserving(T; conserve)`, in the keyword constructor of a site type |

@@ -98,6 +98,9 @@ include("sites/Tjs.jl")
 include("sites/Qbosons.jl")
 include("sites/Qudits.jl")
 
+# The gates of quantum circuits
+include("sites/Circuits.jl")
+
 # The hints of the errors of a program written for 1.x
 include("Hints.jl")
 

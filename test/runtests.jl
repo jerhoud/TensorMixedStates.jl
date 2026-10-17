@@ -1,4 +1,5 @@
-using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons
+using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Bosons, .Spins, .Electrons, .Tjs, .Qbosons,
+      .Circuits
 using Test, Random, Aqua
 
 # Every source of randomness in the suite is pinned, so that a run can be reproduced and a

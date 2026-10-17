@@ -11,14 +11,14 @@ The examples of this page use qubits on a six site system, that is
 
 ```@setup operators
 using TensorMixedStates
-using .Qubits
+using .Qubits, .Circuits
 n = 6
 j = 1.0
 h = 0.5
 ```
 
 ```julia
-using TensorMixedStates, .Qubits
+using TensorMixedStates, .Qubits, .Circuits
 
 n = 6
 j = 1.0
@@ -47,7 +47,8 @@ lindbladian = -im * hamiltonian + dissipators
 
 Note the factor `-im` for the Hamiltonian.
 
-They define quantum gates, like
+They define quantum gates, the module `Circuits` giving `H`, the rotations and the controlled
+gates, like
 
 ```@example operators
 gates = H(1)Swap(1, 2)H(1)
@@ -122,6 +123,31 @@ exp(::TensorMixedStates.GenericOp{TensorMixedStates.IsOperator})
 sqrt(::TensorMixedStates.GenericOp)
 matrix
 tensor
+```
+
+## Gates of circuits
+
+The module `Circuits`, `using .Circuits`, gathers the gates of quantum circuits: `H`, `S` and
+`T`, which `H` and `S` extend to qudits, `Phase`, `Sum`, the rotations and the controlled gates.
+A rotation by `θ` has `θ/2` in its exponent, `Rx(θ)` being ``e^{-i\theta X/2}`` on a qubit and
+`Rxx(θ)` ``e^{-i\theta X \otimes X/2}`` on two, as in OpenQASM, Qiskit or PennyLane.
+
+```@docs
+TensorMixedStates.Circuits
+Phase
+Sum
+Rx
+Ry
+Rz
+Rxx
+Ryy
+Rzz
+CX
+CNOT
+CY
+CZ
+CCX
+Toffoli
 ```
 
 ## Operators on another system

@@ -1,5 +1,5 @@
-# The Qubit site type, its states and operators, its gates and its graph states, gathered in
-# the module Qubits.
+# The Qubit site type, its states and operators, its gates and its graph states: the module Qubits
+# gathers them but the gates, which the module Circuits gathers.
 
 export Qubits
 
@@ -34,8 +34,9 @@ values ±1, so `conserve = Z` conserves the magnetization, as `2Sz` does; its pa
                        ``S^2``
 - `N`                : the number of excitations, ``(1 - Z)/2``: `"Dn"` is the occupied state
                        and `Sm` creates an excitation
-- `H, S, T`          : the Hadamard, S and T gates
-- `Phase(t)`         : the phase gate
+
+The gates `H`, `S`, `T`, `Phase(t)`, the rotations and the controlled gates are in the module
+`Circuits`.
 """
 struct Qubit <: AbstractSite
     conserve::Conservation
@@ -143,5 +144,4 @@ function thermal_relaxation_gate(T1::Real, T2::Real, t::Real)
 end
 
 @create_site_module(Qubits, [Qubit, graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm,
-                             H, S, T, Phase, thermal_relaxation_dissipator,
-                             thermal_relaxation_gate])
+                             thermal_relaxation_dissipator, thermal_relaxation_gate])

@@ -1,5 +1,6 @@
 using Documenter
-using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons
+using TensorMixedStates, .Qubits, .Qudits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons,
+    .Circuits
 
 # context in which the doctests of the docstrings are run
 DocMeta.setdocmeta!(
@@ -7,7 +8,7 @@ DocMeta.setdocmeta!(
     :DocTestSetup,
     quote
         using TensorMixedStates
-        using .Qubits, .Qudits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons
+        using .Qubits, .Qudits, .Fermions, .Electrons, .Spins, .Bosons, .Tjs, .Qbosons, .Circuits
     end;
     recursive = true,
 )

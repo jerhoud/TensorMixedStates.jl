@@ -27,7 +27,6 @@ using .Qubits
 ```@docs
 TensorMixedStates.Qubits
 Qubit
-Phase
 graph_state
 thermal_relaxation_gate
 thermal_relaxation_dissipator
@@ -123,7 +122,6 @@ using .Qudits
 ```@docs
 TensorMixedStates.Qudits
 Qudit
-Sum
 ```
 
 ## Conservation

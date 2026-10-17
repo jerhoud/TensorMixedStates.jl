@@ -9,11 +9,12 @@ function or type below, and that of a site type, as `?Qubit`, its states and its
 ```julia
 using TensorMixedStates, .Qubits, .Fermions, .Bosons   # the module of each site type: also
                                                       # .Spins, .Electrons, .Tjs, .Qudits, .Qbosons
+using .Circuits                                       # the gates: H, S, T, rotations, CX
 ```
 
-A site module brings short names, `N`, `H`, `T`: a script using them as variables takes only
-what it needs, `using .Qubits: Qubit, X, Z`, or writes them qualified after
-`import .Qubits as Q`, as `Q.X(1)`.
+These modules bring short names, as `N` or `H`: a script using them as variables takes only what
+it needs, `using .Qubits: Qubit, X, Z`, or writes them qualified after `import .Qubits as Q`, as
+`Q.X(1)`.
 
 Run scripts with `julia --threads=auto script.jl`. The first call of a session compiles, a few
 seconds; the precompiled workload covers the common paths.
@@ -42,19 +43,20 @@ a density matrix, or `Level => n`, the basis state `n` counted from 0. Conservat
 
 ```julia
 ham = -sum(Z(i) * Z(i + 1) for i in 1:9) - 0.5 * sum(X(i) for i in 1:10) # X(i): X on site i;
-                                          # not H, the Hadamard gate of Qubits
+                                          # not H, the Hadamard gate of Circuits
 hop = -sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:9)      # fermions: strings
                                                                          # laid automatically
 L = -im * ham + sum(Dissipator(sqrt(0.1) * Sm)(i) for i in 1:10)          # a Lindbladian
-gates = controlled(X)(1, 2) * H(1)        # a product acts right to left: H first
+gates = CX(1, 2) * H(1)                   # a product acts right to left: H first
 noisy = depolarizing_gate(0.01)(3)        # a channel, for a mixed state
 myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 ```
 
 `X`, `Y`, `Z`, `Sp`, `Sm`, `N` on qubits; `C`, `N` on fermions; `A`, `N` on bosons; `Sx`, `Sy`,
-`Sz`, `Sp`, `Sm` on spins; `Id`, `F`, `Level`, `Swap` and `controlled` on every site. `⊗` makes an
-operator of several sites, `X ⊗ X`, placed by `(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`,
-`Proj("Up")` and `Proj(Z => 1)` work on operators.
+`Sz`, `Sp`, `Sm` on spins; `Id`, `F`, `Level`, `Swap` and `controlled` on every site; the gates
+`H`, `S`, `T`, `Phase(θ)`, `Rx(θ)`, `Ry`, `Rz`, `Rxx(θ)`, `Ryy`, `Rzz`, `CX` or `CNOT`, `CY`,
+`CZ`, `CCX` or `Toffoli` in `Circuits`. `⊗` makes an operator of several sites, `X ⊗ X`, placed by
+`(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)` work on operators.
 
 ## Conventions
 
@@ -66,6 +68,7 @@ operator of several sites, `X ⊗ X`, placed by `(X ⊗ X)(2, 5)`; `exp`, `sqrt`
 | amplitude damping | `amplitude_damping_gate(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
 | depolarization | `depolarizing_gate(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_gate(4p/3)` |
 | a product of gates | the rightmost factor acts first |
+| rotations | `Rx(θ)` is ``e^{-i\theta X/2}`` and `Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, as in OpenQASM and Qiskit; `Rx(θ)` is ``e^{-i\theta S_x}`` on a spin |
 | values measured | by `measure`, real for a Hermitian operator, complex otherwise, `Trace` complex; by `expect`, `expect1` and `trace`, complex as soon as the state is: `real(expect(ψ, ham))` |
 
 ## Solvers

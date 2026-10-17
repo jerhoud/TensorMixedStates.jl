@@ -42,7 +42,7 @@ using TensorMixedStates, .Qubits
 
 n = 20
 sys = System(n, Qubit())
-ham = -sum(Z(i) * Z(i + 1) for i in 1:n-1) - 0.8 * sum(X(i) for i in 1:n)   # not H: H is Hadamard
+ham = -sum(Z(i) * Z(i + 1) for i in 1:n-1) - 0.8 * sum(X(i) for i in 1:n)   # H is a gate
 E, ψ = ground_state(ham, random_state(Pure, sys, 8);
                     algo = Dmrg(nsweeps = 10), limits = Limits(maxdim = [10, 20, 50, 100]))
 ρ = evolve(-im * ham + sum(Dissipator(sqrt(0.1) * Sm)(i) for i in 1:n), 1.0,
@@ -61,12 +61,14 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
   take `"Dn"` to `"Up"`.
 - `depolarizing_gate(p)` is ``(1 - p)\rho + p I/d``: a Pauli error of probability ``p/3``
   each is `depolarizing_gate(4p/3)`.
-- In a product of gates the rightmost acts first.
+- In a product of gates the rightmost acts first. The gates are in `using .Circuits`: `H`, `S`,
+  `T`, `Phase(θ)`, `CX` or `CNOT`, `CZ`, `CCX` or `Toffoli`, and the rotations, `Rx(θ)` being
+  ``e^{-i\theta X/2}`` and `Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, as in Qiskit.
 - A density matrix is `State{Mixed}`; dissipators and channels need one, `mix(ψ)` makes one,
   of the square of the bond dimension of `ψ`: from a ground state of bond dimension 100, a
   density matrix of 10000, which no machine evolves. Truncate `ψ` first, or start mixed.
-- `H`, `X`, `S`, `T`, `N` are operators of `Qubits`: do not name variables after them, or
-  import only what you use, `using .Qubits: Qubit, X, Z`.
+- `X`, `N` are operators of `Qubits`, `H`, `S`, `T` gates of `Circuits`: do not name variables
+  after them, or import only what you use, `using .Qubits: Qubit, X, Z`.
 - `measure` returns a vector of pairs `name => value`, even for one measurement, and an
   operator of one site, `Z`, gives one pair `"Z" => [a value per site]`. The value of a
   Hermitian operator is real, of any other complex; `Trace` is complex. For one number call

@@ -520,7 +520,7 @@ end
           jw(se, 3, collect(cu')) * jw(se, 1, cu) + jw(se, 3, collect(cn')) * jw(se, 1, cn)
     # an operator of several sites given by a function of its sites
     q3 = Qudit(3)
-    @test summed(System(2, q3), Qudits.Sum(1, 2)) ≈ matrix(Qudits.Sum, q3, q3)
+    @test summed(System(2, q3), Circuits.Sum(1, 2)) ≈ matrix(Circuits.Sum, q3, q3)
 
     # the reduction: an identity goes into the coefficient, a product that vanishes drops its
     # term, blocks equal up to a coefficient are gathered, and a real operator keeps real terms

@@ -53,7 +53,8 @@ makes the state of a changed copy.
 | `dmrg(H, ψ0; nsweeps, maxdim, cutoff)` | `ground_state(H, ψ0; algo = Dmrg(; nsweeps), limits = Limits(; maxdim, cutoff))` |
 | `tdvp(H, -im * t, ψ0; nsteps)` | `evolve(-im * H, t, ψ0; nsteps)` |
 | `expect(ψ, "Z")`, `correlation_matrix(ψ, "Z", "Z")` | `expect1(ψ, Z)`, `expect2(ψ, (Z, Z))`, or `measure(ψ, [Z, (Z, Z)])` |
-| `apply(gates, ψ; cutoff)` | `apply(gates, ψ; limits)`, the gates written as operators, `controlled(X)(1, 2) * H(1)` |
+| `apply(gates, ψ; cutoff)` | `apply(gates, ψ; limits)`, the gates written as operators, `CX(1, 2) * H(1)` of `Circuits` |
+| `op("Rxx", s1, s2; ϕ)`, ``e^{-i\phi X \otimes X}`` | `Rxx(2ϕ)(i, j)` of `Circuits`, ``e^{-i\theta X \otimes X/2}`` as in Qiskit |
 | `inner(ψ, ϕ)` | `inner(ψ, ϕ)` |
 
 `tdvp` of ITensorMPS computes ``e^{t A}`` for its operator ``A`` and time ``t``, so that a real

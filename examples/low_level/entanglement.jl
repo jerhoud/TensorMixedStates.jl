@@ -4,7 +4,7 @@
 # Rényi-2 mutual information are known in closed form: on a mixed state the entropy of a part no
 # longer measures its entanglement with the rest, which the negativity does.
 
-using TensorMixedStates, .Qubits, LinearAlgebra
+using TensorMixedStates, .Qubits, .Circuits, LinearAlgebra
 
 # a GHZ state of 6 qubits: the entanglement entropy across each of its cuts
 ghz = ghz_state(System(6, Qubit()), "Up", "Dn")
@@ -13,7 +13,7 @@ println("GHZ, entropy across each cut ", entropies, ", log 2 = ", log(2))
 
 # a Bell pair, then the depolarization of the two qubits together
 q = 0.2
-bell = apply(controlled(X)(1, 2) * H(1), State{Mixed}(System(2, Qubit()), "Up"))
+bell = apply(CX(1, 2) * H(1), State{Mixed}(System(2, Qubit()), "Up"))
 werner = apply(depolarizing_gate(q, 2)(1, 2), bell)
 values = measure(werner, [ReducedDensityMatrix([1, 2]), VonNeumannEntropy([1]),
                           LogNegativity([1], [2]), MutualInfoRenyi2([1])])

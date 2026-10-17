@@ -364,7 +364,7 @@ end
     @test matrix(Z, Qudit(2)) ≈ matrix(Z, Qubit())
     @test matrix(X, Qudit(2)) ≈ matrix(X, Qubit())
     @test matrix(H, Qudit(2)) ≈ matrix(H, Qubit())
-    @test matrix(S, Qudit(2)) ≈ matrix(Qubits.S, Qubit())
+    @test matrix(S, Qudit(2)) ≈ matrix(Circuits.S, Qubit())
     @test matrix(X, Qudit(1)) == ones(1, 1)
     @test matrix(Z, Qudit(1)) == ones(1, 1)
     @test matrix(Sum, Qudit(2), Qudit(2)) ≈ matrix(controlled(X), Qubit(), Qubit())
@@ -392,6 +392,39 @@ end
         @test expect1(rep(State{Pure}(System(3, Qudit(3)), ["0", "1", "2"])), Z) ≈
             [exp(2im * π * n / 3) for n in 0:2]
     end
+end
+
+@testset "The gates of Circuits" begin
+    q = Qubit()
+    σx, σy, σz = [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1]
+    θ = 0.37
+    # rotations of half their angle in the exponent, as in OpenQASM and Qiskit
+    @test matrix(Rx(θ), q) ≈ exp(-im * θ / 2 * σx)
+    @test matrix(Ry(θ), q) ≈ exp(-im * θ / 2 * σy)
+    @test matrix(Rz(θ), q) ≈ exp(-im * θ / 2 * σz)
+    @test matrix(Rz(θ), q) ≈ exp(-im * θ / 2) * matrix(Phase(θ), q)
+    @test matrix(Rxx(θ), q) ≈ exp(-im * θ / 2 * kron(σx, σx))
+    @test matrix(Ryy(θ), q) ≈ exp(-im * θ / 2 * kron(σy, σy))
+    @test matrix(Rzz(θ), q) ≈ exp(-im * θ / 2 * kron(σz, σz))
+    # on a spin, the rotation of the spin
+    sx, sz = matrix(Sx, Spin(1)), matrix(Sz, Spin(1))
+    @test matrix(Rx(θ), Spin(1)) ≈ exp(-im * θ * sx)
+    @test matrix(Rzz(θ), Spin(1)) ≈ exp(-2im * θ * kron(sz, sz))
+    # the controlled gates, acting when the first site is in "Dn"
+    @test matrix(CX, q) ≈ [1 0 0 0; 0 1 0 0; 0 0 0 1; 0 0 1 0]
+    @test matrix(CY, q) ≈ [1 0 0 0; 0 1 0 0; 0 0 0 -im; 0 0 im 0]
+    @test matrix(CZ, q) ≈ LA.Diagonal([1, 1, 1, -1])
+    toffoli = Matrix{Float64}(LA.I, 8, 8)
+    toffoli[7:8, 7:8] = [0 1; 1 0]
+    @test matrix(CCX, q) ≈ toffoli
+    @test CNOT === CX && Toffoli === CCX
+    @test string(CX) == "CX" && string(CCX) == "CCX" && string(Rx(0.5)) == "Rx(0.5)"
+    bell = apply(CX(1, 2) * H(1), State{Pure}(System(2, q), "Up"))
+    @test last.(measure(bell, [Z(1) * Z(2), X(1) * X(2)])) ≈ [1, 1]
+    # the gates are in Circuits alone
+    @test !(:H in names(Qubits)) && !(:Sum in names(Qudits))
+    @test issubset([:H, :S, :T, :Phase, :Sum, :Rx, :Rzz, :CX, :CNOT, :CCX, :Toffoli],
+                   names(Circuits))
 end
 
 @testset "Unknown operator and state names" begin

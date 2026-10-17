@@ -104,8 +104,12 @@ const renamed_names = Dict{Symbol, String}(
                    "first site of any type",
     :Zd => "Zd became Z of Qudits",
     :Xd => "Xd became X of Qudits",
-    :Hd => "Hd became H of Qudits",
-    :Sumd => "Sumd became Sum of Qudits",
+    :Hd => "Hd became H, in the module Circuits: using .Circuits",
+    :Sumd => "Sumd became Sum, in the module Circuits: using .Circuits",
+    :H => "H is in the module Circuits: using .Circuits",
+    :S => "S is in the module Circuits: using .Circuits",
+    :T => "T is in the module Circuits: using .Circuits",
+    :Phase => "Phase is in the module Circuits: using .Circuits",
 )
 
 """

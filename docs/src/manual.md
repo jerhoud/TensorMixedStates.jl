@@ -233,8 +233,8 @@ used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outrig
 `cannot assign a value to imported variable`. There is no such issue inside a function,
 where `state = ...` is an ordinary local variable. This manual prefixes its own variables with
 `my`, as in `mystate` and `myop`, which is one way of staying clear. Another is to take from a
-site module only the names one uses, `using .Qubits: Qubit, X, Z`, which leaves `N`, `H` and `T`
-free, or to write them qualified after `import .Qubits as Q`, as `Q.X(3)`.
+site module only the names one uses, `using .Qubits: Qubit, X, Z`, which leaves `N` free, or to
+write them qualified after `import .Qubits as Q`, as `Q.X(3)`.
 
 The operator system is very rich and flexible. For example, if you want to use this Hamiltonian
 
@@ -263,7 +263,8 @@ Many operations are defined on generic operators:
   is the basis of the site, and `Level => n` the basis state `n`, counted from 0.
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`
 - `controlled` makes controlled gates, which do nothing when their first site is in its first
-  basis state, `Level => 0`, as `"Up"` for a qubit: `CX = controlled(X)`
+  basis state, `Level => 0`, as `"Up"` for a qubit: `controlled(X)` is the `CX` of the module
+  `Circuits`, see [Gates](@ref)
 
 For example one can define the Rxy 2-site operator by
 
@@ -328,12 +329,21 @@ We can now work with states and operators.
 
 ### Gates
 
+The gates of quantum circuits are in the module `Circuits`: `H`, `S`, `T`, `Phase`, the
+rotations, `Rx(θ)` being ``e^{-i\theta X/2}`` on a qubit as in OpenQASM and Qiskit and
+`Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, and the controlled gates `CX` or `CNOT`, `CY`, `CZ`, and
+`CCX` or `Toffoli`:
+
+```@example manual
+using .Circuits
+```
+
 Gates are applied with `apply`. In a product of gates the rightmost acts first: here the
 Hadamard gate on the first qubit, then the controlled not, which turns two up qubits into a
 Bell pair
 
 ```@example manual
-mybell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(2, Qubit()), "Up"))
+mybell = apply(CX(1, 2) * H(1), State{Pure}(System(2, Qubit()), "Up"))
 measure(mybell, [Z(1)Z(2), X(1)X(2)])
 ```
 
@@ -559,7 +569,7 @@ entanglement between two parts of them, which on a mixed state the entropy no lo
 Both are ``\log 2`` for one qubit of a Bell pair:
 
 ```@example manual
-mybell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
+mybell = apply(CX(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
 measure(mybell, [VonNeumannEntropy([1]), LogNegativity([1], [2])])
 ```
 

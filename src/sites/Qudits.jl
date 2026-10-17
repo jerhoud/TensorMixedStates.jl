@@ -1,5 +1,6 @@
 # The Qudit site type, a level system of any dimension with the generalized Pauli operators,
-# with its operators and the gate Sum, gathered in the module Qudits.
+# with its operators, gathered in the module Qudits, and its gates H, S and Sum, which the module
+# Circuits gathers.
 
 export Qudits
 
@@ -27,6 +28,9 @@ Writing ``d`` for the dimension and ``\\omega = e^{2i\\pi/d}``, the clock operat
 - `N`  : the level operator, `diag(0, 1, ..., d-1)`
 - `Z`  : the clock operator, `mod(N, d)`
 - `X`  : the shift operator
+
+In the module `Circuits`:
+
 - `H`  : the Fourier operator, or generalized Hadamard gate
 - `S`  : the phase operator, of order ``d`` for odd ``d`` and ``2d`` for even ``d``
 - `Sum` : the generalized controlled not of two qudits, see `Sum`
@@ -74,4 +78,4 @@ it is the CNOT.
 """
 const Sum = Operator{2}("Sum", (a, _) -> sum(Proj(Level => i) ⊗ X^i for i in 0:dim(a)-1))
 
-@create_site_module(Qudits, [Qudit, N, Z, X, H, S, Sum])
+@create_site_module(Qudits, [Qudit, N, Z, X])
