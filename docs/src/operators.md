@@ -96,7 +96,7 @@ Operators can be added and multiplied using usual operators (`+`, `-`, `*`, `/`,
 
 ```@docs
 Operator
-⊗(::GenericOp{K, N}, ::GenericOp{K, M}) where {K, N, M}
+⊗(::TensorMixedStates.GenericOp{K, N}, ::TensorMixedStates.GenericOp{K, M}) where {K, N, M}
 Proj
 Level
 Swap
@@ -116,10 +116,10 @@ amplitude_damping_dissipator
 Evolver
 named
 parity
-mod(::GenericOp{IsOperator}, ::Int)
-dag(::GenericOp{IsOperator})
-exp(::GenericOp{IsOperator})
-sqrt(::GenericOp)
+mod(::TensorMixedStates.GenericOp{TensorMixedStates.IsOperator}, ::Int)
+dag(::TensorMixedStates.GenericOp{TensorMixedStates.IsOperator})
+exp(::TensorMixedStates.GenericOp{TensorMixedStates.IsOperator})
+sqrt(::TensorMixedStates.GenericOp)
 matrix
 tensor
 ```
@@ -137,12 +137,12 @@ map_sites
 ## Operator types
 
 These types describe the operators themselves, they are mostly useful when writing functions
-operating on operators.
+operating on operators. They are not exported: `TensorMixedStates.GenericOp`.
 
 ```@docs
-Op
-OpKind
-GenericOp
-IndexedOp
-SimpleOp
+TensorMixedStates.Op
+TensorMixedStates.OpKind
+TensorMixedStates.GenericOp
+TensorMixedStates.IndexedOp
+TensorMixedStates.SimpleOp
 ```

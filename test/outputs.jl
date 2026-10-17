@@ -8,7 +8,7 @@ using DataFrames
 
 # a destination of another package, which records its rows, and one that refuses X(1) before
 # anything is measured
-struct Recorder <: Destination
+struct Recorder <: TMS.Destination
     name::String
 end
 
@@ -32,7 +32,7 @@ function Base.close(r::Recording)
     return nothing
 end
 
-struct Picky <: Destination end
+struct Picky <: TMS.Destination end
 
 struct PickyOpen end
 

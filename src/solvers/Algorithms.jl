@@ -2,7 +2,7 @@
 # the parameters of the local steps, Tdvp and ApproxW for the evolutions, Dmrg for the searches,
 # and the abstract types an algorithm of one's own extends.
 
-export Krylov, EvolutionAlgorithm, SearchAlgorithm, Tdvp, ApproxW, Dmrg
+export Krylov, Tdvp, ApproxW, Dmrg
 
 """
     Krylov(; dim = nothing, maxiter = nothing, tol = nothing)

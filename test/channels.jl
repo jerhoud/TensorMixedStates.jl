@@ -208,7 +208,7 @@ end
     γ, t = 0.7, 0.4
     p = 1 - exp(-γ * t)
     ev(L) = matrix(exp(t * L), q)
-    @test exp(Dissipator(X)) isa TMS.ExpOp{IsChannel}
+    @test exp(Dissipator(X)) isa TMS.ExpOp{TMS.IsChannel}
     @test ev(Evolver(-im * (X + 0.3Z))) ≈ matrix(Gate(exp(-im * t * (X + 0.3Z))), q)
     @test ev(amplitude_damping_dissipator(γ)) ≈ matrix(amplitude_damping_gate(p), q)
     @test ev(dephasing_dissipator(γ)) ≈ matrix(dephasing_gate(p), q)
@@ -348,7 +348,7 @@ end
     @test norm(make_mpo(PreMPO(ψ, [L, Evolver(X)(1)]), [1., 0.5]) -
                make_mpo(PreMPO(ψ, [K, X(1)]), [1., 0.5])) < 1e-12
     # the identity of generators, ρ ↦ ρ, is the evolver of half the identity
-    idg = TMS.IdentityOp{IsGenerator, TMS.Generic, 1}()
+    idg = TMS.IdentityOp{TMS.IsGenerator, TMS.Generic, 1}()
     @test TMS.pure_part(idg) == 0.5 * Id
     @test matrix(Evolver(TMS.pure_part(idg)), Qubit()) ≈ matrix(idg, Qubit())
     @test_throws "holds a dissipator, which a pure state cannot follow" make_mpo(ψ,
@@ -907,7 +907,7 @@ end
     # of several sites, as a gate: the parity of two qubits of |++⟩ not read leaves mixed the two
     # Bell pairs of X1X2 = 1; in a generator, the dissipators of its projectors
     pp = State{Mixed}(System(2, Qubit()), "+")
-    @test Dephase(Z ⊗ Z) isa GenericOp{IsChannel, 2}
+    @test Dephase(Z ⊗ Z) isa TMS.GenericOp{TMS.IsChannel, 2}
     @test repr(Dephase(Z ⊗ Z)) == "Dephase(Z⊗Z)"
     dz = apply(Dephase(Z ⊗ Z)(1, 2), pp)
     @test real(expect(dz, X(1) * X(2))) ≈ 1
@@ -944,7 +944,7 @@ end
     @test norm(apply(exp(0.25 * Evolver(Id))(1), q) - exp(0.5) * q) < 1e-12
     # a fermionic jump, its strings on both sides of ρ, has one: the amplitude damping of the
     # fermion, against its Kraus operators
-    @test exp(t * Dissipator(C)) isa TMS.ExpOp{IsChannel}
+    @test exp(t * Dissipator(C)) isa TMS.ExpOp{TMS.IsChannel}
     pd = 1 - exp(-t)
     fs = mix(random_state(Pure, System(3, Fermion()), 4))
     @test norm(apply(exp(t * Dissipator(C))(2), fs) -

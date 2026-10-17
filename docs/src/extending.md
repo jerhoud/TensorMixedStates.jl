@@ -194,12 +194,13 @@ a type of its own, is an [`Update`](@ref) phase.
 
 An evolution goes through [`TensorMixedStates.evolve_step`](@ref), whose method is chosen by the
 type of its `algo`: a method of evolution of your own is a subtype of
-[`EvolutionAlgorithm`](@ref) with a method of `evolve_step`, which makes one step, and which
-`evolve`, `thermalize` and their phases then take as they take `Tdvp`. Two steps of `Tdvp` of
-half the length make one:
+[`TensorMixedStates.EvolutionAlgorithm`](@ref) with a method of `evolve_step`, which makes one
+step, and which `evolve`, `thermalize` and their phases then take as they take `Tdvp`. Two steps
+of `Tdvp` of half the length make one:
 
 ```julia
 using TensorMixedStates, .Qubits
+using TensorMixedStates: EvolutionAlgorithm
 
 struct HalfSteps <: EvolutionAlgorithm end
 
@@ -214,18 +215,19 @@ evolve(-im * sum(X(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "Up");
 ```
 
 A search goes through [`TensorMixedStates.search`](@ref) in the same way: a method of search of
-your own is a subtype of [`SearchAlgorithm`](@ref) with a method of `search`, which
-`ground_state`, `steady_state` and their phases then take as they take `Dmrg`.
+your own is a subtype of [`TensorMixedStates.SearchAlgorithm`](@ref) with a method of `search`,
+which `ground_state`, `steady_state` and their phases then take as they take `Dmrg`.
 
 ## Destinations of one's own
 
-A destination of the measurements is a subtype of [`Destination`](@ref), compared by value,
-which `open` opens once and which is then given each row of values by
+A destination of the measurements is a subtype of [`TensorMixedStates.Destination`](@ref),
+compared by value, which `open` opens once and which is then given each row of values by
 [`TensorMixedStates.write_row`](@ref), and closed at the end of the run. A destination printing
 the time and the values on a line:
 
 ```julia
 using TensorMixedStates, .Qubits
+using TensorMixedStates: Destination
 
 struct Line <: Destination end
 struct OpenLine end
@@ -257,11 +259,12 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
-- `expect(state, op::IndexedOp)` computes the expectation value of an operator placed on
-  sites, normalised by the trace, which `measure`, and so `output`, asks for, those of the
-  operators of one site and of the pairs of them included. The operator is given as the user
-  wrote it, on the physical sites, which [`map_sites`](@ref) places on another system;
-- `apply(op::IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
+- `expect(state, op::TensorMixedStates.IndexedOp)` computes the expectation value of an
+  operator placed on sites, normalised by the trace, which `measure`, and so `output`, asks for,
+  those of the operators of one site and of the pairs of them included. The operator is given
+  as the user wrote it, on the physical sites, which [`map_sites`](@ref) places on another
+  system;
+- `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes

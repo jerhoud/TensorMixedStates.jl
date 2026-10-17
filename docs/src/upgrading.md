@@ -119,7 +119,7 @@ Measure(…)])` measures the two as one, where 1.x returned a group for each.
 | `SetState(state)` | `Reset(state)`, a channel: at a rate `γ` in an evolver, `γ * Dissipator(Reset(state))` |
 | `log_msg` | `log_message` |
 | `output(sim, list; energy = e)` | `output(Simulation(sim, sim.state; energy = e), list)` |
-| `get_sim_file`, `close_sim_files` | `output(sim, destination => list)`, or a `Destination` of one's own; `runTMS` closes the files |
+| `get_sim_file`, `close_sim_files` | `output(sim, destination => list)`, or a `TensorMixedStates.Destination` of one's own; `runTMS` closes the files |
 | `DataToFrame` | `data_to_frame` |
 | `Simulation(state; …)`, a function given a `Simulation` | the functions take the state, `sim.state`; a `Simulation` is made by `runTMS` |
 | `create_graph_state` | `CreateState(type = Pure(), state = graph_state(graph))` |
@@ -132,7 +132,8 @@ A phase of one's own is a subtype of `TensorMixedStates.AbstractPhase`, which re
 union `Phases`, with the fields `name`, `time_start` and `final_measurements`, and it runs by
 `run_phase(phase, sim, done)`, or step by step by `prepare_phase`, `step_count` and `run_step`,
 see [Extending TMS](extending.md). `run_steps`, `resume_step` and `Algo` are gone,
-`EvolutionAlgorithm` and `SearchAlgorithm` taking the place of the last.
+`TensorMixedStates.EvolutionAlgorithm` and `TensorMixedStates.SearchAlgorithm` taking the place
+of the last.
 
 ## Operators, sites and states
 
@@ -140,6 +141,7 @@ see [Extending TMS](extending.md). `run_steps`, `resume_step` and `Algo` are gon
 |:----|:----|
 | `@def_operators(site, [type => [name = matrix, …]])` | `@def_operators T [name = matrix, …]`, `T` the site type |
 | `Operator{N}(name, definition, type)` | `Operator{N}(name, definition)` |
+| `Op`, `GenericOp`, `IndexedOp`, `SimpleOp` | not exported: `TensorMixedStates.GenericOp` |
 | `OpType`, `plain_op`, `fermionic_op`, `selfadjoint_op`, `involution_op` | removed: the parity of an operator comes from `fermion_parities` of its site |
 | `isfermionic`, `has_fermionic` | removed, as above |
 | `named(…; type)`, `controlled(op; type)` | without `type` |

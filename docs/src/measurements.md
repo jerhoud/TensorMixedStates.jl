@@ -187,7 +187,7 @@ their `measurements`, given as pairs `destination => measurements`. The destinat
   Data("mydata") => [TraceDeviation, X(1), Y]
   ```
 
-- a `Destination` of one's own.
+- a `TensorMixedStates.Destination` of one's own.
 
 The columns of a table are `time`, then a column per value: the name of the measurement, as
 `X(1)*X(3)` for an operator placed on sites, `X(i)` for each site of an operator of one site,
@@ -206,5 +206,5 @@ df = data_to_frame(mysim.data["mydata"])
 ```@docs
 output
 log_message
-Destination
+TensorMixedStates.Destination
 ```

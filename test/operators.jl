@@ -23,7 +23,7 @@ end
     @test matrix(0 * X, q) ≈ zeros(2, 2)
     g = 0.0
     @test matrix(g * C + g * dag(C), f) == zeros(2, 2)
-    @test matrix(TMS.SumOp(TMS.Op{IsOperator, TMS.Generic, 1}[]), f) == zeros(2, 2)
+    @test matrix(TMS.SumOp(TMS.Op{TMS.IsOperator, TMS.Generic, 1}[]), f) == zeros(2, 2)
 end
 
 @testset "Operator simplification" begin
@@ -119,8 +119,8 @@ end
     @test_throws "Proj(N => 1)(3) rather than Proj(N(3) => 1)" Proj(X(3) => 1)
     # of several sites, the singlet and the spin 2 of two spins one, printed as before whatever
     # its number of sites
-    @test Proj("Up") isa SimpleOp
-    @test Proj(Swap => -1) isa GenericOp{IsOperator, 2}
+    @test Proj("Up") isa TMS.SimpleOp
+    @test Proj(Swap => -1) isa TMS.GenericOp{TMS.IsOperator, 2}
     @test repr(Proj("Up")) == "Proj(\"Up\")"
     @test repr(Proj(Swap => -1)) == "Proj(Swap => -1)"
     @test matrix(Proj(Swap => -1), Qubit()) ≈ matrix((Id ⊗ Id - Swap) / 2, Qubit())
@@ -937,7 +937,7 @@ end
     # several sites, and placed, where it has no site, being the identity of the whole system
     q = Qubit()
     @test Id ⊗ Id isa TMS.IdentityOp
-    @test Gate(Id) isa TMS.IdentityOp{IsChannel}
+    @test Gate(Id) isa TMS.IdentityOp{TMS.IsChannel}
     @test Gate(Id ⊗ Id) == Gate(Id) ⊗ Gate(Id) == Id ⊗ Gate(Id)
     @test Gate(Id)^2 == Gate(Id)
     @test Gate(3Id) == 9 * Gate(Id)

@@ -228,10 +228,10 @@ end
 
 interleaved(i) = 2i - 1
 
-TensorMixedStates.apply(op::IndexedOp, st::InterleavedState; kwargs...) =
+TensorMixedStates.apply(op::TensorMixedStates.IndexedOp, st::InterleavedState; kwargs...) =
     InterleavedState(st.system, apply(map_sites(interleaved, op), st.inner; kwargs...))
 
-TensorMixedStates.expect(st::InterleavedState, op::IndexedOp) =
+TensorMixedStates.expect(st::InterleavedState, op::TensorMixedStates.IndexedOp) =
     expect(st.inner, map_sites(interleaved, op))
 
 # the state on the doubled system goes in a subgroup, read back on the sites it lies on
@@ -290,7 +290,7 @@ end
 
 # An evolution of one's own: each step by the exponential of the dense matrix of the MPO of the
 # evolver, its time functions read at the middle of the step, exact on a small system
-struct DenseStep <: EvolutionAlgorithm end
+struct DenseStep <: TensorMixedStates.EvolutionAlgorithm end
 
 function TensorMixedStates.evolve_step(::DenseStep, pre::PreMPO, coefs, state::State{R}, time, dt,
                                        step, limits) where R
@@ -301,7 +301,7 @@ function TensorMixedStates.evolve_step(::DenseStep, pre::PreMPO, coefs, state::S
 end
 
 # one that records what each step is given and multiplies the state by `factor`
-struct StepRecorder <: EvolutionAlgorithm
+struct StepRecorder <: TensorMixedStates.EvolutionAlgorithm
     calls::Vector{Any}
     factor::Float64
 end
@@ -315,10 +315,10 @@ function TensorMixedStates.evolve_step(a::StepRecorder, pre, coefs, state, time,
 end
 
 # one that has no step
-struct Stepless <: EvolutionAlgorithm end
+struct Stepless <: TensorMixedStates.EvolutionAlgorithm end
 
 # A search of one's own: the lowest eigenvector of the dense matrix of the MPO
-struct DenseSearch <: SearchAlgorithm end
+struct DenseSearch <: TensorMixedStates.SearchAlgorithm end
 
 function TensorMixedStates.search(::DenseSearch, mpo, state::State{R}, limits; sweep_done = nothing,
                                   krylov = Krylov(), done = 0, energy = nothing) where R

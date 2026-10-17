@@ -10,10 +10,10 @@ An evolution or a search is given its method as `algo`: `Tdvp` or `ApproxW` for 
 steps is a `Krylov`.
 
 ```@docs
-EvolutionAlgorithm
+TensorMixedStates.EvolutionAlgorithm
 Tdvp
 ApproxW
-SearchAlgorithm
+TensorMixedStates.SearchAlgorithm
 Dmrg
 ```
 

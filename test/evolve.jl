@@ -680,7 +680,7 @@ end
     @test repr(ApproxW(order = 4)) ==
           "ApproxW(order = 4, w = 2, apply_algo = \"naive\", hermitianize_period = 0)"
     @test ApproxW(order = 3, w = 1, apply_algo = "densitymatrix").apply_algo == "densitymatrix"
-    @test Tdvp() isa EvolutionAlgorithm && ApproxW(order = 1) isa EvolutionAlgorithm
+    @test Tdvp() isa TMS.EvolutionAlgorithm && ApproxW(order = 1) isa TMS.EvolutionAlgorithm
     # the order and the approximation are checked when the method is written, not at its first
     # step, and the order has no default
     @test_throws UndefKeywordError ApproxW()

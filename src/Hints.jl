@@ -79,6 +79,10 @@ const renamed_names = Dict{Symbol, String}(
     :SysIndex => "SysIndex was removed: the index of site i is siteind(Pure, system, i)",
     :make_approx_W1 => "make_approx_W1 is no longer exported: TensorMixedStates.make_approx_W1",
     :make_approx_W2 => "make_approx_W2 is no longer exported: TensorMixedStates.make_approx_W2",
+    :Op => "Op is no longer exported: TensorMixedStates.Op",
+    :GenericOp => "GenericOp is no longer exported: TensorMixedStates.GenericOp",
+    :IndexedOp => "IndexedOp is no longer exported: TensorMixedStates.IndexedOp",
+    :SimpleOp => "SimpleOp is no longer exported: TensorMixedStates.SimpleOp",
     :run_steps => "run_steps was removed: a phase of one's own made of steps, see " *
                   "TensorMixedStates.prepare_phase, or Update(f; nsteps)",
     :resume_step => "resume_step was removed: a phase of one's own made of steps resumes by " *

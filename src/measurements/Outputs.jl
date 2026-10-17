@@ -2,7 +2,7 @@
 # other packages extend, the text tables, the JSON Lines files and the Data of TMS, and Outputs,
 # which measures lists on a state and writes each to its destination.
 
-export Destination, Data, data_to_frame
+export Data, data_to_frame
 
 """
     Destination

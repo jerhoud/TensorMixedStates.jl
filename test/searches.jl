@@ -358,7 +358,7 @@ end
 end
 
 @testset "The methods and their parameters" begin
-    @test Dmrg(nsweeps = 3) isa SearchAlgorithm
+    @test Dmrg(nsweeps = 3) isa TMS.SearchAlgorithm
     @test repr(Dmrg(nsweeps = 3)) == "Dmrg(nsweeps = 3, noise = 0.0, krylov = Krylov(), tol = 0.0)"
     @test repr(Dmrg(nsweeps = 3, noise = [1e-6, 0], krylov = Krylov(dim = 8), tol = 1e-10)) ==
           "Dmrg(nsweeps = 3, noise = [1.0e-6, 0.0], krylov = Krylov(dim = 8), tol = 1.0e-10)"

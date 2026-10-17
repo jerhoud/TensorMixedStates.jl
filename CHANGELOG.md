@@ -58,6 +58,7 @@ version 2.x.
 - A product of sums that would develop into more terms than its factors have, as a moment `H^4`,
   and on a density matrix a gate or a dissipator of an operator of many terms, are built from the
   MPOs of their factors, at a cost linear in the number of sites.
+- `Op`, `GenericOp`, `IndexedOp` and `SimpleOp` are no longer exported.
 
 ### Removed
 

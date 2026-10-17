@@ -3,7 +3,7 @@
 # layers walk an expression with `scalarcoef`, `scalararg`, `sumsubs`, `prodsubs`,
 # `factor_sites`, `scale`, `power`, `is_pure` and `obs_name`.
 
-export Pure, Mixed, OpKind, IsOperator, IsChannel, IsGenerator, Op, GenericOp, IndexedOp, SimpleOp
+export Pure, Mixed
 export Operator, Id, Proj, Gate, Reset, Dephase, Dissipator, Evolver, named, parity, dag, ⊗,
     tensor, map_sites
 
