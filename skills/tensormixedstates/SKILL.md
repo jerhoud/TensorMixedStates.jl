@@ -18,6 +18,12 @@ julia -e 'using TensorMixedStates; print(pkgversion(TensorMixedStates))'   # mus
 julia -e 'using TensorMixedStates; print(joinpath(pkgdir(TensorMixedStates), "docs", "src", "quickref.md"))'
 ```
 
+Installing compiles for five to six minutes with up to 7 GB of memory. With less memory, first
+write `[TensorMixedStates]` and `precompile_workload = false` on two lines of a
+`LocalPreferences.toml` next to the `Project.toml` of the environment: the installation then
+compiles in seconds, each session compiling what it uses, about three minutes for a first
+simulation.
+
 Read that `quickref.md`: the whole library on one page, version matched. `upgrading.md`, next
 to it, lists what changed since version 1. In Julia, `?name` gives the help of a function or a
 type, and that of a site type, as `?Qubit`, its states and its operators.
