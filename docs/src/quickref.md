@@ -11,6 +11,10 @@ using TensorMixedStates, .Qubits, .Fermions, .Bosons   # the module of each site
                                                       # .Spins, .Electrons, .Tjs, .Qudits, .Qbosons
 ```
 
+A site module brings short names, `N`, `H`, `T`: a script using them as variables takes only
+what it needs, `using .Qubits: Qubit, X, Z`, or writes them qualified after
+`import .Qubits as Q`, as `Q.X(1)`.
+
 Run scripts with `julia --threads=auto script.jl`. The first call of a session compiles, a few
 seconds; the precompiled workload covers the common paths.
 

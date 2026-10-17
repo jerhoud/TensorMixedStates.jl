@@ -65,7 +65,8 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
 - A density matrix is `State{Mixed}`; dissipators and channels need one, `mix(ψ)` makes one,
   of the square of the bond dimension of `ψ`: from a ground state of bond dimension 100, a
   density matrix of 10000, which no machine evolves. Truncate `ψ` first, or start mixed.
-- `H`, `X`, `S`, `T`, `N` are operators of `Qubits`: do not name variables after them.
+- `H`, `X`, `S`, `T`, `N` are operators of `Qubits`: do not name variables after them, or
+  import only what you use, `using .Qubits: Qubit, X, Z`.
 - `measure` returns a vector of pairs `name => value`, even for one measurement, and an
   operator of one site, `Z`, gives one pair `"Z" => [a value per site]`. The value of a
   Hermitian operator is real, of any other complex; `Trace` is complex. For one number call

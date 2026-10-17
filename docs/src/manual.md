@@ -232,7 +232,9 @@ of your program shadows the function for the rest of the file, and if you happen
 used it before assigning to it, Julia 1.10 and 1.11 refuse the assignment outright with
 `cannot assign a value to imported variable`. There is no such issue inside a function,
 where `state = ...` is an ordinary local variable. This manual prefixes its own variables with
-`my`, as in `mystate` and `myop`, which is one way of staying clear.
+`my`, as in `mystate` and `myop`, which is one way of staying clear. Another is to take from a
+site module only the names one uses, `using .Qubits: Qubit, X, Z`, which leaves `N`, `H` and `T`
+free, or to write them qualified after `import .Qubits as Q`, as `Q.X(3)`.
 
 The operator system is very rich and flexible. For example, if you want to use this Hamiltonian
 
