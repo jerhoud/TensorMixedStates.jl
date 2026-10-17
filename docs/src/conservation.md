@@ -51,11 +51,11 @@ QN("N",-1)
 Under `Qubit(conserve = parity(N))` it has one, `QN("parity(N)",1,2)`, the two differences
 becoming the same one modulo 2.
 
-The flux is asked of every factor of one site, and not only of the whole operator: each
-factor becomes a tensor of its own. `Sx(1) * Sx(2) + Sy(1) * Sy(2)` conserves the
-magnetisation as a whole, but under `Spin(1, conserve = 2Sz)` its factors have none, and it is
-refused. Written with factors of a definite flux, as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 2`, it
-is accepted.
+The flux is that of the whole operator. A factor of one site connecting several charges, as
+`Sx`, is split into parts of definite flux, and the parts of a flux other than the whole must
+cancel: `Sx(1) * Sx(2) + Sy(1) * Sy(2)`, which conserves the magnetisation, is accepted under
+`Spin(1, conserve = 2Sz)`, the same operator as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 2`, while
+`Sx(1) * Sx(2)` alone has no flux.
 
 An operator of no definite charge can still be measured: `expect`, `expect1`, `expect2`,
 `measure`, `probabilities` and `sample` take its value on the state conserving nothing, see
