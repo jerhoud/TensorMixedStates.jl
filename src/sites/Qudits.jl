@@ -27,7 +27,7 @@ Writing ``d`` for the dimension and ``\\omega = e^{2i\\pi/d}``, the clock operat
 
 - `N`  : the level operator, `diag(0, 1, ..., d-1)`
 - `Z`  : the clock operator, `mod(N, d)`
-- `X`  : the shift operator
+- `X`  : the shift operator, ``ZX = \\omega XZ``
 
 In the module `Circuits`:
 

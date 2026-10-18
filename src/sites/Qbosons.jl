@@ -21,7 +21,8 @@ the site type of a q-boson mode truncated to `dim` levels, the occupation going 
 
 # Operators
 
-- `A` : the annihilation operator ``a``
+- `A` : the annihilation operator ``a``, ``a a^\\dagger - q a^\\dagger a = 1 - q`` except on
+  the last level, which the truncation cuts
 - `N` : the number of q-bosons
 - `Q`, `P` : the position and momentum quadratures, ``(a + a^\\dagger)/\\sqrt{2}`` and
   ``(a - a^\\dagger)/(i\\sqrt{2})``
