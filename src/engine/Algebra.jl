@@ -58,8 +58,8 @@ struct CompactedOp{R}
     system::System
     constant::Number
     # a dictionary of its own element type: converting a Dict{Int, Matrix{Float64}} into a
-    # Dict{Int, Matrix} failed on Julia 1.10 (UndefVarError T in setindex!), depending on what a
-    # session compiled first
+    # Dict{Int, Matrix} failed on Julia 1.10 and 1.13 (UndefVarError T in setindex!), depending
+    # on what a session compiled first, JuliaLang/julia#63928
     singles::Dict{Int, <:Matrix}
     block::Union{Nothing, ComBlock}
     norm::Float64
