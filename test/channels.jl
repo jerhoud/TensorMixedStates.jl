@@ -491,7 +491,7 @@ end
     for a in (Dephase(G), exp(0.1 * Dissipator(G)))
         @test mpo_matrix(State{Mixed}(q3, "FullyMixed"), a(1, 2, 3)) ≈
             matrix(a, Qubit(), Qubit(), Qubit())
-        @test all(b -> maximum(abs, b.m) ≤ 2 + 1e-12,
+        @test all(b -> maximum(abs, b.m) ≤ 1 + 1e-12,
                   [ b for t in TMS.lower(q3, a(1, 2, 3)) for b in t.blocks ])
     end
     # the order of the mixed index, read once for each kind of site

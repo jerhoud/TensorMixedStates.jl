@@ -165,48 +165,72 @@ end
 """
     representatives(blocks)
 
-for each of the matrices `blocks`, the first of them in an order of their own equal to it up to
-rounding, see `nearly`, or itself, so that blocks equal up to rounding become one, their values
-untouched. They are sorted by their projection on fixed random weights, which matrices equal up
-to rounding have within a window of the width of rounding, each compared with the
-representatives of those of its window before it alone
+for each of the matrices `blocks`, a factor and a representative, the block being the factor
+times its representative up to rounding, the blocks proportional up to rounding sharing theirs:
+the first of them in an order of their own, divided by its first element of largest modulus and
+cleared of rounding. The factor of another block is its element there, the whole block then
+checked against the representative, so that no two blocks have to choose the same element, as
+in the deparallelisation of Hubig, McCulloch and Schollwöck, Phys. Rev. B 95, 035129 (2017).
+They are sorted by the projection of their direction on fixed random weights, the same for a
+block and its multiples, which proportional blocks have within a window of the width of
+rounding, each compared with the representatives of those of its window before it alone
 """
 function representatives(blocks::Vector{Matrix})
+    factors = Vector{Number}(undef, length(blocks))
     reps = similar(blocks)
+    # a representative before it is cleared of rounding, and the position of its 1
+    raw = similar(blocks)
+    pivots = zeros(Int, length(blocks))
     for n in unique(length.(blocks))
         group = findall(b -> length(b) == n, blocks)
         # fixed, so that an operator always gives the same MPO, and drawn from a generator of
         # their own, which leaves the draws of the user as they are
         w = randn(Xoshiro(20261015), 2n)
-        p = [ sum(w[j] * real(b[j]) + w[n + j] * imag(b[j]) for j in 1:n) for b in blocks[group] ]
-        δ = norm(w) * rounding_tol * maximum(norm, blocks[group])
+        v = complex.(w[1:n], w[n+1:2n])
+        p = [ abs2(sum(v[j] * b[j] for j in 1:n)) / sum(abs2, b) for b in blocks[group] ]
+        δ = 4 * sum(abs2, v) * rounding_tol
         order = sortperm(p)
         for (a, g) in enumerate(order)
             i = group[g]
-            reps[i] = blocks[i]
+            m = blocks[i]
             for c in a-1:-1:1
                 if p[g] - p[order[c]] > δ
                     break
                 end
-                r = reps[group[order[c]]]
-                if size(r) == size(blocks[i]) && nearly(blocks[i], r)
-                    reps[i] = r
+                j = group[order[c]]
+                k = pivots[j]
+                if size(raw[j]) == size(m) && norm(m - m[k] * raw[j]) ≤ rounding_tol * norm(m)
+                    factors[i], reps[i], raw[i], pivots[i] = m[k], reps[j], raw[j], k
                     break
                 end
             end
+            if pivots[i] == 0
+                k = argmax(abs.(vec(m)))
+                r = m / m[k]
+                r[k] = 1
+                b = copy(r)
+                # rounding between charges, which an eigendecomposition leaves behind, is no
+                # charge
+                b[abs.(b) .≤ rounding_tol * norm(b)] .= 0
+                # as the phases a split by singular values leaves on its factors, see
+                # `split_matrix`
+                if eltype(b) <: Complex && all(x -> abs(imag(x)) ≤ rounding_tol * norm(b), b)
+                    b = real(b)
+                end
+                factors[i], reps[i], raw[i], pivots[i] = m[k], no_signed_zero(b), r, k
+            end
         end
     end
-    return reps
+    return factors, reps
 end
 
 """
     reduced(terms)
 
 the terms with each block equal to a multiple of the identity taken out, every other block
-divided by its first element of at least half its largest, that element going into the
-coefficient, and made real when its imaginary part is of rounding, a term that vanishes on a
-site dropped, the blocks equal up to rounding made one, see `representatives`, and the terms
-of the same blocks gathered, a real coefficient kept real
+written as a factor, which goes into the coefficient, times the representative of the blocks
+proportional to it up to rounding, see `representatives`, a term that vanishes on a site
+dropped, and the terms of the same blocks gathered, a real coefficient kept real
 """
 function reduced(terms::Vector{Term})
     normed = Tuple{Number, Vector{Block}, Term}[]
@@ -223,26 +247,13 @@ function reduced(terms::Vector{Term})
                 coef *= λ
                 continue
             end
-            # a pivot of rounding would make the block huge and its coefficient look like
-            # rounding, which the compaction drops
-            big = maximum(abs, m)
-            k = findfirst(e -> abs(e) ≥ big / 2, m)
-            coef *= m[k]
-            b = m / m[k]
-            b[k] = 1
-            # rounding between charges, which an eigendecomposition leaves behind, is no charge
-            b[abs.(b) .≤ rounding_tol * norm(b)] .= 0
-            # as the phases a split by singular values leaves on its factors, see `split_matrix`
-            if eltype(b) <: Complex && all(x -> abs(imag(x)) ≤ rounding_tol * norm(b), b)
-                b = real(b)
-            end
-            push!(blocks, Block(x.site, b, x.parity))
+            push!(blocks, x)
         end
         if coef ≠ 0
             push!(normed, (coef, blocks, t))
         end
     end
-    reps = no_signed_zero.(representatives(Matrix[ x.m for (_, bs, _) in normed for x in bs ]))
+    factors, reps = representatives(Matrix[ x.m for (_, bs, _) in normed for x in bs ])
     out = Term[]
     seen = Dict{Tuple{Vector{Block}, Vector{Int}, Vector{Int}}, Int}()
     r = 0
@@ -250,6 +261,7 @@ function reduced(terms::Vector{Term})
         blocks = Block[]
         for x in bs
             r += 1
+            coef *= factors[r]
             push!(blocks, Block(x.site, reps[r], x.parity))
         end
         key = (blocks, t.kets, t.bras)

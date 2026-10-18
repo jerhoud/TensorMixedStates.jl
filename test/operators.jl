@@ -530,6 +530,13 @@ end
     @test terms(X(1) * Y(1)) == [(im, [1])]
     @test only(TMS.lower(s2, X(1) * Y(1))).blocks == [TMS.Block(1, z, 0)]
     @test terms(X(1) + X(1)) == [(2., [1])]
+    # whatever element their ratio would be read on: A of a boson of dimension 5, of elements 1,
+    # √2, √3 and 2, and the same one unit of rounding off on its 1, half its largest element
+    a5 = matrix(A, Boson(5))
+    a5r = copy(a5)
+    a5r[1, 2] = prevfloat(1.0)
+    pair = Operator{1}("a", a5)(1) * A(2) + Operator{1}("a'", a5r)(1) * A(2)
+    @test length(TMS.lower(System(2, Boson(5)), pair)) == 1
     @test isempty(terms(X(1) - X(1))) && isempty(terms(Sp(1) * Sp(1)))
     yy = only(TMS.lower(s2, Y(1) * Y(2)))
     @test yy.coef === -1. && all(b -> eltype(b.m) == Float64, yy.blocks)
