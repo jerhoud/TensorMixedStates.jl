@@ -645,7 +645,16 @@ function compacted(::Type{R}, system::System, terms::Vector{Term},
             k, m, _ = only(fs)
             add!(singles, k, T.(t.coef * m))
         else
-            push!(multi, (T(t.coef), [ (k, atom(k, m), g) for (k, m, g) in fs ]))
+            # the pass weighs a term by its coefficient: each factor is divided by the power of
+            # two of its norm, which goes into the coefficient exactly
+            c = T(t.coef)
+            ids = Tuple{Int, Int, Int}[]
+            for (k, m, g) in fs
+                e = iszero(m) ? 0 : exponent(norm(m))
+                c *= exp2(e)
+                push!(ids, (k, atom(k, m * exp2(-e)), g))
+            end
+            push!(multi, (c, ids))
         end
     end
     b = nothing

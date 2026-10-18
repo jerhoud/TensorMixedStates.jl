@@ -57,6 +57,20 @@ end
     @test memory_channels(st, nz) == fill(1, n - 1)
 end
 
+@testset "A term weighed by its blocks, not by its coefficient alone" begin
+    # a block of norm 1e14 with a coefficient of 1e-14, as a block divided by a remainder of
+    # rounding once was, beside a term of the same first factor: the compaction kept the
+    # coefficient alone and dropped the term as rounding
+    sys = System(3, Qubit())
+    t1 = only(TMS.lower(sys, X(1) * Z(2) * Z(3)))
+    t2 = only(TMS.lower(sys, X(1) * Y(2) * Y(3)))
+    scaled = [ b.site == 3 ? TMS.Block(3, 1e14 * b.m, b.parity) : b for b in t2.blocks ]
+    ts = [t1, TMS.Term(1e-14 * t2.coef, scaled, t2.kets, t2.bras)]
+    c = TMS.from_terms(Pure, sys, X(1) * Z(2) * Z(3) + X(1) * Y(2) * Y(3), ts)
+    h = TMS.system_matrix(Pure, sys, ts)
+    @test norm(mpo_matrix(PreMPO(sys, [c])) - h) < 1e-12 * norm(h)
+end
+
 @testset "A factor holding the identity" begin
     # (Id + Z)(1) * Z(2) stands for Z(2) + Z(1) * Z(2), its part of one site laid on that site
     st = State{Pure}(System(3, Qubit()), "Up")
