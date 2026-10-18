@@ -348,3 +348,16 @@ end
               1e-12 * nnorm(mpo_matrix(pv, c))
     end
 end
+
+@testset "A real operator compacted first in a session" begin
+    # Julia 1.10 failed on the matrices of one site of a real operator compacted first in a
+    # session, as the first one measured, which a new process alone shows
+    script = """
+        using TensorMixedStates, .Qubits, Random
+        h = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.5 * sum(X(i) for i in 1:4)
+        ψ = random_state(Pure, System(4, Qubit()), 4; rng = Xoshiro(1))
+        print(only(last.(measure(ψ, Measure(h)))) ≈ real(expect(ψ, h)))
+        """
+    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no -e $script`
+    @test read(cmd, String) == "true"
+end

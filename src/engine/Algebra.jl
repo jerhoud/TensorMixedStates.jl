@@ -57,7 +57,10 @@ when it has no term, and its terms when it was made of them alone. Each time fun
 struct CompactedOp{R}
     system::System
     constant::Number
-    singles::Dict{Int, Matrix}
+    # a dictionary of its own element type: converting a Dict{Int, Matrix{Float64}} into a
+    # Dict{Int, Matrix} failed on Julia 1.10 (UndefVarError T in setindex!), depending on what a
+    # session compiled first
+    singles::Dict{Int, <:Matrix}
     block::Union{Nothing, ComBlock}
     norm::Float64
     width::Float64
@@ -154,7 +157,7 @@ function Base.adjoint(c::CompactedOp{R}) where R
                              for (lr, comb) in p) for p in b.pieces ],
                  [ [ collect(m') for m in atoms ] for atoms in b.atoms ])
     return CompactedOp{R}(c.system, conj(c.constant),
-                          Dict{Int, Matrix}(k => collect(m') for (k, m) in c.singles), block,
+                          typeof(c.singles)(k => collect(m') for (k, m) in c.singles), block,
                           c.norm, c.width, isnothing(c.flux) ? nothing : -c.flux, nothing)
 end
 
