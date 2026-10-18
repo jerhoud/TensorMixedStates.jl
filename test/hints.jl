@@ -30,6 +30,11 @@ end
     @test occursin("Upgrading from 1.x", message(() -> Core.eval(m, :HermiticityError)))
     # a name that is no name of 1.x has no hint
     @test !occursin("TensorMixedStates", message(() -> Core.eval(m, :undefined_name)))
+    # nor a static parameter named as a gate of 1.x, which Julia tells apart from 1.11 on
+    if VERSION ≥ v"1.11"
+        parameter(x::Union{Int, Vector{T}}) where T = T
+        @test !occursin("TensorMixedStates", message(() -> parameter(1)))
+    end
     # a solver of ITensorMPS called on the objects of this package
     st = State{Pure}(System(2, Qubit()), "Up")
     @test occursin("dmrg became ground_state", message(() -> TMS.ITensorMPS.dmrg(Z(1), st)))

@@ -276,6 +276,10 @@ end
 
 function __init__()
     Base.Experimental.register_error_hint(UndefVarError) do io, e
+        # from Julia 1.11 on, a static parameter or a local variable says so: no name of 1.x
+        if isdefined(e, :scope) && e.scope isa Symbol
+            return
+        end
         h = get(renamed_names, e.var, nothing)
         if !isnothing(h)
             print(io, "\nTensorMixedStates 2.0: ", h,
