@@ -19,6 +19,17 @@ constructor taking the values of its fields in their order, which reading a stat
     end
     MySite(; conserve = ()) = conserving(MySite; conserve)
     TensorMixedStates.dim(::MySite) = 2
+
+# Operators
+
+Declared once for every site type, each of these holds on a site type that declares what it is
+made of, `Sp` and `Sz`, `A`, or `Cup` and `Cdn`, unless it declares the name itself:
+
+- `Sm`             : `dag(Sp)`
+- `Sx, Sy`         : `(Sp + Sm) / 2` and `(Sp - Sm) / 2im`
+- `S2`             : `(Sp * Sm + Sm * Sp) / 2 + Sz^2`
+- `Q, P`           : `(A + dag(A)) / √2` and `(A - dag(A)) / (im * √2)`
+- `Nup, Ndn, Ntot` : `dag(Cup) * Cup`, `dag(Cdn) * Cdn` and `Nup + Ndn`
 """
 abstract type AbstractSite end
 
@@ -354,20 +365,21 @@ const Cdn = Operator{1}("Cdn")
     site_types()
 
 the site types declaring operators, read off the methods `@def_operators` added, in the order of
-their names
+their names, and last the abstract ones declaring some, as `AbstractSite` its relations
 """
 function site_types()
     ts = DataType[]
     for m in methods(operator_definition)
         sig = Base.unwrap_unionall(m.sig)
         if length(sig.parameters) == 3
-            t = sig.parameters[2]
-            if t isa DataType && t <: AbstractSite && !isabstracttype(t) && !(t in ts)
+            t, v = sig.parameters[2], sig.parameters[3]
+            if t isa DataType && t <: AbstractSite && !(t in ts) &&
+               (!isabstracttype(t) || (v isa DataType && !isempty(v.parameters)))
                 push!(ts, t)
             end
         end
     end
-    return sort!(ts; by = t -> string(nameof(t)))
+    return sort!(ts; by = t -> (isabstracttype(t), string(nameof(t))))
 end
 
 """
@@ -436,8 +448,9 @@ end
     getdoc(op::Operator{1})
 
 the help of an operator of one site that has none of its own, as `X`, `?X` at the prompt: what
-it is on each site type naming it in the section `Operators` of its help, and the modules of
-this package exporting it; `nothing`, which leaves the help to Julia, for another operator
+it is on each site type naming it in the section `Operators` of its help, then on every site
+type as `AbstractSite` names it, and the modules of this package exporting it; `nothing`, which
+leaves the help to Julia, for another operator
 """
 function Base.Docs.getdoc(a::Operator{1})
     name = Symbol(a.name)
@@ -451,8 +464,9 @@ function Base.Docs.getdoc(a::Operator{1})
     for t in ts, (names, rest) in operator_lines(t)
         if a.name in names
             group = length(names) > 1 ? Any[" (", Markdown.Code(join(names, ", ")), ")"] : Any[]
-            push!(lines, Any[Markdown.Paragraph(Any["on ", Markdown.Code(string(nameof(t))),
-                                                    group..., ": ", rest...])])
+            on = isabstracttype(t) ? Any["on every site type declaring what it is made of"] :
+                                     Any["on ", Markdown.Code(string(nameof(t)))]
+            push!(lines, Any[Markdown.Paragraph(Any[on..., group..., ": ", rest...])])
         end
     end
     if isempty(lines)

@@ -987,6 +987,17 @@ end
     @test occursin("X, an operator of one site, exported by Qubits and Qudits:", x)
     @test occursin("on Qubit (X, Y, Z): the Pauli operators", x)
     @test occursin("on Qudit: the shift operator", x)
+    # the relations declared once for every site type are named in the help of AbstractSite
+    relations = String[]
+    for m in methods(TMS.operator_definition)
+        _, t, v = Base.unwrap_unionall(m.sig).parameters
+        if t === AbstractSite && v isa DataType && !isempty(v.parameters)
+            push!(relations, string(only(v.parameters)))
+        end
+    end
+    named = reduce(vcat, [ first(l) for l in TMS.operator_lines(AbstractSite) ]; init = String[])
+    @test !isempty(relations) && issubset(relations, named)
+    @test occursin("on every site type declaring what it is made of: dag(Sp)", help(Sm))
     # the site types of one's own, beside those of the package
     @test occursin("on Lamp: the light it gives", help(Glow))
     @test occursin("on Fermion: the number of fermions", help(N))

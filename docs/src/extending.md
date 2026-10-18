@@ -72,6 +72,10 @@ which the help of an operator, `?Nr`, gathers from every site type naming it:
 - `Nr`       : the Rydberg population
 ```
 
+A site type declaring `Sp` and `Sz` also has `Sm`, `Sx`, `Sy` and `S2`, one declaring `A` has
+`Q` and `P`, and one declaring `Cup` and `Cdn` has `Nup`, `Ndn` and `Ntot`, as the help of
+[`AbstractSite`](@ref) lists, unless it declares these names itself.
+
 ### Conserved quantities
 
 A site type that can conserve quantities records them in a field `conserve` of type
