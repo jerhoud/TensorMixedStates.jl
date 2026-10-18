@@ -134,6 +134,9 @@ A rotation by `θ` has `θ/2` in its exponent, `Rx(θ)` being ``e^{-i\theta X/2}
 
 ```@docs
 TensorMixedStates.Circuits
+H
+S
+T
 Phase
 Sum
 Rx

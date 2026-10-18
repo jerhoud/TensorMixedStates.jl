@@ -5,6 +5,29 @@
 export Circuits
 
 """
+    H
+
+the Hadamard gate of a qubit, ``(X + Z)/\\sqrt{2}``, and on a qudit the Fourier operator,
+``|j\\rangle \\mapsto \\sum_k \\omega^{jk} |k\\rangle / \\sqrt{d}``, ``\\omega = e^{2i\\pi/d}``
+"""
+H
+
+"""
+    S
+
+the phase gate of a qubit, ``\\mathrm{diag}(1, i)``, and on a qudit the phase operator, of order
+``d`` for odd ``d`` and ``2d`` for even ``d``, see `Qudit`
+"""
+S
+
+"""
+    T
+
+the gate ``\\mathrm{diag}(1, e^{i\\pi/4})`` of a qubit, the square root of `S`
+"""
+T
+
+"""
     Rx(θ)
 
 the rotation by the angle `θ` about the axis `x`, ``e^{-i\\theta S_x}``: on a qubit

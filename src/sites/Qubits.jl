@@ -35,8 +35,11 @@ values ±1, so `conserve = Z` conserves the magnetization, as `2Sz` does; its pa
 - `N`                : the number of excitations, ``(1 - Z)/2``: `"Dn"` is the occupied state
                        and `Sm` creates an excitation
 
-The gates `H`, `S`, `T`, `Phase(t)`, the rotations and the controlled gates are in the module
-`Circuits`.
+In the module `Circuits`, with `Phase(t)`, the rotations and the controlled gates:
+
+- `H`                : the Hadamard gate, ``(X + Z)/\\sqrt{2}``
+- `S, T`             : the phase gates ``\\mathrm{diag}(1, i)`` and
+                       ``\\mathrm{diag}(1, e^{i\\pi/4})``
 """
 struct Qubit <: AbstractSite
     conserve::Conservation
