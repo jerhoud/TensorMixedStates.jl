@@ -26,7 +26,8 @@ simulation.
 
 Read that `quickref.md`: the whole library on one page, version matched. `upgrading.md`, next
 to it, lists what changed since version 1. In Julia, `?name` gives the help of a function or a
-type, and that of a site type, as `?Qubit`, its states and its operators.
+type, that of a site type, as `?Qubit`, its states and its operators, and that of an operator,
+as `?X`, what it is on each site type that has it.
 
 Write a script and run it with `julia --threads=auto script.jl`. The first run of a session
 compiles for a few seconds.

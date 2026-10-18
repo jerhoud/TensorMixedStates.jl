@@ -19,6 +19,8 @@ version 2.x.
 
 ### Added
 
+- `?X` on an operator of a site type: what it is on each site type that has it, read off their
+  helps, and the modules exporting it.
 - `thermalize` and the phase `Thermalize`, the thermal state of a Hamiltonian, or its canonical
   state from `fully_mixed` of a sector.
 - Channels and their dissipators: `depolarizing_gate`, `dephasing_gate`, `reset_gate`, and for

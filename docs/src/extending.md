@@ -61,7 +61,16 @@ measure(mystate, [Nr, Trace])
 ```
 
 The names of the operators become constants of the module the declaration is in, the first time
-they are declared, which a package exports with its site type.
+they are declared, which a package exports with its site type. The help of a site type, its
+docstring, lists its operators in a section `# Operators`, as the site types of this package do,
+which the help of an operator, `?Nr`, gathers from every site type naming it:
+
+```
+# Operators
+
+- `Sge, Ser` : the transitions from g to e and from e to r
+- `Nr`       : the Rydberg population
+```
 
 ### Conserved quantities
 

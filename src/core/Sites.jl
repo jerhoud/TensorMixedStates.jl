@@ -347,3 +347,128 @@ const Cdn = Operator{1}("Cdn")
     Ndn = dag(Cdn) * Cdn,
     Ntot = Nup + Ndn,
 ]
+
+############### The help of the operators of the site types ###############
+
+"""
+    site_types()
+
+the site types declaring operators, read off the methods `@def_operators` added, in the order of
+their names
+"""
+function site_types()
+    ts = DataType[]
+    for m in methods(operator_definition)
+        sig = Base.unwrap_unionall(m.sig)
+        if length(sig.parameters) == 3
+            t = sig.parameters[2]
+            if t isa DataType && t <: AbstractSite && !isabstracttype(t) && !(t in ts)
+                push!(ts, t)
+            end
+        end
+    end
+    return sort!(ts; by = t -> string(nameof(t)))
+end
+
+"""
+    markdown_blocks(md)
+
+the blocks of the help `md`, those of the helps it gathers taken one by one
+"""
+markdown_blocks(md::Markdown.MD) =
+    reduce(vcat, [ markdown_blocks(x) for x in md.content ]; init = Any[])
+markdown_blocks(x) = Any[x]
+
+"""
+    type_help(t)
+
+the help of the type `t`, its docstrings read off the documentation of its module, where
+`Base.Docs.doc` needs the REPL
+"""
+function type_help(t::DataType)
+    m = parentmodule(t)
+    docs = get(Base.Docs.meta(m), Base.Docs.Binding(m, nameof(t)), nothing)
+    if isnothing(docs)
+        return Markdown.MD(Any[])
+    end
+    return Markdown.MD(Any[ Markdown.parse(join(string.(docs.docs[s].text))) for s in docs.order ])
+end
+
+"""
+    operator_lines(t)
+
+the items of the section `Operators` of the help of the site type `t`, as the site types of
+this package write them: the names given as code before the colon of each, and what follows it
+"""
+function operator_lines(t::DataType)
+    lines = Tuple{Vector{String}, Vector{Any}}[]
+    inside = false
+    for b in markdown_blocks(type_help(t))
+        if b isa Markdown.Header
+            inside = b.text == ["Operators"]
+        elseif inside && b isa Markdown.List
+            for item in b.items
+                if isempty(item) || !(first(item) isa Markdown.Paragraph)
+                    continue
+                end
+                names, rest, colon = String[], Any[], false
+                for x in first(item).content
+                    if colon
+                        push!(rest, x)
+                    elseif x isa Markdown.Code
+                        append!(names, strip.(split(x.code, ",")))
+                    elseif x isa AbstractString && occursin(":", x)
+                        colon = true
+                        after = lstrip(split(x, ":"; limit = 2)[2])
+                        if !isempty(after)
+                            push!(rest, after)
+                        end
+                    end
+                end
+                push!(lines, (names, rest))
+            end
+        end
+    end
+    return lines
+end
+
+"""
+    getdoc(op::Operator{1})
+
+the help of an operator of one site that has none of its own, as `X`, `?X` at the prompt: what
+it is on each site type naming it in the section `Operators` of its help, and the modules of
+this package exporting it; `nothing`, which leaves the help to Julia, for another operator
+"""
+function Base.Docs.getdoc(a::Operator{1})
+    name = Symbol(a.name)
+    ts = site_types()
+    homes = unique([@__MODULE__; [ parentmodule(t) for t in ts ]])
+    bound = [ m for m in homes if isdefined(m, name) && getfield(m, name) === a ]
+    if isempty(bound) || any(m -> haskey(Base.Docs.meta(m), Base.Docs.Binding(m, name)), bound)
+        return nothing
+    end
+    lines = Any[]
+    for t in ts, (names, rest) in operator_lines(t)
+        if a.name in names
+            group = length(names) > 1 ? Any[" (", Markdown.Code(join(names, ", ")), ")"] : Any[]
+            push!(lines, Any[Markdown.Paragraph(Any["on ", Markdown.Code(string(nameof(t))),
+                                                    group..., ": ", rest...])])
+        end
+    end
+    if isempty(lines)
+        return nothing
+    end
+    head = Any[Markdown.Code(a.name), ", an operator of one site"]
+    mods = [ string(n) for n in names(@__MODULE__)
+             if getfield(@__MODULE__, n) isa Module && n ≠ nameof(@__MODULE__) &&
+                name in names(getfield(@__MODULE__, n)) ]
+    for (i, m) in enumerate(mods)
+        push!(head, i == 1 ? ", exported by " : i == length(mods) ? " and " : ", ")
+        push!(head, Markdown.Code(m))
+    end
+    push!(head, ":")
+    return Markdown.MD(Any[Markdown.Paragraph(head), Markdown.List(lines),
+                           Markdown.Paragraph(Any["The help of a site type, as ",
+                                                  Markdown.Code("?Qubit"),
+                                                  ", gives its states and its other operators."])])
+end

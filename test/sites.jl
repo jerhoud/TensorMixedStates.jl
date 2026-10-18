@@ -24,6 +24,23 @@ TensorMixedStates.dim(::Dummit) = 2
 
 @create_site_module(Dummits, [Dummit, N])
 
+# a site type of one's own whose help names its operators, as those of the package do
+"""
+    Lamp()
+
+a lamp, off or on
+
+# Operators
+
+- `Glow` : the light it gives
+- `N`    : on when it is lit
+"""
+struct Lamp <: AbstractSite end
+
+TensorMixedStates.dim(::Lamp) = 2
+
+@def_operators Lamp [ Glow = [0. 0. ; 0. 1.], N = [0. 0. ; 0. 1.] ]
+
 struct Dummit2 <: AbstractSite end
 
 TensorMixedStates.dim(::Dummit2) = 2
@@ -956,4 +973,24 @@ end
             @test norm(apply(op(1, 2), two(charged))) ≈ norm(apply(op(1, 2), two(dense)))
         end
     end
+end
+
+@testset "The help of an operator of a site type" begin
+    help(a) = replace(sprint(show, MIME"text/plain"(), Base.Docs.getdoc(a)), r"\s+" => " ")
+    # each operator a site type of the package declares is named in the section Operators of
+    # its help, from which ?X gathers what X is on each of them
+    for s in (Qubit(), Qudit(3), Fermion(), Boson(3), Qboson(0.5, 4), Spin(1), Electron(), Tj())
+        named = reduce(vcat, [ first(l) for l in TMS.operator_lines(typeof(s)) ]; init = String[])
+        @test issubset(TMS.declared_names(TMS.operator_definition, s), named)
+    end
+    x = help(X)
+    @test occursin("X, an operator of one site, exported by Qubits and Qudits:", x)
+    @test occursin("on Qubit (X, Y, Z): the Pauli operators", x)
+    @test occursin("on Qudit: the shift operator", x)
+    # the site types of one's own, beside those of the package
+    @test occursin("on Lamp: the light it gives", help(Glow))
+    @test occursin("on Fermion: the number of fermions", help(N))
+    @test occursin("on Lamp: on when it is lit", help(N))
+    # a help of its own is kept
+    @test isnothing(Base.Docs.getdoc(Id)) && isnothing(Base.Docs.getdoc(H))
 end
