@@ -673,12 +673,16 @@ end
     plain(sys, op) = TMS.system_matrix(Pure, sys, TMS.reduced(TMS.op_terms(sys, op, ())))
     same(sys, op) = lowered(sys, op) ≈ plain(sys, op)
     nterms(sys, op) = length(TMS.lower(sys, op))
+    # the identity, its coefficient that of a matrix computed to rounding, which varies with the
+    # LAPACK of the machine
+    identity_like(a) = a isa TMS.IdentityOp ||
+                       (a isa TMS.ScalarOp && a.arg isa TMS.IdentityOp && a.coef ≈ 1)
     q, fe = Qubit(), Fermion()
     s5, f4, f5 = System(5, q), System(4, fe), System(5, fe)
     @test TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2)) == X(5)
     @test nterms(s5, Swap(1, 2) * Z(1) * Z(2) * Swap(1, 2)) == 1
-    @test TMS.gathered(s5, Swap(1, 2) * Swap(2, 1)) isa TMS.IdentityOp
-    @test TMS.gathered(f5, Swap(1, 3) * Swap(3, 1)) isa TMS.IdentityOp
+    @test identity_like(TMS.gathered(s5, Swap(1, 2) * Swap(2, 1)))
+    @test identity_like(TMS.gathered(f5, Swap(1, 3) * Swap(3, 1)))
     @test TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2) + Swap(3, 4) * Z(1) * Swap(3, 4)) ==
           X(5) + Z(1)
     # two odd factors that change places take a sign
