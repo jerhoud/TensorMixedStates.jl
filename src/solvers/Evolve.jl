@@ -136,6 +136,15 @@ function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number,
     if vanished(state.state)
         return state
     end
+    # KrylovKit takes its precision as absolute, and a vector below it for a fixed point: the
+    # step is made on the state of norm one, its norm put back after, the evolution being linear.
+    # The norm is the full product, not that of an orthogonality centre, which a state read back
+    # from a file has lost, so that a resumed run takes the same steps
+    n = sqrt(real(dot(state.state, state.state)))
+    if iszero(n)
+        return state
+    end
+    state = State(state, state.state / n)
     mpo = isnothing(coefs) ? cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing) :
                              make_mpo(pre, [ f(time + dt / 2) for f in coefs ])
     tr = truncation(limits)
@@ -155,7 +164,7 @@ function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number,
         tdvp(mpo, dt, state.state; nsweeps = 1, tr...,
              updater_kwargs = (; eager = true, krylov_kwargs(algo.krylov)...))
     end
-    state = State(state, st)
+    state = State(state, n * st)
     if due(algo.hermitianize_period, step)
         state = hermitianize(state; limits)
     end

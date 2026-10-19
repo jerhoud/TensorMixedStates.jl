@@ -81,6 +81,20 @@ end
     end
 end
 
+@testset "A step of tdvp whatever the norm of the state" begin
+    # KrylovKit takes its precision as absolute, and a vector below it for a fixed point: a
+    # density matrix of trace one, whose norm is the square root of its purity, 2^-35 fully mixed
+    # on 70 qubits, did not move, nor a state of norm 1e-13
+    n = 70
+    r = evolve(sum(Dissipator(Sp)(i) for i in 1:n), 1., fully_mixed(System(n, Qubit()));
+               nsteps = 5)
+    @test real(expect(r, Z(1))) ≈ 1 - exp(-1) atol = 1e-10
+    ρ = random_state(Mixed, System(4, Qubit()), 2; rng = Xoshiro(20261019))
+    ev = -im * sum(X(i) * X(i + 1) + Z(i) * Z(i + 1) for i in 1:3) + Dissipator(sqrt(0.1) * Sm)(2)
+    r1 = evolve(ev, 0.5, ρ; nsteps = 5)
+    @test norm(1e13 * evolve(ev, 0.5, 1e-13 * ρ; nsteps = 5) - r1) < 1e-10 * norm(r1)
+end
+
 @testset "Each method against the exact evolution" begin
     # a chain of three qubits, coupled between neighbours and between the two ends across the
     # middle one, in fields along Z and X, evolved for a time 1 from a product state, pure and
