@@ -611,19 +611,22 @@ end
 """
     on_atom_bases(terms, atoms)
 
-the terms of several sites `terms`, as `direct_pass` takes them, rewritten so that the atoms each
-site uses are independent: site by site, the one using the most first, a basis is chosen among
-them by `interpolative`, every other atom written as a combination of it, and the terms of the
-same factors gathered. The pass takes its atoms as independent: a generic matrix split into
-terms of distinct atoms, 3717 on a site for a channel on four sites, made it open as many
-channels.
+the terms of several sites `terms`, as `direct_pass` takes them, rewritten so that the atoms of
+each site that uses more of them than the dimension of its operators are independent: site by
+site, the one using the most first, a basis is chosen among them by `interpolative`, every other
+atom written as a combination of it, and the terms of the same factors gathered. The pass takes
+its atoms as independent: a generic matrix split into terms of distinct atoms, 3717 on a site for
+a channel on four sites, made it open as many channels. Below that dimension, the few relations
+between the atoms are left to the sweeps of `compacted`: a term is developed into a term for
+each combination of the atoms of its factors, which made a product of `Sp` on 20 qubits beside
+`X` and `Y` a million terms.
 """
 function on_atom_bases(terms::Vector{Tuple{T, Vector{Tuple{Int, Int, Int}}}},
                        atoms::Dict{Int, Vector{Matrix{T}}}) where T
     used(k) = sort!(unique(a for (_, fs) in terms for (s, a, _) in fs if s == k))
     for k in sort!(collect(keys(atoms)); by = k -> -length(used(k)))
         ids = used(k)
-        if length(ids) ≤ 1
+        if isempty(ids) || length(ids) ≤ length(atoms[k][first(ids)])
             continue
         end
         rows = [ vec(atoms[k][a]) for a in ids ]

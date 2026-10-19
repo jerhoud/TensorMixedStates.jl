@@ -82,17 +82,28 @@ end
     exact = matrix(Dephase(G), q, q, q, q)
     @test norm(mpo_matrix(pre) - exact) < 1e-12 * norm(exact)
     @test pre.linkdims .- 1 == least_channels(exact, fill(4, 4))
-    # the rewriting: X, Y and X + Y on the first site come out as two independent atoms, the
-    # operator unchanged
-    x, y = ComplexF64[0 1 ; 1 0], ComplexF64[0 -im ; im 0]
-    atoms = Dict(1 => [x, y, x + y], 2 => [x])
-    terms = [ (1.0 + 0im, [(1, a, 0), (2, 1, 0)]) for a in 1:3 ]
-    dense(ts) = sum(c * kron(atoms[1][fs[1][2]], atoms[2][fs[2][2]]) for (c, fs) in ts)
-    rewritten = TMS.on_atom_bases(terms, atoms)
-    used = unique(fs[1][2] for (_, fs) in rewritten)
-    @test length(used) < 3
-    @test LA.rank(reduce(hcat, [ vec(atoms[1][a]) for a in used ])) == length(used)
-    @test dense(rewritten) ≈ dense(terms)
+    # the rewriting: five atoms on a qubit, beyond the four dimensions of its operators, come out
+    # independent, the operator unchanged; three, below, are left as they are
+    x, y, z = ComplexF64[0 1 ; 1 0], ComplexF64[0 -im ; im 0], ComplexF64[1 0 ; 0 -1]
+    for (ms, n) in (([x, y, z, x + y, y + z], 3), ([x, y, x + y], 3))
+        atoms = Dict(1 => ms, 2 => [x])
+        terms = [ (1.0 + 0im, [(1, a, 0), (2, 1, 0)]) for a in eachindex(ms) ]
+        dense(ts) = sum(c * kron(atoms[1][fs[1][2]], atoms[2][fs[2][2]]) for (c, fs) in ts)
+        rewritten = TMS.on_atom_bases(terms, atoms)
+        used = unique(fs[1][2] for (_, fs) in rewritten)
+        @test dense(rewritten) ≈ dense(terms)
+        if length(ms) > 4
+            @test LA.rank(reduce(hcat, [ vec(atoms[1][a]) for a in used ])) == length(used) == n
+        else
+            @test rewritten == terms
+        end
+    end
+    # a product of Sp on 30 qubits beside X and Y, which the rewriting developed into 2^30
+    # terms: three channels, those of the product, of X and of Y, two at the ends, where Sp,
+    # X and Y are dependent
+    sys = System(30, Qubit())
+    h = prod(Sp(i) for i in 1:30) + sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) for i in 1:29)
+    @test maximum(memory_channels(State{Pure}(sys, "Up"), h)) == 3
 end
 
 @testset "A factor holding the identity" begin
