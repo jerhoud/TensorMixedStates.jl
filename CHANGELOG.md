@@ -10,6 +10,10 @@ the reference article.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.6.2] - 2026-10-19
+
 ### Fixed
 
 - `tdvp`, and `Evolve` with `Tdvp()`, lost precision with the norm of the state, as for a
