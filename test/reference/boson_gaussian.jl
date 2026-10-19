@@ -1,9 +1,9 @@
-# Reference values for the "Free bosons with source" testset of `algorithms.jl`, from the
+# Reference values for the "Free bosons with source" testset of `evolve.jl`, from the
 # Gaussian moments of its Lindbladian, which is quadratic: a hopping hamiltonian
 # H = Σ h_ab a_a† a_b on 4 sites and a gain L = √g a_2†, g = (2√0.1)² = 0.4.
 #
 # This file is not part of the test suite and nothing runs it automatically. It is here so
-# that the numbers written in `algorithms.jl` can be checked and regenerated rather than
+# that the numbers written in `evolve.jl` can be checked and regenerated rather than
 # taken on faith: run it with `julia test/reference/boson_gaussian.jl`. It uses LinearAlgebra
 # only, on purpose — a reference produced by the code under test would check nothing.
 #

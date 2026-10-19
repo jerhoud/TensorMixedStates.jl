@@ -1,8 +1,8 @@
-# Reference values for the "Ising chain" testset of `algorithms.jl`, by exact
+# Reference values for the "Ising chain" testset of `evolve.jl`, by exact
 # diagonalization of the 6 qubit ring in its full 64 dimensional Hilbert space.
 #
 # This file is not part of the test suite and nothing runs it automatically. It is here so
-# that the numbers written in `algorithms.jl` can be checked and regenerated rather than
+# that the numbers written in `evolve.jl` can be checked and regenerated rather than
 # taken on faith: run it with `julia test/reference/ising_ed.jl`. It uses LinearAlgebra
 # only, on purpose — a reference produced by the code under test would check nothing.
 #

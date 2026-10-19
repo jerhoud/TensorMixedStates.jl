@@ -1,9 +1,9 @@
-# Reference values for the "Free fermions with source" testset of `algorithms.jl`, by dense
+# Reference values for the "Free fermions with source" testset of `evolve.jl`, by dense
 # Lindblad evolution of the 5 site chain: Jordan-Wigner by hand, then the exponential of the
 # vectorized Liouvillian on the 32 dimensional Fock space.
 #
 # This file is not part of the test suite and nothing runs it automatically. It is here so
-# that the numbers written in `algorithms.jl` can be checked and regenerated rather than
+# that the numbers written in `evolve.jl` can be checked and regenerated rather than
 # taken on faith: run it with `julia test/reference/fermion_lindblad.jl`. It uses
 # LinearAlgebra only, on purpose — a reference produced by the code under test would check
 # nothing.

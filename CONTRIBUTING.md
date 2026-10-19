@@ -123,10 +123,11 @@ list of uncovered lines rather than the percentage.
 Compare against an exact value whenever an exact value exists. A number recorded from a
 previous run freezes the behaviour of the day it was recorded rather than checking anything.
 When no closed form is available, an independent computation often still is:
-`test/reference/` holds scripts that produce the reference values of `algorithms.jl` by
-exact diagonalization and by dense Lindblad evolution, in `LinearAlgebra` alone. They share
-no code with what they check, which is the whole point, and the suite does not run them —
-they are there so the numbers in the tests can be regenerated and argued with. If you must
+`test/reference/` holds scripts that produce the reference values of `evolve.jl` by exact
+diagonalization, by dense Lindblad evolution and from Gaussian moments, in `LinearAlgebra`
+alone, and the files of earlier versions that `states_io.jl` reads back. They share no code
+with what they check, which is the whole point, and the suite does not run them — they are
+there so the numbers in the tests can be regenerated and argued with. If you must
 record a number, say in a comment where it comes from and that it is a regression check.
 
 Randomness is pinned: `runtests.jl` seeds the global generator, and a test that draws should
@@ -150,21 +151,25 @@ machinery behind the phases have no `@docs` entry on purpose.
 
 Code, comments, docstrings and commit messages are written in English.
 
-Site operators are declared with `@def_operators`, never by calling `add_operator` directly.
-The macro is what binds the operator name, checks it against a name already in scope and
-keeps the library consistent; calling `add_operator` yourself goes around all of that. The
-same holds for `@def_states` and `@create_site_module`.
+Site operators are declared with `@def_operators`, never by adding a method to
+`operator_definition` yourself. The macro is what binds the operator name, checks it against a
+name already in scope and keeps the library consistent; a method written by hand goes around
+all of that. The same holds for `@def_states` and `@create_site_module`.
 
 Global identifiers are `const`.
 
 Fermions rest on one invariant, the Jordan-Wigner convention: a fermionic operator `A` placed
 on site `i` is its matrix there with `F` on every site before it, so that `A(i) * B(j)`, with
-`i < j`, is `(A * F)(i) * F(i+1) * … * F(j-1) * B(j)` on the matrices of the sites. Four places
-build these strings and must agree: `simplify`, for the MPOs, `expect`, the gates and
-`compact`; `expect2`, along its correlation matrix; `legs(::TensorOp)`, for the matrix of a
-tensor product; and `trace_signs`, for `partial_trace`. The testset "A random fermionic
-oracle" of `test/observables.jl` checks them all against dense matrices written from the
-convention alone. A new place building strings goes through `simplify` or is added to it.
+`i < j`, is `(A * F)(i) * F(i+1) * … * F(j-1) * B(j)` on the matrices of the sites. The
+descent keeps the strings of a term apart, as the sites where they change (`Term`), and these
+places lay them and must agree: `laid_strings`, for the dense matrices of terms and the dense
+blocks of `apply`; `string_factors` and `direct_pass`, for the MPOs, whose channels carry the
+strings over the sites a term crosses; `strung_kron`, for the matrix of a tensor product;
+`string_signs`, for a matrix of several sites split into terms; `expect2`, along its
+correlation matrix; and `trace_signs`, for `partial_trace`. The testset "A random fermionic
+oracle" of `test/observables.jl` checks them against dense matrices written from the
+convention alone. A new place laying strings goes through `laid_strings`, or is added to this
+list and to that testset.
 
 Control flow is written with `if`, never with the short-circuit operators. `cond && return`,
 `x isa T || error(…)` and `flag && do_something()` are out, and so is every other use of
@@ -172,20 +177,21 @@ Control flow is written with `if`, never with the short-circuit operators. `cond
 ordinary and welcome.
 
 A public name takes the form most of the package has. Version 2.0 brought the names published
-before into line with the rules below, but for the exceptions noted; from then on a published
+before into line with the rules below, but for the exception noted; from then on a published
 name is kept as it is, since renaming it would break programs for no gain:
 
 - words are written out: `measurements`, `log_message`, the tolerance `tol` excepted;
-- a predicate is one word, as in Base: `isfermionic`, `hasfermionic`;
+- a predicate is one word, as in Base: `stopped`;
 - a measurement takes the state first, as `expect` and `variance`, and a solver the operator
-  first, as in ITensorMPS: `tdvp(evolver, t, state)`;
+  first, as in ITensorMPS: `evolve(evolver, duration, state)`, `ground_state(hamiltonian,
+  state)`;
 - a number of time steps is `nsteps`, a number of dmrg sweeps `nsweeps`;
 - something done every `k` steps is given by `<what>_period`, as `measurements_period`;
 - a field does not repeat the name of its struct: `Krylov(dim = 8)`, not `krylovdim`;
-- the suffix `Error` is for an exception (`TraceError` and `HermiticityError`, kept, are
-  measurements whose names are column headers of the output files);
-- a constructor returns an object of its own type (`RandomState`, kept, returns a `State`, as
-  `State{Pure}(...)` does, whose forms it follows).
+- the suffix `Error` is kept for an exception, a measurement of how far a state is from a
+  property being a `Deviation`, as `TraceDeviation`;
+- a constructor returns an object of its own type, a function making one of another type
+  being written in lower case, as `random_state`.
 
 ## Performance work
 
@@ -195,16 +201,16 @@ The running time is dominated by the ITensor contractions, not by the Julia code
 them. Rewriting an inner loop, shaving an allocation or chasing a type instability in the
 symbolic layer will not show up in a measurement. The contraction side will.
 
-When a change touches the symbolic layer or the construction of the MPO, the measure of
-success is the number of terms in the resulting MPO, not the time simplification takes. A
-simplification that runs twice as fast but leaves more terms behind is a loss, because the
-term count is what the bond dimension is paid on, and the bond dimension is what the whole
-computation is paid on.
+When a change touches the descent of operators or the compaction into MPOs, the measure of
+success is the number of channels of the resulting MPO, its bond dimension, which
+`test/compact.jl` compares with the least a triangular MPO can have, not the time the descent
+takes. A descent that runs twice as fast but leaves more channels behind is a loss, because
+the bond dimension is what the whole computation is paid on.
 
-One design point that looks like an oversight and is not: applying a gate does not simplify
-it, since `Swap` would become its expression and a product of those a sum the gate cannot be.
-Only a gate with a fermionic factor goes through `simplify`, to get its strings, and then piece
-by piece, its factors of several sites left whole, see `prepare_gate`.
+One design point that looks like an oversight and is not: `apply` never develops a product.
+It takes it factor by factor from the right, each as a dense block on its sites when small
+enough and through its MPO otherwise, see `pieces` and `piece_steps!`, so that a product of
+`Swap`s stays a sequence of gates rather than the sum it would develop into.
 
 ## Reporting a problem
 
