@@ -71,6 +71,30 @@ end
     @test norm(mpo_matrix(PreMPO(sys, [c])) - h) < 1e-12 * norm(h)
 end
 
+@testset "A matrix split into terms of distinct atoms" begin
+    # the split of a generic matrix gives each term atoms of its own, which the direct pass took
+    # as independent: on four sites, 3974 terms, nine minutes; written first on a basis of the
+    # atoms of each site, a few seconds and the least channels
+    g = randn(Xoshiro(20261019), ComplexF64, 16, 16)
+    G = Operator{4}("G", (g + g') / 2)
+    q = Qubit()
+    pre = PreMPO(State{Mixed}(System(4, q), "FullyMixed"), Dephase(G)(1, 2, 3, 4))
+    exact = matrix(Dephase(G), q, q, q, q)
+    @test norm(mpo_matrix(pre) - exact) < 1e-12 * norm(exact)
+    @test pre.linkdims .- 1 == least_channels(exact, fill(4, 4))
+    # the rewriting: X, Y and X + Y on the first site come out as two independent atoms, the
+    # operator unchanged
+    x, y = ComplexF64[0 1 ; 1 0], ComplexF64[0 -im ; im 0]
+    atoms = Dict(1 => [x, y, x + y], 2 => [x])
+    terms = [ (1.0 + 0im, [(1, a, 0), (2, 1, 0)]) for a in 1:3 ]
+    dense(ts) = sum(c * kron(atoms[1][fs[1][2]], atoms[2][fs[2][2]]) for (c, fs) in ts)
+    rewritten = TMS.on_atom_bases(terms, atoms)
+    used = unique(fs[1][2] for (_, fs) in rewritten)
+    @test length(used) < 3
+    @test LA.rank(reduce(hcat, [ vec(atoms[1][a]) for a in used ])) == length(used)
+    @test dense(rewritten) ≈ dense(terms)
+end
+
 @testset "A factor holding the identity" begin
     # (Id + Z)(1) * Z(2) stands for Z(2) + Z(1) * Z(2), its part of one site laid on that site
     st = State{Pure}(System(3, Qubit()), "Up")

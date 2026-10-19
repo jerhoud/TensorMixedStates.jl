@@ -144,9 +144,10 @@ Built from left to right: on each site, the channels on the left continued by an
 the strings of their terms where these have no factor, and the terms beginning there, are rows
 over the suffixes of the terms; the rows `interpolative` keeps are the channels on the right,
 and the coefficients of all the rows the pieces of the site. A term opens on its first site and
-closes on its last. The atoms are taken as independent: the relations `on_basis!` finds between
-them, and the identity `push_identities!` moves out, leave channels dependent on either side,
-which the sweeps of `compacted` reduce.
+closes on its last. The atoms are taken as independent, as `on_atom_bases` makes them: the
+relations `on_basis!` finds between them once their identity is taken out, and that identity,
+which `push_identities!` moves out, leave channels dependent on either side, which the sweeps
+of `compacted` reduce.
 """
 function direct_pass(terms::Vector{Tuple{T, Vector{Tuple{Int, Int, Int}}}}, strings,
                      tol::Real) where T
@@ -608,14 +609,60 @@ function string_factors(::Type{R}, system::System, t::Term) where R
 end
 
 """
+    on_atom_bases(terms, atoms)
+
+the terms of several sites `terms`, as `direct_pass` takes them, rewritten so that the atoms each
+site uses are independent: site by site, the one using the most first, a basis is chosen among
+them by `interpolative`, every other atom written as a combination of it, and the terms of the
+same factors gathered. The pass takes its atoms as independent: a generic matrix split into
+terms of distinct atoms, 3717 on a site for a channel on four sites, made it open as many
+channels.
+"""
+function on_atom_bases(terms::Vector{Tuple{T, Vector{Tuple{Int, Int, Int}}}},
+                       atoms::Dict{Int, Vector{Matrix{T}}}) where T
+    used(k) = sort!(unique(a for (_, fs) in terms for (s, a, _) in fs if s == k))
+    for k in sort!(collect(keys(atoms)); by = k -> -length(used(k)))
+        ids = used(k)
+        if length(ids) ≤ 1
+            continue
+        end
+        rows = [ vec(atoms[k][a]) for a in ids ]
+        kept, t = interpolative(rows, norm.(rows), rounding_tol)
+        if length(kept) == length(ids)
+            continue
+        end
+        comb = Dict(ids[i] => [ (ids[kept[j]], t[i, j]) for j in eachindex(kept)
+                                if !iszero(t[i, j]) ]
+                    for i in eachindex(ids))
+        gathered = Dict{Vector{Tuple{Int, Int, Int}}, T}()
+        for (c, fs) in terms
+            j = findfirst(f -> first(f) == k, fs)
+            if isnothing(j)
+                add!(gathered, fs, c)
+                continue
+            end
+            s, a, g = fs[j]
+            for (b, x) in comb[a]
+                f = copy(fs)
+                f[j] = (s, b, g)
+                add!(gathered, f, c * x)
+            end
+        end
+        terms = [ (c, fs) for (fs, c) in gathered if !iszero(c) ]
+    end
+    return terms
+end
+
+"""
     compacted(R, system, terms, limits = Limits())
 
 the terms of an operator on `system` as its constant, its terms of one site, a matrix for each
 site, and the block of channels of its terms of several sites, `nothing` when it has none, the
 matrices being those of superoperators for `R = Mixed`. The strings of the terms are laid on
 their factors, see `string_factors`, and carried by the channels between them. The block, built
-by `direct_pass`, is reduced to as few channels on each link as the rank of the coupling across
-it, see `reduced_block`, and truncated by `limits`. A term of one site that rounding left in
+by `direct_pass` once the atoms each site uses are made independent, see `on_atom_bases`, is
+reduced to as few channels on each link as the rank of the coupling across it, see
+`reduced_block`, and truncated by `limits`. A term of one site that rounding left in
 place of zero is dropped, the terms measured by `normalized_size`.
 """
 function compacted(::Type{R}, system::System, terms::Vector{Term},
@@ -659,6 +706,7 @@ function compacted(::Type{R}, system::System, terms::Vector{Term},
     end
     b = nothing
     if !isempty(multi)
+        multi = on_atom_bases(multi, atoms)
         start, dims, pieces = direct_pass(multi, string_atom, rounding_tol)
         # the atoms read after the pass, which adds those of the strings
         b = ComBlock{T}(start, dims, pieces,
