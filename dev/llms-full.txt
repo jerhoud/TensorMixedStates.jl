@@ -2,7 +2,8 @@
 
 The whole library on one page, for a reader who knows quantum mechanics and wants a correct
 computation quickly, a person or an AI. `?name` at the Julia prompt gives the details of any
-function or type below, and that of a site type, as `?Qubit`, its states and its operators.
+function or type below, that of a site type, as `?Qubit`, its states and its operators, and that
+of an operator, as `?X`, what it is on each site type that has it.
 
 ## Loading
 
@@ -1538,7 +1539,20 @@ measure(mystate, [Nr, Trace])
 ```
 
 The names of the operators become constants of the module the declaration is in, the first time
-they are declared, which a package exports with its site type.
+they are declared, which a package exports with its site type. The help of a site type, its
+docstring, lists its operators in a section `# Operators`, as the site types of this package do,
+which the help of an operator, `?Nr`, gathers from every site type naming it:
+
+```
+# Operators
+
+- `Sge, Ser` : the transitions from g to e and from e to r
+- `Nr`       : the Rydberg population
+```
+
+A site type declaring `Sp` and `Sz` also has `Sm`, `Sx`, `Sy` and `S2`, one declaring `A` has
+`Q` and `P`, and one declaring `Cup` and `Cdn` has `Nup`, `Ndn` and `Ntot`, as the help of
+[`AbstractSite`](@ref) lists, unless it declares these names itself.
 
 ### Conserved quantities
 
