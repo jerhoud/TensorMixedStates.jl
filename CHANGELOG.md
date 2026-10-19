@@ -10,7 +10,10 @@ the reference article.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- `tdvp`, and `Evolve` with `Tdvp()`, lost precision with the norm of the state, as for a
+  density matrix near the fully mixed state on many sites: each step is now made at norm one.
 
 ## [1.6.1] - 2026-10-09
 

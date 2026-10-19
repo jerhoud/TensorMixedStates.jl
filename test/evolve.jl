@@ -29,6 +29,17 @@
         end
 end
 
+@testset "A step of tdvp whatever the norm of the state" begin
+    # KrylovKit takes its precision as absolute, and a vector below it for a fixed point: a
+    # state of norm 1e-13 did not move, and a density matrix of trace one, whose norm is the
+    # square root of its purity, lost precision as it neared the fully mixed state on many sites
+    ρ = mix(State{Pure}(System(4, Qubit()), "X+"))
+    ev = -im * sum(X(i) * X(i + 1) + Z(i) * Z(i + 1) for i in 1:3) + Dissipator(sqrt(0.1) * Sm)(2)
+    r1 = tdvp(ev, 0.5, ρ; nsweeps = 5)
+    r2 = tdvp(ev, 0.5, State(ρ, 1e-13 * ρ.state); nsweeps = 5)
+    @test real(expect(r2, X(1))) ≈ real(expect(r1, X(1))) atol = 1e-10
+end
+
 @testset "Multi evolve" begin
     for (algo, time_step, tol) in [
         (Tdvp(), 0.1, 1e-14),

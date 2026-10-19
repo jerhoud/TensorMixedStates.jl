@@ -63,7 +63,14 @@ function tdvp(pre::PreMPO{R}, t::Number, state::State{R};
             mpo = make_mpo(pre, map(f->f(tf), coefs))
         end
         lim = sweep_limits(limits, sweep)
-        st = tdvp(mpo, dt, st; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim, kwargs...)
+        # KrylovKit takes its precision as absolute, and a vector below it for a fixed point:
+        # the step is made on the state of norm one, its norm put back after, the evolution
+        # being linear. The norm is the full product, not that of an orthogonality centre, which
+        # a state read back from a file may not know, so that a resumed run takes the same steps
+        n = sqrt(real(dot(st, st)))
+        scale = iszero(n) ? one(n) : n
+        st = scale * tdvp(mpo, dt, st / scale; nsweeps = 1, lim.cutoff, lim.maxdim, lim.mindim,
+                          kwargs...)
         if sweep_due(n_hermitianize, sweep)
             st = hermitianize(State(state, st); limits = lim).state
         end
