@@ -177,6 +177,12 @@ end
     @test lm.system == sys
     @test inner(m, lm) ≈ inner(m, m)
     @test hs_fidelity(m, lm) ≈ 1
+
+    # with the orthogonality centre the file records, which renaming the indices forgot: a
+    # resumed run took other steps, moving the centre from elsewhere
+    c = State(a, TMS.ITensorMPS.orthogonalize(a.state, 2))
+    save_state(file, "c", c)
+    @test TMS.ITensorMPS.ortho_lims(load_state(file, "c").state) == 2:2
 end
 
 @testset "Site fields of every kind" begin

@@ -313,8 +313,10 @@ end
     read_mps(g, system, R)
 
 the MPS a state file holds in the group `g`, on the indices of `system` in the representation
-`R`. Version 2 kept charged indices on a partial trace whose sites conserve nothing, of a single
-sector each, which densifying puts in the order of the plain ones.
+`R`, with the orthogonality centre the file records, which renaming the indices forgets, so
+that a resumed run takes the steps of the uninterrupted one. Version 2 kept charged indices on a
+partial trace whose sites conserve nothing, of a single sector each, which densifying puts in
+the order of the plain ones.
 """
 function read_mps(g, system::System, ::Type{R}) where R
     st = read(g, "state", MPS)
@@ -322,10 +324,13 @@ function read_mps(g, system::System, ::Type{R}) where R
         error("state \"$(lstrip(HDF5.name(g), '/'))\" has $(length(system)) sites but a state " *
               "of length $(length(st))")
     end
+    lims = ortho_lims(st)
     if hasqns(st[1]) && !is_charged(system)
         st = dense(st)
     end
-    return replace_siteinds(st, siteinds(R, system))
+    st = replace_siteinds(st, siteinds(R, system))
+    set_ortho_lims!(st, lims)
+    return st
 end
 
 """
