@@ -64,9 +64,6 @@ version 2.x.
   and on a density matrix a gate or a dissipator of an operator of many terms, are built from the
   MPOs of their factors, at a cost linear in the number of sites.
 - `Op`, `GenericOp`, `IndexedOp` and `SimpleOp` are no longer exported.
-- A step of `Tdvp` is made on the state of norm one, KrylovKit taking its tolerance as absolute:
-  1.x passed the state as it was, its precision falling with its norm, as for a density matrix
-  near the fully mixed state on many sites.
 - `Gates` is made of the steps of `apply`, a batch of gates or an MPO on some sites, between
   which a run can write a checkpoint or stop, where 1.x applied the whole product in one go.
 
@@ -84,6 +81,13 @@ version 2.x.
 - The names deprecated since 1.2.0 and 1.3.0: `EE`, `Linkdim`, `Mutual_Info_Renyi2` and
   `DataToFrame`.
 - `mpo_algo` of `steady_state` and `SteadyState`, the method of the product of the MPOs.
+
+## [1.6.2] - 2026-10-19
+
+### Fixed
+
+- `tdvp`, and `Evolve` with `Tdvp()`, lost precision with the norm of the state, as for a
+  density matrix near the fully mixed state on many sites: each step is now made at norm one.
 
 ## [1.6.1] - 2026-10-09
 
