@@ -170,6 +170,25 @@ end
     end
 end
 
+@testset "Gates stopped between their steps resume as the uninterrupted ones" begin
+    # the steps of apply, a batch of gates or an MPO, between which a run can stop: a circuit on
+    # six qubits, gates far apart through their MPO, stopped after each step, gives back the
+    # measurements of the uninterrupted run to the last digit
+    in_tmp() do
+        circuit = CX(1, 5) * Rzz(0.4)(2, 3) * CX(4, 6) * prod(H(i) for i in 1:6) * CZ(2, 6)
+        phases = [CreateState{Pure}(6, Qubit(), "Up"; randomize = 3),
+                  Gates(gates = circuit, limits = Limits(maxdim = 16),
+                        final_measurements = "final.json" => [X, Z(3), (X, Z)])]
+        sd(name) = SimData(; name, seed = 1, phases)
+        ref = runTMS(sd("ref"))
+        run_through(sd("chk"); max_time = -1)
+        @test read("chk/final.json", String) == read("ref/final.json", String)
+        nsteps = length(last(TMS.apply_steps(circuit, ref.state)))
+        @test nsteps > 3
+        @test count("Resuming from the checkpoint", read("chk/log", String)) > nsteps
+    end
+end
+
 @testset "Interrupts, kills and stops" begin
     in_tmp() do
         fail_in, crash_in, stop_in = Ref(0), Ref(0), Ref(0)

@@ -1,4 +1,4 @@
-# The phases transforming the state at once: ToMixed, Weaken, PartialTrace and Gates.
+# The phases transforming the state: ToMixed, Weaken and PartialTrace at once, Gates step by step.
 
 export ToMixed, Weaken, PartialTrace, Gates
 
@@ -105,7 +105,8 @@ run_phase(phase::PartialTrace, sim::Simulation, ::Int) =
 """
     Gates(; gates, limits, on, name, time_start, final_measurements)
 
-a phase that applies gates to the state, see `apply`.
+a phase that applies gates to the state, see `apply`, by its steps, a batch of gates or an MPO,
+between which the run can write a checkpoint or stop.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -127,7 +128,46 @@ a phase that applies gates to the state, see `apply`.
     on::Union{Symbol, Vector{Symbol}} = :state
 end
 
-run_phase(phase::Gates, sim::Simulation, ::Int) =
-    foldl(state_names(phase.on); init = sim) do sim, name
-        with_state(sim, name, apply(phase.gates, state_named(sim, name); phase.limits))
+"""
+    GatesSteps(coefs, steps, limits, on)
+
+a `Gates` prepared: for each state it acts on, the number it is multiplied by and the steps of
+`apply`, see `apply_steps`, made in turn, its limits and the names of the states
+"""
+struct GatesSteps
+    coefs::Vector{Number}
+    steps::Vector{Vector}
+    limits::Limits
+    on::Vector{Symbol}
+end
+
+function prepare_phase(phase::Gates, sim::Simulation)
+    names = state_names(phase.on)
+    prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in names ]
+    return GatesSteps(first.(prepared), last.(prepared), phase.limits, names)
+end
+
+# a product that vanishes, of no step, takes one to give the null state
+step_count(g::GatesSteps) = max(1, maximum(length, g.steps))
+
+# each state multiplied by its number at its last step, as `applied` does
+function run_step(g::GatesSteps, sim::Simulation, k::Int)
+    for (name, coef, steps) in zip(g.on, g.coefs, g.steps)
+        state = state_named(sim, name)
+        st = state.state
+        if coef == 0
+            if k == 1
+                st = 0 * st
+            end
+        else
+            if k ≤ length(steps)
+                st = applied_step(st, steps[k], truncation(g.limits))
+            end
+            if k == max(1, length(steps)) && coef ≠ 1
+                st = coef * st
+            end
+        end
+        sim = with_state(sim, name, State(state, st))
     end
+    return sim
+end

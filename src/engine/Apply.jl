@@ -544,11 +544,20 @@ function applied(state::State, coef::Number, steps, limits::Limits)
     end
     st, tr = state.state, truncation(limits)
     for step in steps
-        st = step isa WindowMPO ? applied_window(step.mpo, step.lo, st, tr) :
-                                  applied_gates(step.gates, step.on, st, tr)
+        st = applied_step(st, step, tr)
     end
     return State(state, coef == 1 ? st : coef * st)
 end
+
+"""
+    applied_step(st, step, tr)
+
+the MPS `st` with the step `step` of `apply` applied, truncated by `tr`, see `truncation`: a batch
+of gates, see `applied_gates`, or an MPO on the sites it acts on, see `applied_window`
+"""
+applied_step(st::MPS, step, tr) =
+    step isa WindowMPO ? applied_window(step.mpo, step.lo, st, tr) :
+                         applied_gates(step.gates, step.on, st, tr)
 
 """
     apply(op, state; limits = Limits())
@@ -578,29 +587,36 @@ projectors when they have few terms. The state is not normalised.
     apply(exp(-0.1im * (X ⊗ X + Y ⊗ Y))(2, 5), state)
     apply(depolarizing_gate(0.01, 2)(1, 2) * controlled(X)(1, 2), ρ)
 """
-function apply(a::IndexedOp{IsOperator}, state::State{Pure}; limits::Limits = Limits())
+apply(a::IndexedOp, state::State; limits::Limits = Limits()) =
+    applied(state, apply_steps(a, state)..., limits)
+
+"""
+    apply_steps(op, state)
+
+the number `state` is multiplied by and the steps of `apply` for `op`, see `pure_steps` and
+`mixed_steps`, which depend on the system of the state alone
+"""
+function apply_steps(a::IndexedOp{IsOperator}, state::State{Pure})
     check_indices(state.system, a)
-    return applied(state, pure_steps(state.system, a)..., limits)
+    return pure_steps(state.system, a)
 end
 
-function apply(a::IndexedOp{IsChannel}, state::State{Pure}; limits::Limits = Limits())
+function apply_steps(a::IndexedOp{IsChannel}, state::State{Pure})
     if !is_pure(a)
         error("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot " *
               "take: apply it to mix(state)")
     end
-    return apply(kraus(a), state; limits)
+    return apply_steps(kraus(a), state)
 end
 
-apply(a::IndexedOp{IsGenerator}, ::State{Pure}; limits::Limits = Limits()) =
+apply_steps(a::IndexedOp{IsGenerator}, ::State{Pure}) =
     error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
 
-apply(a::IndexedOp{IsOperator}, state::State{Mixed}; limits::Limits = Limits()) =
-    apply(Gate(a), state; limits)
+apply_steps(a::IndexedOp{IsOperator}, state::State{Mixed}) = apply_steps(Gate(a), state)
 
-function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed};
-               limits::Limits = Limits())
+function apply_steps(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::State{Mixed})
     check_indices(state.system, a)
-    return applied(state, mixed_steps(state.system, a)..., limits)
+    return mixed_steps(state.system, a)
 end
 
 function apply(mpo::MPO, state::State; limits::Limits = Limits(), apply_algo::String = "naive")

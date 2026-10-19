@@ -266,14 +266,11 @@ it by default.
 ### What can be resumed inside a phase
 
 `Evolve`, `GroundState`, `SteadyState`, `Thermalize` and `Update` are resumed at the step or
-the sweep they reached, and a phase of your own made of steps at the step it reached, see
+the sweep they reached, `Gates` at the step of `apply` it reached, a batch of gates or an MPO
+on some sites, and a phase of your own made of steps at the step it reached, see
 [Phases of one's own](@ref own-phases).
 The other phases are short enough to be replayed, and a checkpoint is taken between phases
 whenever one is due.
-
-The exception is `Gates`, which applies its whole product of gates in one go and therefore
-cannot be cut in the middle. A deep circuit is better written as
-several `Gates` phases, which gives resume points at no cost.
 
 ## Measurements
 

@@ -67,6 +67,8 @@ version 2.x.
 - A step of `Tdvp` is made on the state of norm one, KrylovKit taking its tolerance as absolute:
   1.x passed the state as it was, its precision falling with its norm, as for a density matrix
   near the fully mixed state on many sites.
+- `Gates` is made of the steps of `apply`, a batch of gates or an MPO on some sites, between
+  which a run can write a checkpoint or stop, where 1.x applied the whole product in one go.
 
 ### Removed
 
