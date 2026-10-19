@@ -14,7 +14,8 @@ field, that of KrylovKit for tdvp (30, 100, 1e-12) and of ITensorMPS for dmrg (3
 
 - `dim`: the largest dimension of a Krylov space
 - `maxiter`: the number of Krylov spaces built in turn
-- `tol`: the tolerance; for tdvp, it sets the number of vectors, `dim` only bounding it
+- `tol`: the tolerance, for tdvp relative to the norm of the state, whose step is made on the
+  state of norm one; for tdvp, it sets the number of vectors, `dim` only bounding it
 
 # Examples
 

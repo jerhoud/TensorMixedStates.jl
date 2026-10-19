@@ -64,6 +64,9 @@ version 2.x.
   and on a density matrix a gate or a dissipator of an operator of many terms, are built from the
   MPOs of their factors, at a cost linear in the number of sites.
 - `Op`, `GenericOp`, `IndexedOp` and `SimpleOp` are no longer exported.
+- A step of `Tdvp` is made on the state of norm one, KrylovKit taking its tolerance as absolute:
+  1.x passed the state as it was, its precision falling with its norm, as for a density matrix
+  near the fully mixed state on many sites.
 
 ### Removed
 
