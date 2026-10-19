@@ -367,12 +367,14 @@ function fermi_sea(system::System, hamiltonian::IndexedOp{IsOperator}, nparticle
         if !(0 ≤ m ≤ length(sites))
             error("$m fermions of $c do not fit on the $(length(sites)) sites holding it")
         end
-        if norm(h - h') > 1e-10 * max(1, norm(h))
+        # relative to the size of the levels, as their rounding is: a floor of 1 took the levels
+        # of a hamiltonian in small units for one, and let rounding split those of a large one
+        if norm(h - h') > 1e-10 * norm(h)
             error("the hamiltonian is not hermitian")
         end
         e = eigen(Hermitian(h))
         ε = e.values
-        tol = 1e-10 * max(1, ε[end] - ε[1])
+        tol = 1e-10 * maximum(abs, ε)
         closed(k) = k == 0 || k == length(sites) || ε[k+1] - ε[k] > tol
         if !closed(m)
             below = findlast(closed, 0:m) - 1

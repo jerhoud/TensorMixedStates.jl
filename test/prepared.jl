@@ -322,6 +322,14 @@ end
     ring = -sum(dag(C)(i) * C(j) + dag(C)(j) * C(i) for (i, j) in circle_graph(10))
     @test_throws "take 3 or 5" fermi_sea(System(10, Fermion()), ring, 4)
     @test sum(real(expect1(fermi_sea(System(10, Fermion()), ring + 1e-3 * N(1), 4), N))) ≈ 4
+    # whatever the units: tolerances of 1e-10 with a floor of 1 refused the ring scaled down,
+    # took its levels shifted by 1e8, split by rounding, for distinct, and let a hopping one way
+    # only, not hermitian, through
+    for h in (1e-12 * ring, ring + 1e8 * sum(N(i) for i in 1:10))
+        @test_throws "take 3 or 5" fermi_sea(System(10, Fermion()), h, 4)
+        @test sum(real(expect1(fermi_sea(System(10, Fermion()), h, 3), N))) ≈ 3
+    end
+    @test_throws "not hermitian" fermi_sea(System(4, Fermion()), 1e-12 * dag(C)(1) * C(2), 1)
 
     # refused: what is not a hamiltonian of free fermions, and arguments that do not fit
     free = hop(C, 4)
