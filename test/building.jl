@@ -116,7 +116,7 @@ end
     # a field left nothing takes the default of the function, 1e-26 for a sum
     @test Limits().cutoff === nothing
     @test maxlinkdim(apply(prod(controlled(Z)(i, i + 1) for i in 1:19), s)) == maxlinkdim(s)
-    @test maxlinkdim(evolve(-im * sum(Z(i) for i in 1:20), 0.1, s)) == maxlinkdim(s)
+    @test maxlinkdim(evolve(-im * sum(Z(i) for i in 1:20), 0.1, s; nsteps = 1)) == maxlinkdim(s)
     # a weight of 1e-28 is below the default cutoff, one of 1e-18 is not, and a cutoff of zero
     # keeps everything
     up, dn = State{Pure}(System(6, Qubit()), "Up"), State{Pure}(System(6, Qubit()), "Dn")

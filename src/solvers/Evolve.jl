@@ -194,10 +194,33 @@ function evolve_step(algo::ApproxW, pre::PreMPO, coefs, state::State, time::Numb
 end
 
 """
-    evolve(evolver, duration, state; algo = Tdvp(), nsteps = 1, limits = Limits(),
+    evolution_steps(what, span, nsteps, step, step_name)
+
+the number of steps of `what` over `span`, given as `nsteps`, at least one, or by its step, the
+keyword `step_name`: the nearest whole number of steps covering `span`, none for a span shorter
+than half a step. Exactly one of the two is given, the other being `nothing`.
+"""
+function evolution_steps(what::String, span::Number, nsteps, step, step_name::String)
+    if isnothing(nsteps) && isnothing(step)
+        error("$what needs its number of steps, nsteps = 100 for instance, or its step, " *
+              "$step_name = 0.01")
+    elseif !isnothing(nsteps) && !isnothing(step)
+        error("$what takes nsteps or $step_name, not both")
+    elseif !isnothing(step) && iszero(step)
+        error("the $step_name of $what cannot be zero")
+    elseif !isnothing(nsteps) && nsteps < 1
+        error("$what takes at least one step, and nsteps is $nsteps")
+    end
+    return isnothing(nsteps) ? round(Int, abs(span / step)) : nsteps
+end
+
+"""
+    evolve(evolver, duration, state; nsteps | time_step, algo = Tdvp(), limits = Limits(),
            mpo_limits = Limits(), time = 0, step = 1)
 
-the state evolved for `duration` under `evolver`, in `nsteps` steps of `duration / nsteps` by
+the state evolved for `duration` under `evolver`, in `nsteps` steps of `duration / nsteps`, or
+in steps of `time_step` adjusted to the nearest one dividing `duration` into a whole number of
+them (none when `duration` is shorter than half a step), one of the two being given, by
 the method `algo`, see `EvolutionAlgorithm`. The evolver is `-im * H` for a Hamiltonian `H`,
 plus dissipators for a mixed state, or its `PreMPO(state, evolver)`, prepared once for several
 calls and keeping the MPOs they build; one that depends on time pairs a vector of them with as
@@ -210,13 +233,16 @@ truncates the MPO of the evolver, see `PreMPO` (default none).
 # Examples
 
     evolve(-im * H, 1., state; nsteps = 10, limits = Limits(cutoff = 1e-12, maxdim = 50))
-    evolve([-im * H0, -im * H1] => [t -> 1, t -> cos(t)], 1., state; algo = ApproxW(order = 4))
+    evolve([-im * H0, -im * H1] => [t -> 1, t -> cos(t)], 1., state; time_step = 0.05,
+           algo = ApproxW(order = 4))
 """
 function evolve(evolver, duration::Number, state::State; algo::EvolutionAlgorithm = Tdvp(),
-                nsteps::Int = 1, limits::Limits = Limits(), mpo_limits::Limits = Limits(),
-                time::Number = 0., step::Int = 1)
-    if nsteps < 1
-        error("an evolution takes at least one step, and nsteps is $nsteps")
+                nsteps::Union{Nothing, Int} = nothing, time_step::Union{Nothing, Number} = nothing,
+                limits::Limits = Limits(), mpo_limits::Limits = Limits(), time::Number = 0.,
+                step::Int = 1)
+    nsteps = evolution_steps("an evolution", duration, nsteps, time_step, "time_step")
+    if nsteps == 0
+        return state
     end
     pre, coefs = prepared_evolver(state, evolver, mpo_limits)
     dt = duration / nsteps

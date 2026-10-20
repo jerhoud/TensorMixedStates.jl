@@ -1303,7 +1303,7 @@ end
     # a product of definite charge whose gathering merges two factors into one of none, which
     # was refused, the merge being counted on the charged system
     @test expect(b, X(1) * Swap(1, 2) * X(2)) ≈ expect(b, Swap(1, 2)) ≈ 1
-    @test norm(evolve(-im * X(1) * Swap(1, 2) * X(2), 0.1, b)) ≈ 1
+    @test norm(evolve(-im * X(1) * Swap(1, 2) * X(2), 0.1, b; nsteps = 1)) ≈ 1
     # under a strong symmetry, a channel of several sites given by its matrix gets the refusal
     # of the strong symmetry, as one of one site does
     @test_throws "which conserving it strongly forbids" TMS.lower(
@@ -1811,8 +1811,8 @@ end
             @test norm(z + st) ≈ norm(st)
             @test norm(apply(dag(C)(1) * C(3), z)) == 0
             @test norm(apply((dag(C) ⊗ C)(1, 4), z)) == 0
-            @test norm(evolve(-im * hop, 0.1, z)) == 0
-            @test norm(evolve(-im * hop, 0.1, z; algo = ApproxW(order = 2))) == 0
+            @test norm(evolve(-im * hop, 0.1, z; nsteps = 1)) == 0
+            @test norm(evolve(-im * hop, 0.1, z; nsteps = 1, algo = ApproxW(order = 2))) == 0
             f = tempname() * ".h5"
             save_state(f, "z", z)
             @test norm(load_state(f, "z")) == 0

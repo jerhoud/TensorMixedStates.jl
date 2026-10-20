@@ -61,6 +61,8 @@ version 2.x.
   systems it weakens to: `expect` of such an operator no longer lowers and compacts it again.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
+- `evolve` and `thermalize` take their number of steps, `nsteps`, or their step, `time_step` or
+  `beta_step`, with no default, where 1.x made one step; `Evolve` and `Thermalize` take either.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a

@@ -25,7 +25,7 @@ println("after the dephasing, ", expect(ρ, particles), " particles, ",
 
 # the loss is refused under the strong symmetry
 try
-    evolve(hopping + dephasing + loss, 0.1, ρ)
+    evolve(hopping + dephasing + loss, 0.1, ρ; nsteps = 1)
 catch e
     println("refused: ", first(split(sprint(showerror, e), "\n")))
 end

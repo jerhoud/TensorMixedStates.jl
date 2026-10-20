@@ -28,17 +28,18 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") ≠ "true"
                 expect1(ψ, Z)
                 expect2(ψ, (Z, Z))
                 for st in (ψ, up)
-                    evolve(-im * h, 0.1, st; limits = lim)
-                    evolve(-im * h, 0.1, st; algo = ApproxW(order = 2), limits = lim)
+                    evolve(-im * h, 0.1, st; nsteps = 1, limits = lim)
+                    evolve(-im * h, 0.1, st; nsteps = 1, algo = ApproxW(order = 2), limits = lim)
                 end
                 dissipative = -im * h + Dissipator(Sm)(1)
                 for st in (ρ, ρup)
-                    evolve(dissipative, 0.1, st; limits = lim)
-                    evolve(dissipative, 0.1, st; algo = ApproxW(order = 2), limits = lim)
+                    evolve(dissipative, 0.1, st; nsteps = 1, limits = lim)
+                    evolve(dissipative, 0.1, st; nsteps = 1, algo = ApproxW(order = 2),
+                           limits = lim)
                 end
                 ground_state(h, ψ; algo = Dmrg(nsweeps = 2), limits = lim)
                 steady_state(dissipative, ρup; algo = Dmrg(nsweeps = 1), limits = lim)
-                thermalize(h, 0.1, State{Mixed}(system, "FullyMixed"); limits = lim)
+                thermalize(h, 0.1, State{Mixed}(system, "FullyMixed"); nsteps = 1, limits = lim)
                 apply(X(1) * Z(2), ψ)
                 apply(Gate(X)(1), ρ)
                 # a conserved quantity makes the tensors block sparse, on a density matrix
@@ -48,13 +49,14 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") ≠ "true"
                 ψf = State{Pure}(System(4, Fermion(conserve = N)), alternating)
                 _, ψg = ground_state(hopping, ψf; algo = Dmrg(nsweeps = 2), limits = lim)
                 for st in (ψf, ψg)
-                    evolve(-im * hopping, 0.1, st; limits = lim)
+                    evolve(-im * hopping, 0.1, st; nsteps = 1, limits = lim)
                 end
                 expect2(ψg, (dag(C), C))
                 lindblad = -im * hopping + Dissipator(N)(1)
                 ρf = State{Mixed}(System(4, Fermion(conserve = strong(N))), alternating)
-                ρf = evolve(lindblad, 0.1, ρf; limits = lim)
-                ρf = evolve(lindblad + Dissipator(C)(1), 0.1, weaken(ρf); limits = lim)
+                ρf = evolve(lindblad, 0.1, ρf; nsteps = 1, limits = lim)
+                ρf = evolve(lindblad + Dissipator(C)(1), 0.1, weaken(ρf); nsteps = 1,
+                            limits = lim)
                 measure(ρf, Measure(N, Purity, Trace, EntanglementEntropy(1)); time = 0.)
                 # a run with its checkpoints, and a run whose output is redirected
                 mktempdir() do dir

@@ -21,8 +21,8 @@ function step_number(span::Number, step::Number, what::String, sim::Simulation)
 end
 
 """
-    Evolve(; evolver, duration, time_step, algo = Tdvp(), limits, mpo_limits, measurements,
-             measurements_period, on, name, time_start, final_measurements)
+    Evolve(; evolver, duration, time_step | nsteps, algo = Tdvp(), limits, mpo_limits,
+             measurements, measurements_period, on, name, time_start, final_measurements)
 
 a phase of time evolution, see `evolve`.
 
@@ -32,7 +32,8 @@ a phase of time evolution, see `evolve`.
   evolver depending on time `[A, B] => [f, g]`, see `evolve`, or `A => f` for a single term
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one dividing the duration into a whole
-  number of steps, and taken with the sign of the duration (no step when that number is zero)
+  number of steps, and taken with the sign of the duration (no step when that number is zero),
+  or `nsteps`, the number of steps, one of the two being given
 - `algo`: the method, see `EvolutionAlgorithm`
 - `limits`: the limits of the state, see `Limits`
 - `mpo_limits`: the truncation of the MPO of the evolver, see `PreMPO` (default none)
@@ -54,25 +55,24 @@ a phase of time evolution, see `evolve`.
     final_measurements = []
     evolver
     duration::Number
-    time_step::Number
+    time_step::Union{Nothing, Number} = nothing
+    nsteps::Union{Nothing, Int} = nothing
     algo::EvolutionAlgorithm = Tdvp()
     limits::Limits = Limits()
     mpo_limits::Limits = Limits()
     measurements = []
     measurements_period::Int = 1
     on::Union{Symbol, Vector{Symbol}} = :state
-    function Evolve(name, time_start, final_measurements, evolver, duration, time_step, algo,
-                    limits, mpo_limits, measurements, measurements_period, on)
-        if iszero(time_step)
-            error("the time step of an Evolve cannot be zero")
-        end
+    function Evolve(name, time_start, final_measurements, evolver, duration, time_step, nsteps,
+                    algo, limits, mpo_limits, measurements, measurements_period, on)
+        evolution_steps("an Evolve", duration, nsteps, time_step, "time_step")
         # A => f written as the vectors, A => [f] left to be refused
         if evolver isa Pair && !(first(evolver) isa Union{AbstractVector, PreMPO}) &&
            !(last(evolver) isa AbstractVector)
             evolver = [first(evolver)] => [last(evolver)]
         end
-        return new(name, time_start, final_measurements, evolver, duration, time_step, algo,
-                   limits, mpo_limits, measurements, measurements_period, on)
+        return new(name, time_start, final_measurements, evolver, duration, time_step, nsteps,
+                   algo, limits, mpo_limits, measurements, measurements_period, on)
     end
 end
 
@@ -96,7 +96,11 @@ end
 
 function prepare_phase(phase::Evolve, sim::Simulation)
     names = state_names(phase.on)
-    n = step_number(phase.duration, phase.time_step, "an evolution", sim)
+    n = if isnothing(phase.nsteps)
+        step_number(phase.duration, phase.time_step, "an evolution", sim)
+    else
+        phase.nsteps
+    end
     if n == 0
         return EvolveSteps(phase.algo, nothing, nothing, phase.limits, 0, sim.time, phase.duration,
                            names)
@@ -126,8 +130,8 @@ function run_step(e::EvolveSteps, sim::Simulation, k::Int)
 end
 
 """
-    Thermalize(; hamiltonian, beta, beta_step, algo = Tdvp(), limits, mpo_limits, measurements,
-                 measurements_period, on, name, time_start, final_measurements)
+    Thermalize(; hamiltonian, beta, beta_step | nsteps, algo = Tdvp(), limits, mpo_limits,
+                 measurements, measurements_period, on, name, time_start, final_measurements)
 
 a phase that takes a mixed state ``\\rho`` to ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}``,
 normalized to trace one, by an evolution in imaginary time, see `thermalize`: from
@@ -140,7 +144,8 @@ leaves the state normalized only.
   `TensorMixedStates.AbstractPhase`
 - `hamiltonian`: the Hamiltonian ``H``
 - `beta`: the inverse temperature ``\\beta``
-- `beta_step`: its step, adjusted as the time step of `Evolve`
+- `beta_step`: its step, adjusted as the time step of `Evolve`, or `nsteps`, the number of steps,
+  one of the two being given
 - `algo`: the method, see `EvolutionAlgorithm`
 - `limits`: the limits of the state, see `Limits`
 - `mpo_limits`: the truncation of the MPO of the Hamiltonian, see `PreMPO` (default none)
@@ -159,20 +164,19 @@ leaves the state normalized only.
     final_measurements = []
     hamiltonian
     beta::Real
-    beta_step::Real
+    beta_step::Union{Nothing, Real} = nothing
+    nsteps::Union{Nothing, Int} = nothing
     algo::EvolutionAlgorithm = Tdvp()
     limits::Limits = Limits()
     mpo_limits::Limits = Limits()
     measurements = []
     measurements_period::Int = 1
     on::Symbol = :state
-    function Thermalize(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
-                        limits, mpo_limits, measurements, measurements_period, on)
-        if iszero(beta_step)
-            error("the beta_step of a Thermalize cannot be zero")
-        end
-        return new(name, time_start, final_measurements, hamiltonian, beta, beta_step, algo,
-                   limits, mpo_limits, measurements, measurements_period, on)
+    function Thermalize(name, time_start, final_measurements, hamiltonian, beta, beta_step,
+                        nsteps, algo, limits, mpo_limits, measurements, measurements_period, on)
+        evolution_steps("a Thermalize", beta, nsteps, beta_step, "beta_step")
+        return new(name, time_start, final_measurements, hamiltonian, beta, beta_step, nsteps,
+                   algo, limits, mpo_limits, measurements, measurements_period, on)
     end
 end
 
@@ -199,7 +203,11 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
     if !(state isa State{Mixed})
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
-    n = step_number(phase.beta, phase.beta_step, "a thermalization", sim)
+    n = if isnothing(phase.nsteps)
+        step_number(phase.beta, phase.beta_step, "a thermalization", sim)
+    else
+        phase.nsteps
+    end
     # a step that only normalizes, giving the values all the same
     if n == 0
         return ThermalSteps(phase.algo, nothing, phase.limits, 1, 0., phase.on)

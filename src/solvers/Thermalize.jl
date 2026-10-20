@@ -22,12 +22,13 @@ function thermal_step(algo::EvolutionAlgorithm, pre::PreMPO{Mixed}, state::State
 end
 
 """
-    thermalize(hamiltonian, beta, state; algo = Tdvp(), nsteps = 1, limits = Limits(),
+    thermalize(hamiltonian, beta, state; nsteps | beta_step, algo = Tdvp(), limits = Limits(),
                mpo_limits = Limits(), step = 1)
 
 the mixed state ``\\rho``, normalized to trace one, taken to
 ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}`` by an evolution in imaginary time in `nsteps` steps
-of `beta / nsteps` by the method `algo`, see `EvolutionAlgorithm` (`ApproxW` has its limits
+of `beta / nsteps`, or in steps of `beta_step` adjusted as the `time_step` of `evolve`, one of
+the two being given, by the method `algo`, see `EvolutionAlgorithm` (`ApproxW` has its limits
 there), the state normalized to trace one at each step. It is returned as `(log_trace, state)`,
 `log_trace` being ``\\log \\mathrm{tr}(e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2})`` for ``\\rho``
 of trace one, so that the `log_trace` of successive calls add up.
@@ -49,10 +50,13 @@ trace one, and not normalized again. A pure state is refused.
                                 limits = Limits(cutoff = 1e-12, maxdim = 64))
 """
 function thermalize(hamiltonian, beta::Real, state::State{Mixed};
-                    algo::EvolutionAlgorithm = Tdvp(), nsteps::Int = 1,
-                    limits::Limits = Limits(), mpo_limits::Limits = Limits(), step::Int = 1)
-    if nsteps < 1
-        error("thermalize takes at least one step, and nsteps is $nsteps")
+                    algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
+                    beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
+                    mpo_limits::Limits = Limits(), step::Int = 1)
+    nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
+    # a beta shorter than half a step leaves the state normalized only, as the phase does
+    if nsteps == 0
+        return (0., step == 1 ? normalize(state) : state)
     end
     pre = prepared_operator(state, hamiltonian, mpo_limits)
     # a continued computation is not normalized again, which would change its rounding, and the

@@ -72,7 +72,7 @@ A term that does not depend on time takes a constant function, `t -> 1.0`. The e
 pair of the two, `hs => coefs`, given to `evolve` or to an `Evolve` phase as any other evolver:
 
 ```julia
-evolve(hs => coefs, duration, initial_state; time = 0)
+evolve(hs => coefs, duration, initial_state; nsteps = 100, time = 0)
 ```
 
 The functions are read at `time`, the time the evolution starts at, plus the time of each step;

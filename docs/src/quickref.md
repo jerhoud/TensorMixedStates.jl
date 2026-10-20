@@ -88,9 +88,9 @@ lt, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, li
 ```
 
 `evolve` takes a time dependent evolver as `[A, B] => [f, g]`, real functions of the time, read
-from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`) and the
-sweeps: a result is trusted once it does not move when each is improved, see
-[Checking the accuracy](@ref).
+from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`, or
+`time_step`, one of which `evolve` and `thermalize` require, as the phases) and the sweeps: a
+result is trusted once it does not move when each is improved, see [Checking the accuracy](@ref).
 
 ## Measurements
 

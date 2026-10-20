@@ -57,7 +57,7 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 
 | 1.6 | 2.0 |
 |:----|:----|
-| `tdvp(evolver, t, state; nsweeps = n)` | `evolve(evolver, t, state; nsteps = n)`, `algo = Tdvp()` by default |
+| `tdvp(evolver, t, state; nsweeps = n)` | `evolve(evolver, t, state; nsteps = n)`, or `time_step = dt`, one of them required where `tdvp` made one sweep by default, `algo = Tdvp()` by default |
 | `approx_W(evolver, t, state; order, w, nsweeps = n)` | `evolve(evolver, t, state; algo = ApproxW(; order, w), nsteps = n)` |
 | `Tdvp(n_expand, n_hermitianize)`, `ApproxW(n_hermitianize)` | `Tdvp(; expand_period, hermitianize_period)`, `ApproxW(; order, hermitianize_period)` |
 | `first_sweep = k` | `step = k`, `time` the time the evolution starts at, `duration` and `nsteps` those of the steps left |

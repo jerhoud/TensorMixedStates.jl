@@ -346,7 +346,7 @@ end
     lim = Limits(cutoff = 0)
     for (st, ev) in [(ψ, -im * h), (mix(ψ), -im * h + Dissipator(sqrt(0.3) * Sm)(1))]
         exact = evolve(ev, 0.5, st; nsteps = 4, limits = lim)
-        @test norm(evolve(ev, 0.5, st; algo = DenseStep()) - exact) < 1e-10
+        @test norm(evolve(ev, 0.5, st; nsteps = 1, algo = DenseStep()) - exact) < 1e-10
     end
     # and an Evolve phase, resumed after each step as the uninterrupted run
     in_tmp() do
@@ -388,8 +388,8 @@ end
     @test l ≈ 3 * log(2)
     @test norm(ρ - ρ0) < 1e-14
     msg = "the trace of the state reached -1.0 at step 2 of thermalize: take smaller steps"
-    @test_throws msg thermalize(h, 0.75, ρ0; algo = StepRecorder(-1.), step = 2)
-    @test_throws MethodError evolve(-im * h, 0.5, ψ; algo = Stepless())
+    @test_throws msg thermalize(h, 0.75, ρ0; nsteps = 1, algo = StepRecorder(-1.), step = 2)
+    @test_throws MethodError evolve(-im * h, 0.5, ψ; nsteps = 1, algo = Stepless())
 
     # a search of one's own goes through ground_state and steady_state
     e, gs = ground_state(h, ψ; algo = DenseSearch())

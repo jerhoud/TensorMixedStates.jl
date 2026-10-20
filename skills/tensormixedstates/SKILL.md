@@ -59,7 +59,8 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
 
 ## Conventions and traps
 
-- The evolver is `-im * H` plus dissipators: `evolve(-im * H, t, ψ)` for a real time `t`.
+- The evolver is `-im * H` plus dissipators: `evolve(-im * H, t, ψ; nsteps = n)` for a real
+  time `t` in `n` steps, or `time_step = dt`; there is no default number of steps.
 - `Dissipator(L)` is ``L\rho L^\dagger - \frac12\{L^\dagger L, \rho\}``, and
   `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`: a rate γ is `Dissipator(sqrt(γ) * L)`,
   exactly as a collapse operator of QuTiP.
