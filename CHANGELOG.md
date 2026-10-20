@@ -82,7 +82,7 @@ version 2.x.
   `DataToFrame`.
 - `mpo_algo` of `steady_state` and `SteadyState`, the method of the product of the MPOs.
 
-## [1.6.2] - 2026-10-19
+## [1.6.2] - 2026-10-20
 
 ### Fixed
 
