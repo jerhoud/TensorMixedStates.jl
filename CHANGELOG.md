@@ -57,8 +57,8 @@ version 2.x.
 - `measure`, the outputs, `expect`, `expect1` and `expect2` give the value of a Hermitian operator
   as real, and that of any other as complex, whatever the state; `complex = true` gives `expect`,
   `expect1` and `expect2` the complex numbers computed, as 1.x did.
-- A system keeps the operators measured on its states prepared, up to 1000, and the systems it
-  weakens to: `expect` of an operator already measured no longer lowers and compacts it again.
+- A system keeps prepared the operators of several terms measured twice on its states, and the
+  systems it weakens to: `expect` of such an operator no longer lowers and compacts it again.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,

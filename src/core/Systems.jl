@@ -26,10 +26,12 @@ struct System
     fermions::Vector{Int}
     # the systems it weakens to, see `weaken`, made once each, under `lock`, so that the states
     # of this system share theirs, and the operators prepared to be measured on its states, see
-    # `prepare_op`, with whether they are Hermitian, see `kept_for!`
+    # `prepare_op`, with whether they are Hermitian, those asked for once leaving their hash in
+    # `seen`, see `kept_for!`
     weakened::Dict{Conserved, System}
     prepared::Dict{IndexedOp{IsOperator}, Any}
     hermitian::Dict{IndexedOp{IsOperator}, Bool}
+    seen::Set{UInt}
     lock::ReentrantLock
     function System(sites::Vector{<:AbstractSite})
         foreach(check_site, unique(sites))
@@ -45,7 +47,7 @@ struct System
         key = foldl((h, s) -> hash(s, h), sites; init = hash(length(sites)))
         return new(copy(sites), key, charged, strong, fermions, Dict{Conserved, System}(),
                    Dict{IndexedOp{IsOperator}, Any}(), Dict{IndexedOp{IsOperator}, Bool}(),
-                   ReentrantLock())
+                   Set{UInt}(), ReentrantLock())
     end
 end
 
@@ -54,31 +56,43 @@ System(size::Int, a::AbstractSite) = System(fill(a, size))
 """
     prepared_limit
 
-how many values a dictionary of a system keeps, see `kept_for!`: one more empties it, which
-bounds the memory a run fills when it measures, at every step, an operator that changes with
-the step, as one depending on the time. It changes how fast, never what is measured.
+how many values a dictionary of a system keeps, and how many keys asked for once it remembers,
+see `kept_for!`: one more empties it, which bounds its memory. It changes how fast, never what
+is measured.
 """
 const prepared_limit = 1000
 
 """
-    kept_for!(make, system, cache, key)
+    kept_for!(make, system, cache, key; worth)
 
-the value of `key` in the dictionary `cache` of `system`, made by `make()` the first time and
-kept, the dictionary emptied when it holds `prepared_limit` values. It is made outside the lock
-of the system, so that the threads measuring other operators wait for nothing, two threads
-making the same value keeping the first.
+the value of `key` in the dictionary `cache` of `system`, made by `make()` when it is not there.
+A value `worth` keeping is kept the second time its key is asked for, the first leaving only the
+hash of the key in `system.seen`, so that an operator asked for once, as one changing at every
+step, is never kept. It is made outside the lock of the system, so that the threads measuring
+other operators wait for nothing, two threads making the same value keeping the first.
 """
-function kept_for!(make, system::System, cache::AbstractDict, key)
+function kept_for!(make, system::System, cache::AbstractDict, key; worth = _ -> true)
     found = lock(() -> get(cache, key, nothing), system.lock)
     if !isnothing(found)
         return found
     end
     v = make()
+    if !worth(v)
+        return v
+    end
+    h = hash(key)
     return lock(system.lock) do
+        if !(h in system.seen)
+            if length(system.seen) ≥ prepared_limit
+                empty!(system.seen)
+            end
+            push!(system.seen, h)
+            return v
+        end
         if length(cache) ≥ prepared_limit
             empty!(cache)
         end
-        get!(cache, key, v)
+        return get!(cache, key, v)
     end
 end
 

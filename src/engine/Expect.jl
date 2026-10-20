@@ -334,15 +334,25 @@ struct PreparedOp
 end
 
 """
+    worth_keeping(p)
+
+whether the operator prepared `p` is worth keeping for the next call, see `kept_for!`: of
+several terms, or held as the MPO of its factors, where a product of local operators prepares
+in about the time finding it would take
+"""
+worth_keeping(p::PreparedOp) = isnothing(p.op.terms) || length(p.op.terms) > 1
+
+"""
     prepare_op(system, op)
 
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`: compacted
 on `system`, see `compacted_op`, or, when it changes the charges by no definite amount, see
 `FluxError`, on the same sites conserving nothing, where it is measured on the state conserving
-nothing, see `plain_form`; `system` keeps it for the next call, see `kept_for!`
+nothing, see `plain_form`; `system` keeps it for the next calls once it is asked for twice, if
+it is `worth_keeping`, see `kept_for!`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
-    return kept_for!(system, system.prepared, a) do
+    return kept_for!(system, system.prepared, a; worth = worth_keeping) do
         c = or_on_plain(s -> compacted_op(s, a), system)
         PreparedOp(c, c.system !== system)
     end::PreparedOp
@@ -399,13 +409,26 @@ hermitian_blocks(c::CompactedOp) =
     hermitian_op(system, a, p)
 
 whether the operator `a` placed on sites, prepared on `system` as `p`, see `prepare_op`, is
-Hermitian, see `is_hermitian` and `hermitian_blocks`, kept by `system`, see `kept_for!`
+Hermitian, see `is_hermitian` and `hermitian_blocks`, kept by `system` with the preparation
 """
-hermitian_op(system::System, a::IndexedOp{IsOperator}, p::PreparedOp) =
-    kept_for!(system, system.hermitian, a) do
-        c = p.op
-        isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
+function hermitian_op(system::System, a::IndexedOp{IsOperator}, p::PreparedOp)
+    found = lock(() -> get(system.hermitian, a, nothing), system.lock)
+    if !isnothing(found)
+        return found
     end
+    c = p.op
+    h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
+    # kept with the preparation of the operator, see prepare_op
+    lock(system.lock) do
+        if haskey(system.prepared, a)
+            if length(system.hermitian) ≥ prepared_limit
+                empty!(system.hermitian)
+            end
+            system.hermitian[a] = h
+        end
+    end
+    return h
+end
 
 """
     site_hermitian(system, o)
@@ -499,7 +522,7 @@ The value of a Hermitian operator is real, as `measure` gives it, its imaginary 
 with a warning when it is more than rounding, as a density matrix that lost its hermiticity
 gives; that of any other operator is complex, and an array of values of both kinds complex.
 With `complex = true`, the value is the complex number computed, imaginary part included. The
-system of the state keeps the operator prepared for the next call.
+system of the state keeps an operator of several terms prepared once it is asked for twice.
 
 # Examples
 

@@ -1677,22 +1677,30 @@ end
 end
 
 @testset "A system keeps its operators prepared" begin
-    # an operator measured on a state of a system is prepared once, with whether it is
-    # Hermitian, and found again when it is written again; past prepared_limit what the system
-    # keeps is dropped, which bounds the memory an operator changing at every step fills
+    # an operator of several terms measured on the states of a system is kept prepared, with
+    # whether it is Hermitian, from the second time it is asked for, and found again when it is
+    # written again: asked for once, as one changing at every step, it leaves only its hash
     sys = System(4, Qubit())
     h() = sum(X(i) * X(i + 1) for i in 1:3) + 0.5 * Z(2)
     a, b = random_state(Pure, sys, 4), random_state(Pure, sys, 4)
     expect(a, h())
+    @test isempty(sys.prepared) && isempty(sys.hermitian) && length(sys.seen) == 1
+    expect(b, h())
     p = only(values(sys.prepared))
     @test only(values(sys.hermitian))
-    expect(b, h())
-    @test only(values(sys.prepared)) === p
     @test TMS.prepare_op(sys, h()) === p
     # another system prepares its own, even an equal one
     @test TMS.prepare_op(System(4, Qubit()), h()) !== p
-    for k in 1:TMS.prepared_limit
-        TMS.prepare_op(sys, k * Z(1))
+    # a product of local operators, which prepares in about the time finding it takes, is never
+    # kept, however often it is asked for, nor are the pairs and the sites of expect2 and expect1
+    for _ in 1:3
+        expect(a, X(1) * X(3))
+        expect2(a, (Z, Z))
+    end
+    @test length(sys.prepared) == 1
+    # past prepared_limit what the system keeps is dropped, which bounds its memory
+    for k in 1:TMS.prepared_limit, _ in 1:2
+        TMS.prepare_op(sys, (1 + k / 2000) * h())
     end
     @test length(sys.prepared) == 1
     @test TMS.prepare_op(sys, h()) !== p
