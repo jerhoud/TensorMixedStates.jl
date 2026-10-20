@@ -3,8 +3,8 @@
 # engine/ for the operators on a system, measurements/ for what is measured and written,
 # solvers/ for the evolutions and the searches, runner/ for the simulations runTMS runs, the
 # site types in sites/, the hints Julia prints after an error, then the precompilation
-# workload. Version 2 is written from its lowest layer up, the code of 1.x staying on the
-# branch dev.
+# workload. Version 2 rewrote the library from its lowest layer up; 1.x is maintained on the
+# branch release-1.6.
 
 """
     TensorMixedStates

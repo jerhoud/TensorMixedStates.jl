@@ -19,11 +19,11 @@ a given change belongs on, and what else it needs, is the subject of the next se
 `dev` is where work lands and `main` carries the released state, together with the tag that
 names it. Three facts about this repository decide the rest.
 
-The documentation is published from `main` and from tags only. A push to `dev` builds it and
-runs its doctests and `@example` blocks, which is the check that matters, but publishes
-nothing: `main` deploys the `dev` documentation and a tag deploys `vX.Y.Z` and moves
-`stable` onto it. A documentation fix is therefore verified as soon as it reaches `dev`, and
-visible only once it reaches `main`.
+The documentation is published from `dev` and from tags. A push to `dev` builds it, runs its
+doctests and `@example` blocks, which is the check that matters, and publishes it as the `dev`
+documentation; a tag publishes `vX.Y.Z` and moves `stable` onto it; a push to `main` builds
+it and publishes nothing. A documentation fix is therefore visible in the `dev` documentation
+as soon as it reaches `dev`, and in `stable` at the next release.
 
 Continuous integration runs on `main`, on `dev`, on tags and on pull requests, and otherwise
 only when dispatched by hand. A topic branch pushed on its own runs nothing, so open a pull
@@ -79,12 +79,20 @@ being a fast forward of `main`, which complicates every merge afterwards.
 
 This is the maintainer's part, and it is the same for every version.
 
-1. `main` is fast forwarded onto `dev`.
-2. The `version` field of `Project.toml` is bumped on `main`, committed and pushed, which
-   publishes the `dev` documentation.
-3. That commit is registered in the General registry through JuliaRegistrator.
+1. On `dev`, one commit sets the version in `Project.toml`, in `CITATION.cff` with its
+   `date-released`, and in the placeholder of `.github/ISSUE_TEMPLATE/bug_report.yml`, and
+   closes the changelog, its section dated like `CITATION.cff`, the day of the registration.
+2. `main` is fast forwarded onto `dev` and pushed.
+3. A comment `@JuliaRegistrator register` on that commit, followed by the release notes,
+   registers it in the General registry.
 4. TagBot creates the `vX.Y.Z` tag once the registry pull request is merged.
 5. The tag deploys `vX.Y.Z` and moves `stable` onto it.
+
+A fix of an older series, while `dev` prepares the next major version, goes on a branch
+`release-X.Y` cut from the last tag of that series, the fix and then the version as above.
+CI runs there only when dispatched by hand, the release is registered by
+`@JuliaRegistrator register branch=release-X.Y`, and the changelog of `dev` takes the
+section of that release word for word, as it did for 1.6.1 and 1.6.2.
 
 Tags and `gh-pages` do not refresh on their own in a clone, so `git fetch --tags` before
 judging what is released.
