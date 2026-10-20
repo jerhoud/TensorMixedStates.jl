@@ -690,7 +690,7 @@ holding the values of `expect1` and of `expect2` for the operators and the pairs
 """
 function entry_value(it::OpValue, name, c::Context, _)
     state = c.state
-    x = state isa State ? prepared_value(weak_form(state), it.prepared) : expect(state, it.op)
+    x = state isa State ? prepared_value(weak_form(state), it.prepared) : expect_value(state, it.op)
     return it.hermitian ? real_value(x, it.prepared.op.norm, name, getfield(c, :time)) :
                           complex_value(x)
 end

@@ -231,8 +231,8 @@ interleaved(i) = 2i - 1
 TensorMixedStates.apply(op::TensorMixedStates.IndexedOp, st::InterleavedState; kwargs...) =
     InterleavedState(st.system, apply(map_sites(interleaved, op), st.inner; kwargs...))
 
-TensorMixedStates.expect(st::InterleavedState, op::TensorMixedStates.IndexedOp) =
-    expect(st.inner, map_sites(interleaved, op))
+TensorMixedStates.expect_value(st::InterleavedState, op::TensorMixedStates.IndexedOp) =
+    TensorMixedStates.expect_value(st.inner, map_sites(interleaved, op))
 
 # the state on the doubled system goes in a subgroup, read back on the sites it lies on
 TensorMixedStates.write_state(g, st::InterleavedState) =
@@ -258,6 +258,11 @@ end
     # measure goes through its expect, the values of a Hermitian operator real there too
     @test [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]
     @test measure(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)) isa Float64
+    # and so does expect, through the expect_value of the state, the complex number computed
+    # with complex = true
+    @test expect(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)) isa Float64
+    @test expect(wide, N(2); complex = true) isa ComplexF64
+    @test expect(wide, N(2); complex = true) ≈ expect(st, N(2))
     # values of both kinds in an array make an array of complex numbers
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) isa Vector{ComplexF64}
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])

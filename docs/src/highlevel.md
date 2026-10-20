@@ -50,4 +50,5 @@ TensorMixedStates.check_list
 TensorMixedStates.resume_mark
 TensorMixedStates.write_state
 TensorMixedStates.read_state
+TensorMixedStates.expect_value
 ```

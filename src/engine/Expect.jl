@@ -486,11 +486,12 @@ ruled_value(x, hermitian::Bool, scale, name) =
     expect(state, op; complex = false)
 
 the expectation value of the operator `op`, placed on sites, or the array or the tuple of those
-of an array or a tuple of them, on the state of an extension as well, divided by the real part
-of the trace of the state: ``\\langle\\psi|op|\\psi\\rangle / \\langle\\psi|\\psi\\rangle`` on a
-pure state, ``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a mixed one. Its factors may
-come in any order, act on several sites, and the Jordan-Wigner strings of fermionic operators
-are laid for you. On a system conserving charges, an operator changing them by no definite
+of an array or a tuple of them, on the state of an extension as well, through its
+`expect_value`, divided by the real part of the trace of the state:
+``\\langle\\psi|op|\\psi\\rangle / \\langle\\psi|\\psi\\rangle`` on a pure state,
+``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a mixed one. Its factors may come in any
+order, act on several sites, and the Jordan-Wigner strings of fermionic operators are laid
+for you. On a system conserving charges, an operator changing them by no definite
 amount is measured on the state conserving nothing, see `weaken`. A channel, a generator and an
 operator not placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
 
@@ -513,6 +514,29 @@ function expect(state::State, a::IndexedOp{IsOperator}; complex::Bool = false)
     x = prepared_value(state, p)
     return complex ? complex_value(x) :
                      ruled_value(x, hermitian_op(state.system, a, p), p.op.norm, obs_name(a))
+end
+
+"""
+    expect_value(state, op)
+
+the expectation value of the operator `op` placed on sites, as the state computes it, divided
+by the real part of its trace: the number `expect` gives with `complex = true`, and makes real
+for a Hermitian operator otherwise. The state of an extension adds a method, which `expect`,
+`expect1`, `expect2` and `measure` go through, see `AbstractState`.
+"""
+function expect_value(state::State, a::IndexedOp{IsOperator})
+    state = weak_form(state)
+    return prepared_value(state, prepare_op(state.system, a))
+end
+
+# on the state of an extension, through its expect_value, Hermitian or not on its physical sites
+function expect(state::AbstractState, a::IndexedOp{IsOperator}; complex::Bool = false)
+    x = expect_value(state, a)
+    if complex
+        return complex_value(x)
+    end
+    p = prepare_op(state.system, a)
+    return ruled_value(x, hermitian_op(state.system, a, p), p.op.norm, obs_name(a))
 end
 
 function expect(state::AbstractState, ops::AbstractArray; kwargs...)
@@ -627,7 +651,7 @@ Hermitian on every site where it is defined are real, the others complex, and al
 complex numbers computed with `complex = true`, as for `expect`. The even part of the operator
 on a site is measured there on the density matrix of the site, its odd part with the
 Jordan-Wigner string on the sites before, both from environments the state keeps. On the state
-of an extension, each value is measured by its `expect`.
+of an extension, each value is measured by its `expect_value`.
 
 # Examples
 
@@ -679,12 +703,12 @@ function expect1_computed(state::State, ops::AbstractArray{<:SimpleOp})
     end
 end
 
-# on the state of an extension, through its expect
+# on the state of an extension, through its expect_value
 function expect1_computed(state::AbstractState, ops::AbstractArray{<:SimpleOp})
     n = length(state)
     return map(ops) do o
         on = defined_sites(state.system, o)
-        return [ i in on ? expect(state, o(i)) : missing for i in 1:n ]
+        return [ i in on ? expect_value(state, o(i)) : missing for i in 1:n ]
     end
 end
 
@@ -911,7 +935,7 @@ others complex, and all of them the complex numbers computed with `complex = tru
 `expect`. The Jordan-Wigner strings are laid for you. A pair whose operators have one and the
 same parity on all those sites is measured by sharing the environments of each site, any other
 row by row, each part of definite parity with its string. On the state of an extension, each
-entry is measured by its `expect`.
+entry is measured by its `expect_value`.
 
 # Examples
 
@@ -968,7 +992,7 @@ function expect2_computed(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp
     return [ map(identity, m) for m in r ]
 end
 
-# on the state of an extension, through its expect
+# on the state of an extension, through its expect_value
 function expect2_computed(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
                           sites::AbstractVector{Int} = 1:length(state))
     sys = state.system
@@ -981,7 +1005,7 @@ function expect2_computed(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, 
         on1 = intersect(sites, defined_sites(sys, o1))
         on2 = intersect(sites, defined_sites(sys, o2))
         for i in on1, j in on2
-            r[i, j] = expect(state, i == j ? (o1 * o2)(i) : o1(i) * o2(j))
+            r[i, j] = expect_value(state, i == j ? (o1 * o2)(i) : o1(i) * o2(j))
         end
         return map(identity, r)
     end

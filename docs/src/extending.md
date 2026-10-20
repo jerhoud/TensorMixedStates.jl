@@ -272,12 +272,12 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
-- `expect(state, op::TensorMixedStates.IndexedOp)` computes the expectation value of an
-  operator placed on sites, normalised by the trace, which `measure`, and so `output`, asks for,
-  those of the operators of one site and of the pairs of them included. The operator is given
-  as the user wrote it, on the physical sites, which [`map_sites`](@ref) places on another
-  system. It gives the value as computed: `measure`, `expect1` and `expect2` make that of a
-  Hermitian operator real;
+- `TensorMixedStates.expect_value(state, op::TensorMixedStates.IndexedOp)` computes the
+  expectation value of an operator placed on sites, normalised by the trace, as a complex
+  number, which `expect`, `measure`, and so `output`, ask for, those of the operators of one
+  site and of the pairs of them included, making the value of a Hermitian operator real. The
+  operator is given as the user wrote it, on the physical sites, which [`map_sites`](@ref)
+  places on another system;
 - `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
