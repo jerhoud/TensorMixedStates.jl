@@ -26,8 +26,11 @@ end
 
 function ITensorMPS.checkdone!(o::SweepHook; energy, sweep, psi, kwargs...)
     # normalized as the search normalizes what it returns, an eigenvector having a sign of its
-    # own; normalize makes a new MPS, leaving that of dmrg untouched
-    st = isnothing(o.sweep_done) && isnothing(o.mpo) ? nothing : normalize(State(o.state, psi))
+    # own, and in place, so that the state measured and saved is the one dmrg goes on with: a
+    # copy normalized apart differed from it by a rounding on some processors, and a resumed
+    # search from the uninterrupted one
+    st = isnothing(o.sweep_done) && isnothing(o.mpo) ? nothing :
+         State(o.state, copy(normalize!(psi)))
     e = isnothing(o.mpo) ? energy : real(inner(st.state', o.mpo, st.state))
     stop = !isnothing(o.energy) && abs(o.energy - e) < o.tol
     o.energy = e
