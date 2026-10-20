@@ -1079,7 +1079,7 @@ end
         return State(mix(a), mix(a).state + 0.6im * mix(b).state)
     end
     ws, ss = skew(Fermion(conserve = N)), skew(Fermion(conserve = strong(N)))
-    adjoint_numbers(x) = [ expect(dag(x), dag(C)(1) * C(3)), expect(dag(x), N(3)),
+    adjoint_numbers(x) = [ expect(dag(x), dag(C)(1) * C(3)), expect(dag(x), N(3); complex = true),
                            inner(dag(x), x) ]
     @test isapprox(adjoint_numbers(ws), adjoint_numbers(ss); atol = 1e-12)
     @test abs(expect(dag(ss), dag(C)(1) * C(3))) > 0.1

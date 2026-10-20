@@ -270,7 +270,8 @@ end
     L = -im * (-sum(Z(i) * Z(i+1) for i in 1:4)) + sum(Dissipator(Sp)(i) for i in 1:5)
     r = random_state(Mixed, System(5, Qubit()), 10)
     z(krylov) = real(expect1(last(steady_state(L, r; algo = Dmrg(nsweeps = 10; krylov),
-                                               limits = Limits(maxdim = 10, cutoff = 1e-10))), Z))
+                                               limits = Limits(maxdim = 10, cutoff = 1e-10))), Z;
+                             complex = true))
     @test z(Krylov()) ≈ ones(5) atol = 1e-7
     @test z(Krylov(tol = 1e-14)) ≈ z(Krylov()) atol = 1e-12
     @test maximum(abs.(z(Krylov(dim = 3, maxiter = 1)) .- 1)) > 1e-3

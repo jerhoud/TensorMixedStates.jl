@@ -59,7 +59,7 @@ end
                                 (ApproxW(order = 4, w = 1), 10, 2e-6),
                                 (ApproxW(order = 1, w = 1), 100, 0.03)]
         st = evolve(ev, 1., ρ; algo, nsteps, limits = lim)
-        @test real(expect(st, [X(1), Y(1), Z(1)])) ≈ exact atol = tol
+        @test real(expect(st, [X(1), Y(1), Z(1)]; complex = true)) ≈ exact atol = tol
         @test trace(st) ≈ 1 atol = 1e-12
     end
 
@@ -77,7 +77,7 @@ end
     for (algo, tol) in [(Tdvp(), 1e-11), (ApproxW(order = 4, w = 2), 1e-7),
                         (ApproxW(order = 4, w = 1), 1e-7)]
         st = evolve(ev2, 1., ρ2; algo, nsteps = 20, limits = lim)
-        @test real(expect(st, [X(1), Z(2), Y(1) * X(2)])) ≈ ref atol = tol
+        @test real(expect(st, [X(1), Z(2), Y(1) * X(2)]; complex = true)) ≈ ref atol = tol
     end
 end
 
@@ -579,9 +579,9 @@ end
     ρ = evolve(-im * sum(A(i) * dag(A)(i+1) + dag(A)(i) * A(i+1) for i in 1:3) +
                Dissipator(2 * sqrt(0.1) * dag(A))(2), 0.3, State{Mixed}(System(4, Boson(7)), "0");
                algo = ApproxW(order = 4, w = 2), nsteps = 3, limits = Limits(maxdim = 16))
-    @test real(expect1(ρ, N)) ≈
+    @test real(expect1(ρ, N; complex = true)) ≈
           [0.0036328913502, 0.1200236303285, 0.0035680174576, 4.86613106e-5] atol = 1e-5
-    @test expect(ρ, [dag(A)(2) * A(i) for i in 1:4]) ≈
+    @test expect(ρ, [dag(A)(2) * A(i) for i in 1:4]; complex = true) ≈
           [-0.0180013634952im, 0.1200236303285, -0.0178675798942im, -0.0017865872242] atol = 1e-5
     @test purity(ρ) ≈ 0.7965328475916 atol = 1e-5
 end
@@ -821,7 +821,7 @@ end
                                        (3, 16, 1e-5, 1e-4), (4, 16, 1e-6, 2e-6)]
         lw, ρw = thermalize(h, β, ρ0; nsteps, algo = ApproxW(; order), limits = lim)
         @test lw ≈ log(tr(g) / 2^n) atol = tol
-        @test real(expect(ρw, h)) ≈ tr(g * dense) / tr(g) atol = etol
+        @test real(expect(ρw, h; complex = true)) ≈ tr(g * dense) / tr(g) atol = etol
         @test real(trace(ρw)) ≈ 1
         @test abs(imag(trace(ρw))) < 1e-7
     end
