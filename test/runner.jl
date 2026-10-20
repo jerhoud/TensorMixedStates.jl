@@ -511,10 +511,11 @@ end
         @test_ok runTMS(SimData(name = "g", phases = [start, up("data" => Z(1)),
                                                       up("./data" => Z(1)), up("d.json" => X(1)),
                                                       up("d.json" => Z(1))]))
-        # two names of one file are one destination
-        twice = Gates(gates = X(1), final_measurements = ["data" => X(1), "./data" => X(1)])
+        # two names of one file are one destination, the lists a call sends it one list, a line
+        twice = Gates(gates = X(1), final_measurements = ["data" => X(1), "./data" => Z(1)])
         runTMS(SimData(name = "d", phases = [start, twice]))
-        @test length(readlines("d/data")) == 3
+        @test readlines("d/data")[1] == "time\tX(1)\tZ(1)"
+        @test length(readlines("d/data")) == 2
     end
 end
 

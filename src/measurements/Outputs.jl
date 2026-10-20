@@ -420,18 +420,36 @@ destination(::Outputs, x) =
     error("$(repr(x)) is not a destination: a file name, \"stdout\", \"stderr\", \"\", " *
           "Data(name) or a Destination")
 
+as_measure(m::Measure) = m
+as_measure(x) = Measure(x)
+
+"""
+    by_destination(o, list)
+
+the pairs `destination => measurements` of `list` as pairs `destination => Measure`, one for
+each destination, in the order they first come, the lists going to one destination gathered
+into one, so that a call writes one row to each
+"""
+function by_destination(o::Outputs, list::AbstractVector)
+    ps = [ destination(o, first(p)) => last(p) for p in list ]
+    ds = unique(first.(ps))
+    ms = [ [ last(p) for p in ps if first(p) == d ] for d in ds ]
+    return [ d => (length(m) == 1 ? as_measure(only(m)) : Measure(m)) for (d, m) in zip(ds, ms) ]
+end
+
 """
     output!(o, state, destination => measurements; time, values...)
     output!(o, state, [destination => measurements, ...]; time, values...)
 
-measure each list on `state`, see `measure`, and write it to its destination, see `destination`:
-the destinations are opened and checked first, then everything is measured, then written
+measure each list on `state`, see `measure`, and write it to its destination, see `destination`,
+one row to each destination, the lists going to one destination measured as one: the
+destinations are opened and checked first, then everything is measured, then written
 """
 output!(o::Outputs, state::AbstractState, p::Pair; kwargs...) = output!(o, state, [p]; kwargs...)
 
 function output!(o::Outputs, state::AbstractState, list::AbstractVector; time = nothing, values...)
     lock(o.lock) do
-        items = [ destination(o, first(p)) => as_measure(last(p)) for p in list ]
+        items = by_destination(o, list)
         for (d, m) in items
             if any(e -> first(e) == "time", m.entries)
                 error("a measurement written to $d cannot be named time, the column of the times")
@@ -445,9 +463,6 @@ function output!(o::Outputs, state::AbstractState, list::AbstractVector; time = 
     end
     return nothing
 end
-
-as_measure(m::Measure) = m
-as_measure(x) = Measure(x)
 
 """
     close!(o)

@@ -45,13 +45,16 @@ measurement_lists(x) =
 """
     run_lists(phases, final_measurements)
 
-the lists of measurements of a simulation, as pairs `destination => measurements`: its final
-ones, those of the end of each phase and those of their steps, see `measurement_lists`
+the lists of measurements of a simulation, each the pairs `destination => measurements` that one
+call writes, see `measurement_lists`: its final ones, those of the end of each phase and those
+of their steps
 """
-run_lists(phases::Vector, final_measurements) =
-    [ p for l in [ final_measurements ; [ q.final_measurements for q in phases ] ;
-                   [ q.measurements for q in phases if hasfield(typeof(q), :measurements) ] ]
-      for p in measurement_lists(l) ]
+function run_lists(phases::Vector, final_measurements)
+    lists = Any[final_measurements]
+    append!(lists, [ q.final_measurements for q in phases ])
+    append!(lists, [ q.measurements for q in phases if hasfield(typeof(q), :measurements) ])
+    return [ measurement_lists(l) for l in lists ]
+end
 
 """
     check_values(phases, final_measurements)
@@ -61,7 +64,7 @@ phase provides, see `provided_values`, and return the names of those they provid
 """
 function check_values(phases::Vector, final_measurements)
     provided = unique(Symbol[ v for p in phases for v in provided_values(p) ])
-    for p in run_lists(phases, final_measurements)
+    for l in run_lists(phases, final_measurements), p in l
         for (name, m) in as_measure(last(p)).entries
             for r in measurement_reads(m)
                 if r ∉ provided && r ∉ (:step, :rng)
@@ -106,7 +109,7 @@ end
 refuse, before a run with a directory starts rather than when it writes there, a file of the
 simulation directory as the destination of a list of measurements of the phases or of the final
 measurements, or as a file a phase writes, see `phase_files` and `simulation_files`, and a text
-file given two lists, as one holds one list
+file given two lists, as one holds one list, the lists one call sends it making one
 """
 function check_destinations(phases::Vector, final_measurements)
     for p in phases, f in phase_files(p)
@@ -115,17 +118,14 @@ function check_destinations(phases::Vector, final_measurements)
         end
     end
     held = Dict{String, Vector{String}}()
-    for (d, m) in run_lists(phases, final_measurements)
-        if !(d isa AbstractString) || d in ("stdout", "-", "stderr", "")
+    for l in run_lists(phases, final_measurements), (d, m) in by_destination(Outputs(), l)
+        if !(d isa Union{TextFile, JsonFile})
             continue
-        elseif normpath(d) in simulation_files
-            error("cannot write to $d, a file of the simulation directory: choose another name")
-        elseif last(splitext(d)) in (".json", ".jsonl")
-            continue
-        end
-        names = first.(as_measure(m).entries)
-        if get!(held, normpath(d), names) ≠ names
-            error("$d holds the list $(join(held[normpath(d)], ", ")), and another needs " *
+        elseif d.path in simulation_files
+            error("cannot write to $(d.path), a file of the simulation directory: choose another " *
+                  "name")
+        elseif d isa TextFile && get!(held, d.path, first.(m.entries)) ≠ first.(m.entries)
+            error("$(d.path) holds the list $(join(held[d.path], ", ")), and another needs " *
                   "another file")
         end
     end

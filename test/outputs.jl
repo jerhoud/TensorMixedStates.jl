@@ -120,6 +120,9 @@ end
         @test count[] == 0
         # the same list, through the same file however it is named
         TMS.output!(o, ψ, "./a.dat" => [X(1)]; time = 2)
+        # the lists a call sends to one file are one list, a line
+        TMS.output!(o, ψ, ["ab.dat" => X(1), "./ab.dat" => [Z(1), Z(2)]]; time = 0)
+        TMS.output!(o, ψ, ["ab.dat" => X(1), "ab.dat" => [Z(1), Z(2)]]; time = 1)
         TMS.output!(o, ψ, "v.dat" => ["v" => c -> c.v]; time = 0, v = [1., 2.])
         @test_throws "the values of v do not fit the columns" TMS.output!(
             o, ψ, "v.dat" => ["v" => c -> c.v]; time = 1, v = [1., 2., 3.])
@@ -133,6 +136,8 @@ end
             o, ψ, "w.dat" => ["w" => c -> c.w]; time = 1, w = 1im)
         TMS.close!(o)
         @test readlines(joinpath(dir, "a.dat")) == ["time\tX(1)", "0\t0", "2\t0"]
+        @test readlines(joinpath(dir, "ab.dat")) ==
+            ["time\tX(1)\tZ(1)\tZ(2)", "0\t0\t1\t1", "1\t0\t1\t1"]
         @test isempty(readlines(joinpath(dir, "b.dat")))
         @test readlines(joinpath(dir, "v.dat")) == ["time\tv[1]\tv[2]", "0\t1\t2"]
     end
@@ -185,6 +190,7 @@ end
                 "chk" => c -> Check([1., 2.], [1., 2.5])]
         TMS.output!(o, ψ, ["data.json" => list, "data.jsonl" => Z(1)]; time = 0.5)
         TMS.output!(o, ψ, "data.json" => [X(1)]; time = 1.5im)
+        TMS.output!(o, ψ, ["both.json" => X(1), "both.json" => Z(1)]; time = 0)
         mixed = State{Pure}(System([Qubit(), Fermion()]), ["Up", "Occ"])
         TMS.output!(o, mixed, "missing.json" => ["n" => dag(C) * C])
         TMS.close!(o)
@@ -206,6 +212,10 @@ end
         @test e["time"]["im"] ≈ 1.5
         @test e["X(1)"] ≈ 1
         @test TMS.JSON.parse(only(readlines(joinpath(dir, "data.jsonl"))))["Z(1)"] ≈ 0 atol = 1e-12
+        # the lists a call sends to one file are one object
+        both = only(readlines(joinpath(dir, "both.json")))
+        @test startswith(both, "{\"time\":0,\"X(1)\":")
+        @test TMS.JSON.parse(both)["Z(1)"] ≈ 0 atol = 1e-12
         n = TMS.JSON.parse(only(readlines(joinpath(dir, "missing.json"))))["n"]
         @test isnothing(n[1])
         @test n[2] ≈ 1
@@ -229,9 +239,13 @@ end
     @test ismissing(df[2, "Z(1)"])
     @test ismissing(df[1, "X(1)"])
     @test df[2, "X"] ≈ [0, 0] atol = 1e-12
-    # two pairs to one Data in one call are two rows, and nothing gathered is a table of times
+    # two pairs to one Data in one call make one row, their lists one list, which cannot name
+    # two measurements alike, and nothing gathered is a table of times
     TMS.output!(o, ψ, [Data("e") => X(1), Data("e") => Z(1)])
-    @test length(TMS.data_rows(o, "e")) == 2
+    @test first.(only(TMS.data_rows(o, "e"))) == ["time", "X(1)", "Z(1)"]
+    @test_throws "several measurements are named \"X(1)\"" TMS.output!(
+        o, ψ, [Data("e") => X(1), Data("e") => [X(1), Z(1)]])
+    @test length(TMS.data_rows(o, "e")) == 1
     empty = data_to_frame(Vector{Pair{String, Any}}[])
     @test names(empty) == ["time"]
     @test size(empty) == (0, 1)
