@@ -180,13 +180,15 @@ const moved_keywords = let
     for T in (Tdvp, ApproxW)
         d[(T, :n_hermitianize)] = "n_hermitianize became hermitianize_period"
     end
-    d[(PartialTrace, :trace_positions)] = "trace_positions became positions"
-    d[(PartialTrace, :keep_positions)] = "keep_positions = p became positions = p, keep = true"
+    d[(PartialTrace, :trace_positions)] = "trace_positions became trace_out"
+    d[(PartialTrace, :keep_positions)] = "keep_positions became keep"
     for (f, k) in ((steady_state, :alg), (steady_state, :mpo_algo), (SteadyState, :mpo_algo))
         d[(f, k)] = "$k was removed: the MPO of L†L is built from that of L with as few " *
                     "channels as its rank, mpo_limits truncating it if given"
     end
-    d[(partial_trace, :keepers)] = "keepers became keep"
+    d[(partial_trace, :keepers)] = "the sites are given by keyword, partial_trace(state; keep = " *
+                                   "positions) for keepers = true, partial_trace(state; " *
+                                   "trace_out = positions) otherwise"
     d[(load_state, :system)] = "system was removed: systems with the same sites are equal"
     for f in (named, controlled)
         d[(f, :type)] = "type was removed with the types of operators: the parity of an " *
@@ -219,8 +221,8 @@ takes_simulation(f) =
 
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
 moved, a `Simulation` where a state is taken, a solver of ITensorMPS called on objects of this
-package, and the forms of 1.x of `measure`, `Check`, `Operator`, `Simulation`, `output`,
-`variance`, the Rényi entropies of a block, `matrix` and `State`
+package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`, `Simulation`,
+`output`, `variance`, the Rényi entropies of a block, `matrix` and `State`
 """
 function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     f = e.f
@@ -247,6 +249,9 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
                   "Simulation(sim, state) gives the simulation another one")
     elseif f === ITensorMPS.tdvp || f === ITensorMPS.dmrg
         print(io, "\nTensorMixedStates 2.0: ", renamed_names[nameof(f)])
+    elseif f === partial_trace && length(types) == 2
+        print(io, "\nTensorMixedStates 2.0: the sites are given by keyword, " *
+                  "partial_trace(state; trace_out = positions), or keep = positions")
     elseif f === measure && length(types) == 3
         print(io, "\nTensorMixedStates 2.0: the time is a keyword, measure(state, list; time = t)")
     elseif f === Check && !isempty(types) && types[1] <: AbstractString

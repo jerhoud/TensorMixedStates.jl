@@ -91,7 +91,8 @@ mixed state is refused by `ground_state`: search the pure state and mix it.
 | `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
 | `variance(h, state)` | `variance(state, h)` |
-| `partial_trace(state, positions; keepers)` | `partial_trace(state, positions; keep)` |
+| `partial_trace(state, positions)` | `partial_trace(state; trace_out = positions)` |
+| `partial_trace(state, positions; keepers = true)` | `partial_trace(state; keep = positions)` |
 | `:sweep` in a list of measurements | `:step` |
 
 The value of a Hermitian operator is real, its imaginary part dropped with a warning when it is
@@ -109,8 +110,8 @@ Measure(…)])` measures the two as one, where 1.x returned a group for each.
 | `GroundState(nsweeps, noise, tolerance)` | `GroundState(algo = Dmrg(; nsweeps, noise, tol))`, `algo` being required |
 | `SteadyState(nsweeps, tolerance)` | `SteadyState(algo = Dmrg(; nsweeps, tol))`, `algo` being required |
 | `Dmrg(…)`, the phase | `GroundState(…)`: `Dmrg` is now the method of a search |
-| `PartialTrace(trace_positions = p)` | `PartialTrace(positions = p)` |
-| `PartialTrace(keep_positions = p)` | `PartialTrace(positions = p, keep = true)` |
+| `PartialTrace(trace_positions = p)` | `PartialTrace(trace_out = p)` |
+| `PartialTrace(keep_positions = p)` | `PartialTrace(keep = p)` |
 | `CreateState(seed = s)` | `SimData(seed = s)`, the draws of every phase using the generator of the run |
 | `SimData(time_format, data_format)` | `SimData(; format)`, for every number written |
 | `SimData(checkpoint_interval, max_time, threading)` | `runTMS(sim_data; checkpoint_interval, max_time, threading)`, or the variables `TMS_CHECKPOINT_INTERVAL`, `TMS_MAX_TIME`, `TMS_THREADING` |

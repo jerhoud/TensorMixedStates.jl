@@ -628,7 +628,7 @@ end
         @test norm(apply(o, ρ) - mix(apply(o, ψ))) < 1e-10
         keep = sort(randperm(n)[1:rand(1:3)])
         o, d = product(length(keep), p -> keep[p], n)
-        @test expect(partial_trace(ρ, keep; keep = true), o) ≈ value(d) atol = 1e-10
+        @test expect(partial_trace(ρ; keep), o) ≈ value(d) atol = 1e-10
     end
     # a function of an even product applied as a gate, on sites in any order and apart
     odd = singles[[1, 2, 4]]
@@ -1031,7 +1031,7 @@ end
     both(s -> expect2(mix(s), (dag(C), C)))
     both(s -> expect(mix(s), η(1) * γ(3)))
     both(s -> expect2(mix(s), (γ, N)))
-    both(s -> trace(partial_trace(mix(s), [1, 3])))
+    both(s -> trace(partial_trace(mix(s); trace_out = [1, 3])))
     both(s -> mutual_info_renyi2(mix(s), 1:2))
     both(s -> trace(apply(Gate(F)(1), mix(s))))
     both(s -> trace(apply(Dissipator(N)(2), mix(s))))
@@ -1087,8 +1087,9 @@ end
     @test hermiticity(ss) < 0.99
     # tracing out part of the sites is refused, what is left being a mixture over several
     # sectors, which a state keeping the two charges apart cannot hold
-    @test_throws "weaken it first" partial_trace(s, [1, 3])
-    @test expect(partial_trace(weaken(s), [1, 3]), N(1)) ≈ expect(partial_trace(w, [1, 3]), N(1))
+    @test_throws "weaken it first" partial_trace(s; trace_out = [1, 3])
+    @test expect(partial_trace(weaken(s); trace_out = [1, 3]), N(1)) ≈
+          expect(partial_trace(w; trace_out = [1, 3]), N(1))
     # a number read off a partial trace is measured all the same, through the weak form
     both(x -> renyi2(x, [1, 2]))
     both(x -> mutual_info_renyi2(x, [1, 2]))
@@ -1133,42 +1134,47 @@ end
     s3 = System(3, fe)
     p(v) = State{Pure}(s3, v)
     ρ = mix(normalize(p(["Occ", "Occ", "Emp"]) + p(["Emp", "Occ", "Occ"])))
-    @test expect(partial_trace(ρ, [2]), dag(C)(1) * C(2)) ≈ expect(ρ, dag(C)(1) * C(3)) ≈ -0.5
+    @test expect(partial_trace(ρ; trace_out = [2]), dag(C)(1) * C(2)) ≈
+          expect(ρ, dag(C)(1) * C(3)) ≈ -0.5
     # a state of no definite parity takes the sign on a single fermionic operator as well
     ρ = mix(normalize(p(["Emp", "Occ", "Emp"]) + p(["Emp", "Occ", "Occ"])))
-    @test expect(partial_trace(ρ, [1, 2]), C(1) + dag(C)(1)) ≈ expect(ρ, C(3) + dag(C)(3)) ≈ -1
+    @test expect(partial_trace(ρ; trace_out = [1, 2]), C(1) + dag(C)(1)) ≈
+          expect(ρ, C(3) + dag(C)(3)) ≈ -1
     # every product of two operators of the sites kept, sites traced out on both sides of a
     # charged system
     charged = State{Pure}(System(5, Fermion(conserve = N)), ["Occ", "Occ", "Emp", "Emp", "Occ"])
     ρ = mix(random_state(charged, 4))
-    red = partial_trace(ρ, [1, 4]; keep = true)
+    red = partial_trace(ρ; keep = [1, 4])
     @test red.system == System(2, Fermion(conserve = N))
     for a in (Id, N, C, dag(C)), b in (Id, N, C, dag(C))
         @test expect(red, a(1) * b(2)) ≈ expect(ρ, a(1) * b(4)) atol = 1e-12
     end
     # two species on a site
     ρ = mix(random_state(Pure, System(3, Electron()), 4))
-    @test expect(partial_trace(ρ, [2]), dag(Cdn)(1) * Cup(2)) ≈ expect(ρ, dag(Cdn)(1) * Cup(3))
+    @test expect(partial_trace(ρ; trace_out = [2]), dag(Cdn)(1) * Cup(2)) ≈
+          expect(ρ, dag(Cdn)(1) * Cup(3))
     # no fermion kept on the right of one traced out: no sign, and the bond dimension stays
     ρ = mix(random_state(Pure, System(4, fe), 4))
-    @test maxlinkdim(partial_trace(ρ, [3, 4])) ≤ maxlinkdim(ρ)
+    @test maxlinkdim(partial_trace(ρ; trace_out = [3, 4])) ≤ maxlinkdim(ρ)
 end
 
 @testset "A partial trace keeps the trace, and what it refuses" begin
     # nothing is divided by the trace, which a state of trace zero keeps
     ρ = mix(random_state(Pure, System(4, Qubit()), 4))
     for k in ([1], [2], [4], [1, 3])
-        @test trace(partial_trace(2 * ρ, k)) ≈ 2 * trace(ρ)
+        @test trace(partial_trace(2 * ρ; trace_out = k)) ≈ 2 * trace(ρ)
     end
-    @test abs(trace(partial_trace(ρ - ρ, [1]))) < 1e-12
-    @test length(partial_trace(ρ, 1:3; keep = true)) == 3
-    # a position the state does not have, every site traced out, and a pure state, which is not
-    # mixed behind the caller's back
-    @test_throws "given site 5, which the state does not have" partial_trace(ρ, [5])
-    @test_throws "given site 0" partial_trace(ρ, [0, 1]; keep = true)
-    @test_throws "every site" partial_trace(ρ, 1:4)
+    @test abs(trace(partial_trace(ρ - ρ; trace_out = [1]))) < 1e-12
+    @test length(partial_trace(ρ; keep = 1:3)) == 3
+    # a position the state does not have, every site traced out, the sites given both ways or
+    # not at all, and a pure state, which is not mixed behind the caller's back
+    @test_throws "given site 5, which the state does not have" partial_trace(ρ; trace_out = [5])
+    @test_throws "given site 0" partial_trace(ρ; keep = [0, 1])
+    @test_throws "every site" partial_trace(ρ; trace_out = 1:4)
+    @test_throws "one of the two" partial_trace(ρ)
+    @test_throws "one of the two" partial_trace(ρ; keep = [1], trace_out = [2])
     ψ = random_state(Pure, System(4, Qubit()), 4)
-    @test_throws "use mix(state) first" partial_trace(ψ, [1, 2])
+    @test_throws "use mix(state) first" partial_trace(ψ; trace_out = [1, 2])
 end
 
 @testset "Reduced density matrix and von Neumann entropy" begin
@@ -1772,7 +1778,7 @@ end
         @test_throws "which is zero, as for the null state" fidelity(z, ψ)
         @test_throws "which is zero, as for the null state" variance(z, N(1))
         zm = apply(C(2), mix(ψ))
-        @test norm(partial_trace(zm, [1, 2])) == 0
+        @test norm(partial_trace(zm; trace_out = [1, 2])) == 0
         @test_throws "which is zero, as for the null state" purity(zm)
         @test_throws "which is zero, as for the null state" hermiticity(zm)
         @test_throws "which is zero, as for the null state" hs_fidelity(zm, mix(ψ))

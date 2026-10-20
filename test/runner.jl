@@ -582,13 +582,13 @@ end
             CopyState(:hot => :steady),
             SteadyState(lindbladian = -im * h + Dissipator(Sm)(1), algo = Dmrg(nsweeps = 2),
                         limits = lim, on = :steady),
-            PartialTrace(positions = [3], on = :hot)]))
+            PartialTrace(trace_out = [3], on = :hot)]))
         @test sim.state isa State{Pure} && real(expect(sim.state, Z(1))) ≈ 1
         @test sim.f isa State{Mixed} && string(symmetries(sim.f.system)) == "N"
         @test length(sim.hot) == 2
         _, thermal = thermalize(h, 0.4, State{Mixed}(System(3, Qubit()), "FullyMixed"); nsteps = 2,
                                 limits = lim)
-        @test hs_fidelity(partial_trace(thermal, [3]), sim.hot) ≈ 1
+        @test hs_fidelity(partial_trace(thermal; trace_out = [3]), sim.hot) ≈ 1
         @test sim.steady isa State{Mixed}
         # a named state created first, and several states of one system and representation only
         @test runTMS(SimData(phases = [CreateState{Pure}(3, Qubit(), "+"; on = :x),
@@ -1017,7 +1017,7 @@ end
         xs = prod(X(i) for i in 1:6)
         sim = run([CreateState(type = Mixed(), state = ghz, final_measurements = "" => [
                        check("purity", purity, 1), check("x", st -> real(expect(st, xs)), 1)]),
-                   PartialTrace(positions = [2, 3, 5], keep = true, final_measurements = "" => [
+                   PartialTrace(keep = [2, 3, 5], final_measurements = "" => [
                        check("z", st -> real(expect1(st, Z)), zeros(3)),
                        check("zz", st -> real(expect2(st, (Z, Z))), ones(3, 3))])])
         @test length(sim.state) == 3

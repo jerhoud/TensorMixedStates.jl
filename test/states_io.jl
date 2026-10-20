@@ -349,7 +349,7 @@ end
     # any state conserving nothing
     file = joinpath(mktempdir(), "traced.h5")
     sq = System([Qubit(), Fermion(conserve = N)])
-    ρ = partial_trace(mix(State{Pure}(sq, ["+", "Occ"])), [1]; keep = true)
+    ρ = partial_trace(mix(State{Pure}(sq, ["+", "Occ"])); keep = [1])
     save_state(file, "traced", ρ)
     lt = load_state(file, "traced")
     @test lt.system == System(1, Qubit())

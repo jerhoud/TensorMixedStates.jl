@@ -68,39 +68,39 @@ function run_phase(phase::Weaken, sim::Simulation, ::Int)
 end
 
 """
-    PartialTrace(; positions, keep = false, on, name, time_start, final_measurements)
+    PartialTrace(; keep | trace_out, on, name, time_start, final_measurements)
 
-a phase that traces out the sites at `positions`, or with `keep = true` all the others, see
-`partial_trace`. The sites kept make a new system, numbered from 1 in their order, which the
-operators of the phases after this one refer to. `on` is the name of the state it acts on, see
-`CopyState` (default `:state`).
+a phase that reduces the state to the sites at the positions `keep`, or traces out those at
+`trace_out`, see `partial_trace`. The sites kept make a new system, numbered from 1 in their
+order, which the operators of the phases after this one refer to. `on` is the name of the state
+it acts on, see `CopyState` (default `:state`).
 
 # Examples
 
-    PartialTrace(positions = [2, 3, 6])
-    PartialTrace(positions = [1, 4, 5], keep = true)
+    PartialTrace(trace_out = [2, 3, 6])
+    PartialTrace(keep = [1, 4, 5])
 """
 @kwdef struct PartialTrace <: AbstractPhase
     name::String = "Computing partial trace"
     time_start::Union{Nothing, Number} = nothing
     final_measurements = []
-    positions::Vector{Int} = nothing
-    keep::Bool = false
+    keep::Union{Nothing, Vector{Int}} = nothing
+    trace_out::Union{Nothing, Vector{Int}} = nothing
     on::Symbol = :state
-    # the positions, which have no default, asked for by an error of their own: Julia attaches no
-    # hint to the error of a keyword missing, which a keyword of 1.x left unread would raise
-    function PartialTrace(name, time_start, final_measurements, positions, keep, on)
-        if isnothing(positions)
-            error("PartialTrace needs positions, the sites to trace out, or with keep = true " *
-                  "those to keep")
+    # one of keep and trace_out, asked for by an error of their own: Julia attaches no hint to
+    # the error of a keyword missing, which a keyword of 1.x left unread would raise
+    function PartialTrace(name, time_start, final_measurements, keep, trace_out, on)
+        if isnothing(keep) == isnothing(trace_out)
+            error("PartialTrace takes the sites to keep, keep = positions, or those to trace " *
+                  "out, trace_out = positions, one of the two")
         end
-        return new(name, time_start, final_measurements, positions, keep, on)
+        return new(name, time_start, final_measurements, keep, trace_out, on)
     end
 end
 
 run_phase(phase::PartialTrace, sim::Simulation, ::Int) =
     with_state(sim, phase.on,
-               partial_trace(state_named(sim, phase.on), phase.positions; phase.keep))
+               partial_trace(state_named(sim, phase.on); phase.keep, phase.trace_out))
 
 """
     Gates(; gates, limits, on, name, time_start, final_measurements)

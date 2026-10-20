@@ -181,7 +181,7 @@ end
             r, rm = jw_reduced(sys, full, kept), jw_reduced(sys, R, kept)
             @test reduced_density_matrix(ψ, kept) ≈ r atol = 1e-10
             @test reduced_density_matrix(ρ, kept) ≈ rm atol = 1e-10
-            pt = ket_bra_matrix(partial_trace(ρ, kept; keep = true))
+            pt = ket_bra_matrix(partial_trace(ρ; keep = kept))
             @test pt / LA.tr(pt) ≈ rm atol = 1e-10
             @test renyi2(ψ, kept) ≈ S2(r) atol = 1e-10
             @test renyi2(ρ, kept) ≈ S2(rm) atol = 1e-10

@@ -58,6 +58,8 @@ version 2.x.
   as complex, whatever the state.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
+- `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
+  `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `steady_state` builds the MPO of ``L^\dagger L`` from that of ``L`` with as few channels as its
   rank, where the product of the MPOs had the square of their bond dimension, and its
   `mpo_limits` truncate it in its triangular form.

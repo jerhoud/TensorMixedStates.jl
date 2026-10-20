@@ -92,10 +92,11 @@ function trace_signs(state::State{R}, kept) where R
 end
 
 """
-    partial_trace(state, positions [; keep = false])
+    partial_trace(state; keep)
+    partial_trace(state; trace_out)
 
-the mixed `state` with the sites at `positions` traced out, or, with `keep = true`, all the
-others: a mixed state on the system of the sites kept, in their order, with the trace of
+the mixed `state` reduced to the sites at the positions `keep`, or with those at `trace_out`
+traced out: a mixed state on the system of the sites kept, in their order, with the trace of
 `state`. An operator of the sites kept has on it the value it has on `state`, fermionic signs
 included; tracing out a fermionic site with fermionic sites kept on its right may double the
 bond dimension.
@@ -105,16 +106,21 @@ A pure state is refused (`mix` it first), so is a state conserving something str
 
 # Examples
 
-    partial_trace(ρ, [1, 2])
-    partial_trace(ρ, 3:5; keep = true)
+    partial_trace(ρ; keep = 3:5)
+    partial_trace(ρ; trace_out = [1, 2])
 """
-function partial_trace(state::State{Mixed}, positions::AbstractVector{Int}; keep::Bool = false)
+function partial_trace(state::State{Mixed}; keep::Union{Nothing, AbstractVector{Int}} = nothing,
+                       trace_out::Union{Nothing, AbstractVector{Int}} = nothing)
+    if isnothing(keep) == isnothing(trace_out)
+        error("partial_trace takes the sites to keep, keep = positions, or those to trace out, " *
+              "trace_out = positions, one of the two")
+    end
     if !isempty(strong_names(state.system))
         error("partial_trace cannot trace out part of a state conserving something strongly, " *
               "which leaves a mixture over several sectors: weaken it first")
     end
-    check_positions(state, positions, "partial_trace")
-    kept = keep ? sort(unique(positions)) : setdiff(1:length(state), positions)
+    check_positions(state, something(keep, trace_out), "partial_trace")
+    kept = isnothing(keep) ? setdiff(1:length(state), trace_out) : sort(unique(keep))
     if isempty(kept)
         error("partial_trace cannot trace out every site of a state")
     end
@@ -122,5 +128,5 @@ function partial_trace(state::State{Mixed}, positions::AbstractVector{Int}; keep
 end
 
 # not mixed behind the caller's back, the result being a state
-partial_trace(::State{Pure}, ::AbstractVector{Int}; keep::Bool = false) =
+partial_trace(::State{Pure}; kwargs...) =
     error("partial_trace needs a mixed representation: use mix(state) first")

@@ -407,7 +407,8 @@ end
     # in their state, which their partial trace shows
     es = System(3, Electron())
     e = mix((State{Pure}(es, ["Up", "Up", "Emp"]) + State{Pure}(es, ["Emp", "Up", "Up"])) / sqrt(2))
-    @test norm(partial_trace(apply(Reset("Emp")(2), e), [2]) - partial_trace(e, [2])) < 1e-12
+    @test norm(partial_trace(apply(Reset("Emp")(2), e); trace_out = [2]) -
+               partial_trace(e; trace_out = [2])) < 1e-12
 end
 
 @testset "The exponential of a generator on sites apart" begin
@@ -850,7 +851,7 @@ end
     e = mix((State{Pure}(esys, ["Up", "Up", "Emp"]) + State{Pure}(esys, ["Emp", "Up", "Up"])) /
             sqrt(2))
     evolved = evolve(reset_dissipator(γ, "Dn")(2), t, e; nsteps = 20, limits = Limits(maxdim = 100))
-    @test norm(partial_trace(evolved, [2]) - partial_trace(e, [2])) < 1e-10
+    @test norm(partial_trace(evolved; trace_out = [2]) - partial_trace(e; trace_out = [2])) < 1e-10
     # the descent lays the strings of each parity, so that a reset to a state of no definite
     # parity, against its Kraus operators |v⟩⟨i|, and a mixture of a reset and a fermionic gate
     # are applied

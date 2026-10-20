@@ -75,9 +75,9 @@ end
         (() -> steady_state(L, ρ; algo, alg = "naive"), "alg was removed: the MPO of L†L"),
         (() -> steady_state(L, ρ; algo, mpo_algo = "naive"), "mpo_algo was removed"),
         (() -> SteadyState(lindbladian = L, algo, mpo_algo = "naive"), "mpo_algo was removed"),
-        (() -> partial_trace(ρ, [1]; keepers = true), "keepers became keep"),
-        (() -> PartialTrace(trace_positions = [1]), "trace_positions became positions"),
-        (() -> PartialTrace(keep_positions = [1]), "positions = p, keep = true"),
+        (() -> partial_trace(ρ, [1]; keepers = true), "partial_trace(state; keep = positions)"),
+        (() -> PartialTrace(trace_positions = [1]), "trace_positions became trace_out"),
+        (() -> PartialTrace(keep_positions = [1]), "keep_positions became keep"),
         (() -> load_state("state.h5", "s"; system = st.system), "systems with the same sites"),
         (() -> controlled(X; type = 1), "type was removed"),
     ]
@@ -106,9 +106,11 @@ end
     @test occursin("renyi2(state, 1:k)", message(() -> renyi2(st, 1)))
     @test occursin("matrix(X, site)", message(() -> matrix("X", Qubit())))
     @test occursin("systems with the same sites are equal", message(() -> State(st.system, st)))
-    # the positions of PartialTrace are asked for by an error of their own, which leaves the
+    @test occursin("partial_trace(state; trace_out = positions)",
+                   message(() -> partial_trace(mix(st), [1])))
+    # the sites of PartialTrace are asked for by an error of their own, which leaves the
     # keywords of 1.x to their hints
-    @test occursin("PartialTrace needs positions", message(() -> PartialTrace()))
+    @test occursin("PartialTrace takes the sites to keep", message(() -> PartialTrace()))
     # the steps a list of measurements reads
     @test occursin("the :sweep of 1.x is :step", message(() -> SimData(phases = [
         CreateState{Pure}(2, Qubit(), "Up"),

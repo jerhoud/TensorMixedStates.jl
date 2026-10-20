@@ -225,7 +225,7 @@ read on the state carrying the signs of the fermionic sites traced out, whose pl
 the fermionic one, see `trace_signs`
 """
 part_renyi2(state::State{Mixed}, kept::Vector{Int}) =
-    renyi2(partial_trace(weak_form(state), kept; keep = true))
+    renyi2(partial_trace(weak_form(state); keep = kept))
 
 function part_renyi2(state::State{Pure}, kept::Vector{Int})
     n = length(state)
@@ -271,7 +271,8 @@ the sites traced out make ``S_2(B)`` another value on a state of no definite par
 """
 function parts_renyi2(state::State{Mixed}, kept::Vector{Int})
     w = weak_form(state)
-    return renyi2(partial_trace(w, kept; keep = true)) + renyi2(partial_trace(w, kept)) - renyi2(w)
+    return renyi2(partial_trace(w; keep = kept)) + renyi2(partial_trace(w; trace_out = kept)) -
+           renyi2(w)
 end
 
 function parts_renyi2(state::State{Pure}, kept::Vector{Int})
@@ -330,7 +331,7 @@ function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{I
         return ones(1, 1)
     end
     check_reduced(state, unique(positions))
-    r = partial_trace(weak_form(state), positions; keep = true)
+    r = partial_trace(weak_form(state); keep = positions)
     system = r.system
     t = prod(r.state)
     js, bs = Index[], Index[]
