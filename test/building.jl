@@ -332,12 +332,13 @@ end
 
 @testset "The trace is kept with the state" begin
     # computed once, under the lock of the state, with the weak form a state conserving
-    # something strongly is measured on
+    # something strongly is measured on, whose system its system makes once for all its states
     ρ = mix(State{Pure}(System(3, Fermion(conserve = strong(N))), ["Occ", "Emp", "Occ"]))
     @test isempty(ρ.preobs.trace) && isempty(ρ.preobs.weak)
     @test trace(ρ) ≈ 1
     @test length(ρ.preobs.trace) == 1
-    @test only(ρ.preobs.weak).system == weaken(ρ).system
+    @test only(ρ.preobs.weak).system === weaken(ρ).system
+    @test weaken(mix(State{Pure}(ρ.system, ["Emp", "Occ", "Occ"]))).system === weaken(ρ).system
     ψ = random_state(Pure, System(4, Qubit()), 4)
     @test trace(ψ) ≈ norm(ψ)^2
     @test only(ψ.preobs.trace) === trace(ψ)

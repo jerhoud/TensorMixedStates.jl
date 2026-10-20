@@ -24,6 +24,10 @@ struct System
     charged::Bool
     strong::Vector{String}
     fermions::Vector{Int}
+    # the systems it weakens to, see `weaken`, made once each, under `lock`, so that the states
+    # of this system share theirs
+    weakened::Dict{Conserved, System}
+    lock::ReentrantLock
     function System(sites::Vector{<:AbstractSite})
         foreach(check_site, unique(sites))
         check_charges(sites)
@@ -36,7 +40,8 @@ struct System
         end
         # Julia's hash of a long vector reads only some of its elements
         key = foldl((h, s) -> hash(s, h), sites; init = hash(length(sites)))
-        return new(copy(sites), key, charged, strong, fermions)
+        return new(copy(sites), key, charged, strong, fermions, Dict{Conserved, System}(),
+                   ReentrantLock())
     end
 end
 
@@ -101,7 +106,9 @@ function weaken(system::System, target::Conserved)
     if target.names == symmetries(system).names
         return system
     end
-    return System([ weaken(s, target) for s in system.sites ])
+    return lock(system.lock) do
+        get!(() -> System([ weaken(s, target) for s in system.sites ]), system.weakened, target)
+    end
 end
 
 weaken(system::System, spec) = weaken(system, Conserved(spec_names(spec)))
