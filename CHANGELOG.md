@@ -54,7 +54,8 @@ version 2.x.
   as `algo = Dmrg(…)`, `Tdvp(…)` or `ApproxW(…)` and their truncation as `limits`.
 - A truncation left unspecified discards the singular values below 1e-13 of the norm, what
   rounding leaves, where 1.x kept everything; `Limits(cutoff = 0)` keeps everything.
-- The value of a Hermitian operator is real, and that of any other complex, whatever the state.
+- `measure` and the outputs give the value of a Hermitian operator as real, and that of any other
+  as complex, whatever the state.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
 - `steady_state` builds the MPO of ``L^\dagger L`` from that of ``L`` with as few channels as its
