@@ -12,7 +12,7 @@ the reference article.
 
 Nothing yet.
 
-## [1.6.2] - 2026-10-19
+## [1.6.2] - 2026-10-20
 
 ### Fixed
 
