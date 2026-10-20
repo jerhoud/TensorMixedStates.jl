@@ -257,7 +257,7 @@ end
     @test [ expect(wide, o) for o in ops ] ≈ [ expect(st, o) for o in ops ]
     # measure goes through its expect, the values of a Hermitian operator real there too
     @test [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]
-    @test last(only(measure(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)))) isa Float64
+    @test measure(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)) isa Float64
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
     # expect1 and expect2 measure each value through its expect, on all sites or chosen ones, and
     # so does measure for an operator of one site and a pair

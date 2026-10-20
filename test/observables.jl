@@ -293,7 +293,7 @@ end
     ψp = normalize(sum(State{Pure}(sf, c) for c in (["Emp", "Emp"], ["Emp", "Occ"],
                                                     ["Occ", "Emp"], ["Occ", "Occ"])))
     @test renyi2(ψp, [2]) ≈ renyi2(mix(ψp), [2]) ≈ L2
-    @test last(only(measure(ψp, [SubRenyi2([2])]))) ≈ L2
+    @test measure(ψp, SubRenyi2([2])) ≈ L2
     ψr = random_state(Pure, System(4, Fermion()), 4)
     @test renyi2(ψr, [3, 4]) ≈ renyi2(mix(ψr), [3, 4])
     @test mutual_info_renyi2(ψr, [1, 2]) ≈ mutual_info_renyi2(mix(ψr), [1, 2])
@@ -324,14 +324,14 @@ end
     @test r["MutualInfoRenyi2(3)"] ≈ mutual_info_renyi2(st4, [3])
     # the spectrum asked for is written whole, the eigenvalues beyond the bond dimension at the
     # cut being zeros, so that the rows of a file keep their width
-    v = only(measure(State{Pure}(System(3, Qubit()), "Up"), EntanglementEntropy(1, 4)))
+    v = only(measure(State{Pure}(System(3, Qubit()), "Up"), [EntanglementEntropy(1, 4)]))
     @test first(v) == "EntanglementEntropy(1,4)"
     @test length(last(v)) == 5
     @test last(v)[1] ≈ 0 atol=1e-12
     @test last(v)[2] ≈ 1
     @test last(v)[3:5] == zeros(3)
     # and the entropy is that of entanglement_entropy, followed by its spectrum
-    @test last(only(measure(bell, EntanglementEntropy(1, 2)))) ≈ [L2, 0.5, 0.5]
+    @test measure(bell, EntanglementEntropy(1, 2)) ≈ [L2, 0.5, 0.5]
 end
 
 @testset "Entanglement resolved by sector" begin
@@ -418,7 +418,7 @@ end
     ev(st, op) = (ψ = raw_vector(st); ψ' * lowered(st.system, op) * ψ / (ψ' * ψ))
     function check(st, op, hermitian)
         @test expect(st, op) ≈ ev(st, op) atol = 1e-12 * LA.opnorm(lowered(st.system, op))
-        @test (last(only(measure(st, [op]))) isa Real) == hermitian
+        @test (measure(st, op) isa Real) == hermitian
     end
     q = random_state(Pure, System(5, Qubit()), 4; rng = Xoshiro(20261016))
     mag = sum(Z(i) for i in 1:5)
@@ -484,9 +484,9 @@ end
     @test renyi2(stp, 1:3) ≈ renyi2(stp, [1, 2, 3])
     @test mutual_info_renyi2(stm, 1:3) ≈ mutual_info_renyi2(stm, [1, 2, 3])
     # `measure` hands back a vector of name => value pairs, one per measurement
-    @test last(only(measure(stm, SubRenyi2(1:3)))) ≈ renyi2(stm, [1, 2, 3])
-    @test last(only(measure(stm, MutualInfoRenyi2(1:3)))) ≈ mutual_info_renyi2(stm, [1, 2, 3])
-    @test first(only(measure(stm, SubRenyi2(1:3)))) == "SubRenyi2(1:3)"
+    @test measure(stm, SubRenyi2(1:3)) ≈ renyi2(stm, [1, 2, 3])
+    @test measure(stm, MutualInfoRenyi2(1:3)) ≈ mutual_info_renyi2(stm, [1, 2, 3])
+    @test first(only(measure(stm, [SubRenyi2(1:3)]))) == "SubRenyi2(1:3)"
 end
 
 @testset "A cut at either end" begin
@@ -512,10 +512,10 @@ end
     # no site has no entropy, as the cut 0, where partial_trace refused to keep nothing
     @test renyi2(ψ, Int[]) == 0
     @test renyi2(mix(ψ), Int[]) == 0
-    @test last(only(measure(ψ, SubRenyi2(Int[])))) == 0
+    @test measure(ψ, SubRenyi2(Int[])) == 0
     # positions in a vector of another element type failed at the first measurement
-    @test last(only(measure(ψ, SubRenyi2([])))) == 0
-    @test last(only(measure(mix(ψ), SubRenyi2([])))) == 0
+    @test measure(ψ, SubRenyi2([])) == 0
+    @test measure(mix(ψ), SubRenyi2([])) == 0
     @test renyi2(ψ, Any[1, 2]) ≈ renyi2(ψ, [1, 2])
     @test mutual_info_renyi2(ψ, Any[1]) ≈ mutual_info_renyi2(ψ, [1])
     @test mutual_info_renyi2(ψ, []) == 0
@@ -523,7 +523,7 @@ end
     @test_throws "renyi2 was given site 4" renyi2(ψ, 1:4)
     # the leading block of two sites, named by its positions
     @test SubRenyi2(1:2).name == "SubRenyi2(1,2)"
-    @test last(only(measure(ψ, SubRenyi2(1:2)))) ≈ renyi2(mix(ψ), [1, 2])
+    @test measure(ψ, SubRenyi2(1:2)) ≈ renyi2(mix(ψ), [1, 2])
 end
 
 @testset "Measuring a multiple of the identity" begin
@@ -533,8 +533,8 @@ end
         @test expect1(s, (2X)^2) ≈ fill(4, 3)
         @test expect2(s, (2Id, X)) ≈ 2 * expect2(s, (Id, X))
         @test expect(s, 3 * Id(1)) ≈ 3
-        @test last(only(measure(s, (0.5Z)^2))) ≈ fill(0.25, 3)
-        @test last(only(measure(s, 3 * Id(2)))) ≈ 3
+        @test measure(s, (0.5Z)^2) ≈ fill(0.25, 3)
+        @test measure(s, 3 * Id(2)) ≈ 3
     end
 end
 
@@ -859,11 +859,11 @@ end
     # the reference is written with the measurement, on a system of its own
     ref = State{Pure}(System(3, Qubit()), "+")
     st = State{Pure}(System(3, Qubit()), ["+", "+", "Up"])
-    @test first(only(measure(st, Fidelity(ref)))) == "Fidelity"
-    @test last(only(measure(st, Fidelity(ref)))) ≈ 0.5
-    @test first(only(measure(st, Overlap(ref)))) == "Overlap"
-    @test last(only(measure(st, Overlap(ref)))) ≈ 1/√2
-    @test last(only(measure(mix(st), Fidelity(ref)))) ≈ 0.5
+    @test first(only(measure(st, [Fidelity(ref)]))) == "Fidelity"
+    @test measure(st, Fidelity(ref)) ≈ 0.5
+    @test first(only(measure(st, [Overlap(ref)]))) == "Overlap"
+    @test measure(st, Overlap(ref)) ≈ 1/√2
+    @test measure(mix(st), Fidelity(ref)) ≈ 0.5
     # and through a run, where the system does not exist until the phase creates it, or with a
     # reference the run names, missing until there is one
     fidelities() = Data("d") => [Fidelity(ref), Overlap(ref), "named" => Fidelity(:ref)]
@@ -881,9 +881,9 @@ end
     for sites in ([Fermion(conserve = strong(N)) for _ in 1:3],
                   [Fermion(conserve = strong(N)), Qubit(), Fermion(conserve = strong(N))])
         p = State{Pure}(System(sites), ["Occ", sites[2] isa Qubit ? "Up" : "Emp", "Occ"])
-        @test last(only(measure(weaken(mix(p)), Fidelity(p)))) ≈ 1
-        @test last(only(measure(weaken(mix(p), ()), Fidelity(p)))) ≈ 1
-        @test last(only(measure(weaken(p), Overlap(p)))) ≈ 1
+        @test measure(weaken(mix(p)), Fidelity(p)) ≈ 1
+        @test measure(weaken(mix(p), ()), Fidelity(p)) ≈ 1
+        @test measure(weaken(p), Overlap(p)) ≈ 1
     end
     # and a pure reference on a state dropping part of what it conserves, a site left conserving
     # nothing being cut into a single block on a system still charged
@@ -893,7 +893,7 @@ end
     ψ = normalize(p(["1", "2", "0", "0"]) + 0.5 * p(["0", "1", "1", "1"]) -
                   0.7im * p(["1", "0", "2", "0"]))
     for target in (N, named(N, "Nb"))
-        @test last(only(measure(weaken(mix(ψ), target), Fidelity(ψ)))) ≈ 1
+        @test measure(weaken(mix(ψ), target), Fidelity(ψ)) ≈ 1
     end
     # but a reference conserving less than the state is refused, weakening the state at every
     # measurement costing a whole conversion of it
@@ -924,9 +924,9 @@ end
     @test_throws "reads nowhere" SimData(phases = [CreateState{Pure}(2, Qubit(), "Up";
         final_measurements = "d" => [:nowhere => [Z]])])
     # the matrix elements <ref|op|state> of two pure states, a vector for an operator of one site
-    @test last(only(measure(a, Overlap(:b, X(1) * Z(3)); b))) ≈ inner(b, apply(X(1) * Z(3), a))
-    @test last(only(measure(a, Overlap(:a, X(1) * Z(3)); a))) ≈ expect(a, X(1) * Z(3))
-    @test last(only(measure(a, Overlap(b, Z)))) ≈ [ inner(b, apply(Z(i), a)) for i in 1:4 ]
+    @test measure(a, Overlap(:b, X(1) * Z(3)); b) ≈ inner(b, apply(X(1) * Z(3), a))
+    @test measure(a, Overlap(:a, X(1) * Z(3)); a) ≈ expect(a, X(1) * Z(3))
+    @test measure(a, Overlap(b, Z)) ≈ [ inner(b, apply(Z(i), a)) for i in 1:4 ]
     @test_throws "matrix element of two pure states" measure(mix(a), Overlap(:b, Z); b = mix(b))
 end
 
@@ -969,8 +969,8 @@ end
     @test variance(gs, h) < variance(r, h)
 
     # as a measurement
-    @test first(only(measure(r, Variance(h)))) == "Variance"
-    @test last(only(measure(r, Variance(h)))) ≈ variance(r, h)
+    @test first(only(measure(r, [Variance(h)]))) == "Variance"
+    @test measure(r, Variance(h)) ≈ variance(r, h)
 
     # a hamiltonian on a density matrix has no variance in this sense
     @test_throws "needs a pure representation" variance(mix(r), h)
@@ -1261,10 +1261,10 @@ end
     @test_throws "a part without fermionic sites" log_negativity(s, [1], [3])
     @test_throws "sites in both parts" log_negativity(q, [1, 2], [2])
     @test log_negativity(q, [], [2]) == 0
-    measured = only(measure(bell, LogNegativity([1], [2])))
+    measured = only(measure(bell, [LogNegativity([1], [2])]))
     @test first(measured) == "LogNegativity(1;2)"
     @test last(measured) ≈ log(2)
-    @test first(only(measure(q, LogNegativity(1:2, [4])))) == "LogNegativity(1,2;4)"
+    @test first(only(measure(q, [LogNegativity(1:2, [4])]))) == "LogNegativity(1,2;4)"
 end
 
 @testset "What expect refuses" begin
@@ -1311,13 +1311,13 @@ end
     # and so does variance, where it was refused, and its measurement
     @test variance(b, X(1)) ≈ 1
     @test variance(b, X(1) + X(2)) ≈ 4
-    @test last(only(measure(b, [Variance(X(1))]))) ≈ 1
+    @test measure(b, Variance(X(1))) ≈ 1
     # and so are its matrix elements, by inner and Overlap, which were refused: X(1)|b⟩ holds
     # |↓↓⟩ with the amplitude 1/√2, and so does X(2)|b⟩
     dd = State{Pure}(sys, ["Dn", "Dn"])
     @test inner(dd, X(1), b) ≈ 1 / √2
-    @test last(only(measure(b, [Overlap(dd, X(1))]))) ≈ 1 / √2
-    @test last(only(measure(b, [Overlap(dd, X)]))) ≈ fill(1 / √2, 2)
+    @test measure(b, Overlap(dd, X(1))) ≈ 1 / √2
+    @test measure(b, Overlap(dd, X)) ≈ fill(1 / √2, 2)
     # apply keeps refusing it, its result having no definite charges
     @test_throws "no definite flux" apply(X(1), b)
 end
@@ -1339,9 +1339,15 @@ end
     @test last(r[4]) ≈ 1
     @test last(r[5]) == 1.5
     @test last(r[6]) == -3.2
-    single = measure(st, X(1))
+    # a measurement alone gives its value, a list of one its pair, as v[i] and v[[i]] do,
+    # named or on a named state as well, :φ => list being a list
+    @test measure(st, X(1)) ≈ 1
+    single = measure(st, [X(1)])
     @test single isa Vector{Pair{String, Any}}
     @test first(only(single)) == "X(1)" && last(only(single)) ≈ 1
+    @test measure(st, "x" => X(1)) ≈ 1
+    @test measure(st, :φ => X(1); φ = st) ≈ 1
+    @test first.(measure(st, :φ => [X(1), Z(1)]; φ = st)) == ["φ.X(1)", "φ.Z(1)"]
     # a Measure holds such a list, printed by the names of its measurements
     m = Measure(X, (X, Y), Z(1) * Z(2), Purity, "E" => :energy)
     @test repr(m) == "Measure(X, (X, Y), Z(1)*Z(2), Purity, E)"
@@ -1431,7 +1437,7 @@ end
     @test last(r[3]) == -1
     @test last(r[4]) == [:energy, :state, :time]
     # a complex time
-    @test last(only(measure(st, "t" => c -> c.time; time = 0.5im))) == 0.5im
+    @test measure(st, "t" => c -> c.time; time = 0.5im) == 0.5im
     # the symbol :time reads it as a symbol reads a value, where it was refused as not given
     @test measure(st, [:time]; time = 0.5) == ["time" => 0.5]
     @test_throws "measure was given no value of time" measure(st, [:time])
@@ -1444,19 +1450,19 @@ end
         st, "f" => c -> c.foo)
     # its value is given as it is computed, a complex one with no warning
     ph = apply(Phase(0.7)(1), State{Pure}(System(2, Qubit()), "+"))
-    sp = @test_logs last(only(measure(ph, "sp" => c -> expect(c.state, Sp(1)))))
+    sp = @test_logs measure(ph, "sp" => c -> expect(c.state, Sp(1)))
     @test sp ≈ exp(0.7im) / 2
 
     # a Check is what such a function returns to compare a value with a reference: measure gives
     # the value, the reference and the norm of their difference
-    ch = last(only(measure(st, "chk" => c -> Check(expect(c.state, X(1)), 1; tol = 1e-10))))
+    ch = measure(st, "chk" => c -> Check(expect(c.state, X(1)), 1; tol = 1e-10))
     @test keys(ch) == (:value, :reference, :difference)
     @test ch.value ≈ 1 && ch.reference == 1 && ch.difference < 1e-10
-    ch = last(only(measure(st, "chk" => c -> Check(expect1(c.state, X), [1, 1, 1]; tol = 1e-10))))
+    ch = measure(st, "chk" => c -> Check(expect1(c.state, X), [1, 1, 1]; tol = 1e-10))
     @test ch.value ≈ ones(3) && ch.reference == [1, 1, 1] && ch.difference < 1e-10
     # complex values are compared whole, each kept as it is computed
-    ch = last(only(measure(ph, "chk" => c -> Check(expect(c.state, Sp(1)), exp(0.7im) / 2;
-                                                     tol = 1e-10))))
+    ch = measure(ph, "chk" => c -> Check(expect(c.state, Sp(1)), exp(0.7im) / 2;
+                                         tol = 1e-10))
     @test ch.value ≈ exp(0.7im) / 2 && ch.difference < 1e-10
     # beyond tol it is refused, the message giving the name, the time when measure is given one,
     # the values, their difference and tol, or only warned about with warn = true
@@ -1466,10 +1472,10 @@ end
         st, far(); time = 2.5)
     @test_throws "beyond tol = 1.0e-6" measure(st, far())
     failed = r"^Check chk failed: 1\.0 and 1\.001 differ by .*, beyond tol = 1\.0e-6$"
-    ch = @test_logs (:warn, failed) last(only(measure(st, far(warn = true))))
+    ch = @test_logs (:warn, failed) measure(st, far(warn = true))
     @test ch.difference ≈ 0.001
     # without tol nothing is refused, the three being recorded
-    ch = @test_logs last(only(measure(st, "chk" => c -> Check(1.0, 2.0))))
+    ch = @test_logs measure(st, "chk" => c -> Check(1.0, 2.0))
     @test ch == (value = 1.0, reference = 2.0, difference = 1.0)
     # values of different shapes are refused, tol or not
     @test_throws "Check chk compares values of different shapes, (2,) and (1, 2)" measure(
@@ -1479,15 +1485,15 @@ end
     # entries missing on both sides, as where an operator is not defined, are left out, where a
     # tol failed on a TypeError, and entries missing on one side alone fail it
     qf = State{Pure}(System([Qubit(), Fermion()]), ["+", "Emp"])
-    ch = last(only(measure(qf, "chk" => c -> Check(expect1(c.state, X), [0.5, missing]; tol = 1))))
+    ch = measure(qf, "chk" => c -> Check(expect1(c.state, X), [0.5, missing]; tol = 1))
     @test ch.value[1] ≈ 1 && ismissing(ch.value[2]) && ch.difference ≈ 0.5
     @test_throws "and [1.0, 2.0] miss different entries" measure(
         qf, "chk" => c -> Check([1.0, missing], [1.0, 2.0]; tol = 1))
-    @test ismissing(last(only(measure(qf, "chk" => c -> Check(missing, 1.0)))).difference)
+    @test ismissing(measure(qf, "chk" => c -> Check(missing, 1.0)).difference)
     # a value not given, which 1.x compared as an empty value, failing on a MethodError: the
     # function reading it is refused, and given the value, the Check compares it
     @test_throws "this measurement reads energy" measure(st, "e" => c -> Check(c.energy, -1.0))
-    @test last(only(measure(st, "e" => c -> Check(c.energy, -1.0); energy = -1.0))) ==
+    @test measure(st, "e" => c -> Check(c.energy, -1.0); energy = -1.0) ==
           (value = -1.0, reference = -1.0, difference = 0.0)
 end
 
@@ -1496,7 +1502,7 @@ end
     # list is prepared, that of any other complex, whatever the element type of the state: a
     # real value is a Float64 on a complex state, a complex one a ComplexF64 on a real state.
     # 1.x decided by a symbolic test, which took Sp(1)Sm(2) + Sm(1)Sp(2) for complex
-    value(st, m) = last(only(measure(st, m)))
+    value(st, m) = measure(st, m)
     up = State{Pure}(System(2, Qubit()), "Up")
     ph = apply(Phase(0.7)(1), State{Pure}(System(2, Qubit()), "+"))
     plus_i = State{Pure}(System(2, Qubit()), ["+", "i"])
@@ -1506,7 +1512,7 @@ end
     @test value(ph, Sp(1)) ≈ exp(0.7im) / 2
     @test value(ph, Sp(1) * Sm(2) + Sm(1) * Sp(2)) isa Float64
     @test value(up, Id(2)) === 1.0
-    iv = only(measure(plus_i, im * X(1) * Y(2)))
+    iv = only(measure(plus_i, [im * X(1) * Y(2)]))
     @test first(iv) == "im*X(1)*Y(2)"
     @test last(iv) isa ComplexF64
     @test last(iv) ≈ im
@@ -1598,7 +1604,7 @@ end
     # the operator norms of its blocks, and not next to the value: a value
     # zero up to rounding is not warned about
     up = State{Pure}(System(2, Qubit()), "Up")
-    @test (@test_logs measure(up, X(1))) == ["X(1)" => 0.0]
+    @test (@test_logs measure(up, X(1))) == 0.0
     r = random_state(Pure, System(5, Qubit()), 4)
     for s in (r, mix(r))
         o = X(2) * Z(3) - real(expect(s, X(2) * Z(3))) * Id(1)
@@ -1609,7 +1615,7 @@ end
     ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
     @test expect(ρ, X(1)) ≈ 0.6im
     msg = "the imaginary part of a Hermitian measurement is beyond rounding, dropped"
-    x = @test_logs (:warn, msg) last(only(measure(ρ, X(1))))
+    x = @test_logs (:warn, msg) measure(ρ, X(1))
     @test x isa Float64 && x == 0
     # the warning carries the measurement, the imaginary part and the time, in a group of its own,
     # which a run gathers into one warning

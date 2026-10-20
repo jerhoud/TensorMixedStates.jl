@@ -194,13 +194,13 @@ end
     ψ = random_state(Pure, System(n, Qubit()), 4)
     v = dense_vector(ψ)
     @test isapprox(expect(ψ, h), v' * lowered(ψ.system, h) * v; rtol = 1e-12)
-    @test isapprox(last(only(measure(ψ, h))), expect(ψ, h); rtol = 1e-12)
+    @test isapprox(measure(ψ, h), expect(ψ, h); rtol = 1e-12)
     @test isapprox(variance(ψ, h), real(v' * lowered(ψ.system, h)^2 * v) - real(expect(ψ, h))^2;
                    rtol = 1e-10, atol = 1e-12)
     ρ = random_state(Mixed, System(n, Qubit()), 4)
     r = ket_bra_matrix(ρ)
     @test isapprox(expect(ρ, h), LA.tr(r * lowered(ρ.system, h)) / LA.tr(r); rtol = 1e-12)
-    @test isapprox(last(only(measure(ρ, h))), real(expect(ρ, h)); rtol = 1e-12)
+    @test isapprox(measure(ρ, h), real(expect(ρ, h)); rtol = 1e-12)
     hf = sum(0.5^(j - i) * (dag(C)(i) * C(j) + dag(C)(j) * C(i)) + 0.2 * N(i) * N(j)
              for i in 1:n for j in i+1:n)
     ψf = random_state(Pure, System(n, Fermion()), 4)
@@ -208,8 +208,8 @@ end
     @test isapprox(expect(ψf, hf), vf' * lowered(ψf.system, hf) * vf; rtol = 1e-12)
     # the kind of the value is found on the operator, Hermitian and so real, its difference with
     # its adjoint compacting to nothing
-    @test last(only(measure(ψf, hf))) isa Real
-    @test last(only(measure(ψf, hf))) ≈ real(expect(ψf, hf)) rtol = 1e-12
+    @test measure(ψf, hf) isa Real
+    @test measure(ψf, hf) ≈ real(expect(ψf, hf)) rtol = 1e-12
 end
 
 @testset "The constant, the zero operator, the charges and the element type" begin

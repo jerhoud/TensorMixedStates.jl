@@ -129,7 +129,7 @@ end
             h, dh = o + o_dag, d + d'
             var = real(v' * dh * dh * v - (v' * dh * v)^2)
             @test variance(ψ, h) ≈ var atol = 1e-10 rtol = 1e-10
-            @test last(only(measure(ψ, [h]))) ≈ real(v' * dh * v) atol = 1e-10 rtol = 1e-10
+            @test measure(ψ, h) ≈ real(v' * dh * v) atol = 1e-10 rtol = 1e-10
             # the bound of the width of the spectrum the search of excited states reads
             λ = LA.eigvals(LA.Hermitian(dh))
             @test sum(TMS.term_width(sys, t) for t in TMS.lower(sys, h); init = 0.0) ≥

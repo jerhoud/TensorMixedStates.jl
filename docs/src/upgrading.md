@@ -100,7 +100,9 @@ more than rounding, and that of an operator that is not Hermitian is complex, wh
 the columns of a file do not depend on it. For the same reason, `Trace` is complex.
 
 A list of measurements given to `measure` is one list: `measure(state, [Measure(…),
-Measure(…)])` measures the two as one, where 1.x returned a group for each.
+Measure(…)])` measures the two as one, where 1.x returned a group for each. A measurement
+alone gives its value, where 1.x gave a vector of one pair: `last(only(measure(state, m)))`
+is now `measure(state, m)`, and `measure(state, [m])` gives the pair.
 
 ## Simulations
 

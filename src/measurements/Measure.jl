@@ -799,10 +799,12 @@ function entry_value(it::OnNamedItem, name, c::Context, _)
 end
 
 """
+    measure(state, measurement; time, values...)
     measure(state, measurements; time, values...)
 
-the measurements on `state`, a `Measure` or what one is built from, as a vector of pairs
-`name => value` in their order. An operator placed on sites gives its expectation value, an
+the value of one measurement on `state`, or those of a list of them, a vector, a `Measure` or
+`:φ => list`, as a vector of pairs `name => value` in their order, as `v[i]` and `v[[i]]` give
+an element and a vector. An operator placed on sites gives its expectation value, an
 operator of one site a vector indexed by site and a pair a matrix, as `expect1` and `expect2`
 give them, made real when the operator, or each product of the pair, is Hermitian, with a
 warning when the imaginary part dropped is beyond rounding, and complex otherwise; any other
@@ -814,6 +816,7 @@ anew at each call.
 
 # Examples
 
+    measure(state, Purity)
     measure(state, [X, (X, Y), Z(1) * Z(2), Purity])
     measure(state, ["E" => c -> real(expect(c.state, H)), :energy]; time = 1.5, energy = -3.2)
 """
@@ -839,5 +842,8 @@ function measure(state::AbstractState, m::Measure; time::Union{Nothing, Number} 
                               for ((name, _), it) in zip(m.entries, items) ]
 end
 
-measure(state::AbstractState, measurements; kwargs...) =
-    measure(state, Measure(measurements); kwargs...)
+measure(state::AbstractState,
+        list::Union{AbstractArray, Pair{Symbol, <:Union{AbstractArray, Measure}}}; kwargs...) =
+    measure(state, Measure(list); kwargs...)
+
+measure(state::AbstractState, m; kwargs...) = last(only(measure(state, Measure(m); kwargs...)))

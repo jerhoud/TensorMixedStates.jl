@@ -967,8 +967,8 @@ end
     st = random_state(Pure, System(3, q), 2)
     @test expect(st, Id(2) - X(2) * X(2)) ≈ 0 atol = 1e-12
     # it is its own adjoint, and so measured as real, a number as any expectation value is
-    @test last(only(measure(st, Id(2)))) === 1.0
-    @test last(only(measure(mix(st), Id(2)))) === 1.0
+    @test measure(st, Id(2)) === 1.0
+    @test measure(mix(st), Id(2)) === 1.0
     # its tensor, where one is needed, goes on the site the caller names
     @test expect1(st, Id) ≈ ones(3)
     @test expect1(mix(st), Id) ≈ ones(3)

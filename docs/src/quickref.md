@@ -96,8 +96,9 @@ sweeps: a result is trusted once it does not move when each is improved, see
 
 ```julia
 measure(ψt, [X(1) * X(10), Z, (X, X), Purity, EntanglementEntropy(5)])
-# a vector of pairs name => value, even for one measurement: an operator on sites gives a
-# number, an operator of one site one pair "Z" => [a value per site], a pair a correlation matrix
+# a list gives a vector of pairs name => value: an operator on sites gives a number, an
+# operator of one site a vector of a value per site, a pair a correlation matrix
+measure(ψt, Z)  # a measurement alone gives its value, [Z] the vector of one pair
 measure(ψt, ["E" => c -> real(expect(c.state, ham)), "t" => c -> c.time]; time = 1.0)
 # one value at a time
 expect(ψt, X(1) * X(10)); expect1(ψt, Z); expect2(ψt, (X, X))

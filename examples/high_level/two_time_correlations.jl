@@ -26,7 +26,7 @@ sim = runTMS(SimData(
     ],
 ))
 
-found = last(only(measure(sim.state, Overlap(:φ, X); φ = sim.φ)))
+found = measure(sim.state, Overlap(:φ, X); φ = sim.φ)
 
 # exactly
 x, z = matrix(X, Qubit()), matrix(Z, Qubit())

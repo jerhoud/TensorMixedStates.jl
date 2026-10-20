@@ -2,10 +2,12 @@
 
 ## What is measured
 
-`measure(state, measurements; time, values...)` returns the measurements, in their order, as
-pairs `name => value`. A measurement is an operator, a measurement of the library, a symbol, or
-a function of the context, each possibly named, and a list of them is a vector or a `Measure`,
-which keeps what it prepares for the next call. The examples below use a four qubit state
+`measure(state, measurement)` returns the value of one measurement, and
+`measure(state, measurements; time, values...)` those of a list, in their order, as pairs
+`name => value`, as `v[i]` and `v[[i]]` give an element and a vector. A measurement is an
+operator, a measurement of the library, a symbol, or a function of the context, each possibly
+named, and a list of them is a vector or a `Measure`, which keeps what it prepares for the
+next call. The examples below use a four qubit state
 
 ```@setup measurements
 using TensorMixedStates
