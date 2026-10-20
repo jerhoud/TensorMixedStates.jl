@@ -97,7 +97,7 @@ written, see `SimData`.
 A function of the context may return a `Check`, which compares a value with a reference:
 
 ```@example measurements
-measure(mystate, "check" => c -> Check(real(expect(c.state, X(1))), 1.0; tol = 1e-8))
+measure(mystate, "check" => c -> Check(expect(c.state, X(1)), 1.0; tol = 1e-8))
 ```
 
 The value is then the value, the reference and their distance, and a distance beyond `tol` is an
@@ -115,6 +115,10 @@ it is more than rounding, which a density matrix that lost its hermiticity gives
 gathers these warnings into one at the end of each phase. `Trace`, `TraceDeviation`, `Overlap`
 and `ReducedDensityMatrix` are complex, the other measurements of the library real, and a
 function of the context gives what it returns.
+
+`expect`, `expect1` and `expect2` give their values by the same rule. With `complex = true`,
+they give the complex numbers computed, imaginary parts included, which a list of
+measurements gets through a function: `"x" => c -> expect(c.state, X(1); complex = true)`.
 
 ## Reference
 

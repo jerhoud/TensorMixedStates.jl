@@ -276,7 +276,8 @@ The phases and the measurements reach the state through the methods you give:
   operator placed on sites, normalised by the trace, which `measure`, and so `output`, asks for,
   those of the operators of one site and of the pairs of them included. The operator is given
   as the user wrote it, on the physical sites, which [`map_sites`](@ref) places on another
-  system;
+  system. It gives the value as computed: `measure`, `expect1` and `expect2` make that of a
+  Hermitian operator real;
 - `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,

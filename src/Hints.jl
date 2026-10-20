@@ -19,9 +19,10 @@ const renamed_names = Dict{Symbol, String}(
                     "random_state(Mixed, system, linkdims) or random_state(state, linkdims)",
     :StateFunc => "StateFunc was removed: a list of measurements takes \"name\" => c -> f(c.state)",
     :TimeFunc => "TimeFunc was removed: a list of measurements takes \"name\" => c -> f(c.time)",
-    :RealValue => "RealValue was removed: write \"name\" => c -> real(expect(c.state, op))",
+    :RealValue => "RealValue was removed: the value of a Hermitian operator is real, " *
+                  "\"name\" => op",
     :ImaginaryValue => "ImaginaryValue was removed: write " *
-                       "\"name\" => c -> imag(expect(c.state, op))",
+                       "\"name\" => c -> imag(expect(c.state, op; complex = true))",
     :ComplexValue => "ComplexValue was removed: the value of an operator that is not " *
                      "Hermitian is complex",
     :trace2 => "trace2 became purity",

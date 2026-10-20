@@ -12,7 +12,7 @@ xx = sum(Sx(i) * Sx(i + 1) + Sy(i) * Sy(i + 1) for i in 1:n-1)
 wall = State{Pure}(System(n, Spin(1/2)), [i ≤ n ÷ 2 ? "1/2" : "-1/2" for i in 1:n])
 lim = Limits(maxdim = 64)
 
-magnetization(st) = real(expect1(st, Sz))
+magnetization(st) = expect1(st, Sz)
 tdvp = magnetization(evolve(-im * xx, t, wall; nsteps = 40, limits = lim))
 tdvp_half = magnetization(evolve(-im * xx, t, wall; nsteps = 80, limits = lim))
 approx = magnetization(evolve(-im * xx, t, wall; algo = ApproxW(order = 4), nsteps = 40,

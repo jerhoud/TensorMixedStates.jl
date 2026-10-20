@@ -13,7 +13,7 @@ hot = State{Mixed}(System(n, Qubit()), "FullyMixed")
 lim = Limits(maxdim = 64)
 
 logtrace, thermal = thermalize(ising, β, hot; nsteps = 40, limits = lim)
-energy = real(expect(thermal, ising))
+energy = expect(thermal, ising)
 # the derivative of log Z, by two other temperatures close by
 δ = 0.01
 plus, _ = thermalize(ising, β + δ, hot; nsteps = 40, limits = lim)

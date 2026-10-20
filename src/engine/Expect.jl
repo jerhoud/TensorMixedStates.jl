@@ -339,11 +339,13 @@ end
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`: compacted
 on `system`, see `compacted_op`, or, when it changes the charges by no definite amount, see
 `FluxError`, on the same sites conserving nothing, where it is measured on the state conserving
-nothing, see `plain_form`
+nothing, see `plain_form`; `system` keeps it for the next call, see `kept_for!`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
-    c = or_on_plain(s -> compacted_op(s, a), system)
-    return PreparedOp(c, c.system !== system)
+    return kept_for!(system, system.prepared, a) do
+        c = or_on_plain(s -> compacted_op(s, a), system)
+        PreparedOp(c, c.system !== system)
+    end::PreparedOp
 end
 
 """
@@ -368,7 +370,120 @@ function prepared_value(state::State, p::PreparedOp)
 end
 
 """
-    expect(state, op)
+    is_hermitian(system, terms, scale)
+
+whether the operator of the `terms` on `system` is Hermitian: their difference with their
+adjoints, see `dag(::Term)`, compacts to nothing once its terms of rounding size next to
+`scale`, see `term_size`, are dropped
+"""
+function is_hermitian(system::System, terms::Vector{Term}, scale::Real)
+    diff = reduced([ terms ; scaled(-1, map(dag, terms)) ])
+    kept = [ t for t in diff if term_size(t) > rounding_tol * scale ]
+    if isempty(kept)
+        return true
+    end
+    constant, singles, b = compacted(Pure, system, kept)
+    return abs(constant) ≤ rounding_tol * scale && isempty(singles) && isnothing(b)
+end
+
+"""
+    hermitian_blocks(c)
+
+whether the operator compacted `c`, see `compacted_op`, is Hermitian: zero, or of no flux, an
+adjoint changing the charges the other way, and minus its adjoint vanishing, see `vanishes`
+"""
+hermitian_blocks(c::CompactedOp) =
+    isnothing(c.flux) || (c.flux == QN() && vanishes(combined(c.system, [(c, 1), (c', -1)])))
+
+"""
+    hermitian_op(system, a, p)
+
+whether the operator `a` placed on sites, prepared on `system` as `p`, see `prepare_op`, is
+Hermitian, see `is_hermitian` and `hermitian_blocks`, kept by `system`, see `kept_for!`
+"""
+hermitian_op(system::System, a::IndexedOp{IsOperator}, p::PreparedOp) =
+    kept_for!(system, system.hermitian, a) do
+        c = p.op
+        isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
+    end
+
+"""
+    site_hermitian(system, o)
+
+whether the operator of one site `o` is Hermitian on every site of `system` where it is
+defined, and the largest of its operator norms there, the scale of its values
+"""
+function site_hermitian(system::System, o::SimpleOp)
+    ms = [ matrix(o, system[i]) for i in defined_sites(system, o) ]
+    return (all(m -> nearly(m, m'), ms), maximum(opnorm, ms; init = 0.0))
+end
+
+"""
+    pair_hermitian(system, (a, b))
+
+whether every product `a(i) * b(j)` of the operators of one site `a` and `b` on `system` is
+Hermitian, and the product of their largest operator norms, the scale of its values
+"""
+function pair_hermitian(system::System, (a, b)::Tuple{SimpleOp, SimpleOp})
+    on(o) = [ (i, matrix(o, system[i])) for i in defined_sites(system, o) ]
+    as, bs = on(a), on(b)
+    hermitian(ms) = all(nearly(m, m') for (_, m) in ms)
+    even(ms) = all(parity_of(m, matrix(F, system[i])) == 0 for (i, m) in ms)
+    commuting = all(nearly(x * y, y * x) for (i, x) in as for (j, y) in bs if i == j)
+    # two odd operators anticommute on two sites, which makes their product anti-Hermitian
+    h = hermitian(as) && hermitian(bs) && commuting && (even(as) || even(bs))
+    norms(ms) = maximum(opnorm(m) for (_, m) in ms; init = 0.0)
+    return (h, norms(as) * norms(bs))
+end
+
+"""
+    imaginary_tol
+
+how large the imaginary part of the expectation value of a Hermitian operator may be, relative
+to the scale of the operator, see `term_size`, before `expect` or `measure` warns as it drops it
+"""
+const imaginary_tol = 1e-8
+
+"""
+    real_value(x, scale, name, time)
+
+the real part of the value `x` of the Hermitian operator or measurement `name`, element by
+element, with a warning when the imaginary part dropped is beyond rounding next to `scale`, of
+the group `:imaginary_part` and carrying `measurement`, `imaginary` and `time`, so that a logger
+may gather such warnings
+"""
+function real_value(x::Number, scale, name, time)
+    if abs(imag(x)) > imaginary_tol * scale
+        @warn("the imaginary part of a Hermitian measurement is beyond rounding, dropped",
+              measurement = name, imaginary = imag(x), time, _group = :imaginary_part)
+    end
+    return real(x)
+end
+
+real_value(::Missing, _, _, _) = missing
+real_value(x::AbstractArray, args...) = map(y -> real_value(y, args...), x)
+
+"""
+    complex_value(x)
+
+the value `x` of an operator or a measurement that is not Hermitian as a complex number,
+element by element, so that its type does not depend on the state measured
+"""
+complex_value(x::Number) = complex(x)
+complex_value(::Missing) = missing
+complex_value(x::AbstractArray) = map(complex_value, x)
+
+"""
+    ruled_value(x, hermitian, scale, name)
+
+the value `x` of the operator `name` as `expect`, `expect1` and `expect2` give it: real when the
+operator is Hermitian, see `real_value`, and complex otherwise, see `complex_value`
+"""
+ruled_value(x, hermitian::Bool, scale, name) =
+    hermitian ? real_value(x, scale, name, nothing) : complex_value(x)
+
+"""
+    expect(state, op; complex = false)
 
 the expectation value of the operator `op`, placed on sites, or the array or the tuple of those
 of an array or a tuple of them, on the state of an extension as well, divided by the real part
@@ -379,26 +494,44 @@ are laid for you. On a system conserving charges, an operator changing them by n
 amount is measured on the state conserving nothing, see `weaken`. A channel, a generator and an
 operator not placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
 
+The value of a Hermitian operator is real, as `measure` gives it, its imaginary part dropped,
+with a warning when it is more than rounding, as a density matrix that lost its hermiticity
+gives; that of any other operator is complex, and an array of values of both kinds complex.
+With `complex = true`, the value is the complex number computed, imaginary part included. The
+system of the state keeps the operator prepared for the next call.
+
 # Examples
 
     expect(state, X(1) * Y(2) + Y(1) * Z(3))
     expect(state, [X(1) * Y(2), X(3), Swap(1, 3)])
     expect(state, C(3) * dag(C)(1))
+    expect(ρ, X(1); complex = true)
 """
-function expect(state::State, a::IndexedOp{IsOperator})
+function expect(state::State, a::IndexedOp{IsOperator}; complex::Bool = false)
     state = weak_form(state)
-    return prepared_value(state, prepare_op(state.system, a))
+    p = prepare_op(state.system, a)
+    x = prepared_value(state, p)
+    return complex ? complex_value(x) :
+                     ruled_value(x, hermitian_op(state.system, a, p), p.op.norm, obs_name(a))
 end
 
-expect(state::AbstractState, ops::Union{AbstractArray, Tuple}) = map(o -> expect(state, o), ops)
+function expect(state::AbstractState, ops::AbstractArray; kwargs...)
+    values = map(o -> expect(state, o; kwargs...), ops)
+    # real and complex values make an array of complex numbers, as [1.0, 2im], where map would
+    # give an array of Number
+    T = mapreduce(typeof, promote_type, values; init = Union{})
+    return T === Union{} ? values : convert(Array{T}, values)
+end
 
-expect(::State, a::Op{IsChannel}) =
+expect(state::AbstractState, ops::Tuple; kwargs...) = map(o -> expect(state, o; kwargs...), ops)
+
+expect(::State, a::Op{IsChannel}; kwargs...) =
     error("expect takes an observable, and $(obs_name(a)) is a channel")
 
-expect(::State, a::Op{IsGenerator}) =
+expect(::State, a::Op{IsGenerator}; kwargs...) =
     error("expect takes an observable, and $(obs_name(a)) is a generator")
 
-expect(::State, a::GenericOp{IsOperator, N}) where N =
+expect(::State, a::GenericOp{IsOperator, N}; kwargs...) where N =
     error("expect takes an operator placed on sites, such as $(obs_name(a((1:N)...))) rather " *
           "than $(obs_name(a)), and expect1 measures an operator of one site on every site")
 
@@ -485,21 +618,35 @@ definite_everywhere(system::System, ops, sites) =
                                for o in ops for i in intersect(sites, defined_sites(system, o)))
 
 """
-    expect1(state, op)
+    expect1(state, op; complex = false)
 
 the expectation values of the operator of one site `op` on every site, normalised as by
 `expect`: a vector indexed by site, `missing` where `op` is not defined, or, for an array of
-operators, an array of such vectors arranged as the operators. The even part of the operator on
-a site is measured there on the density matrix of the site, its odd part with the Jordan-Wigner
-string on the sites before, both from environments the state keeps. On the state of an
-extension, each value is measured by its `expect`.
+operators, an array of such vectors arranged as the operators. The values of an operator
+Hermitian on every site where it is defined are real, the others complex, and all of them the
+complex numbers computed with `complex = true`, as for `expect`. The even part of the operator
+on a site is measured there on the density matrix of the site, its odd part with the
+Jordan-Wigner string on the sites before, both from environments the state keeps. On the state
+of an extension, each value is measured by its `expect`.
 
 # Examples
 
     expect1(state, X)
     expect1(state, [X, Y, Z])
 """
-function expect1(state::State, ops::AbstractArray{<:SimpleOp})
+function expect1(state::AbstractState, ops::AbstractArray{<:SimpleOp}; complex::Bool = false)
+    values = expect1_computed(state, ops)
+    return map(ops, values) do o, v
+        complex ? complex_value(v) : ruled_value(v, site_hermitian(state.system, o)..., obs_name(o))
+    end
+end
+
+"""
+    expect1_computed(state, ops)
+
+the values of `expect1` as they are computed, before they are made real or complex
+"""
+function expect1_computed(state::State, ops::AbstractArray{<:SimpleOp})
     state = weak_form(state)
     if !definite_everywhere(state.system, ops, 1:length(state))
         state = plain_form(state)
@@ -533,7 +680,7 @@ function expect1(state::State, ops::AbstractArray{<:SimpleOp})
 end
 
 # on the state of an extension, through its expect
-function expect1(state::AbstractState, ops::AbstractArray{<:SimpleOp})
+function expect1_computed(state::AbstractState, ops::AbstractArray{<:SimpleOp})
     n = length(state)
     return map(ops) do o
         on = defined_sites(state.system, o)
@@ -541,22 +688,22 @@ function expect1(state::AbstractState, ops::AbstractArray{<:SimpleOp})
     end
 end
 
-expect1(state::AbstractState, op::SimpleOp) = only(expect1(state, [op]))
+expect1(state::AbstractState, op::SimpleOp; kwargs...) = only(expect1(state, [op]; kwargs...))
 
-expect1(::AbstractState, a::IndexedOp) =
+expect1(::AbstractState, a::IndexedOp; kwargs...) =
     error("expect1 measures an operator on every site, X rather than X(1): measure " *
           "$(obs_name(a)) with expect")
 
-expect1(::AbstractState, a::Op) =
+expect1(::AbstractState, a::Op; kwargs...) =
     error("expect1 measures an operator of one site, and $(obs_name(a)) is not one")
 
-function expect1(state::AbstractState, ops::AbstractArray)
+function expect1(state::AbstractState, ops::AbstractArray; kwargs...)
     for o in ops
         if !(o isa SimpleOp)
             expect1(state, o)
         end
     end
-    return expect1(state, convert(Array{SimpleOp}, ops))
+    return expect1(state, convert(Array{SimpleOp}, ops); kwargs...)
 end
 
 """
@@ -752,24 +899,42 @@ function general_pairs!(r, state::State, (o1, o2), on1, on2)
 end
 
 """
-    expect2(state, (o1, o2); sites)
-    expect2(state, [(o1, o2), ...]; sites)
+    expect2(state, (o1, o2); sites, complex = false)
+    expect2(state, [(o1, o2), ...]; sites, complex = false)
 
 the matrix whose entry `(i, j)` is the expectation value of `o1(i) * o2(j)`, normalised as by
 `expect`, the diagonal being that of `(o1 * o2)(i)`, for `i` and `j` in `sites` (all sites by
 default), `missing` elsewhere and where `o1` is not defined on `i` or `o2` on `j`; for a
-vector of pairs, a vector of such matrices. The Jordan-Wigner strings are laid for you. A pair
-whose operators have one and the same parity on all those sites is measured by sharing the
-environments of each site, any other row by row, each part of definite parity with its string.
-On the state of an extension, each entry is measured by its `expect`.
+vector of pairs, a vector of such matrices. The matrix of a pair whose products are all
+Hermitian, `o1` and `o2` Hermitian, commuting on a site and not both fermionic, is real, the
+others complex, and all of them the complex numbers computed with `complex = true`, as for
+`expect`. The Jordan-Wigner strings are laid for you. A pair whose operators have one and the
+same parity on all those sites is measured by sharing the environments of each site, any other
+row by row, each part of definite parity with its string. On the state of an extension, each
+entry is measured by its `expect`.
 
 # Examples
 
     expect2(state, (X, X))
     expect2(state, [(X, Y), (C, dag(C))]; sites = 1:10)
 """
-function expect2(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
-                 sites::AbstractVector{Int} = 1:length(state))
+function expect2(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+                 sites::AbstractVector{Int} = 1:length(state), complex::Bool = false)
+    values = expect2_computed(state, pairs; sites)
+    return map(pairs, values) do (a, b), v
+        complex ? complex_value(v) :
+                  ruled_value(v, pair_hermitian(state.system, (a, b))...,
+                              "($(obs_name(a)), $(obs_name(b)))")
+    end
+end
+
+"""
+    expect2_computed(state, pairs; sites)
+
+the values of `expect2` as they are computed, before they are made real or complex
+"""
+function expect2_computed(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+                          sites::AbstractVector{Int} = 1:length(state))
     state = weak_form(state)
     sys = state.system
     n = length(sys)
@@ -804,8 +969,8 @@ function expect2(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
 end
 
 # on the state of an extension, through its expect
-function expect2(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
-                 sites::AbstractVector{Int} = 1:length(state))
+function expect2_computed(state::AbstractState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+                          sites::AbstractVector{Int} = 1:length(state))
     sys = state.system
     n = length(sys)
     for i in sites

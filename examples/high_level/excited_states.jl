@@ -30,9 +30,9 @@ sim = runTMS(SimData(
     ],
 ))
 
-e0 = real(expect(sim.ground, hamiltonian))
-e1 = real(expect(sim.state, hamiltonian))
-println("ground state energy ", e0, ", that of the singlets ", real(expect(singlets, hamiltonian)))
+e0 = expect(sim.ground, hamiltonian)
+e1 = expect(sim.state, hamiltonian)
+println("ground state energy ", e0, ", that of the singlets ", expect(singlets, hamiltonian))
 println("fidelity of the ground state to the singlets ", fidelity(sim.ground, singlets))
 println("gap ", e1 - e0, ", overlap of the two states ", fidelity(sim.state, sim.ground))
 @assert fidelity(sim.ground, singlets) > 1 - 1e-8

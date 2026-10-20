@@ -562,7 +562,7 @@ list cannot share a name.
 
 # Examples
 
-    Measure(X, (X, Y), Z(1) * Z(2), Purity, "E" => c -> real(expect(c.state, H)), :energy)
+    Measure(X, (X, Y), Z(1) * Z(2), Purity, "E" => c -> expect(c.state, H), :energy)
 """
 struct Measure
     entries::Vector{Pair{String, Any}}
@@ -645,32 +645,6 @@ mutable struct OnNamedItem
 end
 
 """
-    is_hermitian(system, terms, scale)
-
-whether the operator of the `terms` on `system` is Hermitian: their difference with their
-adjoints, see `dag(::Term)`, compacts to nothing once its terms of rounding size next to
-`scale`, see `term_size`, are dropped
-"""
-function is_hermitian(system::System, terms::Vector{Term}, scale::Real)
-    diff = reduced([ terms ; scaled(-1, map(dag, terms)) ])
-    kept = [ t for t in diff if term_size(t) > rounding_tol * scale ]
-    if isempty(kept)
-        return true
-    end
-    constant, singles, b = compacted(Pure, system, kept)
-    return abs(constant) ≤ rounding_tol * scale && isempty(singles) && isnothing(b)
-end
-
-"""
-    hermitian_blocks(c)
-
-whether the operator compacted `c`, see `compacted_op`, is Hermitian: zero, or of no flux, an
-adjoint changing the charges the other way, and minus its adjoint vanishing, see `vanishes`
-"""
-hermitian_blocks(c::CompactedOp) =
-    isnothing(c.flux) || (c.flux == QN() && vanishes(combined(c.system, [(c, 1), (c', -1)])))
-
-"""
     prepared_entry(state, m)
 
 the measurement `m` made ready for the states of the representation and of the system of
@@ -678,30 +652,16 @@ the measurement `m` made ready for the states of the representation and of the s
 staying as it is
 """
 function prepared_entry(state::AbstractState, a::IndexedOp{IsOperator})
-    p = prepare_op(state isa State ? weak_form(state).system : state.system, a)
-    c = p.op
-    h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
-    return OpValue(p, a, h)
+    system = state isa State ? weak_form(state).system : state.system
+    p = prepare_op(system, a)
+    return OpValue(p, a, hermitian_op(system, a, p))
 end
 
-function prepared_entry(state::AbstractState, o::SimpleOp)
-    system = state.system
-    ms = [ matrix(o, system[i]) for i in defined_sites(system, o) ]
-    return SiteValues(o, all(m -> nearly(m, m'), ms), maximum(opnorm, ms; init = 0.0))
-end
+prepared_entry(state::AbstractState, o::SimpleOp) =
+    SiteValues(o, site_hermitian(state.system, o)...)
 
-function prepared_entry(state::AbstractState, (a, b)::Tuple{SimpleOp, SimpleOp})
-    system = state.system
-    on(o) = [ (i, matrix(o, system[i])) for i in defined_sites(system, o) ]
-    as, bs = on(a), on(b)
-    hermitian(ms) = all(nearly(m, m') for (_, m) in ms)
-    even(ms) = all(parity_of(m, matrix(F, system[i])) == 0 for (i, m) in ms)
-    commuting = all(nearly(x * y, y * x) for (i, x) in as for (j, y) in bs if i == j)
-    # two odd operators anticommute on two sites, which makes their product anti-Hermitian
-    h = hermitian(as) && hermitian(bs) && commuting && (even(as) || even(bs))
-    norms(ms) = maximum(opnorm(m) for (_, m) in ms; init = 0.0)
-    return PairValues((a, b), h, norms(as) * norms(bs))
-end
+prepared_entry(state::AbstractState, pair::Tuple{SimpleOp, SimpleOp}) =
+    PairValues(pair, pair_hermitian(state.system, pair)...)
 
 prepared_entry(state::AbstractState, m::StateMeasurement) = OnState(m.prepare(state))
 prepared_entry(::AbstractState, f::Function) = f
@@ -721,43 +681,6 @@ prepared(m::Measure, state::AbstractState) =
             Any[ prepared_entry(state, last(e)) for e in m.entries ]
         end
     end
-
-"""
-    imaginary_tol
-
-how large the imaginary part of the expectation value of a Hermitian operator may be, relative
-to the scale of the operator, see `term_size`, before `measure` warns as it drops it
-"""
-const imaginary_tol = 1e-8
-
-"""
-    real_value(x, scale, name, time)
-
-the real part of the value `x` of the Hermitian measurement `name`, element by element, with a
-warning when the imaginary part dropped is beyond rounding next to `scale`, of the group
-`:imaginary_part` and carrying `measurement`, `imaginary` and `time`, so that a logger may
-gather such warnings
-"""
-function real_value(x::Number, scale, name, time)
-    if abs(imag(x)) > imaginary_tol * scale
-        @warn("the imaginary part of a Hermitian measurement is beyond rounding, dropped",
-              measurement = name, imaginary = imag(x), time, _group = :imaginary_part)
-    end
-    return real(x)
-end
-
-real_value(::Missing, _, _, _) = missing
-real_value(x::AbstractArray, args...) = map(y -> real_value(y, args...), x)
-
-"""
-    complex_value(x)
-
-the value `x` of a measurement that is not Hermitian as a complex number, element by element,
-so that its type does not depend on the state measured
-"""
-complex_value(x::Number) = complex(x)
-complex_value(::Missing) = missing
-complex_value(x::AbstractArray) = map(complex_value, x)
 
 """
     entry_value(item, name, c, computed)
@@ -818,7 +741,7 @@ anew at each call.
 
     measure(state, Purity)
     measure(state, [X, (X, Y), Z(1) * Z(2), Purity])
-    measure(state, ["E" => c -> real(expect(c.state, H)), :energy]; time = 1.5, energy = -3.2)
+    measure(state, ["E" => c -> expect(c.state, H), :energy]; time = 1.5, energy = -3.2)
 """
 function measure(state::AbstractState, m::Measure; time::Union{Nothing, Number} = nothing,
                  values...)
@@ -835,8 +758,10 @@ function measure(state::AbstractState, m::Measure; time::Union{Nothing, Number} 
     end
     ops = unique(SimpleOp[ it.op for it in items if it isa SiteValues ])
     pairs = unique(Tuple{SimpleOp, SimpleOp}[ it.pair for it in items if it isa PairValues ])
-    computed = (sites = Dict(zip(ops, isempty(ops) ? [] : expect1(state, ops))),
-                pairs = Dict(zip(pairs, isempty(pairs) ? [] : expect2(state, pairs))))
+    # as computed: the values are made real or complex below, under their names
+    sites = isempty(ops) ? [] : expect1(state, ops; complex = true)
+    correlations = isempty(pairs) ? [] : expect2(state, pairs; complex = true)
+    computed = (sites = Dict(zip(ops, sites)), pairs = Dict(zip(pairs, correlations)))
     c = Context(state, time, given)
     return Pair{String, Any}[ name => entry_value(it, name, c, computed)
                               for ((name, _), it) in zip(m.entries, items) ]

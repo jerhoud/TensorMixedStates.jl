@@ -25,8 +25,11 @@ struct System
     strong::Vector{String}
     fermions::Vector{Int}
     # the systems it weakens to, see `weaken`, made once each, under `lock`, so that the states
-    # of this system share theirs
+    # of this system share theirs, and the operators prepared to be measured on its states, see
+    # `prepare_op`, with whether they are Hermitian, see `kept_for!`
     weakened::Dict{Conserved, System}
+    prepared::Dict{IndexedOp{IsOperator}, Any}
+    hermitian::Dict{IndexedOp{IsOperator}, Bool}
     lock::ReentrantLock
     function System(sites::Vector{<:AbstractSite})
         foreach(check_site, unique(sites))
@@ -41,11 +44,43 @@ struct System
         # Julia's hash of a long vector reads only some of its elements
         key = foldl((h, s) -> hash(s, h), sites; init = hash(length(sites)))
         return new(copy(sites), key, charged, strong, fermions, Dict{Conserved, System}(),
+                   Dict{IndexedOp{IsOperator}, Any}(), Dict{IndexedOp{IsOperator}, Bool}(),
                    ReentrantLock())
     end
 end
 
 System(size::Int, a::AbstractSite) = System(fill(a, size))
+
+"""
+    prepared_limit
+
+how many values a dictionary of a system keeps, see `kept_for!`: one more empties it, which
+bounds the memory a run fills when it measures, at every step, an operator that changes with
+the step, as one depending on the time. It changes how fast, never what is measured.
+"""
+const prepared_limit = 1000
+
+"""
+    kept_for!(make, system, cache, key)
+
+the value of `key` in the dictionary `cache` of `system`, made by `make()` the first time and
+kept, the dictionary emptied when it holds `prepared_limit` values. It is made outside the lock
+of the system, so that the threads measuring other operators wait for nothing, two threads
+making the same value keeping the first.
+"""
+function kept_for!(make, system::System, cache::AbstractDict, key)
+    found = lock(() -> get(cache, key, nothing), system.lock)
+    if !isnothing(found)
+        return found
+    end
+    v = make()
+    return lock(system.lock) do
+        if length(cache) ≥ prepared_limit
+            empty!(cache)
+        end
+        get!(cache, key, v)
+    end
+end
 
 (a::System == b::System) = a.sites == b.sites
 hash(a::System, h::UInt) = hash(a.sites, hash(System, h))

@@ -1510,6 +1510,15 @@ end
     @test value(ph, X(1)) ≈ cos(0.7)
     @test value(up, Sp(1)) isa ComplexF64
     @test value(ph, Sp(1)) ≈ exp(0.7im) / 2
+    # expect, expect1 and expect2 follow the same rule, and give the complex numbers computed
+    # with complex = true
+    @test expect(ph, X(1)) isa Float64 && expect(ph, X(1)) ≈ cos(0.7)
+    @test expect(up, Sp(1)) isa ComplexF64
+    @test expect(ph, X(1); complex = true) isa ComplexF64
+    @test expect1(ph, X) isa Vector{Float64} && expect1(up, Sp) isa Vector{ComplexF64}
+    @test expect1(ph, X; complex = true) isa Vector{ComplexF64}
+    @test expect2(ph, (X, X)) isa Matrix{Float64} && expect2(ph, (X, Y)) isa Matrix{ComplexF64}
+    @test expect2(ph, (X, X); complex = true) isa Matrix{ComplexF64}
     @test value(ph, Sp(1) * Sm(2) + Sm(1) * Sp(2)) isa Float64
     @test value(up, Id(2)) === 1.0
     iv = only(measure(plus_i, [im * X(1) * Y(2)]))
@@ -1611,10 +1620,12 @@ end
         @test abs(expect(s, o)) < 1e-12
         @test_logs measure(s, [o, X, (X, Z), Z(1) * Z(5)])
     end
-    # a density matrix that is not Hermitian gives the Hermitian X an imaginary part of 0.6
+    # a density matrix that is not Hermitian gives the Hermitian X an imaginary part of 0.6,
+    # which expect drops as measure does, and gives with complex = true
     ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
-    @test expect(ρ, X(1)) ≈ 0.6im
     msg = "the imaginary part of a Hermitian measurement is beyond rounding, dropped"
+    @test (@test_logs (:warn, msg) expect(ρ, X(1))) == 0
+    @test (@test_logs expect(ρ, X(1); complex = true)) ≈ 0.6im
     x = @test_logs (:warn, msg) measure(ρ, X(1))
     @test x isa Float64 && x == 0
     # the warning carries the measurement, the imaginary part and the time, in a group of its own,
@@ -1663,6 +1674,28 @@ end
     measure(random_state(Pure, System(5, Qubit()), 2), m)
     @test length(m.prepared) == 3
     # a preparation refused leaves nothing, see "Energy variance"
+end
+
+@testset "A system keeps its operators prepared" begin
+    # an operator measured on a state of a system is prepared once, with whether it is
+    # Hermitian, and found again when it is written again; past prepared_limit what the system
+    # keeps is dropped, which bounds the memory an operator changing at every step fills
+    sys = System(4, Qubit())
+    h() = sum(X(i) * X(i + 1) for i in 1:3) + 0.5 * Z(2)
+    a, b = random_state(Pure, sys, 4), random_state(Pure, sys, 4)
+    expect(a, h())
+    p = only(values(sys.prepared))
+    @test only(values(sys.hermitian))
+    expect(b, h())
+    @test only(values(sys.prepared)) === p
+    @test TMS.prepare_op(sys, h()) === p
+    # another system prepares its own, even an equal one
+    @test TMS.prepare_op(System(4, Qubit()), h()) !== p
+    for k in 1:TMS.prepared_limit
+        TMS.prepare_op(sys, k * Z(1))
+    end
+    @test length(sys.prepared) == 1
+    @test TMS.prepare_op(sys, h()) !== p
 end
 
 @testset "Site indices out of the system" begin

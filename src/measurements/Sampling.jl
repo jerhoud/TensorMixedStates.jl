@@ -115,7 +115,7 @@ function counting_probabilities(state::State, sites, locals)
     K = t1 - t0 + 1
     φ = map(0:K-1) do k
         phase(t, p) = Operator{1}("Count$k", sum(cis(2π * k * u / K) * q for (u, q) in zip(t, p)))
-        expect(state, prod(phase(l...)(i) for (i, l) in zip(sites, locals)))
+        expect(state, prod(phase(l...)(i) for (i, l) in zip(sites, locals)); complex = true)
     end
     return [ T => real(sum(φ[k+1] * cis(-2π * k * T / K) for k in 0:K-1)) / K
              for T in sort(collect(totals)) ]
@@ -215,7 +215,7 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
     inv = involution(system, op)
     if !isnothing(inv)
         c, P = inv
-        m = real(expect(state, P))
+        m = real(expect(state, P; complex = true))
         signs = c > 0 ? [-1, 1] : [1, -1]
         return (c .* signs, zeroed((1 .+ signs .* m) ./ 2),
                 (k, limits) -> project_parity(state, P, signs[k]; limits))
@@ -229,7 +229,7 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
     sites, values, ps = measured_spectrum(system, op, what)
     projectors = [ Operator{length(sites)}("Proj($op => $λ)", p)(sites...)
                    for (λ, p) in zip(values, ps) ]
-    probs = [ real(expect(state, p)) for p in projectors ]
+    probs = [ real(expect(state, p; complex = true)) for p in projectors ]
     function project(k, limits)
         if !definite_on(system, ps[k], sites)
             error("the result $(values[k]) of $(obs_name(op)) leaves the state without " *

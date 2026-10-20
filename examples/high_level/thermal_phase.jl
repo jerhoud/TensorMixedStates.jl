@@ -9,7 +9,7 @@ using TensorMixedStates, .Qubits, LinearAlgebra
 n = 6
 Δ = 2.0
 xxz = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Δ * Z(i) * Z(i + 1) for i in 1:n-1)
-energy = "energy" => c -> real(expect(c.state, xxz))
+energy = "energy" => c -> expect(c.state, xxz)
 
 sim = runTMS(SimData(
     name = "XXZ_thermal",
@@ -29,7 +29,7 @@ dense = sum(on(x, i) * on(x, i + 1) + on(y, i) * on(y, i + 1) + Δ * on(z, i) * 
 λ = eigvals(Hermitian(dense))
 w = exp.(-2.0 * λ)
 exact_energy = sum(λ .* w) / sum(w)
-println("energy at β = 2: ", real(expect(sim.state, xxz)), "   exact ", exact_energy)
+println("energy at β = 2: ", expect(sim.state, xxz), "   exact ", exact_energy)
 println("log Z at β = 2: ", sim.log_trace + n * log(2), "   exact ", log(sum(w)))
-@assert abs(real(expect(sim.state, xxz)) - exact_energy) < 1e-4
+@assert abs(expect(sim.state, xxz) - exact_energy) < 1e-4
 @assert abs(sim.log_trace + n * log(2) - log(sum(w))) < 1e-4

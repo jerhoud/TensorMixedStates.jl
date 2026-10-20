@@ -16,9 +16,9 @@ residual, steady = steady_state(lindbladian, start; algo = Dmrg(nsweeps = 10),
                                 limits = Limits(maxdim = 16))
 
 exact = -γ^2 / (γ^2 + 2Ω^2)
-println("⟨Z⟩ after a long evolution ", real(expect1(relaxed, Z)))
-println("⟨Z⟩ of the steady state    ", real(expect1(steady, Z)), ", residual ", residual)
+println("⟨Z⟩ after a long evolution ", expect1(relaxed, Z))
+println("⟨Z⟩ of the steady state    ", expect1(steady, Z), ", residual ", residual)
 println("exact                      ", exact)
 println("purity of the steady state ", purity(steady))
-@assert maximum(abs.(real(expect1(relaxed, Z)) .- exact)) < 1e-6
-@assert maximum(abs.(real(expect1(steady, Z)) .- exact)) < 1e-8
+@assert maximum(abs.(expect1(relaxed, Z) .- exact)) < 1e-6
+@assert maximum(abs.(expect1(steady, Z) .- exact)) < 1e-8

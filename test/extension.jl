@@ -258,6 +258,8 @@ end
     # measure goes through its expect, the values of a Hermitian operator real there too
     @test [last.(measure(wide, ops))...] ≈ [last.(measure(st, ops))...]
     @test measure(wide, dag(C)(1) * C(3) + dag(C)(3) * C(1)) isa Float64
+    # values of both kinds in an array make an array of complex numbers
+    @test expect(wide, [N(2), dag(C)(1) * C(3)]) isa Vector{ComplexF64}
     @test expect(wide, [N(2), dag(C)(1) * C(3)]) ≈ expect(st, [N(2), dag(C)(1) * C(3)])
     # expect1 and expect2 measure each value through its expect, on all sites or chosen ones, and
     # so does measure for an operator of one site and a pair
@@ -277,7 +279,7 @@ end
     # a tuple of operators gives a tuple of values, on a State as on a state of one's own
     pair = (N(2), C(1) * dag(C)(3))
     @test expect(st, pair) isa Tuple
-    @test collect(expect(wide, pair)) ≈ collect(expect(st, pair))
+    @test all(expect(wide, pair) .≈ expect(st, pair))
     mktempdir() do dir
         file = joinpath(dir, "wide.h5")
         save_state(file, "wide", wide)

@@ -20,7 +20,7 @@ lim = Limits(maxdim = 64)
 
 ρ = State{Mixed}(System(n, Fermion(conserve = strong(N))), [isodd(i) ? "Occ" : "Emp" for i in 1:n])
 ρ = evolve(hopping + dephasing, 1.0, ρ; nsteps = 20, limits = lim)
-println("after the dephasing, ", real(expect(ρ, particles)), " particles, ",
+println("after the dephasing, ", expect(ρ, particles), " particles, ",
         symmetries(ρ.system), " conserved")
 
 # the loss is refused under the strong symmetry
@@ -33,6 +33,6 @@ end
 ρ = weaken(ρ)                            # one level down: N conserved weakly
 t = 2.0
 ρ = evolve(hopping + dephasing + loss, t, ρ; nsteps = 40, limits = lim)
-println("after the loss, ", real(expect(ρ, particles)), " particles, exactly ", 3exp(-κ * t),
+println("after the loss, ", expect(ρ, particles), " particles, exactly ", 3exp(-κ * t),
         ", ", symmetries(ρ.system), " conserved")
-@assert abs(real(expect(ρ, particles)) - 3exp(-κ * t)) < 1e-8
+@assert abs(expect(ρ, particles) - 3exp(-κ * t)) < 1e-8

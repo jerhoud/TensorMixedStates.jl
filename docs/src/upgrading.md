@@ -81,7 +81,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it.
 | `measure(state, list, t)` | `measure(state, list; time = t)` |
 | `StateFunc("name", f)` | `"name" => c -> f(c.state)` |
 | `TimeFunc("name", f)` | `"name" => c -> f(c.time)` |
-| `RealValue`, `ImaginaryValue` | `"name" => c -> real(expect(c.state, op))`, `imag(…)` |
+| `RealValue`, `ImaginaryValue` | `"name" => op`, `"name" => c -> imag(expect(c.state, op; complex = true))` |
 | `ComplexValue` | removed: the value of an operator that is not Hermitian is complex |
 | `Check("name", obs1, obs2, tol)` | `"name" => c -> Check(a, b; tol)`, the values `a` and `b` computed from `c`, as `expect(c.state, op)` |
 | `trace2`, `Trace2` | `purity`, `Purity` |
@@ -97,7 +97,9 @@ mixed state is refused by `ground_state`: search the pure state and mix it.
 
 The value of a Hermitian operator is real, its imaginary part dropped with a warning when it is
 more than rounding, and that of an operator that is not Hermitian is complex, whatever the state:
-the columns of a file do not depend on it. For the same reason, `Trace` is complex.
+the columns of a file do not depend on it. For the same reason, `Trace` is complex. `expect`,
+`expect1` and `expect2` follow that rule, where 1.x gave the complex numbers computed, which
+`complex = true` gives.
 
 A list of measurements given to `measure` is one list: `measure(state, [Measure(…),
 Measure(…)])` measures the two as one, where 1.x returned a group for each. A measurement

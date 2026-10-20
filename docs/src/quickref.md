@@ -70,7 +70,7 @@ myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 | depolarization | `depolarizing_gate(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_gate(4p/3)` |
 | a product of gates | the rightmost factor acts first |
 | rotations | `Rx(θ)` is ``e^{-i\theta X/2}`` and `Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, as in OpenQASM and Qiskit; `Rx(θ)` is ``e^{-i\theta S_x}`` on a spin |
-| values measured | by `measure`, real for a Hermitian operator, complex otherwise, `Trace` complex; by `expect`, `expect1` and `trace`, complex as soon as the state is: `real(expect(ψ, ham))` |
+| values measured | by `measure`, `expect`, `expect1` and `expect2` alike, real for a Hermitian operator, complex otherwise; `expect(ψ, op; complex = true)` the complex number computed; `Trace` and `trace` complex |
 
 ## Solvers
 
@@ -99,7 +99,7 @@ measure(ψt, [X(1) * X(10), Z, (X, X), Purity, EntanglementEntropy(5)])
 # a list gives a vector of pairs name => value: an operator on sites gives a number, an
 # operator of one site a vector of a value per site, a pair a correlation matrix
 measure(ψt, Z)  # a measurement alone gives its value, [Z] the vector of one pair
-measure(ψt, ["E" => c -> real(expect(c.state, ham)), "t" => c -> c.time]; time = 1.0)
+measure(ψt, ["E" => c -> expect(c.state, ham), "t" => c -> c.time]; time = 1.0)
 # one value at a time
 expect(ψt, X(1) * X(10)); expect1(ψt, Z); expect2(ψt, (X, X))
 purity(ρt); maxlinkdim(ψt); entanglement_entropy(ψt, 5)  # (entropy, spectrum)

@@ -54,8 +54,11 @@ version 2.x.
   as `algo = Dmrg(…)`, `Tdvp(…)` or `ApproxW(…)` and their truncation as `limits`.
 - A truncation left unspecified discards the singular values below 1e-13 of the norm, what
   rounding leaves, where 1.x kept everything; `Limits(cutoff = 0)` keeps everything.
-- `measure` and the outputs give the value of a Hermitian operator as real, and that of any other
-  as complex, whatever the state.
+- `measure`, the outputs, `expect`, `expect1` and `expect2` give the value of a Hermitian operator
+  as real, and that of any other as complex, whatever the state; `complex = true` gives `expect`,
+  `expect1` and `expect2` the complex numbers computed, as 1.x did.
+- A system keeps the operators measured on its states prepared, up to 1000, and the systems it
+  weakens to: `expect` of an operator already measured no longer lowers and compacts it again.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,

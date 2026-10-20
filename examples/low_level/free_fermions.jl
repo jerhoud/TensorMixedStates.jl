@@ -20,10 +20,10 @@ exact_energy = sum(-2cos(k * π / (n + 1)) for k in 1:nf)
 exact_correlations = modes * modes'                        # ⟨c†_i c_j⟩
 
 correlations = expect2(ground, (dag(C), C))                # the matrix of ⟨c†_i c_j⟩
-println("energy of the search ", e, "   of the Fermi sea ", real(expect(sea, hamiltonian)),
+println("energy of the search ", e, "   of the Fermi sea ", expect(sea, hamiltonian),
         "   exact ", exact_energy)
 println("overlap of the two states ", abs(inner(sea, ground)))
 println("largest error on ⟨c†_i c_j⟩ ", maximum(abs.(correlations - exact_correlations)))
 @assert abs(e - exact_energy) < 1e-8
-@assert abs(real(expect(sea, hamiltonian)) - exact_energy) < 1e-10
+@assert abs(expect(sea, hamiltonian) - exact_energy) < 1e-10
 @assert maximum(abs.(correlations - exact_correlations)) < 1e-6
