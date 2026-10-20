@@ -1093,8 +1093,10 @@ end
 
 @testset "Every kind of destination and of value survives a resume" begin
     # a text file is continued from where it was, a JSON Lines file too, and the rows of a Data,
-    # held by the checkpoint, come back with their types, complex numbers and matrices included;
-    # an interrupt in the final measurements of a phase of no steps resumes from the phase before
+    # held by the checkpoint, come back with their types, complex numbers, matrices and integers
+    # other than Int included, which 1.6.0 gave back as another type, or as a wrong number above
+    # typemax(Int64); an interrupt in the final measurements of a phase of no steps resumes from
+    # the phase before
     in_tmp() do
         stop_in, fail_in = Ref(0), Ref(0)
         breaker = "breaker" => function (_)
@@ -1107,7 +1109,10 @@ end
             return 0.0
         end
         ms = [Sp(1), (X, Z), (Sp, Sm)]
-        measurements = ["data" => [ms ; stopper(stop_in)], "out.json" => ms, Data("d") => ms]
+        ints = ["i32" => c -> Int32(7), "u64" => c -> typemax(UInt64) - UInt64(12345),
+                "big" => c -> big(2)^70]
+        measurements = ["data" => [ms ; stopper(stop_in)], "out.json" => ms,
+                        Data("d") => [ms ; ints]]
         phases = [CreateState{Pure}(2, Qubit(), "X+"),
                   Evolve(evolver = -im * (Z(1) + X(1) * X(2)), duration = 0.6, time_step = 0.1,
                          limits = Limits(maxdim = 10, cutoff = 1e-15); measurements),
@@ -1131,6 +1136,9 @@ end
         @test all(types(resumed) .== types(whole))
         @test all(isapprox(last(a), last(b))
                   for (ra, rb) in zip(resumed, whole) for (a, b) in zip(ra, rb))
+        @test [ last(p) for r in resumed for p in r if first(p) in ("i32", "u64", "big") ] ==
+              repeat([7, typemax(UInt64) - 12345, big(2)^70], length(whole))
+        @test all(r -> map(typeof ∘ last, r[end-2:end]) == [Int32, UInt64, BigInt], resumed)
     end
 end
 
