@@ -46,6 +46,7 @@ version 2.x.
 - The module `Circuits`: the gates `H`, `S`, `T`, `Phase` and `Sum`, which `Qubits` and `Qudits` no
   longer export, the rotations `Rx` to `Rzz`, and `CX`, `CNOT`, `CY`, `CZ`, `CCX`, `Toffoli`.
 - `tr`, the trace of a state under the name of `LinearAlgebra`.
+- `dag` and `'` of an operator placed on sites, and `'` of a generic one: `H = -(h + h')`.
 - A quick reference, pages for users of QuTiP or ITensors and on choosing and checking the
   parameters, and a skill for AI agents in `skills/tensormixedstates`.
 

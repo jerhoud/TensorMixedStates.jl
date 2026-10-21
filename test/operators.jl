@@ -15,6 +15,21 @@
     @test matrix(dag(dag(dag(S))), q) ≈ matrix(dag(S), q)
 end
 
+@testset "The adjoint of a placed operator" begin
+    # dag and ' conjugate the coefficients and reverse the products, fermions included, whose
+    # strings follow the order of the factors, where a placed operator had no adjoint
+    sys = System([Fermion(), Qubit(), Fermion(), Fermion()])
+    a = (1 + 2im) * dag(C)(1) * C(3) + 0.5im * X(2) * C(4) * N(1) + 3 * Sp(2) + im * Id(1)
+    m = lowered(sys, a)
+    @test lowered(sys, dag(a)) ≈ m'
+    @test lowered(sys, a') ≈ m'
+    @test lowered(sys, a'') ≈ m
+    @test lowered(sys, C'(1) * C(3)) ≈ lowered(sys, dag(C)(1) * C(3))
+    # a hopping written with its adjoint
+    h = C'(3) * C(4) + C'(1) * Sp(2) * C(3)
+    @test lowered(sys, h + h') ≈ lowered(sys, h) + lowered(sys, h)'
+end
+
 @testset "The zero operator" begin
     # a term of coefficient zero, and a sum left with no term at all, as an empty one, are the
     # zero operator

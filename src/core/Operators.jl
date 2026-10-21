@@ -744,15 +744,26 @@ struct DagOp{N} <: GenericOp{IsOperator, N}
 end
 
 """
-    dag(::GenericOp)
+    dag(op)
+    op'
 
-the adjoint of a generic operator on pure states.
+the adjoint of an operator on pure states, generic or placed on sites, a placed one having its
+coefficients conjugated and its products reversed.
 
 # Examples
 
     dag(C) * C
+    h = sum(C'(i) * C(i + 1) for i in 1:9); H = -(h + h')
 """
 dag(a::GenericOp{IsOperator}) = DagOp(a)
+dag(a::AtIndex{IsOperator}) = AtIndex(dag(a.op), a.index)
+dag(a::ScalarOp{IsOperator, Indexed}) = scale(conj(a.coef), dag(a.arg))
+dag(a::SumOp{IsOperator, Indexed}) = SumOp(IndexedOp{IsOperator}[ dag(x) for x in a.subs ])
+dag(a::ProdOp{IsOperator, Indexed}) =
+    ProdOp(IndexedOp{IsOperator}[ dag(x) for x in reverse(a.subs) ])
+dag(a::IdentityOp{IsOperator, Indexed}) = a
+
+Base.adjoint(a::Op{IsOperator}) = dag(a)
 
 """
     ModOp{N}

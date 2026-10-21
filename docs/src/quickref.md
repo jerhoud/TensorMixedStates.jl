@@ -57,7 +57,8 @@ myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 `Sz`, `Sp`, `Sm` on spins; `Id`, `F`, `Level`, `Swap` and `controlled` on every site; the gates
 `H`, `S`, `T`, `Phase(θ)`, `Rx(θ)`, `Ry`, `Rz`, `Rxx(θ)`, `Ryy`, `Rzz`, `CX` or `CNOT`, `CY`,
 `CZ`, `CCX` or `Toffoli` in `Circuits`. `⊗` makes an operator of several sites, `X ⊗ X`, placed by
-`(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)` work on operators.
+`(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)` work on operators, and
+`dag` or `'` on placed ones too, `h + h'`.
 
 ## Conventions
 
