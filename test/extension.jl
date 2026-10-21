@@ -301,9 +301,10 @@ end
 # evolver, its time functions read at the middle of the step, exact on a small system
 struct DenseStep <: TensorMixedStates.EvolutionAlgorithm end
 
-function TensorMixedStates.evolve_step(::DenseStep, pre::PreMPO, coefs, state::State{R}, time, dt,
-                                       step, limits) where R
-    mpo = isnothing(coefs) ? make_mpo(pre) : make_mpo(pre, [ f(time + dt / 2) for f in coefs ])
+function TensorMixedStates.evolve_step(::DenseStep, pre::PreMPO, state::State{R}, time, dt, step,
+                                       limits) where R
+    fs = pre.functions
+    mpo = isnothing(fs) ? make_mpo(pre) : make_mpo(pre, [ f(time + dt / 2) for f in fs ])
     s = siteinds(R, state.system)
     u = exp(dt * prod(mpo), [ i' for i in s ], s)
     return State(state, TensorMixedStates.ITensorMPS.MPS(IT.noprime(u * prod(state.state)), s))
@@ -317,8 +318,8 @@ end
 
 StepRecorder(factor = 1.) = StepRecorder([], factor)
 
-function TensorMixedStates.evolve_step(a::StepRecorder, pre, coefs, state, time, dt, step, limits)
-    values = isnothing(coefs) ? nothing : [ f(time) for f in coefs ]
+function TensorMixedStates.evolve_step(a::StepRecorder, pre, state, time, dt, step, limits)
+    values = isnothing(pre.functions) ? nothing : [ f(time) for f in pre.functions ]
     push!(a.calls, (time, dt, step, limits.maxdim, values))
     return a.factor * state
 end

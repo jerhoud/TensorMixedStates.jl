@@ -120,15 +120,15 @@ function expanded(state::State, mpo::MPO)
 end
 
 """
-    evolve_step(algo, pre, coefs, state, time, dt, step, limits)
+    evolve_step(algo, pre, state, time, dt, step, limits)
 
 the state after one step of `dt` from `time` by the method `algo`, under the evolver `pre`,
-its time functions `coefs`, those of `pre`, `nothing` when it does not depend on time, `step`
-being the number of the step, from 1, and `limits` its limits, see `step_limits`. An
-`EvolutionAlgorithm` of one's own adds a method.
+whose time functions are `pre.functions`, one per term, `nothing` when it does not depend on
+time, see `make_mpo`, `step` being the number of the step, from 1, and `limits` its limits, see
+`step_limits`. An `EvolutionAlgorithm` of one's own adds a method.
 """
-function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number, dt::Number,
-                     step::Int, limits::Limits)
+function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Number, step::Int,
+                     limits::Limits)
     # an evolution leaves the null state null, which ITensors fails on
     if vanished(state.state)
         return state
@@ -142,8 +142,9 @@ function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number,
         return state
     end
     state = State(state, state.state / n)
-    mpo = isnothing(coefs) ? cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing) :
-                             make_mpo(pre, [ f(time + dt / 2) for f in coefs ])
+    fs = pre.functions
+    mpo = isnothing(fs) ? cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing) :
+                          make_mpo(pre, [ f(time + dt / 2) for f in fs ])
     tr = truncation(limits)
     # before the step: from a state of small bond dimension, a product state, an expansion after
     # the step comes too late, which leaves an error of order dt; a single site has no bond
@@ -168,16 +169,16 @@ function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number,
     return state
 end
 
-function evolve_step(algo::ApproxW, pre::PreMPO, coefs, state::State, time::Number, dt::Number,
+function evolve_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number,
                      step::Int, limits::Limits)
     if vanished(state.state)
         return state
     end
-    mpos = if isnothing(coefs)
+    mpos = if isnothing(pre.functions)
         cached_mpos(() -> approx_W_mpos(pre, dt, algo), pre, :approx_W, (algo.order, algo.w, dt))
     else
         reduce(vcat, [ approx_W_mpos(pre, dt, algo, c)
-                       for c in step_coefs(coefs, time, dt, algo.order) ])
+                       for c in step_coefs(pre.functions, time, dt, algo.order) ])
     end
     st = state.state
     for mpo in mpos
@@ -245,7 +246,7 @@ function evolve(evolver, duration::Number, state::State; algo::EvolutionAlgorith
     pre = prepared_evolver(state, evolver, mpo_limits)
     dt = duration / nsteps
     for k in 0:nsteps - 1
-        state = evolve_step(algo, pre, pre.functions, state, time + k * dt, dt, step + k,
+        state = evolve_step(algo, pre, state, time + k * dt, dt, step + k,
                             step_limits(limits, step + k))
     end
     return state

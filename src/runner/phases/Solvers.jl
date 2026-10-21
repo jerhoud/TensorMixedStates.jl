@@ -116,8 +116,8 @@ step_count(e::EvolveSteps) = e.nsteps
 function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
     for name in e.on
-        st = evolve_step(e.algo, e.pre, e.pre.functions, state_named(sim, name),
-                         e.start + (k - 1) * dt, dt, k, step_limits(e.limits, k))
+        st = evolve_step(e.algo, e.pre, state_named(sim, name), e.start + (k - 1) * dt, dt, k,
+                         step_limits(e.limits, k))
         sim = with_state(sim, name, st)
     end
     return Simulation(sim, sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt)

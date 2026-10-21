@@ -208,8 +208,9 @@ a type of its own, is an [`Update`](@ref) phase.
 An evolution goes through [`TensorMixedStates.evolve_step`](@ref), whose method is chosen by the
 type of its `algo`: a method of evolution of your own is a subtype of
 [`TensorMixedStates.EvolutionAlgorithm`](@ref) with a method of `evolve_step`, which makes one
-step, and which `evolve`, `thermalize` and their phases then take as they take `Tdvp`. Two steps
-of `Tdvp` of half the length make one:
+step, and which `evolve`, `thermalize` and their phases then take as they take `Tdvp`, the time
+functions of an evolver depending on time being those of its `PreMPO`, `pre.functions`. Two
+steps of `Tdvp` of half the length make one:
 
 ```julia
 using TensorMixedStates, .Qubits
@@ -217,10 +218,9 @@ using TensorMixedStates: EvolutionAlgorithm
 
 struct HalfSteps <: EvolutionAlgorithm end
 
-function TensorMixedStates.evolve_step(::HalfSteps, pre, coefs, state, time, dt, step, limits)
-    half = TensorMixedStates.evolve_step(Tdvp(), pre, coefs, state, time, dt / 2, step, limits)
-    return TensorMixedStates.evolve_step(Tdvp(), pre, coefs, half, time + dt / 2, dt / 2, step,
-                                         limits)
+function TensorMixedStates.evolve_step(::HalfSteps, pre, state, time, dt, step, limits)
+    half = TensorMixedStates.evolve_step(Tdvp(), pre, state, time, dt / 2, step, limits)
+    return TensorMixedStates.evolve_step(Tdvp(), pre, half, time + dt / 2, dt / 2, step, limits)
 end
 
 evolve(-im * sum(X(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "Up");
