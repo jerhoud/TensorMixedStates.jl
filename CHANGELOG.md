@@ -83,6 +83,8 @@ version 2.x.
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a
   list returns its pairs.
+- A `.json` file is the array of an object per time, where 1.x wrote an object per measurement
+  once the run ended, and a `.jsonl` file the same objects as JSON Lines, written as measured.
 - `steady_state` builds the MPO of ``L^\dagger L`` from that of ``L`` with as few channels as its
   rank, where the product of the MPOs had the square of their bond dimension, and its
   `mpo_limits` truncate it in its triangular form.

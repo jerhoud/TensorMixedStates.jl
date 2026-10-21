@@ -199,7 +199,9 @@ Some results change without any edit beyond those above:
   anti-Hermitian one its complex value, where 1.x gave its imaginary part as `Im(name)`. A pair
   of operators is named `(X, Y)`, where 1.x named it `XY`.
 - **The files.** Every number is written with `SimData(format = "%.8g")`, the time included,
-  which 1.x wrote with four digits. The `.json` files are JSON Lines, an object per time.
+  which 1.x wrote with four digits. A `.json` file is the array of an object per time, where
+  1.x wrote an object per measurement, and a `.jsonl` file the same objects as JSON Lines,
+  written as they are measured.
 - **`runTMS`** no longer changes the working directory: a relative path in the code of a phase
   is taken from the directory `runTMS` was called in, where 1.x ran in that of the simulation.
 - **`data_to_frame`** gives the columns of the data files, a vector or a matrix spread over

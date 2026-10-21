@@ -182,7 +182,8 @@ end
 @testset "JSON Lines" begin
     # one object per call, the time then the measurements in their order, nested as measure gives
     # them: a complex number {"re", "im"}, missing null, a float that is not finite a string, a
-    # Check an object, and another list in the same file
+    # Check an object, and another list in the same file; a .json file the array of the objects,
+    # an object a line, a .jsonl file JSON Lines
     mktempdir() do dir
         o = TMS.Outputs(; dir)
         ψ = State{Pure}(System(2, Qubit()), "+")
@@ -195,9 +196,9 @@ end
         TMS.output!(o, mixed, "missing.json" => ["n" => dag(C) * C])
         TMS.close!(o)
         lines = readlines(joinpath(dir, "data.json"))
-        @test length(lines) == 2
-        @test startswith(lines[1], "{\"time\":0.5,\"Z\":")
-        d = TMS.JSON.parse(lines[1])
+        @test length(lines) == 4 && lines[1] == "[" && lines[end] == "]"
+        @test startswith(lines[2], "{\"time\":0.5,\"Z\":") && endswith(lines[2], "},")
+        d, e = TMS.JSON.parsefile(joinpath(dir, "data.json"))
         @test d["Z"] ≈ [0, 0] atol = 1e-12
         @test d["Sp(1)"]["re"] ≈ 0.5
         @test d["Sp(1)"]["im"] ≈ 0 atol = 1e-12
@@ -207,16 +208,15 @@ end
         @test d["inf"] == "-Inf"
         @test d["chk"]["reference"] == [1, 2.5]
         @test d["chk"]["difference"] ≈ 0.5
-        @test occursin("\"chk\":{\"value\":[1.0,2.0],\"reference\"", lines[1])
-        e = TMS.JSON.parse(lines[2])
+        @test occursin("\"chk\":{\"value\":[1.0,2.0],\"reference\"", lines[2])
         @test e["time"]["im"] ≈ 1.5
         @test e["X(1)"] ≈ 1
         @test TMS.JSON.parse(only(readlines(joinpath(dir, "data.jsonl"))))["Z(1)"] ≈ 0 atol = 1e-12
         # the lists a call sends to one file are one object
-        both = only(readlines(joinpath(dir, "both.json")))
-        @test startswith(both, "{\"time\":0,\"X(1)\":")
-        @test TMS.JSON.parse(both)["Z(1)"] ≈ 0 atol = 1e-12
-        n = TMS.JSON.parse(only(readlines(joinpath(dir, "missing.json"))))["n"]
+        both = only(TMS.JSON.parsefile(joinpath(dir, "both.json")))
+        @test first(keys(both)) == "time" && both["X(1)"] ≈ 0 atol = 1e-12
+        @test both["Z(1)"] ≈ 0 atol = 1e-12
+        n = only(TMS.JSON.parsefile(joinpath(dir, "missing.json")))["n"]
         @test isnothing(n[1])
         @test n[2] ≈ 1
     end
@@ -334,13 +334,13 @@ end
         o = TMS.Outputs(; dir)
         ψ = State{Pure}(System(1, Qubit()), "Up")
         list = [Z(1), "s" => c -> c.step]
-        out(o, k) = TMS.output!(o, ψ, ["r.dat" => list, "r.json" => list, Data("r") => list,
-                                       "" => list]; time = k, step = k)
+        out(o, k) = TMS.output!(o, ψ, ["r.dat" => list, "r.json" => list, "r.jsonl" => list,
+                                       Data("r") => list, "" => list]; time = k, step = k)
         out(o, 1)
         out(o, 2)
         marks = TMS.resume_marks(o)
-        @test Set(keys(marks)) ==
-              Set([TMS.destination(o, "r.dat"), TMS.destination(o, "r.json"), Data("r")])
+        @test Set(keys(marks)) == Set([TMS.destination(o, "r.dat"), TMS.destination(o, "r.json"),
+                                       TMS.destination(o, "r.jsonl"), Data("r")])
         out(o, 3)
         TMS.close!(o)
         o2 = TMS.reopen!(TMS.Outputs(; dir), marks)
@@ -351,7 +351,10 @@ end
         TMS.close!(o2)
         @test readlines(joinpath(dir, "r.dat")) ==
               ["time\tZ(1)\ts", "1\t1\t1", "2\t1\t2", "4\t1\t4"]
-        @test [ TMS.JSON.parse(l)["time"] for l in readlines(joinpath(dir, "r.json")) ] == [1, 2, 4]
+        # the array closed when the outputs were, its bracket cut with what followed the mark
+        @test [ d["time"] for d in TMS.JSON.parsefile(joinpath(dir, "r.json")) ] == [1, 2, 4]
+        @test [ TMS.JSON.parse(l)["time"] for l in readlines(joinpath(dir, "r.jsonl")) ] ==
+              [1, 2, 4]
         @test [ last(first(r)) for r in TMS.data_rows(o2, "r") ] == [1, 2, 4]
     end
 end

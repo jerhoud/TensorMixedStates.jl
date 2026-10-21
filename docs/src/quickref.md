@@ -128,12 +128,13 @@ Other phases: `ToMixed`, `Weaken`, `PartialTrace`, `Gates`, `Thermalize`, `Stead
 `SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on a named state by `on = :φ`,
 and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list `:φ => [Z, Purity]` measures
 the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
-site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file name (a table), `"name.jsonl"` (JSON
-Lines), `"stdout"`, or `Data("name")` (kept in `sim.data`, `row["X(1)"]`, a table: `DataFrame(sim.data["name"])`). Running the program
-again resumes a stopped run from its checkpoint; `runTMS(sd; max_time, checkpoint_interval)`
-or the variables `TMS_MAX_TIME`, `TMS_CHECKPOINT_INTERVAL` set them; a file `restart` in the
-directory, or `cleanTMS(sd)`, starts over. `runTMS(sd; output = devnull)` makes no directory,
-a `SaveState` alone writing its file.
+site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file
+name (a table), `"name.jsonl"` (JSON Lines), `"name.json"` (a JSON array), `"stdout"`, or
+`Data("name")` (kept in `sim.data`, `row["X(1)"]`, a table: `DataFrame(sim.data["name"])`).
+Running the program again resumes a stopped run from its checkpoint;
+`runTMS(sd; max_time, checkpoint_interval)` or the variables `TMS_MAX_TIME`,
+`TMS_CHECKPOINT_INTERVAL` set them; a file `restart` in the directory, or `cleanTMS(sd)`, starts
+over. `runTMS(sd; output = devnull)` makes no directory, a `SaveState` alone writing its file.
 
 ## When something fails
 

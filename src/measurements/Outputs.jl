@@ -1,5 +1,5 @@
 # The outputs of the measurements: Destination, the open type of where they are written, which
-# other packages extend, the text tables, the JSON Lines files and the Data of TMS, and Outputs,
+# other packages extend, the text tables, the JSON files and the Data of TMS, and Outputs,
 # which measures lists on a state and writes each to its destination.
 
 export Data, data_to_frame
@@ -8,8 +8,8 @@ export Data, data_to_frame
     Destination
 
 where measurements are written: a description, compared by value, opened once and given a row
-at each call. TMS writes text tables, to files and to the streams of the process, JSON Lines
-files, all named by a string, and `Data`. A package adds its own by a subtype and these methods
+at each call. TMS writes text tables, to files and to the streams of the process, JSON files,
+all named by a string, and `Data`. A package adds its own by a subtype and these methods
 of TensorMixedStates, `o` being the destination opened, `o = open(d)`:
 
 - `write_row(o, time, row)`: write `row`, the pairs `name => value` that `measure` returns,
@@ -262,7 +262,8 @@ end
 """
     JsonFile(path)
 
-a JSON Lines file, one object per row
+a JSON file of one object per row: a `.jsonl` file JSON Lines, an object per line, and a
+`.json` file the array of the objects, an object per line too, which closing the file ends
 """
 struct JsonFile <: Destination
     path::String
@@ -271,20 +272,48 @@ end
 show(io::IO, d::JsonFile) = print(io, d.path)
 
 """
-    JsonLines(io)
+    is_array(d)
 
-a JSON Lines file opened
+whether the JSON file `d` is an array, a `.json` file, rather than JSON Lines
 """
-struct JsonLines
+is_array(d::JsonFile) = last(splitext(d.path)) == ".json"
+
+"""
+    JsonOpened(io, array, empty)
+
+a JSON file opened, an array or JSON Lines, and for an array whether it holds no object yet
+"""
+mutable struct JsonOpened
     io::IO
+    array::Bool
+    empty::Bool
 end
 
-open(d::JsonFile) = JsonLines(open(d.path, "w"))
-open(d::JsonFile, mark::Integer) = JsonLines(reopened(d.path, mark))
+function open(d::JsonFile)
+    io = open(d.path, "w")
+    if is_array(d)
+        print(io, "[")
+    end
+    return JsonOpened(io, is_array(d), true)
+end
 
-close(o::JsonLines) = close(o.io)
+# an array cut at a mark lost its closing bracket, and holds an object past its opening one
+function open(d::JsonFile, mark::Integer)
+    io = reopened(d.path, mark)
+    if is_array(d) && position(io) == 0
+        print(io, "[")
+    end
+    return JsonOpened(io, is_array(d), position(io) ≤ 1)
+end
 
-resume_mark(o::JsonLines) = (flush(o.io); position(o.io))
+function close(o::JsonOpened)
+    if o.array
+        print(o.io, "\n]\n")
+    end
+    close(o.io)
+end
+
+resume_mark(o::JsonOpened) = (flush(o.io); position(o.io))
 
 """
     json_text(x)
@@ -311,8 +340,14 @@ the pairs `ps` as a JSON object, in their order
 json_object(ps) =
     "{" * join([ JSON.json(string(k)) * ":" * json_text(v) for (k, v) in ps ], ",") * "}"
 
-function write_row(o::JsonLines, time, row)
-    println(o.io, json_object([ "time" => time ; row ]))
+function write_row(o::JsonOpened, time, row)
+    text = json_object([ "time" => time ; row ])
+    if o.array
+        print(o.io, o.empty ? "\n" : ",\n", text)
+        o.empty = false
+    else
+        println(o.io, text)
+    end
     flush(o.io)
     return nothing
 end
@@ -536,8 +571,9 @@ end
     destination(o, d)
 
 the destination a name stands for in the outputs `o`: `"stdout"` or `"-"` and `"stderr"`
-the streams of the process, `""` nowhere, a name ending in `.json` or `.jsonl` a JSON Lines
-file, any other a text file, relative to the directory of `o`; a `Destination` as it is
+the streams of the process, `""` nowhere, a name ending in `.json` or `.jsonl` a JSON file,
+see `JsonFile`, any other a text file, relative to the directory of `o`; a `Destination` as it
+is
 """
 function destination(o::Outputs, name::AbstractString)
     if name == "stdout" || name == "-"

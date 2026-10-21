@@ -180,9 +180,11 @@ their `measurements`, given as pairs `destination => measurements`. The destinat
 - `"stdout"` or `"-"`, and `"stderr"`: a text table on the stream, written again with its new
   columns when the list changes; `""` writes nothing.
 
-- a file name ending in `.json` or `.jsonl`: JSON Lines, an object for each time measured, the
-  time and each measurement under its name, a vector as an array, a matrix as the array of its
-  rows and a complex number as an object, as `{"time":0.1,"X":[0.5,0.5],"Trace":{"re":1.0,"im":0.0}}`.
+- a file name ending in `.jsonl`: JSON Lines, an object for each time measured, written as it
+  is measured, the time and each measurement under its name, a vector as an array, a matrix as
+  the array of its rows and a complex number as an object, as
+  `{"time":0.1,"X":[0.5,0.5],"Trace":{"re":1.0,"im":0.0}}`. A name ending in `.json` gives the
+  array of these objects, a JSON document whose closing bracket is written when the run ends.
 
   ```julia
   "data.jsonl" => [Purity, X(2)Z(3), (X, Y)]
