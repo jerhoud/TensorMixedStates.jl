@@ -145,54 +145,129 @@ entanglement entropy
 """
 entanglement_spectrum(state::State, cut::Int) = last(entropy_spectrum(cut_svd(state, cut)[2]))
 
+# the charges of a sector, as the pairs `name => charge` of the quantities conserved in the order
+# of their names, and what is known of it
+const SectorCharges = Tuple{Vararg{Pair{String, Int}}}
+const Sector = NamedTuple{(:weight, :entropy, :spectrum), Tuple{Float64, Float64, Vector{Float64}}}
+
+"""
+    Sectors
+
+the sectors of the entanglement across a cut, see `entanglement_by_sector`: a dictionary from
+their charges to what is known of each, in the order of the charges, a sector being read by
+its charges as `fully_mixed` takes them
+"""
+struct Sectors <: AbstractDict{SectorCharges, Sector}
+    # the name and the modulus of each quantity conserved, in the order of their names
+    quantities::Vector{Tuple{String, Int}}
+    entries::Vector{Pair{SectorCharges, Sector}}
+end
+
+Base.length(s::Sectors) = length(s.entries)
+Base.iterate(s::Sectors, k::Int = 1) = k > length(s.entries) ? nothing : (s.entries[k], k + 1)
+
+"""
+    sector_key(s, charges)
+
+the charges `charges`, pairs `op => charge` in any order, `op` an operator or its name, as a key
+of `s`, refused unless they give an integer charge to each quantity conserved
+"""
+function sector_key(s::Sectors, charges::Tuple)
+    names = first.(s.quantities)
+    given = Dict{String, Any}()
+    for p in charges
+        if !(p isa Pair)
+            error("a sector is read by its charges, sectors[N => 2], not by $(repr(p))")
+        end
+        given[first(p) isa AbstractString ? String(first(p)) : obs_name(first(p))] = last(p)
+    end
+    if length(given) ≠ length(charges) || sort(collect(keys(given))) ≠ names
+        error("a sector gives the charge of each quantity conserved, " *
+              (isempty(names) ? "and nothing is" : join(names, ", ")) *
+              ", got $(join(sort(collect(keys(given))), ", "))")
+    end
+    return Tuple(map(s.quantities) do (n, m)
+        v = given[n]
+        if !(v isa Real && isinteger(v))
+            error("the charge of $n is an integer, not $v")
+        end
+        n => (m > 1 ? mod(Int(v), m) : Int(v))
+    end)
+end
+
+function Base.get(s::Sectors, charges::Tuple, default)
+    key = sector_key(s, charges)
+    k = findfirst(e -> first(e) == key, s.entries)
+    return isnothing(k) ? default : last(s.entries[k])
+end
+
+Base.get(s::Sectors, charges::Pair, default) = get(s, (charges,), default)
+
+Base.get(::Sectors, ::QN, default) =
+    error("a sector is read by its charges, as fully_mixed takes them, sectors[N => 2], where " *
+          "1.x took a QN")
+
+"""
+    sector_charges(q, quantities)
+
+the charges of the sector of charge `q`, the key of `Sectors` for the `quantities` conserved,
+a quantity `q` does not hold having the charge zero
+"""
+function sector_charges(q::QN, quantities)
+    vals = Dict(n => v for (n, v, _) in qn_components(q))
+    return Tuple(n => (m > 1 ? mod(get(vals, n, 0), m) : get(vals, n, 0)) for (n, m) in quantities)
+end
+
 """
     entanglement_by_sector(state::State{Pure}, cut::Int)
 
 the entanglement across the cut between sites `cut` and `cut + 1`, resolved by the charge of
-the sites up to `cut`: a `Dict` from each charge, a `QN` (`using ITensors: QN`), to
-`(weight, entropy, spectrum)`, the probability of that charge and the entropy and decreasing
-spectrum of the reduced density matrix restricted to it and normalised. The entanglement
+the sites up to `cut`: a dictionary from the charges of each sector, the pairs `name => charge`
+of the quantities conserved in the order of their names, to `(weight, entropy, spectrum)`, the
+probability of that charge and the entropy and decreasing spectrum of the reduced density
+matrix restricted to it and normalised. A sector is read by its charges as `fully_mixed` takes
+them, in any order, `sectors[N => 2]` or `sectors[Ntot => 4, 2Sz => 0]`. The entanglement
 entropy is `Σ weight * entropy - Σ weight * log(weight)`, the second sum being the number
-entropy. A state conserving nothing has the single sector `QN()`; a mixed representation is
+entropy. A state conserving nothing has the single sector `()`; a mixed representation is
 refused.
 
 # Examples
 
-    using ITensors: QN
     sectors = entanglement_by_sector(state, 3)   # cut between sites 3 and 4
-    sectors[QN("N", 2)].weight
+    sectors[N => 2].weight
 """
 function entanglement_by_sector(state::State{Pure}, cut::Int)
     U, S = cut_svd(state, cut)
     u = commonind(U, S)
     if !hasqns(u)
         ee, sp = entropy_spectrum(S)
-        return Dict(QN() => (weight = 1.0, entropy = ee, spectrum = sp))
+        return Sectors(Tuple{String, Int}[], [() => (weight = 1.0, entropy = ee, spectrum = sp)])
     end
     # U carrying no flux, what flows through `u` is what the sites up to `cut` hold
     if flux(U) ≠ QN()
         error("bug: the left factor of a cut carries $(flux(U)), so its sectors cannot be read")
     end
-    squares = Dict{QN, Vector{Float64}}()
+    quantities = sort(unique([ (q.name, q.modulus) for site in state.system.sites
+                                                    for q in conserved(site).quantities ]))
+    squares = Dict{SectorCharges, Vector{Float64}}()
     k = 0
     for (q, d) in space(u)
-        append!(get!(squares, dir(u) == ITensors.In ? q : -q, Float64[]),
-                [ S[k + i, k + i]^2 for i in 1:d ])
+        c = sector_charges(dir(u) == ITensors.In ? q : -q, quantities)
+        append!(get!(squares, c, Float64[]), [ S[k + i, k + i]^2 for i in 1:d ])
         k += d
     end
     total = sum(sum, values(squares))
-    sectors = Dict{QN, NamedTuple{(:weight, :entropy, :spectrum),
-                                  Tuple{Float64, Float64, Vector{Float64}}}}()
-    for (q, sq) in squares
+    entries = Pair{SectorCharges, Sector}[]
+    for (c, sq) in squares
         w = sum(sq)
         # a sector kept with nothing in it
         if w == 0
             continue
         end
         sp = sort(sq / w; rev = true)
-        sectors[q] = (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp)
+        push!(entries, c => (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp))
     end
-    return sectors
+    return Sectors(quantities, sort!(entries; by = first))
 end
 
 entanglement_by_sector(::State{Mixed}, ::Int) =

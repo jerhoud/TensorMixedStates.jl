@@ -94,6 +94,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it. `gro
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
 | `variance(h, state)` | `variance(state, h)` |
 | `ee, spectrum = entanglement_entropy(state, cut)` | `entanglement_entropy(state, cut)`, `entanglement_spectrum(state, cut)` |
+| `entanglement_by_sector(state, cut)[QN("N", 2)]` | `entanglement_by_sector(state, cut)[N => 2]`, the charges as `fully_mixed` takes them |
 | `partial_trace(state, positions)` | `partial_trace(state; trace_out = positions)` |
 | `partial_trace(state, positions; keepers = true)` | `partial_trace(state; keep = positions)` |
 | `:sweep` in a list of measurements | `:step` |

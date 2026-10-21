@@ -73,6 +73,8 @@ version 2.x.
   `(residual, state)` and `(log_trace, state)`, which destructure as the tuples of 1.x did.
 - `entanglement_entropy(state, cut)` returns the entropy, and the new `entanglement_spectrum`
   the spectrum, where 1.x returned both.
+- `entanglement_by_sector` reads a sector by its charges as `fully_mixed` takes them,
+  `sectors[N => 2]`, where 1.x indexed it by a `QN`.
 - `SteadyState` provides the eigenvalue of ``L^\dagger L`` as `:residual`, where 1.x named it
   `:energy`, which its lists of measurements cannot read, it being that of another phase.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,

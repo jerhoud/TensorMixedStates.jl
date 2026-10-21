@@ -346,38 +346,47 @@ end
         @test total(entanglement_by_sector(st, pos)) ≈ entanglement_entropy(st, pos)
     end
 
-    # cut after one site, the charge on the left is either one particle or none
+    # cut after one site, the charge on the left is either one particle or none, a sector read by
+    # its charges as fully_mixed takes them, the operator or its name, where 1.x took a QN
     d = entanglement_by_sector(st, 1)
-    @test sort(collect(keys(d)); by = string) == [IT.QN("N", 0), IT.QN("N", 1)]
-    @test d[IT.QN("N", 1)].weight ≈ 0.8
-    @test d[IT.QN("N", 0)].weight ≈ 0.2
+    @test collect(keys(d)) == [("N" => 0,), ("N" => 1,)]
+    @test d[N => 1].weight ≈ 0.8
+    @test d[N => 0].weight ≈ 0.2
+    @test d[("N" => 1,)] == d[N => 1] && haskey(d, N => 0) && !haskey(d, N => 2)
+    @test_throws KeyError d[N => 2]
+    @test_throws "where 1.x took a QN" d[IT.QN("N", 1)]
+    @test_throws "the charge of N is an integer, not 0.5" d[N => 0.5]
     # cut after two, it is one particle in both terms, and the entanglement lives inside it
     d = entanglement_by_sector(st, 2)
-    @test collect(keys(d)) == [IT.QN("N", 1)]
-    @test d[IT.QN("N", 1)].weight ≈ 1
-    @test d[IT.QN("N", 1)].spectrum ≈ [0.8, 0.2]
-    @test d[IT.QN("N", 1)].entropy ≈ entanglement_entropy(st, 2)
+    @test collect(keys(d)) == [("N" => 1,)]
+    @test d[N => 1].weight ≈ 1
+    @test d[N => 1].spectrum ≈ [0.8, 0.2]
+    @test d[N => 1].entropy ≈ entanglement_entropy(st, 2)
 
     # several quantities at once, and a charge modulo 2 over a basis whose charges repeat
     e = System(3, Electron(conserve = (Ntot, 2Sz)))
     q(v) = State{Pure}(e, v)
     se = (q(["Up", "Dn", "Emp"]) + 0.5 * q(["UpDn", "Emp", "Emp"])) / sqrt(1.25)
     d = entanglement_by_sector(se, 1)
-    @test d[IT.QN(("Ntot", 1), ("2Sz", 1))].weight ≈ 0.8
-    @test d[IT.QN(("Ntot", 2), ("2Sz", 0))].weight ≈ 0.2
+    @test d[Ntot => 1, 2Sz => 1].weight ≈ 0.8
+    @test d[2Sz => 0, Ntot => 2].weight ≈ 0.2
+    @test collect(keys(d)) == [("2Sz" => 0, "Ntot" => 2), ("2Sz" => 1, "Ntot" => 1)]
+    @test_throws "gives the charge of each quantity conserved, 2Sz, Ntot, got Ntot" d[Ntot => 1]
     b = System(3, Boson(4, conserve = parity(N)))
     r(v) = State{Pure}(b, v)
     d = entanglement_by_sector((r(["1", "2", "0"]) + 0.5 * r(["0", "3", "0"])) / sqrt(1.25), 1)
-    @test d[IT.QN("parity(N)", 1, 2)].weight ≈ 0.8
-    @test d[IT.QN("parity(N)", 0, 2)].weight ≈ 0.2
+    @test d[parity(N) => 1].weight ≈ 0.8
+    @test d[parity(N) => 0].weight ≈ 0.2
+    @test d[parity(N) => 3] == d[parity(N) => 1]
 
     # without charges there is a single sector holding the whole spectrum
     fd = System(4, Fermion())
     pd(v) = State{Pure}(fd, v)
     sd = (pd(["Occ", "Emp", "Emp", "Occ"]) + 0.5 * pd(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
     d = entanglement_by_sector(sd, 2)
-    @test collect(keys(d)) == [IT.QN()]
-    @test d[IT.QN()].spectrum ≈ entanglement_spectrum(sd, 2)
+    @test collect(keys(d)) == [()]
+    @test d[()].spectrum ≈ entanglement_spectrum(sd, 2)
+    @test_throws "and nothing is, got N" d[N => 1]
 
     # a mixed representation is refused, its links pairing the charge of a ket with a bra
     @test_throws "takes a pure state" entanglement_by_sector(mix(st), 1)
