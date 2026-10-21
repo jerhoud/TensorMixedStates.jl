@@ -28,7 +28,7 @@ sim = runTMS(SimData(
 ))
 
 rows = sim.data["trajectory"]
-results = [ Dict(row)["result"] for row in rows ]
+results = [ row["result"] for row in rows ]
 println("results of the measurements: ", Int.(results))
 # after a measurement, the first qubit is in the state of the result
-@assert all(Dict(row)["result"] ≈ Dict(row)["Z(1)"] for row in rows)
+@assert all(row["result"] ≈ row["Z(1)"] for row in rows)

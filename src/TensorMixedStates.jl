@@ -36,7 +36,7 @@ import ITensorMPS: maxlinkdim, expect, apply, sample
 
 using ITensors, ITensorMPS, LinearAlgebra, Random, HDF5
 using Serialization: serialize, deserialize
-import Printf, JSON, Dates, Logging, Markdown
+import Printf, JSON, Dates, Logging, Markdown, Tables
 
 # Sites, systems and states
 include("core/Operators.jl")

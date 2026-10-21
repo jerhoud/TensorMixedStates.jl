@@ -129,7 +129,7 @@ Other phases: `ToMixed`, `Weaken`, `PartialTrace`, `Gates`, `Thermalize`, `Stead
 and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list `:φ => [Z, Purity]` measures
 the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
 site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file name (a table), `"name.jsonl"` (JSON
-Lines), `"stdout"`, or `Data("name")` (kept in `sim.data`, `data_to_frame`). Running the program
+Lines), `"stdout"`, or `Data("name")` (kept in `sim.data`, `row["X(1)"]`, a table: `DataFrame(sim.data["name"])`). Running the program
 again resumes a stopped run from its checkpoint; `runTMS(sd; max_time, checkpoint_interval)`
 or the variables `TMS_MAX_TIME`, `TMS_CHECKPOINT_INTERVAL` set them; a file `restart` in the
 directory, or `cleanTMS(sd)`, starts over. `runTMS(sd; output = devnull)` makes no directory,

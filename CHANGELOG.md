@@ -47,6 +47,8 @@ version 2.x.
   longer export, the rotations `Rx` to `Rzz`, and `CX`, `CNOT`, `CY`, `CZ`, `CCX`, `Toffoli`.
 - `tr`, the trace of a state under the name of `LinearAlgebra`.
 - `dag` and `'` of an operator placed on sites, and `'` of a generic one: `H = -(h + h')`.
+- The rows of a `Data` read a value by its name, `row["X(1)"]`, and form a table of `Tables.jl`
+  with the columns of a text table, which `DataFrame` and `CSV.write` take.
 - A quick reference, pages for users of QuTiP or ITensors and on choosing and checking the
   parameters, and a skill for AI agents in `skills/tensormixedstates`.
 

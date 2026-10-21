@@ -61,7 +61,7 @@ it, so that it must not be changed in place.
 - `sim.step`: the steps the phase being run has done
 - `sim.rng`: the random number generator of the run, for every draw of a phase, see `SimData`
 - `sim.name`: the value `name`, a state named by `CopyState` for instance
-- `sim.data`: the rows gathered in each `Data(name)`, under `name`
+- `sim.data`: the rows gathered in each `Data(name)`, under `name`, a table, see `Data`
 
 # Examples
 
@@ -101,8 +101,7 @@ the rows gathered in each `Data` of the run of `sim`, by its name
 function data_rows(sim::Simulation)
     o = getfield(sim, :run).outputs
     return lock(o.lock) do
-        Dict{String, Vector{Vector{Pair{String, Any}}}}(d.name => h.rows for (d, h) in o.opened
-                                                         if d isa Data)
+        Dict{String, DataTable}(d.name => DataTable(h.rows) for (d, h) in o.opened if d isa Data)
     end
 end
 

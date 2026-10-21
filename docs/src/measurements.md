@@ -189,7 +189,10 @@ their `measurements`, given as pairs `destination => measurements`. The destinat
   ```
 
 - `Data(name)`: the rows are kept in memory, in the `data` of the `Simulation` that `runTMS`
-  returns, which `data_to_frame` turns into a `DataFrame`.
+  returns, each the time then the pairs `name => value` measured, `row["X(1)"]` reading a value
+  as it was measured. The rows are also a table, of the package `Tables.jl`, whose columns are
+  those of a text table of the same measurements, below, which `DataFrame(rows)`,
+  `CSV.write(file, rows)` and `data_to_frame(rows)` take.
 
   ```julia
   Data("mydata") => [TraceDeviation, X(1), Y]
@@ -208,7 +211,9 @@ destinations: `log`, `stop`, `restart`, `error`, `running`, `stamp`, `descriptio
 
 ```julia
 mysim = runTMS(simdata)
-df = data_to_frame(mysim.data["mydata"])
+rows = mysim.data["mydata"]
+rows[end]["X(1)"]           # the last value of X(1)
+df = data_to_frame(rows)    # with using DataFrames, the same as DataFrame(rows)
 ```
 
 ```@docs

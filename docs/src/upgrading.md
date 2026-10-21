@@ -135,8 +135,9 @@ is now `measure(state, m)`, and `measure(state, [m])` gives the pair.
 | `CreateState(type = Pure(), …)` | `CreateState(type = Pure, …)`, the type as in `State{Pure}`, by default that of a `State` given |
 
 The data files are tables: a line naming the columns, then a line per time measured.
-`sim.data` holds the rows of each `Data` destination, which `data_to_frame` turns into a table
-as it did those of 1.x.
+`sim.data` holds the rows of each `Data` destination, a row reading a value by its name,
+`row["X(1)"]`, and the rows a table with the columns of the data files, which `data_to_frame`
+and `DataFrame` take.
 
 A phase of one's own is a subtype of `TensorMixedStates.AbstractPhase`, which replaces the
 union `Phases`, with the fields `name`, `time_start` and `final_measurements`, and it runs by
@@ -201,6 +202,8 @@ Some results change without any edit beyond those above:
   which 1.x wrote with four digits. The `.json` files are JSON Lines, an object per time.
 - **`runTMS`** no longer changes the working directory: a relative path in the code of a phase
   is taken from the directory `runTMS` was called in, where 1.x ran in that of the simulation.
-- **`data_to_frame`** orders its columns as the measurements were first made.
+- **`data_to_frame`** gives the columns of the data files, a vector or a matrix spread over
+  several, as `X(1)`, `X(2)`, in the order the measurements were first made, where 1.x gave a
+  column per measurement, a vector or a matrix in each cell.
 - **The random draws** of a run use its own generator, seeded by `SimData(; seed)`, or by a seed
   drawn and written in `stamp`, and kept by its checkpoints.

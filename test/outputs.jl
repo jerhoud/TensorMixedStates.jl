@@ -223,22 +223,32 @@ end
 end
 
 @testset "Data and data_to_frame" begin
-    # rows kept in memory, the time then the measurements; a table of a column per measurement
-    # in the order they first come, each value as it is, missing in a row without it
+    # rows kept in memory, the time then the measurements, each value as it was measured and
+    # read by its name; and a table whose columns are those of a text table of the same lists,
+    # in the order they first come, missing in a row without them, which DataFrame takes as it
+    # is and data_to_frame too
     o = TMS.Outputs()
     ψ = State{Pure}(System(2, Qubit()), "Up")
     TMS.output!(o, ψ, Data("d") => [Z(1), Z(2)]; time = 0.)
-    TMS.output!(o, ψ, Data("d") => [X(1), Z(2), X]; time = 0.1)
+    TMS.output!(o, ψ, Data("d") => [X(1), Z(2), Y]; time = 0.1)
     rows = TMS.data_rows(o, "d")
     @test first.(rows[1]) == ["time", "Z(1)", "Z(2)"]
     @test last.(rows[1]) ≈ [0, 1, 1]
+    @test rows[2]["Y"] ≈ [0, 0] atol = 1e-12
+    @test Dict(rows[2])["Z(2)"] ≈ 1
+    @test_throws KeyError rows[1]["Y"]
     df = data_to_frame(rows)
-    @test names(df) == ["time", "Z(1)", "Z(2)", "X(1)", "X"]
+    @test isequal(DataFrame(rows), df)
+    @test names(df) == ["time", "Z(1)", "Z(2)", "X(1)", "Y(1)", "Y(2)"]
     @test df.time == [0., 0.1]
     @test df[!, "Z(2)"] ≈ [1, 1]
     @test ismissing(df[2, "Z(1)"])
     @test ismissing(df[1, "X(1)"])
-    @test df[2, "X"] ≈ [0, 0] atol = 1e-12
+    @test df[2, "Y(1)"] ≈ 0 atol = 1e-12
+    # two cells of a row under one column are refused, as a text table refuses them
+    TMS.output!(o, ψ, Data("twice") => [X(1), X])
+    @test_throws "two columns of the table would be named X(1)" data_to_frame(
+        TMS.data_rows(o, "twice"))
     # two pairs to one Data in one call make one row, their lists one list, which cannot name
     # two measurements alike, and nothing gathered is a table of times
     TMS.output!(o, ψ, [Data("e") => X(1), Data("e") => Z(1)])
@@ -262,6 +272,28 @@ end
         sprint(showerror, e)
     end
     @test occursin("data_to_frame(sim.data[\"name\"])", hint) && !occursin("sim.state", hint)
+end
+
+@testset "The table of a Data has the columns of a text table" begin
+    # the same lists written to a file and to a Data: the table has the header of the file,
+    # for an operator of one site, a pair, a complex value, a named tuple holding a vector, a
+    # value given to the list and a measurement of the library, and the values of the file,
+    # which it rounds
+    mktempdir() do dir
+        o = TMS.Outputs(dir = dir)
+        ψ = random_state(Pure, System(3, Qubit()), 2)
+        list = [Z(1), X, (Z, Z), Sp(2), "nt" => c -> (a = 1, b = [2., 3.]), :step,
+                EntanglementEntropy(1, 2)]
+        for t in (0., 0.5)
+            TMS.output!(o, ψ, ["table.dat" => list, Data("d") => list]; time = t, step = 3)
+        end
+        TMS.close!(o)
+        lines = split.(readlines(joinpath(dir, "table.dat")), '\t')
+        df = data_to_frame(TMS.data_rows(o, "d"))
+        @test names(df) == lines[1]
+        @test all(isapprox(parse(Float64, lines[r + 1][k]), df[r, k]; rtol = 1e-7, atol = 1e-12)
+                  for r in 1:2, k in 1:ncol(df))
+    end
 end
 
 @testset "A destination of another package" begin

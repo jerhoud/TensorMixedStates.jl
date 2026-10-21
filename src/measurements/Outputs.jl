@@ -153,78 +153,89 @@ function prepare_list!(t::TextTable, m::Measure)
 end
 
 """
-    cells!(out, col, x, format)
+    cells!(out, col, x)
 
-the cells of the value `x` under the column `col`, pushed to `out` as pairs `column => text`:
-a real number in `format`, an integer as it is, a complex number as `Re(col)` and `Im(col)`,
-`missing` or `nothing` as an empty cell, a vector as `col[i]`, a matrix row by row as
-`col[i,j]`, a named tuple as `col.field`, anything else as it prints, on one line
+`out`, the cells of the value `x` under the column `col` pushed to it as pairs
+`column => value`: a complex number as `Re(col)` and `Im(col)`, a vector as `col[i]`, a matrix
+row by row as `col[i,j]`, a named tuple as `col.field`, `nothing` as `missing`, anything else
+as it is, which a text table writes by `text_cell`
 """
-cells!(out, col, x::Integer, _) = push!(out, col => string(x))
-cells!(out, col, x::Real, f) = push!(out, col => Printf.format(f, float(x)))
-
-function cells!(out, col, x::Complex, f)
-    cells!(out, "Re($col)", real(x), f)
-    cells!(out, "Im($col)", imag(x), f)
+function cells!(out, col, x::Complex)
+    cells!(out, "Re($col)", real(x))
+    return cells!(out, "Im($col)", imag(x))
 end
 
-cells!(out, col, ::Union{Missing, Nothing}, _) = push!(out, col => "")
+cells!(out, col, ::Nothing) = push!(out, col => missing)
 
-function cells!(out, col, x::AbstractVector, f)
+function cells!(out, col, x::AbstractVector)
     for (i, y) in enumerate(x)
-        cells!(out, "$col[$i]", y, f)
+        cells!(out, "$col[$i]", y)
     end
+    return out
 end
 
-function cells!(out, col, x::AbstractMatrix, f)
+function cells!(out, col, x::AbstractMatrix)
     for i in axes(x, 1), j in axes(x, 2)
-        cells!(out, "$col[$i,$j]", x[i, j], f)
+        cells!(out, "$col[$i,$j]", x[i, j])
     end
+    return out
 end
 
-function cells!(out, col, x::NamedTuple, f)
+function cells!(out, col, x::NamedTuple)
     for (k, y) in pairs(x)
-        cells!(out, "$col.$k", y, f)
+        cells!(out, "$col.$k", y)
     end
+    return out
 end
 
-cells!(out, col, x, _) = push!(out, col => replace(string(x), r"[\t\r\n]" => " "))
+cells!(out, col, x) = push!(out, col => x)
 
 """
-    entry_cells(name, m, x, format)
+    text_cell(x, format)
+
+the text of the cell `x` in a text table, see `cells!`: a real number in `format`, an integer
+as it is, `missing` as an empty cell, anything else as it prints, on one line
+"""
+text_cell(x::Integer, _) = string(x)
+text_cell(x::Real, f) = Printf.format(f, float(x))
+text_cell(::Missing, _) = ""
+text_cell(x, _) = replace(string(x), r"[\t\r\n]" => " ")
+
+"""
+    entry_cells(name, m, x)
 
 the cells of the value `x` of the measurement `m` named `name`, see `cells!`: an operator of one
 site on site `i` under `name(i)`, a pair on sites `i` and `j` under `A(i)B(j)`, or `name(i,j)`
 when it is named, and a measurement of the state named `φ` under the cells it has on its own,
-prefixed by `φ.`
+prefixed by `φ.`. The cells are those `cells!` gives of `x`, in the same order, under other
+names.
 """
-function entry_cells(name::String, m, x, f)
-    out = Pair{String, String}[]
+function entry_cells(name::String, m, x)
+    out = Pair{String, Any}[]
     if m isa OnNamed
         prefix = "$(m.state)."
-        inner = entry_cells(String(chopprefix(name, prefix)), m.entry, x, f)
-        return [ prefix * c => v for (c, v) in inner ]
+        inner = entry_cells(String(chopprefix(name, prefix)), m.entry, x)
+        return Pair{String, Any}[ prefix * c => v for (c, v) in inner ]
     elseif m isa SimpleOp && x isa AbstractVector
         for (i, y) in enumerate(x)
-            cells!(out, "$name($i)", y, f)
+            cells!(out, "$name($i)", y)
         end
     elseif m isa Tuple{SimpleOp, SimpleOp} && x isa AbstractMatrix
         a, b = map(obs_name, m)
         col(i, j) = name == entry_name(m) ? "$a($i)$b($j)" : "$name($i,$j)"
         for i in axes(x, 1), j in axes(x, 2)
-            cells!(out, col(i, j), x[i, j], f)
+            cells!(out, col(i, j), x[i, j])
         end
     else
-        cells!(out, name, x, f)
+        cells!(out, name, x)
     end
     return out
 end
 
 function put_row!(t::TextTable, time, m::Measure, row)
-    times = Pair{String, String}[]
-    cells!(times, "time", time, t.format)
+    times = cells!(Pair{String, Any}[], "time", time)
     parts = [ [times] ;
-              [ entry_cells(name, e, x, t.format) for ((name, e), (_, x)) in zip(m.entries, row) ] ]
+              [ entry_cells(name, e, x) for ((name, e), (_, x)) in zip(m.entries, row) ] ]
     columns = [ first.(p) for p in parts ]
     if columns ≠ t.columns
         if !isnothing(t.path) && !isnothing(t.columns)
@@ -243,7 +254,7 @@ function put_row!(t::TextTable, time, m::Measure, row)
         t.columns = columns
         println(t.io, join(names, '\t'))
     end
-    println(t.io, join([ last(c) for p in parts for c in p ], '\t'))
+    println(t.io, join([ text_cell(last(c), t.format) for p in parts for c in p ], '\t'))
     flush(t.io)
     return nothing
 end
@@ -310,11 +321,124 @@ end
     Data(name)
 
 a destination kept in memory, a vector of rows, each the time then the pairs `name => value`
-measured, which `data_to_frame` turns into a table
+measured, see `DataRow`, and a table of the cells of these values, see `DataTable`
 """
 struct Data <: Destination
     name::String
 end
+
+"""
+    DataRow
+
+a row of a `Data`: the pairs `name => value` measured, the time first, each value as it was
+measured, `row[name]` giving the value of `name`, and the columns of the cells of these values,
+see `cells!`
+"""
+struct DataRow <: AbstractVector{Pair{String, Any}}
+    measured::Vector{Pair{String, Any}}
+    # the column of each cell, the time first, shared by the rows that have the same
+    columns::Vector{String}
+end
+
+Base.size(r::DataRow) = size(r.measured)
+Base.IndexStyle(::Type{DataRow}) = IndexLinear()
+Base.getindex(r::DataRow, k::Int) = r.measured[k]
+
+function Base.getindex(r::DataRow, name::AbstractString)
+    k = findfirst(p -> first(p) == name, r.measured)
+    if isnothing(k)
+        throw(KeyError(name))
+    end
+    return last(r.measured[k])
+end
+
+"""
+    measured_cells(measured)
+
+the cells of the values of the pairs `measured`, see `cells!`, in their order, without their
+columns
+"""
+measured_cells(measured) =
+    Any[ last(c) for (name, x) in measured for c in cells!(Pair{String, Any}[], name, x) ]
+
+# a row of the pairs `measured`, the columns of its cells named as `cells!` names those of
+# values of no measurement of their own
+DataRow(measured::AbstractVector) =
+    DataRow(collect(Pair{String, Any}, measured),
+            [ first(c) for (name, x) in measured for c in cells!(Pair{String, Any}[], name, x) ])
+
+"""
+    DataTable
+
+the rows of a `Data`, see `DataRow`, as `sim.data[name]` gives them: a vector of rows, and a
+table of `Tables.jl` whose columns are those a text table of the same measurements has, see
+`cells!`, a cell that a row lacks being `missing`, so that `DataFrame(rows)` and
+`CSV.write(file, rows)` take it
+"""
+struct DataTable <: AbstractVector{DataRow}
+    rows::Vector{DataRow}
+end
+
+Base.size(t::DataTable) = size(t.rows)
+Base.IndexStyle(::Type{DataTable}) = IndexLinear()
+Base.getindex(t::DataTable, k::Int) = t.rows[k]
+
+"""
+    DataColumns
+
+the columns of a `DataTable`, by `Tables.columns`
+"""
+struct DataColumns <: Tables.AbstractColumns
+    names::Vector{Symbol}
+    columns::Vector{AbstractVector}
+    index::Dict{Symbol, Int}
+end
+
+Tables.columnnames(c::DataColumns) = getfield(c, :names)
+Tables.getcolumn(c::DataColumns, k::Int) = getfield(c, :columns)[k]
+Tables.getcolumn(c::DataColumns, name::Symbol) = getfield(c, :columns)[getfield(c, :index)[name]]
+
+"""
+    data_columns(rows)
+
+the columns of the cells of `rows`, in the order they first come, a column only `time` when
+there is no row, refused when two cells of a row share a column, as a text table refuses them
+"""
+function data_columns(rows::Vector{DataRow})
+    names = String["time"]
+    columns = Vector{Any}[Any[]]
+    index = Dict("time" => 1)
+    for (r, row) in enumerate(rows)
+        cells = measured_cells(row.measured)
+        if length(cells) ≠ length(row.columns)
+            error("bug: a row of a Data has $(length(cells)) cells and $(length(row.columns)) " *
+                  "columns")
+        end
+        for (name, x) in zip(row.columns, cells)
+            k = get!(index, name) do
+                push!(names, name)
+                push!(columns, Any[ missing for _ in 1:r - 1 ])
+                return length(columns)
+            end
+            if length(columns[k]) ≥ r
+                error("two columns of the table would be named $name: give one of the " *
+                      "measurements a name of its own, as \"name\" => op")
+            end
+            push!(columns[k], x)
+        end
+        for c in columns
+            if length(c) < r
+                push!(c, missing)
+            end
+        end
+    end
+    return DataColumns(Symbol.(names), AbstractVector[ map(identity, c) for c in columns ],
+                       Dict(Symbol(n) => k for (k, n) in enumerate(names)))
+end
+
+Tables.istable(::Type{DataTable}) = true
+Tables.columnaccess(::Type{DataTable}) = true
+Tables.columns(t::DataTable) = data_columns(t.rows)
 
 """
     DataRows(rows)
@@ -322,7 +446,7 @@ end
 a `Data` opened, its rows
 """
 struct DataRows
-    rows::Vector{Vector{Pair{String, Any}}}
+    rows::Vector{DataRow}
 end
 
 """
@@ -332,7 +456,7 @@ the mark of a `Data`, its first `n` rows: the rows themselves, which only grow, 
 copy, which a run marking every step would make of all its rows each time
 """
 struct RowsMark
-    rows::Vector{Vector{Pair{String, Any}}}
+    rows::Vector{DataRow}
     n::Int
 end
 
@@ -344,22 +468,35 @@ the mark `m` as it is kept beyond the run, a `RowsMark` holding its rows alone
 kept(m::RowsMark) = RowsMark(m.rows[1:m.n], m.n)
 kept(m) = m
 
-open(::Data) = DataRows(Vector{Pair{String, Any}}[])
+open(::Data) = DataRows(DataRow[])
 open(::Data, m::RowsMark) = DataRows(m.rows[1:m.n])
 close(::DataRows) = nothing
 resume_mark(o::DataRows) = RowsMark(o.rows, length(o.rows))
 
 function write_row(o::DataRows, time, row)
-    push!(o.rows, Pair{String, Any}[ "time" => time ; row ])
+    push!(o.rows, DataRow(Pair{String, Any}[ "time" => time ; row ]))
+    return nothing
+end
+
+# the columns of the cells named as a text table of the list `m` names them, see `entry_cells`,
+# those of the row before when they are the same
+function put_row!(o::DataRows, time, m::Measure, row)
+    measured = Pair{String, Any}[ "time" => time ; row ]
+    cells = [ c for ((name, e), (_, x)) in zip(m.entries, row) for c in entry_cells(name, e, x) ]
+    columns = String[ "time" ; first.(cells) ]
+    if !isempty(o.rows) && last(o.rows).columns == columns
+        columns = last(o.rows).columns
+    end
+    push!(o.rows, DataRow(measured, columns))
     return nothing
 end
 
 """
     data_to_frame(rows)
 
-a `DataFrame` of the rows of a `Data`: a column `time` and a column per measurement, in the
-order they first come, each value as it was measured, `missing` in a row without it. The
-`DataFrames` package must be loaded.
+the `DataFrame` of the rows of a `Data`, `DataFrame(rows)`, see `DataTable`: the column `time`,
+then the columns a text table of the same measurements has, in the order they first come,
+`missing` in a row without them. The `DataFrames` package must be loaded.
 
 # Examples
 
@@ -481,7 +618,7 @@ end
 
 the rows the outputs `o` gathered in `Data(name)`
 """
-data_rows(o::Outputs, name::String) = o.opened[Data(name)].rows
+data_rows(o::Outputs, name::String) = DataTable(o.opened[Data(name)].rows)
 
 """
     resume_marks(o)
