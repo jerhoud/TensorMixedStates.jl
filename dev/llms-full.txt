@@ -49,7 +49,7 @@ hop = -sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:9)      # ferm
                                                                          # laid automatically
 L = -im * ham + sum(Dissipator(sqrt(0.1) * Sm)(i) for i in 1:10)          # a Lindbladian
 gates = CX(1, 2) * H(1)                   # a product acts right to left: H first
-noisy = depolarizing_gate(0.01)(3)        # a channel, for a mixed state
+noisy = depolarizing_channel(0.01)(3)        # a channel, for a mixed state
 myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 ```
 
@@ -57,7 +57,8 @@ myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 `Sz`, `Sp`, `Sm` on spins; `Id`, `F`, `Level`, `Swap` and `controlled` on every site; the gates
 `H`, `S`, `T`, `Phase(θ)`, `Rx(θ)`, `Ry`, `Rz`, `Rxx(θ)`, `Ryy`, `Rzz`, `CX` or `CNOT`, `CY`,
 `CZ`, `CCX` or `Toffoli` in `Circuits`. `⊗` makes an operator of several sites, `X ⊗ X`, placed by
-`(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)` work on operators.
+`(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)` work on operators, and
+`dag` or `'` on placed ones too, `h + h'`.
 
 ## Conventions
 
@@ -66,11 +67,11 @@ myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 | the evolver | `-im * H` plus dissipators: ``d\psi/dt = -iH\psi``, ``\hbar = 1`` |
 | a jump operator | `Dissipator(L)`, ``L\rho L^\dagger - \frac12\{L^\dagger L, \rho\}``; `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`, so a rate ``\gamma`` is `γ * Dissipator(L)` |
 | qubit states | `"Up"` = ``\vert 0\rangle``, `"Dn"` = ``\vert 1\rangle``; `Z` is +1 on `"Up"`; `N` counts `"Dn"`; `Sp` takes `"Dn"` to `"Up"` |
-| amplitude damping | `amplitude_damping_gate(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
-| depolarization | `depolarizing_gate(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_gate(4p/3)` |
+| amplitude damping | `amplitude_damping_channel(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
+| depolarization | `depolarizing_channel(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_channel(4p/3)` |
 | a product of gates | the rightmost factor acts first |
 | rotations | `Rx(θ)` is ``e^{-i\theta X/2}`` and `Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, as in OpenQASM and Qiskit; `Rx(θ)` is ``e^{-i\theta S_x}`` on a spin |
-| values measured | by `measure`, real for a Hermitian operator, complex otherwise, `Trace` complex; by `expect`, `expect1` and `trace`, complex as soon as the state is: `real(expect(ψ, ham))` |
+| values measured | by `measure`, `expect`, `expect1` and `expect2` alike, real for a Hermitian operator, complex otherwise; `expect(ψ, op; complex = true)` the complex number computed; `Trace` and `trace` complex |
 
 ## Solvers
 
@@ -87,21 +88,22 @@ lt, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, li
 ψg = apply(gates, State{Pure}(sys, "Up"); limits = lim)
 ```
 
-`evolve` takes a time dependent evolver as `[A, B] => [f, g]`, real functions of the time, read
-from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`) and the
-sweeps: a result is trusted once it does not move when each is improved, see
-[Checking the accuracy](@ref).
+`evolve` takes a time dependent evolver as a vector of terms, `[A, B => g]` for
+``A + g(t) B``, `g` a real function of the time, read from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`, or
+`time_step`, one of which `evolve` and `thermalize` require, as the phases) and the sweeps: a
+result is trusted once it does not move when each is improved, see [Checking the accuracy](@ref).
 
 ## Measurements
 
 ```julia
 measure(ψt, [X(1) * X(10), Z, (X, X), Purity, EntanglementEntropy(5)])
-# a vector of pairs name => value, even for one measurement: an operator on sites gives a
-# number, an operator of one site one pair "Z" => [a value per site], a pair a correlation matrix
-measure(ψt, ["E" => c -> real(expect(c.state, ham)), "t" => c -> c.time]; time = 1.0)
+# a list gives a vector of pairs name => value: an operator on sites gives a number, an
+# operator of one site a vector of a value per site, a pair a correlation matrix
+measure(ψt, Z)  # a measurement alone gives its value, [Z] the vector of one pair
+measure(ψt, ["E" => ham, "t" => c -> c.time]; time = 1.0)
 # one value at a time
 expect(ψt, X(1) * X(10)); expect1(ψt, Z); expect2(ψt, (X, X))
-purity(ρt); maxlinkdim(ψt); entanglement_entropy(ψt, 5)  # (entropy, spectrum)
+purity(ρt); maxlinkdim(ψt); entanglement_entropy(ψt, 5); entanglement_spectrum(ψt, 5)
 probabilities(ψt, Z(1) * Z(2)); sample(ψt, Z(1)); collapse(ψt, Z(1))  # (result, probability, state)
 ```
 
@@ -161,11 +163,12 @@ operator `c` of `mesolve` is `Dissipator(c)` in an evolver.
 | `tensor(sigmaz(), sigmaz())` acting on qubits `i` and `j` | `Z(i) * Z(j)` |
 | `mesolve(H, ρ0, tlist, c_ops = [c1, c2], e_ops = [o])` | `evolve(-im * H + Dissipator(c1) + Dissipator(c2), t, ρ0; nsteps)`, then `measure(ρ, o)` |
 | `sesolve(H, ψ0, tlist)` | `evolve(-im * H, t, ψ0; nsteps)` |
+| `sesolve([H0, [H1, f]], ψ0, tlist)` | `evolve([-im * H0, -im * H1 => f], t, ψ0; nsteps)`, `f` of real values |
 | `steadystate(H, c_ops)` | `steady_state(-im * H + sum(Dissipator.(c_ops)), ρ; algo = Dmrg(; nsweeps))` |
 | `H.groundstate()` | `ground_state(H, ψ; algo = Dmrg(; nsweeps))` |
 | `expect(o, ρ)` | `expect(ρ, o)`, or `measure(ρ, o)` |
-| `ρ.ptrace([0, 2])` | `partial_trace(ρ, [1, 3]; keep = true)`, sites counted from 1 |
-| `entropy_vn(ρ.ptrace([0]))` | `vonneumann_entropy(ρ, [1])` |
+| `ρ.ptrace([0, 2])` | `partial_trace(ρ; keep = [1, 3])`, sites counted from 1 |
+| `entropy_vn(ρ.ptrace([0]))` | `von_neumann_entropy(ρ, [1])` |
 
 A collapse operator carries its rate, `sqrt(γ) * c` in QuTiP as in TMS: `Dissipator(sqrt(γ) * c)`
 is `γ * Dissipator(c)`. A QuTiP operator is a matrix on the whole space; a TMS operator is placed
@@ -458,7 +461,7 @@ Many operations are defined on generic operators:
 
 - addition, multiplication and power by a number
 - tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`)
-- `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``.
+- `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``; `C'` is the same, and both take placed operators too, `h + h'`.
 - `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the dissipator whose jump operator, `Sp`, the ``S^+`` operator, flips a qubit toward up
 - `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply a ``\sigma_x`` gate 10 percent of the time.
 - `Proj` represents an operator that projects on the given state, for example `Proj("Up")`
@@ -651,12 +654,12 @@ Noise acts on a mixed state, either as a channel applied between gates, or as a 
 evolver. Three kinds are ready for sites of any type, each as a channel `…_gate(p, …)`, taking
 place with probability `p`, and as a generator `…_dissipator(γ, …)`, of rate `γ`:
 
-- [`reset_gate`](@ref)`(p, state)` resets a site to `state`, see `Reset`; with `n`,
-  `reset_gate(p, n, state)` resets `n` sites together, and `reset_gate(p, [s1, s2])`
+- [`reset_channel`](@ref)`(p, state)` resets a site to `state`, see `Reset`; with `n`,
+  `reset_channel(p, n, state)` resets `n` sites together, and `reset_channel(p, [s1, s2])`
   each site to its state;
-- [`depolarizing_gate`](@ref)`(p, n)` is the reset to `"FullyMixed"`: on a qubit, the channel
-  applying each Pauli operator with probability `p/3` is `depolarizing_gate(4p/3)`;
-- [`dephasing_gate`](@ref)`(p, A)` erases the coherences between the eigenspaces of `A`, or
+- [`depolarizing_channel`](@ref)`(p, n)` is the reset to `"FullyMixed"`: on a qubit, the channel
+  applying each Pauli operator with probability `p/3` is `depolarizing_channel(4p/3)`;
+- [`dephasing_channel`](@ref)`(p, A)` erases the coherences between the eigenspaces of `A`, or
   in the basis of the site without `A`, see `Dephase`.
 
 Evolving under a generator for a time `t` is the channel of probability ``1 - e^{-\gamma t}``.
@@ -670,12 +673,12 @@ measure(mydephased, X)
 ```
 
 ```@example manual
-measure(apply(prod(dephasing_gate(1 - exp(-0.5))(i) for i in 1:2), myplus), X)
+measure(apply(prod(dephasing_channel(1 - exp(-0.5))(i) for i in 1:2), myplus), X)
 ```
 
-Sites reset together are not sites reset each on its own: `depolarizing_gate(p, 2)`
+Sites reset together are not sites reset each on its own: `depolarizing_channel(p, 2)`
 depolarizes both sites with probability `p`, where
-`depolarizing_gate(p) ⊗ depolarizing_gate(p)` depolarizes each with probability `p`. And
+`depolarizing_channel(p) ⊗ depolarizing_channel(p)` depolarizes each with probability `p`. And
 `dephasing_dissipator(γ, A)` damps every coherence between two eigenspaces of `A` at the rate
 `γ`, where `Dissipator(A)` damps it at ``(\lambda_a - \lambda_b)^2/2``, faster for distant
 eigenvalues; they agree on a qubit, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`.
@@ -689,9 +692,9 @@ for a time `t`, `exp(t * L)`.
 On a qubit, `"Up"` is ``|0\rangle`` and `"Dn"` ``|1\rangle``, the excitation `N` counts: the
 decay of an excitation, from `"Dn"` to `"Up"`, is `Dissipator(Sp)`, and `Dissipator(Sm)`, which
 takes `"Up"` to `"Dn"` in the evolution above, excites. The decay is given for sites of any type
-by [`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref), of the
+by [`amplitude_damping_channel`](@ref) and [`amplitude_damping_dissipator`](@ref), of the
 excitations an operator destroys, `Sp` by default, and the relaxation of times ``T_1`` and
-``T_2`` of a qubit, its decay and its dephasing, by [`thermal_relaxation_gate`](@ref) and
+``T_2`` of a qubit, its decay and its dephasing, by [`thermal_relaxation_channel`](@ref) and
 [`thermal_relaxation_dissipator`](@ref) of the module `Qubits`.
 
 ### Steady states
@@ -1683,8 +1686,9 @@ a type of its own, is an [`Update`](@ref) phase.
 An evolution goes through [`TensorMixedStates.evolve_step`](@ref), whose method is chosen by the
 type of its `algo`: a method of evolution of your own is a subtype of
 [`TensorMixedStates.EvolutionAlgorithm`](@ref) with a method of `evolve_step`, which makes one
-step, and which `evolve`, `thermalize` and their phases then take as they take `Tdvp`. Two steps
-of `Tdvp` of half the length make one:
+step, and which `evolve`, `thermalize` and their phases then take as they take `Tdvp`, the time
+functions of an evolver depending on time being those of its `PreMPO`, `pre.functions`. Two
+steps of `Tdvp` of half the length make one:
 
 ```julia
 using TensorMixedStates, .Qubits
@@ -1692,10 +1696,9 @@ using TensorMixedStates: EvolutionAlgorithm
 
 struct HalfSteps <: EvolutionAlgorithm end
 
-function TensorMixedStates.evolve_step(::HalfSteps, pre, coefs, state, time, dt, step, limits)
-    half = TensorMixedStates.evolve_step(Tdvp(), pre, coefs, state, time, dt / 2, step, limits)
-    return TensorMixedStates.evolve_step(Tdvp(), pre, coefs, half, time + dt / 2, dt / 2, step,
-                                         limits)
+function TensorMixedStates.evolve_step(::HalfSteps, pre, state, time, dt, step, limits)
+    half = TensorMixedStates.evolve_step(Tdvp(), pre, state, time, dt / 2, step, limits)
+    return TensorMixedStates.evolve_step(Tdvp(), pre, half, time + dt / 2, dt / 2, step, limits)
 end
 
 evolve(-im * sum(X(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "Up");
@@ -1747,11 +1750,12 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
-- `expect(state, op::TensorMixedStates.IndexedOp)` computes the expectation value of an
-  operator placed on sites, normalised by the trace, which `measure`, and so `output`, asks for,
-  those of the operators of one site and of the pairs of them included. The operator is given
-  as the user wrote it, on the physical sites, which [`map_sites`](@ref) places on another
-  system;
+- `TensorMixedStates.expect_value(state, op::TensorMixedStates.IndexedOp)` computes the
+  expectation value of an operator placed on sites, normalised by the trace, as a complex
+  number, which `expect`, `measure`, and so `output`, ask for, those of the operators of one
+  site and of the pairs of them included, making the value of a Hermitian operator real. The
+  operator is given as the user wrote it, on the physical sites, which [`map_sites`](@ref)
+  places on another system;
 - `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
@@ -1827,11 +1831,11 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 
 | 1.6 | 2.0 |
 |:----|:----|
-| `tdvp(evolver, t, state; nsweeps = n)` | `evolve(evolver, t, state; nsteps = n)`, `algo = Tdvp()` by default |
+| `tdvp(evolver, t, state; nsweeps = n)` | `evolve(evolver, t, state; nsteps = n)`, or `time_step = dt`, one of them required where `tdvp` made one sweep by default, `algo = Tdvp()` by default |
 | `approx_W(evolver, t, state; order, w, nsweeps = n)` | `evolve(evolver, t, state; algo = ApproxW(; order, w), nsteps = n)` |
 | `Tdvp(n_expand, n_hermitianize)`, `ApproxW(n_hermitianize)` | `Tdvp(; expand_period, hermitianize_period)`, `ApproxW(; order, hermitianize_period)` |
 | `first_sweep = k` | `step = k`, `time` the time the evolution starts at, `duration` and `nsteps` those of the steps left |
-| `coefs` of an evolver depending on time | `[A, B] => [f, g]`, real functions of the time |
+| `coefs` of an evolver depending on time, `hs => coefs` of `Evolve` | a vector of terms, `[A, B => g]` for ``A + g(t) B``, each with its real function of the time if it has one |
 | `time_start` | `time` |
 | `dmrg(H, state; nsweeps, noise)` | `ground_state(H, state; algo = Dmrg(; nsweeps, noise, tol))` |
 | `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(; nsweeps))` |
@@ -1842,7 +1846,9 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 
 `Dmrg` has no default number of sweeps, which `dmrg` took as 1. `ground_state` no longer takes
 an MPO: give the operator, or its `PreMPO(state, operator)`, prepared once for several calls. A
-mixed state is refused by `ground_state`: search the pure state and mix it.
+mixed state is refused by `ground_state`: search the pure state and mix it. `ground_state`,
+`steady_state` and `thermalize` return named tuples, `(energy, state)`, `(residual, state)` and
+`(log_trace, state)`, which destructure as before.
 
 ## Measurements
 
@@ -1851,7 +1857,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it.
 | `measure(state, list, t)` | `measure(state, list; time = t)` |
 | `StateFunc("name", f)` | `"name" => c -> f(c.state)` |
 | `TimeFunc("name", f)` | `"name" => c -> f(c.time)` |
-| `RealValue`, `ImaginaryValue` | `"name" => c -> real(expect(c.state, op))`, `imag(…)` |
+| `RealValue`, `ImaginaryValue` | `"name" => op`, `"name" => c -> imag(expect(c.state, op; complex = true))` |
 | `ComplexValue` | removed: the value of an operator that is not Hermitian is complex |
 | `Check("name", obs1, obs2, tol)` | `"name" => c -> Check(a, b; tol)`, the values `a` and `b` computed from `c`, as `expect(c.state, op)` |
 | `trace2`, `Trace2` | `purity`, `Purity` |
@@ -1861,15 +1867,22 @@ mixed state is refused by `ground_state`: search the pure state and mix it.
 | `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
 | `variance(h, state)` | `variance(state, h)` |
-| `partial_trace(state, positions; keepers)` | `partial_trace(state, positions; keep)` |
+| `ee, spectrum = entanglement_entropy(state, cut)` | `entanglement_entropy(state, cut)`, `entanglement_spectrum(state, cut)` |
+| `entanglement_by_sector(state, cut)[QN("N", 2)]` | `entanglement_by_sector(state, cut)[N => 2]`, the charges as `fully_mixed` takes them |
+| `partial_trace(state, positions)` | `partial_trace(state; trace_out = positions)` |
+| `partial_trace(state, positions; keepers = true)` | `partial_trace(state; keep = positions)` |
 | `:sweep` in a list of measurements | `:step` |
 
 The value of a Hermitian operator is real, its imaginary part dropped with a warning when it is
 more than rounding, and that of an operator that is not Hermitian is complex, whatever the state:
-the columns of a file do not depend on it. For the same reason, `Trace` is complex.
+the columns of a file do not depend on it. For the same reason, `Trace` is complex. `expect`,
+`expect1` and `expect2` follow that rule, where 1.x gave the complex numbers computed, which
+`complex = true` gives.
 
 A list of measurements given to `measure` is one list: `measure(state, [Measure(…),
-Measure(…)])` measures the two as one, where 1.x returned a group for each.
+Measure(…)])` measures the two as one, where 1.x returned a group for each. A measurement
+alone gives its value, where 1.x gave a vector of one pair: `last(only(measure(state, m)))`
+is now `measure(state, m)`, and `measure(state, [m])` gives the pair.
 
 ## Simulations
 
@@ -1879,8 +1892,8 @@ Measure(…)])` measures the two as one, where 1.x returned a group for each.
 | `GroundState(nsweeps, noise, tolerance)` | `GroundState(algo = Dmrg(; nsweeps, noise, tol))`, `algo` being required |
 | `SteadyState(nsweeps, tolerance)` | `SteadyState(algo = Dmrg(; nsweeps, tol))`, `algo` being required |
 | `Dmrg(…)`, the phase | `GroundState(…)`: `Dmrg` is now the method of a search |
-| `PartialTrace(trace_positions = p)` | `PartialTrace(positions = p)` |
-| `PartialTrace(keep_positions = p)` | `PartialTrace(positions = p, keep = true)` |
+| `PartialTrace(trace_positions = p)` | `PartialTrace(trace_out = p)` |
+| `PartialTrace(keep_positions = p)` | `PartialTrace(keep = p)` |
 | `CreateState(seed = s)` | `SimData(seed = s)`, the draws of every phase using the generator of the run |
 | `SimData(time_format, data_format)` | `SimData(; format)`, for every number written |
 | `SimData(checkpoint_interval, max_time, threading)` | `runTMS(sim_data; checkpoint_interval, max_time, threading)`, or the variables `TMS_CHECKPOINT_INTERVAL`, `TMS_MAX_TIME`, `TMS_THREADING` |
@@ -1892,7 +1905,8 @@ Measure(…)])` measures the two as one, where 1.x returned a group for each.
 | `get_sim_file`, `close_sim_files` | `output(sim, destination => list)`, or a `TensorMixedStates.Destination` of one's own; `runTMS` closes the files |
 | `DataToFrame` | `data_to_frame` |
 | `Simulation(state; …)`, a function given a `Simulation` | the functions take the state, `sim.state`; a `Simulation` is made by `runTMS` |
-| `create_graph_state` | `CreateState(type = Pure(), state = graph_state(graph))` |
+| `create_graph_state` | `CreateState(graph_state(graph))` |
+| `CreateState(type = Pure(), …)` | `CreateState(type = Pure, …)`, the type as in `State{Pure}`, by default that of a `State` given |
 
 The data files are tables: a line naming the columns, then a line per time measured.
 `sim.data` holds the rows of each `Data` destination, which `data_to_frame` turns into a table
