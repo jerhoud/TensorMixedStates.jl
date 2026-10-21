@@ -44,19 +44,20 @@ The `]` switches the prompt to the package manager of Julia.
 After downloading TMS, Julia compiles it, with no interaction on the user's part, the first time
 and after each update of TMS or of a package it uses. This compilation runs small computations,
 so that the first calls of a script do not wait for their own compilation, and takes five to six
-minutes and up to 7 GB of memory. On a machine with less memory, a login node of a cluster for
-instance, these computations are left out by a file `LocalPreferences.toml` next to the
-`Project.toml` of the environment, written before installing TMS or before the next
-`using TensorMixedStates`:
+minutes and up to 7 GB of memory, 9 GB with Julia 1.10. On a machine with less memory, a login
+node of a cluster for instance, these computations are left out by a file
+`LocalPreferences.toml` next to the `Project.toml` of the environment, written before
+installing TMS or before the next `using TensorMixedStates`:
 
 ```toml
 [TensorMixedStates]
 precompile_workload = false
 ```
 
-The compilation then takes about ten seconds and less than 1 GB, but each new session compiles
-what it uses as it runs: the first simulation of [High Level Interface](@ref) takes about three
-minutes rather than six seconds.
+The compilation of TMS then takes about ten seconds and less than 1 GB, the packages it uses
+taking about 2 GB the first time, but each new session compiles what it uses as it runs: the
+first simulation of [High Level Interface](@ref) takes about three minutes rather than six
+seconds.
 
 ## A first example
 

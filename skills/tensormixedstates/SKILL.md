@@ -18,11 +18,11 @@ julia -e 'using TensorMixedStates; print(pkgversion(TensorMixedStates))'   # mus
 julia -e 'using TensorMixedStates; print(joinpath(pkgdir(TensorMixedStates), "docs", "src", "quickref.md"))'
 ```
 
-Installing compiles for five to six minutes with up to 7 GB of memory. With less memory, first
-write `[TensorMixedStates]` and `precompile_workload = false` on two lines of a
-`LocalPreferences.toml` next to the `Project.toml` of the environment: the installation then
-compiles in seconds, each session compiling what it uses, about three minutes for a first
-simulation.
+Installing compiles for five to six minutes with up to 7 GB of memory, 9 GB with Julia 1.10.
+With less memory, first write `[TensorMixedStates]` and `precompile_workload = false` on two
+lines of a `LocalPreferences.toml` next to the `Project.toml` of the environment: TMS then
+compiles in seconds and less than 1 GB, the packages it uses taking about 2 GB the first time,
+each session compiling what it uses, about three minutes for a first simulation.
 
 Read that `quickref.md`: the whole library on one page, version matched. `upgrading.md`, next
 to it, lists what changed since version 1. In Julia, `?name` gives the help of a function or a
