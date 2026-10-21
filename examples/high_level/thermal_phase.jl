@@ -9,7 +9,7 @@ using TensorMixedStates, .Qubits, LinearAlgebra
 n = 6
 Δ = 2.0
 xxz = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Δ * Z(i) * Z(i + 1) for i in 1:n-1)
-energy = "energy" => c -> expect(c.state, xxz)
+energy = "energy" => xxz
 
 sim = runTMS(SimData(
     name = "XXZ_thermal",

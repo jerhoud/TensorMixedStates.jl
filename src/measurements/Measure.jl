@@ -564,7 +564,7 @@ list cannot share a name.
 
 # Examples
 
-    Measure(X, (X, Y), Z(1) * Z(2), Purity, "E" => c -> expect(c.state, H), :energy)
+    Measure(X, (X, Y), Z(1) * Z(2), Purity, "E" => H, "cos" => c -> cos(2c.time), :energy)
 """
 struct Measure
     entries::Vector{Pair{String, Any}}
@@ -743,7 +743,7 @@ anew at each call.
 
     measure(state, Purity)
     measure(state, [X, (X, Y), Z(1) * Z(2), Purity])
-    measure(state, ["E" => c -> expect(c.state, H), :energy]; time = 1.5, energy = -3.2)
+    measure(state, ["E" => H, "cos" => c -> cos(2c.time), :energy]; time = 1.5, energy = -3.2)
 """
 function measure(state::AbstractState, m::Measure; time::Union{Nothing, Number} = nothing,
                  values...)
