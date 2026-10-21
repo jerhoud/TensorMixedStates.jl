@@ -45,6 +45,7 @@ version 2.x.
   which truncate the MPO in its triangular form, the one `ApproxW` needs.
 - The module `Circuits`: the gates `H`, `S`, `T`, `Phase` and `Sum`, which `Qubits` and `Qudits` no
   longer export, the rotations `Rx` to `Rzz`, and `CX`, `CNOT`, `CY`, `CZ`, `CCX`, `Toffoli`.
+- `tr`, the trace of a state under the name of `LinearAlgebra`.
 - A quick reference, pages for users of QuTiP or ITensors and on choosing and checking the
   parameters, and a skill for AI agents in `skills/tensormixedstates`.
 

@@ -344,6 +344,8 @@ end
     @test only(ψ.preobs.trace) === trace(ψ)
     # a state built from it starts with caches of its own
     @test isempty(normalize(ψ).preobs.trace)
+    # tr of LinearAlgebra is the trace, where it asked for the size of the state
+    @test tr(ψ) === trace(ψ) && tr(ρ) === trace(ρ)
 end
 
 @testset "A random state needs a sector" begin

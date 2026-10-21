@@ -5,7 +5,7 @@
 # `element_maps` and `on_legs`, give limits to ITensors with `truncation`, and the measurements
 # fill the cache `preobs` of a state with `cached!`, measuring on `weak_form` or `plain_form`.
 
-export State, Limits, mix, maxlinkdim, trace, norm, normalize, inner, dot
+export State, Limits, mix, maxlinkdim, trace, tr, norm, normalize, inner, dot
 
 """
     Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing)
@@ -678,6 +678,13 @@ function trace(state::State{Mixed})
     end
     return only(t)
 end
+
+"""
+    tr(::AbstractState)
+
+the trace of the state, `trace` under the name `LinearAlgebra` gives it
+"""
+tr(state::AbstractState) = trace(state)
 
 """
     nonzero_trace(state, what)

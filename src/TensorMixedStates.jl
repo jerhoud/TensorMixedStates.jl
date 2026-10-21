@@ -30,7 +30,7 @@ module TensorMixedStates
 
 import Base: *, +, -, /, ^, exp, sqrt, mod, show, showerror, ==, hash, length, getindex,
              getproperty, setproperty!, propertynames, truncate, open, close
-import LinearAlgebra: norm, normalize, dot
+import LinearAlgebra: norm, normalize, dot, tr
 import ITensors: dag, dim, matrix, flux, inner, siteind, siteinds
 import ITensorMPS: maxlinkdim, expect, apply, sample
 

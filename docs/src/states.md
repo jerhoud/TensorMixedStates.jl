@@ -23,6 +23,7 @@ maxlinkdim(::State)
 mix
 truncate(::State)
 trace(::State{Pure})
+tr(::TensorMixedStates.AbstractState)
 purity(::State{Pure})
 norm(::State)
 normalize(::State{Pure})
