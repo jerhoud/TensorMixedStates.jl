@@ -29,7 +29,8 @@ a phase of time evolution, see `evolve`.
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
 - `evolver`: `-im * H` for a Hamiltonian `H`, plus dissipators for a mixed state, or for an
-  evolver depending on time `[A, B] => [f, g]`, see `evolve`, or `A => f` for a single term
+  evolver depending on time a vector of terms `[A, B => g]`, see `evolve`, the time being that
+  of the simulation
 - `duration`: the duration of the evolution
 - `time_step`: the time step, adjusted to the nearest one dividing the duration into a whole
   number of steps, and taken with the sign of the duration (no step when that number is zero),
@@ -66,27 +67,21 @@ a phase of time evolution, see `evolve`.
     function Evolve(name, time_start, final_measurements, evolver, duration, time_step, nsteps,
                     algo, limits, mpo_limits, measurements, measurements_period, on)
         evolution_steps("an Evolve", duration, nsteps, time_step, "time_step")
-        # A => f written as the vectors, A => [f] left to be refused
-        if evolver isa Pair && !(first(evolver) isa Union{AbstractVector, PreMPO}) &&
-           !(last(evolver) isa AbstractVector)
-            evolver = [first(evolver)] => [last(evolver)]
-        end
         return new(name, time_start, final_measurements, evolver, duration, time_step, nsteps,
                    algo, limits, mpo_limits, measurements, measurements_period, on)
     end
 end
 
 """
-    EvolveSteps(algo, pre, coefs, limits, nsteps, start, duration, on)
+    EvolveSteps(algo, pre, limits, nsteps, start, duration, on)
 
-an `Evolve` prepared: its method, the `PreMPO` of its evolver and its time functions, its
+an `Evolve` prepared: its method, the `PreMPO` of its evolver, with its time functions, its
 limits, its number of steps, the time it starts from, its duration and the names of the states
 it evolves
 """
-struct EvolveSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}, C}
+struct EvolveSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}}
     algo::A
     pre::P
-    coefs::C
     limits::Limits
     nsteps::Int
     start::Number
@@ -102,8 +97,7 @@ function prepare_phase(phase::Evolve, sim::Simulation)
         phase.nsteps
     end
     if n == 0
-        return EvolveSteps(phase.algo, nothing, nothing, phase.limits, 0, sim.time, phase.duration,
-                           names)
+        return EvolveSteps(phase.algo, nothing, phase.limits, 0, sim.time, phase.duration, names)
     end
     states = [ state_named(sim, name) for name in names ]
     # one PreMPO for all, which is that of a representation and of a system
@@ -112,8 +106,8 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     end
     what = names == [:state] ? "the state" : "the states " * join(names, ", ")
     log_message(sim, "Evolving $what from time $(sim.time) to $(sim.time + phase.duration)")
-    pre, coefs = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
-    return EvolveSteps(phase.algo, pre, coefs, phase.limits, n, sim.time, phase.duration, names)
+    pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
+    return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end
 
 step_count(e::EvolveSteps) = e.nsteps
@@ -122,8 +116,8 @@ step_count(e::EvolveSteps) = e.nsteps
 function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
     for name in e.on
-        st = evolve_step(e.algo, e.pre, e.coefs, state_named(sim, name), e.start + (k - 1) * dt,
-                         dt, k, step_limits(e.limits, k))
+        st = evolve_step(e.algo, e.pre, e.pre.functions, state_named(sim, name),
+                         e.start + (k - 1) * dt, dt, k, step_limits(e.limits, k))
         sim = with_state(sim, name, st)
     end
     return Simulation(sim, sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt)

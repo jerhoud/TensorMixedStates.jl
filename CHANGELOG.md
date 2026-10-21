@@ -63,6 +63,8 @@ version 2.x.
   listed in "Upgrading from 1.x".
 - `evolve` and `thermalize` take their number of steps, `nsteps`, or their step, `time_step` or
   `beta_step`, with no default, where 1.x made one step; `Evolve` and `Thermalize` take either.
+- An evolver depending on time is a vector of terms, `[A, B => g]` for A + g(t) B, where 1.x
+  paired the vectors of the terms and of their functions; its `PreMPO` keeps the functions.
 - `CreateState` takes the type of its state, `type = Pure`, where 1.x took `Pure()`, by default
   that of a `State` given, as `CreateState(ψ)`, and `CreateState{Pure}(system, state)`.
 - `ground_state`, `steady_state` and `thermalize` return named tuples, `(energy, state)`,

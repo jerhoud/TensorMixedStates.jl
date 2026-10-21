@@ -61,7 +61,7 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 | `approx_W(evolver, t, state; order, w, nsweeps = n)` | `evolve(evolver, t, state; algo = ApproxW(; order, w), nsteps = n)` |
 | `Tdvp(n_expand, n_hermitianize)`, `ApproxW(n_hermitianize)` | `Tdvp(; expand_period, hermitianize_period)`, `ApproxW(; order, hermitianize_period)` |
 | `first_sweep = k` | `step = k`, `time` the time the evolution starts at, `duration` and `nsteps` those of the steps left |
-| `coefs` of an evolver depending on time | `[A, B] => [f, g]`, real functions of the time |
+| `coefs` of an evolver depending on time, `hs => coefs` of `Evolve` | a vector of terms, `[A, B => g]` for ``A + g(t) B``, each with its real function of the time if it has one |
 | `time_start` | `time` |
 | `dmrg(H, state; nsweeps, noise)` | `ground_state(H, state; algo = Dmrg(; nsweeps, noise, tol))` |
 | `steady_state(L, state; nsweeps, alg)` | `steady_state(L, state; algo = Dmrg(; nsweeps))` |

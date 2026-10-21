@@ -149,7 +149,8 @@ const moved_keywords = let
     d[(evolve, :nsweeps)] = "nsweeps became nsteps, the number of steps"
     d[(evolve, :first_sweep)] = "first_sweep became step: time is then the time the evolution " *
                                 "starts at, duration and nsteps those of the steps left"
-    d[(evolve, :coefs)] = "an evolver depending on time is written [A, B] => [f, g]"
+    d[(evolve, :coefs)] = "an evolver depending on time is a vector of terms, each with its " *
+                          "function if it has one, [A, B => g] for A + g(t) B"
     d[(evolve, :time_start)] = "time_start became time"
     d[(thermalize, :log_trace)] = "the log_trace of successive calls of thermalize add up"
     for k in (:checkpoint_interval, :max_time, :threading)

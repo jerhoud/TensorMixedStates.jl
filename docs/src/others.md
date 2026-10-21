@@ -40,8 +40,8 @@ sites. For a long ranged one, the difference is large. Measured on
 | 20    | 190   | 102                  | 3         |
 | 40    | 780   | 402                  | 3         |
 
-Three channels is also what `ITensorMPS`' `OpSum` finds there, with an SVD. Each element of a
-time dependent evolver is compacted on its own, so that it keeps its time function, and changing
+Three channels is also what `ITensorMPS`' `OpSum` finds there, with an SVD. Each term of a time
+dependent evolver is compacted on its own, so that it keeps its time function, and changing
 the coefficients from one step to the next rebuilds the tensors of the MPO alone.
 
 A product of sums would develop into as many terms as the product of theirs: the moment `M^4` of

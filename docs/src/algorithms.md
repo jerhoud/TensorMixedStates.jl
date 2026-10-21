@@ -42,8 +42,9 @@ steady_state
 ### Time dependent evolvers
 
 For time evolution, it may be useful to have time dependent operators. In TMS, a time dependent
-operator is described in the following way: a vector of indexed operators and a vector of time
-functions. For example, to describe
+operator is a vector of terms, each an operator with its function of time, `A => f`, or an
+operator alone when it does not depend on time: `[A, B => g]` is ``A + g(t) B``. For example,
+to describe
 
 ```math
     h(t) = - e^{-t} \sum_{i=1}^{n-1} \sigma_x^i \sigma_x^{i+1} - \sin(t) \sum_{i=1}^n \sigma_z^i
@@ -58,25 +59,19 @@ n = 6
 
 ```@example algorithms
 hs = -im * [ -sum(X(i)X(i+1) for i in 1:n-1), -sum(Z(i) for i in 1:n)]
+evolver = [ hs[1] => t -> exp(-t), hs[2] => t -> sin(t) ]
 nothing # hide
 ```
 
-and
-
-```@example algorithms
-coefs = [ t -> exp(-t), t -> sin(t) ]
-nothing # hide
-```
-
-A term that does not depend on time takes a constant function, `t -> 1.0`. The evolver is the
-pair of the two, `hs => coefs`, given to `evolve` or to an `Evolve` phase as any other evolver:
+The evolver is given to `evolve` or to an `Evolve` phase as any other evolver:
 
 ```julia
-evolve(hs => coefs, duration, initial_state; nsteps = 100, time = 0)
+evolve(evolver, duration, initial_state; nsteps = 100, time = 0)
 ```
 
 The functions are read at `time`, the time the evolution starts at, plus the time of each step;
-an `Evolve` phase gives them the time of the simulation.
+an `Evolve` phase gives them the time of the simulation. `PreMPO(initial_state, evolver)`
+prepares the evolver once for several calls, its functions kept.
 
 `Tdvp`, and `ApproxW` of order 1 or 2, take each function at the middle of each time step,
 which limits them to an error of order ``\tau^2`` in the time step ``\tau``. `ApproxW` of
@@ -94,7 +89,7 @@ A drive ``\Omega (e^{i\omega t} \sigma^+ + e^{-i\omega t} \sigma^-)`` is thus
 
 ```julia
 hs = -im * [ Ω * X(1), -Ω * Y(1) ]
-coefs = [ t -> cos(ω * t), t -> sin(ω * t) ]
+evolver = [ hs[1] => t -> cos(ω * t), hs[2] => t -> sin(ω * t) ]
 ```
 
 ```@docs

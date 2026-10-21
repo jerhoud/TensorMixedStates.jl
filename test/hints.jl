@@ -54,7 +54,7 @@ end
         (() -> steady_state(L, ρ; algo, first_sweep = 2), "phase resumes its search"),
         (() -> evolve(-im * h, 0.1, st; order = 2), "ApproxW(order"),
         (() -> evolve(-im * h, 0.1, st; time_start = 1.), "time_start became time"),
-        (() -> evolve(-im * h, 0.1, st; coefs = [t -> 1]), "[A, B] => [f, g]"),
+        (() -> evolve(-im * h, 0.1, st; coefs = [t -> 1]), "[A, B => g] for A + g(t) B"),
         (() -> thermalize(h, 0.1, ρ; first_step = 2), "first_step became step"),
         (() -> SimData(; phases, checkpoint_interval = 10), "runTMS(sim_data; checkpoint_interval"),
         (() -> SimData(; phases, max_time = 10), "TMS_MAX_TIME"),

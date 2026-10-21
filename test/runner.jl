@@ -144,7 +144,7 @@ end
         tr = "trace" => c -> real(trace(c.state))
         phases = [CreateState{Pure}(4, Qubit(), "Up"; randomize = 4),
                   CopyState(:state => :start),
-                  Evolve(evolver = [-im * H, -im * X(2)] => [t -> 1, t -> cos(3t)], duration = 0.3,
+                  Evolve(evolver = [-im * H, -im * X(2) => t -> cos(3t)], duration = 0.3,
                          time_step = 0.1, limits = lim,
                          measurements = "evolve" => [X(1), Z, :step, draw, Fidelity(:start)]),
                   GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 30, tol = 1e-10), limits = lim,

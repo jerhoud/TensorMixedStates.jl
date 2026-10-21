@@ -148,22 +148,21 @@ end
     # integrator of ApproxW of order 4, are exact on functions of degree one, and so are tdvp
     # and WII on these terms: what is left is rounding, and on a mixed state the cutoff of the
     # hundred MPOs ApproxW builds, about 1e-13
-    hs = [-im * Z(1), -im * Z(2)]
-    fs = [t -> 1., t -> t]
+    terms = [-im * Z(1) => t -> 1., -im * Z(2) => t -> t]
     lim = Limits(maxdim = 10, cutoff = 1e-15)
     precessed = [cos(2), sin(2), cos(1), sin(1)]
     for (algo, tol) in [(Tdvp(), 1e-13), (ApproxW(order = 4, w = 2), 1e-12)], R in (Pure, Mixed)
-        st = evolve(hs => fs, 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps = 100,
+        st = evolve(terms, 1., State{R}(System(2, Qubit()), "X+"); algo, nsteps = 100,
                     limits = lim)
         @test real(expect(st, [X(1), Y(1), X(2), Y(2)])) ≈ precessed atol = tol
     end
     # read from `time`: from 1, Z(2) turns by 3 over a time 1
-    st = evolve(hs => fs, 1., State{Pure}(System(2, Qubit()), "X+"); nsteps = 10, time = 1.)
+    st = evolve(terms, 1., State{Pure}(System(2, Qubit()), "X+"); nsteps = 10, time = 1.)
     @test real(expect(st, X(2))) ≈ cos(3) atol = 1e-12
     # the vector given as its PreMPO, on a mixed state, so that each operator of the vector is
     # lifted to the mixed representation
     ρ = mix(State{Pure}(System(2, Qubit()), "X+"))
-    st = evolve(PreMPO(ρ, hs) => fs, 1., ρ; nsteps = 100)
+    st = evolve(PreMPO(ρ, terms), 1., ρ; nsteps = 100)
     @test real(expect(st, X(1))) ≈ cos(2.) atol = 1e-13
     @test real(expect(st, X(2))) ≈ cos(1.) atol = 1e-13
 end
@@ -194,8 +193,10 @@ end
     exact_mixed = dense_state(sys, reshape(r, 4, 4))
     lim = Limits(cutoff = 0)
     for (st, ev, exact) in [(ψ, -im .* ops, exact_pure), (mix(ψ), lind, exact_mixed)]
+        # the first function is constant, and so is its term
+        terms = [ev[1], ev[2] => fs[2], ev[3] => fs[3]]
         err(algo, nsteps) =
-            norm(evolve(ev => fs, t, st; algo, nsteps, time = t0, limits = lim) - exact)
+            norm(evolve(terms, t, st; algo, nsteps, time = t0, limits = lim) - exact)
         @test abs(log2(err(Tdvp(), 16) / err(Tdvp(), 32)) - 2) < 0.4
         for order in 1:4
             @test abs(log2(err(ApproxW(; order), 16) / err(ApproxW(; order), 32)) - order) < 0.4
@@ -203,27 +204,32 @@ end
     end
 end
 
-@testset "One time function per term" begin
-    # too few raised a BoundsError on an internal vector in 1.x, and too many were ignored
+@testset "The terms of an evolver depending on time" begin
+    # each term carries its function, which leaves no count to match: too few functions raised a
+    # BoundsError on an internal vector in 1.x, and too many were ignored. Its vectors paired are
+    # refused, alone, with a PreMPO, or for a single term
     hs = [-im * Z(1), -im * Z(2)]
     st = State{Pure}(System(2, Qubit()), "X+")
-    @test_throws "an evolver of 2 terms takes as many time functions, got 1" evolve(
-        hs => [t -> 1.], 0.1, st; nsteps = 1)
-    @test_throws "an evolver of 2 terms takes as many time functions, got 3" evolve(
-        hs => [t -> 1., t -> 1., t -> 1.], 0.1, st; nsteps = 1)
-    # the PreMPO of a vector given with no functions
-    @test_throws "an evolver of 2 terms takes as many time functions, got 1" evolve(
-        PreMPO(st, hs), 0.1, st; nsteps = 1)
-    # a single term with its function is written with the vectors
-    @test_throws "is not an evolver" evolve(-im * Z(1) => [t -> 1.], 0.1, st; nsteps = 1)
-    @test real(expect(evolve([-im * Z(1)] => [t -> 2.], 0.4, st; nsteps = 1), X(1))) ≈ cos(1.6)
-    # which an Evolve phase writes A => f as well
+    msg = "where 1.x paired vectors, [A, B] => [f, g]"
+    @test_throws msg evolve(hs => [t -> 1., t -> 1.], 0.1, st; nsteps = 1)
+    @test_throws msg evolve(PreMPO(st, hs) => [t -> 1., t -> 1.], 0.1, st; nsteps = 1)
+    @test_throws msg evolve(-im * Z(1) => [t -> 1.], 0.1, st; nsteps = 1)
+    @test_throws "3 is not a term of an evolver" evolve([-im * Z(1), 3], 0.1, st; nsteps = 1)
+    # terms with no function are their sum, given as they are or as their PreMPO
+    ref = evolve(sum(hs), 0.4, st; nsteps = 2)
+    @test norm(evolve(hs, 0.4, st; nsteps = 2) - ref) < 1e-12
+    @test norm(evolve(PreMPO(st, hs), 0.4, st; nsteps = 2) - ref) < 1e-12
+    # a single term, in a vector or not, and the PreMPO keeping the function
+    for ev in (-im * Z(1) => t -> 2., [-im * Z(1) => t -> 2.], PreMPO(st, -im * Z(1) => t -> 2.))
+        @test real(expect(evolve(ev, 0.4, st; nsteps = 1), X(1))) ≈ cos(1.6)
+    end
+    # which an Evolve phase takes as well
     run(evolver) = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "X+"),
                                             Evolve(; evolver, duration = 0.4, time_step = 0.1)]);
                           output = devnull)
-    @test real(expect(run(-im * Z(1) => (t -> 2.)).state, X(1))) ≈ cos(1.6)
-    @test real(expect(run([-im * Z(1)] => [t -> 2.]).state, X(1))) ≈ cos(1.6)
-    @test_throws "is not an evolver" run(-im * Z(1) => [t -> 1.])
+    @test real(expect(run(-im * Z(1) => t -> 2.).state, X(1))) ≈ cos(1.6)
+    @test real(expect(run([-im * Z(2), -im * Z(1) => t -> 2.]).state, X(1))) ≈ cos(1.6)
+    @test_throws msg run([-im * Z(1)] => [t -> 1.])
 end
 
 @testset "Time functions take real values" begin
@@ -233,16 +239,16 @@ end
     ψ = State{Pure}(System(2, Qubit()), ["Up", "X+"])
     for st in (ψ, mix(ψ)), algo in (Tdvp(), ApproxW(order = 2))
         @test_throws "time functions take real values" evolve(
-            hs => [t -> cis(3t), t -> 0., t -> 1.], 1., st; nsteps = 1, algo)
+            [hs[1] => t -> cis(3t), hs[2] => t -> 0., hs[3]], 1., st; nsteps = 1, algo)
     end
     # the same drive written with its real and imaginary parts: evolving the mixed state is
     # mixing the evolved pure state, the Hamiltonian not commuting at different times. Tdvp is
     # exact at full bond dimension, which a cutoff of zero keeps, and the tolerance of ApproxW
     # is its error measured here
-    fs = [t -> cos(3t), t -> sin(3t), t -> 1.]
+    terms = [hs[1] => t -> cos(3t), hs[2] => t -> sin(3t), hs[3]]
     for (algo, lim, tol) in [(Tdvp(), Limits(cutoff = 0), 1e-11),
                              (ApproxW(order = 4), Limits(), 1e-7)]
-        ev(st) = evolve(hs => fs, 1., st; algo, nsteps = 50, limits = lim)
+        ev(st) = evolve(terms, 1., st; algo, nsteps = 50, limits = lim)
         @test norm(ev(mix(ψ)) - mix(ev(ψ))) < tol
     end
 end
@@ -265,7 +271,7 @@ end
         end
     end
     # and through an evolution: -i X(1)X(2)/2 over a time 1 turns Z(1) by an angle 1
-    st = evolve([-im * X(1) * X(2)] => [t -> 0.5], 1., State{Pure}(System(2, Qubit()), "Up");
+    st = evolve(-im * X(1) * X(2) => t -> 0.5, 1., State{Pure}(System(2, Qubit()), "Up");
                 nsteps = 10, limits = Limits(maxdim = 4, cutoff = 1e-14))
     @test real(expect(st, Z(1))) ≈ cos(1.) atol = 1e-12
 end
@@ -401,12 +407,11 @@ end
     half = evolve(ev, 0.2, ρ0; algo, nsteps = 2, limits = lim(16))
     @test norm(evolve(ev, 0.2, half; algo, nsteps = 2, limits = lim(16)) - whole) > 1e-8
     # and time: an evolver that depends on time resumed at the time it had reached
-    hs = [-im * h, -im * sum(Z(i) for i in 1:n)]
-    fs = [t -> 1., t -> cos(4t)]
+    terms = [-im * h, -im * sum(Z(i) for i in 1:n) => t -> cos(4t)]
     for algo in (Tdvp(), ApproxW(order = 4))
-        whole = evolve(hs => fs, 0.4, st0; algo, nsteps = 4, limits = lim(16))
-        half = evolve(hs => fs, 0.2, st0; algo, nsteps = 2, limits = lim(16))
-        @test norm(evolve(hs => fs, 0.2, half; algo, nsteps = 2, time = 0.2, step = 3,
+        whole = evolve(terms, 0.4, st0; algo, nsteps = 4, limits = lim(16))
+        half = evolve(terms, 0.2, st0; algo, nsteps = 2, limits = lim(16))
+        @test norm(evolve(terms, 0.2, half; algo, nsteps = 2, time = 0.2, step = 3,
                           limits = lim(16)) - whole) < 1e-12
     end
     # and thermalize, the log traces of the two parts adding up to that of the whole
@@ -676,9 +681,9 @@ end
     # the methods keep theirs apart
     @test last(pre.cache[:mpo]) === mpo
     # an evolver that depends on time keeps nothing, its MPOs changing at each step
-    pv = PreMPO(st, [-im * h, -im * X(1)])
+    pv = PreMPO(st, [-im * h, -im * X(1) => cos])
     for algo in (Tdvp(), ApproxW(order = 4))
-        evolve(pv => [t -> 1., cos], 0.2, st; algo, nsteps = 2)
+        evolve(pv, 0.2, st; algo, nsteps = 2)
     end
     @test isempty(pv.cache)
     # thermalize keeps them too, for a step of -dβ/2
@@ -726,7 +731,7 @@ end
     one = System(1, Qubit())
     ψ = State{Pure}(one, "X+")
     @test real(expect(evolve(-im * Z(1), 0.5, ψ; nsteps = 5), X(1))) ≈ cos(1)
-    @test real(expect(evolve([-im * Z(1)] => [t -> 2t], 0.5, ψ; nsteps = 5), X(1))) ≈ cos(0.5)
+    @test real(expect(evolve(-im * Z(1) => t -> 2t, 0.5, ψ; nsteps = 5), X(1))) ≈ cos(0.5)
     # a decaying qubit, from Up
     ρ = evolve(Dissipator(sqrt(0.5) * Sm)(1), 1.0, mix(State{Pure}(one, "Up")); nsteps = 4)
     @test real(expect(ρ, Z(1))) ≈ 2exp(-0.5) - 1
@@ -750,7 +755,7 @@ end
     @test_throws "the PreMPO was prepared on another system than that of the state" evolve(
         PreMPO(other, -im * X(1)), 0.1, st; nsteps = 1)
     @test_throws "the PreMPO was prepared on another system than that of the state" evolve(
-        PreMPO(other, [-im * X(1)]) => [t -> 1.], 0.1, st; nsteps = 1)
+        PreMPO(other, -im * X(1) => t -> 1.), 0.1, st; nsteps = 1)
     @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
         PreMPO(ρ, -im * X(1)), 0.1, st; nsteps = 1)
     @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
@@ -758,9 +763,9 @@ end
     # with its functions, where it ran into ITensors, or gave a broken state by ApproxW
     for algo in (Tdvp(), ApproxW(order = 1))
         @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
-            PreMPO(st, [-im * X(1)]) => [t -> 1.], 0.1, ρ; nsteps = 1, algo)
+            PreMPO(st, -im * X(1) => t -> 1.), 0.1, ρ; nsteps = 1, algo)
         @test_throws "the PreMPO was prepared on a state of the other representation" evolve(
-            PreMPO(ρ, [-im * X(1)]) => [t -> 1.], 0.1, st; nsteps = 1, algo)
+            PreMPO(ρ, -im * X(1) => t -> 1.), 0.1, st; nsteps = 1, algo)
     end
     same = PreMPO(State{Pure}(System(2, Qubit()), "Dn"), -im * X(1))
     @test real(expect(evolve(same, 0.4, st; nsteps = 4), Z(1))) ≈ cos(0.8)
@@ -939,9 +944,11 @@ end
     ln, ρn = thermalize(h, 1., ρ; nsteps = 2)
     @test lb ≈ ln && norm(ρb - ρn) < 1e-14
     @test first(thermalize(h, 0.1, ρ; beta_step = 0.5)) == 0
-    # a Hamiltonian depending on time, refused by a message that spoke of a search
-    @test_throws "is not an operator or its PreMPO" thermalize([Z(1)] => [t -> 1.], 1., ρ;
+    # a Hamiltonian depending on time, refused by a message that spoke of a search, and its PreMPO
+    @test_throws "is not an operator or its PreMPO" thermalize([Z(1) => t -> 1.], 1., ρ;
                                                                 nsteps = 1)
+    @test_throws "the PreMPO depends on time, which an evolution alone follows" thermalize(
+        PreMPO(ρ, Z(1) => t -> 1.), 1., ρ; nsteps = 1)
     @test_throws MethodError thermalize(h, 1., ρ; nsteps = 1, maxdim = 4)
     # and a Thermalize phase, a step of zero or none when it is written, a pure state when it
     # runs, its number of steps given in place of its step

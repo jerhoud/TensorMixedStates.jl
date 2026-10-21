@@ -181,8 +181,20 @@ end
     h = lowered(st.system, 0.3 * h1 - 1.2 * h2)
     @test norm(mpo_matrix(PreMPO(st, [h1, h2]), [0.3, -1.2]) - h) < 1e-12 * norm(h)
     pre = PreMPO(st, [h1, h2])
-    @test_throws "takes as many time functions" make_mpo(pre, [1.])
+    @test_throws "a PreMPO of 2 terms takes as many coefficients, got 1" make_mpo(pre, [1.])
     @test_throws "time functions take real values" make_mpo(pre, [1., im])
+    # terms with no function are their sum
+    s = lowered(st.system, h1 + h2)
+    @test norm(mpo_matrix(pre) - s) < 1e-12 * norm(s)
+    # the functions are kept, a constant term taking one, and the MPO is then built at their
+    # values only
+    tpre = PreMPO(st, [h1, h2 => t -> cos(t)])
+    @test [ f(0.7) for f in tpre.functions ] == [1., cos(0.7)]
+    @test norm(mpo_matrix(tpre, [0.3, -1.2]) - h) < 1e-12 * norm(h)
+    @test_throws "the PreMPO depends on time: give the values of its time functions" make_mpo(tpre)
+    @test_throws "the PreMPO depends on time" make_mpo(st, [h1 => t -> 1.])
+    @test_throws "where 1.x paired vectors, [A, B] => [f, g]" PreMPO(st, [h1, h2] => [sin, cos])
+    @test_throws "is not a term of an evolver" PreMPO(st, [h1, 2])
 end
 
 @testset "Measuring a compacted operator" begin
@@ -293,14 +305,22 @@ end
     d1, d2 = mpo_matrix(l1), mpo_matrix(l2)
     @test norm(mpo_matrix(l1 * l2) - d1 * d2) < 1e-12 * norm(d1) * norm(d2)
     @test norm(mpo_matrix(l1 - 2 * l2) - (d1 - 2 * d2)) < 1e-12 * norm(d1)
-    # what is refused: two systems, two representations, several time functions
+    # what is refused: two systems, two representations, several terms, a time function
     @test_throws "the PreMPOs of a product are on two systems" PreMPO(q, X(1)) * PreMPO(f, N(1))
     @test_throws "the PreMPOs of a product are of two representations" PreMPO(q, X(1)) * l1
     vq = PreMPO(q, [X(1), Z(2)])
-    @test_throws "a PreMPO of several time functions is not multiplied" vq * PreMPO(q, X(1))
+    @test_throws "a PreMPO of several terms is not multiplied" vq * PreMPO(q, X(1))
     @test_throws "the PreMPOs of a sum are on two systems" PreMPO(q, X(1)) + PreMPO(f, N(1))
     @test_throws "the PreMPOs of a sum are of two representations" PreMPO(q, X(1)) - l1
-    @test_throws "a PreMPO of several time functions is not added or scaled" 2 * vq
+    @test_throws "a PreMPO of several terms is not added or scaled" 2 * vq
+    tq = PreMPO(q, X(1) * Y(2) => t -> 2t)
+    @test_throws "a PreMPO depending on time is not multiplied" PreMPO(q, X(1)) * tq
+    @test_throws "a PreMPO depending on time is not added or scaled" tq - PreMPO(q, X(1))
+    # but the adjoint keeps them, their values being real
+    a = PreMPO(q, [Sp(1) * Z(3), Sm(2) * X(4) => t -> 2t])'
+    @test a.functions[2](0.25) == 0.5
+    d = mpo_matrix(PreMPO(q, [Sp(1) * Z(3), Sm(2) * X(4)]), [0.3, -1.2])
+    @test norm(mpo_matrix(a, [0.3, -1.2]) - d') < 1e-12 * norm(d)
     # the bound of the norm, the sum of the sizes of the terms, multiplies, and that of the width
     # of the spectrum of a product is twice it, which gives a search of excited states its weight:
     # H shifted, so that H² has no level of two

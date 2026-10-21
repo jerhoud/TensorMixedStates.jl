@@ -359,10 +359,9 @@ end
         run_through(SimData(; name = "chk", phases); max_time = -1)
         @test read("chk/data", String) == read("ref/data", String)
     end
-    hs = [-im * X(1) * X(2), -im * sum(Z(i) for i in 1:3)]
-    fs = [t -> 1., t -> cos(2t)]
-    @test norm(evolve(hs => fs, 0.5, ψ; algo = DenseStep(), nsteps = 5) -
-               evolve(hs => fs, 0.5, ψ; nsteps = 5, limits = lim)) < 1e-10
+    terms = [-im * X(1) * X(2), -im * sum(Z(i) for i in 1:3) => t -> cos(2t)]
+    @test norm(evolve(terms, 0.5, ψ; algo = DenseStep(), nsteps = 5) -
+               evolve(terms, 0.5, ψ; nsteps = 5, limits = lim)) < 1e-10
     # thermalize, against e^{-βH}/Z
     x, z, o = [0. 1. ; 1. 0.], [1. 0. ; 0. -1.], [1. 0. ; 0. 1.]
     hd = kron(x, x, o) + kron(o, z, z) + 0.5 * (kron(z, o, o) + kron(o, z, o) + kron(o, o, z))
@@ -380,7 +379,7 @@ end
           [(1., 0.25, 5, 5, nothing), (1.25, 0.25, 6, 6, nothing), (1.5, 0.25, 7, 7, nothing)]
     @test norm(st - ψ) < 1e-14
     rec = StepRecorder()
-    evolve([-im * h] => [t -> 2t], 0.5, ψ; algo = rec, nsteps = 2)
+    evolve(-im * h => t -> 2t, 0.5, ψ; algo = rec, nsteps = 2)
     @test rec.calls == [(0., 0.25, 1, nothing, [0.]), (0.25, 0.25, 2, nothing, [0.5])]
     # by thermalize, steps of -dβ/2 from a time 0, the state brought back to trace one and its
     # trace added to the logarithm

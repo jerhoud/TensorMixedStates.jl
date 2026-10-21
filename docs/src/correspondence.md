@@ -20,6 +20,7 @@ operator `c` of `mesolve` is `Dissipator(c)` in an evolver.
 | `tensor(sigmaz(), sigmaz())` acting on qubits `i` and `j` | `Z(i) * Z(j)` |
 | `mesolve(H, ρ0, tlist, c_ops = [c1, c2], e_ops = [o])` | `evolve(-im * H + Dissipator(c1) + Dissipator(c2), t, ρ0; nsteps)`, then `measure(ρ, o)` |
 | `sesolve(H, ψ0, tlist)` | `evolve(-im * H, t, ψ0; nsteps)` |
+| `sesolve([H0, [H1, f]], ψ0, tlist)` | `evolve([-im * H0, -im * H1 => f], t, ψ0; nsteps)`, `f` of real values |
 | `steadystate(H, c_ops)` | `steady_state(-im * H + sum(Dissipator.(c_ops)), ρ; algo = Dmrg(; nsweeps))` |
 | `H.groundstate()` | `ground_state(H, ψ; algo = Dmrg(; nsweeps))` |
 | `expect(o, ρ)` | `expect(ρ, o)`, or `measure(ρ, o)` |

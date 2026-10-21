@@ -106,8 +106,8 @@ function mpo_matrix(m::TMS.ITensorMPS.MPO, idx)
     d = prod(IT.dim.(idx))
     return reshape(a, d, d)
 end
-mpo_matrix(pre::PreMPO{R}, coefs = [1.]) where R =
-    mpo_matrix(make_mpo(pre, coefs), siteinds(R, pre.system))
+mpo_matrix(pre::PreMPO{R}, coefs...) where R =
+    mpo_matrix(make_mpo(pre, coefs...), siteinds(R, pre.system))
 mpo_matrix(st::State{R}, m::TMS.ITensorMPS.MPO) where R <: TMS.PM =
     mpo_matrix(m, siteinds(R, st.system))
 mpo_matrix(st::State, op) = mpo_matrix(PreMPO(st, op))

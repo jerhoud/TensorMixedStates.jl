@@ -23,7 +23,8 @@ end
 the MPO of the approximation WI of the exponential of `tau` times the operator of `pre`,
 `coefs` being the values of its time functions, see `make_mpo`
 """
-function make_approx_W1(pre::PreMPO{R}, tau::Number, coefs::AbstractVector = [1.]) where R
+function make_approx_W1(pre::PreMPO{R}, tau::Number,
+                        coefs::AbstractVector = constant_coefs(pre)) where R
     coefs = check_coefs(pre, coefs)
     sys = pre.system
     elt = promote_type(mpo_eltype(pre), typeof(tau))
@@ -73,7 +74,8 @@ exponential of `tau` times the operator of `pre`, `coefs` being the values of it
 functions, see `make_mpo`. Its error, of order ``\\tau^2``, comes from the products of terms
 that cross a same link.
 """
-function make_approx_W2(pre::PreMPO{R}, tau::Number, coefs::AbstractVector = [1.]) where R
+function make_approx_W2(pre::PreMPO{R}, tau::Number,
+                        coefs::AbstractVector = constant_coefs(pre)) where R
     coefs = check_coefs(pre, coefs)
     sys = pre.system
     elt = promote_type(mpo_eltype(pre), typeof(tau))
@@ -133,7 +135,8 @@ end
 the MPOs of the approximation of `algo`, an `ApproxW`, of the exponential of `tau` times the
 operator of `pre`, to apply in turn
 """
-function approx_W_mpos(pre::PreMPO, tau::Number, algo::ApproxW, coefs::AbstractVector = [1.])
+function approx_W_mpos(pre::PreMPO, tau::Number, algo::ApproxW,
+                       coefs::AbstractVector = constant_coefs(pre))
     make = algo.w == 1 ? make_approx_W1 : make_approx_W2
     return [ make(pre, tau * c, coefs) for c in w_approx_coefs[algo.order] ]
 end

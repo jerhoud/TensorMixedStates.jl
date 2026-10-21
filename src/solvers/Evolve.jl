@@ -29,12 +29,18 @@ end
     prepared_operator(state, op, mpo_limits = Limits())
 
 the `PreMPO` of the operator `op` of a solver on `state`, or `op` itself when it is one,
-truncated by `mpo_limits`, see `truncated_once`
+truncated by `mpo_limits`, see `truncated_once`, refused when it depends on time, which an
+evolution alone follows, see `prepared_evolver`
 """
 prepared_operator(state::State, a::IndexedOp, mpo_limits::Limits = Limits()) =
     PreMPO(state, a; limits = mpo_limits)
-prepared_operator(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
-    truncated_once(check_pre(pre, state), mpo_limits)
+function prepared_operator(state::State{R}, pre::PreMPO{R},
+                           mpo_limits::Limits = Limits()) where {R <: PM}
+    if !isnothing(pre.functions)
+        error("the PreMPO depends on time, which an evolution alone follows")
+    end
+    return truncated_once(check_pre(pre, state), mpo_limits)
+end
 
 prepared_operator(::State, ::PreMPO, ::Limits = Limits()) =
     error("the PreMPO was prepared on a state of the other representation")
@@ -48,24 +54,15 @@ prepared_operator(::State, x, ::Limits = Limits()) =
 """
     prepared_evolver(state, evolver, mpo_limits = Limits())
 
-the `PreMPO` of the evolver of `state`, see `prepared_operator`, and its time functions,
-`nothing` for an evolver that does not depend on time: an operator, its `PreMPO`, or a vector of
-operators, or its `PreMPO`, paired with as many functions of time, `[A, B] => [f, g]`
+the `PreMPO` of the evolver of `state`, see `prepared_operator`, with its time functions: an
+operator, a vector of terms `[A, B => g]`, a term `A => g`, or the `PreMPO` of one of them
 """
 prepared_evolver(state::State, a::Union{IndexedOp, PreMPO, MPO}, mpo_limits::Limits = Limits()) =
-    (prepared_operator(state, a, mpo_limits), nothing)
-
-function prepared_evolver(state::State,
-                          (ops, fs)::Pair{<:Union{AbstractVector, PreMPO}, <:AbstractVector},
-                          mpo_limits::Limits = Limits())
-    pre = ops isa PreMPO ? prepared_operator(state, ops, mpo_limits) :
-                           PreMPO(state, [ o for o in ops ]; limits = mpo_limits)
-    if length(fs) ≠ length(pre.parts)
-        error("an evolver of $(length(pre.parts)) terms takes as many time functions, " *
-              "got $(length(fs))")
-    end
-    return (pre, collect(fs))
-end
+    prepared_operator(state, a, mpo_limits)
+prepared_evolver(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
+    truncated_once(check_pre(pre, state), mpo_limits)
+prepared_evolver(state::State, terms::Union{AbstractVector, Pair}, mpo_limits::Limits = Limits()) =
+    PreMPO(state, terms; limits = mpo_limits)
 
 prepared_evolver(::State, x, ::Limits = Limits()) = error("$(repr(x)) is not an evolver")
 
@@ -126,9 +123,9 @@ end
     evolve_step(algo, pre, coefs, state, time, dt, step, limits)
 
 the state after one step of `dt` from `time` by the method `algo`, under the evolver `pre`,
-its time functions `coefs`, `nothing` when it does not depend on time, `step` being the number
-of the step, from 1, and `limits` its limits, see `step_limits`. An `EvolutionAlgorithm` of
-one's own adds a method.
+its time functions `coefs`, those of `pre`, `nothing` when it does not depend on time, `step`
+being the number of the step, from 1, and `limits` its limits, see `step_limits`. An
+`EvolutionAlgorithm` of one's own adds a method.
 """
 function evolve_step(algo::Tdvp, pre::PreMPO, coefs, state::State, time::Number, dt::Number,
                      step::Int, limits::Limits)
@@ -223,8 +220,9 @@ in steps of `time_step` adjusted to the nearest one dividing `duration` into a w
 them (none when `duration` is shorter than half a step), one of the two being given, by
 the method `algo`, see `EvolutionAlgorithm`. The evolver is `-im * H` for a Hamiltonian `H`,
 plus dissipators for a mixed state, or its `PreMPO(state, evolver)`, prepared once for several
-calls and keeping the MPOs they build; one that depends on time pairs a vector of them with as
-many real functions of time, `[A, B] => [f, g]`, read at `time` plus the time of each step.
+calls and keeping the MPOs they build. One that depends on time is a vector of terms, each an
+operator or an operator with its real function of time, `[A, B => g]` for ``A + g(t) B``,
+``t`` starting at `time`.
 `step` is the number of the first step, for the periods of the methods and for `limits`, see
 `Limits`, which may give one value per step, step `k` taking the `k`-th. Its default cutoff is
 `1e-26` for tdvp and `apply_algo = "naive"`, `eps()` for `"densitymatrix"`. `mpo_limits`
@@ -233,7 +231,7 @@ truncates the MPO of the evolver, see `PreMPO` (default none).
 # Examples
 
     evolve(-im * H, 1., state; nsteps = 10, limits = Limits(cutoff = 1e-12, maxdim = 50))
-    evolve([-im * H0, -im * H1] => [t -> 1, t -> cos(t)], 1., state; time_step = 0.05,
+    evolve([-im * H0, -im * H1 => t -> cos(t)], 1., state; time_step = 0.05,
            algo = ApproxW(order = 4))
 """
 function evolve(evolver, duration::Number, state::State; algo::EvolutionAlgorithm = Tdvp(),
@@ -244,10 +242,10 @@ function evolve(evolver, duration::Number, state::State; algo::EvolutionAlgorith
     if nsteps == 0
         return state
     end
-    pre, coefs = prepared_evolver(state, evolver, mpo_limits)
+    pre = prepared_evolver(state, evolver, mpo_limits)
     dt = duration / nsteps
     for k in 0:nsteps - 1
-        state = evolve_step(algo, pre, coefs, state, time + k * dt, dt, step + k,
+        state = evolve_step(algo, pre, pre.functions, state, time + k * dt, dt, step + k,
                             step_limits(limits, step + k))
     end
     return state

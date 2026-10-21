@@ -50,31 +50,37 @@ end
 
 """
     PreMPO(state, op; limits = Limits())
+    PreMPO(state, [A, B => g]; limits = Limits())
 
 the operator `op`, placed on sites, laid on the system of `state` as the pieces of its MPO,
 its terms compacted into as few channels as a triangular MPO can have; `make_mpo` builds the
-MPO from it. A vector of operators gives each its own time function, see `make_mpo`. On a pure
-state, a generator with no dissipator, ``\\rho \\mapsto K\\rho + \\rho K^\\dagger``, gives
-the MPO of `K`, which the state follows as ``d\\psi/dt = K\\psi``. On a mixed state, a channel
-or a generator gives the MPO of its superoperator, and an operator `K` that of `Evolver(K)`.
+MPO from it. A vector of terms, each an operator or an operator with its real function of time,
+is the evolver depending on time ``A + g(t) B`` of `evolve`, each term laid apart, see
+`make_mpo`. On a pure state, a generator with no dissipator,
+``\\rho \\mapsto K\\rho + \\rho K^\\dagger``, gives the MPO of `K`, which the state follows as
+``d\\psi/dt = K\\psi``. On a mixed state, a channel or a generator gives the MPO of its
+superoperator, and an operator `K` that of `Evolver(K)`.
 
 `limits` truncates the MPO in its triangular form, see `Limits`: across each link, the singular
 values of the part of the operator acting on both sides, for the Hilbert-Schmidt norm
 normalized on each site, are cut as those of a bond of a state, the bond dimension of the MPO
 being two more than its channels; by default nothing is cut but rounding.
 
-`pre'`, `a * b`, `a ^ p`, `a + b`, `a - b`, `c * a` and `sum(v)`, of `PreMPO`s of one system
-each of a single time function, are the `PreMPO`s of the adjoint, of the product, of the power
-and of the linear combinations of their operators: built with as few channels as their rank
-across each link, at a cost linear in the number of sites, where the terms of a product grow as
-the product of theirs. `PreMPO(state, op)` builds so the products of sums of `op` that would
-develop into more terms than their factors have, and, on a mixed state, its gates and
-dissipators of operators of many terms from the sides ``K\\rho`` and ``\\rho K^\\dagger`` of these.
+`pre'` is the `PreMPO` of the adjoint, its time functions kept, and `a * b`, `a ^ p`, `a + b`,
+`a - b`, `c * a` and `sum(v)`, of `PreMPO`s of one system each of a single term not depending on
+time, those of the product, of the power and of the linear combinations of their operators:
+built with as few channels as their rank across each link, at a cost linear in the number of
+sites, where the terms of a product grow as the product of theirs. `PreMPO(state, op)` builds so
+the products of sums of `op` that would develop into more terms than their factors have, and, on
+a mixed state, its gates and dissipators of operators of many terms from the sides ``K\\rho``
+and ``\\rho K^\\dagger`` of these.
 """
 struct PreMPO{R <: PM}
     system::System
-    # the operator of each time function, compacted, which its pieces lay, see `lay_compacted!`
+    # the operator of each term, compacted, which its pieces lay, see `lay_compacted!`
     parts::Vector{CompactedOp{R}}
+    # the function of time of each term, `nothing` for an operator that does not depend on time
+    functions::Union{Nothing, Vector{Any}}
     linkdims::Vector{Int}
     # the pieces on each site, see `add_piece!`
     pieces::Vector{Vector{Piece}}
@@ -114,12 +120,12 @@ end
 """
     check_coefs(pre, coefs)
 
-`coefs` as a `Vector{Float64}`, refused unless it holds one real value per time function of
-`pre`
+`coefs` as a `Vector{Float64}`, refused unless it holds one real value per term of `pre`, that
+of its time function
 """
 function check_coefs(pre::PreMPO, coefs::AbstractVector)
     if length(coefs) ≠ length(pre.parts)
-        error("an evolver of $(length(pre.parts)) terms takes as many time functions, got " *
+        error("a PreMPO of $(length(pre.parts)) terms takes as many coefficients, got " *
               "$(length(coefs))")
     end
     for (k, c) in enumerate(coefs)
@@ -129,6 +135,19 @@ function check_coefs(pre::PreMPO, coefs::AbstractVector)
         end
     end
     return Vector{Float64}(coefs)
+end
+
+"""
+    constant_coefs(pre)
+
+the coefficients of the terms of `pre`, all one, refused when `pre` depends on time
+"""
+function constant_coefs(pre::PreMPO)
+    if !isnothing(pre.functions)
+        error("the PreMPO depends on time: give the values of its time functions, " *
+              "make_mpo(pre, coefs)")
+    end
+    return ones(length(pre.parts))
 end
 
 """
@@ -169,12 +188,13 @@ function lay_compacted!(pre::PreMPO{R}, c::CompactedOp{R}, ref::Int) where R
     return pre
 end
 
-# the PreMPO on `system` of the operators compacted `parts`, one per time function, laid in their
-# order, see `lay_compacted!`; a comment, not a docstring, which would put a method of no user in
-# the reference of the exported PreMPO
-function PreMPO(system::System, parts::Vector{CompactedOp{R}}) where R
+# the PreMPO on `system` of the operators compacted `parts`, one per term, laid in their order,
+# see `lay_compacted!`, and of their time functions `functions`; a comment, not a docstring,
+# which would put a method of no user in the reference of the exported PreMPO
+function PreMPO(system::System, parts::Vector{CompactedOp{R}},
+                functions::Union{Nothing, Vector{Any}} = nothing) where R
     n = length(system)
-    pre = PreMPO{R}(system, parts, fill(1, n - 1), [ Piece[] for _ in 1:n ],
+    pre = PreMPO{R}(system, parts, functions, fill(1, n - 1), [ Piece[] for _ in 1:n ],
                     block_orders(R, system), Dict{Symbol, Tuple{Any, Any}}(), ReentrantLock(),
                     sum(c -> c.width, parts; init = 0.0), sum(c -> c.norm, parts; init = 0.0))
     for (ref, c) in enumerate(parts)
@@ -187,17 +207,19 @@ end
     single_part(pres, what)
 
 the operator compacted of each of the `PreMPO`s `pres`, refused when they are on two systems or
-one has several time functions, `what` naming the operation in the refusals
+one depends on time or has several terms, `what` naming the operation in the refusals
 """
 function single_part(pres, what::String)
     sys = first(pres).system
     if any(p -> p.system ≠ sys, pres)
         error("the PreMPOs of a $what are on two systems")
     end
+    done = what == "product" ? "multiplied" : "added or scaled"
     for p in pres
-        if length(p.parts) ≠ 1
-            error("a PreMPO of several time functions is not " *
-                  (what == "product" ? "multiplied" : "added or scaled"))
+        if !isnothing(p.functions)
+            error("a PreMPO depending on time is not $done")
+        elseif length(p.parts) ≠ 1
+            error("a PreMPO of several terms is not $done")
         end
     end
     return [ only(p.parts) for p in pres ]
@@ -206,9 +228,10 @@ end
 """
     adjoint(pre)
 
-the `PreMPO` of the adjoint of the operator of `pre`, each time function apart
+the `PreMPO` of the adjoint of the operator of `pre`, each term apart, its time functions, of
+real values, kept
 """
-Base.adjoint(pre::PreMPO) = PreMPO(pre.system, [ c' for c in pre.parts ])
+Base.adjoint(pre::PreMPO) = PreMPO(pre.system, [ c' for c in pre.parts ], pre.functions)
 
 """
     a * b
@@ -289,31 +312,65 @@ the channel or the generator `a`, an operator given for a density matrix being i
 superoperator(a::IndexedOp{IsOperator}) = Evolver(a)
 superoperator(a::IndexedOp) = a
 
-# a single operator being a vector of one
-PreMPO(state::State, a::IndexedOp; limits::Limits = Limits()) = PreMPO(state, [a]; limits)
-function PreMPO(state::State{Pure}, as::Vector{<:IndexedOp}; limits::Limits = Limits())
-    sys = state.system
-    parts = CompactedOp{Pure}[ compacted_op(sys, followed_operator(a), limits) for a in as ]
-    return PreMPO(sys, parts)
+"""
+    split_terms(terms)
+
+the operators of the vector of terms `terms`, see `PreMPO`, and their time functions, `nothing`
+when no term has one, a constant term among others taking `Returns(1.)`; the vectors paired of
+1.x, `[A, B] => [f, g]`, are refused
+"""
+function split_terms(terms::AbstractVector)
+    ops = IndexedOp[]
+    fs = Any[]
+    for t in terms
+        if t isa IndexedOp
+            push!(ops, t)
+            push!(fs, nothing)
+        elseif t isa Pair && first(t) isa IndexedOp && !(last(t) isa AbstractVector)
+            push!(ops, first(t))
+            push!(fs, last(t))
+        elseif t isa Pair && (first(t) isa Union{AbstractVector, PreMPO} ||
+                              last(t) isa AbstractVector)
+            error("an evolver depending on time gives each term its function, [A, B => g] for " *
+                  "A + g(t) B, where 1.x paired vectors, [A, B] => [f, g]")
+        else
+            error("$(repr(t)) is not a term of an evolver: an operator A, or A => f, f its " *
+                  "function of time")
+        end
+    end
+    return ops, all(isnothing, fs) ? nothing : Any[ isnothing(f) ? Returns(1.) : f for f in fs ]
 end
 
-function PreMPO(state::State{Mixed}, as::Vector{<:IndexedOp}; limits::Limits = Limits())
+# a single operator, or a single term, being a vector of one
+PreMPO(state::State, a::Union{IndexedOp, Pair}; limits::Limits = Limits()) =
+    PreMPO(state, [a]; limits)
+
+function PreMPO(state::State{Pure}, terms::AbstractVector; limits::Limits = Limits())
     sys = state.system
-    parts = CompactedOp{Mixed}[ compacted_super(sys, superoperator(a), limits) for a in as ]
-    return PreMPO(sys, parts)
+    ops, fs = split_terms(terms)
+    parts = CompactedOp{Pure}[ compacted_op(sys, followed_operator(a), limits) for a in ops ]
+    return PreMPO(sys, parts, fs)
+end
+
+function PreMPO(state::State{Mixed}, terms::AbstractVector; limits::Limits = Limits())
+    sys = state.system
+    ops, fs = split_terms(terms)
+    parts = CompactedOp{Mixed}[ compacted_super(sys, superoperator(a), limits) for a in ops ]
+    return PreMPO(sys, parts, fs)
 end
 
 """
     truncated(pre, limits)
 
-`pre` truncated by `limits`, see `truncated_block`, each of its time functions apart, the
-bounds of its norm and of its width kept, and `pre` itself for `Limits()`
+`pre` truncated by `limits`, see `truncated_block`, each of its terms apart, its time functions
+and the bounds of its norm and of its width kept, and `pre` itself for `Limits()`
 """
 function truncated(pre::PreMPO, limits::Limits)
     if limits == Limits()
         return pre
     end
-    return PreMPO(pre.system, [ combined(pre.system, [(c, 1)], limits) for c in pre.parts ])
+    return PreMPO(pre.system, [ combined(pre.system, [(c, 1)], limits) for c in pre.parts ],
+                  pre.functions)
 end
 
 """
@@ -510,8 +567,9 @@ end
     make_mpo(::State, op)
 
 the MPO of the operator `op` on the system of the state, given with the state or as
-`PreMPO(state, op)`. For a vector of operators, built from its `PreMPO`, `coefs` holds the
-value of each time function, one real number per operator (default `[1.]`, a single operator).
+`PreMPO(state, op)`. For a vector of terms, built from its `PreMPO`, `coefs` holds the value of
+the time function of each, one real number per term, one for all by default, which a `PreMPO`
+depending on time refuses.
 
 # Examples
 
@@ -519,7 +577,7 @@ value of each time function, one real number per operator (default `[1.]`, a sin
     mpo = make_mpo(ρ, -im * sum(Z(i) * Z(i + 1) for i in 1:9) +
                       sum(Dissipator(Sm)(i) for i in 1:10))
 """
-make_mpo(pre::PreMPO, coefs::AbstractVector = [1.]) =
+make_mpo(pre::PreMPO, coefs::AbstractVector = constant_coefs(pre)) =
     window_mpo(pre, check_coefs(pre, coefs), 1:length(pre.system))
 
 make_mpo(state::State, a) = make_mpo(PreMPO(state, a))
