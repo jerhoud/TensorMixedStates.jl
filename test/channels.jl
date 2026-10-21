@@ -411,6 +411,19 @@ end
     e = mix((State{Pure}(es, ["Up", "Up", "Emp"]) + State{Pure}(es, ["Emp", "Up", "Up"])) / sqrt(2))
     @test norm(partial_trace(apply(Reset("Emp")(2), e); trace_out = [2]) -
                partial_trace(e; trace_out = [2])) < 1e-12
+    # the resets of a chain conserving nothing leave a product state, its bond dimension falling
+    # from 64 to 1: the singular values of rounding are cut by the default truncation, which 1.6.0
+    # kept, its bond dimension rising to 192, and the site left alone keeps its state
+    chain = System(6, Fermion())
+    ψ = State{Pure}(chain, [ isodd(j) ? "Occ" : "Emp" for j in 1:6 ])
+    h = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:5)
+    r = mix(evolve(-im * h, 0.6, ψ; nsteps = 6, limits = Limits(maxdim = 8, cutoff = 1e-12)))
+    start, n1 = maxlinkdim(r), expect(r, N(1))
+    for i in 2:6
+        r = apply(Reset("Emp")(i), r)
+    end
+    @test start == 64 && maxlinkdim(r) == 1
+    @test expect(r, N(1)) ≈ n1
 end
 
 @testset "The exponential of a generator on sites apart" begin
