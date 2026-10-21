@@ -10,7 +10,7 @@ simdata(n, c) = SimData(
 
     phases = [
         # a phase creating the state, the graph state of the complete graph
-        CreateState(type = Pure(), state = graph_state(complete_graph(n); limits = Limits(cutoff = 1e-14))),
+        CreateState(type = Pure, state = graph_state(complete_graph(n); limits = Limits(cutoff = 1e-14))),
         # a phase to switch to mixed representation
         ToMixed(),
         # a phase for Lindblad evolution

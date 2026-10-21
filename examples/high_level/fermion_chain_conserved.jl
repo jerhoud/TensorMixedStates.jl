@@ -58,7 +58,7 @@ sim_data(n) = SimData(
     phases = [
         CreateState(
             name = "Initialization in the alternating state",
-            type = Mixed(),
+            type = Mixed,
             system = System(n, Fermion(conserve = strong(N))),
             state = [i % 2 == 0 ? "Occ" : "Emp" for i in 1:n],
             final_measurements = measurements(n),

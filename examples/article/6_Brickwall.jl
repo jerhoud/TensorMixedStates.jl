@@ -45,7 +45,7 @@ sim_data(n, ϕ, steps, noise) = SimData(
         # a Phase to create the initial state
         CreateState(
             name = "Initialization", # for the log file
-            type = Mixed(), # type of representation
+            type = Mixed, # type of representation
             system = System(n, Qubit()), # system description (n qubits)
             state =  "0",  # initial all 0 state
             final_measurements = output(n), # save measurements for inital state

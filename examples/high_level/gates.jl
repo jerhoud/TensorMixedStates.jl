@@ -11,7 +11,7 @@ phases(n) = [
   CreateState(
     name = "Building my very special state",
     final_measurements = measurements,
-    type = Pure(),
+    type = Pure,
     system = System(n, Qubit()),
     state = "Up",
   ),

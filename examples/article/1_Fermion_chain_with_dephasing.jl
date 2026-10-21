@@ -44,7 +44,7 @@ sim_data(gamma, n, step, alg) = SimData(
         # a Phase to create the initial state
         CreateState(
             name = "Initialization in state |101010...>", # for the log file
-            type = Mixed(), # type of representation
+            type = Mixed, # type of representation
             system = System(n, Fermion()), # system description (n fermion sites)
             state =  [i % 2 == 0 ? "Occ" : "Emp" for i in 1:n], # initial state
             final_measurements = output(n), # save measurements for inital state

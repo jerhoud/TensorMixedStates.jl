@@ -5,6 +5,8 @@ export CreateState
 
 """
     CreateState(; type, system, state, randomize, on, name, time_start, final_measurements)
+    CreateState(state::State; options...)
+    CreateState{Pure|Mixed}(system, state; options...)
     CreateState{Pure|Mixed}(n, site, state; options...)
     CreateState{Pure|Mixed}(sites, state; options...)
 
@@ -12,7 +14,8 @@ a phase that creates the state of the simulation.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
-- `type`: the representation of the state, `Pure()` or `Mixed()`
+- `type`: the representation of the state, `Pure` or `Mixed`, by default that of `state` when
+  it is a `State`
 - `system`: the `System` of the state, unused when `state` is a `State`
 - `state`: a description of the state, see `State`, or a `State`, mixed if `type` asks for it
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
@@ -22,26 +25,44 @@ a phase that creates the state of the simulation.
 
 # Examples
 
-    CreateState(type = Pure(), system = System(10, Qubit()), state = "Up")
-    CreateState(type = Pure(), system = System(10, Qubit()), state = "Up", randomize = 50)
+    CreateState(type = Pure, system = System(10, Qubit()), state = "Up", randomize = 50)
+    CreateState(graph_state(complete_graph(10)))
     CreateState{Mixed}(4, Fermion(conserve = N), ["Occ", "Emp", "Occ", "Emp"]; randomize = 16)
     CreateState{Pure}(10, Qubit(), "Up")
 """
-@kwdef struct CreateState{R <: PM} <: AbstractPhase
-    name::String = "Creating state"
-    time_start::Union{Nothing, Number} = nothing
-    final_measurements = []
-    type::R
-    system::Union{Nothing, System} = nothing
-    state = nothing
-    randomize::Int = 0
-    on::Symbol = :state
+struct CreateState{R <: PM} <: AbstractPhase
+    name::String
+    time_start::Union{Nothing, Number}
+    final_measurements
+    type::Type{R}
+    system::Union{Nothing, System}
+    state
+    randomize::Int
+    on::Symbol
 end
 
+function CreateState(; name::String = "Creating state",
+                     time_start::Union{Nothing, Number} = nothing, final_measurements = [],
+                     type = nothing, system::Union{Nothing, System} = nothing, state = nothing,
+                     randomize::Int = 0, on::Symbol = :state)
+    if type isa PM
+        r = nameof(typeof(type))
+        error("CreateState takes the type of its state, type = $r, where 1.x took type = $r()")
+    elseif isnothing(type) && !(state isa State)
+        error("CreateState needs the type of its state, type = Pure or type = Mixed, unless its " *
+              "state is a State")
+    end
+    R = something(type, state isa State{Pure} ? Pure : Mixed)
+    return CreateState{R}(name, time_start, final_measurements, R, system, state, randomize, on)
+end
+
+CreateState(state::State; kwargs...) = CreateState(; state, kwargs...)
+CreateState{R}(system::System, state; kwargs...) where R =
+    CreateState(; type = R, system, state, kwargs...)
 CreateState{R}(n::Int, site::AbstractSite, state; kwargs...) where R =
-    CreateState(; type = R(), system = System(n, site), state, kwargs...)
+    CreateState(; type = R, system = System(n, site), state, kwargs...)
 CreateState{R}(sites::Vector{<:AbstractSite}, state; kwargs...) where R =
-    CreateState(; type = R(), system = System(sites), state, kwargs...)
+    CreateState(; type = R, system = System(sites), state, kwargs...)
 
 provided_values(phase::CreateState) = phase.on === :state ? () : (phase.on,)
 

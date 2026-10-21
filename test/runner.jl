@@ -996,12 +996,22 @@ end
         # a State given to CreateState, mixed if asked, a mixed one not made pure, and a random
         # state without a system
         pure = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
-        @test run([CreateState(type = Mixed(), state = pure)]).state isa State{Mixed}
+        @test run([CreateState(type = Mixed, state = pure)]).state isa State{Mixed}
         @test_throws "asked for a pure state but given a mixed one" run(
-            [CreateState(type = Pure(), state = mix(pure))])
-        @test_throws "a system and randomize" run([CreateState(type = Pure(), randomize = 10)])
+            [CreateState(type = Pure, state = mix(pure))])
+        @test_throws "a system and randomize" run([CreateState(type = Pure, randomize = 10)])
         @test_throws "cannot randomize a State into a mixed state" run(
-            [CreateState(type = Mixed(), state = pure, randomize = 4)])
+            [CreateState(type = Mixed, state = pure, randomize = 4)])
+        # its type that of the State it is given unless told, Pure or Mixed as in State{R},
+        # where 1.x took Pure(), and a system with a description, as State{R} takes them
+        @test run([CreateState(pure)]).state isa State{Pure}
+        @test run([CreateState(mix(pure))]).state isa State{Mixed}
+        @test run([CreateState(pure; type = Mixed)]).state isa State{Mixed}
+        @test run([CreateState{Mixed}(System(2, Qubit()), "Up")]).state isa State{Mixed}
+        @test_throws "type = Pure, where 1.x took type = Pure()" CreateState(type = Pure(),
+                                                                          state = pure)
+        @test_throws "needs the type of its state" CreateState(system = System(2, Qubit()),
+                                                                state = "Up")
         # its time_start, and a random mixed state drawn in a sector
         @test run([CreateState{Pure}(2, Qubit(), "Up"; time_start = 1.)]).time == 1.
         conf = ["Occ", "Emp", "Occ", "Emp"]
@@ -1015,7 +1025,7 @@ end
         ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))
         check(name, f, ref) = name => c -> Check(f(c.state), ref; tol = 1e-10)
         xs = prod(X(i) for i in 1:6)
-        sim = run([CreateState(type = Mixed(), state = ghz, final_measurements = "" => [
+        sim = run([CreateState(type = Mixed, state = ghz, final_measurements = "" => [
                        check("purity", purity, 1), check("x", st -> real(expect(st, xs)), 1)]),
                    PartialTrace(keep = [2, 3, 5], final_measurements = "" => [
                        check("z", st -> real(expect1(st, Z)), zeros(3)),
@@ -1209,7 +1219,7 @@ end
     # before it stops, rather than a line each
     ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
     sd(name) = SimData(; name, final_measurements = "f" => X(1), phases = [
-        CreateState(type = Mixed(), state = ρ),
+        CreateState(type = Mixed, state = ρ),
         Update(c -> nothing; nsteps = 3, measurements = "x.json" => [X, X(1)])])
     dropped = Regex("WARNING: (\\d+) imaginary parts? of Hermitian measurements beyond rounding " *
                     "dropped, the largest (\\S+), of (.+) at time (\\S+)\\n")

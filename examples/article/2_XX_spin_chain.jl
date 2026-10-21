@@ -47,7 +47,7 @@ sim_data(n, step, duration, alg, eL, eR, muL, muR) = SimData(
         # a Phase to create the initial state
         CreateState(
             name = "Initialization in the infinite temperature state (rho ~ identity)", # for the log
-            type = Mixed(), # type of representation
+            type = Mixed, # type of representation
             system = System(n, Qubit()), # system description (n qubit sites)
             state =  "FullyMixed", # initial state (infinite temperature)
             final_measurements = output(n), # save measurements for inital state

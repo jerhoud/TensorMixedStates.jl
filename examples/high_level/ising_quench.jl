@@ -40,7 +40,7 @@ sim_data(J,h,n) = SimData(
     phases = [
         CreateState(
             name = "Initialization in state |++...+>",
-            type = Pure(),
+            type = Pure,
             system = System(n, Qubit()),
             state = "X+",
             final_measurements = measurements(n),

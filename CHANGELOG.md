@@ -63,6 +63,8 @@ version 2.x.
   listed in "Upgrading from 1.x".
 - `evolve` and `thermalize` take their number of steps, `nsteps`, or their step, `time_step` or
   `beta_step`, with no default, where 1.x made one step; `Evolve` and `Thermalize` take either.
+- `CreateState` takes the type of its state, `type = Pure`, where 1.x took `Pure()`, by default
+  that of a `State` given, as `CreateState(ψ)`, and `CreateState{Pure}(system, state)`.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a

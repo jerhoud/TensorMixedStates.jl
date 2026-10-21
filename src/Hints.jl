@@ -96,7 +96,7 @@ const renamed_names = Dict{Symbol, String}(
     :Phases => "Phases was removed: a phase is a subtype of TensorMixedStates.AbstractPhase",
     :Algo => "Algo became EvolutionAlgorithm, and SearchAlgorithm for the searches",
     :create_graph_state => "create_graph_state was removed: write " *
-                           "CreateState(type = Pure(), state = graph_state(graph))",
+                           "CreateState(graph_state(graph))",
     :Fup => "Fup was removed: write parity(Nup)",
     :Fdn => "Fdn was removed: write parity(Ndn)",
     :Swap => "Swap is no longer in Qubits: TensorMixedStates exports it, for two sites of any " *

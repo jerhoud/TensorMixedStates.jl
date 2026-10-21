@@ -17,7 +17,7 @@ sim = runTMS(SimData(
     description = "the correlations <X_4(0) X_j(t)> in the ground state of an Ising chain",
     seed = 1,
     phases = [
-        CreateState(type = Pure(), system = System(n, Qubit()), randomize = 8),
+        CreateState(type = Pure, system = System(n, Qubit()), randomize = 8),
         GroundState(hamiltonian = ising, algo = Dmrg(nsweeps = 10, tol = 1e-12), limits = limits),
         CopyState(:state => :φ),
         Gates(gates = X(4), on = :φ),

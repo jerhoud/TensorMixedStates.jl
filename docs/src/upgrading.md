@@ -127,7 +127,8 @@ is now `measure(state, m)`, and `measure(state, [m])` gives the pair.
 | `get_sim_file`, `close_sim_files` | `output(sim, destination => list)`, or a `TensorMixedStates.Destination` of one's own; `runTMS` closes the files |
 | `DataToFrame` | `data_to_frame` |
 | `Simulation(state; …)`, a function given a `Simulation` | the functions take the state, `sim.state`; a `Simulation` is made by `runTMS` |
-| `create_graph_state` | `CreateState(type = Pure(), state = graph_state(graph))` |
+| `create_graph_state` | `CreateState(graph_state(graph))` |
+| `CreateState(type = Pure(), …)` | `CreateState(type = Pure, …)`, the type as in `State{Pure}`, by default that of a `State` given |
 
 The data files are tables: a line naming the columns, then a line per time measured.
 `sim.data` holds the rows of each `Data` destination, which `data_to_frame` turns into a table

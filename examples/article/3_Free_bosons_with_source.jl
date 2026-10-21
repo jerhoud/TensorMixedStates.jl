@@ -50,7 +50,7 @@ sim_data(n, step, duration, alg, gamma) = SimData(
         # a Phase to create the initial state
         CreateState(
             name = "Initialization - creating an empty boson chain", # for the log file
-            type = Mixed(), # type of representation
+            type = Mixed, # type of representation
             system = System(n, Boson(MAXOCC + 1)), # system description (n boson sites)
             state =  "0", # initial empty state
             final_measurements = output(n), # save measurements for inital state

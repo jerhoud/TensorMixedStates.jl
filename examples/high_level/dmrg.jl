@@ -11,7 +11,7 @@ sim_data(n) = SimData(
     phases = [
         CreateState(
             system = System(n, Qubit()),
-            type = Pure(),
+            type = Pure,
             randomize = 10,
         ),
         GroundState(

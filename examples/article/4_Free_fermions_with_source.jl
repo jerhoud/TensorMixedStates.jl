@@ -46,7 +46,7 @@ sim_data(n, step, duration, alg, Gamma) = SimData(
         # a Phase to create the initial state
         CreateState(
             name = "Initialization - creating an empty (spinless) fermion chain", # for the log file
-            type = Mixed(), # type of representation
+            type = Mixed, # type of representation
             system = System(n, Fermion()), # system description (n fermion sites)
             state =  "0", # initial empty state
             final_measurements = output(n), # save measurements for inital state

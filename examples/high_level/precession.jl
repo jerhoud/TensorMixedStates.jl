@@ -14,7 +14,7 @@ phases(n) = [
     CreateState(
         name = "Create $n qubits pointing in the 6 directions",
         final_measurements = measurements,
-        type = Pure(),
+        type = Pure,
         system = System(n, Qubit()),
         state = repeat(["X+", "Y+", "Z+", "X-", "Y-", "Z-"], (n + 5) ÷ 6)[1:n],
       ),
