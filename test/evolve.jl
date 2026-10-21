@@ -514,38 +514,44 @@ end
 
 @testset "The expansion before a step of tdvp" begin
     # tdvp expands a state whose bond dimension is below min(5, maxdim) before any step, the
-    # default Tdvp() included: on the ring above, the same values as with expand_period
+    # default Tdvp() included: on the ring above, the same values as with expand_period. The
+    # warnings tested are those of TMS, the deprecations Julia 1.14 brings to the QR of NDTensors,
+    # which the expansion goes through, left aside
     ring = -im * (sum(Z(i) * Z(i + 1) for i in 1:5) + Z(6) * Z(1) - sum(X(i) for i in 1:6))
-    st = @test_logs evolve(ring, 1., State{Pure}(System(6, Qubit()), "X+"); nsteps = 10,
-                           limits = Limits(maxdim = 8, cutoff = 1e-14))
+    st = @test_logs without_deprecations(
+        () -> evolve(ring, 1., State{Pure}(System(6, Qubit()), "X+"); nsteps = 10,
+                     limits = Limits(maxdim = 8, cutoff = 1e-14)))
     @test real(expect(st, X(1))) ≈ 0.48881258418 atol = 1e-8
     # from FullyMixed on a system conserving N, where the Krylov vectors of ITensorMPS, truncated
     # to one more than the bond dimension, kept nothing and expand failed
     h = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) + Z(i) * Z(i + 1) for i in 1:3)
     ρ = State{Mixed}(System(4, Qubit(conserve = N)), "FullyMixed")
-    @test_logs thermalize(h, 0.1, ρ; nsteps = 1, limits = Limits(maxdim = 16))
+    @test_logs without_deprecations(
+        () -> thermalize(h, 0.1, ρ; nsteps = 1, limits = Limits(maxdim = 16)))
     # on a mixed product state under a term of small weight, expand changed the state by 2.4e-5,
     # the vectors it adds not quite orthogonal to its basis: the state written again in the
     # enlarged bonds is exact, and so is the step
     ρx = mix(State{Pure}(System(2, Qubit()), "X+"))
     m = make_mpo(ρx, -im * (Z(1) + 1e-3 * Z(2)))
     @test norm(TMS.expanded(ρx, m) - ρx) < 1e-14
-    st = @test_logs evolve(-im * (Z(1) + 1e-3 * Z(2)), 0.01, ρx; nsteps = 1,
-                           limits = Limits(maxdim = 10))
+    st = @test_logs without_deprecations(
+        () -> evolve(-im * (Z(1) + 1e-3 * Z(2)), 0.01, ρx; nsteps = 1,
+                     limits = Limits(maxdim = 10)))
     @test real(expect(st, X(2))) ≈ cos(2e-5) atol = 1e-14
     # and on a mixed state of fermions, where the enlarged bonds miss about 1e-13 of the state a
     # bond, within the precision of the expansion, kept: from FullyMixed in 10 steps, against the
     # same thermal state in 80
     tv = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) + 0.5 * N(i) * N(i + 1) for i in 1:5)
     f = State{Mixed}(System(6, Fermion(conserve = N)), "FullyMixed")
-    _, ρ10 = @test_logs thermalize(tv, 2., f; nsteps = 10, limits = Limits(maxdim = 64))
+    _, ρ10 = @test_logs without_deprecations(
+        () -> thermalize(tv, 2., f; nsteps = 10, limits = Limits(maxdim = 64)))
     _, ρ80 = thermalize(tv, 2., f; nsteps = 80, limits = Limits(maxdim = 64))
     @test real(expect(ρ10, tv)) ≈ real(expect(ρ80, tv)) atol = 1e-6
     # the expansion is dropped, with a warning, when expand fails on charged indices, as on a
     # state the evolver maps onto itself: the step is then exact all the same
     up = mix(State{Pure}(System(4, Qubit(conserve = N)), "Up"))
-    st = @test_logs (:warn, r"failed on charged indices \(BoundsError\)") evolve(
-        -im * h, 0.1, up; nsteps = 1, limits = Limits(maxdim = 16))
+    st = @test_logs (:warn, r"failed on charged indices \(BoundsError\)") without_deprecations(
+        () -> evolve(-im * h, 0.1, up; nsteps = 1, limits = Limits(maxdim = 16)))
     @test real(expect(st, Z(1))) ≈ 1
 end
 

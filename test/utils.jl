@@ -8,6 +8,27 @@ const TMS = TensorMixedStates
 const IT = TensorMixedStates.ITensors
 const LA = TensorMixedStates.LinearAlgebra
 
+# the logger `parent` but for the deprecation warnings, see `without_deprecations`
+struct NoDeprecations <: TMS.Logging.AbstractLogger
+    parent::TMS.Logging.AbstractLogger
+end
+
+TMS.Logging.min_enabled_level(l::NoDeprecations) = TMS.Logging.min_enabled_level(l.parent)
+TMS.Logging.shouldlog(l::NoDeprecations, level, _module, group, id) =
+    group !== :depwarn && TMS.Logging.shouldlog(l.parent, level, _module, group, id)
+TMS.Logging.handle_message(l::NoDeprecations, args...; kwargs...) =
+    TMS.Logging.handle_message(l.parent, args...; kwargs...)
+TMS.Logging.catch_exceptions(l::NoDeprecations) = TMS.Logging.catch_exceptions(l.parent)
+
+"""
+    without_deprecations(f)
+
+`f()`, the deprecation warnings it logs dropped, so that a test of the warnings of TMS leaves
+aside those a new Julia brings to the packages TMS uses, as NDTensors converting the `Q` of a QR
+decomposition on Julia 1.14
+"""
+without_deprecations(f) = TMS.Logging.with_logger(f, NoDeprecations(TMS.Logging.current_logger()))
+
 """
 test whether a statement executes without throwing an exception
 """
