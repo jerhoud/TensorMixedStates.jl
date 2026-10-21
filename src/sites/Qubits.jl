@@ -117,7 +117,7 @@ end
 the generator of the relaxation of a qubit of times `T1` and `T2`: its decay to `"Up"`, of time
 `T1`, and the dephasing that brings the decay of its coherences to the time `T2`,
 `amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1))`. `T2` cannot
-exceed `2T1`. Evolving under it for a time `t` is `thermal_relaxation_gate(T1, T2, t)`.
+exceed `2T1`. Evolving under it for a time `t` is `thermal_relaxation_channel(T1, T2, t)`.
 
 # Examples
 
@@ -129,7 +129,7 @@ function thermal_relaxation_dissipator(T1::Real, T2::Real)
 end
 
 """
-    thermal_relaxation_gate(T1, T2, t)
+    thermal_relaxation_channel(T1, T2, t)
 
 the channel of the relaxation of a qubit of times `T1` and `T2` over a time `t`,
 `exp(t * thermal_relaxation_dissipator(T1, T2))`: the population of `"Dn"` decays by
@@ -137,14 +137,14 @@ the channel of the relaxation of a qubit of times `T1` and `T2` over a time `t`,
 
 # Examples
 
-    prod(thermal_relaxation_gate(50., 30., 0.1)(i) for i in 1:10)
+    prod(thermal_relaxation_channel(50., 30., 0.1)(i) for i in 1:10)
 """
-function thermal_relaxation_gate(T1::Real, T2::Real, t::Real)
+function thermal_relaxation_channel(T1::Real, T2::Real, t::Real)
     if t < 0
-        error("thermal_relaxation_gate takes a time of zero or above, not $t")
+        error("thermal_relaxation_channel takes a time of zero or above, not $t")
     end
     return exp(t * thermal_relaxation_dissipator(T1, T2))
 end
 
 @create_site_module(Qubits, [Qubit, graph_state, X, Y, Z, Sx, Sy, Sz, S2, N, Sp, Sm,
-                             thermal_relaxation_dissipator, thermal_relaxation_gate])
+                             thermal_relaxation_dissipator, thermal_relaxation_channel])

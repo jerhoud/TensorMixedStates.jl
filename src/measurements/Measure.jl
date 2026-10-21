@@ -294,10 +294,10 @@ ReducedDensityMatrix(positions::AbstractVector) =
     VonNeumannEntropy(positions)
 
 the measurement of the von Neumann entropy of the sites at `positions`, see
-`vonneumann_entropy`
+`von_neumann_entropy`
 """
 VonNeumannEntropy(positions::AbstractVector) =
-    on_positions("VonNeumannEntropy", vonneumann_entropy, positions)
+    on_positions("VonNeumannEntropy", von_neumann_entropy, positions)
 
 """
     LogNegativity(a, b)

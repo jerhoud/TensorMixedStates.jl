@@ -49,7 +49,7 @@ hop = -sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:9)      # ferm
                                                                          # laid automatically
 L = -im * ham + sum(Dissipator(sqrt(0.1) * Sm)(i) for i in 1:10)          # a Lindbladian
 gates = CX(1, 2) * H(1)                   # a product acts right to left: H first
-noisy = depolarizing_gate(0.01)(3)        # a channel, for a mixed state
+noisy = depolarizing_channel(0.01)(3)        # a channel, for a mixed state
 myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 ```
 
@@ -66,8 +66,8 @@ myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 | the evolver | `-im * H` plus dissipators: ``d\psi/dt = -iH\psi``, ``\hbar = 1`` |
 | a jump operator | `Dissipator(L)`, ``L\rho L^\dagger - \frac12\{L^\dagger L, \rho\}``; `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`, so a rate ``\gamma`` is `γ * Dissipator(L)` |
 | qubit states | `"Up"` = ``\vert 0\rangle``, `"Dn"` = ``\vert 1\rangle``; `Z` is +1 on `"Up"`; `N` counts `"Dn"`; `Sp` takes `"Dn"` to `"Up"` |
-| amplitude damping | `amplitude_damping_gate(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
-| depolarization | `depolarizing_gate(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_gate(4p/3)` |
+| amplitude damping | `amplitude_damping_channel(p)`, `amplitude_damping_dissipator(γ)`: `"Dn"` decays to `"Up"` |
+| depolarization | `depolarizing_channel(p)` is ``(1-p)\rho + p\,I/d``: each Pauli error with probability ``p/3`` is `depolarizing_channel(4p/3)` |
 | a product of gates | the rightmost factor acts first |
 | rotations | `Rx(θ)` is ``e^{-i\theta X/2}`` and `Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, as in OpenQASM and Qiskit; `Rx(θ)` is ``e^{-i\theta S_x}`` on a spin |
 | values measured | by `measure`, `expect`, `expect1` and `expect2` alike, real for a Hermitian operator, complex otherwise; `expect(ψ, op; complex = true)` the complex number computed; `Trace` and `trace` complex |

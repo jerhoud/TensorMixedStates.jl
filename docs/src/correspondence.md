@@ -24,7 +24,7 @@ operator `c` of `mesolve` is `Dissipator(c)` in an evolver.
 | `H.groundstate()` | `ground_state(H, ψ; algo = Dmrg(; nsweeps))` |
 | `expect(o, ρ)` | `expect(ρ, o)`, or `measure(ρ, o)` |
 | `ρ.ptrace([0, 2])` | `partial_trace(ρ; keep = [1, 3])`, sites counted from 1 |
-| `entropy_vn(ρ.ptrace([0]))` | `vonneumann_entropy(ρ, [1])` |
+| `entropy_vn(ρ.ptrace([0]))` | `von_neumann_entropy(ρ, [1])` |
 
 A collapse operator carries its rate, `sqrt(γ) * c` in QuTiP as in TMS: `Dissipator(sqrt(γ) * c)`
 is `γ * Dissipator(c)`. A QuTiP operator is a matrix on the whole space; a TMS operator is placed

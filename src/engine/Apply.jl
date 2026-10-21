@@ -585,7 +585,7 @@ projectors when they have few terms. The state is not normalised.
 
     apply(controlled(Z)(1, 3) * H(2) * controlled(X)(3, 4), state)
     apply(exp(-0.1im * (X ⊗ X + Y ⊗ Y))(2, 5), state)
-    apply(depolarizing_gate(0.01, 2)(1, 2) * controlled(X)(1, 2), ρ)
+    apply(depolarizing_channel(0.01, 2)(1, 2) * controlled(X)(1, 2), ρ)
 """
 apply(a::IndexedOp, state::State; limits::Limits = Limits()) =
     applied(state, apply_steps(a, state)..., limits)

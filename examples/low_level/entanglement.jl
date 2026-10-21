@@ -14,7 +14,7 @@ println("GHZ, entropy across each cut ", entropies, ", log 2 = ", log(2))
 # a Bell pair, then the depolarization of the two qubits together
 q = 0.2
 bell = apply(CX(1, 2) * H(1), State{Mixed}(System(2, Qubit()), "Up"))
-werner = apply(depolarizing_gate(q, 2)(1, 2), bell)
+werner = apply(depolarizing_channel(q, 2)(1, 2), bell)
 values = measure(werner, [ReducedDensityMatrix([1, 2]), VonNeumannEntropy([1]),
                           LogNegativity([1], [2]), MutualInfoRenyi2([1])])
 foreach(println, values)

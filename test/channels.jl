@@ -189,13 +189,13 @@ end
     # sends to zero
     q, b = Qubit(), Boson(3)
     t1, t2 = vec(eye(2))', mixed_vec(eye(4), 2, 2)'
-    for c in (reset_gate(0.3, "Dn"), depolarizing_gate(0.2), dephasing_gate(0.4), Dephase(X),
-              amplitude_damping_gate(0.3), thermal_relaxation_gate(5., 3., 0.7))
+    for c in (reset_channel(0.3, "Dn"), depolarizing_channel(0.2), dephasing_channel(0.4),
+              Dephase(X), amplitude_damping_channel(0.3), thermal_relaxation_channel(5., 3., 0.7))
         @test t1 * matrix(c, q) ≈ t1
     end
-    @test t2 * matrix(reset_gate(0.3, ["Up", "Dn"]), q) ≈ t2
+    @test t2 * matrix(reset_channel(0.3, ["Up", "Dn"]), q) ≈ t2
     t3 = transpose(vec(eye(3)))
-    @test t3 * matrix(amplitude_damping_gate(0.3, A), b) ≈ t3
+    @test t3 * matrix(amplitude_damping_channel(0.3, A), b) ≈ t3
     for g in (-im * X + Dissipator(Sm), reset_dissipator(0.4, "Up"), dephasing_dissipator(0.2),
               depolarizing_dissipator(0.3), amplitude_damping_dissipator(0.5),
               thermal_relaxation_dissipator(5., 3.))
@@ -210,61 +210,62 @@ end
     ev(L) = matrix(exp(t * L), q)
     @test exp(Dissipator(X)) isa TMS.ExpOp{TMS.IsChannel}
     @test ev(Evolver(-im * (X + 0.3Z))) ≈ matrix(Gate(exp(-im * t * (X + 0.3Z))), q)
-    @test ev(amplitude_damping_dissipator(γ)) ≈ matrix(amplitude_damping_gate(p), q)
-    @test ev(dephasing_dissipator(γ)) ≈ matrix(dephasing_gate(p), q)
-    @test ev(reset_dissipator(γ, ["Up", "Dn"])) ≈ matrix(reset_gate(p, ["Up", "Dn"]), q)
-    @test ev(depolarizing_dissipator(γ, 2)) ≈ matrix(depolarizing_gate(p, 2), q)
-    @test ev(dephasing_dissipator(γ, Z ⊗ Z)) ≈ matrix(dephasing_gate(p, Z ⊗ Z), q)
-    @test ev(thermal_relaxation_dissipator(5., 3.)) ≈ matrix(thermal_relaxation_gate(5., 3., t), q)
+    @test ev(amplitude_damping_dissipator(γ)) ≈ matrix(amplitude_damping_channel(p), q)
+    @test ev(dephasing_dissipator(γ)) ≈ matrix(dephasing_channel(p), q)
+    @test ev(reset_dissipator(γ, ["Up", "Dn"])) ≈ matrix(reset_channel(p, ["Up", "Dn"]), q)
+    @test ev(depolarizing_dissipator(γ, 2)) ≈ matrix(depolarizing_channel(p, 2), q)
+    @test ev(dephasing_dissipator(γ, Z ⊗ Z)) ≈ matrix(dephasing_channel(p, Z ⊗ Z), q)
+    @test ev(thermal_relaxation_dissipator(5., 3.)) ≈
+          matrix(thermal_relaxation_channel(5., 3., t), q)
     b = Boson(5)
     @test matrix(exp(t * amplitude_damping_dissipator(γ, A)), b) ≈
-          matrix(amplitude_damping_gate(p, A), b)
+          matrix(amplitude_damping_channel(p, A), b)
 end
 
 @testset "The library of noises" begin
     q, f, b = Qubit(), Fermion(), Boson(6)
     p = 0.3
     # the forms of a qubit
-    @test matrix(depolarizing_gate(p), q) ≈
+    @test matrix(depolarizing_channel(p), q) ≈
         matrix((1 - 3p/4) * Gate(Id) + p/4 * (Gate(X) + Gate(Y) + Gate(Z)), q)
     @test matrix(Dissipator(Z), q) ≈ matrix(dephasing_dissipator(2, Z), q)
-    @test matrix(amplitude_damping_gate(p), q) ≈
+    @test matrix(amplitude_damping_channel(p), q) ≈
         matrix(Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(Sp), q)
-    @test matrix(thermal_relaxation_gate(5., 3., 0.4), q) ≈
-        matrix(dephasing_gate(1 - exp(-0.4 * (1/3 - 1/10))) *
-               amplitude_damping_gate(1 - exp(-0.4 / 5)), q)
+    @test matrix(thermal_relaxation_channel(5., 3., 0.4), q) ≈
+        matrix(dephasing_channel(1 - exp(-0.4 * (1/3 - 1/10))) *
+               amplitude_damping_channel(1 - exp(-0.4 / 5)), q)
     # sites reset together, or each to its state, a vector of numbers being one state
-    @test reset_gate(p, ["Up", "Dn"]) == (1 - p) * Gate(Id ⊗ Id) + p * Reset("Up") ⊗ Reset("Dn")
-    @test reset_gate(p, 2, "Up") == (1 - p) * Gate(Id ⊗ Id) + p * Reset("Up") ⊗ Reset("Up")
-    @test reset_gate(p, [1., 0.]) == (1 - p) * Gate(Id) + p * Reset([1., 0.])
+    @test reset_channel(p, ["Up", "Dn"]) == (1 - p) * Gate(Id ⊗ Id) + p * Reset("Up") ⊗ Reset("Dn")
+    @test reset_channel(p, 2, "Up") == (1 - p) * Gate(Id ⊗ Id) + p * Reset("Up") ⊗ Reset("Up")
+    @test reset_channel(p, [1., 0.]) == (1 - p) * Gate(Id) + p * Reset([1., 0.])
     # amplitude damping on other sites: the same Kraus operators on a fermion, and on a boson
     # each photon lost on its own, the number of those left binomial
-    @test matrix(amplitude_damping_gate(p, C), f) ≈
+    @test matrix(amplitude_damping_channel(p, C), f) ≈
         matrix(Gate(Id - (1 - sqrt(1 - p)) * N) + p * Gate(C), f)
     n, d = 4, 6
     ρ = zeros(d, d)
     ρ[n + 1, n + 1] = 1
-    out = reshape(matrix(amplitude_damping_gate(p, A), b) * vec(ρ), d, d)
+    out = reshape(matrix(amplitude_damping_channel(p, A), b) * vec(ρ), d, d)
     @test real(LA.diag(out))[1:n + 1] ≈ [ binomial(n, k) * (1 - p)^k * p^(n - k) for k in 0:n ]
     # with p = 1, an infinite time, the reset to the state the decay ends in, refused when there
     # is none
-    @test matrix(amplitude_damping_gate(1.), q) ≈ matrix(Reset("Up"), q)
-    @test repr(amplitude_damping_gate(1.)) == "Reset(DecayEnd(Sp))"
-    @test amplitude_damping_gate(1., A) == amplitude_damping_gate(1., A)
-    @test matrix(amplitude_damping_gate(1.), q) ≈ matrix(Gate(Id - N) + Gate(Sp), q)
-    @test matrix(amplitude_damping_gate(1., A), b) ≈ matrix(Reset("0"), b)
-    @test matrix(amplitude_damping_gate(1.), Spin(1)) ≈ matrix(Reset(Level => 0), Spin(1))
+    @test matrix(amplitude_damping_channel(1.), q) ≈ matrix(Reset("Up"), q)
+    @test repr(amplitude_damping_channel(1.)) == "Reset(DecayEnd(Sp))"
+    @test amplitude_damping_channel(1., A) == amplitude_damping_channel(1., A)
+    @test matrix(amplitude_damping_channel(1.), q) ≈ matrix(Gate(Id - N) + Gate(Sp), q)
+    @test matrix(amplitude_damping_channel(1., A), b) ≈ matrix(Reset("0"), b)
+    @test matrix(amplitude_damping_channel(1.), Spin(1)) ≈ matrix(Reset(Level => 0), Spin(1))
     @test_throws "does not take every state of Electron() to a single one" matrix(
-        amplitude_damping_gate(1.), Electron())
-    @test matrix(thermal_relaxation_gate(5., 3., 1e4), q) ≈ matrix(Reset("Up"), q)
+        amplitude_damping_channel(1.), Electron())
+    @test matrix(thermal_relaxation_channel(5., 3., 1e4), q) ≈ matrix(Reset("Up"), q)
     # parameters out of their domain
-    for g in (() -> reset_gate(1.5, "Up"), () -> depolarizing_gate(-0.1), () -> dephasing_gate(2.),
-              () -> amplitude_damping_gate(1.1))
+    for g in (() -> reset_channel(1.5, "Up"), () -> depolarizing_channel(-0.1),
+              () -> dephasing_channel(2.), () -> amplitude_damping_channel(1.1))
         @test_throws "takes a probability between 0 and 1" g()
     end
-    @test_throws "must be positive" thermal_relaxation_gate(0., 3., 1.)
+    @test_throws "must be positive" thermal_relaxation_channel(0., 3., 1.)
     @test_throws "is above 2T1" thermal_relaxation_dissipator(1., 3.)
-    @test_throws "takes a time of zero or above" thermal_relaxation_gate(5., 3., -1.)
+    @test_throws "takes a time of zero or above" thermal_relaxation_channel(5., 3., -1.)
 end
 
 @testset "Purity of channels and generators" begin
@@ -445,7 +446,7 @@ end
     t = transpose(foldl(kron, fill(vec(eye(2)), 3)))
     L = -im * (dag(C)(1) * C(3) + dag(C)(3) * C(1)) + Dissipator(C(1) + C(3))
     @test norm(t * superop(fs, L)) < 1e-12
-    Φ = reset_gate(0.3, "Emp")(2) * Gate((C + dag(C))(1)) * depolarizing_gate(0.2, 2)(1, 3)
+    Φ = reset_channel(0.3, "Emp")(2) * Gate((C + dag(C))(1)) * depolarizing_channel(0.2, 2)(1, 3)
     @test t * superop(fs, Φ) ≈ t
 end
 
@@ -469,7 +470,7 @@ end
     l = -im * (dag(C) ⊗ C - C ⊗ dag(C)) + Dissipator(C ⊗ Id) + Dissipator(Id ⊗ C)
     for a in [-im * h + Dissipator(C)(1) + 0.5 * Dissipator(dag(C)(2)), Gate(C(1) + C(3)),
               Reset("Occ")(2), Dephase(im * (C + dag(C)) ⊗ (C + dag(C)))(1, 3), exp(0.4 * l)(1, 3),
-              reset_gate(0.3, "Emp")(2) * Gate(C)(1)]
+              reset_channel(0.3, "Emp")(2) * Gate(C)(1)]
         @test laid_mixed(ρ, a) ≈ superop(fs, a)
     end
     # an operator given for a density matrix is its evolver, and a vector takes time functions
@@ -616,7 +617,7 @@ end
         reset(x) = sum(k * x * k' for k in ks)
         @test after(Reset("Emp")(2)) ≈ reset(r)
         k = lowered(sys, C(1) + C(3))
-        @test after(reset_gate(0.3, "Emp")(2) * Gate(C(1) + C(3))) ≈
+        @test after(reset_channel(0.3, "Emp")(2) * Gate(C(1) + C(3))) ≈
             0.7 * k * r * k' + 0.3 * reset(k * r * k')
         ps = [ lowered(sys, Proj(N ⊗ N => λ)(1, 3)) for λ in (0., 1.) ]
         @test after(Dephase(N ⊗ N)(1, 3)) ≈ sum(p * r * p for p in ps)
@@ -749,19 +750,19 @@ end
     paulis = (Id, X, Y, Z)
     q = mix(random_state(Pure, System(3, Qubit()), 4))
     one_site = (1 - 3p / 4) * Gate(Id) + p / 4 * (Gate(X) + Gate(Y) + Gate(Z))
-    @test norm(apply(depolarizing_gate(p)(2), q) - apply(one_site(2), q)) < 1e-12
+    @test norm(apply(depolarizing_channel(p)(2), q) - apply(one_site(2), q)) < 1e-12
     two_sites = (1 - p) * Gate(Id ⊗ Id) + p / 16 * sum(Gate(a ⊗ b) for a in paulis for b in paulis)
-    @test norm(apply(depolarizing_gate(p, 2)(1, 3), q) - apply(two_sites(1, 3), q)) < 1e-12
+    @test norm(apply(depolarizing_channel(p, 2)(1, 3), q) - apply(two_sites(1, 3), q)) < 1e-12
     s = State{Mixed}(System(2, Spin(1)), "1")
-    @test expect(apply(depolarizing_gate(p)(1), s), Proj("1")(1)) ≈ 1 - p + p / 3
+    @test expect(apply(depolarizing_channel(p)(1), s), Proj("1")(1)) ≈ 1 - p + p / 3
     γ, t = 0.7, 0.5
     for (ρ, n, sites) in [(mix(random_state(Pure, System(3, Spin(1)), 4)), 1, (2,)), (q, 2, (1, 3))]
         evolved = evolve(depolarizing_dissipator(γ, n)(sites...), t, ρ; nsteps = 20,
                          limits = Limits(maxdim = 100))
-        @test norm(evolved - apply(depolarizing_gate(1 - exp(-γ * t), n)(sites...), ρ)) < 1e-10
+        @test norm(evolved - apply(depolarizing_channel(1 - exp(-γ * t), n)(sites...), ρ)) < 1e-10
     end
     strong_sys = System(2, Qubit(conserve = strong(N)))
-    @test_throws "conserving it strongly forbids" apply(depolarizing_gate(p)(1),
+    @test_throws "conserving it strongly forbids" apply(depolarizing_channel(p)(1),
                                                         State{Mixed}(strong_sys, "Up"))
 end
 
@@ -788,20 +789,20 @@ end
     p = 0.4
     q = mix(random_state(Pure, System(3, Qubit()), 4))
     applied(g) = apply(g, q)
-    @test norm(applied(reset_gate(p, "Up")(2)) -
+    @test norm(applied(reset_channel(p, "Up")(2)) -
                applied(((1 - p) * Gate(Id) + p * Reset("Up"))(2))) < 1e-12
     each = (1 - p) * Gate(Id ⊗ Id) + p * (Reset("Up") ⊗ Reset("Dn"))
-    @test norm(applied(reset_gate(p, ["Up", "Dn"])(1, 3)) - applied(each(1, 3))) < 1e-12
+    @test norm(applied(reset_channel(p, ["Up", "Dn"])(1, 3)) - applied(each(1, 3))) < 1e-12
     # a level is given as Level => 0, a number denoting no state
-    by_level = applied(reset_gate(p, 2, Level => 0)(1, 3))
-    @test norm(by_level - applied(reset_gate(p, ["Up", "Up"])(1, 3))) < 1e-12
+    by_level = applied(reset_channel(p, 2, Level => 0)(1, 3))
+    @test norm(by_level - applied(reset_channel(p, ["Up", "Up"])(1, 3))) < 1e-12
     # a vector of numbers is the amplitudes of a single state, as for State
-    by_vector = applied(reset_gate(p, [0., 1.])(2))
-    @test norm(by_vector - applied(reset_gate(p, "Dn")(2))) < 1e-12
+    by_vector = applied(reset_channel(p, [0., 1.])(2))
+    @test norm(by_vector - applied(reset_channel(p, "Dn")(2))) < 1e-12
     γ, t = 0.7, 0.5
     evolved = evolve(reset_dissipator(γ, "Up")(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
-    @test norm(evolved - applied(reset_gate(1 - exp(-γ * t), "Up")(2))) < 1e-10
-    @test depolarizing_gate(p, 2) == reset_gate(p, 2, "FullyMixed")
+    @test norm(evolved - applied(reset_channel(1 - exp(-γ * t), "Up")(2))) < 1e-10
+    @test depolarizing_channel(p, 2) == reset_channel(p, 2, "FullyMixed")
 end
 
 @testset "Reset on fermions" begin
@@ -825,19 +826,20 @@ end
     for s in ["Emp", "Occ", "FullyMixed"], i in 1:4
         @test norm(apply(Reset(s)(i), ρ) - exact(s, i, ρ)) < 1e-12
     end
-    @test norm(apply(reset_gate(q, "Occ")(3), ρ) - ((1 - q) * ρ + q * exact("Occ", 3, ρ))) < 1e-12
-    @test norm(apply(depolarizing_gate(q, 2)(2, 4), ρ) -
+    @test norm(apply(reset_channel(q, "Occ")(3), ρ) - ((1 - q) * ρ + q * exact("Occ", 3, ρ))) <
+          1e-12
+    @test norm(apply(depolarizing_channel(q, 2)(2, 4), ρ) -
                ((1 - q) * ρ + q * exact("FullyMixed", 2, exact("FullyMixed", 4, ρ)))) < 1e-12
     @test norm(apply((Reset("Occ") ⊗ Reset("Emp"))(3, 2), ρ) -
                exact("Emp", 2, exact("Occ", 3, ρ))) < 1e-12
     @test norm(apply(Gate(C)(1) * Reset("Occ")(3), ρ) - apply(Gate(C)(1), exact("Occ", 3, ρ))) <
           1e-12
     @test norm(apply(exp(t * reset_dissipator(γ, "Emp"))(3), ρ) -
-               apply(reset_gate(1 - exp(-γ * t), "Emp")(3), ρ)) < 1e-12
+               apply(reset_channel(1 - exp(-γ * t), "Emp")(3), ρ)) < 1e-12
     # the generator, through its MPO, against the channel
     for (generator, channel) in
-            [(reset_dissipator(γ, "Occ")(2), reset_gate(1 - exp(-γ * t), "Occ")(2)),
-             (depolarizing_dissipator(γ, 2)(2, 4), depolarizing_gate(1 - exp(-γ * t), 2)(2, 4))]
+            [(reset_dissipator(γ, "Occ")(2), reset_channel(1 - exp(-γ * t), "Occ")(2)),
+             (depolarizing_dissipator(γ, 2)(2, 4), depolarizing_channel(1 - exp(-γ * t), 2)(2, 4))]
         evolved = evolve(generator, t, ρ; nsteps = 20, limits = Limits(maxdim = 100))
         @test norm(evolved - apply(channel, ρ)) < 1e-10
     end
@@ -865,9 +867,9 @@ end
     # no definite parity after a fermionic site: a reset being idempotent, its evolution is the
     # reset with probability 1 - exp(-γt), on sites apart as well
     @test norm(apply(exp(t * reset_dissipator(γ, 2, "Emp"))(2, 4), ρ) -
-               apply(reset_gate(1 - exp(-γ * t), 2, "Emp")(2, 4), ρ)) < 1e-12
+               apply(reset_channel(1 - exp(-γ * t), 2, "Emp")(2, 4), ρ)) < 1e-12
     @test norm(apply(exp(t * depolarizing_dissipator(γ, 2))(1, 3), ρ) -
-               apply(depolarizing_gate(1 - exp(-γ * t), 2)(1, 3), ρ)) < 1e-12
+               apply(depolarizing_channel(1 - exp(-γ * t), 2)(1, 3), ρ)) < 1e-12
 end
 
 @testset "Qubit decay and relaxation" begin
@@ -876,44 +878,44 @@ end
     # commute, so that the generator for a time t gives the product of their channels
     p = 0.3
     ψ = State{Pure}(System(2, Qubit()), [[0.6, 0.8], "Up"])
-    decayed = apply(amplitude_damping_gate(p)(1), mix(ψ))
+    decayed = apply(amplitude_damping_channel(p)(1), mix(ψ))
     @test trace(decayed) ≈ 1
     @test expect(decayed, N(1)) ≈ 0.64 * (1 - p)
     @test expect(decayed, X(1)) ≈ 2 * 0.48 * sqrt(1 - p)
     γ, t, T1, T2 = 0.7, 0.5, 2., 1.5
     by_rate = evolve(amplitude_damping_dissipator(γ)(1), t, mix(ψ); nsteps = 20,
                      limits = Limits(maxdim = 16))
-    @test norm(by_rate - apply(amplitude_damping_gate(1 - exp(-γ * t))(1), mix(ψ))) < 1e-10
+    @test norm(by_rate - apply(amplitude_damping_channel(1 - exp(-γ * t))(1), mix(ψ))) < 1e-10
     by_times = evolve(thermal_relaxation_dissipator(T1, T2)(1), t, mix(ψ); nsteps = 20,
                       limits = Limits(maxdim = 16))
-    @test norm(by_times - apply(thermal_relaxation_gate(T1, T2, t)(1), mix(ψ))) < 1e-10
+    @test norm(by_times - apply(thermal_relaxation_channel(T1, T2, t)(1), mix(ψ))) < 1e-10
     # read on the channel
-    relaxed = apply(thermal_relaxation_gate(T1, T2, t)(1), mix(ψ))
+    relaxed = apply(thermal_relaxation_channel(T1, T2, t)(1), mix(ψ))
     @test expect(relaxed, N(1)) ≈ 0.64 * exp(-t / T1)
     @test expect(relaxed, X(1)) ≈ 2 * 0.48 * exp(-t / T2)
-    @test_throws "no relaxation reaches" thermal_relaxation_gate(1., 3., t)
+    @test_throws "no relaxation reaches" thermal_relaxation_channel(1., 3., t)
     @test_throws "must be positive" thermal_relaxation_dissipator(0., 1.)
-    @test_throws "between 0 and 1" amplitude_damping_gate(1.5)
+    @test_throws "between 0 and 1" amplitude_damping_channel(1.5)
 end
 
 @testset "Dephasing" begin
     # Dephase(A) erases the coherences between the eigenspaces of A and keeps those within one;
     # its generator damps them all at one rate, where Dissipator(A) depends on the eigenvalues.
-    # Level, the basis of the site, is the default of dephasing_gate and dephasing_dissipator
+    # Level, the basis of the site, is the default of dephasing_channel and dephasing_dissipator
     b = mix(State{Pure}(System(2, Boson(4)), [[1., 1., 1., 0.] / sqrt(3), "0"]))
     @test norm(apply(Dephase(Level)(1), b) - apply(Dephase(N)(1), b)) < 1e-12
     @test abs(expect(apply(Dephase(N)(1), b), A(1))) < 1e-12
     @test expect(apply(Dephase(N)(1), b), N(1)) ≈ expect(b, N(1))
-    @test norm(apply(make_mpo(b, dephasing_gate(0.3)(1)), b) - apply(dephasing_gate(0.3)(1), b)) <
-          1e-12
+    @test norm(apply(make_mpo(b, dephasing_channel(0.3)(1)), b) -
+               apply(dephasing_channel(0.3)(1), b)) < 1e-12
     γ, t = 0.7, 0.5
     evolved = evolve(dephasing_dissipator(γ)(1), t, b; nsteps = 20, limits = Limits(maxdim = 100))
-    @test norm(evolved - apply(dephasing_gate(1 - exp(-γ * t))(1), b)) < 1e-10
+    @test norm(evolved - apply(dephasing_channel(1 - exp(-γ * t))(1), b)) < 1e-10
     q = mix(random_state(Pure, System(3, Qubit()), 4))
     by_rate = evolve(dephasing_dissipator(2, Z)(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
     by_dissipator = evolve(Dissipator(Z)(2), t, q; nsteps = 20, limits = Limits(maxdim = 64))
     @test norm(by_rate - by_dissipator) < 1e-10
-    @test dephasing_gate(0.3) == dephasing_gate(0.3, Level)
+    @test dephasing_channel(0.3) == dephasing_channel(0.3, Level)
     # on an electron, Ntot does not tell Up from Dn
     e = mix(State{Pure}(System(1, Electron()), [[0., 1., 1., 0.] / sqrt(2)]))
     coherence = named([ i == 2 && j == 3 ? 1. : 0. for i in 1:4, j in 1:4 ], "UpDn")
@@ -928,14 +930,14 @@ end
     @test real(expect(dz, X(1) * X(2))) ≈ 1
     @test abs(expect(dz, Z(1) * Z(2))) < 1e-12
     @test abs(expect(dz, X(1))) < 1e-12
-    @test real(expect(apply(dephasing_gate(0.3, Z ⊗ Z)(1, 2), pp), X(1))) ≈ 0.7
+    @test real(expect(apply(dephasing_channel(0.3, Z ⊗ Z)(1, 2), pp), X(1))) ≈ 0.7
     @test matrix(dephasing_dissipator(1.0, Z ⊗ Z), Qubit()) ≈
           matrix(sum(Dissipator(Proj(Z ⊗ Z => λ)) for λ in (-1, 1)), Qubit())
     # its matrix is split into factors of one site, so that its MPO gives the channel
     @test norm(apply(make_mpo(pp, Dephase(Z ⊗ Z)(1, 2)), pp) - dz) < 1e-12
     # diagonal in the charges, it passes a strong conservation
     strong_q = State{Mixed}(System(2, Qubit(conserve = strong(N))), "Up")
-    @test trace(apply(dephasing_gate(0.3)(1), strong_q)) ≈ 1
+    @test trace(apply(dephasing_channel(0.3)(1), strong_q)) ≈ 1
     @test_throws "Dephase needs a Hermitian operator" apply(Dephase(Sp)(1), pp)
 end
 
@@ -969,8 +971,8 @@ end
     f = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2), f)
     @test norm(apply(exp(t * Dissipator(N))(2), f) - evolve(Dissipator(N)(2), t, f; nsteps = 20)) <
           1e-10
-    @test norm(apply(exp(t * Dissipator(N))(2), f) - apply(dephasing_gate(1 - exp(-t / 2))(2), f)) <
-          1e-12
+    @test norm(apply(exp(t * Dissipator(N))(2), f) -
+               apply(dephasing_channel(1 - exp(-t / 2))(2), f)) < 1e-12
 end
 
 @testset "Larger channels on a density matrix" begin
@@ -1113,7 +1115,7 @@ end
     l = Dissipator(C ⊗ Id) + Evolver(-im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))
     for a in [Gate(C)(1) * Reset("Emp")(2) * Gate(dag(C))(4),
               Gate(C(4)) * exp(0.3 * l)(2, 3) * Gate(dag(C)(1)),
-              Gate(C)(4) * reset_gate(0.4, "Occ")(3) * Gate(C)(1)]
+              Gate(C)(4) * reset_channel(0.4, "Occ")(3) * Gate(C)(1)]
         @test superop(fs, a) ≈ TMS.scalarcoef(a) * prod(superop(fs, f) for f in TMS.prodsubs(a))
     end
     # and the dissipator of such a product, its M read off the strings of both sides

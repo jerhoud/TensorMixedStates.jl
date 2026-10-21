@@ -57,12 +57,32 @@ function run_lists(phases::Vector, final_measurements)
 end
 
 """
+    refused_reads(phase)
+
+the values the lists of measurements of `phase` cannot read, each with the reason given when one
+does: none by default
+"""
+refused_reads(::AbstractPhase) = ()
+
+"""
     check_values(phases, final_measurements)
 
 refuse a value measured by one of the lists of the phases, or by the final measurements, that no
-phase provides, see `provided_values`, and return the names of those they provide
+phase provides, see `provided_values`, or that its phase refuses, see `refused_reads`, and
+return the names of those they provide
 """
 function check_values(phases::Vector, final_measurements)
+    for q in phases, (value, why) in refused_reads(q)
+        lists = Any[q.final_measurements]
+        if hasfield(typeof(q), :measurements)
+            push!(lists, q.measurements)
+        end
+        for l in lists, p in measurement_lists(l), (name, m) in as_measure(last(p)).entries
+            if value in measurement_reads(m)
+                error("the measurement $name of a $(nameof(typeof(q))) reads $value: $why")
+            end
+        end
+    end
     provided = unique(Symbol[ v for p in phases for v in provided_values(p) ])
     for l in run_lists(phases, final_measurements), p in l
         for (name, m) in as_measure(last(p)).entries

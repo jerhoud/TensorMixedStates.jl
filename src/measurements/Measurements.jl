@@ -3,7 +3,7 @@
 # parts, the fidelity of two states and the variance of an operator.
 
 export purity, hermiticity, hermitianize, renyi2, mutual_info_renyi2, entanglement_entropy,
-       entanglement_spectrum, entanglement_by_sector, reduced_density_matrix, vonneumann_entropy,
+       entanglement_spectrum, entanglement_by_sector, reduced_density_matrix, von_neumann_entropy,
        log_negativity,
        fidelity, hs_fidelity, variance
 
@@ -411,7 +411,7 @@ reduced_density_matrix(state::State, positions::AbstractVector) =
     reduced_density_matrix(state, Vector{Int}(positions))
 
 """
-    vonneumann_entropy(state, positions)
+    von_neumann_entropy(state, positions)
 
 the von Neumann entropy ``-\\mathrm{tr}\\,\\rho_A \\log \\rho_A`` of the sites at `positions`,
 ``\\rho_A`` being their `reduced_density_matrix`, 0 when there is none; the eigenvalues of
@@ -421,10 +421,10 @@ any number of sites.
 
 # Examples
 
-    vonneumann_entropy(state, [2, 5])
+    von_neumann_entropy(state, [2, 5])
 """
-function vonneumann_entropy(state::State, positions::AbstractVector)
-    check_positions(state, positions, "vonneumann_entropy")
+function von_neumann_entropy(state::State, positions::AbstractVector)
+    check_positions(state, positions, "von_neumann_entropy")
     λ = eigvals(Hermitian(reduced_density_matrix(state, positions)))
     return sum((-x * log(x) for x in λ if x > 0); init = 0.0)
 end

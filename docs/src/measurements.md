@@ -87,9 +87,10 @@ measure(mystate, [Z(1), :reference => [Z(1), Purity]];
 ```
 
 In a simulation, the values are those its phases provide: `:step` the number of steps the
-phase has done, the sweeps of a search, `:energy` the energy of each sweep of `GroundState`, and
-for `SteadyState` the eigenvalue of ``L^\dagger L``, zero for a steady state, and `:beta` and `:log_trace` the inverse temperature
-and the logarithm of the trace of `Thermalize`, see `thermalize`. A state named in a
+phase has done, the sweeps of a search, `:energy` the energy of each sweep of `GroundState`,
+`:residual` for `SteadyState` the eigenvalue of ``L^\dagger L``, zero for a steady state, and
+`:beta` and `:log_trace` the inverse temperature and the logarithm of the trace of
+`Thermalize`, see `thermalize`. A state named in a
 simulation, by `CopyState` for instance, is a value as well, and `Update` provides the values it
 declares. A measurement reading a value that no phase provides is refused when the simulation is
 written, see `SimData`.
@@ -139,7 +140,7 @@ entanglement_by_sector
 renyi2
 mutual_info_renyi2
 reduced_density_matrix
-vonneumann_entropy
+von_neumann_entropy
 log_negativity
 Trace
 TraceDeviation

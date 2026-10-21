@@ -28,7 +28,7 @@ using .Qubits
 TensorMixedStates.Qubits
 Qubit
 graph_state
-thermal_relaxation_gate
+thermal_relaxation_channel
 thermal_relaxation_dissipator
 ```
 

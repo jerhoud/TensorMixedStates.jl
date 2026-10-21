@@ -1214,13 +1214,13 @@ end
     # the entropy of half a Bell pair is log 2, that of the pair 0, and on a cut it is the
     # entanglement entropy
     bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
-    @test vonneumann_entropy(bell, [1]) ≈ log(2)
-    @test abs(vonneumann_entropy(bell, [1, 2])) < 1e-12
-    @test vonneumann_entropy(q, 1:2) ≈ entanglement_entropy(q, 2)
-    @test vonneumann_entropy(q, []) === 0.0
+    @test von_neumann_entropy(bell, [1]) ≈ log(2)
+    @test abs(von_neumann_entropy(bell, [1, 2])) < 1e-12
+    @test von_neumann_entropy(q, 1:2) ≈ entanglement_entropy(q, 2)
+    @test von_neumann_entropy(q, []) === 0.0
     measured = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
     @test measured["ReducedDensityMatrix(1,3)"] ≈ ρ
-    @test measured["VonNeumannEntropy(1)"] ≈ vonneumann_entropy(q, [1])
+    @test measured["VonNeumannEntropy(1)"] ≈ von_neumann_entropy(q, [1])
 end
 
 @testset "Reduced density matrix of a pure state" begin
@@ -1251,7 +1251,7 @@ end
     @test log_negativity(bell, [1], [2]) ≈ log(2)
     @test abs(log_negativity(bell, [1], [3])) < 1e-12
     for p in [0.6, 0.2]
-        werner = apply(depolarizing_gate(1 - p, 2)(1, 2), mix(bell))
+        werner = apply(depolarizing_channel(1 - p, 2)(1, 2), mix(bell))
         @test log_negativity(werner, [1], [2]) ≈ max(0, log((1 + 3p) / 2)) atol = 1e-12
     end
     q = random_state(Pure, System(4, Qubit()), 4)

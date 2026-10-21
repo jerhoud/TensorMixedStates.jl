@@ -188,7 +188,7 @@ end
             @test mutual_info_renyi2(ψ, kept) ≈ S2(r) + S2(jw_reduced(sys, full, rest)) atol = 1e-10
             @test mutual_info_renyi2(ρ, kept) ≈ S2(rm) + S2(jw_reduced(sys, R, rest)) - S2(R) atol =
                   1e-10
-            @test vonneumann_entropy(ψ, kept) ≈ SvN(r) atol = 1e-10
+            @test von_neumann_entropy(ψ, kept) ≈ SvN(r) atol = 1e-10
             if kept == 1:last(kept)
                 @test entanglement_entropy(ψ, last(kept)) ≈ SvN(r) atol = 1e-10
             end

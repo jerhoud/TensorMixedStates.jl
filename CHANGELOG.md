@@ -24,15 +24,15 @@ version 2.x.
   type gets from those it declares, as `Sm` from `Sp`.
 - `thermalize` and the phase `Thermalize`, the thermal state of a Hamiltonian, or its canonical
   state from `fully_mixed` of a sector.
-- Channels and their dissipators: `depolarizing_gate`, `dephasing_gate`, `reset_gate`, and for
-  qubits `amplitude_damping_gate` and `thermal_relaxation_gate`; `Dephase`, a measurement whose
-  result is not read.
+- Channels and their dissipators: `depolarizing_channel`, `dephasing_channel`, `reset_channel`,
+  and for qubits `amplitude_damping_channel` and `thermal_relaxation_channel`; `Dephase`, a
+  measurement whose result is not read.
 - Prepared states: `superposition`, `mixture`, `ghz_state`, `w_state`, `dicke_state`,
   `dimer_state`, `aklt_state`, `mps_state`, `dense_state`, `fully_mixed`, `slater_state` and
   `fermi_sea`.
 - `probabilities`, `sample(state, op)` and `collapse`, the measurement of an operator placed on
   sites, its result drawn or given.
-- `reduced_density_matrix`, `vonneumann_entropy` and `log_negativity`, with their measurements.
+- `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity`, with their measurements.
 - `Proj(A => λ)`, the projector on an eigenspace, and `Level => n`, the basis state `n` of any
   site.
 - The phases `Update`, which changes the simulation by a function, and `CopyState`, which keeps
@@ -69,6 +69,8 @@ version 2.x.
   `(residual, state)` and `(log_trace, state)`, which destructure as the tuples of 1.x did.
 - `entanglement_entropy(state, cut)` returns the entropy, and the new `entanglement_spectrum`
   the spectrum, where 1.x returned both.
+- `SteadyState` provides the eigenvalue of ``L^\dagger L`` as `:residual`, where 1.x named it
+  `:energy`, which its lists of measurements cannot read, it being that of another phase.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a

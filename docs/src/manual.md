@@ -446,12 +446,12 @@ Noise acts on a mixed state, either as a channel applied between gates, or as a 
 evolver. Three kinds are ready for sites of any type, each as a channel `…_gate(p, …)`, taking
 place with probability `p`, and as a generator `…_dissipator(γ, …)`, of rate `γ`:
 
-- [`reset_gate`](@ref)`(p, state)` resets a site to `state`, see `Reset`; with `n`,
-  `reset_gate(p, n, state)` resets `n` sites together, and `reset_gate(p, [s1, s2])`
+- [`reset_channel`](@ref)`(p, state)` resets a site to `state`, see `Reset`; with `n`,
+  `reset_channel(p, n, state)` resets `n` sites together, and `reset_channel(p, [s1, s2])`
   each site to its state;
-- [`depolarizing_gate`](@ref)`(p, n)` is the reset to `"FullyMixed"`: on a qubit, the channel
-  applying each Pauli operator with probability `p/3` is `depolarizing_gate(4p/3)`;
-- [`dephasing_gate`](@ref)`(p, A)` erases the coherences between the eigenspaces of `A`, or
+- [`depolarizing_channel`](@ref)`(p, n)` is the reset to `"FullyMixed"`: on a qubit, the channel
+  applying each Pauli operator with probability `p/3` is `depolarizing_channel(4p/3)`;
+- [`dephasing_channel`](@ref)`(p, A)` erases the coherences between the eigenspaces of `A`, or
   in the basis of the site without `A`, see `Dephase`.
 
 Evolving under a generator for a time `t` is the channel of probability ``1 - e^{-\gamma t}``.
@@ -465,12 +465,12 @@ measure(mydephased, X)
 ```
 
 ```@example manual
-measure(apply(prod(dephasing_gate(1 - exp(-0.5))(i) for i in 1:2), myplus), X)
+measure(apply(prod(dephasing_channel(1 - exp(-0.5))(i) for i in 1:2), myplus), X)
 ```
 
-Sites reset together are not sites reset each on its own: `depolarizing_gate(p, 2)`
+Sites reset together are not sites reset each on its own: `depolarizing_channel(p, 2)`
 depolarizes both sites with probability `p`, where
-`depolarizing_gate(p) ⊗ depolarizing_gate(p)` depolarizes each with probability `p`. And
+`depolarizing_channel(p) ⊗ depolarizing_channel(p)` depolarizes each with probability `p`. And
 `dephasing_dissipator(γ, A)` damps every coherence between two eigenspaces of `A` at the rate
 `γ`, where `Dissipator(A)` damps it at ``(\lambda_a - \lambda_b)^2/2``, faster for distant
 eigenvalues; they agree on a qubit, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`.
@@ -484,9 +484,9 @@ for a time `t`, `exp(t * L)`.
 On a qubit, `"Up"` is ``|0\rangle`` and `"Dn"` ``|1\rangle``, the excitation `N` counts: the
 decay of an excitation, from `"Dn"` to `"Up"`, is `Dissipator(Sp)`, and `Dissipator(Sm)`, which
 takes `"Up"` to `"Dn"` in the evolution above, excites. The decay is given for sites of any type
-by [`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref), of the
+by [`amplitude_damping_channel`](@ref) and [`amplitude_damping_dissipator`](@ref), of the
 excitations an operator destroys, `Sp` by default, and the relaxation of times ``T_1`` and
-``T_2`` of a qubit, its decay and its dephasing, by [`thermal_relaxation_gate`](@ref) and
+``T_2`` of a qubit, its decay and its dephasing, by [`thermal_relaxation_channel`](@ref) and
 [`thermal_relaxation_dissipator`](@ref) of the module `Qubits`.
 
 ### Steady states

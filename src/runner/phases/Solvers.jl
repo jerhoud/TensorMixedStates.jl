@@ -236,11 +236,12 @@ end
 run the search of `phase`, `GroundState` or `SteadyState`, of the lowest eigenvector of `mpo`
 from the state `phase.on` of `sim`, its first `done` sweeps done, each sweep ending with
 `step_done` on the state `result` makes of the eigenvector, and return the simulation with that
-state and the value `:energy`; `check(energy, state)` warns about the state of the last sweep,
-before its step, and `args` are the other keywords of `search`
+state and the eigenvalue as the value `name`; `check(value, state)` warns about the state of the
+last sweep, before its step, and `args` are the other keywords of `search`
 """
-function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check; args...)
-    energy = done == 0 ? nothing : sim.energy
+function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check, name::Symbol;
+                    args...)
+    energy = done == 0 ? nothing : getproperty(sim, name)
     reached = Ref(sim)
     function hook(k, e, st, ends)
         r = result(st)
@@ -248,11 +249,11 @@ function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check; 
         if ends
             check(e, r)
         end
-        reached[] = step_done(with_state(sim, phase.on, r; energy = e), phase, k; last = ends)
+        reached[] = step_done(with_state(sim, phase.on, r; (name => e,)...), phase, k; last = ends)
     end
     e, st = search(phase.algo, mpo, state_named(sim, phase.on), phase.limits; sweep_done = hook,
                    done, energy, args...)
-    return with_state(reached[], phase.on, result(st); energy = e)
+    return with_state(reached[], phase.on, result(st); (name => e,)...)
 end
 
 """
@@ -313,7 +314,8 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
     return run_search(phase, sim, done, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing),
-                      identity, (_, st) -> check_orthogonal(st, args, phase.weight); args...)
+                      identity, (_, st) -> check_orthogonal(st, args, phase.weight), :energy;
+                      args...)
 end
 
 """
@@ -321,8 +323,9 @@ end
                   name, time_start, final_measurements)
 
 a phase that searches the steady state of a Lindbladian from the mixed state, see
-`steady_state`, the value `:energy` taking the eigenvalue of ``L^\\dagger L`` of each sweep, 0
-for a steady state, and the state measured after a sweep having trace one.
+`steady_state`, the value `:residual` taking the eigenvalue of ``L^\\dagger L`` of each sweep, 0
+for a steady state, and the state measured after a sweep having trace one. Its lists of
+measurements cannot read `:energy`, which would be that of another phase.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -357,7 +360,10 @@ for a steady state, and the state measured after a sweep having trace one.
             limits, mpo_limits, measurements, measurements_period, on)
 end
 
-provided_values(::SteadyState) = (:energy,)
+provided_values(::SteadyState) = (:residual,)
+
+refused_reads(::SteadyState) =
+    ((:energy, "the value of a steady state search is residual, the eigenvalue of L†L"),)
 
 function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     state = state_named(sim, phase.on)
@@ -366,6 +372,6 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     end
     l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits)
     log_message(sim, "Searching the steady state")
-    return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result;
+    return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result, :residual;
                       krylov = steady_krylov)
 end

@@ -65,10 +65,10 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
   `Dissipator(c * L)` is `abs2(c) * Dissipator(L)`: a rate γ is `Dissipator(sqrt(γ) * L)`,
   exactly as a collapse operator of QuTiP.
 - On a qubit `"Up"` is ``|0\rangle``, `Z = +1` there, `"Dn"` is ``|1\rangle``, `N` counts `"Dn"`,
-  and `Sp` takes `"Dn"` to `"Up"`; `amplitude_damping_gate` and `amplitude_damping_dissipator`
+  and `Sp` takes `"Dn"` to `"Up"`; `amplitude_damping_channel` and `amplitude_damping_dissipator`
   take `"Dn"` to `"Up"`.
-- `depolarizing_gate(p)` is ``(1 - p)\rho + p I/d``: a Pauli error of probability ``p/3``
-  each is `depolarizing_gate(4p/3)`.
+- `depolarizing_channel(p)` is ``(1 - p)\rho + p I/d``: a Pauli error of probability ``p/3``
+  each is `depolarizing_channel(4p/3)`.
 - In a product of gates the rightmost acts first. The gates are in `using .Circuits`: `H`, `S`,
   `T`, `Phase(θ)`, `CX` or `CNOT`, `CZ`, `CCX` or `Toffoli`, and the rotations, `Rx(θ)` being
   ``e^{-i\theta X/2}`` and `Rxx(θ)` ``e^{-i\theta X \otimes X/2}``, as in Qiskit.

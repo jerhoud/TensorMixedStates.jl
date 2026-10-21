@@ -60,20 +60,20 @@ Noisy gates can be defined using the `Gate` constructor, for example
 noisygate = 0.7Gate(Id) + 0.1Gate(X) + 0.1Gate(Y) + 0.1Gate(Z)
 ```
 
-The reset of sites of any type to a state is the channel [`reset_gate`](@ref), and
+The reset of sites of any type to a state is the channel [`reset_channel`](@ref), and
 its Lindblad generator, for an evolver, [`reset_dissipator`](@ref); to the fully mixed
-state, it is the depolarization, [`depolarizing_gate`](@ref) and
+state, it is the depolarization, [`depolarizing_channel`](@ref) and
 [`depolarizing_dissipator`](@ref). The dephasing channel and its
-generator are [`dephasing_gate`](@ref) and [`dephasing_dissipator`](@ref), built on
+generator are [`dephasing_channel`](@ref) and [`dephasing_dissipator`](@ref), built on
 [`Dephase`](@ref), and the decay of the excitations an operator destroys,
-[`amplitude_damping_gate`](@ref) and [`amplitude_damping_dissipator`](@ref).
+[`amplitude_damping_channel`](@ref) and [`amplitude_damping_dissipator`](@ref).
 
-Two conventions differ from one text to another. `depolarizing_gate(p)` replaces the state of a
+Two conventions differ from one text to another. `depolarizing_channel(p)` replaces the state of a
 site by the fully mixed one with probability `p`, ``(1 - p)\rho + p\,I/d``: on a qubit, the
 channel ``(1 - p)\rho + \frac{p}{3}(X \rho X + Y \rho Y + Z \rho Z)``, which applies each
-Pauli operator with probability ``p/3``, is `depolarizing_gate(4p/3)`. On a qubit, `"Up"` is
+Pauli operator with probability ``p/3``, is `depolarizing_channel(4p/3)`. On a qubit, `"Up"` is
 ``|0\rangle`` and `"Dn"` is ``|1\rangle``, the excitation that `N` counts and that `Sp`
-destroys: `amplitude_damping_gate` and `amplitude_damping_dissipator` take `"Dn"` to `"Up"`.
+destroys: `amplitude_damping_channel` and `amplitude_damping_dissipator` take `"Dn"` to `"Up"`.
 
 And they define observables
 
@@ -106,13 +106,13 @@ Dissipator
 Gate
 Reset
 Dephase
-reset_gate
+reset_channel
 reset_dissipator
-depolarizing_gate
+depolarizing_channel
 depolarizing_dissipator
-dephasing_gate
+dephasing_channel
 dephasing_dissipator
-amplitude_damping_gate
+amplitude_damping_channel
 amplitude_damping_dissipator
 Evolver
 named

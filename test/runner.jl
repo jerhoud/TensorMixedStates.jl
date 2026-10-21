@@ -99,6 +99,14 @@ end
     # a value measured that no phase provides
     @test_throws "reads energy" SimData(; phases, final_measurements = "f" => :energy)
     @test_throws "reads ground" SimData(; phases, final_measurements = "f" => Fidelity(:ground))
+    # the energy in a list of a SteadyState, which would be that of a GroundState before it, its
+    # own value being the residual
+    steady(m) = SteadyState(lindbladian = Dissipator(Sm)(1), algo = Dmrg(nsweeps = 1),
+                            measurements = "s" => m)
+    ground = GroundState(hamiltonian = Z(1), algo = Dmrg(nsweeps = 1))
+    msg = "of a SteadyState reads energy: the value of a steady state search is residual"
+    @test_throws msg SimData(phases = [phases; ground; ToMixed(); steady(:energy)])
+    @test_ok SimData(phases = [phases; ground; ToMixed(); steady(:residual)])
     measured = "f" => [Fidelity(:ground), :step, "r" => c -> rand(c.rng)]
     @test_ok SimData(phases = [phases; CopyState(:state => :ground)], final_measurements = measured)
     @test_ok SimData(phases = [phases; GroundState(hamiltonian = Z(1), algo = Dmrg(nsweeps = 1))],
@@ -153,7 +161,7 @@ end
                   ToMixed(),
                   SteadyState(lindbladian = -im * H + Dissipator(Sm)(1) + Dissipator(Sp)(4),
                               algo = Dmrg(nsweeps = 4), limits = lim,
-                              measurements = "steady" => [:energy, Z(1), tr])]
+                              measurements = "steady" => [:residual, Z(1), tr])]
         sd(name) = SimData(; name, seed = 1, phases,
                            final_measurements = "end" => [tr, :energy, draw, Fidelity(:start)])
         ref = runTMS(sd("ref"))
@@ -163,6 +171,7 @@ end
         end
         @test norm(sim.state - ref.state) < 1e-12
         @test sim.energy ≈ ref.energy
+        @test sim.residual ≈ ref.residual atol = 1e-12
         @test !haskey(getfield(sim, :values), :start)
         # the search ended on its tolerance, before its 30 sweeps
         @test 3 < length(readlines("ref/search")) < 31

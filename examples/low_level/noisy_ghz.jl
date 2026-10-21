@@ -11,7 +11,7 @@ sys = System(n, Qubit())
 
 # the rightmost gate acts first: H on the first qubit, then CNOT(1, 2), CNOT(2, 3), ...
 circuit = prod(CX(i, i + 1) for i in n-1:-1:1) * H(1)
-noise = prod(depolarizing_gate(p)(i) for i in 1:n)
+noise = prod(depolarizing_channel(p)(i) for i in 1:n)
 ρ = apply(noise, apply(circuit, State{Mixed}(sys, "Up")))
 ghz = ghz_state(sys, "Up", "Dn")
 
