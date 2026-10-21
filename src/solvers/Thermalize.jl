@@ -29,9 +29,10 @@ the mixed state ``\\rho``, normalized to trace one, taken to
 ``e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2}`` by an evolution in imaginary time in `nsteps` steps
 of `beta / nsteps`, or in steps of `beta_step` adjusted as the `time_step` of `evolve`, one of
 the two being given, by the method `algo`, see `EvolutionAlgorithm` (`ApproxW` has its limits
-there), the state normalized to trace one at each step. It is returned as `(log_trace, state)`,
-`log_trace` being ``\\log \\mathrm{tr}(e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2})`` for ``\\rho``
-of trace one, so that the `log_trace` of successive calls add up.
+there), the state normalized to trace one at each step. It is returned as the named tuple
+`(log_trace, state)`, `log_trace` being
+``\\log \\mathrm{tr}(e^{-\\beta H/2} \\rho \\, e^{-\\beta H/2})`` for ``\\rho`` of trace one, so
+that the `log_trace` of successive calls add up.
 
 From `"FullyMixed"`, it gives the thermal state ``e^{-\\beta H}/Z``, and `log_trace` is
 ``\\log Z - \\sum_i \\log d_i``, ``d_i`` being the dimension of site `i`. A state commuting
@@ -56,7 +57,7 @@ function thermalize(hamiltonian, beta::Real, state::State{Mixed};
     nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
     # a beta shorter than half a step leaves the state normalized only, as the phase does
     if nsteps == 0
-        return (0., step == 1 ? normalize(state) : state)
+        return (log_trace = 0., state = step == 1 ? normalize(state) : state)
     end
     pre = prepared_operator(state, hamiltonian, mpo_limits)
     # a continued computation is not normalized again, which would change its rounding, and the
@@ -70,7 +71,7 @@ function thermalize(hamiltonian, beta::Real, state::State{Mixed};
                                 step_limits(limits, step + k))
         log_trace += l
     end
-    return (log_trace, state)
+    return (; log_trace, state)
 end
 
 # ::Any rather than _, which Julia 1.10 refuses before keywords

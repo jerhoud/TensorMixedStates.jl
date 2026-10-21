@@ -65,6 +65,10 @@ version 2.x.
   `beta_step`, with no default, where 1.x made one step; `Evolve` and `Thermalize` take either.
 - `CreateState` takes the type of its state, `type = Pure`, where 1.x took `Pure()`, by default
   that of a `State` given, as `CreateState(ψ)`, and `CreateState{Pure}(system, state)`.
+- `ground_state`, `steady_state` and `thermalize` return named tuples, `(energy, state)`,
+  `(residual, state)` and `(log_trace, state)`, which destructure as the tuples of 1.x did.
+- `entanglement_entropy(state, cut)` returns the entropy, and the new `entanglement_spectrum`
+  the spectrum, where 1.x returned both.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a

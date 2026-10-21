@@ -190,7 +190,7 @@ end
                   1e-10
             @test vonneumann_entropy(ψ, kept) ≈ SvN(r) atol = 1e-10
             if kept == 1:last(kept)
-                @test first(entanglement_entropy(ψ, last(kept))) ≈ SvN(r) atol = 1e-10
+                @test entanglement_entropy(ψ, last(kept)) ≈ SvN(r) atol = 1e-10
             end
         end
     end

@@ -202,6 +202,8 @@ TensorMixedStates.variance(st::WrappedState, op) = variance(st.inner, op)
 TensorMixedStates.renyi2(st::WrappedState, positions::AbstractVector) = renyi2(st.inner, positions)
 TensorMixedStates.entanglement_entropy(st::WrappedState, cut::Int) =
     entanglement_entropy(st.inner, cut)
+TensorMixedStates.entanglement_spectrum(st::WrappedState, cut::Int) =
+    entanglement_spectrum(st.inner, cut)
 
 @testset "The measurements of the library on a state of one's own" begin
     # measured by the functions it defines, each state anew, where Variance failed to convert

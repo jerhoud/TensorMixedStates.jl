@@ -562,7 +562,7 @@ end
     @test re([X(1)X(2), X(2)X(3), X(1)X(6)]) ≈ fill(0.1123126174, 3) atol = 1e-7
     fours = [X(1)X(2)X(3)X(4), X(2)X(3)X(4)X(5), X(4)X(5)X(6)X(1)]
     @test re(fours) ≈ fill(0.1123126174, 3) atol = 1e-7
-    @test first(entanglement_entropy(st, 3)) ≈ 1.15220908566 atol = 1e-7
+    @test entanglement_entropy(st, 3) ≈ 1.15220908566 atol = 1e-7
     @test re(X(1)X(2)X(3)X(4)X(5)X(6)) ≈ 1 atol = 1e-8
 end
 
@@ -799,6 +799,7 @@ end
     h = -sum(Z(i) * Z(i+1) for i in 1:n-1) - 0.7 * sum(X(i) for i in 1:n)
     ρ0 = State{Mixed}(sys, "FullyMixed")
     l, ρ = thermalize(h, β, ρ0; nsteps = 13, limits = lim)
+    @test keys(thermalize(h, β, ρ0; nsteps = 13, limits = lim)) == (:log_trace, :state)
     dense = -sum(on_qubit(z, i, n) * on_qubit(z, i+1, n) for i in 1:n-1) -
             0.7 * sum(on_qubit(x, i, n) for i in 1:n)
     g = exp(-β * dense)

@@ -179,7 +179,7 @@ end
                  orthogonal_to = [], weight = nothing)
 
 the ground state of the Hamiltonian, searched from the pure `state` by the method `algo`, see
-`SearchAlgorithm`, as `(energy, state)`. The Hamiltonian may be given as its
+`SearchAlgorithm`, as the named tuple `(energy, state)`. The Hamiltonian may be given as its
 `PreMPO(state, hamiltonian)`, prepared once for several searches and keeping its MPO. `limits`,
 see `Limits`, may give one value per sweep, with a default cutoff of `1e-26`, and `mpo_limits`
 truncates the MPO of the Hamiltonian, see `PreMPO` (default none). A mixed state is
@@ -210,7 +210,7 @@ function ground_state(hamiltonian, state::State{Pure};
     mpo = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
     e, st = search(algo, mpo, state, limits; args...)
     check_orthogonal(st, args, weight)
-    return (e, st)
+    return (energy = e, state = st)
 end
 
 # ::Any rather than _, which Julia 1.10 refuses before keywords
@@ -250,7 +250,7 @@ function steady_result(value, state::State{Mixed})
         @warn "the steady state found has a HermiticityDeviation of $(round(δ; sigdigits = 2)): " *
               "the search has not converged, or the steady state is not unique, see steady_state"
     end
-    return (value, ρ)
+    return (residual = value, state = ρ)
 end
 
 """
@@ -258,10 +258,11 @@ end
 
 the steady state of the Lindbladian ``L``, `-im * H` plus dissipators, the lowest eigenvector
 of ``L^\\dagger L`` searched from the mixed `state` by the method `algo`, see
-`SearchAlgorithm`, as `(value, state)` with trace one, `value` being the eigenvalue reached,
-zero for a steady state. The MPO of ``L^\\dagger L``, built from that of ``L``, has as few
-channels as its rank across each link. The Lindbladian may be given as its
-`PreMPO(state, lindbladian)`, prepared once and keeping the MPO of ``L^\\dagger L``.
+`SearchAlgorithm`, as the named tuple `(residual, state)`, the state of trace one and
+`residual` the eigenvalue reached, zero for a steady state. The MPO of ``L^\\dagger L``,
+built from that of ``L``, has as few channels as its rank across each link. The Lindbladian
+may be given as its `PreMPO(state, lindbladian)`, prepared once and keeping the MPO of
+``L^\\dagger L``.
 
 - `limits`: the limits of the sweeps, see `Limits`, with a default cutoff of `1e-26`
 - `mpo_limits`: the truncation of the MPO of ``L^\\dagger L``, see `PreMPO` (default none)

@@ -102,7 +102,7 @@ measure(ψt, Z)  # a measurement alone gives its value, [Z] the vector of one pa
 measure(ψt, ["E" => c -> expect(c.state, ham), "t" => c -> c.time]; time = 1.0)
 # one value at a time
 expect(ψt, X(1) * X(10)); expect1(ψt, Z); expect2(ψt, (X, X))
-purity(ρt); maxlinkdim(ψt); entanglement_entropy(ψt, 5)  # (entropy, spectrum)
+purity(ρt); maxlinkdim(ψt); entanglement_entropy(ψt, 5); entanglement_spectrum(ψt, 5)
 probabilities(ψt, Z(1) * Z(2)); sample(ψt, Z(1)); collapse(ψt, Z(1))  # (result, probability, state)
 ```
 

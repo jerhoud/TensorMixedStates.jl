@@ -8,7 +8,7 @@ using TensorMixedStates, .Qubits, .Circuits, LinearAlgebra
 
 # a GHZ state of 6 qubits: the entanglement entropy across each of its cuts
 ghz = ghz_state(System(6, Qubit()), "Up", "Dn")
-entropies = [ first(entanglement_entropy(ghz, cut)) for cut in 1:5 ]   # the entropy, then its spectrum
+entropies = [ entanglement_entropy(ghz, cut) for cut in 1:5 ]
 println("GHZ, entropy across each cut ", entropies, ", log 2 = ", log(2))
 
 # a Bell pair, then the depolarization of the two qubits together

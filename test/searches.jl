@@ -534,3 +534,17 @@ end
     ground_state(pre, ψ; algo, mpo_limits = lim)
     @test last(pre.cache[:truncated]) === t
 end
+
+@testset "The searches return named tuples" begin
+    # (energy, state) and (residual, state), destructured as tuples or read by their names
+    h = sum(X(i) * X(i + 1) for i in 1:2)
+    r = ground_state(h, State{Pure}(System(3, Qubit()), "Up"); algo = Dmrg(nsweeps = 4))
+    e, ψ = r
+    @test r.energy == e && r.state === ψ
+    (; energy, state) = r
+    @test energy == e && state === ψ
+    s = steady_state(Dissipator(Sp)(1), State{Mixed}(System(1, Qubit()), "FullyMixed");
+                     algo = Dmrg(nsweeps = 2))
+    @test keys(s) == (:residual, :state)
+    @test s.residual ≈ 0 atol = 1e-10
+end

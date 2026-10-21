@@ -219,27 +219,27 @@ end
     up = zeros(3, 2, 3)
     up[1, 1, 1] = 1
     g = mps_state(s4, [up[1:1, :, :], up, up, up[:, :, 1:1]])
-    @test entanglement_entropy(g, 2)[1] ≈ 0 atol=1e-12
+    @test entanglement_entropy(g, 2) ≈ 0 atol=1e-12
     bell = (State{Pure}(s2, "Up") + State{Pure}(s2, "Dn")) / sqrt(2)
     ghz = (State{Pure}(s4, "Up") + State{Pure}(s4, "Dn")) / sqrt(2)
     product = State{Pure}(s4, "Up")
     fullymixed = State{Mixed}(s4, "FullyMixed")
 
     # a maximally entangled pair carries one bit, with a flat spectrum
-    e, spectrum = entanglement_entropy(bell, 1)
+    e, spectrum = entanglement_entropy(bell, 1), entanglement_spectrum(bell, 1)
     @test e ≈ L2
     @test spectrum ≈ [0.5, 0.5]
     # a GHZ state carries that same one bit wherever it is cut
     for cut in 1:3
-        @test entanglement_entropy(ghz, cut)[1] ≈ L2
+        @test entanglement_entropy(ghz, cut) ≈ L2
     end
     # the cut is on the right of the site, so the last site separates the whole state from
     # nothing, and a position outside the chain is no cut at all
-    @test entanglement_entropy(ghz, 4)[1] ≈ 0 atol=1e-12
+    @test entanglement_entropy(ghz, 4) ≈ 0 atol=1e-12
     @test_throws "entanglement entropy at site 0 of a 4 site state" entanglement_entropy(ghz, 0)
     @test_throws "entanglement entropy at site 5 of a 4 site state" entanglement_entropy(ghz, 5)
     # a product state carries none
-    e, spectrum = entanglement_entropy(product, 2)
+    e, spectrum = entanglement_entropy(product, 2), entanglement_spectrum(product, 2)
     @test e ≈ 0 atol=1e-12
     @test spectrum ≈ [1.]
 
@@ -343,7 +343,7 @@ end
     p(v) = State{Pure}(f, v)
     st = (p(["Occ", "Emp", "Emp", "Occ"]) + 0.5 * p(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
     for pos in 1:4
-        @test total(entanglement_by_sector(st, pos)) ≈ first(entanglement_entropy(st, pos))
+        @test total(entanglement_by_sector(st, pos)) ≈ entanglement_entropy(st, pos)
     end
 
     # cut after one site, the charge on the left is either one particle or none
@@ -356,7 +356,7 @@ end
     @test collect(keys(d)) == [IT.QN("N", 1)]
     @test d[IT.QN("N", 1)].weight ≈ 1
     @test d[IT.QN("N", 1)].spectrum ≈ [0.8, 0.2]
-    @test d[IT.QN("N", 1)].entropy ≈ first(entanglement_entropy(st, 2))
+    @test d[IT.QN("N", 1)].entropy ≈ entanglement_entropy(st, 2)
 
     # several quantities at once, and a charge modulo 2 over a basis whose charges repeat
     e = System(3, Electron(conserve = (Ntot, 2Sz)))
@@ -377,7 +377,7 @@ end
     sd = (pd(["Occ", "Emp", "Emp", "Occ"]) + 0.5 * pd(["Emp", "Occ", "Occ", "Emp"])) / sqrt(1.25)
     d = entanglement_by_sector(sd, 2)
     @test collect(keys(d)) == [IT.QN()]
-    @test d[IT.QN()].spectrum ≈ last(entanglement_entropy(sd, 2))
+    @test d[IT.QN()].spectrum ≈ entanglement_spectrum(sd, 2)
 
     # a mixed representation is refused, its links pairing the charge of a ket with a bra
     @test_throws "takes a pure state" entanglement_by_sector(mix(st), 1)
@@ -1020,8 +1020,8 @@ end
     @test typeof.(last.(measure(d, ms))) == typeof.(last.(measure(q, ms)))
     @test last(measure(q, ms)[5]) isa Float64
     both(s -> norm(s))
-    both(s -> entanglement_entropy(s, 2)[1])
-    both(s -> collect(entanglement_entropy(s, 2)[2]))
+    both(s -> entanglement_entropy(s, 2))
+    both(s -> entanglement_spectrum(s, 2))
 
     both(s -> trace(mix(s)))
     both(s -> purity(mix(s)))
@@ -1216,7 +1216,7 @@ end
     bell = apply(controlled(X)(1, 2) * H(1), State{Pure}(System(3, Qubit()), "Up"))
     @test vonneumann_entropy(bell, [1]) ≈ log(2)
     @test abs(vonneumann_entropy(bell, [1, 2])) < 1e-12
-    @test vonneumann_entropy(q, 1:2) ≈ first(entanglement_entropy(q, 2))
+    @test vonneumann_entropy(q, 1:2) ≈ entanglement_entropy(q, 2)
     @test vonneumann_entropy(q, []) === 0.0
     measured = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
     @test measured["ReducedDensityMatrix(1,3)"] ≈ ρ

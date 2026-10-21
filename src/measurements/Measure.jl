@@ -313,21 +313,23 @@ LogNegativity(a::AbstractVector, b::AbstractVector) =
     EntanglementEntropy(cut, n)
 
 the measurement of the entanglement entropy across the cut between sites `cut` and `cut + 1`,
-see `entanglement_entropy`, followed, given `n`, by the first `n` values of the spectrum,
-padded with zeros beyond the bond dimension of the cut
+see `entanglement_entropy`, followed, given `n`, by the first `n` values of the spectrum, see
+`entanglement_spectrum`, padded with zeros beyond the bond dimension of the cut
 """
 EntanglementEntropy(cut::Int) =
     StateMeasurement("EntanglementEntropy($cut)", function (state)
         check_positions(state, [cut], "EntanglementEntropy")
-        return st -> first(entanglement_entropy(st, cut))
+        return st -> entanglement_entropy(st, cut)
     end)
 
 EntanglementEntropy(cut::Int, n::Int) =
     StateMeasurement("EntanglementEntropy($cut,$n)", function (state)
         check_positions(state, [cut], "EntanglementEntropy")
         return function (st)
-            ee, sp = entanglement_entropy(st, cut)
-            return [ ee ; sp[1:min(length(sp), n)] ; zeros(max(0, n - length(sp))) ]
+            # the entropy of the spectrum, which one decomposition gives
+            sp = entanglement_spectrum(st, cut)
+            return [ shannon_entropy(sp) ; sp[1:min(length(sp), n)] ;
+                     zeros(max(0, n - length(sp))) ]
         end
     end)
 

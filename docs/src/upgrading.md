@@ -72,7 +72,9 @@ by `limits = Limits(cutoff = …, maxdim = …, mindim = …)`, and a Krylov met
 
 `Dmrg` has no default number of sweeps, which `dmrg` took as 1. `ground_state` no longer takes
 an MPO: give the operator, or its `PreMPO(state, operator)`, prepared once for several calls. A
-mixed state is refused by `ground_state`: search the pure state and mix it.
+mixed state is refused by `ground_state`: search the pure state and mix it. `ground_state`,
+`steady_state` and `thermalize` return named tuples, `(energy, state)`, `(residual, state)` and
+`(log_trace, state)`, which destructure as before.
 
 ## Measurements
 
@@ -91,6 +93,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it.
 | `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
 | `variance(h, state)` | `variance(state, h)` |
+| `ee, spectrum = entanglement_entropy(state, cut)` | `entanglement_entropy(state, cut)`, `entanglement_spectrum(state, cut)` |
 | `partial_trace(state, positions)` | `partial_trace(state; trace_out = positions)` |
 | `partial_trace(state, positions; keepers = true)` | `partial_trace(state; keep = positions)` |
 | `:sweep` in a list of measurements | `:step` |

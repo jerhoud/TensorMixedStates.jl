@@ -134,6 +134,7 @@ sample(::State{Pure})
 probabilities
 collapse
 entanglement_entropy
+entanglement_spectrum
 entanglement_by_sector
 renyi2
 mutual_info_renyi2

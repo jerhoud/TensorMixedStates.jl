@@ -3,7 +3,8 @@
 # parts, the fidelity of two states and the variance of an operator.
 
 export purity, hermiticity, hermitianize, renyi2, mutual_info_renyi2, entanglement_entropy,
-       entanglement_by_sector, reduced_density_matrix, vonneumann_entropy, log_negativity,
+       entanglement_spectrum, entanglement_by_sector, reduced_density_matrix, vonneumann_entropy,
+       log_negativity,
        fidelity, hs_fidelity, variance
 
 """
@@ -120,16 +121,29 @@ end
 """
     entanglement_entropy(state, cut::Int)
 
-the entanglement entropy across the cut between sites `cut` and `cut + 1`, and the spectrum
-it is computed from, the eigenvalues of the reduced density matrix of the sites up to `cut`
-in decreasing order. `cut` runs from 1 to the number of sites, the last one giving 0. On a
-mixed representation, this is the operator space entanglement entropy (OSEE).
+the entanglement entropy across the cut between sites `cut` and `cut + 1`, that of the
+spectrum `entanglement_spectrum` gives. `cut` runs from 1 to the number of sites, the last one
+giving 0. On a mixed representation, this is the operator space entanglement entropy (OSEE).
 
 # Examples
 
-    ee, spectrum = entanglement_entropy(state, 3)   # cut between sites 3 and 4
+    entanglement_entropy(state, 3)   # cut between sites 3 and 4
 """
-entanglement_entropy(state::State, cut::Int) = entropy_spectrum(cut_svd(state, cut)[2])
+entanglement_entropy(state::State, cut::Int) = first(entropy_spectrum(cut_svd(state, cut)[2]))
+
+"""
+    entanglement_spectrum(state, cut::Int)
+
+the entanglement spectrum across the cut between sites `cut` and `cut + 1`, the eigenvalues of
+the reduced density matrix of the sites up to `cut` in decreasing order, whose entropy
+`entanglement_entropy` gives; on a mixed representation, the spectrum of the operator space
+entanglement entropy
+
+# Examples
+
+    entanglement_spectrum(state, 3)   # cut between sites 3 and 4
+"""
+entanglement_spectrum(state::State, cut::Int) = last(entropy_spectrum(cut_svd(state, cut)[2]))
 
 """
     entanglement_by_sector(state::State{Pure}, cut::Int)
@@ -233,7 +247,7 @@ function part_renyi2(state::State{Pure}, kept::Vector{Int})
     if isnothing(cut)
         return part_renyi2(mix(state), kept)
     end
-    return -log(sum(abs2, last(entanglement_entropy(trace_signs(state, kept), cut))))
+    return -log(sum(abs2, entanglement_spectrum(trace_signs(state, kept), cut)))
 end
 
 """

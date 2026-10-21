@@ -81,7 +81,9 @@ println(E, " ", measure(ρ, [Z, X(1) * X(n), Purity, MaxLinkdim]))
   list, `measure(ψ, [X(1), Z])`, a vector of pairs `name => value`. The value of a Hermitian
   operator is real, of any other complex, and so for `expect`, `expect1` and `expect2`;
   `complex = true` gives them the complex number computed. `Trace` and `trace` are complex.
-  `entanglement_entropy(ψ, cut)` returns `(entropy, spectrum)`.
+  `entanglement_entropy(ψ, cut)` returns the entropy, `entanglement_spectrum(ψ, cut)` the
+  spectrum; `ground_state`, `steady_state` and `thermalize` return named tuples,
+  `(energy, state)`, `(residual, state)` and `(log_trace, state)`.
 - `ground_state` and `steady_state` need `algo = Dmrg(nsweeps = …)`; there is no `dmrg`,
   `tdvp` or `approx_W` function in version 2. An error on a name of version 1 ends with a line
   saying what to write instead.
