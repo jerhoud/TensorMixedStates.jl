@@ -131,6 +131,19 @@ end
     @test maxlinkdim(apply(mpo, q2; apply_algo = "densitymatrix")) == 1
 end
 
+@testset "mix truncates to the limits it is given" begin
+    ψ = random_state(Pure, System(6, Qubit()), 4; rng = Xoshiro(2))
+    ρ = mix(ψ)
+    # the bond dimension squared, kept whole by the default limits
+    @test maxlinkdim(ρ) == 16
+    @test maxlinkdim(mix(ψ; limits = Limits())) == 16
+    @test mix(ρ) === ρ
+    lim = Limits(maxdim = 5)
+    @test maxlinkdim(mix(ψ; limits = lim)) == 5
+    @test norm(mix(ψ; limits = lim) - truncate(ρ; limits = lim)) < 1e-12
+    @test norm(mix(ρ; limits = lim) - truncate(ρ; limits = lim)) < 1e-12
+end
+
 @testset "Random states" begin
     sys = System(6, Qubit())
     @test maxlinkdim(random_state(Pure, sys, 8)) == 8

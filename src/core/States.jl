@@ -474,14 +474,20 @@ truncate(state::State; limits::Limits) =
     State(state, guarded(st -> truncate(st; truncation(limits)...), vanishes_exactly, state.state))
 
 """
-    mix(::State)
+    mix(::State; limits = Limits())
 
 the state in mixed representation: the density matrix ``|\\psi\\rangle\\langle\\psi|`` of a
-pure state, or a mixed state unchanged.
-"""
-mix(state::State{Mixed}) = state
+pure state, of the square of its bond dimension, or a mixed state unchanged; truncated to
+`limits`, see `truncate`, unless they are the default `Limits()`.
 
-function mix(state::State{Pure})
+# Examples
+
+    ρ = mix(ψ; limits = Limits(maxdim = 100))
+"""
+mix(state::State{Mixed}; limits::Limits = Limits()) =
+    limits == Limits() ? state : truncate(state; limits)
+
+function mix(state::State{Pure}; limits::Limits = Limits())
     n = length(state)
     system = state.system
     # `dense` makes ordinary a tensor left diagonal by a decomposition, but would drop the
@@ -508,7 +514,7 @@ function mix(state::State{Pure})
         end
         v[i] = mt
     end
-    return State{Mixed}(system, MPS(v))
+    return mix(State{Mixed}(system, MPS(v)); limits)
 end
 
 """
