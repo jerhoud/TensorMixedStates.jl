@@ -322,16 +322,48 @@ function expect_block(state::State, b::ComBlock)
 end
 
 """
-    PreparedOp
+    is_hermitian(system, terms, scale)
+
+whether the operator of the `terms` on `system` is Hermitian: their difference with their
+adjoints, see `dag(::Term)`, compacts to nothing once its terms of rounding size next to
+`scale`, see `term_size`, are dropped
+"""
+function is_hermitian(system::System, terms::Vector{Term}, scale::Real)
+    diff = reduced([ terms ; scaled(-1, map(dag, terms)) ])
+    kept = [ t for t in diff if term_size(t) > rounding_tol * scale ]
+    if isempty(kept)
+        return true
+    end
+    constant, singles, b = compacted(Pure, system, kept)
+    return abs(constant) ≤ rounding_tol * scale && isempty(singles) && isnothing(b)
+end
+
+"""
+    hermitian_blocks(c)
+
+whether the operator compacted `c`, see `compacted_op`, is Hermitian: zero, or of no flux, an
+adjoint changing the charges the other way, and minus its adjoint vanishing, see `vanishes`
+"""
+hermitian_blocks(c::CompactedOp) =
+    isnothing(c.flux) || (c.flux == QN() && vanishes(combined(c.system, [(c, 1), (c', -1)])))
+
+"""
+    PreparedOp(op, plain)
 
 an operator placed on sites made ready to be measured on the states of a system, see
 `prepare_op`: compacted, see `CompactedOp`, the bound of its norm bounding its expectation
-values, on the system or, when `plain`, on the same sites conserving nothing
+values, on the system or, when `plain`, on the same sites conserving nothing, and whether it is
+Hermitian, see `is_hermitian` and `hermitian_blocks`, which makes its values real
 """
 struct PreparedOp
     op::CompactedOp{Pure}
     plain::Bool
+    hermitian::Bool
 end
+
+PreparedOp(c::CompactedOp{Pure}, plain::Bool) =
+    PreparedOp(c, plain,
+               isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm))
 
 """
     worth_keeping(p)
@@ -348,8 +380,8 @@ worth_keeping(p::PreparedOp) = isnothing(p.op.terms) || length(p.op.terms) > 1
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`: compacted
 on `system`, see `compacted_op`, or, when it changes the charges by no definite amount, see
 `FluxError`, on the same sites conserving nothing, where it is measured on the state conserving
-nothing, see `plain_form`; `system` keeps it for the next calls once it is asked for twice, if
-it is `worth_keeping`, see `kept_for!`
+nothing, see `plain_form`, with whether it is Hermitian; `system` keeps it for the next calls
+once it is asked for twice, if it is `worth_keeping`, see `kept_for!`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
     return kept_for!(system, system.prepared, a; worth = worth_keeping) do
@@ -377,57 +409,6 @@ function prepared_value(state::State, p::PreparedOp)
         v += expect_block(state, c.block)
     end
     return v / nonzero_trace(state, "expect")
-end
-
-"""
-    is_hermitian(system, terms, scale)
-
-whether the operator of the `terms` on `system` is Hermitian: their difference with their
-adjoints, see `dag(::Term)`, compacts to nothing once its terms of rounding size next to
-`scale`, see `term_size`, are dropped
-"""
-function is_hermitian(system::System, terms::Vector{Term}, scale::Real)
-    diff = reduced([ terms ; scaled(-1, map(dag, terms)) ])
-    kept = [ t for t in diff if term_size(t) > rounding_tol * scale ]
-    if isempty(kept)
-        return true
-    end
-    constant, singles, b = compacted(Pure, system, kept)
-    return abs(constant) ≤ rounding_tol * scale && isempty(singles) && isnothing(b)
-end
-
-"""
-    hermitian_blocks(c)
-
-whether the operator compacted `c`, see `compacted_op`, is Hermitian: zero, or of no flux, an
-adjoint changing the charges the other way, and minus its adjoint vanishing, see `vanishes`
-"""
-hermitian_blocks(c::CompactedOp) =
-    isnothing(c.flux) || (c.flux == QN() && vanishes(combined(c.system, [(c, 1), (c', -1)])))
-
-"""
-    hermitian_op(system, a, p)
-
-whether the operator `a` placed on sites, prepared on `system` as `p`, see `prepare_op`, is
-Hermitian, see `is_hermitian` and `hermitian_blocks`, kept by `system` with the preparation
-"""
-function hermitian_op(system::System, a::IndexedOp{IsOperator}, p::PreparedOp)
-    found = lock(() -> get(system.hermitian, a, nothing), system.lock)
-    if !isnothing(found)
-        return found
-    end
-    c = p.op
-    h = isnothing(c.terms) ? hermitian_blocks(c) : is_hermitian(c.system, c.terms, c.norm)
-    # kept with the preparation of the operator, see prepare_op
-    lock(system.lock) do
-        if haskey(system.prepared, a)
-            if length(system.hermitian) ≥ prepared_limit
-                empty!(system.hermitian)
-            end
-            system.hermitian[a] = h
-        end
-    end
-    return h
 end
 
 """
@@ -535,8 +516,7 @@ function expect(state::State, a::IndexedOp{IsOperator}; complex::Bool = false)
     state = weak_form(state)
     p = prepare_op(state.system, a)
     x = prepared_value(state, p)
-    return complex ? complex_value(x) :
-                     ruled_value(x, hermitian_op(state.system, a, p), p.op.norm, obs_name(a))
+    return complex ? complex_value(x) : ruled_value(x, p.hermitian, p.op.norm, obs_name(a))
 end
 
 """
@@ -559,7 +539,7 @@ function expect(state::AbstractState, a::IndexedOp{IsOperator}; complex::Bool = 
         return complex_value(x)
     end
     p = prepare_op(state.system, a)
-    return ruled_value(x, hermitian_op(state.system, a, p), p.op.norm, obs_name(a))
+    return ruled_value(x, p.hermitian, p.op.norm, obs_name(a))
 end
 
 function expect(state::AbstractState, ops::AbstractArray; kwargs...)

@@ -26,11 +26,9 @@ struct System
     fermions::Vector{Int}
     # the systems it weakens to, see `weaken`, made once each, under `lock`, so that the states
     # of this system share theirs, and the operators prepared to be measured on its states, see
-    # `prepare_op`, with whether they are Hermitian, those asked for once leaving their hash in
-    # `seen`, see `kept_for!`
+    # `prepare_op`, those asked for once leaving their hash in `seen`, see `kept_for!`
     weakened::Dict{Conserved, System}
     prepared::Dict{IndexedOp{IsOperator}, Any}
-    hermitian::Dict{IndexedOp{IsOperator}, Bool}
     seen::Set{UInt}
     lock::ReentrantLock
     function System(sites::Vector{<:AbstractSite})
@@ -46,8 +44,7 @@ struct System
         # Julia's hash of a long vector reads only some of its elements
         key = foldl((h, s) -> hash(s, h), sites; init = hash(length(sites)))
         return new(copy(sites), key, charged, strong, fermions, Dict{Conserved, System}(),
-                   Dict{IndexedOp{IsOperator}, Any}(), Dict{IndexedOp{IsOperator}, Bool}(),
-                   Set{UInt}(), ReentrantLock())
+                   Dict{IndexedOp{IsOperator}, Any}(), Set{UInt}(), ReentrantLock())
     end
 end
 

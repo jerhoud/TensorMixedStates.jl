@@ -589,15 +589,14 @@ entries(m::Measure) = m.entries
 show(io::IO, m::Measure) = print(io, "Measure(", join(first.(m.entries), ", "), ")")
 
 """
-    OpValue(prepared, op, hermitian)
+    OpValue(prepared, op)
 
 an operator placed on sites as `measure` prepares it, see `prepare_op`, measured on the state
-of an extension by its `expect`; its value is made real when it is Hermitian
+of an extension by its `expect_value`; its value is made real when it is Hermitian
 """
 struct OpValue
     prepared::PreparedOp
     op::IndexedOp{IsOperator}
-    hermitian::Bool
 end
 
 """
@@ -655,8 +654,7 @@ staying as it is
 """
 function prepared_entry(state::AbstractState, a::IndexedOp{IsOperator})
     system = state isa State ? weak_form(state).system : state.system
-    p = prepare_op(system, a)
-    return OpValue(p, a, hermitian_op(system, a, p))
+    return OpValue(prepare_op(system, a), a)
 end
 
 prepared_entry(state::AbstractState, o::SimpleOp) =
@@ -693,8 +691,8 @@ holding the values of `expect1` and of `expect2` for the operators and the pairs
 function entry_value(it::OpValue, name, c::Context, _)
     state = c.state
     x = state isa State ? prepared_value(weak_form(state), it.prepared) : expect_value(state, it.op)
-    return it.hermitian ? real_value(x, it.prepared.op.norm, name, getfield(c, :time)) :
-                          complex_value(x)
+    return it.prepared.hermitian ? real_value(x, it.prepared.op.norm, name, getfield(c, :time)) :
+                                   complex_value(x)
 end
 
 function entry_value(it::Union{SiteValues, PairValues}, name, c::Context, computed)
@@ -761,8 +759,8 @@ function measure(state::AbstractState, m::Measure; time::Union{Nothing, Number} 
     ops = unique(SimpleOp[ it.op for it in items if it isa SiteValues ])
     pairs = unique(Tuple{SimpleOp, SimpleOp}[ it.pair for it in items if it isa PairValues ])
     # as computed: the values are made real or complex below, under their names
-    sites = isempty(ops) ? [] : expect1(state, ops; complex = true)
-    correlations = isempty(pairs) ? [] : expect2(state, pairs; complex = true)
+    sites = isempty(ops) ? [] : expect1_computed(state, ops)
+    correlations = isempty(pairs) ? [] : expect2_computed(state, pairs)
     computed = (sites = Dict(zip(ops, sites)), pairs = Dict(zip(pairs, correlations)))
     c = Context(state, time, given)
     return Pair{String, Any}[ name => entry_value(it, name, c, computed)

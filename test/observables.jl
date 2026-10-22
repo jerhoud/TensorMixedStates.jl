@@ -1693,10 +1693,10 @@ end
     h() = sum(X(i) * X(i + 1) for i in 1:3) + 0.5 * Z(2)
     a, b = random_state(Pure, sys, 4), random_state(Pure, sys, 4)
     expect(a, h())
-    @test isempty(sys.prepared) && isempty(sys.hermitian) && length(sys.seen) == 1
+    @test isempty(sys.prepared) && length(sys.seen) == 1
     expect(b, h())
     p = only(values(sys.prepared))
-    @test only(values(sys.hermitian))
+    @test p.hermitian
     @test TMS.prepare_op(sys, h()) === p
     # another system prepares its own, even an equal one
     @test TMS.prepare_op(System(4, Qubit()), h()) !== p
