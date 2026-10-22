@@ -1320,7 +1320,10 @@ jump is `C`, is not. Declaring `strong` and then using a jump that moves the cha
 by a message saying which quantity the jump changes and pointing at the weak form.
 
 A strong quantity takes two of the four charge components ITensors allows, where a weak one
-takes a single one, so at most two quantities can be declared strong.
+takes a single one, so at most two quantities can be declared strong. A system taking all four
+takes them on each of its sites that conserves something, as
+`System(4, Electron(conserve = (strong(Ntot), strong(2Sz))))` does: ITensors fails otherwise,
+[ITensors.jl#1341](https://github.com/ITensor/ITensors.jl/issues/1341), and the system is refused.
 
 ## Moving between the levels
 
