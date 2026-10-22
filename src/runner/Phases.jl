@@ -168,7 +168,7 @@ running the phase again: a search ending on its tolerance would otherwise go on.
 function step_done(sim::Simulation, phase, k::Int; last::Bool = false)
     sim = with_values(sim; step = k)
     if step_due(phase, k)
-        output(sim, phase.measurements)
+        phase_output(sim, phase.measurements)
     end
     log_message(sim, step_line(sim, phase, k))
     run = getfield(sim, :run)

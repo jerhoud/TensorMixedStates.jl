@@ -490,6 +490,8 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         phase = phases[i]
         d = i == start ? done : 0
         run.phase = i
+        # the lists of the phase before are measured no more
+        empty!(run.measures)
         adapt_threading(sim, threading)
         if d == 0
             log_message(sim, "\n***** Starting phase \"$(phase.name)\" *****")
@@ -506,7 +508,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
                 # called for the phase and the state as they are, see output
                 sim = invokelatest(run_phase, phase, sim, d)
             end
-            output(sim, phase.final_measurements)
+            phase_output(sim, phase.final_measurements)
             sim
         end
         sim = td.value
@@ -552,7 +554,7 @@ end
 the final measurements of the simulation, for `runTMS`, whose keyword `output` hides the function
 `output` there
 """
-output_final(sim::Simulation, sd::SimData) = output(sim, sd.final_measurements)
+output_final(sim::Simulation, sd::SimData) = phase_output(sim, sd.final_measurements)
 
 """
     summary_line(sd, run)

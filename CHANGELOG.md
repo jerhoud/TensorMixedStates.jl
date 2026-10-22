@@ -62,7 +62,8 @@ version 2.x.
   as real, and that of any other as complex, whatever the state; `complex = true` gives `expect`,
   `expect1` and `expect2` the complex numbers computed, as 1.x did.
 - A system keeps prepared the operators of several terms measured twice on its states, and the
-  systems it weakens to: `expect` of such an operator no longer lowers and compacts it again.
+  systems it weakens to: `expect` of such an operator no longer lowers and compacts it again; a
+  phase prepares its lists of measurements once, as the MPO of `Variance`.
 - The phases, `SimData`, `runTMS`, the measurements and the operators take new names and forms,
   listed in "Upgrading from 1.x".
 - `evolve` and `thermalize` take their number of steps, `nsteps`, or their step, `time_step` or

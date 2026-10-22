@@ -27,8 +27,9 @@ const reserved_values = (:state, :time, :step, :rng, :data)
 what the simulations of a run share: its directory, empty for a run whose output is redirected
 to the stream `redirect`, its outputs, its log, its checkpointing, the values its phases
 provide, the phase being run and the time it started from, whether it stopped, the warnings its
-log received, and the imaginary parts of Hermitian measurements dropped and not yet reported, how
-many and the largest, as `(imaginary part, measurement, time)`
+log received, the imaginary parts of Hermitian measurements dropped and not yet reported, how
+many and the largest, as `(imaginary part, measurement, time)`, and the lists of measurements of
+the phase being run made into `Measure`s, see `phase_output`
 """
 mutable struct RunData
     dir::String
@@ -43,10 +44,12 @@ mutable struct RunData
     warnings::Int
     dropped::Int
     largest::Union{Nothing, Tuple}
+    measures::IdDict{Any, Vector}
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided) =
-    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false, 0, 0, nothing)
+    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false, 0, 0, nothing,
+            IdDict{Any, Vector}())
 
 """
     Simulation(sim, state[, time = sim.time]; values...)
@@ -268,6 +271,23 @@ end
 
 output(c::Editing, list::AbstractVector) = output(Simulation(c), list)
 output(sim::Union{Simulation, Editing}, p::Pair) = output(sim, [p])
+
+"""
+    phase_output(sim, list)
+
+`output(sim, list)` for a list of measurements of the phase being run, or of the simulation,
+measured again and again: the run makes it once into `Measure`s, one for each destination, kept
+until the next phase starts, see `run_phases`, so that each keeps what it prepares for the
+system measured, see `Measure`
+"""
+function phase_output(sim::Simulation, list)
+    run = getfield(sim, :run)
+    items = get!(run.measures, list) do
+        pairs = list isa Pair ? [list] : list
+        by_destination(run.outputs, [ run_destination(run, first(p)) => last(p) for p in pairs ])
+    end
+    return output(sim, items)
+end
 
 function log_line(run::RunData, text)
     println(run.log, text)

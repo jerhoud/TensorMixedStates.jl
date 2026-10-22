@@ -7,7 +7,7 @@
 `name => value`, as `v[i]` and `v[[i]]` give an element and a vector. A measurement is an
 operator, a measurement of the library, a symbol, or a function of the context, each possibly
 named, and a list of them is a vector or a `Measure`, which keeps what it prepares for the
-next call. The examples below use a four qubit state
+next call, as a phase keeps its lists while it runs. The examples below use a four qubit state
 
 ```@setup measurements
 using TensorMixedStates

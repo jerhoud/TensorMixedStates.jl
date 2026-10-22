@@ -1266,3 +1266,20 @@ end
         @test abs(inner(sim.ground, g)) ≈ 1 atol = 1e-8
     end
 end
+
+@testset "A phase prepares its lists once" begin
+    # a list of a phase, measured at every step, is prepared at its first measurement and kept
+    # while the phase runs, as the MPO of Variance: here a measurement of the library counting
+    # its preparations, once for the steps and the final measurements of a phase, which made a
+    # Measure of the list at each step; the next phase prepares it again
+    count = Ref(0)
+    counted = TMS.StateMeasurement("counted", state -> (count[] += 1; st -> 1.0))
+    list = "" => [counted, Z(1)]
+    ev = -im * X(1)
+    phases = [CreateState{Pure}(2, Qubit(), "Up"),
+              Evolve(evolver = ev, duration = 0.5, time_step = 0.1, measurements = list),
+              Evolve(evolver = ev, duration = 0.5, time_step = 0.1, measurements = list,
+                     final_measurements = list)]
+    runTMS(SimData(; phases); output = devnull)
+    @test count[] == 2
+end
