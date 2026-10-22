@@ -108,6 +108,9 @@ end
     @test occursin("renyi2(state, 1:k)", message(() -> renyi2(st, 1)))
     @test occursin("matrix(X, site)", message(() -> matrix("X", Qubit())))
     @test occursin("systems with the same sites are equal", message(() -> State(st.system, st)))
+    # tensor, which gave the ITensor of an operator, is ⊗
+    @test occursin("matrix(op, site, sites...)", message(() -> tensor(X, Qubit())))
+    @test occursin("matrix(op, system)", message(() -> tensor(st.system, X(1))))
     @test occursin("partial_trace(state; trace_out = positions)",
                    message(() -> partial_trace(mix(st), [1])))
     # the sites of PartialTrace are asked for by an error of their own, which leaves the

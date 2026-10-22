@@ -160,6 +160,7 @@ of the last.
 | `Left(A)`, `Right(A)` | the channel `Gate(A)`, ``\rho \to A \rho A^\dagger``, or the generator `Evolver(K)`, ``\rho \to K \rho + \rho K^\dagger`` |
 | `identity_operator` | `Id`, and `matrix(Id, site)` for its matrix |
 | `matrix("X", site)` | `matrix(X, site)` |
+| `tensor(op, site…)`, the ITensor of an operator | `matrix(op, site…)`, its matrix, or `matrix(op, system)` on a whole system: `tensor` is `⊗` |
 | `Fup`, `Fdn` of `Electron` and `Tj` | `parity(Nup)`, `parity(Ndn)` |
 | `Zd`, `Xd`, `Hd`, `Sumd` of `Qudit` | `Z`, `X` of `Qudits`, `H`, `Sum` of `Circuits` |
 | `H`, `S`, `T`, `Phase` of `Qubits` | in the module `Circuits`: `using .Circuits` |

@@ -224,8 +224,8 @@ takes_simulation(f) =
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
 moved, a `Simulation` where a state is taken, a solver of ITensorMPS called on objects of this
 package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`, `Simulation`,
-`output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix` and
-`State`
+`output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix`, `State`
+and `tensor`
 """
 function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     f = e.f
@@ -281,6 +281,10 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     elseif f === State && length(types) == 2 && types[1] <: System && types[2] <: AbstractState
         print(io, "\nTensorMixedStates 2.0: State(system, state) was removed: systems with the " *
                   "same sites are equal")
+    elseif f === tensor && any(t -> t isa Type && (t <: AbstractSite || t <: System), types)
+        print(io, "\nTensorMixedStates 2.0: tensor is ⊗, the tensor product of operators; the " *
+                  "matrix of an operator is matrix(op, site, sites...), on a whole system " *
+                  "matrix(op, system)")
     end
     return nothing
 end
