@@ -399,20 +399,13 @@ columns
 measured_cells(measured) =
     Any[ last(c) for (name, x) in measured for c in cells!(Pair{String, Any}[], name, x) ]
 
-# a row of the pairs `measured`, the columns of its cells named as `cells!` names those of
-# values of no measurement of their own
-DataRow(measured::AbstractVector) =
-    DataRow(collect(Pair{String, Any}, measured),
-            String[ first(c) for (name, x) in measured
-                    for c in cells!(Pair{String, Any}[], name, x) ])
-
 """
     DataTable
 
 the rows of a `Data`, see `DataRow`, as `sim.data[name]` gives them: a vector of rows, and a
 table of `Tables.jl` whose columns are those a text table of the same measurements has, see
 `cells!`, a cell that a row lacks being `missing`, so that `DataFrame(rows)` and
-`CSV.write(file, rows)` take it
+`CSV.write(file, rows)` take it; a slice or a filter of the rows is one as well
 """
 struct DataTable <: AbstractVector{DataRow}
     rows::Vector{DataRow}
@@ -423,6 +416,10 @@ end
 Base.size(t::DataTable) = size(t.rows)
 Base.IndexStyle(::Type{DataTable}) = IndexLinear()
 Base.getindex(t::DataTable, k::Int) = t.rows[k]
+Base.setindex!(t::DataTable, r::DataRow, k::Int) = setindex!(t.rows, r, k)
+# so that a slice or a filter of the rows is a table as well
+Base.similar(::DataTable, ::Type{DataRow}, dims::Dims{1}) =
+    DataTable(Vector{DataRow}(undef, dims...))
 
 """
     DataColumns
@@ -513,11 +510,6 @@ open(::Data) = DataRows(DataRow[])
 open(::Data, m::RowsMark) = DataRows(m.rows[1:m.n])
 close(::DataRows) = nothing
 resume_mark(o::DataRows) = RowsMark(o.rows, length(o.rows))
-
-function write_row(o::DataRows, time, row)
-    push!(o.rows, DataRow(Pair{String, Any}[ "time" => time ; row ]))
-    return nothing
-end
 
 # the columns of the cells named as a text table of the list `m` names them, see `entry_cells`,
 # those of the row before when they are the same

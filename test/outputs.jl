@@ -245,6 +245,11 @@ end
     @test ismissing(df[2, "Z(1)"])
     @test ismissing(df[1, "X(1)"])
     @test df[2, "Y(1)"] ≈ 0 atol = 1e-12
+    # a slice or a filter of the rows is a table of the same columns, and so is the vector of
+    # them collected, where it named the columns as values of no measurement of their own
+    @test rows[2:end] isa TMS.DataTable && filter(r -> r["time"] > 0, rows) isa TMS.DataTable
+    @test names(DataFrame(rows[2:end])) == ["time", "X(1)", "Z(2)", "Y(1)", "Y(2)"]
+    @test isequal(data_to_frame(collect(rows)), df)
     # two cells of a row under one column are refused, as a text table refuses them
     TMS.output!(o, ψ, Data("twice") => [X(1), X])
     @test_throws "two columns of the table would be named X(1)" data_to_frame(
@@ -256,7 +261,7 @@ end
     @test_throws "several measurements are named \"X(1)\"" TMS.output!(
         o, ψ, [Data("e") => X(1), Data("e") => [X(1), Z(1)]])
     @test length(TMS.data_rows(o, "e")) == 1
-    empty = data_to_frame(Vector{Pair{String, Any}}[])
+    empty = data_to_frame(TMS.DataRow[])
     @test names(empty) == ["time"]
     @test size(empty) == (0, 1)
     # a complex value stays complex, and the rows stay there once the outputs are closed
