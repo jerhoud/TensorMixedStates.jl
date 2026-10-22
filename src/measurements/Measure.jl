@@ -446,9 +446,9 @@ Overlap(name::Symbol, op::Union{IndexedOp{IsOperator}, SimpleOp}) =
 """
     variance_of(state, op)
 
-the function measuring the variance of `op` on the states of the system of `state`, its MPO
-built once, or by the `variance` of the state of an extension; a mixed state is refused here,
-before any measurement
+the function measuring the variance of `op` on the states of the system of `state`: on a pure
+state through its MPO, built once, on any other, a density matrix or the state of an extension,
+by its `variance`
 """
 function variance_of(state::State{Pure}, op)
     on, mpo = or_on_plain(s -> (s, make_mpo(s, op)), state)
@@ -456,15 +456,13 @@ function variance_of(state::State{Pure}, op)
     return on === state ? (st -> variance(st, mpo)) : (st -> variance(plain_form(st), mpo))
 end
 
-variance_of(state::State{Mixed}, op) = variance(state, op)
-
 variance_of(::AbstractState, op) = st -> variance(st, op)
 
 """
     Variance(op)
 
 the measurement of the variance of the operator `op`, see `variance`, its MPO built once for
-each system
+each system on a pure state
 """
 Variance(op) = StateMeasurement("Variance", state -> variance_of(state, op))
 

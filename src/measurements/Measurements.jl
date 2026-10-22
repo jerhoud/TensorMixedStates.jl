@@ -608,18 +608,20 @@ hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
 """
-    variance(state::State{Pure}, op)
+    variance(state, op)
     variance(state::State{Pure}, mpo::MPO)
 
 the variance ``\\langle H^\\dagger H\\rangle - |\\langle H\\rangle|^2`` of the operator `op`,
-``\\langle H^2\\rangle - \\langle H\\rangle^2`` for a Hermitian one, or of the operator of `mpo`,
-on the pure `state`, which need not be normalised, an operator changing the charges by no
-definite amount being measured on the state conserving nothing, as by `expect`. A mixed
-representation is refused.
+placed on sites, ``\\langle H^2\\rangle - \\langle H\\rangle^2`` for a Hermitian one, or of
+the operator of `mpo`, on `state`, which need not be normalised, an operator changing the
+charges by no definite amount being measured on the state conserving nothing, as by `expect`.
+On a density matrix ``\\rho`` of trace one, it is
+``\\mathrm{tr}(\\rho H^\\dagger H) - |\\mathrm{tr}(\\rho H)|^2``.
 
 # Examples
 
     variance(ground_state, hamiltonian)
+    β^2 * variance(thermal_state, hamiltonian)      # the specific heat
 """
 function variance(state::State{Pure}, mpo::MPO)
     st = state.state
@@ -632,6 +634,5 @@ end
 
 variance(state::State{Pure}, op) = or_on_plain(st -> variance(st, make_mpo(st, op)), state)
 
-variance(::State{Mixed}, _) =
-    error("variance needs a pure representation. On a mixed one steady_state returns " *
-          "the equivalent for a Lindbladian")
+variance(state::State{Mixed}, op::IndexedOp{IsOperator}) =
+    expect(state, op' * op) - abs2(expect(state, op; complex = true))

@@ -983,17 +983,21 @@ end
     @test first(only(measure(r, [Variance(h)]))) == "Variance"
     @test measure(r, Variance(h)) ≈ variance(r, h)
 
-    # a hamiltonian on a density matrix has no variance in this sense
-    @test_throws "needs a pure representation" variance(mix(r), h)
-    # and Variance, which builds the MPO when it is prepared, refuses it there, before anything
-    # is measured, the Measure keeping no preparation for it
-    called = Ref(false)
-    @test_throws "needs a pure representation" measure(mix(r), ["f" => c -> (called[] = true),
-                                                                Variance(h)])
-    @test !called[]
+    # on a density matrix, tr(ρ h†h) - |tr(ρ h)|², that of the pure state for |ψ⟩⟨ψ|
+    @test variance(mix(r), h) ≈ variance(r, h)
+    @test variance(mix(r), (1 + im) * h) ≈ variance(r, (1 + im) * h)
+    @test variance(3mix(r), h) ≈ variance(r, h)
+    # and, on a product of the populations 0.3 and 0.7, 1 - ⟨Z⟩² on each site, the sites being
+    # independent, and ⟨Sm Sp⟩ = 0.7 for Sp, whose value is zero
+    ρ = State{Mixed}(sys, [0.3 0. ; 0. 0.7])
+    @test variance(ρ, sum(Z(i) for i in 1:6)) ≈ 6 * (1 - 0.4^2)
+    @test variance(ρ, Sp(1)) ≈ 0.7
+    # an operator changing the charges by no definite amount is measured on the state conserving
+    # nothing, as by expect
+    @test variance(State{Mixed}(System(2, Qubit(conserve = N)), ["Up", "Dn"]), X(1)) ≈ 1
+    # as a measurement, prepared for each representation
     m = Measure(Variance(h))
-    @test_throws "needs a pure representation" measure(mix(r), m)
-    @test isempty(m.prepared)
+    @test last(only(measure(mix(r), m))) ≈ variance(r, h)
     @test last(only(measure(r, m))) ≈ variance(r, h)
 end
 
