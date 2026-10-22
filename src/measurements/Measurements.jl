@@ -103,7 +103,7 @@ end
 the entropy ``-\\sum_i p_i \\log p_i`` of the probabilities `p`, a zero probability, which a
 `mindim` above the Schmidt rank gives, adding nothing rather than NaN
 """
-shannon_entropy(p) = -sum(x * log(x) for x in p if x > 0)
+shannon_entropy(p) = sum((-x * log(x) for x in p if x > 0); init = 0.0)
 
 """
     entropy_spectrum(S)

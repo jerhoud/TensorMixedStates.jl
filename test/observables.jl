@@ -238,9 +238,9 @@ end
     @test entanglement_entropy(ghz, 4) ≈ 0 atol=1e-12
     @test_throws "entanglement entropy at site 0 of a 4 site state" entanglement_entropy(ghz, 0)
     @test_throws "entanglement entropy at site 5 of a 4 site state" entanglement_entropy(ghz, 5)
-    # a product state carries none
+    # a product state carries none, 0.0 and not -0.0, which a file writes -0
     e, spectrum = entanglement_entropy(product, 2), entanglement_spectrum(product, 2)
-    @test e ≈ 0 atol=1e-12
+    @test isequal(e, 0.0)
     @test spectrum ≈ [1.]
 
     # a pure state stays pure, whichever representation holds it
