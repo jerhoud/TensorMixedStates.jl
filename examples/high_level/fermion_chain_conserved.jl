@@ -26,7 +26,7 @@ measurements(n) = [
     "density.dat" => N,
     # constant while the symmetry is strong, then decaying as exp(-kappa t)
     "particles.dat" => sum(N(i) for i in 1:n),
-    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4),
+    "OSEE.dat" => [EntanglementEntropy(n ÷ 2), EntanglementSpectrum(n ÷ 2, 4)],
     "purity.dat" => [Purity, Trace, MaxLinkdim],
 ]
 

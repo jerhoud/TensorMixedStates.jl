@@ -288,7 +288,7 @@ end
         o = TMS.Outputs(dir = dir)
         ψ = random_state(Pure, System(3, Qubit()), 2)
         list = [Z(1), X, (Z, Z), Sp(2), "nt" => c -> (a = 1, b = [2., 3.]), :step,
-                EntanglementEntropy(1, 2)]
+                EntanglementSpectrum(1, 2)]
         for t in (0., 0.5)
             TMS.output!(o, ψ, ["table.dat" => list, Data("d") => list]; time = t, step = 3)
         end

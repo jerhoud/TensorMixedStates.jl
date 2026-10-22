@@ -22,7 +22,8 @@ Rzz(ϕ) = exp(-im * ϕ * Z ⊗ Z)
 # A function depending on the system size producing a vector of output specifications file => data
 # each data file is a table: a line naming its columns, then a line per time measured
 output(n) = [
-    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at mid point and first 4 eigenvalues
+    # OSEE at mid point and first 4 eigenvalues
+    "OSEE.dat" => [EntanglementEntropy(n ÷ 2), EntanglementSpectrum(n ÷ 2, 4)],
     "purity.dat" => Purity, # purity of the density matrix
     "trace.dat" => Trace, # trace to observe eventual deviations from 1
     "bond_dim.dat" => MaxLinkdim # maximum bon dimension

@@ -26,7 +26,7 @@ const renamed_names = Dict{Symbol, String}(
     :ComplexValue => "ComplexValue was removed: the value of an operator that is not " *
                      "Hermitian is complex",
     :trace2 => "trace2 became purity",
-    :EE => "EE became EntanglementEntropy",
+    :EE => "EE became EntanglementEntropy(cut), and its spectrum EntanglementSpectrum(cut, n)",
     :Linkdim => "Linkdim became MaxLinkdim",
     :Mutual_Info_Renyi2 => "Mutual_Info_Renyi2 became MutualInfoRenyi2, of a block of sites: " *
                            "MutualInfoRenyi2(1:k) for the first k",
@@ -224,7 +224,8 @@ takes_simulation(f) =
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
 moved, a `Simulation` where a state is taken, a solver of ITensorMPS called on objects of this
 package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`, `Simulation`,
-`output`, `variance`, the Rényi entropies of a block, `matrix` and `State`
+`output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix` and
+`State`
 """
 function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     f = e.f
@@ -272,6 +273,9 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
            types[2] <: Integer
         print(io, "\nTensorMixedStates 2.0: a block of sites is given by its positions, " *
                   "$(nameof(f))(state, 1:k) for the first k")
+    elseif f === EntanglementEntropy && length(types) == 2
+        print(io, "\nTensorMixedStates 2.0: EntanglementEntropy(cut, n) became " *
+                  "EntanglementEntropy(cut) and EntanglementSpectrum(cut, n), the spectrum")
     elseif f === matrix && !isempty(types) && types[1] <: AbstractString
         print(io, "\nTensorMixedStates 2.0: matrix takes the operator, matrix(X, site)")
     elseif f === State && length(types) == 2 && types[1] <: System && types[2] <: AbstractState

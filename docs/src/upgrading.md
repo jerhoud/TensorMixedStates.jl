@@ -89,6 +89,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it. `gro
 | `trace2`, `Trace2` | `purity`, `Purity` |
 | `TraceError`, `HermiticityError` | `TraceDeviation`, `HermiticityDeviation` |
 | `EE(cut)` | `EntanglementEntropy(cut)` |
+| `EntanglementEntropy(cut, n)`, the entropy then the spectrum | `EntanglementEntropy(cut)`, `EntanglementSpectrum(cut, n)` |
 | `Linkdim` | `MaxLinkdim` |
 | `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |

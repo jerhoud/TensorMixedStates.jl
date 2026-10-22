@@ -17,7 +17,8 @@ limits = Limits(
 # each data file is a table: a line naming its columns, then a line per time measured
 output(n) = [
     "density.dat" => N, # occupation number for all sites
-    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4), # OSEE at midpoint and 4 eignevalues 
+    # OSEE at midpoint and 4 eigenvalues
+    "OSEE.dat" => [EntanglementEntropy(n ÷ 2), EntanglementSpectrum(n ÷ 2, 4)],
     "purity.dat" => Purity, # purity of the density matrix
     "trace.dat" => Trace, # trace of the density matrix to check
     "bond_dim.dat" => MaxLinkdim, # maximum bond dimension

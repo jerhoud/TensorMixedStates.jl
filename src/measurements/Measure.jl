@@ -4,8 +4,8 @@
 
 export Measure, measure, Check, Purity, Trace, TraceDeviation, Norm, Hermiticity,
        HermiticityDeviation, Renyi2, MaxLinkdim, MemoryUsage, SubRenyi2, MutualInfoRenyi2,
-       EntanglementEntropy, ReducedDensityMatrix, VonNeumannEntropy, LogNegativity, Fidelity,
-       Overlap, Variance
+       EntanglementEntropy, EntanglementSpectrum, ReducedDensityMatrix, VonNeumannEntropy,
+       LogNegativity, Fidelity, Overlap, Variance
 
 """
     Context
@@ -310,11 +310,9 @@ LogNegativity(a::AbstractVector, b::AbstractVector) =
 
 """
     EntanglementEntropy(cut)
-    EntanglementEntropy(cut, n)
 
 the measurement of the entanglement entropy across the cut between sites `cut` and `cut + 1`,
-see `entanglement_entropy`, followed, given `n`, by the first `n` values of the spectrum, see
-`entanglement_spectrum`, padded with zeros beyond the bond dimension of the cut
+see `entanglement_entropy`
 """
 EntanglementEntropy(cut::Int) =
     StateMeasurement("EntanglementEntropy($cut)", function (state)
@@ -322,14 +320,19 @@ EntanglementEntropy(cut::Int) =
         return st -> entanglement_entropy(st, cut)
     end)
 
-EntanglementEntropy(cut::Int, n::Int) =
-    StateMeasurement("EntanglementEntropy($cut,$n)", function (state)
-        check_positions(state, [cut], "EntanglementEntropy")
+"""
+    EntanglementSpectrum(cut, n)
+
+the measurement of the first `n` values of the entanglement spectrum across the cut between
+sites `cut` and `cut + 1`, see `entanglement_spectrum`, padded with zeros beyond the bond
+dimension of the cut, so that every row of a file has the same width
+"""
+EntanglementSpectrum(cut::Int, n::Int) =
+    StateMeasurement("EntanglementSpectrum($cut,$n)", function (state)
+        check_positions(state, [cut], "EntanglementSpectrum")
         return function (st)
-            # the entropy of the spectrum, which one decomposition gives
             sp = entanglement_spectrum(st, cut)
-            return [ shannon_entropy(sp) ; sp[1:min(length(sp), n)] ;
-                     zeros(max(0, n - length(sp))) ]
+            return [ sp[1:min(length(sp), n)] ; zeros(max(0, n - length(sp))) ]
         end
     end)
 

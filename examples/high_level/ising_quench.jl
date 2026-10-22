@@ -24,7 +24,7 @@ measurements(n) = [
     "X1X3.dat" => X(1)X(3),
     "X1X4.dat" => X(1)X(4),
     "X1X5.dat" => X(1)X(5),
-    "OSEE.dat" => EntanglementEntropy(n ÷ 2, 4),
+    "OSEE.dat" => [EntanglementEntropy(n ÷ 2), EntanglementSpectrum(n ÷ 2, 4)],
     "purity.dat" => [Purity, Trace, MaxLinkdim]
 ]
 

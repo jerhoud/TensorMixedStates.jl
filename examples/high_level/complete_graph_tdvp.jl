@@ -6,7 +6,8 @@ limits = Limits(
 )
 
 measurements(n) =
-    "data" => [X, Y, Z, Y(1)Y(2), Z(1)Y(2)Y(3), EntanglementEntropy(n ÷ 2, 4), Purity, Trace]
+    "data" => [X, Y, Z, Y(1)Y(2), Z(1)Y(2)Y(3), EntanglementEntropy(n ÷ 2),
+               EntanglementSpectrum(n ÷ 2, 4), Purity, Trace]
 
 sim_data(n) = SimData(
     name = "my_simulation_with_$(n)_qubits",

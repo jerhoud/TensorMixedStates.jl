@@ -75,8 +75,9 @@ version 2.x.
   that of a `State` given, as `CreateState(ψ)`, and `CreateState{Pure}(system, state)`.
 - `ground_state`, `steady_state` and `thermalize` return named tuples, `(energy, state)`,
   `(residual, state)` and `(log_trace, state)`, which destructure as the tuples of 1.x did.
-- `entanglement_entropy(state, cut)` returns the entropy, and the new `entanglement_spectrum`
-  the spectrum, where 1.x returned both.
+- `entanglement_entropy(state, cut)` and `EntanglementEntropy(cut)` give the entropy, and the
+  new `entanglement_spectrum` and `EntanglementSpectrum(cut, n)` the spectrum, where 1.x gave
+  both.
 - A zero entanglement entropy, as that of a product state, is 0.0, where 1.x gave -0.0,
   written -0 in a file.
 - A system whose conserved quantities take the four components ITensors allows, not all on each

@@ -56,7 +56,7 @@ The library measures the state as a whole:
 | `ReducedDensityMatrix(positions)` | the density matrix of the sites at `positions`, a complex matrix, see `reduced_density_matrix` |
 | `LogNegativity(positions_a, positions_b)` | the logarithmic negativity between the sites of `positions_a` and those of `positions_b` |
 | `EntanglementEntropy(cut)` | the entanglement entropy across the cut between sites `cut` and `cut+1`, the operator space entanglement entropy (OSEE) on a mixed representation |
-| `EntanglementEntropy(cut, n)` | the same, followed by the first `n` values of the spectrum it is computed from, see `entanglement_entropy` |
+| `EntanglementSpectrum(cut, n)` | the first `n` values of the spectrum the entropy is computed from, padded with zeros, see `entanglement_spectrum` |
 | `Fidelity(ref)` | the fidelity with the reference state `ref`, or with the state of that name in a simulation, `Fidelity(:ground)` |
 | `Overlap(ref)` | the inner product with the reference state `ref`, a complex number, or with a state named in a simulation |
 | `Overlap(ref, op)` | the matrix element ``\langle ref \vert op \vert state \rangle`` of two pure states, or its vector for an operator of one site on every site, the correlations at two times of a reference evolved with the state |
@@ -180,6 +180,7 @@ VonNeumannEntropy
 ReducedDensityMatrix
 LogNegativity
 EntanglementEntropy
+EntanglementSpectrum
 MaxLinkdim
 MemoryUsage
 ```

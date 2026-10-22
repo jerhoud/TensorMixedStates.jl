@@ -324,14 +324,16 @@ end
     @test r["MutualInfoRenyi2(3)"] ≈ mutual_info_renyi2(st4, [3])
     # the spectrum asked for is written whole, the eigenvalues beyond the bond dimension at the
     # cut being zeros, so that the rows of a file keep their width
-    v = only(measure(State{Pure}(System(3, Qubit()), "Up"), [EntanglementEntropy(1, 4)]))
-    @test first(v) == "EntanglementEntropy(1,4)"
-    @test length(last(v)) == 5
-    @test last(v)[1] ≈ 0 atol=1e-12
-    @test last(v)[2] ≈ 1
-    @test last(v)[3:5] == zeros(3)
-    # and the entropy is that of entanglement_entropy, followed by its spectrum
-    @test measure(bell, EntanglementEntropy(1, 2)) ≈ [L2, 0.5, 0.5]
+    v = only(measure(State{Pure}(System(3, Qubit()), "Up"), [EntanglementSpectrum(1, 4)]))
+    @test first(v) == "EntanglementSpectrum(1,4)"
+    @test last(v) ≈ [1, 0, 0, 0]
+    @test last(v)[2:4] == zeros(3)
+    # the entropy and the spectrum of a cut are those of entanglement_entropy and
+    # entanglement_spectrum
+    r = measure(bell, [EntanglementEntropy(1), EntanglementSpectrum(1, 2)])
+    @test first.(r) == ["EntanglementEntropy(1)", "EntanglementSpectrum(1,2)"]
+    @test last(r[1]) ≈ L2
+    @test last(r[2]) ≈ [0.5, 0.5]
 end
 
 @testset "Entanglement resolved by sector" begin
@@ -1419,7 +1421,7 @@ end
     @test_throws("SubRenyi2 was given site 5, which the state does not have: it has 3 sites",
                  measure(st, SubRenyi2([5])))
     @test_throws "EntanglementEntropy was given site 4" measure(st, EntanglementEntropy(4))
-    @test_throws "EntanglementEntropy was given site 0" measure(st, EntanglementEntropy(0, 2))
+    @test_throws "EntanglementSpectrum was given site 0" measure(st, EntanglementSpectrum(0, 2))
     @test_throws "LogNegativity was given site 7" measure(st, LogNegativity([1], [7]))
     @test_throws "ReducedDensityMatrix was given site 4" measure(st, ReducedDensityMatrix([1, 4]))
     @test_throws "is defined on no site" measure(st, C)
