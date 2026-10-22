@@ -96,7 +96,7 @@ const renamed_names = Dict{Symbol, String}(
     :Phases => "Phases was removed: a phase is a subtype of TensorMixedStates.AbstractPhase",
     :Algo => "Algo became EvolutionAlgorithm, and SearchAlgorithm for the searches",
     :create_graph_state => "create_graph_state was removed: write " *
-                           "CreateState(graph_state(graph))",
+                           "CreateState(graph_state(system, graph))",
     :Fup => "Fup was removed: write parity(Nup)",
     :Fdn => "Fdn was removed: write parity(Ndn)",
     :Swap => "Swap is no longer in Qubits: TensorMixedStates exports it, for two sites of any " *
@@ -224,8 +224,8 @@ takes_simulation(f) =
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
 moved, a `Simulation` where a state is taken, a solver of ITensorMPS called on objects of this
 package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`, `Simulation`,
-`output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix`, `State`
-and `tensor`
+`output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix`, `State`,
+`tensor` and `graph_state`
 """
 function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     f = e.f
@@ -285,6 +285,9 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
         print(io, "\nTensorMixedStates 2.0: tensor is ⊗, the tensor product of operators; the " *
                   "matrix of an operator is matrix(op, site, sites...), on a whole system " *
                   "matrix(op, system)")
+    elseif f === graph_state && length(types) == 1 && types[1] <: AbstractVector
+        print(io, "\nTensorMixedStates 2.0: graph_state takes the system first, " *
+                  "graph_state(System(graph_base_size(graph), Qubit()), graph)")
     end
     return nothing
 end

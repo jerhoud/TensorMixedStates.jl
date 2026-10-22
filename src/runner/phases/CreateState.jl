@@ -26,7 +26,7 @@ a phase that creates the state of the simulation.
 # Examples
 
     CreateState(type = Pure, system = System(10, Qubit()), state = "Up", randomize = 50)
-    CreateState(graph_state(complete_graph(10)))
+    CreateState(graph_state(System(10, Qubit()), complete_graph(10)))
     CreateState{Mixed}(4, Fermion(conserve = N), ["Occ", "Emp", "Occ", "Emp"]; randomize = 16)
     CreateState{Pure}(10, Qubit(), "Up")
 """

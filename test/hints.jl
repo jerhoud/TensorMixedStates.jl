@@ -111,6 +111,8 @@ end
     # tensor, which gave the ITensor of an operator, is ⊗
     @test occursin("matrix(op, site, sites...)", message(() -> tensor(X, Qubit())))
     @test occursin("matrix(op, system)", message(() -> tensor(st.system, X(1))))
+    @test occursin("graph_state(System(graph_base_size(graph), Qubit()), graph)",
+                   message(() -> graph_state(complete_graph(3))))
     @test occursin("partial_trace(state; trace_out = positions)",
                    message(() -> partial_trace(mix(st), [1])))
     # the sites of PartialTrace are asked for by an error of their own, which leaves the

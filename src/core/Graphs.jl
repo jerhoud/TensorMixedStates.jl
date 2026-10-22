@@ -55,7 +55,7 @@ the complete graph of `n` vertices, as a vector of edges:
 
 # Examples
 
-    graph_state(complete_graph(10); limits = Limits(maxdim = 10))
+    graph_state(System(10, Qubit()), complete_graph(10); limits = Limits(maxdim = 10))
 """
 complete_graph(n::Int) =
     [(i, j) for i in 1:(n-1) for j in (i+1):n]

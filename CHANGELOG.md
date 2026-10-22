@@ -89,6 +89,8 @@ version 2.x.
   `sectors[N => 2]`, where 1.x indexed it by a `QN`.
 - `SteadyState` provides the eigenvalue of ``L^\dagger L`` as `:residual`, where 1.x named it
   `:energy`, which its lists of measurements cannot read, it being that of another phase.
+- `graph_state` takes the system first, `graph_state(system, graph; others)`, as the other
+  prepared states, its sites in no edge taking `others`, where 1.x made a system of qubits.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a

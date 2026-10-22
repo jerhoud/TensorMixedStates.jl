@@ -78,20 +78,33 @@ the phase gate of a qubit, ``\\mathrm{diag}(1, e^{it})``.
 Phase(t) = Operator{1}("Phase($t)", [1. 0 ; 0 exp(im * t)])
 
 """
-    graph_state(graph; limits = Limits())
+    graph_state(system, graph; others, limits = Limits())
 
-the graph state of `graph`, a list of edges: the pure state of `graph_base_size(graph)` qubits
-all in `"+"`, to which `controlled(Z)` is applied on every edge, truncated by `limits`.
+the graph state of `graph`, a list of edges between the qubits of `system`: the sites of its
+edges in `"+"`, to which `controlled(Z)` is applied on every edge, truncated by `limits`. The
+sites in no edge take the local state `others`, one for all of them or a vector of one for each,
+which they then need: the qubits of the graph conserve nothing, the others may.
 
 # Examples
 
-    graph_state(complete_graph(10); limits = Limits(maxdim = 10))
+    graph_state(System(10, Qubit()), complete_graph(10); limits = Limits(maxdim = 10))
+    graph_state(System([Qubit(), Qubit(), Fermion(conserve = N)]), [(1, 2)]; others = "Occ")
 """
-function graph_state(g::Vector{Tuple{Int, Int}}; limits::Limits = Limits())
-    if isempty(g)
-        error("graph_state needs a graph with edges, which give its qubits")
+function graph_state(system::System, g::Vector{Tuple{Int, Int}}; others = nothing,
+                     limits::Limits = Limits())
+    n = length(system)
+    vertices = unique(reduce(vcat, [ [i, j] for (i, j) in g ]; init = Int[]))
+    if any(k -> !(1 ≤ k ≤ n), vertices)
+        error("the graph $g reaches beyond the $n sites of the system")
     end
-    state = State{Pure}(System(graph_base_size(g), Qubit()), "+")
+    states = Vector{Any}(undef, n)
+    states[vertices] .= "+"
+    fill_others!(states, setdiff(1:n, vertices), others,
+                 ("is in no edge", "are in no edge", "in no edge"))
+    state = State{Pure}(system, states)
+    if isempty(g)
+        return state
+    end
     CZ = controlled(Z)
     return apply(prod(CZ(i, j) for (i, j) in g), state; limits)
 end

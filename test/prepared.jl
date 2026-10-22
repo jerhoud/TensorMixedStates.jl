@@ -37,7 +37,7 @@ end
     end
     c = mps_state(System(6, Qubit()), [ A[1:1, :, :], fill(A, 4)..., sum(A; dims = 3) ])
     @test maxlinkdim(c) == 2
-    @test abs(LA.dot(dense_vector(c), dense_vector(graph_state(line_graph(6))))) ≈ 1
+    @test abs(LA.dot(dense_vector(c), dense_vector(graph_state(System(6, Qubit()), line_graph(6))))) ≈ 1
     @test_throws "3 tensors cannot" mps_state(System(4, Qubit()),
                                               [A[1:1, :, :], A, sum(A; dims = 3)])
     @test_throws "left dimension of 2 where 1" mps_state(System(2, Qubit()), [A, sum(A; dims = 3)])
@@ -261,7 +261,7 @@ end
 @testset "Graph states" begin
     # the graph state of the complete graph of 4 vertices, pure and mixed: no Pauli of one site
     # has a value, its stabilizers have 1, and so does every Y Y
-    ψ = graph_state(complete_graph(4))
+    ψ = graph_state(System(4, Qubit()), complete_graph(4))
     for s in (ψ, mix(ψ))
         for a in (X, Y, Z)
             @test expect1(s, a) ≈ zeros(4) atol = 1e-12
@@ -269,7 +269,22 @@ end
         @test expect(s, X(1) * Z(2) * Z(3) * Z(4)) ≈ 1
         @test expect2(s, (Y, Y)) ≈ ones(4, 4)
     end
-    @test_throws "a graph with edges" graph_state(Tuple{Int, Int}[])
+    # beside sites conserving something, its qubits conserving nothing, the sites in no edge
+    # taking the states others gives them
+    sys = System([Qubit(), Qubit(), Qubit(), Fermion(conserve = N), Fermion(conserve = N)])
+    g = graph_state(sys, [(1, 2), (2, 3)]; others = ["Occ", "Emp"])
+    @test expect(g, X(1) * Z(2)) ≈ 1
+    @test expect(g, Z(1) * X(2) * Z(3)) ≈ 1
+    @test expect1(g, N)[4:5] ≈ [1, 0]
+    # a qubit in no edge, an isolated vertex, in "+", and a graph of no edge, a product state
+    s3 = System(3, Qubit())
+    @test expect(graph_state(s3, [(1, 2)]; others = "+"), X(3) * X(1) * Z(2)) ≈ 1
+    @test expect(graph_state(s3, Tuple{Int, Int}[]; others = "+"), X(1) * X(2) * X(3)) ≈ 1
+    @test_throws "site 3 is in no edge: give its state with others" graph_state(s3, [(1, 2)])
+    @test_throws "reaches beyond the 3 sites" graph_state(s3, [(1, 4)])
+    # a graph state has no definite charge
+    @test_throws "spreads over several charges of N" graph_state(System(2, Qubit(conserve = N)),
+                                                                [(1, 2)])
 end
 
 @testset "Slater determinants and Fermi seas" begin
