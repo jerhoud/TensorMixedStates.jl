@@ -121,6 +121,28 @@ function of the context gives what it returns.
 they give the complex numbers computed, imaginary parts included, which a list of
 measurements gets through a function: `"x" => c -> expect(c.state, X(1); complex = true)`.
 
+## Two copies of the state
+
+The quantities quadratic in the density matrix are inner products of the density matrix with
+itself through a channel or a generator, see [`inner`](@ref), each a contraction as `expect`
+makes on a density matrix:
+
+| quantity | written as |
+|:---|:---|
+| ``\mathrm{tr}\,\rho^2`` | `inner(ρ, ρ)` |
+| ``\mathrm{tr}(\rho K \rho K^\dagger)`` | `inner(ρ, Gate(K), ρ)` |
+| ``\mathrm{tr}(A \rho^2)``, `A` Hermitian | `inner(ρ, Evolver(A / 2), ρ)` |
+
+Divided by ``\mathrm{tr}\,\rho^2``, the second is, for `K` a product of operators on two sites, a
+Rényi-2 correlator of the mixed state, and the third the mean value of `A` in
+``\rho^2 / \mathrm{tr}\,\rho^2``, which virtual distillation estimates; for an `A` that is not
+Hermitian, the third gives that of its Hermitian part. A list of measurements takes them through
+a function:
+
+```julia
+"C2" => c -> inner(c.state, Gate(X(1) * X(5)), c.state) / inner(c.state, c.state)
+```
+
 ## Reference
 
 ```@docs
