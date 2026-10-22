@@ -213,9 +213,9 @@ end
         @test e["X(1)"] ≈ 1
         @test TMS.JSON.parse(only(readlines(joinpath(dir, "data.jsonl"))))["Z(1)"] ≈ 0 atol = 1e-12
         # the lists a call sends to one file are one object
-        both = only(TMS.JSON.parsefile(joinpath(dir, "both.json")))
-        @test first(keys(both)) == "time" && both["X(1)"] ≈ 0 atol = 1e-12
-        @test both["Z(1)"] ≈ 0 atol = 1e-12
+        both = readlines(joinpath(dir, "both.json"))
+        @test startswith(both[2], "{\"time\":0,\"X(1)\":")
+        @test only(TMS.JSON.parsefile(joinpath(dir, "both.json")))["Z(1)"] ≈ 0 atol = 1e-12
         n = only(TMS.JSON.parsefile(joinpath(dir, "missing.json")))["n"]
         @test isnothing(n[1])
         @test n[2] ≈ 1

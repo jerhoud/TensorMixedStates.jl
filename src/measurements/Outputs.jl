@@ -373,6 +373,9 @@ struct DataRow <: AbstractVector{Pair{String, Any}}
     measured::Vector{Pair{String, Any}}
     # the column of each cell, the time first, shared by the rows that have the same
     columns::Vector{String}
+    # typed: the default constructor, of any two arguments, is ambiguous with those the oldest
+    # versions of ITensors and NDTensors allowed define for every type of array
+    DataRow(measured::Vector{Pair{String, Any}}, columns::Vector{String}) = new(measured, columns)
 end
 
 Base.size(r::DataRow) = size(r.measured)
@@ -400,7 +403,8 @@ measured_cells(measured) =
 # values of no measurement of their own
 DataRow(measured::AbstractVector) =
     DataRow(collect(Pair{String, Any}, measured),
-            [ first(c) for (name, x) in measured for c in cells!(Pair{String, Any}[], name, x) ])
+            String[ first(c) for (name, x) in measured
+                    for c in cells!(Pair{String, Any}[], name, x) ])
 
 """
     DataTable
@@ -412,6 +416,8 @@ table of `Tables.jl` whose columns are those a text table of the same measuremen
 """
 struct DataTable <: AbstractVector{DataRow}
     rows::Vector{DataRow}
+    # typed, as for DataRow
+    DataTable(rows::Vector{DataRow}) = new(rows)
 end
 
 Base.size(t::DataTable) = size(t.rows)
