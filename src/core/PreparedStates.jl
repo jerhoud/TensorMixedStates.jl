@@ -1,6 +1,6 @@
 # Prepared states with an exact MPS: the GHZ, Dicke and W states, the fully mixed state of a
 # sector, and the states given by their MPS tensors, their dense vector or their density
-# matrix.
+# matrix; and the dense vector of a pure state.
 
 export mps_state, dense_state, ghz_state, superposition, mixture, dicke_state, w_state,
        fully_mixed
@@ -157,6 +157,44 @@ function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limit
     sites = siteinds(Mixed, system)
     return normalize(State{Mixed}(system, dense_mps(a, idx, sites, limits;
                                                     combiners = last.(mixers))))
+end
+
+"""
+    Vector(state::State{Pure})
+
+the vector of the pure `state`, not normalized, on the basis of the product states ordered as
+`kron` orders them, the first site varying the slowest, as `dense_state` takes it and
+`matrix(op, system)` acts on it. It is refused beyond `dense_max^2` elements, as many as the
+largest dense matrix TMS builds. The density matrix of a mixed state is given by
+`reduced_density_matrix(ρ, 1:n)`.
+
+# Examples
+
+    Vector(State{Pure}(System(2, Qubit()), "+"))      # [0.5, 0.5, 0.5, 0.5]
+"""
+function Vector(state::State{Pure})
+    system = state.system
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float(dim(s)) for s in system.sites)
+    if d > dense_max^2
+        error("the vector of a state of $(length(system)) sites has " *
+              "$(Printf.@sprintf("%.0f", d)) elements, beyond the $(dense_max^2) TMS builds")
+    end
+    # site by site, the vector of the sites so far for each value of the link on their right: the
+    # tensor of all the sites, of n indices, would be compiled anew for each n, in 10 to 20 s
+    st = state.state
+    n = length(st)
+    v = ones(1, 1)
+    for k in 1:n
+        left = k > 1 ? commonind(st[k-1], st[k]) : nothing
+        right = k < n ? commonind(st[k], st[k+1]) : nothing
+        idx = [ i for i in (left, siteind(Pure, system, k), right) if !isnothing(i) ]
+        a = reshape(Array(dense(st[k]), idx...), size(v, 2), :)
+        # the new site varying the fastest
+        b = reshape(v * a, size(v, 1), dim(system[k]), :)
+        v = reshape(permutedims(b, (2, 1, 3)), :, size(b, 3))
+    end
+    return vec(v)
 end
 
 """

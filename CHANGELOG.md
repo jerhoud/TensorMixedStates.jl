@@ -48,6 +48,8 @@ version 2.x.
 - `tr`, the trace of a state under the name of `LinearAlgebra`.
 - `limits` of `mix`, which truncate the density matrix as `ToMixed` does.
 - `variance` and `Variance` of a density matrix ρ, tr(ρH†H) - |tr(ρH)|².
+- `matrix(op, system)` and `Vector(ψ)`, the dense matrix of an operator on a small system and
+  the vector of a pure state, to compare with an exact computation.
 - `dag` and `'` of an operator placed on sites, and `'` of a generic one: `H = -(h + h')`.
 - The rows of a `Data` read a value by its name, `row["X(1)"]`, and form a table of `Tables.jl`
   with the columns of a text table, which `DataFrame` and `CSV.write` take.

@@ -22,11 +22,8 @@ up = ["1", "0", "1", "-1", "0", "0"]                       # a state of total Sz
 e1_sector, _ = ground_state(heisenberg, State{Pure}(conserving, up); algo = Dmrg(nsweeps = 10),
                             limits = lim)
 
-# the exact spectrum, from the matrices of the operators on a site
-sx, sy, sz = (matrix(op, Spin(1)) for op in (Sx, Sy, Sz))
-on(m, i) = kron([ j == i ? m : Matrix(1.0I, 3, 3) for j in 1:n ]...)
-dense = sum(on(s, i) * on(s, i + 1) for i in 1:n-1 for s in (sx, sy, sz))
-exact = eigvals(Hermitian(dense))
+# the exact spectrum, from the dense matrix of the chain
+exact = eigvals(Hermitian(matrix(heisenberg, sys)))
 
 println("ground state energy  ", e0, "   exact ", exact[1])
 println("first excitation     ", e1 - e0, "   in the sector Sz = 1 ", e1_sector - e0,

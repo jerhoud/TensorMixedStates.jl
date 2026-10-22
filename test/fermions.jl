@@ -122,6 +122,7 @@ end
             @test expect(ψ, o) ≈ v' * d * v atol = 1e-10 rtol = 1e-10
             @test expect(ρ, o) ≈ LA.tr(R * d) atol = 1e-10 rtol = 1e-10
             @test mpo_matrix(ψ, o) ≈ d atol = 1e-10 rtol = 1e-10
+            @test matrix(o, sys) ≈ d atol = 1e-10 rtol = 1e-10
             @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10 rtol = 1e-10
             @test ket_bra_matrix(apply(o, ρ)) ≈ d * R0 * d' atol = 1e-10 rtol = 1e-10
             @test ket_bra_matrix(apply(Gate(o), ρ)) ≈ d * R0 * d' atol = 1e-10 rtol = 1e-10

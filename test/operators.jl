@@ -572,6 +572,29 @@ end
         s3, X(5))
 end
 
+@testset "The matrix of an operator on a system" begin
+    # against the explicit matrices of the factors of one site, their strings laid, and the matrix
+    # of a product of sums, made of those of its factors, against the product of their matrices
+    q, fe = Qubit(), Fermion()
+    s3 = System(3, q)
+    x, y, z = matrix(X, q), matrix(Y, q), matrix(Z, q)
+    @test matrix(X(1) + 2 * Z(2) * Y(3), s3) ≈
+          jw_placed(s3, 1, x) + 2 * jw_placed(s3, 2, z) * jw_placed(s3, 3, y)
+    s4 = System(4, fe)
+    c = matrix(C, fe)
+    hop = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    @test matrix(hop, s4) ≈ jw_placed(s4, 1, collect(c')) * jw_placed(s4, 3, c) +
+                            jw_placed(s4, 3, collect(c')) * jw_placed(s4, 1, c)
+    h = hop + sum(N(i) for i in 1:4)
+    @test matrix(h * h, s4) ≈ matrix(h, s4)^2
+    @test matrix(h * h + 3 * h, s4) ≈ matrix(h, s4)^2 + 3 * matrix(h, s4)
+    # charges play no part, an operator of no definite charge having a matrix as well
+    @test matrix(X(1), System(2, Qubit(conserve = N))) ≈ kron(x, matrix(Id, q))
+    # a site the system does not have, and a system beyond a dense matrix
+    @test_throws "X(5) acts on site 5, which the system does not have" matrix(X(5), s3)
+    @test_throws "beyond the 4096 TMS builds" matrix(Z(1), System(13, q))
+end
+
 @testset "Operators of no definite charge in an expression that has one" begin
     # on a site that conserves something, a block is split into its parts of each charge, so
     # that the Heisenberg coupling written with Sx and Sy, whose terms S⁺S⁺ and S⁻S⁻ cancel

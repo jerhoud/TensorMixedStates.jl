@@ -51,6 +51,12 @@ end
     dc = dense_state(System(4, Fermion(conserve = N)), φ)
     @test sum(expect1(dc, N)) ≈ 2
     @test dense_vector(dc) ≈ φ / LA.norm(φ)
+    # and back, the vector of a state, not normalized, on which matrix(op, system) acts
+    @test Vector(dense_state(System(5, Qubit()), ψ)) ≈ ψ / LA.norm(ψ)
+    @test Vector(2 * dc) ≈ 2φ / LA.norm(φ)
+    v = Vector(dc)
+    @test v' * matrix(dag(C)(1) * C(3), dc.system) * v ≈ expect(dc, dag(C)(1) * C(3))
+    @test_throws "beyond the 16777216 TMS builds" Vector(State{Pure}(System(2, Boson(5000)), "0"))
     @test maxlinkdim(dense_state(System(8, Qubit()), kron(fill([1., 1.], 8)...))) == 1
     @test_throws "no definite charge" dense_state(System(4, Fermion(conserve = N)), ones(16))
     @test_throws "cannot be a state of 16" dense_state(System(4, Qubit()), ones(8))

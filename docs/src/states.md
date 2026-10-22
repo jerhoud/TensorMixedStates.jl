@@ -47,13 +47,14 @@ state, the Slater determinants of free fermions, and the Fermi sea
 of a quadratic hamiltonian, on sites of `Fermion` or `Electron`, beside sites of other types if
 need be, an impurity for instance. Any other state of which one knows the tensors of an MPS is
 built by `mps_state`, and a state small enough to be written down, by its dense vector or
-density matrix, with `dense_state`.
+density matrix, with `dense_state`, whose vector `Vector` gives back.
 The graph states of qubits are built by [`graph_state`](@ref), the AKLT state of spins one by
 [`aklt_state`](@ref), and the thermal states by [`thermalize`](@ref).
 
 ```@docs
 mps_state
 dense_state
+Vector(::State{Pure})
 superposition
 mixture
 ghz_state

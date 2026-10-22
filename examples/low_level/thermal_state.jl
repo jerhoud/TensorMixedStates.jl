@@ -20,11 +20,8 @@ plus, _ = thermalize(ising, β + δ, hot; nsteps = 40, limits = lim)
 minus, _ = thermalize(ising, β - δ, hot; nsteps = 40, limits = lim)
 energy_from_z = -(plus - minus) / (2δ)
 
-# exactly
-x, z = matrix(X, Qubit()), matrix(Z, Qubit())
-on(m, i) = kron([ j == i ? m : Matrix(1.0I, 2, 2) for j in 1:n ]...)
-dense = -sum(on(z, i) * on(z, i + 1) for i in 1:n-1) - 0.7 * sum(on(x, i) for i in 1:n)
-λ = eigvals(Hermitian(dense))
+# exactly, from the dense matrix of the chain
+λ = eigvals(Hermitian(matrix(ising, hot.system)))
 exact_logz = log(sum(exp.(-β * λ)))
 exact_energy = sum(λ .* exp.(-β * λ)) / sum(exp.(-β * λ))
 

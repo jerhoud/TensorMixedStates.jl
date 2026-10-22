@@ -92,6 +92,8 @@ lt, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, li
 ``A + g(t) B``, `g` a real function of the time, read from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`, or
 `time_step`, one of which `evolve` and `thermalize` require, as the phases) and the sweeps: a
 result is trusted once it does not move when each is improved, see [Checking the accuracy](@ref).
+On a small system, `matrix(ham, sys)`, the dense matrix of an operator, its Jordan-Wigner strings
+laid, and `Vector(ψ)`, that of a pure state, give the exact result to compare with.
 
 ## Measurements
 

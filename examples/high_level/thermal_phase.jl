@@ -22,11 +22,7 @@ sim = runTMS(SimData(
     ],
 ))
 
-x, y, z = (matrix(op, Qubit()) for op in (X, Y, Z))
-on(m, i) = kron([ j == i ? m : Matrix(1.0I, 2, 2) for j in 1:n ]...)
-dense = sum(on(x, i) * on(x, i + 1) + on(y, i) * on(y, i + 1) + Δ * on(z, i) * on(z, i + 1)
-            for i in 1:n-1)
-λ = eigvals(Hermitian(dense))
+λ = eigvals(Hermitian(matrix(xxz, System(n, Qubit()))))
 w = exp.(-2.0 * λ)
 exact_energy = sum(λ .* w) / sum(w)
 println("energy at β = 2: ", expect(sim.state, xxz), "   exact ", exact_energy)

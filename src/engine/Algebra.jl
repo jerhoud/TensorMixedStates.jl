@@ -420,6 +420,54 @@ function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits =
 end
 
 """
+    whole_matrix(system, op)
+
+the matrix of the operator `op`, placed on sites, on all the sites of `system`, see
+`system_matrix`: from its terms, see `lower`, but for its products that would develop into more
+terms than their factors have, see `by_blocks`, the product of the matrices of their factors,
+made the same way, as `compacted_op` does
+"""
+function whole_matrix(system::System, a::IndexedOp{IsOperator})
+    g = gathered(system, a)
+    summands = addends(g)
+    if !any(by_blocks, summands)
+        return system_matrix(Pure, system, lower(system, a, g))
+    end
+    parts = [ scalarcoef(x) * prod(f -> whole_matrix(system, f), prodsubs(scalararg(x)))
+              for x in filter(by_blocks, summands) ]
+    rest = filter(x -> !by_blocks(x), summands)
+    if !isempty(rest)
+        push!(parts, whole_matrix(system, SumOp(rest)))
+    end
+    return scalarcoef(g) * sum(parts)
+end
+
+"""
+    matrix(op, system)
+
+the matrix of the operator `op`, placed on sites, on all the sites of `system`, the
+Jordan-Wigner strings of its fermionic operators laid, on the basis of the product states
+ordered as `kron` orders them, the first site varying the slowest, as `dense_state` and `Vector`
+order them: the matrix an exact diagonalization of a small system checks a result against. It
+is refused beyond the dimension `dense_max`, 4096.
+
+# Examples
+
+    eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
+"""
+function matrix(a::IndexedOp{IsOperator}, system::System)
+    check_indices(system, a)
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float(dim(s)) for s in system.sites)
+    if d > dense_max
+        error("the matrix of $(obs_name(a)) on $(length(system)) sites has the dimension " *
+              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
+    end
+    # charges play no part in a matrix, which an operator of no definite charge has as well
+    return whole_matrix(weaken(system, ()), a)
+end
+
+"""
     many_terms(k)
 
 whether the placed operator `k` has more than two terms, or a product that would develop into

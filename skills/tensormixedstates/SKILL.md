@@ -37,7 +37,8 @@ compiles for a few seconds.
 1. Write the model as TMS expressions, and check the conventions below against the user's.
 2. Start with small parameters, a modest `maxdim`, a time step a tenth of the fastest time
    scale, a few sweeps, and a small system whose exact result you can compute by dense
-   diagonalization, to check the script.
+   diagonalization, to check the script: `matrix(H, sys)` is the dense matrix of an operator,
+   Jordan-Wigner strings included, and `Vector(ψ)` the vector of a pure state.
 3. Converge: double `maxdim`, halve the time step, add sweeps, until the digits you report do
    not move. Measure `MaxLinkdim`: once it reaches `maxdim`, the truncation limits the result.
 4. Report the result with the parameters, the checks it passed and the digits they support.

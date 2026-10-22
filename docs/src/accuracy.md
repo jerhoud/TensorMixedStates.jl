@@ -109,3 +109,16 @@ its evolution in time, when that converges, which `evolve` gives. When the quant
 site can conserve, declaring it `strong` keeps `steady_state` in the sector of the starting
 state, see [Conserving a quantity](@ref). A hermitian state does not prove the steady state
 unique.
+
+### Against an exact computation
+
+On a small system, about a dozen qubits, the exact result is at hand: `matrix(op, system)` is
+the dense matrix of an operator, its Jordan-Wigner strings laid, `Vector(ψ)` the vector of a
+pure state on the same basis, and `reduced_density_matrix(ρ, 1:n)` the density matrix of a
+mixed one, which `LinearAlgebra` diagonalizes or exponentiates:
+
+```julia
+λ = eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
+```
+
+A script checked so on a small system then runs at the sizes no exact computation reaches.

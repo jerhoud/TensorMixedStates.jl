@@ -28,13 +28,12 @@ sim = runTMS(SimData(
 
 found = measure(sim.state, Overlap(:φ, X); φ = sim.φ)
 
-# exactly
-x, z = matrix(X, Qubit()), matrix(Z, Qubit())
-on(m, i) = kron([ j == i ? m : Matrix(1.0I, 2, 2) for j in 1:n ]...)
-dense = -sum(on(z, i) * on(z, i + 1) for i in 1:n-1) - 1.2 * sum(on(x, i) for i in 1:n)
+# exactly, from the dense matrices of the operators on the chain
+sys = System(n, Qubit())
+dense = matrix(ising, sys)
 ψ0 = eigvecs(Hermitian(dense))[:, 1]
 u = exp(-im * t * dense)
-exact = [ ψ0' * on(x, 4) * u' * on(x, j) * u * ψ0 for j in 1:n ]
+exact = [ ψ0' * matrix(X(4), sys) * u' * matrix(X(j), sys) * u * ψ0 for j in 1:n ]
 
 println("⟨X_4(0) X_j($t)⟩: ", round.(found; digits = 4))
 println("largest error ", maximum(abs.(found - exact)))
