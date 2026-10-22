@@ -78,6 +78,8 @@ version 2.x.
   the spectrum, where 1.x returned both.
 - A zero entanglement entropy, as that of a product state, is 0.0, where 1.x gave -0.0,
   written -0 in a file.
+- A system whose conserved quantities take the four components ITensors allows, not all on each
+  site conserving something, is refused, where ITensors failed during a computation.
 - `entanglement_by_sector` reads a sector by its charges as `fully_mixed` takes them,
   `sectors[N => 2]`, where 1.x indexed it by a `QN`.
 - `SteadyState` provides the eigenvalue of ``L^\dagger L`` as `:residual`, where 1.x named it

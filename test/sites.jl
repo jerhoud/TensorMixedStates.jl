@@ -760,6 +760,14 @@ end
         [Electron(conserve = (strong(Ntot), strong(2Sz))), Fermion(conserve = N)])
     @test_ok System(2, Fermion(conserve = strong(N)))
     @test_ok System([Fermion(conserve = strong(N)), Qubit(), Fermion(conserve = strong(N))])
+    # all four components, which ITensors fails on unless every site conserving something takes
+    # them all, as beside a site conserving nothing
+    @test_throws "ITensors.jl#1341" System(
+        [Fermion(conserve = strong(N)), Spin(1/2, conserve = strong(2Sz))])
+    @test_throws "ITensors.jl#1341" System([Electron(conserve = (Ntot, 2Sz)),
+        Fermion(conserve = named(N, "Nf")), Boson(3, conserve = named(N, "Nb"))])
+    @test_ok System([Electron(conserve = (strong(Ntot), strong(2Sz))), Qubit(),
+                     Electron(conserve = (strong(Ntot), strong(2Sz)))])
 end
 
 @testset "Superoperators under a strong symmetry" begin
