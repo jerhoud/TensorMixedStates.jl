@@ -682,17 +682,34 @@ elements of each site in the order `orders` gives for it, as on its mixed index,
 """
 function system_matrix(::Type{R}, system::System, ts::Vector{Term}, sites = 1:length(system),
                        orders = nothing) where R
-    ids = [ Matrix{Float64}(I, block_dim(R, system[k]), block_dim(R, system[k])) for k in sites ]
-    d = prod(size(m, 1) for m in ids)
+    dims = [ block_dim(R, system[k]) for k in sites ]
+    d = prod(dims)
     total = zeros(d, d)
     for x in ts
         t = laid_strings(R, system, x)
         bs = Dict(b.site => b.m for b in t.blocks)
-        ms = [ get(bs, k, ids[j]) for (j, k) in enumerate(sites) ]
-        if !isnothing(orders)
-            ms = [ m[o, o] for (m, o) in zip(ms, orders) ]
+        on = findall(k -> haskey(bs, k), sites)
+        if isempty(on)
+            total += t.coef * I
+            continue
         end
-        total += t.coef * foldl(kron, ms)
+        lo, hi = first(on), last(on)
+        ms = [ get(bs, sites[j], Matrix{Float64}(I, dims[j], dims[j])) for j in lo:hi ]
+        if !isnothing(orders)
+            ms = [ m[o, o] for (m, o) in zip(ms, orders[lo:hi]) ]
+        end
+        m = t.coef * foldl(kron, ms)
+        T = promote_type(eltype(total), eltype(m))
+        if T ≠ eltype(total)
+            total = Matrix{T}(total)
+        end
+        # the identities of the sites before and after the blocks laid by indexing rather than by
+        # kron: a term costs d times the dimension of its blocks rather than d²
+        l, r = prod(dims[1:lo-1]), prod(dims[hi+1:end])
+        laid = reshape(total, r, size(m, 1), l, r, size(m, 1), l)
+        for i in 1:l, j in 1:r
+            @views laid[j, :, i, j, :, i] .+= m
+        end
     end
     return total
 end
