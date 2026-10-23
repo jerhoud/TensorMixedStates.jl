@@ -101,6 +101,8 @@ version 2.x.
   list returns its pairs.
 - A `.json` file is the array of an object per time, where 1.x wrote an object per measurement
   once the run ended, and a `.jsonl` file the same objects as JSON Lines, written as measured.
+- A text table writes every number with thirteen significant digits, `SimData(format = "%.13g")`,
+  where 1.x wrote the values with eight and the time with four.
 - `steady_state` builds the MPO of ``L^\dagger L`` from that of ``L`` with as few channels as its
   rank, where the product of the MPOs had the square of their bond dimension, and its
   `mpo_limits` truncate it in its triangular form.

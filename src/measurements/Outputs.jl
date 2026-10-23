@@ -539,7 +539,7 @@ then the columns a text table of the same measurements has, in the order they fi
 function data_to_frame end
 
 """
-    Outputs(; dir = "", format = "%.8g")
+    Outputs(; dir = "", format = "%.13g")
 
 where the lists of measurements of a run go: the destinations opened, by their description,
 the files named relative to `dir`, the numbers of the text tables in the Printf `format`, the
@@ -552,7 +552,7 @@ struct Outputs
     lock::ReentrantLock
 end
 
-function Outputs(; dir::AbstractString = "", format::AbstractString = "%.8g")
+function Outputs(; dir::AbstractString = "", format::AbstractString = "%.13g")
     ok = try
         Printf.format(Printf.Format(format), 1.5)
         true
@@ -560,7 +560,7 @@ function Outputs(; dir::AbstractString = "", format::AbstractString = "%.8g")
         false
     end
     if !ok
-        error("the format $(repr(format)) does not write one number, as \"%.8g\" does")
+        error("the format $(repr(format)) does not write one number, as \"%.13g\" does")
     end
     return Outputs(dir, format, Dict{Destination, Any}(), ReentrantLock())
 end

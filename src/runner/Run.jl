@@ -172,7 +172,8 @@ the description of a simulation, which `runTMS` runs.
 - `description`: the text of the file `description` of the simulation (default `""`)
 - `time_start`: the time the simulation starts at (default 0)
 - `final_measurements`: the measurements made at the end, see `output` (default `[]`)
-- `format`: the Printf format of the numbers written to text files (default `"%.8g"`)
+- `format`: the Printf format of the numbers written to text files (default `"%.13g"`, thirteen
+  significant digits, the precision below which a difference is taken for rounding)
 - `seed`: the seed of the random number generator of the run, `sim.rng`, an integer of zero or
   above, drawn at random by default and written in the file `stamp`, so that a run can be made
   again
@@ -216,7 +217,7 @@ struct SimData
 end
 
 SimData(; name::AbstractString = "simulation", description::AbstractString = "",
-        time_start::Number = 0., final_measurements = [], format::AbstractString = "%.8g",
+        time_start::Number = 0., final_measurements = [], format::AbstractString = "%.13g",
         seed::Union{Nothing, Integer} = nothing, phases) =
     SimData(name, description, time_start, final_measurements, format, seed, phases)
 

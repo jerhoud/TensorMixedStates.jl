@@ -82,10 +82,10 @@ measuring after each step: the magnetization on the six sites and the purity, he
 first step and at the end of the run,
 
 ```
-time  Z(1)          Z(2)         Z(3)         Z(4)         Z(5)         Z(6)          Purity
-0.1   0.94098941    0.94117682   0.94117682   0.94117682   0.94117682   0.94098941    0.78980701
+time  Z(1)               Z(2)               Z(3)               Z(4)               Z(5)               Z(6)               Purity
+0.1   0.9409894108307    0.941176821604     0.9411768236482    0.9411768236508    0.9411768216059    0.9409894108332    0.7898070092902
 ...
-2    -0.095182095  -0.19011196  -0.14498043  -0.14498042  -0.19011196  -0.095182096   0.1086794
+2    -0.09518209547961  -0.1901119643657   -0.1449804250078   -0.1449804249806   -0.190111964564    -0.0951820957316    0.1086794010911
 ```
 
 The qubits start pure and pointing up; by the end the magnetization has reversed and the
@@ -204,8 +204,10 @@ completed does nothing. A simulation that never wrote one runs again from the st
 
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption
-are not duplicated. The result is the same file as an uninterrupted run would have
-produced. A `Data` object is put back as it was at the checkpoint, the values measured after
+are not duplicated. The result is the file an uninterrupted run would have produced, with the
+same values up to rounding: a search resumed between two sweeps rebuilds what dmrg kept from
+one sweep to the next, which may change the last digits of a small value, as a residual close
+to zero. A `Data` object is put back as it was at the checkpoint, the values measured after
 it dropped. The log is the exception: it keeps the history of every run, so what an
 interrupted run wrote after its last checkpoint stays, with the line saying why it stopped,
 followed by the line marking the resume and by the steps done again from the checkpoint.

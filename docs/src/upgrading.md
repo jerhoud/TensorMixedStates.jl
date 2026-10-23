@@ -201,10 +201,11 @@ Some results change without any edit beyond those above:
   1.x could not prove Hermitian, as `Sp(1)Sm(2) + Sm(1)Sp(2)`, has a real value, and an
   anti-Hermitian one its complex value, where 1.x gave its imaginary part as `Im(name)`. A pair
   of operators is named `(X, Y)`, where 1.x named it `XY`.
-- **The files.** Every number is written with `SimData(format = "%.8g")`, the time included,
-  which 1.x wrote with four digits. A `.json` file is the array of an object per time, where
-  1.x wrote an object per measurement, and a `.jsonl` file the same objects as JSON Lines,
-  written as they are measured.
+- **The files.** Every number is written with `SimData(format = "%.13g")`, thirteen significant
+  digits, the time included, where 1.x wrote the values with eight and the time with four;
+  `format = "%.8g"` gives the width of 1.x back. A `.json` file is the array of an object per
+  time, where 1.x wrote an object per measurement, and a `.jsonl` file the same objects as JSON
+  Lines, written as they are measured.
 - **`runTMS`** no longer changes the working directory: a relative path in the code of a phase
   is taken from the directory `runTMS` was called in, where 1.x ran in that of the simulation.
 - **`data_to_frame`** gives the columns of the data files, a vector or a matrix spread over

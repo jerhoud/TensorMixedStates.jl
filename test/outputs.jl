@@ -159,11 +159,11 @@ end
     # stdout and stderr take any list, a new header coming when the columns change, and belong
     # to the process, which keeps them open; "" measures all the same, so that a Check runs
     o = TMS.Outputs()
-    @test TMS.destination(o, "stdout") == TMS.destination(o, "-") == TMS.Stream(stdout, "%.8g")
-    @test TMS.destination(o, "stderr") == TMS.Stream(stderr, "%.8g")
-    @test TMS.destination(o, "") == TMS.Stream(devnull, "%.8g")
+    @test TMS.destination(o, "stdout") == TMS.destination(o, "-") == TMS.Stream(stdout, "%.13g")
+    @test TMS.destination(o, "stderr") == TMS.Stream(stderr, "%.13g")
+    @test TMS.destination(o, "") == TMS.Stream(devnull, "%.13g")
     io = IOBuffer()
-    s = TMS.Stream(io, "%.8g")
+    s = TMS.Stream(io, "%.13g")
     ψ = State{Pure}(System(2, Qubit()), "Up")
     TMS.output!(o, ψ, s => X(1); time = 0)
     TMS.output!(o, ψ, s => Z(1); time = 1)

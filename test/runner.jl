@@ -166,9 +166,17 @@ end
                            final_measurements = "end" => [tr, :energy, draw, Fidelity(:start)])
         ref = runTMS(sd("ref"))
         sim = run_through(sd("chk"); max_time = -1)
-        for f in ("evolve", "search", "found", "open", "thermo", "steady", "end")
+        for f in ("evolve", "search", "found", "open", "thermo", "end")
             @test read("chk/$f", String) == read("ref/$f", String)
         end
+        # a steady state search resumed between two sweeps rebuilds the environments dmrg kept,
+        # which changes the rounding of its residual, an eigenvalue close to zero, by 1e-15:
+        # its file has the same lines and columns, its numbers the same up to rounding
+        chk, ref_lines = readlines("chk/steady"), readlines("ref/steady")
+        @test length(chk) == length(ref_lines) && first(chk) == first(ref_lines)
+        cells(l) = parse.(Float64, split(l, '\t'))
+        @test all(isapprox(cells(a), cells(b); atol = 1e-12)
+                  for (a, b) in zip(chk[2:end], ref_lines[2:end]))
         @test norm(sim.state - ref.state) < 1e-12
         @test sim.energy ≈ ref.energy
         @test sim.residual ≈ ref.residual atol = 1e-12
