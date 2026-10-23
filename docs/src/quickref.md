@@ -90,6 +90,21 @@ lt, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, li
 ψg = apply(gates, State{Pure}(sys, "Up"); limits = lim)
 ```
 
+Every field of the options at its default, but `nsweeps` and `order`, which have none; `?Dmrg`
+and the others say what each does:
+
+```julia
+Limits(cutoff = nothing, maxdim = nothing, mindim = nothing)  # nothing: the default of the
+                                                              # function; a vector, one value
+                                                              # per step or per sweep
+Dmrg(nsweeps = 10, noise = 0, krylov = Krylov(), tol = 0)     # tol = 0: every sweep is made
+Tdvp(krylov = Krylov(), expand_period = 0, hermitianize_period = 0)       # a period 0: never
+ApproxW(order = 4, w = 2, apply_algo = "naive", hermitianize_period = 0)  # order: 1 to 4
+Krylov(dim = nothing, maxiter = nothing, tol = nothing)       # nothing: (30, 100, 1e-12) for
+                                                              # tdvp, (3, 1, 1e-14) for dmrg,
+                                                              # (8, 3, 1e-14) for steady_state
+```
+
 `evolve` takes a time dependent evolver as a vector of terms, `[A, B => g]` for
 ``A + g(t) B``, `g` a real function of the time, read from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`, or
 `time_step`, one of which `evolve` and `thermalize` require, as the phases) and the sweeps: a
