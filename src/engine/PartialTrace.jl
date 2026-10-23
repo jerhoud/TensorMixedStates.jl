@@ -4,9 +4,24 @@
 export partial_trace
 
 """
+    check_repeated(positions, what)
+
+refuse a position given twice, `what` naming the function given it
+"""
+function check_repeated(positions, what)
+    for (k, p) in enumerate(positions)
+        if p in Iterators.take(positions, k - 1)
+            error("$what was given site $p twice")
+        end
+    end
+    return nothing
+end
+
+"""
     check_positions(state, positions, what)
 
-refuse a position of `positions` the state does not have, `what` naming the function given it
+refuse a position of `positions` the state does not have, or one given twice, `what` naming the
+function given it
 """
 function check_positions(state::AbstractState, positions, what)
     n = length(state)
@@ -14,6 +29,22 @@ function check_positions(state::AbstractState, positions, what)
         if !(1 ≤ p ≤ n)
             error("$what was given site $p, which the state does not have: it has $n sites")
         end
+    end
+    check_repeated(positions, what)
+    return nothing
+end
+
+"""
+    check_increasing(positions, what)
+
+refuse positions out of increasing order where their order would change the result, the sites
+being kept in the order of the chain
+"""
+function check_increasing(positions, what)
+    if !issorted(positions)
+        error("$what keeps the sites in the order of the chain and was given " *
+              "$(collect(positions)): give them in increasing order, and use permute_sites for " *
+              "another order")
     end
     return nothing
 end
@@ -95,14 +126,15 @@ end
     partial_trace(state; keep)
     partial_trace(state; trace_out)
 
-the mixed `state` reduced to the sites at the positions `keep`, or with those at `trace_out`
-traced out: a mixed state on the system of the sites kept, in their order, with the trace of
-`state`. An operator of the sites kept has on it the value it has on `state`, fermionic signs
-included; tracing out a fermionic site with fermionic sites kept on its right may double the
-bond dimension.
+the mixed `state` reduced to the sites at the positions `keep`, in increasing order, or with
+those at `trace_out` traced out: a mixed state on the system of the sites kept, in the order of
+the chain, with the trace of `state`. An operator of the sites kept has on it the value it has
+on `state`, fermionic signs included; tracing out a fermionic site with fermionic sites kept on
+its right may double the bond dimension.
 
 A pure state is refused (`mix` it first), so is a state conserving something strongly
-(`weaken` it first), and so is tracing out every site.
+(`weaken` it first), and so are tracing out every site, a site given twice and `keep` out of
+increasing order, which `permute_sites` gives once the trace is taken.
 
 # Examples
 
@@ -120,7 +152,12 @@ function partial_trace(state::State{Mixed}; keep::Union{Nothing, AbstractVector{
               "which leaves a mixture over several sectors: weaken it first")
     end
     check_positions(state, something(keep, trace_out), "partial_trace")
-    kept = isnothing(keep) ? setdiff(1:length(state), trace_out) : sort(unique(keep))
+    if isnothing(keep)
+        kept = setdiff(1:length(state), trace_out)
+    else
+        check_increasing(keep, "partial_trace")
+        kept = collect(keep)
+    end
     if isempty(kept)
         error("partial_trace cannot trace out every site of a state")
     end

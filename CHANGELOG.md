@@ -95,6 +95,8 @@ version 2.x.
   prepared states, its sites in no edge taking `others`, where 1.x made a system of qubits.
 - `partial_trace` and `PartialTrace` take the sites to keep, `keep = …`, or those to trace out,
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
+- A site given twice is refused by the functions and measurements taking positions, and the sites
+  kept by `partial_trace` and `reduced_density_matrix` are given in increasing order.
 - `measure` of one measurement returns its value, where 1.x returned a vector of one pair; a
   list returns its pairs.
 - A `.json` file is the array of an object per time, where 1.x wrote an object per measurement

@@ -70,10 +70,10 @@ end
 """
     PartialTrace(; keep | trace_out, on, name, time_start, final_measurements)
 
-a phase that reduces the state to the sites at the positions `keep`, or traces out those at
-`trace_out`, see `partial_trace`. The sites kept make a new system, numbered from 1 in their
-order, which the operators of the phases after this one refer to. `on` is the name of the state
-it acts on, see `CopyState` (default `:state`).
+a phase that reduces the state to the sites at the positions `keep`, in increasing order, or
+traces out those at `trace_out`, see `partial_trace`. The sites kept make a new system, numbered
+from 1 in the order of the chain, which the operators of the phases after this one refer to.
+`on` is the name of the state it acts on, see `CopyState` (default `:state`).
 
 # Examples
 
@@ -93,6 +93,10 @@ it acts on, see `CopyState` (default `:state`).
         if isnothing(keep) == isnothing(trace_out)
             error("PartialTrace takes the sites to keep, keep = positions, or those to trace " *
                   "out, trace_out = positions, one of the two")
+        end
+        check_repeated(something(keep, trace_out), "PartialTrace")
+        if !isnothing(keep)
+            check_increasing(keep, "PartialTrace")
         end
         return new(name, time_start, final_measurements, keep, trace_out, on)
     end

@@ -293,7 +293,7 @@ renyi2(state::State{Mixed}) = -log(purity(state))
 
 function renyi2(state::State, positions::AbstractVector{Int})
     check_positions(state, positions, "renyi2")
-    kept = sort!(unique(collect(positions)))
+    kept = sort!(collect(positions))
     if isempty(kept)
         return 0.0
     elseif length(kept) == length(state)
@@ -340,7 +340,7 @@ it is the sum of the `renyi2` of the two parts.
 """
 function mutual_info_renyi2(state::State, positions::AbstractVector{Int})
     check_positions(state, positions, "mutual_info_renyi2")
-    kept = sort!(unique(collect(positions)))
+    kept = sort!(collect(positions))
     if isempty(kept) || length(kept) == length(state)
         return 0.0
     end
@@ -403,12 +403,13 @@ end
     reduced_density_matrix(state, positions)
 
 the density matrix of the sites at `positions`, the others traced out, as a matrix of trace
-one on the basis of the product states of those sites, taken in their order, ordered as `kron`
-orders them, the first site varying the slowest, as for `dense_state`. On fermionic sites it is
-written in the Jordan-Wigner basis of the sites kept alone, so that `tr(ρ * matrix(op, ...))`
-is the expectation value of `op` placed on them. It is meant for a few sites, the matrix
-having the square of their dimension as its number of elements, and refused beyond the
-dimension `dense_max`, 4096. A state of trace zero is refused.
+one on the basis of the product states of those sites, given in increasing order, ordered as
+`kron` orders them, the first site varying the slowest, as for `dense_state`. On fermionic sites
+it is written in the Jordan-Wigner basis of the sites kept alone, so that
+`tr(ρ * matrix(op, ...))` is the expectation value of `op` placed on them. It is meant for a few
+sites, the matrix having the square of their dimension as its number of elements, and refused
+beyond the dimension `dense_max`, 4096. A state of trace zero is refused, and so are positions
+out of increasing order, which `permute_sites` gives.
 
 # Examples
 
@@ -416,10 +417,11 @@ dimension `dense_max`, 4096. A state of trace zero is refused.
 """
 function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{Int})
     check_positions(state, positions, "reduced_density_matrix")
+    check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
         return ones(1, 1)
     end
-    check_reduced(state, unique(positions))
+    check_reduced(state, positions)
     r = partial_trace(weak_form(state); keep = positions)
     system = r.system
     t = prod(r.state)
@@ -468,10 +470,11 @@ end
 
 function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int})
     check_positions(state, positions, "reduced_density_matrix")
+    check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
         return ones(1, 1)
     end
-    kept = sort!(unique(collect(positions)))
+    kept = collect(positions)
     check_reduced(state, kept)
     state = trace_signs(state, kept)
     # the dense matrix of many sites has as many indices as ITensors warns about, from 14
@@ -500,7 +503,7 @@ any number of sites.
 """
 function von_neumann_entropy(state::State, positions::AbstractVector)
     check_positions(state, positions, "von_neumann_entropy")
-    λ = eigvals(Hermitian(reduced_density_matrix(state, positions)))
+    λ = eigvals(Hermitian(reduced_density_matrix(state, sort(positions))))
     return sum((-x * log(x) for x in λ if x > 0); init = 0.0)
 end
 
@@ -520,7 +523,7 @@ site, and refused when both hold one.
 function log_negativity(state::State, a::AbstractVector, b::AbstractVector)
     check_positions(state, a, "log_negativity")
     check_positions(state, b, "log_negativity")
-    a, b = sort(unique(Vector{Int}(a))), sort(unique(Vector{Int}(b)))
+    a, b = sort(Vector{Int}(a)), sort(Vector{Int}(b))
     if !isempty(intersect(a, b))
         error("log_negativity was given sites in both parts: $(intersect(a, b))")
     end

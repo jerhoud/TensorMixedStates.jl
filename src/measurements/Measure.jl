@@ -181,9 +181,13 @@ end
     on_positions(name, f, positions...)
 
 the measurement of the library `name` that `f(state, positions...)` gives, named after the
-positions, which are checked when it is prepared
+positions, a site given twice refused at once and those the state does not have when it is
+prepared
 """
 function on_positions(name::String, f, positions...)
+    for p in positions
+        check_repeated(p, name)
+    end
     full = "$name($(join(map(compact_positions, positions), ";")))"
     return StateMeasurement(full, function (state)
         for p in positions
@@ -283,12 +287,14 @@ MutualInfoRenyi2(positions::AbstractVector) =
 """
     ReducedDensityMatrix(positions)
 
-the measurement of the density matrix of the sites at `positions`, see
+the measurement of the density matrix of the sites at `positions`, in increasing order, see
 `reduced_density_matrix`, a complex matrix whatever the state, as `Trace`
 """
-ReducedDensityMatrix(positions::AbstractVector) =
-    on_positions("ReducedDensityMatrix", (st, p) -> complex(reduced_density_matrix(st, p)),
-                 positions)
+function ReducedDensityMatrix(positions::AbstractVector)
+    check_increasing(positions, "ReducedDensityMatrix")
+    return on_positions("ReducedDensityMatrix",
+                        (st, p) -> complex(reduced_density_matrix(st, p)), positions)
+end
 
 """
     VonNeumannEntropy(positions)

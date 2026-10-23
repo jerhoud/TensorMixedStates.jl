@@ -1205,7 +1205,7 @@ end
         @test LA.tr(ρ * m) ≈ expect(q, a(1) * b(3)) atol = 1e-12
     end
     @test reduced_density_matrix(mix(q), [1, 3]) ≈ ρ
-    @test reduced_density_matrix(q, Any[3, 1]) ≈ ρ
+    @test reduced_density_matrix(q, Any[1, 3]) ≈ ρ
     s = random_state(Pure, System([Qubit(), Spin(1), Qubit()]), 4)
     ρs = reduced_density_matrix(s, [2, 3])
     @test size(ρs) == (6, 6)
@@ -1238,12 +1238,42 @@ end
     @test measured["VonNeumannEntropy(1)"] ≈ von_neumann_entropy(q, [1])
 end
 
+@testset "Positions given twice or out of order" begin
+    # a site given twice is refused, and an order other than that of the chain where the result
+    # would depend on it, the density matrix of the sites and the system of a partial trace
+    q = random_state(Pure, System(4, Qubit()), 4)
+    ρq = mix(q)
+    @test_throws "renyi2 was given site 1 twice" renyi2(q, [1, 1])
+    @test_throws "mutual_info_renyi2 was given site 2 twice" mutual_info_renyi2(q, [2, 2])
+    @test_throws "von_neumann_entropy was given site 1 twice" von_neumann_entropy(q, [1, 3, 1])
+    @test_throws "reduced_density_matrix was given site 1 twice" reduced_density_matrix(q, [1, 1])
+    @test_throws "log_negativity was given site 1 twice" log_negativity(q, [1, 1], [2])
+    @test_throws "partial_trace was given site 1 twice" partial_trace(ρq; keep = [1, 1])
+    @test_throws "partial_trace was given site 2 twice" partial_trace(ρq; trace_out = [2, 2])
+    @test_throws "VonNeumannEntropy was given site 1 twice" VonNeumannEntropy([1, 1])
+    @test_throws "PartialTrace was given site 2 twice" PartialTrace(trace_out = [2, 2])
+    for st in (q, ρq)
+        @test_throws "give them in increasing order" reduced_density_matrix(st, [3, 1])
+    end
+    @test_throws "partial_trace keeps the sites in the order of the chain" partial_trace(
+        ρq; keep = [3, 1])
+    @test_throws "ReducedDensityMatrix keeps the sites" ReducedDensityMatrix([3, 1])
+    @test_throws "PartialTrace keeps the sites" PartialTrace(keep = [3, 1])
+    # elsewhere the order is free
+    @test von_neumann_entropy(q, [3, 1]) ≈ von_neumann_entropy(q, [1, 3])
+    @test renyi2(q, [3, 1]) ≈ renyi2(q, [1, 3])
+    @test mutual_info_renyi2(q, [3, 1]) ≈ mutual_info_renyi2(q, [1, 3])
+    @test log_negativity(q, [3, 1], [2]) ≈ log_negativity(q, [1, 3], [2])
+    @test norm(partial_trace(ρq; trace_out = [3, 1]) - partial_trace(ρq; trace_out = [1, 3])) <
+          1e-12
+end
+
 @testset "Reduced density matrix of a pure state" begin
     # contracted on the pure state, it is the one of its mixed representation, fermionic signs
     # included: sites kept on both sides of sites traced out, a site traced out first, and
     # blocks of consecutive sites, from the block of the state orthogonalised on it
     for (st, positions) in [
-            (random_state(Pure, System(6, Qubit()), 8), [[6], [5, 2], [1, 3, 6], [3, 4, 5]]),
+            (random_state(Pure, System(6, Qubit()), 8), [[6], [2, 5], [1, 3, 6], [3, 4, 5]]),
             (random_state(State{Pure}(System(6, Fermion(conserve = N)),
                                       ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]), 8),
              [[2, 4], [2, 3, 5], [2, 3], [4, 5, 6]]),
