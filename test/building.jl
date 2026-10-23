@@ -1,5 +1,6 @@
-# Building the basic objects: System, State and random states, and the limits of a
-# truncation, plus Aqua. What a state measures belongs to sites.jl.
+# Building the basic objects: System, State and random states, the product of two states and
+# the permutation of the sites of one, and the limits of a truncation, plus Aqua. What a state
+# measures belongs to sites.jl.
 #
 # The phases that make the state, run by runTMS, are in runner.jl; the noise and the Krylov
 # parameters of the solvers in searches.jl.
@@ -142,6 +143,107 @@ end
     @test maxlinkdim(mix(ψ; limits = lim)) == 5
     @test norm(mix(ψ; limits = lim) - truncate(ρ; limits = lim)) < 1e-12
     @test norm(mix(ρ; limits = lim) - truncate(ρ; limits = lim)) < 1e-12
+end
+
+@testset "The product of two states" begin
+    rng = Xoshiro(5)
+    rdm(ρ) = reduced_density_matrix(ρ, 1:length(ρ))
+    a = random_state(Pure, System(3, Qubit()), 4; rng)
+    b = random_state(Pure, System([Fermion(), Boson(3)]), 2; rng)
+    @test (a ⊗ b).system == a.system ⊗ b.system
+    @test Vector(a ⊗ b) ≈ kron(Vector(a), Vector(b))
+    @test maxlinkdim(a ⊗ b) == max(maxlinkdim(a), maxlinkdim(b))
+    @test norm(3a ⊗ b) ≈ 3norm(a) * norm(b)
+    # a state twice, its two copies kept apart
+    @test Vector(a ⊗ b ⊗ a) ≈ kron(Vector(a), Vector(b), Vector(a))
+    # density matrices, and a pure state with a mixed one mixed
+    ρ = random_state(Mixed, System(2, Qubit()), 4; rng)
+    @test rdm(mix(a) ⊗ ρ) ≈ kron(rdm(mix(a)), rdm(ρ))
+    @test norm(a ⊗ ρ - mix(a) ⊗ ρ) < 1e-12
+    @test trace(ρ ⊗ ρ) ≈ trace(ρ)^2
+    # qubits conserving nothing beside fermions conserving N, given the sector of charge zero,
+    # the coherences of their density matrix included
+    f = random_state(State{Pure}(System(3, Fermion(conserve = N)), ["Occ", "Emp", "Occ"]), 4; rng)
+    g = graph_state(System(2, Qubit()), [(1, 2)])
+    @test Vector(g ⊗ f) ≈ kron(Vector(g), Vector(f))
+    @test Vector(f ⊗ g) ≈ kron(Vector(f), Vector(g))
+    @test rdm(mix(g) ⊗ mix(f)) ≈ kron(rdm(mix(g)), rdm(mix(f)))
+    @test rdm(mix(f) ⊗ mix(g)) ≈ kron(rdm(mix(f)), rdm(mix(g)))
+    @test expect(mix(g) ⊗ mix(f), X(1) * Z(2)) ≈ 1
+    # the operators of the first standing on the left of those of the second, a hop in the
+    # second crosses the first without a sign
+    @test expect(f ⊗ f, dag(C)(4) * C(6)) ≈ expect(f, dag(C)(1) * C(3))
+    @test expect(mix(f) ⊗ mix(f), dag(C)(4) * C(6)) ≈ expect(f, dag(C)(1) * C(3))
+    @test expect(f ⊗ f, N(2) * N(5)) ≈ expect(f, N(2))^2
+    # under a strong symmetry
+    s = State{Mixed}(System(2, Fermion(conserve = TMS.strong(N))), ["Occ", "Emp"])
+    s = evolve(-im * (dag(C)(1) * C(2) + dag(C)(2) * C(1)) + Dissipator(N)(1), 0.3, s; nsteps = 3)
+    @test rdm(s ⊗ s) ≈ kron(rdm(s), rdm(s))
+    @test expect(s ⊗ s, dag(C)(3) * C(4)) ≈ expect(s, dag(C)(1) * C(2))
+    # the null state
+    @test norm((0 * f) ⊗ g) == 0
+end
+
+@testset "Permuting the sites of a state" begin
+    rng = Xoshiro(6)
+    # the vector of ψ with its sites permuted, the signs of the odd states it crosses counted
+    function permuted_vector(ψ, p)
+        sys = ψ.system
+        n = length(sys)
+        ds = [ dim(s) for s in sys.sites ]
+        parities = [ collect(fermion_parities(s)) for s in sys.sites ]
+        v = Vector(ψ)
+        w = zeros(eltype(v), length(v))
+        q = invperm(p)
+        for (k, c) in enumerate(Iterators.product(reverse([ 1:d for d in ds ])...))
+            s = reverse(collect(c))
+            sign = (-1)^count(p[i] > p[j] && isodd(parities[i][s[i]]) && isodd(parities[j][s[j]])
+                              for i in 1:n for j in i+1:n)
+            w[foldl((x, j) -> (x - 1) * ds[q[j]] + s[q[j]], 1:n; init = 1)] = sign * v[k]
+        end
+        return w
+    end
+    fs = random_state(State{Pure}(System([Fermion(conserve = N), Electron(conserve = Ntot),
+                                          Fermion(conserve = N), Fermion(conserve = N)]),
+                                  ["Occ", "UpDn", "Emp", "Occ"]), 4; rng)
+    for q in ([4, 3, 2, 1], [2, 4, 1, 3], [1, 2, 3, 4])
+        @test Vector(permute_sites(fs, q)) ≈ permuted_vector(fs, q)
+    end
+    # on sites of every kind, conserving something or nothing, an operator measures on the
+    # permuted state what it measures on the state with its sites mapped
+    sys = System([Qubit(), Fermion(conserve = N), Boson(3, conserve = N), Fermion(conserve = N),
+                  Electron(conserve = Ntot)])
+    ψ = random_state(State{Pure}(sys, ["Up", "Occ", "1", "Emp", "Up"]), 6; rng)
+    p = [3, 5, 1, 2, 4]
+    ops = [dag(C)(2) * C(4) + dag(C)(4) * C(2), N(2) * N(4), X(1) * N(3), dag(Cup)(5) * Cdn(5),
+           dag(C)(2) * dag(Cup)(5) * Cup(5) * C(4), A(3) * dag(C)(2) * C(4) * dag(A)(3), X(1)]
+    for st in (ψ, mix(ψ))
+        moved = permute_sites(st, p)
+        @test moved.system == System(sys.sites[invperm(p)])
+        for op in ops
+            @test expect(moved, map_sites(k -> p[k], op); complex = true) ≈
+                  expect(st, op; complex = true)
+        end
+        back = permute_sites(moved, invperm(p))
+        @test back.system == sys
+        @test norm(back - st) < 1e-10 * norm(st)
+    end
+    # under a strong symmetry
+    s = State{Mixed}(System(3, Fermion(conserve = TMS.strong(N))), ["Occ", "Emp", "Occ"])
+    s = evolve(-im * (dag(C)(1) * C(2) + dag(C)(2) * C(1) + dag(C)(2) * C(3) +
+                      dag(C)(3) * C(2)) + Dissipator(N)(2), 0.3, s; nsteps = 3)
+    @test expect(permute_sites(s, [3, 1, 2]), dag(C)(3) * C(2)) ≈ expect(s, dag(C)(1) * C(3))
+    # two halves made apart, interleaved
+    a = random_state(Pure, System(3, Qubit()), 3; rng)
+    b = random_state(Pure, System(3, Fermion()), 3; rng)
+    ab = permute_sites(a ⊗ b, [1, 3, 5, 2, 4, 6])
+    @test expect(ab, Z(1) * N(2) * Z(5)) ≈ expect(a, Z(1) * Z(3)) * expect(b, N(1))
+    # truncated, refused when it is not a permutation, and the null state
+    @test maxlinkdim(permute_sites(ψ, p; limits = Limits(maxdim = 2))) ≤ 2
+    @test_throws "a permutation of the positions 1 to 5" permute_sites(ψ, [1, 1, 2, 3, 4])
+    z = permute_sites(0 * ψ, p)
+    @test norm(z) == 0
+    @test z.system == System(sys.sites[invperm(p)])
 end
 
 @testset "Random states" begin

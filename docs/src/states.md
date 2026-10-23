@@ -66,6 +66,19 @@ slater_state
 fermi_sea
 ```
 
+## Products and permutations
+
+Two states give the state of their two systems together, `a ⊗ b` on `a.system ⊗ b.system`, the
+sites of `b` after those of `a`, and `permute_sites` moves the sites of a state, which
+interleaves two states made apart: a system and its ancillas, two copies of a state, the two
+chains of a ladder. An operator of the second state is placed on the product by
+`map_sites(k -> k + length(a), op)`, and on the permuted state by `map_sites(k -> p[k], op)`.
+
+```@docs
+⊗(::State{R}, ::State{R}) where R
+permute_sites
+```
+
 ## Saving and loading
 
 States can be written to disk in the HDF5 format and read back later. Several states may be

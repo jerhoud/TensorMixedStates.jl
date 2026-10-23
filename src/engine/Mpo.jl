@@ -5,19 +5,6 @@
 export PreMPO, make_mpo
 
 """
-    mixed_elements(system, i)
-
-the element of the density matrix of site `i` of `system` at each position of its mixed index,
-numbered as in the matrices of superoperators, the ket faster
-"""
-function mixed_elements(system::System, i::Int)
-    k = siteind(Mixed, system, i)
-    e = ket_bras(system, i)
-    d = dim(system[i])
-    return invperm(vec([ findfirst(!iszero, Array(e(m, n), k)) for m in 1:d, n in 1:d ]))
-end
-
-"""
     block_orders(R, system)
 
 the order on the index of each site of the elements of the matrix of an operator there: none

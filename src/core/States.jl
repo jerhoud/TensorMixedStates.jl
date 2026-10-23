@@ -1,11 +1,12 @@
 # States, MPS on a system in the pure or the mixed representation: the truncation limits,
 # product states built from local states, sums of states, mixing a pure state, weakening a
-# state, and the norm, the trace and the inner product. The later layers go between the pure
-# and the mixed representations with `combinerto`, `mixer`, `relabel`, `relabeller`,
+# state, the norm, the trace and the inner product, and the product of two states and the
+# permutation of the sites of one. The later layers go between the pure and the mixed
+# representations with `combinerto`, `mixer`, `mixed_elements`, `relabel`, `relabeller`,
 # `element_maps` and `on_legs`, give limits to ITensors with `truncation`, and the measurements
 # fill the cache `preobs` of a state with `cached!`, measuring on `weak_form` or `plain_form`.
 
-export State, Limits, mix, maxlinkdim, trace, tr, norm, normalize, inner, dot
+export State, Limits, mix, maxlinkdim, trace, tr, norm, normalize, inner, dot, permute_sites
 
 """
     Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing)
@@ -225,6 +226,19 @@ function ket_bras(system::System, i::Int)
     j = siteind(Pure, system, i)
     b, c = mixer(j, siteind(Mixed, system, i), system[i])
     return (m, n) -> onehot(j => m, dag(b') => n) * c
+end
+
+"""
+    mixed_elements(system, i)
+
+the element of the density matrix of site `i` of `system` at each position of its mixed index,
+numbered as in the matrices of superoperators, the ket faster
+"""
+function mixed_elements(system::System, i::Int)
+    k = siteind(Mixed, system, i)
+    e = ket_bras(system, i)
+    d = dim(system[i])
+    return invperm(vec([ findfirst(!iszero, Array(e(m, n), k)) for m in 1:d, n in 1:d ]))
 end
 
 """
@@ -778,3 +792,190 @@ inner(::State{Mixed}, ::State{Pure}) =
 dot(a::State, b::State) = inner(a, b)
 
 dot(a::AbstractState, b::AbstractState) = throw(MethodError(dot, (a, b)))
+
+############### Products and permutations ###############
+
+"""
+    lifted(R, st, from, to, offset)
+
+the tensors of the MPS `st` of a state of `from`, a system conserving nothing, laid on the sites
+`offset + 1` on of `to`, which conserves something: each index given the single sector of charge
+zero a site conserving nothing takes there, see `site_index`, the elements of a mixed index in
+the order of `to`, see `mixed_elements`
+"""
+function lifted(::Type{R}, st::MPS, from::System, to::System, offset::Int) where R
+    n = length(st)
+    links = [ commonind(st[k], st[k+1]) for k in 1:n-1 ]
+    charged = [ Index(QN() => dim(l); tags = "Link,l=$(offset + k)")
+                for (k, l) in enumerate(links) ]
+    return map(1:n) do k
+        left, right = max(1, k - 1):k-1, k:min(k, n - 1)
+        old = [ siteind(R, from, k) ; links[left] ; links[right] ]
+        new = [ siteind(R, to, offset + k) ; dag.(charged[left]) ; charged[right] ]
+        a = Array(st[k], old...)
+        if R === Mixed
+            elements = invperm(mixed_elements(from, k))[mixed_elements(to, offset + k)]
+            a = a[elements, ntuple(_ -> Colon(), ndims(a) - 1)...]
+        end
+        return charged_itensor(a, new)
+    end
+end
+
+"""
+    on_system(state, system, offset)
+
+the tensors of the MPS of `state` laid on the sites `offset + 1` on of `system`, which holds its
+sites there, its links renamed, so that the two copies of a state laid twice stay apart
+"""
+function on_system(state::State{R}, system::System, offset::Int) where R
+    from = state.system
+    if is_charged(system) && !is_charged(from)
+        return lifted(R, state.state, from, system, offset)
+    end
+    st = state.state
+    n = length(st)
+    new = Dict{ITensors.IDType, Index}(id(siteind(R, from, k)) => siteind(R, system, offset + k)
+                                       for k in 1:n)
+    for k in 1:n-1
+        l = commonind(st[k], st[k+1])
+        new[id(l)] = settags(sim(l), "Link,l=$(offset + k)")
+    end
+    relab = relabeller(i -> new[id(i)])
+    return [ relabel(t, relab) for t in st ]
+end
+
+"""
+    a ⊗ b
+    tensor(a, b)
+
+the product of the states `a` and `b`, on the system `a.system ⊗ b.system`, the sites of `b`
+following those of `a`: exact, its bond dimension the larger of theirs, its norm or its trace
+the product of theirs. A pure state with a mixed one is mixed, see `mix`. On fermions, the
+operators of `a` stand on the left of those of `b`: the fermionic product of two states of
+definite parity.
+
+# Examples
+
+    ψ ⊗ State{Pure}(System(2, Qubit()), "Up")       # two qubits more
+    left ⊗ right                                     # two halves made apart
+"""
+function ⊗(a::State{R}, b::State{R}) where R
+    system = a.system ⊗ b.system
+    na = length(a)
+    ts = [ on_system(a, system, 0) ; on_system(b, system, na) ]
+    # of dimension one, carrying the charge of the sites of `a`, as the links of a product state,
+    # see `state_links`
+    l = if hasqns(ts[1])
+        q = sum(t -> something(flux(t), QN()), ts[1:na]; init = QN())
+        dag(Index(q => 1; tags = "Link,l=$na"))
+    else
+        Index(1; tags = "Link,l=$na")
+    end
+    ts[na] *= onehot(l => 1)
+    ts[na + 1] *= onehot(dag(l) => 1)
+    return State{R}(system, MPS(ts))
+end
+
+⊗(a::State{Pure}, b::State{Mixed}) = mix(a) ⊗ b
+⊗(a::State{Mixed}, b::State{Pure}) = a ⊗ mix(b)
+
+"""
+    element_parities(R, system, i)
+
+the fermionic parity of each value of the index of site `i` of `system`, see
+`fermion_parities`, on a density matrix those of the kets and those of the bras
+"""
+element_parities(::Type{Pure}, system::System, i::Int) = (collect(fermion_parities(system[i])),)
+
+function element_parities(::Type{Mixed}, system::System, i::Int)
+    p = fermion_parities(system[i])
+    d = length(p)
+    e = mixed_elements(system, i)
+    return ([ p[mod1(x, d)] for x in e ], [ p[cld(x, d)] for x in e ])
+end
+
+"""
+    exchange_sign(R, system, x, y, phi)
+
+the tensor `phi` of the neighbouring sites `x` and `y` of `system` with the sign of their
+exchange, ``(-1)^{p_a p_b}`` for the values `a` of `x` and `b` of `y` of parities ``p_a`` and
+``p_b``, on the kets and on the bras of a density matrix
+"""
+function exchange_sign(::Type{R}, system::System, x::Int, y::Int, phi::ITensor) where R
+    signs(i, p) = charged_itensor(diagm(Float64[ isodd(v) ? -1 : 1 for v in p ]), [i', dag(i)])
+    for (u, v) in zip(element_parities(R, system, x), element_parities(R, system, y))
+        if any(isodd, u) && any(isodd, v)
+            ux, vy = signs(siteind(R, system, x), u), signs(siteind(R, system, y), v)
+            a, b = noprime(phi * ux), noprime(phi * vy)
+            # (-1)^(pa pb) = (1 + (-1)^pa + (-1)^pb - (-1)^(pa + pb)) / 2
+            phi = (phi + a + b - noprime(a * vy)) / 2
+        end
+    end
+    return phi
+end
+
+"""
+    null_mps(R, system)
+
+the MPS of the null state of `system`, its links of dimension one, its tensors without
+elements, which the null state an exchange of sites cannot factorize gives instead
+"""
+function null_mps(::Type{R}, system::System) where R
+    n = length(system)
+    ls = [ is_charged(system) ? Index(QN() => 1; tags = "Link,l=$k") : Index(1; tags = "Link,l=$k")
+           for k in 1:n-1 ]
+    return MPS([ ITensor(Float64, siteind(R, system, k), dag.(ls[max(1, k - 1):k-1])...,
+                         ls[k:min(k, n - 1)]...) for k in 1:n ])
+end
+
+"""
+    permute_sites(state, p; limits = Limits())
+
+the state with its sites moved, site `k` to position `p[k]`, `p` a permutation of the
+positions: an operator measures on it what `map_sites(k -> p[k], op)` measures on `state`. The
+sites are moved by exchanges of neighbours, each truncated by `limits`, by default
+`cutoff = 1e-26`, as many as the pairs of sites `p` puts in the other order. The bond dimension
+may grow: two states interleaved, `a ⊗ b` with the sites of `b` moved between those of `a`,
+have the product of their bond dimensions. On fermions, two odd states exchanged give a sign,
+as `Swap`.
+
+# Examples
+
+    permute_sites(ψ, [1, 3, 5, 2, 4, 6])        # the halves of a chain of 6 sites interleaved
+    permute_sites(ψ, n:-1:1)                    # a chain of n sites reversed
+"""
+function permute_sites(state::State{R}, p::AbstractVector{<:Integer};
+                       limits::Limits = Limits()) where R
+    n = length(state)
+    if sort(p) ≠ 1:n
+        error("permute_sites needs a permutation of the positions 1 to $n, not $p")
+    end
+    system = state.system
+    new = System(system.sites[invperm(p)])
+    st = copy(state.state)
+    if iszero(norm(st))
+        return State{R}(new, null_mps(R, new))
+    end
+    # `at[j]`, the site now at position `j`, sorted on the positions they go to by exchanges of
+    # neighbours, one for each pair in the wrong order
+    at = collect(1:n)
+    trunc = truncation(limits)
+    exchanged = true
+    while exchanged
+        exchanged = false
+        for b in 1:n-1
+            if p[at[b]] > p[at[b+1]]
+                orthogonalize!(st, b)
+                phi = exchange_sign(R, system, at[b], at[b+1], st[b] * st[b+1])
+                # as swapbondsites, which takes sites of different spaces, our sign laid before:
+                # ITensors knows no fermion on our indices
+                setindex!(st, phi, b:b+1; perm = [2, 1], trunc...)
+                at[b], at[b+1] = at[b+1], at[b]
+                exchanged = true
+            end
+        end
+    end
+    sites = Dict(id(siteind(R, system, at[j])) => siteind(R, new, j) for j in 1:n)
+    relab = relabeller(i -> get(sites, id(i), i))
+    return State{R}(new, MPS([ relabel(t, relab) for t in st ]))
+end
