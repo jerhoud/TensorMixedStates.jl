@@ -273,9 +273,10 @@ spec_names(a) = error("$(obs_name(a)) does not name a conserved quantity")
 """
     symmetries(::AbstractSite)
     symmetries(::System)
+    symmetries(::State)
 
-what a site or a system conserves, and whether strongly or weakly, as a `Conserved`, which
-prints as `conserve` is given and can be given back to `weaken`.
+what a site, a system or the system of a state conserves, and whether strongly or weakly, as a
+`Conserved`, which prints as `conserve` is given and can be given back to `weaken`.
 
 # Examples
 

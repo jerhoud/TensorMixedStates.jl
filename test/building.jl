@@ -396,6 +396,15 @@ end
           "PreMPO{Pure}(System(3, Qubit()), 2 terms)"
 end
 
+@testset "A system is a collection of its sites" begin
+    sys = System([Qubit(), Fermion(conserve = N), Boson(3)])
+    @test collect(sys) == [Qubit(), Fermion(conserve = N), Boson(3)]
+    @test [ dim(s) for s in sys ] == [2, 2, 3]
+    @test sys[end] == Boson(3) && eltype(sys) == AbstractSite
+    # and a state tells what its system conserves
+    @test symmetries(State{Pure}(sys, ["Up", "Occ", "0"])) == symmetries(sys)
+end
+
 @testset "States of systems of the same sites compare" begin
     # a state built on a system, saved and read back, or built on another system of the same
     # sites, contracts with the others, on what both conserve; one of other sites is refused,

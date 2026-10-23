@@ -647,6 +647,8 @@ weaken(state::State, spec) = weaken(state, Conserved(spec_names(spec)))
 
 weaken(state::State) = weaken(state, one_step_down(symmetries(state.system)))
 
+symmetries(state::AbstractState) = symmetries(state.system)
+
 """
     common_symmetries(a, b)
 

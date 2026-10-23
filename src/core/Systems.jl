@@ -98,10 +98,16 @@ hash(a::System, h::UInt) = hash(a.sites, hash(System, h))
 
 getindex(s::System, i...) = s.sites[i...]
 
+Base.lastindex(s::System) = lastindex(s.sites)
+
+Base.iterate(s::System, k::Int = 1) = iterate(s.sites, k)
+
+Base.eltype(::Type{System}) = AbstractSite
+
 """
     length(::System)
 
-the number of sites of the system.
+the number of sites of the system, which `system[i]` and `for site in system` read.
 """
 length(system::System) = length(system.sites)
 

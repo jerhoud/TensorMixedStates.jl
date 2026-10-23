@@ -108,13 +108,13 @@ julia> mystate = State{Mixed}(mysystem, ["Up", "Dn", "Up", "Dn"]);
 julia> symmetries(mysystem)
 (2Sz, strong(Ntot))
 
-julia> symmetries(weaken(mystate).system)          # one level down: every strong quantity made weak
+julia> symmetries(weaken(mystate))          # one level down: every strong quantity made weak
 (2Sz, Ntot)
 
-julia> symmetries(weaken(weaken(mystate)).system)  # or, when none is strong, every quantity dropped
+julia> symmetries(weaken(weaken(mystate)))  # or, when none is strong, every quantity dropped
 ()
 
-julia> symmetries(weaken(mystate, 2Sz).system)     # exactly these
+julia> symmetries(weaken(mystate, 2Sz))     # exactly these
 2Sz
 
 julia> weaken(mystate, symmetries(mysystem)) === mystate   # the identity
