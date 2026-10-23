@@ -92,6 +92,8 @@ lt, ρβ = thermalize(ham, 0.5, State{Mixed}(sys, "FullyMixed"); nsteps = 10, li
 ``A + g(t) B``, `g` a real function of the time, read from `time` (keyword, default 0). The error is set by `limits`, the time step (`nsteps`, or
 `time_step`, one of which `evolve` and `thermalize` require, as the phases) and the sweeps: a
 result is trusted once it does not move when each is improved, see [Checking the accuracy](@ref).
+On a small system, `matrix(ham, sys)`, the dense matrix of an operator, its Jordan-Wigner strings
+laid, and `Vector(ψ)`, that of a pure state, give the exact result to compare with.
 
 ## Measurements
 
@@ -933,6 +935,19 @@ its evolution in time, when that converges, which `evolve` gives. When the quant
 site can conserve, declaring it `strong` keeps `steady_state` in the sector of the starting
 state, see [Conserving a quantity](@ref). A hermitian state does not prove the steady state
 unique.
+
+### Against an exact computation
+
+On a small system, about a dozen qubits, the exact result is at hand: `matrix(op, system)` is
+the dense matrix of an operator, its Jordan-Wigner strings laid, `Vector(ψ)` the vector of a
+pure state on the same basis, and `reduced_density_matrix(ρ, 1:n)` the density matrix of a
+mixed one, which `LinearAlgebra` diagonalizes or exponentiates:
+
+```julia
+λ = eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
+```
+
+A script checked so on a small system then runs at the sizes no exact computation reaches.
 
 # High Level Interface
 
@@ -1867,6 +1882,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it. `gro
 | `trace2`, `Trace2` | `purity`, `Purity` |
 | `TraceError`, `HermiticityError` | `TraceDeviation`, `HermiticityDeviation` |
 | `EE(cut)` | `EntanglementEntropy(cut)` |
+| `EntanglementEntropy(cut, n)`, the entropy then the spectrum | `EntanglementEntropy(cut)`, `EntanglementSpectrum(cut, n)` |
 | `Linkdim` | `MaxLinkdim` |
 | `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
@@ -1909,7 +1925,8 @@ is now `measure(state, m)`, and `measure(state, [m])` gives the pair.
 | `get_sim_file`, `close_sim_files` | `output(sim, destination => list)`, or a `TensorMixedStates.Destination` of one's own; `runTMS` closes the files |
 | `DataToFrame` | `data_to_frame` |
 | `Simulation(state; …)`, a function given a `Simulation` | the functions take the state, `sim.state`; a `Simulation` is made by `runTMS` |
-| `create_graph_state` | `CreateState(graph_state(graph))` |
+| `create_graph_state` | `CreateState(graph_state(system, graph))` |
+| `graph_state(graph)` | `graph_state(system, graph)`, the system first as for the other prepared states, `others` for its sites in no edge |
 | `CreateState(type = Pure(), …)` | `CreateState(type = Pure, …)`, the type as in `State{Pure}`, by default that of a `State` given |
 
 The data files are tables: a line naming the columns, then a line per time measured.
@@ -1937,6 +1954,7 @@ of the last.
 | `Left(A)`, `Right(A)` | the channel `Gate(A)`, ``\rho \to A \rho A^\dagger``, or the generator `Evolver(K)`, ``\rho \to K \rho + \rho K^\dagger`` |
 | `identity_operator` | `Id`, and `matrix(Id, site)` for its matrix |
 | `matrix("X", site)` | `matrix(X, site)` |
+| `tensor(op, site…)`, the ITensor of an operator | `matrix(op, site…)`, its matrix, or `matrix(op, system)` on a whole system: `tensor` is `⊗` |
 | `Fup`, `Fdn` of `Electron` and `Tj` | `parity(Nup)`, `parity(Ndn)` |
 | `Zd`, `Xd`, `Hd`, `Sumd` of `Qudit` | `Z`, `X` of `Qudits`, `H`, `Sum` of `Circuits` |
 | `H`, `S`, `T`, `Phase` of `Qubits` | in the module `Circuits`: `using .Circuits` |
