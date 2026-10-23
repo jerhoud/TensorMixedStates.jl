@@ -4,16 +4,16 @@
 
 ## Guides
 
-- [Quick reference](https://jerhoud.github.io/TensorMixedStates.jl/stable/quickref/): the whole library on one page, with its conventions
-- [Coming from QuTiP or ITensors](https://jerhoud.github.io/TensorMixedStates.jl/stable/correspondence/): their functions next to those of TMS
-- [Manual](https://jerhoud.github.io/TensorMixedStates.jl/stable/manual/): sites, states, operators, algorithms and measurements, with examples
-- [Choosing and checking the parameters](https://jerhoud.github.io/TensorMixedStates.jl/stable/accuracy/): the truncation, the time step, the sweeps
-- [High level interface](https://jerhoud.github.io/TensorMixedStates.jl/stable/simulations/): simulations as phases, their files and checkpoints
-- [Conserving a quantity](https://jerhoud.github.io/TensorMixedStates.jl/stable/conservation/): weak and strong symmetries, and what they save
-- [Threads and performance](https://jerhoud.github.io/TensorMixedStates.jl/stable/performance/): threads, BLAS, long sums
-- [Extending TMS](https://jerhoud.github.io/TensorMixedStates.jl/stable/extending/): site types, phases, methods, destinations and states of one's own
-- [Upgrading from 1.x](https://jerhoud.github.io/TensorMixedStates.jl/stable/upgrading/): the names, keywords and defaults that changed in 2.0
+- [Quick reference](https://jerhoud.github.io/TensorMixedStates.jl/dev/quickref/): the whole library on one page, with its conventions
+- [Coming from QuTiP or ITensors](https://jerhoud.github.io/TensorMixedStates.jl/dev/correspondence/): their functions next to those of TMS
+- [Manual](https://jerhoud.github.io/TensorMixedStates.jl/dev/manual/): sites, states, operators, algorithms and measurements, with examples
+- [Choosing and checking the parameters](https://jerhoud.github.io/TensorMixedStates.jl/dev/accuracy/): the truncation, the time step, the sweeps
+- [High level interface](https://jerhoud.github.io/TensorMixedStates.jl/dev/simulations/): simulations as phases, their files and checkpoints
+- [Conserving a quantity](https://jerhoud.github.io/TensorMixedStates.jl/dev/conservation/): weak and strong symmetries, and what they save
+- [Threads and performance](https://jerhoud.github.io/TensorMixedStates.jl/dev/performance/): threads, BLAS, long sums
+- [Extending TMS](https://jerhoud.github.io/TensorMixedStates.jl/dev/extending/): site types, phases, methods, destinations and states of one's own
+- [Upgrading from 1.x](https://jerhoud.github.io/TensorMixedStates.jl/dev/upgrading/): the names, keywords and defaults that changed in 2.0
 
 ## Optional
 
-- [The guides in full](https://jerhoud.github.io/TensorMixedStates.jl/stable/llms-full.txt): the pages above in one file
+- [The guides in full](https://jerhoud.github.io/TensorMixedStates.jl/dev/llms-full.txt): the pages above in one file
