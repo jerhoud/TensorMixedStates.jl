@@ -33,6 +33,8 @@ mixed_sys = System([Qubit(), Boson(4), Fermion()]) # sites of several types
 ψ = ghz_state(sys, "Up", "Dn")                     # also dicke_state, w_state, dimer_state,
                                                    # fermi_sea, slater_state, fully_mixed,
                                                    # graph_state (Qubits), aklt_state (Spins)
+ψ2 = ψ ⊗ State{Pure}(System(2, Qubit()), "Up")     # on sys ⊗ System(2, Qubit()), 12 sites
+ψ3 = permute_sites(ψ2, p)                          # site k moved to position p[k]
 ```
 
 A local state is a name of the site (`"Up"`, `"Dn"`, `"+"`, `"0"`, `"1"` on a qubit), a vector,
