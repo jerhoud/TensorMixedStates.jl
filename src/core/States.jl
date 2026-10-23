@@ -628,6 +628,32 @@ weaken(state::State, spec) = weaken(state, Conserved(spec_names(spec)))
 weaken(state::State) = weaken(state, one_step_down(symmetries(state.system)))
 
 """
+    common_symmetries(a, b)
+
+what the systems `a` and `b` both conserve, a quantity strong where it is strong on both
+"""
+function common_symmetries(a::System, b::System)
+    strong_on_b = Dict(symmetries(b).names)
+    return Conserved([ (n, s && strong_on_b[n]) for (n, s) in symmetries(a).names
+                       if haskey(strong_on_b, n) ])
+end
+
+"""
+    on_common_system(a, b)
+
+the states `a` and `b` of the same sites on what both conserve, see `common_symmetries`, each
+weakened as needed; states of other sites refused
+"""
+function on_common_system(a::State, b::State)
+    if a.system ≠ b.system
+        target = common_symmetries(a.system, b.system)
+        a, b = weaken(a, target), weaken(b, target)
+        same_system(a, b)
+    end
+    return a, b
+end
+
+"""
     norm(::State)
 
 the norm of the state: one for a normalized pure state, and on a mixed one the Hilbert-Schmidt
@@ -776,11 +802,12 @@ normalize(state::AbstractState) = throw(MethodError(normalize, (state,)))
     inner(a::State, b::State)
     dot(a::State, b::State)
 
-the inner product of two states of one system, ``\\langle a | b \\rangle`` on pure
-representations, ``\\mathrm{tr}(a^\\dagger b)`` on mixed ones, not normalized.
+the inner product of two states of the same sites, taken on what both conserve,
+``\\langle a | b \\rangle`` on pure representations, ``\\mathrm{tr}(a^\\dagger b)`` on mixed
+ones, not normalized.
 """
 function inner(a::State{R}, b::State{R}) where R
-    same_system(a, b)
+    a, b = on_common_system(a, b)
     return dot(a.state, b.state)
 end
 

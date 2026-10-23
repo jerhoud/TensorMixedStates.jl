@@ -356,27 +356,24 @@ EntanglementSpectrum(cut::Int, n::Int) =
 """
     reference_on(state, ref, what)
 
-the reference state `ref` of the measurement `what` weakened to what the measured `state`
-conserves, a reference conserving less being refused
+the reference state `ref` of the measurement `what` weakened to what it and the measured `state`
+both conserve, as the function of the measurement takes them, a reference of other sites being
+refused
 """
 function reference_on(state::AbstractState, ref::State, what::String)
-    target = symmetries(state.system)
-    source = symmetries(ref.system)
-    for (name, strong) in target.names
-        k = findfirst(q -> first(q) == name, source.names)
-        if isnothing(k) || (strong && !last(source.names[k]))
-            error("the reference of $what conserves less than the measured state, which " *
-                  "conserves $target")
-        end
+    target = common_symmetries(state.system, ref.system)
+    r = weaken(ref, target)
+    if r.system ≠ weaken(state.system, target)
+        error("the reference of $what is not on the sites of the measured state")
     end
-    return weaken(ref, target)
+    return r
 end
 
 """
     on_named(what, name, f)
 
-the measurement `what` of the state against the reference named `name`, `f(state, ref)`, the
-reference weakened to what the state conserves, `missing` while there is none
+the measurement `what` of the state against the reference named `name`, `f(state, ref)`, see
+`reference_on`, `missing` while there is none
 """
 on_named(what::String, name::Symbol, f) = ContextMeasurement(what, function (c)
     ref = getproperty(c, name)
@@ -387,9 +384,9 @@ end, [name])
     Fidelity(ref)
     Fidelity(name)
 
-the measurement of the fidelity with the reference state `ref`, see `fidelity`, `ref` being
-weakened to what the measured state conserves; given a `name`, the reference is the value of
-that name, a state named in the simulation, `missing` while there is none
+the measurement of the fidelity with the reference state `ref`, see `fidelity`, the two taken
+on what both conserve; given a `name`, the reference is the value of that name, a state named in
+the simulation, `missing` while there is none
 """
 Fidelity(ref::State) = StateMeasurement("Fidelity", function (state)
     r = reference_on(state, ref, "Fidelity")
@@ -430,13 +427,12 @@ end
     Overlap(ref[, op])
     Overlap(name[, op])
 
-the measurement of the inner product with the reference state `ref`, see `inner`, `ref` being
-weakened to what the measured state conserves, a complex number whatever the states, as
-`Trace`; given a `name`, the reference is the value of that name, as for `Fidelity`. With an
-operator, the matrix element ``\\langle ref | op | state \\rangle`` of two pure states, of an
-operator placed on sites, or the vector of those of an operator of one site on every site: from
-a reference `A|ψ⟩` evolved with the state `|ψ⟩`, the correlations ``\\langle A^\\dagger(0) op(t)
-\\rangle`` at two times.
+the measurement of the inner product with the reference state `ref`, see `inner`, the two taken
+on what both conserve, a complex number whatever the states, as `Trace`; given a `name`, the
+reference is the value of that name, as for `Fidelity`. With an operator, the matrix element
+``\\langle ref | op | state \\rangle`` of two pure states, of an operator placed on sites, or the
+vector of those of an operator of one site on every site: from a reference `A|ψ⟩` evolved with
+the state `|ψ⟩`, the correlations ``\\langle A^\\dagger(0) op(t) \\rangle`` at two times.
 
 # Examples
 

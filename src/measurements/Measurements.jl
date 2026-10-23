@@ -578,8 +578,8 @@ end
 """
     fidelity(a, b)
 
-the fidelity of two states of the same system, between 0 and 1, whatever their norms and
-traces: ``|\\langle a | b \\rangle|^2`` on two pure representations,
+the fidelity of two states of the same sites, taken on what both conserve, between 0 and 1,
+whatever their norms and traces: ``|\\langle a | b \\rangle|^2`` on two pure representations,
 ``\\langle \\psi | \\rho | \\psi \\rangle`` on a pure and a mixed one, in either order. Two
 mixed representations are refused, their Uhlmann fidelity being out of reach for a matrix
 product state: use `hs_fidelity`.
@@ -591,8 +591,11 @@ product state: use `hs_fidelity`.
 fidelity(a::State{Pure}, b::State{Pure}) =
     abs2(inner(a, b)) / (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
 
-fidelity(p::State{Pure}, r::State{Mixed}) =
-    real(pure_on_mixed(p, r)) / (nonzero_trace(p, "fidelity") * nonzero_trace(r, "fidelity"))
+function fidelity(p::State{Pure}, r::State{Mixed})
+    p, r = on_common_system(p, r)
+    return real(pure_on_mixed(p, r)) /
+           (nonzero_trace(p, "fidelity") * nonzero_trace(r, "fidelity"))
+end
 
 fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
 
@@ -603,9 +606,9 @@ fidelity(::State{Mixed}, ::State{Mixed}) =
 """
     hs_fidelity(a::State{Mixed}, b::State{Mixed})
 
-the normalised Hilbert-Schmidt overlap of two mixed states of the same system,
-``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``, 1 exactly when they are
-proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
+the normalised Hilbert-Schmidt overlap of two mixed states of the same sites, taken on what
+both conserve, ``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``, 1 exactly when
+they are proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 """
 hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))

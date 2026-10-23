@@ -367,13 +367,17 @@ end
 
 @testset "States of systems of the same sites compare" begin
     # a state built on a system, saved and read back, or built on another system of the same
-    # sites, contracts with the others; one of other sites is refused
+    # sites, contracts with the others, on what both conserve; one of other sites is refused,
+    # and so is the sum of two states conserving different things
     for R in (Pure, Mixed)
         a = random_state(R, System(3, Qubit()), 4)
         b = State{R}(System(3, Qubit()), "Up")
         @test_ok inner(a, b)
         @test inner(b, State{R}(System(3, Qubit()), "Up")) ≈ 1
-        @test_throws "on different systems" inner(a, State{R}(System(3, Qubit(conserve = N)), "Up"))
+        c = State{R}(System(3, Qubit(conserve = N)), "Up")
+        @test inner(a, c) ≈ inner(a, b)
+        @test inner(c, a) ≈ inner(b, a)
+        @test_throws "on different systems" a + c
     end
     @test_throws "on different systems" inner(State{Pure}(System([Qubit(), Boson(4)]), "0"),
                                               State{Pure}(System([Qubit(), Boson(5)]), "0"))

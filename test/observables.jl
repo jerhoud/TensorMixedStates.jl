@@ -911,16 +911,21 @@ end
     for target in (N, named(N, "Nb"))
         @test measure(weaken(mix(ψ), target), Fidelity(ψ)) ≈ 1
     end
-    # but a reference conserving less than the state is refused, weakening the state at every
-    # measurement costing a whole conversion of it
+    # and a reference conserving less than the state, both taken on what both conserve, as the
+    # functions take them
     strong_state = State{Pure}(System(2, Fermion(conserve = strong(N))), "Occ")
     weak_ref = State{Pure}(System(2, Fermion(conserve = N)), "Occ")
-    @test_throws "the reference of Fidelity conserves less than the measured state" measure(
-        mix(strong_state), Fidelity(weak_ref))
-    @test_throws "which conserves strong(N)" measure(mix(strong_state), Fidelity(weak_ref))
+    @test measure(mix(strong_state), Fidelity(weak_ref)) ≈ 1
+    @test fidelity(mix(strong_state), weak_ref) ≈ fidelity(strong_state, weak_ref) ≈ 1
+    @test hs_fidelity(mix(strong_state), mix(weak_ref)) ≈ 1
     sq = State{Pure}(System(2, Qubit(conserve = N)), "Up")
-    @test_throws "the reference of Overlap conserves less than the measured state" measure(
-        sq, Overlap(State{Pure}(System(2, Qubit()), "Up")))
+    plain = State{Pure}(System(2, Qubit()), "Up")
+    @test measure(sq, Overlap(plain)) ≈ inner(plain, sq) ≈ 1
+    @test measure(sq, Overlap(plain, Z)) ≈ [1, 1]
+    @test inner(sq, X(1) * X(1), plain) ≈ 1
+    # a reference of other sites is refused before anything is measured
+    @test_throws "the reference of Fidelity is not on the sites of the measured state" measure(
+        sq, Fidelity(State{Pure}(System(3, Qubit()), "Up")))
 end
 
 @testset "A named state measured, and the matrix elements of Overlap" begin
