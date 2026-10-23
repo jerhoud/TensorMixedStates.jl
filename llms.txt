@@ -1,0 +1,19 @@
+# TensorMixedStates
+
+> A Julia library simulating closed and open quantum systems, pure states and density matrices, with matrix product states: ground and excited states, Hamiltonian and Lindbladian evolution, steady and thermal states, gates and noisy channels, conserved quantities, and simulations written as phases with checkpoints.
+
+## Guides
+
+- [Quick reference](https://jerhoud.github.io/TensorMixedStates.jl/dev/quickref/): the whole library on one page, with its conventions
+- [Coming from QuTiP or ITensors](https://jerhoud.github.io/TensorMixedStates.jl/dev/correspondence/): their functions next to those of TMS
+- [Manual](https://jerhoud.github.io/TensorMixedStates.jl/dev/manual/): sites, states, operators, algorithms and measurements, with examples
+- [Choosing and checking the parameters](https://jerhoud.github.io/TensorMixedStates.jl/dev/accuracy/): the truncation, the time step, the sweeps
+- [High level interface](https://jerhoud.github.io/TensorMixedStates.jl/dev/simulations/): simulations as phases, their files and checkpoints
+- [Conserving a quantity](https://jerhoud.github.io/TensorMixedStates.jl/dev/conservation/): weak and strong symmetries, and what they save
+- [Threads and performance](https://jerhoud.github.io/TensorMixedStates.jl/dev/performance/): threads, BLAS, long sums
+- [Extending TMS](https://jerhoud.github.io/TensorMixedStates.jl/dev/extending/): site types, phases, methods, destinations and states of one's own
+- [Upgrading from 1.x](https://jerhoud.github.io/TensorMixedStates.jl/dev/upgrading/): the names, keywords and defaults that changed in 2.0
+
+## Optional
+
+- [The guides in full](https://jerhoud.github.io/TensorMixedStates.jl/dev/llms-full.txt): the pages above in one file
