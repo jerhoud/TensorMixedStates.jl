@@ -468,16 +468,15 @@ end
     end
     @test filter(k -> due(1, k), 1:4) == [1, 2, 3, 4]
     @test filter(k -> due(3, k), 1:10) == [3, 6, 9]
-    # end to end: no hermitianization with a period of zero or below, the state as by default,
-    # up to rounding, the links of each MPO taking indices of their own
+    # end to end: no hermitianization with a period of zero, the state as by default, up to
+    # rounding, the links of each MPO taking indices of their own; a negative period is refused
+    # when the method is written, see "The methods and their parameters"
     ρ = mix(State{Pure}(System(3, Qubit()), "X+"))
     ev = -im * (X(1) * X(2) + Z(2) * Z(3)) + Dissipator(Sm)(1)
     plain = evolve(ev, 0.3, ρ; algo = ApproxW(order = 2), nsteps = 3)
     @test 1 - hermiticity(plain) > 1e-8
-    for period in (0, -2)
-        @test norm(evolve(ev, 0.3, ρ; algo = ApproxW(order = 2, hermitianize_period = period),
-                          nsteps = 3) - plain) < 1e-14
-    end
+    @test norm(evolve(ev, 0.3, ρ; algo = ApproxW(order = 2, hermitianize_period = 0),
+                      nsteps = 3) - plain) < 1e-14
     # the measurements of an Evolve phase every measurements_period steps, from its start
     sim = runTMS(SimData(phases = [CreateState{Pure}(2, Qubit(), "X+"),
                                    Evolve(evolver = -im * Z(1), duration = 1., time_step = 0.1,
@@ -714,6 +713,15 @@ end
           "ApproxW(order = 4, w = 2, apply_algo = \"naive\", hermitianize_period = 0)"
     @test ApproxW(order = 3, w = 1, apply_algo = "densitymatrix").apply_algo == "densitymatrix"
     @test Tdvp() isa TMS.EvolutionAlgorithm && ApproxW(order = 1) isa TMS.EvolutionAlgorithm
+    # a period is a number of steps, 0 for never, a negative one refused as for every period
+    @test_throws "expand_period is a number of steps, 0 for never, not -1" Tdvp(expand_period = -1)
+    @test_throws "hermitianize_period is a number of steps" Tdvp(hermitianize_period = -2)
+    @test_throws "hermitianize_period is a number of steps" ApproxW(order = 2,
+                                                                   hermitianize_period = -3)
+    @test_throws "measurements_period is a number of steps" Evolve(
+        evolver = -im * Z(1), duration = 1., nsteps = 1, measurements_period = -1)
+    @test_throws "measurements_period is a number of steps" Update(identity;
+                                                                  measurements_period = -1)
     # the order and the approximation are checked when the method is written, not at its first
     # step, and the order has no default
     @test_throws UndefKeywordError ApproxW()

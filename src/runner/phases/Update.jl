@@ -53,6 +53,7 @@ function Update(update::Function; name::AbstractString = "Update", time_start = 
             error("an Update cannot provide $n, a name the run reserves")
         end
     end
+    check_period(measurements_period, "measurements_period")
     return Update(name, time_start, final_measurements, update, nsteps, collect(Symbol, provides),
                   measurements, measurements_period)
 end

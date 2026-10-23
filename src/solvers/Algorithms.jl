@@ -67,6 +67,18 @@ show(io::IO, a::Union{EvolutionAlgorithm, SearchAlgorithm}) =
           join(("$f = $(repr(getfield(a, f)))" for f in fieldnames(typeof(a))), ", "), ")")
 
 """
+    check_period(period, what)
+
+the number of steps `period`, `what` naming it, refused when negative, 0 standing for never
+"""
+function check_period(period, what::String)
+    if period < 0
+        error("$what is a number of steps, 0 for never, not $period")
+    end
+    return period
+end
+
+"""
     Tdvp(; krylov = Krylov(), expand_period = 0, hermitianize_period = 0)
 
 time evolution by tdvp, for `evolve` and `thermalize`. The bond dimension is enlarged by a global
@@ -91,6 +103,9 @@ site, which tdvp does not take, is exponentiated whole.
     krylov::Krylov = Krylov()
     expand_period::Int = 0
     hermitianize_period::Int = 0
+    Tdvp(krylov, expand_period, hermitianize_period) =
+        new(krylov, check_period(expand_period, "expand_period"),
+            check_period(hermitianize_period, "hermitianize_period"))
 end
 
 """
@@ -161,7 +176,7 @@ struct ApproxW <: EvolutionAlgorithm
             error("ApproxW has the approximations WI and WII, w = 1 or 2, not $w")
         end
         check_apply_algo(apply_algo)
-        return new(order, w, apply_algo, hermitianize_period)
+        return new(order, w, apply_algo, check_period(hermitianize_period, "hermitianize_period"))
     end
 end
 

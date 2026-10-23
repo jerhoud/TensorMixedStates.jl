@@ -67,6 +67,7 @@ a phase of time evolution, see `evolve`.
     function Evolve(name, time_start, final_measurements, evolver, duration, time_step, nsteps,
                     algo, limits, mpo_limits, measurements, measurements_period, on)
         evolution_steps("an Evolve", duration, nsteps, time_step, "time_step")
+        check_period(measurements_period, "measurements_period")
         return new(name, time_start, final_measurements, evolver, duration, time_step, nsteps,
                    algo, limits, mpo_limits, measurements, measurements_period, on)
     end
@@ -169,6 +170,7 @@ leaves the state normalized only.
     function Thermalize(name, time_start, final_measurements, hamiltonian, beta, beta_step,
                         nsteps, algo, limits, mpo_limits, measurements, measurements_period, on)
         evolution_steps("a Thermalize", beta, nsteps, beta_step, "beta_step")
+        check_period(measurements_period, "measurements_period")
         return new(name, time_start, final_measurements, hamiltonian, beta, beta_step, nsteps,
                    algo, limits, mpo_limits, measurements, measurements_period, on)
     end
@@ -292,7 +294,8 @@ a phase that searches the ground state of a Hamiltonian from the pure state, see
     GroundState(name, time_start, final_measurements, hamiltonian, algo, limits, mpo_limits,
                 orthogonal_to, weight, measurements, measurements_period, on) =
         new(name, time_start, final_measurements, hamiltonian, search_algo(algo, "GroundState"),
-            limits, mpo_limits, orthogonal_to, weight, measurements, measurements_period, on)
+            limits, mpo_limits, orthogonal_to, weight, measurements,
+            check_period(measurements_period, "measurements_period"), on)
 end
 
 provided_values(::GroundState) = (:energy,)
@@ -351,7 +354,8 @@ measurements cannot read `:energy`, which would be that of another phase.
     SteadyState(name, time_start, final_measurements, lindbladian, algo, limits, mpo_limits,
                 measurements, measurements_period, on) =
         new(name, time_start, final_measurements, lindbladian, search_algo(algo, "SteadyState"),
-            limits, mpo_limits, measurements, measurements_period, on)
+            limits, mpo_limits, measurements,
+            check_period(measurements_period, "measurements_period"), on)
 end
 
 provided_values(::SteadyState) = (:residual,)

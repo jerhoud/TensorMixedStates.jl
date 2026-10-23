@@ -338,6 +338,12 @@ end
     @test Limits(maxdim = Int32[10, 20], mindim = UInt8(2)).maxdim == [10, 20]
     @test_throws "maxdim is an integer" Limits(maxdim = 1e3)
     @test_throws "mindim is an integer" Limits(mindim = [1.5])
+    # values out of their domain are refused when the limits are written, where maxdim = 0 failed
+    # on a BoundsError at the first truncation and a negative cutoff was taken for no truncation
+    @test_throws "Limits takes a maxdim of 1 or more, not 0" Limits(maxdim = 0)
+    @test_throws "Limits takes a maxdim of 1 or more, not 0" Limits(maxdim = [10, 0])
+    @test_throws "Limits takes a cutoff of 0 or more, not -1.0" Limits(cutoff = -1)
+    @test_throws "Limits takes a mindim of 0 or more, not -2" Limits(mindim = -2)
     # a field left nothing takes the default of the function given the limits, field by field
     @test Limits() == Limits(cutoff = nothing, maxdim = nothing, mindim = nothing)
     @test TMS.truncation(Limits(maxdim = 5)) ==

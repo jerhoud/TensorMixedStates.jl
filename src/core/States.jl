@@ -9,6 +9,21 @@
 export State, Limits, mix, maxlinkdim, trace, tr, norm, normalize, inner, dot, permute_sites
 
 """
+    check_limit(x, ok, what)
+
+refuse a field of `Limits`, a value or a vector of them, holding a value for which `ok` is
+false, `what` saying what it takes; `nothing` is the default of the function
+"""
+function check_limit(x, ok, what::String)
+    for v in something(x, ())
+        if !ok(v)
+            error("Limits takes $what, not $v")
+        end
+    end
+    return nothing
+end
+
+"""
     Limits(; cutoff = nothing, maxdim = nothing, mindim = nothing)
 
 the truncation limits of an MPS, a field left `nothing` taking the default of the function the
@@ -32,9 +47,14 @@ struct Limits
     cutoff::Union{Nothing, Float64, Vector{Float64}}
     maxdim::Union{Nothing, Int, Vector{Int}}
     mindim::Union{Nothing, Int, Vector{Int}}
-    # at least one, which ITensors takes for no minimum: with less, it keeps nothing of a
-    # spectrum of zeros
-    Limits(cutoff, maxdim, mindim) = new(cutoff, maxdim, at_least_one(mindim))
+    function Limits(cutoff, maxdim, mindim)
+        check_limit(cutoff, x -> x ≥ 0, "a cutoff of 0 or more")
+        check_limit(maxdim, x -> x ≥ 1, "a maxdim of 1 or more")
+        check_limit(mindim, x -> x ≥ 0, "a mindim of 0 or more")
+        # at least one, which ITensors takes for no minimum: with less, it keeps nothing of a
+        # spectrum of zeros
+        return new(cutoff, maxdim, at_least_one(mindim))
+    end
 end
 
 """
