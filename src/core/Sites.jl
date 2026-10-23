@@ -383,6 +383,61 @@ function site_types()
 end
 
 """
+    declaring_types(name)
+
+the names of the site types declaring the operator `name`, for a message
+"""
+function declaring_types(name::String)
+    v = Val{Symbol(name)}
+    ts = String[]
+    for m in methods(operator_definition)
+        sig = Base.unwrap_unionall(m.sig)
+        if length(sig.parameters) == 3 && sig.parameters[3] === v &&
+           sig.parameters[2] isa DataType && !isabstracttype(sig.parameters[2])
+            push!(ts, string(nameof(sig.parameters[2])))
+        end
+    end
+    return sort!(unique!(ts))
+end
+
+"""
+    own_rule(site)
+
+whether the site type of `site` names states by a rule of its own, a method of `string_state`
+"""
+own_rule(site::AbstractSite) =
+    Base.unwrap_unionall(which(string_state, Tuple{typeof(site), String}).sig).parameters[2] ≠
+    AbstractSite
+
+"""
+    known_states(site)
+
+the names of the states of `site`, for a message: those it declares and those of every site,
+with `"0"` to `"d-1"` when it keeps the default rule of `string_state`, its help named when it
+has a rule of its own
+"""
+function known_states(site::AbstractSite)
+    names = String[]
+    for m in methods(state_definition)
+        sig = Base.unwrap_unionall(m.sig)
+        if length(sig.parameters) == 3
+            t, v = sig.parameters[2], sig.parameters[3]
+            if t isa Type && site isa t && v isa DataType && v <: Val && !isempty(v.parameters)
+                push!(names, string(v.parameters[1]))
+            end
+        end
+    end
+    if own_rule(site)
+        return join([ sort!(names); sort!(collect(keys(common_states))) ], ", ") *
+               " (see ?$(nameof(typeof(site))))"
+    end
+    levels = string.(0:dim(site) - 1)
+    named = sort!(filter(n -> n ∉ levels, names))
+    return join([ named; sort!(collect(keys(common_states))) ], ", ") *
+           " and \"0\" to \"$(dim(site) - 1)\""
+end
+
+"""
     markdown_blocks(md)
 
 the blocks of the help `md`, those of the helps it gathers taken one by one

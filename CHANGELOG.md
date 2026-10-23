@@ -59,7 +59,8 @@ version 2.x.
 - The rows of a `Data` read a value by its name, `row["X(1)"]`, and form a table of `Tables.jl`
   with the columns of a text table, which `DataFrame` and `CSV.write` take.
 - An error on a keyword of ITensors, as `maxdim`, `cutoff` or `dt`, or on one a phase does not
-  have, ends with what to write.
+  have, ends with what to write; one on an unknown state names those the site knows, one on an
+  operator the site types that have it.
 - A quick reference, pages for users of QuTiP or ITensors and on choosing and checking the
   parameters, and a skill for AI agents in `skills/tensormixedstates`.
 

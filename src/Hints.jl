@@ -254,6 +254,13 @@ takes_simulation(f) =
         methods(f))
 
 """
+    site_count(op)
+
+the number of sites of the generic operator `op`
+"""
+site_count(::GenericOp{K, N}) where {K, N} = N
+
+"""
     method_hint(io, e, argtypes, kwargs)
 
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
@@ -315,6 +322,17 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     elseif f isa Type && f <: Operator && length(types) > 2
         print(io, "\nTensorMixedStates 2.0: Operator{N}(name, definition) takes no type and no " *
                   "sites")
+    elseif f isa Type && f <: Operator && length(types) == 2 && types[2] <: AbstractString
+        print(io, "\nOperator{N} takes the name first, Operator{N}(name, definition)")
+    elseif f === named && length(types) == 2 && types[1] <: AbstractString
+        print(io, "\nnamed takes the definition first, named(definition, name)")
+    elseif f isa GenericOp && !isempty(types) && all(t -> t <: Integer, types)
+        n, k = site_count(f), length(types)
+        print(io, "\n", obs_name(f), " acts on ", n, n == 1 ? " site" : " sites", ", not ", k)
+        if n == 1
+            print(io, ": a product places it on several, and Operator{$k}(name, matrix) defines " *
+                      "an operator of $k sites")
+        end
     elseif f === variance && length(types) == 2 && types[2] <: AbstractState
         print(io, "\nTensorMixedStates 2.0: the state comes first, variance(state, op)")
     elseif (f === Renyi2 || f === MutualInfoRenyi2) && length(types) == 1 &&

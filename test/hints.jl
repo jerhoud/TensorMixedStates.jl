@@ -154,6 +154,21 @@ end
         type = Pure, sites = [Qubit()], state = "Up")))
 end
 
+@testset "Operators of one's own and operators placed" begin
+    # the name and the definition in the order of each constructor, and an operator placed on a
+    # number of sites it does not act on
+    swap = [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 1]
+    @test occursin("Operator{N} takes the name first, Operator{N}(name, definition)",
+                   message(() -> Operator{2}(swap, "MySwap")))
+    @test occursin("named takes the definition first, named(definition, name)",
+                   message(() -> named("MyH", [1 1; 1 -1] / sqrt(2))))
+    @test occursin("MySwap acts on 1 site, not 2: a product places it on several, and " *
+                   "Operator{2}(name, matrix) defines an operator of 2 sites",
+                   message(() -> named(swap, "MySwap")(1, 2)))
+    @test occursin("X acts on 1 site, not 2", message(() -> X(1, 2)))
+    @test occursin("Swap acts on 2 sites, not 1", message(() -> Swap(1)))
+end
+
 @testset "data_to_frame without DataFrames" begin
     # in a process that has not loaded DataFrames, the error says to load it
     script = """

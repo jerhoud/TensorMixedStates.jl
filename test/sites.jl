@@ -459,6 +459,16 @@ end
     q2, d2, three = System(2, Qubit()), System(2, Dummit()), [1., 0., 0.]
     @test_throws "state Zorglub is not defined for site Qubit" State{Pure}(q2, "Zorglub")
     @test_throws "state Zorglub is not defined for site Dummit" State{Pure}(d2, "Zorglub")
+    # the error says which names the site knows, and on which site types an operator is
+    @test_throws("state up is not defined for site Qubit, which knows +, -, -i, Dn, Up, X+, " *
+                 "X-, Y+, Y-, Z+, Z-, i, ↑, ↓, FullyMixed and \"0\" to \"1\"",
+                 State{Pure}(q2, "up"))
+    @test_throws "which knows FullyMixed and \"0\" to \"3\"" State{Pure}(System(2, Boson(4)), "up")
+    @test_throws "which knows Dn, Up, ↑, ↓, FullyMixed (see ?Spin)" State{Pure}(
+        System(2, Spin(1)), "up")
+    @test_throws "operator C is not defined for site Qubit, but for Fermion" matrix(C, Qubit())
+    @test_throws "operator Cup is not defined for site Qubit, but for Electron and Tj" matrix(
+        Cup, Qubit())
     @test_throws "a state of 3 components cannot be one of Qubit()" State{Pure}(q2, three)
     @test_throws "a 3×3 density matrix cannot be one of Qubit()" State{Mixed}(
         q2, [1. 0. 0. ; 0. 0. 0. ; 0. 0. 0.])

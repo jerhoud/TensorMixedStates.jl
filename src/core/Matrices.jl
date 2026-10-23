@@ -240,7 +240,9 @@ function matrix(a::Operator, site::AbstractSite, others::AbstractSite...)
     if isnothing(def)
         def = operator_definition(only(sites), Val(Symbol(a.name)))
         if isnothing(def)
-            error("operator $(a.name) is not defined for site $(typeof(only(sites)))")
+            on = declaring_types(a.name)
+            but = isempty(on) ? "" : ", but for " * join(on, ", ", " and ")
+            error("operator $(a.name) is not defined for site $(typeof(only(sites)))$but")
         end
     end
     m = matrix(def, sites...)
@@ -434,7 +436,7 @@ function local_state(site::AbstractSite, name::String)
     if !isnothing(common)
         return local_state(site, common(site))
     end
-    error("state $name is not defined for site $(typeof(site))")
+    error("state $name is not defined for site $(typeof(site)), which knows " * known_states(site))
 end
 
 # an eigenvector of a diagonal operator for a simple eigenvalue is a basis vector, which a pure
