@@ -30,6 +30,8 @@ const renamed_names = Dict{Symbol, String}(
     :Linkdim => "Linkdim became MaxLinkdim",
     :Mutual_Info_Renyi2 => "Mutual_Info_Renyi2 became MutualInfoRenyi2, of a block of sites: " *
                            "MutualInfoRenyi2(1:k) for the first k",
+    :SubRenyi2 => "SubRenyi2 became Renyi2(positions), as renyi2(state, positions): Renyi2(1:k) " *
+                  "for the first k sites",
     :DataToFrame => "DataToFrame became data_to_frame",
     :Trace2 => "Trace2 became Purity",
     :TraceError => "TraceError became TraceDeviation",
@@ -265,10 +267,10 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
                   "sites")
     elseif f === variance && length(types) == 2 && types[2] <: AbstractState
         print(io, "\nTensorMixedStates 2.0: the state comes first, variance(state, op)")
-    elseif (f === SubRenyi2 || f === MutualInfoRenyi2) && length(types) == 1 &&
+    elseif (f === Renyi2 || f === MutualInfoRenyi2) && length(types) == 1 &&
            types[1] <: Integer
         print(io, "\nTensorMixedStates 2.0: a block of sites is given by its positions, " *
-                  "$(nameof(f))(1:k) for the first k")
+                  "$f(1:k) for the first k")
     elseif (f === renyi2 || f === mutual_info_renyi2) && length(types) == 2 &&
            types[2] <: Integer
         print(io, "\nTensorMixedStates 2.0: a block of sites is given by its positions, " *

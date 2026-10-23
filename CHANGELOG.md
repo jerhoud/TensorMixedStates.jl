@@ -87,6 +87,8 @@ version 2.x.
   written -0 in a file.
 - A system whose conserved quantities take the four components ITensors allows, not all on each
   site conserving something, is refused, where ITensors failed during a computation.
+- `SubRenyi2(positions)` became `Renyi2(positions)`, the measurement of `renyi2(state, positions)`,
+  as `Renyi2` is that of `renyi2(state)`.
 - `entanglement_by_sector` reads a sector by its charges as `fully_mixed` takes them,
   `sectors[N => 2]`, where 1.x indexed it by a `QN`.
 - `SteadyState` provides the eigenvalue of ``L^\dagger L`` as `:residual`, where 1.x named it

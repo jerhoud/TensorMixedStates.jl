@@ -102,7 +102,7 @@ end
     @test occursin("output(Simulation(sim, sim.state; energy = e), list)",
                    message(() -> output(sim, [Z(1)]; energy = 1.)))
     @test occursin("variance(state, op)", message(() -> variance(Z(1), st)))
-    @test occursin("SubRenyi2(1:k)", message(() -> SubRenyi2(1)))
+    @test occursin("Renyi2(1:k)", message(() -> Renyi2(1)))
     @test occursin("EntanglementEntropy(cut) and EntanglementSpectrum(cut, n)",
                    message(() -> EntanglementEntropy(1, 4)))
     @test occursin("renyi2(state, 1:k)", message(() -> renyi2(st, 1)))

@@ -293,7 +293,7 @@ end
     ψp = normalize(sum(State{Pure}(sf, c) for c in (["Emp", "Emp"], ["Emp", "Occ"],
                                                     ["Occ", "Emp"], ["Occ", "Occ"])))
     @test renyi2(ψp, [2]) ≈ renyi2(mix(ψp), [2]) ≈ L2
-    @test measure(ψp, SubRenyi2([2])) ≈ L2
+    @test measure(ψp, Renyi2([2])) ≈ L2
     ψr = random_state(Pure, System(4, Fermion()), 4)
     @test renyi2(ψr, [3, 4]) ≈ renyi2(mix(ψr), [3, 4])
     @test mutual_info_renyi2(ψr, [1, 2]) ≈ mutual_info_renyi2(mix(ψr), [1, 2])
@@ -312,7 +312,7 @@ end
     @test m(fullymixed, Purity) ≈ 1 / 16
     @test m(fullymixed, Renyi2) ≈ 4L2
     @test m(fullymixed, HermiticityDeviation) ≈ 0 atol=1e-12
-    @test m(mix(ghz), SubRenyi2([1])) ≈ L2
+    @test m(mix(ghz), Renyi2([1])) ≈ L2
     @test m(ghz, MutualInfoRenyi2(1:2)) ≈ 2L2
     @test m(mix(ghz), MutualInfoRenyi2(1:2)) ≈ 2L2
     @test MutualInfoRenyi2(1:2).name == "MutualInfoRenyi2(1,2)"
@@ -495,9 +495,14 @@ end
     @test renyi2(stp, 1:3) ≈ renyi2(stp, [1, 2, 3])
     @test mutual_info_renyi2(stm, 1:3) ≈ mutual_info_renyi2(stm, [1, 2, 3])
     # `measure` hands back a vector of name => value pairs, one per measurement
-    @test measure(stm, SubRenyi2(1:3)) ≈ renyi2(stm, [1, 2, 3])
+    @test measure(stm, Renyi2(1:3)) ≈ renyi2(stm, [1, 2, 3])
     @test measure(stm, MutualInfoRenyi2(1:3)) ≈ mutual_info_renyi2(stm, [1, 2, 3])
-    @test first(only(measure(stm, [SubRenyi2(1:3)]))) == "SubRenyi2(1:3)"
+    @test first(only(measure(stm, [Renyi2(1:3)]))) == "Renyi2(1:3)"
+    # Renyi2 alone is that of the whole state, beside that of a part in one list
+    r = Dict(measure(stm, [Renyi2, Renyi2(1:3), "named" => Renyi2]))
+    @test r["Renyi2"] ≈ r["named"] ≈ renyi2(stm)
+    @test r["Renyi2(1:3)"] ≈ renyi2(stm, 1:3)
+    @test repr(Renyi2) == "Renyi2"
 end
 
 @testset "A cut at either end" begin
@@ -523,18 +528,18 @@ end
     # no site has no entropy, as the cut 0, where partial_trace refused to keep nothing
     @test renyi2(ψ, Int[]) == 0
     @test renyi2(mix(ψ), Int[]) == 0
-    @test measure(ψ, SubRenyi2(Int[])) == 0
+    @test measure(ψ, Renyi2(Int[])) == 0
     # positions in a vector of another element type failed at the first measurement
-    @test measure(ψ, SubRenyi2([])) == 0
-    @test measure(mix(ψ), SubRenyi2([])) == 0
+    @test measure(ψ, Renyi2([])) == 0
+    @test measure(mix(ψ), Renyi2([])) == 0
     @test renyi2(ψ, Any[1, 2]) ≈ renyi2(ψ, [1, 2])
     @test mutual_info_renyi2(ψ, Any[1]) ≈ mutual_info_renyi2(ψ, [1])
     @test mutual_info_renyi2(ψ, []) == 0
     @test renyi2(mix(ψ), 1:3) ≈ renyi2(mix(ψ))
     @test_throws "renyi2 was given site 4" renyi2(ψ, 1:4)
     # the leading block of two sites, named by its positions
-    @test SubRenyi2(1:2).name == "SubRenyi2(1,2)"
-    @test measure(ψ, SubRenyi2(1:2)) ≈ renyi2(mix(ψ), [1, 2])
+    @test Renyi2(1:2).name == "Renyi2(1,2)"
+    @test measure(ψ, Renyi2(1:2)) ≈ renyi2(mix(ψ), [1, 2])
 end
 
 @testset "Measuring a multiple of the identity" begin
@@ -1452,8 +1457,8 @@ end
     # of one site defined on none
     @test_throws "X(4) acts on site 4, which the system does not have: it has 3 sites" measure(
         st, X(4))
-    @test_throws("SubRenyi2 was given site 5, which the state does not have: it has 3 sites",
-                 measure(st, SubRenyi2([5])))
+    @test_throws("Renyi2 was given site 5, which the state does not have: it has 3 sites",
+                 measure(st, Renyi2([5])))
     @test_throws "EntanglementEntropy was given site 4" measure(st, EntanglementEntropy(4))
     @test_throws "EntanglementSpectrum was given site 0" measure(st, EntanglementSpectrum(0, 2))
     @test_throws "LogNegativity was given site 7" measure(st, LogNegativity([1], [7]))

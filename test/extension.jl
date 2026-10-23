@@ -216,8 +216,8 @@ TensorMixedStates.entanglement_spectrum(st::WrappedState, cut::Int) =
     # and its positions checked on it, which only a State had a method for: a Bell pair on sites
     # 2 and 3
     bell = WrappedState(sys, apply(controlled(X)(2, 3) * H(2), State{Pure}(sys, "Up")))
-    @test last.(measure(bell, [SubRenyi2([3]), EntanglementEntropy(2)])) ≈ [log(2), log(2)]
-    @test_throws "SubRenyi2 was given site 4" measure(bell, [SubRenyi2([4])])
+    @test last.(measure(bell, [Renyi2([3]), EntanglementEntropy(2)])) ≈ [log(2), log(2)]
+    @test_throws "Renyi2 was given site 4" measure(bell, [Renyi2([4])])
 end
 
 # A representation on another system: a pure state whose physical sites are the odd sites of a

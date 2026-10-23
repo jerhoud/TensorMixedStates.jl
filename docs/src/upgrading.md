@@ -91,7 +91,7 @@ mixed state is refused by `ground_state`: search the pure state and mix it. `gro
 | `EE(cut)` | `EntanglementEntropy(cut)` |
 | `EntanglementEntropy(cut, n)`, the entropy then the spectrum | `EntanglementEntropy(cut)`, `EntanglementSpectrum(cut, n)` |
 | `Linkdim` | `MaxLinkdim` |
-| `SubRenyi2(k)`, `renyi2(state, k)` | `SubRenyi2(1:k)`, `renyi2(state, 1:k)` |
+| `SubRenyi2(k)`, `SubRenyi2(positions)`, `renyi2(state, k)` | `Renyi2(1:k)`, `Renyi2(positions)`, `renyi2(state, 1:k)` |
 | `MutualInfoRenyi2(k)`, `Mutual_Info_Renyi2(k)`, `mutual_info_renyi2(state, k)` | `MutualInfoRenyi2(1:k)`, `mutual_info_renyi2(state, 1:k)` |
 | `variance(h, state)` | `variance(state, h)` |
 | `ee, spectrum = entanglement_entropy(state, cut)` | `entanglement_entropy(state, cut)`, `entanglement_spectrum(state, cut)` |

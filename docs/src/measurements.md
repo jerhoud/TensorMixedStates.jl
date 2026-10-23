@@ -50,7 +50,7 @@ The library measures the state as a whole:
 | `Hermiticity` | 1 for a Hermitian density matrix, down to 0 for an anti-Hermitian one |
 | `HermiticityDeviation` | `1 - hermiticity`, the squared norm of the anti-Hermitian part relative to that of the whole |
 | `Renyi2` | the Rényi entropy of order 2 of the state |
-| `SubRenyi2(positions)` | the Rényi entropy of order 2 of the sites at `positions`, `1:k` for the first `k` |
+| `Renyi2(positions)` | the Rényi entropy of order 2 of the sites at `positions`, `1:k` for the first `k` |
 | `MutualInfoRenyi2(positions)` | the Rényi-2 mutual information between the sites at `positions` and the others |
 | `VonNeumannEntropy(positions)` | the von Neumann entropy of the sites at `positions`, from their reduced density matrix |
 | `ReducedDensityMatrix(positions)` | the density matrix of the sites at `positions`, a complex matrix, see `reduced_density_matrix` |
@@ -171,7 +171,6 @@ Norm
 Hermiticity
 HermiticityDeviation
 Renyi2
-SubRenyi2
 Fidelity
 Overlap
 Variance

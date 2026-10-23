@@ -3,7 +3,7 @@
 # context and the Check they may return, and measure, which computes a list on a state.
 
 export Measure, measure, Check, Purity, Trace, TraceDeviation, Norm, Hermiticity,
-       HermiticityDeviation, Renyi2, MaxLinkdim, MemoryUsage, SubRenyi2, MutualInfoRenyi2,
+       HermiticityDeviation, Renyi2, MaxLinkdim, MemoryUsage, MutualInfoRenyi2,
        EntanglementEntropy, EntanglementSpectrum, ReducedDensityMatrix, VonNeumannEntropy,
        LogNegativity, Fidelity, Overlap, Variance
 
@@ -103,6 +103,21 @@ struct StateMeasurement
 end
 
 show(io::IO, m::StateMeasurement) = print(io, m.name)
+
+"""
+    WholeMeasurement(whole, part)
+
+the measurement of the library `whole` of the state as a whole, which, called on positions,
+gives `part(positions)`, the measurement of the sites there, as `Renyi2(1:3)`
+"""
+struct WholeMeasurement
+    whole::StateMeasurement
+    part::Function
+end
+
+(m::WholeMeasurement)(positions::AbstractVector) = m.part(positions)
+
+show(io::IO, m::WholeMeasurement) = show(io, m.whole)
 
 """
     ContextMeasurement(name, f, reads)
@@ -244,10 +259,17 @@ const HermiticityDeviation = on_state("HermiticityDeviation", st -> 1 - hermitic
 
 """
     Renyi2
+    Renyi2(positions)
 
-the measurement of the Rényi-2 entropy of the state, see `renyi2`
+the measurement of the Rényi-2 entropy of the state, or of the sites at `positions`, see
+`renyi2`
+
+# Examples
+
+    Renyi2(1:3)
 """
-const Renyi2 = on_state("Renyi2", renyi2)
+const Renyi2 = WholeMeasurement(on_state("Renyi2", renyi2),
+                                positions -> on_positions("Renyi2", renyi2, positions))
 
 """
     MaxLinkdim
@@ -263,17 +285,6 @@ the measurement of the memory the state occupies, in bytes, the caches the measu
 included
 """
 const MemoryUsage = on_state("MemoryUsage", Base.summarysize)
-
-"""
-    SubRenyi2(positions)
-
-the measurement of the Rényi-2 entropy of the sites at `positions`, see `renyi2`
-
-# Examples
-
-    SubRenyi2(1:3)
-"""
-SubRenyi2(positions::AbstractVector) = on_positions("SubRenyi2", renyi2, positions)
 
 """
     MutualInfoRenyi2(positions)
@@ -476,12 +487,14 @@ Variance(op) = StateMeasurement("Variance", state -> variance_of(state, op))
     checked_measurement(x)
 
 `x` checked to be a measurement: an operator placed on sites, an operator of one site, a pair
-of them, a measurement of the library, or a symbol; anything else is refused
+of them, a measurement of the library, `Renyi2` standing for that of the whole state, or a
+symbol; anything else is refused
 """
 checked_measurement(a::IndexedOp{IsOperator}) = a
 checked_measurement(a::SimpleOp) = a
 checked_measurement(p::Tuple{SimpleOp, SimpleOp}) = p
 checked_measurement(m::StateMeasurement) = m
+checked_measurement(m::WholeMeasurement) = m.whole
 checked_measurement(m::ContextMeasurement) = m
 checked_measurement(m::OnNamed) = m
 checked_measurement(s::Symbol) = s
