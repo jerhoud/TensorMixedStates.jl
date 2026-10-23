@@ -44,3 +44,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
+      # llms.txt and llms-full.txt at the root of the site, where readers look for them: those of
+      # stable, the last release, or of dev before a release has them
+      - name: llms.txt at the root
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/'))
+        run: |
+          git fetch --depth 1 origin gh-pages
+          git worktree add "$RUNNER_TEMP/site" FETCH_HEAD
+          cd "$RUNNER_TEMP/site"
+          if [ -f stable/llms.txt ]; then from=stable; else from=dev; fi
+          cp "$from/llms.txt" "$from/llms-full.txt" .
+          git add llms.txt llms-full.txt
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "llms.txt and llms-full.txt of $from at the root"
+            git push origin HEAD:gh-pages
+          fi

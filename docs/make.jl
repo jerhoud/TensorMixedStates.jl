@@ -42,8 +42,14 @@ makedocs(
 )
 
 # llms.txt, the map of the documentation that language models read, and llms-full.txt, the
-# guides in full, written into the build so that they are published at the root of the site
-const site = "https://jerhoud.github.io/TensorMixedStates.jl/stable"
+# guides in full, written into the build, so that they are published with the pages of the
+# version deploydocs publishes it as, dev for the branch dev or the tag of a release, to which
+# their links lead; documentation.yml copies those of stable, or of dev before a release has
+# them, to the root of the site
+const version = let ref = get(ENV, "GITHUB_REF", "")
+    startswith(ref, "refs/tags/") ? chopprefix(ref, "refs/tags/") : "dev"
+end
+const site = "https://jerhoud.github.io/TensorMixedStates.jl/$version"
 const guides = [
     ("quickref.md", "Quick reference", "the whole library on one page, with its conventions"),
     ("correspondence.md", "Coming from QuTiP or ITensors", "their functions next to those of TMS"),
