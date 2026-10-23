@@ -102,6 +102,8 @@ version 2.x.
   `trace_out = …`, where 1.x took the positions traced out unless `keepers = true`.
 - `inner`, `fidelity` and `hs_fidelity` take two states of the same sites that conserve different
   things on what both conserve, as `Fidelity` and `Overlap` then do.
+- A system is shown as Julia builds it, `System(100, Qubit())`, where each of its sites was
+  written, and an error on two systems says how they differ.
 - `Limits` refuses a `maxdim` below 1 and a negative `cutoff` or `mindim`, and the methods and the
   phases a negative period, where `maxdim = 0` failed at the first truncation.
 - A site given twice is refused by the functions and measurements taking positions, and the sites

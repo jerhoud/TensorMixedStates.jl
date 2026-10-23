@@ -82,6 +82,11 @@ struct PreMPO{R <: PM}
     norm::Float64
 end
 
+# its system, and its number of terms when they depend on time, its pieces being internal
+show(io::IO, pre::PreMPO{R}) where R =
+    print(io, "PreMPO{", R, "}(", pre.system,
+          isnothing(pre.functions) ? "" : ", $(length(pre.parts)) terms", ")")
+
 """
     on_index(pre, k, m)
 

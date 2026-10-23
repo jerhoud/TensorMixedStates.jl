@@ -105,7 +105,41 @@ the number of sites of the system.
 """
 length(system::System) = length(system.sites)
 
-show(io::IO, s::System) = print(io, "System($(s.sites))")
+# as Julia builds the system: n copies of one site, or its sites, a run of one as fill(site, k),
+# so that the system of a long chain does not fill an error message
+function show(io::IO, s::System)
+    n = length(s.sites)
+    if n > 0 && all(==(s.sites[1]), s.sites)
+        print(io, "System(", n, ", ", s.sites[1], ")")
+        return nothing
+    end
+    parts = String[]
+    i = 1
+    while i ≤ n
+        j = i
+        while j < n && s.sites[j + 1] == s.sites[i]
+            j += 1
+        end
+        push!(parts, j > i ? "fill($(s.sites[i]), $(j - i + 1))" : string(s.sites[i]))
+        i = j + 1
+    end
+    print(io, "System([", join(parts, length(parts) < n ? "; " : ", "), "])")
+    return nothing
+end
+
+"""
+    system_difference(a, b)
+
+how the systems `a` and `b` differ, by their numbers of sites or by the first site they do not
+share, for a message
+"""
+function system_difference(a::System, b::System)
+    if length(a) ≠ length(b)
+        return "of $(length(a)) and $(length(b)) sites"
+    end
+    k = findfirst(i -> a[i] ≠ b[i], 1:length(a))
+    return "site $k being $(a[k]) on one and $(b[k]) on the other"
+end
 
 """
     is_charged(system)

@@ -406,7 +406,7 @@ refuse two states on different systems
 """
 same_system(a::State, b::State) =
     if a.system ≠ b.system
-        error("the two states are on different systems, $(a.system) and $(b.system)")
+        error("the two states are on different systems, $(system_difference(a.system, b.system))")
     end
 
 (a::Number * b::State) = State(b, a * b.state)

@@ -371,6 +371,31 @@ end
     @test maxlinkdim(+(st, st; limits = Limits(cutoff = 1e-1, mindim = 4))) == 4
 end
 
+@testset "A system shown as Julia builds it" begin
+    # n copies of one site as System(n, site), others site by site, a run of one as fill(site, k),
+    # where every site of a chain of 100 was written, in errors too
+    @test repr(System(100, Qubit())) == "System(100, Qubit())"
+    @test repr(System([Qubit(), Fermion(conserve = N), Qubit()])) ==
+          "System([Qubit(), Fermion(conserve = N), Qubit()])"
+    @test repr(System([Qubit(), Qubit(), Qubit(), Fermion()])) ==
+          "System([fill(Qubit(), 3); Fermion()])"
+    for s in (System(100, Qubit()), System([Qubit(), Fermion(conserve = N), Qubit()]),
+              System([Boson(4); fill(Qubit(), 3); Boson(4); Boson(4)]))
+        @test eval(Meta.parse(repr(s))) == s
+    end
+    @test repr(State{Pure}(System(100, Qubit()), "Up")) ==
+          "State{Pure}(System(100, Qubit()), (maxlinkdim = 1))"
+    # two states of other systems are told how they differ
+    up(sys) = State{Pure}(sys, "Up")
+    @test_throws "on different systems, of 100 and 101 sites" up(System(100, Qubit())) +
+                                                              up(System(101, Qubit()))
+    @test_throws "site 2 being Qubit() on one and Qubit(conserve = N) on the other" up(
+        System(3, Qubit())) + up(System([Qubit(), Qubit(conserve = N), Qubit()]))
+    @test repr(PreMPO(up(System(3, Qubit())), X(1))) == "PreMPO{Pure}(System(3, Qubit()))"
+    @test repr(PreMPO(up(System(3, Qubit())), [X(1), Z(2) => cos])) ==
+          "PreMPO{Pure}(System(3, Qubit()), 2 terms)"
+end
+
 @testset "States of systems of the same sites compare" begin
     # a state built on a system, saved and read back, or built on another system of the same
     # sites, contracts with the others, on what both conserve; one of other sites is refused,

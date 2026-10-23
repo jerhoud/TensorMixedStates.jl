@@ -145,7 +145,8 @@ function orthogonal_args(state::State{Pure}, pre::PreMPO{Pure}, orthogonal_to::A
         if !(m isa State{Pure})
             error("ground_state searches a state orthogonal to pure states, not to a $(typeof(m))")
         elseif m.system ≠ state.system
-            error("a state of orthogonal_to is on another system than that of the state")
+            error("a state of orthogonal_to is on another system than that of the state, " *
+                  system_difference(m.system, state.system))
         end
         if ITensorMPS.flux(m.state) == ITensorMPS.flux(state.state)
             push!(ms, normalize(m))

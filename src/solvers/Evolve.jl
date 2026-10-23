@@ -19,8 +19,9 @@ refuse a `PreMPO` prepared on another system than that of `state`
 """
 function check_pre(pre::PreMPO, state::State)
     if pre.system ≠ state.system
-        error("the PreMPO was prepared on another system than that of the state: prepare it " *
-              "with the state, PreMPO(state, op)")
+        error("the PreMPO was prepared on another system than that of the state, " *
+              "$(system_difference(pre.system, state.system)): prepare it with the state, " *
+              "PreMPO(state, op)")
     end
     return pre
 end
