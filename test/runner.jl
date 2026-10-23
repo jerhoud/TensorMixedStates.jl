@@ -1034,9 +1034,15 @@ end
         conf = ["Occ", "Emp", "Occ", "Emp"]
         s = run([CreateState{Mixed}(4, Fermion(conserve = N), conf; randomize = 4)]).state
         @test s isa State{Mixed} && maxlinkdim(s) ≤ 4
-        # ToMixed truncates a state already mixed
+        # ToMixed truncates a state already mixed, and, as mix, nothing with the default limits:
+        # the singular value 1e-16 of the density matrix of a + 1e-8 b, which the default cutoff
+        # would drop, is kept
         @test maxlinkdim(run([CreateState{Mixed}(4, Qubit(), "Up"; randomize = 16),
                               ToMixed(limits = Limits(maxdim = 2))]).state) ≤ 2
+        s4 = System(4, Qubit())
+        small = State{Pure}(s4, "Up") + 1e-8 * State{Pure}(s4, "Dn")
+        @test maxlinkdim(run([CreateState(small), ToMixed()]).state) == maxlinkdim(mix(small)) == 4
+        @test maxlinkdim(truncate(mix(small); limits = Limits())) == 3
         # a mixed GHZ state, then the partial trace keeping three of its sites
         sys = System(6, Qubit())
         ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))

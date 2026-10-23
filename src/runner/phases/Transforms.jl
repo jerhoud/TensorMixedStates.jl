@@ -5,8 +5,8 @@ export ToMixed, Weaken, PartialTrace, Gates
 """
     ToMixed(; limits, on, name, time_start, final_measurements)
 
-a phase that takes the state to the mixed representation and truncates it to `limits`, see
-`mix`; a state already mixed is only truncated.
+a phase that takes the state to the mixed representation, `mix(state; limits)`, truncated to
+`limits` unless they are the default `Limits()`; a state already mixed is only truncated.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -30,7 +30,7 @@ function run_phase(phase::ToMixed, sim::Simulation, ::Int)
     if st isa State{Mixed}
         log_message(sim, "The state is already mixed")
     end
-    return with_state(sim, phase.on, truncate(mix(st); phase.limits))
+    return with_state(sim, phase.on, mix(st; phase.limits))
 end
 
 """

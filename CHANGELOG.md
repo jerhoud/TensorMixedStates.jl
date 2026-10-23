@@ -46,7 +46,8 @@ version 2.x.
 - The module `Circuits`: the gates `H`, `S`, `T`, `Phase` and `Sum`, which `Qubits` and `Qudits` no
   longer export, the rotations `Rx` to `Rzz`, and `CX`, `CNOT`, `CY`, `CZ`, `CCX`, `Toffoli`.
 - `tr`, the trace of a state under the name of `LinearAlgebra`.
-- `limits` of `mix`, which truncate the density matrix as `ToMixed` does.
+- `limits` of `mix`, which truncate the density matrix as `ToMixed` does, neither truncating with
+  the default `Limits()`.
 - `variance` and `Variance` of a density matrix ρ, tr(ρH†H) - |tr(ρH)|².
 - `matrix(op, system)` and `Vector(ψ)`, the dense matrix of an operator on a small system and
   the vector of a pure state, to compare with an exact computation.
