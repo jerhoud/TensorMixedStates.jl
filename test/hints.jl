@@ -128,6 +128,32 @@ end
     @test occursin("is Reset(Level => 1)", message(() -> Reset(1)))
 end
 
+@testset "The keywords of ITensors and those a phase does not have" begin
+    # the truncation and the step written as ITensors writes them, and a keyword no phase has,
+    # which Julia reported with the fields given as unsupported too
+    st = State{Pure}(System(2, Qubit()), "Up")
+    @test occursin("\nevolve takes its truncation as limits = Limits(maxdim = …, cutoff = …)",
+                   message(() -> evolve(-im * Z(1), 0.1, st; nsteps = 1, maxdim = 8)))
+    @test occursin("ground_state takes its truncation as limits",
+                   message(() -> ground_state(Z(1), st; algo = Dmrg(nsweeps = 1), cutoff = 1e-10)))
+    @test occursin("apply takes its truncation as limits",
+                   message(() -> apply(X(1), st; maxdim = 8)))
+    @test occursin("mix takes its truncation as limits", message(() -> mix(st; maxdim = 4)))
+    @test occursin("Evolve takes its truncation as limits", message(() -> Evolve(
+        evolver = -im * Z(1), duration = 1., nsteps = 1, maxdim = 8)))
+    @test occursin("evolve takes its step as time_step = …, or its number of steps as nsteps = …",
+                   message(() -> evolve(-im * Z(1), 0.1, st; dt = 0.05)))
+    @test occursin("Evolve takes its step as time_step", message(() -> Evolve(
+        evolver = -im * Z(1), duration = 1., dt = 0.1)))
+    @test occursin("thermalize takes its step as beta_step",
+                   message(() -> thermalize(Z(1), 0.1, mix(st); dt = 0.05)))
+    m = message(() -> Evolve(evolver = -im * Z(1), duration = 1., nsteps = 1, step_size = 0.1))
+    @test occursin("Evolve has no field step_size: its fields are name, time_start, " *
+                   "final_measurements, evolver, duration, time_step, nsteps", m)
+    @test occursin("CreateState has no field sites", message(() -> CreateState(
+        type = Pure, sites = [Qubit()], state = "Up")))
+end
+
 @testset "data_to_frame without DataFrames" begin
     # in a process that has not loaded DataFrames, the error says to load it
     script = """

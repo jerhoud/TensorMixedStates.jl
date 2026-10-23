@@ -203,6 +203,39 @@ const moved_keywords = let
 end
 
 """
+    other_keywords
+
+the keywords of ITensors and of other libraries that TensorMixedStates takes in another form, by
+the function or the type given them, with what to write, which Julia shows after the
+`MethodError` of the call
+"""
+const other_keywords = let
+    d = Dict{Tuple{Any, Symbol}, String}()
+    for (f, name) in ((evolve, "evolve"), (thermalize, "thermalize"),
+                      (ground_state, "ground_state"), (steady_state, "steady_state"),
+                      (apply, "apply"), (truncate, "truncate"), (mix, "mix"),
+                      (collapse, "collapse"), (permute_sites, "permute_sites"),
+                      (superposition, "superposition"), (mixture, "mixture"),
+                      (dense_state, "dense_state"), (dimer_state, "dimer_state"),
+                      (slater_state, "slater_state"), (fermi_sea, "fermi_sea"),
+                      (graph_state, "graph_state"), (hermitianize, "hermitianize"),
+                      (PreMPO, "PreMPO"), (Evolve, "Evolve"), (Thermalize, "Thermalize"),
+                      (GroundState, "GroundState"), (SteadyState, "SteadyState"),
+                      (Gates, "Gates"), (ToMixed, "ToMixed"), (LoadState, "LoadState")),
+        k in (:maxdim, :cutoff, :mindim)
+        d[(f, k)] = "$name takes its truncation as limits = Limits(maxdim = …, cutoff = …)"
+    end
+    for (f, name) in ((evolve, "evolve"), (Evolve, "Evolve")), k in (:dt, :tau)
+        d[(f, k)] = "$name takes its step as time_step = …, or its number of steps as nsteps = …"
+    end
+    for (f, name) in ((thermalize, "thermalize"), (Thermalize, "Thermalize")),
+        k in (:dt, :tau, :dbeta, :time_step)
+        d[(f, k)] = "$name takes its step as beta_step = …, or its number of steps as nsteps = …"
+    end
+    d
+end
+
+"""
     keyword_names(kwargs)
 
 the names of the keywords of a call that failed, as Julia hands them to a hint, pairs of a name
@@ -224,7 +257,8 @@ takes_simulation(f) =
     method_hint(io, e, argtypes, kwargs)
 
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
-moved, a `Simulation` where a state is taken, a solver of ITensorMPS called on objects of this
+moved, a keyword of ITensors, see `other_keywords`, one a phase does not have, a `Simulation`
+where a state is taken, a solver of ITensorMPS called on objects of this
 package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`, `Simulation`,
 `output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix`, `State`,
 `tensor` and `graph_state`
@@ -235,6 +269,22 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
         h = get(moved_keywords, (f, k), nothing)
         if !isnothing(h)
             print(io, "\nTensorMixedStates 2.0: ", h)
+            return nothing
+        end
+    end
+    for k in keyword_names(kwargs)
+        h = get(other_keywords, (f, k), nothing)
+        if !isnothing(h)
+            print(io, "\n", h)
+            return nothing
+        end
+    end
+    if f isa Type && f <: AbstractPhase && !isempty(kwargs)
+        fields = fieldnames(Base.unwrap_unionall(f))
+        unknown = [ k for k in keyword_names(kwargs) if k ∉ fields ]
+        if !isempty(unknown)
+            print(io, "\n", nameof(f), " has no field ", join(unknown, ", "), ": its fields are ",
+                  join(fields, ", "))
             return nothing
         end
     end
