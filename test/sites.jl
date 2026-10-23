@@ -290,6 +290,15 @@ end
         @test a * v ≈ m * v atol = 1e-12
     end
     @test_throws "state 5/2 is not defined for site Spin" TMS.local_state(Spin(3/2), "5/2")
+    # "Up" and "Dn", as "↑" and "↓", are the states of m = s and m = -s, as for a qubit
+    for s in (1/2, 1, 3/2)
+        @test TMS.local_state(Spin(s), "Up") == TMS.local_state(Spin(s), "↑") ==
+              TMS.local_state(Spin(s), value(s))
+        @test TMS.local_state(Spin(s), "Dn") == TMS.local_state(Spin(s), "↓") ==
+              TMS.local_state(Spin(s), value(-s))
+    end
+    singlet(a, b) = dimer_state(System(2, Spin(1/2)), [(1, 2)], a, b)
+    @test fidelity(singlet("Up", "Dn"), singlet("1/2", "-1/2")) ≈ 1
     # and Sx, Sy and Sz measured on those states, pure and mixed
     for rep in (identity, mix)
         st(s, v) = rep(State{Pure}(System(length(v), Spin(s)), v))

@@ -24,6 +24,8 @@ For `m` from `s` down to `-s`, written as an integer or a fraction, `"1"`, `"-1/
 - `"Xm"`        : the eigenstate of `Sx` of eigenvalue `m`
 - `"Ym"`        : the eigenstate of `Sy` of eigenvalue `m`
 
+and `"Up"`, `"↑"`, `"Dn"`, `"↓"` for ``m = s`` and ``m = -s``.
+
 A name gives an eigenvalue: on `Spin(1)`, `"1"` is ``S_z = 1``, and `Level => 1` the second
 basis state, ``S_z = 0``.
 
@@ -54,6 +56,11 @@ dim(a::Spin) = Int(2 * a.s + 1)
     Sz = s -> [ i == j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
     N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
     S2 = s -> s.s * (s.s + 1) * Id,
+]
+
+@def_states Spin [
+    ["Up", "↑"] => s -> [ i == 1 ? 1. : 0. for i in 1:dim(s) ],
+    ["Dn", "↓"] => s -> [ i == dim(s) ? 1. : 0. for i in 1:dim(s) ],
 ]
 
 """
@@ -96,7 +103,8 @@ end
 the AKLT state of a chain of spins one, `Spin(1)`, the exact ground state of
 ``\\sum_i \\vec S_i \\cdot \\vec S_{i+1} + \\frac{1}{3} (\\vec S_i \\cdot \\vec S_{i+1})^2``,
 as an MPS of bond dimension 2. `left` and `right` set the free virtual spins one half at the two
-ends, `"Up"` or `"Dn"`, or a vector of two components.
+ends, pure states as `Spin(1/2)` takes them: `"Up"`, `"Dn"`, `"X1/2"` or a vector of two
+components.
 
 # Examples
 
@@ -107,7 +115,13 @@ function aklt_state(system::System; left = "Up", right = "Up")
     if !all(s -> s isa Spin && s.s == 1, system.sites)
         error("aklt_state takes a chain of spins one, Spin(1)")
     end
-    edge(v) = v == "Up" ? [1., 0.] : v == "Dn" ? [0., 1.] : v
+    function edge(v)
+        e = local_state(Spin(1/2), v)
+        if !(e isa AbstractVector)
+            error("aklt_state takes pure states for its free spins one half, not $(repr(v))")
+        end
+        return e
+    end
     l, r = edge(left), edge(right)
     # in the basis of Spin(1), m = 1, 0, -1, and of the virtual spins, up then down, of the
     # element type of the edges for every tensor, which mps_state takes

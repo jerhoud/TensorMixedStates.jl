@@ -164,6 +164,15 @@ end
     # a complex edge beside the real bulk gave tensors of two element types
     @test expect(aklt_state(System(n, Spin(1)); left = [0.6, 0.8im]), h) ≈ -2 * (n - 1) / 3
     @test_throws "a chain of spins one" aklt_state(System(3, Qubit()))
+    # the edges are pure states of a spin one half, as Spin(1/2) names them, where "1/2" failed
+    # with no method of zero(Any)
+    for (l, r) in (("1/2", "-1/2"), ("↑", "↓"), ("X1/2", [0, 1]))
+        @test expect(aklt_state(System(n, Spin(1)); left = l, right = r), h) ≈ -2 * (n - 1) / 3
+    end
+    @test sum(expect1(aklt_state(System(n, Spin(1)); right = "-1/2"), Sz)) ≈ 1 atol = 1e-12
+    @test_throws "aklt_state takes pure states for its free spins one half" aklt_state(
+        System(n, Spin(1)); left = "FullyMixed")
+    @test_throws "state up is not defined" aklt_state(System(n, Spin(1)); left = "up")
 end
 
 @testset "The AKLT hamiltonian as a sum of projectors" begin

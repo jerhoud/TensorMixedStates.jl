@@ -35,6 +35,8 @@ version 2.x.
 - `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity`, with their measurements.
 - `Proj(A => λ)`, the projector on an eigenspace, and `Level => n`, the basis state `n` of any
   site.
+- `"Up"` and `"Dn"`, or `"↑"` and `"↓"`, the states of a `Spin` of largest and smallest `Sz`, as
+  on a qubit, and the names of a spin one half for the free spins of `aklt_state`.
 - The phases `Update`, which changes the simulation by a function, and `CopyState`, which keeps
   a state under a name; the field `on` of the phases, which act on a named state, measured by a
   list `:φ => [...]` or by `Overlap(:φ, op)`.
