@@ -196,7 +196,10 @@ another time and values, and `sim.rng` is the generator of random numbers of the
 its checkpoints keep. A phase of a single call gives instead
 [`TensorMixedStates.run_phase`](@ref), called with the number of steps a resumed run has already
 done, and calls [`TensorMixedStates.step_done`](@ref) at the end of each of its steps, which
-measures, checkpoints and stops the run there.
+measures, checkpoints and stops the run there. One going on from another state than the one it
+measures, as a search measuring its eigenvector divided by its trace, gives `step_done` the
+simulation holding the state it goes on from as `resume_from`, the one a resumed run starts
+again from.
 
 A phase providing values to the measurements, as `:energy`, names them by a method of
 [`TensorMixedStates.provided_values`](@ref). Within a phase, `output` measures the simulation

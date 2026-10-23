@@ -155,24 +155,32 @@ function step_line(sim::Simulation, phase, k::Int)
 end
 
 """
-    TensorMixedStates.step_done(sim, phase, k; last = false)
+    TensorMixedStates.step_done(sim, phase, k; last = false, resume_from = sim)
 
 the end of step `k` of `phase`, the simulation `sim` holding what it reached: its measurements,
 when due, and its line in the log, then the commit of the step, a checkpoint when one is due,
 and the stop of the run when one is asked for. It returns the simulation, its value `step` set
 to `k`. A phase of a single call calls it wherever it can stop, a sweep of a search for
-instance: its `run_phase(phase, sim, done)` is then called with the steps already done. With
+instance: its `run_phase(phase, sim, done)` is then called with the steps already done and the
+simulation committed, `resume_from`, which is `sim` unless the phase goes on from another state
+than the one measured, as a search measuring its eigenvector divided by its trace. With
 `last`, the phase ends there, `sim` holding its result, which a resumed run takes without
-running the phase again: a search ending on its tolerance would otherwise go on.
+running the phase again (a search ending on its tolerance would otherwise go on):
+`resume_from` is then `sim`.
 """
-function step_done(sim::Simulation, phase, k::Int; last::Bool = false)
+function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
+                   resume_from::Simulation = sim)
+    same = resume_from === sim
+    if last && !same
+        error("step_done with last commits the result of the phase, sim: it takes no resume_from")
+    end
     sim = with_values(sim; step = k)
     if step_due(phase, k)
         phase_output(sim, phase.measurements)
     end
     log_message(sim, step_line(sim, phase, k))
     run = getfield(sim, :run)
-    commit!(sim, run.phase, k; last)
+    commit!(same ? sim : with_values(resume_from; step = k), run.phase, k; last)
     checkpoint_or_stop(run)
     return sim
 end

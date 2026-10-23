@@ -204,10 +204,8 @@ completed does nothing. A simulation that never wrote one runs again from the st
 
 Output files are cut back to the length they had at the checkpoint before the simulation
 continues, so the measurements written between the last checkpoint and the interruption
-are not duplicated. The result is the file an uninterrupted run would have produced, with the
-same values up to rounding: a search resumed between two sweeps rebuilds what dmrg kept from
-one sweep to the next, which may change the last digits of a small value, as a residual close
-to zero. A `Data` object is put back as it was at the checkpoint, the values measured after
+are not duplicated. The result is the same file as an uninterrupted run would have
+produced. A `Data` object is put back as it was at the checkpoint, the values measured after
 it dropped. The log is the exception: it keeps the history of every run, so what an
 interrupted run wrote after its last checkpoint stays, with the line saying why it stopped,
 followed by the line marking the resume and by the steps done again from the checkpoint.

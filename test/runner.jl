@@ -82,6 +82,17 @@ function TMS.run_phase(p::SummingKicks, sim::Simulation, done::Int)
     return sim
 end
 
+# a phase of a single call whose last step would hand a resumed run another result than the
+# simulation it measures
+Base.@kwdef struct EndingElsewhere <: AbstractPhase
+    name::String = "ending elsewhere"
+    time_start = nothing
+    final_measurements = []
+end
+
+TMS.run_phase(p::EndingElsewhere, sim::Simulation, ::Int) =
+    TMS.step_done(sim, p, 1; last = true, resume_from = Simulation(sim, apply(X(1), sim.state)))
+
 @testset "SimData" begin
     phases = [CreateState{Pure}(2, Qubit(), "Up"), Gates(gates = X(1))]
     # nested vectors are flattened
@@ -166,17 +177,9 @@ end
                            final_measurements = "end" => [tr, :energy, draw, Fidelity(:start)])
         ref = runTMS(sd("ref"))
         sim = run_through(sd("chk"); max_time = -1)
-        for f in ("evolve", "search", "found", "open", "thermo", "end")
+        for f in ("evolve", "search", "found", "open", "thermo", "steady", "end")
             @test read("chk/$f", String) == read("ref/$f", String)
         end
-        # a steady state search resumed between two sweeps rebuilds the environments dmrg kept,
-        # which changes the rounding of its residual, an eigenvalue close to zero, by 1e-15:
-        # its file has the same lines and columns, its numbers the same up to rounding
-        chk, ref_lines = readlines("chk/steady"), readlines("ref/steady")
-        @test length(chk) == length(ref_lines) && first(chk) == first(ref_lines)
-        cells(l) = parse.(Float64, split(l, '\t'))
-        @test all(isapprox(cells(a), cells(b); atol = 1e-12)
-                  for (a, b) in zip(chk[2:end], ref_lines[2:end]))
         @test norm(sim.state - ref.state) < 1e-12
         @test sim.energy ≈ ref.energy
         @test sim.residual ≈ ref.residual atol = 1e-12
@@ -343,6 +346,8 @@ end
         # one that has neither interface
         @test_throws "does not know how to run it" runTMS(
             SimData(name = "none", phases = [phases[1], Unrunnable("n", nothing, [])]))
+        @test_throws "takes no resume_from" runTMS(
+            SimData(name = "elsewhere", phases = [phases[1], EndingElsewhere()]))
     end
 end
 

@@ -231,9 +231,10 @@ end
 
 run the search of `phase`, `GroundState` or `SteadyState`, of the lowest eigenvector of `mpo`
 from the state `phase.on` of `sim`, its first `done` sweeps done, each sweep ending with
-`step_done` on the state `result` makes of the eigenvector, and return the simulation with that
-state and the eigenvalue as the value `name`; `check(value, state)` warns about the state of the
-last sweep, before its step, and `args` are the other keywords of `search`
+`step_done` on the state `result` makes of the eigenvector, a resumed search going on from the
+eigenvector itself, as the uninterrupted one, and return the simulation with that state and the
+eigenvalue as the value `name`; `check(value, state)` warns about the state of the last sweep,
+before its step, and `args` are the other keywords of `search`
 """
 function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check, name::Symbol;
                     args...)
@@ -245,7 +246,9 @@ function run_search(phase, sim::Simulation, done::Int, mpo::MPO, result, check, 
         if ends
             check(e, r)
         end
-        reached[] = step_done(with_state(sim, phase.on, r; (name => e,)...), phase, k; last = ends)
+        measured = with_state(sim, phase.on, r; (name => e,)...)
+        resume = ends || r === st ? measured : with_state(sim, phase.on, st; (name => e,)...)
+        reached[] = step_done(measured, phase, k; last = ends, resume_from = resume)
     end
     e, st = search(phase.algo, mpo, state_named(sim, phase.on), phase.limits; sweep_done = hook,
                    done, energy, args...)
