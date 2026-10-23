@@ -1,9 +1,10 @@
 # Quick reference
 
 The whole library on one page, for a reader who knows quantum mechanics and wants a correct
-computation quickly, a person or an AI. `?name` at the Julia prompt gives the details of any
-function or type below, that of a site type, as `?Qubit`, its states and its operators, and that
-of an operator, as `?X`, what it is on each site type that has it.
+computation quickly, a person or an AI. `?name` at the Julia prompt, or `println(@doc name)` in
+a script after `using REPL`, gives the details of any function or type below, that of a site
+type, as `?Qubit`, its states and its operators, and that of an operator, as `?X`, what it is on
+each site type that has it.
 
 ## Loading
 

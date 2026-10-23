@@ -16,6 +16,7 @@ and read the quick reference of the installed version before writing code.
 julia -e 'using Pkg; Pkg.add("TensorMixedStates")'          # once; compiles for several minutes
 julia -e 'using TensorMixedStates; print(pkgversion(TensorMixedStates))'   # must be 2.x
 julia -e 'using TensorMixedStates; print(joinpath(pkgdir(TensorMixedStates), "docs", "src", "quickref.md"))'
+julia -e 'using TensorMixedStates, REPL; println(@doc Tdvp)'   # a docstring, REPL needed
 ```
 
 Installing compiles for five to six minutes with up to 7 GB of memory, 9 GB with Julia 1.10.
@@ -27,7 +28,10 @@ each session compiling what it uses, about three minutes for a first simulation.
 Read that `quickref.md`: the whole library on one page, version matched. `upgrading.md`, next
 to it, lists what changed since version 1. In Julia, `?name` gives the help of a function or a
 type, that of a site type, as `?Qubit`, its states and its operators, and that of an operator,
-as `?X`, what it is on each site type that has it.
+as `?X`, what it is on each site type that has it. From the shell, `println(@doc name)` prints
+it after `using REPL`, as above: without REPL, `@doc` gives a single docstring, raw. For a
+function TMS extends, as `expect`, `apply` or `sample`, the docstrings of ITensorMPS come first
+and those of TMS after them.
 
 Write a script and run it with `julia --threads=auto script.jl`. The first run of a session
 compiles for a few seconds.
