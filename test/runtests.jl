@@ -34,11 +34,18 @@ for g in selected
 end
 
 # one testset per group, which the summary shows as one line, unfolded by Test when one of
-# its tests fails
+# its tests fails; a line as each group starts and ends shows the progress of a long run, a
+# failure printed between those of its group
 @testset verbose=true "TensorMixedStates.jl" begin
-    for g in selected
+    for (k, g) in enumerate(selected)
+        label = "[$k/$(length(selected))] $g"
+        println(label)
+        flush(stdout)
+        t = time()
         @testset "$g" begin
             include("$g.jl")
         end
+        println("$label: $(round(Int, time() - t)) s")
+        flush(stdout)
     end
 end
