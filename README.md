@@ -24,6 +24,18 @@ Being built on ITensor, it computes fast and runs in parallel naturally. Its syn
 operators is meant to make observables, gates, Hamiltonians and Lindbladians easy to write,
 and an optional high level interface expresses a whole simulation in a few lines.
 
+<div align="center">
+  <img src=".github/article_graph_state.png" alt="⟨Y₁Y₂Z₃⟩ against time for 8, 64 and 512 qubits, all on the exact curve" width="440">
+  <br>
+  <img src=".github/article_fermion_source.png" alt="Density profile of free fermions around a source at times 1, 5 and 8, against the exact profiles" width="640">
+</div>
+
+Two results of the [article](https://doi.org/10.21468/SciPostPhysCodeb.72), each against its exact
+solution: above, the decoherence of a complete-graph state of 8, 64 and 512 qubits
+([script](examples/article/5_Complete_graph_decoherence.jl)); below, free fermions injected by a
+localized source, their density profile at three times
+([script](examples/article/4_Free_fermions_with_source.jl)).
+
 ## Installation
 
 ```julia
