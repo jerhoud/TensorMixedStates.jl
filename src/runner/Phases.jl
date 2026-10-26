@@ -149,7 +149,7 @@ the phase provides, but for states
 """
 function step_line(sim::Simulation, phase, k::Int)
     values = getfield(sim, :values)
-    return join([ "step $k, time $(sim.time)" ;
+    return join([ "step $k, time $(time_text(sim, sim.time))" ;
                   [ "$name $(values[name])" for name in provided_values(phase)
                     if haskey(values, name) && !(values[name] isa AbstractState) ] ], ", ")
 end

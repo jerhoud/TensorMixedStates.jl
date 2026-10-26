@@ -585,7 +585,7 @@ function error_line(run, sd::SimData, e)
     k = isnothing(run) ? nothing : run.checkpointer.last
     where = isnothing(run) || run.phase == 0 ? "" :
             " in phase $(run.phase) \"$(sd.phases[run.phase].name)\", last committed at time " *
-            "$(k.time)"
+            time_text(run, k.time)
     return "ERROR$where: " * sprint(showerror, e)
 end
 
@@ -730,7 +730,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         sim = Logging.with_logger(SimLogger(run, Logging.current_logger())) do
             if resume
                 log_line(run, "\nResuming from the checkpoint: phase $(commit.phase), step " *
-                              "$(commit.step), time $(commit.time)")
+                              "$(commit.step), time $(time_text(run, commit.time))")
                 # before anything is written: a destination opened anew would empty a file the
                 # checkpoint continues
                 reopen!(outputs, commit.marks)

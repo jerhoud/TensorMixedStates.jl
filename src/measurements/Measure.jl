@@ -79,7 +79,8 @@ function checked(name::String, ch::Check, time)
     d = same ? sqrt(sum(abs2, skipmissing(a isa AbstractArray ? a .- b : [a - b]); init = 0.0)) :
                missing
     if !isnothing(ch.tol) && (!same || d > ch.tol)
-        when = isnothing(time) ? "" : " at time $time"
+        # the time as the text tables write it by default, there being no run to give a format
+        when = isnothing(time) ? "" : " at time $(text_cell(time, Printf.Format("%.13g")))"
         message = same ? "Check $name failed$when: $a and $b differ by $d, beyond tol = $(ch.tol)" :
                          "Check $name failed$when: $a and $b miss different entries"
         if ch.warn

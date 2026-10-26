@@ -106,7 +106,8 @@ function prepare_phase(phase::Evolve, sim::Simulation)
         error("the states an Evolve evolves together need one system and one representation")
     end
     what = names == [:state] ? "the state" : "the states " * join(names, ", ")
-    log_message(sim, "Evolving $what from time $(sim.time) to $(sim.time + phase.duration)")
+    log_message(sim, "Evolving $what from time $(time_text(sim, sim.time)) to " *
+                     time_text(sim, sim.time + phase.duration))
     pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
     return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end

@@ -1241,6 +1241,24 @@ end
     end
 end
 
+@testset "The times of the log" begin
+    # the log writes a time as the text tables of the run do, in their format: 0.3 where Julia
+    # prints 0.1 + 0.2 as 0.30000000000000004
+    phases = [CreateState{Pure}(2, Qubit(), "Up"),
+              Evolve(evolver = -im * (X(1) + X(2)), duration = 0.2, time_step = 0.1)]
+    in_tmp() do
+        runTMS(SimData(; name = "default", time_start = 0.1, phases))
+        log = read("default/log", String)
+        @test occursin("Evolving the state from time 0.1 to 0.3\n", log)
+        @test occursin("\nstep 2, time 0.3\n", log)
+        @test !occursin("0.30000000000000004", log)
+        runTMS(SimData(; name = "fixed", time_start = 0.1, phases, format = "%.2f"))
+        log = read("fixed/log", String)
+        @test occursin("Evolving the state from time 0.10 to 0.30\n", log)
+        @test occursin("\nstep 2, time 0.30\n", log)
+    end
+end
+
 @testset "The imaginary parts dropped in a run" begin
     # the imaginary parts of Hermitian measurements a run drops make one warning, with how many
     # and the largest, at the end of each phase, after the measurements that end the run, or
@@ -1256,7 +1274,7 @@ end
     in_tmp() do
         @test_logs (:info, r"simulation \"im\" done, .*, 2 warnings in its log") runTMS(sd("im"))
         s = summaries("im/log")
-        @test [ (n, name, t) for (n, _, name, t) in s ] == [(6, "X", "0.0"), (1, "X(1)", "0.0")]
+        @test [ (n, name, t) for (n, _, name, t) in s ] == [(6, "X", "0"), (1, "X(1)", "0")]
         @test all(x -> x[2] ≈ 0.6, s)
         @test !occursin("is beyond rounding, dropped", read("im/log", String))
         # a run stopped and resumed reports what each of its parts dropped

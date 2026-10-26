@@ -8,6 +8,12 @@ This file starts with the release in preparation. For what came before, see the
 archived as the [codebase release](https://doi.org/10.21468/SciPostPhysCodeb.72-r1.28) of
 the reference article.
 
+## [Unreleased]
+
+### Fixed
+
+- The log writes times in the format of the text tables: `0.3`, not `0.30000000000000004`.
+
 ## [2.0.0] - 2026-10-24
 
 A rewrite of the package: the same computations, through a smaller and uniform interface. A

@@ -1520,11 +1520,14 @@ end
                                          tol = 1e-10))
     @test ch.value ≈ exp(0.7im) / 2 && ch.difference < 1e-10
     # beyond tol it is refused, the message giving the name, the time when measure is given one,
-    # the values, their difference and tol, or only warned about with warn = true
+    # as the text tables write it, the values, their difference and tol, or only warned about
+    # with warn = true
     far(; kwargs...) = "chk" => c -> Check(1.0, 1.001; tol = 1e-6, kwargs...)
     @test_throws "Check chk failed: 1.0 and 1.001 differ by" measure(st, far())
     @test_throws "Check chk failed at time 2.5: 1.0 and 1.001 differ by" measure(
         st, far(); time = 2.5)
+    @test_throws "Check chk failed at time 0.3: 1.0 and 1.001 differ by" measure(
+        st, far(); time = 0.1 + 0.2)
     @test_throws "beyond tol = 1.0e-6" measure(st, far())
     failed = r"^Check chk failed: 1\.0 and 1\.001 differ by .*, beyond tol = 1\.0e-6$"
     ch = @test_logs (:warn, failed) measure(st, far(warn = true))

@@ -306,6 +306,16 @@ function log_message(sim::Union{Simulation, Editing}, text)
 end
 
 """
+    time_text(run, t)
+    time_text(sim, t)
+
+the time `t` as the text tables of the run write it, in their format: `0.3` where Julia prints
+`0.30000000000000004`
+"""
+time_text(run::RunData, t) = text_cell(t, Printf.Format(run.outputs.format))
+time_text(sim::Union{Simulation, Editing}, t) = time_text(getfield(sim, :run), t)
+
+"""
     report_dropped(run)
 
 one warning in the log for the imaginary parts of Hermitian measurements dropped since the last
@@ -315,7 +325,7 @@ function report_dropped(run::RunData)
     if run.dropped > 0
         x, name, time = run.largest
         n = run.dropped
-        at = isnothing(time) ? "" : " at time $time"
+        at = isnothing(time) ? "" : " at time $(time_text(run, time))"
         log_line(run, "WARNING: $n imaginary part$(n == 1 ? "" : "s") of Hermitian measurements " *
                       "beyond rounding dropped, the largest $x, of $name$at")
         run.warnings += 1
