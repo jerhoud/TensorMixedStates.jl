@@ -5,33 +5,41 @@ export random_state
 
 """
     random_state(Pure, system, linkdims; rng, eltype = ComplexF64)
+    random_state(Pure, system, states, linkdims; rng, eltype = ComplexF64)
     random_state(state, linkdims; rng, eltype = ComplexF64)
     random_state(Mixed, system, linkdims; rng, eltype = ComplexF64)
     random_state(Mixed, system, states, linkdims; rng, eltype = ComplexF64)
 
 a random state of link dimension `linkdims`: a pure state, the pure `state` randomised in its
 sector, or a mixed state drawn as a purification on twice the system, of link dimension
-`isqrt(linkdims)^2`. On a system conserving something, a pure state is drawn by randomising
-one of the sector wanted, and a mixed one from the local `states` its purification starts
-from, written as for `State`; a mixed state cannot be drawn on a system conserving something
-strongly. `rng` is the random number generator, the global one by default; `eltype = Float64`
-gives a real state, cheaper to contract, correct only if the whole computation stays real.
+`isqrt(linkdims)^2`. On a system conserving something, a pure state is drawn in the sector of
+the local `states`, written as for `State`, or by randomising a state of the sector wanted,
+and a mixed one from the local `states` its purification starts from; a mixed state cannot be
+drawn on a system conserving something strongly. `rng` is the random number generator, the
+global one by default; `eltype = Float64` gives a real state, cheaper to contract, correct only
+if the whole computation stays real.
 
 # Examples
 
     random_state(Pure, system, 20)
     random_state(Mixed, system, 16; eltype = Float64)
-    random_state(State{Pure}(System(6, Fermion(conserve = N)), "Occ"), 8)
+    random_state(Pure, System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Emp"], 8)  # N = 2
+    random_state(ψ, 8)     # in the sector of ψ
 """
 function random_state(::Type{Pure}, system::System, linkdims::Int;
                       rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
     if is_charged(system)
         error("cannot draw a random pure state on a system that conserves something, there " *
-              "being no sector to draw it in: randomise a state of the sector wanted, " *
+              "being no sector to draw it in: give the local states of the sector wanted, " *
+              "random_state(Pure, system, states, linkdims), or randomise a state of it, " *
               "random_state(state, linkdims)")
     end
     return State{Pure}(system, random_mps(rng, eltype, siteinds(Pure, system); linkdims))
 end
+
+random_state(::Type{Pure}, system::System, states, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    random_state(State{Pure}(system, states), linkdims; rng, eltype)
 
 function random_state(state::State{Pure}, linkdims::Int;
                       rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)

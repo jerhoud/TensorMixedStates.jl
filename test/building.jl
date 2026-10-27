@@ -514,10 +514,18 @@ end
     # there is no sector to draw a pure state in, so the form taking a system alone is
     # refused by a message naming the one that works
     @test_throws "no sector to draw it in" random_state(Pure, sys, 4)
+    @test_throws "random_state(Pure, system, states, linkdims)" random_state(Pure, sys, 4)
     @test_throws "random_state(state, linkdims)" random_state(Pure, sys, 4)
-    # randomising a state one already has keeps it in the sector it was in
+    # randomising a state one already has keeps it in the sector it was in, as drawing one from
+    # the local states of a sector does
     p = State{Pure}(sys, conf)
     @test flux(random_state(p, 4).state) == flux(p.state)
+    q = random_state(Pure, sys, conf, 4)
+    @test flux(q.state) == flux(p.state)
+    @test norm(q) ≈ 1
+    @test norm(random_state(Pure, sys, conf, 4; rng = Xoshiro(3)) -
+               random_state(p, 4; rng = Xoshiro(3))) < 1e-14
+    @test eltype(random_state(Pure, sys, conf, 4; eltype = Float64).state[1]) == Float64
     # a mixed one is drawn from the states its purification starts from
     @test_throws "name the local states its purification starts from" random_state(Mixed, sys, 4)
     m = random_state(Mixed, sys, conf, 16)

@@ -13,6 +13,7 @@ the reference article.
 ### Added
 
 - `apply_algo = "zipup"` for `apply` of an MPO and `ApproxW`: faster when truncating much, less accurate.
+- `random_state(Pure, system, states, linkdims)`, a random pure state in the sector of `states`.
 
 ### Changed
 
