@@ -131,7 +131,11 @@ end
     # an operator of no definite fermionic parity has its projectors, their strings being laid
     # by the lowering
     @test matrix(Proj(C + dag(C) => 1), Fermion()) ≈ [1. 1. ; 1. 1.] / 2
-    @test_throws "Proj(N => 1)(3) rather than Proj(N(3) => 1)" Proj(X(3) => 1)
+    # an operator placed on sites places it there, as a gate is placed, but a sum or a product
+    # of placed operators has no operator of its own to project with
+    @test Proj(X(3) => 1) == Proj(X => 1)(3)
+    @test Proj(Swap(1, 3) => -1) == Proj(Swap => -1)(1, 3)
+    @test_throws "take the projector of the operator before placing it" Proj(N(1) + N(2) => 1)
     # of several sites, the singlet and the spin 2 of two spins one, printed as before whatever
     # its number of sites
     @test Proj("Up") isa TMS.SimpleOp
@@ -1161,7 +1165,7 @@ end
     @test TMS.obs_name(reduce(⊗, fill(Z, 6))((1:6)...)) == "(Z⊗Z⊗Z⊗Z⊗Z⊗Z)(1,2,3,4,5,6)"
     # an error message names an operator in this form
     zs = sum(Z(i) for i in 1:10)
-    @test_throws "eigenspace of Z(1)+Z(2)+Z(3)+...+Z(9)+Z(10), which" Proj(zs => 2)
+    @test_throws "eigenspace of Z(1)+Z(2)+Z(3)+...+Z(9)+Z(10) once placed" Proj(zs => 2)
 end
 
 @testset "map_sites moves the factors of an operator" begin

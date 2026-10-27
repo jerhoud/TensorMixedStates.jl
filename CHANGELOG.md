@@ -14,6 +14,7 @@ the reference article.
 
 - `apply_algo = "zipup"` for `apply` of an MPO and `ApproxW`: faster when truncating much, less accurate.
 - `random_state(Pure, system, states, linkdims)`, a random pure state in the sector of `states`.
+- `Proj(N(3) => 1)`, `Dephase(N(1))` and `Reset(N(3) => 1)` are placed where the operator is.
 
 ### Changed
 

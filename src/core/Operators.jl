@@ -362,7 +362,8 @@ end
 
 the projector ``|s\\rangle\\langle s|`` on a local pure state of one site, given as `State`
 takes it, or the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `A`,
-of one site or several.
+of one site or several. An operator placed on sites places the projector there:
+`Proj(N(3) => 1)` is `Proj(N => 1)(3)`.
 
 # Examples
 
@@ -370,6 +371,7 @@ of one site or several.
     Proj(Level => 1)       # the second basis state
     Proj(Sz => 0)          # on a Spin(1), the state of Sz = 0
     Proj(Swap => -1)       # the antisymmetric part of two sites, the singlet of two qubits
+    Proj(Swap(1, 3) => -1) # that of sites 1 and 3, Proj(Swap => -1)(1, 3)
 """
 struct Proj{N} <: GenericOp{IsOperator, N}
     state::Union{String, Vector, Function, Pair{<:GenericOp{IsOperator}, <:Real}}
@@ -383,9 +385,14 @@ Proj(n::Integer) =
     error("a number does not denote a state: the projector on the basis state $n, counted from " *
           "0, is Proj(Level => $n)")
 
-Proj(p::Pair{<:IndexedOp, <:Real}) =
-    error("cannot project on an eigenspace of $(obs_name(first(p))), which is placed on sites: " *
-          "write Proj(N => 1)(3) rather than Proj(N(3) => 1)")
+Proj(p::Pair{<:IndexedOp{IsOperator}, <:Real}) =
+    if first(p) isa AtIndex
+        Proj(first(p).op => last(p))(first(p).index...)
+    else
+        error("cannot project on an eigenspace of $(obs_name(first(p))) once placed: take the " *
+              "projector of the operator before placing it, Proj((N ⊗ Id + Id ⊗ N) => 1)(1, 2) " *
+              "rather than Proj(N(1) + N(2) => 1)")
+    end
 
 ############ AtIndex ################
 
@@ -450,7 +457,8 @@ the channel resetting a site to the local state `state`, given as `State` takes 
 of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a matrix is taken as it
 is, without normalization. On a fermionic site this holds on states of definite parity: on the
 others, an odd operator `O` of the other sites takes the value of
-``\\langle F\\rangle_\\sigma F_i O``, ``F_i`` the parity of the site.
+``\\langle F\\rangle_\\sigma F_i O``, ``F_i`` the parity of the site. An operator of one site
+placed on it places the reset there: `Reset(N(3) => 1)` is `Reset(N => 1)(3)`.
 
 # Examples
 
@@ -469,13 +477,22 @@ Reset(n::Integer) =
     error("a number does not denote a state: the reset to the basis state $n, counted from 0, " *
           "is Reset(Level => $n)")
 
+Reset(p::Pair{<:IndexedOp{IsOperator}, <:Real}) =
+    if first(p) isa AtIndex{IsOperator, 1}
+        Reset(first(p).op => last(p))(only(first(p).index))
+    else
+        error("cannot reset to an eigenstate of $(obs_name(first(p))), which is not an operator " *
+              "of one site placed on it: write Reset(A => λ)(i), A an operator of one site")
+    end
+
 """
     Dephase(A)
 
 the channel dephasing in the eigenbasis of the Hermitian operator `A`, of one site or several,
 ``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``, ``P_\\lambda`` the projector
 on the eigenspace of `A` of eigenvalue ``\\lambda``: the measurement of `A` whose result is not
-read. It erases the coherences between eigenspaces and keeps those within one.
+read. It erases the coherences between eigenspaces and keeps those within one. An operator
+placed on sites places the dephasing there: `Dephase(N(1))` is `Dephase(N)(1)`.
 
 # Examples
 
@@ -489,8 +506,13 @@ struct Dephase{N} <: GenericOp{IsChannel, N}
 end
 
 Dephase(a::IndexedOp{IsOperator}) =
-    error("cannot dephase in the eigenbasis of $(obs_name(a)), which is placed on sites: write " *
-          "Dephase(N)(1) rather than Dephase(N(1))")
+    if a isa AtIndex
+        Dephase(a.op)(a.index...)
+    else
+        error("cannot dephase in the eigenbasis of $(obs_name(a)) once placed: dephase in " *
+              "that of the operator before placing it, Dephase(N ⊗ Id + Id ⊗ N)(1, 2) rather " *
+              "than Dephase(N(1) + N(2))")
+    end
 
 """
     Dissipator(L)

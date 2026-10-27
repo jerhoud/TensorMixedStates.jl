@@ -131,7 +131,15 @@ end
     @test matrix(Proj(1e-14 * Z => -1e-14), q) ≈ matrix(Proj(Z => -1), q)
     @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset([1., 0., 0.]), q)
     @test_throws "a number does not denote a state" Reset(1)
-    @test_throws "write Dephase(N)(1) rather than Dephase(N(1))" Dephase(N(1))
+    # an operator placed on sites places the dephasing or the reset there, as a gate is placed,
+    # but a sum or a product of placed operators has no operator of its own to take
+    @test Dephase(N(1)) == Dephase(N)(1)
+    @test Dephase(Swap(1, 3)) == Dephase(Swap)(1, 3)
+    @test_throws "dephase in that of the operator before placing it" Dephase(N(1) + N(2))
+    @test Reset(N(2) => 1) == Reset(N => 1)(2)
+    for a in (N(1) + N(2), Swap(1, 2))
+        @test_throws "which is not an operator of one site placed on it" Reset(a => 1)
+    end
 end
 
 @testset "The matrix of a channel acts on vec(ρ) in the order of the sites" begin
