@@ -151,9 +151,10 @@ an approximation of the given order, for `evolve` and `thermalize`.
   unless `dβ ΔE` is small, where orders 1 to 3 only go forwards
 - `w`: 1 or 2 for WI or WII (default 2)
 - `apply_algo`: the algorithm of the product of the state by each MPO, see `apply`: `"naive"`
-  (default), exact then truncated, or `"densitymatrix"`, faster at large bond dimensions without
+  (default), exact then truncated, `"densitymatrix"`, faster at large bond dimensions without
   conservation (2.4x at 128 on a Heisenberg chain) but with the cutoff `eps()` it needs, which
-  stops the error near 1e-7 and lets it grow with the number of steps
+  stops the error near 1e-7 and lets it grow with the number of steps, or `"zipup"`, which
+  truncates as it multiplies: faster when `limits` truncate much, less accurate
 - `hermitianize_period`: make a mixed state hermitian every `hermitianize_period` steps
   (default 0, never): from order 2, the complex fractions of the step keep a density matrix
   hermitian only up to the order of the approximation

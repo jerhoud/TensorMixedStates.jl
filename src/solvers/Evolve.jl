@@ -227,8 +227,8 @@ operator or an operator with its real function of time, `[A, B => g]` for ``A + 
 ``t`` starting at `time`.
 `step` is the number of the first step, for the periods of the methods and for `limits`, see
 `Limits`, which may give one value per step, step `k` taking the `k`-th. Its default cutoff is
-`1e-26` for tdvp and `apply_algo = "naive"`, `eps()` for `"densitymatrix"`. `mpo_limits`
-truncates the MPO of the evolver, see `PreMPO` (default none).
+`1e-26` for tdvp and `apply_algo = "naive"` or `"zipup"`, `eps()` for `"densitymatrix"`.
+`mpo_limits` truncates the MPO of the evolver, see `PreMPO` (default none).
 
 # Examples
 
