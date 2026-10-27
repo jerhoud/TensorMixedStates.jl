@@ -31,12 +31,12 @@ end
 """
     check_apply_algo(apply_algo)
 
-refuse an algorithm of the product of an MPO by a state other than `"densitymatrix"` and
-`"naive"`: `"fit"` needs sweeps of its own, and `"zipup"` a later ITensorMPS than TMS requires
+refuse an algorithm of the product of an MPO by a state other than `"naive"`,
+`"densitymatrix"` and `"zipup"`: `"fit"` needs sweeps of its own
 """
 function check_apply_algo(apply_algo::String)
-    if apply_algo ∉ ("densitymatrix", "naive")
-        error("apply_algo is \"densitymatrix\" or \"naive\", not $(repr(apply_algo))")
+    if apply_algo ∉ ("naive", "densitymatrix", "zipup")
+        error("apply_algo is \"naive\", \"densitymatrix\" or \"zipup\", not $(repr(apply_algo))")
     end
 end
 
@@ -178,16 +178,31 @@ function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS,
 end
 
 """
+    zipup_truncation(tr)
+
+the keywords of zipup for the truncation `tr` of the product: at each site, as it is formed,
+a tenth of the cutoff and twice the bond dimension, as ITensorMPS recommends after Paeckel et
+al., these truncations not being optimal, then `tr` once the product is whole. A bond dimension
+of `typemax(Int) ÷ 2` or more becomes `typemax(Int)`, its double wrapping around.
+"""
+zipup_truncation(tr::NamedTuple) =
+    (cutoff = tr.cutoff / 10,
+     maxdim = tr.maxdim ≥ typemax(Int) ÷ 2 ? typemax(Int) : 2 * tr.maxdim,
+     mindim = tr.mindim, truncate_kwargs = tr)
+
+"""
     applied_mpo(mpo, st, limits; alg = "naive")
 
 the MPS `st` with `mpo` applied by the algorithm `alg`, truncated to `limits`, or the null state
 when the result vanishes, see `guarded`, which ``\\langle A\\psi | A\\psi \\rangle`` tells
 exactly. The cutoff is `eps()` by default for `"densitymatrix"`, whose density matrices give the
 squares of the singular values only to `eps()` of the largest: below, it would keep rounding.
+`"zipup"` truncates more loosely as it forms the product, see `zipup_truncation`.
 """
 function applied_mpo(mpo::MPO, st::MPS, limits::Limits; alg::String = "naive")
     tr = alg == "densitymatrix" ? truncation(limits; cutoff = eps()) : truncation(limits)
-    return guarded(s -> apply(mpo, s; alg, tr...), s -> iszero(inner(mpo, s, mpo, s)), st)
+    kw = alg == "zipup" ? zipup_truncation(tr) : tr
+    return guarded(s -> apply(mpo, s; alg, kw...), s -> iszero(inner(mpo, s, mpo, s)), st)
 end
 
 """
@@ -578,8 +593,11 @@ projectors when they have few terms. The state is not normalised.
   for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density
   matrices give the squares of the singular values only to `eps()` of the largest
 - `apply_algo`: for an MPO, the algorithm of its product with the state: `"naive"`, the exact
-  product truncated, or `"densitymatrix"`, faster when it truncates much, but whose error may
-  stay near `1e-8`, see Camaño, Epperly and Tropp, arXiv:2504.06475
+  product truncated, `"densitymatrix"`, faster when it truncates much, but whose error may stay
+  near `1e-8`, or `"zipup"`, which truncates at each site as it multiplies, to a tenth of the
+  cutoff and twice the bond dimension, these truncations not being optimal, then the result to
+  `limits`: faster still when it truncates much, but less accurate; see Camaño, Epperly and
+  Tropp, arXiv:2504.06475
 
 # Examples
 

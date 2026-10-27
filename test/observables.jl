@@ -735,20 +735,42 @@ end
 end
 
 @testset "The algorithms of the product of an MPO by a state" begin
-    # without truncation, "naive", the default, and "densitymatrix" give the exact product, on
-    # a random state
+    # without truncation, "naive", the default, "densitymatrix" and "zipup" give the exact
+    # product, on a random state
     n = 4
     h = sum(X(i) * X(i + 1) for i in 1:n - 1)
     st = random_state(Pure, System(n, Qubit()), 4)
     m = make_mpo(st, h)
     @test norm(apply(m, st; apply_algo = "naive") - apply(m, st)) < 1e-12
     @test norm(apply(m, st; apply_algo = "densitymatrix") - apply(m, st)) < 1e-12
+    @test norm(apply(m, st; apply_algo = "zipup") - apply(m, st)) < 1e-12
     up = State{Pure}(System(n, Qubit()), "Up")
     w(apply_algo) = evolve(-im * h, 0.5, up; algo = ApproxW(; order = 2, apply_algo), nsteps = 5)
     @test norm(w("naive") - w("densitymatrix")) < 1e-12
-    # "fit" needs a number of sweeps of its own, "zipup" is missing for a state from the lowest
-    # ITensorMPS accepted, and a name that is none of them is refused too
-    for alg in ("fit", "zipup", "exact")
+    @test norm(w("naive") - w("zipup")) < 1e-12
+    # zipup on a density matrix, and on a state conserving something, exact without truncation
+    # and within its limits with them
+    ρ = mix(st)
+    mρ = make_mpo(ρ, h)
+    @test norm(apply(mρ, ρ; apply_algo = "zipup") - apply(mρ, ρ)) < 1e-12
+    fe = System(5, Fermion(conserve = N))
+    ψ = random_state(Pure, fe, ["Occ", "Emp", "Occ", "Emp", "Occ"], 4)
+    hop = dag(C) ⊗ C + dag(dag(C) ⊗ C)
+    mf = make_mpo(ψ, sum(hop(i, i + 1) for i in 1:4))
+    @test norm(apply(mf, ψ; apply_algo = "zipup") - apply(mf, ψ)) < 1e-12
+    @test maxlinkdim(apply(mf, ψ; limits = Limits(maxdim = 2), apply_algo = "zipup")) ≤ 2
+    # zipup truncates at each site to a tenth of the cutoff and twice the bond dimension, as
+    # ITensorMPS recommends, then the product to the limits; a bond dimension whose double
+    # would wrap around is left unbounded
+    tr = TMS.truncation(Limits(cutoff = 1e-10, maxdim = 8))
+    z = TMS.zipup_truncation(tr)
+    @test z.cutoff ≈ 1e-11 && z.maxdim == 16 && z.mindim == 1 && z.truncate_kwargs == tr
+    for d in (typemax(Int) ÷ 2, typemax(Int))
+        @test TMS.zipup_truncation(TMS.truncation(Limits(maxdim = d))).maxdim == typemax(Int)
+    end
+    @test TMS.zipup_truncation(TMS.truncation(Limits())).maxdim == typemax(Int)
+    # "fit" needs a number of sweeps of its own, and a name that is none of them is refused too
+    for alg in ("fit", "exact")
         @test_throws "apply_algo is" apply(m, st; apply_algo = alg)
         @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = alg)
     end
@@ -804,7 +826,9 @@ end
               exp(-0.3im * h)(1, 3) * (C ⊗ C)(1, 3))
         @test norm(apply(a, ψ)) == 0
     end
-    @test norm(apply(make_mpo(ψ, C(1) + C(3)), ψ)) == 0
+    for alg in ("naive", "zipup")
+        @test norm(apply(make_mpo(ψ, C(1) + C(3)), ψ; apply_algo = alg)) == 0
+    end
     @test norm(apply((Sp ⊗ Sp)(1, 2), State{Pure}(System(3, Qubit(conserve = N)), "Up"))) == 0
     # and what does not vanish is left as it was
     @test norm(apply((dag(C) ⊗ C)(1, 2), ψ)) ≈ 1

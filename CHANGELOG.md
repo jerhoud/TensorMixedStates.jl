@@ -10,6 +10,14 @@ the reference article.
 
 ## [Unreleased]
 
+### Added
+
+- `apply_algo = "zipup"` for `apply` of an MPO and `ApproxW`: faster when truncating much, less accurate.
+
+### Changed
+
+- TensorMixedStates needs ITensorMPS 0.3.45 and ITensors 0.8, for zipup.
+
 ### Fixed
 
 - The log writes times in the format of the text tables: `0.3`, not `0.30000000000000004`.

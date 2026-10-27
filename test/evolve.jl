@@ -712,6 +712,7 @@ end
     @test repr(ApproxW(order = 4)) ==
           "ApproxW(order = 4, w = 2, apply_algo = \"naive\", hermitianize_period = 0)"
     @test ApproxW(order = 3, w = 1, apply_algo = "densitymatrix").apply_algo == "densitymatrix"
+    @test ApproxW(order = 2, apply_algo = "zipup").apply_algo == "zipup"
     @test Tdvp() isa TMS.EvolutionAlgorithm && ApproxW(order = 1) isa TMS.EvolutionAlgorithm
     # a period is a number of steps, 0 for never, a negative one refused as for every period
     @test_throws "expand_period is a number of steps, 0 for never, not -1" Tdvp(expand_period = -1)
@@ -730,7 +731,7 @@ end
     end
     @test_throws "ApproxW has the approximations WI and WII, w = 1 or 2, not 3" ApproxW(
         order = 2, w = 3)
-    for alg in ("fit", "zipup", "exact")
+    for alg in ("fit", "exact")
         @test_throws "apply_algo is" ApproxW(order = 2, apply_algo = alg)
     end
     # the fractions of a step of each order add up to the whole step
