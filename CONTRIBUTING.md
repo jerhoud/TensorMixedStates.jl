@@ -34,8 +34,8 @@ request, a draft one if the work is unfinished, to have the tests run on it: aga
 for a fix of the released version, against `dev` for anything else.
 
 Changes flow one way, from `main` into `dev`. Every fix that lands on `main` is merged into
-`dev` at once, so that `dev` always contains `main` and the next minor release is a fast
-forward of `main` onto `dev`. Nothing else goes from `dev` to `main`.
+`dev` at once, so that `dev` always contains `main`. Nothing goes from `dev` to `main` but a
+minor or a major release, replayed on `main`, whose history is kept linear, see *Releasing*.
 
 A fix makes the package do what its documentation says, or what it plainly should, without
 adding to its interface. A new function, keyword or option, a change of documented behaviour,
@@ -124,7 +124,7 @@ branches would diverge.
 ### Releasing
 
 This is the maintainer's part. A patch release is made from `main`, a minor or a major one
-from `dev`, by the same version commit: it sets the version in `Project.toml`, in
+from what `dev` holds, by the same version commit: it sets the version in `Project.toml`, in
 `CITATION.cff` with its `date-released`, and in the placeholder of
 `.github/ISSUE_TEMPLATE/bug_report.yml`, and closes the changelog, its `Unreleased` section
 becoming that of the version, dated like `CITATION.cff`, the day of the registration.
@@ -140,12 +140,24 @@ A patch release:
    the release took leave the `Unreleased` section of `dev` for the section of the release,
    which the merge brings.
 
-A minor or a major release:
+A minor or a major release goes through a branch of its own, `prepare-X.Y.0`: the rule
+"Protect main" of the repository keeps the history of `main` linear, and `dev` holds the
+merges of `main`, so its commits are replayed on `main` rather than fast forwarded.
 
-1. On `dev`, after a last merge of `main` if a fix is missing there, the version commit.
-2. `main` is fast forwarded onto `dev` and pushed.
-3. Registration, tag and documentation as for a patch release, steps 2 to 4.
-4. `main` now carries the new series, and `dev` takes the version of the next one.
+1. After a last merge of `main` into `dev` if a fix is missing there,
+   `git switch -c prepare-X.Y.0 dev`, then `git rebase main`, which replays the commits of
+   `dev` on `main` and leaves the merges out. The conflicts the merges resolved come back,
+   and `git rerere`, enabled once by `git config --global rerere.enabled true`, replays the
+   resolutions it recorded then.
+2. `git diff dev prepare-X.Y.0` is empty: the branch holds what `dev` holds, as tested.
+3. On the branch, the version commit. A pull request against `main` has CI run on it; it is
+   not merged from GitHub, whose buttons would add a merge commit or rewrite the commits,
+   and closes as merged at the next step.
+4. `main` is fast forwarded onto the branch and pushed, then registered, tagged and
+   documented as for a patch release, steps 2 to 4. The branch is deleted.
+5. `dev` restarts from `main`: `git switch dev && git reset --hard main`, a commit giving it
+   the version of the next series, and `git push --force-with-lease origin dev`. This is the
+   only time `dev` is rewritten, when it holds nothing that `main` does not.
 
 Between two releases `dev` carries the version it prepares with the suffix `-DEV`, as
 `2.1.0-DEV`, so that a checkout of it is never taken for a release.
