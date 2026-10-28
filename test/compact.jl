@@ -407,6 +407,40 @@ end
     L = -im * sum(Z(i) * Z(j) / (j - i)^2 for i in 1:4 for j in i+1:4) +
         Dissipator(sum(Sm(i) for i in 1:4))
     @test nnorm(mpo_matrix(PreMPO(ρ, L; limits = rounding)) - mpo_matrix(PreMPO(ρ, L))) < 1e-13
+    # on a system that conserves a charge, the channels C† and C of a hopping have the same
+    # singular values: decomposed together they mixed into channels of no definite charge, which
+    # the MPO refused even for the cutoff of rounding; maxdim, which would cut between them and
+    # leave the hopping not hermitian, drops them together
+    halves = ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]
+    fn = State{Pure}(System(6, Fermion(conserve = N)), halves)
+    hn = sum((dag(C)(i) * C(j) + dag(C)(j) * C(i)) / (j - i) for i in 1:6 for j in i+1:6)
+    qn = State{Pure}(System(6, Qubit(conserve = N)), ["Up", "Dn", "Up", "Dn", "Up", "Dn"])
+    xxz = sum((Sp(i) * Sm(j) + Sm(i) * Sp(j) + 0.5 * Z(i) * Z(j)) / (j - i)^2
+              for i in 1:6 for j in i+1:6)
+    ρn = State{Mixed}(System(4, Fermion(conserve = N)), halves[1:4])
+    Ln = -im * sum((dag(C)(i) * C(j) + dag(C)(j) * C(i)) / (j - i) for i in 1:4 for j in i+1:4) +
+         sum(Dissipator(C(i)) for i in 1:4)
+    for (st, op, cutoff, links, error) in [(fn, hn, 1e-4, [2, 4, 4, 4, 2], 1e-2),
+                                           (qn, xxz, 1e-4, [3, 6, 6, 6, 3], 1e-2),
+                                           (ρn, Ln, 1e-2, [5, 5, 5], 1e-1)]
+        exact = mpo_matrix(PreMPO(st, op))
+        @test nnorm(mpo_matrix(PreMPO(st, op; limits = rounding)) - exact) < 1e-13 * nnorm(exact)
+        p = PreMPO(st, op; limits = Limits(; cutoff))
+        @test p.linkdims .- 1 == links
+        @test nnorm(mpo_matrix(p) - exact) < error * nnorm(exact)
+    end
+    pn = PreMPO(fn, hn; limits = Limits(maxdim = 5))
+    hcut = mpo_matrix(pn)
+    @test pn.linkdims .- 1 == [2, 2, 2, 2, 2]
+    @test nnorm(hcut - hcut') < 1e-13 * nnorm(hcut)
+    # values equal to a thousandth are kept or dropped together, but down to mindim, and dropped
+    # only when some value is left
+    bounds(maxdim, mindim = 1) = (; cutoff = 0.0, maxdim, mindim)
+    @test TMS.kept_channels([1, 0.5, 0.5, 0.1], bounds(4)) == 1
+    @test TMS.kept_channels([1, 0.5, 0.5, 0.1], bounds(5)) == 3
+    @test TMS.kept_channels([1, 0.5, 0.49, 0.1], bounds(4)) == 2
+    @test TMS.kept_channels([1, 0.5, 0.5, 0.1], bounds(4, 4)) == 2
+    @test TMS.kept_channels([0.5, 0.5, 0.5], bounds(4)) == 2
     pv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)])
     tv = PreMPO(q, [h, sum(X(i) * X(j) / (j - i)^3 for i in 1:n for j in i+1:n)];
                 limits = Limits(cutoff = 1e-6))

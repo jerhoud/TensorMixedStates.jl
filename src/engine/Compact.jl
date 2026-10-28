@@ -423,7 +423,12 @@ end
 how many of the singular values `s`, in decreasing order, a truncation `t`, see `truncation`,
 keeps on a link: those whose squares the cutoff does not cover, relative to the sum of all, at
 most `maxdim` and at least `mindim` less the two channels of the terms not yet begun and
-finished
+finished. As in ITensors, values whose squares differ by less than a thousandth are not
+separated, those at the cut being dropped together down to `mindim`: the channels `C†` and `C`
+of a hopping have the same value, and a hopping keeping one without the other would no longer
+be hermitian. Where that would leave no value, as for three equal ones and `maxdim = 4`, the
+cut stays where `maxdim` puts it: dropping them all would drop the whole coupling across the
+link.
 """
 function kept_channels(s::AbstractVector{<:Real}, t::NamedTuple)
     total = sum(abs2, s; init = 0.0)
@@ -432,8 +437,113 @@ function kept_channels(s::AbstractVector{<:Real}, t::NamedTuple)
         dropped += s[k]^2
         k -= 1
     end
-    return clamp(k, min(max(t.mindim - 2, 0), length(s)), max(t.maxdim - 2, 0))
+    least = min(max(t.mindim - 2, 0), length(s))
+    k = clamp(k, least, max(t.maxdim - 2, 0))
+    j = k
+    while least < j < length(s) && s[j]^2 - s[j+1]^2 < 1e-3 * s[j]^2
+        j -= 1
+    end
+    return j > 0 ? j : k
 end
+
+"""
+    diagonal_blocks(x)
+
+the blocks of the matrix `x` once its rows and its columns are permuted to make it block
+diagonal, each as its rows and its columns, in increasing order: those its nonzero elements
+connect, the rows and the columns of zeros left out
+"""
+function diagonal_blocks(x::AbstractMatrix)
+    rows_of = [ findall(!iszero, view(x, :, c)) for c in axes(x, 2) ]
+    cols_of = [ findall(!iszero, view(x, r, :)) for r in axes(x, 1) ]
+    row_taken, col_taken = falses(size(x, 1)), falses(size(x, 2))
+    blocks = Tuple{Vector{Int}, Vector{Int}}[]
+    for c in axes(x, 2)
+        if col_taken[c] || isempty(rows_of[c])
+            continue
+        end
+        col_taken[c] = true
+        rows, cols = Int[], [c]
+        # the columns sharing a row with one of the block, until none is left
+        k = 1
+        while k ≤ length(cols)
+            for r in rows_of[cols[k]]
+                if !row_taken[r]
+                    row_taken[r] = true
+                    push!(rows, r)
+                    for s in cols_of[r]
+                        if !col_taken[s]
+                            col_taken[s] = true
+                            push!(cols, s)
+                        end
+                    end
+                end
+            end
+            k += 1
+        end
+        push!(blocks, (sort!(rows), sort!(cols)))
+    end
+    return blocks
+end
+
+"""
+    blockwise(factors, x)
+
+the factors `q` and `c` of `x = q * c`, or of its truncation, from those `factors(ys)` gives for
+the blocks `ys` of `x`, see `diagonal_blocks`, as the vector of the matrices `q` of the blocks
+and that of their matrices `c`: each column of `q` lies on the rows of one block and each row of
+`c` on its columns, the other elements being exact zeros. On a system that conserves a charge,
+rows or columns of different charges never share a nonzero element, so that each column of `q`
+keeps a definite charge, which a decomposition of the whole of `x` would mix where two charges
+have the same singular values.
+"""
+function blockwise(factors, x::AbstractMatrix)
+    blocks = diagonal_blocks(x)
+    qs, cs = factors([ x[rows, cols] for (rows, cols) in blocks ])
+    k = sum(q -> size(q, 2), qs; init = 0)
+    q = zeros(eltype(x), size(x, 1), k)
+    c = zeros(eltype(x), k, size(x, 2))
+    p = 0
+    for ((rows, cols), qb, cb) in zip(blocks, qs, cs)
+        ps = p .+ (1:size(qb, 2))
+        q[rows, ps] = qb
+        c[ps, cols] = cb
+        p += size(qb, 2)
+    end
+    return q, c
+end
+
+"""
+    orthonormal(x)
+
+`x = q * c`, the columns of `q` orthonormal, by QR decompositions of the blocks of `x`, see
+`blockwise`
+"""
+orthonormal(x::AbstractMatrix) =
+    blockwise(x) do ys
+        fs = [ LinearAlgebra.qr(y) for y in ys ]
+        return [ Matrix(f.Q) for f in fs ], [ f.R for f in fs ]
+    end
+
+"""
+    cut(x, t)
+
+`x ≈ q * c`, the columns of `q` orthonormal, by singular value decompositions of the blocks of
+`x`, see `blockwise`, cut to the singular values the truncation `t` keeps among those of all the
+blocks, see `kept_channels`
+"""
+cut(x::AbstractMatrix, t::NamedTuple) =
+    blockwise(x) do ys
+        fs = [ svd(y) for y in ys ]
+        s = reduce(vcat, [ f.S for f in fs ]; init = Float64[])
+        owners = reduce(vcat, [ fill(b, length(f.S)) for (b, f) in enumerate(fs) ]; init = Int[])
+        order = sortperm(s; rev = true)
+        k = kept_channels(s[order], t)
+        # the largest values of each block, as many as it has among the largest `k` of all
+        ks = [ count(==(b), owners[order[1:k]]) for b in eachindex(fs) ]
+        return [ f.U[:, 1:m] for (f, m) in zip(fs, ks) ],
+               [ Diagonal(f.S[1:m]) * f.Vt[1:m, :] for (f, m) in zip(fs, ks) ]
+    end
 
 """
     channel_sweep!(pieces, dims, widths, decompose)
@@ -493,7 +603,9 @@ identity first, for ``\\langle A, B\\rangle = \\mathrm{tr}(A^\\dagger B)/d``, it
 made orthonormal from the left by QR decompositions, then cut from the right by singular value
 decompositions, on its mirror, see `channel_sweep!`: the singular values of a link are those of
 the part of the operator acting on both sides of it, which `limits` truncates as the bonds of a
-state, see `kept_channels`.
+state, see `kept_channels`. Each decomposition, as that of the atoms of a site on its basis, is
+made block by block, see `blockwise`: on a system that conserves a charge, every channel and
+every matrix of the bases keeps a definite one.
 """
 function truncated_block(b::ComBlock{T}, ds::Vector{Int}, limits::Limits) where T
     t = truncation(limits)
@@ -506,10 +618,8 @@ function truncated_block(b::ComBlock{T}, ds::Vector{Int}, limits::Limits) where 
         r = zeros(T, 0, 0)
         bases[j] = Matrix{T}[]
         if !isempty(atoms)
-            f = LinearAlgebra.qr(reduce(hcat, [ vec(m) for m in atoms ]) / sqrt(d))
-            q = Matrix(f.Q)
+            q, r = orthonormal(reduce(hcat, [ vec(m) for m in atoms ]) / sqrt(d))
             bases[j] = [ sqrt(d) * reshape(q[:, p], d, d) for p in axes(q, 2) ]
-            r = f.R
         end
         for (lr, comb) in b.pieces[j]
             x = zeros(T, length(atoms))
@@ -521,23 +631,14 @@ function truncated_block(b::ComBlock{T}, ds::Vector{Int}, limits::Limits) where 
             pieces[j][lr] = [ get(comb, 0, zero(T)); r * x ]
         end
     end
-    # from the left, each link of orthonormal channels, what they carried passed to the next site
-    function orthonormal(x)
-        f = LinearAlgebra.qr(x)
-        return Matrix(f.Q), f.R
-    end
-    # from the right, each link cut to the singular values `limits` keeps, the rest of the
-    # decomposition passed to the site before
-    function cut(x)
-        f = svd(x)
-        k = kept_channels(f.S, t)
-        return f.U[:, 1:k], Diagonal(f.S[1:k]) * f.Vt[1:k, :]
-    end
     widths = [ 1 + length(x) for x in bases ]
     dims = copy(b.dims)
+    # from the left, each link of orthonormal channels, what they carried passed to the next site
     channel_sweep!(pieces, dims, widths, orthonormal)
+    # from the right, each link cut to the singular values `limits` keeps, the rest of the
+    # decomposition passed to the site before
     rdims = reverse(dims)
-    pieces = mirrored(channel_sweep!(mirrored(pieces), rdims, reverse(widths), cut))
+    pieces = mirrored(channel_sweep!(mirrored(pieces), rdims, reverse(widths), x -> cut(x, t)))
     dims = reverse(rdims)
     out = [ SitePieces{T}() for _ in 1:n ]
     for j in 1:n, (lr, v) in pieces[j]
