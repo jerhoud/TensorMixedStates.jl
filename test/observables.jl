@@ -1080,6 +1080,26 @@ end
     both(s -> expect2(mix(s), (dag(C), C)))
     both(s -> expect(mix(s), η(1) * γ(3)))
     both(s -> expect2(mix(s), (γ, N)))
+    # measured by their part of no flux, the only one with a value on a state of definite
+    # charges, without the copy of the state conserving nothing, which a product of γ on 12
+    # sites, whose part of no flux has 924 terms, still takes
+    for fresh in (chain(Fermion(conserve = N)), mix(chain(Fermion(conserve = N))))
+        @test expect(fresh, γ(2)) == 0
+        expect(fresh, η(1) * γ(3))
+        expect1(fresh, γ)
+        expect2(fresh, (η, γ))
+        measure(fresh, ms)
+        @test isempty(fresh.preobs.plain)
+        # the entries no pair of parts reaches, γ changing the charge and N not, are float
+        # zeros as the others: integer ones came out as Complex{Int}
+        @test typeof(expect2(fresh, (γ, N))) == typeof(expect2(weaken(fresh, ()), (γ, N)))
+    end
+    halves = [ isodd(i) ? "Occ" : "Emp" for i in 1:12 ]
+    long = random_state(Pure, System(12, Fermion(conserve = N)), halves, 4;
+                        rng = Xoshiro(20261027))
+    γs = prod(γ(i) for i in 1:12)
+    @test expect(long, γs) ≈ expect(weaken(long, ()), γs) atol = 1e-12
+    @test !isempty(long.preobs.plain)
     both(s -> trace(partial_trace(mix(s); trace_out = [1, 3])))
     both(s -> mutual_info_renyi2(mix(s), 1:2))
     both(s -> trace(apply(Gate(F)(1), mix(s))))

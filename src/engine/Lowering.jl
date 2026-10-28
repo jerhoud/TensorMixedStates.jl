@@ -425,6 +425,35 @@ function grade_parts(::Type{R}, m::AbstractMatrix, site::AbstractSite) where R
 end
 
 """
+    charge_parts(m, site)
+
+the parts of the matrix `m` of an operator on `site`, each made of its elements changing the
+charges of the site by one amount, as pairs `(q, part)`, `q` that amount: `m` alone when it
+changes them by a definite one, as on a site conserving nothing. What rounding leaves of another
+charge is dropped, as charged indices drop it
+"""
+function charge_parts(m::AbstractMatrix, site::AbstractSite)
+    gs = element_grades(Pure, site)
+    small = rounding_tol * norm(m)
+    found = unique(g.q for (g, x) in zip(gs, vec(m)) if abs(x) > small)
+    if length(found) ≤ 1
+        return [ (isempty(found) ? QN() : only(found), m) ]
+    end
+    return [ (q, reshape([ g.q == q ? x : zero(x) for (g, x) in zip(gs, vec(m)) ], size(m)))
+             for q in found ]
+end
+
+"""
+    flux_zero_part(m, site)
+
+the part of the matrix `m` of an operator on `site` changing no charge of the site, see
+`charge_parts`: the only one with a value on a state of definite charges, or on a density matrix
+commuting with them
+"""
+flux_zero_part(m::AbstractMatrix, site::AbstractSite) =
+    sum((x for (q, x) in charge_parts(m, site) if q == QN()); init = zero(m))
+
+"""
     one_site_terms(R, system, i, m)
 
 the terms of the operator of matrix `m` on site `i` of `system`, its part of each grade, charge
@@ -670,6 +699,73 @@ function check_flux(::Type{R}, system::System, a, terms::Vector{Term}) where R
         flux_refusal(system, a, main)
     end
     return [ t for (t, q) in zip(terms, fluxes) if isempty(main) || q == only(main) ]
+end
+
+"""
+    cancelling_products(parts, unit, times, plus)
+
+the sum by `plus` of the products by `times`, from `unit`, of one part of each factor, `parts`
+holding the pairs `(charge, part)` of each, over the choices whose charges cancel, `nothing`
+when there is none: accumulated factor by factor by the charge reached, charges compared by
+`==`, which a dictionary does not do, a charge lacking a name being equal to one where it is
+zero
+"""
+function cancelling_products(parts, unit, times, plus)
+    acc = Pair{QN, typeof(unit)}[ QN() => unit ]
+    for ps in parts
+        next = Pair{QN, typeof(unit)}[]
+        for (q, x) in acc, (r, b) in ps
+            y = times(x, b)
+            k = findfirst(p -> first(p) == q + r, next)
+            if isnothing(k)
+                push!(next, (q + r) => y)
+            else
+                next[k] = first(next[k]) => plus(last(next[k]), y)
+            end
+        end
+        acc = next
+    end
+    k = findfirst(p -> first(p) == QN(), acc)
+    return isnothing(k) ? nothing : last(acc[k])
+end
+
+"""
+    flux_zero_max
+
+the number of terms beyond which `flux_zero_terms` gives up, when it is also more than four
+times those of the operator: the part of no flux of a product of `Sx` on 20 sites has 184756,
+where its measure on the state conserving nothing costs a copy of the state
+"""
+const flux_zero_max = 256
+
+"""
+    flux_zero_terms(system, terms)
+
+the part changing no charge of `system` of the operator of `terms`, lowered on the same sites
+conserving nothing, `nothing` when it has more terms than `flux_zero_max` and four times those
+of `terms`: each block split into its parts of definite charge, see `charge_parts`, and the
+products of one part of each block kept where their charges cancel, see `cancelling_products`.
+On a state of definite charges, or a density matrix commuting with them, the other parts have
+no value.
+"""
+function flux_zero_terms(system::System, terms::Vector{Term})
+    split = [ [ [ (q, Block(b.site, x, b.parity)) for (q, x) in charge_parts(b.m, system[b.site]) ]
+                for b in t.blocks ] for t in terms ]
+    # counted before any is built: a product of Sx on many sites has far more
+    counts = [ something(cancelling_products(parts, 1, (n, _) -> n, +), 0) for parts in split ]
+    if sum(counts; init = 0) > max(flux_zero_max, 4 * length(terms))
+        return nothing
+    end
+    kept = Term[]
+    for (t, parts, n) in zip(terms, split, counts)
+        if n == 0
+            continue
+        end
+        for bs in cancelling_products(parts, [Block[]], (bss, b) -> [ [bs; b] for bs in bss ], vcat)
+            push!(kept, Term(t.coef, bs, t.kets, t.bras))
+        end
+    end
+    return reduced(kept)
 end
 
 """

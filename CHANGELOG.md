@@ -19,6 +19,7 @@ the reference article.
 ### Changed
 
 - TensorMixedStates needs ITensorMPS 0.3.45 and ITensors 0.8, for zipup.
+- `expect`, `expect1`, `expect2` and `measure` take an operator of no definite charge by its part of no flux, without copying the state.
 
 ### Fixed
 
