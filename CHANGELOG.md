@@ -20,6 +20,7 @@ the reference article.
 - `Reset` takes a vector for its unit vector and a matrix divided by its trace: `Reset([1, 1])` doubled the trace.
 - The noise dissipators refuse a negative rate, `Limits` an empty vector, and `Dmrg` an empty or negative noise.
 - `save_state` keeps the state it replaces until the new one is written whole, so that a write that fails leaves it.
+- A checkpoint survives a power cut: its files are synced to the disk before it replaces the previous one, but on Windows.
 
 ## [2.0.0] - 2026-10-24
 

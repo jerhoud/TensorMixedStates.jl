@@ -126,12 +126,29 @@ the name in a state file of the value `name` that is a state
 state_name(name::Symbol) = "value $name"
 
 """
+    sync_file(path)
+
+wait until what was written in the file `path` is on the disk, which the system may otherwise
+keep in memory for a while after the file is closed, for a power cut to lose. Julia has no
+function for it, `fsync` is called; nothing is done on Windows.
+"""
+function sync_file(path::String)
+    if !Sys.iswindows()
+        open(path) do io
+            systemerror("fsync of $path", ccall(:fsync, Cint, (Cint,), fd(io)) ≠ 0)
+        end
+    end
+    return nothing
+end
+
+"""
     write_checkpoint(c)
 
 write the last commit down. Its state and the values that are states go to whichever of
 `checkpoint-1.h5` and `checkpoint-2.h5` the checkpoint on the disk does not name, with the rest
 of the commit serialized, and `checkpoint.json`, which names it, is renamed into place last, so
-that a crash at any point leaves the previous checkpoint or this one, whole. Nothing is written
+that a crash at any point leaves the previous checkpoint or this one, whole. Both are synced to
+the disk before the rename, so that a power cut does too, but on Windows. Nothing is written
 without a directory or for a commit already on the disk.
 """
 function write_checkpoint(c::Checkpointer)
@@ -170,6 +187,10 @@ function write_checkpoint(c::Checkpointer)
                            "time" => string(k.time),
                            "state" => state_file(g)))
     end
+    # on the disk before checkpoint.json names them: a power cut could otherwise leave it naming
+    # a state file the system had not written yet, or empty, the other generation removed
+    sync_file(file)
+    sync_file(tmp)
     # at once, where the mv of Julia 1.10 removes checkpoint.json before renaming
     Base.Filesystem.rename(tmp, checkpoint_json(c.dir))
     # before the other generation goes: a checkpoint written again after an interrupt there goes
