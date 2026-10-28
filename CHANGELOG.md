@@ -15,6 +15,7 @@ the reference article.
 - The log writes times in the format of the text tables: `0.3`, not `0.30000000000000004`.
 - `mpo_limits` and `PreMPO(…; limits)` work on a system that conserves a charge, where they raised a `FluxError`.
 - A truncated MPO keeps or drops channels of equal weight together, so a truncated hopping stays hermitian.
+- `steady_state` warns when the state found has a purity above one, as for a combination whose traces nearly cancel.
 
 ## [2.0.0] - 2026-10-24
 
