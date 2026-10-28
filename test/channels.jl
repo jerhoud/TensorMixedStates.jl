@@ -271,6 +271,11 @@ end
               () -> dephasing_channel(2.), () -> amplitude_damping_channel(1.1))
         @test_throws "takes a probability between 0 and 1" g()
     end
+    # and a negative rate, which the dissipators took
+    for g in (() -> reset_dissipator(-0.1, "Up"), () -> depolarizing_dissipator(-0.1),
+              () -> dephasing_dissipator(-1.), () -> amplitude_damping_dissipator(-0.1))
+        @test_throws "takes a rate of 0 or more" g()
+    end
     @test_throws "must be positive" thermal_relaxation_channel(0., 3., 1.)
     @test_throws "is above 2T1" thermal_relaxation_dissipator(1., 3.)
     @test_throws "takes a time of zero or above" thermal_relaxation_channel(5., 3., -1.)

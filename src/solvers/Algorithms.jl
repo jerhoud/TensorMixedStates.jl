@@ -208,6 +208,15 @@ struct Dmrg <: SearchAlgorithm
         if nsweeps < 1
             error("a search takes at least one sweep, and nsweeps is $nsweeps")
         end
+        # an empty vector, which the sweeps would read past its end
+        if noise isa AbstractVector && isempty(noise)
+            error("a search takes a noise, or one per sweep, not an empty vector")
+        end
+        for x in noise
+            if !(x ≥ 0)
+                error("a search takes a noise of 0 or more, not $x")
+            end
+        end
         return new(nsweeps, noise isa AbstractVector ? Vector{Float64}(noise) : Float64(noise),
                    krylov, tol)
     end

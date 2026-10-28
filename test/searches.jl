@@ -378,6 +378,10 @@ end
     for nsweeps in (0, -1)
         @test_throws "a search takes at least one sweep, and nsweeps is $nsweeps" Dmrg(; nsweeps)
     end
+    # nor an empty vector of noises, which the sweeps read past its end, nor a negative noise
+    @test_throws "not an empty vector" Dmrg(nsweeps = 2, noise = Float64[])
+    @test_throws "a search takes a noise of 0 or more, not -1.0e-7" Dmrg(nsweeps = 2,
+                                                                         noise = [1e-6, -1e-7])
 end
 
 @testset "A single site" begin

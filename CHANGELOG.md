@@ -18,6 +18,7 @@ the reference article.
 - `steady_state` warns when the state found has a purity above one, as for a combination whose traces nearly cancel.
 - `Proj(v)` projects on the unit vector of `v`: `Proj([1, 1])` was twice a projector.
 - `Reset` takes a vector for its unit vector and a matrix divided by its trace: `Reset([1, 1])` doubled the trace.
+- The noise dissipators refuse a negative rate, `Limits` an empty vector, and `Dmrg` an empty or negative noise.
 
 ## [2.0.0] - 2026-10-24
 
