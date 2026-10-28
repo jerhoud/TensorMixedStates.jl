@@ -23,6 +23,15 @@ the reference article.
 ### Fixed
 
 - The log writes times in the format of the text tables: `0.3`, not `0.30000000000000004`.
+- `mpo_limits` and `PreMPO(…; limits)` work on a system that conserves a charge, where they raised a `FluxError`.
+- A truncated MPO keeps or drops channels of equal weight together, so a truncated hopping stays hermitian.
+- `steady_state` warns when the state found has a purity above one, as for a combination whose traces nearly cancel.
+- `Proj(v)` projects on the unit vector of `v`: `Proj([1, 1])` was twice a projector.
+- `Reset` takes a vector for its unit vector and a matrix divided by its trace: `Reset([1, 1])` doubled the trace.
+- The noise dissipators refuse a negative rate, `Limits` an empty vector, and `Dmrg` an empty or negative noise.
+- `save_state` keeps the state it replaces until the new one is written whole, so that a write that fails leaves it.
+- A checkpoint survives a power cut: its files are synced to the disk before it replaces the previous one, but on Windows.
+- From Julia 1.11 on, the hints for the names of 1.x show only in a module that sees TensorMixedStates.
 
 ## [2.0.0] - 2026-10-24
 

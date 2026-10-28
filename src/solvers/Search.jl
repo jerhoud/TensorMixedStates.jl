@@ -242,7 +242,9 @@ const steady_krylov = Krylov(dim = 8, maxiter = 3)
 
 what `steady_state` returns of the eigenvector found: the state divided by its trace, a complex
 number, which takes away the phase that dividing by its real part, as normalize does, would
-leave, with a warning when it is not hermitian
+leave, with a warning when it is not hermitian or when its purity exceeds one. The excess of
+purity is of first order in the error on the state, where the deviation from hermiticity is of
+second order, hence the bounds of `1e-3` and `1e-6`.
 """
 function steady_result(value, state::State{Mixed})
     ρ = state / trace(state)
@@ -250,6 +252,12 @@ function steady_result(value, state::State{Mixed})
     if δ > 1e-6
         @warn "the steady state found has a HermiticityDeviation of $(round(δ; sigdigits = 2)): " *
               "the search has not converged, or the steady state is not unique, see steady_state"
+    end
+    p = purity(ρ)
+    if p > 1 + 1e-3
+        @warn "the steady state found has a purity of $(round(p; sigdigits = 2)), above one, " *
+              "which no density matrix has: the search has not converged, or the steady state " *
+              "is not unique, see steady_state"
     end
     return (residual = value, state = ρ)
 end
@@ -273,8 +281,9 @@ The Krylov search of `Dmrg` takes `dim = 8` and `maxiter = 3` by default, which 
 each sector of a quantity it conserves for instance, and dmrg returns any combination of them,
 in general not a density matrix; declaring the quantity `strong` keeps the search in the
 sector of the starting state. A warning is given when the state found is not hermitian, its
-`HermiticityDeviation` above `1e-6`: the search has not converged, or the steady state is not
-unique.
+`HermiticityDeviation` above `1e-6`, or when its purity exceeds `1 + 1e-3`, as for a
+combination whose traces nearly cancel: the search has not converged, or the steady state is
+not unique.
 
 # Examples
 

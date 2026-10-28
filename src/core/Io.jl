@@ -184,40 +184,63 @@ state_type_name(state::AbstractState) =
     join((fullname(parentmodule(typeof(state)))..., nameof(typeof(state))), ".")
 
 """
+    write_state_group(f, statename, state, ps)
+
+write `state` in the new group `statename` of the HDF5 file `f`: its type, its sites, the fields
+of which `ps` gives as `site_params` makes them, and its tensors
+"""
+function write_state_group(f, statename::String, state::AbstractState, ps)
+    sites = state.system.sites
+    g = create_group(f, statename)
+    attributes(g)["version"] = state_file_version
+    attributes(g)["type"] = state_type_name(state)
+    # the whole path, so that a site type of a module inside another one is found again
+    g["modules"] = [ join(fullname(parentmodule(typeof(s))), ".") for s in sites ]
+    g["types"] = [ string(nameof(typeof(s))) for s in sites ]
+    g["nparams"] = [ length(fieldnames(typeof(s))) for s in sites ]
+    g["pkinds"] = String[ x for p in ps for x in first(p) ]
+    g["params"] = String[ x for p in ps for x in last(p) ]
+    write_conservations(g, sites)
+    write_state(g, state)
+    return nothing
+end
+
+"""
     save_state(filename, statename, state)
 
 save the state in the HDF5 file `filename` under the name `statename`, replacing a state saved
-under that name. Every field of every site must be a number, a boolean, a symbol, a string,
-`nothing` or a `Conservation`.
+under that name. The new one is then written first to the file `filename.tmp`, removed
+afterwards, so that a write that fails leaves the old one. Every field of every site must be a
+number, a boolean, a symbol, a string, `nothing` or a `Conservation`.
 
 # Examples
 
     save_state("myfile.h5", "ground_state", state)
 """
 function save_state(filename::String, statename::String, state::AbstractState)
-    sites = state.system.sites
     # checked before the file is opened: a state that cannot be written must neither leave a
     # half written group nor delete the state already saved under its name
-    ps = map(site_params, sites)
+    ps = map(site_params, state.system.sites)
     if !hasmethod(write_state, Tuple{HDF5.Group, typeof(state)})
         error("cannot save a $(typeof(state)), its type has no method of " *
               "TensorMixedStates.write_state")
     end
-    h5open(filename, "cw") do f
-        if haskey(f, statename)
-            delete_object(f, statename)
+    if isfile(filename) && h5open(f -> haskey(f, statename), filename, "r")
+        # copied over the old one once written whole in a file of its own: written beside it,
+        # the new one could not take its space, which HDF5 frees only while the file is open,
+        # and the file would grow by a state at each save
+        tmp = filename * ".tmp"
+        try
+            h5open(f -> write_state_group(f, statename, state, ps), tmp, "w")
+            h5open(filename, "r+") do f
+                delete_object(f, statename)
+                h5open(t -> copy_object(t, statename, f, statename), tmp, "r")
+            end
+        finally
+            rm(tmp; force = true)
         end
-        g = create_group(f, statename)
-        attributes(g)["version"] = state_file_version
-        attributes(g)["type"] = state_type_name(state)
-        # the whole path, so that a site type of a module inside another one is found again
-        g["modules"] = [ join(fullname(parentmodule(typeof(s))), ".") for s in sites ]
-        g["types"] = [ string(nameof(typeof(s))) for s in sites ]
-        g["nparams"] = [ length(fieldnames(typeof(s))) for s in sites ]
-        g["pkinds"] = String[ x for p in ps for x in first(p) ]
-        g["params"] = String[ x for p in ps for x in last(p) ]
-        write_conservations(g, sites)
-        write_state(g, state)
+    else
+        h5open(f -> write_state_group(f, statename, state, ps), filename, "cw")
     end
     return nothing
 end

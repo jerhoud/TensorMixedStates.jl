@@ -12,9 +12,13 @@ export State, Limits, mix, maxlinkdim, trace, tr, norm, normalize, inner, dot, p
     check_limit(x, ok, what)
 
 refuse a field of `Limits`, a value or a vector of them, holding a value for which `ok` is
-false, `what` saying what it takes; `nothing` is the default of the function
+false, or a vector holding none, which a truncation would read past its end, `what` saying what
+it takes; `nothing` is the default of the function
 """
 function check_limit(x, ok, what::String)
+    if x isa AbstractVector && isempty(x)
+        error("Limits takes $what, or one per step or sweep, not an empty vector")
+    end
     for v in something(x, ())
         if !ok(v)
             error("Limits takes $what, not $v")

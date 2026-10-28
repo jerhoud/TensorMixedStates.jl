@@ -345,6 +345,9 @@ end
     @test_throws "Limits takes a maxdim of 1 or more, not 0" Limits(maxdim = [10, 0])
     @test_throws "Limits takes a cutoff of 0 or more, not -1.0" Limits(cutoff = -1)
     @test_throws "Limits takes a mindim of 0 or more, not -2" Limits(mindim = -2)
+    # and an empty vector, which the first step read past its end
+    @test_throws "or one per step or sweep, not an empty vector" Limits(maxdim = Int[])
+    @test_throws "or one per step or sweep, not an empty vector" Limits(cutoff = Float64[])
     # a field left nothing takes the default of the function given the limits, field by field
     @test Limits() == Limits(cutoff = nothing, maxdim = nothing, mindim = nothing)
     @test TMS.truncation(Limits(maxdim = 5)) ==

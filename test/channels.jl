@@ -130,6 +130,14 @@ end
     @test matrix(Dephase(1e-14 * Z), q) ≈ matrix(Dephase(Z), q)
     @test matrix(Proj(1e-14 * Z => -1e-14), q) ≈ matrix(Proj(Z => -1), q)
     @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset([1., 0., 0.]), q)
+    # a vector stands for its unit vector and a matrix for itself divided by its trace: taken as
+    # they were, they made a reset change the trace, and its dissipator act at a multiple of the
+    # rate given
+    @test matrix(Reset([1., 1.]), q) ≈ matrix(Reset("+"), q)
+    @test matrix(Reset([1. 0. ; 0. 1.]), q) ≈ matrix(Reset("FullyMixed"), q)
+    @test matrix(reset_dissipator(0.1, [1., 1.]), q) ≈ matrix(reset_dissipator(0.1, "+"), q)
+    @test_throws "Reset resets to a state, and the zero vector is none" matrix(Reset([0., 0.]), q)
+    @test_throws "a matrix of zero trace is none" matrix(Reset([1. 0. ; 0. -1.]), q)
     @test_throws "a number does not denote a state" Reset(1)
     # an operator placed on sites places the dephasing or the reset there, as a gate is placed,
     # but a sum or a product of placed operators has no operator of its own to take
@@ -270,6 +278,11 @@ end
     for g in (() -> reset_channel(1.5, "Up"), () -> depolarizing_channel(-0.1),
               () -> dephasing_channel(2.), () -> amplitude_damping_channel(1.1))
         @test_throws "takes a probability between 0 and 1" g()
+    end
+    # and a negative rate, which the dissipators took
+    for g in (() -> reset_dissipator(-0.1, "Up"), () -> depolarizing_dissipator(-0.1),
+              () -> dephasing_dissipator(-1.), () -> amplitude_damping_dissipator(-0.1))
+        @test_throws "takes a rate of 0 or more" g()
     end
     @test_throws "must be positive" thermal_relaxation_channel(0., 3., 1.)
     @test_throws "is above 2T1" thermal_relaxation_dissipator(1., 3.)

@@ -16,6 +16,17 @@ function check_probability(what::String, p::Real)
 end
 
 """
+    check_rate(what, γ)
+
+refuse a negative rate `γ` of the generator `what`, which would not be completely positive
+"""
+function check_rate(what::String, γ::Real)
+    if !(γ ≥ 0)
+        error("$what takes a rate of 0 or more, not $γ")
+    end
+end
+
+"""
     tensor_power(a, n)
 
 the tensor product of `n` copies of the generic operator `a`
@@ -49,7 +60,10 @@ is `reset_channel(1 - exp(-γt), ...)`.
 
     -im * H + sum(reset_dissipator(0.1, "Up")(i) for i in 1:10)
 """
-reset_dissipator(γ::Real, s...) = γ * Dissipator(resets(s...))
+function reset_dissipator(γ::Real, s...)
+    check_rate("reset_dissipator", γ)
+    return γ * Dissipator(resets(s...))
+end
 
 """
     reset_channel(p, state)
@@ -82,7 +96,10 @@ for a time `t` is `depolarizing_channel(1 - exp(-γt), n)`.
 
     -im * H + sum(depolarizing_dissipator(0.1)(i) for i in 1:10)
 """
-depolarizing_dissipator(γ::Real, n::Int = 1) = reset_dissipator(γ, n, "FullyMixed")
+function depolarizing_dissipator(γ::Real, n::Int = 1)
+    check_rate("depolarizing_dissipator", γ)
+    return reset_dissipator(γ, n, "FullyMixed")
+end
 
 """
     depolarizing_channel(p, n = 1)
@@ -118,7 +135,10 @@ under it for a time `t` is `dephasing_channel(1 - exp(-γt), A)`.
     -im * H + sum(dephasing_dissipator(0.1)(i) for i in 1:10)
     dephasing_dissipator(0.1, Z ⊗ Z)(1, 2)      # the parity of two qubits
 """
-dephasing_dissipator(γ::Real, a::GenericOp{IsOperator} = Level) = γ * Dissipator(Dephase(a))
+function dephasing_dissipator(γ::Real, a::GenericOp{IsOperator} = Level)
+    check_rate("dephasing_dissipator", γ)
+    return γ * Dissipator(Dephase(a))
+end
 
 """
     dephasing_channel(p, A = Level)
@@ -148,7 +168,10 @@ destroys, `γ * Dissipator(L)`: `Sp` on a `Qubit`, from `"Dn"` to `"Up"`, `C` on
     -im * H + sum(amplitude_damping_dissipator(0.1)(i) for i in 1:10)
     amplitude_damping_dissipator(0.1, A)(3)     # the loss of photons
 """
-amplitude_damping_dissipator(γ::Real, a::SimpleOp = Sp) = γ * Dissipator(a)
+function amplitude_damping_dissipator(γ::Real, a::SimpleOp = Sp)
+    check_rate("amplitude_damping_dissipator", γ)
+    return γ * Dissipator(a)
+end
 
 """
     DecayEnd(a)

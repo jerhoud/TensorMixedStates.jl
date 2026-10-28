@@ -131,6 +131,9 @@ end
     # an operator of no definite fermionic parity has its projectors, their strings being laid
     # by the lowering
     @test matrix(Proj(C + dag(C) => 1), Fermion()) ≈ [1. 1. ; 1. 1.] / 2
+    # a vector stands for its unit vector, where Proj([1, 1]) gave twice the projector
+    @test matrix(Proj([1, 1]), Qubit()) ≈ [1. 1. ; 1. 1.] / 2
+    @test_throws "the zero vector is none" matrix(Proj([0, 0]), Qubit())
     # an operator placed on sites places it there, as a gate is placed, but a sum or a product
     # of placed operators has no operator of its own to project with
     @test Proj(X(3) => 1) == Proj(X => 1)(3)

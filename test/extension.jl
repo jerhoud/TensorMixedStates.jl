@@ -102,6 +102,17 @@ function TensorMixedStates.read_state(::Type{WrappedState}, g, sites)
     return WrappedState(inner.system, inner)
 end
 
+# a state whose writing fails half way, its tensors written, as a disk filling up makes it fail
+struct HalfWritten <: AbstractState
+    system::System
+    inner::State{Pure}
+end
+
+function TensorMixedStates.write_state(g, st::HalfWritten)
+    TensorMixedStates.write_state(g, st.inner)
+    error("the disk is full")
+end
+
 # phases of one's own creating a WrappedState and turning its first qubit, step by step
 Base.@kwdef struct CreateWrapped <: TensorMixedStates.AbstractPhase
     name::String = "wrapped"
@@ -188,6 +199,11 @@ end
         @test_throws "has no method of TensorMixedStates.write_state" save_state(file, "w",
                                                                                Unwritable(sys))
         @test load_state(file, "w") isa WrappedState
+        # and so does a write that fails half way, made in a file of its own, which goes
+        half = HalfWritten(sys, State{Pure}(sys, "Dn"))
+        @test_throws "the disk is full" save_state(file, "w", half)
+        @test abs(inner(load_state(file, "w").inner, st.inner)) ≈ 1
+        @test !isfile(file * ".tmp")
         # a type with parameters is recorded without them, and a type read only with them
         # has, for the file, no method of read_state
         save_state(file, "t", Tagged{3}(sys, State{Pure}(sys, "Up")))

@@ -176,7 +176,9 @@ end
     # general not a density matrix: in 1.x, rounding took a state of two fermions to one that
     # was not hermitian, its trace complex and ⟨N⟩ far from 0.5, and nothing said so. A
     # starting state of complex weights on two sectors leads to such a combination, which the
-    # warning shows. Conserved strongly, the number keeps the search in the sector of the
+    # warning shows. One of real weights of opposite signs leads to a hermitian combination
+    # whose traces nearly cancel, ⟨N⟩ reaching 10 once divided by its trace, which its purity,
+    # above one, shows. Conserved strongly, the number keeps the search in the sector of the
     # starting state, where the steady state is unique
     h = -sum(dag(C)(i) * C(i+1) + dag(C)(i+1) * C(i) for i in 1:3)
     lind = -im * h + sum(Dissipator(N)(i) for i in 1:4)
@@ -187,6 +189,8 @@ end
     # other warnings may come, those of KrylovKit in its oldest versions for instance
     @test_logs (:warn, r"not unique") match_mode = :any steady_state(
         lind, start(Fermion()) + im * one; algo, limits = lim)
+    @test_logs (:warn, r"purity of .* above one") match_mode = :any steady_state(
+        lind, start(Fermion()) - 0.9 * one; algo, limits = lim)
     logs, (_, ρ) = Test.collect_test_logs() do
         steady_state(lind, start(Fermion(conserve = strong(N))); algo, limits = lim)
     end
@@ -374,6 +378,10 @@ end
     for nsweeps in (0, -1)
         @test_throws "a search takes at least one sweep, and nsweeps is $nsweeps" Dmrg(; nsweeps)
     end
+    # nor an empty vector of noises, which the sweeps read past its end, nor a negative noise
+    @test_throws "not an empty vector" Dmrg(nsweeps = 2, noise = Float64[])
+    @test_throws "a search takes a noise of 0 or more, not -1.0e-7" Dmrg(nsweeps = 2,
+                                                                         noise = [1e-6, -1e-7])
 end
 
 @testset "A single site" begin

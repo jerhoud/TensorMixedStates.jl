@@ -263,7 +263,12 @@ function matrix(a::Proj, site::AbstractSite, others::AbstractSite...)
     if !(v isa Vector)
         error("Proj projects on a pure state, and $(repr(a.state)) is mixed on $(only(sites))")
     end
-    return v * v'
+    # a vector gives its state up to a factor, and the projector is that of its unit vector
+    n = norm(v)
+    if iszero(n)
+        error("Proj projects on a state, and the zero vector is none")
+    end
+    return v * v' / n^2
 end
 
 matrix(a::ScalarOp, site::AbstractSite, sites::AbstractSite...) =
@@ -367,7 +372,14 @@ function matrix(a::Reset, site::AbstractSite, others::AbstractSite...)
     s = only(expand_sites(a, (site, others...)))
     v = local_state(s, a.state)
     σ = v isa Vector ? v * v' : v
-    return vec(σ) * transpose(vec(Matrix{Float64}(I, dim(s), dim(s))))
+    # a vector or a matrix gives its state up to a factor, and the reset is to the one of unit
+    # trace, which a channel and a dissipator of the rate given need
+    t = tr(σ)
+    if iszero(t)
+        what = v isa Vector ? "the zero vector" : "a matrix of zero trace"
+        error("Reset resets to a state, and $what is none")
+    end
+    return vec(σ / t) * transpose(vec(Matrix{Float64}(I, dim(s), dim(s))))
 end
 
 function matrix(a::Dephase, site::AbstractSite, others::AbstractSite...)
