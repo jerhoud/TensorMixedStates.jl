@@ -85,12 +85,12 @@ get_loc(state::State, i::Int) = cached!(create_loc!, state.preobs.loc, state)[i]
     create_right!(r, state)
 
 fill `r` with what `get_right` returns for every site; on a pure state, the right orthogonal
-sites from `rightlim` on give the identity, uncontracted
+sites, those after `ortho_lims`, give the identity, uncontracted
 """
 function create_right!(r, state::State{Pure})
     st = state.state
     n = length(state)
-    rl = ITensorMPS.rightlim(st) - 1
+    rl = last(ortho_lims(st))
     resize!(r, n)
     r[n] = dag(st[n]')
     for i in n-1:-1:1
@@ -139,12 +139,12 @@ end
 
 extend `l`, which holds the environments on the left of the first sites, the first one at
 least, up to site `i`, `at(state, k)` measuring each site before: the identity, see
-`identity_at`, or the string, see `string_at`; on a pure state, the left orthogonal sites up to
-`leftlim` give the identity, uncontracted, for the identity
+`identity_at`, or the string, see `string_at`; on a pure state, the left orthogonal sites, those
+before `ortho_lims`, give the identity, uncontracted, for the identity
 """
 function extend_left!(l, state::State{Pure}, i::Int, at)
     st = state.state
-    ll = at === identity_at ? ITensorMPS.leftlim(st) + 1 : 0
+    ll = at === identity_at ? first(ortho_lims(st)) : 0
     # pushed one by one: an interruption leaves what is there complete
     for k in length(l)+1:i
         v = if k <= ll
