@@ -1324,9 +1324,13 @@ cancel: `Sx(1) * Sx(2) + Sy(1) * Sy(2)`, which conserves the magnetisation, is a
 `Spin(1, conserve = 2Sz)`, the same operator as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 2`, while
 `Sx(1) * Sx(2)` alone has no flux.
 
-An operator of no definite charge can still be measured: `expect`, `expect1`, `expect2`,
-`measure`, `probabilities` and `sample` take its value on the state conserving nothing, see
-[`weaken`](@ref).
+An operator of no definite charge can still be measured. `expect`, `expect1`, `expect2` and
+`measure` take the value of its part of no flux, the only one with a value on a state of
+definite charges, or on a density matrix commuting with them: `Sx` measures 0, and
+`Sx(1) * Sx(2)` as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 4`. `probabilities`, `sample` and
+`variance`, and `expect` for an operator whose part of no flux has many more terms than itself,
+as a long product of `Sx`, take its value on the state conserving nothing, see
+[`weaken`](@ref): a copy of the state, larger than it.
 
 ## Weak and strong symmetries
 
