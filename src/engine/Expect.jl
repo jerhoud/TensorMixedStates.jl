@@ -379,14 +379,34 @@ worth_keeping(p::PreparedOp) = isnothing(p.op.terms) || length(p.op.terms) > 1
 
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`: compacted
 on `system`, see `compacted_op`, or, when it changes the charges by no definite amount, see
-`FluxError`, on the same sites conserving nothing, where it is measured on the state conserving
-nothing, see `plain_form`, with whether it is Hermitian; `system` keeps it for the next calls
-once it is asked for twice, if it is `worth_keeping`, see `kept_for!`
+`FluxError`, its part changing none, see `flux_zero_terms`, the only one with a value on a state
+of `system`, Hermitian or not as `op` itself. When that part has too many terms, or `op` holds a
+product compacted by blocks, see `by_blocks`, it is compacted on the same sites conserving
+nothing, where it is measured on the state conserving nothing, see `plain_form`, a copy that
+weighed 452 MiB, against 95 MiB for `Z(20)`, measuring `X(20)` on 40 qubits of link dimension
+200. `system` keeps it for the next calls once it is asked for twice, if it is `worth_keeping`,
+see `kept_for!`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
     return kept_for!(system, system.prepared, a; worth = worth_keeping) do
-        c = or_on_plain(s -> compacted_op(s, a), system)
-        PreparedOp(c, c.system !== system)
+        try
+            return PreparedOp(compacted_op(system, a), false)
+        catch e
+            if !(e isa FluxError)
+                rethrow()
+            end
+        end
+        plain = conserving_nothing(system)
+        g = gathered(plain, a)
+        if !any(by_blocks, addends(g))
+            terms = lower(plain, a, g)
+            zero_part = flux_zero_terms(system, terms)
+            if !isnothing(zero_part)
+                hermitian = is_hermitian(plain, terms, sum(term_size, terms; init = 0.0))
+                return PreparedOp(from_terms(Pure, system, a, zero_part), false, hermitian)
+            end
+        end
+        return PreparedOp(compacted_op(plain, a), true)
     end::PreparedOp
 end
 
@@ -496,8 +516,10 @@ of an array or a tuple of them, on the state of an extension as well, through it
 ``\\mathrm{tr}(op\\,\\rho) / \\mathrm{tr}\\,\\rho`` on a mixed one. Its factors may come in any
 order, act on several sites, and the Jordan-Wigner strings of fermionic operators are laid
 for you. On a system conserving charges, an operator changing them by no definite
-amount is measured on the state conserving nothing, see `weaken`. A channel, a generator and an
-operator not placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
+amount is measured by its part changing none, the only one with a value on a state of definite
+charges, or on the state conserving nothing, see `weaken`, when that part has many more terms
+than the operator, as for a long product of `Sx`. A channel, a generator and an operator not
+placed on sites, `X` rather than `X(1)`, see `expect1`, are refused.
 
 The value of a Hermitian operator is real, as `measure` gives it, its imaginary part dropped,
 with a warning when it is more than rounding, as a density matrix that lost its hermiticity
@@ -645,6 +667,16 @@ definite_everywhere(system::System, ops, sites) =
                                for o in ops for i in intersect(sites, defined_sites(system, o)))
 
 """
+    measured_part(system, m, i)
+
+the matrix `m` of an operator on site `i` of `system`, or, when it changes the charges by no
+definite amount, its part changing none, see `flux_zero_part`: the only one with a value on a
+state of `system`, and one a tensor on its charged indices can hold
+"""
+measured_part(system::System, m::AbstractMatrix, i::Int) =
+    definite_on(system, m, [i]) ? m : flux_zero_part(m, system[i])
+
+"""
     expect1(state, op; complex = false)
 
 the expectation values of the operator of one site `op` on every site, normalised as by
@@ -675,9 +707,6 @@ the values of `expect1` as they are computed, before they are made real or compl
 """
 function expect1_computed(state::State, ops::AbstractArray{<:SimpleOp})
     state = weak_form(state)
-    if !definite_everywhere(state.system, ops, 1:length(state))
-        state = plain_form(state)
-    end
     sys = state.system
     n = length(sys)
     scale = nonzero_trace(state, "expect1")
@@ -690,7 +719,10 @@ function expect1_computed(state::State, ops::AbstractArray{<:SimpleOp})
                 return missing
             end
             v = 0.
-            for (p, part) in graded_parts(matrix(o, sys[i]), matrix(F, sys[i]))
+            for (p, part) in graded_parts(measured_part(sys, matrix(o, sys[i]), i), matrix(F, sys[i]))
+                if iszero(part)
+                    continue
+                end
                 if p == 1
                     v += scalar(get_strung_left(state, i) * obs_tensor(state, part, i) *
                                 get_right(state, i))
@@ -880,21 +912,31 @@ end
     general_pairs!(r, state, (o1, o2), on1, on2)
 
 fill the entries `(i, j)` of the matrix `r` of the pair `(o1, o2)`, for `i` in `on1` and `j` in
-`on2`, whatever the parities of the two operators, and return `r`. The part of parity `p1` of
-`o1` on `i` and that of parity `p2` of `o2` on a later `j` take the string `F` before `i` when
-`p1 + p2` is odd, the part on `i` followed by `F^p2`, and `F^p2` between `i` and `j`: one row
-of `closed_row` for each. An entry with `j` before `i` is that of the pair written the other way
-round, with the sign of swapping two odd parts.
+`on2`, whatever the parities and the charges of the two operators, and return `r`. The part of
+parity `p1` of `o1` on `i` and that of parity `p2` of `o2` on a later `j` take the string `F`
+before `i` when `p1 + p2` is odd, the part on `i` followed by `F^p2`, and `F^p2` between `i` and
+`j`: one row of `closed_row` for each. Each part is split by charge as well, see `charge_parts`,
+and only parts whose charges cancel are paired, the others having no value on a state of
+definite charges; the diagonal is the part of `o1 * o2` changing no charge, see
+`measured_part`. An entry with `j` before `i` is that of the pair written the other way round,
+with the sign of swapping two odd parts.
 """
 function general_pairs!(r, state::State, (o1, o2), on1, on2)
     sys = state.system
     scale = nonzero_trace(state, "expect2")
-    parts(o, k) = graded_parts(matrix(o, sys[k]), matrix(F, sys[k]))
+    # the parts of each parity and of each charge, see `charge_parts`, a single charge on a site
+    # conserving nothing
+    parts(o, k) = [ (p, c, x) for (p, y) in graded_parts(matrix(o, sys[k]), matrix(F, sys[k]))
+                    for (c, x) in charge_parts(y, sys[k]) if !iszero(x) ]
+    # a float zero, which the entries no pair of parts reaches keep: an integer one would come out
+    # as a Complex{Int}
     for i in on1, j in on2
-        r[i, j] = i == j ? site_value(state, matrix(o1 * o2, sys[i]), i) / scale : 0
+        m = i == j ? measured_part(sys, matrix(o1 * o2, sys[i]), i) : nothing
+        r[i, j] = isnothing(m) || iszero(m) ? 0. : site_value(state, m, i) / scale
     end
     # the rows of `a` on an earlier site, closed by `b` on each later one; written the other way
-    # round, `b(j) a(i)` is `(-1)^(p q) a(i) b(j)` for parts of parities p and q
+    # round, `b(j) a(i)` is `(-1)^(p q) a(i) b(j)` for parts of parities p and q. Parts whose
+    # charges do not cancel have no value on a state of definite charges, and are not paired
     function rows!(a, b, ona, onb, swapped)
         upto = maximum(onb; init = 0)
         for i in ona
@@ -903,11 +945,12 @@ function general_pairs!(r, state::State, (o1, o2), on1, on2)
                 continue
             end
             closing = Dict(j => parts(b, j) for j in later)
-            for (p, x) in parts(a, i), q in unique(q for j in later for (q, _) in closing[j])
+            for (p, ca, x) in parts(a, i),
+                q in unique(q for j in later for (q, cb, _) in closing[j] if ca + cb == QN())
                 left = isodd(p + q) ? get_strung_left(state, i) : get_left(state, i)
                 row = closed_row(state, Expector(i, left / scale), x, i, q, upto)
-                for j in later, (q2, y) in closing[j]
-                    if q2 ≠ q
+                for j in later, (q2, cb, y) in closing[j]
+                    if q2 ≠ q || ca + cb ≠ QN()
                         continue
                     end
                     v = scalar(row[j] * obs_tensor(state, y, j))
@@ -936,9 +979,10 @@ vector of pairs, a vector of such matrices. The matrix of a pair whose products 
 Hermitian, `o1` and `o2` Hermitian, commuting on a site and not both fermionic, is real, the
 others complex, and all of them the complex numbers computed with `complex = true`, as for
 `expect`. The Jordan-Wigner strings are laid for you. A pair whose operators have one and the
-same parity on all those sites is measured by sharing the environments of each site, any other
-row by row, each part of definite parity with its string. On the state of an extension, each
-entry is measured by its `expect_value`.
+same parity on all those sites, and change the charges by definite amounts there, is measured
+by sharing the environments of each site, any other row by row, each part of definite parity
+and charge with its string, the parts whose charges do not cancel left out. On the state of an
+extension, each entry is measured by its `expect_value`.
 
 # Examples
 
@@ -969,16 +1013,15 @@ function expect2_computed(state::State, pairs::Vector{<:Tuple{SimpleOp, SimpleOp
         check_index(sys, i, "expect2")
     end
     sites = sort!(unique(collect(sites)))
-    if !definite_everywhere(sys, [ o for p in pairs for o in p ], sites)
-        state = plain_form(state)
-        sys = state.system
-    end
     r = [ Matrix{Union{Missing, Number}}(missing, n, n) for _ in pairs ]
     fast, parities = Int[], Int[]
     for (k, (o1, o2)) in enumerate(pairs)
         on1 = intersect(sites, defined_sites(sys, o1))
         on2 = intersect(sites, defined_sites(sys, o2))
-        q = on1 == on2 == sites ? pair_parity(sys, (o1, o2), sites) : nothing
+        # a pair changing the charges by no definite amount goes row by row, its parts of
+        # charges cancelling alone, see `general_pairs!`
+        q = on1 == on2 == sites && definite_everywhere(sys, [o1, o2], sites) ?
+            pair_parity(sys, (o1, o2), sites) : nothing
         if !isnothing(q)
             push!(fast, k)
             push!(parities, q)
