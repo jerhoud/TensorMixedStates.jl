@@ -22,6 +22,8 @@ the reference article.
 - `expect`, `expect1`, `expect2` and `measure` take an operator of no definite charge by its part of no flux, without copying the state.
 - A dense operator on many sites is split into terms faster: 15 s rather than 85 s on 10 qubits.
 
+## [2.0.1] - 2026-10-28
+
 ### Fixed
 
 - The log writes times in the format of the text tables: `0.3`, not `0.30000000000000004`.
