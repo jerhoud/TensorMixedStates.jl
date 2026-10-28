@@ -4,6 +4,7 @@
 
 ## Checklist
 
+- [ ] It targets `main` if it fixes the released version, `dev` otherwise, see `CONTRIBUTING.md`
 - [ ] The tests pass: `julia --project=. -e 'using Pkg; Pkg.test()'`
 - [ ] New behaviour is covered by a test, in the group whose file header describes it
 - [ ] The documentation is up to date and `julia --project=docs docs/make.jl` still builds

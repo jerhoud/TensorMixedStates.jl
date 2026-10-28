@@ -11,13 +11,16 @@ cd TensorMixedStates.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-Development happens on the `dev` branch and `main` carries the released state. Which branch
-a given change belongs on, and what else it needs, is the subject of the next section.
+Fixes of the released version are made on `main`, everything else on `dev`, where the next
+version is prepared. Which branch a given change belongs on, and what else it needs, is the
+subject of the next section.
 
 ## Where a change goes
 
-`dev` is where work lands and `main` carries the released state, together with the tag that
-names it. Three facts about this repository decide the rest.
+`main` carries the released series: the last release, and the fixes that will make its next
+patch release. `dev` is where the next minor version is prepared: new features, changes of
+behaviour, and every fix of `main`, merged from there. Three facts about this repository
+decide the rest.
 
 The documentation is published from `dev` and from tags. A push to `dev` builds it, runs its
 doctests and `@example` blocks, which is the check that matters, and publishes it as the `dev`
@@ -27,31 +30,62 @@ as soon as it reaches `dev`, and in `stable` at the next release.
 
 Continuous integration runs on `main`, on `dev`, on tags and on pull requests, and otherwise
 only when dispatched by hand. A topic branch pushed on its own runs nothing, so open a pull
-request against `dev`, a draft one if the work is unfinished, to have the tests run on it.
+request, a draft one if the work is unfinished, to have the tests run on it: against `main`
+for a fix of the released version, against `dev` for anything else.
 
-`main` carrying the tag means that any commit put on it moves the branch past the released
-version. Only a release does that.
+Changes flow one way, from `main` into `dev`. Every fix that lands on `main` is merged into
+`dev` at once, so that `dev` always contains `main` and the next minor release is a fast
+forward of `main` onto `dev`. Nothing else goes from `dev` to `main`.
 
-| Kind of change | Branch | Changelog | Version |
+A fix makes the package do what its documentation says, or what it plainly should, without
+adding to its interface. A new function, keyword or option, a change of documented behaviour,
+a raised lower bound of compat, a rewrite or an optimisation are not fixes, whatever bug they
+also cure, and go on `dev`. Widening a compat bound, as the pull requests of CompatHelper do
+against `main`, is a fix. When in doubt, choose `dev`: a fix released with the next minor
+version does less harm than a patch release that breaks something.
+
+| Kind of change | Branch | Changelog | Released in |
 |---|---|---|---|
-| A typo or a docstring | `dev` | no | — |
-| A documentation rework | topic branch off `dev` | yes, *Changed* | patch |
-| A bug fix | `dev` | yes, *Fixed* | patch |
-| An urgent fix of a serious bug | see below | yes, *Fixed* | patch, released at once |
-| A small improvement | `dev` | yes, *Added* or *Changed* | patch, minor if it adds an exported name |
-| A large feature | topic branch off `dev` | yes, *Added*, written at the end | minor |
+| A typo or a docstring | `main`, or `dev` for what only `dev` has | no | — |
+| A bug fix | `main`, or a topic branch off it | yes, *Fixed* | the next patch release |
+| An urgent fix of a serious bug | `main` | yes, *Fixed* | a patch release, at once |
+| A bug of what only `dev` has | `dev` | no | — |
+| A documentation rework | topic branch off `dev` | yes, *Changed* | the next minor release |
+| A small improvement, its interface settled | `dev` | yes, *Added* or *Changed* | the next minor release |
+| A large feature, or an interface that may still change | topic branch off `dev` | yes, *Added*, written at the end | the next minor release |
 
 Documentation alone does not earn a changelog entry, which is what the "user visible" of the
-[pull request template](.github/pull_request_template.md) comes to in practice. Without push
-rights, every line of that table is a pull request against `dev`, and that template lists
-what to check before opening one.
+[pull request template](.github/pull_request_template.md) comes to in practice, and neither
+does a bug of what no release has had. Without push rights, every line of that table is a
+pull request against the branch it names, and that template lists what to check before
+opening one.
 
 Some of those lines need more than a row.
 
+**A fix** is made on `main` and merged into `dev` right away:
+
+```
+git switch main            # or a topic branch off it, merged by a pull request
+# the fix, the regression test that would have caught it, its line under Fixed
+git switch dev && git merge main
+```
+
+The last line is the one that is easy to forget. Without it `dev` loses the fix and stops
+containing `main`, which complicates every merge afterwards. The merge conflicts in
+`CHANGELOG.md` whenever `dev` has entries of its own: keep both, the fix under *Fixed* in the
+`Unreleased` section of `dev`. A second working tree on `main`, made once by
+`git worktree add ../TensorMixedStates-main main`, saves stashing the work in progress on
+`dev` to make a fix.
+
+**An urgent fix** needs nothing more: `main` holding only releases and fixes, it can be
+released at any moment, as below.
+
 **A long lived branch stays off `dev`**, whether it carries a documentation rework or a
-feature. Cut it from `dev` and merge it back there. Only an urgent fix ever branches from
-the tag. `dev` has to remain mergeable into `main` at any moment, because that is what
-makes an urgent release possible; a half finished rewrite sitting there takes it away.
+feature. Cut it from `dev` and merge it back there once what it brings could be published as
+it is: tested, documented, and with an interface you are ready to keep until the next major
+version, since a published name cannot be taken back before then. `dev` has to remain
+releasable as the next minor version at any moment; a half finished rewrite sitting there
+takes that away.
 
 Commit often on it; a commit is already a state you can return to. A branch of its own is
 for what a commit does not protect: `git branch before-rebase` ahead of a rebase or a
@@ -60,37 +94,65 @@ two approaches have to live side by side. Rebase on `dev` now and then so that t
 merge stays small, bearing in mind that rebasing a branch already pushed rewrites it and
 needs `--force-with-lease`.
 
-**An urgent fix** depends on what `dev` holds. If it holds nothing you would refuse to
-publish, fix it there and fast forward `main` onto it. If it holds unfinished work, branch
-from the tag instead, merge into `main`, release, and merge `main` back into `dev`:
+### When to release
 
-```
-git switch -c hotfix/short-name vX.Y.Z     # the released tag
-# the fix, plus the regression test that would have caught it
-git switch main && git merge hotfix/short-name
-# bump the version in Project.toml, commit, push, release
-git switch dev && git merge main
-```
+A patch release costs users nothing; a minor release commits the package, every name and
+keyword it publishes staying until the next major version.
 
-The last line is the one that is easy to forget. Without it `dev` loses the fix and stops
-being a fast forward of `main`, which complicates every merge afterwards.
+A fix is released according to what it fixes. A wrong result given without warning, or an
+error that blocks a common use, is released within days, since someone may publish a wrong
+computation in the meantime. Other fixes, of an error message, a corner case or the
+documentation, wait for the next urgent one or until a few have gathered, but not for more
+than a month or two: a fix left unreleased brings reports of bugs already fixed.
+
+A minor release gathers a coherent set of features rather than one each. It is made when they
+are finished, tested, documented and used for a while in real computations, which is where a
+wrong name or signature shows up while it can still be changed, or when someone needs one of
+them. A few months between two is a reasonable pace.
+
+A major release is for incompatible changes only, gathered and rare, announced where possible
+by deprecation warnings in a minor release before.
+
+A release that is due is not held back by something on `dev` that is not ready. What is
+unfinished is kept out of the public interface for that release, neither exported nor
+documented, or documented as experimental, since only those names commit the package. A
+change that cannot be hidden, such as a change of behaviour, is reverted on `dev` before the
+version commit and restored right after, by reverting the revert. A feature is never released
+alone from `main` by cherry picking it: `main` would then carry a feature, and the two
+branches would diverge.
 
 ### Releasing
 
-This is the maintainer's part, and it is the same for every version.
+This is the maintainer's part. A patch release is made from `main`, a minor or a major one
+from `dev`, by the same version commit: it sets the version in `Project.toml`, in
+`CITATION.cff` with its `date-released`, and in the placeholder of
+`.github/ISSUE_TEMPLATE/bug_report.yml`, and closes the changelog, its `Unreleased` section
+becoming that of the version, dated like `CITATION.cff`, the day of the registration.
 
-1. On `dev`, one commit sets the version in `Project.toml`, in `CITATION.cff` with its
-   `date-released`, and in the placeholder of `.github/ISSUE_TEMPLATE/bug_report.yml`, and
-   closes the changelog, its section dated like `CITATION.cff`, the day of the registration.
-2. `main` is fast forwarded onto `dev` and pushed.
-3. A comment `@JuliaRegistrator register` on that commit, followed by the release notes,
+A patch release:
+
+1. On `main`, the version commit, pushed.
+2. A comment `@JuliaRegistrator register` on that commit, followed by the release notes,
    registers it in the General registry.
-4. TagBot creates the `vX.Y.Z` tag once the registry pull request is merged.
-5. The tag deploys `vX.Y.Z` and moves `stable` onto it.
+3. TagBot creates the `vX.Y.Z` tag once the registry pull request is merged.
+4. The tag deploys `vX.Y.Z` and moves `stable` onto it.
+5. `main` is merged into `dev`, keeping the version of `dev` in `Project.toml`. The entries
+   the release took leave the `Unreleased` section of `dev` for the section of the release,
+   which the merge brings.
 
-A fix of an older series, while `dev` prepares the next major version, goes on a branch
-`release-X.Y` cut from the last tag of that series, the fix and then the version as above.
-CI runs there only when dispatched by hand, the release is registered by
+A minor or a major release:
+
+1. On `dev`, after a last merge of `main` if a fix is missing there, the version commit.
+2. `main` is fast forwarded onto `dev` and pushed.
+3. Registration, tag and documentation as for a patch release, steps 2 to 4.
+4. `main` now carries the new series, and `dev` takes the version of the next one.
+
+Between two releases `dev` carries the version it prepares with the suffix `-DEV`, as
+`2.1.0-DEV`, so that a checkout of it is never taken for a release.
+
+A fix of an older series, once `main` has moved on to a newer one, goes on a branch
+`release-X.Y` cut from the last tag of that series, the fix and then the version commit as
+above. CI runs there only when dispatched by hand, the release is registered by
 `@JuliaRegistrator register branch=release-X.Y`, and the changelog of `dev` takes the
 section of that release word for word, as it did for 1.6.1 and 1.6.2.
 
