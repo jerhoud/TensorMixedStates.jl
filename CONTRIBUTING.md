@@ -138,7 +138,10 @@ A patch release:
 4. The tag deploys `vX.Y.Z` and moves `stable` onto it.
 5. `main` is merged into `dev`, keeping the version of `dev` in `Project.toml`. The entries
    the release took leave the `Unreleased` section of `dev` for the section of the release,
-   which the merge brings.
+   which the merge brings. Git gets that part wrong without reporting a conflict: it renames
+   the `Unreleased` header of `dev` into that of the release, which then takes the entries of
+   `dev` as well. Put `## [Unreleased]` back above those, and the header of the release above
+   the entries it took, so that its section reads as on `main`.
 
 A minor or a major release goes through a branch of its own, `prepare-X.Y.0`: the rule
 "Protect main" of the repository keeps the history of `main` linear, and `dev` holds the
