@@ -361,8 +361,9 @@ end
     Proj(A => λ)
 
 the projector ``|s\\rangle\\langle s|`` on a local pure state of one site, given as `State`
-takes it, or the projector on the eigenspace of eigenvalue `λ` of the Hermitian operator `A`,
-of one site or several.
+takes it, a vector standing for its unit vector, `Proj([1, 1])` projecting on
+``(|0\\rangle + |1\\rangle)/\\sqrt 2``, or the projector on the eigenspace of eigenvalue `λ` of the
+Hermitian operator `A`, of one site or several.
 
 # Examples
 
@@ -447,10 +448,11 @@ end
 
 the channel resetting a site to the local state `state`, given as `State` takes it,
 ``\\rho \\mapsto \\sigma \\otimes \\mathrm{tr}_i \\rho``, ``\\sigma`` the density matrix
-of `state` and ``\\mathrm{tr}_i`` the trace over the site. A vector or a matrix is taken as it
-is, without normalization. On a fermionic site this holds on states of definite parity: on the
-others, an odd operator `O` of the other sites takes the value of
-``\\langle F\\rangle_\\sigma F_i O``, ``F_i`` the parity of the site.
+of `state` and ``\\mathrm{tr}_i`` the trace over the site. On a fermionic site this holds on
+states of definite parity: on the others, an odd operator `O` of the other sites takes the value
+of ``\\langle F\\rangle_\\sigma F_i O``, ``F_i`` the parity of the site. A vector stands for its
+unit vector and a matrix for itself divided by its trace, `Reset([1, 1])` resetting to
+``(|0\\rangle + |1\\rangle)/\\sqrt 2``.
 
 # Examples
 

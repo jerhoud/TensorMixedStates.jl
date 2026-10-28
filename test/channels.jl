@@ -130,6 +130,14 @@ end
     @test matrix(Dephase(1e-14 * Z), q) ≈ matrix(Dephase(Z), q)
     @test matrix(Proj(1e-14 * Z => -1e-14), q) ≈ matrix(Proj(Z => -1), q)
     @test_throws "a state of 3 components cannot be one of Qubit()" matrix(Reset([1., 0., 0.]), q)
+    # a vector stands for its unit vector and a matrix for itself divided by its trace: taken as
+    # they were, they made a reset change the trace, and its dissipator act at a multiple of the
+    # rate given
+    @test matrix(Reset([1., 1.]), q) ≈ matrix(Reset("+"), q)
+    @test matrix(Reset([1. 0. ; 0. 1.]), q) ≈ matrix(Reset("FullyMixed"), q)
+    @test matrix(reset_dissipator(0.1, [1., 1.]), q) ≈ matrix(reset_dissipator(0.1, "+"), q)
+    @test_throws "Reset resets to a state, and the zero vector is none" matrix(Reset([0., 0.]), q)
+    @test_throws "a matrix of zero trace is none" matrix(Reset([1. 0. ; 0. -1.]), q)
     @test_throws "a number does not denote a state" Reset(1)
     @test_throws "write Dephase(N)(1) rather than Dephase(N(1))" Dephase(N(1))
 end

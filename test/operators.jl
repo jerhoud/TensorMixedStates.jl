@@ -131,6 +131,9 @@ end
     # an operator of no definite fermionic parity has its projectors, their strings being laid
     # by the lowering
     @test matrix(Proj(C + dag(C) => 1), Fermion()) ≈ [1. 1. ; 1. 1.] / 2
+    # a vector stands for its unit vector, where Proj([1, 1]) gave twice the projector
+    @test matrix(Proj([1, 1]), Qubit()) ≈ [1. 1. ; 1. 1.] / 2
+    @test_throws "the zero vector is none" matrix(Proj([0, 0]), Qubit())
     @test_throws "Proj(N => 1)(3) rather than Proj(N(3) => 1)" Proj(X(3) => 1)
     # of several sites, the singlet and the spin 2 of two spins one, printed as before whatever
     # its number of sites
