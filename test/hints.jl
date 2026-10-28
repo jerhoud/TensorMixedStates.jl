@@ -19,8 +19,11 @@ function message(f)
 end
 
 @testset "The names of 1.x" begin
-    # every name of the table, looked up in a module that defines none of them
+    # every name of the table, looked up in a module that defines none of them, which imports
+    # the package as a program written for 1.x does: its exports, Swap among them, would define
+    # some of them
     m = Module()
+    Core.eval(m, :(import TensorMixedStates))
     for (name, h) in TMS.renamed_names
         msg = message(() -> Core.eval(m, name))
         @test occursin("TensorMixedStates 2.0: $h", msg)
@@ -30,10 +33,14 @@ end
     @test occursin("Upgrading from 1.x", message(() -> Core.eval(m, :HermiticityError)))
     # a name that is no name of 1.x has no hint
     @test !occursin("TensorMixedStates", message(() -> Core.eval(m, :undefined_name)))
-    # nor a static parameter named as a gate of 1.x, which Julia tells apart from 1.11 on
+    # nor a static parameter named as a gate of 1.x, nor a name missing in a module that does
+    # not see the package, which Julia tells apart from 1.11 on
     if VERSION ≥ v"1.11"
         parameter(x::Union{Int, Vector{T}}) where T = T
         @test !occursin("TensorMixedStates", message(() -> parameter(1)))
+        for name in (:H, :state, :Index)
+            @test !occursin("TensorMixedStates 2.0", message(() -> Core.eval(Module(), name)))
+        end
     end
     # a solver of ITensorMPS called on the objects of this package
     st = State{Pure}(System(2, Qubit()), "Up")

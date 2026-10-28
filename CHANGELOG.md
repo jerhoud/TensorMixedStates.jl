@@ -21,6 +21,7 @@ the reference article.
 - The noise dissipators refuse a negative rate, `Limits` an empty vector, and `Dmrg` an empty or negative noise.
 - `save_state` keeps the state it replaces until the new one is written whole, so that a write that fails leaves it.
 - A checkpoint survives a power cut: its files are synced to the disk before it replaces the previous one, but on Windows.
+- From Julia 1.11 on, the hints for the names of 1.x show only in a module that sees TensorMixedStates.
 
 ## [2.0.0] - 2026-10-24
 

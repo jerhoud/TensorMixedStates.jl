@@ -6,7 +6,9 @@
     renamed_names
 
 the names of 1.x that 2.0 removed or renamed, with what to write instead, which Julia shows after
-the `UndefVarError` of a program written for 1.x
+the `UndefVarError` of a program written for 1.x; from Julia 1.11 on, only for a name missing in
+a module that sees TensorMixedStates, so that a name such as `H` missing in other code is left to
+the error of Julia alone
 """
 const renamed_names = Dict{Symbol, String}(
     :tdvp => "tdvp became evolve(evolver, duration, state; algo = Tdvp(), nsteps)",
@@ -364,8 +366,11 @@ end
 
 function __init__()
     Base.Experimental.register_error_hint(UndefVarError) do io, e
-        # from Julia 1.11 on, a static parameter or a local variable says so: no name of 1.x
-        if isdefined(e, :scope) && e.scope isa Symbol
+        # from Julia 1.11 on, the error says where the name was missing: a static parameter or a
+        # local variable is no name of 1.x, nor a global of a module that does not see this
+        # package, a program written for 1.x loading it where it calls it
+        if isdefined(e, :scope) &&
+           (e.scope isa Symbol || e.scope isa Module && !isdefined(e.scope, :TensorMixedStates))
             return
         end
         h = get(renamed_names, e.var, nothing)
