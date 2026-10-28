@@ -11,11 +11,14 @@ export random_state
 
 a random state of link dimension `linkdims`: a pure state, the pure `state` randomised in its
 sector, or a mixed state drawn as a purification on twice the system, of link dimension
-`isqrt(linkdims)^2`. On a system conserving something, a pure state is drawn by randomising
-one of the sector wanted, and a mixed one from the local `states` its purification starts
-from, written as for `State`; a mixed state cannot be drawn on a system conserving something
-strongly. `rng` is the random number generator, the global one by default; `eltype = Float64`
-gives a real state, cheaper to contract, correct only if the whole computation stays real.
+`isqrt(linkdims)^2`. The ancillas lie on the right of the system, so that tracing them out
+takes no fermionic sign: a mixed state has a rank of at most `isqrt(linkdims)`, and a purity of
+at least `1 / isqrt(linkdims)`, whatever the size of the system. On a system conserving
+something, a pure state is drawn by randomising one of the sector wanted, and a mixed one from
+the local `states` its purification starts from, written as for `State`; a mixed state cannot
+be drawn on a system conserving something strongly. `rng` is the random number generator, the
+global one by default; `eltype = Float64` gives a real state, cheaper to contract, correct only
+if the whole computation stays real.
 
 # Examples
 
