@@ -113,6 +113,20 @@ end
     @test expect1(lp2, Z) ≈ [-1, -1]
     @test inner(State{Pure}(System(2, Qubit()), "Dn"), lp2) ≈ 1
 
+    # replaced again and again, a state keeps the space of one in the file, which writing the new
+    # one beside the old made grow by a state at each save, and the file the new one is first
+    # written to goes
+    large = random_state(Pure, System(12, Qubit()), 32)
+    before = filesize(file)
+    save_state(file, "large", large)
+    space = filesize(file) - before
+    for _ in 1:5
+        save_state(file, "large", large)
+    end
+    @test filesize(file) - before < 2 * space
+    @test !isfile(file * ".tmp")
+    @test inner(large, load_state(file, "large")) ≈ 1
+
     # sites with parameters are rebuilt identically
     sysp = System([Qubit(), Boson(4), Spin(3/2), Qboson(0.1, 3)])
     stq = State{Pure}(sysp, ["Up", "2", "1/2", "1"])

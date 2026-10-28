@@ -19,6 +19,7 @@ the reference article.
 - `Proj(v)` projects on the unit vector of `v`: `Proj([1, 1])` was twice a projector.
 - `Reset` takes a vector for its unit vector and a matrix divided by its trace: `Reset([1, 1])` doubled the trace.
 - The noise dissipators refuse a negative rate, `Limits` an empty vector, and `Dmrg` an empty or negative noise.
+- `save_state` keeps the state it replaces until the new one is written whole, so that a write that fails leaves it.
 
 ## [2.0.0] - 2026-10-24
 
