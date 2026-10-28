@@ -26,7 +26,7 @@ body:
     id: tms
     attributes:
       label: TensorMixedStates version
-      placeholder: "2.0.0"
+      placeholder: "2.0.1"
     validations:
       required: true
   - type: input
