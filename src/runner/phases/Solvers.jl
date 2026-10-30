@@ -4,6 +4,19 @@
 export Evolve, Thermalize, GroundState, SteadyState
 
 """
+    log_mpo(sim, what, d)
+
+log the bond dimension `d` of the MPO of `what`, the evolver for instance, which sets the cost of
+the phase
+"""
+log_mpo(sim::Simulation, what::String, d::Int) =
+    log_message(sim, "The MPO of the $what has bond dimension $d")
+
+# the bond dimension of its MPO, the term finished taking a channel more, see `make_mpo`
+log_mpo(sim::Simulation, what::String, pre::PreMPO) =
+    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1)
+
+"""
     step_number(span, step, what, sim)
 
 the number of steps of `step` covering `span`, the step adjusted to the nearest one that does so
@@ -109,6 +122,7 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     log_message(sim, "Evolving $what from time $(time_text(sim, sim.time)) to " *
                      time_text(sim, sim.time + phase.duration))
     pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
+    log_mpo(sim, "evolver", pre)
     return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end
 
@@ -211,6 +225,7 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
     pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
+    log_mpo(sim, "Hamiltonian", pre)
     return ThermalSteps(phase.algo, pre, phase.limits, n, phase.beta, phase.on)
 end
 
@@ -314,9 +329,10 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     args = orthogonal_args(state, pre, ms, phase.weight)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
-    return run_search(phase, sim, done, cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing),
-                      identity, (_, st) -> check_orthogonal(st, args, phase.weight), :energy;
-                      args...)
+    mpo = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
+    log_mpo(sim, "Hamiltonian", maxlinkdim(mpo))
+    return run_search(phase, sim, done, mpo, identity,
+                      (_, st) -> check_orthogonal(st, args, phase.weight), :energy; args...)
 end
 
 """
@@ -374,6 +390,7 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     end
     l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits)
     log_message(sim, "Searching the steady state")
+    log_mpo(sim, "squared Lindbladian", maxlinkdim(l2))
     return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result, :residual;
                       krylov = steady_krylov)
 end

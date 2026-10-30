@@ -26,10 +26,11 @@ const reserved_values = (:state, :time, :step, :rng, :data)
 
 what the simulations of a run share: its directory, empty for a run whose output is redirected
 to the stream `redirect`, its outputs, its log, its checkpointing, the values its phases
-provide, the phase being run and the time it started from, whether it stopped, the warnings its
-log received, the imaginary parts of Hermitian measurements dropped and not yet reported, how
-many and the largest, as `(imaginary part, measurement, time)`, and the lists of measurements of
-the phase being run made into `Measure`s, see `phase_output`
+provide, the phase being run and the time it started from, when its step being run started, in
+seconds of `time()`, whether it stopped, the warnings its log received, the imaginary parts of
+Hermitian measurements dropped and not yet reported, how many and the largest, as
+`(imaginary part, measurement, time)`, and the lists of measurements of the phase being run made
+into `Measure`s, see `phase_output`
 """
 mutable struct RunData
     dir::String
@@ -40,6 +41,7 @@ mutable struct RunData
     provided::Vector{Symbol}
     phase::Int
     phase_time::Number
+    step_start::Float64
     stopped::Bool
     warnings::Int
     dropped::Int
@@ -48,8 +50,8 @@ mutable struct RunData
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided) =
-    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., false, 0, 0, nothing,
-            IdDict{Any, Vector}())
+    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., time(), false, 0, 0,
+            nothing, IdDict{Any, Vector}())
 
 """
     Simulation(sim, state[, time = sim.time]; values...)

@@ -429,6 +429,32 @@ function threading_stamp(mode)
         """
 end
 
+"""
+    computing_packages
+
+the packages doing the computations of a run, whose versions the `stamp` file gives
+"""
+const computing_packages = ["ITensors", "ITensorMPS", "NDTensors", "KrylovKit"]
+
+"""
+    packages_stamp()
+
+the lines of the `stamp` file giving the versions of the computing packages, and of the other
+packages the program loads into `Main`, but for the standard library
+"""
+function packages_stamp()
+    loaded = Dict(id.name => m for (id, m) in Base.loaded_modules)
+    version(m) = "$(nameof(m)) $(pkgversion(m))"
+    stamp = "Packages " * join([ version(loaded[name]) for name in computing_packages
+                                 if haskey(loaded, name) ], ", ") * "\n"
+    others = [ getfield(Main, n) for n in names(Main; imported = true) if isdefined(Main, n) ]
+    others = sort([ version(m) for m in others
+                    if m isa Module && parentmodule(m) === m && !isnothing(pkgversion(m)) &&
+                       !startswith(something(pkgdir(m), ""), Sys.STDLIB) &&
+                       m !== TensorMixedStates && string(nameof(m)) ∉ computing_packages ])
+    return isempty(others) ? stamp : stamp * "Program packages " * join(others, ", ") * "\n"
+end
+
 function enter_run()
     lock(active_runs.lock) do
         active_runs.count[] += 1
@@ -504,6 +530,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         else
             log_message(sim, "\n***** Resuming phase \"$(phase.name)\" after step $d *****")
         end
+        run.step_start = time()
         td = @timed begin
             if !(i == start && ended)
                 # called for the phase and the state as they are, see output
@@ -516,7 +543,8 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         report_dropped(run)
         log_message(sim, "***** Ending phase \"$(phase.name)\" after " *
                          "$(round(td.time; digits = 3)) seconds, " *
-                         "$(Base.format_bytes(td.bytes)) allocated *****")
+                         "$(Base.format_bytes(td.bytes)) allocated, peak memory " *
+                         "$(Base.format_bytes(Sys.maxrss())) *****")
         # absent before Julia 1.11; it includes the recompilation
         if haskey(td, :compile_time)
             log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) seconds")
@@ -708,10 +736,11 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                 Julia $VERSION
                 TensorMixedStates $(pkgversion(TensorMixedStates))
                 Date $(Dates.now())
+                Host $(gethostname())
                 Seed $seed
                 Max time $max_time
                 Checkpoint interval $checkpoint_interval
-                """ * threading_stamp(threading))
+                """ * packages_stamp() * threading_stamp(threading))
         end
         sim = if resume
             Simulation(commit.state, commit.time, copy(commit.values), run)
@@ -719,6 +748,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             Simulation(nothing, sd.time_start, Dict{Symbol, Any}(:rng => Xoshiro(seed), :step => 0),
                        run)
         end
+        # each launch, so that the log of a run resumed elsewhere says where each part ran
+        log_line(run, (resume ? "\n" : "") * "Run on $(gethostname()), $(Dates.now()), Julia " *
+                      "$VERSION, TensorMixedStates $(pkgversion(TensorMixedStates))")
         if !isnothing(stale)
             log_line(run, "Warning: the run before, process $(stale[2]) on $(stale[1]), ended " *
                           "without removing running")
@@ -729,7 +761,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         start, done, ended = resume ? (commit.phase, commit.step, commit.last) : (1, 0, false)
         sim = Logging.with_logger(SimLogger(run, Logging.current_logger())) do
             if resume
-                log_line(run, "\nResuming from the checkpoint: phase $(commit.phase), step " *
+                log_line(run, "Resuming from the checkpoint: phase $(commit.phase), step " *
                               "$(commit.step), time $(time_text(run, commit.time))")
                 # before anything is written: a destination opened anew would empty a file the
                 # checkpoint continues

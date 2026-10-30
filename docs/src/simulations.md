@@ -132,12 +132,15 @@ and `LoadState`, is taken there. The working directory of the process does not c
 file opened by a phase of your own with a relative name is taken from it. The directory holds
 in particular:
 
-- `log`: the progression of the computation;
+- `log`: the progression of the computation: the machine and the versions of each launch, the
+  bond dimension of the MPO of each solver, and for each step its values, the largest bond
+  dimension of the state and its duration;
 - `prog.jl`: a copy of the script;
 - `prog_args.json`: the command line arguments it was given, if any;
 - `description`: the content of the `description` field of the `SimData` object;
-- `stamp`: the versions, the date, the seed of the random draws, the BLAS library and the
-  thread settings of the run;
+- `stamp`: the versions of Julia, of TensorMixedStates, of the packages doing the computations
+  and of those the script loads, the date, the machine, the seed of the random draws, the BLAS
+  library and the thread settings of the run;
 - `running`: present during the computation, naming the machine and the process running it.
   `runTMS` refuses to start in a directory where another run may be going on. A file left by
   a process of the same machine that no longer exists, killed for instance, is replaced with

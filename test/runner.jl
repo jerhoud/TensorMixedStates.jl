@@ -1250,12 +1250,33 @@ end
         runTMS(SimData(; name = "default", time_start = 0.1, phases))
         log = read("default/log", String)
         @test occursin("Evolving the state from time 0.1 to 0.3\n", log)
-        @test occursin("\nstep 2, time 0.3\n", log)
+        @test occursin("\nstep 2, time 0.3, ", log)
         @test !occursin("0.30000000000000004", log)
         runTMS(SimData(; name = "fixed", time_start = 0.1, phases, format = "%.2f"))
         log = read("fixed/log", String)
         @test occursin("Evolving the state from time 0.10 to 0.30\n", log)
-        @test occursin("\nstep 2, time 0.30\n", log)
+        @test occursin("\nstep 2, time 0.30, ", log)
+    end
+end
+
+@testset "What the log and the stamp note" begin
+    phases = [CreateState{Pure}(3, Qubit(), "Up"),
+              Evolve(evolver = -im * (X(1) + X(2) * X(3)), duration = 0.2, time_step = 0.1)]
+    in_tmp() do
+        runTMS(SimData(; name = "sim", phases); checkpoint_interval = 1e-9)
+        log = read("sim/log", String)
+        @test startswith(log, "Run on $(gethostname()), ")
+        @test occursin("Created State{Pure}(System(3, Qubit()), (maxlinkdim = 1))\n", log)
+        @test occursin("The MPO of the evolver has bond dimension 3\n", log)
+        @test occursin(r"\nstep 2, time 0.2, maxdim \d+, [\d.]+ s\n", log)
+        @test occursin(r"\nCheckpoint written at time 0.2, ", log)
+        @test occursin(r"allocated, peak memory .* \*\*\*\*\*\n", log)
+        stamp = readlines("sim/stamp")
+        @test "Host $(gethostname())" in stamp
+        @test any(l -> startswith(l, "Packages ITensors "), stamp)
+        # a launch more, noted though the run has nothing left to do
+        runTMS(SimData(; name = "sim", phases))
+        @test count("Run on ", read("sim/log", String)) == 2
     end
 end
 
