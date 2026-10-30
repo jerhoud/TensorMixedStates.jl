@@ -126,14 +126,20 @@ end
 """
     checkpoint_or_stop(run; force = false)
 
-write the last commit when a checkpoint is due, a stop requested, or with `force`, and stop then,
-see `StopRun`
+write the last commit when a checkpoint is due, a stop requested, or with `force`, which the log
+notes with its time and the size of its state file, and stop then, see `StopRun`
 """
 function checkpoint_or_stop(run::RunData; force::Bool = false)
     c = run.checkpointer
     stop = stop_requested(c)
     if stop || force || checkpoint_due(c)
+        before = c.written
         write_checkpoint(c)
+        if c.written !== before
+            file = joinpath(c.dir, state_file(c.generation))
+            log_line(run, "Checkpoint written at time $(time_text(run, c.written.time)), " *
+                          Base.format_bytes(filesize(file)))
+        end
     end
     if stop
         throw(StopRun())
@@ -144,14 +150,21 @@ end
 """
     step_line(sim, phase, k)
 
-the line the log takes at the end of step `k` of `phase`: its number, the time, and the values
-the phase provides, but for states
+the line the log takes at the end of step `k` of `phase`: its number, the time, the values the
+phase provides, but for states, the largest bond dimension of the states it acts on, its field
+`on`, and the seconds the step took, its measurements included
 """
 function step_line(sim::Simulation, phase, k::Int)
     values = getfield(sim, :values)
+    on = hasproperty(phase, :on) ? phase.on : :state
+    names = on isa Symbol ? [on] : on isa Vector{Symbol} ? on : Symbol[]
+    states = [ st for st in (n === :state ? sim.state : get(values, n, nothing) for n in names)
+               if st isa State ]
     return join([ "step $k, time $(time_text(sim, sim.time))" ;
                   [ "$name $(values[name])" for name in provided_values(phase)
-                    if haskey(values, name) && !(values[name] isa AbstractState) ] ], ", ")
+                    if haskey(values, name) && !(values[name] isa AbstractState) ] ;
+                  isempty(states) ? String[] : ["maxdim $(maximum(maxlinkdim, states))"] ;
+                  "$(round(time() - getfield(sim, :run).step_start; digits = 3)) s" ], ", ")
 end
 
 """
@@ -180,6 +193,7 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     end
     log_message(sim, step_line(sim, phase, k))
     run = getfield(sim, :run)
+    run.step_start = time()
     commit!(same ? sim : with_values(resume_from; step = k), run.phase, k; last)
     checkpoint_or_stop(run)
     return sim
@@ -200,6 +214,8 @@ function run_phase(phase::AbstractPhase, sim::Simulation, done::Int)
     # called for the phase and the state as they are, see output
     at_start = Simulation(sim, sim.state, getfield(sim, :run).phase_time)
     p = invokelatest(prepare_phase, phase, at_start)
+    # the first step does not count the preparation
+    getfield(sim, :run).step_start = time()
     for k in done + 1:invokelatest(step_count, p)
         sim = step_done(invokelatest(run_step, p, sim, k), phase, k)
     end

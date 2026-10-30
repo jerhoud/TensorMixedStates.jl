@@ -102,5 +102,6 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     else
         random_state(State{Pure}(phase.system, phase.state), n; rng)
     end
+    log_message(sim, "Created $state")
     return with_state(sim, phase.on, state)
 end
