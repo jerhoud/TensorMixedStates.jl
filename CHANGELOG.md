@@ -16,6 +16,7 @@ the reference article.
 - `random_state(Pure, system, states, linkdims)`, a random pure state in the sector of `states`.
 - `Proj(N(3) => 1)`, `Dephase(N(1))` and `Reset(N(3) => 1)` are placed where the operator is.
 - The log notes each launch, the bond dimension of the MPOs, the checkpoints and the peak memory, and for each step the largest bond dimension and the duration.
+- `runTMS` copies the files the program includes into `prog` and resumes a checkpoint only if they did not change.
 - The `stamp` notes the machine and the versions of ITensors, ITensorMPS, NDTensors, KrylovKit and of the packages of the script.
 
 ### Changed

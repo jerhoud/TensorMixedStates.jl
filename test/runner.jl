@@ -419,6 +419,41 @@ end
     end
 end
 
+@testset "The files a program includes" begin
+    # copied into prog with the program, and compared with it before a checkpoint is resumed
+    program = """
+        using TensorMixedStates, .Qubits
+        include("params.jl")
+        runTMS(SimData(name = "sim", phases = [CreateState{Pure}(2, Qubit(), state),
+                                               Gates(gates = X(1))]); max_time = -1)
+        """
+    in_tmp() do
+        run_prog() = include(joinpath(pwd(), "prog.jl"))
+        write("prog.jl", program)
+        mkdir("lib")
+        write("params.jl", "include(\"lib/more.jl\")\nstate = \"Up\"\n")
+        write("lib/more.jl", "x = 1\n")
+        run_prog()
+        @test read("sim/prog/params.jl", String) == read("params.jl", String)
+        @test read("sim/prog/lib/more.jl", String) == "x = 1\n"
+        # a file included, directly or not, that changed is another program
+        write("lib/more.jl", "x = 2\n")
+        @test_throws "written by another program" run_prog()
+        withenv(run_prog, "TMS_ACCEPT_PROGRAM" => "1")
+        @test read("sim/prog/lib/more.jl", String) == "x = 2\n"
+        run_prog()
+        @test !isfile("sim/error")
+        # as is one that includes no file
+        write("params.jl", "state = \"Up\"\n")
+        @test_throws "written by another program" run_prog()
+        withenv(run_prog, "TMS_ACCEPT_PROGRAM" => "1")
+        @test readdir("sim/prog") == ["params.jl"]
+        # no destination may be there
+        @test_throws "a file of the simulation directory" runTMS(SimData(name = "d",
+            phases = [CreateState{Pure}(2, Qubit(), "Up")], final_measurements = "prog/z" => Z))
+    end
+end
+
 @testset "A directory another run may be using is refused" begin
     phases = [CreateState{Pure}(2, Qubit(), "Up")]
     julia = `$(Base.julia_cmd()) --startup-file=no`
