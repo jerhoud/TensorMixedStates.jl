@@ -133,7 +133,7 @@ file given two lists, as one holds one list, the lists one call sends it making 
 """
 function check_destinations(phases::Vector, final_measurements)
     for p in phases, f in phase_files(p)
-        if normpath(f) in simulation_files
+        if is_simulation_file(f)
             error("cannot save to $f, a file of the simulation directory: choose another name")
         end
     end
@@ -141,7 +141,7 @@ function check_destinations(phases::Vector, final_measurements)
     for l in run_lists(phases, final_measurements), (d, m) in by_destination(Outputs(), l)
         if !(d isa Union{TextFile, JsonFile})
             continue
-        elseif d.path in simulation_files
+        elseif is_simulation_file(d.path)
             error("cannot write to $(d.path), a file of the simulation directory: choose another " *
                   "name")
         elseif d isa TextFile && get!(held, d.path, first.(m.entries)) ≠ first.(m.entries)
@@ -234,11 +234,72 @@ show(io::IO, s::SimData) =
         $(s.phases))""")
 
 """
+    includes
+
+the files included since the package was loaded, each with the file that included it, `nothing`
+for an include from the REPL, which `record_include` notes, see `__init__`: those of the last
+time each file ran
+"""
+const includes = (edges = Pair{Union{Nothing, String}, String}[], lock = ReentrantLock())
+
+# called by include before it runs the file, the source path being still that of the file
+# including it
+function record_include(::Module, path::String)
+    lock(includes.lock) do
+        # it runs again, including what it includes now
+        filter!(e -> e.first ≠ path, includes.edges)
+        push!(includes.edges, Base.source_path(nothing) => path)
+    end
+    return nothing
+end
+
+"""
+    program_files(src_path)
+
+the files the program `src_path` included, directly or not, after the package was loaded and
+still there, each by its path relative to the directory of the program, a `..` taken as
+`_parent`, as the directory `prog` of a simulation holds it
+"""
+function program_files(src_path::String)
+    files = Dict{String, String}()
+    todo = [src_path]
+    edges = lock(() -> copy(includes.edges), includes.lock)
+    while !isempty(todo)
+        f = pop!(todo)
+        for (from, path) in edges
+            # one removed since cannot be compared
+            if from == f && path ≠ src_path && path ∉ values(files) && isfile(path)
+                rel = joinpath(replace(splitpath(relpath(path, dirname(src_path))),
+                                       ".." => "_parent")...)
+                files[rel] = path
+                push!(todo, path)
+            end
+        end
+    end
+    return files
+end
+
+"""
+    stored_files(dir)
+
+the files of the directory `prog` of the simulation directory `dir`, by their paths relative to
+it
+"""
+function stored_files(dir::String)
+    prog = joinpath(dir, "prog")
+    if !isdir(prog)
+        return String[]
+    end
+    return [ relpath(joinpath(root, f), prog) for (root, _, fs) in walkdir(prog) for f in fs ]
+end
+
+"""
     same_program(dir, src_path)
 
 whether the checkpoint of the directory `dir` may be resumed by the program `src_path` given the
-arguments `ARGS`: the same, byte for byte, as `prog.jl`, given the arguments `prog_args.json`
-holds, none when it is absent. A program with no file, run from the REPL, is always accepted.
+arguments `ARGS`: the same, byte for byte, as `prog.jl`, including the same files as those of
+the directory `prog`, given the arguments `prog_args.json` holds, none when it is absent. A
+program with no file, run from the REPL, is always accepted.
 """
 function same_program(dir::String, src_path)
     if isnothing(src_path) || src_path == ""
@@ -246,7 +307,32 @@ function same_program(dir::String, src_path)
     end
     prog, args_file = joinpath(dir, "prog.jl"), joinpath(dir, "prog_args.json")
     args = isfile(args_file) ? JSON.parsefile(args_file) : []
-    return isfile(prog) && read(src_path) == read(prog) && args == ARGS
+    if !(isfile(prog) && read(src_path) == read(prog) && args == ARGS)
+        return false
+    end
+    files = program_files(src_path)
+    return sort(collect(keys(files))) == sort(stored_files(dir)) &&
+           all(read(path) == read(joinpath(dir, "prog", rel)) for (rel, path) in files)
+end
+
+"""
+    copy_program_files(dir, src_path)
+
+copy the files the program `src_path` included into the directory `prog` of the simulation
+directory `dir`, see `program_files`, in place of those it held
+"""
+function copy_program_files(dir::String, src_path::String)
+    files = program_files(src_path)
+    prog = joinpath(dir, "prog")
+    # read before the directory is emptied, which may hold them when the copy of the program is
+    # run
+    sources = Dict(rel => read(path) for (rel, path) in files)
+    rm(prog; recursive = true, force = true)
+    for (rel, data) in sources
+        mkpath(dirname(joinpath(prog, rel)))
+        write(joinpath(prog, rel), data)
+    end
+    return nothing
 end
 
 """
@@ -622,8 +708,9 @@ end
 
 run the simulation, see `SimData`, in a directory named after it, and return the `Simulation`
 it ends with. A checkpoint found in the directory is resumed from, if it was written by the same
-program, `prog.jl` in the directory, given the same arguments: copying an edited program there,
-or setting `TMS_ACCEPT_PROGRAM=1`, resumes it with that one. A file `restart` in the directory
+program, `prog.jl` in the directory, including the same files, copied into its directory `prog`,
+given the same arguments: copying an edited program there, or setting `TMS_ACCEPT_PROGRAM=1`,
+resumes it with that one. A file `restart` in the directory
 starts the simulation over, and `cleanTMS` removes the directory. A destination that is a file of
 the directory, as `log` or `stamp`, or a text file given two lists, is refused before the run
 starts.
@@ -692,8 +779,8 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             resume = has_checkpoint(dir)
             if resume && !same_program(dir, src_path) && get(ENV, "TMS_ACCEPT_PROGRAM", "") ≠ "1"
                 error("the checkpoint of \"$(sd.name)\" was written by another program, or one " *
-                      "given other arguments: to resume with this one, copy it onto prog.jl, or " *
-                      "set TMS_ACCEPT_PROGRAM=1")
+                      "given other arguments: to resume with this one, copy it onto prog.jl, and the " *
+                      "files it includes into prog, or set TMS_ACCEPT_PROGRAM=1")
             end
             started = true
             write(file("running"), "$(gethostname()) $(getpid()) $(Dates.now())\n")
@@ -710,6 +797,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                 if !(isfile(file("prog.jl")) && samefile(src_path, file("prog.jl")))
                     cp(src_path, file("prog.jl"); force = true)
                 end
+                copy_program_files(dir, src_path)
                 # no arguments, no file, as `same_program` reads it
                 if isempty(ARGS)
                     rm(file("prog_args.json"); force = true)

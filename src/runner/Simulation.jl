@@ -8,10 +8,22 @@ export Simulation, output, log_message, stopped
     simulation_files
 
 the files `runTMS` writes in the directory of a simulation, which no destination may be named
-after
+after, nor be in the directory `prog`, which holds the files the program includes, see
+`is_simulation_file`
 """
 const simulation_files = Set(["log", "stop", "restart", "error", "running", "stamp", "description",
                               "prog.jl", "prog_args.json", checkpoint_files...])
+
+"""
+    is_simulation_file(name)
+
+whether `name`, relative to the directory of a simulation, is a file `runTMS` writes there, see
+`simulation_files`
+"""
+function is_simulation_file(name::AbstractString)
+    n = normpath(name)
+    return n in simulation_files || n == "prog" || startswith(n, joinpath("prog", ""))
+end
 
 """
     reserved_values
@@ -224,7 +236,7 @@ a name of a file of the simulation refused
 function run_destination(run::RunData, name::AbstractString)
     if !isnothing(run.redirect)
         return Stream(run.redirect, run.outputs.format)
-    elseif !isempty(run.dir) && normpath(name) in simulation_files
+    elseif !isempty(run.dir) && is_simulation_file(name)
         error("cannot write to $name, a file of the simulation directory: choose another name")
     end
     return name

@@ -365,6 +365,8 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
 end
 
 function __init__()
+    # the files a program includes, which runTMS copies with it, see program_files
+    push!(Base.include_callbacks, record_include)
     Base.Experimental.register_error_hint(UndefVarError) do io, e
         # from Julia 1.11 on, the error says where the name was missing: a static parameter or a
         # local variable is no name of 1.x, nor a global of a module that does not see this
