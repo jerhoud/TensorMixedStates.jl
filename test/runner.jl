@@ -419,6 +419,52 @@ end
     end
 end
 
+@testset "The files a program includes" begin
+    # copied into prog with the program, and compared with it before a checkpoint is resumed
+    program = """
+        using TensorMixedStates, .Qubits
+        include("params.jl")
+        runTMS(SimData(name = "sim", phases = [CreateState{Pure}(2, Qubit(), state),
+                                               Gates(gates = X(1))]); max_time = -1)
+        """
+    in_tmp() do
+        run_prog() = include(joinpath(pwd(), "prog.jl"))
+        write("prog.jl", program)
+        mkdir("lib")
+        write("params.jl", "include(\"lib/more.jl\")\nstate = \"Up\"\n")
+        write("lib/more.jl", "x = 1\n")
+        run_prog()
+        @test read("sim/prog/params.jl", String) == read("params.jl", String)
+        @test read("sim/prog/lib/more.jl", String) == "x = 1\n"
+        # a file included, directly or not, that changed is another program
+        write("lib/more.jl", "x = 2\n")
+        @test_throws "written by another program" run_prog()
+        withenv(run_prog, "TMS_ACCEPT_PROGRAM" => "1")
+        @test read("sim/prog/lib/more.jl", String) == "x = 2\n"
+        run_prog()
+        @test !isfile("sim/error")
+        # a file that no longer includes another keeps it, which it might include again
+        write("params.jl", "isdefined(Main, :x) || include(\"lib/more.jl\")\nstate = \"Up\"\n")
+        @test_throws "written by another program" run_prog()
+        withenv(run_prog, "TMS_ACCEPT_PROGRAM" => "1")
+        @test read("sim/prog/lib/more.jl", String) == "x = 2\n"
+        write("lib/more.jl", "x = 3\n")
+        @test_throws "written by another program" run_prog()
+        # two files copied to the same place
+        mkpath("p/_parent")
+        write("p/prog.jl", program)
+        write("p/params.jl", "include(\"../common.jl\")\ninclude(\"_parent/common.jl\")\n" *
+                             "state = \"Up\"\n")
+        write("common.jl", "")
+        write("p/_parent/common.jl", "")
+        @test_throws "would both be copied to $(joinpath("prog", "_parent", "common.jl"))" include(
+            joinpath(pwd(), "p", "prog.jl"))
+        # no destination may be there
+        @test_throws "a file of the simulation directory" runTMS(SimData(name = "d",
+            phases = [CreateState{Pure}(2, Qubit(), "Up")], final_measurements = "prog/z" => Z))
+    end
+end
+
 @testset "A directory another run may be using is refused" begin
     phases = [CreateState{Pure}(2, Qubit(), "Up")]
     julia = `$(Base.julia_cmd()) --startup-file=no`
