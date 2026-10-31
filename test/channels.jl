@@ -1170,3 +1170,65 @@ end
         @test norm(apply(make_mpo(ρ, op(a)), ρ) - apply(make_mpo(ρ, op(b)), ρ)) < 1e-12
     end
 end
+
+@testset "Kraus operators of definite charge" begin
+    kraus_operators = TMS.kraus_operators
+    # the gates of the Kraus operators applied to a density matrix give the channel, Jordan-Wigner
+    # strings included, which Mixed refuses for an operator of no definite charge
+    function same_channel(ch, sys, ρ)
+        ks = kraus_operators(sys, ch)
+        ref = apply(ch, ρ)
+        return norm(sum(apply(Gate(k), ρ) for k in ks) - ref) / norm(ref) < 1e-10
+    end
+    noises(L, s) = [depolarizing_channel(0.3)(2), dephasing_channel(0.3)(2),
+                    amplitude_damping_channel(0.3, L)(2), reset_channel(0.3, s)(2),
+                    depolarizing_channel(0.3, 2)(1, 3), reset_channel(0.3, [s, s])(3, 1)]
+    cases = [(System(3, Qubit()), Sp, "Up", nothing),
+             (System(3, Fermion()), C, "Occ", nothing),
+             (System(3, Fermion(conserve = N)), C, "Occ", ["Occ", "Emp", "Occ"]),
+             (System(3, Boson(3)), A, "1", nothing),
+             (System(3, Boson(3; conserve = N)), A, "1", ["1", "0", "2"]),
+             (System(3, Electron(conserve = Ntot)), Cup, "Up", ["Up", "UpDn", "Emp"])]
+    for (sys, L, s, start) in cases
+        ρ = isnothing(start) ? random_state(Mixed, sys, 16) : random_state(Mixed, sys, start, 16)
+        for ch in noises(L, s)
+            @test same_channel(ch, sys, ρ)
+        end
+    end
+    # a product and a power, and a reset to a local state degenerate between two charges, which
+    # needs its Choi matrix diagonalized block by block
+    sys = System(3, Qubit())
+    ρ = random_state(Mixed, sys, 16)
+    @test same_channel(depolarizing_channel(0.2)(1) * Gate(X)(2), sys, ρ)
+    @test same_channel((dephasing_channel(0.2, X)^2)(3), sys, ρ)
+    fsys = System(3, Fermion(conserve = N))
+    @test same_channel(Reset([0.5 0. ; 0. 0.5])(2), fsys,
+                       random_state(Mixed, fsys, ["Occ", "Emp", "Occ"], 16))
+    # the depolarizing of a fermion, whose operators X and Y have no definite charge, gives C and
+    # C†, and a channel of no definite charge is refused
+    f = Fermion(conserve = N)
+    ks = kraus_operators(System(1, f), 0.5 * (Gate(C + dag(C)) + Gate(im * (C - dag(C))))(1))
+    @test length(ks) == 2
+    generic(k) = TMS.scalarcoef(k) * TMS.scalararg(k).op
+    @test all(k -> TMS.definite_grade(generic(k), [f]), ks)
+    @test sum(matrix(Gate(generic(k)), f) for k in ks) ≈ matrix(Gate(C) + Gate(dag(C)), f)
+    @test_throws "no definite charge" kraus_operators(System(1, f), Gate(C + dag(C))(1))
+    # the same written as a sum of placed channels, gathered into one, and a fermion conserving
+    # nothing, whose operators keep a definite parity
+    placed = 0.5 * (Gate(C + dag(C))(2) + Gate(im * (C - dag(C)))(2))
+    @test length(kraus_operators(fsys, placed)) == 2
+    @test same_channel(placed, fsys, random_state(Mixed, fsys, ["Occ", "Emp", "Occ"], 16))
+    free = Fermion()
+    @test all(k -> TMS.definite_grade(generic(k), [free]),
+              kraus_operators(System(3, free), depolarizing_channel(0.3)(2)))
+    # no more operators than the dimension of the superoperator, a dense matrix only within its
+    # limit, and a map that does not keep density matrices Hermitian refused
+    @test length(kraus_operators(System(1, Qubit()), (dephasing_channel(0.2, X)^10)(1))) ≤ 4
+    @test_throws "beyond the" kraus_operators(System(7, Qubit()),
+                                              depolarizing_channel(0.1, 7)(1:7...))
+    @test_throws "does not keep density matrices Hermitian" kraus_operators(
+        System(1, Qubit()), Reset([0.5 0.5 ; 0. 0.5])(1))
+    # a dephasing of eight sites, from its projectors, and a gate placed as a whole, as it is
+    @test length(kraus_operators(System(8, Qubit()), Dephase(reduce(⊗, fill(Z, 8)))(1:8...))) == 2
+    @test kraus_operators(System(2, Qubit()), Gate(X(1) + X(2))) == [X(1) + X(2)]
+end
