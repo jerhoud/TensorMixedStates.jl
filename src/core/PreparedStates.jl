@@ -2,8 +2,8 @@
 # sector, and the states given by their MPS tensors, their dense vector or their density
 # matrix; and the dense vector of a pure state.
 
-export mps_state, dense_state, ghz_state, superposition, mixture, dicke_state, w_state,
-       fully_mixed
+export mps_state, dense_state, ghz_state, superposition, mixture, Mixture, dicke_state, w_state,
+       fully_mixed, FullyMixed
 
 """
     local_vector(site, st)
@@ -275,6 +275,19 @@ function superposition(system::System, terms::AbstractVector{<:Pair}; limits::Li
 end
 
 """
+    check_weights(terms)
+
+refuses the weights of the pairs `p => states` of a mixture that are not real and not negative
+"""
+function check_weights(terms)
+    for (p, _) in terms
+        if !(p isa Real) || p < 0
+            error("the weights of a mixture are real and not negative, and $p is not")
+        end
+    end
+end
+
+"""
     mixture(system, terms; limits = Limits())
 
 the mixed state ``\\sum_k p_k \\rho^k_1 \\otimes \\dots \\otimes \\rho^k_n`` of `terms`, pairs
@@ -288,16 +301,41 @@ terms of nonzero weight, truncated to `limits` when they are given, by default `
     mixture(System(4, Qubit()), [0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]])
 """
 function mixture(system::System, terms::AbstractVector{<:Pair}; limits::Limits = Limits())
-    for (p, _) in terms
-        if !(p isa Real) || p < 0
-            error("the weights of a mixture are real and not negative, and $p is not")
-        end
-    end
+    check_weights(terms)
     st = State{Mixed}(system, product_sum(Mixed, system, terms))
     if limits ≠ Limits()
         st = State(st, truncate(st.state; truncation(limits; cutoff = 0.)...))
     end
     return normalize(st)
+end
+
+"""
+    Mixture(terms)
+
+the mixed state of `terms`, pairs `p => states`, as `mixture` gives it, for `State{R}` and
+`CreateState{R}`: exact, normalized. A pure state takes a single term of nonzero weight whose
+local states are pure.
+
+# Examples
+
+    State{Mixed}(System(4, Qubit()), Mixture([0.5 => ["Up", "Dn", "Up", "Dn"], 0.5 => ["Dn", "Up", "Dn", "Up"]]))
+"""
+struct Mixture
+    terms::Vector{Pair}
+    function Mixture(terms::AbstractVector{<:Pair})
+        check_weights(terms)
+        return new(Vector{Pair}(terms))
+    end
+end
+
+State{Mixed}(system::System, m::Mixture) = mixture(system, m.terms)
+
+function State{Pure}(system::System, m::Mixture)
+    kept = filter(t -> !iszero(first(t)), m.terms)
+    if length(kept) ≠ 1
+        error("a pure state is a mixture of a single term of nonzero weight: use State{Mixed}")
+    end
+    return normalize(State{Pure}(system, product_sum(Pure, system, kept)))
 end
 
 """
@@ -489,3 +527,21 @@ function fully_mixed(system::System, quantities::Pair...)
     end
     return normalize(State{Mixed}(system, MPS(its)))
 end
+
+"""
+    FullyMixed(quantities...)
+
+the fully mixed state of the sector given by `quantities`, as `fully_mixed` gives it, for
+`State{Mixed}` and `CreateState{Mixed}`; a pure state refuses it.
+
+# Examples
+
+    State{Mixed}(System(10, Fermion()), FullyMixed(N => 4))
+"""
+struct FullyMixed
+    quantities::Vector{Pair}
+    FullyMixed(quantities::Pair...) = new(collect(quantities))
+end
+
+State{Mixed}(system::System, f::FullyMixed) = fully_mixed(system, f.quantities...)
+State{Pure}(::System, ::FullyMixed) = error("a fully mixed state is not pure: use State{Mixed}")

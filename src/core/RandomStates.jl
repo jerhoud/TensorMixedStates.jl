@@ -115,3 +115,7 @@ function random_state(::Type{Mixed}, system::System, states, linkdims::Int;
     start = State{Pure}(system ⊗ system, double(states, length(system)))
     return traced(mix(random_state(start, isqrt(linkdims); rng, eltype)), 1:length(system))
 end
+
+random_state(::Type{Mixed}, ::System, ::Union{Mixture, FullyMixed}, ::Int; kwargs...) =
+    error("a random mixed state is drawn from the purification of a product state: give its " *
+          "local states")
