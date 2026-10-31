@@ -20,7 +20,8 @@ a phase that creates the state of the simulation.
 - `state`: a description of the state, see `State`, or a `State`, mixed if `type` asks for it
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
   see `random_state` (default 0, none): a pure state randomized from `state`, a mixed one drawn
-  from a purification starting from it, or without `state` any state of the system
+  from a purification starting from its local states, which `Mixture` and `FullyMixed` do not
+  give, or without `state` any state of the system
 - `on`: the name the state created takes, see `CopyState` (default `:state`)
 
 # Examples
@@ -88,8 +89,8 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     elseif phase.state isa State
         # a random mixed state is drawn from a purification, which a State does not give
         if R === Mixed && n ≠ 0
-            error("CreateState cannot randomize a State into a mixed state: give a description " *
-                  "of the state, whose purification it is drawn from")
+            error("CreateState cannot randomize a State into a mixed state: give its local " *
+                  "states, whose purification it is drawn from")
         end
         st = as_representation(R, phase.state)
         n == 0 ? st : random_state(st, n; rng)

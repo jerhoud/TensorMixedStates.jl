@@ -30,6 +30,7 @@ mixed_sys = System([Qubit(), Boson(4), Fermion()]) # sites of several types
 ψ = State{Pure}(sys, [isodd(i) ? "Up" : "Dn" for i in 1:10])
 ρ = State{Mixed}(sys, "FullyMixed")                # density matrices are Mixed
 ρ = mix(ψ)                                         # |ψ⟩⟨ψ|
+ρ = State{Mixed}(sys, FullyMixed(Z => 0))          # a whole state: also Mixture([p => states, …])
 ψ = random_state(Pure, sys, 8)                     # random, bond dimension 8
 ψ = ghz_state(sys, "Up", "Dn")                     # also dicke_state, w_state, dimer_state,
                                                    # fermi_sea, slater_state, fully_mixed,

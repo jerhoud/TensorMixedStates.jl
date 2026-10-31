@@ -121,6 +121,50 @@ end
     @test_throws "real and not negative" mixture(System(2, Qubit()), [-1 => "Up"])
 end
 
+@testset "Mixture and FullyMixed descriptions" begin
+    strong = TMS.strong
+    same(a, b) = norm(a - b) < 1e-12
+    sys = System(4, Qubit())
+    terms = [0.5 => ["Up", "Dn", "Up", "Dn"], 0.25 => ["Dn", "Up", "Dn", "Up"], 0 => "+"]
+    @test same(State{Mixed}(sys, Mixture(terms)), mixture(sys, terms))
+    # terms of different charges, which a weak conservation holds
+    fsys = System(4, Fermion(conserve = N))
+    fterms = [1 => ["Occ", "Emp", "Occ", "Emp"], 2 => ["Emp", "Emp", "Occ", "Occ"], 1 => "Emp"]
+    @test same(State{Mixed}(fsys, Mixture(fterms)), mixture(fsys, fterms))
+    # a pure state takes a single term of nonzero weight, normalized as the mixed one
+    one = [0 => "Dn", 3 => ["Up", "Dn", "Up", "Dn"]]
+    ψ = State{Pure}(sys, Mixture(one))
+    @test abs(inner(ψ, State{Pure}(sys, ["Up", "Dn", "Up", "Dn"]))) ≈ 1
+    @test same(mix(ψ), State{Mixed}(sys, Mixture(one)))
+    @test same(mix(State{Pure}(sys, Mixture([2 => [1, 1]]))), State{Mixed}(sys, Mixture([2 => [1, 1]])))
+    @test expect(State{Pure}(fsys, Mixture([1 => ["Occ", "Emp", "Occ", "Emp"]])), N(1)) ≈ 1
+    # the local states read as the mixed state reads them, and kept as given
+    v = Mixture([1 => view(["Up", "Dn", "Up", "Dn"], 1:4)])
+    @test same(mix(State{Pure}(sys, v)), State{Mixed}(sys, v))
+    given = [1 => "Up"]
+    m = Mixture(given)
+    given[1] = -1 => "Dn"
+    @test expect(State{Pure}(sys, m), Z(1)) ≈ 1
+    @test_throws "a single term of nonzero weight" State{Pure}(sys, Mixture(terms))
+    @test_throws "a single term of nonzero weight" State{Pure}(sys, Mixture([0 => "Up"]))
+    @test_throws "which a pure state cannot take" State{Pure}(sys, Mixture([1 => "FullyMixed"]))
+    @test_throws "real and not negative" Mixture([-1 => "Up"])
+    @test_throws "purification of a product state" random_state(Mixed, sys, Mixture(terms), 4)
+    @test_throws "purification of a product state" random_state(Mixed, sys, FullyMixed(Z => 0), 4)
+    for site in (Fermion(), Fermion(conserve = N), Fermion(conserve = strong(N)))
+        s = System(6, site)
+        @test same(State{Mixed}(s, FullyMixed(N => 2)), fully_mixed(s, N => 2))
+        @test_throws "not pure" State{Pure}(s, FullyMixed(N => 2))
+    end
+    @test same(State{Mixed}(sys, FullyMixed()), State{Mixed}(sys, "FullyMixed"))
+    ssys = System(4, Fermion(conserve = strong(N)))
+    @test_throws "spreads over several charges of strong(N)" State{Mixed}(ssys, FullyMixed())
+    # a single site
+    s1 = System(1, Qubit())
+    @test same(State{Mixed}(s1, Mixture([1 => "Up", 1 => "Dn"])), State{Mixed}(s1, "FullyMixed"))
+    @test same(State{Mixed}(s1, FullyMixed(Z => 1)), State{Mixed}(s1, "Up"))
+end
+
 @testset "Dicke and W states" begin
     d = dicke_state(System(5, Qubit()), 2, "Up", "Dn")
     @test maxlinkdim(d) == 3

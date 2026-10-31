@@ -57,11 +57,13 @@ dense_state
 Vector(::State{Pure})
 superposition
 mixture
+Mixture
 ghz_state
 dicke_state
 w_state
 dimer_state
 fully_mixed
+FullyMixed
 slater_state
 fermi_sea
 ```

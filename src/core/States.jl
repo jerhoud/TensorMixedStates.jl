@@ -176,7 +176,9 @@ the state of a quantum system, as an MPS: a wave function for `R = Pure`, a dens
 `R = Mixed`. The local states are given as a vector, one per site, or as a single one for every
 site: a name, `A => λ`, a vector of amplitudes, in mixed representation a density matrix, or a
 function of the site giving one of those. A vector of numbers is the amplitudes of one local
-state. `State(state, mps)` is a new state on the same system.
+state. `states` may also describe the whole state, `Mixture(terms)` or, in mixed
+representation, `FullyMixed(N => 4)`.
+`State(state, mps)` is a new state on the same system.
 
 States can be added, subtracted, and multiplied or divided by numbers; a sum takes truncation
 limits as `+(a, b; limits = Limits(maxdim = 100))`, by default `cutoff = 1e-26`, which discards
