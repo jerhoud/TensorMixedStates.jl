@@ -30,6 +30,7 @@ mixed_sys = System([Qubit(), Boson(4), Fermion()]) # sites of several types
 ψ = State{Pure}(sys, [isodd(i) ? "Up" : "Dn" for i in 1:10])
 ρ = State{Mixed}(sys, "FullyMixed")                # density matrices are Mixed
 ρ = mix(ψ)                                         # |ψ⟩⟨ψ|
+ρ = State{Mixed}(sys, FullyMixed(Z => 0))          # a whole state: also Mixture([p => states, …])
 ψ = random_state(Pure, sys, 8)                     # random, bond dimension 8
 ψ = ghz_state(sys, "Up", "Dn")                     # also dicke_state, w_state, dimer_state,
                                                    # fermi_sea, slater_state, fully_mixed,
@@ -144,10 +145,10 @@ runTMS(SimData(
 ))
 ```
 
-Other phases: `ToMixed`, `Weaken`, `PartialTrace`, `Gates`, `Thermalize`, `SteadyState`,
-`SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on a named state by `on = :φ`,
-and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list `:φ => [Z, Purity]` measures
-the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
+Other phases: `ToMixed` (`ConvertState{Mixed}`), `Weaken`, `PartialTrace`, `Gates`,
+`Thermalize`, `SteadyState`, `SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on
+a named state by `on = :φ`, and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list
+`:φ => [Z, Purity]` measures the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
 site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file
 name (a table), `"name.jsonl"` (JSON Lines), `"name.json"` (a JSON array), `"stdout"`, or
 `Data("name")` (kept in `sim.data`, `row["X(1)"]`, a table: `DataFrame(sim.data["name"])`).
@@ -981,6 +982,7 @@ The following phases are available:
 - `CreateState`: create a simple state
 - `GroundState`: compute the ground state using dmrg (requires a pure state)
 - `ToMixed`: go from pure representation to mixed representation
+- `ConvertState{R}`: go to representation `R`, of which `ToMixed` is `ConvertState{Mixed}`
 - `Evolve`: do Hamiltonian or Lindbladian evolution
 - `Gates`: apply some gates
 - `PartialTrace`: trace the system over some sites (requires a mixed state)
