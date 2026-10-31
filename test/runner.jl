@@ -457,8 +457,8 @@ end
                              "state = \"Up\"\n")
         write("common.jl", "")
         write("p/_parent/common.jl", "")
-        @test_throws "would both be copied to prog/_parent/common.jl" include(joinpath(pwd(), "p",
-                                                                                       "prog.jl"))
+        @test_throws "would both be copied to $(joinpath("prog", "_parent", "common.jl"))" include(
+            joinpath(pwd(), "p", "prog.jl"))
         # no destination may be there
         @test_throws "a file of the simulation directory" runTMS(SimData(name = "d",
             phases = [CreateState{Pure}(2, Qubit(), "Up")], final_measurements = "prog/z" => Z))
