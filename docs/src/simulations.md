@@ -12,6 +12,7 @@ The following phases are available:
 - `CreateState`: create a simple state
 - `GroundState`: compute the ground state using dmrg (requires a pure state)
 - `ToMixed`: go from pure representation to mixed representation
+- `ConvertState{R}`: go to representation `R`, of which `ToMixed` is `ConvertState{Mixed}`
 - `Evolve`: do Hamiltonian or Lindbladian evolution
 - `Gates`: apply some gates
 - `PartialTrace`: trace the system over some sites (requires a mixed state)
