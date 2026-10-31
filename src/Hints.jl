@@ -223,7 +223,8 @@ const other_keywords = let
                       (graph_state, "graph_state"), (hermitianize, "hermitianize"),
                       (PreMPO, "PreMPO"), (Evolve, "Evolve"), (Thermalize, "Thermalize"),
                       (GroundState, "GroundState"), (SteadyState, "SteadyState"),
-                      (Gates, "Gates"), (ToMixed, "ToMixed"), (LoadState, "LoadState")),
+                      (Gates, "Gates"), (ToMixed, "ToMixed"), (ConvertState{Pure}, "ConvertState"),
+                      (LoadState, "LoadState")),
         k in (:maxdim, :cutoff, :mindim)
         d[(f, k)] = "$name takes its truncation as limits = Limits(maxdim = …, cutoff = …)"
     end
@@ -266,7 +267,8 @@ site_count(::GenericOp{K, N}) where {K, N} = N
     method_hint(io, e, argtypes, kwargs)
 
 print what to write instead after the `MethodError` `e` of a call written for 1.x: a keyword it
-moved, a keyword of ITensors, see `other_keywords`, one a phase does not have, a `Simulation`
+moved, a keyword of ITensors, see `other_keywords`, one a phase does not have, a `ConvertState`
+without its representation, a `Simulation`
 where a state is taken, a solver of ITensorMPS called on objects of this
 package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`, `Simulation`,
 `output`, `variance`, the Rényi entropies of a block, `EntanglementEntropy`, `matrix`, `State`,
@@ -274,6 +276,11 @@ package, and the forms of 1.x of `measure`, `partial_trace`, `Check`, `Operator`
 """
 function method_hint(io::IO, e::MethodError, argtypes, kwargs)
     f = e.f
+    if f === ConvertState
+        print(io, "\nConvertState takes the representation as a parameter: ConvertState{Pure}(…) " *
+                  "or ConvertState{Mixed}(…)")
+        return nothing
+    end
     for k in keyword_names(kwargs)
         h = get(moved_keywords, (f, k), nothing)
         if !isnothing(h)
@@ -292,8 +299,8 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
         fields = fieldnames(Base.unwrap_unionall(f))
         unknown = [ k for k in keyword_names(kwargs) if k ∉ fields ]
         if !isempty(unknown)
-            print(io, "\n", nameof(f), " has no field ", join(unknown, ", "), ": its fields are ",
-                  join(fields, ", "))
+            print(io, "\n", type_name(f), " has no field ", join(unknown, ", "),
+                  ": its fields are ", join(fields, ", "))
             return nothing
         end
     end

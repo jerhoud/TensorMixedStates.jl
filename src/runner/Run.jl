@@ -21,11 +21,12 @@ refuse an object that is not a subtype of `AbstractPhase`, or lacks one of the f
 """
 function check_phase(phase)
     if !(phase isa AbstractPhase)
-        error("$(typeof(phase)) is not a phase, a subtype of TensorMixedStates.AbstractPhase")
+        error("$(type_name(typeof(phase))) is not a phase, a subtype of " *
+              "TensorMixedStates.AbstractPhase")
     end
     for f in (:name, :time_start, :final_measurements)
         if !hasfield(typeof(phase), f)
-            error("$(typeof(phase)) is not a phase, it has no field $f")
+            error("$(type_name(typeof(phase))) is not a phase, it has no field $f")
         end
     end
     return phase
@@ -111,13 +112,13 @@ function check_names(phases::Vector)
                 state_names(p.on) : Symbol[]
         for n in [ names ; collect(provided_values(p)) ]
             if n ≠ :state && n in reserved_values
-                error("$(nameof(typeof(p))) cannot name a state $n, a name the run reserves")
+                error("$(type_name(typeof(p))) cannot name a state $n, a name the run reserves")
             end
         end
         for n in names
             if count(==(n), names) > 1
-                error("$(nameof(typeof(p))) names the state $n twice in its on, which would act " *
-                      "on it twice")
+                error("$(type_name(typeof(p))) names the state $n twice in its on, which would " *
+                      "act on it twice")
             end
         end
     end

@@ -24,6 +24,7 @@ LoadState
 SaveState
 CopyState
 Update
+ConvertState
 ToMixed
 Weaken
 PartialTrace

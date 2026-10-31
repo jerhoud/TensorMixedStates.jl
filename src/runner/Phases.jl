@@ -28,6 +28,20 @@ A phase providing values to the measurements, as `:energy`, declares them with a
 """
 abstract type AbstractPhase end
 
+"""
+    type_name(T)
+
+the name of the type `T` in the messages, without its module, with its parameters:
+`ConvertState{Mixed}`
+"""
+type_name(T::UnionAll) = string(nameof(T))
+type_name(T::DataType) =
+    isempty(T.parameters) ? string(nameof(T)) :
+    "$(nameof(T)){$(join(map(type_parameter, T.parameters), ", "))}"
+
+type_parameter(p::Union{DataType, UnionAll}) = type_name(p)
+type_parameter(p) = repr(p)
+
 # the fields are read from the type, so that those of a phase of one's own are printed too
 function show(io::IO, s::AbstractPhase)
     t = typeof(s)
@@ -209,8 +223,8 @@ simulation it leaves. For a phase made of steps, it prepares the phase and runs 
 """
 function run_phase(phase::AbstractPhase, sim::Simulation, done::Int)
     if !hasmethod(prepare_phase, Tuple{typeof(phase), Simulation})
-        error("$(typeof(phase)) has neither a method of TensorMixedStates.run_phase nor one of " *
-              "TensorMixedStates.prepare_phase, so runTMS does not know how to run it")
+        error("$(type_name(typeof(phase))) has neither a method of TensorMixedStates.run_phase " *
+              "nor one of TensorMixedStates.prepare_phase, so runTMS does not know how to run it")
     end
     # called for the phase and the state as they are, see output
     at_start = Simulation(sim, sim.state, getfield(sim, :run).phase_time)

@@ -68,15 +68,18 @@ CreateState{R}(sites::Vector{<:AbstractSite}, state; kwargs...) where R =
 provided_values(phase::CreateState) = phase.on === :state ? () : (phase.on,)
 
 """
-    as_representation(R, state)
+    as_representation(R, state; limits = Limits())
 
-the `State` handed to a `CreateState` in representation `R`: a pure state is mixed if `R` is
-`Mixed`, a mixed state refused if `R` is `Pure`
+`state` in representation `R`, for `CreateState` and `ConvertState`: a pure state is mixed if `R`
+is `Mixed`, a mixed state refused if `R` is `Pure`; truncated to `limits` unless they are the
+default
 """
-as_representation(::Type{R}, state::State{R}) where R = state
-as_representation(::Type{Mixed}, state::State{Pure}) = mix(state)
-as_representation(::Type{Pure}, ::State{Mixed}) =
-    error("CreateState was asked for a pure state but given a mixed one")
+as_representation(::Type{R}, state::State{R}; limits::Limits = Limits()) where R =
+    limits == Limits() ? state : truncate(state; limits)
+as_representation(::Type{Mixed}, state::State{Pure}; limits::Limits = Limits()) =
+    mix(state; limits)
+as_representation(::Type{Pure}, ::State{Mixed}; limits::Limits = Limits()) =
+    error("a mixed state cannot be made pure: ask for Mixed rather than Pure")
 
 function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     rng = sim.rng

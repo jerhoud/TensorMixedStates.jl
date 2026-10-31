@@ -129,9 +129,9 @@ TMS.run_phase(p::EndingElsewhere, sim::Simulation, ::Int) =
     @test SimData(; phases, seed = 0).seed == 0
     # a state named by a name the run reserves, refused when the run reached the phase, and a
     # state named twice in on, which an Evolve evolved twice a step, its clock once
-    @test_throws "CreateState cannot name a state time, a name the run reserves" SimData(
+    @test_throws "CreateState{Pure} cannot name a state time, a name the run reserves" SimData(
         phases = [phases; CreateState{Pure}(2, Qubit(), "Up"; on = :time)])
-    @test_throws "ToMixed cannot name a state rng, a name the run reserves" SimData(
+    @test_throws "ConvertState{Mixed} cannot name a state rng, a name the run reserves" SimData(
         phases = [phases; ToMixed(on = :rng)])
     @test_throws "Evolve names the state state twice in its on" SimData(phases = [phases;
         Evolve(evolver = -im * X(1), duration = 0.1, time_step = 0.1, on = [:state, :state])])
@@ -1065,7 +1065,7 @@ end
         # state without a system
         pure = State{Pure}(System(2, Qubit()), ["Up", "Dn"])
         @test run([CreateState(type = Mixed, state = pure)]).state isa State{Mixed}
-        @test_throws "asked for a pure state but given a mixed one" run(
+        @test_throws "a mixed state cannot be made pure" run(
             [CreateState(type = Pure, state = mix(pure))])
         @test_throws "a system and randomize" run([CreateState(type = Pure, randomize = 10)])
         @test_throws "cannot randomize a State into a mixed state" run(
@@ -1094,6 +1094,29 @@ end
         small = State{Pure}(s4, "Up") + 1e-8 * State{Pure}(s4, "Dn")
         @test maxlinkdim(run([CreateState(small), ToMixed()]).state) == maxlinkdim(mix(small)) == 4
         @test maxlinkdim(truncate(mix(small); limits = Limits())) == 3
+        # ToMixed is ConvertState{Mixed}, its fields and defaults kept, and ConvertState{Pure}
+        # truncates a pure state, refuses a mixed one
+        @test ToMixed === ConvertState{Mixed}
+        @test ToMixed("m", nothing, [], Limits(maxdim = 2), :state).limits == Limits(maxdim = 2)
+        @test ToMixed().name == "Switching to mixed state representation"
+        @test ConvertState{Pure}().name == "Switching to pure state representation"
+        @test_throws MethodError ConvertState()
+        log = IOBuffer()
+        st = runTMS(SimData(phases = [CreateState{Pure}(4, Qubit(), "Up"; randomize = 4),
+                                      ConvertState{Pure}(limits = Limits(maxdim = 2))]);
+                    output = log).state
+        @test maxlinkdim(st) ≤ 2
+        @test occursin("The state is already pure, only truncated", String(take!(log)))
+        # the weight 1e-28 of Dn, which the default cutoff would drop, is kept
+        tiny = superposition(s4, [1 => "Up", 1e-14 => "Dn"])
+        @test maxlinkdim(truncate(tiny; limits = Limits())) == 1
+        kept = run([CreateState(tiny), ConvertState{Pure}()]).state
+        @test kept isa State{Pure} && maxlinkdim(kept) == 2
+        @test_throws "needs a representation" ConvertState{TensorMixedStates.PM}()
+        @test_throws "a mixed state cannot be made pure" run([CreateState(mix(small)),
+                                                              ConvertState{Pure}()])
+        sim = run([CreateState(small), CreateState(small; on = :g), ConvertState{Mixed}(on = :g)])
+        @test sim.state isa State{Pure} && sim.g isa State{Mixed}
         # a mixed GHZ state, then the partial trace keeping three of its sites
         sys = System(6, Qubit())
         ghz = mix((State{Pure}(sys, "Up") + State{Pure}(sys, "Dn")) / sqrt(2))

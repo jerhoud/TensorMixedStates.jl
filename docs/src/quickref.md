@@ -145,10 +145,10 @@ runTMS(SimData(
 ))
 ```
 
-Other phases: `ToMixed`, `Weaken`, `PartialTrace`, `Gates`, `Thermalize`, `SteadyState`,
-`SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on a named state by `on = :φ`,
-and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list `:φ => [Z, Purity]` measures
-the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
+Other phases: `ToMixed` (`ConvertState{Mixed}`), `Weaken`, `PartialTrace`, `Gates`,
+`Thermalize`, `SteadyState`, `SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on
+a named state by `on = :φ`, and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list
+`:φ => [Z, Purity]` measures the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
 site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file
 name (a table), `"name.jsonl"` (JSON Lines), `"name.json"` (a JSON array), `"stdout"`, or
 `Data("name")` (kept in `sim.data`, `row["X(1)"]`, a table: `DataFrame(sim.data["name"])`).

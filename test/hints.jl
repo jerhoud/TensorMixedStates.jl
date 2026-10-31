@@ -159,6 +159,12 @@ end
                    "final_measurements, evolver, duration, time_step, nsteps", m)
     @test occursin("CreateState has no field sites", message(() -> CreateState(
         type = Pure, sites = [Qubit()], state = "Up")))
+    @test occursin("ConvertState{Mixed} has no field step", message(() -> ToMixed(step = 1)))
+    @test occursin("ToMixed takes its truncation as limits", message(() -> ToMixed(maxdim = 2)))
+    @test occursin("ConvertState takes its truncation as limits",
+                   message(() -> ConvertState{Pure}(maxdim = 2)))
+    @test occursin("ConvertState takes the representation as a parameter",
+                   message(() -> ConvertState(limits = Limits())))
 end
 
 @testset "Operators of one's own and operators placed" begin

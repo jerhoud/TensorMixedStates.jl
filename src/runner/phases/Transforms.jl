@@ -1,36 +1,65 @@
-# The phases transforming the state: ToMixed, Weaken and PartialTrace at once, Gates step by step.
+# The phases transforming the state: ConvertState, Weaken and PartialTrace at once, Gates step by
+# step.
 
-export ToMixed, Weaken, PartialTrace, Gates
+export ConvertState, ToMixed, Weaken, PartialTrace, Gates
 
 """
-    ToMixed(; limits, on, name, time_start, final_measurements)
+    ConvertState{R}(; limits, on, name, time_start, final_measurements)
 
-a phase that takes the state to the mixed representation, `mix(state; limits)`, truncated to
-`limits` unless they are the default `Limits()`; a state already mixed is only truncated.
+a phase that takes the state to the representation `R`, `Pure` or `Mixed`: a pure state is mixed,
+see `mix`, a mixed one refused if `R` is `Pure`, a state already in `R` only truncated; the state
+converted is truncated to `limits` unless they are the default `Limits()`. `ToMixed` is
+`ConvertState{Mixed}`.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
-- `limits`: the truncation of the mixed state, see `Limits`
+- `limits`: the truncation of the state converted, see `Limits`
 - `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
 # Examples
 
     ToMixed(limits = Limits(cutoff = 1e-10, maxdim = 10))
+    ConvertState{Pure}(limits = Limits(maxdim = 10))
 """
-@kwdef struct ToMixed <: AbstractPhase
-    name::String = "Switching to mixed state representation"
-    time_start::Union{Nothing, Number} = nothing
-    final_measurements = []
-    limits::Limits = Limits()
-    on::Symbol = :state
+struct ConvertState{R <: PM} <: AbstractPhase
+    name::String
+    time_start::Union{Nothing, Number}
+    final_measurements
+    limits::Limits
+    on::Symbol
+    function ConvertState{R}(name, time_start, final_measurements, limits, on) where {R <: PM}
+        if !isconcretetype(R)
+            error("ConvertState needs a representation: ConvertState{Pure} or ConvertState{Mixed}")
+        end
+        return new{R}(name, time_start, final_measurements, limits, on)
+    end
 end
 
-function run_phase(phase::ToMixed, sim::Simulation, ::Int)
+# written out rather than by @kwdef, which would also give a ConvertState(; …) without R
+ConvertState{R}(; name::String = "Switching to $(lowercase(string(nameof(R)))) state " *
+                                 "representation",
+                time_start::Union{Nothing, Number} = nothing, final_measurements = [],
+                limits::Limits = Limits(), on::Symbol = :state) where {R <: PM} =
+    ConvertState{R}(name, time_start, final_measurements, limits, on)
+
+"""
+    ToMixed(; limits, on, name, time_start, final_measurements)
+
+the phase `ConvertState{Mixed}`, which takes the state to the mixed representation
+
+# Examples
+
+    ToMixed(limits = Limits(cutoff = 1e-10, maxdim = 10))
+"""
+const ToMixed = ConvertState{Mixed}
+
+function run_phase(phase::ConvertState{R}, sim::Simulation, ::Int) where R
     st = state_named(sim, phase.on)
-    if st isa State{Mixed}
-        log_message(sim, "The state is already mixed")
+    if st isa State{R}
+        only = phase.limits == Limits() ? "" : ", only truncated"
+        log_message(sim, "The state is already $(lowercase(string(nameof(R))))$only")
     end
-    return with_state(sim, phase.on, mix(st; phase.limits))
+    return with_state(sim, phase.on, as_representation(R, st; phase.limits))
 end
 
 """
