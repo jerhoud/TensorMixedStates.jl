@@ -4,17 +4,21 @@
 export Evolve, Thermalize, GroundState, SteadyState
 
 """
-    log_mpo(sim, what, d)
+    log_mpo(sim, what, d, start)
 
 log the bond dimension `d` of the MPO of `what`, the evolver for instance, which sets the cost of
-the phase
+the phase, and the seconds since `start` it took to build, which the first step does not count
 """
-log_mpo(sim::Simulation, what::String, d::Int) =
-    log_message(sim, "The MPO of the $what has bond dimension $d")
+function log_mpo(sim::Simulation, what::String, d::Int, start::Float64)
+    log_message(sim, "The MPO of the $what has bond dimension $d, built in " *
+                     "$(round(time() - start; digits = 3)) s")
+    getfield(sim, :run).step_start = time()
+    return nothing
+end
 
 # the bond dimension of its MPO, the term finished taking a channel more, see `make_mpo`
-log_mpo(sim::Simulation, what::String, pre::PreMPO) =
-    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1)
+log_mpo(sim::Simulation, what::String, pre::PreMPO, start::Float64) =
+    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1, start)
 
 """
     step_number(span, step, what, sim)
@@ -121,8 +125,9 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     what = names == [:state] ? "the state" : "the states " * join(names, ", ")
     log_message(sim, "Evolving $what from time $(time_text(sim, sim.time)) to " *
                      time_text(sim, sim.time + phase.duration))
+    start = time()
     pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
-    log_mpo(sim, "evolver", pre)
+    log_mpo(sim, "evolver", pre, start)
     return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end
 
@@ -224,8 +229,9 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
         return ThermalSteps(phase.algo, nothing, phase.limits, 1, 0., phase.on)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
+    start = time()
     pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
-    log_mpo(sim, "Hamiltonian", pre)
+    log_mpo(sim, "Hamiltonian", pre, start)
     return ThermalSteps(phase.algo, pre, phase.limits, n, phase.beta, phase.on)
 end
 
@@ -324,13 +330,14 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     if !(state isa State{Pure})
         error("GroundState searches a pure state: search it pure and mix it")
     end
+    start = time()
     pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
     ms = [ m isa Symbol ? state_named(sim, m) : m for m in phase.orthogonal_to ]
     args = orthogonal_args(state, pre, ms, phase.weight)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
     mpo = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
-    log_mpo(sim, "Hamiltonian", maxlinkdim(mpo))
+    log_mpo(sim, "Hamiltonian", maxlinkdim(mpo), start)
     return run_search(phase, sim, done, mpo, identity,
                       (_, st) -> check_orthogonal(st, args, phase.weight), :energy; args...)
 end
@@ -388,9 +395,10 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     if !(state isa State{Mixed})
         error("SteadyState searches a density matrix: mix the state first, see ToMixed")
     end
+    start = time()
     l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits)
     log_message(sim, "Searching the steady state")
-    log_mpo(sim, "squared Lindbladian", maxlinkdim(l2))
+    log_mpo(sim, "squared Lindbladian", maxlinkdim(l2), start)
     return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result, :residual;
                       krylov = steady_krylov)
 end
