@@ -443,11 +443,22 @@ end
         @test read("sim/prog/lib/more.jl", String) == "x = 2\n"
         run_prog()
         @test !isfile("sim/error")
-        # as is one that includes no file
-        write("params.jl", "state = \"Up\"\n")
+        # a file that no longer includes another keeps it, which it might include again
+        write("params.jl", "isdefined(Main, :x) || include(\"lib/more.jl\")\nstate = \"Up\"\n")
         @test_throws "written by another program" run_prog()
         withenv(run_prog, "TMS_ACCEPT_PROGRAM" => "1")
-        @test readdir("sim/prog") == ["params.jl"]
+        @test read("sim/prog/lib/more.jl", String) == "x = 2\n"
+        write("lib/more.jl", "x = 3\n")
+        @test_throws "written by another program" run_prog()
+        # two files copied to the same place
+        mkpath("p/_parent")
+        write("p/prog.jl", program)
+        write("p/params.jl", "include(\"../common.jl\")\ninclude(\"_parent/common.jl\")\n" *
+                             "state = \"Up\"\n")
+        write("common.jl", "")
+        write("p/_parent/common.jl", "")
+        @test_throws "would both be copied to prog/_parent/common.jl" include(joinpath(pwd(), "p",
+                                                                                       "prog.jl"))
         # no destination may be there
         @test_throws "a file of the simulation directory" runTMS(SimData(name = "d",
             phases = [CreateState{Pure}(2, Qubit(), "Up")], final_measurements = "prog/z" => Z))

@@ -237,19 +237,15 @@ show(io::IO, s::SimData) =
     includes
 
 the files included since the package was loaded, each with the file that included it, `nothing`
-for an include from the REPL, which `record_include` notes, see `__init__`: those of the last
-time each file ran
+for an include from the REPL, which `record_include` notes, see `__init__`. A file included
+again keeps what it included before, which it may skip this time, as a file it includes once.
 """
-const includes = (edges = Pair{Union{Nothing, String}, String}[], lock = ReentrantLock())
+const includes = (edges = Set{Pair{Union{Nothing, String}, String}}(), lock = ReentrantLock())
 
 # called by include before it runs the file, the source path being still that of the file
 # including it
 function record_include(::Module, path::String)
-    lock(includes.lock) do
-        # it runs again, including what it includes now
-        filter!(e -> e.first ≠ path, includes.edges)
-        push!(includes.edges, Base.source_path(nothing) => path)
-    end
+    lock(() -> push!(includes.edges, Base.source_path(nothing) => path), includes.lock)
     return nothing
 end
 
@@ -271,6 +267,10 @@ function program_files(src_path::String)
             if from == f && path ≠ src_path && path ∉ values(files) && isfile(path)
                 rel = joinpath(replace(splitpath(relpath(path, dirname(src_path))),
                                        ".." => "_parent")...)
+                if haskey(files, rel)
+                    error("$(files[rel]) and $path would both be copied to prog/$rel: rename " *
+                          "one of them")
+                end
                 files[rel] = path
                 push!(todo, path)
             end
