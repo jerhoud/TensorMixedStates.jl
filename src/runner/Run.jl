@@ -268,8 +268,8 @@ function program_files(src_path::String)
                 rel = joinpath(replace(splitpath(relpath(path, dirname(src_path))),
                                        ".." => "_parent")...)
                 if haskey(files, rel)
-                    error("$(files[rel]) and $path would both be copied to prog/$rel: rename " *
-                          "one of them")
+                    error("$(files[rel]) and $path would both be copied to " *
+                          "$(joinpath("prog", rel)): rename one of them")
                 end
                 files[rel] = path
                 push!(todo, path)
