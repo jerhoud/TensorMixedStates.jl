@@ -1267,7 +1267,7 @@ end
         log = read("sim/log", String)
         @test startswith(log, "Run on $(gethostname()), ")
         @test occursin("Created State{Pure}(System(3, Qubit()), (maxlinkdim = 1))\n", log)
-        @test occursin("The MPO of the evolver has bond dimension 3\n", log)
+        @test occursin(r"The MPO of the evolver has bond dimension 3, built in [\d.]+ s\n", log)
         @test occursin(r"\nstep 2, time 0.2, maxdim \d+, [\d.]+ s\n", log)
         @test occursin(r"\nCheckpoint written at time 0.2, ", log)
         @test occursin(r"allocated, peak memory .* \*\*\*\*\*\n", log)

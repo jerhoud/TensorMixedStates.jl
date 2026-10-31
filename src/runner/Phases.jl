@@ -193,9 +193,10 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     end
     log_message(sim, step_line(sim, phase, k))
     run = getfield(sim, :run)
-    run.step_start = time()
     commit!(same ? sim : with_values(resume_from; step = k), run.phase, k; last)
     checkpoint_or_stop(run)
+    # the checkpoint not counted in the next step
+    run.step_start = time()
     return sim
 end
 
