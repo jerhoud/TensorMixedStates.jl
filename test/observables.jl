@@ -1029,6 +1029,10 @@ end
     # an operator changing the charges by no definite amount is measured on the state conserving
     # nothing, as by expect
     @test variance(State{Mixed}(System(2, Qubit(conserve = N)), ["Up", "Dn"]), X(1)) ≈ 1
+    # what is not an operator placed on sites refused before anything is computed
+    for wrong in [make_mpo(r, h), 2.0, [X(1), Z(2)], X, depolarizing_channel(0.1, 1)(1)]
+        @test_throws "variance takes an operator placed on sites" variance(ρ, wrong)
+    end
     # as a measurement, prepared for each representation
     m = Measure(Variance(h))
     @test last(only(measure(mix(r), m))) ≈ variance(r, h)

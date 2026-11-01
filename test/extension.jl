@@ -215,7 +215,8 @@ end
 end
 
 TensorMixedStates.variance(st::WrappedState, op) = variance(st.inner, op)
-TensorMixedStates.renyi2(st::WrappedState, positions::AbstractVector) = renyi2(st.inner, positions)
+TensorMixedStates.renyi2(st::WrappedState, positions::AbstractVector{Int}) =
+    renyi2(st.inner, positions)
 TensorMixedStates.entanglement_entropy(st::WrappedState, cut::Int) =
     entanglement_entropy(st.inner, cut)
 TensorMixedStates.entanglement_spectrum(st::WrappedState, cut::Int) =
@@ -234,6 +235,55 @@ TensorMixedStates.entanglement_spectrum(st::WrappedState, cut::Int) =
     bell = WrappedState(sys, apply(controlled(X)(2, 3) * H(2), State{Pure}(sys, "Up")))
     @test last.(measure(bell, [Renyi2([3]), EntanglementEntropy(2)])) ≈ [log(2), log(2)]
     @test_throws "Renyi2 was given site 4" measure(bell, [Renyi2([4])])
+end
+
+# A state of one's own holding its density matrix, which gives only its reduced density matrices,
+# by a partial trace written here, and its purity: the entropies follow from them
+struct HeldMatrix <: AbstractState
+    system::System
+    ρ::Matrix{ComplexF64}
+end
+
+TensorMixedStates.purity(st::HeldMatrix) = real(LA.tr(st.ρ * st.ρ))
+
+function TensorMixedStates.reduced_density_matrix(st::HeldMatrix, positions::AbstractVector{Int})
+    if isempty(positions)
+        error("HeldMatrix reduces to one site at least")
+    end
+    ds = [ dim(s) for s in st.system.sites ]
+    kept, out = collect(positions), setdiff(1:length(ds), positions)
+    # the place of the levels `ls`, from 0, of sites of dimensions `dims` in the basis kron orders
+    at(ls, dims) = 1 + foldl((x, (l, d)) -> x * d + l, zip(ls, dims); init = 0)
+    levels(c) = collect(Tuple(c)) .- 1
+    r = zeros(ComplexF64, prod(ds[kept]), prod(ds[kept]))
+    for a in CartesianIndices(Tuple(ds[kept])), b in CartesianIndices(Tuple(ds[kept])),
+        c in CartesianIndices(Tuple(ds[out]))
+        ka, kb = zeros(Int, length(ds)), zeros(Int, length(ds))
+        ka[kept], kb[kept] = levels(a), levels(b)
+        ka[out] = kb[out] = levels(c)
+        r[at(levels(a), ds[kept]), at(levels(b), ds[kept])] += st.ρ[at(ka, ds), at(kb, ds)]
+    end
+    return r
+end
+
+@testset "The entropies of a state of one's own from its reduced density matrices" begin
+    sys = System([Qubit(), Qudit(3), Qubit()])
+    ρ = random_state(Mixed, sys, 4; rng = Xoshiro(20261105))
+    st = HeldMatrix(sys, ket_bra_matrix(normalize(ρ)))
+    for kept in [[1], [2], [3], [1, 2], [2, 3], [1, 3]]
+        @test reduced_density_matrix(st, kept) ≈ reduced_density_matrix(ρ, kept) atol = 1e-12
+        @test renyi2(st, kept) ≈ renyi2(ρ, kept) atol = 1e-12
+        @test mutual_info_renyi2(st, kept) ≈ mutual_info_renyi2(ρ, kept) atol = 1e-12
+        @test von_neumann_entropy(st, kept) ≈ von_neumann_entropy(ρ, kept) atol = 1e-12
+    end
+    @test renyi2(st) ≈ renyi2(ρ) atol = 1e-12
+    @test log_negativity(st, [1], [3]) ≈ log_negativity(ρ, [1], [3]) atol = 1e-12
+    @test log_negativity(st, [1, 2], [3]) ≈ log_negativity(ρ, [1, 2], [3]) atol = 1e-12
+    # positions of any vector, converted before its method is called, none giving 0 at once
+    @test measure(st, ReducedDensityMatrix(1:2)) ≈ reduced_density_matrix(ρ, 1:2) atol = 1e-12
+    @test renyi2(st, Any[1, 3]) ≈ renyi2(ρ, [1, 3]) atol = 1e-12
+    @test von_neumann_entropy(st, Int[]) == 0
+    @test renyi2(st, Int[]) == 0
 end
 
 # A representation on another system: a pure state whose physical sites are the odd sites of a
