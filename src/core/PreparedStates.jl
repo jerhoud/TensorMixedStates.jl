@@ -180,18 +180,41 @@ function Vector(state::State{Pure})
         error("the vector of a state of $(length(system)) sites has " *
               "$(Printf.@sprintf("%.0f", d)) elements, beyond the $(dense_max^2) TMS builds")
     end
+    return contracted(state.state, 1:length(system), siteinds(Pure, system))
+end
+
+"""
+    mps_array(st, k, s)
+
+the tensor of site `k` of the MPS `st` as an array on its left link, its site index `s` and its
+right link, a link it lacks of dimension 1
+"""
+function mps_array(st::MPS, k::Int, s::Index)
+    left = k > 1 ? commonind(st[k-1], st[k]) : nothing
+    right = k < length(st) ? commonind(st[k], st[k+1]) : nothing
+    idx = [ i for i in (left, s, right) if !isnothing(i) ]
+    return reshape(Array(dense(st[k]), idx...), isnothing(left) ? 1 : dim(left), dim(s), :)
+end
+
+"""
+    contracted(st, ks, sites; orders = nothing, start = ones(1, 1))
+
+the sites `ks` of the MPS `st`, of indices `sites` reordered by `orders`, contracted from the
+matrix `start` on the link on their left: a vector, from the slowest, on the link on their
+right, the rows of `start` and the sites in order
+"""
+function contracted(st::MPS, ks::UnitRange{Int}, sites::Vector{<:Index};
+                    orders = nothing, start::AbstractMatrix = ones(1, 1))
     # site by site, the vector of the sites so far for each value of the link on their right: the
-    # tensor of all the sites, of n indices, would be compiled anew for each n, in 10 to 20 s
-    st = state.state
-    n = length(st)
-    v = ones(1, 1)
-    for k in 1:n
-        left = k > 1 ? commonind(st[k-1], st[k]) : nothing
-        right = k < n ? commonind(st[k], st[k+1]) : nothing
-        idx = [ i for i in (left, siteind(Pure, system, k), right) if !isnothing(i) ]
-        a = reshape(Array(dense(st[k]), idx...), size(v, 2), :)
+    # tensor of all the sites, of n indices, would be compiled anew for each n, in seconds
+    v = start
+    for (j, k) in enumerate(ks)
+        a = mps_array(st, k, sites[j])
+        if !isnothing(orders)
+            a = a[:, orders[j], :]
+        end
         # the new site varying the fastest
-        b = reshape(v * a, size(v, 1), dim(system[k]), :)
+        b = reshape(v * reshape(a, size(a, 1), :), size(v, 1), size(a, 2), :)
         v = reshape(permutedims(b, (2, 1, 3)), :, size(b, 3))
     end
     return vec(v)

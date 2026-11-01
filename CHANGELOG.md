@@ -27,6 +27,7 @@ the reference article.
 - TensorMixedStates needs ITensorMPS 0.3.45 and ITensors 0.8, for zipup.
 - `expect`, `expect1`, `expect2` and `measure` take an operator of no definite charge by its part of no flux, without copying the state.
 - A dense operator on many sites is split into terms faster: 15 s rather than 85 s on 10 qubits.
+- `reduced_density_matrix` no longer compiles anew for each number of sites kept, which took up to 10 s on first use.
 
 ### Fixed
 
