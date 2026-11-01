@@ -767,7 +767,7 @@ tr(state::AbstractState) = trace(state)
 the real part of the trace, or the norm, of `state`, by which `what` divides, refused when it
 is zero, as for the null state an operator annihilating a state leaves
 """
-function nonzero_trace(state::State, what)
+function nonzero_trace(state::AbstractState, what)
     t = real(trace(state))
     if iszero(t)
         error("$what divides by the trace of the state, which is zero, as for the null state")
