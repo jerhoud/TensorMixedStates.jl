@@ -711,20 +711,8 @@ end
 the names `@def_states` or `@def_operators`, as `f`, declared for the type of `site`, read off
 the methods they added, those declared on an abstract type, made of the others, left out
 """
-function declared_names(f, site::AbstractSite)
-    names = String[]
-    for m in methods(f)
-        sig = Base.unwrap_unionall(m.sig)
-        if length(sig.parameters) == 3
-            t, v = sig.parameters[2], sig.parameters[3]
-            if v isa DataType && v <: Val && !isempty(v.parameters) && typeof(site) <: t &&
-                    !isabstracttype(t)
-                push!(names, string(v.parameters[1]))
-            end
-        end
-    end
-    return names
-end
+declared_names(f, site::AbstractSite) =
+    String[ n for (t, n) in declarations(f) if typeof(site) <: t && !isabstracttype(t) ]
 
 """
     check_declarations(site)

@@ -362,43 +362,44 @@ const Cdn = Operator{1}("Cdn")
 ############### The help of the operators of the site types ###############
 
 """
+    declarations(f)
+
+the declarations `@def_operators` or `@def_states`, as `f`, made, read off the methods they added:
+pairs of the site type, possibly abstract, and the name declared
+"""
+function declarations(f)
+    ds = Tuple{Any, String}[]
+    for m in methods(f)
+        sig = Base.unwrap_unionall(m.sig)
+        if length(sig.parameters) == 3
+            t, v = sig.parameters[2], sig.parameters[3]
+            if v isa DataType && v <: Val && !isempty(v.parameters)
+                push!(ds, (t, string(v.parameters[1])))
+            end
+        end
+    end
+    return ds
+end
+
+"""
     site_types()
 
 the site types declaring operators, read off the methods `@def_operators` added, in the order of
 their names, and last the abstract ones declaring some, as `AbstractSite` its relations
 """
-function site_types()
-    ts = DataType[]
-    for m in methods(operator_definition)
-        sig = Base.unwrap_unionall(m.sig)
-        if length(sig.parameters) == 3
-            t, v = sig.parameters[2], sig.parameters[3]
-            if t isa DataType && t <: AbstractSite && !(t in ts) &&
-               (!isabstracttype(t) || (v isa DataType && !isempty(v.parameters)))
-                push!(ts, t)
-            end
-        end
-    end
-    return sort!(ts; by = t -> (isabstracttype(t), string(nameof(t))))
-end
+site_types() =
+    sort!(unique!(DataType[ t for (t, _) in declarations(operator_definition)
+                            if t isa DataType && t <: AbstractSite ]);
+          by = t -> (isabstracttype(t), string(nameof(t))))
 
 """
     declaring_types(name)
 
 the names of the site types declaring the operator `name`, for a message
 """
-function declaring_types(name::String)
-    v = Val{Symbol(name)}
-    ts = String[]
-    for m in methods(operator_definition)
-        sig = Base.unwrap_unionall(m.sig)
-        if length(sig.parameters) == 3 && sig.parameters[3] === v &&
-           sig.parameters[2] isa DataType && !isabstracttype(sig.parameters[2])
-            push!(ts, string(nameof(sig.parameters[2])))
-        end
-    end
-    return sort!(unique!(ts))
-end
+declaring_types(name::String) =
+    sort!(unique!(String[ string(nameof(t)) for (t, n) in declarations(operator_definition)
+                          if n == name && t isa DataType && !isabstracttype(t) ]))
 
 """
     own_rule(site)
@@ -417,16 +418,7 @@ with `"0"` to `"d-1"` when it keeps the default rule of `string_state`, its help
 has a rule of its own
 """
 function known_states(site::AbstractSite)
-    names = String[]
-    for m in methods(state_definition)
-        sig = Base.unwrap_unionall(m.sig)
-        if length(sig.parameters) == 3
-            t, v = sig.parameters[2], sig.parameters[3]
-            if t isa Type && site isa t && v isa DataType && v <: Val && !isempty(v.parameters)
-                push!(names, string(v.parameters[1]))
-            end
-        end
-    end
+    names = String[ n for (t, n) in declarations(state_definition) if t isa Type && site isa t ]
     if own_rule(site)
         return join([ sort!(names); sort!(collect(keys(common_states))) ], ", ") *
                " (see ?$(nameof(typeof(site))))"
