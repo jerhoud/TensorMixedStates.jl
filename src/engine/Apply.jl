@@ -374,7 +374,7 @@ function block_step!(steps::Vector, ::Type{R}, system::System, m::AbstractMatrix
 end
 
 """
-    lifted(system, w, k, left, bra)
+    on_mixed_index(system, w, k, left, bra)
 
 the tensor `w` of an MPO on the ket index of site `k` of `system`, made to act on its mixed
 index: ``\\rho \\mapsto W\\rho`` when `left`, ``\\rho \\mapsto \\rho W^\\dagger`` otherwise,
@@ -382,7 +382,7 @@ whose links carry the opposite charges, relabelled by `bra`, a `relabeller` the 
 MPO share, to the starred names the bra takes under a strong symmetry; a tensor without the
 site, the identity there, stays so
 """
-function lifted(system::System, w::ITensor, k::Int, left::Bool, bra)
+function on_mixed_index(system::System, w::ITensor, k::Int, left::Bool, bra)
     s, x = siteind(Pure, system, k), siteind(Mixed, system, k)
     if !hasind(w, s)
         # the identity on the site, see `gate_mpo`
@@ -408,8 +408,8 @@ append to the steps of `apply` the gate of matrix `m` on the increasing `sites`:
 state, `R = Pure`, as a dense block, see `block_step!`. On a density matrix, on one site, its
 superoperator ``\\rho \\mapsto m\\rho m^\\dagger`` as a block; on several,
 ``\\rho \\mapsto m\\rho`` then ``\\rho \\mapsto \\rho m^\\dagger``, each the MPO of `m`, see
-`gate_mpo`, made to act on the mixed indices, see `lifted`: one gate on consecutive sites small
-enough, see `dense_enough`, an MPO on its sites otherwise
+`gate_mpo`, made to act on the mixed indices, see `on_mixed_index`: one gate on consecutive
+sites small enough, see `dense_enough`, an MPO on its sites otherwise
 """
 gate_steps!(steps::Vector, ::Type{Pure}, system::System, m::AbstractMatrix, ks) =
     block_step!(steps, Pure, system, m, ks)
@@ -424,7 +424,7 @@ function gate_steps!(steps::Vector, ::Type{Mixed}, system::System, m::AbstractMa
     one_gate = !spread(ks) && dense_enough(Mixed, system, ks)
     bra = relabeller(i -> star(i, strong_names(system)))
     for left in (true, false)
-        ts = [ lifted(system, w[j], lo + j - 1, left, bra) for j in eachindex(w) ]
+        ts = [ on_mixed_index(system, w[j], lo + j - 1, left, bra) for j in eachindex(w) ]
         if one_gate
             add_gate!(steps, prod(ts), ks)
         else
