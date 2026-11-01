@@ -574,13 +574,13 @@ end
 
 expect(state::AbstractState, ops::Tuple; kwargs...) = map(o -> expect(state, o; kwargs...), ops)
 
-expect(::State, a::Op{IsChannel}; kwargs...) =
+expect(::AbstractState, a::Op{IsChannel}; kwargs...) =
     error("expect takes an observable, and $(obs_name(a)) is a channel")
 
-expect(::State, a::Op{IsGenerator}; kwargs...) =
+expect(::AbstractState, a::Op{IsGenerator}; kwargs...) =
     error("expect takes an observable, and $(obs_name(a)) is a generator")
 
-expect(::State, a::GenericOp{IsOperator, N}; kwargs...) where N =
+expect(::AbstractState, a::GenericOp{IsOperator, N}; kwargs...) where N =
     error("expect takes an operator placed on sites, such as $(obs_name(a((1:N)...))) rather " *
           "than $(obs_name(a)), and expect1 measures an operator of one site on every site")
 

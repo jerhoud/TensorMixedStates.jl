@@ -98,6 +98,8 @@ end
     ψ = State{Pure}(System(2, Qubit()), "Up")
     @test_throws "expect divides by the trace" expect(TMS.ExactState(0 * ψ), Z(1))
     e = TMS.ExactState(ψ)
+    @test_throws "is a generator" expect(e, Dissipator(Sm)(1))
+    @test_throws "placed on sites" expect(e, X)
     big = TMS.ExactState(random_state(Pure, System(4, Qubit()), 4))
     @test maxlinkdim(State(big; limits = Limits(maxdim = 1))) == 1
 end
