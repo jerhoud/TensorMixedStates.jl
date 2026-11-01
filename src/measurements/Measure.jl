@@ -475,7 +475,7 @@ the function measuring the variance of `op` on the states of the system of `stat
 state through its MPO, built once, on any other, a density matrix or the state of an extension,
 by its `variance`
 """
-function variance_of(state::State{Pure}, op)
+function variance_of(state::State{Pure}, op::IndexedOp{IsOperator})
     on, mpo = or_on_plain(s -> (s, make_mpo(s, op)), state)
     # the states to come measured on the same form as `state`
     return on === state ? (st -> variance(st, mpo)) : (st -> variance(plain_form(st), mpo))
