@@ -32,6 +32,9 @@ end
         for o in ops
             @test expect(e, o; complex = true) ≈ expect(st, o; complex = true) atol = 1e-12
             @test measure(e, o + dag(o)) ≈ measure(st, o + dag(o)) atol = 1e-12
+            # through expect, a non-Hermitian operator too
+            @test variance(e, o) ≈ variance(st, o) atol = 1e-12
+            @test measure(e, Variance(o + dag(o))) ≈ variance(st, o + dag(o)) atol = 1e-12
         end
         @test expect1(e, F) ≈ expect1(st, F) atol = 1e-12
         @test trace(e) ≈ trace(st)
@@ -77,6 +80,32 @@ end
     @test es.state ≈ ket_bra_matrix(ρs)
     hop = dag(C)(1) * C(2) + dag(C)(2) * C(1)
     @test expect(es, hop) ≈ expect(ρs, hop) atol = 1e-12
+end
+
+# the paths a representation gets from its reduced_density_matrix and its purity, taken on a State
+# and compared with its own
+@testset "Generic paths of the measurements on $name" for (name, sys, h) in [
+        ("qubits", System(4, Qubit()), X(1) * X(2) + Z(3)),
+        ("fermions of no definite parity", System(4, Fermion()),
+         dag(C)(1) * C(2) + dag(C)(2) * C(1) + N(4) + C(3)),
+        ("fermions conserving N", System(4, Fermion(conserve = N)),
+         dag(C)(1) * C(2) + dag(C)(2) * C(1) + N(4))]
+    rng = Xoshiro(20261104)
+    occ = ["Occ", "Emp", "Occ", "Emp"]
+    charged = TMS.is_charged(sys)
+    ψ = charged ? random_state(Pure, sys, occ, 4; rng) : random_state(Pure, sys, 4; rng)
+    ρ = charged ? random_state(Mixed, sys, occ, 4; rng) : random_state(Mixed, sys, 4; rng)
+    AS = TMS.AbstractState
+    for kept in [[1], [4], [1, 2], [2, 3], [1, 3], [2, 4], [1, 2, 4]]
+        for st in [ψ, mix(ψ), ρ]
+            @test invoke(TMS.part_renyi2, Tuple{AS, Vector{Int}}, st, kept) ≈
+                  TMS.part_renyi2(st, kept) atol = 1e-10
+        end
+        # the parts of a mixed state by the generic path, of the pure one by its own
+        @test TMS.parts_renyi2(mix(ψ), kept) ≈ TMS.parts_renyi2(ψ, kept) atol = 1e-10
+    end
+    # the pure state through its MPO, against expect
+    @test invoke(variance, Tuple{AS, Any}, ψ, h) ≈ variance(ψ, h) atol = 1e-10
 end
 
 @testset "From a whole vector or density matrix" begin

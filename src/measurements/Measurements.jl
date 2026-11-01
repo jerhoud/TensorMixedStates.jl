@@ -275,8 +275,8 @@ entanglement_by_sector(::State{Mixed}, ::Int) =
           "differences between the charges of the ket and of the bra")
 
 """
-    renyi2(::State)
-    renyi2(::State, positions::AbstractVector{Int})
+    renyi2(state)
+    renyi2(state, positions::AbstractVector{Int})
 
 the Rényi entropy of order 2, ``-\\log \\mathrm{tr}(\\rho^2)``, of the state, 0 on a pure
 representation; given positions, that of the state reduced to those sites, 0 when there is
@@ -289,9 +289,9 @@ is much more expensive.
     renyi2(state, 1:3)
 """
 renyi2(::State{Pure}) = 0.
-renyi2(state::State{Mixed}) = -log(purity(state))
+renyi2(state::AbstractState) = -log(purity(state))
 
-function renyi2(state::State, positions::AbstractVector{Int})
+function renyi2(state::AbstractState, positions::AbstractVector{Int})
     check_positions(state, positions, "renyi2")
     kept = sort!(collect(positions))
     if isempty(kept)
@@ -303,7 +303,7 @@ function renyi2(state::State, positions::AbstractVector{Int})
 end
 
 # positions in a vector of another element type, `[]` or `Any[1, 3]`
-renyi2(state::State, positions::AbstractVector) = renyi2(state, Vector{Int}(positions))
+renyi2(state::AbstractState, positions::AbstractVector) = renyi2(state, Vector{Int}(positions))
 
 """
     part_renyi2(state, kept)
@@ -311,8 +311,12 @@ renyi2(state::State, positions::AbstractVector) = renyi2(state, Vector{Int}(posi
 the Rényi entropy of order 2 of the state reduced to the increasing positions `kept`, some of
 the sites and not all: a block at an end of a pure state from the Schmidt spectrum of its cut,
 read on the state carrying the signs of the fermionic sites traced out, whose plain reduction is
-the fermionic one, see `trace_signs`
+the fermionic one, see `trace_signs`; on another representation, from its
+`reduced_density_matrix`, of trace one
 """
+part_renyi2(state::AbstractState, kept::Vector{Int}) =
+    -log(sum(abs2, reduced_density_matrix(state, kept)))
+
 part_renyi2(state::State{Mixed}, kept::Vector{Int}) =
     renyi2(partial_trace(weak_form(state); keep = kept))
 
@@ -338,7 +342,7 @@ it is the sum of the `renyi2` of the two parts.
 
     mutual_info_renyi2(state, 1:3)
 """
-function mutual_info_renyi2(state::State, positions::AbstractVector{Int})
+function mutual_info_renyi2(state::AbstractState, positions::AbstractVector{Int})
     check_positions(state, positions, "mutual_info_renyi2")
     kept = sort!(collect(positions))
     if isempty(kept) || length(kept) == length(state)
@@ -348,7 +352,7 @@ function mutual_info_renyi2(state::State, positions::AbstractVector{Int})
 end
 
 # positions in a vector of another element type
-mutual_info_renyi2(state::State, positions::AbstractVector) =
+mutual_info_renyi2(state::AbstractState, positions::AbstractVector) =
     mutual_info_renyi2(state, Vector{Int}(positions))
 
 """
@@ -358,11 +362,8 @@ mutual_info_renyi2(state::State, positions::AbstractVector) =
 rest, neither of them empty; ``2 S_2(A)`` on a pure state, but on fermions, where the signs of
 the sites traced out make ``S_2(B)`` another value on a state of no definite parity
 """
-function parts_renyi2(state::State{Mixed}, kept::Vector{Int})
-    w = weak_form(state)
-    return renyi2(partial_trace(w; keep = kept)) + renyi2(partial_trace(w; trace_out = kept)) -
-           renyi2(w)
-end
+parts_renyi2(state::AbstractState, kept::Vector{Int}) =
+    part_renyi2(state, kept) + part_renyi2(state, setdiff(1:length(state), kept)) - renyi2(state)
 
 function parts_renyi2(state::State{Pure}, kept::Vector{Int})
     a = part_renyi2(state, kept)
@@ -513,9 +514,14 @@ function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{In
     return unit_trace(pairs_matrix(kept_pairs(state, kept), [ dim(state.system[k]) for k in kept ]))
 end
 
-# positions in a vector of another element type, `[]` or `Any[1, 3]`
-reduced_density_matrix(state::State, positions::AbstractVector) =
-    reduced_density_matrix(state, Vector{Int}(positions))
+# positions in a vector of another element type, `[]` or `Any[1, 3]`; integer positions reaching
+# this method have no method of their own, which converting them again would not find
+function reduced_density_matrix(state::AbstractState, positions::AbstractVector)
+    if positions isa AbstractVector{Int}
+        throw(MethodError(reduced_density_matrix, (state, positions)))
+    end
+    return reduced_density_matrix(state, Vector{Int}(positions))
+end
 
 """
     von_neumann_entropy(state, positions)
@@ -530,9 +536,12 @@ any number of sites.
 
     von_neumann_entropy(state, [2, 5])
 """
-function von_neumann_entropy(state::State, positions::AbstractVector)
+function von_neumann_entropy(state::AbstractState, positions::AbstractVector)
     check_positions(state, positions, "von_neumann_entropy")
-    λ = eigvals(Hermitian(reduced_density_matrix(state, sort(positions))))
+    if isempty(positions)
+        return 0.0
+    end
+    λ = eigvals(Hermitian(reduced_density_matrix(state, sort(Vector{Int}(positions)))))
     return sum((-x * log(x) for x in λ if x > 0); init = 0.0)
 end
 
@@ -549,7 +558,7 @@ site, and refused when both hold one.
 
     log_negativity(state, [1, 2], [5])
 """
-function log_negativity(state::State, a::AbstractVector, b::AbstractVector)
+function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVector)
     check_positions(state, a, "log_negativity")
     check_positions(state, b, "log_negativity")
     a, b = sort(Vector{Int}(a)), sort(Vector{Int}(b))
@@ -669,5 +678,12 @@ end
 
 variance(state::State{Pure}, op) = or_on_plain(st -> variance(st, make_mpo(st, op)), state)
 
-variance(state::State{Mixed}, op::IndexedOp{IsOperator}) =
-    expect(state, op' * op) - abs2(expect(state, op; complex = true))
+# `op` of any type in the signature, so that a representation defining `variance(::MyState, op)`
+# stays unambiguous, and checked here
+function variance(state::AbstractState, op)
+    if !(op isa IndexedOp{IsOperator})
+        error("variance takes an operator placed on sites, as X(1) * X(2), or an MPO on a pure " *
+              "state")
+    end
+    return expect(state, op' * op) - abs2(expect(state, op; complex = true))
+end
