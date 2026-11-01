@@ -169,6 +169,23 @@ end
     @test matrix(Gate(X ⊗ (A + dag(A))), q, b) ≈ matrix(Gate(X) ⊗ Gate(A + dag(A)), q, b)
 end
 
+@testset "The positions of the elements of a density matrix in the order of channels" begin
+    # against mixed_order on sites of different dimensions, and against mixed_vec on two
+    for dims in [[2], [2, 3], [3, 2, 4]]
+        D = prod(dims)
+        o = TMS.mixed_order(dims)
+        kets, bras = TMS.pair_positions(dims)
+        @test [ o[1 + kets[a] + bras[b]] for a in 1:D, b in 1:D ] == reshape(1:D^2, D, D)
+    end
+    ρ = randn(ComplexF64, 6, 6)
+    kets, bras = TMS.pair_positions([2, 3])
+    w = zeros(ComplexF64, 36)
+    for a in 1:6, b in 1:6
+        w[1 + kets[a] + bras[b]] = ρ[a, b]
+    end
+    @test w == mixed_vec(ρ, 2, 3)
+end
+
 @testset "The tensor product of channels on fermions" begin
     # (A ⊗ B)(i, j) is A(i) * B(j) for channels too: each factor takes the strings of the odd
     # factors after it, on the kets and on the bras, as the operators of a gate do

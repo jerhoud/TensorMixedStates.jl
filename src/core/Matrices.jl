@@ -144,6 +144,30 @@ function mixed_order(dims)
 end
 
 """
+    pair_positions(dims)
+
+the offsets `(kets, bras)` of the basis states of sites of dimensions `dims` in the order of
+`mixed_order`, element `(a, b)` of a density matrix being at `1 + kets[a] + bras[b]`
+"""
+function pair_positions(dims)
+    d = prod(dims)
+    kets, bras = zeros(Int, d), zeros(Int, d)
+    # from the digits of each basis state, without an array of one axis per site, which would be
+    # compiled anew for each number of sites
+    for a in 1:d
+        r, s = a - 1, 1
+        for k in length(dims):-1:1
+            x = r % dims[k]
+            r ÷= dims[k]
+            kets[a] += x * s
+            bras[a] += x * dims[k] * s
+            s *= dims[k]^2
+        end
+    end
+    return kets, bras
+end
+
+"""
     sided(a, b, sites)
 
 the matrix of the map ρ ↦ a ρ b of the density matrices of `sites`, see `matrix`

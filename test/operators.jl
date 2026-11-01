@@ -602,6 +602,49 @@ end
     @test_throws "beyond the 4096 TMS builds" matrix(Z(1), System(13, q))
 end
 
+@testset "Terms acting on a dense state" begin
+    # on sites of several dimensions, a boson between a qubit and fermions, against the explicit
+    # matrices of the factors; the identity is a term with no block, the zero operator has none
+    rng = Xoshiro(20261102)
+    sys = System([Qubit(), Boson(3), Fermion(), Fermion()])
+    placed(a, k) = jw_placed(sys, k, matrix(a, sys[k]))
+    D = 24
+    w, r = randn(rng, ComplexF64, D), randn(rng, ComplexF64, D, D)
+    for (o, d) in [(X(1) * dag(A)(2) + dag(C)(3) * C(4),
+                    placed(X, 1) * placed(dag(A), 2) + placed(dag(C), 3) * placed(C, 4)),
+                   ((X ⊗ C)(1, 4) + 2 * A(2) * C(3),
+                    placed(X, 1) * placed(C, 4) + 2 * placed(A, 2) * placed(C, 3)),
+                   (3 * Id(1), Matrix(3.0 * LA.I, D, D)), (0 * X(1), zeros(D, D))]
+        ts = TMS.lower(sys, o)
+        @test TMS.dense_acted(Pure, sys, ts, w) ≈ d * w atol = 1e-12
+        @test TMS.dense_acted(Pure, sys, ts, r) ≈ d * r atol = 1e-12
+        @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Gate(o)), r) ≈ d * r * d' atol = 1e-12
+        l = d' * d
+        @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Dissipator(o)), r) ≈
+              d * r * d' - (l * r + r * l) / 2 atol = 1e-12
+    end
+    s1 = System(1, Qubit())
+    v, m = randn(rng, ComplexF64, 2), randn(rng, ComplexF64, 2, 2)
+    y, z = matrix(Y, Qubit()), matrix(Z, Qubit())
+    @test TMS.dense_acted(Pure, s1, TMS.lower(s1, Y(1)), v) ≈ y * v
+    @test TMS.dense_acted(Mixed, s1, TMS.lower(s1, Evolver(-im * Z)(1)), m) ≈
+          -im * (z * m - m * z)
+    # on a system conserving a charge, where the descent splits Sx and Sy into parts of definite
+    # flux, which the terms add back up
+    sp = System(3, Spin(1, conserve = 2Sz))
+    on(a, k) = jw_placed(sp, k, matrix(a, sp[k]))
+    o = Sx(1) * Sx(3) + Sy(1) * Sy(3) + Sz(2)
+    d = on(Sx, 1) * on(Sx, 3) + on(Sy, 1) * on(Sy, 3) + on(Sz, 2)
+    u, s = randn(rng, ComplexF64, 27), randn(rng, ComplexF64, 27, 27)
+    @test TMS.dense_acted(Pure, sp, TMS.lower(sp, o), u) ≈ d * u atol = 1e-12
+    @test TMS.dense_acted(Mixed, sp, TMS.lower(sp, Gate(o)), s) ≈ d * s * d' atol = 1e-12
+    # a state of the wrong size or shape
+    @test_throws MethodError TMS.dense_acted(Mixed, sys, TMS.lower(sys, Gate(X(1))), w)
+    @test_throws "24 rows, not 12" TMS.dense_acted(Pure, sys, TMS.lower(sys, X(1)), w[1:12])
+    @test_throws "24 × 24, not 12 × 24" TMS.dense_acted(Mixed, sys, TMS.lower(sys, Gate(X(1))),
+                                                          r[1:12, :])
+end
+
 @testset "Operators of no definite charge in an expression that has one" begin
     # on a site that conserves something, a block is split into its parts of each charge, so
     # that the Heisenberg coupling written with Sx and Sy, whose terms S⁺S⁺ and S⁻S⁻ cancel
