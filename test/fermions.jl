@@ -150,6 +150,24 @@ end
         end
     end
 
+    @testset "Sums of products" begin
+        # the terms of the products merge and cancel in the descent: the first product is taken
+        # away again, written as the adjoint of its adjoint. A generator of their own leaves the
+        # draws of the testsets after unchanged
+        r = Xoshiro(20261101)
+        for _ in 1:8
+            ps = [ jw_product(sys, ops, r) for _ in 1:rand(r, 2:4) ]
+            cs = randn(r, ComplexF64, length(ps))
+            o = sum(c * p[1] for (c, p) in zip(cs, ps)) - cs[1] * dag(ps[1][2])
+            d = sum(c * p[3] for (c, p) in zip(cs[2:end], ps[2:end]))
+            @test matrix(o, sys) ≈ d atol = 1e-10 rtol = 1e-10
+            @test mpo_matrix(ψ, o) ≈ d atol = 1e-10 rtol = 1e-10
+            @test expect(ρ, o) ≈ LA.tr(R * d) atol = 1e-10 rtol = 1e-10
+            @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10 rtol = 1e-10
+            @test ket_bra_matrix(apply(o, ρ)) ≈ d * R0 * d' atol = 1e-10 rtol = 1e-10
+        end
+    end
+
     @testset "Operators of one site, and pairs" begin
         defined(a, k) =
             try
