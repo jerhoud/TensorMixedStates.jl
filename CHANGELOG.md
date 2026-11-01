@@ -8,7 +8,7 @@ This file starts with the release in preparation. For what came before, see the
 archived as the [codebase release](https://doi.org/10.21468/SciPostPhysCodeb.72-r1.28) of
 the reference article.
 
-## [2.0.1] - 2026-10-28
+## [Unreleased]
 
 ### Added
 
@@ -30,6 +30,12 @@ the reference article.
 - A dense operator on many sites is split into terms faster: 15 s rather than 85 s on 10 qubits.
 - `reduced_density_matrix` no longer compiles anew for each number of sites kept, which took up to 10 s on first use.
 - A state of one's own defining `renyi2`, `mutual_info_renyi2`, `von_neumann_entropy` or `log_negativity` types its positions `positions::AbstractVector{Int}`; a looser type can now make the call ambiguous.
+
+### Fixed
+
+- A phase of one's own defining `run_phase(p::MyPhase, sim, done)` without typing `sim` and `done` is no longer ambiguous.
+
+## [2.0.1] - 2026-10-28
 
 ### Fixed
 
