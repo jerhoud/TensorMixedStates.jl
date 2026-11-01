@@ -1,7 +1,73 @@
-# Systems, the sites a state lives on, compared by their content, and the ITensor indices of
-# their sites, whose identities derive from that content. The later layers also use `is_charged`.
+# Systems, the sites a state lives on, each site checked at its first use, compared by their
+# content, and the ITensor indices of their sites, whose identities derive from that content. The
+# later layers also use `is_charged`.
 
 export System, siteind, siteinds
+
+############### The check of a site at its first use ###############
+
+"""
+    declared_names(f, site)
+
+the names `@def_states` or `@def_operators`, as `f`, declared for the type of `site`, read off
+the methods they added, those declared on an abstract type, made of the others, left out
+"""
+declared_names(f, site::AbstractSite) =
+    String[ n for (t, n) in declarations(f) if typeof(site) <: t && !isabstracttype(t) ]
+
+"""
+    check_declarations(site)
+
+refuse a site whose declarations do not fit it: parities of the wrong number or not 0 or 1,
+states or operators of the wrong size, fermion species not satisfying the anticommutation
+relations
+"""
+function check_declarations(site::AbstractSite)
+    d = dim(site)
+    p = collect(fermion_parities(site))
+    if length(p) ≠ d || !all(in((0, 1)), p)
+        error("$site has $d basis states, and fermion_parities gives $p")
+    end
+    for name in declared_names(state_definition, site)
+        local_state(site, name)
+    end
+    for name in declared_names(operator_definition, site)
+        matrix(Operator{1}(name), site)
+    end
+    species = fermion_species(site)
+    if !isnothing(species)
+        cs = [ matrix(c, site) for c in species ]
+        f = matrix(F, site)
+        id = Matrix{Float64}(I, d, d)
+        for (a, x) in enumerate(cs), (b, y) in enumerate(cs)
+            car = norm(x * y' + y' * x - (a == b ? id : zero(id))) + norm(x * y + y * x)
+            if car > rounding_tol * d || !nearly(f * x * f, -x)
+                error("the fermion species $(species) of $site are not anticommuting " *
+                      "annihilation operators odd under F")
+            end
+        end
+    end
+    return nothing
+end
+
+const checked_sites = Set{AbstractSite}()
+const checked_lock = ReentrantLock()
+
+"""
+    check_site(site)
+
+`site`, its declarations checked the first time this value of the site is used
+"""
+function check_site(site::AbstractSite)
+    lock(checked_lock) do
+        if !(site in checked_sites)
+            check_declarations(site)
+            push!(checked_sites, site)
+        end
+    end
+    return site
+end
+
 
 """
     System(sites::Vector{<:AbstractSite})
