@@ -471,3 +471,65 @@ end
     @test trace(ρ) ≈ 1
     @test real(expect1(ρ, Z)) ≈ fill(-γ^2 / (γ^2 + 2Ω^2), 2)
 end
+
+# An extension of every interface, each method typing only its own type and what the
+# documentation asks for: an ambiguity with a method of TMS shows here before a user meets it,
+# which a call would only show when made
+struct LooseState <: AbstractState
+    system::System
+end
+
+TensorMixedStates.expect_value(st::LooseState, op::TensorMixedStates.IndexedOp) = 0.
+TensorMixedStates.apply(op::TensorMixedStates.IndexedOp, st::LooseState; kwargs...) = st
+TensorMixedStates.write_state(g, st::LooseState) = nothing
+TensorMixedStates.read_state(::Type{LooseState}, g, sites) = nothing
+TensorMixedStates.trace(st::LooseState) = 1.
+TensorMixedStates.norm(st::LooseState) = 1.
+TensorMixedStates.normalize(st::LooseState) = st
+TensorMixedStates.purity(st::LooseState) = 1.
+TensorMixedStates.variance(st::LooseState, op) = 0.
+TensorMixedStates.renyi2(st::LooseState, positions::AbstractVector{Int}) = 0.
+TensorMixedStates.mutual_info_renyi2(st::LooseState, positions::AbstractVector{Int}) = 0.
+TensorMixedStates.reduced_density_matrix(st::LooseState, positions::AbstractVector{Int}) =
+    ones(1, 1)
+TensorMixedStates.von_neumann_entropy(st::LooseState, positions::AbstractVector{Int}) = 0.
+TensorMixedStates.log_negativity(st::LooseState, a::AbstractVector{Int},
+                                 b::AbstractVector{Int}) = 0.
+TensorMixedStates.entanglement_entropy(st::LooseState, cut) = 0.
+TensorMixedStates.entanglement_spectrum(st::LooseState, cut) = [1.]
+
+struct LoosePhase <: TensorMixedStates.AbstractPhase end
+
+TensorMixedStates.run_phase(p::LoosePhase, sim, done) = sim
+TensorMixedStates.provided_values(p::LoosePhase) = ()
+
+struct LooseSteps <: TensorMixedStates.AbstractPhase end
+
+TensorMixedStates.prepare_phase(p::LooseSteps, sim) = p
+TensorMixedStates.step_count(p::LooseSteps) = 1
+TensorMixedStates.run_step(p::LooseSteps, sim, prepared) = sim
+
+struct LooseEvolution <: TensorMixedStates.EvolutionAlgorithm end
+
+TensorMixedStates.evolve_step(::LooseEvolution, pre, state, time, dt, step, limits) = state
+
+struct LooseSearch <: TensorMixedStates.SearchAlgorithm end
+
+TensorMixedStates.search(::LooseSearch, mpo, state, limits; kwargs...) = (0., state)
+
+struct LooseDestination <: TensorMixedStates.Destination end
+struct LooseOpened end
+
+Base.open(::LooseDestination) = LooseOpened()
+Base.open(::LooseDestination, mark) = LooseOpened()
+Base.close(::LooseOpened) = nothing
+TensorMixedStates.write_row(o::LooseOpened, time, row) = nothing
+TensorMixedStates.check_list(o::LooseOpened, names) = nothing
+TensorMixedStates.resume_mark(o::LooseOpened) = nothing
+
+@testset "An extension typed only where the documentation asks" begin
+    ours(m) = m.module === @__MODULE__
+    clashes = [ (a, b) for (a, b) in Test.detect_ambiguities(TensorMixedStates, @__MODULE__)
+                if ours(a) || ours(b) ]
+    @test isempty(clashes)
+end

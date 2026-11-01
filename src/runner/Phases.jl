@@ -221,7 +221,9 @@ run `phase` on the simulation `sim`, its first `done` steps already done, and re
 simulation it leaves. For a phase made of steps, it prepares the phase and runs the steps after
 `done`, ending each with `step_done`; a phase of a single call has a method of its own.
 """
-function run_phase(phase::AbstractPhase, sim::Simulation, done::Int)
+function run_phase(phase::AbstractPhase, sim, done)
+    # `sim` and `done` untyped, so that a phase's own `run_phase(p::MyPhase, sim, done)` stays
+    # unambiguous
     if !hasmethod(prepare_phase, Tuple{typeof(phase), Simulation})
         error("$(type_name(typeof(phase))) has neither a method of TensorMixedStates.run_phase " *
               "nor one of TensorMixedStates.prepare_phase, so runTMS does not know how to run it")

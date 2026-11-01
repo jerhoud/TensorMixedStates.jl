@@ -31,6 +31,10 @@ the reference article.
 - `reduced_density_matrix` no longer compiles anew for each number of sites kept, which took up to 10 s on first use.
 - A state of one's own defining `renyi2`, `mutual_info_renyi2`, `von_neumann_entropy` or `log_negativity` types its positions `positions::AbstractVector{Int}`; a looser type can now make the call ambiguous.
 
+### Fixed
+
+- A phase of one's own defining `run_phase(p::MyPhase, sim, done)` without typing `sim` and `done` is no longer ambiguous.
+
 ## [2.0.1] - 2026-10-28
 
 ### Fixed
