@@ -191,17 +191,6 @@ end
 cells!(out, col, x) = push!(out, col => x)
 
 """
-    text_cell(x, format)
-
-the text of the cell `x` in a text table, see `cells!`: a real number in `format`, an integer
-as it is, `missing` as an empty cell, anything else as it prints, on one line
-"""
-text_cell(x::Integer, _) = string(x)
-text_cell(x::Real, f) = Printf.format(f, float(x))
-text_cell(::Missing, _) = ""
-text_cell(x, _) = replace(string(x), r"[\t\r\n]" => " ")
-
-"""
     entry_cells(name, m, x)
 
 the cells of the value `x` of the measurement `m` named `name`, see `cells!`: an operator of one
