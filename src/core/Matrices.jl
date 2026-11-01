@@ -136,11 +136,15 @@ elements `(k, b)` of each site, the ket `k` faster than the bra `b`, the last si
 `vec(ρ)` is `S`.
 """
 function mixed_order(dims)
-    n = length(dims)
-    ds = reverse(dims)
-    # vec(ρ) as the kets, then the bras, each from the last site to the first
-    axes = reshape(1:prod(dims)^2, ds..., ds...)
-    return vec(permutedims(axes, vec(permutedims([1:n (n + 1):2n]))))
+    d = prod(dims)
+    kets, bras = pair_positions(dims)
+    # element (a, b) of ρ, at a + (b - 1)d in vec(ρ), taken where `pair_positions` puts it: an
+    # array of one axis per site would be compiled anew for each number of sites
+    o = Vector{Int}(undef, d^2)
+    for a in 1:d, b in 1:d
+        o[1 + kets[a] + bras[b]] = a + (b - 1) * d
+    end
+    return o
 end
 
 """
