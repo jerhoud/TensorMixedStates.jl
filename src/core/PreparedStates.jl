@@ -237,6 +237,32 @@ function contracted(st::MPS, ks::UnitRange{Int}, sites::Vector{<:Index};
 end
 
 """
+the density matrix of sites of dimensions `dims` of elements `v` in the order of `mixed_order`
+"""
+function pairs_matrix(v::AbstractVector, dims::Vector{Int})
+    kets, bras = pair_positions(dims)
+    return [ v[1 + k + b] for k in kets, b in bras ]
+end
+
+"""
+the density matrix of the mixed `state`, not normalised, on all its sites
+"""
+function full_matrix(state::State{Mixed})
+    system = state.system
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float(dim(s)) for s in system.sites)
+    if d > dense_max
+        error("the density matrix of a state of $(length(system)) sites has the dimension " *
+              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
+    end
+    n = length(system)
+    # the elements of each site, ket and bra, taken from the mixed index as `mixed_order` has them
+    v = contracted(state.state, 1:n, siteinds(Mixed, system);
+                   orders = [ invperm(mixed_elements(system, i)) for i in 1:n ])
+    return pairs_matrix(v, [ dim(s) for s in system.sites ])
+end
+
+"""
     product_sum(R, system, terms)
 
 the MPS, in the representation `type`, of the sum of the product states of `terms`, pairs
