@@ -422,22 +422,33 @@ function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{I
         return ones(1, 1)
     end
     check_reduced(state, positions)
-    r = partial_trace(weak_form(state); keep = positions)
-    system = r.system
-    n = length(system)
-    # the elements of each site, ket and bra, taken from the mixed index as `mixed_order` has them
-    v = contracted(r.state, 1:n, siteinds(Mixed, system);
-                   orders = [ invperm(mixed_elements(system, i)) for i in 1:n ])
-    return pairs_matrix(v, [ dim(s) for s in system.sites ])
+    return unit_trace(full_matrix(partial_trace(weak_form(state); keep = positions)))
 end
 
 """
-the density matrix of trace one of sites of dimensions `dims`, of elements `v` in the order of
-`mixed_order`
+the density matrix of sites of dimensions `dims` of elements `v` in the order of `mixed_order`
 """
 function pairs_matrix(v::AbstractVector, dims::Vector{Int})
     kets, bras = pair_positions(dims)
-    return unit_trace([ v[1 + k + b] for k in kets, b in bras ])
+    return [ v[1 + k + b] for k in kets, b in bras ]
+end
+
+"""
+the density matrix of the mixed `state`, not normalised, on all its sites
+"""
+function full_matrix(state::State{Mixed})
+    system = state.system
+    # a Float64, which does not wrap around as an Int does on many sites
+    d = prod(float(dim(s)) for s in system.sites)
+    if d > dense_max
+        error("the density matrix of a state of $(length(system)) sites has the dimension " *
+              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
+    end
+    n = length(system)
+    # the elements of each site, ket and bra, taken from the mixed index as `mixed_order` has them
+    v = contracted(state.state, 1:n, siteinds(Mixed, system);
+                   orders = [ invperm(mixed_elements(system, i)) for i in 1:n ])
+    return pairs_matrix(v, [ dim(s) for s in system.sites ])
 end
 
 """
@@ -525,7 +536,7 @@ function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{In
     if kept == first(kept):last(kept)
         return unit_trace(block_matrix(state, first(kept):last(kept)))
     end
-    return pairs_matrix(kept_pairs(state, kept), [ dim(state.system[k]) for k in kept ])
+    return unit_trace(pairs_matrix(kept_pairs(state, kept), [ dim(state.system[k]) for k in kept ]))
 end
 
 # positions in a vector of another element type, `[]` or `Any[1, 3]`

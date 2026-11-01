@@ -106,15 +106,35 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
 end
 
 """
+the array of the vector `ψ`, or of the density matrix `ρ`, of `system` with one axis per index
+of its sites, see `on_legs`, those indices, and the combiners gathering them into the sites
+"""
+dense_legs(system::System, ψ::AbstractVector) =
+    (on_legs(reshape(collect(ψ), :, 1), siteinds(Pure, system), Index[])..., ITensor[])
+
+function dense_legs(system::System, ρ::AbstractMatrix)
+    s = siteinds(Pure, system)
+    mixers = [ mixer(s[k], siteind(Mixed, system, k), system[k]) for k in 1:length(system) ]
+    return (on_legs(Matrix(ρ), s, [ dag(b') for (b, _) in mixers ])..., last.(mixers))
+end
+
+"""
+refuse the array `a` on the indices `idx` when it has no definite charge
+"""
+function check_definite_flux(a::AbstractArray, idx)
+    if !has_definite_flux(a, idx)
+        error("the state has no definite charge, which a system conserving it cannot hold")
+    end
+end
+
+"""
     dense_mps(a, idx, sites, limits; combiners = ITensor[])
 
 the MPS on `sites` of the array `a` on the indices `idx`, once the combiners `combiners` have
 gathered these indices into the sites, truncated to `limits`
 """
 function dense_mps(a::AbstractArray, idx, sites, limits::Limits; combiners = ITensor[])
-    if !has_definite_flux(a, idx)
-        error("the state has no definite charge, which a system conserving it cannot hold")
-    end
+    check_definite_flux(a, idx)
     t = charged_itensor(a, idx)
     for c in combiners
         t *= c
@@ -141,22 +161,18 @@ function dense_state(system::System, ψ::AbstractVector{<:Number}; limits::Limit
     if length(ψ) ≠ prod(dim, s)
         error("a vector of $(length(ψ)) elements cannot be a state of $(prod(dim, s)) basis states")
     end
-    a, idx = on_legs(reshape(collect(ψ), :, 1), s, Index[])
+    a, idx, _ = dense_legs(system, ψ)
     return normalize(State{Pure}(system, dense_mps(a, idx, s, limits)))
 end
 
 function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limits = Limits())
-    n = length(system)
-    s = siteinds(Pure, system)
-    d = prod(dim, s)
+    d = prod(dim, siteinds(Pure, system))
     if size(ρ) ≠ (d, d)
         error("a matrix of size $(size(ρ)) cannot be a density matrix of $d basis states")
     end
-    mixers = [ mixer(s[k], siteind(Mixed, system, k), system[k]) for k in 1:n ]
-    a, idx = on_legs(Matrix(ρ), s, [ dag(b') for (b, _) in mixers ])
+    a, idx, combiners = dense_legs(system, ρ)
     sites = siteinds(Mixed, system)
-    return normalize(State{Mixed}(system, dense_mps(a, idx, sites, limits;
-                                                    combiners = last.(mixers))))
+    return normalize(State{Mixed}(system, dense_mps(a, idx, sites, limits; combiners)))
 end
 
 """

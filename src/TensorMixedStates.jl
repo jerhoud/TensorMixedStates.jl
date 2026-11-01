@@ -78,6 +78,9 @@ include("solvers/Evolve.jl")
 include("solvers/Search.jl")
 include("solvers/Thermalize.jl")
 
+# The exact representation of small systems
+include("dense/ExactStates.jl")
+
 # Simulations
 include("runner/Threading.jl")
 include("runner/Checkpoint.jl")
