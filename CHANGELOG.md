@@ -30,6 +30,7 @@ the reference article.
 - A dense operator on many sites is split into terms faster: 15 s rather than 85 s on 10 qubits.
 - `reduced_density_matrix` no longer compiles anew for each number of sites kept, which took up to 10 s on first use.
 - A state of one's own defining `renyi2`, `mutual_info_renyi2`, `von_neumann_entropy` or `log_negativity` types its positions `positions::AbstractVector{Int}`; a looser type can now make the call ambiguous.
+- `variance` and `Variance` take an operator placed on sites, or an MPO on a pure state, on a pure state as on a mixed one; a vector of operators, taken as their sum on a pure state, is refused.
 
 ### Fixed
 

@@ -676,7 +676,8 @@ function variance(state::State{Pure}, mpo::MPO)
     return e2 - abs2(e)
 end
 
-variance(state::State{Pure}, op) = or_on_plain(st -> variance(st, make_mpo(st, op)), state)
+variance(state::State{Pure}, op::IndexedOp{IsOperator}) =
+    or_on_plain(st -> variance(st, make_mpo(st, op)), state)
 
 # `op` of any type in the signature, so that a representation defining `variance(::MyState, op)`
 # stays unambiguous, and checked here
