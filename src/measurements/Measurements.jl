@@ -424,48 +424,93 @@ function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{I
     check_reduced(state, positions)
     r = partial_trace(weak_form(state); keep = positions)
     system = r.system
-    t = prod(r.state)
-    js, bs = Index[], Index[]
-    # each mixed index split back into its ket and its bra, the dense matrix of many sites
-    # having as many indices as ITensors warns about, from 14
-    ITensors.@disable_warn_order for i in 1:length(system)
-        j = siteind(Pure, system, i)
-        b, c = mixer(j, siteind(Mixed, system, i), system[i])
-        t *= dag(c)
-        push!(js, j)
-        push!(bs, b)
-    end
-    d = prod(dim, js)
-    return unit_trace(reshape(Array(dense(t), reverse(js)..., reverse(dag.(prime.(bs)))...), d, d))
+    n = length(system)
+    # the elements of each site, ket and bra, taken from the mixed index as `mixed_order` has them
+    v = contracted(r.state, 1:n, siteinds(Mixed, system);
+                   orders = [ invperm(mixed_elements(system, i)) for i in 1:n ])
+    return pairs_matrix(v, [ dim(s) for s in system.sites ])
 end
 
 """
-    kept_contraction(state, kept)
-
-the tensor of the density matrix of the sites at the increasing positions `kept` of the pure
-`state`, its kets on the indices of the sites and its bras on their primes: for a block of
-consecutive sites, ``MM^\\dagger``, `M` the block of the state orthogonalised on it, whose
-environments are then the identity, of the dimensions of the sites times ``\\chi^2``; otherwise
-the ket contracted with the bra from left to right, the sites kept left open on both sides
+the density matrix of trace one of sites of dimensions `dims`, of elements `v` in the order of
+`mixed_order`
 """
-function kept_contraction(state::State{Pure}, kept::Vector{Int})
-    if kept == first(kept):last(kept)
-        st = orthogonalize(state.state, first(kept))
-        m = prod(st[k] for k in kept)
-        return m * dag(prime(m, [ siteind(Pure, state.system, k) for k in kept ]))
+function pairs_matrix(v::AbstractVector, dims::Vector{Int})
+    kets, bras = pair_positions(dims)
+    return unit_trace([ v[1 + k + b] for k in kets, b in bras ])
+end
+
+"""
+the environment of the sites up to `k` of the pure `state`, ket with bra, as a matrix on the link
+after site `k`, of dimension 1 for `k = 0`
+"""
+function left_link_matrix(state::State{Pure}, k::Int)
+    if k == 0
+        return ones(1, 1)
     end
     st = state.state
-    t = get_left(state, first(kept))
-    for k in first(kept):last(kept)
-        if k > first(kept)
-            t *= st[k]
-        end
-        if !insorted(k, kept)
-            t *= identity_at(state, k)
-        end
-        t *= k == last(kept) ? get_right(state, k) : dag(st[k]')
+    link = commonind(st[k], st[k+1])
+    return Array(dense(get_left(state, k) * identity_at(state, k) * dag(st[k]')), link, link')
+end
+
+"""
+the environment of the sites after `k` of the pure `state`, ket with bra, as a matrix on the
+link after site `k`, of dimension 1 for the last site
+"""
+function right_link_matrix(state::State{Pure}, k::Int)
+    st = state.state
+    if k == length(st)
+        return ones(1, 1)
     end
-    return t
+    link = commonind(st[k], st[k+1])
+    return Array(dense(get_right(state, k + 1) * identity_at(state, k + 1) * st[k+1]), link, link')
+end
+
+"""
+the elements of the density matrix of the sites `kept` of the pure `state`, in the order of
+`mixed_order`, ket and bra contracted site by site, those of the sites kept left open
+"""
+function kept_pairs(state::State{Pure}, kept::Vector{Int})
+    st = state.state
+    e = left_link_matrix(state, first(kept) - 1)
+    # the ket link, the bra link, the pairs of the sites kept so far
+    v = reshape(e, size(e)..., 1)
+    for k in first(kept):last(kept)
+        a = mps_array(st, k, siteind(Pure, state.system, k))
+        χl, d, χr = size(a)
+        np = size(v, 3)
+        # the ket of the site taken: its value, the ket link, the bra link, the pairs
+        x = reshape(transpose(reshape(a, χl, :)) * reshape(v, χl, :), d, χr, χl, np)
+        if insorted(k, kept)
+            y = transpose(conj(reshape(a, χl, :))) * reshape(permutedims(x, (3, 1, 2, 4)), χl, :)
+            # the pair of the site the fastest of the pairs, its ket faster
+            v = reshape(permutedims(reshape(y, d, χr, d, χr, np), (4, 2, 3, 1, 5)), χr, χr, :)
+        else
+            y = transpose(conj(reshape(a, χl * d, χr))) *
+                reshape(permutedims(x, (3, 1, 2, 4)), χl * d, :)
+            v = permutedims(reshape(y, χr, χr, np), (2, 1, 3))
+        end
+    end
+    e = right_link_matrix(state, last(kept))
+    return transpose(reshape(v, :, size(v, 3))) * vec(e)
+end
+
+"""
+the density matrix, not normalised, of the consecutive sites `ks` of the pure `state`: ``M B``,
+`M` the block of the kets, its links open, and `B` that of the bras with the environments
+"""
+function block_matrix(state::State{Pure}, ks::UnitRange{Int})
+    el = left_link_matrix(state, first(ks) - 1)
+    er = right_link_matrix(state, last(ks))
+    χl, χr = size(el, 1), size(er, 1)
+    m = contracted(state.state, ks, [ siteind(Pure, state.system, k) for k in ks ];
+                   start = Matrix{Float64}(I, χl, χl))
+    d = length(m) ÷ (χl * χr)
+    m = reshape(m, d, χl, χr)
+    # the bras with the environment on the left, then with that on the right
+    b = el * reshape(permutedims(conj(m), (2, 1, 3)), χl, :)
+    b = reshape(reshape(b, χl * d, χr) * transpose(er), χl, d, χr)
+    return reshape(m, d, :) * transpose(reshape(permutedims(b, (2, 1, 3)), d, :))
 end
 
 function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int})
@@ -477,11 +522,10 @@ function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{In
     kept = collect(positions)
     check_reduced(state, kept)
     state = trace_signs(state, kept)
-    # the dense matrix of many sites has as many indices as ITensors warns about, from 14
-    t = ITensors.@disable_warn_order kept_contraction(state, kept)
-    js = [ siteind(Pure, state.system, k) for k in kept ]
-    d = prod(dim, js)
-    return unit_trace(reshape(Array(dense(t), reverse(js)..., reverse(dag.(prime.(js)))...), d, d))
+    if kept == first(kept):last(kept)
+        return unit_trace(block_matrix(state, first(kept):last(kept)))
+    end
+    return pairs_matrix(kept_pairs(state, kept), [ dim(state.system[k]) for k in kept ])
 end
 
 # positions in a vector of another element type, `[]` or `Any[1, 3]`
