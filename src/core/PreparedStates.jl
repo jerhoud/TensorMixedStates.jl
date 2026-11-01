@@ -275,44 +275,33 @@ function product_sum(::Type{R}, system::System, terms) where R
         error("a sum of product states needs one term at least")
     end
     per_site(st) = st isa AbstractVector && !(eltype(st) <: Number) ? st : fill(st, n)
-    locals = map(terms) do (_, states)
+    products = map(terms) do (_, states)
         sts = per_site(states)
         if length(sts) ≠ n
             error("a product state of $(length(sts)) local states cannot be one of $n sites")
         end
-        [ make_one_state(R, system, k, sts[k]) for k in 1:n ]
+        make_state(R, system, collect(sts))
     end
     kept = findall(!iszero ∘ first, terms)
     if isempty(kept)
         error("a sum of product states needs a nonzero term at least")
     end
-    coefs = first.(terms[kept])
-    locals = locals[kept]
-    charged = hasqns(locals[1][1])
-    # the charge of the sites up to each one, for each term
-    partial = charged ? [ accumulate(+, flux.(ts)) for ts in locals ] : nothing
-    if charged && !allequal(last.(partial))
+    products = map(kept) do t
+        st = copy(products[t])
+        st[1] = first(terms[t]) * st[1]
+        st
+    end
+    if hasqns(products[1][1]) && !allequal(sum(flux, st) for st in products)
         error("the terms have different charges: the sum has no definite charge, which a " *
               "system conserving it cannot hold")
     end
-    # each link carries, daggered, the charge of the sites on its left
-    links = map(1:n-1) do k
-        charged ? dag(Index([ p[k] => 1 for p in partial ]...; tags = "Link,l=$k")) :
-                  Index(length(kept); tags = "Link,l=$k")
+    # the links of the product states pointing alike, as `make_state` lays them
+    if length(products) == 1
+        return only(products)
+    elseif n == 1
+        return MPS([ sum(st -> st[1], products) ])
     end
-    its = map(1:n) do k
-        sum(enumerate(locals)) do (t, ts)
-            x = k == 1 ? coefs[t] * ts[k] : ts[k]
-            if k > 1
-                x *= onehot(dag(links[k-1]) => t)
-            end
-            if k < n
-                x *= onehot(links[k] => t)
-            end
-            x
-        end
-    end
-    return MPS(its)
+    return +(products...; alg = "directsum")
 end
 
 """
