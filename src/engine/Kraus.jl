@@ -91,14 +91,13 @@ end
 """
     basis_grades(sites)
 
-the charge and the parity of each basis state of `sites`, in the order of `kron`
+the charge and the parity of each basis state of `sites`, as a `Grade`, in the order of `kron`:
+an element `(a, b)` of an operator changes them by `g[a] - g[b]`
 """
 basis_grades(sites) =
-    foldl((ga, gb) -> vec([ (x[1] + y[1], x[2] + y[2]) for y in gb, x in ga ]),
-          [ collect(zip(basis_charges(s), fermion_parities(s))) for s in sites ])
-
-# the charge and the parity an element (a, b) of an operator changes
-element_grade(g, a, b) = (g[a][1] - g[b][1], mod(g[a][2] + g[b][2], 2))
+    foldl((ga, gb) -> vec([ x + y for y in gb, x in ga ]),
+          [ [ Grade(q, p) for (q, p) in zip(basis_charges(s), fermion_parities(s)) ]
+            for s in sites ])
 
 """
     definite_grade(k, sites)
@@ -109,7 +108,7 @@ function definite_grade(k::GenericOp{IsOperator}, sites)
     m = matrix(k, sites...)
     g = basis_grades(sites)
     small = rounding_tol * norm(m)
-    return length(unique(element_grade(g, a, b) for a in axes(m, 1), b in axes(m, 2)
+    return length(unique(g[a] - g[b] for a in axes(m, 1), b in axes(m, 2)
                          if abs(m[a, b]) > small)) ≤ 1
 end
 
@@ -133,7 +132,7 @@ function choi_kraus(a::GenericOp{IsChannel}, sites)
               "Kraus operators")
     end
     g = basis_grades(sites)
-    grades = vec([ element_grade(g, k, i) for k in 1:d, i in 1:d ])
+    grades = vec([ g[k] - g[i] for k in 1:d, i in 1:d ])
     labels = indexin(grades, unique(grades))
     if any(abs.(j[labels .≠ permutedims(labels)]) .> rounding_tol * norm(j))
         error("$(obs_name(a)) has no definite charge on $on, so it has no Kraus operators of " *
