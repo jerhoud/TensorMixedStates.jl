@@ -181,7 +181,7 @@ project_parity(state::State{Mixed}, P, s; limits::Limits) =
     project_count(state, sites, locals, T; limits)
 
 the state projected on the total `T` of the sum that `counting` describes, and normalized: a
-density matrix by the MPO of the projector on its kets, then on its bras, see `lifted`
+density matrix by the MPO of the projector on its kets, then on its bras, see `on_mixed_index`
 """
 project_count(state::State{Pure}, sites, locals, T; limits::Limits) =
     normalize(apply(count_mpo(state.system, sites, locals, T), state; limits))
@@ -190,8 +190,8 @@ function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
     w = count_mpo(state.system, sites, locals, T)
     bra = relabeller(i -> star(i, strong_names(state.system)))
     for left in (true, false)
-        state = apply(MPO([ lifted(state.system, w[k], k, left, bra) for k in eachindex(w) ]),
-                      state; limits)
+        ts = [ on_mixed_index(state.system, w[k], k, left, bra) for k in eachindex(w) ]
+        state = apply(MPO(ts), state; limits)
     end
     return normalize(state)
 end
