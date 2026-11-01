@@ -7,14 +7,6 @@
 export Conservation, conserving, strong, symmetries, weaken, flux
 
 """
-    charge_tol
-
-how far the eigenvalues of a conserved quantity may lie from the charges they stand for,
-relative to the largest of them when it is above one
-"""
-const charge_tol = 1e-14
-
-"""
     short(x)
 
 a number rounded to two significant digits, as an error message shows a deviation
@@ -29,7 +21,7 @@ the modulus and the charge of each basis state of `site` for the conserved quant
 modulo `m`, written `mod(Q, m)` or `parity(Q)`: the expression carries the modulus, which the
 spectrum is never asked for.
 """
-function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_tol)
+function site_charges(op::SimpleOp, site::AbstractSite)
     # a renamed operator, or one declared for the site, reads its charges off its definition,
     # which may carry a modulus, as parity(N) does
     if op isa Operator
@@ -38,20 +30,21 @@ function site_charges(op::SimpleOp, site::AbstractSite; tol::Float64 = charge_to
             def = def(site)
         end
         if def isa GenericOp
-            return site_charges(def, site; tol)
+            return site_charges(def, site)
         end
     end
     m = matrix(op, site)
     d = diag(m)
-    # relative to the largest charge, whose rounding grows with it
-    tol *= max(1, maximum(abs, d))
+    # rounding as everywhere, relative to the whole matrix: that of an operator computed from
+    # others, as Sp * Sm - Sm * Sp, grows with the dimension of the site
+    small = rounding_tol * norm(m)
     off = norm(m - Diagonal(d))
-    if off > tol
+    if off > small
         error("$(obs_name(op)) is not diagonal on site $(typeof(site)), off by $(short(off)), " *
               "so it cannot be a conserved quantity: a charge is carried by each basis state")
     end
     to_int = maximum(max(abs(imag(x)), abs(real(x) - round(real(x)))) for x in d)
-    if to_int > tol
+    if to_int > small
         error("the eigenvalues of $(obs_name(op)) on site $(typeof(site)) miss the integers by " *
               "$(short(to_int)), so they are not charges. Half integer ones are written " *
               "doubled, 2Sz rather than Sz, and a charge modulo m is written mod(Q, m)")
@@ -65,11 +58,11 @@ site_charges(op::GenericOp{IsOperator}, ::AbstractSite) =
 # a power or the adjoint of a charge modulo m is one modulo m, whatever its eigenvalues: those
 # of Z^2 on Qudit(4), all ±1, would be read as integers
 function site_charges(a::Union{IntPowOp{IsOperator, 1}, GenPowOp{IsOperator, 1}, DagOp{1}},
-                      site::AbstractSite; tol::Float64 = charge_tol)
+                      site::AbstractSite)
     p = a isa DagOp ? -1 : a.expo
     if isreal(p) && isinteger(real(p))
         mq = try
-            site_charges(a.arg, site; tol)
+            site_charges(a.arg, site)
         catch e
             if !(e isa ErrorException)
                 rethrow()
@@ -81,12 +74,12 @@ function site_charges(a::Union{IntPowOp{IsOperator, 1}, GenPowOp{IsOperator, 1},
             return (m, mod.(Int(real(p)) .* q, m))
         end
     end
-    return invoke(site_charges, Tuple{SimpleOp, AbstractSite}, a, site; tol)
+    return invoke(site_charges, Tuple{SimpleOp, AbstractSite}, a, site)
 end
 
 # the modulus of a ModOp is carried rather than read back, ±1 being ambiguous
-function site_charges(a::ModOp{1}, site::AbstractSite; tol::Float64 = charge_tol)
-    m, q = site_charges(a.arg, site; tol)
+function site_charges(a::ModOp{1}, site::AbstractSite)
+    m, q = site_charges(a.arg, site)
     if m ≠ 1
         error("cannot take $(obs_name(a.arg)) modulo $(a.modulus) on site $(typeof(site)): it " *
               "already carries a charge modulo $m")

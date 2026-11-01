@@ -615,6 +615,11 @@ end
     @test TMS.site_charges(parity(N), Boson(4)) == (2, [0, 1, 0, 1])
     @test TMS.site_charges(Z, Qudit(3)) == (3, [0, 1, 2])
     @test TMS.site_charges(Pd, Dummit()) == (2, [0, 1])
+    # what rounding leaves is judged against the whole matrix: 2Sz computed from Sp on a large
+    # spin, off by 1.8e-14 of its largest charge, and not a charge half integer or off diagonal
+    @test TMS.site_charges(Sp * Sm - Sm * Sp, Spin(100)) == (1, collect(200:-2:-200))
+    @test_throws "miss the integers" Spin(1//2, conserve = Sz)
+    @test_throws "is not diagonal" Spin(1, conserve = Sx)
     # the string of versions 1 and 2 is read back as it was written
     @test TMS.decode_conserve("2Sz:0,1,-1,0;Ntot:0,1,1,2") ==
           TMS.conserved(Electron(conserve = (Ntot, 2Sz)))
