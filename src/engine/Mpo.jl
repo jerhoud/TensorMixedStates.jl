@@ -502,7 +502,9 @@ end
     site_tensor(a, idx, llink, rlink)
 
 the tensor of the array `a` of `site_array`; on a charged system only the blocks that are not
-zero are kept, and they must all have the flux the charges of the links give
+zero are kept, and they must all have the flux the charges of the links give. No tolerance: one
+relative to the whole site, its identities included, would drop a term of small coefficient, and
+the pieces come with no element of another charge, see `representatives` and `blockwise`
 """
 site_tensor(a::Array{<:Number, 4}, idx::Index, llink::Index, rlink::Index) =
     ITensor(a, idx', dag(idx), dag(llink), rlink)
