@@ -406,42 +406,41 @@ function laid_strings(::Type{R}, system::System, t::Term) where R
 end
 
 """
+    parts_by(key, none, m, grades)
+
+the parts of the matrix `m`, each made of its elements of one value of `key` on their grade,
+`grades[e]` being that of element `e`, as pairs `(k, part)`: `m` alone when they share one,
+`none` standing for it when no element is above rounding. What rounding leaves of another value
+is dropped, as charged indices drop it
+"""
+function parts_by(key, none, m::AbstractMatrix, gs)
+    small = rounding_tol * norm(m)
+    found = unique(key(g) for (g, x) in zip(gs, vec(m)) if abs(x) > small)
+    if length(found) ≤ 1
+        return [ (isempty(found) ? none : only(found), m) ]
+    end
+    return [ (k, reshape([ key(g) == k ? x : zero(x) for (g, x) in zip(gs, vec(m)) ], size(m)))
+             for k in found ]
+end
+
+"""
     grade_parts(R, m, site)
 
 the parts of the matrix `m` on `site`, of an operator for `Pure` or of a superoperator for
-`Mixed`, each made of its elements of one grade, see `element_grades`, as pairs `(p, part)`, `p`
-the fermionic parity of the part: `m` alone when its elements have a single grade. What
-rounding leaves of another grade is dropped, as charged indices drop it
+`Mixed`, each of one grade, see `element_grades` and `parts_by`, as pairs `(p, part)`, `p` the
+fermionic parity of the part
 """
-function grade_parts(::Type{R}, m::AbstractMatrix, site::AbstractSite) where R
-    gs = element_grades(R, site)
-    small = rounding_tol * norm(m)
-    found = unique(g for (g, x) in zip(gs, vec(m)) if abs(x) > small)
-    if length(found) ≤ 1
-        return [ (isempty(found) ? 0 : only(found).p, m) ]
-    end
-    return [ (g.p, reshape([ h == g ? x : zero(x) for (h, x) in zip(gs, vec(m)) ], size(m)))
-             for g in found ]
-end
+grade_parts(::Type{R}, m::AbstractMatrix, site::AbstractSite) where R =
+    [ (g.p, x) for (g, x) in parts_by(identity, Grade(QN(), 0), m, element_grades(R, site)) ]
 
 """
     charge_parts(m, site)
 
-the parts of the matrix `m` of an operator on `site`, each made of its elements changing the
-charges of the site by one amount, as pairs `(q, part)`, `q` that amount: `m` alone when it
-changes them by a definite one, as on a site conserving nothing. What rounding leaves of another
-charge is dropped, as charged indices drop it
+the parts of the matrix `m` of an operator on `site`, each changing the charges of the site by
+one amount, see `parts_by`, as pairs `(q, part)`, `q` that amount
 """
-function charge_parts(m::AbstractMatrix, site::AbstractSite)
-    gs = element_grades(Pure, site)
-    small = rounding_tol * norm(m)
-    found = unique(g.q for (g, x) in zip(gs, vec(m)) if abs(x) > small)
-    if length(found) ≤ 1
-        return [ (isempty(found) ? QN() : only(found), m) ]
-    end
-    return [ (q, reshape([ g.q == q ? x : zero(x) for (g, x) in zip(gs, vec(m)) ], size(m)))
-             for q in found ]
-end
+charge_parts(m::AbstractMatrix, site::AbstractSite) =
+    parts_by(g -> g.q, QN(), m, element_grades(Pure, site))
 
 """
     flux_zero_part(m, site)
