@@ -165,6 +165,12 @@ end
             @test expect(ρ, o) ≈ LA.tr(R * d) atol = 1e-10 rtol = 1e-10
             @test raw_vector(apply(o, ψ)) ≈ d * w atol = 1e-10 rtol = 1e-10
             @test ket_bra_matrix(apply(o, ρ)) ≈ d * R0 * d' atol = 1e-10 rtol = 1e-10
+            # and their terms acting on the dense states, the gate through its superoperator
+            ts = TMS.lower(sys, o)
+            @test TMS.dense_acted(Pure, sys, ts, w) ≈ d * w atol = 1e-10 rtol = 1e-10
+            @test TMS.dense_acted(Pure, sys, ts, R0) ≈ d * R0 atol = 1e-10 rtol = 1e-10
+            @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Gate(o)), R0) ≈ d * R0 * d' atol =
+                  1e-10 rtol = 1e-10
         end
     end
 
@@ -255,8 +261,10 @@ end
     @testset "Channels of one site" begin
         for k in fermionic
             K = placed(c(k), k)
-            @test ket_bra_matrix(apply(Dissipator(c(k))(k), ρ)) ≈
-                  K * R0 * K' - (K' * K * R0 + R0 * K' * K) / 2 atol = 1e-10
+            dissipated = K * R0 * K' - (K' * K * R0 + R0 * K' * K) / 2
+            @test ket_bra_matrix(apply(Dissipator(c(k))(k), ρ)) ≈ dissipated atol = 1e-10
+            @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Dissipator(c(k))(k)), R0) ≈
+                  dissipated atol = 1e-10
             for s in (sys[k] isa Fermion ? ("Emp", "Occ") : ("Emp", "Up"))
                 l = findfirst(!iszero, TMS.local_state(sys[k], s))
                 kraus = map(1:dim(sys[k])) do x
@@ -266,6 +274,8 @@ end
                 end
                 after = apply(Reset(s)(k), ρ)
                 @test ket_bra_matrix(after) ≈ sum(e * R0 * e' for e in kraus) atol = 1e-10
+                @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Reset(s)(k)), R0) ≈
+                      sum(e * R0 * e' for e in kraus) atol = 1e-10
                 # its docstring: an odd operator of another site takes the value of ⟨F⟩_σ F_k O
                 for j in setdiff(fermionic, k)
                     taken = (-1)^fermion_parities(sys[k])[l] *
