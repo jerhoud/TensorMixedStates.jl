@@ -44,6 +44,13 @@ end
     @test_throws "right dimension of 2" mps_state(System(2, Qubit()), [A[1:1, :, :], A])
     @test_throws "3 states for a site of dimension 2" mps_state(System(2, Qubit()),
                                                                 [zeros(1, 3, 1), zeros(1, 2, 1)])
+    # on a charged system, an amplitude of another charge left by rounding is dropped, as
+    # dense_state drops it, and a real one refused
+    q2 = System(2, Qubit(conserve = N))
+    up, dn = reshape([1., 0.], 1, 2, 1), reshape([0., 1.], 1, 2, 1)
+    @test dense_vector(mps_state(q2, [reshape([1., 1e-17], 1, 2, 1), dn])) ≈ [0, 1, 0, 0]
+    @test_throws "no definite charge" mps_state(q2, [reshape([1., 1e-12], 1, 2, 1), dn])
+    @test dense_vector(mps_state(q2, [up, dn])) ≈ [0, 1, 0, 0]
     # a pure state, and one of definite charge on fermions conserving it
     ψ = [ sin(3k) + im * cos(5k) for k in 1:32 ]
     @test dense_vector(dense_state(System(5, Qubit()), ψ)) ≈ ψ / LA.norm(ψ)

@@ -68,9 +68,12 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
                 tensors[k][unreached, :, :] .= 0
             end
             A = tensors[k]
+            # what rounding leaves at a position of another charge is no charge, and
+            # `charged_itensor` drops it below with the same tolerance on the same array
+            small = rounding_tol * norm(A)
             next = Vector{Union{Nothing, QN}}(nothing, size(A, 3))
             for l in axes(A, 1), j in axes(A, 2), r in axes(A, 3)
-                if !iszero(A[l, j, r])
+                if abs(A[l, j, r]) > small
                     q = partial[l] + charge(k, j)
                     if isnothing(next[r])
                         next[r] = q
@@ -92,7 +95,7 @@ function mps_state(system::System, tensors::Vector{<:AbstractArray{<:Number, 3}}
                                 Index(1; tags = "Link,l=0")
     its = map(1:n) do k
         l = k == 1 ? edge : dag(links[k-1])
-        t = ITensor(tensors[k], l, s[k], links[k])
+        t = charged_itensor(tensors[k], [l, s[k], links[k]])
         # an MPS has no edge links
         if k == 1
             t *= onehot(dag(edge) => 1)
