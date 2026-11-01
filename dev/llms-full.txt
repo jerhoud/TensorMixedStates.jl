@@ -1823,7 +1823,12 @@ The phases and the measurements reach the state through the methods you give:
 
 The measurements of the library go through `trace`, `norm`, `entanglement_entropy` and the
 like: a state gets what its type has a method for, and a measurement or a phase it does not
-support raises a `MethodError`.
+support raises a `MethodError`. Some follow from others unless the type has methods of its own:
+`variance` from `expect_value`, `von_neumann_entropy` and `log_negativity` from
+`reduced_density_matrix`, and `renyi2` and `mutual_info_renyi2` from `reduced_density_matrix`
+and `purity`. A method of your own taking positions types them `positions::AbstractVector{Int}`,
+as `reduced_density_matrix(state::MyState, positions::AbstractVector{Int})`: TMS converts other
+vectors before calling it, and a looser type can make the call ambiguous.
 
 # Upgrading from 1.x
 
