@@ -69,6 +69,27 @@ Checkpointer(dir::String, seed::Integer; interval::Real = 0, max_time::Real = In
                  interval ≤ 0 ? Inf : time() + interval, nothing, nothing, 0)
 
 """
+    resume!(c, commit, generation)
+
+set the checkpointing `c` to resume from `commit`, on the disk in the generation `generation`, as
+`load_checkpoint` reads them
+"""
+function resume!(c::Checkpointer, commit::Commit, generation::Int)
+    c.last = commit
+    c.written = commit
+    c.generation = generation
+    return c
+end
+
+"""
+    keeps_checkpoints(c)
+
+whether the run writes checkpoints besides those of a stop: periodic ones, or one is on the disk
+already, which then has to follow the run to its end
+"""
+keeps_checkpoints(c::Checkpointer) = c.interval > 0 || c.generation ≠ 0
+
+"""
     stop_requested(c)
 
 whether the run should stop now: its deadline is past, or the file `stop` is in its directory
@@ -149,7 +170,8 @@ write the last commit down. Its state and the values that are states go to which
 of the commit serialized, and `checkpoint.json`, which names it, is renamed into place last, so
 that a crash at any point leaves the previous checkpoint or this one, whole. Both are synced to
 the disk before the rename, so that a power cut does too, but on Windows. Nothing is written
-without a directory or for a commit already on the disk.
+without a directory or for a commit already on the disk. It returns the state file written,
+`nothing` when nothing is.
 """
 function write_checkpoint(c::Checkpointer)
     k = c.last
@@ -199,7 +221,7 @@ function write_checkpoint(c::Checkpointer)
     c.written = k
     rm(joinpath(c.dir, state_file(3 - g)); force = true)
     c.next = time() + c.interval
-    return nothing
+    return file
 end
 
 """

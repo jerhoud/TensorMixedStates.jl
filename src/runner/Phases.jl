@@ -154,22 +154,32 @@ function commit!(sim::Simulation, phase::Int, step::Int; last::Bool = false)
 end
 
 """
+    logged_checkpoint(run)
+
+write the last commit down, see `write_checkpoint`, which the log notes with its time and the
+size of its state file
+"""
+function logged_checkpoint(run::RunData)
+    file = write_checkpoint(run.checkpointer)
+    if !isnothing(file)
+        log_line(run, "Checkpoint written at time " *
+                      "$(time_text(run, run.checkpointer.last.time)), " *
+                      Base.format_bytes(filesize(file)))
+    end
+    return nothing
+end
+
+"""
     checkpoint_or_stop(run; force = false)
 
-write the last commit when a checkpoint is due, a stop requested, or with `force`, which the log
-notes with its time and the size of its state file, and stop then, see `StopRun`
+write the last commit when a checkpoint is due, a stop requested, or with `force`, see
+`logged_checkpoint`, and stop then, see `StopRun`
 """
 function checkpoint_or_stop(run::RunData; force::Bool = false)
     c = run.checkpointer
     stop = stop_requested(c)
     if stop || force || checkpoint_due(c)
-        before = c.written
-        write_checkpoint(c)
-        if c.written !== before
-            file = joinpath(c.dir, state_file(c.generation))
-            log_line(run, "Checkpoint written at time $(time_text(run, c.written.time)), " *
-                          Base.format_bytes(filesize(file)))
-        end
+        logged_checkpoint(run)
     end
     if stop
         throw(StopRun())

@@ -633,7 +633,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
             log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) seconds")
         end
         commit!(sim, i + 1, 0)
-        checkpoint_or_stop(run; force = i == length(phases) && (c.interval > 0 || c.generation ≠ 0))
+        checkpoint_or_stop(run; force = i == length(phases) && keeps_checkpoints(c))
     end
     return sim
 end
@@ -811,9 +811,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         outputs = Outputs(; dir, sd.format)
         run = RunData(dir, outputs, logio, output, c, sd.provided)
         if resume
-            c.last = commit
-            c.written = commit
-            c.generation = generation
+            resume!(c, commit, generation)
             run.phase_time = commit.phase_time
         end
         if live
@@ -863,7 +861,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                 report_dropped(run)
                 if e isa InterruptException
                     log_line(run, "\n***** Interrupted, writing a checkpoint *****")
-                    write_checkpoint(c)
+                    logged_checkpoint(run)
                 end
                 log_line(run, stop_line(c, sd.phases))
                 run.stopped = true
