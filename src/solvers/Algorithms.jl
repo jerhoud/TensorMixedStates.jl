@@ -112,7 +112,9 @@ end
     w_approx_coefs
 
 for each order from 1 to 4, the fractions of the time step whose W approximations, applied in
-turn, make up the approximation of that order
+turn, make up the approximation of that order: order 2 from Zaletel et al., Phys. Rev. B 91,
+165112 (2015), orders 3 and 4 from Bidzhiev and Misguich, Phys. Rev. B 96, 195117 (2017),
+appendix A, as in lindbladmpo
 """
 const w_approx_coefs = Vector{ComplexF64}[
     [
