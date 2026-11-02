@@ -53,7 +53,7 @@ of their steps
 function run_lists(phases::Vector, final_measurements)
     lists = Any[final_measurements]
     append!(lists, [ q.final_measurements for q in phases ])
-    append!(lists, [ q.measurements for q in phases if hasfield(typeof(q), :measurements) ])
+    append!(lists, map(step_measurements, phases))
     return [ measurement_lists(l) for l in lists ]
 end
 
@@ -74,10 +74,7 @@ return the names of those they provide
 """
 function check_values(phases::Vector, final_measurements)
     for q in phases, (value, why) in refused_reads(q)
-        lists = Any[q.final_measurements]
-        if hasfield(typeof(q), :measurements)
-            push!(lists, q.measurements)
-        end
+        lists = Any[q.final_measurements, step_measurements(q)]
         for l in lists, p in measurement_lists(l), (name, m) in as_measure(last(p)).entries
             if value in measurement_reads(m)
                 error("the measurement $name of a $(nameof(typeof(q))) reads $value: $why")
@@ -108,8 +105,7 @@ twice in its `on`, which would act on it twice
 """
 function check_names(phases::Vector)
     for p in phases
-        names = hasfield(typeof(p), :on) && p.on isa Union{Symbol, Vector{Symbol}} ?
-                state_names(p.on) : Symbol[]
+        names = acted_on(p)
         for n in [ names ; collect(provided_values(p)) ]
             if n ≠ :state && n in reserved_values
                 error("$(type_name(typeof(p))) cannot name a state $n, a name the run reserves")
