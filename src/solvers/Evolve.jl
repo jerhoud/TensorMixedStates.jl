@@ -84,22 +84,25 @@ function restored(e::MPS, st::MPS)
 end
 
 """
-    expanded(state, mpo)
+    expanded(state, mpo, maxdim)
 
 the state enlarged by a global Krylov expansion under `mpo`, its Krylov vectors computed as `apply`
-computes a product, "naive" and truncated at rounding alone: truncated to one more than the bond
-dimension of the state, the default of ITensorMPS, they keep nothing of some charged states, as
+computes a product, "naive", truncated at rounding and to twice the bond dimension `maxdim` of
+the step, which bounds the cost of the second, the product of `mpo` by the first, and leaves new
+directions even to a state just below `maxdim`: truncated to one more than the bond dimension
+of the state, the default of ITensorMPS, they keep nothing of some charged states, as
 FullyMixed. The other options are those of ITensorMPS. The state is then written again in the
 bonds the expansion enlarged, see `restored`. An expansion only enlarges the basis of the step,
 which goes on without it, with a warning, when ITensorMPS fails on charged indices, as on a state
 that `mpo` maps onto itself, and when the state written again is off by more than the precision
 ITensorMPS gives the expansion, the square root of that of the numbers
 """
-function expanded(state::State, mpo::MPO)
+function expanded(state::State, mpo::MPO, maxdim::Int)
     st = state.state
     e = try
         expand(st, mpo; alg = "global_krylov",
-               apply_kwargs = (; alg = "naive", truncation(Limits())...))
+               apply_kwargs = (; alg = "naive", truncation(Limits())...,
+                               maxdim = twice_maxdim(maxdim)))
     catch err
         if !any(hasqns, st)
             rethrow()
@@ -151,7 +154,7 @@ function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Nu
     # the step comes too late, which leaves an error of order dt; a single site has no bond
     small = maxlinkdim(state) < min(5, tr.maxdim)
     if length(state) > 1 && (small || due(algo.expand_period, step - 1))
-        state = expanded(state, mpo)
+        state = expanded(state, mpo, tr.maxdim)
     end
     st = if length(state) == 1
         # tdvp of ITensorMPS takes two sites at least

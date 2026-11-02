@@ -527,12 +527,15 @@ end
     ρ = State{Mixed}(System(4, Qubit(conserve = N)), "FullyMixed")
     @test_logs without_deprecations(
         () -> thermalize(h, 0.1, ρ; nsteps = 1, limits = Limits(maxdim = 16)))
+    # the Krylov vectors truncated to twice maxdim, which keeps new directions for a small one
+    @test_logs without_deprecations(
+        () -> thermalize(h, 0.1, ρ; nsteps = 1, limits = Limits(maxdim = 5)))
     # on a mixed product state under a term of small weight, expand changed the state by 2.4e-5,
     # the vectors it adds not quite orthogonal to its basis: the state written again in the
     # enlarged bonds is exact, and so is the step
     ρx = mix(State{Pure}(System(2, Qubit()), "X+"))
     m = make_mpo(ρx, -im * (Z(1) + 1e-3 * Z(2)))
-    @test norm(TMS.expanded(ρx, m) - ρx) < 1e-14
+    @test norm(TMS.expanded(ρx, m, typemax(Int)) - ρx) < 1e-14
     st = @test_logs without_deprecations(
         () -> evolve(-im * (Z(1) + 1e-3 * Z(2)), 0.01, ρx; nsteps = 1,
                      limits = Limits(maxdim = 10)))

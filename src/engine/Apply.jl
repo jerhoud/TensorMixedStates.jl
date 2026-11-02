@@ -178,17 +178,23 @@ function applied_gates(gates::Vector{ITensor}, on::Vector{Vector{Int}}, st::MPS,
 end
 
 """
+    twice_maxdim(maxdim)
+
+twice the bond dimension `maxdim`, `typemax(Int)` from `typemax(Int) ÷ 2` on, where the double
+would wrap around
+"""
+twice_maxdim(maxdim::Int) = maxdim ≥ typemax(Int) ÷ 2 ? typemax(Int) : 2maxdim
+
+"""
     zipup_truncation(tr)
 
 the keywords of zipup for the truncation `tr` of the product: at each site, as it is formed,
 a tenth of the cutoff and twice the bond dimension, as ITensorMPS recommends after Paeckel et
-al., these truncations not being optimal, then `tr` once the product is whole. A bond dimension
-of `typemax(Int) ÷ 2` or more becomes `typemax(Int)`, its double wrapping around.
+al., these truncations not being optimal, then `tr` once the product is whole
 """
 zipup_truncation(tr::NamedTuple) =
-    (cutoff = tr.cutoff / 10,
-     maxdim = tr.maxdim ≥ typemax(Int) ÷ 2 ? typemax(Int) : 2 * tr.maxdim,
-     mindim = tr.mindim, truncate_kwargs = tr)
+    (cutoff = tr.cutoff / 10, maxdim = twice_maxdim(tr.maxdim), mindim = tr.mindim,
+     truncate_kwargs = tr)
 
 """
     applied_mpo(mpo, st, limits; alg = "naive")
