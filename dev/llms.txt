@@ -13,6 +13,7 @@
 - [Threads and performance](https://jerhoud.github.io/TensorMixedStates.jl/dev/performance/): threads, BLAS, long sums
 - [Extending TMS](https://jerhoud.github.io/TensorMixedStates.jl/dev/extending/): site types, phases, methods, destinations and states of one's own
 - [Upgrading from 1.x](https://jerhoud.github.io/TensorMixedStates.jl/dev/upgrading/): the names, keywords and defaults that changed in 2.0
+- [Bibliography](https://jerhoud.github.io/TensorMixedStates.jl/dev/bibliography/): the articles the methods of TMS come from, and what each gives it
 
 ## Optional
 
