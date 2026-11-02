@@ -83,7 +83,8 @@ end
 
 time evolution by tdvp, for `evolve` and `thermalize`. The bond dimension is enlarged by a global
 Krylov expansion before any step that starts from a state whose largest bond dimension is below
-`min(5, maxdim)`, as a product state: tdvp is held to the bonds of the state it starts from, and
+`min(5, maxdim)`, as a product state, its Krylov vectors truncated to twice the `maxdim` of the
+step: tdvp is held to the bonds of the state it starts from, and
 would leave the error of the first steps, 5e-5 instead of 1e-7 on a Heisenberg chain. A single
 site, which tdvp does not take, is exponentiated whole.
 

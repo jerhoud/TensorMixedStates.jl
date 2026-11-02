@@ -32,6 +32,7 @@ the reference article.
 - `reduced_density_matrix` no longer compiles anew for each number of sites kept, which took up to 10 s on first use.
 - A state of one's own defining `renyi2`, `mutual_info_renyi2`, `von_neumann_entropy` or `log_negativity` types its positions `positions::AbstractVector{Int}`; a looser type can now make the call ambiguous.
 - `variance` and `Variance` take an operator placed on sites, or an MPO on a pure state, on a pure state as on a mixed one; a vector of operators, taken as their sum on a pure state, is refused.
+- The expansion before a `Tdvp` step truncates its Krylov vectors to twice the `maxdim` of the step, which bounds its cost on a large MPO.
 
 ### Fixed
 
