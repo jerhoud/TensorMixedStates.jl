@@ -887,7 +887,12 @@ mixed state, shows the entanglement that makes the bond dimension grow. A trunca
 `cutoff` shows in neither, and only running again tells it. `Limits()` discards the singular
 values below about 1e-13 of the norm, which keeps rounding from making the bond dimension
 grow and may leave an error of that order: the truncation that makes a computation affordable
-is a choice, checked by running again with a larger `maxdim` and a smaller `cutoff`.
+is a choice, checked by running again with a larger `maxdim` and a smaller `cutoff`. On a
+density matrix, `cutoff` bounds the error in the Hilbert-Schmidt norm of ``\rho``, which does
+not bound the error of every expectation value as the trace norm does, keeps neither the trace
+nor the positivity, and weighs local observables no more than the long operators a dynamics
+builds: see Werner et al., Phys. Rev. Lett. 116, 237201 (2016), and White et al., Phys. Rev. B
+97, 035127 (2018), who propose a truncation keeping the trace and the local observables.
 
 ### Time step
 
