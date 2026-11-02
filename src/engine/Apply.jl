@@ -547,6 +547,22 @@ function mixed_steps(system::System, a::IndexedOp)
 end
 
 """
+    step_applied(st, coef, steps, k, tr)
+
+the MPS `st` after step `k` of `apply`, `k` running over `1:max(1, length(steps))`: step `k`
+applied, truncated by `tr`, see `applied_step`, and the MPS multiplied by `coef` at the last
+step, or made null at the first when `coef` is zero; a step past them leaves it
+"""
+function step_applied(st::MPS, coef::Number, steps, k::Int, tr)
+    if coef == 0
+        return k == 1 ? 0 * st : st
+    elseif k ≤ length(steps)
+        st = applied_step(st, steps[k], tr)
+    end
+    return k == max(1, length(steps)) && coef ≠ 1 ? coef * st : st
+end
+
+"""
     applied(state, coef, steps, limits)
 
 the state with the steps of `apply` applied in order, each truncated to `limits`, batches of
@@ -554,14 +570,11 @@ gates, see `applied_gates`, and MPOs on the sites they act on, see `applied_wind
 multiplied by `coef`; the null state when `coef` is zero
 """
 function applied(state::State, coef::Number, steps, limits::Limits)
-    if coef == 0
-        return State(state, 0 * state.state)
-    end
     st, tr = state.state, truncation(limits)
-    for step in steps
-        st = applied_step(st, step, tr)
+    for k in 1:max(1, length(steps))
+        st = step_applied(st, coef, steps, k, tr)
     end
-    return State(state, coef == 1 ? st : coef * st)
+    return State(state, st)
 end
 
 """

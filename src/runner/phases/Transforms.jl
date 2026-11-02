@@ -183,23 +183,10 @@ end
 # a product that vanishes, of no step, takes one to give the null state
 step_count(g::GatesSteps) = max(1, maximum(length, g.steps))
 
-# each state multiplied by its number at its last step, as `applied` does
 function run_step(g::GatesSteps, sim::Simulation, k::Int)
     for (name, coef, steps) in zip(g.on, g.coefs, g.steps)
         state = state_named(sim, name)
-        st = state.state
-        if coef == 0
-            if k == 1
-                st = 0 * st
-            end
-        else
-            if k ≤ length(steps)
-                st = applied_step(st, steps[k], truncation(g.limits))
-            end
-            if k == max(1, length(steps)) && coef ≠ 1
-                st = coef * st
-            end
-        end
+        st = step_applied(state.state, coef, steps, k, truncation(g.limits))
         sim = with_state(sim, name, State(state, st))
     end
     return sim
