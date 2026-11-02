@@ -29,6 +29,25 @@ A phase providing values to the measurements, as `:energy`, declares them with a
 abstract type AbstractPhase end
 
 """
+    step_measurements(phase)
+    measurements_period(phase)
+    acted_on(phase)
+
+the fields a phase may have: its measurements during its steps, `[]` without the field
+`measurements`, their period, 1 without `measurements_period`, and the names of the states it
+acts on, `[:state]` without the field `on`, none when `on` is neither a name nor a vector of them
+"""
+step_measurements(phase) = hasfield(typeof(phase), :measurements) ? phase.measurements : []
+
+measurements_period(phase) =
+    hasfield(typeof(phase), :measurements_period) ? phase.measurements_period : 1
+
+function acted_on(phase)
+    on = hasfield(typeof(phase), :on) ? phase.on : :state
+    return on isa Union{Symbol, Vector{Symbol}} ? state_names(on) : Symbol[]
+end
+
+"""
     type_name(T)
 
 the name of the type `T` in the messages, without its module, with its parameters:
@@ -108,13 +127,10 @@ function run_step end
 """
     step_due(phase, k)
 
-whether the measurements of `phase` during its steps, its field `measurements`, are due at step
-`k`, every `measurements_period` steps, 1 when the phase does not have that field
+whether measurements of `phase` during its steps are due at step `k`, see `step_measurements`
 """
-function step_due(phase, k::Int)
-    period = hasfield(typeof(phase), :measurements_period) ? phase.measurements_period : 1
-    return hasfield(typeof(phase), :measurements) && due(period, k)
-end
+step_due(phase, k::Int) =
+    !isempty(step_measurements(phase)) && due(measurements_period(phase), k)
 
 """
     StopRun()
@@ -170,9 +186,8 @@ phase provides, but for states, the largest bond dimension of the states it acts
 """
 function step_line(sim::Simulation, phase, k::Int)
     values = getfield(sim, :values)
-    on = hasproperty(phase, :on) ? phase.on : :state
-    names = on isa Symbol ? [on] : on isa Vector{Symbol} ? on : Symbol[]
-    states = [ st for st in (n === :state ? sim.state : get(values, n, nothing) for n in names)
+    states = [ st for st in (n === :state ? sim.state : get(values, n, nothing)
+                             for n in acted_on(phase))
                if st isa State ]
     return join([ "step $k, time $(time_text(sim, sim.time))" ;
                   [ "$name $(values[name])" for name in provided_values(phase)
@@ -203,7 +218,7 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     end
     sim = with_values(sim; step = k)
     if step_due(phase, k)
-        phase_output(sim, phase.measurements)
+        phase_output(sim, step_measurements(phase))
     end
     log_message(sim, step_line(sim, phase, k))
     run = getfield(sim, :run)
