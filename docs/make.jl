@@ -28,6 +28,7 @@ makedocs(
         "performance.md",
         "extending.md",
         "upgrading.md",
+        "bibliography.md",
         "Reference" => [
             "sites.md",
             "operators.md",
@@ -60,6 +61,7 @@ const guides = [
     ("performance.md", "Threads and performance", "threads, BLAS, long sums"),
     ("extending.md", "Extending TMS", "site types, phases, methods, destinations and states of one's own"),
     ("upgrading.md", "Upgrading from 1.x", "the names, keywords and defaults that changed in 2.0"),
+    ("bibliography.md", "Bibliography", "the articles the methods of TMS come from, and what each gives it"),
 ]
 let build = joinpath(@__DIR__, "build"), src = joinpath(@__DIR__, "src")
     open(joinpath(build, "llms.txt"), "w") do io
