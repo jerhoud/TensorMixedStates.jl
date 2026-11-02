@@ -1294,6 +1294,11 @@ end
     @test abs(von_neumann_entropy(bell, [1, 2])) < 1e-12
     @test von_neumann_entropy(q, 1:2) ≈ entanglement_entropy(q, 2)
     @test von_neumann_entropy(q, []) === 0.0
+    # an approximation can leave a density matrix with negative eigenvalues, which the entropy
+    # left out
+    two = System(2, Qubit())
+    bad = (3 * State{Mixed}(two, "Up") - State{Mixed}(two, "Dn")) / 2
+    @test_throws "negative eigenvalue -0.5" von_neumann_entropy(bad, [1])
     measured = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
     @test measured["ReducedDensityMatrix(1,3)"] ≈ ρ
     @test measured["VonNeumannEntropy(1)"] ≈ von_neumann_entropy(q, [1])
