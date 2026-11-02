@@ -242,7 +242,9 @@ const steady_krylov = Krylov(dim = 8, maxiter = 3)
 
 what `steady_state` returns of the eigenvector found: the state divided by its trace, a complex
 number, which takes away the phase that dividing by its real part, as normalize does, would
-leave, with a warning when it is not hermitian or when its purity exceeds one. The excess of
+leave, with a warning when it is not hermitian or when its purity exceeds one, the purity being
+one over the squared trace of the normalized vector, above one exactly when that trace is below
+one, which no positive matrix gives. The excess of
 purity is of first order in the error on the state, where the deviation from hermiticity is of
 second order, hence the bounds of `1e-3` and `1e-6`.
 """
@@ -256,8 +258,9 @@ function steady_result(value, state::State{Mixed})
     p = purity(ρ)
     if p > 1 + 1e-3
         @warn "the steady state found has a purity of $(round(p; sigdigits = 2)), above one, " *
-              "which no density matrix has: the search has not converged, or the steady state " *
-              "is not unique, see steady_state"
+              "which no density matrix has: the vector found has too small a trace for its " *
+              "norm, as when the search has not converged or the steady state is not unique, " *
+              "see steady_state"
     end
     return (residual = value, state = ρ)
 end
