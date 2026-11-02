@@ -54,7 +54,7 @@ dim(a::Spin) = Int(2 * a.s + 1)
     Sp = s -> [ i == j - 1 ? sqrt(s.s * (s.s + 1) - (s.s - i + 1) * (s.s - i)) : 0.
                 for i in 1:dim(s), j in 1:dim(s) ],
     Sz = s -> [ i == j ? s.s - i + 1 : 0. for i in 1:dim(s), j in 1:dim(s) ],
-    N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
+    N = Level,
     S2 = s -> s.s * (s.s + 1) * Id,
 ]
 

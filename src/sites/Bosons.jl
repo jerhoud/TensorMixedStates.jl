@@ -42,7 +42,7 @@ Boson(dim::Int; conserve = ()) = conserving(Boson, dim; conserve)
 dim(a::Boson) = a.dim
 
 @def_operators Boson [
-    N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
+    N = Level,
     A = s -> [ i == j - 1 ? sqrt(i) : 0. for i in 1:dim(s), j in 1:dim(s) ],
 ]
 
