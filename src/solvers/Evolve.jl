@@ -145,7 +145,7 @@ function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Nu
     state = State(state, state.state / n)
     fs = pre.functions
     mpo = isnothing(fs) ? cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing) :
-                          make_mpo(pre, [ f(time + dt / 2) for f in fs ])
+                          make_mpo(pre, only(step_coefs(fs, time, dt, 2)))
     tr = truncation(limits)
     # before the step: from a state of small bond dimension, a product state, an expansion after
     # the step comes too late, which leaves an error of order dt; a single site has no bond
