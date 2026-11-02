@@ -423,8 +423,9 @@ end
 how many of the singular values `s`, in decreasing order, a truncation `t`, see `truncation`,
 keeps on a link: those whose squares the cutoff does not cover, relative to the sum of all, at
 most `maxdim` and at least `mindim` less the two channels of the terms not yet begun and
-finished. As in ITensors, values whose squares differ by less than a thousandth are not
-separated, those at the cut being dropped together down to `mindim`: the channels `C†` and `C`
+finished. As ITensors does for block sparse tensors, and here whatever the tensors, values
+whose squares differ by less than a thousandth are not separated, those at the cut being
+dropped together down to `mindim`: the channels `C†` and `C`
 of a hopping have the same value, and a hopping keeping one without the other would no longer
 be hermitian. Where that would leave no value, as for three equal ones and `maxdim = 4`, the
 cut stays where `maxdim` puts it: dropping them all would drop the whole coupling across the
