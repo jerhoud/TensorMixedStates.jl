@@ -53,6 +53,20 @@ end
     @test 0 < sum(far[1101:1200]) < 100
 end
 
+@testset "Drawing from a density matrix that is not positive" begin
+    # an approximation can leave a density matrix with negative probabilities, which the draws
+    # followed without a word; probabilities gives them as they are
+    sys = System(2, Qubit())
+    bad = (3 * State{Mixed}(sys, "Up") - State{Mixed}(sys, "Dn")) / 2
+    rng = Xoshiro(1)
+    @test last.(probabilities(bad, 1)) ≈ [1.5, -0.5]
+    @test_throws "negative probability, -0.25 of the total" sample(bad; rng)
+    @test_throws "negative probability" sample(bad, 1; rng)
+    @test_throws "negative probability" sample(bad, Z(1) + Z(2); rng)
+    @test_throws "negative probability" collapse(bad, 2; rng)
+    @test_throws "negative probability" collapse(bad, Z(1); rng)
+end
+
 @testset "Sampling a site of a charged state" begin
     # the site legs of a charged state have a direction, which the projector on a basis state
     # has to take
