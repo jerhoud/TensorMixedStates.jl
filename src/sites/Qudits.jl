@@ -51,7 +51,7 @@ Qudit(dim::Int; conserve = ()) = conserving(Qudit, dim; conserve)
 dim(a::Qudit) = a.dim
 
 @def_operators Qudit [
-    N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
+    N = Level,
     # a function of N, so that as a conserved quantity it carries its modulus
     Z = s -> dim(s) == 1 ? ones(ComplexF64, 1, 1) : mod(N, dim(s)),
     X = s -> [ mod(i - j - 1, dim(s)) == 0 ? 1.0 + 0im : 0.0im

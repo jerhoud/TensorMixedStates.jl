@@ -46,7 +46,7 @@ Qboson(q::Real, dim::Int; conserve = ()) = conserving(Qboson, q, dim; conserve)
 dim(a::Qboson) = a.dim
 
 @def_operators Qboson [
-    N = s -> [ i == j ? i - 1. : 0. for i in 1:dim(s), j in 1:dim(s) ],
+    N = Level,
     A = s -> [ i == j - 1 ? sqrt(1 - s.q^i) : 0. for i in 1:dim(s), j in 1:dim(s) ],
 ]
 
