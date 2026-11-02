@@ -274,12 +274,21 @@ end
     draw(p, d, rnd)
 
 the first outcome among `0:d-1` whose cumulated probability exceeds `rnd`, `p(x)` being the
-probability of `x`, the last one taking what the others leave
+probability of `x`, the last one taking what the others leave; refused when one is negative
+beyond rounding, relative to the total, as on a density matrix that is not positive
 """
 function draw(p, d::Int, rnd)
+    ps = [ p(x) for x in 0:d - 1 ]
+    total = sum(abs, ps)
+    low = minimum(ps)
+    if low < -rounding_tol * total
+        error("a result has a negative probability, $(round(low / total; sigdigits = 2)) of the " *
+              "total: the state is not a positive density matrix, as an approximation can leave " *
+              "it (truncation, time step, unconverged search)")
+    end
     ptot = 0.
     for x in 0:d - 2
-        ptot += p(x)
+        ptot += ps[x + 1]
         if rnd < ptot
             return x
         end

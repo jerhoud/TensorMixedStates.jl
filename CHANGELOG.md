@@ -35,6 +35,7 @@ the reference article.
 ### Fixed
 
 - A phase of one's own defining `run_phase(p::MyPhase, sim, done)` without typing `sim` and `done` is no longer ambiguous.
+- `sample` and `collapse` refuse a density matrix giving a result a negative probability beyond rounding, where they drew from it.
 
 ## [2.0.1] - 2026-10-28
 
