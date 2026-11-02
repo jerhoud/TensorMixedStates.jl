@@ -1,5 +1,5 @@
 # The WI and WII approximations of the exponential of an evolver, as MPOs built from its PreMPO,
-# their combinations of orders 1 to 4, and the values of time functions they are taken at.
+# and their combinations of orders 1 to 4.
 
 """
     w_charges(pre, coefs)
@@ -139,21 +139,4 @@ function approx_W_mpos(pre::PreMPO, tau::Number, algo::ApproxW,
                        coefs::AbstractVector = constant_coefs(pre))
     make = algo.w == 1 ? make_approx_W1 : make_approx_W2
     return [ make(pre, tau * c, coefs) for c in w_approx_coefs[algo.order] ]
-end
-
-"""
-    step_coefs(coefs, t, dt, order)
-
-the values of the time functions `coefs` for each exponential of a step of `dt` from `t`, in
-the order they are applied: at the middle of the step up to order 2, and from order 3 the
-commutator-free Magnus integrator of order 4 of Blanes and Moan, two exponentials combining
-the values at the two Gauss points of the step
-"""
-function step_coefs(coefs, t::Number, dt::Number, order::Int)
-    if order ≤ 2
-        return [ map(f -> f(t + dt / 2), coefs) ]
-    end
-    v1, v2 = (map(f -> f(t + (1/2 + s * √3/6) * dt), coefs) for s in (-1, 1))
-    w1, w2 = (3 + 2√3) / 12, (3 - 2√3) / 12
-    return [ w1 * v1 + w2 * v2, w2 * v1 + w1 * v2 ]
 end
