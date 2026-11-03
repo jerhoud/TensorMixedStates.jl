@@ -1945,3 +1945,21 @@ end
         @test_throws "which is zero, as for the null state" hs_fidelity(zm, mix(ψ))
     end
 end
+
+@testset "A mixed state of trace zero up to rounding" begin
+    # beside its Hilbert-Schmidt norm, which the trace of a density matrix exceeds: dividing by
+    # that trace gave values of 1e15
+    rounding = "zero up to rounding beside its norm"
+    sys = System(4, Qubit())
+    r = normalize(random_state(Mixed, sys, 4))
+    d = r - normalize(random_state(Mixed, sys, 4))
+    for g in (normalize, s -> expect(s, Z(1)), s -> expect1(s, Z), purity)
+        @test_throws rounding g(d)
+    end
+    q2 = System(2, Qubit())
+    @test_throws rounding normalize(State{Mixed}(q2, "Up") - State{Mixed}(q2, "Dn"))
+    @test_throws rounding dense_state(q2, ComplexF64.(im * LA.I(4)))
+    @test_throws rounding dense_state(q2, Matrix(LA.Diagonal([1., 1, -1, -1])))
+    # a density matrix of small trace is not refused
+    @test trace(normalize(1e-20 * r)) ≈ 1
+end

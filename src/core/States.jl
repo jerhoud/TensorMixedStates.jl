@@ -765,12 +765,23 @@ tr(state::AbstractState) = trace(state)
     nonzero_norm(state, what)
 
 the real part of the trace, or the norm, of `state`, by which `what` divides, refused when it
-is zero, as for the null state an operator annihilating a state leaves
+is zero, as for the null state an operator annihilating a state leaves, and on a mixed state
+when the trace is zero up to rounding beside its Hilbert-Schmidt norm, which the trace of a
+density matrix exceeds
 """
-function nonzero_trace(state::AbstractState, what)
-    t = real(trace(state))
-    if iszero(t)
+nonzero_trace(state::AbstractState, what) = checked_trace(real(trace(state)), 0, what)
+
+nonzero_trace(state::State{Mixed}, what) = checked_trace(real(trace(state)), norm(state), what)
+
+"""
+the real part `t` of a trace, refused when it is zero, or zero up to rounding beside `scale`
+"""
+function checked_trace(t::Real, scale::Real, what)
+    if iszero(t) && iszero(scale)
         error("$what divides by the trace of the state, which is zero, as for the null state")
+    elseif abs(t) ≤ rounding_tol * scale
+        error("$what divides by the trace $t of the state, zero up to rounding beside its norm " *
+              "$scale, which a density matrix cannot have")
     end
     return t
 end

@@ -121,6 +121,10 @@ end
     @test_throws "beyond the 4096 TMS builds" TMS.ExactState(State{Mixed}(System(13, Qubit()), "Up"))
     @test_throws "beyond the 16777216 TMS builds" TMS.ExactState(System(64, Qubit()), ComplexF64[])
     @test_throws "divides by the trace" TMS.ExactState(q2, zeros(4))
+    traceless = Matrix(LA.Diagonal([1., 1, -1, -1]))
+    @test_throws "zero up to rounding beside its norm" TMS.ExactState(q2, traceless)
+    @test_throws "zero up to rounding beside its norm" TMS.ExactState(q2, traceless + 1e-17 * LA.I)
+    @test LA.tr(TMS.ExactState(q2, 1e-20 * LA.I(4)).state) ≈ 1
 end
 
 @testset "Refusals of the measurements and conversion back" begin

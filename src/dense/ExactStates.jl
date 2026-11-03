@@ -70,6 +70,9 @@ trace(state::ExactState{Mixed}) = tr(state.state)
 
 norm(state::ExactState) = norm(state.state)
 
+nonzero_trace(state::ExactState{Mixed}, what) =
+    checked_trace(real(trace(state)), norm(state), what)
+
 function normalize(state::ExactState{R}) where R
     t = nonzero_trace(state, "normalize")
     x = R === Mixed ? state.state / t : state.state / sqrt(t)
