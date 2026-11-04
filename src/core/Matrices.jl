@@ -423,10 +423,19 @@ function matrix(a::Reset, site::AbstractSite, others::AbstractSite...)
     return vec(σ / t) * transpose(vec(Matrix{Float64}(I, dim(s), dim(s))))
 end
 
+"""
+    dephase_projectors(a, sites)
+
+the eigenvalues of the operator of the dephasing `a` on `sites`, and the projectors on their
+eigenspaces, see `eigenspaces`
+"""
+dephase_projectors(a::Dephase, sites) =
+    eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg, " on " * join(sites, " ⊗ "))
+
 function matrix(a::Dephase, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
     check_dense(a, sites)
-    _, ps = eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg, " on " * join(sites, " ⊗ "))
+    _, ps = dephase_projectors(a, sites)
     return sum(sided(p, p, sites) for p in ps)
 end
 

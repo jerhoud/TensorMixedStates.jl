@@ -312,20 +312,17 @@ end
 """
 the vector `x`, of `extra` columns after the product states of `system`, projected on the total
 `T` of the sum that `counting` describes: each site of the sum applies the projectors of its
-values to each partial total, those that can still reach `T` kept
+values to each partial total, those that can still reach `T` kept, see `count_bonds`
 """
 function count_projected(system::System, sites, locals, T::Int, x::AbstractVector, extra::Int)
     dims = [ dim(s) for s in system.sites ]
-    # the smallest and the largest totals the sites after the k-th can add
-    lo = reverse(cumsum(reverse([ minimum(first(l)) for l in locals ])))
-    hi = reverse(cumsum(reverse([ maximum(first(l)) for l in locals ])))
+    bonds = count_bonds(length(system), sites, locals, T)
     parts = Dict(0 => x)
-    for (j, (k, (values, ps))) in enumerate(zip(sites, locals))
+    for (k, (values, ps)) in zip(sites, locals)
         a, c = prod(dims[k+1:end]; init = 1), prod(dims[1:k-1]; init = 1) * extra
         next = Dict{Int, Vector{ComplexF64}}()
         for (s, y) in parts, (t, p) in zip(values, ps)
-            rest = j < length(sites) ? (lo[j + 1], hi[j + 1]) : (0, 0)
-            if rest[1] ≤ T - s - t ≤ rest[2]
+            if insorted(s + t, bonds[k + 1])
                 v = axis_acted(p, y, a, dims[k], c)
                 next[s + t] = haskey(next, s + t) ? next[s + t] + v : v
             end

@@ -572,8 +572,7 @@ function projector_gates(system::System, a::Dephase, index)
         return nothing
     end
     sites = [ system[i] for i in index ]
-    values, _ = eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg,
-                            " on " * join(sites, " ⊗ "))
+    values, _ = dephase_projectors(a, sites)
     name = string(a(index...))
     tss = [ reduced(matrix_terms(system, Proj(a.arg => λ), index; name)) for λ in values ]
     if sum(ts -> length(ts)^2, tss) > prod(s -> dim(s)^2, sites)
