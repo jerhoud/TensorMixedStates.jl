@@ -29,15 +29,14 @@ end
     counting_probabilities(state, sites, locals)
 
 the totals, twice the values of the sum that `counting` describes, with their probabilities, in
-increasing order: the totals reached lie within `K` successive integers, whose probabilities are
-read off the mean values of the `K` products over the sites of ``e^{2i\\pi k t/K}``, `t` twice
-the value on the site
+increasing order, read off the mean values of the `K` products of phases of `phase_operators`
 """
 function counting_probabilities(state::AbstractState, sites, locals)
-    totals, us = phase_operators(sites, locals)
+    totals, us, period = phase_operators(sites, locals)
     K = length(us)
     φ = [ expect(state, u; complex = true) for u in us ]
-    return [ T => real(sum(φ[k+1] * cis(-2π * k * T / K) for k in 0:K-1)) / K for T in totals ]
+    return [ T => real(sum(φ[k+1] * cis(-2π * k * T / period) for k in 0:K-1)) / K
+             for T in totals ]
 end
 
 """
