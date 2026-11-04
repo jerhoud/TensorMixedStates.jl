@@ -133,7 +133,7 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     log_message(sim, "Evolving $what from time $(time_text(sim, sim.time)) to " *
                      time_text(sim, sim.time + phase.duration))
     start = time()
-    pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits)
+    pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits; duration = phase.duration)
     log_mpo(sim, "evolver", pre, start)
     return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end

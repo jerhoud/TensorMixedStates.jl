@@ -30,6 +30,7 @@ the reference article.
 ### Changed
 
 - The methods of one's own of `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity` take the keyword `max_dense`.
+- The methods of one's own of `prepared_evolver` take the keyword `duration`, that of the whole evolution.
   A state of one's own defining them adds it to their signatures.
 - TensorMixedStates needs ITensorMPS 0.3.45 and ITensors 0.8, for zipup.
 - TensorMixedStates depends on KrylovKit 0.10 directly.

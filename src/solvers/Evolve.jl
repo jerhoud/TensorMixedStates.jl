@@ -53,20 +53,25 @@ prepared_operator(::State, x, ::Limits = Limits()) =
     error("$(repr(x)) is not an operator or its PreMPO")
 
 """
-    prepared_evolver(state, evolver, mpo_limits = Limits())
+    prepared_evolver(state, evolver, mpo_limits = Limits(); duration = nothing)
 
 the `PreMPO` of the evolver of `state`, see `prepared_operator`, with its time functions: an
-operator, a vector of terms `[A, B => g]`, a term `A => g`, or the `PreMPO` of one of them. A
-state of one's own adds a method returning what its `evolve_step` takes as `pre`.
+operator, a vector of terms `[A, B => g]`, a term `A => g`, or the `PreMPO` of one of them.
+`duration` is that of the whole evolution, which an MPS does not use. A state of one's own adds
+a method returning what its `evolve_step` takes as `pre`.
 """
-prepared_evolver(state::State, a::Union{IndexedOp, PreMPO, MPO}, mpo_limits::Limits = Limits()) =
+prepared_evolver(state::State, a::Union{IndexedOp, PreMPO, MPO}, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
     prepared_operator(state, a, mpo_limits)
-prepared_evolver(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits()) where {R <: PM} =
+prepared_evolver(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) where {R <: PM} =
     truncated_once(check_pre(pre, state), mpo_limits)
-prepared_evolver(state::State, terms::Union{AbstractVector, Pair}, mpo_limits::Limits = Limits()) =
+prepared_evolver(state::State, terms::Union{AbstractVector, Pair}, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
     PreMPO(state, terms; limits = mpo_limits)
 
-prepared_evolver(::State, x, ::Limits = Limits()) = error("$(repr(x)) is not an evolver")
+prepared_evolver(::State, x, ::Limits = Limits(); duration::Union{Nothing, Number} = nothing) =
+    error("$(repr(x)) is not an evolver")
 
 """
     restored(e, st)
@@ -249,7 +254,7 @@ function evolve(evolver, duration::Number, state::AbstractState; algo::Evolution
     if nsteps == 0
         return state
     end
-    pre = prepared_evolver(state, evolver, mpo_limits)
+    pre = prepared_evolver(state, evolver, mpo_limits; duration)
     dt = duration / nsteps
     for k in 0:nsteps - 1
         state = evolve_step(algo, pre, state, time + k * dt, dt, step + k,
