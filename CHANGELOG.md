@@ -38,6 +38,7 @@ the reference article.
 
 ### Fixed
 
+- `Dephase` of a sum of operators of one site, as the charge of a region, is applied on any number of sites, where it was refused beyond six qubits.
 - A phase of one's own defining `run_phase(p::MyPhase, sim, done)` without typing `sim` and `done` is no longer ambiguous.
 - `sample` and `collapse` refuse a density matrix giving a result a negative probability beyond rounding, where they drew from it.
 - `von_neumann_entropy` refuses a reduced density matrix with a negative eigenvalue beyond `1e-8` of the largest, which it left out, and takes a smaller one as zero.

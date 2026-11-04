@@ -520,8 +520,8 @@ end
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
 by piece, see `gate_steps!`; any other factor small enough, see `dense_enough`, on at most two
-sites or given by its matrix there, but for a dephasing made of the gates of its projectors,
-see `projector_gates`, as a dense block on the mixed indices, see `block_step!`, as the pieces
+sites or given by its matrix there, but for a dephasing made of gates, see `dephase_gates`, as
+a dense block on the mixed indices, see `block_step!`, as the pieces
 of an operator, see `piece_steps!`, and through its MPO otherwise, see `compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
@@ -534,7 +534,7 @@ function mixed_steps(system::System, a::IndexedOp)
             terms = [ laid_strings(Mixed, system, t) for t in lower(system, f) ]
             ks = sort!(unique(b.site for t in terms for b in t.blocks))
             by_matrix = f isa AtIndex &&
-                (!(f.op isa Dephase) || isnothing(projector_gates(system, f.op, f.index)))
+                (!(f.op isa Dephase) || isnothing(dephase_gates(system, f.op, f.index)))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
             elseif (length(ks) ≤ 2 || by_matrix) && dense_enough(Mixed, system, ks)

@@ -537,7 +537,7 @@ or a named expression of one site is taken by its matrix instead, a term for eac
 than one for each operand, and so is any other operator, see `matrix_terms`. A channel or a
 generator gives the terms of its superoperator: those of a gate, an evolver or a dissipator are
 made of the terms of their operators on each side of the density matrix, see `sided_term`, and
-those of a dephasing are the gates of its projectors when they are few, see `projector_gates`.
+those of a dephasing are gates when it allows, see `dephase_gates`.
 """
 op_terms(system::System, a::SumOp, index) =
     reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
@@ -581,8 +581,52 @@ function projector_gates(system::System, a::Dephase, index)
     return reduce(vcat, map(gate_terms, tss))
 end
 
+"""
+    spread(a, index)
+
+the operator `a` placed on the sites `index`, its sums placed term by term and its tensor
+products factor by factor, their identities left out
+"""
+spread(a::SumOp{IsOperator}, index) = SumOp(IndexedOp{IsOperator}[ spread(x, index) for x in a.subs ])
+spread(a::ScalarOp{IsOperator}, index) = scale(a.coef, spread(a.arg, index))
+
+function spread(a::TensorOp{IsOperator}, index)
+    fs = [ spread(o, index[r]) for (o, r) in zip(a.subs, factor_sites(a)) if !(o isa IdentityOp) ]
+    return isempty(fs) ? a(index...) : prod(fs)
+end
+
+spread(a::GenericOp{IsOperator}, index) = a(index...)
+
+"""
+    twirl_gates(system, a, index)
+
+the terms of the dephasing `a` on the sites `index` of `system` in the eigenbasis of a sum of
+operators of one site, see `counting`, as the mean of the gates of its `K` products of phases
+`U_k`, see `phase_operators`: ``\\sum_T P_T \\rho P_T = \\frac{1}{K} \\sum_k U_k \\rho
+U_k^\\dagger``, the totals lying within `K` successive integers; `nothing` for another operator
+"""
+function twirl_gates(system::System, a::Dephase, index)
+    cnt = counting(system, spread(a.arg, index), "Dephase")
+    if isnothing(cnt)
+        return nothing
+    end
+    _, us = phase_operators(cnt...)
+    return op_terms(system, sum(Gate(u) for u in us) / length(us), ())
+end
+
+"""
+    dephase_gates(system, a, index)
+
+the terms of the dephasing `a` on the sites `index` of `system` without its dense matrix, see
+`twirl_gates` and `projector_gates`, `nothing` when neither applies
+"""
+function dephase_gates(system::System, a::Dephase, index)
+    ts = twirl_gates(system, a, index)
+    return isnothing(ts) ? projector_gates(system, a, index) : ts
+end
+
 function op_terms(system::System, a::Dephase, index)
-    ts = projector_gates(system, a, index)
+    ts = dephase_gates(system, a, index)
     return isnothing(ts) ? matrix_terms(system, a, index) : ts
 end
 

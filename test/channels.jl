@@ -992,6 +992,43 @@ end
     @test_throws "Dephase needs a Hermitian operator" apply(Dephase(Sp)(1), pp)
 end
 
+@testset "Dephasing in the eigenbasis of a sum of operators of one site" begin
+    # the mean of the gates of its products of phases, against Σ P ρ P from the eigenspaces of
+    # the dense matrix of the operator; a sum of eigenvalues off a lattice of half integers, or
+    # an operator of several sites, keeps the gates of its projectors
+    onesite(op, i, k) = foldl(⊗, [ j == i ? op : Id for j in 1:k ])
+    function reference(ρ, m)
+        f = LA.eigen(LA.Hermitian(m))
+        λs = round.(f.values; digits = 8)
+        return sum(begin v = f.vectors[:, λs .== λ]; v * v' * ρ * v * v' end for λ in unique(λs))
+    end
+    rng = Xoshiro(20261105)
+    occ = ["Occ", "Emp", "Occ", "Emp"]
+    for (sys, a, twirled) in [
+            (System(3, Qubit()), sum(onesite(Z, i, 3) for i in 1:3), true),
+            (System(3, Qubit()), onesite(Z, 1, 3) + 2 * onesite(Z, 2, 3) + onesite(Z, 3, 3), true),
+            (System(4, Fermion()), sum(onesite(N, i, 4) for i in 1:4), true),
+            (System(4, Fermion(conserve = N)), sum(onesite(N, i, 4) for i in 1:4), true),
+            (System([Fermion(), Qubit(), Fermion()]), onesite(N, 1, 3) + onesite(Z, 2, 3) +
+                                                       onesite(N, 3, 3), true),
+            (System(3, Qubit()), onesite(Z, 1, 3) + sqrt(2) * onesite(Z, 2, 3), false),
+            (System(3, Qubit()), Z ⊗ Z ⊗ Z, false)]
+        k = length(sys)
+        ρ = TMS.is_charged(sys) ? mix(random_state(Pure, sys, occ, 3; rng)) :
+                                  random_state(Mixed, sys, 4; rng)
+        @test isnothing(TMS.twirl_gates(sys, Dephase(a), Tuple(1:k))) == !twirled
+        m = matrix(a(1:k...), TMS.weaken(sys, ()))
+        @test ket_bra_matrix(apply(Dephase(a)(1:k...), ρ)) ≈ reference(ket_bra_matrix(ρ), m)
+    end
+    # beyond the six qubits its superoperator allowed: on |+…+⟩, a purity of Σ_T p_T², through
+    # an MPO of bond dimension K = k + 1
+    k = 8
+    out = apply(Dephase(sum(onesite(Z, i, k) for i in 1:k))(1:k...),
+                State{Mixed}(System(k, Qubit()), "+"))
+    @test purity(out) ≈ sum((binomial(k, m) / 2^k)^2 for m in 0:k)
+    @test maxlinkdim(out) ≤ k + 1
+end
+
 @testset "Exponentials of superoperators" begin
     # exp(t * L) is the channel of the evolution under L for a time t; its closed forms are in
     # "The exponential of a generator is the channel of its evolution"
