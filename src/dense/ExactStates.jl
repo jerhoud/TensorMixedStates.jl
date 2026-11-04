@@ -354,6 +354,141 @@ function on_both_sides(system::System, p::IndexedOp, ρ::AbstractMatrix)
     return dense_acted(Pure, system, ts, dense_acted(Pure, system, ts, ρ)')'
 end
 
+# applied as `apply` applies them to a `State`, the limits of the MPS without use
+function apply(a::IndexedOp{IsOperator}, state::ExactState{Pure}; limits::Limits = Limits())
+    check_indices(state.system, a)
+    x = dense_acted(Pure, state.system, lower(state.system, a), state.state)
+    return ExactState{Pure}(state.system, x, Val(:raw))
+end
+
+function apply(a::IndexedOp{IsChannel}, state::ExactState{Pure}; limits::Limits = Limits())
+    if !is_pure(a)
+        error("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot " *
+              "take: apply it to mix(state)")
+    end
+    return apply(kraus(a), state)
+end
+
+apply(a::IndexedOp{IsGenerator}, ::ExactState{Pure}; limits::Limits = Limits()) =
+    error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
+
+apply(a::IndexedOp{IsOperator}, state::ExactState{Mixed}; limits::Limits = Limits()) =
+    apply(Gate(a), state)
+
+function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::ExactState{Mixed};
+               limits::Limits = Limits())
+    check_indices(state.system, a)
+    x = dense_acted(Mixed, state.system, lower(state.system, a), state.state)
+    return ExactState{Mixed}(state.system, x, Val(:raw))
+end
+
+apply(::MPO, ::ExactState; kwargs...) =
+    error("an ExactState is given the operator rather than its MPO: apply(op, state)")
+
+"""
+    ExactEvolver
+
+the evolver of an exact state: the terms of each of its parts, see `lower`, and their time
+functions, `nothing` when it does not depend on time, see `split_terms`
+"""
+struct ExactEvolver
+    terms::Vector{Vector{Term}}
+    functions::Union{Nothing, Vector}
+end
+
+prepared_evolver(state::ExactState, a::Union{IndexedOp, Pair}, mpo_limits::Limits = Limits()) =
+    prepared_evolver(state, [a], mpo_limits)
+
+# a pure state follows the operator, a density matrix the evolver of an operator
+function prepared_evolver(state::ExactState{R}, terms::AbstractVector,
+                          ::Limits = Limits()) where R
+    system = state.system
+    ops, fs = split_terms(terms)
+    parts = map(ops) do a
+        check_indices(system, a)
+        return lower(system, R === Pure ? followed_operator(a) : superoperator(a))
+    end
+    return ExactEvolver(parts, fs)
+end
+
+prepared_evolver(::ExactState, ::Union{PreMPO, MPO}, ::Limits = Limits()) =
+    error("an ExactState is given the evolver rather than its PreMPO or MPO: " *
+          "evolve(evolver, duration, state)")
+
+prepared_evolver(::ExactState, x, ::Limits = Limits()) = error("$(repr(x)) is not an evolver")
+
+"""
+the exponential ``e^{tA}x`` of the linear map `A`, without its matrix, by Krylov, to
+`rounding_tol` of the norm of `x`, refused when it does not converge
+"""
+function exact_exp(A, t::Number, x::AbstractArray)
+    n = norm(x)
+    if iszero(n)
+        return x
+    end
+    # KrylovKit takes its precision as absolute: the vector of norm one, its norm put back after
+    y, info = KrylovKit.exponentiate(A, t, x / n; tol = rounding_tol, ishermitian = false,
+                                     eager = true)
+    if info.converged == 0
+        error("the exponential of the evolver of an ExactState did not converge in Krylov to " *
+              "$rounding_tol: take smaller steps")
+    end
+    return n * y
+end
+
+"""
+the error each step of an evolver depending on time may bring to an exact state, relative to
+its norm, see `magnus_evolved`
+"""
+const magnus_tol = 1e-11
+
+"""
+the array `x` evolved from `time` for `dt` under the evolver `cs -> x -> Σ_j c_j A_j x` that
+`act` gives for the values `cs` of its time functions `fs`, by the commutator-free Magnus
+integrator of order 4, see `step_coefs`, each exponential by Krylov, in substeps whose error,
+measured against two half substeps, is below `magnus_tol` times their share of `dt`
+"""
+function magnus_evolved(act, fs, time::Number, dt::Number, x::AbstractArray)
+    if iszero(norm(x))
+        return x
+    end
+    magnus(t, h, y) = foldl((y, cs) -> exact_exp(act(cs), h, y), step_coefs(fs, t, h, 4);
+                            init = y)
+    # the substeps as fractions of `dt`, from `s` and of length `f`
+    s, f = 0.0, 1.0
+    while 1 - s > 4 * eps()
+        f = min(f, 1 - s)
+        t, h = time + s * dt, f * dt
+        whole = magnus(t, h, x)
+        halves = magnus(t + h / 2, h / 2, magnus(t, h / 2, x))
+        err = norm(halves - whole) / norm(halves)
+        if isnan(err)
+            error("the evolver of an ExactState gave NaN within a step")
+        end
+        allowed = magnus_tol * f
+        if err ≤ allowed
+            x, s = halves, s + f
+        end
+        # the local error of order 5 in the length of the substep
+        f *= clamp(0.9 * (allowed / max(err, eps()))^(1 / 5), 0.25, 2.0)
+        if f < 1e-9
+            error("an evolver depending on time varies too fast for the substeps of an " *
+                  "ExactState: take smaller steps")
+        end
+    end
+    return x
+end
+
+# the method of an exact state is its own, those of the MPS without use
+function evolve_step(::Union{Tdvp, ApproxW}, pre::ExactEvolver, state::ExactState{R},
+                     time::Number, dt::Number, step::Int, limits::Limits) where R
+    system = state.system
+    act(cs) = x -> sum(c * dense_acted(R, system, ts, x) for (c, ts) in zip(cs, pre.terms))
+    x = isnothing(pre.functions) ? exact_exp(act(ones(length(pre.terms))), dt, state.state) :
+                                   magnus_evolved(act, pre.functions, time, dt, state.state)
+    return ExactState{R}(system, x, Val(:raw))
+end
+
 # the limits of the MPS have no use on an exact state, see the docstring of ExactState
 function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where R
     system = weaken(state.system, ())

@@ -32,6 +32,7 @@ the reference article.
 - The methods of one's own of `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity` take the keyword `max_dense`.
   A state of one's own defining them adds it to their signatures.
 - TensorMixedStates needs ITensorMPS 0.3.45 and ITensors 0.8, for zipup.
+- TensorMixedStates depends on KrylovKit 0.10 directly.
 - `expect`, `expect1`, `expect2` and `measure` take an operator of no definite charge by its part of no flux, without copying the state.
 - A dense operator on many sites is split into terms faster: 15 s rather than 85 s on 10 qubits.
 - `reduced_density_matrix` no longer compiles anew for each number of sites kept, which took up to 10 s on first use.

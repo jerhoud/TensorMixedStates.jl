@@ -360,3 +360,73 @@ end
         end
     end
 end
+
+@testset "Operators, channels and generators applied on $name" for (name, sys, ops) in [
+        ("qubits", System(3, Qubit()), [X(1) * Z(3) + 2 * Y(2), Sp(1) * Sm(3)]),
+        ("fermions", System(3, Fermion()), [dag(C)(1) * C(3) + dag(C)(3) * C(1), C(2)]),
+        ("a qubit among fermions", System([Fermion(), Qubit(), Electron()]),
+         [dag(C)(1) * Cup(3) + dag(Cup)(3) * C(1), X(2) * Ntot(3)])]
+    rng = Xoshiro(20261109)
+    ψ, ρ = random_state(Pure, sys, 4; rng), random_state(Mixed, sys, 4; rng)
+    eψ, eρ = TMS.ExactState(ψ), TMS.ExactState(ρ)
+    # as apply applies them to a State, not normalised: an operator, K ρ K† on a density matrix
+    for o in ops
+        @test apply(o, eψ).state ≈ raw_vector(apply(o, ψ)) atol = 1e-12
+        @test apply(o, eρ).state ≈ ket_bra_matrix(apply(o, ρ)) atol = 1e-12
+    end
+    # a channel and a generator on a density matrix, a channel of one Kraus operator on a vector
+    for c in [Gate(ops[1]), dephasing_channel(0.3)(1), Dissipator(ops[1])]
+        @test apply(c, eρ).state ≈ ket_bra_matrix(apply(c, ρ)) atol = 1e-12
+    end
+    @test apply(Gate(ops[1]), eψ).state ≈ raw_vector(apply(ops[1], ψ)) atol = 1e-12
+    @test_throws "more than one Kraus operator" apply(dephasing_channel(0.3)(1), eψ)
+    @test_throws "is a generator" apply(Dissipator(ops[1]), eψ)
+    @test_throws "rather than its MPO" apply(make_mpo(ψ, ops[1]), eψ)
+    # the limits of the MPS without use
+    @test apply(ops[1], eψ; limits = Limits(maxdim = 1)).state ≈ apply(ops[1], eψ).state
+end
+
+@testset "Evolution of an exact state" begin
+    # a Hamiltonian, against the exponential of its matrix; a hop past a site on fermions
+    # conserving N
+    for (sys, h, st) in [(System(3, Qubit()), X(1) * X(2) + Z(2) * Z(3) + 0.5 * Z(1), "+"),
+                         (System(3, Fermion(conserve = N)),
+                          dag(C)(1) * C(3) + dag(C)(3) * C(1) + N(2), ["Occ", "Emp", "Emp"])]
+        ψ = TMS.ExactState{Pure}(sys, st)
+        u = exp(-0.7im * matrix(h, sys))
+        @test evolve(-im * h, 0.7, ψ; nsteps = 2).state ≈ u * ψ.state atol = 1e-11
+        # the method and the limits of the MPS without use
+        @test evolve(-im * h, 0.7, ψ; nsteps = 2, algo = ApproxW(order = 2),
+                     limits = Limits(maxdim = 1)).state ≈ u * ψ.state atol = 1e-11
+    end
+    # a Lindbladian, against the exponential of its superoperator built here with kron:
+    # vec(A ρ B) = (transpose(B) ⊗ A) vec(ρ)
+    sys = System(2, Qubit())
+    x, z, sm, o = (matrix(a, Qubit()) for a in (X, Z, Sm, Id))
+    hm, lm = kron(x, x) + 0.3 * kron(z, o), sqrt(0.4) * kron(sm, o)
+    id = kron(o, o)
+    side(a, b) = kron(transpose(b), a)
+    lind = -im * (side(hm, id) - side(id, hm)) + side(lm, lm') -
+           0.5 * (side(lm' * lm, id) + side(id, lm' * lm))
+    ρ = TMS.ExactState{Mixed}(sys, ["Up", "+"])
+    exact = reshape(exp(1.1 * lind) * vec(ρ.state), 4, 4)
+    evolver = -im * (X(1) * X(2) + 0.3 * Z(1)) + Dissipator(sqrt(0.4) * Sm)(1)
+    @test evolve(evolver, 1.1, ρ; nsteps = 3).state ≈ exact atol = 1e-11
+    # depending on time, against fourth-order Runge-Kutta in steps of 1e-3, of error 1e-12
+    hd(t) = cos(2t) * kron(x, o) + kron(z, z)
+    ψ = TMS.ExactState{Pure}(sys, "Up")
+    v = ψ.state
+    δ = 1e-3
+    for k in 0:999
+        t = k * δ
+        f(t, w) = -im * hd(t) * w
+        k1 = f(t, v); k2 = f(t + δ / 2, v + δ / 2 * k1)
+        k3 = f(t + δ / 2, v + δ / 2 * k2); k4 = f(t + δ, v + δ * k3)
+        v += δ / 6 * (k1 + 2k2 + 2k3 + k4)
+    end
+    terms = [-im * X(1) => t -> cos(2t), -im * Z(1) * Z(2)]
+    @test evolve(terms, 1.0, ψ; nsteps = 2).state ≈ v atol = 1e-10
+    # the evolver itself, not its PreMPO
+    @test_throws "rather than its PreMPO" evolve(PreMPO(State{Pure}(sys, "Up"), -im * X(1)), 1.0,
+                                                 ψ; nsteps = 1)
+end
