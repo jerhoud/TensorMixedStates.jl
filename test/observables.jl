@@ -1299,6 +1299,9 @@ end
     two = System(2, Qubit())
     bad = (3 * State{Mixed}(two, "Up") - State{Mixed}(two, "Dn")) / 2
     @test_throws "negative eigenvalue -0.5" von_neumann_entropy(bad, [1])
+    # within approximations, as rounding leaves them, taken as zero
+    near = (1 + 1e-10) * State{Mixed}(two, "Up") - 1e-10 * State{Mixed}(two, "Dn")
+    @test abs(von_neumann_entropy(near, [1])) < 1e-8
     measured = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
     @test measured["ReducedDensityMatrix(1,3)"] ≈ ρ
     @test measured["VonNeumannEntropy(1)"] ≈ von_neumann_entropy(q, [1])

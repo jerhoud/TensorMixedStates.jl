@@ -533,8 +533,8 @@ end
     von_neumann_entropy(state, positions)
 
 the von Neumann entropy ``-\\mathrm{tr}\\,\\rho_A \\log \\rho_A`` of the sites at `positions`,
-``\\rho_A`` being their `reduced_density_matrix`, 0 when there is none; a negative eigenvalue
-beyond rounding, which an approximate state may have, is refused. On a pure state and the
+``\\rho_A`` being their `reduced_density_matrix`, 0 when there is none; a negative eigenvalue,
+which an approximate state may have, is taken as zero, and refused beyond `1e-8` of the largest. On a pure state and the
 sites `1:cut`, `entanglement_entropy(state, cut)` gives the same, at a far lower cost and for
 any number of sites.
 
@@ -548,7 +548,7 @@ function von_neumann_entropy(state::AbstractState, positions::AbstractVector)
         return 0.0
     end
     λ = eigvals(Hermitian(reduced_density_matrix(state, sort(Vector{Int}(positions)))))
-    if first(λ) < -rounding_tol * maximum(abs, λ)
+    if first(λ) < -approximation_tol * maximum(abs, λ)
         error("the reduced density matrix has the negative eigenvalue " *
               "$(round(first(λ); sigdigits = 2)): the state is not a positive density matrix, as " *
               "an approximation can leave it (truncation, time step, unconverged search)")

@@ -21,7 +21,8 @@ leave (truncation, time step, unconverged search), beyond which TMS warns or ref
 imaginary part of the expectation value of a Hermitian operator, relative to the scale of the
 operator, see `term_size`, which `expect` and `measure` drop; the departure of a density matrix
 from hermiticity and its negative eigenvalues, relative to its norm and its largest one, for the
-fidelity of two exact mixed states
+fidelity of two exact mixed states; the negative eigenvalues of a reduced density matrix, for
+`von_neumann_entropy`
 """
 const approximation_tol = 1e-8
 
