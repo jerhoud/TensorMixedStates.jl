@@ -336,6 +336,7 @@ end
     x7 = reduce(⊗, fill(X, 7))
     @test_throws "has 268435456 elements, beyond the 16777216" matrix(exp(Dissipator(x7)), q)
     @test_throws "has 268435456 elements, beyond the 16777216" matrix(Dephase(x7), q)
+    @test_throws "Dephase depends only on the eigenspaces of its operator" matrix(Dephase(x7), q)
     # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
     x64, x32 = reduce(⊗, fill(X, 64)), reduce(⊗, fill(X, 32))
     @test_throws "has 340282366920938463463374607431768211456 elements" matrix(exp(-im * x64), q)
