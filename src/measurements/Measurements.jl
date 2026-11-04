@@ -219,6 +219,13 @@ function sector_charges(q::QN, quantities)
 end
 
 """
+the name and the modulus of each quantity the sites of `system` conserve, in the order of their
+names, as `Sectors` holds them
+"""
+conserved_quantities(system::System) =
+    sort(unique([ (q.name, q.modulus) for site in system.sites for q in conserved(site).quantities ]))
+
+"""
     entanglement_by_sector(state::State{Pure}, cut::Int)
 
 the entanglement across the cut between sites `cut` and `cut + 1`, resolved by the charge of
@@ -247,8 +254,7 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
     if flux(U) ≠ QN()
         error("bug: the left factor of a cut carries $(flux(U)), so its sectors cannot be read")
     end
-    quantities = sort(unique([ (q.name, q.modulus) for site in state.system.sites
-                                                    for q in conserved(site).quantities ]))
+    quantities = conserved_quantities(state.system)
     squares = Dict{SectorCharges, Vector{Float64}}()
     k = 0
     for (q, d) in space(u)

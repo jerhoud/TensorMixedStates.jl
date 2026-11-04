@@ -40,6 +40,16 @@ end
         @test trace(e) ≈ trace(st)
         @test norm(e) ≈ norm(st)
         @test purity(e) ≈ purity(st)
+        # the Schmidt spectrum, the operator space one on a mixed state, of all the singular
+        # values where the MPS has those of its link
+        for cut in 1:4
+            @test entanglement_entropy(e, cut) ≈ entanglement_entropy(st, cut) atol = 1e-10
+            sp, ref = entanglement_spectrum(e, cut), entanglement_spectrum(st, cut)
+            k = min(length(sp), length(ref))
+            @test sp[1:k] ≈ ref[1:k] atol = 1e-12
+            @test sum(sp[k+1:end]; init = 0.0) + sum(ref[k+1:end]; init = 0.0) < 1e-12
+        end
+        @test measure(e, EntanglementEntropy(2)) ≈ entanglement_entropy(st, 2) atol = 1e-10
         # the signs of the fermionic sites traced out, on the left of those kept or not
         for kept in [[1], [4], [2, 3], [1, 3], [2, 4], [1, 2, 4], 1:4]
             @test reduced_density_matrix(e, kept) ≈ reduced_density_matrix(st, kept) atol = 1e-12
@@ -58,6 +68,8 @@ end
     end
     @test mix(eψ).state ≈ ket_bra_matrix(mix(ψ))
     @test mix(eρ) === eρ
+    @test only(entanglement_by_sector(eψ, 2))[2].entropy ≈ entanglement_entropy(ψ, 2) atol = 1e-10
+    @test_throws "takes a pure state" entanglement_by_sector(eρ, 2)
     # between two states, and a density matrix that is not Hermitian
     ψ2, ρ2 = random_state(Pure, sys, 4; rng), random_state(Mixed, sys, 4; rng)
     eψ2, eρ2 = TMS.ExactState(ψ2), TMS.ExactState(ρ2)
@@ -118,6 +130,17 @@ end
     u[2], u[3] = 1, 1e-14
     @test TMS.ExactState(sys, u).state[3] ≈ 1e-14 / norm(u)
     @test_throws "divides by the trace" TMS.ExactState(sys, zeros(16))
+    # the sectors of the charge of the sites on the left of a cut
+    for cut in 1:4
+        s, ref = entanglement_by_sector(e, cut), entanglement_by_sector(ψ, cut)
+        @test collect(keys(s)) == collect(keys(ref))
+        for (c, x) in ref
+            @test s[c].weight ≈ x.weight atol = 1e-12
+            @test s[c].entropy ≈ x.entropy atol = 1e-10
+            k = min(length(s[c].spectrum), length(x.spectrum))
+            @test s[c].spectrum[1:k] ≈ x.spectrum[1:k] atol = 1e-12
+        end
+    end
     # a strong symmetry, whose mixed index full_matrix reads without weakening it
     ss = System(3, Fermion(conserve = strong(N)))
     ρs = mix(random_state(State{Pure}(ss, ["Occ", "Emp", "Occ"]), 3))
@@ -190,6 +213,8 @@ end
     @test_throws "in increasing order" reduced_density_matrix(e, [2, 1])
     @test_throws "which the state does not have" reduced_density_matrix(e, [3])
     @test reduced_density_matrix(e, Int[]) == ones(1, 1)
+    @test_throws "must be between 1 and 2" entanglement_entropy(e, 0)
+    @test_throws "divides by the norm" entanglement_spectrum(TMS.ExactState(0 * ψ), 1)
     # on what the systems conserve, which an exact state does not depend on
     q = TMS.ExactState{Pure}(System(2, Qubit(conserve = N)), "Up")
     @test inner(q, e) ≈ 1

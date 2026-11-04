@@ -167,6 +167,81 @@ hs_fidelity(a::ExactState{Mixed}, b::ExactState{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
 """
+the matrix of `state` across the cut between sites `cut` and `cut + 1`: the sites up to `cut` on
+the rows, the others on the columns, the ket and the bra of each together on a mixed state; a
+cut the state does not have is refused
+"""
+function cut_matrix(state::ExactState{R}, cut::Int) where R
+    system = state.system
+    n = length(system)
+    if !(1 ≤ cut ≤ n)
+        error("cannot compute the entanglement entropy at site $cut of a $n site state, the " *
+              "cut is on the right of a site so it must be between 1 and $n")
+    end
+    nonzero_norm(state, "an entanglement entropy")
+    dims = [ dim(s) for s in system.sites ]
+    l, r = prod(dims[1:cut]), prod(dims[cut+1:end]; init = 1)
+    if R === Pure
+        return transpose(reshape(state.state, r, l))
+    end
+    # the axes of the kets then of the bras, the last site first, as kron orders the basis
+    t = reshape(state.state, r, l, r, l)
+    return reshape(permutedims(t, (2, 4, 1, 3)), l^2, r^2)
+end
+
+"""
+the entanglement entropy and spectrum of the singular values `s`, as `entropy_spectrum`
+"""
+function values_spectrum(s::AbstractVector)
+    sp = sort(abs2.(s); rev = true)
+    sp /= sum(sp)
+    return (shannon_entropy(sp), sp)
+end
+
+entanglement_entropy(state::ExactState, cut::Int) =
+    first(values_spectrum(svdvals(cut_matrix(state, cut))))
+
+entanglement_spectrum(state::ExactState, cut::Int) =
+    last(values_spectrum(svdvals(cut_matrix(state, cut))))
+
+function entanglement_by_sector(state::ExactState{Pure}, cut::Int)
+    m = cut_matrix(state, cut)
+    system = state.system
+    if !is_charged(system)
+        ee, sp = values_spectrum(svdvals(m))
+        return Sectors(Tuple{String, Int}[], [() => (weight = 1.0, entropy = ee, spectrum = sp)])
+    end
+    quantities = conserved_quantities(system)
+    # the charge of each product state of the sites up to `cut`, in the order of `kron`
+    qs = [QN()]
+    for i in 1:cut
+        site = reduce(vcat, [ fill(q, d) for (q, d) in space(siteind(Pure, system, i)) ])
+        qs = [ q + s for q in qs for s in site ]
+    end
+    rows = Dict{SectorCharges, Vector{Int}}()
+    for (k, q) in enumerate(qs)
+        push!(get!(rows, sector_charges(q, quantities), Int[]), k)
+    end
+    total = sum(abs2, m)
+    entries = Pair{SectorCharges, Sector}[]
+    for (c, ks) in rows
+        sq = abs2.(svdvals(m[ks, :]))
+        w = sum(sq)
+        # a sector the state does not reach
+        if w == 0
+            continue
+        end
+        sp = sort(sq / w; rev = true)
+        push!(entries, c => (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp))
+    end
+    return Sectors(quantities, sort!(entries; by = first))
+end
+
+entanglement_by_sector(::ExactState{Mixed}, ::Int) =
+    error("entanglement_by_sector takes a pure state: on a mixed one the sectors of a link are " *
+          "differences between the charges of the ket and of the bra")
+
+"""
 the signs ``(-1)^{\\sum n_l n_k}`` of the product states of `system`, in the order of `kron`, `l`
 running over the fermionic sites traced out and `k` over those of `kept` on their right, `n`
 the parity of a site, which make the plain partial trace the fermionic one, see `trace_signs`;
