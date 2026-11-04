@@ -503,25 +503,54 @@ index_charges(i::Index) =
     reduce(vcat, [ fill(dir(i) == ITensors.In ? -q : q, n) for (q, n) in space(i) ]; init = QN[])
 
 """
-    common_charge(a, charges, tol)
+    charge_table(inds)
 
-the charge every element of the array `a` above `tol` carries, `charges[k][v]` that of value
-`v` of axis `k`: `QN()` for no element, `nothing` when two carry different charges
+the charges of the values of the indices `inds` as integers, `(mods, values)`: value `v` of axis
+`k` brings `values[k][j, v]` to component `j`, of modulus `mods[j]`
 """
-function common_charge(a::AbstractArray, charges, tol)
+function charge_table(inds)
+    charges = map(index_charges, inds)
+    mods = Dict{String, Int}()
+    for cs in charges, q in cs, (n, _, m) in qn_components(q)
+        if get(mods, n, m) ≠ m
+            error("the charge $n comes with two moduli, $m and $(mods[n])")
+        end
+        mods[n] = m
+    end
+    names = sort!(collect(keys(mods)))
+    values = [ Int[ ITensors.val(q, n) for n in names, q in cs ] for cs in charges ]
+    return ([ mods[n] for n in names ], values)
+end
+
+function charge_component((mods, values), j::Int, c::CartesianIndex)
+    s = sum(values[k][j, c[k]] for k in eachindex(values))
+    return abs(mods[j]) > 1 ? mod(s, abs(mods[j])) : s
+end
+
+charge_of(table, c::CartesianIndex) = [ charge_component(table, j, c) for j in eachindex(table[1]) ]
+
+has_charge(table, c::CartesianIndex, q) =
+    all(charge_component(table, j, c) == q[j] for j in eachindex(q))
+
+"""
+    common_charge(a, table, tol)
+
+the charge every element of the array `a` above `tol` carries, as a vector of the components of
+the `charge_table` `table`: zero for no element, `nothing` when two carry different charges
+"""
+function common_charge(a::AbstractArray, table, tol)
     found = nothing
     for c in CartesianIndices(a)
         if abs(a[c]) ≤ tol
             continue
         end
-        q = sum(charges[k][c[k]] for k in eachindex(charges))
         if isnothing(found)
-            found = q
-        elseif q ≠ found
+            found = charge_of(table, c)
+        elseif !has_charge(table, c, found)
             return nothing
         end
     end
-    return isnothing(found) ? QN() : found
+    return isnothing(found) ? zeros(Int, length(table[1])) : found
 end
 
 """
@@ -530,7 +559,7 @@ end
 whether the array `a` on the indices `inds` carries a definite charge, up to rounding
 """
 has_definite_flux(a::AbstractArray, inds) = !any(hasqns, inds) ||
-    !isnothing(common_charge(a, map(index_charges, inds), rounding_tol * norm(a)))
+    !isnothing(common_charge(a, charge_table(inds), rounding_tol * norm(a)))
 
 """
     in_charge(a, inds)
@@ -540,11 +569,14 @@ the array `a` on the indices `inds`, of a definite charge up to rounding, see
 the quantities conserved forbid, which `charged_itensor` drops as well
 """
 function in_charge(a::AbstractArray, inds)
-    charges = map(index_charges, inds)
-    q = common_charge(a, charges, rounding_tol * norm(a))
+    table = charge_table(inds)
+    q = common_charge(a, table, rounding_tol * norm(a))
+    if isnothing(q)
+        error("in_charge needs an array of a definite charge: check it with has_definite_flux")
+    end
     b = copy(a)
     for c in CartesianIndices(b)
-        if sum(charges[k][c[k]] for k in eachindex(charges)) ≠ q
+        if !has_charge(table, c, q)
             b[c] = 0
         end
     end
