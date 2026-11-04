@@ -128,6 +128,9 @@ end
     @test hermiticity(eψ) == 1
     @test hermitianize(enh).state ≈ ket_bra_matrix(hermitianize(nh))
     @test hermitianize(eψ) === eψ
+    # the limits of the MPS accepted, without effect
+    @test hermitianize(enh; limits = Limits(maxdim = 1)).state ≈ hermitianize(enh).state
+    @test mix(eψ; limits = Limits(maxdim = 1)).state ≈ mix(eψ).state
     @test dag(enh).state ≈ ket_bra_matrix(dag(nh))
     # unnormalised, measured through their trace
     for st in [2 * ψ, 3 * ρ]
@@ -164,6 +167,15 @@ end
     u[2], u[3] = 1, 1e-14
     @test TMS.ExactState(sys, u).state[3] ≈ 1e-14 / norm(u)
     @test_throws "divides by the trace" TMS.ExactState(sys, zeros(16))
+    # a projector of no definite charge refused, measured once weakened; a count kept charged
+    @test_throws "collapse weaken(state, ()) instead" collapse(e, X(1) => 1.0)
+    @test collapse(weaken(e, ()), X(1) => 1.0).state.state ≈
+          TMS.ExactState(collapse(weaken(ψ, ()), X(1) => 1.0).state).state atol = 1e-10
+    @test weaken(e).system == weaken(ψ).system
+    total = N(1) + N(2) + N(3)
+    @test last.(probabilities(e, total)) ≈ last.(probabilities(ψ, total)) atol = 1e-10
+    @test collapse(e, total => 1).state.state ≈
+          TMS.ExactState(collapse(ψ, total => 1).state).state atol = 1e-10
     # the sectors of the charge of the sites on the left of a cut
     for cut in 1:4
         s, ref = entanglement_by_sector(e, cut), entanglement_by_sector(ψ, cut)
@@ -183,6 +195,49 @@ end
     hop = dag(C)(1) * C(2) + dag(C)(2) * C(1)
     @test expect(es, hop) ≈ expect(ρs, hop) atol = 1e-12
     @test reduced_density_matrix(es, [1, 3]) ≈ reduced_density_matrix(ρs, [1, 3]) atol = 1e-12
+end
+
+@testset "Sectors of several quantities, of a modulus, strong" for sys in [
+        System(3, Electron(conserve = (Ntot, 2Sz))),
+        System(4, Fermion(conserve = parity(N))),
+        System(3, Fermion(conserve = strong(N)))]
+    states = sys[1] isa Electron ? ["UpDn", "Up", "Emp"] : fill("Occ", length(sys))
+    states[end] = "Emp"
+    ψ = random_state(Pure, sys, states, 4; rng = Xoshiro(20261106))
+    e = TMS.ExactState(ψ)
+    for cut in 1:length(sys)
+        s, ref = entanglement_by_sector(e, cut), entanglement_by_sector(ψ, cut)
+        @test collect(keys(s)) == collect(keys(ref))
+        @test all(isapprox(s[c].weight, x.weight; atol = 1e-12) &&
+                  isapprox(s[c].entropy, x.entropy; atol = 1e-12) for (c, x) in ref)
+    end
+end
+
+@testset "The fidelity of two exact mixed states near rounding and approximations" begin
+    # commuting states, against (Σ √(p q))² in BigFloat: eigenvalues of 1e-14 of the largest,
+    # above the noise of the eigensolver, are kept
+    D = 64
+    sys = System(6, Qubit())
+    δ = 64e-14
+    p = [ (k == 1 ? 1 - δ : 0.0) + δ / D for k in 1:D ]
+    ref = Float64(sum(sqrt.(big.(p) / D))^2)
+    @test fidelity(TMS.ExactState(sys, LA.diagm(p)), TMS.ExactState(sys, LA.diagm(ones(D)))) ≈
+          ref rtol = 1e-10
+    # a defect of hermiticity: the Hermitian part, silently at rounding, with a warning beyond
+    q3 = System(3, Qubit())
+    rng = Xoshiro(20261107)
+    # of full rank, so that the noise leaves its eigenvalues positive
+    ρ = TMS.ExactState(q3, TMS.ExactState(random_state(Mixed, q3, 4; rng)).state + 0.1 * LA.I)
+    g = randn(rng, ComplexF64, 8, 8)
+    noisy = TMS.ExactState(q3, ρ.state + 1e-12 * g)
+    @test @test_logs(fidelity(ρ, noisy)) ≈ fidelity(ρ, hermitianize(noisy))
+    noisy = TMS.ExactState(q3, ρ.state + 1e-6 * g)
+    @test @test_logs((:warn, r"Hermitian part"), fidelity(ρ, noisy)) ≈
+          fidelity(ρ, hermitianize(noisy))
+    # a negative eigenvalue within approximations is taken as zero, beyond it refused
+    @test fidelity(TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -1e-10, 1])),
+                   TMS.ExactState(System(2, Qubit()), LA.diagm(ones(4)))) ≈
+          (1 + sqrt(0.5) + 1)^2 / (2.5 * 4) rtol = 1e-9
 end
 
 # the paths a representation gets from its reduced_density_matrix and its purity, taken on a State
@@ -239,7 +294,7 @@ end
     m = mix(e)
     @test_throws "between a pure and a mixed" inner(e, m)
     @test_throws "between a pure and a mixed" inner(m, e)
-    @test_throws "needs a Hermitian density matrix" fidelity(m, TMS.ExactState((1 + im) * mix(ψ)))
+    @test_logs (:warn, r"Hermitian part") fidelity(m, TMS.ExactState((1 + im) * mix(ψ)))
     negative = TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -0.5, 1]))
     @test_throws "has the eigenvalue -0.25" fidelity(m, negative)
     @test_throws "negative probability" sample(negative)

@@ -19,7 +19,9 @@ const rounding_tol = 1e-13
 the size, relative to the scale of what it affects, of a defect an approximate computation can
 leave (truncation, time step, unconverged search), beyond which TMS warns or refuses: the
 imaginary part of the expectation value of a Hermitian operator, relative to the scale of the
-operator, see `term_size`, which `expect` and `measure` drop
+operator, see `term_size`, which `expect` and `measure` drop; the departure of a density matrix
+from hermiticity and its negative eigenvalues, relative to its norm and its largest one, for the
+fidelity of two exact mixed states
 """
 const approximation_tol = 1e-8
 

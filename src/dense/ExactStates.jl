@@ -10,7 +10,8 @@
 the state of a small `system` held whole, without truncation: its vector for `R = Pure`, its
 density matrix for `R = Mixed`. It is made from a description as `State{R}` takes it, from a
 `State`, or from the whole vector or density matrix `x`, normalised, of definite charges on a
-system conserving something.
+system conserving something. The truncation limits and the methods that functions take for a
+`State` are accepted and ignored.
 
 # Examples
 
@@ -87,8 +88,9 @@ function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where R
     return (R === Mixed ? tr(ax) : dot(x, ax)) / nonzero_trace(state, "expect")
 end
 
-mix(state::ExactState{Mixed}) = state
-mix(state::ExactState{Pure}) = ExactState{Mixed}(state.system, state.state * state.state', Val(:raw))
+mix(state::ExactState{Mixed}; limits::Limits = Limits()) = state
+mix(state::ExactState{Pure}; limits::Limits = Limits()) =
+    ExactState{Mixed}(state.system, state.state * state.state', Val(:raw))
 
 dag(::ExactState{Pure}) = error("dag is meaningless on pure representations")
 dag(state::ExactState{Mixed}) = ExactState{Mixed}(state.system, state.state', Val(:raw))
@@ -100,9 +102,14 @@ hermiticity(::ExactState{Pure}) = 1.
 hermiticity(state::ExactState{Mixed}) =
     0.5 + 0.5 * real(dot(state.state', state.state)) / nonzero_norm(state, "hermiticity")^2
 
-hermitianize(state::ExactState{Pure}) = state
-hermitianize(state::ExactState{Mixed}) =
+hermitianize(state::ExactState{Pure}; limits::Limits = Limits()) = state
+hermitianize(state::ExactState{Mixed}; limits::Limits = Limits()) =
     ExactState{Mixed}(state.system, (state.state + state.state') / 2, Val(:raw))
+
+weaken(state::ExactState{R}, target::Conserved) where {R <: PM} =
+    ExactState{R}(weaken(state.system, target), state.state, Val(:raw))
+weaken(state::ExactState, spec) = weaken(state, Conserved(spec_names(spec)))
+weaken(state::ExactState) = weaken(state, one_step_down(symmetries(state.system)))
 
 """
 refuse two exact states of different sites, whatever they conserve
@@ -137,23 +144,30 @@ end
 fidelity(r::ExactState{Mixed}, p::ExactState{Pure}) = fidelity(p, r)
 
 """
-the square root of the density matrix of `state` of trace one, refused when it is not Hermitian
-or has a negative eigenvalue beyond rounding, as `what` needs
+the square root of the Hermitian part of the density matrix of `state` of trace one, as `what`
+needs, with a warning when it is not Hermitian beyond `approximation_tol`, refused when it has a
+negative eigenvalue beyond it
 """
 function density_sqrt(state::ExactState{Mixed}, what)
     ρ = state.state / nonzero_trace(state, what)
-    if norm(ρ - ρ') > rounding_tol * norm(ρ)
-        error("$what needs a Hermitian density matrix: hermitianize the state")
+    h = (ρ + ρ') / 2
+    δ = norm(ρ - h) / norm(h)
+    if δ > approximation_tol
+        @warn "$what takes the Hermitian part of a density matrix that is not Hermitian by " *
+              "$(round(δ; sigdigits = 2))"
     end
-    λ, u = eigen(Hermitian(ρ))
-    if first(λ) < -rounding_tol * maximum(abs, λ)
+    λ, u = eigen(Hermitian(h))
+    if first(λ) < -approximation_tol * maximum(abs, λ)
         error("$what needs a positive density matrix, and the state has the eigenvalue " *
-              "$(round(first(λ); sigdigits = 2))")
+              "$(round(first(λ); sigdigits = 2)), as an approximation can leave it " *
+              "(truncation, time step, unconverged search)")
     end
-    # the square root makes the rounding ε of a zero eigenvalue √ε: the eigenvalues the
-    # eigensolver does not resolve from zero are zero, which makes it exact on a pure state
-    resolved = length(λ) * eps() * maximum(abs, λ)
-    return u * Diagonal([ x > resolved ? sqrt(x) : 0.0 for x in λ ]) * u'
+    # a defect τ of the state already makes the fidelity uncertain by about √τ, which zeroing a
+    # negative eigenvalue above -τ does not exceed; the square root also makes the rounding of a
+    # zero eigenvalue √ε: those within the noise of the eigensolver, about √D ε of the largest
+    # (measured), are zero, which makes it exact on a pure state
+    noise = 3 * sqrt(length(λ)) * eps() * maximum(abs, λ)
+    return u * Diagonal([ x > noise ? sqrt(x) : 0.0 for x in λ ]) * u'
 end
 
 # the fidelity of Uhlmann and Jozsa, squared as |⟨a|b⟩|² is: (tr √(√a b √a))², the sum of the
