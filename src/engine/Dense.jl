@@ -6,8 +6,15 @@
 the array `x`, seen as `(a, d, c)`, with the matrix `m` applied to its middle axis, as a vector
 """
 function axis_acted(m::AbstractMatrix, x::AbstractArray, a::Int, d::Int, c::Int)
-    v = reshape(permutedims(reshape(x, a, d, c), (2, 1, 3)), d, :)
-    return vec(permutedims(reshape(m * v, d, a, c), (2, 1, 3)))
+    t = reshape(x, a, d, c)
+    y = zeros(promote_type(eltype(m), eltype(x)), a, d, c)
+    # element by element of `m`, which holds many zeros, without permuting the array
+    for i in 1:d, j in 1:d
+        if !iszero(m[j, i])
+            @views y[:, j, :] .+= m[j, i] .* t[:, i, :]
+        end
+    end
+    return vec(y)
 end
 
 """
@@ -19,8 +26,8 @@ function terms_acted(::Type{R}, system::System, ts::Vector{Term}, x::AbstractVec
         laid = laid_strings(R, system, t)
         foldl(laid.blocks; init = x) do y, b
             k = b.site
-            axis_acted(b.m, y, prod(dims[k+1:end]; init = 1), dims[k],
-                       prod(dims[1:k-1]; init = 1) * extra)
+            isone(b.m) ? y : axis_acted(b.m, y, prod(dims[k+1:end]; init = 1), dims[k],
+                                        prod(dims[1:k-1]; init = 1) * extra)
         end * laid.coef
     end
 end
