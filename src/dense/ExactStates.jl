@@ -388,34 +388,39 @@ apply(::MPO, ::ExactState; kwargs...) =
 """
     ExactEvolver
 
-the evolver of an exact state: the terms of each of its parts, see `lower`, and their time
-functions, `nothing` when it does not depend on time, see `split_terms`
+the evolver of an exact state: the terms of each of its parts, see `lower`, their time
+functions, `nothing` when it does not depend on time, see `split_terms`, and the duration of the
+whole evolution, which bounds its error, see `magnus_evolved`
 """
 struct ExactEvolver
     terms::Vector{Vector{Term}}
     functions::Union{Nothing, Vector}
+    duration::Union{Nothing, Number}
 end
 
-prepared_evolver(state::ExactState, a::Union{IndexedOp, Pair}, mpo_limits::Limits = Limits()) =
-    prepared_evolver(state, [a], mpo_limits)
+prepared_evolver(state::ExactState, a::Union{IndexedOp, Pair}, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
+    prepared_evolver(state, [a], mpo_limits; duration)
 
 # a pure state follows the operator, a density matrix the evolver of an operator
-function prepared_evolver(state::ExactState{R}, terms::AbstractVector,
-                          ::Limits = Limits()) where R
+function prepared_evolver(state::ExactState{R}, terms::AbstractVector, ::Limits = Limits();
+                          duration::Union{Nothing, Number} = nothing) where {R <: PM}
     system = state.system
     ops, fs = split_terms(terms)
     parts = map(ops) do a
         check_indices(system, a)
         return lower(system, R === Pure ? followed_operator(a) : superoperator(a))
     end
-    return ExactEvolver(parts, fs)
+    return ExactEvolver(parts, fs, duration)
 end
 
-prepared_evolver(::ExactState, ::Union{PreMPO, MPO}, ::Limits = Limits()) =
+prepared_evolver(::ExactState, ::Union{PreMPO, MPO}, ::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
     error("an ExactState is given the evolver rather than its PreMPO or MPO: " *
           "evolve(evolver, duration, state)")
 
-prepared_evolver(::ExactState, x, ::Limits = Limits()) = error("$(repr(x)) is not an evolver")
+prepared_evolver(::ExactState, x, ::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) = error("$(repr(x)) is not an evolver")
 
 """
 the exponential ``e^{tA}x`` of the linear map `A`, without its matrix, by Krylov, to
@@ -437,18 +442,13 @@ function exact_exp(A, t::Number, x::AbstractArray)
 end
 
 """
-the error each step of an evolver depending on time may bring to an exact state, relative to
-its norm, see `magnus_evolved`
-"""
-const magnus_tol = 1e-11
-
-"""
 the array `x` evolved from `time` for `dt` under the evolver `cs -> x -> Σ_j c_j A_j x` that
 `act` gives for the values `cs` of its time functions `fs`, by the commutator-free Magnus
 integrator of order 4, see `step_coefs`, each exponential by Krylov, in substeps whose error,
-measured against two half substeps, is below `magnus_tol` times their share of `dt`
+measured against two half substeps, keeps that of an evolution of `duration` below
+`1000 rounding_tol`
 """
-function magnus_evolved(act, fs, time::Number, dt::Number, x::AbstractArray)
+function magnus_evolved(act, fs, time::Number, dt::Number, duration::Number, x::AbstractArray)
     if iszero(norm(x))
         return x
     end
@@ -465,7 +465,9 @@ function magnus_evolved(act, fs, time::Number, dt::Number, x::AbstractArray)
         if isnan(err)
             error("the evolver of an ExactState gave NaN within a step")
         end
-        allowed = magnus_tol * f
+        # its share of the error of the whole evolution, kept ten times above the noise of the
+        # exponentials, `rounding_tol` each
+        allowed = max(1000 * rounding_tol * abs(h / duration), 10 * rounding_tol)
         if err ≤ allowed
             x, s = halves, s + f
         end
@@ -481,11 +483,14 @@ end
 
 # the method of an exact state is its own, those of the MPS without use
 function evolve_step(::Union{Tdvp, ApproxW}, pre::ExactEvolver, state::ExactState{R},
-                     time::Number, dt::Number, step::Int, limits::Limits) where R
+                     time::Number, dt::Number, step::Int, limits::Limits) where {R <: PM}
     system = state.system
     act(cs) = x -> sum(c * dense_acted(R, system, ts, x) for (c, ts) in zip(cs, pre.terms))
+    # a step taken alone, outside evolve, is the whole evolution
+    duration = something(pre.duration, dt)
     x = isnothing(pre.functions) ? exact_exp(act(ones(length(pre.terms))), dt, state.state) :
-                                   magnus_evolved(act, pre.functions, time, dt, state.state)
+                                   magnus_evolved(act, pre.functions, time, dt, duration,
+                                                  state.state)
     return ExactState{R}(system, x, Val(:raw))
 end
 

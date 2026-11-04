@@ -425,7 +425,10 @@ end
         v += δ / 6 * (k1 + 2k2 + 2k3 + k4)
     end
     terms = [-im * X(1) => t -> cos(2t), -im * Z(1) * Z(2)]
-    @test evolve(terms, 1.0, ψ; nsteps = 2).state ≈ v atol = 1e-10
+    # the error bounded over the whole evolution, whatever its number of steps
+    for nsteps in (1, 2, 50)
+        @test evolve(terms, 1.0, ψ; nsteps).state ≈ v atol = 1e-10
+    end
     # the evolver itself, not its PreMPO
     @test_throws "rather than its PreMPO" evolve(PreMPO(State{Pure}(sys, "Up"), -im * X(1)), 1.0,
                                                  ψ; nsteps = 1)

@@ -381,7 +381,7 @@ end
 
 # the evolution of the state on another system: its evolver is the operator placed on the
 # doubled system, not a PreMPO, and each step evolves the state there
-TensorMixedStates.prepared_evolver(st::InterleavedState, evolver, mpo_limits) =
+TensorMixedStates.prepared_evolver(st::InterleavedState, evolver, mpo_limits; duration) =
     map_sites(interleaved, evolver)
 
 TensorMixedStates.evolve_step(algo::DenseStep, ev, st::InterleavedState, time, dt, step,
@@ -560,7 +560,7 @@ TensorMixedStates.run_step(p::LooseSteps, sim, prepared) = sim
 struct LooseEvolution <: TensorMixedStates.EvolutionAlgorithm end
 
 TensorMixedStates.evolve_step(::LooseEvolution, pre, state, time, dt, step, limits) = state
-TensorMixedStates.prepared_evolver(st::LooseState, evolver, mpo_limits) = evolver
+TensorMixedStates.prepared_evolver(st::LooseState, evolver, mpo_limits; duration) = evolver
 TensorMixedStates.evolve_step(::LooseEvolution, pre, st::LooseState, time, dt, step, limits) = st
 TensorMixedStates.project_on(st::LooseState, p; limits) = st
 TensorMixedStates.project_count(st::LooseState, sites, locals, T; limits) = st

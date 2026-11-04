@@ -282,10 +282,11 @@ The phases and the measurements reach the state through the methods you give:
   operator is given as the user wrote it, on the physical sites, which [`map_sites`](@ref)
   places on another system;
 - `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
-- [`TensorMixedStates.prepared_evolver`](@ref)`(state::MyState, evolver, mpo_limits)` and
-  [`TensorMixedStates.evolve_step`](@ref)`(algo::MyMethod, pre, state::MyState, time, dt, step,
-  limits)` evolve the state, for `evolve` and the `Evolve` phase: the first prepares the
-  evolver once, as the user wrote it, and the second makes a step with what the first returned,
+- [`TensorMixedStates.prepared_evolver`](@ref)`(state::MyState, evolver, mpo_limits; duration)`
+  and [`TensorMixedStates.evolve_step`](@ref)`(algo::MyMethod, pre, state::MyState, time, dt,
+  step, limits)` evolve the state, for `evolve` and the `Evolve` phase: the first prepares the
+  evolver once, as the user wrote it, `duration` being that of the whole evolution, and the
+  second makes a step with what the first returned,
   see [Methods of one's own](@ref). Typing the method of evolution as well as the state avoids
   an ambiguity with a method of evolution of another package typing only its own;
 - `TensorMixedStates.write_state(group, state)` and
