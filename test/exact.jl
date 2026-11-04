@@ -588,7 +588,12 @@ end
     e, g = ground_state(h, ψ)
     @test_throws "orthogonal to pure states" ground_state(h, ψ; orthogonal_to = [mix(g)])
     @test_throws "orthogonal to pure states" ground_state(h, ψ; orthogonal_to = [mix(State(g))])
-    @test_throws "give each state once" ground_state(h, ψ; orthogonal_to = [g, g])
+    # their span projected out, a state the others span adding nothing
+    e1, g1 = ground_state(h, ψ; orthogonal_to = [g])
+    @test ground_state(h, ψ; orthogonal_to = [g, g]).energy ≈ e1 atol = 1e-10
+    both = TMS.ExactState(sys, (g.state + g1.state) / √2)
+    @test ground_state(h, ψ; orthogonal_to = [g, g1, both]).energy ≈
+          ground_state(h, ψ; orthogonal_to = [g, g1]).energy atol = 1e-10
     # the Thermalize and Gates phases
     in_tmp() do
         phases = [CreateExact(state = TMS.ExactState{Mixed}(sys, "FullyMixed")),
@@ -611,5 +616,26 @@ end
         sim = runTMS(SimData(; name = "g", phases = [CreateExact(state = two),
                                                       Gates(gates = X(1) * X(2))]))
         @test sim.state.state ≈ kron(x, x) * two.state
+    end
+end
+
+@testset "Gates on an exact state beside a State, stopped between the steps of the State" begin
+    # the steps of the State kept, the exact state given the gates at once at the first one; a
+    # run stopped after each step ends as the uninterrupted one
+    in_tmp() do
+        circuit = CX(1, 5) * Rzz(0.4)(2, 3) * CX(4, 6) * prod(H(i) for i in 1:6) * CZ(2, 6)
+        s6 = System(6, Qubit())
+        phases = [CreateExact(state = TMS.ExactState{Pure}(s6, "Up")),
+                  CreateState(type = Pure, system = s6, state = "Up", on = :b),
+                  Gates(gates = circuit, on = [:state, :b])]
+        sd(name) = SimData(; name, phases)
+        ref = runTMS(sd("ref"))
+        sim = run_through(sd("chk"); max_time = -1)
+        @test ref.state.state ≈ Vector(ref.b) atol = 1e-12
+        @test sim.state.state == ref.state.state
+        @test Vector(sim.b) ≈ Vector(ref.b) atol = 1e-12
+        nsteps = length(last(TMS.apply_steps(circuit, ref.b)))
+        @test nsteps > 3
+        @test count("Resuming from the checkpoint", read("chk/log", String)) > nsteps
     end
 end

@@ -577,7 +577,7 @@ function searched_operator(system::System, a, what::String)
     return a
 end
 
-# the method and the limits of the MPS without use, `algo` not needed; the states of
+# the method and the limits of the MPS without use, `algo` not needed; the span of the states of
 # `orthogonal_to` projected out exactly, a weight without use
 function ground_state(hamiltonian, state::ExactState{Pure};
                       algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
@@ -586,7 +586,8 @@ function ground_state(hamiltonian, state::ExactState{Pure};
     system = state.system
     ts = lower(system, searched_operator(system, hamiltonian, "ground_state"))
     H = acting(Pure, system, ts)
-    # the states given, orthonormalised once, Gram-Schmidt twice
+    # the states given, orthonormalised once, Gram-Schmidt twice, a state the previous ones span
+    # up to rounding adding nothing
     qs = Vector{ComplexF64}[]
     for m in orthogonal_to
         if !(m isa Union{ExactState{Pure}, State{Pure}})
@@ -598,10 +599,9 @@ function ground_state(hamiltonian, state::ExactState{Pure};
         for _ in 1:2, q in qs
             v -= q * dot(q, v)
         end
-        if norm(v) ≤ approximation_tol * norm(e.state)
-            error("the states of orthogonal_to are not independent: give each state once")
+        if norm(v) > rounding_tol * norm(e.state)
+            push!(qs, v / norm(v))
         end
-        push!(qs, v / norm(v))
     end
     project(v) = foldl((v, q) -> v - q * dot(q, v), qs; init = v)
     # the states given lifted above the spectrum, so that the lowest is orthogonal to them
