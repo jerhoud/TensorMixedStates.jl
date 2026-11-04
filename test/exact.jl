@@ -102,7 +102,8 @@ end
     # the product state of the second level of site 2 and the first of the others
     levels = [ [ k == (i == 2 ? 2 : 1) ? 1.0 : 0.0 for k in 1:TMS.dim(sys[i]) ] for i in 1:4 ]
     @test sample(TMS.ExactState{Pure}(sys, levels)) == [0, 1, 0, 0]
-    @test only(entanglement_by_sector(eψ, 2))[2].entropy ≈ entanglement_entropy(ψ, 2) atol = 1e-10
+    @test only(entanglement_by_sector(eψ, 2))[2].entropy ≈ entanglement_entropy(ψ, 2) atol =
+          1e-10
     @test_throws "takes a pure state" entanglement_by_sector(eρ, 2)
     # between two states, and a density matrix that is not Hermitian
     ψ2, ρ2 = random_state(Pure, sys, 4; rng), random_state(Mixed, sys, 4; rng)
@@ -249,6 +250,9 @@ end
     @test fidelity(TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -1e-10, 1])),
                    TMS.ExactState(System(2, Qubit()), LA.diagm(ones(4)))) ≈
           (1 + sqrt(0.5) + 1)^2 / (2.5 * 4) rtol = 1e-9
+    # the others renormalised, which keeps the fidelity of a state with itself at one
+    near = TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -1e-9, 0.5]))
+    @test fidelity(near, near) ≈ 1 atol = 1e-14
 end
 
 # the paths a representation gets from its reduced_density_matrix and its purity, taken on a State
@@ -290,6 +294,12 @@ end
     # no bound by default, one given to protect oneself
     @test_throws "has 64 elements, beyond max_dense = 32" TMS.ExactState{Mixed}(System(3, Qubit()),
                                                                                "Up"; max_dense = 32)
+    # a bound given is kept, which by default is the size of the state
+    em = TMS.ExactState{Mixed}(System(3, Qubit()), "Up")
+    @test_throws "beyond max_dense = 32" reduced_density_matrix(em, 1:3; max_dense = 32)
+    @test size(reduced_density_matrix(em, 1:3; max_dense = 64)) == (8, 8)
+    @test_throws "beyond max_dense = 32" measure(em, VonNeumannEntropy(1:3; max_dense = 32))
+    @test TMS.dense_bound(em) == 2^24
     @test_throws "has 64 elements, beyond max_dense = 32" mix(
         TMS.ExactState{Pure}(System(3, Qubit()), "Up"); max_dense = 32)
     # the same call on a State, where it has no use
@@ -297,8 +307,8 @@ end
     @test size(reduced_density_matrix(State{Pure}(System(3, Qubit()), "Up"), 1:3;
                                       max_dense = nothing)) == (8, 8)
     # a whole array is taken whatever its size, the array of the wrong size refused
-    @test_throws "a vector of 18446744073709551616 elements, not an array of size (0,)" TMS.ExactState(
-        System(64, Qubit()), ComplexF64[])
+    msg = "a vector of 18446744073709551616 elements, not an array of size (0,)"
+    @test_throws msg TMS.ExactState(System(64, Qubit()), ComplexF64[])
     @test_throws "divides by the trace" TMS.ExactState(q2, zeros(4))
     traceless = Matrix(LA.Diagonal([1., 1, -1, -1]))
     @test_throws "zero up to rounding beside its norm" TMS.ExactState(q2, traceless)
@@ -315,7 +325,10 @@ end
     m = mix(e)
     @test_throws "between a pure and a mixed" inner(e, m)
     @test_throws "between a pure and a mixed" inner(m, e)
-    @test_logs (:warn, r"Hermitian part") fidelity(m, TMS.ExactState((1 + im) * mix(ψ)))
+    # of a matrix that is not Hermitian, its Hermitian part
+    bad = TMS.ExactState((1 + im) * mix(ψ))
+    @test (@test_logs (:warn, r"Hermitian part") fidelity(m, bad)) ≈
+          fidelity(m, hermitianize(bad))
     negative = TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -0.5, 1]))
     @test_throws "has the eigenvalue -0.25" fidelity(m, negative)
     @test_throws "negative probability" sample(negative)

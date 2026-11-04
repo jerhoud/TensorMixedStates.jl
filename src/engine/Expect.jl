@@ -464,13 +464,14 @@ end
     real_value(x, scale, name, time)
 
 the real part of the value `x` of the Hermitian operator or measurement `name`, element by
-element, with a warning when the imaginary part dropped is beyond rounding next to `scale`, of
+element, with a warning when the imaginary part dropped is beyond `approximation_tol` of `scale`, of
 the group `:imaginary_part` and carrying `measurement`, `imaginary` and `time`, so that a logger
 may gather such warnings
 """
 function real_value(x::Number, scale, name, time)
     if abs(imag(x)) > approximation_tol * scale
-        @warn("the imaginary part of a Hermitian measurement is beyond rounding, dropped",
+        @warn("the imaginary part of a Hermitian measurement is beyond what an approximation " *
+              "leaves, dropped",
               measurement = name, imaginary = imag(x), time, _group = :imaginary_part)
     end
     return real(x)

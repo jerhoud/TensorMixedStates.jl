@@ -25,7 +25,7 @@ the reference article.
 - The page Bibliography of the documentation lists the articles the methods of TMS come from, with what each gives it.
 - `evolve` and the `Evolve` phase take a state of one's own, through its methods of `prepared_evolver` and `evolve_step`.
 - `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
-- `max_dense`, the number of elements of the largest dense matrix a function builds, a matrix of 4096 × 4096 by default, is taken by `matrix(op, system)`, `Vector`, `reduced_density_matrix`, `von_neumann_entropy`, `log_negativity`, `probabilities`, `sample(state, op)`, `collapse`, `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`.
+- `max_dense`, the number of elements of the largest dense matrix a function builds, `nothing` for no bound, is taken by `matrix(op, system)`, `Vector`, `reduced_density_matrix`, `von_neumann_entropy`, `log_negativity`, `probabilities`, `sample(state, op)`, `collapse`, `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`, a matrix of 4096 × 4096 by default, and by `mix`, without bound by default.
 
 ### Changed
 
@@ -41,7 +41,7 @@ the reference article.
 
 ### Fixed
 
-- `Dephase` of a sum of operators of one site, as the charge of a region, is applied on any number of sites, where it was refused beyond six qubits.
+- `Dephase` of a sum of operators of one site with half-integer eigenvalues, as the charge of a region, is applied on any number of sites, where it was refused beyond six qubits.
 - A phase of one's own defining `run_phase(p::MyPhase, sim, done)` without typing `sim` and `done` is no longer ambiguous.
 - `sample` and `collapse` refuse a density matrix giving a result a negative probability beyond rounding, where they drew from it.
 - `von_neumann_entropy` refuses a reduced density matrix with a negative eigenvalue beyond `1e-8` of the largest, which it left out, and takes a smaller one as zero.

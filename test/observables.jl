@@ -1310,7 +1310,7 @@ end
     @test_throws "negative eigenvalue -0.5" von_neumann_entropy(bad, [1])
     # within approximations, as rounding leaves them, taken as zero
     near = (1 + 1e-10) * State{Mixed}(two, "Up") - 1e-10 * State{Mixed}(two, "Dn")
-    @test abs(von_neumann_entropy(near, [1])) < 1e-8
+    @test von_neumann_entropy(near, [1]) == 0
     measured = Dict(measure(q, [ReducedDensityMatrix([1, 3]), VonNeumannEntropy([1])]))
     @test measured["ReducedDensityMatrix(1,3)"] ≈ ρ
     @test measured["VonNeumannEntropy(1)"] ≈ von_neumann_entropy(q, [1])
@@ -1749,7 +1749,8 @@ end
     # a density matrix that is not Hermitian gives the Hermitian X an imaginary part of 0.6,
     # which expect drops as measure does, and gives with complex = true
     ρ = State{Mixed}(System(1, Qubit()), [0.5 0.3im ; 0.3im 0.5])
-    msg = "the imaginary part of a Hermitian measurement is beyond rounding, dropped"
+    msg = "the imaginary part of a Hermitian measurement is beyond what an approximation leaves, " *
+          "dropped"
     @test (@test_logs (:warn, msg) expect(ρ, X(1))) == 0
     @test (@test_logs expect(ρ, X(1); complex = true)) ≈ 0.6im
     x = @test_logs (:warn, msg) measure(ρ, X(1))

@@ -246,8 +246,9 @@ end
 
 TensorMixedStates.purity(st::HeldMatrix) = real(LA.tr(st.ρ * st.ρ))
 
+# the keyword max_dense without a default, which TMS always passes
 function TensorMixedStates.reduced_density_matrix(st::HeldMatrix, positions::AbstractVector{Int};
-                                                  max_dense = 2^24)
+                                                  max_dense)
     if isempty(positions)
         error("HeldMatrix reduces to one site at least")
     end
@@ -272,7 +273,8 @@ end
     ρ = random_state(Mixed, sys, 4; rng = Xoshiro(20261105))
     st = HeldMatrix(sys, ket_bra_matrix(normalize(ρ)))
     for kept in [[1], [2], [3], [1, 2], [2, 3], [1, 3]]
-        @test reduced_density_matrix(st, kept) ≈ reduced_density_matrix(ρ, kept) atol = 1e-12
+        @test reduced_density_matrix(st, kept; max_dense = nothing) ≈
+              reduced_density_matrix(ρ, kept) atol = 1e-12
         @test renyi2(st, kept) ≈ renyi2(ρ, kept) atol = 1e-12
         @test mutual_info_renyi2(st, kept) ≈ mutual_info_renyi2(ρ, kept) atol = 1e-12
         @test von_neumann_entropy(st, kept) ≈ von_neumann_entropy(ρ, kept) atol = 1e-12

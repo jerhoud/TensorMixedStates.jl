@@ -48,6 +48,7 @@ TensorMixedStates.evolve_step
 TensorMixedStates.prepared_evolver
 TensorMixedStates.project_on
 TensorMixedStates.project_count
+TensorMixedStates.dense_bound
 TensorMixedStates.search
 TensorMixedStates.write_row
 TensorMixedStates.check_list

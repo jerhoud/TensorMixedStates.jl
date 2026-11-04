@@ -341,7 +341,7 @@ function report_dropped(run::RunData)
         n = run.dropped
         at = isnothing(time) ? "" : " at time $(time_text(run, time))"
         log_line(run, "WARNING: $n imaginary part$(n == 1 ? "" : "s") of Hermitian measurements " *
-                      "beyond rounding dropped, the largest $x, of $name$at")
+                      "beyond what an approximation leaves dropped, the largest $x, of $name$at")
         run.warnings += 1
         run.dropped = 0
         run.largest = nothing
