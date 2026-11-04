@@ -289,6 +289,10 @@ The phases and the measurements reach the state through the methods you give:
   second makes a step with what the first returned,
   see [Methods of one's own](@ref). Typing the method of evolution as well as the state avoids
   an ambiguity with a method of evolution of another package typing only its own;
+- `ground_state(hamiltonian, state::MyState; kwargs...)` and
+  `steady_state(lindbladian, state::MyState; kwargs...)` search the state, the keywords being
+  those of the functions for a `State`; the `GroundState` and `SteadyState` phases call them
+  once, the state they return measured as a single step;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes

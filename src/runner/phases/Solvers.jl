@@ -332,14 +332,32 @@ end
 
 provided_values(::GroundState) = (:energy,)
 
+"""
+    searched_once(phase, sim, result, name)
+
+the simulation after the search of `phase` on a state of one's own, its `ground_state` or its
+`steady_state` giving `result`, `(value, state)`, as a single step measured at its end, the value
+under `name`
+"""
+function searched_once(phase, sim::Simulation, result, name::Symbol)
+    value, state = result
+    return step_done(with_state(sim, phase.on, state; (name => value,)...), phase, 1; last = true)
+end
+
 function run_phase(phase::GroundState, sim::Simulation, done::Int)
     state = state_named(sim, phase.on)
+    ms = [ m isa Symbol ? state_named(sim, m) : m for m in phase.orthogonal_to ]
+    if !(state isa State)
+        log_message(sim, "Searching the ground state")
+        return searched_once(phase, sim, ground_state(phase.hamiltonian, state; phase.algo,
+                             phase.limits, phase.mpo_limits, orthogonal_to = ms, phase.weight),
+                             :energy)
+    end
     if !(state isa State{Pure})
         error("GroundState searches a pure state: search it pure and mix it")
     end
     start = time()
     pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
-    ms = [ m isa Symbol ? state_named(sim, m) : m for m in phase.orthogonal_to ]
     args = orthogonal_args(state, pre, ms, phase.weight)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
@@ -399,6 +417,11 @@ refused_reads(::SteadyState) =
 
 function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     state = state_named(sim, phase.on)
+    if !(state isa State)
+        log_message(sim, "Searching the steady state")
+        return searched_once(phase, sim, steady_state(phase.lindbladian, state; phase.algo,
+                             phase.limits, phase.mpo_limits), :residual)
+    end
     if !(state isa State{Mixed})
         error("SteadyState searches a density matrix: mix the state first, see ToMixed")
     end
