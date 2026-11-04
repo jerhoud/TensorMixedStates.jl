@@ -187,11 +187,7 @@ cut the state does not have is refused
 """
 function cut_matrix(state::ExactState{R}, cut::Int) where R
     system = state.system
-    n = length(system)
-    if !(1 ≤ cut ≤ n)
-        error("cannot compute the entanglement entropy at site $cut of a $n site state, the " *
-              "cut is on the right of a site so it must be between 1 and $n")
-    end
+    check_cut(length(system), cut)
     nonzero_norm(state, "an entanglement entropy")
     dims = [ dim(s) for s in system.sites ]
     l, r = prod(dims[1:cut]), prod(dims[cut+1:end]; init = 1)
@@ -203,27 +199,17 @@ function cut_matrix(state::ExactState{R}, cut::Int) where R
     return reshape(permutedims(t, (2, 4, 1, 3)), l^2, r^2)
 end
 
-"""
-the entanglement entropy and spectrum of the singular values `s`, as `entropy_spectrum`
-"""
-function values_spectrum(s::AbstractVector)
-    sp = sort(abs2.(s); rev = true)
-    sp /= sum(sp)
-    return (shannon_entropy(sp), sp)
-end
-
 entanglement_entropy(state::ExactState, cut::Int) =
-    first(values_spectrum(svdvals(cut_matrix(state, cut))))
+    first(entropy_spectrum(svdvals(cut_matrix(state, cut))))
 
 entanglement_spectrum(state::ExactState, cut::Int) =
-    last(values_spectrum(svdvals(cut_matrix(state, cut))))
+    last(entropy_spectrum(svdvals(cut_matrix(state, cut))))
 
 function entanglement_by_sector(state::ExactState{Pure}, cut::Int)
     m = cut_matrix(state, cut)
     system = state.system
     if !is_charged(system)
-        ee, sp = values_spectrum(svdvals(m))
-        return Sectors(Tuple{String, Int}[], [() => (weight = 1.0, entropy = ee, spectrum = sp)])
+        return entanglement_sectors(Tuple{String, Int}[], Dict(() => abs2.(svdvals(m))))
     end
     quantities = conserved_quantities(system)
     # the charge of each product state of the sites up to `cut`, in the order of `kron`
@@ -236,19 +222,8 @@ function entanglement_by_sector(state::ExactState{Pure}, cut::Int)
     for (k, q) in enumerate(qs)
         push!(get!(rows, sector_charges(q, quantities), Int[]), k)
     end
-    total = sum(abs2, m)
-    entries = Pair{SectorCharges, Sector}[]
-    for (c, ks) in rows
-        sq = abs2.(svdvals(m[ks, :]))
-        w = sum(sq)
-        # a sector the state does not reach
-        if w == 0
-            continue
-        end
-        sp = sort(sq / w; rev = true)
-        push!(entries, c => (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp))
-    end
-    return Sectors(quantities, sort!(entries; by = first))
+    return entanglement_sectors(quantities,
+                                Dict(c => abs2.(svdvals(m[ks, :])) for (c, ks) in rows))
 end
 
 entanglement_by_sector(::ExactState{Mixed}, ::Int) =
@@ -269,17 +244,7 @@ function trace_sign_vector(system::System, kept::Vector{Int})
     if isnothing(last_kept) || !any(l -> fermionic[l] && !insorted(l, kept), 1:kept[last_kept]-1)
         return nothing
     end
-    odd = map(1:n) do i
-        if !fermionic[i]
-            return Bool[]
-        end
-        f = matrix(F, system[i])
-        if !isdiag(f)
-            error("the parity F of the site $i is not diagonal on its basis, which " *
-                  "reduced_density_matrix needs")
-        end
-        return real(diag(f)) .< 0
-    end
+    odd = [ isodd.(collect(fermion_parities(s))) for s in system.sites ]
     s = ones(prod(dims))
     for (j, c) in enumerate(CartesianIndices(Tuple(reverse(dims))))
         left, flip = false, false

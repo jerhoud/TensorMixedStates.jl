@@ -79,6 +79,16 @@ hermiticity(state::State{Mixed}) =
     0.5 + 0.5 * real(dot(state.state, dag(state).state)) / nonzero_norm(state, "hermiticity")^2
 
 """
+refuse a cut a state of `n` sites does not have, `cut` being the site on its left
+"""
+function check_cut(n::Int, cut::Int)
+    if !(1 ≤ cut ≤ n)
+        error("cannot compute the entanglement entropy at site $cut of a $n site state, the " *
+              "cut is on the right of a site so it must be between 1 and $n")
+    end
+end
+
+"""
     cut_svd(state, cut)
 
 the factors `U` and `S` of the singular value decomposition of the state across the cut
@@ -86,11 +96,7 @@ between sites `cut` and `cut + 1`, `U` holding the sites up to `cut`; a cut the 
 have is refused
 """
 function cut_svd(state::State, cut::Int)
-    n = length(state)
-    if !(1 ≤ cut ≤ n)
-        error("cannot compute the entanglement entropy at site $cut of a $n site state, the " *
-              "cut is on the right of a site so it must be between 1 and $n")
-    end
+    check_cut(length(state), cut)
     nonzero_norm(state, "an entanglement entropy")
     s = orthogonalize(state.state, cut)
     U, S = svd(s[cut], (linkinds(s, cut - 1)..., siteinds(s, cut)...))
@@ -106,17 +112,19 @@ the entropy ``-\\sum_i p_i \\log p_i`` of the probabilities `p`, a zero probabil
 shannon_entropy(p) = sum((-x * log(x) for x in p if x > 0); init = 0.0)
 
 """
-    entropy_spectrum(S)
+    entropy_spectrum(s)
 
-the entanglement entropy and spectrum read off the singular values `S` of a cut, as
-`entanglement_entropy` returns them
+the entanglement entropy and spectrum read off the singular values `s` of a cut, a vector or the
+diagonal `ITensor` of a decomposition, as `entanglement_entropy` returns them
 """
-function entropy_spectrum(S::ITensor)
+function entropy_spectrum(s::AbstractVector)
     # sorted: with conserved quantities the diagonal runs block by block
-    sp = sort([ S[i, i]^2 for i in 1:dim(S, 1) ]; rev = true)
+    sp = sort(abs2.(s); rev = true)
     sp /= sum(sp)
     return (shannon_entropy(sp), sp)
 end
+
+entropy_spectrum(S::ITensor) = entropy_spectrum([ S[i, i] for i in 1:dim(S, 1) ])
 
 """
     entanglement_entropy(state, cut::Int)
@@ -226,6 +234,24 @@ conserved_quantities(system::System) =
     sort(unique([ (q.name, q.modulus) for site in system.sites for q in conserved(site).quantities ]))
 
 """
+the `Sectors` of the `quantities` conserved from the squares of the singular values of each
+sector, `squares`, a sector of nothing in it left out
+"""
+function entanglement_sectors(quantities, squares::AbstractDict)
+    total = sum(sum, values(squares))
+    entries = Pair{SectorCharges, Sector}[]
+    for (c, sq) in squares
+        w = sum(sq)
+        if w == 0
+            continue
+        end
+        sp = sort(sq / w; rev = true)
+        push!(entries, c => (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp))
+    end
+    return Sectors(quantities, sort!(entries; by = first))
+end
+
+"""
     entanglement_by_sector(state::State{Pure}, cut::Int)
 
 the entanglement across the cut between sites `cut` and `cut + 1`, resolved by the charge of
@@ -247,8 +273,8 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
     U, S = cut_svd(state, cut)
     u = commonind(U, S)
     if !hasqns(u)
-        ee, sp = entropy_spectrum(S)
-        return Sectors(Tuple{String, Int}[], [() => (weight = 1.0, entropy = ee, spectrum = sp)])
+        return entanglement_sectors(Tuple{String, Int}[],
+                                    Dict(() => [ S[i, i]^2 for i in 1:dim(S, 1) ]))
     end
     # U carrying no flux, what flows through `u` is what the sites up to `cut` hold
     if flux(U) ≠ QN()
@@ -262,18 +288,7 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
         append!(get!(squares, c, Float64[]), [ S[k + i, k + i]^2 for i in 1:d ])
         k += d
     end
-    total = sum(sum, values(squares))
-    entries = Pair{SectorCharges, Sector}[]
-    for (c, sq) in squares
-        w = sum(sq)
-        # a sector kept with nothing in it
-        if w == 0
-            continue
-        end
-        sp = sort(sq / w; rev = true)
-        push!(entries, c => (weight = w / total, entropy = shannon_entropy(sp), spectrum = sp))
-    end
-    return Sectors(quantities, sort!(entries; by = first))
+    return entanglement_sectors(quantities, squares)
 end
 
 entanglement_by_sector(::State{Mixed}, ::Int) =
