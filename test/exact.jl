@@ -565,6 +565,17 @@ end
     ψ = TMS.ExactState{Pure}(sys, "+")
     @test evolve(-im * h, 1000, ψ; nsteps = 1).state ≈
           V * (exp.(-1000im * λ) .* (V' * ψ.state)) atol = 1e-10
+    # the norm decreasing along the exponential, by a constant shift of the energies
+    shifted = h + 30 * Id(1)
+    l20, th20 = thermalize(h, 20, TMS.ExactState{Mixed}(sys, "FullyMixed"); nsteps = 1)
+    ls, ths = thermalize(shifted, 20, TMS.ExactState{Mixed}(sys, "FullyMixed"); nsteps = 1)
+    @test ls ≈ l20 - 600 atol = 1e-10
+    @test ths.state ≈ th20.state atol = 1e-10
+    v = V * (exp.(-20 * (λ .+ 30)) .* (V' * ψ.state))
+    @test norm(evolve(-shifted, 20, ψ; nsteps = 1).state - v) / norm(v) < 1e-10
+    # a norm beyond the floats refused, an evolution of no duration leaving the state as it is
+    @test_throws "beyond the floats" evolve(-h, 300, ψ; nsteps = 1)
+    @test evolve([-im * h, -im * X(1) => t -> cos(t)], 0.0, ψ; nsteps = 1).state == ψ.state
     # a field rotating fast: H(t) = ω Z / 2 + Ω (cos ωt X + sin ωt Y) / 2 is solved by
     # e^{-iωtZ/2} e^{-iΩtX/2}
     ω, Ω, t = 200, 1, 1.0
@@ -585,6 +596,17 @@ end
         sim = runTMS(SimData(; name = "t", phases))
         m = exp(-1.3 * matrix(h, sys))
         @test sim.state.state ≈ m / LA.tr(m) atol = 1e-11
+        @test sim.beta == 1.3
+        @test sim.log_trace ≈ log(LA.tr(m) / 16) atol = 1e-12
+        # the error bounded over the whole phase, whatever its number of steps
+        phases = [CreateExact(state = TMS.ExactState{Mixed}(sys, "FullyMixed")),
+                  Thermalize(hamiltonian = h, beta = 20, nsteps = 1000)]
+        sim = runTMS(SimData(; name = "t", phases))
+        @test sim.log_trace ≈ -20 * λ[1] + log(sum(exp.(-20 * (λ .- λ[1]))) / 16) atol = 1e-10
+        # a pure state refused, even when its steps round to none
+        phases = [CreateExact(state = ψ), Thermalize(hamiltonian = h, beta = 0.01,
+                                                     beta_step = 0.1)]
+        @test_throws "needs a mixed representation" runTMS(SimData(; name = "p", phases))
         two = TMS.ExactState{Pure}(System(2, Qubit()), "Up")
         sim = runTMS(SimData(; name = "g", phases = [CreateExact(state = two),
                                                       Gates(gates = X(1) * X(2))]))

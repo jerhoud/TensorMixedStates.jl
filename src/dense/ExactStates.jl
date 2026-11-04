@@ -445,37 +445,46 @@ prepared_evolver(::ExactState, x, ::Limits = Limits();
 
 """
 the exponential ``e^{tA}x`` of the linear map `A` of norm at most `bound`, by Krylov to `tol` per
-unit of time, see `KrylovKit.exponentiate`, as `x` normalised and the logarithm of its norm
+unit of time, see `KrylovKit.exponentiate`, as an array of norm one and the logarithm of its norm
 """
 function exp_scaled(A, bound::Real, t::Number, x::AbstractArray, tol::Real)
     n = norm(x)
     if iszero(n)
         return (x, -Inf)
     end
-    # KrylovKit holds its precision as absolute: in pieces along which the norm grows by e^10 at
-    # most, renormalised in between, so that it stays relative however large `t` and `A`
+    # KrylovKit holds its precision as absolute, so that it must stay relative: in pieces,
+    # renormalised in between, of `A` shifted by its mean value `μ`, along which the norm of a
+    # normal map, convex in log and stationary at the start, only grows
     m = max(1, ceil(Int, abs(t) * bound / 10))
     y, scale = x / n, log(n)
     for _ in 1:m
-        y, info = KrylovKit.exponentiate(A, t / m, y; tol, ishermitian = false, eager = true,
-                                         verbosity = 0)
+        μ = dot(y, A(y))
+        z, info = KrylovKit.exponentiate(v -> A(v) - μ * v, t / m, y; tol, ishermitian = false,
+                                         eager = true, verbosity = 0)
         if info.converged == 0
-            error("the exponential of an evolver of an ExactState did not converge in Krylov")
+            error("an exponential of an ExactState did not converge in Krylov: take more steps")
         end
-        ny = norm(y)
-        if iszero(ny)
-            return (y, -Inf)
+        nz = norm(z)
+        if iszero(nz)
+            return (z, -Inf)
         end
-        y, scale = y / ny, scale + log(ny)
+        y, scale = z * cis(imag(t / m * μ)) / nz, scale + log(nz) + real(t / m * μ)
     end
     return (y, scale)
 end
 
 """
-the exponential ``e^{tA}x``, see `exp_scaled`
+the exponential ``e^{tA}x``, see `exp_scaled`, refused when its norm leaves the floats
 """
 function exact_exp(A, bound::Real, t::Number, x::AbstractArray, tol::Real)
+    if iszero(norm(x))
+        return x
+    end
     y, scale = exp_scaled(A, bound, t, x, tol)
+    if !(log(floatmin(Float64)) < scale < log(floatmax(Float64)))
+        error("the evolution takes the norm of the state to e^$(round(scale; digits = 1)), " *
+              "beyond the floats: evolve it in parts, normalizing it in between")
+    end
     return exp(scale) * y
 end
 
@@ -525,6 +534,9 @@ end
 # the method of an exact state is its own, those of the MPS without use
 function evolve_step(::Union{Tdvp, ApproxW}, pre::ExactEvolver, state::ExactState{R},
                      time::Number, dt::Number, step::Int, limits::Limits) where {R <: PM}
+    if iszero(dt)
+        return state
+    end
     system = state.system
     act(cs) = x -> sum(c * dense_acted(R, system, ts, x) for (c, ts) in zip(cs, pre.terms))
     bound(cs) = sum(abs(c) * b for (c, b) in zip(cs, pre.bounds))
@@ -600,7 +612,8 @@ function ground_state(hamiltonian, state::ExactState{Pure};
         error("ground_state is started from a state the states of orthogonal_to span")
     end
     _, v = exact_eigen(A, x, :SR, true, "ground_state of an ExactState did not converge in " *
-                                        "Krylov, as on a spectrum crowded at its bottom")
+                                        "Krylov, its spectrum crowded at its bottom: start " *
+                                        "from a state closer to the ground state")
     v = project(v)
     return (energy = real(dot(v, H(v))) / real(dot(v, v)),
             state = normalize(ExactState{Pure}(system, v, Val(:raw))))
@@ -618,8 +631,9 @@ function steady_state(lindbladian, state::ExactState{Mixed};
     a = searched_operator(system, lindbladian, "steady_state")
     L = acting(Mixed, system, lower(system, superoperator(a)))
     _, x = exact_eigen(L, state.state, :LR, false,
-                       "steady_state of an ExactState did not converge in Krylov: the spectrum " *
-                       "of the Lindbladian near zero is too crowded at this size")
+                       "steady_state of an ExactState did not converge in Krylov, the spectrum " *
+                       "of the Lindbladian crowded near zero: start from a state closer to " *
+                       "the steady state, one evolved for a while for instance")
     t = tr(x)
     if abs(t) ≤ rounding_tol * norm(x)
         error("the eigenvector found by steady_state has no trace: the steady state is not " *
@@ -638,11 +652,13 @@ steady_state(::Any, ::ExactState{Pure}; kwargs...) =
     error("steady_state searches a density matrix: mix the state")
 
 # as thermalize of a State, each step an exponential by Krylov, the method and the limits of the
-# MPS without use
+# MPS without use; `total_beta`, that of the whole thermalization this call is a part of, bounds
+# its error
 function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
                     algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
                     beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
-                    mpo_limits::Limits = Limits(), step::Int = 1)
+                    mpo_limits::Limits = Limits(), step::Int = 1,
+                    total_beta::Union{Nothing, Real} = nothing)
     nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
     if nsteps == 0
         return (log_trace = 0., state = step == 1 ? normalize(state) : state)
@@ -656,7 +672,8 @@ function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
     log_trace = 0.
     for k in 0:nsteps - 1
         # the trace taken apart from the norm, which the exponential may take far beyond floats
-        y, scale = exp_scaled(K, bound, -beta / nsteps / 2, x, 2000 * rounding_tol / abs(beta))
+        y, scale = exp_scaled(K, bound, -beta / nsteps / 2, x,
+                              2000 * rounding_tol / abs(something(total_beta, beta)))
         t = real(tr(y))
         if !(t > 0)
             error("the trace of the state reached $t at step $(step + k) of thermalize")

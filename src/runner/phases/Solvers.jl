@@ -236,14 +236,15 @@ step_count(t::ThermalOwn) = t.nsteps
 function run_step(t::ThermalOwn, sim::Simulation, k::Int)
     p = t.phase
     l, st = thermalize(p.hamiltonian, p.beta / t.nsteps, state_named(sim, p.on); p.algo,
-                       nsteps = 1, limits = step_limits(p.limits, k), p.mpo_limits, step = k)
+                       nsteps = 1, limits = step_limits(p.limits, k), p.mpo_limits, step = k,
+                       total_beta = p.beta)
     return with_state(sim, p.on, st; beta = k == t.nsteps ? p.beta : k * (p.beta / t.nsteps),
                       log_trace = (k == 1 ? 0. : sim.log_trace) + l)
 end
 
 function prepare_phase(phase::Thermalize, sim::Simulation)
     state = state_named(sim, phase.on)
-    if state isa State{Pure}
+    if state isa Union{State{Pure}, ExactState{Pure}}
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
     n = if isnothing(phase.nsteps)

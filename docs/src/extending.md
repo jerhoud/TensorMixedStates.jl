@@ -295,7 +295,8 @@ The phases and the measurements reach the state through the methods you give:
   those of the functions for a `State`; the `GroundState` and `SteadyState` phases call them
   once, the state they return measured as a single step, and
   `thermalize(hamiltonian, beta, state::MyState; kwargs...)` gives the thermal state, which the
-  `Thermalize` phase calls one step at a time, with `nsteps = 1` and the number of the step;
+  `Thermalize` phase calls one step at a time, with `nsteps = 1`, the number of the step and
+  `total_beta`, the `beta` of the whole phase;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes
