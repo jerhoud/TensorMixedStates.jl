@@ -67,6 +67,15 @@ end
     @test fidelity(eψ, eρ) ≈ fidelity(ψ, ρ)
     @test fidelity(eρ, eψ) ≈ fidelity(ψ, ρ)
     @test hs_fidelity(eρ, eρ2) ≈ hs_fidelity(ρ, ρ2)
+    # that of Uhlmann on two mixed ones, which is the pure one on pure states, symmetric, 1 for
+    # one state and the overlap of the probabilities of two commuting ones
+    @test fidelity(mix(eψ), mix(eψ2)) ≈ fidelity(ψ, ψ2) rtol = 1e-10
+    @test fidelity(mix(eψ), TMS.ExactState(3 * ρ)) ≈ fidelity(ψ, ρ) rtol = 1e-10
+    @test fidelity(eρ, eρ2) ≈ fidelity(eρ2, eρ)
+    @test fidelity(eρ, eρ) ≈ 1
+    p, q = rand(rng, size(eρ.state, 1)), rand(rng, size(eρ.state, 1))
+    @test fidelity(TMS.ExactState(sys, LA.diagm(p)), TMS.ExactState(sys, LA.diagm(q))) ≈
+          sum(sqrt.(p .* q))^2 / (sum(p) * sum(q))
     nh = ρ + im * ρ2
     enh = TMS.ExactState(nh)
     @test hermiticity(enh) ≈ hermiticity(nh)
@@ -173,7 +182,9 @@ end
     m = mix(e)
     @test_throws "between a pure and a mixed" inner(e, m)
     @test_throws "between a pure and a mixed" inner(m, e)
-    @test_throws "use hs_fidelity" fidelity(m, m)
+    @test_throws "needs a Hermitian density matrix" fidelity(m, TMS.ExactState((1 + im) * mix(ψ)))
+    negative = TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -0.5, 1]))
+    @test_throws "has the eigenvalue -0.25" fidelity(m, negative)
     @test_throws "meaningless on pure" dag(e)
     @test_throws "different systems" inner(e, TMS.ExactState{Pure}(System(3, Qubit()), "Up"))
     @test_throws "in increasing order" reduced_density_matrix(e, [2, 1])

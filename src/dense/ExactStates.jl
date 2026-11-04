@@ -136,8 +136,32 @@ end
 
 fidelity(r::ExactState{Mixed}, p::ExactState{Pure}) = fidelity(p, r)
 
-fidelity(::ExactState{Mixed}, ::ExactState{Mixed}) =
-    error("no fidelity between two mixed representations: use hs_fidelity")
+"""
+the square root of the density matrix of `state` of trace one, refused when it is not Hermitian
+or has a negative eigenvalue beyond rounding, as `what` needs
+"""
+function density_sqrt(state::ExactState{Mixed}, what)
+    ρ = state.state / nonzero_trace(state, what)
+    if norm(ρ - ρ') > rounding_tol * norm(ρ)
+        error("$what needs a Hermitian density matrix: hermitianize the state")
+    end
+    λ, u = eigen(Hermitian(ρ))
+    if first(λ) < -rounding_tol * maximum(abs, λ)
+        error("$what needs a positive density matrix, and the state has the eigenvalue " *
+              "$(round(first(λ); sigdigits = 2))")
+    end
+    # the square root makes the rounding ε of a zero eigenvalue √ε: the eigenvalues the
+    # eigensolver does not resolve from zero are zero, which makes it exact on a pure state
+    resolved = length(λ) * eps() * maximum(abs, λ)
+    return u * Diagonal([ x > resolved ? sqrt(x) : 0.0 for x in λ ]) * u'
+end
+
+# the fidelity of Uhlmann and Jozsa, squared as |⟨a|b⟩|² is: (tr √(√a b √a))², the sum of the
+# singular values of √a √b
+function fidelity(a::ExactState{Mixed}, b::ExactState{Mixed})
+    same_sites(a, b)
+    return sum(svdvals(density_sqrt(a, "fidelity") * density_sqrt(b, "fidelity")))^2
+end
 
 hs_fidelity(a::ExactState{Mixed}, b::ExactState{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
