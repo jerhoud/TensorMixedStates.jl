@@ -167,6 +167,16 @@ end
     u = zeros(16)
     u[2], u[3] = 1, 1e-14
     @test TMS.ExactState(sys, u).state[3] ≈ 1e-14 / norm(u)
+    # what rounding leaves in a sector the charges forbid, dropped as dense_state does
+    u[1] = 1e-15
+    eu = TMS.ExactState(sys, u)
+    @test eu.state[1] == 0
+    @test eu.state[3] ≈ 1e-14 / norm(u)
+    @test length(entanglement_by_sector(eu, 2)) == length(entanglement_by_sector(State(eu), 2))
+    ρu = TMS.ExactState(sys, u * u')
+    # a mixture of sectors allowed, block diagonal: what joins two sectors dropped
+    @test ρu.state[1, 2:end] == zeros(15) && ρu.state[2:end, 1] == zeros(15)
+    @test real(ρu.state[1, 1]) > 0
     @test_throws "divides by the trace" TMS.ExactState(sys, zeros(16))
     # a projector of no definite charge refused, measured once weakened; a count kept charged
     @test_throws "collapse weaken(state, ()) instead" collapse(e, X(1) => 1.0)
