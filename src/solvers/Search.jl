@@ -162,7 +162,7 @@ warn when `state`, found by a search orthogonal to other states, see `orthogonal
 an overlap with one of them beyond the precision of the numbers: a weight not above the gap, or
 a search that has not converged; `weight` is the one given, `nothing` for the default
 """
-function check_orthogonal(state::State{Pure}, args::NamedTuple, weight::Union{Nothing, Real})
+function check_orthogonal(state::AbstractState, args::NamedTuple, weight::Union{Nothing, Real})
     for m in get(args, :orthogonal_to, State{Pure}[])
         p = abs2(inner(m, state))
         if p > sqrt(eps())
