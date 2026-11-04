@@ -20,6 +20,13 @@ end
 log_mpo(sim::Simulation, what::String, pre::PreMPO, start::Float64) =
     log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1, start)
 
+# the evolver of a state of one's own, which need not be an MPO
+function log_mpo(sim::Simulation, what::String, ::Any, start::Float64)
+    log_message(sim, "The $what was prepared in $(round(time() - start; digits = 3)) s")
+    getfield(sim, :run).step_start = time()
+    return nothing
+end
+
 """
     step_number(span, step, what, sim)
 
@@ -97,7 +104,7 @@ an `Evolve` prepared: its method, the `PreMPO` of its evolver, with its time fun
 limits, its number of steps, the time it starts from, its duration and the names of the states
 it evolves
 """
-struct EvolveSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}}
+struct EvolveSteps{A <: EvolutionAlgorithm, P}
     algo::A
     pre::P
     limits::Limits

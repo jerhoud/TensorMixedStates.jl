@@ -45,6 +45,7 @@ TensorMixedStates.run_phase
 TensorMixedStates.step_done
 TensorMixedStates.provided_values
 TensorMixedStates.evolve_step
+TensorMixedStates.prepared_evolver
 TensorMixedStates.search
 TensorMixedStates.write_row
 TensorMixedStates.check_list
