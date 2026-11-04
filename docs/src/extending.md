@@ -282,7 +282,7 @@ The phases and the measurements reach the state through the methods you give:
   operator is given as the user wrote it, on the physical sites, which [`map_sites`](@ref)
   places on another system;
 - `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates`
-  phase, in one step;
+  phase, at its first step;
 - [`TensorMixedStates.prepared_evolver`](@ref)`(state::MyState, evolver, mpo_limits; duration)`
   and [`TensorMixedStates.evolve_step`](@ref)`(algo::MyMethod, pre, state::MyState, time, dt,
   step, limits)` evolve the state, for `evolve` and the `Evolve` phase: the first prepares the

@@ -162,52 +162,42 @@ between which the run can write a checkpoint or stop.
 end
 
 """
-    GatesSteps(coefs, steps, limits, on)
+    GatesSteps(coefs, steps, limits, on, gates, own)
 
-a `Gates` prepared: for each state it acts on, the number it is multiplied by and the steps of
-`apply`, see `apply_steps`, made in turn, its limits and the names of the states
+a `Gates` prepared: for each `State` it acts on, the number it is multiplied by and the steps of
+`apply`, see `apply_steps`, made in turn, its limits and the names of the states; the gates and
+the names of the states of one's own, which `apply` gives them at once at the first step
 """
 struct GatesSteps
     coefs::Vector{Number}
     steps::Vector{Vector}
     limits::Limits
     on::Vector{Symbol}
-end
-
-"""
-    GatesOnce(gates, limits, on)
-
-a `Gates` on states one of which is of one's own: the gates applied in one step by `apply`
-"""
-struct GatesOnce
     gates::IndexedOp
-    limits::Limits
-    on::Vector{Symbol}
+    own::Vector{Symbol}
 end
-
-step_count(::GatesOnce) = 1
-
-run_step(g::GatesOnce, sim::Simulation, ::Int) =
-    foldl((sim, name) -> with_state(sim, name, apply(g.gates, state_named(sim, name);
-                                                     limits = g.limits)), g.on; init = sim)
 
 function prepare_phase(phase::Gates, sim::Simulation)
     names = state_names(phase.on)
-    if any(name -> !(state_named(sim, name) isa State), names)
-        return GatesOnce(phase.gates, phase.limits, names)
-    end
-    prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in names ]
-    return GatesSteps(first.(prepared), last.(prepared), phase.limits, names)
+    mps = filter(name -> state_named(sim, name) isa State, names)
+    prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in mps ]
+    return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates,
+                      setdiff(names, mps))
 end
 
 # a product that vanishes, of no step, takes one to give the null state
-step_count(g::GatesSteps) = max(1, maximum(length, g.steps))
+step_count(g::GatesSteps) = max(1, maximum(length, g.steps; init = 0))
 
 function run_step(g::GatesSteps, sim::Simulation, k::Int)
     for (name, coef, steps) in zip(g.on, g.coefs, g.steps)
         state = state_named(sim, name)
         st = step_applied(state.state, coef, steps, k, truncation(g.limits))
         sim = with_state(sim, name, State(state, st))
+    end
+    if k == 1
+        for name in g.own
+            sim = with_state(sim, name, apply(g.gates, state_named(sim, name); limits = g.limits))
+        end
     end
     return sim
 end
