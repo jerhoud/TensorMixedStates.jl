@@ -24,6 +24,7 @@ the reference article.
 - `variance`, `von_neumann_entropy`, `log_negativity`, `renyi2` and `mutual_info_renyi2` take a state of one's own, through its `expect_value`, `reduced_density_matrix` and `purity`.
 - The page Bibliography of the documentation lists the articles the methods of TMS come from, with what each gives it.
 - `evolve` and the `Evolve` phase take a state of one's own, through its methods of `prepared_evolver` and `evolve_step`.
+- `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
 
 ### Changed
 

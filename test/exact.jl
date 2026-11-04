@@ -18,11 +18,16 @@
     @test_throws "not pure" TMS.ExactState{Pure}(f, FullyMixed(N => 2))
 end
 
-@testset "Measurements on $name" for (name, sys, ops) in [
-        ("qubits", System(4, Qubit()), [X(1) * Z(3) + 2 * Y(2), Sp(1) * Sm(4)]),
-        ("fermions", System(4, Fermion()), [dag(C)(1) * C(3) + dag(C)(3) * C(1), C(2), N(4)]),
+# `proj`: Hermitian operators measured projectively, a product of involutions, a sum of operators
+# of one site, and one diagonalised on its sites, past a site carrying a string
+@testset "Measurements on $name" for (name, sys, ops, proj) in [
+        ("qubits", System(4, Qubit()), [X(1) * Z(3) + 2 * Y(2), Sp(1) * Sm(4)],
+         [Z(1) * X(3), Z(1) + Z(2) + Z(4), X(1) * X(3) + Z(1)]),
+        ("fermions", System(4, Fermion()), [dag(C)(1) * C(3) + dag(C)(3) * C(1), C(2), N(4)],
+         [F(1) * F(3), N(1) + N(2) + N(4), dag(C)(1) * C(3) + dag(C)(3) * C(1)]),
         ("a qubit among fermions", System([Fermion(), Qubit(), Electron(), Fermion()]),
-         [dag(C)(1) * Cup(3) + dag(Cup)(3) * C(1), C(4), X(2) * Ntot(3)])]
+         [dag(C)(1) * Cup(3) + dag(Cup)(3) * C(1), C(4), X(2) * Ntot(3)],
+         [X(2) * F(4), N(1) + Ntot(3) + N(4), dag(C)(1) * C(4) + dag(C)(4) * C(1)])]
     rng = Xoshiro(20261103)
     ψ, ρ = random_state(Pure, sys, 4; rng), random_state(Mixed, sys, 4; rng)
     eψ, eρ = TMS.ExactState(ψ), TMS.ExactState(ρ)
@@ -50,6 +55,19 @@ end
             @test sum(sp[k+1:end]; init = 0.0) + sum(ref[k+1:end]; init = 0.0) < 1e-12
         end
         @test measure(e, EntanglementEntropy(2)) ≈ entanglement_entropy(st, 2) atol = 1e-10
+        # the results, their probabilities and the states each leaves
+        for o in [proj; Level(3)]
+            ref = probabilities(st, o)
+            @test first.(probabilities(e, o)) ≈ first.(ref)
+            @test last.(probabilities(e, o)) ≈ last.(ref) atol = 1e-10
+            for (λ, p) in ref
+                if p > 1e-6
+                    c, r = collapse(e, o => λ), collapse(st, o => λ)
+                    @test c.probability ≈ r.probability atol = 1e-10
+                    @test c.state.state ≈ TMS.ExactState(r.state).state atol = 1e-10
+                end
+            end
+        end
         # the signs of the fermionic sites traced out, on the left of those kept or not
         for kept in [[1], [4], [2, 3], [1, 3], [2, 4], [1, 2, 4], 1:4]
             @test reduced_density_matrix(e, kept) ≈ reduced_density_matrix(st, kept) atol = 1e-12
@@ -68,6 +86,22 @@ end
     end
     @test mix(eψ).state ≈ ket_bra_matrix(mix(ψ))
     @test mix(eρ) === eρ
+    # draws following the probabilities of the product states, of a site, of an operator
+    d = size(eρ.state, 1)
+    for (e, w) in [(eψ, abs2.(eψ.state)), (eρ, real(LA.diag(eρ.state)))]
+        p = w / sum(w)
+        draws = [ sample(e; rng) for _ in 1:4000 ]
+        dims = [ TMS.dim(s) for s in sys.sites ]
+        index(x) = 1 + sum(x[i] * prod(dims[i+1:end]; init = 1) for i in 1:4)
+        counts = [ count(x -> index(x) == k, draws) for k in 1:d ]
+        @test all(abs.(counts / 4000 - p) .≤ 5 * sqrt.(p .* (1 .- p) / 4000) .+ 1e-12)
+        q = last.(probabilities(e, 2))
+        counts = [ count(==(x), [ sample(e, 2; rng) for _ in 1:4000 ]) for x in 0:length(q)-1 ]
+        @test all(abs.(counts / 4000 - q) .≤ 5 * sqrt.(q .* (1 .- q) / 4000) .+ 1e-12)
+    end
+    # the product state of the second level of site 2 and the first of the others
+    levels = [ [ k == (i == 2 ? 2 : 1) ? 1.0 : 0.0 for k in 1:TMS.dim(sys[i]) ] for i in 1:4 ]
+    @test sample(TMS.ExactState{Pure}(sys, levels)) == [0, 1, 0, 0]
     @test only(entanglement_by_sector(eψ, 2))[2].entropy ≈ entanglement_entropy(ψ, 2) atol = 1e-10
     @test_throws "takes a pure state" entanglement_by_sector(eρ, 2)
     # between two states, and a density matrix that is not Hermitian
@@ -208,6 +242,8 @@ end
     @test_throws "needs a Hermitian density matrix" fidelity(m, TMS.ExactState((1 + im) * mix(ψ)))
     negative = TMS.ExactState(System(2, Qubit()), LA.diagm([1., 0.5, -0.5, 1]))
     @test_throws "has the eigenvalue -0.25" fidelity(m, negative)
+    @test_throws "negative probability" sample(negative)
+    @test_throws "of probability 0" collapse(e, Z(1) => -1)
     @test_throws "meaningless on pure" dag(e)
     @test_throws "different systems" inner(e, TMS.ExactState{Pure}(System(3, Qubit()), "Up"))
     @test_throws "in increasing order" reduced_density_matrix(e, [2, 1])

@@ -313,6 +313,85 @@ function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{
     return unit_trace(sum(t[:, k, :, k] for k in 1:b))
 end
 
+"""
+the operator `p`, placed on sites, applied to the kets of the density matrix `ρ`, then to its
+bras as its adjoint: ``p \\rho p^\\dagger``
+"""
+function on_both_sides(system::System, p::IndexedOp, ρ::AbstractMatrix)
+    ts = lower(system, p)
+    return dense_acted(Pure, system, ts, dense_acted(Pure, system, ts, ρ)')'
+end
+
+# the limits of the MPS have no use on an exact state, see the docstring of ExactState
+function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where R
+    system = weaken(state.system, ())
+    x = R === Mixed ? on_both_sides(system, p, state.state) :
+                      dense_acted(Pure, system, lower(system, p), state.state)
+    return normalize(ExactState{R}(state.system, x, Val(:raw)))
+end
+
+"""
+the vector `x`, of `extra` columns after the product states of `system`, projected on the total
+`T` of the sum that `counting` describes: each site of the sum applies the projectors of its
+values to each partial total, those that can still reach `T` kept
+"""
+function count_projected(system::System, sites, locals, T::Int, x::AbstractVector, extra::Int)
+    dims = [ dim(s) for s in system.sites ]
+    # the smallest and the largest totals the sites after the k-th can add
+    lo = reverse(cumsum(reverse([ minimum(first(l)) for l in locals ])))
+    hi = reverse(cumsum(reverse([ maximum(first(l)) for l in locals ])))
+    parts = Dict(0 => x)
+    for (j, (k, (values, ps))) in enumerate(zip(sites, locals))
+        a, c = prod(dims[k+1:end]; init = 1), prod(dims[1:k-1]; init = 1) * extra
+        next = Dict{Int, Vector{ComplexF64}}()
+        for (s, y) in parts, (t, p) in zip(values, ps)
+            rest = j < length(sites) ? (lo[j + 1], hi[j + 1]) : (0, 0)
+            if rest[1] ≤ T - s - t ≤ rest[2]
+                v = axis_acted(p, y, a, dims[k], c)
+                next[s + t] = haskey(next, s + t) ? next[s + t] + v : v
+            end
+        end
+        parts = next
+    end
+    return get(parts, T, zero(x))
+end
+
+function project_count(state::ExactState{R}, sites, locals, T; limits::Limits) where R
+    system = state.system
+    x = state.state
+    if R === Pure
+        y = count_projected(system, sites, locals, T, x, 1)
+    else
+        d = size(x, 1)
+        kets = reshape(count_projected(system, sites, locals, T, vec(x), d), d, d)
+        y = reshape(count_projected(system, sites, locals, T, vec(Matrix(kets')), d), d, d)'
+    end
+    return normalize(ExactState{R}(system, y, Val(:raw)))
+end
+
+"""
+the probabilities of the product states of `state`, in the order of `kron`, which `draw` refuses
+when one is negative beyond rounding
+"""
+basis_probabilities(state::ExactState{R}) where R =
+    (R === Mixed ? real(diag(state.state)) : abs2.(state.state)) / nonzero_trace(state, "sample")
+
+function sample(state::ExactState; rng = Random.default_rng())
+    p = basis_probabilities(state)
+    dims = [ dim(s) for s in state.system.sites ]
+    c = CartesianIndices(Tuple(reverse(dims)))[draw(x -> p[x + 1], length(p), rand(rng)) + 1]
+    return [ c[length(dims) + 1 - i] - 1 for i in eachindex(dims) ]
+end
+
+function sample(state::ExactState, pos::Int; rng = Random.default_rng())
+    check_positions(state, [pos], "sample")
+    dims = [ dim(s) for s in state.system.sites ]
+    p = basis_probabilities(state)
+    a, c = prod(dims[pos+1:end]; init = 1), prod(dims[1:pos-1]; init = 1)
+    q = vec(sum(reshape(p, a, dims[pos], c); dims = (1, 3)))
+    return draw(x -> q[x + 1], dims[pos], rand(rng))
+end
+
 function write_state(g, state::ExactState{R}) where R
     attributes(g)["representation"] = string(nameof(R))
     g["state"] = state.state
