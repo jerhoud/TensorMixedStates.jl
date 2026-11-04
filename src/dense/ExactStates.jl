@@ -71,6 +71,8 @@ trace(state::ExactState{Mixed}) = tr(state.state)
 
 norm(state::ExactState) = norm(state.state)
 
+dense_bound(state::ExactState) = max(dense_elements, length(state.state))
+
 nonzero_trace(state::ExactState{Mixed}, what) =
     checked_trace(real(trace(state)), norm(state), what)
 
@@ -170,9 +172,11 @@ function density_sqrt(state::ExactState{Mixed}, what)
     # a defect τ of the state already makes the fidelity uncertain by about √τ, which zeroing a
     # negative eigenvalue above -τ does not exceed; the square root also makes the rounding of a
     # zero eigenvalue √ε: those within the noise of the eigensolver, about √D ε of the largest
-    # (measured), are zero, which makes it exact on a pure state
+    # (measured), are zero, which makes it exact on a pure state. The others are brought back to
+    # a trace of one, which keeps the fidelity within [0, 1]
     noise = 3 * sqrt(length(λ)) * eps() * maximum(abs, λ)
-    return u * Diagonal([ x > noise ? sqrt(x) : 0.0 for x in λ ]) * u'
+    kept = [ x > noise ? x : 0.0 for x in λ ]
+    return u * Diagonal(sqrt.(kept / sum(kept))) * u'
 end
 
 # the fidelity of Uhlmann and Jozsa, squared as |⟨a|b⟩|² is: (tr √(√a b √a))², the sum of the
@@ -299,17 +303,14 @@ function partition_matrix(state::ExactState{Pure}, kept::Vector{Int})
 end
 
 function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{Int};
-                                max_dense::Union{Nothing, Int} = dense_elements) where R
+                                max_dense::Union{Nothing, Int} = dense_bound(state)) where R
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
         return ones(1, 1)
     end
     kept = collect(positions)
-    # no larger than the state, the matrix needs no bound
-    if prod(float(dim(state.system[k])) for k in kept)^2 > length(state.state)
-        check_reduced(state, kept, max_dense)
-    end
+    check_reduced(state, kept, max_dense)
     if R === Pure
         m = partition_matrix(state, kept)
         return unit_trace(m * m')
@@ -332,7 +333,7 @@ end
 
 # its reduced density matrix is never formed, which `max_dense` would bound
 function von_neumann_entropy(state::ExactState{Pure}, positions::AbstractVector;
-                             max_dense::Union{Nothing, Int} = dense_elements)
+                             max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
     if isempty(positions)
         return 0.0

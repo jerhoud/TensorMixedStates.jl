@@ -1357,8 +1357,8 @@ end
     sd(name) = SimData(; name, final_measurements = "f" => X(1), phases = [
         CreateState(type = Mixed, state = ρ),
         Update(c -> nothing; nsteps = 3, measurements = "x.json" => [X, X(1)])])
-    dropped = Regex("WARNING: (\\d+) imaginary parts? of Hermitian measurements beyond rounding " *
-                    "dropped, the largest (\\S+), of (.+) at time (\\S+)\\n")
+    dropped = Regex("WARNING: (\\d+) imaginary parts? of Hermitian measurements beyond what an " *
+                    "approximation leaves dropped, the largest (\\S+), of (.+) at time (\\S+)\\n")
     summaries(log) = [ (parse(Int, m[1]), parse(Float64, m[2]), m[3], m[4])
                        for m in eachmatch(dropped, read(log, String)) ]
     in_tmp() do
@@ -1366,7 +1366,7 @@ end
         s = summaries("im/log")
         @test [ (n, name, t) for (n, _, name, t) in s ] == [(6, "X", "0"), (1, "X(1)", "0")]
         @test all(x -> x[2] ≈ 0.6, s)
-        @test !occursin("is beyond rounding, dropped", read("im/log", String))
+        @test !occursin("is beyond what an approximation leaves, dropped", read("im/log", String))
         # a run stopped and resumed reports what each of its parts dropped
         run_through(sd("resumed"); max_time = -1)
         @test sum(first, summaries("resumed/log")) == 7

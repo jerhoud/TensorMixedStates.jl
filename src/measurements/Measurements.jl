@@ -337,7 +337,7 @@ the fermionic one, see `trace_signs`; on another representation, from its
 `reduced_density_matrix`, of trace one
 """
 part_renyi2(state::AbstractState, kept::Vector{Int}) =
-    -log(sum(abs2, reduced_density_matrix(state, kept)))
+    -log(sum(abs2, reduced_density_matrix(state, kept; max_dense = dense_bound(state))))
 
 part_renyi2(state::State{Mixed}, kept::Vector{Int}) =
     renyi2(partial_trace(weak_form(state); keep = kept))
@@ -408,6 +408,15 @@ function unit_trace(m::AbstractMatrix)
 end
 
 """
+    dense_bound(state)
+
+the default of `max_dense` for a dense matrix built from `state`: `dense_elements`, or the
+number of elements `state` holds when it is held whole and larger. A state of one's own held
+whole adds a method.
+"""
+dense_bound(::AbstractState) = dense_elements
+
+"""
     check_reduced(state, kept, max_dense)
 
 refuse the density matrix of the sites at the positions `kept` of `state` beyond `max_dense`
@@ -419,7 +428,7 @@ function check_reduced(state::AbstractState, kept, max_dense::Union{Nothing, Int
 end
 
 """
-    reduced_density_matrix(state, positions; max_dense = 2^24)
+    reduced_density_matrix(state, positions; max_dense)
 
 the density matrix of the sites at `positions`, the others traced out, as a matrix of trace
 one on the basis of the product states of those sites, given in increasing order, ordered as
@@ -430,15 +439,15 @@ sites, the matrix having the square of their dimension as its number of elements
 trace zero is refused, and so are positions out of increasing order, which `permute_sites`
 gives.
 
-- `max_dense`: the number of elements beyond which the matrix is refused, a matrix of
-  4096 × 4096 by default
+- `max_dense`: the number of elements beyond which the matrix is refused, `nothing` for no
+  bound, by default a matrix of 4096 × 4096 or the size of a state held whole
 
 # Examples
 
     ρ = reduced_density_matrix(state, [2, 5])
 """
 function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{Int};
-                                max_dense::Union{Nothing, Int} = dense_elements)
+                                max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
@@ -522,7 +531,7 @@ function block_matrix(state::State{Pure}, ks::UnitRange{Int})
 end
 
 function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int};
-                                max_dense::Union{Nothing, Int} = dense_elements)
+                                max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
@@ -540,7 +549,7 @@ end
 # positions in a vector of another element type, `[]` or `Any[1, 3]`; integer positions reaching
 # this method have no method of their own, which converting them again would not find
 function reduced_density_matrix(state::AbstractState, positions::AbstractVector;
-                                max_dense::Union{Nothing, Int} = dense_elements)
+                                max_dense::Union{Nothing, Int} = dense_bound(state))
     if positions isa AbstractVector{Int}
         throw(MethodError(reduced_density_matrix, (state, positions)))
     end
@@ -548,22 +557,23 @@ function reduced_density_matrix(state::AbstractState, positions::AbstractVector;
 end
 
 """
-    von_neumann_entropy(state, positions; max_dense = 2^24)
+    von_neumann_entropy(state, positions; max_dense)
 
 the von Neumann entropy ``-\\mathrm{tr}\\,\\rho_A \\log \\rho_A`` of the sites at `positions`,
 ``\\rho_A`` being their `reduced_density_matrix`, 0 when there is none; a negative eigenvalue,
-which an approximate state may have, is taken as zero, and refused beyond `1e-8` of the
-largest. On a pure state and the sites `1:cut`, `entanglement_entropy(state, cut)` gives the
+which an approximate state may have, is taken as zero, the others renormalised, and refused
+beyond `1e-8` of the largest. On a pure state and the sites `1:cut`, `entanglement_entropy(state, cut)` gives the
 same, at a far lower cost and for any number of sites.
 
-- `max_dense`: the number of elements of ``\\rho_A`` beyond which it is refused
+- `max_dense`: the number of elements of ``\\rho_A`` beyond which it is refused, as for
+  `reduced_density_matrix`
 
 # Examples
 
     von_neumann_entropy(state, [2, 5])
 """
 function von_neumann_entropy(state::AbstractState, positions::AbstractVector;
-                             max_dense::Union{Nothing, Int} = dense_elements)
+                             max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
     if isempty(positions)
         return 0.0
@@ -575,11 +585,12 @@ function von_neumann_entropy(state::AbstractState, positions::AbstractVector;
               "$(round(first(λ); sigdigits = 2)): the state is not a positive density matrix, as " *
               "an approximation can leave it (truncation, time step, unconverged search)")
     end
-    return shannon_entropy(λ)
+    p = max.(λ, 0)
+    return shannon_entropy(p / sum(p))
 end
 
 """
-    log_negativity(state, a, b; max_dense = 2^24)
+    log_negativity(state, a, b; max_dense)
 
 the logarithmic negativity ``\\log \\|\\rho^{T_B}\\|_1`` between the sites at `a` and those at
 `b`, ``\\rho`` being their `reduced_density_matrix` and ``T_B`` the partial transpose on `b`,
@@ -587,14 +598,15 @@ zero for a separable state and 0 when a part is empty. The partial transpose in 
 Jordan-Wigner basis is not the fermionic one: it is taken on a part holding no fermionic
 site, and refused when both hold one.
 
-- `max_dense`: the number of elements of ``\\rho`` beyond which it is refused
+- `max_dense`: the number of elements of ``\\rho`` beyond which it is refused, as for
+  `reduced_density_matrix`
 
 # Examples
 
     log_negativity(state, [1, 2], [5])
 """
 function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVector;
-                        max_dense::Union{Nothing, Int} = dense_elements)
+                        max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, a, "log_negativity")
     check_positions(state, b, "log_negativity")
     a, b = sort(Vector{Int}(a)), sort(Vector{Int}(b))

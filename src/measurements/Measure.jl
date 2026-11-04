@@ -307,38 +307,47 @@ others, see `mutual_info_renyi2`
 MutualInfoRenyi2(positions::AbstractVector) =
     on_positions("MutualInfoRenyi2", mutual_info_renyi2, positions)
 
+# the `max_dense` of a measurement building a dense matrix of `state`, that of the function, see
+# `dense_bound`, when it is missing
+measured_bound(max_dense, state) = ismissing(max_dense) ? dense_bound(state) : max_dense
+
 """
-    ReducedDensityMatrix(positions; max_dense = 2^24)
+    ReducedDensityMatrix(positions; max_dense)
 
 the measurement of the density matrix of the sites at `positions`, in increasing order, see
 `reduced_density_matrix`, which takes `max_dense`, a complex matrix whatever the state, as
 `Trace`
 """
 function ReducedDensityMatrix(positions::AbstractVector;
-                              max_dense::Union{Nothing, Int} = dense_elements)
+                              max_dense::Union{Missing, Nothing, Int} = missing)
     check_increasing(positions, "ReducedDensityMatrix")
-    return on_positions("ReducedDensityMatrix",
-                        (st, p) -> complex(reduced_density_matrix(st, p; max_dense)), positions)
+    return on_positions("ReducedDensityMatrix", (st, p) -> complex(reduced_density_matrix(
+        st, p; max_dense = measured_bound(max_dense, st))), positions)
 end
 
 """
-    VonNeumannEntropy(positions; max_dense = 2^24)
+    VonNeumannEntropy(positions; max_dense)
 
 the measurement of the von Neumann entropy of the sites at `positions`, see
 `von_neumann_entropy`, which takes `max_dense`
 """
-VonNeumannEntropy(positions::AbstractVector; max_dense::Union{Nothing, Int} = dense_elements) =
-    on_positions("VonNeumannEntropy", (st, p) -> von_neumann_entropy(st, p; max_dense), positions)
+function VonNeumannEntropy(positions::AbstractVector;
+                           max_dense::Union{Missing, Nothing, Int} = missing)
+    return on_positions("VonNeumannEntropy", (st, p) -> von_neumann_entropy(
+        st, p; max_dense = measured_bound(max_dense, st)), positions)
+end
 
 """
-    LogNegativity(a, b; max_dense = 2^24)
+    LogNegativity(a, b; max_dense)
 
 the measurement of the logarithmic negativity between the sites at positions `a` and those at
 `b`, see `log_negativity`, which takes `max_dense`
 """
-LogNegativity(a::AbstractVector, b::AbstractVector;
-              max_dense::Union{Nothing, Int} = dense_elements) =
-    on_positions("LogNegativity", (st, x, y) -> log_negativity(st, x, y; max_dense), a, b)
+function LogNegativity(a::AbstractVector, b::AbstractVector;
+                       max_dense::Union{Missing, Nothing, Int} = missing)
+    return on_positions("LogNegativity", (st, x, y) -> log_negativity(
+        st, x, y; max_dense = measured_bound(max_dense, st)), a, b)
+end
 
 """
     EntanglementEntropy(cut)
@@ -761,7 +770,8 @@ the value of one measurement on `state`, or those of a list of them, a vector, a
 an element and a vector. An operator placed on sites gives its expectation value, an
 operator of one site a vector indexed by site and a pair a matrix, as `expect1` and `expect2`
 give them, made real when the operator, or each product of the pair, is Hermitian, with a
-warning when the imaginary part dropped is beyond rounding, and complex otherwise; any other
+warning when the imaginary part dropped is beyond what an approximation leaves, `1e-8` of the
+scale of the operator, and complex otherwise; any other
 value is given as it is computed, a `Check` as `(value, reference, difference)`. `time` and
 the `values` are what a measurement written as a function reads as `c.time` and `c.energy`,
 and what a symbol stands for, a symbol of the list without a value being refused before

@@ -314,4 +314,5 @@ as `reduced_density_matrix(state::MyState, positions::AbstractVector{Int}; max_d
 converts other vectors before calling it, and a looser type can make the call ambiguous. The
 methods of `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity` take the keyword
 `max_dense`, the number of elements of the largest dense matrix the user lets them build, which
-a method building none ignores.
+a method building none ignores; TMS always passes it, by default
+[`TensorMixedStates.dense_bound`](@ref)`(state)`, which a state held whole extends to its size.

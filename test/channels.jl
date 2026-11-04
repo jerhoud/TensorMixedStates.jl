@@ -1020,8 +1020,16 @@ end
         m = matrix(a(1:k...), TMS.weaken(sys, ()))
         @test ket_bra_matrix(apply(Dephase(a)(1:k...), ρ)) ≈ reference(ket_bra_matrix(ρ), m)
     end
-    # beyond the six qubits its superoperator allowed: on |+…+⟩, a purity of Σ_T p_T², through
-    # an MPO of bond dimension K = k + 1
+    # placed on sites in another order, or apart with a fermionic site between them
+    f4 = System(4, Fermion())
+    ρf = random_state(Mixed, f4, 4; rng)
+    b = onesite(N, 1, 2) + 2 * onesite(N, 2, 2)
+    for idx in ((3, 1), (1, 3), (4, 2))
+        @test ket_bra_matrix(apply(Dephase(b)(idx...), ρf)) ≈
+              reference(ket_bra_matrix(ρf), matrix(b(idx...), f4))
+    end
+    # beyond the six qubits its superoperator allowed: on |+…+⟩, a purity of Σ_T p_T², the
+    # state kept within the k + 1 totals
     k = 8
     out = apply(Dephase(sum(onesite(Z, i, k) for i in 1:k))(1:k...),
                 State{Mixed}(System(k, Qubit()), "+"))
