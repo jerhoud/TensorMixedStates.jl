@@ -433,3 +433,67 @@ end
     @test_throws "rather than its PreMPO" evolve(PreMPO(State{Pure}(sys, "Up"), -im * X(1)), 1.0,
                                                  ψ; nsteps = 1)
 end
+
+# a phase of one's own creating an exact state, for the phases of the library to act on
+Base.@kwdef struct CreateExact <: TMS.AbstractPhase
+    name::String = "exact"
+    time_start = nothing
+    final_measurements = []
+    state::TMS.ExactState
+end
+
+TMS.run_phase(p::CreateExact, sim::TMS.Simulation, ::Int) = TMS.Simulation(sim, p.state)
+
+@testset "Searches and thermal states of an exact state" begin
+    sys = System(4, Qubit())
+    h = X(1) * X(2) + X(2) * X(3) + X(3) * X(4) + 0.7 * sum(Z(i) for i in 1:4)
+    λ = LA.eigvals(LA.Hermitian(matrix(h, sys)))
+    ψ = TMS.ExactState{Pure}(sys, "+")
+    # the lowest eigenvalue, then the next one orthogonal to it, the method and the limits of
+    # the MPS without use and not needed
+    e, g = ground_state(h, ψ)
+    @test e ≈ λ[1] atol = 1e-11
+    @test real(expect(g, h)) ≈ λ[1] atol = 1e-11
+    e1, g1 = ground_state(h, ψ; orthogonal_to = [g], algo = Dmrg(nsweeps = 1),
+                          limits = Limits(maxdim = 1), weight = 1e-3)
+    @test e1 ≈ λ[2] atol = 1e-10
+    @test abs(inner(g, g1)) < 1e-10
+    # in the sector of the state given, on fermions conserving N, against dmrg
+    f = System(4, Fermion(conserve = N))
+    hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) + 0.5 * N(1)
+    start = State{Pure}(f, ["Occ", "Emp", "Occ", "Emp"])
+    ef, _ = ground_state(hop, TMS.ExactState(start))
+    em, _ = ground_state(hop, random_state(start, 4; rng = Xoshiro(1));
+                         algo = Dmrg(nsweeps = 10))
+    @test ef ≈ em atol = 1e-8
+    # the steady state of two driven qubits decaying, whose Z is known
+    Ω, γ = 0.8, 0.5
+    L = sum(-im * Ω / 2 * X(i) + Dissipator(sqrt(γ) * Sm)(i) for i in 1:2)
+    v, ρ = steady_state(L, TMS.ExactState{Mixed}(System(2, Qubit()), "FullyMixed"))
+    @test abs(v) < 1e-20
+    @test LA.tr(ρ.state) ≈ 1
+    @test real(expect1(ρ, Z)) ≈ fill(-γ^2 / (γ^2 + 2Ω^2), 2) atol = 1e-11
+    # e^{-βH}/Z from the fully mixed state, and log Z - Σ log d
+    m = matrix(h, sys)
+    w = exp(-1.3 * m)
+    l, th = thermalize(h, 1.3, TMS.ExactState{Mixed}(sys, "FullyMixed"); nsteps = 3)
+    @test l ≈ log(LA.tr(w) / 16)
+    @test th.state ≈ w / LA.tr(w) atol = 1e-11
+    # refused on the other representation, and given a PreMPO
+    @test_throws "searches a pure state" ground_state(h, mix(ψ))
+    @test_throws "searches a density matrix" steady_state(L, ψ)
+    @test_throws "needs a mixed representation" thermalize(h, 1.0, ψ; nsteps = 1)
+    @test_throws "rather than its PreMPO" ground_state(PreMPO(State{Pure}(sys, "+"), h), ψ)
+    # the phases call the searches of the exact state once, measured at their end
+    in_tmp() do
+        phases = [CreateExact(state = ψ), GroundState(hamiltonian = h, algo = Dmrg(nsweeps = 2),
+                                                      measurements = "e" => [:energy])]
+        sim = runTMS(SimData(; name = "g", phases))
+        @test sim.state isa TMS.ExactState{Pure}
+        @test sim.energy ≈ λ[1] atol = 1e-11
+        phases = [CreateExact(state = TMS.ExactState{Mixed}(System(2, Qubit()), "FullyMixed")),
+                  SteadyState(lindbladian = L, algo = Dmrg(nsweeps = 2))]
+        sim = runTMS(SimData(; name = "s", phases))
+        @test real(expect(sim.state, Z(1))) ≈ -γ^2 / (γ^2 + 2Ω^2) atol = 1e-11
+    end
+end

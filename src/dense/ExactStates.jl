@@ -495,6 +495,134 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::ExactEvolver, state::ExactStat
     return ExactState{R}(system, x, Val(:raw))
 end
 
+"""
+the linear map of the operator, the channel or the generator of terms `ts` on the arrays of the
+exact states of representation `R`, see `dense_acted`
+"""
+acting(::Type{R}, system::System, ts::Vector{Term}) where R = x -> dense_acted(R, system, ts, x)
+
+"""
+a bound of the operator norm of the operator of terms `ts`: the sum over its terms of `|coef|`
+times the product of the norms of their blocks, a Jordan-Wigner string having norm one
+"""
+terms_bound(ts::Vector{Term}) =
+    sum(abs(t.coef) * prod((opnorm(b.m) for b in t.blocks); init = 1.0) for t in ts; init = 0.0)
+
+"""
+the eigenvalue of the linear map `A` of the smallest real part, `which = :SR`, or of the largest,
+`:LR`, and its eigenvector, searched by Krylov from `x` to `rounding_tol`, refused when it does
+not converge; `what` names the caller
+"""
+function exact_eigen(A, x::AbstractArray, which::Symbol, hermitian::Bool, what::String)
+    vals, vecs, info = KrylovKit.eigsolve(A, x / norm(x), 1, which; ishermitian = hermitian,
+                                          tol = rounding_tol)
+    if info.converged == 0
+        error("$what of an ExactState did not converge in Krylov to $rounding_tol")
+    end
+    return first(vals), first(vecs)
+end
+
+"""
+the operator `a` of a search of an exact state, refused when it is the PreMPO or the MPO of one,
+`what` naming the search
+"""
+function searched_operator(system::System, a, what::String)
+    if !(a isa IndexedOp)
+        error("$what of an ExactState is given the operator rather than its PreMPO or MPO")
+    end
+    check_indices(system, a)
+    return a
+end
+
+# the method and the limits of the MPS without use, `algo` not needed; the states of
+# `orthogonal_to` projected out exactly, a weight without use
+function ground_state(hamiltonian, state::ExactState{Pure};
+                      algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
+                      mpo_limits::Limits = Limits(), orthogonal_to::AbstractVector = [],
+                      weight::Union{Nothing, Real} = nothing)
+    system = state.system
+    ts = lower(system, searched_operator(system, hamiltonian, "ground_state"))
+    H = acting(Pure, system, ts)
+    ms = map(orthogonal_to) do m
+        e = m isa ExactState ? m : ExactState(m)
+        same_sites(state, e)
+        return e.state
+    end
+    M = isempty(ms) ? zeros(ComplexF64, length(state.state), 0) : reduce(hcat, ms)
+    project(v) = isempty(ms) ? v : v - M * (M \ v)
+    # the states given lifted above the spectrum, so that the lowest is orthogonal to them
+    c = terms_bound(ts) + 1
+    A = isempty(ms) ? H : v -> (w = project(v); project(H(w)) + c * (v - w))
+    x = project(state.state)
+    if iszero(norm(x))
+        error("ground_state is started from a state the states of orthogonal_to span")
+    end
+    _, v = exact_eigen(A, x, :SR, true, "ground_state")
+    v = project(v)
+    return (energy = real(dot(v, H(v))) / real(dot(v, v)),
+            state = normalize(ExactState{Pure}(system, v, Val(:raw))))
+end
+
+ground_state(::Any, ::ExactState{Mixed}; kwargs...) =
+    error("ground_state searches a pure state: search it pure and mix it")
+
+# the steady state as the eigenvector of the Lindbladian of the largest real part, zero, and
+# `residual` the eigenvalue of L†L that the search of a State reaches
+function steady_state(lindbladian, state::ExactState{Mixed};
+                      algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
+                      mpo_limits::Limits = Limits())
+    system = state.system
+    a = searched_operator(system, lindbladian, "steady_state")
+    L = acting(Mixed, system, lower(system, superoperator(a)))
+    _, x = exact_eigen(L, state.state, :LR, false, "steady_state")
+    t = tr(x)
+    if abs(t) ≤ rounding_tol * norm(x)
+        error("the eigenvector found by steady_state has no trace: the steady state is not " *
+              "unique, as in each sector of a quantity the Lindbladian conserves")
+    end
+    ρ = ExactState{Mixed}(system, x / t, Val(:raw))
+    δ = 1 - hermiticity(ρ)
+    if δ > 1e-6
+        @warn "the steady state found has a HermiticityDeviation of $(round(δ; sigdigits = 2)): " *
+              "the steady state is not unique, see steady_state"
+    end
+    return (residual = (norm(L(ρ.state)) / norm(ρ))^2, state = ρ)
+end
+
+steady_state(::Any, ::ExactState{Pure}; kwargs...) =
+    error("steady_state searches a density matrix: mix the state")
+
+# as thermalize of a State, each step an exponential by Krylov, the method and the limits of the
+# MPS without use
+function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
+                    algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
+                    beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
+                    mpo_limits::Limits = Limits(), step::Int = 1)
+    nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
+    if nsteps == 0
+        return (log_trace = 0., state = step == 1 ? normalize(state) : state)
+    end
+    system = state.system
+    a = searched_operator(system, hamiltonian, "thermalize")
+    # ρ ↦ Hρ + ρH, whose exponential at -β/2 is e^{-βH/2} ρ e^{-βH/2}
+    K = acting(Mixed, system, lower(system, superoperator(a)))
+    x = (step == 1 ? normalize(state) : state).state
+    log_trace = 0.
+    for k in 0:nsteps - 1
+        x = exact_exp(K, -beta / nsteps / 2, x)
+        t = real(tr(x))
+        if !(t > 0)
+            error("the trace of the state reached $t at step $(step + k) of thermalize")
+        end
+        x /= t
+        log_trace += log(t)
+    end
+    return (; log_trace, state = ExactState{Mixed}(system, x, Val(:raw)))
+end
+
+thermalize(::Any, ::Real, ::ExactState{Pure}; kwargs...) =
+    error("a thermal state needs a mixed representation: mix the state first")
+
 # the limits of the MPS have no use on an exact state, see the docstring of ExactState
 function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where R
     system = weaken(state.system, ())
