@@ -616,10 +616,13 @@ end
                     placed(X, 1) * placed(dag(A), 2) + placed(dag(C), 3) * placed(C, 4)),
                    ((X ⊗ C)(1, 4) + 2 * A(2) * C(3),
                     placed(X, 1) * placed(C, 4) + 2 * placed(A, 2) * placed(C, 3)),
+                   (X(1) * dag(A)(2) * C(4), placed(X, 1) * placed(dag(A), 2) * placed(C, 4)),
                    (3 * Id(1), Matrix(3.0 * LA.I, D, D)), (0 * X(1), zeros(D, D))]
         ts = TMS.lower(sys, o)
         @test TMS.dense_acted(Pure, sys, ts, w) ≈ d * w atol = 1e-12
         @test TMS.dense_acted(Pure, sys, ts, r) ≈ d * r atol = 1e-12
+        # the trace of the operator times a matrix, from the elements its terms reach
+        @test TMS.dense_trace(sys, ts, r) ≈ LA.tr(d * r) atol = 1e-11
         @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Gate(o)), r) ≈ d * r * d' atol = 1e-12
         l = d' * d
         @test TMS.dense_acted(Mixed, sys, TMS.lower(sys, Dissipator(o)), r) ≈
@@ -639,6 +642,7 @@ end
     d = on(Sx, 1) * on(Sx, 3) + on(Sy, 1) * on(Sy, 3) + on(Sz, 2)
     u, s = randn(rng, ComplexF64, 27), randn(rng, ComplexF64, 27, 27)
     @test TMS.dense_acted(Pure, sp, TMS.lower(sp, o), u) ≈ d * u atol = 1e-12
+    @test TMS.dense_trace(sp, TMS.lower(sp, o), s) ≈ LA.tr(d * s) atol = 1e-11
     @test TMS.dense_acted(Mixed, sp, TMS.lower(sp, Gate(o)), s) ≈ d * s * d' atol = 1e-12
     # a state of the wrong size or shape
     @test_throws MethodError TMS.dense_acted(Mixed, sys, TMS.lower(sys, Gate(X(1))), w)
