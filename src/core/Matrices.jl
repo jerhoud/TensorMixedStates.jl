@@ -440,21 +440,25 @@ function matrix(a::Reset, site::AbstractSite, others::AbstractSite...)
     return vec(σ / t) * transpose(vec(Matrix{Float64}(I, dim(s), dim(s))))
 end
 
+# what to do when the dense matrix of a dephasing is refused
+const dephase_hint = "Dephase depends only on the eigenspaces of its operator, and a sum of " *
+                     "operators of one site of half-integer eigenvalues, without constant or " *
+                     "common factor, is applied without this matrix"
+
 """
     dephase_projectors(a, sites)
 
 the eigenvalues of the operator of the dephasing `a` on `sites`, and the projectors on their
-eigenspaces, see `eigenspaces`
+eigenspaces, see `eigenspaces`, the dense matrix of the operator refused beyond `dense_elements`
 """
-dephase_projectors(a::Dephase, sites) =
-    eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg, " on " * join(sites, " ⊗ "))
+function dephase_projectors(a::Dephase, sites)
+    check_dense(a.arg, sites; hint = dephase_hint)
+    return eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg, " on " * join(sites, " ⊗ "))
+end
 
 function matrix(a::Dephase, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
-    check_dense(a, sites; hint = "Dephase depends only on the eigenspaces of its operator, and a " *
-                                 "sum of operators of one site of half-integer eigenvalues, " *
-                                 "without constant or common factor, is applied without this " *
-                                 "matrix")
+    check_dense(a, sites; hint = dephase_hint)
     _, ps = dephase_projectors(a, sites)
     return sum(sided(p, p, sites) for p in ps)
 end
