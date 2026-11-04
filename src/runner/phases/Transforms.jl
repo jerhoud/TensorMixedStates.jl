@@ -174,8 +174,28 @@ struct GatesSteps
     on::Vector{Symbol}
 end
 
+"""
+    GatesOnce(gates, limits, on)
+
+a `Gates` on states one of which is of one's own: the gates applied in one step by `apply`
+"""
+struct GatesOnce
+    gates::IndexedOp
+    limits::Limits
+    on::Vector{Symbol}
+end
+
+step_count(::GatesOnce) = 1
+
+run_step(g::GatesOnce, sim::Simulation, ::Int) =
+    foldl((sim, name) -> with_state(sim, name, apply(g.gates, state_named(sim, name);
+                                                     limits = g.limits)), g.on; init = sim)
+
 function prepare_phase(phase::Gates, sim::Simulation)
     names = state_names(phase.on)
+    if any(name -> !(state_named(sim, name) isa State), names)
+        return GatesOnce(phase.gates, phase.limits, names)
+    end
     prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in names ]
     return GatesSteps(first.(prepared), last.(prepared), phase.limits, names)
 end

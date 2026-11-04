@@ -208,6 +208,29 @@ end
     @test reduced_density_matrix(es, [1, 3]) ≈ reduced_density_matrix(ρs, [1, 3]) atol = 1e-12
 end
 
+@testset "Forbidden sectors dropped, of a strong quantity and of a modulus" begin
+    occ = real(LA.diag(matrix(N, Fermion())))
+    particles(b, n) = sum(occ[k + 1] for k in digits(b - 1; base = 2, pad = n))
+    # strong: the blocks joining two charges and the block of another charge
+    ss = System(3, Fermion(conserve = strong(N)))
+    ρ0 = ket_bra_matrix(mix(random_state(State{Pure}(ss, ["Occ", "Emp", "Occ"]), 3)))
+    two, one = findfirst(b -> particles(b, 3) == 2, 1:8), findfirst(b -> particles(b, 3) == 1, 1:8)
+    ρ = copy(ρ0)
+    ρ[two, one] = ρ[one, two] = ρ[one, one] = 1e-15
+    es = TMS.ExactState(ss, ρ).state
+    @test es[two, one] == es[one, two] == es[one, one] == 0
+    @test es ≈ ρ0 atol = 1e-14
+    # parity: 1 and 3 particles kept, 2 dropped
+    ps = System(3, Fermion(conserve = parity(N)))
+    i1, i2, i3 = (findfirst(b -> particles(b, 3) == k, 1:8) for k in 1:3)
+    v = zeros(8)
+    v[i1], v[i3], v[i2] = 1, 0.5, 1e-15
+    w = TMS.ExactState(ps, v).state
+    @test w[i3] ≈ 0.5 / norm([1, 0.5]) && w[i2] == 0
+    v[i2] = 1
+    @test_throws "no definite charge" TMS.ExactState(ps, v)
+end
+
 @testset "Entropies of a pure exact state from its Schmidt values" begin
     # of 13 sites out of 14, whose reduced density matrix, of dimension 8192, is not formed
     ψ = random_state(Pure, System(14, Qubit()), 4; rng = Xoshiro(20261108))
@@ -505,5 +528,66 @@ TMS.run_phase(p::CreateExact, sim::TMS.Simulation, ::Int) = TMS.Simulation(sim, 
                   SteadyState(lindbladian = L, algo = Dmrg(nsweeps = 2))]
         sim = runTMS(SimData(; name = "s", phases))
         @test real(expect(sim.state, Z(1))) ≈ -γ^2 / (γ^2 + 2Ω^2) atol = 1e-11
+    end
+end
+
+@testset "Searches and evolutions of an exact state hard for Krylov" begin
+    x, y, z, sm = (matrix(a, Qubit()) for a in (X, Y, Z, Sm))
+    # steady states of a driven chain decaying slowly, against the kernel of its superoperator
+    # built here with kron, solved with the trace as a constraint
+    for (n, γ) in [(4, 0.1), (4, 0.01), (5, 0.1)]
+        site(m, i) = on_qubit(m, i, n)
+        id = site([1. 0.; 0. 1.], 1)
+        side(a, b) = kron(transpose(b), a)
+        hm = sum(0.5 * site(x, i) for i in 1:n) + sum(site(z, i) * site(z, i + 1) for i in 1:n-1)
+        lind = -im * (side(hm, id) - side(id, hm))
+        for i in 1:n
+            l = sqrt(γ) * site(sm, i)
+            lind += side(l, l') - 0.5 * (side(l' * l, id) + side(id, l' * l))
+        end
+        lind[1, :] = vec(id)
+        ref = reshape(lind \ [1; zeros(4^n - 1)], 2^n, 2^n)
+        L = sum(-im * 0.5 * X(i) + Dissipator(sqrt(γ) * Sm)(i) for i in 1:n) -
+            im * sum(Z(i) * Z(i + 1) for i in 1:n-1)
+        _, ρ = steady_state(L, TMS.ExactState{Mixed}(System(n, Qubit()), "FullyMixed"))
+        @test ρ.state ≈ ref atol = 1e-9
+    end
+    # e^{-βH}/Z at large β in one step, and log Z - Σ log d
+    sys = System(4, Qubit())
+    h = X(1) * X(2) + X(2) * X(3) + X(3) * X(4) + 0.7 * sum(Z(i) for i in 1:4)
+    λ, V = LA.eigen(LA.Hermitian(matrix(h, sys)))
+    β = 200
+    w = exp.(-β * (λ .- λ[1]))
+    l, th = thermalize(h, β, TMS.ExactState{Mixed}(sys, "FullyMixed"); nsteps = 1)
+    @test l ≈ -β * λ[1] + log(sum(w) / 16) atol = 1e-8
+    @test th.state ≈ V * LA.Diagonal(w / sum(w)) * V' atol = 1e-10
+    # a long evolution in one step
+    ψ = TMS.ExactState{Pure}(sys, "+")
+    @test evolve(-im * h, 1000, ψ; nsteps = 1).state ≈
+          V * (exp.(-1000im * λ) .* (V' * ψ.state)) atol = 1e-10
+    # a field rotating fast: H(t) = ω Z / 2 + Ω (cos ωt X + sin ωt Y) / 2 is solved by
+    # e^{-iωtZ/2} e^{-iΩtX/2}
+    ω, Ω, t = 200, 1, 1.0
+    terms = [-im * ω / 2 * Z(1), -im * Ω / 2 * X(1) => s -> cos(ω * s),
+             -im * Ω / 2 * Y(1) => s -> sin(ω * s)]
+    φ = TMS.ExactState{Pure}(System(1, Qubit()), "Up")
+    @test evolve(terms, t, φ; nsteps = 1).state ≈
+          exp(-im * ω * t / 2 * z) * exp(-im * Ω * t / 2 * x) * φ.state atol = 1e-10
+    # orthogonal to pure states only, given once each
+    e, g = ground_state(h, ψ)
+    @test_throws "orthogonal to pure states" ground_state(h, ψ; orthogonal_to = [mix(g)])
+    @test_throws "orthogonal to pure states" ground_state(h, ψ; orthogonal_to = [mix(State(g))])
+    @test_throws "give each state once" ground_state(h, ψ; orthogonal_to = [g, g])
+    # the Thermalize and Gates phases
+    in_tmp() do
+        phases = [CreateExact(state = TMS.ExactState{Mixed}(sys, "FullyMixed")),
+                  Thermalize(hamiltonian = h, beta = 1.3, nsteps = 3)]
+        sim = runTMS(SimData(; name = "t", phases))
+        m = exp(-1.3 * matrix(h, sys))
+        @test sim.state.state ≈ m / LA.tr(m) atol = 1e-11
+        two = TMS.ExactState{Pure}(System(2, Qubit()), "Up")
+        sim = runTMS(SimData(; name = "g", phases = [CreateExact(state = two),
+                                                      Gates(gates = X(1) * X(2))]))
+        @test sim.state.state ≈ kron(x, x) * two.state
     end
 end
