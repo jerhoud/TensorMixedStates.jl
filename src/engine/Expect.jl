@@ -461,14 +461,6 @@ function pair_hermitian(system::System, (a, b)::Tuple{SimpleOp, SimpleOp})
 end
 
 """
-    imaginary_tol
-
-how large the imaginary part of the expectation value of a Hermitian operator may be, relative
-to the scale of the operator, see `term_size`, before `expect` or `measure` warns as it drops it
-"""
-const imaginary_tol = 1e-8
-
-"""
     real_value(x, scale, name, time)
 
 the real part of the value `x` of the Hermitian operator or measurement `name`, element by
@@ -477,7 +469,7 @@ the group `:imaginary_part` and carrying `measurement`, `imaginary` and `time`, 
 may gather such warnings
 """
 function real_value(x::Number, scale, name, time)
-    if abs(imag(x)) > imaginary_tol * scale
+    if abs(imag(x)) > approximation_tol * scale
         @warn("the imaginary part of a Hermitian measurement is beyond rounding, dropped",
               measurement = name, imaginary = imag(x), time, _group = :imaginary_part)
     end

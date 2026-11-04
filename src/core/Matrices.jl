@@ -14,6 +14,16 @@ difference is rounding: a tolerance, not a setting
 const rounding_tol = 1e-13
 
 """
+    approximation_tol
+
+the size, relative to the scale of what it affects, of a defect an approximate computation can
+leave (truncation, time step, unconverged search), beyond which TMS warns or refuses: the
+imaginary part of the expectation value of a Hermitian operator, relative to the scale of the
+operator, see `term_size`, which `expect` and `measure` drop
+"""
+const approximation_tol = 1e-8
+
+"""
     nearly(a, b)
 
 whether `a` and `b` are equal up to rounding, relative to the larger of the two
