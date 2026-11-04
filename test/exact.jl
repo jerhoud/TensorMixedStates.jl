@@ -197,6 +197,17 @@ end
     @test reduced_density_matrix(es, [1, 3]) ≈ reduced_density_matrix(ρs, [1, 3]) atol = 1e-12
 end
 
+@testset "Entropies of a pure exact state from its Schmidt values" begin
+    # of 13 sites out of 14, whose reduced density matrix, of dimension 8192, is not formed
+    ψ = random_state(Pure, System(14, Qubit()), 4; rng = Xoshiro(20261108))
+    e = TMS.ExactState(ψ)
+    @test von_neumann_entropy(e, 1:13) ≈ entanglement_entropy(ψ, 13) atol = 1e-10
+    @test von_neumann_entropy(e, 2:14) ≈ von_neumann_entropy(e, [1]) atol = 1e-10
+    @test renyi2(e, 1:13) ≈ renyi2(ψ, 1:13) atol = 1e-10
+    @test_throws "beyond the 4096" reduced_density_matrix(e, 1:13)
+    @test_throws "divides by the trace" von_neumann_entropy(TMS.ExactState(0 * ψ), [1])
+end
+
 @testset "Sectors of several quantities, of a modulus, strong" for sys in [
         System(3, Electron(conserve = (Ntot, 2Sz))),
         System(4, Fermion(conserve = parity(N))),

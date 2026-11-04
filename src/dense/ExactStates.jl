@@ -265,6 +265,34 @@ function trace_sign_vector(system::System, kept::Vector{Int})
     return s
 end
 
+"""
+the array of `state` with the signs of the fermionic sites traced out laid, see
+`trace_sign_vector`, its axes in the order of `kron`, the last site first, the permutation of
+these axes putting the sites at the increasing positions `kept` before the others, and the
+dimensions of the two parts
+"""
+function kept_first(state::ExactState{R}, kept::Vector{Int}) where R
+    system = state.system
+    n = length(system)
+    dims = [ dim(s) for s in system.sites ]
+    s = trace_sign_vector(system, kept)
+    x = isnothing(s) ? state.state :
+        R === Mixed ? s .* state.state .* transpose(s) : s .* state.state
+    rest = setdiff(1:n, kept)
+    perm = [ n + 1 - i for i in [reverse(kept); reverse(rest)] ]
+    return x, reverse(dims), perm, prod(dims[kept]), prod(dims[rest]; init = 1)
+end
+
+"""
+the vector of the pure `state` as a matrix ``M``, the sites at the increasing positions `kept`
+on its rows, the others on its columns, the fermionic signs laid: their reduced density matrix
+is ``M M^\\dagger``, and the squares of its singular values its spectrum
+"""
+function partition_matrix(state::ExactState{Pure}, kept::Vector{Int})
+    x, rdims, perm, a, b = kept_first(state, kept)
+    return reshape(permutedims(reshape(x, rdims...), perm), a, b)
+end
+
 function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{Int}) where R
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
@@ -272,25 +300,41 @@ function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{
         return ones(1, 1)
     end
     kept = collect(positions)
-    check_reduced(state, kept)
-    system = state.system
-    n = length(system)
-    dims = [ dim(s) for s in system.sites ]
-    s = trace_sign_vector(system, kept)
-    x = isnothing(s) ? state.state :
-        R === Mixed ? s .* state.state .* transpose(s) : s .* state.state
-    # the axes of the sites, the last first as kron orders them, those kept before the others
-    rest = setdiff(1:n, kept)
-    perm = [ n + 1 - i for i in [reverse(kept); reverse(rest)] ]
-    a, b = prod(dims[kept]), prod(dims[rest]; init = 1)
+    # no larger than the state, the matrix needs no bound
+    if prod(float(dim(state.system[k])) for k in kept)^2 > length(state.state)
+        check_reduced(state, kept)
+    end
     if R === Pure
-        m = reshape(permutedims(reshape(x, reverse(dims)...), perm), a, b)
+        m = partition_matrix(state, kept)
         return unit_trace(m * m')
     end
-    t = reshape(permutedims(reshape(x, reverse(dims)..., reverse(dims)...), [perm; perm .+ n]),
-                a, b, a, b)
+    x, rdims, perm, a, b = kept_first(state, kept)
+    n = length(rdims)
+    t = reshape(permutedims(reshape(x, rdims..., rdims...), [perm; perm .+ n]), a, b, a, b)
     return unit_trace(sum(t[:, k, :, k] for k in 1:b))
 end
+
+"""
+the spectrum of the reduced density matrix of trace one of the sites at the increasing
+positions `kept` of the pure `state`, in decreasing order, from the singular values of
+`partition_matrix` without forming that matrix; `what` names the caller in the refusals
+"""
+function kept_spectrum(state::ExactState{Pure}, kept::Vector{Int}, what)
+    nonzero_trace(state, what)
+    return last(entropy_spectrum(svdvals(partition_matrix(state, kept))))
+end
+
+function von_neumann_entropy(state::ExactState{Pure}, positions::AbstractVector)
+    check_positions(state, positions, "von_neumann_entropy")
+    if isempty(positions)
+        return 0.0
+    end
+    kept = sort(Vector{Int}(positions))
+    return shannon_entropy(kept_spectrum(state, kept, "von_neumann_entropy"))
+end
+
+part_renyi2(state::ExactState{Pure}, kept::Vector{Int}) =
+    -log(sum(abs2, kept_spectrum(state, kept, "renyi2")))
 
 """
 the operator `p`, placed on sites, applied to the kets of the density matrix `ρ`, then to its
