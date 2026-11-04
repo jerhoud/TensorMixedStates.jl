@@ -582,20 +582,22 @@ function projector_gates(system::System, a::Dephase, index)
 end
 
 """
-    spread(a, index)
+    distributed(a, index)
 
 the operator `a` placed on the sites `index`, its sums placed term by term and its tensor
 products factor by factor, their identities left out
 """
-spread(a::SumOp{IsOperator}, index) = SumOp(IndexedOp{IsOperator}[ spread(x, index) for x in a.subs ])
-spread(a::ScalarOp{IsOperator}, index) = scale(a.coef, spread(a.arg, index))
+distributed(a::SumOp{IsOperator}, index) =
+    SumOp(IndexedOp{IsOperator}[ distributed(x, index) for x in a.subs ])
+distributed(a::ScalarOp{IsOperator}, index) = scale(a.coef, distributed(a.arg, index))
 
-function spread(a::TensorOp{IsOperator}, index)
-    fs = [ spread(o, index[r]) for (o, r) in zip(a.subs, factor_sites(a)) if !(o isa IdentityOp) ]
+function distributed(a::TensorOp{IsOperator}, index)
+    fs = [ distributed(o, index[r]) for (o, r) in zip(a.subs, factor_sites(a))
+           if !(o isa IdentityOp) ]
     return isempty(fs) ? a(index...) : prod(fs)
 end
 
-spread(a::GenericOp{IsOperator}, index) = a(index...)
+distributed(a::GenericOp{IsOperator}, index) = a(index...)
 
 """
     twirl_gates(system, a, index)
@@ -606,7 +608,7 @@ operators of one site, see `counting`, as the mean of the gates of its `K` produ
 U_k^\\dagger``, the totals lying within `K` successive integers; `nothing` for another operator
 """
 function twirl_gates(system::System, a::Dephase, index)
-    cnt = counting(system, spread(a.arg, index), "Dephase")
+    cnt = counting(system, distributed(a.arg, index), "Dephase")
     if isnothing(cnt)
         return nothing
     end
