@@ -128,8 +128,9 @@ abstract type AbstractState end
 
 the caches a `State` keeps for measurements, filled on first use under `lock`: the local
 tensors, the environments from the left and from the right, those from the left carrying the
-Jordan-Wigner string, the trace, the weakened form of a state conserving something strongly,
-the state conserving nothing, and the adjoint of a density matrix
+Jordan-Wigner string, the trace, the trace checked against the norm, the weakened form of a
+state conserving something strongly, the state conserving nothing, and the adjoint of a density
+matrix
 """
 struct PreObs
     loc::Vector{ITensor}
@@ -137,13 +138,14 @@ struct PreObs
     right::Vector{ITensor}
     strung::Vector{ITensor}
     trace::Vector{Number}
+    checked::Vector{Number}
     weak::Vector{Any}
     plain::Vector{Any}
     adjoint::Vector{Any}
     lock::ReentrantLock
 end
 
-PreObs() = PreObs([], [], [], [], [], [], [], [], ReentrantLock())
+PreObs() = PreObs([], [], [], [], [], [], [], [], [], ReentrantLock())
 
 """
     cached!(create!, v, state)
@@ -771,7 +773,9 @@ density matrix exceeds
 """
 nonzero_trace(state::AbstractState, what) = checked_trace(real(trace(state)), 0, what)
 
-nonzero_trace(state::State{Mixed}, what) = checked_trace(real(trace(state)), norm(state), what)
+nonzero_trace(state::State{Mixed}, what) =
+    only(cached!((v, s) -> push!(v, checked_trace(real(trace(s)), norm(s), what)),
+                 state.preobs.checked, state))
 
 """
 the real part `t` of a trace, refused when it is zero, or zero up to rounding beside `scale`

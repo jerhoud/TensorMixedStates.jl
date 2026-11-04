@@ -1956,6 +1956,10 @@ end
     for g in (normalize, s -> expect(s, Z(1)), s -> expect1(s, Z), purity)
         @test_throws rounding g(d)
     end
+    # the trace is checked once and kept, a refusal keeping nothing
+    @test isempty(d.preobs.checked)
+    purity(r)
+    @test only(r.preobs.checked) == real(trace(r))
     q2 = System(2, Qubit())
     @test_throws rounding normalize(State{Mixed}(q2, "Up") - State{Mixed}(q2, "Dn"))
     @test_throws rounding dense_state(q2, ComplexF64.(im * LA.I(4)))
