@@ -391,7 +391,7 @@ end
 refuse the density matrix of the sites at the positions `kept` of `state` when its dimension,
 the product of theirs, is beyond `dense_max`, rather than exhausting memory
 """
-function check_reduced(state::State, kept)
+function check_reduced(state::AbstractState, kept)
     # a Float64, which does not wrap around as an Int does on many sites
     d = prod(float(dim(state.system[k])) for k in kept)
     if d > dense_max

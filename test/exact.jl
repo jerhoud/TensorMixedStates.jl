@@ -39,13 +39,49 @@ end
         @test expect1(e, F) ≈ expect1(st, F) atol = 1e-12
         @test trace(e) ≈ trace(st)
         @test norm(e) ≈ norm(st)
+        @test purity(e) ≈ purity(st)
+        # the signs of the fermionic sites traced out, on the left of those kept or not
+        for kept in [[1], [4], [2, 3], [1, 3], [2, 4], [1, 2, 4], 1:4]
+            @test reduced_density_matrix(e, kept) ≈ reduced_density_matrix(st, kept) atol = 1e-12
+        end
+        @test reduced_density_matrix(e, Any[1, 3]) ≈ reduced_density_matrix(st, [1, 3]) atol =
+              1e-12
+        @test von_neumann_entropy(e, [1, 3]) ≈ von_neumann_entropy(st, [1, 3]) atol = 1e-10
+        @test renyi2(e, [2, 4]) ≈ renyi2(st, [2, 4]) atol = 1e-10
+        @test mutual_info_renyi2(e, [1, 3]) ≈ mutual_info_renyi2(st, [1, 3]) atol = 1e-10
+        # a part without fermionic sites, as log_negativity asks
+        bosonic = [ i for i in 1:4 if TMS.next_fermion(sys, i) ≠ i ]
+        if !isempty(bosonic)
+            a, b = [first(bosonic) == 1 ? 3 : 1], [first(bosonic)]
+            @test log_negativity(e, a, b) ≈ log_negativity(st, a, b) atol = 1e-10
+        end
     end
+    @test mix(eψ).state ≈ ket_bra_matrix(mix(ψ))
+    @test mix(eρ) === eρ
+    # between two states, and a density matrix that is not Hermitian
+    ψ2, ρ2 = random_state(Pure, sys, 4; rng), random_state(Mixed, sys, 4; rng)
+    eψ2, eρ2 = TMS.ExactState(ψ2), TMS.ExactState(ρ2)
+    @test inner(eψ, eψ2) ≈ inner(ψ, ψ2)
+    @test LA.dot(eρ, eρ2) ≈ inner(ρ, ρ2)
+    @test fidelity(eψ, eψ2) ≈ fidelity(ψ, ψ2)
+    @test fidelity(eψ, eρ) ≈ fidelity(ψ, ρ)
+    @test fidelity(eρ, eψ) ≈ fidelity(ψ, ρ)
+    @test hs_fidelity(eρ, eρ2) ≈ hs_fidelity(ρ, ρ2)
+    nh = ρ + im * ρ2
+    enh = TMS.ExactState(nh)
+    @test hermiticity(enh) ≈ hermiticity(nh)
+    @test hermiticity(eψ) == 1
+    @test hermitianize(enh).state ≈ ket_bra_matrix(hermitianize(nh))
+    @test hermitianize(eψ) === eψ
+    @test dag(enh).state ≈ ket_bra_matrix(dag(nh))
     # unnormalised, measured through their trace
     for st in [2 * ψ, 3 * ρ]
         e = TMS.ExactState(st)
         @test trace(e) ≈ trace(st)
         @test expect(e, first(ops); complex = true) ≈ expect(st, first(ops); complex = true) atol =
               1e-12
+        @test purity(e) ≈ purity(st)
+        @test reduced_density_matrix(e, [1, 3]) ≈ reduced_density_matrix(st, [1, 3]) atol = 1e-12
     end
     @test normalize(eρ).state ≈ ket_bra_matrix(normalize(ρ))
     @test normalize(eψ).state ≈ raw_vector(normalize(ψ))
@@ -80,6 +116,7 @@ end
     @test es.state ≈ ket_bra_matrix(ρs)
     hop = dag(C)(1) * C(2) + dag(C)(2) * C(1)
     @test expect(es, hop) ≈ expect(ρs, hop) atol = 1e-12
+    @test reduced_density_matrix(es, [1, 3]) ≈ reduced_density_matrix(ρs, [1, 3]) atol = 1e-12
 end
 
 # the paths a representation gets from its reduced_density_matrix and its purity, taken on a State
@@ -133,6 +170,18 @@ end
     e = TMS.ExactState(ψ)
     @test_throws "is a generator" expect(e, Dissipator(Sm)(1))
     @test_throws "placed on sites" expect(e, X)
+    m = mix(e)
+    @test_throws "between a pure and a mixed" inner(e, m)
+    @test_throws "between a pure and a mixed" inner(m, e)
+    @test_throws "use hs_fidelity" fidelity(m, m)
+    @test_throws "meaningless on pure" dag(e)
+    @test_throws "different systems" inner(e, TMS.ExactState{Pure}(System(3, Qubit()), "Up"))
+    @test_throws "in increasing order" reduced_density_matrix(e, [2, 1])
+    @test_throws "which the state does not have" reduced_density_matrix(e, [3])
+    @test reduced_density_matrix(e, Int[]) == ones(1, 1)
+    # on what the systems conserve, which an exact state does not depend on
+    q = TMS.ExactState{Pure}(System(2, Qubit(conserve = N)), "Up")
+    @test inner(q, e) ≈ 1
     big = TMS.ExactState(random_state(Pure, System(4, Qubit()), 4))
     @test maxlinkdim(State(big; limits = Limits(maxdim = 1))) == 1
 end

@@ -790,8 +790,8 @@ function checked_trace(t::Real, scale::Real, what)
     return t
 end
 
-function nonzero_norm(state::State, what)
-    n = norm(state.state)
+function nonzero_norm(state::AbstractState, what)
+    n = norm(state)
     if iszero(n)
         error("$what divides by the norm of the state, which is zero, as for the null state")
     end
