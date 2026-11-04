@@ -90,8 +90,10 @@ function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where R
     # measured on what conserves nothing, as on a State, an operator of no definite flux too
     system = weaken(state.system, ())
     x = state.state
-    ax = dense_acted(Pure, system, lower(system, a), x)
-    return (R === Mixed ? tr(ax) : dot(x, ax)) / nonzero_trace(state, "expect")
+    ts = lower(system, a)
+    # on a density matrix, only the elements the terms reach, rather than the whole product
+    v = R === Mixed ? dense_trace(system, ts, x) : dot(x, dense_acted(Pure, system, ts, x))
+    return v / nonzero_trace(state, "expect")
 end
 
 mix(state::ExactState{Mixed}; limits::Limits = Limits(),

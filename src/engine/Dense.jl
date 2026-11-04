@@ -61,3 +61,32 @@ function dense_acted(::Type{Mixed}, system::System, ts::Vector{Term}, x::Abstrac
     y = terms_acted(Mixed, system, ts, w, dims .^ 2, 1)
     return [ y[1 + k + b] for k in kets, b in bras ]
 end
+
+"""
+the trace of the operator of terms `ts`, see `lower`, times the density matrix `ρ` of `system`:
+for each term, its Jordan-Wigner strings laid, each product state `a` and each `b` the nonzero
+elements of its blocks reach from `a`, the product of these elements times `ρ[b, a]`
+"""
+function dense_trace(system::System, ts::Vector{Term}, ρ::AbstractMatrix)
+    dims = [ dim(s) for s in system.sites ]
+    strides = [ prod(dims[k+1:end]; init = 1) for k in eachindex(dims) ]
+    total = zero(ComplexF64)
+    for t in ts
+        laid = laid_strings(Pure, system, t)
+        blocks = [ b for b in laid.blocks if !isone(b.m) ]
+        # the nonzero elements of each row of each block, as (column, value)
+        rows = [ [ [ (j, b.m[i, j]) for j in axes(b.m, 2) if !iszero(b.m[i, j]) ]
+                   for i in axes(b.m, 1) ] for b in blocks ]
+        function walk(a, p, b, v)
+            if p > length(blocks)
+                return v * ρ[b + 1, a + 1]
+            end
+            k = blocks[p].site
+            ak = (a ÷ strides[k]) % dims[k]
+            return sum((walk(a, p + 1, b + (j - 1 - ak) * strides[k], v * x)
+                        for (j, x) in rows[p][ak + 1]); init = zero(ComplexF64))
+        end
+        total += laid.coef * sum(a -> walk(a, 1, a, one(ComplexF64)), 0:size(ρ, 1) - 1)
+    end
+    return total
+end
