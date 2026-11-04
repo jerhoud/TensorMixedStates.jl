@@ -96,33 +96,35 @@ refused rather than exhausting memory, as a call that does not show its dense ma
 const dense_elements = 2^24
 
 """
-    check_elements(n, what, max_dense = dense_elements; settable = true)
+    check_elements(n, what, max_dense = dense_elements; settable = true, hint = "")
 
 refuse `what`, a dense array of `n` elements, a Float64 that does not wrap around as an Int does
 on many sites, beyond `max_dense`, `nothing` for no bound, saying that the caller can raise it
-when it is `settable`
+when it is `settable`, or else what to do, `hint`
 """
 function check_elements(n::Real, what::String, max_dense::Union{Nothing, Int} = dense_elements;
-                        settable::Bool = true)
+                        settable::Bool = true, hint::String = "")
     if !isnothing(max_dense) && n > max_dense
         total = Printf.@sprintf("%.0f", n)
         error(settable ? "$what has $total elements, beyond max_dense = $max_dense: pass a " *
                          "larger max_dense to build it" :
-                         "$what has $total elements, beyond the $max_dense TMS builds")
+                         "$what has $total elements, beyond the $max_dense TMS builds" *
+                         (isempty(hint) ? "" : ": $hint"))
     end
 end
 
 """
-    check_dense(a, sites)
+    check_dense(a, sites; hint = "")
 
 refuse the matrix of the function `a` on `sites` beyond `dense_elements`, its dimension being
-that of the states of the sites or, for a channel or a generator, of their density matrices
+that of the states of the sites or, for a channel or a generator, of their density matrices,
+saying what to do, `hint`
 """
-function check_dense(a::GenericOp{K}, sites) where K
+function check_dense(a::GenericOp{K}, sites; hint::String = "") where K
     ss = expand_sites(a, sites)
     d = prod(float ∘ dim, ss)^(K === IsOperator ? 1 : 2)
     check_elements(d^2, "the dense matrix of $(obs_name(a)) on $(length(ss)) sites";
-                   settable = false)
+                   settable = false, hint)
 end
 
 """
@@ -449,7 +451,10 @@ dephase_projectors(a::Dephase, sites) =
 
 function matrix(a::Dephase, site::AbstractSite, others::AbstractSite...)
     sites = expand_sites(a, (site, others...))
-    check_dense(a, sites)
+    check_dense(a, sites; hint = "Dephase depends only on the eigenspaces of its operator, and a " *
+                                 "sum of operators of one site of half-integer eigenvalues, " *
+                                 "without constant or common factor, is applied without this " *
+                                 "matrix")
     _, ps = dephase_projectors(a, sites)
     return sum(sided(p, p, sites) for p in ps)
 end
