@@ -558,6 +558,8 @@ struct LooseEvolution <: TensorMixedStates.EvolutionAlgorithm end
 TensorMixedStates.evolve_step(::LooseEvolution, pre, state, time, dt, step, limits) = state
 TensorMixedStates.prepared_evolver(st::LooseState, evolver, mpo_limits) = evolver
 TensorMixedStates.evolve_step(::LooseEvolution, pre, st::LooseState, time, dt, step, limits) = st
+TensorMixedStates.project_on(st::LooseState, p; limits) = st
+TensorMixedStates.project_count(st::LooseState, sites, locals, T; limits) = st
 
 struct LooseSearch <: TensorMixedStates.SearchAlgorithm end
 

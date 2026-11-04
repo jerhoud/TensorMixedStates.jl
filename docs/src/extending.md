@@ -304,6 +304,11 @@ like: a state gets what its type has a method for, and a measurement or a phase 
 support raises a `MethodError`. Some follow from others unless the type has methods of its own:
 `variance` from `expect_value`, `von_neumann_entropy` and `log_negativity` from
 `reduced_density_matrix`, and `renyi2` and `mutual_info_renyi2` from `reduced_density_matrix`
-and `purity`. A method of your own taking positions types them `positions::AbstractVector{Int}`,
+and `purity`. `probabilities` and `sample(state, op)` follow from `trace` and `expect_value`,
+and `collapse` from them and from the projections of the state:
+[`TensorMixedStates.project_on`](@ref)`(state::MyState, p; limits)` by a projector placed on
+sites, and [`TensorMixedStates.project_count`](@ref)`(state::MyState, sites, locals, T; limits)`
+on a total of a sum of operators of one site, each returning the state projected and
+normalised. A method of your own taking positions types them `positions::AbstractVector{Int}`,
 as `reduced_density_matrix(state::MyState, positions::AbstractVector{Int})`: TMS converts other
 vectors before calling it, and a looser type can make the call ambiguous.

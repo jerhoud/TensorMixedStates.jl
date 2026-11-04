@@ -109,7 +109,7 @@ increasing order: the totals reached lie within `K` successive integers, whose p
 read off the mean values of the `K` products over the sites of ``e^{2i\\pi k t/K}``, `t` twice
 the value on the site
 """
-function counting_probabilities(state::State, sites, locals)
+function counting_probabilities(state::AbstractState, sites, locals)
     totals = foldl((s, l) -> Set(x + t for x in s for t in first(l)), locals; init = Set(0))
     t0, t1 = extrema(totals)
     K = t1 - t0 + 1
@@ -166,22 +166,32 @@ function count_mpo(system::System, sites, locals, T::Int)
 end
 
 """
+    project_on(state, p; limits)
+
+the state projected by the projector `p`, placed on sites, and normalized, truncated to
+`limits`: a density matrix through the gate of that projector. A state of one's own adds a
+method, which `collapse` takes.
+"""
+project_on(state::State, p::IndexedOp; limits::Limits) = normalize(apply(p, state; limits))
+
+"""
     project_parity(state, P, s; limits)
 
 the state projected by ``(1 + sP)/2``, `P` an involution and `s` its eigenvalue ±1, and
-normalized: a density matrix through the gate of that projector
+normalized, see `project_on`
 """
+project_parity(state::AbstractState, P, s; limits::Limits) =
+    project_on(state, (Id(1) + s * P) / 2; limits)
+
 project_parity(state::State{Pure}, P, s; limits::Limits) =
     normalize(+(state, s * apply(P, state); limits))
-
-project_parity(state::State{Mixed}, P, s; limits::Limits) =
-    normalize(apply(Gate((Id(1) + s * P) / 2), state; limits))
 
 """
     project_count(state, sites, locals, T; limits)
 
 the state projected on the total `T` of the sum that `counting` describes, and normalized: a
-density matrix by the MPO of the projector on its kets, then on its bras, see `on_mixed_index`
+density matrix by the MPO of the projector on its kets, then on its bras, see `on_mixed_index`.
+A state of one's own adds a method, which `collapse` takes for such a sum.
 """
 project_count(state::State{Pure}, sites, locals, T; limits::Limits) =
     normalize(apply(count_mpo(state.system, sites, locals, T), state; limits))
@@ -205,7 +215,7 @@ normalizing it: as a product of involutions, as a sum of operators of one site, 
 projectors on the eigenspaces of its matrix, placed on its sites, whose Jordan-Wigner strings
 the descent lays; `what` names the caller in the refusals
 """
-function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
+function measurement(state::AbstractState, op::IndexedOp{IsOperator}, what::String)
     nonzero_trace(state, what)
     # a probability below rounding, of either sign, as a sum of Fourier leaves for an impossible
     # result, is zero
@@ -235,7 +245,7 @@ function measurement(state::State, op::IndexedOp{IsOperator}, what::String)
             error("the result $(values[k]) of $(obs_name(op)) leaves the state without " *
                   "definite charges: collapse weaken(state, ()) instead")
         end
-        return normalize(apply(projectors[k], state; limits))
+        return project_on(state, projectors[k]; limits)
     end
     return (values, zeroed(probs), project)
 end
@@ -260,12 +270,12 @@ phases.
     probabilities(state, Z(1) * Z(2))
     probabilities(state, sum(N(i) for i in 1:10))
 """
-function probabilities(state::State, op::IndexedOp{IsOperator})
+function probabilities(state::AbstractState, op::IndexedOp{IsOperator})
     values, probs, _ = measurement(state, op, "probabilities")
     return [ λ => p for (λ, p) in zip(values, probs) ]
 end
 
-function probabilities(state::State, pos::Int)
+function probabilities(state::AbstractState, pos::Int)
     check_positions(state, [pos], "probabilities")
     return [ round(Int, x) => p for (x, p) in probabilities(state, Level(pos)) ]
 end
@@ -371,7 +381,7 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
     return result
 end
 
-function sample(state::State, op::IndexedOp{IsOperator}; rng = Random.default_rng())
+function sample(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng())
     ps = probabilities(state, op)
     return first(ps[draw(x -> last(ps[x + 1]), length(ps), rand(rng)) + 1])
 end
@@ -401,20 +411,20 @@ the random number generator, the global one by default.
     s, p, state = collapse(state, Z(1) * Z(2); limits = Limits(maxdim = 100))
     _, p, state = collapse(state, Z(1) * Z(2) => 1)
 """
-function collapse(state::State, op::IndexedOp{IsOperator}; rng = Random.default_rng(),
+function collapse(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng(),
                   limits::Limits = Limits())
     values, probs, project = measurement(state, op, "collapse")
     k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1
     return (result = values[k], probability = probs[k], state = project(k, limits))
 end
 
-function collapse(state::State, pos::Int; rng = Random.default_rng())
+function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "collapse")
     r = collapse(state, Level(pos); rng)
     return (result = round(Int, r.result), probability = r.probability, state = r.state)
 end
 
-function collapse(state::State, result::Pair{<:IndexedOp{IsOperator}, <:Real};
+function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:Real};
                   limits::Limits = Limits())
     op, λ = result
     values, probs, project = measurement(state, op, "collapse")
@@ -430,7 +440,7 @@ function collapse(state::State, result::Pair{<:IndexedOp{IsOperator}, <:Real};
     return (result = values[k], probability = probs[k], state = project(k, limits))
 end
 
-function collapse(state::State, result::Pair{Int, <:Real})
+function collapse(state::AbstractState, result::Pair{Int, <:Real})
     pos, x = result
     check_positions(state, [pos], "collapse")
     r = collapse(state, Level(pos) => x)
