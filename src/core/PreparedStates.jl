@@ -179,26 +179,24 @@ function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limit
 end
 
 """
-    Vector(state::State{Pure})
+    Vector(state::State{Pure}; max_dense = 2^24)
 
 the vector of the pure `state`, not normalized, on the basis of the product states ordered as
 `kron` orders them, the first site varying the slowest, as `dense_state` takes it and
-`matrix(op, system)` acts on it. It is refused beyond `dense_max^2` elements, as many as the
-largest dense matrix TMS builds. The density matrix of a mixed state is given by
+`matrix(op, system)` acts on it. The density matrix of a mixed state is given by
 `reduced_density_matrix(ρ, 1:n)`.
+
+- `max_dense`: the number of elements beyond which the vector is refused, `nothing` for no
+  bound
 
 # Examples
 
     Vector(State{Pure}(System(2, Qubit()), "+"))      # [0.5, 0.5, 0.5, 0.5]
 """
-function Vector(state::State{Pure})
+function Vector(state::State{Pure}; max_dense::Union{Nothing, Int} = dense_elements)
     system = state.system
-    # a Float64, which does not wrap around as an Int does on many sites
-    d = prod(float(dim(s)) for s in system.sites)
-    if d > dense_max^2
-        error("the vector of a state of $(length(system)) sites has " *
-              "$(Printf.@sprintf("%.0f", d)) elements, beyond the $(dense_max^2) TMS builds")
-    end
+    check_elements(prod(float(dim(s)) for s in system.sites),
+                   "the vector of a state of $(length(system)) sites", max_dense)
     return contracted(state.state, 1:length(system), siteinds(Pure, system))
 end
 
@@ -248,16 +246,13 @@ function pairs_matrix(v::AbstractVector, dims::Vector{Int})
 end
 
 """
-the density matrix of the mixed `state`, not normalised, on all its sites
+the density matrix of the mixed `state`, not normalised, on all its sites, refused beyond
+`max_dense` elements, `nothing` for no bound
 """
-function full_matrix(state::State{Mixed})
+function full_matrix(state::State{Mixed}; max_dense::Union{Nothing, Int} = dense_elements)
     system = state.system
-    # a Float64, which does not wrap around as an Int does on many sites
-    d = prod(float(dim(s)) for s in system.sites)
-    if d > dense_max
-        error("the density matrix of a state of $(length(system)) sites has the dimension " *
-              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
-    end
+    check_elements(prod(float(dim(s)) for s in system.sites)^2,
+                   "the density matrix of a state of $(length(system)) sites", max_dense)
     n = length(system)
     # the elements of each site, ket and bra, taken from the mixed index as `mixed_order` has them
     v = contracted(state.state, 1:n, siteinds(Mixed, system);

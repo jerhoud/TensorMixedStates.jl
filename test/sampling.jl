@@ -176,7 +176,12 @@ end
     @test_throws "needs a Hermitian operator" probabilities(plus, Sp(1) * Z(2))
     # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
     up64, xx = State{Pure}(System(64, Qubit()), "Up"), sum(X(i) * X(i + 1) for i in 1:63)
-    @test_throws "of dimension 18446744073709551616, beyond the 4096" probabilities(up64, xx)
+    @test_throws "has 340282366920938463463374607431768211456 elements, beyond max_dense" probabilities(
+        up64, xx)
+    # the bound the caller sets, here below a matrix of 4 × 4
+    @test_throws "has 16 elements, beyond max_dense = 8" probabilities(plus, X(1) * X(2) + Z(1);
+                                                                        max_dense = 8)
+    @test length(probabilities(plus, X(1) * X(2) + Z(1); max_dense = 16)) == 2
     @test_throws "needs an operator placed on sites" probabilities(plus, Id(1))
     @test_throws "which the system does not have" sample(plus, X(7))
     @test_throws "which the state does not have" collapse(plus, 3)

@@ -25,9 +25,12 @@ the reference article.
 - The page Bibliography of the documentation lists the articles the methods of TMS come from, with what each gives it.
 - `evolve` and the `Evolve` phase take a state of one's own, through its methods of `prepared_evolver` and `evolve_step`.
 - `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
+- `max_dense`, the number of elements of the largest dense matrix a function builds, a matrix of 4096 × 4096 by default, is taken by `matrix(op, system)`, `Vector`, `reduced_density_matrix`, `von_neumann_entropy`, `log_negativity`, `probabilities`, `sample(state, op)`, `collapse`, `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`.
 
 ### Changed
 
+- The methods of one's own of `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity` take the keyword `max_dense`.
+  A state of one's own defining them adds it to their signatures.
 - TensorMixedStates needs ITensorMPS 0.3.45 and ITensors 0.8, for zipup.
 - `expect`, `expect1`, `expect2` and `measure` take an operator of no definite charge by its part of no flux, without copying the state.
 - A dense operator on many sites is split into terms faster: 15 s rather than 85 s on 10 qubits.

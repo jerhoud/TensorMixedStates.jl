@@ -310,5 +310,8 @@ and `collapse` from them and from the projections of the state:
 sites, and [`TensorMixedStates.project_count`](@ref)`(state::MyState, sites, locals, T; limits)`
 on a total of a sum of operators of one site, each returning the state projected and
 normalised. A method of your own taking positions types them `positions::AbstractVector{Int}`,
-as `reduced_density_matrix(state::MyState, positions::AbstractVector{Int})`: TMS converts other
-vectors before calling it, and a looser type can make the call ambiguous.
+as `reduced_density_matrix(state::MyState, positions::AbstractVector{Int}; max_dense)`: TMS
+converts other vectors before calling it, and a looser type can make the call ambiguous. The
+methods of `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity` take the keyword
+`max_dense`, the number of elements of the largest dense matrix the user lets them build, which
+a method building none ignores.

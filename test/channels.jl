@@ -325,21 +325,21 @@ end
 end
 
 @testset "Dense matrices of functions are bounded" begin
-    # a function of an operator or a superoperator has to be built dense: beyond dimension 4096
-    # it is refused rather than exhausting memory
+    # a function of an operator or a superoperator has to be built dense: beyond 2^24 elements,
+    # a matrix of 4096 × 4096, it is refused rather than exhausting memory
     q = Qubit()
     x13 = reduce(⊗, fill(X, 13))
-    @test_throws "needs a dense matrix of dimension 8192" matrix(exp(-im * x13), q)
-    @test_throws "needs a dense matrix of dimension 8192" matrix(x13^2, q)
+    @test_throws "has 67108864 elements, beyond the 16777216 TMS builds" matrix(exp(-im * x13), q)
+    @test_throws "has 67108864 elements, beyond the 16777216 TMS builds" matrix(x13^2, q)
     z13 = reduce(⊗, fill(Z, 13))
-    @test_throws "needs a dense matrix of dimension 8192" matrix(Proj(z13 => 1), q)
+    @test_throws "has 67108864 elements, beyond the 16777216 TMS builds" matrix(Proj(z13 => 1), q)
     x7 = reduce(⊗, fill(X, 7))
-    @test_throws "needs a dense matrix of dimension 16384" matrix(exp(Dissipator(x7)), q)
-    @test_throws "needs a dense matrix of dimension 16384" matrix(Dephase(x7), q)
+    @test_throws "has 268435456 elements, beyond the 16777216" matrix(exp(Dissipator(x7)), q)
+    @test_throws "has 268435456 elements, beyond the 16777216" matrix(Dephase(x7), q)
     # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
     x64, x32 = reduce(⊗, fill(X, 64)), reduce(⊗, fill(X, 32))
-    @test_throws "needs a dense matrix of dimension 18446744073709551616" matrix(exp(-im * x64), q)
-    @test_throws "needs a dense matrix of dimension 18446744073709551616" matrix(Dephase(x32), q)
+    @test_throws "has 340282366920938463463374607431768211456 elements" matrix(exp(-im * x64), q)
+    @test_throws "has 340282366920938463463374607431768211456 elements" matrix(Dephase(x32), q)
 end
 
 @testset "Pure channels on pure states" begin

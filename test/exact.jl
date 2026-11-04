@@ -204,7 +204,7 @@ end
     @test von_neumann_entropy(e, 1:13) ≈ entanglement_entropy(ψ, 13) atol = 1e-10
     @test von_neumann_entropy(e, 2:14) ≈ von_neumann_entropy(e, [1]) atol = 1e-10
     @test renyi2(e, 1:13) ≈ renyi2(ψ, 1:13) atol = 1e-10
-    @test_throws "beyond the 4096" reduced_density_matrix(e, 1:13)
+    @test_throws "beyond max_dense = 16777216" reduced_density_matrix(e, 1:13)
     @test_throws "divides by the trace" von_neumann_entropy(TMS.ExactState(0 * ψ), [1])
 end
 
@@ -287,8 +287,18 @@ end
     @test LA.tr(m.state) ≈ 1
     @test_throws "a vector of 4 elements, not an array of size (3,)" TMS.ExactState(q2, [1, 0, 0])
     @test_throws "a density matrix of 4 × 4" TMS.ExactState(q2, ones(4, 3))
-    @test_throws "beyond the 4096 TMS builds" TMS.ExactState(State{Mixed}(System(13, Qubit()), "Up"))
-    @test_throws "beyond the 16777216 TMS builds" TMS.ExactState(System(64, Qubit()), ComplexF64[])
+    # no bound by default, one given to protect oneself
+    @test_throws "has 64 elements, beyond max_dense = 32" TMS.ExactState{Mixed}(System(3, Qubit()),
+                                                                               "Up"; max_dense = 32)
+    @test_throws "has 64 elements, beyond max_dense = 32" mix(
+        TMS.ExactState{Pure}(System(3, Qubit()), "Up"); max_dense = 32)
+    # the same call on a State, where it has no use
+    @test mix(State{Pure}(System(3, Qubit()), "Up"); max_dense = 32) isa State{Mixed}
+    @test size(reduced_density_matrix(State{Pure}(System(3, Qubit()), "Up"), 1:3;
+                                      max_dense = nothing)) == (8, 8)
+    # a whole array is taken whatever its size, the array of the wrong size refused
+    @test_throws "a vector of 18446744073709551616 elements, not an array of size (0,)" TMS.ExactState(
+        System(64, Qubit()), ComplexF64[])
     @test_throws "divides by the trace" TMS.ExactState(q2, zeros(4))
     traceless = Matrix(LA.Diagonal([1., 1, -1, -1]))
     @test_throws "zero up to rounding beside its norm" TMS.ExactState(q2, traceless)

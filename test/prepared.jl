@@ -63,7 +63,9 @@ end
     @test Vector(2 * dc) ≈ 2φ / LA.norm(φ)
     v = Vector(dc)
     @test v' * matrix(dag(C)(1) * C(3), dc.system) * v ≈ expect(dc, dag(C)(1) * C(3))
-    @test_throws "beyond the 16777216 TMS builds" Vector(State{Pure}(System(2, Boson(5000)), "0"))
+    @test_throws "has 25000000 elements, beyond max_dense = 16777216" Vector(
+        State{Pure}(System(2, Boson(5000)), "0"))
+    @test_throws "has 16 elements, beyond max_dense = 8" Vector(dc; max_dense = 8)
     @test maxlinkdim(dense_state(System(8, Qubit()), kron(fill([1., 1.], 8)...))) == 1
     @test_throws "no definite charge" dense_state(System(4, Fermion(conserve = N)), ones(16))
     @test_throws "cannot be a state of 16" dense_state(System(4, Qubit()), ones(8))
