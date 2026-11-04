@@ -533,6 +533,25 @@ has_definite_flux(a::AbstractArray, inds) = !any(hasqns, inds) ||
     !isnothing(common_charge(a, map(index_charges, inds), rounding_tol * norm(a)))
 
 """
+    in_charge(a, inds)
+
+the array `a` on the indices `inds`, of a definite charge up to rounding, see
+`has_definite_flux`, its elements of another charge zeroed: what rounding leaves in the sectors
+the quantities conserved forbid, which `charged_itensor` drops as well
+"""
+function in_charge(a::AbstractArray, inds)
+    charges = map(index_charges, inds)
+    q = common_charge(a, charges, rounding_tol * norm(a))
+    b = copy(a)
+    for c in CartesianIndices(b)
+        if sum(charges[k][c[k]] for k in eachindex(charges)) ≠ q
+            b[c] = 0
+        end
+    end
+    return b
+end
+
+"""
     charged_itensor(a, inds)
 
 the ITensor of the array `a` on the indices `inds`, dropping what rounding leaves outside the

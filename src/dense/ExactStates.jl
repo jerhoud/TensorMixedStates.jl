@@ -10,7 +10,7 @@
 the state of a small `system` held whole, without truncation: its vector for `R = Pure`, its
 density matrix for `R = Mixed`. It is made from a description as `State{R}` takes it, from a
 `State`, or from the whole vector or density matrix `x`, normalised, of definite charges on a
-system conserving something. The truncation limits and the methods that functions take for a
+system conserving something, what rounding leaves in the sectors they forbid dropped. The truncation limits and the methods that functions take for a
 `State` are accepted and ignored.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
@@ -48,10 +48,14 @@ ExactState(state::State{Mixed}; max_dense::Union{Nothing, Int} = nothing) =
     ExactState{Mixed}(state.system, full_matrix(state; max_dense), Val(:raw))
 
 function ExactState(system::System, x::AbstractVecOrMat{<:Number})
-    e = ExactState{x isa AbstractVector ? Pure : Mixed}(system, x, Val(:raw))
+    R = x isa AbstractVector ? Pure : Mixed
+    e = ExactState{R}(system, x, Val(:raw))
     if is_charged(system)
         a, idx, _ = dense_legs(system, x)
         check_definite_flux(a, idx)
+        # the sectors the charges declared forbid are identically zero: what rounding leaves
+        # there is dropped, as dense_state does
+        e = ExactState{R}(system, reshape(in_charge(a, idx), size(x)), Val(:raw))
     end
     return normalize(e)
 end
