@@ -308,34 +308,37 @@ MutualInfoRenyi2(positions::AbstractVector) =
     on_positions("MutualInfoRenyi2", mutual_info_renyi2, positions)
 
 """
-    ReducedDensityMatrix(positions)
+    ReducedDensityMatrix(positions; max_dense = 2^24)
 
 the measurement of the density matrix of the sites at `positions`, in increasing order, see
-`reduced_density_matrix`, a complex matrix whatever the state, as `Trace`
+`reduced_density_matrix`, which takes `max_dense`, a complex matrix whatever the state, as
+`Trace`
 """
-function ReducedDensityMatrix(positions::AbstractVector)
+function ReducedDensityMatrix(positions::AbstractVector;
+                              max_dense::Union{Nothing, Int} = dense_elements)
     check_increasing(positions, "ReducedDensityMatrix")
     return on_positions("ReducedDensityMatrix",
-                        (st, p) -> complex(reduced_density_matrix(st, p)), positions)
+                        (st, p) -> complex(reduced_density_matrix(st, p; max_dense)), positions)
 end
 
 """
-    VonNeumannEntropy(positions)
+    VonNeumannEntropy(positions; max_dense = 2^24)
 
 the measurement of the von Neumann entropy of the sites at `positions`, see
-`von_neumann_entropy`
+`von_neumann_entropy`, which takes `max_dense`
 """
-VonNeumannEntropy(positions::AbstractVector) =
-    on_positions("VonNeumannEntropy", von_neumann_entropy, positions)
+VonNeumannEntropy(positions::AbstractVector; max_dense::Union{Nothing, Int} = dense_elements) =
+    on_positions("VonNeumannEntropy", (st, p) -> von_neumann_entropy(st, p; max_dense), positions)
 
 """
-    LogNegativity(a, b)
+    LogNegativity(a, b; max_dense = 2^24)
 
 the measurement of the logarithmic negativity between the sites at positions `a` and those at
-`b`, see `log_negativity`
+`b`, see `log_negativity`, which takes `max_dense`
 """
-LogNegativity(a::AbstractVector, b::AbstractVector) =
-    on_positions("LogNegativity", log_negativity, a, b)
+LogNegativity(a::AbstractVector, b::AbstractVector;
+              max_dense::Union{Nothing, Int} = dense_elements) =
+    on_positions("LogNegativity", (st, x, y) -> log_negativity(st, x, y; max_dense), a, b)
 
 """
     EntanglementEntropy(cut)

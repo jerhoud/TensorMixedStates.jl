@@ -87,27 +87,42 @@ function graded_parts(m::AbstractMatrix, f::AbstractMatrix)
 end
 
 """
-    dense_max
+    dense_elements
 
-the largest dimension of the dense matrix of a function of an operator, or of a superoperator,
-built on sites: beyond, it is refused rather than exhausting memory
+the number of elements of the largest dense array TMS builds by default, as many as a matrix of
+4096 × 4096, the default of the keyword `max_dense` where a function takes it: beyond, it is
+refused rather than exhausting memory, as a call that does not show its dense matrix would
 """
-const dense_max = 4096
+const dense_elements = 2^24
+
+"""
+    check_elements(n, what, max_dense = dense_elements; settable = true)
+
+refuse `what`, a dense array of `n` elements, a Float64 that does not wrap around as an Int does
+on many sites, beyond `max_dense`, `nothing` for no bound, saying that the caller can raise it
+when it is `settable`
+"""
+function check_elements(n::Real, what::String, max_dense::Union{Nothing, Int} = dense_elements;
+                        settable::Bool = true)
+    if !isnothing(max_dense) && n > max_dense
+        total = Printf.@sprintf("%.0f", n)
+        error(settable ? "$what has $total elements, beyond max_dense = $max_dense: pass a " *
+                         "larger max_dense to build it" :
+                         "$what has $total elements, beyond the $max_dense TMS builds")
+    end
+end
 
 """
     check_dense(a, sites)
 
-refuse the matrix of the function `a` on `sites` when its dimension, that of the states of the
-sites or, for a channel or a generator, of their density matrices, is beyond `dense_max`
+refuse the matrix of the function `a` on `sites` beyond `dense_elements`, its dimension being
+that of the states of the sites or, for a channel or a generator, of their density matrices
 """
 function check_dense(a::GenericOp{K}, sites) where K
     ss = expand_sites(a, sites)
-    # a Float64, which does not wrap around as an Int does on many sites
     d = prod(float ∘ dim, ss)^(K === IsOperator ? 1 : 2)
-    if d > dense_max
-        error("$(obs_name(a)) on $(length(ss)) sites needs a dense matrix of dimension " *
-              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
-    end
+    check_elements(d^2, "the dense matrix of $(obs_name(a)) on $(length(ss)) sites";
+                   settable = false)
 end
 
 """

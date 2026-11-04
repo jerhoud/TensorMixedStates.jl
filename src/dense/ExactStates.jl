@@ -3,8 +3,8 @@
 # varying the slowest, the operators acting through their terms, see `dense_acted`.
 
 """
-    ExactState{R}(system, states)
-    ExactState(state::State)
+    ExactState{R}(system, states; max_dense = nothing)
+    ExactState(state::State; max_dense = nothing)
     ExactState(system, x)
 
 the state of a small `system` held whole, without truncation: its vector for `R = Pure`, its
@@ -12,6 +12,9 @@ density matrix for `R = Mixed`. It is made from a description as `State{R}` take
 `State`, or from the whole vector or density matrix `x`, normalised, of definite charges on a
 system conserving something. The truncation limits and the methods that functions take for a
 `State` are accepted and ignored.
+
+- `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
+  refused, none by default, as for `mix`; a whole array given is taken whatever its size
 
 # Examples
 
@@ -26,26 +29,23 @@ struct ExactState{R <: PM} <: AbstractState
     function ExactState{R}(system::System, x::AbstractVecOrMat, ::Val{:raw}) where {R <: PM}
         # a Float64, which does not wrap around as an Int does on many sites
         d = prod(float(dim(s)) for s in system.sites)
-        limit = R === Mixed ? dense_max : dense_max^2
-        if d > limit
-            error("an ExactState{$R} of $(length(system)) sites has the dimension " *
-                  "$(Printf.@sprintf("%.0f", d)), beyond the $limit TMS builds")
-        end
-        shape = R === Mixed ? (Int(d), Int(d)) : (Int(d),)
-        if size(x) ≠ shape
-            what = R === Mixed ? "a density matrix of $(Int(d)) × $(Int(d))" :
-                                 "a vector of $(Int(d)) elements"
+        if float.(size(x)) ≠ (R === Mixed ? (d, d) : (d,))
+            n = Printf.@sprintf("%.0f", d)
+            what = R === Mixed ? "a density matrix of $n × $n" : "a vector of $n elements"
             error("an ExactState{$R} of the system holds $what, not an array of size $(size(x))")
         end
         return new{R}(system, Array{ComplexF64}(x))
     end
 end
 
-ExactState{R}(args...) where {R <: PM} = ExactState(State{R}(args...))
+ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing) where {R <: PM} =
+    ExactState(State{R}(args...); max_dense)
 
-ExactState(state::State{Pure}) = ExactState{Pure}(state.system, Vector(state), Val(:raw))
+ExactState(state::State{Pure}; max_dense::Union{Nothing, Int} = nothing) =
+    ExactState{Pure}(state.system, Vector(state; max_dense), Val(:raw))
 
-ExactState(state::State{Mixed}) = ExactState{Mixed}(state.system, full_matrix(state), Val(:raw))
+ExactState(state::State{Mixed}; max_dense::Union{Nothing, Int} = nothing) =
+    ExactState{Mixed}(state.system, full_matrix(state; max_dense), Val(:raw))
 
 function ExactState(system::System, x::AbstractVecOrMat{<:Number})
     e = ExactState{x isa AbstractVector ? Pure : Mixed}(system, x, Val(:raw))
@@ -88,9 +88,14 @@ function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where R
     return (R === Mixed ? tr(ax) : dot(x, ax)) / nonzero_trace(state, "expect")
 end
 
-mix(state::ExactState{Mixed}; limits::Limits = Limits()) = state
-mix(state::ExactState{Pure}; limits::Limits = Limits()) =
-    ExactState{Mixed}(state.system, state.state * state.state', Val(:raw))
+mix(state::ExactState{Mixed}; limits::Limits = Limits(),
+    max_dense::Union{Nothing, Int} = nothing) = state
+function mix(state::ExactState{Pure}; limits::Limits = Limits(),
+             max_dense::Union{Nothing, Int} = nothing)
+    check_elements(float(length(state.state))^2,
+                   "the density matrix of a state of $(length(state.system)) sites", max_dense)
+    return ExactState{Mixed}(state.system, state.state * state.state', Val(:raw))
+end
 
 dag(::ExactState{Pure}) = error("dag is meaningless on pure representations")
 dag(state::ExactState{Mixed}) = ExactState{Mixed}(state.system, state.state', Val(:raw))
@@ -293,7 +298,8 @@ function partition_matrix(state::ExactState{Pure}, kept::Vector{Int})
     return reshape(permutedims(reshape(x, rdims...), perm), a, b)
 end
 
-function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{Int}) where R
+function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{Int};
+                                max_dense::Union{Nothing, Int} = dense_elements) where R
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
@@ -302,7 +308,7 @@ function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{
     kept = collect(positions)
     # no larger than the state, the matrix needs no bound
     if prod(float(dim(state.system[k])) for k in kept)^2 > length(state.state)
-        check_reduced(state, kept)
+        check_reduced(state, kept, max_dense)
     end
     if R === Pure
         m = partition_matrix(state, kept)
@@ -324,7 +330,9 @@ function kept_spectrum(state::ExactState{Pure}, kept::Vector{Int}, what)
     return last(entropy_spectrum(svdvals(partition_matrix(state, kept))))
 end
 
-function von_neumann_entropy(state::ExactState{Pure}, positions::AbstractVector)
+# its reduced density matrix is never formed, which `max_dense` would bound
+function von_neumann_entropy(state::ExactState{Pure}, positions::AbstractVector;
+                             max_dense::Union{Nothing, Int} = dense_elements)
     check_positions(state, positions, "von_neumann_entropy")
     if isempty(positions)
         return 0.0

@@ -231,7 +231,8 @@ the name and the modulus of each quantity the sites of `system` conserve, in the
 names, as `Sectors` holds them
 """
 conserved_quantities(system::System) =
-    sort(unique([ (q.name, q.modulus) for site in system.sites for q in conserved(site).quantities ]))
+    sort(unique([ (q.name, q.modulus) for site in system.sites
+                                       for q in conserved(site).quantities ]))
 
 """
 the `Sectors` of the `quantities` conserved from the squares of the singular values of each
@@ -407,44 +408,44 @@ function unit_trace(m::AbstractMatrix)
 end
 
 """
-    check_reduced(state, kept)
+    check_reduced(state, kept, max_dense)
 
-refuse the density matrix of the sites at the positions `kept` of `state` when its dimension,
-the product of theirs, is beyond `dense_max`, rather than exhausting memory
+refuse the density matrix of the sites at the positions `kept` of `state` beyond `max_dense`
+elements, rather than exhausting memory
 """
-function check_reduced(state::AbstractState, kept)
-    # a Float64, which does not wrap around as an Int does on many sites
+function check_reduced(state::AbstractState, kept, max_dense::Union{Nothing, Int})
     d = prod(float(dim(state.system[k])) for k in kept)
-    if d > dense_max
-        error("reduced_density_matrix of $(length(kept)) sites needs a dense matrix of dimension " *
-              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
-    end
+    check_elements(d^2, "the reduced density matrix of $(length(kept)) sites", max_dense)
 end
 
 """
-    reduced_density_matrix(state, positions)
+    reduced_density_matrix(state, positions; max_dense = 2^24)
 
 the density matrix of the sites at `positions`, the others traced out, as a matrix of trace
 one on the basis of the product states of those sites, given in increasing order, ordered as
 `kron` orders them, the first site varying the slowest, as for `dense_state`. On fermionic sites
 it is written in the Jordan-Wigner basis of the sites kept alone, so that
 `tr(ρ * matrix(op, ...))` is the expectation value of `op` placed on them. It is meant for a few
-sites, the matrix having the square of their dimension as its number of elements, and refused
-beyond the dimension `dense_max`, 4096. A state of trace zero is refused, and so are positions
-out of increasing order, which `permute_sites` gives.
+sites, the matrix having the square of their dimension as its number of elements. A state of
+trace zero is refused, and so are positions out of increasing order, which `permute_sites`
+gives.
+
+- `max_dense`: the number of elements beyond which the matrix is refused, a matrix of
+  4096 × 4096 by default
 
 # Examples
 
     ρ = reduced_density_matrix(state, [2, 5])
 """
-function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{Int})
+function reduced_density_matrix(state::State{Mixed}, positions::AbstractVector{Int};
+                                max_dense::Union{Nothing, Int} = dense_elements)
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
         return ones(1, 1)
     end
-    check_reduced(state, positions)
-    return unit_trace(full_matrix(partial_trace(weak_form(state); keep = positions)))
+    check_reduced(state, positions, max_dense)
+    return unit_trace(full_matrix(partial_trace(weak_form(state); keep = positions); max_dense))
 end
 
 """
@@ -520,14 +521,15 @@ function block_matrix(state::State{Pure}, ks::UnitRange{Int})
     return reshape(m, d, :) * transpose(reshape(permutedims(b, (2, 1, 3)), d, :))
 end
 
-function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int})
+function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int};
+                                max_dense::Union{Nothing, Int} = dense_elements)
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
         return ones(1, 1)
     end
     kept = collect(positions)
-    check_reduced(state, kept)
+    check_reduced(state, kept, max_dense)
     state = trace_signs(state, kept)
     if kept == first(kept):last(kept)
         return unit_trace(block_matrix(state, first(kept):last(kept)))
@@ -537,32 +539,37 @@ end
 
 # positions in a vector of another element type, `[]` or `Any[1, 3]`; integer positions reaching
 # this method have no method of their own, which converting them again would not find
-function reduced_density_matrix(state::AbstractState, positions::AbstractVector)
+function reduced_density_matrix(state::AbstractState, positions::AbstractVector;
+                                max_dense::Union{Nothing, Int} = dense_elements)
     if positions isa AbstractVector{Int}
         throw(MethodError(reduced_density_matrix, (state, positions)))
     end
-    return reduced_density_matrix(state, Vector{Int}(positions))
+    return reduced_density_matrix(state, Vector{Int}(positions); max_dense)
 end
 
 """
-    von_neumann_entropy(state, positions)
+    von_neumann_entropy(state, positions; max_dense = 2^24)
 
 the von Neumann entropy ``-\\mathrm{tr}\\,\\rho_A \\log \\rho_A`` of the sites at `positions`,
 ``\\rho_A`` being their `reduced_density_matrix`, 0 when there is none; a negative eigenvalue,
-which an approximate state may have, is taken as zero, and refused beyond `1e-8` of the largest. On a pure state and the
-sites `1:cut`, `entanglement_entropy(state, cut)` gives the same, at a far lower cost and for
-any number of sites.
+which an approximate state may have, is taken as zero, and refused beyond `1e-8` of the
+largest. On a pure state and the sites `1:cut`, `entanglement_entropy(state, cut)` gives the
+same, at a far lower cost and for any number of sites.
+
+- `max_dense`: the number of elements of ``\\rho_A`` beyond which it is refused
 
 # Examples
 
     von_neumann_entropy(state, [2, 5])
 """
-function von_neumann_entropy(state::AbstractState, positions::AbstractVector)
+function von_neumann_entropy(state::AbstractState, positions::AbstractVector;
+                             max_dense::Union{Nothing, Int} = dense_elements)
     check_positions(state, positions, "von_neumann_entropy")
     if isempty(positions)
         return 0.0
     end
-    λ = eigvals(Hermitian(reduced_density_matrix(state, sort(Vector{Int}(positions)))))
+    ρ = reduced_density_matrix(state, sort(Vector{Int}(positions)); max_dense)
+    λ = eigvals(Hermitian(ρ))
     if first(λ) < -approximation_tol * maximum(abs, λ)
         error("the reduced density matrix has the negative eigenvalue " *
               "$(round(first(λ); sigdigits = 2)): the state is not a positive density matrix, as " *
@@ -572,7 +579,7 @@ function von_neumann_entropy(state::AbstractState, positions::AbstractVector)
 end
 
 """
-    log_negativity(state, a, b)
+    log_negativity(state, a, b; max_dense = 2^24)
 
 the logarithmic negativity ``\\log \\|\\rho^{T_B}\\|_1`` between the sites at `a` and those at
 `b`, ``\\rho`` being their `reduced_density_matrix` and ``T_B`` the partial transpose on `b`,
@@ -580,11 +587,14 @@ zero for a separable state and 0 when a part is empty. The partial transpose in 
 Jordan-Wigner basis is not the fermionic one: it is taken on a part holding no fermionic
 site, and refused when both hold one.
 
+- `max_dense`: the number of elements of ``\\rho`` beyond which it is refused
+
 # Examples
 
     log_negativity(state, [1, 2], [5])
 """
-function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVector)
+function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVector;
+                        max_dense::Union{Nothing, Int} = dense_elements)
     check_positions(state, a, "log_negativity")
     check_positions(state, b, "log_negativity")
     a, b = sort(Vector{Int}(a)), sort(Vector{Int}(b))
@@ -607,7 +617,7 @@ function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVect
     k = length(u)
     dims = [ dim(system[i]) for i in u ]
     # kets then bras, the last site first, as kron orders the basis
-    t = reshape(reduced_density_matrix(state, u), reverse(dims)..., reverse(dims)...)
+    t = reshape(reduced_density_matrix(state, u; max_dense), reverse(dims)..., reverse(dims)...)
     perm = collect(1:2k)
     for (p, i) in enumerate(u)
         if i in b

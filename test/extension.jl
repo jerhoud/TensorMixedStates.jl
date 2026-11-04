@@ -246,7 +246,8 @@ end
 
 TensorMixedStates.purity(st::HeldMatrix) = real(LA.tr(st.ρ * st.ρ))
 
-function TensorMixedStates.reduced_density_matrix(st::HeldMatrix, positions::AbstractVector{Int})
+function TensorMixedStates.reduced_density_matrix(st::HeldMatrix, positions::AbstractVector{Int};
+                                                  max_dense = 2^24)
     if isempty(positions)
         error("HeldMatrix reduces to one site at least")
     end
@@ -534,11 +535,12 @@ TensorMixedStates.purity(st::LooseState) = 1.
 TensorMixedStates.variance(st::LooseState, op) = 0.
 TensorMixedStates.renyi2(st::LooseState, positions::AbstractVector{Int}) = 0.
 TensorMixedStates.mutual_info_renyi2(st::LooseState, positions::AbstractVector{Int}) = 0.
-TensorMixedStates.reduced_density_matrix(st::LooseState, positions::AbstractVector{Int}) =
-    ones(1, 1)
-TensorMixedStates.von_neumann_entropy(st::LooseState, positions::AbstractVector{Int}) = 0.
-TensorMixedStates.log_negativity(st::LooseState, a::AbstractVector{Int},
-                                 b::AbstractVector{Int}) = 0.
+TensorMixedStates.reduced_density_matrix(st::LooseState, positions::AbstractVector{Int};
+                                         max_dense) = ones(1, 1)
+TensorMixedStates.von_neumann_entropy(st::LooseState, positions::AbstractVector{Int};
+                                      max_dense) = 0.
+TensorMixedStates.log_negativity(st::LooseState, a::AbstractVector{Int}, b::AbstractVector{Int};
+                                 max_dense) = 0.
 TensorMixedStates.entanglement_entropy(st::LooseState, cut) = 0.
 TensorMixedStates.entanglement_spectrum(st::LooseState, cut) = [1.]
 

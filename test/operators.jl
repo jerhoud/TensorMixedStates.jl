@@ -599,7 +599,9 @@ end
     @test matrix(X(1), System(2, Qubit(conserve = N))) ≈ kron(x, matrix(Id, q))
     # a site the system does not have, and a system beyond a dense matrix
     @test_throws "X(5) acts on site 5, which the system does not have" matrix(X(5), s3)
-    @test_throws "beyond the 4096 TMS builds" matrix(Z(1), System(13, q))
+    @test_throws "has 67108864 elements, beyond max_dense = 16777216" matrix(Z(1), System(13, q))
+    @test_throws "has 64 elements, beyond max_dense = 32" matrix(Z(1), System(3, q); max_dense = 32)
+    @test size(matrix(Z(1), System(3, q); max_dense = 64)) == (8, 8)
 end
 
 @testset "Terms acting on a dense state" begin

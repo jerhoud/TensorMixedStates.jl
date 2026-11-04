@@ -1282,10 +1282,19 @@ end
     @test real(LA.diag(reduced_density_matrix(strong_ρ, [1, 2]))) ≈ [0, 0, 1, 0]
     @test reduced_density_matrix(q, []) == ones(1, 1)
     @test_throws "given site 5, which the state does not have" reduced_density_matrix(q, [5])
-    # beyond dense_max, refused rather than exhausting memory
+    # beyond 2^24 elements by default, or the bound the caller sets, refused rather than
+    # exhausting memory, through the entropies and the negativity as well
     for st in (State{Pure}(System(13, Qubit()), "Up"), State{Mixed}(System(13, Qubit()), "Up"))
-        @test_throws "of dimension 8192, beyond the 4096 TMS builds" reduced_density_matrix(
+        @test_throws "has 67108864 elements, beyond max_dense = 16777216" reduced_density_matrix(
             st, 1:13)
+        @test_throws "has 64 elements, beyond max_dense = 32" reduced_density_matrix(st, 1:3;
+                                                                                    max_dense = 32)
+        @test size(reduced_density_matrix(st, 1:3; max_dense = 64)) == (8, 8)
+        @test_throws "beyond max_dense = 32" von_neumann_entropy(st, 1:3; max_dense = 32)
+        @test_throws "beyond max_dense = 32" log_negativity(st, 1:2, [3]; max_dense = 32)
+        @test_throws "beyond max_dense = 32" measure(st, VonNeumannEntropy(1:3; max_dense = 32))
+        @test_throws "beyond max_dense = 32" measure(st, LogNegativity(1:2, [3]; max_dense = 32))
+        @test_throws "beyond max_dense = 32" measure(st, ReducedDensityMatrix(1:3; max_dense = 32))
     end
     # the entropy of half a Bell pair is log 2, that of the pair 0, and on a cut it is the
     # entanglement entropy

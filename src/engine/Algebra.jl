@@ -443,26 +443,25 @@ function whole_matrix(system::System, a::IndexedOp{IsOperator})
 end
 
 """
-    matrix(op, system)
+    matrix(op, system; max_dense = 2^24)
 
 the matrix of the operator `op`, placed on sites, on all the sites of `system`, the
 Jordan-Wigner strings of its fermionic operators laid, on the basis of the product states
 ordered as `kron` orders them, the first site varying the slowest, as `dense_state` and `Vector`
-order them: the matrix an exact diagonalization of a small system checks a result against. It
-is refused beyond the dimension `dense_max`, 4096.
+order them: the matrix an exact diagonalization of a small system checks a result against.
+
+- `max_dense`: the number of elements beyond which the matrix is refused, a matrix of
+  4096 × 4096 by default
 
 # Examples
 
     eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
 """
-function matrix(a::IndexedOp{IsOperator}, system::System)
+function matrix(a::IndexedOp{IsOperator}, system::System;
+                max_dense::Union{Nothing, Int} = dense_elements)
     check_indices(system, a)
-    # a Float64, which does not wrap around as an Int does on many sites
     d = prod(float(dim(s)) for s in system.sites)
-    if d > dense_max
-        error("the matrix of $(obs_name(a)) on $(length(system)) sites has the dimension " *
-              "$(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
-    end
+    check_elements(d^2, "the matrix of $(obs_name(a)) on $(length(system)) sites", max_dense)
     # charges play no part in a matrix, which an operator of no definite charge has as well
     return whole_matrix(weaken(system, ()), a)
 end

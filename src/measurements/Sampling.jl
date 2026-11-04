@@ -4,23 +4,22 @@
 export probabilities, sample, collapse
 
 """
-    measured_spectrum(system, op, what)
+    measured_spectrum(system, op, what; max_dense = dense_elements)
 
 the sites of `system` the Hermitian operator `op` acts on, increasing, its eigenvalues and the
 projectors on its eigenspaces, matrices on those sites in the Jordan-Wigner basis of those sites
-alone, see `eigenspaces`; `what` names the caller in the refusals
+alone, see `eigenspaces`, refused beyond `max_dense` elements; `what` names the caller in the
+refusals
 """
-function measured_spectrum(system::System, op::IndexedOp{IsOperator}, what::String)
+function measured_spectrum(system::System, op::IndexedOp{IsOperator}, what::String;
+                           max_dense::Union{Nothing, Int} = dense_elements)
     sites = sort(sites_of(op))
     if isempty(sites)
         error("$what needs an operator placed on sites, which $(obs_name(op)) is not")
     end
-    # a Float64, which does not wrap around as an Int does on many sites
     d = prod(float(dim(system[k])) for k in sites)
-    if d > dense_max
-        error("$what of $(obs_name(op)) needs its matrix on its $(length(sites)) sites, of " *
-              "dimension $(Printf.@sprintf("%.0f", d)), beyond the $dense_max TMS builds")
-    end
+    check_elements(d^2, "$what of $(obs_name(op)) needs its matrix on its $(length(sites)) " *
+                        "sites, which", max_dense)
     on = " on " * join([ system[k] for k in sites ], " ⊗ ")
     values, ps = eigenspaces(matrix_on(system, op, sites), what, op, on)
     return sites, values, ps
@@ -121,15 +120,16 @@ function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
 end
 
 """
-    measurement(state, op, what)
+    measurement(state, op, what; max_dense = dense_elements)
 
 the results of measuring the Hermitian operator `op`, in increasing order, their probabilities,
 and the function `(k, limits) -> state` projecting the state on the `k`-th of them and
 normalizing it: as a product of involutions, as a sum of operators of one site, or through the
 projectors on the eigenspaces of its matrix, placed on its sites, whose Jordan-Wigner strings
-the descent lays; `what` names the caller in the refusals
+the descent lays, refused beyond `max_dense` elements; `what` names the caller in the refusals
 """
-function measurement(state::AbstractState, op::IndexedOp{IsOperator}, what::String)
+function measurement(state::AbstractState, op::IndexedOp{IsOperator}, what::String;
+                     max_dense::Union{Nothing, Int} = dense_elements)
     nonzero_trace(state, what)
     # a probability below rounding, of either sign, as a sum of Fourier leaves for an impossible
     # result, is zero
@@ -150,7 +150,7 @@ function measurement(state::AbstractState, op::IndexedOp{IsOperator}, what::Stri
         return (first.(ts) ./ 2, zeroed(last.(ts)),
                 (k, limits) -> project_count(state, cnt..., first(ts[k]); limits))
     end
-    sites, values, ps = measured_spectrum(system, op, what)
+    sites, values, ps = measured_spectrum(system, op, what; max_dense)
     projectors = [ Operator{length(sites)}("Proj($op => $λ)", p)(sites...)
                    for (λ, p) in zip(values, ps) ]
     probs = [ real(expect(state, p; complex = true)) for p in projectors ]
@@ -166,7 +166,7 @@ end
 
 """
     probabilities(state, pos)
-    probabilities(state, op)
+    probabilities(state, op; max_dense = 2^24)
 
 the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
 their probabilities, as pairs `result => probability` in increasing order, those of zero
@@ -178,14 +178,18 @@ operators, by its mean value, and a sum of operators of one site with half integ
 eigenvalues, as the number of particles of a region, by the mean values of products of
 phases.
 
+- `max_dense`: the number of elements of the matrix of `op` on its sites beyond which it is
+  refused, a matrix of 4096 × 4096 by default
+
 # Examples
 
     probabilities(state, 3)
     probabilities(state, Z(1) * Z(2))
     probabilities(state, sum(N(i) for i in 1:10))
 """
-function probabilities(state::AbstractState, op::IndexedOp{IsOperator})
-    values, probs, _ = measurement(state, op, "probabilities")
+function probabilities(state::AbstractState, op::IndexedOp{IsOperator};
+                       max_dense::Union{Nothing, Int} = dense_elements)
+    values, probs, _ = measurement(state, op, "probabilities"; max_dense)
     return [ λ => p for (λ, p) in zip(values, probs) ]
 end
 
@@ -230,13 +234,13 @@ level_projector(d::Int, x::Int) = Matrix{Float64}(Diagonal([ k == x ? 1. : 0. fo
 """
     sample(::State [; rng])
     sample(::State, pos [; rng])
-    sample(::State, op [; rng])
+    sample(::State, op [; rng, max_dense])
 
 a random outcome of measuring the state in the basis of its sites, numbered from 0: a vector
 with one outcome per site, or, given `pos`, the outcome of that site alone; or, given a
 Hermitian operator placed on a few sites, one of its eigenvalues, see `probabilities`. The state
 is left as it is, see `collapse`. `rng` is the random number generator, the global one by
-default.
+default, and `max_dense` that of `probabilities`.
 
 # Examples
 
@@ -295,16 +299,17 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
     return result
 end
 
-function sample(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng())
-    ps = probabilities(state, op)
+function sample(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng(),
+                max_dense::Union{Nothing, Int} = dense_elements)
+    ps = probabilities(state, op; max_dense)
     return first(ps[draw(x -> last(ps[x + 1]), length(ps), rand(rng)) + 1])
 end
 
 """
     collapse(state, pos [; rng])
-    collapse(state, op [; rng, limits])
+    collapse(state, op [; rng, limits, max_dense])
     collapse(state, pos => x)
-    collapse(state, op => λ [; limits])
+    collapse(state, op => λ [; limits, max_dense])
 
 the result of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, its
 probability, and the state it leaves, `(result, probability, state)`: the result is drawn with
@@ -316,7 +321,8 @@ the bond dimension, or quadruples it on a density matrix; for a sum of operators
 an MPO whose bond carries the partial sums, as many as its dimension; otherwise the projector,
 with the Jordan-Wigner strings of the fermionic sites between its sites, refused when it
 leaves the state without definite charges, on a system conserving them, see `weaken`. `rng` is
-the random number generator, the global one by default.
+the random number generator, the global one by default, and `max_dense` that of
+`probabilities`.
 
 # Examples
 
@@ -326,8 +332,8 @@ the random number generator, the global one by default.
     _, p, state = collapse(state, Z(1) * Z(2) => 1)
 """
 function collapse(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng(),
-                  limits::Limits = Limits())
-    values, probs, project = measurement(state, op, "collapse")
+                  limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements)
+    values, probs, project = measurement(state, op, "collapse"; max_dense)
     k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1
     return (result = values[k], probability = probs[k], state = project(k, limits))
 end
@@ -339,9 +345,9 @@ function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
 end
 
 function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:Real};
-                  limits::Limits = Limits())
+                  limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements)
     op, λ = result
-    values, probs, project = measurement(state, op, "collapse")
+    values, probs, project = measurement(state, op, "collapse"; max_dense)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
     if isnothing(k)
         error("$λ is not a result of measuring $(obs_name(op)), whose results are " *
