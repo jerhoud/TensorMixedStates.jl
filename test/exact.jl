@@ -488,9 +488,12 @@ TMS.run_phase(p::CreateExact, sim::TMS.Simulation, ::Int) = TMS.Simulation(sim, 
     @test e ≈ λ[1] atol = 1e-11
     @test real(expect(g, h)) ≈ λ[1] atol = 1e-11
     e1, g1 = ground_state(h, ψ; orthogonal_to = [g], algo = Dmrg(nsweeps = 1),
-                          limits = Limits(maxdim = 1), weight = 1e-3)
+                          limits = Limits(maxdim = 1))
     @test e1 ≈ λ[2] atol = 1e-10
     @test abs(inner(g, g1)) < 1e-10
+    # a weight below the gap, as for a State
+    @test_logs (:warn, r"does not exceed the gap") ground_state(h, ψ; orthogonal_to = [g],
+                                                                 weight = 1e-3)
     # in the sector of the state given, on fermions conserving N, against dmrg
     f = System(4, Fermion(conserve = N))
     hop = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3) + 0.5 * N(1)
@@ -588,9 +591,14 @@ end
     e, g = ground_state(h, ψ)
     @test_throws "orthogonal to pure states" ground_state(h, ψ; orthogonal_to = [mix(g)])
     @test_throws "orthogonal to pure states" ground_state(h, ψ; orthogonal_to = [mix(State(g))])
-    # their span projected out, a state the others span adding nothing
+    # a state the others span, exactly or nearly, adding nothing to avoid
     e1, g1 = ground_state(h, ψ; orthogonal_to = [g])
     @test ground_state(h, ψ; orthogonal_to = [g, g]).energy ≈ e1 atol = 1e-10
+    d = normalize(randn(Xoshiro(3), ComplexF64, 16))
+    for ε in (1e-12, 1e-9)
+        near = TMS.ExactState(sys, g.state + ε * d)
+        @test ground_state(h, ψ; orthogonal_to = [g, near]).energy ≈ e1 atol = 1e-10
+    end
     both = TMS.ExactState(sys, (g.state + g1.state) / √2)
     @test ground_state(h, ψ; orthogonal_to = [g, g1, both]).energy ≈
           ground_state(h, ψ; orthogonal_to = [g, g1]).energy atol = 1e-10

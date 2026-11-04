@@ -577,8 +577,9 @@ function searched_operator(system::System, a, what::String)
     return a
 end
 
-# the method and the limits of the MPS without use, `algo` not needed; the span of the states of
-# `orthogonal_to` projected out exactly, a weight without use
+# the method and the limits of the MPS without use, `algo` not needed; the search of a State
+# solved exactly, see `orthogonal_args`: the lowest state of the Hamiltonian plus `weight` times
+# the projectors of the states of `orthogonal_to`, its energy that of the Hamiltonian alone
 function ground_state(hamiltonian, state::ExactState{Pure};
                       algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
                       mpo_limits::Limits = Limits(), orthogonal_to::AbstractVector = [],
@@ -586,37 +587,22 @@ function ground_state(hamiltonian, state::ExactState{Pure};
     system = state.system
     ts = lower(system, searched_operator(system, hamiltonian, "ground_state"))
     H = acting(Pure, system, ts)
-    # the states given, orthonormalised once, Gram-Schmidt twice, a state the previous ones span
-    # up to rounding adding nothing
-    qs = Vector{ComplexF64}[]
-    for m in orthogonal_to
+    refs = map(orthogonal_to) do m
         if !(m isa Union{ExactState{Pure}, State{Pure}})
             error("ground_state searches a state orthogonal to pure states, not to a $(typeof(m))")
         end
         e = m isa ExactState ? m : ExactState(m)
         same_sites(state, e)
-        v = e.state
-        for _ in 1:2, q in qs
-            v -= q * dot(q, v)
-        end
-        if norm(v) > rounding_tol * norm(e.state)
-            push!(qs, v / norm(v))
-        end
+        return normalize(e)
     end
-    project(v) = foldl((v, q) -> v - q * dot(q, v), qs; init = v)
-    # the states given lifted above the spectrum, so that the lowest is orthogonal to them
-    c = terms_bound(ts) + 1
-    A = isempty(qs) ? H : v -> (w = project(v); project(H(w)) + c * (v - w))
-    x = project(state.state)
-    if norm(x) ≤ approximation_tol * norm(state.state)
-        error("ground_state is started from a state the states of orthogonal_to span")
-    end
-    _, v = exact_eigen(A, x, :SR, true, "ground_state of an ExactState did not converge in " *
-                                        "Krylov, its spectrum crowded at its bottom: start " *
-                                        "from a state closer to the ground state")
-    v = project(v)
-    return (energy = real(dot(v, H(v))) / real(dot(v, v)),
-            state = normalize(ExactState{Pure}(system, v, Val(:raw))))
+    w = something(weight, 1.1 * sum(t -> term_width(system, t), ts; init = 0.0))
+    A = isempty(refs) ? H : v -> H(v) + w * sum(r.state * dot(r.state, v) for r in refs)
+    _, v = exact_eigen(A, state.state, :SR, true, "ground_state of an ExactState did not " *
+                       "converge in Krylov, its spectrum crowded at its bottom: start from a " *
+                       "state closer to the ground state")
+    found = normalize(ExactState{Pure}(system, v, Val(:raw)))
+    check_orthogonal(found, (; orthogonal_to = refs, weight = w), weight)
+    return (energy = real(dot(v, H(v))) / real(dot(v, v)), state = found)
 end
 
 ground_state(::Any, ::ExactState{Mixed}; kwargs...) =
