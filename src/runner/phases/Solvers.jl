@@ -221,9 +221,29 @@ struct ThermalSteps{A <: EvolutionAlgorithm, P <: Union{Nothing, PreMPO}}
     on::Symbol
 end
 
+"""
+    ThermalOwn(phase, nsteps)
+
+a `Thermalize` of `nsteps` on a state of one's own, each step by its `thermalize`
+"""
+struct ThermalOwn
+    phase::Thermalize
+    nsteps::Int
+end
+
+step_count(t::ThermalOwn) = t.nsteps
+
+function run_step(t::ThermalOwn, sim::Simulation, k::Int)
+    p = t.phase
+    l, st = thermalize(p.hamiltonian, p.beta / t.nsteps, state_named(sim, p.on); p.algo,
+                       nsteps = 1, limits = step_limits(p.limits, k), p.mpo_limits, step = k)
+    return with_state(sim, p.on, st; beta = k == t.nsteps ? p.beta : k * (p.beta / t.nsteps),
+                      log_trace = (k == 1 ? 0. : sim.log_trace) + l)
+end
+
 function prepare_phase(phase::Thermalize, sim::Simulation)
     state = state_named(sim, phase.on)
-    if !(state isa State{Mixed})
+    if state isa State{Pure}
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
     n = if isnothing(phase.nsteps)
@@ -236,6 +256,9 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
         return ThermalSteps(phase.algo, nothing, phase.limits, 1, 0., phase.on)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
+    if !(state isa State)
+        return ThermalOwn(phase, n)
+    end
     start = time()
     pre = prepared_operator(state, phase.hamiltonian, phase.mpo_limits)
     log_mpo(sim, "Hamiltonian", pre, start)

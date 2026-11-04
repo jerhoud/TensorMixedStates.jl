@@ -10,8 +10,10 @@
 the state of a small `system` held whole, without truncation: its vector for `R = Pure`, its
 density matrix for `R = Mixed`. It is made from a description as `State{R}` takes it, from a
 `State`, or from the whole vector or density matrix `x`, normalised, of definite charges on a
-system conserving something, what rounding leaves in the sectors they forbid dropped. The truncation limits and the methods that functions take for a
-`State` are accepted and ignored.
+system conserving something, what rounding leaves in the sectors they forbid dropped. The
+truncation limits and the methods that functions take for a `State` are accepted and ignored;
+evolutions are exact up to `1e-10`, and a search stays, as Lanczos does, in what the state it
+starts from reaches, its sector of the charges conserved, declared or not.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
   refused, none by default, as for `mix`; a whole array given is taken whatever its size
@@ -392,14 +394,27 @@ apply(::MPO, ::ExactState; kwargs...) =
     error("an ExactState is given the operator rather than its MPO: apply(op, state)")
 
 """
+the linear map of the operator, the channel or the generator of terms `ts` on the arrays of the
+exact states of representation `R`, see `dense_acted`
+"""
+acting(::Type{R}, system::System, ts::Vector{Term}) where R = x -> dense_acted(R, system, ts, x)
+
+"""
+a bound of the operator norm of the operator of terms `ts`: the sum over its terms of `|coef|`
+times the product of the norms of their blocks, a Jordan-Wigner string having norm one
+"""
+terms_bound(ts::Vector{Term}) =
+    sum(abs(t.coef) * prod((opnorm(b.m) for b in t.blocks); init = 1.0) for t in ts; init = 0.0)
+
+"""
     ExactEvolver
 
-the evolver of an exact state: the terms of each of its parts, see `lower`, their time
-functions, `nothing` when it does not depend on time, see `split_terms`, and the duration of the
-whole evolution, which bounds its error, see `magnus_evolved`
+the evolver of an exact state: the terms of each part, see `lower`, a bound of its norm, see
+`terms_bound`, the time functions, see `split_terms`, and the duration of the whole evolution
 """
 struct ExactEvolver
     terms::Vector{Vector{Term}}
+    bounds::Vector{Float64}
     functions::Union{Nothing, Vector}
     duration::Union{Nothing, Number}
 end
@@ -417,7 +432,7 @@ function prepared_evolver(state::ExactState{R}, terms::AbstractVector, ::Limits 
         check_indices(system, a)
         return lower(system, R === Pure ? followed_operator(a) : superoperator(a))
     end
-    return ExactEvolver(parts, fs, duration)
+    return ExactEvolver(parts, terms_bound.(parts), fs, duration)
 end
 
 prepared_evolver(::ExactState, ::Union{PreMPO, MPO}, ::Limits = Limits();
@@ -429,37 +444,57 @@ prepared_evolver(::ExactState, x, ::Limits = Limits();
                  duration::Union{Nothing, Number} = nothing) = error("$(repr(x)) is not an evolver")
 
 """
-the exponential ``e^{tA}x`` of the linear map `A`, without its matrix, by Krylov, to
-`rounding_tol` of the norm of `x`, refused when it does not converge
+the exponential ``e^{tA}x`` of the linear map `A` of norm at most `bound`, by Krylov to `tol` per
+unit of time, see `KrylovKit.exponentiate`, as `x` normalised and the logarithm of its norm
 """
-function exact_exp(A, t::Number, x::AbstractArray)
+function exp_scaled(A, bound::Real, t::Number, x::AbstractArray, tol::Real)
     n = norm(x)
     if iszero(n)
-        return x
+        return (x, -Inf)
     end
-    # KrylovKit takes its precision as absolute: the vector of norm one, its norm put back after
-    y, info = KrylovKit.exponentiate(A, t, x / n; tol = rounding_tol, ishermitian = false,
-                                     eager = true)
-    if info.converged == 0
-        error("the exponential of the evolver of an ExactState did not converge in Krylov to " *
-              "$rounding_tol: take smaller steps")
+    # KrylovKit holds its precision as absolute: in pieces along which the norm grows by e^10 at
+    # most, renormalised in between, so that it stays relative however large `t` and `A`
+    m = max(1, ceil(Int, abs(t) * bound / 10))
+    y, scale = x / n, log(n)
+    for _ in 1:m
+        y, info = KrylovKit.exponentiate(A, t / m, y; tol, ishermitian = false, eager = true,
+                                         verbosity = 0)
+        if info.converged == 0
+            error("the exponential of an evolver of an ExactState did not converge in Krylov")
+        end
+        ny = norm(y)
+        if iszero(ny)
+            return (y, -Inf)
+        end
+        y, scale = y / ny, scale + log(ny)
     end
-    return n * y
+    return (y, scale)
 end
 
 """
-the array `x` evolved from `time` for `dt` under the evolver `cs -> x -> Σ_j c_j A_j x` that
-`act` gives for the values `cs` of its time functions `fs`, by the commutator-free Magnus
-integrator of order 4, see `step_coefs`, each exponential by Krylov, in substeps whose error,
-measured against two half substeps, keeps that of an evolution of `duration` below
+the exponential ``e^{tA}x``, see `exp_scaled`
+"""
+function exact_exp(A, bound::Real, t::Number, x::AbstractArray, tol::Real)
+    y, scale = exp_scaled(A, bound, t, x, tol)
+    return exp(scale) * y
+end
+
+"""
+the array `x` evolved from `time` for `dt` under `cs -> Σ_j c_j A_j` that `act` gives for the
+values `cs` of the time functions `fs`, of norm at most `bound(cs)`, by the commutator-free
+Magnus integrator of order 4, see `step_coefs`, its error over `duration` below
 `1000 rounding_tol`
 """
-function magnus_evolved(act, fs, time::Number, dt::Number, duration::Number, x::AbstractArray)
+function magnus_evolved(act, bound, fs, time::Number, dt::Number, duration::Number,
+                        x::AbstractArray)
     if iszero(norm(x))
         return x
     end
-    magnus(t, h, y) = foldl((y, cs) -> exact_exp(act(cs), h, y), step_coefs(fs, t, h, 4);
-                            init = y)
+    # the exponentials to a tenth of the error the substeps are allowed, so that their difference
+    # measures that of the integrator
+    tol = 100 * rounding_tol / abs(duration)
+    magnus(t, h, y) = foldl((y, cs) -> exact_exp(act(cs), bound(cs), h, y, tol),
+                            step_coefs(fs, t, h, 4); init = y)
     # the substeps as fractions of `dt`, from `s` and of length `f`
     s, f = 0.0, 1.0
     while 1 - s > 4 * eps()
@@ -473,9 +508,8 @@ function magnus_evolved(act, fs, time::Number, dt::Number, duration::Number, x::
         if isnan(err)
             error("the evolver of an ExactState gave NaN within a step")
         end
-        # its share of the error of the whole evolution, kept ten times above the noise of the
-        # exponentials, `rounding_tol` each
-        allowed = max(1000 * rounding_tol * abs(h / duration), 10 * rounding_tol)
+        # its share of the error of the whole evolution, above the rounding of the operations
+        allowed = max(800 * rounding_tol * abs(h / duration), 10 * eps())
         if err ≤ allowed
             x, s = halves, s + f
         end
@@ -493,37 +527,28 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::ExactEvolver, state::ExactStat
                      time::Number, dt::Number, step::Int, limits::Limits) where {R <: PM}
     system = state.system
     act(cs) = x -> sum(c * dense_acted(R, system, ts, x) for (c, ts) in zip(cs, pre.terms))
+    bound(cs) = sum(abs(c) * b for (c, b) in zip(cs, pre.bounds))
     # a step taken alone, outside evolve, is the whole evolution
     duration = something(pre.duration, dt)
-    x = isnothing(pre.functions) ? exact_exp(act(ones(length(pre.terms))), dt, state.state) :
-                                   magnus_evolved(act, pre.functions, time, dt, duration,
-                                                  state.state)
+    unit = ones(length(pre.terms))
+    x = isnothing(pre.functions) ?
+        exact_exp(act(unit), bound(unit), dt, state.state, 1000 * rounding_tol / abs(duration)) :
+        magnus_evolved(act, bound, pre.functions, time, dt, duration, state.state)
     return ExactState{R}(system, x, Val(:raw))
 end
 
 """
-the linear map of the operator, the channel or the generator of terms `ts` on the arrays of the
-exact states of representation `R`, see `dense_acted`
-"""
-acting(::Type{R}, system::System, ts::Vector{Term}) where R = x -> dense_acted(R, system, ts, x)
-
-"""
-a bound of the operator norm of the operator of terms `ts`: the sum over its terms of `|coef|`
-times the product of the norms of their blocks, a Jordan-Wigner string having norm one
-"""
-terms_bound(ts::Vector{Term}) =
-    sum(abs(t.coef) * prod((opnorm(b.m) for b in t.blocks); init = 1.0) for t in ts; init = 0.0)
-
-"""
 the eigenvalue of the linear map `A` of the smallest real part, `which = :SR`, or of the largest,
-`:LR`, and its eigenvector, searched by Krylov from `x` to `rounding_tol`, refused when it does
-not converge; `what` names the caller
+`:LR`, and its eigenvector, searched by Krylov from `x` to `rounding_tol`, `why` saying what keeps
+it from converging
 """
-function exact_eigen(A, x::AbstractArray, which::Symbol, hermitian::Bool, what::String)
+function exact_eigen(A, x::AbstractArray, which::Symbol, hermitian::Bool, why::String)
+    # wider than the defaults of KrylovKit, which a spectrum crowded at its end needs
     vals, vecs, info = KrylovKit.eigsolve(A, x / norm(x), 1, which; ishermitian = hermitian,
-                                          tol = rounding_tol)
+                                          tol = rounding_tol, krylovdim = min(length(x), 100),
+                                          maxiter = 1000, verbosity = 0)
     if info.converged == 0
-        error("$what of an ExactState did not converge in Krylov to $rounding_tol")
+        error(why)
     end
     return first(vals), first(vecs)
 end
@@ -549,21 +574,33 @@ function ground_state(hamiltonian, state::ExactState{Pure};
     system = state.system
     ts = lower(system, searched_operator(system, hamiltonian, "ground_state"))
     H = acting(Pure, system, ts)
-    ms = map(orthogonal_to) do m
+    # the states given, orthonormalised once, Gram-Schmidt twice
+    qs = Vector{ComplexF64}[]
+    for m in orthogonal_to
+        if !(m isa Union{ExactState{Pure}, State{Pure}})
+            error("ground_state searches a state orthogonal to pure states, not to a $(typeof(m))")
+        end
         e = m isa ExactState ? m : ExactState(m)
         same_sites(state, e)
-        return e.state
+        v = e.state
+        for _ in 1:2, q in qs
+            v -= q * dot(q, v)
+        end
+        if norm(v) ≤ approximation_tol * norm(e.state)
+            error("the states of orthogonal_to are not independent: give each state once")
+        end
+        push!(qs, v / norm(v))
     end
-    M = isempty(ms) ? zeros(ComplexF64, length(state.state), 0) : reduce(hcat, ms)
-    project(v) = isempty(ms) ? v : v - M * (M \ v)
+    project(v) = foldl((v, q) -> v - q * dot(q, v), qs; init = v)
     # the states given lifted above the spectrum, so that the lowest is orthogonal to them
     c = terms_bound(ts) + 1
-    A = isempty(ms) ? H : v -> (w = project(v); project(H(w)) + c * (v - w))
+    A = isempty(qs) ? H : v -> (w = project(v); project(H(w)) + c * (v - w))
     x = project(state.state)
-    if iszero(norm(x))
+    if norm(x) ≤ approximation_tol * norm(state.state)
         error("ground_state is started from a state the states of orthogonal_to span")
     end
-    _, v = exact_eigen(A, x, :SR, true, "ground_state")
+    _, v = exact_eigen(A, x, :SR, true, "ground_state of an ExactState did not converge in " *
+                                        "Krylov, as on a spectrum crowded at its bottom")
     v = project(v)
     return (energy = real(dot(v, H(v))) / real(dot(v, v)),
             state = normalize(ExactState{Pure}(system, v, Val(:raw))))
@@ -580,7 +617,9 @@ function steady_state(lindbladian, state::ExactState{Mixed};
     system = state.system
     a = searched_operator(system, lindbladian, "steady_state")
     L = acting(Mixed, system, lower(system, superoperator(a)))
-    _, x = exact_eigen(L, state.state, :LR, false, "steady_state")
+    _, x = exact_eigen(L, state.state, :LR, false,
+                       "steady_state of an ExactState did not converge in Krylov: the spectrum " *
+                       "of the Lindbladian near zero is too crowded at this size")
     t = tr(x)
     if abs(t) ≤ rounding_tol * norm(x)
         error("the eigenvector found by steady_state has no trace: the steady state is not " *
@@ -611,17 +650,19 @@ function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
     system = state.system
     a = searched_operator(system, hamiltonian, "thermalize")
     # ρ ↦ Hρ + ρH, whose exponential at -β/2 is e^{-βH/2} ρ e^{-βH/2}
-    K = acting(Mixed, system, lower(system, superoperator(a)))
+    ts = lower(system, superoperator(a))
+    K, bound = acting(Mixed, system, ts), terms_bound(ts)
     x = (step == 1 ? normalize(state) : state).state
     log_trace = 0.
     for k in 0:nsteps - 1
-        x = exact_exp(K, -beta / nsteps / 2, x)
-        t = real(tr(x))
+        # the trace taken apart from the norm, which the exponential may take far beyond floats
+        y, scale = exp_scaled(K, bound, -beta / nsteps / 2, x, 2000 * rounding_tol / abs(beta))
+        t = real(tr(y))
         if !(t > 0)
             error("the trace of the state reached $t at step $(step + k) of thermalize")
         end
-        x /= t
-        log_trace += log(t)
+        x = y / t
+        log_trace += scale + log(t)
     end
     return (; log_trace, state = ExactState{Mixed}(system, x, Val(:raw)))
 end

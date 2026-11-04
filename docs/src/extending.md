@@ -281,7 +281,8 @@ The phases and the measurements reach the state through the methods you give:
   site and of the pairs of them included, making the value of a Hermitian operator real. The
   operator is given as the user wrote it, on the physical sites, which [`map_sites`](@ref)
   places on another system;
-- `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
+- `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates`
+  phase, in one step;
 - [`TensorMixedStates.prepared_evolver`](@ref)`(state::MyState, evolver, mpo_limits; duration)`
   and [`TensorMixedStates.evolve_step`](@ref)`(algo::MyMethod, pre, state::MyState, time, dt,
   step, limits)` evolve the state, for `evolve` and the `Evolve` phase: the first prepares the
@@ -292,7 +293,9 @@ The phases and the measurements reach the state through the methods you give:
 - `ground_state(hamiltonian, state::MyState; kwargs...)` and
   `steady_state(lindbladian, state::MyState; kwargs...)` search the state, the keywords being
   those of the functions for a `State`; the `GroundState` and `SteadyState` phases call them
-  once, the state they return measured as a single step;
+  once, the state they return measured as a single step, and
+  `thermalize(hamiltonian, beta, state::MyState; kwargs...)` gives the thermal state, which the
+  `Thermalize` phase calls one step at a time, with `nsteps = 1` and the number of the step;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes
