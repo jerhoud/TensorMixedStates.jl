@@ -376,6 +376,28 @@ function TensorMixedStates.evolve_step(::DenseStep, pre::PreMPO, state::State{R}
     return State(state, TensorMixedStates.ITensorMPS.MPS(IT.noprime(u * prod(state.state)), s))
 end
 
+# the evolution of the state on another system: its evolver is the operator placed on the
+# doubled system, not a PreMPO, and each step evolves the state there
+TensorMixedStates.prepared_evolver(st::InterleavedState, evolver, mpo_limits) =
+    map_sites(interleaved, evolver)
+
+TensorMixedStates.evolve_step(algo::DenseStep, ev, st::InterleavedState, time, dt, step,
+                              limits) =
+    InterleavedState(st.system, evolve(ev, dt, st.inner; nsteps = 1, algo, limits))
+
+Base.@kwdef struct CreateInterleaved <: TensorMixedStates.AbstractPhase
+    name::String = "interleaved"
+    time_start = nothing
+    final_measurements = []
+end
+
+# the fermions occupied on sites 1 and 3, and the ancillas empty
+interleaved_start() = InterleavedState(System(3, Fermion()), State{Pure}(System(6, Fermion()),
+                                       ["Occ", "Emp", "Emp", "Emp", "Occ", "Emp"]))
+
+TensorMixedStates.run_phase(::CreateInterleaved, sim::Simulation, ::Int) =
+    Simulation(sim, interleaved_start())
+
 # one that records what each step is given and multiplies the state by `factor`
 struct StepRecorder <: TensorMixedStates.EvolutionAlgorithm
     calls::Vector{Any}
@@ -472,6 +494,28 @@ end
     @test real(expect1(ρ, Z)) ≈ fill(-γ^2 / (γ^2 + 2Ω^2), 2)
 end
 
+@testset "The evolution of a state of one's own" begin
+    # by evolve and an Evolve phase, against the State it represents; the hop from 1 to 3 goes
+    # past site 2 and the ancillas, which the strings must account for
+    h = dag(C)(1) * C(3) + dag(C)(3) * C(1) + dag(C)(1) * C(2) + dag(C)(2) * C(1) + 0.3 * N(2)
+    st = State{Pure}(System(3, Fermion()), ["Occ", "Emp", "Occ"])
+    ops = [N(1), N(2), dag(C)(1) * C(3)]
+    ref = evolve(-im * h, 0.5, st; nsteps = 2, algo = DenseStep())
+    wide = interleaved_start()
+    out = evolve(-im * h, 0.5, wide; nsteps = 2, algo = DenseStep())
+    @test out isa InterleavedState
+    @test all(expect(out, o) ≈ expect(ref, o) for o in ops)
+    in_tmp() do
+        phases = [CreateInterleaved(),
+                  Evolve(evolver = -im * h, duration = 0.5, nsteps = 2, algo = DenseStep())]
+        sim = runTMS(SimData(; name = "wide", phases))
+        @test sim.state isa InterleavedState
+        @test all(expect(sim.state, o) ≈ expect(ref, o) for o in ops)
+        @test occursin("The evolver was prepared in", read("wide/log", String))
+    end
+    @test_throws MethodError evolve(-im * h, 0.5, wide; nsteps = 1)
+end
+
 # An extension of every interface, each method typing only its own type and what the
 # documentation asks for: an ambiguity with a method of TMS shows here before a user meets it,
 # which a call would only show when made
@@ -512,6 +556,8 @@ TensorMixedStates.run_step(p::LooseSteps, sim, prepared) = sim
 struct LooseEvolution <: TensorMixedStates.EvolutionAlgorithm end
 
 TensorMixedStates.evolve_step(::LooseEvolution, pre, state, time, dt, step, limits) = state
+TensorMixedStates.prepared_evolver(st::LooseState, evolver, mpo_limits) = evolver
+TensorMixedStates.evolve_step(::LooseEvolution, pre, st::LooseState, time, dt, step, limits) = st
 
 struct LooseSearch <: TensorMixedStates.SearchAlgorithm end
 

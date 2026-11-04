@@ -56,7 +56,8 @@ prepared_operator(::State, x, ::Limits = Limits()) =
     prepared_evolver(state, evolver, mpo_limits = Limits())
 
 the `PreMPO` of the evolver of `state`, see `prepared_operator`, with its time functions: an
-operator, a vector of terms `[A, B => g]`, a term `A => g`, or the `PreMPO` of one of them
+operator, a vector of terms `[A, B => g]`, a term `A => g`, or the `PreMPO` of one of them. A
+state of one's own adds a method returning what its `evolve_step` takes as `pre`.
 """
 prepared_evolver(state::State, a::Union{IndexedOp, PreMPO, MPO}, mpo_limits::Limits = Limits()) =
     prepared_operator(state, a, mpo_limits)
@@ -129,7 +130,8 @@ end
 the state after one step of `dt` from `time` by the method `algo`, under the evolver `pre`,
 whose time functions are `pre.functions`, one per term, `nothing` when it does not depend on
 time, see `make_mpo`, `step` being the number of the step, from 1, and `limits` its limits, see
-`step_limits`. An `EvolutionAlgorithm` of one's own adds a method.
+`step_limits`. An `EvolutionAlgorithm` of one's own adds a method, and so does a state of
+one's own, `pre` being what its `prepared_evolver` returned.
 """
 function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Number, step::Int,
                      limits::Limits)
@@ -239,7 +241,7 @@ operator or an operator with its real function of time, `[A, B => g]` for ``A + 
     evolve([-im * H0, -im * H1 => t -> cos(t)], 1., state; time_step = 0.05,
            algo = ApproxW(order = 4))
 """
-function evolve(evolver, duration::Number, state::State; algo::EvolutionAlgorithm = Tdvp(),
+function evolve(evolver, duration::Number, state::AbstractState; algo::EvolutionAlgorithm = Tdvp(),
                 nsteps::Union{Nothing, Int} = nothing, time_step::Union{Nothing, Number} = nothing,
                 limits::Limits = Limits(), mpo_limits::Limits = Limits(), time::Number = 0.,
                 step::Int = 1)
