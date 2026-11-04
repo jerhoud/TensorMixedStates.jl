@@ -461,7 +461,9 @@ function magnus_evolved(act, fs, time::Number, dt::Number, duration::Number, x::
         t, h = time + s * dt, f * dt
         whole = magnus(t, h, x)
         halves = magnus(t + h / 2, h / 2, magnus(t, h / 2, x))
-        err = norm(halves - whole) / norm(halves)
+        # the local error of order 5 in the length of the substep: the two halves kept err by
+        # about a fifteenth of their difference to the whole step
+        err = norm(halves - whole) / norm(halves) / 15
         if isnan(err)
             error("the evolver of an ExactState gave NaN within a step")
         end
@@ -471,7 +473,6 @@ function magnus_evolved(act, fs, time::Number, dt::Number, duration::Number, x::
         if err ≤ allowed
             x, s = halves, s + f
         end
-        # the local error of order 5 in the length of the substep
         f *= clamp(0.9 * (allowed / max(err, eps()))^(1 / 5), 0.25, 2.0)
         if f < 1e-9
             error("an evolver depending on time varies too fast for the substeps of an " *
