@@ -83,20 +83,24 @@ end
 """
     phase_operators(sites, locals)
 
-the totals of the sum that `counting` describes, twice its values, in increasing order, and the
-`K` products over its sites of ``e^{2i\\pi k t/K}``, `t` twice the value on the site, for `k`
-in `0:K-1`, the totals lying within `K` successive integers: their mean values give the
-probabilities of the totals, their mean as gates the dephasing in the eigenbasis of the sum
+the totals of the sum that `counting` describes, twice its values, in increasing order, the `K`
+products over its sites of ``e^{2i\\pi k t/P}``, `t` twice the value on the site, for `k` in
+`0:K-1`, and their period `P = gK`: the totals lie within `K` successive multiples of `g`, the
+greatest common divisor of the gaps between the values of each site. Their mean values give the
+probabilities of the totals, their mean as gates the dephasing in the eigenbasis of the sum.
 """
 function phase_operators(sites, locals)
     totals = foldl((s, l) -> Set(x + t for x in s for t in first(l)), locals; init = Set(0))
     t0, t1 = extrema(totals)
-    K = t1 - t0 + 1
+    g = gcd([ t - first(ts) for (ts, _) in locals for t in ts ])
+    g = iszero(g) ? 1 : g
+    K = (t1 - t0) ÷ g + 1
     us = map(0:K-1) do k
-        phase(t, p) = Operator{1}("Count$k", sum(cis(2π * k * u / K) * q for (u, q) in zip(t, p)))
+        phase(t, p) = Operator{1}("Count$k",
+                                  sum(cis(2π * k * u / (g * K)) * q for (u, q) in zip(t, p)))
         prod(phase(l...)(i) for (i, l) in zip(sites, locals))
     end
-    return sort(collect(totals)), us
+    return sort(collect(totals)), us, g * K
 end
 
 """

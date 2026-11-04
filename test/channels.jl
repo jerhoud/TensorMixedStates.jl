@@ -1039,6 +1039,10 @@ end
                 State{Mixed}(System(k, Qubit()), "+"))
     @test purity(out) ≈ sum((binomial(k, m) / 2^k)^2 for m in 0:k)
     @test maxlinkdim(out) ≤ k + 1
+    # as the mean of k + 1 gates, one per total reached, the totals of ΣZ being 4 apart
+    zs = TMS.counting(System(k, Qubit()), TMS.distributed(sum(onesite(Z, i, k) for i in 1:k),
+                                                           Tuple(1:k)), "Dephase")
+    @test length(TMS.phase_operators(zs...)[2]) == k + 1
 end
 
 @testset "Exponentials of superoperators" begin
