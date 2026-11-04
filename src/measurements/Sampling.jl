@@ -189,9 +189,12 @@ project_parity(state::State{Pure}, P, s; limits::Limits) =
 """
     project_count(state, sites, locals, T; limits)
 
-the state projected on the total `T` of the sum that `counting` describes, and normalized: a
+the state projected on the total `T` of a sum of operators of one site, and normalized: a
 density matrix by the MPO of the projector on its kets, then on its bras, see `on_mixed_index`.
-A state of one's own adds a method, which `collapse` takes for such a sum.
+`sites` are the sites of the sum, increasing, and `locals` gives for each the pair of twice the
+eigenvalues of its operator there, as integers, and of the projectors on their eigenspaces,
+matrices on that site, `T` being twice the total. A state of one's own adds a method, which
+`collapse` takes for such a sum.
 """
 project_count(state::State{Pure}, sites, locals, T; limits::Limits) =
     normalize(apply(count_mpo(state.system, sites, locals, T), state; limits))
