@@ -70,7 +70,7 @@ function generic_kraus(a::GenericOp{IsChannel}, sites)
     elseif a isa ScalarOp
         return [ scale(sqrt(a.coef), k) for k in generic_kraus(a.arg, sites) ]
     elseif a isa Dephase
-        values, _ = eigenspaces(matrix(a.arg, sites...), "Dephase", a.arg)
+        values, _ = dephase_projectors(a, sites)
         return [ Proj(a.arg => λ) for λ in values ]
     elseif a isa SumOp
         parts = [ generic_kraus(x, sites) for x in a.subs ]

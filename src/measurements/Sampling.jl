@@ -27,81 +27,6 @@ function measured_spectrum(system::System, op::IndexedOp{IsOperator}, what::Stri
 end
 
 """
-    even_on(system, i, m)
-
-whether the matrix `m` of an operator on site `i` of `system` is even, so that it commutes with
-the operators of other sites
-"""
-even_on(system::System, i::Int, m::AbstractMatrix) = parity_of(m, matrix(F, system[i])) == 0
-
-"""
-    involution(system, op)
-
-`(c, P)` when `op` is `c P`, `c` real and not zero and `P` a product of Hermitian involutions of
-one site on distinct sites, two at least, each even, so that they commute, and diagonal on a
-system conserving something; `nothing` otherwise
-"""
-function involution(system::System, op::IndexedOp{IsOperator})
-    c = scalarcoef(op)
-    fs = IndexedOp{IsOperator}[]
-    for x in prodsubs(scalararg(op))
-        c *= scalarcoef(x)
-        a = scalararg(x)
-        if !(a isa AtIndex && length(a.index) == 1)
-            return nothing
-        end
-        i = only(a.index)
-        m = matrix(a.op, system[i])
-        if !(nearly(m, m') && nearly(m * m, one(m)) && even_on(system, i, m)) ||
-           (is_charged(system) && !nearly(m, Diagonal(diag(m))))
-            return nothing
-        end
-        push!(fs, a)
-    end
-    sites = [ only(a.index) for a in fs ]
-    if length(sites) < 2 || !allunique(sites) || !isreal(c) || iszero(c)
-        return nothing
-    end
-    return (float(real(c)), ProdOp(fs))
-end
-
-"""
-    counting(system, op, what)
-
-the sites of `op` and, for each, twice the eigenvalues of its part on that site, as integers,
-with the projectors on their eigenspaces, when `op` is a sum of operators of one site on two
-sites at least, each even, so that they commute, of half integer eigenvalues and diagonal on a
-system conserving something; `nothing` otherwise. `what` names the caller in the refusals.
-"""
-function counting(system::System, op::IndexedOp{IsOperator}, what::String)
-    c = scalarcoef(op)
-    parts = Dict{Int, Vector{Any}}()
-    for x in sumsubs(scalararg(op))
-        a = scalararg(x)
-        if !(a isa AtIndex && length(a.index) == 1)
-            return nothing
-        end
-        push!(get!(parts, only(a.index), []), c * scalarcoef(x) * a.op)
-    end
-    sites = sort(collect(keys(parts)))
-    if length(sites) < 2
-        return nothing
-    end
-    locals = map(sites) do i
-        m = matrix(sum(parts[i]), system[i])
-        if !even_on(system, i, m) || (is_charged(system) && !nearly(m, Diagonal(diag(m))))
-            return nothing
-        end
-        values, ps = eigenspaces(m, what, op, " on $(system[i])")
-        if any(λ -> abs(2λ - round(2λ)) > 2 * spectral_tol(values), values)
-            return nothing
-        end
-        return (round.(Int, 2 .* values), ps)
-    end
-    return any(isnothing, locals) ? nothing : (sites, locals)
-end
-
-"""
     counting_probabilities(state, sites, locals)
 
 the totals, twice the values of the sum that `counting` describes, with their probabilities, in
@@ -110,15 +35,10 @@ read off the mean values of the `K` products over the sites of ``e^{2i\\pi k t/K
 the value on the site
 """
 function counting_probabilities(state::AbstractState, sites, locals)
-    totals = foldl((s, l) -> Set(x + t for x in s for t in first(l)), locals; init = Set(0))
-    t0, t1 = extrema(totals)
-    K = t1 - t0 + 1
-    φ = map(0:K-1) do k
-        phase(t, p) = Operator{1}("Count$k", sum(cis(2π * k * u / K) * q for (u, q) in zip(t, p)))
-        expect(state, prod(phase(l...)(i) for (i, l) in zip(sites, locals)); complex = true)
-    end
-    return [ T => real(sum(φ[k+1] * cis(-2π * k * T / K) for k in 0:K-1)) / K
-             for T in sort(collect(totals)) ]
+    totals, us = phase_operators(sites, locals)
+    K = length(us)
+    φ = [ expect(state, u; complex = true) for u in us ]
+    return [ T => real(sum(φ[k+1] * cis(-2π * k * T / K) for k in 0:K-1)) / K for T in totals ]
 end
 
 """
@@ -126,32 +46,23 @@ end
 
 the MPO of the projector on the total `T` of the sum that `counting` describes, on the pure
 indices of `system`: its bond carries the totals of the sites on its left that can still reach
-`T`
+`T`, see `count_bonds`
 """
 function count_mpo(system::System, sites, locals, T::Int)
     n = length(system)
     at = Dict(i => k for (k, i) in enumerate(sites))
-    steps(i) = haskey(at, i) ? first(locals[at[i]]) : [0]
-    reached = [ Set(0) ]
-    for i in 1:n
-        push!(reached, Set(s + t for s in reached[i] for t in steps(i)))
-    end
-    bonds = Vector{Vector{Int}}(undef, n + 1)
-    bonds[n + 1] = [T]
-    for i in n:-1:1
-        bonds[i] = sort([ s for s in reached[i] if any(t -> (s + t) in bonds[i + 1], steps(i)) ])
-    end
+    bonds = count_bonds(n, sites, locals, T)
     links = [ is_charged(system) ? Index(QN() => length(b); tags = "Count,l=$(i - 1)") :
                                    Index(length(b); tags = "Count,l=$(i - 1)")
               for (i, b) in enumerate(bonds) ]
     # real for real projectors, which keep a real state real
-    T = promote_type(Float64, (eltype(p) for (_, ps) in locals for p in ps)...)
+    E = promote_type(Float64, (eltype(p) for (_, ps) in locals for p in ps)...)
     ts = map(1:n) do i
         x = siteind(Pure, system, i)
         d = dim(x)
         right = Dict(s => q for (q, s) in enumerate(bonds[i + 1]))
         blocks = haskey(at, i) ? collect(zip(locals[at[i]]...)) : [ (0, Matrix{Float64}(I, d, d)) ]
-        a = zeros(T, d, d, length(bonds[i]), length(bonds[i + 1]))
+        a = zeros(E, d, d, length(bonds[i]), length(bonds[i + 1]))
         for (p, s) in enumerate(bonds[i]), (t, m) in blocks
             q = get(right, s + t, nothing)
             if !isnothing(q)
