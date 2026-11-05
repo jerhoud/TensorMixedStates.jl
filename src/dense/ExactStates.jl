@@ -287,6 +287,47 @@ end
 hs_fidelity(a::ExactState{Mixed}, b::ExactState{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
+# with a State, converted exactly, as the measurements of an exact state against an MPS ask
+inner(a::ExactState, b::State) = inner(a, ExactState(b))
+inner(a::State, b::ExactState) = inner(ExactState(a), b)
+dot(a::ExactState, b::State) = inner(a, b)
+dot(a::State, b::ExactState) = inner(a, b)
+fidelity(a::ExactState, b::State) = fidelity(a, ExactState(b))
+fidelity(a::State, b::ExactState) = fidelity(ExactState(a), b)
+hs_fidelity(a::ExactState, b::State) = hs_fidelity(a, ExactState(b))
+hs_fidelity(a::State, b::ExactState) = hs_fidelity(ExactState(a), b)
+
+# as for a State, on what conserves nothing, not normalised
+function inner(a::ExactState{Pure}, op::IndexedOp{IsOperator}, b::ExactState{Pure})
+    same_sites(a, b)
+    system = weaken(b.system, ())
+    check_indices(system, op)
+    return dot(a.state, dense_acted(Pure, system, lower(system, op), b.state))
+end
+
+function inner(a::ExactState{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}},
+               b::ExactState{Mixed})
+    same_sites(a, b)
+    system = weaken(b.system, ())
+    check_indices(system, op)
+    return dot(a.state, dense_acted(Mixed, system, lower(system, op), b.state))
+end
+
+function inner(::ExactState{Mixed}, op::IndexedOp{IsOperator}, ::ExactState{Mixed})
+    name = obs_name(op)
+    error("between density matrices the operator $name is ambiguous: write Gate($name) for the " *
+          "map ρ ↦ KρK† or Evolver($name) for ρ ↦ Kρ + ρK†")
+end
+
+dot(a::ExactState, op::IndexedOp, b::ExactState) = inner(a, op, b)
+
+# as for a State, exact: its sites following those of `a`, the operators of `a` on the left on
+# fermions, which the order of kron gives
+⊗(a::ExactState{R}, b::ExactState{R}) where {R <: PM} =
+    ExactState{R}(a.system ⊗ b.system, kron(a.state, b.state), Val(:raw))
+⊗(a::ExactState{Pure}, b::ExactState{Mixed}) = mix(a) ⊗ b
+⊗(a::ExactState{Mixed}, b::ExactState{Pure}) = a ⊗ mix(b)
+
 """
 the matrix of `state` across the cut between sites `cut` and `cut + 1`: the sites up to `cut` on
 the rows, the others on the columns, the ket and the bra of each together on a mixed state; a
