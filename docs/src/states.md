@@ -37,6 +37,15 @@ random_state
 partial_trace
 ```
 
+## Exact states
+
+```@docs
+ExactState
+State(::ExactState)
+maxlinkdim(::ExactState)
+Vector(::ExactState{Pure})
+```
+
 ## Prepared states
 
 Besides the product states the local states give, TMS builds states with an exact MPS of small

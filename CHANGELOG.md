@@ -12,6 +12,7 @@ the reference article.
 
 ### Added
 
+- `ExactState{R}`, the state of a small system held whole, without truncation, for checking a program written for MPS (`SimData(backend = ExactState)`), evolving without time step error and studying small systems.
 - `apply_algo = "zipup"` for `apply` of an MPO and `ApproxW`: faster when truncating much, less accurate.
 - `random_state(Pure, system, states, linkdims)`, a random pure state in the sector of `states`.
 - `ConvertState{R}`, a phase taking the state to the representation `R`; `ToMixed` is `ConvertState{Mixed}`.
