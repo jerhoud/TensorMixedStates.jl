@@ -80,6 +80,7 @@ function run_phase(phase::ConvertState{R}, sim::Simulation, ::Int) where R
     else
         as_representation(R, as_backend(phase.backend, st); phase.limits)
     end
+    log_ignored(sim, converted, phase, (:limits,))
     return with_state(sim, phase.on, converted)
 end
 
@@ -202,8 +203,11 @@ function prepare_phase(phase::Gates, sim::Simulation)
     names = state_names(phase.on)
     mps = filter(name -> state_named(sim, name) isa State, names)
     prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in mps ]
-    return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates,
-                      setdiff(names, mps))
+    own = setdiff(names, mps)
+    for name in own
+        log_ignored(sim, state_named(sim, name), phase, (:limits,))
+    end
+    return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates, own)
 end
 
 # a product that vanishes, of no step, takes one to give the null state

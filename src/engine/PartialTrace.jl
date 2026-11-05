@@ -143,6 +143,16 @@ increasing order, which `permute_sites` gives once the trace is taken.
 """
 function partial_trace(state::State{Mixed}; keep::Union{Nothing, AbstractVector{Int}} = nothing,
                        trace_out::Union{Nothing, AbstractVector{Int}} = nothing)
+    kept = kept_positions(state, keep, trace_out)
+    return traced(trace_signs(state, kept), kept)
+end
+
+"""
+    kept_positions(state, keep, trace_out)
+
+the positions `partial_trace` keeps, given `keep` or `trace_out`, refused as its docstring says
+"""
+function kept_positions(state::AbstractState, keep, trace_out)
     if isnothing(keep) == isnothing(trace_out)
         error("partial_trace takes the sites to keep, keep = positions, or those to trace out, " *
               "trace_out = positions, one of the two")
@@ -161,7 +171,7 @@ function partial_trace(state::State{Mixed}; keep::Union{Nothing, AbstractVector{
     if isempty(kept)
         error("partial_trace cannot trace out every site of a state")
     end
-    return traced(trace_signs(state, kept), kept)
+    return kept
 end
 
 # not mixed behind the caller's back, the result being a state
