@@ -321,6 +321,10 @@ function inner(::ExactState{Mixed}, op::IndexedOp{IsOperator}, ::ExactState{Mixe
 end
 
 dot(a::ExactState, op::IndexedOp, b::ExactState) = inner(a, op, b)
+inner(a::ExactState, op::IndexedOp, b::State) = inner(a, op, ExactState(b))
+inner(a::State, op::IndexedOp, b::ExactState) = inner(ExactState(a), op, b)
+dot(a::ExactState, op::IndexedOp, b::State) = inner(a, op, b)
+dot(a::State, op::IndexedOp, b::ExactState) = inner(a, op, b)
 
 # as for a State, exact: its sites following those of `a`, the operators of `a` on the left on
 # fermions, which the order of kron gives

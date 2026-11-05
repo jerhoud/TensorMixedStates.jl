@@ -384,7 +384,7 @@ the reference state `ref` of the measurement `what` weakened to what it and the 
 both conserve, as the function of the measurement takes them, a reference of other sites being
 refused
 """
-function reference_on(state::AbstractState, ref::State, what::String)
+function reference_on(state::AbstractState, ref::AbstractState, what::String)
     target = common_symmetries(state.system, ref.system)
     r = weaken(ref, target)
     if r.system ≠ weaken(state.system, target)
@@ -412,7 +412,7 @@ the measurement of the fidelity with the reference state `ref`, see `fidelity`, 
 on what both conserve; given a `name`, the reference is the value of that name, a state named in
 the simulation, `missing` while there is none
 """
-Fidelity(ref::State) = StateMeasurement("Fidelity", function (state)
+Fidelity(ref::AbstractState) = StateMeasurement("Fidelity", function (state)
     r = reference_on(state, ref, "Fidelity")
     return st -> fidelity(st, r)
 end)
@@ -428,6 +428,8 @@ or between the states conserving nothing when it changes the charges by no defin
 """
 applied_element(ref::State{Pure}, a::IndexedOp{IsOperator}, state::State{Pure}) =
     or_on_plain((r, s) -> complex(inner(r, apply(a, s))), ref, state)
+applied_element(ref::AbstractState, a::IndexedOp{IsOperator}, state::AbstractState) =
+    complex(inner(ref, a, state))
 
 """
     matrix_element(ref, op, state)
@@ -436,8 +438,8 @@ applied_element(ref::State{Pure}, a::IndexedOp{IsOperator}, state::State{Pure}) 
 the vector of its values on each site for an operator of one site, `missing` where it is not
 defined
 """
-function matrix_element(ref::State, op, state::State)
-    if !(ref isa State{Pure} && state isa State{Pure})
+function matrix_element(ref::AbstractState, op, state::AbstractState)
+    if !(representation(ref) === Pure && representation(state) === Pure)
         error("Overlap with an operator is the matrix element of two pure states")
     end
     if op isa SimpleOp
@@ -463,14 +465,14 @@ the state `|ψ⟩`, the correlations ``\\langle A^\\dagger(0) op(t) \\rangle`` a
     Overlap(:excited)
     Overlap(:kicked, Z)            # ⟨kicked|Z_i|state⟩ for every site i
 """
-Overlap(ref::State) = StateMeasurement("Overlap", function (state)
+Overlap(ref::AbstractState) = StateMeasurement("Overlap", function (state)
     r = reference_on(state, ref, "Overlap")
     return st -> complex(inner(r, st))
 end)
 
 Overlap(name::Symbol) = on_named("Overlap", name, (st, r) -> complex(inner(r, st)))
 
-Overlap(ref::State, op::Union{IndexedOp{IsOperator}, SimpleOp}) =
+Overlap(ref::AbstractState, op::Union{IndexedOp{IsOperator}, SimpleOp}) =
     StateMeasurement("Overlap", function (state)
         r = reference_on(state, ref, "Overlap")
         return st -> matrix_element(r, op, st)
