@@ -11,11 +11,12 @@ the path of `file`, relative to the directory of the simulation
 in_dir(sim::Simulation, file::String) = joinpath(getfield(sim, :run).dir, file)
 
 """
-    LoadState(; file, statename = "state", limits, on = :state, name, time_start,
+    LoadState(; file, statename = "state", limits, backend, on = :state, name, time_start,
                 final_measurements)
 
 a phase that loads a state from an HDF5 file written by `SaveState` or `save_state`, see
-`load_state`, and truncates it to `limits`, unless they are the default `Limits()`.
+`load_state`, of the type it was written with unless `backend` is given, and truncates it to
+`limits`, unless they are the default `Limits()`.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -23,6 +24,8 @@ a phase that loads a state from an HDF5 file written by `SaveState` or `save_sta
   another simulation saved is found under `../othername/`
 - `statename`: the name of the state in the file
 - `limits`: the truncation of the state once loaded, see `Limits`
+- `backend`: the type of states to take the state to, `State` (MPS) or `ExactState` (default
+  `nothing`, the type of the file kept)
 - `on`: the name the state takes in the simulation, `:state` for the current state, another
   for a reference state, `c.ref` to the measurements, see `Fidelity`
 
@@ -30,6 +33,7 @@ a phase that loads a state from an HDF5 file written by `SaveState` or `save_sta
 
     LoadState(file = "ground.h5")
     LoadState(file = "../other/ground.h5", statename = "gs", on = :ground)
+    LoadState(file = "ground.h5", backend = ExactState)
 """
 @kwdef struct LoadState <: AbstractPhase
     name::String = "Loading state"
@@ -38,15 +42,24 @@ a phase that loads a state from an HDF5 file written by `SaveState` or `save_sta
     file::String
     statename::String = "state"
     limits::Limits = Limits()
+    backend::Union{Nothing, Type} = nothing
     on::Symbol = :state
+    LoadState(name, time_start, final_measurements, file, statename, limits, backend, on) =
+        new(name, time_start, final_measurements, file, statename, limits, check_backend(backend),
+            on)
 end
+
+# the fields of 2.0, before backend
+LoadState(name, time_start, final_measurements, file, statename, limits, on) =
+    LoadState(name, time_start, final_measurements, file, statename, limits, nothing, on)
 
 provided_values(phase::LoadState) = phase.on === :state ? () : (phase.on,)
 
 function run_phase(phase::LoadState, sim::Simulation, ::Int)
     st = load_state(in_dir(sim, phase.file), phase.statename)
-    # not truncated at the default limits, which a state of an extension need not support
-    return with_state(sim, phase.on, phase.limits == Limits() ? st : truncate(st; phase.limits))
+    # the type of the file kept unless backend is given, the limits applied by as_backend
+    return with_state(sim, phase.on, as_backend(something(phase.backend, backend_of(st)), st;
+                                                phase.limits))
 end
 
 """

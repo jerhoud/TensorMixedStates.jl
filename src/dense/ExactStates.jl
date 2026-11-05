@@ -43,10 +43,13 @@ end
 ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing) where {R <: PM} =
     ExactState(State{R}(args...); max_dense)
 
-ExactState(state::State{Pure}; max_dense::Union{Nothing, Int} = nothing) =
+# the limits, of the conversion between types of states, without use
+ExactState(state::State{Pure}; max_dense::Union{Nothing, Int} = nothing,
+           limits::Limits = Limits()) =
     ExactState{Pure}(state.system, Vector(state; max_dense), Val(:raw))
 
-ExactState(state::State{Mixed}; max_dense::Union{Nothing, Int} = nothing) =
+ExactState(state::State{Mixed}; max_dense::Union{Nothing, Int} = nothing,
+           limits::Limits = Limits()) =
     ExactState{Mixed}(state.system, full_matrix(state; max_dense), Val(:raw))
 
 function ExactState(system::System, x::AbstractVecOrMat{<:Number})
@@ -71,6 +74,15 @@ State(state::ExactState; limits::Limits = Limits()) =
     dense_state(state.system, state.state; limits)
 
 show(io::IO, s::ExactState{R}) where {R <: PM} = print(io, "ExactState{$R}($(s.system))")
+
+representation(::ExactState{R}) where {R <: PM} = R
+
+# for CreateState and ConvertState, see as_representation, the limits without use
+as_representation(::Type{R}, state::ExactState{R}; limits::Limits = Limits()) where {R <: PM} =
+    state
+as_representation(::Type{Mixed}, state::ExactState{Pure}; limits::Limits = Limits()) = mix(state)
+as_representation(::Type{Pure}, ::ExactState{Mixed}; limits::Limits = Limits()) =
+    error("a mixed state cannot be made pure: ask for Mixed rather than Pure")
 
 trace(state::ExactState{Pure}) = dot(state.state, state.state)
 trace(state::ExactState{Mixed}) = tr(state.state)

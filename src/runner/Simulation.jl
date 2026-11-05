@@ -34,12 +34,31 @@ and `c.time`, those the run gives, `c.step` and `c.rng`, and `sim.data`
 const reserved_values = (:state, :time, :step, :rng, :data)
 
 """
-    RunData(dir, outputs, log, redirect, checkpointer, provided)
+    check_backend(backend)
+
+`backend`, refused unless it is a type of states named without its representation, as
+`ExactState`
+"""
+function check_backend(backend)
+    t = backend isa Type ? Base.unwrap_unionall(backend) : nothing
+    if !(t isa DataType && t <: AbstractState && !isabstracttype(t))
+        error("a backend is a type of states, as State or ExactState, not $(repr(backend))")
+    elseif backend isa DataType && backend.name.wrapper !== backend
+        error("a backend is named without its representation: backend = $(nameof(backend))")
+    end
+    return backend
+end
+
+check_backend(::Nothing) = nothing
+
+"""
+    RunData(dir, outputs, log, redirect, checkpointer, provided, backend)
 
 what the simulations of a run share: its directory, empty for a run whose output is redirected
 to the stream `redirect`, its outputs, its log, its checkpointing, the values its phases
-provide, the phase being run and the time it started from, when its step being run started, in
-seconds of `time()`, whether it stopped, the warnings its log received, the imaginary parts of
+provide, the type of states its phases create by default, see `SimData`, the phase being run
+and the time it started from, when its step being run started, in seconds of `time()`, whether
+it stopped, the warnings its log received, the imaginary parts of
 Hermitian measurements dropped and not yet reported, how many and the largest, as
 `(imaginary part, measurement, time)`, and the lists of measurements of the phase being run made
 into `Measure`s, see `phase_output`
@@ -51,6 +70,7 @@ mutable struct RunData
     redirect::Union{Nothing, IO}
     checkpointer::Checkpointer
     provided::Vector{Symbol}
+    backend::Type
     phase::Int
     phase_time::Number
     step_start::Float64
@@ -61,9 +81,9 @@ mutable struct RunData
     measures::IdDict{Any, Vector}
 end
 
-RunData(dir, outputs, log, redirect, checkpointer, provided) =
-    RunData(dir, outputs, log, redirect, checkpointer, provided, 0, 0., time(), false, 0, 0,
-            nothing, IdDict{Any, Vector}())
+RunData(dir, outputs, log, redirect, checkpointer, provided, backend) =
+    RunData(dir, outputs, log, redirect, checkpointer, provided, backend, 0, 0., time(), false, 0,
+            0, nothing, IdDict{Any, Vector}())
 
 """
     Simulation(sim, state[, time = sim.time]; values...)
@@ -101,6 +121,13 @@ function Simulation(sim::Simulation, state::Union{Nothing, AbstractState}, time:
     end
     return Simulation(state, time, merge(getfield(sim, :values), values), getfield(sim, :run))
 end
+
+"""
+    run_backend(sim)
+
+the type of states the phases of the run of `sim` create by default, see `SimData`
+"""
+run_backend(sim::Simulation) = getfield(sim, :run).backend
 
 """
     with_values(sim; values...)

@@ -174,6 +174,10 @@ the description of a simulation, which `runTMS` runs.
 - `seed`: the seed of the random number generator of the run, `sim.rng`, an integer of zero or
   above, drawn at random by default and written in the file `stamp`, so that a run can be made
   again
+- `backend`: the type of states `CreateState` makes when its own `backend` is not given, `State`
+  (MPS) by default or `ExactState`, so that the phases of a program need no change to run on
+  another backend, `LoadState` keeping the type of its file and a phase the backend cannot run
+  raising an error
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
@@ -198,9 +202,11 @@ struct SimData
     final_measurements
     format::String
     seed::Union{Nothing, Integer}
+    backend::Type
     phases::Vector{Any}
     provided::Vector{Symbol}
-    function SimData(name, description, time_start, final_measurements, format, seed, phases)
+    function SimData(name, description, time_start, final_measurements, format, seed, backend,
+                     phases)
         # which Julia 1.10 refuses
         if !isnothing(seed) && seed < 0
             error("the seed of a simulation is an integer of zero or above, got $seed")
@@ -209,14 +215,18 @@ struct SimData
         provided = check_values(ps, final_measurements)
         check_names(ps)
         return new(name, description, time_start, final_measurements, check_format(format), seed,
-                   ps, provided)
+                   check_backend(backend), ps, provided)
     end
 end
 
+# the fields of 2.0, before backend
+SimData(name, description, time_start, final_measurements, format, seed, phases) =
+    SimData(name, description, time_start, final_measurements, format, seed, State, phases)
+
 SimData(; name::AbstractString = "simulation", description::AbstractString = "",
         time_start::Number = 0., final_measurements = [], format::AbstractString = "%.13g",
-        seed::Union{Nothing, Integer} = nothing, phases) =
-    SimData(name, description, time_start, final_measurements, format, seed, phases)
+        seed::Union{Nothing, Integer} = nothing, backend = State, phases) =
+    SimData(name, description, time_start, final_measurements, format, seed, backend, phases)
 
 show(io::IO, s::SimData) =
     print(io, """
@@ -227,6 +237,7 @@ show(io::IO, s::SimData) =
             final_measurements = $(s.final_measurements),
             format = $(repr(s.format)),
             seed = $(repr(s.seed)),
+            backend = $(s.backend),
             phases =
         $(s.phases))""")
 
@@ -733,7 +744,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                                    (nothing, 0, something(sd.seed, rand(RandomDevice(), UInt64)))
         c = Checkpointer(dir, seed; interval = checkpoint_interval, max_time)
         outputs = Outputs(; dir, sd.format)
-        run = RunData(dir, outputs, logio, output, c, sd.provided)
+        run = RunData(dir, outputs, logio, output, c, sd.provided, sd.backend)
         if resume
             resume!(c, commit, generation)
             run.phase_time = commit.phase_time
@@ -758,6 +769,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         # each launch, so that the log of a run resumed elsewhere says where each part ran
         log_line(run, (resume ? "\n" : "") * "Run on $(gethostname()), $(Dates.now()), Julia " *
                       "$VERSION, TensorMixedStates $(pkgversion(TensorMixedStates))")
+        if sd.backend !== State
+            log_line(run, "States created as $(nameof(sd.backend)) by default")
+        end
         if !isnothing(stale)
             log_line(run, "Warning: the run before, process $(stale[2]) on $(stale[1]), ended " *
                           "without removing running")
