@@ -351,13 +351,16 @@ end
 
 note in the log the options `names` of `phase` that the type of `state` ignores, see
 `ignored_options`, those given only: an algorithm other than the default `Tdvp()`, limits other
-than `Limits()`
+than `Limits()`, a link dimension of `randomize` other than 0
 """
 function log_ignored(sim::Simulation, state::AbstractState, phase, names)
     given(x::Limits) = x ≠ Limits()
     given(x::EvolutionAlgorithm) = x ≠ Tdvp()
+    given(x::Integer) = !iszero(x)
     given(x) = !isnothing(x)
-    ignored = [ n for n in names if n in ignored_options(state) && given(getfield(phase, n)) ]
+    label(n) = n === :randomize ? "the link dimension of randomize" : string(n)
+    ignored = [ label(n) for n in names
+                if n in ignored_options(state) && given(getfield(phase, n)) ]
     if !isempty(ignored)
         log_message(sim, "$(nameof(typeof(state))) ignores $(join(ignored, ", ", " and "))")
     end

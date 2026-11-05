@@ -212,8 +212,9 @@ representation(::State{R}) where R = R
 """
     ignored_options(state)
 
-the options of the phases, among `:algo`, `:limits` and `:mpo_limits`, that the type of `state`
-accepts without use, which a run notes in its log: none by default
+the options of the phases, among `:algo`, `:limits`, `:mpo_limits` and `:randomize`, its link
+dimension, that the type of `state` accepts without use, which a run notes in its log: none by
+default
 """
 ignored_options(::AbstractState) = ()
 

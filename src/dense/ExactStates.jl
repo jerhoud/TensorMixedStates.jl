@@ -16,9 +16,9 @@ system conserving something, what rounding leaves in the sectors they forbid dro
 truncation limits and the methods that functions take for a `State` are accepted and ignored;
 evolutions are exact up to `1e-10`, and a search stays in the sector of the charges declared of
 the state it starts from, the symmetries not declared broken as DMRG does.
-`random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws one
-uniformly in its sector whatever the link dimension, and its `maxlinkdim` is that of the whole
-space it holds. Its memory grows as ``d^n``, ``d^{2n}`` for a density matrix, and a search or an
+`random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws a pure one
+uniformly in its sector, a mixed one from a uniform purification as for a `State`, whatever the
+link dimension, and its `maxlinkdim` is that of the whole space it holds. Its memory grows as ``d^n``, ``d^{2n}`` for a density matrix, and a search or an
 evolution keeps tens of copies of it, see the manual.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
@@ -74,10 +74,16 @@ end
 """
     State(exact::ExactState; limits = Limits())
 
-the MPS of the exact state `exact`, normalised, truncated to `limits`.
+the MPS of the exact state `exact`, of its norm or its trace, truncated to `limits`.
+
+# Examples
+
+    State(ExactState{Pure}(System(4, Qubit()), "+"); limits = Limits(maxdim = 2))
 """
-State(state::ExactState; limits::Limits = Limits()) =
-    dense_state(state.system, state.state; limits)
+function State(state::ExactState{R}; limits::Limits = Limits()) where {R <: PM}
+    a, idx, combiners = dense_legs(state.system, state.state)
+    return State{R}(state.system, dense_mps(a, idx, siteinds(R, state.system), limits; combiners))
+end
 
 show(io::IO, s::ExactState{R}) where {R <: PM} = print(io, "ExactState{$R}($(s.system))")
 
@@ -88,6 +94,10 @@ representation(::ExactState{R}) where {R <: PM} = R
 
 the largest link dimension of an MPS of the system of the state, without truncation: that of
 the whole space it holds
+
+# Examples
+
+    maxlinkdim(ExactState{Pure}(System(4, Qubit()), "Up"))      # 4
 """
 function maxlinkdim(state::ExactState)
     ds = [ representation(state) === Mixed ? dim(s)^2 : dim(s) for s in state.system.sites ]
@@ -95,15 +105,15 @@ function maxlinkdim(state::ExactState)
 end
 
 # the approximations of an MPS, without use for a state held whole
-ignored_options(::ExactState) = (:algo, :limits, :mpo_limits)
+ignored_options(::ExactState) = (:algo, :limits, :mpo_limits, :randomize)
 
 # as partial_trace of a State, the density matrix of the sites kept
 function partial_trace(state::ExactState{Mixed};
                        keep::Union{Nothing, AbstractVector{Int}} = nothing,
                        trace_out::Union{Nothing, AbstractVector{Int}} = nothing)
     kept = kept_positions(state, keep, trace_out)
-    return ExactState{Mixed}(System(state.system.sites[kept]),
-                             reduced_density_matrix(state, kept; max_dense = nothing), Val(:raw))
+    return ExactState{Mixed}(System(state.system.sites[kept]), traced_matrix(state, kept),
+                             Val(:raw))
 end
 
 partial_trace(::ExactState{Pure}; kwargs...) =
@@ -176,6 +186,10 @@ a copy of the vector of the exact pure `state`, as `Vector` of a `State` gives i
 matrix of a mixed state is given by `reduced_density_matrix(ρ, 1:n)`
 
 - `max_dense`: the number of elements beyond which the vector is refused, none by default
+
+# Examples
+
+    Vector(ExactState{Pure}(System(2, Qubit()), "+"))           # [0.5, 0.5, 0.5, 0.5]
 """
 function Vector(state::ExactState{Pure}; max_dense::Union{Nothing, Int} = nothing)
     check_elements(float(length(state.state)), "the vector of a state of " *
@@ -395,14 +409,22 @@ function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{
     end
     kept = collect(positions)
     check_reduced(state, kept, max_dense)
+    return unit_trace(traced_matrix(state, kept))
+end
+
+"""
+the density matrix of the sites at the increasing positions `kept` of `state`, of the trace of
+`state`
+"""
+function traced_matrix(state::ExactState{R}, kept::Vector{Int}) where {R <: PM}
     if R === Pure
         m = partition_matrix(state, kept)
-        return unit_trace(m * m')
+        return m * m'
     end
     x, rdims, perm, a, b = kept_first(state, kept)
     n = length(rdims)
     t = reshape(permutedims(reshape(x, rdims..., rdims...), [perm; perm .+ n]), a, b, a, b)
-    return unit_trace(sum(t[:, k, :, k] for k in 1:b))
+    return sum(t[:, k, :, k] for k in 1:b)
 end
 
 """
