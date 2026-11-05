@@ -148,6 +148,38 @@ function mix(state::ExactState{Pure}; limits::Limits = Limits(),
     return ExactState{Mixed}(state.system, state.state * state.state', Val(:raw))
 end
 
+# as for a State, exact: the limits without use
+(a::Number * b::ExactState{R}) where {R <: PM} = ExactState{R}(b.system, a * b.state, Val(:raw))
+(a::ExactState * b::Number) = b * a
+(a::ExactState / b::Number) = inv(b) * a
+-(a::ExactState) = -1 * a
+
+function +(a::ExactState{R}, b::ExactState{R}; limits::Limits = Limits()) where {R <: PM}
+    if a.system ≠ b.system
+        error("the two states are on different systems, $(system_difference(a.system, b.system))")
+    end
+    return ExactState{R}(a.system, a.state + b.state, Val(:raw))
+end
+
+-(a::ExactState{R}, b::ExactState{R}; limits::Limits = Limits()) where {R <: PM} =
+    +(a, -b; limits)
+
+truncate(state::ExactState; limits::Limits) = state
+
+"""
+    Vector(state::ExactState{Pure}; max_dense = nothing)
+
+a copy of the vector of the exact pure `state`, as `Vector` of a `State` gives it; the density
+matrix of a mixed state is given by `reduced_density_matrix(ρ, 1:n)`
+
+- `max_dense`: the number of elements beyond which the vector is refused, none by default
+"""
+function Vector(state::ExactState{Pure}; max_dense::Union{Nothing, Int} = nothing)
+    check_elements(float(length(state.state)), "the vector of a state of " *
+                   "$(length(state.system)) sites", max_dense)
+    return copy(state.state)
+end
+
 dag(::ExactState{Pure}) = error("dag is meaningless on pure representations")
 dag(state::ExactState{Mixed}) = ExactState{Mixed}(state.system, state.state', Val(:raw))
 
