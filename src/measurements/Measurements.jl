@@ -572,7 +572,7 @@ same, at a far lower cost and for any number of sites.
 
     von_neumann_entropy(state, [2, 5])
 """
-function von_neumann_entropy(state::AbstractState, positions::AbstractVector;
+function von_neumann_entropy(state::AbstractState, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
     if isempty(positions)
@@ -588,6 +588,11 @@ function von_neumann_entropy(state::AbstractState, positions::AbstractVector;
     p = max.(λ, 0)
     return shannon_entropy(p / sum(p))
 end
+
+# other vectors converted, so that a method of one's own typing its positions is reached
+von_neumann_entropy(state::AbstractState, positions::AbstractVector;
+                    max_dense::Union{Nothing, Int} = dense_bound(state)) =
+    von_neumann_entropy(state, Vector{Int}(positions); max_dense)
 
 """
     log_negativity(state, a, b; max_dense)
