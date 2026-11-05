@@ -106,7 +106,8 @@ representation, for `CreateState`, `ConvertState` and `LoadState`; truncated to 
 backend that approximates, unless they are the default. Two types of one's own convert through
 `State`, or by a method naming both.
 """
-as_backend(::Type{T}, state::T; limits::Limits = Limits()) where {T <: AbstractState} = state
+as_backend(::Type{T}, state::T; limits::Limits = Limits()) where {T <: AbstractState} =
+    limits == Limits() ? state : truncate(state; limits)
 as_backend(::Type{State}, state::State; limits::Limits = Limits()) =
     limits == Limits() ? state : truncate(state; limits)
 as_backend(::Type{State}, state::AbstractState; limits::Limits = Limits()) = State(state; limits)
