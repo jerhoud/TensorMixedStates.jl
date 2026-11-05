@@ -19,7 +19,9 @@ manipulations of systems and states, a rich set of sites and operators that the 
 extend, and the algorithms that go with them: ground states by DMRG, Hamiltonian and
 Lindbladian evolution by TDVP and others, thermal states by evolution in imaginary time, and
 the application of gates, noisy ones included. It prepares states such as Fermi seas, GHZ,
-Dicke and AKLT states, and the fully mixed state of a sector.
+Dicke and AKLT states, and the fully mixed state of a sector. Small systems can also be held
+whole, without truncation, by `ExactState`, which runs the same programs exactly to check a
+simulation.
 Being built on ITensor, it computes fast and runs in parallel naturally. Its syntax for
 operators is meant to make observables, gates, Hamiltonians and Lindbladians easy to write,
 and an optional high level interface expresses a whole simulation in a few lines.

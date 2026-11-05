@@ -23,6 +23,8 @@ Version 2.0 is a rewrite of the library: a program written for 1.x needs the edi
 - Measurements of expectation values, correlations, entanglement entropies, purities, fidelities
   and reduced density matrices.
 - Conserved quantities, with weak and strong symmetries for open systems.
+- Exact states of small systems, `ExactState`, which run the same programs without truncation,
+  to check a simulation (`SimData(backend = ExactState)`) or study a small system exactly.
 - An optional high level interface, which writes a simulation in a few lines, with its
   measurements, its output files and checkpoints, from which an interrupted simulation resumes.
 
