@@ -126,7 +126,8 @@ mixed one, which `LinearAlgebra` diagonalizes or exponentiates:
 λ = eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
 ```
 
-The whole script runs exactly with `SimData(backend = ExactState)`, its states held as
-`ExactState`, see [Exact states](@ref manual-exact-states): its measurements, against those of the
-MPS on the same system, tell the error of the truncation and of the time step. A script checked
+With `SimData(backend = ExactState)`, the `CreateState` phases of the script make
+`ExactState`s, see [Exact states](@ref manual-exact-states), a state loaded by `LoadState` keeping
+the type of its file: the measurements, against those of the MPS on the same system, tell the
+error of the truncation and of the time step. A script checked
 so on a small system then runs at the sizes no exact computation reaches.

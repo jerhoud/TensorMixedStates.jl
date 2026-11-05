@@ -22,8 +22,8 @@ a phase that creates the state of the simulation.
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
   see `random_state` (default 0, none): a pure state randomized from `state`, a mixed one drawn
   from a purification starting from its local states, which `Mixture` and `FullyMixed` do not
-  give, or without `state` any state of the system; an `ExactState` is drawn uniformly whatever
-  `randomize`
+  give, or without `state` any state of the system; an `ExactState` is drawn as
+  `random_state(ExactState{R}, …)` draws it, whatever the link dimension
 - `backend`: the type of states holding the state, `State` (MPS) or `ExactState`, by default that
   of the simulation, see `SimData`
 - `on`: the name the state created takes, see `CopyState` (default `:state`)
@@ -151,6 +151,10 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
         end
         # the backend first, then the representation, as ConvertState does
         st = as_representation(R, as_backend(backend, phase.state))
+        if n ≠ 0 && !applicable(random_state, st, n)
+            error("$(nameof(typeof(st))) randomizes no state: randomize it with backend = State " *
+                  "and convert it with ConvertState")
+        end
         n == 0 ? st : random_state(st, n; rng)
     elseif isnothing(phase.system)
         error("CreateState needs a system or a State")
@@ -161,5 +165,6 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     end
     state = as_backend(backend, state)
     log_message(sim, "Created $state")
+    log_ignored(sim, state, phase, (:randomize,))
     return with_state(sim, phase.on, state)
 end

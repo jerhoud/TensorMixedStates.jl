@@ -700,14 +700,14 @@ end
         sim = runTMS(SimData(name = "cm", phases = [
             CreateState(ψ), ConvertState{Mixed}(backend = TMS.ExactState)]))
         @test sim.state isa TMS.ExactState{Mixed} && sim.state.state ≈ e.state * e.state'
-        # cos(0.3) |000⟩ + sin(0.3) |110⟩, cut to its largest Schmidt value
+        # cos(0.3) |000⟩ + sin(0.3) |110⟩, cut to its largest Schmidt value, not normalized again
         v = zeros(8)
         v[1], v[7] = cos(0.3), sin(0.3)
         sim = runTMS(SimData(name = "cp", phases = [
             CreateState(TMS.ExactState(sys, v); backend = TMS.ExactState),
             ConvertState{Pure}(backend = State, limits = Limits(maxdim = 1))]))
         @test sim.state isa State{Pure} && maxlinkdim(sim.state) == 1
-        @test abs(Vector(sim.state)[1]) ≈ 1
+        @test abs(Vector(sim.state)[1]) ≈ cos(0.3)
         # charged fermions, against their vector contracted here
         f = System(3, Fermion(conserve = N))
         φ = random_state(State{Pure}(f, ["Occ", "Emp", "Occ"]), 3; rng = Xoshiro(7))
@@ -764,6 +764,17 @@ end
         @test occursin("ExactState ignores algo and limits", read("given/log", String))
         evolve_with("default")
         @test !occursin("ignores", read("default/log", String))
+        # the link dimension of randomize, and the limits of Gates once for its two states
+        sys2 = System(2, Qubit())
+        runTMS(SimData(name = "gl", seed = 1, backend = TMS.ExactState, phases = [
+            CreateState{Pure}(sys2, "Up"; randomize = 4),
+            CreateState{Pure}(sys2, "Up"; on = :b),
+            Gates(gates = X(1), limits = Limits(maxdim = 2), on = [:state, :b]),
+            SaveState(file = "s.h5"),
+            LoadState(file = "s.h5", backend = TMS.ExactState, limits = Limits(maxdim = 2))]))
+        log = read("gl/log", String)
+        @test occursin("ExactState ignores the link dimension of randomize", log)
+        @test count("ExactState ignores limits", log) == 2
     end
     # the density matrix of the sites kept, against partial_trace of the State, on qubits and on
     # charged fermions, by keep and by trace_out
@@ -775,6 +786,18 @@ end
         @test e.system == partial_trace(ρ; args...).system
         @test e.state ≈ TMS.ExactState(partial_trace(ρ; args...)).state atol = 1e-12
     end
+    # of the trace of the state, as for a State, a traceless one included
+    ρa, ρb = mix(State{Pure}(System(3, Qubit()), "Up")), mix(State{Pure}(System(3, Qubit()), "+"))
+    for (ex, st) in ((2 * TMS.ExactState(ρa), 2 * ρa),
+                     (TMS.ExactState(ρa) - TMS.ExactState(ρb), ρa - ρb))
+        @test partial_trace(ex; keep = [1]).state ≈
+              TMS.ExactState(partial_trace(st; keep = [1])).state atol = 1e-12
+    end
+    # converted to an MPS of its norm or its trace
+    @test norm(State(2 * TMS.ExactState(State{Pure}(System(3, Qubit()), "+")))) ≈ 2
+    @test trace(State(2 * TMS.ExactState(ρa))) ≈ 2
+    δ = TMS.ExactState(ρa) - TMS.ExactState(ρb)
+    @test TMS.ExactState(State(δ)).state ≈ δ.state atol = 1e-12
     @test_throws "needs a mixed representation" partial_trace(TMS.ExactState(State{Pure}(
         System(2, Qubit()), "Up")); keep = [1])
     @test_throws "every site" partial_trace(TMS.ExactState(q); trace_out = 1:4)
@@ -793,6 +816,12 @@ end
     rng = Xoshiro(11)
     w = [ abs2(random_state(TMS.ExactState{Pure}, q, 4; rng).state[1]) for _ in 1:2000 ]
     @test sum(w) / length(w) ≈ 1 / 8 atol = 0.01
+    # its second moment, 2 / (d (d + 1)) on the sphere, about 4.7 standard deviations wide
+    @test sum(w .^ 2) / length(w) ≈ 2 / 72 atol = 0.005
+    # a mixed state of the Hilbert-Schmidt measure, of mean purity 2d / (d² + 1)
+    p = [ real(LA.tr(random_state(TMS.ExactState{Mixed}, System(2, Qubit()), 4; rng).state^2))
+          for _ in 1:2000 ]
+    @test sum(p) / length(p) ≈ 8 / 17 atol = 0.01
     # in the sector of the local states, pure and mixed, the mixed one block diagonal over the
     # sectors its purification reaches, against the number of particles counted here
     f = System(3, Fermion(conserve = N))

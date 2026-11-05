@@ -619,7 +619,7 @@ A whole program runs on it with `SimData(backend = ExactState)`: each `CreateSta
 state an `ExactState`, which the phases and the measurements then act on as on a `State`, and
 the log notes the options of a phase that only an MPS uses. One phase does it with
 `backend = ExactState` in `CreateState`, `ConvertState` or `LoadState`, and
-`ConvertState{Pure}(backend = State)` comes back to an MPS. Outside a simulation,
+`ConvertState{R}(backend = State)` comes back to an MPS. Outside a simulation,
 `ExactState{R}(system, states)` takes the descriptions of `State{R}`, and `ExactState(ψ)` and
 `State(e)` convert a state either way:
 
@@ -636,10 +636,13 @@ The functions of a `State` take it, with these differences:
   duration, and a search converges to a residual of `1e-13`;
 - a search stays in the sector of the charges the system declares, the other symmetries of the
   Hamiltonian being broken, as DMRG breaks them;
-- `random_state(ExactState{R}, …)` and `randomize` draw a state uniformly in its sector,
+- `random_state(ExactState{R}, …)` and `randomize` draw a pure state uniformly in its sector,
+  and a mixed one from a uniform purification on the system doubled, as the MPS draws it,
   whatever the link dimension asked;
 - `maxlinkdim` is that of an MPS holding the whole space, and `truncate` leaves the state as it
-  is.
+  is;
+- `⊗` and `permute_sites` do not take it, and it is given an operator itself, never its `PreMPO`
+  or its MPO.
 
 Its size limits it: a pure state of ``n`` sites of dimension ``d`` holds ``d^n`` complex numbers
 of 16 bytes, a density matrix ``d^{2n}``, so on qubits

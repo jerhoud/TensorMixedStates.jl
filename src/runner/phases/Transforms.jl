@@ -204,8 +204,9 @@ function prepare_phase(phase::Gates, sim::Simulation)
     mps = filter(name -> state_named(sim, name) isa State, names)
     prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in mps ]
     own = setdiff(names, mps)
-    for name in own
-        log_ignored(sim, state_named(sim, name), phase, (:limits,))
+    # once for each backend
+    for st in unique(backend_of, [ state_named(sim, name) for name in own ])
+        log_ignored(sim, st, phase, (:limits,))
     end
     return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates, own)
 end
