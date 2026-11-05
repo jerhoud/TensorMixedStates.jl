@@ -642,8 +642,7 @@ The functions of a `State` take it, with these differences:
 - `maxlinkdim` is that of an MPS holding the whole space, and `truncate` leaves the state as it
   is;
 - `inner`, `fidelity` and `hs_fidelity` compare it with a `State`, converted exactly;
-- `permute_sites` does not take it, and it is given an operator itself, never its `PreMPO` or
-  its MPO.
+- it is given an operator itself, never its `PreMPO` or its MPO.
 
 Its size limits it: a pure state of ``n`` sites of dimension ``d`` holds ``d^n`` complex numbers
 of 16 bytes, a density matrix ``d^{2n}``, so on qubits

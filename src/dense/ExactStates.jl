@@ -328,6 +328,38 @@ dot(a::ExactState, op::IndexedOp, b::ExactState) = inner(a, op, b)
 ⊗(a::ExactState{Pure}, b::ExactState{Mixed}) = mix(a) ⊗ b
 ⊗(a::ExactState{Mixed}, b::ExactState{Pure}) = a ⊗ mix(b)
 
+# as for a State, exact, the limits without use: site `k` moved to position `p[k]`, each pair of
+# sites `p` puts in the other order giving the sign of their exchange on fermions, on the kets
+# and on the bras of a density matrix
+function permute_sites(state::ExactState{R}, p::AbstractVector{<:Integer};
+                       limits::Limits = Limits()) where {R <: PM}
+    n = length(state)
+    if sort(p) ≠ 1:n
+        error("permute_sites needs a permutation of the positions 1 to $n, not $p")
+    end
+    sites = state.system.sites
+    dims = [ dim(s) for s in sites ]
+    # an array on the axes of the sites, in their order, as the vector of kron orders them
+    on_sites(x) = permutedims(reshape(x, reverse(dims)...), n:-1:1)
+    in_kron(a) = vec(permutedims(a, n:-1:1))
+    # the exponent of the sign of each basis state
+    parities = [ collect(fermion_parities(s)) for s in sites ]
+    on_axis(v, k) = reshape(v, ntuple(j -> j == k ? length(v) : 1, n))
+    exponent = zeros(Int, dims...)
+    for k in 1:n, l in k+1:n
+        if p[k] > p[l] && any(isodd, parities[k]) && any(isodd, parities[l])
+            exponent = exponent .+ on_axis(parities[k], k) .* on_axis(parities[l], l)
+        end
+    end
+    # for each basis state of the result, the one of `state` it comes from, and its sign
+    q = invperm(p)
+    from = in_kron(permutedims(on_sites(1:prod(dims)), q))
+    sign = in_kron(@. ifelse(iseven(exponent), 1.0, -1.0))[from]
+    x = state.state
+    y = R === Pure ? sign .* x[from] : (sign * sign') .* x[from, from]
+    return ExactState{R}(System(sites[q]), y, Val(:raw))
+end
+
 """
 the matrix of `state` across the cut between sites `cut` and `cut + 1`: the sites up to `cut` on
 the rows, the others on the columns, the ket and the bra of each together on a mixed state; a
