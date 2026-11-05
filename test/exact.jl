@@ -668,3 +668,90 @@ end
     _, up = ground_state(-sum(Z(i) * Z(i + 1) for i in 1:n-1), TMS.ExactState{Pure}(sys, "Up"))
     @test abs2(up.state[1]) > 0.9999
 end
+
+@testset "Backends of the states of a run" begin
+    in_tmp() do
+        sys = System(3, Qubit())
+        ψ = State{Pure}(sys, "+")
+        e = TMS.ExactState(ψ)
+        # created, from a description or a state, the type given or that of the run
+        sim = runTMS(SimData(name = "c", phases = [
+            CreateState{Pure}(sys, "+"; backend = TMS.ExactState)]))
+        @test sim.state isa TMS.ExactState{Pure} && sim.state.state ≈ e.state
+        sim = runTMS(SimData(name = "s", phases = [CreateState(ψ; backend = TMS.ExactState)]))
+        @test sim.state.state ≈ e.state
+        sim = runTMS(SimData(name = "e", phases = [CreateState(e)]))
+        @test sim.state isa State{Pure} && Vector(sim.state) ≈ e.state
+        mixture = Mixture([0.25 => "Up", 0.75 => "Dn"])
+        sim = runTMS(SimData(name = "m", phases = [
+            CreateState{Mixed}(sys, mixture; backend = TMS.ExactState)]))
+        @test sim.state.state ≈ TMS.ExactState{Mixed}(sys, mixture).state
+        # a whole program on the backend of the run, against the same on MPS converted, the
+        # mixing keeping the backend of the state
+        circuit = CX(1, 2) * H(3)
+        phases = [CreateState{Pure}(sys, "+"), Gates(gates = circuit), ToMixed(),
+                  Gates(gates = X(2))]
+        mps = runTMS(SimData(; name = "mps", phases))
+        exact = runTMS(SimData(; name = "exact", backend = TMS.ExactState, phases))
+        @test exact.state isa TMS.ExactState{Mixed}
+        @test exact.state.state ≈ TMS.ExactState(mps.state).state atol = 1e-12
+        @test occursin("States created as ExactState by default", read("exact/log", String))
+        # converted, backend and representation at once, or back to an MPS truncated once
+        sim = runTMS(SimData(name = "cm", phases = [
+            CreateState(ψ), ConvertState{Mixed}(backend = TMS.ExactState)]))
+        @test sim.state isa TMS.ExactState{Mixed} && sim.state.state ≈ e.state * e.state'
+        # cos(0.3) |000⟩ + sin(0.3) |110⟩, cut to its largest Schmidt value
+        v = zeros(8)
+        v[1], v[7] = cos(0.3), sin(0.3)
+        sim = runTMS(SimData(name = "cp", phases = [
+            CreateState(TMS.ExactState(sys, v); backend = TMS.ExactState),
+            ConvertState{Pure}(backend = State, limits = Limits(maxdim = 1))]))
+        @test sim.state isa State{Pure} && maxlinkdim(sim.state) == 1
+        @test abs(Vector(sim.state)[1]) ≈ 1
+        # charged fermions, against their vector contracted here
+        f = System(3, Fermion(conserve = N))
+        φ = random_state(State{Pure}(f, ["Occ", "Emp", "Occ"]), 3; rng = Xoshiro(7))
+        sim = runTMS(SimData(name = "f", phases = [
+            CreateState(φ), ConvertState{Mixed}(backend = TMS.ExactState)]))
+        @test sim.state.state ≈ dense_vector(φ) * dense_vector(φ)' atol = 1e-12
+        # a state given randomized once a State, an exact state saved and loaded with limits
+        sim = runTMS(SimData(name = "rs", seed = 1, phases = [CreateState(e; randomize = 2)]))
+        @test sim.state isa State{Pure} && norm(sim.state) ≈ 1
+        runTMS(SimData(name = "we", phases = [CreateState(e; backend = TMS.ExactState),
+                                              SaveState(file = "e.h5")]))
+        sim = runTMS(SimData(name = "le", phases = [
+            LoadState(file = "../we/e.h5", limits = Limits(maxdim = 1))]))
+        @test sim.state isa TMS.ExactState{Pure} && sim.state.state ≈ e.state
+        # an exact run stopped after each step resumes as the uninterrupted one
+        sd(name) = SimData(; name, backend = TMS.ExactState, phases)
+        ref = runTMS(sd("ref"))
+        sim = run_through(sd("chk"); max_time = -1)
+        @test sim.state.state == ref.state.state
+        @test count("Resuming from the checkpoint", read("chk/log", String)) > 0
+        # the positional constructors of 2.0
+        @test SimData("p", "", 0., [], "%.13g", nothing, [CreateState(ψ)]).backend === State
+        @test CreateState("c", nothing, [], Pure, sys, "Up", 0, :state).backend === nothing
+        @test CreateState{Pure}("c", nothing, [], Pure, sys, "Up", 0, :state).on === :state
+        @test LoadState("l", nothing, [], "s.h5", "state", Limits(), :state).backend === nothing
+        # loaded as written, or converted
+        runTMS(SimData(name = "w", phases = [CreateState(ψ), SaveState(file = "s.h5")]))
+        sim = runTMS(SimData(name = "l", phases = [LoadState(file = "../w/s.h5")]))
+        @test sim.state isa State{Pure}
+        sim = runTMS(SimData(name = "lx", phases = [
+            LoadState(file = "../w/s.h5", backend = TMS.ExactState)]))
+        @test sim.state isa TMS.ExactState{Pure} && sim.state.state ≈ e.state
+        # refused: a random exact state, a backend with its representation or not a type, a
+        # mixed state made pure
+        @test_throws "as a State only" runTMS(SimData(name = "r", phases = [
+            CreateState{Pure}(sys, "Up"; randomize = 2, backend = TMS.ExactState)]))
+        @test_throws "without its representation" CreateState{Pure}(
+            sys, "Up"; backend = TMS.ExactState{Pure})
+        @test_throws "a type of states" SimData(backend = 3, phases = [CreateState(ψ)])
+        for b in (TMS.AbstractState, Union{}, Union{State, TMS.ExactState})
+            @test_throws "a type of states" CreateState(ψ; backend = b)
+        end
+        @test_throws "cannot be made pure" runTMS(SimData(name = "p", phases = [
+            CreateState{Mixed}(sys, "Up"; backend = TMS.ExactState),
+            ConvertState{Pure}(backend = State)]))
+    end
+end

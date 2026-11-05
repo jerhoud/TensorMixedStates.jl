@@ -202,6 +202,13 @@ end
 
 State(state::State{R}, st::MPS) where R = State{R}(state.system, st)
 
+"""
+    representation(state)
+
+the representation of `state`, `Pure` or `Mixed`, whatever the type holding it
+"""
+representation(::State{R}) where R = R
+
 show(io::IO, s::State{R}) where R =
     print(io, "State{$R}($(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
 

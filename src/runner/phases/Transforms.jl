@@ -4,34 +4,40 @@
 export ConvertState, ToMixed, Weaken, PartialTrace, Gates
 
 """
-    ConvertState{R}(; limits, on, name, time_start, final_measurements)
+    ConvertState{R}(; limits, backend, on, name, time_start, final_measurements)
 
 a phase that takes the state to the representation `R`, `Pure` or `Mixed`: a pure state is mixed,
 see `mix`, a mixed one refused if `R` is `Pure`, a state already in `R` only truncated; the state
-converted is truncated to `limits` unless they are the default `Limits()`. `ToMixed` is
-`ConvertState{Mixed}`.
+converted is truncated to `limits` unless they are the default `Limits()`. Given `backend`, it
+takes the state to that type of states first, then to `R`. `ToMixed` is `ConvertState{Mixed}`.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
-- `limits`: the truncation of the state converted, see `Limits`
+- `limits`: the truncation of the state converted, see `Limits`, applied once, by the last step
+  that approximates
+- `backend`: the type of states to take the state to, `State` (MPS) or `ExactState` (default
+  `nothing`, the type of the state kept)
 - `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
 # Examples
 
     ToMixed(limits = Limits(cutoff = 1e-10, maxdim = 10))
     ConvertState{Pure}(limits = Limits(maxdim = 10))
+    ConvertState{Mixed}(backend = ExactState)
 """
 struct ConvertState{R <: PM} <: AbstractPhase
     name::String
     time_start::Union{Nothing, Number}
     final_measurements
     limits::Limits
+    backend::Union{Nothing, Type}
     on::Symbol
-    function ConvertState{R}(name, time_start, final_measurements, limits, on) where {R <: PM}
+    function ConvertState{R}(name, time_start, final_measurements, limits, backend,
+                             on) where {R <: PM}
         if !isconcretetype(R)
             error("ConvertState needs a representation: ConvertState{Pure} or ConvertState{Mixed}")
         end
-        return new{R}(name, time_start, final_measurements, limits, on)
+        return new{R}(name, time_start, final_measurements, limits, check_backend(backend), on)
     end
 end
 
@@ -39,11 +45,15 @@ end
 ConvertState{R}(; name::String = "Switching to $(lowercase(string(nameof(R)))) state " *
                                  "representation",
                 time_start::Union{Nothing, Number} = nothing, final_measurements = [],
-                limits::Limits = Limits(), on::Symbol = :state) where {R <: PM} =
-    ConvertState{R}(name, time_start, final_measurements, limits, on)
+                limits::Limits = Limits(), backend = nothing, on::Symbol = :state) where {R <: PM} =
+    ConvertState{R}(name, time_start, final_measurements, limits, backend, on)
+
+# the fields of ToMixed in 2.0, before backend
+ConvertState{R}(name, time_start, final_measurements, limits, on) where {R <: PM} =
+    ConvertState{R}(name, time_start, final_measurements, limits, nothing, on)
 
 """
-    ToMixed(; limits, on, name, time_start, final_measurements)
+    ToMixed(; limits, backend, on, name, time_start, final_measurements)
 
 the phase `ConvertState{Mixed}`, which takes the state to the mixed representation
 
@@ -55,11 +65,22 @@ const ToMixed = ConvertState{Mixed}
 
 function run_phase(phase::ConvertState{R}, sim::Simulation, ::Int) where R
     st = state_named(sim, phase.on)
-    if st isa State{R}
+    # refused before a conversion of the whole state
+    if R === Pure && representation(st) === Mixed
+        error("a mixed state cannot be made pure: ask for Mixed rather than Pure")
+    elseif isnothing(phase.backend) && representation(st) === R
         only = phase.limits == Limits() ? "" : ", only truncated"
         log_message(sim, "The state is already $(lowercase(string(nameof(R))))$only")
     end
-    return with_state(sim, phase.on, as_representation(R, st; phase.limits))
+    # the limits applied once, by the last step that approximates
+    converted = if isnothing(phase.backend)
+        as_representation(R, st; phase.limits)
+    elseif representation(st) === R
+        as_backend(phase.backend, st; phase.limits)
+    else
+        as_representation(R, as_backend(phase.backend, st); phase.limits)
+    end
+    return with_state(sim, phase.on, converted)
 end
 
 """

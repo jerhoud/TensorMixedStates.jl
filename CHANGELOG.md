@@ -25,6 +25,8 @@ the reference article.
 - The page Bibliography of the documentation lists the articles the methods of TMS come from, with what each gives it.
 - `evolve` and the `Evolve` phase take a state of one's own, through its methods of `prepared_evolver` and `evolve_step`.
 - The `GroundState`, `SteadyState`, `Thermalize` and `Gates` phases take a state of one's own, through its `ground_state`, `steady_state`, `thermalize` and `apply`.
+- `backend`, the type of states holding the state, is taken by `CreateState`, `ConvertState`, `LoadState` and `SimData`, which gives the default of `CreateState`.
+- `CreateState` takes a state of one's own, through its `representation`, its `as_representation` and its conversions from and to `State`.
 - `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
 - `max_dense`, the number of elements of the largest dense matrix a function builds, `nothing` for no bound, is taken by `matrix(op, system)`, `Vector`, `reduced_density_matrix`, `von_neumann_entropy`, `log_negativity`, `probabilities`, `sample(state, op)`, `collapse`, `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`, a matrix of 4096 × 4096 by default, and by `mix`, without bound by default.
 

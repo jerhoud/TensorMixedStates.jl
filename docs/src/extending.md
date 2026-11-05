@@ -264,9 +264,14 @@ mark)`, lets a resumed run go on where the checkpoint left it, rather than start
 
 ## States of one's own
 
-A state of your own, of a representation of its own, is a subtype of
-[`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of its
-physical sites, which a phase of your own creates, see [Phases of one's own](@ref own-phases).
+A state of your own, a backend of its own holding a state as `State` holds it in an MPS, is a
+subtype of [`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of
+its physical sites. Its representation, `Pure` or `Mixed`, says what the state is, and so what
+the results of a program mean; the backend says how it is held and computed, which leaves the
+results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
+states of the `CreateState` phases of a program on your backend without changing its phases,
+which then need the methods below; `CreateState(…; backend = MyState)` does it for one phase,
+besides a phase of your own creating the state, see [Phases of one's own](@ref own-phases).
 TMS reads that system to save the state, to choose the threading, to log what weakening
 changes, and to put the reference of `Fidelity` or `Overlap` on the system of the measured
 state. It need not be the one the state keeps its tensors on: a mixed state held as a pure state
@@ -275,6 +280,20 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
+- `TensorMixedStates.representation(state::MyState)` gives the representation of the state,
+  `Pure` or `Mixed`, the type being best written `MyState{R}`;
+- `MyState(state::State; limits)` and `State(state::MyState; limits)` convert the state from an
+  MPS and to one, for `CreateState`, which takes a state to the backend of the simulation unless
+  given its own, and for `ConvertState` and `LoadState` given a `backend`, `limits` truncating
+  the result of a backend that approximates. Two types of one's own convert through `State`,
+  unless a method of `TensorMixedStates.as_backend(::Type{Other}, state::MyState; limits)` names
+  both: a method naming one of them only would be ambiguous with that of another package. A
+  backend that approximates also gives `as_backend(::Type{MyState}, state::MyState; limits)`,
+  which truncates the state to `limits` for `ConvertState` and `LoadState`, and which otherwise
+  leaves it as it is;
+- `TensorMixedStates.as_representation(R, state::MyState; limits)` takes the state to the
+  representation `R` for `CreateState` and `ConvertState`, a pure state mixed, a mixed one
+  refused for `Pure`;
 - `TensorMixedStates.expect_value(state, op::TensorMixedStates.IndexedOp)` computes the
   expectation value of an operator placed on sites, normalised by the trace, as a complex
   number, which `expect`, `measure`, and so `output`, ask for, those of the operators of one

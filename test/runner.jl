@@ -1068,7 +1068,7 @@ end
         @test_throws "a mixed state cannot be made pure" run(
             [CreateState(type = Pure, state = mix(pure))])
         @test_throws "a system and randomize" run([CreateState(type = Pure, randomize = 10)])
-        @test_throws "cannot randomize a State into a mixed state" run(
+        @test_throws "cannot randomize a state into a mixed state" run(
             [CreateState(type = Mixed, state = pure, randomize = 4)])
         # its type that of the State it is given unless told, Pure or Mixed as in State{R},
         # where 1.x took Pure(), and a system with a description, as State{R} takes them
