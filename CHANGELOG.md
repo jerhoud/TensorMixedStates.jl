@@ -54,6 +54,8 @@ the reference article.
 - `sample` and `collapse` refuse a density matrix giving a result a negative probability beyond rounding, where they drew from it.
 - `von_neumann_entropy` refuses a reduced density matrix with a negative eigenvalue beyond `1e-8` of the largest, which it left out, and takes a smaller one as zero.
 - `normalize`, `expect` and the other measurements dividing by the trace refuse a mixed state whose trace is zero up to rounding beside its norm, where they gave values of 1e15.
+- `mps_state` drops what rounding leaves at a position of another charge, as `dense_state` does, where it refused the state.
+- A conserved quantity computed on a large spin is accepted, judged diagonal and integer to rounding relative to its matrix, where it was refused.
 
 ## [2.0.1] - 2026-10-28
 
