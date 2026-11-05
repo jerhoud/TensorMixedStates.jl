@@ -826,3 +826,22 @@ end
     @test maxlinkdim(TMS.ExactState{Pure}(System([Qubit(), Qudit(3), Qubit()]), "0")) == 2
     @test maxlinkdim(TMS.ExactState{Pure}(System(1, Qubit()), "Up")) == 1
 end
+
+@testset "Arithmetic, truncation and vector of an exact state" begin
+    sys = System(3, Qubit())
+    a, b = State{Pure}(sys, "Up"), State{Pure}(sys, "+")
+    ea, eb = TMS.ExactState(a), TMS.ExactState(b)
+    # as for a State, without truncation
+    @test Vector(2ea - eb / 3 + ea * 1im) ≈ Vector(2a - b / 3 + a * 1im)
+    @test Vector(-ea) == -Vector(ea)
+    ρ = mix(ea) + mix(eb)
+    @test ρ.state ≈ Vector(ea) * Vector(ea)' + Vector(eb) * Vector(eb)'
+    @test truncate(ea; limits = Limits(maxdim = 1)) === ea
+    # a copy of the vector
+    v = Vector(ea)
+    v[1] = 0
+    @test Vector(ea)[1] == 1
+    @test_throws "beyond max_dense = 4" Vector(ea; max_dense = 4)
+    @test_throws "different systems" ea + TMS.ExactState{Pure}(System(3, Qubit(conserve = N)),
+                                                               "Up")
+end
