@@ -14,6 +14,9 @@ system conserving something, what rounding leaves in the sectors they forbid dro
 truncation limits and the methods that functions take for a `State` are accepted and ignored;
 evolutions are exact up to `1e-10`, and a search stays in the sector of the charges declared of
 the state it starts from, the symmetries not declared broken as DMRG does.
+`random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws one
+uniformly in its sector whatever the link dimension, and its `maxlinkdim` is that of the whole
+space it holds.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
   refused, none by default, as for `mix`; a whole array given is taken whatever its size
@@ -76,6 +79,17 @@ State(state::ExactState; limits::Limits = Limits()) =
 show(io::IO, s::ExactState{R}) where {R <: PM} = print(io, "ExactState{$R}($(s.system))")
 
 representation(::ExactState{R}) where {R <: PM} = R
+
+"""
+    maxlinkdim(::ExactState)
+
+the largest link dimension of an MPS of the system of the state, without truncation: that of
+the whole space it holds
+"""
+function maxlinkdim(state::ExactState)
+    ds = [ representation(state) === Mixed ? dim(s)^2 : dim(s) for s in state.system.sites ]
+    return maximum((min(prod(ds[1:k]), prod(ds[k+1:end])) for k in 1:length(ds)-1); init = 1)
+end
 
 # the approximations of an MPS, without use for a state held whole
 ignored_options(::ExactState) = (:algo, :limits, :mpo_limits)
@@ -607,10 +621,11 @@ end
 
 """
 a random vector of norm one of the shape of the vector `x` of `system`, in the sector of its
-charges declared, drawn by `rng`
+charges declared, drawn by `rng` of Gaussian elements of type `eltype`, so uniformly
 """
-function random_in_sector(system::System, x::AbstractVector, rng::AbstractRNG)
-    r = randn(rng, ComplexF64, length(x))
+function random_in_sector(system::System, x::AbstractVector, rng::AbstractRNG,
+                          eltype::Type{<:Number} = ComplexF64)
+    r = randn(rng, eltype, length(x))
     if is_charged(system)
         a, idx, _ = dense_legs(system, x)
         table = charge_table(idx)
@@ -621,6 +636,66 @@ function random_in_sector(system::System, x::AbstractVector, rng::AbstractRNG)
         r = vec(of_charge(reshape(r, size(a)), table, q))
     end
     return r / norm(r)
+end
+
+# as random_state of a State, but uniform whatever `linkdims`: a pure state of the uniform measure
+# on the vectors of its sector, a mixed one of the measure its purification on the system doubled
+# induces, as that of the MPS, the ancillas on the right taking no fermionic sign
+function random_state(::Type{ExactState{Pure}}, system::System, linkdims::Int;
+                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
+    if is_charged(system)
+        error("cannot draw a random pure state on a system that conserves something, there " *
+              "being no sector to draw it in: give the local states of the sector wanted")
+    end
+    d = prod(dim(s) for s in system.sites)
+    return ExactState{Pure}(system, random_in_sector(system, zeros(d), rng, eltype), Val(:raw))
+end
+
+random_state(::Type{ExactState{Pure}}, system::System, states, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    random_state(ExactState{Pure}(system, states), linkdims; rng, eltype)
+
+random_state(state::ExactState{Pure}, linkdims::Int; rng::AbstractRNG = Random.default_rng(),
+             eltype::Type{<:Number} = ComplexF64) =
+    ExactState{Pure}(state.system, random_in_sector(state.system, state.state, rng, eltype),
+                     Val(:raw))
+
+random_state(::ExactState{Mixed}, ::Int; kwargs...) =
+    error("randomising a mixed state is not implemented")
+
+function random_state(::Type{ExactState{Mixed}}, system::System, linkdims::Int;
+                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
+    refuse_strong(system)
+    if is_charged(system)
+        error("cannot draw a random mixed state on a system that conserves something without a " *
+              "sector to start from: name the local states its purification starts from")
+    end
+    d = prod(dim(s) for s in system.sites)
+    return traced_half(system, random_in_sector(system ⊗ system, zeros(d^2), rng, eltype))
+end
+
+function random_state(::Type{ExactState{Mixed}}, system::System, states, linkdims::Int;
+                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
+    refuse_strong(system)
+    doubled = system ⊗ system
+    start = ExactState{Pure}(doubled, double(states, length(system)))
+    return traced_half(system, random_in_sector(doubled, start.state, rng, eltype))
+end
+
+random_state(::Type{ExactState{Mixed}}, ::System, ::Union{Mixture, FullyMixed}, ::Int;
+             kwargs...) =
+    error("a random mixed state is drawn from the purification of a product state: give its " *
+          "local states")
+
+"""
+the density matrix of `system` the pure vector `ψ` of `system ⊗ system` leaves once the second
+half, on the right, is traced out
+"""
+function traced_half(system::System, ψ::AbstractVector)
+    d = prod(dim(s) for s in system.sites)
+    # ψ in the order of kron, the first half the slowest: m[a, i] = ψ(i, a)
+    m = reshape(ψ, d, d)
+    return ExactState{Mixed}(system, transpose(m) * conj(m), Val(:raw))
 end
 
 # the method and the limits of the MPS without use, `algo` not needed; the search of a State

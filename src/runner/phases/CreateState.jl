@@ -22,7 +22,8 @@ a phase that creates the state of the simulation.
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
   see `random_state` (default 0, none): a pure state randomized from `state`, a mixed one drawn
   from a purification starting from its local states, which `Mixture` and `FullyMixed` do not
-  give, or without `state` any state of the system, drawn as a `State` only
+  give, or without `state` any state of the system; an `ExactState` is drawn uniformly whatever
+  `randomize`
 - `backend`: the type of states holding the state, `State` (MPS) or `ExactState`, by default that
   of the simulation, see `SimData`
 - `on`: the name the state created takes, see `CopyState` (default `:state`)
@@ -119,20 +120,29 @@ the type of states holding `state`, without its representation, as `ExactState`
 """
 backend_of(state::AbstractState) = Base.typename(typeof(state)).wrapper
 
+"""
+a random state of representation `R` held by `backend`, see `random_state`, refused for a type
+of states of one's own that draws none
+"""
+random_of(::Type{State}, ::Type{R}, args...; rng::AbstractRNG) where R =
+    random_state(R, args...; rng)
+function random_of(::Type{T}, ::Type{R}, args...; rng::AbstractRNG) where {T, R}
+    if !applicable(random_state, T{R}, args...)
+        error("$(nameof(T)) draws no random state: draw it with backend = State and convert it " *
+              "with ConvertState")
+    end
+    return random_state(T{R}, args...; rng)
+end
+
 function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     rng = sim.rng
     n = phase.randomize
     backend = something(phase.backend, run_backend(sim))
-    # an MPS drawn and converted is not the uniform draw an exact state is to have
-    if n ≠ 0 && backend !== State
-        error("CreateState draws a random state as a State only: draw it with backend = State " *
-              "and convert it with ConvertState")
-    end
     state = if isnothing(phase.state)
         if n == 0 || isnothing(phase.system)
             error("CreateState needs a state, or a system and randomize to draw one")
         end
-        random_state(R, phase.system, n; rng)
+        random_of(backend, R, phase.system, n; rng)
     elseif phase.state isa AbstractState
         # a random mixed state is drawn from a purification, which a state given does not give
         if R === Mixed && n ≠ 0
@@ -146,10 +156,8 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
         error("CreateState needs a system or a State")
     elseif n == 0
         State{R}(phase.system, phase.state)
-    elseif R === Mixed
-        random_state(Mixed, phase.system, phase.state, n; rng)
     else
-        random_state(State{Pure}(phase.system, phase.state), n; rng)
+        random_of(backend, R, phase.system, phase.state, n; rng)
     end
     state = as_backend(backend, state)
     log_message(sim, "Created $state")
