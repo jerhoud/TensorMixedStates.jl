@@ -607,6 +607,56 @@ myprob, measure(mypair, [Z(1)Z(2), X(1)X(2)])
 
 For more details see the reference or the inline help.
 
+## [Exact states](@id manual-exact-states)
+
+`ExactState{R}` holds the state of a small system whole, its vector for `Pure` or its density
+matrix for `Mixed`, without truncation. It checks a program written for MPS on a small case,
+where the exact result tells the truncation error from the others; it evolves without the error
+of a time step an evolver that does not depend on time; and it studies small systems as they
+are.
+
+A whole program runs on it with `SimData(backend = ExactState)`: each `CreateState` makes its
+state an `ExactState`, which the phases and the measurements then act on as on a `State`, and
+the log notes the options of a phase that only an MPS uses. One phase does it with
+`backend = ExactState` in `CreateState`, `ConvertState` or `LoadState`, and
+`ConvertState{Pure}(backend = State)` comes back to an MPS. Outside a simulation,
+`ExactState{R}(system, states)` takes the descriptions of `State{R}`, and `ExactState(ψ)` and
+`State(e)` convert a state either way:
+
+```@example manual
+myexact = ExactState{Pure}(System(4, Qubit()), "+")
+myising = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.5 * sum(X(i) for i in 1:4)
+ground_state(myising, myexact).energy
+```
+
+The functions of a `State` take it, with these differences:
+
+- `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
+  and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
+  duration, and a search converges to a residual of `1e-13`;
+- a search stays in the sector of the charges the system declares, the other symmetries of the
+  Hamiltonian being broken, as DMRG breaks them;
+- `random_state(ExactState{R}, …)` and `randomize` draw a state uniformly in its sector,
+  whatever the link dimension asked;
+- `maxlinkdim` is that of an MPS holding the whole space, and `truncate` leaves the state as it
+  is.
+
+Its size limits it: a pure state of ``n`` sites of dimension ``d`` holds ``d^n`` complex numbers
+of 16 bytes, a density matrix ``d^{2n}``, so on qubits
+
+| qubits | pure state | density matrix |
+|:------ | ----------:| --------------:|
+| 10     | 16 KB      | 17 MB          |
+| 12     | 66 KB      | 268 MB         |
+| 14     | 262 KB     | 4.3 GB         |
+| 20     | 17 MB      |                |
+| 24     | 268 MB     |                |
+
+and a computation holds several copies: a search by Lanczos or Arnoldi keeps up to about a
+hundred vectors of the size of the state, an evolution or a thermalization about thirty, so that
+the steady state of 12 qubits may take some 27 GB. Nothing bounds it by default; the keyword
+`max_dense` of `ExactState(ψ)`, `mix` and the like protects a call.
+
 ## Accuracy
 
 A result is trusted once it no longer moves when the truncation, the time step and the sweeps

@@ -37,6 +37,7 @@ mixed_sys = System([Qubit(), Boson(4), Fermion()]) # sites of several types
                                                    # graph_state (Qubits), aklt_state (Spins)
 ψ2 = ψ ⊗ State{Pure}(System(2, Qubit()), "Up")     # on sys ⊗ System(2, Qubit()), 12 sites
 ψ3 = permute_sites(ψ2, p)                          # site k moved to position p[k]
+e = ExactState{Pure}(System(4, Qubit()), "Up")     # held whole, without truncation; ExactState(ψ)
 ```
 
 A local state is a name of the site (`"Up"`, `"Dn"`, `"+"`, `"0"`, `"1"` on a qubit), a vector,
@@ -134,6 +135,7 @@ probabilities(ψt, Z(1) * Z(2)); sample(ψt, Z(1)); collapse(ψt, Z(1))  # (resu
 runTMS(SimData(
     name = "quench",                      # the directory of its files
     seed = 1,                             # the random draws, reproducible
+    # backend = ExactState,               # the same program on exact states, for a small check
     phases = [
         CreateState{Pure}(10, Qubit(), "Up"),
         GroundState(hamiltonian = ham, algo = Dmrg(nsweeps = 10), limits = lim),

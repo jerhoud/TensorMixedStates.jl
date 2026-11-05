@@ -2,6 +2,8 @@
 # matrix, on the basis of the product states ordered as `kron` orders them, the first site
 # varying the slowest, the operators acting through their terms, see `dense_acted`.
 
+export ExactState
+
 """
     ExactState{R}(system, states; max_dense = nothing)
     ExactState(state::State; max_dense = nothing)
@@ -16,7 +18,8 @@ evolutions are exact up to `1e-10`, and a search stays in the sector of the char
 the state it starts from, the symmetries not declared broken as DMRG does.
 `random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws one
 uniformly in its sector whatever the link dimension, and its `maxlinkdim` is that of the whole
-space it holds.
+space it holds. Its memory grows as ``d^n``, ``d^{2n}`` for a density matrix, and a search or an
+evolution keeps tens of copies of it, see the manual.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
   refused, none by default, as for `mix`; a whole array given is taken whatever its size
