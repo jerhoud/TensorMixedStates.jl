@@ -81,6 +81,7 @@ include("solvers/Thermalize.jl")
 
 # The exact representation of small systems
 include("dense/ExactStates.jl")
+include("dense/ExactSolvers.jl")
 
 # Simulations
 include("runner/Threading.jl")
