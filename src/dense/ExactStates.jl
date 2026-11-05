@@ -18,8 +18,9 @@ evolutions are exact up to `1e-10`, and a search stays in the sector of the char
 the state it starts from, the symmetries not declared broken as DMRG does.
 `random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws a pure one
 uniformly in its sector, a mixed one from a uniform purification as for a `State`, whatever the
-link dimension, and its `maxlinkdim` is that of the whole space it holds. Its memory grows as ``d^n``, ``d^{2n}`` for a density matrix, and a search or an
-evolution keeps tens of copies of it, see the manual.
+link dimension, and its `maxlinkdim` is that of the whole space it holds. Its memory grows as
+``d^n``, ``d^{2n}`` for a density matrix, and a search or an evolution keeps tens of copies of
+it, see the manual.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
   refused, none by default, as for `mix`; a whole array given is taken whatever its size
@@ -338,23 +339,12 @@ function permute_sites(state::ExactState{R}, p::AbstractVector{<:Integer};
         error("permute_sites needs a permutation of the positions 1 to $n, not $p")
     end
     sites = state.system.sites
-    dims = [ dim(s) for s in sites ]
-    # an array on the axes of the sites, in their order, as the vector of kron orders them
-    on_sites(x) = permutedims(reshape(x, reverse(dims)...), n:-1:1)
-    in_kron(a) = vec(permutedims(a, n:-1:1))
-    # the exponent of the sign of each basis state
-    parities = [ collect(fermion_parities(s)) for s in sites ]
-    on_axis(v, k) = reshape(v, ntuple(j -> j == k ? length(v) : 1, n))
-    exponent = zeros(Int, dims...)
-    for k in 1:n, l in k+1:n
-        if p[k] > p[l] && any(isodd, parities[k]) && any(isodd, parities[l])
-            exponent = exponent .+ on_axis(parities[k], k) .* on_axis(parities[l], l)
-        end
-    end
+    dims = site_dims(state.system)
     # for each basis state of the result, the one of `state` it comes from, and its sign
     q = invperm(p)
-    from = in_kron(permutedims(on_sites(1:prod(dims)), q))
-    sign = in_kron(@. ifelse(iseven(exponent), 1.0, -1.0))[from]
+    from = in_kron(permutedims(on_sites(1:prod(dims), dims), q))
+    signs = pair_signs(sites, [ (k, l) for k in 1:n for l in k+1:n if p[k] > p[l] ])
+    sign = isnothing(signs) ? ones(prod(dims)) : signs[from]
     x = state.state
     y = R === Pure ? sign .* x[from] : (sign * sign') .* x[from, from]
     return ExactState{R}(System(sites[q]), y, Val(:raw))
@@ -369,7 +359,7 @@ function cut_matrix(state::ExactState{R}, cut::Int) where {R <: PM}
     system = state.system
     check_cut(length(system), cut)
     nonzero_norm(state, "an entanglement entropy")
-    dims = [ dim(s) for s in system.sites ]
+    dims = site_dims(system)
     l, r = prod(dims[1:cut]), prod(dims[cut+1:end]; init = 1)
     if R === Pure
         return transpose(reshape(state.state, r, l))
@@ -416,34 +406,8 @@ running over the fermionic sites traced out and `k` over those of `kept` on thei
 the parity of a site, which make the plain partial trace the fermionic one, see `trace_signs`;
 `nothing` when there is none
 """
-function trace_sign_vector(system::System, kept::Vector{Int})
-    n = length(system)
-    dims = [ dim(s) for s in system.sites ]
-    fermionic = [ next_fermion(system, i) == i for i in 1:n ]
-    last_kept = findlast(k -> fermionic[k], kept)
-    if isnothing(last_kept) || !any(l -> fermionic[l] && !insorted(l, kept), 1:kept[last_kept]-1)
-        return nothing
-    end
-    odd = [ isodd.(collect(fermion_parities(s))) for s in system.sites ]
-    s = ones(prod(dims))
-    for (j, c) in enumerate(CartesianIndices(Tuple(reverse(dims))))
-        left, flip = false, false
-        for i in 1:n
-            if fermionic[i]
-                p = odd[i][c[n + 1 - i]]
-                if insorted(i, kept)
-                    flip ⊻= left & p
-                else
-                    left ⊻= p
-                end
-            end
-        end
-        if flip
-            s[j] = -1
-        end
-    end
-    return s
-end
+trace_sign_vector(system::System, kept::Vector{Int}) =
+    pair_signs(system.sites, [ (l, k) for k in kept for l in 1:k-1 if !insorted(l, kept) ])
 
 """
 the array of `state` with the signs of the fermionic sites traced out laid, see
@@ -454,7 +418,7 @@ dimensions of the two parts
 function kept_first(state::ExactState{R}, kept::Vector{Int}) where {R <: PM}
     system = state.system
     n = length(system)
-    dims = [ dim(s) for s in system.sites ]
+    dims = site_dims(system)
     s = trace_sign_vector(system, kept)
     x = isnothing(s) ? state.state :
         R === Mixed ? s .* state.state .* transpose(s) : s .* state.state
@@ -578,11 +542,12 @@ the vector `x`, of `extra` columns after the product states of `system`, project
 values to each partial total, those that can still reach `T` kept, see `count_bonds`
 """
 function count_projected(system::System, sites, locals, T::Int, x::AbstractVector, extra::Int)
-    dims = [ dim(s) for s in system.sites ]
+    dims = site_dims(system)
     bonds = count_bonds(length(system), sites, locals, T)
     parts = Dict(0 => x)
     for (k, (values, ps)) in zip(sites, locals)
-        a, c = prod(dims[k+1:end]; init = 1), prod(dims[1:k-1]; init = 1) * extra
+        a, before = around(dims, k)
+        c = before * extra
         next = Dict{Int, Vector{ComplexF64}}()
         for (s, y) in parts, (t, p) in zip(values, ps)
             if insorted(s + t, bonds[k + 1])
@@ -617,16 +582,16 @@ basis_probabilities(state::ExactState{R}) where {R <: PM} =
 
 function sample(state::ExactState; rng = Random.default_rng())
     p = basis_probabilities(state)
-    dims = [ dim(s) for s in state.system.sites ]
+    dims = site_dims(state.system)
     c = CartesianIndices(Tuple(reverse(dims)))[draw(x -> p[x + 1], length(p), rand(rng)) + 1]
     return [ c[length(dims) + 1 - i] - 1 for i in eachindex(dims) ]
 end
 
 function sample(state::ExactState, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "sample")
-    dims = [ dim(s) for s in state.system.sites ]
+    dims = site_dims(state.system)
     p = basis_probabilities(state)
-    a, c = prod(dims[pos+1:end]; init = 1), prod(dims[1:pos-1]; init = 1)
+    a, c = around(dims, pos)
     q = vec(sum(reshape(p, a, dims[pos], c); dims = (1, 3)))
     return draw(x -> q[x + 1], dims[pos], rand(rng))
 end

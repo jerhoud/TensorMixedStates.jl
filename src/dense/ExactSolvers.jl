@@ -215,7 +215,7 @@ function random_state(::Type{ExactState{Pure}}, system::System, linkdims::Int;
         error("cannot draw a random pure state on a system that conserves something, there " *
               "being no sector to draw it in: give the local states of the sector wanted")
     end
-    d = prod(dim(s) for s in system.sites)
+    d = prod(site_dims(system))
     return ExactState{Pure}(system, random_in_sector(system, zeros(d), rng, eltype), Val(:raw))
 end
 
@@ -238,7 +238,7 @@ function random_state(::Type{ExactState{Mixed}}, system::System, linkdims::Int;
         error("cannot draw a random mixed state on a system that conserves something without a " *
               "sector to start from: name the local states its purification starts from")
     end
-    d = prod(dim(s) for s in system.sites)
+    d = prod(site_dims(system))
     return traced_half(system, random_in_sector(system ⊗ system, zeros(d^2), rng, eltype))
 end
 
@@ -260,7 +260,7 @@ the density matrix of `system` the pure vector `ψ` of `system ⊗ system` leave
 half, on the right, is traced out
 """
 function traced_half(system::System, ψ::AbstractVector)
-    d = prod(dim(s) for s in system.sites)
+    d = prod(site_dims(system))
     # ψ in the order of kron, the first half the slowest: m[a, i] = ψ(i, a)
     m = reshape(ψ, d, d)
     return ExactState{Mixed}(system, transpose(m) * conj(m), Val(:raw))
