@@ -1335,7 +1335,7 @@ end
         runTMS(SimData(; name = "sim", phases); checkpoint_interval = 1e-9)
         log = read("sim/log", String)
         @test occursin("\nApplying 2 gates\n", log)
-        @test occursin(r"\*\*\*\*\* This launch took [\d.]+ seconds, .* peak memory ", log)
+        @test occursin(r"\*\*\*\*\* This launch took [\d.]+ seconds of wall clock, .* peak memory ", log)
         @test startswith(log, "Run on $(gethostname()), ")
         @test occursin("Created State{Pure}(System(3, Qubit()), (maxlinkdim = 1))\n", log)
         @test occursin(r"evolver has bond dimension 3, takes [\d.]+ \w+, built in [\d.]+ s\n", log)

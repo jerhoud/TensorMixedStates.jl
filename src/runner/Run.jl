@@ -814,7 +814,8 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             end
             # this launch only, a resumed run counting from its own start
             log_line(run, "\n***** This launch took $(round(time() - launched; digits = 3)) " *
-                          "seconds, $(Base.format_bytes(Base.gc_bytes() - allocated)) " *
+                          "seconds of wall clock, " *
+                          "$(Base.format_bytes(Base.gc_bytes() - allocated)) " *
                           "allocated, peak memory $(Base.format_bytes(Sys.maxrss())) *****")
             return sim
         end
