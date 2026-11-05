@@ -919,3 +919,20 @@ end
     @test_throws "a permutation of the positions" permute_sites(
         TMS.ExactState{Pure}(System(2, Qubit()), "Up"), [1, 1])
 end
+
+@testset "Measurements against a reference state in a run on exact states" begin
+    # the same program on MPS and on exact states, the reference named or given, against
+    # each other: product states and gates, exact on both
+    sys = System(3, Qubit())
+    ref = State{Pure}(sys, "+")
+    ms = ["F" => Fidelity(:ref), "O" => Overlap(:ref), "OZ" => Overlap(:ref, Z),
+          "OZX" => Overlap(:ref, Z(1) * X(2)), "Fg" => Fidelity(ref), "OXg" => Overlap(ref, X(3))]
+    phases = [CreateState(ref), CopyState(:state => :ref),
+              Gates(gates = X(1) * H(2), final_measurements = "m" => ms)]
+    in_tmp() do
+        runTMS(SimData(; name = "mps", phases))
+        runTMS(SimData(; name = "exact", backend = TMS.ExactState, phases))
+        values(file) = [ parse.(Float64, split(l)[2:end]) for l in readlines(file)[2:end] ]
+        @test values("exact/m") ≈ values("mps/m") atol = 1e-12
+    end
+end
