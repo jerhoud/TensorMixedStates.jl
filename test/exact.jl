@@ -899,3 +899,21 @@ end
     ρ = TMS.ExactState{Mixed}(System(2, Qubit()), "Up")
     @test_throws "is ambiguous" inner(ρ, X(1), ρ)
 end
+
+@testset "Sites of an exact state permuted" begin
+    # against the State, fermionic signs on the kets and the bras included
+    rng = Xoshiro(9)
+    for (sys, st) in ((System(4, Fermion(conserve = N)), ["Occ", "Emp", "Occ", "Occ"]),
+                      (System([Fermion(), Qubit(), Electron()]), ["Occ", "Up", "Up"]))
+        n = length(sys)
+        ψ = random_state(State{Pure}(sys, st), 2; rng)
+        ρ = mix(ψ) + 0.2 * mix(random_state(State{Pure}(sys, st), 2; rng))
+        for p in (collect(n:-1:1), circshift(1:n, 1)), x in (ψ, ρ)
+            moved = permute_sites(TMS.ExactState(x), p)
+            @test moved.system == permute_sites(x, p).system
+            @test moved.state ≈ TMS.ExactState(permute_sites(x, p)).state atol = 1e-13
+        end
+    end
+    @test_throws "a permutation of the positions" permute_sites(
+        TMS.ExactState{Pure}(System(2, Qubit()), "Up"), [1, 1])
+end
