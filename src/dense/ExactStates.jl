@@ -70,7 +70,7 @@ the MPS of the exact state `exact`, normalised, truncated to `limits`.
 State(state::ExactState; limits::Limits = Limits()) =
     dense_state(state.system, state.state; limits)
 
-show(io::IO, s::ExactState{R}) where R = print(io, "ExactState{$R}($(s.system))")
+show(io::IO, s::ExactState{R}) where {R <: PM} = print(io, "ExactState{$R}($(s.system))")
 
 trace(state::ExactState{Pure}) = dot(state.state, state.state)
 trace(state::ExactState{Mixed}) = tr(state.state)
@@ -82,13 +82,13 @@ dense_bound(state::ExactState) = max(dense_elements, length(state.state))
 nonzero_trace(state::ExactState{Mixed}, what) =
     checked_trace(real(trace(state)), norm(state), what)
 
-function normalize(state::ExactState{R}) where R
+function normalize(state::ExactState{R}) where {R <: PM}
     t = nonzero_trace(state, "normalize")
     x = R === Mixed ? state.state / t : state.state / sqrt(t)
     return ExactState{R}(state.system, x, Val(:raw))
 end
 
-function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where R
+function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where {R <: PM}
     # measured on what conserves nothing, as on a State, an operator of no definite flux too
     system = weaken(state.system, ())
     x = state.state
@@ -135,7 +135,7 @@ function same_sites(a::ExactState, b::ExactState)
     end
 end
 
-function inner(a::ExactState{R}, b::ExactState{R}) where R
+function inner(a::ExactState{R}, b::ExactState{R}) where {R <: PM}
     same_sites(a, b)
     return dot(a.state, b.state)
 end
@@ -202,7 +202,7 @@ the matrix of `state` across the cut between sites `cut` and `cut + 1`: the site
 the rows, the others on the columns, the ket and the bra of each together on a mixed state; a
 cut the state does not have is refused
 """
-function cut_matrix(state::ExactState{R}, cut::Int) where R
+function cut_matrix(state::ExactState{R}, cut::Int) where {R <: PM}
     system = state.system
     check_cut(length(system), cut)
     nonzero_norm(state, "an entanglement entropy")
@@ -288,7 +288,7 @@ the array of `state` with the signs of the fermionic sites traced out laid, see
 these axes putting the sites at the increasing positions `kept` before the others, and the
 dimensions of the two parts
 """
-function kept_first(state::ExactState{R}, kept::Vector{Int}) where R
+function kept_first(state::ExactState{R}, kept::Vector{Int}) where {R <: PM}
     system = state.system
     n = length(system)
     dims = [ dim(s) for s in system.sites ]
@@ -311,7 +311,7 @@ function partition_matrix(state::ExactState{Pure}, kept::Vector{Int})
 end
 
 function reduced_density_matrix(state::ExactState{R}, positions::AbstractVector{Int};
-                                max_dense::Union{Nothing, Int} = dense_bound(state)) where R
+                                max_dense::Union{Nothing, Int} = dense_bound(state)) where {R <: PM}
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
     if isempty(positions)
@@ -397,7 +397,8 @@ apply(::MPO, ::ExactState; kwargs...) =
 the linear map of the operator, the channel or the generator of terms `ts` on the arrays of the
 exact states of representation `R`, see `dense_acted`
 """
-acting(::Type{R}, system::System, ts::Vector{Term}) where R = x -> dense_acted(R, system, ts, x)
+acting(::Type{R}, system::System, ts::Vector{Term}) where {R <: PM} =
+    x -> dense_acted(R, system, ts, x)
 
 """
 a bound of the operator norm of the operator of terms `ts`: the sum over its terms of `|coef|`
@@ -674,7 +675,7 @@ thermalize(::Any, ::Real, ::ExactState{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation: mix the state first")
 
 # the limits of the MPS have no use on an exact state, see the docstring of ExactState
-function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where R
+function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where {R <: PM}
     system = weaken(state.system, ())
     x = R === Mixed ? on_both_sides(system, p, state.state) :
                       dense_acted(Pure, system, lower(system, p), state.state)
@@ -704,7 +705,7 @@ function count_projected(system::System, sites, locals, T::Int, x::AbstractVecto
     return get(parts, T, zero(x))
 end
 
-function project_count(state::ExactState{R}, sites, locals, T; limits::Limits) where R
+function project_count(state::ExactState{R}, sites, locals, T; limits::Limits) where {R <: PM}
     system = state.system
     x = state.state
     if R === Pure
@@ -721,7 +722,7 @@ end
 the probabilities of the product states of `state`, in the order of `kron`, which `draw` refuses
 when one is negative beyond rounding
 """
-basis_probabilities(state::ExactState{R}) where R =
+basis_probabilities(state::ExactState{R}) where {R <: PM} =
     (R === Mixed ? real(diag(state.state)) : abs2.(state.state)) / nonzero_trace(state, "sample")
 
 function sample(state::ExactState; rng = Random.default_rng())
@@ -740,7 +741,7 @@ function sample(state::ExactState, pos::Int; rng = Random.default_rng())
     return draw(x -> q[x + 1], dims[pos], rand(rng))
 end
 
-function write_state(g, state::ExactState{R}) where R
+function write_state(g, state::ExactState{R}) where {R <: PM}
     attributes(g)["representation"] = string(nameof(R))
     g["state"] = state.state
     return nothing

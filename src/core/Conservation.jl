@@ -1,8 +1,8 @@
 # What a site conserves: the charges read off the conserved operators, kept typed in the site,
 # strong or weak, the relabellings of the charges they need, and sites compared and printed as
 # values. The later layers lay matrices on charged indices with `conserved`, `strong_names`,
-# `star`, `basis_charges`, `has_definite_flux`, `charged_itensor`, `common_charge`,
-# `charge_flux`, `FluxError`, `weak_qn` and `adjoint_index`.
+# `star`, `bra_index`, `basis_charges`, `qn_components`, `has_definite_flux`, `charged_itensor`,
+# `in_charge`, `charge_flux`, `FluxError` and `adjoint_index`.
 
 export Conservation, conserving, strong, symmetries, weaken, flux
 
@@ -564,9 +564,8 @@ has_definite_flux(a::AbstractArray, inds) = !any(hasqns, inds) ||
 """
     in_charge(a, inds)
 
-the array `a` on the indices `inds`, of a definite charge up to rounding, see
-`has_definite_flux`, its elements of another charge zeroed: what rounding leaves in the sectors
-the quantities conserved forbid, which `charged_itensor` drops as well
+the array `a` on the indices `inds`, of a definite charge up to rounding, its elements of
+another charge zeroed, as `charged_itensor` drops them
 """
 function in_charge(a::AbstractArray, inds)
     table = charge_table(inds)
