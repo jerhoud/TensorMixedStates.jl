@@ -3,6 +3,48 @@
 # `kron` orders them, the first site varying the slowest.
 
 """
+the dimensions of the sites of `system`, in their order
+"""
+site_dims(system::System) = [ dim(s) for s in system.sites ]
+
+"""
+the numbers of elements after and before the axis of site `k` in an array of the sites of
+dimensions `dims` in the order of `kron`, the first site the slowest
+"""
+around(dims::Vector{Int}, k::Int) = (prod(dims[k+1:end]; init = 1), prod(dims[1:k-1]; init = 1))
+
+"""
+the array `x` in the order of `kron` on one axis per site of dimensions `dims`, in their order
+"""
+on_sites(x::AbstractArray, dims::Vector{Int}) =
+    permutedims(reshape(x, reverse(dims)...), length(dims):-1:1)
+
+"""
+the array `a` of one axis per site, in their order, as the vector in the order of `kron`
+"""
+in_kron(a::AbstractArray) = vec(permutedims(a, ndims(a):-1:1))
+
+"""
+the signs ``(-1)^{\\sum p_k p_l}`` of the product states of `sites`, in the order of `kron`, the
+sum over the pairs `(k, l)` of `pairs`, `p` the fermionic parity of the value of a site;
+`nothing` when no pair joins two fermionic sites
+"""
+function pair_signs(sites::Vector{<:AbstractSite}, pairs)
+    n = length(sites)
+    parities = [ collect(fermion_parities(s)) for s in sites ]
+    fermionic = [ (k, l) for (k, l) in pairs if any(isodd, parities[k]) && any(isodd, parities[l]) ]
+    if isempty(fermionic)
+        return nothing
+    end
+    on_axis(v, k) = reshape(v, ntuple(j -> j == k ? length(v) : 1, n))
+    exponent = zeros(Int, [ dim(s) for s in sites ]...)
+    for (k, l) in fermionic
+        exponent = exponent .+ on_axis(parities[k], k) .* on_axis(parities[l], l)
+    end
+    return in_kron(@. ifelse(iseven(exponent), 1.0, -1.0))
+end
+
+"""
 the array `x`, seen as `(a, d, c)`, with the matrix `m` applied to its middle axis, as a vector
 """
 function axis_acted(m::AbstractMatrix, x::AbstractArray, a::Int, d::Int, c::Int)
@@ -26,8 +68,8 @@ function terms_acted(::Type{R}, system::System, ts::Vector{Term}, x::AbstractVec
         laid = laid_strings(R, system, t)
         foldl(laid.blocks; init = x) do y, b
             k = b.site
-            isone(b.m) ? y : axis_acted(b.m, y, prod(dims[k+1:end]; init = 1), dims[k],
-                                        prod(dims[1:k-1]; init = 1) * extra)
+            after, before = around(dims, k)
+            isone(b.m) ? y : axis_acted(b.m, y, after, dims[k], before * extra)
         end * laid.coef
     end
 end
@@ -39,7 +81,7 @@ the terms `terms` of an operator applied to the vector `x` or to the kets of the
 `Pure`, or those of a superoperator applied to the density matrix `x`, for `Mixed`, see `lower`
 """
 function dense_acted(::Type{Pure}, system::System, ts::Vector{Term}, x::AbstractVecOrMat)
-    dims = [ dim(s) for s in system.sites ]
+    dims = site_dims(system)
     if size(x, 1) ≠ prod(dims)
         error("a dense state of the system has $(prod(dims)) rows, not $(size(x, 1))")
     end
@@ -47,7 +89,7 @@ function dense_acted(::Type{Pure}, system::System, ts::Vector{Term}, x::Abstract
 end
 
 function dense_acted(::Type{Mixed}, system::System, ts::Vector{Term}, x::AbstractMatrix)
-    dims = [ dim(s) for s in system.sites ]
+    dims = site_dims(system)
     D = prod(dims)
     if size(x) ≠ (D, D)
         error("a density matrix of the system is $D × $D, not $(size(x, 1)) × $(size(x, 2))")
@@ -68,8 +110,8 @@ for each term, its Jordan-Wigner strings laid, each product state `a` and each `
 elements of its blocks reach from `a`, the product of these elements times `ρ[b, a]`
 """
 function dense_trace(system::System, ts::Vector{Term}, ρ::AbstractMatrix)
-    dims = [ dim(s) for s in system.sites ]
-    strides = [ prod(dims[k+1:end]; init = 1) for k in eachindex(dims) ]
+    dims = site_dims(system)
+    strides = [ first(around(dims, k)) for k in eachindex(dims) ]
     total = zero(ComplexF64)
     for t in ts
         laid = laid_strings(Pure, system, t)
