@@ -874,3 +874,28 @@ end
     @test_throws "different systems" ea + TMS.ExactState{Pure}(System(3, Qubit(conserve = N)),
                                                                "Up")
 end
+
+@testset "Products, matrix elements and comparisons with a State of exact states" begin
+    rng = Xoshiro(5)
+    for (sa, sb) in ((System(2, Qubit()), System(1, Qubit())),
+                     (System(2, Fermion()), System(2, Fermion())))
+        a, b, c = (random_state(Pure, s, 2; rng) for s in (sa, sb, sa))
+        # a mixed state of both parities on fermions, whose product with another has signs
+        ρa = mix(a) + 0.3 * mix(random_state(Pure, sa, 2; rng))
+        for (x, y) in ((a, b), (ρa, mix(b)), (a, mix(b)))
+            product = TMS.ExactState(x) ⊗ TMS.ExactState(y)
+            @test product.state ≈ TMS.ExactState(x ⊗ y).state atol = 1e-14
+        end
+        fermions = sa[1] isa Fermion
+        op = fermions ? dag(C)(1) * C(2) + 0.5 * N(1) : X(1) * Y(2) + Z(1)
+        @test inner(TMS.ExactState(a), op, TMS.ExactState(c)) ≈ inner(a, op, c) atol = 1e-14
+        g = fermions ? Dissipator(C)(1) : Gate(X(1))
+        @test dot(TMS.ExactState(ρa), g, TMS.ExactState(mix(c))) ≈ dot(ρa, g, mix(c)) atol = 1e-14
+        # against a State, converted exactly
+        @test inner(TMS.ExactState(a), c) ≈ inner(a, c) atol = 1e-14
+        @test TMS.fidelity(a, TMS.ExactState(c)) ≈ TMS.fidelity(a, c) atol = 1e-14
+        @test TMS.hs_fidelity(TMS.ExactState(ρa), mix(c)) ≈ TMS.hs_fidelity(ρa, mix(c)) atol = 1e-14
+    end
+    ρ = TMS.ExactState{Mixed}(System(2, Qubit()), "Up")
+    @test_throws "is ambiguous" inner(ρ, X(1), ρ)
+end
