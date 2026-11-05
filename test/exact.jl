@@ -236,6 +236,8 @@ end
     ψ = random_state(Pure, System(14, Qubit()), 4; rng = Xoshiro(20261108))
     e = TMS.ExactState(ψ)
     @test von_neumann_entropy(e, 1:13) ≈ entanglement_entropy(ψ, 13) atol = 1e-10
+    # positions of another type converted, the reduced density matrix still not formed
+    @test von_neumann_entropy(e, collect(1.0:13.0)) ≈ entanglement_entropy(ψ, 13) atol = 1e-10
     @test von_neumann_entropy(e, 2:14) ≈ von_neumann_entropy(e, [1]) atol = 1e-10
     @test renyi2(e, 1:13) ≈ renyi2(ψ, 1:13) atol = 1e-10
     @test_throws "beyond max_dense = 16777216" reduced_density_matrix(e, 1:13)

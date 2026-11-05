@@ -511,7 +511,7 @@ function kept_spectrum(state::ExactState{Pure}, kept::Vector{Int}, what)
 end
 
 # its reduced density matrix is never formed, which `max_dense` would bound
-function von_neumann_entropy(state::ExactState{Pure}, positions::AbstractVector;
+function von_neumann_entropy(state::ExactState{Pure}, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
     if isempty(positions)
