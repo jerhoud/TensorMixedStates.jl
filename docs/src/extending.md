@@ -288,9 +288,9 @@ The phases and the measurements reach the state through the methods you give:
   the result of a backend that approximates. Two types of one's own convert through `State`,
   unless a method of `TensorMixedStates.as_backend(::Type{Other}, state::MyState; limits)` names
   both: a method naming one of them only would be ambiguous with that of another package. A
-  backend that approximates also gives `as_backend(::Type{MyState}, state::MyState; limits)`,
-  which truncates the state to `limits` for `ConvertState` and `LoadState`, and which otherwise
-  leaves it as it is;
+  state already of the type asked is truncated by `truncate(state::MyState; limits)` when
+  `ConvertState` or `LoadState` are given limits, which a backend that approximates nothing
+  defines as leaving the state as it is, and without which such limits are refused;
 - `TensorMixedStates.as_representation(R, state::MyState; limits)` takes the state to the
   representation `R` for `CreateState` and `ConvertState`, a pure state mixed, a mixed one
   refused for `Pure`;
