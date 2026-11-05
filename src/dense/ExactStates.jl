@@ -77,6 +77,21 @@ show(io::IO, s::ExactState{R}) where {R <: PM} = print(io, "ExactState{$R}($(s.s
 
 representation(::ExactState{R}) where {R <: PM} = R
 
+# the approximations of an MPS, without use for a state held whole
+ignored_options(::ExactState) = (:algo, :limits, :mpo_limits)
+
+# as partial_trace of a State, the density matrix of the sites kept
+function partial_trace(state::ExactState{Mixed};
+                       keep::Union{Nothing, AbstractVector{Int}} = nothing,
+                       trace_out::Union{Nothing, AbstractVector{Int}} = nothing)
+    kept = kept_positions(state, keep, trace_out)
+    return ExactState{Mixed}(System(state.system.sites[kept]),
+                             reduced_density_matrix(state, kept; max_dense = nothing), Val(:raw))
+end
+
+partial_trace(::ExactState{Pure}; kwargs...) =
+    error("partial_trace needs a mixed representation: use mix(state) first")
+
 # for CreateState and ConvertState, see as_representation, the limits without use
 as_representation(::Type{R}, state::ExactState{R}; limits::Limits = Limits()) where {R <: PM} =
     state

@@ -755,3 +755,37 @@ end
             ConvertState{Pure}(backend = State)]))
     end
 end
+
+@testset "Options ignored in a run and partial traces of an exact state" begin
+    in_tmp() do
+        sys = System(3, Qubit())
+        h = X(1) * X(2) + Z(3)
+        evolve_with(name; kwargs...) = runTMS(SimData(; name, backend = TMS.ExactState, phases = [
+            CreateState{Pure}(sys, "Up"),
+            Evolve(; evolver = -im * h, duration = 0.5, nsteps = 2, kwargs...)]))
+        evolve_with("given"; algo = ApproxW(order = 2), limits = Limits(maxdim = 4))
+        @test occursin("ExactState ignores algo and limits", read("given/log", String))
+        evolve_with("default")
+        @test !occursin("ignores", read("default/log", String))
+    end
+    # the density matrix of the sites kept, against partial_trace of the State, on qubits and on
+    # charged fermions, by keep and by trace_out
+    q = mix(random_state(Pure, System(4, Qubit()), 4; rng = Xoshiro(3)))
+    f = mix(random_state(State{Pure}(System(4, Fermion(conserve = N)),
+                                     ["Occ", "Emp", "Occ", "Emp"]), 4; rng = Xoshiro(4)))
+    for ρ in (q, f), args in ((; keep = [1, 3]), (; trace_out = [2]), (; keep = [4]))
+        e = partial_trace(TMS.ExactState(ρ); args...)
+        @test e.system == partial_trace(ρ; args...).system
+        @test e.state ≈ TMS.ExactState(partial_trace(ρ; args...)).state atol = 1e-12
+    end
+    @test_throws "needs a mixed representation" partial_trace(TMS.ExactState(State{Pure}(
+        System(2, Qubit()), "Up")); keep = [1])
+    @test_throws "every site" partial_trace(TMS.ExactState(q); trace_out = 1:4)
+    # the phase in a run
+    in_tmp() do
+        sim = runTMS(SimData(name = "p", backend = TMS.ExactState, phases = [
+            CreateState{Mixed}(System(3, Qubit()), ["Up", "+", "Dn"]),
+            PartialTrace(keep = [2, 3])]))
+        @test sim.state.state ≈ TMS.ExactState{Mixed}(System(2, Qubit()), ["+", "Dn"]).state
+    end
+end

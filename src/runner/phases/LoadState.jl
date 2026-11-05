@@ -58,8 +58,9 @@ provided_values(phase::LoadState) = phase.on === :state ? () : (phase.on,)
 function run_phase(phase::LoadState, sim::Simulation, ::Int)
     st = load_state(in_dir(sim, phase.file), phase.statename)
     # the type of the file kept unless backend is given, the limits applied by as_backend
-    return with_state(sim, phase.on, as_backend(something(phase.backend, backend_of(st)), st;
-                                                phase.limits))
+    loaded = as_backend(something(phase.backend, backend_of(st)), st; phase.limits)
+    log_ignored(sim, loaded, phase, (:limits,))
+    return with_state(sim, phase.on, loaded)
 end
 
 """

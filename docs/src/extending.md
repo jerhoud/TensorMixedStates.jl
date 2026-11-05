@@ -294,6 +294,9 @@ The phases and the measurements reach the state through the methods you give:
 - `TensorMixedStates.as_representation(R, state::MyState; limits)` takes the state to the
   representation `R` for `CreateState` and `ConvertState`, a pure state mixed, a mixed one
   refused for `Pure`;
+- `TensorMixedStates.ignored_options(state::MyState)` lists the options of the phases, among
+  `:algo`, `:limits` and `:mpo_limits`, that the backend accepts without use, which a run notes
+  in its log when a phase gives them (none by default);
 - `TensorMixedStates.expect_value(state, op::TensorMixedStates.IndexedOp)` computes the
   expectation value of an operator placed on sites, normalised by the trace, as a complex
   number, which `expect`, `measure`, and so `output`, ask for, those of the operators of one

@@ -132,6 +132,7 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     what = names == [:state] ? "the state" : "the states " * join(names, ", ")
     log_message(sim, "Evolving $what from time $(time_text(sim, sim.time)) to " *
                      time_text(sim, sim.time + phase.duration))
+    log_ignored(sim, states[1], phase, (:algo, :limits, :mpo_limits))
     start = time()
     pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits; duration = phase.duration)
     log_mpo(sim, "evolver", pre, start)
@@ -258,6 +259,7 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
     end
     log_message(sim, "Thermalizing the state to beta $(phase.beta)")
     if !(state isa State)
+        log_ignored(sim, state, phase, (:algo, :limits, :mpo_limits))
         return ThermalOwn(phase, n)
     end
     start = time()
@@ -373,6 +375,7 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     ms = [ m isa Symbol ? state_named(sim, m) : m for m in phase.orthogonal_to ]
     if !(state isa State)
         log_message(sim, "Searching the ground state")
+        log_ignored(sim, state, phase, (:algo, :limits, :mpo_limits))
         return searched_once(phase, sim, ground_state(phase.hamiltonian, state; phase.algo,
                              phase.limits, phase.mpo_limits, orthogonal_to = ms, phase.weight),
                              :energy)
@@ -443,6 +446,7 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     state = state_named(sim, phase.on)
     if !(state isa State)
         log_message(sim, "Searching the steady state")
+        log_ignored(sim, state, phase, (:algo, :limits, :mpo_limits))
         return searched_once(phase, sim, steady_state(phase.lindbladian, state; phase.algo,
                              phase.limits, phase.mpo_limits), :residual)
     end

@@ -209,6 +209,14 @@ the representation of `state`, `Pure` or `Mixed`, whatever the type holding it
 """
 representation(::State{R}) where R = R
 
+"""
+    ignored_options(state)
+
+the options of the phases, among `:algo`, `:limits` and `:mpo_limits`, that the type of `state`
+accepts without use, which a run notes in its log: none by default
+"""
+ignored_options(::AbstractState) = ()
+
 show(io::IO, s::State{R}) where R =
     print(io, "State{$R}($(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
 
