@@ -200,6 +200,8 @@ struct GatesSteps
 end
 
 function prepare_phase(phase::Gates, sim::Simulation)
+    n = length(prodsubs(phase.gates))
+    log_message(sim, "Applying $n gate$(n == 1 ? "" : "s")")
     names = state_names(phase.on)
     mps = filter(name -> state_named(sim, name) isa State, names)
     prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in mps ]

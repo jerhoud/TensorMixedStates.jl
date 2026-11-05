@@ -18,7 +18,7 @@ the reference article.
 - `ConvertState{R}`, a phase taking the state to the representation `R`; `ToMixed` is `ConvertState{Mixed}`.
 - `Mixture(terms)` and `FullyMixed(quantities...)`, the states of `mixture` and `fully_mixed` as descriptions for `State{R}` and `CreateState{R}`.
 - `Proj(N(3) => 1)`, `Dephase(N(1))` and `Reset(N(3) => 1)` are placed where the operator is.
-- The log notes each launch, the bond dimension of the MPOs, the checkpoints and the peak memory, and for each step the largest bond dimension and the duration.
+- The log notes each launch with its duration, the bond dimension and the memory of the MPOs, the number of gates of a `Gates` phase, the checkpoints and the peak memory, and for each step the largest bond dimension and the duration.
 - `runTMS` copies the files the program includes into `prog` and resumes a checkpoint only if they did not change.
   A checkpoint written by 2.0 for a program that includes files is resumed by setting `TMS_ACCEPT_PROGRAM=1` once.
 - The `stamp` notes the machine and the versions of ITensors, ITensorMPS, NDTensors, KrylovKit and of the packages of the script.

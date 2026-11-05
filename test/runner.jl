@@ -1329,14 +1329,16 @@ end
 end
 
 @testset "What the log and the stamp note" begin
-    phases = [CreateState{Pure}(3, Qubit(), "Up"),
+    phases = [CreateState{Pure}(3, Qubit(), "Up"), Gates(gates = H(1) * X(2)),
               Evolve(evolver = -im * (X(1) + X(2) * X(3)), duration = 0.2, time_step = 0.1)]
     in_tmp() do
         runTMS(SimData(; name = "sim", phases); checkpoint_interval = 1e-9)
         log = read("sim/log", String)
+        @test occursin("\nApplying 2 gates\n", log)
+        @test occursin(r"\*\*\*\*\* This launch took [\d.]+ seconds, .* peak memory ", log)
         @test startswith(log, "Run on $(gethostname()), ")
         @test occursin("Created State{Pure}(System(3, Qubit()), (maxlinkdim = 1))\n", log)
-        @test occursin(r"The MPO of the evolver has bond dimension 3, built in [\d.]+ s\n", log)
+        @test occursin(r"evolver has bond dimension 3, takes [\d.]+ \w+, built in [\d.]+ s\n", log)
         @test occursin(r"\nstep 2, time 0.2, maxdim \d+, [\d.]+ s\n", log)
         @test occursin(r"\nCheckpoint written at time 0.2, ", log)
         @test occursin(r"allocated, peak memory .* \*\*\*\*\*\n", log)
