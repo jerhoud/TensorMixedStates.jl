@@ -4,21 +4,28 @@
 export Evolve, Thermalize, GroundState, SteadyState
 
 """
-    log_mpo(sim, what, d, start)
+    log_mpo(sim, what, d, bytes, start)
 
 log the bond dimension `d` of the MPO of `what`, the evolver for instance, which sets the cost of
-the phase, and the seconds since `start` it took to build, which the first step does not count
+the phase, the memory `bytes` it takes, and the seconds since `start` it took to build, which the
+first step does not count
 """
-function log_mpo(sim::Simulation, what::String, d::Int, start::Float64)
-    log_message(sim, "The MPO of the $what has bond dimension $d, built in " *
-                     "$(round(time() - start; digits = 3)) s")
+function log_mpo(sim::Simulation, what::String, d::Int, bytes::Int, start::Float64)
+    log_message(sim, "The MPO of the $what has bond dimension $d, takes " *
+                     "$(Base.format_bytes(bytes)), built in $(round(time() - start; digits = 3)) s")
     getfield(sim, :run).step_start = time()
     return nothing
 end
 
-# the bond dimension of its MPO, the term finished taking a channel more, see `make_mpo`
+# the bond dimension of its MPO, the term finished taking a channel more, see `make_mpo`, and
+# the memory of its prepared form, without the system it shares with the other operators
 log_mpo(sim::Simulation, what::String, pre::PreMPO, start::Float64) =
-    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1, start)
+    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1,
+            Base.summarysize(pre; exclude = Union{DataType, Core.TypeName, Core.MethodInstance,
+                                                  System}), start)
+
+log_mpo(sim::Simulation, what::String, mpo::MPO, start::Float64) =
+    log_mpo(sim, what, maxlinkdim(mpo), Base.summarysize(mpo), start)
 
 # the evolver of a state of one's own, which need not be an MPO
 function log_mpo(sim::Simulation, what::String, ::Any, start::Float64)
@@ -389,7 +396,7 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
     log_message(sim, isempty(args) ? "Searching the ground state" :
                      "Searching an excited state, of weight $(args.weight)")
     mpo = cached_mpos(() -> make_mpo(pre), pre, :mpo, nothing)
-    log_mpo(sim, "Hamiltonian", maxlinkdim(mpo), start)
+    log_mpo(sim, "Hamiltonian", mpo, start)
     return run_search(phase, sim, done, mpo, identity,
                       (_, st) -> check_orthogonal(st, args, phase.weight), :energy; args...)
 end
@@ -456,7 +463,7 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
     start = time()
     l2 = squared_lindbladian(prepared_operator(state, phase.lindbladian), phase.mpo_limits)
     log_message(sim, "Searching the steady state")
-    log_mpo(sim, "squared Lindbladian", maxlinkdim(l2), start)
+    log_mpo(sim, "squared Lindbladian", l2, start)
     return run_search(phase, sim, done, l2, st -> st / trace(st), steady_result, :residual;
                       krylov = steady_krylov)
 end

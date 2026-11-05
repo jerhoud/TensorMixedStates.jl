@@ -788,6 +788,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                 # checkpoint continues
                 reopen!(outputs, commit.marks)
             end
+            launched, allocated = time(), Base.gc_bytes()
             try
                 sim = run_phases(sim, sd.phases, start, done, ended, threading)
                 output_final(sim, sd)
@@ -811,6 +812,10 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                 k = c.last
                 sim = Simulation(k.state, k.time, k.values, run)
             end
+            # this launch only, a resumed run counting from its own start
+            log_line(run, "\n***** This launch took $(round(time() - launched; digits = 3)) " *
+                          "seconds, $(Base.format_bytes(Base.gc_bytes() - allocated)) " *
+                          "allocated, peak memory $(Base.format_bytes(Sys.maxrss())) *****")
             return sim
         end
         # what a program, or an AI running it, reads without opening the log
