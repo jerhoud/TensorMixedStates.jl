@@ -740,10 +740,7 @@ end
         sim = runTMS(SimData(name = "lx", phases = [
             LoadState(file = "../w/s.h5", backend = TMS.ExactState)]))
         @test sim.state isa TMS.ExactState{Pure} && sim.state.state ≈ e.state
-        # refused: a random exact state, a backend with its representation or not a type, a
-        # mixed state made pure
-        @test_throws "as a State only" runTMS(SimData(name = "r", phases = [
-            CreateState{Pure}(sys, "Up"; randomize = 2, backend = TMS.ExactState)]))
+        # refused: a backend with its representation or not a type, a mixed state made pure
         @test_throws "without its representation" CreateState{Pure}(
             sys, "Up"; backend = TMS.ExactState{Pure})
         @test_throws "a type of states" SimData(backend = 3, phases = [CreateState(ψ)])
@@ -788,4 +785,44 @@ end
             PartialTrace(keep = [2, 3])]))
         @test sim.state.state ≈ TMS.ExactState{Mixed}(System(2, Qubit()), ["+", "Dn"]).state
     end
+end
+
+@testset "Random exact states and their link dimension" begin
+    # uniform on the sphere: the mean weight of a basis vector is 1/d
+    q = System(3, Qubit())
+    rng = Xoshiro(11)
+    w = [ abs2(random_state(TMS.ExactState{Pure}, q, 4; rng).state[1]) for _ in 1:2000 ]
+    @test sum(w) / length(w) ≈ 1 / 8 atol = 0.01
+    # in the sector of the local states, pure and mixed, the mixed one block diagonal over the
+    # sectors its purification reaches, against the number of particles counted here
+    f = System(3, Fermion(conserve = N))
+    occ = real(LA.diag(matrix(N, Fermion())))
+    count_n = [ sum(occ[k + 1] for k in digits(b - 1; base = 2, pad = 3)) for b in 1:8 ]
+    ψ = random_state(TMS.ExactState{Pure}, f, ["Occ", "Emp", "Occ"], 4; rng)
+    @test norm(ψ.state) ≈ 1
+    @test all(iszero(ψ.state[b]) for b in 1:8 if count_n[b] ≠ 2)
+    @test random_state(ψ, 4; rng).state[count_n .≠ 2] == zeros(count(≠(2), count_n))
+    ρ = random_state(TMS.ExactState{Mixed}, f, ["Occ", "Emp", "Occ"], 4; rng).state
+    nm = LA.Diagonal(count_n)
+    @test LA.tr(ρ) ≈ 1 && ρ ≈ ρ' && norm(ρ * nm - nm * ρ) < 1e-12
+    @test minimum(LA.eigvals(LA.Hermitian(ρ))) > -1e-12
+    σ = random_state(TMS.ExactState{Mixed}, q, 4; rng).state
+    @test LA.tr(σ) ≈ 1 && minimum(LA.eigvals(LA.Hermitian(σ))) > -1e-12
+    # refused as for a State
+    @test_throws "conserves something" random_state(TMS.ExactState{Pure}, f, 4)
+    @test_throws "strongly" random_state(TMS.ExactState{Mixed}, System(2, Fermion(conserve =
+        strong(N))), ["Occ", "Emp"], 4)
+    @test_throws "local states" random_state(TMS.ExactState{Mixed}, q, FullyMixed(), 4)
+    # drawn in a run
+    in_tmp() do
+        sim = runTMS(SimData(name = "r", seed = 2, backend = TMS.ExactState, phases = [
+            CreateState{Pure}(f, ["Occ", "Emp", "Occ"]; randomize = 4)]))
+        @test sim.state isa TMS.ExactState{Pure} && all(iszero(sim.state.state[b]) for b in 1:8
+                                                        if count_n[b] ≠ 2)
+    end
+    # the link dimension of the whole space
+    @test maxlinkdim(TMS.ExactState{Pure}(System(4, Qubit()), "Up")) == 4
+    @test maxlinkdim(TMS.ExactState{Mixed}(q, "Up")) == 4
+    @test maxlinkdim(TMS.ExactState{Pure}(System([Qubit(), Qudit(3), Qubit()]), "0")) == 2
+    @test maxlinkdim(TMS.ExactState{Pure}(System(1, Qubit()), "Up")) == 1
 end
