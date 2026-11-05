@@ -12,8 +12,8 @@ density matrix for `R = Mixed`. It is made from a description as `State{R}` take
 `State`, or from the whole vector or density matrix `x`, normalised, of definite charges on a
 system conserving something, what rounding leaves in the sectors they forbid dropped. The
 truncation limits and the methods that functions take for a `State` are accepted and ignored;
-evolutions are exact up to `1e-10`, and a search stays, as Lanczos does, in what the state it
-starts from reaches, its sector of the charges conserved, declared or not.
+evolutions are exact up to `1e-10`, and a search stays in the sector of the charges declared of
+the state it starts from, the symmetries not declared broken as DMRG does.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
   refused, none by default, as for `mix`; a whole array given is taken whatever its size
@@ -578,6 +578,24 @@ function searched_operator(system::System, a, what::String)
     return a
 end
 
+"""
+a random vector of norm one of the shape of the vector `x` of `system`, in the sector of its
+charges declared, drawn by `rng`
+"""
+function random_in_sector(system::System, x::AbstractVector, rng::AbstractRNG)
+    r = randn(rng, ComplexF64, length(x))
+    if is_charged(system)
+        a, idx, _ = dense_legs(system, x)
+        table = charge_table(idx)
+        q = common_charge(a, table, rounding_tol * norm(a))
+        if isnothing(q)
+            error("the state has no definite charge, which a system conserving it cannot hold")
+        end
+        r = vec(of_charge(reshape(r, size(a)), table, q))
+    end
+    return r / norm(r)
+end
+
 # the method and the limits of the MPS without use, `algo` not needed; the search of a State
 # solved exactly, see `orthogonal_args`: the lowest state of the Hamiltonian plus `weight` times
 # the projectors of the states of `orthogonal_to`, its energy that of the Hamiltonian alone
@@ -598,7 +616,11 @@ function ground_state(hamiltonian, state::ExactState{Pure};
     end
     w = something(weight, 1.1 * sum(t -> term_width(system, t), ts; init = 0.0))
     A = isempty(refs) ? H : v -> H(v) + w * sum(r.state * dot(r.state, v) for r in refs)
-    _, v = exact_eigen(A, state.state, :SR, true, "ground_state of an ExactState did not " *
+    # Lanczos started from the state given perturbed by a random state of its sector of the
+    # charges declared, so that it reaches the sectors of the symmetries not declared, as DMRG
+    # does, the state given still picking among degenerate states
+    x = state.state + 0.01 * norm(state.state) * random_in_sector(system, state.state, Xoshiro(1))
+    _, v = exact_eigen(A, x, :SR, true, "ground_state of an ExactState did not " *
                        "converge in Krylov, its spectrum crowded at its bottom: start from a " *
                        "state closer to the ground state")
     found = normalize(ExactState{Pure}(system, v, Val(:raw)))

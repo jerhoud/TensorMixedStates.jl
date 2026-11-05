@@ -647,3 +647,24 @@ end
         @test count("Resuming from the checkpoint", read("chk/log", String)) > nsteps
     end
 end
+
+@testset "Searches of an exact state leave the sectors of the symmetries not declared" begin
+    # an Ising chain conserves the parity of its X, undeclared: from a state of one parity, the
+    # levels of the other reached, against the matrix built here with kron
+    n = 4
+    sys = System(n, Qubit())
+    x, z = matrix(X, Qubit()), matrix(Z, Qubit())
+    hd = -sum(Z(i) * Z(i + 1) for i in 1:n-1) - 0.3 * sum(X(i) for i in 1:n)
+    hm = -sum(on_qubit(z, i, n) * on_qubit(z, i + 1, n) for i in 1:n-1) -
+         0.3 * sum(on_qubit(x, i, n) for i in 1:n)
+    λ = LA.eigvals(LA.Hermitian(hm))
+    ψ = TMS.ExactState{Pure}(sys, "+")
+    e, g = ground_state(hd, ψ)
+    @test e ≈ λ[1] atol = 1e-12
+    @test ground_state(hd, ψ; orthogonal_to = [g]).energy ≈ λ[2] atol = 1e-12
+    odd = TMS.ExactState{Pure}(sys, ["+", "+", "+", "-"])
+    @test ground_state(hd, odd).energy ≈ λ[1] atol = 1e-12
+    # among degenerate ground states, the one the state given picks
+    _, up = ground_state(-sum(Z(i) * Z(i + 1) for i in 1:n-1), TMS.ExactState{Pure}(sys, "Up"))
+    @test abs2(up.state[1]) > 0.9999
+end

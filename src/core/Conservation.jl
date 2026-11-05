@@ -2,7 +2,8 @@
 # strong or weak, the relabellings of the charges they need, and sites compared and printed as
 # values. The later layers lay matrices on charged indices with `conserved`, `strong_names`,
 # `star`, `bra_index`, `basis_charges`, `qn_components`, `has_definite_flux`, `charged_itensor`,
-# `in_charge`, `charge_flux`, `FluxError` and `adjoint_index`.
+# `in_charge`, `charge_table`, `common_charge`, `of_charge`, `charge_flux`, `FluxError` and
+# `adjoint_index`.
 
 export Conservation, conserving, strong, symmetries, weaken, flux
 
@@ -573,6 +574,13 @@ function in_charge(a::AbstractArray, inds)
     if isnothing(q)
         error("in_charge needs an array of a definite charge: check it with has_definite_flux")
     end
+    return of_charge(a, table, q)
+end
+
+"""
+the array `a` with its elements of a charge other than `q` zeroed, see `charge_table`
+"""
+function of_charge(a::AbstractArray, table, q)
     b = copy(a)
     for c in CartesianIndices(b)
         if !has_charge(table, c, q)
