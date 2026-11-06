@@ -151,8 +151,8 @@ function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where {R <
     g = gathered(system, a)
     ts = developed(system, g)
     # on a density matrix, only the elements the terms reach, rather than the whole product
-    v = R === Pure ? dot(x, first(gathered_acted(system, g, x))) :
-        isnothing(ts) ? tr(first(gathered_acted(system, g, x))) : dense_trace(system, ts, x)
+    v = R === Pure ? dot(x, gathered_acted(system, g, x)) :
+        isnothing(ts) ? tr(gathered_acted(system, g, x)) : dense_trace(system, ts, x)
     return v / nonzero_trace(state, "expect")
 end
 
@@ -496,13 +496,35 @@ part_renyi2(state::ExactState{Pure}, kept::Vector{Int}) =
     -log(sum(abs2, kept_spectrum(state, kept, "renyi2")))
 
 """
+the system `system` conserving nothing, the operator `op` checked on it first: refused on a
+charged `system` when it changes the charges by no definite amount, as on a `State`, see
+`compacted_op`
+"""
+function checked_plain(system::System, a::IndexedOp{IsOperator})
+    check_indices(system, a)
+    if is_charged(system)
+        compacted_op(system, a)
+    end
+    return weaken(system, ())
+end
+
+"""
+the operator `op`, placed on sites, applied to the vector `x`, or to the kets of the matrix `x`,
+see `gathered_acted`, refused when it changes the charges of `system` by no definite amount
+"""
+function operator_acted(system::System, a::IndexedOp{IsOperator}, x::AbstractVecOrMat)
+    plain = checked_plain(system, a)
+    return gathered_acted(plain, gathered(plain, a), x)
+end
+
+"""
 the operator `p`, placed on sites, applied to the kets of the density matrix `ρ`, then to its
 bras as its adjoint: ``p \\rho p^\\dagger``
 """
 function on_both_sides(system::System, p::IndexedOp{IsOperator}, ρ::AbstractMatrix)
-    check_indices(system, p)
-    g = gathered(system, p)
-    return first(gathered_acted(system, g, first(gathered_acted(system, g, ρ))'))'
+    plain = checked_plain(system, p)
+    g = gathered(plain, p)
+    return gathered_acted(plain, g, gathered_acted(plain, g, ρ)')'
 end
 
 # applied as `apply` applies them to a `State`, the limits of the MPS without use

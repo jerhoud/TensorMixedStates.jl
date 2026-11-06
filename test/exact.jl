@@ -966,6 +966,11 @@ end
     @test apply(op, ρ).state ≈ m * r * m'
     @test expect(ρ, op; complex = true) ≈ LA.tr(m * r) / LA.tr(r)
 
+    # a product of definite flux whose factors have none, X(1) Swap(1, 2) X(2) conserving N,
+    # applied as on a State
+    qn = System(3, Qubit(conserve = N))
+    xs = ExactState(State{Pure}(qn, ["Up", "Dn", "Up"]))
+    @test apply(X(1) * Swap(1, 2) * X(2), xs).state ≈ apply(Swap(1, 2), xs).state
     # on a charged system, a sum of parts changing the charges by different amounts is refused
     fc = System(4, Fermion(conserve = N))
     xc = ExactState(State{Pure}(fc, ["Occ", "Emp", "Occ", "Emp"]))

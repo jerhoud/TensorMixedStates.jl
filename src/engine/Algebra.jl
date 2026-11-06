@@ -395,7 +395,21 @@ function compacted_form(system::System, a, g::IndexedOp{IsOperator}, limits::Lim
     form(x) = compacted_form(system, x, x, Limits(), side, developed(system, x))
     s = scalararg(g)
     parts = Tuple{CompactedOp{R}, Number}[]
-    if s isa ProdOp
+    if s isa ProdOp && is_charged(system)
+        # a factor of no definite flux taken in its parts of each flux, see `sector_product`
+        ps = [ flux_parts(system, f, side) for f in s.subs ]
+        if all(p -> length(p) == 1, ps)
+            cache = Dict(zip(s.subs, [ last(only(p)) for p in ps ]))
+            add_part!(parts, blocked_product(s.subs, f -> cache[f]), coef(scalarcoef(g)))
+        else
+            acc = sector_product(system, R, ps)
+            if length(acc) > 1
+                flux_refusal(system, a, first.(acc))
+            elseif !isempty(acc)
+                add_part!(parts, last(only(acc)), coef(scalarcoef(g)))
+            end
+        end
+    elseif s isa ProdOp
         add_part!(parts, blocked_product(s.subs, form), coef(scalarcoef(g)))
     elseif s isa SumOp
         dev = Term[]
@@ -416,6 +430,72 @@ function compacted_form(system::System, a, g::IndexedOp{IsOperator}, limits::Lim
         error("$(obs_name(g)) develops into its terms, which compacted_form was not given")
     end
     return combined(system, parts, limits, a)
+end
+
+"""
+    flux_parts(system, f, side)
+
+the factor `f`, gathered, of a product on the charged `system`, compacted as `compacted_op` does
+with `side`, in its parts of definite flux, as pairs `flux => part`: its terms grouped by their
+flux when it develops, those of rounding size next to the largest left out, see
+`normalized_size`; otherwise its compaction, of the one flux it must then have
+"""
+function flux_parts(system::System, f::IndexedOp{IsOperator}, side::Union{Nothing, Symbol})
+    R = isnothing(side) ? Pure : Mixed
+    ts = developed(system, f)
+    if isnothing(ts)
+        c = compacted_form(system, f, f, Limits(), side, nothing)
+        return isnothing(c.flux) ? Pair{QN, CompactedOp{R}}[] : [c.flux => c]
+    end
+    sizes = normalized_size.(ts)
+    small = rounding_tol * maximum(sizes; init = 0.0)
+    groups = Pair{QN, Vector{Term}}[]
+    for (t, z) in zip(ts, sizes)
+        if z ≤ small
+            continue
+        end
+        q = term_flux(Pure, system, f, t)
+        k = findfirst(p -> first(p) == q, groups)
+        if isnothing(k)
+            push!(groups, q => [t])
+        else
+            push!(last(groups[k]), t)
+        end
+    end
+    return Pair{QN, CompactedOp{R}}[ q => from_terms(R, system, f, checked_side(system, f, g, side))
+                                     for (q, g) in groups ]
+end
+
+"""
+    sector_product(system, R, parts)
+
+the product of factors given by their parts of definite flux, `parts` holding the pairs
+`flux => part` of each, compacted on `system`, as pairs `flux => product` over the fluxes the
+products reach and do not vanish, see `vanishes`: accumulated factor by factor, the products
+reaching one flux summed, see `combined`, as `cancelling_products` does for the terms of no flux.
+A product of factors of no definite flux, as `X(1) * Swap(1, 2) * X(2)` conserving `N`, can
+have one, the products of the other fluxes vanishing.
+"""
+function sector_product(system::System, ::Type{R}, parts::Vector) where R
+    unit = CompactedOp{R}(system, 1.0, Dict{Int, Matrix}(), nothing, 1.0, 0.0, QN(), nothing)
+    acc = Pair{QN, CompactedOp{R}}[ QN() => unit ]
+    for ps in parts
+        next = Pair{QN, CompactedOp{R}}[]
+        for (q, x) in acc, (r, b) in ps
+            y = product(x, b)
+            if vanishes(y)
+                continue
+            end
+            k = findfirst(p -> first(p) == q + r, next)
+            if isnothing(k)
+                push!(next, (q + r) => y)
+            else
+                next[k] = first(next[k]) => combined(system, [(last(next[k]), 1), (y, 1)])
+            end
+        end
+        acc = next
+    end
+    return acc
 end
 
 """
