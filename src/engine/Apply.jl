@@ -139,7 +139,8 @@ the factors of the product `op`, gathered, see `gathered`, cut into the pieces `
 one by one, and the number they are multiplied by: the factors on two neighbouring sites taken
 together, see `grouped`, then the factors of one site of definite parity brought together where
 they commute with the pieces they cross, a sign for two odd ones, so that their strings
-compensate, every other factor being a piece of its own
+compensate, every other factor being a piece of its own. On a charged system, a product with a
+factor whose terms change the charges by different amounts is one piece, see `flux_groups`.
 """
 function pieces(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
@@ -151,6 +152,14 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     run = 0
     after, odd, none = Set{Int}(), 0, false
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(scalararg(g)) if !(x isa IdentityOp) ]
+    # a piece needs a definite flux on charged sites, which a factor with none does not give
+    function fluxes(f)
+        gs = flux_groups(system, f)
+        return isnothing(gs) ? 1 : length(gs)
+    end
+    if is_charged(system) && any(f -> fluxes(f) > 1, fs)
+        return coef, [ (ProdOp(fs), false) ]
+    end
     for x in grouped(system, fs)
         sx, px = sites_of(x), parity_on(system, x)
         joins = x isa AtIndex && length(x.index) == 1 && !isnothing(px)
@@ -519,7 +528,7 @@ they bring, 0 for a dense piece that is zero. A piece on one site or two neighbo
 matrix on more sites goes through its MPO as any other piece. Otherwise it goes
 through gates of one site when it has a single term, as a run usually does, and through its MPO
 otherwise, see `compacted_op`, on a density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``,
-see `compacted_super`
+the product of its sides
 """
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
                       run::Bool) where R
@@ -537,8 +546,12 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     c = compacted_op(system, p)
     if !isnothing(c.terms) && length(c.terms) == 1
         return one_site_gates!(steps, R, system, only(c.terms))
+    elseif R === Mixed
+        # not `Gate(p)`, which is the product of the gates of its factors, of no definite flux
+        # when they have none
+        c = product(compacted_op(system, p; side = :left), compacted_op(system, p; side = :right))
     end
-    return pre_step!(steps, PreMPO(system, [R === Pure ? c : compacted_super(system, Gate(p))]))
+    return pre_step!(steps, PreMPO(system, [c]))
 end
 
 """
