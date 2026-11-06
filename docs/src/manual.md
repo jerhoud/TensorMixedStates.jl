@@ -252,7 +252,7 @@ h = sum(X(i)X(i+1) for i in 1:n-1)
 Many operations are defined on generic operators:
 
 - addition, multiplication and power by a number
-- tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`)
+- tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`). Placed, it is the product of its factors placed, `(X⊗X)(2, 5) == X(2) * X(5)`, and a sum or a product of generic operators is placed term by term or factor by factor likewise
 - `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``; `C'` is the same, and both take placed operators too, `h + h'`.
 - `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the dissipator whose jump operator, `Sp`, the ``S^+`` operator, flips a qubit toward up
 - `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply a ``\sigma_x`` gate 10 percent of the time.
@@ -261,7 +261,9 @@ Many operations are defined on generic operators:
   the state of zero ``S_z``.
 - `Level` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
   is the basis of the site, and `Level => n` the basis state `n`, counted from 0.
-- the functions `exp` and `sqrt`: for example `sqrt(Swap)`
+- the functions `exp` and `sqrt`: for example `sqrt(Swap)`. They, `mod`, `parity`, `Proj(A => λ)`
+  and `Dephase` take the operator before it is placed, `exp(X⊗X)(1, 2)`, a placed one only when
+  it is a single operator, as `Proj(N(3) => 1)`
 - `controlled` makes controlled gates, which do nothing when their first site is in its first
   basis state, `Level => 0`, as `"Up"` for a qubit: `controlled(X)` is the `CX` of the module
   `Circuits`, see [Gates](@ref)

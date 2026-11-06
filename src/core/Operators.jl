@@ -400,7 +400,9 @@ Proj(p::Pair{<:IndexedOp{IsOperator}, <:Real}) =
 """
     AtIndex{K, N}
 
-an operator placed on sites, as `X(1)` or `Swap(2, 4)`, on distinct sites
+an operator placed on sites, as `X(1)` or `Swap(2, 4)`, on distinct sites. An operator built of
+others is placed through them, see `placed_through`, `(A ⊗ B)(i, j)` being `A(i) * B(j)`, so
+that an `AtIndex` of an operator holds a leaf, an operator taken by its matrix
 """
 struct AtIndex{K, N} <: IndexedOp{K}
     op::GenericOp{K, N}
@@ -410,10 +412,13 @@ struct AtIndex{K, N} <: IndexedOp{K}
             error("$(obs_name(op)) acts on $N sites and cannot be placed on $index, which " *
                   "repeats a site")
         end
-        if scalararg(op) isa IdentityOp
+        a = scalararg(op)
+        if a isa IdentityOp
             return scale(scalarcoef(op), IdentityOp{K, Indexed, 1}())
+        elseif built_of_others(a)
+            return scale(scalarcoef(op), placed_through(a, index))
         end
-        return scale(scalarcoef(op), new{K, N}(scalararg(op), index))
+        return scale(scalarcoef(op), new{K, N}(a, index))
     end
 end
 
@@ -754,6 +759,9 @@ it generates.
 """
 exp(a::GenericOp{IsOperator, N}) where N = ExpOp{IsOperator, N}(a)
 exp(a::GenericOp{IsGenerator, N}) where N = ExpOp{IsChannel, N}(a)
+exp(a::Op{<:Any, Indexed}) =
+    error("$(obs_name(a)) has no exponential once placed: take that of the operator before " *
+          "placing it, exp(X ⊗ X)(1, 2)")
 
 """
     DagOp{N}
@@ -790,6 +798,33 @@ dag(a::IdentityOp{IsOperator, Indexed}) = a
 Base.adjoint(a::Op{IsOperator}) = dag(a)
 
 """
+    built_of_others(op)
+
+whether the generic operator `op` is built of others that place each on its own, so that it is
+placed through them, see `placed_through`: a tensor product, a sum, a product, the adjoint or a
+natural power of such an operator. Any other is a leaf, taken by its matrix, a named expression
+among them, as a gate is.
+"""
+built_of_others(::Union{TensorOp{IsOperator}, SumOp{IsOperator, Generic},
+                        ProdOp{IsOperator, Generic}}) = true
+built_of_others(a::Union{DagOp, IntPowOp{IsOperator}}) = built_of_others(a.arg)
+built_of_others(_) = false
+
+"""
+    placed_through(op, index)
+
+the operator `op`, built of others, see `built_of_others`, placed on the sites `index` through
+them: sums term by term, products and natural powers factor by factor, tensor products factor by
+factor on their sites, their identities left out, the adjoint as that of its operand placed
+"""
+placed_through(a::SumOp, index) = SumOp(IndexedOp{IsOperator}[ x(index...) for x in a.subs ])
+placed_through(a::ProdOp, index) = ProdOp(IndexedOp{IsOperator}[ x(index...) for x in a.subs ])
+placed_through(a::DagOp, index) = dag(a.arg(index...))
+placed_through(a::IntPowOp, index) = prod(fill(a.arg(index...), a.expo))
+placed_through(a::TensorOp, index) =
+    prod(o(index[r]...) for (o, r) in zip(a.subs, factor_sites(a)) if !(o isa IdentityOp))
+
+"""
     ModOp{N}
 
 an operator `A` taken modulo an integer `m` of at least 2, ``e^{2i\\pi A/m}``, see `mod`
@@ -812,6 +847,9 @@ the operator ``e^{2i\\pi A/m}``. Conserved, `conserve = mod(N, 3)` gives the cha
 ``n \\bmod 3``, added modulo 3 over the sites.
 """
 mod(a::GenericOp{IsOperator}, m::Int) = ModOp(a, m)
+mod(a::IndexedOp{IsOperator}, ::Int) =
+    error("$(obs_name(a)) has no modulus once placed: take that of the operator before " *
+          "placing it, mod(N ⊗ Id + Id ⊗ N, 3)(1, 2)")
 
 """
     parity(A)
@@ -823,6 +861,9 @@ the operator ``(-1)^A``, `mod(A, 2)`: conserved, a charge of ``\\mathbb{Z}_2``.
     Fermion(conserve = parity(N))
 """
 parity(a::GenericOp{IsOperator}) = ModOp(a, 2)
+parity(a::IndexedOp{IsOperator}) =
+    error("$(obs_name(a)) has no parity once placed: take that of the operator before " *
+          "placing it, parity(N ⊗ Id + Id ⊗ N)(1, 2)")
 
 ############### Purity ###############
 
