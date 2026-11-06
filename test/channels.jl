@@ -1146,6 +1146,11 @@ end
     g = exp(-0.2im * (A ⊗ dag(A) + dag(A) ⊗ A))(1, 2)
     u = lowered(bs, g)
     @test ket_bra_matrix(apply(g, ρb)) ≈ u * rb * u'
+    # and so is any other channel on them, whose dense block would hold 4096² elements
+    d = Dissipator(A(1) * A(2))
+    @test only(last(TMS.mixed_steps(bs, d))) isa TMS.WindowMPO
+    l = lowered(bs, A(1) * A(2))
+    @test ket_bra_matrix(apply(d, ρb)) ≈ l * rb * l' - (l' * l * rb + rb * l' * l) / 2
 end
 
 @testset "Gates on a density matrix, on the kets then on the bras" begin
