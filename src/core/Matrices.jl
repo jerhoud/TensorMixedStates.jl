@@ -267,8 +267,9 @@ the matrix of the generic operator `op` on the given sites, a single one standin
 identical ones, the last site varying fastest. A tensor product of fermionic factors holds the
 Jordan-Wigner strings between them: the matrix of `C ⊗ dag(C)` is that of `C(1) * dag(C)(2)`.
 A channel or a generator acts on the density matrices ρ of the sites: its matrix is that of
-the map of vec(ρ), the last site varying fastest and, on each site, the ket faster than the
-bra.
+the map of the elements of ρ, numbered by the pair (ket, bra) of each site, the ket faster
+than the bra and the last site varying fastest. On one site this is the order of vec(ρ); on
+several it is not, vec(ρ) varying the kets of all the sites faster than any bra.
 
 # Examples
 
