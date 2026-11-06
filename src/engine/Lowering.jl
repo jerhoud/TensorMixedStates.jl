@@ -505,10 +505,10 @@ end
 """
     pure_terms(system, k, index)
 
-the terms of the operator `k`, generic and placed on the sites `index`, or placed, its products
-gathered first, see `gathered`, their strings not laid
+the terms of the operator `k`, generic and placed on the sites `index`, or placed, gathered
+first, see `gathered`, their strings not laid
 """
-pure_terms(system::System, k::GenericOp{IsOperator}, index) = reduced(op_terms(system, k, index))
+pure_terms(system::System, k::GenericOp{IsOperator}, index) = pure_terms(system, k(index...), ())
 pure_terms(system::System, k::IndexedOp{IsOperator}, _) =
     reduced(op_terms(system, gathered(system, k), ()))
 
@@ -531,17 +531,16 @@ end
     op_terms(system, op, index)
 
 the terms of the operator `op` on `system`, as it is written: sums and products distributed, a
-generic operator placed on the sites `index`. A tensor product is the product of its factors
-placed, `(A ⊗ B)(i, j) = A(i) * B(j)`, and a named expression is its expression. A generic sum
-or a named expression of one site is taken by its matrix instead, a term for each parity rather
-than one for each operand, and so is any other operator, see `matrix_terms`. A channel or a
-generator gives the terms of its superoperator: those of a gate, an evolver or a dissipator are
-made of the terms of their operators on each side of the density matrix, see `sided_term`, and
-those of a dephasing are gates when it allows, see `dephase_gates`.
+generic operator placed on the sites `index`. An operator, placed through what it is built of,
+see `AtIndex`, reaches its leaves: a named expression of several sites gives the terms of that
+expression placed, see `pure_terms`, any other leaf those of its matrix, a term for each
+parity, see `matrix_terms`. A channel or a generator gives the terms of its superoperator: a
+tensor product of channels the product of its factors placed, a gate, an evolver or a
+dissipator the terms of their operators on each side of the density matrix, see `sided_term`,
+and a dephasing gates when it allows, see `dephase_gates`.
 """
 op_terms(system::System, a::SumOp, index) =
     reduce(vcat, [ op_terms(system, x, index) for x in a.subs ])
-op_terms(system::System, a::SumOp{IsOperator, Generic, 1}, index) = matrix_terms(system, a, index)
 op_terms(system::System, a::ProdOp, index) =
     tree_products([ op_terms(system, x, index) for x in a.subs ])
 op_terms(system::System, a::ScalarOp, index) = scaled(a.coef, op_terms(system, a.arg, index))
@@ -551,7 +550,8 @@ op_terms(system::System, a::TensorOp, index) =
     tree_products([ op_terms(system, o, index[p]) for (o, p) in zip(a.subs, factor_sites(a)) ])
 op_terms(system::System, a::DagOp, index) = map(dag, op_terms(system, a.arg, index))
 op_terms(system::System, a::Operator{N}, index) where N =
-    N > 1 && a.expr isa GenericOp ? op_terms(system, a.expr, index) : matrix_terms(system, a, index)
+    N > 1 && a.expr isa GenericOp ? pure_terms(system, a.expr, index) :
+    matrix_terms(system, a, index)
 op_terms(system::System, a::Union{Proj, ExpOp, IntPowOp, GenPowOp{IsOperator}, ModOp, Reset},
          index) =
     matrix_terms(system, a, index)
@@ -582,24 +582,6 @@ function projector_gates(system::System, a::Dephase, index)
 end
 
 """
-    distributed(a, index)
-
-the operator `a` placed on the sites `index`, its sums placed term by term and its tensor
-products factor by factor, their identities left out
-"""
-distributed(a::SumOp{IsOperator}, index) =
-    SumOp(IndexedOp{IsOperator}[ distributed(x, index) for x in a.subs ])
-distributed(a::ScalarOp{IsOperator}, index) = scale(a.coef, distributed(a.arg, index))
-
-function distributed(a::TensorOp{IsOperator}, index)
-    fs = [ distributed(o, index[r]) for (o, r) in zip(a.subs, factor_sites(a))
-           if !(o isa IdentityOp) ]
-    return isempty(fs) ? a(index...) : prod(fs)
-end
-
-distributed(a::GenericOp{IsOperator}, index) = a(index...)
-
-"""
     twirl_gates(system, a, index)
 
 the terms of the dephasing `a` on the sites `index` of `system` in the eigenbasis of a sum of
@@ -608,7 +590,7 @@ operators of one site, see `counting`, as the mean of the gates of its `K` produ
 U_k^\\dagger``, the totals lying within `K` successive integers; `nothing` for another operator
 """
 function twirl_gates(system::System, a::Dephase, index)
-    cnt = counting(system, distributed(a.arg, index), "Dephase")
+    cnt = counting(system, a.arg(index...), "Dephase")
     if isnothing(cnt)
         return nothing
     end
@@ -875,6 +857,9 @@ function parity_on(system::System, a::AtIndex)
     fs = [ matrix(F, s) for s in sites ]
     if all(f -> f == I, fs)
         return 0
+    elseif a.op isa Operator && a.op.expr isa GenericOp && length(sites) > 1
+        # a named expression, a gate, that of its expression, without its dense matrix
+        return parity_on(system, a.op.expr(a.index...))
     end
     return parity_of(matrix(a.op, sites...), foldl(kron, fs))
 end
@@ -1128,30 +1113,14 @@ function merged_pass(system::System, fs, info, refused)
 end
 
 """
-    as_product(a)
-
-the placed operator `a`, a placed tensor product being taken as the product of its factors
-placed, `(A ⊗ B)(i, j) == A(i) * B(j)`
-"""
-as_product(a::AtIndex{IsOperator}) =
-    if a.op isa TensorOp
-        ProdOp(IndexedOp{IsOperator}[ as_product(o(a.index[r]...))
-                                      for (o, r) in zip(a.op.subs, factor_sites(a.op)) ])
-    else
-        a
-    end
-as_product(a) = a
-
-"""
     gathered(system, op)
 
-the placed operator `op` rewritten without developing anything, into a normal form: in each
-product, a tensor product is taken as the product of its factors, see `as_product`, which then
-merge one by one rather than through the dense matrix of the whole, two factors sharing a site
-are merged where they can be, see `merged_pass`, until nothing merges, then the factors are
-sorted by their sites as far as they (anti)commute, see `sort_factors!`. Sums are gathered term
-by term, a sum on a single site becoming the operator of its matrix, as a merged product does,
-and an operator in normal form is left as it is.
+the placed operator `op` rewritten for the descent without developing anything, into a normal
+form on `system`, from its leaves, which alone are placed whole, see `AtIndex`: in each product,
+two factors sharing a site are merged where that gives no more terms, see `merged_pass`, until
+nothing merges, then the factors are sorted by their sites as far as they (anti)commute, see
+`sort_factors!`. Sums are gathered term by term, a sum on a single site becoming the operator of
+its matrix, as a merged product does, and an operator in normal form is left as it is.
 """
 function gathered(system::System, a::SumOp{IsOperator, Indexed})
     s = SumOp([ gathered(system, x) for x in a.subs ])
@@ -1167,7 +1136,7 @@ gathered(system::System, a::ScalarOp{IsOperator, Indexed}) =
 gathered(::System, a::Union{AtIndex{IsOperator}, IdentityOp{IsOperator, Indexed}}) = a
 
 function gathered(system::System, a::ProdOp{IsOperator, Indexed})
-    p = ProdOp(IndexedOp{IsOperator}[ gathered(system, as_product(x)) for x in a.subs ])
+    p = ProdOp(IndexedOp{IsOperator}[ gathered(system, x) for x in a.subs ])
     coef = scalarcoef(p)
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(p) if !(x isa IdentityOp) ]
     info = [ (sites_of(x), parity_on(system, x)) for x in fs ]

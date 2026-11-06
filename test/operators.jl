@@ -852,6 +852,86 @@ end
     @test_throws "no definite flux" TMS.lower(System(3, Fermion(conserve = N)), C(2) + dag(C)(2))
 end
 
+@testset "An operator built of others is placed through them" begin
+    # a tensor product, a generic sum or product, an adjoint or a natural power is placed as its
+    # operands placed, `(A ⊗ B)(i, j)` being `A(i) * B(j)`, so that what stays placed whole is a
+    # leaf, taken by its matrix: written either way, an operator is the same value, with the
+    # same matrix as its generic terms, the same apply and the same measurement, and nothing
+    # forms the dense matrix of the whole, which took gigabytes on ten sites
+    fe, q = Fermion(), Qubit()
+    f5 = System(5, fe)
+    generic(sys, a, index) = TMS.system_matrix(Pure, sys, TMS.reduced(TMS.op_terms(sys, a, index)))
+    placed_whole(o) = o isa Union{TMS.TensorOp, TMS.SumOp, TMS.ProdOp, TMS.ScalarOp} ||
+                      (o isa TMS.DagOp && placed_whole(o.arg)) ||
+                      (o isa TMS.IntPowOp && placed_whole(o.arg))
+    leaves(a::TMS.AtIndex) = [a.op]
+    leaves(a::Union{TMS.SumOp, TMS.ProdOp}) = reduce(vcat, map(leaves, a.subs))
+    leaves(a::TMS.ScalarOp) = leaves(a.arg)
+    leaves(::TMS.IdentityOp) = []
+    ψ = random_state(Pure, f5, 4; rng = Xoshiro(3))
+    ρ = mix(ψ)
+    for (a, index, written) in [
+            (C ⊗ dag(C), (2, 5), C(2) * dag(C)(5)),
+            (C ⊗ dag(C), (5, 2), C(5) * dag(C)(2)),
+            ((C + dag(C)) ⊗ N ⊗ C, (1, 3, 4), (C(1) + dag(C)(1)) * N(3) * C(4)),
+            (dag(C ⊗ dag(C) ⊗ C), (1, 2, 4), dag(C(1) * dag(C)(2) * C(4))),
+            (C ⊗ dag(C) + dag(C) ⊗ C, (1, 3), C(1) * dag(C)(3) + dag(C)(1) * C(3)),
+            ((N ⊗ C) * (dag(C) ⊗ N), (2, 4), N(2) * C(4) * dag(C)(2) * N(4)),
+            ((C ⊗ Id ⊗ dag(C) + N ⊗ N ⊗ Id)^3, (1, 2, 3),
+             (C(1) * dag(C)(3) + N(1) * N(2))^3),
+            (2im * (C ⊗ Id ⊗ dag(C)), (1, 2, 3), 2im * C(1) * dag(C)(3))]
+        whole = a(index...)
+        @test whole == written
+        @test all(!placed_whole, leaves(whole))
+        @test lowered(f5, whole) ≈ generic(f5, a, index)
+        @test raw_vector(apply(whole, ψ)) ≈ lowered(f5, whole) * raw_vector(ψ)
+        @test ket_bra_matrix(apply(Gate(whole), ρ)) ≈
+              lowered(f5, whole) * ket_bra_matrix(ρ) * lowered(f5, whole)'
+    end
+    @test (X ⊗ X)(1, 2) == X(1) * X(2) && (X + Z)(1) == X(1) + Z(1)
+
+    # a function of the spectrum takes the operator before it is placed, a leaf placed too
+    @test_throws "once placed" ((X ⊗ X)(1, 2))^0.5
+    @test_throws "once placed" Proj((N ⊗ Id + Id ⊗ N)(1, 2) => 1)
+    @test_throws "once placed" Dephase((Z ⊗ Z)(1, 2))
+    @test_throws "once placed" exp(X(1))
+    @test_throws "once placed" mod(N(1), 3)
+    @test_throws "once placed" parity(N(1))
+    @test Proj(Swap(1, 3) => -1) == Proj(Swap => -1)(1, 3)
+    @test X(1)^0.5 == (X^0.5)(1)
+
+    # a named expression stays whole, as a gate, its parity read off its expression
+    @test TMS.gathered(System(3, q), CCX(1, 2, 3)) == CCX(1, 2, 3)
+    long = Operator{10}("long", reduce(⊗, [C ; fill(N, 8) ; dag(C)]))
+    f10 = System(10, fe)
+    TMS.parity_on(f10, long(1:10...))
+    @test TMS.parity_on(f10, long(1:10...)) == 0
+    @test (@allocated TMS.parity_on(f10, long(1:10...))) < 2^20
+
+    # apply of a tensor product of ten fermions, and a product with a generic sum of tensor
+    # products of eight qubits, took 45 MB and 120 MB through their dense matrix
+    whole = reduce(⊗, [isodd(k) ? C : dag(C) for k in 1:10])(1:10...)
+    TMS.pieces(f10, whole)
+    @test (@allocated TMS.pieces(f10, whole)) < 2^22
+    q8 = System(8, q)
+    op = Z(1) * (reduce(⊗, fill(X, 8)) + reduce(⊗, fill(Y, 8)))(1:8...)
+    TMS.gathered(q8, op)
+    @test (@allocated TMS.gathered(q8, op)) < 2^22
+
+    # a tensor product is measured as the product of its factors, beyond the size of its dense
+    # matrix, and so is its power
+    q3 = System(3, q)
+    φ = random_state(Pure, q3, 3; rng = Xoshiro(4))
+    same_law(a, b) = first.(a) ≈ first.(b) && last.(a) ≈ last.(b)
+    @test same_law(probabilities(φ, (Z ⊗ Z ⊗ Z)(1, 2, 3)), probabilities(φ, Z(1) * Z(2) * Z(3)))
+    @test same_law(probabilities(φ, (N ⊗ Id + Id ⊗ N)(1, 3)), probabilities(φ, N(1) + N(3)))
+    q13 = System(13, q)
+    plus = State{Pure}(q13, "+")
+    p = probabilities(plus, reduce(⊗, fill(Z, 13))(1:13...))
+    @test first.(p) == [-1, 1] && last.(p) ≈ [0.5, 0.5]
+    @test expect(plus, reduce(⊗, fill(X, 13))(1:13...)^2) ≈ 1
+end
+
 @testset "tensor is ⊗ under a name in ASCII" begin
     @test tensor === ⊗
     @test tensor(X, Y) == X ⊗ Y
@@ -1211,10 +1291,13 @@ end
     t = reduce(⊗, fill(Z, 10))
     @test TMS.obs_name(t) == "Z⊗Z⊗Z⊗...⊗Z⊗Z"
     @test eval(Meta.parse(repr(t))) == t
-    # a placed operator keeps the compact form, and so does its list of sites
-    @test TMS.obs_name(t((1:10)...)) == "(Z⊗Z⊗Z⊗...⊗Z⊗Z)(1,2,3,...,9,10)"
+    # placed, a tensor product is the product of its factors placed, in the compact form
+    @test TMS.obs_name(t((1:10)...)) == "Z(1)*Z(2)*Z(3)*...*Z(9)*Z(10)"
     @test eval(Meta.parse(repr(t((1:10)...)))) == t((1:10)...)
-    @test TMS.obs_name(reduce(⊗, fill(Z, 6))((1:6)...)) == "(Z⊗Z⊗Z⊗Z⊗Z⊗Z)(1,2,3,4,5,6)"
+    @test TMS.obs_name(reduce(⊗, fill(Z, 6))((1:6)...)) == "Z(1)*Z(2)*Z(3)*Z(4)*Z(5)*Z(6)"
+    # and so is the list of sites of a leaf
+    sw = Operator{10}("W", t)
+    @test TMS.obs_name(sw((1:10)...)) == "W(1,2,3,...,9,10)"
     # an error message names an operator in this form
     zs = sum(Z(i) for i in 1:10)
     @test_throws "eigenspace of Z(1)+Z(2)+Z(3)+...+Z(9)+Z(10) once placed" Proj(zs => 2)
