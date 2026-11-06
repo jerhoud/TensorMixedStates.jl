@@ -46,6 +46,8 @@ the reference article.
 - A state of one's own defining `renyi2`, `mutual_info_renyi2`, `von_neumann_entropy` or `log_negativity` types its positions `positions::AbstractVector{Int}`; a looser type can now make the call ambiguous.
 - `variance` and `Variance` take an operator placed on sites, or an MPO on a pure state, on a pure state as on a mixed one; a vector of operators, taken as their sum on a pure state, is refused.
 - The expansion before a `Tdvp` step truncates its Krylov vectors to twice the `maxdim` of the step, which bounds its cost on a large MPO.
+- An operator built of others is placed through them: `(X ⊗ X)(2, 5)` is `X(2) * X(5)`, and `(X + Z)(1)` is `X(1) + Z(1)`, equal to them and printed as them.
+  A measurement of such an operator takes this name in the outputs, and a list measuring it under both writings is refused, the two having one name. A power that is not an integer, `sqrt`, `exp`, `mod`, `parity`, `Proj(A => λ)`, `Dephase` and `Reset(A => λ)` take it before it is placed, `sqrt(X ⊗ X)(1, 2)`; placed, it is refused with this advice.
 
 ### Fixed
 
@@ -56,6 +58,8 @@ the reference article.
 - `normalize`, `expect` and the other measurements dividing by the trace refuse a mixed state whose trace is zero up to rounding beside its norm, where they gave values of 1e15.
 - `mps_state` drops what rounding leaves at a position of another charge, as `dense_state` does, where it refused the state.
 - A conserved quantity computed on a large spin is accepted, judged diagonal and integer to rounding relative to its matrix, where it was refused.
+- `exp`, `mod` and `parity` of a placed operator are refused with what to write instead, where a `MethodError` came out, and `sqrt` of a single placed operator is its power `0.5`, as `^` gives it.
+- A tensor product, a generic sum or product, an adjoint or a natural power placed, as `(C ⊗ dag(C))(1, 5)`, is computed through its operands, where `apply`, a product holding it and its power formed its dense matrix, up to gigabytes on ten sites, and `probabilities`, `sample` and `collapse` refused it beyond twelve qubits.
 
 ## [2.0.1] - 2026-10-28
 
