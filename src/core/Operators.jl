@@ -730,11 +730,13 @@ Base.literal_pow(::typeof(^), a::Op, ::Val{p}) where p = a ^ p
     end
 
 """
-    sqrt(::GenericOp)
+    sqrt(op)
 
-the principal square root of a generic operator, `op^0.5`
+the principal square root of the operator `op`, `op^0.5`: of a generic operator, or of a single
+operator placed, `sqrt(X(1))`; an operator built of others takes it before it is placed
 """
 sqrt(a::GenericOp) = a ^ 0.5
+sqrt(a::IndexedOp) = a ^ 0.5
 
 """
     ExpOp{K, N}
@@ -759,7 +761,7 @@ it generates.
 """
 exp(a::GenericOp{IsOperator, N}) where N = ExpOp{IsOperator, N}(a)
 exp(a::GenericOp{IsGenerator, N}) where N = ExpOp{IsChannel, N}(a)
-exp(a::Op{<:Any, Indexed}) =
+exp(a::IndexedOp) =
     error("$(obs_name(a)) has no exponential once placed: take that of the operator before " *
           "placing it, exp(X ⊗ X)(1, 2)")
 

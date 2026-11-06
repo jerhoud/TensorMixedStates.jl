@@ -889,6 +889,14 @@ end
               lowered(f5, whole) * ket_bra_matrix(ρ) * lowered(f5, whole)'
     end
     @test (X ⊗ X)(1, 2) == X(1) * X(2) && (X + Z)(1) == X(1) + Z(1)
+    # against matrices built by hand, their strings laid explicitly, apart from the descent
+    c(k) = jw_placed(f5, k, matrix(C, fe))
+    v = raw_vector(ψ)
+    for (op, m) in [((C ⊗ dag(C))(4, 2), c(4) * c(2)'),
+                    (dag(C ⊗ dag(C) ⊗ C)(1, 2, 4), (c(1) * c(2)' * c(4))'),
+                    (Operator{3}("T", C ⊗ N ⊗ dag(C))(4, 1, 2), c(4) * c(1)' * c(1) * c(2)')]
+        @test raw_vector(apply(op, ψ)) ≈ m * v
+    end
 
     # a function of the spectrum takes the operator before it is placed, a leaf placed too
     @test_throws "once placed" ((X ⊗ X)(1, 2))^0.5
@@ -898,7 +906,8 @@ end
     @test_throws "once placed" mod(N(1), 3)
     @test_throws "once placed" parity(N(1))
     @test Proj(Swap(1, 3) => -1) == Proj(Swap => -1)(1, 3)
-    @test X(1)^0.5 == (X^0.5)(1)
+    @test X(1)^0.5 == sqrt(X(1)) == (X^0.5)(1)
+    @test_throws "once placed" sqrt((X ⊗ X)(1, 2))
 
     # a named expression stays whole, as a gate, its parity read off its expression
     @test TMS.gathered(System(3, q), CCX(1, 2, 3)) == CCX(1, 2, 3)
