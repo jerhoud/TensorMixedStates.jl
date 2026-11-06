@@ -471,8 +471,9 @@ end
 
 the product of factors given by their parts of definite flux, `parts` holding the pairs
 `flux => part` of each, compacted on `system`, as pairs `flux => product` over the fluxes the
-products reach and do not vanish, see `vanishes`: accumulated factor by factor, the products
-reaching one flux summed, see `combined`, as `cancelling_products` does for the terms of no flux.
+products reach: accumulated factor by factor, the products reaching one flux summed, see
+`combined`, as `cancelling_products` does for the terms of no flux, a flux left out when its
+sum vanishes, see `vanishes`.
 A product of factors of no definite flux, as `X(1) * Swap(1, 2) * X(2)` conserving `N`, can
 have one, the products of the other fluxes vanishing.
 """
@@ -493,7 +494,8 @@ function sector_product(system::System, ::Type{R}, parts::Vector) where R
                 next[k] = first(next[k]) => combined(system, [(last(next[k]), 1), (y, 1)])
             end
         end
-        acc = next
+        # a flux whose products cancel once summed
+        acc = filter!(p -> !vanishes(last(p)), next)
     end
     return acc
 end
