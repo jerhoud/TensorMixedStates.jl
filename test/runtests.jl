@@ -33,6 +33,10 @@ for g in selected
     end
 end
 
+# the time spent compiling, which Julia counts once switched on, the first group paying for
+# most of it when the precompilation workload is skipped
+Base.cumulative_compile_timing(true)
+
 # one testset per group, which the summary shows as one line, unfolded by Test when one of
 # its tests fails; a line as each group starts and ends shows the progress of a long run, a
 # failure printed between those of its group
@@ -41,11 +45,12 @@ end
         label = "[$k/$(length(selected))] $g"
         println(label)
         flush(stdout)
-        t = time()
+        t, c = time(), first(Base.cumulative_compile_time_ns())
         @testset "$g" begin
             include("$g.jl")
         end
-        println("$label: $(round(Int, time() - t)) s")
+        compiling = (first(Base.cumulative_compile_time_ns()) - c) / 1e9
+        println("$label: $(round(Int, time() - t)) s, $(round(Int, compiling)) s compiling")
         flush(stdout)
     end
 end
