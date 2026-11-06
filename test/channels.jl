@@ -595,6 +595,14 @@ end
     @test !TMS.super_by_blocks(qs, Gate(X(1) * X(2) + Z(3)))
     @test_throws "changes N by different amounts" PreMPO(
         State{Mixed}(ss, ["Occ", "Emp", "Occ", "Emp"]), loss)
+    # made of the sides of their operators too: a gate of a product, the product of the gates
+    # of its factors, and a product with a gate of an operator that does not develop
+    cz = prod(CZ(i, i + 1) for i in 1:4)
+    ρq = random_state(Mixed, qs, 2; rng = Xoshiro(20261106))
+    for a in (Gate(cz), Gate(cz + X(1)) * Gate(X(1) + X(2)))
+        @test TMS.super_by_blocks(qs, a)
+        @test laid_mixed(ρq, a) ≈ superop(qs, a)
+    end
     # K ρ K† of many terms applied to a density matrix
     k = hq + 0.5 * X(1) * Z(3)
     ρ = random_state(Mixed, qs, 2; rng = Xoshiro(20261016))
