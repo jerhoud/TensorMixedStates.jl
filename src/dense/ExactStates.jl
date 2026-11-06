@@ -146,10 +146,13 @@ end
 function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where {R <: PM}
     # measured on what conserves nothing, as on a State, an operator of no definite flux too
     system = weaken(state.system, ())
+    check_indices(system, a)
     x = state.state
-    ts = lower(system, a)
+    g = gathered(system, a)
+    ts = developed(system, g)
     # on a density matrix, only the elements the terms reach, rather than the whole product
-    v = R === Mixed ? dense_trace(system, ts, x) : dot(x, dense_acted(Pure, system, ts, x))
+    v = R === Pure ? dot(x, first(gathered_acted(system, g, x))) :
+        isnothing(ts) ? tr(first(gathered_acted(system, g, x))) : dense_trace(system, ts, x)
     return v / nonzero_trace(state, "expect")
 end
 
@@ -303,7 +306,7 @@ function inner(a::ExactState{Pure}, op::IndexedOp{IsOperator}, b::ExactState{Pur
     same_sites(a, b)
     system = weaken(b.system, ())
     check_indices(system, op)
-    return dot(a.state, dense_acted(Pure, system, lower(system, op), b.state))
+    return dot(a.state, operator_acted(system, op, b.state))
 end
 
 function inner(a::ExactState{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}},
@@ -496,15 +499,16 @@ part_renyi2(state::ExactState{Pure}, kept::Vector{Int}) =
 the operator `p`, placed on sites, applied to the kets of the density matrix `ρ`, then to its
 bras as its adjoint: ``p \\rho p^\\dagger``
 """
-function on_both_sides(system::System, p::IndexedOp, ρ::AbstractMatrix)
-    ts = lower(system, p)
-    return dense_acted(Pure, system, ts, dense_acted(Pure, system, ts, ρ)')'
+function on_both_sides(system::System, p::IndexedOp{IsOperator}, ρ::AbstractMatrix)
+    check_indices(system, p)
+    g = gathered(system, p)
+    return first(gathered_acted(system, g, first(gathered_acted(system, g, ρ))'))'
 end
 
 # applied as `apply` applies them to a `State`, the limits of the MPS without use
 function apply(a::IndexedOp{IsOperator}, state::ExactState{Pure}; limits::Limits = Limits())
     check_indices(state.system, a)
-    x = dense_acted(Pure, state.system, lower(state.system, a), state.state)
+    x = operator_acted(state.system, a, state.state)
     return ExactState{Pure}(state.system, x, Val(:raw))
 end
 
@@ -520,7 +524,7 @@ apply(a::IndexedOp{IsGenerator}, ::ExactState{Pure}; limits::Limits = Limits()) 
     error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
 
 apply(a::IndexedOp{IsOperator}, state::ExactState{Mixed}; limits::Limits = Limits()) =
-    apply(Gate(a), state)
+    ExactState{Mixed}(state.system, on_both_sides(state.system, a, state.state), Val(:raw))
 
 function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::ExactState{Mixed};
                limits::Limits = Limits())
@@ -536,7 +540,7 @@ apply(::MPO, ::ExactState; kwargs...) =
 function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where {R <: PM}
     system = weaken(state.system, ())
     x = R === Mixed ? on_both_sides(system, p, state.state) :
-                      dense_acted(Pure, system, lower(system, p), state.state)
+                      operator_acted(system, p, state.state)
     return normalize(ExactState{R}(state.system, x, Val(:raw)))
 end
 

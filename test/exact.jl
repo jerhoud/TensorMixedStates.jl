@@ -936,3 +936,38 @@ end
         @test values("exact/m") ≈ values("mps/m") atol = 1e-12
     end
 end
+
+@testset "A product of sums applied factor by factor" begin
+    # a product whose factors have several terms each is applied factor by factor, not developed:
+    # a chain of 11 CZ on 12 qubits took 1.8 GB applied whole
+    q12 = System(12, Qubit())
+    x = ExactState(random_state(Pure, q12, 4; rng = Xoshiro(31)))
+    cz = prod(CZ(i, i + 1) for i in 1:11)
+    one_by_one = foldl((s, i) -> apply(CZ(i, i + 1), s), 11:-1:1; init = x)
+    apply(cz, x)
+    @test (@allocated apply(cz, x)) < 50 * 2^20
+    @test apply(cz, x).state ≈ one_by_one.state
+    @test expect(x, cz; complex = true) ≈
+          LA.dot(x.state, one_by_one.state) / LA.dot(x.state, x.state)
+
+    # on fermions, against matrices built by hand, pure and mixed
+    f5 = System(5, Fermion())
+    c(k) = jw_placed(f5, k, matrix(C, Fermion()))
+    n(k) = c(k)' * c(k)
+    op = (C(1) + dag(C)(2)) * (N(2) + C(3)) * (dag(C)(3) + N(4)) * (C(4) + dag(C)(5))
+    m = (c(1) + c(2)') * (n(2) + c(3)) * (c(3)' + n(4)) * (c(4) + c(5)')
+    @test isnothing(TMS.developed(f5, TMS.gathered(f5, op)))
+    ψ = ExactState(random_state(Pure, f5, 4; rng = Xoshiro(32)))
+    v = ψ.state
+    @test apply(op, ψ).state ≈ m * v
+    @test expect(ψ, op; complex = true) ≈ (v' * m * v) / (v' * v)
+    ρ = mix(ψ)
+    r = ρ.state
+    @test apply(op, ρ).state ≈ m * r * m'
+    @test expect(ρ, op; complex = true) ≈ LA.tr(m * r) / LA.tr(r)
+
+    # on a charged system, a sum of parts changing the charges by different amounts is refused
+    fc = System(4, Fermion(conserve = N))
+    xc = ExactState(State{Pure}(fc, ["Occ", "Emp", "Occ", "Emp"]))
+    @test_throws "no definite flux" apply((C(1) + dag(C)(2)) * (N(3) + C(4)) + C(1), xc)
+end

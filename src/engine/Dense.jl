@@ -132,3 +132,42 @@ function dense_trace(system::System, ts::Vector{Term}, ρ::AbstractMatrix)
     end
     return total
 end
+
+"""
+    operator_acted(system, op, x)
+
+the placed operator `op` applied to the vector `x`, or to the kets of the matrix `x`: through its
+terms when it develops, see `developed`, otherwise its products factor by factor from the right
+and its sums term by term, without developing them; refused on a charged `system` when it
+changes the charges by no definite amount, see `FluxError`
+"""
+operator_acted(system::System, a::IndexedOp{IsOperator}, x::AbstractVecOrMat) =
+    first(gathered_acted(system, gathered(system, a), x))
+
+# the operator `g`, gathered, applied to `x`, and its flux, `nothing` for the operator zero
+function gathered_acted(system::System, g::IndexedOp{IsOperator}, x::AbstractVecOrMat)
+    ts = developed(system, g)
+    if !isnothing(ts)
+        ts = check_flux(Pure, system, g, ts)
+        flux = isempty(ts) ? nothing :
+               is_charged(system) ? term_flux(Pure, system, g, first(ts)) : QN()
+        return dense_acted(Pure, system, ts, x), flux
+    end
+    c, s = scalarcoef(g), scalararg(g)
+    if s isa ProdOp
+        y, fluxes = x, Union{Nothing, QN}[]
+        for f in reverse(s.subs)
+            y, q = gathered_acted(system, f, y)
+            push!(fluxes, q)
+        end
+        return c * y, any(isnothing, fluxes) ? nothing : sum(fluxes)
+    elseif s isa SumOp
+        parts = [ gathered_acted(system, t, x) for t in s.subs ]
+        fluxes = unique(q for (_, q) in parts if !isnothing(q))
+        if length(fluxes) > 1
+            flux_refusal(system, g, fluxes)
+        end
+        return c * sum(first, parts), isempty(fluxes) ? nothing : only(fluxes)
+    end
+    error("$(obs_name(g)) neither develops nor is a sum or a product")
+end
