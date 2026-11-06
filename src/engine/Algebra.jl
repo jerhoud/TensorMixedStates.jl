@@ -309,34 +309,6 @@ vanishes(c::CompactedOp) = isnothing(c.flux) ||
      all(m -> normalized_norm(m) ≤ rounding_tol * c.norm, values(c.singles)))
 
 """
-    term_estimate(a)
-
-the number of terms of the placed operator `a` developed as it is written, a bound, terms that
-merge counted apart, as a `Float64`, which does not wrap around as an `Int` does on a product of
-many sums
-"""
-term_estimate(a::SumOp) = sum(term_estimate, a.subs)
-term_estimate(a::ProdOp) = prod(term_estimate, a.subs)
-term_estimate(a::ScalarOp) = term_estimate(a.arg)
-term_estimate(::Op) = 1.0
-
-"""
-    by_blocks(a)
-
-whether the placed operator `a`, gathered, see `gathered`, is a product whose terms would
-outnumber those of its factors together, see `term_estimate`, so that it is better made of the
-compactions of its factors multiplied, see `compacted_op`
-"""
-function by_blocks(a::IndexedOp)
-    p = scalararg(a)
-    if !(p isa ProdOp)
-        return false
-    end
-    counts = term_estimate.(p.subs)
-    return prod(counts) > sum(counts)
-end
-
-"""
     addends(a)
 
 the operators the placed operator `a` is the sum of, its coefficient left out, `a` itself when it
@@ -383,11 +355,11 @@ end
     compacted_op(system, op, limits = Limits(); side = nothing)
 
 the operator `op`, placed on sites, compacted on `system` and truncated by `limits`, see
-`truncated_block`: from its terms, see `lower`, but for its products that would develop into
-more terms than their factors have, see `by_blocks`. Those are made of the compactions of their
-factors, made the same way, multiplied, equal factors in a row by squaring, see `power`, and
-added to that of the rest in one reduction, see `combined`. With `side`, `:left` or `:right`,
-the superoperator ``\\rho \\mapsto op\\,\\rho`` or ``\\rho \\mapsto \\rho\\,op^\\dagger``, see
+`truncated_block`: from its terms when it develops, see `developed`, otherwise its sums and its
+products composed from their parts, made the same way, the parts that develop compacted
+together, the factors of a product multiplied, equal factors in a row by squaring, see `power`,
+and all added in one reduction, see `combined`. With `side`, `:left` or `:right`, the
+superoperator ``\\rho \\mapsto op\\,\\rho`` or ``\\rho \\mapsto \\rho\\,op^\\dagger``, see
 `side_terms`, a product made of the sides of its factors in the same order on both sides,
 ``\\rho (AB)^\\dagger`` being ``(\\rho B^\\dagger) A^\\dagger``. Refused when it changes the
 charges by no definite amount, see `FluxError`.
@@ -396,25 +368,52 @@ function compacted_op(system::System, a::IndexedOp{IsOperator}, limits::Limits =
                       side::Union{Nothing, Symbol} = nothing)
     check_indices(system, a)
     g = gathered(system, a)
-    summands = addends(g)
+    return compacted_form(system, a, g, limits, side, developed(system, g))
+end
+
+"""
+    checked_side(system, a, terms, side)
+
+the terms of the operator `a` refused without definite flux, see `check_flux`, and for a `side`
+those of its superoperator, see `side_terms`
+"""
+function checked_side(system::System, a, terms::Vector{Term}, side::Union{Nothing, Symbol})
+    terms = check_flux(Pure, system, a, terms)
+    return isnothing(side) ? terms : check_flux(Mixed, system, a, side_terms(side, terms))
+end
+
+# the operator `a`, gathered as `g`, compacted as `compacted_op` does, `ts` its terms when it
+# develops, `nothing` otherwise
+function compacted_form(system::System, a, g::IndexedOp{IsOperator}, limits::Limits,
+                        side::Union{Nothing, Symbol}, ts::Union{Nothing, Vector{Term}})
     R = isnothing(side) ? Pure : Mixed
-    if !any(by_blocks, summands)
-        terms = lower(system, a, g)
-        if !isnothing(side)
-            terms = check_flux(Mixed, system, a, side_terms(side, terms))
-        end
-        return from_terms(R, system, a, terms, limits)
+    if !isnothing(ts)
+        return from_terms(R, system, a, checked_side(system, a, ts, side), limits)
     end
     # the side of the right takes the adjoint of the operator, and so of its coefficients
     coef(x) = side == :right ? conj(x) : x
+    form(x) = compacted_form(system, x, x, Limits(), side, developed(system, x))
+    s = scalararg(g)
     parts = Tuple{CompactedOp{R}, Number}[]
-    rest = filter(x -> !by_blocks(x), summands)
-    if !isempty(rest)
-        add_part!(parts, compacted_op(system, SumOp(rest); side), coef(scalarcoef(g)))
-    end
-    for x in filter(by_blocks, summands)
-        factors = blocked_product(prodsubs(scalararg(x)), f -> compacted_op(system, f; side))
-        add_part!(parts, factors, coef(scalarcoef(g) * scalarcoef(x)))
+    if s isa ProdOp
+        add_part!(parts, blocked_product(s.subs, form), coef(scalarcoef(g)))
+    elseif s isa SumOp
+        dev = Term[]
+        for x in s.subs
+            t = developed(system, x)
+            if isnothing(t)
+                add_part!(parts, compacted_form(system, x, x, Limits(), side, t),
+                          coef(scalarcoef(g)))
+            else
+                append!(dev, t)
+            end
+        end
+        if !isempty(dev)
+            add_part!(parts, from_terms(R, system, a, checked_side(system, a, reduced(dev), side)),
+                      coef(scalarcoef(g)))
+        end
+    else
+        error("$(obs_name(g)) develops into its terms, which compacted_form was not given")
     end
     return combined(system, parts, limits, a)
 end
@@ -423,23 +422,20 @@ end
     whole_matrix(system, op)
 
 the matrix of the operator `op`, placed on sites, on all the sites of `system`, see
-`system_matrix`: from its terms, see `lower`, but for its products that would develop into more
-terms than their factors have, see `by_blocks`, the product of the matrices of their factors,
-made the same way, as `compacted_op` does
+`system_matrix`: from its terms when it develops, see `developed`, otherwise the sum or the
+product of the matrices of its parts, made the same way, as `compacted_op` does
 """
 function whole_matrix(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
-    summands = addends(g)
-    if !any(by_blocks, summands)
-        return system_matrix(Pure, system, lower(system, a, g))
+    ts = developed(system, g)
+    if !isnothing(ts)
+        return system_matrix(Pure, system, ts)
     end
-    parts = [ scalarcoef(x) * prod(f -> whole_matrix(system, f), prodsubs(scalararg(x)))
-              for x in filter(by_blocks, summands) ]
-    rest = filter(x -> !by_blocks(x), summands)
-    if !isempty(rest)
-        push!(parts, whole_matrix(system, SumOp(rest)))
+    s = scalararg(g)
+    if s isa ProdOp
+        return scalarcoef(g) * prod(f -> whole_matrix(system, f), s.subs)
     end
-    return scalarcoef(g) * sum(parts)
+    return scalarcoef(g) * sum(x -> whole_matrix(system, x), s.subs)
 end
 
 """
@@ -467,31 +463,34 @@ function matrix(a::IndexedOp{IsOperator}, system::System;
 end
 
 """
-    many_terms(k)
+    developed_count(system, k)
 
-whether the placed operator `k` has more than two terms, or a product that would develop into
-more terms than its factors have, see `by_blocks`, so that a gate or a dissipator of `k` is
-better made of its sides, see `compacted_super`
+the number of terms of the placed operator `k` on `system`, see `developed`, as a `Float64`, `Inf`
+when it does not develop
 """
-many_terms(k::IndexedOp) = term_estimate(k) > 2 || any(by_blocks, addends(k))
+function developed_count(system::System, k::IndexedOp{IsOperator})
+    ts = developed(system, gathered(system, k))
+    return isnothing(ts) ? Inf : float(length(ts))
+end
 
 """
-    super_by_blocks(a)
+    super_by_blocks(system, a)
 
-whether the superoperator `a`, placed on sites, is better made of the sides of its operators,
-see `compacted_super`: a gate or a dissipator of an operator of many terms, see `many_terms`, an
-evolver of one with a product that would develop, or a product of channels whose terms would
-outnumber those of its factors together, a gate of `k` having the square of the terms of `k`
+whether the superoperator `a`, placed on sites, is better made of the sides of its operators on
+`system`, see `compacted_super`: a gate or a dissipator of an operator of more than two terms or
+that does not develop, see `developed`, an evolver of one that does not develop, or a product of
+channels whose terms would outnumber those of its factors together, a gate of `k` having the
+square of the terms of `k`
 """
-function super_by_blocks(a::IndexedOp)
+function super_by_blocks(system::System, a::IndexedOp)
     s = scalararg(a)
     if s isa Union{Gate{Indexed}, Dissipator{Indexed}}
-        return s.arg isa IndexedOp{IsOperator} && many_terms(s.arg)
+        return s.arg isa IndexedOp{IsOperator} && developed_count(system, s.arg) > 2
     elseif s isa Evolver{Indexed}
-        return any(by_blocks, addends(s.arg))
+        return isinf(developed_count(system, s.arg))
     elseif s isa ProdOp
-        counts = [ scalararg(x) isa Gate{Indexed} ? term_estimate(scalararg(x).arg)^2 : 1.0
-                   for x in s.subs ]
+        counts = [ scalararg(x) isa Gate{Indexed} ?
+                   developed_count(system, scalararg(x).arg)^2 : 1.0 for x in s.subs ]
         return prod(counts) > sum(counts)
     end
     return false
@@ -511,15 +510,16 @@ function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits()
     check_indices(system, a)
     c = scalarcoef(a)
     summands = addends(a)
-    if !any(super_by_blocks, summands)
+    blocks = [ super_by_blocks(system, x) for x in summands ]
+    if !any(blocks)
         return from_terms(Mixed, system, a, lower(system, a), limits)
     end
     parts = Tuple{CompactedOp{Mixed}, Number}[]
-    rest = filter(x -> !super_by_blocks(x), summands)
+    rest = summands[.!blocks]
     if !isempty(rest)
         add_part!(parts, compacted_super(system, SumOp(rest)), c)
     end
-    for x in filter(super_by_blocks, summands)
+    for x in summands[blocks]
         y, k = scalararg(x), c * scalarcoef(x)
         if y isa ProdOp
             add_part!(parts, blocked_product(y.subs, f -> compacted_super(system, f)), k)

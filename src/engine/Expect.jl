@@ -380,8 +380,8 @@ worth_keeping(p::PreparedOp) = isnothing(p.op.terms) || length(p.op.terms) > 1
 the operator `op` made ready to be measured on the states of `system`, see `PreparedOp`: compacted
 on `system`, see `compacted_op`, or, when it changes the charges by no definite amount, see
 `FluxError`, its part changing none, see `flux_zero_terms`, the only one with a value on a state
-of `system`, Hermitian or not as `op` itself. When that part has too many terms, or `op` holds a
-product compacted by blocks, see `by_blocks`, it is compacted on the same sites conserving
+of `system`, Hermitian or not as `op` itself. When that part has too many terms, or `op` does
+not develop into its terms, see `developed`, it is compacted on the same sites conserving
 nothing, where it is measured on the state conserving nothing, see `plain_form`, a copy that
 weighed 452 MiB, against 95 MiB for `Z(20)`, measuring `X(20)` on 40 qubits of link dimension
 200. `system` keeps it for the next calls once it is asked for twice, if it is `worth_keeping`,
@@ -397,9 +397,8 @@ function prepare_op(system::System, a::IndexedOp{IsOperator})
             end
         end
         plain = conserving_nothing(system)
-        g = gathered(plain, a)
-        if !any(by_blocks, addends(g))
-            terms = lower(plain, a, g)
+        terms = developed(plain, gathered(plain, a))
+        if !isnothing(terms)
             zero_part = flux_zero_terms(system, terms)
             if !isnothing(zero_part)
                 hermitian = is_hermitian(plain, terms, sum(term_size, terms; init = 0.0))

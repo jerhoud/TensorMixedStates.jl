@@ -574,14 +574,14 @@ end
                      (cs, -im * hop + loss), (ss, -im * hop + Dissipator(sum(N(i) for i in 1:4)))]
         start = sys === qs || sys === fs ? "FullyMixed" : ["Occ", "Emp", "Occ", "Emp"]
         ρ = State{Mixed}(sys, start)
-        @test any(TMS.super_by_blocks, TMS.addends(a))
+        @test any(x -> TMS.super_by_blocks(sys, x), TMS.addends(a))
         S = superop(sys, a)
         @test laid_mixed(ρ, a) ≈ S
         @test PreMPO(ρ, a).linkdims .- 1 == least_channels(S, fill(4, length(sys)))
     end
     # a gate of two terms keeps its terms, and a loss under a strong symmetry is refused as by
     # its terms
-    @test !TMS.super_by_blocks(Gate(X(1) * X(2) + Z(3)))
+    @test !TMS.super_by_blocks(qs, Gate(X(1) * X(2) + Z(3)))
     @test_throws "changes N by different amounts" PreMPO(
         State{Mixed}(ss, ["Occ", "Emp", "Occ", "Emp"]), loss)
     # K ρ K† of many terms applied to a density matrix
