@@ -433,19 +433,16 @@ function compacted_form(system::System, a, g::IndexedOp{IsOperator}, limits::Lim
 end
 
 """
-    flux_parts(system, f, side)
+    flux_groups(system, f)
 
-the factor `f`, gathered, of a product on the charged `system`, compacted as `compacted_op` does
-with `side`, in its parts of definite flux, as pairs `flux => part`: its terms grouped by their
-flux when it develops, those of rounding size next to the largest left out, see
-`normalized_size`; otherwise its compaction, of the one flux it must then have
+the terms of the factor `f`, gathered, of a product on the charged `system`, grouped by their
+flux as pairs `flux => terms`, those of rounding size next to the largest left out, see
+`normalized_size`; `nothing` when it does not develop, see `developed`
 """
-function flux_parts(system::System, f::IndexedOp{IsOperator}, side::Union{Nothing, Symbol})
-    R = isnothing(side) ? Pure : Mixed
+function flux_groups(system::System, f::IndexedOp{IsOperator})
     ts = developed(system, f)
     if isnothing(ts)
-        c = compacted_form(system, f, f, Limits(), side, nothing)
-        return isnothing(c.flux) ? Pair{QN, CompactedOp{R}}[] : [c.flux => c]
+        return nothing
     end
     sizes = normalized_size.(ts)
     small = rounding_tol * maximum(sizes; init = 0.0)
@@ -461,6 +458,24 @@ function flux_parts(system::System, f::IndexedOp{IsOperator}, side::Union{Nothin
         else
             push!(last(groups[k]), t)
         end
+    end
+    return groups
+end
+
+"""
+    flux_parts(system, f, side)
+
+the factor `f`, gathered, of a product on the charged `system`, compacted as `compacted_op` does
+with `side`, in its parts of definite flux, as pairs `flux => part`: its terms grouped by their
+flux when it develops, see `flux_groups`; otherwise its compaction, of the one flux it must then
+have
+"""
+function flux_parts(system::System, f::IndexedOp{IsOperator}, side::Union{Nothing, Symbol})
+    R = isnothing(side) ? Pure : Mixed
+    groups = flux_groups(system, f)
+    if isnothing(groups)
+        c = compacted_form(system, f, f, Limits(), side, nothing)
+        return isnothing(c.flux) ? Pair{QN, CompactedOp{R}}[] : [c.flux => c]
     end
     return Pair{QN, CompactedOp{R}}[ q => from_terms(R, system, f, checked_side(system, f, g, side))
                                      for (q, g) in groups ]

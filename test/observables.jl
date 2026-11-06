@@ -1446,6 +1446,21 @@ end
     # was refused, the merge being counted on the charged system
     @test expect(b, X(1) * Swap(1, 2) * X(2)) ≈ expect(b, Swap(1, 2)) ≈ 1
     @test norm(evolve(-im * X(1) * Swap(1, 2) * X(2), 0.1, b; nsteps = 1)) ≈ 1
+    # and so are such products on sites apart, applied whole through their MPO, and products
+    # whose parts of other charges cancel once summed: H X H is Z, (X + Z) X (X + Z) is 2Z
+    s3 = System(3, Qubit(conserve = N))
+    b3 = normalize(State{Pure}(s3, ["Up", "Dn", "Dn"]) + State{Pure}(s3, ["Dn", "Up", "Dn"]))
+    swapped = normalize(State{Pure}(s3, ["Dn", "Dn", "Up"]) + State{Pure}(s3, ["Dn", "Up", "Dn"]))
+    z = [1 0; 0 -1]
+    zs = kron(z, z, z) * ExactState(b3).state
+    for (op, ref, k) in [(X(1) * Swap(1, 3) * X(3), ExactState(swapped).state, 1),
+                         (X(1) * X(2) * Swap(1, 3) * X(3) * X(2), ExactState(swapped).state, 1),
+                         (prod(H(i) * X(i) * H(i) for i in 1:3), zs, 1),
+                         (prod((X(i) + Z(i)) * X(i) * (X(i) + Z(i)) for i in 1:3), zs, 8)]
+        @test ExactState(apply(op, b3)).state ≈ k * ref
+        @test ExactState(apply(make_mpo(b3, op), b3)).state ≈ k * ref
+        @test ExactState(apply(op, mix(b3))).state ≈ k^2 * ref * ref'
+    end
     # under a strong symmetry, a channel of several sites given by its matrix gets the refusal
     # of the strong symmetry, as one of one site does
     @test_throws "which conserving it strongly forbids" TMS.lower(
