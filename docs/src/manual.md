@@ -261,9 +261,10 @@ Many operations are defined on generic operators:
   the state of zero ``S_z``.
 - `Level` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
   is the basis of the site, and `Level => n` the basis state `n`, counted from 0.
-- the functions `exp` and `sqrt`: for example `sqrt(Swap)`. They, `mod`, `parity`, `Proj(A => λ)`
-  and `Dephase` take the operator before it is placed, `exp(X⊗X)(1, 2)`, a placed one only when
-  it is a single operator, as `Proj(N(3) => 1)`
+- the functions `exp` and `sqrt`: for example `sqrt(Swap)`. They, the powers that are not
+  integers, `mod`, `parity`, `Proj(A => λ)`, `Dephase` and `Reset(A => λ)` take the operator
+  before it is placed, `exp(X⊗X)(1, 2)`; `sqrt`, a power, `Proj`, `Dephase` and `Reset` also take
+  a single placed operator, as `sqrt(X(1))` or `Proj(N(3) => 1)`
 - `controlled` makes controlled gates, which do nothing when their first site is in its first
   basis state, `Level => 0`, as `"Up"` for a qubit: `controlled(X)` is the `CX` of the module
   `Circuits`, see [Gates](@ref)
