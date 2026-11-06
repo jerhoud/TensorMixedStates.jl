@@ -571,13 +571,30 @@ function developed_count(system::System, k::IndexedOp{IsOperator})
 end
 
 """
+    gate_operator(a)
+
+the operator `k` placed on sites of the channel `a` when it is `Gate(k)`, a gate placed on sites
+included, `nothing` otherwise
+"""
+function gate_operator(a::IndexedOp)
+    s = scalararg(a)
+    if s isa Gate{Indexed}
+        return s.arg
+    elseif s isa AtIndex && s.op isa Gate
+        return s.op.arg(s.index...)
+    end
+    return nothing
+end
+
+"""
     super_by_blocks(system, a)
 
 whether the superoperator `a`, placed on sites, is better made of the sides of its operators on
 `system`, see `compacted_super`: a gate or a dissipator of an operator of more than two terms or
 that does not develop, see `developed`, an evolver of one that does not develop, or a product of
 channels whose terms would outnumber those of its factors together, a gate of `k` having the
-square of the terms of `k`
+square of the terms of `k`, see `gate_operator`, and a gate of an operator that does not develop
+making it so
 """
 function super_by_blocks(system::System, a::IndexedOp)
     s = scalararg(a)
@@ -586,9 +603,9 @@ function super_by_blocks(system::System, a::IndexedOp)
     elseif s isa Evolver{Indexed}
         return isinf(developed_count(system, s.arg))
     elseif s isa ProdOp
-        counts = [ scalararg(x) isa Gate{Indexed} ?
-                   developed_count(system, scalararg(x).arg)^2 : 1.0 for x in s.subs ]
-        return prod(counts) > sum(counts)
+        ks = gate_operator.(s.subs)
+        counts = [ isnothing(k) ? 1.0 : developed_count(system, k)^2 for k in ks ]
+        return any(isinf, counts) || prod(counts) > sum(counts)
     end
     return false
 end
