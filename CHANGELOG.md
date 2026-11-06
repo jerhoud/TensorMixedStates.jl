@@ -58,6 +58,7 @@ the reference article.
 - `normalize`, `expect` and the other measurements dividing by the trace refuse a mixed state whose trace is zero up to rounding beside its norm, where they gave values of 1e15.
 - `mps_state` drops what rounding leaves at a position of another charge, as `dense_state` does, where it refused the state.
 - A conserved quantity computed on a large spin is accepted, judged diagonal and integer to rounding relative to its matrix, where it was refused.
+- A product of operators of several terms each, as a chain of `CZ` gates or of gates given by their matrix, is compacted factor by factor instead of being developed into a number of terms exponential in its length: `expect` of 15 `CZ` on 16 qubits took 9.6 s, and of six generic two-site gates 26 s.
 - `exp`, `mod` and `parity` of a placed operator are refused with what to write instead, where a `MethodError` came out, and `sqrt` of a single placed operator is its power `0.5`, as `^` gives it.
 - A tensor product, a generic sum or product, an adjoint or a natural power placed, as `(C ⊗ dag(C))(1, 5)`, is computed through its operands, where `apply`, a product holding it and its power formed its dense matrix, up to gigabytes on ten sites, and `probabilities`, `sample` and `collapse` refused it beyond twelve qubits.
 
