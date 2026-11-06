@@ -30,6 +30,7 @@ the reference article.
 - A run notes in its log the options of a phase that the type of its state ignores, which a state of one's own lists in its `ignored_options`.
 - `CreateState` takes a state of one's own, through its `representation`, its `as_representation` and its conversions from and to `State`.
 - `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
+- `TensorMixedStates.dense_elements[]`, the bound of the dense matrices TMS builds, a matrix of 4096 × 4096 at first, can be raised to build larger ones, as the exponential of an operator on many sites, which was refused, and gives the default of `max_dense`.
 - `max_dense`, the number of elements of the largest dense matrix a function builds, `nothing` for no bound, is taken by `matrix(op, system)`, `Vector`, `reduced_density_matrix`, `von_neumann_entropy`, `log_negativity`, `probabilities`, `sample(state, op)`, `collapse`, `ReducedDensityMatrix`, `VonNeumannEntropy` and `LogNegativity`, a matrix of 4096 × 4096 by default, and by `mix`, without bound by default.
 
 ### Changed

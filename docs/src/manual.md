@@ -264,7 +264,9 @@ Many operations are defined on generic operators:
 - the functions `exp` and `sqrt`: for example `sqrt(Swap)`. They, the powers that are not
   integers, `mod`, `parity`, `Proj(A => λ)`, `Dephase` and `Reset(A => λ)` take the operator
   before it is placed, `exp(X⊗X)(1, 2)`; `sqrt`, a power, `Proj`, `Dephase` and `Reset` also take
-  a single placed operator, as `sqrt(X(1))` or `Proj(N(3) => 1)`
+  a single placed operator, as `sqrt(X(1))` or `Proj(N(3) => 1)`. Their matrix is built dense,
+  and refused beyond 2^24 elements, a matrix of 4096 × 4096: `TensorMixedStates.dense_elements[] =
+  2^28` raises the bound, and the default of the keyword `max_dense` with it
 - `controlled` makes controlled gates, which do nothing when their first site is in its first
   basis state, `Level => 0`, as `"Up"` for a qubit: `controlled(X)` is the `CX` of the module
   `Circuits`, see [Gates](@ref)

@@ -87,29 +87,32 @@ function graded_parts(m::AbstractMatrix, f::AbstractMatrix)
 end
 
 """
-    dense_elements
+    dense_elements[]
 
 the number of elements of the largest dense array TMS builds by default, as many as a matrix of
-4096 × 4096, the default of the keyword `max_dense` where a function takes it: beyond, it is
-refused rather than exhausting memory, as a call that does not show its dense matrix would
+4096 × 4096 at first: the default of the keyword `max_dense` where a function takes it, and the
+bound of the dense matrices TMS computes without showing them, as that of the exponential of an
+operator on many sites. Beyond, a call is refused rather than exhausting memory; set it to build
+larger ones, as `TensorMixedStates.dense_elements[] = 2^28`.
 """
-const dense_elements = 2^24
+const dense_elements = Ref{Int}(2^24)
 
 """
-    check_elements(n, what, max_dense = dense_elements; settable = true, hint = "")
+    check_elements(n, what, max_dense = dense_elements[]; settable = true, hint = "")
 
 refuse `what`, a dense array of `n` elements, a Float64 that does not wrap around as an Int does
 on many sites, beyond `max_dense`, `nothing` for no bound, saying that the caller can raise it
 when it is `settable`, or else what to do, `hint`
 """
-function check_elements(n::Real, what::String, max_dense::Union{Nothing, Int} = dense_elements;
+function check_elements(n::Real, what::String, max_dense::Union{Nothing, Int} = dense_elements[];
                         settable::Bool = true, hint::String = "")
     if !isnothing(max_dense) && n > max_dense
         total = Printf.@sprintf("%.0f", n)
         error(settable ? "$what has $total elements, beyond max_dense = $max_dense: pass a " *
                          "larger max_dense to build it" :
-                         "$what has $total elements, beyond the $max_dense TMS builds" *
-                         (isempty(hint) ? "" : ": $hint"))
+                         "$what has $total elements, beyond the $max_dense TMS builds: raise " *
+                         "TensorMixedStates.dense_elements[] to build it" *
+                         (isempty(hint) ? "" : "; $hint"))
     end
 end
 
