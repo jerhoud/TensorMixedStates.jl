@@ -132,7 +132,7 @@ trace(state::ExactState{Mixed}) = tr(state.state)
 
 norm(state::ExactState) = norm(state.state)
 
-dense_bound(state::ExactState) = max(dense_elements, length(state.state))
+dense_bound(state::ExactState) = max(dense_elements[], length(state.state))
 
 nonzero_trace(state::ExactState{Mixed}, what) =
     checked_trace(real(trace(state)), norm(state), what)

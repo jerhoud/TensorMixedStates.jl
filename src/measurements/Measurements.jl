@@ -414,7 +414,7 @@ the default of `max_dense` for a dense matrix built from `state`: `dense_element
 number of elements `state` holds when it is held whole and larger. A state of one's own held
 whole adds a method.
 """
-dense_bound(::AbstractState) = dense_elements
+dense_bound(::AbstractState) = dense_elements[]
 
 """
     check_reduced(state, kept, max_dense)
@@ -440,7 +440,8 @@ trace zero is refused, and so are positions out of increasing order, which `perm
 gives.
 
 - `max_dense`: the number of elements beyond which the matrix is refused, `nothing` for no
-  bound, by default a matrix of 4096 × 4096 or the size of a state held whole
+  bound, by default `TensorMixedStates.dense_elements[]`, a matrix of 4096 × 4096 at first, or
+  the size of a state held whole
 
 # Examples
 

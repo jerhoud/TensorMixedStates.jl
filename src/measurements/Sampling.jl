@@ -12,7 +12,7 @@ alone, see `eigenspaces`, refused beyond `max_dense` elements; `what` names the 
 refusals
 """
 function measured_spectrum(system::System, op::IndexedOp{IsOperator}, what::String;
-                           max_dense::Union{Nothing, Int} = dense_elements)
+                           max_dense::Union{Nothing, Int} = dense_elements[])
     sites = sort(sites_of(op))
     if isempty(sites)
         error("$what needs an operator placed on sites, which $(obs_name(op)) is not")
@@ -128,7 +128,7 @@ projectors on the eigenspaces of its matrix, placed on its sites, whose Jordan-W
 the descent lays, refused beyond `max_dense` elements; `what` names the caller in the refusals
 """
 function measurement(state::AbstractState, op::IndexedOp{IsOperator}, what::String;
-                     max_dense::Union{Nothing, Int} = dense_elements)
+                     max_dense::Union{Nothing, Int} = dense_elements[])
     nonzero_trace(state, what)
     # a probability below rounding, of either sign, as a sum of Fourier leaves for an impossible
     # result, is zero
@@ -165,7 +165,7 @@ end
 
 """
     probabilities(state, pos)
-    probabilities(state, op; max_dense = 2^24)
+    probabilities(state, op; max_dense)
 
 the results of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, with
 their probabilities, as pairs `result => probability` in increasing order, those of zero
@@ -178,7 +178,7 @@ eigenvalues, as the number of particles of a region, by the mean values of produ
 phases.
 
 - `max_dense`: the number of elements of the matrix of `op` on its sites beyond which it is
-  refused, a matrix of 4096 × 4096 by default
+  refused, by default `TensorMixedStates.dense_elements[]`, a matrix of 4096 × 4096 at first
 
 # Examples
 
@@ -187,7 +187,7 @@ phases.
     probabilities(state, sum(N(i) for i in 1:10))
 """
 function probabilities(state::AbstractState, op::IndexedOp{IsOperator};
-                       max_dense::Union{Nothing, Int} = dense_elements)
+                       max_dense::Union{Nothing, Int} = dense_elements[])
     values, probs, _ = measurement(state, op, "probabilities"; max_dense)
     return [ λ => p for (λ, p) in zip(values, probs) ]
 end
@@ -299,7 +299,7 @@ function sample(state::State{Mixed}; rng = Random.default_rng())
 end
 
 function sample(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng(),
-                max_dense::Union{Nothing, Int} = dense_elements)
+                max_dense::Union{Nothing, Int} = dense_elements[])
     ps = probabilities(state, op; max_dense)
     return first(ps[draw(x -> last(ps[x + 1]), length(ps), rand(rng)) + 1])
 end
@@ -331,7 +331,7 @@ the random number generator, the global one by default, and `max_dense` that of
     _, p, state = collapse(state, Z(1) * Z(2) => 1)
 """
 function collapse(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.default_rng(),
-                  limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements)
+                  limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements[])
     values, probs, project = measurement(state, op, "collapse"; max_dense)
     k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1
     return (result = values[k], probability = probs[k], state = project(k, limits))
@@ -344,7 +344,7 @@ function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
 end
 
 function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:Real};
-                  limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements)
+                  limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements[])
     op, λ = result
     values, probs, project = measurement(state, op, "collapse"; max_dense)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)

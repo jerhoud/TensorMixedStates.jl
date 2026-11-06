@@ -519,22 +519,22 @@ function whole_matrix(system::System, a::IndexedOp{IsOperator})
 end
 
 """
-    matrix(op, system; max_dense = 2^24)
+    matrix(op, system; max_dense)
 
 the matrix of the operator `op`, placed on sites, on all the sites of `system`, the
 Jordan-Wigner strings of its fermionic operators laid, on the basis of the product states
 ordered as `kron` orders them, the first site varying the slowest, as `dense_state` and `Vector`
 order them: the matrix an exact diagonalization of a small system checks a result against.
 
-- `max_dense`: the number of elements beyond which the matrix is refused, a matrix of
-  4096 × 4096 by default
+- `max_dense`: the number of elements beyond which the matrix is refused, `nothing` for no
+  bound, by default `TensorMixedStates.dense_elements[]`, a matrix of 4096 × 4096 at first
 
 # Examples
 
     eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
 """
 function matrix(a::IndexedOp{IsOperator}, system::System;
-                max_dense::Union{Nothing, Int} = dense_elements)
+                max_dense::Union{Nothing, Int} = dense_elements[])
     check_indices(system, a)
     d = prod(float(dim(s)) for s in system.sites)
     check_elements(d^2, "the matrix of $(obs_name(a)) on $(length(system)) sites", max_dense)

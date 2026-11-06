@@ -179,7 +179,7 @@ function dense_state(system::System, ρ::AbstractMatrix{<:Number}; limits::Limit
 end
 
 """
-    Vector(state::State{Pure}; max_dense = 2^24)
+    Vector(state::State{Pure}; max_dense)
 
 the vector of the pure `state`, not normalized, on the basis of the product states ordered as
 `kron` orders them, the first site varying the slowest, as `dense_state` takes it and
@@ -187,13 +187,13 @@ the vector of the pure `state`, not normalized, on the basis of the product stat
 `reduced_density_matrix(ρ, 1:n)`.
 
 - `max_dense`: the number of elements beyond which the vector is refused, `nothing` for no
-  bound
+  bound, by default `TensorMixedStates.dense_elements[]`, a matrix of 4096 × 4096 at first
 
 # Examples
 
     Vector(State{Pure}(System(2, Qubit()), "+"))      # [0.5, 0.5, 0.5, 0.5]
 """
-function Vector(state::State{Pure}; max_dense::Union{Nothing, Int} = dense_elements)
+function Vector(state::State{Pure}; max_dense::Union{Nothing, Int} = dense_elements[])
     system = state.system
     check_elements(prod(float(dim(s)) for s in system.sites),
                    "the vector of a state of $(length(system)) sites", max_dense)
@@ -249,7 +249,7 @@ end
 the density matrix of the mixed `state`, not normalised, on all its sites, refused beyond
 `max_dense` elements, `nothing` for no bound
 """
-function full_matrix(state::State{Mixed}; max_dense::Union{Nothing, Int} = dense_elements)
+function full_matrix(state::State{Mixed}; max_dense::Union{Nothing, Int} = dense_elements[])
     system = state.system
     check_elements(prod(float(dim(s)) for s in system.sites)^2,
                    "the density matrix of a state of $(length(system)) sites", max_dense)

@@ -338,8 +338,19 @@ end
     @test_throws "has 268435456 elements, beyond the 16777216" matrix(Dephase(x7), q)
     @test_throws "Dephase depends only on the eigenspaces of its operator" matrix(Dephase(x7), q)
     # the matrix of its operator, refused before it is built, as on many sites it would not fit
-    @test_throws "has 67108864 elements, beyond the 16777216 TMS builds: Dephase depends" apply(
+    @test_throws "dense_elements[] to build it; Dephase depends" apply(
         Dephase(z13)(1:13...), State{Mixed}(System(13, Qubit()), "Up"))
+    # the bound is set by the user, and so is the default of max_dense with it
+    old = TMS.dense_elements[]
+    x6 = reduce(⊗, fill(X, 6))
+    try
+        TMS.dense_elements[] = 2^10
+        @test_throws "raise TensorMixedStates.dense_elements[] to build it" matrix(exp(-im * x6), q)
+        @test_throws "beyond max_dense = 1024" matrix(x6(1:6...), System(6, q))
+    finally
+        TMS.dense_elements[] = old
+    end
+    @test size(matrix(exp(-im * x6), q)) == (64, 64)
     # the dimension 2^64, which an Int wrapped around to 0, letting the matrix be built
     x64, x32 = reduce(⊗, fill(X, 64)), reduce(⊗, fill(X, 32))
     @test_throws "has 340282366920938463463374607431768211456 elements" matrix(exp(-im * x64), q)
