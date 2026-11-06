@@ -360,17 +360,35 @@ end
     for (st, op) in [(q, mag^4), (q, ham^3), (q, (ham^2 + ham)^2), (q, ham * mag * ham),
                      (q, 2im * ham^2 + mag), (f, hop^2 + γ^3), (f, (hop + γ)^3),
                      (cf, ntot^3 + hop^2)]
-        @test any(TMS.by_blocks, TMS.addends(TMS.gathered(st.system, op)))
+        @test isnothing(TMS.developed(st.system, TMS.gathered(st.system, op)))
         check_mpo(st, op)
     end
     # a product of factors of one term each, or of two factors of two terms, keeps its terms
-    @test !TMS.by_blocks(TMS.gathered(q.system, (X(1) + Z(2)) * (X(3) + Z(4))))
-    @test !TMS.by_blocks(TMS.gathered(f.system, dag(C)(1) * C(3) * N(4)))
-    # the estimates in Float64: a projector on a code space of 64 stabilizers has 2^64 terms,
+    developed(st, op) = TMS.developed(st.system, TMS.gathered(st.system, op))
+    @test length(developed(q, (X(1) + Z(2)) * (X(3) + Z(4)))) == 4
+    @test length(developed(f, dag(C)(1) * C(3) * N(4))) == 1
+    # the counts in Float64: a projector on a code space of 64 stabilizers has 2^64 terms,
     # which an Int wrapped around to 0, the product being developed
     p64 = prod((Id(2i - 1) + Z(2i - 1) * Z(2i)) / 2 for i in 1:64)
     q128 = State{Pure}(System(128, Qubit()), "Up")
-    @test TMS.by_blocks(TMS.gathered(q128.system, p64))
+    @test isnothing(developed(q128, p64))
+    # the terms of each factor are counted exactly, where an estimate counted one for any
+    # operator given by its matrix or by a named expression: a chain of CZ, two terms each, and
+    # of generic gates of two sites, six terms each, are composed, not developed into 2^15 and
+    # 6^6 terms (9.6 s and 26 s for expect before)
+    q16 = random_state(Pure, System(16, Qubit()), 4; rng = Xoshiro(11))
+    cz = prod(CZ(i, i + 1) for i in 1:15)
+    @test isnothing(developed(q16, cz))
+    @test maxlinkdim(make_mpo(q16, cz)) ≤ 6
+    q7 = random_state(Pure, System(7, Qubit()), 4; rng = Xoshiro(12))
+    u = Operator{2}("U", randn(Xoshiro(13), ComplexF64, 4, 4))
+    us = prod(u(i, i + 1) for i in 1:6)
+    @test isnothing(developed(q7, us))
+    v = dense_vector(q7)
+    id(n) = foldl(kron, fill([1. 0. ; 0. 1.], n); init = ones(1, 1))
+    um = matrix(u, Qubit(), Qubit())
+    m = prod(kron(id(i - 1), um, id(6 - i)) for i in 1:6)
+    @test expect(q7, us; complex = true) ≈ v' * m * v
     @test expect(q128, p64) ≈ 1
     # on charged fermions: a product that vanishes, (Σ C†)² being 0, does not count its flux
     # beside N(1), and a sum of two fluxes is refused

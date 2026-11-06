@@ -1184,3 +1184,45 @@ function lower(system::System, a::IndexedOp{<:Union{IsChannel, IsGenerator}})
     check_indices(system, a)
     return check_flux(Mixed, system, a, reduced(op_terms(system, a, ())))
 end
+
+"""
+    developed(system, op)
+
+the terms of the placed operator `op`, gathered, see `gathered`, reduced, when no product in it
+develops into more terms than its factors have together, the terms of each factor counted
+exactly; `nothing` otherwise, such a product being composed rather than developed, see
+`compacted_op`
+"""
+developed(system::System, a::Union{AtIndex{IsOperator}, IdentityOp{IsOperator, Indexed}}) =
+    reduced(op_terms(system, a, ()))
+
+function developed(system::System, a::ScalarOp{IsOperator, Indexed})
+    ts = developed(system, a.arg)
+    return isnothing(ts) ? nothing : scaled(a.coef, ts)
+end
+
+function developed(system::System, a::SumOp{IsOperator, Indexed})
+    ts = Term[]
+    for x in a.subs
+        t = developed(system, x)
+        if isnothing(t)
+            return nothing
+        end
+        append!(ts, t)
+    end
+    return reduced(ts)
+end
+
+function developed(system::System, a::ProdOp{IsOperator, Indexed})
+    parts = Vector{Term}[]
+    for x in a.subs
+        t = developed(system, x)
+        if isnothing(t)
+            return nothing
+        end
+        push!(parts, t)
+    end
+    counts = length.(parts)
+    # in Float64, which does not wrap around as an Int does on a product of many sums
+    return prod(float, counts) > sum(counts) ? nothing : reduced(tree_products(parts))
+end
