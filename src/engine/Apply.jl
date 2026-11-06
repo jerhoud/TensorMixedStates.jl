@@ -12,8 +12,9 @@ export apply
     dense_limit
 
 the largest product of the squares of the dimensions of two neighbouring sites for which
-`apply` applies a gate to a density matrix as one block on their mixed indices, see
-`gate_steps!`; beyond, its sides go through their MPOs
+`apply` applies a channel or a generator to a density matrix as one block on their mixed
+indices, see `gate_steps!` and `mixed_steps`; beyond, a gate goes through the MPOs of its sides,
+any other through its MPO
 """
 const dense_limit = 1024
 
@@ -587,10 +588,10 @@ end
     mixed_steps(system, op)
 
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
-generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
-by piece, see `gate_steps!`; any other factor on one site or two neighbouring ones, see
-`neighbouring`, as a dense block on the mixed indices, see `block_step!`, as the pieces of an
-operator, see `piece_steps!`, and through its MPO otherwise, see `compacted_super`
+generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate as
+the pieces of its operator, see `piece_steps!`; any other factor on one site or two neighbouring
+ones, see `neighbouring`, small enough, see `dense_enough`, as a dense block on the mixed
+indices, see `block_step!`, and through its MPO otherwise, see `compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
@@ -603,7 +604,7 @@ function mixed_steps(system::System, a::IndexedOp)
             ks = sort!(unique(b.site for t in terms for b in t.blocks))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
-            elseif neighbouring(ks)
+            elseif neighbouring(ks) && dense_enough(Mixed, system, ks)
                 orders = [ mixed_elements(system, k) for k in ks ]
                 m = system_matrix(Mixed, system, terms, ks, orders)
                 block_step!(steps, Mixed, system, m, ks)
