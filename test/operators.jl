@@ -76,14 +76,16 @@ end
     for a in [dag(sqrt(X)), dag(Sz^0.5), dag((X + Y)^0.3), dag(sqrt(N)), dag(X^3)]
         @test lowered(s1, a(1)) ≈ matrix(a, q)
     end
-    # a run collapsing to the identity leaves its two neighbours adjacent, and they have to be
-    # merged in their turn: placed, the factors of a site merge into one, a multiple of the
-    # identity going into the coefficient
-    @test TMS.gathered(s1, X(1) * X(1)) isa TMS.IdentityOp
+    # the factors of a site are multiplied in the terms, a run collapsing to the identity
+    # leaving one term of the identity
     @test TMS.gathered(s1, X(1) * Id(1)) == X(1)
-    @test TMS.gathered(s1, X(1) * Y(1) * Y(1) * X(1)) isa TMS.IdentityOp
-    @test TMS.gathered(s1, X(1) * Y(1) * Z(1) * Z(1) * Y(1) * X(1)) isa TMS.IdentityOp
-    @test TMS.gathered(s1, Z(1) * X(1) * X(1) * Z(1) * Y(1)) == Y(1)
+    i1, y1 = matrix(Id, q), matrix(Y, q)
+    for (op, m) in [(X(1) * X(1), i1), (X(1) * Y(1) * Y(1) * X(1), i1),
+                    (X(1) * Y(1) * Z(1) * Z(1) * Y(1) * X(1), i1),
+                    (Z(1) * X(1) * X(1) * Z(1) * Y(1), y1)]
+        @test lowered(s1, op) ≈ m
+        @test length(TMS.lower(s1, op)) == 1
+    end
 end
 
 @testset "A matrix is taken on one site at least" begin
@@ -767,41 +769,37 @@ end
 end
 
 @testset "Products gathered before the descent" begin
-    # the first pass of the descent develops nothing: it sorts the factors of a product by
-    # their sites as far as they (anti)commute, and merges those sharing a site, the sites of
-    # one among those of the other, when they can be brought together, which leaves fewer terms
-    # to develop and the operator unchanged
+    # the first pass of the descent develops and merges nothing: it replaces a named expression
+    # by its expression and sorts the factors of a product by their sites as far as they
+    # (anti)commute; the terms multiply what shares a site, and the compaction reduces the rest
     plain(sys, op) = TMS.system_matrix(Pure, sys, TMS.reduced(TMS.op_terms(sys, op, ())))
     same(sys, op) = lowered(sys, op) ≈ plain(sys, op)
     nterms(sys, op) = length(TMS.lower(sys, op))
-    # the identity, its coefficient that of a matrix computed to rounding, which varies with the
-    # LAPACK of the machine
-    identity_like(a) = a isa TMS.IdentityOp ||
-                       (a isa TMS.ScalarOp && a.arg isa TMS.IdentityOp && a.coef ≈ 1)
     q, fe = Qubit(), Fermion()
     s5, f4, f5 = System(5, q), System(4, fe), System(5, fe)
-    @test TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2)) == X(5)
-    @test nterms(s5, Swap(1, 2) * Z(1) * Z(2) * Swap(1, 2)) == 1
-    @test identity_like(TMS.gathered(s5, Swap(1, 2) * Swap(2, 1)))
-    @test identity_like(TMS.gathered(f5, Swap(1, 3) * Swap(3, 1)))
-    @test TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2) + Swap(3, 4) * Z(1) * Swap(3, 4)) ==
-          X(5) + Z(1)
+    st5 = random_state(Pure, s5, 2; rng = Xoshiro(41))
+    dims(op) = maxlinkdim(make_mpo(st5, op))
+    # factors sharing a site stay apart, the MPO as small as for their product
+    @test length(TMS.prodsubs(TMS.gathered(s5, Swap(1, 2) * X(5) * Swap(1, 2)))) == 3
+    @test lowered(s5, Swap(1, 2) * X(5) * Swap(1, 2)) ≈ lowered(s5, X(5))
+    @test dims(Swap(1, 2) * X(5) * Swap(1, 2)) == dims(X(5))
+    @test dims(Swap(1, 2) * Z(1) * Z(2) * Swap(1, 2)) == dims(Z(1) * Z(2))
+    @test lowered(s5, Swap(1, 2) * Swap(2, 1)) ≈ lowered(s5, Id(1))
+    @test lowered(f5, Swap(1, 3) * Swap(3, 1)) ≈ lowered(f5, Id(1))
+    # a named expression is replaced by its expression, its value kept
+    @test !any(x -> x isa TMS.AtIndex && x.op isa Operator && x.op.expr isa TMS.GenericOp,
+               TMS.prodsubs(TMS.gathered(s5, controlled(X)(2, 3) * X(1))))
+    @test lowered(s5, controlled(X)(2, 3)) ≈ TMS.system_matrix(Pure, s5,
+        TMS.reduced(TMS.op_terms(s5, controlled(X), (2, 3))))
     # two odd factors that change places take a sign
     g = TMS.gathered(f4, C(1) * C(2) * dag(C)(1))
     @test TMS.scalarcoef(g) == -1 && last(TMS.prodsubs(g)) == C(2)
     # a factor goes back past one that commutes with it, even placed between its sites
     g = TMS.gathered(s5, Swap(1, 3) * X(2) * Z(3))
-    @test length(TMS.prodsubs(g)) == 2 && last(TMS.prodsubs(g)) == X(2)
-    # a factor linked to both keeps them apart, and a merge that would give more terms is
-    # refused
+    @test TMS.prodsubs(g) == [Swap(1, 3), X(2), Z(3)]
     linked = Swap(1, 2) * Swap(2, 3) * Swap(1, 2)
     @test TMS.gathered(s5, linked) == linked
-    # a tensor product is taken as the product of its factors: the two hops merge site by site,
-    # into n₁ and 1 - n₄ beside the swap, where merged whole into n₁(1 - n₄) of two sites they
-    # would be cut into more terms by its identity parts
     hops = (dag(C) ⊗ C)(1, 4) * Swap(2, 3) * (dag(C) ⊗ C)(4, 1)
-    @test length(TMS.prodsubs(TMS.gathered(f5, hops))) == 3
-    @test nterms(f5, hops) == 4
 
     # the result is a normal form, which the pass leaves as it is, and the operator stays the
     # same
@@ -817,27 +815,23 @@ end
     sorted = Swap(2, 3) * Swap(1, 2) * Swap(3, 4)
     @test TMS.gathered(s5, sorted) == sorted
 
-    # each factor merges into the nearest earlier one it does not commute with, in one pass:
-    # two Pauli strings on 1000 sites give one factor per site, X * Z = -im * Y, and an odd
+    # two Pauli strings on 1000 sites give one term, X * Z = -im * Y on each site, and an odd
     # factor going back past odd ones takes their sign
-    g = TMS.gathered(System(1000, q), prod(X(i) for i in 1:1000) * prod(Z(i) for i in 1:1000))
-    fs = TMS.prodsubs(TMS.scalararg(g))
-    @test length(fs) == 1000 && TMS.scalarcoef(g) == 1
-    @test all(k -> TMS.sites_of(fs[k]) == [k] && matrix(fs[k].op, q) ≈ -im * matrix(Y, q), 1:1000)
+    t = only(TMS.lower(System(1000, q), prod(X(i) for i in 1:1000) * prod(Z(i) for i in 1:1000)))
+    @test t.coef ≈ 1 && all(b -> b.m ≈ -im * matrix(Y, q), t.blocks) && length(t.blocks) == 1000
     @test same(f5, C(1) * dag(C)(2) * C(3) * N(4) * dag(C)(1) * C(2) * N(3))
 
     # the sort places, of the factors whose dependencies are placed, the one of smallest sites:
     # one form for products differing only by the order of factors that (anti)commute, a
     # product written backwards sorted, with a sign for the odd factors that change places
-    @test TMS.gathered(s5, Swap(4, 5) * controlled(X)(2, 5) * X(3)) ==
-          TMS.gathered(s5, Swap(4, 5) * X(3) * controlled(X)(2, 5)) ==
-          X(3) * Swap(4, 5) * controlled(X)(2, 5)
+    @test TMS.gathered(s5, Swap(4, 5) * Swap(2, 5) * X(3)) ==
+          TMS.gathered(s5, Swap(4, 5) * X(3) * Swap(2, 5)) ==
+          X(3) * Swap(4, 5) * Swap(2, 5)
     @test TMS.gathered(System(1000, q), prod(X(i) for i in 1000:-1:1)) == prod(X(i) for i in 1:1000)
     g = TMS.gathered(f4, C(3) * C(2) * C(1))
     @test TMS.scalarcoef(g) == -1 && TMS.prodsubs(TMS.scalararg(g)) == [C(1), C(2), C(3)]
 
-    # a sum on a single site is taken by its matrix, as a merged product, so that a product of
-    # such sums is one term, and it merges with the factors of its site
+    # a sum on a single site is taken by its matrix, so that a product of such sums is one term
     @test TMS.gathered(s5, Id(2) + Z(2)) isa TMS.AtIndex
     projector = prod(Id(i) + Z(i) for i in 1:5)
     odd_sums = (C(2) + dag(C)(2)) * (C(4) + dag(C)(4))
@@ -909,13 +903,16 @@ end
     @test X(1)^0.5 == sqrt(X(1)) == (X^0.5)(1)
     @test_throws "once placed" sqrt((X ⊗ X)(1, 2))
 
-    # a named expression stays whole, as a gate, its parity read off its expression
-    @test TMS.gathered(System(3, q), CCX(1, 2, 3)) == CCX(1, 2, 3)
+    # a named expression is replaced by its expression, its value kept, and its parity read
+    # off its factors, not off its dense matrix
+    q3 = System(3, q)
+    @test !(TMS.gathered(q3, CCX(1, 2, 3)) isa TMS.AtIndex)
+    @test lowered(q3, CCX(1, 2, 3)) ≈ matrix(CCX.expr, q, q, q)
     long = Operator{10}("long", reduce(⊗, [C ; fill(N, 8) ; dag(C)]))
     f10 = System(10, fe)
-    TMS.parity_on(f10, long(1:10...))
-    @test TMS.parity_on(f10, long(1:10...)) == 0
-    @test (@allocated TMS.parity_on(f10, long(1:10...))) < 2^20
+    TMS.parity_on(f10, TMS.gathered(f10, long(1:10...)))
+    @test TMS.parity_on(f10, TMS.gathered(f10, long(1:10...))) == 0
+    @test (@allocated TMS.parity_on(f10, TMS.gathered(f10, long(1:10...)))) < 2^20
 
     # apply of a tensor product of ten fermions, and a product with a generic sum of tensor
     # products of eight qubits, took 45 MB and 120 MB through their dense matrix

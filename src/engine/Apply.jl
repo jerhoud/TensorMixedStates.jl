@@ -11,9 +11,9 @@ export apply
 """
     dense_limit
 
-the largest product of the dimensions of the sites of a factor of more than two sites given by
-its matrix there that `apply` takes as a dense block, see `piece_steps!`, and of their squares
-for a block on the mixed indices of a density matrix; beyond, it goes through its MPO
+the largest product of the squares of the dimensions of two neighbouring sites for which
+`apply` applies a gate to a density matrix as one block on their mixed indices, see
+`gate_steps!`; beyond, its sides go through their MPOs
 """
 const dense_limit = 1024
 
@@ -76,12 +76,70 @@ function gate_on(m::AbstractMatrix, idx)
 end
 
 """
+    neighbouring(sites)
+
+whether the increasing `sites` are one site or two neighbouring ones, where `apply` takes a
+piece as a dense block
+"""
+neighbouring(sites) = length(sites) == 1 || (length(sites) == 2 && sites[2] == sites[1] + 1)
+
+"""
+    grouped(system, fs)
+
+the factors `fs` of a product, in their order, with each run of consecutive factors on the same
+two neighbouring sites holding a factor of these two sites taken as one, see `neighbouring`,
+the factors of one site among them included, those at its ends only when even, so that an odd
+one keeps its strings in a run, see `pieces`
+"""
+function grouped(system::System, fs::Vector{IndexedOp{IsOperator}})
+    out = IndexedOp{IsOperator}[]
+    seg = IndexedOp{IsOperator}[]
+    sites = Int[]
+    function close!()
+        pairs = findall(x -> length(sites_of(x)) == 2, seg)
+        if isempty(pairs)
+            append!(out, seg)
+        else
+            lo, hi = first(pairs), last(pairs)
+            even(x) = parity_on(system, x) == 0
+            while lo > 1 && even(seg[lo - 1])
+                lo -= 1
+            end
+            while hi < length(seg) && even(seg[hi + 1])
+                hi += 1
+            end
+            append!(out, seg[1:lo-1])
+            push!(out, ProdOp(seg[lo:hi]))
+            append!(out, seg[hi+1:end])
+        end
+        empty!(seg)
+        empty!(sites)
+    end
+    for x in fs
+        u = sort(union(sites, sites_of(x)))
+        if !neighbouring(u)
+            close!()
+            u = sort(sites_of(x))
+        end
+        if neighbouring(u)
+            push!(seg, x)
+            append!(empty!(sites), u)
+        else
+            push!(out, x)
+        end
+    end
+    close!()
+    return out
+end
+
+"""
     pieces(system, op)
 
 the factors of the product `op`, gathered, see `gathered`, cut into the pieces `apply` applies
-one by one, and the number they are multiplied by: the factors of one site of definite parity
-are brought together where they commute with the pieces they cross, a sign for two odd ones,
-so that their strings compensate, every other factor being a piece of its own
+one by one, and the number they are multiplied by: the factors on two neighbouring sites taken
+together, see `grouped`, then the factors of one site of definite parity brought together where
+they commute with the pieces they cross, a sign for two odd ones, so that their strings
+compensate, every other factor being a piece of its own
 """
 function pieces(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
@@ -92,10 +150,8 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     # sites, how many are odd, and whether one has no definite parity
     run = 0
     after, odd, none = Set{Int}(), 0, false
-    for x in prodsubs(g)
-        if x isa IdentityOp
-            continue
-        end
+    fs = IndexedOp{IsOperator}[ x for x in prodsubs(scalararg(g)) if !(x isa IdentityOp) ]
+    for x in grouped(system, fs)
         sx, px = sites_of(x), parity_on(system, x)
         joins = x isa AtIndex && length(x.index) == 1 && !isnothing(px)
         # it reaches the last run when it (anti)commutes with every piece after it, see
@@ -457,10 +513,10 @@ end
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
 operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
-they bring, 0 for a dense piece that is zero. A piece on at most two sites, or a factor given by
-its matrix on its sites small enough, see `dense_enough`, laying no string elsewhere and changing
-the charges by a definite amount, see `definite_on`, is a dense block, see `gate_steps!`, unless
-it is a run: a sum or a product on more sites costs less through its MPO. Otherwise it goes
+they bring, 0 for a dense piece that is zero. A piece on one site or two neighbouring ones, see
+`neighbouring`, laying no string elsewhere and changing the charges by a definite amount, see
+`definite_on`, is a dense block, see `gate_steps!`, unless it is a run; an operator given by its
+matrix on more sites goes through its MPO as any other piece. Otherwise it goes
 through gates of one site when it has a single term, as a run usually does, and through its MPO
 otherwise, see `compacted_op`, on a density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``,
 see `compacted_super`
@@ -468,7 +524,7 @@ see `compacted_super`
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
                       run::Bool) where R
     sites = sort(sites_of(p))
-    if !run && (length(sites) ≤ 2 || (p isa AtIndex && dense_enough(Pure, system, sites)))
+    if !run && neighbouring(sites)
         m = matrix_on(system, p, sites)
         # the null state, which ITensors cannot factorise into an MPO on charged sites
         if iszero(m)
@@ -519,10 +575,9 @@ end
 
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate piece
-by piece, see `gate_steps!`; any other factor small enough, see `dense_enough`, on at most two
-sites or given by its matrix there, but for a dephasing made of gates, see `dephase_gates`, as
-a dense block on the mixed indices, see `block_step!`, as the pieces
-of an operator, see `piece_steps!`, and through its MPO otherwise, see `compacted_super`
+by piece, see `gate_steps!`; any other factor on one site or two neighbouring ones, see
+`neighbouring`, as a dense block on the mixed indices, see `block_step!`, as the pieces of an
+operator, see `piece_steps!`, and through its MPO otherwise, see `compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
@@ -533,11 +588,9 @@ function mixed_steps(system::System, a::IndexedOp)
         else
             terms = [ laid_strings(Mixed, system, t) for t in lower(system, f) ]
             ks = sort!(unique(b.site for t in terms for b in t.blocks))
-            by_matrix = f isa AtIndex &&
-                (!(f.op isa Dephase) || isnothing(dephase_gates(system, f.op, f.index)))
             if isempty(ks)
                 coef *= sum(t.coef for t in terms; init = 0.)
-            elseif (length(ks) ≤ 2 || by_matrix) && dense_enough(Mixed, system, ks)
+            elseif neighbouring(ks)
                 orders = [ mixed_elements(system, k) for k in ks ]
                 m = system_matrix(Mixed, system, terms, ks, orders)
                 block_step!(steps, Mixed, system, m, ks)

@@ -1102,8 +1102,9 @@ end
     @test norm(apply(prod(swaps), ρ5) - one_by_one) < 1e-10
     # a dissipator of a sum or of a product, a sum of gates and a dephasing made of the gates of
     # its projectors, on more than two sites, go through their MPO, 20 to 250 times faster than
-    # their dense blocks on 4 and 5 sites, as the pieces of an operator; a channel given by its
-    # matrix stays dense, and so does a dephasing whose projectors have too many terms
+    # their dense blocks on 4 and 5 sites, as the pieces of an operator; so do a channel given
+    # by its matrix and a dephasing whose projectors have too many terms, a dense block being
+    # only for one site or two neighbouring ones
     r5 = random_state(Mixed, q5, 3)
     for d in (Dissipator(sum(Sm(i) for i in 1:5)), Dissipator(prod(X(i) for i in 1:5)),
               0.5 * Gate(Id(1)) + 0.5 * Gate(prod(Z(i) for i in 1:5)),
@@ -1114,7 +1115,8 @@ end
     zsum = Operator{4}("Zsum", sum(reduce(⊗, [ i == j ? Z : Id for j in 1:4 ]) for i in 1:4))
     @test isnothing(TMS.projector_gates(q5, Dephase(zsum), (1, 2, 3, 4)))
     for d in (exp(0.1 * Dissipator(reduce(⊗, fill(Z, 4))))(1, 2, 3, 4), Dephase(zsum)(1, 2, 3, 4))
-        @test only(last(TMS.mixed_steps(q5, d))) isa TMS.GateBatch
+        @test only(last(TMS.mixed_steps(q5, d))) isa TMS.WindowMPO
+        @test norm(apply(d, r5) - apply(make_mpo(r5, d), r5)) < 1e-12
     end
     # and gates far apart leave the sites in their places
     ρf = random_state(Mixed, System(6, Fermion()), 3)
@@ -1151,7 +1153,7 @@ end
                controlled(controlled(X))(1, 3, 6), controlled(X)(1, 5) * H(2) * g4(3, 4)]
         @test same(ρ, Gate(op), lowered(qs, op))
     end
-    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.WindowMPO, TMS.WindowMPO]
+    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.WindowMPO]
     @test kinds(ρ, Gate(controlled(X)(3, 4))) == [TMS.GateBatch]
     @test kinds(ρ, Gate(H(3))) == [TMS.GateBatch]
     ps = [ lowered(qs, Proj(Z ⊗ Z => λ)(1, 4)) for λ in (1., -1.) ]
