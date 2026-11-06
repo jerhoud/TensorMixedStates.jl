@@ -4,7 +4,7 @@
 export probabilities, sample, collapse
 
 """
-    measured_spectrum(system, op, what; max_dense = dense_elements)
+    measured_spectrum(system, op, what; max_dense = dense_elements[])
 
 the sites of `system` the Hermitian operator `op` acts on, increasing, its eigenvalues and the
 projectors on its eigenspaces, matrices on those sites in the Jordan-Wigner basis of those sites
@@ -119,7 +119,7 @@ function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
 end
 
 """
-    measurement(state, op, what; max_dense = dense_elements)
+    measurement(state, op, what; max_dense = dense_elements[])
 
 the results of measuring the Hermitian operator `op`, in increasing order, their probabilities,
 and the function `(k, limits) -> state` projecting the state on the `k`-th of them and

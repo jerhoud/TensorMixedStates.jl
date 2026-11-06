@@ -119,7 +119,7 @@ end
 """
     check_dense(a, sites; hint = "")
 
-refuse the matrix of the function `a` on `sites` beyond `dense_elements`, its dimension being
+refuse the matrix of the function `a` on `sites` beyond `dense_elements[]`, its dimension being
 that of the states of the sites or, for a channel or a generator, of their density matrices,
 saying what to do, `hint`
 """
@@ -453,7 +453,7 @@ const dephase_hint = "Dephase depends only on the eigenspaces of its operator, a
     dephase_projectors(a, sites)
 
 the eigenvalues of the operator of the dephasing `a` on `sites`, and the projectors on their
-eigenspaces, see `eigenspaces`, the dense matrix of the operator refused beyond `dense_elements`
+eigenspaces, see `eigenspaces`, the dense matrix of the operator refused beyond `dense_elements[]`
 """
 function dephase_projectors(a::Dephase, sites)
     check_dense(a.arg, sites; hint = dephase_hint)
