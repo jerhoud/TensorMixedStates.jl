@@ -857,9 +857,6 @@ function parity_on(system::System, a::AtIndex)
     fs = [ matrix(F, s) for s in sites ]
     if all(f -> f == I, fs)
         return 0
-    elseif a.op isa Operator && a.op.expr isa GenericOp && length(sites) > 1
-        # a named expression, a gate, that of its expression, without its dense matrix
-        return parity_on(system, a.op.expr(a.index...))
     end
     return parity_of(matrix(a.op, sites...), foldl(kron, fs))
 end
@@ -920,25 +917,6 @@ function placed_matrix(m::AbstractMatrix, magnitude::Real, name::String, sites)
 end
 
 """
-    merged(system, a, b)
-
-the product `a * b` of two placed operators, the sites of one among those of the other, as one
-operator given by its matrix on the sites of the larger, see `placed_matrix`
-"""
-function merged(system::System, a::AtIndex, b::AtIndex)
-    sites = length(a.index) ≥ length(b.index) ? a.index : b.index
-    x, y = matrix_on(system, a, sites), matrix_on(system, b, sites)
-    return placed_matrix(x * y, norm(x) * norm(y), "($(a * b))", sites)
-end
-
-"""
-    term_count(system, op)
-
-the number of terms of the placed operator `op` on `system`
-"""
-term_count(system::System, a::IndexedOp{IsOperator}) = length(pure_terms(system, a, ()))
-
-"""
     or_on_plain(f, xs...)
 
 `f(xs...)`, or, when that refuses an operator changing the charges by no definite amount, see
@@ -963,18 +941,6 @@ conserving nothing
 """
 conserving_nothing(x::State) = plain_form(x)
 conserving_nothing(x::System) = weaken(x, ())
-
-"""
-    more_terms(system, m, a, x)
-
-whether the factor `m`, the merge of the factors `a` and `x`, has more terms on `system` than
-`a` and `x` together; counted on the system conserving nothing when one of them has no definite
-charge, as a merge may have on its way to a product that has one
-"""
-function more_terms(system::System, m, a, x)
-    cm, ca, cx = or_on_plain(s -> (term_count(s, m), term_count(s, a), term_count(s, x)), system)
-    return cm > ca * cx
-end
 
 """
     sort_factors!(fs, info)
@@ -1041,86 +1007,14 @@ function sort_factors!(fs, info)
 end
 
 """
-    merged_pass(system, fs, info, refused)
-
-the factors of the product `fs`, of `(sites, parity)` `info`, each merged, from left to right,
-into the nearest earlier one it does not (anti)commute with, see `sort_factors!`, if it shares a
-site with it, the sites of one among those of the other, see `merged`, and the merge gives no
-more terms than the two factors, see `term_count`, a pair giving more going into `refused`.
-Return the factors left with their info, the number the product gets multiplied by, -1 for
-each odd factor an odd one goes back past, and whether anything merged. That nearest factor is
-read off the last factor on each site and the last odd one and the last one of no definite
-parity, counted in Fenwick trees.
-"""
-function merged_pass(system::System, fs, info, refused)
-    n = length(fs)
-    out = Union{Nothing, IndexedOp{IsOperator}}[]
-    oinfo = Tuple{Vector{Int}, Union{Nothing, Int}}[]
-    on_site = Dict{Int, Vector{Int}}()
-    odd, none = zeros(Int, n), zeros(Int, n)
-    coef, changed = 1, false
-    # the last factor still there on site s
-    function last_on(s)
-        ks = get!(Vector{Int}, on_site, s)
-        while !isempty(ks) && isnothing(out[last(ks)])
-            pop!(ks)
-        end
-        return isempty(ks) ? 0 : last(ks)
-    end
-    function tally!(k, p, x)
-        if isnothing(p)
-            count_add!(none, k, x)
-        elseif p == 1
-            count_add!(odd, k, x)
-        end
-    end
-    for (x, (sx, px)) in zip(fs, info)
-        i = maximum(last_on, sx; init = 0)
-        blocking = px == 0 ? 0 : max(last_counted(none), px == 1 ? 0 : last_counted(odd))
-        if i > 0 && i ≥ blocking && out[i] isa AtIndex && x isa AtIndex &&
-           (issubset(oinfo[i][1], sx) || issubset(sx, oinfo[i][1])) && (out[i], x) ∉ refused
-            a = out[i]
-            m = merged(system, a, x)
-            if m isa AtIndex && more_terms(system, m, a, x)
-                push!(refused, (a, x))
-            else
-                changed = true
-                if px == 1 && isodd(count_to(odd, n) - count_to(odd, i))
-                    coef = -coef
-                end
-                tally!(i, oinfo[i][2], -1)
-                if m isa AtIndex
-                    sm, pm = sites_of(m), parity_on(system, m)
-                    for s in setdiff(sm, oinfo[i][1])
-                        push!(on_site[s], i)
-                    end
-                    out[i], oinfo[i] = m, (sm, pm)
-                    tally!(i, pm, 1)
-                else
-                    out[i] = nothing
-                    coef *= scalarcoef(m)
-                end
-                continue
-            end
-        end
-        push!(out, x)
-        push!(oinfo, (sx, px))
-        foreach(s -> push!(get!(Vector{Int}, on_site, s), length(out)), sx)
-        tally!(length(out), px, 1)
-    end
-    kept = [ k for k in eachindex(out) if !isnothing(out[k]) ]
-    return IndexedOp{IsOperator}[ out[k] for k in kept ], oinfo[kept], coef, changed
-end
-
-"""
     gathered(system, op)
 
 the placed operator `op` rewritten for the descent without developing anything, into a normal
-form on `system`, from its leaves, which alone are placed whole, see `AtIndex`: in each product,
-two factors sharing a site are merged where that gives no more terms, see `merged_pass`, until
-nothing merges, then the factors are sorted by their sites as far as they (anti)commute, see
-`sort_factors!`. Sums are gathered term by term, a sum on a single site becoming the operator of
-its matrix, as a merged product does, and an operator in normal form is left as it is.
+form on `system`: its leaves placed, see `AtIndex`, a named expression replaced by its expression
+placed, the factors of each product sorted by their sites as far as they (anti)commute, see
+`sort_factors!`, and sums gathered term by term, a sum on a single site becoming the operator
+of its matrix. Nothing is merged: the terms, the compaction and `apply` multiply what shares a
+site. An operator in normal form is left as it is.
 """
 function gathered(system::System, a::SumOp{IsOperator, Indexed})
     s = SumOp([ gathered(system, x) for x in a.subs ])
@@ -1133,21 +1027,15 @@ function gathered(system::System, a::SumOp{IsOperator, Indexed})
 end
 gathered(system::System, a::ScalarOp{IsOperator, Indexed}) =
     scale(a.coef, gathered(system, a.arg))
-gathered(::System, a::Union{AtIndex{IsOperator}, IdentityOp{IsOperator, Indexed}}) = a
+gathered(::System, a::IdentityOp{IsOperator, Indexed}) = a
+gathered(system::System, a::AtIndex{IsOperator}) =
+    a.op isa Operator && a.op.expr isa GenericOp ? gathered(system, a.op.expr(a.index...)) : a
 
 function gathered(system::System, a::ProdOp{IsOperator, Indexed})
     p = ProdOp(IndexedOp{IsOperator}[ gathered(system, x) for x in a.subs ])
     coef = scalarcoef(p)
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(p) if !(x isa IdentityOp) ]
     info = [ (sites_of(x), parity_on(system, x)) for x in fs ]
-    refused = Set{Tuple{IndexedOp{IsOperator}, IndexedOp{IsOperator}}}()
-    while coef ≠ 0
-        fs, info, c, changed = merged_pass(system, fs, info, refused)
-        coef *= c
-        if !changed
-            break
-        end
-    end
     coef *= sort_factors!(fs, info)
     return scale(coef, ProdOp(fs))
 end

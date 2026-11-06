@@ -1,5 +1,5 @@
 # The Fenwick tree of counts and the binary heap with which the gathering of a product orders
-# its factors and finds the one a factor merges into, see `sort_factors!` and `merged_pass`.
+# its factors, see `sort_factors!`.
 
 """
     count_add!(tree, k, x)
@@ -26,29 +26,6 @@ function count_to(tree::Vector{Int}, k::Int)
         k -= k & -k
     end
     return c
-end
-
-"""
-    last_counted(tree)
-
-the last position of the Fenwick tree `tree` of counts 0 or 1 whose count is 1, 0 when there is
-none
-"""
-function last_counted(tree::Vector{Int})
-    c = count_to(tree, length(tree))
-    if c == 0
-        return 0
-    end
-    # the last position whose sum up to it is under c
-    k, step = 0, prevpow(2, length(tree))
-    while step > 0
-        if k + step ≤ length(tree) && tree[k + step] < c
-            k += step
-            c -= tree[k]
-        end
-        step >>= 1
-    end
-    return k + 1
 end
 
 """

@@ -727,6 +727,25 @@ end
     @test only(steps((C + N)(3))) isa TMS.WindowMPO
     @test length(only(steps(C(4))).gates) == 4
     @test length(only(steps((C + dag(C))(3) * named(N + 2Id, "G")(5))).gates) == 4
+    # factors on one site or on two neighbouring ones are applied as one block: X(1) Z(1) as a
+    # single gate X·Z, also across a factor elsewhere, X(1) CX(1, 2) Z(1) as one block on
+    # (1, 2); a named gate of three sites goes through its MPO
+    q3 = random_state(Pure, System(3, Qubit()), 4; rng = Xoshiro(51))
+    qsteps(op) = last(TMS.pure_steps(q3.system, op))
+    one_gate(op) = length(qsteps(op)) == 1 && length(only(qsteps(op)).gates) == 1
+    @test one_gate(X(1) * Z(1)) && one_gate(X(1) * CX(1, 2) * Z(1))
+    @test one_gate(Swap(1, 2) * X(1) * Swap(1, 2))
+    @test length(only(qsteps(X(1) * Y(2) * Z(1))).gates) == 2
+    @test only(qsteps(CCX(1, 2, 3))) isa TMS.WindowMPO
+    for op in [X(1) * Z(1), X(1) * Y(2) * Z(1), X(1) * CX(1, 2) * Z(1), CCX(1, 2, 3)]
+        @test norm(apply(op, q3) - apply(make_mpo(q3, op), q3)) < 1e-12
+    end
+    # a named gate of many sites times a factor of one of them is not merged into its dense
+    # matrix, which took 2.3 GB on ten qubits
+    q10 = System(10, Qubit())
+    w = Operator{10}("W", reduce(⊗, fill(X, 10)))
+    TMS.gathered(q10, Z(1) * w(1:10...))
+    @test (@allocated TMS.gathered(q10, Z(1) * w(1:10...))) < 2^22
     # a product that vanishes gives the null state, and an MPO is applied as it is
     ψ = random_state(Pure, fe, 4)
     @test norm(apply(C(2) * C(2), ψ)) == 0
