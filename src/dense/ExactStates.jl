@@ -496,7 +496,7 @@ part_renyi2(state::ExactState{Pure}, kept::Vector{Int}) =
     -log(sum(abs2, kept_spectrum(state, kept, "renyi2")))
 
 """
-the system `system` conserving nothing, the operator `op` checked on it first: refused on a
+the system `system` conserving nothing, the operator `a` checked on it first: refused on a
 charged `system` when it changes the charges by no definite amount, as on a `State`, see
 `compacted_op`
 """

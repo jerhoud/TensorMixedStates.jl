@@ -410,7 +410,7 @@ end
 """
     dense_bound(state)
 
-the default of `max_dense` for a dense matrix built from `state`: `dense_elements`, or the
+the default of `max_dense` for a dense matrix built from `state`: `dense_elements[]`, or the
 number of elements `state` holds when it is held whole and larger. A state of one's own held
 whole adds a method.
 """
