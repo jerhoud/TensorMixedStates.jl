@@ -1159,6 +1159,13 @@ end
     @test only(last(TMS.mixed_steps(bs, d))) isa TMS.WindowMPO
     l = lowered(bs, A(1) * A(2))
     @test ket_bra_matrix(apply(d, ρb)) ≈ l * rb * l' - (l' * l * rb + rb * l' * l) / 2
+    # and so is one on a single site of dimension 40, whose dense block would hold 1600²
+    b40 = System(2, Boson(40))
+    ρ40 = random_state(Mixed, b40, 2)
+    r40 = ket_bra_matrix(ρ40)
+    @test only(last(TMS.mixed_steps(b40, Dissipator(A(1))))) isa TMS.WindowMPO
+    l = lowered(b40, A(1))
+    @test ket_bra_matrix(apply(Dissipator(A(1)), ρ40)) ≈ l * r40 * l' - (l' * l * r40 + r40 * l' * l) / 2
 end
 
 @testset "Gates on a density matrix, on the kets then on the bras" begin
