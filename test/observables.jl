@@ -718,6 +718,14 @@ end
     for op in [C(1) * (C ⊗ N)(2, 3) * dag(C)(4), C(1) * (C + N)(2) * dag(C)(4) * N(5)]
         @test norm(apply(op, ψ) - apply(make_mpo(ψ, op), ψ)) < 1e-10
     end
+    # on a charged system, factors of no definite flux in a block of two neighbouring sites of
+    # definite flux leave the rest of the product gate by gate
+    qn = System(6, Qubit(conserve = N))
+    hop = exp(-0.3im * (X ⊗ X + Y ⊗ Y))
+    circ = prod(hop(i, i + 1) for i in (1, 3, 5, 2, 4))
+    @test all(s -> s isa TMS.GateBatch, last(TMS.pure_steps(qn, X(1) * Swap(1, 2) * X(2) * circ)))
+    ψn = State{Pure}(qn, ["Up", "Dn", "Up", "Dn", "Up", "Dn"])
+    @test norm(apply(X(1) * Swap(1, 2) * X(2) * circ, ψn) - apply(Swap(1, 2) * circ, ψn)) < 1e-12
     # a dense block on its sites when it lays no string elsewhere, its MPO otherwise, and
     # gates of one site for a single term
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
@@ -1447,7 +1455,8 @@ end
     @test expect(b, X(1) * Swap(1, 2) * X(2)) ≈ expect(b, Swap(1, 2)) ≈ 1
     @test norm(evolve(-im * X(1) * Swap(1, 2) * X(2), 0.1, b; nsteps = 1)) ≈ 1
     # and so are such products on sites apart, applied whole through their MPO, and products
-    # whose parts of other charges cancel once summed: H X H is Z, (X + Z) X (X + Z) is 2Z
+    # whose parts of other charges cancel once summed: H ⊗ H commutes with Swap, H X H is Z,
+    # (X + Z) X (X + Z) is 2Z
     s3 = System(3, Qubit(conserve = N))
     b3 = normalize(State{Pure}(s3, ["Up", "Dn", "Dn"]) + State{Pure}(s3, ["Dn", "Up", "Dn"]))
     swapped = normalize(State{Pure}(s3, ["Dn", "Dn", "Up"]) + State{Pure}(s3, ["Dn", "Up", "Dn"]))
@@ -1455,6 +1464,7 @@ end
     zs = kron(z, z, z) * ExactState(b3).state
     for (op, ref, k) in [(X(1) * Swap(1, 3) * X(3), ExactState(swapped).state, 1),
                          (X(1) * X(2) * Swap(1, 3) * X(3) * X(2), ExactState(swapped).state, 1),
+                         (H(1) * H(3) * Swap(1, 3) * H(1) * H(3), ExactState(swapped).state, 1),
                          (prod(H(i) * X(i) * H(i) for i in 1:3), zs, 1),
                          (prod((X(i) + Z(i)) * X(i) * (X(i) + Z(i)) for i in 1:3), zs, 8)]
         @test ExactState(apply(op, b3)).state ≈ k * ref

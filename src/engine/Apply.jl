@@ -11,10 +11,10 @@ export apply
 """
     dense_limit
 
-the largest product of the squares of the dimensions of two neighbouring sites for which
-`apply` applies a channel or a generator to a density matrix as one block on their mixed
-indices, see `gate_steps!` and `mixed_steps`; beyond, a gate goes through the MPOs of its sides,
-any other through its MPO
+the largest product of the squares of the dimensions of the sites for which `apply` applies to a
+density matrix as one block on their mixed indices a gate of two neighbouring sites, see
+`gate_steps!`, or another channel or a generator of one site or two neighbouring ones, see
+`mixed_steps`; beyond, a gate goes through the MPOs of its sides, any other through its MPO
 """
 const dense_limit = 1024
 
@@ -140,8 +140,10 @@ the factors of the product `op`, gathered, see `gathered`, cut into the pieces `
 one by one, and the number they are multiplied by: the factors on two neighbouring sites taken
 together, see `grouped`, then the factors of one site of definite parity brought together where
 they commute with the pieces they cross, a sign for two odd ones, so that their strings
-compensate, every other factor being a piece of its own. On a charged system, a product with a
-factor whose terms change the charges by different amounts is one piece, see `flux_groups`.
+compensate, every other factor being a piece of its own; each piece with its kind, `:run` for
+a run of factors of one site, `:piece` otherwise. On a charged system, a product with a group of
+factors whose terms change the charges by different amounts is one piece of kind `:whole`, see
+`flux_groups`.
 """
 function pieces(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
@@ -153,15 +155,16 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     run = 0
     after, odd, none = Set{Int}(), 0, false
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(scalararg(g)) if !(x isa IdentityOp) ]
-    # a piece needs a definite flux on charged sites, which a factor with none does not give
+    groups = grouped(system, fs)
+    # a piece needs a definite flux on charged sites, which a group with none does not give
     function fluxes(f)
         gs = flux_groups(system, f)
         return isnothing(gs) ? 1 : length(gs)
     end
-    if is_charged(system) && any(f -> fluxes(f) > 1, fs)
-        return coef, [ (ProdOp(fs), false) ]
+    if is_charged(system) && any(x -> fluxes(x) > 1, groups)
+        return coef, [ (ProdOp(fs), :whole) ]
     end
-    for x in grouped(system, fs)
+    for x in groups
         sx, px = sites_of(x), parity_on(system, x)
         joins = x isa AtIndex && length(x.index) == 1 && !isnothing(px)
         # it reaches the last run when it (anti)commutes with every piece after it, see
@@ -184,7 +187,7 @@ function pieces(system::System, a::IndexedOp{IsOperator})
             none |= isnothing(px)
         end
     end
-    return coef, [ (ProdOp(p), r) for (p, r) in zip(ps, runs) ]
+    return coef, [ (ProdOp(p), r ? :run : :piece) for (p, r) in zip(ps, runs) ]
 end
 
 # The workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
@@ -519,22 +522,22 @@ function one_site_gates!(steps::Vector, ::Type{R}, system::System, t::Term) wher
 end
 
 """
-    piece_steps!(steps, R, system, p, run)
+    piece_steps!(steps, R, system, p, kind)
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
-operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
-they bring, 0 for a dense piece that is zero. A piece on one site or two neighbouring ones, see
-`neighbouring`, laying no string elsewhere and changing the charges by a definite amount, see
-`definite_on`, is a dense block, see `gate_steps!`, unless it is a run; an operator given by its
-matrix on more sites goes through its MPO as any other piece. Otherwise it goes
-through gates of one site when it has a single term, as a run usually does, and through its MPO
-otherwise, see `compacted_op`, on a density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``,
-the product of its sides
+operator, of `kind` as `pieces` gives it, and return the number they bring, 0 for a dense
+piece that is zero. A piece on one site or two neighbouring ones, see `neighbouring`, laying no
+string elsewhere and changing the charges by a definite amount, see `definite_on`, is a dense
+block, see `gate_steps!`, unless it is a run; an operator given by its matrix on more sites goes
+through its MPO as any other piece. Otherwise it goes through gates of one site when it has a
+single term, as a run usually does, and through its MPO otherwise, see `compacted_op`, on a
+density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``, see `compacted_super`, the product of
+its sides for a piece of kind `:whole`
 """
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
-                      run::Bool) where R
+                      kind::Symbol) where R
     sites = sort(sites_of(p))
-    if !run && neighbouring(sites)
+    if kind ≠ :run && neighbouring(sites)
         m = matrix_on(system, p, sites)
         # the null state, which ITensors cannot factorise into an MPO on charged sites
         if iszero(m)
@@ -547,10 +550,12 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     c = compacted_op(system, p)
     if !isnothing(c.terms) && length(c.terms) == 1
         return one_site_gates!(steps, R, system, only(c.terms))
-    elseif R === Mixed
-        # not `Gate(p)`, which is the product of the gates of its factors, of no definite flux
-        # when they have none
+    elseif R === Mixed && kind == :whole
+        # not `Gate(p)`, the product of the gates of its factors, of no definite flux when they
+        # have none
         c = product(compacted_op(system, p; side = :left), compacted_op(system, p; side = :right))
+    elseif R === Mixed
+        c = compacted_super(system, Gate(p))
     end
     return pre_step!(steps, PreMPO(system, [c]))
 end
@@ -564,8 +569,8 @@ the number they bring
 """
 function operator_steps!(steps::Vector, ::Type{R}, system::System, a::IndexedOp{IsOperator}) where R
     coef, ps = pieces(system, a)
-    for (p, run) in reverse(ps)
-        coef *= piece_steps!(steps, R, system, p, run)
+    for (p, kind) in reverse(ps)
+        coef *= piece_steps!(steps, R, system, p, kind)
         if coef == 0
             break
         end
@@ -669,11 +674,12 @@ the state with the operator `op`, placed on sites, applied, or the MPO `mpo` fro
 factor and never developed: the factors on one site or two neighbouring sites are applied as a
 dense block there, together when they share these sites, any other through its MPO, as a
 factor laying Jordan-Wigner strings on other sites; on conserved charges, a product with a
-factor of no definite flux goes whole through its MPO. On a pure state, a channel of a single
-Kraus operator `K`, as `Gate(K)`, is applied as `K`. On a mixed state, a channel is applied factor by factor in the same way, `Gate(K)` as `K`
-on the kets and its conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L`
-gives `L(ρ)`, a dephasing of more than two sites through the MPO of the gates of its
-projectors when they have few terms. The state is not normalised.
+factor of no definite flux outside such a block goes whole through its MPO. On a pure state, a
+channel of a single Kraus operator `K`, as `Gate(K)`, is applied as `K`. On a mixed state, a
+channel is applied factor by factor in the same way, `Gate(K)` as `K` on the kets and its
+conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives `L(ρ)`, a
+dephasing of more than two sites through the MPO of the gates of its projectors when they have
+few terms. The state is not normalised.
 
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole state
   for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density
