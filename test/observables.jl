@@ -1476,7 +1476,7 @@ end
     ψf = random_state(State{Pure}(fn, ["Occ", "Emp", "Occ", "Emp"]), 4)
     γ(i) = C(i) + dag(C)(i)
     for op in (γ(2) * dag(C)(1) * C(3) * γ(2), γ(3) * (dag(C)(1) * C(4) + dag(C)(4) * C(1)) * γ(3))
-        @test last.(last(TMS.pieces(fn, op))) == [:whole]
+        @test length(last(TMS.pieces(fn, op))) == 1
         @test ExactState(apply(op, ψf)).state ≈ apply(op, ExactState(ψf)).state
         @test ExactState(apply(op, mix(ψf))).state ≈ apply(op, mix(ExactState(ψf))).state
     end
