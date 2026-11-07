@@ -1184,7 +1184,7 @@ end
                controlled(controlled(X))(1, 3, 6), controlled(X)(1, 5) * H(2) * g4(3, 4)]
         @test same(ρ, Gate(op), lowered(qs, op))
     end
-    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.WindowMPO]
+    @test kinds(ρ, Gate(controlled(X)(2, 5))) == [TMS.WindowMPO, TMS.WindowMPO]
     @test kinds(ρ, Gate(controlled(X)(3, 4))) == [TMS.GateBatch]
     @test kinds(ρ, Gate(H(3))) == [TMS.GateBatch]
     ps = [ lowered(qs, Proj(Z ⊗ Z => λ)(1, 4)) for λ in (1., -1.) ]

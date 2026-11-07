@@ -140,10 +140,9 @@ the factors of the product `op`, gathered, see `gathered`, cut into the pieces `
 one by one, and the number they are multiplied by: the factors on two neighbouring sites taken
 together, see `grouped`, then the factors of one site of definite parity brought together where
 they commute with the pieces they cross, a sign for two odd ones, so that their strings
-compensate, every other factor being a piece of its own; each piece with its kind, `:run` for
-a run of factors of one site, `:piece` otherwise. On a charged system, a product with a group of
-factors whose terms change the charges by different amounts is one piece of kind `:whole`, see
-`flux_groups`.
+compensate, every other factor being a piece of its own, each piece with whether it is such a
+run. On a charged system, a product with a group of factors whose terms change the charges by
+different amounts is one piece, see `flux_groups`.
 """
 function pieces(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
@@ -162,7 +161,7 @@ function pieces(system::System, a::IndexedOp{IsOperator})
         return isnothing(gs) ? 1 : length(gs)
     end
     if is_charged(system) && any(x -> fluxes(x) > 1, groups)
-        return coef, [ (ProdOp(fs), :whole) ]
+        return coef, [ (ProdOp(fs), false) ]
     end
     for x in groups
         sx, px = sites_of(x), parity_on(system, x)
@@ -187,7 +186,7 @@ function pieces(system::System, a::IndexedOp{IsOperator})
             none |= isnothing(px)
         end
     end
-    return coef, [ (ProdOp(p), r ? :run : :piece) for (p, r) in zip(ps, runs) ]
+    return coef, [ (ProdOp(p), r) for (p, r) in zip(ps, runs) ]
 end
 
 # The workaround of ITensors, which cannot factorise a tensor of charged indices that is exactly
@@ -522,22 +521,21 @@ function one_site_gates!(steps::Vector, ::Type{R}, system::System, t::Term) wher
 end
 
 """
-    piece_steps!(steps, R, system, p, kind)
+    piece_steps!(steps, R, system, p, run)
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
-operator, of `kind` as `pieces` gives it, and return the number they bring, 0 for a dense
-piece that is zero. A piece on one site or two neighbouring ones, see `neighbouring`, laying no
+operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
+they bring, 0 for a dense piece that is zero. A piece on one site or two neighbouring ones, see `neighbouring`, laying no
 string elsewhere and changing the charges by a definite amount, see `definite_on`, is a dense
 block, see `gate_steps!`, unless it is a run; an operator given by its matrix on more sites goes
 through its MPO as any other piece. Otherwise it goes through gates of one site when it has a
 single term, as a run usually does, and through its MPO otherwise, see `compacted_op`, on a
-density matrix that of ``\\rho \\mapsto K\\rho K^\\dagger``, see `compacted_super`, the product of
-its sides for a piece of kind `:whole`
+density matrix that of ``\\rho \\mapsto K\\rho`` then that of ``\\rho \\mapsto \\rho K^\\dagger``
 """
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
-                      kind::Symbol) where R
+                      run::Bool) where R
     sites = sort(sites_of(p))
-    if kind ≠ :run && neighbouring(sites)
+    if !run && neighbouring(sites)
         m = matrix_on(system, p, sites)
         # the null state, which ITensors cannot factorise into an MPO on charged sites
         if iszero(m)
@@ -550,14 +548,14 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     c = compacted_op(system, p)
     if !isnothing(c.terms) && length(c.terms) == 1
         return one_site_gates!(steps, R, system, only(c.terms))
-    elseif R === Mixed && kind == :whole
-        # not `Gate(p)`, the product of the gates of its factors, of no definite flux when they
-        # have none
-        c = product(compacted_op(system, p; side = :left), compacted_op(system, p; side = :right))
-    elseif R === Mixed
-        c = compacted_super(system, Gate(p))
+    elseif R === Pure
+        return pre_step!(steps, PreMPO(system, [c]))
     end
-    return pre_step!(steps, PreMPO(system, [c]))
+    # the sides one after the other, not their product, whose reduction can lose the parts of
+    # small relative size of the operator, nor `Gate(p)`, made of the gates of the factors, of
+    # no definite flux when they have none
+    sides = [ compacted_op(system, p; side = s) for s in (:left, :right) ]
+    return prod(pre_step!(steps, PreMPO(system, [c])) for c in sides)
 end
 
 """
@@ -569,8 +567,8 @@ the number they bring
 """
 function operator_steps!(steps::Vector, ::Type{R}, system::System, a::IndexedOp{IsOperator}) where R
     coef, ps = pieces(system, a)
-    for (p, kind) in reverse(ps)
-        coef *= piece_steps!(steps, R, system, p, kind)
+    for (p, run) in reverse(ps)
+        coef *= piece_steps!(steps, R, system, p, run)
         if coef == 0
             break
         end
