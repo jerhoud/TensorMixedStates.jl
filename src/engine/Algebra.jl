@@ -168,7 +168,8 @@ the terms of one site and the block of channels of the operator compacted on `sy
 pieces on each site `k` are `moves(k)`, as `(l, r, m, x)`: `x` times the matrix `m` from channel
 `l` of the link on the left to channel `r` of the link on the right, `dims` their numbers, 0 for
 an opening or a closing, a term of one site when both are; the matrices of each site numbered as
-its atoms, the block reduced, see `reduced_block`, and truncated by `limits`
+its atoms, each divided by the power of two of its norm, which goes into its coefficient, the
+block reduced, see `reduced_block`, and truncated by `limits`
 """
 function from_moves(::Type{R}, sys::System, ::Type{T}, dims::Vector{Int}, moves,
                     limits::Limits) where {R, T}
@@ -183,11 +184,15 @@ function from_moves(::Type{R}, sys::System, ::Type{T}, dims::Vector{Int}, moves,
                 add!(singles, k, x * m)
                 continue
             end
+            # atoms of sizes far apart make the basis of the site ill-conditioned, see
+            # `on_basis!`, and the sweeps then drop channels that are not negligible
+            e = iszero(m) ? 0 : exponent(norm(m))
+            m = m * exp2(-e)
             a = get!(ids, m) do
                 push!(atoms[k], m)
                 return length(atoms[k])
             end
-            add!(get!(Combination{T}, pieces[k], (l, r)), a, T(x))
+            add!(get!(Combination{T}, pieces[k], (l, r)), a, T(x) * exp2(e))
         end
     end
     block = n == 1 ? nothing :

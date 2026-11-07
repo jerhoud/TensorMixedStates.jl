@@ -236,6 +236,21 @@ end
     @test eltype(make_mpo(st, X(1) + Y(2))[1]) == ComplexF64
 end
 
+@testset "A product of compacted operators of terms far apart in size" begin
+    # the matrices of its moves are taken as atoms divided by the power of two of their norm, so
+    # that a term of 1e-11 leaves the basis of each site well conditioned, which the sweeps
+    # need to keep the channels that are not negligible
+    q3 = System(3, Qubit())
+    k = (X ⊗ Y + 0.5 * Y ⊗ Z + 1e-11 * Z ⊗ X)(1, 3)
+    p = TMS.product(TMS.compacted_op(q3, k; side = :left), TMS.compacted_op(q3, k; side = :right))
+    for atoms in p.block.atoms
+        if !isempty(atoms)
+            s = LA.svdvals(reduce(hcat, vec.(atoms)))
+            @test s[1] / s[end] < 10
+        end
+    end
+end
+
 @testset "The algebra of PreMPOs" begin
     # the MPO of a product, built from those of its factors, stands for the product and has the
     # least channels, where developing it would give the product of the numbers of their terms,
