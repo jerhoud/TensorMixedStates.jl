@@ -6,16 +6,12 @@
 the operator `a`, or its superoperator, see `superoperator`, prepared to act on the exact states
 of `system`, and its compaction, which bounds its norm and its width and checks its flux
 """
-function exact_acting(::Type{Pure}, system::System, a::IndexedOp{IsOperator})
-    c = compacted_op(system, a)
-    plain = weaken(system, ())
-    return prepared_acted(plain, gathered(plain, a)), c
-end
+exact_acting(::Type{Pure}, system::System, a::IndexedOp{IsOperator}) =
+    exact_action(Pure, system, a; checked = false), compacted_op(system, a)
 
 function exact_acting(::Type{Mixed}, system::System, a::IndexedOp)
     s = superoperator(a)
-    c = compacted_super(system, s)
-    return prepared_channel(weaken(system, ()), s), c
+    return exact_action(Mixed, system, s; checked = false), compacted_super(system, s)
 end
 
 """

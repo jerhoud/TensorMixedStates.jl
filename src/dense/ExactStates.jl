@@ -305,20 +305,14 @@ hs_fidelity(a::State, b::ExactState) = hs_fidelity(ExactState(a), b)
 # as for a State, on what conserves nothing, not normalised
 function inner(a::ExactState{Pure}, op::IndexedOp{IsOperator}, b::ExactState{Pure})
     same_sites(a, b)
-    system = weaken(b.system, ())
-    check_indices(system, op)
-    return dot(a.state, operator_acted(system, op, b.state))
+    return dot(a.state, exact_action(Pure, b.system, op; checked = false)(b.state))
 end
 
 function inner(a::ExactState{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}},
                b::ExactState{Mixed})
     same_sites(a, b)
-    check_indices(b.system, op)
     # refused when it changes the charges by no definite amount, as on a `State`
-    if is_charged(b.system)
-        compacted_super(b.system, op)
-    end
-    return dot(a.state, channel_acted(weaken(b.system, ()), op, b.state))
+    return dot(a.state, exact_action(Mixed, b.system, op)(b.state))
 end
 
 function inner(::ExactState{Mixed}, op::IndexedOp{IsOperator}, ::ExactState{Mixed})
@@ -500,44 +494,6 @@ part_renyi2(state::ExactState{Pure}, kept::Vector{Int}) =
     -log(sum(abs2, kept_spectrum(state, kept, "renyi2")))
 
 """
-the system `system` conserving nothing, the operator `a` checked on it first: refused on a
-charged `system` when it changes the charges by no definite amount, as on a `State`, see
-`compacted_op`
-"""
-function checked_plain(system::System, a::IndexedOp{IsOperator})
-    check_indices(system, a)
-    if is_charged(system)
-        # by its terms when it develops, otherwise by its compaction, which composes its parts
-        ts = developed(system, gathered(system, a))
-        if isnothing(ts)
-            compacted_op(system, a)
-        else
-            check_flux(Pure, system, a, ts)
-        end
-    end
-    return weaken(system, ())
-end
-
-"""
-the operator `op`, placed on sites, applied to the vector `x`, or to the kets of the matrix `x`,
-see `gathered_acted`, refused when it changes the charges of `system` by no definite amount
-"""
-function operator_acted(system::System, a::IndexedOp{IsOperator}, x::AbstractVecOrMat)
-    plain = checked_plain(system, a)
-    return gathered_acted(plain, gathered(plain, a), x)
-end
-
-"""
-the operator `p`, placed on sites, applied to the kets of the density matrix `ρ`, then to its
-bras as its adjoint: ``p \\rho p^\\dagger``
-"""
-function on_both_sides(system::System, p::IndexedOp{IsOperator}, ρ::AbstractMatrix)
-    plain = checked_plain(system, p)
-    g = gathered(plain, p)
-    return gathered_acted(plain, g, gathered_acted(plain, g, ρ)')'
-end
-
-"""
 the kind, a `Gate`, an `Evolver` or a `Dissipator`, and the placed argument of the channel or the
 generator `a` when it is one of them, placed on sites or holding a placed operator; `nothing`
 otherwise
@@ -599,17 +555,34 @@ function prepared_channel(system::System, a::IndexedOp)
 end
 
 """
-the channel or the generator `a`, placed on sites, applied to the density matrix `ρ` of `system`,
-conserving nothing, see `prepared_channel`
+the operator, the channel or the generator `a` prepared to act on the arrays of the exact states
+of representation `R` of `system` as `apply` acts, an operator `K` on a density matrix as
+``K\\rho K^\\dagger``; with `checked`, refused when it changes the charges by no definite amount
 """
-channel_acted(system::System, a::IndexedOp, ρ::AbstractMatrix) = prepared_channel(system, a)(ρ)
+function exact_action(::Type{R}, system::System, a::IndexedOp; checked::Bool = true) where R
+    check_indices(system, a)
+    if checked && is_charged(system)
+        # by its terms when it develops, otherwise by its compaction, which composes its parts
+        ts = a isa IndexedOp{IsOperator} ? developed(system, gathered(system, a)) : nothing
+        if !isnothing(ts)
+            check_flux(Pure, system, a, ts)
+        elseif a isa IndexedOp{IsOperator}
+            compacted_op(system, a)
+        else
+            compacted_super(system, a)
+        end
+    end
+    plain = weaken(system, ())
+    if !(a isa IndexedOp{IsOperator})
+        return prepared_channel(plain, a)
+    end
+    act = prepared_acted(plain, gathered(plain, a))
+    return R === Pure ? act : ρ -> act(act(ρ)')'
+end
 
 # applied as `apply` applies them to a `State`, the limits of the MPS without use
-function apply(a::IndexedOp{IsOperator}, state::ExactState{Pure}; limits::Limits = Limits())
-    check_indices(state.system, a)
-    x = operator_acted(state.system, a, state.state)
-    return ExactState{Pure}(state.system, x, Val(:raw))
-end
+apply(a::IndexedOp{IsOperator}, state::ExactState{Pure}; limits::Limits = Limits()) =
+    ExactState{Pure}(state.system, exact_action(Pure, state.system, a)(state.state), Val(:raw))
 
 function apply(a::IndexedOp{IsChannel}, state::ExactState{Pure}; limits::Limits = Limits())
     if !is_pure(a)
@@ -622,28 +595,16 @@ end
 apply(a::IndexedOp{IsGenerator}, ::ExactState{Pure}; limits::Limits = Limits()) =
     error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
 
-apply(a::IndexedOp{IsOperator}, state::ExactState{Mixed}; limits::Limits = Limits()) =
-    ExactState{Mixed}(state.system, on_both_sides(state.system, a, state.state), Val(:raw))
-
-function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::ExactState{Mixed};
-               limits::Limits = Limits())
-    check_indices(state.system, a)
-    # refused when it changes the charges by no definite amount, as on a `State`
-    if is_charged(state.system)
-        compacted_super(state.system, a)
-    end
-    x = channel_acted(weaken(state.system, ()), a, state.state)
-    return ExactState{Mixed}(state.system, x, Val(:raw))
-end
+apply(a::IndexedOp{<:Union{IsOperator, IsChannel, IsGenerator}}, state::ExactState{Mixed};
+      limits::Limits = Limits()) =
+    ExactState{Mixed}(state.system, exact_action(Mixed, state.system, a)(state.state), Val(:raw))
 
 apply(::MPO, ::ExactState; kwargs...) =
     error("an ExactState is given the operator rather than its MPO: apply(op, state)")
 
 # the limits of the MPS have no use on an exact state, see the docstring of ExactState
 function project_on(state::ExactState{R}, p::IndexedOp; limits::Limits) where {R <: PM}
-    system = weaken(state.system, ())
-    x = R === Mixed ? on_both_sides(system, p, state.state) :
-                      operator_acted(system, p, state.state)
+    x = exact_action(R, state.system, p; checked = false)(state.state)
     return normalize(ExactState{R}(state.system, x, Val(:raw)))
 end
 
