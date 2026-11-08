@@ -592,6 +592,31 @@ function gate_operator(a::IndexedOp)
 end
 
 """
+    channel_factors(a)
+
+the factors of the channel or the generator `a`, its coefficient left out, those of the
+identity dropped, and each run of gates as the product of their operators, a gate of a product
+being the product of the gates: an operator stands for its gate
+"""
+function channel_factors(a::IndexedOp)
+    fs = IndexedOp[]
+    for x in prodsubs(a)
+        k = x isa Gate ? x.arg :
+            x isa AtIndex && x.op isa Gate ? AtIndex(x.op.arg, x.index) : nothing
+        if x isa IdentityOp
+            continue
+        elseif isnothing(k)
+            push!(fs, x)
+        elseif !isempty(fs) && last(fs) isa IndexedOp{IsOperator}
+            fs[end] = last(fs) * k
+        else
+            push!(fs, k)
+        end
+    end
+    return fs
+end
+
+"""
     super_by_blocks(system, a)
 
 whether the superoperator `a`, placed on sites, is better made of the sides of its operators on
@@ -623,7 +648,8 @@ truncated by `limits`, see `truncated_block`: from its terms, see `lower`, but f
 made of the sides of its operators, see `super_by_blocks` and `compacted_op`, multiplied, the
 adjoint of a side being the side of the adjoint. The evolver of `K` is ``K\\rho + \\rho
 K^\\dagger``, its gate ``K\\rho K^\\dagger``, the dissipator of `L` ``L\\rho L^\\dagger -
-(L^\\dagger L\\rho + \\rho L^\\dagger L)/2``, and a product of channels that of their compactions.
+(L^\\dagger L\\rho + \\rho L^\\dagger L)/2``, and a product of channels that of their compactions,
+a run of gates being the gate of the product of their operators, see `channel_factors`.
 """
 function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits())
     check_indices(system, a)
@@ -641,7 +667,12 @@ function compacted_super(system::System, a::IndexedOp, limits::Limits = Limits()
     for x in summands[blocks]
         y, k = scalararg(x), c * scalarcoef(x)
         if y isa ProdOp
-            add_part!(parts, blocked_product(y.subs, f -> compacted_super(system, f)), k)
+            # a run of gates as the gate of the product of their operators, see
+            # `channel_factors`, whose flux can be definite where theirs are not
+            sides(K) = product(compacted_op(system, K; side = :left),
+                               compacted_op(system, K; side = :right))
+            factor(f) = f isa IndexedOp{IsOperator} ? sides(f) : compacted_super(system, f)
+            add_part!(parts, blocked_product(channel_factors(y), factor), k)
             continue
         end
         l, r = compacted_op(system, y.arg; side = :left), compacted_op(system, y.arg; side = :right)

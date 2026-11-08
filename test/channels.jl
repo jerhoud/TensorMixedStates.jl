@@ -1178,6 +1178,15 @@ end
     ρf = random_state(Mixed, f4, 2)
     @test ket_bra_matrix(apply(Dissipator(C(3)), ρf)) ≈
         dissipated(lowered(f4, C(3)), ket_bra_matrix(ρf))
+    # a run of gates on a charged system is the gate of the product of their operators, whose
+    # flux is definite where that of a factor is not
+    fc = System(4, Fermion(conserve = N))
+    ρc = random_state(Mixed, fc, ["Occ", "Emp", "Occ", "Emp"], 4)
+    g3 = Gate(C(1)) * Gate(C(1) + dag(C)(2)) * Gate(N(3) + N(4))
+    k3 = lowered(fc, C(1) * (C(1) + dag(C)(2)) * (N(3) + N(4)))
+    r3 = k3 * ket_bra_matrix(ρc) * k3'
+    @test ket_bra_matrix(apply(g3, ρc)) ≈ r3
+    @test ket_bra_matrix(apply(make_mpo(ρc, g3), ρc)) ≈ r3
 end
 
 @testset "Gates on a density matrix, on the kets then on the bras" begin

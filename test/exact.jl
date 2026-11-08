@@ -1018,4 +1018,22 @@ end
     r = x6.state
     @test evolve(Dissipator(cz6), t, x6; nsteps = 1).state ≈
         exp(-t) * (cosh(t) * r + sinh(t) * u6 * r * u6')
+    # by the structure on fermions, charged or not: P develops into no terms, and a dissipator
+    # of three terms is made of the sides of its operator; a run of gates on the charged system
+    # whose product has a definite flux where a factor has none
+    hop(i, j) = dag(C)(i) * C(j) + dag(C)(j) * C(i)
+    P = hop(1, 2) * hop(3, 4) * (N(1) + N(4))
+    fu = System(4, Fermion())
+    xu = mix(ExactState(random_state(Pure, fu, 4; rng = Xoshiro(7))))
+    g3 = Gate(C(1)) * Gate(C(1) + dag(C)(2)) * Gate(N(3) + N(4))
+    for (x, a) in [(xu, Gate(P)), (xu, -im * P + Dissipator(P)),
+                   (xu, Dissipator(C(1) + C(2) + C(3))), (xf, Gate(P)),
+                   (xf, -im * P + Dissipator(P)), (xf, Dissipator(C(1) + C(2) + C(3))), (xf, g3)]
+        @test apply(a, x).state ≈ byterms(x, a)
+    end
+    # and a thermal state of a Hamiltonian that does not develop
+    hp = P + dag(P)
+    w = exp(-0.7 * matrix(hp, fu))
+    _, th = thermalize(hp, 0.7, TMS.ExactState{Mixed}(fu, "FullyMixed"); nsteps = 1)
+    @test th.state ≈ w / LA.tr(w) atol = 1e-11
 end

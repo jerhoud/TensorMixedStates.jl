@@ -347,31 +347,6 @@ function gate_mpo(::Type{R}, system::System, m::AbstractMatrix, ks) where R
 end
 
 """
-    channel_factors(a)
-
-the factors of the channel or the generator `a`, its coefficient left out, those of the
-identity dropped, and each run of gates as the product of their operators, a gate of a product
-being the product of the gates: an operator stands for its gate
-"""
-function channel_factors(a::IndexedOp)
-    fs = IndexedOp[]
-    for x in prodsubs(a)
-        k = x isa Gate ? x.arg :
-            x isa AtIndex && x.op isa Gate ? AtIndex(x.op.arg, x.index) : nothing
-        if x isa IdentityOp
-            continue
-        elseif isnothing(k)
-            push!(fs, x)
-        elseif !isempty(fs) && last(fs) isa IndexedOp{IsOperator}
-            fs[end] = last(fs) * k
-        else
-            push!(fs, k)
-        end
-    end
-    return fs
-end
-
-"""
     GateBatch(gates, on)
 
 a step of `apply`: gates applied together, each on its consecutive sites `on`
