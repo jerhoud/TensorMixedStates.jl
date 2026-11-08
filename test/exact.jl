@@ -493,6 +493,18 @@ TMS.run_phase(p::CreateExact, sim::TMS.Simulation, ::Int) = TMS.Simulation(sim, 
                           limits = Limits(maxdim = 1))
     @test e1 ≈ λ[2] atol = 1e-10
     @test abs(inner(g, g1)) < 1e-10
+    # a degenerate lowest level, reached state after state from the same start, whose
+    # perturbation is drawn anew for each number of states to avoid
+    p = (X(1) + Z(2)) * (X(2) + Z(3)) * (X(3) + Z(4))
+    hd = p + dag(p)
+    λd = minimum(LA.eigvals(LA.Hermitian(matrix(hd, sys))))
+    found = TMS.ExactState{Pure}[]
+    for _ in 1:3
+        ed, gd = ground_state(hd, ψ; orthogonal_to = found)
+        @test ed ≈ λd atol = 1e-10
+        @test all(r -> abs(inner(r, gd)) < 1e-10, found)
+        push!(found, gd)
+    end
     # a weight below the gap, as for a State
     @test_logs (:warn, r"does not exceed the gap") ground_state(h, ψ; orthogonal_to = [g],
                                                                  weight = 1e-3)

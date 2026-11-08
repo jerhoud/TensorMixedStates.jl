@@ -289,8 +289,10 @@ function ground_state(hamiltonian, state::ExactState{Pure};
     A = isempty(refs) ? H : v -> H(v) + w * sum(r.state * dot(r.state, v) for r in refs)
     # Lanczos started from the state given perturbed by a random state of its sector of the
     # charges declared, so that it reaches the sectors of the symmetries not declared, as DMRG
-    # does, the state given still picking among degenerate states
-    x = state.state + 0.01 * norm(state.state) * random_in_sector(system, state.state, Xoshiro(1))
+    # does, the state given still picking among degenerate states; drawn anew for each number of
+    # states to avoid, a start reaching a single state of each degenerate level
+    rng = Xoshiro(1 + length(refs))
+    x = state.state + 0.01 * norm(state.state) * random_in_sector(system, state.state, rng)
     _, v = exact_eigen(A, x, :SR, true, "ground_state of an ExactState did not " *
                        "converge in Krylov, its spectrum crowded at its bottom: start from a " *
                        "state closer to the ground state")
