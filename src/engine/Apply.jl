@@ -593,9 +593,10 @@ end
 
 the number a density matrix is multiplied by and the steps of `apply` for the channel or the
 generator `op`, from its rightmost factor to its leftmost, see `channel_factors`: a gate as
-the pieces of its operator, see `piece_steps!`; any other factor on one site or two neighbouring
-ones, see `neighbouring`, small enough, see `dense_enough`, as a dense block on the mixed
-indices, see `block_step!`, and through its MPO otherwise, see `compacted_super`
+the pieces of its operator, see `piece_steps!`; any other factor whose sites, read on its
+structure, are one site or two neighbouring ones small enough, see `dense_enough`, and whose
+terms, their strings laid, stay on them, as a dense block on the mixed indices, see
+`block_step!`, and through its MPO otherwise, see `compacted_super`
 """
 function mixed_steps(system::System, a::IndexedOp)
     coef = scalarcoef(a)
@@ -604,14 +605,17 @@ function mixed_steps(system::System, a::IndexedOp)
         if f isa IndexedOp{IsOperator}
             coef *= abs2(operator_steps!(steps, Mixed, system, f))
         else
-            terms = [ laid_strings(Mixed, system, t) for t in lower(system, f) ]
-            ks = sort!(unique(b.site for t in terms for b in t.blocks))
-            if isempty(ks)
+            # its sites read on its structure, so that it is developed only when small
+            ks = sort!(sites_of(f))
+            small = isempty(ks) || (neighbouring(ks) && dense_enough(Mixed, system, ks))
+            terms = small ? [ laid_strings(Mixed, system, t) for t in lower(system, f) ] : Term[]
+            tks = sort!(unique(b.site for t in terms for b in t.blocks))
+            if small && isempty(tks)
                 coef *= sum(t.coef for t in terms; init = 0.)
-            elseif neighbouring(ks) && dense_enough(Mixed, system, ks)
-                orders = [ mixed_elements(system, k) for k in ks ]
-                m = system_matrix(Mixed, system, terms, ks, orders)
-                block_step!(steps, Mixed, system, m, ks)
+            elseif small && issubset(tks, ks)
+                orders = [ mixed_elements(system, k) for k in tks ]
+                m = system_matrix(Mixed, system, terms, tks, orders)
+                block_step!(steps, Mixed, system, m, tks)
             else
                 coef *= pre_step!(steps, PreMPO(system, [compacted_super(system, f)]))
             end

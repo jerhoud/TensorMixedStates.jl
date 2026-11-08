@@ -845,6 +845,7 @@ sites_of(a::AtIndex) = collect(a.index)
 sites_of(a::Union{SumOp, ProdOp}) = union((sites_of(x) for x in a.subs)...)
 sites_of(a::ScalarOp) = sites_of(a.arg)
 sites_of(::IdentityOp) = Int[]
+sites_of(a::Union{Gate{Indexed}, Dissipator{Indexed}, Evolver{Indexed}}) = sites_of(a.arg)
 
 """
     parity_on(system, op)

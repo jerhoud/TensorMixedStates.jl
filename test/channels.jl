@@ -1166,6 +1166,18 @@ end
     @test only(last(TMS.mixed_steps(b40, Dissipator(A(1))))) isa TMS.WindowMPO
     l = lowered(b40, A(1))
     @test ket_bra_matrix(apply(Dissipator(A(1)), ρ40)) ≈ l * r40 * l' - (l' * l * r40 + r40 * l' * l) / 2
+    # a channel on many sites goes through its MPO without being developed first, and one on a
+    # fermion keeps the strings its terms lay on the sites before it
+    dissipated(l, r) = l * r * l' - (l' * l * r + r * l' * l) / 2
+    q6 = System(6, Qubit())
+    ρ6 = random_state(Mixed, q6, 2)
+    cz = prod(CZ(i, i + 1) for i in 1:5)
+    @test only(last(TMS.mixed_steps(q6, Dissipator(cz)))) isa TMS.WindowMPO
+    @test ket_bra_matrix(apply(Dissipator(cz), ρ6)) ≈ dissipated(lowered(q6, cz), ket_bra_matrix(ρ6))
+    f4 = System(4, Fermion())
+    ρf = random_state(Mixed, f4, 2)
+    @test ket_bra_matrix(apply(Dissipator(C(3)), ρf)) ≈
+        dissipated(lowered(f4, C(3)), ket_bra_matrix(ρf))
 end
 
 @testset "Gates on a density matrix, on the kets then on the bras" begin
