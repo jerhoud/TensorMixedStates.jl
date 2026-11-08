@@ -503,7 +503,13 @@ charged `system` when it changes the charges by no definite amount, as on a `Sta
 function checked_plain(system::System, a::IndexedOp{IsOperator})
     check_indices(system, a)
     if is_charged(system)
-        compacted_op(system, a)
+        # by its terms when it develops, otherwise by its compaction, which composes its parts
+        ts = developed(system, gathered(system, a))
+        if isnothing(ts)
+            compacted_op(system, a)
+        else
+            check_flux(Pure, system, a, ts)
+        end
     end
     return weaken(system, ())
 end

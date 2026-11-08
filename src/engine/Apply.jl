@@ -525,12 +525,13 @@ end
 
 append to the steps of `apply` on a state of representation `R` those of the piece `p` of an
 operator, `run` when it is a run of factors of one site, see `pieces`, and return the number
-they bring, 0 for a dense piece that is zero. A piece on one site or two neighbouring ones, see `neighbouring`, laying no
-string elsewhere and changing the charges by a definite amount, see `definite_on`, is a dense
-block, see `gate_steps!`, unless it is a run; an operator given by its matrix on more sites goes
-through its MPO as any other piece. Otherwise it goes through gates of one site when it has a
-single term, as a run usually does, and through its MPO otherwise, see `compacted_op`, on a
-density matrix that of ``\\rho \\mapsto K\\rho`` then that of ``\\rho \\mapsto \\rho K^\\dagger``
+they bring, 0 for a dense piece that is zero. A piece on one site or two neighbouring ones, see
+`neighbouring`, laying no string elsewhere and changing the charges by a definite amount, see
+`definite_on`, is a dense block, see `gate_steps!`, unless it is a run; an operator given by its
+matrix on more sites goes through its MPO as any other piece. Otherwise it goes through gates of
+one site when it has a single term, see `developed`, as a run usually does, and through its MPO
+otherwise, see `compacted_op`, on a density matrix that of ``\\rho \\mapsto K\\rho`` then that
+of ``\\rho \\mapsto \\rho K^\\dagger``
 """
 function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsOperator},
                       run::Bool) where R
@@ -545,11 +546,11 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
             return 1
         end
     end
-    c = compacted_op(system, p)
-    if !isnothing(c.terms) && length(c.terms) == 1
-        return one_site_gates!(steps, R, system, only(c.terms))
+    ts = developed(system, gathered(system, p))
+    if !isnothing(ts) && length(ts) == 1
+        return one_site_gates!(steps, R, system, only(check_flux(Pure, system, p, ts)))
     elseif R === Pure
-        return pre_step!(steps, PreMPO(system, [c]))
+        return pre_step!(steps, PreMPO(system, [compacted_op(system, p)]))
     end
     # the sides one after the other, not their product, whose reduction can lose the parts of
     # small relative size of the operator, nor `Gate(p)`, made of the gates of the factors, of
