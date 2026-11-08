@@ -852,6 +852,12 @@ where the exact result tells the truncation error from the others; it evolves wi
 of a time step an evolver that does not depend on time; and it studies small systems as they
 are.
 
+!!! warning "Experimental"
+    `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
+    when the exact states gain sectors of charge and quantum trajectories, or when other
+    backends show what they lack. `max_dense` and the functions acting on a state are not
+    concerned.
+
 A whole program runs on it with `SimData(backend = ExactState)`: each `CreateState` makes its
 state an `ExactState`, which the phases and the measurements then act on as on a `State`, and
 the log notes the options of a phase that only an MPS uses. One phase does it with
