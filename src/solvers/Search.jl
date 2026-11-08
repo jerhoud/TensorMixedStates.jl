@@ -248,7 +248,7 @@ one, which no positive matrix gives. The excess of
 purity is of first order in the error on the state, where the deviation from hermiticity is of
 second order, hence the bounds of `1e-3` and `1e-6`.
 """
-function steady_result(value, state::State{Mixed})
+function steady_result(value, state::AbstractState)
     ρ = state / trace(state)
     δ = 1 - hermiticity(ρ)
     if δ > 1e-6

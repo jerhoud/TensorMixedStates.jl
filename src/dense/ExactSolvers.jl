@@ -321,12 +321,7 @@ function steady_state(lindbladian, state::ExactState{Mixed};
         error("the eigenvector found by steady_state has no trace: the steady state is not " *
               "unique, as in each sector of a quantity the Lindbladian conserves")
     end
-    ρ = ExactState{Mixed}(system, x / t, Val(:raw))
-    δ = 1 - hermiticity(ρ)
-    if δ > 1e-6
-        @warn "the steady state found has a HermiticityDeviation of $(round(δ; sigdigits = 2)): " *
-              "the steady state is not unique, see steady_state"
-    end
+    _, ρ = steady_result(nothing, ExactState{Mixed}(system, x, Val(:raw)))
     return (residual = (norm(L(ρ.state)) / norm(ρ))^2, state = ρ)
 end
 
