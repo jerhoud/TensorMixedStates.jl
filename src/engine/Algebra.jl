@@ -403,13 +403,16 @@ function compacted_form(system::System, a, g::IndexedOp{IsOperator}, limits::Lim
     if s isa ProdOp && is_charged(system)
         # a factor of no definite flux taken in its parts of each flux, see `sector_product`
         ps = [ flux_parts(system, f, side) for f in s.subs ]
-        runs = flux_runs(system, R, i -> ps[i], [ length(p) == 1 for p in ps ], a)
+        definite = [ length(p) == 1 for p in ps ]
+        order, sign = flux_sunk(system, s.subs, definite)
+        fs, ps = s.subs[order], ps[order]
+        runs = flux_runs(system, R, i -> ps[i], definite[order], a)
         if !isnothing(runs)
             # a run of several factors keyed by its range, equal to no factor
-            keys = [ isnothing(c) ? s.subs[first(r)] : r for (r, c) in runs ]
+            keys = [ isnothing(c) ? fs[first(r)] : r for (r, c) in runs ]
             made = Dict(k => (isnothing(c) ? last(only(ps[first(r)])) : c)
                         for (k, (r, c)) in zip(keys, runs))
-            add_part!(parts, blocked_product(keys, k -> made[k]), coef(scalarcoef(g)))
+            add_part!(parts, blocked_product(keys, k -> made[k]), sign * coef(scalarcoef(g)))
         end
     elseif s isa ProdOp
         add_part!(parts, blocked_product(s.subs, form), coef(scalarcoef(g)))
@@ -519,6 +522,42 @@ function sector_step(system::System, acc::Vector, ps::Vector)
     end
     # a flux whose products cancel once summed
     return filter!(p -> !vanishes(last(p)), next)
+end
+
+"""
+    flux_sunk(system, fs, definite)
+
+the order of the factors `fs` of a product, gathered, and its sign, in which each factor of no
+definite flux, `!definite[i]`, is moved right past the factors of definite flux that commute
+with it, on other sites, up to the first that does not, so that its run, see `flux_runs`,
+starts there rather than where `gathered` put it
+"""
+function flux_sunk(system::System, fs::Vector, definite::AbstractVector{Bool})
+    order = collect(eachindex(fs))
+    sign = 1
+    for i in length(fs)-1:-1:1
+        if definite[order[i]]
+            continue
+        end
+        f = fs[order[i]]
+        p = parity_on(system, f)
+        j = i
+        while j < length(fs) && definite[order[j + 1]]
+            g = fs[order[j + 1]]
+            q = parity_on(system, g)
+            # a part of no definite parity does not commute with an odd one on other sites
+            if !isdisjoint(sites_of(f), sites_of(g)) || (isnothing(p) && q ≠ 0) ||
+               (isnothing(q) && p ≠ 0)
+                break
+            end
+            if p == 1 && q == 1
+                sign = -sign
+            end
+            order[j], order[j + 1] = order[j + 1], order[j]
+            j += 1
+        end
+    end
+    return order, sign
 end
 
 """

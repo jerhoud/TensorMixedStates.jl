@@ -162,8 +162,10 @@ function pieces(system::System, a::IndexedOp{IsOperator})
         return isnothing(gs) ? 1 : length(gs)
     end
     if is_charged(system) && any(x -> fluxes(x) > 1, fs)
-        cut = flux_runs(system, Pure, i -> flux_parts(system, fs[i], nothing),
-                        [ fluxes(x) ≤ 1 for x in fs ], a)
+        definite = [ fluxes(x) ≤ 1 for x in fs ]
+        order, sign = flux_sunk(system, fs, definite)
+        fs, coef = fs[order], sign * coef
+        cut = flux_runs(system, Pure, i -> flux_parts(system, fs[i], nothing), definite[order], a)
         if isnothing(cut)
             return coef, [ (ProdOp(fs), false) ]
         end

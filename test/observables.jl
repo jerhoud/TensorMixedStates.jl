@@ -734,6 +734,10 @@ end
     deep = prod(G(i, i + 1) for layer in 1:5 for i in (isodd(layer) ? (1:2:7) : (2:2:6)))
     ψ8 = random_state(Pure, q8, repeat(["Up", "Dn"], 4), 4)
     @test norm(apply(deep * X(1) * Swap(1, 8) * X(8), ψ8) - apply(deep * Swap(1, 8), ψ8)) < 1e-12
+    # X(1), which gathered puts right after the last gate on site 1, is moved next to Swap, so
+    # that the gates are not in its run
+    windows(op) = [ maxlinkdim(s.mpo) for s in last(TMS.pure_steps(q8, op)) if s isa TMS.WindowMPO ]
+    @test windows(deep * X(1) * Swap(1, 8) * X(8)) == windows(Swap(1, 8))
     # or with the whole product when the factors before it cancel them
     ψr = random_state(Pure, qn, ["Up", "Dn", "Up", "Dn", "Up", "Dn"], 4)
     @test norm(apply(N(2) * Swap(2, 5) * X(5), ψr) - apply(Swap(2, 5) * N(5) * X(5), ψr)) < 1e-12
@@ -1492,6 +1496,14 @@ end
         @test ExactState(apply(op, ψf)).state ≈ apply(op, ExactState(ψf)).state
         @test ExactState(apply(op, mix(ψf))).state ≈ apply(op, mix(ExactState(ψf))).state
     end
+    # γ(1) moved past dag(C)(3), with a sign, next to the swap, with which and γ(3) it has a flux
+    FS = Operator{2}("FS", [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 -1])
+    op = γ(1) * dag(C)(3) * FS(1, 3) * γ(3)
+    fs = TMS.prodsubs(TMS.scalararg(TMS.gathered(fn, op)))
+    @test TMS.flux_sunk(fn, fs, [false, true, true, false]) == ([2, 1, 3, 4], -1)
+    @test ExactState(apply(op, ψf)).state ≈ apply(op, ExactState(ψf)).state
+    @test ExactState(apply(make_mpo(ψf, op), ψf)).state ≈ apply(op, ExactState(ψf)).state
+    @test ExactState(apply(op, mix(ψf))).state ≈ apply(op, mix(ExactState(ψf))).state
     # under a strong symmetry, a channel of several sites given by its matrix gets the refusal
     # of the strong symmetry, as one of one site does
     @test_throws "which conserving it strongly forbids" TMS.lower(
