@@ -126,9 +126,7 @@ part of the operator acting on the sites of the subset and as the identity on th
 an axis for each of the former, the component along the identity projected out on the former
 and the latter traced out and divided by their dimension. The sites are taken from the last,
 so that dropping an axis leaves those still to come in place, depth first: the subsets agreeing
-on the last sites share the projections of these rather than each one making them anew, which
-took a dense operator on 10 qubits 85 s rather than 15. The parts still to come wait on a stack
-rather than in the frames of a recursion, which would hold one on each site.
+on the last sites share the projections of these rather than each one making them anew.
 """
 function foreach_part(f, x::AbstractArray, d)
     stack = Tuple{Int, Vector{Bool}, AbstractArray}[(length(d), Bool[], x)]

@@ -382,9 +382,7 @@ on `system`, see `compacted_op`, or, when it changes the charges by no definite 
 `FluxError`, its part changing none, see `flux_zero_terms`, the only one with a value on a state
 of `system`, Hermitian or not as `op` itself. When that part has too many terms, or `op` does
 not develop into its terms, see `developed`, it is compacted on the same sites conserving
-nothing, where it is measured on the state conserving nothing, see `plain_form`, a copy that
-weighed 452 MiB, against 95 MiB for `Z(20)`, measuring `X(20)` on 40 qubits of link dimension
-200. `system` keeps it for the next calls once it is asked for twice, if it is `worth_keeping`,
+nothing, where it is measured on the state conserving nothing, see `plain_form`. `system` keeps it for the next calls once it is asked for twice, if it is `worth_keeping`,
 see `kept_for!`
 """
 function prepare_op(system::System, a::IndexedOp{IsOperator})
