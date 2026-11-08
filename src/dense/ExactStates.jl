@@ -21,7 +21,7 @@ the state it starts from, the symmetries not declared broken as DMRG does.
 uniformly in its sector, a mixed one from a uniform purification as for a `State`, whatever the
 link dimension, and its `maxlinkdim` is that of the whole space it holds. Its memory grows as
 ``d^n``, ``d^{2n}`` for a density matrix, and a search or an evolution keeps tens of copies of
-it, see the manual.
+it, see the manual. Experimental: it may change in a version 2.x.
 
 - `max_dense`: the number of elements of the vector or of the density matrix beyond which it is
   refused, none by default, as for `mix`; a whole array given is taken whatever its size

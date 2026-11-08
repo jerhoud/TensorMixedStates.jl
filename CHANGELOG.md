@@ -12,7 +12,7 @@ the reference article.
 
 ### Added
 
-- `ExactState{R}`, the state of a small system held whole, without truncation, for checking a program written for MPS (`SimData(backend = ExactState)`), evolving without time step error an evolver that does not depend on time, and studying small systems.
+- `ExactState{R}` (experimental), the state of a small system held whole, without truncation, for checking a program written for MPS (`SimData(backend = ExactState)`), evolving without time step error an evolver that does not depend on time, and studying small systems.
 - `apply_algo = "zipup"` for `apply` of an MPO and `ApproxW`: faster when truncating much, less accurate.
 - `random_state(Pure, system, states, linkdims)`, a random pure state in the sector of `states`.
 - `ConvertState{R}`, a phase taking the state to the representation `R`; `ToMixed` is `ConvertState{Mixed}`.
@@ -26,7 +26,7 @@ the reference article.
 - The page Bibliography of the documentation lists the articles the methods of TMS come from, with what each gives it.
 - `evolve` and the `Evolve` phase take a state of one's own, through its methods of `prepared_evolver` and `evolve_step`.
 - The `GroundState`, `SteadyState`, `Thermalize` and `Gates` phases take a state of one's own, through its `ground_state`, `steady_state`, `thermalize` and `apply`.
-- `backend`, the type of states holding the state, is taken by `CreateState`, `ConvertState`, `LoadState` and `SimData`, which gives the default of `CreateState`.
+- `backend` (experimental), the type of states holding the state, is taken by `CreateState`, `ConvertState`, `LoadState` and `SimData`, which gives the default of `CreateState`.
 - A run notes in its log the options of a phase that the type of its state ignores, which a state of one's own lists in its `ignored_options`.
 - `CreateState` takes a state of one's own, through its `representation`, its `as_representation` and its conversions from and to `State`.
 - `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
