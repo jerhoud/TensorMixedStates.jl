@@ -222,12 +222,21 @@ weaken(state::ExactState, spec) = weaken(state, Conserved(spec_names(spec)))
 weaken(state::ExactState) = weaken(state, one_step_down(symmetries(state.system)))
 
 """
-refuse two exact states of different sites, whatever they conserve
+refuse two states of different sites, whatever they conserve
 """
-function same_sites(a::ExactState, b::ExactState)
+function same_sites(a::Union{ExactState, State}, b::Union{ExactState, State})
     if weaken(a.system, ()) ≠ weaken(b.system, ())
         error("the two states are on different systems, $(system_difference(a.system, b.system))")
     end
+end
+
+"""
+the `State` `b` held whole to meet the exact state `a`, refused before it is made when their
+sites differ
+"""
+function exact_beside(a::ExactState, b::State)
+    same_sites(a, b)
+    return ExactState(b)
 end
 
 function inner(a::ExactState{R}, b::ExactState{R}) where {R <: PM}
@@ -293,14 +302,14 @@ hs_fidelity(a::ExactState{Mixed}, b::ExactState{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
 # with a State, converted exactly, as the measurements of an exact state against an MPS ask
-inner(a::ExactState, b::State) = inner(a, ExactState(b))
-inner(a::State, b::ExactState) = inner(ExactState(a), b)
+inner(a::ExactState, b::State) = inner(a, exact_beside(a, b))
+inner(a::State, b::ExactState) = inner(exact_beside(b, a), b)
 dot(a::ExactState, b::State) = inner(a, b)
 dot(a::State, b::ExactState) = inner(a, b)
-fidelity(a::ExactState, b::State) = fidelity(a, ExactState(b))
-fidelity(a::State, b::ExactState) = fidelity(ExactState(a), b)
-hs_fidelity(a::ExactState, b::State) = hs_fidelity(a, ExactState(b))
-hs_fidelity(a::State, b::ExactState) = hs_fidelity(ExactState(a), b)
+fidelity(a::ExactState, b::State) = fidelity(a, exact_beside(a, b))
+fidelity(a::State, b::ExactState) = fidelity(exact_beside(b, a), b)
+hs_fidelity(a::ExactState, b::State) = hs_fidelity(a, exact_beside(a, b))
+hs_fidelity(a::State, b::ExactState) = hs_fidelity(exact_beside(b, a), b)
 
 # as for a State, on what conserves nothing, not normalised
 function inner(a::ExactState{Pure}, op::IndexedOp{IsOperator}, b::ExactState{Pure})
@@ -322,8 +331,8 @@ function inner(::ExactState{Mixed}, op::IndexedOp{IsOperator}, ::ExactState{Mixe
 end
 
 dot(a::ExactState, op::IndexedOp, b::ExactState) = inner(a, op, b)
-inner(a::ExactState, op::IndexedOp, b::State) = inner(a, op, ExactState(b))
-inner(a::State, op::IndexedOp, b::ExactState) = inner(ExactState(a), op, b)
+inner(a::ExactState, op::IndexedOp, b::State) = inner(a, op, exact_beside(a, b))
+inner(a::State, op::IndexedOp, b::ExactState) = inner(exact_beside(b, a), op, b)
 dot(a::ExactState, op::IndexedOp, b::State) = inner(a, op, b)
 dot(a::State, op::IndexedOp, b::ExactState) = inner(a, op, b)
 

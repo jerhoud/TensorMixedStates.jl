@@ -370,6 +370,11 @@ end
     @test_throws "of probability 0" collapse(e, Z(1) => -1)
     @test_throws "meaningless on pure" dag(e)
     @test_throws "different systems" inner(e, TMS.ExactState{Pure}(System(3, Qubit()), "Up"))
+    # before holding whole a State too large to be
+    far = State{Pure}(System(40, Qubit()), "Up")
+    @test_throws "different systems" inner(far, e)
+    @test_throws "different systems" fidelity(e, far)
+    @test_throws "different systems" inner(e, X(1), far)
     @test_throws "in increasing order" reduced_density_matrix(e, [2, 1])
     @test_throws "which the state does not have" reduced_density_matrix(e, [3])
     @test reduced_density_matrix(e, Int[]) == ones(1, 1)
