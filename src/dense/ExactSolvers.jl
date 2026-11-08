@@ -3,27 +3,29 @@
 # draws.
 
 """
-the linear map of the operator, the channel or the generator of terms `ts` on the arrays of the
-exact states of representation `R`, see `dense_acted`
+the operator `a`, or its superoperator, see `superoperator`, prepared to act on the exact states
+of `system`, and its compaction, which bounds its norm and its width and checks its flux
 """
-acting(::Type{R}, system::System, ts::Vector{Term}) where {R <: PM} =
-    x -> dense_acted(R, system, ts, x)
+function exact_acting(::Type{Pure}, system::System, a::IndexedOp{IsOperator})
+    c = compacted_op(system, a)
+    plain = weaken(system, ())
+    return prepared_acted(plain, gathered(plain, a)), c
+end
 
-"""
-a bound of the operator norm of the operator of terms `ts`: the sum over its terms of `|coef|`
-times the product of the norms of their blocks, a Jordan-Wigner string having norm one
-"""
-terms_bound(ts::Vector{Term}) =
-    sum(abs(t.coef) * prod((opnorm(b.m) for b in t.blocks); init = 1.0) for t in ts; init = 0.0)
+function exact_acting(::Type{Mixed}, system::System, a::IndexedOp)
+    s = superoperator(a)
+    c = compacted_super(system, s)
+    return prepared_channel(weaken(system, ()), s), c
+end
 
 """
     ExactEvolver
 
-the evolver of an exact state: the terms of each part, see `lower`, a bound of its norm, see
-`terms_bound`, the time functions, see `split_terms`, and the duration of the whole evolution
+the evolver of an exact state: the linear map of each part and a bound of its norm, see
+`exact_acting`, the time functions, see `split_terms`, and the duration of the whole evolution
 """
 struct ExactEvolver
-    terms::Vector{Vector{Term}}
+    actions::Vector{Function}
     bounds::Vector{Float64}
     functions::Union{Nothing, Vector}
     duration::Union{Nothing, Number}
@@ -40,9 +42,9 @@ function prepared_evolver(state::ExactState{R}, terms::AbstractVector, ::Limits 
     ops, fs = split_terms(terms)
     parts = map(ops) do a
         check_indices(system, a)
-        return lower(system, R === Pure ? followed_operator(a) : superoperator(a))
+        return exact_acting(R, system, R === Pure ? followed_operator(a) : a)
     end
-    return ExactEvolver(parts, terms_bound.(parts), fs, duration)
+    return ExactEvolver(first.(parts), [ c.norm for (_, c) in parts ], fs, duration)
 end
 
 prepared_evolver(::ExactState, ::Union{PreMPO, MPO}, ::Limits = Limits();
@@ -148,11 +150,11 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::ExactEvolver, state::ExactStat
         return state
     end
     system = state.system
-    act(cs) = x -> sum(c * dense_acted(R, system, ts, x) for (c, ts) in zip(cs, pre.terms))
+    act(cs) = x -> sum(c * f(x) for (c, f) in zip(cs, pre.actions))
     bound(cs) = sum(abs(c) * b for (c, b) in zip(cs, pre.bounds))
     # a step taken alone, outside evolve, is the whole evolution
     duration = something(pre.duration, dt)
-    unit = ones(length(pre.terms))
+    unit = ones(length(pre.actions))
     x = isnothing(pre.functions) ?
         exact_exp(act(unit), bound(unit), dt, state.state, 1000 * rounding_tol / abs(duration)) :
         magnus_evolved(act, bound, pre.functions, time, dt, duration, state.state)
@@ -274,8 +276,7 @@ function ground_state(hamiltonian, state::ExactState{Pure};
                       mpo_limits::Limits = Limits(), orthogonal_to::AbstractVector = [],
                       weight::Union{Nothing, Real} = nothing)
     system = state.system
-    ts = lower(system, searched_operator(system, hamiltonian, "ground_state"))
-    H = acting(Pure, system, ts)
+    H, c = exact_acting(Pure, system, searched_operator(system, hamiltonian, "ground_state"))
     refs = map(orthogonal_to) do m
         if !(m isa Union{ExactState{Pure}, State{Pure}})
             error("ground_state searches a state orthogonal to pure states, not to a $(typeof(m))")
@@ -284,7 +285,7 @@ function ground_state(hamiltonian, state::ExactState{Pure};
         same_sites(state, e)
         return normalize(e)
     end
-    w = something(weight, 1.1 * sum(t -> term_width(system, t), ts; init = 0.0))
+    w = something(weight, 1.1 * c.width)
     A = isempty(refs) ? H : v -> H(v) + w * sum(r.state * dot(r.state, v) for r in refs)
     # Lanczos started from the state given perturbed by a random state of its sector of the
     # charges declared, so that it reaches the sectors of the symmetries not declared, as DMRG
@@ -308,7 +309,7 @@ function steady_state(lindbladian, state::ExactState{Mixed};
                       mpo_limits::Limits = Limits())
     system = state.system
     a = searched_operator(system, lindbladian, "steady_state")
-    L = acting(Mixed, system, lower(system, superoperator(a)))
+    L, _ = exact_acting(Mixed, system, a)
     _, x = exact_eigen(L, state.state, :LR, false,
                        "steady_state of an ExactState did not converge in Krylov, the spectrum " *
                        "of the Lindbladian crowded near zero: start from a state closer to " *
@@ -345,8 +346,8 @@ function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
     system = state.system
     a = searched_operator(system, hamiltonian, "thermalize")
     # ρ ↦ Hρ + ρH, whose exponential at -β/2 is e^{-βH/2} ρ e^{-βH/2}
-    ts = lower(system, superoperator(a))
-    K, bound = acting(Mixed, system, ts), terms_bound(ts)
+    K, c = exact_acting(Mixed, system, a)
+    bound = c.norm
     x = (step == 1 ? normalize(state) : state).state
     log_trace = 0.
     for k in 0:nsteps - 1

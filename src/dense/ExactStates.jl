@@ -1,6 +1,7 @@
 # The exact representation of a state of a small system: its whole vector, or its whole density
 # matrix, on the basis of the product states ordered as `kron` orders them, the first site
-# varying the slowest, the operators acting through their terms, see `dense_acted`.
+# varying the slowest, the operators acting through their terms, see `dense_acted`, or factor by
+# factor where they would develop into too many, see `prepared_acted` and `prepared_channel`.
 
 export ExactState
 
@@ -548,37 +549,68 @@ function channel_leaf(a::IndexedOp)
 end
 
 """
-the channel or the generator `a`, placed on sites, applied to the density matrix `ρ` of
-`system`, conserving nothing, by its structure: a gate of `K` as ``K\\rho K^\\dagger``, an
-evolver as ``K\\rho + \\rho K^\\dagger``, a dissipator of `L` as ``L\\rho L^\\dagger -
-(L^\\dagger L\\rho + \\rho L^\\dagger L)/2``, each `K` acting as `gathered_acted` makes it act,
-sums term by term and products factor by factor from the right; any other channel by its terms,
-see `lower`
+the terms of the channel or the generator `a`, see `lower`, unless it is better made of the
+sides of its operator, see `super_by_blocks`, or is a sum or a product: `nothing` then
 """
-function channel_acted(system::System, a::IndexedOp, ρ::AbstractMatrix)
-    if a isa ScalarOp
-        return a.coef * channel_acted(system, a.arg, ρ)
+function channel_terms(system::System, a::IndexedOp)
+    if a isa Union{SumOp, ProdOp} || (a isa ScalarOp && a.arg isa Union{SumOp, ProdOp}) ||
+       super_by_blocks(system, a)
+        return nothing
+    end
+    return lower(system, a)
+end
+
+"""
+the channel or the generator `a` as a function applying it to a density matrix of `system`,
+conserving nothing, prepared once: by its terms, see `channel_terms`, or by its structure
+"""
+function prepared_channel(system::System, a::IndexedOp)
+    ts = channel_terms(system, a)
+    if !isnothing(ts)
+        return ρ -> dense_acted(Mixed, system, ts, ρ)
+    elseif a isa ScalarOp
+        f = prepared_channel(system, a.arg)
+        return ρ -> a.coef * f(ρ)
     elseif a isa SumOp
-        return sum(x -> channel_acted(system, x, ρ), a.subs)
+        terms = Term[]
+        rest = Function[]
+        for x in a.subs
+            u = channel_terms(system, x)
+            if isnothing(u)
+                push!(rest, prepared_channel(system, x))
+            else
+                append!(terms, u)
+            end
+        end
+        merged = reduced(terms)
+        on(ρ) = isempty(merged) ? zero(ρ) : dense_acted(Mixed, system, merged, ρ)
+        return ρ -> on(ρ) + sum(f -> f(ρ), rest; init = zero(ρ))
     elseif a isa ProdOp
-        return foldr((f, y) -> channel_acted(system, f, y), a.subs; init = ρ)
+        fs = [ prepared_channel(system, f) for f in a.subs ]
+        return ρ -> foldr((f, y) -> f(y), fs; init = ρ)
     end
     kind, k = channel_leaf(a)
-    if !(k isa IndexedOp{IsOperator})
-        return dense_acted(Mixed, system, lower(system, a), ρ)
-    end
-    g = gathered(system, k)
-    left(y) = gathered_acted(system, g, y)
-    right(y) = gathered_acted(system, g, y')'
+    act = prepared_acted(system, gathered(system, k))
+    left(y) = act(y)
+    right(y) = act(y')'
     if kind isa Gate
-        return right(left(ρ))
+        return ρ -> right(left(ρ))
     elseif kind isa Evolver
-        return left(ρ) + right(ρ)
+        return ρ -> left(ρ) + right(ρ)
     end
-    d = gathered(system, dag(k))
-    m(y) = gathered_acted(system, d, gathered_acted(system, g, y))
-    return right(left(ρ)) - (m(ρ) + m(ρ')') / 2
+    back = prepared_acted(system, gathered(system, dag(k)))
+    function dissipated(ρ)
+        lρ = act(ρ)
+        return right(lρ) - (back(lρ) + back(act(ρ'))') / 2
+    end
+    return dissipated
 end
+
+"""
+the channel or the generator `a`, placed on sites, applied to the density matrix `ρ` of `system`,
+conserving nothing, see `prepared_channel`
+"""
+channel_acted(system::System, a::IndexedOp, ρ::AbstractMatrix) = prepared_channel(system, a)(ρ)
 
 # applied as `apply` applies them to a `State`, the limits of the MPS without use
 function apply(a::IndexedOp{IsOperator}, state::ExactState{Pure}; limits::Limits = Limits())

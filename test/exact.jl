@@ -1008,4 +1008,14 @@ end
     cz = prod(CZ(i, i + 1) for i in 1:7)
     u = matrix(cz, q8)
     @test apply(Gate(cz), x8).state ≈ u * x8.state * u'
+    # and the dissipator of a chain of five evolved: K ρ K - ρ, K² = 1, gives
+    # e^{-t}(cosh(t) ρ + sinh(t) K ρ K)
+    q6 = System(6, Qubit())
+    x6 = mix(ExactState(random_state(Pure, q6, 2; rng = Xoshiro(6))))
+    cz6 = prod(CZ(i, i + 1) for i in 1:5)
+    u6 = matrix(cz6, q6)
+    t = 0.3
+    r = x6.state
+    @test evolve(Dissipator(cz6), t, x6; nsteps = 1).state ≈
+        exp(-t) * (cosh(t) * r + sinh(t) * u6 * r * u6')
 end

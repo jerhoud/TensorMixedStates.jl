@@ -134,23 +134,43 @@ function dense_trace(system::System, ts::Vector{Term}, ρ::AbstractMatrix)
 end
 
 """
-    gathered_acted(system, g, x)
+    prepared_acted(system, g)
 
-the placed operator `g`, gathered, see `gathered`, applied to the vector `x`, or to the kets of
-the matrix `x`: through its terms when it develops, see `developed`, otherwise its products
-factor by factor from the right and its sums term by term, without developing them. Its flux is
-not checked: see `operator_acted` on a charged system.
+the placed operator `g`, gathered, as a function applying it to a vector or to the kets of a
+matrix, by its terms where it develops, otherwise factor by factor; its flux is not checked
 """
-function gathered_acted(system::System, g::IndexedOp{IsOperator}, x::AbstractVecOrMat)
+function prepared_acted(system::System, g::IndexedOp{IsOperator})
     ts = developed(system, g)
     if !isnothing(ts)
-        return dense_acted(Pure, system, ts, x)
+        return x -> dense_acted(Pure, system, ts, x)
     end
     c, s = scalarcoef(g), scalararg(g)
     if s isa ProdOp
-        return c * foldr((f, y) -> gathered_acted(system, f, y), s.subs; init = x)
+        fs = [ prepared_acted(system, f) for f in s.subs ]
+        return x -> c * foldr((f, y) -> f(y), fs; init = x)
     elseif s isa SumOp
-        return c * sum(t -> gathered_acted(system, t, x), s.subs)
+        terms = Term[]
+        rest = Function[]
+        for t in s.subs
+            u = developed(system, t)
+            if isnothing(u)
+                push!(rest, prepared_acted(system, t))
+            else
+                append!(terms, u)
+            end
+        end
+        merged = reduced(terms)
+        on(x) = isempty(merged) ? zero(x) : dense_acted(Pure, system, merged, x)
+        return x -> c * (on(x) + sum(f -> f(x), rest; init = zero(x)))
     end
     error("$(obs_name(g)) neither develops nor is a sum or a product")
 end
+
+"""
+    gathered_acted(system, g, x)
+
+the placed operator `g`, gathered, applied to the vector `x`, or to the kets of the matrix `x`,
+see `prepared_acted`
+"""
+gathered_acted(system::System, g::IndexedOp{IsOperator}, x::AbstractVecOrMat) =
+    prepared_acted(system, g)(x)
