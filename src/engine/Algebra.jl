@@ -601,8 +601,7 @@ being the product of the gates: an operator stands for its gate
 function channel_factors(a::IndexedOp)
     fs = IndexedOp[]
     for x in prodsubs(a)
-        k = x isa Gate ? x.arg :
-            x isa AtIndex && x.op isa Gate ? AtIndex(x.op.arg, x.index) : nothing
+        k = gate_operator(x)
         if x isa IdentityOp
             continue
         elseif isnothing(k)

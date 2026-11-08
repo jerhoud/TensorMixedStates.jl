@@ -134,6 +134,28 @@ function dense_trace(system::System, ts::Vector{Term}, ρ::AbstractMatrix)
 end
 
 """
+    summed_action(R, system, parts, terms_of, prepared)
+
+the sum of `parts` as a function on the arrays of representation `R`: the terms `terms_of(x)` of
+the parts that have some gathered into one list, see `dense_acted`, the others by `prepared(x)`
+"""
+function summed_action(::Type{R}, system::System, parts, terms_of, prepared) where R
+    terms = Term[]
+    rest = Function[]
+    for x in parts
+        u = terms_of(x)
+        if isnothing(u)
+            push!(rest, prepared(x))
+        else
+            append!(terms, u)
+        end
+    end
+    merged = reduced(terms)
+    on(y) = isempty(merged) ? zero(y) : dense_acted(R, system, merged, y)
+    return y -> on(y) + sum(f -> f(y), rest; init = zero(y))
+end
+
+"""
     prepared_acted(system, g)
 
 the placed operator `g`, gathered, as a function applying it to a vector or to the kets of a
@@ -149,19 +171,9 @@ function prepared_acted(system::System, g::IndexedOp{IsOperator})
         fs = [ prepared_acted(system, f) for f in s.subs ]
         return x -> c * foldr((f, y) -> f(y), fs; init = x)
     elseif s isa SumOp
-        terms = Term[]
-        rest = Function[]
-        for t in s.subs
-            u = developed(system, t)
-            if isnothing(u)
-                push!(rest, prepared_acted(system, t))
-            else
-                append!(terms, u)
-            end
-        end
-        merged = reduced(terms)
-        on(x) = isempty(merged) ? zero(x) : dense_acted(Pure, system, merged, x)
-        return x -> c * (on(x) + sum(f -> f(x), rest; init = zero(x)))
+        f = summed_action(Pure, system, s.subs, t -> developed(system, t),
+                          t -> prepared_acted(system, t))
+        return x -> c * f(x)
     end
     error("$(obs_name(g)) neither develops nor is a sum or a product")
 end

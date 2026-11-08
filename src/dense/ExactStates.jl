@@ -313,9 +313,12 @@ end
 function inner(a::ExactState{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}},
                b::ExactState{Mixed})
     same_sites(a, b)
-    system = weaken(b.system, ())
-    check_indices(system, op)
-    return dot(a.state, channel_acted(system, op, b.state))
+    check_indices(b.system, op)
+    # refused when it changes the charges by no definite amount, as on a `State`
+    if is_charged(b.system)
+        compacted_super(b.system, op)
+    end
+    return dot(a.state, channel_acted(weaken(b.system, ()), op, b.state))
 end
 
 function inner(::ExactState{Mixed}, op::IndexedOp{IsOperator}, ::ExactState{Mixed})
@@ -572,19 +575,8 @@ function prepared_channel(system::System, a::IndexedOp)
         f = prepared_channel(system, a.arg)
         return ρ -> a.coef * f(ρ)
     elseif a isa SumOp
-        terms = Term[]
-        rest = Function[]
-        for x in a.subs
-            u = channel_terms(system, x)
-            if isnothing(u)
-                push!(rest, prepared_channel(system, x))
-            else
-                append!(terms, u)
-            end
-        end
-        merged = reduced(terms)
-        on(ρ) = isempty(merged) ? zero(ρ) : dense_acted(Mixed, system, merged, ρ)
-        return ρ -> on(ρ) + sum(f -> f(ρ), rest; init = zero(ρ))
+        return summed_action(Mixed, system, a.subs, x -> channel_terms(system, x),
+                             x -> prepared_channel(system, x))
     elseif a isa ProdOp
         fs = [ prepared_channel(system, f) for f in a.subs ]
         return ρ -> foldr((f, y) -> f(y), fs; init = ρ)

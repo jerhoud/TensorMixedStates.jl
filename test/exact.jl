@@ -1011,6 +1011,7 @@ end
         @test inner(x, a, x) ≈ LA.dot(x.state, byterms(x, a))
     end
     @test_throws "no definite flux" apply(Gate(C(1) + dag(C)(2)), xf)
+    @test_throws "no definite flux" inner(xf, Gate(C(1) + dag(C)(2)), xf)
     # but a product of gates whose product of operators has one, C(1) (C(1) + C(2)†) = C(1) C(2)†
     g = Gate(C(1)) * Gate(C(1) + dag(C)(2))
     @test apply(g, xf).state ≈ byterms(xf, g)
