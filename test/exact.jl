@@ -976,3 +976,36 @@ end
     xc = ExactState(State{Pure}(fc, ["Occ", "Emp", "Occ", "Emp"]))
     @test_throws "no definite flux" apply((C(1) + dag(C)(2)) * (N(3) + C(4)) + C(1), xc)
 end
+
+@testset "Channels applied to an exact density matrix by their structure" begin
+    # a gate, an evolver and a dissipator act through their operators, never developed, any
+    # other channel by its terms: the same as the action of all the terms, on qubits, on
+    # fermions with their strings, and on a charged system, whose flux is checked
+    byterms(x, a) = TMS.dense_acted(Mixed, TMS.weaken(x.system, ()),
+                                    TMS.lower(TMS.weaken(x.system, ()), a), x.state)
+    q4 = System(4, Qubit())
+    xq = mix(ExactState(random_state(Pure, q4, 4; rng = Xoshiro(3))))
+    f4 = System(4, Fermion(conserve = N))
+    xf = mix(ExactState(random_state(State{Pure}(f4, ["Occ", "Emp", "Occ", "Emp"]), 4;
+                                     rng = Xoshiro(4))))
+    hop = dag(C)(1) * C(3) + dag(C)(3) * C(1)
+    for (x, a) in [(xq, Gate(CZ(1, 2) * CZ(2, 3) * CZ(3, 4))), (xq, 0.3 * Gate(X(1) + Z(3))),
+                   (xq, -im * X(2) * X(3) + Dissipator(Sm(1) * Sm(4))),
+                   (xq, depolarizing_channel(0.2)(2) * Gate(H(1))),
+                   (xq, Dephase(Z ⊗ Z)(1, 3) + Reset("Up")(4)),
+                   (xf, Gate(exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 3)) * Gate(C(2) * dag(C)(4))),
+                   (xf, -im * hop + Dissipator(C(2)) + Dissipator(N(1) * N(4)))]
+        @test apply(a, x).state ≈ byterms(x, a)
+        @test inner(x, a, x) ≈ LA.dot(x.state, byterms(x, a))
+    end
+    @test_throws "no definite flux" apply(Gate(C(1) + dag(C)(2)), xf)
+    # but a product of gates whose product of operators has one, C(1) (C(1) + C(2)†) = C(1) C(2)†
+    g = Gate(C(1)) * Gate(C(1) + dag(C)(2))
+    @test apply(g, xf).state ≈ byterms(xf, g)
+    # a gate of a chain of eight CZ, which developed into 4^7 terms on its density matrix
+    q8 = System(8, Qubit())
+    x8 = mix(ExactState(random_state(Pure, q8, 2; rng = Xoshiro(5))))
+    cz = prod(CZ(i, i + 1) for i in 1:7)
+    u = matrix(cz, q8)
+    @test apply(Gate(cz), x8).state ≈ u * x8.state * u'
+end

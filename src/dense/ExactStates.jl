@@ -314,7 +314,7 @@ function inner(a::ExactState{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerato
     same_sites(a, b)
     system = weaken(b.system, ())
     check_indices(system, op)
-    return dot(a.state, dense_acted(Mixed, system, lower(system, op), b.state))
+    return dot(a.state, channel_acted(system, op, b.state))
 end
 
 function inner(::ExactState{Mixed}, op::IndexedOp{IsOperator}, ::ExactState{Mixed})
@@ -533,6 +533,53 @@ function on_both_sides(system::System, p::IndexedOp{IsOperator}, ρ::AbstractMat
     return gathered_acted(plain, g, gathered_acted(plain, g, ρ)')'
 end
 
+"""
+the kind, a `Gate`, an `Evolver` or a `Dissipator`, and the placed argument of the channel or the
+generator `a` when it is one of them, placed on sites or holding a placed operator; `nothing`
+otherwise
+"""
+function channel_leaf(a::IndexedOp)
+    if a isa Union{Gate{Indexed}, Evolver{Indexed}, Dissipator{Indexed}}
+        return a, a.arg
+    elseif a isa AtIndex && a.op isa Union{Gate, Evolver, Dissipator}
+        return a.op, a.op.arg(a.index...)
+    end
+    return nothing, nothing
+end
+
+"""
+the channel or the generator `a`, placed on sites, applied to the density matrix `ρ` of
+`system`, conserving nothing, by its structure: a gate of `K` as ``K\\rho K^\\dagger``, an
+evolver as ``K\\rho + \\rho K^\\dagger``, a dissipator of `L` as ``L\\rho L^\\dagger -
+(L^\\dagger L\\rho + \\rho L^\\dagger L)/2``, each `K` acting as `gathered_acted` makes it act,
+sums term by term and products factor by factor from the right; any other channel by its terms,
+see `lower`
+"""
+function channel_acted(system::System, a::IndexedOp, ρ::AbstractMatrix)
+    if a isa ScalarOp
+        return a.coef * channel_acted(system, a.arg, ρ)
+    elseif a isa SumOp
+        return sum(x -> channel_acted(system, x, ρ), a.subs)
+    elseif a isa ProdOp
+        return foldr((f, y) -> channel_acted(system, f, y), a.subs; init = ρ)
+    end
+    kind, k = channel_leaf(a)
+    if !(k isa IndexedOp{IsOperator})
+        return dense_acted(Mixed, system, lower(system, a), ρ)
+    end
+    g = gathered(system, k)
+    left(y) = gathered_acted(system, g, y)
+    right(y) = gathered_acted(system, g, y')'
+    if kind isa Gate
+        return right(left(ρ))
+    elseif kind isa Evolver
+        return left(ρ) + right(ρ)
+    end
+    d = gathered(system, dag(k))
+    m(y) = gathered_acted(system, d, gathered_acted(system, g, y))
+    return right(left(ρ)) - (m(ρ) + m(ρ')') / 2
+end
+
 # applied as `apply` applies them to a `State`, the limits of the MPS without use
 function apply(a::IndexedOp{IsOperator}, state::ExactState{Pure}; limits::Limits = Limits())
     check_indices(state.system, a)
@@ -557,7 +604,11 @@ apply(a::IndexedOp{IsOperator}, state::ExactState{Mixed}; limits::Limits = Limit
 function apply(a::IndexedOp{<:Union{IsChannel, IsGenerator}}, state::ExactState{Mixed};
                limits::Limits = Limits())
     check_indices(state.system, a)
-    x = dense_acted(Mixed, state.system, lower(state.system, a), state.state)
+    # refused when it changes the charges by no definite amount, as on a `State`
+    if is_charged(state.system)
+        compacted_super(state.system, a)
+    end
+    x = channel_acted(weaken(state.system, ()), a, state.state)
     return ExactState{Mixed}(state.system, x, Val(:raw))
 end
 
