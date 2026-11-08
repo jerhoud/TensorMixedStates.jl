@@ -726,6 +726,17 @@ end
     @test all(s -> s isa TMS.GateBatch, last(TMS.pure_steps(qn, X(1) * Swap(1, 2) * X(2) * circ)))
     ψn = State{Pure}(qn, ["Up", "Dn", "Up", "Dn", "Up", "Dn"])
     @test norm(apply(X(1) * Swap(1, 2) * X(2) * circ, ψn) - apply(Swap(1, 2) * circ, ψn)) < 1e-12
+    # a factor of no definite flux taken with the factors after it up to the first giving one,
+    # behind a circuit too deep for its product with them to cancel its other fluxes to rounding
+    q8 = System(8, Qubit(conserve = N))
+    xx_yy = [0 0 0 0; 0 0 2 0; 0 2 0 0; 0 0 0 0]
+    G = Operator{2}("G", exp(-0.3im * xx_yy))
+    deep = prod(G(i, i + 1) for layer in 1:5 for i in (isodd(layer) ? (1:2:7) : (2:2:6)))
+    ψ8 = random_state(Pure, q8, repeat(["Up", "Dn"], 4), 4)
+    @test norm(apply(deep * X(1) * Swap(1, 8) * X(8), ψ8) - apply(deep * Swap(1, 8), ψ8)) < 1e-12
+    # or with the whole product when the factors before it cancel them
+    ψr = random_state(Pure, qn, ["Up", "Dn", "Up", "Dn", "Up", "Dn"], 4)
+    @test norm(apply(N(2) * Swap(2, 5) * X(5), ψr) - apply(Swap(2, 5) * N(5) * X(5), ψr)) < 1e-12
     # a dense block on its sites when it lays no string elsewhere, its MPO otherwise, and
     # gates of one site for a single term
     h = dag(C) ⊗ C + dag(dag(C) ⊗ C)
@@ -1476,7 +1487,8 @@ end
     ψf = random_state(State{Pure}(fn, ["Occ", "Emp", "Occ", "Emp"]), 4)
     γ(i) = C(i) + dag(C)(i)
     for op in (γ(2) * dag(C)(1) * C(3) * γ(2), γ(3) * (dag(C)(1) * C(4) + dag(C)(4) * C(1)) * γ(3))
-        @test length(last(TMS.pieces(fn, op))) == 1
+        # γ taken with the γ that gathered brings next to it, their product having a flux
+        @test length(last(TMS.pieces(fn, op))) == 2
         @test ExactState(apply(op, ψf)).state ≈ apply(op, ExactState(ψf)).state
         @test ExactState(apply(op, mix(ψf))).state ≈ apply(op, mix(ExactState(ψf))).state
     end

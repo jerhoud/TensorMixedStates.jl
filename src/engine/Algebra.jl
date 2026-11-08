@@ -403,16 +403,13 @@ function compacted_form(system::System, a, g::IndexedOp{IsOperator}, limits::Lim
     if s isa ProdOp && is_charged(system)
         # a factor of no definite flux taken in its parts of each flux, see `sector_product`
         ps = [ flux_parts(system, f, side) for f in s.subs ]
-        if all(p -> length(p) == 1, ps)
-            cache = Dict(zip(s.subs, [ last(only(p)) for p in ps ]))
-            add_part!(parts, blocked_product(s.subs, f -> cache[f]), coef(scalarcoef(g)))
-        else
-            acc = sector_product(system, R, ps)
-            if length(acc) > 1
-                flux_refusal(system, a, first.(acc))
-            elseif !isempty(acc)
-                add_part!(parts, last(only(acc)), coef(scalarcoef(g)))
-            end
+        runs = flux_runs(system, R, i -> ps[i], [ length(p) == 1 for p in ps ], a)
+        if !isnothing(runs)
+            # a run of several factors keyed by its range, equal to no factor
+            keys = [ isnothing(c) ? s.subs[first(r)] : r for (r, c) in runs ]
+            made = Dict(k => (isnothing(c) ? last(only(ps[first(r)])) : c)
+                        for (k, (r, c)) in zip(keys, runs))
+            add_part!(parts, blocked_product(keys, k -> made[k]), coef(scalarcoef(g)))
         end
     elseif s isa ProdOp
         add_part!(parts, blocked_product(s.subs, form), coef(scalarcoef(g)))
@@ -499,25 +496,69 @@ have one, the products of the other fluxes vanishing.
 """
 function sector_product(system::System, ::Type{R}, parts::Vector) where R
     unit = CompactedOp{R}(system, 1.0, Dict{Int, Matrix}(), nothing, 1.0, 0.0, QN(), nothing)
-    acc = Pair{QN, CompactedOp{R}}[ QN() => unit ]
-    for ps in parts
-        next = Pair{QN, CompactedOp{R}}[]
-        for (q, x) in acc, (r, b) in ps
-            y = product(x, b)
-            if vanishes(y)
-                continue
-            end
-            k = findfirst(p -> first(p) == q + r, next)
-            if isnothing(k)
-                push!(next, (q + r) => y)
-            else
-                next[k] = first(next[k]) => combined(system, [(last(next[k]), 1), (y, 1)])
-            end
+    return foldl((acc, ps) -> sector_step(system, acc, ps), parts;
+                 init = Pair{QN, CompactedOp{R}}[ QN() => unit ])
+end
+
+"""
+the product `acc` of factors, as `sector_product` gives it, times the factor of parts `ps`
+"""
+function sector_step(system::System, acc::Vector, ps::Vector)
+    next = empty(acc)
+    for (q, x) in acc, (r, b) in ps
+        y = product(x, b)
+        if vanishes(y)
+            continue
         end
-        # a flux whose products cancel once summed
-        acc = filter!(p -> !vanishes(last(p)), next)
+        k = findfirst(p -> first(p) == q + r, next)
+        if isnothing(k)
+            push!(next, (q + r) => y)
+        else
+            next[k] = first(next[k]) => combined(system, [(last(next[k]), 1), (y, 1)])
+        end
     end
-    return acc
+    # a flux whose products cancel once summed
+    return filter!(p -> !vanishes(last(p)), next)
+end
+
+"""
+    flux_runs(system, R, part, definite, a)
+
+the factors of a product on the charged `system` cut into runs of definite flux, as pairs of a
+range and its product, see `sector_product`: a factor of definite flux, `definite[i]`, alone, of
+product `nothing`, and from a factor of several fluxes the shortest run whose product has one,
+the factors given by their parts `part(i)`; the whole product when a run reaches its end
+without one, the factors before it being able to cancel its other fluxes. `nothing` when a run
+vanishes; refused when the whole product has no definite flux, `a` naming it.
+"""
+function flux_runs(system::System, ::Type{R}, part, definite::AbstractVector{Bool}, a) where R
+    n = length(definite)
+    runs = Tuple{UnitRange{Int}, Union{Nothing, CompactedOp{R}}}[]
+    i = 1
+    while i ≤ n
+        if definite[i]
+            push!(runs, (i:i, nothing))
+            i += 1
+            continue
+        end
+        acc, j = part(i), i
+        while length(acc) > 1 && j < n
+            j += 1
+            acc = sector_step(system, acc, part(j))
+        end
+        if length(acc) > 1 && i > 1
+            acc, i = sector_product(system, R, [ part(k) for k in 1:n ]), 1
+            empty!(runs)
+        end
+        if isempty(acc)
+            return nothing
+        elseif length(acc) > 1
+            flux_refusal(system, a, first.(acc))
+        end
+        push!(runs, (i:j, last(only(acc))))
+        i = j + 1
+    end
+    return runs
 end
 
 """

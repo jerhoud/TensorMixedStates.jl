@@ -141,8 +141,9 @@ one by one, and the number they are multiplied by: the factors on two neighbouri
 together, see `grouped`, then the factors of one site of definite parity brought together where
 they commute with the pieces they cross, a sign for two odd ones, so that their strings
 compensate, every other factor being a piece of its own, each piece with whether it is such a
-run. On a charged system, a product with a group of factors whose terms change the charges by
-different amounts is one piece, see `flux_groups`.
+run. On a charged system, a factor whose terms change the charges by different amounts, see
+`flux_groups`, is first taken with the factors after it up to the first whose product with it
+has a definite flux, see `flux_runs`.
 """
 function pieces(system::System, a::IndexedOp{IsOperator})
     g = gathered(system, a)
@@ -154,15 +155,21 @@ function pieces(system::System, a::IndexedOp{IsOperator})
     run = 0
     after, odd, none = Set{Int}(), 0, false
     fs = IndexedOp{IsOperator}[ x for x in prodsubs(scalararg(g)) if !(x isa IdentityOp) ]
-    groups = grouped(system, fs)
-    # a piece needs a definite flux on charged sites, which a group with none does not give
+    # a piece needs a definite flux on charged sites: a factor with none taken with the factors
+    # after it that give one
     function fluxes(f)
         gs = flux_groups(system, f)
         return isnothing(gs) ? 1 : length(gs)
     end
-    if is_charged(system) && any(x -> fluxes(x) > 1, groups)
-        return coef, [ (ProdOp(fs), false) ]
+    if is_charged(system) && any(x -> fluxes(x) > 1, fs)
+        cut = flux_runs(system, Pure, i -> flux_parts(system, fs[i], nothing),
+                        [ fluxes(x) ≤ 1 for x in fs ], a)
+        if isnothing(cut)
+            return coef, [ (ProdOp(fs), false) ]
+        end
+        fs = IndexedOp{IsOperator}[ length(r) == 1 ? fs[only(r)] : ProdOp(fs[r]) for (r, _) in cut ]
     end
+    groups = grouped(system, fs)
     for x in groups
         sx, px = sites_of(x), parity_on(system, x)
         joins = x isa AtIndex && length(x.index) == 1 && !isnothing(px)
@@ -651,13 +658,14 @@ the state with the operator `op`, placed on sites, applied, or the MPO `mpo` fro
 `make_mpo`. A product acts as the operator it denotes, its rightmost factor first, factor by
 factor and never developed: the factors on one site or two neighbouring sites are applied as a
 dense block there, together when they share these sites, any other through its MPO, as a
-factor laying Jordan-Wigner strings on other sites; on conserved charges, a product with a
-factor of no definite flux outside such a block goes whole through its MPO. On a pure state, a
-channel of a single Kraus operator `K`, as `Gate(K)`, is applied as `K`. On a mixed state, a
-channel is applied factor by factor in the same way, `Gate(K)` as `K` on the kets and its
-conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives `L(ρ)`, a
-dephasing of more than two sites through the MPO of the gates of its projectors when they have
-few terms. The state is not normalised.
+factor laying Jordan-Wigner strings on other sites; on conserved charges, a factor of no
+definite flux outside such a block goes through one MPO with the factors after it up to the
+first whose product with it has a definite flux, or with the whole product when none has. On
+a pure state, a channel of a single Kraus operator `K`, as `Gate(K)`, is applied as `K`. On a
+mixed state, a channel is applied factor by factor in the same way, `Gate(K)` as `K` on the
+kets and its conjugate on the bras, an operator `K` being `Gate(K)`; a generator `L` gives
+`L(ρ)`, a dephasing of more than two sites through the MPO of the gates of its projectors when
+they have few terms. The state is not normalised.
 
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole state
   for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density
