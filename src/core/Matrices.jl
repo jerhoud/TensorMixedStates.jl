@@ -272,7 +272,9 @@ Jordan-Wigner strings between them: the matrix of `C ⊗ dag(C)` is that of `C(1
 A channel or a generator acts on the density matrices ρ of the sites: its matrix is that of
 the map of the elements of ρ, numbered by the pair (ket, bra) of each site, the ket faster
 than the bra and the last site varying fastest. On one site this is the order of vec(ρ); on
-several it is not, vec(ρ) varying the kets of all the sites faster than any bra.
+several it is not, vec(ρ) varying the kets of all the sites faster than any bra. The functions
+of a spectrum, `exp`, `mod`, powers, `Proj(A => λ)` and `Dephase`, are refused beyond
+`TensorMixedStates.dense_elements[]` elements, which can be raised.
 
 # Examples
 
