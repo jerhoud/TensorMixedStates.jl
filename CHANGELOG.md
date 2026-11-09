@@ -27,6 +27,7 @@ the reference article.
 - `evolve` and the `Evolve` phase take a state of one's own, through its methods of `prepared_evolver` and `evolve_step`.
 - The `GroundState`, `SteadyState`, `Thermalize` and `Gates` phases take a state of one's own, through its `ground_state`, `steady_state`, `thermalize` and `apply`.
 - `backend` (experimental), the type of states holding the state, is taken by `CreateState`, `ConvertState`, `LoadState` and `SimData`, which gives the default of `CreateState`.
+- `Fidelity` and `Overlap` take a reference state of any backend, as an `ExactState`.
 - A run notes in its log the options of a phase that the type of its state ignores, which a state of one's own lists in its `ignored_options`.
 - `CreateState` takes a state of one's own, through its `representation`, its `as_representation` and its conversions from and to `State`.
 - `probabilities`, `sample(state, op)` and `collapse` take a state of one's own, through its `expect_value` and its methods of `project_on` and `project_count`.
