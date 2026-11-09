@@ -8,7 +8,7 @@ This file starts with the release in preparation. For what came before, see the
 archived as the [codebase release](https://doi.org/10.21468/SciPostPhysCodeb.72-r1.28) of
 the reference article.
 
-## [Unreleased]
+## [2.1.0] - 2026-11-09
 
 ### Added
 
