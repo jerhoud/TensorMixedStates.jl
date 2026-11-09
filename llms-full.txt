@@ -30,12 +30,14 @@ mixed_sys = System([Qubit(), Boson(4), Fermion()]) # sites of several types
 ψ = State{Pure}(sys, [isodd(i) ? "Up" : "Dn" for i in 1:10])
 ρ = State{Mixed}(sys, "FullyMixed")                # density matrices are Mixed
 ρ = mix(ψ)                                         # |ψ⟩⟨ψ|
+ρ = State{Mixed}(sys, FullyMixed(Z => 0))          # a whole state: also Mixture([p => states, …])
 ψ = random_state(Pure, sys, 8)                     # random, bond dimension 8
 ψ = ghz_state(sys, "Up", "Dn")                     # also dicke_state, w_state, dimer_state,
                                                    # fermi_sea, slater_state, fully_mixed,
                                                    # graph_state (Qubits), aklt_state (Spins)
 ψ2 = ψ ⊗ State{Pure}(System(2, Qubit()), "Up")     # on sys ⊗ System(2, Qubit()), 12 sites
 ψ3 = permute_sites(ψ2, p)                          # site k moved to position p[k]
+e = ExactState{Pure}(System(4, Qubit()), "Up")     # held whole, without truncation; ExactState(ψ)
 ```
 
 A local state is a name of the site (`"Up"`, `"Dn"`, `"+"`, `"0"`, `"1"` on a qubit), a vector,
@@ -60,8 +62,8 @@ myop = named([1 1 ; 1 -1] / √2, "MyOp")   # an operator of one's own
 `Sz`, `Sp`, `Sm` on spins; `Id`, `F`, `Level`, `Swap` and `controlled` on every site; the gates
 `H`, `S`, `T`, `Phase(θ)`, `Rx(θ)`, `Ry`, `Rz`, `Rxx(θ)`, `Ryy`, `Rzz`, `CX` or `CNOT`, `CY`,
 `CZ`, `CCX` or `Toffoli` in `Circuits`. `⊗` makes an operator of several sites, `X ⊗ X`, placed by
-`(X ⊗ X)(2, 5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)` work on operators, and
-`dag` or `'` on placed ones too, `h + h'`.
+`(X ⊗ X)(2, 5)`, which is `X(2) * X(5)`; `exp`, `sqrt`, `dag`, `Proj("Up")` and `Proj(Z => 1)`
+work on operators before they are placed, and `dag` or `'` on placed ones too, `h + h'`.
 
 ## Conventions
 
@@ -133,6 +135,7 @@ probabilities(ψt, Z(1) * Z(2)); sample(ψt, Z(1)); collapse(ψt, Z(1))  # (resu
 runTMS(SimData(
     name = "quench",                      # the directory of its files
     seed = 1,                             # the random draws, reproducible
+    # backend = ExactState,               # the same program on exact states, for a small check
     phases = [
         CreateState{Pure}(10, Qubit(), "Up"),
         GroundState(hamiltonian = ham, algo = Dmrg(nsweeps = 10), limits = lim),
@@ -144,10 +147,10 @@ runTMS(SimData(
 ))
 ```
 
-Other phases: `ToMixed`, `Weaken`, `PartialTrace`, `Gates`, `Thermalize`, `SteadyState`,
-`SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on a named state by `on = :φ`,
-and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list `:φ => [Z, Purity]` measures
-the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
+Other phases: `ToMixed` (`ConvertState{Mixed}`), `Weaken`, `PartialTrace`, `Gates`,
+`Thermalize`, `SteadyState`, `SaveState`, `LoadState`, `Update`. A phase acts on `:state`, or on
+a named state by `on = :φ`, and `Evolve` and `Gates` on several, `on = [:state, :φ]`; a list
+`:φ => [Z, Purity]` measures the named state, and `Overlap(:φ, X)` gives ``\langle φ \vert X_i \vert state \rangle`` on every
 site, the correlations at two times of `φ = A|ψ⟩` evolved with `|ψ⟩`. A destination is a file
 name (a table), `"name.jsonl"` (JSON Lines), `"name.json"` (a JSON array), `"stdout"`, or
 `Data("name")` (kept in `sim.data`, `row["X(1)"]`, a table: `DataFrame(sim.data["name"])`).
@@ -481,7 +484,7 @@ h = sum(X(i)X(i+1) for i in 1:n-1)
 Many operations are defined on generic operators:
 
 - addition, multiplication and power by a number
-- tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`)
+- tensor product: `X⊗X` is a two site operator (`⊗` is usually obtained by typing \otimes in your editor, just in case, one can also write `tensor(X, X)`). Placed, it is the product of its factors placed, `(X⊗X)(2, 5) == X(2) * X(5)`, and a sum or a product of generic operators is placed term by term or factor by factor likewise
 - `dag` represents the adjoint operator, for example `C` is the `c` operator for fermions and `dag(C)` is ``c^\dagger``; `C'` is the same, and both take placed operators too, `h + h'`.
 - `Dissipator` represents a Lindblad dissipator, for example `Dissipator(Sp)` is the dissipator whose jump operator, `Sp`, the ``S^+`` operator, flips a qubit toward up
 - `Gate` represents an operator to be applied as a gate on a mixed state. It is useful to define noisy gate operators, for example `0.9Gate(Id) + 0.1Gate(X)` is a noisy gate operator that will apply a ``\sigma_x`` gate 10 percent of the time.
@@ -490,7 +493,12 @@ Many operations are defined on generic operators:
   the state of zero ``S_z``.
 - `Level` numbers the basis states of any site, ``\mathrm{diag}(0, 1, \dots)``: its eigenbasis
   is the basis of the site, and `Level => n` the basis state `n`, counted from 0.
-- the functions `exp` and `sqrt`: for example `sqrt(Swap)`
+- the functions `exp` and `sqrt`: for example `sqrt(Swap)`. They, the powers that are not
+  integers, `mod`, `parity`, `Proj(A => λ)`, `Dephase` and `Reset(A => λ)` take the operator
+  before it is placed, `exp(X⊗X)(1, 2)`; `sqrt`, a power, `Proj`, `Dephase` and `Reset` also take
+  a single placed operator, as `sqrt(X(1))` or `Proj(N(3) => 1)`. Their matrix is built dense,
+  and refused beyond 2^24 elements, a matrix of 4096 × 4096: `TensorMixedStates.dense_elements[] =
+  2^28` raises the bound, and the default of the keyword `max_dense` with it
 - `controlled` makes controlled gates, which do nothing when their first site is in its first
   basis state, `Level => 0`, as `"Up"` for a qubit: `controlled(X)` is the `CX` of the module
   `Circuits`, see [Gates](@ref)
@@ -836,6 +844,65 @@ myprob, measure(mypair, [Z(1)Z(2), X(1)X(2)])
 
 For more details see the reference or the inline help.
 
+## [Exact states](@id manual-exact-states)
+
+`ExactState{R}` holds the state of a small system whole, its vector for `Pure` or its density
+matrix for `Mixed`, without truncation. It checks a program written for MPS on a small case,
+where the exact result tells the truncation error from the others; it evolves without the error
+of a time step an evolver that does not depend on time; and it studies small systems as they
+are.
+
+!!! warning "Experimental"
+    `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
+    when the exact states gain sectors of charge and quantum trajectories, or when other
+    backends show what they lack. `max_dense` and the functions acting on a state are not
+    concerned.
+
+A whole program runs on it with `SimData(backend = ExactState)`: each `CreateState` makes its
+state an `ExactState`, which the phases and the measurements then act on as on a `State`, and
+the log notes the options of a phase that only an MPS uses. One phase does it with
+`backend = ExactState` in `CreateState`, `ConvertState` or `LoadState`, and
+`ConvertState{R}(backend = State)` comes back to an MPS. Outside a simulation,
+`ExactState{R}(system, states)` takes the descriptions of `State{R}`, and `ExactState(ψ)` and
+`State(e)` convert a state either way:
+
+```@example manual
+myexact = ExactState{Pure}(System(4, Qubit()), "+")
+myising = -sum(Z(i) * Z(i + 1) for i in 1:3) - 0.5 * sum(X(i) for i in 1:4)
+ground_state(myising, myexact).energy
+```
+
+The functions of a `State` take it, with these differences:
+
+- `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
+  and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
+  duration, and a search converges to a residual of `1e-13`;
+- a search stays in the sector of the charges the system declares, the other symmetries of the
+  Hamiltonian being broken, as DMRG breaks them;
+- `random_state(ExactState{R}, …)` and `randomize` draw a pure state uniformly in its sector,
+  and a mixed one from a uniform purification on the system doubled, as the MPS draws it,
+  whatever the link dimension asked;
+- `maxlinkdim` is that of an MPS holding the whole space, and `truncate` leaves the state as it
+  is;
+- `inner`, `fidelity` and `hs_fidelity` compare it with a `State`, converted exactly;
+- it is given an operator itself, never its `PreMPO` or its MPO.
+
+Its size limits it: a pure state of ``n`` sites of dimension ``d`` holds ``d^n`` complex numbers
+of 16 bytes, a density matrix ``d^{2n}``, so on qubits
+
+| qubits | pure state | density matrix |
+|:------ | ----------:| --------------:|
+| 10     | 16 KB      | 17 MB          |
+| 12     | 66 KB      | 268 MB         |
+| 14     | 262 KB     | 4.3 GB         |
+| 20     | 17 MB      |                |
+| 24     | 268 MB     |                |
+
+and a computation holds several copies: a search by Lanczos or Arnoldi keeps up to about a
+hundred vectors of the size of the state, an evolution or a thermalization about thirty, so that
+the steady state of 12 qubits may take some 27 GB. Nothing bounds it by default; the keyword
+`max_dense` of `ExactState(ψ)`, `mix` and the like protects a call.
+
 ## Accuracy
 
 A result is trusted once it no longer moves when the truncation, the time step and the sweeps
@@ -886,7 +953,12 @@ mixed state, shows the entanglement that makes the bond dimension grow. A trunca
 `cutoff` shows in neither, and only running again tells it. `Limits()` discards the singular
 values below about 1e-13 of the norm, which keeps rounding from making the bond dimension
 grow and may leave an error of that order: the truncation that makes a computation affordable
-is a choice, checked by running again with a larger `maxdim` and a smaller `cutoff`.
+is a choice, checked by running again with a larger `maxdim` and a smaller `cutoff`. On a
+density matrix, `cutoff` bounds the error in the Hilbert-Schmidt norm of ``\rho``, which does
+not bound the error of every expectation value as the trace norm does, keeps neither the trace
+nor the positivity, and weighs local observables no more than the long operators a dynamics
+builds: see Werner et al., Phys. Rev. Lett. 116, 237201 (2016), and White et al., Phys. Rev. B
+97, 035127 (2018), who propose a truncation keeping the trace and the local observables.
 
 ### Time step
 
@@ -965,7 +1037,11 @@ mixed one, which `LinearAlgebra` diagonalizes or exponentiates:
 λ = eigvals(Hermitian(matrix(hamiltonian, System(10, Qubit()))))
 ```
 
-A script checked so on a small system then runs at the sizes no exact computation reaches.
+With `SimData(backend = ExactState)`, the `CreateState` phases of the script make
+`ExactState`s, see [Exact states](@ref manual-exact-states), a state loaded by `LoadState` keeping
+the type of its file: the measurements, against those of the MPS on the same system, tell the
+error of the truncation and of the time step. A script checked
+so on a small system then runs at the sizes no exact computation reaches.
 
 # High Level Interface
 
@@ -981,6 +1057,7 @@ The following phases are available:
 - `CreateState`: create a simple state
 - `GroundState`: compute the ground state using dmrg (requires a pure state)
 - `ToMixed`: go from pure representation to mixed representation
+- `ConvertState{R}`: go to representation `R`, of which `ToMixed` is `ConvertState{Mixed}`
 - `Evolve`: do Hamiltonian or Lindbladian evolution
 - `Gates`: apply some gates
 - `PartialTrace`: trace the system over some sites (requires a mixed state)
@@ -1101,12 +1178,17 @@ and `LoadState`, is taken there. The working directory of the process does not c
 file opened by a phase of your own with a relative name is taken from it. The directory holds
 in particular:
 
-- `log`: the progression of the computation;
+- `log`: the progression of the computation: the machine and the versions of each launch, the
+  bond dimension of the MPO of each solver, and for each step its values, the largest bond
+  dimension of the state and its duration;
 - `prog.jl`: a copy of the script;
+- `prog`: a copy of the files the script includes, if any, at their paths relative to the
+  script, a `..` becoming `_parent`;
 - `prog_args.json`: the command line arguments it was given, if any;
 - `description`: the content of the `description` field of the `SimData` object;
-- `stamp`: the versions, the date, the seed of the random draws, the BLAS library and the
-  thread settings of the run;
+- `stamp`: the versions of Julia, of TensorMixedStates, of the packages doing the computations
+  and of those the script loads, the date, the machine, the seed of the random draws, the BLAS
+  library and the thread settings of the run;
 - `running`: present during the computation, naming the machine and the process running it.
   `runTMS` refuses to start in a directory where another run may be going on. A file left by
   a process of the same machine that no longer exists, killed for instance, is replaced with
@@ -1188,15 +1270,17 @@ measurement or a phase drawing with `c.rng` or `sim.rng`. A draw made with anoth
 the global one of Julia for instance, is not reproduced.
 
 A checkpoint is resumed only by the program that wrote it: the program run must be the same,
-byte for byte, as the copy `prog.jl` in the directory, and be given the same command line
-arguments, which `prog_args.json` holds when there are some. Editing the program and running it again under the
-same name thus reports an error instead of quietly continuing something else. To resume with
-the edited program all the same, more time or other threads for instance, copy it onto
-`prog.jl`, and its arguments into `prog_args.json`, or set the environment variable
-`TMS_ACCEPT_PROGRAM=1`; to start over, put a file `restart` in the directory or give the
-simulation another name. Only these two files are compared: a change in a file the
-program includes, or in a parameter it reads elsewhere, from an environment variable or a data
-file, goes unseen. A simulation run from the REPL, with no program file, is always resumed.
+byte for byte, as the copy `prog.jl` in the directory, include the same files as the copies in
+`prog`, and be given the same command line arguments, which `prog_args.json` holds when there
+are some. Editing the program or a file it includes and running it again under the same name
+thus reports an error instead of quietly continuing something else. To resume with the edited
+program all the same, more time or other threads for instance, copy it onto `prog.jl`, the
+files it includes into `prog`, and its arguments into `prog_args.json`, or set the environment
+variable `TMS_ACCEPT_PROGRAM=1`; to start over, put a file `restart` in the directory or give the
+simulation another name. The files included before `using TensorMixedStates` are not seen, nor
+the packages the program loads, whose versions `stamp` gives, nor a parameter it reads
+elsewhere, from an environment variable or a data file. A simulation run from the REPL, with no
+program file, is always resumed.
 
 A program running several simulations copies itself into the directory of each, so that once
 it is edited none of them resumes, those it did not change included, until it is copied onto
@@ -1324,9 +1408,13 @@ cancel: `Sx(1) * Sx(2) + Sy(1) * Sy(2)`, which conserves the magnetisation, is a
 `Spin(1, conserve = 2Sz)`, the same operator as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 2`, while
 `Sx(1) * Sx(2)` alone has no flux.
 
-An operator of no definite charge can still be measured: `expect`, `expect1`, `expect2`,
-`measure`, `probabilities` and `sample` take its value on the state conserving nothing, see
-[`weaken`](@ref).
+An operator of no definite charge can still be measured. `expect`, `expect1`, `expect2` and
+`measure` take the value of its part of no flux, the only one with a value on a state of
+definite charges, or on a density matrix commuting with them: `Sx` measures 0, and
+`Sx(1) * Sx(2)` as `(Sp(1) * Sm(2) + Sm(1) * Sp(2)) / 4`. `probabilities`, `sample` and
+`variance`, and `expect` for an operator whose part of no flux has many more terms than itself,
+as a long product of `Sx`, take its value on the state conserving nothing, see
+[`weaken`](@ref): a copy of the state, larger than it.
 
 ## Weak and strong symmetries
 
@@ -1779,9 +1867,14 @@ mark)`, lets a resumed run go on where the checkpoint left it, rather than start
 
 ## States of one's own
 
-A state of your own, of a representation of its own, is a subtype of
-[`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of its
-physical sites, which a phase of your own creates, see [Phases of one's own](@ref own-phases).
+A state of your own, a backend of its own holding a state as `State` holds it in an MPS, is a
+subtype of [`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of
+its physical sites. Its representation, `Pure` or `Mixed`, says what the state is, and so what
+the results of a program mean; the backend says how it is held and computed, which leaves the
+results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
+states of the `CreateState` phases of a program on your backend without changing its phases,
+which then need the methods below; `CreateState(…; backend = MyState)` does it for one phase,
+besides a phase of your own creating the state, see [Phases of one's own](@ref own-phases).
 TMS reads that system to save the state, to choose the threading, to log what weakening
 changes, and to put the reference of `Fidelity` or `Overlap` on the system of the measured
 state. It need not be the one the state keeps its tensors on: a mixed state held as a pure state
@@ -1790,13 +1883,45 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
+- `TensorMixedStates.representation(state::MyState)` gives the representation of the state,
+  `Pure` or `Mixed`, the type being best written `MyState{R}`;
+- `MyState(state::State; limits)` and `State(state::MyState; limits)` convert the state from an
+  MPS and to one, for `CreateState`, which takes a state to the backend of the simulation unless
+  given its own, and for `ConvertState` and `LoadState` given a `backend`, `limits` truncating
+  the result of a backend that approximates. Two types of one's own convert through `State`,
+  unless a method of `TensorMixedStates.as_backend(::Type{Other}, state::MyState; limits)` names
+  both: a method naming one of them only would be ambiguous with that of another package. A
+  state already of the type asked is truncated by `truncate(state::MyState; limits)` when
+  `ConvertState` or `LoadState` are given limits, which a backend that approximates nothing
+  defines as leaving the state as it is, and without which such limits are refused;
+- `TensorMixedStates.as_representation(R, state::MyState; limits)` takes the state to the
+  representation `R` for `CreateState` and `ConvertState`, a pure state mixed, a mixed one
+  refused for `Pure`;
+- `TensorMixedStates.ignored_options(state::MyState)` lists the options of the phases, among
+  `:algo`, `:limits` and `:mpo_limits`, that the backend accepts without use, which a run notes
+  in its log when a phase gives them (none by default);
 - `TensorMixedStates.expect_value(state, op::TensorMixedStates.IndexedOp)` computes the
   expectation value of an operator placed on sites, normalised by the trace, as a complex
   number, which `expect`, `measure`, and so `output`, ask for, those of the operators of one
   site and of the pairs of them included, making the value of a Hermitian operator real. The
   operator is given as the user wrote it, on the physical sites, which [`map_sites`](@ref)
   places on another system;
-- `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates` phase;
+- `apply(op::TensorMixedStates.IndexedOp, state; kwargs...)` applies the gates of a `Gates`
+  phase, at its first step;
+- [`TensorMixedStates.prepared_evolver`](@ref)`(state::MyState, evolver, mpo_limits; duration)`
+  and [`TensorMixedStates.evolve_step`](@ref)`(algo::MyMethod, pre, state::MyState, time, dt,
+  step, limits)` evolve the state, for `evolve` and the `Evolve` phase: the first prepares the
+  evolver once, as the user wrote it, `duration` being that of the whole evolution, and the
+  second makes a step with what the first returned,
+  see [Methods of one's own](@ref). Typing the method of evolution as well as the state avoids
+  an ambiguity with a method of evolution of another package typing only its own;
+- `ground_state(hamiltonian, state::MyState; kwargs...)` and
+  `steady_state(lindbladian, state::MyState; kwargs...)` search the state, the keywords being
+  those of the functions for a `State`; the `GroundState` and `SteadyState` phases call them
+  once, the state they return measured as a single step, and
+  `thermalize(hamiltonian, beta, state::MyState; kwargs...)` gives the thermal state, which the
+  `Thermalize` phase calls one step at a time, with `nsteps = 1`, the number of the step and
+  `total_beta`, the `beta` of the whole phase;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes
@@ -1810,7 +1935,21 @@ The phases and the measurements reach the state through the methods you give:
 
 The measurements of the library go through `trace`, `norm`, `entanglement_entropy` and the
 like: a state gets what its type has a method for, and a measurement or a phase it does not
-support raises a `MethodError`.
+support raises a `MethodError`. Some follow from others unless the type has methods of its own:
+`variance` from `expect_value`, `von_neumann_entropy` and `log_negativity` from
+`reduced_density_matrix`, and `renyi2` and `mutual_info_renyi2` from `reduced_density_matrix`
+and `purity`. `probabilities` and `sample(state, op)` follow from `trace` and `expect_value`,
+and `collapse` from them and from the projections of the state:
+[`TensorMixedStates.project_on`](@ref)`(state::MyState, p; limits)` by a projector placed on
+sites, and [`TensorMixedStates.project_count`](@ref)`(state::MyState, sites, locals, T; limits)`
+on a total of a sum of operators of one site, each returning the state projected and
+normalised. A method of your own taking positions types them `positions::AbstractVector{Int}`,
+as `reduced_density_matrix(state::MyState, positions::AbstractVector{Int}; max_dense)`: TMS
+converts other vectors before calling it, and a looser type can make the call ambiguous. The
+methods of `reduced_density_matrix`, `von_neumann_entropy` and `log_negativity` take the keyword
+`max_dense`, the number of elements of the largest dense matrix the user lets them build, which
+a method building none ignores; TMS always passes it, by default
+[`TensorMixedStates.dense_bound`](@ref)`(state)`, which a state held whole extends to its size.
 
 # Upgrading from 1.x
 
@@ -2027,4 +2166,120 @@ Some results change without any edit beyond those above:
   column per measurement, a vector or a matrix in each cell.
 - **The random draws** of a run use its own generator, seeded by `SimData(; seed)`, or by a seed
   drawn and written in `stamp`, and kept by its checkpoints.
+
+# Bibliography
+
+The articles the methods of TMS come from, each with what it gives TMS. To cite TMS itself, see
+[References](index.md#References).
+
+## Matrix product states and operators
+
+- M. Fishman, S. R. White and E. M. Stoudenmire, *The ITensor Software Library for Tensor
+  Network Calculations*, SciPost Phys. Codebases 4 (2022),
+  [doi:10.21468/SciPostPhysCodeb.4](https://doi.org/10.21468/SciPostPhysCodeb.4),
+  [arXiv:2007.14822](https://arxiv.org/abs/2007.14822): the tensors, the MPS and MPO and the
+  solvers TMS is built on.
+- S. R. White, *Density matrix formulation for quantum renormalization groups*, Phys. Rev.
+  Lett. 69, 2863 (1992),
+  [doi:10.1103/PhysRevLett.69.2863](https://doi.org/10.1103/PhysRevLett.69.2863): DMRG, which
+  `Dmrg` runs through ITensorMPS.
+- C. Hubig, I. P. McCulloch and U. Schollwöck, *Generic construction of efficient matrix
+  product operators*, Phys. Rev. B 95, 035129 (2017),
+  [doi:10.1103/PhysRevB.95.035129](https://doi.org/10.1103/PhysRevB.95.035129),
+  [arXiv:1611.02498](https://arxiv.org/abs/1611.02498): the terms of an operator compacted into
+  as few channels as their rank, the sums and products of `PreMPO`, the factors rescaled by
+  powers of two.
+- D. E. Parker, X. Cao and M. P. Zaletel, *Local matrix product operators: Canonical form,
+  compression, and control theory*, Phys. Rev. B 102, 035147 (2020),
+  [doi:10.1103/PhysRevB.102.035147](https://doi.org/10.1103/PhysRevB.102.035147),
+  [arXiv:1909.06341](https://arxiv.org/abs/1909.06341): the truncation of an MPO by
+  `mpo_limits`, on an orthonormal basis of each site, the identity apart.
+
+## Mixed states
+
+- F. Verstraete, J. J. García-Ripoll and J. I. Cirac, *Matrix Product Density Operators:
+  Simulation of Finite-Temperature and Dissipative Systems*, Phys. Rev. Lett. 93, 207204
+  (2004), [doi:10.1103/PhysRevLett.93.207204](https://doi.org/10.1103/PhysRevLett.93.207204),
+  [arXiv:cond-mat/0406426](https://arxiv.org/abs/cond-mat/0406426), and M. Zwolak and G. Vidal,
+  *Mixed-State Dynamics in One-Dimensional Quantum Lattice Systems: A Time-Dependent
+  Superoperator Renormalization Algorithm*, Phys. Rev. Lett. 93, 207205 (2004),
+  [doi:10.1103/PhysRevLett.93.207205](https://doi.org/10.1103/PhysRevLett.93.207205),
+  [arXiv:cond-mat/0406440](https://arxiv.org/abs/cond-mat/0406440): the mixed representation,
+  an MPS of the vectorized density matrix acted on by superoperators, and `thermalize`, its
+  evolution in imaginary time.
+- A. H. Werner, D. Jaschke, P. Silvi, M. Kliesch, T. Calarco, J. Eisert and S. Montangero,
+  *Positive Tensor Network Approach for Simulating Open Quantum Many-Body Systems*, Phys. Rev.
+  Lett. 116, 237201 (2016),
+  [doi:10.1103/PhysRevLett.116.237201](https://doi.org/10.1103/PhysRevLett.116.237201),
+  [arXiv:1412.5746](https://arxiv.org/abs/1412.5746), and C. D. White, M. Zaletel,
+  R. S. K. Mong and G. Refael, *Quantum dynamics of thermalizing systems*, Phys. Rev. B 97,
+  035127 (2018), [doi:10.1103/PhysRevB.97.035127](https://doi.org/10.1103/PhysRevB.97.035127),
+  [arXiv:1707.01506](https://arxiv.org/abs/1707.01506): what the `cutoff` of a density matrix
+  bounds, see [Truncation](@ref).
+
+## Time evolution
+
+- J. Haegeman, J. I. Cirac, T. J. Osborne, I. Pižorn, H. Verschelde and F. Verstraete,
+  *Time-Dependent Variational Principle for Quantum Lattices*, Phys. Rev. Lett. 107, 070601
+  (2011), [doi:10.1103/PhysRevLett.107.070601](https://doi.org/10.1103/PhysRevLett.107.070601),
+  [arXiv:1103.0936](https://arxiv.org/abs/1103.0936), and J. Haegeman, C. Lubich, I. Oseledets,
+  B. Vandereycken and F. Verstraete, *Unifying time evolution and optimization with matrix
+  product states*, Phys. Rev. B 94, 165116 (2016),
+  [doi:10.1103/PhysRevB.94.165116](https://doi.org/10.1103/PhysRevB.94.165116),
+  [arXiv:1408.5056](https://arxiv.org/abs/1408.5056): the time dependent variational principle,
+  which `Tdvp` runs through ITensorMPS.
+- M. Yang and S. R. White, *Time-dependent variational principle with ancillary Krylov
+  subspace*, Phys. Rev. B 102, 094315 (2020),
+  [doi:10.1103/PhysRevB.102.094315](https://doi.org/10.1103/PhysRevB.102.094315),
+  [arXiv:2005.06104](https://arxiv.org/abs/2005.06104): the global Krylov expansion `Tdvp`
+  makes before a step from a small bond dimension.
+- M. P. Zaletel, R. S. K. Mong, C. Karrasch, J. E. Moore and F. Pollmann, *Time-evolving a
+  matrix product state with long-ranged interactions*, Phys. Rev. B 91, 165112 (2015),
+  [doi:10.1103/PhysRevB.91.165112](https://doi.org/10.1103/PhysRevB.91.165112),
+  [arXiv:1407.1832](https://arxiv.org/abs/1407.1832): the approximations WI and WII of
+  `ApproxW`, and its order 2.
+- K. Bidzhiev and G. Misguich, *Out-of-equilibrium dynamics in a quantum impurity model:
+  Numerics for particle transport and entanglement entropy*, Phys. Rev. B 96, 195117 (2017),
+  [doi:10.1103/PhysRevB.96.195117](https://doi.org/10.1103/PhysRevB.96.195117),
+  [arXiv:1707.06111](https://arxiv.org/abs/1707.06111), appendix A: the complex steps of
+  `ApproxW` of orders 3 and 4.
+- S. Blanes and P. C. Moan, *Fourth- and sixth-order commutator-free Magnus integrators for
+  linear and non-linear dynamical systems*, Appl. Numer. Math. 56, 1519 (2006),
+  [doi:10.1016/j.apnum.2005.11.004](https://doi.org/10.1016/j.apnum.2005.11.004): the
+  commutator-free Magnus integrator of order 4 of the evolvers depending on time.
+- E. M. Stoudenmire and S. R. White, *Minimally entangled typical thermal state algorithms*,
+  New J. Phys. 12, 055026 (2010),
+  [doi:10.1088/1367-2630/12/5/055026](https://doi.org/10.1088/1367-2630/12/5/055026),
+  [arXiv:1002.1305](https://arxiv.org/abs/1002.1305), and C. Camaño, E. N. Epperly and
+  J. A. Tropp, *Successive randomized compression: A randomized algorithm for the compressed
+  MPO-MPS product*, Quantum 10, 2022 (2026),
+  [doi:10.22331/q-2026-03-10-2022](https://doi.org/10.22331/q-2026-03-10-2022),
+  [arXiv:2504.06475](https://arxiv.org/abs/2504.06475): the zip-up product of
+  `apply_algo = "zipup"`, and how the products of an MPO by a state compare, `"densitymatrix"`
+  included.
+
+## Searches
+
+- J. Cui, J. I. Cirac and M. C. Bañuls, *Variational Matrix Product Operators for the Steady
+  State of Dissipative Quantum Systems*, Phys. Rev. Lett. 114, 220601 (2015),
+  [doi:10.1103/PhysRevLett.114.220601](https://doi.org/10.1103/PhysRevLett.114.220601),
+  [arXiv:1501.06786](https://arxiv.org/abs/1501.06786): `steady_state`, by dmrg on
+  ``L^\dagger L``.
+
+## States and measurements
+
+- M. T. Fishman and S. R. White, *Compression of correlation matrices and an efficient method
+  for forming matrix product states of fermionic Gaussian states*, Phys. Rev. B 92, 075132
+  (2015), [doi:10.1103/PhysRevB.92.075132](https://doi.org/10.1103/PhysRevB.92.075132),
+  [arXiv:1504.07701](https://arxiv.org/abs/1504.07701): the circuit of rotations that builds
+  `slater_state` and `fermi_sea`.
+- A. J. Ferris and G. Vidal, *Perfect sampling with unitary tensor networks*, Phys. Rev. B 85,
+  165146 (2012), [doi:10.1103/PhysRevB.85.165146](https://doi.org/10.1103/PhysRevB.85.165146),
+  [arXiv:1201.3974](https://arxiv.org/abs/1201.3974): the perfect sampling of `sample` on a pure
+  state, through ITensorMPS.
+- H. Shapourian, K. Shiozaki and S. Ryu, *Partial time-reversal transformation and
+  entanglement negativity in fermionic systems*, Phys. Rev. B 95, 165101 (2017),
+  [doi:10.1103/PhysRevB.95.165101](https://doi.org/10.1103/PhysRevB.95.165101),
+  [arXiv:1611.07536](https://arxiv.org/abs/1611.07536): the fermionic partial transpose, which
+  `log_negativity` does not compute, refusing two parts holding fermions.
 
