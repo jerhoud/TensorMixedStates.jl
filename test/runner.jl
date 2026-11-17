@@ -392,9 +392,12 @@ end
         withenv(() -> run_prog(), "TMS_ACCEPT_PROGRAM" => "1")
         @test read("sim/prog.jl", String) == program("Dn")
         @test read("sim/description", String) == "Dn"
-        # the copy of the program runs again
+        accepted = "Warning: resumed by a program other than the one that wrote the checkpoint"
+        @test count(accepted, read("sim/log", String)) == 1
+        # the copy of the program runs again, the program it resumes with being that one
         with_args(() -> include(joinpath(pwd(), "sim", "prog.jl")), String[])
         @test !isfile("sim/error")
+        @test count(accepted, read("sim/log", String)) == 1
         # a directory that lost its program is another program
         mv("sim/prog.jl", "saved.jl")
         @test_throws "written by another program" run_prog()

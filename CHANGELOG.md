@@ -8,6 +8,12 @@ This file starts with the release in preparation. For what came before, see the
 archived as the [codebase release](https://doi.org/10.21468/SciPostPhysCodeb.72-r1.28) of
 the reference article.
 
+## [Unreleased]
+
+### Changed
+
+- A resumption that `TMS_ACCEPT_PROGRAM=1` allows with an edited program is noted in the log.
+
 ## [2.1.0] - 2026-11-09
 
 ### Added

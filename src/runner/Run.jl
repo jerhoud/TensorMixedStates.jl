@@ -642,10 +642,10 @@ run the simulation, see `SimData`, in a directory named after it, and return the
 it ends with. A checkpoint found in the directory is resumed from, if it was written by the same
 program, `prog.jl` in the directory, including the same files, copied into its directory `prog`,
 given the same arguments: copying an edited program there, or setting `TMS_ACCEPT_PROGRAM=1`,
-resumes it with that one. A file `restart` in the directory
-starts the simulation over, and `cleanTMS` removes the directory. A destination that is a file of
-the directory, as `log` or `stamp`, or a text file given two lists, is refused before the run
-starts.
+resumes it with that one, the variable leaving a line in the log. A file `restart` in the
+directory starts the simulation over, and `cleanTMS` removes the directory. A destination that is
+a file of the directory, as `log` or `stamp`, or a text file given two lists, is refused before
+the run starts.
 
 - `max_time`: seconds after which the run stops, writing a checkpoint
 - `checkpoint_interval`: seconds between two checkpoints, 0 for those of a stop only
@@ -695,6 +695,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         end
         stale = nothing
         resume = false
+        accepted = false
         if live
             claim_directory(dir)
             claimed = true
@@ -709,7 +710,8 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
             mkpath(dir)
             src_path = Base.source_path()
             resume = has_checkpoint(dir)
-            if resume && !same_program(dir, src_path) && get(ENV, "TMS_ACCEPT_PROGRAM", "") ≠ "1"
+            accepted = resume && !same_program(dir, src_path)
+            if accepted && get(ENV, "TMS_ACCEPT_PROGRAM", "") ≠ "1"
                 error("the checkpoint of \"$(sd.name)\" was written by another program, or one " *
                       "given other arguments: to resume with this one, copy it onto prog.jl, and the " *
                       "files it includes into prog, or set TMS_ACCEPT_PROGRAM=1")
@@ -775,6 +777,10 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         if !isnothing(stale)
             log_line(run, "Warning: the run before, process $(stale[2]) on $(stale[1]), ended " *
                           "without removing running")
+        end
+        if accepted
+            log_line(run, "Warning: resumed by a program other than the one that wrote the " *
+                          "checkpoint, as TMS_ACCEPT_PROGRAM=1 allows")
         end
         if !resume
             commit!(sim, 1, 0)

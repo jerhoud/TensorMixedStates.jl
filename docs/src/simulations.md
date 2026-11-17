@@ -231,11 +231,11 @@ are some. Editing the program or a file it includes and running it again under t
 thus reports an error instead of quietly continuing something else. To resume with the edited
 program all the same, more time or other threads for instance, copy it onto `prog.jl`, the
 files it includes into `prog`, and its arguments into `prog_args.json`, or set the environment
-variable `TMS_ACCEPT_PROGRAM=1`; to start over, put a file `restart` in the directory or give the
-simulation another name. The files included before `using TensorMixedStates` are not seen, nor
-the packages the program loads, whose versions `stamp` gives, nor a parameter it reads
-elsewhere, from an environment variable or a data file. A simulation run from the REPL, with no
-program file, is always resumed.
+variable `TMS_ACCEPT_PROGRAM=1`, which the log notes; to start over, put a file `restart` in
+the directory or give the simulation another name. The files included before
+`using TensorMixedStates` are not seen, nor the packages the program loads, whose versions
+`stamp` gives, nor a parameter it reads elsewhere, from an environment variable or a data file.
+A simulation run from the REPL, with no program file, is always resumed.
 
 A program running several simulations copies itself into the directory of each, so that once
 it is edited none of them resumes, those it did not change included, until it is copied onto
