@@ -25,7 +25,7 @@ its own.
         J = [1 + 0.1 * randn(c.rng) for i in 1:9]
         H = -sum(J[i] * Z(i) * Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10)
         GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 10),
-                    final_measurements = "energies" => [:sample, :energy])
+                    final_measurements = EachSample("energies") => :energy)
     end
 """
 struct Realizations <: AbstractPhase

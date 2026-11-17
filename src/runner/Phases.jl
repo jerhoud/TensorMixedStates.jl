@@ -266,6 +266,8 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     end
     commit!(same ? sim : with_values(resume_from; step = k), run.phase, k; last)
     checkpoint_or_stop(run)
+    # what a phase of a single call writes before its next step, as after a resume there
+    row_at!(run, run.phase, k + 1)
     # the checkpoint not counted in the next step
     run.step_start = time()
     return sim
@@ -356,7 +358,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         run.step_start = time()
         td = @timed begin
             if !(i == start && ended)
-                row_at!(run, i, d)
+                row_at!(run, i, d + 1)
                 # called for the phase and the state as they are, see output
                 sim = invokelatest(run_phase, phase, sim, d)
             end

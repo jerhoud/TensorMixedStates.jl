@@ -18,6 +18,21 @@ end
 seeded(seed, sample, stream) =
     Xoshiro(mix(mix(mix(UInt64(seed)) ⊻ UInt64(sample)) ⊻ UInt64(stream)))
 
+# a phase of a single call writing by itself between its steps
+struct Kicks <: TensorMixedStates.AbstractPhase
+    name::String
+    time_start
+    final_measurements
+end
+
+function TensorMixedStates.run_phase(p::Kicks, sim, done)
+    for k in done + 1:3
+        output(sim, "u" => "u" => c -> 1.0 * c.sample + k)
+        sim = TensorMixedStates.step_done(sim, p, k)
+    end
+    return sim
+end
+
 # a chain of four qubits, its couplings drawn by the generator of the sample, evolved three steps
 function quench(c; measurements = "steps" => [:step, X(1), Z])
     J = [1 + 0.5 * randn(c.rng) for _ in 1:3]
@@ -273,5 +288,88 @@ end
         Ja = [ r["J"] for r in a.data["J"] ]
         @test [ r["J"] for r in b.data["J"] ] == Ja[1:2]
         @test Ja[1] ≠ Ja[2]
+    end
+end
+
+@testset "Averages of JSON, complex and vector values, rows some samples lack, one sample" begin
+    in_tmp() do
+        up = CreateState{Pure}(3, Qubit(), "Up")
+        z = "z" => c -> complex(c.sample, -c.sample)
+        v = "v" => c -> [1.0, c.sample]
+        gate = Realizations(c -> Gates(gates = X(1)))
+        sim = runTMS(SimData(name = "j", samples = 3, phases = [up, gate],
+                             final_measurements = ["f.jsonl" => [z, v], Data("f") => [z, v]]))
+        row = TensorMixedStates.JSON.parse(only(readlines("j/f.jsonl")))
+        @test row["N"] == 3 && row["Re(z)"] ≈ 2 && row["Im(z)"] ≈ -2 && row["std(Re(z))"] ≈ 1
+        @test row["v[1]"] == 1 && row["std(v[1])"] == 0 && row["err(v[2])"] ≈ 1 / sqrt(3)
+        @test only(sim.data["f"])["v[2]"] ≈ 2
+        # the first sample has fewer steps: the later rows average the samples that have them
+        short(c) = Evolve(evolver = -im * (0.5 * c.sample * X(1)),
+                          duration = c.sample == 1 ? 0.1 : 0.3, time_step = 0.1,
+                          measurements = [Data("t") => Z(1), EachSample(Data("e")) => Z(1)])
+        sim = runTMS(SimData(name = "s", samples = 3, phases = [up, Realizations(short)]))
+        t, e = sim.data["t"], sim.data["e"]
+        @test [ r["N"] for r in t ] == [3, 2, 2]
+        @test t[3]["Z(1)"] ≈ sum(r["Z(1)"] for r in e if r["time"] == t[3]["time"]) / 2
+        # one sample has no deviation
+        one = runTMS(SimData(name = "o", samples = 1, phases = [up, gate],
+                             final_measurements = Data("x") => X(1)))
+        @test isnan(only(one.data["x"])["std(X(1))"])
+    end
+end
+
+@testset "Averages refused: values, columns, lists, destinations" begin
+    in_tmp() do
+        up = CreateState{Pure}(3, Qubit(), "Up")
+        gate = Realizations(c -> Gates(gates = X(1)))
+        ending(name, final) = runTMS(SimData(; name, samples = 2, phases = [up, gate],
+                                             final_measurements = final))
+        sometimes = "m" => c -> c.sample == 1 ? missing : 1.0
+        @test_throws "missing in some samples only" ending("m", "m" => sometimes)
+        @test_throws "cannot be averaged" ending("s", "s" => "s" => c -> "text")
+        @test_throws "other columns" ending("v", "v" => "v" => c -> ones(c.sample))
+        @test_throws "two columns" ending("d", "d" => [Z, "Z(1)" => Z(1)])
+        @test_throws "one the averages write" ending("n", "n" => "N" => X(1))
+        # a list written by an Update, to an averaged text file holding another
+        lists = Realizations(c -> Update(d -> (output(d, "g" => X(1)); output(d, "g" => Z(1)))))
+        @test_throws "holds the list" runTMS(SimData(name = "l", samples = 2, phases = [up, lists]))
+        # a destination both averaged and written for each sample, without a directory or by an
+        # Update
+        both = SimData(samples = 2, phases = [up, gate],
+                       final_measurements = [Data("x") => X(1), EachSample(Data("x")) => X(1)])
+        @test_throws "both averaged" runTMS(both; output = devnull)
+        each = Realizations(c -> Update(d -> output(d, EachSample("g") => X(1))))
+        @test_throws "both averaged" runTMS(SimData(name = "b", samples = 2, phases = [up, each],
+                                                    final_measurements = "g" => X(1)))
+        # EachSample written by an Update in a simulation without samples
+        alone = Update(d -> output(d, EachSample("g") => X(1)))
+        @test_throws "has no samples" runTMS(SimData(name = "a", phases = [up, alone]))
+    end
+end
+
+@testset "A phase of one's own writing between its steps resumes as the uninterrupted one" begin
+    in_tmp() do
+        kicks = Realizations(c -> Kicks("kicks", nothing, []))
+        sd(name) = SimData(; name, samples = 2,
+                           phases = [CreateState{Pure}(2, Qubit(), "Up"), kicks])
+        runTMS(sd("ref"))
+        run_through(sd("chk"); max_time = -1)
+        @test read("chk/u", String) == read("ref/u", String)
+        @test length(readlines("ref/u")) == 4
+    end
+end
+
+@testset "Averages keep the digits of a deviation small against the mean, and seeds stay" begin
+    in_tmp() do
+        x(k) = 1e8 + 1e-3 * k + 1e-4 * k^2
+        sim = runTMS(SimData(name = "p", samples = 6,
+                             phases = [CreateState{Pure}(2, Qubit(), "Up"),
+                                       Realizations(c -> Gates(gates = X(1)))],
+                             final_measurements = Data("x") => "x" => c -> x(c.sample)))
+        xs = big.(x.(1:6))
+        sd = sqrt(sum((xs .- sum(xs) / 6) .^ 2) / 5)
+        @test only(sim.data["x"])["std(x)"] ≈ sd rtol = 1e-12
+        # the first draw of the disorder of sample 1 of seed 7, the same in Julia 1.10 and 1.13
+        @test rand(TensorMixedStates.disorder_rng(7, 1)) == 0.284828998012419
     end
 end

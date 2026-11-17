@@ -328,8 +328,9 @@ average ground state energy and magnetization. A row that some samples lack, a s
 slow searches reach for instance, averages those that have it. The samples of a row must have the
 same time and the same columns, and a value that is not a number cannot be averaged. A row
 written before the samples is shared by all, and written with no error and no deviation. The
-means and deviations are updated sample after sample by the algorithm of West (1979), accurate
-even when the deviation is small against the mean.
+means and deviations are updated sample after sample by the algorithm of West (1979), each value
+shifted by its value in the first sample (Chan, Golub and LeVeque 1983), accurate even when the
+deviation is small against the mean.
 
 `EachSample(d)` writes to `d` a row for each sample instead, after the time the column `sample`
 giving its index, 0 before the samples: the file `energies` above holds the energy of each

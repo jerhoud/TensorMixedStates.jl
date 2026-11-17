@@ -150,12 +150,9 @@ samples when they are averaged
 function data_rows(sim::Simulation)
     o = getfield(sim, :run).outputs
     return lock(o.lock) do
-        merge(Dict{String, DataTable}(d.name => DataTable(h.rows) for (d, h) in o.opened
-                                      if d isa Data),
-              Dict{String, DataTable}(d.inner.name => DataTable(h.rows) for (d, h) in o.opened
-                                      if d isa EachSample && d.inner isa Data),
-              Dict{String, DataTable}(d.inner.name => averaged_data(h) for (d, h) in o.opened
-                                      if d isa Averaged && d.inner isa Data))
+        names = unique(String[ n for n in map(data_name, collect(keys(o.opened)))
+                               if !isnothing(n) ])
+        Dict{String, DataTable}(n => data_rows(o, n) for n in names)
     end
 end
 

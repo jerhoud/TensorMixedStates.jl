@@ -96,17 +96,17 @@ function check_names(phases::Vector)
 end
 
 """
-    check_destinations(phases, final_measurements, sampled)
+    check_destinations(phases, final_measurements, sampled; live = true)
 
-refuse, before a run with a directory starts rather than when it writes there, a file of the
-simulation directory as the destination of a list of measurements of the phases or of the final
-measurements, or as a file a phase writes, see `phase_files` and `simulation_files`, a text
-file given two lists, as one holds one list, the lists one call sends it making one, and in a
-`sampled` simulation a file or `Data` both averaged and written for each sample
+refuse, before a run starts rather than when it writes there, in a `sampled` simulation a file or
+`Data` both averaged and written for each sample, and in a run with a directory (`live`) a file
+of the simulation directory as the destination of a list of measurements of the phases or of the
+final measurements, or as a file a phase writes, see `phase_files` and `simulation_files`, and a
+text file given two lists, as one holds one list, the lists one call sends it making one
 """
-function check_destinations(phases::Vector, final_measurements, sampled::Bool)
+function check_destinations(phases::Vector, final_measurements, sampled::Bool; live::Bool = true)
     for p in phases, f in phase_files(p)
-        if is_simulation_file(f)
+        if live && is_simulation_file(f)
             error("cannot save to $f, a file of the simulation directory: choose another name")
         end
     end
@@ -114,13 +114,14 @@ function check_destinations(phases::Vector, final_measurements, sampled::Bool)
     averaged = Dict{Any, Bool}()
     for l in run_lists(phases, final_measurements), (a, m) in by_destination(Outputs(; sampled), l)
         d = a isa Union{Averaged, EachSample} ? a.inner : a
-        both = d isa Union{TextFile, JsonFile, Data} &&
+        # without a directory, a name is the stream the output goes to, and only a Data is kept
+        both = (live ? d isa Union{TextFile, JsonFile, Data} : d isa Data) &&
                get!(averaged, d, a isa Averaged) ≠ (a isa Averaged)
         if both
             error("$d is written both averaged and for each sample: give EachSample(…) another " *
                   "destination")
         end
-        if !(d isa Union{TextFile, JsonFile})
+        if !live || !(d isa Union{TextFile, JsonFile})
             continue
         elseif is_simulation_file(d.path)
             error("cannot write to $(d.path), a file of the simulation directory: choose another " *
@@ -660,10 +661,10 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, sample::Int, st
         phases = [prefix; realized]
         check_values(phases, sd.final_measurements, true)
         check_names(realized)
-        if !isempty(c.dir)
-            check_destinations(phases, sd.final_measurements, true)
-        end
+        check_destinations(phases, sd.final_measurements, true; live = !isempty(c.dir))
         sim = run_phases(sim, phases, start, done, ended, threading; final = false)
+        # what follows is told of the sample, outside its phases
+        run.phase = 0
         # before the final measurements, as without samples: a new run makes them again; not for
         # a sample resumed after its phases, whose checkpoint is on the disk, where a run asked to
         # stop would stop again and again
@@ -781,9 +782,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     end
     positive(s) = (n = parse(Int, s); n ≥ 1 ? n : nothing)
     samples = isnothing(sd.samples) ? nothing : launch_setting("TMS_SAMPLES", sd.samples, positive)
-    if live
-        check_destinations(checked_phases(sd), sd.final_measurements, !isnothing(samples))
-    end
+    check_destinations(checked_phases(sd), sd.final_measurements, !isnothing(samples); live)
     dir = live ? abspath(sd.name) : ""
     file(name) = joinpath(dir, name)
     outermost = enter_run()
