@@ -62,8 +62,7 @@ it stopped, the warnings its log received, the imaginary parts of
 Hermitian measurements dropped and not yet reported, how many and the largest, as
 `(imaginary part, measurement, time)`, the lists of measurements of the phase being run made
 into `Measure`s, see `phase_output`, the sample being run, 0 without one, the phases it runs,
-whether the log leaves out the lines of its phases and steps, and the commit of the branch point
-of the samples, see `Realizations`
+and whether the log leaves out the lines of its phases and steps
 """
 mutable struct RunData
     dir::String
@@ -84,12 +83,11 @@ mutable struct RunData
     sample::Int
     phases::Vector{Any}
     quiet::Bool
-    branch::Union{Nothing, Commit}
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided, backend) =
     RunData(dir, outputs, log, redirect, checkpointer, provided, backend, 0, 0., time(), false, 0,
-            0, nothing, IdDict{Any, Vector}(), 0, Any[], false, nothing)
+            0, nothing, IdDict{Any, Vector}(), 0, Any[], false)
 
 """
     Simulation(sim, state[, time = sim.time]; values...)

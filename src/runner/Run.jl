@@ -1,6 +1,6 @@
-# runTMS, which runs a simulation described by a SimData phase after phase, in a directory of its
-# own, with its log, its checkpoints and the resumption of an interrupted run, and cleanTMS, which
-# removes that directory.
+# runTMS, which runs a simulation described by a SimData phase after phase, or sample after sample
+# from a branch point, in a directory of its own, with its log, its checkpoints and the resumption
+# of an interrupted run, and cleanTMS, which removes that directory.
 
 export runTMS, cleanTMS, SimData
 
@@ -134,6 +134,15 @@ function check_format(format::AbstractString)
 end
 
 """
+    checked_phases(phases, realized, samples)
+    checked_phases(sd)
+
+the phases the checks of a simulation see: those of its dry call in place of `Realizations`
+"""
+checked_phases(phases::Vector, realized::Vector, samples) =
+    isnothing(samples) ? phases : [phases[1:end - 1]; realized]
+
+"""
     SimData(; name = "simulation", phases, options...)
 
 the description of a simulation, which `runTMS` runs.
@@ -196,9 +205,10 @@ struct SimData
         elseif !isnothing(samples) && !isnothing(seed) && seed > typemax(UInt64)
             error("the seed of a simulation with samples is at most typemax(UInt64), got $seed")
         end
+        samples = isnothing(samples) ? nothing : Int(samples)
         ps = map(check_phase, flatten_phases(phases))
         realized = branched_phases(ps, samples)
-        checked = isnothing(samples) ? ps : [ps[1:end - 1]; realized]
+        checked = checked_phases(ps, realized, samples)
         provided = check_values(checked, final_measurements, !isnothing(samples))
         check_names(checked)
         return new(name, description, time_start, final_measurements, check_format(format), seed,
@@ -220,6 +230,8 @@ SimData(; name::AbstractString = "simulation", description::AbstractString = "",
         samples::Union{Nothing, Integer} = nothing, phases) =
     SimData(name, description, time_start, final_measurements, format, seed, backend, samples,
             phases)
+
+checked_phases(sd::SimData) = checked_phases(sd.phases, sd.realized, sd.samples)
 
 show(io::IO, s::SimData) =
     print(io, """
@@ -568,15 +580,101 @@ function leave_run()
 end
 
 """
+    run_simulation(sim, sd, samples, sample, start, done, ended, threading)
+
+run the phases and the final measurements of `sd` from where `Commit` says, see `run_samples`
+"""
+function run_simulation(sim::Simulation, sd::SimData, samples::Union{Nothing, Int}, sample::Int,
+                        start::Int, done::Int, ended::Bool, threading)
+    if isnothing(samples)
+        sim = run_phases(sim, sd.phases, start, done, ended, threading)
+        phase_output(sim, sd.final_measurements)
+        return sim
+    end
+    return run_samples(sim, sd, samples, sample, start, done, ended, threading)
+end
+
+"""
+    run_samples(sim, sd, samples, sample, start, done, ended, threading)
+
+the phases before the branch point once, kept in `branch.h5`, then each sample up to `samples`
+from it; a run resumed beyond `samples` ends the sample it is in
+"""
+function run_samples(sim::Simulation, sd::SimData, samples::Int, sample::Int, start::Int,
+                     done::Int, ended::Bool, threading)
+    run = getfield(sim, :run)
+    c = run.checkpointer
+    prefix = sd.phases[1:end - 1]
+    if sample > samples
+        log_line(run, "Sample $sample reached already, beyond the $samples asked for: only that " *
+                      "one is ended")
+    end
+    final = max(samples, sample)
+    fresh = sample == 0
+    if fresh
+        run.sample = 0
+        sim = run_phases(sim, prefix, start, done, ended, threading; final = false)
+        values = committed_values(getfield(sim, :values))
+        b = Commit(0, length(prefix) + 1, 0, false, run.phase_time, sim.time, sim.state, values,
+                   Dict{Destination, Any}())
+        if !isempty(c.dir)
+            write_branch(c.dir, b, c.seed)
+        end
+        sample = 1
+    else
+        b = read_branch(c.dir)
+    end
+    for k in sample:final
+        run.sample = k
+        run.quiet = k > 1
+        resumed = !fresh
+        if fresh
+            values = merge(b.values, Dict{Symbol, Any}(:sample => k, :step => 0,
+                                                        :rng => sample_rng(c.seed, k)))
+            sim = Simulation(b.state, b.time, values, run)
+            start, done, ended = length(prefix) + 1, 0, false
+            commit!(sim, start, 0)
+        end
+        fresh = true
+        began = time()
+        # no phase runs while Realizations draws: an error or a stop there names the sample only
+        run.phase = 0
+        run.phases = Any[]
+        realized = realized_phases(last(sd.phases), Realization(k, disorder_rng(c.seed, k)))
+        check_realization(realized, sd.realized, k)
+        phases = [prefix; realized]
+        check_values(phases, sd.final_measurements, true)
+        check_names(realized)
+        if !isempty(c.dir)
+            check_destinations(phases, sd.final_measurements)
+        end
+        sim = run_phases(sim, phases, start, done, ended, threading; final = false)
+        # before the final measurements, as without samples: a new run makes them again; not for
+        # a sample resumed after its phases, whose checkpoint is on the disk, where a run asked to
+        # stop would stop again and again
+        if k == final && !(resumed && start > length(phases))
+            commit!(sim, length(phases) + 1, 0)
+            checkpoint_or_stop(run; force = true)
+        end
+        phase_output(sim, sd.final_measurements)
+        log_line(run, "Sample $k of $final done, $(round(time() - began; digits = 3)) seconds" *
+                      (sim.state isa State ? ", maxdim $(maxlinkdim(sim.state))" : ""))
+    end
+    run.quiet = false
+    return sim
+end
+
+"""
     stop_place(c, phases)
 
 where a run stops, from its last commit
 """
 function stop_place(c::Checkpointer, phases::Vector)
     k = c.last
-    place = k.phase > length(phases) ? "after the last phase" :
-            k.step == 0 ? "before phase \"$(phases[k.phase].name)\"" :
-            "after step $(k.step) of phase \"$(phases[k.phase].name)\""
+    # no phases while the function of Realizations draws those of a sample
+    name = k.phase ≤ length(phases) ? "phase \"$(phases[k.phase].name)\"" : "phase $(k.phase)"
+    place = !isempty(phases) && k.phase > length(phases) ? "after the last phase" :
+            k.step == 0 ? "before $name" : "after step $(k.step) of $name"
     return k.sample == 0 ? place : "$place of sample $(k.sample)"
 end
 
@@ -616,7 +714,8 @@ the time of its last commit
 """
 function error_line(run, sd::SimData, e)
     k = isnothing(run) ? nothing : run.checkpointer.last
-    where = isnothing(run) || run.phase == 0 ? "" :
+    where = isnothing(run) || run.phase == run.sample == 0 ? "" :
+            run.phase == 0 ? " in sample $(run.sample), outside its phases" :
             " in phase $(run.phase) \"$(run.phases[run.phase].name)\"" *
             (run.sample == 0 ? "" : " of sample $(run.sample)") *
             ", last committed at time " * time_text(run, k.time)
@@ -663,14 +762,10 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     if live && isempty(sd.name)
         error("a simulation run in a directory needs a name, that of its directory")
     end
-    samples = isnothing(sd.samples) ? nothing :
-              launch_setting("TMS_SAMPLES", sd.samples, s -> parse(Int, s))
-    if !isnothing(samples) && samples < 1
-        error("the number of samples of a simulation is 1 or more, got $samples")
-    end
+    positive(s) = (n = parse(Int, s); n ≥ 1 ? n : nothing)
+    samples = isnothing(sd.samples) ? nothing : launch_setting("TMS_SAMPLES", sd.samples, positive)
     if live
-        check_destinations(isnothing(samples) ? sd.phases : [sd.phases[1:end - 1]; sd.realized],
-                           sd.final_measurements)
+        check_destinations(checked_phases(sd), sd.final_measurements)
     end
     dir = live ? abspath(sd.name) : ""
     file(name) = joinpath(dir, name)
@@ -774,6 +869,9 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         if !isnothing(stale)
             log_line(run, "Warning: the run before, process $(stale[2]) on $(stale[1]), ended " *
                           "without removing running")
+        end
+        if isnothing(samples) && !isempty(get(ENV, "TMS_SAMPLES", ""))
+            log_line(run, "TMS_SAMPLES is not used: the simulation has no samples")
         end
         if accepted
             log_line(run, "Warning: resumed by a program other than the one that wrote the " *

@@ -17,7 +17,8 @@ the reference article.
 ### Changed
 
 - The checkpoints of 2.1 are not resumed: start such a run over.
-
+- `sample` is reserved, as `step` and `rng`: no value or state of a simulation may take that name.
+- `branch.h5` is a file of the simulation directory, which no destination or saved state may take.
 - A resumption that `TMS_ACCEPT_PROGRAM=1` allows with an edited program is noted in the log.
 
 ## [2.1.0] - 2026-11-09

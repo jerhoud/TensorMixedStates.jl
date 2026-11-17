@@ -66,6 +66,9 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") ≠ "true"
                                          limits = lim, measurements = "data" => [Z, Purity])]
                         runTMS(SimData(; name = "workload", phases); checkpoint_interval = 1e-9)
                         runTMS(SimData(; name = "workload", phases); output = devnull)
+                        # a run of samples, from its branch point
+                        runTMS(SimData(; name = "samples", samples = 2,
+                                       phases = [phases[1], Realizations(c -> phases[2])]))
                     end
                 end
             end

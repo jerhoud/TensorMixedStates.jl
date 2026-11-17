@@ -4,7 +4,7 @@
 # Goes here: src/runner/Samples.jl and what it changes in the runner. The tests run in temporary
 # directories, which they make the working directory while they run.
 
-using TensorMixedStates: Realization, disorder_rng, sample_rng
+using TensorMixedStates: Realization
 
 # a chain of four qubits, its couplings drawn by the generator of the sample, evolved three steps
 function quench(c; measurements = "steps" => [:sample, :step, X(1), Z])
@@ -27,13 +27,14 @@ sampled(name; samples = 3, phases = [CreateState{Pure}(4, Qubit(), "Up"), Realiz
         for k in 1:3
             hand = runTMS(SimData(name = "h$k",
                                   phases = [CreateState{Pure}(4, Qubit(), "Up"),
-                                            quench(Realization(k, disorder_rng(7, k));
+                                            quench(Realization(k, Xoshiro(UInt64[7, k]));
                                                    measurements = [])],
                                   final_measurements = Data("end") => [X(1), Z(2)]))
             @test rows[k]["X(1)"] == hand.data["end"][1]["X(1)"]
             @test rows[k]["Z(2)"] == hand.data["end"][1]["Z(2)"]
-            # the phases draw with the generator of the sample, the disorder with its own
-            @test rows[k]["draw"] == rand(sample_rng(7, k))
+            # the phases draw with the generator of the sample, the disorder with its own, both
+            # seeded by the seed of the run and the sample
+            @test rows[k]["draw"] == rand(Xoshiro(UInt64[7, k, 1]))
         end
         @test rows[1]["X(1)"] ≠ rows[2]["X(1)"]
         @test length(readlines("s/steps")) == 1 + 3 * 3
@@ -108,7 +109,7 @@ end
         runTMS(sampled("p"; samples = 4))
         @test read("p/end", String) == read("ref/end", String)
         @test_throws "runTMS cannot read" withenv(() -> runTMS(sampled("p")), "TMS_SAMPLES" => "x")
-        @test_throws "1 or more" withenv(() -> runTMS(sampled("p")), "TMS_SAMPLES" => "0")
+        @test_throws "runTMS cannot read" withenv(() -> runTMS(sampled("p")), "TMS_SAMPLES" => "0")
     end
 end
 
@@ -122,8 +123,7 @@ end
                                            phases = [up, Realizations(quench)])
     @test_throws "returns a Realizations" SimData(samples = 2, phases = [up,
                                                   Realizations(c -> Realizations(quench))])
-    @test_throws "overwrite" SimData(samples = 2,
-                                     phases = [up, Realizations(c -> SaveState(file = "f.h5"))])
+    @test SimData(samples = Int32(2), phases = [up, Realizations(quench)]).samples === 2
     @test_throws "changes nothing" SimData(samples = 2, phases = [up, Realizations(c -> (c.x = 1))])
     @test_throws "not c.state" SimData(samples = 2, phases = [up, Realizations(c -> c.state)])
     @test_throws "only a simulation with samples" SimData(phases = [up],
@@ -132,5 +132,67 @@ end
         other(c) = c.sample == 1 ? quench(c) : Gates(gates = X(1))
         sd = sampled("o"; phases = [up, Realizations(other)])
         @test_throws "phase 1 of sample 2 is Gates" runTMS(sd)
+    end
+end
+
+@testset "Mixed samples, a state named before the branch point, Data, stops and prolongation" begin
+    in_tmp() do
+        function noisy(c)
+            J = [1 + 0.5 * randn(c.rng) for _ in 1:2]
+            H = -sum(J[i] * Z(i) * Z(i + 1) for i in 1:2) - sum(X(i) for i in 1:3)
+            return [ToMixed(),
+                    Evolve(evolver = -im * H + Dissipator(sqrt(0.3) * Sm)(1), duration = 0.2,
+                           time_step = 0.1, algo = ApproxW(order = 2), limits = Limits(maxdim = 16),
+                           measurements = Data("steps") => [:sample, :step, Z(1), Purity])]
+        end
+        phases = [CreateState{Pure}(3, Qubit(), "Up"), CopyState(:state => :init),
+                  Realizations(noisy)]
+        sd(name) = SimData(; name, seed = 3, samples = 3, phases,
+                           final_measurements = Data("end") => [:sample, Z(2), Fidelity(:init)])
+        ref = runTMS(sd("ref"))
+        withenv(() -> run_through(sd("chk"); max_time = -1), "TMS_SAMPLES" => "2")
+        chk = run_through(sd("chk"); max_time = -1)
+        for name in ("steps", "end")
+            @test chk.data[name] == ref.data[name]
+        end
+        @test length(ref.data["end"]) == 3
+        @test norm(chk.state - ref.state) < 1e-12
+    end
+end
+
+@testset "Errors, stops and checks of a sample" begin
+    in_tmp() do
+        up = CreateState{Pure}(4, Qubit(), "Up")
+        ref = runTMS(sampled("ref"))
+        # an error while Realizations draws names the sample
+        failing(c) = c.sample == 2 ? error("no draw") : quench(c)
+        @test_throws "no draw" runTMS(sampled("e"; phases = [up, Realizations(failing)]))
+        @test occursin("in sample 2, outside its phases", read("e/error", String))
+        # a stop there names where the checkpoint is, and the run resumes from it
+        interrupted = Ref(true)
+        function stopping(c)
+            if c.sample == 2 && interrupted[]
+                interrupted[] = false
+                throw(InterruptException())
+            end
+            return quench(c)
+        end
+        sd = sampled("i"; phases = [up, Realizations(stopping)])
+        @test stopped(runTMS(sd))
+        @test occursin("Stopping before phase 2 of sample 2", read("i/log", String))
+        @test !stopped(runTMS(sd))
+        @test read("i/end", String) == read("ref/end", String)
+        # the phases of each sample are checked before it runs
+        reading(c) = Gates(gates = X(1),
+                           final_measurements = Data("g") => [c.sample == 1 ? X(1) : :energy])
+        @test_throws "reads energy" runTMS(sampled("r"; phases = [up, Realizations(reading)]))
+        # a state saved by each sample under its own name
+        saving(c) = [quench(c), SaveState(file = "states.h5", statename = "s$(c.sample)")]
+        runTMS(sampled("v"; samples = 2, phases = [up, Realizations(saving)]))
+        @test load_state("v/states.h5", "s1") isa State{Pure}
+        @test load_state("v/states.h5", "s2") isa State{Pure}
+        # the number of samples of the environment, for a simulation without any
+        withenv(() -> runTMS(SimData(name = "n", phases = [up])), "TMS_SAMPLES" => "5")
+        @test occursin("TMS_SAMPLES is not used", read("n/log", String))
     end
 end

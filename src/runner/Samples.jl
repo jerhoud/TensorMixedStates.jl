@@ -1,6 +1,6 @@
 # The samples of a simulation: Realizations, the last phase, whose function draws the disorder of a
-# sample and returns its phases, and the loop running each sample from the branch point, the state
-# the phases before Realizations reached, computed once.
+# sample and returns its phases, the generators of a sample and the checks of its phases; runTMS
+# runs the samples (Run.jl).
 
 export Realizations
 
@@ -15,8 +15,9 @@ sample, and the value `:sample` gives its index to the measurements.
 
 `f` must return the same phases, by type and name, for every sample, and draw with `c.rng` alone,
 so that a resumed sample gets the same phases. It is called once when the `SimData` is written,
-with a generator of its own, so that its phases are checked before the run. The phase has no
-`time_start` nor `final_measurements` of its own.
+with a generator of its own, so that its phases are checked before the run, and they are checked
+again for each sample before it runs. The phase has no `time_start` nor `final_measurements` of
+its own.
 
 # Examples
 
@@ -63,9 +64,8 @@ setproperty!(::Realization, ::Symbol, _) =
     disorder_rng(seed, sample)
     sample_rng(seed, sample)
 
-the generators of the sample `sample` of a run of seed `seed`: the one `Realizations` draws its
-disorder with, and the one its phases draw with, `sim.rng`, independent of each other and of
-those of the other samples, so that a sample is made again alone
+the generators of a sample, for its disorder and for its phases (`sim.rng`), independent of each
+other and of those of the other samples
 """
 disorder_rng(seed::Integer, sample::Int) = Xoshiro(UInt64[seed, sample])
 
@@ -75,19 +75,14 @@ sample_rng(seed::Integer, sample::Int) = Xoshiro(UInt64[seed, sample, 1])
 """
     realized_phases(p, c)
 
-the phases the function of `p` returns for `c`, flattened and checked as phases, refusing
-another `Realizations` and a phase writing a file of its own, which each sample would overwrite
+the phases the function of `p` returns for `c`, flattened and checked as phases, another
+`Realizations` refused
 """
 function realized_phases(p::Realizations, c::Realization)
     ps = map(check_phase, flatten_phases(p.realize(c)))
-    for q in ps
-        if q isa Realizations
-            error("the function of Realizations returns a Realizations, which only the last " *
-                  "phase of a simulation may be")
-        elseif !isempty(phase_files(q))
-            error("$(type_name(typeof(q))) writes $(first(phase_files(q))), which every sample " *
-                  "would overwrite: it cannot be among the phases of Realizations")
-        end
+    if any(q -> q isa Realizations, ps)
+        error("the function of Realizations returns a Realizations, which only the last phase of " *
+              "a simulation may be")
     end
     return ps
 end
@@ -95,9 +90,8 @@ end
 """
     branched_phases(phases, samples)
 
-the phases the function of the last phase of `phases`, a `Realizations`, returns for the first
-sample with a generator of its own, none without samples; a `Realizations` that is not the last
-phase is refused, and so are samples without one and one without samples
+the phases of the dry call of the `Realizations` ending `phases`, none without samples; a
+misplaced `Realizations`, samples without one and one without samples refused
 """
 function branched_phases(phases::Vector, samples::Union{Nothing, Int})
     for (i, p) in enumerate(phases)
@@ -134,89 +128,4 @@ function check_realization(phases::Vector, reference::Vector, sample::Int)
         end
     end
     return nothing
-end
-
-"""
-    run_simulation(sim, sd, samples, sample, start, done, ended, threading)
-
-run the phases of the simulation `sd` and its final measurements, from the sample `sample`, the
-phase `start` and `done` steps, the phase itself done when `ended`, see `Commit`: once without
-samples, otherwise the phases before the branch point once, see `run_samples`
-"""
-function run_simulation(sim::Simulation, sd, samples::Union{Nothing, Int}, sample::Int,
-                        start::Int, done::Int, ended::Bool, threading)
-    if isnothing(samples)
-        sim = run_phases(sim, sd.phases, start, done, ended, threading)
-        phase_output(sim, sd.final_measurements)
-        return sim
-    end
-    return run_samples(sim, sd, samples, sample, start, done, ended, threading)
-end
-
-"""
-    run_samples(sim, sd, samples, sample, start, done, ended, threading)
-
-run the simulation `sd`, which ends with `Realizations`, up to its sample `samples`, from where
-`run_simulation` says: the phases before `Realizations` once, the branch point they reach kept
-in `branch.h5`, then each sample from it, with its index `:sample`, its generator, the phases
-`Realizations` returns and the final measurements of `sd`, the log writing the phases and steps
-of the first only and a line for each. A run resumed beyond `samples` ends the sample it resumes,
-whose final measurements the outputs reopened have lost. A run with a directory ends with a
-checkpoint, which a run with more samples goes on from.
-"""
-function run_samples(sim::Simulation, sd, samples::Int, sample::Int, start::Int, done::Int,
-                     ended::Bool, threading)
-    run = getfield(sim, :run)
-    c = run.checkpointer
-    prefix = sd.phases[1:end - 1]
-    if sample > samples
-        log_line(run, "Sample $sample reached already, beyond the $samples asked for: only that " *
-                      "one is ended")
-    end
-    final = max(samples, sample)
-    fresh = sample == 0
-    if fresh
-        run.sample = 0
-        sim = run_phases(sim, prefix, start, done, ended, threading; final = false)
-        values = committed_values(getfield(sim, :values))
-        run.branch = Commit(0, length(prefix) + 1, 0, false, run.phase_time, sim.time, sim.state,
-                            values, Dict{Destination, Any}())
-        if !isempty(c.dir)
-            write_branch(c.dir, run.branch, c.seed)
-        end
-        sample = 1
-    else
-        run.branch = read_branch(c.dir)
-    end
-    b = run.branch
-    for k in sample:final
-        run.sample = k
-        run.quiet = k > 1
-        resumed = !fresh
-        if fresh
-            values = merge(b.values, Dict{Symbol, Any}(:sample => k, :step => 0,
-                                                        :rng => sample_rng(c.seed, k)))
-            sim = Simulation(b.state, b.time, values, run)
-            start, done, ended = length(prefix) + 1, 0, false
-            commit!(sim, start, 0)
-        end
-        fresh = true
-        began = time()
-        realized = realized_phases(last(sd.phases), Realization(k, disorder_rng(c.seed, k)))
-        check_realization(realized, sd.realized, k)
-        phases = [prefix; realized]
-        sim = run_phases(sim, phases, start, done, ended, threading; final = false)
-        # before the final measurements, as without samples: a new run makes them again; not for
-        # a sample resumed after its phases, whose checkpoint is on the disk, where a run asked to
-        # stop would stop again and again
-        if k == final && !(resumed && start > length(phases))
-            commit!(sim, length(phases) + 1, 0)
-            checkpoint_or_stop(run; force = true)
-        end
-        phase_output(sim, sd.final_measurements)
-        log_line(run, "Sample $k of $final done, $(round(time() - began; digits = 3)) seconds" *
-                      (sim.state isa State ? ", maxdim $(maxlinkdim(sim.state))" : ""))
-    end
-    run.quiet = false
-    return sim
 end
