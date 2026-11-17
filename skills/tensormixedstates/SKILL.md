@@ -101,5 +101,6 @@ For a run of hours, write it as a simulation, `runTMS(SimData(name = "…", phas
 see the quick reference: it writes its measurements as tables in a directory, keeps checkpoints
 and resumes when run again. The line it prints at the end says whether it is done and how many
 warnings its `log` holds; read them. For an average over disorder, give it `samples = N` and a
-last phase `Realizations() do c … end` drawing the disorder with `c.rng`: it writes a row for
-each sample (`:sample`), which you average after the run.
+last phase `Realizations() do c … end` drawing the disorder with `c.rng`: its files hold the
+averages with their errors, `c`, `err(c)`, `std(c)`, and `EachSample("name")` a row for each
+sample.

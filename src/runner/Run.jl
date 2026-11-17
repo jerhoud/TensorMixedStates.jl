@@ -96,21 +96,30 @@ function check_names(phases::Vector)
 end
 
 """
-    check_destinations(phases, final_measurements)
+    check_destinations(phases, final_measurements, sampled)
 
 refuse, before a run with a directory starts rather than when it writes there, a file of the
 simulation directory as the destination of a list of measurements of the phases or of the final
-measurements, or as a file a phase writes, see `phase_files` and `simulation_files`, and a text
-file given two lists, as one holds one list, the lists one call sends it making one
+measurements, or as a file a phase writes, see `phase_files` and `simulation_files`, a text
+file given two lists, as one holds one list, the lists one call sends it making one, and in a
+`sampled` simulation a file or `Data` both averaged and written for each sample
 """
-function check_destinations(phases::Vector, final_measurements)
+function check_destinations(phases::Vector, final_measurements, sampled::Bool)
     for p in phases, f in phase_files(p)
         if is_simulation_file(f)
             error("cannot save to $f, a file of the simulation directory: choose another name")
         end
     end
     held = Dict{String, Vector{String}}()
-    for l in run_lists(phases, final_measurements), (d, m) in by_destination(Outputs(), l)
+    averaged = Dict{Any, Bool}()
+    for l in run_lists(phases, final_measurements), (a, m) in by_destination(Outputs(; sampled), l)
+        d = a isa Union{Averaged, EachSample} ? a.inner : a
+        both = d isa Union{TextFile, JsonFile, Data} &&
+               get!(averaged, d, a isa Averaged) ≠ (a isa Averaged)
+        if both
+            error("$d is written both averaged and for each sample: give EachSample(…) another " *
+                  "destination")
+        end
         if !(d isa Union{TextFile, JsonFile})
             continue
         elseif is_simulation_file(d.path)
@@ -163,9 +172,10 @@ the description of a simulation, which `runTMS` runs.
   another backend, `LoadState` keeping the type of its file and a phase the backend cannot run
   raising an error
 - `samples`: the number of samples of a simulation whose last phase is `Realizations`, which
-  draws the disorder of each, the final measurements being made at the end of each sample
-  (default `nothing`, no samples); the environment variable `TMS_SAMPLES` overrides it, so that a
-  finished run is prolonged by running it again with more
+  draws the disorder of each, the final measurements being made at the end of each sample, the
+  files and `Data` holding averages over the samples, see `EachSample` (default `nothing`, no
+  samples); the environment variable `TMS_SAMPLES` overrides it, so that a finished run is
+  prolonged by running it again with more
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
@@ -211,6 +221,10 @@ struct SimData
         checked = checked_phases(ps, realized, samples)
         provided = check_values(checked, final_measurements, !isnothing(samples))
         check_names(checked)
+        if isnothing(samples) && any(first(p) isa EachSample
+                                     for l in run_lists(checked, final_measurements) for p in l)
+            error("EachSample writes a row for each sample, and the simulation has no samples")
+        end
         return new(name, description, time_start, final_measurements, check_format(format), seed,
                    check_backend(backend), samples, ps, provided, realized)
     end
@@ -588,6 +602,7 @@ function run_simulation(sim::Simulation, sd::SimData, samples::Union{Nothing, In
                         start::Int, done::Int, ended::Bool, threading)
     if isnothing(samples)
         sim = run_phases(sim, sd.phases, start, done, ended, threading)
+        row_at!(getfield(sim, :run), typemax(Int), 0)
         phase_output(sim, sd.final_measurements)
         return sim
     end
@@ -646,7 +661,7 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, sample::Int, st
         check_values(phases, sd.final_measurements, true)
         check_names(realized)
         if !isempty(c.dir)
-            check_destinations(phases, sd.final_measurements)
+            check_destinations(phases, sd.final_measurements, true)
         end
         sim = run_phases(sim, phases, start, done, ended, threading; final = false)
         # before the final measurements, as without samples: a new run makes them again; not for
@@ -656,7 +671,9 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, sample::Int, st
             commit!(sim, length(phases) + 1, 0)
             checkpoint_or_stop(run; force = true)
         end
+        row_at!(run, typemax(Int), 0)
         phase_output(sim, sd.final_measurements)
+        end_sample!(run.outputs)
         log_line(run, "Sample $k of $final done, $(round(time() - began; digits = 3)) seconds" *
                       (sim.state isa State ? ", maxdim $(maxlinkdim(sim.state))" : ""))
     end
@@ -765,7 +782,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     positive(s) = (n = parse(Int, s); n ≥ 1 ? n : nothing)
     samples = isnothing(sd.samples) ? nothing : launch_setting("TMS_SAMPLES", sd.samples, positive)
     if live
-        check_destinations(checked_phases(sd), sd.final_measurements)
+        check_destinations(checked_phases(sd), sd.final_measurements, !isnothing(samples))
     end
     dir = live ? abspath(sd.name) : ""
     file(name) = joinpath(dir, name)
@@ -834,7 +851,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         commit, generation, seed = resume ? load_checkpoint(dir) :
                                    (nothing, 0, something(sd.seed, rand(RandomDevice(), UInt64)))
         c = Checkpointer(dir, seed; interval = checkpoint_interval, max_time)
-        outputs = Outputs(; dir, sd.format)
+        outputs = Outputs(; dir, sd.format, sampled = !isnothing(samples))
         run = RunData(dir, outputs, logio, output, c, sd.provided, sd.backend)
         if resume
             resume!(c, commit, generation)

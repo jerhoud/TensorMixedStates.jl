@@ -184,12 +184,13 @@ end
 """
     logged_checkpoint(run)
 
-write the last commit down, see `write_checkpoint`, which the log notes with its time and the
-size of its state file
+write the last commit down, see `write_checkpoint`, and the averaged files as it has them, which
+the log notes with its time and the size of its state file
 """
 function logged_checkpoint(run::RunData)
     file = write_checkpoint(run.checkpointer)
     if !isnothing(file)
+        rewrite_averaged!(run.outputs, run.checkpointer.last.marks)
         log_line(run, "Checkpoint written at time " *
                       "$(time_text(run, run.checkpointer.last.time)), " *
                       Base.format_bytes(filesize(file)))
@@ -255,10 +256,11 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
         error("step_done with last commits the result of the phase, sim: it takes no resume_from")
     end
     sim = with_values(sim; step = k)
+    run = getfield(sim, :run)
     if step_due(phase, k)
+        row_at!(run, run.phase, k)
         phase_output(sim, step_measurements(phase))
     end
-    run = getfield(sim, :run)
     if !run.quiet
         log_message(sim, step_line(sim, phase, k))
     end
@@ -289,6 +291,7 @@ function run_phase(phase::AbstractPhase, sim, done)
     # the first step does not count the preparation
     getfield(sim, :run).step_start = time()
     for k in done + 1:invokelatest(step_count, p)
+        row_at!(getfield(sim, :run), getfield(sim, :run).phase, k)
         sim = step_done(invokelatest(run_step, p, sim, k), phase, k)
     end
     return sim
@@ -353,9 +356,12 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         run.step_start = time()
         td = @timed begin
             if !(i == start && ended)
+                row_at!(run, i, d)
                 # called for the phase and the state as they are, see output
                 sim = invokelatest(run_phase, phase, sim, d)
             end
+            # whatever the steps of the phase, so that the samples of an average match
+            row_at!(run, i, typemax(Int))
             phase_output(sim, phase.final_measurements)
             sim
         end

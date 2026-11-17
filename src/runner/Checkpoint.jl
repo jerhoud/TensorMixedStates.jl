@@ -136,11 +136,15 @@ relative(d::TextFile, dir::String) = TextFile(relative(d.path, dir), d.format)
 relative(d::JsonFile, dir::String) = JsonFile(relative(d.path, dir))
 relative(path::String, dir::String) =
     startswith(path, joinpath(dir, "")) ? relpath(path, dir) : path
+relative(d::Averaged, dir::String) = Averaged(relative(d.inner, dir))
+relative(d::EachSample, dir::String) = EachSample(relative(d.inner, dir))
 relative(d, _) = d
 
 rooted(d::TextFile, dir::String) = TextFile(rooted(d.path, dir), d.format)
 rooted(d::JsonFile, dir::String) = JsonFile(rooted(d.path, dir))
 rooted(path::String, dir::String) = isabspath(path) ? path : normpath(joinpath(dir, path))
+rooted(d::Averaged, dir::String) = Averaged(rooted(d.inner, dir))
+rooted(d::EachSample, dir::String) = EachSample(rooted(d.inner, dir))
 rooted(d, _) = d
 
 """

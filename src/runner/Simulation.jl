@@ -144,12 +144,18 @@ with_values(sim::Simulation; values...) =
 """
     data_rows(sim)
 
-the rows gathered in each `Data` of the run of `sim`, by its name
+the rows gathered in each `Data` of the run of `sim`, by its name, their averages over the
+samples when they are averaged
 """
 function data_rows(sim::Simulation)
     o = getfield(sim, :run).outputs
     return lock(o.lock) do
-        Dict{String, DataTable}(d.name => DataTable(h.rows) for (d, h) in o.opened if d isa Data)
+        merge(Dict{String, DataTable}(d.name => DataTable(h.rows) for (d, h) in o.opened
+                                      if d isa Data),
+              Dict{String, DataTable}(d.inner.name => DataTable(h.rows) for (d, h) in o.opened
+                                      if d isa EachSample && d.inner isa Data),
+              Dict{String, DataTable}(d.inner.name => averaged_data(h) for (d, h) in o.opened
+                                      if d isa Averaged && d.inner isa Data))
     end
 end
 
@@ -273,7 +279,17 @@ function run_destination(run::RunData, name::AbstractString)
     return name
 end
 
+run_destination(run::RunData, d::EachSample) = EachSample(run_destination(run, d.inner))
+
 run_destination(::RunData, d) = d
+
+"""
+    row_at!(run, phase, step)
+
+the place where the rows measured from now on are written, see `put_keyed_row!`: the step `step`
+of the phase `phase` of the sample being run
+"""
+row_at!(run::RunData, phase::Int, step::Int) = (run.outputs.at[] = (run.sample, phase, step))
 
 """
     measured_values(sim)

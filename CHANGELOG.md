@@ -12,7 +12,8 @@ the reference article.
 
 ### Added
 
-- `SimData(samples = N)` and the phase `Realizations(f)`: N samples of a simulation, each drawing its disorder with `c.rng`, run from the state the phases before `Realizations` reached, computed once; `TMS_SAMPLES` prolongs a finished run.
+- `SimData(samples = N)` and the phase `Realizations(f)`: N samples of a simulation, each drawing its disorder with `c.rng`, run from the state the phases before `Realizations` reached, computed once, its files and `Data` holding the averages over the samples with their errors; `TMS_SAMPLES` prolongs a finished run.
+- `EachSample(d)`: the destination `d` written a row for each sample.
 
 ### Changed
 

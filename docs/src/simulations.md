@@ -300,7 +300,7 @@ runTMS(SimData(
             GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 20, tol = 1e-10), limits = lim)
         end,
     ],
-    final_measurements = "energies" => [:sample, :energy, Z],
+    final_measurements = ["energy" => [:energy, Z], EachSample("energies") => :energy],
 ))
 ```
 
@@ -315,15 +315,32 @@ Each sample draws with generators of its own, made from the seed of the run and 
 sample: `c.rng` for its disorder, and `sim.rng` for its phases and measurements. A sample is
 thus the same whichever run computes it.
 
-The final measurements of the `SimData` are made at the end of each sample, and the value
-`:sample` gives its index to the measurements: the file `energies` above holds a row for each
-sample. Averages, distributions and error bars are computed from those rows after the run, from
-the files or from `sim.data`, whose `Data` destinations hold the rows of every sample. The log
-writes the phases and steps of the first sample only, and a line for each sample.
+The final measurements of the `SimData` are made at the end of each sample. A file or a `Data`
+then holds averages over the samples: a row for each row of a sample, matched by its phase and
+its step, the final measurements of a phase whatever its number of steps, with the columns `N`,
+the samples in it, `N_eff`, their effective number, equal to `N` here, and for each column `c`
+of the values, `c`, its mean, `err(c)`, the error on the mean, and `std(c)`, the standard
+deviation of the samples, `NaN` for one sample. The file `energy` above holds one row, the
+average ground state energy and magnetization. A row that some samples lack, a step that only the
+slow searches reach for instance, averages those that have it. The samples of a row must have the
+same time and the same columns, and a value that is not a number cannot be averaged. A row
+written before the samples is shared by all, and written with no error and no deviation. The
+means and deviations are updated sample after sample by the algorithm of West (1979), accurate
+even when the deviation is small against the mean.
+
+`EachSample(d)` writes to `d` a row for each sample instead, after the time the column `sample`
+giving its index, 0 before the samples: the file `energies` above holds the energy of each
+sample, for distributions or analyses of one's own after the run. The value `:sample` gives the
+index of the sample to any measurement. A stream, `"stdout"` for instance, and a destination of
+one's own are written for each sample, without that column.
+
+An averaged file is written whole, from the samples ended, at each checkpoint and at the end of
+the run; follow a long run by setting `checkpoint_interval`. The log writes the phases and steps
+of the first sample only, and a line for each sample.
 
 The branch point is kept in the file `branch.h5` of the directory, and a run with samples ends
-with a checkpoint, even without periodic ones. A stopped run resumes in the sample, the phase and the step it had
-reached. The environment variable `TMS_SAMPLES` overrides `samples`: running the program again
+with a checkpoint, even without periodic ones. A stopped run resumes in the sample, the phase
+and the step it had reached. The environment variable `TMS_SAMPLES` overrides `samples`: running the program again
 with `TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001 from the branch point,
 without running the phases before it again, and writes the same files as 2000 samples in one
 run. With fewer samples than those done, a run only ends the sample it had stopped in.
