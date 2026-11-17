@@ -313,7 +313,9 @@ checked again before it runs.
 
 Each sample draws with generators of its own, made from the seed of the run and the index of the
 sample: `c.rng` for its disorder, and `sim.rng` for its phases and measurements. A sample is
-thus the same whichever run computes it.
+thus the same whichever run computes it, and two simulations of the same `seed` whose functions
+draw alike get the same disorder in each sample, whatever their phases: put the draw in a
+function both programs include to compare them on the same realizations.
 
 The final measurements of the `SimData` are made at the end of each sample. A file or a `Data`
 then holds averages over the samples: a row for each row of a sample, matched by its phase and

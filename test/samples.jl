@@ -246,3 +246,22 @@ end
                                                      phases = [up, Realizations(steps)]))
     end
 end
+
+@testset "Two simulations of the same seed draw the same disorder" begin
+    in_tmp() do
+        disorder(c) = [1 + 0.5 * randn(c.rng) for _ in 1:3]
+        keep(J) = Update(c -> c.J = J; provides = [:J])
+        a = runTMS(SimData(name = "a", seed = 5, samples = 3,
+                           phases = [CreateState{Pure}(4, Qubit(), "Up"),
+                                     Realizations(c -> [keep(disorder(c)), Gates(gates = X(1))])],
+                           final_measurements = EachSample(Data("J")) => :J))
+        # other phases, drawing with the generator of the sample, and fewer samples
+        random = CreateState{Pure}(4, Qubit(), "Up"; randomize = 2)
+        b = runTMS(SimData(name = "b", seed = 5, samples = 2,
+                           phases = [Realizations(c -> [random, keep(disorder(c))])],
+                           final_measurements = EachSample(Data("J")) => :J))
+        Ja = [ r["J"] for r in a.data["J"] ]
+        @test [ r["J"] for r in b.data["J"] ] == Ja[1:2]
+        @test Ja[1] ≠ Ja[2]
+    end
+end
