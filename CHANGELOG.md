@@ -10,7 +10,13 @@ the reference article.
 
 ## [Unreleased]
 
+### Added
+
+- `SimData(samples = N)` and the phase `Realizations(f)`: N samples of a simulation, each drawing its disorder with `c.rng`, run from the state the phases before `Realizations` reached, computed once; `TMS_SAMPLES` prolongs a finished run.
+
 ### Changed
+
+- The checkpoints of 2.1 are not resumed: start such a run over.
 
 - A resumption that `TMS_ACCEPT_PROGRAM=1` allows with an edited program is noted in the log.
 

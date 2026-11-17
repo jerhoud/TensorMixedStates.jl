@@ -1,7 +1,7 @@
 # Simulations as runTMS runs them: SimData and the phases, the outputs and the log of a run, its
 # checkpoints and its resumes, its lock, its program, the settings of a launch and the threading.
 #
-# Goes here: everything of src/runner. The tests run in temporary directories, which they make
+# Goes here: everything of src/runner but the samples, see samples.jl. The tests run in temporary directories, which they make
 # the working directory while they run, safe as long as the groups stay sequential.
 
 using TensorMixedStates: AbstractPhase
@@ -1174,8 +1174,10 @@ end
         runTMS(SimData(; name = "old", phases))
         meta = "old/checkpoint.json"
         text = read(meta, String)
-        write(meta, replace(text, "\"version\":5" => "\"version\":4"))
-        @test_throws "has the layout 4 of another version" runTMS(SimData(; name = "old", phases))
+        v = TMS.checkpoint_file_version
+        write(meta, replace(text, "\"version\":$v" => "\"version\":$(v - 1)"))
+        @test_throws "has the layout $(v - 1) of another version" runTMS(SimData(; name = "old",
+                                                                                  phases))
         write(meta, replace(text, "\"julia\":\"$VERSION\"" => "\"julia\":\"1.9.0\""))
         @test_throws "written by Julia 1.9.0" runTMS(SimData(; name = "old", phases))
     end

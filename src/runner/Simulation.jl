@@ -29,9 +29,9 @@ end
     reserved_values
 
 the names no value of a simulation may take: those the measurements read otherwise, `c.state`
-and `c.time`, those the run gives, `c.step` and `c.rng`, and `sim.data`
+and `c.time`, those the run gives, `c.step`, `c.rng` and `c.sample`, and `sim.data`
 """
-const reserved_values = (:state, :time, :step, :rng, :data)
+const reserved_values = (:state, :time, :step, :rng, :sample, :data)
 
 """
     check_backend(backend)
@@ -60,8 +60,10 @@ provide, the type of states its phases create by default, see `SimData`, the pha
 and the time it started from, when its step being run started, in seconds of `time()`, whether
 it stopped, the warnings its log received, the imaginary parts of
 Hermitian measurements dropped and not yet reported, how many and the largest, as
-`(imaginary part, measurement, time)`, and the lists of measurements of the phase being run made
-into `Measure`s, see `phase_output`
+`(imaginary part, measurement, time)`, the lists of measurements of the phase being run made
+into `Measure`s, see `phase_output`, the sample being run, 0 without one, the phases it runs,
+whether the log leaves out the lines of its phases and steps, and the commit of the branch point
+of the samples, see `Realizations`
 """
 mutable struct RunData
     dir::String
@@ -79,11 +81,15 @@ mutable struct RunData
     dropped::Int
     largest::Union{Nothing, Tuple}
     measures::IdDict{Any, Vector}
+    sample::Int
+    phases::Vector{Any}
+    quiet::Bool
+    branch::Union{Nothing, Commit}
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided, backend) =
     RunData(dir, outputs, log, redirect, checkpointer, provided, backend, 0, 0., time(), false, 0,
-            0, nothing, IdDict{Any, Vector}())
+            0, nothing, IdDict{Any, Vector}(), 0, Any[], false, nothing)
 
 """
     Simulation(sim, state[, time = sim.time]; values...)

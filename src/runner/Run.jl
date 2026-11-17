@@ -5,34 +5,6 @@
 export runTMS, cleanTMS, SimData
 
 """
-    flatten_phases(phases)
-
-the phases given as nested vectors, flattened into a single list, where a phase has the position
-a checkpoint records
-"""
-flatten_phases(p::AbstractVector) = reduce(vcat, map(flatten_phases, p); init = Any[])
-flatten_phases(p) = Any[p]
-
-"""
-    check_phase(phase)
-
-refuse an object that is not a subtype of `AbstractPhase`, or lacks one of the fields `name`,
-`time_start` and `final_measurements`
-"""
-function check_phase(phase)
-    if !(phase isa AbstractPhase)
-        error("$(type_name(typeof(phase))) is not a phase, a subtype of " *
-              "TensorMixedStates.AbstractPhase")
-    end
-    for f in (:name, :time_start, :final_measurements)
-        if !hasfield(typeof(phase), f)
-            error("$(type_name(typeof(phase))) is not a phase, it has no field $f")
-        end
-    end
-    return phase
-end
-
-"""
     measurement_lists(x)
 
 the lists of measurements `output` takes, `destination => measurements` or a vector of them, as
@@ -66,13 +38,13 @@ does: none by default
 refused_reads(::AbstractPhase) = ()
 
 """
-    check_values(phases, final_measurements)
+    check_values(phases, final_measurements, sampled)
 
 refuse a value measured by one of the lists of the phases, or by the final measurements, that no
 phase provides, see `provided_values`, or that its phase refuses, see `refused_reads`, and
-return the names of those they provide
+return the names of those they provide; `:sample` is read only when the simulation is `sampled`
 """
-function check_values(phases::Vector, final_measurements)
+function check_values(phases::Vector, final_measurements, sampled::Bool)
     for q in phases, (value, why) in refused_reads(q)
         lists = Any[q.final_measurements, step_measurements(q)]
         for l in lists, p in measurement_lists(l), (name, m) in as_measure(last(p)).entries
@@ -85,7 +57,10 @@ function check_values(phases::Vector, final_measurements)
     for l in run_lists(phases, final_measurements), p in l
         for (name, m) in as_measure(last(p)).entries
             for r in measurement_reads(m)
-                if r ∉ provided && r ∉ (:step, :rng)
+                if r === :sample && !sampled
+                    error("the measurement $name reads sample, which only a simulation with " *
+                          "samples has, see Realizations")
+                elseif r ∉ provided && r ∉ (:step, :rng, :sample)
                     of_1x = r === :sweep ? ": the :sweep of 1.x is :step" : ""
                     error("the measurement $name reads $r, a value that no phase of the " *
                           "simulation provides$of_1x")
@@ -178,6 +153,10 @@ the description of a simulation, which `runTMS` runs.
   (MPS) by default or `ExactState`, so that the phases of a program need no change to run on
   another backend, `LoadState` keeping the type of its file and a phase the backend cannot run
   raising an error
+- `samples`: the number of samples of a simulation whose last phase is `Realizations`, which
+  draws the disorder of each, the final measurements being made at the end of each sample
+  (default `nothing`, no samples); the environment variable `TMS_SAMPLES` overrides it, so that a
+  finished run is prolonged by running it again with more
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
@@ -203,30 +182,44 @@ struct SimData
     format::String
     seed::Union{Nothing, Integer}
     backend::Type
+    samples::Union{Nothing, Int}
     phases::Vector{Any}
     provided::Vector{Symbol}
+    realized::Vector{Any}
     function SimData(name, description, time_start, final_measurements, format, seed, backend,
-                     phases)
+                     samples, phases)
         # which Julia 1.10 refuses
         if !isnothing(seed) && seed < 0
             error("the seed of a simulation is an integer of zero or above, got $seed")
+        elseif !isnothing(samples) && samples < 1
+            error("the number of samples of a simulation is 1 or more, got $samples")
+        elseif !isnothing(samples) && !isnothing(seed) && seed > typemax(UInt64)
+            error("the seed of a simulation with samples is at most typemax(UInt64), got $seed")
         end
         ps = map(check_phase, flatten_phases(phases))
-        provided = check_values(ps, final_measurements)
-        check_names(ps)
+        realized = branched_phases(ps, samples)
+        checked = isnothing(samples) ? ps : [ps[1:end - 1]; realized]
+        provided = check_values(checked, final_measurements, !isnothing(samples))
+        check_names(checked)
         return new(name, description, time_start, final_measurements, check_format(format), seed,
-                   check_backend(backend), ps, provided)
+                   check_backend(backend), samples, ps, provided, realized)
     end
 end
 
-# the fields of 2.0, before backend
+# the fields of 2.0, before backend, and of 2.1, before samples
 SimData(name, description, time_start, final_measurements, format, seed, phases) =
     SimData(name, description, time_start, final_measurements, format, seed, State, phases)
 
+SimData(name, description, time_start, final_measurements, format, seed, backend, phases) =
+    SimData(name, description, time_start, final_measurements, format, seed, backend, nothing,
+            phases)
+
 SimData(; name::AbstractString = "simulation", description::AbstractString = "",
         time_start::Number = 0., final_measurements = [], format::AbstractString = "%.13g",
-        seed::Union{Nothing, Integer} = nothing, backend = State, phases) =
-    SimData(name, description, time_start, final_measurements, format, seed, backend, phases)
+        seed::Union{Nothing, Integer} = nothing, backend = State,
+        samples::Union{Nothing, Integer} = nothing, phases) =
+    SimData(name, description, time_start, final_measurements, format, seed, backend, samples,
+            phases)
 
 show(io::IO, s::SimData) =
     print(io, """
@@ -238,6 +231,7 @@ show(io::IO, s::SimData) =
             format = $(repr(s.format)),
             seed = $(repr(s.seed)),
             backend = $(s.backend),
+            samples = $(repr(s.samples)),
             phases =
         $(s.phases))""")
 
@@ -580,9 +574,10 @@ where a run stops, from its last commit
 """
 function stop_place(c::Checkpointer, phases::Vector)
     k = c.last
-    return k.phase > length(phases) ? "after the last phase" :
-           k.step == 0 ? "before phase \"$(phases[k.phase].name)\"" :
-           "after step $(k.step) of phase \"$(phases[k.phase].name)\""
+    place = k.phase > length(phases) ? "after the last phase" :
+            k.step == 0 ? "before phase \"$(phases[k.phase].name)\"" :
+            "after step $(k.step) of phase \"$(phases[k.phase].name)\""
+    return k.sample == 0 ? place : "$place of sample $(k.sample)"
 end
 
 """
@@ -596,21 +591,13 @@ function stop_line(c::Checkpointer, phases::Vector)
 end
 
 """
-    output_final(sim, sd)
-
-the final measurements of the simulation, for `runTMS`, whose keyword `output` hides the function
-`output` there
-"""
-output_final(sim::Simulation, sd::SimData) = phase_output(sim, sd.final_measurements)
-
-"""
     summary_line(sd, run)
 
 the line the console takes once a run returns: whether it ended or stopped, where its results
 are, and how many warnings its log received
 """
 function summary_line(sd::SimData, run::RunData)
-    at = stop_place(run.checkpointer, sd.phases)
+    at = stop_place(run.checkpointer, run.phases)
     state = !run.stopped ? "done" :
             isempty(run.dir) ? "stopped $at, with no directory to resume from" :
             "stopped $at: run it again to resume it"
@@ -630,8 +617,9 @@ the time of its last commit
 function error_line(run, sd::SimData, e)
     k = isnothing(run) ? nothing : run.checkpointer.last
     where = isnothing(run) || run.phase == 0 ? "" :
-            " in phase $(run.phase) \"$(sd.phases[run.phase].name)\", last committed at time " *
-            time_text(run, k.time)
+            " in phase $(run.phase) \"$(run.phases[run.phase].name)\"" *
+            (run.sample == 0 ? "" : " of sample $(run.sample)") *
+            ", last committed at time " * time_text(run, k.time)
     return "ERROR$where: " * sprint(showerror, e)
 end
 
@@ -675,8 +663,14 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     if live && isempty(sd.name)
         error("a simulation run in a directory needs a name, that of its directory")
     end
+    samples = isnothing(sd.samples) ? nothing :
+              launch_setting("TMS_SAMPLES", sd.samples, s -> parse(Int, s))
+    if !isnothing(samples) && samples < 1
+        error("the number of samples of a simulation is 1 or more, got $samples")
+    end
     if live
-        check_destinations(sd.phases, sd.final_measurements)
+        check_destinations(isnothing(samples) ? sd.phases : [sd.phases[1:end - 1]; sd.realized],
+                           sd.final_measurements)
     end
     dir = live ? abspath(sd.name) : ""
     file(name) = joinpath(dir, name)
@@ -765,8 +759,11 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         sim = if resume
             Simulation(commit.state, commit.time, copy(commit.values), run)
         else
-            Simulation(nothing, sd.time_start, Dict{Symbol, Any}(:rng => Xoshiro(seed), :step => 0),
-                       run)
+            values = Dict{Symbol, Any}(:rng => Xoshiro(seed), :step => 0)
+            if !isnothing(samples)
+                values[:sample] = 0
+            end
+            Simulation(nothing, sd.time_start, values, run)
         end
         # each launch, so that the log of a run resumed elsewhere says where each part ran
         log_line(run, (resume ? "\n" : "") * "Run on $(gethostname()), $(Dates.now()), Julia " *
@@ -785,19 +782,20 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         if !resume
             commit!(sim, 1, 0)
         end
-        start, done, ended = resume ? (commit.phase, commit.step, commit.last) : (1, 0, false)
+        sample, start, done, ended =
+            resume ? (commit.sample, commit.phase, commit.step, commit.last) : (0, 1, 0, false)
         sim = Logging.with_logger(SimLogger(run, Logging.current_logger())) do
             if resume
-                log_line(run, "Resuming from the checkpoint: phase $(commit.phase), step " *
-                              "$(commit.step), time $(time_text(run, commit.time))")
+                log_line(run, "Resuming from the checkpoint: " *
+                              (sample == 0 ? "" : "sample $sample, ") * "phase $(commit.phase), " *
+                              "step $(commit.step), time $(time_text(run, commit.time))")
                 # before anything is written: a destination opened anew would empty a file the
                 # checkpoint continues
                 reopen!(outputs, commit.marks)
             end
             launched, allocated = time(), Base.gc_bytes()
             try
-                sim = run_phases(sim, sd.phases, start, done, ended, threading)
-                output_final(sim, sd)
+                sim = run_simulation(sim, sd, samples, sample, start, done, ended, threading)
                 report_dropped(run)
             catch e
                 if !(e isa StopRun || (e isa InterruptException && live))
@@ -808,7 +806,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                     log_line(run, "\n***** Interrupted, writing a checkpoint *****")
                     logged_checkpoint(run)
                 end
-                log_line(run, stop_line(c, sd.phases))
+                log_line(run, stop_line(c, run.phases))
                 run.stopped = true
                 # a nested run passes the interrupt on, so that the run it is in stops as well
                 if e isa InterruptException && !outermost

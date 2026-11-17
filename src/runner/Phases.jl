@@ -29,6 +29,34 @@ A phase providing values to the measurements, as `:energy`, declares them with a
 abstract type AbstractPhase end
 
 """
+    flatten_phases(phases)
+
+the phases given as nested vectors, flattened into a single list, where a phase has the position
+a checkpoint records
+"""
+flatten_phases(p::AbstractVector) = reduce(vcat, map(flatten_phases, p); init = Any[])
+flatten_phases(p) = Any[p]
+
+"""
+    check_phase(phase)
+
+refuse an object that is not a subtype of `AbstractPhase`, or lacks one of the fields `name`,
+`time_start` and `final_measurements`
+"""
+function check_phase(phase)
+    if !(phase isa AbstractPhase)
+        error("$(type_name(typeof(phase))) is not a phase, a subtype of " *
+              "TensorMixedStates.AbstractPhase")
+    end
+    for f in (:name, :time_start, :final_measurements)
+        if !hasfield(typeof(phase), f)
+            error("$(type_name(typeof(phase))) is not a phase, it has no field $f")
+        end
+    end
+    return phase
+end
+
+"""
     step_measurements(phase)
     measurements_period(phase)
     acted_on(phase)
@@ -147,8 +175,8 @@ last one when `last`, see `Commit`
 """
 function commit!(sim::Simulation, phase::Int, step::Int; last::Bool = false)
     run = getfield(sim, :run)
-    run.checkpointer.last = Commit(phase, step, last, run.phase_time, sim.time, sim.state,
-                                   committed_values(getfield(sim, :values)),
+    run.checkpointer.last = Commit(run.sample, phase, step, last, run.phase_time, sim.time,
+                                   sim.state, committed_values(getfield(sim, :values)),
                                    resume_marks(run.outputs))
     return nothing
 end
@@ -230,8 +258,10 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     if step_due(phase, k)
         phase_output(sim, step_measurements(phase))
     end
-    log_message(sim, step_line(sim, phase, k))
     run = getfield(sim, :run)
+    if !run.quiet
+        log_message(sim, step_line(sim, phase, k))
+    end
     commit!(same ? sim : with_values(resume_from; step = k), run.phase, k; last)
     checkpoint_or_stop(run)
     # the checkpoint not counted in the next step
@@ -288,16 +318,19 @@ function adapt_threading(sim::Simulation, threading)
 end
 
 """
-    run_phases(sim, phases, start, done, ended, threading)
+    run_phases(sim, phases, start, done, ended, threading; final = true)
 
 run the phases from the phase `start`, its first `done` steps done, and the phase itself when
 `ended`, see `Commit`: each logged, given its `time_start`, run by `run_phase` and measured by
 its `final_measurements`, committed at its end, with a checkpoint when one is due, a stop asked
-for, or after the last phase when the run writes checkpoints, so that a new run does nothing
+for, or after the last phase when `final` and the run writes checkpoints, so that a new run does
+nothing
 """
-function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ended::Bool, threading)
+function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ended::Bool, threading;
+                    final::Bool = true)
     run = getfield(sim, :run)
     c = run.checkpointer
+    run.phases = phases
     for i in start:length(phases)
         phase = phases[i]
         d = i == start ? done : 0
@@ -306,7 +339,9 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         empty!(run.measures)
         adapt_threading(sim, threading)
         if d == 0
-            log_message(sim, "\n***** Starting phase \"$(phase.name)\" *****")
+            if !run.quiet
+                log_message(sim, "\n***** Starting phase \"$(phase.name)\" *****")
+            end
             if !isnothing(phase.time_start)
                 sim = Simulation(sim, sim.state, phase.time_start)
             end
@@ -326,16 +361,19 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
         end
         sim = td.value
         report_dropped(run)
-        log_message(sim, "***** Ending phase \"$(phase.name)\" after " *
-                         "$(round(td.time; digits = 3)) seconds, " *
-                         "$(Base.format_bytes(td.bytes)) allocated, peak memory " *
-                         "$(Base.format_bytes(Sys.maxrss())) *****")
-        # absent before Julia 1.11; it includes the recompilation
-        if haskey(td, :compile_time)
-            log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) seconds")
+        if !run.quiet
+            log_message(sim, "***** Ending phase \"$(phase.name)\" after " *
+                             "$(round(td.time; digits = 3)) seconds, " *
+                             "$(Base.format_bytes(td.bytes)) allocated, peak memory " *
+                             "$(Base.format_bytes(Sys.maxrss())) *****")
+            # absent before Julia 1.11; it includes the recompilation
+            if haskey(td, :compile_time)
+                log_message(sim, "compilation time was $(round(td.compile_time; digits = 3)) " *
+                                 "seconds")
+            end
         end
         commit!(sim, i + 1, 0)
-        checkpoint_or_stop(run; force = i == length(phases) && keeps_checkpoints(c))
+        checkpoint_or_stop(run; force = final && i == length(phases) && keeps_checkpoints(c))
     end
     return sim
 end

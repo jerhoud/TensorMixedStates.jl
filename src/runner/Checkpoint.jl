@@ -7,16 +7,18 @@
 
 the layout version of a checkpoint; `load_checkpoint` refuses a checkpoint of another one
 """
-const checkpoint_file_version = 5
+const checkpoint_file_version = 6
 
 """
-    Commit(phase, step, last, phase_time, time, state, values, marks)
+    Commit(sample, phase, step, last, phase_time, time, state, values, marks)
 
 a point a simulation can be resumed from, taken once everything the uninterrupted run writes
 before that point is written: a checkpoint writes a commit and nothing else, so that it holds the
 state, the counts and the outputs of one moment.
 
-- `phase`: the index of the phase to run or to go on with, one past the last once they are done
+- `sample`: the sample being run, see `Realizations`, 0 before the samples and without them
+- `phase`: the index of the phase to run or to go on with, one past the last once they are done,
+  in the phases of the sample
 - `step`: the steps of that phase done
 - `last`: whether the phase ended with that step, the commit holding its result
 - `phase_time`: the time that phase started from, from which its steps count
@@ -25,6 +27,7 @@ state, the counts and the outputs of one moment.
 - `marks`: how far each destination had got, see `resume_marks`
 """
 struct Commit
+    sample::Int
     phase::Int
     step::Int
     last::Bool
@@ -119,7 +122,8 @@ state_file(g::Int) = "checkpoint-$g.h5"
 
 the files a checkpoint writes in the directory of a simulation
 """
-const checkpoint_files = ("checkpoint.json", "checkpoint.json.tmp", state_file(1), state_file(2))
+const checkpoint_files = ("checkpoint.json", "checkpoint.json.tmp", state_file(1), state_file(2),
+                          "branch.h5", "branch.h5.tmp")
 
 """
     relative(d, dir)
@@ -163,6 +167,37 @@ function sync_file(path::String)
 end
 
 """
+    write_commit(file, k, dir, seed)
+
+write the commit `k` of a run in the directory `dir` with the seed `seed` to the state file
+`file`, made anew: its state and the values that are states saved as states, the rest serialized
+"""
+function write_commit(file::String, k::Commit, dir::String, seed::Integer)
+    rm(file; force = true)
+    # none before the first state, or after a CopyState that moved it away
+    if !isnothing(k.state)
+        save_state(file, "state", k.state)
+    end
+    rest = Dict{Symbol, Any}()
+    for (name, v) in k.values
+        if v isa AbstractState
+            save_state(file, state_name(name), v)
+        else
+            rest[name] = v
+        end
+    end
+    io = IOBuffer()
+    marks = Dict{Destination, Any}(relative(d, dir) => kept(m) for (d, m) in k.marks)
+    serialize(io, (; seed, k.sample, k.phase, k.step, k.last, k.phase_time, k.time, values = rest,
+                   states = [ name for (name, v) in k.values if v isa AbstractState ], marks))
+    # the file made here when no state was saved there
+    h5open(file, "cw") do f
+        f["commit"] = take!(io)
+    end
+    return nothing
+end
+
+"""
     write_checkpoint(c)
 
 write the last commit down. Its state and the values that are states go to whichever of
@@ -181,32 +216,12 @@ function write_checkpoint(c::Checkpointer)
     end
     g = c.generation == 1 ? 2 : 1
     file = joinpath(c.dir, state_file(g))
-    rm(file; force = true)
-    # none before the first state, or after a CopyState that moved it away
-    if !isnothing(k.state)
-        save_state(file, "state", k.state)
-    end
-    rest = Dict{Symbol, Any}()
-    for (name, v) in k.values
-        if v isa AbstractState
-            save_state(file, state_name(name), v)
-        else
-            rest[name] = v
-        end
-    end
-    io = IOBuffer()
-    marks = Dict{Destination, Any}(relative(d, c.dir) => kept(m) for (d, m) in k.marks)
-    serialize(io, (; c.seed, k.phase, k.step, k.last, k.phase_time, k.time, values = rest,
-                   states = [ name for (name, v) in k.values if v isa AbstractState ], marks))
-    # the file made here when no state was saved there
-    h5open(file, "cw") do f
-        f["commit"] = take!(io)
-    end
+    write_commit(file, k, c.dir, c.seed)
     tmp = checkpoint_json(c.dir) * ".tmp"
     open(tmp, "w") do f
         JSON.print(f, Dict("version" => checkpoint_file_version, "julia" => string(VERSION),
-                           "seed" => string(c.seed), "phase" => k.phase, "step" => k.step,
-                           "time" => string(k.time),
+                           "seed" => string(c.seed), "sample" => k.sample, "phase" => k.phase,
+                           "step" => k.step, "time" => string(k.time),
                            "state" => state_file(g)))
     end
     # on the disk before checkpoint.json names them: a power cut could otherwise leave it naming
@@ -232,6 +247,24 @@ whether the directory holds a checkpoint
 has_checkpoint(dir::String) = isfile(checkpoint_json(dir))
 
 """
+    read_commit(file, dir)
+
+the commit the state file `file` of the directory `dir` holds, see `write_commit`, and the seed
+it was written with
+"""
+function read_commit(file::String, dir::String)
+    k = h5open(f -> deserialize(IOBuffer(read(f["commit"]))), file, "r")
+    values = Dict{Symbol, Any}(k.values)
+    for name in k.states
+        values[name] = load_state(file, state_name(name))
+    end
+    marks = Dict{Destination, Any}(rooted(d, dir) => m for (d, m) in k.marks)
+    state = h5open(f -> haskey(f, "state"), file, "r") ? load_state(file, "state") : nothing
+    return (Commit(k.sample, k.phase, k.step, k.last, k.phase_time, k.time, state, values, marks),
+            k.seed)
+end
+
+"""
     load_checkpoint(dir)
 
 the commit of the checkpoint of `dir`, the generation of its state file and the seed of the
@@ -254,13 +287,32 @@ function load_checkpoint(dir::String)
     if !isfile(file)
         error("the checkpoint of $dir names the state file $(meta["state"]), which is missing")
     end
-    k = h5open(f -> deserialize(IOBuffer(read(f["commit"]))), file, "r")
-    values = Dict{Symbol, Any}(k.values)
-    for name in k.states
-        values[name] = load_state(file, state_name(name))
+    commit, seed = read_commit(file, dir)
+    return (commit, meta["state"] == state_file(2) ? 2 : 1, seed)
+end
+
+"""
+    write_branch(dir, k, seed)
+    read_branch(dir)
+
+write the commit `k` of the branch point of the samples to the file `branch.h5` of the directory
+`dir`, see `write_commit`, renamed into place once on the disk, so that a crash leaves no part of
+it; and read it back, see `read_commit`
+"""
+function write_branch(dir::String, k::Commit, seed::Integer)
+    file = joinpath(dir, "branch.h5")
+    tmp = file * ".tmp"
+    write_commit(tmp, k, dir, seed)
+    sync_file(tmp)
+    Base.Filesystem.rename(tmp, file)
+    return nothing
+end
+
+function read_branch(dir::String)
+    file = joinpath(dir, "branch.h5")
+    if !isfile(file)
+        error("the checkpoint of $dir is in a sample, and the file branch.h5 the samples start " *
+              "from is missing")
     end
-    marks = Dict{Destination, Any}(rooted(d, dir) => m for (d, m) in k.marks)
-    state = h5open(f -> haskey(f, "state"), file, "r") ? load_state(file, "state") : nothing
-    commit = Commit(k.phase, k.step, k.last, k.phase_time, k.time, state, values, marks)
-    return (commit, meta["state"] == state_file(2) ? 2 : 1, k.seed)
+    return first(read_commit(file, dir))
 end
