@@ -9,14 +9,14 @@
 using TensorMixedStates: Realization
 
 # the seeds of a sample written again from SplitMix64, apart from the code under test
-function mix(x::UInt64)
+function mix64(x::UInt64)
     x += 0x9e3779b97f4a7c15
     x = (x ⊻ (x >> 30)) * 0xbf58476d1ce4e5b9
     x = (x ⊻ (x >> 27)) * 0x94d049bb133111eb
     return x ⊻ (x >> 31)
 end
 seeded(seed, sample, stream) =
-    Xoshiro(mix(mix(mix(UInt64(seed)) ⊻ UInt64(sample)) ⊻ UInt64(stream)))
+    Xoshiro(mix64(mix64(mix64(UInt64(seed)) ⊻ UInt64(sample)) ⊻ UInt64(stream)))
 
 # a phase of a single call writing by itself between its steps
 struct Kicks <: TensorMixedStates.AbstractPhase

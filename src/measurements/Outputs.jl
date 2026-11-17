@@ -610,6 +610,12 @@ function RowSum(time, cells::Vector{Pair{String, Any}})
                   zeros(k))
 end
 
+# whether two times of a row are the same but for rounding, see `rounding_tol`: a step computed
+# from another duration differs by an ulp
+same_time(a, b) =
+    isequal(a, b) ||
+    (a isa Number && b isa Number && abs(a - b) ≤ rounding_tol * max(abs(a), abs(b)))
+
 """
     added(s, cells, time, key, d; weight = 1)
 
@@ -618,7 +624,7 @@ the same time, columns and missing cells
 """
 function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d;
                weight::Real = 1)
-    if !isequal(time, s.time)
+    if !same_time(time, s.time)
         error("the samples of $d have the times $(s.time) and $time at $(row_place(key)): " *
               "averaged rows need the same times, which EachSample(…) does not")
     elseif first.(cells) ≠ s.columns
