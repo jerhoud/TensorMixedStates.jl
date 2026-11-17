@@ -61,16 +61,32 @@ setproperty!(::Realization, ::Symbol, _) =
           "Update among those phases changes the simulation")
 
 """
+    splitmix(x)
+
+the finalizer of SplitMix64 (Steele, Lea and Flood 2014), a bijection of `UInt64` mixing its bits
+"""
+function splitmix(x::UInt64)
+    x += 0x9e3779b97f4a7c15
+    x = (x ⊻ (x >> 30)) * 0xbf58476d1ce4e5b9
+    x = (x ⊻ (x >> 27)) * 0x94d049bb133111eb
+    return x ⊻ (x >> 31)
+end
+
+"""
     disorder_rng(seed, sample)
     sample_rng(seed, sample)
 
 the generators of a sample, for its disorder and for its phases (`sim.rng`), independent of each
 other and of those of the other samples
 """
-disorder_rng(seed::Integer, sample::Int) = Xoshiro(UInt64[seed, sample])
+disorder_rng(seed::Integer, sample::Int) = Xoshiro(mixed_seed(seed, sample, 0))
 
-# the third number, 1, leaves room for several trajectories of one disorder
-sample_rng(seed::Integer, sample::Int) = Xoshiro(UInt64[seed, sample, 1])
+# the stream 1 leaves room for several trajectories of one disorder
+sample_rng(seed::Integer, sample::Int) = Xoshiro(mixed_seed(seed, sample, 1))
+
+# an integer seed, Julia having changed how it hashes a seed of several numbers after 1.10
+mixed_seed(seed::Integer, sample::Int, stream::Int) =
+    splitmix(splitmix(splitmix(UInt64(seed)) ⊻ UInt64(sample)) ⊻ UInt64(stream))
 
 """
     realized_phases(p, c)

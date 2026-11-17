@@ -222,7 +222,8 @@ erasing the directory.
 The generator of the random draws of the run is part of a checkpoint, so that a resumed run
 draws the same numbers as the uninterrupted one, in a `CreateState` with `randomize`, or in a
 measurement or a phase drawing with `c.rng` or `sim.rng`. A draw made with another generator,
-the global one of Julia for instance, is not reproduced.
+the global one of Julia for instance, is not reproduced. A seed gives the same draws for one minor
+version of Julia, which `stamp` records, not necessarily for another.
 
 A checkpoint is resumed only by the program that wrote it: the program run must be the same,
 byte for byte, as the copy `prog.jl` in the directory, include the same files as the copies in
@@ -342,10 +343,11 @@ of the first sample only, and a line for each sample.
 
 The branch point is kept in the file `branch.h5` of the directory, and a run with samples ends
 with a checkpoint, even without periodic ones. A stopped run resumes in the sample, the phase
-and the step it had reached. The environment variable `TMS_SAMPLES` overrides `samples`: running the program again
-with `TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001 from the branch point,
-without running the phases before it again, and writes the same files as 2000 samples in one
-run. With fewer samples than those done, a run only ends the sample it had stopped in.
+and the step it had reached. The environment variable `TMS_SAMPLES` overrides `samples`:
+running the program again with `TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001
+from the branch point, without running the phases before it again, and writes the same files as
+2000 samples in one run. With fewer samples than those done, a run only ends the sample it had
+stopped in.
 
 ## Measurements
 

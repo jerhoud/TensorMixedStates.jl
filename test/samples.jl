@@ -8,6 +8,16 @@
 
 using TensorMixedStates: Realization
 
+# the seeds of a sample written again from SplitMix64, apart from the code under test
+function mix(x::UInt64)
+    x += 0x9e3779b97f4a7c15
+    x = (x ⊻ (x >> 30)) * 0xbf58476d1ce4e5b9
+    x = (x ⊻ (x >> 27)) * 0x94d049bb133111eb
+    return x ⊻ (x >> 31)
+end
+seeded(seed, sample, stream) =
+    Xoshiro(mix(mix(mix(UInt64(seed)) ⊻ UInt64(sample)) ⊻ UInt64(stream)))
+
 # a chain of four qubits, its couplings drawn by the generator of the sample, evolved three steps
 function quench(c; measurements = "steps" => [:step, X(1), Z])
     J = [1 + 0.5 * randn(c.rng) for _ in 1:3]
@@ -30,14 +40,14 @@ sampled(name; samples = 3, phases = [CreateState{Pure}(4, Qubit(), "Up"), Realiz
         for k in 1:3
             hand = runTMS(SimData(name = "h$k",
                                   phases = [CreateState{Pure}(4, Qubit(), "Up"),
-                                            quench(Realization(k, Xoshiro(UInt64[7, k]));
+                                            quench(Realization(k, seeded(7, k, 0));
                                                    measurements = [])],
                                   final_measurements = Data("end") => [X(1), Z(2)]))
             @test rows[k]["X(1)"] == hand.data["end"][1]["X(1)"]
             @test rows[k]["Z(2)"] == hand.data["end"][1]["Z(2)"]
             # the phases draw with the generator of the sample, the disorder with its own, both
             # seeded by the seed of the run and the sample
-            @test rows[k]["draw"] == rand(Xoshiro(UInt64[7, k, 1]))
+            @test rows[k]["draw"] == rand(seeded(7, k, 1))
         end
         @test rows[1]["X(1)"] ≠ rows[2]["X(1)"]
         # the averages of the samples
