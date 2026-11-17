@@ -280,6 +280,54 @@ on some sites, and a phase of your own made of steps at the step it reached, see
 The other phases are short enough to be replayed, and a checkpoint is taken between phases
 whenever one is due.
 
+## Samples and disorder
+
+A simulation with `samples` runs its last phases many times, once for each sample, each sample
+with its own draw of the disorder. The phases before the last phase, `Realizations`, run once
+and lead to the branch point; each sample starts again from the state they reached and runs the
+phases the function of `Realizations` returns.
+
+```julia
+runTMS(SimData(
+    name = "disordered_ground",
+    seed = 1,
+    samples = 1000,
+    phases = [
+        CreateState{Pure}(10, Qubit(), "Up"),
+        Realizations() do c
+            J = [1 + 0.1 * randn(c.rng) for i in 1:9]
+            H = -sum(J[i] * Z(i) * Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10)
+            GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 20, tol = 1e-10), limits = lim)
+        end,
+    ],
+    final_measurements = "energies" => [:sample, :energy, Z],
+))
+```
+
+The function is given `c.sample`, the index of the sample, and `c.rng`, the generator it draws
+the disorder with, and returns the phases of that sample. It must draw with `c.rng` alone, so
+that a sample can be made again, and return the same phases, by type and name, for every
+sample: only their operators and values change. It is called once when the `SimData` is
+written, so that its phases are checked before the run, and the phases of each sample are
+checked again before it runs.
+
+Each sample draws with generators of its own, made from the seed of the run and the index of the
+sample: `c.rng` for its disorder, and `sim.rng` for its phases and measurements. A sample is
+thus the same whichever run computes it.
+
+The final measurements of the `SimData` are made at the end of each sample, and the value
+`:sample` gives its index to the measurements: the file `energies` above holds a row for each
+sample. Averages, distributions and error bars are computed from those rows after the run, from
+the files or from `sim.data`, whose `Data` destinations hold the rows of every sample. The log
+writes the phases and steps of the first sample only, and a line for each sample.
+
+The branch point is kept in the file `branch.h5` of the directory, and a run with samples ends
+with a checkpoint, even without periodic ones. A stopped run resumes in the sample, the phase and the step it had
+reached. The environment variable `TMS_SAMPLES` overrides `samples`: running the program again
+with `TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001 from the branch point,
+without running the phases before it again, and writes the same files as 2000 samples in one
+run. With fewer samples than those done, a run only ends the sample it had stopped in.
+
 ## Measurements
 
 Measurements are specified in the `measurements` field of `Evolve`, `GroundState`,

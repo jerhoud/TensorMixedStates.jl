@@ -159,6 +159,12 @@ Running the program again resumes a stopped run from its checkpoint;
 `TMS_CHECKPOINT_INTERVAL` set them; a file `restart` in the directory, or `cleanTMS(sd)`, starts
 over. `runTMS(sd; output = devnull)` makes no directory, a `SaveState` alone writing its file.
 
+Disorder: `SimData(samples = N, …)` whose last phase, `Realizations() do c … end`, returns the
+phases of a sample, drawing its disorder with `c.rng`; the phases before it run once, the final
+measurements of the `SimData` at the end of each sample, `:sample` giving its index. Averages
+are computed from those rows after the run; `TMS_SAMPLES=2N julia prog.jl` prolongs a finished
+run.
+
 ## When something fails
 
 An error on a name or a keyword of version 1.x ends with a line saying what 2.0 writes instead,
