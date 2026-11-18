@@ -491,6 +491,19 @@ function check_removable(name::AbstractString)
     end
 end
 
+# the content of the file running of `dir`, nothing without one: read once, its process removing
+# it without the lock
+function running_marker(dir::String)
+    try
+        return read(joinpath(dir, "running"), String)
+    catch e
+        if e isa SystemError && e.errnum == Libc.ENOENT
+            return nothing
+        end
+        rethrow()
+    end
+end
+
 """
     check_unlocked(dir)
 
@@ -498,12 +511,10 @@ refuse a directory whose file `running` marks a run that may still be going on, 
 `live_marker`, and return the parts of a stale one, `nothing` without one
 """
 function check_unlocked(dir::String)
-    file = joinpath(dir, "running")
-    if !isfile(file)
+    marker = running_marker(dir)
+    if isnothing(marker)
         return nothing
-    end
-    marker = read(file, String)
-    if live_marker(marker)
+    elseif live_marker(marker)
         parts = split(marker)
         since = length(parts) ≥ 3 ? ", started $(parts[3])" : ""
         error("$dir holds the file running of another run$since, which may still be going on: " *
@@ -1232,8 +1243,10 @@ end
 whether the file `running` of the directory `dir` marks a run that may still be going on, see
 `live_marker`; and the numbers of the parts of the simulation of directory `dir` so marked
 """
-live_run(dir::String) = isfile(joinpath(dir, "running")) &&
-                        live_marker(read(joinpath(dir, "running"), String))
+function live_run(dir::String)
+    marker = running_marker(dir)
+    return !isnothing(marker) && live_marker(marker)
+end
 
 function part_numbers(dir::String)
     parts = joinpath(dir, "parts")
@@ -1256,7 +1269,8 @@ directory taken, see `claim_run`
 """
 function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true,
                          merging = (format = "%.13g", tol = [], min_samples = 10))
-    prefix = live_run(dir)
+    marker = running_marker(dir)
+    prefix = !isnothing(marker) && live_marker(marker)
     if !first && isfile(joinpath(dir, "stop"))
         return :stop => nothing
     elseif first && !prefix && isempty(live_parts(dir))
@@ -1306,7 +1320,7 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
         end
         return :part => accepted
     elseif prefix
-        return :wait => split(read(joinpath(dir, "running"), String))
+        return :wait => split(marker)
     end
     return :prefix => claim_run(dir, src_path)
 end

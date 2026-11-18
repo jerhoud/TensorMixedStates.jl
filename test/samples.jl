@@ -672,5 +672,9 @@ end
         got = T.with_lock(time, dir)
         wait(holder)
         @test released[] ≤ got < released[] + 1
+        # the file running read once, absent when its process removed it
+        @test isnothing(T.running_marker(dir)) && !T.live_run(dir)
+        write(joinpath(dir, "running"), "host 1 date\n")
+        @test T.running_marker(dir) == "host 1 date\n"
     end
 end
