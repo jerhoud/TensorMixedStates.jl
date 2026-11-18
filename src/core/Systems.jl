@@ -330,7 +330,7 @@ all its sites.
     siteind(Pure, system, 1)
     siteinds(Mixed, system)
 """
-siteind(::Type{Pure}, system::System, i::Int) = site_index(system, i)
+siteind(::Type{<:Ket}, system::System, i::Int) = site_index(system, i)
 
 function siteind(::Type{Mixed}, system::System, i::Int)
     x = mixed_space_index(site_index(system, i), system[i])

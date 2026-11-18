@@ -95,7 +95,7 @@ state alone, `a` naming the operator in the refusals
 """
 function from_terms(::Type{R}, system::System, a, terms::Vector{Term},
                     limits::Limits = Limits()) where R
-    width = R === Pure ? sum(t -> term_width(system, t), terms; init = 0.0) : 0.0
+    width = R <: Ket ? sum(t -> term_width(system, t), terms; init = 0.0) : 0.0
     return CompactedOp{R}(system, compacted(R, system, terms, limits)...,
                           sum(term_size, terms; init = 0.0), width,
                           terms_flux(R, system, a, terms), terms)

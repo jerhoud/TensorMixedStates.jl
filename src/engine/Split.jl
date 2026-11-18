@@ -10,7 +10,7 @@
 the dimension of the matrix of an operator on `site` for the representation `R`: that of the
 site for `Pure`, its square for `Mixed`, a superoperator acting on its density matrices
 """
-block_dim(::Type{Pure}, site::AbstractSite) = dim(site)
+block_dim(::Type{<:Ket}, site::AbstractSite) = dim(site)
 block_dim(::Type{Mixed}, site::AbstractSite) = dim(site)^2
 
 """
@@ -38,7 +38,7 @@ matrix: the charge and the parity of an operator of one site made of that elemen
 `Mixed`, `a` and `b` are elements ``(k, b)`` of the density matrix, the ket faster, of the
 charge of the mixed index, that of the ket minus that of the bra, starred where it is strong.
 """
-function element_grades(::Type{Pure}, site::AbstractSite)
+function element_grades(::Type{<:Ket}, site::AbstractSite)
     c = basis_charges(site)
     p = fermion_parities(site)
     return vec([ Grade(c[a] - c[b], mod(p[a] + p[b], 2)) for a in eachindex(c), b in eachindex(c) ])
@@ -78,7 +78,7 @@ the sign of each element of an operator on `sites`, one axis per site, see `stri
 superoperator on `Mixed` sites takes the sign of its kets times that of its bras: it is a sum of
 `ρ ↦ A ρ B†`, whose elements are those of `A` times those of `conj(B)`.
 """
-function string_signs(::Type{Pure}, sites::Vector{<:AbstractSite})
+function string_signs(::Type{<:Ket}, sites::Vector{<:AbstractSite})
     d = [ dim(s) for s in sites ]
     p = [ fermion_parities(s) for s in sites ]
     js = eachindex(d)

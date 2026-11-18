@@ -57,7 +57,7 @@ of the site taken on both sides, ``\\rho \\mapsto f\\rho f``, and the function g
 projector `p` taken on the kets alone, ``\\rho \\mapsto p\\rho``: `f` and `p` themselves on a
 pure state
 """
-sign_blocks(::Type{Pure}, ::System, ::Int, f::AbstractMatrix) = (f, p -> p)
+sign_blocks(::Type{<:Ket}, ::System, ::Int, f::AbstractMatrix) = (f, p -> p)
 
 function sign_blocks(::Type{Mixed}, system::System, i::Int, f::AbstractMatrix)
     o = mixed_elements(system, i)

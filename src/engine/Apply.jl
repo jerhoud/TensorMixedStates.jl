@@ -469,7 +469,7 @@ superoperator ``\\rho \\mapsto m\\rho m^\\dagger`` as a block; on several,
 `gate_mpo`, made to act on the mixed indices, see `on_mixed_index`: one gate on consecutive
 sites small enough, see `dense_enough`, an MPO on its sites otherwise
 """
-gate_steps!(steps::Vector, ::Type{Pure}, system::System, m::AbstractMatrix, ks) =
+gate_steps!(steps::Vector, ::Type{<:Ket}, system::System, m::AbstractMatrix, ks) =
     block_step!(steps, Pure, system, m, ks)
 
 function gate_steps!(steps::Vector, ::Type{Mixed}, system::System, m::AbstractMatrix, ks)
@@ -533,7 +533,7 @@ function piece_steps!(steps::Vector, ::Type{R}, system::System, p::IndexedOp{IsO
     ts = developed(system, gathered(system, p))
     if !isnothing(ts) && length(ts) == 1
         return one_site_gates!(steps, R, system, only(check_flux(Pure, system, p, ts)))
-    elseif R === Pure
+    elseif R <: Ket
         return pre_step!(steps, PreMPO(system, [compacted_op(system, p)]))
     end
     # the sides one after the other, not their product, whose reduction can lose the parts of

@@ -378,6 +378,8 @@ the type of the state `statename`, which its file names `name`
 function state_type(name::String, statename::String)
     if name == "Pure"
         return State{Pure}
+    elseif name == "Trajectory"
+        return State{Trajectory}
     elseif name == "Mixed"
         return State{Mixed}
     end

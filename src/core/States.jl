@@ -340,7 +340,7 @@ end
 
 the ITensor of the local state `state` on site `i` of `system`, in the representation `R`
 """
-function make_one_state(::Type{Pure}, system::System, i::Int, x)
+function make_one_state(::Type{<:Ket}, system::System, i::Int, x)
     v = local_state(system[i], x)
     if !(v isa Vector)
         hint = x isa Pair ? ": A => λ gives a vector only for a diagonal operator and a " *
@@ -973,7 +973,7 @@ end
 the fermionic parity of each value of the index of site `i` of `system`, see
 `fermion_parities`, on a density matrix those of the kets and those of the bras
 """
-element_parities(::Type{Pure}, system::System, i::Int) = (collect(fermion_parities(system[i])),)
+element_parities(::Type{<:Ket}, system::System, i::Int) = (collect(fermion_parities(system[i])),)
 
 function element_parities(::Type{Mixed}, system::System, i::Int)
     p = fermion_parities(system[i])

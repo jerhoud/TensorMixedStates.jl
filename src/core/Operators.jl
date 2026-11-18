@@ -25,11 +25,26 @@ the supertype of `Pure` and `Mixed`, the representations of a state this package
 abstract type PM <: Representation end
 
 """
+    abstract type Ket <: PM
+
+the supertype of `Pure` and `Trajectory`, the representations whose tensors are wave functions
+"""
+abstract type Ket <: PM end
+
+"""
     Pure
 
 the representation of a state as a wave function, as in `State{Pure}`.
 """
-struct Pure <: PM end
+struct Pure <: Ket end
+
+"""
+    Trajectory
+
+the representation of a state as one quantum trajectory, a wave function whose average over the
+trajectories is the density matrix (in development, not exported)
+"""
+struct Trajectory <: Ket end
 
 """
     Mixed

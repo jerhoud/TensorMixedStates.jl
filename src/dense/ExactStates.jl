@@ -5,6 +5,9 @@
 
 export ExactState
 
+no_exact_trajectory() =
+    error("ExactState holds Pure or Mixed states: run a Trajectory simulation with State")
+
 """
     ExactState{R}(system, states; max_dense = nothing)
     ExactState(state::State; max_dense = nothing)
@@ -37,6 +40,9 @@ struct ExactState{R <: PM} <: AbstractState
     state::VecOrMat{ComplexF64}
     # copied: the state never shares the array of the caller
     function ExactState{R}(system::System, x::AbstractVecOrMat, ::Val{:raw}) where {R <: PM}
+        if R === Trajectory
+            no_exact_trajectory()
+        end
         # a Float64, which does not wrap around as an Int does on many sites
         d = prod(float(dim(s)) for s in system.sites)
         if float.(size(x)) ≠ (R === Mixed ? (d, d) : (d,))
@@ -48,8 +54,12 @@ struct ExactState{R <: PM} <: AbstractState
     end
 end
 
-ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing) where {R <: PM} =
-    ExactState(State{R}(args...); max_dense)
+function ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing) where {R <: PM}
+    if R === Trajectory
+        no_exact_trajectory()
+    end
+    return ExactState(State{R}(args...); max_dense)
+end
 
 # the limits, of the conversion between types of states, without use
 ExactState(state::State{Pure}; max_dense::Union{Nothing, Int} = nothing,

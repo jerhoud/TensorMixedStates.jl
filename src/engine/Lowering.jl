@@ -369,7 +369,7 @@ strings_on(t::Term, k::Int) = on_string(t.kets, k) + 2on_string(t.bras, k)
 the matrix of the strings `g`, see `strings_on`, on a site whose `F` has the matrix `f`: `F`
 for an operator, ``\\rho \\mapsto F^a \\rho F^b`` for a superoperator, `R = Mixed`
 """
-string_matrix(::Type{Pure}, f::AbstractMatrix, g::Int) = isodd(g) ? f : one(f)
+string_matrix(::Type{<:Ket}, f::AbstractMatrix, g::Int) = isodd(g) ? f : one(f)
 string_matrix(::Type{Mixed}, f::AbstractMatrix, g::Int) =
     kron(isodd(g >> 1) ? f : one(f), isodd(g) ? f : one(f))
 
@@ -662,7 +662,7 @@ end
 the flux of the matrix `m` of a term of `what` on `site`, that of an operator for `Pure`, of a
 superoperator for `Mixed`
 """
-block_flux(::Type{Pure}, m::AbstractMatrix, what, site::AbstractSite) = charge_flux(m, what, site)
+block_flux(::Type{<:Ket}, m::AbstractMatrix, what, site::AbstractSite) = charge_flux(m, what, site)
 block_flux(::Type{Mixed}, m::AbstractMatrix, what, site::AbstractSite) = mixed_flux(m, what, site)
 
 """

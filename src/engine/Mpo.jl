@@ -11,7 +11,7 @@ the order on the index of each site of the elements of the matrix of an operator
 to take for `Pure`, see `mixed_elements` for `Mixed`, read once for each kind of site, which
 alone gives it
 """
-block_orders(::Type{Pure}, ::System) = Vector{Int}[]
+block_orders(::Type{<:Ket}, ::System) = Vector{Int}[]
 
 function block_orders(::Type{Mixed}, system::System)
     orders = Dict{AbstractSite, Vector{Int}}()
@@ -93,7 +93,7 @@ show(io::IO, pre::PreMPO{R}) where R =
 the matrix `m` of an operator on site `k`, its rows and columns in the order of the index of
 the site, see `block_orders`
 """
-on_index(::PreMPO{Pure}, ::Int, m::Matrix) = m
+on_index(::PreMPO{<:Ket}, ::Int, m::Matrix) = m
 on_index(pre::PreMPO{Mixed}, k::Int, m::Matrix) = m[pre.orders[k], pre.orders[k]]
 
 """

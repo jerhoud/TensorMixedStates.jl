@@ -22,7 +22,7 @@ says what belongs there. To add a group, create the file and add its name here.
 """
 const GROUPS = ["building", "channels", "compact", "docs", "evolve", "exact", "extension", "fermions",
                 "hints", "observables", "operators", "outputs", "prepared", "runner", "samples",
-                "sampling", "searches", "sites", "states_io"]
+                "sampling", "searches", "sites", "states_io", "trajectory"]
 
 # without arguments everything runs, otherwise only the groups given on the command
 # line, as in `Pkg.test(test_args = ["observables", "sites"])`

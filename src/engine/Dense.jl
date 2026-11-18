@@ -80,7 +80,7 @@ end
 the terms `terms` of an operator applied to the vector `x` or to the kets of the matrix `x`, for
 `Pure`, or those of a superoperator applied to the density matrix `x`, for `Mixed`, see `lower`
 """
-function dense_acted(::Type{Pure}, system::System, ts::Vector{Term}, x::AbstractVecOrMat)
+function dense_acted(::Type{<:Ket}, system::System, ts::Vector{Term}, x::AbstractVecOrMat)
     dims = site_dims(system)
     if size(x, 1) ≠ prod(dims)
         error("a dense state of the system has $(prod(dims)) rows, not $(size(x, 1))")
