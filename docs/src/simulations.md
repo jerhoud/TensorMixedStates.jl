@@ -339,17 +339,33 @@ sample, for distributions or analyses of one's own after the run. The value `:sa
 index of the sample to any measurement. A stream, `"stdout"` for instance, and a destination of
 one's own are written for each sample, without that column.
 
-An averaged file is written whole, from the samples ended, at each checkpoint and at the end of
-the run; follow a long run by setting `checkpoint_interval`. The log writes the phases and steps
-of the first sample only, and a line for each sample.
+The phases before the branch point run once, in the directory of the simulation, whose log
+tells them, and end with the file `branch.h5`. The samples are then run by parts, each in a
+directory of its own, `parts/1`, `parts/2`, …, with its log, which tells the phases and steps of
+its first sample only and a line for each sample: a part takes the next sample no part has
+taken, runs it, and leaves its rows in the directory `pending`. The samples ended are merged into
+the files and the `Data` of the simulation in their order, up to the first one not ended, so
+that they hold samples 1 to m, the same to the last bit whichever process ran each, and an
+average never favours the samples that end first. An averaged file is written whole at each
+merge.
 
-The branch point is kept in the file `branch.h5` of the directory, and a run with samples ends
-with a checkpoint, even without periodic ones. A stopped run resumes in the sample, the phase
-and the step it had reached. The environment variable `TMS_SAMPLES` overrides `samples`:
-running the program again with `TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001
-from the branch point, without running the phases before it again, and writes the same files as
-2000 samples in one run. With fewer samples than those done, a run only ends the sample it had
-stopped in.
+Running the program several times at once, `julia prog.jl & julia prog.jl & …`, runs the samples
+on as many cores, each process with its own memory: a process waits while another runs the
+phases before the branch point, takes a part, and ends when no sample is left, its `Simulation`
+holding the state of the last sample it ran and the `Data` merged so far; the console says how
+many samples are merged and how many processes still run. A sample runs on a single thread, BLAS
+and Strided included, so that it is the same whatever the threads of the process, which change
+the rounding of the products: launch a process for each core instead. The `threading` of
+`runTMS` applies to the phases before the branch point.
+
+A part stopped, or left by a process that died, is taken over by the next process, which resumes
+it where its checkpoint is. The file `stop` stops all the parts in the directory of the
+simulation, one part in its own; a run finding no other process running removes it. A sample
+that fails stops the other parts once they end theirs, and the next run tries it again. The
+environment variable `TMS_SAMPLES` overrides `samples`: running the program again with
+`TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001 from the branch point, without
+running the phases before it again, and writes the same files as 2000 samples in one run. With
+fewer samples than those merged, a run changes nothing.
 
 ## Measurements
 

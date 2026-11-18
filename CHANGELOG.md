@@ -14,12 +14,13 @@ the reference article.
 
 - `SimData(samples = N)` and the phase `Realizations(f)`: N samples of a simulation, each drawing its disorder with `c.rng`, run from the state the phases before `Realizations` reached, computed once, its files and `Data` holding the averages over the samples with their errors; `TMS_SAMPLES` prolongs a finished run.
 - `EachSample(d)`: the destination `d` written a row for each sample.
+- The samples of a simulation run on as many cores as processes running the program at once, each sample on one thread, merged in their order: the same results to the last bit whatever the number of processes.
 
 ### Changed
 
 - The checkpoints of 2.1 are not resumed: start such a run over.
 - `sample` is reserved, as `step` and `rng`: no value or state of a simulation may take that name.
-- `branch.h5` is a file of the simulation directory, which no destination or saved state may take.
+- `branch.h5`, `lock`, `queue.json`, `merged.jls` and the directories `parts` and `pending` are files of the simulation directory, which no destination or saved state may take.
 - A resumption that `TMS_ACCEPT_PROGRAM=1` allows with an edited program is noted in the log.
 
 ## [2.1.0] - 2026-11-09

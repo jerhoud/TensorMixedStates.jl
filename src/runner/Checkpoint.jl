@@ -7,7 +7,7 @@
 
 the layout version of a checkpoint; `load_checkpoint` refuses a checkpoint of another one
 """
-const checkpoint_file_version = 6
+const checkpoint_file_version = 7
 
 """
     Commit(sample, phase, step, last, phase_time, time, state, values, marks)
@@ -48,16 +48,18 @@ committed_values(values::AbstractDict) =
     Dict{Symbol, Any}(k => v isa AbstractRNG ? copy(v) : v for (k, v) in values)
 
 """
-    Checkpointer(dir, seed; interval = 0, max_time = Inf)
+    Checkpointer(dir, seed; interval = 0, max_time = Inf, main = "")
 
 the checkpointing of a run: its directory, empty for a run without one, which writes no
-checkpoint, the seed of its generator, which a checkpoint keeps, the seconds between two
-checkpoints, zero for none but those of a stop, and the deadline after which the run stops; the
-last commit, the commit the checkpoint on the disk holds and which of the two generations of
+checkpoint, the directory of the simulation for a part of it, whose file `stop` stops it as
+well, empty otherwise, the seed of its generator, which a checkpoint keeps, the seconds between
+two checkpoints, zero for none but those of a stop, and the deadline after which the run stops;
+the last commit, the commit the checkpoint on the disk holds and which of the two generations of
 state files it names, 0 for none
 """
 mutable struct Checkpointer
     dir::String
+    main::String
     seed::Integer
     interval::Float64
     deadline::Float64
@@ -67,8 +69,9 @@ mutable struct Checkpointer
     generation::Int
 end
 
-Checkpointer(dir::String, seed::Integer; interval::Real = 0, max_time::Real = Inf) =
-    Checkpointer(dir, seed, interval, max_time == Inf ? Inf : time() + max_time,
+Checkpointer(dir::String, seed::Integer; interval::Real = 0, max_time::Real = Inf,
+             main::String = "") =
+    Checkpointer(dir, main, seed, interval, max_time == Inf ? Inf : time() + max_time,
                  interval ≤ 0 ? Inf : time() + interval, nothing, nothing, 0)
 
 """
@@ -95,10 +98,11 @@ keeps_checkpoints(c::Checkpointer) = c.interval > 0 || c.generation ≠ 0
 """
     stop_requested(c)
 
-whether the run should stop now: its deadline is past, or the file `stop` is in its directory
+whether the run should stop now: its deadline is past, or the file `stop` is in its directory or,
+for a part, in that of the simulation
 """
 stop_requested(c::Checkpointer) =
-    time() ≥ c.deadline || (!isempty(c.dir) && isfile(joinpath(c.dir, "stop")))
+    time() ≥ c.deadline || any(d -> !isempty(d) && isfile(joinpath(d, "stop")), (c.dir, c.main))
 
 """
     checkpoint_due(c)
@@ -123,7 +127,8 @@ state_file(g::Int) = "checkpoint-$g.h5"
 the files a checkpoint writes in the directory of a simulation
 """
 const checkpoint_files = ("checkpoint.json", "checkpoint.json.tmp", state_file(1), state_file(2),
-                          "branch.h5", "branch.h5.tmp")
+                          "branch.h5", "branch.h5.tmp", "lock", "queue.json", "queue.json.tmp",
+                          "merged.jls", "merged.jls.tmp")
 
 """
     relative(d, dir)
@@ -220,7 +225,8 @@ function write_checkpoint(c::Checkpointer)
     end
     g = c.generation == 1 ? 2 : 1
     file = joinpath(c.dir, state_file(g))
-    write_commit(file, k, c.dir, c.seed)
+    # the files of a part named relative to the directory of the simulation, where they are
+    write_commit(file, k, isempty(c.main) ? c.dir : c.main, c.seed)
     tmp = checkpoint_json(c.dir) * ".tmp"
     open(tmp, "w") do f
         JSON.print(f, Dict("version" => checkpoint_file_version, "julia" => string(VERSION),
@@ -269,14 +275,15 @@ function read_commit(file::String, dir::String)
 end
 
 """
-    load_checkpoint(dir)
+    load_checkpoint(dir, root = dir)
 
-the commit of the checkpoint of `dir`, the generation of its state file and the seed of the
-generator of the run. A checkpoint of
+the commit of the checkpoint of `dir`, its files named relative to `root`, the directory of the
+simulation for a part of it, the generation of its state file and the seed of the generator of
+the run. A checkpoint of
 another layout, or written by another minor version of Julia, whose serialization may differ,
 is refused.
 """
-function load_checkpoint(dir::String)
+function load_checkpoint(dir::String, root::String = dir)
     meta = JSON.parsefile(checkpoint_json(dir))
     if meta["version"] ≠ checkpoint_file_version
         error("the checkpoint of $dir has the layout $(meta["version"]) of another version of " *
@@ -291,7 +298,7 @@ function load_checkpoint(dir::String)
     if !isfile(file)
         error("the checkpoint of $dir names the state file $(meta["state"]), which is missing")
     end
-    commit, seed = read_commit(file, dir)
+    commit, seed = read_commit(file, root)
     return (commit, meta["state"] == state_file(2) ? 2 : 1, seed)
 end
 
@@ -301,7 +308,7 @@ end
 
 write the commit `k` of the branch point of the samples to the file `branch.h5` of the directory
 `dir`, see `write_commit`, renamed into place once on the disk, so that a crash leaves no part of
-it; and read it back, see `read_commit`
+it; and read it back with its seed, see `read_commit`
 """
 function write_branch(dir::String, k::Commit, seed::Integer)
     file = joinpath(dir, "branch.h5")
@@ -315,8 +322,81 @@ end
 function read_branch(dir::String)
     file = joinpath(dir, "branch.h5")
     if !isfile(file)
-        error("the checkpoint of $dir is in a sample, and the file branch.h5 the samples start " *
-              "from is missing")
+        error("the file branch.h5 the samples of $dir start from is missing")
     end
-    return first(read_commit(file, dir))
+    return read_commit(file, dir)
 end
+
+"""
+    write_serialized(file, x)
+    read_serialized(file)
+
+write `x` serialized to `file`, after a line naming the layout of the checkpoints and the
+version of Julia, renamed into place once on the disk, so that a crash leaves no part of it; and
+read it back, refused when written with another layout or another minor version of Julia, see
+`load_checkpoint`
+"""
+function write_serialized(file::String, x)
+    tmp = file * ".tmp"
+    open(tmp, "w") do io
+        println(io, "TensorMixedStates $checkpoint_file_version Julia $VERSION")
+        serialize(io, x)
+    end
+    sync_file(tmp)
+    Base.Filesystem.rename(tmp, file)
+    return nothing
+end
+
+function read_serialized(file::String)
+    open(file) do io
+        words = split(readline(io))
+        if length(words) ≠ 4 || words[2] ≠ string(checkpoint_file_version)
+            error("$file has another layout, of another version of TensorMixedStates: start the " *
+                  "simulation over")
+        end
+        v = VersionNumber(words[4])
+        if (v.major, v.minor) ≠ (VERSION.major, VERSION.minor)
+            error("$file was written by Julia $v: go on with Julia $(v.major).$(v.minor), or " *
+                  "start the simulation over")
+        end
+        return deserialize(io)
+    end
+end
+
+"""
+    write_merged(dir, samples, marks)
+    read_merged(dir)
+
+write the merge of the samples of the simulation of directory `dir` to its file `merged.jls`:
+the samples merged, 1 to `samples`, and the marks of its destinations, as a commit holds them,
+see `Commit`; and read it back, `samples => marks`
+"""
+write_merged(dir::String, samples::Int, marks::AbstractDict) =
+    write_serialized(joinpath(dir, "merged.jls"),
+                     samples => Dict{Destination, Any}(relative(d, dir) => kept(m)
+                                                       for (d, m) in marks))
+
+function read_merged(dir::String)
+    samples, marks = read_serialized(joinpath(dir, "merged.jls"))
+    return samples => Dict{Destination, Any}(rooted(d, dir) => m for (d, m) in marks)
+end
+
+"""
+    pending_file(dir, sample)
+    write_pending(dir, sample, records)
+    read_pending(dir, sample)
+
+the file of the directory `dir` of a simulation holding the rows of a sample ended and not merged
+yet, the rows a part took, see `take_records!`, written there, and read back
+"""
+pending_file(dir::String, sample::Int) = joinpath(dir, "pending", "sample-$sample")
+
+function write_pending(dir::String, sample::Int, records::AbstractVector)
+    mkpath(joinpath(dir, "pending"))
+    write_serialized(pending_file(dir, sample),
+                     [ relative(d, dir) => rows for (d, rows) in records ])
+    return nothing
+end
+
+read_pending(dir::String, sample::Int) =
+    [ rooted(d, dir) => rows for (d, rows) in read_serialized(pending_file(dir, sample)) ]

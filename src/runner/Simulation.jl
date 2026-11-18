@@ -8,8 +8,8 @@ export Simulation, output, log_message, stopped
     simulation_files
 
 the files `runTMS` writes in the directory of a simulation, which no destination may be named
-after, nor be in the directory `prog`, which holds the files the program includes, see
-`is_simulation_file`
+after, nor be in its directories `prog`, which holds the files the program includes, `parts`
+and `pending`, which hold those of the samples, see `is_simulation_file`
 """
 const simulation_files = Set(["log", "stop", "restart", "error", "running", "stamp", "description",
                               "prog.jl", "prog_args.json", checkpoint_files...])
@@ -22,7 +22,8 @@ whether `name`, relative to the directory of a simulation, is a file `runTMS` wr
 """
 function is_simulation_file(name::AbstractString)
     n = normpath(name)
-    return n in simulation_files || n == "prog" || startswith(n, joinpath("prog", ""))
+    return n in simulation_files ||
+           any(d -> n == d || startswith(n, joinpath(d, "")), ("prog", "parts", "pending"))
 end
 
 """

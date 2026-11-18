@@ -302,8 +302,9 @@ end
 """
     adapt_threading(sim, threading)
 
-set the threading of the run before a phase: `:dense` or `:blocks` as asked, or for `:auto` the
-mode suited to the system of the state, once there is one; a change is logged
+set the threading of the run before a phase: `:dense` or `:blocks` as asked, a `ThreadingState`
+for the samples, see `sample_threading`, or for `:auto` the mode suited to the system of the
+state, once there is one; a change is logged
 """
 function adapt_threading(sim::Simulation, threading)
     mode = threading ≠ :auto ? threading :
@@ -315,7 +316,8 @@ function adapt_threading(sim::Simulation, threading)
     set_threading(mode)
     after = threading_settings()
     if after != before
-        log_message(sim, "Threading set to :$mode: BLAS threads $(after.blas), Strided threads " *
+        what = mode isa Symbol ? ":$mode" : "one thread"
+        log_message(sim, "Threading set to $what: BLAS threads $(after.blas), Strided threads " *
                          "$(after.strided), block sparse multithreading " *
                          (after.blocksparse ? "on" : "off"))
     end

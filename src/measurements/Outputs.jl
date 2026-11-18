@@ -50,19 +50,35 @@ resume_mark(_) = nothing
 open(d::Destination, _) = open(d)
 
 """
-    prepare_list!(o, m)
+    MeasuredRow(time, values, parts)
 
-check that the destination opened `o` can take the `Measure` `m`, see `check_list`, a text
-table keeping what it needs to name its columns
+a row of measurements as the destinations take it: the time, the pairs `name => value`
+measured, and the cells of each value, see `entry_cells`, which hold no operator, so that the
+row is written again in another process, see `measured_row`
 """
-prepare_list!(o, m::Measure) = check_list(o, first.(m.entries))
+struct MeasuredRow
+    time::Any
+    values::Vector{Pair{String, Any}}
+    parts::Vector{Vector{Pair{String, Any}}}
+end
+
+# the cells of a row in their order, as a text table names its columns
+row_cells(r::MeasuredRow) = Pair{String, Any}[ c for p in r.parts for c in p ]
 
 """
-    put_row!(o, time, m, row)
+    prepare_list!(o, names)
 
-write the values `row` of the `Measure` `m` to the destination opened `o`, see `write_row`
+check that the destination opened `o` can take the list of measurements named `names`, see
+`check_list`, a text table keeping what it needs to name its columns
 """
-put_row!(o, time, ::Measure, row) = write_row(o, time, row)
+prepare_list!(o, names::Vector{String}) = check_list(o, names)
+
+"""
+    put_row!(o, r)
+
+write the `MeasuredRow` `r` to the destination opened `o`, see `write_row`
+"""
+put_row!(o, r::MeasuredRow) = write_row(o, r.time, r.values)
 
 """
     TextFile(path, format)
@@ -142,8 +158,7 @@ resume_mark(t::TextTable) =
     end
 
 # a file holds one list, a stream takes any, writing a header when it changes
-function prepare_list!(t::TextTable, m::Measure)
-    names = first.(m.entries)
+function prepare_list!(t::TextTable, names::Vector{String})
     if isnothing(t.path) || t.names == names
         return nothing
     elseif !isnothing(t.names)
@@ -222,10 +237,18 @@ function entry_cells(name::String, m, x)
     return out
 end
 
-function put_row!(t::TextTable, time, m::Measure, row)
-    times = cells!(Pair{String, Any}[], "time", time)
-    parts = [ [times] ;
-              [ entry_cells(name, e, x) for ((name, e), (_, x)) in zip(m.entries, row) ] ]
+"""
+    measured_row(m, time, row)
+
+the `MeasuredRow` of the values `row` of the `Measure` `m` measured at `time`
+"""
+measured_row(m::Measure, time, row) =
+    MeasuredRow(time, Pair{String, Any}[ p for p in row ],
+                [ entry_cells(name, e, x) for ((name, e), (_, x)) in zip(m.entries, row) ])
+
+function put_row!(t::TextTable, r::MeasuredRow)
+    row = r.values
+    parts = [ [cells!(Pair{String, Any}[], "time", r.time)] ; r.parts ]
     columns = [ first.(p) for p in parts ]
     if columns ≠ t.columns
         if !isnothing(t.path) && !isnothing(t.columns)
@@ -503,9 +526,9 @@ resume_mark(o::DataRows) = RowsMark(o.rows, length(o.rows))
 
 # the columns of the cells named as a text table of the list `m` names them, see `entry_cells`,
 # those of the row before when they are the same
-function put_row!(o::DataRows, time, m::Measure, row)
-    measured = Pair{String, Any}[ "time" => time ; row ]
-    cells = row_cells(m, row)
+function put_row!(o::DataRows, r::MeasuredRow)
+    measured = Pair{String, Any}[ "time" => r.time ; r.values ]
+    cells = row_cells(r)
     columns = String[ "time" ; first.(cells) ]
     if !isempty(o.rows) && last(o.rows).columns == columns
         columns = last(o.rows).columns
@@ -574,16 +597,6 @@ const RowKey = NTuple{3, Int}
 row_place((phase, step, _)::RowKey) =
     phase == typemax(Int) ? "the final measurements" :
     step == typemax(Int) ? "the end of phase $phase" : "step $step of phase $phase"
-
-"""
-    row_cells(m, row)
-
-the cells of the values `row` of the `Measure` `m`, named as a text table names them, see
-`entry_cells`
-"""
-row_cells(m::Measure, row) =
-    Pair{String, Any}[ c for ((name, e), (_, x)) in zip(m.entries, row)
-                       for c in entry_cells(name, e, x) ]
 
 """
     RowSum(time, cells)
@@ -723,8 +736,7 @@ open(d::Averaged, m::AveragedMark) =
 resume_mark(o::AveragedOpened) =
     AveragedMark(o.sums, o.fixed, o.samples, o.rows, length(o.rows), o.names)
 
-function prepare_list!(o::AveragedOpened, m::Measure)
-    names = first.(m.entries)
+function prepare_list!(o::AveragedOpened, names::Vector{String})
     inner = o.destination.inner
     if !(inner isa TextFile) || o.names == names
         return nothing
@@ -736,16 +748,21 @@ function prepare_list!(o::AveragedOpened, m::Measure)
 end
 
 """
-    put_keyed_row!(o, at, time, m, row)
+    put_keyed_row!(o, at, r)
 
-`put_row!(o, time, m, row)`, the row being written at `at`, `(sample, phase, step)`, which an
-averaged destination keeps it by, see `RowKey`
+`put_row!(o, r)`, the row being written at `at`, `(sample, phase, step)`, which an averaged
+destination keeps it by, see `RowKey`
 """
-put_keyed_row!(o, _, time, m::Measure, row) = put_row!(o, time, m, row)
+put_keyed_row!(o, _, r::MeasuredRow) = put_row!(o, r)
 
-function put_keyed_row!(o::AveragedOpened, (sample, phase, step), time, m::Measure, row)
-    d = o.destination
-    cells = row_cells(m, row)
+"""
+    check_averaged(d, cells, phase, step)
+
+refuse the cells of a row of the averaged destination `d` at step `step` of phase `phase` that
+cannot be averaged: two columns of one name, a column named as the averages name theirs, a value
+other than a number
+"""
+function check_averaged(d::Averaged, cells::Vector{Pair{String, Any}}, phase::Int, step::Int)
     columns = first.(cells)
     twice = findfirst(c -> count(==(c), columns) > 1, columns)
     taken = findfirst(c -> c in ("N", "N_eff") || startswith(c, "err(") || startswith(c, "std("),
@@ -757,6 +774,18 @@ function put_keyed_row!(o::AveragedOpened, (sample, phase, step), time, m::Measu
         error("the column $(columns[taken]) of $d is one the averages write: give the " *
               "measurement another name, as \"name\" => op")
     end
+    bad = findfirst(c -> !(last(c) isa Union{Real, Missing}), cells)
+    if !isnothing(bad)
+        error("$(first(cells[bad])) of $d is $(repr(last(cells[bad]))) at " *
+              "$(row_place((phase, step, 0))), which cannot be averaged: write it with " *
+              "EachSample(…)")
+    end
+    return nothing
+end
+
+function put_keyed_row!(o::AveragedOpened, (sample, phase, step), r::MeasuredRow)
+    cells = row_cells(r)
+    check_averaged(o.destination, cells, phase, step)
     if sample == 0
         n = 1 + count(k -> k[1] == phase && k[2] == step, keys(o.fixed))
     else
@@ -766,16 +795,10 @@ function put_keyed_row!(o::AveragedOpened, (sample, phase, step), time, m::Measu
             n += 1
         end
     end
-    bad = findfirst(c -> !(last(c) isa Union{Real, Missing}), cells)
-    if !isnothing(bad)
-        error("$(first(cells[bad])) of $d is $(repr(last(cells[bad]))) at " *
-              "$(row_place((phase, step, n))), which cannot be averaged: write it with " *
-              "EachSample(…)")
-    end
     if sample == 0
-        o.fixed = merge(o.fixed, Dict((phase, step, n) => (time, cells)))
+        o.fixed = merge(o.fixed, Dict((phase, step, n) => (r.time, cells)))
     else
-        push!(o.rows, ((phase, step, n), time, cells))
+        push!(o.rows, ((phase, step, n), r.time, cells))
     end
     return nothing
 end
@@ -855,12 +878,75 @@ function averaged_data(o::AveragedOpened)
 end
 
 """
-    Outputs(; dir = "", format = "%.13g", sampled = false)
+    Recorder(destination)
+
+a destination of a simulation with samples as a part of the simulation opens it, a text or JSON
+file or a `Data`, averaged or `EachSample`: the rows of the sample being run kept, each with
+where it is written, `(sample, phase, step)`, and the names of its list, for the merge to write
+them in the order of the samples, see `replay!`; the rows that cannot be averaged are refused at
+once, see `check_averaged`, and a text file given two lists
+"""
+mutable struct Recorder
+    destination::Destination
+    names::Union{Nothing, Vector{String}}
+    list::Vector{String}
+    rows::Vector{Tuple{NTuple{3, Int}, Vector{String}, MeasuredRow}}
+end
+
+Recorder(d::Destination) =
+    Recorder(d, nothing, String[], Tuple{NTuple{3, Int}, Vector{String}, MeasuredRow}[])
+
+# whether a part of a simulation with samples records what goes to `d`, see `Recorder`
+recorded(d::Destination) =
+    d isa Averaged || (d isa EachSample && d.inner isa Union{TextFile, JsonFile, Data})
+
+function prepare_list!(r::Recorder, names::Vector{String})
+    inner = r.destination.inner
+    if inner isa TextFile
+        if !isnothing(r.names) && r.names ≠ names
+            error("$(inner.path) holds the list $(join(r.names, ", ")), and another needs " *
+                  "another file")
+        end
+        r.names = names
+    end
+    r.list = names
+    return nothing
+end
+
+function put_keyed_row!(r::Recorder, at::NTuple{3, Int}, row::MeasuredRow)
+    if r.destination isa Averaged
+        check_averaged(r.destination, row_cells(row), at[2], at[3])
+    end
+    push!(r.rows, (at, r.list, row))
+    return nothing
+end
+
+close(::Recorder) = nothing
+
+"""
+    RecordMark(names, rows, n)
+
+the mark of a `Recorder`, its first `n` rows, held without a copy as `RowsMark` holds them
+"""
+struct RecordMark
+    names::Union{Nothing, Vector{String}}
+    rows::Vector{Tuple{NTuple{3, Int}, Vector{String}, MeasuredRow}}
+    n::Int
+end
+
+resume_mark(r::Recorder) = RecordMark(r.names, r.rows, length(r.rows))
+kept(m::RecordMark) = RecordMark(m.names, m.rows[1:m.n], m.n)
+open(d::Averaged, m::RecordMark) = Recorder(d, m.names, String[], m.rows[1:m.n])
+open(d::EachSample, m::RecordMark) = Recorder(d, m.names, String[], m.rows[1:m.n])
+
+"""
+    Outputs(; dir = "", format = "%.13g", sampled = false, recording = false)
 
 where the lists of measurements of a run go: the destinations opened, by their description,
 the files named relative to `dir`, the numbers of the text tables in the Printf `format`, the
 time as the values; for a simulation `sampled`, its files and `Data` averaged over the samples,
-see `Averaged`, and where the rows are written, see `put_keyed_row!`
+see `Averaged`, and where the rows are written, see `put_keyed_row!`; `recording` for a part of
+a simulation with samples, which records its rows instead of writing them, see `Recorder`
 """
 struct Outputs
     dir::String
@@ -868,11 +954,12 @@ struct Outputs
     opened::Dict{Destination, Any}
     lock::ReentrantLock
     sampled::Bool
+    recording::Bool
     at::Base.RefValue{NTuple{3, Int}}
 end
 
 function Outputs(; dir::AbstractString = "", format::AbstractString = "%.13g",
-                 sampled::Bool = false)
+                 sampled::Bool = false, recording::Bool = false)
     ok = try
         Printf.format(Printf.Format(format), 1.5)
         true
@@ -882,7 +969,7 @@ function Outputs(; dir::AbstractString = "", format::AbstractString = "%.13g",
     if !ok
         error("the format $(repr(format)) does not write one number, as \"%.13g\" does")
     end
-    return Outputs(dir, format, Dict{Destination, Any}(), ReentrantLock(), sampled,
+    return Outputs(dir, format, Dict{Destination, Any}(), ReentrantLock(), sampled, recording,
                    Ref((0, 0, 0)))
 end
 
@@ -974,11 +1061,12 @@ function output!(o::Outputs, state::AbstractState, list::AbstractVector; time = 
                 error("$(d.inner) is written both averaged and for each sample: give " *
                       "EachSample(…) another destination")
             end
-            prepare_list!(get!(() -> open(d), o.opened, d), m)
+            opened = get!(() -> o.recording && recorded(d) ? Recorder(d) : open(d), o.opened, d)
+            prepare_list!(opened, first.(m.entries))
         end
         rows = [ measure(state, m; time, values...) for (_, m) in items ]
         for ((d, m), row) in zip(items, rows)
-            put_keyed_row!(o.opened[d], o.at[], time, m, row)
+            put_keyed_row!(o.opened[d], o.at[], measured_row(m, time, row))
         end
     end
     return nothing
@@ -1003,6 +1091,10 @@ the rows the outputs `o` gathered in `Data(name)`, its averages when it is avera
 """
 function data_rows(o::Outputs, name::String)
     d = Data(name)
+    if o.recording
+        error("the rows of Data(\"$name\") are gathered once the samples are merged: read them " *
+              "in the Simulation runTMS returns")
+    end
     return haskey(o.opened, Averaged(d)) ? averaged_data(o.opened[Averaged(d)]) :
            DataTable(o.opened[haskey(o.opened, d) ? d : EachSample(d)].rows)
 end
@@ -1036,6 +1128,54 @@ function rewrite_averaged!(o::Outputs, marks::AbstractDict)
 end
 
 """
+    take_records!(o)
+    clear_records!(o)
+
+the rows the recorders of the outputs `o` of a part hold, `destination => rows` for each that
+has some, see `Recorder`, taken away from them; and those rows dropped
+"""
+function take_records!(o::Outputs)
+    lock(o.lock) do
+        records = [ d => h.rows for (d, h) in o.opened if h isa Recorder && !isempty(h.rows) ]
+        clear_records!(o)
+        return records
+    end
+end
+
+function clear_records!(o::Outputs)
+    lock(o.lock) do
+        # anew rather than emptied: the marks of the commits hold them
+        for h in values(o.opened)
+            if h isa Recorder
+                h.rows = Tuple{NTuple{3, Int}, Vector{String}, MeasuredRow}[]
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+    replay!(o, records)
+
+the rows of a sample, as `take_records!` took them in a part, written to the outputs `o` of the
+directory of the simulation, then added to its averages, see `end_sample!`, as the sample does
+when it is run in the process
+"""
+function replay!(o::Outputs, records::AbstractVector)
+    lock(o.lock) do
+        for (d, rows) in records
+            opened = get!(() -> open(d), o.opened, d)
+            for (at, names, row) in rows
+                prepare_list!(opened, names)
+                put_keyed_row!(opened, at, row)
+            end
+        end
+    end
+    end_sample!(o)
+    return o
+end
+
+"""
     resume_marks(o)
     reopen!(o, marks)
 
@@ -1051,6 +1191,22 @@ resume_marks(o::Outputs) =
 function reopen!(o::Outputs, marks::AbstractDict)
     lock(o.lock) do
         for (d, m) in marks
+            o.opened[d] = open(d, m)
+        end
+    end
+    return o
+end
+
+"""
+    data_outputs(dir, format, marks)
+
+outputs in `dir` holding the `Data` of `marks` alone, averaged or for each sample, reopened at
+their marks, so that `sim.data` reads them: the files of `marks` are left as they are
+"""
+function data_outputs(dir::AbstractString, format::AbstractString, marks::AbstractDict)
+    o = Outputs(; dir, format, sampled = true)
+    for (d, m) in marks
+        if !isnothing(data_name(d))
             o.opened[d] = open(d, m)
         end
     end

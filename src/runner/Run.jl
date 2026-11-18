@@ -176,7 +176,8 @@ the description of a simulation, which `runTMS` runs.
   draws the disorder of each, the final measurements being made at the end of each sample, the
   files and `Data` holding averages over the samples, see `EachSample` (default `nothing`, no
   samples); the environment variable `TMS_SAMPLES` overrides it, so that a finished run is
-  prolonged by running it again with more
+  prolonged by running it again with more, and the program run several times at once runs the
+  samples on as many cores, see `runTMS`
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
@@ -471,6 +472,9 @@ function cleanTMS(name::AbstractString)
             error("$(abspath(name)) is the directory of a run of this process, going on")
         end
         check_unlocked(abspath(name))
+        for p in part_numbers(abspath(name))
+            check_unlocked(part_dir(abspath(name), p))
+        end
     end
     rm(name; recursive = true, force = true)
     return nothing
@@ -597,7 +601,8 @@ end
 """
     run_simulation(sim, sd, samples, sample, start, done, ended, threading)
 
-run the phases and the final measurements of `sd` from where `Commit` says, see `run_samples`
+run the phases and the final measurements of `sd` from where `Commit` says, or for a simulation
+with samples run without a directory, each sample in turn, see `run_samples`
 """
 function run_simulation(sim::Simulation, sd::SimData, samples::Union{Nothing, Int}, sample::Int,
                         start::Int, done::Int, ended::Bool, threading)
@@ -607,76 +612,162 @@ function run_simulation(sim::Simulation, sd::SimData, samples::Union{Nothing, In
         phase_output(sim, sd.final_measurements)
         return sim
     end
-    return run_samples(sim, sd, samples, sample, start, done, ended, threading)
+    return run_samples(sim, sd, samples, threading)
 end
 
 """
-    run_samples(sim, sd, samples, sample, start, done, ended, threading)
+    sample_threading
 
-the phases before the branch point once, kept in `branch.h5`, then each sample up to `samples`
-from it; a run resumed beyond `samples` ends the sample it is in
+the threading of the samples, one thread for each, so that a sample is the same to the last bit
+whichever process runs it, how many run and how many threads they have: the number of threads
+of BLAS changes the rounding of its products
 """
-function run_samples(sim::Simulation, sd::SimData, samples::Int, sample::Int, start::Int,
-                     done::Int, ended::Bool, threading)
+const sample_threading = ThreadingState(1, 1, false)
+
+"""
+    run_prefix(sim, sd, commit, threading)
+
+run the phases of `sd` before its branch point, from `commit`, `nothing` for a new run, then write
+the merge of no sample, which holds their rows, see `write_merged`, and `branch.h5` last, which
+the parts wait for, see `run_parts`
+"""
+function run_prefix(sim::Simulation, sd::SimData, commit::Union{Nothing, Commit}, threading)
     run = getfield(sim, :run)
     c = run.checkpointer
     prefix = sd.phases[1:end - 1]
-    if sample > samples
-        log_line(run, "Sample $sample reached already, beyond the $samples asked for: only that " *
-                      "one is ended")
-    end
-    final = max(samples, sample)
-    fresh = sample == 0
-    if fresh
-        run.sample = 0
-        sim = run_phases(sim, prefix, start, done, ended, threading; final = false)
-        values = committed_values(getfield(sim, :values))
-        b = Commit(0, length(prefix) + 1, 0, false, run.phase_time, sim.time, sim.state, values,
-                   Dict{Destination, Any}())
-        if !isempty(c.dir)
-            write_branch(c.dir, b, c.seed)
-        end
-        sample = 1
+    start, done, ended = isnothing(commit) ? (1, 0, false) :
+                         (commit.phase, commit.step, commit.last)
+    sim = run_phases(sim, prefix, start, done, ended, threading; final = false)
+    b = Commit(0, length(prefix) + 1, 0, false, run.phase_time, sim.time, sim.state,
+               committed_values(getfield(sim, :values)), Dict{Destination, Any}())
+    write_merged(c.dir, 0, resume_marks(run.outputs))
+    # its files written now, before a merge writes them
+    close!(run.outputs)
+    empty!(run.outputs.opened)
+    write_branch(c.dir, b, c.seed)
+    log_line(run, "Branch point written, the samples start from it")
+    return sim
+end
+
+"""
+    run_sample(sim, sd, b, sample, resumed, threading)
+
+run the sample `sample` of `sd` from the branch point `b`, or from the commit `resumed` of the
+sample, `sim` holding it: its phases, drawn by the function of `Realizations`, and the final
+measurements; its rows are then those of the outputs of the run, which the caller adds to the
+averages
+"""
+function run_sample(sim::Simulation, sd::SimData, b::Commit, sample::Int,
+                    resumed::Union{Nothing, Commit}, threading)
+    run = getfield(sim, :run)
+    c = run.checkpointer
+    prefix = sd.phases[1:end - 1]
+    run.sample = sample
+    if isnothing(resumed)
+        values = merge(b.values, Dict{Symbol, Any}(:sample => sample, :step => 0,
+                                                    :rng => sample_rng(c.seed, sample)))
+        sim = Simulation(b.state, b.time, values, run)
+        start, done, ended = length(prefix) + 1, 0, false
+        commit!(sim, start, 0)
     else
-        b = read_branch(c.dir)
+        start, done, ended = resumed.phase, resumed.step, resumed.last
     end
-    for k in sample:final
-        run.sample = k
+    began = time()
+    # no phase runs while Realizations draws: an error or a stop there names the sample only
+    run.phase = 0
+    run.phases = Any[]
+    realized = realized_phases(last(sd.phases), Realization(sample, disorder_rng(c.seed, sample)))
+    check_realization(realized, sd.realized, sample)
+    phases = [prefix; realized]
+    check_values(phases, sd.final_measurements, true)
+    check_names(realized)
+    check_destinations(phases, sd.final_measurements, true; live = !isempty(c.dir))
+    sim = run_phases(sim, phases, start, done, ended, threading; final = false)
+    # what follows is told of the sample, outside its phases
+    run.phase = 0
+    row_at!(run, typemax(Int), 0)
+    phase_output(sim, sd.final_measurements)
+    log_line(run, "Sample $sample done, $(round(time() - began; digits = 3)) seconds" *
+                  (sim.state isa State ? ", maxdim $(maxlinkdim(sim.state))" : ""))
+    return sim
+end
+
+"""
+    run_samples(sim, sd, samples, threading)
+
+the phases before the branch point once, then each sample up to `samples` from it, in a run
+without a directory, see `run_parts` for one in a directory
+"""
+function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
+    run = getfield(sim, :run)
+    prefix = sd.phases[1:end - 1]
+    sim = run_phases(sim, prefix, 1, 0, false, threading; final = false)
+    b = Commit(0, length(prefix) + 1, 0, false, run.phase_time, sim.time, sim.state,
+               committed_values(getfield(sim, :values)), Dict{Destination, Any}())
+    each = isnothing(threading) ? nothing : sample_threading
+    for k in 1:samples
         run.quiet = k > 1
-        resumed = !fresh
-        if fresh
-            values = merge(b.values, Dict{Symbol, Any}(:sample => k, :step => 0,
-                                                        :rng => sample_rng(c.seed, k)))
-            sim = Simulation(b.state, b.time, values, run)
-            start, done, ended = length(prefix) + 1, 0, false
-            commit!(sim, start, 0)
-        end
-        fresh = true
-        began = time()
-        # no phase runs while Realizations draws: an error or a stop there names the sample only
-        run.phase = 0
-        run.phases = Any[]
-        realized = realized_phases(last(sd.phases), Realization(k, disorder_rng(c.seed, k)))
-        check_realization(realized, sd.realized, k)
-        phases = [prefix; realized]
-        check_values(phases, sd.final_measurements, true)
-        check_names(realized)
-        check_destinations(phases, sd.final_measurements, true; live = !isempty(c.dir))
-        sim = run_phases(sim, phases, start, done, ended, threading; final = false)
-        # what follows is told of the sample, outside its phases
-        run.phase = 0
-        # before the final measurements, as without samples: a new run makes them again; not for
-        # a sample resumed after its phases, whose checkpoint is on the disk, where a run asked to
-        # stop would stop again and again
-        if k == final && !(resumed && start > length(phases))
-            commit!(sim, length(phases) + 1, 0)
-            checkpoint_or_stop(run; force = true)
-        end
-        row_at!(run, typemax(Int), 0)
-        phase_output(sim, sd.final_measurements)
+        sim = run_sample(sim, sd, b, k, nothing, each)
         end_sample!(run.outputs)
-        log_line(run, "Sample $k of $final done, $(round(time() - began; digits = 3)) seconds" *
-                      (sim.state isa State ? ", maxdim $(maxlinkdim(sim.state))" : ""))
+    end
+    run.quiet = false
+    return sim
+end
+
+"""
+    run_part(sim, sd, b, commit, dir, part, threading)
+
+run the part `part` of the simulation `sd` of directory `dir`: samples taken from its queue one
+at a time, see `take_sample!`, from the branch point `b`, or from `commit` for the sample it
+holds, their rows recorded, then written for the merge, see `write_pending` and
+`sample_ended!`, until none is left; a sample failing is noted, so that the other parts stop
+"""
+function run_part(sim::Simulation, sd::SimData, b::Commit, commit::Union{Nothing, Commit},
+                  dir::String, part::Int, threading)
+    run = getfield(sim, :run)
+    c = run.checkpointer
+    each = isnothing(threading) ? nothing : sample_threading
+    if isnothing(commit)
+        # what the part returns when it finds no sample left
+        sim = Simulation(b.state, b.time, copy(b.values), run)
+    end
+    quiet = false
+    while true
+        run.sample = 0
+        run.phase = 0
+        k = take_sample!(dir, part)
+        if isnothing(k)
+            break
+        end
+        # between two samples, where nothing is left to write, and once a sample is left only,
+        # so that a part with nothing left ends; after one sample, so that a launch whose time
+        # is up still runs a step, as without samples
+        if quiet && stop_requested(c)
+            throw(StopRun())
+        end
+        resumed = !isnothing(commit) && commit.sample == k ? commit : nothing
+        if isnothing(resumed)
+            # those of the commit of another sample, which a part resumed holds
+            clear_records!(run.outputs)
+        end
+        commit = nothing
+        run.quiet = quiet
+        quiet = true
+        try
+            sim = run_sample(sim, sd, b, k, resumed, each)
+        catch e
+            if !(e isa StopRun || e isa InterruptException)
+                sample_failed!(dir, k, part)
+            end
+            rethrow()
+        end
+        run.sample = 0
+        write_pending(dir, k, take_records!(run.outputs))
+        merged = sample_ended!(dir, part, sd.format)
+        if !isnothing(merged)
+            log_line(run, first(merged) == last(merged) ? "Sample $(first(merged)) merged" :
+                          "Samples $(first(merged)) to $(last(merged)) merged")
+        end
     end
     run.quiet = false
     return sim
@@ -707,12 +798,13 @@ function stop_line(c::Checkpointer, phases::Vector)
 end
 
 """
-    summary_line(sd, run)
+    summary_line(sd, run[, samples])
 
 the line the console takes once a run returns: whether it ended or stopped, where its results
-are, and how many warnings its log received
+are, how many warnings its log received, and what `samples` says of the samples, see
+`samples_line`
 """
-function summary_line(sd::SimData, run::RunData)
+function summary_line(sd::SimData, run::RunData, samples::AbstractString = "")
     at = stop_place(run.checkpointer, run.phases)
     state = !run.stopped ? "done" :
             isempty(run.dir) ? "stopped $at, with no directory to resume from" :
@@ -721,7 +813,7 @@ function summary_line(sd::SimData, run::RunData)
     n = run.warnings
     warned = n == 0 ? "" : isempty(run.dir) ? ", $n warning$(n == 1 ? "" : "s") in its output" :
              ", $n warning$(n == 1 ? "" : "s") in its log"
-    return "simulation \"$(sd.name)\" $state$where$warned"
+    return "simulation \"$(sd.name)\" $state$where$warned" * (isempty(samples) ? "" : "; $samples")
 end
 
 """
@@ -768,6 +860,13 @@ and the behaviour of Ctrl-C, which the last to end puts back, and an interrupt s
 and the runs it is in, each resuming where it was. A nested run, as in an `Update`, is done again
 when the run it is in resumes, the same way with `output = devnull` and a `seed` only: in a
 directory of its own, it resumes its checkpoint or starts over, a seed drawn anew.
+
+The samples of a simulation, see `SimData`, are run by parts, each in a directory `parts/1`,
+`parts/2`, … of its own, and merged in their order into its files and `Data`: running the
+program several times at once runs them on as many cores, a process waiting while another runs
+the phases before the branch point, and returning when no sample is left, with the `Data`
+merged so far. Each sample runs on one thread, so that it is the same whichever process runs
+it. The file `stop` of the directory stops all the parts.
 """
 function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0,
                 threading::Union{Nothing, Symbol} = :dense, output::Union{Nothing, IO} = nothing)
@@ -783,11 +882,90 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
     positive(s) = (n = parse(Int, s); n ≥ 1 ? n : nothing)
     samples = isnothing(sd.samples) ? nothing : launch_setting("TMS_SAMPLES", sd.samples, positive)
     check_destinations(checked_phases(sd), sd.final_measurements, !isnothing(samples); live)
+    settings = (; max_time, checkpoint_interval, threading, output, samples)
+    if live && !isnothing(samples)
+        return run_parts(sd, settings)
+    end
     dir = live ? abspath(sd.name) : ""
+    src_path = Base.source_path()
+    claim() = with_lock(() -> claim_run(dir, src_path), dir)
+    sim, run = run_in(sd, dir, settings; claim) do sim, commit, threading
+        sample, start, done, ended = isnothing(commit) ? (0, 1, 0, false) :
+                                     (commit.sample, commit.phase, commit.step, commit.last)
+        return run_simulation(sim, sd, samples, sample, start, done, ended, threading)
+    end
+    # what a program, or an AI running it, reads without opening the log
+    @info summary_line(sd, run)
+    return sim
+end
+
+"""
+    empty_directory(dir)
+
+remove what the directory `dir` holds, but its lock, which the caller holds, see `with_lock`
+"""
+function empty_directory(dir::String)
+    for f in readdir(dir)
+        if f ≠ "lock"
+            rm(joinpath(dir, f); recursive = true, force = true)
+        end
+    end
+    return nothing
+end
+
+"""
+    claim_run(dir, src_path; accepted = false)
+
+take the directory `dir` for a run of the program `src_path`, under its lock, see `with_lock`:
+refused while another run may be using it, see `check_unlocked`, emptied when it holds the file
+`restart`, its checkpoint refused when another program wrote it, unless `TMS_ACCEPT_PROGRAM=1`
+or `accepted`, and its file `running` written; whether the run before left `running`, as
+`check_unlocked` returns it, whether there is a checkpoint to resume, and whether the program
+was accepted
+"""
+function claim_run(dir::String, src_path; accepted::Bool = false)
+    stale = check_unlocked(dir)
+    if isfile(joinpath(dir, "restart"))
+        check_removable(dir)
+        empty_directory(dir)
+        stale = nothing
+    end
+    resume = has_checkpoint(dir)
+    if resume && !same_program(dir, src_path)
+        if get(ENV, "TMS_ACCEPT_PROGRAM", "") ≠ "1"
+            error("the checkpoint of \"$dir\" was written by another program, or one given other " *
+                  "arguments: to resume with this one, copy it onto prog.jl, and the files it " *
+                  "includes into prog, or set TMS_ACCEPT_PROGRAM=1")
+        end
+        accepted = true
+    end
+    write(joinpath(dir, "running"), "$(gethostname()) $(getpid()) $(Dates.now())\n")
+    return (; stale, resume, accepted)
+end
+
+"""
+    run_in(work, sd, dir, settings; claim, outdir = dir, main = "", seed = sd.seed,
+           recording = false, clear_stop = true)
+
+the run of `sd` in the directory `dir`, empty for none, with the settings of `runTMS`: the
+directory taken by `claim`, see `claim_run`, the threading set, the program copied, the log and
+the stamp written, the checkpoint resumed, then `work(sim, commit, threading)` called with the
+simulation, the commit resumed, `nothing` for a new run, and the threading of the run, `nothing`
+for a nested one, its stop logged and its error written; the simulation it returns and the
+`RunData`. For a part of a simulation with samples, `outdir` is the directory of the
+simulation, where the destinations are, `main` that directory, whose file `stop` stops the part
+as well, `seed` that of the simulation, `recording` true, see `Recorder`, and the file `stop`
+is not removed from the directory of the simulation, where it stops all the parts
+"""
+function run_in(work::Function, sd::SimData, dir::String, settings; claim = nothing,
+                outdir::String = dir, main::String = "", seed = sd.seed, recording::Bool = false,
+                clear_stop::Bool = true)
+    (; max_time, checkpoint_interval, output, samples) = settings
+    live = !isempty(dir)
     file(name) = joinpath(dir, name)
     outermost = enter_run()
     # only the outermost run sets the threading of the process
-    threading = outermost ? threading : nothing
+    threading = outermost ? settings.threading : nothing
     # whether the run has taken its directory: only then does the way out write `error` and
     # remove `running`
     claimed = false
@@ -804,33 +982,20 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         if live
             claim_directory(dir)
             claimed = true
-            if isdir(dir)
-                stale = check_unlocked(dir)
-                if isfile(file("restart"))
-                    check_removable(sd.name)
-                    rm(dir; recursive = true)
-                    stale = nothing
-                end
-            end
             mkpath(dir)
-            src_path = Base.source_path()
-            resume = has_checkpoint(dir)
-            accepted = resume && !same_program(dir, src_path)
-            if accepted && get(ENV, "TMS_ACCEPT_PROGRAM", "") ≠ "1"
-                error("the checkpoint of \"$(sd.name)\" was written by another program, or one " *
-                      "given other arguments: to resume with this one, copy it onto prog.jl, and the " *
-                      "files it includes into prog, or set TMS_ACCEPT_PROGRAM=1")
-            end
+            (; stale, resume, accepted) = claim()
             started = true
-            write(file("running"), "$(gethostname()) $(getpid()) $(Dates.now())\n")
             # left over from the run before
-            rm(file("stop"); force = true)
+            if clear_stop
+                rm(file("stop"); force = true)
+            end
             rm(file("error"); force = true)
             # a resumed run continues the log, keeping the history of every run
             logio = open(file("log"), resume ? "a" : "w")
             if sd.description ≠ ""
                 write(file("description"), sd.description)
             end
+            src_path = Base.source_path()
             # cp refuses to copy the program onto itself, when it is the copy that is run
             if !isnothing(src_path) && src_path ≠ ""
                 if !(isfile(file("prog.jl")) && samefile(src_path, file("prog.jl")))
@@ -847,11 +1012,11 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         else
             logio = output
         end
-        commit, generation, seed = resume ? load_checkpoint(dir) :
-                                   (nothing, 0, something(sd.seed, rand(RandomDevice(), UInt64)))
-        c = Checkpointer(dir, seed; interval = checkpoint_interval, max_time)
-        outputs = Outputs(; dir, sd.format, sampled = !isnothing(samples))
-        run = RunData(dir, outputs, logio, output, c, sd.provided, sd.backend)
+        commit, generation, seed = resume ? load_checkpoint(dir, isempty(main) ? dir : main) :
+                                   (nothing, 0, something(seed, rand(RandomDevice(), UInt64)))
+        c = Checkpointer(dir, seed; interval = checkpoint_interval, max_time, main)
+        outputs = Outputs(; dir = outdir, sd.format, sampled = !isnothing(samples), recording)
+        run = RunData(outdir, outputs, logio, output, c, sd.provided, sd.backend)
         if resume
             resume!(c, commit, generation)
             run.phase_time = commit.phase_time
@@ -896,20 +1061,19 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         if !resume
             commit!(sim, 1, 0)
         end
-        sample, start, done, ended =
-            resume ? (commit.sample, commit.phase, commit.step, commit.last) : (0, 1, 0, false)
         sim = Logging.with_logger(SimLogger(run, Logging.current_logger())) do
             if resume
                 log_line(run, "Resuming from the checkpoint: " *
-                              (sample == 0 ? "" : "sample $sample, ") * "phase $(commit.phase), " *
-                              "step $(commit.step), time $(time_text(run, commit.time))")
+                              (commit.sample == 0 ? "" : "sample $(commit.sample), ") *
+                              "phase $(commit.phase), step $(commit.step), time " *
+                              time_text(run, commit.time))
                 # before anything is written: a destination opened anew would empty a file the
                 # checkpoint continues
                 reopen!(outputs, commit.marks)
             end
             launched, allocated = time(), Base.gc_bytes()
             try
-                sim = run_simulation(sim, sd, samples, sample, start, done, ended, threading)
+                sim = work(sim, commit, threading)
                 report_dropped(run)
             catch e
                 if !(e isa StopRun || (e isa InterruptException && live))
@@ -937,9 +1101,7 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
                           "allocated, peak memory $(Base.format_bytes(Sys.maxrss())) *****")
             return sim
         end
-        # what a program, or an AI running it, reads without opening the log
-        @info summary_line(sd, run)
-        return sim
+        return (sim, run)
     catch e
         if started
             if !isnothing(run)
@@ -965,4 +1127,162 @@ function runTMS(sd::SimData; max_time::Real = Inf, checkpoint_interval::Real = 0
         end
         leave_run()
     end
+end
+
+"""
+    live_run(dir)
+    live_parts(dir)
+
+whether the file `running` of the directory `dir` marks a run that may still be going on, see
+`live_marker`; and the numbers of the parts of the simulation of directory `dir` so marked
+"""
+live_run(dir::String) = isfile(joinpath(dir, "running")) &&
+                        live_marker(read(joinpath(dir, "running"), String))
+
+function part_numbers(dir::String)
+    parts = joinpath(dir, "parts")
+    numbers = isdir(parts) ? [ tryparse(Int, f) for f in readdir(parts) ] : Union{Nothing, Int}[]
+    return sort!(Int[ p for p in numbers if !isnothing(p) ])
+end
+
+live_parts(dir::String) = filter(p -> live_run(part_dir(dir, p)), part_numbers(dir))
+
+"""
+    launch_samples!(dir, samples, src_path)
+
+under the lock of the directory `dir` of a simulation with samples, a process joining it: the
+directory emptied for a file `restart`, its file `stop` and the samples failed forgotten when no
+other process runs it, the samples asked for set in its queue, and the role of the process:
+`:part` once the branch point is written, `:wait` while another process runs the phases before
+it, `:prefix` for this one to run them, the directory then taken, see `claim_run`; with what
+`claim_run` returns, or for a part whether the program was accepted
+"""
+function launch_samples!(dir::String, samples::Int, src_path)
+    prefix = live_run(dir)
+    alone = !prefix && isempty(live_parts(dir))
+    if isfile(joinpath(dir, "restart"))
+        if !alone
+            error("$dir holds the file restart while other processes run the simulation: let " *
+                  "them end, or stop them by the file stop, first")
+        end
+        check_removable(dir)
+        empty_directory(dir)
+    end
+    q = isfile(queue_file(dir)) ? read_queue(dir) :
+        Queue(samples, 1, Dict{Int, Int}(), Dict{Int, Int}())
+    q.samples = samples
+    if alone
+        rm(joinpath(dir, "stop"); force = true)
+        empty!(q.failed)
+    end
+    write_queue(dir, q)
+    if isfile(joinpath(dir, "branch.h5"))
+        accepted = false
+        if !same_program(dir, src_path)
+            if get(ENV, "TMS_ACCEPT_PROGRAM", "") ≠ "1"
+                error("the samples of \"$dir\" were started by another program, or one given " *
+                      "other arguments: to go on with this one, copy it onto prog.jl, and the " *
+                      "files it includes into prog, or set TMS_ACCEPT_PROGRAM=1")
+            end
+            accepted = true
+        end
+        return :part => accepted
+    elseif prefix
+        return :wait => nothing
+    end
+    return :prefix => claim_run(dir, src_path)
+end
+
+"""
+    claim_part(dir, src_path, accepted)
+
+under the lock of the directory `dir` of a simulation with samples, the part a process runs, and
+its directory taken, see `claim_run`: a part no process runs that holds a sample, else, while
+samples are left, one no process runs, or a new one; `nothing` when no sample is left
+"""
+function claim_part(dir::String, src_path, accepted::Bool)
+    q = read_queue(dir)
+    numbers = part_numbers(dir)
+    idle = filter(p -> !live_run(part_dir(dir, p)), numbers)
+    holding = filter(p -> haskey(q.current, p), idle)
+    part = !isempty(holding) ? first(holding) :
+           q.next > q.samples || !isempty(q.failed) ? nothing :
+           !isempty(idle) ? first(idle) : maximum(numbers; init = 0) + 1
+    if isnothing(part)
+        return nothing
+    end
+    mkpath(part_dir(dir, part))
+    return part => claim_run(part_dir(dir, part), src_path; accepted)
+end
+
+"""
+    samples_line(dir, merged)
+
+what the console takes of the samples of the simulation of directory `dir` once a process
+returns: the samples merged, out of those asked for, and the other processes running
+"""
+function samples_line(dir::String, merged::Int)
+    n = length(live_parts(dir))
+    asked = read_queue(dir).samples
+    return (merged ≤ asked ? "$merged of $asked samples merged" :
+            "$merged samples merged, more than the $asked asked for") *
+           (n == 0 ? "" : ", $n other process$(n == 1 ? "" : "es") running")
+end
+
+"""
+    run_parts(sd, settings)
+
+run the simulation with samples `sd` in its directory, alongside the other processes running it,
+with the settings of `runTMS`: the phases before the branch point once, by the first process,
+while the others wait, see `run_prefix`, then samples taken from the queue in a part of its own,
+see `run_part`, until none is left. The simulation returned is the one the part ends with, its
+`Data` those of the samples merged, or the branch point when no sample was left.
+"""
+function run_parts(sd::SimData, settings)
+    dir = abspath(sd.name)
+    src_path = Base.source_path()
+    mkpath(dir)
+    waiting = false
+    role, claimed = :wait, nothing
+    while role == :wait
+        role, claimed = with_lock(() -> launch_samples!(dir, settings.samples, src_path), dir)
+        if role == :wait
+            if !waiting
+                @info "simulation \"$(sd.name)\": waiting for the phases before the branch " *
+                      "point, which another process runs"
+                waiting = true
+            end
+            sleep(1)
+        end
+    end
+    if role == :prefix
+        sim, run = run_in(sd, dir, settings; claim = () -> claimed,
+                          clear_stop = false) do sim, commit, threading
+            return run_prefix(sim, sd, commit, threading)
+        end
+        if run.stopped
+            @info summary_line(sd, run)
+            return sim
+        end
+        claimed = false
+    end
+    b, seed = read_branch(dir)
+    taken = with_lock(() -> claim_part(dir, src_path, claimed), dir)
+    if isnothing(taken)
+        merged, marks = read_merged(dir)
+        run = RunData(dir, data_outputs(dir, sd.format, marks), devnull, nothing,
+                      Checkpointer("", seed), sd.provided, sd.backend)
+        @info "simulation \"$(sd.name)\" has no sample left to run, results in $dir; " *
+              samples_line(dir, merged)
+        return Simulation(b.state, b.time, copy(b.values), run)
+    end
+    part, claimed = taken
+    sim, run = run_in(sd, part_dir(dir, part), settings; claim = () -> claimed, outdir = dir,
+                      main = dir, seed, recording = true) do sim, commit, threading
+        return run_part(sim, sd, b, commit, dir, part, threading)
+    end
+    merged, marks = read_merged(dir)
+    run.outputs = data_outputs(dir, sd.format, marks)
+    @info summary_line(sd, run, samples_line(dir, merged))
+    return sim
 end

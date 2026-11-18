@@ -76,12 +76,14 @@ sampled(name; samples = 3, phases = [CreateState{Pure}(4, Qubit(), "Up"), Realiz
         @test avg["err(X(1))"] ≈ sd / sqrt(3) rtol = 1e-10
         # a row for each step, the header first
         @test length(readlines("s/steps")) == 1 + 3
-        log = read("s/log", String)
-        # the branch point once, the phases and steps of the first sample only
-        @test count("Starting phase", log) == 2
+        # the branch point once, in the directory of the simulation, then the phases and steps of
+        # the first sample only, in the directory of its part
+        @test count("Starting phase", read("s/log", String)) == 1
+        log = read("s/parts/1/log", String)
+        @test count("Starting phase", log) == 1
         @test count("step 3, time", log) == 1
-        @test occursin("Sample 3 of 3 done", log)
-        @test isfile("s/branch.h5")
+        @test occursin("Sample 3 done", log)
+        @test isfile("s/branch.h5") && isempty(readdir("s/pending"))
     end
 end
 
@@ -123,10 +125,9 @@ end
             @test read("chk/$f", String) == read("ref/$f", String)
         end
         @test norm(sim.state - ref.state) < 1e-12
-        log = read("chk/log", String)
-        @test occursin("Resuming from the checkpoint: sample 3", log)
+        @test occursin("Resuming from the checkpoint: sample 3", read("chk/parts/1/log", String))
         # the branch point once
-        @test count("Starting phase \"Creating state\"", log) == 1
+        @test count("Starting phase \"Creating state\"", read("chk/log", String)) == 1
     end
 end
 
@@ -140,14 +141,12 @@ end
         for f in ("steps", "end")
             @test read("p/$f", String) == read("ref/$f", String)
         end
-        # fewer samples than those done only end the one the checkpoint is in
+        # fewer samples than those done change nothing
         withenv(() -> runTMS(sampled("p")), "TMS_SAMPLES" => "3")
         for f in ("steps", "end")
             @test read("p/$f", String) == read("ref/$f", String)
         end
-        log = read("p/log", String)
-        @test occursin("beyond the 3 asked for", log)
-        @test count("Starting phase", log) == 2
+        @test count("Starting phase", read("p/log", String)) == 1
         # the same number again does nothing more
         runTMS(sampled("p"; samples = 4))
         @test read("p/end", String) == read("ref/end", String)
@@ -213,7 +212,10 @@ end
         # an error while Realizations draws names the sample
         failing(c) = c.sample == 2 ? error("no draw") : quench(c)
         @test_throws "no draw" runTMS(sampled("e"; phases = [up, Realizations(failing)]))
-        @test occursin("in sample 2, outside its phases", read("e/error", String))
+        @test occursin("in sample 2, outside its phases", read("e/parts/1/error", String))
+        # the sample is noted failed: the other parts stop, and a new run tries it again
+        @test TensorMixedStates.read_queue(abspath("e")).failed == Dict(2 => 1)
+        @test_throws "no draw" runTMS(sampled("e"; phases = [up, Realizations(failing)]))
         # a stop there names where the checkpoint is, and the run resumes from it
         interrupted = Ref(true)
         function stopping(c)
@@ -225,7 +227,7 @@ end
         end
         sd = sampled("i"; phases = [up, Realizations(stopping)])
         @test stopped(runTMS(sd))
-        @test occursin("Stopping before phase 2 of sample 2", read("i/log", String))
+        @test occursin("Stopping before phase 2 of sample 2", read("i/parts/1/log", String))
         @test !stopped(runTMS(sd))
         @test read("i/end", String) == read("ref/end", String)
         # the phases of each sample are checked before it runs
@@ -371,5 +373,84 @@ end
         @test only(sim.data["x"])["std(x)"] ≈ sd rtol = 1e-12
         # the first draw of the disorder of sample 1 of seed 7, the same in Julia 1.10 and 1.13
         @test rand(TensorMixedStates.disorder_rng(7, 1)) == 0.284828998012419
+    end
+end
+
+@testset "A part a process left is taken over, and the file stop of the simulation stops all" begin
+    in_tmp() do
+        ref = runTMS(sampled("ref"; samples = 4))
+        # a part stopped in a sample, then its file running naming a process that has ended
+        function stop_in_two(d)
+            if d.sample == 2
+                touch("s/stop")
+            end
+        end
+        stopping = Realizations(c -> [Update(stop_in_two), quench(c)])
+        once(name) = sampled(name; samples = 4,
+                             phases = [CreateState{Pure}(4, Qubit(), "Up"), stopping])
+        @test stopped(runTMS(once("s")))
+        @test TensorMixedStates.read_queue(abspath("s")).current == Dict(1 => 2)
+        q = run(`$(Base.julia_cmd()) --startup-file=no -e "exit()"`; wait = false)
+        ended = getpid(q)
+        wait(q)
+        write("s/parts/1/running", "$(gethostname()) $ended 2026-11-18T12:00:00\n")
+        sim = runTMS(once("s"))
+        @test !stopped(sim)
+        log = read("s/parts/1/log", String)
+        @test occursin("process $ended on $(gethostname()), ended without removing running", log)
+        @test occursin("Resuming from the checkpoint: sample 2", log)
+        @test readdir("s/parts") == ["1"]
+        for f in ("steps", "end")
+            @test read("s/$f", String) == read("ref/$f", String)
+        end
+        # a live part is not taken: another one is made
+        p = run(`$(Base.julia_cmd()) --startup-file=no -e "sleep(300)"`; wait = false)
+        try
+            write("s/parts/1/running", "$(gethostname()) $(getpid(p)) 2026-11-18T12:00:00\n")
+            withenv(() -> runTMS(once("s")), "TMS_SAMPLES" => "5")
+            @test readdir("s/parts") == ["1", "2"]
+            @test TensorMixedStates.read_merged(abspath("s")).first == 5
+            @test_throws "may still be going on" cleanTMS("s")
+        finally
+            kill(p, Base.SIGKILL)
+        end
+    end
+end
+
+@testset "Two processes run the samples of a simulation as one does" begin
+    in_tmp() do
+        program = """
+            using TensorMixedStates, .Qubits
+            # each sample waits for the second process, so that both run samples
+            waiting = Update(c -> (t = time(); while isdir("two") && !isdir("two/parts/2") &&
+                                                         time() - t < 600; sleep(0.1); end);
+                             provides = Symbol[])
+            function quench(c)
+                J = [1 + 0.5 * randn(c.rng) for _ in 1:3]
+                H = -sum(J[i] * Z(i) * Z(i + 1) for i in 1:3) - sum(X(i) for i in 1:4)
+                return [waiting, Evolve(evolver = -im * H, duration = 0.3, time_step = 0.1,
+                                        limits = Limits(maxdim = 16),
+                                        measurements = ["steps" => [X(1), Z],
+                                                        EachSample("each") => Z(2)])]
+            end
+            runTMS(SimData(name = ARGS[1], seed = 7, samples = 8,
+                           phases = [CreateState{Pure}(4, Qubit(), "Up"), Realizations(quench)],
+                           final_measurements = ["end.json" => [X(1), Z(2)],
+                                                 EachSample("each.jsonl") => [X(1)]]))
+            """
+        write("prog.jl", program)
+        julia = `$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no prog.jl`
+        run(`$julia one`)
+        ps = [ run(pipeline(`$julia two`; stdout = devnull, stderr = devnull); wait = false)
+               for _ in 1:2 ]
+        foreach(wait, ps)
+        @test all(success, ps)
+        @test readdir("two/parts") == ["1", "2"]
+        @test all(occursin("Sample", read("two/parts/$p/log", String)) for p in 1:2)
+        for f in ("steps", "each", "end.json", "each.jsonl")
+            @test read("two/$f", String) == read("one/$f", String)
+        end
+        @test TensorMixedStates.read_merged(abspath("two")).first == 8
+        @test isempty(readdir("two/pending"))
     end
 end
