@@ -214,7 +214,8 @@ end
         @test_throws "no draw" runTMS(sampled("e"; phases = [up, Realizations(failing)]))
         @test occursin("in sample 2, outside its phases", read("e/parts/1/error", String))
         # the sample is noted failed: the other parts stop, and a new run tries it again
-        @test TensorMixedStates.read_queue(abspath("e")).failed == Dict(2 => 1)
+        failed = TensorMixedStates.read_queue(abspath("e")).failed
+        @test collect(keys(failed)) == [2] && occursin("no draw", failed[2])
         @test_throws "no draw" runTMS(sampled("e"; phases = [up, Realizations(failing)]))
         # a stop there names where the checkpoint is, and the run resumes from it
         interrupted = Ref(true)
@@ -235,10 +236,10 @@ end
                            final_measurements = Data("g") => [c.sample == 1 ? X(1) : :energy])
         @test_throws "reads energy" runTMS(sampled("r"; phases = [up, Realizations(reading)]))
         # a state saved by each sample under its own name
-        saving(c) = [quench(c), SaveState(file = "states.h5", statename = "s$(c.sample)")]
+        saving(c) = [quench(c), SaveState(file = "state$(c.sample).h5")]
         runTMS(sampled("v"; samples = 2, phases = [up, Realizations(saving)]))
-        @test load_state("v/states.h5", "s1") isa State{Pure}
-        @test load_state("v/states.h5", "s2") isa State{Pure}
+        @test load_state("v/state1.h5", "state") isa State{Pure}
+        @test load_state("v/state2.h5", "state") isa State{Pure}
         # the number of samples of the environment, for a simulation without any
         withenv(() -> runTMS(SimData(name = "n", phases = [up])), "TMS_SAMPLES" => "5")
         @test occursin("TMS_SAMPLES is not used", read("n/log", String))
@@ -269,8 +270,11 @@ end
         # samples whose rows have other times cannot be averaged
         steps(c) = Evolve(evolver = -im * X(1), duration = 0.2,
                           time_step = c.sample == 1 ? 0.1 : 0.05, measurements = "t" => Z(1))
-        @test_throws "the same times" runTMS(SimData(name = "t", samples = 2,
-                                                     phases = [up, Realizations(steps)]))
+        times = SimData(name = "t", samples = 3, phases = [up, Realizations(steps)])
+        @test_throws "sample 2 cannot be merged" runTMS(times)
+        # the next run merges first, and fails again before running another sample
+        @test_throws "the same times" runTMS(times)
+        @test readdir("t/pending") == ["sample-2"]
     end
 end
 
@@ -452,5 +456,75 @@ end
         end
         @test TensorMixedStates.read_merged(abspath("two")).first == 8
         @test isempty(readdir("two/pending"))
+    end
+end
+
+@testset "A run without a directory gives the same Data, and a sample reads those merged" begin
+    in_tmp() do
+        look(d) = (d.seen = haskey(d.data, "x") ? Float64(only(d.data["x"])["N"]) : 0.)
+        seeing = Realizations(c -> [Update(look; provides = [:seen]), quench(c)])
+        sd(name) = sampled(name; phases = [CreateState{Pure}(4, Qubit(), "Up"), seeing],
+                           final_measurements = [Data("x") => [X(1), Z(2)],
+                                                 EachSample(Data("seen")) => :seen])
+        a = runTMS(sd("a"))
+        b = runTMS(sd("b"); output = devnull)
+        @test [ r["seen"] for r in a.data["seen"] ] == [0, 1, 2]
+        for name in ("x", "seen")
+            @test a.data[name] == b.data[name]
+        end
+    end
+end
+
+@testset "Samples given back, a launch joining while waiting, an edited program" begin
+    in_tmp() do
+        up = CreateState{Pure}(4, Qubit(), "Up")
+        ref = runTMS(sampled("ref"; phases = [up, Realizations(c -> [Update(d -> nothing),
+                                                                     quench(c)])]))
+        # a stop in sample 3, whose part is then given fewer samples
+        once = Ref(true)
+        function stop_in_three(d)
+            if d.sample == 3 && once[]
+                once[] = false
+                touch("l/stop")
+            end
+        end
+        sd = sampled("l"; phases = [up, Realizations(c -> [Update(stop_in_three), quench(c)])])
+        @test stopped(runTMS(sd))
+        withenv(() -> runTMS(sd), "TMS_SAMPLES" => "2")
+        q = TensorMixedStates.read_queue(abspath("l"))
+        @test q.free == [3] && isempty(q.current)
+        @test TensorMixedStates.read_merged(abspath("l")).first == 2
+        runTMS(sd)
+        for f in ("steps", "end")
+            @test read("l/$f", String) == read("ref/$f", String)
+        end
+        # the checkpoint of sample 3 resumed once, then removed when the sample was given back
+        @test count("Resuming", read("l/parts/1/log", String)) == 1
+        # an edited program, refused, then accepted and kept
+        write("l/prog.jl", "# another program")
+        @test_throws "written by another program" withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4")
+        withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4", "TMS_ACCEPT_PROGRAM" => "1")
+        @test occursin("TMS_ACCEPT_PROGRAM=1 allows", read("l/log", String))
+        withenv(() -> runTMS(sd), "TMS_SAMPLES" => "5")
+        @test TensorMixedStates.read_merged(abspath("l")).first == 5
+        # a launch waiting for the phases before the branch point, which another process runs
+        p = run(`$(Base.julia_cmd()) --startup-file=no -e "sleep(300)"`; wait = false)
+        try
+            dir = abspath("w")
+            mkpath(dir)
+            write("w/running", "$(gethostname()) $(getpid(p)) 2026-11-18T12:00:00\n")
+            launch(first) = TensorMixedStates.with_lock(dir) do
+                TensorMixedStates.launch_samples!(dir, 2, nothing; first)
+            end
+            @test launch(true).first == :wait
+            touch("w/stop")
+            @test launch(true).first == :wait
+            @test launch(false).first == :stop
+            @test isfile("w/stop")
+            touch("w/restart")
+            @test_throws "holds the file restart" launch(true)
+        finally
+            kill(p, Base.SIGKILL)
+        end
     end
 end

@@ -352,16 +352,21 @@ merge.
 Running the program several times at once, `julia prog.jl & julia prog.jl & …`, runs the samples
 on as many cores, each process with its own memory: a process waits while another runs the
 phases before the branch point, takes a part, and ends when no sample is left, its `Simulation`
-holding the state of the last sample it ran and the `Data` merged so far; the console says how
-many samples are merged and how many processes still run. A sample runs on a single thread, BLAS
-and Strided included, so that it is the same whatever the threads of the process, which change
-the rounding of the products: launch a process for each core instead. The `threading` of
-`runTMS` applies to the phases before the branch point.
+holding the state of the last sample it ran and the `Data` merged so far, which `sim.data` also
+gives in a sample; the console says how many samples are merged and how many processes still
+run. A sample runs on a single thread, BLAS and Strided included, so that it is the same
+whatever the threads of the process, which change the rounding of the products: launch a
+process for each core instead. The `threading` of `runTMS` applies to the phases before the
+branch point; `threading = nothing` leaves the threading of the samples as it is, and their
+results may then differ by rounding from one process to another. A file a sample writes, by
+`SaveState` for instance, needs a name of its own for each sample, `"state$(c.sample).h5"`: the
+processes write at once.
 
 A part stopped, or left by a process that died, is taken over by the next process, which resumes
 it where its checkpoint is. The file `stop` stops all the parts in the directory of the
 simulation, one part in its own; a run finding no other process running removes it. A sample
-that fails stops the other parts once they end theirs, and the next run tries it again. The
+that fails, or that cannot be merged, makes the other processes fail with its error once they
+end their sample, and the next run tries it again. The
 environment variable `TMS_SAMPLES` overrides `samples`: running the program again with
 `TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001 from the branch point, without
 running the phases before it again, and writes the same files as 2000 samples in one run. With

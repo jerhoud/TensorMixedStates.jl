@@ -63,7 +63,8 @@ it stopped, the warnings its log received, the imaginary parts of
 Hermitian measurements dropped and not yet reported, how many and the largest, as
 `(imaginary part, measurement, time)`, the lists of measurements of the phase being run made
 into `Measure`s, see `phase_output`, the sample being run, 0 without one, the phases it runs,
-and whether the log leaves out the lines of its phases and steps
+whether the log leaves out the lines of its phases and steps, and the outputs the samples are
+merged into in a run without a directory, while its outputs record those of a sample
 """
 mutable struct RunData
     dir::String
@@ -84,11 +85,12 @@ mutable struct RunData
     sample::Int
     phases::Vector{Any}
     quiet::Bool
+    merged::Union{Nothing, Outputs}
 end
 
 RunData(dir, outputs, log, redirect, checkpointer, provided, backend) =
     RunData(dir, outputs, log, redirect, checkpointer, provided, backend, 0, 0., time(), false, 0,
-            0, nothing, IdDict{Any, Vector}(), 0, Any[], false)
+            0, nothing, IdDict{Any, Vector}(), 0, Any[], false, nothing)
 
 """
     Simulation(sim, state[, time = sim.time]; values...)
@@ -146,10 +148,15 @@ with_values(sim::Simulation; values...) =
     data_rows(sim)
 
 the rows gathered in each `Data` of the run of `sim`, by its name, their averages over the
-samples when they are averaged
+samples when they are averaged; in a sample, those of the samples merged
 """
 function data_rows(sim::Simulation)
-    o = getfield(sim, :run).outputs
+    run = getfield(sim, :run)
+    o = run.outputs
+    if o.recording
+        o = !isnothing(run.merged) ? run.merged :
+            data_outputs(run.dir, o.format, last(read_merged(run.dir)))
+    end
     return lock(o.lock) do
         names = unique(String[ n for n in map(data_name, collect(keys(o.opened)))
                                if !isnothing(n) ])

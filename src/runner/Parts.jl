@@ -5,123 +5,136 @@
 """
     with_lock(f, dir)
 
-`f()` holding the lock of the directory `dir`, its file `lock`, which a process holds a short
-while: one left by a process that died is passed over after a minute, five for one of another
-machine, see `mkpidlock`
+`f()` holding the lock of the directory `dir`, its file `lock`: one left by a process that died
+is passed over after a minute, five for another machine, see `mkpidlock`
 """
 with_lock(f::Function, dir::String) =
     mkpidlock(f, joinpath(dir, "lock"); stale_age = 60, poll_interval = 1)
 
-"""
-    part_dir(dir, part)
-
-the directory of the part numbered `part` of the simulation of directory `dir`
-"""
+# the directory of the part numbered `part` of the simulation of directory `dir`
 part_dir(dir::String, part::Int) = joinpath(dir, "parts", string(part))
 
 """
-    Queue(samples, next, current, failed)
+    Queue(samples, next, free, current, failed)
 
-the queue of the samples of a simulation, its file `queue.json`, read and written under its
-lock: the samples asked for, the next one no part has taken, the sample each part runs, by the
-number of the part, and the samples failed, with the part whose file `error` says why
+the queue of the samples of a simulation, its file `queue.json`: the samples asked for, the next
+one never taken, those given back, the sample each part holds, by part, and the samples failed,
+with what went wrong
 """
 mutable struct Queue
     samples::Int
     next::Int
+    free::Vector{Int}
     current::Dict{Int, Int}
-    failed::Dict{Int, Int}
+    failed::Dict{Int, String}
 end
 
 queue_file(dir::String) = joinpath(dir, "queue.json")
 
 function read_queue(dir::String)
     q = JSON.parsefile(queue_file(dir))
-    return Queue(q["samples"], q["next"],
+    return Queue(q["samples"], q["next"], Int[ k for k in q["free"] ],
                  Dict{Int, Int}(parse(Int, p) => k for (p, k) in q["current"]),
-                 Dict{Int, Int}(parse(Int, k) => p for (k, p) in q["failed"]))
+                 Dict{Int, String}(parse(Int, k) => m for (k, m) in q["failed"]))
 end
 
 function write_queue(dir::String, q::Queue)
     tmp = queue_file(dir) * ".tmp"
     open(tmp, "w") do f
-        JSON.print(f, Dict("samples" => q.samples, "next" => q.next,
+        JSON.print(f, Dict("samples" => q.samples, "next" => q.next, "free" => sort(q.free),
                            "current" => Dict(string(p) => k for (p, k) in q.current),
-                           "failed" => Dict(string(k) => p for (k, p) in q.failed)))
+                           "failed" => Dict(string(k) => m for (k, m) in q.failed)))
     end
     sync_file(tmp)
     Base.Filesystem.rename(tmp, queue_file(dir))
     return nothing
 end
 
+# the error of a queue with a sample failed, naming the first
+function failed_error(q::Queue)
+    k = minimum(keys(q.failed))
+    return ErrorException("sample $k failed, the samples stop: $(q.failed[k])")
+end
+
+# the sample a part takes next, given back or never taken, within the samples asked for
+function next_sample(q::Queue)
+    free = filter(≤(q.samples), q.free)
+    return !isempty(free) ? minimum(free) : q.next ≤ q.samples ? q.next : nothing
+end
+
 """
-    take_sample!(dir, part)
+    take_sample!(dir, part; stop = false)
 
 the sample the part `part` of the simulation of directory `dir` runs next: the one it holds, or
-else the next one no part has taken, `nothing` when none is left; refused once a sample failed
+else the next one, `nothing` when none is left, `:stop` with `stop` when one is left, which it
+does not take; refused once a sample failed. A sample held beyond those asked for is given back.
 """
-function take_sample!(dir::String, part::Int)
+function take_sample!(dir::String, part::Int; stop::Bool = false)
     return with_lock(dir) do
         q = read_queue(dir)
-        if haskey(q.current, part)
-            return q.current[part]
-        elseif !isempty(q.failed)
-            k = minimum(keys(q.failed))
-            error("sample $k failed, as the file error of $(part_dir(dir, q.failed[k])) says: " *
-                  "the samples stop")
-        elseif q.next > q.samples
-            return nothing
+        k = get(q.current, part, nothing)
+        if !isnothing(k) && k > q.samples
+            delete!(q.current, part)
+            push!(q.free, k)
+            write_queue(dir, q)
+            k = nothing
         end
-        k = q.next
-        q.next += 1
+        if !isnothing(k)
+            return stop ? :stop : k
+        elseif !isempty(q.failed)
+            throw(failed_error(q))
+        end
+        k = next_sample(q)
+        if isnothing(k) || stop
+            return isnothing(k) ? nothing : :stop
+        end
+        filter!(≠(k), q.free)
+        q.next = max(q.next, k + 1)
         q.current[part] = k
         write_queue(dir, q)
         return k
     end
 end
 
-"""
-    sample_failed!(dir, sample, part)
+# `sample` noted failed with `message` in the queue `q` of the simulation of directory `dir`
+function note_failed!(dir::String, q::Queue, sample::Int, message::AbstractString)
+    q.failed[sample] = message
+    write_queue(dir, q)
+    return nothing
+end
 
-note in the queue of the simulation of directory `dir` that `sample` failed, the file `error` of
-the part `part` saying why, so that the other parts stop, see `take_sample!`
 """
-function sample_failed!(dir::String, sample::Int, part::Int)
+    sample_failed!(dir, sample, message)
+
+note that `sample` failed with `message`, so that the other parts stop, see `take_sample!`
+"""
+sample_failed!(dir::String, sample::Int, message::AbstractString) =
+    with_lock(() -> note_failed!(dir, read_queue(dir), sample, message), dir)
+
+"""
+    sample_ended!(dir, part)
+
+note that the part `part` ended its sample, whose rows are written, see `write_pending`
+"""
+function sample_ended!(dir::String, part::Int)
     with_lock(dir) do
         q = read_queue(dir)
-        q.failed[sample] = part
+        delete!(q.current, part)
         write_queue(dir, q)
     end
     return nothing
 end
 
 """
-    sample_ended!(dir, part, format)
+    merge_samples!(dir, format; limit = 100)
 
-note in the queue of the simulation of directory `dir` that the part `part` ended its sample,
-whose rows are written, see `write_pending`, and merge the samples ended, see `merge_samples!`;
-the first sample merged and the last, `nothing` when none was
+under the lock of the directory `dir` of a simulation, at most `limit` of its samples ended added
+to its outputs in their order, see `replay!`, from the first not merged up to the first not
+ended: its files written, then `merged.jls`, then the rows merged removed, so that a crash
+leaves a merge to go on with. It returns the first sample merged and the last, `nothing` for
+none. A sample that cannot be merged is noted failed, see `sample_failed!`.
 """
-function sample_ended!(dir::String, part::Int, format::String)
-    return with_lock(dir) do
-        q = read_queue(dir)
-        delete!(q.current, part)
-        write_queue(dir, q)
-        return merge_samples!(dir, part, format)
-    end
-end
-
-"""
-    merge_samples!(dir, part, format)
-
-under the lock of the directory `dir` of a simulation, its samples ended added to its outputs in
-their order, see `replay!`, from the first not merged up to the first not ended: its files
-written, then `merged.jls`, then the rows of the samples merged removed, so that a crash at any
-point leaves a merge to go on with. It returns the first sample merged and the last, `nothing`
-when none was. A sample that cannot be merged is noted failed, the file `error` of the part
-`part`, which merges, saying why, see `sample_failed!`.
-"""
-function merge_samples!(dir::String, part::Int, format::String)
+function merge_samples!(dir::String, format::String; limit::Int = 100)
     m, marks = read_merged(dir)
     k = m + 1
     if !isfile(pending_file(dir, k))
@@ -129,18 +142,20 @@ function merge_samples!(dir::String, part::Int, format::String)
     end
     o = reopen!(Outputs(; dir, format, sampled = true), marks)
     try
-        while isfile(pending_file(dir, k))
+        while k ≤ m + limit && isfile(pending_file(dir, k))
             replay!(o, read_pending(dir, k))
             k += 1
         end
-    catch
-        q = read_queue(dir)
-        q.failed[k] = part
-        write_queue(dir, q)
+    catch e
         # the averaged files left as the merge before wrote them, the rows written to the others
         # cut by the next merge, which reopens them at their marks
         foreach(close, (h for h in values(o.opened) if !(h isa AveragedOpened)))
-        rethrow()
+        if e isa InterruptException
+            rethrow()
+        end
+        message = "sample $k cannot be merged: $(sprint(showerror, e))"
+        note_failed!(dir, read_queue(dir), k, message)
+        error(message)
     end
     marks = resume_marks(o)
     close!(o)
@@ -153,4 +168,22 @@ function merge_samples!(dir::String, part::Int, format::String)
         end
     end
     return m + 1 => k - 1
+end
+
+"""
+    merge_all!(dir, format)
+
+the samples ended of the simulation of directory `dir` merged, see `merge_samples!`, the lock
+taken anew for every `limit` of them, so that it is held a short while; the first sample merged
+and the last, `nothing` for none
+"""
+function merge_all!(dir::String, format::String)
+    merged = nothing
+    while true
+        step = with_lock(() -> merge_samples!(dir, format), dir)
+        if isnothing(step)
+            return merged
+        end
+        merged = isnothing(merged) ? step : first(merged) => last(step)
+    end
 end

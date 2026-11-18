@@ -880,11 +880,8 @@ end
 """
     Recorder(destination)
 
-a destination of a simulation with samples as a part of the simulation opens it, a text or JSON
-file or a `Data`, averaged or `EachSample`: the rows of the sample being run kept, each with
-where it is written, `(sample, phase, step)`, and the names of its list, for the merge to write
-them in the order of the samples, see `replay!`; the rows that cannot be averaged are refused at
-once, see `check_averaged`, and a text file given two lists
+a file or `Data` of a simulation with samples as a sample opens it: its rows kept, each with
+where it is written and the names of its list, for `replay!`; checked as `check_averaged` does
 """
 mutable struct Recorder
     destination::Destination
