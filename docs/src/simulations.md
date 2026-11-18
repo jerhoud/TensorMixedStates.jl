@@ -374,12 +374,15 @@ changes nothing.
 
 A tolerance stops the samples once their averages are precise enough: with
 `tolerance = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
-the samples merged are those up to the first whose errors in `energy`, every `err(c)` at every
-row, are within `atol + rtol * |c|`, at least `min_samples` of them, 10 by default, so that an
-error underestimated by chance does not stop it; `samples` is then the most that runs. The
-samples merged are the same whichever process runs them, the samples running beyond the first
-that reaches the tolerance ending without being merged. A program run again with a tighter
-tolerance goes on from the samples merged.
+the samples stop at the first whose errors in `energy`, every `err(c)` at every row, are within
+`atol + rtol * |c|`, every row holding at least `min_samples` samples, 10 by default, so that an
+error underestimated by chance does not stop them; `samples` is then the most that runs. A
+quantity constant over the first samples, as a rare event, has an error of zero there: raise
+`min_samples` above the samples it takes to show. The tolerance names an averaged file or
+`Data`, a `Data` alone in a run without a directory. The samples merged are the same whichever
+process runs them, the samples running beyond the first that reaches the tolerance ending
+without being merged. A program run again with a tighter tolerance goes on from the samples
+merged; with a looser one, it keeps them.
 
 ## Measurements
 

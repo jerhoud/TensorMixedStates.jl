@@ -178,13 +178,14 @@ the description of a simulation, which `runTMS` runs.
   samples); the environment variable `TMS_SAMPLES` overrides it, so that a finished run is
   prolonged by running it again with more, and the program run several times at once runs the
   samples on as many cores, see `runTMS`
-- `tolerance`: the errors the samples stop at, once at least `min_samples` are done, for an
-  averaged destination `d`, `d => atol` or `d => (atol = …, rtol = …)`, or a list of them: every
-  error of `d`, `err(c)`, within `atol + rtol * |c|`, at every row, the samples merged being those
-  up to the first that reaches it, the same whichever process runs them (default `[]`, all the
+- `tolerance`: the errors the samples stop at, for an averaged destination `d`, a file or a
+  `Data` (a `Data` alone in a run without a directory), `d => atol` or
+  `d => (atol = …, rtol = …)`, or a list of them: every error of `d`, `err(c)`, within
+  `atol + rtol * |c|`, at every row, the samples stopping at the first that reaches it, the same
+  whichever process runs them, those an earlier launch merged kept (default `[]`, all the
   `samples`)
-- `min_samples`: the samples done before the tolerance is looked at, so that it does not stop on
-  an error underestimated by chance (default 10)
+- `min_samples`: the samples each row of `d` holds before its tolerance is looked at, so that it
+  does not stop on an error underestimated by chance (default 10)
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
@@ -243,7 +244,10 @@ struct SimData
             error("min_samples is 1 or more, got $min_samples")
         end
         for (d, _) in tolerance
-            if !any(first(p) == d for l in lists for p in l)
+            if !(plain_destination(Outputs(), d) isa Union{TextFile, JsonFile, Data})
+                error("the tolerance names $(repr(d)), which is not averaged: name a file or a " *
+                      "Data, as \"energy\" or Data(\"x\")")
+            elseif !any(first(p) == d for l in lists for p in l)
                 error("the tolerance names $(repr(d)), which no list of measurements writes " *
                       "averaged: name a destination of the lists, as \"energy\" or Data(\"x\")")
             end
@@ -286,7 +290,7 @@ function tolerances(v::AbstractVector)
             tol isa NamedTuple && issubset(keys(tol), (:atol, :rtol)) &&
             all(x -> x isa Real, values(tol)) ?
             (atol = Float64(get(tol, :atol, 0.)), rtol = Float64(get(tol, :rtol, 0.))) : nothing
-        if isnothing(t) || t.atol < 0 || t.rtol < 0
+        if isnothing(t) || !(t.atol ≥ 0 && t.rtol ≥ 0)
             error("a tolerance is destination => atol or destination => (atol = …, rtol = …), " *
                   "of zero or above, got $(repr(p))")
         end
@@ -777,6 +781,8 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
                within(merged.opened, merged.dir, sd.format, sd.tolerance, sd.min_samples)
                 log_line(run, "Tolerance reached at sample $k")
                 break
+            elseif !isempty(sd.tolerance) && k == samples
+                log_line(run, "Tolerance not reached at sample $k, the last asked for")
             end
         end
     finally
@@ -1305,7 +1311,7 @@ the sample it holds, of a sample ended, is removed.
 """
 function claim_part(dir::String, src_path, accepted::Bool)
     q = read_queue(dir)
-    if !isempty(q.failed)
+    if !isempty(failed_samples(q))
         throw(failed_error(q))
     end
     numbers = part_numbers(dir)
@@ -1329,19 +1335,20 @@ function claim_part(dir::String, src_path, accepted::Bool)
 end
 
 """
-    samples_line(dir, merged)
+    samples_line(dir, merged; tolerance = false)
 
 what the console takes of the samples of the simulation of directory `dir` once a process
-returns: the samples merged, out of those asked for, and the other processes running
+returns: the samples merged, out of those asked for, whether a `tolerance` was reached, and the
+other processes running
 """
-function samples_line(dir::String, merged::Int)
+function samples_line(dir::String, merged::Int; tolerance::Bool = false)
     n = length(live_parts(dir))
     q = read_queue(dir)
     asked = q.samples
-    return (!isnothing(q.reached) ? "$merged samples merged, the tolerance reached at sample " *
-                                    "$(q.reached)" :
-            merged ≤ asked ? "$merged of $asked samples merged" :
-            "$merged samples merged, more than the $asked asked for") *
+    count = merged ≤ asked ? "$merged of $asked samples merged" :
+            "$merged samples merged, more than the $asked asked for"
+    return (!isnothing(q.reached) ? "$merged samples merged, within the tolerance" :
+            tolerance && merged ≥ asked ? "$count, the tolerance not reached" : count) *
            (n == 0 ? "" : ", $n other process$(n == 1 ? "" : "es") running")
 end
 
@@ -1427,7 +1434,7 @@ function run_parts(sd::SimData, settings)
     if !isnothing(b)
         merged, marks = read_merged(dir)
         run.outputs = data_outputs(dir, sd.format, marks)
-        line = samples_line(dir, merged)
+        line = samples_line(dir, merged; tolerance = !isempty(sd.tolerance))
         @info ran ? summary_line(sd, run, line) :
               "simulation \"$(sd.name)\" has no sample left to run, results in $dir; $line"
     end

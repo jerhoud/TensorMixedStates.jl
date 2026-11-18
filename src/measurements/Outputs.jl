@@ -662,6 +662,14 @@ function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d
     return RowSum(s.time, s.columns, s.missing, s.shift, s.n + 1, W, s.W2 + w^2, mean, M2)
 end
 
+# the standard deviation of the samples in the cell `i` of the row of sums `s` and the error on
+# their mean, NaN for one sample
+function spread(s::RowSum, i::Int)
+    unbiased = s.W - s.W2 / s.W
+    sd = unbiased > 0 ? sqrt(s.M2[i] / unbiased) : NaN
+    return sd, sd / sqrt(s.W^2 / s.W2)
+end
+
 """
     averaged_cells(s)
 
@@ -669,16 +677,13 @@ the cells of the row of sums `s`: `N`, `N_eff`, and for each cell its mean, the 
 the standard deviation of the samples, `NaN` for one sample
 """
 function averaged_cells(s::RowSum)
-    neff = s.W^2 / s.W2
-    out = Pair{String, Any}[ "N" => s.n, "N_eff" => neff ]
-    unbiased = s.W - s.W2 / s.W
+    out = Pair{String, Any}[ "N" => s.n, "N_eff" => s.W^2 / s.W2 ]
     for (i, c) in enumerate(s.columns)
         if s.missing[i]
             append!(out, [ c => missing, "err($c)" => missing, "std($c)" => missing ])
         else
-            sd = unbiased > 0 ? sqrt(s.M2[i] / unbiased) : NaN
-            append!(out, [ c => s.shift[i] + s.mean[i], "err($c)" => sd / sqrt(neff),
-                           "std($c)" => sd ])
+            sd, err = spread(s, i)
+            append!(out, [ c => s.shift[i] + s.mean[i], "err($c)" => err, "std($c)" => sd ])
         end
     end
     return out
@@ -1214,17 +1219,20 @@ end
     within(sums, samples, (atol, rtol), min_samples)
 
 whether the averages `sums` of `samples` samples, at least `min_samples`, have every error within
-`atol + rtol * |mean|`, cell by cell: a row of one sample, whose error is not known, is not
+`atol + rtol * |mean|`, cell by cell, every row holding at least `min_samples` samples: a row of
+one sample, whose error is not known, is not
 """
 function within(sums::AbstractDict{RowKey, RowSum}, samples::Int, (atol, rtol), min_samples::Int)
     if samples < max(min_samples, 2)
         return false
     end
     for s in values(sums)
-        unbiased = s.W - s.W2 / s.W
+        if s.n < min_samples
+            return false
+        end
         for i in eachindex(s.columns)
             if !s.missing[i]
-                err = unbiased > 0 ? sqrt(s.M2[i] / unbiased) / sqrt(s.W^2 / s.W2) : NaN
+                _, err = spread(s, i)
                 # NaN fails it
                 if !(err ≤ atol + rtol * abs(s.shift[i] + s.mean[i]))
                     return false

@@ -52,14 +52,17 @@ function write_queue(dir::String, q::Queue)
     return nothing
 end
 
-# the error of a queue with a sample failed, naming the first
-function failed_error(q::Queue)
-    k = minimum(keys(q.failed))
-    return ErrorException("sample $k failed, the samples stop: $(q.failed[k])")
-end
-
 # the last sample the parts run: those asked for, or that reaching the tolerance
 last_sample(q::Queue) = min(q.samples, something(q.reached, q.samples))
+
+# the samples failed among those the parts run, see last_sample
+failed_samples(q::Queue) = filter(≤(last_sample(q)), collect(keys(q.failed)))
+
+# the error of a queue with a sample failed, naming the first
+function failed_error(q::Queue)
+    k = minimum(failed_samples(q))
+    return ErrorException("sample $k failed, the samples stop: $(q.failed[k])")
+end
 
 # the sample a part takes next, given back or never taken, up to the last one
 function next_sample(q::Queue)
@@ -87,7 +90,7 @@ function take_sample!(dir::String, part::Int; stop::Bool = false)
         end
         if !isnothing(k)
             return stop ? :stop : k
-        elseif !isempty(q.failed)
+        elseif !isempty(failed_samples(q))
             throw(failed_error(q))
         end
         k = next_sample(q)
@@ -148,6 +151,11 @@ function merge_samples!(dir::String, merging; limit::Int = 100)
     k = m + 1
     q = read_queue(dir)
     if !isnothing(q.reached) || !isfile(pending_file(dir, k))
+        return nothing
+    elseif !isempty(tolerance) && within(marks, dir, format, tolerance, min_samples)
+        # reached by a merge that stopped before the queue noted it
+        q.reached = m
+        write_queue(dir, q)
         return nothing
     end
     o = reopen!(Outputs(; dir, format, sampled = true), marks)

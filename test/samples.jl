@@ -554,6 +554,18 @@ end
         @test TensorMixedStates.read_queue(abspath("t")).reached == n
         @test split(readlines("t/f")[2], '\t')[2] == string(n)
         @test only(runTMS(sd("d", Data("v") => 0.25); output = devnull).data["v"])["N"] == n
+        @test startswith(TensorMixedStates.samples_line(abspath("t"), n),
+                         "$n samples merged, within the tolerance")
+        runTMS(SimData(; name = "n", samples = 12, tolerance = Data("v") => 1e-6,
+                       phases = [up, gate], final_measurements = [Data("v") => value]))
+        @test TensorMixedStates.samples_line(abspath("n"), 12; tolerance = true) ==
+              "12 of 12 samples merged, the tolerance not reached"
+        # every row holds min_samples: one written by two samples never reaches it
+        w = Realizations(c -> Gates(gates = X(1), final_measurements =
+                                        c.sample ≤ 2 ? [Data("w") => "w" => c -> 1.] : []))
+        sim = runTMS(SimData(; name = "w", samples = 30, tolerance = Data("w") => 0.1,
+                             phases = [up, w], final_measurements = [Data("v") => value]))
+        @test only(sim.data["v"])["N"] == 30
         # more samples change nothing, a tighter tolerance goes on
         withenv(() -> runTMS(sd("t", Data("v") => 0.25)), "TMS_SAMPLES" => "500")
         @test TensorMixedStates.read_merged(abspath("t")).first == n
@@ -567,8 +579,18 @@ end
                                               final_measurements = "f" => X(1))
         @test_throws "which no list of measurements writes" sd("x", "g" => 0.1)
         @test_throws "of zero or above" sd("x", "f" => -1)
+        @test_throws "of zero or above" sd("x", "f" => NaN)
+        @test_throws "which is not averaged" sd("x", EachSample("f") => 0.1)
+        @test_throws "which is not averaged" sd("x", "" => 0.1)
         @test_throws "a tolerance is" sd("x", "f" => (atol = "a",))
         @test_throws "min_samples is 1 or more" sd("x", "f" => 0.1; min_samples = 0)
         @test_throws "names a Data(name) alone" runTMS(sd("x", "f" => 0.1); output = devnull)
+        # a sample failed beyond the one reaching the tolerance stops no part
+        T = TensorMixedStates
+        dir = mkpath(abspath("q"))
+        T.write_queue(dir, T.Queue(40, 17, 19, Int[], Dict(2 => 18), Dict(18 => "boom")))
+        @test isnothing(T.take_sample!(dir, 1))
+        T.write_queue(dir, T.Queue(40, nothing, 19, Int[], Dict{Int, Int}(), Dict(18 => "boom")))
+        @test_throws "sample 18 failed" T.take_sample!(dir, 1)
     end
 end
