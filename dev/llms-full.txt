@@ -164,7 +164,7 @@ phases of a sample, drawing its disorder with `c.rng`; the phases before it run 
 measurements of the `SimData` at the end of each sample. Files and `Data` hold the averages
 (columns `c`, `err(c)`, `std(c)`, `N`), `EachSample("name")` a row for each sample (column
 `sample`); `TMS_SAMPLES=2N julia prog.jl` prolongs a finished run, and the program launched K
-times at once runs the samples on K cores, with the same results; `tolerance = "name" => atol`
+times at once runs the samples on K cores, with the same results; `tol = "name" => atol`
 stops them once the errors of `name` are within `atol`.
 
 ## When something fails
@@ -1423,10 +1423,12 @@ end their sample, and the next run tries it again. The environment variable `TMS
 overrides `samples`: running the program again with `TMS_SAMPLES=2000` after 1000 samples goes
 on with sample 1001 from the branch point, without running the phases before it again, and
 writes the same files as 2000 samples in one run. With fewer samples than those merged, a run
-changes nothing.
+changes nothing. A run is prolonged with the minor version of Julia that started it; another
+version of TensorMixedStates goes on when it reads its files, which the log notes, the samples
+then coming from two versions.
 
 A tolerance stops the samples once their averages are precise enough: with
-`tolerance = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
+`tol = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
 the samples stop at the first whose errors in `energy`, every `err(c)` at every row, are within
 `atol + rtol * |c|`, every row holding at least `min_samples` samples, 10 by default, so that an
 error underestimated by chance does not stop them; `samples` is then the most that runs. A
