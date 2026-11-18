@@ -36,7 +36,7 @@ import ITensorMPS: maxlinkdim, expect, apply, sample
 
 using ITensors, ITensorMPS, LinearAlgebra, Random, HDF5
 using Serialization: serialize, deserialize
-using FileWatching.Pidfile: mkpidlock
+using FileWatching.Pidfile: trymkpidlock
 import Printf, JSON, Dates, Logging, Markdown, Tables, KrylovKit
 
 # Sites, systems and states

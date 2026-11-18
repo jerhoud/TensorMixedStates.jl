@@ -8,8 +8,20 @@
 `f()` holding the lock of the directory `dir`, its file `lock`: one left by a process that died
 is passed over after a minute, five for another machine, see `mkpidlock`
 """
-with_lock(f::Function, dir::String) =
-    mkpidlock(f, joinpath(dir, "lock"); stale_age = 60, poll_interval = 1)
+function with_lock(f::Function, dir::String)
+    # tried again every tenth of a second: the wait of mkpidlock watches the file, which misses
+    # its removal by another machine on a network file system, waiting stale_age then
+    held = trymkpidlock(joinpath(dir, "lock"); stale_age = 60)
+    while held === false
+        sleep(0.1)
+        held = trymkpidlock(joinpath(dir, "lock"); stale_age = 60)
+    end
+    try
+        return f()
+    finally
+        close(held)
+    end
+end
 
 # the directory of the part numbered `part` of the simulation of directory `dir`
 part_dir(dir::String, part::Int) = joinpath(dir, "parts", string(part))

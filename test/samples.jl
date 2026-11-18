@@ -646,3 +646,23 @@ end
         @test split(readlines("d/e")[1], '\t') == ["time", "sample", "X(1)"]
     end
 end
+
+@testset "The lock of a simulation is released on an error and taken as soon as it is free" begin
+    in_tmp() do
+        T = TensorMixedStates
+        dir = mkpath(abspath("l"))
+        @test_throws "inside" T.with_lock(() -> error("inside"), dir)
+        t = time()
+        @test T.with_lock(() -> 1, dir) == 1
+        @test time() - t < 1
+        released = Ref(0.)
+        holder = @async T.with_lock(dir) do
+            sleep(0.5)
+            released[] = time()
+        end
+        sleep(0.1)
+        got = T.with_lock(time, dir)
+        wait(holder)
+        @test released[] ≤ got < released[] + 1
+    end
+end
