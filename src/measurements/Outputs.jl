@@ -1015,21 +1015,22 @@ as_measure(m::Measure) = m
 as_measure(x) = Measure(x)
 
 """
-    each_sample(o, d, measurements)
+    each_sample(d, m)
 
-the pair `EachSample(d) => measurements` of a list, `d` made a destination, the measurements
+the measurements `m` of the destination `EachSample(d)`, the lists going there gathered,
 measuring `:sample` first unless they start with it; another of the `sample_columns` refused
 """
-function each_sample(o::Outputs, d::EachSample, measurements)
-    m = as_measure(measurements)
+function each_sample(d::EachSample, m::Measure)
     sampled = !isempty(m.entries) && first(m.entries) == ("sample" => :sample)
     skip = sampled ? 1 : 0
     taken = findfirst(e -> first(e) in sample_columns, m.entries[skip + 1:end])
     if !isnothing(taken)
-        error("the column $(first(m.entries[taken + skip])) of $d is one the samples write: " *
-              "give the measurement another name, as \"name\" => op")
+        e = m.entries[taken + skip]
+        error("the column $(first(e)) of $d is one the samples write: " *
+              (e == ("sample" => :sample) ? "put :sample first, or leave it out" :
+               "give the measurement another name, as \"name\" => op"))
     end
-    return EachSample(plain_destination(o, d.inner)) => (sampled ? m : Measure([:sample, m]))
+    return sampled ? m : Measure([:sample, m])
 end
 
 """
@@ -1038,15 +1039,17 @@ end
 the pairs `destination => measurements` of `list` as pairs `destination => Measure`, one for
 each destination, in the order they first come, the lists going to one destination gathered
 into one, so that a call writes one row to each; `EachSample(d)` is opened as `d`, not averaged,
-measuring `:sample` first unless the list starts with it, so that a list made this way is made again as
-it is, as `output` does with the lists of `phase_output`
+measuring `:sample` first unless the list starts with it, so that a list made this way is made
+again as it is, as `output` does with the lists of `phase_output`
 """
 function by_destination(o::Outputs, list::AbstractVector)
-    ps = [ first(p) isa EachSample ? each_sample(o, first(p), last(p)) :
+    ps = [ first(p) isa EachSample ? EachSample(plain_destination(o, first(p).inner)) => last(p) :
            destination(o, first(p)) => last(p) for p in list ]
     ds = unique(first.(ps))
     ms = [ [ last(p) for p in ps if first(p) == d ] for d in ds ]
-    return [ d => (length(m) == 1 ? as_measure(only(m)) : Measure(m)) for (d, m) in zip(ds, ms) ]
+    gathered(m) = length(m) == 1 ? as_measure(only(m)) : Measure(m)
+    return [ d => (d isa EachSample ? each_sample(d, gathered(m)) : gathered(m))
+             for (d, m) in zip(ds, ms) ]
 end
 
 """
@@ -1065,7 +1068,7 @@ function output!(o::Outputs, state::AbstractState, list::AbstractVector; time = 
         for (d, m) in items
             if any(e -> first(e) == "time", m.entries)
                 error("a measurement written to $d cannot be named time, the column of the times")
-            elseif d isa EachSample && !haskey(values, :sample)
+            elseif d isa EachSample && !o.sampled
                 error("EachSample writes a row for each sample, and the simulation has no samples")
             end
             twin = d isa EachSample && d.inner isa Union{TextFile, JsonFile, Data} ?

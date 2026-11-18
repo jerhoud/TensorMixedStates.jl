@@ -707,3 +707,18 @@ end
         @test T.running_marker(dir) == "host 1 date\n"
     end
 end
+
+@testset "The lists to one EachSample are gathered behind one column sample" begin
+    in_tmp() do
+        up = CreateState{Pure}(2, Qubit(), "Up")
+        r = Realizations(c -> Gates(gates = X(1)))
+        sd(name, final) = SimData(; name, samples = 2, phases = [up, r], final_measurements = final)
+        runTMS(sd("a", [EachSample("e") => X(1), EachSample("e") => Z(1)]))
+        @test split(readlines("a/e")[1], '\t') == ["time", "sample", "X(1)", "Z(1)"]
+        @test_throws "put :sample first" runTMS(sd("b", EachSample("e") => [X(1), :sample]))
+        # a value sample given by an Update does not make samples
+        give = Update(c -> (c.sample = 7); provides = [:sample])
+        each = Update(c -> output(c, EachSample("e") => X(1)))
+        @test_throws "has no samples" runTMS(SimData(; name = "c", phases = [up, give, each]))
+    end
+end
