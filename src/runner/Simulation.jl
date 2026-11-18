@@ -8,31 +8,34 @@ export Simulation, output, log_message, stopped
     simulation_files
 
 the files `runTMS` writes in the directory of a simulation, which no destination may be named
-after, nor be in its directories `prog`, which holds the files the program includes, `parts`
-and `pending`, which hold those of the samples, see `is_simulation_file`
+after, nor be in its directory `prog`, which holds the files the program includes, nor, with
+samples, be one of `sample_files` or in `parts` and `pending`, see `is_simulation_file`
 """
 const simulation_files = Set(["log", "stop", "restart", "error", "running", "stamp", "description",
                               "prog.jl", "prog_args.json", checkpoint_files...])
 
 """
-    is_simulation_file(name)
+    is_simulation_file(name, sampled)
 
-whether `name`, relative to the directory of a simulation, is a file `runTMS` writes there, see
-`simulation_files`
+whether `name`, relative to the directory of a simulation, `sampled` or not, is a file `runTMS`
+writes there, see `simulation_files`
 """
-function is_simulation_file(name::AbstractString)
+function is_simulation_file(name::AbstractString, sampled::Bool)
     n = normpath(name)
-    return n in simulation_files ||
-           any(d -> n == d || startswith(n, joinpath(d, "")), ("prog", "parts", "pending"))
+    under(d) = n == d || startswith(n, joinpath(d, ""))
+    return n in simulation_files || under("prog") ||
+           sampled && (n in sample_files || under("parts") || under("pending"))
 end
 
 """
     reserved_values
 
 the names no value of a simulation may take: those the measurements read otherwise, `c.state`
-and `c.time`, those the run gives, `c.step`, `c.rng` and `c.sample`, and `sim.data`
+and `c.time`, those the run gives, `c.step` and `c.rng`, and `sim.data`; `c.sample` too in a
+simulation with samples, see `gives_sample`
 """
-const reserved_values = (:state, :time, :step, :rng, :sample, :data)
+const reserved_values = (:state, :time, :step, :rng, :data)
+
 
 """
     check_backend(backend)
@@ -92,6 +95,9 @@ RunData(dir, outputs, log, redirect, checkpointer, provided, backend) =
     RunData(dir, outputs, log, redirect, checkpointer, provided, backend, 0, 0., time(), false, 0,
             0, nothing, IdDict{Any, Vector}(), 0, Any[], false, nothing)
 
+# whether the run `run` gives the value `:sample`, a simulation with samples
+gives_sample(run::RunData) = run.outputs.sampled
+
 """
     Simulation(sim, state[, time = sim.time]; values...)
 
@@ -122,7 +128,7 @@ end
 function Simulation(sim::Simulation, state::Union{Nothing, AbstractState}, time::Number = sim.time;
                     values...)
     for name in keys(values)
-        if name in reserved_values
+        if name in reserved_values || name === :sample && gives_sample(getfield(sim, :run))
             error("a simulation cannot be given a value named $name, a name the run reserves")
         end
     end
@@ -214,7 +220,7 @@ function setproperty!(c::Editing, name::Symbol, x)
         error("c.time takes a number, not a $(typeof(x))")
     elseif name === :state || name === :time
         setfield!(c, name, x)
-    elseif name in reserved_values
+    elseif name in reserved_values || name === :sample && gives_sample(getfield(c, :run))
         error("$name cannot be changed, a name the run reserves")
     elseif isnothing(x)
         delete!(getfield(c, :values), name)
@@ -278,7 +284,7 @@ a name of a file of the simulation refused
 function run_destination(run::RunData, name::AbstractString)
     if !isnothing(run.redirect)
         return Stream(run.redirect, run.outputs.format)
-    elseif !isempty(run.dir) && is_simulation_file(name)
+    elseif !isempty(run.dir) && is_simulation_file(name, gives_sample(run))
         error("cannot write to $name, a file of the simulation directory: choose another name")
     end
     return name

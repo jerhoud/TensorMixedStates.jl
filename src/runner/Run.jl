@@ -57,7 +57,7 @@ function check_values(phases::Vector, final_measurements, sampled::Bool)
     for l in run_lists(phases, final_measurements), p in l
         for (name, m) in as_measure(last(p)).entries
             for r in measurement_reads(m)
-                if r === :sample && !sampled
+                if r === :sample && !sampled && r ∉ provided
                     error("the measurement $name reads sample, which only a simulation with " *
                           "samples has, see Realizations")
                 elseif r ∉ provided && r ∉ (:step, :rng, :sample)
@@ -72,17 +72,18 @@ function check_values(phases::Vector, final_measurements, sampled::Bool)
 end
 
 """
-    check_names(phases)
+    check_names(phases, sampled)
 
 refuse, when the `SimData` is written rather than when the run reaches the phase, a phase naming a
-state by a name the run reserves, see `reserved_values`, `:state` aside, and one naming a state
+state by a name the run reserves, see `reserved_values`, `:state` aside, or `:sample` in a
+`sampled` simulation, which gives it, and one naming a state
 twice in its `on`, which would act on it twice
 """
-function check_names(phases::Vector)
+function check_names(phases::Vector, sampled::Bool)
     for p in phases
         names = acted_on(p)
         for n in [ names ; collect(provided_values(p)) ]
-            if n ≠ :state && n in reserved_values
+            if n ≠ :state && n in reserved_values || sampled && n === :sample
                 error("$(type_name(typeof(p))) cannot name a state $n, a name the run reserves")
             end
         end
@@ -106,7 +107,7 @@ text file given two lists, as one holds one list, the lists one call sends it ma
 """
 function check_destinations(phases::Vector, final_measurements, sampled::Bool; live::Bool = true)
     for p in phases, f in phase_files(p)
-        if live && is_simulation_file(f)
+        if live && is_simulation_file(f, sampled)
             error("cannot save to $f, a file of the simulation directory: choose another name")
         end
     end
@@ -123,7 +124,7 @@ function check_destinations(phases::Vector, final_measurements, sampled::Bool; l
         end
         if !live || !(d isa Union{TextFile, JsonFile})
             continue
-        elseif is_simulation_file(d.path)
+        elseif is_simulation_file(d.path, sampled)
             error("cannot write to $(d.path), a file of the simulation directory: choose another " *
                   "name")
         elseif d isa TextFile && get!(held, d.path, first.(m.entries)) ≠ first.(m.entries)
@@ -232,7 +233,7 @@ struct SimData
         realized = branched_phases(ps, samples)
         checked = checked_phases(ps, realized, samples)
         provided = check_values(checked, final_measurements, !isnothing(samples))
-        check_names(checked)
+        check_names(checked, !isnothing(samples))
         lists = run_lists(checked, final_measurements)
         if isnothing(samples) && any(first(p) isa EachSample for l in lists for p in l)
             error("EachSample writes a row for each sample, and the simulation has no samples")
@@ -740,7 +741,7 @@ function run_sample(sim::Simulation, sd::SimData, b::Commit, sample::Int,
     check_realization(realized, sd.realized, sample)
     phases = [prefix; realized]
     check_values(phases, sd.final_measurements, true)
-    check_names(realized)
+    check_names(realized, true)
     check_destinations(phases, sd.final_measurements, true; live = !isempty(c.dir))
     sim = run_phases(sim, phases, start, done, ended, threading; final = false)
     # what follows is told of the sample, outside its phases

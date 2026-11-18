@@ -153,11 +153,18 @@ state_file(g::Int) = "checkpoint-$g.h5"
 """
     checkpoint_files
 
-the files a checkpoint writes in the directory of a simulation
+the files a checkpoint writes in the directory of a simulation, and its lock
 """
 const checkpoint_files = ("checkpoint.json", "checkpoint.json.tmp", state_file(1), state_file(2),
-                          "branch.h5", "branch.h5.tmp", "lock", "queue.json", "queue.json.tmp",
-                          "merged.jls", "merged.jls.tmp")
+                          "lock")
+
+"""
+    sample_files
+
+the files a simulation with samples writes in its directory besides, see `Parts.jl`
+"""
+const sample_files = ("branch.h5", "branch.h5.tmp", "queue.json", "queue.json.tmp", "merged.jls",
+                      "merged.jls.tmp")
 
 """
     relative(d, dir)

@@ -20,8 +20,7 @@ the reference article.
 ### Changed
 
 - The checkpoints of 2.1 are not resumed: start such a run over.
-- `sample` is reserved, as `step` and `rng`: no value or state of a simulation may take that name.
-- `branch.h5`, `lock`, `queue.json`, `merged.jls` and the directories `parts` and `pending` are files of the simulation directory, which no destination or saved state may take.
+- A destination or a saved state named `lock` is refused, the run writing its lock there.
 - A resumption that `TMS_ACCEPT_PROGRAM=1` allows with an edited program is noted in the log.
 
 ## [2.1.0] - 2026-11-09

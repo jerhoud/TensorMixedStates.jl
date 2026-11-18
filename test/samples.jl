@@ -335,7 +335,7 @@ end
         @test_throws "cannot be averaged" ending("s", "s" => "s" => c -> "text")
         @test_throws "other columns" ending("v", "v" => "v" => c -> ones(c.sample))
         @test_throws "two columns" ending("d", "d" => [Z, "Z(1)" => Z(1)])
-        @test_throws "one the averages write" ending("n", "n" => "N" => X(1))
+        @test_throws "one the averages or the samples write" ending("n", "n" => "N" => X(1))
         # a list written by an Update, to an averaged text file holding another
         lists = Realizations(c -> Update(d -> (output(d, "g" => X(1)); output(d, "g" => Z(1)))))
         @test_throws "holds the list" runTMS(SimData(name = "l", samples = 2, phases = [up, lists]))
@@ -622,5 +622,27 @@ end
         withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4")
         @test occursin("those before by 2.1.0", read("v/log", String))
         @test T.read_merged(abspath("v")).first == 4
+    end
+end
+
+@testset "The names the samples reserve are free in a simulation without samples" begin
+    in_tmp() do
+        up = CreateState{Pure}(2, Qubit(), "Up")
+        give = Update(c -> (c.sample = 7); provides = [:sample])
+        runTMS(SimData(; name = "a", phases = [up, give],
+                       final_measurements = ["queue.json" => :sample, "f" => "weight" => X(1)]))
+        @test isfile("a/queue.json") && isfile("a/f")
+        r = Realizations(c -> Gates(gates = X(1)))
+        @test_throws "a name the run reserves" SimData(; name = "b", samples = 2,
+                                                         phases = [up, give, r])
+        sd(name, final) = SimData(; name, samples = 2, phases = [up, r], final_measurements = final)
+        @test_throws "a file of the simulation directory" runTMS(sd("b", "queue.json" => X(1)))
+        for (k, list) in enumerate((EachSample("e") => "weight" => X(1),
+                                    EachSample("e") => "sample" => X(1),
+                                    EachSample("e") => [X(1), :sample], "f" => "trajectory" => X(1)))
+            @test_throws "the samples write" runTMS(sd("c$k", list))
+        end
+        runTMS(sd("d", EachSample("e") => [:sample, X(1)]))
+        @test split(readlines("d/e")[1], '\t') == ["time", "sample", "X(1)"]
     end
 end

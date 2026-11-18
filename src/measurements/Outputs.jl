@@ -569,6 +569,9 @@ end
 
 show(io::IO, d::EachSample) = print(io, "EachSample(", d.inner, ")")
 
+# the columns the rows of the samples write, or will: no measurement written there takes their name
+const sample_columns = ("sample", "weight", "trajectory")
+
 # opened as the destination it stands for, once a name is made a destination, see by_destination
 open(d::EachSample) = open(d.inner)
 open(d::EachSample, mark) = open(d.inner, mark)
@@ -764,20 +767,20 @@ put_keyed_row!(o, _, r::MeasuredRow) = put_row!(o, r)
     check_averaged(d, cells, phase, step)
 
 refuse the cells of a row of the averaged destination `d` at step `step` of phase `phase` that
-cannot be averaged: two columns of one name, a column named as the averages name theirs, a value
-other than a number
+cannot be averaged: two columns of one name, a column named as the averages or the samples
+name theirs, see `sample_columns`, a value other than a number
 """
 function check_averaged(d::Averaged, cells::Vector{Pair{String, Any}}, phase::Int, step::Int)
     columns = first.(cells)
     twice = findfirst(c -> count(==(c), columns) > 1, columns)
-    taken = findfirst(c -> c in ("N", "N_eff") || startswith(c, "err(") || startswith(c, "std("),
-                      columns)
+    taken = findfirst(c -> c in ("N", "N_eff") || c in sample_columns || startswith(c, "err(") ||
+                           startswith(c, "std("), columns)
     if !isnothing(twice)
         error("two columns of $d would be named $(columns[twice]): give one of the measurements " *
               "a name of its own, as \"name\" => op")
     elseif !isnothing(taken)
-        error("the column $(columns[taken]) of $d is one the averages write: give the " *
-              "measurement another name, as \"name\" => op")
+        error("the column $(columns[taken]) of $d is one the averages or the samples write: " *
+              "give the measurement another name, as \"name\" => op")
     end
     bad = findfirst(c -> !(last(c) isa Union{Real, Missing}), cells)
     if !isnothing(bad)
@@ -1013,11 +1016,17 @@ as_measure(x) = Measure(x)
     each_sample(o, d, measurements)
 
 the pair `EachSample(d) => measurements` of a list, `d` made a destination, the measurements
-measuring `:sample` first unless they do
+measuring `:sample` first unless they start with it; another of the `sample_columns` refused
 """
 function each_sample(o::Outputs, d::EachSample, measurements)
     m = as_measure(measurements)
-    sampled = any(e -> first(e) == "sample", m.entries)
+    sampled = !isempty(m.entries) && first(m.entries) == ("sample" => :sample)
+    skip = sampled ? 1 : 0
+    taken = findfirst(e -> first(e) in sample_columns, m.entries[skip + 1:end])
+    if !isnothing(taken)
+        error("the column $(first(m.entries[taken + skip])) of $d is one the samples write: " *
+              "give the measurement another name, as \"name\" => op")
+    end
     return EachSample(plain_destination(o, d.inner)) => (sampled ? m : Measure([:sample, m]))
 end
 
@@ -1027,7 +1036,7 @@ end
 the pairs `destination => measurements` of `list` as pairs `destination => Measure`, one for
 each destination, in the order they first come, the lists going to one destination gathered
 into one, so that a call writes one row to each; `EachSample(d)` is opened as `d`, not averaged,
-measuring `:sample` first unless the list does, so that a list made this way is made again as
+measuring `:sample` first unless the list starts with it, so that a list made this way is made again as
 it is, as `output` does with the lists of `phase_output`
 """
 function by_destination(o::Outputs, list::AbstractVector)
