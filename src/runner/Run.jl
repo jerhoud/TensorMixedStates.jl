@@ -1288,6 +1288,13 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
     write_queue(dir, q)
     if branched
         store_program(dir, src_path)
+        version, current = branch_version(dir), pkgversion(TensorMixedStates)
+        if version ≠ current
+            open(joinpath(dir, "log"), "a") do io
+                println(io, "Warning: samples run by TensorMixedStates $current, those before by " *
+                            "$version, from $(Dates.now())")
+            end
+        end
         if accepted
             open(joinpath(dir, "log"), "a") do io
                 println(io, "Warning: samples run by a program other than the one that started " *

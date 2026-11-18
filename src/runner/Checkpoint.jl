@@ -10,6 +10,35 @@ the layout version of a checkpoint; `load_checkpoint` refuses a checkpoint of an
 const checkpoint_file_version = 7
 
 """
+    samples_file_version
+
+the layout version of the files a run with samples keeps once it ends, `branch.h5`, `merged.jls`
+and those of `pending`, apart from the checkpoints: a later TensorMixedStates reads them while it
+can
+"""
+const samples_file_version = 1
+
+# the line naming what wrote a file of the samples, see check_written
+written_by() = "TensorMixedStates $samples_file_version Julia $VERSION version " *
+               "$(pkgversion(TensorMixedStates))"
+
+# the version of TensorMixedStates that wrote `file`, whose first line is `line`; refused when this
+# one cannot read it
+function check_written(file::String, line::AbstractString)
+    w = split(line)
+    if length(w) ≠ 6 || w[1] ≠ "TensorMixedStates" || w[2] ≠ string(samples_file_version)
+        error("$file has the layout of another version of TensorMixedStates: go on with the " *
+              "versions that wrote it, as the log of the run names them")
+    end
+    v = VersionNumber(w[4])
+    if (v.major, v.minor) ≠ (VERSION.major, VERSION.minor)
+        error("$file was written by Julia $v and TensorMixedStates $(w[6]): go on with Julia " *
+              "$(v.major).$(v.minor), as juliaup and the Manifest.toml of the project give it")
+    end
+    return VersionNumber(w[6])
+end
+
+"""
     Commit(sample, phase, step, last, phase_time, time, state, values, marks)
 
 a point a simulation can be resumed from, taken once everything the uninterrupted run writes
@@ -314,32 +343,44 @@ function write_branch(dir::String, k::Commit, seed::Integer)
     file = joinpath(dir, "branch.h5")
     tmp = file * ".tmp"
     write_commit(tmp, k, dir, seed)
+    h5open(f -> f["written_by"] = written_by(), tmp, "r+")
     sync_file(tmp)
     Base.Filesystem.rename(tmp, file)
     return nothing
 end
 
 function read_branch(dir::String)
+    branch_version(dir)
+    return read_commit(joinpath(dir, "branch.h5"), dir)
+end
+
+"""
+    branch_version(dir)
+
+the version of TensorMixedStates that wrote the branch point of the samples of the directory
+`dir`, refused when this one cannot read it, see `check_written`
+"""
+function branch_version(dir::String)
     file = joinpath(dir, "branch.h5")
     if !isfile(file)
         error("the file branch.h5 the samples of $dir start from is missing")
     end
-    return read_commit(file, dir)
+    line = h5open(f -> haskey(f, "written_by") ? read(f["written_by"]) : "", file, "r")
+    return check_written(file, line)
 end
 
 """
     write_serialized(file, x)
     read_serialized(file)
 
-write `x` serialized to `file`, after a line naming the layout of the checkpoints and the
-version of Julia, renamed into place once on the disk, so that a crash leaves no part of it; and
-read it back, refused when written with another layout or another minor version of Julia, see
-`load_checkpoint`
+write `x` serialized to `file`, after a line naming what wrote it, see `written_by`, renamed into
+place once on the disk, so that a crash leaves no part of it; and read it back, refused when this
+version cannot, see `check_written`
 """
 function write_serialized(file::String, x)
     tmp = file * ".tmp"
     open(tmp, "w") do io
-        println(io, "TensorMixedStates $checkpoint_file_version Julia $VERSION")
+        println(io, written_by())
         serialize(io, x)
     end
     sync_file(tmp)
@@ -349,16 +390,7 @@ end
 
 function read_serialized(file::String)
     open(file) do io
-        words = split(readline(io))
-        if length(words) ≠ 4 || words[2] ≠ string(checkpoint_file_version)
-            error("$file has another layout, of another version of TensorMixedStates: start the " *
-                  "simulation over")
-        end
-        v = VersionNumber(words[4])
-        if (v.major, v.minor) ≠ (VERSION.major, VERSION.minor)
-            error("$file was written by Julia $v: go on with Julia $(v.major).$(v.minor), or " *
-                  "start the simulation over")
-        end
+        check_written(file, readline(io))
         return deserialize(io)
     end
 end

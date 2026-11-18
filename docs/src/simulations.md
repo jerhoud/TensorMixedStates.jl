@@ -370,7 +370,9 @@ end their sample, and the next run tries it again. The environment variable `TMS
 overrides `samples`: running the program again with `TMS_SAMPLES=2000` after 1000 samples goes
 on with sample 1001 from the branch point, without running the phases before it again, and
 writes the same files as 2000 samples in one run. With fewer samples than those merged, a run
-changes nothing.
+changes nothing. A run is prolonged with the minor version of Julia that started it; another
+version of TensorMixedStates goes on when it reads its files, which the log notes, the samples
+then coming from two versions.
 
 A tolerance stops the samples once their averages are precise enough: with
 `tolerance = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,

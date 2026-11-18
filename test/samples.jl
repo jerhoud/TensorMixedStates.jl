@@ -594,3 +594,33 @@ end
         @test_throws "sample 18 failed" T.take_sample!(dir, 1)
     end
 end
+
+@testset "The files of the samples name what wrote them, refused where this version cannot read them" begin
+    in_tmp() do
+        T = TensorMixedStates
+        sd = SimData(; name = "v", samples = 3,
+                     phases = [CreateState{Pure}(3, Qubit(), "Up"),
+                               Realizations(c -> Gates(gates = X(1)))],
+                     final_measurements = "f" => "x" => c -> 1. * c.sample)
+        runTMS(sd)
+        file = abspath("v/merged.jls")
+        kept = read(file)
+        header = T.written_by()
+        @test String(kept[1:ncodeunits(header)]) == header
+        body = kept[ncodeunits(header) + 1:end]
+        write(file, [codeunits(replace(header, "Julia $VERSION" => "Julia 1.9.0")); body])
+        @test_throws "go on with Julia 1.9" runTMS(sd)
+        write(file, [codeunits(replace(header, "TensorMixedStates $(T.samples_file_version)" =>
+                                               "TensorMixedStates 0")); body])
+        @test_throws "the layout of another version" runTMS(sd)
+        write(file, kept)
+        # another version of TensorMixedStates goes on, noted in the log
+        T.HDF5.h5open(abspath("v/branch.h5"), "r+") do f
+            T.HDF5.delete_object(f, "written_by")
+            f["written_by"] = replace(header, r"version .*" => "version 2.1.0")
+        end
+        withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4")
+        @test occursin("those before by 2.1.0", read("v/log", String))
+        @test T.read_merged(abspath("v")).first == 4
+    end
+end
