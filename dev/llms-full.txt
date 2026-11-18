@@ -162,9 +162,10 @@ over. `runTMS(sd; output = devnull)` makes no directory, a `SaveState` alone wri
 Disorder: `SimData(samples = N, …)` whose last phase, `Realizations() do c … end`, returns the
 phases of a sample, drawing its disorder with `c.rng`; the phases before it run once, the final
 measurements of the `SimData` at the end of each sample. Files and `Data` hold the averages
-(columns `c`, `err(c)`, `std(c)`, `N`), `EachSample("name")` a row for each sample (column
+(columns `c`, `err(c)`, `std(c)`, `N`, `N_eff`), `EachSample("name")` a row for each sample (column
 `sample`); `TMS_SAMPLES=2N julia prog.jl` prolongs a finished run, and the program launched K
-times at once runs the samples on K cores, with the same results; `tol = "name" => atol`
+times at once runs the samples on K cores, with the same results unless a sample reads
+`sim.data`; `tol = "name" => atol`
 stops them once the errors of `name` are within `atol`.
 
 ## When something fails
@@ -1201,7 +1202,12 @@ in particular:
   `runTMS` refuses to start in a directory where another run may be going on. A file left by
   a process of the same machine that no longer exists, killed for instance, is replaced with
   a warning in the log; any other is removed by hand;
-- `error`: the error that ended the run, if one did.
+- `error`: the error that ended the run, if one did, that of a sample too, whose part holds the
+  whole error;
+- `lock`: guards the files several processes share;
+- with samples, `branch.h5`, `queue.json`, `merged.jls`, `parts` and `pending`: the branch point,
+  the queue of the samples, their merge, the directories of the parts and of the rows not merged
+  yet. `merged.jls` is needed to prolong a run or to read its `Data` again.
 
 When `runTMS` returns, a line on the console says whether the simulation is done or stopped,
 where its results are and how many warnings its log holds, which a program, or an AI running it,
@@ -1351,7 +1357,8 @@ runTMS(SimData(
         Realizations() do c
             J = [1 + 0.1 * randn(c.rng) for i in 1:9]
             H = -sum(J[i] * Z(i) * Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10)
-            GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 20, tol = 1e-10), limits = lim)
+            GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 20, tol = 1e-10),
+                        limits = Limits(maxdim = 64))
         end,
     ],
     final_measurements = ["energy" => [:energy, Z], EachSample("energies") => :energy],
@@ -1381,7 +1388,8 @@ average ground state energy and magnetization. A row that some samples lack, a s
 slow searches reach for instance, averages those that have it. The samples of a row must have the
 same time, but for rounding, and the same columns, and a value that is not a number cannot be
 averaged. A row written before the samples is shared by all, and written with no error and no
-deviation. The
+deviation. A measurement written averaged or for each sample cannot be named `sample`, `weight`
+or `trajectory`, which the samples write or will. The
 means and deviations are updated sample after sample by the algorithm of West (1979), each value
 shifted by its value in the first sample (Chan, Golub and LeVeque 1983), accurate even when the
 deviation is small against the mean.
@@ -1398,8 +1406,9 @@ directory of its own, `parts/1`, `parts/2`, …, with its log, which tells the p
 its first sample only and a line for each sample: a part takes the next sample no part has
 taken, runs it, and leaves its rows in the directory `pending`. The samples ended are merged into
 the files and the `Data` of the simulation in their order, up to the first one not ended, so
-that they hold samples 1 to m, the same to the last bit whichever process ran each, and an
-average never favours the samples that end first. An averaged file is written whole at each
+that they hold samples 1 to m, the same to the last bit whichever process ran each, unless a
+sample reads `sim.data`, which holds the samples merged when it runs, and an average never
+favours the samples that end first. An averaged file is written whole at each
 merge.
 
 Running the program several times at once, `julia prog.jl & julia prog.jl & …`, runs the samples
