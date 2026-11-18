@@ -1109,7 +1109,9 @@ function run_in(work::Function, sd::SimData, dir::String, settings; claim = noth
             end
             rm(file("error"); force = true)
             # a resumed run continues the log, keeping the history of every run, as a part does
-            logio = open(file("log"), resume || !isempty(main) ? "a" : "w")
+            # appended with samples, where other processes add lines while the first ends
+            appended = resume || !isempty(main) || !isnothing(sd.samples)
+            logio = open(file("log"), appended ? "a" : "w")
             if sd.description ≠ ""
                 write(file("description"), sd.description)
             end
@@ -1304,11 +1306,13 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
     write_queue(dir, q)
     if branched
         store_program(dir, src_path)
-        version, current = branch_version(dir), pkgversion(TensorMixedStates)
-        if version ≠ current
+        branch, merged = branch_version(dir), merged_version(dir)
+        current = pkgversion(TensorMixedStates)
+        if branch ≠ current || merged ≠ current
             open(joinpath(dir, "log"), "a") do io
-                println(io, "Warning: samples run by TensorMixedStates $current, those before by " *
-                            "$version, from $(Dates.now())")
+                println(io, "Warning: samples run by TensorMixedStates $current from " *
+                            "$(Dates.now()), those merged before by $merged, the branch point by " *
+                            "$branch")
             end
         end
         if accepted

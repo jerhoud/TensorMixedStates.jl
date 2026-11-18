@@ -656,8 +656,25 @@ end
             f["written_by"] = replace(header, r"version .*" => "version 2.1.0")
         end
         withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4")
-        @test occursin("those before by 2.1.0", read("v/log", String))
+        @test occursin("the branch point by 2.1.0", read("v/log", String))
         @test T.read_merged(abspath("v")).first == 4
+        # a branch point written by another minor version of Julia
+        T.HDF5.h5open(abspath("v/branch.h5"), "r+") do f
+            T.HDF5.delete_object(f, "written_by")
+            f["written_by"] = replace(header, "Julia $VERSION" => "Julia 1.9.0")
+        end
+        @test_throws "go on with Julia 1.9" withenv(() -> runTMS(sd), "TMS_SAMPLES" => "5")
+        # the checkpoint of a part another version cannot resume costs its sample alone
+        for _ in 1:50
+            runTMS(sampled("w"); max_time = -1)
+            if isfile("w/parts/1/checkpoint.json")
+                break
+            end
+        end
+        meta = T.JSON.parsefile("w/parts/1/checkpoint.json")
+        meta["version"] = 0
+        open(io -> T.JSON.print(io, meta), "w/parts/1/checkpoint.json", "w")
+        @test_throws "remove the checkpoint files of" runTMS(sampled("w"))
     end
 end
 
@@ -720,5 +737,23 @@ end
         give = Update(c -> (c.sample = 7); provides = [:sample])
         each = Update(c -> output(c, EachSample("e") => X(1)))
         @test_throws "has no samples" runTMS(SimData(; name = "c", phases = [up, give, each]))
+    end
+end
+
+@testset "The error file names the first sample failed among those the parts run" begin
+    in_tmp() do
+        T = TensorMixedStates
+        none = Dict{Int, Int}()
+        dir = mkpath(abspath("n"))
+        q = T.Queue(10, nothing, 6, Int[], none, Dict{Int, String}())
+        T.note_failed!(dir, q, 3, "three")
+        T.note_failed!(dir, q, 5, "five")
+        @test read(joinpath(dir, "error"), String) == "ERROR in sample 3: three\n"
+        @test count("ERROR in sample", read(joinpath(dir, "log"), String)) == 2
+        # beyond the sample reaching the tolerance, noted in the queue alone
+        dir = mkpath(abspath("m"))
+        q = T.Queue(10, 2, 6, Int[], none, Dict{Int, String}())
+        T.note_failed!(dir, q, 4, "four")
+        @test !isfile(joinpath(dir, "error")) && haskey(T.read_queue(dir).failed, 4)
     end
 end

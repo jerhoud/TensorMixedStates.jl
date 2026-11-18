@@ -9,12 +9,17 @@
 is passed over after a minute, five for another machine, see `mkpidlock`
 """
 function with_lock(f::Function, dir::String)
-    # tried again every tenth of a second: the wait of mkpidlock watches the file, which misses
-    # its removal by another machine on a network file system, waiting stale_age then
-    held = trymkpidlock(joinpath(dir, "lock"); stale_age = 60)
+    path = joinpath(dir, "lock")
+    # tried every tenth of a second, a stale lock looked for every ten seconds: the wait of
+    # mkpidlock misses the removal of the file by another machine on a network file system, and
+    # the look for a stale lock warns of a clock skew each time
+    tries, held = 0, false
     while held === false
-        sleep(0.1)
-        held = trymkpidlock(joinpath(dir, "lock"); stale_age = 60)
+        if tries > 0
+            sleep(0.1)
+        end
+        held = trymkpidlock(path; stale_age = tries % 100 == 0 ? 60 : 0, refresh = 30)
+        tries += 1
     end
     try
         return f()
@@ -117,14 +122,16 @@ function take_sample!(dir::String, part::Int; stop::Bool = false)
     end
 end
 
-# `sample` noted failed with `message` in the queue `q` of the simulation of directory `dir`, in
-# its file error and in its log
+# `sample` noted failed with `message` in the queue `q` of the simulation of directory `dir`, and
+# when the parts run it, in its log and in its file error, which names the first sample failed
 function note_failed!(dir::String, q::Queue, sample::Int, message::AbstractString)
     q.failed[sample] = message
     write_queue(dir, q)
-    line = "ERROR in sample $sample: $message"
-    write(joinpath(dir, "error"), line * "\n")
-    open(io -> println(io, "\n" * line), joinpath(dir, "log"), "a")
+    if sample ≤ last_sample(q)
+        open(io -> println(io, "\nERROR in sample $sample: $message"), joinpath(dir, "log"), "a")
+        k = minimum(failed_samples(q))
+        write(joinpath(dir, "error"), "ERROR in sample $k: $(q.failed[k])\n")
+    end
     return nothing
 end
 

@@ -14,7 +14,7 @@ const checkpoint_file_version = 7
 
 the layout version of the files a run with samples keeps once it ends, `branch.h5`, `merged.jls`
 and those of `pending`, apart from the checkpoints: a later TensorMixedStates reads them while it
-can
+can. Raise it with any change of `write_commit`, of the marks or of the rows these files serialize.
 """
 const samples_file_version = 1
 
@@ -153,10 +153,9 @@ state_file(g::Int) = "checkpoint-$g.h5"
 """
     checkpoint_files
 
-the files a checkpoint writes in the directory of a simulation, and its lock
+the files a checkpoint writes in the directory of a simulation
 """
-const checkpoint_files = ("checkpoint.json", "checkpoint.json.tmp", state_file(1), state_file(2),
-                          "lock")
+const checkpoint_files = ("checkpoint.json", "checkpoint.json.tmp", state_file(1), state_file(2))
 
 """
     sample_files
@@ -321,14 +320,17 @@ is refused.
 """
 function load_checkpoint(dir::String, root::String = dir)
     meta = JSON.parsefile(checkpoint_json(dir))
+    # for a part, its sample alone is lost
+    over = dir == root ? "start the simulation over" :
+           "remove the checkpoint files of $dir to run its sample again"
     if meta["version"] ≠ checkpoint_file_version
         error("the checkpoint of $dir has the layout $(meta["version"]) of another version of " *
-              "TensorMixedStates: start the simulation over")
+              "TensorMixedStates: $over")
     end
     v = VersionNumber(meta["julia"])
     if (v.major, v.minor) ≠ (VERSION.major, VERSION.minor)
         error("the checkpoint of $dir was written by Julia $v: resume it with Julia " *
-              "$(v.major).$(v.minor), or start the simulation over")
+              "$(v.major).$(v.minor), or $over")
     end
     file = joinpath(dir, meta["state"])
     if !isfile(file)
@@ -414,6 +416,12 @@ write_merged(dir::String, samples::Int, marks::AbstractDict) =
     write_serialized(joinpath(dir, "merged.jls"),
                      samples => Dict{Destination, Any}(relative(d, dir) => kept(m)
                                                        for (d, m) in marks))
+
+# the version of TensorMixedStates that last merged samples into `dir`, see `check_written`
+function merged_version(dir::String)
+    file = joinpath(dir, "merged.jls")
+    return open(io -> check_written(file, readline(io)), file)
+end
 
 function read_merged(dir::String)
     samples, marks = read_serialized(joinpath(dir, "merged.jls"))

@@ -12,7 +12,7 @@ after, nor be in its directory `prog`, which holds the files the program include
 samples, be one of `sample_files` or in `parts` and `pending`, see `is_simulation_file`
 """
 const simulation_files = Set(["log", "stop", "restart", "error", "running", "stamp", "description",
-                              "prog.jl", "prog_args.json", checkpoint_files...])
+                              "lock", "prog.jl", "prog_args.json", checkpoint_files...])
 
 """
     is_simulation_file(name, sampled)
@@ -35,7 +35,6 @@ and `c.time`, those the run gives, `c.step` and `c.rng`, and `sim.data`; `c.samp
 simulation with samples, see `gives_sample`
 """
 const reserved_values = (:state, :time, :step, :rng, :data)
-
 
 """
     check_backend(backend)
