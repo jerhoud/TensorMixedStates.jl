@@ -631,7 +631,7 @@ end
     end
 end
 
-@testset "The files of the samples name what wrote them, refused where this version cannot read them" begin
+@testset "The files of the samples name what wrote them, refused where this one cannot read" begin
     in_tmp() do
         T = TensorMixedStates
         sd = SimData(; name = "v", samples = 3,
@@ -675,7 +675,8 @@ end
         @test_throws "a file of the simulation directory" runTMS(sd("b", "queue.json" => X(1)))
         for (k, list) in enumerate((EachSample("e") => "weight" => X(1),
                                     EachSample("e") => "sample" => X(1),
-                                    EachSample("e") => [X(1), :sample], "f" => "trajectory" => X(1)))
+                                    EachSample("e") => [X(1), :sample],
+                                    "f" => "trajectory" => X(1)))
             @test_throws "the samples write" runTMS(sd("c$k", list))
         end
         runTMS(sd("d", EachSample("e") => [:sample, X(1)]))
