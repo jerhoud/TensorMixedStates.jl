@@ -119,15 +119,28 @@ end
 
 @testset "Samples stopped anywhere resume as the uninterrupted ones" begin
     in_tmp() do
-        ref = runTMS(sampled("ref"))
-        sim = run_through(sampled("chk"); max_time = -1)
-        for f in ("steps", "end")
+        lists = ["end" => [X(1), Z(2)], EachSample("each") => X(1)]
+        ref = runTMS(sampled("ref"; final_measurements = lists))
+        sim = run_through(sampled("chk"; final_measurements = lists); max_time = -1)
+        for f in ("steps", "end", "each")
             @test read("chk/$f", String) == read("ref/$f", String)
         end
         @test norm(sim.state - ref.state) < 1e-12
         @test occursin("Resuming from the checkpoint: sample 3", read("chk/parts/1/log", String))
         # the branch point once
         @test count("Starting phase \"Creating state\"", read("chk/log", String)) == 1
+        # the tolerance reached at the same sample, ±1 values reaching 0.6 at the fourth
+        v = "v" => "v" => c -> isodd(c.sample) ? 1. : -1.
+        tol(name) = SimData(; name, seed = 7, samples = 6, tol = "v" => 0.6, min_samples = 2,
+                            phases = [CreateState{Pure}(4, Qubit(), "Up"), Realizations(quench)],
+                            final_measurements = ["end" => [X(1), Z(2)], v])
+        runTMS(tol("tref"))
+        run_through(tol("tchk"); max_time = -1)
+        @test TensorMixedStates.read_merged(abspath("tref")).first == 4
+        @test TensorMixedStates.read_merged(abspath("tchk")).first == 4
+        for f in ("steps", "end", "v")
+            @test read("tchk/$f", String) == read("tref/$f", String)
+        end
     end
 end
 
@@ -433,7 +446,9 @@ end
         program = """
             using TensorMixedStates, .Qubits
             # each sample waits for the second process, so that both run samples
-            waiting = Update(c -> (t = time(); while isdir("two") && !isdir("two/parts/2") &&
+            two = endswith(ARGS[1], "two")
+            second = joinpath(ARGS[1], "parts", "2")
+            waiting = Update(c -> (t = time(); while two && !isdir(second) &&
                                                          time() - t < 600; sleep(0.1); end);
                              provides = Symbol[])
             function quench(c)
@@ -444,10 +459,13 @@ end
                                         measurements = ["steps" => [X(1), Z],
                                                         EachSample("each") => Z(2)])]
             end
-            runTMS(SimData(name = ARGS[1], seed = 7, samples = 8,
+            # with a tolerance, ±1 values reaching 0.6 at the fourth sample
+            tol = ARGS[1] in ("tone", "ttwo") ? "v" => 0.6 : []
+            runTMS(SimData(name = ARGS[1], seed = 7, samples = 8, tol = tol, min_samples = 2,
                            phases = [CreateState{Pure}(4, Qubit(), "Up"), Realizations(quench)],
                            final_measurements = ["end.json" => [X(1), Z(2)],
-                                                 EachSample("each.jsonl") => [X(1)]]))
+                                                 EachSample("each.jsonl") => [X(1)],
+                                                 "v" => "v" => c -> isodd(c.sample) ? 1. : -1.]))
             """
         write("prog.jl", program)
         julia = `$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no prog.jl`
@@ -463,6 +481,16 @@ end
         end
         @test TensorMixedStates.read_merged(abspath("two")).first == 8
         @test isempty(readdir("two/pending"))
+        # with a tolerance, the same samples merged whatever the processes
+        run(`$julia tone`)
+        ps = [ run(pipeline(`$julia ttwo`; stdout = devnull, stderr = devnull); wait = false)
+               for _ in 1:2 ]
+        foreach(wait, ps)
+        @test all(success, ps)
+        for f in ("steps", "each", "end.json", "each.jsonl", "v")
+            @test read("ttwo/$f", String) == read("tone/$f", String)
+        end
+        @test TensorMixedStates.read_merged(abspath("ttwo")).first == 4
     end
 end
 
