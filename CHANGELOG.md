@@ -12,10 +12,10 @@ the reference article.
 
 ### Added
 
-- `SimData(samples = N)` and the phase `Realizations(f)`: N samples of a simulation, each drawing its disorder with `c.rng`, run from the state the phases before `Realizations` reached, computed once, its files and `Data` holding the averages over the samples with their errors; `TMS_SAMPLES` prolongs a finished run.
+- `SimData(samples = N)` and the phase `Realizations(f)`: averages over disorder with their errors, prolonged by `TMS_SAMPLES`.
 - `EachSample(d)`: the destination `d` written a row for each sample.
 - `SimData(tol, min_samples)` stops the samples once the errors of an averaged destination are within a tolerance.
-- The samples of a simulation run on as many cores as processes running the program at once, each sample on one thread, merged in their order: the same results to the last bit whatever the number of processes, but with `threading = nothing`.
+- The samples of a simulation run on as many cores as processes running the program at once.
 
 ### Changed
 

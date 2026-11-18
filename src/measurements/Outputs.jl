@@ -369,7 +369,9 @@ end
     Data(name)
 
 a destination kept in memory, a vector of rows, each the time then the pairs `name => value`
-measured, see `DataRow`, and a table of the cells of these values, see `DataTable`
+measured, see `DataRow`, and a table of the cells of these values, see `DataTable`; in a
+simulation with samples, the cells averaged, `N`, `N_eff`, `c`, `err(c)` and `std(c)`, see
+`Averaged`
 """
 struct Data <: Destination
     name::String
@@ -379,8 +381,8 @@ end
     DataRow
 
 a row of a `Data`: the pairs `name => value` measured, the time first, each value as it was
-measured, `row[name]` giving the value of `name`, and the columns of the cells of these values,
-see `cells!`
+measured, `row[name]` giving the value of `name`, the cell `name` for a row averaged, and the
+columns of the cells of these values, see `cells!`
 """
 struct DataRow <: AbstractVector{Pair{String, Any}}
     measured::Vector{Pair{String, Any}}

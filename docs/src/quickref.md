@@ -162,9 +162,10 @@ over. `runTMS(sd; output = devnull)` makes no directory, a `SaveState` alone wri
 Disorder: `SimData(samples = N, …)` whose last phase, `Realizations() do c … end`, returns the
 phases of a sample, drawing its disorder with `c.rng`; the phases before it run once, the final
 measurements of the `SimData` at the end of each sample. Files and `Data` hold the averages
-(columns `c`, `err(c)`, `std(c)`, `N`), `EachSample("name")` a row for each sample (column
+(columns `c`, `err(c)`, `std(c)`, `N`, `N_eff`), `EachSample("name")` a row for each sample (column
 `sample`); `TMS_SAMPLES=2N julia prog.jl` prolongs a finished run, and the program launched K
-times at once runs the samples on K cores, with the same results; `tol = "name" => atol`
+times at once runs the samples on K cores, with the same results unless a sample reads
+`sim.data`; `tol = "name" => atol`
 stops them once the errors of `name` are within `atol`.
 
 ## When something fails

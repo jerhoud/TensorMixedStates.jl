@@ -231,7 +231,8 @@ The columns of a table are `time`, then a column per value: the name of the meas
 `m.field` for those of a named tuple. A complex value takes the two columns `Re(m)` and
 `Im(m)`. The files `runTMS` writes itself in the directory of the simulation cannot be
 destinations: `log`, `stop`, `restart`, `error`, `running`, `stamp`, `description`, `prog.jl`,
-`prog_args.json`, the checkpoint files and those of the directory `prog`.
+`prog_args.json`, `lock`, the checkpoint files and those of the directory `prog`, and with
+samples `branch.h5`, `queue.json`, `merged.jls` and the directories `parts` and `pending`.
 
 ```julia
 mysim = runTMS(simdata)
