@@ -148,7 +148,8 @@ in particular:
   `runTMS` refuses to start in a directory where another run may be going on. A file left by
   a process of the same machine that no longer exists, killed for instance, is replaced with
   a warning in the log; any other is removed by hand;
-- `error`: the error that ended the run, if one did.
+- `error`: the error that ended the run, if one did, that of a sample too, whose part holds the
+  whole error.
 
 When `runTMS` returns, a line on the console says whether the simulation is done or stopped,
 where its results are and how many warnings its log holds, which a program, or an AI running it,

@@ -216,7 +216,14 @@ end
         # the sample is noted failed: the other parts stop, and a new run tries it again
         failed = TensorMixedStates.read_queue(abspath("e")).failed
         @test collect(keys(failed)) == [2] && occursin("no draw", failed[2])
+        # and told in the error file and the log of the simulation
+        @test startswith(read("e/error", String), "ERROR in sample 2: ") &&
+              occursin("no draw", read("e/error", String))
+        @test occursin("ERROR in sample 2: ", read("e/log", String))
         @test_throws "no draw" runTMS(sampled("e"; phases = [up, Realizations(failing)]))
+        # a run that ends removes the error file
+        runTMS(sampled("e"))
+        @test !isfile("e/error")
         # a stop there names where the checkpoint is, and the run resumes from it
         interrupted = Ref(true)
         function stopping(c)
@@ -504,7 +511,8 @@ end
         write("l/prog.jl", "# another program")
         @test_throws "written by another program" withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4")
         withenv(() -> runTMS(sd), "TMS_SAMPLES" => "4", "TMS_ACCEPT_PROGRAM" => "1")
-        @test occursin("TMS_ACCEPT_PROGRAM=1 allows", read("l/log", String))
+        @test occursin("TMS_ACCEPT_PROGRAM=1 allows", read("l/log", String)) &&
+              occursin("the 3 samples merged before", read("l/log", String))
         withenv(() -> runTMS(sd), "TMS_SAMPLES" => "5")
         @test TensorMixedStates.read_merged(abspath("l")).first == 5
         # a launch waiting for the phases before the branch point, which another process runs

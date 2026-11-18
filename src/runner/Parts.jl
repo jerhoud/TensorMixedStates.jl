@@ -117,10 +117,14 @@ function take_sample!(dir::String, part::Int; stop::Bool = false)
     end
 end
 
-# `sample` noted failed with `message` in the queue `q` of the simulation of directory `dir`
+# `sample` noted failed with `message` in the queue `q` of the simulation of directory `dir`, in
+# its file error and in its log
 function note_failed!(dir::String, q::Queue, sample::Int, message::AbstractString)
     q.failed[sample] = message
     write_queue(dir, q)
+    line = "ERROR in sample $sample: $message"
+    write(joinpath(dir, "error"), line * "\n")
+    open(io -> println(io, "\n" * line), joinpath(dir, "log"), "a")
     return nothing
 end
 

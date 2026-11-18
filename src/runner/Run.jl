@@ -1270,6 +1270,7 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
             empty!(q.failed)
             write_queue(dir, q)
         end
+        rm(joinpath(dir, "error"); force = true)
     elseif first && isfile(joinpath(dir, "restart"))
         error("$dir holds the file restart while other processes run the simulation: let them " *
               "end, or stop them by the file stop, first")
@@ -1299,7 +1300,8 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
         if accepted
             open(joinpath(dir, "log"), "a") do io
                 println(io, "Warning: samples run by a program other than the one that started " *
-                            "them, as TMS_ACCEPT_PROGRAM=1 allows, from $(Dates.now())")
+                            "them, as TMS_ACCEPT_PROGRAM=1 allows, from $(Dates.now()), the " *
+                            "$m samples merged before by the program before")
             end
         end
         return :part => accepted
@@ -1379,14 +1381,14 @@ function run_parts(sd::SimData, settings)
     src_path = Base.source_path()
     mkpath(dir)
     first = true
-    role, claimed = :wait, nothing
+    role, payload = :wait, nothing
     while role == :wait
-        role, claimed = with_lock(dir) do
+        role, payload = with_lock(dir) do
             launch_samples!(dir, settings.samples, src_path; first, merging = merging(sd))
         end
         if role == :wait
             if first
-                host, pid = length(claimed) ≥ 2 ? claimed[1:2] : ("?", "?")
+                host, pid = length(payload) ≥ 2 ? payload[1:2] : ("?", "?")
                 @info "simulation \"$(sd.name)\": waiting for the phases before the branch " *
                       "point, which process $pid on $host runs; if it runs no more, remove " *
                       joinpath(dir, "running")
@@ -1395,12 +1397,14 @@ function run_parts(sd::SimData, settings)
             sleep(1)
         end
     end
+    # whether this process runs its parts with a program other than the one that started them
+    accepted = role == :part && payload
     b = nothing
     if role == :stop
         @info "simulation \"$(sd.name)\" stopped while waiting for the branch point, by the " *
               "file stop"
     elseif role == :prefix
-        sim, run = run_in(sd, dir, settings; claim = () -> claimed,
+        sim, run = run_in(sd, dir, settings; claim = () -> payload,
                           clear_stop = false) do sim, commit, threading
             return run_prefix(sim, sd, commit, threading)
         end
@@ -1408,7 +1412,6 @@ function run_parts(sd::SimData, settings)
             @info summary_line(sd, run)
             return sim
         end
-        claimed = false
     end
     if role ≠ :stop
         # what a process that died while merging left
@@ -1417,7 +1420,7 @@ function run_parts(sd::SimData, settings)
     end
     sim, run = nothing, nothing
     while role ≠ :stop
-        taken = with_lock(() -> claim_part(dir, src_path, claimed), dir)
+        taken = with_lock(() -> claim_part(dir, src_path, accepted), dir)
         if isnothing(taken)
             break
         end
