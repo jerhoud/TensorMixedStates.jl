@@ -15,6 +15,7 @@ the purity ``\\mathrm{tr}(\\rho^\\dagger\\rho) / (\\mathrm{tr}\\,\\rho)^2``, whi
 mixed one, above 1 only for a matrix that is not positive or not Hermitian.
 """
 purity(::State{Pure}) = 1.
+purity(::State{Trajectory}) = not_linear("the purity")
 purity(state::State{Mixed}) = (norm(state.state) / nonzero_trace(state, "purity"))^2
 
 """
@@ -37,7 +38,7 @@ end
 the state whose density matrix is the adjoint of that of the state, computed once and kept with
 it. A pure representation is refused.
 """
-dag(::State{Pure}) = error("dag is meaningless on pure representations")
+dag(::State{<:Ket}) = error("dag is meaningless on pure representations")
 
 function dag(state::State{Mixed})
     a = cached!(state.preobs.adjoint, state) do a, state
@@ -63,7 +64,7 @@ end
 the state whose density matrix is the Hermitian part ``(\\rho + \\rho^\\dagger)/2`` of that of
 `state`, the sum truncated by `limits`. A pure representation is returned as it is.
 """
-hermitianize(state::State{Pure}; limits::Limits = Limits()) = state
+hermitianize(state::State{<:Ket}; limits::Limits = Limits()) = state
 hermitianize(state::State{Mixed}; limits::Limits = Limits()) = 0.5 * +(state, dag(state); limits)
 
 """
@@ -75,6 +76,7 @@ Hermitian, as it should be:
 pure representation.
 """
 hermiticity(::State{Pure}) = 1.
+hermiticity(::State{Trajectory}) = not_linear("the hermiticity")
 hermiticity(state::State{Mixed}) =
     0.5 + 0.5 * real(dot(state.state, dag(state).state)) / nonzero_norm(state, "hermiticity")^2
 
@@ -95,6 +97,8 @@ the factors `U` and `S` of the singular value decomposition of the state across 
 between sites `cut` and `cut + 1`, `U` holding the sites up to `cut`; a cut the state does not
 have is refused
 """
+cut_svd(::State{Trajectory}, ::Int) = not_linear("an entanglement entropy or spectrum")
+
 function cut_svd(state::State, cut::Int)
     check_cut(length(state), cut)
     nonzero_norm(state, "an entanglement entropy")
@@ -292,6 +296,8 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
     return entanglement_sectors(quantities, squares)
 end
 
+entanglement_by_sector(::State{Trajectory}, ::Int) = not_linear("an entanglement entropy")
+
 entanglement_by_sector(::State{Mixed}, ::Int) =
     error("entanglement_by_sector takes a pure state: on a mixed one the sectors of a link are " *
           "differences between the charges of the ket and of the bra")
@@ -342,6 +348,8 @@ part_renyi2(state::AbstractState, kept::Vector{Int}) =
 part_renyi2(state::State{Mixed}, kept::Vector{Int}) =
     renyi2(partial_trace(weak_form(state); keep = kept))
 
+part_renyi2(::State{Trajectory}, ::Vector{Int}) = not_linear("a Renyi 2 entropy")
+
 function part_renyi2(state::State{Pure}, kept::Vector{Int})
     n = length(state)
     cut = kept == 1:last(kept) ? last(kept) : kept == first(kept):n ? first(kept) - 1 : nothing
@@ -386,6 +394,8 @@ the sites traced out make ``S_2(B)`` another value on a state of no definite par
 """
 parts_renyi2(state::AbstractState, kept::Vector{Int}) =
     part_renyi2(state, kept) + part_renyi2(state, setdiff(1:length(state), kept)) - renyi2(state)
+
+parts_renyi2(::State{Trajectory}, ::Vector{Int}) = not_linear("a Renyi 2 entropy")
 
 function parts_renyi2(state::State{Pure}, kept::Vector{Int})
     a = part_renyi2(state, kept)
@@ -462,7 +472,7 @@ end
 the environment of the sites up to `k` of the pure `state`, ket with bra, as a matrix on the link
 after site `k`, of dimension 1 for `k = 0`
 """
-function left_link_matrix(state::State{Pure}, k::Int)
+function left_link_matrix(state::State{<:Ket}, k::Int)
     if k == 0
         return ones(1, 1)
     end
@@ -475,7 +485,7 @@ end
 the environment of the sites after `k` of the pure `state`, ket with bra, as a matrix on the
 link after site `k`, of dimension 1 for the last site
 """
-function right_link_matrix(state::State{Pure}, k::Int)
+function right_link_matrix(state::State{<:Ket}, k::Int)
     st = state.state
     if k == length(st)
         return ones(1, 1)
@@ -488,7 +498,7 @@ end
 the elements of the density matrix of the sites `kept` of the pure `state`, in the order of
 `mixed_order`, ket and bra contracted site by site, those of the sites kept left open
 """
-function kept_pairs(state::State{Pure}, kept::Vector{Int})
+function kept_pairs(state::State{<:Ket}, kept::Vector{Int})
     st = state.state
     e = left_link_matrix(state, first(kept) - 1)
     # the ket link, the bra link, the pairs of the sites kept so far
@@ -517,7 +527,7 @@ end
 the density matrix, not normalised, of the consecutive sites `ks` of the pure `state`: ``M B``,
 `M` the block of the kets, its links open, and `B` that of the bras with the environments
 """
-function block_matrix(state::State{Pure}, ks::UnitRange{Int})
+function block_matrix(state::State{<:Ket}, ks::UnitRange{Int})
     el = left_link_matrix(state, first(ks) - 1)
     er = right_link_matrix(state, last(ks))
     χl, χr = size(el, 1), size(er, 1)
@@ -531,7 +541,7 @@ function block_matrix(state::State{Pure}, ks::UnitRange{Int})
     return reshape(m, d, :) * transpose(reshape(permutedims(b, (2, 1, 3)), d, :))
 end
 
-function reduced_density_matrix(state::State{Pure}, positions::AbstractVector{Int};
+function reduced_density_matrix(state::State{<:Ket}, positions::AbstractVector{Int};
                                 max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
@@ -573,6 +583,9 @@ same, at a far lower cost and for any number of sites.
 
     von_neumann_entropy(state, [2, 5])
 """
+von_neumann_entropy(::State{Trajectory}, ::AbstractVector{Int}; kwargs...) =
+    not_linear("a von Neumann entropy")
+
 function von_neumann_entropy(state::AbstractState, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
@@ -611,6 +624,9 @@ site, and refused when both hold one.
 
     log_negativity(state, [1, 2], [5])
 """
+log_negativity(::State{Trajectory}, ::AbstractVector, ::AbstractVector; kwargs...) =
+    not_linear("a logarithmic negativity")
+
 function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVector;
                         max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, a, "log_negativity")
@@ -667,6 +683,14 @@ function pure_on_mixed(p::State{Pure}, r::State{Mixed})
     return scalar(t)
 end
 
+# a pure reference ⟨φ|ρ|φ⟩, linear in the density matrix, which the trajectories give on average;
+# in the order of the arguments, as for two pure states
+function ket_fidelity(a::State{<:Ket}, b::State{<:Ket})
+    c, d = on_common_system(a, b)
+    return abs2(dot(c.state, d.state)) /
+           (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
+end
+
 """
     fidelity(a, b)
 
@@ -680,8 +704,7 @@ product state: use `hs_fidelity`.
 
     fidelity(state, ground_state)
 """
-fidelity(a::State{Pure}, b::State{Pure}) =
-    abs2(inner(a, b)) / (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
+fidelity(a::State{Pure}, b::State{Pure}) = ket_fidelity(a, b)
 
 function fidelity(p::State{Pure}, r::State{Mixed})
     p, r = on_common_system(p, r)
@@ -690,6 +713,12 @@ function fidelity(p::State{Pure}, r::State{Mixed})
 end
 
 fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
+
+fidelity(t::State{Trajectory}, p::State{Pure}) = ket_fidelity(t, p)
+fidelity(p::State{Pure}, t::State{Trajectory}) = ket_fidelity(p, t)
+fidelity(::State{Trajectory}, ::State{<:Union{Trajectory, Mixed}}) =
+    not_linear("a fidelity but to a pure state")
+fidelity(::State{Mixed}, ::State{Trajectory}) = not_linear("a fidelity but to a pure state")
 
 fidelity(::State{Mixed}, ::State{Mixed}) =
     error("no fidelity between two mixed representations, it needs the spectrum of a " *
@@ -702,6 +731,9 @@ the normalised Hilbert-Schmidt overlap of two mixed states of the same sites, ta
 both conserve, ``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``, 1 exactly when
 they are proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 """
+hs_fidelity(::State{Trajectory}, ::State) = not_linear("hs_fidelity")
+hs_fidelity(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_linear("hs_fidelity")
+
 hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
@@ -721,6 +753,13 @@ On a density matrix ``\\rho`` of trace one, it is
     variance(ground_state, hamiltonian)
     β^2 * variance(thermal_state, hamiltonian)      # the specific heat
 """
+variance(::State{Trajectory}, ::MPO) = trajectory_variance()
+variance(::State{Trajectory}, ::IndexedOp{IsOperator}) = trajectory_variance()
+
+trajectory_variance() =
+    error("a variance is not linear in the density matrix: measure A^2 and A, whose averages " *
+          "over the trajectories give it")
+
 function variance(state::State{Pure}, mpo::MPO)
     st = state.state
     n2 = nonzero_trace(state, "variance")

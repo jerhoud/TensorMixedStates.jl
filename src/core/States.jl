@@ -209,6 +209,14 @@ the representation of `state`, `Pure` or `Mixed`, whatever the type holding it
 """
 representation(::State{R}) where R = R
 
+# the refusals of a state of the representation Trajectory: what is not linear in the density
+# matrix, which the average over trajectories does not give, and what needs drawing
+not_linear(what::AbstractString) =
+    error("$what is not linear in the density matrix: the average over trajectories does not " *
+          "give it, use State{Mixed}")
+not_yet(what::AbstractString) =
+    error("$what comes with the draws of the trajectories, not available yet: use State{Mixed}")
+
 """
     ignored_options(state)
 
@@ -546,6 +554,9 @@ of an exact state, and has no use on an MPS.
 mix(state::State{Mixed}; limits::Limits = Limits(), max_dense::Union{Nothing, Int} = nothing) =
     limits == Limits() ? state : truncate(state; limits)
 
+mix(::State{Trajectory}; kwargs...) =
+    error("a trajectory is not a mixed state, the average of trajectories is: use State{Mixed}")
+
 function mix(state::State{Pure}; limits::Limits = Limits(),
              max_dense::Union{Nothing, Int} = nothing)
     n = length(state)
@@ -720,7 +731,7 @@ the state measurements run on: `state` itself, or, for a mixed state conserving 
 strongly, `weaken(state)`, computed once and kept with it. Under a strong symmetry an element
 |m⟩⟨m| has no charge of its own, and weakening changes no expectation value.
 """
-weak_form(state::State{Pure}) = state
+weak_form(state::State{<:Ket}) = state
 
 weak_form(state::State{Mixed}) =
     if isempty(strong_names(state.system))
@@ -758,7 +769,7 @@ end
 the trace of the density matrix, or the squared norm of a pure state, computed once and kept
 with the state.
 """
-trace(state::State{Pure}) =
+trace(state::State{<:Ket}) =
     only(cached!((t, s) -> push!(t, inner(s.state, s.state)), state.preobs.trace, state))
 
 function trace(state::State{Mixed})
@@ -850,7 +861,7 @@ end
 the state rescaled to norm one on a pure representation, to a trace of real part one on a
 mixed one.
 """
-function normalize(state::State{Pure})
+function normalize(state::State{<:Ket})
     nonzero_trace(state, "normalize")
     return State(state, normalize(state.state))
 end
@@ -876,6 +887,9 @@ inner(::State{Pure}, ::State{Mixed}) =
     error("no inner product between a pure and a mixed representation: mix the pure one")
 inner(::State{Mixed}, ::State{Pure}) =
     error("no inner product between a pure and a mixed representation: mix the pure one")
+inner(::State{Trajectory}, ::State{Trajectory}) = not_linear("an inner product")
+inner(::State{Trajectory}, ::State) = not_linear("an inner product")
+inner(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_linear("an inner product")
 
 dot(a::State, b::State) = inner(a, b)
 
@@ -966,6 +980,9 @@ end
 
 ⊗(a::State{Pure}, b::State{Mixed}) = mix(a) ⊗ b
 ⊗(a::State{Mixed}, b::State{Pure}) = a ⊗ mix(b)
+⊗(::State{Trajectory}, ::State{Trajectory}) = not_yet("the product of two trajectories")
+⊗(::State{Trajectory}, ::State{<:Union{Pure, Mixed}}) = not_yet("the product of a trajectory")
+⊗(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_yet("the product of a trajectory")
 
 """
     element_parities(R, system, i)

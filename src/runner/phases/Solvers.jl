@@ -252,7 +252,9 @@ end
 
 function prepare_phase(phase::Thermalize, sim::Simulation)
     state = state_named(sim, phase.on)
-    if state isa Union{State{Pure}, ExactState{Pure}}
+    if state isa State{Trajectory}
+        not_yet("a thermal state")
+    elseif state isa Union{State{Pure}, ExactState{Pure}}
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
     n = if isnothing(phase.nsteps)
@@ -387,7 +389,9 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
                              phase.limits, phase.mpo_limits, orthogonal_to = ms, phase.weight),
                              :energy)
     end
-    if !(state isa State{Pure})
+    if state isa State{Trajectory}
+        not_searched()
+    elseif !(state isa State{Pure})
         error("GroundState searches a pure state: search it pure and mix it")
     end
     start = time()

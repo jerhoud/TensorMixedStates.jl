@@ -65,6 +65,9 @@ end
 random_state(::State{Mixed}, ::Int; kwargs...) =
     error("randomising a mixed state is not implemented")
 
+random_state(::State{Trajectory}, ::Int; kwargs...) = not_yet("a random state")
+random_state(::Type{Trajectory}, args...; kwargs...) = not_yet("a random state")
+
 """
     refuse_strong(system)
 

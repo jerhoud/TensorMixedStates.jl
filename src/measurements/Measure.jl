@@ -247,12 +247,16 @@ complex number as `Trace`
 """
 const TraceDeviation = on_state("TraceDeviation", st -> complex(1 - trace(st)))
 
+# the norm of the density matrix, which one trajectory does not give
+measured_norm(state::AbstractState) = norm(state)
+measured_norm(::State{Trajectory}) = not_linear("the norm")
+
 """
     Norm
 
 the measurement of the norm of the state, see `norm`
 """
-const Norm = on_state("Norm", norm)
+const Norm = on_state("Norm", measured_norm)
 
 """
     Hermiticity

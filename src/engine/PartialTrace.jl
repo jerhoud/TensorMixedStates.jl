@@ -175,5 +175,7 @@ function kept_positions(state::AbstractState, keep, trace_out)
 end
 
 # not mixed behind the caller's back, the result being a state
+partial_trace(::State{Trajectory}; kwargs...) =
+    error("a trajectory is not a mixed state, the average of trajectories is: use State{Mixed}")
 partial_trace(::State{Pure}; kwargs...) =
     error("partial_trace needs a mixed representation: use mix(state) first")

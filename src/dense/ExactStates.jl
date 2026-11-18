@@ -61,6 +61,8 @@ function ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing) where 
     return ExactState(State{R}(args...); max_dense)
 end
 
+ExactState(::State{Trajectory}; kwargs...) = no_exact_trajectory()
+
 # the limits, of the conversion between types of states, without use
 ExactState(state::State{Pure}; max_dense::Union{Nothing, Int} = nothing,
            limits::Limits = Limits()) =

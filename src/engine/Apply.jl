@@ -694,20 +694,22 @@ apply(a::IndexedOp, state::State; limits::Limits = Limits()) =
 the number `state` is multiplied by and the steps of `apply` for `op`, see `pure_steps` and
 `mixed_steps`, which depend on the system of the state alone
 """
-function apply_steps(a::IndexedOp{IsOperator}, state::State{Pure})
+function apply_steps(a::IndexedOp{IsOperator}, state::State{<:Ket})
     check_indices(state.system, a)
     return pure_steps(state.system, a)
 end
 
-function apply_steps(a::IndexedOp{IsChannel}, state::State{Pure})
-    if !is_pure(a)
+function apply_steps(a::IndexedOp{IsChannel}, state::State{<:Ket})
+    if !is_pure(a) && state isa State{Trajectory}
+        not_yet("a channel of more than one Kraus operator on a trajectory")
+    elseif !is_pure(a)
         error("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot " *
               "take: apply it to mix(state)")
     end
     return apply_steps(kraus(a), state)
 end
 
-apply_steps(a::IndexedOp{IsGenerator}, ::State{Pure}) =
+apply_steps(a::IndexedOp{IsGenerator}, ::State{<:Ket}) =
     error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
 
 apply_steps(a::IndexedOp{IsOperator}, state::State{Mixed}) = apply_steps(Gate(a), state)

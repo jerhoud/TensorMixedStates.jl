@@ -31,7 +31,7 @@ end
 the tensor measuring the identity on site `i`: the identity of the site on a pure state, the
 trace over the site on a mixed one
 """
-function identity_at(state::State{Pure}, i::Int)
+function identity_at(state::State{<:Ket}, i::Int)
     j = siteind(Pure, state.system, i)
     return delta(dag(j), j')
 end
@@ -47,7 +47,7 @@ end
 the tensor measuring the operator of matrix `m` on site `i`: its tensor on a pure state,
 carried onto the trace on a mixed one, see `on_trace`
 """
-function obs_tensor(state::State{Pure}, m::AbstractMatrix, i::Int)
+function obs_tensor(state::State{<:Ket}, m::AbstractMatrix, i::Int)
     j = siteind(Pure, state.system, i)
     return charged_itensor(m, [j', dag(j)])
 end
@@ -62,7 +62,7 @@ end
 
 fill `l` with what `get_loc` returns for every site, mixed states only
 """
-create_loc!(_, ::State{Pure}) = error("bug: get_loc on pure states")
+create_loc!(_, ::State{<:Ket}) = error("bug: get_loc on pure states")
 
 function create_loc!(l, state::State{Mixed})
     n = length(state)
@@ -87,7 +87,7 @@ get_loc(state::State, i::Int) = cached!(create_loc!, state.preobs.loc, state)[i]
 fill `r` with what `get_right` returns for every site; on a pure state, the right orthogonal
 sites, those after `ortho_lims`, give the identity, uncontracted
 """
-function create_right!(r, state::State{Pure})
+function create_right!(r, state::State{<:Ket})
     st = state.state
     n = length(state)
     rl = last(ortho_lims(st))
@@ -142,7 +142,7 @@ least, up to site `i`, `at(state, k)` measuring each site before: the identity, 
 `identity_at`, or the string, see `string_at`; on a pure state, the left orthogonal sites, those
 before `ortho_lims`, give the identity, uncontracted, for the identity
 """
-function extend_left!(l, state::State{Pure}, i::Int, at)
+function extend_left!(l, state::State{<:Ket}, i::Int, at)
     st = state.state
     ll = at === identity_at ? first(ortho_lims(st)) : 0
     # pushed one by one: an interruption leaves what is there complete
@@ -226,7 +226,7 @@ Expector() = Expector(0, ITensor())
 the contraction `t` of an expector at `from`, its operator placed there, carried to `to`, the
 sites in between traced out and the site of `to` left open
 """
-function zip_between(state::State{Pure}, t::ITensor, from::Int, to::Int)
+function zip_between(state::State{<:Ket}, t::ITensor, from::Int, to::Int)
     st = state.state
     t *= dag(st[from]')
     for k in from+1:to-1
@@ -284,7 +284,7 @@ measured there; on a pure state the identity only renames the index of the site
 """
 function times_piece(state::State, t::ITensor, b::ComBlock, j::Int, comb::Combination)
     k = b.start + j - 1
-    if state isa State{Pure} && collect(keys(comb)) == [0]
+    if state isa State{<:Ket} && collect(keys(comb)) == [0]
         return comb[0] * prime(t, siteind(Pure, state.system, k))
     end
     return t * obs_tensor(state, combination_matrix(b, j, comb, dim(state.system[k])), k)
@@ -779,7 +779,7 @@ function swap_rule(state::State, (o1, o2), sites, parity::Int)
     sys = state.system
     if o1 == o2
         return parity == 1 ? (-) : identity
-    elseif state isa State{Pure} &&
+    elseif state isa State{<:Ket} &&
            all(i -> nearly(matrix(o2, sys[i]), collect(matrix(o1, sys[i])')), sites)
         return conj
     end
@@ -815,7 +815,7 @@ fill the entries `(i, j)` of the matrices `r` of the pairs of operators `pairs`,
 in `sites`, each pair being defined on all of them with one parity there, its entry of
 `parities`, see `pair_parity`, and return `r`
 """
-function fast_pairs!(r, state::State{Pure}, pairs, parities, sites)
+function fast_pairs!(r, state::State{<:Ket}, pairs, parities, sites)
     sys = state.system
     scale = nonzero_trace(state, "expect2")
     rules = [ swap_rule(state, p, sites, q) for (p, q) in zip(pairs, parities) ]
@@ -1065,6 +1065,10 @@ operator changing the charges by no definite amount being taken between the stat
 nothing, as by `expect`. Between two density matrices, for a channel or a generator,
 ``\\mathrm{tr}(a^\\dagger\\, op(b))``; a pure operator is ambiguous there, and refused.
 """
+inner(::State{Trajectory}, ::IndexedOp, ::State) = not_linear("a matrix element")
+inner(::State{<:Union{Pure, Mixed}}, ::IndexedOp, ::State{Trajectory}) =
+    not_linear("a matrix element")
+
 function inner(a::State{Pure}, op::IndexedOp{IsOperator}, b::State{Pure})
     a, b = on_common_system(a, b)
     return or_on_plain((x, y) -> inner(x.state', make_mpo(y, op), y.state), a, b)

@@ -337,7 +337,7 @@ end
 PreMPO(state::State, a::Union{IndexedOp, Pair}; limits::Limits = Limits()) =
     PreMPO(state, [a]; limits)
 
-function PreMPO(state::State{Pure}, terms::AbstractVector; limits::Limits = Limits())
+function PreMPO(state::State{<:Ket}, terms::AbstractVector; limits::Limits = Limits())
     sys = state.system
     ops, fs = split_terms(terms)
     parts = CompactedOp{Pure}[ compacted_op(sys, followed_operator(a), limits) for a in ops ]

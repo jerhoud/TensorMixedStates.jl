@@ -215,6 +215,11 @@ function ground_state(hamiltonian, state::State{Pure};
 end
 
 # ::Any rather than _, which Julia 1.10 refuses before keywords
+ground_state(::Any, ::State{Trajectory}; kwargs...) = not_searched()
+
+not_searched() =
+    error("a trajectory is not searched: search the state in Pure, then " *
+          "ConvertState{Trajectory}")
 ground_state(::Any, ::State{Mixed}; kwargs...) =
     error("ground_state searches a pure state: search it pure and mix it")
 
@@ -302,5 +307,6 @@ function steady_state(lindbladian, state::State{Mixed};
 end
 
 # ::Any rather than _, which Julia 1.10 refuses before keywords
+steady_state(::Any, ::State{Trajectory}; kwargs...) = not_yet("a steady state")
 steady_state(::Any, ::State{Pure}; kwargs...) =
     error("steady_state searches a density matrix: mix the state")

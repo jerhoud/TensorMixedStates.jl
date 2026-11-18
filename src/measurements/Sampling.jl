@@ -92,7 +92,7 @@ normalized, see `project_on`
 project_parity(state::AbstractState, P, s; limits::Limits) =
     project_on(state, (Id(1) + s * P) / 2; limits)
 
-project_parity(state::State{Pure}, P, s; limits::Limits) =
+project_parity(state::State{<:Ket}, P, s; limits::Limits) =
     normalize(+(state, s * apply(P, state); limits))
 
 """
@@ -105,7 +105,7 @@ eigenvalues of its operator there, as integers, and of the projectors on their e
 matrices on that site, `T` being twice the total. A state of one's own adds a method, which
 `collapse` takes for such a sum.
 """
-project_count(state::State{Pure}, sites, locals, T; limits::Limits) =
+project_count(state::State{<:Ket}, sites, locals, T; limits::Limits) =
     normalize(apply(count_mpo(state.system, sites, locals, T), state; limits))
 
 function project_count(state::State{Mixed}, sites, locals, T; limits::Limits)
@@ -247,14 +247,14 @@ default, and `max_dense` that of `probabilities`.
     sample(state, 3)
     sample(state, Z(1) * Z(2))
 """
-function sample(state::State{Pure}; rng = Random.default_rng())
+function sample(state::State{<:Ket}; rng = Random.default_rng())
     nonzero_trace(state, "sample")
     st = orthogonalize(state.state, 1)
     st[1] /= norm(st[1])
     return sample(rng, st) .- 1
 end
 
-function sample(state::State{Pure}, pos::Int; rng = Random.default_rng())
+function sample(state::State{<:Ket}, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "sample")
     nonzero_trace(state, "sample")
     st = orthogonalize(state.state, pos)
