@@ -159,6 +159,14 @@ Running the program again resumes a stopped run from its checkpoint;
 `TMS_CHECKPOINT_INTERVAL` set them; a file `restart` in the directory, or `cleanTMS(sd)`, starts
 over. `runTMS(sd; output = devnull)` makes no directory, a `SaveState` alone writing its file.
 
+Disorder: `SimData(samples = N, …)` whose last phase, `Realizations() do c … end`, returns the
+phases of a sample, drawing its disorder with `c.rng`; the phases before it run once, the final
+measurements of the `SimData` at the end of each sample. Files and `Data` hold the averages
+(columns `c`, `err(c)`, `std(c)`, `N`), `EachSample("name")` a row for each sample (column
+`sample`); `TMS_SAMPLES=2N julia prog.jl` prolongs a finished run, and the program launched K
+times at once runs the samples on K cores, with the same results; `tolerance = "name" => atol`
+stops them once the errors of `name` are within `atol`.
+
 ## When something fails
 
 An error on a name or a keyword of version 1.x ends with a line saying what 2.0 writes instead,
@@ -1267,7 +1275,8 @@ erasing the directory.
 The generator of the random draws of the run is part of a checkpoint, so that a resumed run
 draws the same numbers as the uninterrupted one, in a `CreateState` with `randomize`, or in a
 measurement or a phase drawing with `c.rng` or `sim.rng`. A draw made with another generator,
-the global one of Julia for instance, is not reproduced.
+the global one of Julia for instance, is not reproduced. A seed gives the same draws for one minor
+version of Julia, which `stamp` records, not necessarily for another.
 
 A checkpoint is resumed only by the program that wrote it: the program run must be the same,
 byte for byte, as the copy `prog.jl` in the directory, include the same files as the copies in
@@ -1276,11 +1285,11 @@ are some. Editing the program or a file it includes and running it again under t
 thus reports an error instead of quietly continuing something else. To resume with the edited
 program all the same, more time or other threads for instance, copy it onto `prog.jl`, the
 files it includes into `prog`, and its arguments into `prog_args.json`, or set the environment
-variable `TMS_ACCEPT_PROGRAM=1`; to start over, put a file `restart` in the directory or give the
-simulation another name. The files included before `using TensorMixedStates` are not seen, nor
-the packages the program loads, whose versions `stamp` gives, nor a parameter it reads
-elsewhere, from an environment variable or a data file. A simulation run from the REPL, with no
-program file, is always resumed.
+variable `TMS_ACCEPT_PROGRAM=1`, which the log notes; to start over, put a file `restart` in
+the directory or give the simulation another name. The files included before
+`using TensorMixedStates` are not seen, nor the packages the program loads, whose versions
+`stamp` gives, nor a parameter it reads elsewhere, from an environment variable or a data file.
+A simulation run from the REPL, with no program file, is always resumed.
 
 A program running several simulations copies itself into the directory of each, so that once
 it is edited none of them resumes, those it did not change included, until it is copied onto
@@ -1324,6 +1333,109 @@ on some sites, and a phase of your own made of steps at the step it reached, see
 [Phases of one's own](@ref own-phases).
 The other phases are short enough to be replayed, and a checkpoint is taken between phases
 whenever one is due.
+
+## Samples and disorder
+
+A simulation with `samples` runs its last phases many times, once for each sample, each sample
+with its own draw of the disorder. The phases before the last phase, `Realizations`, run once
+and lead to the branch point; each sample starts again from the state they reached and runs the
+phases the function of `Realizations` returns.
+
+```julia
+runTMS(SimData(
+    name = "disordered_ground",
+    seed = 1,
+    samples = 1000,
+    phases = [
+        CreateState{Pure}(10, Qubit(), "Up"),
+        Realizations() do c
+            J = [1 + 0.1 * randn(c.rng) for i in 1:9]
+            H = -sum(J[i] * Z(i) * Z(i + 1) for i in 1:9) - sum(X(i) for i in 1:10)
+            GroundState(hamiltonian = H, algo = Dmrg(nsweeps = 20, tol = 1e-10), limits = lim)
+        end,
+    ],
+    final_measurements = ["energy" => [:energy, Z], EachSample("energies") => :energy],
+))
+```
+
+The function is given `c.sample`, the index of the sample, and `c.rng`, the generator it draws
+the disorder with, and returns the phases of that sample. It must draw with `c.rng` alone, so
+that a sample can be made again, and return the same phases, by type and name, for every
+sample: only their operators and values change. It is called once when the `SimData` is
+written, so that its phases are checked before the run, and the phases of each sample are
+checked again before it runs.
+
+Each sample draws with generators of its own, made from the seed of the run and the index of the
+sample: `c.rng` for its disorder, and `sim.rng` for its phases and measurements. A sample is
+thus the same whichever run computes it, and two simulations of the same `seed` whose functions
+draw alike get the same disorder in each sample, whatever their phases: put the draw in a
+function both programs include to compare them on the same realizations.
+
+The final measurements of the `SimData` are made at the end of each sample. A file or a `Data`
+then holds averages over the samples: a row for each row of a sample, matched by its phase and
+its step, the final measurements of a phase whatever its number of steps, with the columns `N`,
+the samples in it, `N_eff`, their effective number, equal to `N` here, and for each column `c`
+of the values, `c`, its mean, `err(c)`, the error on the mean, and `std(c)`, the standard
+deviation of the samples, `NaN` for one sample. The file `energy` above holds one row, the
+average ground state energy and magnetization. A row that some samples lack, a step that only the
+slow searches reach for instance, averages those that have it. The samples of a row must have the
+same time, but for rounding, and the same columns, and a value that is not a number cannot be
+averaged. A row written before the samples is shared by all, and written with no error and no
+deviation. The
+means and deviations are updated sample after sample by the algorithm of West (1979), each value
+shifted by its value in the first sample (Chan, Golub and LeVeque 1983), accurate even when the
+deviation is small against the mean.
+
+`EachSample(d)` writes to `d` a row for each sample instead, after the time the column `sample`
+giving its index, 0 before the samples: the file `energies` above holds the energy of each
+sample, for distributions or analyses of one's own after the run. The value `:sample` gives the
+index of the sample to any measurement. A stream, `"stdout"` for instance, and a destination of
+one's own are written for each sample, without that column.
+
+The phases before the branch point run once, in the directory of the simulation, whose log
+tells them, and end with the file `branch.h5`. The samples are then run by parts, each in a
+directory of its own, `parts/1`, `parts/2`, …, with its log, which tells the phases and steps of
+its first sample only and a line for each sample: a part takes the next sample no part has
+taken, runs it, and leaves its rows in the directory `pending`. The samples ended are merged into
+the files and the `Data` of the simulation in their order, up to the first one not ended, so
+that they hold samples 1 to m, the same to the last bit whichever process ran each, and an
+average never favours the samples that end first. An averaged file is written whole at each
+merge.
+
+Running the program several times at once, `julia prog.jl & julia prog.jl & …`, runs the samples
+on as many cores, each process with its own memory: a process waits while another runs the
+phases before the branch point, takes a part, and ends when no sample is left, its `Simulation`
+holding the state of the last sample it ran and the `Data` merged so far, which `sim.data` also
+gives in a sample; the console says how many samples are merged and how many processes still
+run. A sample runs on a single thread, BLAS and Strided included, so that it is the same
+whatever the threads of the process, which change the rounding of the products: launch a
+process for each core instead. The `threading` of `runTMS` applies to the phases before the
+branch point; `threading = nothing` leaves the threading of the samples as it is, and their
+results may then differ by rounding from one process to another. A file a sample writes, by
+`SaveState` for instance, needs a name of its own for each sample, `"state$(c.sample).h5"`: the
+processes write at once.
+
+A part stopped, or left by a process that died, is taken over by the next process, which resumes
+it where its checkpoint is. The file `stop` stops all the parts in the directory of the
+simulation, one part in its own; a run finding no other process running removes it. A sample
+that fails, or that cannot be merged, makes the other processes fail with its error once they
+end their sample, and the next run tries it again. The environment variable `TMS_SAMPLES`
+overrides `samples`: running the program again with `TMS_SAMPLES=2000` after 1000 samples goes
+on with sample 1001 from the branch point, without running the phases before it again, and
+writes the same files as 2000 samples in one run. With fewer samples than those merged, a run
+changes nothing.
+
+A tolerance stops the samples once their averages are precise enough: with
+`tolerance = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
+the samples stop at the first whose errors in `energy`, every `err(c)` at every row, are within
+`atol + rtol * |c|`, every row holding at least `min_samples` samples, 10 by default, so that an
+error underestimated by chance does not stop them; `samples` is then the most that runs. A
+quantity constant over the first samples, as a rare event, has an error of zero there: raise
+`min_samples` above the samples it takes to show. The tolerance names an averaged file or
+`Data`, a `Data` alone in a run without a directory. The samples merged are the same whichever
+process runs them, the samples running beyond the first that reaches the tolerance ending
+without being merged. A program run again with a tighter tolerance goes on from the samples
+merged; with a looser one, it keeps them.
 
 ## Measurements
 
