@@ -15,14 +15,15 @@ with_lock(f::Function, dir::String) =
 part_dir(dir::String, part::Int) = joinpath(dir, "parts", string(part))
 
 """
-    Queue(samples, next, free, current, failed)
+    Queue(samples, reached, next, free, current, failed)
 
-the queue of the samples of a simulation, its file `queue.json`: the samples asked for, the next
-one never taken, those given back, the sample each part holds, by part, and the samples failed,
-with what went wrong
+the queue of the samples of a simulation, its file `queue.json`: the samples asked for, the
+sample whose merge reached the tolerance, `nothing` before, the next one never taken, those
+given back, the sample each part holds, by part, and the samples failed, with what went wrong
 """
 mutable struct Queue
     samples::Int
+    reached::Union{Nothing, Int}
     next::Int
     free::Vector{Int}
     current::Dict{Int, Int}
@@ -33,7 +34,7 @@ queue_file(dir::String) = joinpath(dir, "queue.json")
 
 function read_queue(dir::String)
     q = JSON.parsefile(queue_file(dir))
-    return Queue(q["samples"], q["next"], Int[ k for k in q["free"] ],
+    return Queue(q["samples"], q["reached"], q["next"], Int[ k for k in q["free"] ],
                  Dict{Int, Int}(parse(Int, p) => k for (p, k) in q["current"]),
                  Dict{Int, String}(parse(Int, k) => m for (k, m) in q["failed"]))
 end
@@ -41,7 +42,8 @@ end
 function write_queue(dir::String, q::Queue)
     tmp = queue_file(dir) * ".tmp"
     open(tmp, "w") do f
-        JSON.print(f, Dict("samples" => q.samples, "next" => q.next, "free" => sort(q.free),
+        JSON.print(f, Dict("samples" => q.samples, "reached" => q.reached, "next" => q.next,
+                           "free" => sort(q.free),
                            "current" => Dict(string(p) => k for (p, k) in q.current),
                            "failed" => Dict(string(k) => m for (k, m) in q.failed)))
     end
@@ -56,10 +58,13 @@ function failed_error(q::Queue)
     return ErrorException("sample $k failed, the samples stop: $(q.failed[k])")
 end
 
-# the sample a part takes next, given back or never taken, within the samples asked for
+# the last sample the parts run: those asked for, or that reaching the tolerance
+last_sample(q::Queue) = min(q.samples, something(q.reached, q.samples))
+
+# the sample a part takes next, given back or never taken, up to the last one
 function next_sample(q::Queue)
-    free = filter(≤(q.samples), q.free)
-    return !isempty(free) ? minimum(free) : q.next ≤ q.samples ? q.next : nothing
+    free = filter(≤(last_sample(q)), q.free)
+    return !isempty(free) ? minimum(free) : q.next ≤ last_sample(q) ? q.next : nothing
 end
 
 """
@@ -67,13 +72,14 @@ end
 
 the sample the part `part` of the simulation of directory `dir` runs next: the one it holds, or
 else the next one, `nothing` when none is left, `:stop` with `stop` when one is left, which it
-does not take; refused once a sample failed. A sample held beyond those asked for is given back.
+does not take; refused once a sample failed. A sample held beyond the last one is given back,
+see `last_sample`.
 """
 function take_sample!(dir::String, part::Int; stop::Bool = false)
     return with_lock(dir) do
         q = read_queue(dir)
         k = get(q.current, part, nothing)
-        if !isnothing(k) && k > q.samples
+        if !isnothing(k) && k > last_sample(q)
             delete!(q.current, part)
             push!(q.free, k)
             write_queue(dir, q)
@@ -126,24 +132,30 @@ function sample_ended!(dir::String, part::Int)
 end
 
 """
-    merge_samples!(dir, format; limit = 100)
+    merge_samples!(dir, merging; limit = 100)
 
 under the lock of the directory `dir` of a simulation, at most `limit` of its samples ended added
 to its outputs in their order, see `replay!`, from the first not merged up to the first not
-ended: its files written, then `merged.jls`, then the rows merged removed, so that a crash
-leaves a merge to go on with. It returns the first sample merged and the last, `nothing` for
-none. A sample that cannot be merged is noted failed, see `sample_failed!`.
+ended, or the first reaching the tolerance, `merging = (; format, tolerance, min_samples)`, see
+`within`, which the queue then notes: its files written, then `merged.jls`, then the rows merged
+removed, so that a crash leaves a merge to go on with. It returns `(first, last, reached)`, the
+samples merged and whether the tolerance was reached, `nothing` for none. A sample that cannot
+be merged is noted failed, see `sample_failed!`.
 """
-function merge_samples!(dir::String, format::String; limit::Int = 100)
+function merge_samples!(dir::String, merging; limit::Int = 100)
+    (; format, tolerance, min_samples) = merging
     m, marks = read_merged(dir)
     k = m + 1
-    if !isfile(pending_file(dir, k))
+    q = read_queue(dir)
+    if !isnothing(q.reached) || !isfile(pending_file(dir, k))
         return nothing
     end
     o = reopen!(Outputs(; dir, format, sampled = true), marks)
+    reached = false
     try
-        while k ≤ m + limit && isfile(pending_file(dir, k))
+        while !reached && k ≤ m + limit && isfile(pending_file(dir, k))
             replay!(o, read_pending(dir, k))
+            reached = !isempty(tolerance) && within(o.opened, dir, format, tolerance, min_samples)
             k += 1
         end
     catch e
@@ -160,6 +172,10 @@ function merge_samples!(dir::String, format::String; limit::Int = 100)
     marks = resume_marks(o)
     close!(o)
     write_merged(dir, k - 1, marks)
+    if reached
+        q.reached = k - 1
+        write_queue(dir, q)
+    end
     # those a crash left after the merge before as well
     for f in readdir(joinpath(dir, "pending"))
         n = tryparse(Int, chopprefix(f, "sample-"))
@@ -167,23 +183,23 @@ function merge_samples!(dir::String, format::String; limit::Int = 100)
             rm(joinpath(dir, "pending", f); force = true)
         end
     end
-    return m + 1 => k - 1
+    return (first = m + 1, last = k - 1, reached)
 end
 
 """
-    merge_all!(dir, format)
+    merge_all!(dir, merging)
 
 the samples ended of the simulation of directory `dir` merged, see `merge_samples!`, the lock
-taken anew for every `limit` of them, so that it is held a short while; the first sample merged
-and the last, `nothing` for none
+taken anew for every `limit` of them, so that it is held a short while; `(first, last, reached)`
+as `merge_samples!` returns it, `nothing` for none
 """
-function merge_all!(dir::String, format::String)
+function merge_all!(dir::String, merging)
     merged = nothing
     while true
-        step = with_lock(() -> merge_samples!(dir, format), dir)
+        step = with_lock(() -> merge_samples!(dir, merging), dir)
         if isnothing(step)
             return merged
         end
-        merged = isnothing(merged) ? step : first(merged) => last(step)
+        merged = isnothing(merged) ? step : (; merged.first, step.last, step.reached)
     end
 end

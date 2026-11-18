@@ -178,6 +178,13 @@ the description of a simulation, which `runTMS` runs.
   samples); the environment variable `TMS_SAMPLES` overrides it, so that a finished run is
   prolonged by running it again with more, and the program run several times at once runs the
   samples on as many cores, see `runTMS`
+- `tolerance`: the errors the samples stop at, once at least `min_samples` are done, for an
+  averaged destination `d`, `d => atol` or `d => (atol = …, rtol = …)`, or a list of them: every
+  error of `d`, `err(c)`, within `atol + rtol * |c|`, at every row, the samples merged being those
+  up to the first that reaches it, the same whichever process runs them (default `[]`, all the
+  `samples`)
+- `min_samples`: the samples done before the tolerance is looked at, so that it does not stop on
+  an error underestimated by chance (default 10)
 
 A measurement of a value that no phase provides is refused here, see
 `TensorMixedStates.provided_values`, and so is a state named by a name the run reserves, or twice
@@ -204,11 +211,13 @@ struct SimData
     seed::Union{Nothing, Integer}
     backend::Type
     samples::Union{Nothing, Int}
+    tolerance::Vector{Pair{Any, @NamedTuple{atol::Float64, rtol::Float64}}}
+    min_samples::Int
     phases::Vector{Any}
     provided::Vector{Symbol}
     realized::Vector{Any}
     function SimData(name, description, time_start, final_measurements, format, seed, backend,
-                     samples, phases)
+                     samples, tolerance, min_samples, phases)
         # which Julia 1.10 refuses
         if !isnothing(seed) && seed < 0
             error("the seed of a simulation is an integer of zero or above, got $seed")
@@ -223,12 +232,25 @@ struct SimData
         checked = checked_phases(ps, realized, samples)
         provided = check_values(checked, final_measurements, !isnothing(samples))
         check_names(checked)
-        if isnothing(samples) && any(first(p) isa EachSample
-                                     for l in run_lists(checked, final_measurements) for p in l)
+        lists = run_lists(checked, final_measurements)
+        if isnothing(samples) && any(first(p) isa EachSample for l in lists for p in l)
             error("EachSample writes a row for each sample, and the simulation has no samples")
         end
+        tolerance = tolerances(tolerance)
+        if !isempty(tolerance) && isnothing(samples)
+            error("a tolerance stops the samples, and the simulation has no samples")
+        elseif min_samples < 1
+            error("min_samples is 1 or more, got $min_samples")
+        end
+        for (d, _) in tolerance
+            if !any(first(p) == d for l in lists for p in l)
+                error("the tolerance names $(repr(d)), which no list of measurements writes " *
+                      "averaged: name a destination of the lists, as \"energy\" or Data(\"x\")")
+            end
+        end
         return new(name, description, time_start, final_measurements, check_format(format), seed,
-                   check_backend(backend), samples, ps, provided, realized)
+                   check_backend(backend), samples, tolerance, Int(min_samples), ps, provided,
+                   realized)
     end
 end
 
@@ -237,17 +259,50 @@ SimData(name, description, time_start, final_measurements, format, seed, phases)
     SimData(name, description, time_start, final_measurements, format, seed, State, phases)
 
 SimData(name, description, time_start, final_measurements, format, seed, backend, phases) =
-    SimData(name, description, time_start, final_measurements, format, seed, backend, nothing,
-            phases)
+    SimData(name, description, time_start, final_measurements, format, seed, backend, nothing, [],
+            10, phases)
 
 SimData(; name::AbstractString = "simulation", description::AbstractString = "",
         time_start::Number = 0., final_measurements = [], format::AbstractString = "%.13g",
         seed::Union{Nothing, Integer} = nothing, backend = State,
-        samples::Union{Nothing, Integer} = nothing, phases) =
+        samples::Union{Nothing, Integer} = nothing, tolerance = [], min_samples::Integer = 10,
+        phases) =
     SimData(name, description, time_start, final_measurements, format, seed, backend, samples,
-            phases)
+            tolerance, min_samples, phases)
+
+"""
+    tolerances(t)
+
+the tolerance of a `SimData` as a vector of pairs `destination => (atol, rtol)`, from a pair
+`d => atol` or `d => (atol = …, rtol = …)` or a vector of them
+"""
+tolerances(p::Pair) = tolerances([p])
+
+function tolerances(v::AbstractVector)
+    out = Pair{Any, @NamedTuple{atol::Float64, rtol::Float64}}[]
+    for p in v
+        tol = p isa Pair ? last(p) : nothing
+        t = tol isa Real ? (atol = Float64(tol), rtol = 0.) :
+            tol isa NamedTuple && issubset(keys(tol), (:atol, :rtol)) &&
+            all(x -> x isa Real, values(tol)) ?
+            (atol = Float64(get(tol, :atol, 0.)), rtol = Float64(get(tol, :rtol, 0.))) : nothing
+        if isnothing(t) || t.atol < 0 || t.rtol < 0
+            error("a tolerance is destination => atol or destination => (atol = …, rtol = …), " *
+                  "of zero or above, got $(repr(p))")
+        end
+        push!(out, first(p) => t)
+    end
+    return out
+end
+
+tolerances(x) =
+    error("a tolerance is destination => atol or destination => (atol = …, rtol = …), or a " *
+          "list of them, got $(repr(x))")
 
 checked_phases(sd::SimData) = checked_phases(sd.phases, sd.realized, sd.samples)
+
+# what the merge of the samples of `sd` needs, see `merge_samples!`
+merging(sd::SimData) = (; sd.format, sd.tolerance, sd.min_samples)
 
 show(io::IO, s::SimData) =
     print(io, """
@@ -260,6 +315,8 @@ show(io::IO, s::SimData) =
             seed = $(repr(s.seed)),
             backend = $(s.backend),
             samples = $(repr(s.samples)),
+            tolerance = $(s.tolerance),
+            min_samples = $(s.min_samples),
             phases =
         $(s.phases))""")
 
@@ -700,6 +757,10 @@ recorded, then added to the outputs, as a part records them and the merge adds t
 """
 function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
     run = getfield(sim, :run)
+    if any(!(first(t) isa Data) for t in sd.tolerance)
+        error("without a directory, the files are not written and a tolerance names a " *
+              "Data(name) alone")
+    end
     prefix = sd.phases[1:end - 1]
     sim = run_phases(sim, prefix, 1, 0, false, threading; final = false)
     b = branch_commit(sim, length(prefix) + 1)
@@ -712,6 +773,11 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
             run.quiet = k > 1
             sim = run_sample(sim, sd, b, k, nothing, each)
             replay!(merged, take_records!(run.outputs))
+            if !isempty(sd.tolerance) &&
+               within(merged.opened, merged.dir, sd.format, sd.tolerance, sd.min_samples)
+                log_line(run, "Tolerance reached at sample $k")
+                break
+            end
         end
     finally
         close!(run.outputs)
@@ -769,10 +835,11 @@ function run_part(sim::Simulation, sd::SimData, b::Commit, commit::Union{Nothing
         run.sample = 0
         write_pending(dir, k, take_records!(run.outputs))
         sample_ended!(dir, part)
-        merged = merge_all!(dir, sd.format)
+        merged = merge_all!(dir, merging(sd))
         if !isnothing(merged)
-            log_line(run, first(merged) == last(merged) ? "Sample $(first(merged)) merged" :
-                          "Samples $(first(merged)) to $(last(merged)) merged")
+            log_line(run, (merged.first == merged.last ? "Sample $(merged.last) merged" :
+                           "Samples $(merged.first) to $(merged.last) merged") *
+                          (merged.reached ? ", the tolerance reached" : ""))
         end
     end
     run.quiet = false
@@ -1180,7 +1247,8 @@ program was accepted, `:wait` while another process runs the phases before it, w
 process, `:stop` for a file `stop` found while waiting, `:prefix` for this one to run them, the
 directory taken, see `claim_run`
 """
-function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true)
+function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true,
+                         merging = (format = "%.13g", tolerance = [], min_samples = 10))
     prefix = live_run(dir)
     if !first && isfile(joinpath(dir, "stop"))
         return :stop => nothing
@@ -1202,8 +1270,15 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
     branched = isfile(joinpath(dir, "branch.h5"))
     accepted = branched && check_program(dir, src_path, "the branch point")
     q = isfile(queue_file(dir)) ? read_queue(dir) :
-        Queue(samples, 1, Int[], Dict{Int, Int}(), Dict{Int, String}())
+        Queue(samples, nothing, 1, Int[], Dict{Int, Int}(), Dict{Int, String}())
     q.samples = samples
+    if branched
+        # the tolerance of this program, on the samples merged
+        m, marks = read_merged(dir)
+        (; format, tolerance, min_samples) = merging
+        q.reached = !isempty(tolerance) && within(marks, dir, format, tolerance, min_samples) ?
+                    m : nothing
+    end
     write_queue(dir, q)
     if branched
         store_program(dir, src_path)
@@ -1261,8 +1336,11 @@ returns: the samples merged, out of those asked for, and the other processes run
 """
 function samples_line(dir::String, merged::Int)
     n = length(live_parts(dir))
-    asked = read_queue(dir).samples
-    return (merged ≤ asked ? "$merged of $asked samples merged" :
+    q = read_queue(dir)
+    asked = q.samples
+    return (!isnothing(q.reached) ? "$merged samples merged, the tolerance reached at sample " *
+                                    "$(q.reached)" :
+            merged ≤ asked ? "$merged of $asked samples merged" :
             "$merged samples merged, more than the $asked asked for") *
            (n == 0 ? "" : ", $n other process$(n == 1 ? "" : "es") running")
 end
@@ -1288,8 +1366,9 @@ function run_parts(sd::SimData, settings)
     first = true
     role, claimed = :wait, nothing
     while role == :wait
-        role, claimed = with_lock(() -> launch_samples!(dir, settings.samples, src_path; first),
-                                  dir)
+        role, claimed = with_lock(dir) do
+            launch_samples!(dir, settings.samples, src_path; first, merging = merging(sd))
+        end
         if role == :wait
             if first
                 host, pid = length(claimed) ≥ 2 ? claimed[1:2] : ("?", "?")
@@ -1318,7 +1397,7 @@ function run_parts(sd::SimData, settings)
     end
     if role ≠ :stop
         # what a process that died while merging left
-        merge_all!(dir, sd.format)
+        merge_all!(dir, merging(sd))
         b, seed = read_branch(dir)
     end
     sim, run = nothing, nothing

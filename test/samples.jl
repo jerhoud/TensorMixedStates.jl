@@ -528,3 +528,47 @@ end
         end
     end
 end
+
+@testset "The samples stop at the first whose average reaches the tolerance" begin
+    in_tmp() do
+        up = CreateState{Pure}(3, Qubit(), "Up")
+        gate = Realizations(c -> Gates(gates = X(1)))
+        value = "v" => c -> isodd(c.sample) ? 1. : -1.
+        # the first number of samples, from `least` on, whose error is within `atol`
+        function reaching(atol, least)
+            for n in max(least, 2):10^4
+                x = big.([ isodd(k) ? 1 : -1 for k in 1:n ])
+                m = sum(x) / n
+                if sqrt(sum((x .- m) .^ 2) / (n - 1) / n) ≤ atol
+                    return n
+                end
+            end
+        end
+        sd(name, tolerance; min_samples = 10) =
+            SimData(; name, samples = 400, tolerance, min_samples, phases = [up, gate],
+                    final_measurements = [Data("v") => value, "f" => value])
+        n = reaching(0.25, 10)
+        @test n == 17
+        sim = runTMS(sd("t", Data("v") => 0.25))
+        @test only(sim.data["v"])["N"] == n
+        @test TensorMixedStates.read_queue(abspath("t")).reached == n
+        @test split(readlines("t/f")[2], '\t')[2] == string(n)
+        @test only(runTMS(sd("d", Data("v") => 0.25); output = devnull).data["v"])["N"] == n
+        # more samples change nothing, a tighter tolerance goes on
+        withenv(() -> runTMS(sd("t", Data("v") => 0.25)), "TMS_SAMPLES" => "500")
+        @test TensorMixedStates.read_merged(abspath("t")).first == n
+        sim = runTMS(sd("t", "f" => (atol = 0.1,)))
+        @test only(sim.data["v"])["N"] == reaching(0.1, 10)
+        # at least min_samples, and a file
+        sim = runTMS(sd("m", "f" => (atol = 0.25, rtol = 0.); min_samples = 30))
+        @test only(sim.data["v"])["N"] == reaching(0.25, 30) == 30
+        # refused
+        @test_throws "has no samples" SimData(phases = [up], tolerance = "f" => 1e-3,
+                                              final_measurements = "f" => X(1))
+        @test_throws "which no list of measurements writes" sd("x", "g" => 0.1)
+        @test_throws "of zero or above" sd("x", "f" => -1)
+        @test_throws "a tolerance is" sd("x", "f" => (atol = "a",))
+        @test_throws "min_samples is 1 or more" sd("x", "f" => 0.1; min_samples = 0)
+        @test_throws "names a Data(name) alone" runTMS(sd("x", "f" => 0.1); output = devnull)
+    end
+end

@@ -366,11 +366,20 @@ A part stopped, or left by a process that died, is taken over by the next proces
 it where its checkpoint is. The file `stop` stops all the parts in the directory of the
 simulation, one part in its own; a run finding no other process running removes it. A sample
 that fails, or that cannot be merged, makes the other processes fail with its error once they
-end their sample, and the next run tries it again. The
-environment variable `TMS_SAMPLES` overrides `samples`: running the program again with
-`TMS_SAMPLES=2000` after 1000 samples goes on with sample 1001 from the branch point, without
-running the phases before it again, and writes the same files as 2000 samples in one run. With
-fewer samples than those merged, a run changes nothing.
+end their sample, and the next run tries it again. The environment variable `TMS_SAMPLES`
+overrides `samples`: running the program again with `TMS_SAMPLES=2000` after 1000 samples goes
+on with sample 1001 from the branch point, without running the phases before it again, and
+writes the same files as 2000 samples in one run. With fewer samples than those merged, a run
+changes nothing.
+
+A tolerance stops the samples once their averages are precise enough: with
+`tolerance = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
+the samples merged are those up to the first whose errors in `energy`, every `err(c)` at every
+row, are within `atol + rtol * |c|`, at least `min_samples` of them, 10 by default, so that an
+error underestimated by chance does not stop it; `samples` is then the most that runs. The
+samples merged are the same whichever process runs them, the samples running beyond the first
+that reaches the tolerance ending without being merged. A program run again with a tighter
+tolerance goes on from the samples merged.
 
 ## Measurements
 

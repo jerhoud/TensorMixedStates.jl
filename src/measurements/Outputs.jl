@@ -1209,3 +1209,49 @@ function data_outputs(dir::AbstractString, format::AbstractString, marks::Abstra
     end
     return o
 end
+
+"""
+    within(sums, samples, (atol, rtol), min_samples)
+
+whether the averages `sums` of `samples` samples, at least `min_samples`, have every error within
+`atol + rtol * |mean|`, cell by cell: a row of one sample, whose error is not known, is not
+"""
+function within(sums::AbstractDict{RowKey, RowSum}, samples::Int, (atol, rtol), min_samples::Int)
+    if samples < max(min_samples, 2)
+        return false
+    end
+    for s in values(sums)
+        unbiased = s.W - s.W2 / s.W
+        for i in eachindex(s.columns)
+            if !s.missing[i]
+                err = unbiased > 0 ? sqrt(s.M2[i] / unbiased) / sqrt(s.W^2 / s.W2) : NaN
+                # NaN fails it
+                if !(err ≤ atol + rtol * abs(s.shift[i] + s.mean[i]))
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
+"""
+    within(opened, dir, format, tolerance, min_samples)
+
+whether the averaged destinations the `tolerance` names, `destination => (atol, rtol)`, have
+their errors within it, see `within`, `opened` holding them opened or their marks, their files
+named relative to `dir`; one not written yet is not
+"""
+function within(opened::AbstractDict, dir::AbstractString, format::AbstractString,
+                tolerance::AbstractVector, min_samples::Int)
+    o = Outputs(; dir, format, sampled = true)
+    for (d, tol) in tolerance
+        h = get(opened, destination(o, d), nothing)
+        if !(h isa Union{AveragedOpened, AveragedMark} &&
+             within(h.sums, h.samples, (tol.atol, tol.rtol), min_samples))
+            return false
+        end
+    end
+    return true
+end
+
