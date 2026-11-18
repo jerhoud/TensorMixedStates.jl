@@ -24,7 +24,8 @@ whole, without truncation, by `ExactState`, which runs the same programs exactly
 simulation.
 Being built on ITensor, it computes fast and runs in parallel naturally. Its syntax for
 operators is meant to make observables, gates, Hamiltonians and Lindbladians easy to write,
-and an optional high level interface expresses a whole simulation in a few lines.
+and an optional high level interface expresses a whole simulation in a few lines, averages over
+disorder included, whose samples several processes share.
 
 <div align="center">
   <img src=".github/article_graph_state.png" alt="⟨Y₁Y₂Z₃⟩ against time for 8, 64 and 512 qubits, all on the exact curve" width="440">

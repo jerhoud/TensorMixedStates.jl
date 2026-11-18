@@ -27,6 +27,9 @@ Version 2.0 is a rewrite of the library: a program written for 1.x needs the edi
   to check a simulation (`SimData(backend = ExactState)`) or study a small system exactly.
 - An optional high level interface, which writes a simulation in a few lines, with its
   measurements, its output files and checkpoints, from which an interrupted simulation resumes.
+- Averages over disorder: the samples of a simulation, `SimData(samples = N)` with
+  `Realizations`, run from a state computed once, shared by several processes and stopped at a
+  tolerance, written with their errors.
 
 Being based on ITensor, TMS delivers high performance computations, and uses the cores of
 the machine, see [Threads and performance](@ref).
