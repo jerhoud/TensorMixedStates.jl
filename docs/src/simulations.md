@@ -375,7 +375,7 @@ version of TensorMixedStates goes on when it reads its files, which the log note
 then coming from two versions.
 
 A tolerance stops the samples once their averages are precise enough: with
-`tolerance = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
+`tol = "energy" => 1e-3`, or `"energy" => (atol = 1e-3, rtol = 1e-2)`, or a list of them,
 the samples stop at the first whose errors in `energy`, every `err(c)` at every row, are within
 `atol + rtol * |c|`, every row holding at least `min_samples` samples, 10 by default, so that an
 error underestimated by chance does not stop them; `samples` is then the most that runs. A

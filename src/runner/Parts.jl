@@ -139,20 +139,20 @@ end
 
 under the lock of the directory `dir` of a simulation, at most `limit` of its samples ended added
 to its outputs in their order, see `replay!`, from the first not merged up to the first not
-ended, or the first reaching the tolerance, `merging = (; format, tolerance, min_samples)`, see
+ended, or the first reaching the tolerance, `merging = (; format, tol, min_samples)`, see
 `within`, which the queue then notes: its files written, then `merged.jls`, then the rows merged
 removed, so that a crash leaves a merge to go on with. It returns `(first, last, reached)`, the
 samples merged and whether the tolerance was reached, `nothing` for none. A sample that cannot
 be merged is noted failed, see `sample_failed!`.
 """
 function merge_samples!(dir::String, merging; limit::Int = 100)
-    (; format, tolerance, min_samples) = merging
+    (; format, tol, min_samples) = merging
     m, marks = read_merged(dir)
     k = m + 1
     q = read_queue(dir)
     if !isnothing(q.reached) || !isfile(pending_file(dir, k))
         return nothing
-    elseif !isempty(tolerance) && within(marks, dir, format, tolerance, min_samples)
+    elseif !isempty(tol) && within(marks, dir, format, tol, min_samples)
         # reached by a merge that stopped before the queue noted it
         q.reached = m
         write_queue(dir, q)
@@ -163,7 +163,7 @@ function merge_samples!(dir::String, merging; limit::Int = 100)
     try
         while !reached && k ≤ m + limit && isfile(pending_file(dir, k))
             replay!(o, read_pending(dir, k))
-            reached = !isempty(tolerance) && within(o.opened, dir, format, tolerance, min_samples)
+            reached = !isempty(tol) && within(o.opened, dir, format, tol, min_samples)
             k += 1
         end
     catch e

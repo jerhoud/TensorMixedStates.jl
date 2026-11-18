@@ -544,8 +544,8 @@ end
                 end
             end
         end
-        sd(name, tolerance; min_samples = 10) =
-            SimData(; name, samples = 400, tolerance, min_samples, phases = [up, gate],
+        sd(name, tol; min_samples = 10) =
+            SimData(; name, samples = 400, tol, min_samples, phases = [up, gate],
                     final_measurements = [Data("v") => value, "f" => value])
         n = reaching(0.25, 10)
         @test n == 17
@@ -556,14 +556,14 @@ end
         @test only(runTMS(sd("d", Data("v") => 0.25); output = devnull).data["v"])["N"] == n
         @test startswith(TensorMixedStates.samples_line(abspath("t"), n),
                          "$n samples merged, within the tolerance")
-        runTMS(SimData(; name = "n", samples = 12, tolerance = Data("v") => 1e-6,
+        runTMS(SimData(; name = "n", samples = 12, tol = Data("v") => 1e-6,
                        phases = [up, gate], final_measurements = [Data("v") => value]))
         @test TensorMixedStates.samples_line(abspath("n"), 12; tolerance = true) ==
               "12 of 12 samples merged, the tolerance not reached"
         # every row holds min_samples: one written by two samples never reaches it
         w = Realizations(c -> Gates(gates = X(1), final_measurements =
                                         c.sample ≤ 2 ? [Data("w") => "w" => c -> 1.] : []))
-        sim = runTMS(SimData(; name = "w", samples = 30, tolerance = Data("w") => 0.1,
+        sim = runTMS(SimData(; name = "w", samples = 30, tol = Data("w") => 0.1,
                              phases = [up, w], final_measurements = [Data("v") => value]))
         @test only(sim.data["v"])["N"] == 30
         # more samples change nothing, a tighter tolerance goes on
@@ -575,7 +575,7 @@ end
         sim = runTMS(sd("m", "f" => (atol = 0.25, rtol = 0.); min_samples = 30))
         @test only(sim.data["v"])["N"] == reaching(0.25, 30) == 30
         # refused
-        @test_throws "has no samples" SimData(phases = [up], tolerance = "f" => 1e-3,
+        @test_throws "has no samples" SimData(phases = [up], tol = "f" => 1e-3,
                                               final_measurements = "f" => X(1))
         @test_throws "which no list of measurements writes" sd("x", "g" => 0.1)
         @test_throws "of zero or above" sd("x", "f" => -1)

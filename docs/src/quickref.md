@@ -164,7 +164,7 @@ phases of a sample, drawing its disorder with `c.rng`; the phases before it run 
 measurements of the `SimData` at the end of each sample. Files and `Data` hold the averages
 (columns `c`, `err(c)`, `std(c)`, `N`), `EachSample("name")` a row for each sample (column
 `sample`); `TMS_SAMPLES=2N julia prog.jl` prolongs a finished run, and the program launched K
-times at once runs the samples on K cores, with the same results; `tolerance = "name" => atol`
+times at once runs the samples on K cores, with the same results; `tol = "name" => atol`
 stops them once the errors of `name` are within `atol`.
 
 ## When something fails

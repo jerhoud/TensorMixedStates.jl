@@ -178,13 +178,13 @@ the description of a simulation, which `runTMS` runs.
   samples); the environment variable `TMS_SAMPLES` overrides it, so that a finished run is
   prolonged by running it again with more, and the program run several times at once runs the
   samples on as many cores, see `runTMS`
-- `tolerance`: the errors the samples stop at, for an averaged destination `d`, a file or a
+- `tol`: the errors the samples stop at, for an averaged destination `d`, a file or a
   `Data` (a `Data` alone in a run without a directory), `d => atol` or
   `d => (atol = …, rtol = …)`, or a list of them: every error of `d`, `err(c)`, within
   `atol + rtol * |c|`, at every row, the samples stopping at the first that reaches it, the same
   whichever process runs them, those an earlier launch merged kept (default `[]`, all the
   `samples`)
-- `min_samples`: the samples each row of `d` holds before its tolerance is looked at, so that it
+- `min_samples`: the samples each row of `d` holds before its `tol` is looked at, so that it
   does not stop on an error underestimated by chance (default 10)
 
 A measurement of a value that no phase provides is refused here, see
@@ -212,13 +212,13 @@ struct SimData
     seed::Union{Nothing, Integer}
     backend::Type
     samples::Union{Nothing, Int}
-    tolerance::Vector{Pair{Any, @NamedTuple{atol::Float64, rtol::Float64}}}
+    tol::Vector{Pair{Any, @NamedTuple{atol::Float64, rtol::Float64}}}
     min_samples::Int
     phases::Vector{Any}
     provided::Vector{Symbol}
     realized::Vector{Any}
     function SimData(name, description, time_start, final_measurements, format, seed, backend,
-                     samples, tolerance, min_samples, phases)
+                     samples, tol, min_samples, phases)
         # which Julia 1.10 refuses
         if !isnothing(seed) && seed < 0
             error("the seed of a simulation is an integer of zero or above, got $seed")
@@ -237,13 +237,13 @@ struct SimData
         if isnothing(samples) && any(first(p) isa EachSample for l in lists for p in l)
             error("EachSample writes a row for each sample, and the simulation has no samples")
         end
-        tolerance = tolerances(tolerance)
-        if !isempty(tolerance) && isnothing(samples)
+        tol = tolerances(tol)
+        if !isempty(tol) && isnothing(samples)
             error("a tolerance stops the samples, and the simulation has no samples")
         elseif min_samples < 1
             error("min_samples is 1 or more, got $min_samples")
         end
-        for (d, _) in tolerance
+        for (d, _) in tol
             if !(plain_destination(Outputs(), d) isa Union{TextFile, JsonFile, Data})
                 error("the tolerance names $(repr(d)), which is not averaged: name a file or a " *
                       "Data, as \"energy\" or Data(\"x\")")
@@ -253,7 +253,7 @@ struct SimData
             end
         end
         return new(name, description, time_start, final_measurements, check_format(format), seed,
-                   check_backend(backend), samples, tolerance, Int(min_samples), ps, provided,
+                   check_backend(backend), samples, tol, Int(min_samples), ps, provided,
                    realized)
     end
 end
@@ -269,10 +269,10 @@ SimData(name, description, time_start, final_measurements, format, seed, backend
 SimData(; name::AbstractString = "simulation", description::AbstractString = "",
         time_start::Number = 0., final_measurements = [], format::AbstractString = "%.13g",
         seed::Union{Nothing, Integer} = nothing, backend = State,
-        samples::Union{Nothing, Integer} = nothing, tolerance = [], min_samples::Integer = 10,
+        samples::Union{Nothing, Integer} = nothing, tol = [], min_samples::Integer = 10,
         phases) =
     SimData(name, description, time_start, final_measurements, format, seed, backend, samples,
-            tolerance, min_samples, phases)
+            tol, min_samples, phases)
 
 """
     tolerances(t)
@@ -306,7 +306,7 @@ tolerances(x) =
 checked_phases(sd::SimData) = checked_phases(sd.phases, sd.realized, sd.samples)
 
 # what the merge of the samples of `sd` needs, see `merge_samples!`
-merging(sd::SimData) = (; sd.format, sd.tolerance, sd.min_samples)
+merging(sd::SimData) = (; sd.format, sd.tol, sd.min_samples)
 
 show(io::IO, s::SimData) =
     print(io, """
@@ -319,7 +319,7 @@ show(io::IO, s::SimData) =
             seed = $(repr(s.seed)),
             backend = $(s.backend),
             samples = $(repr(s.samples)),
-            tolerance = $(s.tolerance),
+            tol = $(s.tol),
             min_samples = $(s.min_samples),
             phases =
         $(s.phases))""")
@@ -761,7 +761,7 @@ recorded, then added to the outputs, as a part records them and the merge adds t
 """
 function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
     run = getfield(sim, :run)
-    if any(!(first(t) isa Data) for t in sd.tolerance)
+    if any(!(first(t) isa Data) for t in sd.tol)
         error("without a directory, the files are not written and a tolerance names a " *
               "Data(name) alone")
     end
@@ -777,11 +777,11 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
             run.quiet = k > 1
             sim = run_sample(sim, sd, b, k, nothing, each)
             replay!(merged, take_records!(run.outputs))
-            if !isempty(sd.tolerance) &&
-               within(merged.opened, merged.dir, sd.format, sd.tolerance, sd.min_samples)
+            if !isempty(sd.tol) &&
+               within(merged.opened, merged.dir, sd.format, sd.tol, sd.min_samples)
                 log_line(run, "Tolerance reached at sample $k")
                 break
-            elseif !isempty(sd.tolerance) && k == samples
+            elseif !isempty(sd.tol) && k == samples
                 log_line(run, "Tolerance not reached at sample $k, the last asked for")
             end
         end
@@ -1254,7 +1254,7 @@ process, `:stop` for a file `stop` found while waiting, `:prefix` for this one t
 directory taken, see `claim_run`
 """
 function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true,
-                         merging = (format = "%.13g", tolerance = [], min_samples = 10))
+                         merging = (format = "%.13g", tol = [], min_samples = 10))
     prefix = live_run(dir)
     if !first && isfile(joinpath(dir, "stop"))
         return :stop => nothing
@@ -1281,8 +1281,8 @@ function launch_samples!(dir::String, samples::Int, src_path; first::Bool = true
     if branched
         # the tolerance of this program, on the samples merged
         m, marks = read_merged(dir)
-        (; format, tolerance, min_samples) = merging
-        q.reached = !isempty(tolerance) && within(marks, dir, format, tolerance, min_samples) ?
+        (; format, tol, min_samples) = merging
+        q.reached = !isempty(tol) && within(marks, dir, format, tol, min_samples) ?
                     m : nothing
     end
     write_queue(dir, q)
@@ -1441,7 +1441,7 @@ function run_parts(sd::SimData, settings)
     if !isnothing(b)
         merged, marks = read_merged(dir)
         run.outputs = data_outputs(dir, sd.format, marks)
-        line = samples_line(dir, merged; tolerance = !isempty(sd.tolerance))
+        line = samples_line(dir, merged; tolerance = !isempty(sd.tol))
         @info ran ? summary_line(sd, run, line) :
               "simulation \"$(sd.name)\" has no sample left to run, results in $dir; $line"
     end

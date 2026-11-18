@@ -103,5 +103,5 @@ and resumes when run again. The line it prints at the end says whether it is don
 warnings its `log` holds; read them. For an average over disorder, give it `samples = N` and a
 last phase `Realizations() do c … end` drawing the disorder with `c.rng`: its files hold the
 averages with their errors, `c`, `err(c)`, `std(c)`, and `EachSample("name")` a row for each
-sample; `tolerance = "name" => atol` stops the samples once the errors of `name` are within
+sample; `tol = "name" => atol` stops the samples once the errors of `name` are within
 `atol`; launch the program once per core, at the same time, to share the samples.
