@@ -19,13 +19,13 @@ seeded(seed, sample, stream) =
     Xoshiro(mix64(mix64(mix64(UInt64(seed)) ⊻ UInt64(sample)) ⊻ UInt64(stream)))
 
 # a phase of a single call writing by itself between its steps
-struct Kicks <: TensorMixedStates.AbstractPhase
+struct WritingKicks <: TensorMixedStates.AbstractPhase
     name::String
     time_start
     final_measurements
 end
 
-function TensorMixedStates.run_phase(p::Kicks, sim, done)
+function TensorMixedStates.run_phase(p::WritingKicks, sim, done)
     for k in done + 1:3
         output(sim, "u" => "u" => c -> 1.0 * c.sample + k)
         sim = TensorMixedStates.step_done(sim, p, k)
@@ -355,7 +355,7 @@ end
 
 @testset "A phase of one's own writing between its steps resumes as the uninterrupted one" begin
     in_tmp() do
-        kicks = Realizations(c -> Kicks("kicks", nothing, []))
+        kicks = Realizations(c -> WritingKicks("kicks", nothing, []))
         sd(name) = SimData(; name, samples = 2,
                            phases = [CreateState{Pure}(2, Qubit(), "Up"), kicks])
         runTMS(sd("ref"))
