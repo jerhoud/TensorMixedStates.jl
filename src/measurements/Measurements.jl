@@ -38,7 +38,8 @@ end
 the state whose density matrix is the adjoint of that of the state, computed once and kept with
 it. A pure representation is refused.
 """
-dag(::State{<:Ket}) = error("dag is meaningless on pure representations")
+dag(::State{Pure}) = error("dag is meaningless on pure representations")
+dag(::State{Trajectory}) = error("dag is meaningless on pure representations")
 
 function dag(state::State{Mixed})
     a = cached!(state.preobs.adjoint, state) do a, state
