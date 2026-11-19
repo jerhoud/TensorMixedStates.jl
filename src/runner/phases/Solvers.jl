@@ -142,7 +142,10 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     log_ignored(sim, states[1], phase, (:algo, :limits, :mpo_limits))
     start = time()
     pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits; duration = phase.duration)
-    log_mpo(sim, "evolver", pre, start)
+    if pre isa JumpEvolver && length(names) > 1
+        not_yet("an Evolve of several trajectories with jumps")
+    end
+    log_mpo(sim, "evolver", pre isa JumpEvolver ? pre.pre : pre, start)
     return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end
 
@@ -152,8 +155,8 @@ step_count(e::EvolveSteps) = e.nsteps
 function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
     for name in e.on
-        st = evolve_step(e.algo, e.pre, state_named(sim, name), e.start + (k - 1) * dt, dt, k,
-                         step_limits(e.limits, k))
+        st = evolve_step(e.algo, with_rng(e.pre, sim.rng), state_named(sim, name),
+                         e.start + (k - 1) * dt, dt, k, step_limits(e.limits, k))
         sim = with_state(sim, name, st)
     end
     return Simulation(sim, sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt)

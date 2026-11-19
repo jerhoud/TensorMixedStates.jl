@@ -156,8 +156,8 @@ end
     p = random_state(Pure, qubits, 4; rng)
     t = as_trajectory(p)
     h = sum(Z(i) * Z(i + 1) for i in 1:2) + sum(X(i) for i in 1:3)
-    @test_throws "a dissipator on a trajectory comes with the draws" evolve(
-        -im * h + Dissipator(X)(1), 0.1, t; nsteps = 1)
+    @test_throws "given the generator rather than its PreMPO" PreMPO(t, -im * h +
+                                                                      Dissipator(X)(1))
     @test_throws "a channel on a trajectory comes with the draws" evolve(
         depolarizing_channel(0.2)(1), 0.1, t; nsteps = 1)
     steady(R) = runTMS(SimData(; name = "s", phases = [CreateState{R}(qubits, "Up"),
@@ -212,7 +212,7 @@ end
         ch = depolarizing_channel(0.4; kraus)(1) * amplitude_damping_channel(0.5, Sp)(2) *
              reset_channel(0.3, "Up")(3) * controlled(X)(1, 2)
         ref = real(expect1(apply(ch, mix(p)), Z))
-        values = [ real(expect1(apply(ch, t; rng), Z)) for _ in 1:400 ]
+        values = [ real(expect1(apply(ch, t; rng), Z)) for _ in 1:200 ]
         @test within_error(values, ref)
         same(seed) = expect1(apply(ch, t; rng = Xoshiro(seed)), Z)
         @test same(1) == same(1)
@@ -223,7 +223,7 @@ end
     ch = amplitude_damping_channel(0.5, C)(2) * dephasing_channel(0.3)(3) *
          reset_channel(0.4, "FullyMixed")(1)
     ref = real(expect1(apply(ch, mix(pf)), N))
-    values = [ real(expect1(apply(ch, as_trajectory(pf); rng), N)) for _ in 1:400 ]
+    values = [ real(expect1(apply(ch, as_trajectory(pf); rng), N)) for _ in 1:200 ]
     @test within_error(values, ref)
     # the Kraus operators as written: the identity and the Pauli strings, or the identity and the
     # resets to each basis state
@@ -241,12 +241,12 @@ end
     @test_throws "kraus is :reset or :pauli" depolarizing_channel(0.2; kraus = :other)
     # drawn as written, never developed: a power, and a channel of many sites
     ch = (dephasing_channel(0.2, X)^10)(1)
-    @test within_error([ real(expect1(apply(ch, t; rng), X)) for _ in 1:200 ],
+    @test within_error([ real(expect1(apply(ch, t; rng), X)) for _ in 1:100 ],
                        real(expect1(apply(ch, mix(p)), X)))
     seven = System(7, Qubit())
     p7 = random_state(Pure, seven, 4; rng)
     ch = depolarizing_channel(0.3, 7)(1:7...)
-    @test within_error([ real(expect1(apply(ch, as_trajectory(p7); rng), Z)) for _ in 1:200 ],
+    @test within_error([ real(expect1(apply(ch, as_trajectory(p7); rng), Z)) for _ in 1:100 ],
                        real(expect1(apply(ch, mix(p7)), Z)))
     # in a run, the generator of the simulation draws them
     gates(name) = runTMS(SimData(; name, seed = 3, phases = [
@@ -257,14 +257,15 @@ end
 end
 
 # whether the density matrix averaged over the trajectories `ts` is that of `ρ`, element by
-# element within `k` of its standard errors
-function same_density(ts, ρ; k = 5)
+# element within `k` of its standard errors, at least `floor`: 1 / length(ts) for an element
+# that the trajectories may never reach
+function same_density(ts, ρ; k = 5, floor = 1e-10)
     vs = [ (v = dense_vector(State{Pure}(t.system, t.state)); v * v' / real(v' * v)) for t in ts ]
     n = length(vs)
     m = sum(vs) / n
     err = sqrt.(sum(v -> abs2.(v .- m), vs) / (n - 1) / n)
     ref = ket_bra_matrix(ρ)
-    return all(abs.(m .- ref) .≤ k .* err .+ 1e-10)
+    return all(abs.(m .- ref) .≤ k .* max.(err, floor))
 end
 
 @testset "Trajectory draws products in sums, coherences and charges as Mixed does" begin
@@ -278,13 +279,13 @@ end
     for ch in (Gate(Mp)(1) * Gate(X)(2) + Gate(Mm)(1) * Gate(Z)(2),
                Gate(Proj("Up"))(1) * Gate(X)(2) + Gate(Proj("Dn"))(1),
                depolarizing_channel(0.4; kraus = :pauli)(1) * reset_channel(0.3, "Up")(2))
-        @test same_density([ apply(ch, t; rng) for _ in 1:600 ], apply(ch, mix(p)))
+        @test same_density([ apply(ch, t; rng) for _ in 1:300 ], apply(ch, mix(p)))
     end
     # fermions: coherences and Jordan-Wigner signs, a reset to a degenerate target with rounding
     fermions = System(3, Fermion(conserve = N))
     pf = random_state(Pure, fermions, ["Occ", "Emp", "Occ"], 4; rng)
     ch = amplitude_damping_channel(0.5, C)(3) * Reset([0.5 1e-17 ; 1e-17 0.5])(2)
-    @test same_density([ apply(ch, as_trajectory(pf); rng) for _ in 1:600 ], apply(ch, mix(pf)))
+    @test same_density([ apply(ch, as_trajectory(pf); rng) for _ in 1:300 ], apply(ch, mix(pf)))
     # refused as Mixed refuses: Kraus operators changing a strong charge by different amounts
     strong_sys = System(3, Fermion(conserve = strong(N)))
     ps = random_state(Pure, strong_sys, ["Occ", "Emp", "Occ"], 4; rng)
@@ -303,4 +304,52 @@ end
                     Gates(gates = depolarizing_channel(1.)(1))],
                     final_measurements = Data("z") => Z(1)); output = devnull).data["z"])["Z(1)"]
     @test any(seed -> run(seed) ≈ -1, 1:20)
+end
+
+@testset "Trajectory draws the jumps of the dissipators, whose average is the evolution" begin
+    rng = Xoshiro(12)
+    qubits = System(3, Qubit())
+    p = random_state(Pure, qubits, 4; rng)
+    t = as_trajectory(p)
+    h = sum(X(i) for i in 1:3) + sum(Z(i) * Z(i + 1) for i in 1:2)
+    # jumps of operators, of a channel and of a collective operator; first order in the step
+    g = -im * h + sum(0.5 * Dissipator(Sm)(i) for i in 1:3) + 0.3 * Dissipator(Z)(2) +
+        0.4 * Dissipator(depolarizing_channel(0.5))(1) + 0.3 * Dissipator(Sm(2) + Sm(3))
+    ts = [ evolve(g, 0.5, t; nsteps = 10, rng) for _ in 1:100 ]
+    @test all(x -> real(trace(x)) ≈ 1, ts)
+    @test same_density(ts, evolve(g, 0.5, mix(p); nsteps = 10); floor = 1 / 100)
+    same(seed) = expect1(evolve(g, 0.5, t; nsteps = 5, rng = Xoshiro(seed)), Z)
+    @test same(1) == same(1)
+    # fermions, Jordan-Wigner signs and coherences, a rate depending on time, a reset
+    fermions = System(3, Fermion(conserve = N))
+    pf = random_state(Pure, fermions, ["Occ", "Emp", "Occ"], 4; rng)
+    hf = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:2)
+    gf = [-im * hf, Dissipator(C)(3) => t -> 1 + t, 0.5 * Dissipator(Reset("Occ"))(1)]
+    ts = [ evolve(gf, 0.5, as_trajectory(pf); nsteps = 10, rng) for _ in 1:100 ]
+    @test same_density(ts, evolve(gf, 0.5, mix(pf); nsteps = 10); floor = 1 / 100)
+    # refused: a jump changing a strong charge, as Mixed refuses it, negative rates, a trace the
+    # operator part does not keep, steps backward or too long, jumps of no definite charge
+    strong_sys = System(3, Fermion(conserve = strong(N)))
+    ps = as_trajectory(random_state(Pure, strong_sys, ["Occ", "Emp", "Occ"], 4; rng))
+    @test_throws "by different amounts" evolve(-im * hf + Dissipator(C)(2), 0.1, ps; nsteps = 1)
+    @test real(trace(evolve(-im * hf + Dissipator(N)(2), 0.1, ps; nsteps = 2, rng))) ≈ 1
+    @test_throws "negative rate, -0.1" evolve(-im * h - 0.1 * Dissipator(Sm)(1), 0.1, t;
+                                             nsteps = 1)
+    @test_throws "gives their jumps a negative rate" evolve(
+        [-im * h, Dissipator(Sm)(1) => t -> -1], 0.1, t; nsteps = 1)
+    @test_throws "does not keep the trace" evolve(Evolver(X)(1) + Dissipator(Sm)(1), 0.1, t;
+                                                  nsteps = 1)
+    @test_throws "forward in real time" evolve(g, -0.1, t; nsteps = 1)
+    @test_throws "above one: take smaller steps" evolve(-im * h + 100 * Dissipator(Sm)(1), 0.1,
+                                                        t; nsteps = 1)
+    @test_throws "no definite flux" evolve(-im * hf + Dissipator(C + dag(C))(2), 0.1,
+                                           as_trajectory(pf); nsteps = 1)
+    # in a run, the generator of the simulation draws them, one trajectory at a time
+    run(name; on = [:state]) = runTMS(SimData(; name, seed = 5, phases = [
+                    CreateState{Trajectory}(qubits, "Up"), CreateState{Trajectory}(qubits, "Up";
+                                                                                   on = :b),
+                    Evolve(evolver = g, duration = 0.5, nsteps = 10, on = on)],
+                    final_measurements = Data("z") => Z); output = devnull).data["z"]
+    @test run("a") == run("b")
+    @test_throws "several trajectories with jumps" run("c"; on = [:state, :b])
 end

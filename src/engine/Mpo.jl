@@ -288,7 +288,8 @@ refused when `a` holds a dissipator; an operator is itself, and a channel is ref
 function followed_operator(a::IndexedOp{IsGenerator}, R::Type{<:Ket} = Pure)
     if !is_pure(a)
         if R === Trajectory
-            not_yet("a dissipator on a trajectory")
+            error("$(obs_name(a)) holds a dissipator, whose jumps a trajectory draws in evolve " *
+                  "or an Evolve phase, given the generator rather than its PreMPO")
         end
         error("$(obs_name(a)) holds a dissipator, which a pure state cannot follow: mix the state")
     end

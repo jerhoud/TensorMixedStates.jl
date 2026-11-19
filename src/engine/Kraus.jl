@@ -138,10 +138,13 @@ function strong_flux(k::GenericOp{IsOperator}, sites, names)
     if isnothing(i)
         return Pair{String, Int}[]
     end
-    q = (g[i[1]] - g[i[2]]).q
-    return sort!([ chopsuffix(nm, "*") => v for (nm, v, _) in qn_components(q)
-                   if chopsuffix(nm, "*") in names && v ≠ 0 ])
+    return strong_part((g[i[1]] - g[i[2]]).q, names)
 end
+
+# the nonzero components of the charge `q` in the strongly conserved quantities `names`
+strong_part(q::QN, names) =
+    sort!([ chopsuffix(nm, "*") => v for (nm, v, _) in qn_components(q)
+            if chopsuffix(nm, "*") in names && v ≠ 0 ])
 
 # the sum of the fluxes `fs`, as `strong_flux` gives them
 function added_fluxes(fs)

@@ -203,6 +203,164 @@ function evolve_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt:
     return state
 end
 
+############### Jumps of the trajectories ###############
+
+"""
+    unravelled(a)
+
+the operators and the dissipators of the generator `a`, `(ops, dissipators)`: the operator of
+each part with no dissipator, see `pure_part`, and `rate => L` for `rate * Dissipator(L)`, `L` an
+operator or a channel, placed on sites as in `a`
+"""
+function unravelled(a::Op{IsGenerator})
+    if a isa SumOp
+        parts = map(unravelled, a.subs)
+        return (reduce(vcat, first.(parts)), reduce(vcat, last.(parts)))
+    elseif a isa ScalarOp
+        ops, ds = unravelled(a.arg)
+        return (Op{IsOperator}[ scale(a.coef, x) for x in ops ],
+                Pair{Float64, Op}[ a.coef * r => x for (r, x) in ds ])
+    elseif a isa AtIndex
+        ops, ds = unravelled(a.op)
+        return (Op{IsOperator}[ AtIndex(x, a.index) for x in ops ],
+                Pair{Float64, Op}[ r => AtIndex(x, a.index) for (r, x) in ds ])
+    elseif a isa Dissipator
+        return (Op{IsOperator}[], Pair{Float64, Op}[1.0 => a.arg])
+    end
+    return (Op{IsOperator}[pure_part(a)], Pair{Float64, Op}[])
+end
+
+"""
+    Decay(f, rate, jumps, steps)
+
+the jumps of a term of an evolver, which a trajectory draws: `rate`, the sum of their
+``L^\\dagger L``, whose expectation value times `f(t)` (1 for `f = nothing`) is the rate of a
+jump at time `t`, the operators `jumps` and the `steps` applying them, see `apply_steps`
+"""
+struct Decay
+    f::Any
+    rate::IndexedOp{IsOperator}
+    jumps::Vector{IndexedOp{IsOperator}}
+    steps::Vector{Any}
+end
+
+"""
+    JumpEvolver(pre, decays, rng)
+
+the evolver of a trajectory under dissipators: the `PreMPO` of its effective operator
+``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term with jumps, and the
+generator drawing them, see `with_rng`, `nothing` for the default one
+"""
+struct JumpEvolver
+    pre::PreMPO
+    decays::Vector{Decay}
+    rng::Union{Nothing, AbstractRNG}
+end
+
+function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limits)
+    sys = state.system
+    terms = []
+    decays = Decay[]
+    for (k, a) in enumerate(ops)
+        pure, ds = a isa IndexedOp{IsGenerator} ? unravelled(a) :
+                   ([followed_operator(a, Trajectory)], [])
+        # a trajectory is brought back to its trace after each step, which the dissipators alone
+        # change
+        if !isempty(pure) && !prepare_op(sys, im * sum(pure)).hermitian
+            trace_not_kept(a)
+        end
+        jumps = IndexedOp{IsOperator}[]
+        for (r, x) in ds
+            if r < 0
+                error("$(obs_name(a)) holds a dissipator of negative rate, $r, whose jumps no " *
+                      "trajectory draws")
+            end
+            append!(jumps, [ sqrt(r) * j for j in (x isa IndexedOp{IsChannel} ?
+                                                    kraus_operators(sys, x) : [x]) ])
+        end
+        f = isnothing(fs) ? nothing : fs[k]
+        op = isempty(pure) ? nothing : sum(pure)
+        if !isempty(jumps)
+            for j in jumps
+                check_jump(sys, j, a)
+            end
+            rate = sum(j -> dag(j) * j, jumps)
+            push!(decays, Decay(f, rate, jumps, [ apply_steps(j, state) for j in jumps ]))
+            op = isnothing(op) ? -0.5 * rate : op - 0.5 * rate
+        end
+        push!(terms, isnothing(f) ? op : op => f)
+    end
+    return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, nothing)
+end
+
+# refuse the jump `j` of the generator `a` when it changes a charge `system` conserves strongly,
+# as State{Mixed} refuses the dissipator
+function check_jump(system::System, j::IndexedOp{IsOperator}, a)
+    names = strong_names(system)
+    if !isempty(names)
+        flux = compacted_op(system, j).flux
+        if !isnothing(flux) && !isempty(strong_part(flux, names))
+            strong_refusal(a, names)
+        end
+    end
+end
+
+prepared_evolver(state::State{Trajectory}, a::IndexedOp, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
+    prepared_evolver(state, [a], mpo_limits; duration)
+
+function prepared_evolver(state::State{Trajectory}, terms::Union{AbstractVector, Pair},
+                          mpo_limits::Limits = Limits(); duration::Union{Nothing, Number} = nothing)
+    ops, fs = split_terms(terms isa Pair ? [terms] : terms)
+    if all(a -> !(a isa IndexedOp{IsGenerator}) || is_pure(a), ops)
+        return PreMPO(state, terms; limits = mpo_limits)
+    end
+    return JumpEvolver(state, ops, fs, mpo_limits)
+end
+
+"""
+    with_rng(pre, rng)
+
+the evolver `pre`, see `prepared_evolver`, drawing with `rng`: itself when it draws nothing
+"""
+with_rng(pre, ::AbstractRNG) = pre
+with_rng(e::JumpEvolver, rng::AbstractRNG) = JumpEvolver(e.pre, e.decays, rng)
+
+# the rate of the jumps of `d` on `state` at `time`
+function decay_rate(d::Decay, state::State{Trajectory}, time::Number)
+    c = isnothing(d.f) ? 1. : d.f(time)
+    if c < 0
+        error("the function of a term holding dissipators is $c at time $time, which gives " *
+              "their jumps a negative rate")
+    end
+    return c * real(expect(state, d.rate))
+end
+
+# one step of a trajectory at first order in `dt`: a jump with the probability `dt` times the
+# sum of the rates, drawn among the jumps by its rate, or else a step under the effective
+# operator, the trajectory brought back to its trace
+function evolve_step(algo::EvolutionAlgorithm, e::JumpEvolver, state::State{Trajectory},
+                     time::Number, dt::Number, step::Int, limits::Limits)
+    if !(isreal(dt) && real(dt) > 0)
+        error("a trajectory draws its jumps forward in real time, and the step is $dt")
+    elseif vanished(state.state)
+        return state
+    end
+    rng = something(e.rng, Random.default_rng())
+    rates = [ decay_rate(d, state, time) for d in e.decays ]
+    δp = real(dt) * sum(rates)
+    if δp > 1
+        error("a step of $dt from time $time gives a trajectory a probability " *
+              "$(round(δp; sigdigits = 3)) of a jump, above one: take smaller steps")
+    end
+    if rand(rng) ≥ δp
+        return with_trace(evolve_step(algo, e.pre, state, time, dt, step, limits), state)
+    end
+    d = e.decays[draw_index(rates, rng)]
+    i = draw_index([ real(expect(state, dag(j) * j)) for j in d.jumps ], rng)
+    return with_trace(applied(state, d.steps[i]..., limits), state)
+end
+
 """
     evolution_steps(what, span, nsteps, step, step_name)
 
@@ -226,7 +384,7 @@ end
 
 """
     evolve(evolver, duration, state; nsteps | time_step, algo = Tdvp(), limits = Limits(),
-           mpo_limits = Limits(), time = 0, step = 1)
+           mpo_limits = Limits(), time = 0, step = 1, rng)
 
 the state evolved for `duration` under `evolver`, in `nsteps` steps of `duration / nsteps`, or
 in steps of `time_step` adjusted to the nearest one dividing `duration` into a whole number of
@@ -240,6 +398,8 @@ operator or an operator with its real function of time, `[A, B => g]` for ``A + 
 `Limits`, which may give one value per step, step `k` taking the `k`-th. Its default cutoff is
 `1e-26` for tdvp and `apply_algo = "naive"` or `"zipup"`, `eps()` for `"densitymatrix"`.
 `mpo_limits` truncates the MPO of the evolver, see `PreMPO` (default none).
+`rng` is the random number generator a trajectory draws the jumps of the dissipators with, at
+first order in the step, the global one by default.
 
 # Examples
 
@@ -250,12 +410,12 @@ operator or an operator with its real function of time, `[A, B => g]` for ``A + 
 function evolve(evolver, duration::Number, state::AbstractState; algo::EvolutionAlgorithm = Tdvp(),
                 nsteps::Union{Nothing, Int} = nothing, time_step::Union{Nothing, Number} = nothing,
                 limits::Limits = Limits(), mpo_limits::Limits = Limits(), time::Number = 0.,
-                step::Int = 1)
+                step::Int = 1, rng::AbstractRNG = Random.default_rng())
     nsteps = evolution_steps("an evolution", duration, nsteps, time_step, "time_step")
     if nsteps == 0
         return state
     end
-    pre = prepared_evolver(state, evolver, mpo_limits; duration)
+    pre = with_rng(prepared_evolver(state, evolver, mpo_limits; duration), rng)
     dt = duration / nsteps
     for k in 0:nsteps - 1
         state = evolve_step(algo, pre, state, time + k * dt, dt, step + k,
