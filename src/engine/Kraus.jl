@@ -45,14 +45,16 @@ end
 """
     site_kraus(system, a)
 
-the Kraus operators of the channel `a` placed on sites, from its structure when they have a
-definite charge and parity, from its Choi matrix otherwise
+the Kraus operators of the channel `a` placed on sites, from its structure, refused when they
+have no definite charge or parity, as a trajectory draws among the operators written
 """
 function site_kraus(system::System, a::AtIndex{IsChannel})
     sites = [ system[i] for i in a.index ]
     ks = generic_kraus(a.op, sites)
     if !all(k -> definite_grade(k, sites), ks)
-        ks = choi_kraus(a.op, sites)
+        error("the Kraus operators of $(obs_name(a.op)) as written have no definite charge or " *
+              "parity on $(join(sites, " ⊗ ")): write the channel as a sum of gates of definite " *
+              "charge and parity, among which its trajectories are drawn")
     end
     return [ k(a.index...) for k in ks ]
 end
@@ -60,11 +62,10 @@ end
 """
     generic_kraus(a, sites)
 
-the Kraus operators of the channel `a` of `sites` from its structure, from the Choi matrix of a
-part with none or with more of them than the dimension of its superoperator
+the Kraus operators of the channel `a` of `sites` from its structure, as written, from the Choi
+matrix of a part with none
 """
 function generic_kraus(a::GenericOp{IsChannel}, sites)
-    most = prod(dim, sites)^2
     if is_pure(a)
         return [kraus(a)]
     elseif a isa ScalarOp
@@ -72,20 +73,50 @@ function generic_kraus(a::GenericOp{IsChannel}, sites)
     elseif a isa Dephase
         values, _ = dephase_projectors(a, sites)
         return [ Proj(a.arg => λ) for λ in values ]
+    elseif a isa Reset
+        return reset_kraus(a, only(sites))
     elseif a isa SumOp
-        parts = [ generic_kraus(x, sites) for x in a.subs ]
-        return sum(length, parts) > most ? choi_kraus(a, sites) : reduce(vcat, parts)
+        return reduce(vcat, [ generic_kraus(x, sites) for x in a.subs ])
     elseif a isa Union{ProdOp, IntPowOp, TensorOp}
         parts = a isa ProdOp ? [ generic_kraus(x, sites) for x in a.subs ] :
                 a isa IntPowOp ? fill(generic_kraus(a.arg, sites), a.expo) :
                 [ generic_kraus(x, sites[r]) for (x, r) in zip(a.subs, factor_sites(a)) ]
-        if prod(float ∘ length, parts) > most
-            return choi_kraus(a, sites)
-        end
         combine = a isa TensorOp ? (ks -> reduce(⊗, ks)) : prod
         return vec([ combine(ks) for ks in Iterators.product(parts...) ])
     end
     return choi_kraus(a, sites)
+end
+
+"""
+    reset_kraus(a, site)
+
+the Kraus operators of the reset `a` of `site` to a density matrix σ, ``\\sqrt{λ}|s⟩⟨n|`` for each
+eigenvector `s` of σ and each basis state `n`: the basis states themselves when σ is diagonal in
+the basis of the site, as `"FullyMixed"`, so that no eigensolver chooses among degenerate ones
+"""
+function reset_kraus(a::Reset, site::AbstractSite)
+    x = local_state(site, a.state)
+    d = dim(site)
+    basis(k) = [ i == k ? 1. : 0. for i in 1:d ]
+    if x isa AbstractMatrix && !nearly(x, x')
+        error("$(obs_name(a)) does not keep density matrices Hermitian on $site, so it has no " *
+              "Kraus operators")
+    end
+    σ = x isa AbstractMatrix ? x / real(tr(x)) : x
+    pairs = if σ isa AbstractVector
+        [(1., σ / norm(σ))]
+    elseif isdiag(σ)
+        [ (real(σ[k, k]), basis(k)) for k in 1:d if !iszero(σ[k, k]) ]
+    else
+        e = eigen(Hermitian(σ))
+        collect(zip(e.values, eachcol(e.vectors)))
+    end
+    if any(p -> first(p) < -rounding_tol, pairs)
+        error("$(obs_name(a)) is not completely positive on $site, so it has no Kraus operators")
+    end
+    filter!(p -> first(p) > rounding_tol, pairs)
+    return vec([ Operator{1}("K$k[$(obs_name(a))]", sqrt(λ) * s * basis(n)')
+                 for (k, ((λ, s), n)) in enumerate(Iterators.product(pairs, 1:d)) ])
 end
 
 """

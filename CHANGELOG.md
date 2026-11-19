@@ -8,6 +8,12 @@ This file starts with the release in preparation. For what came before, see the
 archived as the [codebase release](https://doi.org/10.21468/SciPostPhysCodeb.72-r1.28) of
 the reference article.
 
+## [Unreleased]
+
+### Added
+
+- `depolarizing_channel(p, n; kraus = :reset)` chooses its decomposition into gates, `:reset` or `:pauli`.
+
 ## [2.2.0] - 2026-11-18
 
 ### Added

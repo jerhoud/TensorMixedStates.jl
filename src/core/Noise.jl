@@ -102,22 +102,33 @@ function depolarizing_dissipator(γ::Real, n::Int = 1)
 end
 
 """
-    depolarizing_channel(p, n = 1)
+    depolarizing_channel(p, n = 1; kraus = :reset)
 
-the channel depolarizing `n` sites together with probability `p`, `reset_channel(p, n,
-"FullyMixed")`, ``(1 - p)\\,\\rho + p\\,\\mathrm{tr}_S\\rho \\otimes I/d^n``: on a qubit,
-`(1 - 3p/4) * Gate(Id) + p/4 * (Gate(X) + Gate(Y) + Gate(Z))`. Two sites depolarized together
+the channel depolarizing `n` sites together with probability `p`,
+``(1 - p)\\,\\rho + p\\,\\mathrm{tr}_S\\rho \\otimes I/d^n``. Two sites depolarized together
 are not two sites depolarized each on its own,
 `depolarizing_channel(p) ⊗ depolarizing_channel(p)`.
+
+- `kraus`: how it is written as a sum of gates, which changes nothing on a pure or a mixed
+  state: `:reset`, `reset_channel(p, n, "FullyMixed")`, on any site, or `:pauli`, on qubits,
+  the identity and the Pauli strings, `(1 - 3p/4) * Gate(Id) + p/4 * (Gate(X) + Gate(Y) +
+  Gate(Z))` on one
 
 # Examples
 
     prod(depolarizing_channel(0.01)(i) for i in 1:10)
     depolarizing_channel(0.02, 2)(1, 2) * controlled(Z)(1, 2)
 """
-function depolarizing_channel(p::Real, n::Int = 1)
+function depolarizing_channel(p::Real, n::Int = 1; kraus::Symbol = :reset)
     check_probability("depolarizing_channel", p)
-    return reset_channel(p, n, "FullyMixed")
+    if kraus === :reset
+        return reset_channel(p, n, "FullyMixed")
+    elseif kraus === :pauli
+        strings = vec([ reduce(⊗, ps) for ps in Iterators.product(fill([Id, X, Y, Z], n)...) ])
+        q = p / 4^n
+        return (1 - p + q) * Gate(first(strings)) + q * sum(Gate, strings[2:end])
+    end
+    error("kraus is :reset or :pauli, got $(repr(kraus))")
 end
 
 """

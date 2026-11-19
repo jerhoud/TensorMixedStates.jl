@@ -110,7 +110,6 @@ end
             (() -> random_state(Trajectory, qubits, 2), "a random state comes with the draws"),
             (() -> State{Trajectory}(qubits, Mixture([0.5 => "Up", 0.5 => "Dn"])),
              "a mixed initial state comes with the draws"),
-            (() -> apply(Reset("Up")(1), t), "more than one Kraus operator on a trajectory"),
             (() -> ground_state(h, t), "a trajectory is not searched"),
             (() -> thermalize(h, 1., t), "a thermal state comes with the draws"),
             (() -> steady_state(-im * h, t), "a steady state comes with the draws"),
@@ -182,7 +181,7 @@ end
     @test_throws "fidelity but to a pure state" fidelity(t, mix(e))
 end
 
-@testset "Trajectory is built from a pure description, and State from a concrete representation" begin
+@testset "Trajectory is built from a pure description, and State from a concrete one" begin
     qubits = System(2, Qubit())
     t = State{Trajectory}(qubits, Mixture([1.0 => "Up", 0 => "Dn"]))
     @test t isa State{Trajectory} && expect1(t, Z) == expect1(State{Pure}(qubits, "Up"), Z)
@@ -194,4 +193,65 @@ end
     @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
         qubits, [[1 0; 0 0], "Up"])
     @test_throws "State{Ket} has no representation of its own" State{Ket}(qubits, "Up")
+end
+
+# whether the mean of the vectors `values` is `ref`, within `k` of its standard errors
+function within_error(values::Vector{<:Vector}, ref::Vector; k = 4)
+    n = length(values)
+    m = sum(values) / n
+    err = [ sqrt(sum(abs2(v[i] - m[i]) for v in values) / (n - 1) / n) for i in eachindex(ref) ]
+    return all(abs.(m .- ref) .≤ k .* err .+ 1e-12)
+end
+
+@testset "Trajectory draws the Kraus operators of a channel, whose average is the channel" begin
+    rng = Xoshiro(9)
+    qubits = System(3, Qubit())
+    p = random_state(Pure, qubits, 4; rng)
+    t = as_trajectory(p)
+    for kraus in (:reset, :pauli)
+        ch = depolarizing_channel(0.4; kraus)(1) * amplitude_damping_channel(0.5, Sp)(2) *
+             reset_channel(0.3, "Up")(3) * controlled(X)(1, 2)
+        ref = real(expect1(apply(ch, mix(p)), Z))
+        values = [ real(expect1(apply(ch, t; rng), Z)) for _ in 1:400 ]
+        @test within_error(values, ref)
+        same(seed) = expect1(apply(ch, t; rng = Xoshiro(seed)), Z)
+        @test same(1) == same(1)
+    end
+    # on fermions conserving their number weakly, each trajectory keeps a definite number
+    fermions = System(4, Fermion(conserve = N))
+    pf = random_state(Pure, fermions, ["Occ", "Emp", "Occ", "Emp"], 4; rng)
+    ch = amplitude_damping_channel(0.5, C)(2) * dephasing_channel(0.3)(3) *
+         reset_channel(0.4, "FullyMixed")(1)
+    ref = real(expect1(apply(ch, mix(pf)), N))
+    values = [ real(expect1(apply(ch, as_trajectory(pf); rng), N)) for _ in 1:400 ]
+    @test within_error(values, ref)
+    # the Kraus operators as written: the identity and the Pauli strings, or the identity and the
+    # resets to each basis state
+    ks(c) = TensorMixedStates.kraus_operators(qubits, c(1))
+    @test length(ks(depolarizing_channel(0.2; kraus = :pauli))) == 4
+    @test length(ks(depolarizing_channel(0.2))) == 5
+    @test length(TensorMixedStates.kraus_operators(qubits,
+                 depolarizing_channel(0.2, 2; kraus = :pauli)(1, 2))) == 16
+    # refused: Kraus operators of no definite charge, a channel not keeping the trace
+    @test_throws "as written have no definite charge" apply(
+        0.5 * (Gate(C + dag(C)) + Gate(im * (C - dag(C))))(2), as_trajectory(pf); rng)
+    @test_throws "does not keep the trace" apply(0.5 * depolarizing_channel(0.2)(1), t; rng)
+    @test_throws "does not keep the trace" apply(Gate(Proj("Up"))(1) + Gate(Proj("Up"))(1), t;
+                                                 rng)
+    @test_throws "kraus is :reset or :pauli" depolarizing_channel(0.2; kraus = :other)
+    # drawn as written, never developed: a power, and a channel of many sites
+    ch = (dephasing_channel(0.2, X)^10)(1)
+    @test within_error([ real(expect1(apply(ch, t; rng), X)) for _ in 1:200 ],
+                       real(expect1(apply(ch, mix(p)), X)))
+    seven = System(7, Qubit())
+    p7 = random_state(Pure, seven, 4; rng)
+    ch = depolarizing_channel(0.3, 7)(1:7...)
+    @test within_error([ real(expect1(apply(ch, as_trajectory(p7); rng), Z)) for _ in 1:200 ],
+                       real(expect1(apply(ch, mix(p7)), Z)))
+    # in a run, the generator of the simulation draws them
+    gates(name) = runTMS(SimData(; name, seed = 3, phases = [
+                    CreateState{Trajectory}(qubits, "Up"),
+                    Gates(gates = depolarizing_channel(0.5)(1) * depolarizing_channel(0.5)(2))],
+                    final_measurements = Data("z") => Z); output = devnull).data["z"]
+    @test gates("a") == gates("b")
 end

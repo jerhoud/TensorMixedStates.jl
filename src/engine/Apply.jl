@@ -669,6 +669,8 @@ kets and its conjugate on the bras, an operator `K` being `Gate(K)`; a generator
 `L(ρ)`, a dephasing of more than two sites through the MPO of the gates of its projectors when
 they have few terms. The state is not normalised.
 
+- `rng`: the random number generator a trajectory draws the Kraus operators of a channel with,
+  one for each factor, with their Born probabilities, the global one by default
 - `limits`: the truncation of the bonds a gate of several sites crosses, or of the whole state
   for an MPO, `cutoff = 1e-26` by default, `eps()` with `"densitymatrix"`, whose density
   matrices give the squares of the singular values only to `eps()` of the largest
@@ -685,8 +687,151 @@ they have few terms. The state is not normalised.
     apply(exp(-0.1im * (X ⊗ X + Y ⊗ Y))(2, 5), state)
     apply(depolarizing_channel(0.01, 2)(1, 2) * controlled(X)(1, 2), ρ)
 """
-apply(a::IndexedOp, state::State; limits::Limits = Limits()) =
+apply(a::IndexedOp, state::State; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) =
     applied(state, apply_steps(a, state)..., limits)
+
+function apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits = Limits(),
+               rng::AbstractRNG = Random.default_rng())
+    if is_pure(a)
+        return applied(state, apply_steps(a, state)..., limits)
+    end
+    kept_trace(a, [trace_kept(a, state)])
+    return drawn(a, state, limits, rng)
+end
+
+"""
+    drawn(a, st, limits, rng)
+
+the trajectory `st` with the channel `a` applied as its structure is written, a Kraus operator
+drawn with its Born probability given the channel, and the state brought back to its trace: a
+product factor after factor, its rightmost first, each keeping the trace, a power as many times,
+a sum by one of its parts, drawn with the trace it keeps, see `trace_kept`, then within it, any
+other channel among its Kraus operators, see `kraus_operators`. Drawing so never develops a
+product or a sum, and gives the Kraus operators of the developed channel with their
+probabilities.
+"""
+function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, rng::AbstractRNG)
+    if a isa ScalarOp
+        return drawn(a.arg, st, limits, rng)
+    elseif a isa ProdOp
+        for f in reverse(channel_factors(a))
+            if f isa IndexedOp{IsOperator}
+                st = apply(f, st; limits)
+            else
+                kept_trace(f, [trace_kept(f, st)])
+                st = drawn(f, st, limits, rng)
+            end
+        end
+        return st
+    elseif a isa SumOp
+        ws = [ trace_kept(x, st) for x in a.subs ]
+        return drawn(a.subs[draw_index(ws, rng)], st, limits, rng)
+    elseif a isa AtIndex && a.op isa Union{ScalarOp, ProdOp, SumOp, IntPowOp, TensorOp}
+        return drawn(placed_structure(a), st, limits, rng)
+    end
+    ks = kraus_of(st.system, a)
+    ps = [ real(expect(st, dag(k) * k)) for k in ks ]
+    return with_trace(apply(ks[draw_index(ps, rng)], st; limits), st)
+end
+
+# the Kraus operators of the channel `a`, placed on sites, checked for a definite charge when it is
+# placed as a whole, see `kraus_operators`
+kraus_of(system::System, a::IndexedOp{IsChannel}) =
+    a isa AtIndex || !is_pure(a) ? kraus_operators(system, a) : [kraus(a)]
+
+# the trajectory `new` scaled to the trace of `old`, before a Kraus operator was applied: the norm
+# of a trajectory goes through a channel unchanged, as the probability of no jump it may carry
+with_trace(new::State{Trajectory}, old::State{Trajectory}) =
+    sqrt(real(trace(old)) / real(trace(new))) * new
+
+"""
+    placed_structure(a)
+
+the channel `a`, a structure of channels placed on sites as a whole, as a structure of placed
+channels: its parts placed on the same sites, the factors of a tensor product on theirs
+"""
+function placed_structure(a::AtIndex{IsChannel})
+    g = a.op
+    if g isa ScalarOp
+        return g.coef * AtIndex(g.arg, a.index)
+    elseif g isa SumOp
+        return SumOp(IndexedOp{IsChannel}[ AtIndex(x, a.index) for x in g.subs ])
+    elseif g isa IntPowOp
+        return ProdOp(IndexedOp{IsChannel}[ AtIndex(g.arg, a.index) for _ in 1:g.expo ])
+    elseif g isa TensorOp
+        return ProdOp(IndexedOp{IsChannel}[ AtIndex(x, a.index[r])
+                                            for (x, r) in zip(g.subs, factor_sites(g)) ])
+    end
+    return ProdOp(IndexedOp{IsChannel}[ AtIndex(x, a.index) for x in g.subs ])
+end
+
+"""
+    keeps_trace(system, a)
+
+whether the channel `a`, placed on sites, keeps the trace by its structure: a reset, a
+dephasing, the identity, a gate whose matrix is unitary, and their products and powers
+"""
+function keeps_trace(system::System, a::IndexedOp{IsChannel})
+    if a isa ScalarOp
+        return isone(a.coef) && keeps_trace(system, a.arg)
+    elseif a isa ProdOp
+        return all(x -> keeps_trace(system, x), a.subs)
+    elseif !(a isa AtIndex)
+        return false
+    end
+    g = a.op
+    if g isa Union{Reset, Dephase, IdentityOp} || g isa Gate && g.arg isa IdentityOp
+        return true
+    elseif g isa Union{ProdOp, IntPowOp, TensorOp}
+        return keeps_trace(system, placed_structure(a))
+    elseif g isa Gate
+        m = matrix(g.arg, [ system[i] for i in a.index ]...)
+        return nearly(m' * m, one(m))
+    end
+    return false
+end
+
+"""
+    trace_kept(a, st)
+
+the trace the channel `a`, placed on sites, keeps of the trajectory `st` divided by its trace,
+the sum of ``\\langle K^\\dagger K\\rangle`` over its Kraus operators: one when its structure
+keeps the trace, see `keeps_trace`, the coefficient times that of a part, the sum of those of
+the parts of a sum, one for a product, whose factors are checked as they are drawn
+"""
+function trace_kept(a::IndexedOp{IsChannel}, st::State{Trajectory})
+    if keeps_trace(st.system, a)
+        return 1.
+    elseif a isa ScalarOp
+        return a.coef * trace_kept(a.arg, st)
+    elseif a isa SumOp
+        return sum(x -> trace_kept(x, st), a.subs)
+    elseif a isa AtIndex && a.op isa Union{ScalarOp, SumOp}
+        return trace_kept(placed_structure(a), st)
+    elseif a isa ProdOp || a isa AtIndex && a.op isa Union{ProdOp, IntPowOp, TensorOp}
+        # each factor is checked on the state it is drawn on, see `drawn`
+        return 1.
+    end
+    return sum(k -> real(expect(st, dag(k) * k)), kraus_of(st.system, a))
+end
+
+# the index of a draw among the weights `ps`, whose sum need not be one
+draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
+    something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
+
+# the probabilities `ps` of the parts of `a`, refused when they do not sum to one: far from their
+# rounding, and from a channel losing any trace that matters
+function kept_trace(a, ps::Vector{Float64})
+    if !isapprox(sum(ps), 1; rtol = sqrt(eps()))
+        trace_not_kept(a)
+    end
+    return ps
+end
+
+trace_not_kept(a) =
+    error("$(obs_name(a)) does not keep the trace, which a trajectory follows only with weights, " *
+          "not available yet: use State{Mixed}")
 
 """
     apply_steps(op, state)

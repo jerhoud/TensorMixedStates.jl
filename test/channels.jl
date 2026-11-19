@@ -1319,7 +1319,7 @@ end
         end
     end
     # a product and a power, and a reset to a local state degenerate between two charges, which
-    # needs its Choi matrix diagonalized block by block
+    # the basis states give
     sys = System(3, Qubit())
     ρ = random_state(Mixed, sys, 16)
     @test same_channel(depolarizing_channel(0.2)(1) * Gate(X)(2), sys, ρ)
@@ -1327,28 +1327,25 @@ end
     fsys = System(3, Fermion(conserve = N))
     @test same_channel(Reset([0.5 0. ; 0. 0.5])(2), fsys,
                        random_state(Mixed, fsys, ["Occ", "Emp", "Occ"], 16))
-    # the depolarizing of a fermion, whose operators X and Y have no definite charge, gives C and
-    # C†, and a channel of no definite charge is refused
+    # Kraus operators written with no definite charge are refused, as a trajectory draws among
+    # the operators written, alone, in a sum, or as a sum of placed channels; a fermion conserving
+    # nothing keeps a definite parity
     f = Fermion(conserve = N)
-    ks = kraus_operators(System(1, f), 0.5 * (Gate(C + dag(C)) + Gate(im * (C - dag(C))))(1))
-    @test length(ks) == 2
     generic(k) = TMS.scalarcoef(k) * TMS.scalararg(k).op
-    @test all(k -> TMS.definite_grade(generic(k), [f]), ks)
-    @test sum(matrix(Gate(generic(k)), f) for k in ks) ≈ matrix(Gate(C) + Gate(dag(C)), f)
-    @test_throws "no definite charge" kraus_operators(System(1, f), Gate(C + dag(C))(1))
-    # the same written as a sum of placed channels, gathered into one, and a fermion conserving
-    # nothing, whose operators keep a definite parity
-    placed = 0.5 * (Gate(C + dag(C))(2) + Gate(im * (C - dag(C)))(2))
-    @test length(kraus_operators(fsys, placed)) == 2
-    @test same_channel(placed, fsys, random_state(Mixed, fsys, ["Occ", "Emp", "Occ"], 16))
+    @test_throws "as written have no definite charge" kraus_operators(
+        System(1, f), 0.5 * (Gate(C + dag(C)) + Gate(im * (C - dag(C))))(1))
+    @test_throws "as written have no definite charge" kraus_operators(System(1, f),
+                                                                      Gate(C + dag(C))(1))
+    @test_throws "as written have no definite charge" kraus_operators(
+        fsys, 0.5 * (Gate(C + dag(C))(2) + Gate(im * (C - dag(C)))(2)))
     free = Fermion()
-    @test all(k -> TMS.definite_grade(generic(k), [free]),
+    @test all(k -> TMS.scalararg(k) isa TMS.IdentityOp || TMS.definite_grade(generic(k), [free]),
               kraus_operators(System(3, free), depolarizing_channel(0.3)(2)))
-    # no more operators than the dimension of the superoperator, a dense matrix only within its
-    # limit, and a map that does not keep density matrices Hermitian refused
-    @test length(kraus_operators(System(1, Qubit()), (dephasing_channel(0.2, X)^10)(1))) ≤ 4
-    @test_throws "beyond the" kraus_operators(System(7, Qubit()),
-                                              depolarizing_channel(0.1, 7)(1:7...))
+    # a power developed as written, which a trajectory draws factor by factor instead, and a
+    # reset to a matrix that is not a density matrix refused
+    @test length(kraus_operators(System(1, Qubit()), (dephasing_channel(0.2, X)^10)(1))) == 3^10
+    @test_throws "is not completely positive" kraus_operators(System(1, Qubit()),
+                                                              Reset([1.5 0. ; 0. -0.5])(1))
     @test_throws "does not keep density matrices Hermitian" kraus_operators(
         System(1, Qubit()), Reset([0.5 0.5 ; 0. 0.5])(1))
     # a dephasing of eight sites, from its projectors, and a gate placed as a whole, as it is

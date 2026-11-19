@@ -184,11 +184,12 @@ between which the run can write a checkpoint or stop.
 end
 
 """
-    GatesSteps(coefs, steps, limits, on, gates, own)
+    GatesSteps(coefs, steps, limits, on, gates, own, drawn)
 
 a `Gates` prepared: for each `State` it acts on, the number it is multiplied by and the steps of
 `apply`, see `apply_steps`, made in turn, its limits and the names of the states; the gates and
-the names of the states of one's own, which `apply` gives them at once at the first step
+the names of the states of one's own, which `apply` gives them at once at the first step, and of
+the trajectories, which `apply` gives them then, drawing with the generator of the simulation
 """
 struct GatesSteps
     coefs::Vector{Number}
@@ -197,20 +198,24 @@ struct GatesSteps
     on::Vector{Symbol}
     gates::IndexedOp
     own::Vector{Symbol}
+    drawn::Vector{Symbol}
 end
 
 function prepare_phase(phase::Gates, sim::Simulation)
     n = length(prodsubs(phase.gates))
     log_message(sim, "Applying $n gate$(n == 1 ? "" : "s")")
     names = state_names(phase.on)
-    mps = filter(name -> state_named(sim, name) isa State, names)
+    # a trajectory draws the Kraus operators of the channels as it applies them
+    drawn = filter(name -> state_named(sim, name) isa State{Trajectory}, names)
+    mps = filter(name -> state_named(sim, name) isa State && name ∉ drawn, names)
     prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in mps ]
-    own = setdiff(names, mps)
+    own = setdiff(names, mps, drawn)
     # once for each backend
     for st in unique(backend_of, [ state_named(sim, name) for name in own ])
         log_ignored(sim, st, phase, (:limits,))
     end
-    return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates, own)
+    return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates, own,
+                      drawn)
 end
 
 # a product that vanishes, of no step, takes one to give the null state
@@ -225,6 +230,10 @@ function run_step(g::GatesSteps, sim::Simulation, k::Int)
     if k == 1
         for name in g.own
             sim = with_state(sim, name, apply(g.gates, state_named(sim, name); limits = g.limits))
+        end
+        for name in g.drawn
+            sim = with_state(sim, name, apply(g.gates, state_named(sim, name); limits = g.limits,
+                                              rng = sim.rng))
         end
     end
     return sim
