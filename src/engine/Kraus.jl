@@ -90,9 +90,8 @@ end
 """
     reset_kraus(a, site)
 
-the Kraus operators of the reset `a` of `site` to a density matrix σ, ``\\sqrt{λ}|s⟩⟨n|`` for each
-eigenvector `s` of σ and each basis state `n`: the basis states themselves when σ is diagonal in
-the basis of the site, as `"FullyMixed"`, so that no eigensolver chooses among degenerate ones
+the Kraus operators of the reset `a` of `site` to σ, ``\\sqrt{λ}|s⟩⟨n|`` for each eigenvector `s`
+of σ, found block by block of charge and parity, and each basis state `n`
 """
 function reset_kraus(a::Reset, site::AbstractSite)
     x = local_state(site, a.state)
@@ -102,21 +101,55 @@ function reset_kraus(a::Reset, site::AbstractSite)
         error("$(obs_name(a)) does not keep density matrices Hermitian on $site, so it has no " *
               "Kraus operators")
     end
-    σ = x isa AbstractMatrix ? x / real(tr(x)) : x
-    pairs = if σ isa AbstractVector
-        [(1., σ / norm(σ))]
-    elseif isdiag(σ)
-        [ (real(σ[k, k]), basis(k)) for k in 1:d if !iszero(σ[k, k]) ]
-    else
-        e = eigen(Hermitian(σ))
-        collect(zip(e.values, eachcol(e.vectors)))
+    σ = x isa AbstractMatrix ? x / real(tr(x)) : x * x' / real(x' * x)
+    g = basis_grades([site])
+    # the rounding left between sectors dropped, a coherence between them refused
+    if any(abs(σ[i, j]) > rounding_tol * norm(σ) for i in 1:d, j in 1:d if g[i] ≠ g[j])
+        error("$(obs_name(a)) resets $site to a state of no definite charge or parity, which a " *
+              "trajectory cannot hold")
     end
-    if any(p -> first(p) < -rounding_tol, pairs)
-        error("$(obs_name(a)) is not completely positive on $site, so it has no Kraus operators")
+    pairs = Tuple{Float64, Vector}[]
+    for b in [ findall(==(x), g) for x in unique(g) ]
+        block = σ[b, b]
+        e = isdiag(block) ?
+            (values = real(diag(block)), vectors = Matrix(1.0I, length(b), length(b))) :
+            eigen(Hermitian(block))
+        for (λ, u) in zip(e.values, eachcol(e.vectors))
+            if λ < -rounding_tol
+                error("$(obs_name(a)) is not completely positive on $site, so it has no Kraus " *
+                      "operators")
+            elseif λ > rounding_tol
+                s = zeros(eltype(u), d)
+                s[b] = u
+                push!(pairs, (λ, s))
+            end
+        end
     end
-    filter!(p -> first(p) > rounding_tol, pairs)
     return vec([ Operator{1}("K$k[$(obs_name(a))]", sqrt(λ) * s * basis(n)')
                  for (k, ((λ, s), n)) in enumerate(Iterators.product(pairs, 1:d)) ])
+end
+
+# the flux, in the strongly conserved quantities `names`, of the operator `k` of definite charge on
+# `sites`: its nonzero components
+function strong_flux(k::GenericOp{IsOperator}, sites, names)
+    m = matrix(k, sites...)
+    g = basis_grades(sites)
+    i = findfirst(x -> abs(x) > rounding_tol * norm(m), m)
+    if isnothing(i)
+        return Pair{String, Int}[]
+    end
+    q = (g[i[1]] - g[i[2]]).q
+    return sort!([ chopsuffix(nm, "*") => v for (nm, v, _) in qn_components(q)
+                   if chopsuffix(nm, "*") in names && v ≠ 0 ])
+end
+
+# the sum of the fluxes `fs`, as `strong_flux` gives them
+function added_fluxes(fs)
+    total = Dict{String, Int}()
+    for f in fs, (nm, v) in f
+        total[nm] = get(total, nm, 0) + v
+    end
+    return sort!([ nm => v for (nm, v) in total if v ≠ 0 ])
 end
 
 """

@@ -121,7 +121,9 @@ are not two sites depolarized each on its own,
 """
 function depolarizing_channel(p::Real, n::Int = 1; kraus::Symbol = :reset)
     check_probability("depolarizing_channel", p)
-    if kraus === :reset
+    if n < 1
+        error("depolarizing_channel acts on 1 site or more, got $n")
+    elseif kraus === :reset
         return reset_channel(p, n, "FullyMixed")
     elseif kraus === :pauli
         strings = vec([ reduce(⊗, ps) for ps in Iterators.product(fill([Id, X, Y, Z], n)...) ])

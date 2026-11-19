@@ -255,3 +255,52 @@ end
                     final_measurements = Data("z") => Z); output = devnull).data["z"]
     @test gates("a") == gates("b")
 end
+
+# whether the density matrix averaged over the trajectories `ts` is that of `ρ`, element by
+# element within `k` of its standard errors
+function same_density(ts, ρ; k = 5)
+    vs = [ (v = dense_vector(State{Pure}(t.system, t.state)); v * v' / real(v' * v)) for t in ts ]
+    n = length(vs)
+    m = sum(vs) / n
+    err = sqrt.(sum(v -> abs2.(v .- m), vs) / (n - 1) / n)
+    ref = ket_bra_matrix(ρ)
+    return all(abs.(m .- ref) .≤ k .* err .+ 1e-10)
+end
+
+@testset "Trajectory draws products in sums, coherences and charges as Mixed does" begin
+    rng = Xoshiro(11)
+    qubits = System(2, Qubit())
+    p = random_state(Pure, qubits, 4; rng)
+    t = as_trajectory(p)
+    # a weak measurement with feedback, its parts products of gates of unequal weights
+    ε = 0.8
+    Mp, Mm = ((Id + ε * Z) / 2)^0.5, ((Id - ε * Z) / 2)^0.5
+    for ch in (Gate(Mp)(1) * Gate(X)(2) + Gate(Mm)(1) * Gate(Z)(2),
+               Gate(Proj("Up"))(1) * Gate(X)(2) + Gate(Proj("Dn"))(1),
+               depolarizing_channel(0.4; kraus = :pauli)(1) * reset_channel(0.3, "Up")(2))
+        @test same_density([ apply(ch, t; rng) for _ in 1:600 ], apply(ch, mix(p)))
+    end
+    # fermions: coherences and Jordan-Wigner signs, a reset to a degenerate target with rounding
+    fermions = System(3, Fermion(conserve = N))
+    pf = random_state(Pure, fermions, ["Occ", "Emp", "Occ"], 4; rng)
+    ch = amplitude_damping_channel(0.5, C)(3) * Reset([0.5 1e-17 ; 1e-17 0.5])(2)
+    @test same_density([ apply(ch, as_trajectory(pf); rng) for _ in 1:600 ], apply(ch, mix(pf)))
+    # refused as Mixed refuses: Kraus operators changing a strong charge by different amounts
+    strong_sys = System(3, Fermion(conserve = strong(N)))
+    ps = random_state(Pure, strong_sys, ["Occ", "Emp", "Occ"], 4; rng)
+    @test_throws "by different amounts" apply(amplitude_damping_channel(0.5, C)(2),
+                                              as_trajectory(ps); rng)
+    @test_throws "by different amounts" apply(Gate(C)(1) + Gate(dag(C))(2), as_trajectory(ps);
+                                              rng)
+    # refused: off the system, a reset to a state of no definite parity, no sites
+    @test_throws "which the system does not have" apply(depolarizing_channel(0.3)(5), t; rng)
+    free = as_trajectory(random_state(Pure, System(2, Fermion()), 4; rng))
+    @test_throws "which a trajectory cannot hold" apply(Reset([1, 1])(1), free; rng)
+    @test_throws "1 site or more" depolarizing_channel(0.1, 0)
+    # a run draws: a full depolarizing of |↑⟩ gives ↓ for some seed
+    run(seed) = only(runTMS(SimData(; name = "d$seed", seed, phases = [
+                    CreateState{Trajectory}(System(1, Qubit()), "Up"),
+                    Gates(gates = depolarizing_channel(1.)(1))],
+                    final_measurements = Data("z") => Z(1)); output = devnull).data["z"])["Z(1)"]
+    @test any(seed -> run(seed) ≈ -1, 1:20)
+end
