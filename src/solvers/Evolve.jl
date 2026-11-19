@@ -15,10 +15,14 @@ truncated_once(pre::PreMPO, limits::Limits) =
 """
     check_pre(pre, state)
 
-refuse a `PreMPO` prepared on another system than that of `state`
+refuse a `PreMPO` prepared on another system than that of `state`, or for the matrices of
+another representation, see `algebra`
 """
-function check_pre(pre::PreMPO, state::State)
-    if pre.system ≠ state.system
+function check_pre(pre::PreMPO{S}, state::State{R}) where {S, R}
+    if S !== algebra(R)
+        error("the PreMPO was prepared on a state of the other representation: prepare it with " *
+              "the state, PreMPO(state, op)")
+    elseif pre.system ≠ state.system
         error("the PreMPO was prepared on another system than that of the state, " *
               "$(system_difference(pre.system, state.system)): prepare it with the state, " *
               "PreMPO(state, op)")
@@ -35,16 +39,13 @@ evolution alone follows, see `prepared_evolver`
 """
 prepared_operator(state::State, a::IndexedOp, mpo_limits::Limits = Limits()) =
     PreMPO(state, a; limits = mpo_limits)
-function prepared_operator(state::State{R}, pre::PreMPO{R},
-                           mpo_limits::Limits = Limits()) where {R <: PM}
+function prepared_operator(state::State, pre::PreMPO, mpo_limits::Limits = Limits())
+    check_pre(pre, state)
     if !isnothing(pre.functions)
         error("the PreMPO depends on time, which an evolution alone follows")
     end
-    return truncated_once(check_pre(pre, state), mpo_limits)
+    return truncated_once(pre, mpo_limits)
 end
-
-prepared_operator(::State, ::PreMPO, ::Limits = Limits()) =
-    error("the PreMPO was prepared on a state of the other representation")
 
 prepared_operator(::State, ::MPO, ::Limits = Limits()) =
     error("the solvers take an operator or its PreMPO, which keeps the MPOs they build, not an MPO")
@@ -63,8 +64,8 @@ a method returning what its `evolve_step` takes as `pre`.
 prepared_evolver(state::State, a::Union{IndexedOp, PreMPO, MPO}, mpo_limits::Limits = Limits();
                  duration::Union{Nothing, Number} = nothing) =
     prepared_operator(state, a, mpo_limits)
-prepared_evolver(state::State{R}, pre::PreMPO{R}, mpo_limits::Limits = Limits();
-                 duration::Union{Nothing, Number} = nothing) where {R <: PM} =
+prepared_evolver(state::State, pre::PreMPO, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
     truncated_once(check_pre(pre, state), mpo_limits)
 prepared_evolver(state::State, terms::Union{AbstractVector, Pair}, mpo_limits::Limits = Limits();
                  duration::Union{Nothing, Number} = nothing) =

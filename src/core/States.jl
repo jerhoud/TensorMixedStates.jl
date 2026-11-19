@@ -654,16 +654,16 @@ function weaken(state::State{R}, target::Conserved) where {R <: PM}
     n = length(state)
     collapse, drop = transitions(source, target)
     relab = relabeller(i -> weak_index(i, collapse, drop))
-    if R === Pure
+    if R <: Ket
         if !is_charged(weak)
-            return State{Pure}(weak, replace_siteinds(dense(state.state), siteinds(Pure, weak)))
+            return State{R}(weak, replace_siteinds(dense(state.state), siteinds(R, weak)))
         end
         # the relabelling keeps the basis order; only a site left conserving nothing needs a
         # map, the new system giving it a single block where the relabelling keeps one per
         # basis state
-        return State{Pure}(weak, MPS(map(1:n) do i
+        return State{R}(weak, MPS(map(1:n) do i
             t = relabel(state.state[i], relab)
-            old, new = relab(siteind(Pure, system, i)), siteind(Pure, weak, i)
+            old, new = relab(siteind(R, system, i)), siteind(R, weak, i)
             return space(old) == space(new) ? replaceind(t, old, new) : t * pure_map(old, new)
         end))
     end

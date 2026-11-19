@@ -53,6 +53,11 @@ the representation of a state as a density matrix, as in `State{Mixed}`.
 """
 struct Mixed <: PM end
 
+# the representation whose matrices the operators acting on a state of `R` have, that of a wave
+# function for every ket
+algebra(::Type{<:Ket}) = Pure
+algebra(::Type{Mixed}) = Mixed
+
 """
     abstract type GI
 

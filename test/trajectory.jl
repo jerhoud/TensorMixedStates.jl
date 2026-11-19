@@ -121,3 +121,32 @@ end
         @test_throws message f()
     end
 end
+
+@testset "Trajectory weakens, compares and evolves by a PreMPO as Pure does" begin
+    rng = Xoshiro(7)
+    fermions = System(4, Fermion(conserve = strong(N)))
+    p = random_state(Pure, fermions, ["Occ", "Emp", "Occ", "Emp"], 4; rng)
+    t = as_trajectory(p)
+    for target in ((), (N,))
+        w = weaken(t, target)
+        @test w isa State{Trajectory} && expect1(w, N) == expect1(weaken(p, target), N)
+    end
+    q = random_state(Pure, fermions, ["Emp", "Occ", "Occ", "Emp"], 4; rng)
+    @test fidelity(t, weaken(q, ())) == fidelity(p, weaken(q, ()))
+    # an operator measured on the state conserving nothing
+    spins = System(6, Spin(1 / 2; conserve = 2Sz))
+    ps = random_state(Pure, spins, ["Up", "Dn", "Up", "Dn", "Up", "Dn"], 4; rng)
+    op = (Sx(1) + Sx(2)) * (Sx(3) + Sx(4)) * (Sx(5) + Sx(6))
+    @test expect(as_trajectory(ps), op) == expect(ps, op)
+    # a PreMPO prepared on a trajectory is for its wave function
+    h = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:3)
+    et = evolve(PreMPO(t, -im * h), 0.2, t; nsteps = 2)
+    @test et isa State{Trajectory} && expect1(et, N) == expect1(evolve(PreMPO(p, -im * h), 0.2,
+                                                                       p; nsteps = 2), N)
+    # in a run, weakened then evolved
+    run(R) = runTMS(SimData(; name = "w", phases = [
+                 CreateState{R}(fermions, ["Occ", "Emp", "Occ", "Emp"]), Weaken(target = ()),
+                 Evolve(evolver = -im * h, duration = 0.2, time_step = 0.1)],
+                 final_measurements = Data("n") => N); output = devnull)
+    @test run(Trajectory).data["n"] == run(Pure).data["n"]
+end
