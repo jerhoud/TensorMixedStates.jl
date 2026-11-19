@@ -413,6 +413,11 @@ function qn_components(q::QN)
     return cs
 end
 
+# the nonzero components of the charge `q` in the strongly conserved quantities `names`
+strong_part(q::QN, names) =
+    sort!([ chopsuffix(nm, "*") => v for (nm, v, _) in qn_components(q)
+            if chopsuffix(nm, "*") in names && v ≠ 0 ])
+
 """
     map_charges(f, i)
 

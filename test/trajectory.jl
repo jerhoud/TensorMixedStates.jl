@@ -106,10 +106,7 @@ end
             (() -> Vector(t), "the vector of one trajectory"),
             (() -> t ⊗ t, "the product of two trajectories"),
             (() -> t ⊗ p, "the product of a trajectory"),
-            (() -> random_state(t, 2), "a random state comes with the draws"),
-            (() -> random_state(Trajectory, qubits, 2), "a random state comes with the draws"),
-            (() -> State{Trajectory}(qubits, Mixture([0.5 => "Up", 0.5 => "Dn"])),
-             "a mixed initial state comes with the draws"),
+            (() -> random_state(t, 2), "randomising a trajectory is not implemented"),
             (() -> ground_state(h, t), "a trajectory is not searched"),
             (() -> thermalize(h, 1., t), "a thermal state comes with the draws"),
             (() -> steady_state(-im * h, t), "a steady state comes with the draws"),
@@ -186,13 +183,14 @@ end
     t = State{Trajectory}(qubits, Mixture([1.0 => "Up", 0 => "Dn"]))
     @test t isa State{Trajectory} && expect1(t, Z) == expect1(State{Pure}(qubits, "Up"), Z)
     @test occursin("State{Trajectory}", repr(t))
-    @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
-        qubits, Mixture([0.5 => "Up", 0.5 => "Dn"]))
-    @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
-        qubits, FullyMixed())
-    @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
-        qubits, [[1 0; 0 0], "Up"])
+    # a projector of rank one is a pure state, whatever the draw
+    @test expect1(State{Trajectory}(qubits, [[1 0; 0 0], "Up"]), Z) == [1, 1]
     @test_throws "State{Ket} has no representation of its own" State{Ket}(qubits, "Up")
+    # the generator taken by every representation, which only a trajectory draws with
+    for R in (Pure, Mixed), x in ("Up", Mixture([1.0 => "Up"]))
+        @test expect1(State{R}(qubits, x; rng = Xoshiro(1)), Z) == expect1(State{R}(qubits, x), Z)
+    end
+    @test expect1(State{Mixed}(qubits, FullyMixed(); rng = Xoshiro(1)), Z) == [0, 0]
 end
 
 # whether the mean of the vectors `values` is `ref`, within `k` of its standard errors
@@ -424,4 +422,58 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
                     final_measurements = Data("z") => Z); output = devnull).data["z"]
     @test run("a") == run("b")
     @test !isempty(run("c"; on = [:state, :b]))
+end
+
+@testset "Trajectory draws its initial state from a mixed description, whose average it is" begin
+    rng = Xoshiro(13)
+    draws(f) = [ f() for _ in 1:2000 ]
+    same(f, ρ) = same_density(draws(f), ρ; floor = 1 / 2000)
+    # local mixed states, by their eigenvectors, a mixture weighted by the traces of its states
+    qubits = System(3, Qubit())
+    locals = ["FullyMixed", [0.7 0.2; 0.2 0.3], "Up"]
+    @test same(() -> State{Trajectory}(qubits, locals; rng), State{Mixed}(qubits, locals))
+    m = Mixture([0.3 => ["Up", [1, 1], "Dn"], 0.7 => [[1 0; 0 1], "Dn", [2, 0]]])
+    @test same(() -> State{Trajectory}(qubits, m; rng), State{Mixed}(qubits, m))
+    @test same(() -> State{Trajectory}(qubits, FullyMixed(); rng),
+               State{Mixed}(qubits, FullyMixed()))
+    # fermions conserving their number weakly: each draw of one number, a sector drawn uniformly
+    fermions = System(4, Fermion(conserve = N))
+    fl = ["FullyMixed", [0.6 0; 0 0.4], "Occ", [0.5 0; 0 0.5]]
+    ts = draws(() -> State{Trajectory}(fermions, fl; rng))
+    @test same_density(ts, State{Mixed}(fermions, fl); floor = 1 / 2000)
+    @test all(t -> isinteger(round(real(expect(t, sum(N(i) for i in 1:4))); digits = 10)), ts)
+    @test same(() -> State{Trajectory}(fermions, FullyMixed(N => 2); rng),
+               State{Mixed}(fermions, FullyMixed(N => 2)))
+    # random states: the ancillas of the purification of random_state(Mixed) measured
+    pq = TMS.purification(Trajectory, qubits, 4; rng = Xoshiro(3), eltype = ComplexF64)
+    @test same(() -> TMS.projected(pq, qubits, rng), random_state(Mixed, qubits, 4;
+                                                                  rng = Xoshiro(3)))
+    states = ["Occ", "Emp", "Occ", "Emp"]
+    pf = TMS.purification(Trajectory, fermions, states, 4; rng = Xoshiro(4), eltype = ComplexF64)
+    @test same(() -> TMS.projected(pf, fermions, rng),
+               random_state(Mixed, fermions, states, 4; rng = Xoshiro(4)))
+    @test random_state(Trajectory, fermions, states, 4; rng) isa State{Trajectory}
+    # refused: values conserved strongly spread over, coherences between parities, matrices that
+    # are no density matrices
+    strong_sys = System(2, Fermion(conserve = strong(N)))
+    @test_throws "conserving it strongly forbids" State{Trajectory}(strong_sys, "FullyMixed")
+    @test_throws "the terms have different values of N" State{Trajectory}(
+        strong_sys, Mixture([0.5 => ["Occ", "Emp"], 0.5 => "Emp"]))
+    @test State{Trajectory}(strong_sys, FullyMixed(N => 1); rng) isa State{Trajectory}
+    @test_throws "cannot draw a random mixed state" random_state(Trajectory, strong_sys,
+                                                                 ["Occ", "Emp"], 4)
+    free = System(2, Fermion())
+    @test_throws "no definite charge or parity" State{Trajectory}(free, [0.5 0.5; 0.5 0.5])
+    @test_throws "is not Hermitian" State{Trajectory}(qubits, [0.5 0.5; 0 0.5])
+    @test_throws "is not positive" State{Trajectory}(qubits, [1.5 0; 0 -0.5])
+    @test_throws "drawn from the purification" random_state(Trajectory, qubits, FullyMixed(), 4)
+    # in a run, the generator of the simulation draws them
+    run(name; kwargs...) = runTMS(SimData(; name, seed = 5, phases = [
+                    CreateState{Trajectory}(fermions, kwargs[:state];
+                                            randomize = get(kwargs, :randomize, 0))],
+                    final_measurements = Data("n") => N); output = devnull).data["n"]
+    @test run("a"; state = "FullyMixed") == run("b"; state = "FullyMixed")
+    @test run("c"; state = states, randomize = 4) == run("d"; state = states, randomize = 4)
+    @test_throws "drawn from the purification" run("e"; state = FullyMixed(N => 2),
+                                                   randomize = 4)
 end

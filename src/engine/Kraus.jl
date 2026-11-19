@@ -108,23 +108,11 @@ function reset_kraus(a::Reset, site::AbstractSite)
         error("$(obs_name(a)) resets $site to a state of no definite charge or parity, which a " *
               "trajectory cannot hold")
     end
-    pairs = Tuple{Float64, Vector}[]
-    for b in [ findall(==(x), g) for x in unique(g) ]
-        block = σ[b, b]
-        e = isdiag(block) ?
-            (values = real(diag(block)), vectors = Matrix(1.0I, length(b), length(b))) :
-            eigen(Hermitian(block))
-        for (λ, u) in zip(e.values, eachcol(e.vectors))
-            if λ < -rounding_tol
-                error("$(obs_name(a)) is not completely positive on $site, so it has no Kraus " *
-                      "operators")
-            elseif λ > rounding_tol
-                s = zeros(eltype(u), d)
-                s[b] = u
-                push!(pairs, (λ, s))
-            end
-        end
+    es = sector_eigen(σ, g)
+    if any(e -> first(e) < -rounding_tol, es)
+        error("$(obs_name(a)) is not completely positive on $site, so it has no Kraus operators")
     end
+    pairs = filter(e -> first(e) > rounding_tol, es)
     return vec([ Operator{1}("K$k[$(obs_name(a))]", sqrt(λ) * s * basis(n)')
                  for (k, ((λ, s), n)) in enumerate(Iterators.product(pairs, 1:d)) ])
 end
@@ -140,11 +128,6 @@ function strong_flux(k::GenericOp{IsOperator}, sites, names)
     end
     return strong_part((g[i[1]] - g[i[2]]).q, names)
 end
-
-# the nonzero components of the charge `q` in the strongly conserved quantities `names`
-strong_part(q::QN, names) =
-    sort!([ chopsuffix(nm, "*") => v for (nm, v, _) in qn_components(q)
-            if chopsuffix(nm, "*") in names && v ≠ 0 ])
 
 # the sum of the fluxes `fs`, as `strong_flux` gives them
 function added_fluxes(fs)

@@ -166,7 +166,7 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     elseif isnothing(phase.system)
         error("CreateState needs a system or a State")
     elseif n == 0
-        State{R}(phase.system, phase.state)
+        State{R}(phase.system, phase.state; rng)
     else
         random_of(backend, R, phase.system, phase.state, n; rng)
     end

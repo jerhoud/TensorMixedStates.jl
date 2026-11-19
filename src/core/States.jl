@@ -349,17 +349,84 @@ function charged_state(a::AbstractArray, inds, what, site::AbstractSite)
     return charged_itensor(a, inds)
 end
 
-"""
-    make_one_state(R, system, i, state)
+# the index of a draw among the weights `ps`, whose sum need not be one
+draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
+    something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
 
-the ITensor of the local state `state` on site `i` of `system`, in the representation `R`
 """
-function make_one_state(::Type{R}, system::System, i::Int, x) where {R <: Ket}
+    sector_eigen(σ, g)
+
+the eigenvalues and the eigenvectors `(λ, s)` of the Hermitian matrix `σ` of a site whose basis
+states have the grades `g`, block by block of grade, a diagonal block keeping the basis itself
+"""
+function sector_eigen(σ::AbstractMatrix, g)
+    pairs = Tuple{Float64, Vector}[]
+    for b in [ findall(==(x), g) for x in unique(g) ]
+        block = σ[b, b]
+        e = isdiag(block) ?
+            (values = real(diag(block)), vectors = Matrix(1.0I, length(b), length(b))) :
+            eigen(Hermitian(block))
+        for (λ, u) in zip(e.values, eachcol(e.vectors))
+            s = zeros(eltype(u), size(σ, 1))
+            s[b] = u
+            push!(pairs, (λ, s))
+        end
+    end
+    return pairs
+end
+
+"""
+    drawn_local(system, i, x, rng)
+
+the vector of a pure state of site `i` of `system` drawn from the local state `x`: `x` itself
+when it is pure, otherwise an eigenvector of its density matrix with the probability of its
+eigenvalue, see `sector_eigen`, refused when it spreads over charges or parities, or over
+strongly conserved values, which a trajectory, of definite ones, could only draw among
+"""
+function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
+    site = system[i]
+    v = local_state(site, x)
+    if v isa Vector
+        return v
+    elseif !nearly(v, v')
+        error("$(repr(x)) is not Hermitian on $site, so it is not a density matrix")
+    end
+    σ = v / real(tr(v))
+    d = dim(site)
+    g = collect(zip(basis_charges(site), fermion_parities(site)))
+    # the rounding left between sectors dropped, a coherence between them refused
+    if any(abs(σ[a, b]) > rounding_tol * norm(σ) for a in 1:d, b in 1:d if g[a] ≠ g[b])
+        error("$(repr(x)) is a state of $site of no definite charge or parity, which a " *
+              "trajectory cannot draw")
+    end
+    es = sector_eigen(σ, g)
+    if any(e -> first(e) < -rounding_tol, es)
+        error("$(repr(x)) is not positive on $site, so it is not a density matrix")
+    end
+    kept = filter(e -> first(e) > rounding_tol, es)
+    names = strong_names(system)
+    strong(s) = strong_part(first(g[findfirst(!iszero, s)]), names)
+    if !isempty(names) && !allequal(strong(s) for (_, s) in kept)
+        error("$(repr(x)) spreads over several values of $(join(names, ", ")) on $site, which " *
+              "conserving it strongly forbids: drop `strong`")
+    end
+    return last(kept[draw_index(first.(kept), rng)])
+end
+
+"""
+    make_one_state(R, system, i, state; rng)
+
+the ITensor of the local state `state` on site `i` of `system`, in the representation `R`; a
+trajectory draws a pure state from a mixed one with `rng`, see `drawn_local`
+"""
+make_one_state(::Type{Trajectory}, system::System, i::Int, x;
+               rng::AbstractRNG = Random.default_rng()) =
+    make_one_state(Pure, system, i, drawn_local(system, i, x, rng))
+
+function make_one_state(::Type{R}, system::System, i::Int, x;
+                        rng::AbstractRNG = Random.default_rng()) where {R <: Ket}
     v = local_state(system[i], x)
     if !(v isa Vector)
-        if R === Trajectory
-            not_yet("a mixed initial state")
-        end
         hint = x isa Pair ? ": A => λ gives a vector only for a diagonal operator and a " *
                             "simple eigenvalue" : ""
         error("$(repr(x)) is a density matrix on $(system[i]), which a pure state cannot take$hint")
@@ -369,7 +436,8 @@ end
 
 # laid on the ket and the bra, then combined: combining charged indices sorts their sectors,
 # so the mixed basis is not in matrix order
-function make_one_state(::Type{Mixed}, system::System, i::Int, x)
+function make_one_state(::Type{Mixed}, system::System, i::Int, x;
+                        rng::AbstractRNG = Random.default_rng())
     v = local_state(system[i], x)
     m = v isa Vector ? v * v' : v
     j = siteind(Pure, system, i)
@@ -398,13 +466,15 @@ function state_links(ts::Vector{ITensor})
 end
 
 """
-    make_state(R, system, states)
+    make_state(R, system, states; rng)
 
-the product state MPS of the local states `states`, one per site of `system`
+the product state MPS of the local states `states`, one per site of `system`, a trajectory
+drawing a mixed one with `rng`, see `make_one_state`
 """
-function make_state(::Type{R}, system::System, states::Vector) where R
+function make_state(::Type{R}, system::System, states::Vector;
+                    rng::AbstractRNG = Random.default_rng()) where R
     n = length(system)
-    ts = [ make_one_state(R, system, i, states[i]) for i in 1:n ]
+    ts = [ make_one_state(R, system, i, states[i]; rng) for i in 1:n ]
     st = MPS(n)
     if n == 1
         st[1] = ts[1]
@@ -420,23 +490,27 @@ function make_state(::Type{R}, system::System, states::Vector) where R
     return st
 end
 
-function State{R}(system::System, states::Vector) where R
+function State{R}(system::System, states::Vector; rng::AbstractRNG = Random.default_rng()) where R
     if length(system) ≠ length(states)
         error("incompatible sizes between system ($(length(system))) and states " *
               "($(length(states)))")
     end
-    return State{R}(system, make_state(R, system, states))
+    return State{R}(system, make_state(R, system, states; rng))
 end
 
 # a list of type Any: a vector of numbers is the amplitudes of a single local state
-State{R}(system::System, state) where R = State{R}(system, Any[ state for _ in 1:length(system) ])
+State{R}(system::System, state; rng::AbstractRNG = Random.default_rng()) where R =
+    State{R}(system, Any[ state for _ in 1:length(system) ]; rng)
 
-State{R}(system::System, state::Union{Vector{<:Number}, Matrix}) where R =
-    State{R}(system, Any[ state for _ in 1:length(system) ])
+State{R}(system::System, state::Union{Vector{<:Number}, Matrix};
+         rng::AbstractRNG = Random.default_rng()) where R =
+    State{R}(system, Any[ state for _ in 1:length(system) ]; rng)
 
-State{R}(size::Int, site::AbstractSite, state) where R = State{R}(System(size, site), state)
+State{R}(size::Int, site::AbstractSite, state; rng::AbstractRNG = Random.default_rng()) where R =
+    State{R}(System(size, site), state; rng)
 
-State{R}(sites::Vector{<:AbstractSite}, state) where R = State{R}(System(sites), state)
+State{R}(sites::Vector{<:AbstractSite}, state; rng::AbstractRNG = Random.default_rng()) where R =
+    State{R}(System(sites), state; rng)
 
 ############### Operations ###############
 

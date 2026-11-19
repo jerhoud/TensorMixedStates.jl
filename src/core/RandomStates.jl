@@ -65,8 +65,9 @@ end
 random_state(::State{Mixed}, ::Int; kwargs...) =
     error("randomising a mixed state is not implemented")
 
-random_state(::State{Trajectory}, ::Int; kwargs...) = not_yet("a random state")
-random_state(::Type{Trajectory}, args...; kwargs...) = not_yet("a random state")
+random_state(::State{Trajectory}, ::Int; kwargs...) =
+    error("randomising a trajectory is not implemented: draw one with " *
+          "random_state(Trajectory, system, states, linkdims)")
 
 """
     refuse_strong(system)
@@ -82,17 +83,28 @@ function refuse_strong(system::System)
     end
 end
 
-function random_state(::Type{Mixed}, system::System, linkdims::Int;
-                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
+"""
+    purification(R, system, linkdims; rng, eltype)
+    purification(R, system, states, linkdims; rng, eltype)
+
+the random pure state on twice `system` whose ancillas, on the right, purify the random mixed
+state of `random_state(R, …)`, drawn from the local `states` on each half when they are given
+"""
+function purification(R, system::System, linkdims::Int; rng::AbstractRNG, eltype::Type{<:Number})
     refuse_strong(system)
     if is_charged(system)
         error("cannot draw a random mixed state on a system that conserves something without a " *
               "sector to start from: name the local states its purification starts from, " *
-              "random_state(Mixed, system, states, linkdims)")
+              "random_state($(nameof(R)), system, states, linkdims)")
     end
-    purification = random_state(Pure, system ⊗ system, isqrt(linkdims); rng, eltype)
-    # the ancillas lie on the right, so that tracing them out takes no fermionic sign
-    return traced(mix(purification), 1:length(system))
+    return random_state(Pure, system ⊗ system, isqrt(linkdims); rng, eltype)
+end
+
+function purification(R, system::System, states, linkdims::Int; rng::AbstractRNG,
+                      eltype::Type{<:Number})
+    refuse_strong(system)
+    start = State{Pure}(system ⊗ system, double(states, length(system)))
+    return random_state(start, isqrt(linkdims); rng, eltype)
 end
 
 """
@@ -112,13 +124,60 @@ end
 double(states, n::Int) = Any[ states for _ in 1:2n ]
 double(states::Vector{<:Number}, n::Int) = Any[ states for _ in 1:2n ]
 
-function random_state(::Type{Mixed}, system::System, states, linkdims::Int;
-                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
-    refuse_strong(system)
-    start = State{Pure}(system ⊗ system, double(states, length(system)))
-    return traced(mix(random_state(start, isqrt(linkdims); rng, eltype)), 1:length(system))
-end
+# the ancillas lie on the right, so that tracing them out takes no fermionic sign
+random_state(::Type{Mixed}, system::System, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    traced(mix(purification(Mixed, system, linkdims; rng, eltype)), 1:length(system))
 
-random_state(::Type{Mixed}, ::System, ::Union{Mixture, FullyMixed}, ::Int; kwargs...) =
+random_state(::Type{Mixed}, system::System, states, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    traced(mix(purification(Mixed, system, states, linkdims; rng, eltype)), 1:length(system))
+
+random_state(::Type{Trajectory}, system::System, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    projected(purification(Trajectory, system, linkdims; rng, eltype), system, rng)
+
+random_state(::Type{Trajectory}, system::System, states, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    projected(purification(Trajectory, system, states, linkdims; rng, eltype), system, rng)
+
+no_random_mixture() =
     error("a random mixed state is drawn from the purification of a product state: give its " *
           "local states")
+
+random_state(::Type{Mixed}, ::System, ::Union{Mixture, FullyMixed}, ::Int; kwargs...) =
+    no_random_mixture()
+random_state(::Type{Trajectory}, ::System, ::Union{Mixture, FullyMixed}, ::Int; kwargs...) =
+    no_random_mixture()
+
+"""
+    projected(p, system, rng)
+
+the state of `system` left by the purification `p` of a mixed state, its ancillas on the right
+measured one after the other in their basis, each outcome drawn with its probability given
+those before, see `purification`: the average of its density matrix over the draws is the
+mixed state
+"""
+function projected(p::State{Pure}, system::System, rng::AbstractRNG)
+    n = length(system)
+    # the system on the left of the centre is orthonormal: the weights of the ancillas are those
+    # of the tensors on its right
+    st = orthogonalize(p.state, n + 1)
+    a = st[n + 1]
+    for k in n+1:2n
+        s = siteind(Pure, p.system, k)
+        ps = [ norm(a * onehot(dag(s) => j))^2 for j in 1:dim(s) ]
+        j = draw_index(ps, rng)
+        a = a * onehot(dag(s) => j) / sqrt(ps[j] / sum(ps))
+        if k < 2n
+            a *= st[k + 1]
+        end
+    end
+    ts = [ st[i] for i in 1:n ]
+    ts[n] *= a
+    mps = MPS(ts)
+    if hasqns(ts[1]) && !is_charged(system)
+        mps = dense(mps)
+    end
+    return State{Trajectory}(system, replace_siteinds(mps, siteinds(Pure, system)))
+end

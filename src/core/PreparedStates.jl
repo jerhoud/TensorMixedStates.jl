@@ -383,9 +383,11 @@ struct Mixture
     end
 end
 
-State{Mixed}(system::System, m::Mixture) = mixture(system, m.terms)
+# the generator, which only a trajectory draws with, taken by every representation
+State{Mixed}(system::System, m::Mixture; rng::AbstractRNG = Random.default_rng()) =
+    mixture(system, m.terms)
 
-function State{Pure}(system::System, m::Mixture)
+function State{Pure}(system::System, m::Mixture; rng::AbstractRNG = Random.default_rng())
     kept = filter(t -> !iszero(first(t)), m.terms)
     if length(kept) ≠ 1
         error("a pure state is a mixture of a single term of nonzero weight: use State{Mixed}")
@@ -393,13 +395,36 @@ function State{Pure}(system::System, m::Mixture)
     return normalize(State{Pure}(system, product_sum(Pure, system, kept)))
 end
 
-# a mixture of a single term is a pure state, that of several is drawn
-function State{Trajectory}(system::System, m::Mixture)
-    if count(t -> !iszero(first(t)), m.terms) ≠ 1
-        not_yet("a mixed initial state")
+# a term drawn with the weight `mixture` gives it, its weight times the traces of its local
+# states, then its local states drawn, see `drawn_local`
+function State{Trajectory}(system::System, m::Mixture; rng::AbstractRNG = Random.default_rng())
+    n = length(system)
+    kept = filter(t -> !iszero(first(t)), m.terms)
+    if isempty(kept)
+        error("a sum of product states needs a nonzero term at least")
     end
-    p = State{Pure}(system, m)
-    return State{Trajectory}(p.system, p.state)
+    per_site(st) = st isa AbstractVector && !(eltype(st) <: Number) ? st : fill(st, n)
+    locals = map(kept) do (_, states)
+        sts = per_site(states)
+        if length(sts) ≠ n
+            error("a product state of $(length(sts)) local states cannot be one of $n sites")
+        end
+        [ local_state(system[i], sts[i]) for i in 1:n ]
+    end
+    # the strongly conserved values of a term, from those of the diagonal of its local states
+    names = strong_names(system)
+    function strong(vs)
+        ds = [ v isa Vector ? abs2.(v) : abs.(diag(v)) for v in vs ]
+        return strong_part(sum(basis_charges(system[i])[findfirst(>(0), ds[i])] for i in 1:n),
+                           names)
+    end
+    if !isempty(names) && !allequal(strong(vs) for vs in locals)
+        error("the terms have different values of $(join(names, ", ")), which conserving it " *
+              "strongly forbids: drop `strong`")
+    end
+    trace_of(v) = v isa Vector ? real(v' * v) : real(tr(v))
+    ws = [ Float64(p) * prod(trace_of, vs) for ((p, _), vs) in zip(kept, locals) ]
+    return normalize(State{Trajectory}(system, locals[draw_index(ws, rng)]; rng))
 end
 
 """
@@ -520,6 +545,37 @@ function fully_mixed(system::System, quantities::Pair...)
     if isempty(quantities)
         return State{Mixed}(system, "FullyMixed")
     end
+    locals, states, terms = sector_paths(system, quantities)
+    # each link carries, daggered, the charge of the sites on its left
+    charged = hasqns(locals[1][1])
+    links = [ charged ? dag(Index([ q => 1 for (_, q) in states[k+1] ]...; tags = "Link,l=$k")) :
+                        Index(length(states[k+1]); tags = "Link,l=$k") for k in 1:n-1 ]
+    its = map(1:n) do k
+        sum(terms[k]) do (l, j, r)
+            t = locals[k][j]
+            if k > 1
+                t *= onehot(dag(links[k-1]) => l)
+            end
+            if k < n
+                t *= onehot(links[k] => r)
+            end
+            t
+        end
+    end
+    return normalize(State{Mixed}(system, MPS(its)))
+end
+
+"""
+    sector_paths(system, quantities)
+
+the basis states of the sector of `quantities`, see `fully_mixed`, as paths through link states:
+`(locals, states, terms)`, `locals[k][j]` the projector of site `k` on its basis state `j` in
+the mixed representation, `states[k]` the link states on the left of site `k`, the values of
+the quantities with their charge, and `terms[k]` the steps `(l, j, r)` from link state `l` by
+the basis state `j` to link state `r`
+"""
+function sector_paths(system::System, quantities)
+    n = length(system)
     # rounded so that sums of the same values compare equal
     key(x) = round(x; digits = 10)
     values = map(1:n) do k
@@ -574,22 +630,7 @@ function fully_mixed(system::System, quantities::Pair...)
         error("the sector does not fix the charges the system conserves strongly, which a " *
               "mixed state cannot spread over")
     end
-    # each link carries, daggered, the charge of the sites on its left
-    links = [ charged ? dag(Index([ q => 1 for (_, q) in states[k+1] ]...; tags = "Link,l=$k")) :
-                        Index(length(states[k+1]); tags = "Link,l=$k") for k in 1:n-1 ]
-    its = map(1:n) do k
-        sum(terms[k]) do (l, j, r)
-            t = locals[k][j]
-            if k > 1
-                t *= onehot(dag(links[k-1]) => l)
-            end
-            if k < n
-                t *= onehot(links[k] => r)
-            end
-            t
-        end
-    end
-    return normalize(State{Mixed}(system, MPS(its)))
+    return locals, states, terms
 end
 
 """
@@ -607,6 +648,37 @@ struct FullyMixed
     FullyMixed(quantities::Pair...) = new(collect(quantities))
 end
 
-State{Mixed}(system::System, f::FullyMixed) = fully_mixed(system, f.quantities...)
-State{Pure}(::System, ::FullyMixed) = error("a fully mixed state is not pure: use State{Mixed}")
-State{Trajectory}(::System, ::FullyMixed) = not_yet("a mixed initial state")
+State{Mixed}(system::System, f::FullyMixed; rng::AbstractRNG = Random.default_rng()) =
+    fully_mixed(system, f.quantities...)
+State{Pure}(::System, ::FullyMixed; rng::AbstractRNG = Random.default_rng()) =
+    error("a fully mixed state is not pure: use State{Mixed}")
+# a basis state of the sector drawn uniformly, by the number of those completing each link state
+# of `sector_paths`, counted exactly
+function State{Trajectory}(system::System, f::FullyMixed;
+                           rng::AbstractRNG = Random.default_rng())
+    if isempty(f.quantities)
+        return State{Trajectory}(system, "FullyMixed"; rng)
+    end
+    _, states, terms = sector_paths(system, f.quantities)
+    n = length(system)
+    counts = [ zeros(BigInt, length(states[k])) for k in 1:n+1 ]
+    counts[n+1] .= 1
+    for k in n:-1:1, (l, _, r) in terms[k]
+        counts[k][l] += counts[k+1][r]
+    end
+    u = rand(rng, big(1):counts[1][1])
+    l = 1
+    basis = Vector{Vector{Float64}}(undef, n)
+    for k in 1:n
+        for (from, j, r) in terms[k]
+            if from == l && u ≤ counts[k+1][r]
+                basis[k] = [ a == j ? 1. : 0. for a in 1:dim(system[k]) ]
+                l = r
+                break
+            elseif from == l
+                u -= counts[k+1][r]
+            end
+        end
+    end
+    return State{Trajectory}(system, basis)
+end

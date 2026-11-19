@@ -841,10 +841,6 @@ function strong_fluxes(system::System, a::IndexedOp{IsChannel}, names)
     return unique([ strong_flux(k, sites, names) for k in ks ])
 end
 
-# the index of a draw among the weights `ps`, whose sum need not be one
-draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
-    something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
-
 # the probabilities `ps` of the parts of `a`, refused when they do not sum to one: far from their
 # rounding, and from a channel losing any trace that matters
 function kept_trace(a, ps::Vector{Float64})
