@@ -260,26 +260,24 @@ end
 function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limits)
     sys = state.system
     terms = []
+    pures = []
     decays = Decay[]
     for (k, a) in enumerate(ops)
         pure, ds = a isa IndexedOp{IsGenerator} ? unravelled(a) :
                    ([followed_operator(a, Trajectory)], [])
-        # a trajectory is brought back to its trace after each step, which the dissipators alone
-        # change
-        if !isempty(pure) && !prepare_op(sys, im * sum(pure)).hermitian
-            trace_not_kept(a)
-        end
         jumps = IndexedOp{IsOperator}[]
         for (r, x) in ds
             if r < 0
                 error("$(obs_name(a)) holds a dissipator of negative rate, $r, whose jumps no " *
-                      "trajectory draws")
+                      "trajectory draws: use State{Mixed}")
             end
-            append!(jumps, [ sqrt(r) * j for j in (x isa IndexedOp{IsChannel} ?
-                                                    kraus_operators(sys, x) : [x]) ])
+            ks = x isa IndexedOp{IsChannel} ? kraus_operators(sys, x) : [x]
+            # a Kraus operator proportional to the identity has a null dissipator
+            append!(jumps, [ sqrt(r) * j for j in ks if !(scalararg(j) isa IdentityOp) ])
         end
         f = isnothing(fs) ? nothing : fs[k]
         op = isempty(pure) ? nothing : sum(pure)
+        push!(pures, op)
         if !isempty(jumps)
             for j in jumps
                 check_jump(sys, j, a)
@@ -288,7 +286,18 @@ function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limi
             push!(decays, Decay(f, rate, jumps, [ apply_steps(j, state) for j in jumps ]))
             op = isnothing(op) ? -0.5 * rate : op - 0.5 * rate
         end
-        push!(terms, isnothing(f) ? op : op => f)
+        if !isnothing(op)
+            push!(terms, isnothing(f) ? op : op => f)
+        end
+    end
+    # a trajectory is brought back to its trace after each step, which only the dissipators may
+    # change: the operators of the terms of one function of time are anti-Hermitian together
+    for f in unique(isnothing(fs) ? [nothing] : fs)
+        ks = [ k for k in eachindex(ops) if isequal(isnothing(fs) ? nothing : fs[k], f) &&
+                                            !isnothing(pures[k]) ]
+        if !isempty(ks) && !prepare_op(sys, im * sum(pures[ks])).hermitian
+            trace_not_kept(sum(ops[ks]))
+        end
     end
     return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, nothing)
 end
@@ -331,15 +340,17 @@ function decay_rate(d::Decay, state::State{Trajectory}, time::Number)
     c = isnothing(d.f) ? 1. : d.f(time)
     if c < 0
         error("the function of a term holding dissipators is $c at time $time, which gives " *
-              "their jumps a negative rate")
+              "their jumps a negative rate, which no trajectory draws: use State{Mixed}")
     end
     return c * real(expect(state, d.rate))
 end
 
 # one step of a trajectory at first order in `dt`: a jump with the probability `dt` times the
 # sum of the rates, drawn among the jumps by its rate, or else a step under the effective
-# operator, the trajectory brought back to its trace
-function evolve_step(algo::EvolutionAlgorithm, e::JumpEvolver, state::State{Trajectory},
+# operator, the trajectory brought back to its trace. A jump replacing the step leaves a smaller
+# error than a jump followed by the step (measured on a qubit). An algorithm of one's own calling
+# evolve_step of Tdvp or ApproxW with a JumpEvolver draws the jumps with them
+function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
                      time::Number, dt::Number, step::Int, limits::Limits)
     if !(isreal(dt) && real(dt) > 0)
         error("a trajectory draws its jumps forward in real time, and the step is $dt")
@@ -348,7 +359,7 @@ function evolve_step(algo::EvolutionAlgorithm, e::JumpEvolver, state::State{Traj
     end
     rng = something(e.rng, Random.default_rng())
     rates = [ decay_rate(d, state, time) for d in e.decays ]
-    δp = real(dt) * sum(rates)
+    δp = real(dt) * sum(rates; init = 0.0)
     if δp > 1
         error("a step of $dt from time $time gives a trajectory a probability " *
               "$(round(δp; sigdigits = 3)) of a jump, above one: take smaller steps")

@@ -27,6 +27,10 @@ log_mpo(sim::Simulation, what::String, pre::PreMPO, start::Float64) =
 log_mpo(sim::Simulation, what::String, mpo::MPO, start::Float64) =
     log_mpo(sim, what, maxlinkdim(mpo), Base.summarysize(mpo), start)
 
+# that of the effective operator of a trajectory
+log_mpo(sim::Simulation, what::String, e::JumpEvolver, start::Float64) =
+    log_mpo(sim, what, e.pre, start)
+
 # the evolver of a state of one's own, which need not be an MPO
 function log_mpo(sim::Simulation, what::String, ::Any, start::Float64)
     log_message(sim, "The $what was prepared in $(round(time() - start; digits = 3)) s")
@@ -107,7 +111,7 @@ end
 """
     EvolveSteps(algo, pre, limits, nsteps, start, duration, on)
 
-an `Evolve` prepared: its method, the `PreMPO` of its evolver, with its time functions, its
+an `Evolve` prepared: its method, its evolver prepared, see `prepared_evolver`, its
 limits, its number of steps, the time it starts from, its duration and the names of the states
 it evolves
 """
@@ -142,10 +146,7 @@ function prepare_phase(phase::Evolve, sim::Simulation)
     log_ignored(sim, states[1], phase, (:algo, :limits, :mpo_limits))
     start = time()
     pre = prepared_evolver(states[1], phase.evolver, phase.mpo_limits; duration = phase.duration)
-    if pre isa JumpEvolver && length(names) > 1
-        not_yet("an Evolve of several trajectories with jumps")
-    end
-    log_mpo(sim, "evolver", pre isa JumpEvolver ? pre.pre : pre, start)
+    log_mpo(sim, "evolver", pre, start)
     return EvolveSteps(phase.algo, pre, phase.limits, n, sim.time, phase.duration, names)
 end
 

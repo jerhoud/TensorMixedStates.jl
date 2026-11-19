@@ -306,29 +306,99 @@ end
     @test any(seed -> run(seed) ≈ -1, 1:20)
 end
 
+# the trajectory of the scheme of `evolve` from the vector `ψ`, drawn with `rng` as it draws: `ks`
+# the effective operators `(f, K)` of the terms, `decays` the jumps `(f, [L])` of those with jumps,
+# `f` their function of time or `nothing`
+function dense_trajectory(ψ, ks, decays, duration, nsteps, rng)
+    dt = duration / nsteps
+    c(f, t) = isnothing(f) ? 1.0 : f(t)
+    pick(ps) = something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
+    for k in 0:nsteps - 1
+        t = k * dt
+        rates = [ c(f, t) * real(ψ' * sum(L' * L for L in Ls) * ψ) / real(ψ' * ψ)
+                  for (f, Ls) in decays ]
+        n = LA.norm(ψ)
+        if rand(rng) ≥ dt * sum(rates)
+            ψ = exp(dt * sum(c(f, t + dt / 2) * K for (f, K) in ks)) * ψ
+        else
+            Ls = last(decays[pick(rates)])
+            ψ = Ls[pick([ real(ψ' * L' * L * ψ) for L in Ls ])] * ψ
+        end
+        ψ *= n / LA.norm(ψ)
+    end
+    return ψ
+end
+
+# whether the trajectories evolved by `evolve` from `t` with the seeds 1:n are those of
+# `dense_trajectory`
+function same_trajectories(evolver, t, ks, decays; duration = 0.5, nsteps = 10, n = 10)
+    ψ = raw_vector(State{Pure}(t.system, t.state))
+    return all(1:n) do seed
+        a = raw_vector(State{Pure}(t.system, evolve(evolver, duration, t; nsteps,
+                                                    rng = Xoshiro(seed)).state))
+        b = dense_trajectory(ψ, ks, decays, duration, nsteps, Xoshiro(seed))
+        isapprox(a, b; rtol = 1e-8)
+    end
+end
+
+struct HalfJumps <: TMS.EvolutionAlgorithm end
+
+TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
+    TMS.evolve_step(Tdvp(), pre, TMS.evolve_step(Tdvp(), pre, state, time, dt / 2, step, limits),
+                    time + dt / 2, dt / 2, step, limits)
+
 @testset "Trajectory draws the jumps of the dissipators, whose average is the evolution" begin
     rng = Xoshiro(12)
     qubits = System(3, Qubit())
     p = random_state(Pure, qubits, 4; rng)
     t = as_trajectory(p)
     h = sum(X(i) for i in 1:3) + sum(Z(i) * Z(i + 1) for i in 1:2)
-    # jumps of operators, of a channel and of a collective operator; first order in the step
-    g = -im * h + sum(0.5 * Dissipator(Sm)(i) for i in 1:3) + 0.3 * Dissipator(Z)(2) +
-        0.4 * Dissipator(depolarizing_channel(0.5))(1) + 0.3 * Dissipator(Sm(2) + Sm(3))
+    m(o) = lowered(qubits, o)
+    # jumps of operators, of a channel but its identity, and of a collective operator; a rate
+    # depending on time, of a term of its own
+    dep = depolarizing_channel(0.5)(1)
+    kdep = [ sqrt(0.4) * m(k) for k in TMS.kraus_operators(qubits, dep)
+             if !(m(k) ≈ m(k)[1, 1] * LA.I) ]
+    @test length(kdep) == 4
+    f = s -> 1 + s
+    g = [-im * h + 0.5 * Dissipator(Sm)(1) + 0.4 * Dissipator(dep) +
+         0.3 * Dissipator(Sm(2) + Sm(3)), Dissipator(Z)(2) => f]
+    jumps = [ [[sqrt(0.5) * m(Sm(1))] ; kdep ; [sqrt(0.3) * m(Sm(2) + Sm(3))]], [m(Z(2))] ]
+    effective(Ls) = -0.5 * sum(L' * L for L in Ls)
+    @test same_trajectories(g, t, [(nothing, -im * m(h) + effective(jumps[1])),
+                                   (f, effective(jumps[2]))],
+                            [(nothing, jumps[1]), (f, jumps[2])])
+    # fermions: Jordan-Wigner strings in a jump across a site, a reset
+    fermions = System(3, Fermion(conserve = N))
+    pf = random_state(Pure, fermions, ["Occ", "Emp", "Occ"], 4; rng)
+    tf = as_trajectory(pf)
+    c(k) = jw_placed(fermions, k, matrix(C, fermions[k]))
+    hf = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:2)
+    hop = c(1)' * c(3)
+    kres = [ sqrt(0.5) * lowered(fermions, k)
+             for k in TMS.kraus_operators(fermions, Reset("Occ")(1)) ]
+    gf = -im * hf + 0.5 * Dissipator(Reset("Occ"))(1) + 0.4 * Dissipator(dag(C)(1) * C(3)) +
+         Dissipator(C)(2)
+    jf = [ kres ; [sqrt(0.4) * hop, c(2)] ]
+    @test same_trajectories(gf, tf, [(nothing, -im * lowered(fermions, hf) + effective(jf))],
+                            [(nothing, jf)])
+    # the average, at first order in the step
     ts = [ evolve(g, 0.5, t; nsteps = 10, rng) for _ in 1:100 ]
     @test all(x -> real(trace(x)) ≈ 1, ts)
     @test same_density(ts, evolve(g, 0.5, mix(p); nsteps = 10); floor = 1 / 100)
-    same(seed) = expect1(evolve(g, 0.5, t; nsteps = 5, rng = Xoshiro(seed)), Z)
-    @test same(1) == same(1)
-    # fermions, Jordan-Wigner signs and coherences, a rate depending on time, a reset
-    fermions = System(3, Fermion(conserve = N))
-    pf = random_state(Pure, fermions, ["Occ", "Emp", "Occ"], 4; rng)
-    hf = sum(dag(C)(i) * C(i + 1) + dag(C)(i + 1) * C(i) for i in 1:2)
-    gf = [-im * hf, Dissipator(C)(3) => t -> 1 + t, 0.5 * Dissipator(Reset("Occ"))(1)]
-    ts = [ evolve(gf, 0.5, as_trajectory(pf); nsteps = 10, rng) for _ in 1:100 ]
-    @test same_density(ts, evolve(gf, 0.5, mix(pf); nsteps = 10); floor = 1 / 100)
+    # the identity of a channel is no jump: equal dissipators give equal trajectories
+    same(d) = evolve(-im * h + d, 0.1, t; nsteps = 5, rng = Xoshiro(2))
+    vector(x) = raw_vector(State{Pure}(x.system, x.state))
+    @test vector(same(Dissipator(100 * depolarizing_channel(0.01))(1))) ≈
+          vector(same(depolarizing_dissipator(1)(1)))
+    # an algorithm of one's own drawing through the steps of Tdvp
+    @test vector(evolve(g, 0.5, t; nsteps = 5, algo = HalfJumps(), rng = Xoshiro(3))) ≈
+          vector(evolve(g, 0.5, t; nsteps = 10, rng = Xoshiro(3)))
+    # the trace kept by the operators of the terms of one function together
+    @test real(trace(evolve([-im * h + X(1), -X(1), Dissipator(Sm)(1)], 0.1, t; nsteps = 2,
+                            rng))) ≈ 1
     # refused: a jump changing a strong charge, as Mixed refuses it, negative rates, a trace the
-    # operator part does not keep, steps backward or too long, jumps of no definite charge
+    # operators do not keep, steps backward or too long, jumps of no definite charge
     strong_sys = System(3, Fermion(conserve = strong(N)))
     ps = as_trajectory(random_state(Pure, strong_sys, ["Occ", "Emp", "Occ"], 4; rng))
     @test_throws "by different amounts" evolve(-im * hf + Dissipator(C)(2), 0.1, ps; nsteps = 1)
@@ -336,20 +406,22 @@ end
     @test_throws "negative rate, -0.1" evolve(-im * h - 0.1 * Dissipator(Sm)(1), 0.1, t;
                                              nsteps = 1)
     @test_throws "gives their jumps a negative rate" evolve(
-        [-im * h, Dissipator(Sm)(1) => t -> -1], 0.1, t; nsteps = 1)
+        [-im * h, Dissipator(Sm)(1) => s -> -1], 0.1, t; nsteps = 1)
     @test_throws "does not keep the trace" evolve(Evolver(X)(1) + Dissipator(Sm)(1), 0.1, t;
                                                   nsteps = 1)
+    @test_throws "does not keep the trace" evolve([-im * h + X(1), -X(1) => f,
+                                                   Dissipator(Sm)(1)], 0.1, t; nsteps = 1)
     @test_throws "forward in real time" evolve(g, -0.1, t; nsteps = 1)
     @test_throws "above one: take smaller steps" evolve(-im * h + 100 * Dissipator(Sm)(1), 0.1,
                                                         t; nsteps = 1)
-    @test_throws "no definite flux" evolve(-im * hf + Dissipator(C + dag(C))(2), 0.1,
-                                           as_trajectory(pf); nsteps = 1)
-    # in a run, the generator of the simulation draws them, one trajectory at a time
+    @test_throws "no definite flux" evolve(-im * hf + Dissipator(C + dag(C))(2), 0.1, tf;
+                                           nsteps = 1)
+    # in a run, the generator of the simulation draws them, for each trajectory in turn
     run(name; on = [:state]) = runTMS(SimData(; name, seed = 5, phases = [
                     CreateState{Trajectory}(qubits, "Up"), CreateState{Trajectory}(qubits, "Up";
                                                                                    on = :b),
                     Evolve(evolver = g, duration = 0.5, nsteps = 10, on = on)],
                     final_measurements = Data("z") => Z); output = devnull).data["z"]
     @test run("a") == run("b")
-    @test_throws "several trajectories with jumps" run("c"; on = [:state, :b])
+    @test !isempty(run("c"; on = [:state, :b]))
 end
