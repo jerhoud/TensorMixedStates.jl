@@ -700,9 +700,10 @@ function apply_steps(a::IndexedOp{IsOperator}, state::State{<:Ket})
 end
 
 function apply_steps(a::IndexedOp{IsChannel}, state::State{<:Ket})
-    if !is_pure(a) && state isa State{Trajectory}
-        not_yet("a channel of more than one Kraus operator on a trajectory")
-    elseif !is_pure(a)
+    if !is_pure(a)
+        if state isa State{Trajectory}
+            not_yet("a channel of more than one Kraus operator on a trajectory")
+        end
         error("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot " *
               "take: apply it to mix(state)")
     end

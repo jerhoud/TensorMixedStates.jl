@@ -280,21 +280,29 @@ products, and `a^0` the identity, see `power`
 Base.literal_pow(::typeof(^), a::PreMPO, ::Val{p}) where p = a ^ p
 
 """
-    followed_operator(a)
+    followed_operator(a, R = Pure)
 
 the operator `K` a pure state follows as ``d\\psi/dt = K\\psi`` under the generator `a`,
 refused when `a` holds a dissipator; an operator is itself, and a channel is refused
 """
-function followed_operator(a::IndexedOp{IsGenerator})
+function followed_operator(a::IndexedOp{IsGenerator}, R::Type{<:Ket} = Pure)
     if !is_pure(a)
+        if R === Trajectory
+            not_yet("a dissipator on a trajectory")
+        end
         error("$(obs_name(a)) holds a dissipator, which a pure state cannot follow: mix the state")
     end
     return pure_part(a)
 end
 
-followed_operator(a::IndexedOp{IsOperator}) = a
-followed_operator(a::IndexedOp{IsChannel}) =
+followed_operator(a::IndexedOp{IsOperator}, ::Type{<:Ket} = Pure) = a
+
+function followed_operator(a::IndexedOp{IsChannel}, R::Type{<:Ket} = Pure)
+    if R === Trajectory
+        not_yet("a channel on a trajectory")
+    end
     error("$(obs_name(a)) is a channel, which acts on a density matrix: mix the state")
+end
 
 """
     superoperator(a)
@@ -340,7 +348,8 @@ PreMPO(state::State, a::Union{IndexedOp, Pair}; limits::Limits = Limits()) =
 function PreMPO(state::State{<:Ket}, terms::AbstractVector; limits::Limits = Limits())
     sys = state.system
     ops, fs = split_terms(terms)
-    parts = CompactedOp{Pure}[ compacted_op(sys, followed_operator(a), limits) for a in ops ]
+    parts = CompactedOp{Pure}[ compacted_op(sys, followed_operator(a, representation(state)),
+                                            limits) for a in ops ]
     return PreMPO(sys, parts, fs)
 end
 

@@ -461,7 +461,9 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
         return searched_once(phase, sim, steady_state(phase.lindbladian, state; phase.algo,
                              phase.limits, phase.mpo_limits), :residual)
     end
-    if !(state isa State{Mixed})
+    if state isa State{Trajectory}
+        not_yet("a steady state")
+    elseif !(state isa State{Mixed})
         error("SteadyState searches a density matrix: mix the state first, see ToMixed")
     end
     start = time()

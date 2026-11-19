@@ -137,6 +137,8 @@ partial_trace(::ExactState{Pure}; kwargs...) =
 as_representation(::Type{R}, state::ExactState{R}; limits::Limits = Limits()) where {R <: PM} =
     state
 as_representation(::Type{Mixed}, state::ExactState{Pure}; limits::Limits = Limits()) = mix(state)
+as_representation(::Type{Trajectory}, ::ExactState; limits::Limits = Limits()) =
+    no_exact_trajectory()
 as_representation(::Type{Pure}, ::ExactState{Mixed}; limits::Limits = Limits()) =
     error("a mixed state cannot be made pure: ask for Mixed rather than Pure")
 
@@ -323,6 +325,17 @@ fidelity(a::State, b::ExactState) = fidelity(exact_beside(b, a), b)
 hs_fidelity(a::ExactState, b::State) = hs_fidelity(a, exact_beside(a, b))
 hs_fidelity(a::State, b::ExactState) = hs_fidelity(exact_beside(b, a), b)
 
+# a trajectory beside an exact state, which never holds one: the fidelity to a pure state, linear,
+# on the MPS of the exact one, the rest refused as beside a State
+fidelity(t::State{Trajectory}, e::ExactState{Pure}) = fidelity(t, State(e))
+fidelity(e::ExactState{Pure}, t::State{Trajectory}) = fidelity(State(e), t)
+fidelity(::State{Trajectory}, ::ExactState{Mixed}) = not_linear("a fidelity but to a pure state")
+fidelity(::ExactState{Mixed}, ::State{Trajectory}) = not_linear("a fidelity but to a pure state")
+inner(::State{Trajectory}, ::ExactState) = not_linear("an inner product")
+inner(::ExactState, ::State{Trajectory}) = not_linear("an inner product")
+hs_fidelity(::State{Trajectory}, ::ExactState) = not_linear("hs_fidelity")
+hs_fidelity(::ExactState, ::State{Trajectory}) = not_linear("hs_fidelity")
+
 # as for a State, on what conserves nothing, not normalised
 function inner(a::ExactState{Pure}, op::IndexedOp{IsOperator}, b::ExactState{Pure})
     same_sites(a, b)
@@ -345,6 +358,8 @@ end
 dot(a::ExactState, op::IndexedOp, b::ExactState) = inner(a, op, b)
 inner(a::ExactState, op::IndexedOp, b::State) = inner(a, op, exact_beside(a, b))
 inner(a::State, op::IndexedOp, b::ExactState) = inner(exact_beside(b, a), op, b)
+inner(::State{Trajectory}, ::IndexedOp, ::ExactState) = not_linear("a matrix element")
+inner(::ExactState, ::IndexedOp, ::State{Trajectory}) = not_linear("a matrix element")
 dot(a::ExactState, op::IndexedOp, b::State) = inner(a, op, b)
 dot(a::State, op::IndexedOp, b::ExactState) = inner(a, op, b)
 

@@ -207,6 +207,8 @@ end
 # as random_state of a State, but uniform whatever `linkdims`: a pure state of the uniform measure
 # on the vectors of its sector, a mixed one of the measure its purification on the system doubled
 # induces, as that of the MPS, the ancillas on the right taking no fermionic sign
+random_state(::Type{ExactState{Trajectory}}, args...; kwargs...) = no_exact_trajectory()
+
 function random_state(::Type{ExactState{Pure}}, system::System, linkdims::Int;
                       rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
     if is_charged(system)

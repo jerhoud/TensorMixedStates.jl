@@ -150,3 +150,34 @@ end
                  final_measurements = Data("n") => N); output = devnull)
     @test run(Trajectory).data["n"] == run(Pure).data["n"]
 end
+
+@testset "Trajectory leaves the dissipators, the channels and the exact states for later" begin
+    rng = Xoshiro(8)
+    qubits = System(3, Qubit())
+    p = random_state(Pure, qubits, 4; rng)
+    t = as_trajectory(p)
+    h = sum(Z(i) * Z(i + 1) for i in 1:2) + sum(X(i) for i in 1:3)
+    @test_throws "a dissipator on a trajectory comes with the draws" evolve(
+        -im * h + Dissipator(X)(1), 0.1, t; nsteps = 1)
+    @test_throws "a channel on a trajectory comes with the draws" evolve(
+        depolarizing_channel(0.2)(1), 0.1, t; nsteps = 1)
+    steady(R) = runTMS(SimData(; name = "s", phases = [CreateState{R}(qubits, "Up"),
+                       SteadyState(lindbladian = -im * h, algo = Dmrg(nsweeps = 1))]);
+                       output = devnull)
+    @test_throws "a steady state comes with the draws" steady(Trajectory)
+    # the exact states hold none, but give the fidelity to a pure state
+    e = ExactState(p)
+    @test_throws "ExactState holds Pure or Mixed states" TensorMixedStates.as_representation(
+        Trajectory, e)
+    @test_throws "ExactState holds Pure or Mixed states" random_state(ExactState{Trajectory},
+                                                                      qubits, 2)
+    convert(R) = runTMS(SimData(; name = "c", phases = [
+                        CreateState{Pure}(qubits, "Up"; backend = ExactState),
+                        ConvertState{R}()]); output = devnull)
+    @test_throws "ExactState holds Pure or Mixed states" convert(Trajectory)
+    q = random_state(Pure, qubits, 4; rng)
+    @test fidelity(t, ExactState(q)) ≈ fidelity(t, q) rtol = 1e-12
+    @test fidelity(ExactState(q), t) ≈ fidelity(q, t) rtol = 1e-12
+    @test_throws "inner product is not linear" inner(t, e)
+    @test_throws "fidelity but to a pure state" fidelity(t, mix(e))
+end
