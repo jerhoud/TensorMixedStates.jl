@@ -97,8 +97,6 @@ the factors `U` and `S` of the singular value decomposition of the state across 
 between sites `cut` and `cut + 1`, `U` holding the sites up to `cut`; a cut the state does not
 have is refused
 """
-cut_svd(::State{Trajectory}, ::Int) = not_linear("an entanglement entropy or spectrum")
-
 function cut_svd(state::State, cut::Int)
     check_cut(length(state), cut)
     nonzero_norm(state, "an entanglement entropy")
@@ -106,6 +104,8 @@ function cut_svd(state::State, cut::Int)
     U, S = svd(s[cut], (linkinds(s, cut - 1)..., siteinds(s, cut)...))
     return U, S
 end
+
+cut_svd(::State{Trajectory}, ::Int) = not_linear("an entanglement entropy or spectrum")
 
 """
     shannon_entropy(p)
@@ -583,9 +583,6 @@ same, at a far lower cost and for any number of sites.
 
     von_neumann_entropy(state, [2, 5])
 """
-von_neumann_entropy(::State{Trajectory}, ::AbstractVector{Int}; kwargs...) =
-    not_linear("a von Neumann entropy")
-
 function von_neumann_entropy(state::AbstractState, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
@@ -602,6 +599,9 @@ function von_neumann_entropy(state::AbstractState, positions::AbstractVector{Int
     p = max.(λ, 0)
     return shannon_entropy(p / sum(p))
 end
+
+von_neumann_entropy(::State{Trajectory}, ::AbstractVector{Int}; kwargs...) =
+    not_linear("a von Neumann entropy")
 
 # other vectors converted, so that a method of one's own typing its positions is reached
 von_neumann_entropy(state::AbstractState, positions::AbstractVector;
@@ -624,9 +624,6 @@ site, and refused when both hold one.
 
     log_negativity(state, [1, 2], [5])
 """
-log_negativity(::State{Trajectory}, ::AbstractVector, ::AbstractVector; kwargs...) =
-    not_linear("a logarithmic negativity")
-
 function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVector;
                         max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, a, "log_negativity")
@@ -661,6 +658,9 @@ function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVect
     d = prod(dims)
     return log(sum(abs, eigvals(Hermitian(reshape(permutedims(t, perm), d, d)))))
 end
+
+log_negativity(::State{Trajectory}, ::AbstractVector, ::AbstractVector; kwargs...) =
+    not_linear("a logarithmic negativity")
 
 """
     pure_on_mixed(p, r)
@@ -731,11 +731,11 @@ the normalised Hilbert-Schmidt overlap of two mixed states of the same sites, ta
 both conserve, ``\\mathrm{tr}(ab)/\\sqrt{\\mathrm{tr}(a^2)\\mathrm{tr}(b^2)}``, 1 exactly when
 they are proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 """
-hs_fidelity(::State{Trajectory}, ::State) = not_linear("hs_fidelity")
-hs_fidelity(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_linear("hs_fidelity")
-
 hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
+
+hs_fidelity(::State{Trajectory}, ::State) = not_linear("hs_fidelity")
+hs_fidelity(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_linear("hs_fidelity")
 
 """
     variance(state, op)
@@ -753,10 +753,6 @@ On a density matrix ``\\rho`` of trace one, it is
     variance(ground_state, hamiltonian)
     β^2 * variance(thermal_state, hamiltonian)      # the specific heat
 """
-variance(::State{Trajectory}, ::Union{MPO, IndexedOp{IsOperator}}) =
-    error("a variance is not linear in the density matrix: measure A^2 and A, whose averages " *
-          "over the trajectories give it")
-
 function variance(state::State{Pure}, mpo::MPO)
     st = state.state
     n2 = nonzero_trace(state, "variance")
@@ -765,6 +761,10 @@ function variance(state::State{Pure}, mpo::MPO)
     e2 = real(inner(mpo, st, mpo, st)) / n2
     return e2 - abs2(e)
 end
+
+variance(::State{Trajectory}, ::Union{MPO, IndexedOp{IsOperator}}) =
+    error("a variance is not linear in the density matrix: measure A^2 and A, whose averages " *
+          "over the trajectories give it")
 
 variance(state::State{Pure}, op::IndexedOp{IsOperator}) =
     or_on_plain(st -> variance(st, make_mpo(st, op)), state)

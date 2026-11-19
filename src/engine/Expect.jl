@@ -1065,14 +1065,14 @@ operator changing the charges by no definite amount being taken between the stat
 nothing, as by `expect`. Between two density matrices, for a channel or a generator,
 ``\\mathrm{tr}(a^\\dagger\\, op(b))``; a pure operator is ambiguous there, and refused.
 """
-inner(::State{Trajectory}, ::IndexedOp, ::State) = not_linear("a matrix element")
-inner(::State{<:Union{Pure, Mixed}}, ::IndexedOp, ::State{Trajectory}) =
-    not_linear("a matrix element")
-
 function inner(a::State{Pure}, op::IndexedOp{IsOperator}, b::State{Pure})
     a, b = on_common_system(a, b)
     return or_on_plain((x, y) -> inner(x.state', make_mpo(y, op), y.state), a, b)
 end
+
+inner(::State{Trajectory}, ::IndexedOp, ::State) = not_linear("a matrix element")
+inner(::State{<:Union{Pure, Mixed}}, ::IndexedOp, ::State{Trajectory}) =
+    not_linear("a matrix element")
 
 function inner(a::State{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}}, b::State{Mixed})
     a, b = on_common_system(a, b)

@@ -193,15 +193,15 @@ the vector of the pure `state`, not normalized, on the basis of the product stat
 
     Vector(State{Pure}(System(2, Qubit()), "+"))      # [0.5, 0.5, 0.5, 0.5]
 """
-Vector(::State{Trajectory}; kwargs...) =
-    error("the vector of one trajectory is not the state: use State{Pure} or State{Mixed}")
-
 function Vector(state::State{Pure}; max_dense::Union{Nothing, Int} = dense_elements[])
     system = state.system
     check_elements(prod(float(dim(s)) for s in system.sites),
                    "the vector of a state of $(length(system)) sites", max_dense)
     return contracted(state.state, 1:length(system), siteinds(Pure, system))
 end
+
+Vector(::State{Trajectory}; kwargs...) =
+    error("the vector of one trajectory is not the state: use State{Pure} or State{Mixed}")
 
 """
     mps_array(st, k, s)
