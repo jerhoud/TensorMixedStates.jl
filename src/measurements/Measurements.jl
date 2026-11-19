@@ -684,7 +684,7 @@ function pure_on_mixed(p::State{Pure}, r::State{Mixed})
 end
 
 # a pure reference ⟨φ|ρ|φ⟩, linear in the density matrix, which the trajectories give on average;
-# in the order of the arguments, as for two pure states
+# a trajectory and a pure state computed as two pure states are, so that they agree to the bit
 function ket_fidelity(a::State{<:Ket}, b::State{<:Ket})
     c, d = on_common_system(a, b)
     return abs2(dot(c.state, d.state)) /
@@ -753,10 +753,7 @@ On a density matrix ``\\rho`` of trace one, it is
     variance(ground_state, hamiltonian)
     β^2 * variance(thermal_state, hamiltonian)      # the specific heat
 """
-variance(::State{Trajectory}, ::MPO) = trajectory_variance()
-variance(::State{Trajectory}, ::IndexedOp{IsOperator}) = trajectory_variance()
-
-trajectory_variance() =
+variance(::State{Trajectory}, ::Union{MPO, IndexedOp{IsOperator}}) =
     error("a variance is not linear in the density matrix: measure A^2 and A, whose averages " *
           "over the trajectories give it")
 

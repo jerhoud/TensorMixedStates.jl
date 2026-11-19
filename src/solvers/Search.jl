@@ -214,14 +214,14 @@ function ground_state(hamiltonian, state::State{Pure};
     return (energy = e, state = st)
 end
 
-# ::Any rather than _, which Julia 1.10 refuses before keywords
-ground_state(::Any, ::State{Trajectory}; kwargs...) = not_searched()
-
 not_searched() =
     error("a trajectory is not searched: search the state in Pure, then " *
           "ConvertState{Trajectory}")
+
+# ::Any rather than _, which Julia 1.10 refuses before keywords
 ground_state(::Any, ::State{Mixed}; kwargs...) =
     error("ground_state searches a pure state: search it pure and mix it")
+ground_state(::Any, ::State{Trajectory}; kwargs...) = not_searched()
 
 """
     squared_lindbladian(pre, mpo_limits)

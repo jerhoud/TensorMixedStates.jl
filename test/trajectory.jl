@@ -181,3 +181,17 @@ end
     @test_throws "inner product is not linear" inner(t, e)
     @test_throws "fidelity but to a pure state" fidelity(t, mix(e))
 end
+
+@testset "Trajectory is built from a pure description, and State from a concrete representation" begin
+    qubits = System(2, Qubit())
+    t = State{Trajectory}(qubits, Mixture([1.0 => "Up", 0 => "Dn"]))
+    @test t isa State{Trajectory} && expect1(t, Z) == expect1(State{Pure}(qubits, "Up"), Z)
+    @test occursin("State{Trajectory}", repr(t))
+    @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
+        qubits, Mixture([0.5 => "Up", 0.5 => "Dn"]))
+    @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
+        qubits, FullyMixed())
+    @test_throws "a mixed initial state comes with the draws" State{Trajectory}(
+        qubits, [[1 0; 0 0], "Up"])
+    @test_throws "State{Ket} has no representation of its own" State{Ket}(qubits, "Up")
+end

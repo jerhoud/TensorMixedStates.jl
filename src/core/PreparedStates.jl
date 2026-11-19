@@ -393,6 +393,15 @@ function State{Pure}(system::System, m::Mixture)
     return normalize(State{Pure}(system, product_sum(Pure, system, kept)))
 end
 
+# a mixture of a single term is a pure state, that of several is drawn
+function State{Trajectory}(system::System, m::Mixture)
+    if count(t -> !iszero(first(t)), m.terms) ≠ 1
+        not_yet("a mixed initial state")
+    end
+    p = State{Pure}(system, m)
+    return State{Trajectory}(p.system, p.state)
+end
+
 """
     ghz_state(system, states...)
 
@@ -600,4 +609,4 @@ end
 
 State{Mixed}(system::System, f::FullyMixed) = fully_mixed(system, f.quantities...)
 State{Pure}(::System, ::FullyMixed) = error("a fully mixed state is not pure: use State{Mixed}")
-State{Trajectory}(::System, ::Union{Mixture, FullyMixed}) = not_yet("a mixed initial state")
+State{Trajectory}(::System, ::FullyMixed) = not_yet("a mixed initial state")

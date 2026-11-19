@@ -197,7 +197,13 @@ struct State{R <: PM} <: AbstractState
     system::System
     state::MPS
     preobs::PreObs
-    State{R}(system::System, state::MPS) where {R <: PM} = new{R}(system, state, PreObs())
+    function State{R}(system::System, state::MPS) where {R <: PM}
+        if isabstracttype(R)
+            error("State{$(nameof(R))} has no representation of its own: use State{Pure}, " *
+                  "State{Mixed} or another concrete one")
+        end
+        return new{R}(system, state, PreObs())
+    end
 end
 
 State(state::State{R}, st::MPS) where R = State{R}(state.system, st)
@@ -227,7 +233,7 @@ default
 ignored_options(::AbstractState) = ()
 
 show(io::IO, s::State{R}) where R =
-    print(io, "State{$R}($(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
+    print(io, "State{$(nameof(R))}($(s.system), (maxlinkdim = $(maxlinkdim(s.state))))")
 
 """
     length(::AbstractState)
@@ -348,9 +354,12 @@ end
 
 the ITensor of the local state `state` on site `i` of `system`, in the representation `R`
 """
-function make_one_state(::Type{<:Ket}, system::System, i::Int, x)
+function make_one_state(::Type{R}, system::System, i::Int, x) where {R <: Ket}
     v = local_state(system[i], x)
     if !(v isa Vector)
+        if R === Trajectory
+            not_yet("a mixed initial state")
+        end
         hint = x isa Pair ? ": A => λ gives a vector only for a diagonal operator and a " *
                             "simple eigenvalue" : ""
         error("$(repr(x)) is a density matrix on $(system[i]), which a pure state cannot take$hint")
@@ -554,7 +563,9 @@ of an exact state, and has no use on an MPS.
 mix(state::State{Mixed}; limits::Limits = Limits(), max_dense::Union{Nothing, Int} = nothing) =
     limits == Limits() ? state : truncate(state; limits)
 
-mix(::State{Trajectory}; kwargs...) =
+mix(::State{Trajectory}; kwargs...) = not_mixed()
+
+not_mixed() =
     error("a trajectory is not a mixed state, the average of trajectories is: use State{Mixed}")
 
 function mix(state::State{Pure}; limits::Limits = Limits(),
