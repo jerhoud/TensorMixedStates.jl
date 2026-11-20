@@ -23,7 +23,8 @@ a phase that creates the state of the simulation.
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
   see `random_state` (default 0, none): a pure state randomized from `state`, a mixed one drawn
   from a purification starting from its local states, which `Mixture` and `FullyMixed` do not
-  give, or without `state` any state of the system; an `ExactState` is drawn as
+  give, a trajectory drawn from that purification by measuring its ancillas, or without `state`
+  any state of the system; an `ExactState` is drawn as
   `random_state(ExactState{R}, …)` draws it, whatever the link dimension
 - `backend`: the type of states holding the state, `State` (MPS) or `ExactState`, by default that
   of the simulation, see `SimData`

@@ -35,9 +35,9 @@ t = State{Trajectory}(ψ)            # the pure state ψ, a ground state for ins
   purification, and measures its ancillas: the average of the trajectory is the random mixed
   state drawn from that purification.
 
-A trajectory has a definite charge and parity, like a pure state: a local density matrix with
-coherences between charges or parities is refused, and so is, on a system conserving a quantity
-strongly, a description spreading over several of its values.
+A local density matrix with coherences between charges or fermionic parities is refused, since
+its eigenvectors would not be drawn among states of definite charge and parity, and so is, on a
+system conserving a quantity strongly, a description spreading over several of its values.
 
 ## Evolving and applying
 
@@ -58,7 +58,7 @@ t = evolve(L, 1.0, State{Trajectory}(sys, "Dn"); nsteps = 50, rng = Xoshiro(2))
 draws. The jumps and the Kraus operators are those the expression is written with: `L` for
 `Dissipator(L)`, the gates of a sum of `Gate`, the projectors of a `Dephase`, the operators of
 a `Reset`; a channel given by its matrix alone is decomposed by its Choi matrix, block by block
-of charge. Two ways of writing one channel give the same average with different variances:
+of charge and parity. Two ways of writing one channel give the same average with different variances:
 `depolarizing_channel(p; kraus = :reset)`, the default, resets the sites to the fully mixed
 state with the probability `p`, `kraus = :pauli` applies the identity or a Pauli gate, on
 qubits.
@@ -111,8 +111,8 @@ since every sample would go on from the same trajectory.
 The average over the trajectories gives what is linear in the density matrix: the expectation
 values, the probabilities of `sample` and `collapse`, the trace, the fidelity to a pure state.
 The rest is refused with a message saying so: the purity, the entropies and the entanglement
-spectrum, the logarithmic negativity, the fidelity to a mixed state, the norm, inner products
-and matrix elements between states. `Variance(A)` is refused too: measure `A^2` and `A`, whose
+spectrum, the logarithmic negativity, the fidelity to a mixed state, the measurement `Norm`,
+inner products and matrix elements between states. `Variance(A)` is refused too: measure `A^2` and `A`, whose
 averages give it. A trajectory is not mixed by `mix`, has no `Vector`, and is not held by an
 `ExactState`.
 
