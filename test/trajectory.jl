@@ -682,3 +682,70 @@ end
     @test weighed(() -> evolve(g, 0.5, t; nsteps = 40, rng), evolve(g, 0.5, mix(p); nsteps = 40);
                   n = 300)
 end
+
+@testset "Weights stay right at zero, under rounding, across rows and for one carrier" begin
+    rng = Xoshiro(31)
+    q = System(1, Qubit())
+    q2 = System(2, Qubit())
+    K = Operator{1}("K", [1.0 0; 0 0.1])
+    # a part or a factor of probability zero leaves a null trajectory, not NaN nor an error
+    t = State{Trajectory}(q2, ["Dn", "Up"])
+    @test real(trace(apply(Gate(Proj("Up"))(1) + Gate(Proj("Up"))(1), t; rng))) == 0
+    @test real(trace(apply(depolarizing_channel(0.1)(2) * Gate(Proj("Up"))(1), t; rng))) == 0
+    # a probability zero but for rounding is no negative weight
+    θ = 0.7
+    Q = Operator{1}("Q", [sin(θ)^2 -sin(θ)*cos(θ); -sin(θ)*cos(θ) cos(θ)^2])
+    @test real(trace(apply(Gate(Q)(1) + Gate(Q)(1), State{Trajectory}(q, [cos(θ), sin(θ)]);
+                           rng))) < 1e-25
+    # in a simulation, those trajectories stop, in a product or after two collapses in one step
+    run(phases, lists; samples = 40) = runTMS(SimData(; seed = 7, samples, phases,
+                                                      final_measurements = lists); output = devnull)
+    r = only(run([CreateState{Trajectory}(q, "FullyMixed"),
+                  Gates(gates = depolarizing_channel(0.1)(1) * Gate(Proj("Up"))(1))],
+                 Data("z") => Z(1)).data["z"])
+    @test abs(r["log_weight"] - log(0.5)) < 4 * r["err(log_weight)"]
+    twice = Update(c -> (c.state = collapse(c.state, Z(1) => 1).state;
+                         c.state = collapse(c.state, Z(2) => 1).state))
+    r = only(run([CreateState{Trajectory}(q2, "FullyMixed"), twice], Data("z") => Z(1)).data["z"])
+    @test abs(r["log_weight"] - log(0.25)) < 4 * r["err(log_weight)"]
+    # the error of a weighted mean, that of a ratio of means
+    rows = run([CreateState{Trajectory}(q, "FullyMixed"), Gates(gates = Gate(K)(1))],
+               EachSample(Data("z")) => Z(1)).data["z"]
+    avg = only(run([CreateState{Trajectory}(q, "FullyMixed"), Gates(gates = Gate(K)(1))],
+                   Data("z") => Z(1)).data["z"])
+    w = [ exp(r["log_weight"]) for r in rows ]
+    x = [ r["Z(1)"] for r in rows ]
+    m = sum(w .* x) / sum(w)
+    n = length(w)
+    @test avg["err(Z(1))"] ≈ sqrt(sum(w .^ 2 .* (x .- m) .^ 2) * n / (n - 1)) / sum(w)
+    # a tolerance waits for the error of the mean weight too
+    sim = runTMS(SimData(seed = 7, samples = 30, min_samples = 10, tol = Data("v") => 1e-6,
+                         phases = [CreateState{Trajectory}(q, "FullyMixed"),
+                                   Gates(gates = Gate(K)(1))],
+                         final_measurements = Data("v") => ["one" => Proj("Up")(1) +
+                                                                      Proj("Dn")(1)]);
+                 output = devnull)
+    @test only(sim.data["v"])["N"] == 30
+    # every row of a simulation of trajectories weighs, 0 before the trajectory, in one text file
+    in_tmp() do
+        runTMS(SimData(name = "e", seed = 7, samples = 2, phases = [
+                    CreateState{Pure}(q, "Up"; final_measurements = EachSample("e.txt") => Z(1)),
+                    ConvertState{Trajectory}(final_measurements = EachSample("e.txt") => Z(1))]))
+        lines = readlines("e/e.txt")
+        @test occursin("log_weight", lines[1]) && allequal(length.(split.(lines, '\t')))
+    end
+    # :log_weight read outside a trajectory is 0; :log_trace refused on trajectories
+    r = only(run([CreateState{Pure}(q, "Up"), Realizations(c -> [Gates(gates = Gate(X)(1))])],
+                 Data("v") => ["lw" => :log_weight]; samples = 2).data["v"])
+    @test r["lw"] == 0
+    @test_throws "reads log_trace" SimData(samples = 2, phases = [
+                     CreateState{Trajectory}(q, "FullyMixed"),
+                     Thermalize(hamiltonian = Z(1), beta = 0.5, nsteps = 2,
+                                measurements = Data("t") => :log_trace)])
+    # only :state carries a weight
+    @test_throws "which only :state carries" run([CreateState{Trajectory}(q, "FullyMixed"),
+                                                   CreateState{Trajectory}(q, "FullyMixed";
+                                                                           on = :b),
+                                                   Gates(gates = Gate(K)(1), on = :b)],
+                                                  Data("z") => Z(1); samples = 2)
+end
