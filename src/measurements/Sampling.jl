@@ -313,9 +313,9 @@ end
 the result of measuring site `pos`, or the Hermitian operator `op` placed on a few sites, its
 probability, and the state it leaves, `(result, probability, state)`: the result is drawn with
 its probability, see `probabilities`, or given as a pair, `pos => x` or `op => λ`, a result that
-is not possible or of zero probability being refused, and the state is projected onto it and
-normalized; a trajectory keeps its trace, its weight, times the probability of a result given,
-of zero probability leaving the null state. The projection on several sites is truncated by `limits`, `Limits()` by default:
+is not possible being refused, and of zero probability too but on a trajectory, and the state is
+projected onto it and normalized; a trajectory keeps its trace, its weight, times the
+probability of a result given, one of zero probability leaving the null state. The projection on several sites is truncated by `limits`, `Limits()` by default:
 for a product of involutions, the state plus its image by the product, which at most doubles
 the bond dimension, or quadruples it on a density matrix; for a sum of operators of one site,
 an MPO whose bond carries the partial sums, as many as its dimension; otherwise the projector,
@@ -342,11 +342,7 @@ end
 # the state a measurement leaves, `st` normalized; a trajectory keeps its trace, its weight, times
 # the probability `p` of a result imposed
 collapsed(::AbstractState, st, p::Real) = st
-function collapsed(state::State{Trajectory}, st, p::Real)
-    f = p * real(trace(state))
-    # a factor one but for rounding left out, which would only change the last bits
-    return abs(f - 1) ≤ rounding_tol ? st : sqrt(f) * st
-end
+collapsed(state::State{Trajectory}, st, p::Real) = weighted(st, p * real(trace(state)))
 
 function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "collapse")
@@ -357,6 +353,9 @@ end
 function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:Real};
                   limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements[])
     op, λ = result
+    if state isa State{Trajectory} && is_null(state)
+        return (result = λ, probability = 0., state = state)
+    end
     values, probs, project = measurement(state, op, "collapse"; max_dense)
     k = findfirst(v -> abs(v - λ) ≤ spectral_tol(values), values)
     if isnothing(k)

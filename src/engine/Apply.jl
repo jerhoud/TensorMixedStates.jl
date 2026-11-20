@@ -699,10 +699,12 @@ apply(a::IndexedOp, state::State{Trajectory}; limits::Limits = Limits(),
 # point numbers, far from any trace a computation keeps in range
 function kept_scale(st::State{Trajectory})
     t = norm(st.state)^2
-    if 0 < t < 1e-250 || t > 1e250
+    if isnan(t)
+        error("the trace of the trajectory is NaN")
+    elseif 0 < t < 1e-250 || t > 1e250
         error("the trace of the trajectory reached $t, near the bounds of the numbers: divide it " *
-              "by its trace and keep the logarithm of that trace as its weight, or run it in a " *
-              "simulation, which carries its weight")
+              "by its trace and keep the logarithm of that trace as its weight; a simulation " *
+              "carries it between steps, so that there the operation is to be split into steps")
     end
     return st
 end
@@ -729,15 +731,21 @@ keeps of it, so that the average of the trajectories is the channel applied: lef
 channel keeping the trace
 """
 function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, rng::AbstractRNG)
-    if a isa ScalarOp
-        return scaled_trace(drawn(a.arg, st, limits, rng), a.coef, a)
+    if is_null(st)
+        return st
+    elseif a isa ScalarOp
+        return weighted(drawn(a.arg, st, limits, rng), a.coef)
     elseif a isa SumOp
-        ws = [ weight(x, st) for x in a.subs ]
-        x = a.subs[draw_index(ws, rng)]
+        ws = [ max(weight(x, st), 0.) for x in a.subs ]
+        total = sum(ws)
+        if !(total > 0)
+            return 0 * st
+        end
+        j = draw_index(ws, rng)
+        x = a.subs[j]
         # the part drawn without its coefficient, weighted by the sum over its weight, which an
         # estimate leaves unbiased, and a sum keeping the trace leaves unchanged
-        return scaled_trace(drawn(scalararg(x), st, limits, rng),
-                            sum(ws) / weight(scalararg(x), st), a)
+        return weighted(drawn(scalararg(x), st, limits, rng), scalarcoef(x) * total / ws[j])
     elseif a isa ProdOp && !is_pure(a)
         for f in reverse(channel_factors(a))
             st = f isa IndexedOp{IsOperator} ? apply(f, st; limits) : drawn(f, st, limits, rng)
@@ -747,19 +755,21 @@ function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, r
         return drawn(placed_structure(a), st, limits, rng)
     end
     ks = kraus_of(st.system, a)
-    ps = [ real(expect(st, dag(k) * k)) for k in ks ]
-    return scaled_trace(with_trace(apply(ks[draw_index(ps, rng)], st; limits), st), sum(ps), a)
+    ps = [ max(real(expect(st, dag(k) * k)), 0.) for k in ks ]
+    total = sum(ps)
+    if !(total > 0)
+        return 0 * st
+    end
+    return weighted(with_trace(apply(ks[draw_index(ps, rng)], st; limits), st), total)
 end
 
-# the trajectory `st` with its trace, its weight, multiplied by the factor `f` the channel `a`
-# keeps, a factor one but for rounding left out, which would only change the last bits
-function scaled_trace(st::State{Trajectory}, f::Real, a)
-    if f < 0
-        error("$(obs_name(a)) gives a trajectory a negative weight, $f: it is not completely " *
-              "positive")
-    end
-    return abs(f - 1) ≤ rounding_tol ? st : sqrt(f) * st
-end
+# whether the trajectory `st` is null, of weight zero, which a channel or a collapse leaves null
+is_null(st::State{Trajectory}) = vanished(st.state) || iszero(real(trace(st)))
+
+# the trajectory `st` with its trace, its weight, multiplied by the factor `f`, which only rounding
+# makes negative, a factor one but for rounding left out, which would only change the last bits
+weighted(st::State{Trajectory}, f::Real) =
+    abs(f - 1) ≤ rounding_tol ? st : sqrt(max(f, 0.)) * st
 
 # the Kraus operators of the channel `a`, placed on sites, checked for a definite charge when it is
 # placed as a whole, see `kraus_operators`
@@ -768,8 +778,10 @@ kraus_of(system::System, a::IndexedOp{IsChannel}) =
 
 # the trajectory `new` scaled to the trace of `old`, before a Kraus operator was applied: the norm
 # of a trajectory goes through a channel unchanged, as the probability of no jump it may carry
-with_trace(new::State{Trajectory}, old::State{Trajectory}) =
-    sqrt(real(trace(old)) / real(trace(new))) * new
+function with_trace(new::State{Trajectory}, old::State{Trajectory})
+    t = real(trace(new))
+    return iszero(t) ? new : sqrt(real(trace(old)) / t) * new
+end
 
 # the channel `a` placed on sites as a whole as a structure of placed channels
 function placed_structure(a::AtIndex{IsChannel})
