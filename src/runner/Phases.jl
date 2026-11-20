@@ -329,6 +329,28 @@ function adapt_threading(sim::Simulation, threading)
 end
 
 """
+    check_sampled(sim)
+
+refuse a state of `sim` that is a trajectory outside the samples, before the branch point or in a
+simulation without samples, as a single draw its files would give as a result
+"""
+function check_sampled(sim::Simulation)
+    values = getfield(sim, :values)
+    if get(values, :sample, 0) ≠ 0
+        return nothing
+    end
+    for (name, st) in [ :state => sim.state; [ k => v for (k, v) in values ] ]
+        if st isa State{Trajectory}
+            error("the state :$name is a trajectory outside the samples, a single draw: make " *
+                  "trajectories in the samples, SimData(samples = N, …), from " *
+                  "CreateState{Trajectory} or ConvertState{Trajectory}, or from a LoadState " *
+                  "among the phases Realizations returns")
+        end
+    end
+    return nothing
+end
+
+"""
     run_phases(sim, phases, start, done, ended, threading; final = true)
 
 run the phases from the phase `start`, its first `done` steps done, and the phase itself when
@@ -367,6 +389,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
                 row_at!(run, i, d + 1)
                 # called for the phase and the state as they are, see output
                 sim = invokelatest(run_phase, phase, sim, d)
+                check_sampled(sim)
             end
             # whatever the steps of the phase, so that the samples of an average match
             row_at!(run, i, typemax(Int))

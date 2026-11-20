@@ -537,4 +537,12 @@ end
     @test_throws "comes before Realizations" SimData(samples = 2, phases = [
                      body[1], Realizations(_ -> body[2:2])])
     @test_throws "or makes trajectories" SimData(samples = 2, phases = [prefix])
+    # a trajectory outside the samples refused when it appears, whatever makes it
+    made = Update(c -> c.state = State{Trajectory}(c.state))
+    evolved = Evolve(evolver = g, duration = 0.2, nsteps = 2)
+    @test_throws "a trajectory outside the samples" runTMS(SimData(phases = [prefix, made]);
+                                                           output = devnull)
+    @test_throws "a trajectory outside the samples" runTMS(SimData(samples = 2, phases = [
+                     prefix, made, Realizations(_ -> [evolved])]); output = devnull)
+    @test length(run("f", [Realizations(_ -> [prefix, made, evolved])])) == 3
 end
