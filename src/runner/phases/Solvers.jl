@@ -263,7 +263,9 @@ function prepare_phase(phase::Thermalize, sim::Simulation)
         error("a Thermalize of a trajectory acts on :state, whose trace is the weight of the " *
               "sample")
     elseif state isa Union{State{Pure}, ExactState{Pure}}
-        error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
+        error("a thermal state needs a mixed representation or trajectories: mix the state " *
+              "first, see ToMixed, or draw trajectories, CreateState{Trajectory}(system, " *
+              "\"FullyMixed\")")
     end
     n = if isnothing(phase.nsteps)
         step_number(phase.beta, phase.beta_step, "a thermalization", sim)

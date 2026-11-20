@@ -298,7 +298,9 @@ function run_phase(phase::AbstractPhase, sim, done)
     getfield(sim, :run).step_start = time()
     for k in done + 1:invokelatest(step_count, p)
         row_at!(getfield(sim, :run), getfield(sim, :run).phase, k)
-        sim = step_done(invokelatest(run_step, p, sim, k), phase, k)
+        stepped = invokelatest(run_step, p, sim, k)
+        check_carriers(sim, stepped, phase)
+        sim = step_done(stepped, phase, k)
         if zero_weight(sim)
             break
         end
@@ -356,10 +358,10 @@ end
 """
     carried_weight(sim)
 
-`sim` with the trace of its trajectory carried into its value `:log_weight`, as its logarithm,
-and its trajectories divided by the square root of that trace, once it is far from one, so that
-a long phase neither underflows nor overflows it; `sim` itself otherwise, the measurements adding
-the logarithm of the trace to the value
+`sim` with the trace of its trajectory `:state` carried into its value `:log_weight`, as its
+logarithm, and the trajectory divided by the square root of that trace, once it is far from one,
+so that a long phase neither underflows nor overflows it; `sim` itself otherwise, the
+measurements adding the logarithm of the trace to the value
 """
 function carried_weight(sim::Simulation)
     st = sim.state
@@ -380,14 +382,32 @@ function carried_weight(sim::Simulation)
     end
     values = copy(getfield(sim, :values))
     values[:log_weight] = get(values, :log_weight, 0.) + log(t)
-    s = 1 / sqrt(t)
-    st = s * st
-    for (k, v) in values
-        if v isa State{Trajectory}
-            values[k] = s * v
+    return Simulation(st / sqrt(t), sim.time, values, getfield(sim, :run))
+end
+
+"""
+    check_carriers(before, after, phase)
+
+refuse a change of the trace of a trajectory other than `:state` from the simulation `before` to
+`after` by `phase`, but of one the phase gives anew, see `provided_values`: only `:state` carries
+the weight of a sample, the others are measured as they are, unweighted
+"""
+function check_carriers(before::Simulation, after::Simulation, phase)
+    given = provided_values(phase)
+    for (name, st) in getfield(after, :values)
+        old = get(getfield(before, :values), name, nothing)
+        if st isa State{Trajectory} && old isa State{Trajectory} && name ∉ given
+            r = real(trace(st)) / real(trace(old))
+            # a weight changes the trace by a factor far from one, rounding and truncation by far
+            # less
+            if !(abs(r - 1) ≤ 1e-8)
+                error("$(phase.name) multiplies the trace of the trajectory :$name by $r, a " *
+                      "weight, which only :state carries: act on :state with what does not keep " *
+                      "the trace")
+            end
         end
     end
-    return Simulation(st, sim.time, values, getfield(sim, :run))
+    return nothing
 end
 
 # whether the trajectory of `sim` has a weight of zero, which stops its sample, see `run_phases`
@@ -435,7 +455,9 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
             if !(i == start && ended)
                 row_at!(run, i, d + 1)
                 # called for the phase and the state as they are, see output
-                sim = invokelatest(run_phase, phase, sim, d)
+                ran = invokelatest(run_phase, phase, sim, d)
+                check_carriers(sim, ran, phase)
+                sim = ran
                 check_sampled(sim)
                 sim = carried_weight(sim)
             end

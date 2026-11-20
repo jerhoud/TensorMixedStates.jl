@@ -252,7 +252,8 @@ function put_row!(t::TextTable, r::MeasuredRow)
     columns = [ first.(p) for p in parts ]
     if columns ≠ t.columns
         if !isnothing(t.path) && !isnothing(t.columns)
-            k = findfirst(k -> columns[k] ≠ t.columns[k], eachindex(columns))
+            k = something(findfirst(k -> k > length(t.columns) || columns[k] ≠ t.columns[k],
+                                    eachindex(columns)), length(columns))
             what = k == 1 ? "the time does" : "the values of $(first(row[k - 1])) do"
             error("$what not fit the columns $(t.path) took at its first line: a value changing " *
                   "its cells, as one missing at first, needs a .json file")
@@ -651,19 +652,25 @@ function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d
         error("the samples of $d have other columns at $(row_place(key)): averaged rows need the " *
               "same, which EachSample(…) does not")
     end
-    shift, mean, M2 = copy(s.shift), copy(s.mean), copy(s.M2)
+    k = length(cells)
+    shift, mean = copy(s.shift), copy(s.mean)
     W, W2 = s.W, s.W2
     iw = findfirst(==("log_weight"), s.columns)
+    # weighted, M2 holds after the sums of `spread` those of the error of a weighted mean,
+    # Σw²(y - mean)² and Σw²(y - mean), which are M2 and 0 for weights one
+    M2 = length(s.M2) == k && !isnothing(iw) ? [s.M2; s.M2; zeros(k)] : copy(s.M2)
     w = 1.
     if !isnothing(iw)
         lw = Float64(last(cells[iw]))
         if lw > shift[iw]
             f = exp(shift[iw] - lw)
-            W, W2, M2 = f * W, f^2 * W2, f * M2
+            W, W2 = f * W, f^2 * W2
+            M2 = [ f * M2[1:k] ; f^2 * M2[k+1:3k] ]
             shift[iw] = lw
         end
         w = exp(lw - shift[iw])
     end
+    W2_before = W2
     W += w
     for (i, (column, x)) in enumerate(cells)
         if i == iw
@@ -675,19 +682,45 @@ function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d
             # exact where the deviations are small against the value, which keeps their digits
             y = x - shift[i]
             delta = y - mean[i]
-            mean[i] += (w / W) * delta
+            moved = (w / W) * delta
+            mean[i] += moved
             M2[i] += w * delta * (y - mean[i])
+            if !isnothing(iw)
+                # the weighted sums around the mean, moved with it
+                S, T = M2[k + i], M2[2k + i]
+                M2[k + i] = S - 2moved * T + moved^2 * W2_before + w^2 * (y - mean[i])^2
+                M2[2k + i] = T - moved * W2_before + w^2 * (y - mean[i])
+            end
         end
     end
     return RowSum(s.time, s.columns, s.missing, shift, s.n + 1, W, W2 + w^2, mean, M2)
 end
 
 # the standard deviation of the samples in the cell `i` of the row of sums `s` and the error on
-# their mean, NaN for one sample
+# their weighted mean, that of a ratio of means, ``\sqrt{\sum w^2 (x - \bar x)^2} / \sum w``
+# (Cochran, Sampling techniques, 1977, ch. 6), times ``\sqrt{n / (n - 1)}``, so that weights one
+# give the error of a mean; NaN for one sample
 function spread(s::RowSum, i::Int)
+    k = length(s.columns)
     unbiased = s.W - s.W2 / s.W
     sd = unbiased > 0 ? sqrt(s.M2[i] / unbiased) : NaN
-    return sd, sd / sqrt(s.W^2 / s.W2)
+    if length(s.M2) == k || isnothing(findfirst(==("log_weight"), s.columns))
+        # weights one, the error of a mean as 2.2 computed it
+        return sd, sd / sqrt(s.W^2 / s.W2)
+    end
+    err = s.n > 1 ? sqrt(max(s.M2[k + i], 0.) / s.W^2 * s.n / (s.n - 1)) : NaN
+    return sd, err
+end
+
+# the logarithm of the mean weight of the row of sums `s` over the `samples` merged, those a weight
+# of zero stopped before the row included, and its error relative to it, from the spread of the
+# weights
+function mean_weight(s::RowSum, samples::Int)
+    i = findfirst(==("log_weight"), s.columns)
+    n = max(samples, s.n)
+    m = s.W / n
+    err = n > 1 ? sqrt(max(s.W2 / n - m^2, 0.) / (n - 1)) / m : NaN
+    return s.shift[i] + log(m), err
 end
 
 """
@@ -701,11 +734,8 @@ function averaged_cells(s::RowSum, samples::Int = s.n)
     out = Pair{String, Any}[ "N" => s.n, "N_eff" => s.W^2 / s.W2 ]
     for (i, c) in enumerate(s.columns)
         if c == "log_weight"
-            # the mean weight, its error relative to it from the spread of the weights
-            n = max(samples, s.n)
-            m = s.W / n
-            err = n > 1 ? sqrt(max(s.W2 / n - m^2, 0.) / (n - 1)) / m : NaN
-            append!(out, [ c => s.shift[i] + log(m), "err($c)" => err ])
+            lw, err = mean_weight(s, samples)
+            append!(out, [ c => lw, "err($c)" => err ])
         elseif s.missing[i]
             append!(out, [ c => missing, "err($c)" => missing, "std($c)" => missing ])
         else
@@ -972,13 +1002,15 @@ open(d::Averaged, m::RecordMark) = Recorder(d, m.names, String[], m.rows[1:m.n])
 open(d::EachSample, m::RecordMark) = Recorder(d, m.names, String[], m.rows[1:m.n])
 
 """
-    Outputs(; dir = "", format = "%.13g", sampled = false, recording = false)
+    Outputs(; dir = "", format = "%.13g", sampled = false, recording = false, weighted = false)
 
 where the lists of measurements of a run go: the destinations opened, by their description,
 the files named relative to `dir`, the numbers of the text tables in the Printf `format`, the
 time as the values; for a simulation `sampled`, its files and `Data` averaged over the samples,
 see `Averaged`, and where the rows are written, see `put_keyed_row!`; `recording` for a part of
-a simulation with samples, which records its rows instead of writing them, see `Recorder`
+a simulation with samples, which records its rows instead of writing them, see `Recorder`;
+`weighted` for a simulation of trajectories, whose rows write the logarithm of their weight,
+`log_weight`
 """
 struct Outputs
     dir::String
@@ -987,11 +1019,12 @@ struct Outputs
     lock::ReentrantLock
     sampled::Bool
     recording::Bool
+    weighted::Bool
     at::Base.RefValue{NTuple{3, Int}}
 end
 
 function Outputs(; dir::AbstractString = "", format::AbstractString = "%.13g",
-                 sampled::Bool = false, recording::Bool = false)
+                 sampled::Bool = false, recording::Bool = false, weighted::Bool = false)
     ok = try
         Printf.format(Printf.Format(format), 1.5)
         true
@@ -1002,7 +1035,7 @@ function Outputs(; dir::AbstractString = "", format::AbstractString = "%.13g",
         error("the format $(repr(format)) does not write one number, as \"%.13g\" does")
     end
     return Outputs(dir, format, Dict{Destination, Any}(), ReentrantLock(), sampled, recording,
-                   Ref((0, 0, 0)))
+                   weighted, Ref((0, 0, 0)))
 end
 
 """
@@ -1106,11 +1139,11 @@ function output!(o::Outputs, state::AbstractState, list::AbstractVector; time = 
             prepare_list!(opened, first.(m.entries))
         end
         rows = [ measure(state, m; time, values...) for (_, m) in items ]
-        weight = get(values, :log_weight, nothing)
         for ((d, m), row) in zip(items, rows)
             r = measured_row(m, time, row)
-            if !isnothing(weight) && d isa Union{Averaged, EachSample}
-                r = weighted_row(r, weight)
+            # every row of the samples of trajectories, 0 before the trajectory
+            if o.weighted && d isa Union{Averaged, EachSample}
+                r = weighted_row(r, get(values, :log_weight, 0.))
             end
             put_keyed_row!(o.opened[d], o.at[], r)
         end
@@ -1282,9 +1315,10 @@ function within(sums::AbstractDict{RowKey, RowSum}, samples::Int, (atol, rtol), 
         end
         for i in eachindex(s.columns)
             if !s.missing[i]
-                _, err = spread(s, i)
+                value, err = s.columns[i] == "log_weight" ? mean_weight(s, samples) :
+                             (s.shift[i] + s.mean[i], last(spread(s, i)))
                 # NaN fails it
-                if !(err ≤ atol + rtol * abs(s.shift[i] + s.mean[i]))
+                if !(err ≤ atol + rtol * abs(value))
                     return false
                 end
             end

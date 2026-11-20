@@ -335,9 +335,12 @@ function output(sim::Simulation, list::AbstractVector)
     run = getfield(sim, :run)
     items = [ run_destination(run, first(p)) => last(p) for p in list ]
     values = measured_values(sim)
-    # the weight of a trajectory, what its steps carried and what its trace holds
+    # the weight of a trajectory, what its steps carried and what its trace holds, one for any
+    # other state of a sample
     if sim.state isa State{Trajectory}
         values[:log_weight] = get(values, :log_weight, 0.) + log(real(trace(sim.state)))
+    elseif gives_sample(run)
+        values[:log_weight] = get(values, :log_weight, 0.)
     end
     # called for the state as it is: inferred for any state, the measurements would take
     # minutes to compile

@@ -57,9 +57,9 @@ and `mpo_limits` truncates its MPO, see `PreMPO` (default none).
 `step` is the number of the first step, for the periods of the method and for `limits`, which
 may give one value per step; from a later step, the state is taken as a computation left it, of
 trace one, and not normalized again. A pure state is refused. A trajectory ``\\psi``, drawn from a
-mixed state, is taken to ``e^{-\\beta H/2} \\psi`` normalized, `log_trace` being that of its
-squared norm: its exponential is the weight of the trajectory, whose average is that of the
-mixed state, see the page on trajectories.
+mixed state, normalized as a mixed state is, is taken to ``e^{-\\beta H/2} \\psi`` normalized,
+`log_trace` being that of its squared norm: its exponential weighs the trajectory, see the page
+on trajectories.
 
 # Examples
 

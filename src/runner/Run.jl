@@ -73,6 +73,29 @@ function check_values(phases::Vector, final_measurements, sampled::Bool)
 end
 
 """
+    check_trajectory_reads(phases, final_measurements)
+
+refuse, in a simulation of trajectories, a measurement reading `:log_trace`, the logarithm of the
+weight a thermalization gives each, whose average over the samples is not that of the thermal
+state
+"""
+function check_trajectory_reads(phases::Vector, final_measurements)
+    if !any(makes_trajectory, phases)
+        return nothing
+    end
+    for l in run_lists(phases, final_measurements), p in l
+        for (name, m) in as_measure(last(p)).entries
+            if :log_trace in measurement_reads(m)
+                error("the measurement $name reads log_trace, the weight of one trajectory, whose " *
+                      "average is not that of the thermal state: read the column log_weight of " *
+                      "the averages, the logarithm of the mean weight")
+            end
+        end
+    end
+    return nothing
+end
+
+"""
     check_names(phases, sampled)
 
 refuse, when the `SimData` is written rather than when the run reaches the phase, a phase naming a
@@ -235,6 +258,7 @@ struct SimData
         realized = branched_phases(ps, samples)
         checked = checked_phases(ps, realized, samples)
         provided = check_values(checked, final_measurements, !isnothing(samples))
+        check_trajectory_reads(checked, final_measurements)
         check_names(checked, !isnothing(samples))
         lists = run_lists(checked, final_measurements)
         if isnothing(samples) && any(first(p) isa EachSample for l in lists for p in l)
@@ -307,6 +331,9 @@ tolerances(x) =
           "list of them, got $(repr(x))")
 
 checked_phases(sd::SimData) = checked_phases(sd.phases, sd.realized, sd.samples)
+
+# whether the samples of `sd` are trajectories, whose rows carry their weight, see `Outputs`
+makes_trajectories(sd::SimData) = any(makes_trajectory, checked_phases(sd))
 
 # what the merge of the samples of `sd` needs, see `merge_samples!`
 merging(sd::SimData) = (; sd.format, sd.tol, sd.min_samples)
@@ -786,7 +813,8 @@ function run_samples(sim::Simulation, sd::SimData, samples::Int, threading)
     b = branch_commit(sim, length(prefix) + 1)
     merged = run.outputs
     run.merged = merged
-    run.outputs = Outputs(; merged.dir, merged.format, sampled = true, recording = true)
+    run.outputs = Outputs(; merged.dir, merged.format, sampled = true, recording = true,
+                          weighted = merged.weighted)
     each = isnothing(threading) ? nothing : sample_threading
     try
         for k in 1:samples
@@ -1126,7 +1154,8 @@ function run_in(work::Function, sd::SimData, dir::String, settings; claim = noth
         commit, generation, seed = resume ? load_checkpoint(dir, isempty(main) ? dir : main) :
                                    (nothing, 0, something(seed, rand(RandomDevice(), UInt64)))
         c = Checkpointer(dir, seed; interval = checkpoint_interval, max_time, main)
-        outputs = Outputs(; dir = outdir, sd.format, sampled = !isnothing(samples), recording)
+        outputs = Outputs(; dir = outdir, sd.format, sampled = !isnothing(samples), recording,
+                          weighted = makes_trajectories(sd))
         run = RunData(outdir, outputs, logio, output, c, sd.provided, sd.backend)
         if resume
             resume!(c, commit, generation)
@@ -1457,7 +1486,8 @@ function run_parts(sd::SimData, settings)
     end
     ran = !isnothing(run)
     if !ran
-        run = RunData(dir, Outputs(; dir, sd.format, sampled = true), devnull, nothing,
+        run = RunData(dir, Outputs(; dir, sd.format, sampled = true,
+                                   weighted = makes_trajectories(sd)), devnull, nothing,
                       Checkpointer("", isnothing(b) ? something(sd.seed, 0) : seed), sd.provided,
                       sd.backend)
         run.stopped = role == :stop
