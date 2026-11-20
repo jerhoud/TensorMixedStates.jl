@@ -1,7 +1,6 @@
 # The representation Trajectory, a state held as one quantum trajectory: its types, the algebra it
 # shares with Pure, its files, and what it refuses
 
-const Trajectory = TensorMixedStates.Trajectory
 const Ket = TensorMixedStates.Ket
 
 @testset "Trajectory is a ket, as Pure, and holds its states as Pure does" begin
