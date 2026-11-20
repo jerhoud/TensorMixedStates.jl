@@ -197,7 +197,9 @@ struct State{R <: PM} <: AbstractState
     system::System
     state::MPS
     preobs::PreObs
-    function State{R}(system::System, state::MPS) where {R <: PM}
+    # the generator taken, as by every constructor, and unused
+    function State{R}(system::System, state::MPS;
+                      rng::AbstractRNG = Random.default_rng()) where {R <: PM}
         if isabstracttype(R)
             error("State{$(nameof(R))} has no representation of its own: use State{Pure}, " *
                   "State{Mixed} or another concrete one")

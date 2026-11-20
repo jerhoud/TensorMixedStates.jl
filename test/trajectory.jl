@@ -191,6 +191,11 @@ end
         @test expect1(State{R}(qubits, x; rng = Xoshiro(1)), Z) == expect1(State{R}(qubits, x), Z)
     end
     @test expect1(State{Mixed}(qubits, FullyMixed(); rng = Xoshiro(1)), Z) == [0, 0]
+    ψ = State{Pure}(qubits, "Up")
+    @test State{Pure}(qubits, ψ.state; rng = Xoshiro(1)).state === ψ.state
+    run(name, state) = runTMS(SimData(; name, phases = [CreateState{Pure}(qubits, state)],
+                                      final_measurements = Data("z") => Z); output = devnull)
+    @test run("mps", ψ.state).data["z"] == run("name", "Up").data["z"]
 end
 
 # whether the mean of the vectors `values` is `ref`, within `k` of its standard errors
