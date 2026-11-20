@@ -58,6 +58,12 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") ≠ "true"
                 ρf = evolve(lindblad + Dissipator(C)(1), 0.1, weaken(ρf); nsteps = 1,
                             limits = lim)
                 measure(ρf, Measure(N, Purity, Trace, EntanglementEntropy(1)); time = 0.)
+                # a trajectory drawn from a mixed description, its jumps and a channel drawn
+                t = State{Trajectory}(system, ["Up", "FullyMixed", [0.7 0.2; 0.2 0.3], "Dn"];
+                                      rng = Xoshiro(2))
+                t = evolve(dissipative, 0.1, t; nsteps = 1, limits = lim, rng = Xoshiro(3))
+                t = apply(depolarizing_channel(0.1)(2) * Gate(X)(1), t; rng = Xoshiro(4))
+                measure(t, Measure(X, Z(1) * Z(2), h, Trace); time = 0.)
                 # a run with its checkpoints, and a run whose output is redirected
                 mktempdir() do dir
                     cd(dir) do
@@ -70,6 +76,13 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") ≠ "true"
                         # an eval, which precompilation forbids, and parts read their branch point
                         runTMS(SimData(; name = "samples", samples = 2,
                                        phases = [phases[1], Realizations(c -> phases[2])]);
+                               output = devnull)
+                        # trajectories, one in each sample
+                        runTMS(SimData(; name = "trajectories", samples = 2,
+                                       phases = [CreateState{Trajectory}(4, Qubit(), "FullyMixed"),
+                                                 Evolve(evolver = dissipative, duration = 0.2,
+                                                        time_step = 0.1, limits = lim,
+                                                        measurements = "data" => Z)]);
                                output = devnull)
                     end
                 end
