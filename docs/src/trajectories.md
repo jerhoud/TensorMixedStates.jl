@@ -112,6 +112,12 @@ error; `EachSample` gives that of each trajectory, and the measurements may read
 `:log_weight`. The run carries the trace into that value at each step where it is far from one,
 so that it neither underflows nor overflows.
 
+`thermalize` and `Thermalize` take a trajectory drawn from a mixed state, as
+`CreateState{Trajectory}(system, "FullyMixed")`, to ``e^{-\\beta H/2} \\psi`` normalized, its
+weight multiplied by the squared norm: the averages are those of the thermal state, and the mean
+weight is ``Z / \\prod_i d_i``. The weights spread as ``\\beta`` grows, which `N_eff` shows: at low
+temperature, few trajectories count.
+
 A result imposed by `collapse`, as `collapse(t, Z(1) => 1)` in an `Update`, multiplies the
 weight by its probability, a postselection whose probability `log_weight` then estimates. A
 trajectory of probability zero is left null and stops its sample: it counts in the mean weight,
@@ -136,6 +142,6 @@ and `A`, whose averages give it. A trajectory is not mixed by `mix`, has no `Vec
 held by an `ExactState`. A ground state is searched in `Pure`, then made a trajectory by
 `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
 
-Not available yet: `SteadyState` and `Thermalize`, `ConvertState{Trajectory}` of a mixed
+Not available yet: `SteadyState`, `ConvertState{Trajectory}` of a mixed
 state, the product `⊗` of trajectories, `random_state(t, n)` of a trajectory `t`, and a channel
 in one product with a gate that does not keep the trace.

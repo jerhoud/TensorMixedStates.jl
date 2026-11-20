@@ -173,7 +173,9 @@ normalized to trace one, by an evolution in imaginary time, see `thermalize`: fr
 `"FullyMixed"`, the thermal state ``e^{-\\beta H}/Z``. The time does not move. It provides the
 values `:beta`, the inverse temperature reached, and `:log_trace`, the logarithm of the trace
 before normalization, see `thermalize`: 0 both for a `beta` shorter than half a step, which
-leaves the state normalized only.
+leaves the state normalized only. A trajectory, drawn from a mixed state, is taken to
+``e^{-\\beta H/2} \\psi`` normalized, its weight multiplied by the trace before normalization, so
+that the averages of the samples are those of the thermal state.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
@@ -257,8 +259,9 @@ end
 
 function prepare_phase(phase::Thermalize, sim::Simulation)
     state = state_named(sim, phase.on)
-    if state isa State{Trajectory}
-        not_yet("a thermal state")
+    if state isa State{Trajectory} && phase.on ≠ :state
+        error("a Thermalize of a trajectory acts on :state, whose trace is the weight of the " *
+              "sample")
     elseif state isa Union{State{Pure}, ExactState{Pure}}
         error("a thermal state needs a mixed representation: mix the state first, see ToMixed")
     end
@@ -284,15 +287,23 @@ end
 
 step_count(t::ThermalSteps) = t.nsteps
 
-# as thermalize: normalized at the first step only, the logarithms of the traces added up
+# as thermalize: normalized at the first step only, the logarithms of the traces added up, and
+# for a trajectory carried into its weight, its trace before the first step included
 function run_step(t::ThermalSteps, sim::Simulation, k::Int)
-    state = k == 1 ? normalize(state_named(sim, t.on)) : state_named(sim, t.on)
+    state = state_named(sim, t.on)
+    weight = get(getfield(sim, :values), :log_weight, 0.)
+    if k == 1 && state isa State{Trajectory}
+        weight += log(real(trace(state)))
+    end
+    state = k == 1 ? normalize(state) : state
     if isnothing(t.pre)
-        return with_state(sim, t.on, state; beta = 0., log_trace = 0.)
+        sim = with_state(sim, t.on, state; beta = 0., log_trace = 0.)
+        return state isa State{Trajectory} ? with_values(sim; log_weight = weight) : sim
     end
     st, l = thermal_step(t.algo, t.pre, state, t.beta / t.nsteps, k, step_limits(t.limits, k))
-    return with_state(sim, t.on, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
-                      log_trace = (k == 1 ? 0. : sim.log_trace) + l)
+    sim = with_state(sim, t.on, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
+                     log_trace = (k == 1 ? 0. : sim.log_trace) + l)
+    return st isa State{Trajectory} ? with_values(sim; log_weight = weight + l) : sim
 end
 
 """

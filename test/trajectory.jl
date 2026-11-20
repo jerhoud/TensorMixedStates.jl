@@ -108,7 +108,6 @@ end
             (() -> t ⊗ p, "the product of a trajectory"),
             (() -> random_state(t, 2), "randomising a trajectory is not implemented"),
             (() -> ground_state(h, t), "a trajectory is not searched"),
-            (() -> thermalize(h, 1., t), "a thermal state comes with the draws"),
             (() -> steady_state(-im * h, t), "a steady state comes with the draws"),
             (() -> ExactState(t), "ExactState holds Pure or Mixed states"),
             (() -> TMS.as_representation(Mixed, t), "a trajectory is not a pure or a mixed"),
@@ -636,4 +635,31 @@ end
     @test all(r -> r["N"] == z["N"], sim.data["steps"])
     ρ = evolve(-im * X(1), 0.3, collapse(State{Mixed}(q, ρ0), Z(1) => 1).state; nsteps = 3)
     @test z["Z(1)"] ≈ real(expect(ρ, Z(1))) atol = 1e-8
+end
+
+@testset "Trajectories thermalize by their weights, whose average is the thermal state" begin
+    n = 6
+    sys = System(n, Qubit())
+    h = -sum(Z(i) * Z(i + 1) for i in 1:n-1) - 0.7 * sum(X(i) for i in 1:n)
+    # outside a simulation: normalized, the logarithm of its squared norm returned
+    lt, t = thermalize(h, 0.5, State{Trajectory}(sys, "FullyMixed"; rng = Xoshiro(1)); nsteps = 4)
+    @test real(trace(t)) ≈ 1 && isfinite(lt)
+    # in a simulation, against the mixed state, the weights spreading as beta grows
+    run(beta) = only(runTMS(SimData(seed = 2, samples = 100, phases = [
+                    CreateState{Trajectory}(sys, "FullyMixed"),
+                    Thermalize(; hamiltonian = h, beta, nsteps = 10)],
+                    final_measurements = Data("e") => ["E" => h]); output = devnull).data["e"])
+    neff = map((0.5, 1.5)) do beta
+        r = run(beta)
+        l, ρ = thermalize(h, beta, State{Mixed}(sys, "FullyMixed"); nsteps = 10)
+        @test abs(r["E"] - real(expect(ρ, h))) < 4 * r["err(E)"]
+        @test abs(r["log_weight"] - l) < 4 * r["err(log_weight)"]
+        r["N_eff"]
+    end
+    @test neff[2] < neff[1]
+    # refused: a trajectory other than the state, whose trace weighs the sample
+    @test_throws "acts on :state" runTMS(SimData(samples = 1, phases = [
+                     CreateState{Trajectory}(sys, "FullyMixed"),
+                     CreateState{Trajectory}(sys, "FullyMixed"; on = :b),
+                     Thermalize(hamiltonian = h, beta = 0.5, nsteps = 2, on = :b)]); output = devnull)
 end

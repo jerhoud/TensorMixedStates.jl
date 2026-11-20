@@ -943,7 +943,7 @@ end
     # a pure state, which e^{-βH/2} takes to its ground state
     st = State{Pure}(System(n, Qubit()), "Up")
     for hp in (h, PreMPO(st, h))
-        @test_throws "a thermal state needs a mixed representation: mix the state first" thermalize(
+        @test_throws "a thermal state needs a mixed representation or trajectories" thermalize(
             hp, 1., st; nsteps = 1)
     end
     ρ = State{Mixed}(System(n, Qubit()), "FullyMixed")

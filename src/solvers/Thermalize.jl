@@ -21,6 +21,19 @@ function thermal_step(algo::EvolutionAlgorithm, pre::PreMPO{Mixed}, state::State
     return (state / t, log(t))
 end
 
+# a trajectory, ``\psi`` taken to ``e^{-d\beta H/2} \psi`` by `pre`, the `PreMPO` of `H` on it,
+# and divided by the square root of its trace
+function thermal_step(algo::EvolutionAlgorithm, pre::PreMPO, state::State{Trajectory},
+                      dbeta::Real, step::Int, limits::Limits)
+    state = evolve_step(algo, pre, state, 0., -dbeta / 2, step, limits)
+    t = real(trace(state))
+    if !(t > 0)
+        error("the trace of the trajectory reached $t at step $step of thermalize: take smaller " *
+              "steps or larger limits")
+    end
+    return (state / sqrt(t), log(t))
+end
+
 """
     thermalize(hamiltonian, beta, state; nsteps | beta_step, algo = Tdvp(), limits = Limits(),
                mpo_limits = Limits(), step = 1)
@@ -43,14 +56,17 @@ Hamiltonian may be given as its `PreMPO` on the mixed state, prepared once and k
 and `mpo_limits` truncates its MPO, see `PreMPO` (default none).
 `step` is the number of the first step, for the periods of the method and for `limits`, which
 may give one value per step; from a later step, the state is taken as a computation left it, of
-trace one, and not normalized again. A pure state is refused.
+trace one, and not normalized again. A pure state is refused. A trajectory ``\\psi``, drawn from a
+mixed state, is taken to ``e^{-\\beta H/2} \\psi`` normalized, `log_trace` being that of its
+squared norm: its exponential is the weight of the trajectory, whose average is that of the
+mixed state, see the page on trajectories.
 
 # Examples
 
     log_trace, rho = thermalize(H, 2.0, State{Mixed}(system, "FullyMixed"); nsteps = 20,
                                 limits = Limits(cutoff = 1e-12, maxdim = 64))
 """
-function thermalize(hamiltonian, beta::Real, state::State{Mixed};
+function thermalize(hamiltonian, beta::Real, state::State{<:Union{Mixed, Trajectory}};
                     algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
                     beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
                     mpo_limits::Limits = Limits(), step::Int = 1)
@@ -75,6 +91,6 @@ function thermalize(hamiltonian, beta::Real, state::State{Mixed};
 end
 
 # ::Any rather than _, which Julia 1.10 refuses before keywords
-thermalize(::Any, ::Real, ::State{Trajectory}; kwargs...) = not_yet("a thermal state")
 thermalize(::Any, ::Real, ::State{Pure}; kwargs...) =
-    error("a thermal state needs a mixed representation: mix the state first")
+    error("a thermal state needs a mixed representation or trajectories: mix the state first, " *
+          "or draw trajectories from a mixed one, as State{Trajectory}(system, \"FullyMixed\")")
