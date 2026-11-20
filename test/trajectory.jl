@@ -491,8 +491,14 @@ end
     coherent = [0.5 0.5; 0.5 0.5]
     @test same(() -> State{Trajectory}(free, coherent; rng), State{Mixed}(free, coherent))
     pfree = random_state(Pure, free, 4; rng = Xoshiro(5))
-    reset = Reset([1, 1])(1)
-    @test same(() -> apply(reset, as_trajectory(pfree); rng), apply(reset, mix(pfree)))
+    for site in 1:2
+        reset = Reset([1, 1])(site)
+        @test same(() -> apply(reset, as_trajectory(pfree); rng), apply(reset, mix(pfree)))
+    end
+    # jumps of mixed parity, under a string
+    lindblad = -im * (dag(C)(1) * C(2) + dag(C)(2) * C(1)) + Dissipator(Id + C)(2)
+    jumped = [ evolve(lindblad, 0.2, as_trajectory(pfree); nsteps = 20, rng) for _ in 1:300 ]
+    @test same_density(jumped, evolve(lindblad, 0.2, mix(pfree); nsteps = 20); floor = 1 / 300)
     u = (Id + im * (C + dag(C))) / sqrt(2)
     mixing = (0.5 * Gate(u) + 0.5 * Gate(Id))(2)
     @test same(() -> apply(mixing, as_trajectory(pfree); rng), apply(mixing, mix(pfree)))
