@@ -84,6 +84,8 @@ CreateState{R}(sites::Vector{<:AbstractSite}, state; kwargs...) where R =
 
 provided_values(phase::CreateState) = phase.on === :state ? () : (phase.on,)
 
+makes_trajectory(::CreateState{Trajectory}) = true
+
 """
     as_representation(R, state; limits = Limits())
 

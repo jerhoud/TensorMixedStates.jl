@@ -140,11 +140,11 @@ end
     @test et isa State{Trajectory} && expect1(et, N) == expect1(evolve(PreMPO(p, -im * h), 0.2,
                                                                        p; nsteps = 2), N)
     # in a run, weakened then evolved
-    run(R) = runTMS(SimData(; name = "w", phases = [
+    run(R, d; kwargs...) = runTMS(SimData(; name = "w", kwargs..., phases = [
                  CreateState{R}(fermions, ["Occ", "Emp", "Occ", "Emp"]), Weaken(target = ()),
                  Evolve(evolver = -im * h, duration = 0.2, time_step = 0.1)],
-                 final_measurements = Data("n") => N); output = devnull)
-    @test run(Trajectory).data["n"] == run(Pure).data["n"]
+                 final_measurements = d => N); output = devnull).data["n"][1]["N"]
+    @test run(Trajectory, EachSample(Data("n")); samples = 1) == run(Pure, Data("n"))
 end
 
 @testset "Trajectory leaves the dissipators, the channels and the exact states for later" begin
@@ -157,7 +157,8 @@ end
                                                                       Dissipator(X)(1))
     @test_throws "a channel on a trajectory comes with the draws" evolve(
         depolarizing_channel(0.2)(1), 0.1, t; nsteps = 1)
-    steady(R) = runTMS(SimData(; name = "s", phases = [CreateState{R}(qubits, "Up"),
+    steady(R) = runTMS(SimData(; name = "s", samples = 1, phases = [
+                       CreateState{R}(qubits, "Up"),
                        SteadyState(lindbladian = -im * h, algo = Dmrg(nsweeps = 1))]);
                        output = devnull)
     @test_throws "a steady state comes with the draws" steady(Trajectory)
@@ -167,7 +168,7 @@ end
         Trajectory, e)
     @test_throws "ExactState holds Pure or Mixed states" random_state(ExactState{Trajectory},
                                                                       qubits, 2)
-    convert(R) = runTMS(SimData(; name = "c", phases = [
+    convert(R) = runTMS(SimData(; name = "c", samples = 1, phases = [
                         CreateState{Pure}(qubits, "Up"; backend = ExactState),
                         ConvertState{R}()]); output = devnull)
     @test_throws "ExactState holds Pure or Mixed states" convert(Trajectory)
@@ -252,10 +253,10 @@ end
     @test within_error([ real(expect1(apply(ch, as_trajectory(p7); rng), Z)) for _ in 1:100 ],
                        real(expect1(apply(ch, mix(p7)), Z)))
     # in a run, the generator of the simulation draws them
-    gates(name) = runTMS(SimData(; name, seed = 3, phases = [
+    gates(name) = runTMS(SimData(; name, seed = 3, samples = 1, phases = [
                     CreateState{Trajectory}(qubits, "Up"),
                     Gates(gates = depolarizing_channel(0.5)(1) * depolarizing_channel(0.5)(2))],
-                    final_measurements = Data("z") => Z); output = devnull).data["z"]
+                    final_measurements = EachSample(Data("z")) => Z); output = devnull).data["z"]
     @test gates("a") == gates("b")
 end
 
@@ -302,7 +303,7 @@ end
     @test_throws "which a trajectory cannot hold" apply(Reset([1, 1])(1), free; rng)
     @test_throws "1 site or more" depolarizing_channel(0.1, 0)
     # a run draws: a full depolarizing of |↑⟩ gives ↓ for some seed
-    run(seed) = only(runTMS(SimData(; name = "d$seed", seed, phases = [
+    run(seed) = only(runTMS(SimData(; name = "d$seed", seed, samples = 1, phases = [
                     CreateState{Trajectory}(System(1, Qubit()), "Up"),
                     Gates(gates = depolarizing_channel(1.)(1))],
                     final_measurements = Data("z") => Z(1)); output = devnull).data["z"])["Z(1)"]
@@ -420,11 +421,11 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     @test_throws "no definite flux" evolve(-im * hf + Dissipator(C + dag(C))(2), 0.1, tf;
                                            nsteps = 1)
     # in a run, the generator of the simulation draws them, for each trajectory in turn
-    run(name; on = [:state]) = runTMS(SimData(; name, seed = 5, phases = [
+    run(name; on = [:state]) = runTMS(SimData(; name, seed = 5, samples = 1, phases = [
                     CreateState{Trajectory}(qubits, "Up"), CreateState{Trajectory}(qubits, "Up";
                                                                                    on = :b),
                     Evolve(evolver = g, duration = 0.5, nsteps = 10, on = on)],
-                    final_measurements = Data("z") => Z); output = devnull).data["z"]
+                    final_measurements = EachSample(Data("z")) => Z); output = devnull).data["z"]
     @test run("a") == run("b")
     @test !isempty(run("c"; on = [:state, :b]))
 end
@@ -477,12 +478,46 @@ end
     @test_throws "is not positive" State{Trajectory}(qubits, [1.5 0; 0 -0.5])
     @test_throws "drawn from the purification" random_state(Trajectory, qubits, FullyMixed(), 4)
     # in a run, the generator of the simulation draws them
-    run(name; kwargs...) = runTMS(SimData(; name, seed = 5, phases = [
+    run(name; kwargs...) = runTMS(SimData(; name, seed = 5, samples = 1, phases = [
                     CreateState{Trajectory}(fermions, kwargs[:state];
                                             randomize = get(kwargs, :randomize, 0))],
-                    final_measurements = Data("n") => N); output = devnull).data["n"]
+                    final_measurements = EachSample(Data("n")) => N); output = devnull).data["n"]
     @test run("a"; state = "FullyMixed") == run("b"; state = "FullyMixed")
     @test run("c"; state = states, randomize = 4) == run("d"; state = states, randomize = 4)
     @test_throws "drawn from the purification" run("e"; state = FullyMixed(N => 2),
                                                    randomize = 4)
+end
+
+@testset "Trajectories run as the samples of a simulation, from the phase that makes them" begin
+    qubits = System(3, Qubit())
+    h = sum(Z(i) * Z(i + 1) for i in 1:2) + sum(X(i) for i in 1:3)
+    g = -im * h + sum(0.5 * Dissipator(Sm)(i) for i in 1:3)
+    run(name, phases; samples = 3) = runTMS(SimData(; name, seed = 9, samples, phases,
+                    final_measurements = EachSample(Data("z")) => Z); output = devnull).data["z"]
+    # as Realizations returning the phases from the first making a trajectory
+    body = [CreateState{Trajectory}(qubits, ["Up", "FullyMixed", "Dn"]),
+            Evolve(evolver = g, duration = 0.2, nsteps = 2)]
+    @test run("a", body) == run("b", [Realizations(_ -> body)])
+    prefix = CreateState{Pure}(qubits, "Up")
+    tail = [ConvertState{Trajectory}(), Evolve(evolver = g, duration = 0.2, nsteps = 2)]
+    @test run("c", [prefix; tail]) == run("d", [prefix, Realizations(_ -> tail)])
+    rows = run("e", body)
+    @test rows[1]["Z"] ≠ rows[2]["Z"]
+    # their average that of the mixed state, for the same disorder
+    disordered(R) = c -> begin
+        J = 1 + 0.3 * randn(c.rng)
+        [prefix, ConvertState{R}(), Evolve(evolver = -im * J * h + sum(0.5 * Dissipator(Sm)(i)
+                                                                         for i in 1:3),
+                                           duration = 0.5, nsteps = 20)]
+    end
+    average(R) = only(runTMS(SimData(; name = "m", seed = 4, samples = 80,
+                                     phases = [Realizations(disordered(R))],
+                                     final_measurements = Data("z") => Z); output = devnull).data["z"])
+    t, m = average(Trajectory), average(Mixed)
+    @test all(abs(t["Z($i)"] - m["Z($i)"]) < 4 * t["err(Z($i))"] for i in 1:3)
+    # refused: trajectories without samples, or before Realizations, samples without either
+    @test_throws "making trajectories needs samples" SimData(phases = body)
+    @test_throws "comes before Realizations" SimData(samples = 2, phases = [
+                     body[1], Realizations(_ -> body[2:2])])
+    @test_throws "or makes trajectories" SimData(samples = 2, phases = [prefix])
 end

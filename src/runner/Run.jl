@@ -174,11 +174,12 @@ the description of a simulation, which `runTMS` runs.
   another backend, `LoadState` keeping the type of its file and a phase the backend cannot run
   raising an error
 - `samples`: the number of samples of a simulation whose last phase is `Realizations`, which
-  draws the disorder of each, the final measurements being made at the end of each sample, the
-  files and `Data` holding averages over the samples, see `EachSample` (default `nothing`, no
-  samples); the environment variable `TMS_SAMPLES` overrides it, so that a finished run is
-  prolonged by running it again with more, and the program run several times at once runs the
-  samples on as many cores, see `runTMS`
+  draws the disorder of each, or which makes trajectories, each sample running the phases from
+  the first `CreateState{Trajectory}` or `ConvertState{Trajectory}` on, the final measurements
+  being made at the end of each sample, the files and `Data` holding averages over the
+  samples, see `EachSample` (default `nothing`, no samples); the environment variable
+  `TMS_SAMPLES` overrides it, so that a finished run is prolonged by running it again with more,
+  and the program run several times at once runs the samples on as many cores, see `runTMS`
 - `tol`: the errors the samples stop at, for an averaged destination `d`, a file or a
   `Data` (a `Data` alone in a run without a directory), `d => atol` or
   `d => (atol = …, rtol = …)`, or a list of them: every error of `d`, `err(c)`, within
@@ -229,7 +230,7 @@ struct SimData
             error("the seed of a simulation with samples is at most typemax(UInt64), got $seed")
         end
         samples = isnothing(samples) ? nothing : Int(samples)
-        ps = map(check_phase, flatten_phases(phases))
+        ps = trajectory_branch(map(check_phase, flatten_phases(phases)), samples)
         realized = branched_phases(ps, samples)
         checked = checked_phases(ps, realized, samples)
         provided = check_values(checked, final_measurements, !isnothing(samples))

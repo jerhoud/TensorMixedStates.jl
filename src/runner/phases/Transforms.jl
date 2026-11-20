@@ -63,6 +63,8 @@ the phase `ConvertState{Mixed}`, which takes the state to the mixed representati
 """
 const ToMixed = ConvertState{Mixed}
 
+makes_trajectory(::ConvertState{Trajectory}) = true
+
 function run_phase(phase::ConvertState{R}, sim::Simulation, ::Int) where R
     st = state_named(sim, phase.on)
     # refused before a conversion of the whole state

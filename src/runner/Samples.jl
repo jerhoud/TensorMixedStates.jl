@@ -104,6 +104,32 @@ function realized_phases(p::Realizations, c::Realization)
 end
 
 """
+    trajectory_branch(phases, samples)
+
+`phases`, those from the first that makes a trajectory run as the phases of each sample, as
+`Realizations` runs them, when no `Realizations` draws the samples; a trajectory made without
+samples, or before `Realizations`, refused
+"""
+function trajectory_branch(phases::Vector, samples::Union{Nothing, Int})
+    i = findfirst(makes_trajectory, phases)
+    j = findfirst(p -> p isa Realizations, phases)
+    if isnothing(i)
+        return phases
+    elseif !isnothing(j) && i < j
+        error("$(type_name(typeof(phases[i]))) \"$(phases[i].name)\" comes before Realizations, " *
+              "so that every sample would go on from one trajectory: put it among the phases " *
+              "Realizations returns")
+    elseif !isnothing(j)
+        return phases
+    elseif isnothing(samples)
+        error("a simulation making trajectories needs samples: SimData(samples = N, …), N = 1 " *
+              "for a single trajectory")
+    end
+    sample = phases[i:end]
+    return [phases[1:i - 1]; Realizations(_ -> sample; name = "Trajectories")]
+end
+
+"""
     branched_phases(phases, samples)
 
 the phases of the dry call of the `Realizations` ending `phases`, none without samples; a
@@ -120,7 +146,9 @@ function branched_phases(phases::Vector, samples::Union{Nothing, Int})
     if branched && isnothing(samples)
         error("a simulation ending with Realizations needs samples: SimData(samples = N, …)")
     elseif !branched && !isnothing(samples)
-        error("a simulation with samples ends with the phase Realizations, which draws each sample")
+        error("a simulation with samples ends with the phase Realizations, which draws each " *
+              "sample, or makes trajectories, with CreateState{Trajectory} or " *
+              "ConvertState{Trajectory}")
     end
     return branched ? realized_phases(last(phases), Realization(1, Xoshiro(0))) : Any[]
 end

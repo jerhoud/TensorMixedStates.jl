@@ -114,6 +114,10 @@ instance, none by default. A measurement of a value that no phase provides is re
 """
 provided_values(_) = ()
 
+# whether `phase` makes a trajectory, where the samples of a simulation branch off without
+# `Realizations`
+makes_trajectory(_) = false
+
 """
     phase_files(phase)
 
