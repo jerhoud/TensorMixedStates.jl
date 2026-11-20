@@ -360,16 +360,28 @@ draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
     something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
 
 """
-    sector_eigen(σ, g)
+    site_eigen(σ, site)
 
-the eigenvalues and the eigenvectors `(λ, s)` of the Hermitian matrix `σ` of a site whose basis
-states have the charges `g`, block by block of charge, a diagonal block keeping the basis itself
+the eigenvalues and the eigenvectors `(λ, s)` of the Hermitian matrix `σ` of `site`, block by
+block of the charges the site conserves and, unless `σ` has coherences between them, of the
+fermionic parities, a block diagonal but for rounding keeping the basis itself, so that rounding
+chooses neither the blocks nor the eigenvectors; `nothing` when `σ` has coherences between
+charges
 """
-function sector_eigen(σ::AbstractMatrix, g)
+function site_eigen(σ::AbstractMatrix, site::AbstractSite)
+    small = rounding_tol * norm(σ)
+    d = size(σ, 1)
+    coherent(g) = any(abs(σ[a, b]) > small for a in 1:d, b in 1:d if g[a] ≠ g[b])
+    charges = basis_charges(site)
+    if coherent(charges)
+        return nothing
+    end
+    graded = collect(zip(charges, fermion_parities(site)))
+    g = coherent(graded) ? charges : graded
     pairs = Tuple{Float64, Vector}[]
     for b in [ findall(==(x), g) for x in unique(g) ]
         block = σ[b, b]
-        e = isdiag(block) ?
+        e = all(abs(block[i, j]) ≤ small for i in axes(block, 1), j in axes(block, 2) if i ≠ j) ?
             (values = real(diag(block)), vectors = Matrix(1.0I, length(b), length(b))) :
             eigen(Hermitian(block))
         for (λ, u) in zip(e.values, eachcol(e.vectors))
@@ -386,7 +398,7 @@ end
 
 the vector of a pure state of site `i` of `system` drawn from the local state `x`: `x` itself
 when it is pure, otherwise an eigenvector of its density matrix with the probability of its
-eigenvalue, see `sector_eigen`, refused when it has coherences between the charges the site
+eigenvalue, see `site_eigen`, refused when it has coherences between the charges the site
 conserves, or spreads over strongly conserved values, which a trajectory, of definite ones,
 could only draw among
 """
@@ -398,20 +410,16 @@ function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
     elseif !nearly(v, v')
         error("$(repr(x)) is not Hermitian on $site, so it is not a density matrix")
     end
-    σ = v / real(tr(v))
-    d = dim(site)
-    g = basis_charges(site)
-    # the rounding left between sectors dropped, a coherence between them refused
-    if any(abs(σ[a, b]) > rounding_tol * norm(σ) for a in 1:d, b in 1:d if g[a] ≠ g[b])
+    es = site_eigen(v / real(tr(v)), site)
+    if isnothing(es)
         error("$(repr(x)) is a state of $site of no definite charge, which a trajectory cannot " *
               "draw")
-    end
-    es = sector_eigen(σ, g)
-    if any(e -> first(e) < -rounding_tol, es)
+    elseif any(e -> first(e) < -rounding_tol, es)
         error("$(repr(x)) is not positive on $site, so it is not a density matrix")
     end
     kept = filter(e -> first(e) > rounding_tol, es)
     names = strong_names(system)
+    g = basis_charges(site)
     strong(s) = strong_part(g[findfirst(!iszero, s)], names)
     if !isempty(names) && !allequal(strong(s) for (_, s) in kept)
         error("$(repr(x)) spreads over several values of $(join(names, ", ")) on $site, which " *

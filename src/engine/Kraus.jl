@@ -51,7 +51,7 @@ have no definite charge, as a trajectory draws among the operators written
 function site_kraus(system::System, a::AtIndex{IsChannel})
     sites = [ system[i] for i in a.index ]
     ks = generic_kraus(a.op, sites)
-    if !all(k -> definite_grade(k, sites), ks)
+    if !all(k -> definite_charge(k, sites), ks)
         error("the Kraus operators of $(obs_name(a.op)) as written have no definite charge on " *
               "$(join(sites, " ⊗ ")): write the channel as a sum of gates of definite charge, " *
               "among which its trajectories are drawn")
@@ -91,7 +91,7 @@ end
     reset_kraus(a, site)
 
 the Kraus operators of the reset `a` of `site` to σ, ``\\sqrt{λ}|s⟩⟨n|`` for each eigenvector `s`
-of σ, found block by block of the charges the site conserves, and each basis state `n`
+of σ, see `site_eigen`, and each basis state `n`
 """
 function reset_kraus(a::Reset, site::AbstractSite)
     x = local_state(site, a.state)
@@ -102,14 +102,11 @@ function reset_kraus(a::Reset, site::AbstractSite)
               "Kraus operators")
     end
     σ = x isa AbstractMatrix ? x / real(tr(x)) : x * x' / real(x' * x)
-    g = basis_charges(site)
-    # the rounding left between sectors dropped, a coherence between them refused
-    if any(abs(σ[i, j]) > rounding_tol * norm(σ) for i in 1:d, j in 1:d if g[i] ≠ g[j])
+    es = site_eigen(σ, site)
+    if isnothing(es)
         error("$(obs_name(a)) resets $site to a state of no definite charge, which a trajectory " *
               "cannot hold")
-    end
-    es = sector_eigen(σ, g)
-    if any(e -> first(e) < -rounding_tol, es)
+    elseif any(e -> first(e) < -rounding_tol, es)
         error("$(obs_name(a)) is not completely positive on $site, so it has no Kraus operators")
     end
     pairs = filter(e -> first(e) > rounding_tol, es)
@@ -150,11 +147,11 @@ basis_grades(sites) =
             for s in sites ])
 
 """
-    definite_grade(k, sites)
+    definite_charge(k, sites)
 
 whether the operator `k` of `sites` has a definite charge, in the quantities they conserve
 """
-function definite_grade(k::GenericOp{IsOperator}, sites)
+function definite_charge(k::GenericOp{IsOperator}, sites)
     m = matrix(k, sites...)
     g = [ x.q for x in basis_grades(sites) ]
     small = rounding_tol * norm(m)
@@ -166,7 +163,8 @@ end
     choi_kraus(a, sites)
 
 the Kraus operators of the channel `a` of `sites`, its Choi matrix diagonalized block by block of
-the charges they conserve, those of weight below rounding dropped
+the charges they conserve and, unless it has coherences between them, of the fermionic parities,
+as `site_eigen` does, those of weight below rounding dropped
 """
 function choi_kraus(a::GenericOp{IsChannel}, sites)
     check_dense(a, sites)
@@ -181,12 +179,20 @@ function choi_kraus(a::GenericOp{IsChannel}, sites)
         error("$(obs_name(a)) does not keep density matrices Hermitian on $on, so it has no " *
               "Kraus operators")
     end
-    g = [ x.q for x in basis_grades(sites) ]
-    grades = vec([ g[k] - g[i] for k in 1:d, i in 1:d ])
-    labels = indexin(grades, unique(grades))
-    if any(abs.(j[labels .≠ permutedims(labels)]) .> rounding_tol * norm(j))
+    function labels_of(g)
+        gs = vec([ g[k] - g[i] for k in 1:d, i in 1:d ])
+        return indexin(gs, unique(gs))
+    end
+    coherent(l) = any(abs.(j[l .≠ permutedims(l)]) .> rounding_tol * norm(j))
+    graded = basis_grades(sites)
+    labels = labels_of([ x.q for x in graded ])
+    if coherent(labels)
         error("$(obs_name(a)) has no definite charge on $on, so it has no Kraus operators of " *
               "definite charge")
+    end
+    parted = labels_of(graded)
+    if !coherent(parted)
+        labels = parted
     end
     blocks = [ findall(==(l), labels) for l in unique(labels) ]
     es = [ eigen(Hermitian(j[b, b])) for b in blocks ]

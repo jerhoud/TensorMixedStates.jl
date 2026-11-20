@@ -494,6 +494,19 @@ end
     u = (Id + im * (C + dag(C))) / sqrt(2)
     mixing = (0.5 * Gate(u) + 0.5 * Gate(Id))(2)
     @test same(() -> apply(mixing, as_trajectory(pfree); rng), apply(mixing, mix(pfree)))
+    # the rounding between parities, or in a diagonal block, chooses neither the blocks nor the
+    # eigenvectors drawn, nor the Kraus operators of a reset
+    σe = [0.25 0 0 0.05; 0 0.3 0 0; 0 0 0.2 0; 0.05 0 0 0.25]
+    σe[1, 2] = σe[2, 1] = 1e-14
+    electron = System(1, Electron())
+    @test all(_ -> abs(real(expect(State{Trajectory}(electron, σe; rng), TMS.F(1)))) ≈ 1, 1:50)
+    @test all(_ -> abs(real(expect(State{Trajectory}(System(1, Qubit()),
+                                                     [0.5 1e-14; 1e-14 0.5]; rng), Z(1)))) ≈ 1,
+              1:20)
+    parities = [0, 1, 1, 0]
+    definite(m) = allequal(mod(parities[a] + parities[b], 2) for a in 1:4, b in 1:4
+                           if abs(m[a, b]) > 1e-12)
+    @test all(k -> definite(matrix(k, Electron())), TMS.reset_kraus(Reset(σe), Electron()))
     # in a run, the generator of the simulation draws them
     run(name; kwargs...) = runTMS(SimData(; name, seed = 5, samples = 1, phases = [
                     CreateState{Trajectory}(fermions, kwargs[:state];
