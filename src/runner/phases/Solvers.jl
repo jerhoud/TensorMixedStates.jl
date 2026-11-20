@@ -63,7 +63,8 @@ a phase of time evolution, see `evolve`.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
-- `evolver`: `-im * H` for a Hamiltonian `H`, plus dissipators for a mixed state, or for an
+- `evolver`: `-im * H` for a Hamiltonian `H`, plus dissipators for a mixed state or a
+  trajectory, whose jumps it draws with the generator of the sample, or for an
   evolver depending on time a vector of terms `[A, B => g]`, see `evolve`, the time being that
   of the simulation
 - `duration`: the duration of the evolution

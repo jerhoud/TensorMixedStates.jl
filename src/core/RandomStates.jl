@@ -9,6 +9,8 @@ export random_state
     random_state(state, linkdims; rng, eltype = ComplexF64)
     random_state(Mixed, system, linkdims; rng, eltype = ComplexF64)
     random_state(Mixed, system, states, linkdims; rng, eltype = ComplexF64)
+    random_state(Trajectory, system, linkdims; rng, eltype = ComplexF64)
+    random_state(Trajectory, system, states, linkdims; rng, eltype = ComplexF64)
 
 a random state of link dimension `linkdims`: a pure state, the pure `state` randomised in its
 sector, or a mixed state drawn as a purification on twice the system, of link dimension
@@ -18,8 +20,10 @@ at least `1 / isqrt(linkdims)`, whatever the size of the system. On a system con
 something, a pure state is drawn in the sector of the local `states`, written as for `State`,
 or by randomising a state of the sector wanted, and a mixed one from the local `states` its
 purification starts from; a mixed state cannot be drawn on a system conserving something
-strongly. `rng` is the random number generator, the global one by default; `eltype = Float64`
-gives a real state, cheaper to contract, correct only if the whole computation stays real.
+strongly. A trajectory is drawn as the mixed state is, its ancillas then measured, so that its
+average over these measurements is the mixed state of that purification. `rng` is the random
+number generator, the global one by default; `eltype = Float64` gives a real state, cheaper to
+contract, correct only if the whole computation stays real.
 
 # Examples
 

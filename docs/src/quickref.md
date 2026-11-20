@@ -32,6 +32,8 @@ mixed_sys = System([Qubit(), Boson(4), Fermion()]) # sites of several types
 ρ = mix(ψ)                                         # |ψ⟩⟨ψ|
 ρ = State{Mixed}(sys, FullyMixed(Z => 0))          # a whole state: also Mixture([p => states, …])
 ψ = random_state(Pure, sys, 8)                     # random, bond dimension 8
+t = State{Trajectory}(sys, "FullyMixed"; rng)      # one quantum trajectory, a pure state drawn
+                                                   # from a mixed description
 ψ = ghz_state(sys, "Up", "Dn")                     # also dicke_state, w_state, dimer_state,
                                                    # fermi_sea, slater_state, fully_mixed,
                                                    # graph_state (Qubits), aklt_state (Spins)
@@ -167,6 +169,12 @@ measurements of the `SimData` at the end of each sample. Files and `Data` hold t
 times at once runs the samples on K cores, with the same results unless a sample reads
 `sim.data`; `tol = "name" => atol`
 stops them once the errors of `name` are within `atol`.
+
+Trajectories: `SimData(samples = N, …)` with a `CreateState{Trajectory}` or a
+`ConvertState{Trajectory}` runs one trajectory in each sample, from that phase on, with the same
+averaged files; dissipators and channels draw jumps and Kraus operators with the generator of
+the sample, at first order in the step for the jumps. What is not linear in the density matrix,
+as `Purity` or `Variance`, is refused; see [Quantum trajectories](@ref).
 
 ## When something fails
 

@@ -9,7 +9,8 @@ Version 2.0 is a rewrite of the library: a program written for 1.x needs the edi
 ## Features
 
 - Pure states and, for open systems, density matrices, both represented as matrix product
-  states.
+  states, or quantum trajectories, pure states drawn at random whose average is the density
+  matrix.
 - A rich set of sites and operators, easily extended by the user, with a very expressive
   syntax for observables, gates, channels, Hamiltonians and Lindbladians.
 - Ground states and excited states with DMRG, Hamiltonian and Lindbladian evolution with TDVP

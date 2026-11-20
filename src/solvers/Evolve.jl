@@ -401,8 +401,8 @@ the state evolved for `duration` under `evolver`, in `nsteps` steps of `duration
 in steps of `time_step` adjusted to the nearest one dividing `duration` into a whole number of
 them (none when `duration` is shorter than half a step), one of the two being given, by
 the method `algo`, see `EvolutionAlgorithm`. The evolver is `-im * H` for a Hamiltonian `H`,
-plus dissipators for a mixed state, or its `PreMPO(state, evolver)`, prepared once for several
-calls and keeping the MPOs they build. One that depends on time is a vector of terms, each an
+plus dissipators for a mixed state or a trajectory, or its `PreMPO(state, evolver)`, prepared
+once for several calls and keeping the MPOs they build. One that depends on time is a vector of terms, each an
 operator or an operator with its real function of time, `[A, B => g]` for ``A + g(t) B``,
 ``t`` starting at `time`.
 `step` is the number of the first step, for the periods of the methods and for `limits`, see

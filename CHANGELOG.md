@@ -12,6 +12,8 @@ the reference article.
 
 ### Added
 
+- `Trajectory`: quantum trajectories, pure states drawn at random whose average is the density matrix, by `State{Trajectory}`, `evolve` and `apply`, one in each sample of a simulation from its `CreateState{Trajectory}` or `ConvertState{Trajectory}` on.
+- `State{R}(…; rng)` takes the random number generator a trajectory draws its pure state with.
 - `depolarizing_channel(p, n; kraus = :reset)` chooses its decomposition into gates, `:reset` or `:pauli`.
 
 ## [2.2.0] - 2026-11-18

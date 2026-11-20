@@ -15,6 +15,7 @@ siteind(::Type{Pure}, ::System, ::Int64)
 TensorMixedStates.Representation
 Pure
 Mixed
+Trajectory
 Limits
 State
 TensorMixedStates.AbstractState

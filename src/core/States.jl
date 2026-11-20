@@ -169,13 +169,15 @@ function cached!(create!, v, state)
 end
 
 """
-    State{R}(system, states)
-    State{R}(n::Int, site::AbstractSite, states)
-    State{R}(sites::Vector{<:AbstractSite}, states)
+    State{R}(system, states; rng)
+    State{R}(n::Int, site::AbstractSite, states; rng)
+    State{R}(sites::Vector{<:AbstractSite}, states; rng)
     State(state, mps)
 
 the state of a quantum system, as an MPS: a wave function for `R = Pure`, a density matrix for
-`R = Mixed`. The local states are given as a vector, one per site, or as a single one for every
+`R = Mixed`, one quantum trajectory for `R = Trajectory`, which draws a pure state from the
+mixed descriptions with the random number generator `rng`, the global one by default, ignored
+by the others. The local states are given as a vector, one per site, or as a single one for every
 site: a name, `A => λ`, a vector of amplitudes, in mixed representation a density matrix, or a
 function of the site giving one of those. A vector of numbers is the amplitudes of one local
 state. `states` may also describe the whole state, `Mixture(terms)` or, in mixed
@@ -213,7 +215,7 @@ State(state::State{R}, st::MPS) where R = State{R}(state.system, st)
 """
     representation(state)
 
-the representation of `state`, `Pure` or `Mixed`, whatever the type holding it
+the representation of `state`, `Pure`, `Mixed` or `Trajectory`, whatever the type holding it
 """
 representation(::State{R}) where R = R
 

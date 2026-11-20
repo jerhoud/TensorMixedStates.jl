@@ -6,8 +6,9 @@ export ConvertState, ToMixed, Weaken, PartialTrace, Gates
 """
     ConvertState{R}(; limits, backend, on, name, time_start, final_measurements)
 
-a phase that takes the state to the representation `R`, `Pure` or `Mixed`: a pure state is mixed,
-see `mix`, a mixed one refused if `R` is `Pure`, a state already in `R` only truncated; the state
+a phase that takes the state to the representation `R`, `Pure`, `Mixed` or `Trajectory`: a pure
+state is mixed, see `mix`, or made a trajectory, a mixed one refused if `R` is `Pure` or
+`Trajectory`, a state already in `R` only truncated; the state
 converted is truncated to `limits` unless they are the default `Limits()`. Given `backend`, it
 takes the state to that type of states first, then to `R`. `ToMixed` is `ConvertState{Mixed}`.
 
@@ -35,7 +36,8 @@ struct ConvertState{R <: PM} <: AbstractPhase
     function ConvertState{R}(name, time_start, final_measurements, limits, backend,
                              on) where {R <: PM}
         if !isconcretetype(R)
-            error("ConvertState needs a representation: ConvertState{Pure} or ConvertState{Mixed}")
+            error("ConvertState needs a representation: ConvertState{Pure}, " *
+                  "ConvertState{Mixed} or ConvertState{Trajectory}")
         end
         return new{R}(name, time_start, final_measurements, limits, check_backend(backend), on)
     end

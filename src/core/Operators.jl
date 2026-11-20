@@ -3,7 +3,7 @@
 # layers walk an expression with `scalarcoef`, `scalararg`, `sumsubs`, `prodsubs`,
 # `factor_sites`, `scale`, `power`, `is_pure` and `obs_name`.
 
-export Pure, Mixed
+export Pure, Mixed, Trajectory
 export Operator, Id, Proj, Gate, Reset, Dephase, Dissipator, Evolver, named, parity, dag, ⊗,
     tensor, map_sites
 
@@ -12,15 +12,16 @@ export Operator, Id, Proj, Gate, Reset, Dephase, Dissipator, Evolver, named, par
 """
     abstract type Representation
 
-the supertype of the representations of a state: `Pure`, `Mixed`, and those an extension
-defines.
+the supertype of the representations of a state: `Pure`, `Mixed`, `Trajectory`, and those an
+extension defines.
 """
 abstract type Representation end
 
 """
     abstract type PM <: Representation
 
-the supertype of `Pure` and `Mixed`, the representations of a state this package defines
+the supertype of `Pure`, `Mixed` and `Trajectory`, the representations of a state this package
+defines
 """
 abstract type PM <: Representation end
 
@@ -41,8 +42,9 @@ struct Pure <: Ket end
 """
     Trajectory
 
-the representation of a state as one quantum trajectory, a wave function whose average over the
-trajectories is the density matrix (in development, not exported)
+the representation of a state as one quantum trajectory, as in `State{Trajectory}`: a wave
+function drawn at random, whose average over the trajectories is the density matrix, see the
+page on trajectories.
 """
 struct Trajectory <: Ket end
 

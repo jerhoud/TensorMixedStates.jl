@@ -7,16 +7,17 @@ export CreateState
     CreateState(; type, system, state, randomize, backend, on, name, time_start,
                   final_measurements)
     CreateState(state; options...)
-    CreateState{Pure|Mixed}(system, state; options...)
-    CreateState{Pure|Mixed}(n, site, state; options...)
-    CreateState{Pure|Mixed}(sites, state; options...)
+    CreateState{R}(system, state; options...)
+    CreateState{R}(n, site, state; options...)
+    CreateState{R}(sites, state; options...)
 
 a phase that creates the state of the simulation.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
-- `type`: the representation of the state, `Pure` or `Mixed`, by default that of `state` when
-  it is a state; the type holding it is `backend`
+- `type`: the representation of the state, `R`, `Pure`, `Mixed` or `Trajectory`, by default that
+  of `state` when it is a state; the type holding it is `backend`; a trajectory is drawn with
+  the generator of the sample, see `SimData`
 - `system`: the `System` of the state, unused when `state` is a state
 - `state`: a description of the state, see `State`, or a state, mixed if `type` asks for it
 - `randomize`: the link dimension of a random state to draw with the generator of the run,
@@ -56,8 +57,8 @@ function CreateState(; name::String = "Creating state",
         r = nameof(typeof(type))
         error("CreateState takes the type of its state, type = $r, where 1.x took type = $r()")
     elseif isnothing(type) && !(state isa AbstractState)
-        error("CreateState needs the type of its state, type = Pure or type = Mixed, unless " *
-              "it is given a state")
+        error("CreateState needs the type of its state, type = Pure, type = Mixed or " *
+              "type = Trajectory, unless it is given a state")
     end
     R = isnothing(type) ? representation(state) : type
     return CreateState{R}(name, time_start, final_measurements, R, system, state, randomize,

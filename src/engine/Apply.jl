@@ -653,7 +653,7 @@ applied_step(st::MPS, step, tr) =
                          applied_gates(step.gates, step.on, st, tr)
 
 """
-    apply(op, state; limits = Limits())
+    apply(op, state; limits = Limits(), rng)
     apply(mpo::MPO, state; limits = Limits(), apply_algo = "naive")
 
 the state with the operator `op`, placed on sites, applied, or the MPO `mpo` from
