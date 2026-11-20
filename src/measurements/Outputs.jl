@@ -691,18 +691,20 @@ function spread(s::RowSum, i::Int)
 end
 
 """
-    averaged_cells(s)
+    averaged_cells(s, samples = s.n)
 
 the cells of the row of sums `s`: `N`, `N_eff`, and for each cell its mean, the error on it and
-the standard deviation of the samples, `NaN` for one sample
+the standard deviation of the samples, `NaN` for one sample; the mean weight over the `samples`
+merged, those a weight of zero stopped before the row included
 """
-function averaged_cells(s::RowSum)
+function averaged_cells(s::RowSum, samples::Int = s.n)
     out = Pair{String, Any}[ "N" => s.n, "N_eff" => s.W^2 / s.W2 ]
     for (i, c) in enumerate(s.columns)
         if c == "log_weight"
             # the mean weight, its error relative to it from the spread of the weights
-            m = s.W / s.n
-            err = s.n > 1 ? sqrt(max(s.W2 / s.n - m^2, 0.) / (s.n - 1)) / m : NaN
+            n = max(samples, s.n)
+            m = s.W / n
+            err = n > 1 ? sqrt(max(s.W2 / n - m^2, 0.) / (n - 1)) / m : NaN
             append!(out, [ c => s.shift[i] + log(m), "err($c)" => err ])
         elseif s.missing[i]
             append!(out, [ c => missing, "err($c)" => missing, "std($c)" => missing ])
@@ -855,7 +857,7 @@ end
 function averaged_rows(sums::Dict{RowKey, RowSum}, fixed::AbstractDict, samples::Int)
     ks = sort!(collect(union(keys(sums), keys(fixed))))
     return [ haskey(fixed, k) ? first(fixed[k]) => fixed_cells(last(fixed[k]), samples) :
-                                sums[k].time => averaged_cells(sums[k]) for k in ks ]
+                                sums[k].time => averaged_cells(sums[k], samples) for k in ks ]
 end
 
 """

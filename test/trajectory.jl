@@ -611,3 +611,29 @@ end
     @test out["log_weight"] ≈ Float64(log(sum(bw) / 5)) rtol = 1e-12
     @test out["N_eff"] ≈ Float64(sum(bw)^2 / sum(bw .^ 2)) rtol = 1e-12
 end
+
+@testset "A result imposed weighs a trajectory by its probability, a weight of zero stopping it" begin
+    q = System(1, Qubit())
+    # outside a simulation: the trace kept by a result drawn, times the probability of one imposed
+    t = State{Trajectory}(q, [1, 1])
+    @test real(trace(collapse(t, Z(1); rng = Xoshiro(1)).state)) ≈ 2
+    r = collapse(t, Z(1) => 1)
+    @test r.probability ≈ 0.5 && real(trace(r.state)) ≈ 1
+    r = collapse(State{Trajectory}(q, "Up"), Z(1) => -1)
+    @test r.probability == 0 && real(trace(r.state)) == 0
+    @test_throws "of probability" collapse(State{Pure}(q, "Up"), Z(1) => -1)
+    # in a simulation: the trajectories of probability zero stopped, counted in the mean weight
+    ρ0 = [0.7 0; 0 0.3]
+    post = Update(c -> c.state = collapse(c.state, Z(1) => 1).state)
+    evolved = Evolve(evolver = -im * X(1), duration = 0.3, nsteps = 3,
+                     measurements = Data("steps") => Z(1))
+    sim = runTMS(SimData(seed = 4, samples = 400,
+                         phases = [CreateState{Trajectory}(q, ρ0), post, evolved],
+                         final_measurements = Data("z") => Z(1)); output = devnull)
+    z = only(sim.data["z"])
+    @test abs(z["log_weight"] - log(0.7)) < 4 * z["err(log_weight)"]
+    @test abs(z["N"] - 280) < 4 * sqrt(400 * 0.7 * 0.3)
+    @test all(r -> r["N"] == z["N"], sim.data["steps"])
+    ρ = evolve(-im * X(1), 0.3, collapse(State{Mixed}(q, ρ0), Z(1) => 1).state; nsteps = 3)
+    @test z["Z(1)"] ≈ real(expect(ρ, Z(1))) atol = 1e-8
+end

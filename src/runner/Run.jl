@@ -760,7 +760,9 @@ function run_sample(sim::Simulation, sd::SimData, b::Commit, sample::Int,
     # what follows is told of the sample, outside its phases
     run.phase = 0
     row_at!(run, typemax(Int), 0)
-    phase_output(sim, sd.final_measurements)
+    if !zero_weight(sim)
+        phase_output(sim, sd.final_measurements)
+    end
     log_line(run, "Sample $sample done, $(round(time() - began; digits = 3)) seconds" *
                   (sim.state isa State ? ", maxdim $(maxlinkdim(sim.state))" : ""))
     return sim

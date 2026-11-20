@@ -261,7 +261,7 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     end
     sim = carried_weight(with_values(sim; step = k))
     run = getfield(sim, :run)
-    if step_due(phase, k)
+    if step_due(phase, k) && !zero_weight(sim)
         row_at!(run, run.phase, k)
         phase_output(sim, step_measurements(phase))
     end
@@ -299,6 +299,9 @@ function run_phase(phase::AbstractPhase, sim, done)
     for k in done + 1:invokelatest(step_count, p)
         row_at!(getfield(sim, :run), getfield(sim, :run).phase, k)
         sim = step_done(invokelatest(run_step, p, sim, k), phase, k)
+        if zero_weight(sim)
+            break
+        end
     end
     return sim
 end
@@ -364,9 +367,13 @@ function carried_weight(sim::Simulation)
         return sim
     end
     t = real(trace(st))
-    if !(t > 0)
-        error("the trace of the trajectory reached $t, a weight of zero, which trajectories do " *
-              "not follow yet: use State{Mixed}")
+    if t == 0 && !zero_weight(sim)
+        return Simulation(st, sim.time, merge(getfield(sim, :values), Dict(:log_weight => -Inf)),
+                          getfield(sim, :run))
+    elseif t == 0
+        return sim
+    elseif !(t > 0)
+        error("the trace of the trajectory reached $t, which no weight is")
     elseif abs(log(t)) < 100
         # far from the bounds of the numbers, and from rounding, which would change the last bits
         return sim
@@ -383,6 +390,9 @@ function carried_weight(sim::Simulation)
     return Simulation(st, sim.time, values, getfield(sim, :run))
 end
 
+# whether the trajectory of `sim` has a weight of zero, which stops its sample, see `run_phases`
+zero_weight(sim::Simulation) = get(getfield(sim, :values), :log_weight, 0.) == -Inf
+
 """
     run_phases(sim, phases, start, done, ended, threading; final = true)
 
@@ -398,6 +408,10 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
     c = run.checkpointer
     run.phases = phases
     for i in start:length(phases)
+        if zero_weight(sim)
+            log_message(sim, "\n***** The trajectory has a weight of zero: the sample stops *****")
+            break
+        end
         phase = phases[i]
         d = i == start ? done : 0
         run.phase = i
@@ -427,7 +441,9 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
             end
             # whatever the steps of the phase, so that the samples of an average match
             row_at!(run, i, typemax(Int))
-            phase_output(sim, phase.final_measurements)
+            if !zero_weight(sim)
+                phase_output(sim, phase.final_measurements)
+            end
             sim
         end
         sim = td.value

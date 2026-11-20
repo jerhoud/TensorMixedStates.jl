@@ -110,7 +110,12 @@ trajectory by it, `N_eff` saying how many count, and the column `log_weight` giv
 of the mean weight, an estimate of the logarithm of the trace of the mixed state, with its
 error; `EachSample` gives that of each trajectory, and the measurements may read it as the value
 `:log_weight`. The run carries the trace into that value at each step where it is far from one,
-so that it neither underflows nor overflows. Outside a simulation, the trace of a trajectory is its weight: average
+so that it neither underflows nor overflows.
+
+A result imposed by `collapse`, as `collapse(t, Z(1) => 1)` in an `Update`, multiplies the
+weight by its probability, a postselection whose probability `log_weight` then estimates. A
+trajectory of probability zero is left null and stops its sample: it counts in the mean weight,
+but in no row after, whose column `N` counts the trajectories left. Outside a simulation, the trace of a trajectory is its weight: average
 `trace(t) * expect(t, A)` and divide by the average of `trace(t)`.
 
 With disorder, the function of `Realizations` returns the phases of the trajectory, from its

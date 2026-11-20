@@ -314,7 +314,8 @@ the result of measuring site `pos`, or the Hermitian operator `op` placed on a f
 probability, and the state it leaves, `(result, probability, state)`: the result is drawn with
 its probability, see `probabilities`, or given as a pair, `pos => x` or `op => λ`, a result that
 is not possible or of zero probability being refused, and the state is projected onto it and
-normalized. The projection on several sites is truncated by `limits`, `Limits()` by default:
+normalized; a trajectory keeps its trace, its weight, times the probability of a result given,
+of zero probability leaving the null state. The projection on several sites is truncated by `limits`, `Limits()` by default:
 for a product of involutions, the state plus its image by the product, which at most doubles
 the bond dimension, or quadruples it on a density matrix; for a sum of operators of one site,
 an MPO whose bond carries the partial sums, as many as its dimension; otherwise the projector,
@@ -334,7 +335,17 @@ function collapse(state::AbstractState, op::IndexedOp{IsOperator}; rng = Random.
                   limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements[])
     values, probs, project = measurement(state, op, "collapse"; max_dense)
     k = draw(x -> probs[x + 1], length(probs), rand(rng)) + 1
-    return (result = values[k], probability = probs[k], state = project(k, limits))
+    return (result = values[k], probability = probs[k],
+            state = collapsed(state, project(k, limits), 1.))
+end
+
+# the state a measurement leaves, `st` normalized; a trajectory keeps its trace, its weight, times
+# the probability `p` of a result imposed
+collapsed(::AbstractState, st, p::Real) = st
+function collapsed(state::State{Trajectory}, st, p::Real)
+    f = p * real(trace(state))
+    # a factor one but for rounding left out, which would only change the last bits
+    return abs(f - 1) ≤ rounding_tol ? st : sqrt(f) * st
 end
 
 function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
@@ -352,11 +363,15 @@ function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:
         error("$λ is not a result of measuring $(obs_name(op)), whose results are " *
               "$(join(values, ", "))")
     end
-    if probs[k] ≤ 0
+    if probs[k] ≤ 0 && state isa State{Trajectory}
+        # a trajectory of weight zero, which a simulation stops
+        return (result = values[k], probability = 0., state = 0 * state)
+    elseif probs[k] ≤ 0
         error("collapse cannot project on the result $λ of $(obs_name(op)), of probability " *
               "$(probs[k])")
     end
-    return (result = values[k], probability = probs[k], state = project(k, limits))
+    return (result = values[k], probability = probs[k],
+            state = collapsed(state, project(k, limits), probs[k]))
 end
 
 function collapse(state::AbstractState, result::Pair{Int, <:Real})
