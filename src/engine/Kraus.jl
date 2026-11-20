@@ -1,11 +1,11 @@
-# The Kraus operators of a channel, each of definite charge and parity, for the trajectories,
+# The Kraus operators of a channel, each of definite charge, for the trajectories,
 # which draw one of them where a density matrix takes their sum.
 
 """
     kraus_operators(system, a)
 
 the Kraus operators `K` of the channel `a` on `system`, operators placed on its sites, `a` being
-``\\rho \\mapsto \\sum_K K\\rho K^\\dagger``, each of definite charge and parity but for a gate
+``\\rho \\mapsto \\sum_K K\\rho K^\\dagger``, each of definite charge but for a gate
 placed as a whole, as `Gate(X(1) + X(2))`
 """
 function kraus_operators(system::System, a::IndexedOp{IsChannel})
@@ -46,15 +46,15 @@ end
     site_kraus(system, a)
 
 the Kraus operators of the channel `a` placed on sites, from its structure, refused when they
-have no definite charge or parity, as a trajectory draws among the operators written
+have no definite charge, as a trajectory draws among the operators written
 """
 function site_kraus(system::System, a::AtIndex{IsChannel})
     sites = [ system[i] for i in a.index ]
     ks = generic_kraus(a.op, sites)
     if !all(k -> definite_grade(k, sites), ks)
-        error("the Kraus operators of $(obs_name(a.op)) as written have no definite charge or " *
-              "parity on $(join(sites, " ⊗ ")): write the channel as a sum of gates of definite " *
-              "charge and parity, among which its trajectories are drawn")
+        error("the Kraus operators of $(obs_name(a.op)) as written have no definite charge on " *
+              "$(join(sites, " ⊗ ")): write the channel as a sum of gates of definite charge, " *
+              "among which its trajectories are drawn")
     end
     return [ k(a.index...) for k in ks ]
 end
@@ -91,7 +91,7 @@ end
     reset_kraus(a, site)
 
 the Kraus operators of the reset `a` of `site` to σ, ``\\sqrt{λ}|s⟩⟨n|`` for each eigenvector `s`
-of σ, found block by block of charge and parity, and each basis state `n`
+of σ, found block by block of the charges the site conserves, and each basis state `n`
 """
 function reset_kraus(a::Reset, site::AbstractSite)
     x = local_state(site, a.state)
@@ -102,11 +102,11 @@ function reset_kraus(a::Reset, site::AbstractSite)
               "Kraus operators")
     end
     σ = x isa AbstractMatrix ? x / real(tr(x)) : x * x' / real(x' * x)
-    g = basis_grades([site])
+    g = basis_charges(site)
     # the rounding left between sectors dropped, a coherence between them refused
     if any(abs(σ[i, j]) > rounding_tol * norm(σ) for i in 1:d, j in 1:d if g[i] ≠ g[j])
-        error("$(obs_name(a)) resets $site to a state of no definite charge or parity, which a " *
-              "trajectory cannot hold")
+        error("$(obs_name(a)) resets $site to a state of no definite charge, which a trajectory " *
+              "cannot hold")
     end
     es = sector_eigen(σ, g)
     if any(e -> first(e) < -rounding_tol, es)
@@ -152,11 +152,11 @@ basis_grades(sites) =
 """
     definite_grade(k, sites)
 
-whether the operator `k` of `sites` has a definite charge and a definite parity
+whether the operator `k` of `sites` has a definite charge, in the quantities they conserve
 """
 function definite_grade(k::GenericOp{IsOperator}, sites)
     m = matrix(k, sites...)
-    g = basis_grades(sites)
+    g = [ x.q for x in basis_grades(sites) ]
     small = rounding_tol * norm(m)
     return length(unique(g[a] - g[b] for a in axes(m, 1), b in axes(m, 2)
                          if abs(m[a, b]) > small)) ≤ 1
@@ -166,7 +166,7 @@ end
     choi_kraus(a, sites)
 
 the Kraus operators of the channel `a` of `sites`, its Choi matrix diagonalized block by block of
-charge and parity, those of weight below rounding dropped
+the charges they conserve, those of weight below rounding dropped
 """
 function choi_kraus(a::GenericOp{IsChannel}, sites)
     check_dense(a, sites)
@@ -181,7 +181,7 @@ function choi_kraus(a::GenericOp{IsChannel}, sites)
         error("$(obs_name(a)) does not keep density matrices Hermitian on $on, so it has no " *
               "Kraus operators")
     end
-    g = basis_grades(sites)
+    g = [ x.q for x in basis_grades(sites) ]
     grades = vec([ g[k] - g[i] for k in 1:d, i in 1:d ])
     labels = indexin(grades, unique(grades))
     if any(abs.(j[labels .≠ permutedims(labels)]) .> rounding_tol * norm(j))

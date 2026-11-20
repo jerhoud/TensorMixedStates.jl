@@ -363,7 +363,7 @@ draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
     sector_eigen(σ, g)
 
 the eigenvalues and the eigenvectors `(λ, s)` of the Hermitian matrix `σ` of a site whose basis
-states have the grades `g`, block by block of grade, a diagonal block keeping the basis itself
+states have the charges `g`, block by block of charge, a diagonal block keeping the basis itself
 """
 function sector_eigen(σ::AbstractMatrix, g)
     pairs = Tuple{Float64, Vector}[]
@@ -386,8 +386,9 @@ end
 
 the vector of a pure state of site `i` of `system` drawn from the local state `x`: `x` itself
 when it is pure, otherwise an eigenvector of its density matrix with the probability of its
-eigenvalue, see `sector_eigen`, refused when it spreads over charges or parities, or over
-strongly conserved values, which a trajectory, of definite ones, could only draw among
+eigenvalue, see `sector_eigen`, refused when it has coherences between the charges the site
+conserves, or spreads over strongly conserved values, which a trajectory, of definite ones,
+could only draw among
 """
 function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
     site = system[i]
@@ -399,11 +400,11 @@ function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
     end
     σ = v / real(tr(v))
     d = dim(site)
-    g = collect(zip(basis_charges(site), fermion_parities(site)))
+    g = basis_charges(site)
     # the rounding left between sectors dropped, a coherence between them refused
     if any(abs(σ[a, b]) > rounding_tol * norm(σ) for a in 1:d, b in 1:d if g[a] ≠ g[b])
-        error("$(repr(x)) is a state of $site of no definite charge or parity, which a " *
-              "trajectory cannot draw")
+        error("$(repr(x)) is a state of $site of no definite charge, which a trajectory cannot " *
+              "draw")
     end
     es = sector_eigen(σ, g)
     if any(e -> first(e) < -rounding_tol, es)
@@ -411,7 +412,7 @@ function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
     end
     kept = filter(e -> first(e) > rounding_tol, es)
     names = strong_names(system)
-    strong(s) = strong_part(first(g[findfirst(!iszero, s)]), names)
+    strong(s) = strong_part(g[findfirst(!iszero, s)], names)
     if !isempty(names) && !allequal(strong(s) for (_, s) in kept)
         error("$(repr(x)) spreads over several values of $(join(names, ", ")) on $site, which " *
               "conserving it strongly forbids: drop `strong`")

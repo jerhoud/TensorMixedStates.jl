@@ -1329,18 +1329,18 @@ end
                        random_state(Mixed, fsys, ["Occ", "Emp", "Occ"], 16))
     # Kraus operators written with no definite charge are refused, as a trajectory draws among
     # the operators written, alone, in a sum, or as a sum of placed channels; a fermion conserving
-    # nothing keeps a definite parity
+    # nothing imposes no parity on them, one conserving it does
     f = Fermion(conserve = N)
-    generic(k) = TMS.scalarcoef(k) * TMS.scalararg(k).op
     @test_throws "as written have no definite charge" kraus_operators(
         System(1, f), 0.5 * (Gate(C + dag(C)) + Gate(im * (C - dag(C))))(1))
     @test_throws "as written have no definite charge" kraus_operators(System(1, f),
                                                                       Gate(C + dag(C))(1))
     @test_throws "as written have no definite charge" kraus_operators(
         fsys, 0.5 * (Gate(C + dag(C))(2) + Gate(im * (C - dag(C)))(2)))
-    free = Fermion()
-    @test all(k -> TMS.scalararg(k) isa TMS.IdentityOp || TMS.definite_grade(generic(k), [free]),
-              kraus_operators(System(3, free), depolarizing_channel(0.3)(2)))
+    mixing = 0.5 * (Gate((Id + im * (C + dag(C))) / sqrt(2)) + Gate(Id))
+    @test length(kraus_operators(System(3, Fermion()), mixing(2))) == 2
+    @test_throws "as written have no definite charge" kraus_operators(
+        System(3, Fermion(conserve = parity(N))), mixing(2))
     # a power developed as written, which a trajectory draws factor by factor instead, and a
     # reset to a matrix that is not a density matrix refused
     @test length(kraus_operators(System(1, Qubit()), (dephasing_channel(0.2, X)^10)(1))) == 3^10

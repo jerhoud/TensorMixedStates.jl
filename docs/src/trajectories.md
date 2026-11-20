@@ -35,9 +35,12 @@ t = State{Trajectory}(ψ)            # the pure state ψ, a ground state for ins
   purification, and measures its ancillas: the average of the trajectory is the random mixed
   state drawn from that purification.
 
-A local density matrix with coherences between charges or fermionic parities is refused, since
-its eigenvectors would not be drawn among states of definite charge and parity, and so is, on a
-system conserving a quantity strongly, a description spreading over several of its values.
+On a system conserving a quantity, a trajectory has a definite charge of it, like a pure state:
+a local density matrix with coherences between its charges is refused, and so is, when it is
+conserved strongly, a description spreading over several of its values. A system conserving
+nothing imposes nothing, not even the parity of fermions: to keep real fermions to states of
+definite parity, declare it, `Fermion(conserve = parity(N))`, see
+[Conserving a quantity](@ref).
 
 ## Evolving and applying
 
@@ -58,9 +61,9 @@ t = evolve(L, 1.0, State{Trajectory}(sys, "Dn"); nsteps = 50, rng = Xoshiro(2))
 draws. The jumps and the Kraus operators are those the expression is written with: `L` for
 `Dissipator(L)`, the gates of a sum of `Gate`, the projectors of a `Dephase`, the operators of
 a `Reset`; a channel given by its matrix alone is decomposed by its Choi matrix, block by block
-of charge and parity. Two ways of writing one channel give the same average with different variances:
-`depolarizing_channel(p; kraus = :reset)`, the default, resets the sites to the fully mixed
-state with the probability `p`, `kraus = :pauli` applies the identity or a Pauli gate, on
+of the charges conserved. Two ways of writing one channel give the same average with different
+variances: `depolarizing_channel(p; kraus = :reset)`, the default, resets the sites to the fully
+mixed state with the probability `p`, `kraus = :pauli` applies the identity or a Pauli gate, on
 qubits.
 
 The algebra of states acts on the kets, as for pure states: `t1 + t2` is a superposition, not a

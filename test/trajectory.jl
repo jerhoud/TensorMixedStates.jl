@@ -302,10 +302,11 @@ end
                                               as_trajectory(ps); rng)
     @test_throws "by different amounts" apply(Gate(C)(1) + Gate(dag(C))(2), as_trajectory(ps);
                                               rng)
-    # refused: off the system, a reset to a state of no definite parity, no sites
+    # refused: off the system, a reset to a state of no definite charge of a quantity conserved,
+    # no sites
     @test_throws "which the system does not have" apply(depolarizing_channel(0.3)(5), t; rng)
-    free = as_trajectory(random_state(Pure, System(2, Fermion()), 4; rng))
-    @test_throws "which a trajectory cannot hold" apply(Reset([1, 1])(1), free; rng)
+    paired = as_trajectory(State{Pure}(System(2, Fermion(conserve = parity(N))), "Occ"))
+    @test_throws "which a trajectory cannot hold" apply(Reset([1, 1])(1), paired; rng)
     @test_throws "1 site or more" depolarizing_channel(0.1, 0)
     # a run draws: a full depolarizing of |↑⟩ gives ↓ for some seed
     run(seed) = only(runTMS(SimData(; name = "d$seed", seed, samples = 1, phases = [
@@ -477,11 +478,22 @@ end
                  N(1)) ≈ 1
     @test_throws "cannot draw a random mixed state" random_state(Trajectory, strong_sys,
                                                                  ["Occ", "Emp"], 4)
-    free = System(2, Fermion())
-    @test_throws "no definite charge or parity" State{Trajectory}(free, [0.5 0.5; 0.5 0.5])
+    @test_throws "no definite charge" State{Trajectory}(System(2, Fermion(conserve = parity(N))),
+                                                        [0.5 0.5; 0.5 0.5])
     @test_throws "is not Hermitian" State{Trajectory}(qubits, [0.5 0.5; 0 0.5])
     @test_throws "is not positive" State{Trajectory}(qubits, [1.5 0; 0 -0.5])
     @test_throws "drawn from the purification" random_state(Trajectory, qubits, FullyMixed(), 4)
+    # a system conserving nothing imposes no parity on the fermions: a local state, a reset target
+    # and Kraus operators superposing parities, the latter on the second site, under a string
+    free = System(2, Fermion())
+    coherent = [0.5 0.5; 0.5 0.5]
+    @test same(() -> State{Trajectory}(free, coherent; rng), State{Mixed}(free, coherent))
+    pfree = random_state(Pure, free, 4; rng = Xoshiro(5))
+    reset = Reset([1, 1])(1)
+    @test same(() -> apply(reset, as_trajectory(pfree); rng), apply(reset, mix(pfree)))
+    u = (Id + im * (C + dag(C))) / sqrt(2)
+    mixing = (0.5 * Gate(u) + 0.5 * Gate(Id))(2)
+    @test same(() -> apply(mixing, as_trajectory(pfree); rng), apply(mixing, mix(pfree)))
     # in a run, the generator of the simulation draws them
     run(name; kwargs...) = runTMS(SimData(; name, seed = 5, samples = 1, phases = [
                     CreateState{Trajectory}(fermions, kwargs[:state];
