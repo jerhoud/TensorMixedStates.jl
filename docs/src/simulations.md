@@ -291,7 +291,9 @@ whenever one is due.
 A simulation with `samples` runs its last phases many times, once for each sample, each sample
 with its own draw of the disorder. The phases before the last phase, `Realizations`, run once
 and lead to the branch point; each sample starts again from the state they reached and runs the
-phases the function of `Realizations` returns.
+phases the function of `Realizations` returns. A simulation of quantum trajectories branches in
+the same way at its first `CreateState{Trajectory}` or `ConvertState{Trajectory}`, without
+`Realizations`, see [Quantum trajectories](@ref).
 
 ```julia
 runTMS(SimData(

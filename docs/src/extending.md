@@ -16,9 +16,9 @@ own:
     [methods](@ref "Methods of one's own"), the
     [destinations](@ref "Destinations of one's own") and the
     [states](@ref "States of one's own") of one's own, and the functions they name, are
-    experimental. They were written for extensions still to come, quantum trajectories,
-    purifications or adapters of other libraries, and may change in a version 2.x when the
-    first of these shows what they lack. The functions they name are not exported: a program
+    experimental. They were written for extensions still to come, purifications or adapters
+    of other libraries, and may change in a version 2.x when the first of these shows what they
+    lack. The functions they name are not exported: a program
     adds a method to a function under its full name, as `TensorMixedStates.run_phase`, and
     imports a type it uses, as with `using TensorMixedStates: AbstractPhase`. The site types,
     the operators and the measurements of one's own are not concerned.

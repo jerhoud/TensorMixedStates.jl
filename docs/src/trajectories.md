@@ -107,7 +107,9 @@ that computes it.
 With disorder, the function of `Realizations` returns the phases of the trajectory, from its
 `CreateState{Trajectory}` or `ConvertState{Trajectory}`: each sample is then one realization of
 the disorder and one trajectory. A phase making a trajectory before `Realizations` is refused,
-since every sample would go on from the same trajectory.
+since every sample would go on from the same trajectory, and so is a trajectory loaded by
+`LoadState` or set by `Update` outside the samples: a trajectory is loaded among the phases
+`Realizations` returns.
 
 ## What a trajectory refuses
 
@@ -115,9 +117,11 @@ The average over the trajectories gives what is linear in the density matrix: th
 values, the probabilities of `sample` and `collapse`, the trace, the fidelity to a pure state.
 The rest is refused with a message saying so: the purity, the entropies and the entanglement
 spectrum, the logarithmic negativity, the fidelity to a mixed state, the measurement `Norm`,
-inner products and matrix elements between states. `Variance(A)` is refused too: measure `A^2` and `A`, whose
-averages give it. A trajectory is not mixed by `mix`, has no `Vector`, and is not held by an
-`ExactState`.
+inner products and matrix elements between states. `Variance(A)` is refused too: measure `A^2`
+and `A`, whose averages give it. A trajectory is not mixed by `mix`, has no `Vector`, and is not
+held by an `ExactState`. A ground state is searched in `Pure`, then made a trajectory by
+`State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
 
 Not available yet: `SteadyState` and `Thermalize`, `ConvertState{Trajectory}` of a mixed
-state, and a channel in one product with a gate that does not keep the trace.
+state, the product `⊗` of trajectories, `random_state(t, n)` of a trajectory `t`, and a channel
+in one product with a gate that does not keep the trace.

@@ -7,11 +7,12 @@ export Realizations
 """
     Realizations(f; name = "Realizations")
 
-the last phase of a simulation with `samples`, see `SimData`, where its samples branch off: each
-sample starts from the state the phases before it reached, computed once, and runs the phases
-`f(c)` returns, `c.sample` being the index of the sample and `c.rng` the generator `f` draws the
-disorder of that sample with. The final measurements of the `SimData` are made at the end of each
-sample, and the value `:sample` gives its index to the measurements.
+the last phase of a simulation with `samples` drawing a disorder, see `SimData`, where its
+samples branch off: each sample starts from the state the phases before it reached, computed
+once, and runs the phases `f(c)` returns, `c.sample` being the index of the sample and `c.rng`
+the generator `f` draws the disorder of that sample with. The final measurements of the
+`SimData` are made at the end of each sample, and the value `:sample` gives its index to the
+measurements.
 
 `f` must return the same phases, by type and name, for every sample, and draw with `c.rng` alone,
 so that a resumed sample gets the same phases. It is called once when the `SimData` is written,

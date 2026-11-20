@@ -527,7 +527,10 @@ State{R}(size::Int, site::AbstractSite, state; rng::AbstractRNG = Random.default
 State{R}(sites::Vector{<:AbstractSite}, state; rng::AbstractRNG = Random.default_rng()) where R =
     State{R}(System(sites), state; rng)
 
-State{Trajectory}(ψ::State{Pure}) = State{Trajectory}(ψ.system, copy(ψ.state))
+State{Trajectory}(ψ::State{<:Ket}; rng::AbstractRNG = Random.default_rng()) =
+    State{Trajectory}(ψ.system, copy(ψ.state))
+State{Trajectory}(::State{Mixed}; rng::AbstractRNG = Random.default_rng()) =
+    not_yet("a trajectory of a mixed state")
 
 ############### Operations ###############
 

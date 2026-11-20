@@ -189,6 +189,8 @@ end
     tψ = State{Trajectory}(ψ)
     @test tψ isa State{Trajectory} && expect1(tψ, X) == expect1(ψ, X)
     @test tψ.state !== ψ.state
+    @test expect1(State{Trajectory}(tψ; rng = Xoshiro(2)), X) == expect1(ψ, X)
+    @test_throws "a trajectory of a mixed state" State{Trajectory}(mix(ψ))
     # a projector of rank one is a pure state, whatever the draw
     @test expect1(State{Trajectory}(qubits, [[1 0; 0 0], "Up"]), Z) == [1, 1]
     @test_throws "State{Ket} has no representation of its own" State{Ket}(qubits, "Up")
