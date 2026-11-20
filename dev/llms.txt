@@ -10,6 +10,7 @@
 - [Choosing and checking the parameters](https://jerhoud.github.io/TensorMixedStates.jl/dev/accuracy/): the truncation, the time step, the sweeps
 - [High level interface](https://jerhoud.github.io/TensorMixedStates.jl/dev/simulations/): simulations as phases, their files and checkpoints
 - [Conserving a quantity](https://jerhoud.github.io/TensorMixedStates.jl/dev/conservation/): weak and strong symmetries, and what they save
+- [Quantum trajectories](https://jerhoud.github.io/TensorMixedStates.jl/dev/trajectories/): pure states drawn at random, whose average is the density matrix
 - [Threads and performance](https://jerhoud.github.io/TensorMixedStates.jl/dev/performance/): threads, BLAS, long sums
 - [Extending TMS](https://jerhoud.github.io/TensorMixedStates.jl/dev/extending/): site types, phases, methods, destinations and states of one's own
 - [Upgrading from 1.x](https://jerhoud.github.io/TensorMixedStates.jl/dev/upgrading/): the names, keywords and defaults that changed in 2.0
