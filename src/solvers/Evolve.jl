@@ -245,15 +245,17 @@ struct Decay
 end
 
 """
-    JumpEvolver(pre, decays, rng)
+    JumpEvolver(pre, decays, keeps, rng)
 
 the evolver of a trajectory under dissipators: the `PreMPO` of its effective operator
-``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term with jumps, and the
-generator drawing them, see `with_rng`, `nothing` for the default one
+``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term with jumps, whether its
+operators `K` keep the trace, and the generator drawing them, see `with_rng`, `nothing` for the
+default one
 """
 struct JumpEvolver
     pre::PreMPO
     decays::Vector{Decay}
+    keeps::Bool
     rng::Union{Nothing, AbstractRNG}
 end
 
@@ -290,16 +292,13 @@ function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limi
             push!(terms, isnothing(f) ? op : op => f)
         end
     end
-    # a trajectory is brought back to its trace after each step, which only the dissipators may
-    # change: the operators of the terms of one function of time are anti-Hermitian together
-    for f in unique(isnothing(fs) ? [nothing] : fs)
+    # the operators of the terms of one function of time anti-Hermitian together keep the trace
+    keeps = all(unique(isnothing(fs) ? [nothing] : fs)) do f
         ks = [ k for k in eachindex(ops) if isequal(isnothing(fs) ? nothing : fs[k], f) &&
                                             !isnothing(pures[k]) ]
-        if !isempty(ks) && !prepare_op(sys, im * sum(pures[ks])).hermitian
-            trace_not_kept(sum(ops[ks]))
-        end
+        isempty(ks) || prepare_op(sys, im * sum(pures[ks])).hermitian
     end
-    return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, nothing)
+    return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, keeps, nothing)
 end
 
 # refuse the jump `j` of the generator `a` when it changes a charge `system` conserves strongly,
@@ -333,7 +332,7 @@ end
 the evolver `pre`, see `prepared_evolver`, drawing with `rng`: itself when it draws nothing
 """
 with_rng(pre, ::AbstractRNG) = pre
-with_rng(e::JumpEvolver, rng::AbstractRNG) = JumpEvolver(e.pre, e.decays, rng)
+with_rng(e::JumpEvolver, rng::AbstractRNG) = JumpEvolver(e.pre, e.decays, e.keeps, rng)
 
 # the rate of the jumps of `d` on `state` at `time`
 function decay_rate(d::Decay, state::State{Trajectory}, time::Number)
@@ -347,9 +346,11 @@ end
 
 # one step of a trajectory at first order in `dt`: a jump with the probability `dt` times the
 # sum of the rates, drawn among the jumps by its rate, or else a step under the effective
-# operator, the trajectory brought back to its trace. A jump replacing the step leaves a smaller
-# error than a jump followed by the step (measured on a qubit). An algorithm of one's own calling
-# evolve_step of Tdvp or ApproxW with a JumpEvolver draws the jumps with them
+# operator, the trajectory brought back to its trace or, when the operators do not keep it,
+# divided by the probability of no jump, which weighs it at first order in `dt` by what they keep.
+# A jump replacing the step leaves a smaller error than a jump followed by the step (measured on a
+# qubit). An algorithm of one's own calling evolve_step of Tdvp or ApproxW with a JumpEvolver
+# draws the jumps with them
 function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
                      time::Number, dt::Number, step::Int, limits::Limits)
     if !(isreal(dt) && real(dt) > 0)
@@ -365,7 +366,8 @@ function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Tr
               "$(round(δp; sigdigits = 3)) of a jump, above one: take smaller steps")
     end
     if rand(rng) ≥ δp
-        return with_trace(evolve_step(algo, e.pre, state, time, dt, step, limits), state)
+        stepped = evolve_step(algo, e.pre, state, time, dt, step, limits)
+        return e.keeps ? with_trace(stepped, state) : stepped / sqrt(1 - δp)
     end
     d = e.decays[draw_index(rates, rng)]
     i = draw_index([ real(expect(state, dag(j) * j)) for j in d.jumps ], rng)

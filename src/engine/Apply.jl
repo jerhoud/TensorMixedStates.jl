@@ -717,45 +717,48 @@ function apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits
     if !isempty(names) && length(strong_fluxes(state.system, a, names)) > 1
         strong_refusal(a, names)
     end
-    return drawn(a, state, limits, rng; check = true)
+    return kept_scale(drawn(a, state, limits, rng))
 end
 
 """
-    drawn(a, st, limits, rng; check = false)
+    drawn(a, st, limits, rng)
 
-the trajectory `st` with the channel `a` applied as written, a Kraus operator drawn with its
-Born probability given `a`, the state brought back to its trace; with `check`, `a` refused when
-it does not keep the trace
+the trajectory `st` with the channel `a` applied as written, a part of a sum drawn by its
+weight, a Kraus operator by its Born probability, its trace, its weight, multiplied by what `a`
+keeps of it, so that the average of the trajectories is the channel applied: left as it is by a
+channel keeping the trace
 """
-function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, rng::AbstractRNG;
-               check::Bool = false)
+function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, rng::AbstractRNG)
     if a isa ScalarOp
-        if check
-            kept_trace(a, [weight(a, st)])
-        end
-        return drawn(a.arg, st, limits, rng)
+        return scaled_trace(drawn(a.arg, st, limits, rng), a.coef, a)
     elseif a isa SumOp
         ws = [ weight(x, st) for x in a.subs ]
-        if check
-            kept_trace(a, ws)
-        end
-        return drawn(a.subs[draw_index(ws, rng)], st, limits, rng)
+        x = a.subs[draw_index(ws, rng)]
+        # the part drawn without its coefficient, weighted by the sum over its weight, which an
+        # estimate leaves unbiased, and a sum keeping the trace leaves unchanged
+        return scaled_trace(drawn(scalararg(x), st, limits, rng),
+                            sum(ws) / weight(scalararg(x), st), a)
     elseif a isa ProdOp && !is_pure(a)
-        unitary_gates(st.system, a)
         for f in reverse(channel_factors(a))
-            st = f isa IndexedOp{IsOperator} ? apply(f, st; limits) :
-                 drawn(f, st, limits, rng; check = true)
+            st = f isa IndexedOp{IsOperator} ? apply(f, st; limits) : drawn(f, st, limits, rng)
         end
         return st
     elseif a isa AtIndex && a.op isa Union{ProdOp, SumOp, IntPowOp, TensorOp}
-        return drawn(placed_structure(a), st, limits, rng; check)
+        return drawn(placed_structure(a), st, limits, rng)
     end
     ks = kraus_of(st.system, a)
     ps = [ real(expect(st, dag(k) * k)) for k in ks ]
-    if check
-        kept_trace(a, ps)
+    return scaled_trace(with_trace(apply(ks[draw_index(ps, rng)], st; limits), st), sum(ps), a)
+end
+
+# the trajectory `st` with its trace, its weight, multiplied by the factor `f` the channel `a`
+# keeps, a factor one but for rounding left out, which would only change the last bits
+function scaled_trace(st::State{Trajectory}, f::Real, a)
+    if f < 0
+        error("$(obs_name(a)) gives a trajectory a negative weight, $f: it is not completely " *
+              "positive")
     end
-    return with_trace(apply(ks[draw_index(ps, rng)], st; limits), st)
+    return abs(f - 1) ≤ rounding_tol ? st : sqrt(f) * st
 end
 
 # the Kraus operators of the channel `a`, placed on sites, checked for a definite charge when it is
@@ -784,7 +787,7 @@ end
 
 # the trace the channel `a` keeps of the trajectory `st`, divided by its trace: one for a
 # structure keeping it, a product of gates one Kraus operator, a product of channels one, its
-# factors being checked as they are drawn
+# factors weighing the trajectory as they are drawn
 function weight(a::IndexedOp{IsChannel}, st::State{Trajectory})
     if keeps_trace(st.system, a)
         return 1.
@@ -796,20 +799,10 @@ function weight(a::IndexedOp{IsChannel}, st::State{Trajectory})
         return weight(placed_structure(a), st)
     elseif !is_pure(a) &&
            (a isa ProdOp || a isa AtIndex && a.op isa Union{ProdOp, IntPowOp, TensorOp})
-        unitary_gates(st.system, a isa AtIndex ? placed_structure(a) : a)
+        # one for a product, whose factors weigh the trajectory as they are drawn
         return 1.
     end
     return sum(k -> real(expect(st, dag(k) * k)), kraus_of(st.system, a))
-end
-
-# refuse a product of channels holding a gate that does not keep the trace, which only weights
-# would follow
-function unitary_gates(system::System, a::IndexedOp{IsChannel})
-    for x in prodsubs(a)
-        if is_pure(x) && !keeps_trace(system, x)
-            not_yet("a channel and a gate not keeping the trace in one product, on a trajectory,")
-        end
-    end
 end
 
 # whether the channel `a`, placed on sites, keeps the trace by its structure
@@ -856,19 +849,6 @@ function strong_fluxes(system::System, a::IndexedOp{IsChannel}, names)
     ks = is_pure(a) ? [kraus(a.op)] : generic_kraus(a.op, sites)
     return unique([ strong_flux(k, sites, names) for k in ks ])
 end
-
-# the probabilities `ps` of the parts of `a`, refused when they do not sum to one: far from their
-# rounding, and from a channel losing any trace that matters
-function kept_trace(a, ps::Vector{Float64})
-    if !isapprox(sum(ps), 1; rtol = sqrt(eps()))
-        trace_not_kept(a)
-    end
-    return ps
-end
-
-trace_not_kept(a) =
-    error("$(obs_name(a)) does not keep the trace, which a trajectory follows only with weights, " *
-          "not available yet: use State{Mixed}")
 
 """
     apply_steps(op, state)

@@ -105,7 +105,8 @@ becomes the starting point of every trajectory by `ConvertState{Trajectory}()` a
 that computes it.
 
 An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
-projection, changes the trace of the trajectory, which is its weight: the averages weigh each
+projection, a channel or an evolver that loses trace, changes the trace of the trajectory, which
+is its weight: the averages weigh each
 trajectory by it, `N_eff` saying how many count, and the column `log_weight` gives the logarithm
 of the mean weight, an estimate of the logarithm of the trace of the mixed state, with its
 error; `EachSample` gives that of each trajectory, and the measurements may read it as the value
@@ -143,5 +144,4 @@ held by an `ExactState`. A ground state is searched in `Pure`, then made a traje
 `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
 
 Not available yet: `SteadyState`, `ConvertState{Trajectory}` of a mixed
-state, the product `⊗` of trajectories, `random_state(t, n)` of a trajectory `t`, and a channel
-in one product with a gate that does not keep the trace.
+state, the product `⊗` of trajectories and `random_state(t, n)` of a trajectory `t`.

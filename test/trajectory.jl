@@ -242,12 +242,12 @@ end
     @test length(ks(depolarizing_channel(0.2))) == 5
     @test length(TensorMixedStates.kraus_operators(qubits,
                  depolarizing_channel(0.2, 2; kraus = :pauli)(1, 2))) == 16
-    # refused: Kraus operators of no definite charge, a channel not keeping the trace
+    # refused: Kraus operators of no definite charge; a channel not keeping the trace weighs
     @test_throws "as written have no definite charge" apply(
         0.5 * (Gate(C + dag(C)) + Gate(im * (C - dag(C))))(2), as_trajectory(pf); rng)
-    @test_throws "does not keep the trace" apply(0.5 * depolarizing_channel(0.2)(1), t; rng)
-    @test_throws "does not keep the trace" apply(Gate(Proj("Up"))(1) + Gate(Proj("Up"))(1), t;
-                                                 rng)
+    @test real(trace(apply(0.5 * depolarizing_channel(0.2)(1), t; rng))) ≈ 0.5
+    @test real(trace(apply(Gate(Proj("Up"))(1) + Gate(Proj("Up"))(1), t; rng))) ≈
+          2 * real(expect(p, Proj("Up")(1)))
     @test_throws "kraus is :reset or :pauli" depolarizing_channel(0.2; kraus = :other)
     # drawn as written, never developed: a power, and a channel of many sites
     ch = (dephasing_channel(0.2, X)^10)(1)
@@ -408,8 +408,8 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     # the trace kept by the operators of the terms of one function together
     @test real(trace(evolve([-im * h + X(1), -X(1), Dissipator(Sm)(1)], 0.1, t; nsteps = 2,
                             rng))) ≈ 1
-    # refused: a jump changing a strong charge, as Mixed refuses it, negative rates, a trace the
-    # operators do not keep, steps backward or too long, jumps of no definite charge
+    # refused: a jump changing a strong charge, as Mixed refuses it, negative rates, steps backward
+    # or too long, jumps of no definite charge
     strong_sys = System(3, Fermion(conserve = strong(N)))
     ps = as_trajectory(random_state(Pure, strong_sys, ["Occ", "Emp", "Occ"], 4; rng))
     @test_throws "by different amounts" evolve(-im * hf + Dissipator(C)(2), 0.1, ps; nsteps = 1)
@@ -418,10 +418,6 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
                                              nsteps = 1)
     @test_throws "gives their jumps a negative rate" evolve(
         [-im * h, Dissipator(Sm)(1) => s -> -1], 0.1, t; nsteps = 1)
-    @test_throws "does not keep the trace" evolve(Evolver(X)(1) + Dissipator(Sm)(1), 0.1, t;
-                                                  nsteps = 1)
-    @test_throws "does not keep the trace" evolve([-im * h + X(1), -X(1) => f,
-                                                   Dissipator(Sm)(1)], 0.1, t; nsteps = 1)
     @test_throws "forward in real time" evolve(g, -0.1, t; nsteps = 1)
     @test_throws "above one: take smaller steps" evolve(-im * h + 100 * Dissipator(Sm)(1), 0.1,
                                                         t; nsteps = 1)
@@ -662,4 +658,27 @@ end
                      CreateState{Trajectory}(sys, "FullyMixed"),
                      CreateState{Trajectory}(sys, "FullyMixed"; on = :b),
                      Thermalize(hamiltonian = h, beta = 0.5, nsteps = 2, on = :b)]); output = devnull)
+end
+
+@testset "Channels and evolvers not keeping the trace weigh a trajectory by what they keep" begin
+    rng = Xoshiro(21)
+    qubits = System(2, Qubit())
+    p = random_state(Pure, qubits, 2; rng)
+    t = as_trajectory(p)
+    # the average of trace × ⟨Z(1)⟩ and of the trace, against the channel applied to the mixed state
+    function weighed(f, ρ; n = 400)
+        values = [ (s = f(); [real(trace(s)), real(trace(s)) * real(expect(s, Z(1)))])
+                   for _ in 1:n ]
+        return within_error(values, [real(trace(ρ)), real(trace(ρ)) * real(expect(ρ, Z(1)))])
+    end
+    K = Operator{1}("K", [1.0 0; 0 0.5])
+    for ch in ((0.5 * Gate(X) + 0.3 * Gate(Id))(1),
+               Gate(K)(1) * depolarizing_channel(0.3)(2),
+               0.7 * amplitude_damping_channel(0.4)(2))
+        @test weighed(() -> apply(ch, t; rng), apply(ch, mix(p)))
+    end
+    # an evolver whose operators lose trace, with jumps, at first order in the step
+    g = -im * (X(1) * X(2) + Z(1)) - 0.4 * Proj("Dn")(1) + Dissipator(sqrt(0.5) * Sm)(2)
+    @test weighed(() -> evolve(g, 0.5, t; nsteps = 40, rng), evolve(g, 0.5, mix(p); nsteps = 40);
+                  n = 300)
 end
