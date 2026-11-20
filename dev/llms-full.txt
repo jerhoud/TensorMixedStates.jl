@@ -1683,7 +1683,9 @@ definite parity, declare it, `Fermion(conserve = parity(N))`, see
 ``dt``, a jump happens with the probability ``\delta p = dt \sum_L \langle L^\dagger L\rangle``,
 the operator ``L`` drawn among those of the dissipators with its rate ``\langle L^\dagger
 L\rangle``, and replaces the step; otherwise the step evolves the trajectory under the effective
-operator ``-iH - \frac12 \sum_L L^\dagger L``. The trajectory is then brought back to its trace.
+operator ``-iH - \frac12 \sum_L L^\dagger L``. The trajectory is then brought back to its trace
+or, when the operators do not keep it, divided by the probability of no jump, which weighs it by
+what they keep.
 This scheme is of first order in ``dt``: the average of the trajectories has an error of order
 ``dt``, which halving the step shows, and a step whose ``\delta p`` exceeds one is refused.
 
@@ -1741,24 +1743,32 @@ that computes it.
 
 An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
 projection, a channel or an evolver that loses trace, changes the trace of the trajectory, which
-is its weight: the averages weigh each
-trajectory by it, `N_eff` saying how many count, and the column `log_weight` gives the logarithm
-of the mean weight, an estimate of the logarithm of the trace of the mixed state, with its
-error; `EachSample` gives that of each trajectory, and the measurements may read it as the value
+is its weight. The averages weigh each trajectory by it, their errors being those of a ratio of
+weighted means, `N_eff` saying how many trajectories count, and the column `log_weight` gives the
+logarithm of the mean weight, an estimate of the logarithm of the trace of the mixed state, with
+its error. Every row of a simulation of trajectories has that column, 0 before the trajectory,
+`EachSample` giving the weight of each, and the measurements may read it as the value
 `:log_weight`. The run carries the trace into that value at each step where it is far from one,
-so that it neither underflows nor overflows.
+so that it neither underflows nor overflows. Only the trajectory `:state` carries the weight: a
+phase changing the trace of another one is refused.
 
 `thermalize` and `Thermalize` take a trajectory drawn from a mixed state, as
-`CreateState{Trajectory}(system, "FullyMixed")`, to ``e^{-\\beta H/2} \\psi`` normalized, its
+`CreateState{Trajectory}(system, "FullyMixed")`, to ``e^{-\beta H/2} \psi`` normalized, its
 weight multiplied by the squared norm: the averages are those of the thermal state, and the mean
-weight is ``Z / \\prod_i d_i``. The weights spread as ``\\beta`` grows, which `N_eff` shows: at low
-temperature, few trajectories count.
+weight is ``Z / \prod_i d_i``. The weights spread as ``\beta`` grows, which `N_eff` shows: at low
+temperature, few trajectories count. The value `:log_trace`, the logarithm of the weight of one
+trajectory, is refused in a measurement, its average not being that of the thermal state: the
+column `log_weight` gives it.
 
 A result imposed by `collapse`, as `collapse(t, Z(1) => 1)` in an `Update`, multiplies the
 weight by its probability, a postselection whose probability `log_weight` then estimates. A
 trajectory of probability zero is left null and stops its sample: it counts in the mean weight,
-but in no row after, whose column `N` counts the trajectories left. Outside a simulation, the trace of a trajectory is its weight: average
-`trace(t) * expect(t, A)` and divide by the average of `trace(t)`.
+but in no row after, whose column `N` counts the trajectories left.
+
+Outside a simulation, the trace of a trajectory is its weight: average `trace(t) * expect(t, A)`
+and divide by the average of `trace(t)`. `thermalize` normalizes the trajectory it is given, as
+it does a mixed state: the weight is then the exponential of its `log_trace` times the trace the
+trajectory had.
 
 With disorder, the function of `Realizations` returns the phases of the trajectory, from its
 `CreateState{Trajectory}` or `ConvertState{Trajectory}`: each sample is then one realization of
