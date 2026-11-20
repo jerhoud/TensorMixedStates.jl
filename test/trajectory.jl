@@ -460,6 +460,10 @@ end
     @test_throws "the terms have different values of N" State{Trajectory}(
         strong_sys, Mixture([0.5 => ["Occ", "Emp"], 0.5 => "Emp"]))
     @test State{Trajectory}(strong_sys, FullyMixed(N => 1); rng) isa State{Trajectory}
+    # the rounding left in a local state does not decide its strongly conserved values
+    ρ = [1e-18 0; 0 1]
+    @test expect(State{Trajectory}(strong_sys, Mixture([0.5 => [ρ, ρ], 0.5 => "Occ"]); rng),
+                 N(1)) ≈ 1
     @test_throws "cannot draw a random mixed state" random_state(Trajectory, strong_sys,
                                                                  ["Occ", "Emp"], 4)
     free = System(2, Fermion())

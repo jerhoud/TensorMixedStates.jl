@@ -411,12 +411,12 @@ function State{Trajectory}(system::System, m::Mixture; rng::AbstractRNG = Random
         end
         [ local_state(system[i], sts[i]) for i in 1:n ]
     end
-    # the strongly conserved values of a term, from those of the diagonal of its local states
+    # the strongly conserved values of a term, from the basis states of largest weight of its local
+    # states, those of definite values being the only ones drawn, see `drawn_local`
     names = strong_names(system)
     function strong(vs)
         ds = [ v isa Vector ? abs2.(v) : abs.(diag(v)) for v in vs ]
-        return strong_part(sum(basis_charges(system[i])[findfirst(>(0), ds[i])] for i in 1:n),
-                           names)
+        return strong_part(sum(basis_charges(system[i])[argmax(ds[i])] for i in 1:n), names)
     end
     if !isempty(names) && !allequal(strong(vs) for vs in locals)
         error("the terms have different values of $(join(names, ", ")), which conserving it " *
