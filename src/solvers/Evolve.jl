@@ -247,8 +247,9 @@ end
 """
     JumpEvolver(pre, decays, keeps, rng)
 
-the evolver of a trajectory under dissipators: the `PreMPO` of its effective operator
-``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term with jumps, whether its
+the evolver of a trajectory under dissipators, or under operators keeping its trace: the `PreMPO`
+of its effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term
+with jumps, none without dissipators, whether its
 operators `K` keep the trace, and the generator drawing them, see `with_rng`, `nothing` for the
 default one
 """
@@ -321,7 +322,10 @@ function prepared_evolver(state::State{Trajectory}, terms::Union{AbstractVector,
                           mpo_limits::Limits = Limits(); duration::Union{Nothing, Number} = nothing)
     ops, fs = split_terms(terms isa Pair ? [terms] : terms)
     if all(a -> !(a isa IndexedOp{IsGenerator}) || is_pure(a), ops)
-        return PreMPO(state, terms; limits = mpo_limits)
+        e = JumpEvolver(state, ops, fs, mpo_limits)
+        # an evolver keeping the trace brings the trajectory back to it at each step, so that what
+        # truncation loses is no weight
+        return e.keeps ? e : e.pre
     end
     return JumpEvolver(state, ops, fs, mpo_limits)
 end
@@ -353,7 +357,9 @@ end
 # draws the jumps with them
 function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
                      time::Number, dt::Number, step::Int, limits::Limits)
-    if !(isreal(dt) && real(dt) > 0)
+    if isempty(e.decays)
+        return with_trace(evolve_step(algo, e.pre, state, time, dt, step, limits), state)
+    elseif !(isreal(dt) && real(dt) > 0)
         error("a trajectory draws its jumps forward in real time, and the step is $dt")
     elseif vanished(state.state)
         return state

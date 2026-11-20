@@ -713,7 +713,10 @@ function apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits
                rng::AbstractRNG = Random.default_rng())
     check_indices(state.system, a)
     if is_pure(a)
-        return kept_scale(applied(state, apply_steps(a, state)..., limits))
+        st = applied(state, apply_steps(a, state)..., limits)
+        # gates keeping the trace bring the trajectory back to it, so that what truncation loses
+        # is no weight
+        return kept_scale(keeps_trace(state.system, a) ? with_trace(st, state) : st)
     end
     names = strong_names(state.system)
     if !isempty(names) && length(strong_fluxes(state.system, a, names)) > 1
@@ -780,7 +783,7 @@ kraus_of(system::System, a::IndexedOp{IsChannel}) =
 # of a trajectory goes through a channel unchanged, as the probability of no jump it may carry
 function with_trace(new::State{Trajectory}, old::State{Trajectory})
     t = real(trace(new))
-    return iszero(t) ? new : sqrt(real(trace(old)) / t) * new
+    return iszero(t) ? new : weighted(new, real(trace(old)) / t)
 end
 
 # the channel `a` placed on sites as a whole as a structure of placed channels

@@ -747,6 +747,19 @@ end
                                                                            on = :b),
                                                    Gates(gates = Gate(K)(1), on = :b)],
                                                   Data("z") => Z(1); samples = 2)
+    # truncation is no weight: an evolution or gates keeping the trace bring it back
+    six = System(6, Qubit())
+    h6 = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) for i in 1:5) + 0.5 * sum(Z(i) for i in 1:6)
+    t6 = State{Trajectory}(six, "FullyMixed"; rng)
+    @test real(trace(evolve(-im * h6, 1., t6; nsteps = 10, limits = Limits(maxdim = 2)))) ≈ 1
+    circuit = prod(Gate(exp(-0.3im * (X ⊗ X + Y ⊗ Y)))(i, i + 1) for i in 1:5)
+    @test real(trace(apply(circuit, evolve(-im * h6, 1., t6; nsteps = 4);
+                           limits = Limits(maxdim = 2), rng))) ≈ 1
+    r = run([CreateState{Trajectory}(six, "FullyMixed"),
+             CreateState{Trajectory}(six, "FullyMixed"; on = :b),
+             Evolve(evolver = -im * h6, duration = 1., nsteps = 10, limits = Limits(maxdim = 2),
+                    on = [:state, :b])], Data("z") => Z(3); samples = 2).data["z"]
+    @test only(r)["log_weight"] ≈ 0 atol = 1e-12
     # an Update too, though it provides the state
     halved = Update(c -> c.b = collapse(c.b, Z(1) => 1).state; provides = [:b])
     @test_throws "which only :state carries" run([CreateState{Trajectory}(q, "FullyMixed"),
