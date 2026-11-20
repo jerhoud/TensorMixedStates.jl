@@ -104,6 +104,15 @@ shares them between the processes. A pure state prepared once, a ground state fo
 becomes the starting point of every trajectory by `ConvertState{Trajectory}()` after the phase
 that computes it.
 
+An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
+projection, changes the trace of the trajectory, which is its weight: the averages weigh each
+trajectory by it, `N_eff` saying how many count, and the column `log_weight` gives the logarithm
+of the mean weight, an estimate of the logarithm of the trace of the mixed state, with its
+error; `EachSample` gives that of each trajectory, and the measurements may read it as the value
+`:log_weight`. The run carries the trace into that value at each step where it is far from one,
+so that it neither underflows nor overflows. Outside a simulation, the trace of a trajectory is its weight: average
+`trace(t) * expect(t, A)` and divide by the average of `trace(t)`.
+
 With disorder, the function of `Realizations` returns the phases of the trajectory, from its
 `CreateState{Trajectory}` or `ConvertState{Trajectory}`: each sample is then one realization of
 the disorder and one trajectory. A phase making a trajectory before `Realizations` is refused,

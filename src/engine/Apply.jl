@@ -691,11 +691,27 @@ apply(a::IndexedOp, state::State; limits::Limits = Limits(),
       rng::AbstractRNG = Random.default_rng()) =
     applied(state, apply_steps(a, state)..., limits)
 
+apply(a::IndexedOp, state::State{Trajectory}; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) =
+    kept_scale(applied(state, apply_steps(a, state)..., limits))
+
+# the trajectory `st` refused when its trace, which weights it, nears the bounds of the floating
+# point numbers, far from any trace a computation keeps in range
+function kept_scale(st::State{Trajectory})
+    t = norm(st.state)^2
+    if 0 < t < 1e-250 || t > 1e250
+        error("the trace of the trajectory reached $t, near the bounds of the numbers: divide it " *
+              "by its trace and keep the logarithm of that trace as its weight, or run it in a " *
+              "simulation, which carries its weight")
+    end
+    return st
+end
+
 function apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits = Limits(),
                rng::AbstractRNG = Random.default_rng())
     check_indices(state.system, a)
     if is_pure(a)
-        return applied(state, apply_steps(a, state)..., limits)
+        return kept_scale(applied(state, apply_steps(a, state)..., limits))
     end
     names = strong_names(state.system)
     if !isempty(names) && length(strong_fluxes(state.system, a, names)) > 1

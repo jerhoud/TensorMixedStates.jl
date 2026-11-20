@@ -259,7 +259,7 @@ function step_done(sim::Simulation, phase, k::Int; last::Bool = false,
     if last && !same
         error("step_done with last commits the result of the phase, sim: it takes no resume_from")
     end
-    sim = with_values(sim; step = k)
+    sim = carried_weight(with_values(sim; step = k))
     run = getfield(sim, :run)
     if step_due(phase, k)
         row_at!(run, run.phase, k)
@@ -351,6 +351,39 @@ function check_sampled(sim::Simulation)
 end
 
 """
+    carried_weight(sim)
+
+`sim` with the trace of its trajectory carried into its value `:log_weight`, as its logarithm,
+and its trajectories divided by the square root of that trace, once it is far from one, so that
+a long phase neither underflows nor overflows it; `sim` itself otherwise, the measurements adding
+the logarithm of the trace to the value
+"""
+function carried_weight(sim::Simulation)
+    st = sim.state
+    if !(st isa State{Trajectory})
+        return sim
+    end
+    t = real(trace(st))
+    if !(t > 0)
+        error("the trace of the trajectory reached $t, a weight of zero, which trajectories do " *
+              "not follow yet: use State{Mixed}")
+    elseif abs(log(t)) < 100
+        # far from the bounds of the numbers, and from rounding, which would change the last bits
+        return sim
+    end
+    values = copy(getfield(sim, :values))
+    values[:log_weight] = get(values, :log_weight, 0.) + log(t)
+    s = 1 / sqrt(t)
+    st = s * st
+    for (k, v) in values
+        if v isa State{Trajectory}
+            values[k] = s * v
+        end
+    end
+    return Simulation(st, sim.time, values, getfield(sim, :run))
+end
+
+"""
     run_phases(sim, phases, start, done, ended, threading; final = true)
 
 run the phases from the phase `start`, its first `done` steps done, and the phase itself when
@@ -390,6 +423,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
                 # called for the phase and the state as they are, see output
                 sim = invokelatest(run_phase, phase, sim, d)
                 check_sampled(sim)
+                sim = carried_weight(sim)
             end
             # whatever the steps of the phase, so that the samples of an average match
             row_at!(run, i, typemax(Int))

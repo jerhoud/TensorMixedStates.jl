@@ -567,3 +567,47 @@ end
                      prefix, made, Realizations(_ -> [evolved])]); output = devnull)
     @test length(run("f", [Realizations(_ -> [prefix, made, evolved])])) == 3
 end
+
+@testset "A trajectory weighs the averages by its trace, carried at each step" begin
+    q = System(1, Qubit())
+    K = Operator{1}("K", [1.0 0; 0 0.5])
+    run(lists; samples = 3, more = []) = runTMS(SimData(; seed = 3, samples, phases = [
+                    CreateState{Trajectory}(q, "FullyMixed"), Gates(gates = Gate(K)(1)), more...],
+                    final_measurements = lists); output = devnull)
+    rows = run(EachSample(Data("z")) => Z(1)).data["z"]
+    @test all(r -> r["log_weight"] ≈ (r["Z(1)"] > 0 ? 0 : log(0.25)), rows)
+    w = [ exp(r["log_weight"]) for r in rows ]
+    z = [ r["Z(1)"] for r in rows ]
+    avg = only(run(Data("z") => Z(1)).data["z"])
+    @test avg["Z(1)"] ≈ sum(w .* z) / sum(w)
+    @test avg["N_eff"] ≈ sum(w)^2 / sum(w .^ 2)
+    @test avg["log_weight"] ≈ log(sum(w) / 3)
+    # against the mixed state, its expectation value and its trace
+    many = only(run(Data("z") => Z(1); samples = 400).data["z"])
+    ρ = apply(Gate(K)(1), State{Mixed}(q, "FullyMixed"))
+    @test abs(many["Z(1)"] - real(expect(ρ, Z(1)))) < 4 * many["err(Z(1))"]
+    @test abs(many["log_weight"] - log(real(trace(ρ)))) < 4 * many["err(log_weight)"]
+    # carried at each step: a thousand quarterings of the trace in one phase
+    quarter = Update(c -> c.state = 0.5 * c.state; nsteps = 1000)
+    rows = run(EachSample(Data("z")) => Z(1); more = [quarter]).data["z"]
+    @test all(r -> r["log_weight"] ≈ 1000 * log(0.25) + (r["Z(1)"] > 0 ? 0 : log(0.25)), rows)
+    # the column reserved, the value read
+    @test_throws "one the averages or the samples write" run(Data("z") => ["log_weight" => Z(1)])
+    @test only(run(Data("z") => ["lw" => :log_weight]).data["z"])["lw"] isa Real
+    # outside a simulation, a trace near the bounds of the numbers refused
+    @test_throws "near the bounds of the numbers" apply(Gate(1e-130 * Id)(1),
+                                                         State{Trajectory}(q, "Up"))
+    # weights hundreds of orders of magnitude apart, against sums in BigFloat
+    lws = [0., 800., -800., 300., 800.5]
+    xs = [0.3, -1.2, 5.0, 2.2, 0.7]
+    cells(lw, x) = Pair{String, Any}["x" => x, "log_weight" => lw]
+    sums = TMS.RowSum(0., cells(lws[1], xs[1]))
+    for (lw, x) in zip(lws, xs)
+        sums = TMS.added(sums, cells(lw, x), 0., (1, 1, 1), "d")
+    end
+    out = Dict(TMS.averaged_cells(sums))
+    bw = exp.(big.(lws))
+    @test out["x"] ≈ Float64(sum(bw .* xs) / sum(bw)) rtol = 1e-12
+    @test out["log_weight"] ≈ Float64(log(sum(bw) / 5)) rtol = 1e-12
+    @test out["N_eff"] ≈ Float64(sum(bw)^2 / sum(bw .^ 2)) rtol = 1e-12
+end

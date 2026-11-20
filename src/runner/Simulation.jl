@@ -334,9 +334,14 @@ function output(sim::Simulation, list::AbstractVector)
     end
     run = getfield(sim, :run)
     items = [ run_destination(run, first(p)) => last(p) for p in list ]
+    values = measured_values(sim)
+    # the weight of a trajectory, what its steps carried and what its trace holds
+    if sim.state isa State{Trajectory}
+        values[:log_weight] = get(values, :log_weight, 0.) + log(real(trace(sim.state)))
+    end
     # called for the state as it is: inferred for any state, the measurements would take
     # minutes to compile
-    invokelatest(output!, run.outputs, sim.state, items; time = sim.time, measured_values(sim)...)
+    invokelatest(output!, run.outputs, sim.state, items; time = sim.time, values...)
     return nothing
 end
 

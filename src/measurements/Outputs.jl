@@ -558,8 +558,9 @@ function data_to_frame end
 
 the destination `d`, a file name or a destination, written a row for each sample in a simulation
 with samples, after the time the column `sample` giving its index, 0 before the samples, rather
-than the averages over the samples its other destinations hold, see `SimData`; refused in a
-simulation without samples
+than the averages over the samples its other destinations hold, see `SimData`, a trajectory
+writing the logarithm of its weight in the column `log_weight`; refused in a simulation without
+samples
 
 # Examples
 
@@ -572,7 +573,7 @@ end
 show(io::IO, d::EachSample) = print(io, "EachSample(", d.inner, ")")
 
 # the columns the rows of the samples write, or will: no measurement written there takes their name
-const sample_columns = ("sample", "weight", "trajectory")
+const sample_columns = ("sample", "weight", "trajectory", "log_weight")
 
 # opened as the destination it stands for, once a name is made a destination, see by_destination
 open(d::EachSample) = open(d.inner)
@@ -635,13 +636,14 @@ same_time(a, b) =
     (a isa Number && b isa Number && abs(a - b) ≤ rounding_tol * max(abs(a), abs(b)))
 
 """
-    added(s, cells, time, key, d; weight = 1)
+    added(s, cells, time, key, d)
 
 the sums `s` of the row `key` of the averaged destination `d` with a sample, refused unless it has
-the same time, columns and missing cells
+the same time, columns and missing cells; a trajectory weighed by the exponential of its cell
+`log_weight`, which is shifted by the largest so far, the sums rescaled when it grows, so that no
+weight overflows
 """
-function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d;
-               weight::Real = 1)
+function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d)
     if !same_time(time, s.time)
         error("the samples of $d have the times $(s.time) and $time at $(row_place(key)): " *
               "averaged rows need the same times, which EachSample(…) does not")
@@ -649,22 +651,35 @@ function added(s::RowSum, cells::Vector{Pair{String, Any}}, time, key::RowKey, d
         error("the samples of $d have other columns at $(row_place(key)): averaged rows need the " *
               "same, which EachSample(…) does not")
     end
-    w = Float64(weight)
-    W = s.W + w
-    mean, M2 = copy(s.mean), copy(s.M2)
+    shift, mean, M2 = copy(s.shift), copy(s.mean), copy(s.M2)
+    W, W2 = s.W, s.W2
+    iw = findfirst(==("log_weight"), s.columns)
+    w = 1.
+    if !isnothing(iw)
+        lw = Float64(last(cells[iw]))
+        if lw > shift[iw]
+            f = exp(shift[iw] - lw)
+            W, W2, M2 = f * W, f^2 * W2, f * M2
+            shift[iw] = lw
+        end
+        w = exp(lw - shift[iw])
+    end
+    W += w
     for (i, (column, x)) in enumerate(cells)
-        if ismissing(x) ≠ s.missing[i]
+        if i == iw
+            continue
+        elseif ismissing(x) ≠ s.missing[i]
             error("$column of $d is missing in some samples only at $(row_place(key)): it cannot " *
                   "be averaged, which EachSample(…) does not need")
         elseif !ismissing(x)
             # exact where the deviations are small against the value, which keeps their digits
-            y = x - s.shift[i]
+            y = x - shift[i]
             delta = y - mean[i]
             mean[i] += (w / W) * delta
             M2[i] += w * delta * (y - mean[i])
         end
     end
-    return RowSum(s.time, s.columns, s.missing, s.shift, s.n + 1, W, s.W2 + w^2, mean, M2)
+    return RowSum(s.time, s.columns, s.missing, shift, s.n + 1, W, W2 + w^2, mean, M2)
 end
 
 # the standard deviation of the samples in the cell `i` of the row of sums `s` and the error on
@@ -684,7 +699,12 @@ the standard deviation of the samples, `NaN` for one sample
 function averaged_cells(s::RowSum)
     out = Pair{String, Any}[ "N" => s.n, "N_eff" => s.W^2 / s.W2 ]
     for (i, c) in enumerate(s.columns)
-        if s.missing[i]
+        if c == "log_weight"
+            # the mean weight, its error relative to it from the spread of the weights
+            m = s.W / s.n
+            err = s.n > 1 ? sqrt(max(s.W2 / s.n - m^2, 0.) / (s.n - 1)) / m : NaN
+            append!(out, [ c => s.shift[i] + log(m), "err($c)" => err ])
+        elseif s.missing[i]
             append!(out, [ c => missing, "err($c)" => missing, "std($c)" => missing ])
         else
             sd, err = spread(s, i)
@@ -795,7 +815,8 @@ end
 
 function put_keyed_row!(o::AveragedOpened, (sample, phase, step), r::MeasuredRow)
     cells = row_cells(r)
-    check_averaged(o.destination, cells, phase, step)
+    weighted = !isempty(cells) && first(last(cells)) == "log_weight"
+    check_averaged(o.destination, weighted ? cells[1:end - 1] : cells, phase, step)
     if sample == 0
         n = 1 + count(k -> k[1] == phase && k[2] == step, keys(o.fixed))
     else
@@ -922,7 +943,9 @@ end
 
 function put_keyed_row!(r::Recorder, at::NTuple{3, Int}, row::MeasuredRow)
     if r.destination isa Averaged
-        check_averaged(r.destination, row_cells(row), at[2], at[3])
+        cells = row_cells(row)
+        weighted = !isempty(cells) && first(last(cells)) == "log_weight"
+        check_averaged(r.destination, weighted ? cells[1:end - 1] : cells, at[2], at[3])
     end
     push!(r.rows, (at, r.list, row))
     return nothing
@@ -1081,12 +1104,23 @@ function output!(o::Outputs, state::AbstractState, list::AbstractVector; time = 
             prepare_list!(opened, first.(m.entries))
         end
         rows = [ measure(state, m; time, values...) for (_, m) in items ]
+        weight = get(values, :log_weight, nothing)
         for ((d, m), row) in zip(items, rows)
-            put_keyed_row!(o.opened[d], o.at[], measured_row(m, time, row))
+            r = measured_row(m, time, row)
+            if !isnothing(weight) && d isa Union{Averaged, EachSample}
+                r = weighted_row(r, weight)
+            end
+            put_keyed_row!(o.opened[d], o.at[], r)
         end
     end
     return nothing
 end
+
+# the row `r` of a trajectory with the logarithm of its weight, `log_weight`, which the averages
+# weigh it by and the rows of each sample write
+weighted_row(r::MeasuredRow, log_weight::Real) =
+    MeasuredRow(r.time, Pair{String, Any}[ r.values ; "log_weight" => Float64(log_weight) ],
+                [ r.parts ; [Pair{String, Any}["log_weight" => Float64(log_weight)]] ])
 
 """
     close!(o)
