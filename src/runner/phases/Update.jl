@@ -60,6 +60,8 @@ end
 
 provided_values(phase::Update) = Tuple(phase.provides)
 
+fresh_states(::Update) = ()
+
 prepare_phase(phase::Update, ::Simulation) = phase
 
 step_count(phase::Update) = phase.nsteps

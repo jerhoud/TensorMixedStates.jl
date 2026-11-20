@@ -118,6 +118,10 @@ provided_values(_) = ()
 # `Realizations`
 makes_trajectory(_) = false
 
+# the states `phase` makes anew, whose trace no weight changed: those it provides but for an
+# Update, which may change a state it provides
+fresh_states(phase) = provided_values(phase)
+
 """
     phase_files(phase)
 
@@ -389,11 +393,11 @@ end
     check_carriers(before, after, phase)
 
 refuse a change of the trace of a trajectory other than `:state` from the simulation `before` to
-`after` by `phase`, but of one the phase gives anew, see `provided_values`: only `:state` carries
+`after` by `phase`, but of one the phase makes anew, see `fresh_states`: only `:state` carries
 the weight of a sample, the others are measured as they are, unweighted
 """
 function check_carriers(before::Simulation, after::Simulation, phase)
-    given = provided_values(phase)
+    given = fresh_states(phase)
     for (name, st) in getfield(after, :values)
         old = get(getfield(before, :values), name, nothing)
         if st isa State{Trajectory} && old isa State{Trajectory} && name ∉ given

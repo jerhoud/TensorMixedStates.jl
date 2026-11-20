@@ -747,4 +747,10 @@ end
                                                                            on = :b),
                                                    Gates(gates = Gate(K)(1), on = :b)],
                                                   Data("z") => Z(1); samples = 2)
+    # an Update too, though it provides the state
+    halved = Update(c -> c.b = collapse(c.b, Z(1) => 1).state; provides = [:b])
+    @test_throws "which only :state carries" run([CreateState{Trajectory}(q, "FullyMixed"),
+                                                   CreateState{Trajectory}(q, [1, 1] / sqrt(2);
+                                                                           on = :b),
+                                                   halved], Data("z") => Z(1); samples = 2)
 end
