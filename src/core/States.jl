@@ -172,17 +172,19 @@ end
     State{R}(system, states; rng)
     State{R}(n::Int, site::AbstractSite, states; rng)
     State{R}(sites::Vector{<:AbstractSite}, states; rng)
+    State{Trajectory}(ψ::State{Pure})
     State(state, mps)
 
 the state of a quantum system, as an MPS: a wave function for `R = Pure`, a density matrix for
 `R = Mixed`, one quantum trajectory for `R = Trajectory`, which draws a pure state from the
 mixed descriptions with the random number generator `rng`, the global one by default, ignored
-by the others. The local states are given as a vector, one per site, or as a single one for every
-site: a name, `A => λ`, a vector of amplitudes, in mixed representation a density matrix, or a
-function of the site giving one of those. A vector of numbers is the amplitudes of one local
-state. `states` may also describe the whole state, `Mixture(terms)` or, in mixed
-representation, `FullyMixed(N => 4)`.
-`State(state, mps)` is a new state on the same system.
+by the others. The local states are given as a vector, one per site, or as a single one for
+every site: a name, `A => λ`, a vector of amplitudes, in mixed representation or for a
+trajectory a density matrix, or a function of the site giving one of those. A vector of numbers
+is the amplitudes of one local state. `states` may also describe the whole state,
+`Mixture(terms)` or, in mixed representation or for a trajectory, `FullyMixed(N => 4)`.
+`State{Trajectory}(ψ)` is the pure state `ψ` as a trajectory, and `State(state, mps)` a new
+state on the same system.
 
 States can be added, subtracted, and multiplied or divided by numbers; a sum takes truncation
 limits as `+(a, b; limits = Limits(maxdim = 100))`, by default `cutoff = 1e-26`, which discards
@@ -515,6 +517,8 @@ State{R}(size::Int, site::AbstractSite, state; rng::AbstractRNG = Random.default
 
 State{R}(sites::Vector{<:AbstractSite}, state; rng::AbstractRNG = Random.default_rng()) where R =
     State{R}(System(sites), state; rng)
+
+State{Trajectory}(ψ::State{Pure}) = State{Trajectory}(ψ.system, copy(ψ.state))
 
 ############### Operations ###############
 

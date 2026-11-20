@@ -23,6 +23,7 @@ t = State{Trajectory}(sys, ["Up", "FullyMixed", [0.7 0.2; 0.2 0.3], "Dn"]; rng =
 t = State{Trajectory}(sys, Mixture([0.5 => "Up", 0.5 => "Dn"]))
 t = State{Trajectory}(System(4, Fermion(conserve = N)), FullyMixed(N => 2))
 t = random_state(Trajectory, sys, 16)
+t = State{Trajectory}(ψ)            # the pure state ψ, a ground state for instance
 ```
 
 - A pure local state is taken as it is; a density matrix gives one of its eigenvectors, with its

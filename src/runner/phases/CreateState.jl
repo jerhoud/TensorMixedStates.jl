@@ -99,7 +99,7 @@ as_representation(::Type{R}, state::State{R}; limits::Limits = Limits()) where R
 as_representation(::Type{Mixed}, state::State{Pure}; limits::Limits = Limits()) =
     mix(state; limits)
 as_representation(::Type{Trajectory}, state::State{Pure}; limits::Limits = Limits()) =
-    as_representation(Trajectory, State{Trajectory}(state.system, state.state); limits)
+    as_representation(Trajectory, State{Trajectory}(state); limits)
 as_representation(::Type{<:Union{Pure, Mixed}}, ::State{Trajectory}; limits::Limits = Limits()) =
     error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
 as_representation(::Type{Trajectory}, ::State{Mixed}; limits::Limits = Limits()) =

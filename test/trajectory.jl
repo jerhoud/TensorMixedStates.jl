@@ -184,6 +184,11 @@ end
     t = State{Trajectory}(qubits, Mixture([1.0 => "Up", 0 => "Dn"]))
     @test t isa State{Trajectory} && expect1(t, Z) == expect1(State{Pure}(qubits, "Up"), Z)
     @test occursin("State{Trajectory}", repr(t))
+    # a pure state as a trajectory, its MPS copied
+    ψ = random_state(Pure, qubits, 2; rng = Xoshiro(1))
+    tψ = State{Trajectory}(ψ)
+    @test tψ isa State{Trajectory} && expect1(tψ, X) == expect1(ψ, X)
+    @test tψ.state !== ψ.state
     # a projector of rank one is a pure state, whatever the draw
     @test expect1(State{Trajectory}(qubits, [[1 0; 0 0], "Up"]), Z) == [1, 1]
     @test_throws "State{Ket} has no representation of its own" State{Ket}(qubits, "Up")
