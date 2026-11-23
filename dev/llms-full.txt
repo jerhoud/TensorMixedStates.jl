@@ -173,7 +173,7 @@ stops them once the errors of `name` are within `atol`.
 Trajectories: `SimData(samples = N, …)` with a `CreateState{Trajectory}` or a
 `ConvertState{Trajectory}` runs one trajectory in each sample, from that phase on, with the same
 averaged files; dissipators and channels draw jumps and Kraus operators with the generator of
-the sample, at first order in the step for the jumps, the averages weighted by the traces of
+the sample, the averages weighted by the traces of
 the trajectories (column `log_weight`). What is not linear in the density matrix,
 as `Purity` or `Variance`, is refused; see [Quantum trajectories](@ref).
 
@@ -1679,15 +1679,17 @@ definite parity, declare it, `Fermion(conserve = parity(N))`, see
 
 ## Evolving and applying
 
-`evolve` takes the evolver of a mixed state, `-im * H` plus dissipators. At each step of length
-``dt``, a jump happens with the probability ``\delta p = dt \sum_L \langle L^\dagger L\rangle``,
-the operator ``L`` drawn among those of the dissipators with its rate ``\langle L^\dagger
-L\rangle``, and replaces the step; otherwise the step evolves the trajectory under the effective
-operator ``-iH - \frac12 \sum_L L^\dagger L``. The trajectory is then brought back to its trace
-or, when the operators do not keep it, divided by the probability of no jump, which weighs it by
-what they keep.
-This scheme is of first order in ``dt``: the average of the trajectories has an error of order
-``dt``, which halving the step shows, and a step whose ``\delta p`` exceeds one is refused.
+`evolve` takes the evolver of a mixed state, `-im * H` plus dissipators. Between jumps, the
+trajectory evolves under the effective operator ``-iH - \frac12 \sum_L L^\dagger L``, and a jump
+happens at the time ``s`` where the probability of none, ``\exp(-\int_0^s r)``, reaches a number
+drawn at random, ``r = \sum_L \langle L^\dagger L\rangle`` being the rate of the jumps, taken
+linear over each step between its values at both ends; the operator ``L`` is drawn among those
+of the dissipators with its rate ``\langle L^\dagger L\rangle`` at that time, and the rest of the
+step drawn again, so that a step may hold several jumps. The trajectory is then brought back to
+its trace or, when the operators do not keep it, weighed by what they keep.
+Besides the error of the method of the steps, the average of the trajectories has one from the
+rate taken linear, which halving the step shows: a rate that rises and falls back within a
+step, nearly zero at both ends, draws no jump in it.
 
 ```julia
 L = -im * sum(X(i) for i in 1:4) + sum(Dissipator(sqrt(0.2) * Sp)(i) for i in 1:4)
