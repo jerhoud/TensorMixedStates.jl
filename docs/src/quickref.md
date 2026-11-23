@@ -174,7 +174,9 @@ Trajectories: `SimData(samples = N, …)` with a `CreateState{Trajectory}` or a
 `ConvertState{Trajectory}` runs one trajectory in each sample, from that phase on, with the same
 averaged files; dissipators and channels draw jumps and Kraus operators with the generator of
 the sample, the averages weighted by the traces of
-the trajectories (column `log_weight`). What is not linear in the density matrix,
+the trajectories (column `log_weight`); the value `:jumps` counts the jumps drawn in the trajectory,
+and `dephasing_dissipator(γ; jumps = :phases)` draws phases, `Z` on a qubit, where the default
+draws projectors. What is not linear in the density matrix,
 as `Purity` or `Variance`, is refused; see [Quantum trajectories](@ref).
 
 ## When something fails
