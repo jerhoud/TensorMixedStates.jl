@@ -485,6 +485,18 @@ end
     # the density matrix does not see the choice
     @test ket_bra_matrix(apply(dephasing_channel(0.3; kraus = :phases)(1), mix(p))) ≈
           ket_bra_matrix(apply(dephasing_channel(0.3)(1), mix(p)))
+    # the relaxation of a qubit passes its jumps to its dephasing: Z at the rate γ / 2
+    q1 = System(1, Qubit())
+    γ = 1 / 3. - 1 / 10.
+    for (jumps, dephasing) in ((:projectors, [ sqrt(γ) * [1 0; 0 0], sqrt(γ) * [0 0; 0 1] ]),
+                               (:phases, [ sqrt(γ / 2) * [1 0; 0 -1] ]))
+        e = TMS.prepared_evolver(as_trajectory(State{Pure}(q1, "Up")),
+                                 thermal_relaxation_dissipator(5., 3.; jumps)(1))
+        js = [ lowered(q1, j) for d in e.decays for j in d.jumps ]
+        @test length(js) == 1 + length(dephasing)
+        @test any(j -> j ≈ sqrt(1 / 5.) * [0 1; 0 0], js)
+        @test all(k -> any(j -> j ≈ k || j ≈ -k, js), dephasing)
+    end
     @test occursin("kraus = :phases", repr(Dephase(Z; kraus = :phases)))
     @test_throws "the jumps of dephasing_dissipator are :projectors or :phases" dephasing_dissipator(
         0.1; jumps = :pauli)

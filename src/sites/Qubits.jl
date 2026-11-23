@@ -125,20 +125,22 @@ function thermal_relaxation_check(T1::Real, T2::Real)
 end
 
 """
-    thermal_relaxation_dissipator(T1, T2)
+    thermal_relaxation_dissipator(T1, T2; jumps = :projectors)
 
 the generator of the relaxation of a qubit of times `T1` and `T2`: its decay to `"Up"`, of time
 `T1`, and the dephasing that brings the decay of its coherences to the time `T2`,
-`amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1))`. `T2` cannot
-exceed `2T1`. Evolving under it for a time `t` is `thermal_relaxation_channel(T1, T2, t)`.
+`amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1); jumps)`, whose
+`jumps` a trajectory draws. `T2` cannot exceed `2T1`. Evolving under it for a time `t` is
+`thermal_relaxation_channel(T1, T2, t)`.
 
 # Examples
 
     -im * H + sum(thermal_relaxation_dissipator(50., 30.)(i) for i in 1:10)
+    thermal_relaxation_dissipator(50., 30.; jumps = :phases)   # dephasing by jumps Z
 """
-function thermal_relaxation_dissipator(T1::Real, T2::Real)
+function thermal_relaxation_dissipator(T1::Real, T2::Real; jumps::Symbol = :projectors)
     thermal_relaxation_check(T1, T2)
-    return amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1))
+    return amplitude_damping_dissipator(1 / T1) + dephasing_dissipator(1 / T2 - 1 / (2T1); jumps)
 end
 
 """

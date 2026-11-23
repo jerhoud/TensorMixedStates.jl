@@ -16,7 +16,7 @@ the reference article.
 - `State{R}(…; rng)` takes the random number generator a trajectory draws its pure state with.
 - `depolarizing_channel(p, n; kraus = :reset)` chooses its decomposition into gates, `:reset` or `:pauli`.
 - `:jumps`, a value of a simulation with samples, the number of jumps the dissipators of its `Evolve` phases drew in the trajectory `:state`.
-- `Dephase(A; kraus = :projectors)`, `dephasing_channel(p, A; kraus)` and `dephasing_dissipator(γ, A; jumps)` choose the Kraus operators a trajectory draws, the projectors on the eigenspaces of `A` or `:phases`, unitaries changing the phases between them.
+- `Dephase(A; kraus = :projectors)`, `dephasing_channel(p, A; kraus)` and `dephasing_dissipator(γ, A; jumps)`, and `thermal_relaxation_dissipator(T1, T2; jumps)` for its dephasing, choose the Kraus operators a trajectory draws, the projectors on the eigenspaces of `A` or `:phases`, unitaries changing the phases between them.
 
 ### Changed
 
