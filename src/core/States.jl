@@ -357,7 +357,7 @@ end
 
 # the index of a draw among the weights `ps`, whose sum need not be one
 draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
-    something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
+    something(findfirst(>(rand(rng) * sum(ps)), cumsum(ps)), findlast(>(0), ps))
 
 """
     site_eigen(σ, site)
@@ -398,7 +398,7 @@ end
 
 the vector of a pure state of site `i` of `system` drawn from the local state `x`: `x` itself
 when it is pure, otherwise an eigenvector of its density matrix with the probability of its
-eigenvalue, see `site_eigen`, refused when it has coherences between the charges the site
+eigenvalue, times the square root of its trace, see `site_eigen`, refused when it has coherences between the charges the site
 conserves, or spreads over strongly conserved values, which a trajectory, of definite ones,
 could only draw among
 """
@@ -409,8 +409,14 @@ function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
         return v
     elseif !nearly(v, v')
         error("$(repr(x)) is not Hermitian on $site, so it is not a density matrix")
+    elseif iszero(v)
+        return zeros(eltype(v), size(v, 1))
     end
-    es = site_eigen(v / real(tr(v)), site)
+    t = real(tr(v))
+    if !(t > 0)
+        error("$(repr(x)) has the trace $t on $site, so it is not a density matrix")
+    end
+    es = site_eigen(v / t, site)
     if isnothing(es)
         error("$(repr(x)) is a state of $site of no definite charge, which a trajectory cannot " *
               "draw")
@@ -425,7 +431,8 @@ function drawn_local(system::System, i::Int, x, rng::AbstractRNG)
         error("$(repr(x)) spreads over several values of $(join(names, ", ")) on $site, which " *
               "conserving it strongly forbids: drop `strong`")
     end
-    return last(kept[draw_index(first.(kept), rng)])
+    # the trace of the local state is its weight, as the norm of a vector is
+    return sqrt(t) * last(kept[draw_index(first.(kept), rng)])
 end
 
 """

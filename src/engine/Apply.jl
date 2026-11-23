@@ -691,9 +691,13 @@ apply(a::IndexedOp, state::State; limits::Limits = Limits(),
       rng::AbstractRNG = Random.default_rng()) =
     applied(state, apply_steps(a, state)..., limits)
 
-apply(a::IndexedOp, state::State{Trajectory}; limits::Limits = Limits(),
-      rng::AbstractRNG = Random.default_rng()) =
-    kept_scale(applied(state, apply_steps(a, state)..., limits))
+# an operator applied to the ket, its phase kept, the trajectory brought back to its trace when the
+# gate it makes keeps it, so that what truncation loses is no weight
+function apply(a::IndexedOp{IsOperator}, state::State{Trajectory}; limits::Limits = Limits(),
+               rng::AbstractRNG = Random.default_rng())
+    st = applied(state, apply_steps(a, state)..., limits)
+    return kept_scale(keeps_trace(state.system, Gate(a)) ? with_trace(st, state) : st)
+end
 
 # the trajectory `st` refused when its trace, which weights it, nears the bounds of the floating
 # point numbers, far from any trace a computation keeps in range
@@ -703,8 +707,8 @@ function kept_scale(st::State{Trajectory})
         error("the trace of the trajectory is NaN")
     elseif 0 < t < 1e-250 || t > 1e250
         error("the trace of the trajectory reached $t, near the bounds of the numbers: divide it " *
-              "by its trace and keep the logarithm of that trace as its weight; a simulation " *
-              "carries it between steps, so that there the operation is to be split into steps")
+              "by its trace and keep the logarithm of that trace as its weight, or, in a " *
+              "simulation, split the operation into steps")
     end
     return st
 end

@@ -153,7 +153,7 @@ end
     h = sum(Z(i) * Z(i + 1) for i in 1:2) + sum(X(i) for i in 1:3)
     @test_throws "given the generator rather than its PreMPO" PreMPO(t, -im * h +
                                                                       Dissipator(X)(1))
-    @test_throws "a channel on a trajectory comes with the draws" evolve(
+    @test_throws "which a trajectory draws through apply" evolve(
         depolarizing_channel(0.2)(1), 0.1, t; nsteps = 1)
     steady(R) = runTMS(SimData(; name = "s", samples = 1, phases = [
                        CreateState{R}(qubits, "Up"),
@@ -760,6 +760,21 @@ end
              Evolve(evolver = -im * h6, duration = 1., nsteps = 10, limits = Limits(maxdim = 2),
                     on = [:state, :b])], Data("z") => Z(3); samples = 2).data["z"]
     @test only(r)["log_weight"] ≈ 0 atol = 1e-12
+    # a local density matrix weighs by its trace, as a vector by its norm; negative ones refused
+    @test real(trace(State{Trajectory}(q, [2 0.3; 0.3 1]; rng))) ≈ 3
+    @test real(trace(State{Trajectory}(q, [0 0; 0 0]))) == 0
+    @test_throws "so it is not a density matrix" State{Trajectory}(q, [-1 0; 0 0])
+    # an operator keeping the trace, alone or in a product of channels, brings it back after a
+    # truncation, its phase kept
+    four = System(4, Qubit())
+    u = exp(-0.7im * (X ⊗ X + Y ⊗ Y))
+    t4 = State{Trajectory}(random_state(Pure, four, 4; rng))
+    one_bond = Limits(maxdim = 1)
+    @test real(trace(apply(u(2, 3), t4; limits = one_bond))) ≈ 1
+    @test real(trace(apply(depolarizing_channel(0.1)(1) * Gate(u)(2, 3), t4; limits = one_bond,
+                           rng))) ≈ 1
+    pure(s) = raw_vector(State{Pure}(s.system, s.state))
+    @test pure(apply(im * X(1), t4)) ≈ im * pure(apply(X(1), t4))
     # an Update too, though it provides the state
     halved = Update(c -> c.b = collapse(c.b, Z(1) => 1).state; provides = [:b])
     @test_throws "which only :state carries" run([CreateState{Trajectory}(q, "FullyMixed"),

@@ -300,7 +300,8 @@ followed_operator(a::IndexedOp{IsOperator}, ::Type{<:Ket} = Pure) = a
 
 function followed_operator(a::IndexedOp{IsChannel}, R::Type{<:Ket} = Pure)
     if R === Trajectory
-        not_yet("a channel on a trajectory")
+        error("$(obs_name(a)) is a channel, which a trajectory draws through apply or a Gates " *
+              "phase, or as the jumps of a Dissipator of it in an evolver")
     end
     error("$(obs_name(a)) is a channel, which acts on a density matrix: mix the state")
 end

@@ -165,7 +165,8 @@ run_phase(phase::PartialTrace, sim::Simulation, ::Int) =
     Gates(; gates, limits, on, name, time_start, final_measurements)
 
 a phase that applies gates to the state, see `apply`, by its steps, a batch of gates or an MPO,
-between which the run can write a checkpoint or stop.
+between which the run can write a checkpoint or stop; a trajectory takes them all in its first
+step, drawing the channels with the generator of the sample.
 
 - `name`, `time_start`, `final_measurements`: the fields of every phase, see
   `TensorMixedStates.AbstractPhase`
