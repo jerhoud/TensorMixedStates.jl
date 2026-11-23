@@ -322,18 +322,31 @@ end
 function dense_trajectory(ψ, ks, decays, duration, nsteps, rng)
     dt = duration / nsteps
     c(f, t) = isnothing(f) ? 1.0 : f(t)
-    pick(ps) = something(findfirst(≥(rand(rng) * sum(ps)), cumsum(ps)), length(ps))
-    for k in 0:nsteps - 1
-        t = k * dt
-        rates = [ c(f, t) * real(ψ' * sum(L' * L for L in Ls) * ψ) / real(ψ' * ψ)
-                  for (f, Ls) in decays ]
-        n = LA.norm(ψ)
-        if rand(rng) ≥ dt * sum(rates)
-            ψ = exp(dt * sum(c(f, t + dt / 2) * K for (f, K) in ks)) * ψ
-        else
-            Ls = last(decays[pick(rates)])
-            ψ = Ls[pick([ real(ψ' * L' * L * ψ) for L in Ls ])] * ψ
+    pick(ps) = something(findfirst(>(rand(rng) * sum(ps)), cumsum(ps)), findlast(>(0), ps))
+    value(A, φ) = real(φ' * A * φ) / real(φ' * φ)
+    rates(φ, t) = [ c(f, t) * value(sum(L' * L for L in Ls), φ) for (f, Ls) in decays ]
+    stepped(φ, t, s) = exp(s * sum(c(f, t + s / 2) * K for (f, K) in ks)) * φ
+    # the rest `τ` of a step from `t`: no jump up to s with the probability exp(-a0 s - b s²)
+    function part(φ, t, τ)
+        a0 = max(sum(rates(φ, t)), 0.0)
+        whole = stepped(φ, t, τ)
+        b = (max(sum(rates(whole, t + τ)), 0.0) - a0) / (2τ)
+        lu = log(rand(rng))
+        if lu < -τ * (a0 + b * τ)
+            return whole
         end
+        s = clamp(-2lu / (a0 + sqrt(max(a0^2 - 4b * lu, 0.0))), 0.0, τ)
+        φ = stepped(φ, t, s)
+        r = rates(φ, t + s)
+        if sum(r) > 0
+            Ls = last(decays[pick(r)])
+            φ = Ls[pick([ value(L' * L, φ) for L in Ls ])] * φ
+        end
+        return s < τ ? part(φ, t + s, τ - s) : φ
+    end
+    n = LA.norm(ψ)
+    for k in 0:nsteps - 1
+        ψ = part(ψ, k * dt, dt)
         ψ *= n / LA.norm(ψ)
     end
     return ψ
@@ -341,13 +354,14 @@ end
 
 # whether the trajectories evolved by `evolve` from `t` with the seeds 1:n are those of
 # `dense_trajectory`
-function same_trajectories(evolver, t, ks, decays; duration = 0.5, nsteps = 10, n = 10)
+function same_trajectories(evolver, t, ks, decays; duration = 0.5, nsteps = 10, n = 10,
+                           algo = Tdvp(), rtol = 1e-8)
     ψ = raw_vector(State{Pure}(t.system, t.state))
     return all(1:n) do seed
-        a = raw_vector(State{Pure}(t.system, evolve(evolver, duration, t; nsteps,
+        a = raw_vector(State{Pure}(t.system, evolve(evolver, duration, t; nsteps, algo,
                                                     rng = Xoshiro(seed)).state))
         b = dense_trajectory(ψ, ks, decays, duration, nsteps, Xoshiro(seed))
-        isapprox(a, b; rtol = 1e-8)
+        isapprox(a, b; rtol)
     end
 end
 
@@ -392,7 +406,7 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     jf = [ kres ; [sqrt(0.4) * hop, c(2)] ]
     @test same_trajectories(gf, tf, [(nothing, -im * lowered(fermions, hf) + effective(jf))],
                             [(nothing, jf)])
-    # the average, at first order in the step
+    # the average
     ts = [ evolve(g, 0.5, t; nsteps = 10, rng) for _ in 1:100 ]
     @test all(x -> real(trace(x)) ≈ 1, ts)
     @test same_density(ts, evolve(g, 0.5, mix(p); nsteps = 10); floor = 1 / 100)
@@ -407,8 +421,29 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     # the trace kept by the operators of the terms of one function together
     @test real(trace(evolve([-im * h + X(1), -X(1), Dissipator(Sm)(1)], 0.1, t; nsteps = 2,
                             rng))) ≈ 1
-    # refused: a jump changing a strong charge, as Mixed refuses it, negative rates, steps backward
-    # or too long, jumps of no definite charge
+    # ApproxW, whose steps after a jump are not cached
+    @test same_trajectories(g, t, [(nothing, -im * m(h) + effective(jumps[1])),
+                                   (f, effective(jumps[2]))],
+                            [(nothing, jumps[1]), (f, jumps[2])]; algo = ApproxW(order = 4),
+                            rtol = 1e-4)
+    # steps holding several jumps, five on average
+    xs = [sqrt(50) * m(X(1))]
+    @test same_trajectories(-im * h + 50 * Dissipator(X)(1), t,
+                            [(nothing, -im * m(h) + effective(xs))], [(nothing, xs)];
+                            duration = 0.2, nsteps = 2)
+    # a rate vanishing at the end of the evolution, which the end of the last step passes by
+    # rounding
+    @test real(trace(evolve([-im * h, Dissipator(Sm)(1) => s -> 0.3 - s], 0.3, t; nsteps = 10,
+                            rng))) ≈ 1
+    # a step so long that the norm without jump underflows: its jumps drawn, or zero when the
+    # operators lose it
+    q1 = System(1, Qubit())
+    @test real(trace(evolve(-im * X(1) + 760 * Dissipator(Z)(1), 1.0,
+                            State{Trajectory}(q1, "Up"); nsteps = 1, rng))) ≈ 1
+    @test real(trace(evolve(-1000 * Proj("Dn")(1) + Dissipator(Sm)(1), 1.0,
+                            State{Trajectory}(q1, "Dn"); nsteps = 1, rng))) == 0
+    # refused: a jump changing a strong charge, as Mixed refuses it, negative rates, steps
+    # backward, jumps of no definite charge
     strong_sys = System(3, Fermion(conserve = strong(N)))
     ps = as_trajectory(random_state(Pure, strong_sys, ["Occ", "Emp", "Occ"], 4; rng))
     @test_throws "by different amounts" evolve(-im * hf + Dissipator(C)(2), 0.1, ps; nsteps = 1)
@@ -418,8 +453,6 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     @test_throws "gives their jumps a negative rate" evolve(
         [-im * h, Dissipator(Sm)(1) => s -> -1], 0.1, t; nsteps = 1)
     @test_throws "forward in real time" evolve(g, -0.1, t; nsteps = 1)
-    @test_throws "above one: take smaller steps" evolve(-im * h + 100 * Dissipator(Sm)(1), 0.1,
-                                                        t; nsteps = 1)
     @test_throws "no definite flux" evolve(-im * hf + Dissipator(C + dag(C))(2), 0.1, tf;
                                            nsteps = 1)
     # in a run, the generator of the simulation draws them, for each trajectory in turn
@@ -676,9 +709,14 @@ end
                0.7 * amplitude_damping_channel(0.4)(2))
         @test weighed(() -> apply(ch, t; rng), apply(ch, mix(p)))
     end
-    # an evolver whose operators lose trace, with jumps, at first order in the step
+    # an evolver whose operators lose trace, with jumps, in long steps
     g = -im * (X(1) * X(2) + Z(1)) - 0.4 * Proj("Dn")(1) + Dissipator(sqrt(0.5) * Sm)(2)
-    @test weighed(() -> evolve(g, 0.5, t; nsteps = 40, rng), evolve(g, 0.5, mix(p); nsteps = 40);
+    @test weighed(() -> evolve(g, 0.5, t; nsteps = 2, rng), evolve(g, 0.5, mix(p); nsteps = 40);
+                  n = 300)
+    # with a rate depending on time
+    gt = [-im * (X(1) * X(2) + Z(1)) - 0.4 * Proj("Dn")(1),
+          Dissipator(sqrt(0.5) * Sm)(2) => s -> 1 + 2s]
+    @test weighed(() -> evolve(gt, 0.5, t; nsteps = 2, rng), evolve(gt, 0.5, mix(p); nsteps = 40);
                   n = 300)
 end
 

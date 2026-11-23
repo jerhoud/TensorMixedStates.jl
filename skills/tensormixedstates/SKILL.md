@@ -109,6 +109,7 @@ sample; `tol = "name" => atol` stops the samples once the errors of `name` are w
 When the density matrix is too entangled for `State{Mixed}`, quantum trajectories average pure
 states drawn at random instead: `samples = N` and a phase `CreateState{Trajectory}` or
 `ConvertState{Trajectory}`, each sample running one trajectory from that phase on, the
-dissipators drawing jumps at first order in the time step (halve it to check). Measure only
+dissipators drawing jumps with their rate taken linear over each time step (halve it to
+check). Measure only
 what is linear in the density matrix: expectation values, not `Purity`, entropies or
 `Variance` (measure `A^2` and `A` instead).

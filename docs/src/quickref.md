@@ -173,7 +173,7 @@ stops them once the errors of `name` are within `atol`.
 Trajectories: `SimData(samples = N, …)` with a `CreateState{Trajectory}` or a
 `ConvertState{Trajectory}` runs one trajectory in each sample, from that phase on, with the same
 averaged files; dissipators and channels draw jumps and Kraus operators with the generator of
-the sample, at first order in the step for the jumps, the averages weighted by the traces of
+the sample, the averages weighted by the traces of
 the trajectories (column `log_weight`). What is not linear in the density matrix,
 as `Purity` or `Variance`, is refused; see [Quantum trajectories](@ref).
 

@@ -181,12 +181,18 @@ function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Nu
     return state
 end
 
-function evolve_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number,
-                     step::Int, limits::Limits)
+evolve_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number, step::Int,
+            limits::Limits) = approx_W_step(algo, pre, state, time, dt, step, limits, true)
+
+# the step of ApproxW, its MPOs kept in the cache of `pre` when `cached`
+function approx_W_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number,
+                       step::Int, limits::Limits, cached::Bool)
     if vanished(state.state)
         return state
     end
-    mpos = if isnothing(pre.functions)
+    mpos = if isnothing(pre.functions) && !cached
+        approx_W_mpos(pre, dt, algo)
+    elseif isnothing(pre.functions)
         cached_mpos(() -> approx_W_mpos(pre, dt, algo), pre, :approx_W, (algo.order, algo.w, dt))
     else
         reduce(vcat, [ approx_W_mpos(pre, dt, algo, c)
@@ -339,47 +345,91 @@ with_rng(pre, ::AbstractRNG) = pre
 with_rng(e::JumpEvolver, rng::AbstractRNG) = JumpEvolver(e.pre, e.decays, e.keeps, rng)
 
 # the rate of the jumps of `d` on `state` at `time`
-function decay_rate(d::Decay, state::State{Trajectory}, time::Number)
+function decay_rate(d::Decay, state::State{Trajectory}, time::Number; checked::Bool = true)
     c = isnothing(d.f) ? 1. : d.f(time)
-    if c < 0
+    if c < 0 && !checked
+        # within a step or at its end, which may lie past the end of the evolution by rounding
+        return 0.0
+    elseif c < 0
         error("the function of a term holding dissipators is $c at time $time, which gives " *
               "their jumps a negative rate, which no trajectory draws: use State{Mixed}")
     end
     return c * real(expect(state, d.rate))
 end
 
-# one step of a trajectory at first order in `dt`: a jump with the probability `dt` times the
-# sum of the rates, drawn among the jumps by its rate, or else a step under the effective
-# operator, the trajectory brought back to its trace or, when the operators do not keep it,
-# divided by the probability of no jump, which weighs it at first order in `dt` by what they keep.
-# A jump replacing the step leaves a smaller error than a jump followed by the step (measured on a
-# qubit). An algorithm of one's own calling evolve_step of Tdvp or ApproxW with a JumpEvolver
-# draws the jumps with them
+# the step of `algo` under `pre`, ApproxW keeping its MPOs in the cache when `cached`
+part_step(algo::Tdvp, pre::PreMPO, state, time, dt, step, limits, ::Bool) =
+    evolve_step(algo, pre, state, time, dt, step, limits)
+part_step(algo::ApproxW, pre::PreMPO, state, time, dt, step, limits, cached::Bool) =
+    approx_W_step(algo, pre, state, time, dt, step, limits, cached)
+
+# the rate of all the jumps of `e` on `state` at `time`, rounding below zero taken as zero, a
+# negative rate function refused when `checked`, see `decay_rate`
+total_rate(e::JumpEvolver, state::State{Trajectory}, time::Number; checked::Bool = true) =
+    max(sum(d -> decay_rate(d, state, time; checked), e.decays), 0.0)
+
+# One step of a trajectory: the time of the next jump drawn from the probability of no jump up to
+# it, as QuTiP's mcsolve and QuantumOptics.jl's mcwf do, the jump drawn by its rate at that time
+# and the rest of the step drawn again. That probability is taken from the rates at both ends of
+# the step, linear in between, not from the norm, which truncation lowers. The trajectory is
+# brought back to its trace or, when the operators do not keep it, weighed by the norm left over
+# the probability drawn with, which corrects the rate taken linear where it is not zero.
+# An algorithm of one's own calling evolve_step of Tdvp or ApproxW with a JumpEvolver draws the
+# jumps with them
 function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
                      time::Number, dt::Number, step::Int, limits::Limits)
     if isempty(e.decays)
         return followed(evolve_step(algo, e.pre, state, time, dt, step, limits), state, 1)
     elseif !(isreal(dt) && real(dt) > 0)
         error("a trajectory draws its jumps forward in real time, and the step is $dt")
-    elseif vanished(state.state)
+    end
+    return jump_step(algo, e, state, time, real(dt), step, limits, false)
+end
+
+# operators keeping the trace leave no trajectory of norm zero but by underflow
+no_norm_error(dt, time) =
+    error("a step of $dt from time $time leaves a trajectory of norm zero by underflow, its " *
+          "jumps too frequent for it: take smaller steps")
+
+# the step of `evolve_step` for a JumpEvolver, or its `rest` after a jump, whose steps of ApproxW
+# are not cached and whose start may lie past the end of the evolution by rounding
+function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
+                   time::Number, dt::Real, step::Int, limits::Limits, rest::Bool)
+    if is_null(state)
         return state
     end
     rng = something(e.rng, Random.default_rng())
-    rates = [ decay_rate(d, state, time) for d in e.decays ]
-    δp = real(dt) * sum(rates; init = 0.0)
-    if δp > 1
-        error("a step of $dt from time $time gives a trajectory a probability " *
-              "$(round(δp; sigdigits = 3)) of a jump, above one: take smaller steps")
+    a0 = total_rate(e, state, time; checked = !rest)
+    stepped = part_step(algo, e.pre, state, time, dt, step, limits, !rest)
+    # a step losing all the norm, by the operators or by underflow, gives no rate at its end
+    a1 = is_null(stepped) ? a0 : total_rate(e, stepped, time + dt; checked = false)
+    # no jump up to s with the probability exp(-a0 s - c s²)
+    c = (a1 - a0) / (2dt)
+    lq = -dt * (a0 + c * dt)
+    lu = log(rand(rng))
+    if lu < lq
+        if is_null(stepped)
+            return e.keeps ? no_norm_error(dt, time) : stepped
+        end
+        return e.keeps ? followed(stepped, state, 1) : stepped / exp(lq / 2)
     end
-    if rand(rng) ≥ δp
-        stepped = evolve_step(algo, e.pre, state, time, dt, step, limits)
-        # the operators losing trace: the norm the step leaves, the one weight no closed form
-        # gives, divided by the probability of no jump
-        return e.keeps ? followed(stepped, state, 1) : stepped / sqrt(1 - δp)
+    s = clamp(-2lu / (a0 + sqrt(max(a0^2 - 4c * lu, 0.0))), 0.0, dt)
+    before = part_step(algo, e.pre, state, time, s, step, limits, false)
+    if is_null(before)
+        return e.keeps ? no_norm_error(dt, time) : before
     end
-    d = e.decays[draw_index(rates, rng)]
-    i = draw_index([ real(expect(state, dag(j) * j)) for j in d.jumps ], rng)
-    return followed(applied(state, d.steps[i]..., limits), state, 1)
+    rates = [ decay_rate(d, before, time + s; checked = false) for d in e.decays ]
+    jumped = if sum(rates) ≤ 0
+        # the linear rate drew a jump where there is none: weight zero when losing trace
+        e.keeps ? followed(before, state, 1) : 0 * before
+    else
+        d = e.decays[draw_index(rates, rng)]
+        i = draw_index([ real(expect(before, dag(j) * j)) for j in d.jumps ], rng)
+        x = applied(before, d.steps[i]..., limits)
+        e.keeps ? followed(x, state, 1) :
+                  followed(x, before, sum(rates) / ((a0 + 2c * s) * exp(-s * (a0 + c * s))))
+    end
+    return s < dt ? jump_step(algo, e, jumped, time + s, dt - s, step, limits, true) : jumped
 end
 
 """
@@ -419,8 +469,8 @@ operator or an operator with its real function of time, `[A, B => g]` for ``A + 
 `Limits`, which may give one value per step, step `k` taking the `k`-th. Its default cutoff is
 `1e-26` for tdvp and `apply_algo = "naive"` or `"zipup"`, `eps()` for `"densitymatrix"`.
 `mpo_limits` truncates the MPO of the evolver, see `PreMPO` (default none).
-`rng` is the random number generator a trajectory draws the jumps of the dissipators with, at
-first order in the step, the global one by default.
+`rng` is the random number generator a trajectory draws the jumps of the dissipators with, the
+global one by default.
 
 # Examples
 
