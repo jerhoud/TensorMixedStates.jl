@@ -230,6 +230,11 @@ evolve(-im * sum(X(i) for i in 1:4), 0.5, State{Pure}(System(4, Qubit()), "Up");
        algo = HalfSteps(), nsteps = 5)
 ```
 
+On a trajectory, the evolver `pre` is the `PreMPO` of the evolver only when it loses trace and
+has no dissipator; otherwise it is an object that draws the jumps and brings the trajectory back
+to its trace, which a method of one's own passes on to `evolve_step` of `Tdvp` or `ApproxW`, as
+`HalfSteps` does.
+
 A search goes through [`TensorMixedStates.search`](@ref) in the same way: a method of search of
 your own is a subtype of [`TensorMixedStates.SearchAlgorithm`](@ref) with a method of `search`,
 which `ground_state`, `steady_state` and their phases then take as they take `Dmrg`.
