@@ -617,6 +617,17 @@ end
     @test_throws "a trajectory outside the samples" runTMS(SimData(samples = 2, phases = [
                      prefix, made, Realizations(_ -> [evolved])]); output = devnull)
     @test length(run("f", [Realizations(_ -> [prefix, made, evolved])])) == 3
+    # the jumps counted, a Poisson number of mean 2 for jumps X at the rate 2 for a time 1
+    q1 = System(1, Qubit())
+    counts = [ r["jumps"] for r in runTMS(SimData(; name = "j", seed = 3, samples = 200, phases = [
+                   CreateState{Trajectory}(q1, "Up"),
+                   Evolve(evolver = -im * Z(1) + 2 * Dissipator(X)(1), duration = 1.0, nsteps = 4)],
+                   final_measurements = EachSample(Data("j")) => ["jumps" => :jumps]);
+                   output = devnull).data["j"] ]
+    @test all(c -> isinteger(c) && c ≥ 0, counts)
+    @test abs(sum(counts) / 200 - 2) < 5 * sqrt(2 / 200)
+    @test_throws "a name the run reserves" SimData(samples = 2, phases = [
+                     CreateState{Trajectory}(q1, "Up"), CreateState{Pure}(q1, "Up"; on = :jumps)])
 end
 
 @testset "A trajectory weighs the averages by its trace, carried at each step" begin

@@ -245,19 +245,20 @@ struct Decay
 end
 
 """
-    JumpEvolver(pre, decays, keeps, rng)
+    JumpEvolver(pre, decays, keeps, rng, jumps)
 
 the evolver of a trajectory under dissipators, or under operators keeping its trace: the `PreMPO`
 of its effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term
 with jumps, none without dissipators, whether its
-operators `K` keep the trace, and the generator drawing them, see `with_rng`, `nothing` for the
-default one
+operators `K` keep the trace, the generator drawing them, see `with_rng`, `nothing` for the
+default one, and the count the jumps drawn are added to, `nothing` for none
 """
 struct JumpEvolver
     pre::PreMPO
     decays::Vector{Decay}
     keeps::Bool
     rng::Union{Nothing, AbstractRNG}
+    jumps::Union{Nothing, Base.RefValue{Int}}
 end
 
 function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limits)
@@ -299,7 +300,7 @@ function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limi
                                             !isnothing(pures[k]) ]
         isempty(ks) || prepare_op(sys, im * sum(pures[ks])).hermitian
     end
-    return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, keeps, nothing)
+    return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, keeps, nothing, nothing)
 end
 
 # refuse the jump `j` of the generator `a` when it changes a charge `system` conserves strongly,
@@ -331,12 +332,14 @@ function prepared_evolver(state::State{Trajectory}, terms::Union{AbstractVector,
 end
 
 """
-    with_rng(pre, rng)
+    with_rng(pre, rng, jumps = nothing)
 
-the evolver `pre`, see `prepared_evolver`, drawing with `rng`: itself when it draws nothing
+the evolver `pre`, see `prepared_evolver`, drawing with `rng` and adding the number of its jumps
+to `jumps[]` when it is given: itself when it draws nothing
 """
-with_rng(pre, ::AbstractRNG) = pre
-with_rng(e::JumpEvolver, rng::AbstractRNG) = JumpEvolver(e.pre, e.decays, e.keeps, rng)
+with_rng(pre, ::AbstractRNG, ::Union{Nothing, Base.RefValue{Int}} = nothing) = pre
+with_rng(e::JumpEvolver, rng::AbstractRNG, jumps::Union{Nothing, Base.RefValue{Int}} = nothing) =
+    JumpEvolver(e.pre, e.decays, e.keeps, rng, jumps)
 
 # the rate of the jumps of `d` on `state` at `time`
 function decay_rate(d::Decay, state::State{Trajectory}, time::Number; checked::Bool = true)
@@ -414,6 +417,9 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Traj
         d = e.decays[draw_index(rates, rng)]
         i = draw_index([ real(expect(before, dag(j) * j)) for j in d.jumps ], rng)
         x = applied(before, d.steps[i]..., limits)
+        if !isnothing(e.jumps)
+            e.jumps[] += 1
+        end
         e.keeps ? followed(x, state, 1) :
                   followed(x, before, sum(rates) / ((a0 + 2c * s) * exp(-s * (a0 + c * s))))
     end

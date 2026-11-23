@@ -15,11 +15,13 @@ the reference article.
 - `Trajectory`: quantum trajectories, pure states drawn at random whose average is the density matrix, by `State{Trajectory}`, `evolve` and `apply`, one in each sample of a simulation from its `CreateState{Trajectory}` or `ConvertState{Trajectory}` on.
 - `State{R}(…; rng)` takes the random number generator a trajectory draws its pure state with.
 - `depolarizing_channel(p, n; kraus = :reset)` chooses its decomposition into gates, `:reset` or `:pauli`.
+- `:jumps`, a value of a simulation with samples, the number of jumps the dissipators of its `Evolve` phases drew in the trajectory `:state`.
 - `Dephase(A; kraus = :projectors)`, `dephasing_channel(p, A; kraus)` and `dephasing_dissipator(γ, A; jumps)` choose the Kraus operators a trajectory draws, the projectors on the eigenspaces of `A` or `:phases`, unitaries changing the phases between them.
 
 ### Changed
 
 - `log_weight` is reserved in a simulation with samples, as a column and as a value, the logarithm of the weight of a trajectory: a measurement or a state of that name there takes another one.
+- `jumps` is reserved as a value in a simulation with samples: a state of that name there takes another one.
 
 ## [2.2.0] - 2026-11-18
 

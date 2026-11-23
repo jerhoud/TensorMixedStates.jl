@@ -342,6 +342,9 @@ function output(sim::Simulation, list::AbstractVector)
     elseif gives_sample(run)
         values[:log_weight] = get(values, :log_weight, 0.)
     end
+    if gives_sample(run)
+        values[:jumps] = get(values, :jumps, 0)
+    end
     # called for the state as it is: inferred for any state, the measurements would take
     # minutes to compile
     invokelatest(output!, run.outputs, sim.state, items; time = sim.time, values...)

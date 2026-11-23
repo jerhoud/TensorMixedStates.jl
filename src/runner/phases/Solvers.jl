@@ -155,15 +155,23 @@ end
 
 step_count(e::EvolveSteps) = e.nsteps
 
-# the times of the steps are those of evolve, the last one the end asked for
+# the times of the steps are those of evolve, the last one the end asked for; the jumps of the
+# trajectory :state are added to the value :jumps
 function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
+    jumps = Ref(0)
     for name in e.on
-        st = evolve_step(e.algo, with_rng(e.pre, sim.rng), state_named(sim, name),
-                         e.start + (k - 1) * dt, dt, k, step_limits(e.limits, k))
+        st = evolve_step(e.algo, with_rng(e.pre, sim.rng, name === :state ? jumps : nothing),
+                         state_named(sim, name), e.start + (k - 1) * dt, dt, k,
+                         step_limits(e.limits, k))
         sim = with_state(sim, name, st)
     end
-    return Simulation(sim, sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt)
+    values = getfield(sim, :values)
+    if jumps[] > 0
+        values = merge(values, Dict(:jumps => get(values, :jumps, 0) + jumps[]))
+    end
+    return Simulation(sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt, values,
+                      getfield(sim, :run))
 end
 
 """

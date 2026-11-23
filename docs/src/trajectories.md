@@ -111,7 +111,9 @@ samples of a disorder do, the trajectories do: `tol` stops them once the errors 
 enough, `TMS_SAMPLES` prolongs a finished run, and the program launched several times at once
 shares them between the processes. A pure state prepared once, a ground state for instance,
 becomes the starting point of every trajectory by `ConvertState{Trajectory}()` after the phase
-that computes it.
+that computes it. The value `:jumps` counts the jumps the dissipators of the `Evolve` phases drew
+in the trajectory `:state`, 0 before the first: `"jumps" => :jumps` gives their mean number, and
+`EachSample` that of each trajectory.
 
 An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
 projection, a channel or an evolver that loses trace, changes the trace of the trajectory, which
