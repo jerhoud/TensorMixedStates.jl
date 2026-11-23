@@ -486,7 +486,9 @@ end
     @test ket_bra_matrix(apply(dephasing_channel(0.3; kraus = :phases)(1), mix(p))) ≈
           ket_bra_matrix(apply(dephasing_channel(0.3)(1), mix(p)))
     @test occursin("kraus = :phases", repr(Dephase(Z; kraus = :phases)))
-    @test_throws ":projectors or :phases" dephasing_dissipator(0.1; jumps = :pauli)
+    @test_throws "the jumps of dephasing_dissipator are :projectors or :phases" dephasing_dissipator(
+        0.1; jumps = :pauli)
+    @test_throws "the Kraus operators of Dephase are :projectors or :phases" Dephase(Z; kraus = :x)
 end
 
 @testset "Trajectory draws its initial state from a mixed description, whose average it is" begin

@@ -143,8 +143,8 @@ damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant eigenvalues:
 when `A` has two eigenvalues, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`. Evolving
 under it for a time `t` is `dephasing_channel(1 - exp(-γt), A)`. `jumps` gives the jumps of a
 trajectory, see `Dephase`: `:projectors` on the eigenspaces at the rate `γ`, or `:phases`, unitary,
-`d - 1` of them at the rate `γ / d` for `d` eigenvalues, `√(γ/2) Z` for a qubit, which change no
-population in the eigenbasis of `A`.
+`d - 1` of them at the rate `γ / d` for `d` eigenvalues, `√(γ/2) Z` on a qubit for the default
+`A`, which change no population in the eigenbasis of `A`.
 
 # Examples
 
@@ -154,6 +154,9 @@ population in the eigenbasis of `A`.
 function dephasing_dissipator(γ::Real, a::GenericOp{IsOperator} = Level;
                               jumps::Symbol = :projectors)
     check_rate("dephasing_dissipator", γ)
+    if jumps ∉ (:projectors, :phases)
+        error("the jumps of dephasing_dissipator are :projectors or :phases, got $(repr(jumps))")
+    end
     return γ * Dissipator(Dephase(a; kraus = jumps))
 end
 
