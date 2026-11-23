@@ -55,6 +55,8 @@ LoadState(name, time_start, final_measurements, file, statename, limits, on) =
 
 provided_values(phase::LoadState) = phase.on === :state ? () : (phase.on,)
 
+renews_state(phase::LoadState) = phase.on === :state
+
 function run_phase(phase::LoadState, sim::Simulation, ::Int)
     st = load_state(in_dir(sim, phase.file), phase.statename)
     # the type of the file kept unless backend is given, the limits applied by as_backend
@@ -133,6 +135,8 @@ end
 CopyState(names::Pair{Symbol, Symbol}; kwargs...) = CopyState(; names, kwargs...)
 
 provided_values(phase::CopyState) = last(phase.names) === :state ? () : (last(phase.names),)
+
+renews_state(phase::CopyState) = last(phase.names) === :state
 
 function run_phase(phase::CopyState, sim::Simulation, ::Int)
     from, to = phase.names

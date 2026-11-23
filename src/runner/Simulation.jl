@@ -97,6 +97,13 @@ RunData(dir, outputs, log, redirect, checkpointer, provided, backend) =
 # whether the run `run` gives the value `:sample`, a simulation with samples
 gives_sample(run::RunData) = run.outputs.sampled
 
+# the values the run gives a simulation with samples, when `sampled`, and one making trajectories,
+# when `trajectories`, which no phase may name
+given_values(sampled::Bool, trajectories::Bool) =
+    ((sampled ? (:sample,) : ())..., (trajectories ? (:log_weight, :jumps) : ())...)
+
+given_values(run::RunData) = given_values(gives_sample(run), run.outputs.weighted)
+
 """
     Simulation(sim, state[, time = sim.time]; values...)
 
@@ -127,7 +134,7 @@ end
 function Simulation(sim::Simulation, state::Union{Nothing, AbstractState}, time::Number = sim.time;
                     values...)
     for name in keys(values)
-        if name in reserved_values || name === :sample && gives_sample(getfield(sim, :run))
+        if name in reserved_values || name in given_values(getfield(sim, :run))
             error("a simulation cannot be given a value named $name, a name the run reserves")
         end
     end
@@ -219,7 +226,7 @@ function setproperty!(c::Editing, name::Symbol, x)
         error("c.time takes a number, not a $(typeof(x))")
     elseif name === :state || name === :time
         setfield!(c, name, x)
-    elseif name in reserved_values || name === :sample && gives_sample(getfield(c, :run))
+    elseif name in reserved_values || name in given_values(getfield(c, :run))
         error("$name cannot be changed, a name the run reserves")
     elseif isnothing(x)
         delete!(getfield(c, :values), name)
@@ -336,13 +343,13 @@ function output(sim::Simulation, list::AbstractVector)
     items = [ run_destination(run, first(p)) => last(p) for p in list ]
     values = measured_values(sim)
     # the weight of a trajectory, what its steps carried and what its trace holds, one for any
-    # other state of a sample
+    # other state of a simulation making trajectories
     if sim.state isa State{Trajectory}
         values[:log_weight] = get(values, :log_weight, 0.) + log(real(trace(sim.state)))
-    elseif gives_sample(run)
+    elseif run.outputs.weighted
         values[:log_weight] = get(values, :log_weight, 0.)
     end
-    if gives_sample(run)
+    if run.outputs.weighted
         values[:jumps] = get(values, :jumps, 0)
     end
     # called for the state as it is: inferred for any state, the measurements would take

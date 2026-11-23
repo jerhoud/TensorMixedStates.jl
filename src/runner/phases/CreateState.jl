@@ -86,6 +86,8 @@ CreateState{R}(sites::Vector{<:AbstractSite}, state; kwargs...) where R =
 
 provided_values(phase::CreateState) = phase.on === :state ? () : (phase.on,)
 
+renews_state(phase::CreateState) = phase.on === :state
+
 makes_trajectory(::CreateState{Trajectory}) = true
 
 """

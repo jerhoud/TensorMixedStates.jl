@@ -112,8 +112,9 @@ enough, `TMS_SAMPLES` prolongs a finished run, and the program launched several 
 shares them between the processes. A pure state prepared once, a ground state for instance,
 becomes the starting point of every trajectory by `ConvertState{Trajectory}()` after the phase
 that computes it. The value `:jumps` counts the jumps the dissipators of the `Evolve` phases drew
-in the trajectory `:state`, 0 before the first: `"jumps" => :jumps` gives their mean number, and
-`EachSample` that of each trajectory.
+in the trajectory `:state` since a phase put it there, 0 before the first: `"jumps" => :jumps`
+gives their mean number, and `EachSample` that of each trajectory. The values `:log_weight` and
+`:jumps` belong to the run: no phase of a simulation making trajectories may set them.
 
 An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
 projection, a channel or an evolver that loses trace, changes the trace of the trajectory, which

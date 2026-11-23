@@ -122,6 +122,16 @@ makes_trajectory(_) = false
 # Update, which may change a state it provides
 fresh_states(phase) = provided_values(phase)
 
+# whether `phase` puts a new state in `:state`, which carries none of the weight and the jumps of
+# the trajectory it replaces, see `renewed`
+renews_state(_) = false
+
+# `sim` without the values of the trajectory its new `:state` replaced
+renewed(sim::Simulation) =
+    Simulation(sim.state, sim.time,
+               filter(p -> first(p) ∉ (:log_weight, :jumps), getfield(sim, :values)),
+               getfield(sim, :run))
+
 """
     phase_files(phase)
 
@@ -461,7 +471,7 @@ function run_phases(sim::Simulation, phases::Vector, start::Int, done::Int, ende
                 # called for the phase and the state as they are, see output
                 ran = invokelatest(run_phase, phase, sim, d)
                 check_carriers(sim, ran, phase)
-                sim = ran
+                sim = renews_state(phase) ? renewed(ran) : ran
                 check_sampled(sim)
                 sim = carried_weight(sim)
             end

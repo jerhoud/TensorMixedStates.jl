@@ -628,6 +628,28 @@ end
     @test abs(sum(counts) / 200 - 2) < 5 * sqrt(2 / 200)
     @test_throws "a name the run reserves" SimData(samples = 2, phases = [
                      CreateState{Trajectory}(q1, "Up"), CreateState{Pure}(q1, "Up"; on = :jumps)])
+    # a new trajectory counts its own jumps, and carries its own weight
+    each(phases, column) = [ r[column] for r in runTMS(SimData(; name = "r", seed = 5, samples = 20,
+                                 phases, final_measurements = EachSample(Data("r")) =>
+                                 ["jumps" => :jumps, "z" => Z(1)]); output = devnull).data["r"] ]
+    renewed = [CreateState{Trajectory}(q1, "Up"),
+               Evolve(evolver = 2 * Dissipator(X)(1), duration = 1.0, nsteps = 4),
+               CreateState{Trajectory}(q1, "Up")]
+    @test all(==(0), each(renewed, "jumps"))
+    thermal = [CreateState{Trajectory}(q1, "FullyMixed"),
+               Thermalize(hamiltonian = Z(1), beta = 1.0, nsteps = 2),
+               CreateState{Trajectory}(q1, "Dn")]
+    @test all(==(0), each(thermal, "log_weight"))
+    # the run alone sets them
+    @test_throws "jumps cannot be changed" each([CreateState{Trajectory}(q1, "Up"),
+                                                 Update(c -> c.jumps = 7)], "jumps")
+    @test_throws "log_weight cannot be changed" each([CreateState{Trajectory}(q1, "Up"),
+                                                      Update(c -> c.log_weight = 3.)], "jumps")
+    # names of their own in a simulation with samples making no trajectory
+    pure = runTMS(SimData(; name = "p", samples = 2, phases = [Realizations(_ -> [
+                      CreateState{Pure}(q1, "Up"), Update(c -> c.jumps = 1; provides = [:jumps])])],
+                      final_measurements = Data("p") => ["jumps" => :jumps]); output = devnull)
+    @test only(pure.data["p"])["jumps"] == 1
 end
 
 @testset "A trajectory weighs the averages by its trace, carried at each step" begin
@@ -806,10 +828,10 @@ end
         lines = readlines("e/e.txt")
         @test occursin("log_weight", lines[1]) && allequal(length.(split.(lines, '\t')))
     end
-    # :log_weight read outside a trajectory is 0; :log_trace refused on trajectories
-    r = only(run([CreateState{Pure}(q, "Up"), Realizations(c -> [Gates(gates = Gate(X)(1))])],
-                 Data("v") => ["lw" => :log_weight]; samples = 2).data["v"])
-    @test r["lw"] == 0
+    # :log_weight only in a simulation making trajectories; :log_trace refused on trajectories
+    @test_throws "only a simulation making trajectories has" run(
+        [CreateState{Pure}(q, "Up"), Realizations(c -> [Gates(gates = Gate(X)(1))])],
+        Data("v") => ["lw" => :log_weight]; samples = 2)
     @test_throws "reads log_trace" SimData(samples = 2, phases = [
                      CreateState{Trajectory}(q, "FullyMixed"),
                      Thermalize(hamiltonian = Z(1), beta = 0.5, nsteps = 2,

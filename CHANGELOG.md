@@ -20,8 +20,7 @@ the reference article.
 
 ### Changed
 
-- `log_weight` is reserved in a simulation with samples, as a column and as a value, the logarithm of the weight of a trajectory: a measurement or a state of that name there takes another one.
-- `jumps` is reserved as a value in a simulation with samples: a state of that name there takes another one.
+- `log_weight` is reserved as a column in a simulation with samples, where the trajectories write the logarithm of their weight: a measurement of that name there takes another one.
 
 ## [2.2.0] - 2026-11-18
 

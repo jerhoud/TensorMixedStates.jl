@@ -42,8 +42,8 @@ refused_reads(::AbstractPhase) = ()
 
 refuse a value measured by one of the lists of the phases, or by the final measurements, that no
 phase provides, see `provided_values`, or that its phase refuses, see `refused_reads`, and
-return the names of those they provide; `:sample`, `:log_weight` and `:jumps` are read only when the
-simulation is `sampled`
+return the names of those they provide; `:sample` is read only when the simulation is `sampled`,
+`:log_weight` and `:jumps` only when it makes trajectories
 """
 function check_values(phases::Vector, final_measurements, sampled::Bool)
     for q in phases, (value, why) in refused_reads(q)
@@ -55,13 +55,19 @@ function check_values(phases::Vector, final_measurements, sampled::Bool)
         end
     end
     provided = unique(Symbol[ v for p in phases for v in provided_values(p) ])
+    given = given_values(sampled, any(makes_trajectory, phases))
     for l in run_lists(phases, final_measurements), p in l
         for (name, m) in as_measure(last(p)).entries
             for r in measurement_reads(m)
-                if r in (:sample, :log_weight, :jumps) && !sampled && r ∉ provided
+                if r in provided || r in given || r in (:step, :rng)
+                    # a value the simulation has
+                elseif r === :sample
                     error("the measurement $name reads $r, which only a simulation with " *
                           "samples has, see Realizations")
-                elseif r ∉ provided && r ∉ (:step, :rng, :sample, :log_weight, :jumps)
+                elseif r in (:log_weight, :jumps)
+                    error("the measurement $name reads $r, which only a simulation making " *
+                          "trajectories has, see Trajectory")
+                else
                     of_1x = r === :sweep ? ": the :sweep of 1.x is :step" : ""
                     error("the measurement $name reads $r, a value that no phase of the " *
                           "simulation provides$of_1x")
@@ -99,16 +105,17 @@ end
     check_names(phases, sampled)
 
 refuse, when the `SimData` is written rather than when the run reaches the phase, a phase naming a
-state by a name the run reserves, see `reserved_values`, `:state` aside, or `:sample` or
-`:log_weight` or `:jumps` in a `sampled` simulation, which gives them, and one naming a state
-twice in its `on`, which would act on it twice
+state or a value by a name the run reserves, see `reserved_values`, `:state` aside, or one it
+gives, see `given_values`, and one naming a state twice in its `on`, which would act on it twice
 """
 function check_names(phases::Vector, sampled::Bool)
+    given = given_values(sampled, any(makes_trajectory, phases))
     for p in phases
         names = acted_on(p)
-        for n in [ names ; collect(provided_values(p)) ]
-            if n ≠ :state && n in reserved_values || sampled && n in (:sample, :log_weight, :jumps)
-                error("$(type_name(typeof(p))) cannot name a state $n, a name the run reserves")
+        for (n, what) in [ [ n => "name a state" for n in names ] ;
+                           [ n => "provide a value" for n in provided_values(p) ] ]
+            if n ≠ :state && n in reserved_values || n in given
+                error("$(type_name(typeof(p))) cannot $what $n, a name the run reserves")
             end
         end
         for n in names
