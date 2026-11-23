@@ -465,6 +465,30 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     @test !isempty(run("c"; on = [:state, :b]))
 end
 
+@testset "Dephasing draws the projectors on the eigenspaces, or the phases between them" begin
+    rng = Xoshiro(43)
+    # the Kraus operators of the phases on a qutrit: unitaries over √3, the dephasing on average
+    q3 = System(1, Qudit(3))
+    ks = [ lowered(q3, k) for k in TMS.kraus_operators(q3, Dephase(Level; kraus = :phases)(1)) ]
+    @test length(ks) == 3
+    @test all(k -> 3 * k' * k ≈ LA.I, ks)
+    ρ = (x = randn(rng, ComplexF64, 3, 3); x * x')
+    @test sum(k * ρ * k' for k in ks) ≈ LA.Diagonal(LA.diag(ρ))
+    # on qubits, the jump is Z, the average of the trajectories the evolution
+    qubits = System(2, Qubit())
+    p = random_state(Pure, qubits, 2; rng)
+    t = as_trajectory(p)
+    g = -im * (X(1) * X(2) + Z(1)) +
+        sum(dephasing_dissipator(0.8; jumps = :phases)(i) for i in 1:2)
+    ts = [ evolve(g, 0.5, t; nsteps = 5, rng) for _ in 1:200 ]
+    @test same_density(ts, evolve(g, 0.5, mix(p); nsteps = 40); floor = 1 / 200)
+    # the density matrix does not see the choice
+    @test ket_bra_matrix(apply(dephasing_channel(0.3; kraus = :phases)(1), mix(p))) ≈
+          ket_bra_matrix(apply(dephasing_channel(0.3)(1), mix(p)))
+    @test occursin("kraus = :phases", repr(Dephase(Z; kraus = :phases)))
+    @test_throws ":projectors or :phases" dephasing_dissipator(0.1; jumps = :pauli)
+end
+
 @testset "Trajectory draws its initial state from a mixed description, whose average it is" begin
     rng = Xoshiro(13)
     draws(f) = [ f() for _ in 1:2000 ]

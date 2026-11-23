@@ -72,7 +72,15 @@ function generic_kraus(a::GenericOp{IsChannel}, sites)
         return [ scale(sqrt(a.coef), k) for k in generic_kraus(a.arg, sites) ]
     elseif a isa Dephase
         values, _ = dephase_projectors(a, sites)
-        return [ Proj(a.arg => λ) for λ in values ]
+        ps = [ Proj(a.arg => λ) for λ in values ]
+        if a.kraus === :projectors
+            return ps
+        end
+        d = length(ps)
+        # the identity written as such, which a Dissipator of the channel drops
+        unit = scale(1 / sqrt(d), IdentityOp{IsOperator, Generic, length(sites)}())
+        return [ [unit] ; [ sum(cis(2π * j * k / d) / sqrt(d) * p for (j, p) in enumerate(ps))
+                           for k in 1:d - 1 ] ]
     elseif a isa Reset
         return reset_kraus(a, only(sites))
     elseif a isa SumOp

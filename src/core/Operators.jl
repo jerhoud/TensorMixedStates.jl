@@ -515,28 +515,40 @@ Reset(p::Pair{<:IndexedOp{IsOperator}, <:Real}) =
     end
 
 """
-    Dephase(A)
+    Dephase(A; kraus = :projectors)
 
 the channel dephasing in the eigenbasis of the Hermitian operator `A`, of one site or several,
 ``\\rho \\mapsto \\sum_\\lambda P_\\lambda \\rho P_\\lambda``, ``P_\\lambda`` the projector
 on the eigenspace of `A` of eigenvalue ``\\lambda``: the measurement of `A` whose result is not
 read. It erases the coherences between eigenspaces and keeps those within one. An operator
 placed on sites places the dephasing there: `Dephase(N(1))` is `Dephase(N)(1)`.
+`kraus` gives the Kraus operators a trajectory draws among, the same channel for a density
+matrix: `:projectors`, the ``P_\\lambda``, or `:phases`, the unitaries
+``\\sum_j \\omega^{jk} P_{\\lambda_j} / \\sqrt{d}``, ``\\omega = e^{2i\\pi/d}``, for `k` from 0 to
+`d - 1` and the `d` eigenvalues ``\\lambda_j``, which change the phases between eigenspaces
+instead of choosing one.
 
 # Examples
 
     Dephase(Level)(3)       # in the basis of the site
     Dephase(Ntot)(2)        # on an Electron, keeps the coherence of Up and Dn
     Dephase(Z ⊗ Z)(1, 2)    # the parity of two qubits, not read
+    Dephase(Z; kraus = :phases)(1)    # a trajectory draws Z rather than the projectors
 """
 struct Dephase{N} <: GenericOp{IsChannel, N}
     arg::GenericOp{IsOperator, N}
-    Dephase(arg::GenericOp{IsOperator, N}) where N = new{N}(arg)
+    kraus::Symbol
+    function Dephase(arg::GenericOp{IsOperator, N}; kraus::Symbol = :projectors) where N
+        if kraus ∉ (:projectors, :phases)
+            error("the Kraus operators of Dephase are :projectors or :phases, got $(repr(kraus))")
+        end
+        return new{N}(arg, kraus)
+    end
 end
 
-Dephase(a::IndexedOp{IsOperator}) =
+Dephase(a::IndexedOp{IsOperator}; kraus::Symbol = :projectors) =
     if a isa AtIndex
-        Dephase(a.op)(a.index...)
+        Dephase(a.op; kraus)(a.index...)
     else
         error("cannot dephase in the eigenbasis of $(obs_name(a)) once placed: dephase in " *
               "that of the operator before placing it, Dephase(N ⊗ Id + Id ⊗ N)(1, 2) rather " *
@@ -1142,7 +1154,11 @@ show(io::IO, a::DagOp) =
 
 show(io::IO, a::Union{Gate, Dephase, Dissipator, Evolver}) =
     paren(io, 1000, 0) do io
-        show_func(io, nameof(typeof(a)), a.arg)
+        if a isa Dephase && a.kraus ≠ :projectors
+            print(io, "Dephase(", a.arg, "; kraus = ", repr(a.kraus), ")")
+        else
+            show_func(io, nameof(typeof(a)), a.arg)
+        end
     end
 
 show(io::IO, a::ModOp) =

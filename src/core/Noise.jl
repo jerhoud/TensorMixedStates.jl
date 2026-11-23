@@ -134,39 +134,45 @@ function depolarizing_channel(p::Real, n::Int = 1; kraus::Symbol = :reset)
 end
 
 """
-    dephasing_dissipator(γ, A = Level)
+    dephasing_dissipator(γ, A = Level; jumps = :projectors)
 
 the generator dephasing at rate `γ` in the eigenbasis of `A`, by default the basis of the site,
 `γ * Dissipator(Dephase(A))`, ``\\gamma\\,(\\Delta(\\rho) - \\rho)``, `Δ` being `Dephase(A)`.
 Every coherence between two eigenspaces decays at the same rate `γ`, where `Dissipator(A)`
 damps it at ``(\\lambda_a - \\lambda_b)^2 / 2``, faster for distant eigenvalues: the two agree
 when `A` has two eigenvalues, `Dissipator(Z)` being `dephasing_dissipator(2, Z)`. Evolving
-under it for a time `t` is `dephasing_channel(1 - exp(-γt), A)`.
+under it for a time `t` is `dephasing_channel(1 - exp(-γt), A)`. `jumps` gives the jumps of a
+trajectory, see `Dephase`: `:projectors` on the eigenspaces at the rate `γ`, or `:phases`, unitary,
+`d - 1` of them at the rate `γ / d` for `d` eigenvalues, `√(γ/2) Z` for a qubit, which change no
+population in the eigenbasis of `A`.
 
 # Examples
 
     -im * H + sum(dephasing_dissipator(0.1)(i) for i in 1:10)
     dephasing_dissipator(0.1, Z ⊗ Z)(1, 2)      # the parity of two qubits
 """
-function dephasing_dissipator(γ::Real, a::GenericOp{IsOperator} = Level)
+function dephasing_dissipator(γ::Real, a::GenericOp{IsOperator} = Level;
+                              jumps::Symbol = :projectors)
     check_rate("dephasing_dissipator", γ)
-    return γ * Dissipator(Dephase(a))
+    return γ * Dissipator(Dephase(a; kraus = jumps))
 end
 
 """
-    dephasing_channel(p, A = Level)
+    dephasing_channel(p, A = Level; kraus = :projectors)
 
 the channel dephasing with probability `p` in the eigenbasis of `A`, by default the basis of
-the site, ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being `Dephase(A)`.
+the site, ``(1 - p)\\,\\rho + p\\,\\Delta(\\rho)``, `Δ` being `Dephase(A; kraus)`, whose
+`kraus` gives the Kraus operators a trajectory draws among.
 
 # Examples
 
     prod(dephasing_channel(0.01)(i) for i in 1:10)
     dephasing_channel(0.1, Z ⊗ Z)(1, 2)      # the parity of two qubits
 """
-function dephasing_channel(p::Real, a::GenericOp{IsOperator, N} = Level) where N
+function dephasing_channel(p::Real, a::GenericOp{IsOperator, N} = Level;
+                           kraus::Symbol = :projectors) where N
     check_probability("dephasing_channel", p)
-    return (1 - p) * Gate(tensor_power(Id, N)) + p * Dephase(a)
+    return (1 - p) * Gate(tensor_power(Id, N)) + p * Dephase(a; kraus)
 end
 
 """
