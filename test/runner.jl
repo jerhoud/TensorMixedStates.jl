@@ -1344,6 +1344,14 @@ end
         @test startswith(log, "Run on $(gethostname()), ")
         @test occursin("Created State{Pure}(System(3, Qubit()), (maxlinkdim = 1))\n", log)
         @test occursin(r"evolver has bond dimension 3, takes [\d.]+ \w+, built in [\d.]+ s\n", log)
+        # the memory of the MPO without the operators its system keeps prepared for measurements
+        st = State{Pure}(System(4, Qubit()), "Up")
+        pre = PreMPO(st, -im * sum(X(i) * X(i + 1) for i in 1:3))
+        bytes = TMS.prepared_bytes(pre)
+        for _ in 1:2, i in 1:4, j in 1:4
+            expect(st, Z(i) * Z(j) + X(i))
+        end
+        @test TMS.prepared_bytes(pre) == bytes
         @test occursin(r"\nstep 2, time 0.2, maxdim \d+, [\d.]+ s\n", log)
         @test occursin(r"\nCheckpoint written at time 0.2, ", log)
         @test occursin(r"allocated, peak memory .* \*\*\*\*\*\n", log)

@@ -17,14 +17,18 @@ function log_mpo(sim::Simulation, what::String, d::Int, bytes::Int, start::Float
     return nothing
 end
 
+# the memory of the prepared form of `pre`, without the caches of the systems it shares with the
+# other operators. Held in place in the fields, a system escapes `exclude` in Julia 1.13, and so
+# does the set of its hashes, whose dictionary does not
+prepared_bytes(pre::PreMPO) =
+    Base.summarysize(pre; exclude = Union{DataType, Core.TypeName, Core.MethodInstance,
+                                          Dict{IndexedOp{IsOperator}, Any}, Set{UInt},
+                                          Dict{UInt, Nothing}, Dict{Conserved, System}})
+
 # the bond dimension of its MPO, the term finished taking a channel more, see `make_mpo`, and
-# the memory of its prepared form, without the caches of the systems it shares with the other
-# operators: held in place in the fields, a system escapes `exclude`, which its caches do not
+# the memory of its prepared form
 log_mpo(sim::Simulation, what::String, pre::PreMPO, start::Float64) =
-    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1,
-            Base.summarysize(pre; exclude = Union{DataType, Core.TypeName, Core.MethodInstance,
-                                                  Dict{IndexedOp{IsOperator}, Any}, Set{UInt},
-                                                  Dict{Conserved, System}}), start)
+    log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1, prepared_bytes(pre), start)
 
 log_mpo(sim::Simulation, what::String, mpo::MPO, start::Float64) =
     log_mpo(sim, what, maxlinkdim(mpo), Base.summarysize(mpo), start)
