@@ -18,11 +18,13 @@ function log_mpo(sim::Simulation, what::String, d::Int, bytes::Int, start::Float
 end
 
 # the bond dimension of its MPO, the term finished taking a channel more, see `make_mpo`, and
-# the memory of its prepared form, without the system it shares with the other operators
+# the memory of its prepared form, without the caches of the systems it shares with the other
+# operators: held in place in the fields, a system escapes `exclude`, which its caches do not
 log_mpo(sim::Simulation, what::String, pre::PreMPO, start::Float64) =
     log_mpo(sim, what, maximum(pre.linkdims; init = 0) + 1,
             Base.summarysize(pre; exclude = Union{DataType, Core.TypeName, Core.MethodInstance,
-                                                  System}), start)
+                                                  Dict{IndexedOp{IsOperator}, Any}, Set{UInt},
+                                                  Dict{Conserved, System}}), start)
 
 log_mpo(sim::Simulation, what::String, mpo::MPO, start::Float64) =
     log_mpo(sim, what, maxlinkdim(mpo), Base.summarysize(mpo), start)
