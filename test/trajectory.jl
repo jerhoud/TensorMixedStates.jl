@@ -485,6 +485,21 @@ end
     # the density matrix does not see the choice
     @test ket_bra_matrix(apply(dephasing_channel(0.3; kraus = :phases)(1), mix(p))) ≈
           ket_bra_matrix(apply(dephasing_channel(0.3)(1), mix(p)))
+    # in the eigenbasis of a sum of operators of one site, products of phases of each site, those
+    # of the dense matrix up to a phase each, which allow many sites
+    tensor_sum(n) = sum(reduce(⊗, [ j == i ? N : Id for j in 1:n ]) for i in 1:n)
+    q3s = System(3, Qubit())
+    sum3 = Dephase(tensor_sum(3); kraus = :phases)
+    products = [ lowered(q3s, k) for k in TMS.kraus_operators(q3s, sum3(1, 2, 3)) ]
+    dense = [ lowered(q3s, k(1, 2, 3)) for k in TMS.generic_kraus(sum3, [ q3s[i] for i in 1:3 ]) ]
+    @test length(products) == length(dense) == 4
+    @test all(abs(LA.tr(a' * b)) ≈ LA.norm(a)^2 ≈ LA.norm(b)^2 for (a, b) in zip(products, dense))
+    q14 = System(14, Qubit())
+    g14 = dephasing_dissipator(0.5, tensor_sum(14); jumps = :phases)(1:14...)
+    @test length(TMS.kraus_operators(q14, Dephase(tensor_sum(14); kraus = :phases)(1:14...))) == 15
+    t14 = evolve(g14, 0.2, State{Trajectory}(q14, "+"); nsteps = 2, rng)
+    @test real(trace(t14)) ≈ 1
+    @test real(expect(t14, sum(N(i) for i in 1:14))) ≈ 7
     # the relaxation of a qubit passes its jumps to its dephasing: Z at the rate γ / 2
     q1 = System(1, Qubit())
     γ = 1 / 3. - 1 / 10.

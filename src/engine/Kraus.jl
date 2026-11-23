@@ -43,12 +43,42 @@ function gathered_channel(a::Union{SumOp, ProdOp})
 end
 
 """
+    phase_kraus(system, a)
+
+the Kraus operators of the phases of the dephasing `a` placed on sites in the eigenbasis of a sum
+of operators of one site, see `counting`, as the products of phases of `phase_operators`, without
+the dense matrix of the sum: those of `generic_kraus` up to a phase each, when the totals fill
+their `K` successive values; `nothing` otherwise
+"""
+function phase_kraus(system::System, a::AtIndex{IsChannel})
+    if !(a.op isa Dephase && a.op.kraus === :phases)
+        return nothing
+    end
+    cnt = counting(system, a.op.arg(a.index...), "Dephase")
+    if isnothing(cnt)
+        return nothing
+    end
+    totals, us, _ = phase_operators(cnt...)
+    K = length(us)
+    if length(totals) ≠ K
+        return nothing
+    end
+    # the identity written as such, which a Dissipator of the channel drops
+    unit = scale(1 / sqrt(K), IdentityOp{IsOperator, Generic, length(a.index)}())
+    return [ [unit(a.index...)] ; [ (1 / sqrt(K)) * u for u in us[2:end] ] ]
+end
+
+"""
     site_kraus(system, a)
 
 the Kraus operators of the channel `a` placed on sites, from its structure, refused when they
 have no definite charge, as a trajectory draws among the operators written
 """
 function site_kraus(system::System, a::AtIndex{IsChannel})
+    ks = phase_kraus(system, a)
+    if !isnothing(ks)
+        return ks
+    end
     sites = [ system[i] for i in a.index ]
     ks = generic_kraus(a.op, sites)
     if !all(k -> definite_charge(k, sites), ks)
