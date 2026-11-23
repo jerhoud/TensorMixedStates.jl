@@ -421,7 +421,7 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
     # the trace kept by the operators of the terms of one function together
     @test real(trace(evolve([-im * h + X(1), -X(1), Dissipator(Sm)(1)], 0.1, t; nsteps = 2,
                             rng))) ≈ 1
-    # ApproxW, whose steps after a jump are not cached
+    # ApproxW, whose steps before and after a jump take the place of the step in its cache
     @test same_trajectories(g, t, [(nothing, -im * m(h) + effective(jumps[1])),
                                    (f, effective(jumps[2]))],
                             [(nothing, jumps[1]), (f, jumps[2])]; algo = ApproxW(order = 4),

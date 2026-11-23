@@ -181,18 +181,12 @@ function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Nu
     return state
 end
 
-evolve_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number, step::Int,
-            limits::Limits) = approx_W_step(algo, pre, state, time, dt, step, limits, true)
-
-# the step of ApproxW, its MPOs kept in the cache of `pre` when `cached`
-function approx_W_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number,
-                       step::Int, limits::Limits, cached::Bool)
+function evolve_step(algo::ApproxW, pre::PreMPO, state::State, time::Number, dt::Number,
+                     step::Int, limits::Limits)
     if vanished(state.state)
         return state
     end
-    mpos = if isnothing(pre.functions) && !cached
-        approx_W_mpos(pre, dt, algo)
-    elseif isnothing(pre.functions)
+    mpos = if isnothing(pre.functions)
         cached_mpos(() -> approx_W_mpos(pre, dt, algo), pre, :approx_W, (algo.order, algo.w, dt))
     else
         reduce(vcat, [ approx_W_mpos(pre, dt, algo, c)
@@ -357,12 +351,6 @@ function decay_rate(d::Decay, state::State{Trajectory}, time::Number; checked::B
     return c * real(expect(state, d.rate))
 end
 
-# the step of `algo` under `pre`, ApproxW keeping its MPOs in the cache when `cached`
-part_step(algo::Tdvp, pre::PreMPO, state, time, dt, step, limits, ::Bool) =
-    evolve_step(algo, pre, state, time, dt, step, limits)
-part_step(algo::ApproxW, pre::PreMPO, state, time, dt, step, limits, cached::Bool) =
-    approx_W_step(algo, pre, state, time, dt, step, limits, cached)
-
 # the rate of all the jumps of `e` on `state` at `time`, rounding below zero taken as zero, a
 # negative rate function refused when `checked`, see `decay_rate`
 total_rate(e::JumpEvolver, state::State{Trajectory}, time::Number; checked::Bool = true) =
@@ -391,8 +379,8 @@ no_norm_error(dt, time) =
     error("a step of $dt from time $time leaves a trajectory of norm zero by underflow, its " *
           "jumps too frequent for it: take smaller steps")
 
-# the step of `evolve_step` for a JumpEvolver, or its `rest` after a jump, whose steps of ApproxW
-# are not cached and whose start may lie past the end of the evolution by rounding
+# the step of `evolve_step` for a JumpEvolver, or its `rest` after a jump, whose start may lie
+# past the end of the evolution by rounding
 function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
                    time::Number, dt::Real, step::Int, limits::Limits, rest::Bool)
     if is_null(state)
@@ -400,7 +388,7 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Traj
     end
     rng = something(e.rng, Random.default_rng())
     a0 = total_rate(e, state, time; checked = !rest)
-    stepped = part_step(algo, e.pre, state, time, dt, step, limits, !rest)
+    stepped = evolve_step(algo, e.pre, state, time, dt, step, limits)
     # a step losing all the norm, by the operators or by underflow, gives no rate at its end
     a1 = is_null(stepped) ? a0 : total_rate(e, stepped, time + dt; checked = false)
     # no jump up to s with the probability exp(-a0 s - c s²)
@@ -414,7 +402,7 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Traj
         return e.keeps ? followed(stepped, state, 1) : stepped / exp(lq / 2)
     end
     s = clamp(-2lu / (a0 + sqrt(max(a0^2 - 4c * lu, 0.0))), 0.0, dt)
-    before = part_step(algo, e.pre, state, time, s, step, limits, false)
+    before = evolve_step(algo, e.pre, state, time, s, step, limits)
     if is_null(before)
         return e.keeps ? no_norm_error(dt, time) : before
     end
