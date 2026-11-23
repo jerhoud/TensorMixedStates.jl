@@ -773,6 +773,11 @@ end
     @test real(trace(apply(u(2, 3), t4; limits = one_bond))) ≈ 1
     @test real(trace(apply(depolarizing_channel(0.1)(1) * Gate(u)(2, 3), t4; limits = one_bond,
                            rng))) ≈ 1
+    # one that does not keep it multiplies it by ⟨A†A⟩, computed before, truncation or not; a
+    # truncation keeps it
+    A = X(2) * X(3) + 0.5 * Z(2)
+    @test real(trace(apply(A, t4; limits = one_bond))) ≈ real(expect(t4, dag(A) * A))
+    @test real(trace(truncate(t4; limits = one_bond))) ≈ 1
     pure(s) = raw_vector(State{Pure}(s.system, s.state))
     @test pure(apply(im * X(1), t4)) ≈ im * pure(apply(X(1), t4))
     # an Update too, though it provides the state

@@ -116,10 +116,15 @@ its error. Every row of a simulation of trajectories has that column, 0 before t
 `:log_weight`. The run carries the trace into that value at each step where it is far from one,
 so that it neither underflows nor overflows. Only the trajectory `:state` carries the weight: a
 phase changing the trace of another one is refused. A local density matrix weighs the trajectory
-drawn from it by its trace, as the norm of a vector does. What keeps the trace, operators, gates
-and evolvers, brings the trajectory back to it after a truncation, which is then no weight; but
-a `PreMPO` given to `evolve` or `Evolve` is taken as it is, its truncation counted in the weight:
-give the evolver itself.
+drawn from it by its trace, as the norm of a vector does.
+
+Every operation multiplies the trace of a trajectory by what it keeps of the trace of the mixed
+state, computed before it and not read on the ket it leaves: one for what keeps the trace, the
+sum of ``\langle K^\dagger K\rangle`` for a channel, ``\langle A^\dagger A\rangle`` for an
+operator ``A``, the probability of a result imposed, so that truncation and rounding are never a
+weight; a truncation keeps the trace. One exception, an evolution whose operators lose trace,
+whose weight has no closed form, takes the norm its steps leave, truncation included, as does a
+`PreMPO` given to `evolve` or `Evolve`, which is taken as it is: give the evolver itself.
 
 `thermalize` and `Thermalize` take a trajectory drawn from a mixed state, as
 `CreateState{Trajectory}(system, "FullyMixed")`, to ``e^{-\beta H/2} \psi`` normalized, its

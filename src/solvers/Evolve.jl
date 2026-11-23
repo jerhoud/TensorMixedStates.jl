@@ -358,7 +358,7 @@ end
 function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
                      time::Number, dt::Number, step::Int, limits::Limits)
     if isempty(e.decays)
-        return with_trace(evolve_step(algo, e.pre, state, time, dt, step, limits), state)
+        return followed(evolve_step(algo, e.pre, state, time, dt, step, limits), state, 1)
     elseif !(isreal(dt) && real(dt) > 0)
         error("a trajectory draws its jumps forward in real time, and the step is $dt")
     elseif vanished(state.state)
@@ -373,11 +373,13 @@ function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Tr
     end
     if rand(rng) ≥ δp
         stepped = evolve_step(algo, e.pre, state, time, dt, step, limits)
-        return e.keeps ? with_trace(stepped, state) : stepped / sqrt(1 - δp)
+        # the operators losing trace: the norm the step leaves, the one weight no closed form
+        # gives, divided by the probability of no jump
+        return e.keeps ? followed(stepped, state, 1) : stepped / sqrt(1 - δp)
     end
     d = e.decays[draw_index(rates, rng)]
     i = draw_index([ real(expect(state, dag(j) * j)) for j in d.jumps ], rng)
-    return with_trace(applied(state, d.steps[i]..., limits), state)
+    return followed(applied(state, d.steps[i]..., limits), state, 1)
 end
 
 """

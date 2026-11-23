@@ -355,6 +355,32 @@ function charged_state(a::AbstractArray, inds, what, site::AbstractSite)
     return charged_itensor(a, inds)
 end
 
+"""
+    followed(new, old, f)
+
+the trajectory `new` an operation left of `old`, its trace set to `f` times that of `old`: `f` is
+what the operation keeps of the trace of the mixed state, the weight it gives, whatever
+truncation and rounding made of the norm of `new`; a factor one but for rounding leaves `new` as
+it is, and `f` zero, or negative by rounding only, leaves the null trajectory
+"""
+function followed(new::State{Trajectory}, old::State{Trajectory}, f::Real)
+    target = real(trace(old)) * max(f, 0.)
+    t = real(trace(new))
+    if iszero(target)
+        return 0 * new
+    elseif iszero(t)
+        return new
+    end
+    r = target / t
+    return abs(r - 1) ≤ rounding_tol ? new : sqrt(r) * new
+end
+
+# the trajectory `st` with its trace multiplied by `f`, see `followed`
+weighted(st::State{Trajectory}, f::Real) = followed(st, st, f)
+
+# whether the trajectory `st` is null, of weight zero, which a channel or a collapse leaves null
+is_null(st::State{Trajectory}) = vanished(st.state) || iszero(real(trace(st)))
+
 # the index of a draw among the weights `ps`, whose sum need not be one
 draw_index(ps::Vector{Float64}, rng::AbstractRNG) =
     something(findfirst(>(rand(rng) * sum(ps)), cumsum(ps)), findlast(>(0), ps))
@@ -648,6 +674,10 @@ rounding leaves.
 """
 truncate(state::State; limits::Limits) =
     State(state, guarded(st -> truncate(st; truncation(limits)...), vanishes_exactly, state.state))
+
+# a trajectory keeps its trace, its weight, through a truncation
+truncate(state::State{Trajectory}; limits::Limits) =
+    followed(invoke(truncate, Tuple{State}, state; limits), state, 1)
 
 """
     mix(::State; limits = Limits(), max_dense = nothing)

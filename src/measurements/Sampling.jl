@@ -342,7 +342,7 @@ end
 # the state a measurement leaves, `st` normalized; a trajectory keeps its trace, its weight, times
 # the probability `p` of a result imposed
 collapsed(::AbstractState, st, p::Real) = st
-collapsed(state::State{Trajectory}, st, p::Real) = weighted(st, p * real(trace(state)))
+collapsed(state::State{Trajectory}, st, p::Real) = followed(st, state, p)
 
 function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "collapse")

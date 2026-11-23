@@ -691,12 +691,15 @@ apply(a::IndexedOp, state::State; limits::Limits = Limits(),
       rng::AbstractRNG = Random.default_rng()) =
     applied(state, apply_steps(a, state)..., limits)
 
-# an operator applied to the ket, its phase kept, the trajectory brought back to its trace when the
-# gate it makes keeps it, so that what truncation loses is no weight
+# an operator applied to the ket, its phase kept, the trace multiplied by what it keeps of it,
+# ⟨a†a⟩, computed before, so that what truncation loses is no weight, see `followed`
 function apply(a::IndexedOp{IsOperator}, state::State{Trajectory}; limits::Limits = Limits(),
                rng::AbstractRNG = Random.default_rng())
-    st = applied(state, apply_steps(a, state)..., limits)
-    return kept_scale(keeps_trace(state.system, Gate(a)) ? with_trace(st, state) : st)
+    if is_null(state)
+        return state
+    end
+    f = keeps_trace(state.system, Gate(a)) ? 1. : real(expect(state, dag(a) * a))
+    return kept_scale(followed(applied(state, apply_steps(a, state)..., limits), state, f))
 end
 
 # the trajectory `st` refused when its trace, which weights it, nears the bounds of the floating
@@ -717,10 +720,7 @@ function apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits
                rng::AbstractRNG = Random.default_rng())
     check_indices(state.system, a)
     if is_pure(a)
-        st = applied(state, apply_steps(a, state)..., limits)
-        # gates keeping the trace bring the trajectory back to it, so that what truncation loses
-        # is no weight
-        return kept_scale(keeps_trace(state.system, a) ? with_trace(st, state) : st)
+        return apply(kraus(a), state; limits)
     end
     names = strong_names(state.system)
     if !isempty(names) && length(strong_fluxes(state.system, a, names)) > 1
@@ -767,28 +767,13 @@ function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, r
     if !(total > 0)
         return 0 * st
     end
-    return weighted(with_trace(apply(ks[draw_index(ps, rng)], st; limits), st), total)
+    return followed(applied(st, apply_steps(ks[draw_index(ps, rng)], st)..., limits), st, total)
 end
-
-# whether the trajectory `st` is null, of weight zero, which a channel or a collapse leaves null
-is_null(st::State{Trajectory}) = vanished(st.state) || iszero(real(trace(st)))
-
-# the trajectory `st` with its trace, its weight, multiplied by the factor `f`, which only rounding
-# makes negative, a factor one but for rounding left out, which would only change the last bits
-weighted(st::State{Trajectory}, f::Real) =
-    abs(f - 1) ≤ rounding_tol ? st : sqrt(max(f, 0.)) * st
 
 # the Kraus operators of the channel `a`, placed on sites, checked for a definite charge when it is
 # placed as a whole, see `kraus_operators`
 kraus_of(system::System, a::IndexedOp{IsChannel}) =
     a isa AtIndex || !is_pure(a) ? kraus_operators(system, a) : [kraus(a)]
-
-# the trajectory `new` scaled to the trace of `old`, before a Kraus operator was applied: the norm
-# of a trajectory goes through a channel unchanged, as the probability of no jump it may carry
-function with_trace(new::State{Trajectory}, old::State{Trajectory})
-    t = real(trace(new))
-    return iszero(t) ? new : weighted(new, real(trace(old)) / t)
-end
 
 # the channel `a` placed on sites as a whole as a structure of placed channels
 function placed_structure(a::AtIndex{IsChannel})
