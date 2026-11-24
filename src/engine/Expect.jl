@@ -1070,9 +1070,9 @@ function inner(a::State{Pure}, op::IndexedOp{IsOperator}, b::State{Pure})
     return or_on_plain((x, y) -> inner(x.state', make_mpo(y, op), y.state), a, b)
 end
 
-inner(::State{Trajectory}, ::IndexedOp, ::State) = not_linear("a matrix element")
-inner(::State{<:Union{Pure, Mixed}}, ::IndexedOp, ::State{Trajectory}) =
-    not_linear("a matrix element")
+inner(t::State{Trajectory}, op::IndexedOp, s::State) = inner(as_pure(t), op, s)
+inner(s::State{<:Union{Pure, Mixed}}, op::IndexedOp, t::State{Trajectory}) =
+    inner(s, op, as_pure(t))
 
 function inner(a::State{Mixed}, op::IndexedOp{<:Union{IsChannel, IsGenerator}}, b::State{Mixed})
     a, b = on_common_system(a, b)

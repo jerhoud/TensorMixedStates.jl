@@ -200,8 +200,7 @@ function Vector(state::State{Pure}; max_dense::Union{Nothing, Int} = dense_eleme
     return contracted(state.state, 1:length(system), siteinds(Pure, system))
 end
 
-Vector(::State{Trajectory}; kwargs...) =
-    error("the vector of one trajectory is not the state: use State{Pure} or State{Mixed}")
+Vector(st::State{Trajectory}; kwargs...) = Vector(as_pure(st); kwargs...)
 
 """
     mps_array(st, k, s)

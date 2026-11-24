@@ -223,11 +223,7 @@ the representation of `state`, `Pure`, `Mixed` or `Trajectory`, whatever the typ
 """
 representation(::AbstractState{R}) where R = R
 
-# the refusals of a state of the representation Trajectory: what is not linear in the density
-# matrix, which the average over trajectories does not give, and what needs drawing
-not_linear(what::AbstractString) =
-    error("$what is not linear in the density matrix: the average over trajectories does not " *
-          "give it, use State{Mixed}")
+# the refusal of what a trajectory needs drawing for, not written yet
 not_yet(what::AbstractString) =
     error("$what comes with the draws of the trajectories, not available yet: use State{Mixed}")
 
@@ -379,6 +375,10 @@ end
 
 # the trajectory `st` with its trace multiplied by `f`, see `followed`
 weighted(st::AbstractState{Trajectory}, f::Real) = followed(st, st, f)
+
+# the pure state the trajectory `st` holds, its ket normalised, on which what is not linear in
+# the density matrix is measured
+as_pure(st::State{Trajectory}) = normalize(State{Pure}(st.system, st.state))
 
 # whether the trajectory `st` is null, of weight zero, which a channel or a collapse leaves null
 is_null(st::AbstractState{Trajectory}) = iszero(real(trace(st)))
@@ -1032,9 +1032,9 @@ inner(::State{Pure}, ::State{Mixed}) =
     error("no inner product between a pure and a mixed representation: mix the pure one")
 inner(::State{Mixed}, ::State{Pure}) =
     error("no inner product between a pure and a mixed representation: mix the pure one")
-inner(::State{Trajectory}, ::State{Trajectory}) = not_linear("an inner product")
-inner(::State{Trajectory}, ::State) = not_linear("an inner product")
-inner(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_linear("an inner product")
+inner(t::State{Trajectory}, s::State{Trajectory}) = inner(as_pure(t), as_pure(s))
+inner(t::State{Trajectory}, s::State) = inner(as_pure(t), s)
+inner(s::State{<:Union{Pure, Mixed}}, t::State{Trajectory}) = inner(s, as_pure(t))
 
 dot(a::State, b::State) = inner(a, b)
 

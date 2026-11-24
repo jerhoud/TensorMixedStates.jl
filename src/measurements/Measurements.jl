@@ -15,7 +15,7 @@ the purity ``\\mathrm{tr}(\\rho^\\dagger\\rho) / (\\mathrm{tr}\\,\\rho)^2``, whi
 mixed one, above 1 only for a matrix that is not positive or not Hermitian.
 """
 purity(::State{Pure}) = 1.
-purity(::State{Trajectory}) = not_linear("the purity")
+purity(st::State{Trajectory}) = purity(as_pure(st))
 purity(state::State{Mixed}) = (norm(state.state) / nonzero_trace(state, "purity"))^2
 
 """
@@ -77,7 +77,7 @@ Hermitian, as it should be:
 pure representation.
 """
 hermiticity(::State{Pure}) = 1.
-hermiticity(::State{Trajectory}) = not_linear("the hermiticity")
+hermiticity(st::State{Trajectory}) = hermiticity(as_pure(st))
 hermiticity(state::State{Mixed}) =
     0.5 + 0.5 * real(dot(state.state, dag(state).state)) / nonzero_norm(state, "hermiticity")^2
 
@@ -106,7 +106,7 @@ function cut_svd(state::State, cut::Int)
     return U, S
 end
 
-cut_svd(::State{Trajectory}, ::Int) = not_linear("an entanglement entropy or spectrum")
+cut_svd(st::State{Trajectory}, cut::Int) = cut_svd(as_pure(st), cut)
 
 """
     shannon_entropy(p)
@@ -297,7 +297,7 @@ function entanglement_by_sector(state::State{Pure}, cut::Int)
     return entanglement_sectors(quantities, squares)
 end
 
-entanglement_by_sector(::State{Trajectory}, ::Int) = not_linear("an entanglement entropy")
+entanglement_by_sector(st::State{Trajectory}, cut::Int) = entanglement_by_sector(as_pure(st), cut)
 
 entanglement_by_sector(::State{Mixed}, ::Int) =
     error("entanglement_by_sector takes a pure state: on a mixed one the sectors of a link are " *
@@ -349,7 +349,7 @@ part_renyi2(state::AbstractState, kept::Vector{Int}) =
 part_renyi2(state::State{Mixed}, kept::Vector{Int}) =
     renyi2(partial_trace(weak_form(state); keep = kept))
 
-part_renyi2(::State{Trajectory}, ::Vector{Int}) = not_linear("a Renyi 2 entropy")
+part_renyi2(st::State{Trajectory}, kept::Vector{Int}) = part_renyi2(as_pure(st), kept)
 
 function part_renyi2(state::State{Pure}, kept::Vector{Int})
     n = length(state)
@@ -396,7 +396,7 @@ the sites traced out make ``S_2(B)`` another value on a state of no definite par
 parts_renyi2(state::AbstractState, kept::Vector{Int}) =
     part_renyi2(state, kept) + part_renyi2(state, setdiff(1:length(state), kept)) - renyi2(state)
 
-parts_renyi2(::State{Trajectory}, ::Vector{Int}) = not_linear("a Renyi 2 entropy")
+parts_renyi2(st::State{Trajectory}, kept::Vector{Int}) = parts_renyi2(as_pure(st), kept)
 
 function parts_renyi2(state::State{Pure}, kept::Vector{Int})
     a = part_renyi2(state, kept)
@@ -601,8 +601,8 @@ function von_neumann_entropy(state::AbstractState, positions::AbstractVector{Int
     return shannon_entropy(p / sum(p))
 end
 
-von_neumann_entropy(::State{Trajectory}, ::AbstractVector{Int}; kwargs...) =
-    not_linear("a von Neumann entropy")
+von_neumann_entropy(st::State{Trajectory}, positions::AbstractVector{Int}; kwargs...) =
+    von_neumann_entropy(as_pure(st), positions; kwargs...)
 
 # other vectors converted, so that a method of one's own typing its positions is reached
 von_neumann_entropy(state::AbstractState, positions::AbstractVector;
@@ -660,8 +660,8 @@ function log_negativity(state::AbstractState, a::AbstractVector, b::AbstractVect
     return log(sum(abs, eigvals(Hermitian(reshape(permutedims(t, perm), d, d)))))
 end
 
-log_negativity(::State{Trajectory}, ::AbstractVector, ::AbstractVector; kwargs...) =
-    not_linear("a logarithmic negativity")
+log_negativity(st::State{Trajectory}, a::AbstractVector, b::AbstractVector; kwargs...) =
+    log_negativity(as_pure(st), a, b; kwargs...)
 
 """
     pure_on_mixed(p, r)
@@ -717,9 +717,8 @@ fidelity(r::State{Mixed}, p::State{Pure}) = fidelity(p, r)
 
 fidelity(t::State{Trajectory}, p::State{Pure}) = ket_fidelity(t, p)
 fidelity(p::State{Pure}, t::State{Trajectory}) = ket_fidelity(p, t)
-fidelity(::State{Trajectory}, ::State{<:Union{Trajectory, Mixed}}) =
-    not_linear("a fidelity but to a pure state")
-fidelity(::State{Mixed}, ::State{Trajectory}) = not_linear("a fidelity but to a pure state")
+fidelity(t::State{Trajectory}, s::State{<:Union{Trajectory, Mixed}}) = fidelity(as_pure(t), s)
+fidelity(r::State{Mixed}, t::State{Trajectory}) = fidelity(r, as_pure(t))
 
 fidelity(::State{Mixed}, ::State{Mixed}) =
     error("no fidelity between two mixed representations, it needs the spectrum of a " *
@@ -735,8 +734,8 @@ they are proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
-hs_fidelity(::State{Trajectory}, ::State) = not_linear("hs_fidelity")
-hs_fidelity(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = not_linear("hs_fidelity")
+hs_fidelity(t::State{Trajectory}, s::State) = hs_fidelity(as_pure(t), s)
+hs_fidelity(s::State{<:Union{Pure, Mixed}}, t::State{Trajectory}) = hs_fidelity(s, as_pure(t))
 
 """
     variance(state, op)
@@ -763,9 +762,7 @@ function variance(state::State{Pure}, mpo::MPO)
     return e2 - abs2(e)
 end
 
-variance(::State{Trajectory}, ::Union{MPO, IndexedOp{IsOperator}}) =
-    error("a variance is not linear in the density matrix: measure A^2 and A, whose averages " *
-          "over the trajectories give it")
+variance(st::State{Trajectory}, op::Union{MPO, IndexedOp{IsOperator}}) = variance(as_pure(st), op)
 
 variance(state::State{Pure}, op::IndexedOp{IsOperator}) =
     or_on_plain(st -> variance(st, make_mpo(st, op)), state)

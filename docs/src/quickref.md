@@ -176,8 +176,9 @@ averaged files; dissipators and channels draw jumps and Kraus operators with the
 the sample, the averages weighted by the traces of
 the trajectories (column `log_weight`); the value `:jumps` counts the jumps drawn in the trajectory,
 and `dephasing_dissipator(γ; jumps = :phases)` draws phases, `Z` on a qubit, where the default
-draws projectors. What is not linear in the density matrix,
-as `Purity` or `Variance`, is refused; see [Quantum trajectories](@ref).
+draws projectors. What is not linear in the density matrix, as an entanglement entropy or
+`Variance`, is measured on the normalised ket of each trajectory and averaged, not on the density
+matrix; see [Quantum trajectories](@ref).
 
 ## When something fails
 

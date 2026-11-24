@@ -7,8 +7,8 @@ random: the average of ``|\psi\rangle\langle\psi|`` over the trajectories is the
 that `State{Mixed}` would hold, the dissipators and the channels drawing jumps or Kraus
 operators where the density matrix takes their sum. The representation is `Trajectory`, as in
 `State{Trajectory}`: a trajectory is a ket, and what holds for a pure state holds for it, but
-for the draws and for the measurements that are not linear in the density matrix, see
-[What a trajectory refuses](@ref).
+for the draws and the weights, and the measurements that are not linear in the density matrix
+are those of each pure state, see [What a trajectory measures](@ref).
 
 ## Making a trajectory
 
@@ -162,16 +162,19 @@ since every sample would go on from the same trajectory, and so is a trajectory 
 `LoadState` or set by `Update` outside the samples: a trajectory is loaded among the phases
 `Realizations` returns.
 
-## What a trajectory refuses
+## What a trajectory measures
 
 The average over the trajectories gives what is linear in the density matrix: the expectation
 values, the probabilities of `sample` and `collapse`, the trace, the fidelity to a pure state.
-The rest is refused with a message saying so: the purity, the entropies and the entanglement
-spectrum, the logarithmic negativity, the fidelity to a mixed state, the measurement `Norm`,
-inner products and matrix elements between states. `Variance(A)` is refused too: measure `A^2`
-and `A`, whose averages give it. A trajectory is not mixed by `mix`, has no `Vector`, and is not
-held by an `ExactState`. A ground state is searched in `Pure`, then made a trajectory by
-`State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
+Anything else is measured on the pure state each trajectory holds, its ket normalised, and
+averaged with the weights: the entropies, the entanglement spectrum and the logarithmic
+negativity of each trajectory, the average entanglement of a monitored system, not that of the
+density matrix; `Purity` and `Norm` are 1; `Variance(A)` is the mean of the variances of `A` in
+each trajectory, smaller than that of the density matrix, which the averages of `A^2` and `A`
+give; `inner`, `Vector` and the fidelities take the normalised ket. Such averages depend on the
+way the channels and the dissipators are unravelled, see `dephasing_dissipator(γ; jumps)`. A
+trajectory is not mixed by `mix`, and is not held by an `ExactState`. A ground state is searched
+in `Pure`, then made a trajectory by `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
 
 Not available yet: `SteadyState`, `ConvertState{Trajectory}` of a mixed
 state, the product `⊗` of trajectories and `random_state(t, n)` of a trajectory `t`.

@@ -72,37 +72,30 @@ as_trajectory(p) = State{Trajectory}(p.system, p.state)
     @test c isa State{Trajectory} && expect1(c, Z) == expect1(p, Z)
 end
 
-@testset "Trajectory refuses what is not linear in the density matrix, and what needs draws" begin
+@testset "Trajectory measures the rest on its normalised ket, and refuses what needs draws" begin
     rng = Xoshiro(6)
     qubits = System(4, Qubit())
     p = random_state(Pure, qubits, 4; rng)
-    t = as_trajectory(p)
+    q = random_state(Pure, qubits, 4; rng)
+    # a weight of 9, which these measures do not see: those of the pure state p
+    t = 3 * as_trajectory(p)
+    for f in (purity, renyi2, s -> renyi2(s, [1, 2]), s -> mutual_info_renyi2(s, [1]), hermiticity,
+              s -> entanglement_entropy(s, 2), s -> entanglement_spectrum(s, 2),
+              s -> von_neumann_entropy(s, [1]), s -> log_negativity(s, [1], [2]),
+              s -> inner(s, q), s -> inner(q, s), s -> inner(s, X(1), q),
+              s -> fidelity(s, mix(q)), s -> variance(s, X(1)), Vector,
+              s -> last.(measure(s, Measure([Norm, Overlap(q), Variance(X(2))]); time = 0.)))
+        @test f(t) ≈ f(p) rtol = 1e-10
+    end
+    @test inner(t, t) ≈ 1
+    for ((ct, a), (cp, b)) in zip(entanglement_by_sector(t, 2), entanglement_by_sector(p, 2))
+        @test ct == cp && a.weight ≈ b.weight && a.entropy ≈ b.entropy && a.spectrum ≈ b.spectrum
+    end
     h = sum(Z(i) * Z(i + 1) for i in 1:3) + sum(X(i) for i in 1:4)
     TMS = TensorMixedStates
     for (f, message) in (
-            (() -> purity(t), "purity is not linear"),
-            (() -> renyi2(t), "purity is not linear"),
-            (() -> renyi2(t, [1, 2]), "Renyi 2 entropy is not linear"),
-            (() -> mutual_info_renyi2(t, [1]), "Renyi 2 entropy is not linear"),
-            (() -> hermiticity(t), "hermiticity is not linear"),
-            (() -> entanglement_entropy(t, 2), "entanglement entropy or spectrum"),
-            (() -> entanglement_spectrum(t, 2), "entanglement entropy or spectrum"),
-            (() -> entanglement_by_sector(t, 2), "entanglement entropy is not linear"),
-            (() -> von_neumann_entropy(t, [1]), "von Neumann entropy is not linear"),
-            (() -> log_negativity(t, [1], [2]), "logarithmic negativity is not linear"),
-            (() -> inner(t, t), "inner product is not linear"),
-            (() -> inner(t, p), "inner product is not linear"),
-            (() -> inner(p, t), "inner product is not linear"),
-            (() -> inner(t, X(1), t), "matrix element is not linear"),
-            (() -> hs_fidelity(t, t), "hs_fidelity is not linear"),
-            (() -> fidelity(t, t), "fidelity but to a pure state"),
-            (() -> fidelity(t, mix(p)), "fidelity but to a pure state"),
-            (() -> variance(t, X(1)), "measure A^2 and A"),
-            (() -> measure(t, Measure(Norm); time = 0.), "norm is not linear"),
-            (() -> measure(t, Measure(Overlap(p)); time = 0.), "not linear"),
             (() -> mix(t), "a trajectory is not a mixed state"),
             (() -> partial_trace(t; keep = [1]), "a trajectory is not a mixed state"),
-            (() -> Vector(t), "the vector of one trajectory"),
             (() -> t ⊗ t, "the product of two trajectories"),
             (() -> t ⊗ p, "the product of a trajectory"),
             (() -> random_state(t, 2), "randomising a trajectory is not implemented"),
@@ -173,8 +166,8 @@ end
     q = random_state(Pure, qubits, 4; rng)
     @test fidelity(t, ExactState(q)) ≈ fidelity(t, q) rtol = 1e-12
     @test fidelity(ExactState(q), t) ≈ fidelity(q, t) rtol = 1e-12
-    @test_throws "inner product is not linear" inner(t, e)
-    @test_throws "fidelity but to a pure state" fidelity(t, mix(e))
+    @test inner(t, e) ≈ inner(TensorMixedStates.as_pure(t), e) rtol = 1e-12
+    @test fidelity(t, mix(e)) ≈ fidelity(TensorMixedStates.as_pure(t), mix(e)) rtol = 1e-12
 end
 
 @testset "Trajectory is built from a pure description, and State from a concrete one" begin
