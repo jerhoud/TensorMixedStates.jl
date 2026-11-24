@@ -198,7 +198,11 @@ Set `TMS_SKIP_PRECOMPILE_WORKLOAD=true` in the environment to skip the precompil
 workload of `src/Precompile.jl`. That workload exists to make the first call fast for users,
 and it costs a great deal of time when you are loading or testing the package over and over.
 It is a development shortcut only: do not set it in CI and do not rely on it anywhere a user
-could end up.
+could end up. Julia does not take the variable into account when it picks a cache: a package
+image built without the workload is loaded by every later session, with or without the
+variable, until a source file changes. Before measuring first-call times, check which image is
+loaded: `JULIA_DEBUG=loading` prints its path, and the image with the workload weighs a few
+hundred MB, the one without about 13 MB.
 
 Coverage is measured on every CI run and sent to Codecov, which shows the lines of `src/`
 that no test reaches. A pull request that adds code without tests will show up there. Note
