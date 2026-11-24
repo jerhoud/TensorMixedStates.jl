@@ -130,6 +130,25 @@ function expanded(state::State, mpo::MPO, maxdim::Int)
     return new
 end
 
+# every bond of `st` as large as the space on its smaller side, which an expansion cannot
+# enlarge; charges make the largest bonds smaller, and such states are still expanded
+function bonds_full(st::MPS)
+    d = [ dim(siteinds(st, i)) for i in eachindex(st) ]
+    cap = typemax(Int) ÷ maximum(d)
+    right = ones(Int, length(st))
+    for i in length(st)-1:-1:1
+        right[i] = min(right[i + 1] * d[i + 1], cap)
+    end
+    left = 1
+    for b in 1:length(st)-1
+        left = min(left * d[b], cap)
+        if linkdim(st, b) < min(left, right[b])
+            return false
+        end
+    end
+    return true
+end
+
 """
     evolve_step(algo, pre, state, time, dt, step, limits)
 
@@ -161,7 +180,7 @@ function evolve_step(algo::Tdvp, pre::PreMPO, state::State, time::Number, dt::Nu
     # before the step: from a state of small bond dimension, a product state, an expansion after
     # the step comes too late, which leaves an error of order dt; a single site has no bond
     small = maxlinkdim(state) < min(5, tr.maxdim)
-    if length(state) > 1 && (small || due(algo.expand_period, step - 1))
+    if length(state) > 1 && (small || due(algo.expand_period, step - 1)) && !bonds_full(state.state)
         state = expanded(state, mpo, tr.maxdim)
     end
     st = if length(state) == 1

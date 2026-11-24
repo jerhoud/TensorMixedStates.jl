@@ -555,6 +555,18 @@ end
     st = @test_logs (:warn, r"failed on charged indices \(BoundsError\)") without_deprecations(
         () -> evolve(-im * h, 0.1, up; nsteps = 1, limits = Limits(maxdim = 16)))
     @test real(expect(st, Z(1))) ≈ 1
+    # a state whose every bond holds the whole space on its smaller side is not expanded, the
+    # projection of tdvp being exact on it; a product state or a smaller bond still is
+    q4 = System(4, Qubit())
+    ψ = random_state(Pure, q4, 4)
+    @test TMS.bonds_full(ψ.state)
+    @test !TMS.bonds_full(random_state(Pure, q4, 2).state)
+    @test !TMS.bonds_full(State{Pure}(System(2, Qubit()), "Up").state)
+    @test !TMS.bonds_full(State{Mixed}(System(70, Qubit()), "Up").state)     # 4^70 beyond an Int
+    ising4 = -im * (-sum(Z(i) * Z(i + 1) for i in 1:3) - 0.8 * sum(X(i) for i in 1:4))
+    st = evolve(ising4, 1., ψ; nsteps = 10, limits = Limits(maxdim = 16))
+    @test maximum(abs.(expect1(st, Z) - expect1(evolve(ising4, 1., ExactState(ψ); nsteps = 10), Z))) <
+          1e-10
 end
 
 @testset "Ising chain" begin
