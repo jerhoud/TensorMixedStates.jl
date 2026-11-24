@@ -121,13 +121,15 @@ end
 # the approximations of an MPS, without use for a state held whole
 ignored_options(::ExactState) = (:algo, :limits, :mpo_limits, :randomize)
 
+# the density matrix of the sites at the increasing positions `kept`, of the trace of `state`
+traced_state(state::ExactState, kept::Vector{Int}) =
+    ExactState{Mixed}(System(state.system.sites[kept]), traced_matrix(state, kept), Val(:raw))
+
 # as partial_trace of a State, the density matrix of the sites kept
 function partial_trace(state::ExactState{Mixed};
                        keep::Union{Nothing, AbstractVector{Int}} = nothing,
                        trace_out::Union{Nothing, AbstractVector{Int}} = nothing)
-    kept = kept_positions(state, keep, trace_out)
-    return ExactState{Mixed}(System(state.system.sites[kept]), traced_matrix(state, kept),
-                             Val(:raw))
+    return traced_state(state, kept_positions(state, keep, trace_out))
 end
 
 partial_trace(::ExactState{Pure}; kwargs...) =
@@ -503,6 +505,40 @@ function traced_matrix(state::ExactState{R}, kept::Vector{Int}) where {R <: PM}
     n = length(rdims)
     t = reshape(permutedims(reshape(x, rdims..., rdims...), [perm; perm .+ n]), a, b, a, b)
     return sum(t[:, k, :, k] for k in 1:b)
+end
+
+# on a pure state, the density matrix of each site, or pair of sites, traced once for all the
+# operators, rather than a vector as large as the state for each value
+function expect1_computed(state::ExactState{Pure}, ops::AbstractArray{<:SimpleOp})
+    n = length(state)
+    subs = Dict{Int, ExactState{Mixed}}()
+    sub(i) = get!(() -> traced_state(state, [i]), subs, i)
+    return map(ops) do o
+        on = defined_sites(state.system, o)
+        return [ i in on ? expect_value(sub(i), o(1)) : missing for i in 1:n ]
+    end
+end
+
+function expect2_computed(state::ExactState{Pure}, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+                          sites::AbstractVector{Int} = 1:length(state))
+    sys = state.system
+    n = length(sys)
+    for i in sites
+        check_index(sys, i, "expect2")
+    end
+    subs = Dict{Vector{Int}, ExactState{Mixed}}()
+    sub(kept) = get!(() -> traced_state(state, kept), subs, kept)
+    return map(pairs) do (o1, o2)
+        r = Matrix{Union{Missing, Number}}(missing, n, n)
+        on1 = intersect(sites, defined_sites(sys, o1))
+        on2 = intersect(sites, defined_sites(sys, o2))
+        for i in on1, j in on2
+            r[i, j] = i == j ? expect_value(sub([i]), (o1 * o2)(1)) :
+                      i < j ? expect_value(sub([i, j]), o1(1) * o2(2)) :
+                              expect_value(sub([j, i]), o1(2) * o2(1))
+        end
+        return map(identity, r)
+    end
 end
 
 """
