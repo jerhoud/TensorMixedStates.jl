@@ -1397,7 +1397,9 @@ its step, the final measurements of a phase whatever its number of steps, with t
 the samples in it, `N_eff`, their effective number, equal to `N` here, and for each column `c`
 of the values, `c`, its mean, `err(c)`, the error on the mean, and `std(c)`, the standard
 deviation of the samples, `NaN` for one sample. The file `energy` above holds one row, the
-average ground state energy and magnetization. A row that some samples lack, a step that only the
+average ground state energy and magnetization. A row of a `Data` holds these cells, `row["Z(1)"]`
+and `row["err(Z(1))"]`, and gives the vector of the cells of a value of every site or of a vector,
+`row["Z"]` and `row["err(Z)"]`, as a row without samples gives the value. A row that some samples lack, a step that only the
 slow searches reach for instance, averages those that have it. The samples of a row must have the
 same time, but for rounding, and the same columns, and a value that is not a number cannot be
 averaged. A row written before the samples is shared by all, and written with no error and no
@@ -2187,10 +2189,12 @@ mark)`, lets a resumed run go on where the checkpoint left it, rather than start
 ## States of one's own
 
 A state of your own, a backend of its own holding a state as `State` holds it in an MPS, is a
-subtype of [`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of
-its physical sites. Its representation, `Pure` or `Mixed`, says what the state is, and so what
-the results of a program mean; the backend says how it is held and computed, which leaves the
-results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
+subtype of [`TensorMixedStates.AbstractState`](@ref)`{R}` with a field `system` holding the
+`System` of its physical sites, `struct MyState{R} <: AbstractState{R}`, or
+`struct MyState <: AbstractState{Pure}` for a single representation. Its representation `R`,
+`Pure` or `Mixed`, which `TensorMixedStates.representation(state)` gives, says what the state is,
+and so what the results of a program mean; the backend says how it is held and computed, which
+leaves the results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
 states of the `CreateState` phases of a program on your backend without changing its phases,
 which then need the methods below; `CreateState(…; backend = MyState)` does it for one phase,
 besides a phase of your own creating the state, see [Phases of one's own](@ref own-phases).
@@ -2202,8 +2206,6 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
-- `TensorMixedStates.representation(state::MyState)` gives the representation of the state,
-  `Pure` or `Mixed`, the type being best written `MyState{R}`;
 - `MyState(state::State; limits)` and `State(state::MyState; limits)` convert the state from an
   MPS and to one, for `CreateState`, which takes a state to the backend of the simulation unless
   given its own, and for `ConvertState` and `LoadState` given a `backend`, `limits` truncating
