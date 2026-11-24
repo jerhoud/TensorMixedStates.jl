@@ -691,21 +691,36 @@ apply(a::IndexedOp, state::State; limits::Limits = Limits(),
       rng::AbstractRNG = Random.default_rng()) =
     applied(state, apply_steps(a, state)..., limits)
 
+"""
+    ket_applied(op, state; limits)
+
+the operator `op` placed on sites applied to the ket of the trajectory `state`, without weight,
+for the draws of `apply` and `evolve`: a method for each type of states holding trajectories
+"""
+ket_applied(a::IndexedOp{IsOperator}, state::State{Trajectory}; limits::Limits = Limits()) =
+    applied(state, apply_steps(a, state)..., limits)
+
+apply(a::IndexedOp{IsOperator}, state::State{Trajectory}; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) = trajectory_applied(a, state, limits)
+
+apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) = trajectory_applied(a, state, limits, rng)
+
 # an operator applied to the ket, its phase kept, the trace multiplied by what it keeps of it,
 # ⟨a†a⟩, computed before, so that what truncation loses is no weight, see `followed`
-function apply(a::IndexedOp{IsOperator}, state::State{Trajectory}; limits::Limits = Limits(),
-               rng::AbstractRNG = Random.default_rng())
+function trajectory_applied(a::IndexedOp{IsOperator}, state::AbstractState{Trajectory},
+                            limits::Limits)
     if is_null(state)
         return state
     end
     f = keeps_trace(state.system, Gate(a)) ? 1. : real(expect(state, dag(a) * a))
-    return kept_scale(followed(applied(state, apply_steps(a, state)..., limits), state, f))
+    return kept_scale(followed(ket_applied(a, state; limits), state, f))
 end
 
 # the trajectory `st` refused when its trace, which weights it, nears the bounds of the floating
 # point numbers, far from any trace a computation keeps in range
-function kept_scale(st::State{Trajectory})
-    t = norm(st.state)^2
+function kept_scale(st::AbstractState{Trajectory})
+    t = real(trace(st))
     if isnan(t)
         error("the trace of the trajectory is NaN")
     elseif 0 < t < 1e-250 || t > 1e250
@@ -716,11 +731,11 @@ function kept_scale(st::State{Trajectory})
     return st
 end
 
-function apply(a::IndexedOp{IsChannel}, state::State{Trajectory}; limits::Limits = Limits(),
-               rng::AbstractRNG = Random.default_rng())
+function trajectory_applied(a::IndexedOp{IsChannel}, state::AbstractState{Trajectory},
+                            limits::Limits, rng::AbstractRNG)
     check_indices(state.system, a)
     if is_pure(a)
-        return apply(kraus(a), state; limits)
+        return trajectory_applied(kraus(a), state, limits)
     end
     names = strong_names(state.system)
     if !isempty(names) && length(strong_fluxes(state.system, a, names)) > 1
@@ -737,7 +752,8 @@ weight, a Kraus operator by its Born probability, its trace, its weight, multipl
 keeps of it, so that the average of the trajectories is the channel applied: left as it is by a
 channel keeping the trace
 """
-function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, rng::AbstractRNG)
+function drawn(a::IndexedOp{IsChannel}, st::AbstractState{Trajectory}, limits::Limits,
+               rng::AbstractRNG)
     if is_null(st)
         return st
     elseif a isa ScalarOp
@@ -755,7 +771,8 @@ function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, r
         return weighted(drawn(scalararg(x), st, limits, rng), scalarcoef(x) * total / ws[j])
     elseif a isa ProdOp && !is_pure(a)
         for f in reverse(channel_factors(a))
-            st = f isa IndexedOp{IsOperator} ? apply(f, st; limits) : drawn(f, st, limits, rng)
+            st = f isa IndexedOp{IsOperator} ? trajectory_applied(f, st, limits) :
+                                                drawn(f, st, limits, rng)
         end
         return st
     elseif a isa AtIndex && a.op isa Union{ProdOp, SumOp, IntPowOp, TensorOp}
@@ -767,7 +784,7 @@ function drawn(a::IndexedOp{IsChannel}, st::State{Trajectory}, limits::Limits, r
     if !(total > 0)
         return 0 * st
     end
-    return followed(applied(st, apply_steps(ks[draw_index(ps, rng)], st)..., limits), st, total)
+    return followed(ket_applied(ks[draw_index(ps, rng)], st; limits), st, total)
 end
 
 # the Kraus operators of the channel `a`, placed on sites, checked for a definite charge when it is
@@ -792,7 +809,7 @@ end
 # the trace the channel `a` keeps of the trajectory `st`, divided by its trace: one for a
 # structure keeping it, a product of gates one Kraus operator, a product of channels one, its
 # factors weighing the trajectory as they are drawn
-function weight(a::IndexedOp{IsChannel}, st::State{Trajectory})
+function weight(a::IndexedOp{IsChannel}, st::AbstractState{Trajectory})
     if keeps_trace(st.system, a)
         return 1.
     elseif a isa ScalarOp

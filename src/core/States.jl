@@ -365,7 +365,7 @@ what the operation keeps of the trace of the mixed state, the weight it gives, w
 truncation and rounding made of the norm of `new`; a factor one but for rounding leaves `new` as
 it is, and `f` zero, or negative by rounding only, leaves the null trajectory
 """
-function followed(new::State{Trajectory}, old::State{Trajectory}, f::Real)
+function followed(new::AbstractState{Trajectory}, old::AbstractState{Trajectory}, f::Real)
     target = real(trace(old)) * max(f, 0.)
     t = real(trace(new))
     if iszero(target)
@@ -378,9 +378,10 @@ function followed(new::State{Trajectory}, old::State{Trajectory}, f::Real)
 end
 
 # the trajectory `st` with its trace multiplied by `f`, see `followed`
-weighted(st::State{Trajectory}, f::Real) = followed(st, st, f)
+weighted(st::AbstractState{Trajectory}, f::Real) = followed(st, st, f)
 
 # whether the trajectory `st` is null, of weight zero, which a channel or a collapse leaves null
+is_null(st::AbstractState{Trajectory}) = iszero(real(trace(st)))
 is_null(st::State{Trajectory}) = vanished(st.state) || iszero(real(trace(st)))
 
 # the index of a draw among the weights `ps`, whose sum need not be one

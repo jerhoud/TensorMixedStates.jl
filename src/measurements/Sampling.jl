@@ -342,7 +342,7 @@ end
 # the state a measurement leaves, `st` normalized; a trajectory keeps its trace, its weight, times
 # the probability `p` of a result imposed
 collapsed(::AbstractState, st, p::Real) = st
-collapsed(state::State{Trajectory}, st, p::Real) = followed(st, state, p)
+collapsed(state::AbstractState{Trajectory}, st, p::Real) = followed(st, state, p)
 
 function collapse(state::AbstractState, pos::Int; rng = Random.default_rng())
     check_positions(state, [pos], "collapse")
@@ -353,7 +353,7 @@ end
 function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:Real};
                   limits::Limits = Limits(), max_dense::Union{Nothing, Int} = dense_elements[])
     op, λ = result
-    if state isa State{Trajectory} && is_null(state)
+    if state isa AbstractState{Trajectory} && is_null(state)
         return (result = λ, probability = 0., state = state)
     end
     values, probs, project = measurement(state, op, "collapse"; max_dense)
@@ -362,7 +362,7 @@ function collapse(state::AbstractState, result::Pair{<:IndexedOp{IsOperator}, <:
         error("$λ is not a result of measuring $(obs_name(op)), whose results are " *
               "$(join(values, ", "))")
     end
-    if probs[k] ≤ 0 && state isa State{Trajectory}
+    if probs[k] ≤ 0 && state isa AbstractState{Trajectory}
         # a trajectory of weight zero, which a simulation stops
         return (result = values[k], probability = 0., state = 0 * state)
     elseif probs[k] ≤ 0
