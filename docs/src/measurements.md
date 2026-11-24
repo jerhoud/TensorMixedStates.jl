@@ -214,7 +214,8 @@ their `measurements`, given as pairs `destination => measurements`. The destinat
 
 - `Data(name)`: the rows are kept in memory, in the `data` of the `Simulation` that `runTMS`
   returns, each the time then the pairs `name => value` measured, `row["X(1)"]` reading a value
-  as it was measured. The rows are also a table, of the package `Tables.jl`, whose columns are
+  as it was measured, and a cell of it by its column, below, `row["Z(2)"]` for the value `Z`
+  of every site. The rows are also a table, of the package `Tables.jl`, whose columns are
   those of a text table of the same measurements, below, which `DataFrame(rows)`,
   `CSV.write(file, rows)` and `data_to_frame(rows)` take.
 

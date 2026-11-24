@@ -237,6 +237,26 @@ end
     @test rows[2]["Y"] ≈ [0, 0] atol = 1e-12
     @test Dict(rows[2])["Z(2)"] ≈ 1
     @test_throws KeyError rows[1]["Y"]
+    # a cell read by its column, of a value of every site, of a pair and of a complex value
+    @test rows[2]["Y(2)"] == rows[2]["Y"][2]
+    @test_throws KeyError rows[1]["Y(1)"]
+    TMS.output!(o, ψ, Data("cells") => [(X, Z), Sp(1)]; time = 0.)
+    e = only(TMS.data_rows(o, "cells"))
+    @test e["X(1)Z(2)"] == last(e[2])[1, 2]
+    @test e["Re(Sp(1))"] == real(last(e[3])) && e["Im(Sp(1))"] == imag(last(e[3]))
+    # a row of cells alone, as an averaged one: the vector of the cells numbered 1 to n, their
+    # errors, complex values from their parts, refused when not numbered 1 to n
+    cells = ["time" => 0., "Z(1)" => 1., "err(Z(1))" => 0.1, "Z(2)" => 2., "err(Z(2))" => 0.2,
+             "v[1]" => 3., "v[2]" => 4., "Re(s(1))" => 1., "Im(s(1))" => -1.,
+             "err(Re(s(1)))" => 0.5, "err(Im(s(1)))" => 0.5, "w(1)" => 5., "w(3)" => 6.,
+             "X(1)Z(2)" => 7., "Re(c)" => 2., "Im(c)" => 3.]
+    avg = TMS.DataRow(Pair{String, Any}[cells...], first.(cells))
+    @test avg["Z"] == [1., 2.] && avg["err(Z)"] == [0.1, 0.2] && avg["v"] == [3., 4.]
+    @test avg["s"] == [1. - 1im] && avg["c"] == 2. + 3im
+    @test_throws "err(s) of a complex value" avg["err(s)"]
+    @test_throws "not numbered from 1 to n" avg["w"]
+    @test_throws KeyError avg["std(Z)"]
+    @test_throws KeyError avg["X"]
     df = data_to_frame(rows)
     @test isequal(DataFrame(rows), df)
     @test names(df) == ["time", "Z(1)", "Z(2)", "X(1)", "Y(1)", "Y(2)"]

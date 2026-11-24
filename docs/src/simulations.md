@@ -332,7 +332,9 @@ its step, the final measurements of a phase whatever its number of steps, with t
 the samples in it, `N_eff`, their effective number, equal to `N` here, and for each column `c`
 of the values, `c`, its mean, `err(c)`, the error on the mean, and `std(c)`, the standard
 deviation of the samples, `NaN` for one sample. The file `energy` above holds one row, the
-average ground state energy and magnetization. A row that some samples lack, a step that only the
+average ground state energy and magnetization. A row of a `Data` holds these cells, `row["Z(1)"]`
+and `row["err(Z(1))"]`, and gives the vector of the cells of a value of every site or of a vector,
+`row["Z"]` and `row["err(Z)"]`, as a row without samples gives the value. A row that some samples lack, a step that only the
 slow searches reach for instance, averages those that have it. The samples of a row must have the
 same time, but for rounding, and the same columns, and a value that is not a number cannot be
 averaged. A row written before the samples is shared by all, and written with no error and no

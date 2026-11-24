@@ -329,6 +329,10 @@ end
         @test row["N"] == 3 && row["Re(z)"] ≈ 2 && row["Im(z)"] ≈ -2 && row["std(Re(z))"] ≈ 1
         @test row["v[1]"] == 1 && row["std(v[1])"] == 0 && row["err(v[2])"] ≈ 1 / sqrt(3)
         @test only(sim.data["f"])["v[2]"] ≈ 2
+        # read whole as without samples: the vector of the means, of the errors, a complex mean
+        f = only(sim.data["f"])
+        @test f["v"] ≈ [1, 2] && f["err(v)"] ≈ [0, 1 / sqrt(3)] && f["z"] ≈ 2 - 2im
+        @test_throws "two parts" f["err(z)"]
         # the first sample has fewer steps: the later rows average the samples that have them
         short(c) = Evolve(evolver = -im * (0.5 * c.sample * X(1)),
                           duration = c.sample == 1 ? 0.1 : 0.3, time_step = 0.1,

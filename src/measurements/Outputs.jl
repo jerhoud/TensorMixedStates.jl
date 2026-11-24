@@ -382,8 +382,11 @@ end
     DataRow
 
 a row of a `Data`: the pairs `name => value` measured, the time first, each value as it was
-measured, `row[name]` giving the value of `name`, the cell `name` for a row averaged, and the
-columns of the cells of these values, see `cells!`
+measured, and the columns of the cells of these values, see `cells!`, which a row averaged holds
+alone. `row[name]` gives the value of `name`, or the cell of the column `name`, as `Z(1)` of a
+value `Z` of every site, or the vector of the cells `name(k)` or `name[k]`, k = 1 to n, their
+`Re` and `Im` making complex numbers, as `Z`, `err(Z)` or `std(Z)` of a row averaged, see
+`numbered_cells`
 """
 struct DataRow <: AbstractVector{Pair{String, Any}}
     measured::Vector{Pair{String, Any}}
@@ -400,10 +403,18 @@ Base.getindex(r::DataRow, k::Int) = r.measured[k]
 
 function Base.getindex(r::DataRow, name::AbstractString)
     k = findfirst(p -> first(p) == name, r.measured)
-    if isnothing(k)
+    if !isnothing(k)
+        return last(r.measured[k])
+    end
+    c = findfirst(==(name), r.columns)
+    if !isnothing(c)
+        return measured_cells(r.measured)[c]
+    end
+    v = numbered_cells(r, name)
+    if isnothing(v)
         throw(KeyError(name))
     end
-    return last(r.measured[k])
+    return v
 end
 
 """
@@ -414,6 +425,67 @@ columns
 """
 measured_cells(measured) =
     Any[ last(c) for (name, x) in measured for c in cells!(Pair{String, Any}[], name, x) ]
+
+# the columns of `columns` written prefix * k * suffix, as k => the place of the column
+function numbered(columns::Vector{String}, prefix::String, suffix::String)
+    found = Dict{Int, Int}()
+    for (c, col) in enumerate(columns)
+        if startswith(col, prefix) && endswith(col, suffix) &&
+           ncodeunits(col) > ncodeunits(prefix) + ncodeunits(suffix)
+            k = chopsuffix(chopprefix(col, prefix), suffix)
+            if all(isdigit, k)
+                found[parse(Int, k)] = c
+            end
+        end
+    end
+    return found
+end
+
+"""
+    numbered_cells(row, name)
+
+the vector of the cells `name(k)` or `name[k]` of the `DataRow` `row`, k = 1 to n, or of their
+`err` and `std` for `name` = `err(Z)` or `std(Z)`, the cells `Re(…)` and `Im(…)` of each making a
+complex number; `nothing` when there is none. A value of every site or a vector, of a row
+averaged, read whole as a row without samples holds it: columns not numbered 1 to n, or the
+error of a complex value, are refused
+"""
+function numbered_cells(r::DataRow, name::AbstractString)
+    m = match(r"^(err|std)\((.*)\)$", name)
+    pre, base, post = isnothing(m) ? ("", name, "") : ("$(m[1])(", m[2], ")")
+    rc, ic = findfirst(==("$(pre)Re($base)$post"), r.columns),
+             findfirst(==("$(pre)Im($base)$post"), r.columns)
+    if !isnothing(rc) && !isnothing(ic)
+        if !isnothing(m)
+            error("$name of a complex value has two parts: read $(pre)Re($base)$post and " *
+                  "$(pre)Im($base)$post")
+        end
+        cells = measured_cells(r.measured)
+        return complex(cells[rc], cells[ic])
+    end
+    for (open, close) in (("(", ")"), ("[", "]"))
+        re = numbered(r.columns, pre * base * open, close * post)
+        parts = (numbered(r.columns, "$(pre)Re($base$open", "$close)$post"),
+                 numbered(r.columns, "$(pre)Im($base$open", "$close)$post"))
+        if isempty(re) && all(isempty, parts)
+            continue
+        end
+        cells = measured_cells(r.measured)
+        n = max(length(re), length(first(parts)))
+        if !isempty(re) && issetequal(keys(re), 1:n) && all(isempty, parts)
+            return [ cells[re[k]] for k in 1:n ]
+        elseif isempty(re) && all(p -> issetequal(keys(p), 1:n), parts)
+            if !isnothing(m)
+                error("$name of a complex value has two parts: read $(pre)Re($base$(open)1$close)" *
+                      "$post and $(pre)Im($base$(open)1$close)$post")
+            end
+            return [ complex(cells[first(parts)[k]], cells[last(parts)[k]]) for k in 1:n ]
+        end
+        error("the cells of $name in the row are not numbered from 1 to n: read them one by " *
+              "one, as row[\"$(pre)$base$(open)1$close$post\"]")
+    end
+    return nothing
+end
 
 """
     DataTable
