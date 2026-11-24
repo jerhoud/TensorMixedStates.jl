@@ -904,3 +904,17 @@ end
                                                                            on = :b),
                                                    halved], Data("z") => Z(1); samples = 2)
 end
+
+@testset "A run of trajectories notes the measurements it takes on each normalised ket" begin
+    in_tmp() do
+        q = System(3, Qubit())
+        list = "m" => [Z, EntanglementEntropy(2)]
+        runTMS(SimData(name = "t", seed = 1, samples = 1, final_measurements = list,
+                       phases = [CreateState{Trajectory}(q, "Up")]))
+        line = only(filter(l -> occursin("normalised ket", l), readlines("t/log")))
+        @test endswith(line, "density matrix: EntanglementEntropy(2)")
+        runTMS(SimData(name = "m", final_measurements = list,
+                       phases = [CreateState{Mixed}(q, "Up")]))
+        @test !occursin("normalised ket", read("m/log", String))
+    end
+end

@@ -509,6 +509,18 @@ each system on a pure state
 """
 Variance(op) = StateMeasurement("Variance", state -> variance_of(state, op))
 
+# the measurements of the library that are not linear in the density matrix, which a trajectory
+# takes on its normalised ket, see `as_pure`, the fidelity included, whose reference may be pure
+const on_ket_names = ("Purity", "Norm", "Hermiticity", "HermiticityDeviation", "Renyi2",
+                      "MutualInfoRenyi2", "EntanglementEntropy", "EntanglementSpectrum",
+                      "VonNeumannEntropy", "LogNegativity", "Overlap", "Variance", "Fidelity")
+
+# whether the measurement `m` is one of them
+on_ket(m::Union{StateMeasurement, ContextMeasurement}) = first(split(m.name, '(')) in on_ket_names
+on_ket(m::WholeMeasurement) = on_ket(m.whole)
+on_ket(m::OnNamed) = on_ket(m.entry)
+on_ket(_) = false
+
 """
     checked_measurement(x)
 

@@ -342,6 +342,17 @@ checked_phases(sd::SimData) = checked_phases(sd.phases, sd.realized, sd.samples)
 # whether the samples of `sd` are trajectories, whose rows carry their weight, see `Outputs`
 makes_trajectories(sd::SimData) = any(makes_trajectory, checked_phases(sd))
 
+# the names of the measurements of `sd` that its trajectories take on their normalised kets, see
+# `on_ket`, none when it makes none
+function on_kets(sd::SimData)
+    phases = checked_phases(sd)
+    if !any(makes_trajectory, phases)
+        return String[]
+    end
+    return unique(String[ name for l in run_lists(phases, sd.final_measurements) for p in l
+                          for (name, m) in as_measure(last(p)).entries if on_ket(m) ])
+end
+
 # what the merge of the samples of `sd` needs, see `merge_samples!`
 merging(sd::SimData) = (; sd.format, sd.tol, sd.min_samples)
 
@@ -1193,6 +1204,12 @@ function run_in(work::Function, sd::SimData, dir::String, settings; claim = noth
                       "$VERSION, TensorMixedStates $(pkgversion(TensorMixedStates))")
         if sd.backend !== State
             log_line(run, "States created as $(nameof(sd.backend)) by default")
+        end
+        averaged = on_kets(sd)
+        if !isempty(averaged)
+            log_line(run, "Warning: measured on the normalised ket of each trajectory and " *
+                          "averaged, which in general differs from the value for the density " *
+                          "matrix: $(join(averaged, ", "))")
         end
         if !isnothing(stale)
             log_line(run, "Warning: the run before, process $(stale[2]) on $(stale[1]), ended " *
