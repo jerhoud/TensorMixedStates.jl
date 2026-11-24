@@ -35,7 +35,7 @@ it, see the manual. Experimental: it may change in a version 2.x.
     ExactState{Mixed}(System(4, Fermion()), FullyMixed(N => 2))
     ExactState(System(2, Qubit()), [1, 0, 0, 1])
 """
-struct ExactState{R <: PM} <: AbstractState
+struct ExactState{R <: PM} <: AbstractState{R}
     system::System
     state::VecOrMat{ComplexF64}
     # copied: the state never shares the array of the caller
@@ -100,8 +100,6 @@ function State(state::ExactState{R}; limits::Limits = Limits()) where {R <: PM}
 end
 
 show(io::IO, s::ExactState{R}) where {R <: PM} = print(io, "ExactState{$R}($(s.system))")
-
-representation(::ExactState{R}) where {R <: PM} = R
 
 """
     maxlinkdim(::ExactState)

@@ -270,10 +270,12 @@ mark)`, lets a resumed run go on where the checkpoint left it, rather than start
 ## States of one's own
 
 A state of your own, a backend of its own holding a state as `State` holds it in an MPS, is a
-subtype of [`TensorMixedStates.AbstractState`](@ref) with a field `system` holding the `System` of
-its physical sites. Its representation, `Pure` or `Mixed`, says what the state is, and so what
-the results of a program mean; the backend says how it is held and computed, which leaves the
-results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
+subtype of [`TensorMixedStates.AbstractState`](@ref)`{R}` with a field `system` holding the
+`System` of its physical sites, `struct MyState{R} <: AbstractState{R}`, or
+`struct MyState <: AbstractState{Pure}` for a single representation. Its representation `R`,
+`Pure` or `Mixed`, which `TensorMixedStates.representation(state)` gives, says what the state is,
+and so what the results of a program mean; the backend says how it is held and computed, which
+leaves the results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
 states of the `CreateState` phases of a program on your backend without changing its phases,
 which then need the methods below; `CreateState(…; backend = MyState)` does it for one phase,
 besides a phase of your own creating the state, see [Phases of one's own](@ref own-phases).
@@ -285,8 +287,6 @@ doubled one in a field of its own.
 
 The phases and the measurements reach the state through the methods you give:
 
-- `TensorMixedStates.representation(state::MyState)` gives the representation of the state,
-  `Pure` or `Mixed`, the type being best written `MyState{R}`;
 - `MyState(state::State; limits)` and `State(state::MyState; limits)` convert the state from an
   MPS and to one, for `CreateState`, which takes a state to the backend of the simulation unless
   given its own, and for `ConvertState` and `LoadState` given a `backend`, `limits` truncating

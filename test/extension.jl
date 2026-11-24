@@ -75,7 +75,7 @@ end
 end
 
 # a state with no way of being written
-struct Unwritable <: AbstractState
+struct Unwritable <: AbstractState{Pure}
     system::System
 end
 
@@ -90,7 +90,7 @@ end
 
 # A representation of one's own: a state wrapping a pure `State`, which goes through the state
 # files like a `State`
-struct WrappedState <: AbstractState
+struct WrappedState <: AbstractState{Pure}
     system::System
     inner::State{Pure}
 end
@@ -103,7 +103,7 @@ function TensorMixedStates.read_state(::Type{WrappedState}, g, sites)
 end
 
 # a state whose writing fails half way, its tensors written, as a disk filling up makes it fail
-struct HalfWritten <: AbstractState
+struct HalfWritten <: AbstractState{Pure}
     system::System
     inner::State{Pure}
 end
@@ -140,7 +140,7 @@ TensorMixedStates.run_step(::TurnWrapped, sim, _) =
 
 # a state whose type has a parameter, which a state file does not record: write_state writes it
 # in the group and a method of read_state for the type without parameters reads it back
-struct Tagged{T} <: AbstractState
+struct Tagged{T} <: AbstractState{Pure}
     system::System
     inner::State{Pure}
 end
@@ -156,7 +156,7 @@ function TensorMixedStates.read_state(::Type{<:Tagged}, g, sites)
 end
 
 # and one read by a method for its types with parameters only, which a file cannot give
-struct Untagged{T} <: AbstractState
+struct Untagged{T} <: AbstractState{Pure}
     system::System
     inner::State{Pure}
 end
@@ -239,7 +239,7 @@ end
 
 # A state of one's own holding its density matrix, which gives only its reduced density matrices,
 # by a partial trace written here, and its purity: the entropies follow from them
-struct HeldMatrix <: AbstractState
+struct HeldMatrix <: AbstractState{Mixed}
     system::System
     ρ::Matrix{ComplexF64}
 end
@@ -292,7 +292,7 @@ end
 # A representation on another system: a pure state whose physical sites are the odd sites of a
 # doubled system, each followed by an ancilla left empty, as a purification interleaves them.
 # It receives the operators as written and places them on its system with map_sites.
-struct InterleavedState <: AbstractState
+struct InterleavedState <: AbstractState{Pure}
     system::System
     inner::State{Pure}
 end
@@ -522,14 +522,14 @@ end
 # An extension of every interface, each method typing only its own type and what the
 # documentation asks for: an ambiguity with a method of TMS shows here before a user meets it,
 # which a call would only show when made
-struct LooseState <: AbstractState
+struct LooseState{R} <: AbstractState{R}
     system::System
 end
 
 TensorMixedStates.expect_value(st::LooseState, op::TensorMixedStates.IndexedOp) = 0.
 TensorMixedStates.apply(op::TensorMixedStates.IndexedOp, st::LooseState; kwargs...) = st
 TensorMixedStates.write_state(g, st::LooseState) = nothing
-TensorMixedStates.read_state(::Type{LooseState}, g, sites) = nothing
+TensorMixedStates.read_state(::Type{<:LooseState}, g, sites) = nothing
 TensorMixedStates.trace(st::LooseState) = 1.
 TensorMixedStates.norm(st::LooseState) = 1.
 TensorMixedStates.normalize(st::LooseState) = st

@@ -116,12 +116,14 @@ function show(io::IO, l::Limits)
 end
 
 """
-    abstract type AbstractState
+    abstract type AbstractState{R}
 
-the supertype of the states a simulation holds: `State`, and the states of a representation
-an extension defines, which have a field `system`, the `System` of their physical sites.
+the supertype of the states a simulation holds, of the representation `R`, `Pure`, `Mixed` or
+`Trajectory`: `State{R}`, `ExactState{R}`, and the states an extension defines, as
+`struct MyState{R} <: AbstractState{R}`, which have a field `system`, the `System` of their
+physical sites.
 """
-abstract type AbstractState end
+abstract type AbstractState{R <: PM} end
 
 """
     PreObs
@@ -197,7 +199,7 @@ what rounding leaves.
     State{Pure}(System(3, Qudit(4)), Level .=> [0, 3, 1])
     State{Mixed}([Qubit(), Boson(4), Fermion()], ["Up", "2", "Occ"])
 """
-struct State{R <: PM} <: AbstractState
+struct State{R <: PM} <: AbstractState{R}
     system::System
     state::MPS
     preobs::PreObs
@@ -219,7 +221,7 @@ State(state::State{R}, st::MPS) where R = State{R}(state.system, st)
 
 the representation of `state`, `Pure`, `Mixed` or `Trajectory`, whatever the type holding it
 """
-representation(::State{R}) where R = R
+representation(::AbstractState{R}) where R = R
 
 # the refusals of a state of the representation Trajectory: what is not linear in the density
 # matrix, which the average over trajectories does not give, and what needs drawing
