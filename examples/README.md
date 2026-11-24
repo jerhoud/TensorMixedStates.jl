@@ -40,7 +40,15 @@ Three folders, from the shortest scripts to those of the article:
   - `complete_graph_tdvp.jl`: a complete graph state decaying under dissipation, evolved with
     `Tdvp`;
   - `fermion_chain_conserved.jl`: a fermion chain with dephasing conserving its number of
-    particles strongly, then weakly once a loss is added.
+    particles strongly, then weakly once a loss is added;
+  - `disorder_average.jl`: free fermions in random on-site energies drawn by `Realizations`,
+    averaged over samples stopped by a tolerance, each sample checked against its exact solution;
+  - `damped_trajectories.jl`: a pumped chain of qubits unravelled into quantum trajectories, their
+    average and their number of jumps checked against the density matrix;
+  - `unravellings.jl`: one dephasing unravelled into projective jumps or into phases, the same
+    averages with different spreads;
+  - `exact_check.jl`: one program run on `ExactState` and on MPS of growing link dimensions, the
+    error of the truncation read against the exact run.
 - [`article`](article): the six examples of the article describing TMS, at the sizes it
   published, hours of computation each, see its [README](article/README.md).
 
