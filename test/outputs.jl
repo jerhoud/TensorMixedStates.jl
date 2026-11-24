@@ -257,6 +257,12 @@ end
     @test_throws "not numbered from 1 to n" avg["w"]
     @test_throws KeyError avg["std(Z)"]
     @test_throws KeyError avg["X"]
+    # a complex time, two cells, which the columns follow
+    TMS.output!(o, ψ, Data("ctime") => [Z, X(1)]; time = 0.3 + 0.2im)
+    t = only(TMS.data_rows(o, "ctime"))
+    @test [t["Z(1)"], t["Z(2)"], t["X(1)"]] ≈ [1, 1, 0] atol = 1e-12
+    @test names(DataFrame(TMS.data_rows(o, "ctime"))) ==
+          ["Re(time)", "Im(time)", "Z(1)", "Z(2)", "X(1)"]
     df = data_to_frame(rows)
     @test isequal(DataFrame(rows), df)
     @test names(df) == ["time", "Z(1)", "Z(2)", "X(1)", "Y(1)", "Y(2)"]

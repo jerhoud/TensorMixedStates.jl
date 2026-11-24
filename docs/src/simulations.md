@@ -333,16 +333,18 @@ the samples in it, `N_eff`, their effective number, equal to `N` here, and for e
 of the values, `c`, its mean, `err(c)`, the error on the mean, and `std(c)`, the standard
 deviation of the samples, `NaN` for one sample. The file `energy` above holds one row, the
 average ground state energy and magnetization. A row of a `Data` holds these cells, `row["Z(1)"]`
-and `row["err(Z(1))"]`, and gives the vector of the cells of a value of every site or of a vector,
-`row["Z"]` and `row["err(Z)"]`, as a row without samples gives the value. A row that some samples lack, a step that only the
-slow searches reach for instance, averages those that have it. The samples of a row must have the
-same time, but for rounding, and the same columns, and a value that is not a number cannot be
-averaged. A row written before the samples is shared by all, and written with no error and no
-deviation. A measurement written averaged or for each sample cannot be named `sample`, `weight`
-or `trajectory`, which the samples write or will. The
-means and deviations are updated sample after sample by the algorithm of West (1979), each value
-shifted by its value in the first sample (Chan, Golub and LeVeque 1983), accurate even when the
-deviation is small against the mean.
+and `row["err(Z(1))"]`, and gives the vector of the cells of a value of every site or of a
+vector, `row["Z"]` and `row["err(Z)"]`, as a row without samples gives the value; `row["N"]` is
+the number of samples, and a value named `N`, as the operator `N` of every site, is read by its
+cells, `row["N(1)"]`, or named otherwise, `"n" => N`. A row that some samples lack, a step that
+only the slow searches reach for instance, averages those that have it. The samples of a row
+must have the same time, but for rounding, and the same columns, and a value that is not a
+number cannot be averaged. A row written before the samples is shared by all, and written with
+no error and no deviation. A measurement written averaged or for each sample cannot be named
+`sample`, `weight` or `trajectory`, which the samples write or will. The means and deviations
+are updated sample after sample by the algorithm of West (1979), each value shifted by its value
+in the first sample (Chan, Golub and LeVeque 1983), accurate even when the deviation is small
+against the mean.
 
 `EachSample(d)` writes to `d` a row for each sample instead, after the time the column `sample`
 giving its index, 0 before the samples: the file `energies` above holds the energy of each

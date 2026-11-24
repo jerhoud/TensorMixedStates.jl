@@ -124,9 +124,18 @@ as_backend(::Type{State}, state::State; limits::Limits = Limits()) =
     limits == Limits() ? state : truncate(state; limits)
 as_backend(::Type{State}, state::AbstractState; limits::Limits = Limits()) = State(state; limits)
 as_backend(::Type{T}, state::State; limits::Limits = Limits()) where {T <: AbstractState} =
-    T(state; limits)
+    same_representation(T, T(state; limits), state)
 as_backend(::Type{T}, state::AbstractState; limits::Limits = Limits()) where {T <: AbstractState} =
-    T(State(state); limits)
+    same_representation(T, T(State(state); limits), state)
+
+# the state `new` that the backend `T` made of `state`, refused in another representation
+function same_representation(T::Type, new::AbstractState, state::AbstractState)
+    if representation(new) !== representation(state)
+        error("the backend $(nameof(T)) gave a $(representation(new)) state for a " *
+              "$(representation(state)) one: it holds no $(representation(state)) state")
+    end
+    return new
+end
 
 """
 the type of states holding `state`, without its representation, as `ExactState`

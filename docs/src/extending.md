@@ -275,9 +275,10 @@ subtype of [`TensorMixedStates.AbstractState`](@ref)`{R}` with a field `system` 
 `struct MyState <: AbstractState{Pure}` for a single representation. Its representation `R`,
 `Pure` or `Mixed`, which `TensorMixedStates.representation(state)` gives, says what the state is,
 and so what the results of a program mean; the backend says how it is held and computed, which
-leaves the results unchanged up to the approximations it makes. `SimData(backend = MyState)` makes the
-states of the `CreateState` phases of a program on your backend without changing its phases,
-which then need the methods below; `CreateState(…; backend = MyState)` does it for one phase,
+leaves the results unchanged up to the approximations it makes. `SimData(backend = MyState)`
+makes the states of the `CreateState` phases of a program on your backend without changing its
+phases, which then need the methods below, a state of a representation the backend does not
+hold being refused; `CreateState(…; backend = MyState)` does it for one phase,
 besides a phase of your own creating the state, see [Phases of one's own](@ref own-phases).
 TMS reads that system to save the state, to choose the threading, to log what weakening
 changes, and to put the reference of `Fidelity` or `Overlap` on the system of the measured

@@ -381,12 +381,9 @@ end
 """
     DataRow
 
-a row of a `Data`: the pairs `name => value` measured, the time first, each value as it was
-measured, and the columns of the cells of these values, see `cells!`, which a row averaged holds
-alone. `row[name]` gives the value of `name`, or the cell of the column `name`, as `Z(1)` of a
-value `Z` of every site, or the vector of the cells `name(k)` or `name[k]`, k = 1 to n, their
-`Re` and `Im` making complex numbers, as `Z`, `err(Z)` or `std(Z)` of a row averaged, see
-`numbered_cells`
+a row of a `Data`: the pairs `name => value` measured, the time first, and the columns of their
+cells, see `cells!`, which an averaged row holds alone; `row[name]` reads a value, a cell by its
+column, or the vector of numbered cells, see `numbered_cells`
 """
 struct DataRow <: AbstractVector{Pair{String, Any}}
     measured::Vector{Pair{String, Any}}
@@ -404,6 +401,11 @@ Base.getindex(r::DataRow, k::Int) = r.measured[k]
 function Base.getindex(r::DataRow, name::AbstractString)
     k = findfirst(p -> first(p) == name, r.measured)
     if !isnothing(k)
+        # an averaged row, which has N_eff, names N its number of samples
+        if name == "N" && "N_eff" in r.columns && !isempty(numbered(r.columns, "N(", ")"))
+            error("N is the number of samples of the row and the name of a value of every " *
+                  "site: read its cells, as row[\"N(1)\"], or name it, \"n\" => N")
+        end
         return last(r.measured[k])
     end
     c = findfirst(==(name), r.columns)
@@ -441,48 +443,41 @@ function numbered(columns::Vector{String}, prefix::String, suffix::String)
     return found
 end
 
-"""
-    numbered_cells(row, name)
-
-the vector of the cells `name(k)` or `name[k]` of the `DataRow` `row`, k = 1 to n, or of their
-`err` and `std` for `name` = `err(Z)` or `std(Z)`, the cells `Re(…)` and `Im(…)` of each making a
-complex number; `nothing` when there is none. A value of every site or a vector, of a row
-averaged, read whole as a row without samples holds it: columns not numbered 1 to n, or the
-error of a complex value, are refused
-"""
+# the cells `name(k)` or `name[k]`, k = 1 to n, of the row `r` as a vector, Re and Im making a
+# complex number, or their `err` or `std` for `err(name)` or `std(name)`; nothing when it has none
 function numbered_cells(r::DataRow, name::AbstractString)
     m = match(r"^(err|std)\((.*)\)$", name)
     pre, base, post = isnothing(m) ? ("", name, "") : ("$(m[1])(", m[2], ")")
-    rc, ic = findfirst(==("$(pre)Re($base)$post"), r.columns),
-             findfirst(==("$(pre)Im($base)$post"), r.columns)
-    if !isnothing(rc) && !isnothing(ic)
-        if !isnothing(m)
-            error("$name of a complex value has two parts: read $(pre)Re($base)$post and " *
-                  "$(pre)Im($base)$post")
+    cells = measured_cells(r.measured)
+    # the complex number of the cells Re and Im of `c`, nothing when the row lacks one of them
+    function complex_cell(c)
+        re, ic = (findfirst(==("$pre$part($c)$post"), r.columns) for part in ("Re", "Im"))
+        if isnothing(re) || isnothing(ic)
+            return nothing
+        elseif !isnothing(m)
+            error("$name of a complex value has two parts: read $(pre)Re($c)$post and " *
+                  "$(pre)Im($c)$post")
         end
-        cells = measured_cells(r.measured)
-        return complex(cells[rc], cells[ic])
+        return complex(cells[re], cells[ic])
+    end
+    z = complex_cell(base)
+    if !isnothing(z)
+        return z
     end
     for (open, close) in (("(", ")"), ("[", "]"))
-        re = numbered(r.columns, pre * base * open, close * post)
-        parts = (numbered(r.columns, "$(pre)Re($base$open", "$close)$post"),
-                 numbered(r.columns, "$(pre)Im($base$open", "$close)$post"))
-        if isempty(re) && all(isempty, parts)
+        real_cells = numbered(r.columns, pre * base * open, close * post)
+        complex_cells = numbered(r.columns, "$(pre)Re($base$open", "$close)$post")
+        ks = union(keys(real_cells), keys(complex_cells))
+        if isempty(ks)
             continue
         end
-        cells = measured_cells(r.measured)
-        n = max(length(re), length(first(parts)))
-        if !isempty(re) && issetequal(keys(re), 1:n) && all(isempty, parts)
-            return [ cells[re[k]] for k in 1:n ]
-        elseif isempty(re) && all(p -> issetequal(keys(p), 1:n), parts)
-            if !isnothing(m)
-                error("$name of a complex value has two parts: read $(pre)Re($base$(open)1$close)" *
-                      "$post and $(pre)Im($base$(open)1$close)$post")
-            end
-            return [ complex(cells[first(parts)[k]], cells[last(parts)[k]]) for k in 1:n ]
+        v = [ haskey(real_cells, k) ? cells[real_cells[k]] : complex_cell("$base$open$k$close")
+              for k in 1:length(ks) ]
+        if !issetequal(ks, 1:length(ks)) || any(isnothing, v)
+            error("the cells of $name in the row are not numbered from 1 to n: read them one by " *
+                  "one, as row[\"$pre$base$open$(minimum(ks))$close$post\"]")
         end
-        error("the cells of $name in the row are not numbered from 1 to n: read them one by " *
-              "one, as row[\"$(pre)$base$(open)1$close$post\"]")
+        return v
     end
     return nothing
 end
@@ -531,9 +526,12 @@ the columns of the cells of `rows`, in the order they first come, a column only 
 there is no row, refused when two cells of a row share a column, as a text table refuses them
 """
 function data_columns(rows::Vector{DataRow})
-    names = String["time"]
-    columns = Vector{Any}[Any[]]
-    index = Dict("time" => 1)
+    if isempty(rows)
+        return DataColumns([:time], AbstractVector[Any[]], Dict(:time => 1))
+    end
+    names = String[]
+    columns = Vector{Any}[]
+    index = Dict{String, Int}()
     for (r, row) in enumerate(rows)
         cells = measured_cells(row.measured)
         if length(cells) ≠ length(row.columns)
@@ -599,12 +597,15 @@ open(::Data, m::RowsMark) = DataRows(m.rows[1:m.n])
 close(::DataRows) = nothing
 resume_mark(o::DataRows) = RowsMark(o.rows, length(o.rows))
 
+# the columns of the time `t`, two for a complex one, as cells! splits it
+time_columns(t) = first.(cells!(Pair{String, Any}[], "time", t))
+
 # the columns of the cells named as a text table of the list `m` names them, see `entry_cells`,
 # those of the row before when they are the same
 function put_row!(o::DataRows, r::MeasuredRow)
     measured = Pair{String, Any}[ "time" => r.time ; r.values ]
     cells = row_cells(r)
-    columns = String[ "time" ; first.(cells) ]
+    columns = String[ time_columns(r.time) ; first.(cells) ]
     if !isempty(o.rows) && last(o.rows).columns == columns
         columns = last(o.rows).columns
     end
@@ -1009,7 +1010,8 @@ close(o::AveragedOpened) = write_averaged(o.destination, o.sums, o.fixed, o.samp
 function averaged_data(o::AveragedOpened)
     rows = averaged_rows(o.sums, o.fixed, o.samples)
     return DataTable(DataRow[ DataRow(Pair{String, Any}[ "time" => t ; cells ],
-                                      String[ "time" ; first.(cells) ]) for (t, cells) in rows ])
+                                      String[ time_columns(t) ; first.(cells) ])
+                              for (t, cells) in rows ])
 end
 
 """

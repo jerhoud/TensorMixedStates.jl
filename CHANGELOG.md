@@ -18,7 +18,7 @@ the reference article.
 - `:jumps`, a value of a simulation with samples, the number of jumps the dissipators of its `Evolve` phases drew in the trajectory `:state`.
 - `Dephase(A; kraus = :projectors)`, `dephasing_channel(p, A; kraus)` and `dephasing_dissipator(γ, A; jumps)`, and `thermal_relaxation_dissipator(T1, T2; jumps)` for its dephasing, choose the Kraus operators a trajectory draws, the projectors on the eigenspaces of `A` or `:phases`, unitaries changing the phases between them.
 
-- A row of a `Data` reads a cell by its column, `row["Z(1)"]` of a value `Z` of every site, and an averaged row the vector of the cells of a value of every site or of a vector, `row["Z"]`, `row["err(Z)"]`, so that a row reads alike with or without samples.
+- A row of a `Data` reads a cell by its column, `row["Z(1)"]` of a value `Z` of every site, and an averaged row the vector of the cells of a value of every site or of a vector, `row["Z"]`, `row["err(Z)"]`, so that a row reads alike with or without samples, but for a value named `N`, the name of the number of samples there.
 
 ### Changed
 

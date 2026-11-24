@@ -317,6 +317,30 @@ end
     end
 end
 
+@testset "Averaged rows read as rows without samples" begin
+    in_tmp() do
+        row(name, phases, list; samples = 2) =
+            only(runTMS(SimData(; name, samples, phases, final_measurements = Data("d") => list);
+                        output = devnull).data["d"])
+        # a complex time, two cells, which the columns follow
+        evolved = Realizations(c -> Evolve(evolver = -im * sum(X(i) for i in 1:2),
+                                           duration = 0.2 - 0.1im, nsteps = 2))
+        z = row("t", [CreateState{Pure}(2, Qubit(), "Up"), evolved], Z)
+        @test z["Z"] == [z["Z(1)"], z["Z(2)"]] && z["Re(time)"] ≈ 0.2 && z["Im(time)"] ≈ -0.1
+        # N names the number of samples: a value of that name is read by its cells
+        up = CreateState{Pure}(3, Qubit(), "Up")
+        n = row("n", [up, Realizations(c -> Gates(gates = X(1)))], N)
+        @test_throws "N is the number of samples" n["N"]
+        @test [n["N(1)"], n["N(2)"], n["N(3)"]] ≈
+              row("n0", [up, Gates(gates = X(1))], N; samples = nothing)["N"]
+        @test n["N_eff"] ≈ 2
+        # cells complex and missing in one value, as without samples
+        st = CreateState{Pure}(System([Qubit(), Boson(3)]), ["Up", "0"])
+        sp = row("s", [st, Realizations(c -> Gates(gates = X(1)))], Sp)
+        @test isequal(sp["Sp"], row("s0", [st, Gates(gates = X(1))], Sp; samples = nothing)["Sp"])
+    end
+end
+
 @testset "Averages of JSON, complex and vector values, rows some samples lack, one sample" begin
     in_tmp() do
         up = CreateState{Pure}(3, Qubit(), "Up")

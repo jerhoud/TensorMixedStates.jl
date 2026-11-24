@@ -168,6 +168,22 @@ function TensorMixedStates.read_state(::Type{Untagged{T}}, g, sites) where T
     return Untagged{T}(inner.system, inner)
 end
 
+# A backend holding pure states only, whose constructor takes any State: a mixed state given to
+# it is refused rather than held under the representation Pure
+struct PureOnly <: AbstractState{Pure}
+    system::System
+    inner::State
+end
+
+PureOnly(st::State; limits::Limits = Limits()) = PureOnly(st.system, st)
+
+@testset "A backend of one representation" begin
+    ρ = State{Mixed}(System(2, Qubit()), "Up")
+    @test_throws "gave a Pure state for a Mixed one" TensorMixedStates.as_backend(PureOnly, ρ)
+    ψ = State{Pure}(System(2, Qubit()), "Up")
+    @test TensorMixedStates.as_backend(PureOnly, ψ).inner === ψ
+end
+
 @testset "A representation of one's own" begin
     sys = System(3, Qubit())
     st = WrappedState(sys, apply(X(1) * H(2), State{Pure}(sys, "Up")))

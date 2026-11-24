@@ -12,8 +12,8 @@ export Operator, Id, Proj, Gate, Reset, Dephase, Dissipator, Evolver, named, par
 """
     abstract type Representation
 
-the supertype of the representations of a state: `Pure`, `Mixed`, `Trajectory`, and those an
-extension defines.
+the supertype of the representations of a state, `Pure`, `Mixed` and `Trajectory`: a state of
+one's own holds one of them, see `AbstractState`
 """
 abstract type Representation end
 
