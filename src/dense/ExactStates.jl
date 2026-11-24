@@ -1,7 +1,7 @@
 # The exact representation of a state of a small system: its whole vector, or its whole density
 # matrix, on the basis of the product states ordered as `kron` orders them, the first site
-# varying the slowest, the operators acting through their terms, see `dense_acted`, or factor by
-# factor where they would develop into too many, see `prepared_acted` and `prepared_channel`.
+# varying the slowest, the operators acting through their terms, see `prepared_terms`, or factor
+# by factor where they would develop into too many, see `prepared_acted` and `prepared_channel`.
 
 export ExactState
 
@@ -557,24 +557,26 @@ end
 
 """
 the channel or the generator `a` as a function applying it to a density matrix of `system`,
-conserving nothing, prepared once: by its terms, see `channel_terms`, or by its structure
+conserving nothing, prepared once: by its terms, see `channel_terms`, or by its structure; see
+`prepared_terms` for `diagonal`
 """
-function prepared_channel(system::System, a::IndexedOp)
+function prepared_channel(system::System, a::IndexedOp; diagonal::Bool = true)
     ts = channel_terms(system, a)
     if !isnothing(ts)
-        return ρ -> dense_acted(Mixed, system, ts, ρ)
+        return prepared_terms(Mixed, system, ts; diagonal)
     elseif a isa ScalarOp
-        f = prepared_channel(system, a.arg)
+        f = prepared_channel(system, a.arg; diagonal)
         return ρ -> a.coef * f(ρ)
     elseif a isa SumOp
         return summed_action(Mixed, system, a.subs, x -> channel_terms(system, x),
-                             x -> prepared_channel(system, x))
+                             x -> prepared_channel(system, x; diagonal); diagonal)
     elseif a isa ProdOp
-        fs = [ prepared_channel(system, f) for f in a.subs ]
+        # the factors prepared together, each without a diagonal as large as the state
+        fs = [ prepared_channel(system, f; diagonal = false) for f in a.subs ]
         return ρ -> foldr((f, y) -> f(y), fs; init = ρ)
     end
     kind, k = channel_leaf(a)
-    act = prepared_acted(system, gathered(system, k))
+    act = prepared_acted(system, gathered(system, k); diagonal)
     left(y) = act(y)
     right(y) = act(y')'
     if kind isa Gate
@@ -582,7 +584,7 @@ function prepared_channel(system::System, a::IndexedOp)
     elseif kind isa Evolver
         return ρ -> left(ρ) + right(ρ)
     end
-    back = prepared_acted(system, gathered(system, dag(k)))
+    back = prepared_acted(system, gathered(system, dag(k)); diagonal)
     function dissipated(ρ)
         lρ = act(ρ)
         return right(lρ) - (back(lρ) + back(act(ρ'))') / 2
