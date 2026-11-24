@@ -250,37 +250,47 @@ function unravelled(a::Op{IsGenerator})
 end
 
 """
-    Decay(f, rate, jumps, steps)
+    Decay(f, rate, jumps)
 
 the jumps of a term of an evolver, which a trajectory draws: `rate`, the sum of their
 ``L^\\dagger L``, whose expectation value times `f(t)` (1 for `f = nothing`) is the rate of a
-jump at time `t`, the operators `jumps` and the `steps` applying them, see `apply_steps`
+jump at time `t`, and the operators `jumps`
 """
 struct Decay
     f::Any
     rate::IndexedOp{IsOperator}
     jumps::Vector{IndexedOp{IsOperator}}
-    steps::Vector{Any}
 end
 
 """
     JumpEvolver(pre, decays, keeps, rng, jumps)
 
-the evolver of a trajectory under dissipators, or under operators keeping its trace: the `PreMPO`
-of its effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, the `Decay` of each term
+the evolver of a trajectory under dissipators, or under operators keeping its trace: the evolver
+of its ket under the effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, see
+`ket_evolver`, the `Decay` of each term
 with jumps, none without dissipators, whether its
 operators `K` keep the trace, the generator drawing them, see `with_rng`, `nothing` for the
 default one, and the count the jumps drawn are added to, `nothing` for none
 """
 struct JumpEvolver
-    pre::PreMPO
+    pre::Any
     decays::Vector{Decay}
     keeps::Bool
     rng::Union{Nothing, AbstractRNG}
     jumps::Union{Nothing, Base.RefValue{Int}}
 end
 
-function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limits)
+"""
+    ket_evolver(state, terms, mpo_limits)
+
+the evolver of the ket of the trajectory `state` under the operators `terms`, as
+`prepared_evolver` takes them, which `evolve_step` takes as `pre`: a method for each type of
+states holding trajectories
+"""
+ket_evolver(state::State{Trajectory}, terms::AbstractVector, mpo_limits::Limits) =
+    PreMPO(state, terms; limits = mpo_limits)
+
+function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limits::Limits)
     sys = state.system
     terms = []
     pures = []
@@ -303,10 +313,14 @@ function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limi
         push!(pures, op)
         if !isempty(jumps)
             for j in jumps
+                # refused here, off the system or of no definite flux, as apply refuses it,
+                # rather than at the first jump drawn
+                check_indices(sys, j)
+                pure_steps(sys, j)
                 check_jump(sys, j, a)
             end
             rate = sum(j -> dag(j) * j, jumps)
-            push!(decays, Decay(f, rate, jumps, [ apply_steps(j, state) for j in jumps ]))
+            push!(decays, Decay(f, rate, jumps))
             op = isnothing(op) ? -0.5 * rate : op - 0.5 * rate
         end
         if !isnothing(op)
@@ -319,7 +333,7 @@ function JumpEvolver(state::State{Trajectory}, ops::Vector, fs, mpo_limits::Limi
                                             !isnothing(pures[k]) ]
         isempty(ks) || prepare_op(sys, im * sum(pures[ks])).hermitian
     end
-    return JumpEvolver(PreMPO(state, terms; limits = mpo_limits), decays, keeps, nothing, nothing)
+    return JumpEvolver(ket_evolver(state, terms, mpo_limits), decays, keeps, nothing, nothing)
 end
 
 # refuse the jump `j` of the generator `a` when it changes a charge `system` conserves strongly,
@@ -338,8 +352,13 @@ prepared_evolver(state::State{Trajectory}, a::IndexedOp, mpo_limits::Limits = Li
                  duration::Union{Nothing, Number} = nothing) =
     prepared_evolver(state, [a], mpo_limits; duration)
 
-function prepared_evolver(state::State{Trajectory}, terms::Union{AbstractVector, Pair},
-                          mpo_limits::Limits = Limits(); duration::Union{Nothing, Number} = nothing)
+prepared_evolver(state::State{Trajectory}, terms::Union{AbstractVector, Pair},
+                 mpo_limits::Limits = Limits(); duration::Union{Nothing, Number} = nothing) =
+    trajectory_evolver(state, terms, mpo_limits)
+
+# the evolver of the trajectory `state` under `terms`, see `prepared_evolver`
+function trajectory_evolver(state::AbstractState{Trajectory}, terms::Union{AbstractVector, Pair},
+                            mpo_limits::Limits)
     ops, fs = split_terms(terms isa Pair ? [terms] : terms)
     if all(a -> !(a isa IndexedOp{IsGenerator}) || is_pure(a), ops)
         e = JumpEvolver(state, ops, fs, mpo_limits)
@@ -361,7 +380,8 @@ with_rng(e::JumpEvolver, rng::AbstractRNG, jumps::Union{Nothing, Base.RefValue{I
     JumpEvolver(e.pre, e.decays, e.keeps, rng, jumps)
 
 # the rate of the jumps of `d` on `state` at `time`
-function decay_rate(d::Decay, state::State{Trajectory}, time::Number; checked::Bool = true)
+function decay_rate(d::Decay, state::AbstractState{Trajectory}, time::Number;
+                    checked::Bool = true)
     c = isnothing(d.f) ? 1. : d.f(time)
     if c < 0 && !checked
         # within a step or at its end, which may lie past the end of the evolution by rounding
@@ -375,7 +395,7 @@ end
 
 # the rate of all the jumps of `e` on `state` at `time`, rounding below zero taken as zero, a
 # negative rate function refused when `checked`, see `decay_rate`
-total_rate(e::JumpEvolver, state::State{Trajectory}, time::Number; checked::Bool = true) =
+total_rate(e::JumpEvolver, state::AbstractState{Trajectory}, time::Number; checked::Bool = true) =
     max(sum(d -> decay_rate(d, state, time; checked), e.decays), 0.0)
 
 # One step of a trajectory: the time of the next jump drawn from the probability of no jump up to
@@ -386,7 +406,7 @@ total_rate(e::JumpEvolver, state::State{Trajectory}, time::Number; checked::Bool
 # the probability drawn with, which corrects the rate taken linear where it is not zero.
 # An algorithm of one's own calling evolve_step of Tdvp or ApproxW with a JumpEvolver draws the
 # jumps with them
-function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
+function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractState{Trajectory},
                      time::Number, dt::Number, step::Int, limits::Limits)
     if isempty(e.decays)
         return followed(evolve_step(algo, e.pre, state, time, dt, step, limits), state, 1)
@@ -403,7 +423,7 @@ no_norm_error(dt, time) =
 
 # the step of `evolve_step` for a JumpEvolver, or its `rest` after a jump, whose start may lie
 # past the end of the evolution by rounding
-function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Trajectory},
+function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractState{Trajectory},
                    time::Number, dt::Real, step::Int, limits::Limits, rest::Bool)
     if is_null(state)
         return state
@@ -435,7 +455,7 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::State{Traj
     else
         d = e.decays[draw_index(rates, rng)]
         i = draw_index([ real(expect(before, dag(j) * j)) for j in d.jumps ], rng)
-        x = applied(before, d.steps[i]..., limits)
+        x = ket_applied(d.jumps[i], before; limits)
         if !isnothing(e.jumps)
             e.jumps[] += 1
         end
