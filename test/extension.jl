@@ -581,7 +581,7 @@ TensorMixedStates.evolve_step(::LooseEvolution, pre, st::LooseState, time, dt, s
 TensorMixedStates.project_on(st::LooseState, p; limits) = st
 TensorMixedStates.project_count(st::LooseState, sites, locals, T; limits) = st
 TensorMixedStates.ket_applied(op::TensorMixedStates.IndexedOp, st::LooseState; limits) = st
-TensorMixedStates.ket_evolver(st::LooseState, terms, mpo_limits) = terms
+TensorMixedStates.ket_evolver(st::LooseState, terms, mpo_limits; duration = nothing) = terms
 
 struct LooseSearch <: TensorMixedStates.SearchAlgorithm end
 

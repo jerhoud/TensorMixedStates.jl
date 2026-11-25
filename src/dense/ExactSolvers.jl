@@ -31,16 +31,33 @@ prepared_evolver(state::ExactState, a::Union{IndexedOp, Pair}, mpo_limits::Limit
                  duration::Union{Nothing, Number} = nothing) =
     prepared_evolver(state, [a], mpo_limits; duration)
 
+# the evolver of the exact states of representation `R` of `system` under the parts `ops`, as
+# `exact_acting` takes them, and their time functions `fs`
+function exact_evolver(::Type{R}, system::System, ops::AbstractVector, fs,
+                       duration::Union{Nothing, Number}) where R
+    parts = map(a -> exact_acting(R, system, a), ops)
+    return ExactEvolver(first.(parts), [ c.norm for (_, c) in parts ], fs, duration)
+end
+
 # a pure state follows the operator, a density matrix the evolver of an operator
 function prepared_evolver(state::ExactState{R}, terms::AbstractVector, ::Limits = Limits();
                           duration::Union{Nothing, Number} = nothing) where {R <: PM}
     system = state.system
     ops, fs = split_terms(terms)
-    parts = map(ops) do a
-        check_indices(system, a)
-        return exact_acting(R, system, R === Pure ? followed_operator(a) : a)
-    end
-    return ExactEvolver(first.(parts), [ c.norm for (_, c) in parts ], fs, duration)
+    foreach(a -> check_indices(system, a), ops)
+    return exact_evolver(R, system, R === Pure ? followed_operator.(ops) : ops, fs, duration)
+end
+
+# a trajectory draws its jumps, see `trajectory_evolver`, its ket following the effective
+# operators of `ket_evolver`
+prepared_evolver(state::ExactState{Trajectory}, terms::AbstractVector,
+                 mpo_limits::Limits = Limits(); duration::Union{Nothing, Number} = nothing) =
+    trajectory_evolver(state, terms, mpo_limits; duration)
+
+function ket_evolver(state::ExactState{Trajectory}, terms::AbstractVector, ::Limits;
+                     duration::Union{Nothing, Number} = nothing)
+    ops, fs = split_terms(terms)
+    return exact_evolver(Pure, state.system, ops, fs, duration)
 end
 
 prepared_evolver(::ExactState, ::Union{PreMPO, MPO}, ::Limits = Limits();
@@ -206,9 +223,8 @@ end
 
 # as random_state of a State, but uniform whatever `linkdims`: a pure state of the uniform measure
 # on the vectors of its sector, a mixed one of the measure its purification on the system doubled
-# induces, as that of the MPS, the ancillas on the right taking no fermionic sign
-random_state(::Type{ExactState{Trajectory}}, args...; kwargs...) = no_exact_trajectory()
-
+# induces, as that of the MPS, the ancillas on the right taking no fermionic sign, a trajectory
+# the ket that purification leaves once its ancillas are measured
 function random_state(::Type{ExactState{Pure}}, system::System, linkdims::Int;
                       rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
     if is_charged(system)
@@ -231,29 +247,65 @@ random_state(state::ExactState{Pure}, linkdims::Int; rng::AbstractRNG = Random.d
 random_state(::ExactState{Mixed}, ::Int; kwargs...) =
     error("randomising a mixed state is not implemented")
 
-function random_state(::Type{ExactState{Mixed}}, system::System, linkdims::Int;
-                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
+random_state(::ExactState{Trajectory}, ::Int; kwargs...) =
+    error("randomising a trajectory is not implemented: draw one with " *
+          "random_state(ExactState{Trajectory}, system, states, linkdims)")
+
+"""
+the vector of a uniform purification of a mixed state of `system`, on `system ⊗ system`, in the
+sector of the local `states` doubled, or in the whole space for `states = nothing`, which a
+system conserving something refuses
+"""
+function uniform_purification(system::System, states, rng::AbstractRNG, eltype::Type{<:Number})
     refuse_strong(system)
-    if is_charged(system)
+    doubled = system ⊗ system
+    if !isnothing(states)
+        start = ExactState{Pure}(doubled, double(states, length(system)))
+        return random_in_sector(doubled, start.state, rng, eltype)
+    elseif is_charged(system)
         error("cannot draw a random mixed state on a system that conserves something without a " *
               "sector to start from: name the local states its purification starts from")
     end
-    d = prod(site_dims(system))
-    return traced_half(system, random_in_sector(system ⊗ system, zeros(d^2), rng, eltype))
+    return random_in_sector(doubled, zeros(prod(site_dims(system))^2), rng, eltype)
 end
 
-function random_state(::Type{ExactState{Mixed}}, system::System, states, linkdims::Int;
-                      rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64)
-    refuse_strong(system)
-    doubled = system ⊗ system
-    start = ExactState{Pure}(doubled, double(states, length(system)))
-    return traced_half(system, random_in_sector(doubled, start.state, rng, eltype))
-end
+random_state(::Type{ExactState{Mixed}}, system::System, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    traced_half(system, uniform_purification(system, nothing, rng, eltype))
+
+random_state(::Type{ExactState{Mixed}}, system::System, states, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    traced_half(system, uniform_purification(system, states, rng, eltype))
 
 random_state(::Type{ExactState{Mixed}}, ::System, ::Union{Mixture, FullyMixed}, ::Int;
              kwargs...) =
     error("a random mixed state is drawn from the purification of a product state: give its " *
           "local states")
+
+random_state(::Type{ExactState{Trajectory}}, system::System, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    projected_half(system, uniform_purification(system, nothing, rng, eltype), rng)
+
+random_state(::Type{ExactState{Trajectory}}, system::System, states, linkdims::Int;
+             rng::AbstractRNG = Random.default_rng(), eltype::Type{<:Number} = ComplexF64) =
+    projected_half(system, uniform_purification(system, states, rng, eltype), rng)
+
+random_state(::Type{ExactState{Trajectory}}, ::System, ::Union{Mixture, FullyMixed}, ::Int;
+             kwargs...) = no_random_mixture()
+
+"""
+the trajectory of `system` the pure vector `ψ` of `system ⊗ system` leaves once the second half,
+on the right, is measured in its basis, its outcome drawn by `rng` with its probability,
+normalised
+"""
+function projected_half(system::System, ψ::AbstractVector, rng::AbstractRNG)
+    d = prod(site_dims(system))
+    # ψ in the order of kron, the first half the slowest: m[a, i] = ψ(i, a)
+    m = reshape(ψ, d, d)
+    a = draw_index([ sum(abs2, view(m, a, :)) for a in 1:d ], rng)
+    x = m[a, :]
+    return ExactState{Trajectory}(system, x / norm(x), Val(:raw))
+end
 
 """
 the density matrix of `system` the pure vector `ψ` of `system ⊗ system` leaves once the second
@@ -301,6 +353,7 @@ end
 
 ground_state(::Any, ::ExactState{Mixed}; kwargs...) =
     error("ground_state searches a pure state: search it pure and mix it")
+ground_state(::Any, ::ExactState{Trajectory}; kwargs...) = not_searched()
 
 # the steady state as the eigenvector of the Lindbladian of the largest real part, zero, and
 # `residual` the eigenvalue of L†L that the search of a State reaches
@@ -325,6 +378,7 @@ end
 
 steady_state(::Any, ::ExactState{Pure}; kwargs...) =
     error("steady_state searches a density matrix: mix the state")
+steady_state(::Any, ::ExactState{Trajectory}; kwargs...) = not_yet("a steady state")
 
 # as thermalize of a State, each step an exponential by Krylov, the method and the limits of the
 # MPS without use; `total_beta`, that of the whole thermalization this call is a part of, bounds
@@ -361,3 +415,6 @@ end
 
 thermalize(::Any, ::Real, ::ExactState{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation: mix the state first")
+thermalize(::Any, ::Real, ::ExactState{Trajectory}; kwargs...) =
+    error("thermalizing a trajectory held whole is not implemented yet: thermalize it with " *
+          "backend = State")

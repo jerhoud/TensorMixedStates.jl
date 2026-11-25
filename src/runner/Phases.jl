@@ -359,7 +359,7 @@ function check_sampled(sim::Simulation)
         return nothing
     end
     for (name, st) in [ :state => sim.state; [ k => v for (k, v) in values ] ]
-        if st isa State{Trajectory}
+        if st isa AbstractState{Trajectory}
             error("the state :$name is a trajectory outside the samples, a single draw: make " *
                   "trajectories in the samples, SimData(samples = N, …), from " *
                   "CreateState{Trajectory} or ConvertState{Trajectory}, or from a LoadState " *
@@ -379,7 +379,7 @@ measurements adding the logarithm of the trace to the value
 """
 function carried_weight(sim::Simulation)
     st = sim.state
-    if !(st isa State{Trajectory})
+    if !(st isa AbstractState{Trajectory})
         return sim
     end
     t = real(trace(st))
@@ -410,7 +410,7 @@ function check_carriers(before::Simulation, after::Simulation, phase)
     given = fresh_states(phase)
     for (name, st) in getfield(after, :values)
         old = get(getfield(before, :values), name, nothing)
-        if st isa State{Trajectory} && old isa State{Trajectory} && name ∉ given
+        if st isa AbstractState{Trajectory} && old isa AbstractState{Trajectory} && name ∉ given
             r = real(trace(st)) / real(trace(old))
             # a weight changes the trace by a factor far from one, rounding and truncation by far
             # less

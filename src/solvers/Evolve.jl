@@ -281,16 +281,18 @@ struct JumpEvolver
 end
 
 """
-    ket_evolver(state, terms, mpo_limits)
+    ket_evolver(state, terms, mpo_limits; duration = nothing)
 
 the evolver of the ket of the trajectory `state` under the operators `terms`, as
-`prepared_evolver` takes them, which `evolve_step` takes as `pre`: a method for each type of
-states holding trajectories
+`prepared_evolver` takes them, which `evolve_step` takes as `pre`, over the whole `duration` of
+the evolution when it is known: a method for each type of states holding trajectories
 """
-ket_evolver(state::State{Trajectory}, terms::AbstractVector, mpo_limits::Limits) =
+ket_evolver(state::State{Trajectory}, terms::AbstractVector, mpo_limits::Limits;
+            duration::Union{Nothing, Number} = nothing) =
     PreMPO(state, terms; limits = mpo_limits)
 
-function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limits::Limits)
+function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limits::Limits;
+                     duration::Union{Nothing, Number} = nothing)
     sys = state.system
     terms = []
     pures = []
@@ -333,7 +335,8 @@ function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limi
                                             !isnothing(pures[k]) ]
         isempty(ks) || prepare_op(sys, im * sum(pures[ks])).hermitian
     end
-    return JumpEvolver(ket_evolver(state, terms, mpo_limits), decays, keeps, nothing, nothing)
+    return JumpEvolver(ket_evolver(state, terms, mpo_limits; duration), decays, keeps, nothing,
+                       nothing)
 end
 
 # refuse the jump `j` of the generator `a` when it changes a charge `system` conserves strongly,
@@ -354,19 +357,19 @@ prepared_evolver(state::State{Trajectory}, a::IndexedOp, mpo_limits::Limits = Li
 
 prepared_evolver(state::State{Trajectory}, terms::Union{AbstractVector, Pair},
                  mpo_limits::Limits = Limits(); duration::Union{Nothing, Number} = nothing) =
-    trajectory_evolver(state, terms, mpo_limits)
+    trajectory_evolver(state, terms, mpo_limits; duration)
 
 # the evolver of the trajectory `state` under `terms`, see `prepared_evolver`
 function trajectory_evolver(state::AbstractState{Trajectory}, terms::Union{AbstractVector, Pair},
-                            mpo_limits::Limits)
+                            mpo_limits::Limits; duration::Union{Nothing, Number} = nothing)
     ops, fs = split_terms(terms isa Pair ? [terms] : terms)
     if all(a -> !(a isa IndexedOp{IsGenerator}) || is_pure(a), ops)
-        e = JumpEvolver(state, ops, fs, mpo_limits)
+        e = JumpEvolver(state, ops, fs, mpo_limits; duration)
         # an evolver keeping the trace brings the trajectory back to it at each step, so that what
         # truncation loses is no weight
         return e.keeps ? e : e.pre
     end
-    return JumpEvolver(state, ops, fs, mpo_limits)
+    return JumpEvolver(state, ops, fs, mpo_limits; duration)
 end
 
 """

@@ -344,7 +344,7 @@ function output(sim::Simulation, list::AbstractVector)
     values = measured_values(sim)
     # the weight of a trajectory, what its steps carried and what its trace holds, one for any
     # other state of a simulation making trajectories
-    if sim.state isa State{Trajectory}
+    if sim.state isa AbstractState{Trajectory}
         values[:log_weight] = get(values, :log_weight, 0.) + log(real(trace(sim.state)))
     elseif run.outputs.weighted
         values[:log_weight] = get(values, :log_weight, 0.)

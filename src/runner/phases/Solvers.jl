@@ -273,7 +273,7 @@ end
 
 function prepare_phase(phase::Thermalize, sim::Simulation)
     state = state_named(sim, phase.on)
-    if state isa State{Trajectory} && phase.on ≠ :state
+    if state isa AbstractState{Trajectory} && phase.on ≠ :state
         error("a Thermalize of a trajectory acts on :state, whose trace is the weight of the " *
               "sample")
     elseif state isa Union{State{Pure}, ExactState{Pure}}
@@ -308,18 +308,18 @@ step_count(t::ThermalSteps) = t.nsteps
 function run_step(t::ThermalSteps, sim::Simulation, k::Int)
     state = state_named(sim, t.on)
     weight = get(getfield(sim, :values), :log_weight, 0.)
-    if k == 1 && state isa State{Trajectory}
+    if k == 1 && state isa AbstractState{Trajectory}
         weight += log(real(trace(state)))
     end
     state = k == 1 ? normalize(state) : state
     if isnothing(t.pre)
         sim = with_state(sim, t.on, state; beta = 0., log_trace = 0.)
-        return state isa State{Trajectory} ? with_values(sim; log_weight = weight) : sim
+        return state isa AbstractState{Trajectory} ? with_values(sim; log_weight = weight) : sim
     end
     st, l = thermal_step(t.algo, t.pre, state, t.beta / t.nsteps, k, step_limits(t.limits, k))
     sim = with_state(sim, t.on, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
                      log_trace = (k == 1 ? 0. : sim.log_trace) + l)
-    return st isa State{Trajectory} ? with_values(sim; log_weight = weight + l) : sim
+    return st isa AbstractState{Trajectory} ? with_values(sim; log_weight = weight + l) : sim
 end
 
 """
@@ -421,7 +421,7 @@ function run_phase(phase::GroundState, sim::Simulation, done::Int)
                              phase.limits, phase.mpo_limits, orthogonal_to = ms, phase.weight),
                              :energy)
     end
-    if state isa State{Trajectory}
+    if state isa AbstractState{Trajectory}
         not_searched()
     elseif !(state isa State{Pure})
         error("GroundState searches a pure state: search it pure and mix it")
@@ -493,7 +493,7 @@ function run_phase(phase::SteadyState, sim::Simulation, done::Int)
         return searched_once(phase, sim, steady_state(phase.lindbladian, state; phase.algo,
                              phase.limits, phase.mpo_limits), :residual)
     end
-    if state isa State{Trajectory}
+    if state isa AbstractState{Trajectory}
         not_yet("a steady state")
     elseif !(state isa State{Mixed})
         error("SteadyState searches a density matrix: mix the state first, see ToMixed")

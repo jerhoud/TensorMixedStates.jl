@@ -249,7 +249,7 @@ const TraceDeviation = on_state("TraceDeviation", st -> complex(1 - trace(st)))
 
 # the norm of the density matrix, or of the ket of a trajectory normalised, see `as_pure`
 measured_norm(state::AbstractState) = norm(state)
-measured_norm(st::State{Trajectory}) = norm(as_pure(st))
+measured_norm(st::AbstractState{Trajectory}) = norm(as_pure(st))
 
 """
     Norm

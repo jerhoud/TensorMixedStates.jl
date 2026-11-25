@@ -211,12 +211,13 @@ function prepare_phase(phase::Gates, sim::Simulation)
     log_message(sim, "Applying $n gate$(n == 1 ? "" : "s")")
     names = state_names(phase.on)
     # a trajectory draws the Kraus operators of the channels as it applies them
-    trajectories = filter(name -> state_named(sim, name) isa State{Trajectory}, names)
+    trajectories = filter(name -> state_named(sim, name) isa AbstractState{Trajectory}, names)
     mps = filter(name -> state_named(sim, name) isa State && name ∉ trajectories, names)
     prepared = [ apply_steps(phase.gates, state_named(sim, name)) for name in mps ]
     own = setdiff(names, mps, trajectories)
-    # once for each backend
-    for st in unique(backend_of, [ state_named(sim, name) for name in own ])
+    # once for each backend, the trajectories of a backend of one's own included
+    others = [ state_named(sim, name) for name in setdiff(names, mps) ]
+    for st in unique(backend_of, filter(st -> !(st isa State), others))
         log_ignored(sim, st, phase, (:limits,))
     end
     return GatesSteps(first.(prepared), last.(prepared), phase.limits, mps, phase.gates, own,

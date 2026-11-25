@@ -18,8 +18,6 @@ const Ket = TensorMixedStates.Ket
         back = load_state(file, "t")
         @test back isa State{Trajectory} && overlap(back, st) ≈ 1
     end
-    @test_throws "ExactState holds Pure or Mixed states" ExactState{Trajectory}(System(2, Qubit()),
-                                                                                "Up")
 end
 
 as_trajectory(p) = State{Trajectory}(p.system, p.state)
@@ -101,7 +99,6 @@ end
             (() -> random_state(t, 2), "randomising a trajectory is not implemented"),
             (() -> ground_state(h, t), "a trajectory is not searched"),
             (() -> steady_state(-im * h, t), "a steady state comes with the draws"),
-            (() -> ExactState(t), "ExactState holds Pure or Mixed states"),
             (() -> TMS.as_representation(Mixed, t), "a trajectory is not a pure or a mixed"),
             (() -> TMS.as_representation(Pure, t), "a trajectory is not a pure or a mixed"),
             (() -> TMS.as_representation(Trajectory, mix(p)), "a trajectory of a mixed state"))
@@ -138,7 +135,7 @@ end
     @test run(Trajectory, EachSample(Data("n")); samples = 1) == run(Pure, Data("n"))
 end
 
-@testset "Trajectory leaves the dissipators, the channels and the exact states for later" begin
+@testset "Trajectory leaves the dissipators and the channels to evolve and apply" begin
     rng = Xoshiro(8)
     qubits = System(3, Qubit())
     p = random_state(Pure, qubits, 4; rng)
@@ -153,16 +150,8 @@ end
                        SteadyState(lindbladian = -im * h, algo = Dmrg(nsweeps = 1))]);
                        output = devnull)
     @test_throws "a steady state comes with the draws" steady(Trajectory)
-    # the exact states hold none, but give the fidelity to a pure state
+    # beside an exact state
     e = ExactState(p)
-    @test_throws "ExactState holds Pure or Mixed states" TensorMixedStates.as_representation(
-        Trajectory, e)
-    @test_throws "ExactState holds Pure or Mixed states" random_state(ExactState{Trajectory},
-                                                                      qubits, 2)
-    convert(R) = runTMS(SimData(; name = "c", samples = 1, phases = [
-                        CreateState{Pure}(qubits, "Up"; backend = ExactState),
-                        ConvertState{R}()]); output = devnull)
-    @test_throws "ExactState holds Pure or Mixed states" convert(Trajectory)
     q = random_state(Pure, qubits, 4; rng)
     @test fidelity(t, ExactState(q)) ≈ fidelity(t, q) rtol = 1e-12
     @test fidelity(ExactState(q), t) ≈ fidelity(q, t) rtol = 1e-12
@@ -917,4 +906,123 @@ end
                        phases = [CreateState{Mixed}(q, "Up")]))
         @test !occursin("normalised ket", read("m/log", String))
     end
+end
+
+@testset "ExactState holds a trajectory, drawn and measured as State draws and measures it" begin
+    rng = Xoshiro(21)
+    TMS = TensorMixedStates
+    qubits = System(3, Qubit())
+    p = random_state(Pure, qubits, 4; rng)
+    t = 3 * as_trajectory(p)
+    e = ExactState(t)
+    pure(s) = raw_vector(State{Pure}(s.system, s.state))
+    # the trace, its weight, kept both ways and in files
+    @test e isa ExactState{Trajectory} && e.state ≈ pure(t) && trace(e) ≈ trace(t)
+    back = State(e)
+    @test back isa State{Trajectory} && pure(back) ≈ pure(t)
+    mktempdir() do dir
+        file = joinpath(dir, "e.h5")
+        save_state(file, "e", e)
+        r = load_state(file, "e")
+        @test r isa ExactState{Trajectory} && r.state == e.state
+    end
+    @test TMS.as_representation(Trajectory, ExactState(p)) isa ExactState{Trajectory}
+    @test ExactState{Trajectory}(qubits, "Up") isa ExactState{Trajectory}
+    # linear in the density matrix, and on the normalised ket
+    q = random_state(Pure, qubits, 4; rng)
+    op = X(1) * Z(2) + 0.3 * Y(3)
+    @test expect(e, op) ≈ expect(t, op) rtol = 1e-12
+    @test expect1(e, Z) ≈ expect1(t, Z) rtol = 1e-12
+    @test reduced_density_matrix(e, [1, 3]) ≈ reduced_density_matrix(t, [1, 3]) rtol = 1e-12
+    @test von_neumann_entropy(e, [2]) ≈ von_neumann_entropy(t, [2]) rtol = 1e-10
+    @test entanglement_entropy(e, 1) ≈ entanglement_entropy(t, 1) rtol = 1e-10
+    @test log_negativity(e, [1], [2]) ≈ log_negativity(t, [1], [2]) rtol = 1e-10
+    @test purity(e) == 1 && hermiticity(e) == 1
+    @test variance(e, op) ≈ variance(t, op) rtol = 1e-10
+    @test Vector(e) ≈ Vector(t) rtol = 1e-12
+    @test fidelity(e, ExactState(q)) ≈ fidelity(t, q) rtol = 1e-12
+    @test fidelity(e, mix(ExactState(q))) ≈ fidelity(t, mix(q)) rtol = 1e-12
+    @test fidelity(e, ExactState(3 * as_trajectory(q))) ≈ fidelity(t, q) rtol = 1e-12
+    @test inner(e, ExactState(q)) ≈ inner(t, q) rtol = 1e-12
+    @test TMS.measured_norm(e) ≈ 1
+    # applied and collapsed as State applies and collapses it, with the same draws
+    dep = depolarizing_channel(0.6)(1) * amplitude_damping_channel(0.4)(2)
+    @test all(1:10) do seed
+        apply(dep, e; rng = Xoshiro(seed)).state ≈ pure(apply(dep, t; rng = Xoshiro(seed)))
+    end
+    A = X(2) * X(3) + 0.5 * Z(2)
+    @test apply(A, e).state ≈ pure(apply(A, t))
+    c = collapse(e, Z(1) => 1)
+    @test c.probability ≈ collapse(t, Z(1) => 1).probability && trace(c.state) ≈ 9c.probability
+    # refused as on a State
+    h = sum(X(i) for i in 1:3) + sum(Z(i) * Z(i + 1) for i in 1:2)
+    for (f, message) in (
+            (() -> mix(e), "a trajectory is not a mixed state"),
+            (() -> partial_trace(e; keep = [1]), "a trajectory is not a mixed state"),
+            (() -> e ⊗ e, "the product of two trajectories"),
+            (() -> e ⊗ ExactState(p), "the product of a trajectory"),
+            (() -> random_state(e, 2), "randomising a trajectory is not implemented"),
+            (() -> ground_state(h, e), "a trajectory is not searched"),
+            (() -> steady_state(-im * h, e), "a steady state comes with the draws"),
+            (() -> thermalize(h, 1., e), "thermalizing a trajectory held whole"),
+            (() -> apply(Dissipator(X)(1), e), "is a generator"),
+            (() -> TMS.as_representation(Pure, e), "a trajectory is not a pure or a mixed"),
+            (() -> TMS.as_representation(Trajectory, mix(ExactState(p))),
+             "a trajectory of a mixed state"))
+        @test_throws message f()
+    end
+    # drawn at random from the purification, of a definite charge, that of the purification only
+    # fixed by its start
+    r = random_state(ExactState{Trajectory}, qubits, 2; rng)
+    @test r isa ExactState{Trajectory} && real(trace(r)) ≈ 1
+    fermions = System(3, Fermion(conserve = N))
+    rf = random_state(ExactState{Trajectory}, fermions, ["Occ", "Emp", "Occ"], 2; rng)
+    n = sum(expect1(rf, N))
+    @test abs(n - round(n)) < 1e-12 && 1 ≤ round(n) ≤ 3
+    @test_throws "without a sector" random_state(ExactState{Trajectory}, fermions, 2; rng)
+end
+
+@testset "ExactState evolves a trajectory exactly, its jumps drawn as State draws them" begin
+    rng = Xoshiro(22)
+    TMS = TensorMixedStates
+    qubits = System(3, Qubit())
+    p = random_state(Pure, qubits, 4; rng)
+    e = ExactState(as_trajectory(p))
+    h = sum(X(i) for i in 1:3) + sum(Z(i) * Z(i + 1) for i in 1:2)
+    m(o) = lowered(qubits, o)
+    # without dissipators, as a pure state, the time functions over the whole duration
+    for g in (-im * h, [-im * h, -im * Z(2) => s -> cos(3s)])
+        @test evolve(g, 1., e; nsteps = 20).state ≈
+              evolve(g, 1., ExactState(p); nsteps = 20).state rtol = 1e-11
+    end
+    # the jumps replayed with the same seeds by an independent evaluation
+    dep = depolarizing_channel(0.5)(1)
+    kdep = [ sqrt(0.4) * m(k) for k in TMS.kraus_operators(qubits, dep)
+             if !(m(k) ≈ m(k)[1, 1] * LA.I) ]
+    g = -im * h + 0.5 * Dissipator(Sm)(1) + 0.4 * Dissipator(dep) +
+        0.3 * Dissipator(Sm(2) + Sm(3))
+    jumps = [[sqrt(0.5) * m(Sm(1))] ; kdep ; [sqrt(0.3) * m(Sm(2) + Sm(3))]]
+    K = -im * m(h) - 0.5 * sum(L' * L for L in jumps)
+    @test all(1:10) do seed
+        a = evolve(g, 0.5, e; nsteps = 10, rng = Xoshiro(seed)).state
+        b = dense_trajectory(e.state, [(nothing, K)], [(nothing, jumps)], 0.5, 10, Xoshiro(seed))
+        isapprox(a, b; rtol = 1e-8)
+    end
+    # their average is the evolution of the density matrix
+    ts = [ evolve(g, 0.5, e; nsteps = 10, rng).state for _ in 1:400 ]
+    vs = [ v * v' / real(v' * v) for v in ts ]
+    mean = sum(vs) / length(vs)
+    err = sqrt.(sum(v -> abs2.(v .- mean), vs) / (length(vs) - 1) / length(vs))
+    ρ = evolve(g, 0.5, mix(ExactState(p)); nsteps = 10).state
+    @test all(abs.(mean .- ρ) .≤ 5 .* max.(err, 1 / 400))
+    # in a run of samples, weighed by an operator not keeping the trace as a State is
+    A = X(1) + 0.5 * Z(2)
+    x = runTMS(SimData(; name = "x", samples = 200, seed = 3, backend = ExactState, phases = [
+                       CreateState{Trajectory}(qubits, "Up"),
+                       Evolve(evolver = g, duration = 0.5, time_step = 0.05), Gates(gates = A)],
+                       final_measurements = Data("z") => [Z]); output = devnull).data["z"][1]
+    ρ = apply(A, evolve(g, 0.5, mix(ExactState{Pure}(qubits, "Up")); nsteps = 10))
+    @test all(abs.(x["Z"] .- expect1(ρ, Z)) .≤ 5 .* x["err(Z)"])
+    @test x["err(log_weight)"] > 0
+    @test abs(x["log_weight"] - log(real(trace(ρ)))) ≤ 5 * x["err(log_weight)"] + 1e-9
 end

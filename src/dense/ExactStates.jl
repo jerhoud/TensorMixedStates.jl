@@ -5,24 +5,25 @@
 
 export ExactState
 
-no_exact_trajectory() =
-    error("ExactState holds Pure or Mixed states: run a Trajectory simulation with State")
-
 """
-    ExactState{R}(system, states; max_dense = nothing)
+    ExactState{R}(system, states; max_dense = nothing, rng)
     ExactState(state::State; max_dense = nothing)
     ExactState(system, x)
 
-the state of a small `system` held whole, without truncation: its vector for `R = Pure`, its
-density matrix for `R = Mixed`. It is made from a description as `State{R}` takes it, from a
-`State`, or from the whole vector or density matrix `x`, normalised, of definite charges on a
+the state of a small `system` held whole, without truncation: its vector for `R = Pure` or
+`R = Trajectory`, its density matrix for `R = Mixed`. It is made from a description as `State{R}`
+takes it, a trajectory drawn with `rng`, from a `State`, a trajectory keeping its trace, its
+weight, or from the whole vector or density matrix `x`, normalised, of definite charges on a
 system conserving something, what rounding leaves in the sectors they forbid dropped. The
 truncation limits and the methods that functions take for a `State` are accepted and ignored;
-evolutions are exact up to `1e-10`, and a search stays in the sector of the charges declared of
+evolutions are exact up to `1e-10`, but for the jumps a trajectory draws, which keep the error
+of the time step, and a search stays in the sector of the charges declared of
 the state it starts from, the symmetries not declared broken as DMRG does.
 `random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws a pure one
-uniformly in its sector, a mixed one from a uniform purification as for a `State`, whatever the
-link dimension, and its `maxlinkdim` is that of the whole space it holds. Its memory grows as
+uniformly in its sector, a mixed one from a uniform purification as for a `State`, a trajectory
+by measuring the ancillas of that purification, whatever the link dimension, and its
+`maxlinkdim` is that of the whole space it holds. A trajectory is not thermalized yet. Its
+memory grows as
 ``d^n``, ``d^{2n}`` for a density matrix, and a search or an evolution keeps tens of copies of
 it, see the manual. Experimental: it may change in a version 2.x.
 
@@ -40,9 +41,6 @@ struct ExactState{R <: PM} <: AbstractState{R}
     state::VecOrMat{ComplexF64}
     # copied: the state never shares the array of the caller
     function ExactState{R}(system::System, x::AbstractVecOrMat, ::Val{:raw}) where {R <: PM}
-        if R === Trajectory
-            no_exact_trajectory()
-        end
         # a Float64, which does not wrap around as an Int does on many sites
         d = prod(float(dim(s)) for s in system.sites)
         if float.(size(x)) ≠ (R === Mixed ? (d, d) : (d,))
@@ -54,19 +52,16 @@ struct ExactState{R <: PM} <: AbstractState{R}
     end
 end
 
-function ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing) where {R <: PM}
-    if R === Trajectory
-        no_exact_trajectory()
-    end
-    return ExactState(State{R}(args...); max_dense)
-end
+ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing,
+              rng::AbstractRNG = Random.default_rng()) where {R <: PM} =
+    ExactState(State{R}(args...; rng); max_dense)
 
-ExactState(::State{Trajectory}; kwargs...) = no_exact_trajectory()
-
-# the limits, of the conversion between types of states, without use
-ExactState(state::State{Pure}; max_dense::Union{Nothing, Int} = nothing,
-           limits::Limits = Limits()) =
-    ExactState{Pure}(state.system, Vector(state; max_dense), Val(:raw))
+# the limits, of the conversion between types of states, without use; a trajectory keeps its
+# trace, its weight
+ExactState(state::State{R}; max_dense::Union{Nothing, Int} = nothing,
+           limits::Limits = Limits()) where {R <: Ket} =
+    ExactState{R}(state.system, Vector(State{Pure}(state.system, state.state); max_dense),
+                  Val(:raw))
 
 ExactState(state::State{Mixed}; max_dense::Union{Nothing, Int} = nothing,
            limits::Limits = Limits()) =
@@ -132,17 +127,23 @@ end
 
 partial_trace(::ExactState{Pure}; kwargs...) =
     error("partial_trace needs a mixed representation: use mix(state) first")
+partial_trace(::ExactState{Trajectory}; kwargs...) = not_mixed()
 
 # for CreateState and ConvertState, see as_representation, the limits without use
 as_representation(::Type{R}, state::ExactState{R}; limits::Limits = Limits()) where {R <: PM} =
     state
 as_representation(::Type{Mixed}, state::ExactState{Pure}; limits::Limits = Limits()) = mix(state)
-as_representation(::Type{Trajectory}, ::ExactState; limits::Limits = Limits()) =
-    no_exact_trajectory()
+as_representation(::Type{Trajectory}, state::ExactState{Pure}; limits::Limits = Limits()) =
+    ExactState{Trajectory}(state.system, state.state, Val(:raw))
+as_representation(::Type{<:Union{Pure, Mixed}}, ::ExactState{Trajectory};
+                  limits::Limits = Limits()) =
+    error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
+as_representation(::Type{Trajectory}, ::ExactState{Mixed}; limits::Limits = Limits()) =
+    not_yet("a trajectory of a mixed state")
 as_representation(::Type{Pure}, ::ExactState{Mixed}; limits::Limits = Limits()) =
     error("a mixed state cannot be made pure: ask for Mixed rather than Pure")
 
-trace(state::ExactState{Pure}) = dot(state.state, state.state)
+trace(state::ExactState{<:Ket}) = dot(state.state, state.state)
 trace(state::ExactState{Mixed}) = tr(state.state)
 
 norm(state::ExactState) = norm(state.state)
@@ -166,13 +167,14 @@ function expect_value(state::ExactState{R}, a::IndexedOp{IsOperator}) where {R <
     g = gathered(system, a)
     ts = developed(system, g)
     # on a density matrix, only the elements the terms reach, rather than the whole product
-    v = R === Pure ? dot(x, gathered_acted(system, g, x)) :
+    v = R <: Ket ? dot(x, gathered_acted(system, g, x)) :
         isnothing(ts) ? tr(gathered_acted(system, g, x)) : dense_trace(system, ts, x)
     return v / nonzero_trace(state, "expect")
 end
 
 mix(state::ExactState{Mixed}; limits::Limits = Limits(),
     max_dense::Union{Nothing, Int} = nothing) = state
+mix(::ExactState{Trajectory}; kwargs...) = not_mixed()
 function mix(state::ExactState{Pure}; limits::Limits = Limits(),
              max_dense::Union{Nothing, Int} = nothing)
     check_elements(float(length(state.state))^2,
@@ -216,7 +218,7 @@ function Vector(state::ExactState{Pure}; max_dense::Union{Nothing, Int} = nothin
     return copy(state.state)
 end
 
-dag(::ExactState{Pure}) = error("dag is meaningless on pure representations")
+dag(::ExactState{<:Ket}) = error("dag is meaningless on pure representations")
 dag(state::ExactState{Mixed}) = ExactState{Mixed}(state.system, state.state', Val(:raw))
 
 purity(::ExactState{Pure}) = 1.
@@ -226,7 +228,7 @@ hermiticity(::ExactState{Pure}) = 1.
 hermiticity(state::ExactState{Mixed}) =
     0.5 + 0.5 * real(dot(state.state', state.state)) / nonzero_norm(state, "hermiticity")^2
 
-hermitianize(state::ExactState{Pure}; limits::Limits = Limits()) = state
+hermitianize(state::ExactState{<:Ket}; limits::Limits = Limits()) = state
 hermitianize(state::ExactState{Mixed}; limits::Limits = Limits()) =
     ExactState{Mixed}(state.system, (state.state + state.state') / 2, Val(:raw))
 
@@ -265,16 +267,20 @@ inner(::ExactState{Mixed}, ::ExactState{Pure}) =
 
 dot(a::ExactState, b::ExactState) = inner(a, b)
 
-fidelity(a::ExactState{Pure}, b::ExactState{Pure}) =
-    abs2(inner(a, b)) / (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
+# a trajectory as its normalised ket, which these give whatever the norms
+function fidelity(a::ExactState{<:Ket}, b::ExactState{<:Ket})
+    same_sites(a, b)
+    return abs2(dot(a.state, b.state)) /
+           (nonzero_trace(a, "fidelity") * nonzero_trace(b, "fidelity"))
+end
 
-function fidelity(p::ExactState{Pure}, r::ExactState{Mixed})
+function fidelity(p::ExactState{<:Ket}, r::ExactState{Mixed})
     same_sites(p, r)
     return real(dot(p.state, r.state * p.state)) /
            (nonzero_trace(p, "fidelity") * nonzero_trace(r, "fidelity"))
 end
 
-fidelity(r::ExactState{Mixed}, p::ExactState{Pure}) = fidelity(p, r)
+fidelity(r::ExactState{Mixed}, p::ExactState{<:Ket}) = fidelity(p, r)
 
 """
 the square root of the Hermitian part of the density matrix of `state` of trace one, as `what`
@@ -336,6 +342,30 @@ inner(e::ExactState, t::State{Trajectory}) = inner(e, as_pure(t))
 hs_fidelity(t::State{Trajectory}, e::ExactState) = hs_fidelity(as_pure(t), e)
 hs_fidelity(e::ExactState, t::State{Trajectory}) = hs_fidelity(e, as_pure(t))
 
+# what is not linear in the density matrix, measured on the normalised ket of a trajectory held
+# whole, see `as_pure`; the fidelity, which the kets give whatever their norms, above
+as_pure(st::ExactState{Trajectory}) = normalize(ExactState{Pure}(st.system, st.state, Val(:raw)))
+Vector(st::ExactState{Trajectory}; max_dense::Union{Nothing, Int} = nothing) =
+    Vector(as_pure(st); max_dense)
+inner(a::ExactState{Trajectory}, b::ExactState) = inner(as_pure(a), b)
+inner(a::ExactState{Trajectory}, b::ExactState{Trajectory}) = inner(as_pure(a), as_pure(b))
+inner(a::ExactState{<:Union{Pure, Mixed}}, b::ExactState{Trajectory}) = inner(a, as_pure(b))
+inner(t::ExactState{Trajectory}, op::IndexedOp, s::ExactState) = inner(as_pure(t), op, s)
+inner(s::ExactState{<:Union{Pure, Mixed}}, op::IndexedOp, t::ExactState{Trajectory}) =
+    inner(s, op, as_pure(t))
+entanglement_by_sector(st::ExactState{Trajectory}, cut::Int) =
+    entanglement_by_sector(as_pure(st), cut)
+purity(st::ExactState{Trajectory}) = purity(as_pure(st))
+hermiticity(st::ExactState{Trajectory}) = hermiticity(as_pure(st))
+part_renyi2(st::ExactState{Trajectory}, kept::Vector{Int}) = part_renyi2(as_pure(st), kept)
+parts_renyi2(st::ExactState{Trajectory}, kept::Vector{Int}) = parts_renyi2(as_pure(st), kept)
+von_neumann_entropy(st::ExactState{Trajectory}, positions::AbstractVector{Int}; kwargs...) =
+    von_neumann_entropy(as_pure(st), positions; kwargs...)
+log_negativity(st::ExactState{Trajectory}, a::AbstractVector, b::AbstractVector; kwargs...) =
+    log_negativity(as_pure(st), a, b; kwargs...)
+variance(st::ExactState{Trajectory}, op::Union{MPO, IndexedOp{IsOperator}}) =
+    variance(as_pure(st), op)
+
 # as for a State, on what conserves nothing, not normalised
 function inner(a::ExactState{Pure}, op::IndexedOp{IsOperator}, b::ExactState{Pure})
     same_sites(a, b)
@@ -369,6 +399,11 @@ dot(a::State, op::IndexedOp, b::ExactState) = inner(a, op, b)
     ExactState{R}(a.system ⊗ b.system, kron(a.state, b.state), Val(:raw))
 ⊗(a::ExactState{Pure}, b::ExactState{Mixed}) = mix(a) ⊗ b
 ⊗(a::ExactState{Mixed}, b::ExactState{Pure}) = a ⊗ mix(b)
+⊗(::ExactState{Trajectory}, ::ExactState{Trajectory}) = not_yet("the product of two trajectories")
+⊗(::ExactState{Trajectory}, ::ExactState{<:Union{Pure, Mixed}}) =
+    not_yet("the product of a trajectory")
+⊗(::ExactState{<:Union{Pure, Mixed}}, ::ExactState{Trajectory}) =
+    not_yet("the product of a trajectory")
 
 # as for a State, exact, the limits without use: site `k` moved to position `p[k]`, each pair of
 # sites `p` puts in the other order giving the sign of their exchange on fermions, on the kets
@@ -387,7 +422,7 @@ function permute_sites(state::ExactState{R}, p::AbstractVector{<:Integer};
     signs = pair_signs(sites, [ (k, l) for k in 1:n for l in k+1:n if p[k] > p[l] ])
     sign = isnothing(signs) ? ones(prod(dims)) : signs[from]
     x = state.state
-    y = R === Pure ? sign .* x[from] : (sign * sign') .* x[from, from]
+    y = R <: Ket ? sign .* x[from] : (sign * sign') .* x[from, from]
     return ExactState{R}(System(sites[q]), y, Val(:raw))
 end
 
@@ -402,7 +437,7 @@ function cut_matrix(state::ExactState{R}, cut::Int) where {R <: PM}
     nonzero_norm(state, "an entanglement entropy")
     dims = site_dims(system)
     l, r = prod(dims[1:cut]), prod(dims[cut+1:end]; init = 1)
-    if R === Pure
+    if R <: Ket
         return transpose(reshape(state.state, r, l))
     end
     # the axes of the kets then of the bras, the last site first, as kron orders the basis
@@ -473,7 +508,7 @@ the vector of the pure `state` as a matrix ``M``, the sites at the increasing po
 on its rows, the others on its columns, the fermionic signs laid: their reduced density matrix
 is ``M M^\\dagger``, and the squares of its singular values its spectrum
 """
-function partition_matrix(state::ExactState{Pure}, kept::Vector{Int})
+function partition_matrix(state::ExactState{<:Ket}, kept::Vector{Int})
     x, rdims, perm, a, b = kept_first(state, kept)
     return reshape(permutedims(reshape(x, rdims...), perm), a, b)
 end
@@ -495,7 +530,7 @@ the density matrix of the sites at the increasing positions `kept` of `state`, o
 `state`
 """
 function traced_matrix(state::ExactState{R}, kept::Vector{Int}) where {R <: PM}
-    if R === Pure
+    if R <: Ket
         m = partition_matrix(state, kept)
         return m * m'
     end
@@ -507,7 +542,7 @@ end
 
 # on a pure state, the density matrix of each site, or pair of sites, traced once for all the
 # operators, rather than a vector as large as the state for each value
-function expect1_computed(state::ExactState{Pure}, ops::AbstractArray{<:SimpleOp})
+function expect1_computed(state::ExactState{<:Ket}, ops::AbstractArray{<:SimpleOp})
     n = length(state)
     subs = Dict{Int, ExactState{Mixed}}()
     sub(i) = get!(() -> traced_state(state, [i]), subs, i)
@@ -517,7 +552,7 @@ function expect1_computed(state::ExactState{Pure}, ops::AbstractArray{<:SimpleOp
     end
 end
 
-function expect2_computed(state::ExactState{Pure}, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+function expect2_computed(state::ExactState{<:Ket}, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
                           sites::AbstractVector{Int} = 1:length(state))
     sys = state.system
     n = length(sys)
@@ -649,7 +684,7 @@ function exact_action(::Type{R}, system::System, a::IndexedOp; checked::Bool = t
         return prepared_channel(plain, a)
     end
     act = prepared_acted(plain, gathered(plain, a))
-    return R === Pure ? act : ρ -> act(act(ρ)')'
+    return R <: Ket ? act : ρ -> act(act(ρ)')'
 end
 
 # applied as `apply` applies them to a `State`, the limits of the MPS without use
@@ -664,12 +699,24 @@ function apply(a::IndexedOp{IsChannel}, state::ExactState{Pure}; limits::Limits 
     return apply(kraus(a), state)
 end
 
-apply(a::IndexedOp{IsGenerator}, ::ExactState{Pure}; limits::Limits = Limits()) =
+apply(a::IndexedOp{IsGenerator}, ::ExactState{<:Ket}; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) =
     error("apply takes an operator or a channel, and $(obs_name(a)) is a generator")
 
 apply(a::IndexedOp{<:Union{IsOperator, IsChannel, IsGenerator}}, state::ExactState{Mixed};
       limits::Limits = Limits()) =
     ExactState{Mixed}(state.system, exact_action(Mixed, state.system, a)(state.state), Val(:raw))
+
+# a trajectory draws the Kraus operators of a channel with `rng`, see `trajectory_applied`
+ket_applied(a::IndexedOp{IsOperator}, state::ExactState{Trajectory}; limits::Limits = Limits()) =
+    ExactState{Trajectory}(state.system, exact_action(Pure, state.system, a)(state.state),
+                           Val(:raw))
+
+apply(a::IndexedOp{IsOperator}, state::ExactState{Trajectory}; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) = trajectory_applied(a, state, limits)
+
+apply(a::IndexedOp{IsChannel}, state::ExactState{Trajectory}; limits::Limits = Limits(),
+      rng::AbstractRNG = Random.default_rng()) = trajectory_applied(a, state, limits, rng)
 
 apply(::MPO, ::ExactState; kwargs...) =
     error("an ExactState is given the operator rather than its MPO: apply(op, state)")
@@ -707,7 +754,7 @@ end
 function project_count(state::ExactState{R}, sites, locals, T; limits::Limits) where {R <: PM}
     system = state.system
     x = state.state
-    if R === Pure
+    if R <: Ket
         y = count_projected(system, sites, locals, T, x, 1)
     else
         d = size(x, 1)
@@ -748,7 +795,8 @@ end
 
 function read_state(::Type{<:ExactState}, g, sites)
     name = read(attributes(g)["representation"])
-    R = name == "Pure" ? Pure : name == "Mixed" ? Mixed : nothing
+    R = name == "Pure" ? Pure : name == "Mixed" ? Mixed : name == "Trajectory" ? Trajectory :
+        nothing
     if isnothing(R)
         error("an ExactState of unknown representation \"$name\"")
     end
