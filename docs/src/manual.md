@@ -617,8 +617,8 @@ For more details see the reference or the inline help.
 `ExactState{R}` holds the state of a small system whole, its vector for `Pure` and
 `Trajectory`, its density matrix for `Mixed`, without truncation. It checks a program written
 for MPS on a small case, where the exact result tells the truncation error from the others; it
-evolves without the error of a time step an evolver that does not depend on time, but for the
-jumps of a trajectory; and it studies small systems as they are.
+evolves without the error of a time step an evolver that does not depend on time; and it
+studies small systems as they are.
 
 !!! warning "Experimental"
     `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
@@ -644,9 +644,9 @@ The functions of a `State` take it, with these differences:
 
 - `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
   and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
-  duration, but for the jumps of a trajectory, drawn with the error of the time step as on a
-  `State`, see [Quantum trajectories](trajectories.md), and a search converges to a residual of
-  `1e-13`;
+  duration, the jumps of a trajectory drawn as on a `State` but weighed by its exact norm,
+  which takes the error of the time step out of the averages, see
+  [Quantum trajectories](trajectories.md), and a search converges to a residual of `1e-13`;
 - a search stays in the sector of the charges the system declares, the other symmetries of the
   Hamiltonian being broken, as DMRG breaks them;
 - `random_state(ExactState{R}, …)` and `randomize` draw a pure state uniformly in its sector,

@@ -268,8 +268,9 @@ end
 the evolver of a trajectory under dissipators, or under operators keeping its trace: the evolver
 of its ket under the effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, see
 `ket_evolver`, the `Decay` of each term
-with jumps, none without dissipators, whether its
-operators `K` keep the trace, the generator drawing them, see `with_rng`, `nothing` for the
+with jumps, none without dissipators, whether the trajectory is brought back to its trace at
+each step, its operators `K` keeping it on a backend whose norm truncation lowers, see
+`exact_norm`, the generator drawing them, see `with_rng`, `nothing` for the
 default one, and the count the jumps drawn are added to, `nothing` for none
 """
 struct JumpEvolver
@@ -290,6 +291,15 @@ the evolution when it is known: a method for each type of states holding traject
 ket_evolver(state::State{Trajectory}, terms::AbstractVector, mpo_limits::Limits;
             duration::Union{Nothing, Number} = nothing) =
     PreMPO(state, terms; limits = mpo_limits)
+
+"""
+    exact_norm(state)
+
+whether the backend of the trajectory `state` keeps the norm of its ket exactly, without
+truncation: its jumps are then weighed by the norm the evolution leaves, which takes the error
+of the rate taken linear over a step out of the averages; `false` by default
+"""
+exact_norm(::AbstractState) = false
 
 function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limits::Limits;
                      duration::Union{Nothing, Number} = nothing)
@@ -330,7 +340,7 @@ function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limi
         end
     end
     # the operators of the terms of one function of time anti-Hermitian together keep the trace
-    keeps = all(unique(isnothing(fs) ? [nothing] : fs)) do f
+    keeps = !exact_norm(state) && all(unique(isnothing(fs) ? [nothing] : fs)) do f
         ks = [ k for k in eachindex(ops) if isequal(isnothing(fs) ? nothing : fs[k], f) &&
                                             !isnothing(pures[k]) ]
         isempty(ks) || prepare_op(sys, im * sum(pures[ks])).hermitian

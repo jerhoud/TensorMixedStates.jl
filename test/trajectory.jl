@@ -1002,18 +1002,30 @@ end
         0.3 * Dissipator(Sm(2) + Sm(3))
     jumps = [[sqrt(0.5) * m(Sm(1))] ; kdep ; [sqrt(0.3) * m(Sm(2) + Sm(3))]]
     K = -im * m(h) - 0.5 * sum(L' * L for L in jumps)
+    # weighed by their exact norm, see exact_norm
     @test all(1:10) do seed
         a = evolve(g, 0.5, e; nsteps = 10, rng = Xoshiro(seed)).state
         b = dense_trajectory(e.state, [(nothing, K)], [(nothing, jumps)], 0.5, 10, Xoshiro(seed))
-        isapprox(a, b; rtol = 1e-8)
+        isapprox(a / LA.norm(a), b / LA.norm(b); rtol = 1e-8)
     end
-    # their average is the evolution of the density matrix
+    # their weighted average is the evolution of the density matrix
     ts = [ evolve(g, 0.5, e; nsteps = 10, rng).state for _ in 1:400 ]
     vs = [ v * v' / real(v' * v) for v in ts ]
-    mean = sum(vs) / length(vs)
+    mean = sum(v * v' for v in ts) / sum(v -> real(v' * v), ts)
     err = sqrt.(sum(v -> abs2.(v .- mean), vs) / (length(vs) - 1) / length(vs))
     ρ = evolve(g, 0.5, mix(ExactState(p)); nsteps = 10).state
     @test all(abs.(mean .- ρ) .≤ 5 .* max.(err, 1 / 400))
+    # the weights take the error of the rate taken linear out, even in a single step where it
+    # biased the unweighted average by 7 error bars (measured)
+    qubit = System(1, Qubit())
+    g1 = -im * X(1) + 2 * Dissipator(Sm)(1)
+    e1 = ExactState{Trajectory}(qubit, "Up")
+    ts1 = [ evolve(g1, 1., e1; nsteps = 1, rng) for _ in 1:4000 ]
+    w = [ real(trace(t)) for t in ts1 ]
+    z = [ real(expect(t, Z(1))) for t in ts1 ]
+    m = sum(w .* z) / sum(w)
+    ref = real(expect(evolve(g1, 1., mix(ExactState{Pure}(qubit, "Up")); nsteps = 1), Z(1)))
+    @test abs(m - ref) ≤ 5 * sqrt(sum(abs2, w .* (z .- m))) / sum(w)
     # in a run of samples, weighed by an operator not keeping the trace as a State is
     A = X(1) + 0.5 * Z(2)
     x = runTMS(SimData(; name = "x", samples = 200, seed = 3, backend = ExactState, phases = [

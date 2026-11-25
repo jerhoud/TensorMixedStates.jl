@@ -16,9 +16,10 @@ takes it, a trajectory drawn with `rng`, from a `State`, a trajectory keeping it
 weight, or from the whole vector or density matrix `x`, normalised, of definite charges on a
 system conserving something, what rounding leaves in the sectors they forbid dropped. The
 truncation limits and the methods that functions take for a `State` are accepted and ignored;
-evolutions are exact up to `1e-10`, but for the jumps a trajectory draws, which keep the error
-of the time step, and a search stays in the sector of the charges declared of
-the state it starts from, the symmetries not declared broken as DMRG does.
+evolutions are exact up to `1e-10`, the jumps a trajectory draws being weighed by its exact
+norm, which takes the error of the time step out of the averages, and a search stays in the
+sector of the charges declared of the state it starts from, the symmetries not declared broken
+as DMRG does.
 `random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws a pure one
 uniformly in its sector, a mixed one from a uniform purification as for a `State`, a trajectory
 by measuring the ancillas of that purification, whatever the link dimension, and its
@@ -340,6 +341,8 @@ inner(t::State{Trajectory}, e::ExactState) = inner(as_pure(t), e)
 inner(e::ExactState, t::State{Trajectory}) = inner(e, as_pure(t))
 hs_fidelity(t::State{Trajectory}, e::ExactState) = hs_fidelity(as_pure(t), e)
 hs_fidelity(e::ExactState, t::State{Trajectory}) = hs_fidelity(e, as_pure(t))
+
+exact_norm(::ExactState) = true
 
 # what is not linear in the density matrix, measured on the normalised ket of a trajectory held
 # whole, see `as_pure`; the fidelity, which the kets give whatever their norms, above
