@@ -17,7 +17,8 @@ weight, or from the whole vector or density matrix `x`, normalised, of definite 
 system conserving something, what rounding leaves in the sectors they forbid dropped. The
 truncation limits and the methods that functions take for a `State` are accepted and ignored;
 evolutions are exact up to `1e-10`, the jumps a trajectory draws being weighed by its exact
-norm, which takes the error of the time step out of the averages, and a search stays in the
+norm, which corrects the rate taken linear over a step where it is not zero, see
+`evolve`, and a search stays in the
 sector of the charges declared of the state it starts from, the symmetries not declared broken
 as DMRG does.
 `random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws a pure one

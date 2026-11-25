@@ -434,6 +434,14 @@ TMS.evolve_step(::HalfJumps, pre, state, time, dt, step, limits) =
                                              nsteps = 1)
     @test_throws "gives their jumps a negative rate" evolve(
         [-im * h, Dissipator(Sm)(1) => s -> -1], 0.1, t; nsteps = 1)
+    # a rate function negative within a step or at its end, refused whatever the steps, and one
+    # zero at the end of the evolution, which rounding puts past it, 0.2 + 0.1 > 0.3
+    for n in 1:3
+        @test_throws "gives their jumps a negative rate" evolve(
+            [-im * h, Dissipator(Sm)(1) => s -> 1 - 2s], 0.9, t; nsteps = n, rng)
+    end
+    @test real(trace(evolve([-im * h, Dissipator(Sm)(1) => s -> 0.3 - s], 0.3, t; nsteps = 3,
+                            rng))) ≈ real(trace(t))
     @test_throws "forward in real time" evolve(g, -0.1, t; nsteps = 1)
     @test_throws "no definite flux" evolve(-im * hf + Dissipator(C + dag(C))(2), 0.1, tf;
                                            nsteps = 1)
@@ -1036,6 +1044,13 @@ end
     @test all(abs.(x["Z"] .- expect1(ρ, Z)) .≤ 5 .* x["err(Z)"])
     @test x["err(log_weight)"] > 0
     @test abs(x["log_weight"] - log(real(trace(ρ)))) ≤ 5 * x["err(log_weight)"] + 1e-9
+    # a second trajectory carries no weight: brought back to its trace, as on a State
+    y = runTMS(SimData(; name = "y", samples = 3, seed = 3, backend = ExactState, phases = [
+                       CreateState{Trajectory}(qubits, "Up"), CopyState(:state => :b),
+                       Evolve(evolver = g, duration = 0.5, time_step = 0.1, on = [:state, :b])],
+                       final_measurements = EachSample(Data("b")) => ["tb" => c -> real(trace(c.b))]);
+               output = devnull).data["b"]
+    @test length(y) == 3 && all(r -> r["tb"] ≈ 1, y)
 end
 
 @testset "ExactState thermalizes a trajectory exactly, its weight carried by a run" begin

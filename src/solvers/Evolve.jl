@@ -265,22 +265,25 @@ struct Decay
 end
 
 """
-    JumpEvolver(pre, decays, keeps, rng, jumps)
+    JumpEvolver(pre, decays, keeps, exact, rng, jumps, stop)
 
 the evolver of a trajectory under dissipators, or under operators keeping its trace: the evolver
 of its ket under the effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L_j``, see
 `ket_evolver`, the `Decay` of each term
-with jumps, none without dissipators, whether the trajectory is brought back to its trace at
-each step, its operators `K` keeping it on a backend whose norm truncation lowers, see
-`exact_norm`, the generator drawing them, see `with_rng`, `nothing` for the
-default one, and the list the jumps drawn are pushed to, see `evolve`, `nothing` for none
+with jumps, none without dissipators, whether its operators `K` keep the trace, which brings the
+trajectory back to it at each step unless `exact`, its jumps then weighed by the exact norm of
+its ket, see `exact_norm`, the generator drawing them, see `with_rng`, `nothing` for the
+default one, the list the jumps drawn are pushed to, see `evolve`, `nothing` for none, and the
+end of the evolution, `nothing` when unknown, past which rounding may put the end of a step
 """
 struct JumpEvolver
     pre::Any
     decays::Vector{Decay}
     keeps::Bool
+    exact::Bool
     rng::Union{Nothing, AbstractRNG}
     jumps::Union{Nothing, AbstractVector}
+    stop::Union{Nothing, Float64}
 end
 
 """
@@ -298,8 +301,9 @@ ket_evolver(state::State{Trajectory}, terms::AbstractVector, mpo_limits::Limits;
     exact_norm(state)
 
 whether the backend of the trajectory `state` keeps the norm of its ket exactly, without
-truncation: its jumps are then weighed by the norm the evolution leaves, which takes the error
-of the rate taken linear over a step out of the averages; `false` by default
+truncation: the jumps of its trajectory `:state` are then weighed by the norm the evolution
+leaves, which corrects the rate taken linear over a step where it is not zero; `false` by
+default
 """
 exact_norm(::AbstractState) = false
 
@@ -348,13 +352,13 @@ function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limi
         end
     end
     # the operators of the terms of one function of time anti-Hermitian together keep the trace
-    keeps = !exact_norm(state) && all(unique(isnothing(fs) ? [nothing] : fs)) do f
+    keeps = all(unique(isnothing(fs) ? [nothing] : fs)) do f
         ks = [ k for k in eachindex(ops) if isequal(isnothing(fs) ? nothing : fs[k], f) &&
                                             !isnothing(pures[k]) ]
         isempty(ks) || prepare_op(sys, im * sum(pures[ks])).hermitian
     end
-    return JumpEvolver(ket_evolver(state, terms, mpo_limits; duration), decays, keeps, nothing,
-                       nothing)
+    return JumpEvolver(ket_evolver(state, terms, mpo_limits; duration), decays, keeps,
+                       exact_norm(state), nothing, nothing, nothing)
 end
 
 # refuse the jump `j` of the generator `a` when it changes a charge `system` conserves strongly,
@@ -385,46 +389,50 @@ function trajectory_evolver(state::AbstractState{Trajectory}, terms::Union{Abstr
         e = JumpEvolver(state, ops, fs, mpo_limits; duration)
         # an evolver keeping the trace brings the trajectory back to it at each step, so that what
         # truncation loses is no weight
-        return e.keeps ? e : e.pre
+        return e.keeps && !e.exact ? e : e.pre
     end
     return JumpEvolver(state, ops, fs, mpo_limits; duration)
 end
 
 """
-    with_rng(pre, rng, jumps = nothing)
+    with_rng(pre, rng, jumps = nothing; weighed = true, stop = nothing)
 
 the evolver `pre`, see `prepared_evolver`, drawing with `rng` and pushing its jumps to the list
-`jumps` when it is given, see `evolve`: itself when it draws nothing
+`jumps` when it is given, see `evolve`, over an evolution ending at `stop` when it is given, a
+trajectory that carries no weight, `weighed = false`, brought back to its trace as on a backend
+whose norm truncation lowers: itself when it draws nothing
 """
-with_rng(pre, ::AbstractRNG, ::Union{Nothing, AbstractVector} = nothing) = pre
-with_rng(e::JumpEvolver, rng::AbstractRNG, jumps::Union{Nothing, AbstractVector} = nothing) =
-    JumpEvolver(e.pre, e.decays, e.keeps, rng, jumps)
+with_rng(pre, ::AbstractRNG, ::Union{Nothing, AbstractVector} = nothing; weighed::Bool = true,
+         stop::Union{Nothing, Number} = nothing) = pre
+with_rng(e::JumpEvolver, rng::AbstractRNG, jumps::Union{Nothing, AbstractVector} = nothing;
+         weighed::Bool = true, stop::Union{Nothing, Number} = nothing) =
+    JumpEvolver(e.pre, e.decays, e.keeps, e.exact && weighed, rng, jumps,
+                isnothing(stop) ? nothing : Float64(stop))
 
-# the rate of the jumps of `d` on `state` at `time`
-function decay_rate(d::Decay, state::AbstractState{Trajectory}, time::Number;
-                    checked::Bool = true)
-    c = isnothing(d.f) ? 1. : d.f(time)
-    if c < 0 && !checked
-        # within a step or at its end, which may lie past the end of the evolution by rounding
-        return 0.0
-    elseif c < 0
-        error("the function of a term holding dissipators is $c at time $time, which gives " *
+# the rate of the jumps of `d` on `state` at `time`, taken at the end `stop` of the evolution when
+# rounding puts the end of a step past it, a negative rate function refused
+function decay_rate(d::Decay, state::AbstractState{Trajectory}, time::Number,
+                    stop::Union{Nothing, Float64})
+    t = isnothing(stop) ? time : min(time, stop)
+    c = isnothing(d.f) ? 1. : d.f(t)
+    if c < 0
+        error("the function of a term holding dissipators is $c at time $t, which gives " *
               "their jumps a negative rate, which no trajectory draws: use State{Mixed}")
     end
     return c * real(expect(state, d.rate))
 end
 
-# the rate of all the jumps of `e` on `state` at `time`, rounding below zero taken as zero, a
-# negative rate function refused when `checked`, see `decay_rate`
-total_rate(e::JumpEvolver, state::AbstractState{Trajectory}, time::Number; checked::Bool = true) =
-    max(sum(d -> decay_rate(d, state, time; checked), e.decays), 0.0)
+# the rate of all the jumps of `e` on `state` at `time`, rounding below zero taken as zero
+total_rate(e::JumpEvolver, state::AbstractState{Trajectory}, time::Number) =
+    max(sum(d -> decay_rate(d, state, time, e.stop), e.decays), 0.0)
 
 # One step of a trajectory: the time of the next jump drawn from the probability of no jump up to
 # it, as QuTiP's mcsolve and QuantumOptics.jl's mcwf do, the jump drawn by its rate at that time
 # and the rest of the step drawn again. That probability is taken from the rates at both ends of
 # the step, linear in between, not from the norm, which truncation lowers. The trajectory is
-# brought back to its trace or, when the operators do not keep it, weighed by the norm left over
-# the probability drawn with, which corrects the rate taken linear where it is not zero.
+# brought back to its trace or, when the operators do not keep it or the norm is exact, see
+# `exact_norm`, weighed by the norm left over the probability drawn with, which corrects the rate
+# taken linear where it is not zero.
 # An algorithm of one's own calling evolve_step of Tdvp or ApproxW with a JumpEvolver draws the
 # jumps with them
 function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractState{Trajectory},
@@ -434,7 +442,7 @@ function evolve_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::Abstract
     elseif !(isreal(dt) && real(dt) > 0)
         error("a trajectory draws its jumps forward in real time, and the step is $dt")
     end
-    return jump_step(algo, e, state, time, real(dt), step, limits, false)
+    return jump_step(algo, e, state, time, real(dt), step, limits)
 end
 
 # operators keeping the trace leave no trajectory of norm zero but by underflow
@@ -442,37 +450,37 @@ no_norm_error(dt, time) =
     error("a step of $dt from time $time leaves a trajectory of norm zero by underflow, its " *
           "jumps too frequent for it: take smaller steps")
 
-# the step of `evolve_step` for a JumpEvolver, or its `rest` after a jump, whose start may lie
-# past the end of the evolution by rounding
+# the step of `evolve_step` for a JumpEvolver, or its rest after a jump
 function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractState{Trajectory},
-                   time::Number, dt::Real, step::Int, limits::Limits, rest::Bool)
+                   time::Number, dt::Real, step::Int, limits::Limits)
     if is_null(state)
         return state
     end
     rng = something(e.rng, Random.default_rng())
-    a0 = total_rate(e, state, time; checked = !rest)
+    brought = e.keeps && !e.exact
+    a0 = total_rate(e, state, time)
     stepped = evolve_step(algo, e.pre, state, time, dt, step, limits)
     # a step losing all the norm, by the operators or by underflow, gives no rate at its end
-    a1 = is_null(stepped) ? a0 : total_rate(e, stepped, time + dt; checked = false)
+    a1 = is_null(stepped) ? a0 : total_rate(e, stepped, time + dt)
     # no jump up to s with the probability exp(-a0 s - c s²)
     c = (a1 - a0) / (2dt)
     lq = -dt * (a0 + c * dt)
     lu = log(rand(rng))
     if lu < lq
         if is_null(stepped)
-            return e.keeps ? no_norm_error(dt, time) : stepped
+            return brought ? no_norm_error(dt, time) : stepped
         end
-        return e.keeps ? followed(stepped, state, 1) : stepped / exp(lq / 2)
+        return brought ? followed(stepped, state, 1) : stepped / exp(lq / 2)
     end
     s = clamp(-2lu / (a0 + sqrt(max(a0^2 - 4c * lu, 0.0))), 0.0, dt)
     before = evolve_step(algo, e.pre, state, time, s, step, limits)
     if is_null(before)
-        return e.keeps ? no_norm_error(dt, time) : before
+        return brought ? no_norm_error(dt, time) : before
     end
-    rates = [ decay_rate(d, before, time + s; checked = false) for d in e.decays ]
+    rates = [ decay_rate(d, before, time + s, e.stop) for d in e.decays ]
     jumped = if sum(rates) ≤ 0
         # the linear rate drew a jump where there is none: weight zero when losing trace
-        e.keeps ? followed(before, state, 1) : 0 * before
+        brought ? followed(before, state, 1) : 0 * before
     else
         d = e.decays[draw_index(rates, rng)]
         i = draw_index([ real(expect(before, dag(j) * j)) for j in d.jumps ], rng)
@@ -481,10 +489,10 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractSt
             dissipator, kraus = d.labels[i]
             push!(e.jumps, (; time = time + s, dissipator, kraus))
         end
-        e.keeps ? followed(x, state, 1) :
+        brought ? followed(x, state, 1) :
                   followed(x, before, sum(rates) / ((a0 + 2c * s) * exp(-s * (a0 + c * s))))
     end
-    return s < dt ? jump_step(algo, e, jumped, time + s, dt - s, step, limits, true) : jumped
+    return s < dt ? jump_step(algo, e, jumped, time + s, dt - s, step, limits) : jumped
 end
 
 """
@@ -546,7 +554,8 @@ function evolve(evolver, duration::Number, state::AbstractState; algo::Evolution
     if nsteps == 0
         return state
     end
-    pre = with_rng(prepared_evolver(state, evolver, mpo_limits; duration), rng, jumps)
+    pre = with_rng(prepared_evolver(state, evolver, mpo_limits; duration), rng, jumps;
+                   stop = time + duration)
     dt = duration / nsteps
     for k in 0:nsteps - 1
         state = evolve_step(algo, pre, state, time + k * dt, dt, step + k,

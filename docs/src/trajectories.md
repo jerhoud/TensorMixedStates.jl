@@ -55,9 +55,12 @@ its trace or, when the operators do not keep it, weighed by what they keep.
 Besides the error of the method of the steps, the average of the trajectories has one from the
 rate taken linear, which halving the step shows: a rate that rises and falls back within a
 step, nearly zero at both ends, draws no jump in it. An `ExactState{Trajectory}`, whose norm no
-truncation lowers, weighs its trajectory by the norm the evolution leaves over the probability
-drawn with, which takes that error out of the averages at the cost of weights slightly
-different from one.
+truncation lowers, weighs its trajectory `:state` by the norm the evolution leaves over the
+probability drawn with, which corrects the rate taken linear where it is not zero, at the cost
+of weights different from one. A rate zero at both ends of a step but not within it still
+draws no jump there, and one nearly zero at both ends gives a few jumps of very large weights:
+take steps short enough for the rate. Its other trajectories carry no weight and are brought
+back to their trace, as on a `State`.
 
 ```julia
 L = -im * sum(X(i) for i in 1:4) + sum(Dissipator(sqrt(0.2) * Sp)(i) for i in 1:4)

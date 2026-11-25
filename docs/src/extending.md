@@ -354,7 +354,8 @@ which call:
 - `TensorMixedStates.as_pure(state)`, the normalised ket as a pure state, on which `Norm` is
   measured;
 - `TensorMixedStates.exact_norm(state)`, `true` for a backend keeping the norm of the ket
-  exactly, without truncation, whose jumps are then weighed by that norm, `false` by default.
+  exactly, without truncation, whose jumps in the trajectory `:state` are then weighed by that
+  norm, `false` by default.
 
 The draws also multiply and divide the state by numbers, `c * state` and `state / c`, which set
 its weight, and normalise it, `normalize(state)`; a jump steps its ket with `evolve_step(algo,

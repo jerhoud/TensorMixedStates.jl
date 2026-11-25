@@ -166,8 +166,10 @@ function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
     jumps = []
     for name in e.on
-        st = evolve_step(e.algo, with_rng(e.pre, sim.rng, name === :state ? jumps : nothing),
-                         state_named(sim, name), e.start + (k - 1) * dt, dt, k,
+        # only :state carries a weight, the others brought back to their trace
+        pre = with_rng(e.pre, sim.rng, name === :state ? jumps : nothing;
+                       weighed = name === :state, stop = e.start + e.duration)
+        st = evolve_step(e.algo, pre, state_named(sim, name), e.start + (k - 1) * dt, dt, k,
                          step_limits(e.limits, k))
         sim = with_state(sim, name, st)
     end
