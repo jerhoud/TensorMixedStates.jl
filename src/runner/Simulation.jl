@@ -44,7 +44,9 @@ const reserved_values = (:state, :time, :step, :rng, :data)
 """
 function check_backend(backend)
     t = backend isa Type ? Base.unwrap_unionall(backend) : nothing
-    if !(t isa DataType && t <: AbstractState && !isabstracttype(t))
+    # the type as given, its parameters bound: Julia 1.14 no longer takes State{R}, R free, as a
+    # subtype of AbstractState
+    if !(t isa DataType && backend <: AbstractState && !isabstracttype(t))
         error("a backend is a type of states, as State or ExactState, not $(repr(backend))")
     elseif backend isa DataType && backend.name.wrapper !== backend
         error("a backend is named without its representation: backend = $(nameof(backend))")
