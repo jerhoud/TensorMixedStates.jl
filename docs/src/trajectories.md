@@ -185,7 +185,8 @@ averaged with the weights: the entropies, the entanglement spectrum and the loga
 negativity of each trajectory, the average entanglement of a monitored system, not that of the
 density matrix; `Purity` and `Norm` are 1; `Variance(A)` is the mean of the variances of `A` in
 each trajectory, smaller than that of the density matrix, which the averages of `A^2` and `A`
-give; `inner`, `Vector` and the fidelities take the normalised ket. Such averages depend on the
+give; `inner`, `Vector` and `fidelity` take the normalised ket, and `hs_fidelity`, between
+mixed representations, refuses it. Such averages depend on the
 way the channels and the dissipators are unravelled, see `dephasing_dissipator(γ; jumps)`. A
 trajectory is not mixed by `mix`. An `ExactState{Trajectory}` holds its ket whole, without
 truncation, as `backend = ExactState` makes it in a simulation. A ground state is searched in

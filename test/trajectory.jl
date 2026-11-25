@@ -101,7 +101,10 @@ end
             (() -> steady_state(-im * h, t), "a steady state comes with the draws"),
             (() -> TMS.as_representation(Mixed, t), "a trajectory is not a pure or a mixed"),
             (() -> TMS.as_representation(Pure, t), "a trajectory is not a pure or a mixed"),
-            (() -> TMS.as_representation(Trajectory, mix(p)), "a trajectory of a mixed state"))
+            (() -> TMS.as_representation(Trajectory, mix(p)), "a trajectory of a mixed state"),
+            (() -> hs_fidelity(t, mix(q)), "a trajectory holds a pure state"),
+            (() -> hs_fidelity(mix(q), t), "a trajectory holds a pure state"),
+            (() -> hs_fidelity(t, t), "a trajectory holds a pure state"))
         @test_throws message f()
     end
 end
@@ -987,7 +990,11 @@ end
             (() -> apply(Dissipator(X)(1), e), "is a generator"),
             (() -> TMS.as_representation(Pure, e), "a trajectory is not a pure or a mixed"),
             (() -> TMS.as_representation(Trajectory, mix(ExactState(p))),
-             "a trajectory of a mixed state"))
+             "a trajectory of a mixed state"),
+            (() -> hs_fidelity(e, mix(ExactState(q))), "a trajectory holds a pure state"),
+            (() -> hs_fidelity(mix(ExactState(q)), e), "a trajectory holds a pure state"),
+            (() -> hs_fidelity(e, mix(q)), "a trajectory holds a pure state"),
+            (() -> hs_fidelity(t, mix(ExactState(q))), "a trajectory holds a pure state"))
         @test_throws message f()
     end
     # drawn at random from the purification, of a definite charge, that of the purification only

@@ -340,8 +340,11 @@ fidelity(t::State{Trajectory}, e::ExactState{Mixed}) = fidelity(as_pure(t), e)
 fidelity(e::ExactState{Mixed}, t::State{Trajectory}) = fidelity(e, as_pure(t))
 inner(t::State{Trajectory}, e::ExactState) = inner(as_pure(t), e)
 inner(e::ExactState, t::State{Trajectory}) = inner(e, as_pure(t))
-hs_fidelity(t::State{Trajectory}, e::ExactState) = hs_fidelity(as_pure(t), e)
-hs_fidelity(e::ExactState, t::State{Trajectory}) = hs_fidelity(e, as_pure(t))
+hs_fidelity(::State{Trajectory}, ::ExactState) = trajectory_hs_fidelity()
+hs_fidelity(::ExactState, ::State{Trajectory}) = trajectory_hs_fidelity()
+hs_fidelity(::ExactState{Trajectory}, ::ExactState) = trajectory_hs_fidelity()
+hs_fidelity(::ExactState{<:Union{Pure, Mixed}}, ::ExactState{Trajectory}) =
+    trajectory_hs_fidelity()
 
 exact_norm(::ExactState) = true
 

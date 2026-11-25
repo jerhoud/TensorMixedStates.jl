@@ -734,8 +734,12 @@ they are proportional. This is **not** the Uhlmann fidelity, see `fidelity`.
 hs_fidelity(a::State{Mixed}, b::State{Mixed}) =
     real(inner(a, b)) / (nonzero_norm(a, "hs_fidelity") * nonzero_norm(b, "hs_fidelity"))
 
-hs_fidelity(t::State{Trajectory}, s::State) = hs_fidelity(as_pure(t), s)
-hs_fidelity(s::State{<:Union{Pure, Mixed}}, t::State{Trajectory}) = hs_fidelity(s, as_pure(t))
+# a trajectory holds a pure state, which hs_fidelity, between mixed ones, does not take
+trajectory_hs_fidelity() =
+    error("hs_fidelity compares two mixed representations, and a trajectory holds a pure " *
+          "state: use fidelity")
+hs_fidelity(::State{Trajectory}, ::State) = trajectory_hs_fidelity()
+hs_fidelity(::State{<:Union{Pure, Mixed}}, ::State{Trajectory}) = trajectory_hs_fidelity()
 
 """
     variance(state, op)
