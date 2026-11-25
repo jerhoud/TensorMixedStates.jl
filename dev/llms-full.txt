@@ -175,6 +175,7 @@ Trajectories: `SimData(samples = N, …)` with a `CreateState{Trajectory}` or a
 averaged files; dissipators and channels draw jumps and Kraus operators with the generator of
 the sample, the averages weighted by the traces of
 the trajectories (column `log_weight`); the value `:jumps` counts the jumps drawn in the trajectory,
+`:jump_list` lists them (time, dissipator, Kraus index; write it with `EachSample("jumps.jsonl")`),
 and `dephasing_dissipator(γ; jumps = :phases)` draws phases, `Z` on a qubit, where the default
 draws projectors. What is not linear in the density matrix, as an entanglement entropy or
 `Variance`, is measured on the normalised ket of each trajectory and averaged, not on the density
@@ -870,8 +871,8 @@ For more details see the reference or the inline help.
 `ExactState{R}` holds the state of a small system whole, its vector for `Pure` and
 `Trajectory`, its density matrix for `Mixed`, without truncation. It checks a program written
 for MPS on a small case, where the exact result tells the truncation error from the others; it
-evolves without the error of a time step an evolver that does not depend on time, but for the
-jumps of a trajectory; and it studies small systems as they are.
+evolves without the error of a time step an evolver that does not depend on time; and it
+studies small systems as they are.
 
 !!! warning "Experimental"
     `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
@@ -897,9 +898,9 @@ The functions of a `State` take it, with these differences:
 
 - `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
   and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
-  duration, but for the jumps of a trajectory, drawn with the error of the time step as on a
-  `State`, see [Quantum trajectories](trajectories.md), and a search converges to a residual of
-  `1e-13`;
+  duration, the jumps of a trajectory drawn as on a `State` but weighed by its exact norm,
+  which takes the error of the time step out of the averages, see
+  [Quantum trajectories](trajectories.md), and a search converges to a residual of `1e-13`;
 - a search stays in the sector of the charges the system declares, the other symmetries of the
   Hamiltonian being broken, as DMRG breaks them;
 - `random_state(ExactState{R}, …)` and `randomize` draw a pure state uniformly in its sector,
@@ -1698,7 +1699,10 @@ step drawn again, so that a step may hold several jumps. The trajectory is then 
 its trace or, when the operators do not keep it, weighed by what they keep.
 Besides the error of the method of the steps, the average of the trajectories has one from the
 rate taken linear, which halving the step shows: a rate that rises and falls back within a
-step, nearly zero at both ends, draws no jump in it.
+step, nearly zero at both ends, draws no jump in it. An `ExactState{Trajectory}`, whose norm no
+truncation lowers, weighs its trajectory by the norm the evolution leaves over the probability
+drawn with, which takes that error out of the averages at the cost of weights slightly
+different from one.
 
 ```julia
 L = -im * sum(X(i) for i in 1:4) + sum(Dissipator(sqrt(0.2) * Sp)(i) for i in 1:4)
@@ -1757,8 +1761,14 @@ shares them between the processes. A pure state prepared once, a ground state fo
 becomes the starting point of every trajectory by `ConvertState{Trajectory}()` after the phase
 that computes it. The value `:jumps` counts the jumps the dissipators of the `Evolve` phases drew
 in the trajectory `:state` since a phase put it there, 0 before the first: `"jumps" => :jumps`
-gives their mean number, and `EachSample` that of each trajectory. The values `:log_weight` and
-`:jumps` belong to the run: no phase of a simulation making trajectories may set them.
+gives their mean number, and `EachSample` that of each trajectory. The value `:jump_list` lists
+them, each as `(time, dissipator, kraus)`: its time, the dissipator as written and placed, as
+`"Sm(1)"`, and the index of the operator drawn among the Kraus operators of a channel,
+`TensorMixedStates.kraus_operators(system, dissipator)`, 1 for an operator;
+`EachSample("jumps.jsonl") => [:jump_list]` writes it for each trajectory, in JSON, and
+`evolve(…; jumps = list)` gives the same list outside a simulation. The values `:log_weight`,
+`:jumps` and `:jump_list` belong to the run: no phase of a simulation making trajectories may set
+them.
 
 An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
 projection, a channel or an evolver that loses trace, changes the trace of the trajectory, which
@@ -2280,7 +2290,9 @@ which call:
   of the ket under the operators `terms`, the effective operators of the jumps included, which
   its `evolve_step` takes as `pre`;
 - `TensorMixedStates.as_pure(state)`, the normalised ket as a pure state, on which `Norm` is
-  measured.
+  measured;
+- `TensorMixedStates.exact_norm(state)`, `true` for a backend keeping the norm of the ket
+  exactly, without truncation, whose jumps are then weighed by that norm, `false` by default.
 
 The draws also multiply and divide the state by numbers, `c * state` and `state / c`, which set
 its weight, and normalise it, `normalize(state)`; a jump steps its ket with `evolve_step(algo,
