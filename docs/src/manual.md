@@ -614,15 +614,15 @@ For more details see the reference or the inline help.
 
 ## [Exact states](@id manual-exact-states)
 
-`ExactState{R}` holds the state of a small system whole, its vector for `Pure` or its density
-matrix for `Mixed`, without truncation. It checks a program written for MPS on a small case,
-where the exact result tells the truncation error from the others; it evolves without the error
-of a time step an evolver that does not depend on time; and it studies small systems as they
-are.
+`ExactState{R}` holds the state of a small system whole, its vector for `Pure` and
+`Trajectory`, its density matrix for `Mixed`, without truncation. It checks a program written
+for MPS on a small case, where the exact result tells the truncation error from the others; it
+evolves without the error of a time step an evolver that does not depend on time, but for the
+jumps of a trajectory; and it studies small systems as they are.
 
 !!! warning "Experimental"
     `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
-    when the exact states gain sectors of charge and quantum trajectories, or when other
+    when the exact states gain sectors of charge, or when other
     backends show what they lack. `max_dense` and the functions acting on a state are not
     concerned.
 
@@ -644,12 +644,14 @@ The functions of a `State` take it, with these differences:
 
 - `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
   and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
-  duration, and a search converges to a residual of `1e-13`;
+  duration, but for the jumps of a trajectory, drawn with the error of the time step as on a
+  `State`, see [Quantum trajectories](trajectories.md), and a search converges to a residual of
+  `1e-13`;
 - a search stays in the sector of the charges the system declares, the other symmetries of the
   Hamiltonian being broken, as DMRG breaks them;
 - `random_state(ExactState{R}, …)` and `randomize` draw a pure state uniformly in its sector,
-  and a mixed one from a uniform purification on the system doubled, as the MPS draws it,
-  whatever the link dimension asked;
+  a mixed one from a uniform purification on the system doubled, as the MPS draws it, and a
+  trajectory by measuring the ancillas of that purification, whatever the link dimension asked;
 - `maxlinkdim` is that of an MPS holding the whole space, and `truncate` leaves the state as it
   is;
 - `inner`, `fidelity` and `hs_fidelity` compare it with a `State`, converted exactly;

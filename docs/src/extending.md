@@ -273,9 +273,10 @@ A state of your own, a backend of its own holding a state as `State` holds it in
 subtype of [`TensorMixedStates.AbstractState`](@ref)`{R}` with a field `system` holding the
 `System` of its physical sites, `struct MyState{R} <: AbstractState{R}`, or
 `struct MyState <: AbstractState{Pure}` for a single representation. Its representation `R`,
-`Pure` or `Mixed`, which `TensorMixedStates.representation(state)` gives, says what the state is,
-and so what the results of a program mean; the backend says how it is held and computed, which
-leaves the results unchanged up to the approximations it makes. `SimData(backend = MyState)`
+`Pure`, `Mixed` or `Trajectory`, which `TensorMixedStates.representation(state)` gives, says
+what the state is, and so what the results of a program mean; the backend says how it is held
+and computed, which leaves the results unchanged up to the approximations it makes.
+`SimData(backend = MyState)`
 makes the states of the `CreateState` phases of a program on your backend without changing its
 phases, which then need the methods below, a state of a representation the backend does not
 hold being refused; `CreateState(…; backend = MyState)` does it for one phase,
@@ -335,6 +336,28 @@ The phases and the measurements reach the state through the methods you give:
   subgroup, `write_state(create_group(group, "inner"), inner)`, `create_group` coming from
   HDF5, and reads it back with `read_state(State{Pure}, group["inner"], sites)`, given the
   sites it lies on.
+
+A backend of trajectories, `AbstractState{Trajectory}`, draws them with the code of TMS, its
+state holding the ket of the trajectory, whose trace is its weight: its methods of `apply` and
+`prepared_evolver` return `TensorMixedStates.trajectory_applied(op, state, limits)`, with `rng`
+for a channel, and `TensorMixedStates.trajectory_evolver(state, terms, mpo_limits; duration)`,
+which call:
+
+- `TensorMixedStates.ket_applied(op, state; limits)`, the operator applied to the ket,
+  without weight;
+- `TensorMixedStates.ket_evolver(state, terms, mpo_limits; duration)`, the evolver
+  of the ket under the operators `terms`, the effective operators of the jumps included, which
+  its `evolve_step` takes as `pre`;
+- `TensorMixedStates.as_pure(state)`, the normalised ket as a pure state, on which `Norm` is
+  measured.
+
+The draws also multiply and divide the state by numbers, `c * state` and `state / c`, which set
+its weight, and normalise it, `normalize(state)`; a jump steps its ket with `evolve_step(algo,
+pre, state, …)`, `algo` a `Tdvp` or an `ApproxW`, which a method typing the state accepts.
+
+What is not linear in the density matrix, `purity`, `von_neumann_entropy`, `variance` and the
+like, is measured on the normalised ket of each trajectory by methods of the backend, as
+`ExactState` has, typed `MyState{Trajectory}`.
 
 The measurements of the library go through `trace`, `norm`, `entanglement_entropy` and the
 like: a state gets what its type has a method for, and a measurement or a phase it does not

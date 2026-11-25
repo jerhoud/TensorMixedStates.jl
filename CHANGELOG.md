@@ -21,6 +21,7 @@ the reference article.
 - A row of a `Data` reads a cell by its column, `row["Z(1)"]` of a value `Z` of every site, and an averaged row the vector of the cells of a value of every site or of a vector, `row["Z"]`, `row["err(Z)"]`, so that a row reads alike with or without samples, but for a value named `N`, the name of the number of samples there.
 
 - What is not linear in the density matrix, as an entanglement entropy, the purity or a variance, is measured on the normalised ket of each trajectory, and averaged over the trajectories with their weights.
+- `ExactState{Trajectory}`: a trajectory held whole, without truncation, made by `backend = ExactState` in a simulation of trajectories.
 
 ### Changed
 
