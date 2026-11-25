@@ -494,6 +494,8 @@ TMS.run_phase(p::CreateExact, sim::TMS.Simulation, ::Int) = TMS.Simulation(sim, 
     e, g = ground_state(h, ψ)
     @test e ≈ λ[1] atol = 1e-11
     @test real(expect(g, h)) ≈ λ[1] atol = 1e-11
+    @test ground_state(Evolver(h), ψ).energy ≈ λ[1] atol = 1e-11
+    @test_throws "which a pure state cannot follow" ground_state(Dissipator(X)(1), ψ)
     e1, g1 = ground_state(h, ψ; orthogonal_to = [g], algo = Dmrg(nsweeps = 1),
                           limits = Limits(maxdim = 1))
     @test e1 ≈ λ[2] atol = 1e-10

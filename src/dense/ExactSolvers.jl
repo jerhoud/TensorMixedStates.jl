@@ -326,7 +326,9 @@ function ground_state(hamiltonian, state::ExactState{Pure};
                       mpo_limits::Limits = Limits(), orthogonal_to::AbstractVector = [],
                       weight::Union{Nothing, Real} = nothing)
     system = state.system
-    H, c = exact_acting(Pure, system, searched_operator(system, hamiltonian, "ground_state"))
+    # as the MPS takes it, the evolver of the Hamiltonian as the Hamiltonian
+    H, c = exact_acting(Pure, system,
+                        followed_operator(searched_operator(system, hamiltonian, "ground_state")))
     refs = map(orthogonal_to) do m
         if !(m isa Union{ExactState{Pure}, State{Pure}})
             error("ground_state searches a state orthogonal to pure states, not to a $(typeof(m))")
