@@ -184,16 +184,21 @@ state_type_name(state::AbstractState) =
     join((fullname(parentmodule(typeof(state)))..., nameof(typeof(state))), ".")
 
 """
-    write_state_group(f, statename, state, ps)
+    write_state_group(f, statename, state, ps, log_weight)
 
 write `state` in the new group `statename` of the HDF5 file `f`: its type, its sites, the fields
-of which `ps` gives as `site_params` makes them, and its tensors
+of which `ps` gives as `site_params` makes them, its tensors and the logarithm of the weight of a
+trajectory when it is given, see `saved_log_weight`
 """
-function write_state_group(f, statename::String, state::AbstractState, ps)
+function write_state_group(f, statename::String, state::AbstractState, ps,
+                           log_weight::Union{Nothing, Float64})
     sites = state.system.sites
     g = create_group(f, statename)
     attributes(g)["version"] = state_file_version
     attributes(g)["type"] = state_type_name(state)
+    if !isnothing(log_weight)
+        attributes(g)["log_weight"] = log_weight
+    end
     # the whole path, so that a site type of a module inside another one is found again
     g["modules"] = [ join(fullname(parentmodule(typeof(s))), ".") for s in sites ]
     g["types"] = [ string(nameof(typeof(s))) for s in sites ]
@@ -217,7 +222,12 @@ number, a boolean, a symbol, a string, `nothing` or a `Conservation`.
 
     save_state("myfile.h5", "ground_state", state)
 """
-function save_state(filename::String, statename::String, state::AbstractState)
+save_state(filename::String, statename::String, state::AbstractState) =
+    write_state_file(filename, statename, state, nothing)
+
+# save_state writing also the logarithm of the weight of a trajectory, see `SaveState`
+function write_state_file(filename::String, statename::String, state::AbstractState,
+                          log_weight::Union{Nothing, Float64})
     # checked before the file is opened: a state that cannot be written must neither leave a
     # half written group nor delete the state already saved under its name
     ps = map(site_params, state.system.sites)
@@ -231,7 +241,7 @@ function save_state(filename::String, statename::String, state::AbstractState)
         # and the file would grow by a state at each save
         tmp = filename * ".tmp"
         try
-            h5open(f -> write_state_group(f, statename, state, ps), tmp, "w")
+            h5open(f -> write_state_group(f, statename, state, ps, log_weight), tmp, "w")
             h5open(filename, "r+") do f
                 delete_object(f, statename)
                 h5open(t -> copy_object(t, statename, f, statename), tmp, "r")
@@ -240,7 +250,7 @@ function save_state(filename::String, statename::String, state::AbstractState)
             rm(tmp; force = true)
         end
     else
-        h5open(f -> write_state_group(f, statename, state, ps), filename, "cw")
+        h5open(f -> write_state_group(f, statename, state, ps, log_weight), filename, "cw")
     end
     return nothing
 end
@@ -438,4 +448,16 @@ load_state(filename::String, statename::String) =
         version = file_version(g, statename)
         type = state_type(read(attributes(g)["type"]), statename)
         return read_state(type, g, read_sites(g, version))
+    end
+
+"""
+    saved_log_weight(filename, statename)
+
+the logarithm of the weight of the trajectory `:state` that `SaveState` saved under the name
+`statename` in the file `filename`, `nothing` for a state saved without it
+"""
+saved_log_weight(filename::String, statename::String) =
+    h5open(filename, "r") do f
+        a = attributes(open_group(f, statename))
+        return haskey(a, "log_weight") ? Float64(read(a["log_weight"])) : nothing
     end

@@ -694,6 +694,18 @@ end
     quarter = Update(c -> c.state = 0.5 * c.state; nsteps = 1000)
     rows = run(EachSample(Data("z")) => Z(1); more = [quarter]).data["z"]
     @test all(r -> r["log_weight"] ≈ 1000 * log(0.25) + (r["Z(1)"] > 0 ? 0 : log(0.25)), rows)
+    # saved with its weight, which loading it into :state gives back, and loading it under
+    # another name does not
+    mktempdir() do dir
+        cd(dir) do
+            loaded(name, on) = only(runTMS(SimData(; name, seed = 3, samples = 1, phases = [
+                CreateState{Trajectory}(q, "Up"), quarter, SaveState(file = "s.h5"),
+                CreateState{Trajectory}(q, "Up"), LoadState(; file = "s.h5", on)],
+                final_measurements = Data("z") => Z(1))).data["z"])["log_weight"]
+            @test loaded("s", :state) ≈ 1000 * log(0.25) rtol = 1e-12
+            @test abs(loaded("b", :b)) < 1e-12
+        end
+    end
     # the column reserved, the value read
     @test_throws "one the averages or the samples write" run(Data("z") => ["log_weight" => Z(1)])
     @test only(run(Data("z") => ["lw" => :log_weight]).data["z"])["lw"] isa Real

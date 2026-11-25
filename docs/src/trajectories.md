@@ -137,7 +137,9 @@ its error. Every row of a simulation of trajectories has that column, 0 before t
 `EachSample` giving the weight of each, and the measurements may read it as the value
 `:log_weight`. The run carries the trace into that value at each step where it is far from one,
 so that it neither underflows nor overflows. Only the trajectory `:state` carries the weight: a
-phase changing the trace of another one is refused. A local density matrix weighs the trajectory
+phase changing the trace of another one is refused. `SaveState` saves the trajectory `:state`
+with its weight, which `LoadState` gives back to a trajectory loaded into `:state`. A local
+density matrix weighs the trajectory
 drawn from it by its trace, as the norm of a vector does.
 
 Every operation multiplies the trace of a trajectory by what it keeps of the trace of the mixed

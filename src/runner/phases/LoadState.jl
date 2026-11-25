@@ -29,6 +29,9 @@ a phase that loads a state from an HDF5 file written by `SaveState` or `save_sta
 - `on`: the name the state takes in the simulation, `:state` for the current state, another
   for a reference state, `c.ref` to the measurements, see `Fidelity`
 
+A trajectory loaded into `:state` takes the weight `SaveState` saved with it, one when there is
+none; loaded under another name, it carries none.
+
 # Examples
 
     LoadState(file = "ground.h5")
@@ -62,7 +65,14 @@ function run_phase(phase::LoadState, sim::Simulation, ::Int)
     # the type of the file kept unless backend is given, the limits applied by as_backend
     loaded = as_backend(something(phase.backend, backend_of(st)), st; phase.limits)
     log_ignored(sim, loaded, phase, (:limits,))
-    return with_state(sim, phase.on, loaded)
+    sim = with_state(sim, phase.on, loaded)
+    if phase.on === :state && loaded isa AbstractState{Trajectory}
+        lw = saved_log_weight(in_dir(sim, phase.file), phase.statename)
+        if !isnothing(lw)
+            sim = with_values(sim; log_weight = lw)
+        end
+    end
+    return sim
 end
 
 """
@@ -77,6 +87,8 @@ under the same name.
   of the files of the simulation, as `log`, which the run refuses before it starts
 - `statename`: the name of the state in the file
 - `on`: the state saved, `:state` the current one, or one the simulation named
+
+The trajectory `:state` is saved with its weight, which `LoadState` gives it back.
 
 # Examples
 
@@ -94,7 +106,10 @@ end
 phase_files(phase::SaveState) = (phase.file,)
 
 function run_phase(phase::SaveState, sim::Simulation, ::Int)
-    save_state(in_dir(sim, phase.file), phase.statename, state_named(sim, phase.on))
+    st = state_named(sim, phase.on)
+    lw = phase.on === :state && st isa AbstractState{Trajectory} ?
+         Float64(get(getfield(sim, :values), :log_weight, 0.0)) : nothing
+    write_state_file(in_dir(sim, phase.file), phase.statename, st, lw)
     return sim
 end
 
