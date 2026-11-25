@@ -325,7 +325,10 @@ The phases and the measurements reach the state through the methods you give:
   once, the state they return measured as a single step, and
   `thermalize(hamiltonian, beta, state::MyState; kwargs...)` gives the thermal state, which the
   `Thermalize` phase calls one step at a time, with `nsteps = 1`, the number of the step and
-  `total_beta`, the `beta` of the whole phase;
+  `total_beta`, the `beta` of the whole phase; for a trajectory, it takes the ket, normalized at
+  the first step only as a mixed state is, to ``e^{-\beta H/2}\psi`` normalized, `log_trace`
+  being the logarithm of the squared norm of ``e^{-\beta H/2}\psi``, and the phase adds to the
+  weight the trace before the first step and `log_trace`;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes

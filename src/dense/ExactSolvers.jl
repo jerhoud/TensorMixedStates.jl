@@ -380,10 +380,36 @@ steady_state(::Any, ::ExactState{Pure}; kwargs...) =
     error("steady_state searches a density matrix: mix the state")
 steady_state(::Any, ::ExactState{Trajectory}; kwargs...) = not_yet("a steady state")
 
+# the map a thermalization exponentiates at -β/2: ρ ↦ Hρ + ρH on a density matrix, whose
+# exponential is e^{-βH/2} ρ e^{-βH/2}, the operator the ket follows on a trajectory, and the
+# compaction bounding its norm
+thermal_acting(::Type{Mixed}, system::System, a) = exact_acting(Mixed, system, a)
+thermal_acting(::Type{Trajectory}, system::System, a) =
+    exact_acting(Pure, system, followed_operator(a, Trajectory))
+
+# the array `y` of norm one an exponential left, `scale` the logarithm of its norm, normalized
+# as the representation `R` is at step `step` of a thermalization, and the logarithm of the trace
+# it took
+function thermal_normalized(::Type{Mixed}, y, scale::Real, step::Int)
+    t = real(tr(y))
+    if !(t > 0)
+        error("the trace of the state reached $t at step $step of thermalize")
+    end
+    return y / t, scale + log(t)
+end
+
+function thermal_normalized(::Type{Trajectory}, y, scale::Real, step::Int)
+    if !isfinite(scale)
+        error("thermalize was given a trajectory of norm zero at step $step: start it from a " *
+              "trajectory of nonzero weight")
+    end
+    return y, 2 * scale
+end
+
 # as thermalize of a State, each step an exponential by Krylov, the method and the limits of the
 # MPS without use; `total_beta`, that of the whole thermalization this call is a part of, bounds
 # its error
-function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
+function thermalize(hamiltonian, beta::Real, state::ExactState{<:Union{Mixed, Trajectory}};
                     algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
                     beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
                     mpo_limits::Limits = Limits(), step::Int = 1,
@@ -393,28 +419,19 @@ function thermalize(hamiltonian, beta::Real, state::ExactState{Mixed};
         return (log_trace = 0., state = step == 1 ? normalize(state) : state)
     end
     system = state.system
-    a = searched_operator(system, hamiltonian, "thermalize")
-    # ρ ↦ Hρ + ρH, whose exponential at -β/2 is e^{-βH/2} ρ e^{-βH/2}
-    K, c = exact_acting(Mixed, system, a)
-    bound = c.norm
+    R = representation(state)
+    K, c = thermal_acting(R, system, searched_operator(system, hamiltonian, "thermalize"))
     x = (step == 1 ? normalize(state) : state).state
     log_trace = 0.
     for k in 0:nsteps - 1
         # the trace taken apart from the norm, which the exponential may take far beyond floats
-        y, scale = exp_scaled(K, bound, -beta / nsteps / 2, x,
+        y, scale = exp_scaled(K, c.norm, -beta / nsteps / 2, x,
                               2000 * rounding_tol / abs(something(total_beta, beta)))
-        t = real(tr(y))
-        if !(t > 0)
-            error("the trace of the state reached $t at step $(step + k) of thermalize")
-        end
-        x = y / t
-        log_trace += scale + log(t)
+        x, l = thermal_normalized(R, y, scale, step + k)
+        log_trace += l
     end
-    return (; log_trace, state = ExactState{Mixed}(system, x, Val(:raw)))
+    return (; log_trace, state = ExactState{R}(system, x, Val(:raw)))
 end
 
 thermalize(::Any, ::Real, ::ExactState{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation: mix the state first")
-thermalize(::Any, ::Real, ::ExactState{Trajectory}; kwargs...) =
-    error("thermalizing a trajectory held whole is not implemented yet: thermalize it with " *
-          "backend = State")

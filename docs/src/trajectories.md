@@ -174,9 +174,8 @@ each trajectory, smaller than that of the density matrix, which the averages of 
 give; `inner`, `Vector` and the fidelities take the normalised ket. Such averages depend on the
 way the channels and the dissipators are unravelled, see `dephasing_dissipator(γ; jumps)`. A
 trajectory is not mixed by `mix`. An `ExactState{Trajectory}` holds its ket whole, without
-truncation, as `backend = ExactState` makes it in a simulation, but does not thermalize yet. A
-ground state is searched
-in `Pure`, then made a trajectory by `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
+truncation, as `backend = ExactState` makes it in a simulation. A ground state is searched in
+`Pure`, then made a trajectory by `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
 
 Not available yet: `SteadyState`, `ConvertState{Trajectory}` of a mixed
 state, the product `⊗` of trajectories and `random_state(t, n)` of a trajectory `t`.

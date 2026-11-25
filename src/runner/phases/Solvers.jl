@@ -262,13 +262,27 @@ end
 
 step_count(t::ThermalOwn) = t.nsteps
 
+# `sim` with its state `on` thermalized to `st` at step `k` of `nsteps` towards `beta`, `l` the
+# logarithm of the trace the step took, added up; a trajectory carries into its weight its trace
+# `before` the first step and these logarithms
+function thermalized(sim::Simulation, on::Symbol, before, st, l::Real, k::Int, nsteps::Int,
+                     beta::Real)
+    weight = get(getfield(sim, :values), :log_weight, 0.)
+    if k == 1 && before isa AbstractState{Trajectory}
+        weight += log(real(trace(before)))
+    end
+    sim = with_state(sim, on, st; beta = k == nsteps ? beta : k * (beta / nsteps),
+                     log_trace = (k == 1 ? 0. : sim.log_trace) + l)
+    return st isa AbstractState{Trajectory} ? with_values(sim; log_weight = weight + l) : sim
+end
+
 function run_step(t::ThermalOwn, sim::Simulation, k::Int)
     p = t.phase
-    l, st = thermalize(p.hamiltonian, p.beta / t.nsteps, state_named(sim, p.on); p.algo,
-                       nsteps = 1, limits = step_limits(p.limits, k), p.mpo_limits, step = k,
+    state = state_named(sim, p.on)
+    l, st = thermalize(p.hamiltonian, p.beta / t.nsteps, state; p.algo, nsteps = 1,
+                       limits = step_limits(p.limits, k), p.mpo_limits, step = k,
                        total_beta = p.beta)
-    return with_state(sim, p.on, st; beta = k == t.nsteps ? p.beta : k * (p.beta / t.nsteps),
-                      log_trace = (k == 1 ? 0. : sim.log_trace) + l)
+    return thermalized(sim, p.on, state, st, l, k, t.nsteps, p.beta)
 end
 
 function prepare_phase(phase::Thermalize, sim::Simulation)
@@ -303,23 +317,14 @@ end
 
 step_count(t::ThermalSteps) = t.nsteps
 
-# as thermalize: normalized at the first step only, the logarithms of the traces added up, and
-# for a trajectory carried into its weight, its trace before the first step included
+# as thermalize: normalized at the first step only, see `thermalized`
 function run_step(t::ThermalSteps, sim::Simulation, k::Int)
     state = state_named(sim, t.on)
-    weight = get(getfield(sim, :values), :log_weight, 0.)
-    if k == 1 && state isa AbstractState{Trajectory}
-        weight += log(real(trace(state)))
+    st, l = (k == 1 ? normalize(state) : state), 0.
+    if !isnothing(t.pre)
+        st, l = thermal_step(t.algo, t.pre, st, t.beta / t.nsteps, k, step_limits(t.limits, k))
     end
-    state = k == 1 ? normalize(state) : state
-    if isnothing(t.pre)
-        sim = with_state(sim, t.on, state; beta = 0., log_trace = 0.)
-        return state isa AbstractState{Trajectory} ? with_values(sim; log_weight = weight) : sim
-    end
-    st, l = thermal_step(t.algo, t.pre, state, t.beta / t.nsteps, k, step_limits(t.limits, k))
-    sim = with_state(sim, t.on, st; beta = k == t.nsteps ? t.beta : k * (t.beta / t.nsteps),
-                     log_trace = (k == 1 ? 0. : sim.log_trace) + l)
-    return st isa AbstractState{Trajectory} ? with_values(sim; log_weight = weight + l) : sim
+    return thermalized(sim, t.on, state, st, l, k, t.nsteps, t.beta)
 end
 
 """

@@ -964,7 +964,6 @@ end
             (() -> random_state(e, 2), "randomising a trajectory is not implemented"),
             (() -> ground_state(h, e), "a trajectory is not searched"),
             (() -> steady_state(-im * h, e), "a steady state comes with the draws"),
-            (() -> thermalize(h, 1., e), "thermalizing a trajectory held whole"),
             (() -> apply(Dissipator(X)(1), e), "is a generator"),
             (() -> TMS.as_representation(Pure, e), "a trajectory is not a pure or a mixed"),
             (() -> TMS.as_representation(Trajectory, mix(ExactState(p))),
@@ -1025,4 +1024,46 @@ end
     @test all(abs.(x["Z"] .- expect1(ρ, Z)) .≤ 5 .* x["err(Z)"])
     @test x["err(log_weight)"] > 0
     @test abs(x["log_weight"] - log(real(trace(ρ)))) ≤ 5 * x["err(log_weight)"] + 1e-9
+end
+
+@testset "ExactState thermalizes a trajectory exactly, its weight carried by a run" begin
+    rng = Xoshiro(23)
+    qubits = System(3, Qubit())
+    h = sum(X(i) for i in 1:3) + sum(Z(i) * Z(i + 1) for i in 1:2) + 0.5 * sum(Z(i) for i in 1:3)
+    p = random_state(Pure, qubits, 4; rng)
+    # against the exponential of the dense matrix, from a trajectory of trace 3
+    e = 3 * ExactState(as_trajectory(p))
+    r = thermalize(h, 0.6, e; nsteps = 3)
+    v = Vector(p)
+    w = LA.exp(-0.3 * Matrix(matrix(h, qubits))) * (v / LA.norm(v))
+    @test r.state isa ExactState{Trajectory} && real(trace(r.state)) ≈ 1
+    @test r.state.state ≈ w / LA.norm(w) rtol = 1e-9
+    @test r.log_trace ≈ log(LA.norm(w)^2) rtol = 1e-9
+    # step by step, as the phase does
+    l, st = 0., e
+    for k in 1:3
+        lk, st = thermalize(h, 0.2, st; nsteps = 1, step = k, total_beta = 0.6)
+        l += lk
+    end
+    @test st.state ≈ r.state.state rtol = 1e-9
+    @test l ≈ r.log_trace rtol = 1e-9
+    # the evolver of the Hamiltonian as the Hamiltonian, a dissipator refused as on a State
+    @test thermalize(Evolver(h), 0.6, e; nsteps = 3).state.state ≈ r.state.state rtol = 1e-12
+    @test_throws "whose jumps a trajectory draws" thermalize(Dissipator(X)(1), 0.6, e; nsteps = 3)
+    # in a run, a single trajectory weighed by 3X(1), of trace 9, before the phase
+    one = runTMS(SimData(; name = "one", samples = 1, seed = 4, backend = ExactState, phases = [
+                         CreateState{Trajectory}(qubits, "Up"), Gates(gates = 3 * X(1)),
+                         Thermalize(hamiltonian = h, beta = 1., nsteps = 4)],
+                         final_measurements = Data("w") => [Z]); output = devnull).data["w"][1]
+    dn = thermalize(h, 1., ExactState{Trajectory}(qubits, ["Dn", "Up", "Up"]); nsteps = 4)
+    @test one["log_weight"] ≈ log(9) + dn.log_trace rtol = 1e-9
+    # the weighted average of trajectories drawn from the fully mixed state is the thermal state
+    x = runTMS(SimData(; name = "th", samples = 300, seed = 4, backend = ExactState, phases = [
+                       CreateState{Trajectory}(qubits, "FullyMixed"),
+                       Thermalize(hamiltonian = h, beta = 1., nsteps = 4)],
+                       final_measurements = Data("t") => [Z]); output = devnull).data["t"][1]
+    ρ = thermalize(h, 1., ExactState{Mixed}(qubits, "FullyMixed"); nsteps = 4)
+    @test all(abs.(x["Z"] .- expect1(ρ.state, Z)) .≤ 5 .* x["err(Z)"])
+    @test x["err(log_weight)"] > 0
+    @test abs(x["log_weight"] - ρ.log_trace) ≤ 5 * x["err(log_weight)"]
 end

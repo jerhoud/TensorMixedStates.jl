@@ -22,8 +22,7 @@ the state it starts from, the symmetries not declared broken as DMRG does.
 `random_state(ExactState{R}, …)`, with the arguments of `random_state(R, …)`, draws a pure one
 uniformly in its sector, a mixed one from a uniform purification as for a `State`, a trajectory
 by measuring the ancillas of that purification, whatever the link dimension, and its
-`maxlinkdim` is that of the whole space it holds. A trajectory is not thermalized yet. Its
-memory grows as
+`maxlinkdim` is that of the whole space it holds. Its memory grows as
 ``d^n``, ``d^{2n}`` for a density matrix, and a search or an evolution keeps tens of copies of
 it, see the manual. Experimental: it may change in a version 2.x.
 
