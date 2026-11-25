@@ -871,8 +871,8 @@ For more details see the reference or the inline help.
 `ExactState{R}` holds the state of a small system whole, its vector for `Pure` and
 `Trajectory`, its density matrix for `Mixed`, without truncation. It checks a program written
 for MPS on a small case, where the exact result tells the truncation error from the others; it
-evolves without the error of a time step an evolver that does not depend on time; and it
-studies small systems as they are.
+evolves a pure or mixed state without the error of a time step under an evolver that does not
+depend on time; and it studies small systems as they are.
 
 !!! warning "Experimental"
     `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
@@ -899,7 +899,7 @@ The functions of a `State` take it, with these differences:
 - `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
   and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
   duration, the jumps of a trajectory drawn as on a `State` but weighed by its exact norm,
-  which takes the error of the time step out of the averages, see
+  which corrects the rate taken linear over a step where it is not zero, see
   [Quantum trajectories](trajectories.md), and a search converges to a residual of `1e-13`;
 - a search stays in the sector of the charges the system declares, the other symmetries of the
   Hamiltonian being broken, as DMRG breaks them;
@@ -1700,9 +1700,12 @@ its trace or, when the operators do not keep it, weighed by what they keep.
 Besides the error of the method of the steps, the average of the trajectories has one from the
 rate taken linear, which halving the step shows: a rate that rises and falls back within a
 step, nearly zero at both ends, draws no jump in it. An `ExactState{Trajectory}`, whose norm no
-truncation lowers, weighs its trajectory by the norm the evolution leaves over the probability
-drawn with, which takes that error out of the averages at the cost of weights slightly
-different from one.
+truncation lowers, weighs its trajectory `:state` by the norm the evolution leaves over the
+probability drawn with, which corrects the rate taken linear where it is not zero, at the cost
+of weights different from one. A rate zero at both ends of a step but not within it still
+draws no jump there, and one nearly zero at both ends gives a few jumps of very large weights:
+take steps short enough for the rate. Its other trajectories carry no weight and are brought
+back to their trace, as on a `State`.
 
 ```julia
 L = -im * sum(X(i) for i in 1:4) + sum(Dissipator(sqrt(0.2) * Sp)(i) for i in 1:4)
@@ -1779,7 +1782,9 @@ its error. Every row of a simulation of trajectories has that column, 0 before t
 `EachSample` giving the weight of each, and the measurements may read it as the value
 `:log_weight`. The run carries the trace into that value at each step where it is far from one,
 so that it neither underflows nor overflows. Only the trajectory `:state` carries the weight: a
-phase changing the trace of another one is refused. A local density matrix weighs the trajectory
+phase changing the trace of another one is refused. `SaveState` saves the trajectory `:state`
+with its weight, which `LoadState` gives back to a trajectory loaded into `:state`. A local
+density matrix weighs the trajectory
 drawn from it by its trace, as the norm of a vector does.
 
 Every operation multiplies the trace of a trajectory by what it keeps of the trace of the mixed
@@ -1825,7 +1830,8 @@ averaged with the weights: the entropies, the entanglement spectrum and the loga
 negativity of each trajectory, the average entanglement of a monitored system, not that of the
 density matrix; `Purity` and `Norm` are 1; `Variance(A)` is the mean of the variances of `A` in
 each trajectory, smaller than that of the density matrix, which the averages of `A^2` and `A`
-give; `inner`, `Vector` and the fidelities take the normalised ket. Such averages depend on the
+give; `inner`, `Vector` and `fidelity` take the normalised ket, and `hs_fidelity`, between
+mixed representations, refuses it. Such averages depend on the
 way the channels and the dissipators are unravelled, see `dephasing_dissipator(γ; jumps)`. A
 trajectory is not mixed by `mix`. An `ExactState{Trajectory}` holds its ket whole, without
 truncation, as `backend = ExactState` makes it in a simulation. A ground state is searched in
@@ -2292,7 +2298,8 @@ which call:
 - `TensorMixedStates.as_pure(state)`, the normalised ket as a pure state, on which `Norm` is
   measured;
 - `TensorMixedStates.exact_norm(state)`, `true` for a backend keeping the norm of the ket
-  exactly, without truncation, whose jumps are then weighed by that norm, `false` by default.
+  exactly, without truncation, whose jumps in the trajectory `:state` are then weighed by that
+  norm, `false` by default.
 
 The draws also multiply and divide the state by numbers, `c * state` and `state / c`, which set
 its weight, and normalise it, `normalize(state)`; a jump steps its ket with `evolve_step(algo,
