@@ -15,14 +15,12 @@ the reference article.
 - `Trajectory`: quantum trajectories, pure states drawn at random whose average is the density matrix, by `State{Trajectory}`, `evolve` and `apply`, one in each sample of a simulation from its `CreateState{Trajectory}` or `ConvertState{Trajectory}` on.
 - `State{R}(…; rng)` takes the random number generator a trajectory draws its pure state with.
 - `depolarizing_channel(p, n; kraus = :reset)` chooses its decomposition into gates, `:reset` or `:pauli`.
-- `:jumps`, a value of a simulation with samples, the number of jumps the dissipators of its `Evolve` phases drew in the trajectory `:state`.
+- `:jumps`, a value of a simulation making trajectories, the number of jumps the dissipators of its `Evolve` phases drew in the trajectory `:state`.
 - `:jump_list`, a value of a simulation making trajectories, and `evolve(…; jumps)`: the time, the dissipator and the Kraus index of each jump drawn.
 - `Dephase(A; kraus = :projectors)`, `dephasing_channel(p, A; kraus)` and `dephasing_dissipator(γ, A; jumps)`, and `thermal_relaxation_dissipator(T1, T2; jumps)` for its dephasing, choose the Kraus operators a trajectory draws, the projectors on the eigenspaces of `A` or `:phases`, unitaries changing the phases between them.
-
 - A row of a `Data` reads a cell by its column, `row["Z(1)"]` of a value `Z` of every site, and an averaged row the vector of the cells of a value of every site or of a vector, `row["Z"]`, `row["err(Z)"]`, so that a row reads alike with or without samples, but for a value named `N`, the name of the number of samples there.
-
 - What is not linear in the density matrix, as an entanglement entropy, the purity or a variance, is measured on the normalised ket of each trajectory, and averaged over the trajectories with their weights.
-- `ExactState{Trajectory}`: a trajectory held whole, without truncation, made by `backend = ExactState` in a simulation of trajectories, its jumps weighed by its exact norm so that the averages carry no error of the time step.
+- `ExactState{Trajectory}`: a trajectory held whole, without truncation, made by `backend = ExactState` in a simulation of trajectories, its jumps weighed by its exact norm, which corrects the rate of the jumps taken linear over a step where it is not zero.
 
 ### Changed
 
@@ -31,6 +29,10 @@ the reference article.
 - `expect1`, `expect2` and `measure` take the density matrix of each site, or pair of sites, of a pure `ExactState` once for all their values: the correlations XX, YY and ZZ of 18 qubits take 0.61 s rather than 4.0 s.
 - `AbstractState{R}` takes the representation of a state as its parameter: a state of one's own declares it, `struct MyState{R} <: AbstractState{R}` or `struct MyState <: AbstractState{Pure}`, and no longer defines `representation`.
 - `Tdvp` no longer expands a state whose every bond holds the whole space on its smaller side, which a small system reaches and kept expanding at every step: 100 steps of 4 qubits take 0.78 s rather than 1.13 s.
+
+### Fixed
+
+- The memory logged for the MPO of an evolver no longer counts the caches of the system, which grew with the operators measured.
 
 ## [2.2.0] - 2026-11-18
 

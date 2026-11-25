@@ -110,6 +110,6 @@ When the density matrix is too entangled for `State{Mixed}`, quantum trajectorie
 states drawn at random instead: `samples = N` and a phase `CreateState{Trajectory}` or
 `ConvertState{Trajectory}`, each sample running one trajectory from that phase on, the
 dissipators drawing jumps with their rate taken linear over each time step (halve it to
-check). Measure only
-what is linear in the density matrix: expectation values, not `Purity`, entropies or
-`Variance` (measure `A^2` and `A` instead).
+check). The averages give what is linear in the density matrix, as expectation values;
+`Purity`, entropies or `Variance` are measured on the normalised ket of each trajectory and
+averaged, not on the density matrix (measure `A^2` and `A` for its variance).
