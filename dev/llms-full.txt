@@ -867,15 +867,15 @@ For more details see the reference or the inline help.
 
 ## [Exact states](@id manual-exact-states)
 
-`ExactState{R}` holds the state of a small system whole, its vector for `Pure` or its density
-matrix for `Mixed`, without truncation. It checks a program written for MPS on a small case,
-where the exact result tells the truncation error from the others; it evolves without the error
-of a time step an evolver that does not depend on time; and it studies small systems as they
-are.
+`ExactState{R}` holds the state of a small system whole, its vector for `Pure` and
+`Trajectory`, its density matrix for `Mixed`, without truncation. It checks a program written
+for MPS on a small case, where the exact result tells the truncation error from the others; it
+evolves without the error of a time step an evolver that does not depend on time, but for the
+jumps of a trajectory; and it studies small systems as they are.
 
 !!! warning "Experimental"
     `ExactState` and the keyword `backend` are experimental: they may change in a version 2.x,
-    when the exact states gain sectors of charge and quantum trajectories, or when other
+    when the exact states gain sectors of charge, or when other
     backends show what they lack. `max_dense` and the functions acting on a state are not
     concerned.
 
@@ -897,12 +897,14 @@ The functions of a `State` take it, with these differences:
 
 - `limits`, `mpo_limits` and `algo`, which control the approximations of an MPS, are accepted
   and have no use; an evolution or a thermalization is exact up to `1e-10` over its whole
-  duration, and a search converges to a residual of `1e-13`;
+  duration, but for the jumps of a trajectory, drawn with the error of the time step as on a
+  `State`, see [Quantum trajectories](trajectories.md), and a search converges to a residual of
+  `1e-13`;
 - a search stays in the sector of the charges the system declares, the other symmetries of the
   Hamiltonian being broken, as DMRG breaks them;
 - `random_state(ExactState{R}, …)` and `randomize` draw a pure state uniformly in its sector,
-  and a mixed one from a uniform purification on the system doubled, as the MPS draws it,
-  whatever the link dimension asked;
+  a mixed one from a uniform purification on the system doubled, as the MPS draws it, and a
+  trajectory by measuring the ancillas of that purification, whatever the link dimension asked;
 - `maxlinkdim` is that of an MPS holding the whole space, and `truncate` leaves the state as it
   is;
 - `inner`, `fidelity` and `hs_fidelity` compare it with a `State`, converted exactly;
@@ -1815,8 +1817,9 @@ density matrix; `Purity` and `Norm` are 1; `Variance(A)` is the mean of the vari
 each trajectory, smaller than that of the density matrix, which the averages of `A^2` and `A`
 give; `inner`, `Vector` and the fidelities take the normalised ket. Such averages depend on the
 way the channels and the dissipators are unravelled, see `dephasing_dissipator(γ; jumps)`. A
-trajectory is not mixed by `mix`, and is not held by an `ExactState`. A ground state is searched
-in `Pure`, then made a trajectory by `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
+trajectory is not mixed by `mix`. An `ExactState{Trajectory}` holds its ket whole, without
+truncation, as `backend = ExactState` makes it in a simulation. A ground state is searched in
+`Pure`, then made a trajectory by `State{Trajectory}(ψ)` or `ConvertState{Trajectory}()`.
 
 Not available yet: `SteadyState`, `ConvertState{Trajectory}` of a mixed
 state, the product `⊗` of trajectories and `random_state(t, n)` of a trajectory `t`.
@@ -2198,9 +2201,10 @@ A state of your own, a backend of its own holding a state as `State` holds it in
 subtype of [`TensorMixedStates.AbstractState`](@ref)`{R}` with a field `system` holding the
 `System` of its physical sites, `struct MyState{R} <: AbstractState{R}`, or
 `struct MyState <: AbstractState{Pure}` for a single representation. Its representation `R`,
-`Pure` or `Mixed`, which `TensorMixedStates.representation(state)` gives, says what the state is,
-and so what the results of a program mean; the backend says how it is held and computed, which
-leaves the results unchanged up to the approximations it makes. `SimData(backend = MyState)`
+`Pure`, `Mixed` or `Trajectory`, which `TensorMixedStates.representation(state)` gives, says
+what the state is, and so what the results of a program mean; the backend says how it is held
+and computed, which leaves the results unchanged up to the approximations it makes.
+`SimData(backend = MyState)`
 makes the states of the `CreateState` phases of a program on your backend without changing its
 phases, which then need the methods below, a state of a representation the backend does not
 hold being refused; `CreateState(…; backend = MyState)` does it for one phase,
@@ -2249,7 +2253,10 @@ The phases and the measurements reach the state through the methods you give:
   once, the state they return measured as a single step, and
   `thermalize(hamiltonian, beta, state::MyState; kwargs...)` gives the thermal state, which the
   `Thermalize` phase calls one step at a time, with `nsteps = 1`, the number of the step and
-  `total_beta`, the `beta` of the whole phase;
+  `total_beta`, the `beta` of the whole phase; for a trajectory, it takes the ket, normalized at
+  the first step only as a mixed state is, to ``e^{-\beta H/2}\psi`` normalized, `log_trace`
+  being the logarithm of the squared norm of ``e^{-\beta H/2}\psi``, and the phase adds to the
+  weight the trace before the first step and `log_trace`;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes
@@ -2260,6 +2267,28 @@ The phases and the measurements reach the state through the methods you give:
   subgroup, `write_state(create_group(group, "inner"), inner)`, `create_group` coming from
   HDF5, and reads it back with `read_state(State{Pure}, group["inner"], sites)`, given the
   sites it lies on.
+
+A backend of trajectories, `AbstractState{Trajectory}`, draws them with the code of TMS, its
+state holding the ket of the trajectory, whose trace is its weight: its methods of `apply` and
+`prepared_evolver` return `TensorMixedStates.trajectory_applied(op, state, limits)`, with `rng`
+for a channel, and `TensorMixedStates.trajectory_evolver(state, terms, mpo_limits; duration)`,
+which call:
+
+- `TensorMixedStates.ket_applied(op, state; limits)`, the operator applied to the ket,
+  without weight;
+- `TensorMixedStates.ket_evolver(state, terms, mpo_limits; duration)`, the evolver
+  of the ket under the operators `terms`, the effective operators of the jumps included, which
+  its `evolve_step` takes as `pre`;
+- `TensorMixedStates.as_pure(state)`, the normalised ket as a pure state, on which `Norm` is
+  measured.
+
+The draws also multiply and divide the state by numbers, `c * state` and `state / c`, which set
+its weight, and normalise it, `normalize(state)`; a jump steps its ket with `evolve_step(algo,
+pre, state, …)`, `algo` a `Tdvp` or an `ApproxW`, which a method typing the state accepts.
+
+What is not linear in the density matrix, `purity`, `von_neumann_entropy`, `variance` and the
+like, is measured on the normalised ket of each trajectory by methods of the backend, as
+`ExactState` has, typed `MyState{Trajectory}`.
 
 The measurements of the library go through `trace`, `norm`, `entanglement_entropy` and the
 like: a state gets what its type has a method for, and a measurement or a phase it does not
