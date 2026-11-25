@@ -129,7 +129,7 @@ renews_state(_) = false
 # `sim` without the values of the trajectory its new `:state` replaced
 renewed(sim::Simulation) =
     Simulation(sim.state, sim.time,
-               filter(p -> first(p) ∉ (:log_weight, :jumps), getfield(sim, :values)),
+               filter(p -> first(p) ∉ (:log_weight, :jumps, :jump_list), getfield(sim, :values)),
                getfield(sim, :run))
 
 """

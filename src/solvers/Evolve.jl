@@ -250,16 +250,18 @@ function unravelled(a::Op{IsGenerator})
 end
 
 """
-    Decay(f, rate, jumps)
+    Decay(f, rate, jumps, labels)
 
 the jumps of a term of an evolver, which a trajectory draws: `rate`, the sum of their
 ``L^\\dagger L``, whose expectation value times `f(t)` (1 for `f = nothing`) is the rate of a
-jump at time `t`, and the operators `jumps`
+jump at time `t`, the operators `jumps`, and for each the dissipator it comes from, as written
+and placed, and its index among the Kraus operators of that dissipator, 1 for an operator
 """
 struct Decay
     f::Any
     rate::IndexedOp{IsOperator}
     jumps::Vector{IndexedOp{IsOperator}}
+    labels::Vector{Tuple{IndexedOp, Int}}
 end
 
 """
@@ -271,14 +273,14 @@ of its ket under the effective operator ``K - \\frac{1}{2}\\sum_j L_j^\\dagger L
 with jumps, none without dissipators, whether the trajectory is brought back to its trace at
 each step, its operators `K` keeping it on a backend whose norm truncation lowers, see
 `exact_norm`, the generator drawing them, see `with_rng`, `nothing` for the
-default one, and the count the jumps drawn are added to, `nothing` for none
+default one, and the list the jumps drawn are pushed to, see `evolve`, `nothing` for none
 """
 struct JumpEvolver
     pre::Any
     decays::Vector{Decay}
     keeps::Bool
     rng::Union{Nothing, AbstractRNG}
-    jumps::Union{Nothing, Base.RefValue{Int}}
+    jumps::Union{Nothing, AbstractVector}
 end
 
 """
@@ -311,14 +313,20 @@ function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limi
         pure, ds = a isa IndexedOp{IsGenerator} ? unravelled(a) :
                    ([followed_operator(a, Trajectory)], [])
         jumps = IndexedOp{IsOperator}[]
+        labels = Tuple{IndexedOp, Int}[]
         for (r, x) in ds
             if r < 0
                 error("$(obs_name(a)) holds a dissipator of negative rate, $r, whose jumps no " *
                       "trajectory draws: use State{Mixed}")
             end
             ks = x isa IndexedOp{IsChannel} ? kraus_operators(sys, x) : [x]
-            # a Kraus operator proportional to the identity has a null dissipator
-            append!(jumps, [ sqrt(r) * j for j in ks if !(scalararg(j) isa IdentityOp) ])
+            for (k, j) in enumerate(ks)
+                # a Kraus operator proportional to the identity has a null dissipator
+                if !(scalararg(j) isa IdentityOp)
+                    push!(jumps, sqrt(r) * j)
+                    push!(labels, (x, k))
+                end
+            end
         end
         f = isnothing(fs) ? nothing : fs[k]
         op = isempty(pure) ? nothing : sum(pure)
@@ -332,7 +340,7 @@ function JumpEvolver(state::AbstractState{Trajectory}, ops::Vector, fs, mpo_limi
                 check_jump(sys, j, a)
             end
             rate = sum(j -> dag(j) * j, jumps)
-            push!(decays, Decay(f, rate, jumps))
+            push!(decays, Decay(f, rate, jumps, labels))
             op = isnothing(op) ? -0.5 * rate : op - 0.5 * rate
         end
         if !isnothing(op)
@@ -385,11 +393,11 @@ end
 """
     with_rng(pre, rng, jumps = nothing)
 
-the evolver `pre`, see `prepared_evolver`, drawing with `rng` and adding the number of its jumps
-to `jumps[]` when it is given: itself when it draws nothing
+the evolver `pre`, see `prepared_evolver`, drawing with `rng` and pushing its jumps to the list
+`jumps` when it is given, see `evolve`: itself when it draws nothing
 """
-with_rng(pre, ::AbstractRNG, ::Union{Nothing, Base.RefValue{Int}} = nothing) = pre
-with_rng(e::JumpEvolver, rng::AbstractRNG, jumps::Union{Nothing, Base.RefValue{Int}} = nothing) =
+with_rng(pre, ::AbstractRNG, ::Union{Nothing, AbstractVector} = nothing) = pre
+with_rng(e::JumpEvolver, rng::AbstractRNG, jumps::Union{Nothing, AbstractVector} = nothing) =
     JumpEvolver(e.pre, e.decays, e.keeps, rng, jumps)
 
 # the rate of the jumps of `d` on `state` at `time`
@@ -470,7 +478,8 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractSt
         i = draw_index([ real(expect(before, dag(j) * j)) for j in d.jumps ], rng)
         x = ket_applied(d.jumps[i], before; limits)
         if !isnothing(e.jumps)
-            e.jumps[] += 1
+            dissipator, kraus = d.labels[i]
+            push!(e.jumps, (; time = time + s, dissipator, kraus))
         end
         e.keeps ? followed(x, state, 1) :
                   followed(x, before, sum(rates) / ((a0 + 2c * s) * exp(-s * (a0 + c * s))))
@@ -501,7 +510,7 @@ end
 
 """
     evolve(evolver, duration, state; nsteps | time_step, algo = Tdvp(), limits = Limits(),
-           mpo_limits = Limits(), time = 0, step = 1, rng)
+           mpo_limits = Limits(), time = 0, step = 1, rng, jumps = nothing)
 
 the state evolved for `duration` under `evolver`, in `nsteps` steps of `duration / nsteps`, or
 in steps of `time_step` adjusted to the nearest one dividing `duration` into a whole number of
@@ -516,23 +525,28 @@ operator or an operator with its real function of time, `[A, B => g]` for ``A + 
 `1e-26` for tdvp and `apply_algo = "naive"` or `"zipup"`, `eps()` for `"densitymatrix"`.
 `mpo_limits` truncates the MPO of the evolver, see `PreMPO` (default none).
 `rng` is the random number generator a trajectory draws the jumps of the dissipators with, the
-global one by default.
+global one by default, and `jumps` a vector each jump is pushed to as
+`(time, dissipator, kraus)`: its time, the dissipator as written and placed, as `Sm(1)` or
+`Dephase(Level)(3)`, and the index of the operator drawn among the Kraus operators of a channel,
+`TensorMixedStates.kraus_operators(system, dissipator)`, 1 for an operator.
 
 # Examples
 
     evolve(-im * H, 1., state; nsteps = 10, limits = Limits(cutoff = 1e-12, maxdim = 50))
     evolve([-im * H0, -im * H1 => t -> cos(t)], 1., state; time_step = 0.05,
            algo = ApproxW(order = 4))
+    evolve(-im * H + Dissipator(Sm)(1), 1., trajectory; nsteps = 10, jumps = list)
 """
 function evolve(evolver, duration::Number, state::AbstractState; algo::EvolutionAlgorithm = Tdvp(),
                 nsteps::Union{Nothing, Int} = nothing, time_step::Union{Nothing, Number} = nothing,
                 limits::Limits = Limits(), mpo_limits::Limits = Limits(), time::Number = 0.,
-                step::Int = 1, rng::AbstractRNG = Random.default_rng())
+                step::Int = 1, rng::AbstractRNG = Random.default_rng(),
+                jumps::Union{Nothing, AbstractVector} = nothing)
     nsteps = evolution_steps("an evolution", duration, nsteps, time_step, "time_step")
     if nsteps == 0
         return state
     end
-    pre = with_rng(prepared_evolver(state, evolver, mpo_limits; duration), rng)
+    pre = with_rng(prepared_evolver(state, evolver, mpo_limits; duration), rng, jumps)
     dt = duration / nsteps
     for k in 0:nsteps - 1
         state = evolve_step(algo, pre, state, time + k * dt, dt, step + k,

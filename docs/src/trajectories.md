@@ -116,8 +116,14 @@ shares them between the processes. A pure state prepared once, a ground state fo
 becomes the starting point of every trajectory by `ConvertState{Trajectory}()` after the phase
 that computes it. The value `:jumps` counts the jumps the dissipators of the `Evolve` phases drew
 in the trajectory `:state` since a phase put it there, 0 before the first: `"jumps" => :jumps`
-gives their mean number, and `EachSample` that of each trajectory. The values `:log_weight` and
-`:jumps` belong to the run: no phase of a simulation making trajectories may set them.
+gives their mean number, and `EachSample` that of each trajectory. The value `:jump_list` lists
+them, each as `(time, dissipator, kraus)`: its time, the dissipator as written and placed, as
+`"Sm(1)"`, and the index of the operator drawn among the Kraus operators of a channel,
+`TensorMixedStates.kraus_operators(system, dissipator)`, 1 for an operator;
+`EachSample("jumps.jsonl") => [:jump_list]` writes it for each trajectory, in JSON, and
+`evolve(…; jumps = list)` gives the same list outside a simulation. The values `:log_weight`,
+`:jumps` and `:jump_list` belong to the run: no phase of a simulation making trajectories may set
+them.
 
 An operator that does not keep the trace, a `Gate(K)` of a `K` that is not unitary or a
 projection, a channel or an evolver that loses trace, changes the trace of the trajectory, which

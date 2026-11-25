@@ -175,6 +175,7 @@ Trajectories: `SimData(samples = N, …)` with a `CreateState{Trajectory}` or a
 averaged files; dissipators and channels draw jumps and Kraus operators with the generator of
 the sample, the averages weighted by the traces of
 the trajectories (column `log_weight`); the value `:jumps` counts the jumps drawn in the trajectory,
+`:jump_list` lists them (time, dissipator, Kraus index; write it with `EachSample("jumps.jsonl")`),
 and `dephasing_dissipator(γ; jumps = :phases)` draws phases, `Z` on a qubit, where the default
 draws projectors. What is not linear in the density matrix, as an entanglement entropy or
 `Variance`, is measured on the normalised ket of each trajectory and averaged, not on the density

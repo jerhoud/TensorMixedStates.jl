@@ -1079,3 +1079,44 @@ end
     @test x["err(log_weight)"] > 0
     @test abs(x["log_weight"] - ρ.log_trace) ≤ 5 * x["err(log_weight)"]
 end
+
+@testset "A trajectory lists its jumps: their time, their dissipator and its Kraus index" begin
+    TMS = TensorMixedStates
+    # X at the constant rate 2: the first jump at -log(u) / 2, u the first draw, unless u < e^-2
+    t = State{Trajectory}(System(1, Qubit()), "Up")
+    @test all(1:20) do seed
+        js = []
+        evolve(2 * Dissipator(X)(1), 1., t; nsteps = 1, rng = Xoshiro(seed), jumps = js)
+        u = rand(Xoshiro(seed))
+        u < exp(-2) ? isempty(js) :
+            first(js).time ≈ -log(u) / 2 && TMS.obs_name(first(js).dissipator) == "X(1)" &&
+            first(js).kraus == 1
+    end
+    # each dissipator as written, the Kraus operators of a channel by their index, on an MPS and
+    # held whole, which draw the same jumps
+    q = System(3, Qubit())
+    p = random_state(Pure, q, 4; rng = Xoshiro(3))
+    g = -im * sum(X(i) for i in 1:3) + 0.5 * Dissipator(Sm)(1) + depolarizing_dissipator(0.4)(2) +
+        dephasing_dissipator(0.3)(3)
+    names = Dict("Sm(1)" => 1:1, "Reset(\"FullyMixed\")(2)" => 1:4, "Dephase(Level)(3)" => 1:2)
+    for st in (State{Trajectory}(p), ExactState(State{Trajectory}(p)))
+        js = []
+        evolve(g, 2., st; nsteps = 20, rng = Xoshiro(5), jumps = js)
+        @test !isempty(js) && issorted([ j.time for j in js ]) && 0 < js[1].time && js[end].time < 2
+        @test all(j -> j.kraus in names[TMS.obs_name(j.dissipator)], js)
+    end
+    # in a run, written for each trajectory, as many as :jumps counts
+    in_tmp() do
+        sim = runTMS(SimData(name = "j", seed = 1, samples = 3, phases = [
+                             CreateState{Trajectory}(q, "Up"),
+                             Evolve(evolver = g, duration = 1., time_step = 0.1)],
+                             final_measurements = [EachSample("jumps.jsonl") => [:jump_list],
+                                                   EachSample(Data("n")) => [:jumps]]))
+        rows = [ TMS.JSON.parse(l) for l in readlines("j/jumps.jsonl") ]
+        counts = Dict(r["sample"] => r["jumps"] for r in sim.data["n"])
+        @test length(rows) == 3 && sum(values(counts)) > 0
+        @test all(r -> length(r["jump_list"]) == counts[r["sample"]], rows)
+        listed = reduce(vcat, [ r["jump_list"] for r in rows ])
+        @test all(j -> j["kraus"] in names[j["dissipator"]], listed)
+    end
+end

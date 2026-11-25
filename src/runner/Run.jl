@@ -43,7 +43,7 @@ refused_reads(::AbstractPhase) = ()
 refuse a value measured by one of the lists of the phases, or by the final measurements, that no
 phase provides, see `provided_values`, or that its phase refuses, see `refused_reads`, and
 return the names of those they provide; `:sample` is read only when the simulation is `sampled`,
-`:log_weight` and `:jumps` only when it makes trajectories
+`:log_weight`, `:jumps` and `:jump_list` only when it makes trajectories
 """
 function check_values(phases::Vector, final_measurements, sampled::Bool)
     for q in phases, (value, why) in refused_reads(q)
@@ -64,7 +64,7 @@ function check_values(phases::Vector, final_measurements, sampled::Bool)
                 elseif r === :sample
                     error("the measurement $name reads $r, which only a simulation with " *
                           "samples has, see Realizations")
-                elseif r in (:log_weight, :jumps)
+                elseif r in (:log_weight, :jumps, :jump_list)
                     error("the measurement $name reads $r, which only a simulation making " *
                           "trajectories has, see Trajectory")
                 else

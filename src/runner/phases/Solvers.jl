@@ -160,10 +160,11 @@ end
 step_count(e::EvolveSteps) = e.nsteps
 
 # the times of the steps are those of evolve, the last one the end asked for; the jumps of the
-# trajectory :state are added to the value :jumps of a simulation making trajectories
+# trajectory :state are counted in the value :jumps of a simulation making trajectories, and
+# listed in :jump_list, each dissipator by its name
 function run_step(e::EvolveSteps, sim::Simulation, k::Int)
     dt = e.duration / e.nsteps
-    jumps = Ref(0)
+    jumps = []
     for name in e.on
         st = evolve_step(e.algo, with_rng(e.pre, sim.rng, name === :state ? jumps : nothing),
                          state_named(sim, name), e.start + (k - 1) * dt, dt, k,
@@ -171,8 +172,10 @@ function run_step(e::EvolveSteps, sim::Simulation, k::Int)
         sim = with_state(sim, name, st)
     end
     values = getfield(sim, :values)
-    if jumps[] > 0 && getfield(sim, :run).outputs.weighted
-        values = merge(values, Dict(:jumps => get(values, :jumps, 0) + jumps[]))
+    if !isempty(jumps) && getfield(sim, :run).outputs.weighted
+        listed = [ (; j.time, dissipator = obs_name(j.dissipator), j.kraus) for j in jumps ]
+        values = merge(values, Dict(:jumps => get(values, :jumps, 0) + length(jumps),
+                                    :jump_list => [ get(values, :jump_list, []) ; listed ]))
     end
     return Simulation(sim.state, k == e.nsteps ? e.start + e.duration : e.start + k * dt, values,
                       getfield(sim, :run))

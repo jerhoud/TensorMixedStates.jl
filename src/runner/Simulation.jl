@@ -100,7 +100,7 @@ gives_sample(run::RunData) = run.outputs.sampled
 # the values the run gives a simulation with samples, when `sampled`, and one making trajectories,
 # when `trajectories`, which no phase may name
 given_values(sampled::Bool, trajectories::Bool) =
-    ((sampled ? (:sample,) : ())..., (trajectories ? (:log_weight, :jumps) : ())...)
+    ((sampled ? (:sample,) : ())..., (trajectories ? (:log_weight, :jumps, :jump_list) : ())...)
 
 given_values(run::RunData) = given_values(gives_sample(run), run.outputs.weighted)
 
@@ -351,6 +351,7 @@ function output(sim::Simulation, list::AbstractVector)
     end
     if run.outputs.weighted
         values[:jumps] = get(values, :jumps, 0)
+        values[:jump_list] = get(values, :jump_list, [])
     end
     # called for the state as it is: inferred for any state, the measurements would take
     # minutes to compile
