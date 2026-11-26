@@ -7,6 +7,7 @@ if !isdefined(Main, :dense_majorana)
     include("gaussian_dense.jl")
 end
 using .LA: I, Diagonal, eigen, Hermitian
+using TensorMixedStates.GaussianKernels: MajoranaPoly, quadratic_ground_state
 
 const gc_rng = Random.Xoshiro(20261127)
 
@@ -188,4 +189,105 @@ end
     @test TensorMixedStates.majorana_poly(System([Fermion(), Boson(3)]), N(1)) ==
           TensorMixedStates.majorana_poly(System([Fermion()]), N(1))
     @test_throws ArgumentError TensorMixedStates.MajoranaLayout(System([Tj(), Fermion()]))
+end
+
+# the ground energy of H from its quadratic form, H = c + (1/4) Σ k γγ = c + (i/4) Σ h γγ, h = -ik,
+# in the even sector of the backend, which holds all the states of the system
+function gc_ground_energy(sys, H; axes = Dict{Int, Symbol}())
+    c, k, _ = TensorMixedStates.gaussian_generator(sys, H; axes)
+    h = -im * k
+    @assert all(iszero, imag(h))
+    real(c) + quadratic_ground_state(real(h), 1).energy
+end
+
+gc_lowest(O) = eigen(Hermitian((O + O') / 2)).values[1]
+
+@testset "generators" begin
+    # quadratic_form against the dense matrices
+    G = TensorMixedStates.GaussianKernels
+    p = MajoranaPoly(Int[] => 0.3, [1, 2] => 1.0 - 2im, [2, 5] => 0.5, [3, 6] => -1im)
+    c, k = G.quadratic_form(p, 6)
+    γγ(a, b) = dense_matrix(x -> dense_majorana(a, dense_majorana(b, x)), 3)
+    @test dense_poly(p, 3) ≈ c * I + sum(k[a, b] * γγ(a, b) for a in 1:6, b in 1:6 if a != b) / 4
+    @test_throws ArgumentError G.quadratic_form(MajoranaPoly([1] => 1), 2)
+    @test_throws ArgumentError G.quadratic_form(MajoranaPoly([1, 2, 3, 4] => 1), 4)
+    # ground energies: fermions with hopping, pairing and a chemical potential
+    sys = System([Fermion() for _ in 1:4])
+    H = sum(-(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) + 0.4 * (C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j)) for j in 1:3) +
+        0.3 * sum(N(j) for j in 1:4)
+    cd(k) = gc_op(sys, dag(C), k)
+    c(k) = gc_op(sys, C, k)
+    Hd = sum(-(cd(j) * c(j + 1) + cd(j + 1) * c(j)) + 0.4 * (c(j) * c(j + 1) + cd(j + 1) * cd(j)) for j in 1:3) +
+         0.3 * sum(gc_op(sys, N, j) for j in 1:4)
+    @test gc_ground_energy(sys, H) ≈ gc_lowest(Hd) atol = 1e-12
+    # Ising along X with longitudinal fields on both ends (ancilla, even states)
+    sys = System([Qubit() for _ in 1:5])
+    q(O, k) = gc_embed(sys, k, TensorMixedStates.matrix(O, sys.sites[k]))
+    H = -sum(Z(j) * Z(j + 1) for j in 1:4) - 0.7 * sum(X(j) for j in 1:5) + 0.3 * Z(1) - 0.2 * Z(5)
+    Hd = -sum(q(Z, j) * q(Z, j + 1) for j in 1:4) - 0.7 * sum(q(X, j) for j in 1:5) + 0.3 * q(Z, 1) - 0.2 * q(Z, 5)
+    xaxes = Dict(k => :X for k in 1:5)
+    @test gc_ground_energy(sys, H; axes = xaxes) ≈ gc_lowest(Hd) atol = 1e-12
+    _, k, _ = TensorMixedStates.gaussian_generator(sys, -im * H; axes = xaxes)
+    @test all(iszero, imag(k))
+    # electrons: hopping of both spins and a field on the spin
+    sys = System([Electron(), Electron()])
+    H = -(dag(Cup)(1) * Cup(2) + dag(Cup)(2) * Cup(1) + dag(Cdn)(1) * Cdn(2) + dag(Cdn)(2) * Cdn(1)) + 0.5 * Sz(1)
+    e(O, k) = gc_op(sys, O, k)
+    Hd = -(e(Cup, 1)' * e(Cup, 2) + e(Cup, 2)' * e(Cup, 1) + e(Cdn, 1)' * e(Cdn, 2) + e(Cdn, 2)' * e(Cdn, 1)) + 0.5 * e(Sz, 1)
+    @test gc_ground_energy(sys, H) ≈ gc_lowest(Hd) atol = 1e-12
+end
+
+@testset "generators refused" begin
+    message(sys, op; axes = Dict{Int, Symbol}()) =
+        try
+            TensorMixedStates.gaussian_generator(sys, op; axes)
+            ""
+        catch e
+            e isa ArgumentError ? e.msg : rethrow()
+        end
+    # Ising along Z: ZZ is quartic, the error proposes X
+    sys = System([Qubit() for _ in 1:4])
+    m = message(sys, -sum(Z(j) * Z(j + 1) for j in 1:3) - 0.7 * sum(X(j) for j in 1:4))
+    @test occursin("degree 4", m) && occursin("2 => :X", m) && occursin("3 => :X", m)
+    # qubits coupled across another: no axis, reorder the sites
+    m = message(System([Qubit() for _ in 1:3]), X(1) * X(3) + Y(1) * Y(3))
+    @test occursin("No Pauli axis", m) && occursin("Qubits 1 and 3", m)
+    # axes that only the ends allow: XY along X, and X₁Y₂, a chain from the ancilla when the axis of
+    # qubit 1 is X (or Z₁Z₂ one when it is Z); a rule per site (couplings exclude their Paulis) finds
+    # none on qubit 1 (on 2 qubits every generator is quadratic, so the chain is longer)
+    sys = System([Qubit() for _ in 1:4])
+    H = sum(Y(j) * Y(j + 1) + Z(j) * Z(j + 1) for j in 1:3) + X(1) * Y(2) + 0.5 * X(3)
+    m = message(sys, H)
+    proposed = Dict(parse(Int, r[1]) => Symbol(r[2]) for r in eachmatch(r"(\d+) => :([XYZ])", m))
+    @test length(proposed) == 4 && gc_degree(sys, H; axes = proposed) == 2
+    @test gc_degree(sys, H; axes = Dict(k => :X for k in 1:4)) == 2
+    @test message(System([Qubit(), Qubit()]), Y(1) * X(2) + Z(1) * Z(2) + X(1) * Z(2)) == ""
+    # fermions and qubits: the qubits come second, the last one is the last mode
+    sys = System([Fermion(), Fermion(), Qubit(), Qubit()])
+    m = message(sys, dag(C)(1) * C(2) + dag(C)(2) * C(1) + Z(3) * Z(4) + X(3) + X(4))
+    @test occursin("make it quadratic", m)
+    # Hubbard: fermions only, no advice on axes
+    m = message(System([Electron(), Electron()]), Nupdn(1) + dag(Cup)(1) * Cup(2))
+    @test occursin("sites 1", m) && occursin("degree 4", m) && !occursin("axes", m)
+end
+
+@testset "checks of the compiler" begin
+    G = TensorMixedStates.GaussianKernels
+    # an axis given for a site that has no qubit is refused, not ignored
+    sys = System([Fermion(), Qubit()])
+    @test_throws ArgumentError TensorMixedStates.majorana_poly(sys, Z(2); axes = Dict(1 => :X))
+    @test_throws ArgumentError TensorMixedStates.majorana_poly(sys, Z(2); axes = Dict(3 => :X))
+    # a residue of cancelling terms is kept, and shown in the message
+    sys = System([Fermion() for _ in 1:3])
+    m = try
+        TensorMixedStates.gaussian_generator(sys, 0.1 * N(1) * N(2) + 0.2 * N(1) * N(2) - 0.3 * N(1) * N(2) + N(3))
+        ""
+    catch e
+        e.msg
+    end
+    @test occursin("degree 4", m) && occursin("e-17", m)
+    # hash and quadratic_form
+    p = MajoranaPoly([1, 2] => 1.0, Int[] => 2.0)
+    @test hash(p) == hash(MajoranaPoly(Int[] => 2.0, [1, 2] => 1.0))
+    @test_throws ArgumentError G.quadratic_form(MajoranaPoly([1, 7] => 1), 6)
 end

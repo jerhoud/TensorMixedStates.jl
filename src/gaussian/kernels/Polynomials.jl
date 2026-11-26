@@ -85,3 +85,30 @@ end
 # c(α)† = γ_{α_w} ⋯ γ_{α_1} = (-1)^{w(w-1)/2} c(α)
 Base.adjoint(p::MajoranaPoly) =
     MajoranaPoly(Dict(α => (iseven(length(α) * (length(α) - 1) ÷ 2) ? 1 : -1) * conj(c) for (α, c) in p.terms))
+
+"""
+    quadratic_form(p, nmajoranas)
+
+`(c, k)` with `p = c + (1/4) Σ_ab k_ab γ_a γ_b`, `k` complex antisymmetric of size `nmajoranas`;
+an error if `p` has a monomial of one or more than two Majoranas. For `p = -iH` with `H` Hermitian,
+`k` is real and is the `h` of `propagator`.
+"""
+function quadratic_form(p::MajoranaPoly, nmajoranas::Integer)
+    c = zero(ComplexF64)
+    k = zeros(ComplexF64, nmajoranas, nmajoranas)
+    for (α, d) in p.terms
+        if !isempty(α) && last(α) > nmajoranas
+            throw(ArgumentError("a monomial on Majorana $(last(α)) for a form on $nmajoranas"))
+        end
+        if isempty(α)
+            c += d
+        elseif length(α) == 2
+            a, b = α
+            k[a, b] += 2d
+            k[b, a] -= 2d
+        else
+            throw(ArgumentError("a monomial of $(length(α)) Majoranas is not quadratic"))
+        end
+    end
+    c, k
+end

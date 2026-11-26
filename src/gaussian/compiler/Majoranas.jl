@@ -157,8 +157,13 @@ error if it acts on a site that has no mode.
 """
 function majorana_poly(system::System, op::IndexedOp{IsOperator}; axes = Dict{Int, Symbol}())
     layout = MajoranaLayout(system; axes)
+    polynomial(system, layout, lower(system, op))
+end
+
+# the terms ts as a polynomial on the Majoranas of the backend, on its even states
+function polynomial(system::System, layout::MajoranaLayout, ts::Vector{Term})
     d = Dict{Vector{Int}, ComplexF64}()
-    for t in lower(system, op)
+    for t in ts
         add_term!(d, system, layout, t)
     end
     on_even(with_ancilla(MajoranaPoly(d)), layout.count + 2)

@@ -89,6 +89,7 @@ include("dense/ExactSolvers.jl")
 # the translation of operators into polynomials in Majoranas
 include("gaussian/kernels/GaussianKernels.jl")
 include("gaussian/compiler/Majoranas.jl")
+include("gaussian/compiler/Generators.jl")
 
 # Simulations
 include("runner/Threading.jl")
