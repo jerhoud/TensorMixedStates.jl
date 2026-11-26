@@ -24,21 +24,13 @@ function quadratic_ground_state(h::AbstractMatrix{<:Real}, parity::Union{Nothing
     T, Q = F.T, F.Z
     m = size(T, 1)
     modes = Tuple{Int, Int, Float64}[]
-    real_eigenvalues = Int[]
-    i = 1
-    while i <= m
-        if i < m && T[i+1, i] != 0
-            ε = (T[i, i+1] - T[i+1, i]) / 2
-            push!(modes, ε >= 0 ? (i, i + 1, ε) : (i + 1, i, -ε))
-            i += 2
+    for (a, b) in normal_pairs(T)
+        if b == a + 1 && T[b, a] != 0
+            ε = (T[a, b] - T[b, a]) / 2
+            push!(modes, ε >= 0 ? (a, b, ε) : (b, a, -ε))
         else
-            push!(real_eigenvalues, i)
-            i += 1
+            push!(modes, (a, b, max(abs(T[a, a]), abs(T[b, b]))))
         end
-    end
-    for k in 1:2:length(real_eigenvalues)
-        a, b = real_eigenvalues[k], real_eigenvalues[k+1]
-        push!(modes, (a, b, max(abs(T[a, a]), abs(T[b, b]))))
     end
     sort!(modes; by = last)
     M = zeros(m, m)

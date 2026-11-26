@@ -456,3 +456,44 @@ end
     @test_throws ArgumentError MajoranaPoly([1, 1] => 1)
     @test_throws ArgumentError MajoranaPoly([0] => 1)
 end
+
+@testset "expectation of a Gaussian unitary with its phase" begin
+    # against ⟨ψ|e^{tc} exp(-iHt)|ψ⟩, random states and generators, long times
+    for n in 1:6, t in (0.3, 2.1, 7.5)
+        ψ = dense_gaussian(rand(gk_rng, Bool, n), gk_rng)
+        h = gk_antisymmetric(2n)
+        c = randn(gk_rng, ComplexF64)
+        v = exp(t * c) * dot(ψ, exp(-im * t * dense_hamiltonian(h)) * ψ)
+        @test gk_dist(unitary_expectation(dense_covariance(ψ), h, t, c), LogComplex(v)) < 1e-12
+    end
+    # a mode at φ = π/2 (its cosine zero), modes the generator does not touch, h = 0
+    for n in (3, 4)
+        ψ = dense_gaussian(rand(gk_rng, Bool, n), gk_rng)
+        h = gk_antisymmetric(2n)
+        h[1:2, :] .= 0
+        h[:, 1:2] .= 0
+        h[3:4, :] .= 0
+        h[:, 3:4] .= 0
+        h[3, 4], h[4, 3] = 1.3, -1.3
+        for t in (π / 1.3, 0.8)
+            v = dot(ψ, exp(-im * t * dense_hamiltonian(h)) * ψ)
+            @test gk_dist(unitary_expectation(dense_covariance(ψ), h, t), LogComplex(v)) < 1e-12
+        end
+        @test gk_dist(unitary_expectation(dense_covariance(ψ), zeros(2n, 2n), 1.0), LogComplex(1)) < 1e-14
+    end
+    # 200 modes: on an eigenstate of H, e^{-iEt} exactly, its phase included
+    n = 200
+    h = zeros(2n, 2n)
+    for j in 1:n
+        h[2j-1, 2j] = -1.4
+        if j < n
+            h[2j, 2j+1] = 1.0
+        end
+    end
+    h = h - transpose(h)
+    g = quadratic_ground_state(h)
+    for t in (0.5, 3.7)
+        @test gk_dist(unitary_expectation(g.cov, h, t), LogComplex(cis(-g.energy * t))) < 1e-10
+    end
+    @test_throws DimensionMismatch unitary_expectation(zeros(4, 4), zeros(2, 2), 1.0)
+end

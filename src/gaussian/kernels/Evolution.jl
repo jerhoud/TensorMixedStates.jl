@@ -14,6 +14,58 @@ propagator(h::AbstractMatrix{<:Real}, t::Real) = exp(h * t)
 
 antisymmetric(M) = (M - transpose(M)) / 2
 
+# the normal modes of a real antisymmetric matrix of real Schur form Q T Qᵀ, as pairs (a, b) of columns
+# of Q: a 2 × 2 block on (i, i + 1), then the real eigenvalues (zero to rounding) paired in their order;
+# the pairing follows the blocks LAPACK returns, not the size of the eigenvalues
+function normal_pairs(T::AbstractMatrix)
+    m = size(T, 1)
+    pairs = Tuple{Int, Int}[]
+    real_eigenvalues = Int[]
+    i = 1
+    while i <= m
+        if i < m && T[i+1, i] != 0
+            push!(pairs, (i, i + 1))
+            i += 2
+        else
+            push!(real_eigenvalues, i)
+            i += 1
+        end
+    end
+    for k in 1:2:length(real_eigenvalues)
+        push!(pairs, (real_eigenvalues[k], real_eigenvalues[k+1]))
+    end
+    pairs
+end
+
+"""
+    unitary_expectation(M, h, t, c = 0)
+
+⟨ψ|e^{t(c + K)}|ψ⟩ with its phase, as a `LogComplex`, for the state ψ of covariance `M` and
+K = (1/4) Σ h_ab γ_a γ_b, `h` real antisymmetric, so that e^{tK} = exp(-iHt) for H = (i/4) Σ h_ab γ_a γ_b.
+In the normal modes of h, e^{tK} = Π_j (cos φ_j + sin φ_j γ'_a γ'_b), φ_j = ε_j t/2, whose expectation is
+by Wick's theorem the pfaffian Pf(D iM' D + C), M' the covariance in the modes, D the sines on the first
+Majorana of each mode, C the cosines on the pairs: no square root, no choice of sign.
+"""
+function unitary_expectation(M::AbstractMatrix{<:Real}, h::AbstractMatrix{<:Real}, t::Real, c::Number = 0)
+    m = size(M, 1)
+    if size(M) != (m, m) || size(h) != (m, m) || isodd(m)
+        throw(DimensionMismatch("M and h are of the same size 2n, not $(size(M)) and $(size(h))"))
+    end
+    F = schur(Matrix{Float64}(antisymmetric(h)))
+    T = F.T
+    pairs = normal_pairs(T)
+    O = F.Z[:, reduce(vcat, [[a, b] for (a, b) in pairs]; init = Int[])]
+    d = ones(m)
+    C = zeros(m, m)
+    for (j, (a, b)) in enumerate(pairs)
+        φ = (T[a, b] - T[b, a]) / 4 * t
+        d[2j-1] = sin(φ)
+        C[2j-1, 2j], C[2j, 2j-1] = cos(φ), -cos(φ)
+    end
+    A = Diagonal(d) * (im .* (transpose(O) * M * O)) * Diagonal(d) + C
+    LogComplex(real(t * c), cis(imag(t * c))) * logpfaffian(A)
+end
+
 """
     rotate(g, R)
 
