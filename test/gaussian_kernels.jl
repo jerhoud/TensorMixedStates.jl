@@ -497,3 +497,32 @@ end
     end
     @test_throws DimensionMismatch unitary_expectation(zeros(4, 4), zeros(2, 2), 1.0)
 end
+
+@testset "branches evolving under different Gaussian unitaries" begin
+    # components of both parities in two branches, each under its own e^{t(c + K)}, a common rotation
+    # in between: the whole sum against the dense vector, its phase common to all
+    for n in (2, 3, 5)
+        ψ1 = dense_gaussian(zeros(Bool, n), gk_rng)
+        ψs = [ψ1, dense_monomial([1, 4], ψ1), dense_monomial([2], ψ1), dense_gaussian(rand(gk_rng, Bool, n), gk_rng)]
+        branch = [1, 2, 1, 2]
+        a = randn(gk_rng, ComplexF64, length(ψs))
+        s = GaussianSum(gk_from_dense.(ψs), a, gk_rng)
+        for step in 1:3
+            steps = Dict(p => (gk_antisymmetric(2n), rand(gk_rng), randn(gk_rng, ComplexF64)) for p in (1, 2))
+            evolve_branches!(s, branch, steps)
+            stepped(ψ, (h, t, c)) = exp(t * c) * exp(-im * t * dense_hamiltonian(h)) * ψ
+            ψs = [stepped(ψ, steps[p]) for (ψ, p) in zip(ψs, branch)]
+            h, t = gk_antisymmetric(2n), rand(gk_rng)
+            evolve!(s, propagator(h, t))
+            ψs = [exp(-im * t * dense_hamiltonian(h)) * ψ for ψ in ψs]
+        end
+        fix!(s)
+        v = sum(ComplexF64(c) * dense_vector(g) for (c, g) in zip(s.coefs, s.comps))
+        w = sum(ak * ψ for (ak, ψ) in zip(a, ψs))
+        @test abs(dot(w, v)) ≈ LA.norm(v) * LA.norm(w) rtol = 1e-10
+        @test LA.norm(v) ≈ LA.norm(w) rtol = 1e-10
+        @test ComplexF64(norm2(s)) ≈ LA.norm(w)^2 rtol = 1e-10
+    end
+    s = GaussianSum([describe(fock_covariance([false]))], [1], gk_rng)
+    @test_throws DimensionMismatch evolve_branches!(s, [1, 2], Dict(1 => (zeros(2, 2), 1.0, 0)))
+end

@@ -11,7 +11,7 @@ using SkewLinearAlgebra: logabspfaffian
 
 export LogComplex, logpfaffian, fock_covariance, majorana_on_fock, PureGaussian, nmodes,
        find_support, describe, apply_monomial, overlap, cross_term, expect_monomial,
-       transition_matrix, propagator, unitary_expectation, rotate, GaussianSum, evolve!, fix!,
+       transition_matrix, propagator, unitary_expectation, rotate, GaussianSum, evolve!, evolve_branches!, fix!,
        project, project!, norm2, quadratic_ground_state, MajoranaPoly, degree,
        quadratic_form
 

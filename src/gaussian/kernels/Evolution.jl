@@ -177,3 +177,37 @@ function fix!(s::GaussianSum)
     s.R = Matrix{Float64}(I, size(R))
     s
 end
+
+"""
+    evolve_branches!(s, branch, steps)
+
+applies to each component k of `s` the operator e^{t(c + K)} of its branch, `(h, t, c) = steps[branch[k]]`,
+K = (1/4) Σ h_ab γ_a γ_b with `h` real antisymmetric: a Gaussian unitary times e^{tc}, different from one
+branch to another. The phase each branch takes is that of ⟨F|e^{t(c + K)}|F⟩ for the reference F
+(`unitary_expectation`); the links to F are computed again, in O(K n³).
+"""
+function evolve_branches!(s::GaussianSum, branch::AbstractVector{<:Integer}, steps::AbstractDict)
+    if length(branch) != length(s.comps)
+        throw(DimensionMismatch("$(length(branch)) branches for $(length(s.comps)) components"))
+    end
+    fix!(s)
+    F, Fo = s.ref, s.refodd
+    moved = Dict{Int, Tuple{PureGaussian, PureGaussian, Matrix{Float64}, Float64}}()
+    for p in unique(branch)
+        h, t, c = steps[p]
+        R = propagator(h, t)
+        # U_p F with its phase, then U_p F_o from ⟨U_p F|γ_b|U_p F_o⟩ = Σ_c R_bc ⟨F|γ_c|F_o⟩, as in fix!
+        Fp = align(rotate(F, R), F, Int[], unitary_expectation(F.cov, h, t, c).phase)
+        w = R * s.u
+        b = argmax(abs.(w))
+        moved[p] = (Fp, align(rotate(Fo, R), Fp, [b], w[b]), R, real(t * c))
+    end
+    for k in eachindex(s.comps)
+        Fp, Fop, R, loss = moved[branch[k]]
+        g = s.comps[k]
+        # ⟨U_p F|U_p G⟩ = ⟨F|G⟩, the link
+        s.comps[k] = align(rotate(g, R), iseven(count(g.x)) ? Fp : Fop, Int[], s.links[k].phase)
+        s.coefs[k] *= LogComplex(loss, 1)
+    end
+    relink!(s)
+end
