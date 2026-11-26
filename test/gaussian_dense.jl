@@ -51,17 +51,33 @@ function dense_covariance(ψ)
     M
 end
 
-# a random pure Gaussian state with a random phase: random rotations
-# exp(θ γ_a γ_b / 2) = cos(θ/2) + sin(θ/2) γ_a γ_b applied to |x⟩
-function dense_gaussian(x, rng; nrot = 4 * length(x)^2 + 4)
-    ψ = dense_fock(x) .* cis(2π * rand(rng))
-    m = 2 * length(x)
+# random rotations exp(θ γ_a γ_b / 2) = cos(θ/2) + sin(θ/2) γ_a γ_b of n modes, as (a, b, θ)
+function dense_rotations(n, rng; nrot = 4 * n^2 + 4)
+    rots = Tuple{Int, Int, Float64}[]
     for _ in 1:nrot
-        a, b = rand(rng, 1:m), rand(rng, 1:m)
+        a, b = rand(rng, 1:2n), rand(rng, 1:2n)
         if a != b
-            θ = 2π * rand(rng)
-            ψ = cos(θ / 2) .* ψ .+ sin(θ / 2) .* dense_majorana(a, dense_majorana(b, ψ))
+            push!(rots, (a, b, 2π * rand(rng)))
         end
+    end
+    rots
+end
+
+function dense_rotate(ψ, rots)
+    for (a, b, θ) in rots
+        ψ = cos(θ / 2) .* ψ .+ sin(θ / 2) .* dense_majorana(a, dense_majorana(b, ψ))
+    end
+    ψ
+end
+
+# a random pure Gaussian state with a random phase
+dense_gaussian(x, rng) =
+    dense_rotate(dense_fock(x) .* cis(2π * rand(rng)), dense_rotations(length(x), rng))
+
+# c(α)ψ = γ_{α_1} ⋯ γ_{α_w} ψ
+function dense_monomial(α, ψ)
+    for b in Iterators.reverse(α)
+        ψ = dense_majorana(b, ψ)
     end
     ψ
 end
