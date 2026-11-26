@@ -51,7 +51,7 @@ replaces `s` by Π s, not normalised, Π the projector on mode `j` occupied (or 
 projected and its coefficient multiplied by the square root of its probability; the components whose
 weight √p |a| is below 1e-13 times the largest are dropped, the projection of the others exact (a
 component that cannot be found in that occupation has p zero to rounding, and its projection would be
-noise); an error if all are.
+noise); an error if all are. Returns the indices of the components kept.
 """
 function project!(s::GaussianSum, j::Integer, occupied::Bool)
     fix!(s)
@@ -64,15 +64,18 @@ function project!(s::GaussianSum, j::Integer, occupied::Bool)
     largest = maximum(logw)
     comps = PureGaussian[]
     coefs = LogComplex[]
-    for (g, a, w) in zip(s.comps, s.coefs, logw)
+    kept = Int[]
+    for (k, (g, a, w)) in enumerate(zip(s.comps, s.coefs, logw))
         if w > -Inf && w >= largest + log(1e-13)
             p, h = project(g, j, occupied)
             push!(comps, h)
             push!(coefs, a * LogComplex(log(p) / 2, 1))
+            push!(kept, k)
         end
     end
     s.comps, s.coefs = comps, coefs
     relink!(s)
+    kept
 end
 
 """

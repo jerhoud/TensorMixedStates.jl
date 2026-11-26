@@ -36,13 +36,13 @@ gs_random_vector(d) = (v = randn(gs_rng, ComplexF64, d); v / LA.norm(v))
             Ψ = gs_lifted(sys, reduce(kron, vs); axes)
             @test g.cov ≈ dense_covariance(Ψ) atol = 1e-12
             @test g.cov * transpose(g.cov) ≈ I atol = 1e-12
-            @test !g.definite
+            @test !TensorMixedStates.definite(g)
         end
     end
     # states of definite parity, Fock states and eigenstates of the axes
     sys = System([Fermion(), Electron(), Qubit()])
     g = TensorMixedStates.GaussianState(State{Pure}(sys, ["Occ", "Up", "Dn"]))
-    @test g.definite
+    @test TensorMixedStates.definite(g)
     @test g.cov ≈ dense_covariance(gs_lifted(sys, reduce(kron, [[0, 1.0], [0, 1.0, 0, 0], [0, 1.0]]))) atol = 1e-12
     # refused: a state that is not a product, a mixed state
     sys = System([Qubit() for _ in 1:4])
@@ -65,7 +65,8 @@ function gs_random(sys; definite::Bool)
     ψ = similar(x)
     ψ[gc_to_modes(sys)] = x
     layout = TensorMixedStates.MajoranaLayout(sys)
-    g = TensorMixedStates.GaussianState{Pure}(sys, Dict{Int, Symbol}(), layout, dense_covariance(Ψ), nothing, definite, 1.0, 64)
+    g = TensorMixedStates.GaussianState{Pure}(sys, Dict{Int, Symbol}(), layout, dense_covariance(Ψ), nothing,
+                                              definite ? [1] : nothing, 1.0, 64)
     g, ψ
 end
 
@@ -231,7 +232,7 @@ end
             save_state(file, "g", g)
             h = load_state(file, "g")
             @test h isa TensorMixedStates.GaussianState{Pure}
-            @test h.cov == g.cov && h.axes == g.axes && h.definite == g.definite && h.trace == g.trace
+            @test h.cov == g.cov && h.axes == g.axes && h.parities == g.parities && h.trace == g.trace
         end
     end
     # an entangled state: a ground state converted
@@ -330,7 +331,7 @@ end
     @test TensorMixedStates.trace(apply(Sx(1) * Sz(2), g)) ≈ TensorMixedStates.trace(g) / 16
     # eigenstates of the axes have a definite parity, whose entropies take the Gaussian formula
     g = TensorMixedStates.GaussianState(State{Pure}(System(30, Qubit()), "X+"); axes = :X)
-    @test g.definite && abs(entanglement_entropy(g, 15)) < 1e-12
+    @test TensorMixedStates.definite(g) && abs(entanglement_entropy(g, 15)) < 1e-12
     # the forms of the axes, and the sites without modes refused
     st = State{Pure}(System([Qubit(), Fermion(), Qubit()]), [gs_random_vector(2) for _ in 1:3])
     g1 = TensorMixedStates.GaussianState(st; axes = :X)
@@ -476,7 +477,7 @@ end
     ring = sum(Z(j) * Z(j + 1) for j in 1:n-1) + Z(n) * Z(1)
     H = ring - 0.7 * sum(X(j) for j in 1:n)
     g = TensorMixedStates.GaussianState(State{Pure}(sys, "X+"); axes = :X)
-    @test g.definite
+    @test TensorMixedStates.definite(g)
     e = TensorMixedStates.ExactState(State{Pure}(sys, "X+"))
     g = evolve(-im * H, 1.0, g; nsteps = 5)
     e = evolve(-im * H, 1.0, e; nsteps = 5)
@@ -488,9 +489,18 @@ end
     r = ground_state(H, g)
     @test r.energy ≈ E.values[1] atol = 1e-10
     @test gs_same(r.state, E.vectors[:, 1], sys)
-    # a ring on a state of no definite parity is refused
-    gm = TensorMixedStates.GaussianState(State{Pure}(sys, [gs_random_vector(2) for _ in 1:n]); axes = :X)
-    @test_throws ArgumentError evolve(-im * H, 0.1, gm; nsteps = 1)
+    # a ring on a state of no definite parity: its two sectors under their own Gaussian unitaries
+    vs = [gs_random_vector(2) for _ in 1:n]
+    gm = TensorMixedStates.GaussianState(State{Pure}(sys, vs); axes = :X)
+    em = TensorMixedStates.ExactState(State{Pure}(sys, vs))
+    gm = evolve(-im * H, 1.0, gm; nsteps = 4)
+    em = evolve(-im * H, 1.0, em; nsteps = 4)
+    @test TensorMixedStates.ncomponents(gm) == 2 && gm.parities == [1, -1]
+    @test gs_same(gm, em.state, sys)
+    @test TensorMixedStates.expect_value(gm, Z(2)) ≈ TensorMixedStates.expect_value(em, Z(2)) atol = 1e-10
+    # depending on time, refused for now
+    @test_throws ArgumentError evolve([-im * H, -im * X(1) => t -> cos(t)],
+                                      0.1, TensorMixedStates.GaussianState(State{Pure}(sys, vs); axes = :X); nsteps = 1)
 end
 
 @testset "programs with superpositions against ExactState" begin
@@ -577,7 +587,7 @@ end
     @test TensorMixedStates.trace(apply(N(1) - N(1), gf)) == 0
     @test TensorMixedStates.trace(apply(C(2), TensorMixedStates.GaussianState(State{Pure}(sysf, "Emp")))) == 0
     # a projection keeps a definite parity
-    @test TensorMixedStates.project_on(g, (Id(1) + Z(1)) / 2).definite
+    @test TensorMixedStates.definite(TensorMixedStates.project_on(g, (Id(1) + Z(1)) / 2))
     # a collapse on a sum whose components conserve the number
     gu = TensorMixedStates.GaussianState(State{Pure}(sys, "Up"))
     eu = TensorMixedStates.ExactState(State{Pure}(sys, "Up"))
@@ -687,11 +697,10 @@ end
     H = sum(J[j] * Z(j) * Z(j + 1) for j in 1:n-1) + J[n] * Z(n) * Z(1) - sum(X(j) for j in 1:n)
     ev = -im * H + sum(0.1 * Dissipator(Z)(j) for j in 1:n)
     g = TensorMixedStates.GaussianState(State{Trajectory}(sys, "Dn"); axes = :X)
-    @test !g.definite
-    @test_throws "project it on each sector" evolve(ev, 0.1, g; nsteps = 1)
+    @test !TensorMixedStates.definite(g)
     P = prod(X(j) for j in 1:n)
     sectors = [TensorMixedStates.project_on(g, (Id(1) + s * P) / 2) for s in (1, -1)]
-    @test all(x.definite for x in sectors)
+    @test all(TensorMixedStates.definite(x) for x in sectors)
     @test [TensorMixedStates.state_parity(x) for x in sectors] == [1, -1]
     for seed in 1:2
         gs = [evolve(ev, 2.0, x; nsteps = 10, rng = Random.Xoshiro(seed)) for x in sectors]
@@ -700,4 +709,35 @@ end
             @test sum(TensorMixedStates.expect_value(x, o) for x in gs) / 2 ≈ TensorMixedStates.expect_value(e, o) atol = 1e-10
         end
     end
+    # the whole state from |↓…↓⟩, its two branches together: the same jumps as ExactState, odd values (⟨Z⟩)
+    # included, the parities of the branches exchanged by each jump
+    for seed in 1:3
+        jg, je = [], []
+        x = evolve(ev, 2.0, g; nsteps = 10, rng = Random.Xoshiro(seed), jumps = jg)
+        e = evolve(ev, 2.0, TensorMixedStates.ExactState(State{Trajectory}(sys, "Dn")); nsteps = 10,
+                   rng = Random.Xoshiro(seed), jumps = je)
+        @test [j.dissipator for j in jg] == [j.dissipator for j in je]
+        @test x.parities == (iseven(length(jg)) ? [1, -1] : [-1, 1])
+        @test gs_same(x, e.state, sys)
+        for k in (1, 4)
+            @test TensorMixedStates.expect_value(x, Z(k)) ≈ TensorMixedStates.expect_value(e, Z(k)) atol = 1e-9
+        end
+        @test TensorMixedStates.trace(x) ≈ real(TensorMixedStates.trace(e)) atol = 1e-9
+    end
+    # files keep the parities of a sum
+    x = evolve(-im * H, 0.3, TensorMixedStates.GaussianState(State{Pure}(sys, "Dn"); axes = :X); nsteps = 1)
+    mktempdir() do dir
+        file = joinpath(dir, "b.h5")
+        save_state(file, "b", x)
+        @test load_state(file, "b").parities == x.parities == [1, -1]
+    end
+    # a ground state with zero modes in the system and the ancilla decoupled: its parity is that of the
+    # ancilla, the entropies by the covariance
+    sysf = System(4, Fermion())
+    Hf = sum(-(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) for j in 2:3)
+    r = ground_state(Hf, TensorMixedStates.GaussianState(State{Pure}(sysf, "Emp")))
+    σ = only(r.state.parities)
+    @test r.state.cov[1, 2] == σ
+    v = TensorMixedStates.ExactState(State(r.state)).state
+    @test gs_same(r.state, v, sysf)
 end

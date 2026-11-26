@@ -28,8 +28,9 @@ struct GaussianState{R <: PM} <: AbstractState{R}
     # one component: its covariance, its phase free; several: their sum, with their phases
     cov::Union{Nothing, Matrix{Float64}}
     sum::Union{Nothing, GaussianSum}
-    # whether the physical state has a definite parity, see the entropies; false for several components
-    definite::Bool
+    # the physical parity ±1 of each component (the occupation of the ancilla), nothing when not known:
+    # the sectors of the evolutions that need them, and the entropies of a state of one component
+    parities::Union{Nothing, Vector{Int}}
     # the squared norm of the state
     trace::Float64
     max_terms::Int
@@ -53,22 +54,38 @@ function GaussianState(state::State{R}; axes = Dict{Int, Symbol}(), max_terms::I
     end
     vectors = local_vectors(state)
     cov, definite = product_covariance(system, layout, vectors)
-    GaussianState{R}(system, axes, layout, cov, nothing, definite, norm(state.state)^2, max_terms)
+    parities = definite ? [Int(sign(cov[1, 2]))] : nothing
+    GaussianState{R}(system, axes, layout, cov, nothing, parities, norm(state.state)^2, max_terms)
 end
 
 # the generator of the references of the sums: fixed, so that a run can be reproduced (the reference
 # changes the results by rounding only)
 const reference_seed = 20261126
 
-# a state of one component like `state`, of covariance `cov`
-single(state::GaussianState{R}, cov::Matrix{Float64}; definite::Bool = state.definite,
-       trace::Real = state.trace) where {R <: Ket} =
-    GaussianState{R}(state.system, state.axes, state.layout, cov, nothing, definite, trace, state.max_terms)
+# a state of one component like `state`, of covariance `cov` and physical parity `parities`
+function single(state::GaussianState{R}, cov::Matrix{Float64}; parities = state.parities,
+                trace::Real = state.trace) where {R <: Ket}
+    if !(isnothing(parities) || length(parities) == 1)
+        throw(ArgumentError("a state of one component has one parity, not $(length(parities))"))
+    end
+    GaussianState{R}(state.system, state.axes, state.layout, cov, nothing, parities, trace, state.max_terms)
+end
+
+# whether the state is of one component and of a known parity
+definite(state::GaussianState) = isnothing(state.sum) && !isnothing(state.parities)
+
+# the parity of a component after the monomial α: changed by a single Majorana of the ancilla (1 or 2),
+# which changes its occupation
+flipped(p::Int, α) = isodd(count(<=(2), α)) ? -p : p
 
 # a state like `state` held by the sum `s`, refused beyond max_terms components, of one component
-# when it has one; `trace` its squared norm when known
-function superposed(state::GaussianState{R}, s::GaussianSum; trace::Union{Nothing, Real} = nothing) where {R <: Ket}
+# when it has one; `trace` its squared norm when known, `parities` those of the components when known
+function superposed(state::GaussianState{R}, s::GaussianSum; trace::Union{Nothing, Real} = nothing,
+                    parities::Union{Nothing, Vector{Int}} = nothing) where {R <: Ket}
     K = length(s.comps)
+    if !(isnothing(parities) || length(parities) == K)
+        throw(ArgumentError("$(length(parities)) parities for $K components"))
+    end
     if K > state.max_terms
         throw(ArgumentError("the state would have $K Gaussian components, above max_terms = $(state.max_terms): " *
                             "raise it with GaussianState(…; max_terms)"))
@@ -85,9 +102,9 @@ function superposed(state::GaussianState{R}, s::GaussianSum; trace::Union{Nothin
     end
     if K == 1
         fix!(s)
-        return single(state, only(s.comps).cov; definite = false, trace = t)
+        return single(state, only(s.comps).cov; parities, trace = t)
     end
-    GaussianState{R}(state.system, state.axes, state.layout, nothing, s, false, t, state.max_terms)
+    GaussianState{R}(state.system, state.axes, state.layout, nothing, s, parities, t, state.max_terms)
 end
 
 # the state as a sum that can be changed, its phases not brought up to date
@@ -195,7 +212,7 @@ norm(state::GaussianState{<:Ket}) = sqrt(state.trace)
 
 # the state as the representation R, its data unchanged
 with_representation(::Type{R}, s::GaussianState) where {R <: Ket} =
-    GaussianState{R}(s.system, s.axes, s.layout, s.cov, s.sum, s.definite, s.trace, s.max_terms)
+    GaussianState{R}(s.system, s.axes, s.layout, s.cov, s.sum, s.parities, s.trace, s.max_terms)
 
 # whether the backend keeps the norm of a trajectory exactly, see `exact_norm`
 exact_norm(::GaussianState) = true
@@ -338,7 +355,7 @@ function von_neumann_entropy(state::GaussianState{<:Ket}, positions::AbstractVec
     fermions = all(!isnothing(fermion_species(state.system[k])) for k in order)
     qubits = all(isnothing(fermion_species(state.system[k])) for k in order)
     ends = kept == order[1:length(kept)] || kept == order[end-length(kept)+1:end]
-    if !(state.definite && (fermions || (qubits && ends)))
+    if !(definite(state) && (fermions || (qubits && ends)))
         return invoke(von_neumann_entropy, Tuple{AbstractState, AbstractVector{Int}}, state, positions; max_dense)
     end
     majoranas = reduce(vcat, [layout.first[k] .+ (0:length(layout.majoranas[k])-1) .+ 2 for k in kept]; init = Int[])
@@ -434,7 +451,9 @@ end
 function write_state(g, state::GaussianState{R}) where R
     attributes(g)["representation"] = string(nameof(R))
     attributes(g)["axes"] = join(("$k:$P" for (k, P) in sort(collect(state.axes))), ",")
-    attributes(g)["definite"] = Int(state.definite)
+    if !isnothing(state.parities)
+        g["parities"] = state.parities
+    end
     attributes(g)["trace"] = state.trace
     attributes(g)["max_terms"] = state.max_terms
     if isnothing(state.sum)
@@ -466,14 +485,20 @@ function read_state(::Type{<:GaussianState}, g, sites)
     axes = Dict{Int, Symbol}(parse(Int, first(split(e, ":"))) => Symbol(last(split(e, ":"))) for e in split(text, ",") if !isempty(e))
     layout = MajoranaLayout(system; axes)
     max_terms = haskey(attributes(g), "max_terms") ? Int(read(attributes(g)["max_terms"])) : 64
-    definite, trace = read(attributes(g)["definite"]) == 1, read(attributes(g)["trace"])
+    trace = read(attributes(g)["trace"])
+    parities = haskey(g, "parities") ? Vector{Int}(read(g["parities"])) : nothing
     if haskey(g, "covariance")
-        return GaussianState{R}(system, axes, layout, read(g["covariance"]), nothing, definite, trace, max_terms)
+        cov = read(g["covariance"])
+        # files of before the parities of the components: a flag for a state of one component
+        if haskey(attributes(g), "definite") && read(attributes(g)["definite"]) == 1
+            parities = [Int(sign(cov[1, 2]))]
+        end
+        return GaussianState{R}(system, axes, layout, cov, nothing, parities, trace, max_terms)
     end
     number(v) = LogComplex(v[1], complex(v[2], v[3]))
     hs = [g["component$k"] for k in 1:read(attributes(g)["components"])]
     comps = [PureGaussian(read(h["covariance"]), Bool.(read(h["support"])), number(read(h["amplitude"]))) for h in hs]
     coefs = [number(read(h["coefficient"])) for h in hs]
     s = GaussianSum(comps, coefs, Random.Xoshiro(reference_seed))
-    GaussianState{R}(system, axes, layout, nothing, s, definite, trace, max_terms)
+    GaussianState{R}(system, axes, layout, nothing, s, parities, trace, max_terms)
 end

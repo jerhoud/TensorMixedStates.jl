@@ -1,7 +1,7 @@
 # Evolutions, ground states and gates of the Gaussian backend: a Gaussian unitary turns the covariance
 # by its rotation R, M → R M Rᵀ, read exactly from its quadratic generator.
 
-import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric
+import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric, evolve_branches!, project!
 
 # whether the quadratic form k couples the ancilla to the system: a linear term, which changes the
 # physical parity
@@ -20,21 +20,25 @@ function unitary_form(c::Number, k::AbstractMatrix, what::String; lossy::Bool = 
     (lossy ? complex(c) : im * imag(c)), real(k)
 end
 
-# the state turned by the Gaussian unitary of rotation R, which keeps the parity when `definite`: the
-# covariance of one component, the rotation accumulated by a sum, its norm unchanged
-function turned(state::GaussianState{<:Ket}, R::AbstractMatrix, definite::Bool)
+# the state turned by the Gaussian unitary of rotation R, which keeps the parities of the components when
+# `keeps` (it does not couple the ancilla): the covariance of one component, the rotation accumulated by
+# a sum, its norm unchanged
+function turned(state::GaussianState{<:Ket}, R::AbstractMatrix, keeps::Bool)
+    parities = keeps ? state.parities : nothing
     if isnothing(state.sum)
-        return single(state, antisymmetric(R * state.cov * transpose(R)); definite = state.definite && definite)
+        return single(state, antisymmetric(R * state.cov * transpose(R)); parities)
     end
     s = as_sum(state)
     evolve!(s, R)
-    superposed(state, s; trace = state.trace)
+    superposed(state, s; trace = state.trace, parities)
 end
 
-# the physical parity of a state of one component and definite parity, nothing for another: that of the
-# ancilla on the even states, ⟨-iγ₁γ₂⟩ = M₁₂ = ±1
-state_parity(state::GaussianState{<:Ket}) =
-    isnothing(state.sum) && state.definite ? Int(sign(state.cov[1, 2])) : nothing
+# the physical parity of the state when known and the same for all its components, nothing otherwise: that
+# of the ancilla on the even states, ⟨-iγ₁γ₂⟩ = M₁₂ = ±1
+function state_parity(state::GaussianState{<:Ket})
+    p = state.parities
+    isnothing(p) || !allequal(p) ? nothing : first(p)
+end
 
 """
 the evolver of a Gaussian state under L(t) = Σ_j f_j(t) L_j, nothing for the functions of a constant
@@ -60,15 +64,15 @@ evolver_what(pre::GaussianEvolver) =
                 "the L†L of its jumps a constant (jumps by Paulis or unitaries), for now" :
                 "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now"
 
-# the evolver compiled for the parity σ of the states (nothing: none needed): for a constant one, the
-# real part of c, h real and whether it keeps the parity; for one depending on time, the (c_j, k_j) and
-# whether it keeps the parity
+# the evolver compiled for the parity σ of the states (nothing: none needed): for a constant one, c (its
+# real part the loss of a trajectory, its imaginary part the phase between sectors), h real and whether it
+# keeps the parity; for one depending on time, the (c_j, k_j) and whether it keeps the parity
 function compiled(pre::GaussianEvolver, σ)
     get!(pre.forms, σ) do
         if isnothing(pre.fs)
             c, k, _ = gaussian_generator(pre.system, reduce(+, pre.ops); axes = pre.axes, parity = σ)
             c0, h = unitary_form(c, k, evolver_what(pre); pre.lossy)
-            return real(c0), h, !couples_ancilla(k)
+            return c0, h, !couples_ancilla(k)
         end
         forms = [gaussian_generator(pre.system, op; axes = pre.axes, parity = σ) for op in pre.ops]
         [(c, k) for (c, k, _) in forms], !any(couples_ancilla(k) for (_, k, _) in forms)
@@ -106,34 +110,25 @@ function gaussian_evolver(state::GaussianState, terms::AbstractVector, duration:
     # the sectors of the parity when the whole evolver conserves it and needs them
     whole = polynomial(system, state.layout, lower(system, reduce(+, ops)))
     p = pre(!quadratic && conserves_parity(whole))
-    # compiled now for the state, so that an error comes at once
-    compiled(p, step_parity(p, state))
+    # compiled now for the parities the state needs, so that an error comes at once
+    for σ in step_parities(p, state)
+        compiled(p, σ)
+    end
     p
 end
 
-# the parity the evolver is compiled for to step the state: that of the state when it needs the sectors;
-# when the state has none, the error of the operator that is not quadratic, or the refusal of an operator
-# quadratic in each sector only (a ring)
-function step_parity(pre::GaussianEvolver, state::GaussianState{<:Ket})
+# the parities the evolver is compiled for to step the state: none needed, that of the state, or both
+# sectors when the components differ or are not known
+function step_parities(pre::GaussianEvolver, state::GaussianState{<:Ket})
     if !pre.sectors
-        return nothing
+        return [nothing]
     end
     σ = state_parity(state)
-    if isnothing(σ)
-        try
-            compiled(pre, nothing)
-        catch e
-            if !(e isa ArgumentError)
-                rethrow()
-            end
-            compiled(pre, 1)
-            throw(ArgumentError("the Gaussian backend evolves under this operator (a ring) only a state of one " *
-                                "component and definite parity: project it on each sector, (Id + P)/2 and " *
-                                "(Id - P)/2 with P the parity, and evolve them apart"))
-        end
-    end
-    σ
+    isnothing(σ) ? [1, -1] : [σ]
 end
+
+const branches_what = "the Gaussian backend evolves a state whose components lie in both sectors of the parity under a " *
+                      "constant operator only, for now"
 
 function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{<:Ket},
                      time::Number, dt::Number, step::Int, limits::Limits)
@@ -143,15 +138,73 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::Gaussi
     if !(dt isa Real)
         throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
     end
-    σ = step_parity(pre, state)
+    σs = step_parities(pre, state)
+    if length(σs) == 2
+        if !isnothing(pre.fs)
+            throw(ArgumentError(branches_what))
+        end
+        return branches_step(pre, state, dt)
+    end
+    σ = only(σs)
     if isnothing(pre.fs)
-        loss, h, even = compiled(pre, σ)
+        c, h, even = compiled(pre, σ)
         R = get!(() -> propagator(h, dt), pre.rotations, (σ, Float64(dt)))
-        return lost(turned(state, R, even), loss * dt)
+        return lost(turned(state, R, even), real(c) * dt)
     end
     forms, even = compiled(pre, σ)
     R, loss = magnus_rotation(pre, forms, time, dt)
     lost(turned(state, R, even), loss)
+end
+
+# the state as a sum of components of known parities: its components cut, where not known, into their
+# projections on the two sectors (the occupations of the ancilla, exactly), those of weight zero left out
+function in_sectors(state::GaussianState{<:Ket})
+    if !isnothing(state.parities)
+        return as_sum(state), state.parities
+    end
+    s = as_sum(state)
+    fix!(s)
+    comps, coefs, parities = PureGaussian[], LogComplex[], Int[]
+    for (σ, occupied) in ((1, false), (-1, true))
+        t = deepcopy(s)
+        kept = try
+            project!(t, 1, occupied)
+        catch e
+            if !(e isa ArgumentError)
+                rethrow()
+            end
+            # no component in this sector
+            Int[]
+        end
+        append!(comps, t.comps)
+        append!(coefs, t.coefs)
+        append!(parities, fill(σ, length(kept)))
+    end
+    K = length(comps)
+    if K > state.max_terms
+        throw(ArgumentError("the sectors of the parity would give the state $K Gaussian components, above " *
+                            "max_terms = $(state.max_terms): raise it with GaussianState(…; max_terms)"))
+    end
+    GaussianSum(comps, coefs, Random.Xoshiro(reference_seed)), parities
+end
+
+# a step of a constant evolver on a state whose components lie in both sectors, each under the Gaussian
+# unitary of its sector with their relative phase (`evolve_branches!`)
+function branches_step(pre::GaussianEvolver, state::GaussianState{<:Ket}, dt::Real)
+    s, parities = in_sectors(state)
+    steps = Dict{Int, Tuple{Matrix{Float64}, Float64, ComplexF64}}()
+    for σ in (1, -1)
+        c, h, even = compiled(pre, σ)
+        if !even
+            throw(ErrorException("an evolver compiled in a sector couples the ancilla"))
+        end
+        steps[σ] = (h, Float64(dt), c)
+    end
+    evolve_branches!(s, parities, steps)
+    # the sectors are orthogonal: a loss common to both multiplies the trace, another needs the norm
+    losses = [real(steps[σ][3]) for σ in (1, -1)]
+    trace = allequal(losses) ? state.trace * exp(2 * first(losses) * dt) : nothing
+    superposed(state, s; trace, parities)
 end
 
 # the state with its norm multiplied by e^l
@@ -226,10 +279,22 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
     c, k, _ = generator
     # H = c + (1/4) Σ k γγ Hermitian is -iH = -ic + (1/4) Σ -ik γγ anti-Hermitian
     _, h = unitary_form(-im * c, -im * k, "ground_state needs a Hermitian Hamiltonian")
-    g = quadratic_ground_state(h, 1)
+    if couples_ancilla(k)
+        g = quadratic_ground_state(h, 1)
+        degenerate_info(g)
+        found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, nothing, 1.0, state.max_terms)
+        return (energy = real(c) + g.energy, state = found)
+    end
+    # the ancilla decoupled: the system's ground state, of parity σ, and the ancilla of the same parity, so
+    # that no zero mode of the system is paired with a Majorana of the ancilla
+    g = quadratic_ground_state(h[3:end, 3:end])
     degenerate_info(g)
-    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, !couples_ancilla(k), 1.0,
-                                state.max_terms)
+    σ = isempty(g.cov) ? 1 : Int(sign(real(logpfaffian(g.cov).phase)))
+    M = size(h, 1)
+    cov = zeros(M, M)
+    cov[1, 2], cov[2, 1] = σ, -σ
+    cov[3:end, 3:end] = g.cov
+    found = GaussianState{Pure}(system, state.axes, state.layout, cov, nothing, [σ], 1.0, state.max_terms)
     (energy = real(c) + g.energy, state = found)
 end
 
@@ -270,7 +335,7 @@ function sector_ground_state(system::System, H, state::GaussianState{Pure}, σ::
     cov = zeros(M, M)
     cov[1, 2], cov[2, 1] = σ, -σ
     cov[3:end, 3:end] = g.cov
-    found = GaussianState{Pure}(system, state.axes, state.layout, cov, nothing, true, 1.0, state.max_terms)
+    found = GaussianState{Pure}(system, state.axes, state.layout, cov, nothing, [σ], 1.0, state.max_terms)
     (energy = real(c) + g.energy, width = sum(g.energies), levels = g, state = found)
 end
 
@@ -341,7 +406,8 @@ function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)
         D = ones(size(state.cov, 1))
         D[α] .= -1
         # c c(α) multiplies the norm by |c|, c(α) being unitary
-        return single(state, D .* state.cov .* transpose(D); trace = abs2(c) * state.trace)
+        parities = isnothing(state.parities) ? nothing : [flipped(only(state.parities), α)]
+        return single(state, D .* state.cov .* transpose(D); parities, trace = abs2(c) * state.trace)
     end
     applied_poly(state, p)
 end
@@ -353,7 +419,7 @@ function scaled(state::GaussianState{<:Ket}, c::Number)
     end
     s = as_sum(state)
     s.coefs .*= Ref(LogComplex(c))
-    superposed(state, s; trace = abs2(c) * state.trace)
+    superposed(state, s; trace = abs2(c) * state.trace, state.parities)
 end
 
 (c::Number * state::GaussianState) = scaled(state, c)
@@ -384,10 +450,11 @@ function applied_poly(state::GaussianState{<:Ket}, p::MajoranaPoly; cause::Strin
     end
     s.comps, s.coefs = comps, coefs
     relink!(s)
-    superposed(state, s)
+    parities = isnothing(state.parities) ? nothing : [flipped(q, α) for q in state.parities for (α, _) in p.terms]
+    superposed(state, s; parities)
 end
 
-import .GaussianKernels: occupation_probability, project_covariance!, project!, MajoranaPoly
+import .GaussianKernels: occupation_probability, project_covariance!, MajoranaPoly
 
 # the modes and occupations of a projector that is a product of projectors on the occupations of modes,
 # Π_m (1/2 + σ_m (i/2) γ_{2m-1}γ_{2m}), σ_m = 1 for occupied (-iγγ = 1 - 2n), as m => occupied; nothing
@@ -422,18 +489,26 @@ function projected(state::GaussianState{<:Ket}, occupations)
             project_covariance!(M, m, s, q)
             t *= q
         end
-        # the occupations commute with the parity, which that of the ancilla (mode 1) fixes
-        return single(state, M; trace = t, definite = state.definite || any(m == 1 for (m, _) in occupations))
+        return single(state, M; trace = t, parities = projected_parities(state.parities, occupations))
     end
     s = as_sum(state)
+    parities = state.parities
     for (m, o) in occupations
-        project!(s, m, o)
+        kept = project!(s, m, o)
+        parities = isnothing(parities) ? nothing : parities[kept]
     end
-    r = superposed(state, s)
-    if isnothing(r.sum) && any(m == 1 for (m, _) in occupations)
-        return single(r, r.cov; definite = true)
+    superposed(state, s; parities = projected_parities(parities, occupations, length(s.comps)))
+end
+
+# the parities of the components after a projection on these occupations of modes, which commute with the
+# parity: that of the ancilla (mode 1) when projected, empty or occupied
+function projected_parities(parities, occupations, K::Int = 1)
+    for (m, o) in occupations
+        if m == 1
+            return fill(o ? -1 : 1, K)
+        end
     end
-    r
+    parities
 end
 
 function normalized(state::GaussianState{<:Ket})
