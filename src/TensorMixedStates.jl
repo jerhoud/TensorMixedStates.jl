@@ -2,9 +2,10 @@
 # the order they are read, a directory for each layer: core/ for sites, systems and states,
 # engine/ for the operators on a system, measurements/ for what is measured and written,
 # solvers/ for the evolutions and the searches, dense/ for the exact states of small systems,
-# runner/ for the simulations runTMS runs, the site types in sites/, the hints Julia prints
-# after an error, then the precompilation workload. Version 2 rewrote the library from its lowest layer up; 1.x is maintained on the
-# branch release-1.6.
+# gaussian/kernels/ for the numerical kernels of Gaussian states, runner/ for the simulations
+# runTMS runs, the site types in sites/, the hints Julia prints after an error, then the
+# precompilation workload. Version 2 rewrote the library from its lowest layer up; 1.x is
+# maintained on the branch release-1.6.
 
 """
     TensorMixedStates
@@ -83,6 +84,9 @@ include("solvers/Thermalize.jl")
 # The exact representation of small systems
 include("dense/ExactStates.jl")
 include("dense/ExactSolvers.jl")
+
+# The numerical kernels of fermionic Gaussian states, a module using no type of the library
+include("gaussian/kernels/GaussianKernels.jl")
 
 # Simulations
 include("runner/Threading.jl")

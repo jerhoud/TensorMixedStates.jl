@@ -41,6 +41,8 @@ makedocs(
         ]
     ],
     checkdocs=:exports,
+    # the Gaussian kernels are internal, documented in their source only
+    checkdocs_ignored_modules = [TensorMixedStates.GaussianKernels],
 )
 
 # llms.txt, the map of the documentation that language models read, and llms-full.txt, the
