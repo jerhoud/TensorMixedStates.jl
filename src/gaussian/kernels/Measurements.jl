@@ -48,22 +48,28 @@ end
     project!(s, j, occupied)
 
 replaces `s` by Π s, not normalised, Π the projector on mode `j` occupied (or empty): each component is
-projected and its coefficient multiplied by the square root of its probability; the components that
-cannot be found in that occupation are dropped, an error if all are.
+projected and its coefficient multiplied by the square root of its probability; the components whose
+weight √p |a| is below 1e-13 times the largest are dropped, the projection of the others exact (a
+component that cannot be found in that occupation has p zero to rounding, and its projection would be
+noise); an error if all are.
 """
 function project!(s::GaussianSum, j::Integer, occupied::Bool)
     fix!(s)
+    sign = occupied ? -1.0 : 1.0
+    ps = [occupation_probability(g.cov, j, sign) for g in s.comps]
+    logw = [p > 0 ? log(p) / 2 + a.logabs : -Inf for (p, a) in zip(ps, s.coefs)]
+    if all(==(-Inf), logw)
+        throw(ArgumentError("mode $j cannot be found $(occupied ? "occupied" : "empty")"))
+    end
+    largest = maximum(logw)
     comps = PureGaussian[]
     coefs = LogComplex[]
-    for (g, a) in zip(s.comps, s.coefs)
-        if occupation_probability(g.cov, j, occupied ? -1.0 : 1.0) > 0
+    for (g, a, w) in zip(s.comps, s.coefs, logw)
+        if w > -Inf && w >= largest + log(1e-13)
             p, h = project(g, j, occupied)
             push!(comps, h)
             push!(coefs, a * LogComplex(log(p) / 2, 1))
         end
-    end
-    if isempty(comps)
-        throw(ArgumentError("mode $j cannot be found $(occupied ? "occupied" : "empty")"))
     end
     s.comps, s.coefs = comps, coefs
     relink!(s)

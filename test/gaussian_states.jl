@@ -158,7 +158,7 @@ end
         ψ = exp(-im * 4dt * Hd(sys)) * ψ
         @test gs_same(g, ψ, sys)
     end
-    # refused: an evolver depending on time, one that is not unitary
+    # refused: an evolver that is not unitary
     g, _ = gs_product(sys1)
     @test_throws ArgumentError TensorMixedStates.prepared_evolver(g, -im * H1 - 0.1 * N(2))
 end
@@ -534,10 +534,80 @@ end
         g = apply(T(1) * H(2) * Ry(θ)(1), g)
         ψ = m(T, 1) * m(H, 2) * m(Ry(θ), 1) * ψ
         @test gs_same(g, ψ, sys)
+        # the pairs k < l: through the transition matrix for θ = 0.3, the precise way for orthogonal ones
         P = TensorMixedStates.pair_transitions(g.sum)
-        @test any(!isnothing, P)
-        if θ == 0
-            @test any(isnothing, P)
+        pairs = [P[k, l] for k in axes(P, 1), l in axes(P, 2) if k < l]
+        if θ == 0.3
+            @test any(!isnothing, pairs)
+        elseif θ == 0
+            @test any(isnothing, pairs)
         end
     end
+end
+
+@testset "fixes from the reviews of lot 4" begin
+    n = 4
+    sys = System(n, Qubit())
+    q(O, k) = gc_op(sys, O, k)
+    ringxy = sum(X(j) * X(mod1(j + 1, n)) + Y(j) * Y(mod1(j + 1, n)) for j in 1:n)
+    ringxyd = sum(q(X, j) * q(X, mod1(j + 1, n)) + q(Y, j) * q(Y, mod1(j + 1, n)) for j in 1:n)
+    st = State{Pure}(sys, ["Up", "Dn", "Up", "Dn"])
+    g = TensorMixedStates.GaussianState(st)
+    e = TensorMixedStates.ExactState(st)
+    # a ring with a term changing the parity: refused, not reduced to a sector
+    @test_throws ArgumentError evolve([-im * ringxy, -im * X(1) => cos], 0.5, g; nsteps = 2)
+    # a ring depending on time, the parity kept
+    terms = [-im * ringxy, -im * Z(2) => cos]
+    @test gs_same(evolve(terms, 0.5, g; nsteps = 2), evolve(terms, 0.5, e; nsteps = 2).state, sys)
+    # one evolver for states of the two parities, each in its sector
+    pre = TensorMixedStates.prepared_evolver(g, -im * ringxy)
+    go = apply(X(1), g)
+    go = TensorMixedStates.evolve_step(Tdvp(), pre, go, 0.0, 0.4, 1, Limits())
+    @test gs_same(go, exp(-0.4im * ringxyd) * (q(X, 1) * e.state), sys)
+    # an evolution depending on time unitary as a whole, not term by term
+    sysf = System(3, Fermion())
+    gf, ψf = gs_product(sysf)
+    ef = TensorMixedStates.ExactState{Pure}(sysf, ψf, Val(:raw))
+    tf = [-im * dag(C)(1) * C(2) => t -> cis(t), -im * dag(C)(2) * C(1) => t -> cis(-t)]
+    @test gs_same(evolve(tf, 0.6, gf; nsteps = 2), evolve(tf, 0.6, ef; nsteps = 2).state, sysf)
+    # null states: refused when measured, as for an ExactState
+    g0 = apply(Id(1) - Z(1), TensorMixedStates.GaussianState(State{Pure}(sys, "Up")))
+    @test TensorMixedStates.trace(g0) == 0 && TensorMixedStates.norm(g0) == 0
+    @test_throws ErrorException TensorMixedStates.expect_value(g0, Z(2))
+    @test TensorMixedStates.trace(apply(N(1) - N(1), gf)) == 0
+    @test TensorMixedStates.trace(apply(C(2), TensorMixedStates.GaussianState(State{Pure}(sysf, "Emp")))) == 0
+    # a projection keeps a definite parity
+    @test TensorMixedStates.project_on(g, (Id(1) + Z(1)) / 2).definite
+    # a collapse on a sum whose components conserve the number
+    gu = TensorMixedStates.GaussianState(State{Pure}(sys, "Up"))
+    eu = TensorMixedStates.ExactState(State{Pure}(sys, "Up"))
+    # an open chain: a ring needs a definite parity, which a sum has not
+    Hn = sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:n-1) + 0.4 * Z(2)
+    gu = evolve(-im * Hn, 0.7, apply(H(1), gu); nsteps = 2)
+    eu = evolve(-im * Hn, 0.7, apply(H(1), eu); nsteps = 2)
+    rg, re = collapse(gu, 3 => 1), collapse(eu, 3 => 1)
+    @test rg.probability ≈ re.probability atol = 1e-12
+    @test gs_same(rg.state, re.state.state, sys)
+    # gates exp(A), A not quadratic, as polynomials
+    gp, ψp = gs_product(sys)
+    gp = apply(Rx(0.3)(2) * exp(-0.3im * (Z ⊗ Z))(1, 2), gp)
+    ψp = q(Rx(0.3), 2) * exp(-0.3im * q(Z, 1) * q(Z, 2)) * ψp
+    @test gs_same(gp, ψp, sys)
+    # the log of a degenerate level of the other sector, not returned, is not written
+    sys5 = System(5, Qubit())
+    H5 = sum(Z(j) * Z(mod1(j + 1, 5)) for j in 1:5) - 0.7 * sum(X(j) for j in 1:5)
+    g5 = TensorMixedStates.GaussianState(State{Pure}(sys5, "X+"); axes = :X)
+    @test_logs ground_state(H5, g5)
+    # sample of one site from the probabilities, without projecting
+    gx = apply(T(2), TensorMixedStates.GaussianState(State{Pure}(System(3, Qubit()), "X+"); axes = :X, max_terms = 2))
+    @test sample(gx, 1) in (0, 1)
+    # the sites of a term refused in a sector
+    m = try
+        TensorMixedStates.prepared_evolver(TensorMixedStates.GaussianState(State{Pure}(System(6, Qubit()), "Up")),
+                                           -im * Z(1) * Z(2) * Z(3) * Z(4))
+        ""
+    catch err
+        err.msg
+    end
+    @test occursin("sites 1, 2, 3, 4", m)
 end

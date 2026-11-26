@@ -30,36 +30,46 @@ function turned(state::GaussianState{Pure}, R::AbstractMatrix, definite::Bool)
     superposed(state, s; trace = state.trace)
 end
 
-"""
-the evolver of a Gaussian state: L = c + (1/4) Σ k_ab γ_a γ_b, k real, the rotations exp(k dt) already
-computed, and whether L keeps the physical parity
-"""
-struct GaussianEvolver
-    k::Matrix{Float64}
-    rotations::Dict{Float64, Matrix{Float64}}
-    even::Bool
-end
-
-prepared_evolver(state::GaussianState{Pure}, a::Union{IndexedOp, Pair}, mpo_limits::Limits = Limits();
-                 duration::Union{Nothing, Number} = nothing) =
-    prepared_evolver(state, [a], mpo_limits; duration)
-
 # the physical parity of a state of one component and definite parity, nothing for another: that of the
 # ancilla on the even states, ⟨-iγ₁γ₂⟩ = M₁₂ = ±1
 state_parity(state::GaussianState{Pure}) =
     isnothing(state.sum) && state.definite ? Int(sign(state.cov[1, 2])) : nothing
 
 """
-the evolver of a Gaussian state under L(t) = Σ_j f_j(t) L_j, L_j = c_j + (1/4) Σ k_j γγ with k_j real:
-the time functions, nothing for a constant evolver, the duration of the evolution, and whether L keeps
-the physical parity
+the evolver of a Gaussian state under L(t) = Σ_j f_j(t) L_j, nothing for the functions of a constant
+evolver: its operators compiled for each physical parity of the states it steps (nothing when they do
+not need it), and the rotations of the constant one by step
 """
-struct GaussianTimeEvolver
-    ks::Vector{Matrix{Float64}}
-    fs::Vector
+struct GaussianEvolver
+    system::System
+    axes::Dict{Int, Symbol}
+    ops::Vector
+    fs::Union{Nothing, Vector}
     duration::Union{Nothing, Number}
-    even::Bool
+    # whether the evolver is quadratic only in the sector of the parity of the state (a ring of qubits)
+    sectors::Bool
+    forms::Dict{Any, Any}
+    rotations::Dict{Any, Matrix{Float64}}
 end
+
+const evolver_what = "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now"
+
+# the evolver compiled for the parity σ of the states (nothing: none needed): for a constant one, h real
+# and whether it keeps the parity; for one depending on time, the k_j and whether it keeps the parity
+function compiled(pre::GaussianEvolver, σ)
+    get!(pre.forms, σ) do
+        if isnothing(pre.fs)
+            c, k, _ = gaussian_generator(pre.system, reduce(+, pre.ops); axes = pre.axes, parity = σ)
+            return last(unitary_form(c, k, evolver_what)), !couples_ancilla(k)
+        end
+        forms = [gaussian_generator(pre.system, op; axes = pre.axes, parity = σ) for op in pre.ops]
+        [k for (_, k, _) in forms], !any(couples_ancilla(k) for (_, k, _) in forms)
+    end
+end
+
+prepared_evolver(state::GaussianState{Pure}, a::Union{IndexedOp, Pair}, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
+    prepared_evolver(state, [a], mpo_limits; duration)
 
 function prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::Limits = Limits();
                           duration::Union{Nothing, Number} = nothing)
@@ -67,16 +77,28 @@ function prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::L
     if !all(op -> op isa IndexedOp{IsOperator}, ops)
         throw(ArgumentError("the Gaussian backend evolves a pure state under an operator, -iH"))
     end
-    what = "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now"
-    parity = state_parity(state)
-    if isnothing(fs)
-        c, k, _ = gaussian_generator(state.system, reduce(+, ops); axes = state.axes, parity)
-        _, h = unitary_form(c, k, what)
-        return GaussianEvolver(h, Dict{Float64, Matrix{Float64}}(), !couples_ancilla(k))
+    system = state.system
+    pre(sectors) = GaussianEvolver(system, state.axes, ops, fs, duration, sectors, Dict{Any, Any}(), Dict{Any, Matrix{Float64}}())
+    quadratic = all(op -> degree(polynomial(system, state.layout, lower(system, op))) <= 2, ops)
+    # the sectors of the parity when the whole evolver conserves it and needs them
+    whole = polynomial(system, state.layout, lower(system, reduce(+, ops)))
+    p = pre(!quadratic && conserves_parity(whole))
+    # compiled now for the state, so that an error comes at once
+    compiled(p, step_parity(p, state))
+    p
+end
+
+# the parity the evolver is compiled for to step the state: that of the state when it needs the sectors,
+# the error of the operator that is not quadratic when the state has none
+function step_parity(pre::GaussianEvolver, state::GaussianState{Pure})
+    if !pre.sectors
+        return nothing
     end
-    forms = [gaussian_generator(state.system, op; axes = state.axes, parity) for op in ops]
-    ks = [last(unitary_form(c, k, what)) for (c, k, _) in forms]
-    GaussianTimeEvolver(ks, fs, duration, !any(couples_ancilla(k) for (_, k, _) in forms))
+    σ = state_parity(state)
+    if isnothing(σ)
+        compiled(pre, nothing)
+    end
+    σ
 end
 
 function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{Pure},
@@ -87,56 +109,24 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::Gaussi
     if !(dt isa Real)
         throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
     end
-    R = get!(() -> propagator(pre.k, dt), pre.rotations, Float64(dt))
-    turned(state, R, pre.even)
-end
-
-function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianTimeEvolver, state::GaussianState{Pure},
-                     time::Number, dt::Number, step::Int, limits::Limits)
-    if iszero(dt)
-        return state
+    σ = step_parity(pre, state)
+    if isnothing(pre.fs)
+        h, even = compiled(pre, σ)
+        R = get!(() -> propagator(h, dt), pre.rotations, (σ, Float64(dt)))
+        return turned(state, R, even)
     end
-    if !(dt isa Real)
-        throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
-    end
-    turned(state, magnus_rotation(pre, time, dt), pre.even)
+    ks, even = compiled(pre, σ)
+    turned(state, magnus_rotation(pre, ks, time, dt), even)
 end
 
 # the rotation R of the step from `time` to `time + dt`, dR/dt = (Σ_j f_j(t) k_j) R, by the
-# commutator-free Magnus integrator of order 4 with substeps, as `magnus_evolved` for an ExactState:
-# a substep against its two halves, its error kept within its share of 1000 rounding_tol over the
-# duration
-function magnus_rotation(pre::GaussianTimeEvolver, time::Number, dt::Number)
-    duration = something(pre.duration, dt)
-    function generator(cs)
-        if !all(c -> isreal(c), cs)
-            throw(ArgumentError("the Gaussian backend evolves under real time functions, a unitary evolution"))
-        end
-        sum(real(c) * k for (c, k) in zip(cs, pre.ks))
-    end
+# commutator-free Magnus integrator of order 4 on the substeps of `substepped`, as for an ExactState;
+# the sum anti-Hermitian at each substep, its terms need not be
+function magnus_rotation(pre::GaussianEvolver, ks, time::Number, dt::Number)
+    generator(cs) = last(unitary_form(0, sum(c * k for (c, k) in zip(cs, ks)), evolver_what))
     magnus(t, h, R) = foldl((R, cs) -> propagator(generator(cs), h) * R, step_coefs(pre.fs, t, h, 4); init = R)
-    R = Matrix{Float64}(I, size(first(pre.ks)))
-    s, f = 0.0, 1.0
-    while 1 - s > 4 * eps()
-        f = min(f, 1 - s)
-        t, h = time + s * dt, f * dt
-        whole = magnus(t, h, R)
-        halves = magnus(t + h / 2, h / 2, magnus(t, h / 2, R))
-        err = norm(halves - whole) / norm(halves) / 15
-        if isnan(err)
-            error("the evolver of a GaussianState gave NaN within a step")
-        end
-        allowed = max(800 * rounding_tol * abs(h / duration), 10 * eps())
-        if err ≤ allowed
-            R, s = halves, s + f
-        end
-        f *= clamp(0.9 * (allowed / max(err, eps()))^(1 / 5), 0.25, 2.0)
-        if f < 1e-9
-            error("an evolver depending on time varies too fast for the substeps of a GaussianState: " *
-                  "take smaller steps")
-        end
-    end
-    R
+    R = Matrix{Float64}(I, size(first(ks)))
+    substepped(magnus, time, dt, something(pre.duration, dt), R, "a GaussianState")
 end
 
 """
@@ -179,6 +169,7 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
                   "$(round(abs(a.energy - b.energy); sigdigits = 2)), one of them is returned"
         end
         best = a.energy <= b.energy ? a : b
+        degenerate_info(best.levels)
         return (energy = best.energy, state = best.state)
     end
     c, k, _ = generator
@@ -225,12 +216,11 @@ function sector_ground_state(system::System, H, state::GaussianState{Pure}, σ::
     end
     _, h = unitary_form(-im * c, -im * k, "ground_state needs a Hermitian Hamiltonian")
     g = quadratic_ground_state(h[3:end, 3:end], σ)
-    degenerate_info(g)
     cov = zeros(M, M)
     cov[1, 2], cov[2, 1] = σ, -σ
     cov[3:end, 3:end] = g.cov
     found = GaussianState{Pure}(system, state.axes, state.layout, cov, nothing, true, 1.0, state.max_terms)
-    (energy = real(c) + g.energy, width = sum(g.energies), state = found)
+    (energy = real(c) + g.energy, width = sum(g.energies), levels = g, state = found)
 end
 
 # the generator A of a gate written exp(A), placed on its sites, nothing for another gate
@@ -264,8 +254,20 @@ function apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Li
         return foldr((g, st) -> apply(g, st; limits), s.subs; init = state)
     end
     A = gate_generator(s)
+    generator = nothing
     if !isnothing(A)
-        c0, k, _ = gaussian_generator(state.system, A; axes = state.axes)
+        generator = try
+            gaussian_generator(state.system, A; axes = state.axes)
+        catch e
+            if !(e isa ArgumentError)
+                rethrow()
+            end
+            # A not quadratic: exp(A) as a polynomial, below
+            nothing
+        end
+    end
+    if !isnothing(generator)
+        c0, k, _ = generator
         _, h = unitary_form(c0, k, "the Gaussian backend applies exp(A) with A anti-Hermitian, unitary gates")
         return turned(state, propagator(h, 1), !couples_ancilla(k))
     end
@@ -290,11 +292,16 @@ function scaled(state::GaussianState{Pure}, c::Number)
     superposed(state, s; trace = abs2(c) * state.trace)
 end
 
-# the polynomial p applied to the state: each monomial to each component, exactly, with its phase
-function applied_poly(state::GaussianState{Pure}, p::MajoranaPoly)
+# the polynomial p applied to the state: each monomial to each component, exactly, with its phase;
+# `cause` names what multiplies the components in the refusal beyond max_terms
+function applied_poly(state::GaussianState{Pure}, p::MajoranaPoly; cause::String = "the operator")
+    if iszero(p)
+        # the null state
+        return scaled(state, 0)
+    end
     K = ncomponents(state) * length(p)
     if K > state.max_terms
-        throw(ArgumentError("the operator would give the state $K Gaussian components, above max_terms = " *
+        throw(ArgumentError("$cause would give the state $K Gaussian components, above max_terms = " *
                             "$(state.max_terms): raise it with GaussianState(…; max_terms)"))
     end
     s = as_sum(state)
@@ -344,7 +351,8 @@ function projected(state::GaussianState{Pure}, occupations)
             project_covariance!(M, m, s, q)
             t *= q
         end
-        return single(state, M; definite = false, trace = t)
+        # the occupations commute with the parity
+        return single(state, M; trace = t)
     end
     s = as_sum(state)
     for (m, o) in occupations
@@ -353,8 +361,10 @@ function projected(state::GaussianState{Pure}, occupations)
     superposed(state, s)
 end
 
-normalized(state::GaussianState{Pure}) =
+function normalized(state::GaussianState{Pure})
+    nonzero_trace(state, "project_on")
     isnothing(state.sum) ? single(state, state.cov; trace = 1.0) : scaled(state, 1 / sqrt(state.trace))
+end
 
 """
     project_on(state::GaussianState, p; limits)
@@ -366,15 +376,20 @@ polynomial otherwise, see `apply`.
 function project_on(state::GaussianState{Pure}, p::IndexedOp; limits::Limits = Limits())
     poly = polynomial(state.system, state.layout, lower(weaken(state.system, ()), p))
     occupations = occupation_projector(poly)
-    normalized(isnothing(occupations) ? apply(p, state; limits) : projected(state, occupations))
+    if !isnothing(occupations)
+        return normalized(projected(state, occupations))
+    end
+    cause = "this measurement, outside the occupations of the modes,"
+    normalized(applied_poly(state, poly; cause))
 end
 
 project_count(::GaussianState, sites, locals, T; limits::Limits = Limits()) =
-    throw(ArgumentError("the Gaussian backend does not project on a total of operators of one site, which " *
-                        "is not Gaussian; measure the sites one by one"))
+    throw(ArgumentError("the Gaussian backend does not project on a total of operators of one site for now; " *
+                        "measure the sites one by one"))
 
+# drawn from the probabilities, without projecting the state
 sample(state::GaussianState{Pure}, pos::Int; rng = Random.default_rng()) =
-    first(collapse(state, pos; rng))
+    round(Int, sample(state, Level(pos); rng))
 
 # the sites drawn one after the other, each collapsing the state
 function sample(state::GaussianState{Pure}; rng = Random.default_rng())

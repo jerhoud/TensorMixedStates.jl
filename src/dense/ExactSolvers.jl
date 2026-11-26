@@ -129,6 +129,15 @@ function magnus_evolved(act, bound, fs, time::Number, dt::Number, duration::Numb
     tol = 100 * rounding_tol / abs(duration)
     magnus(t, h, y) = foldl((y, cs) -> exact_exp(act(cs), bound(cs), h, y, tol),
                             step_coefs(fs, t, h, 4); init = y)
+    return substepped(magnus, time, dt, duration, x, "an ExactState")
+end
+
+"""
+`x` taken from `time` to `time + dt` by the steps `magnus(t, h, x)` of an integrator of order 4, on
+substeps whose length adapts so that the error of each, measured against its two halves, stays
+within its share of `1000 rounding_tol` over `duration`; `name` names the state in the errors
+"""
+function substepped(magnus, time::Number, dt::Number, duration::Number, x::AbstractArray, name::String)
     # the substeps as fractions of `dt`, from `s` and of length `f`
     s, f = 0.0, 1.0
     while 1 - s > 4 * eps()
@@ -140,7 +149,7 @@ function magnus_evolved(act, bound, fs, time::Number, dt::Number, duration::Numb
         # about a fifteenth of their difference to the whole step
         err = norm(halves - whole) / norm(halves) / 15
         if isnan(err)
-            error("the evolver of an ExactState gave NaN within a step")
+            error("the evolver of $name gave NaN within a step")
         end
         # its share of the error of the whole evolution, above the rounding of the operations
         allowed = max(800 * rounding_tol * abs(h / duration), 10 * eps())
@@ -149,8 +158,8 @@ function magnus_evolved(act, bound, fs, time::Number, dt::Number, duration::Numb
         end
         f *= clamp(0.9 * (allowed / max(err, eps()))^(1 / 5), 0.25, 2.0)
         if f < 1e-9
-            error("an evolver depending on time varies too fast for the substeps of an " *
-                  "ExactState: take smaller steps")
+            error("an evolver depending on time varies too fast for the substeps of $name: " *
+                  "take smaller steps")
         end
     end
     return x

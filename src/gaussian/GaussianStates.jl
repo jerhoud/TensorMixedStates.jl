@@ -3,10 +3,10 @@
 # A state of one component, whose phase is not observable, keeps its covariance only.
 
 import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, relink!, norm2, apply_monomial,
-                         cross_term, describe, overlap, fock_state, transition_matrix, logpfaffian
+                         cross_term, describe, overlap, fock_state, logpfaffian
 
 """
-    GaussianState(state::State{Pure}; axes = :Z, limits = Limits())
+    GaussianState(state::State{Pure}; axes = :Z, max_terms = 64, limits = Limits())
 
 the product state `state` held exactly as a fermionic Gaussian state, on fermionic sites and sites of
 dimension 2 (qubits); `limits` is without use. A state that is not a product, an MPS of link
@@ -15,7 +15,8 @@ dimension above 1, is refused.
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis
 - `max_terms`: the largest number of Gaussian components of the state, which operators that are not
-  Gaussian multiply (default 64)
+  Gaussian multiply (default 64); a measurement of K components keeps K(K-1)/2 matrices of the size
+  of the covariance
 
     CreateState(…; backend = GaussianState)
     CreateState(GaussianState(State{Pure}(System(4, Qubit()), "X+"); axes = :X))
@@ -72,8 +73,16 @@ function superposed(state::GaussianState{Pure}, s::GaussianSum; trace::Union{Not
         throw(ArgumentError("the state would have $K Gaussian components, above max_terms = $(state.max_terms): " *
                             "raise it with GaussianState(…; max_terms)"))
     end
-    # computed only when not given: K² overlaps
-    t = isnothing(trace) ? real(ComplexF64(norm2(s))) : trace
+    # computed only when not given, K² overlaps; zero when the components cancel to rounding beside the
+    # scale of their coefficients, as the null state an operator annihilating the state leaves
+    t = trace
+    if isnothing(t)
+        t = real(ComplexF64(norm2(s)))
+        scale = sum(abs, s.coefs; init = 0.0)^2
+        if abs(t) <= rounding_tol * scale
+            t = 0.0
+        end
+    end
     if K == 1
         fix!(s)
         return single(state, only(s.comps).cov; definite = false, trace = t)
@@ -195,46 +204,58 @@ import .GaussianKernels: expect_monomial
 # values of the monomials already met kept in cache
 function poly_value(state::GaussianState{Pure}, p::MajoranaPoly,
                     cache::Dict{Vector{Int}, ComplexF64} = Dict{Vector{Int}, ComplexF64}())
+    nonzero_trace(state, "expect")
     value(α) = isnothing(state.sum) ? ComplexF64(expect_monomial(state.cov, α)) : sum_monomial(state, α)
     sum((c * get!(() -> value(α), cache, α) for (α, c) in p.terms); init = zero(ComplexF64))
 end
 
-# the overlap and the transition matrix W of each pair of components of a sum brought up to date, so that
-# ⟨G_k|c(α)|G_l⟩ = ⟨G_k|G_l⟩ Pf(W[α, α]) (Bravyi and Gosset, eq. (28)), for the pairs where M_k + M_l is
-# well conditioned, its reciprocal condition above 1e-4, which keeps the error of W near 1e-12 (D-f,
-# measured equal to the precise way within 3e-14, local/gaussian/experiences/lot4.out); nothing for the
-# others, nearly or exactly orthogonal, which take the precise way. Computed once for a sum, which no
-# operation changes once brought up to date.
+# the overlap and the transition matrix W of each pair k < l of components of a sum brought up to date,
+# so that ⟨G_k|c(α)|G_l⟩ = ⟨G_k|G_l⟩ Pf(W[α, α]) (Bravyi and Gosset, eq. (28)), for the pairs where
+# M_k + M_l is well conditioned, its reciprocal condition above 1e-4, which kept the error within 1e-13
+# against the precise way (decided 2026-11-26); nothing for the others, nearly or exactly orthogonal,
+# which take the precise way. Computed once for a sum, which no operation changes once brought up to
+# date.
 const pair_cache = WeakKeyDict{GaussianSum, Matrix{Any}}()
 
 function pair_transitions(s::GaussianSum)
     get!(pair_cache, s) do
         K = length(s.comps)
         P = Matrix{Any}(nothing, K, K)
-        for k in 1:K, l in 1:K
-            gk, gl = s.comps[k], s.comps[l]
-            o = overlap(gk, gl)
-            S = gk.cov + gl.cov
+        for k in 1:K, l in k+1:K
+            Mk, Ml = s.comps[k].cov, s.comps[l].cov
+            o = overlap(s.comps[k], s.comps[l])
+            S = Mk + Ml
             F = lu(S; check = false)
             if !iszero(o) && issuccess(F) && LinearAlgebra.LAPACK.gecon!('1', copy(F.factors), opnorm(S, 1)) > 1e-4
-                P[k, l] = (o, transition_matrix(gk.cov, gl.cov))
+                W = im .* conj.((-2I + im * Mk - im * Ml) / F)
+                W[diagind(W)] .= 1
+                P[k, l] = (o, W)
             end
         end
         P
     end
 end
 
+# Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩: the diagonal by Pf(iM_k[α, α]), the pairs l < k from k < l
+# by ⟨G_k|c(α)|G_l⟩ = conj(⟨G_l|c(α)†|G_k⟩), c(α)† = ± c(α)
 function sum_monomial(state::GaussianState{Pure}, α::Vector{Int})
     s = state.sum
     fix!(s)
     P = pair_transitions(s)
+    w = length(α)
+    adjoint_sign = iseven(w * (w - 1) ÷ 2) ? 1 : -1
     total = zero(LogComplex)
-    for (k, (gk, ak)) in enumerate(zip(s.comps, s.coefs)), (l, (gl, al)) in enumerate(zip(s.comps, s.coefs))
-        if isnothing(P[k, l])
-            total += conj(ak) * al * cross_term(gk, α, gl)
-        else
-            o, W = P[k, l]
-            total += conj(ak) * al * o * (isempty(α) ? one(LogComplex) : logpfaffian(W[α, α]))
+    for (k, (gk, ak)) in enumerate(zip(s.comps, s.coefs))
+        total += conj(ak) * ak * expect_monomial(gk.cov, α)
+        for l in k+1:length(s.comps)
+            gl, al = s.comps[l], s.coefs[l]
+            if isnothing(P[k, l])
+                v = cross_term(gk, α, gl)
+            else
+                o, W = P[k, l]
+                v = o * (isempty(α) ? one(LogComplex) : logpfaffian(W[α, α]))
+            end
+            total += conj(ak) * al * v + conj(al) * ak * conj(v) * adjoint_sign
         end
     end
     ComplexF64(total) / state.trace

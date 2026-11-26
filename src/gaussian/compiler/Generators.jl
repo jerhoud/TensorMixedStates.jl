@@ -16,16 +16,19 @@ function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Di
     layout = MajoranaLayout(system; axes)
     terms = lower(system, op)
     p = polynomial(system, layout, terms)
-    if !isnothing(parity) && conserves_parity(p)
+    sector = !isnothing(parity) && conserves_parity(p)
+    if sector
         p = in_sector(p, layout.count, parity)
     end
+    # the polynomial of a term as it enters p
+    term_poly(t) = sector ? in_sector(polynomial(system, layout, [t]), layout.count, parity) : polynomial(system, layout, [t])
     if degree(p) <= 2
         c, k = quadratic_form(p, layout.count + 2)
         return c, k, layout.count + 2
     end
     bad = [α for α in keys(p.terms) if length(α) > 2]
     culprits = unique(sort(unique(b.site for b in t.blocks)) for t in terms
-                      if (q = polynomial(system, layout, [t]); any(haskey(q.terms, α) for α in bad)))
+                      if (q = term_poly(t); any(haskey(q.terms, α) for α in bad)))
     largest = maximum(abs(p.terms[α]) for α in bad)
     shown = join(("sites " * join(ks, ", ") for ks in first(culprits, 3)), "; ")
     more = length(culprits) > 3 ? " and $(length(culprits) - 3) others" : ""
