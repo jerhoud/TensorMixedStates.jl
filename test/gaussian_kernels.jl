@@ -65,6 +65,24 @@ end
     p = logpfaffian(A)
     @test p.logabs ≈ 200 * log(1e-3) rtol = 1e-12
     @test p.phase ≈ sign(det(O))
+    # Pf² = det at 2n = 40 and 200, real and complex
+    for m in (40, 200), T in (Float64, ComplexF64)
+        B = randn(gk_rng, T, m, m) / sqrt(m)
+        A = B - transpose(B)
+        p = logpfaffian(A)
+        l, s = LA.logabsdet(A)
+        @test 2 * p.logabs ≈ l rtol = 1e-12
+        @test p.phase^2 ≈ s atol = 1e-10
+    end
+    # singular matrices: zero, never NaN; two equal rows and columns, exactly singular
+    for T in (Float64, ComplexF64)
+        B = randn(gk_rng, T, 8, 8)
+        A = B - transpose(B)
+        A[:, 8] = A[:, 7]
+        A[8, :] = A[7, :]
+        A[7, 8] = A[8, 7] = 0
+        @test iszero(logpfaffian(A))
+    end
 end
 
 @testset "Fock states" begin

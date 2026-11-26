@@ -7,7 +7,6 @@
 module GaussianKernels
 
 using LinearAlgebra
-using SkewLinearAlgebra: logabspfaffian
 
 export LogComplex, logpfaffian, fock_covariance, majorana_on_fock, PureGaussian, nmodes,
        find_support, describe, apply_monomial, overlap, cross_term, expect_monomial,

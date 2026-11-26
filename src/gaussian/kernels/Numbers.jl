@@ -69,8 +69,58 @@ function logpfaffian(A::AbstractMatrix)
     if isempty(A)
         return one(LogComplex)
     end
-    l, s = logabspfaffian((A - transpose(A)) / 2)
+    l, s = parlett_reid((A - transpose(A)) / 2)
     LogComplex(l, s)
+end
+
+# (log|Pf(A)|, phase of Pf(A)) for A antisymmetric, by the Parlett-Reid elimination with partial pivoting
+# (Wimmer, ACM TOMS 38, 30 (2012), PFAPACK). The updates keep A exactly antisymmetric, so that a column that
+# vanishes gives Pf = 0 (SkewLinearAlgebra 1.1, with fast math and the pivot tested on the other side of the
+# diagonal, gave NaN on the overlap of two orthogonal states)
+function parlett_reid(A0::AbstractMatrix{<:Number})
+    n = size(A0, 1)
+    A = Matrix{float(eltype(A0))}(A0)
+    phase = one(complex(eltype(A)))
+    if isodd(n)
+        return -Inf, zero(phase)
+    end
+    logabs = 0.0
+    τ = similar(A, n)
+    c = similar(A, n)
+    @inbounds for k in 1:2:n-1
+        # pivot: the largest element of row k beyond the diagonal
+        kp = k + 1
+        largest = abs(A[k, k+1])
+        for j in k+2:n
+            if abs(A[k, j]) > largest
+                kp, largest = j, abs(A[k, j])
+            end
+        end
+        if kp != k + 1
+            for j in k:n
+                A[k+1, j], A[kp, j] = A[kp, j], A[k+1, j]
+            end
+            for i in k:n
+                A[i, k+1], A[i, kp] = A[i, kp], A[i, k+1]
+            end
+            phase = -phase
+        end
+        p = A[k, k+1]
+        if iszero(p)
+            return -Inf, zero(phase)
+        end
+        logabs += log(abs(p))
+        phase *= p / abs(p)
+        # A[i, j] += τ_i c_j - c_i τ_j: the same rounding on (i, j) and (j, i), which stay opposite
+        for i in k+2:n
+            τ[i] = A[k, i] / p
+            c[i] = A[i, k+1]
+        end
+        for j in k+2:n, i in k+2:n
+            A[i, j] += τ[i] * c[j] - c[i] * τ[j]
+        end
+    end
+    logabs, phase
 end
 
 """

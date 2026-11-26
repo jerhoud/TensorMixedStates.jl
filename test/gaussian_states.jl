@@ -792,3 +792,19 @@ end
     gm = TensorMixedStates.GaussianState(State{Pure}(sys, "Up"); axes = :X)
     @test_throws "project it on each sector" TensorMixedStates.prepared_evolver(gm, [-im * ring, -im * X(1) => t -> cos(t)])
 end
+
+@testset "cross terms of orthogonal components" begin
+    # a sum of 7 components on qubits and fermions, some exactly orthogonal after the evolution (their
+    # overlap matrix singular: NaN by the pfaffian of SkewLinearAlgebra 1.1), against ExactState
+    sys = System([Qubit(), Qubit(), Fermion(), Fermion()])
+    st = State{Pure}(sys, ["Up", "Dn", "Occ", "Emp"])
+    H = dag(C)(3) * C(4) + dag(C)(4) * C(3) + 0.3 * Z(1) + 0.2 * X(1) * X(2)
+    gate = X(1) + 0.5 * C(3) + 0.2 * dag(C)(4) * C(3)
+    g = evolve(-im * H, 0.8, apply(gate, TensorMixedStates.GaussianState(st)); nsteps = 3)
+    e = evolve(-im * H, 0.8, apply(gate, TensorMixedStates.ExactState(st)); nsteps = 3)
+    @test TensorMixedStates.ncomponents(g) > 1
+    for o in (X(2), X(2) * N(4), Z(1), N(3), C(3))
+        @test TensorMixedStates.expect_value(g, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-10
+    end
+    @test gs_same(g, e.state, sys)
+end
