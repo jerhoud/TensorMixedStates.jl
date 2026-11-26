@@ -6,11 +6,11 @@ import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, r
                          cross_term, describe, overlap, fock_state, logpfaffian
 
 """
-    GaussianState(state::State{Pure}; axes = :Z, max_terms = 64, limits = Limits())
+    GaussianState(state::State{R}; axes = :Z, max_terms = 64, limits = Limits())
 
-the product state `state` held exactly as a fermionic Gaussian state, on fermionic sites and sites of
-dimension 2 (qubits); `limits` is without use. A state that is not a product, an MPS of link
-dimension above 1, is refused.
+the product state `state`, pure or a trajectory (`R = Pure` or `Trajectory`), held exactly as a
+fermionic Gaussian state, on fermionic sites and sites of dimension 2 (qubits); `limits` is without
+use. A state that is not a product, an MPS of link dimension above 1, is refused.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis
@@ -35,8 +35,8 @@ struct GaussianState{R <: PM} <: AbstractState{R}
     max_terms::Int
 end
 
-function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
-                       limits::Limits = Limits())
+function GaussianState(state::State{R}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
+                       limits::Limits = Limits()) where {R <: Ket}
     d = maxlinkdim(state.state)
     if d > 1
         throw(ArgumentError("the Gaussian backend starts from a product state, not from an MPS of " *
@@ -53,7 +53,7 @@ function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), max_terms
     end
     vectors = local_vectors(state)
     cov, definite = product_covariance(system, layout, vectors)
-    GaussianState{Pure}(system, axes, layout, cov, nothing, definite, norm(state.state)^2, max_terms)
+    GaussianState{R}(system, axes, layout, cov, nothing, definite, norm(state.state)^2, max_terms)
 end
 
 # the generator of the references of the sums: fixed, so that a run can be reproduced (the reference
@@ -61,13 +61,13 @@ end
 const reference_seed = 20261126
 
 # a state of one component like `state`, of covariance `cov`
-single(state::GaussianState{Pure}, cov::Matrix{Float64}; definite::Bool = state.definite,
-       trace::Real = state.trace) =
-    GaussianState{Pure}(state.system, state.axes, state.layout, cov, nothing, definite, trace, state.max_terms)
+single(state::GaussianState{R}, cov::Matrix{Float64}; definite::Bool = state.definite,
+       trace::Real = state.trace) where {R <: Ket} =
+    GaussianState{R}(state.system, state.axes, state.layout, cov, nothing, definite, trace, state.max_terms)
 
 # a state like `state` held by the sum `s`, refused beyond max_terms components, of one component
 # when it has one; `trace` its squared norm when known
-function superposed(state::GaussianState{Pure}, s::GaussianSum; trace::Union{Nothing, Real} = nothing)
+function superposed(state::GaussianState{R}, s::GaussianSum; trace::Union{Nothing, Real} = nothing) where {R <: Ket}
     K = length(s.comps)
     if K > state.max_terms
         throw(ArgumentError("the state would have $K Gaussian components, above max_terms = $(state.max_terms): " *
@@ -87,11 +87,11 @@ function superposed(state::GaussianState{Pure}, s::GaussianSum; trace::Union{Not
         fix!(s)
         return single(state, only(s.comps).cov; definite = false, trace = t)
     end
-    GaussianState{Pure}(state.system, state.axes, state.layout, nothing, s, false, t, state.max_terms)
+    GaussianState{R}(state.system, state.axes, state.layout, nothing, s, false, t, state.max_terms)
 end
 
 # the state as a sum that can be changed, its phases not brought up to date
-function as_sum(state::GaussianState{Pure})
+function as_sum(state::GaussianState{<:Ket})
     if isnothing(state.sum)
         g = describe(state.cov)
         return GaussianSum([g], [sqrt(state.trace)], Random.Xoshiro(reference_seed))
@@ -100,8 +100,8 @@ function as_sum(state::GaussianState{Pure})
 end
 
 
-GaussianState(state::State{R}; kwargs...) where R =
-    throw(ArgumentError("the Gaussian backend holds pure states only for now, not a State{$R}"))
+GaussianState(::State{Mixed}; kwargs...) =
+    throw(ArgumentError("the Gaussian backend holds pure states and trajectories only for now, not a State{Mixed}"))
 
 # the axes given to GaussianState as a Dict from the qubits to their Paulis
 function axes_by_site(system::System, axes)
@@ -189,20 +189,31 @@ end
 representation(::GaussianState{R}) where R = R
 show(io::IO, s::GaussianState{R}) where R = print(io, "GaussianState{$R}($(s.system))")
 ignored_options(::GaussianState) = (:algo, :limits, :mpo_limits, :randomize)
-trace(state::GaussianState{Pure}) = state.trace
+trace(state::GaussianState{<:Ket}) = state.trace
 ncomponents(state::GaussianState) = isnothing(state.sum) ? 1 : length(state.sum.comps)
-norm(state::GaussianState{Pure}) = sqrt(state.trace)
+norm(state::GaussianState{<:Ket}) = sqrt(state.trace)
 
-as_representation(::Type{Pure}, state::GaussianState{Pure}; limits::Limits = Limits()) = state
-as_representation(::Type{R}, ::GaussianState{Pure}; limits::Limits = Limits()) where R =
-    throw(ArgumentError("the Gaussian backend holds pure states only for now, not $R"))
+# the state as the representation R, its data unchanged
+with_representation(::Type{R}, s::GaussianState) where {R <: Ket} =
+    GaussianState{R}(s.system, s.axes, s.layout, s.cov, s.sum, s.definite, s.trace, s.max_terms)
+
+# whether the backend keeps the norm of a trajectory exactly, see `exact_norm`
+exact_norm(::GaussianState) = true
+
+as_representation(::Type{R}, state::GaussianState{R}; limits::Limits = Limits()) where {R <: Ket} = state
+as_representation(::Type{Trajectory}, state::GaussianState{Pure}; limits::Limits = Limits()) =
+    with_representation(Trajectory, state)
+as_representation(::Type{Pure}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
+    error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
+as_representation(::Type{Mixed}, ::GaussianState; limits::Limits = Limits()) =
+    throw(ArgumentError("the Gaussian backend holds pure states and trajectories only for now, not Mixed"))
 
 import .GaussianKernels: expect_monomial
 
 # the value on the state, normalised, of a polynomial in its Majoranas: Σ c_α Pf(iM[α, α]) for one
 # component, Σ c_α Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩ for several (see `sum_monomial`); the
 # values of the monomials already met kept in cache
-function poly_value(state::GaussianState{Pure}, p::MajoranaPoly,
+function poly_value(state::GaussianState{<:Ket}, p::MajoranaPoly,
                     cache::Dict{Vector{Int}, ComplexF64} = Dict{Vector{Int}, ComplexF64}())
     nonzero_trace(state, "expect")
     value(α) = isnothing(state.sum) ? ComplexF64(expect_monomial(state.cov, α)) : sum_monomial(state, α)
@@ -238,7 +249,7 @@ end
 
 # Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩: the diagonal by Pf(iM_k[α, α]), the pairs l < k from k < l
 # by ⟨G_k|c(α)|G_l⟩ = conj(⟨G_l|c(α)†|G_k⟩), c(α)† = ± c(α)
-function sum_monomial(state::GaussianState{Pure}, α::Vector{Int})
+function sum_monomial(state::GaussianState{<:Ket}, α::Vector{Int})
     s = state.sum
     fix!(s)
     P = pair_transitions(s)
@@ -262,7 +273,7 @@ function sum_monomial(state::GaussianState{Pure}, α::Vector{Int})
 end
 
 # measured on what conserves nothing, as on a State, an operator of no definite flux too
-expect_value(state::GaussianState{Pure}, a::IndexedOp{IsOperator}) =
+expect_value(state::GaussianState{<:Ket}, a::IndexedOp{IsOperator}) =
     poly_value(state, polynomial(state.system, state.layout, lower(weaken(state.system, ()), a)))
 
 # the matrix of size d with a 1 at (r, c)
@@ -290,7 +301,7 @@ end
 
 # ρ_A[a, b] = ⟨|b⟩⟨a|⟩, |b⟩⟨a| an operator on the sites given by its matrix and placed, its
 # Jordan-Wigner strings laid by `lower`, so that tr(ρ_A matrix(op)) = ⟨op⟩ as for a State
-function reduced_density_matrix(state::GaussianState{Pure}, positions::AbstractVector{Int};
+function reduced_density_matrix(state::GaussianState{<:Ket}, positions::AbstractVector{Int};
                                 max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "reduced_density_matrix")
     check_increasing(positions, "reduced_density_matrix")
@@ -319,7 +330,7 @@ by the eigenvalues ±iν of the covariance of the modes of the sites, Σ h((1 + 
 a definite parity and the sites are fermionic, or qubits only and the first or the last ones (the
 reduced state is then the Gaussian one of their modes); otherwise from `reduced_density_matrix`.
 """
-function von_neumann_entropy(state::GaussianState{Pure}, positions::AbstractVector{Int};
+function von_neumann_entropy(state::GaussianState{<:Ket}, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
     layout, order = state.layout, state.layout.order
@@ -336,7 +347,7 @@ function von_neumann_entropy(state::GaussianState{Pure}, positions::AbstractVect
     shannon_entropy(vcat(ps, 1 .- ps))
 end
 
-function entanglement_entropy(state::GaussianState{Pure}, cut::Int)
+function entanglement_entropy(state::GaussianState{<:Ket}, cut::Int)
     check_cut(length(state.system.sites), cut)
     von_neumann_entropy(state, 1:cut)
 end
@@ -369,7 +380,7 @@ end
 # the vector of the physical state in the basis of TMS, its phase free: Ψ = Σ_x ⟨x|Ψ⟩ |x⟩ over the
 # even Fock states of the modes, the ancilla first (⟨x|Ψ⟩ = Σ_k a_k ⟨x|G_k⟩ for several components),
 # and ψ = Ψ_even - iΨ_odd, an array of the occupations of the sites carried to their bases
-function physical_vector(state::GaussianState{Pure})
+function physical_vector(state::GaussianState{<:Ket})
     system, layout = state.system, state.layout
     order = layout.order
     dims = [dim(s) for s in system.sites]
@@ -408,14 +419,14 @@ end
 the state as an MPS, through its dense vector, from an overlap for each Fock state of its modes:
 refused beyond 16 modes, where it would take minutes.
 """
-function State(state::GaussianState{Pure}; limits::Limits = Limits())
+function State(state::GaussianState{R}; limits::Limits = Limits()) where {R <: Ket}
     m = state.layout.count ÷ 2
     if m > 16
         throw(ArgumentError("the Gaussian backend converts to a State through 2^m overlaps for m modes, " *
                             "up to 16 modes, not $m"))
     end
     ψ = physical_vector(state)
-    State(ExactState{Pure}(state.system, sqrt(state.trace) * ψ / norm(ψ), Val(:raw)); limits)
+    State(ExactState{R}(state.system, sqrt(state.trace) * ψ / norm(ψ), Val(:raw)); limits)
 end
 
 # one component: its covariance; several: for each, its covariance, its support, its amplitude and
@@ -445,9 +456,11 @@ end
 
 function read_state(::Type{<:GaussianState}, g, sites)
     name = read(attributes(g)["representation"])
-    if name != "Pure"
+    representations = Dict("Pure" => Pure, "Trajectory" => Trajectory)
+    if !haskey(representations, name)
         error("a GaussianState of unknown representation \"$name\"")
     end
+    R = representations[name]
     system = System(sites)
     text = read(attributes(g)["axes"])
     axes = Dict{Int, Symbol}(parse(Int, first(split(e, ":"))) => Symbol(last(split(e, ":"))) for e in split(text, ",") if !isempty(e))
@@ -455,12 +468,12 @@ function read_state(::Type{<:GaussianState}, g, sites)
     max_terms = haskey(attributes(g), "max_terms") ? Int(read(attributes(g)["max_terms"])) : 64
     definite, trace = read(attributes(g)["definite"]) == 1, read(attributes(g)["trace"])
     if haskey(g, "covariance")
-        return GaussianState{Pure}(system, axes, layout, read(g["covariance"]), nothing, definite, trace, max_terms)
+        return GaussianState{R}(system, axes, layout, read(g["covariance"]), nothing, definite, trace, max_terms)
     end
     number(v) = LogComplex(v[1], complex(v[2], v[3]))
     hs = [g["component$k"] for k in 1:read(attributes(g)["components"])]
     comps = [PureGaussian(read(h["covariance"]), Bool.(read(h["support"])), number(read(h["amplitude"]))) for h in hs]
     coefs = [number(read(h["coefficient"])) for h in hs]
     s = GaussianSum(comps, coefs, Random.Xoshiro(reference_seed))
-    GaussianState{Pure}(system, axes, layout, nothing, s, definite, trace, max_terms)
+    GaussianState{R}(system, axes, layout, nothing, s, definite, trace, max_terms)
 end

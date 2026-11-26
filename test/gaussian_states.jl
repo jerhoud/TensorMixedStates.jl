@@ -264,11 +264,11 @@ function gs_same_outputs(a, b; atol = 1e-10)
 end
 
 # a program run on GaussianState and on ExactState: the same measurements, the same final state
-function gs_programs_agree(phases)
+function gs_programs_agree(phases; kwargs...)
     ok = true
     in_tmp() do
-        g = runTMS(SimData(; name = "g", backend = TensorMixedStates.GaussianState, phases))
-        e = runTMS(SimData(; name = "e", backend = TensorMixedStates.ExactState, phases))
+        g = runTMS(SimData(; name = "g", backend = TensorMixedStates.GaussianState, phases, kwargs...))
+        e = runTMS(SimData(; name = "e", backend = TensorMixedStates.ExactState, phases, kwargs...))
         ok &= g.state isa TensorMixedStates.GaussianState
         ok &= gs_same_outputs("g", "e")
         v, w = TensorMixedStates.ExactState(State(g.state)).state, e.state.state
@@ -610,4 +610,69 @@ end
         err.msg
     end
     @test occursin("sites 1, 2, 3, 4", m)
+end
+
+@testset "trajectories with jumps of constant Σ L†L" begin
+    # ising_quench: a ring along X from X+, Z jumps, against ExactState with the same draws
+    n = 6
+    sys = System(n, Qubit())
+    H = sum(Z(j) * Z(j + 1) for j in 1:n-1) + Z(n) * Z(1) - 0.7 * sum(X(j) for j in 1:n)
+    L = -im * H + sum(0.4 * Dissipator(Z)(j) for j in 1:n)
+    for seed in 1:3
+        g = TensorMixedStates.GaussianState(State{Trajectory}(sys, "X+"); axes = :X)
+        e = TensorMixedStates.ExactState(State{Trajectory}(sys, "X+"))
+        @test g isa TensorMixedStates.GaussianState{Trajectory}
+        jg, je = [], []
+        g = evolve(L, 2.0, g; nsteps = 20, rng = Random.Xoshiro(seed), jumps = jg)
+        e = evolve(L, 2.0, e; nsteps = 20, rng = Random.Xoshiro(seed), jumps = je)
+        @test [j.dissipator for j in jg] == [j.dissipator for j in je]
+        @test all(isapprox(a.time, b.time; atol = 1e-12) for (a, b) in zip(jg, je))
+        @test TensorMixedStates.trace(g) ≈ real(TensorMixedStates.trace(e)) atol = 1e-9
+        @test gs_same(g, e.state, sys)
+    end
+    # fermions, Majorana jumps C + C† and σ⁺, σ⁻ pairs of the same rate (each L†L is not constant, their
+    # sum is), one depending on time, against ExactState
+    sys = System(5, Fermion())
+    Hf = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) + 0.3 * (C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j)) for j in 1:4)
+    terms = [-im * Hf + 0.3 * Dissipator(C + dag(C))(2), 0.5 * (Dissipator(C)(4) + Dissipator(dag(C))(4)) => t -> 1 + t]
+    g, ψ = gs_product(sys)
+    e = TensorMixedStates.ExactState(State(g))
+    e = TensorMixedStates.ExactState{Trajectory}(sys, e.state, Val(:raw))
+    g = TensorMixedStates.as_representation(Trajectory, g)
+    jg, je = [], []
+    g = evolve(terms, 1.5, g; nsteps = 10, rng = Random.Xoshiro(4), jumps = jg)
+    e = evolve(terms, 1.5, e; nsteps = 10, rng = Random.Xoshiro(4), jumps = je)
+    @test !isempty(jg) && [j.dissipator for j in jg] == [j.dissipator for j in je]
+    @test TensorMixedStates.trace(g) ≈ real(TensorMixedStates.trace(e)) rtol = 1e-9
+    @test gs_same(g, e.state, sys)
+    # a program: evolution with jumps, a Pauli channel drawn, measurements, against ExactState with the
+    # same draws
+    sys = System(5, Qubit())
+    meas = EachSample(Data("t")) => [X, Z, X(1) * X(2), EntanglementEntropy(2)]
+    phases = [CreateState{Trajectory}(sys, "X+"; final_measurements = meas),
+              Evolve(evolver = -im * sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:4) + sum(0.3 * Dissipator(Z)(j) for j in 1:5),
+                     duration = 1.0, time_step = 0.1, measurements = meas),
+              Gates(gates = depolarizing_channel(0.6)(3), final_measurements = meas)]
+    for seed in 1:3
+        run(b) = runTMS(SimData(; name = "t", backend = b, phases, seed, samples = 1); output = devnull)
+        rg, re = in_tmp(() -> run(TensorMixedStates.GaussianState)), in_tmp(() -> run(TensorMixedStates.ExactState))
+        @test rg.state isa TensorMixedStates.GaussianState{Trajectory}
+        tg, te = rg.data["t"], re.data["t"]
+        @test length(tg) == length(te) == 12
+        same(p, q) = first(p) == first(q) && isapprox(last(p), last(q); atol = 1e-10)
+        @test all(length(a) == length(b) && all(same(p, q) for (p, q) in zip(a, b)) for (a, b) in zip(tg, te))
+        v, w = TensorMixedStates.ExactState(State(rg.state)).state, re.state.state
+        @test abs(dot(v, w)) ≈ LA.norm(v) * LA.norm(w) atol = 1e-10
+    end
+    # jumps whose Σ L†L is not constant are refused for now, as are mixed states
+    gt = TensorMixedStates.GaussianState(State{Trajectory}(sys, "Up"))
+    @test_throws ArgumentError evolve(-im * Z(1) + Dissipator(Sm)(2), 0.1, gt; nsteps = 1)
+    @test_throws ArgumentError TensorMixedStates.GaussianState(State{Mixed}(sys, "Up"))
+    @test_throws ErrorException TensorMixedStates.as_representation(Pure, gt)
+    # files keep the representation
+    mktempdir() do dir
+        file = joinpath(dir, "t.h5")
+        save_state(file, "t", gt)
+        @test load_state(file, "t") isa TensorMixedStates.GaussianState{Trajectory}
+    end
 end
