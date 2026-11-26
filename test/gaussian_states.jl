@@ -522,3 +522,22 @@ end
         @test gs_programs_agree(phases)
     end
 end
+
+@testset "cross terms of nearly orthogonal components" begin
+    # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal, which take the precise way; Ry(θ) on
+    # qubit 1 first makes them nearly orthogonal (θ = 1e-7) or not (θ = 0.3)
+    sys = System([Qubit() for _ in 1:4])
+    m(O, k) = gc_embed(sys, k, TensorMixedStates.matrix(O, sys.sites[k]))
+    for θ in (0.0, 1e-7, 0.3)
+        g = TensorMixedStates.GaussianState(State{Pure}(sys, "X+"))
+        ψ = reduce(kron, fill(ComplexF64[1, 1] / sqrt(2), 4))
+        g = apply(T(1) * H(2) * Ry(θ)(1), g)
+        ψ = m(T, 1) * m(H, 2) * m(Ry(θ), 1) * ψ
+        @test gs_same(g, ψ, sys)
+        P = TensorMixedStates.pair_transitions(g.sum)
+        @test any(!isnothing, P)
+        if θ == 0
+            @test any(isnothing, P)
+        end
+    end
+end
