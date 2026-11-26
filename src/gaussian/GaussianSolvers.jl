@@ -7,6 +7,18 @@ import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric
 # physical parity
 couples_ancilla(k::AbstractMatrix) = any(!iszero, k[1:2, 3:end])
 
+# k real and c imaginary of L = c + (1/4) Σ k_ab γ_a γ_b, as for L = -iH with H Hermitian, the
+# imaginary part of k and the real part of c below rounding_tol times the size of L taken as the
+# rounding of the expansion of the operator (5.6e-17 for an exactly Hermitian matrix with complex
+# entries), refused above with its size
+function unitary_form(c::Number, k::AbstractMatrix, what::String)
+    defect = max(maximum(abs, imag(k); init = 0.0), abs(real(c)))
+    if defect > rounding_tol * (norm(k) + abs(c))
+        throw(ArgumentError("$what: this operator departs from it by a part of size $(round(defect; sigdigits = 2))"))
+    end
+    im * imag(c), real(k)
+end
+
 turned(state::GaussianState{Pure}, R::AbstractMatrix, definite::Bool) =
     GaussianState{Pure}(state.system, state.axes, state.layout, antisymmetric(R * state.cov * transpose(R)),
                         state.definite && definite, state.trace)
@@ -35,11 +47,8 @@ function prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::L
         throw(ArgumentError("the Gaussian backend evolves a pure state under an operator, -iH"))
     end
     c, k, _ = gaussian_generator(state.system, reduce(+, ops); axes = state.axes)
-    if !all(iszero, imag(k)) || !iszero(real(c))
-        throw(ArgumentError("the Gaussian backend evolves a pure state under -iH with H Hermitian, for now: " *
-                            "this evolver has a part that is not unitary"))
-    end
-    GaussianEvolver(real(k), Dict{Float64, Matrix{Float64}}(), !couples_ancilla(k))
+    _, h = unitary_form(c, k, "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now")
+    GaussianEvolver(h, Dict{Float64, Matrix{Float64}}(), !couples_ancilla(k))
 end
 
 function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{Pure},
@@ -75,15 +84,12 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
     end
     H = followed_operator(searched_operator(system, hamiltonian, "ground_state"))
     c, k, _ = gaussian_generator(system, H; axes = state.axes)
-    h = -im * k
-    if !all(iszero, imag(h)) || !iszero(imag(c))
-        throw(ArgumentError("ground_state needs a Hermitian Hamiltonian"))
-    end
-    g = quadratic_ground_state(real(h), 1)
+    # H = c + (1/4) Σ k γγ Hermitian is -iH = -ic + (1/4) Σ -ik γγ anti-Hermitian
+    _, h = unitary_form(-im * c, -im * k, "ground_state needs a Hermitian Hamiltonian")
+    g = quadratic_ground_state(h, 1)
     ε = g.energies
     # the gap within the even states: two modes more, or the lowest occupied one moved up
-    flipped = g.energy > -sum(ε) / 2
-    gap = flipped ? ε[2] - ε[1] : ε[1] + ε[2]
+    gap = g.occupied ? ε[2] - ε[1] : ε[1] + ε[2]
     width = sum(ε)
     if gap < 1e-10 * width
         @info "ground_state of a GaussianState: the ground level is degenerate within " *
@@ -109,10 +115,10 @@ gate_generator(::IndexedOp) = nothing
 """
     apply(op, state::GaussianState{Pure})
 
-the gates of `op` applied to the state, a product applied factor by factor from the right, a factor in
-front changing the norm only: a gate
-written exp(A), A quadratic and anti-Hermitian (the rotations of Circuits, `exp` written by the
-user), or a single monomial in Majoranas (a Pauli string); others are refused for now.
+the gates of `op` applied to the state, a product applied factor by factor from the right, a factor
+changing the norm only: a gate written exp(A), A quadratic and anti-Hermitian (the rotations of
+Circuits, `exp` written by the user), or a single monomial in Majoranas (a Pauli string); others are
+refused for now.
 """
 function apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Limits = Limits())
     c, s = scalarcoef(op), scalararg(op)
@@ -127,18 +133,17 @@ function apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Li
     A = gate_generator(s)
     if !isnothing(A)
         c0, k, _ = gaussian_generator(state.system, A; axes = state.axes)
-        if !all(iszero, imag(k)) || !iszero(real(c0))
-            throw(ArgumentError("the Gaussian backend applies exp(A) with A anti-Hermitian, unitary gates"))
-        end
-        return turned(state, propagator(real(k), 1), !couples_ancilla(k))
+        _, h = unitary_form(c0, k, "the Gaussian backend applies exp(A) with A anti-Hermitian, unitary gates")
+        return turned(state, propagator(h, 1), !couples_ancilla(k))
     end
     p = polynomial(state.system, state.layout, lower(state.system, s))
     if length(p) == 1
-        α = only(keys(p.terms))
+        α, c = only(p.terms)
         D = ones(size(state.cov, 1))
         D[α] .= -1
         cov = D .* state.cov .* transpose(D)
-        return GaussianState{Pure}(state.system, state.axes, state.layout, cov, state.definite, state.trace)
+        # c c(α) multiplies the norm by |c|, c(α) being unitary
+        return GaussianState{Pure}(state.system, state.axes, state.layout, cov, state.definite, abs2(c) * state.trace)
     end
     throw(ArgumentError("the Gaussian backend applies gates written exp(A), A quadratic, or Pauli strings, " *
                         "not $(obs_name(op)), for now"))

@@ -3,14 +3,17 @@
 # A state of one component, whose phase is not observable, keeps its covariance only.
 
 """
-    GaussianState(state::State{Pure}; axes = Dict(), limits = Limits())
+    GaussianState(state::State{Pure}; axes = :Z, limits = Limits())
 
-the product state `state` held exactly as a fermionic Gaussian state; `axes` maps a qubit (a site of
-dimension 2 that is not fermionic) to the Pauli `:X`, `:Y` or `:Z` along which it is occupied, `:Z`
-by default; `limits` is without use. A state that is not a product, an MPS of link dimension above
-1, is refused.
+the product state `state` held exactly as a fermionic Gaussian state, on fermionic sites and sites of
+dimension 2 (qubits); `limits` is without use. A state that is not a product, an MPS of link
+dimension above 1, is refused.
+
+- `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
+  one per site (`nothing` on the others) or a `Dict` from sites to Paulis
 
     CreateState(…; backend = GaussianState)
+    CreateState(GaussianState(State{Pure}(System(4, Qubit()), "X+"); axes = :X))
 """
 struct GaussianState{R <: PM} <: AbstractState{R}
     system::System
@@ -30,8 +33,14 @@ function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), limits::L
                             "link dimension $d"))
     end
     system = state.system
-    axes = Dict{Int, Symbol}(axes)
+    axes = axes_by_site(system, axes)
     layout = MajoranaLayout(system; axes)
+    for k in eachindex(system.sites)
+        if isempty(layout.majoranas[k])
+            throw(ArgumentError("the Gaussian backend holds fermionic sites and sites of dimension 2, " *
+                                "not site $k, a $(typeof(system[k]))"))
+        end
+    end
     vectors = local_vectors(state)
     cov, definite = product_covariance(system, layout, vectors)
     GaussianState{Pure}(system, axes, layout, cov, definite, norm(state.state)^2)
@@ -39,6 +48,20 @@ end
 
 GaussianState(state::State{R}; kwargs...) where R =
     throw(ArgumentError("the Gaussian backend holds pure states only for now, not a State{$R}"))
+
+# the axes given to GaussianState as a Dict from the qubits to their Paulis
+function axes_by_site(system::System, axes)
+    qubits = [k for k in eachindex(system.sites) if isnothing(fermion_species(system[k])) && dim(system[k]) == 2]
+    if axes isa Symbol
+        return Dict{Int, Symbol}(k => axes for k in qubits)
+    elseif axes isa AbstractVector
+        if length(axes) != length(system.sites)
+            throw(ArgumentError("a vector of axes has one entry per site, $(length(system.sites)) here, not $(length(axes))"))
+        end
+        return Dict{Int, Symbol}(k => a for (k, a) in enumerate(axes) if !isnothing(a))
+    end
+    Dict{Int, Symbol}(axes)
+end
 
 # the normalised vector of each site of a product state
 function local_vectors(state::State)
@@ -66,14 +89,15 @@ end
 # ancilla, then the sites with modes in the order of the modes): γ_a of unit i is the parities of
 # the units before it times its local Majorana.
 function product_covariance(system::System, layout::MajoranaLayout, vectors)
-    order = sort([k for k in eachindex(system.sites) if !isempty(layout.majoranas[k])]; by = k -> layout.first[k])
     units = [(ComplexF64[1, im] / sqrt(2), [pauli_x, pauli_y], pauli_z)]
-    for k in order
+    for k in layout.order
         push!(units, (vectors[k], layout.majoranas[k], layout.parity[k]))
     end
     ev(v, m) = dot(v, m * v)
     parities = [ev(v, P) for (v, _, P) in units]
-    definite = all(abs(p) == 1 for p in parities[2:end])
+    # |⟨P⟩| = 1 to rounding for a site of definite parity, an eigenstate of X along X giving
+    # 1.0000000000000002: decided far from rounding, an error of this size at most on the entropies
+    definite = all(1 - abs(p) < 1e-12 for p in parities[2:end])
     nu = length(units)
     # products of the parities before and after each unit
     before = ones(ComplexF64, nu)
@@ -128,8 +152,9 @@ function poly_value(state::GaussianState{Pure}, p::MajoranaPoly,
         init = zero(ComplexF64))
 end
 
+# measured on what conserves nothing, as on a State, an operator of no definite flux too
 expect_value(state::GaussianState{Pure}, a::IndexedOp{IsOperator}) =
-    poly_value(state, polynomial(state.system, state.layout, lower(state.system, a)))
+    poly_value(state, polynomial(state.system, state.layout, lower(weaken(state.system, ()), a)))
 
 # the matrix of size d with a 1 at (r, c)
 function matrix_unit(d::Int, r::Int, c::Int)
@@ -154,8 +179,8 @@ function kron_indices(dims::Vector{Int})
     out
 end
 
-# ρ_A[a, b] = ⟨ψ| |b⟩⟨a| ⊗ 1 |ψ⟩, each |b⟩⟨a| a product of matrix units on the sites, without strings:
-# the reduced density matrix of the sites as tensor factors, as for a State
+# ρ_A[a, b] = ⟨|b⟩⟨a|⟩, |b⟩⟨a| an operator on the sites given by its matrix and placed, its
+# Jordan-Wigner strings laid by `lower`, so that tr(ρ_A matrix(op)) = ⟨op⟩ as for a State
 function reduced_density_matrix(state::GaussianState{Pure}, positions::AbstractVector{Int};
                                 max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "reduced_density_matrix")
@@ -164,20 +189,16 @@ function reduced_density_matrix(state::GaussianState{Pure}, positions::AbstractV
         return ones(1, 1)
     end
     kept = collect(positions)
-    for k in kept
-        if isempty(state.layout.majoranas[k])
-            throw(ArgumentError("the Gaussian backend has no density matrix of site $k, which has no mode"))
-        end
-    end
     check_reduced(state, kept, max_dense)
-    dims = [dim(state.system[k]) for k in kept]
+    system = weaken(state.system, ())
+    dims = [dim(system[k]) for k in kept]
     basis = kron_indices(dims)
     ρ = zeros(ComplexF64, length(basis), length(basis))
     cache = Dict{Vector{Int}, ComplexF64}()
     for (ia, a) in enumerate(basis), (ib, b) in enumerate(basis)
-        blocks = [Block(k, matrix_unit(d, b[i], a[i]), 0) for (i, (k, d)) in enumerate(zip(kept, dims))]
-        p = polynomial(state.system, state.layout, [Term(1, blocks, Int[], Int[])])
-        ρ[ia, ib] = poly_value(state, p, cache)
+        unit = reduce(kron, [matrix_unit(d, b[i], a[i]) for (i, d) in enumerate(dims)])
+        op = Operator{length(kept)}("E($b,$a)", unit)(kept...)
+        ρ[ia, ib] = poly_value(state, polynomial(system, state.layout, lower(system, op)), cache)
     end
     ρ
 end
@@ -186,18 +207,18 @@ end
     von_neumann_entropy(state::GaussianState, positions; max_dense)
 
 by the eigenvalues ±iν of the covariance of the modes of the sites, Σ h((1 + ν)/2), when the state has
-a definite parity, the system one kind of modes and the sites are the first or the last ones (the
-fermionic reduced state is then that of the sites); otherwise from `reduced_density_matrix`.
+a definite parity and the sites are fermionic, or qubits only and the first or the last ones (the
+reduced state is then the Gaussian one of their modes); otherwise from `reduced_density_matrix`.
 """
 function von_neumann_entropy(state::GaussianState{Pure}, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
-    layout = state.layout
-    order = sort([k for k in eachindex(state.system.sites) if !isempty(layout.majoranas[k])]; by = k -> layout.first[k])
-    kept = sort([k for k in unique(positions) if !isempty(layout.majoranas[k])]; by = k -> layout.first[k])
-    kinds = unique(isnothing(fermion_species(state.system[k])) for k in order)
+    layout, order = state.layout, state.layout.order
+    kept = sort(unique(positions); by = k -> layout.first[k])
+    fermions = all(!isnothing(fermion_species(state.system[k])) for k in order)
+    qubits = all(isnothing(fermion_species(state.system[k])) for k in order)
     ends = kept == order[1:length(kept)] || kept == order[end-length(kept)+1:end]
-    if !(state.definite && length(kinds) <= 1 && ends)
+    if !(state.definite && (fermions || (qubits && ends)))
         return invoke(von_neumann_entropy, Tuple{AbstractState, AbstractVector{Int}}, state, positions; max_dense)
     end
     majoranas = reduce(vcat, [layout.first[k] .+ (0:length(layout.majoranas[k])-1) .+ 2 for k in kept]; init = Int[])
@@ -206,7 +227,12 @@ function von_neumann_entropy(state::GaussianState{Pure}, positions::AbstractVect
     shannon_entropy(vcat(ps, 1 .- ps))
 end
 
-entanglement_entropy(state::GaussianState{Pure}, cut::Int) = von_neumann_entropy(state, 1:cut)
+function entanglement_entropy(state::GaussianState{Pure}, cut::Int)
+    check_cut(length(state.system.sites), cut)
+    von_neumann_entropy(state, 1:cut)
+end
+
+truncate(state::GaussianState; limits::Limits) = state
 
 import .GaussianKernels: describe, overlap, fock_state
 
@@ -238,12 +264,7 @@ end
 # of the sites carried to their bases
 function physical_vector(state::GaussianState{Pure})
     system, layout = state.system, state.layout
-    for k in eachindex(system.sites)
-        if isempty(layout.majoranas[k])
-            throw(ArgumentError("the Gaussian backend has no vector of site $k, which has no mode"))
-        end
-    end
-    order = sort(collect(eachindex(system.sites)); by = k -> layout.first[k])
+    order = layout.order
     dims = [dim(s) for s in system.sites]
     nmodes = layout.count ÷ 2 + 1
     g = describe(state.cov)
@@ -272,14 +293,14 @@ end
 """
     State(state::GaussianState; limits)
 
-the state as an MPS, through its dense vector: refused above `TensorMixedStates.dense_elements[]`
-elements.
+the state as an MPS, through its dense vector, from an overlap for each Fock state of its modes:
+refused beyond 16 modes, where it would take minutes.
 """
 function State(state::GaussianState{Pure}; limits::Limits = Limits())
-    d = prod(dim(s) for s in state.system.sites)
-    if d > dense_elements[]
-        throw(ArgumentError("the Gaussian backend converts to a State through its dense vector, of $d " *
-                            "elements here, above $(dense_elements[])"))
+    m = state.layout.count ÷ 2
+    if m > 16
+        throw(ArgumentError("the Gaussian backend converts to a State through 2^m overlaps for m modes, " *
+                            "up to 16 modes, not $m"))
     end
     ψ = physical_vector(state)
     State(ExactState{Pure}(state.system, sqrt(state.trace) * ψ / norm(ψ), Val(:raw)); limits)

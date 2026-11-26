@@ -6,8 +6,9 @@
 """
     quadratic_ground_state(h, parity = nothing)
 
-`(cov, energy, energies)`: the covariance and energy of a ground state of H = (i/4) Σ h_ab γ_a γ_b,
-of the given parity (±1) or of any, and the energies of its normal modes in increasing order.
+`(cov, energy, energies, occupied)`: the covariance and energy of a ground state of H = (i/4) Σ h_ab γ_a γ_b,
+of the given parity (±1) or of any, the energies of its normal modes in increasing order, and whether
+its lowest mode is occupied (to reach the parity).
 """
 function quadratic_ground_state(h::AbstractMatrix{<:Real}, parity::Union{Nothing, Integer} = nothing)
     if !(parity === nothing || parity == 1 || parity == -1)
@@ -46,11 +47,12 @@ function quadratic_ground_state(h::AbstractMatrix{<:Real}, parity::Union{Nothing
     end
     energies = [ε for (_, _, ε) in modes]
     energy = -sum(energies; init = 0.0) / 2
-    if parity !== nothing && real(logpfaffian(M).phase) * parity < 0
+    occupied = parity !== nothing && real(logpfaffian(M).phase) * parity < 0
+    if occupied
         # the other sector: the lowest mode occupied
         a, b, ε = first(modes)
         M .-= 2 .* (Q[:, a] .* transpose(Q[:, b]) .- Q[:, b] .* transpose(Q[:, a]))
         energy += ε
     end
-    (cov = M, energy = energy, energies = energies)
+    (cov = M, energy = energy, energies = energies, occupied = occupied)
 end

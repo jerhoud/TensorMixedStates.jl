@@ -31,8 +31,7 @@ end
 
 # the qubits of the system, in the order of the modes
 qubit_sites(system::System, layout::MajoranaLayout) =
-    sort([k for k in eachindex(system.sites) if !isempty(layout.majoranas[k]) && isnothing(fermion_species(system[k]))];
-         by = k -> layout.first[k])
+    [k for k in layout.order if isnothing(fermion_species(system[k]))]
 
 const pauli_matrices = ((:X, pauli_x), (:Y, pauli_y), (:Z, pauli_z))
 

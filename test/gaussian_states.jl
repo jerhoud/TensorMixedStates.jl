@@ -69,14 +69,9 @@ function gs_random(sys; definite::Bool)
     g, ψ
 end
 
-# the reduced density matrix of the sites kept of the vector ψ (the first site the slowest)
-function gs_partial(ψ, dims, kept)
-    n = length(dims)
-    T = reshape(ψ, reverse(dims)...)
-    rows = reverse([n + 1 - k for k in kept])
-    A = reshape(permutedims(T, vcat(rows, setdiff(1:n, rows))), prod(dims[kept]), :)
-    A * A'
-end
+# the reduced density matrix of the sites kept of the vector ψ (in the basis of TMS), from ExactState,
+# which lays the fermionic signs of a State
+gs_partial(sys, ψ, kept) = reduced_density_matrix(TensorMixedStates.ExactState{Pure}(sys, ψ / LA.norm(ψ), Val(:raw)), kept)
 
 gs_entropy(ρ) = (λ = max.(eigvals(Hermitian(ρ)), 0); -sum(x * log(x) for x in λ if x > 0; init = 0.0))
 
@@ -99,12 +94,12 @@ gs_entropy(ρ) = (λ = max.(eigvals(Hermitian(ρ)), 0); -sum(x * log(x) for x in
             @test TensorMixedStates.expect_value(g, op) ≈ dot(ψ, O * ψ) atol = 1e-12
         end
         for kept in ([1], [1, 2], [2, 3], [1, 3], [n - 1, n], [n])
-            ρ = gs_partial(ψ, dims, kept)
+            ρ = gs_partial(sys, ψ, kept)
             @test reduced_density_matrix(g, kept) ≈ ρ atol = 1e-12
             @test von_neumann_entropy(g, kept) ≈ gs_entropy(ρ) atol = 1e-10
         end
-        for cut in 0:n
-            @test entanglement_entropy(g, cut) ≈ gs_entropy(gs_partial(ψ, dims, 1:cut)) atol = 1e-10
+        for cut in 1:n
+            @test entanglement_entropy(g, cut) ≈ gs_entropy(gs_partial(sys, ψ, 1:cut)) atol = 1e-10
         end
     end
 end
@@ -126,9 +121,14 @@ function gs_same(g, ψ, sys; nops = 6)
         v = TensorMixedStates.expect_value(g, prod(o(k) for (o, k) in zip(Os, ks)))
         ok &= isapprox(v, dot(ψ, prod(gc_op(sys, o, k) for (o, k) in zip(Os, ks)) * ψ) / dot(ψ, ψ); atol = 1e-10)
     end
-    dims = [dim(s) for s in sys.sites]
     for cut in 1:n-1
-        ok &= isapprox(entanglement_entropy(g, cut), gs_entropy(gs_partial(ψ / LA.norm(ψ), dims, 1:cut)); atol = 1e-9)
+        ok &= isapprox(entanglement_entropy(g, cut), gs_entropy(gs_partial(sys, ψ, 1:cut)); atol = 1e-9)
+    end
+    for kept in ([2], [1, 3], [2, n])
+        if !allunique(kept) || maximum(kept) > n
+            continue
+        end
+        ok &= isapprox(von_neumann_entropy(g, kept), gs_entropy(gs_partial(sys, ψ, kept)); atol = 1e-9)
     end
     ok
 end
@@ -323,4 +323,44 @@ end
     end
     @test_throws ArgumentError TensorMixedStates.gaussian_generator(System([Fermion(), Fermion(), Qubit()]),
                                                                     Sp(3) * C(2) + dag(C)(2) * Sm(3))
+end
+
+@testset "checks from the reviews of lot 3" begin
+    # a monomial gate multiplies the norm by its coefficient
+    sys = System([Spin(1/2), Spin(1/2)])
+    g, _ = gs_product(sys)
+    @test TensorMixedStates.trace(apply(Sz(1), g)) ≈ TensorMixedStates.trace(g) / 4
+    @test TensorMixedStates.trace(apply(Sx(1) * Sz(2), g)) ≈ TensorMixedStates.trace(g) / 16
+    # eigenstates of the axes have a definite parity, whose entropies take the Gaussian formula
+    g = TensorMixedStates.GaussianState(State{Pure}(System(30, Qubit()), "X+"); axes = :X)
+    @test g.definite && abs(entanglement_entropy(g, 15)) < 1e-12
+    # the forms of the axes, and the sites without modes refused
+    st = State{Pure}(System([Qubit(), Fermion(), Qubit()]), [gs_random_vector(2) for _ in 1:3])
+    g1 = TensorMixedStates.GaussianState(st; axes = :X)
+    @test g1.cov == TensorMixedStates.GaussianState(st; axes = [:X, nothing, :X]).cov ==
+          TensorMixedStates.GaussianState(st; axes = Dict(1 => :X, 3 => :X)).cov
+    @test_throws ArgumentError TensorMixedStates.GaussianState(st; axes = [:X, :X])
+    @test_throws ArgumentError TensorMixedStates.GaussianState(State{Pure}(System([Qubit(), Boson(3)]), ["Up", "0"]))
+    # values of no definite flux on a charged system, as on a State
+    gq = TensorMixedStates.GaussianState(State{Pure}(System([Fermion(conserve = N) for _ in 1:3]), ["Occ", "Emp", "Emp"]))
+    @test TensorMixedStates.expect_value(gq, C(1) + dag(C)(1)) ≈ 0 atol = 1e-14
+    # truncate, the cuts
+    @test truncate(g1; limits = Limits(maxdim = 2)) === g1
+    @test_throws ErrorException entanglement_entropy(g1, 0)
+    @test_throws ErrorException entanglement_entropy(g1, 4)
+    # a Hermitian operator given by a matrix with complex entries, whose expansion leaves rounding
+    sys = System([Qubit() for _ in 1:3])
+    A = Operator{1}("A", ComplexF64[0.25 0.5+0.25im; 0.5-0.25im -0.75])
+    H = A(1) + X(1) * X(2) + Y(1) * Y(2) + 0.3 * Z(3) + X(2) * X(3)
+    Hd = gc_op(sys, A, 1) + gc_op(sys, X, 1) * gc_op(sys, X, 2) + gc_op(sys, Y, 1) * gc_op(sys, Y, 2) +
+         0.3 * gc_op(sys, Z, 3) + gc_op(sys, X, 2) * gc_op(sys, X, 3)
+    g, ψ = gs_product(sys)
+    E = eigen(Hermitian(Hd))
+    r = ground_state(H, g)
+    @test r.energy ≈ E.values[1] atol = 1e-12
+    pre = TensorMixedStates.prepared_evolver(g, -im * H)
+    g2 = TensorMixedStates.evolve_step(Tdvp(), pre, g, 0.0, 0.3, 1, Limits())
+    @test gs_same(g2, exp(-0.3im * Hd) * ψ, sys)
+    # the conversion to State is refused beyond 16 modes
+    @test_throws ArgumentError State(TensorMixedStates.GaussianState(State{Pure}(System(17, Qubit()), "Up")))
 end

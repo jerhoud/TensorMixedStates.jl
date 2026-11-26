@@ -19,13 +19,15 @@ pauli(v) = v[1] * pauli_x + v[2] * pauli_y + v[3] * pauli_z
 """
     MajoranaLayout(system; axes = Dict())
 
-the Majoranas of `system`: for each site, its local Majoranas as matrices on the site, the parity of
-its modes, the index of its first Majorana in the system (the ancilla excluded) and the parities of
+the Majoranas of `system`: the sites with modes in the order of the modes and, for each site, its
+local Majoranas as matrices on the site, the parity of its modes, the index of its first Majorana in the system (the ancilla excluded) and the parities of
 the sites before it in the order of the modes; `axes` maps a site of dimension 2 to the Pauli, `:X`,
 `:Y` or `:Z`, along which its mode is occupied (the -1 eigenstate), `:Z` by default; an error for a
 site whose annihilation operators do not make fermionic modes.
 """
 struct MajoranaLayout
+    # the sites with modes in the order of the modes
+    order::Vector{Int}
     first::Vector{Int}
     majoranas::Vector{Vector{Matrix{ComplexF64}}}
     parity::Vector{Matrix{ComplexF64}}
@@ -104,7 +106,7 @@ function MajoranaLayout(system::System; axes = Dict{Int, Symbol}())
         first[k] = count + 1
         count += length(majoranas[k])
     end
-    layout = MajoranaLayout(first, majoranas, parity, Vector{Tuple{ComplexF64, Vector{Int}}}(undef, n), count)
+    layout = MajoranaLayout(order, first, majoranas, parity, Vector{Tuple{ComplexF64, Vector{Int}}}(undef, n), count)
     acc = (one(ComplexF64), Int[])
     for k in 1:n
         layout.before[k] = acc
