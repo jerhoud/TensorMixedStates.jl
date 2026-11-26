@@ -44,18 +44,39 @@ prepared_evolver(state::GaussianState{Pure}, a::Union{IndexedOp, Pair}, mpo_limi
                  duration::Union{Nothing, Number} = nothing) =
     prepared_evolver(state, [a], mpo_limits; duration)
 
+# the physical parity of a state of one component and definite parity, nothing for another: that of the
+# ancilla on the even states, ⟨-iγ₁γ₂⟩ = M₁₂ = ±1
+state_parity(state::GaussianState{Pure}) =
+    isnothing(state.sum) && state.definite ? Int(sign(state.cov[1, 2])) : nothing
+
+"""
+the evolver of a Gaussian state under L(t) = Σ_j f_j(t) L_j, L_j = c_j + (1/4) Σ k_j γγ with k_j real:
+the time functions, nothing for a constant evolver, the duration of the evolution, and whether L keeps
+the physical parity
+"""
+struct GaussianTimeEvolver
+    ks::Vector{Matrix{Float64}}
+    fs::Vector
+    duration::Union{Nothing, Number}
+    even::Bool
+end
+
 function prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::Limits = Limits();
                           duration::Union{Nothing, Number} = nothing)
     ops, fs = split_terms(terms)
-    if !isnothing(fs)
-        throw(ArgumentError("the Gaussian backend evolves under an evolver that does not depend on time, for now"))
-    end
     if !all(op -> op isa IndexedOp{IsOperator}, ops)
         throw(ArgumentError("the Gaussian backend evolves a pure state under an operator, -iH"))
     end
-    c, k, _ = gaussian_generator(state.system, reduce(+, ops); axes = state.axes)
-    _, h = unitary_form(c, k, "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now")
-    GaussianEvolver(h, Dict{Float64, Matrix{Float64}}(), !couples_ancilla(k))
+    what = "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now"
+    parity = state_parity(state)
+    if isnothing(fs)
+        c, k, _ = gaussian_generator(state.system, reduce(+, ops); axes = state.axes, parity)
+        _, h = unitary_form(c, k, what)
+        return GaussianEvolver(h, Dict{Float64, Matrix{Float64}}(), !couples_ancilla(k))
+    end
+    forms = [gaussian_generator(state.system, op; axes = state.axes, parity) for op in ops]
+    ks = [last(unitary_form(c, k, what)) for (c, k, _) in forms]
+    GaussianTimeEvolver(ks, fs, duration, !any(couples_ancilla(k) for (_, k, _) in forms))
 end
 
 function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{Pure},
@@ -68,6 +89,54 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::Gaussi
     end
     R = get!(() -> propagator(pre.k, dt), pre.rotations, Float64(dt))
     turned(state, R, pre.even)
+end
+
+function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianTimeEvolver, state::GaussianState{Pure},
+                     time::Number, dt::Number, step::Int, limits::Limits)
+    if iszero(dt)
+        return state
+    end
+    if !(dt isa Real)
+        throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
+    end
+    turned(state, magnus_rotation(pre, time, dt), pre.even)
+end
+
+# the rotation R of the step from `time` to `time + dt`, dR/dt = (Σ_j f_j(t) k_j) R, by the
+# commutator-free Magnus integrator of order 4 with substeps, as `magnus_evolved` for an ExactState:
+# a substep against its two halves, its error kept within its share of 1000 rounding_tol over the
+# duration
+function magnus_rotation(pre::GaussianTimeEvolver, time::Number, dt::Number)
+    duration = something(pre.duration, dt)
+    function generator(cs)
+        if !all(c -> isreal(c), cs)
+            throw(ArgumentError("the Gaussian backend evolves under real time functions, a unitary evolution"))
+        end
+        sum(real(c) * k for (c, k) in zip(cs, pre.ks))
+    end
+    magnus(t, h, R) = foldl((R, cs) -> propagator(generator(cs), h) * R, step_coefs(pre.fs, t, h, 4); init = R)
+    R = Matrix{Float64}(I, size(first(pre.ks)))
+    s, f = 0.0, 1.0
+    while 1 - s > 4 * eps()
+        f = min(f, 1 - s)
+        t, h = time + s * dt, f * dt
+        whole = magnus(t, h, R)
+        halves = magnus(t + h / 2, h / 2, magnus(t, h / 2, R))
+        err = norm(halves - whole) / norm(halves) / 15
+        if isnan(err)
+            error("the evolver of a GaussianState gave NaN within a step")
+        end
+        allowed = max(800 * rounding_tol * abs(h / duration), 10 * eps())
+        if err ≤ allowed
+            R, s = halves, s + f
+        end
+        f *= clamp(0.9 * (allowed / max(err, eps()))^(1 / 5), 0.25, 2.0)
+        if f < 1e-9
+            error("an evolver depending on time varies too fast for the substeps of a GaussianState: " *
+                  "take smaller steps")
+        end
+    end
+    R
 end
 
 """
@@ -90,12 +159,45 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
                             "quantities, for now"))
     end
     H = followed_operator(searched_operator(system, hamiltonian, "ground_state"))
-    c, k, _ = gaussian_generator(system, H; axes = state.axes)
+    generator = try
+        gaussian_generator(system, H; axes = state.axes)
+    catch e
+        if !(e isa ArgumentError)
+            rethrow()
+        end
+        nothing
+    end
+    if isnothing(generator)
+        # quadratic in each sector of the physical parity, which it conserves (a ring), or the error
+        found = [sector_ground_state(system, H, state, σ) for σ in (1, -1)]
+        if any(isnothing, found)
+            gaussian_generator(system, H; axes = state.axes)
+        end
+        a, b = found
+        if abs(a.energy - b.energy) < 1e-10 * max(a.width, b.width)
+            @info "ground_state of a GaussianState: the ground levels of the two parities differ by " *
+                  "$(round(abs(a.energy - b.energy); sigdigits = 2)), one of them is returned"
+        end
+        best = a.energy <= b.energy ? a : b
+        return (energy = best.energy, state = best.state)
+    end
+    c, k, _ = generator
     # H = c + (1/4) Σ k γγ Hermitian is -iH = -ic + (1/4) Σ -ik γγ anti-Hermitian
     _, h = unitary_form(-im * c, -im * k, "ground_state needs a Hermitian Hamiltonian")
     g = quadratic_ground_state(h, 1)
+    degenerate_info(g)
+    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, !couples_ancilla(k), 1.0,
+                                state.max_terms)
+    (energy = real(c) + g.energy, state = found)
+end
+
+# the line of log of a ground level degenerate within 1e-10 of the width of the spectrum, the gap taken
+# within the states of the same parity: two modes more, or the lowest occupied one moved up
+function degenerate_info(g)
     ε = g.energies
-    # the gap within the even states: two modes more, or the lowest occupied one moved up
+    if length(ε) < 2
+        return nothing
+    end
     gap = g.occupied ? ε[2] - ε[1] : ε[1] + ε[2]
     width = sum(ε)
     if gap < 1e-10 * width
@@ -103,9 +205,32 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
               "$(round(gap; sigdigits = 2)) for a spectrum of width $(round(width; sigdigits = 2)), " *
               "one of its states is returned"
     end
-    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, !couples_ancilla(k), 1.0,
-                                state.max_terms)
-    (energy = real(c) + g.energy, state = found)
+    nothing
+end
+
+# the ground state of H among the states of physical parity σ, nothing when H is not quadratic there:
+# the system's modes in their ground state of parity σ, the ancilla in that of parity σ, all even
+function sector_ground_state(system::System, H, state::GaussianState{Pure}, σ::Int)
+    generator = try
+        gaussian_generator(system, H; axes = state.axes, parity = σ)
+    catch e
+        if !(e isa ArgumentError)
+            rethrow()
+        end
+        return nothing
+    end
+    c, k, M = generator
+    if couples_ancilla(k)
+        return nothing
+    end
+    _, h = unitary_form(-im * c, -im * k, "ground_state needs a Hermitian Hamiltonian")
+    g = quadratic_ground_state(h[3:end, 3:end], σ)
+    degenerate_info(g)
+    cov = zeros(M, M)
+    cov[1, 2], cov[2, 1] = σ, -σ
+    cov[3:end, 3:end] = g.cov
+    found = GaussianState{Pure}(system, state.axes, state.layout, cov, nothing, true, 1.0, state.max_terms)
+    (energy = real(c) + g.energy, width = sum(g.energies), state = found)
 end
 
 # the generator A of a gate written exp(A), placed on its sites, nothing for another gate

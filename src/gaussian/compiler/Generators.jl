@@ -1,19 +1,24 @@
 # Generators of the Gaussian backend: the operators that must be quadratic in Majoranas, refused
 # otherwise with the terms that are not and, for qubits, the Pauli axes that would make them so.
 
-import .GaussianKernels: quadratic_form, degree
+import .GaussianKernels: quadratic_form, degree, monomial_product
 
 """
-    gaussian_generator(system, op; axes = Dict())
+    gaussian_generator(system, op; axes = Dict(), parity = nothing)
 
 `(c, k, nmajoranas)` with `op = c + (1/4) Σ_ab k_ab γ_a γ_b` on the states of the Gaussian backend,
-see `majorana_poly` and `quadratic_form`; an error naming the terms of `op` that are not quadratic,
-and the Pauli axes of the qubits that would make them so when it finds some.
+see `majorana_poly` and `quadratic_form`; with `parity` ±1, on the states of that physical parity when
+`op` conserves it (see `in_sector`); an error naming the terms of `op` that are not quadratic, and the
+Pauli axes of the qubits that would make them so when it finds some.
 """
-function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Dict{Int, Symbol}())
+function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Dict{Int, Symbol}(),
+                            parity::Union{Nothing, Int} = nothing)
     layout = MajoranaLayout(system; axes)
     terms = lower(system, op)
     p = polynomial(system, layout, terms)
+    if !isnothing(parity) && conserves_parity(p)
+        p = in_sector(p, layout.count, parity)
+    end
     if degree(p) <= 2
         c, k = quadratic_form(p, layout.count + 2)
         return c, k, layout.count + 2
@@ -27,6 +32,33 @@ function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Di
     message = "the Gaussian backend needs an operator quadratic in Majoranas, its terms on $shown$more " *
               "are of degree $(maximum(length, bad)) (coefficients up to $(Printf.@sprintf("%.2g", largest)))."
     throw(ArgumentError(message * qubit_advice(system, layout, terms, axes)))
+end
+
+# whether the polynomial conserves the physical parity: no monomial has one Majorana of the ancilla
+# without the other, as the odd operators of the system give (γ₁γ₂ is the parity of the ancilla, which
+# the reduction on the even states brings in)
+conserves_parity(p::MajoranaPoly) = !any(α -> (1 in α) ⊻ (2 in α), keys(p.terms))
+
+# p on the states whose physical parity P = (-i)^n c(3:2n+2) is σ, n = count/2 modes, p conserving it:
+# there γ₁γ₂ = iσ (the parity of the ancilla is that of the system), and c(α) = σ c(α) P =
+# σ (-i)^n c(α) c(3:2n+2) for α in the system, the shorter kept (the term closing a ring of qubits, the
+# parity times a quadratic term, becomes quadratic), α when they are as long
+function in_sector(p::MajoranaPoly, count::Int, σ::Int)
+    system = collect(3:count+2)
+    phase = σ * (-im)^(count ÷ 2)
+    d = Dict{Vector{Int}, ComplexF64}()
+    for (α, c) in p.terms
+        if 1 in α
+            α, c = α[3:end], c * im * σ
+        end
+        if 2 * length(α) > count
+            s, β = monomial_product(α, system)
+            d[β] = get(d, β, 0) + c * s * phase
+        else
+            d[α] = get(d, α, 0) + c
+        end
+    end
+    MajoranaPoly(d)
 end
 
 # the qubits of the system, in the order of the modes

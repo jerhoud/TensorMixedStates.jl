@@ -160,7 +160,6 @@ end
     end
     # refused: an evolver depending on time, one that is not unitary
     g, _ = gs_product(sys1)
-    @test_throws ArgumentError TensorMixedStates.prepared_evolver(g, [-im * N(1), -im * N(2) => t -> t])
     @test_throws ArgumentError TensorMixedStates.prepared_evolver(g, -im * H1 - 0.1 * N(2))
 end
 
@@ -459,4 +458,37 @@ gs_projected(P, ψ) = (φ = P * ψ; φ / LA.norm(φ))
     gr, _ = gs_product(System([Fermion(), Qubit(), Electron()]))
     s = sample(apply(H(2), gr))
     @test length(s) == 3 && 0 <= s[1] <= 1 && 0 <= s[2] <= 1 && 0 <= s[3] <= 3
+end
+
+@testset "evolution depending on time, sectors of the parity" begin
+    # H(t) = XY + cos(2t) Σ Z, against the evolution of an ExactState (its own Magnus integrator)
+    sys = System([Qubit() for _ in 1:4])
+    g, _ = gs_product(sys)
+    e = TensorMixedStates.ExactState(State(g))
+    terms = [-im * sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:3), -im * sum(Z(j) for j in 1:4) => t -> cos(2t)]
+    g = evolve(terms, 1.2, g; nsteps = 3)
+    e = evolve(terms, 1.2, e; nsteps = 3)
+    @test gs_same(g, e.state, sys)
+    @test_throws ArgumentError evolve([-im * Z(1), -im * Z(2) => t -> exp(im * t)], 0.3, g; nsteps = 1)
+    # the quench of ising_quench, pure: a ring along X from X+, against ExactState
+    n = 6
+    sys = System(n, Qubit())
+    ring = sum(Z(j) * Z(j + 1) for j in 1:n-1) + Z(n) * Z(1)
+    H = ring - 0.7 * sum(X(j) for j in 1:n)
+    g = TensorMixedStates.GaussianState(State{Pure}(sys, "X+"); axes = :X)
+    @test g.definite
+    e = TensorMixedStates.ExactState(State{Pure}(sys, "X+"))
+    g = evolve(-im * H, 1.0, g; nsteps = 5)
+    e = evolve(-im * H, 1.0, e; nsteps = 5)
+    @test gs_same(g, e.state, sys)
+    @test TensorMixedStates.expect_value(g, Z(1) * Z(4)) ≈ TensorMixedStates.expect_value(e, Z(1) * Z(4)) atol = 1e-10
+    # its ground state, from the two sectors, against the lowest level
+    Hd = sum(gc_op(sys, Z, j) * gc_op(sys, Z, mod1(j + 1, n)) for j in 1:n) - 0.7 * sum(gc_op(sys, X, j) for j in 1:n)
+    E = eigen(Hermitian(Hd))
+    r = ground_state(H, g)
+    @test r.energy ≈ E.values[1] atol = 1e-10
+    @test gs_same(r.state, E.vectors[:, 1], sys)
+    # a ring on a state of no definite parity is refused
+    gm = TensorMixedStates.GaussianState(State{Pure}(sys, [gs_random_vector(2) for _ in 1:n]); axes = :X)
+    @test_throws ArgumentError evolve(-im * H, 0.1, gm; nsteps = 1)
 end
