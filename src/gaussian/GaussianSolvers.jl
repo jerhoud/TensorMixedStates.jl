@@ -183,3 +183,81 @@ function applied_poly(state::GaussianState{Pure}, p::MajoranaPoly)
     relink!(s)
     superposed(state, s)
 end
+
+import .GaussianKernels: occupation_probability, project_covariance!, project!, MajoranaPoly
+
+# the modes and occupations of a projector that is a product of projectors on the occupations of modes,
+# Π_m (1/2 + σ_m (i/2) γ_{2m-1}γ_{2m}), σ_m = 1 for occupied (-iγγ = 1 - 2n), as m => occupied; nothing
+# for another operator. Decided by the exact equality of the polynomials: a projector whose expansion
+# carries rounding takes the general path, exact too.
+function occupation_projector(p::MajoranaPoly)
+    singles = [α for α in keys(p.terms) if length(α) == 2 && isodd(α[1]) && α[2] == α[1] + 1]
+    r = length(singles)
+    if r == 0 || length(p) != 2^r
+        return nothing
+    end
+    occupied = [(α[1] + 1) ÷ 2 => p.terms[α] == im / 2^r for α in singles]
+    if !all(p.terms[α] == im / 2^r || p.terms[α] == -im / 2^r for α in singles)
+        return nothing
+    end
+    product = prod(MajoranaPoly(Int[] => 0.5, [2m - 1, 2m] => (o ? im : -im) / 2) for (m, o) in occupied)
+    product == p ? occupied : nothing
+end
+
+# the state projected on these occupations of modes, exactly, not normalised; an error when that has
+# probability zero
+function projected(state::GaussianState{Pure}, occupations)
+    if isnothing(state.sum)
+        M = copy(state.cov)
+        t = state.trace
+        for (m, o) in occupations
+            s = o ? -1.0 : 1.0
+            q = occupation_probability(M, m, s)
+            if q == 0
+                throw(ArgumentError("the state cannot be projected on a result of probability zero"))
+            end
+            project_covariance!(M, m, s, q)
+            t *= q
+        end
+        return single(state, M; definite = false, trace = t)
+    end
+    s = as_sum(state)
+    for (m, o) in occupations
+        project!(s, m, o)
+    end
+    superposed(state, s)
+end
+
+normalized(state::GaussianState{Pure}) =
+    isnothing(state.sum) ? single(state, state.cov; trace = 1.0) : scaled(state, 1 / sqrt(state.trace))
+
+"""
+    project_on(state::GaussianState, p; limits)
+
+the state projected by `p` and normalised: exactly and without new components for a product of
+projectors on the occupations of modes (N of a fermion, (1 ± σ)/2 along the axis of a qubit), as a
+polynomial otherwise, see `apply`.
+"""
+function project_on(state::GaussianState{Pure}, p::IndexedOp; limits::Limits = Limits())
+    poly = polynomial(state.system, state.layout, lower(weaken(state.system, ()), p))
+    occupations = occupation_projector(poly)
+    normalized(isnothing(occupations) ? apply(p, state; limits) : projected(state, occupations))
+end
+
+project_count(::GaussianState, sites, locals, T; limits::Limits = Limits()) =
+    throw(ArgumentError("the Gaussian backend does not project on a total of operators of one site, which " *
+                        "is not Gaussian; measure the sites one by one"))
+
+sample(state::GaussianState{Pure}, pos::Int; rng = Random.default_rng()) =
+    first(collapse(state, pos; rng))
+
+# the sites drawn one after the other, each collapsing the state
+function sample(state::GaussianState{Pure}; rng = Random.default_rng())
+    out = Int[]
+    for pos in eachindex(state.system.sites)
+        r = collapse(state, pos; rng)
+        push!(out, r.result)
+        state = r.state
+    end
+    out
+end

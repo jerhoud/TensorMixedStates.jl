@@ -416,3 +416,47 @@ end
     @test TensorMixedStates.ncomponents(g) == 4
     @test_throws ArgumentError apply(H(1), g)
 end
+
+# the projected vector, normalised
+gs_projected(P, ψ) = (φ = P * ψ; φ / LA.norm(φ))
+
+@testset "measurements" begin
+    # projections on occupations: exact, no new component, one or several components
+    sys = System([Fermion(), Electron(), Qubit()])
+    g, ψ = gs_product(sys)
+    h = TensorMixedStates.project_on(g, N(1))
+    @test TensorMixedStates.ncomponents(h) == 1
+    @test gs_same(h, gs_projected(gc_op(sys, N, 1), ψ), sys)
+    # the levels of an Electron, products of the occupations of its two modes
+    up = TensorMixedStates.matrix(Nup, sys.sites[2]) * (I - TensorMixedStates.matrix(Ndn, sys.sites[2]))
+    r = collapse(g, Level(2) => 1)
+    P = gc_embed(sys, 2, up)
+    @test r.probability ≈ real(dot(ψ, P * ψ)) / real(dot(ψ, ψ)) atol = 1e-12
+    @test TensorMixedStates.ncomponents(r.state) == 1
+    @test gs_same(r.state, gs_projected(P, ψ), sys)
+    # a superposition projected on an occupation
+    g2 = apply(T(3) * H(3), g)
+    ψ2 = gc_embed(sys, 3, TensorMixedStates.matrix(T, sys.sites[3]) * TensorMixedStates.matrix(H, sys.sites[3])) * ψ
+    h2 = TensorMixedStates.project_on(g2, (Id(1) - Z(3)) / 2)
+    @test TensorMixedStates.ncomponents(h2) == TensorMixedStates.ncomponents(g2)
+    @test gs_same(h2, gs_projected((I - gc_op(sys, Z, 3)) / 2, ψ2), sys)
+    # another projector, as a polynomial
+    h3 = TensorMixedStates.project_on(g, (Id(1) + X(3)) / 2)
+    @test gs_same(h3, gs_projected((I + gc_op(sys, X, 3)) / 2, ψ), sys)
+    # probabilities and a collapse on a result
+    pr = probabilities(g, N(1) + N(3))
+    for (λ, p) in pr
+        Pλ = sum(P for (v, P) in ((0, (I - gc_op(sys, N, 1)) * (I - gc_op(sys, N, 3))),
+                                  (1, gc_op(sys, N, 1) * (I - gc_op(sys, N, 3)) + (I - gc_op(sys, N, 1)) * gc_op(sys, N, 3)),
+                                  (2, gc_op(sys, N, 1) * gc_op(sys, N, 3))) if v == round(Int, λ))
+        @test p ≈ real(dot(ψ, Pλ * ψ)) / real(dot(ψ, ψ)) atol = 1e-12
+    end
+    @test_throws ArgumentError TensorMixedStates.project_count(g, [1, 3], nothing, 2; limits = Limits())
+    # samples: a Fock state gives its occupations, any state values in range
+    sysf = System([Fermion() for _ in 1:4])
+    gf = TensorMixedStates.GaussianState(State{Pure}(sysf, ["Occ", "Emp", "Occ", "Occ"]))
+    @test sample(gf) == [1, 0, 1, 1]
+    gr, _ = gs_product(System([Fermion(), Qubit(), Electron()]))
+    s = sample(apply(H(2), gr))
+    @test length(s) == 3 && 0 <= s[1] <= 1 && 0 <= s[2] <= 1 && 0 <= s[3] <= 3
+end
