@@ -268,3 +268,92 @@ end
     b = argmax(abs.(w))
     @test gk_dist(cross_term(s.comps[1], [b], s.comps[5]), LogComplex(w[b])) < 1e-9
 end
+
+# the projector on mode j occupied or empty
+gk_projector(j, occupied, ψ) = dense_site(occupied ? ComplexF64[0 0; 0 1] : ComplexF64[1 0; 0 0], j, ψ)
+
+@testset "measurements of occupations" begin
+    kept = changed = 0
+    for n in 1:6, _ in 1:(n <= 4 ? 6 : 2), j in 1:n, occupied in (false, true)
+        ψ = dense_gaussian(rand(gk_rng, Bool, n), gk_rng)
+        g = gk_from_dense(ψ)
+        φ = gk_projector(j, occupied, ψ)
+        if n == 1
+            # a single mode is in a Fock state
+            @test_throws ArgumentError project(g, j, !g.x[1])
+            continue
+        end
+        p, h = project(g, j, occupied)
+        @test p ≈ dot(φ, φ) atol = 1e-12
+        @test sqrt(p) .* dense_vector(h) ≈ φ atol = 1e-11
+        @test exp(2 * h.amp.logabs) >= 2.0^-n * (1 - 1e-12)
+        if h.x == g.x
+            kept += 1
+        else
+            changed += 1
+        end
+    end
+    @test kept > 0 && changed > 0
+    # certainty, and an outcome of probability 1e-8
+    x = [false, true, false]
+    p, h = project(describe(fock_covariance(x)), 2, true)
+    @test p == 1 && h.x == x
+    @test_throws ArgumentError project(describe(fock_covariance(x)), 2, false)
+    ψ = dense_rotate(dense_fock(zeros(Bool, 4)), [(1, 3, 2e-4)])
+    φ = gk_projector(1, true, ψ)
+    p, h = project(gk_from_dense(ψ), 1, true)
+    @test p ≈ 1e-8 rtol = 1e-6
+    @test sqrt(p) .* dense_vector(h) ≈ φ rtol = 1e-8
+    # superpositions, after an evolution
+    for n in (3, 5)
+        ψ1 = dense_gaussian(zeros(Bool, n), gk_rng)
+        ψs = [ψ1, dense_monomial(randperm(gk_rng, 2n)[1:2], ψ1), dense_monomial([3], ψ1),
+              dense_fock(zeros(Bool, n)), dense_gaussian(vcat(true, falses(n - 1)), gk_rng)]
+        a = randn(gk_rng, ComplexF64, length(ψs))
+        s = GaussianSum(gk_from_dense.(ψs), a, gk_rng)
+        h, t = gk_antisymmetric(2n), rand(gk_rng)
+        evolve!(s, propagator(h, t))
+        Ψ = exp(-im * t * dense_hamiltonian(h)) * sum(a .* ψs)
+        @test ComplexF64(norm2(s)) ≈ dot(Ψ, Ψ) rtol = 1e-11
+        project!(s, 2, true)
+        Φ = gk_projector(2, true, Ψ)
+        @test ComplexF64(norm2(s)) ≈ dot(Φ, Φ) rtol = 1e-11
+        Φs = sum(ComplexF64(c) .* dense_vector(g) for (c, g) in zip(s.coefs, s.comps))
+        z = dot(Φ, Φs) / dot(Φ, Φ)
+        @test abs(z) ≈ 1 atol = 1e-10
+        @test Φs ≈ z .* Φ atol = 1e-10
+    end
+    # a component whose mode 1 is empty, but for the rounding of its covariance, adds no spurious
+    # weight of order √eps: 1 - M₁₂ ~ 1e-16 > 0 in some of the draws, which (1 - M₁₂)/2 would take as
+    # a probability
+    n = 4
+    rounded = 0
+    for _ in 1:6
+        rots = [r for r in dense_rotations(n, gk_rng) if r[1] > 2 && r[2] > 2]
+        ψs = [dense_gaussian(zeros(Bool, n), gk_rng), dense_rotate(dense_fock(zeros(Bool, n)), rots)]
+        s = GaussianSum(gk_from_dense.(ψs), [1, 1], gk_rng)
+        rounded += s.comps[2].cov[1, 2] < 1
+        project!(s, 1, true)
+        Φ = gk_projector(1, true, sum(ψs))
+        @test ComplexF64(norm2(s)) ≈ dot(Φ, Φ) rtol = 1e-12
+        Φs = sum(ComplexF64(c) .* dense_vector(g) for (c, g) in zip(s.coefs, s.comps))
+        @test Φs ≈ (dot(Φ, Φs) / dot(Φ, Φ)) .* Φ atol = 1e-12
+    end
+    @test rounded > 0
+    # a component that cannot be found occupied is dropped, all of them is an error
+    s = GaussianSum([describe(fock_covariance([false, false])), describe(fock_covariance([true, true]))],
+                    [1, 1], gk_rng)
+    project!(s, 1, true)
+    @test length(s.comps) == 1 && s.comps[1].x == [true, true]
+    @test_throws ArgumentError project!(s, 2, false)
+end
+
+@testset "measurements at 200 modes, by consistency" begin
+    n = 200
+    g = describe(gk_random_covariance(n, zeros(Bool, n)))
+    for j in (1, 77, 200), occupied in (false, true)
+        # ⟨ψ|ψ′⟩ = ⟨ψ|Πψ⟩/√p = √p
+        p, h = project(g, j, occupied)
+        @test gk_dist(overlap(g, h), LogComplex(log(p) / 2, 1)) < 1e-10
+    end
+end

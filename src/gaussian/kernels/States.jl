@@ -16,6 +16,25 @@ end
 
 nmodes(g::PureGaussian) = length(g.x)
 
+# the covariance, in place, after finding mode j empty (s = 1) or occupied (s = -1), an outcome of
+# probability p > 0, by Wick's theorem (Dias and König, postmeasure)
+function project_covariance!(M, j, s, p)
+    c, d = 2j - 1, 2j
+    wc = M[:, c]
+    wd = M[:, d]
+    f = s / (2p)
+    for b in axes(M, 2), a in axes(M, 1)
+        M[a, b] += f * (wd[a] * wc[b] - wc[a] * wd[b])
+    end
+    M[c, :] .= 0
+    M[:, c] .= 0
+    M[d, :] .= 0
+    M[:, d] .= 0
+    M[c, d] = s
+    M[d, c] = -s
+    M
+end
+
 """
     find_support(M)
 
@@ -29,26 +48,13 @@ function find_support(M0::AbstractMatrix{<:Real})
     x = zeros(Bool, n)
     logp = 0.0
     for j in 1:n
-        c, d = 2j - 1, 2j
-        q = (1 + M[c, d]) / 2
+        q = (1 + M[2j-1, 2j]) / 2
         # either outcome is valid when q is near 1/2, so where the comparison falls is harmless
         s = q >= 1/2 ? 1.0 : -1.0
         p = s > 0 ? q : 1 - q
         x[j] = s < 0
         logp += log(p)
-        # the covariance after finding mode j in that occupation, by Wick's theorem
-        wc = M[:, c]
-        wd = M[:, d]
-        f = s / (2p)
-        for b in axes(M, 2), a in axes(M, 1)
-            M[a, b] += f * (wd[a] * wc[b] - wc[a] * wd[b])
-        end
-        M[c, :] .= 0
-        M[:, c] .= 0
-        M[d, :] .= 0
-        M[:, d] .= 0
-        M[c, d] = s
-        M[d, c] = -s
+        project_covariance!(M, j, s, p)
     end
     x, logp
 end
