@@ -1,0 +1,21 @@
+# TensorMixedStates
+
+> A Julia library simulating closed and open quantum systems, pure states and density matrices, with matrix product states: ground and excited states, Hamiltonian and Lindbladian evolution, steady and thermal states, gates and noisy channels, conserved quantities, and simulations written as phases with checkpoints.
+
+## Guides
+
+- [Quick reference](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/quickref/): the whole library on one page, with its conventions
+- [Coming from QuTiP or ITensors](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/correspondence/): their functions next to those of TMS
+- [Manual](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/manual/): sites, states, operators, algorithms and measurements, with examples
+- [Choosing and checking the parameters](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/accuracy/): the truncation, the time step, the sweeps
+- [High level interface](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/simulations/): simulations as phases, their files and checkpoints
+- [Conserving a quantity](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/conservation/): weak and strong symmetries, and what they save
+- [Quantum trajectories](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/trajectories/): pure states drawn at random, whose average is the density matrix
+- [Threads and performance](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/performance/): threads, BLAS, long sums
+- [Extending TMS](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/extending/): site types, phases, methods, destinations and states of one's own
+- [Upgrading from 1.x](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/upgrading/): the names, keywords and defaults that changed in 2.0
+- [Bibliography](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/bibliography/): the articles the methods of TMS come from, and what each gives it
+
+## Optional
+
+- [The guides in full](https://jerhoud.github.io/TensorMixedStates.jl/v2.3.0/llms-full.txt): the pages above in one file
