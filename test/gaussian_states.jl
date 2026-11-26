@@ -246,3 +246,81 @@ end
     @test gs_same(r.state, v, sys)
     @test entanglement_entropy(r.state, 2) > 0.1
 end
+
+# the numbers of the files of measurements of two runs, which must have the same files and lines
+function gs_same_outputs(a, b; atol = 1e-10)
+    files = sort(filter(f -> endswith(f, ".dat"), readdir(a)))
+    ok = !isempty(files) && files == sort(filter(f -> endswith(f, ".dat"), readdir(b)))
+    for f in files
+        la, lb = readlines(joinpath(a, f)), readlines(joinpath(b, f))
+        ok &= length(la) == length(lb)
+        for (x, y) in zip(la, lb)
+            ta, tb = split(x), split(y)
+            ok &= length(ta) == length(tb)
+            for (u, v) in zip(ta, tb)
+                p, q = tryparse(Float64, u), tryparse(Float64, v)
+                ok &= isnothing(p) ? u == v : !isnothing(q) && isapprox(p, q; atol)
+            end
+        end
+    end
+    ok
+end
+
+# a program run on GaussianState and on ExactState: the same measurements, the same final state
+function gs_programs_agree(phases)
+    ok = true
+    in_tmp() do
+        g = runTMS(SimData(; name = "g", backend = TensorMixedStates.GaussianState, phases))
+        e = runTMS(SimData(; name = "e", backend = TensorMixedStates.ExactState, phases))
+        ok &= g.state isa TensorMixedStates.GaussianState
+        ok &= gs_same_outputs("g", "e")
+        v = TensorMixedStates.ExactState(State(g.state)).state
+        ok &= isapprox(abs(dot(v, e.state.state)), LA.norm(e.state.state); atol = 1e-10)
+    end
+    ok
+end
+
+@testset "programs against ExactState" begin
+    # fermions: product state, evolution with pairing, gates, ground state
+    for _ in 1:2
+        n = 6
+        sys = System(n, Fermion())
+        t, Δ, μ = randn(gs_rng, 3)
+        H = sum(t * (dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) + Δ * (C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j)) for j in 1:n-1) +
+            μ * sum(N(j) for j in 1:n)
+        meas = ["f.dat" => [N, dag(C)(1) * C(4), EntanglementEntropy(3)]]
+        phases = [CreateState{Pure}(sys, [gs_random_vector(2) for _ in 1:n]; final_measurements = meas),
+                  Evolve(evolver = -im * H, duration = 0.6, time_step = 0.2, measurements = meas),
+                  Gates(gates = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 3) * (C + dag(C))(5), final_measurements = meas),
+                  GroundState(hamiltonian = H + 0.3 * N(1), algo = Dmrg(nsweeps = 10), final_measurements = meas)]
+        @test gs_programs_agree(phases)
+    end
+    # qubits along Z: Ising J XX - h Z from X+, gates, XX + YY ground state
+    for _ in 1:2
+        n = 6
+        sys = System(n, Qubit())
+        J, h = randn(gs_rng, 2)
+        H = J * sum(X(j) * X(j + 1) for j in 1:n-1) - h * sum(Z(j) for j in 1:n)
+        meas = ["q.dat" => [X, Z, X(1) * X(2), Y(2) * Y(3), EntanglementEntropy(3)]]
+        phases = [CreateState{Pure}(sys, "X+"; final_measurements = meas),
+                  Evolve(evolver = -im * H, duration = 0.6, time_step = 0.2, measurements = meas),
+                  Gates(gates = Rz(0.3)(2) * Rxx(0.2)(3, 4) * Ryy(0.2)(3, 4) * X(1) * Rx(0.5)(1), final_measurements = meas),
+                  GroundState(hamiltonian = sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:n-1) + 0.3 * Z(2) - 0.1 * Z(5),
+                              algo = Dmrg(nsweeps = 10), final_measurements = meas)]
+        @test gs_programs_agree(phases)
+    end
+    # qubits then fermions, the last qubit coupled to the fermions: quadratic in this order only (with
+    # the fermions first, σ⁺c is the parity of the fermions times a hopping)
+    for _ in 1:2
+        sys = System([Qubit(), Qubit(), Fermion(), Fermion()])
+        a, b, c = randn(gs_rng, 3)
+        H = a * (dag(C)(3) * C(4) + dag(C)(4) * C(3)) + b * (Sp(2) * C(4) + dag(C)(4) * Sm(2)) +
+            (X(1) * X(2) + Y(1) * Y(2)) + c * (N(3) + Z(1))
+        meas = ["m.dat" => [N(3), N(4), Z(1), Z(2), dag(C)(4) * Sm(2), EntanglementEntropy(2)]]
+        phases = [CreateState{Pure}(sys, [gs_random_vector(2) for _ in 1:4]; final_measurements = meas),
+                  Evolve(evolver = -im * H, duration = 0.6, time_step = 0.2, measurements = meas)]
+        @test gs_programs_agree(phases)
+    end
+    @test_throws ArgumentError TensorMixedStates.gaussian_generator(System([Fermion(), Fermion(), Qubit()]),
+                                                                    Sp(3) * C(2) + dag(C)(2) * Sm(3))
+end
