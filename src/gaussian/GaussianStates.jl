@@ -2,6 +2,9 @@
 # by the covariance of the Majoranas of the backend (the ancilla first, see compiler/Majoranas.jl).
 # A state of one component, whose phase is not observable, keeps its covariance only.
 
+import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, relink!, norm2, apply_monomial,
+                         cross_term, describe, overlap, fock_state
+
 """
     GaussianState(state::State{Pure}; axes = :Z, limits = Limits())
 
@@ -11,6 +14,8 @@ dimension above 1, is refused.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis
+- `max_terms`: the largest number of Gaussian components of the state, which operators that are not
+  Gaussian multiply (default 64)
 
     CreateState(…; backend = GaussianState)
     CreateState(GaussianState(State{Pure}(System(4, Qubit()), "X+"); axes = :X))
@@ -19,14 +24,18 @@ struct GaussianState{R <: PM} <: AbstractState{R}
     system::System
     axes::Dict{Int, Symbol}
     layout::MajoranaLayout
-    cov::Matrix{Float64}
-    # whether the physical state has a definite parity, see the entropies
+    # one component: its covariance, its phase free; several: their sum, with their phases
+    cov::Union{Nothing, Matrix{Float64}}
+    sum::Union{Nothing, GaussianSum}
+    # whether the physical state has a definite parity, see the entropies; false for several components
     definite::Bool
-    # the squared norm of the state, which a factor in front of a gate changes
+    # the squared norm of the state
     trace::Float64
+    max_terms::Int
 end
 
-function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), limits::Limits = Limits())
+function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
+                       limits::Limits = Limits())
     d = maxlinkdim(state.state)
     if d > 1
         throw(ArgumentError("the Gaussian backend starts from a product state, not from an MPS of " *
@@ -43,8 +52,43 @@ function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), limits::L
     end
     vectors = local_vectors(state)
     cov, definite = product_covariance(system, layout, vectors)
-    GaussianState{Pure}(system, axes, layout, cov, definite, norm(state.state)^2)
+    GaussianState{Pure}(system, axes, layout, cov, nothing, definite, norm(state.state)^2, max_terms)
 end
+
+# the generator of the references of the sums: fixed, so that a run can be reproduced (the reference
+# changes the results by rounding only)
+const reference_seed = 20261126
+
+# a state of one component like `state`, of covariance `cov`
+single(state::GaussianState{Pure}, cov::Matrix{Float64}; definite::Bool = state.definite,
+       trace::Real = state.trace) =
+    GaussianState{Pure}(state.system, state.axes, state.layout, cov, nothing, definite, trace, state.max_terms)
+
+# a state like `state` held by the sum `s`, refused beyond max_terms components, of one component
+# when it has one; `trace` its squared norm when known
+function superposed(state::GaussianState{Pure}, s::GaussianSum; trace::Union{Nothing, Real} = nothing)
+    K = length(s.comps)
+    if K > state.max_terms
+        throw(ArgumentError("the state would have $K Gaussian components, above max_terms = $(state.max_terms): " *
+                            "raise it with GaussianState(…; max_terms)"))
+    end
+    t = something(trace, real(ComplexF64(norm2(s))))
+    if K == 1
+        fix!(s)
+        return single(state, only(s.comps).cov; definite = false, trace = t)
+    end
+    GaussianState{Pure}(state.system, state.axes, state.layout, nothing, s, false, t, state.max_terms)
+end
+
+# the state as a sum that can be changed, its phases not brought up to date
+function as_sum(state::GaussianState{Pure})
+    if isnothing(state.sum)
+        g = describe(state.cov)
+        return GaussianSum([g], [sqrt(state.trace)], Random.Xoshiro(reference_seed))
+    end
+    deepcopy(state.sum)
+end
+
 
 GaussianState(state::State{R}; kwargs...) where R =
     throw(ArgumentError("the Gaussian backend holds pure states only for now, not a State{$R}"))
@@ -136,6 +180,7 @@ representation(::GaussianState{R}) where R = R
 show(io::IO, s::GaussianState{R}) where R = print(io, "GaussianState{$R}($(s.system))")
 ignored_options(::GaussianState) = (:algo, :limits, :mpo_limits, :randomize)
 trace(state::GaussianState{Pure}) = state.trace
+ncomponents(state::GaussianState) = isnothing(state.sum) ? 1 : length(state.sum.comps)
 norm(state::GaussianState{Pure}) = sqrt(state.trace)
 
 as_representation(::Type{Pure}, state::GaussianState{Pure}; limits::Limits = Limits()) = state
@@ -144,12 +189,23 @@ as_representation(::Type{R}, ::GaussianState{Pure}; limits::Limits = Limits()) w
 
 import .GaussianKernels: expect_monomial
 
-# the value on the state of a polynomial in its Majoranas, Σ c_α Pf(iM[α, α]), the values of the
-# monomials already met kept in cache
+# the value on the state, normalised, of a polynomial in its Majoranas: Σ c_α Pf(iM[α, α]) for one
+# component, Σ c_α Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩ for several (each term by the action
+# of the monomial and an overlap, D-f); the values of the monomials already met kept in cache
 function poly_value(state::GaussianState{Pure}, p::MajoranaPoly,
                     cache::Dict{Vector{Int}, ComplexF64} = Dict{Vector{Int}, ComplexF64}())
-    sum((c * get!(() -> ComplexF64(expect_monomial(state.cov, α)), cache, α) for (α, c) in p.terms);
-        init = zero(ComplexF64))
+    value(α) = isnothing(state.sum) ? ComplexF64(expect_monomial(state.cov, α)) : sum_monomial(state, α)
+    sum((c * get!(() -> value(α), cache, α) for (α, c) in p.terms); init = zero(ComplexF64))
+end
+
+function sum_monomial(state::GaussianState{Pure}, α::Vector{Int})
+    s = state.sum
+    fix!(s)
+    total = zero(LogComplex)
+    for (gk, ak) in zip(s.comps, s.coefs), (gl, al) in zip(s.comps, s.coefs)
+        total += conj(ak) * al * cross_term(gk, α, gl)
+    end
+    ComplexF64(total) / state.trace
 end
 
 # measured on what conserves nothing, as on a State, an operator of no definite flux too
@@ -234,8 +290,6 @@ end
 
 truncate(state::GaussianState; limits::Limits) = state
 
-import .GaussianKernels: describe, overlap, fock_state
-
 # the basis of the occupations of the modes of site k as the columns of a matrix, column 1 + Σ_r n_r 2^(r-1)
 # being (c_1†)^n_1 ⋯ (c_q†)^n_q |0⟩ with c_r = (γ_{2r-1} + iγ_{2r})/2 from its local Majoranas, the
 # vacuum the vector all c_r annihilate
@@ -260,21 +314,26 @@ function on_axis(a::Array, k::Int, B::AbstractMatrix)
 end
 
 # the vector of the physical state in the basis of TMS, its phase free: Ψ = Σ_x ⟨x|Ψ⟩ |x⟩ over the
-# even Fock states of the modes, the ancilla first, and ψ = Ψ_even - iΨ_odd, an array of the occupations
-# of the sites carried to their bases
+# even Fock states of the modes, the ancilla first (⟨x|Ψ⟩ = Σ_k a_k ⟨x|G_k⟩ for several components),
+# and ψ = Ψ_even - iΨ_odd, an array of the occupations of the sites carried to their bases
 function physical_vector(state::GaussianState{Pure})
     system, layout = state.system, state.layout
     order = layout.order
     dims = [dim(s) for s in system.sites]
     nmodes = layout.count ÷ 2 + 1
-    g = describe(state.cov)
+    if isnothing(state.sum)
+        comps, coefs = [describe(state.cov)], [one(LogComplex)]
+    else
+        fix!(state.sum)
+        comps, coefs = state.sum.comps, state.sum.coefs
+    end
     a = zeros(ComplexF64, dims...)
     for idx in 0:2^nmodes-1
         x = [((idx >> (nmodes - j)) & 1) == 1 for j in 1:nmodes]
         if isodd(count(x))
             continue
         end
-        amp = ComplexF64(overlap(fock_state(x), g))
+        amp = ComplexF64(sum((c * overlap(fock_state(x), g) for (g, c) in zip(comps, coefs)); init = zero(LogComplex)))
         occupations = zeros(Int, length(dims))
         pos = 2
         for k in order
@@ -306,12 +365,28 @@ function State(state::GaussianState{Pure}; limits::Limits = Limits())
     State(ExactState{Pure}(state.system, sqrt(state.trace) * ψ / norm(ψ), Val(:raw)); limits)
 end
 
+# one component: its covariance; several: for each, its covariance, its support, its amplitude and
+# its coefficient, the numbers as their logarithm and phase
 function write_state(g, state::GaussianState{R}) where R
     attributes(g)["representation"] = string(nameof(R))
     attributes(g)["axes"] = join(("$k:$P" for (k, P) in sort(collect(state.axes))), ",")
     attributes(g)["definite"] = Int(state.definite)
     attributes(g)["trace"] = state.trace
-    g["covariance"] = state.cov
+    attributes(g)["max_terms"] = state.max_terms
+    if isnothing(state.sum)
+        g["covariance"] = state.cov
+        return nothing
+    end
+    s = state.sum
+    fix!(s)
+    for (k, (c, a)) in enumerate(zip(s.comps, s.coefs))
+        h = create_group(g, "component$k")
+        h["covariance"] = c.cov
+        h["support"] = Int.(c.x)
+        h["amplitude"] = [c.amp.logabs, real(c.amp.phase), imag(c.amp.phase)]
+        h["coefficient"] = [a.logabs, real(a.phase), imag(a.phase)]
+    end
+    attributes(g)["components"] = length(s.comps)
     return nothing
 end
 
@@ -323,6 +398,16 @@ function read_state(::Type{<:GaussianState}, g, sites)
     system = System(sites)
     text = read(attributes(g)["axes"])
     axes = Dict{Int, Symbol}(parse(Int, first(split(e, ":"))) => Symbol(last(split(e, ":"))) for e in split(text, ",") if !isempty(e))
-    GaussianState{Pure}(system, axes, MajoranaLayout(system; axes), read(g["covariance"]),
-                        read(attributes(g)["definite"]) == 1, read(attributes(g)["trace"]))
+    layout = MajoranaLayout(system; axes)
+    max_terms = haskey(attributes(g), "max_terms") ? Int(read(attributes(g)["max_terms"])) : 64
+    definite, trace = read(attributes(g)["definite"]) == 1, read(attributes(g)["trace"])
+    if haskey(g, "covariance")
+        return GaussianState{Pure}(system, axes, layout, read(g["covariance"]), nothing, definite, trace, max_terms)
+    end
+    number(v) = LogComplex(v[1], complex(v[2], v[3]))
+    hs = [g["component$k"] for k in 1:read(attributes(g)["components"])]
+    comps = [PureGaussian(read(h["covariance"]), Bool.(read(h["support"])), number(read(h["amplitude"]))) for h in hs]
+    coefs = [number(read(h["coefficient"])) for h in hs]
+    s = GaussianSum(comps, coefs, Random.Xoshiro(reference_seed))
+    GaussianState{Pure}(system, axes, layout, nothing, s, definite, trace, max_terms)
 end

@@ -19,9 +19,16 @@ function unitary_form(c::Number, k::AbstractMatrix, what::String)
     im * imag(c), real(k)
 end
 
-turned(state::GaussianState{Pure}, R::AbstractMatrix, definite::Bool) =
-    GaussianState{Pure}(state.system, state.axes, state.layout, antisymmetric(R * state.cov * transpose(R)),
-                        state.definite && definite, state.trace)
+# the state turned by the Gaussian unitary of rotation R, which keeps the parity when `definite`: the
+# covariance of one component, the rotation accumulated by a sum, its norm unchanged
+function turned(state::GaussianState{Pure}, R::AbstractMatrix, definite::Bool)
+    if isnothing(state.sum)
+        return single(state, antisymmetric(R * state.cov * transpose(R)); definite = state.definite && definite)
+    end
+    s = as_sum(state)
+    evolve!(s, R)
+    superposed(state, s; trace = state.trace)
+end
 
 """
 the evolver of a Gaussian state: L = c + (1/4) Σ k_ab γ_a γ_b, k real, the rotations exp(k dt) already
@@ -96,7 +103,8 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
               "$(round(gap; sigdigits = 2)) for a spectrum of width $(round(width; sigdigits = 2)), " *
               "one of its states is returned"
     end
-    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, !couples_ancilla(k), 1.0)
+    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, !couples_ancilla(k), 1.0,
+                                state.max_terms)
     (energy = real(c) + g.energy, state = found)
 end
 
@@ -117,15 +125,15 @@ gate_generator(::IndexedOp) = nothing
 
 the gates of `op` applied to the state, a product applied factor by factor from the right, a factor
 changing the norm only: a gate written exp(A), A quadratic and anti-Hermitian (the rotations of
-Circuits, `exp` written by the user), or a single monomial in Majoranas (a Pauli string); others are
-refused for now.
+Circuits, `exp` written by the user), turns every component; any other operator, a polynomial in
+Majoranas, has each of its monomials applied exactly to each component, which multiplies their
+number, refused beyond `max_terms`.
 """
 function apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Limits = Limits())
     c, s = scalarcoef(op), scalararg(op)
     if c != 1
         # a factor in front of the gates changes the norm only, as for an ExactState
-        st = apply(s, state; limits)
-        return GaussianState{Pure}(st.system, st.axes, st.layout, st.cov, st.definite, abs2(c) * st.trace)
+        return scaled(apply(s, state; limits), c)
     end
     if s isa ProdOp
         return foldr((g, st) -> apply(g, st; limits), s.subs; init = state)
@@ -136,15 +144,42 @@ function apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Li
         _, h = unitary_form(c0, k, "the Gaussian backend applies exp(A) with A anti-Hermitian, unitary gates")
         return turned(state, propagator(h, 1), !couples_ancilla(k))
     end
-    p = polynomial(state.system, state.layout, lower(state.system, s))
-    if length(p) == 1
+    p = polynomial(state.system, state.layout, lower(weaken(state.system, ()), s))
+    if length(p) == 1 && isnothing(state.sum)
         α, c = only(p.terms)
         D = ones(size(state.cov, 1))
         D[α] .= -1
-        cov = D .* state.cov .* transpose(D)
         # c c(α) multiplies the norm by |c|, c(α) being unitary
-        return GaussianState{Pure}(state.system, state.axes, state.layout, cov, state.definite, abs2(c) * state.trace)
+        return single(state, D .* state.cov .* transpose(D); trace = abs2(c) * state.trace)
     end
-    throw(ArgumentError("the Gaussian backend applies gates written exp(A), A quadratic, or Pauli strings, " *
-                        "not $(obs_name(op)), for now"))
+    applied_poly(state, p)
+end
+
+# the state times `c`
+function scaled(state::GaussianState{Pure}, c::Number)
+    if isnothing(state.sum)
+        return single(state, state.cov; trace = abs2(c) * state.trace)
+    end
+    s = as_sum(state)
+    s.coefs .*= Ref(LogComplex(c))
+    superposed(state, s; trace = abs2(c) * state.trace)
+end
+
+# the polynomial p applied to the state: each monomial to each component, exactly, with its phase
+function applied_poly(state::GaussianState{Pure}, p::MajoranaPoly)
+    K = ncomponents(state) * length(p)
+    if K > state.max_terms
+        throw(ArgumentError("the operator would give the state $K Gaussian components, above max_terms = " *
+                            "$(state.max_terms): raise it with GaussianState(…; max_terms)"))
+    end
+    s = as_sum(state)
+    fix!(s)
+    comps, coefs = PureGaussian[], LogComplex[]
+    for (g, a) in zip(s.comps, s.coefs), (α, c) in p.terms
+        push!(comps, apply_monomial(α, g))
+        push!(coefs, a * c)
+    end
+    s.comps, s.coefs = comps, coefs
+    relink!(s)
+    superposed(state, s)
 end

@@ -65,7 +65,7 @@ function gs_random(sys; definite::Bool)
     ψ = similar(x)
     ψ[gc_to_modes(sys)] = x
     layout = TensorMixedStates.MajoranaLayout(sys)
-    g = TensorMixedStates.GaussianState{Pure}(sys, Dict{Int, Symbol}(), layout, dense_covariance(Ψ), definite, 1.0)
+    g = TensorMixedStates.GaussianState{Pure}(sys, Dict{Int, Symbol}(), layout, dense_covariance(Ψ), nothing, definite, 1.0, 64)
     g, ψ
 end
 
@@ -206,8 +206,6 @@ end
     end
     g2 = apply(2 * X(1), g)
     @test TensorMixedStates.trace(g2) ≈ 4 * TensorMixedStates.trace(g)
-    @test_throws ArgumentError apply(H(2), g)
-    @test_throws ArgumentError apply(CNOT(2, 3), g)
     # a fermionic gate written as an exponential, on a mixed system
     sys = System([Fermion(), Qubit(), Fermion()])
     g, ψ = gs_product(sys)
@@ -363,4 +361,58 @@ end
     @test gs_same(g2, exp(-0.3im * Hd) * ψ, sys)
     # the conversion to State is refused beyond 16 modes
     @test_throws ArgumentError State(TensorMixedStates.GaussianState(State{Pure}(System(17, Qubit()), "Up")))
+end
+
+@testset "superpositions" begin
+    # gates that are not Gaussian make several components: against the dense state, values, entropies
+    sys = System([Qubit() for _ in 1:4])
+    g, ψ = gs_product(sys)
+    m(O, sites...) = TensorMixedStates.matrix(O, (sys.sites[k] for k in sites)...)
+    embed2(U, k) = reduce(kron, [j == k ? U : Matrix{ComplexF64}(I, 2, 2) for j in 1:4 if j != k + 1])
+    # T, H and S·Rz multiply the components by 2 each, CNOT and CZ by 4 (D4: no merging): 8 at most here
+    for (G_, Gd) in ((CNOT(1, 2), embed2(m(CNOT, 1, 2), 1)), (0.5 * CZ(3, 4), 0.5 * embed2(m(CZ, 3, 4), 3)))
+        g1, ψ1 = gs_product(sys)
+        g1 = apply(G_, g1)
+        @test gs_same(g1, Gd * ψ1, sys)
+        @test TensorMixedStates.trace(g1) ≈ real(dot(Gd * ψ1, Gd * ψ1)) rtol = 1e-10
+    end
+    steps = [(T(2), gc_embed(sys, 2, m(T, 2))), (H(3), gc_embed(sys, 3, m(H, 3))),
+             (Rxx(0.4)(2, 3), embed2(m(Rxx(0.4), 2, 3), 2)),
+             (S(4) * Rz(0.3)(1), gc_embed(sys, 4, m(S, 4)) * gc_embed(sys, 1, m(Rz(0.3), 1)))]
+    for (G_, Gd) in steps
+        g = apply(G_, g)
+        ψ = Gd * ψ
+        @test gs_same(g, ψ, sys)
+        @test TensorMixedStates.trace(g) ≈ real(dot(ψ, ψ)) rtol = 1e-10
+    end
+    @test TensorMixedStates.ncomponents(g) == 8
+    # an evolution of a superposition, its files, its conversion to State
+    Hxy = sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:3) + 0.4 * Z(2)
+    Hd = sum(gc_op(sys, X, j) * gc_op(sys, X, j + 1) + gc_op(sys, Y, j) * gc_op(sys, Y, j + 1) for j in 1:3) + 0.4 * gc_op(sys, Z, 2)
+    pre = TensorMixedStates.prepared_evolver(g, -im * Hxy)
+    for step in 1:3
+        g = TensorMixedStates.evolve_step(Tdvp(), pre, g, 0.0, 0.2, step, Limits())
+    end
+    ψ = exp(-0.6im * Hd) * ψ
+    @test gs_same(g, ψ, sys)
+    v = TensorMixedStates.ExactState(State(g)).state
+    @test abs(dot(v, ψ)) ≈ LA.norm(v) * LA.norm(ψ) rtol = 1e-10
+    mktempdir() do dir
+        file = joinpath(dir, "g.h5")
+        save_state(file, "g", g)
+        h = load_state(file, "g")
+        @test gs_same(h, ψ, sys) && TensorMixedStates.ncomponents(h) == TensorMixedStates.ncomponents(g)
+    end
+    # fermions: a quartic operator applied, a product of odd operators
+    sys = System([Fermion(), Electron(), Fermion()])
+    g, ψ = gs_product(sys)
+    g = apply(Nupdn(2) + 0.3 * dag(C)(1) * C(3), g)
+    ψ = (gc_op(sys, Nupdn, 2) + 0.3 * gc_op(sys, dag(C), 1) * gc_op(sys, C, 3)) * ψ
+    @test gs_same(g, ψ, sys)
+    # max_terms: beyond, a clear refusal
+    sys = System([Qubit() for _ in 1:4])
+    g = TensorMixedStates.GaussianState(State{Pure}(sys, "Up"); max_terms = 4)
+    g = apply(H(2) * H(3), g)
+    @test TensorMixedStates.ncomponents(g) == 4
+    @test_throws ArgumentError apply(H(1), g)
 end
