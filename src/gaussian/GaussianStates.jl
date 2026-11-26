@@ -19,6 +19,8 @@ struct GaussianState{R <: PM} <: AbstractState{R}
     cov::Matrix{Float64}
     # whether the physical state has a definite parity, see the entropies
     definite::Bool
+    # the squared norm of the state, which a factor in front of a gate changes
+    trace::Float64
 end
 
 function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), limits::Limits = Limits())
@@ -32,7 +34,7 @@ function GaussianState(state::State{Pure}; axes = Dict{Int, Symbol}(), limits::L
     layout = MajoranaLayout(system; axes)
     vectors = local_vectors(state)
     cov, definite = product_covariance(system, layout, vectors)
-    GaussianState{Pure}(system, axes, layout, cov, definite)
+    GaussianState{Pure}(system, axes, layout, cov, definite, norm(state.state)^2)
 end
 
 GaussianState(state::State{R}; kwargs...) where R =
@@ -109,8 +111,8 @@ end
 representation(::GaussianState{R}) where R = R
 show(io::IO, s::GaussianState{R}) where R = print(io, "GaussianState{$R}($(s.system))")
 ignored_options(::GaussianState) = (:algo, :limits, :mpo_limits, :randomize)
-trace(::GaussianState{Pure}) = 1.0
-norm(::GaussianState{Pure}) = 1.0
+trace(state::GaussianState{Pure}) = state.trace
+norm(state::GaussianState{Pure}) = sqrt(state.trace)
 
 as_representation(::Type{Pure}, state::GaussianState{Pure}; limits::Limits = Limits()) = state
 as_representation(::Type{R}, ::GaussianState{Pure}; limits::Limits = Limits()) where R =

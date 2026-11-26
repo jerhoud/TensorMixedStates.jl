@@ -91,6 +91,7 @@ include("gaussian/kernels/GaussianKernels.jl")
 include("gaussian/compiler/Majoranas.jl")
 include("gaussian/compiler/Generators.jl")
 include("gaussian/GaussianStates.jl")
+include("gaussian/GaussianSolvers.jl")
 
 # Simulations
 include("runner/Threading.jl")

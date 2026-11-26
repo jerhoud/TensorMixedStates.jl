@@ -1,0 +1,145 @@
+# Evolutions, ground states and gates of the Gaussian backend: a Gaussian unitary turns the covariance
+# by its rotation R, M → R M Rᵀ, read exactly from its quadratic generator.
+
+import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric
+
+# whether the quadratic form k couples the ancilla to the system: a linear term, which changes the
+# physical parity
+couples_ancilla(k::AbstractMatrix) = any(!iszero, k[1:2, 3:end])
+
+turned(state::GaussianState{Pure}, R::AbstractMatrix, definite::Bool) =
+    GaussianState{Pure}(state.system, state.axes, state.layout, antisymmetric(R * state.cov * transpose(R)),
+                        state.definite && definite, state.trace)
+
+"""
+the evolver of a Gaussian state: L = c + (1/4) Σ k_ab γ_a γ_b, k real, the rotations exp(k dt) already
+computed, and whether L keeps the physical parity
+"""
+struct GaussianEvolver
+    k::Matrix{Float64}
+    rotations::Dict{Float64, Matrix{Float64}}
+    even::Bool
+end
+
+prepared_evolver(state::GaussianState{Pure}, a::Union{IndexedOp, Pair}, mpo_limits::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
+    prepared_evolver(state, [a], mpo_limits; duration)
+
+function prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::Limits = Limits();
+                          duration::Union{Nothing, Number} = nothing)
+    ops, fs = split_terms(terms)
+    if !isnothing(fs)
+        throw(ArgumentError("the Gaussian backend evolves under an evolver that does not depend on time, for now"))
+    end
+    if !all(op -> op isa IndexedOp{IsOperator}, ops)
+        throw(ArgumentError("the Gaussian backend evolves a pure state under an operator, -iH"))
+    end
+    c, k, _ = gaussian_generator(state.system, reduce(+, ops); axes = state.axes)
+    if !all(iszero, imag(k)) || !iszero(real(c))
+        throw(ArgumentError("the Gaussian backend evolves a pure state under -iH with H Hermitian, for now: " *
+                            "this evolver has a part that is not unitary"))
+    end
+    GaussianEvolver(real(k), Dict{Float64, Matrix{Float64}}(), !couples_ancilla(k))
+end
+
+function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{Pure},
+                     time::Number, dt::Number, step::Int, limits::Limits)
+    if iszero(dt)
+        return state
+    end
+    if !(dt isa Real)
+        throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
+    end
+    R = get!(() -> propagator(pre.k, dt), pre.rotations, Float64(dt))
+    turned(state, R, pre.even)
+end
+
+"""
+    ground_state(hamiltonian, state::GaussianState; kwargs...)
+
+the ground state of a quadratic Hamiltonian, from its normal modes (`quadratic_ground_state`), with a
+line of log when it is degenerate within 1e-10 of the width of its spectrum; `algo`, `limits` and
+`mpo_limits` are without use.
+"""
+function ground_state(hamiltonian, state::GaussianState{Pure};
+                      algo::Union{Nothing, SearchAlgorithm} = nothing, limits::Limits = Limits(),
+                      mpo_limits::Limits = Limits(), orthogonal_to::AbstractVector = [],
+                      weight::Union{Nothing, Real} = nothing)
+    system = state.system
+    if !isempty(orthogonal_to)
+        throw(ArgumentError("the Gaussian backend searches the ground state only, not states orthogonal to others"))
+    end
+    if is_charged(system)
+        throw(ArgumentError("the Gaussian backend searches the ground state of a system without conserved " *
+                            "quantities, for now"))
+    end
+    H = followed_operator(searched_operator(system, hamiltonian, "ground_state"))
+    c, k, _ = gaussian_generator(system, H; axes = state.axes)
+    h = -im * k
+    if !all(iszero, imag(h)) || !iszero(imag(c))
+        throw(ArgumentError("ground_state needs a Hermitian Hamiltonian"))
+    end
+    g = quadratic_ground_state(real(h), 1)
+    ε = g.energies
+    # the gap within the even states: two modes more, or the lowest occupied one moved up
+    flipped = g.energy > -sum(ε) / 2
+    gap = flipped ? ε[2] - ε[1] : ε[1] + ε[2]
+    width = sum(ε)
+    if gap < 1e-10 * width
+        @info "ground_state of a GaussianState: the ground level is degenerate within " *
+              "$(round(gap; sigdigits = 2)) for a spectrum of width $(round(width; sigdigits = 2)), " *
+              "one of its states is returned"
+    end
+    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, !couples_ancilla(k), 1.0)
+    (energy = real(c) + g.energy, state = found)
+end
+
+# the generator A of a gate written exp(A), placed on its sites, nothing for another gate
+function gate_generator(g::AtIndex)
+    op = g.op
+    if op isa Operator && op.expr isa ExpOp
+        return AtIndex(op.expr.arg, g.index)
+    elseif op isa ExpOp
+        return AtIndex(op.arg, g.index)
+    end
+    nothing
+end
+gate_generator(::IndexedOp) = nothing
+
+"""
+    apply(op, state::GaussianState{Pure})
+
+the gates of `op` applied to the state, a product applied factor by factor from the right, a factor in
+front changing the norm only: a gate
+written exp(A), A quadratic and anti-Hermitian (the rotations of Circuits, `exp` written by the
+user), or a single monomial in Majoranas (a Pauli string); others are refused for now.
+"""
+function apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Limits = Limits())
+    c, s = scalarcoef(op), scalararg(op)
+    if c != 1
+        # a factor in front of the gates changes the norm only, as for an ExactState
+        st = apply(s, state; limits)
+        return GaussianState{Pure}(st.system, st.axes, st.layout, st.cov, st.definite, abs2(c) * st.trace)
+    end
+    if s isa ProdOp
+        return foldr((g, st) -> apply(g, st; limits), s.subs; init = state)
+    end
+    A = gate_generator(s)
+    if !isnothing(A)
+        c0, k, _ = gaussian_generator(state.system, A; axes = state.axes)
+        if !all(iszero, imag(k)) || !iszero(real(c0))
+            throw(ArgumentError("the Gaussian backend applies exp(A) with A anti-Hermitian, unitary gates"))
+        end
+        return turned(state, propagator(real(k), 1), !couples_ancilla(k))
+    end
+    p = polynomial(state.system, state.layout, lower(state.system, s))
+    if length(p) == 1
+        α = only(keys(p.terms))
+        D = ones(size(state.cov, 1))
+        D[α] .= -1
+        cov = D .* state.cov .* transpose(D)
+        return GaussianState{Pure}(state.system, state.axes, state.layout, cov, state.definite, state.trace)
+    end
+    throw(ArgumentError("the Gaussian backend applies gates written exp(A), A quadratic, or Pauli strings, " *
+                        "not $(obs_name(op)), for now"))
+end

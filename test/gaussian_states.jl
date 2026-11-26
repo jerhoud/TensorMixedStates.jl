@@ -20,7 +20,7 @@ function gs_lifted(sys, ψ; axes = Dict{Int, Symbol}())
     vcat(even, im .* (x - even))
 end
 
-using .LA: dot, eigvals
+using .LA: dot, eigvals, eigen, Hermitian, I
 
 gs_random_vector(d) = (v = randn(gs_rng, ComplexF64, d); v / LA.norm(v))
 
@@ -65,7 +65,7 @@ function gs_random(sys; definite::Bool)
     ψ = similar(x)
     ψ[gc_to_modes(sys)] = x
     layout = TensorMixedStates.MajoranaLayout(sys)
-    g = TensorMixedStates.GaussianState{Pure}(sys, Dict{Int, Symbol}(), layout, dense_covariance(Ψ), definite)
+    g = TensorMixedStates.GaussianState{Pure}(sys, Dict{Int, Symbol}(), layout, dense_covariance(Ψ), definite, 1.0)
     g, ψ
 end
 
@@ -107,4 +107,112 @@ gs_entropy(ρ) = (λ = max.(eigvals(Hermitian(ρ)), 0); -sum(x * log(x) for x in
             @test entanglement_entropy(g, cut) ≈ gs_entropy(gs_partial(ψ, dims, 1:cut)) atol = 1e-10
         end
     end
+end
+
+# a random product state of sys, its GaussianState and its vector in the basis of TMS
+function gs_product(sys; axes = Dict{Int, Symbol}())
+    vs = [gs_random_vector(dim(s)) for s in sys.sites]
+    TensorMixedStates.GaussianState(State{Pure}(sys, vs); axes), reduce(kron, vs)
+end
+
+# the values of random operators on the sites and the entropies of the cuts, on g and on ψ
+function gs_same(g, ψ, sys; nops = 6)
+    n = length(sys.sites)
+    opsof(k) = gc_kind(sys.sites[k]) == :qubit ? (X, Y, Z) : sys.sites[k] isa Electron ? (Cup, Cdn, Nup) : (C, dag(C), N)
+    ok = true
+    for _ in 1:nops
+        ks = rand(gs_rng, 1:n, rand(gs_rng, 1:2))
+        Os = [rand(gs_rng, opsof(k)) for k in ks]
+        v = TensorMixedStates.expect_value(g, prod(o(k) for (o, k) in zip(Os, ks)))
+        ok &= isapprox(v, dot(ψ, prod(gc_op(sys, o, k) for (o, k) in zip(Os, ks)) * ψ) / dot(ψ, ψ); atol = 1e-10)
+    end
+    dims = [dim(s) for s in sys.sites]
+    for cut in 1:n-1
+        ok &= isapprox(entanglement_entropy(g, cut), gs_entropy(gs_partial(ψ / LA.norm(ψ), dims, 1:cut)); atol = 1e-9)
+    end
+    ok
+end
+
+@testset "evolution" begin
+    # fermions with hopping and pairing; qubits XX + YY with fields; Ising along X with fields on both ends
+    sys1 = System([Fermion() for _ in 1:5])
+    H1 = sum(-(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) + 0.4 * (C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j)) for j in 1:4) +
+         0.3 * sum(N(j) for j in 1:5)
+    H1d(sys) = sum(-(gc_op(sys, dag(C), j) * gc_op(sys, C, j + 1) + gc_op(sys, dag(C), j + 1) * gc_op(sys, C, j)) +
+                   0.4 * (gc_op(sys, C, j) * gc_op(sys, C, j + 1) + gc_op(sys, dag(C), j + 1) * gc_op(sys, dag(C), j)) for j in 1:4) +
+                   0.3 * sum(gc_op(sys, N, j) for j in 1:5)
+    sys2 = System([Qubit() for _ in 1:5])
+    q(sys, O, k) = gc_op(sys, O, k)
+    H2 = sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:4) + 0.5 * Z(2) - 0.3 * Z(4)
+    H2d(sys) = sum(q(sys, X, j) * q(sys, X, j + 1) + q(sys, Y, j) * q(sys, Y, j + 1) for j in 1:4) + 0.5 * q(sys, Z, 2) - 0.3 * q(sys, Z, 4)
+    H3 = -sum(Z(j) * Z(j + 1) for j in 1:4) - 0.7 * sum(X(j) for j in 1:5) + 0.3 * Z(1) - 0.2 * Z(5)
+    H3d(sys) = -sum(q(sys, Z, j) * q(sys, Z, j + 1) for j in 1:4) - 0.7 * sum(q(sys, X, j) for j in 1:5) + 0.3 * q(sys, Z, 1) - 0.2 * q(sys, Z, 5)
+    for (sys, H, Hd, axes) in ((sys1, H1, H1d, Dict{Int, Symbol}()), (sys2, H2, H2d, Dict{Int, Symbol}()),
+                               (sys2, H3, H3d, Dict(k => :X for k in 1:5)))
+        g, ψ = gs_product(sys; axes)
+        pre = TensorMixedStates.prepared_evolver(g, -im * H)
+        dt = 0.13
+        for step in 1:4
+            g = TensorMixedStates.evolve_step(Tdvp(), pre, g, (step - 1) * dt, dt, step, Limits())
+        end
+        ψ = exp(-im * 4dt * Hd(sys)) * ψ
+        @test gs_same(g, ψ, sys)
+    end
+    # refused: an evolver depending on time, one that is not unitary
+    g, _ = gs_product(sys1)
+    @test_throws ArgumentError TensorMixedStates.prepared_evolver(g, [-im * N(1), -im * N(2) => t -> t])
+    @test_throws ArgumentError TensorMixedStates.prepared_evolver(g, -im * H1 - 0.1 * N(2))
+end
+
+@testset "ground states" begin
+    sys = System([Fermion() for _ in 1:5])
+    H = sum(-(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) + 0.4 * (C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j)) for j in 1:4) +
+        0.3 * sum(N(j) for j in 1:5)
+    Hd = sum(-(gc_op(sys, dag(C), j) * gc_op(sys, C, j + 1) + gc_op(sys, dag(C), j + 1) * gc_op(sys, C, j)) +
+             0.4 * (gc_op(sys, C, j) * gc_op(sys, C, j + 1) + gc_op(sys, dag(C), j + 1) * gc_op(sys, dag(C), j)) for j in 1:4) +
+         0.3 * sum(gc_op(sys, N, j) for j in 1:5)
+    E = eigen(Hermitian(Hd))
+    g, _ = gs_product(sys)
+    r = ground_state(H, g)
+    @test r.energy ≈ E.values[1] atol = 1e-12
+    @test gs_same(r.state, E.vectors[:, 1], sys)
+    sysq = System([Qubit() for _ in 1:5])
+    Hq = -sum(Z(j) * Z(j + 1) for j in 1:4) - 0.7 * sum(X(j) for j in 1:5) + 0.3 * Z(1)
+    Hqd = -sum(gc_op(sysq, Z, j) * gc_op(sysq, Z, j + 1) for j in 1:4) - 0.7 * sum(gc_op(sysq, X, j) for j in 1:5) + 0.3 * gc_op(sysq, Z, 1)
+    Eq = eigen(Hermitian(Hqd))
+    gq, _ = gs_product(sysq; axes = Dict(k => :X for k in 1:5))
+    rq = ground_state(Hq, gq)
+    @test rq.energy ≈ Eq.values[1] atol = 1e-12
+    @test gs_same(rq.state, Eq.vectors[:, 1], sysq)
+    # refused: a charged system, states to avoid
+    gc_ = TensorMixedStates.GaussianState(State{Pure}(System([Fermion(conserve = N) for _ in 1:3]), ["Occ", "Emp", "Emp"]))
+    @test_throws ArgumentError ground_state(sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:2), gc_)
+    @test_throws ArgumentError ground_state(H, g; orthogonal_to = [r.state])
+end
+
+@testset "gates" begin
+    sys = System([Qubit() for _ in 1:4])
+    m(O, sites...) = TensorMixedStates.matrix(O, (sys.sites[k] for k in sites)...)
+    embed2(U, k) = reduce(kron, [j == k ? U : Matrix{ComplexF64}(I, 2, 2) for j in 1:4 if j != k + 1])
+    g, ψ = gs_product(sys)
+    gates = [(Rx(0.3)(1), gc_embed(sys, 1, m(Rx(0.3), 1))), (Rz(0.7)(2), gc_embed(sys, 2, m(Rz(0.7), 2))),
+             (Rxx(0.4)(2, 3) * Ryy(0.4)(2, 3), embed2(m(Rxx(0.4), 2, 3) * m(Ryy(0.4), 2, 3), 2)),
+             (Ry(0.5)(4), gc_embed(sys, 4, m(Ry(0.5), 4))), (X(2), gc_op(sys, X, 2)),
+             (Z(2) * X(3), gc_op(sys, Z, 2) * gc_op(sys, X, 3))]
+    for (G_, Gd) in gates
+        g = apply(G_, g)
+        ψ = Gd * ψ
+        @test gs_same(g, ψ, sys)
+    end
+    g2 = apply(2 * X(1), g)
+    @test TensorMixedStates.trace(g2) ≈ 4 * TensorMixedStates.trace(g)
+    @test_throws ArgumentError apply(H(2), g)
+    @test_throws ArgumentError apply(CNOT(2, 3), g)
+    # a fermionic gate written as an exponential, on a mixed system
+    sys = System([Fermion(), Qubit(), Fermion()])
+    g, ψ = gs_product(sys)
+    A = -0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C))
+    g = apply(exp(A)(1, 3), g)
+    Ad = -0.3im * (gc_op(sys, dag(C), 1) * gc_op(sys, C, 3) + (gc_op(sys, dag(C), 1) * gc_op(sys, C, 3))')
+    @test gs_same(g, exp(Ad) * ψ, sys)
 end
