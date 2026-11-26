@@ -741,3 +741,54 @@ end
     v = TensorMixedStates.ExactState(State(r.state)).state
     @test gs_same(r.state, v, sysf)
 end
+
+@testset "fixes from the reviews of lot 5" begin
+    # ground states with a term in the parity, which lands on the ancilla: energy and state against the dense
+    for (sys, axes, H) in ((System(4, Qubit()), :X, -sum(X(j) for j in 1:4) + 0.5 * prod(X(j) for j in 1:4)),
+                           (System(4, Qubit()), :X, -sum(X(j) for j in 1:4) + 2 * prod(X(j) for j in 1:4)),
+                           (System(2, Qubit()), :Z, Z(1) * Z(2)),
+                           (System(2, Qubit()), :Z, Z(1) * Z(2) + 0.3 * X(1) * X(2)))
+        g = TensorMixedStates.GaussianState(State{Pure}(sys, "Up"); axes)
+        e = TensorMixedStates.ExactState(State{Pure}(sys, "Up"))
+        r, re = ground_state(H, g), ground_state(H, e)
+        @test r.energy ≈ re.energy atol = 1e-10
+        @test real(TensorMixedStates.expect_value(r.state, H)) ≈ re.energy atol = 1e-10
+    end
+    # a ring on a sum of unknown parity, its components all in one sector (the other sector empty), and on
+    # states of one parity whose parity was lost by gates coupling the ancilla (the other sector noise)
+    n = 5
+    sys = System(n, Qubit())
+    ring = sum(Z(j) * Z(j + 1) for j in 1:n-1) + Z(n) * Z(1) - 0.6 * sum(X(j) for j in 1:n)
+    start = State{Pure}(sys, ["Up"; fill("X+", n - 1)])
+    prep(st) = apply(Z(2) * Z(3) + 0.5 * Z(4) * Z(5), TensorMixedStates.project_on(st, 0.5 * (Id(1) + X(1)); limits = Limits()))
+    g = prep(TensorMixedStates.GaussianState(start; axes = :X))
+    e = prep(TensorMixedStates.ExactState(start))
+    @test isnothing(g.parities)
+    g, e = evolve(-im * ring, 0.5, g; nsteps = 2), evolve(-im * ring, 0.5, e; nsteps = 2)
+    @test gs_same(g, e.state, sys)
+    xp = State{Pure}(sys, "X+")
+    for gates in ((exp(-im * π / 2 * Z)(1),), (exp(-0.37im * Z)(1), exp(0.37im * Z)(1)))
+        g = foldl((st, x) -> apply(x, st), gates; init = TensorMixedStates.GaussianState(xp; axes = :X))
+        e = foldl((st, x) -> apply(x, st), gates; init = TensorMixedStates.ExactState(xp))
+        g, e = evolve(-im * ring, 0.5, g; nsteps = 2), evolve(-im * ring, 0.5, e; nsteps = 2)
+        @test TensorMixedStates.ncomponents(g) == 1
+        @test gs_same(g, e.state, sys)
+    end
+    # the rotations kept by a trajectory: one per parity, whatever its jumps
+    gt = TensorMixedStates.GaussianState(State{Trajectory}(sys, "X+"); axes = :X)
+    pre = TensorMixedStates.with_rng(TensorMixedStates.prepared_evolver(gt, -im * ring + sum(0.5 * Dissipator(Z)(j) for j in 1:n)),
+                                     Random.Xoshiro(1), [])
+    for k in 0:39
+        gt = TensorMixedStates.evolve_step(Tdvp(), pre, gt, 0.1k, 0.1, k + 1, Limits())
+    end
+    @test !isempty(pre.jumps) && length(pre.pre.rotations) <= 2
+    # refusals with their remedy
+    gp = TensorMixedStates.GaussianState(xp; axes = :X)
+    @test_throws "is a generator" apply(Dissipator(Z)(1), gp)
+    @test_throws "is a generator" apply(Dissipator(Z)(1), TensorMixedStates.as_representation(Trajectory, gp))
+    @test_throws "draw it on a trajectory" apply(depolarizing_channel(0.2)(1), gp)
+    @test_throws "not searched" ground_state(ring, TensorMixedStates.as_representation(Trajectory, gp))
+    @test_throws "not a pure or a mixed state" TensorMixedStates.as_representation(Mixed, TensorMixedStates.as_representation(Trajectory, gp))
+    gm = TensorMixedStates.GaussianState(State{Pure}(sys, "Up"); axes = :X)
+    @test_throws "project it on each sector" TensorMixedStates.prepared_evolver(gm, [-im * ring, -im * X(1) => t -> cos(t)])
+end

@@ -1,7 +1,8 @@
 # Evolutions, ground states and gates of the Gaussian backend: a Gaussian unitary turns the covariance
 # by its rotation R, M → R M Rᵀ, read exactly from its quadratic generator.
 
-import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric, evolve_branches!, project!
+import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric, evolve_branches!, project,
+                         project!, occupation_probability
 
 # whether the quadratic form k couples the ancilla to the system: a linear term, which changes the
 # physical parity
@@ -111,7 +112,11 @@ function gaussian_evolver(state::GaussianState, terms::AbstractVector, duration:
     whole = polynomial(system, state.layout, lower(system, reduce(+, ops)))
     p = pre(!quadratic && conserves_parity(whole))
     # compiled now for the parities the state needs, so that an error comes at once
-    for σ in step_parities(p, state)
+    σs = step_parities(p, state)
+    if length(σs) == 2 && !isnothing(fs)
+        throw(ArgumentError(branches_what))
+    end
+    for σ in σs
         compiled(p, σ)
     end
     p
@@ -127,8 +132,9 @@ function step_parities(pre::GaussianEvolver, state::GaussianState{<:Ket})
     isnothing(σ) ? [1, -1] : [σ]
 end
 
-const branches_what = "the Gaussian backend evolves a state whose components lie in both sectors of the parity under a " *
-                      "constant operator only, for now"
+const branches_what = "the Gaussian backend evolves a state lying in both sectors of the parity (a ring) under a " *
+                      "constant operator only, for now; for values even in the parity, project it on each sector, " *
+                      "(Id + P)/2 and (Id - P)/2 with P the parity, and evolve them apart"
 
 function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{<:Ket},
                      time::Number, dt::Number, step::Int, limits::Limits)
@@ -148,37 +154,44 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::Gaussi
     σ = only(σs)
     if isnothing(pre.fs)
         c, h, even = compiled(pre, σ)
-        R = get!(() -> propagator(h, dt), pre.rotations, (σ, Float64(dt)))
-        return lost(turned(state, R, even), real(c) * dt)
+        return lost(turned(state, rotation(pre, σ, h, dt), even), real(c) * dt)
     end
     forms, even = compiled(pre, σ)
     R, loss = magnus_rotation(pre, forms, time, dt)
     lost(turned(state, R, even), loss)
 end
 
+# the rotation of a step of the constant evolver in the sector σ, kept for the last step only: the steps
+# of a trajectory between its jumps are of any length
+function rotation(pre::GaussianEvolver, σ, h::AbstractMatrix, dt::Real)
+    key = (σ, Float64(dt))
+    if !haskey(pre.rotations, key)
+        filter!(kv -> first(first(kv)) !== σ, pre.rotations)
+        pre.rotations[key] = propagator(h, dt)
+    end
+    pre.rotations[key]
+end
+
 # the state as a sum of components of known parities: its components cut, where not known, into their
-# projections on the two sectors (the occupations of the ancilla, exactly), those of weight zero left out
+# projections on the two sectors (the occupations of the ancilla, exactly), those of weight √p |a| below
+# 1e-13 times the largest of both sectors left out, as `project!` does within one
 function in_sectors(state::GaussianState{<:Ket})
     if !isnothing(state.parities)
         return as_sum(state), state.parities
     end
     s = as_sum(state)
     fix!(s)
+    parts = [(g, a, σ, occupation_probability(g.cov, 1, Float64(σ))) for (g, a) in zip(s.comps, s.coefs) for σ in (1, -1)]
+    logw = [p > 0 ? log(p) / 2 + a.logabs : -Inf for (_, a, _, p) in parts]
+    largest = maximum(logw)
     comps, coefs, parities = PureGaussian[], LogComplex[], Int[]
-    for (σ, occupied) in ((1, false), (-1, true))
-        t = deepcopy(s)
-        kept = try
-            project!(t, 1, occupied)
-        catch e
-            if !(e isa ArgumentError)
-                rethrow()
-            end
-            # no component in this sector
-            Int[]
+    for ((g, a, σ, _), w) in zip(parts, logw)
+        if w > -Inf && w >= largest + log(1e-13)
+            p, h = project(g, 1, σ == -1)
+            push!(comps, h)
+            push!(coefs, a * LogComplex(log(p) / 2, 1))
+            push!(parities, σ)
         end
-        append!(comps, t.comps)
-        append!(coefs, t.coefs)
-        append!(parities, fill(σ, length(kept)))
     end
     K = length(comps)
     if K > state.max_terms
@@ -191,6 +204,10 @@ end
 # a step of a constant evolver on a state whose components lie in both sectors, each under the Gaussian
 # unitary of its sector with their relative phase (`evolve_branches!`)
 function branches_step(pre::GaussianEvolver, state::GaussianState{<:Ket}, dt::Real)
+    if iszero(state.trace)
+        # the null state
+        return state
+    end
     s, parities = in_sectors(state)
     steps = Dict{Int, Tuple{Matrix{Float64}, Float64, ComplexF64}}()
     for σ in (1, -1)
@@ -261,8 +278,9 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
         end
         nothing
     end
-    if isnothing(generator)
-        # quadratic in each sector of the physical parity, which it conserves (a ring), or the error
+    if isnothing(generator) || !couples_ancilla(generator[2])
+        # quadratic in each sector of the physical parity, which it conserves (a ring, or a term in the parity,
+        # which lands on the ancilla), or the error
         found = [sector_ground_state(system, H, state, σ) for σ in (1, -1)]
         if any(isnothing, found)
             gaussian_generator(system, H; axes = state.axes)
@@ -279,24 +297,13 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
     c, k, _ = generator
     # H = c + (1/4) Σ k γγ Hermitian is -iH = -ic + (1/4) Σ -ik γγ anti-Hermitian
     _, h = unitary_form(-im * c, -im * k, "ground_state needs a Hermitian Hamiltonian")
-    if couples_ancilla(k)
-        g = quadratic_ground_state(h, 1)
-        degenerate_info(g)
-        found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, nothing, 1.0, state.max_terms)
-        return (energy = real(c) + g.energy, state = found)
-    end
-    # the ancilla decoupled: the system's ground state, of parity σ, and the ancilla of the same parity, so
-    # that no zero mode of the system is paired with a Majorana of the ancilla
-    g = quadratic_ground_state(h[3:end, 3:end])
+    g = quadratic_ground_state(h, 1)
     degenerate_info(g)
-    σ = isempty(g.cov) ? 1 : Int(sign(real(logpfaffian(g.cov).phase)))
-    M = size(h, 1)
-    cov = zeros(M, M)
-    cov[1, 2], cov[2, 1] = σ, -σ
-    cov[3:end, 3:end] = g.cov
-    found = GaussianState{Pure}(system, state.axes, state.layout, cov, nothing, [σ], 1.0, state.max_terms)
+    found = GaussianState{Pure}(system, state.axes, state.layout, g.cov, nothing, nothing, 1.0, state.max_terms)
     (energy = real(c) + g.energy, state = found)
 end
+
+ground_state(::Any, ::GaussianState{Trajectory}; kwargs...) = not_searched()
 
 # the line of log of a ground level degenerate within 1e-10 of the width of the spectrum, the gap taken
 # within the states of the same parity: two modes more, or the lowest occupied one moved up
@@ -371,6 +378,17 @@ apply(a::IndexedOp{IsChannel}, state::GaussianState{Trajectory}; limits::Limits 
 
 ket_applied(a::IndexedOp{IsOperator}, state::GaussianState{Trajectory}; limits::Limits = Limits()) =
     gaussian_applied(a, state)
+
+function apply(a::IndexedOp{IsChannel}, state::GaussianState{Pure}; limits::Limits = Limits())
+    if !is_pure(a)
+        throw(ArgumentError("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot take: " *
+                            "draw it on a trajectory, CreateState{Trajectory}"))
+    end
+    gaussian_applied(kraus(a), state)
+end
+
+apply(a::IndexedOp{IsGenerator}, ::GaussianState; limits::Limits = Limits(), rng::AbstractRNG = Random.default_rng()) =
+    throw(ArgumentError("apply takes an operator or a channel, and $(obs_name(a)) is a generator"))
 
 # the operator applied to the ket of the state, see `apply`
 function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)

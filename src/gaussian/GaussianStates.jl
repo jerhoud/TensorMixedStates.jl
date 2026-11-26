@@ -222,8 +222,10 @@ as_representation(::Type{Trajectory}, state::GaussianState{Pure}; limits::Limits
     with_representation(Trajectory, state)
 as_representation(::Type{Pure}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
     error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
-as_representation(::Type{Mixed}, ::GaussianState; limits::Limits = Limits()) =
+as_representation(::Type{Mixed}, ::GaussianState{Pure}; limits::Limits = Limits()) =
     throw(ArgumentError("the Gaussian backend holds pure states and trajectories only for now, not Mixed"))
+as_representation(::Type{Mixed}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
+    error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
 
 import .GaussianKernels: expect_monomial
 
