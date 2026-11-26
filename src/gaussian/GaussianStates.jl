@@ -115,3 +115,93 @@ norm(::GaussianState{Pure}) = 1.0
 as_representation(::Type{Pure}, state::GaussianState{Pure}; limits::Limits = Limits()) = state
 as_representation(::Type{R}, ::GaussianState{Pure}; limits::Limits = Limits()) where R =
     throw(ArgumentError("the Gaussian backend holds pure states only for now, not $R"))
+
+import .GaussianKernels: expect_monomial
+
+# the value on the state of a polynomial in its Majoranas, Σ c_α Pf(iM[α, α]), the values of the
+# monomials already met kept in cache
+function poly_value(state::GaussianState{Pure}, p::MajoranaPoly,
+                    cache::Dict{Vector{Int}, ComplexF64} = Dict{Vector{Int}, ComplexF64}())
+    sum((c * get!(() -> ComplexF64(expect_monomial(state.cov, α)), cache, α) for (α, c) in p.terms);
+        init = zero(ComplexF64))
+end
+
+expect_value(state::GaussianState{Pure}, a::IndexedOp{IsOperator}) =
+    poly_value(state, polynomial(state.system, state.layout, lower(state.system, a)))
+
+# the matrix of size d with a 1 at (r, c)
+function matrix_unit(d::Int, r::Int, c::Int)
+    m = zeros(ComplexF64, d, d)
+    m[r, c] = 1
+    m
+end
+
+# the local indices of the basis states of sites of dimensions dims, in the order of kron (the first
+# site the slowest)
+function kron_indices(dims::Vector{Int})
+    out = Vector{Int}[]
+    for idx in 0:prod(dims)-1
+        local_ = zeros(Int, length(dims))
+        r = idx
+        for i in length(dims):-1:1
+            local_[i] = r % dims[i] + 1
+            r ÷= dims[i]
+        end
+        push!(out, local_)
+    end
+    out
+end
+
+# ρ_A[a, b] = ⟨ψ| |b⟩⟨a| ⊗ 1 |ψ⟩, each |b⟩⟨a| a product of matrix units on the sites, without strings:
+# the reduced density matrix of the sites as tensor factors, as for a State
+function reduced_density_matrix(state::GaussianState{Pure}, positions::AbstractVector{Int};
+                                max_dense::Union{Nothing, Int} = dense_bound(state))
+    check_positions(state, positions, "reduced_density_matrix")
+    check_increasing(positions, "reduced_density_matrix")
+    if isempty(positions)
+        return ones(1, 1)
+    end
+    kept = collect(positions)
+    for k in kept
+        if isempty(state.layout.majoranas[k])
+            throw(ArgumentError("the Gaussian backend has no density matrix of site $k, which has no mode"))
+        end
+    end
+    check_reduced(state, kept, max_dense)
+    dims = [dim(state.system[k]) for k in kept]
+    basis = kron_indices(dims)
+    ρ = zeros(ComplexF64, length(basis), length(basis))
+    cache = Dict{Vector{Int}, ComplexF64}()
+    for (ia, a) in enumerate(basis), (ib, b) in enumerate(basis)
+        blocks = [Block(k, matrix_unit(d, b[i], a[i]), 0) for (i, (k, d)) in enumerate(zip(kept, dims))]
+        p = polynomial(state.system, state.layout, [Term(1, blocks, Int[], Int[])])
+        ρ[ia, ib] = poly_value(state, p, cache)
+    end
+    ρ
+end
+
+"""
+    von_neumann_entropy(state::GaussianState, positions; max_dense)
+
+by the eigenvalues ±iν of the covariance of the modes of the sites, Σ h((1 + ν)/2), when the state has
+a definite parity, the system one kind of modes and the sites are the first or the last ones (the
+fermionic reduced state is then that of the sites); otherwise from `reduced_density_matrix`.
+"""
+function von_neumann_entropy(state::GaussianState{Pure}, positions::AbstractVector{Int};
+                             max_dense::Union{Nothing, Int} = dense_bound(state))
+    check_positions(state, positions, "von_neumann_entropy")
+    layout = state.layout
+    order = sort([k for k in eachindex(state.system.sites) if !isempty(layout.majoranas[k])]; by = k -> layout.first[k])
+    kept = sort([k for k in unique(positions) if !isempty(layout.majoranas[k])]; by = k -> layout.first[k])
+    kinds = unique(isnothing(fermion_species(state.system[k])) for k in order)
+    ends = kept == order[1:length(kept)] || kept == order[end-length(kept)+1:end]
+    if !(state.definite && length(kinds) <= 1 && ends)
+        return invoke(von_neumann_entropy, Tuple{AbstractState, AbstractVector{Int}}, state, positions; max_dense)
+    end
+    majoranas = reduce(vcat, [layout.first[k] .+ (0:length(layout.majoranas[k])-1) .+ 2 for k in kept]; init = Int[])
+    ν = eigvals(Hermitian(im * state.cov[majoranas, majoranas]))
+    ps = (1 .+ ν[length(ν)÷2+1:end]) ./ 2
+    shannon_entropy(vcat(ps, 1 .- ps))
+end
+
+entanglement_entropy(state::GaussianState{Pure}, cut::Int) = von_neumann_entropy(state, 1:cut)
