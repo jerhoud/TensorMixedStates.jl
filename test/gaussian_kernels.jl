@@ -424,3 +424,37 @@ end
         end
     end
 end
+
+# the dense matrix of a polynomial on n modes
+gk_dense_poly(p, n) = sum((c .* dense_matrix(x -> dense_monomial(α, x), n) for (α, c) in p.terms);
+                          init = zeros(ComplexF64, 2^n, 2^n))
+
+function gk_random_poly(n)
+    MajoranaPoly((sort(randperm(gk_rng, 2n)[1:rand(gk_rng, 0:2n)]) => randn(gk_rng, ComplexF64)
+                  for _ in 1:rand(gk_rng, 1:4))...)
+end
+
+@testset "polynomials in Majoranas" begin
+    for n in 1:4, _ in 1:10
+        p, q = gk_random_poly(n), gk_random_poly(n)
+        P, Q = gk_dense_poly(p, n), gk_dense_poly(q, n)
+        @test gk_dense_poly(p * q, n) ≈ P * Q atol = 1e-12
+        @test gk_dense_poly(p + q, n) ≈ P + Q atol = 1e-12
+        @test gk_dense_poly(p - 2im * q, n) ≈ P - 2im * Q atol = 1e-12
+        @test gk_dense_poly(p', n) ≈ P' atol = 1e-12
+    end
+    # γ_a γ_a = 1, anticommutation, exact cancellations, degree and parity
+    g(a) = MajoranaPoly([a] => 1)
+    @test g(2) * g(2) == MajoranaPoly(Int[] => 1)
+    @test g(1) * g(3) + g(3) * g(1) == zero(MajoranaPoly)
+    @test iszero(g(1) - g(1)) && length(g(1) + g(2)) == 2
+    @test MajoranaPoly([1] => 1, [1] => -1) == zero(MajoranaPoly)
+    @test degree(zero(MajoranaPoly)) == 0 && degree(g(1) * g(4) * g(6)) == 3
+    # parity is not exported, TensorMixedStates has one of another meaning
+    gparity = TensorMixedStates.GaussianKernels.parity
+    @test gparity(g(1) * g(2)) == 0 && gparity(g(5)) == 1 && gparity(g(1) + g(1) * g(2)) === nothing
+    @test gparity(zero(MajoranaPoly)) == 0
+    @test_throws ArgumentError MajoranaPoly([2, 1] => 1)
+    @test_throws ArgumentError MajoranaPoly([1, 1] => 1)
+    @test_throws ArgumentError MajoranaPoly([0] => 1)
+end
