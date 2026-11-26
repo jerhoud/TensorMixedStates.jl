@@ -111,15 +111,26 @@ function gaussian_evolver(state::GaussianState, terms::AbstractVector, duration:
     p
 end
 
-# the parity the evolver is compiled for to step the state: that of the state when it needs the sectors,
-# the error of the operator that is not quadratic when the state has none
+# the parity the evolver is compiled for to step the state: that of the state when it needs the sectors;
+# when the state has none, the error of the operator that is not quadratic, or the refusal of an operator
+# quadratic in each sector only (a ring)
 function step_parity(pre::GaussianEvolver, state::GaussianState{<:Ket})
     if !pre.sectors
         return nothing
     end
     σ = state_parity(state)
     if isnothing(σ)
-        compiled(pre, nothing)
+        try
+            compiled(pre, nothing)
+        catch e
+            if !(e isa ArgumentError)
+                rethrow()
+            end
+            compiled(pre, 1)
+            throw(ArgumentError("the Gaussian backend evolves under this operator (a ring) only a state of one " *
+                                "component and definite parity: project it on each sector, (Id + P)/2 and " *
+                                "(Id - P)/2 with P the parity, and evolve them apart"))
+        end
     end
     σ
 end
@@ -411,14 +422,18 @@ function projected(state::GaussianState{<:Ket}, occupations)
             project_covariance!(M, m, s, q)
             t *= q
         end
-        # the occupations commute with the parity
-        return single(state, M; trace = t)
+        # the occupations commute with the parity, which that of the ancilla (mode 1) fixes
+        return single(state, M; trace = t, definite = state.definite || any(m == 1 for (m, _) in occupations))
     end
     s = as_sum(state)
     for (m, o) in occupations
         project!(s, m, o)
     end
-    superposed(state, s)
+    r = superposed(state, s)
+    if isnothing(r.sum) && any(m == 1 for (m, _) in occupations)
+        return single(r, r.cov; definite = true)
+    end
+    r
 end
 
 function normalized(state::GaussianState{<:Ket})

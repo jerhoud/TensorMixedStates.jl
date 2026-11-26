@@ -676,3 +676,28 @@ end
         @test load_state(file, "t") isa TensorMixedStates.GaussianState{Trajectory}
     end
 end
+
+@testset "sectors of the parity of ising_quench" begin
+    # from |↓…↓⟩ (no definite parity along X), the ring is refused with its remedy; each sector, projected,
+    # has a definite parity, and the mean of the two trajectories drawn with the same generator is the
+    # trajectory of ExactState from |↓…↓⟩ for the even observables
+    n = 6
+    sys = System(n, Qubit())
+    J = 1 .+ 0.3 * randn(gs_rng, n)
+    H = sum(J[j] * Z(j) * Z(j + 1) for j in 1:n-1) + J[n] * Z(n) * Z(1) - sum(X(j) for j in 1:n)
+    ev = -im * H + sum(0.1 * Dissipator(Z)(j) for j in 1:n)
+    g = TensorMixedStates.GaussianState(State{Trajectory}(sys, "Dn"); axes = :X)
+    @test !g.definite
+    @test_throws "project it on each sector" evolve(ev, 0.1, g; nsteps = 1)
+    P = prod(X(j) for j in 1:n)
+    sectors = [TensorMixedStates.project_on(g, (Id(1) + s * P) / 2) for s in (1, -1)]
+    @test all(x.definite for x in sectors)
+    @test [TensorMixedStates.state_parity(x) for x in sectors] == [1, -1]
+    for seed in 1:2
+        gs = [evolve(ev, 2.0, x; nsteps = 10, rng = Random.Xoshiro(seed)) for x in sectors]
+        e = evolve(ev, 2.0, TensorMixedStates.ExactState(State{Trajectory}(sys, "Dn")); nsteps = 10, rng = Random.Xoshiro(seed))
+        for o in (X(2), X(1) * X(4), Y(2) * Y(3), Z(1) * Z(4), Z(3) * Z(6))
+            @test sum(TensorMixedStates.expect_value(x, o) for x in gs) / 2 ≈ TensorMixedStates.expect_value(e, o) atol = 1e-10
+        end
+    end
+end
