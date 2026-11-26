@@ -216,3 +216,33 @@ end
     Ad = -0.3im * (gc_op(sys, dag(C), 1) * gc_op(sys, C, 3) + (gc_op(sys, dag(C), 1) * gc_op(sys, C, 3))')
     @test gs_same(g, exp(Ad) * ψ, sys)
 end
+
+@testset "files and conversion to State" begin
+    for (sites, axes) in (([Fermion(), Electron(), Qubit(), Fermion()], Dict(3 => :X)),
+                          ([Qubit(), Qubit(), Qubit()], Dict(1 => :Y)),
+                          ([Electron()], Dict{Int, Symbol}()))
+        sys = System(sites)
+        g, ψ = gs_product(sys; axes)
+        # the vector of the conversion against the state: the same values and entropies
+        st = State(g)
+        v = TensorMixedStates.ExactState(st).state
+        @test abs(dot(v, ψ)) ≈ 1 atol = 1e-10
+        @test gs_same(g, v, sys)
+        # files keep the covariance, the axes, the parity and the trace
+        mktempdir() do dir
+            file = joinpath(dir, "g.h5")
+            save_state(file, "g", g)
+            h = load_state(file, "g")
+            @test h isa TensorMixedStates.GaussianState{Pure}
+            @test h.cov == g.cov && h.axes == g.axes && h.definite == g.definite && h.trace == g.trace
+        end
+    end
+    # an entangled state: a ground state converted
+    sys = System([Fermion() for _ in 1:4])
+    H = sum(-(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) + 0.4 * (C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j)) for j in 1:3)
+    g, _ = gs_product(sys)
+    r = ground_state(H, g)
+    v = TensorMixedStates.ExactState(State(r.state)).state
+    @test gs_same(r.state, v, sys)
+    @test entanglement_entropy(r.state, 2) > 0.1
+end

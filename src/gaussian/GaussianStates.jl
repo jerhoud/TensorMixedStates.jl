@@ -207,3 +207,101 @@ function von_neumann_entropy(state::GaussianState{Pure}, positions::AbstractVect
 end
 
 entanglement_entropy(state::GaussianState{Pure}, cut::Int) = von_neumann_entropy(state, 1:cut)
+
+import .GaussianKernels: describe, overlap, fock_state
+
+# the basis of the occupations of the modes of site k as the columns of a matrix, column 1 + Σ_r n_r 2^(r-1)
+# being (c_1†)^n_1 ⋯ (c_q†)^n_q |0⟩ with c_r = (γ_{2r-1} + iγ_{2r})/2 from its local Majoranas, the
+# vacuum the vector all c_r annihilate
+function occupation_basis(layout::MajoranaLayout, k::Int)
+    γs = layout.majoranas[k]
+    q = length(γs) ÷ 2
+    cs = [(γs[2r-1] + im * γs[2r]) / 2 for r in 1:q]
+    vacuum = nullspace(reduce(vcat, cs))[:, 1]
+    B = zeros(ComplexF64, length(vacuum), 2^q)
+    for o in 0:2^q-1
+        B[:, o + 1] = foldr((r, v) -> (o >> (r - 1)) & 1 == 1 ? cs[r]' * v : v, 1:q; init = vacuum)
+    end
+    B
+end
+
+# the array a with the matrix B applied to its axis k
+function on_axis(a::Array, k::Int, B::AbstractMatrix)
+    n = ndims(a)
+    p = vcat(k, setdiff(1:n, k))
+    b = reshape(B * reshape(permutedims(a, p), size(a, k), :), size(B, 1), size(a)[setdiff(1:n, k)]...)
+    permutedims(b, invperm(p))
+end
+
+# the vector of the physical state in the basis of TMS, its phase free: Ψ = Σ_x ⟨x|Ψ⟩ |x⟩ over the
+# even Fock states of the modes, the ancilla first, and ψ = Ψ_even - iΨ_odd, an array of the occupations
+# of the sites carried to their bases
+function physical_vector(state::GaussianState{Pure})
+    system, layout = state.system, state.layout
+    for k in eachindex(system.sites)
+        if isempty(layout.majoranas[k])
+            throw(ArgumentError("the Gaussian backend has no vector of site $k, which has no mode"))
+        end
+    end
+    order = sort(collect(eachindex(system.sites)); by = k -> layout.first[k])
+    dims = [dim(s) for s in system.sites]
+    nmodes = layout.count ÷ 2 + 1
+    g = describe(state.cov)
+    a = zeros(ComplexF64, dims...)
+    for idx in 0:2^nmodes-1
+        x = [((idx >> (nmodes - j)) & 1) == 1 for j in 1:nmodes]
+        if isodd(count(x))
+            continue
+        end
+        amp = ComplexF64(overlap(fock_state(x), g))
+        occupations = zeros(Int, length(dims))
+        pos = 2
+        for k in order
+            q = length(layout.majoranas[k]) ÷ 2
+            occupations[k] = sum(x[pos + r - 1] << (r - 1) for r in 1:q) + 1
+            pos += q
+        end
+        a[occupations...] = x[1] ? -im * amp : amp
+    end
+    for k in eachindex(system.sites)
+        a = on_axis(a, k, occupation_basis(layout, k))
+    end
+    in_kron(a)
+end
+
+"""
+    State(state::GaussianState; limits)
+
+the state as an MPS, through its dense vector: refused above `TensorMixedStates.dense_elements[]`
+elements.
+"""
+function State(state::GaussianState{Pure}; limits::Limits = Limits())
+    d = prod(dim(s) for s in state.system.sites)
+    if d > dense_elements[]
+        throw(ArgumentError("the Gaussian backend converts to a State through its dense vector, of $d " *
+                            "elements here, above $(dense_elements[])"))
+    end
+    ψ = physical_vector(state)
+    State(ExactState{Pure}(state.system, sqrt(state.trace) * ψ / norm(ψ), Val(:raw)); limits)
+end
+
+function write_state(g, state::GaussianState{R}) where R
+    attributes(g)["representation"] = string(nameof(R))
+    attributes(g)["axes"] = join(("$k:$P" for (k, P) in sort(collect(state.axes))), ",")
+    attributes(g)["definite"] = Int(state.definite)
+    attributes(g)["trace"] = state.trace
+    g["covariance"] = state.cov
+    return nothing
+end
+
+function read_state(::Type{<:GaussianState}, g, sites)
+    name = read(attributes(g)["representation"])
+    if name != "Pure"
+        error("a GaussianState of unknown representation \"$name\"")
+    end
+    system = System(sites)
+    text = read(attributes(g)["axes"])
+    axes = Dict{Int, Symbol}(parse(Int, first(split(e, ":"))) => Symbol(last(split(e, ":"))) for e in split(text, ",") if !isempty(e))
+    GaussianState{Pure}(system, axes, MajoranaLayout(system; axes), read(g["covariance"]),
+                        read(attributes(g)["definite"]) == 1, read(attributes(g)["trace"]))
+end
