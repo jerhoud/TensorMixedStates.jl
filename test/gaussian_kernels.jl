@@ -357,3 +357,70 @@ end
         @test gk_dist(overlap(g, h), LogComplex(log(p) / 2, 1)) < 1e-10
     end
 end
+
+# the lowest eigenvalue and its eigenvector of H in a parity sector
+function gk_dense_ground(H, n, parity)
+    sector = [k for k in 1:2^n if (iseven(count(dense_bits(k - 1, n))) ? 1 : -1) == parity]
+    E = eigen(Hermitian(H[sector, sector]))
+    ψ = zeros(ComplexF64, 2^n)
+    ψ[sector] = E.vectors[:, 1]
+    E.values[1], ψ, E.values
+end
+
+@testset "ground states of quadratic Hamiltonians" begin
+    for n in 1:6, _ in 1:3
+        h = gk_antisymmetric(2n)
+        H = dense_hamiltonian(h)
+        gs = quadratic_ground_state(h)
+        @test gs.energy ≈ eigen(Hermitian(H)).values[1] atol = 1e-11
+        @test length(gs.energies) == n && issorted(gs.energies) && all(>=(0), gs.energies)
+        for parity in (1, -1)
+            E, ψ, _ = gk_dense_ground(H, n, parity)
+            g = quadratic_ground_state(h, parity)
+            @test g.energy ≈ E atol = 1e-11
+            @test g.cov ≈ dense_covariance(ψ) atol = 1e-10
+        end
+    end
+    # zero modes: mode 1 decoupled, then h = 0; both sectors are ground states
+    for n in (3, 4)
+        h = gk_antisymmetric(2n)
+        h[1:2, :] .= 0
+        h[:, 1:2] .= 0
+        H = dense_hamiltonian(h)
+        E0 = eigen(Hermitian(H)).values[1]
+        for parity in (nothing, 1, -1)
+            g = quadratic_ground_state(h, parity)
+            @test g.energy ≈ E0 atol = 1e-11
+            @test g.cov * transpose(g.cov) ≈ I atol = 1e-12
+            @test abs(-sum(h .* g.cov) / 4 - E0) < 1e-11
+            if parity !== nothing
+                @test real(logpfaffian(g.cov).phase) ≈ parity
+            end
+        end
+        @test quadratic_ground_state(h).energies[1] < 1e-12
+    end
+    g = quadratic_ground_state(zeros(4, 4), -1)
+    @test g.energy == 0 && real(logpfaffian(g.cov).phase) ≈ -1 && g.cov * transpose(g.cov) ≈ I
+    @test_throws ArgumentError quadratic_ground_state(zeros(2, 2), 0)
+    @test_throws ArgumentError quadratic_ground_state(zeros(3, 3))
+    @test_throws ArgumentError quadratic_ground_state(zeros(2, 4))
+    @test_throws ArgumentError quadratic_ground_state(zeros(0, 0), -1)
+    # 200 modes, Ising: a pure covariance commuting with h, of energy -(1/4) Σ h_ab M_ab
+    n = 200
+    h = zeros(2n, 2n)
+    for j in 1:n
+        h[2j-1, 2j] = 0.7
+        if j < n
+            h[2j, 2j+1] = 1.0
+        end
+    end
+    h = h - transpose(h)
+    for parity in (nothing, 1, -1)
+        g = quadratic_ground_state(h, parity)
+        @test g.cov * transpose(g.cov) ≈ I atol = 1e-11
+        @test -sum(h .* g.cov) / 4 ≈ g.energy rtol = 1e-12
+        if parity === nothing
+            @test h * g.cov ≈ g.cov * h atol = 1e-11
+        end
+    end
+end

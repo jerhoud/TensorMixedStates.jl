@@ -12,7 +12,7 @@ using SkewLinearAlgebra: logabspfaffian
 export LogComplex, logpfaffian, fock_covariance, majorana_on_fock, PureGaussian, nmodes,
        find_support, describe, apply_monomial, overlap, cross_term, expect_monomial,
        transition_matrix, propagator, rotate, GaussianSum, evolve!, fix!,
-       project, project!, norm2
+       project, project!, norm2, quadratic_ground_state
 
 include("Numbers.jl")
 include("Fock.jl")
@@ -20,5 +20,6 @@ include("States.jl")
 include("Overlaps.jl")
 include("Evolution.jl")
 include("Measurements.jl")
+include("GroundStates.jl")
 
 end
