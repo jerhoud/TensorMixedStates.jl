@@ -2,7 +2,9 @@
 # evaluator of gaussian_dense.jl, up to 10 modes, and by consistency at 200 modes: numbers held
 # by their logarithm, pfaffians, Fock states, supports of Gaussian states.
 
-include("gaussian_dense.jl")
+if !isdefined(Main, :dense_majorana)
+    include("gaussian_dense.jl")
+end
 using TensorMixedStates.GaussianKernels
 using .LA: qr, det, dot, I, eigen, Hermitian
 
@@ -425,10 +427,6 @@ end
     end
 end
 
-# the dense matrix of a polynomial on n modes
-gk_dense_poly(p, n) = sum((c .* dense_matrix(x -> dense_monomial(α, x), n) for (α, c) in p.terms);
-                          init = zeros(ComplexF64, 2^n, 2^n))
-
 function gk_random_poly(n)
     MajoranaPoly((sort(randperm(gk_rng, 2n)[1:rand(gk_rng, 0:2n)]) => randn(gk_rng, ComplexF64)
                   for _ in 1:rand(gk_rng, 1:4))...)
@@ -437,11 +435,11 @@ end
 @testset "polynomials in Majoranas" begin
     for n in 1:4, _ in 1:10
         p, q = gk_random_poly(n), gk_random_poly(n)
-        P, Q = gk_dense_poly(p, n), gk_dense_poly(q, n)
-        @test gk_dense_poly(p * q, n) ≈ P * Q atol = 1e-12
-        @test gk_dense_poly(p + q, n) ≈ P + Q atol = 1e-12
-        @test gk_dense_poly(p - 2im * q, n) ≈ P - 2im * Q atol = 1e-12
-        @test gk_dense_poly(p', n) ≈ P' atol = 1e-12
+        P, Q = dense_poly(p, n), dense_poly(q, n)
+        @test dense_poly(p * q, n) ≈ P * Q atol = 1e-12
+        @test dense_poly(p + q, n) ≈ P + Q atol = 1e-12
+        @test dense_poly(p - 2im * q, n) ≈ P - 2im * Q atol = 1e-12
+        @test dense_poly(p', n) ≈ P' atol = 1e-12
     end
     # γ_a γ_a = 1, anticommutation, exact cancellations, degree and parity
     g(a) = MajoranaPoly([a] => 1)

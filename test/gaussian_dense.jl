@@ -126,3 +126,7 @@ function dense_vector(g)
     k = dense_index(g.x)
     v .* cis(angle(ComplexF64(g.amp)) - angle(v[k]))
 end
+
+# the matrix of a polynomial in Majoranas on n modes
+dense_poly(p, n) = sum((c .* dense_matrix(x -> dense_monomial(α, x), n) for (α, c) in p.terms);
+                       init = zeros(ComplexF64, 2^n, 2^n))
