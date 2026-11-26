@@ -271,8 +271,8 @@ function gs_programs_agree(phases)
         e = runTMS(SimData(; name = "e", backend = TensorMixedStates.ExactState, phases))
         ok &= g.state isa TensorMixedStates.GaussianState
         ok &= gs_same_outputs("g", "e")
-        v = TensorMixedStates.ExactState(State(g.state)).state
-        ok &= isapprox(abs(dot(v, e.state.state)), LA.norm(e.state.state); atol = 1e-10)
+        v, w = TensorMixedStates.ExactState(State(g.state)).state, e.state.state
+        ok &= isapprox(abs(dot(v, w)), LA.norm(v) * LA.norm(w); atol = 1e-10) && isapprox(LA.norm(v), LA.norm(w); rtol = 1e-10)
     end
     ok
 end
@@ -491,4 +491,34 @@ end
     # a ring on a state of no definite parity is refused
     gm = TensorMixedStates.GaussianState(State{Pure}(sys, [gs_random_vector(2) for _ in 1:n]); axes = :X)
     @test_throws ArgumentError evolve(-im * H, 0.1, gm; nsteps = 1)
+end
+
+@testset "programs with superpositions against ExactState" begin
+    # qubits: gates that are not Gaussian, an evolution depending on time, a projection, from X+
+    for _ in 1:2
+        n = 5
+        sys = System(n, Qubit())
+        a, b = randn(gs_rng, 2)
+        meas = ["s.dat" => [X, Z, X(1) * X(2), Y(2) * Y(4), EntanglementEntropy(2)]]
+        evolver = [-im * sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:n-1), -im * a * sum(Z(j) for j in 1:n) => t -> cos(b * t)]
+        phases = [CreateState{Pure}(sys, "X+"; final_measurements = meas),
+                  Gates(gates = T(2) * H(3), final_measurements = meas),
+                  Evolve(evolver = evolver, duration = 0.6, time_step = 0.2, measurements = meas),
+                  Gates(gates = (Id(1) + Z(4)) / 2 * S(5), final_measurements = meas)]
+        @test gs_programs_agree(phases)
+    end
+    # fermions: a polynomial applied, pairing depending on time, a projection on an occupation
+    for _ in 1:2
+        n = 5
+        sys = System(n, Fermion())
+        a, b = randn(gs_rng, 2)
+        meas = ["f.dat" => [N, dag(C)(1) * C(3), EntanglementEntropy(2)]]
+        evolver = [-im * sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:n-1),
+                   -im * a * sum(C(j) * C(j + 1) + dag(C)(j + 1) * dag(C)(j) for j in 1:n-1) => t -> sin(b * t)]
+        phases = [CreateState{Pure}(sys, [gs_random_vector(2) for _ in 1:n]; final_measurements = meas),
+                  Gates(gates = dag(C)(1) * C(3) + 0.5 * N(2), final_measurements = meas),
+                  Evolve(evolver = evolver, duration = 0.6, time_step = 0.2, measurements = meas),
+                  Gates(gates = N(4), final_measurements = meas)]
+        @test gs_programs_agree(phases)
+    end
 end
