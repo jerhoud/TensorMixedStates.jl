@@ -86,10 +86,11 @@ include("dense/ExactStates.jl")
 include("dense/ExactSolvers.jl")
 
 # The numerical kernels of fermionic Gaussian states, a module using no type of the library, and
-# the translation of operators into polynomials in Majoranas
+# the translation of operators into polynomials in Majoranas, and the states of the Gaussian backend
 include("gaussian/kernels/GaussianKernels.jl")
 include("gaussian/compiler/Majoranas.jl")
 include("gaussian/compiler/Generators.jl")
+include("gaussian/GaussianStates.jl")
 
 # Simulations
 include("runner/Threading.jl")
