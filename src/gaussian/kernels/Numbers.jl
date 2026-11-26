@@ -24,6 +24,7 @@ struct LogComplex
 end
 
 LogComplex(z::Number) = z == 0 ? zero(LogComplex) : LogComplex(log(abs(z)), z)
+LogComplex(z::LogComplex) = z
 
 Base.zero(::Type{LogComplex}) = LogComplex(-Inf, 0)
 Base.one(::Type{LogComplex}) = LogComplex(0.0, 1)

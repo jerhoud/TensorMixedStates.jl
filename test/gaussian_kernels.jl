@@ -4,7 +4,7 @@
 
 include("gaussian_dense.jl")
 using TensorMixedStates.GaussianKernels
-using .LA: qr, det, dot, I
+using .LA: qr, det, dot, I, eigen, Hermitian
 
 const gk_rng = Random.Xoshiro(20261126)
 
@@ -182,4 +182,89 @@ end
     @test gk_dist(o01 * o12 * o20, LogComplex(-n * log(4), im^n) * logpfaffian(T)) < 1e-9
     α = [7, 2, 150, 33]
     @test gk_dist(cross_term(gs[1], α, gs[2]), conj(cross_term(gs[2], reverse(α), gs[1]))) < 1e-9
+end
+
+gk_antisymmetric(m) = (B = randn(gk_rng, m, m); B - transpose(B))
+
+@testset "evolution and the transport of phases" begin
+    # propagator against exp(-iHt)
+    for n in (1, 3, 5)
+        ψ = dense_gaussian(rand(gk_rng, Bool, n), gk_rng)
+        h = gk_antisymmetric(2n)
+        φ = exp(-im * 0.7 * dense_hamiltonian(h)) * ψ
+        R = propagator(h, 0.7)
+        @test R * dense_covariance(ψ) * transpose(R) ≈ dense_covariance(φ) atol = 1e-12
+        @test rotate(gk_from_dense(ψ), R).cov ≈ dense_covariance(φ) atol = 1e-12
+        @test dense_vector(gk_from_dense(ψ)) ≈ ψ atol = 1e-12
+    end
+    # components born of one another by monomials, orthogonal ones, both parities, a h at each step
+    for n in (2, 4, 6)
+        ψ1 = dense_gaussian(zeros(Bool, n), gk_rng)
+        xodd = zeros(Bool, n)
+        xodd[end] = true
+        ψs = [ψ1, dense_monomial(randperm(gk_rng, 2n)[1:4], ψ1), dense_monomial([2], ψ1),
+              dense_fock(zeros(Bool, n)), dense_fock(vcat(trues(2), falses(n - 2))),
+              dense_gaussian(xodd, gk_rng)]
+        s = GaussianSum(gk_from_dense.(ψs), randn(gk_rng, ComplexF64, length(ψs)), gk_rng)
+        for step in 1:4
+            h, t = gk_antisymmetric(2n), rand(gk_rng)
+            evolve!(s, propagator(h, t))
+            ψs = [exp(-im * t * dense_hamiltonian(h)) * ψ for ψ in ψs]
+            if step == 2
+                fix!(s)
+            end
+        end
+        fix!(s)
+        # every component equal to the exact one up to one phase common to all
+        z = [dot(ψ, dense_vector(g)) for (ψ, g) in zip(ψs, s.comps)]
+        @test all(abs(zk - z[1]) < 1e-10 for zk in z)
+        @test abs(z[1]) ≈ 1 atol = 1e-10
+    end
+    @test_throws DimensionMismatch GaussianSum([describe(fock_covariance([false]))], [1, 2], gk_rng)
+    # a reflection changes the parity, it is not the rotation of a Gaussian unitary of H
+    s = GaussianSum([describe(fock_covariance([false, false]))], [1], gk_rng)
+    evolve!(s, [-1.0 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1])
+    @test_throws ArgumentError fix!(s)
+    @test_throws DimensionMismatch GaussianSum(describe.(fock_covariance.([[false], [false, false]])), [1, 1], gk_rng)
+end
+
+@testset "transport of phases at 200 modes, by consistency" begin
+    n = 200
+    G1 = describe(gk_random_covariance(n, zeros(Bool, n)))
+    comps = [G1, apply_monomial([2, 7, 11, 30], G1), describe(fock_covariance(zeros(Bool, n))),
+             describe(fock_covariance(vcat(trues(4), falses(n - 4)))), apply_monomial([1], G1),
+             apply_monomial([3, 5, 9], G1)]
+    G0 = [overlap(a, b) for a in comps, b in comps]
+    # a transverse field Ising chain in Majoranas
+    h = zeros(2n, 2n)
+    for j in 1:n
+        h[2j-1, 2j] = 0.7
+        if j < n
+            h[2j, 2j+1] = 1.0
+        end
+    end
+    h = h - transpose(h)
+    R = propagator(h, 0.01)
+    s = GaussianSum(comps, ones(length(comps)), gk_rng)
+    for step in 1:200
+        evolve!(s, R)
+        if step == 100
+            fix!(s)
+        end
+    end
+    fix!(s)
+    for k in eachindex(comps), l in eachindex(comps)
+        o = overlap(s.comps[k], s.comps[l])
+        if abs(G0[k, l]) < 1e-12
+            @test abs(o) < 1e-12
+        else
+            @test gk_dist(o, G0[k, l]) < 1e-9
+        end
+    end
+    # between parities: ⟨UG₁|γ_b|U γ₁G₁⟩ = Σ_c R_bc ⟨G₁|γ_c γ₁|G₁⟩
+    u = im .* G1.cov[:, 1]
+    u[1] = 1
+    w = R^200 * u
+    b = argmax(abs.(w))
+    @test gk_dist(cross_term(s.comps[1], [b], s.comps[5]), LogComplex(w[b])) < 1e-9
 end

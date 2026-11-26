@@ -97,3 +97,32 @@ function dense_pfaffian(A)
     end
     s
 end
+
+# the matrix of a linear map f on vectors of n modes
+function dense_matrix(f, n)
+    A = zeros(ComplexF64, 2^n, 2^n)
+    for k in 1:2^n
+        e = zeros(ComplexF64, 2^n)
+        e[k] = 1
+        A[:, k] = f(e)
+    end
+    A
+end
+
+dense_pair(M, a, b, ψ) = M[a, b] .* dense_majorana(a, dense_majorana(b, ψ))
+
+# H = (i/4) Σ h_ab γ_a γ_b
+dense_hamiltonian(h) =
+    dense_matrix(ψ -> (im / 4) .* sum(dense_pair(h, a, b, ψ) for a in axes(h, 1), b in axes(h, 2) if a != b),
+                 size(h, 1) ÷ 2)
+
+# the state of a description: the top eigenvector of Σ_{a<b} M_ab (-i γ_a γ_b), of eigenvalue n,
+# with the phase of its amplitude on g.x
+function dense_vector(g)
+    M = g.cov
+    m = size(M, 1)
+    O = dense_matrix(ψ -> -im .* sum(dense_pair(M, a, b, ψ) for a in 1:m, b in 1:m if a < b), m ÷ 2)
+    v = eigen(Hermitian(O)).vectors[:, end]
+    k = dense_index(g.x)
+    v .* cis(angle(ComplexF64(g.amp)) - angle(v[k]))
+end
