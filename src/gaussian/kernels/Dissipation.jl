@@ -28,22 +28,33 @@ function nonunitary_step(M::AbstractMatrix{<:Real}, R::AbstractMatrix)
     covariance_of(Matrix(F.Q)[:, 1:n]), sum(log ∘ abs, diag(F.R))
 end
 
+# the part P₊u of u that creates on the pure state of covariance M, its annihilators Z: the rest annihilates
+creating_part(Z::AbstractMatrix, u::AbstractVector) = u - Z * (Z' * u)
+
+"""
+    linear_annihilates(M, u)
+
+whether the linear operator L = Σ_a u_a γ_a annihilates the pure state of covariance `M`, its creating
+part P₊u within 1e-13 of u in norm, where rounding would make the direction of L|ψ⟩.
+"""
+linear_annihilates(M::AbstractMatrix{<:Real}, u::AbstractVector) =
+    norm(creating_part(annihilators(M), u)) <= 1e-13 * norm(u)
+
 """
     linear_applied(M, u)
 
-the covariance of L|ψ⟩, normalised, and ‖L|ψ⟩‖² = u†(I + iM)u for the normalised pure state ψ of
-covariance `M` and the linear operator L = Σ_a u_a γ_a; an error when L|ψ⟩ is zero, ‖L|ψ⟩‖² within 1e-13
-of ‖u‖², where rounding would make its direction. Only the part
-w = P₊u of u creates: L|ψ⟩ = (w·γ)|ψ⟩, annihilated by w·γ and by the annihilators z·γ of ψ with
-w̄†z = 0.
+the covariance of L|ψ⟩, normalised, and ‖L|ψ⟩‖² = u†(I + iM)u = 2‖P₊u‖² for the normalised pure state ψ of
+covariance `M` and the linear operator L = Σ_a u_a γ_a; an error when L annihilates ψ, see
+`linear_annihilates`. Only the part w = P₊u of u creates: L|ψ⟩ = (w·γ)|ψ⟩, annihilated by w·γ and by the
+annihilators z·γ of ψ with w̄†z = 0.
 """
 function linear_applied(M::AbstractMatrix{<:Real}, u::AbstractVector)
-    p = real(dot(u, u) + im * dot(u, M * u))
-    if !(p > 1e-13 * real(dot(u, u)))
+    Z = annihilators(M)
+    w = creating_part(Z, u)
+    if norm(w) <= 1e-13 * norm(u)
         throw(ArgumentError("the linear operator annihilates the state"))
     end
-    Z = annihilators(M)
-    w = u - Z * (Z' * u)
+    p = 2 * norm(w)^2
     w ./= norm(w)
     # the annihilators of ψ orthogonal to w̄, the last ones of a basis of Z starting along Z†w̄
     a = Z' * conj(w)

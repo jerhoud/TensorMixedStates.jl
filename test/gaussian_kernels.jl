@@ -590,5 +590,6 @@ end
         end
         z = TensorMixedStates.GaussianKernels.annihilators(M0)[:, 1]
         @test_throws ArgumentError linear_applied(M0, z)
+        @test linear_annihilates(M0, z) && !linear_annihilates(M0, randn(gk_rng, ComplexF64, 2n))
     end
 end

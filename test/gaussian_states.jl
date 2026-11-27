@@ -533,6 +533,45 @@ end
     end
 end
 
+@testset "trajectories with projective and linear jumps" begin
+    # the no-jump evolution not unitary (Σ L†L not constant): monitored occupations, losses and gains of
+    # fermions, losses on qubits behind their strings, against ExactState{Trajectory} with the same draws
+    function both(sys, st, ev, T; seed = 1, nsteps = 8)
+        g = TensorMixedStates.GaussianState(State{Trajectory}(sys, st))
+        e = TensorMixedStates.ExactState(State{Trajectory}(sys, st))
+        jg, je = [], []
+        for i in 1:3
+            g = evolve(ev, T / 3, g; nsteps, time = (i - 1) * T / 3, rng = Random.Xoshiro(seed + i), jumps = jg)
+            e = evolve(ev, T / 3, e; nsteps, time = (i - 1) * T / 3, rng = Random.Xoshiro(seed + i), jumps = je)
+        end
+        g, e, jg, je
+    end
+    fs = System(4, Fermion())
+    hop = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3) + 0.3 * N(2)
+    qs = System(5, Qubit())
+    xy = sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:4) + 0.4 * sum(Z(j) for j in 1:5)
+    cases = [(fs, ["Occ", "Emp", "Occ", "Emp"], -im * hop + sum(Dissipator(N)(j) for j in 1:4), [N(1), N(3), C(1) * dag(C)(2)]),
+             (fs, ["Occ", "Occ", "Occ", "Emp"], -im * hop + sum(0.5 * Dissipator(C)(j) for j in 1:4), [N(2), N(4), C(2) * dag(C)(3)]),
+             (fs, "Emp", -im * hop + 0.4 * Dissipator(dag(C))(2) + 0.6 * Dissipator(C)(3) + Dissipator(N)(1), [N(1), N(2), N(4)]),
+             (qs, ["Dn", "Up", "Dn", "Dn", "Up"], -im * xy + sum(0.5 * Dissipator(Sp)(j) for j in 1:5) + 0.3 * Dissipator(N)(4),
+              [Z(1), Z(3), X(2) * X(3), Z(5)])]
+    for (sys, st, ev, obs) in cases, seed in (1, 2)
+        g, e, jg, je = both(sys, st, ev, 1.2; seed)
+        @test length(jg) == length(je)
+        @test all(a.time ≈ b.time && a.kraus == b.kraus for (a, b) in zip(jg, je))
+        @test TensorMixedStates.trace(g) ≈ TensorMixedStates.trace(e) rtol = 1e-9
+        for o in obs
+            @test TensorMixedStates.expect_value(g, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-9
+        end
+    end
+    # refused: a jump that does not keep the state Gaussian, a superposition under a non-unitary evolution
+    gf = TensorMixedStates.GaussianState(State{Trajectory}(fs, ["Occ", "Emp", "Occ", "Emp"]))
+    @test_throws "keep a state Gaussian" TensorMixedStates.prepared_evolver(gf, [-im * hop + Dissipator(Id + N)(1)])
+    gq = apply(T(2), TensorMixedStates.GaussianState(State{Trajectory}(qs, "X+")))
+    @test TensorMixedStates.ncomponents(gq) == 2
+    @test_throws "superposition" evolve(-im * xy + Dissipator(N)(1), 0.2, gq; nsteps = 1)
+end
+
 @testset "cross terms of nearly orthogonal components" begin
     # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal by structure (C of `pair_transition`); Ry(θ)
     # on qubit 1 first makes them nearly orthogonal (θ = 1e-7, the precise way) or not (θ = 0.3, the
@@ -676,9 +715,8 @@ end
         v, w = TensorMixedStates.ExactState(State(rg.state)).state, re.state.state
         @test abs(dot(v, w)) ≈ LA.norm(v) * LA.norm(w) atol = 1e-10
     end
-    # jumps whose Σ L†L is not constant are refused for now, as are mixed states
+    # mixed states are refused
     gt = TensorMixedStates.GaussianState(State{Trajectory}(sys, "Up"))
-    @test_throws ArgumentError evolve(-im * Z(1) + Dissipator(Sm)(2), 0.1, gt; nsteps = 1)
     @test_throws ArgumentError TensorMixedStates.GaussianState(State{Mixed}(sys, "Up"))
     @test_throws ErrorException TensorMixedStates.as_representation(Pure, gt)
     # files keep the representation

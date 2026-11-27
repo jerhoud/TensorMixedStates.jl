@@ -2,7 +2,11 @@
 # by its rotation R, M → R M Rᵀ, read exactly from its quadratic generator.
 
 import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric, evolve_branches!, project,
-                         project!, occupation_probability
+                         project!, occupation_probability, nonunitary_step, linear_applied, linear_annihilates
+
+const nonunitary_sum_what = "the Gaussian backend evolves a superposition of Gaussian states under unitary operators " *
+                            "only: under the jumps of a trajectory that are not unitary (projectors, linear operators), " *
+                            "start from a state of one component"
 
 # whether the quadratic form k couples the ancilla to the system: a linear term, which changes the
 # physical parity
@@ -11,21 +15,36 @@ couples_ancilla(k::AbstractMatrix) = any(!iszero, k[1:2, 3:end])
 # k real and c imaginary of L = c + (1/4) Σ k_ab γ_a γ_b, as for L = -iH with H Hermitian, the
 # imaginary part of k and the real part of c below rounding_tol times the size of L taken as the
 # rounding of the expansion of the operator (5.6e-17 for an exactly Hermitian matrix with complex
-# entries), refused above with its size; with `lossy`, the real part of c kept, as for the
-# -iH - Γ/2 of a trajectory whose Σ L†L is the constant Γ
+# entries), refused above with its size; with `lossy`, for the ket of a trajectory, c and k as they are,
+# k real when its imaginary part is that rounding, so that a unitary step keeps the norm exactly
 function unitary_form(c::Number, k::AbstractMatrix, what::String; lossy::Bool = false)
-    defect = max(maximum(abs, imag(k); init = 0.0), lossy ? 0.0 : abs(real(c)))
-    if defect > rounding_tol * (norm(k) + abs(c))
+    scale = rounding_tol * (norm(k) + abs(c))
+    if lossy
+        return complex(c), maximum(abs, imag(k); init = 0.0) > scale ? Matrix{ComplexF64}(k) : real(k)
+    end
+    defect = max(maximum(abs, imag(k); init = 0.0), abs(real(c)))
+    if defect > scale
         throw(ArgumentError("$what: this operator departs from it by a part of size $(round(defect; sigdigits = 2))"))
     end
-    (lossy ? complex(c) : im * imag(c)), real(k)
+    im * imag(c), real(k)
 end
 
-# the state turned by the Gaussian unitary of rotation R, which keeps the parities of the components when
+# exp(k t), the rotation of the Gaussian operator of generator k over t, complex orthogonal for k complex
+step_operator(k::AbstractMatrix, t::Real) = eltype(k) <: Real ? propagator(k, t) : exp(k * t)
+
+# the state turned by the Gaussian operator of rotation R, which keeps the parities of the components when
 # `keeps` (it does not couple the ancilla): the covariance of one component, the rotation accumulated by
-# a sum, its norm unchanged
+# a sum, its norm unchanged for R real; for R complex, a non-unitary step of one component, its trace
+# multiplied by the factor on its norm (`nonunitary_step`)
 function turned(state::GaussianState{<:Ket}, R::AbstractMatrix, keeps::Bool)
     parities = keeps ? state.parities : nothing
+    if !(eltype(R) <: Real)
+        if !isnothing(state.sum)
+            throw(ArgumentError(nonunitary_sum_what))
+        end
+        M, lognorm = nonunitary_step(state.cov, R)
+        return single(state, M; parities, trace = state.trace * exp(lognorm))
+    end
     if isnothing(state.sum)
         return single(state, antisymmetric(R * state.cov * transpose(R)); parities)
     end
@@ -57,12 +76,11 @@ struct GaussianEvolver
     # whether the evolver is quadratic only in the sector of the parity of the state (a ring of qubits)
     sectors::Bool
     forms::Dict{Any, Any}
-    rotations::Dict{Any, Matrix{Float64}}
+    rotations::Dict{Any, Any}
 end
 
 evolver_what(pre::GaussianEvolver) =
-    pre.lossy ? "the Gaussian backend evolves a trajectory under -iH - Γ/2 with H Hermitian and Γ the sum of " *
-                "the L†L of its jumps a constant (jumps by Paulis or unitaries), for now" :
+    pre.lossy ? "the Gaussian backend evolves a trajectory under a quadratic operator" :
                 "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now"
 
 # the evolver compiled for the parity σ of the states (nothing: none needed): for a constant one, c (its
@@ -92,7 +110,32 @@ prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::Limits = L
 # `ket_evolver`
 prepared_evolver(state::GaussianState{Trajectory}, terms::AbstractVector, mpo_limits::Limits = Limits();
                  duration::Union{Nothing, Number} = nothing) =
-    trajectory_evolver(state, terms, mpo_limits; duration)
+    checked_jumps(state, trajectory_evolver(state, terms, mpo_limits; duration))
+
+# the evolver `e` of the trajectory `state`, refused when one of its jumps does not keep the state Gaussian
+function checked_jumps(state::GaussianState, e)
+    if e isa JumpEvolver
+        for d in e.decays, j in d.jumps
+            if !gaussian_jump(state, j)
+                throw(ArgumentError("the Gaussian backend draws the jumps that keep a state Gaussian: unitary gates of " *
+                                    "quadratic generators, products of projectors on occupations, linear operators " *
+                                    "(c, c†, σ⁻, …); $(obs_name(j)) is none of them"))
+            end
+        end
+    end
+    e
+end
+
+# whether the jump j keeps a Gaussian state Gaussian, applied exactly by `gaussian_applied`
+function gaussian_jump(state::GaussianState, j::IndexedOp{IsOperator})
+    s = scalararg(j)
+    if !isnothing(quadratic_gate(state, s))
+        return true
+    end
+    p = polynomial(state.system, state.layout, lower(weaken(state.system, ()), s))
+    m = maximum((isempty(α) ? 0 : last(α) for α in keys(p.terms)); init = 0)
+    length(p) == 1 || !isnothing(occupation_projector(p)) || !isnothing(monomial_linear(p, m))
+end
 
 ket_evolver(state::GaussianState{Trajectory}, terms::AbstractVector, ::Limits;
             duration::Union{Nothing, Number} = nothing) =
@@ -106,7 +149,7 @@ function gaussian_evolver(state::GaussianState, terms::AbstractVector, duration:
     end
     system = state.system
     pre(sectors) = GaussianEvolver(system, state.axes, ops, fs, duration, lossy, sectors, Dict{Any, Any}(),
-                                   Dict{Any, Matrix{Float64}}())
+                                   Dict{Any, Any}())
     quadratic = all(op -> degree(polynomial(system, state.layout, lower(system, op))) <= 2, ops)
     # the sectors of the parity when the whole evolver conserves it and needs them
     whole = polynomial(system, state.layout, lower(system, reduce(+, ops)))
@@ -167,7 +210,7 @@ function rotation(pre::GaussianEvolver, σ, h::AbstractMatrix, dt::Real)
     key = (σ, Float64(dt))
     if !haskey(pre.rotations, key)
         filter!(kv -> first(first(kv)) !== σ, pre.rotations)
-        pre.rotations[key] = propagator(h, dt)
+        pre.rotations[key] = step_operator(h, dt)
     end
     pre.rotations[key]
 end
@@ -215,6 +258,9 @@ function branches_step(pre::GaussianEvolver, state::GaussianState{<:Ket}, dt::Re
         if !even
             throw(ErrorException("an evolver compiled in a sector couples the ancilla"))
         end
+        if !(eltype(h) <: Real)
+            throw(ArgumentError(nonunitary_sum_what))
+        end
         steps[σ] = (h, Float64(dt), c)
     end
     evolve_branches!(s, parities, steps)
@@ -239,15 +285,16 @@ function magnus_rotation(pre::GaussianEvolver, forms, time::Number, dt::Number)
     function stage(X, cs, h)
         c0, g = generator(cs)
         Y = copy(X)
-        Y[1:m, 1:m] = propagator(g, h) * X[1:m, 1:m]
+        Y[1:m, 1:m] = step_operator(g, h) * X[1:m, 1:m]
         Y[m+1, m+1] += h * real(c0)
         Y
     end
     magnus(t, h, X) = foldl((X, cs) -> stage(X, cs, h), step_coefs(pre.fs, t, h, 4); init = X)
-    X = zeros(m + 1, m + 1)
-    X[1:m, 1:m] = Matrix{Float64}(I, m, m)
+    X = zeros(pre.lossy ? ComplexF64 : Float64, m + 1, m + 1)
+    X[1:m, 1:m] = I(m)
     X = substepped(magnus, time, dt, something(pre.duration, dt), X, "a GaussianState")
-    X[1:m, 1:m], X[m+1, m+1]
+    R = X[1:m, 1:m]
+    (isreal(R) ? real(R) : R), real(X[m+1, m+1])
 end
 
 """
@@ -400,19 +447,7 @@ function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)
     if s isa ProdOp
         return foldr((g, st) -> gaussian_applied(g, st), s.subs; init = state)
     end
-    A = gate_generator(s)
-    generator = nothing
-    if !isnothing(A)
-        generator = try
-            gaussian_generator(state.system, A; axes = state.axes)
-        catch e
-            if !(e isa ArgumentError)
-                rethrow()
-            end
-            # A not quadratic: exp(A) as a polynomial, below
-            nothing
-        end
-    end
+    generator = quadratic_gate(state, s)
     if !isnothing(generator)
         c0, k, _ = generator
         _, h = unitary_form(c0, k, "the Gaussian backend applies exp(A) with A anti-Hermitian, unitary gates")
@@ -421,13 +456,78 @@ function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)
     p = polynomial(state.system, state.layout, lower(weaken(state.system, ()), s))
     if length(p) == 1 && isnothing(state.sum)
         α, c = only(p.terms)
-        D = ones(size(state.cov, 1))
-        D[α] .= -1
         # c c(α) multiplies the norm by |c|, c(α) being unitary
-        parities = isnothing(state.parities) ? nothing : [flipped(only(state.parities), α)]
-        return single(state, D .* state.cov .* transpose(D); parities, trace = abs2(c) * state.trace)
+        return single(state, flipped_covariance(state.cov, α); parities = flipped_parities(state.parities, [α]),
+                      trace = abs2(c) * state.trace)
+    end
+    occupations = occupation_projector(p)
+    if !isnothing(occupations) && isnothing(state.sum)
+        return projected(state, occupations; null = true)
+    end
+    linear = isnothing(state.sum) ? monomial_linear(p, size(state.cov, 1)) : nothing
+    if !isnothing(linear)
+        β, u = linear
+        if linear_annihilates(state.cov, u)
+            return scaled(state, 0)
+        end
+        M, w = linear_applied(state.cov, u)
+        return single(state, flipped_covariance(M, β); parities = flipped_parities(state.parities, collect(keys(p.terms))),
+                      trace = w * state.trace)
     end
     applied_poly(state, p)
+end
+
+# the generator of the gate s, exp(A) with A quadratic, as `gaussian_generator` gives it; nothing for another
+# operator or a gate whose A is not quadratic
+function quadratic_gate(state::GaussianState, s)
+    A = gate_generator(s)
+    if isnothing(A)
+        return nothing
+    end
+    try
+        gaussian_generator(state.system, A; axes = state.axes)
+    catch e
+        if !(e isa ArgumentError)
+            rethrow()
+        end
+        nothing
+    end
+end
+
+# the covariance of c(α)|ψ⟩: the rows and columns α change sign
+function flipped_covariance(M::AbstractMatrix, α::AbstractVector{Int})
+    D = ones(size(M, 1))
+    D[α] .= -1
+    D .* M .* transpose(D)
+end
+
+# the parity of one component after one of the monomials αs, nothing when they disagree or it is not known
+function flipped_parities(parities, αs)
+    if isnothing(parities)
+        return nothing
+    end
+    after = unique(flipped(only(parities), α) for α in αs)
+    length(after) == 1 ? after : nothing
+end
+
+# (β, u) when p = c(β) Σ_a u_a γ_a, its monomials one Majorana longer than their common part β: a linear
+# operator behind the strings of Jordan-Wigner and the ancilla (c_i, σ⁻), whose c(β ∪ {a}) is ±c(β)γ_a;
+# nothing for another polynomial
+function monomial_linear(p::MajoranaPoly, m::Int)
+    αs = collect(keys(p.terms))
+    if isempty(αs)
+        return nothing
+    end
+    β = reduce(intersect, αs)
+    if any(α -> length(α) != length(β) + 1, αs)
+        return nothing
+    end
+    u = zeros(ComplexF64, m)
+    for α in αs
+        a = only(setdiff(α, β))
+        u[a] = p.terms[α] * (iseven(count(>(a), β)) ? 1 : -1)
+    end
+    β, u
 end
 
 # the state times `c`
@@ -492,16 +592,18 @@ function occupation_projector(p::MajoranaPoly)
     product == p ? occupied : nothing
 end
 
-# the state projected on these occupations of modes, exactly, not normalised; an error when that has
-# probability zero
-function projected(state::GaussianState{<:Ket}, occupations)
+# the state projected on these occupations of modes, exactly, not normalised; when that has probability
+# zero, an error, or with `null` on one component the null state
+function projected(state::GaussianState{<:Ket}, occupations; null::Bool = false)
     if isnothing(state.sum)
         M = copy(state.cov)
         t = state.trace
         for (m, o) in occupations
             s = o ? -1.0 : 1.0
             q = occupation_probability(M, m, s)
-            if q == 0
+            if q == 0 && null
+                return scaled(state, 0)
+            elseif q == 0
                 throw(ArgumentError("the state cannot be projected on a result of probability zero"))
             end
             project_covariance!(M, m, s, q)
