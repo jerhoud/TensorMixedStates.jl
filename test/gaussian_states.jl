@@ -830,3 +830,29 @@ end
         @test TensorMixedStates.poly_value(x, p) ≈ sum((c * by_overlaps(α) for (α, c) in p.terms); init = 0im) atol = 1e-12
     end
 end
+
+@testset "parity of a product state judged on the amplitude" begin
+    # an amplitude of 6e-7 in the other sector (a probability of 3.6e-13) makes no definite parity: kept by
+    # the values and by the branches, against ExactState; an eigenstate of the parity is definite
+    sys = System(3, Qubit())
+    st = State{Pure}(sys, [ComplexF64[1, 6e-7] / sqrt(1 + 3.6e-13), ComplexF64[1, 0], ComplexF64[1, 0]])
+    g = TensorMixedStates.GaussianState(st)
+    @test isnothing(g.parities)
+    @test TensorMixedStates.definite(TensorMixedStates.GaussianState(State{Pure}(sys, "Up")))
+    @test TensorMixedStates.definite(TensorMixedStates.GaussianState(State{Pure}(sys, "X+"); axes = :X))
+    gate = 0.5 * Id(1) + X(2)
+    x, e = apply(gate, g), apply(gate, TensorMixedStates.ExactState(st))
+    for o in (X(1), X(1) * X(2), Z(1))
+        @test TensorMixedStates.expect_value(x, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-13
+    end
+    n = 4
+    ring = System(n, Qubit())
+    H = sum(Z(j) * Z(j + 1) for j in 1:n-1) + Z(n) * Z(1) - sum(X(j) for j in 1:n)
+    v = ComplexF64[1 + 7e-7, 1 - 7e-7] / sqrt(2 * (1 + 4.9e-13))
+    st = State{Pure}(ring, [[v]; fill(ComplexF64[1, 1] / sqrt(2), n - 1)])
+    x = evolve(-im * H, 0.5, TensorMixedStates.GaussianState(st; axes = :X); nsteps = 2)
+    e = evolve(-im * H, 0.5, TensorMixedStates.ExactState(st); nsteps = 2)
+    for o in (Z(1), Z(1) * Z(3), X(2), Y(1) * Z(2))
+        @test TensorMixedStates.expect_value(x, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-9
+    end
+end

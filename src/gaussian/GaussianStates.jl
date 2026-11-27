@@ -166,9 +166,10 @@ function product_covariance(system::System, layout::MajoranaLayout, vectors)
     end
     ev(v, m) = dot(v, m * v)
     parities = [ev(v, P) for (v, _, P) in units]
-    # |⟨P⟩| = 1 to rounding for a site of definite parity, an eigenstate of X along X giving
-    # 1.0000000000000002: decided far from rounding, an error of this size at most on the entropies
-    definite = all(1 - abs(p) < 1e-12 for p in parities[2:end])
+    # a site of definite parity when its amplitude in the other sector, ‖(1 - sP)v‖/2 with s the sign
+    # of ⟨P⟩, is within 1e-13 of its norm, as in `in_sectors`: 1 - |⟨P⟩| sees it only squared
+    definite = all(norm(v - sign(real(p)) * (P * v)) / 2 <= 1e-13 * norm(v)
+                   for ((v, _, P), p) in zip(units[2:end], parities[2:end]))
     nu = length(units)
     # products of the parities before and after each unit
     before = ones(ComplexF64, nu)
@@ -241,7 +242,7 @@ end
 
 # the overlap ⟨G_1|G_2⟩ and the transition matrix W such that ⟨G_1|c(α)|G_2⟩ = ⟨G_1|G_2⟩ Pf(W[α, α])
 # (Bravyi and Gosset, eq. (28)) where M_1 + M_2 is well conditioned, its reciprocal condition above 1e-4,
-# which kept the error within 1e-13 against the precise way (decided 2026-11-26); nothing elsewhere
+# which kept the error within 1e-13 against the precise way; nothing elsewhere
 function transition(g1::PureGaussian, g2::PureGaussian)
     M1, M2 = g1.cov, g2.cov
     o = overlap(g1, g2)
@@ -262,14 +263,10 @@ function link_majorana(M1::Matrix{Float64}, M2::Matrix{Float64})
     2 + argmax(vec(sum(abs2, V[3:end, end-1:end]; dims = 2)))
 end
 
-# (o, W, β) for each pair k < l of components of a sum brought up to date, such that
-# ⟨G_k|c(α)|G_l⟩ = ⟨G_k|c(α) c(β)⁻¹ c(β)|G_l⟩ with o, W the overlap and the transition matrix of
-# (G_k, c(β)G_l); nothing where M_k + M_l is ill conditioned, the pair nearly or exactly orthogonal,
-# which takes the precise way. β is empty, but for two components of known parities in the two sectors
-# of the ancilla, orthogonal: there β = (1, a), which brings G_l into the sector of G_k and flips the
-# parity of its system, γ_a chosen by `link_majorana` on (G_k, γ₁G_l). The value does not depend on
-# the link, only its precision, guarded by the condition of `transition`. Computed once for a sum, which
-# no operation changes once brought up to date.
+# (o, W, β) for each pair k < l of a sum brought up to date, the `transition` of (G_k, c(β)G_l), so that
+# ⟨G_k|c(α)|G_l⟩ = ⟨G_k|c(α) c(β)⁻¹ c(β)|G_l⟩; nothing where it fails (the precise way). β = (1, a) links two
+# components in the two sectors of the ancilla, orthogonal, empty otherwise; the link sets the precision
+# only. Computed once for a sum, which no operation changes once brought up to date.
 const pair_cache = WeakKeyDict{GaussianSum, Matrix{Any}}()
 
 function pair_transitions(s::GaussianSum, parities::Union{Nothing, Vector{Int}})
