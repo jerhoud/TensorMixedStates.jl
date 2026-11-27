@@ -74,14 +74,21 @@ end
         @test 2 * p.logabs ≈ l rtol = 1e-12
         @test p.phase^2 ≈ s atol = 1e-10
     end
-    # singular matrices: zero, never NaN; two equal rows and columns, exactly singular
-    for T in (Float64, ComplexF64)
+    # singular matrices, two equal rows and columns: never NaN; zero in real arithmetic, rounding in complex
+    # arithmetic (x / x is not always 1 there), below the bound |Pf(A)|² ≤ Π_i ‖A[i, :]‖
+    for T in (Float64, ComplexF64), trial in 1:20
         B = randn(gk_rng, T, 8, 8)
         A = B - transpose(B)
         A[:, 8] = A[:, 7]
         A[8, :] = A[7, :]
         A[7, 8] = A[8, 7] = 0
-        @test iszero(logpfaffian(A))
+        p = logpfaffian(A)
+        @test !isnan(p.logabs) && !isnan(p.phase)
+        if T == Float64
+            @test iszero(p)
+        else
+            @test iszero(p) || p.logabs < log(1e-12) + sum(log(LA.norm(A[i, :])) for i in 1:8) / 2
+        end
     end
 end
 
