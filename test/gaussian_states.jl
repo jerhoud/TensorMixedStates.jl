@@ -612,6 +612,34 @@ end
     @test_throws "each sector" evolve(-im * ring + Dissipator((Id - X) / 2)(1), 0.2, gr; nsteps = 1)
 end
 
+@testset "thermalize of Gaussian trajectories" begin
+    # e^{-βH/2}ψ normalised and log ‖·‖², against ExactState{Trajectory}: fermions, qubits, a ring of qubits from a
+    # state of definite parity (compiled in its sector), and a thermalization in two calls
+    fs = System(4, Fermion())
+    hf = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3) + 0.4 * N(1) - 0.3 * N(4)
+    qs = System(4, Qubit())
+    hq = sum(X(j) * X(j + 1) + 0.6 * Y(j) * Y(j + 1) for j in 1:3) + 0.5 * sum(Z(j) for j in 1:4)
+    hr = sum(X(j) * X(mod1(j + 1, 4)) + Y(j) * Y(mod1(j + 1, 4)) for j in 1:4) + 0.3 * sum(Z(j) for j in 1:4)
+    for (sys, st, h, obs) in ((fs, ["Occ", "Emp", "Occ", "Emp"], hf, [N(1), N(3), C(1) * dag(C)(2)]),
+                              (qs, "X+", hq, [X(1), Z(2), X(2) * X(3)]),
+                              (qs, ["Up", "Dn", "Up", "Dn"], hr, [Z(1), X(1) * X(2), Y(2) * Y(3)]))
+        g = thermalize(h, 1.5, TensorMixedStates.GaussianState(State{Trajectory}(sys, st)); nsteps = 3)
+        e = thermalize(h, 1.5, TensorMixedStates.ExactState(State{Trajectory}(sys, st)); nsteps = 3)
+        @test g.log_trace ≈ e.log_trace atol = 1e-9
+        @test TensorMixedStates.trace(g.state) ≈ 1 atol = 1e-12
+        for o in obs
+            @test TensorMixedStates.expect_value(g.state, o) ≈ TensorMixedStates.expect_value(e.state, o) atol = 1e-9
+        end
+        g1 = thermalize(h, 0.75, TensorMixedStates.GaussianState(State{Trajectory}(sys, st)); nsteps = 1)
+        g2 = thermalize(h, 0.75, g1.state; nsteps = 1, step = 2)
+        @test g1.log_trace + g2.log_trace ≈ g.log_trace atol = 1e-9
+    end
+    # refused: a pure state, a superposition
+    @test_throws "trajectories" thermalize(hf, 1.0, TensorMixedStates.GaussianState(State{Pure}(fs, "Emp")); nsteps = 1)
+    gq = apply(T(2), TensorMixedStates.GaussianState(State{Trajectory}(qs, "X+")))
+    @test_throws "superposition" thermalize(hq, 1.0, gq; nsteps = 1)
+end
+
 @testset "cross terms of nearly orthogonal components" begin
     # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal by structure (C of `pair_transition`); Ry(θ)
     # on qubit 1 first makes them nearly orthogonal (θ = 1e-7, the precise way) or not (θ = 0.3, the

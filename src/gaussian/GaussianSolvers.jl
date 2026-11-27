@@ -388,6 +388,42 @@ end
 
 ground_state(::Any, ::GaussianState{Trajectory}; kwargs...) = not_searched()
 
+# the trajectory ψ, normalised, taken to e^{-βH/2}ψ normalised in `nsteps` steps of `beta / nsteps` (or of
+# `beta_step`) by the non-unitary steps of the ket of a trajectory, `log_trace` the logarithm of its squared
+# norm, as thermalize of a State or an ExactState; from a later `step`, not normalised again; `algo`, `limits`,
+# `mpo_limits` and `total_beta` are without use, its steps exact
+function thermalize(hamiltonian, beta::Real, state::GaussianState{Trajectory};
+                    algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
+                    beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
+                    mpo_limits::Limits = Limits(), step::Int = 1, total_beta::Union{Nothing, Real} = nothing)
+    nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
+    if step == 1
+        nonzero_trace(state, "thermalize")
+        state = scaled(state, 1 / sqrt(state.trace))
+    end
+    if nsteps == 0
+        return (log_trace = 0.0, state)
+    end
+    if !(hamiltonian isa IndexedOp{IsOperator})
+        throw(ArgumentError("thermalize of a GaussianState takes the Hamiltonian as an operator"))
+    end
+    pre = gaussian_evolver(state, [-0.5 * hamiltonian], nothing; lossy = true)
+    log_trace = 0.0
+    for k in 0:nsteps-1
+        state = evolve_step(Tdvp(), pre, state, 0.0, beta / nsteps, step + k, limits)
+        if !(state.trace > 0)
+            throw(ErrorException("thermalize left a trajectory of norm zero at step $(step + k)"))
+        end
+        log_trace += log(state.trace)
+        state = scaled(state, 1 / sqrt(state.trace))
+    end
+    (; log_trace, state)
+end
+
+thermalize(::Any, ::Real, ::GaussianState{Pure}; kwargs...) =
+    error("a thermal state needs a mixed representation or trajectories: draw trajectories from a mixed one, " *
+          "as State{Trajectory}(system, \"FullyMixed\"), a GaussianState holding no mixed state")
+
 # the line of log of a ground level degenerate within 1e-10 of the width of the spectrum, the gap taken
 # within the states of the same parity: two modes more, or the lowest occupied one moved up
 function degenerate_info(g)
