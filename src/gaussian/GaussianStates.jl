@@ -263,13 +263,14 @@ function link_majorana(M1::Matrix{Float64}, M2::Matrix{Float64})
     2 + argmax(vec(sum(abs2, V[3:end, end-1:end]; dims = 2)))
 end
 
-# (o, W, β) for each pair k < l of a sum brought up to date, the `transition` of (G_k, c(β)G_l), so that
+# (o, W, β) for each pair k < l of a sum, brought up to date first, the `transition` of (G_k, c(β)G_l), so that
 # ⟨G_k|c(α)|G_l⟩ = ⟨G_k|c(α) c(β)⁻¹ c(β)|G_l⟩; nothing where it fails (the precise way). β = (1, a) links two
 # components in the two sectors of the ancilla, orthogonal, empty otherwise; the link sets the precision
 # only. Computed once for a sum, which no operation changes once brought up to date.
 const pair_cache = WeakKeyDict{GaussianSum, Matrix{Any}}()
 
 function pair_transitions(s::GaussianSum, parities::Union{Nothing, Vector{Int}})
+    fix!(s)
     get!(pair_cache, s) do
         K = length(s.comps)
         P = Matrix{Any}(nothing, K, K)
