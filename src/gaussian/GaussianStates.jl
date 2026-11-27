@@ -241,8 +241,8 @@ function poly_value(state::GaussianState{<:Ket}, p::MajoranaPoly,
 end
 
 # the overlap ⟨G_1|G_2⟩ and the transition matrix W such that ⟨G_1|c(α)|G_2⟩ = ⟨G_1|G_2⟩ Pf(W[α, α])
-# (Bravyi and Gosset, eq. (28)) where M_1 + M_2 is well conditioned, its reciprocal condition above 1e-4,
-# which kept the error within 1e-13 against the precise way; nothing elsewhere
+# (Bravyi and Gosset, eq. (28)) where M_1 + M_2 is well conditioned, its reciprocal condition above 1e-4; the
+# error grows as it falls (2.3e-13 against the precise way measured at 2.3e-3); nothing elsewhere
 function transition(g1::PureGaussian, g2::PureGaussian)
     M1, M2 = g1.cov, g2.cov
     o = overlap(g1, g2)
@@ -259,23 +259,22 @@ end
 # ⟨G_1|c(α)|G_2⟩ = ω Pf([W[α, α] Z[α, :]; -Z[α, :]ᵀ C]), Z and C empty for a transition matrix
 bordered_pfaffian(W, Z, C, α) = logpfaffian([W[α, α] Z[α, :]; -transpose(Z[α, :]) C])
 
-# (ω, W, Z, C) of `bordered_pfaffian` for components orthogonal by structure, as G and c(β)G (gates T, jumps,
-# the branches of a ring): the singular values of Σ = M_1 + M_2 below 1e-13 of the largest, in groups of four
-# (a pair of modes each), apart from the others (above 1e-3 of the largest). With V_S their singular vectors,
-# V_R the others, P₊ = (I + iM_1)/2, Z an orthonormal basis of P₊V_S and G = ZᵀΣZ, the transition matrix is
-# -4i P₊ V_R (V_RᵀΣV_R)⁻¹ V_Rᵀ + Z(-4iG⁻¹)Zᵀ, and C = (i/4)G holds the small singular values without dividing
-# by them, as the robust Wick theorem of Chen and Scuseria (J. Chem. Phys. 158, 231102 (2023), eqs. (28),
-# (32)-(34)); this split is exact at singular values zero only, hence the rounding level. ω is calibrated by
-# the precise way on α₀, the rows of Z of largest volume, where |Pf| ≥ 1e-8 bounds its error; nothing elsewhere
+# (ω, W, Z, C) of `bordered_pfaffian` for components orthogonal by structure (G and c(β)G: gates T, jumps, the
+# branches of a ring), after the robust Wick theorem of Chen and Scuseria (J. Chem. Phys. 158, 231102 (2023),
+# eqs. (28), (32)-(34)): the singular values of Σ = M_1 + M_2 at rounding level, in groups of four (a pair of
+# modes each), kept in C without dividing by them; nothing elsewhere
 function singular_transition(g1::PureGaussian, g2::PureGaussian)
     M1 = g1.cov
     Σ = M1 + g2.cov
     m = size(Σ, 1)
     F = svd(Σ)
+    # the split below is exact for zero singular values only, so these, apart from the others
     k = count(<=(1e-13 * F.S[1]), F.S)
     if k == 0 || k % 4 != 0 || (k < m && F.S[m-k] < 1e-3 * F.S[1])
         return nothing
     end
+    # the transition matrix -4i P₊Σ⁻¹, P₊ = (I + iM_1)/2, is W on the regular singular vectors V_R plus
+    # Z(-4iG⁻¹)Zᵀ, Z an orthonormal basis of P₊V_S and G = ZᵀΣZ, the bordered pfaffian taking C = (i/4)G
     VS, VR = F.V[:, m-k+1:m], F.V[:, 1:m-k]
     W = -2im * (I + im * M1) * (VR * ((VR' * Σ * VR) \ VR'))
     E = eigen(Hermitian(im * (VS' * M1 * VS)))
@@ -283,8 +282,9 @@ function singular_transition(g1::PureGaussian, g2::PureGaussian)
         return nothing
     end
     Z = VS * E.vectors[:, E.values .> 0]
-    G = transpose(Z) * Σ * Z
-    C = (im / 8) * (G - transpose(G))
+    C = (im / 4) * (transpose(Z) * Σ * Z)
+    # ω by the precise way on the rows of Z of largest volume; |Pf| below 1e-8 left to the precise way as a
+    # precaution (errors measured within 1.6e-14 down to |Pf| = 1.5e-6)
     α0 = sort(qr(transpose(Z), ColumnNorm()).p[1:k÷2])
     b = bordered_pfaffian(W, Z, C, α0)
     if b.logabs < log(1e-8)

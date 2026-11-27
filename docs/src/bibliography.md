@@ -123,6 +123,12 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   [doi:10.1016/j.aop.2026.170757](https://doi.org/10.1016/j.aop.2026.170757),
   [arXiv:2409.11628](https://arxiv.org/abs/2409.11628): the random reference state that carries
   the relative phases of a superposition of Gaussian states through Gaussian unitaries.
+- G. P. Chen and G. E. Scuseria, *Robust formulation of Wick's theorem for computing matrix
+  elements between Hartree–Fock–Bogoliubov wavefunctions*, J. Chem. Phys. 158, 231102 (2023),
+  [doi:10.1063/5.0156124](https://doi.org/10.1063/5.0156124),
+  [arXiv:2304.13780](https://arxiv.org/abs/2304.13780): the cross terms of components of a
+  superposition orthogonal by structure, their zero singular values kept apart without dividing
+  by them.
 - M. Wimmer, *Algorithm 923: Efficient numerical computation of the Pfaffian for dense and
   banded skew-symmetric matrices*, ACM Trans. Math. Softw. 38, 30 (2012),
   [doi:10.1145/2331130.2331138](https://doi.org/10.1145/2331130.2331138),
