@@ -545,7 +545,7 @@ end
         ψ = m(T, 1) * m(H, 2) * m(Ry(θ), 1) * ψ
         @test gs_same(g, ψ, sys)
         # the pairs k < l: through the transition matrix for θ = 0.3, the precise way for orthogonal ones
-        P = TensorMixedStates.pair_transitions(g.sum)
+        P = TensorMixedStates.pair_transitions(g.sum, g.parities)
         pairs = [P[k, l] for k in axes(P, 1), l in axes(P, 2) if k < l]
         if θ == 0.3
             @test any(!isnothing, pairs)
@@ -807,4 +807,26 @@ end
         @test TensorMixedStates.expect_value(g, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-10
     end
     @test gs_same(g, e.state, sys)
+end
+
+@testset "cross terms of the branches" begin
+    # the two branches of a ring, in the two sectors of the ancilla: their pair linked by γ₁γ_a, the terms
+    # leaving c(α)G_l in the other sector zero, every value as the double sum of the cross terms by overlaps
+    GK = TensorMixedStates.GaussianKernels
+    n = 6
+    sys = System(n, Qubit())
+    H = sum(Z(j) * Z(j + 1) for j in 1:n-1) + Z(n) * Z(1) - sum(X(j) for j in 1:n)
+    x = evolve(-im * H, 0.7, TensorMixedStates.GaussianState(State{Pure}(sys, "Dn"); axes = :X); nsteps = 2)
+    s = x.sum
+    @test x.parities == [1, -1]
+    @test TensorMixedStates.pair_transitions(s, x.parities)[1, 2][3][1] == 1
+    function by_overlaps(α)
+        v = sum(conj(ak) * al * (k == l ? GK.expect_monomial(gk.cov, α) : GK.cross_term(gk, α, gl))
+                for (k, (gk, ak)) in enumerate(zip(s.comps, s.coefs)), (l, (gl, al)) in enumerate(zip(s.comps, s.coefs)))
+        ComplexF64(v) / x.trace
+    end
+    for o in (Z(1), Z(3), X(2), Z(1) * Z(4), X(1) * Z(2), Y(2) * Z(5), Id(1))
+        p = TensorMixedStates.polynomial(sys, x.layout, TensorMixedStates.lower(TensorMixedStates.weaken(sys, ()), o))
+        @test TensorMixedStates.poly_value(x, p) ≈ sum((c * by_overlaps(α) for (α, c) in p.terms); init = 0im) atol = 1e-12
+    end
 end

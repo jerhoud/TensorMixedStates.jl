@@ -227,7 +227,7 @@ as_representation(::Type{Mixed}, ::GaussianState{Pure}; limits::Limits = Limits(
 as_representation(::Type{Mixed}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
     error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
 
-import .GaussianKernels: expect_monomial
+import .GaussianKernels: expect_monomial, monomial_product
 
 # the value on the state, normalised, of a polynomial in its Majoranas: Σ c_α Pf(iM[α, α]) for one
 # component, Σ c_α Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩ for several (see `sum_monomial`); the
@@ -239,27 +239,52 @@ function poly_value(state::GaussianState{<:Ket}, p::MajoranaPoly,
     sum((c * get!(() -> value(α), cache, α) for (α, c) in p.terms); init = zero(ComplexF64))
 end
 
-# the overlap and the transition matrix W of each pair k < l of components of a sum brought up to date,
-# so that ⟨G_k|c(α)|G_l⟩ = ⟨G_k|G_l⟩ Pf(W[α, α]) (Bravyi and Gosset, eq. (28)), for the pairs where
-# M_k + M_l is well conditioned, its reciprocal condition above 1e-4, which kept the error within 1e-13
-# against the precise way (decided 2026-11-26); nothing for the others, nearly or exactly orthogonal,
-# which take the precise way. Computed once for a sum, which no operation changes once brought up to
-# date.
+# the overlap ⟨G_1|G_2⟩ and the transition matrix W such that ⟨G_1|c(α)|G_2⟩ = ⟨G_1|G_2⟩ Pf(W[α, α])
+# (Bravyi and Gosset, eq. (28)) where M_1 + M_2 is well conditioned, its reciprocal condition above 1e-4,
+# which kept the error within 1e-13 against the precise way (decided 2026-11-26); nothing elsewhere
+function transition(g1::PureGaussian, g2::PureGaussian)
+    M1, M2 = g1.cov, g2.cov
+    o = overlap(g1, g2)
+    S = M1 + M2
+    F = lu(S; check = false)
+    if iszero(o) || !issuccess(F) || LinearAlgebra.LAPACK.gecon!('1', copy(F.factors), opnorm(S, 1)) <= 1e-4
+        return nothing
+    end
+    W = im .* conj.((-2I + im * M1 - im * M2) / F)
+    W[diagind(W)] .= 1
+    o, W
+end
+
+# the Majorana a ≥ 3 (not of the ancilla) of largest weight on the null space of M_1 + M_2, real
+# antisymmetric so of even dimension, spanned here by its last two singular vectors
+function link_majorana(M1::Matrix{Float64}, M2::Matrix{Float64})
+    V = svd(M1 + M2).V
+    2 + argmax(vec(sum(abs2, V[3:end, end-1:end]; dims = 2)))
+end
+
+# (o, W, β) for each pair k < l of components of a sum brought up to date, such that
+# ⟨G_k|c(α)|G_l⟩ = ⟨G_k|c(α) c(β)⁻¹ c(β)|G_l⟩ with o, W the overlap and the transition matrix of
+# (G_k, c(β)G_l); nothing where M_k + M_l is ill conditioned, the pair nearly or exactly orthogonal,
+# which takes the precise way. β is empty, but for two components of known parities in the two sectors
+# of the ancilla, orthogonal: there β = (1, a), which brings G_l into the sector of G_k and flips the
+# parity of its system, γ_a chosen by `link_majorana` on (G_k, γ₁G_l). The value does not depend on
+# the link, only its precision, guarded by the condition of `transition`. Computed once for a sum, which
+# no operation changes once brought up to date.
 const pair_cache = WeakKeyDict{GaussianSum, Matrix{Any}}()
 
-function pair_transitions(s::GaussianSum)
+function pair_transitions(s::GaussianSum, parities::Union{Nothing, Vector{Int}})
     get!(pair_cache, s) do
         K = length(s.comps)
         P = Matrix{Any}(nothing, K, K)
         for k in 1:K, l in k+1:K
-            Mk, Ml = s.comps[k].cov, s.comps[l].cov
-            o = overlap(s.comps[k], s.comps[l])
-            S = Mk + Ml
-            F = lu(S; check = false)
-            if !iszero(o) && issuccess(F) && LinearAlgebra.LAPACK.gecon!('1', copy(F.factors), opnorm(S, 1)) > 1e-4
-                W = im .* conj.((-2I + im * Mk - im * Ml) / F)
-                W[diagind(W)] .= 1
-                P[k, l] = (o, W)
+            gk, gl = s.comps[k], s.comps[l]
+            β = Int[]
+            if !isnothing(parities) && parities[k] != parities[l]
+                β = [1, link_majorana(gk.cov, apply_monomial([1], gl).cov)]
+            end
+            t = transition(gk, apply_monomial(β, gl))
+            if !isnothing(t)
+                P[k, l] = (t..., β)
             end
         end
         P
@@ -267,23 +292,33 @@ function pair_transitions(s::GaussianSum)
 end
 
 # Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩: the diagonal by Pf(iM_k[α, α]), the pairs l < k from k < l
-# by ⟨G_k|c(α)|G_l⟩ = conj(⟨G_l|c(α)†|G_k⟩), c(α)† = ± c(α)
+# by ⟨G_k|c(α)|G_l⟩ = conj(⟨G_l|c(α)†|G_k⟩), c(α)† = ± c(α), α strictly increasing as in a MajoranaPoly.
+# Where the parities of the components are known, a term where c(α)G_l lies in the other sector of the
+# ancilla from G_k is zero exactly.
 function sum_monomial(state::GaussianState{<:Ket}, α::Vector{Int})
     s = state.sum
     fix!(s)
-    P = pair_transitions(s)
+    p = state.parities
+    P = pair_transitions(s, p)
     w = length(α)
     adjoint_sign = iseven(w * (w - 1) ÷ 2) ? 1 : -1
     total = zero(LogComplex)
     for (k, (gk, ak)) in enumerate(zip(s.comps, s.coefs))
-        total += conj(ak) * ak * expect_monomial(gk.cov, α)
+        if isnothing(p) || p[k] == flipped(p[k], α)
+            total += conj(ak) * ak * expect_monomial(gk.cov, α)
+        end
         for l in k+1:length(s.comps)
+            if !isnothing(p) && p[k] != flipped(p[l], α)
+                continue
+            end
             gl, al = s.comps[l], s.coefs[l]
             if isnothing(P[k, l])
                 v = cross_term(gk, α, gl)
             else
-                o, W = P[k, l]
-                v = o * (isempty(α) ? one(LogComplex) : logpfaffian(W[α, α]))
+                # c(β)⁻¹ = -c(β) for β = (1, a), then c(α) c(β) = ε c(α′)
+                o, W, β = P[k, l]
+                ε, α′ = monomial_product(α, β)
+                v = (isempty(β) ? 1 : -ε) * o * (isempty(α′) ? one(LogComplex) : logpfaffian(W[α′, α′]))
             end
             total += conj(ak) * al * v + conj(al) * ak * conj(v) * adjoint_sign
         end
