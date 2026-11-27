@@ -129,6 +129,11 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   [arXiv:2304.13780](https://arxiv.org/abs/2304.13780): the cross terms of components of a
   superposition orthogonal by structure, their zero singular values kept apart without dividing
   by them.
+- E. Knill, *Fermionic linear optics and matchgates*,
+  [arXiv:quant-ph/0108033](https://arxiv.org/abs/quant-ph/0108033), section 6, and X. Lyu and
+  K. Bu, *Displaced fermionic Gaussian states and their classical simulation*,
+  [arXiv:2411.18517](https://arxiv.org/abs/2411.18517): the extra mode that makes the odd
+  operators of `GaussianState` even, its Majorana multiplying them.
 - M. Wimmer, *Algorithm 923: Efficient numerical computation of the Pfaffian for dense and
   banded skew-symmetric matrices*, ACM Trans. Math. Softw. 38, 30 (2012),
   [doi:10.1145/2331130.2331138](https://doi.org/10.1145/2331130.2331138),

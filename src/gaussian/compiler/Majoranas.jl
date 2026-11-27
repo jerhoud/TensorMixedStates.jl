@@ -6,7 +6,9 @@
 # precede its Majoranas, which for the second block is the Klein factor that makes its odd operators
 # anticommute with those of the first. A mode comes first, the ancilla: Majoranas 1 and 2, the
 # system's from 3 on, and an odd monomial c(α) of the system becomes i γ₁ c(α), which keeps every
-# state even (local/gaussian/experiences.md, « Mode ancillaire »).
+# state even: the embedding of the linear terms into the quadratic ones of Knill (arXiv:quant-ph/0108033,
+# §6), written by Lyu and Bu as γ_J → iγ_Jγ_{2n+1} (arXiv:2411.18517, definition A.2), here with the extra
+# mode first.
 
 import .GaussianKernels: MajoranaPoly, monomial_product
 
