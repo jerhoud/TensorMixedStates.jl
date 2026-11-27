@@ -551,3 +551,44 @@ end
     s = GaussianSum([describe(fock_covariance([false]))], [1], gk_rng)
     @test_throws DimensionMismatch evolve_branches!(s, [1, 2], Dict(1 => (zeros(2, 2), 1.0, 0)))
 end
+
+@testset "non-unitary steps and linear operators" begin
+    # e^K|ψ⟩ for K = (1/4) Σ k_ab γ_a γ_b, k complex, against the dense exponential: covariance and squared norm
+    for n in (1, 2, 4, 6), t in (0.3, 2.0)
+        ψ = dense_gaussian(rand(gk_rng, Bool, n), gk_rng)
+        ψ ./= sqrt(real(dot(ψ, ψ)))
+        k = gk_antisymmetric(2n) + im * gk_antisymmetric(2n) / 2
+        φ = exp(-im * t * dense_hamiltonian(k)) * ψ
+        M, lognorm = nonunitary_step(dense_covariance(ψ), exp(t * k))
+        @test M ≈ dense_covariance(φ / sqrt(real(dot(φ, φ)))) atol = 1e-12
+        @test lognorm ≈ log(real(dot(φ, φ))) atol = 1e-12
+    end
+    # a real k: the unitary rotation, the norm kept
+    ψ = dense_gaussian(rand(gk_rng, Bool, 3), gk_rng)
+    h = gk_antisymmetric(6)
+    M, lognorm = nonunitary_step(dense_covariance(ψ), propagator(h, 0.7))
+    @test M ≈ propagator(h, 0.7) * dense_covariance(ψ) * transpose(propagator(h, 0.7)) atol = 1e-12
+    @test abs(lognorm) < 1e-13
+    # L|ψ⟩ for L = Σ u_a γ_a: a random u, a mode operator c_j and c_j†, an annihilator of ψ refused
+    for n in (1, 2, 3, 5)
+        ψ = dense_gaussian(rand(gk_rng, Bool, n), gk_rng)
+        ψ ./= sqrt(real(dot(ψ, ψ)))
+        M0 = dense_covariance(ψ)
+        j = rand(gk_rng, 1:n)
+        cj = zeros(ComplexF64, 2n)
+        cj[2j-1], cj[2j] = 1 / 2, im / 2
+        for u in (randn(gk_rng, ComplexF64, 2n), cj, conj(cj))
+            φ = sum(u[a] .* dense_majorana(a, ψ) for a in 1:2n)
+            if real(dot(φ, φ)) < 1e-12
+                # one mode: a Fock state, which c_j or c_j† annihilates
+                @test_throws ArgumentError linear_applied(M0, u)
+                continue
+            end
+            M, p = linear_applied(M0, u)
+            @test p ≈ real(dot(φ, φ)) atol = 1e-12
+            @test M ≈ dense_covariance(φ / sqrt(real(dot(φ, φ)))) atol = 1e-12
+        end
+        z = TensorMixedStates.GaussianKernels.annihilators(M0)[:, 1]
+        @test_throws ArgumentError linear_applied(M0, z)
+    end
+end
