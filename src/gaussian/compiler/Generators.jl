@@ -21,7 +21,7 @@ function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Di
         p = in_sector(p, layout.count, parity)
     end
     # the polynomial of a term as it enters p
-    term_poly(t) = sector ? in_sector(polynomial(system, layout, [t]), layout.count, parity) : polynomial(system, layout, [t]; even)
+    term_poly(t) = sector ? in_sector(polynomial(system, layout, [t]; even), layout.count, parity) : polynomial(system, layout, [t]; even)
     if degree(p) <= 2
         c, k = quadratic_form(p, layout.count + 2)
         return c, k, layout.count + 2

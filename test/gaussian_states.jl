@@ -1022,7 +1022,7 @@ end
         @test g isa TS.GaussianState{Mixed} && near(g, e, obs)
         g, e = applied(gates, g), applied(gates, e)
         @test near(g, e, obs; atol = 1e-10)
-        for kept in ([1, 2], [2, 3], [1, 2, 3, 4])
+        for kept in ([1, 2], [2, 3], [1, 3], [2, 4], [1, 2, 3, 4])
             @test TS.reduced_density_matrix(g, kept) ≈ TS.reduced_density_matrix(e, kept) atol = 1e-10
             @test von_neumann_entropy(g, kept) ≈ von_neumann_entropy(e, kept) atol = 1e-10
         end
@@ -1064,8 +1064,30 @@ end
     e = TS.ExactState(State{Mixed}(sys, st))
     A = -0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C))
     gates = [exp(A)(1, 4), exp(-0.2im * (dag(Cup) ⊗ C + dag(dag(Cup) ⊗ C)))(2, 4)]
-    obs = [N(1), Nup(2), Ndn(2), Z(3), N(4), C(1) * dag(C)(4), Cup(2) * dag(C)(4)]
+    obs = [N(1), Nup(2), Ndn(2), Nup(2) * Ndn(2), Z(3), N(4), C(1) * dag(C)(4), Cup(2) * dag(C)(4)]
     @test near(applied(gates, g), applied(gates, e), obs; atol = 1e-10)
+    # an Electron in a Gaussian state, a mixture or with coherences between |0⟩ and |↑↓⟩ (the mixtures made products
+    # by maxdim = 1, exactly); refused when not Gaussian, ⟨n↑n↓⟩ not ⟨n↑⟩⟨n↓⟩
+    es = System([Electron(), Qubit()])
+    for st in (mixture(es, [0.3 => ["Emp", "Up"], 0.7 => ["Up", "Up"]]; limits = Limits(maxdim = 1)),
+               mix(State{Pure}(es, [[0.6, 0, 0, 0.8im], [1.0, 0]])))
+        g, e = TS.GaussianState(st), TS.ExactState(st)
+        @test near(g, e, [Nup(1), Ndn(1), Nup(1) * Ndn(1), Cup(1) * Cdn(1), Z(2)])
+    end
+    for st in (State{Mixed}(es, ["MixedSpin", "Up"]), mixture(es, [0.5 => ["Emp", "Up"], 0.5 => ["UpDn", "Up"]]; limits = Limits(maxdim = 1)))
+        @test_throws "Wick's theorem" TS.GaussianState(st)
+    end
+    # a projection of small probability p, its relative error up to about 1e-16/p; below 1e-13, probability zero
+    function small(θ)
+        st = State{Mixed}(fs, ["Occ", "Emp", "FullyMixed", "Emp"])
+        gates = [exp(-im * θ * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2), hop(3, 4)]
+        applied(gates, TS.GaussianState(st)), applied(gates, TS.ExactState(st))
+    end
+    g, e = small(1e-5)
+    @test near(TS.project_on(g, N(2)), TS.project_on(e, N(2); limits = Limits()), fobs; atol = 1e-6)
+    g, _ = small(1e-8)
+    @test TS.trace(apply(N(2), g)) == 0
+    @test_throws "probability zero" TS.project_on(g, N(2))
     # pure states of a definite parity, even and odd, made mixed
     for (sys, st, gates, obs) in ((fs, ["Occ", "Emp", "Occ", "Emp"], fgates, fobs), (qs, ["Up", "Dn", "Dn", "Dn"], qgates, qobs))
         p = applied(gates, TS.GaussianState(State{Pure}(sys, st)))
@@ -1085,7 +1107,15 @@ end
     @test_throws "not Gaussian on a mixed state" TS.project_on(gq, (Id(1) + X(1)) / 2)
     @test_throws "several Kraus" apply(depolarizing_channel(0.2)(1), gq)
     @test_throws "one Gaussian component" TS.as_representation(Mixed, apply(T(2), TS.GaussianState(State{Pure}(qs, "X+"))))
-    @test_throws "no definite parity" TS.as_representation(Mixed, TS.GaussianState(State{Pure}(qs, "X+")))
+    @test_throws "not known" TS.as_representation(Mixed, TS.GaussianState(State{Pure}(qs, "X+")))
+    # the parity of a pure state lost by a gate coupling the ancilla, found again by a projection on its sector
+    gl = apply(Ry(-0.3)(1), apply(Ry(0.3)(1), TS.GaussianState(State{Pure}(qs, "Up"))))
+    @test_throws "not known" TS.as_representation(Mixed, gl)
+    gl = TS.project_on(gl, (Id(1) + prod(Z(j) for j in 1:4)) / 2)
+    @test near(mix(gl), TS.ExactState(State{Mixed}(qs, "Up")), qobs)
+    @test_throws "cannot be made pure" TS.as_representation(Pure, gq)
+    @test_throws "trajectory of a mixed state" TS.as_representation(Trajectory, gq)
+    @test mix(gq) === gq
     @test_throws "does not evolve" evolve(-im * (X(1) * X(2)), 0.1, gq; nsteps = 1)
     @test_throws "operator space" entanglement_entropy(gq, 2)
     @test_throws "does not convert" State(gq)

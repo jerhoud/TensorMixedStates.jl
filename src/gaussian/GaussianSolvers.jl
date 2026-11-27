@@ -59,7 +59,8 @@ function turned(state::GaussianState{Mixed}, R::AbstractMatrix{<:Real}, keeps::B
 end
 
 const mixed_odd_what = "the Gaussian backend holds mixed states that commute with the parity, and this " *
-                       "operator has a term odd in the Majoranas (a field X or Y on the first qubit)"
+                       "operator has a term odd in the Majoranas (C + C† of a fermion, a field across the axis " *
+                       "of the first qubit): apply it to a pure state or to trajectories"
 
 # the state of one component under E^m, E = exp(k) complex orthogonal growing vectors by a bounded factor
 # (`nonunitary_pieces`), a QR after each (`nonunitary_step`): its trace multiplied by the factor on the
@@ -132,7 +133,8 @@ prepared_evolver(state::GaussianState{Trajectory}, terms::AbstractVector, mpo_li
 
 prepared_evolver(::GaussianState{Mixed}, terms::AbstractVector, ::Limits = Limits();
                  duration::Union{Nothing, Number} = nothing) =
-    throw(ArgumentError("the Gaussian backend does not evolve mixed states for now"))
+    throw(ArgumentError("the Gaussian backend does not evolve mixed states yet: draw trajectories, as " *
+                        "State{Trajectory}(system, \"FullyMixed\"), or use a State{Mixed}"))
 
 # the evolver `e` of the trajectory `state`; when its evolution without jumps is not unitary, refused if one of
 # its jumps does not keep the state Gaussian (the superposition it would make could not be evolved)
@@ -443,7 +445,7 @@ thermalize(::Any, ::Real, ::GaussianState{Pure}; kwargs...) =
           "as State{Trajectory}(system, \"FullyMixed\")")
 
 thermalize(::Any, ::Real, ::GaussianState{Mixed}; kwargs...) =
-    throw(ArgumentError("the Gaussian backend does not thermalize mixed states for now: draw trajectories, " *
+    throw(ArgumentError("the Gaussian backend does not thermalize mixed states yet: draw trajectories, " *
                         "as State{Trajectory}(system, \"FullyMixed\")"))
 
 # the line of log of a ground level degenerate within 1e-10 of the width of the spectrum, the gap taken
@@ -507,7 +509,9 @@ changing the norm only: a gate written exp(A), A quadratic and anti-Hermitian (t
 Circuits, `exp` written by the user), turns every component; any other operator, a polynomial in
 Majoranas, has each of its monomials applied exactly to each component, which multiplies their
 number, refused beyond `max_terms`. A trajectory draws the Kraus operators of a channel, and takes
-the weight an operator keeps of it, as for a State.
+the weight an operator keeps of it, as for a State. A mixed state ρ becomes O ρ O† for O a gate exp(A)
+without odd term, a product of Majoranas, a projector on occupations, `C` or `dag(C)` of a mode, or a
+channel of one Kraus operator among them; other operators are refused.
 """
 apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Limits = Limits()) = gaussian_applied(op, state)
 
@@ -525,7 +529,7 @@ apply(op::IndexedOp{IsOperator}, state::GaussianState{Mixed}; limits::Limits = L
 function apply(a::IndexedOp{IsChannel}, state::GaussianState{Mixed}; limits::Limits = Limits())
     if !is_pure(a)
         throw(ArgumentError("the Gaussian backend does not apply to a mixed state a channel of several Kraus " *
-                            "operators for now"))
+                            "operators yet: draw it on trajectories, CreateState{Trajectory}"))
     end
     gaussian_applied(kraus(a), state)
 end
@@ -602,7 +606,7 @@ function mixed_applied(state::GaussianState{Mixed}, kind::Symbol, data)
         c, h = unitary_form(c0, k, ""; lossy = true)
         if !(eltype(h) <: Real)
             throw(ArgumentError("the Gaussian backend does not apply to a mixed state a gate exp(A) whose A is " *
-                                "not anti-Hermitian, for now"))
+                                "not anti-Hermitian yet: apply it to trajectories"))
         end
         return lost(turned(state, propagator(h, 1), !couples_ancilla(k)), real(c))
     elseif kind == :null
@@ -789,15 +793,27 @@ function occupation_projector(p::MajoranaPoly)
     product == p ? (occupied, λ) : nothing
 end
 
-# the state projected on these occupations of modes, exactly, not normalised; when that has probability
-# zero, an error, or with `null` on one component the null state
-function projected(state::GaussianState{<:Ket}, occupations; null::Bool = false)
+# the probability of finding mode m empty (s = 1) or occupied (s = -1) in a state of one component of
+# covariance M, precise for a pure state (`occupation_probability`); for a mixed one (1 + s M_{2m-1,2m})/2
+# (Bravyi and König 2012, eq. (20)), its relative precision eps/p, M_{2m-1,2m} known to eps only: below
+# rounding_tol, as `measurement` takes it, zero
+occupation_of(::GaussianState, M, m, s) = occupation_probability(M, m, s)
+
+function occupation_of(::GaussianState{Mixed}, M, m, s)
+    q = (1 + s * M[2m - 1, 2m]) / 2
+    q <= rounding_tol ? 0.0 : q
+end
+
+# the state projected on these occupations of modes, exactly, not normalised, the covariance by Wick's
+# theorem, for a mixed state too (Bravyi and König 2012, eq. (22)); when that has probability zero, an
+# error, or with `null` on one component the null state
+function projected(state::GaussianState, occupations; null::Bool = false)
     if isnothing(state.sum)
         M = copy(state.cov)
         t = state.trace
         for (m, o) in occupations
             s = o ? -1.0 : 1.0
-            q = occupation_probability(M, m, s)
+            q = occupation_of(state, M, m, s)
             if q == 0 && null
                 return scaled(state, 0)
             elseif q == 0
@@ -815,26 +831,6 @@ function projected(state::GaussianState{<:Ket}, occupations; null::Bool = false)
         parities = isnothing(parities) ? nothing : parities[kept]
     end
     superposed(state, s; parities = projected_parities(parities, occupations, length(s.comps)))
-end
-
-# Π ρ Π for the projector Π on these occupations, the probability of each (1 ± M_{2m-1,2m})/2 for a mixed
-# state (the identity of `occupation_probability` holds for a pure one only), its update by Wick's theorem
-# for a mixed state too (Bravyi and König 2012, eqs. (20) and (22))
-function projected(state::GaussianState{Mixed}, occupations; null::Bool = false)
-    M = copy(state.cov)
-    t = state.trace
-    for (m, o) in occupations
-        s = o ? -1.0 : 1.0
-        q = (1 + s * M[2m - 1, 2m]) / 2
-        if q <= 0 && null
-            return scaled(state, 0)
-        elseif q <= 0
-            throw(ArgumentError("the state cannot be projected on a result of probability zero"))
-        end
-        project_covariance!(M, m, s, q)
-        t *= q
-    end
-    single(state, M; trace = t)
 end
 
 # the parities of the components after a projection on these occupations of modes, which commute with the
@@ -858,7 +854,9 @@ end
 
 the state projected by `p` and normalised: exactly and without new components for a product of
 projectors on the occupations of modes (N of a fermion, (1 ± σ)/2 along the axis of a qubit), as a
-polynomial otherwise, see `apply`.
+polynomial otherwise, see `apply`, which a mixed state refuses. On a mixed state, a result of
+probability p is projected with a relative error up to about 1e-16/p, its covariance known to 1e-16
+only; a probability below 1e-13 is taken as zero, as `collapse` takes it.
 """
 function project_on(state::GaussianState, p::IndexedOp; limits::Limits = Limits())
     poly = state_polynomial(state, lower(weaken(state.system, ()), p))

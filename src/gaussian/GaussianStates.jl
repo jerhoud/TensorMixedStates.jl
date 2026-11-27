@@ -3,7 +3,7 @@
 # A state of one component, whose phase is not observable, keeps its covariance only.
 
 import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, relink!, norm2, apply_monomial,
-                         cross_term, describe, overlap, fock_state, logpfaffian
+                         cross_term, describe, overlap, fock_state, logpfaffian, expect_monomial
 
 """
     GaussianState(state::State{R}; axes = :Z, max_terms = 64, limits = Limits())
@@ -13,9 +13,10 @@ fermionic Gaussian state, on fermionic sites and sites of dimension 2 (qubits); 
 use. A state that is not a product, an MPS of link dimension above 1, is refused. A trajectory evolves
 under dissipators whose effective operator -iH - (1/2) Σ L†L is quadratic; when it is not unitary, the
 trajectory is of one component and its jumps keep it Gaussian: gates exp(A) of quadratic A, projectors on
-occupations, linear operators (`C`, `dag(C)`, `Sp`, `Sm`). A mixed state commutes with the parity on each
-site (no coherence between occupations, as `"FullyMixed"`), is of one component and takes Gaussian unitaries,
-projectors on occupations and products of Majoranas; it does not evolve for now.
+occupations, linear operators (`C`, `dag(C)`, `Sp`, `Sm`). A mixed state is on each site a Gaussian state
+of its modes, which commutes with their parity (`"FullyMixed"`, mixtures of occupations; on a site of
+one mode any state that commutes with its parity), of one component; it takes Gaussian unitaries, products
+of Majoranas, projectors on occupations and `C`, `dag(C)` of a mode, see `apply`, and does not evolve yet.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis
@@ -41,8 +42,9 @@ struct GaussianState{R <: PM} <: AbstractState{R}
     max_terms::Int
 end
 
-function GaussianState(state::State{R}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
-                       limits::Limits = Limits()) where {R <: Ket}
+# the system, the axes by site and the layout of the product state `state`, refused when it is not a
+# product or has a site without modes
+function product_layout(state::State, axes)
     d = maxlinkdim(state.state)
     if d > 1
         throw(ArgumentError("the Gaussian backend starts from a product state, not from an MPS of " *
@@ -57,6 +59,12 @@ function GaussianState(state::State{R}; axes = Dict{Int, Symbol}(), max_terms::I
                                 "not site $k, a $(typeof(system[k]))"))
         end
     end
+    system, axes, layout
+end
+
+function GaussianState(state::State{R}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
+                       limits::Limits = Limits()) where {R <: Ket}
+    system, axes, layout = product_layout(state, axes)
     vectors = local_vectors(state)
     cov, definite = product_covariance(system, layout, vectors)
     parities = definite ? [Int(sign(cov[1, 2]))] : nothing
@@ -138,36 +146,54 @@ end
 # the ancilla of the pure states (|0⟩ψ_even + i|1⟩ψ_odd) would not leave a mixed state Gaussian
 function GaussianState(state::State{Mixed}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
                        limits::Limits = Limits())
-    d = maxlinkdim(state.state)
-    if d > 1
-        throw(ArgumentError("the Gaussian backend starts from a product state, not from an MPS of " *
-                            "link dimension $d"))
-    end
-    system = state.system
-    axes = axes_by_site(system, axes)
-    layout = MajoranaLayout(system; axes)
-    m = 2 + layout.count
-    M = zeros(m, m)
+    system, axes, layout = product_layout(state, axes)
+    t = nonzero_trace(state, "GaussianState")
+    M = zeros(2 + layout.count, 2 + layout.count)
     M[1, 2] = 1
     for k in eachindex(system.sites)
-        γs, P = layout.majoranas[k], layout.parity[k]
-        if isempty(γs)
-            throw(ArgumentError("the Gaussian backend holds fermionic sites and sites of dimension 2, " *
-                                "not site $k, a $(typeof(system[k]))"))
-        end
-        ρ = reduced_density_matrix(state, [k])
-        ρ = ρ / tr(ρ)
-        if norm(ρ * P - P * ρ) > 1e-13 * norm(ρ)
-            throw(ArgumentError("the Gaussian backend holds mixed states that commute with the parity: site $k " *
-                                "has coherences between occupations"))
-        end
-        # the ancilla first, then the r-th Majorana of site k at layout.first[k] + 1 + r
-        f = layout.first[k] + 1
-        for r in eachindex(γs), t in r+1:length(γs)
-            M[f + r, f + t] = real(-im * tr(ρ * γs[r] * γs[t]))
+        ρ = local_density(state, k)
+        # the ancilla first, then the Majoranas of site k from layout.first[k] + 2
+        js = layout.first[k] .+ (1:length(layout.majoranas[k])) .+ 1
+        M[js, js] = site_covariance(layout, k, ρ / tr(ρ))
+    end
+    GaussianState{Mixed}(system, axes, layout, M - transpose(M), nothing, nothing, t, max_terms)
+end
+
+# the density matrix of site k of the mixed product `state`, not normalised, from its tensor: the other sites
+# contribute their traces, and the signs of a fermionic partial trace only the elements odd in the parity,
+# which `site_covariance` refuses
+function local_density(state::State{Mixed}, k::Int)
+    a = mps_array(state.state, k, siteind(Mixed, state.system, k))
+    pairs_matrix(vec(a[:, invperm(mixed_elements(state.system, k)), :]), [dim(state.system[k])])
+end
+
+# the upper triangle of the covariance of the modes of site k in its density matrix ρ, normalised; refused
+# when ρ does not commute with their parity, or is not the Gaussian state of that covariance, its values on
+# the monomials of four Majoranas and more off Wick's theorem by more than 1e-12 (on a site of several modes:
+# an Electron in (n↑ + n↓ - 2n↑n↓)/2 has the covariance of a Gaussian state, not its ⟨n↑n↓⟩)
+function site_covariance(layout::MajoranaLayout, k::Int, ρ::AbstractMatrix)
+    γs, P = layout.majoranas[k], layout.parity[k]
+    if norm(ρ * P - P * ρ) > 1e-13 * norm(ρ)
+        throw(ArgumentError("the Gaussian backend holds mixed states that commute with the parity: site $k has " *
+                            "coherences between even and odd occupations"))
+    end
+    q = length(γs)
+    m = zeros(q, q)
+    for r in 1:q, t in r+1:q
+        m[r, t] = real(-im * tr(ρ * γs[r] * γs[t]))
+    end
+    a = m - transpose(m)
+    for (β, c) in local_monomials(γs, size(ρ, 1))
+        if iseven(length(β)) && length(β) >= 4
+            gap = abs(tr(ρ * c) - ComplexF64(expect_monomial(a, β)))
+            if gap > 1e-12
+                throw(ArgumentError("the Gaussian backend holds Gaussian mixed states, and the state of site $k " *
+                                    "is not one: its correlations of $(length(β)) Majoranas miss Wick's theorem " *
+                                    "by $(round(gap; sigdigits = 2))"))
+            end
         end
     end
-    GaussianState{Mixed}(system, axes, layout, M - transpose(M), nothing, nothing, real(trace(state)), max_terms)
+    m
 end
 
 # the axes given to GaussianState as a Dict from the qubits to their Paulis
@@ -268,12 +294,15 @@ with_representation(::Type{R}, s::GaussianState) where {R <: Ket} =
 # whether the backend keeps the norm of a trajectory exactly, see `exact_norm`
 exact_norm(::GaussianState) = true
 
-as_representation(::Type{R}, state::GaussianState{R}; limits::Limits = Limits()) where {R <: Ket} = state
+as_representation(::Type{R}, state::GaussianState{R}; limits::Limits = Limits()) where {R <: PM} = state
 as_representation(::Type{Trajectory}, state::GaussianState{Pure}; limits::Limits = Limits()) =
     with_representation(Trajectory, state)
 as_representation(::Type{Pure}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
     error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
-as_representation(::Type{Mixed}, state::GaussianState{Mixed}; limits::Limits = Limits()) = state
+as_representation(::Type{Pure}, ::GaussianState{Mixed}; limits::Limits = Limits()) =
+    error("a mixed state cannot be made pure: ask for Mixed rather than Pure")
+as_representation(::Type{Trajectory}, ::GaussianState{Mixed}; limits::Limits = Limits()) =
+    not_yet("a trajectory of a mixed state")
 
 # |ψ⟩⟨ψ| for ψ of one component and a definite parity, which commutes with the parity: its covariance, the
 # ancilla made empty, its terms with the system zero by the definite parity
@@ -282,8 +311,8 @@ function as_representation(::Type{Mixed}, state::GaussianState{Pure}; limits::Li
         throw(ArgumentError("the Gaussian backend holds a mixed state of one Gaussian component, not the " *
                             "$(ncomponents(state)) of this state"))
     elseif isnothing(state.parities)
-        throw(ArgumentError("the Gaussian backend holds mixed states that commute with the parity, and this pure " *
-                            "state has no definite parity"))
+        throw(ArgumentError("the Gaussian backend holds mixed states that commute with the parity, and the parity " *
+                            "of this pure state is not known: project it on a sector of the parity first"))
     end
     M = copy(state.cov)
     M[1:2, :] .= 0
@@ -294,7 +323,10 @@ end
 as_representation(::Type{Mixed}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
     error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
 
-import .GaussianKernels: expect_monomial
+mix(state::GaussianState{Pure}; limits::Limits = Limits(), max_dense::Union{Nothing, Int} = nothing) =
+    as_representation(Mixed, state)
+mix(state::GaussianState{Mixed}; limits::Limits = Limits(), max_dense::Union{Nothing, Int} = nothing) = state
+mix(::GaussianState{Trajectory}; kwargs...) = not_mixed()
 
 # the value on the state, normalised, of a polynomial in its Majoranas: Σ c_α Pf(iM[α, α]) for one
 # component, Σ c_α Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩ for several (see `sum_monomial`); the
@@ -465,7 +497,7 @@ function reduced_density_matrix(state::GaussianState, positions::AbstractVector{
     for (ia, a) in enumerate(basis), (ib, b) in enumerate(basis)
         unit = reduce(kron, [matrix_unit(d, b[i], a[i]) for (i, d) in enumerate(dims)])
         op = Operator{length(kept)}("E($b,$a)", unit)(kept...)
-        ρ[ia, ib] = poly_value(state, polynomial(system, state.layout, lower(system, op); even = even_states(state)), cache)
+        ρ[ia, ib] = poly_value(state, state_polynomial(state, lower(system, op)), cache)
     end
     ρ
 end
@@ -581,7 +613,8 @@ function State(state::GaussianState{R}; limits::Limits = Limits()) where {R <: K
 end
 
 State(::GaussianState{Mixed}; limits::Limits = Limits()) =
-    throw(ArgumentError("the Gaussian backend does not convert a mixed state to a State for now"))
+    throw(ArgumentError("the Gaussian backend does not convert a mixed state to a State yet: build it as a " *
+                        "State{Mixed} from the start"))
 
 # one component: its covariance; several: for each, its covariance, its support, its amplitude and
 # its coefficient, the numbers as their logarithm and phase
