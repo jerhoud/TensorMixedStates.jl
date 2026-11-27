@@ -87,3 +87,26 @@ function linear_applied(M::AbstractMatrix{<:Real}, u::AbstractVector)
     rest = (qr(reshape(a, :, 1)).Q * Matrix{ComplexF64}(I, length(a), length(a)))[:, 2:end]
     covariance_of(hcat(Z * rest, w)), p
 end
+
+"""
+    lyapunov_propagator(X, Y, t)
+
+`(E, G)` with M(t) = E M(0) Eᵀ + G the solution of dM/dt = X M + M Xᵀ + Y, the covariance of a mixed
+Gaussian state under a Lindbladian of quadratic H and linear jumps (Bravyi and König 2012, eq. (32)):
+E = e^{Xt} and G = ∫₀ᵗ e^{Xs} Y e^{Xᵀs} ds = F₁₂ Eᵀ, F₁₂ the upper right block of the exponential of
+[X Y; 0 -Xᵀ] t (Van Loan 1978); the block e^{-Xᵀt} grows as e^{‖X‖t}, which `lyapunov_pieces` bounds, the
+instability Bravyi and König note for long times.
+"""
+function lyapunov_propagator(X::AbstractMatrix{<:Real}, Y::AbstractMatrix{<:Real}, t::Real)
+    n = size(X, 1)
+    F = exp([X Y; zeros(n, n) -transpose(X)] * t)
+    E = F[1:n, 1:n]
+    E, F[1:n, n+1:end] * transpose(E)
+end
+
+"""
+    lyapunov_pieces(X, t)
+
+the number of pieces of a step of `lyapunov_propagator` over `t`, so that each grows its blocks by at most e.
+"""
+lyapunov_pieces(X::AbstractMatrix{<:Real}, t::Real) = max(1, ceil(Int, abs(t) * opnorm(X)))

@@ -1116,10 +1116,67 @@ end
     @test_throws "cannot be made pure" TS.as_representation(Pure, gq)
     @test_throws "trajectory of a mixed state" TS.as_representation(Trajectory, gq)
     @test mix(gq) === gq
-    @test_throws "does not evolve" evolve(-im * (X(1) * X(2)), 0.1, gq; nsteps = 1)
     @test_throws "operator space" entanglement_entropy(gq, 2)
     @test_throws "does not convert" State(gq)
     @test_throws "real number" 2im * gq
     @test_throws "does not thermalize" thermalize(Z(1), 1.0, gq; nsteps = 1)
     @test_throws "searches a pure state" ground_state(Z(1), gq)
+end
+
+@testset "mixed states under Lindbladians" begin
+    # the covariance under -iH and dissipators of linear operators, an equation of Lyapunov, against ExactState{Mixed}:
+    # losses and gains of fermions, a Majorana as jump, an Electron, losses of the first qubit; steps short and long;
+    # steady states; the dissipators that are not Gaussian on a mixed state refused
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    qs = System(4, Qubit())
+    es = System([Electron(), Fermion(), Fermion()])
+    hop = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3) + 0.3 * N(2)
+    xy = sum(X(j) * X(j + 1) + 0.6 * Y(j) * Y(j + 1) for j in 1:3) + 0.4 * sum(Z(j) for j in 1:4)
+    he = dag(Cup)(1) * C(2) + dag(C)(2) * Cup(1) + dag(C)(2) * C(3) + dag(C)(3) * C(2) + 0.5 * Nup(1) - 0.2 * Ndn(1)
+    fobs = [N(1), N(2), N(4), C(1) * dag(C)(2), dag(C)(1) * C(3), N(1) * N(3), C(2) * C(3)]
+    qobs = [Z(1), Z(3), X(1) * X(2), Y(2) * X(3), Z(1) * Z(4)]
+    eobs = [Nup(1), Ndn(1), Nup(1) * Ndn(1), N(2), Cup(1) * dag(C)(3), N(3)]
+    cases = [(fs, ["Occ", "Emp", "FullyMixed", "Occ"], -im * hop + 0.5 * Dissipator(C)(1) + 0.3 * Dissipator(dag(C))(4) +
+              0.2 * Dissipator(C)(3), fobs),
+             (fs, "FullyMixed", -im * hop + 0.7 * Dissipator(C)(2) + 0.2 * Dissipator(dag(C))(2), fobs),
+             (fs, "Occ", -im * hop + 0.4 * Dissipator(C + dag(C))(2) + 0.3 * Dissipator(C)(1), fobs),
+             (qs, ["Up", "Dn", "FullyMixed", "Dn"], -im * xy + 0.6 * Dissipator(Sm)(1) + 0.2 * Dissipator(Sp)(1), qobs),
+             (es, ["UpDn", "FullyMixed", "Emp"], -im * he + 0.5 * Dissipator(Cdn)(1) + 0.4 * Dissipator(C)(3) +
+              0.1 * Dissipator(dag(Cup))(1), eobs)]
+    near(g, e, obs; atol) = all(abs(TS.expect_value(g, o) - TS.expect_value(e, o)) <= atol for o in obs)
+    for (sys, st, L, obs) in cases
+        for (T, n) in ((1.0, 4), (20.0, 2))
+            g = evolve(L, T, TS.GaussianState(State{Mixed}(sys, st)); nsteps = n)
+            e = evolve(L, T, TS.ExactState(State{Mixed}(sys, st)); nsteps = 10)
+            @test TS.trace(g) ≈ 1 && near(g, e, obs; atol = 1e-10)
+        end
+        r = steady_state(L, TS.GaussianState(State{Mixed}(sys, st)))
+        x = steady_state(L, TS.ExactState(State{Mixed}(sys, st)))
+        @test r.residual < 1e-20 && near(r.state, x.state, obs; atol = 1e-9)
+        # one step long past the relaxation, in pieces
+        @test near(evolve(L, 300.0, TS.GaussianState(State{Mixed}(sys, st)); nsteps = 1), x.state, obs; atol = 1e-9)
+    end
+    # an evolution between gates and measurements, from a pure state made mixed
+    L = cases[1][3]
+    p = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 3), TS.GaussianState(State{Pure}(fs, ["Occ", "Emp", "Occ", "Emp"])))
+    g = TS.project_on(evolve(L, 0.7, mix(p); nsteps = 3), N(3))
+    e = TS.project_on(evolve(L, 0.7, apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 3),
+                                           TS.ExactState(State{Mixed}(fs, ["Occ", "Emp", "Occ", "Emp"]))); nsteps = 3), N(3);
+                      limits = Limits())
+    @test near(g, e, fobs; atol = 1e-10)
+    # refused
+    gq = TS.GaussianState(State{Mixed}(qs, "FullyMixed"))
+    gf = TS.GaussianState(State{Mixed}(fs, "FullyMixed"))
+    @test_throws "not one: draw trajectories" evolve(-im * xy + Dissipator(Z)(2), 1.0, gq; nsteps = 1)
+    @test_throws "not one: draw trajectories" evolve(-im * xy + Dissipator(Sm)(2), 1.0, gq; nsteps = 1)
+    @test_throws "not one: draw trajectories" evolve(-im * hop + Dissipator(N)(2), 1.0, gf; nsteps = 1)
+    @test_throws "odd in the Majoranas" evolve(-im * (xy + X(1)), 1.0, gq; nsteps = 1)
+    @test_throws "constant Lindbladian" evolve([-im * xy => t -> cos(t)], 1.0, gq; nsteps = 1)
+    @test_throws "H Hermitian" evolve(-im * xy - 0.2 * Z(1), 1.0, gq; nsteps = 1)
+    @test_throws "no unique steady state" steady_state(-im * hop, gf)
+    # a mode no dissipator reaches
+    f2 = System(2, Fermion())
+    @test_throws "no unique steady state" steady_state(-im * (N(1) + N(2)) + Dissipator(C)(1),
+                                                       TS.GaussianState(State{Mixed}(f2, "Occ")))
 end

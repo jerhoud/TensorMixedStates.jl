@@ -2,7 +2,8 @@
 # by its rotation R, M → R M Rᵀ, read exactly from its quadratic generator.
 
 import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric, evolve_branches!, project,
-                         project!, occupation_probability, nonunitary_step, nonunitary_pieces, linear_applied
+                         project!, occupation_probability, nonunitary_step, nonunitary_pieces, linear_applied,
+                         lyapunov_propagator, lyapunov_pieces
 
 const nonunitary_sum_what = "the Gaussian backend evolves a superposition of Gaussian states under unitary operators " *
                             "only: under the jumps of a trajectory that are not unitary (projectors, linear operators), " *
@@ -131,10 +132,124 @@ prepared_evolver(state::GaussianState{Trajectory}, terms::AbstractVector, mpo_li
                  duration::Union{Nothing, Number} = nothing) =
     checked_jumps(state, trajectory_evolver(state, terms, mpo_limits; duration))
 
-prepared_evolver(::GaussianState{Mixed}, terms::AbstractVector, ::Limits = Limits();
-                 duration::Union{Nothing, Number} = nothing) =
-    throw(ArgumentError("the Gaussian backend does not evolve mixed states yet: draw trajectories, as " *
-                        "State{Trajectory}(system, \"FullyMixed\"), or use a State{Mixed}"))
+"""
+the evolver of a mixed Gaussian state under a constant Lindbladian, -iH with H quadratic and dissipators of
+linear operators: dM/dt = X M + M Xᵀ + Y (see `lindblad_form`), and for each length of step its propagator
+(`lyapunov_propagator`) over a piece and the number of pieces
+"""
+struct LyapunovEvolver
+    X::Matrix{Float64}
+    Y::Matrix{Float64}
+    steps::Dict{Float64, Tuple{Matrix{Float64}, Matrix{Float64}, Int}}
+end
+
+function prepared_evolver(state::GaussianState{Mixed}, terms::AbstractVector, ::Limits = Limits();
+                          duration::Union{Nothing, Number} = nothing)
+    ops, fs = split_terms(terms)
+    if !isnothing(fs)
+        throw(ArgumentError("the Gaussian backend evolves a mixed state under a constant Lindbladian only, yet: " *
+                            "draw trajectories, as State{Trajectory}(system, \"FullyMixed\")"))
+    end
+    LyapunovEvolver(lindblad_form(state, ops)..., Dict{Float64, Tuple{Matrix{Float64}, Matrix{Float64}, Int}}())
+end
+
+# X and Y of dM/dt = X M + M Xᵀ + Y for the Lindbladian of `ops` on a mixed state: k, the generator of -iH,
+# turns M (dM/dt = k M + M kᵀ), and the dissipators of rates r and operators L = Σ_a u_a γ_a make
+# B = Σ r ū uᵀ, of dM/dt = 4 Im B - 2 (M Re B + Re B M) by ⟨γ_a γ_b⟩ = δ_ab + i M_ab; so X = k - 2 Re B and
+# Y = 4 Im B, the equation of Bravyi and König (2012, eq. (32)) for the Lindbladian of TMS, theirs having a
+# factor 2 on the dissipators
+function lindblad_form(state::GaussianState{Mixed}, ops)
+    system = state.system
+    n = 2 + state.layout.count
+    hs = []
+    B = zeros(ComplexF64, n, n)
+    for a in ops
+        pure, ds = a isa IndexedOp{IsGenerator} ? unravelled(a) : ([a], [])
+        append!(hs, pure)
+        for (r, x) in ds
+            for j in (x isa IndexedOp{IsChannel} ? kraus_operators(system, x) : [x])
+                # a Kraus operator proportional to the identity has a null dissipator
+                if !(scalararg(j) isa IdentityOp)
+                    u = mixed_jump(state, j, x)
+                    B .+= r .* conj(u) .* transpose(u)
+                end
+            end
+        end
+    end
+    k = zeros(n, n)
+    if !isempty(hs)
+        c, k0, _ = gaussian_generator(system, sum(hs); axes = state.axes, even = false)
+        _, k = unitary_form(c, k0, "the Gaussian backend evolves a mixed state under -iH, H Hermitian, and dissipators")
+        if couples_ancilla(k)
+            throw(ArgumentError(mixed_odd_what))
+        end
+    end
+    k - 2 * real(B), 4 * imag(B)
+end
+
+# the coefficients u of the operator j = Σ_a u_a γ_a of a dissipator on a mixed state, read on its polynomial
+# Σ_a i u_a γ₁γ_a; refused when j is not linear in the Majoranas or lies behind a string (σ⁻ past the first
+# qubit), its dissipator not Gaussian on a mixed state
+function mixed_jump(state::GaussianState{Mixed}, j, x)
+    u = zeros(ComplexF64, 2 + state.layout.count)
+    for (α, c) in state_polynomial(state, lower(weaken(state.system, ()), j)).terms
+        if length(α) != 2 || α[1] != 1 || α[2] < 3
+            throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators of operators linear " *
+                                "in the Majoranas (C, dag(C), Sm and Sp of the first qubit), and $(obs_name(x)) is " *
+                                "not one: draw trajectories, as State{Trajectory}(system, \"FullyMixed\")"))
+        end
+        u[α[2]] = -im * c
+    end
+    u
+end
+
+function evolve_step(::Union{Tdvp, ApproxW}, pre::LyapunovEvolver, state::GaussianState{Mixed},
+                     time::Number, dt::Number, step::Int, limits::Limits)
+    if iszero(dt)
+        return state
+    end
+    if !(dt isa Real)
+        throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
+    end
+    E, G, m = get!(pre.steps, Float64(dt)) do
+        m = lyapunov_pieces(pre.X, dt)
+        (lyapunov_propagator(pre.X, pre.Y, dt / m)..., m)
+    end
+    M = state.cov
+    for _ in 1:m
+        M = E * M * transpose(E) + G
+    end
+    single(state, antisymmetric(M))
+end
+
+"""
+    steady_state(lindbladian, state::GaussianState{Mixed})
+
+`(residual, state)`: the steady state of the Lindbladian, X M + M Xᵀ + Y = 0 for the covariance M of the
+modes (Bravyi and König 2012, eq. (33)), solved by `lyap`, of trace one, and the relative residual
+‖X M + M Xᵀ + Y‖² / ‖M‖²; refused when it is not unique, an eigenvalue of X of real part above
+-1e-10 ‖X‖ (a mode the dissipators do not damp). `algo`, `limits` and `mpo_limits` are without use.
+"""
+function steady_state(lindbladian, state::GaussianState{Mixed}; algo::Union{Nothing, SearchAlgorithm} = nothing,
+                      limits::Limits = Limits(), mpo_limits::Limits = Limits())
+    ops, fs = split_terms(lindbladian isa AbstractVector ? lindbladian : [lindbladian])
+    if !isnothing(fs)
+        throw(ArgumentError("steady_state takes a constant Lindbladian, not one depending on time"))
+    end
+    X, Y = lindblad_form(state, ops)
+    # the modes of the system, the ancilla held empty
+    s = 3:size(X, 1)
+    Xs, Ys = X[s, s], Y[s, s]
+    top = maximum(real, eigvals(Xs); init = -Inf)
+    if top > -1e-10 * opnorm(Xs)
+        throw(ArgumentError("the Lindbladian has no unique steady state: a mode is not damped by its dissipators " *
+                            "(an eigenvalue of real part $(round(top; sigdigits = 2)) of the Lyapunov equation)"))
+    end
+    M = copy(state.cov)
+    M[s, s] = antisymmetric(lyap(Xs, Ys))
+    residual = (norm(Xs * M[s, s] + M[s, s] * transpose(Xs) + Ys) / norm(M[s, s]))^2
+    (residual = residual, state = single(state, M; trace = 1.0))
+end
 
 # the evolver `e` of the trajectory `state`; when its evolution without jumps is not unitary, refused if one of
 # its jumps does not keep the state Gaussian (the superposition it would make could not be evolved)

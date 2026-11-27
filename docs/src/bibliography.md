@@ -76,8 +76,8 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   `ApproxW` of orders 3 and 4.
 - C. Van Loan, *Computing integrals involving the matrix exponential*, IEEE Trans. Autom.
   Control 23, 395 (1978), [doi:10.1109/TAC.1978.1101743](https://doi.org/10.1109/TAC.1978.1101743):
-  the integrals of exponentials that the steps of `ApproxW` need, read in the exponential of a
-  block triangular matrix.
+  the integrals of exponentials that the steps of `ApproxW` and those of a mixed `GaussianState`
+  need, read in the exponential of a block triangular matrix.
 - S. Blanes and P. C. Moan, *Fourth- and sixth-order commutator-free Magnus integrators for
   linear and non-linear dynamical systems*, Appl. Numer. Math. 56, 1519 (2006),
   [doi:10.1016/j.apnum.2005.11.004](https://doi.org/10.1016/j.apnum.2005.11.004): the
@@ -115,8 +115,10 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   transition matrix (eq. (28)).
 - S. Bravyi and R. König, *Classical simulation of dissipative fermionic linear optics*, Quantum
   Inf. Comput. 12, 925 (2012), [arXiv:1112.2184](https://arxiv.org/abs/1112.2184): the
-  probability of an occupation in a mixed Gaussian state (eq. (20)) and the covariance after
-  measuring it (eq. (22)), used for the mixed states of `GaussianState`.
+  probability of an occupation in a mixed Gaussian state (eq. (20)), the covariance after
+  measuring it (eq. (22)), its evolution under a Lindbladian of quadratic H and linear jumps,
+  an equation of Lyapunov (eq. (32)), and its steady state (eq. (33)), used for the mixed states
+  of `GaussianState`.
 - B. Dias and R. König, *Classical simulation of non-Gaussian fermionic circuits*, Quantum 8,
   1350 (2024), [doi:10.22331/q-2024-05-21-1350](https://doi.org/10.22331/q-2024-05-21-1350),
   [arXiv:2307.12912](https://arxiv.org/abs/2307.12912): a Gaussian state held with its phase by
