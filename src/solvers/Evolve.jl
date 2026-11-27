@@ -255,14 +255,19 @@ end
 the jumps of a term of an evolver, which a trajectory draws: `rate`, the sum of their
 ``L^\\dagger L``, whose expectation value times `f(t)` (1 for `f = nothing`) is the rate of a
 jump at time `t`, the operators `jumps`, and for each the dissipator it comes from, as written
-and placed, and its index among the Kraus operators of that dissipator, 1 for an operator
+and placed, and its index among the Kraus operators of that dissipator, 1 for an operator; the
+``L^\\dagger L`` of each jump, which draw it, made once
 """
 struct Decay
     f::Any
     rate::IndexedOp{IsOperator}
     jumps::Vector{IndexedOp{IsOperator}}
     labels::Vector{Tuple{IndexedOp, Int}}
+    products::Vector{IndexedOp{IsOperator}}
 end
+
+Decay(f, rate::IndexedOp{IsOperator}, jumps::Vector{IndexedOp{IsOperator}}, labels::Vector{Tuple{IndexedOp, Int}}) =
+    Decay(f, rate, jumps, labels, [dag(j) * j for j in jumps])
 
 """
     JumpEvolver(pre, decays, keeps, exact, rng, jumps, stop)
@@ -483,7 +488,7 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractSt
         brought ? followed(before, state, 1) : 0 * before
     else
         d = e.decays[draw_index(rates, rng)]
-        i = draw_index([ real(expect(before, dag(j) * j)) for j in d.jumps ], rng)
+        i = draw_index([ real(expect(before, p)) for p in d.products ], rng)
         x = ket_applied(d.jumps[i], before; limits)
         if !isnothing(e.jumps)
             dissipator, kraus = d.labels[i]

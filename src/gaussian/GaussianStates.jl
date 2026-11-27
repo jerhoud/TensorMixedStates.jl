@@ -336,8 +336,29 @@ function sum_monomial(state::GaussianState{<:Ket}, α::Vector{Int})
 end
 
 # measured on what conserves nothing, as on a State, an operator of no definite flux too
-expect_value(state::GaussianState{<:Ket}, a::IndexedOp{IsOperator}) =
-    poly_value(state, polynomial(state.system, state.layout, lower(weaken(state.system, ()), a)))
+expect_value(state::GaussianState{<:Ket}, a::IndexedOp{IsOperator}) = poly_value(state, cached_polynomial(state, a))
+
+# the polynomial of the operator a on the layout of the state, kept by the identity of both: the rates of the jumps
+# of a trajectory, measured at each step, are lowered once (72 % of a monitored trajectory went to lowering them
+# again, profile P11); emptied beyond 1000 operators, which a program building new ones in a loop would reach;
+# behind a lock, trajectories running on several threads
+const polynomial_cache = IdDict{Any, MajoranaPoly}()
+const polynomial_lock = ReentrantLock()
+
+function cached_polynomial(state::GaussianState, a::IndexedOp{IsOperator})
+    key = (a, state.layout, state.system)
+    p = lock(() -> get(polynomial_cache, key, nothing), polynomial_lock)
+    if isnothing(p)
+        p = polynomial(state.system, state.layout, lower(weaken(state.system, ()), a))
+        lock(polynomial_lock) do
+            if length(polynomial_cache) > 1000
+                empty!(polynomial_cache)
+            end
+            polynomial_cache[key] = p
+        end
+    end
+    p
+end
 
 # the matrix of size d with a 1 at (r, c)
 function matrix_unit(d::Int, r::Int, c::Int)
