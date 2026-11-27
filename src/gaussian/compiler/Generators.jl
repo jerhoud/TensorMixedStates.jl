@@ -3,6 +3,18 @@
 
 import .GaussianKernels: quadratic_form, degree, monomial_product
 
+# the end of a refusal whose terms out of the form wanted are at most `bad`, 1e-12 times the largest coefficient
+# `scale` of the operator or less: likely of that form in exact arithmetic, the rest left by rounding; the
+# backend still decides the form exactly, never by a tolerance, so that no term of the user is dropped
+function rounding_hint(bad::Real, scale::Real)
+    if !(bad <= 1e-12 * scale)
+        return ""
+    end
+    " Those terms are of the size of rounding ($(Printf.@sprintf("%.1g", bad / scale)) of the largest coefficient): " *
+    "the operator is likely of that form in exact arithmetic, written so that rounding leaves them (U * A * dag(U), " *
+    "a matrix computed in floating point); write it so that it compiles exactly."
+end
+
 """
     gaussian_generator(system, op; axes = Dict(), parity = nothing, even = true)
 
@@ -34,7 +46,8 @@ function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Di
     more = length(culprits) > 3 ? " and $(length(culprits) - 3) others" : ""
     message = "the Gaussian backend needs an operator quadratic in Majoranas, its terms on $shown$more " *
               "are of degree $(maximum(length, bad)) (coefficients up to $(Printf.@sprintf("%.2g", largest)))."
-    throw(ArgumentError(message * qubit_advice(system, layout, terms, axes; even)))
+    hint = rounding_hint(largest, maximum(abs, values(p.terms)))
+    throw(ArgumentError(message * hint * qubit_advice(system, layout, terms, axes; even)))
 end
 
 # whether the polynomial conserves the physical parity: no monomial has one Majorana of the ancilla

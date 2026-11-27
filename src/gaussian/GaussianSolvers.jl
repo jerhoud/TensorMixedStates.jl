@@ -204,13 +204,17 @@ end
 # modes before it in the layout, its dissipator not Gaussian on a mixed state
 function mixed_jump(state::GaussianState{Mixed}, j, x)
     u = zeros(ComplexF64, 2 + state.layout.count)
-    for (α, c) in state_polynomial(state, lower(weaken(state.system, ()), j)).terms
-        if length(α) != 2 || α[1] != 1 || α[2] < 3
-            throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators of operators linear " *
-                                "in its Majoranas (C and dag(C) of fermions placed before any qubit, Sm and Sp of " *
-                                "the first qubit of a system of qubits along :Z), and $(obs_name(x)) is not one: " *
-                                "draw trajectories, as State{Trajectory}(system, \"FullyMixed\")"))
-        end
+    p = state_polynomial(state, lower(weaken(state.system, ()), j))
+    linear(α) = length(α) == 2 && α[1] == 1 && α[2] >= 3
+    if !all(linear, keys(p.terms))
+        bad = maximum(abs(c) for (α, c) in p.terms if !linear(α))
+        throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators of operators linear " *
+                            "in its Majoranas (C and dag(C) of fermions placed before any qubit, Sm and Sp of " *
+                            "the first qubit of a system of qubits along :Z), and $(obs_name(x)) is not one: " *
+                            "draw trajectories, as State{Trajectory}(system, \"FullyMixed\")." *
+                            rounding_hint(bad, maximum(abs, values(p.terms)))))
+    end
+    for (α, c) in p.terms
         u[α[2]] = -im * c
     end
     u
@@ -832,7 +836,36 @@ function mixed_applied(state::GaussianState{Mixed}, kind::Symbol, data)
                       trace = abs2(z) * x.trace)
     end
     throw(ArgumentError("the Gaussian backend applies to a mixed state Gaussian unitaries, products of " *
-                        "Majoranas, projectors on occupations and c, c† of a mode, not this operator"))
+                        "Majoranas, projectors on occupations and c, c† of a mode, not this operator." *
+                        mixed_rounding_hint(kind, data, size(state.cov, 1))))
+end
+
+# the rounding hint of a refusal of `mixed_applied`, for the message only: when the operator, without its
+# monomials of 1e-12 of the largest or less, would be one monomial, a projector or c, c† of a mode
+function mixed_rounding_hint(kind::Symbol, data, m::Int)
+    if kind == :linear
+        return rounding_hint(mode_deviation(data[2]), norm(data[2]))
+    elseif kind != :poly
+        return ""
+    end
+    scale = maximum(abs, values(data.terms))
+    small(c) = abs(c) <= 1e-12 * scale
+    kept = MajoranaPoly(Dict(α => c for (α, c) in data.terms if !small(c)))
+    removed = maximum((abs(c) for c in values(data.terms) if small(c)); init = 0.0)
+    linear = monomial_linear(kept, m)
+    taken = length(kept) == 1 || !isnothing(occupation_projector(kept)) ||
+            (!isnothing(linear) && mode_deviation(last(linear)) <= 1e-12 * norm(last(linear)))
+    taken && removed > 0 ? rounding_hint(removed, scale) : ""
+end
+
+# how far the coefficients u of a linear operator are from those of c or c† of one mode, z(γ_a ± iγ_{a+1})
+function mode_deviation(u::AbstractVector)
+    best = Inf
+    for a in 1:2:length(u)-1
+        rest = norm(u[setdiff(eachindex(u), (a, a + 1))])
+        best = min(best, rest + min(abs(u[a + 1] - im * u[a]), abs(u[a + 1] + im * u[a])))
+    end
+    best
 end
 
 # how the Gaussian backend applies the operator s exactly to a state of one component: (:gate, generator) for

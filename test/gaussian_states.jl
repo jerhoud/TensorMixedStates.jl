@@ -1304,3 +1304,23 @@ end
     @test_throws "odd in the Majoranas" evolve([-im * hq, -im * Z(1) => cos], 0.1, gq; nsteps = 1)
     @test_throws "H Hermitian" evolve([-im * hq, -0.3 * X(1) => cos], 0.1, gq; nsteps = 1)
 end
+
+@testset "refusals of terms of the size of rounding" begin
+    # the form is decided exactly; when the terms out of it are 1e-12 of the largest coefficient or less, the
+    # refusal says they are likely rounding; a genuine interaction is refused without that hint
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    U = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2)
+    hop = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3)
+    gp = TS.GaussianState(State{Pure}(fs, "Occ"))
+    gm = TS.GaussianState(State{Mixed}(fs, "FullyMixed"))
+    @test_throws "size of rounding" evolve(-im * (U * hop * dag(U)), 0.1, gp; nsteps = 1)
+    @test_throws "size of rounding" evolve(Dissipator(U * C(1) * dag(U)), 0.1, gm; nsteps = 1)
+    @test_throws "size of rounding" apply(C(1) + 1e-15 * C(1) * N(2), gm)
+    err = try
+        evolve(-im * (hop + 0.1 * N(1) * N(2)), 0.1, gp; nsteps = 1)
+    catch e
+        e
+    end
+    @test err isa ArgumentError && !occursin("size of rounding", sprint(showerror, err))
+end
