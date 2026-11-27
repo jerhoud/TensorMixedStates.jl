@@ -534,7 +534,7 @@ end
 end
 
 @testset "cross terms of nearly orthogonal components" begin
-    # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal by structure (`singular_transition`); Ry(θ)
+    # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal by structure (C of `pair_transition`); Ry(θ)
     # on qubit 1 first makes them nearly orthogonal (θ = 1e-7, the precise way) or not (θ = 0.3, the
     # transition matrix)
     sys = System([Qubit() for _ in 1:4])
@@ -813,7 +813,7 @@ end
 
 @testset "cross terms of the branches" begin
     # the two branches of a ring, in the two sectors of the ancilla: their pair orthogonal by structure
-    # (`singular_transition`, one pair of modes), the terms leaving c(α)G_l in the other sector zero, every
+    # (C of `pair_transition`, one pair of modes), the terms leaving c(α)G_l in the other sector zero, every
     # value as the double sum of the cross terms by overlaps
     GK = TensorMixedStates.GaussianKernels
     n = 6

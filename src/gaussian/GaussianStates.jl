@@ -240,43 +240,33 @@ function poly_value(state::GaussianState{<:Ket}, p::MajoranaPoly,
     sum((c * get!(() -> value(α), cache, α) for (α, c) in p.terms); init = zero(ComplexF64))
 end
 
-# the overlap ⟨G_1|G_2⟩ and the transition matrix W such that ⟨G_1|c(α)|G_2⟩ = ⟨G_1|G_2⟩ Pf(W[α, α])
-# (Bravyi and Gosset, eq. (28)) where M_1 + M_2 is well conditioned, its reciprocal condition above 1e-4; the
-# error grows as it falls (2.3e-13 against the precise way measured at 2.3e-3); nothing elsewhere
-function transition(g1::PureGaussian, g2::PureGaussian)
-    M1, M2 = g1.cov, g2.cov
-    o = overlap(g1, g2)
-    S = M1 + M2
-    F = lu(S; check = false)
-    if iszero(o) || !issuccess(F) || LinearAlgebra.LAPACK.gecon!('1', copy(F.factors), opnorm(S, 1)) <= 1e-4
-        return nothing
-    end
-    W = im .* conj.((-2I + im * M1 - im * M2) / F)
-    W[diagind(W)] .= 1
-    o, W
-end
-
 # ⟨G_1|c(α)|G_2⟩ = ω Pf([W[α, α] Z[α, :]; -Z[α, :]ᵀ C]), Z and C empty for a transition matrix
 bordered_pfaffian(W, Z, C, α) = logpfaffian([W[α, α] Z[α, :]; -transpose(Z[α, :]) C])
 
-# (ω, W, Z, C) of `bordered_pfaffian` for components orthogonal by structure (G and c(β)G: gates T, jumps, the
-# branches of a ring), after the robust Wick theorem of Chen and Scuseria (J. Chem. Phys. 158, 231102 (2023),
-# eqs. (28), (32)-(34)): the singular values of Σ = M_1 + M_2 at rounding level, in groups of four (a pair of
-# modes each), kept in C without dividing by them; nothing elsewhere
-function singular_transition(g1::PureGaussian, g2::PureGaussian)
+# (ω, W, Z, C) of `bordered_pfaffian` for the pair (G_1, G_2), nothing where the precise way is needed. The
+# transition matrix -4i P₊Σ⁻¹ of Bravyi and Gosset (eq. (28)), Σ = M_1 + M_2 and P₊ = (I + iM_1)/2, splits on
+# the singular vectors of Σ: W on the regular ones V_R, and Z(-4iG⁻¹)Zᵀ on those of the singular values at
+# rounding level V_S, which components orthogonal by structure have (G and c(β)G: gates T, jumps, the branches
+# of a ring), Z an orthonormal basis of P₊V_S and G = ZᵀΣZ; C = (i/4)G keeps these small singular values without
+# dividing by them, after the robust Wick theorem of Chen and Scuseria (J. Chem. Phys. 158, 231102 (2023),
+# eqs. (28), (32)-(34)).
+function pair_transition(g1::PureGaussian, g2::PureGaussian)
     M1 = g1.cov
     Σ = M1 + g2.cov
     m = size(Σ, 1)
     F = svd(Σ)
-    # the split below is exact for zero singular values only, so these, apart from the others
+    # the split is exact for zero singular values only, in groups of four (a pair of modes each); the others at
+    # least 1e-3 of the largest, which bounds the error of W (2.3e-13 measured at a reciprocal condition 2.3e-3)
     k = count(<=(1e-13 * F.S[1]), F.S)
-    if k == 0 || k % 4 != 0 || (k < m && F.S[m-k] < 1e-3 * F.S[1])
+    if k % 4 != 0 || (k < m && F.S[m-k] < 1e-3 * F.S[1])
         return nothing
     end
-    # the transition matrix -4i P₊Σ⁻¹, P₊ = (I + iM_1)/2, is W on the regular singular vectors V_R plus
-    # Z(-4iG⁻¹)Zᵀ, Z an orthonormal basis of P₊V_S and G = ZᵀΣZ, the bordered pfaffian taking C = (i/4)G
     VS, VR = F.V[:, m-k+1:m], F.V[:, 1:m-k]
     W = -2im * (I + im * M1) * (VR * ((VR' * Σ * VR) \ VR'))
+    if k == 0
+        o = overlap(g1, g2)
+        return iszero(o) ? nothing : (o, W, zeros(ComplexF64, m, 0), zeros(ComplexF64, 0, 0))
+    end
     E = eigen(Hermitian(im * (VS' * M1 * VS)))
     if count(>(0), E.values) != k ÷ 2
         return nothing
@@ -293,9 +283,8 @@ function singular_transition(g1::PureGaussian, g2::PureGaussian)
     cross_term(g1, α0, g2) / b, W, Z, C
 end
 
-# (ω, W, Z, C) of `bordered_pfaffian` for each pair k < l of a sum, brought up to date first: the transition
-# matrix where it is well conditioned, else `singular_transition`; nothing where both fail (the precise way).
-# Computed once for a sum, which no operation changes once brought up to date.
+# `pair_transition` for each pair k < l of a sum, brought up to date first. Computed once for a sum, which no
+# operation changes once brought up to date.
 const pair_cache = WeakKeyDict{GaussianSum, Matrix{Any}}()
 
 function pair_transitions(s::GaussianSum)
@@ -304,14 +293,7 @@ function pair_transitions(s::GaussianSum)
         K = length(s.comps)
         P = Matrix{Any}(nothing, K, K)
         for k in 1:K, l in k+1:K
-            gk, gl = s.comps[k], s.comps[l]
-            t = transition(gk, gl)
-            if isnothing(t)
-                P[k, l] = singular_transition(gk, gl)
-            else
-                o, W = t
-                P[k, l] = (o, W, zeros(ComplexF64, size(W, 1), 0), zeros(ComplexF64, 0, 0))
-            end
+            P[k, l] = pair_transition(s.comps[k], s.comps[l])
         end
         P
     end
