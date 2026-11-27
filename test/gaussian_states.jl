@@ -1171,7 +1171,7 @@ end
     @test_throws "not one: draw trajectories" evolve(-im * xy + Dissipator(Sm)(2), 1.0, gq; nsteps = 1)
     @test_throws "not one: draw trajectories" evolve(-im * hop + Dissipator(N)(2), 1.0, gf; nsteps = 1)
     @test_throws "odd in the Majoranas" evolve(-im * (xy + X(1)), 1.0, gq; nsteps = 1)
-    @test_throws "constant Lindbladian" evolve([-im * xy => t -> cos(t)], 1.0, gq; nsteps = 1)
+    @test_throws "without terms depending on time" evolve([-im * xy + Dissipator(Sm)(1), -im * Z(2) => t -> cos(t)], 1.0, gq; nsteps = 1)
     @test_throws "H Hermitian" evolve(-im * xy - 0.2 * Z(1), 1.0, gq; nsteps = 1)
     @test_throws "no unique steady state" steady_state(-im * hop, gf)
     # a mode no dissipator reaches
@@ -1278,4 +1278,29 @@ end
     bad = evolve(-im * hop - 0.6 * Dissipator(C)(2), 2.0, TS.GaussianState(State{Mixed}(fs, "FullyMixed")); nsteps = 2)
     @test_throws "not that of a state" thermalize(hf, 1.0, bad; nsteps = 1)
     @test_throws "finite beta" thermalize(hf, Inf, g; nsteps = 1)
+end
+
+@testset "mixed states under H(t)" begin
+    # -iH(t) without dissipators on a mixed state, by the rotations of Magnus, against ExactState{Mixed}: fermions,
+    # qubits along X and a fermion between qubits; refused with dissipators, odd terms, a non-Hermitian H
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    qs = System(3, Qubit())
+    hop = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3)
+    hq = Z(1) * Z(2) + 0.6 * Y(1) * Y(2) + Z(2) * Z(3)
+    near(g, e, obs; atol) = all(abs(TS.expect_value(g, o) - TS.expect_value(e, o)) <= atol for o in obs)
+    for (sys, st, axes, terms, obs) in ((fs, ["Occ", "FullyMixed", "Emp", "Occ"], Dict{Int, Symbol}(),
+                                         [-im * hop, -im * N(2) => t -> cos(2t), -im * (dag(C)(1) * C(4) + dag(C)(4) * C(1)) => t -> t],
+                                         [N(1), N(3), C(1) * dag(C)(2), prod(F(j) for j in 1:4)]),
+                                        (qs, ["X+", "FullyMixed", "X-"], Dict(k => :X for k in 1:3),
+                                         [-im * hq, -im * sum(X(j) for j in 1:3) => t -> sin(t)],
+                                         [X(1), Z(1) * Z(2), Y(2) * Y(3), prod(X(j) for j in 1:3)]))
+        g = evolve(terms, 1.3, TS.GaussianState(State{Mixed}(sys, st); axes); nsteps = 4)
+        e = evolve(terms, 1.3, TS.ExactState(State{Mixed}(sys, st)); nsteps = 4)
+        @test TS.trace(g) ≈ 1 && near(g, e, obs; atol = 1e-9)
+    end
+    gq = TS.GaussianState(State{Mixed}(qs, "FullyMixed"); axes = :X)
+    @test_throws "constant, without terms depending on time" evolve([-im * hq + Dissipator(Sm)(1), -im * Z(1) => cos], 0.1, gq; nsteps = 1)
+    @test_throws "odd in the Majoranas" evolve([-im * hq, -im * Z(1) => cos], 0.1, gq; nsteps = 1)
+    @test_throws "H Hermitian" evolve([-im * hq, -0.3 * X(1) => cos], 0.1, gq; nsteps = 1)
 end

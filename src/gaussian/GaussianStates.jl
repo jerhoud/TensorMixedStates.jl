@@ -19,7 +19,8 @@ one mode any state that commutes with its parity), of one component; it takes Ga
 of Majoranas, projectors on occupations and `C`, `dag(C)` of a mode, see `apply`, and evolves under a constant
 Lindbladian, -iH with H quadratic and dissipators of operators linear in its Majoranas (`C`, `dag(C)` of fermions
 placed before any qubit, `Sm` and `Sp` of the first qubit of a system of qubits along `:Z`), exactly, with its
-`steady_state`; `thermalize` takes it to e^{-βH/2} ρ e^{-βH/2}, exactly.
+`steady_state`, and under -iH(t) without dissipators as a pure state does; `thermalize` takes it to
+e^{-βH/2} ρ e^{-βH/2}, exactly.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis

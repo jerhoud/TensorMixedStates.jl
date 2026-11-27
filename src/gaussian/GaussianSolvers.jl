@@ -85,7 +85,8 @@ end
 the evolver of a Gaussian state under L(t) = Σ_j f_j(t) L_j, nothing for the functions of a constant
 evolver: its operators compiled for each physical parity of the states it steps (nothing when they do
 not need it), and the rotations of the constant one by step; `lossy` for the ket of a trajectory, whose
-L may not be anti-Hermitian, which changes its norm
+L may not be anti-Hermitian, which changes its norm; `even` false for a mixed state, compiled as `polynomial`
+says
 """
 struct GaussianEvolver
     system::System
@@ -96,11 +97,12 @@ struct GaussianEvolver
     lossy::Bool
     # whether the evolver is quadratic only in the sector of the parity of the state (a ring of qubits)
     sectors::Bool
+    even::Bool
     forms::Dict{Any, Any}
     rotations::Dict{Any, Any}
 end
 
-evolver_what(::GaussianEvolver) = "the Gaussian backend evolves a pure state under -iH with H Hermitian, for now"
+evolver_what(::GaussianEvolver) = "the Gaussian backend evolves a pure or a mixed state under -iH with H Hermitian"
 
 # the evolver compiled for the parity σ of the states (nothing: none needed): for a constant one, c (its
 # real part the loss of a trajectory, its imaginary part the phase between sectors), h (complex for the ket
@@ -109,11 +111,11 @@ evolver_what(::GaussianEvolver) = "the Gaussian backend evolves a pure state und
 function compiled(pre::GaussianEvolver, σ)
     get!(pre.forms, σ) do
         if isnothing(pre.fs)
-            c, k, _ = gaussian_generator(pre.system, reduce(+, pre.ops); axes = pre.axes, parity = σ)
+            c, k, _ = gaussian_generator(pre.system, reduce(+, pre.ops); axes = pre.axes, parity = σ, even = pre.even)
             c0, h = unitary_form(c, k, evolver_what(pre); pre.lossy)
             return c0, h, !couples_ancilla(k)
         end
-        forms = [gaussian_generator(pre.system, op; axes = pre.axes, parity = σ) for op in pre.ops]
+        forms = [gaussian_generator(pre.system, op; axes = pre.axes, parity = σ, even = pre.even) for op in pre.ops]
         [(c, k) for (c, k, _) in forms], !any(couples_ancilla(k) for (_, k, _) in forms)
     end
 end
@@ -143,12 +145,22 @@ struct LyapunovEvolver
     steps::Dict{Float64, Tuple{Matrix{Float64}, Matrix{Float64}, Int}}
 end
 
+# under a constant Lindbladian by the equation of Lyapunov; under -iH(t), without dissipators, by the rotations
+# of the pure states (Magnus)
 function prepared_evolver(state::GaussianState{Mixed}, terms::AbstractVector, ::Limits = Limits();
                           duration::Union{Nothing, Number} = nothing)
     ops, fs = split_terms(terms)
     if !isnothing(fs)
-        throw(ArgumentError("the Gaussian backend evolves a mixed state under a constant Lindbladian only, yet: " *
-                            "draw trajectories, as State{Trajectory}(system, \"FullyMixed\")"))
+        if !all(op -> op isa IndexedOp{IsOperator}, ops)
+            throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators that are constant, " *
+                                "without terms depending on time: draw trajectories, as " *
+                                "State{Trajectory}(system, \"FullyMixed\")"))
+        end
+        pre = gaussian_evolver(state, terms, duration; lossy = false)
+        if !last(compiled(pre, nothing))
+            throw(ArgumentError(mixed_odd_what))
+        end
+        return pre
     end
     LyapunovEvolver(lindblad_form(state, ops)..., Dict{Float64, Tuple{Matrix{Float64}, Matrix{Float64}, Int}}())
 end
@@ -294,12 +306,13 @@ function gaussian_evolver(state::GaussianState, terms::AbstractVector, duration:
         throw(ArgumentError("the Gaussian backend evolves a pure state under an operator, -iH"))
     end
     system = state.system
-    pre(sectors) = GaussianEvolver(system, state.axes, ops, fs, duration, lossy, sectors, Dict{Any, Any}(),
+    even = even_states(state)
+    pre(sectors) = GaussianEvolver(system, state.axes, ops, fs, duration, lossy, sectors, even, Dict{Any, Any}(),
                                    Dict{Any, Any}())
-    quadratic = all(op -> degree(polynomial(system, state.layout, lower(system, op))) <= 2, ops)
-    # the sectors of the parity when the whole evolver conserves it and needs them
-    whole = polynomial(system, state.layout, lower(system, reduce(+, ops)))
-    p = pre(!quadratic && conserves_parity(whole))
+    quadratic = all(op -> degree(polynomial(system, state.layout, lower(system, op); even)) <= 2, ops)
+    # the sectors of the parity when the whole evolver conserves it and needs them, on even states only
+    whole = polynomial(system, state.layout, lower(system, reduce(+, ops)); even)
+    p = pre(even && !quadratic && conserves_parity(whole))
     # compiled now for the parities the state needs, so that an error comes at once
     σs = step_parities(p, state)
     if length(σs) == 2 && !isnothing(fs)
@@ -313,7 +326,7 @@ end
 
 # the parities the evolver is compiled for to step the state: none needed, that of the state, or both
 # sectors when the components differ or are not known
-function step_parities(pre::GaussianEvolver, state::GaussianState{<:Ket})
+function step_parities(pre::GaussianEvolver, state::GaussianState)
     if !pre.sectors
         return [nothing]
     end
@@ -355,6 +368,20 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::Gaussi
     end
     R, loss = magnus_rotation(pre, forms, time, dt)
     lost(turned(state, R, even), loss)
+end
+
+# a step of a mixed state under -iH(t): the rotation of the step, as for a pure state
+function evolve_step(::Union{Tdvp, ApproxW}, pre::GaussianEvolver, state::GaussianState{Mixed},
+                     time::Number, dt::Number, step::Int, limits::Limits)
+    if iszero(dt)
+        return state
+    end
+    if !(dt isa Real)
+        throw(ArgumentError("the Gaussian backend evolves by real time steps, not $dt"))
+    end
+    forms, even = compiled(pre, nothing)
+    R, _ = magnus_rotation(pre, forms, time, dt)
+    turned(state, R, even)
 end
 
 # a step of the ket of a trajectory under an evolver depending on time, in pieces whose rotation R grows vectors
