@@ -11,9 +11,9 @@ import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, r
 the product state `state`, pure or a trajectory (`R = Pure` or `Trajectory`), held exactly as a
 fermionic Gaussian state, on fermionic sites and sites of dimension 2 (qubits); `limits` is without
 use. A state that is not a product, an MPS of link dimension above 1, is refused. A trajectory evolves
-under dissipators whose jumps keep it Gaussian: unitary gates of quadratic generators, products of
-projectors on occupations, linear operators (`C`, `dag(C)`, `Sp`, `Sm`); under jumps that are not unitary
-it must be of one component.
+under dissipators whose effective operator -iH - (1/2) Σ L†L is quadratic; when it is not unitary, the
+trajectory is of one component and its jumps keep it Gaussian: gates exp(A) of quadratic A, projectors on
+occupations, linear operators (`C`, `dag(C)`, `Sp`, `Sm`).
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis

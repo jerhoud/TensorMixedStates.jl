@@ -129,6 +129,16 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   [arXiv:2304.13780](https://arxiv.org/abs/2304.13780): the cross terms of components of a
   superposition orthogonal by structure, their zero singular values kept apart without dividing
   by them.
+- X. Cao, A. Tilloy and A. De Luca, *Entanglement in a fermion chain under continuous monitoring*,
+  SciPost Phys. 7, 024 (2019),
+  [doi:10.21468/SciPostPhys.7.2.024](https://doi.org/10.21468/SciPostPhys.7.2.024),
+  [arXiv:1804.04638](https://arxiv.org/abs/1804.04638), and Y. Le Gal, X. Turkeshi and M. Schirò,
+  *Entanglement dynamics in monitored systems and the role of quantum jumps*, PRX Quantum 5, 030329
+  (2024), [doi:10.1103/PRXQuantum.5.030329](https://doi.org/10.1103/PRXQuantum.5.030329),
+  [arXiv:2312.13419](https://arxiv.org/abs/2312.13419), appendix F: the trajectories of
+  `GaussianState` under jumps that are not unitary, the state carried by its annihilators and
+  orthonormalised by a QR at each step, the factor on its norm read from that QR (their eq. (F12),
+  here extended to states that do not conserve the number of fermions).
 - E. Knill, *Fermionic linear optics and matchgates*,
   [arXiv:quant-ph/0108033](https://arxiv.org/abs/quant-ph/0108033), section 6, and X. Lyu and
   K. Bu, *Displaced fermionic Gaussian states and their classical simulation*,

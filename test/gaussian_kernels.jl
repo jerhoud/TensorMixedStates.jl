@@ -563,6 +563,19 @@ end
         @test M ≈ dense_covariance(φ / sqrt(real(dot(φ, φ)))) atol = 1e-12
         @test lognorm ≈ log(real(dot(φ, φ))) atol = 1e-12
     end
+    # a long step under a strong loss or gain on mode 1, in the pieces of nonunitary_pieces
+    for n in (2, 4)
+        h = gk_antisymmetric(2n)
+        k = h / 2 + im * zeros(2n, 2n)
+        k[1, 2], k[2, 1] = k[1, 2] + 5im, k[2, 1] - 5im
+        ψ = dense_fock(falses(n))
+        φ = exp(-im * 10 * dense_hamiltonian(k)) * ψ
+        m = nonunitary_pieces(k, 10)
+        @test m >= 50
+        M, lognorm = nonunitary_step(fock_covariance(falses(n)), exp(10 / m * k), m)
+        @test M ≈ dense_covariance(φ / sqrt(real(dot(φ, φ)))) atol = 1e-10
+        @test lognorm ≈ log(real(dot(φ, φ))) atol = 1e-10
+    end
     # a real k: the unitary rotation, the norm kept
     ψ = dense_gaussian(rand(gk_rng, Bool, 3), gk_rng)
     h = gk_antisymmetric(6)
@@ -581,7 +594,7 @@ end
             φ = sum(u[a] .* dense_majorana(a, ψ) for a in 1:2n)
             if real(dot(φ, φ)) < 1e-12
                 # one mode: a Fock state, which c_j or c_j† annihilates
-                @test_throws ArgumentError linear_applied(M0, u)
+                @test linear_applied(M0, u) == (nothing, 0.0)
                 continue
             end
             M, p = linear_applied(M0, u)
@@ -589,7 +602,7 @@ end
             @test M ≈ dense_covariance(φ / sqrt(real(dot(φ, φ)))) atol = 1e-12
         end
         z = TensorMixedStates.GaussianKernels.annihilators(M0)[:, 1]
-        @test_throws ArgumentError linear_applied(M0, z)
+        @test linear_applied(M0, z) == (nothing, 0.0)
         @test linear_annihilates(M0, z) && !linear_annihilates(M0, randn(gk_rng, ComplexF64, 2n))
     end
 end

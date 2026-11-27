@@ -11,21 +11,47 @@ function annihilators(M::AbstractMatrix{<:Real})
     E.vectors[:, E.values .< 0]
 end
 
-# the covariance of the pure state whose annihilators have the coefficients spanned by the orthonormal Q
-covariance_of(Q::AbstractMatrix) = antisymmetric(real(im .* (2 .* (Q * Q') - I)))
+# the covariance of the pure state whose annihilators have the coefficients spanned by the orthonormal Q,
+# real when Q spans an isotropic subspace (QᵀQ = 0); an error when it does not to 1e-10, the precision of
+# the steps lost
+function covariance_of(Q::AbstractMatrix)
+    iM = im .* (2 .* (Q * Q') - I)
+    defect = maximum(abs, imag(iM); init = 0.0)
+    if defect > 1e-10
+        throw(ErrorException("a non-unitary Gaussian step lost its precision (defect $(round(defect; sigdigits = 2)) " *
+                             "of the covariance): take smaller steps"))
+    end
+    antisymmetric(real(iM))
+end
 
 """
-    nonunitary_step(M, R)
+    nonunitary_pieces(k, t)
 
-the covariance of e^K|ψ⟩, normalised, and log ‖e^K|ψ⟩‖² for the normalised pure state ψ of covariance `M`
-and K = (1/4) Σ k_ab γ_a γ_b with k complex antisymmetric, R = exp(k) complex orthogonal (`propagator` for
-k real): with Z the annihilators of ψ and RZ = QR, those of e^K|ψ⟩ are Q and ‖e^K|ψ⟩‖² = Π_j |R_jj|,
-the Majorana form of eq. (F12) of Le Gal, Turkeshi and Schirò.
+the number of pieces of a step e^{tK}, K = (1/4) Σ k_ab γ_a γ_b, in `nonunitary_step`: each grows a vector
+by at most e, ‖e^{(t/m)k}‖ ≤ e^{(t/m)‖Im k‖}, so that the QR of each loses little.
 """
-function nonunitary_step(M::AbstractMatrix{<:Real}, R::AbstractMatrix)
+nonunitary_pieces(k::AbstractMatrix, t::Real) = max(1, ceil(Int, abs(t) * opnorm(imag(k))))
+
+"""
+    nonunitary_step(M, R, m = 1)
+
+the covariance of e^{mK}|ψ⟩, normalised, and log ‖e^{mK}|ψ⟩‖² for the normalised pure state ψ of covariance
+`M`, K = (1/4) Σ k_ab γ_a γ_b with k complex antisymmetric and R = exp(k) complex orthogonal (`propagator`
+for k real), applied m times: the annihilators Z of ψ become Q of RZ = QR each time, and the squared norm is
+multiplied by Π_j |R_jj|. That factor, eq. (F12) of Le Gal, Turkeshi and Schirò for occupied orbitals of a
+state of fixed number (Π |R_jj|²), is here the one of the annihilators of any pure Gaussian state (measured
+against the dense exponential); R should grow vectors by a bounded factor, see `nonunitary_pieces`.
+"""
+function nonunitary_step(M::AbstractMatrix{<:Real}, R::AbstractMatrix, m::Int = 1)
     n = size(M, 1) ÷ 2
-    F = qr(R * annihilators(M))
-    covariance_of(Matrix(F.Q)[:, 1:n]), sum(log ∘ abs, diag(F.R))
+    Q = annihilators(M)
+    lognorm = 0.0
+    for _ in 1:m
+        F = qr(R * Q)
+        Q = Matrix(F.Q)[:, 1:n]
+        lognorm += sum(log ∘ abs, diag(F.R))
+    end
+    covariance_of(Q), lognorm
 end
 
 # the part P₊u of u that creates on the pure state of covariance M, its annihilators Z: the rest annihilates
@@ -44,15 +70,15 @@ linear_annihilates(M::AbstractMatrix{<:Real}, u::AbstractVector) =
     linear_applied(M, u)
 
 the covariance of L|ψ⟩, normalised, and ‖L|ψ⟩‖² = u†(I + iM)u = 2‖P₊u‖² for the normalised pure state ψ of
-covariance `M` and the linear operator L = Σ_a u_a γ_a; an error when L annihilates ψ, see
+covariance `M` and the linear operator L = Σ_a u_a γ_a; `(nothing, 0.0)` when L annihilates ψ, see
 `linear_annihilates`. Only the part w = P₊u of u creates: L|ψ⟩ = (w·γ)|ψ⟩, annihilated by w·γ and by the
-annihilators z·γ of ψ with w̄†z = 0.
+annihilators z·γ of ψ with w̄†z = 0. Its precision is that of w, about eps ‖u‖ / ‖w‖.
 """
 function linear_applied(M::AbstractMatrix{<:Real}, u::AbstractVector)
     Z = annihilators(M)
     w = creating_part(Z, u)
     if norm(w) <= 1e-13 * norm(u)
-        throw(ArgumentError("the linear operator annihilates the state"))
+        return nothing, 0.0
     end
     p = 2 * norm(w)^2
     w ./= norm(w)

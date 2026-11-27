@@ -564,12 +564,52 @@ end
             @test TensorMixedStates.expect_value(g, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-9
         end
     end
-    # refused: a jump that does not keep the state Gaussian, a superposition under a non-unitary evolution
+    # the jumps of the review of 5c: a projector with its rate, a gate exp(A) not unitary, a null jump, rates
+    # depending on time, sites of both kinds, one site; unitary jumps that are not Gaussian when the evolution
+    # without jumps is unitary (the polynomial way, the components multiplied)
+    mixed = System([Fermion(), Qubit(), Fermion()])
+    more = [(fs, ["Occ", "Emp", "Occ", "Emp"], -im * hop + 0.5 * Dissipator(Id - N)(2) + Dissipator(N)(3), [N(1), N(2), N(4)]),
+            (fs, ["Occ", "Emp", "Occ", "Emp"], -im * hop + 3.0 * Dissipator(exp(0.5 * N))(2) + Dissipator(C)(1), [N(1), N(3)]),
+            (fs, ["Occ", "Emp", "Occ", "Emp"], -im * hop + Dissipator(C * C)(1) + Dissipator(C)(3), [N(2), N(3)]),
+            (fs, ["Occ", "Occ", "Emp", "Emp"], [-im * hop, sum(Dissipator(N)(j) for j in 1:4) => t -> 1 + 0.5 * sin(3t)],
+             [N(1), N(4), C(2) * dag(C)(3)]),
+            (mixed, ["Occ", "Dn", "Occ"], -im * (N(1) + 0.7 * Z(2) + N(3)) + Dissipator(C)(1) + 0.5 * Dissipator(Sp)(2) +
+             Dissipator(C)(3), [N(1), Z(2), N(3)]),
+            (System(1, Fermion()), "Occ", -im * N(1) + 0.8 * Dissipator(C)(1), [N(1)]),
+            (qs, "X+", -im * xy + 0.4 * Dissipator(T)(2), [X(1), Z(2), X(3) * X(4)])]
+    for (sys, st, ev, obs) in more
+        g, e, jg, je = both(sys, st, ev, 1.2)
+        @test length(jg) == length(je)
+        @test all(a.time ≈ b.time for (a, b) in zip(jg, je))
+        @test TensorMixedStates.trace(g) ≈ TensorMixedStates.trace(e) rtol = 1e-9
+        for o in obs
+            @test TensorMixedStates.expect_value(g, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-9
+        end
+    end
+    # long steps under strong losses, one step: the vacuum stays empty, a fermion lost as in ExactState
+    g = evolve(-im * hop + 10 * Dissipator(C)(1), 10.0, TensorMixedStates.GaussianState(State{Trajectory}(fs, "Emp"));
+               nsteps = 1, rng = Random.Xoshiro(1))
+    @test TensorMixedStates.trace(g) ≈ 1 atol = 1e-12
+    g, e, jg, je = both(fs, ["Emp", "Emp", "Emp", "Occ"], -im * hop + 10 * Dissipator(C)(1), 30.0; nsteps = 1)
+    @test length(jg) == length(je)
+    @test TensorMixedStates.trace(g) ≈ TensorMixedStates.trace(e) rtol = 1e-8
+    @test TensorMixedStates.expect_value(g, N(2)) ≈ TensorMixedStates.expect_value(e, N(2)) atol = 1e-9
+    # a linear operator on a state it nearly annihilates, exact by the projection: Sp after Ry(1e-10)
+    q1 = System(2, Qubit())
+    g = apply(Sp(1), apply(Ry(1e-10)(1), TensorMixedStates.GaussianState(State{Pure}(q1, "Up"))))
+    @test abs(TensorMixedStates.expect_value(g, X(1))) < 1e-14
+    # refused: a jump that does not keep the state Gaussian under an evolution that is not unitary, a
+    # superposition under it, a state of both sectors of the parity on a ring under it
     gf = TensorMixedStates.GaussianState(State{Trajectory}(fs, ["Occ", "Emp", "Occ", "Emp"]))
-    @test_throws "keep a state Gaussian" TensorMixedStates.prepared_evolver(gf, [-im * hop + Dissipator(Id + N)(1)])
+    @test_throws "keep a state Gaussian" TensorMixedStates.prepared_evolver(gf, [-im * hop + Dissipator(Id + 0.3 * C * dag(C))(1) +
+                                                                                Dissipator(N)(2)])
     gq = apply(T(2), TensorMixedStates.GaussianState(State{Trajectory}(qs, "X+")))
     @test TensorMixedStates.ncomponents(gq) == 2
     @test_throws "superposition" evolve(-im * xy + Dissipator(N)(1), 0.2, gq; nsteps = 1)
+    rs = System(4, Qubit())
+    ring = sum(Z(j) * Z(j + 1) for j in 1:3) + Z(4) * Z(1) - sum(X(j) for j in 1:4)
+    gr = TensorMixedStates.GaussianState(State{Trajectory}(rs, "Dn"); axes = :X)
+    @test_throws "each sector" evolve(-im * ring + Dissipator((Id - X) / 2)(1), 0.2, gr; nsteps = 1)
 end
 
 @testset "cross terms of nearly orthogonal components" begin
