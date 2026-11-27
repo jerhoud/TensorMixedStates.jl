@@ -679,7 +679,7 @@ they have few terms. The state is not normalised.
   near `1e-8`, or `"zipup"`, which truncates at each site as it multiplies, to a tenth of the
   cutoff and twice the bond dimension, these truncations not being optimal, then the result to
   `limits`: faster still when it truncates much, but less accurate; see Camaño, Epperly and
-  Tropp, arXiv:2504.06475
+  Tropp, Quantum 10, 2022 (2026), arXiv:2504.06475
 
 # Examples
 

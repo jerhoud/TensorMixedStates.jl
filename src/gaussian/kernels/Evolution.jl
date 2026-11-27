@@ -1,8 +1,9 @@
 # Gaussian unitaries, and superpositions of Gaussian states that keep their relative phases under
 # them. U = exp(-iHt) with H = (i/4) Σ h_ab γ_a γ_b fixes U γ_a U† only up to a phase on each
 # state, so the phases are carried by links to a generic reference F evolved with the state:
-# ⟨UF|UG_k⟩ = ⟨F|G_k⟩. This is the random reference of Guaita, Hackl and Quella (arXiv:2409.11628,
-# §III E), with descriptions of Dias and König; F_o = γ₁F serves the odd components.
+# ⟨UF|UG_k⟩ = ⟨F|G_k⟩. This is the random reference of Guaita, Hackl and Quella (Ann. Phys. 495,
+# 170757 (2026), arXiv:2409.11628, §III E), with descriptions of Dias and König; F_o = γ₁F serves
+# the odd components.
 
 """
     propagator(h, t)
