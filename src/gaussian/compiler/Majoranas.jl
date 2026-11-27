@@ -199,18 +199,23 @@ function add_term!(d, system::System, layout::MajoranaLayout, t::Term)
         push!(factors, local_expansion(layout, k, m))
         push!(sites, k)
     end
-    for choice in Iterators.product(factors...)
-        coef = ComplexF64(t.coef)
-        α = Int[]
-        for (k, (β, c)) in zip(sites, choice)
+    # the products of one monomial per factor, built factor by factor: a product of iterators splatted from a
+    # tuple of one per site would be compiled anew for each number of sites, in seconds on long strings
+    acc = [(ComplexF64(t.coef), Int[])]
+    for (k, factor) in zip(sites, factors)
+        next = Tuple{ComplexF64, Vector{Int}}[]
+        for (coef, α) in acc, (β, c) in factor
             coef *= c
             if isodd(length(β))
                 s, α = monomial_product(α, layout.before[k][2])
                 coef *= s * layout.before[k][1]
             end
             s, α = monomial_product(α, β)
-            coef *= s
+            push!(next, (coef * s, α))
         end
+        acc = next
+    end
+    for (coef, α) in acc
         d[α] = get(d, α, 0) + coef
     end
     d

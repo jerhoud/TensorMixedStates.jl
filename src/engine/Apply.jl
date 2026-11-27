@@ -859,8 +859,13 @@ function strong_fluxes(system::System, a::IndexedOp{IsChannel}, names)
     elseif a isa SumOp
         return unique(reduce(vcat, [ strong_fluxes(system, x, names) for x in a.subs ]))
     elseif a isa ProdOp
-        parts = [ strong_fluxes(system, x, names) for x in a.subs ]
-        return unique([ added_fluxes(fs) for fs in Iterators.product(parts...) ])
+        # summed factor by factor: a product of iterators splatted from a tuple would be compiled anew for
+        # each number of factors
+        totals = [Pair{String, Int}[]]
+        for x in a.subs
+            totals = unique([ added_fluxes((t, f)) for t in totals for f in strong_fluxes(system, x, names) ])
+        end
+        return totals
     elseif a isa AtIndex && a.op isa Union{ProdOp, SumOp, IntPowOp, TensorOp}
         return strong_fluxes(system, placed_structure(a), names)
     elseif !(a isa AtIndex)

@@ -79,13 +79,16 @@ function pauli_groups(qubits, terms::Vector{Term})
         others = [b for b in t.blocks if !(b.site in qubits)]
         options = [[(P, tr(σ * b.m) / 2) for (P, σ) in ((:I, I), pauli_matrices...) if tr(σ * b.m) != 0]
                    for b in qblocks]
-        for choice in Iterators.product(options...)
-            key = [b.site => P for (b, (P, _)) in zip(qblocks, choice) if P != :I]
-            blocks = vcat(others, [Block(b.site, pauli(axis_vector(P)), 0)
-                                   for (b, (P, _)) in zip(qblocks, choice) if P != :I])
-            sort!(blocks; by = b -> b.site)
-            coef = t.coef * prod(c for (_, c) in choice; init = one(ComplexF64))
-            push!(get!(groups, key, Term[]), Term(coef, blocks, t.kets, t.bras))
+        # the choices of one Pauli per qubit, built qubit by qubit as in `add_term!`: a product of iterators
+        # splatted from a tuple would be compiled anew for each number of qubits
+        partial = [(Pair{Int, Symbol}[], Block[], one(ComplexF64))]
+        for (b, opts) in zip(qblocks, options)
+            partial = [P == :I ? (key, bs, c * x) : ([key; b.site => P], [bs; Block(b.site, pauli(axis_vector(P)), 0)], c * x)
+                       for (key, bs, c) in partial for (P, x) in opts]
+        end
+        for (key, bs, c) in partial
+            blocks = sort!(vcat(others, bs); by = b -> b.site)
+            push!(get!(groups, key, Term[]), Term(t.coef * c, blocks, t.kets, t.bras))
         end
     end
     groups
