@@ -424,7 +424,8 @@ function decay_rate(d::Decay, state::AbstractState{Trajectory}, time::Number,
         error("the function of a term holding dissipators is $c at time $t, which gives " *
               "their jumps a negative rate, which no trajectory draws: use State{Mixed}")
     end
-    return c * real(expect(state, d.rate))
+    # complex = true: L†L is Hermitian by construction, and checking it again would lower it at each call
+    return c * real(expect(state, d.rate; complex = true))
 end
 
 # the rate of all the jumps of `e` on `state` at `time`, rounding below zero taken as zero
@@ -488,7 +489,7 @@ function jump_step(algo::Union{Tdvp, ApproxW}, e::JumpEvolver, state::AbstractSt
         brought ? followed(before, state, 1) : 0 * before
     else
         d = e.decays[draw_index(rates, rng)]
-        i = draw_index([ real(expect(before, p)) for p in d.products ], rng)
+        i = draw_index([ real(expect(before, p; complex = true)) for p in d.products ], rng)
         x = ket_applied(d.jumps[i], before; limits)
         if !isnothing(e.jumps)
             dissipator, kraus = d.labels[i]
