@@ -81,7 +81,7 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
 - S. Blanes and P. C. Moan, *Fourth- and sixth-order commutator-free Magnus integrators for
   linear and non-linear dynamical systems*, Appl. Numer. Math. 56, 1519 (2006),
   [doi:10.1016/j.apnum.2005.11.004](https://doi.org/10.1016/j.apnum.2005.11.004): the
-  commutator-free Magnus integrator of order 4 of the evolvers depending on time.
+  commutator-free Magnus integrator of order 4 of the evolvers depending on time (eq. (43)).
 - E. M. Stoudenmire and S. R. White, *Minimally entangled typical thermal state algorithms*,
   New J. Phys. 12, 055026 (2010),
   [doi:10.1088/1367-2630/12/5/055026](https://doi.org/10.1088/1367-2630/12/5/055026),

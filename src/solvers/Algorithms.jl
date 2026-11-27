@@ -267,8 +267,8 @@ later_steps(l::Limits, done::Int) =
 
 the values of the time functions `coefs` for each exponential of a step of `dt` from `t`, in
 the order they are applied: at the middle of the step up to order 2, and from order 3 the
-commutator-free Magnus integrator of order 4 of Blanes and Moan (2006), two exponentials combining
-the values at the two Gauss points of the step
+commutator-free Magnus integrator of order 4 of Blanes and Moan (2006, eq. (43)), two exponentials
+combining the values at the two Gauss points of the step
 """
 function step_coefs(coefs, t::Number, dt::Number, order::Int)
     if order ≤ 2
