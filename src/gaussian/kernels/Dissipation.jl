@@ -110,3 +110,18 @@ end
 the number of pieces of a step of `lyapunov_propagator` over `t`, so that each grows its blocks by at most e.
 """
 lyapunov_pieces(X::AbstractMatrix{<:Real}, t::Real) = max(1, ceil(Int, abs(t) * opnorm(X)))
+
+"""
+    purified_covariance(M)
+
+the covariance [M S; -S -M] of a pure Gaussian state on twice the Majoranas whose first half has the
+covariance `M` of a mixed state, S = √(I + M²): symmetric and a function of M², so that it commutes with M
+and the result squares to -I; the eigenvalues of I + M² below zero by rounding are taken as zero. A step
+on the first half, `nonunitary_step` of R ⊕ I, is then one of the mixed state, ρ → e^K ρ e^{K†}, the factor
+on the norm its trace (the trace of the operator on the purifying half being one).
+"""
+function purified_covariance(M::AbstractMatrix{<:Real})
+    E = eigen(Symmetric(I + M * M))
+    S = E.vectors * Diagonal(sqrt.(max.(E.values, 0.0))) * transpose(E.vectors)
+    [M S; -S -M]
+end

@@ -119,6 +119,12 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   measuring it (eq. (22)), its evolution under a Lindbladian of quadratic H and linear jumps,
   an equation of Lyapunov (eq. (32)), and its steady state (eq. (33)), used for the mixed states
   of `GaussianState`.
+- J. Surace and L. Tagliacozzo, *Fermionic Gaussian states: an introduction to numerical
+  approaches*, SciPost Phys. Lect. Notes 54 (2022),
+  [doi:10.21468/SciPostPhysLectNotes.54](https://doi.org/10.21468/SciPostPhysLectNotes.54),
+  [arXiv:2111.08343](https://arxiv.org/abs/2111.08343): the imaginary-time evolution of a mixed
+  Gaussian state by the product rule of covariances (eqs. (86), (153)), which `thermalize` of a mixed
+  `GaussianState` replaces by a purification, the product rule needing `I - M` invertible.
 - B. Dias and R. König, *Classical simulation of non-Gaussian fermionic circuits*, Quantum 8,
   1350 (2024), [doi:10.22331/q-2024-05-21-1350](https://doi.org/10.22331/q-2024-05-21-1350),
   [arXiv:2307.12912](https://arxiv.org/abs/2307.12912): a Gaussian state held with its phase by

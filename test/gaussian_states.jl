@@ -1119,7 +1119,6 @@ end
     @test_throws "operator space" entanglement_entropy(gq, 2)
     @test_throws "does not convert" State(gq)
     @test_throws "real number" 2im * gq
-    @test_throws "does not thermalize" thermalize(Z(1), 1.0, gq; nsteps = 1)
     @test_throws "searches a pure state" ground_state(Z(1), gq)
 end
 
@@ -1179,4 +1178,39 @@ end
     f2 = System(2, Fermion())
     @test_throws "no unique steady state" steady_state(-im * (N(1) + N(2)) + Dissipator(C)(1),
                                                        TS.GaussianState(State{Mixed}(f2, "Occ")))
+end
+
+@testset "thermalize of mixed states" begin
+    # e^{-βH/2} ρ e^{-βH/2} normalised and log tr, by a purification, against ExactState{Mixed}: from FullyMixed (the
+    # thermal state, log Z - Σ log d), from mixtures and from a pure state made mixed, fermions and qubits, a large β,
+    # two calls whose log_trace add up
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    qs = System(4, Qubit())
+    hf = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3) + 0.4 * N(1) - 0.3 * N(4) + 0.7 * Id(1)
+    hq = sum(X(j) * X(j + 1) + 0.6 * Y(j) * Y(j + 1) for j in 1:3) + 0.5 * sum(Z(j) for j in 1:4)
+    fobs = [N(1), N(3), C(1) * dag(C)(2), N(1) * N(4), C(2) * C(3)]
+    qobs = [Z(1), X(1) * X(2), Y(2) * Y(3), Z(1) * Z(4)]
+    near(g, e, obs; atol) = all(abs(TS.expect_value(g, o) - TS.expect_value(e, o)) <= atol for o in obs)
+    for (sys, st, h, obs) in ((fs, "FullyMixed", hf, fobs), (fs, ["Occ", "FullyMixed", "Emp", "FullyMixed"], hf, fobs),
+                              (qs, "FullyMixed", hq, qobs), (qs, ["Up", "FullyMixed", "Dn", "Up"], hq, qobs))
+        for (β, n) in ((1.5, 3), (30.0, 2))
+            g = thermalize(h, β, TS.GaussianState(State{Mixed}(sys, st)); nsteps = n)
+            e = thermalize(h, β, TS.ExactState(State{Mixed}(sys, st)); nsteps = n)
+            @test g.log_trace ≈ e.log_trace atol = 1e-9
+            @test TS.trace(g.state) == 1 && near(g.state, e.state, obs; atol = 1e-9)
+        end
+        g1 = thermalize(h, 0.75, TS.GaussianState(State{Mixed}(sys, st)); nsteps = 1)
+        g2 = thermalize(h, 0.75, g1.state; nsteps = 1, step = 2)
+        g = thermalize(h, 1.5, TS.GaussianState(State{Mixed}(sys, st)); nsteps = 2)
+        @test g1.log_trace + g2.log_trace ≈ g.log_trace atol = 1e-9
+    end
+    # from a pure state made mixed, the trace of the state kept out of the normalisation
+    p = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 3), TS.GaussianState(State{Pure}(fs, ["Occ", "Emp", "Occ", "Emp"])))
+    e = apply(exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 3), TS.ExactState(State{Mixed}(fs, ["Occ", "Emp", "Occ", "Emp"])))
+    g, x = thermalize(hf, 2.0, 3 * mix(p); nsteps = 2), thermalize(hf, 2.0, 3 * e; nsteps = 2)
+    @test g.log_trace ≈ x.log_trace atol = 1e-9
+    @test near(g.state, x.state, fobs; atol = 1e-9)
+    # refused: a term odd in the Majoranas
+    @test_throws "odd in the Majoranas" thermalize(hq + X(1), 1.0, TS.GaussianState(State{Mixed}(qs, "FullyMixed")); nsteps = 1)
 end

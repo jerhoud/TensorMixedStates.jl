@@ -3,7 +3,7 @@
 
 import .GaussianKernels: propagator, quadratic_ground_state, antisymmetric, evolve_branches!, project,
                          project!, occupation_probability, nonunitary_step, nonunitary_pieces, linear_applied,
-                         lyapunov_propagator, lyapunov_pieces
+                         lyapunov_propagator, lyapunov_pieces, purified_covariance
 
 const nonunitary_sum_what = "the Gaussian backend evolves a superposition of Gaussian states under unitary operators " *
                             "only: under the jumps of a trajectory that are not unitary (projectors, linear operators), " *
@@ -559,9 +559,48 @@ thermalize(::Any, ::Real, ::GaussianState{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation or trajectories: draw trajectories from a mixed one, " *
           "as State{Trajectory}(system, \"FullyMixed\")")
 
-thermalize(::Any, ::Real, ::GaussianState{Mixed}; kwargs...) =
-    throw(ArgumentError("the Gaussian backend does not thermalize mixed states yet: draw trajectories, " *
-                        "as State{Trajectory}(system, \"FullyMixed\")"))
+# the mixed state ρ, normalised, taken to e^{-βH/2} ρ e^{-βH/2} normalised in `nsteps` steps of `beta / nsteps`
+# (or of `beta_step`), `log_trace` the logarithm of its trace, as thermalize of a State or an ExactState; from a
+# later `step`, not normalised again. The state is held by its purification (`purified_covariance`), a pure state
+# whose first half follows e^{-dβ H/2} by the non-unitary steps of the pure states, exact: the product rule
+# of the covariances of ρ and e^{-βH} (Surace and Tagliacozzo 2022, eqs. (86), (153)) needs I - M invertible,
+# false for pure modes and near it at large β. `algo`, `limits`, `mpo_limits` and `total_beta` are without use.
+function thermalize(hamiltonian, beta::Real, state::GaussianState{Mixed};
+                    algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
+                    beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
+                    mpo_limits::Limits = Limits(), step::Int = 1, total_beta::Union{Nothing, Real} = nothing)
+    nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
+    if step == 1
+        nonzero_trace(state, "thermalize")
+        state = single(state, state.cov; trace = 1.0)
+    end
+    if nsteps == 0
+        return (log_trace = 0.0, state)
+    end
+    if !(hamiltonian isa IndexedOp{IsOperator})
+        throw(ArgumentError("thermalize of a GaussianState takes the Hamiltonian as an operator"))
+    end
+    c0, k0, _ = gaussian_generator(state.system, -0.5 * hamiltonian; axes = state.axes, even = false)
+    c, k = unitary_form(c0, k0, ""; lossy = true)
+    if couples_ancilla(k)
+        throw(ArgumentError(mixed_odd_what))
+    end
+    n = size(state.cov, 1)
+    db = beta / nsteps
+    m = nonunitary_pieces(k, db)
+    R = Matrix{ComplexF64}(I, 2n, 2n)
+    R[1:n, 1:n] = step_operator(k, db / m)
+    Γ = purified_covariance(state.cov)
+    log_trace = 0.0
+    for s in 0:nsteps-1
+        Γ, lognorm = nonunitary_step(Γ, R, m)
+        log_trace += lognorm + 2 * real(c) * db
+        if !isfinite(log_trace)
+            throw(ErrorException("thermalize left a state of trace zero at step $(step + s)"))
+        end
+    end
+    (; log_trace, state = single(state, antisymmetric(Γ[1:n, 1:n]); trace = 1.0))
+end
 
 # the line of log of a ground level degenerate within 1e-10 of the width of the spectrum, the gap taken
 # within the states of the same parity: two modes more, or the lowest occupied one moved up
