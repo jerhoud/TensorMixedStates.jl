@@ -164,13 +164,15 @@ function majorana_poly(system::System, op::IndexedOp{IsOperator}; axes = Dict{In
     polynomial(system, layout, lower(system, op))
 end
 
-# the terms ts as a polynomial on the Majoranas of the backend, on its even states
-function polynomial(system::System, layout::MajoranaLayout, ts::Vector{Term})
+# the terms ts as a polynomial on the Majoranas of the backend, on its even states; with `even = false`, on
+# states of both parities, where the total parity is not 1 (the mixed states, their ancilla empty)
+function polynomial(system::System, layout::MajoranaLayout, ts::Vector{Term}; even::Bool = true)
     d = Dict{Vector{Int}, ComplexF64}()
     for t in ts
         add_term!(d, system, layout, t)
     end
-    on_even(with_ancilla(MajoranaPoly(d)), layout.count + 2)
+    p = with_ancilla(MajoranaPoly(d))
+    even ? on_even(p, layout.count + 2) : p
 end
 
 # the term t added to d: the factor of site k is its block followed by its strings there, b.m F_k

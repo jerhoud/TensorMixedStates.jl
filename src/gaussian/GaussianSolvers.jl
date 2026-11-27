@@ -49,6 +49,18 @@ function turned(state::GaussianState{<:Ket}, R::AbstractMatrix{<:Real}, keeps::B
     superposed(state, s; trace = state.trace, parities)
 end
 
+# a gate turning a mixed state: refused when it couples the ancilla, a term odd in the Majoranas that the
+# parity-commuting states of the backend cannot follow
+function turned(state::GaussianState{Mixed}, R::AbstractMatrix{<:Real}, keeps::Bool)
+    if !keeps
+        throw(ArgumentError(mixed_odd_what))
+    end
+    single(state, antisymmetric(R * state.cov * transpose(R)))
+end
+
+const mixed_odd_what = "the Gaussian backend holds mixed states that commute with the parity, and this " *
+                       "operator has a term odd in the Majoranas (a field X or Y on the first qubit)"
+
 # the state of one component under E^m, E = exp(k) complex orthogonal growing vectors by a bounded factor
 # (`nonunitary_pieces`), a QR after each (`nonunitary_step`): its trace multiplied by the factor on the
 # norm and by e^{2 loss}, its parities kept when `keeps`
@@ -117,6 +129,10 @@ prepared_evolver(state::GaussianState{Pure}, terms::AbstractVector, ::Limits = L
 prepared_evolver(state::GaussianState{Trajectory}, terms::AbstractVector, mpo_limits::Limits = Limits();
                  duration::Union{Nothing, Number} = nothing) =
     checked_jumps(state, trajectory_evolver(state, terms, mpo_limits; duration))
+
+prepared_evolver(::GaussianState{Mixed}, terms::AbstractVector, ::Limits = Limits();
+                 duration::Union{Nothing, Number} = nothing) =
+    throw(ArgumentError("the Gaussian backend does not evolve mixed states for now"))
 
 # the evolver `e` of the trajectory `state`; when its evolution without jumps is not unitary, refused if one of
 # its jumps does not keep the state Gaussian (the superposition it would make could not be evolved)
@@ -387,6 +403,8 @@ function ground_state(hamiltonian, state::GaussianState{Pure};
 end
 
 ground_state(::Any, ::GaussianState{Trajectory}; kwargs...) = not_searched()
+ground_state(::Any, ::GaussianState{Mixed}; kwargs...) =
+    error("ground_state searches a pure state: search it pure and mix it")
 
 # the trajectory ψ, normalised, taken to e^{-βH/2}ψ normalised in `nsteps` steps of `beta / nsteps` (or of
 # `beta_step`) by the non-unitary steps of the ket of a trajectory, `log_trace` the logarithm of its squared
@@ -422,7 +440,11 @@ end
 
 thermalize(::Any, ::Real, ::GaussianState{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation or trajectories: draw trajectories from a mixed one, " *
-          "as State{Trajectory}(system, \"FullyMixed\"), a GaussianState holding no mixed state")
+          "as State{Trajectory}(system, \"FullyMixed\")")
+
+thermalize(::Any, ::Real, ::GaussianState{Mixed}; kwargs...) =
+    throw(ArgumentError("the Gaussian backend does not thermalize mixed states for now: draw trajectories, " *
+                        "as State{Trajectory}(system, \"FullyMixed\")"))
 
 # the line of log of a ground level degenerate within 1e-10 of the width of the spectrum, the gap taken
 # within the states of the same parity: two modes more, or the lowest occupied one moved up
@@ -498,6 +520,16 @@ apply(a::IndexedOp{IsChannel}, state::GaussianState{Trajectory}; limits::Limits 
 ket_applied(a::IndexedOp{IsOperator}, state::GaussianState{Trajectory}; limits::Limits = Limits()) =
     gaussian_applied(a, state)
 
+apply(op::IndexedOp{IsOperator}, state::GaussianState{Mixed}; limits::Limits = Limits()) = gaussian_applied(op, state)
+
+function apply(a::IndexedOp{IsChannel}, state::GaussianState{Mixed}; limits::Limits = Limits())
+    if !is_pure(a)
+        throw(ArgumentError("the Gaussian backend does not apply to a mixed state a channel of several Kraus " *
+                            "operators for now"))
+    end
+    gaussian_applied(kraus(a), state)
+end
+
 function apply(a::IndexedOp{IsChannel}, state::GaussianState{Pure}; limits::Limits = Limits())
     if !is_pure(a)
         throw(ArgumentError("$(obs_name(a)) has more than one Kraus operator, which a pure state cannot take: " *
@@ -520,6 +552,9 @@ function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)
         return foldr((g, st) -> gaussian_applied(g, st), s.subs; init = state)
     end
     kind, data = operator_kind(state, s)
+    if state isa GaussianState{Mixed}
+        return mixed_applied(state, kind, data)
+    end
     if kind == :gate
         c0, k, _ = data
         c, h = unitary_form(c0, k, ""; lossy = true)
@@ -554,7 +589,38 @@ function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)
         return single(state, flipped_covariance(M, β); parities = flipped_parities(state.parities, αs),
                       trace = w * state.trace)
     end
-    applied_poly(state, polynomial(state.system, state.layout, lower(weaken(state.system, ()), s)))
+    applied_poly(state, state_polynomial(state, lower(weaken(state.system, ()), s)))
+end
+
+# O ρ O† for the operator O of `kind` and `data` (`operator_kind`): Gaussian unitaries, products of Majoranas,
+# projectors on occupations and c(β) c_j, c(β) c_j†, their Majoranas on the ancilla dropped, the ancilla of
+# a mixed state held empty; refused otherwise
+function mixed_applied(state::GaussianState{Mixed}, kind::Symbol, data)
+    physical(α) = filter(>(2), α)
+    if kind == :gate
+        c0, k, _ = data
+        c, h = unitary_form(c0, k, ""; lossy = true)
+        if !(eltype(h) <: Real)
+            throw(ArgumentError("the Gaussian backend does not apply to a mixed state a gate exp(A) whose A is " *
+                                "not anti-Hermitian, for now"))
+        end
+        return lost(turned(state, propagator(h, 1), !couples_ancilla(k)), real(c))
+    elseif kind == :null
+        return scaled(state, 0)
+    elseif kind == :monomial
+        α, c = data
+        return single(state, flipped_covariance(state.cov, physical(α)); trace = abs2(c) * state.trace)
+    elseif kind == :projector
+        occupations, λ = data
+        return scaled(projected(state, occupations; null = true), λ)
+    elseif kind == :mode
+        β, j, occupied, z, _ = data
+        x = projected(state, [j => occupied]; null = true)
+        return single(x, flipped_covariance(flipped_covariance(x.cov, [2j - 1]), physical(β));
+                      trace = abs2(z) * x.trace)
+    end
+    throw(ArgumentError("the Gaussian backend applies to a mixed state Gaussian unitaries, products of " *
+                        "Majoranas, projectors on occupations and c, c† of a mode, not this operator"))
 end
 
 # how the Gaussian backend applies the operator s exactly to a state of one component: (:gate, generator) for
@@ -566,7 +632,7 @@ function operator_kind(state::GaussianState, s)
     if !isnothing(generator)
         return :gate, generator
     end
-    p = polynomial(state.system, state.layout, lower(weaken(state.system, ()), s))
+    p = state_polynomial(state, lower(weaken(state.system, ()), s))
     if length(p) == 0
         return :null, nothing
     elseif length(p) == 1
@@ -600,7 +666,7 @@ function quadratic_gate(state::GaussianState, s)
         return nothing
     end
     try
-        gaussian_generator(state.system, A; axes = state.axes)
+        gaussian_generator(state.system, A; axes = state.axes, even = even_states(state))
     catch e
         if !(e isa ArgumentError)
             rethrow()
@@ -646,7 +712,7 @@ function monomial_linear(p::MajoranaPoly, m::Int)
 end
 
 # the state times `c`
-function scaled(state::GaussianState{<:Ket}, c::Number)
+function scaled(state::GaussianState, c::Number)
     if isnothing(state.sum)
         return single(state, state.cov; trace = abs2(c) * state.trace)
     end
@@ -658,6 +724,18 @@ end
 (c::Number * state::GaussianState) = scaled(state, c)
 (state::GaussianState * c::Number) = scaled(state, c)
 (state::GaussianState / c::Number) = scaled(state, inv(c))
+
+# a density matrix times c, as for a State: its trace times c, real
+function density_scaled(state::GaussianState{Mixed}, c::Number)
+    if !isreal(c)
+        throw(ArgumentError("a mixed Gaussian state is multiplied by a real number, not $c"))
+    end
+    single(state, state.cov; trace = real(c) * state.trace)
+end
+
+(c::Number * state::GaussianState{Mixed}) = density_scaled(state, c)
+(state::GaussianState{Mixed} * c::Number) = density_scaled(state, c)
+(state::GaussianState{Mixed} / c::Number) = density_scaled(state, inv(c))
 
 # the pure state the trajectory holds, normalised
 as_pure(state::GaussianState{Trajectory}) = with_representation(Pure, scaled(state, 1 / sqrt(nonzero_trace(state, "as_pure"))))
@@ -688,6 +766,9 @@ function applied_poly(state::GaussianState{<:Ket}, p::MajoranaPoly; cause::Strin
 end
 
 import .GaussianKernels: occupation_probability, project_covariance!, MajoranaPoly
+
+applied_poly(::GaussianState{Mixed}, ::MajoranaPoly; cause::String = "the operator") =
+    throw(ArgumentError("$cause is not Gaussian on a mixed state of the Gaussian backend"))
 
 # the modes and occupations of an operator that is λ times a product of projectors on the occupations of
 # modes, Π_m (1/2 + σ_m (i/2) γ_{2m-1}γ_{2m}), σ_m = 1 for occupied (-iγγ = 1 - 2n), as (m => occupied, λ);
@@ -736,6 +817,26 @@ function projected(state::GaussianState{<:Ket}, occupations; null::Bool = false)
     superposed(state, s; parities = projected_parities(parities, occupations, length(s.comps)))
 end
 
+# Π ρ Π for the projector Π on these occupations, the probability of each (1 ± M_{2m-1,2m})/2 for a mixed
+# state (the identity of `occupation_probability` holds for a pure one only), its update by Wick's theorem
+# for a mixed state too (Bravyi and König 2012, eqs. (20) and (22))
+function projected(state::GaussianState{Mixed}, occupations; null::Bool = false)
+    M = copy(state.cov)
+    t = state.trace
+    for (m, o) in occupations
+        s = o ? -1.0 : 1.0
+        q = (1 + s * M[2m - 1, 2m]) / 2
+        if q <= 0 && null
+            return scaled(state, 0)
+        elseif q <= 0
+            throw(ArgumentError("the state cannot be projected on a result of probability zero"))
+        end
+        project_covariance!(M, m, s, q)
+        t *= q
+    end
+    single(state, M; trace = t)
+end
+
 # the parities of the components after a projection on these occupations of modes, which commute with the
 # parity: that of the ancilla (mode 1) when projected, empty or occupied
 function projected_parities(parities, occupations, K::Int = 1)
@@ -747,7 +848,7 @@ function projected_parities(parities, occupations, K::Int = 1)
     parities
 end
 
-function normalized(state::GaussianState{<:Ket})
+function normalized(state::GaussianState)
     nonzero_trace(state, "project_on")
     isnothing(state.sum) ? single(state, state.cov; trace = 1.0) : scaled(state, 1 / sqrt(state.trace))
 end
@@ -759,8 +860,8 @@ the state projected by `p` and normalised: exactly and without new components fo
 projectors on the occupations of modes (N of a fermion, (1 ± σ)/2 along the axis of a qubit), as a
 polynomial otherwise, see `apply`.
 """
-function project_on(state::GaussianState{<:Ket}, p::IndexedOp; limits::Limits = Limits())
-    poly = polynomial(state.system, state.layout, lower(weaken(state.system, ()), p))
+function project_on(state::GaussianState, p::IndexedOp; limits::Limits = Limits())
+    poly = state_polynomial(state, lower(weaken(state.system, ()), p))
     projector = occupation_projector(poly)
     if !isnothing(projector)
         return normalized(projected(state, first(projector)))
@@ -774,11 +875,11 @@ project_count(::GaussianState, sites, locals, T; limits::Limits = Limits()) =
                         "measure the sites one by one"))
 
 # drawn from the probabilities, without projecting the state
-sample(state::GaussianState{<:Ket}, pos::Int; rng = Random.default_rng()) =
+sample(state::GaussianState, pos::Int; rng = Random.default_rng()) =
     round(Int, sample(state, Level(pos); rng))
 
 # the sites drawn one after the other, each collapsing the state
-function sample(state::GaussianState{<:Ket}; rng = Random.default_rng())
+function sample(state::GaussianState; rng = Random.default_rng())
     out = Int[]
     for pos in eachindex(state.system.sites)
         r = collapse(state, pos; rng)

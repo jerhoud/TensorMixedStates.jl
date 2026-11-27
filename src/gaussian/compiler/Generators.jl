@@ -4,24 +4,24 @@
 import .GaussianKernels: quadratic_form, degree, monomial_product
 
 """
-    gaussian_generator(system, op; axes = Dict(), parity = nothing)
+    gaussian_generator(system, op; axes = Dict(), parity = nothing, even = true)
 
 `(c, k, nmajoranas)` with `op = c + (1/4) Σ_ab k_ab γ_a γ_b` on the states of the Gaussian backend,
 see `majorana_poly` and `quadratic_form`; with `parity` ±1, on the states of that physical parity when
 `op` conserves it (see `in_sector`); an error naming the terms of `op` that are not quadratic, and the
-Pauli axes of the qubits that would make them so when it finds some.
+Pauli axes of the qubits that would make them so when it finds some; `even` as for `polynomial`.
 """
 function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Dict{Int, Symbol}(),
-                            parity::Union{Nothing, Int} = nothing)
+                            parity::Union{Nothing, Int} = nothing, even::Bool = true)
     layout = MajoranaLayout(system; axes)
     terms = lower(system, op)
-    p = polynomial(system, layout, terms)
+    p = polynomial(system, layout, terms; even)
     sector = !isnothing(parity) && conserves_parity(p)
     if sector
         p = in_sector(p, layout.count, parity)
     end
     # the polynomial of a term as it enters p
-    term_poly(t) = sector ? in_sector(polynomial(system, layout, [t]), layout.count, parity) : polynomial(system, layout, [t])
+    term_poly(t) = sector ? in_sector(polynomial(system, layout, [t]), layout.count, parity) : polynomial(system, layout, [t]; even)
     if degree(p) <= 2
         c, k = quadratic_form(p, layout.count + 2)
         return c, k, layout.count + 2

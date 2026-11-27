@@ -113,6 +113,10 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   [arXiv:1609.00735](https://arxiv.org/abs/1609.00735): the conventions of the Majoranas of
   `GaussianState`, the overlap of two Gaussian states with its phase (eq. (27)) and their
   transition matrix (eq. (28)).
+- S. Bravyi and R. König, *Classical simulation of dissipative fermionic linear optics*, Quantum
+  Inf. Comput. 12, 925 (2012), [arXiv:1112.2184](https://arxiv.org/abs/1112.2184): the
+  probability of an occupation in a mixed Gaussian state (eq. (20)) and the covariance after
+  measuring it (eq. (22)), used for the mixed states of `GaussianState`.
 - B. Dias and R. König, *Classical simulation of non-Gaussian fermionic circuits*, Quantum 8,
   1350 (2024), [doi:10.22331/q-2024-05-21-1350](https://doi.org/10.22331/q-2024-05-21-1350),
   [arXiv:2307.12912](https://arxiv.org/abs/2307.12912): a Gaussian state held with its phase by

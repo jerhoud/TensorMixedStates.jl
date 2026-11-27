@@ -44,10 +44,10 @@ gs_random_vector(d) = (v = randn(gs_rng, ComplexF64, d); v / LA.norm(v))
     g = TensorMixedStates.GaussianState(State{Pure}(sys, ["Occ", "Up", "Dn"]))
     @test TensorMixedStates.definite(g)
     @test g.cov ≈ dense_covariance(gs_lifted(sys, reduce(kron, [[0, 1.0], [0, 1.0, 0, 0], [0, 1.0]]))) atol = 1e-12
-    # refused: a state that is not a product, a mixed state
+    # refused: a state that is not a product, a mixed state with coherences between occupations
     sys = System([Qubit() for _ in 1:4])
     @test_throws ArgumentError TensorMixedStates.GaussianState(random_state(Pure, sys, 2))
-    @test_throws ArgumentError TensorMixedStates.GaussianState(State{Mixed}(sys, "Up"))
+    @test_throws "coherences" TensorMixedStates.GaussianState(State{Mixed}(sys, "X+"))
 end
 
 # a random Gaussian state of sys (axes Z): with a definite parity, an even Gaussian of the modes; else
@@ -783,9 +783,7 @@ end
         v, w = TensorMixedStates.ExactState(State(rg.state)).state, re.state.state
         @test abs(dot(v, w)) ≈ LA.norm(v) * LA.norm(w) atol = 1e-10
     end
-    # mixed states are refused
     gt = TensorMixedStates.GaussianState(State{Trajectory}(sys, "Up"))
-    @test_throws ArgumentError TensorMixedStates.GaussianState(State{Mixed}(sys, "Up"))
     @test_throws ErrorException TensorMixedStates.as_representation(Pure, gt)
     # files keep the representation
     mktempdir() do dir
@@ -992,4 +990,106 @@ end
     for o in (Z(1), Z(1) * Z(3), X(2), Y(1) * Z(2))
         @test TensorMixedStates.expect_value(x, o) ≈ TensorMixedStates.expect_value(e, o) atol = 1e-9
     end
+end
+
+@testset "mixed states" begin
+    # GaussianState{Mixed} against ExactState{Mixed}: products commuting with the parity and pure states of a
+    # definite parity made mixed, then gates, products of Majoranas, projections; values, entropies,
+    # measurements, files; the refusals
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    qs = System(4, Qubit())
+    hop(a, b) = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(a, b)
+    xy(a, b) = exp(-0.3im * (X ⊗ X + 0.6 * Y ⊗ Y))(a, b)
+    fgates = [hop(1, 2), hop(2, 3), (C + dag(C))(3), hop(3, 4), exp(-0.7im * N)(2), hop(1, 3)]
+    qgates = [xy(1, 2), xy(2, 3), X(1), xy(3, 4), exp(-0.5im * Z)(2), X(2) * Y(3)]
+    # with the total parity, which a mixed state need not have
+    fobs = [N(1), N(2), N(4), C(1) * dag(C)(2), dag(C)(1) * C(3), C(2) * C(3), N(1) * N(3), C(1) + dag(C)(1),
+            prod(F(j) for j in 1:4)]
+    qobs = [Z(1), Z(3), X(1) * X(2), Y(2) * X(3), Z(1) * Z(4), X(1), Y(3), prod(Z(j) for j in 1:4), prod(X(j) for j in 1:4)]
+    # occupied along X: Y and Z are the Majoranas, X the parity
+    yz(a, b) = exp(-0.3im * (Z ⊗ Z + 0.6 * Y ⊗ Y))(a, b)
+    xgates = [yz(1, 2), yz(2, 3), X(1), yz(3, 4), exp(-0.5im * X)(2), X(2) * Y(3)]
+    applied(gates, st) = foldl((x, a) -> apply(a, x), gates; init = st)
+    near(g, e, obs; atol = 1e-12) = TS.trace(g) ≈ real(TS.trace(e)) && all(abs(TS.expect_value(g, o) - TS.expect_value(e, o)) <= atol for o in obs)
+    # the occupation of site 2 as a projector and as a measured operator
+    cases = [(fs, ["FullyMixed", "Occ", "FullyMixed", "Emp"], fgates, fobs, Dict{Int, Symbol}(), N(2), N(2) => 1),
+             (qs, ["FullyMixed", "Up", "Dn", "FullyMixed"], qgates, qobs, Dict{Int, Symbol}(), (Id(2) - Z(2)) / 2, Z(2) => -1),
+             (qs, ["X+", "FullyMixed", "X-", "X+"], xgates, qobs, Dict(k => :X for k in 1:4), (Id(2) - X(2)) / 2, X(2) => -1)]
+    for (sys, st, gates, obs, axes, proj, meas) in cases
+        g = TS.GaussianState(State{Mixed}(sys, st); axes)
+        e = TS.ExactState(State{Mixed}(sys, st))
+        @test g isa TS.GaussianState{Mixed} && near(g, e, obs)
+        g, e = applied(gates, g), applied(gates, e)
+        @test near(g, e, obs; atol = 1e-10)
+        for kept in ([1, 2], [2, 3], [1, 2, 3, 4])
+            @test TS.reduced_density_matrix(g, kept) ≈ TS.reduced_density_matrix(e, kept) atol = 1e-10
+            @test von_neumann_entropy(g, kept) ≈ von_neumann_entropy(e, kept) atol = 1e-10
+        end
+        # projections, measurements given and drawn
+        @test near(apply(2 * proj, g), apply(2 * proj, e), obs; atol = 1e-10)
+        r = collapse(g, meas)
+        x = collapse(e, meas)
+        @test r.probability ≈ x.probability atol = 1e-10
+        @test near(r.state, x.state, obs; atol = 1e-10)
+        d = collapse(g, first(meas); rng = Random.Xoshiro(3))
+        @test d.probability ≈ collapse(e, first(meas) => d.result).probability atol = 1e-10
+        if isempty(axes)
+            @test length(sample(g; rng = Random.Xoshiro(4))) == 4
+        else
+            # the levels along Z are not occupations along X: projected, the mixed state would not commute with the parity
+            @test_throws "not Gaussian on a mixed state" sample(g; rng = Random.Xoshiro(4))
+        end
+        # files
+        mktempdir() do dir
+            file = joinpath(dir, "m.h5")
+            save_state(file, "m", g)
+            h = load_state(file, "m")
+            @test h isa TS.GaussianState{Mixed} && h.cov == g.cov && TS.trace(h) == TS.trace(g)
+        end
+    end
+    # the modes of a fermion taken out and put back, C ρ C† and C† ρ C
+    g = TS.GaussianState(State{Mixed}(fs, ["FullyMixed", "Occ", "FullyMixed", "Emp"]))
+    e = TS.ExactState(State{Mixed}(fs, ["FullyMixed", "Occ", "FullyMixed", "Emp"]))
+    g, e = applied(fgates[1:2], g), applied(fgates[1:2], e)
+    for op in (C(2), dag(C)(3), 0.5 * dag(C)(1))
+        @test near(apply(op, g), apply(op, e), fobs; atol = 1e-10)
+    end
+    @test near(TS.project_on(g, N(3)), TS.project_on(e, N(3); limits = Limits()), fobs; atol = 1e-10)
+    @test TS.trace(2 * g) ≈ 2 * TS.trace(g) && TS.trace(g / 4) ≈ TS.trace(g) / 4
+    # sites of several modes, and a fermionic gate between a fermion and a qubit
+    sys = System([Fermion(), Electron(), Qubit(), Fermion()])
+    st = ["FullyMixed", "FullyMixed", "Dn", "Occ"]
+    g = TS.GaussianState(State{Mixed}(sys, st))
+    e = TS.ExactState(State{Mixed}(sys, st))
+    A = -0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C))
+    gates = [exp(A)(1, 4), exp(-0.2im * (dag(Cup) ⊗ C + dag(dag(Cup) ⊗ C)))(2, 4)]
+    obs = [N(1), Nup(2), Ndn(2), Z(3), N(4), C(1) * dag(C)(4), Cup(2) * dag(C)(4)]
+    @test near(applied(gates, g), applied(gates, e), obs; atol = 1e-10)
+    # pure states of a definite parity, even and odd, made mixed
+    for (sys, st, gates, obs) in ((fs, ["Occ", "Emp", "Occ", "Emp"], fgates, fobs), (qs, ["Up", "Dn", "Dn", "Dn"], qgates, qobs))
+        p = applied(gates, TS.GaussianState(State{Pure}(sys, st)))
+        g = TS.as_representation(Mixed, p)
+        e = applied(gates, TS.ExactState(State{Mixed}(sys, st)))
+        @test g isa TS.GaussianState{Mixed} && near(g, e, obs; atol = 1e-10)
+        @test von_neumann_entropy(g, 1:4) ≈ 0 atol = 1e-10
+        @test near(apply(gates[1], g), apply(gates[1], e), obs; atol = 1e-10)
+    end
+    # refused
+    gq = TS.GaussianState(State{Mixed}(qs, "FullyMixed"))
+    gf = TS.GaussianState(State{Mixed}(fs, "FullyMixed"))
+    @test_throws "coherences" TS.GaussianState(State{Mixed}(qs, ["Up", "X+", "Up", "Up"]))
+    @test_throws "odd in the Majoranas" apply(Ry(0.3)(1), gq)
+    @test_throws "not this operator" apply(T(2), gq)
+    @test_throws "not anti-Hermitian" apply(exp(0.5 * N)(2), gf)
+    @test_throws "not Gaussian on a mixed state" TS.project_on(gq, (Id(1) + X(1)) / 2)
+    @test_throws "several Kraus" apply(depolarizing_channel(0.2)(1), gq)
+    @test_throws "one Gaussian component" TS.as_representation(Mixed, apply(T(2), TS.GaussianState(State{Pure}(qs, "X+"))))
+    @test_throws "no definite parity" TS.as_representation(Mixed, TS.GaussianState(State{Pure}(qs, "X+")))
+    @test_throws "does not evolve" evolve(-im * (X(1) * X(2)), 0.1, gq; nsteps = 1)
+    @test_throws "operator space" entanglement_entropy(gq, 2)
+    @test_throws "does not convert" State(gq)
+    @test_throws "real number" 2im * gq
+    @test_throws "does not thermalize" thermalize(Z(1), 1.0, gq; nsteps = 1)
+    @test_throws "searches a pure state" ground_state(Z(1), gq)
 end
