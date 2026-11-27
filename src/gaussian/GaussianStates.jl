@@ -228,7 +228,7 @@ as_representation(::Type{Mixed}, ::GaussianState{Pure}; limits::Limits = Limits(
 as_representation(::Type{Mixed}, ::GaussianState{Trajectory}; limits::Limits = Limits()) =
     error("a trajectory is not a pure or a mixed state: run the simulation in Pure or Mixed")
 
-import .GaussianKernels: expect_monomial, monomial_product
+import .GaussianKernels: expect_monomial
 
 # the value on the state, normalised, of a polynomial in its Majoranas: Σ c_α Pf(iM[α, α]) for one
 # component, Σ c_α Σ_kl conj(a_k) a_l ⟨G_k|c(α)|G_l⟩ / ⟨ψ|ψ⟩ for several (see `sum_monomial`); the
@@ -256,33 +256,61 @@ function transition(g1::PureGaussian, g2::PureGaussian)
     o, W
 end
 
-# the Majorana a ≥ 3 (not of the ancilla) of largest weight on the null space of M_1 + M_2, real
-# antisymmetric so of even dimension, spanned here by its last two singular vectors
-function link_majorana(M1::Matrix{Float64}, M2::Matrix{Float64})
-    V = svd(M1 + M2).V
-    2 + argmax(vec(sum(abs2, V[3:end, end-1:end]; dims = 2)))
+# ⟨G_1|c(α)|G_2⟩ = ω Pf([W[α, α] Z[α, :]; -Z[α, :]ᵀ C]), Z and C empty for a transition matrix
+bordered_pfaffian(W, Z, C, α) = logpfaffian([W[α, α] Z[α, :]; -transpose(Z[α, :]) C])
+
+# (ω, W, Z, C) of `bordered_pfaffian` for components orthogonal by structure, as G and c(β)G (gates T, jumps,
+# the branches of a ring): the singular values of Σ = M_1 + M_2 below 1e-13 of the largest, in groups of four
+# (a pair of modes each), apart from the others (above 1e-3 of the largest). With V_S their singular vectors,
+# V_R the others, P₊ = (I + iM_1)/2, Z an orthonormal basis of P₊V_S and G = ZᵀΣZ, the transition matrix is
+# -4i P₊ V_R (V_RᵀΣV_R)⁻¹ V_Rᵀ + Z(-4iG⁻¹)Zᵀ, and C = (i/4)G holds the small singular values without dividing
+# by them, as the robust Wick theorem of Chen and Scuseria (J. Chem. Phys. 158, 231102 (2023), eqs. (28),
+# (32)-(34)); this split is exact at singular values zero only, hence the rounding level. ω is calibrated by
+# the precise way on α₀, the rows of Z of largest volume, where |Pf| ≥ 1e-8 bounds its error; nothing elsewhere
+function singular_transition(g1::PureGaussian, g2::PureGaussian)
+    M1 = g1.cov
+    Σ = M1 + g2.cov
+    m = size(Σ, 1)
+    F = svd(Σ)
+    k = count(<=(1e-13 * F.S[1]), F.S)
+    if k == 0 || k % 4 != 0 || (k < m && F.S[m-k] < 1e-3 * F.S[1])
+        return nothing
+    end
+    VS, VR = F.V[:, m-k+1:m], F.V[:, 1:m-k]
+    W = -2im * (I + im * M1) * (VR * ((VR' * Σ * VR) \ VR'))
+    E = eigen(Hermitian(im * (VS' * M1 * VS)))
+    if count(>(0), E.values) != k ÷ 2
+        return nothing
+    end
+    Z = VS * E.vectors[:, E.values .> 0]
+    G = transpose(Z) * Σ * Z
+    C = (im / 8) * (G - transpose(G))
+    α0 = sort(qr(transpose(Z), ColumnNorm()).p[1:k÷2])
+    b = bordered_pfaffian(W, Z, C, α0)
+    if b.logabs < log(1e-8)
+        return nothing
+    end
+    cross_term(g1, α0, g2) / b, W, Z, C
 end
 
-# (o, W, β) for each pair k < l of a sum, brought up to date first, the `transition` of (G_k, c(β)G_l), so that
-# ⟨G_k|c(α)|G_l⟩ = ⟨G_k|c(α) c(β)⁻¹ c(β)|G_l⟩; nothing where it fails (the precise way). β = (1, a) links two
-# components in the two sectors of the ancilla, orthogonal, empty otherwise; the link sets the precision
-# only. Computed once for a sum, which no operation changes once brought up to date.
+# (ω, W, Z, C) of `bordered_pfaffian` for each pair k < l of a sum, brought up to date first: the transition
+# matrix where it is well conditioned, else `singular_transition`; nothing where both fail (the precise way).
+# Computed once for a sum, which no operation changes once brought up to date.
 const pair_cache = WeakKeyDict{GaussianSum, Matrix{Any}}()
 
-function pair_transitions(s::GaussianSum, parities::Union{Nothing, Vector{Int}})
+function pair_transitions(s::GaussianSum)
     fix!(s)
     get!(pair_cache, s) do
         K = length(s.comps)
         P = Matrix{Any}(nothing, K, K)
         for k in 1:K, l in k+1:K
             gk, gl = s.comps[k], s.comps[l]
-            β = Int[]
-            if !isnothing(parities) && parities[k] != parities[l]
-                β = [1, link_majorana(gk.cov, apply_monomial([1], gl).cov)]
-            end
-            t = transition(gk, apply_monomial(β, gl))
-            if !isnothing(t)
-                P[k, l] = (t..., β)
+            t = transition(gk, gl)
+            if isnothing(t)
+                P[k, l] = singular_transition(gk, gl)
+            else
+                o, W = t
+                P[k, l] = (o, W, zeros(ComplexF64, size(W, 1), 0), zeros(ComplexF64, 0, 0))
             end
         end
         P
@@ -297,7 +325,7 @@ function sum_monomial(state::GaussianState{<:Ket}, α::Vector{Int})
     s = state.sum
     fix!(s)
     p = state.parities
-    P = pair_transitions(s, p)
+    P = pair_transitions(s)
     w = length(α)
     adjoint_sign = iseven(w * (w - 1) ÷ 2) ? 1 : -1
     total = zero(LogComplex)
@@ -313,10 +341,8 @@ function sum_monomial(state::GaussianState{<:Ket}, α::Vector{Int})
             if isnothing(P[k, l])
                 v = cross_term(gk, α, gl)
             else
-                # c(β)⁻¹ = -c(β) for β = (1, a), then c(α) c(β) = ε c(α′)
-                o, W, β = P[k, l]
-                ε, α′ = monomial_product(α, β)
-                v = (isempty(β) ? 1 : -ε) * o * (isempty(α′) ? one(LogComplex) : logpfaffian(W[α′, α′]))
+                ω, W, Z, C = P[k, l]
+                v = ω * bordered_pfaffian(W, Z, C, α)
             end
             total += conj(ak) * al * v + conj(al) * ak * conj(v) * adjoint_sign
         end

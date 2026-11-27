@@ -534,8 +534,9 @@ end
 end
 
 @testset "cross terms of nearly orthogonal components" begin
-    # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal, which take the precise way; Ry(θ) on
-    # qubit 1 first makes them nearly orthogonal (θ = 1e-7) or not (θ = 0.3)
+    # X+ along Z has ⟨Z₁⟩ = 0: T(1) makes G and Z₁G, orthogonal by structure (`singular_transition`); Ry(θ)
+    # on qubit 1 first makes them nearly orthogonal (θ = 1e-7, the precise way) or not (θ = 0.3, the
+    # transition matrix)
     sys = System([Qubit() for _ in 1:4])
     m(O, k) = gc_embed(sys, k, TensorMixedStates.matrix(O, sys.sites[k]))
     for θ in (0.0, 1e-7, 0.3)
@@ -544,12 +545,13 @@ end
         g = apply(T(1) * H(2) * Ry(θ)(1), g)
         ψ = m(T, 1) * m(H, 2) * m(Ry(θ), 1) * ψ
         @test gs_same(g, ψ, sys)
-        # the pairs k < l: through the transition matrix for θ = 0.3, the precise way for orthogonal ones
-        P = TensorMixedStates.pair_transitions(g.sum, g.parities)
+        P = TensorMixedStates.pair_transitions(g.sum)
         pairs = [P[k, l] for k in axes(P, 1), l in axes(P, 2) if k < l]
         if θ == 0.3
-            @test any(!isnothing, pairs)
+            @test any(p -> !isnothing(p) && isempty(p[3]), pairs)
         elseif θ == 0
+            @test all(!isnothing, pairs) && any(p -> !isempty(p[3]), pairs)
+        else
             @test any(isnothing, pairs)
         end
     end
@@ -810,8 +812,9 @@ end
 end
 
 @testset "cross terms of the branches" begin
-    # the two branches of a ring, in the two sectors of the ancilla: their pair linked by γ₁γ_a, the terms
-    # leaving c(α)G_l in the other sector zero, every value as the double sum of the cross terms by overlaps
+    # the two branches of a ring, in the two sectors of the ancilla: their pair orthogonal by structure
+    # (`singular_transition`, one pair of modes), the terms leaving c(α)G_l in the other sector zero, every
+    # value as the double sum of the cross terms by overlaps
     GK = TensorMixedStates.GaussianKernels
     n = 6
     sys = System(n, Qubit())
@@ -819,13 +822,41 @@ end
     x = evolve(-im * H, 0.7, TensorMixedStates.GaussianState(State{Pure}(sys, "Dn"); axes = :X); nsteps = 2)
     s = x.sum
     @test x.parities == [1, -1]
-    @test TensorMixedStates.pair_transitions(s, x.parities)[1, 2][3][1] == 1
+    @test size(TensorMixedStates.pair_transitions(s)[1, 2][3], 2) == 2
     function by_overlaps(α)
         v = sum(conj(ak) * al * (k == l ? GK.expect_monomial(gk.cov, α) : GK.cross_term(gk, α, gl))
                 for (k, (gk, ak)) in enumerate(zip(s.comps, s.coefs)), (l, (gl, al)) in enumerate(zip(s.comps, s.coefs)))
         ComplexF64(v) / x.trace
     end
     for o in (Z(1), Z(3), X(2), Z(1) * Z(4), X(1) * Z(2), Y(2) * Z(5), Id(1))
+        p = TensorMixedStates.polynomial(sys, x.layout, TensorMixedStates.lower(TensorMixedStates.weaken(sys, ()), o))
+        @test TensorMixedStates.poly_value(x, p) ≈ sum((c * by_overlaps(α) for (α, c) in p.terms); init = 0im) atol = 1e-12
+    end
+end
+
+@testset "cross terms of components orthogonal by structure" begin
+    # T gates on three qubits of X+ along Z, then an XY chain: 8 components, pairs orthogonal by one to three
+    # pairs of modes, spread over the chain; every value as the double sum of the cross terms by overlaps
+    GK = TensorMixedStates.GaussianKernels
+    n = 6
+    sys = System(n, Qubit())
+    H = sum(X(j) * X(j + 1) + Y(j) * Y(j + 1) for j in 1:n-1) + 0.3 * sum(Z(j) for j in 1:n)
+    x = TensorMixedStates.GaussianState(State{Pure}(sys, "X+"))
+    for j in (1, 3, 5)
+        x = apply(T(j), x)
+    end
+    x = evolve(-im * H, 2.0, x; nsteps = 1)
+    s = x.sum
+    GK.fix!(s)
+    P = TensorMixedStates.pair_transitions(s)
+    widths = [size(P[k, l][3], 2) for k in axes(P, 1), l in axes(P, 2) if k < l && !isnothing(P[k, l])]
+    @test length(widths) == 28 && Set(widths) == Set([2, 4, 6])
+    function by_overlaps(α)
+        v = sum(conj(ak) * al * (k == l ? GK.expect_monomial(gk.cov, α) : GK.cross_term(gk, α, gl))
+                for (k, (gk, ak)) in enumerate(zip(s.comps, s.coefs)), (l, (gl, al)) in enumerate(zip(s.comps, s.coefs)))
+        ComplexF64(v) / x.trace
+    end
+    for o in (Z(1), Z(4), X(1) * X(2), X(1) * X(6), Y(2) * Y(5), Z(1) * Z(3) * Z(5), Id(1))
         p = TensorMixedStates.polynomial(sys, x.layout, TensorMixedStates.lower(TensorMixedStates.weaken(sys, ()), o))
         @test TensorMixedStates.poly_value(x, p) ≈ sum((c * by_overlaps(α) for (α, c) in p.terms); init = 0im) atol = 1e-12
     end
