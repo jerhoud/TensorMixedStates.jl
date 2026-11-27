@@ -204,8 +204,8 @@ function add_term!(d, system::System, layout::MajoranaLayout, t::Term)
     acc = [(ComplexF64(t.coef), Int[])]
     for (k, factor) in zip(sites, factors)
         next = Tuple{ComplexF64, Vector{Int}}[]
-        for (coef, α) in acc, (β, c) in factor
-            coef *= c
+        for (c0, α0) in acc, (β, c) in factor
+            coef, α = c0 * c, α0
             if isodd(length(β))
                 s, α = monomial_product(α, layout.before[k][2])
                 coef *= s * layout.before[k][1]

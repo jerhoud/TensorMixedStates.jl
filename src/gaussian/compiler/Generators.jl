@@ -34,7 +34,7 @@ function gaussian_generator(system::System, op::IndexedOp{IsOperator}; axes = Di
     more = length(culprits) > 3 ? " and $(length(culprits) - 3) others" : ""
     message = "the Gaussian backend needs an operator quadratic in Majoranas, its terms on $shown$more " *
               "are of degree $(maximum(length, bad)) (coefficients up to $(Printf.@sprintf("%.2g", largest)))."
-    throw(ArgumentError(message * qubit_advice(system, layout, terms, axes)))
+    throw(ArgumentError(message * qubit_advice(system, layout, terms, axes; even)))
 end
 
 # whether the polynomial conserves the physical parity: no monomial has one Majorana of the ancilla
@@ -99,7 +99,7 @@ other_pauli(P::Symbol) = P == :X ? :Y : :X
 
 # the patterns of the group, as sites => whether the axis is off its Pauli, that make it quadratic, by
 # compiling it alone; nothing when its support is too large to try them all
-function quadratic_patterns(system::System, key, ts::Vector{Term}; largest = 12)
+function quadratic_patterns(system::System, key, ts::Vector{Term}; largest = 12, even::Bool = true)
     if length(key) > largest
         return nothing
     end
@@ -107,7 +107,7 @@ function quadratic_patterns(system::System, key, ts::Vector{Term}; largest = 12)
     for mask in 0:(2^length(key) - 1)
         odd = BitVector([(mask >> (i - 1)) & 1 == 1 for i in eachindex(key)])
         axes = Dict(k => (o ? other_pauli(P) : P) for ((k, P), o) in zip(key, odd))
-        if degree(polynomial(system, MajoranaLayout(system; axes), ts)) <= 2
+        if degree(polynomial(system, MajoranaLayout(system; axes), ts; even)) <= 2
             push!(patterns, odd)
         end
     end
@@ -148,7 +148,7 @@ end
 # Paulis on the qubits must be quadratic, which depends only on whether the axis of each of its qubits
 # is its Pauli or not; the patterns that are are found by compiling, then one per group chosen by
 # backtracking; the axes found are checked by compiling again
-function qubit_advice(system::System, layout::MajoranaLayout, terms::Vector{Term}, axes)
+function qubit_advice(system::System, layout::MajoranaLayout, terms::Vector{Term}, axes; even::Bool = true)
     qubits = qubit_sites(system, layout)
     if isempty(qubits)
         return ""
@@ -157,7 +157,7 @@ function qubit_advice(system::System, layout::MajoranaLayout, terms::Vector{Term
     complete = true
     gaps = Tuple{Int, Int}[]
     for (key, ts) in pauli_groups(qubits, terms)
-        patterns = quadratic_patterns(system, key, ts)
+        patterns = quadratic_patterns(system, key, ts; even)
         if isnothing(patterns)
             complete = false
         elseif !isempty(key) || isempty(patterns)
@@ -178,7 +178,7 @@ function qubit_advice(system::System, layout::MajoranaLayout, terms::Vector{Term
     if found isa Dict
         proposed = Dict(q => (get(axes, q, :Z) in found[q] ? get(axes, q, :Z) : first(sort(collect(found[q]))))
                         for q in qubits)
-        if degree(polynomial(system, MajoranaLayout(system; axes = proposed), terms)) <= 2
+        if degree(polynomial(system, MajoranaLayout(system; axes = proposed), terms; even)) <= 2
             return " The axes " * join(("$q => :$(proposed[q])" for q in qubits), ", ") * " make it quadratic."
         end
     end

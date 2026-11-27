@@ -188,15 +188,16 @@ function lindblad_form(state::GaussianState{Mixed}, ops)
 end
 
 # the coefficients u of the operator j = Σ_a u_a γ_a of a dissipator on a mixed state, read on its polynomial
-# Σ_a i u_a γ₁γ_a; refused when j is not linear in the Majoranas or lies behind a string (σ⁻ past the first
-# qubit), its dissipator not Gaussian on a mixed state
+# Σ_a i u_a γ₁γ_a; refused when j is not linear in the Majoranas of the backend, as σ⁻ behind the parity of the
+# modes before it in the layout, its dissipator not Gaussian on a mixed state
 function mixed_jump(state::GaussianState{Mixed}, j, x)
     u = zeros(ComplexF64, 2 + state.layout.count)
     for (α, c) in state_polynomial(state, lower(weaken(state.system, ()), j)).terms
         if length(α) != 2 || α[1] != 1 || α[2] < 3
             throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators of operators linear " *
-                                "in the Majoranas (C, dag(C), Sm and Sp of the first qubit), and $(obs_name(x)) is " *
-                                "not one: draw trajectories, as State{Trajectory}(system, \"FullyMixed\")"))
+                                "in its Majoranas (C and dag(C) of fermions placed before any qubit, Sm and Sp of " *
+                                "the first qubit of a system of qubits along :Z), and $(obs_name(x)) is not one: " *
+                                "draw trajectories, as State{Trajectory}(system, \"FullyMixed\")"))
         end
         u[α[2]] = -im * c
     end
@@ -223,12 +224,18 @@ function evolve_step(::Union{Tdvp, ApproxW}, pre::LyapunovEvolver, state::Gaussi
 end
 
 """
-    steady_state(lindbladian, state::GaussianState{Mixed})
+    steady_state(lindbladian, state::GaussianState{Mixed}; algo, limits, mpo_limits)
 
-`(residual, state)`: the steady state of the Lindbladian, X M + M Xᵀ + Y = 0 for the covariance M of the
-modes (Bravyi and König 2012, eq. (33)), solved by `lyap`, of trace one, and the relative residual
-‖X M + M Xᵀ + Y‖² / ‖M‖²; refused when it is not unique, an eigenvalue of X of real part above
--1e-10 ‖X‖ (a mode the dissipators do not damp). `algo`, `limits` and `mpo_limits` are without use.
+`(residual, state)`: the steady state of a constant Lindbladian of quadratic H and linear jumps, of trace
+one, its covariance M solving X M + M Xᵀ + Y = 0 (Bravyi and König 2012, eq. (33)), exactly, and the residual
+‖X M + M Xᵀ + Y‖² / ‖X‖², the entries of M being at most 1; refused when it is not unique or too weakly
+damped to be found, an eigenvalue of X of real part above -1e-10 ‖X‖ (a mode the dissipators do not reach).
+
+- `algo`, `limits`, `mpo_limits`: without use
+
+# Examples
+
+    r = steady_state(-im * H + sum(0.3 * Dissipator(C)(j) for j in 1:L), GaussianState(State{Mixed}(sys, "FullyMixed")))
 """
 function steady_state(lindbladian, state::GaussianState{Mixed}; algo::Union{Nothing, SearchAlgorithm} = nothing,
                       limits::Limits = Limits(), mpo_limits::Limits = Limits())
@@ -240,14 +247,16 @@ function steady_state(lindbladian, state::GaussianState{Mixed}; algo::Union{Noth
     # the modes of the system, the ancilla held empty
     s = 3:size(X, 1)
     Xs, Ys = X[s, s], Y[s, s]
+    # >= so that a Lindbladian of zero (X = 0) is refused too
     top = maximum(real, eigvals(Xs); init = -Inf)
-    if top > -1e-10 * opnorm(Xs)
-        throw(ArgumentError("the Lindbladian has no unique steady state: a mode is not damped by its dissipators " *
-                            "(an eigenvalue of real part $(round(top; sigdigits = 2)) of the Lyapunov equation)"))
+    if top >= -1e-10 * opnorm(Xs)
+        throw(ArgumentError("the Lindbladian has no unique steady state, or one too weakly damped to be found here " *
+                            "(an eigenvalue of real part $(round(top; sigdigits = 2)) of the Lyapunov equation): " *
+                            "evolve the state towards it instead"))
     end
     M = copy(state.cov)
     M[s, s] = antisymmetric(lyap(Xs, Ys))
-    residual = (norm(Xs * M[s, s] + M[s, s] * transpose(Xs) + Ys) / norm(M[s, s]))^2
+    residual = (norm(Xs * M[s, s] + M[s, s] * transpose(Xs) + Ys) / norm(Xs))^2
     (residual = residual, state = single(state, M; trace = 1.0))
 end
 
@@ -559,19 +568,36 @@ thermalize(::Any, ::Real, ::GaussianState{Pure}; kwargs...) =
     error("a thermal state needs a mixed representation or trajectories: draw trajectories from a mixed one, " *
           "as State{Trajectory}(system, \"FullyMixed\")")
 
-# the mixed state ρ, normalised, taken to e^{-βH/2} ρ e^{-βH/2} normalised in `nsteps` steps of `beta / nsteps`
-# (or of `beta_step`), `log_trace` the logarithm of its trace, as thermalize of a State or an ExactState; from a
-# later `step`, not normalised again. The state is held by its purification (`purified_covariance`), a pure state
-# whose first half follows e^{-dβ H/2} by the non-unitary steps of the pure states, exact: the product rule
-# of the covariances of ρ and e^{-βH} (Surace and Tagliacozzo 2022, eqs. (86), (153)) needs I - M invertible,
-# false for pure modes and near it at large β. `algo`, `limits`, `mpo_limits` and `total_beta` are without use.
+"""
+    thermalize(hamiltonian, beta, state::GaussianState{Mixed}; nsteps | beta_step, step = 1, …)
+
+`(log_trace, state)`: the mixed state ρ, normalised, taken to e^{-βH/2} ρ e^{-βH/2} normalised, exactly, and the
+logarithm of its trace, as for a State; from a later `step`, its trace is not divided out but enters
+`log_trace`, as for a State. ρ is held by a pure Gaussian purification whose first half follows e^{-βH/2} (the
+product rule of the covariances of ρ and e^{-βH}, Surace and Tagliacozzo 2022, eqs. (86), (153), needs I - M
+invertible, false for pure modes and near it at large β).
+
+- `nsteps`, `beta_step`: the steps, of no effect on the result but by rounding
+- `step`: the number of the first step
+- `algo`, `limits`, `mpo_limits`, `total_beta`: without use
+
+# Examples
+
+    r = thermalize(H, 2.0, GaussianState(State{Mixed}(sys, "FullyMixed")); nsteps = 1)
+"""
 function thermalize(hamiltonian, beta::Real, state::GaussianState{Mixed};
                     algo::EvolutionAlgorithm = Tdvp(), nsteps::Union{Nothing, Int} = nothing,
                     beta_step::Union{Nothing, Real} = nothing, limits::Limits = Limits(),
                     mpo_limits::Limits = Limits(), step::Int = 1, total_beta::Union{Nothing, Real} = nothing)
     nsteps = evolution_steps("thermalize", beta, nsteps, beta_step, "beta_step")
+    if !isfinite(beta)
+        throw(ArgumentError("thermalize takes a finite beta, not $beta"))
+    end
+    t = nonzero_trace(state, "thermalize")
+    if !(t > 0)
+        throw(ArgumentError("thermalize takes a state of positive trace, not $t"))
+    end
     if step == 1
-        nonzero_trace(state, "thermalize")
         state = single(state, state.cov; trace = 1.0)
     end
     if nsteps == 0
@@ -591,12 +617,13 @@ function thermalize(hamiltonian, beta::Real, state::GaussianState{Mixed};
     R = Matrix{ComplexF64}(I, 2n, 2n)
     R[1:n, 1:n] = step_operator(k, db / m)
     Γ = purified_covariance(state.cov)
-    log_trace = 0.0
+    log_trace = log(state.trace)
     for s in 0:nsteps-1
         Γ, lognorm = nonunitary_step(Γ, R, m)
         log_trace += lognorm + 2 * real(c) * db
         if !isfinite(log_trace)
-            throw(ErrorException("thermalize left a state of trace zero at step $(step + s)"))
+            throw(ErrorException("the trace of thermalize left the range of the floating-point numbers at step " *
+                                 "$(step + s): take a smaller beta, or a Hamiltonian without its large constant"))
         end
     end
     (; log_trace, state = single(state, antisymmetric(Γ[1:n, 1:n]); trace = 1.0))

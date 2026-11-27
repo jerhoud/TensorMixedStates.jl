@@ -19,8 +19,7 @@ function kraus_operators(system::System, a::IndexedOp{IsChannel})
             return site_kraus(system, g)
         end
         parts = [ kraus_operators(system, x) for x in a.subs ]
-        return a isa SumOp ? reduce(vcat, parts) :
-               vec([ prod(ks) for ks in Iterators.product(parts...) ])
+        return a isa SumOp ? reduce(vcat, parts) : factor_products(parts, *)
     elseif is_pure(a)
         return [kraus(a)]
     end
@@ -90,6 +89,19 @@ function site_kraus(system::System, a::AtIndex{IsChannel})
 end
 
 """
+the products, by `combine` from the left, of one element of each of the `parts`, the first varying the
+fastest, as `Iterators.product` orders them; built part by part, a product of iterators splatted from a
+tuple being compiled anew for each number of parts
+"""
+function factor_products(parts::Vector, combine)
+    acc = collect(parts[1])
+    for p in parts[2:end]
+        acc = [ combine(x, k) for k in p for x in acc ]
+    end
+    return acc
+end
+
+"""
     generic_kraus(a, sites)
 
 the Kraus operators of the channel `a` of `sites` from its structure, as written, from the Choi
@@ -119,8 +131,7 @@ function generic_kraus(a::GenericOp{IsChannel}, sites)
         parts = a isa ProdOp ? [ generic_kraus(x, sites) for x in a.subs ] :
                 a isa IntPowOp ? fill(generic_kraus(a.arg, sites), a.expo) :
                 [ generic_kraus(x, sites[r]) for (x, r) in zip(a.subs, factor_sites(a)) ]
-        combine = a isa TensorOp ? (ks -> reduce(⊗, ks)) : prod
-        return vec([ combine(ks) for ks in Iterators.product(parts...) ])
+        return factor_products(parts, a isa TensorOp ? (⊗) : (*))
     end
     return choi_kraus(a, sites)
 end

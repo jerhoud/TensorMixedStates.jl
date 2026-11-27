@@ -116,12 +116,18 @@ lyapunov_pieces(X::AbstractMatrix{<:Real}, t::Real) = max(1, ceil(Int, abs(t) * 
 
 the covariance [M S; -S -M] of a pure Gaussian state on twice the Majoranas whose first half has the
 covariance `M` of a mixed state, S = √(I + M²): symmetric and a function of M², so that it commutes with M
-and the result squares to -I; the eigenvalues of I + M² below zero by rounding are taken as zero. A step
+and the result squares to -I; the eigenvalues of I + M² below zero by rounding are taken as zero, beyond 1e-10 an
+error (M is then not the covariance of a state, as dissipators of negative rates can leave it). A step
 on the first half, `nonunitary_step` of R ⊕ I, is then one of the mixed state, ρ → e^K ρ e^{K†}, the factor
 on the norm its trace (the trace of the operator on the purifying half being one).
 """
 function purified_covariance(M::AbstractMatrix{<:Real})
     E = eigen(Symmetric(I + M * M))
+    low = minimum(E.values; init = 0.0)
+    if low < -1e-10
+        throw(ArgumentError("the covariance is not that of a state, I + M² having the eigenvalue " *
+                            "$(round(low; sigdigits = 2)), as dissipators of negative rates can leave it"))
+    end
     S = E.vectors * Diagonal(sqrt.(max.(E.values, 0.0))) * transpose(E.vectors)
     [M S; -S -M]
 end

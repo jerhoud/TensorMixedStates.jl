@@ -17,8 +17,9 @@ occupations, linear operators (`C`, `dag(C)`, `Sp`, `Sm`). A mixed state is on e
 of its modes, which commutes with their parity (`"FullyMixed"`, mixtures of occupations; on a site of
 one mode any state that commutes with its parity), of one component; it takes Gaussian unitaries, products
 of Majoranas, projectors on occupations and `C`, `dag(C)` of a mode, see `apply`, and evolves under a constant
-Lindbladian, -iH with H quadratic and dissipators of linear operators (`C`, `dag(C)`, `Sm` and `Sp` of the
-first qubit), exactly, with its `steady_state`; `thermalize` takes it to e^{-βH/2} ρ e^{-βH/2}, exactly.
+Lindbladian, -iH with H quadratic and dissipators of operators linear in its Majoranas (`C`, `dag(C)` of fermions
+placed before any qubit, `Sm` and `Sp` of the first qubit of a system of qubits along `:Z`), exactly, with its
+`steady_state`; `thermalize` takes it to e^{-βH/2} ρ e^{-βH/2}, exactly.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis

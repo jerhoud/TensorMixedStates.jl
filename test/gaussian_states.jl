@@ -1214,3 +1214,68 @@ end
     # refused: a term odd in the Majoranas
     @test_throws "odd in the Majoranas" thermalize(hq + X(1), 1.0, TS.GaussianState(State{Mixed}(qs, "FullyMixed")); nsteps = 1)
 end
+
+@testset "fixes from the review of lots 6c-6e" begin
+    # against ExactState{Mixed}: steady states fully mixed and refused, qubits along X, fermions and qubits mixed,
+    # dissipators of channels, negative rates and steps, the parity; thermalize from a later step and at negative β;
+    # the refusals with their messages
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    hop = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:3) + 0.3 * N(2)
+    fobs = [N(1), N(3), C(1) * dag(C)(2), prod(F(j) for j in 1:4)]
+    near(g, e, obs; atol) = all(abs(TS.expect_value(g, o) - TS.expect_value(e, o)) <= atol for o in obs)
+    gf = TS.GaussianState(State{Mixed}(fs, "Occ"))
+    # a steady state fully mixed, M = 0: a finite residual
+    r = steady_state(-im * hop + sum(0.5 * Dissipator(C)(j) + 0.5 * Dissipator(dag(C))(j) for j in 1:4), gf)
+    @test r.residual < 1e-28 && all(abs(TS.expect_value(r.state, N(j)) - 0.5) < 1e-14 for j in 1:4)
+    @test_throws "no unique steady state" steady_state(0.0 * Dissipator(C)(1), gf)
+    # qubits along X, the jump (Y + iZ)/2 of the first; a fermion, a qubit, a fermion
+    qs = System(3, Qubit())
+    hq = Z(1) * Z(2) + 0.6 * Y(1) * Y(2) + Z(2) * Z(3) + 0.4 * sum(X(j) for j in 1:3)
+    mixedsys = System([Fermion(), Qubit(), Fermion()])
+    hm = dag(C)(1) * C(3) + dag(C)(3) * C(1) + 0.5 * Z(2) + 0.2 * N(1)
+    channel = Dissipator(0.3 * Gate(C) + 0.7 * Gate(dag(C)))(3)
+    for (sys, st, axes, L, obs) in ((qs, ["X+", "FullyMixed", "X-"], Dict(k => :X for k in 1:3),
+                                     -im * hq + 0.5 * Dissipator(0.5 * (Y + im * Z))(1), [X(1), Z(1) * Z(2), Y(2) * Y(3), prod(X(j) for j in 1:3)]),
+                                    (mixedsys, ["Occ", "FullyMixed", "Emp"], Dict{Int, Symbol}(),
+                                     -im * hm + 0.4 * Dissipator(C)(1) + 0.2 * Dissipator(dag(C))(3) + channel,
+                                     [N(1), N(3), Z(2), C(1) * dag(C)(3), N(1) * N(3)]),
+                                    (fs, ["Occ", "FullyMixed", "Emp", "Occ"], Dict{Int, Symbol}(),
+                                     -im * hop + 0.5 * Dissipator(C)(1) - 0.1 * Dissipator(dag(C))(2), fobs))
+        g = evolve(L, 1.5, TS.GaussianState(State{Mixed}(sys, st); axes); nsteps = 3)
+        e = evolve(L, 1.5, TS.ExactState(State{Mixed}(sys, st)); nsteps = 3)
+        @test near(g, e, obs; atol = 1e-10)
+        g = evolve(L, -0.4, TS.GaussianState(State{Mixed}(sys, st); axes); nsteps = 2)
+        e = evolve(L, -0.4, TS.ExactState(State{Mixed}(sys, st)); nsteps = 2)
+        @test near(g, e, obs; atol = 1e-10)
+    end
+    r = steady_state(-im * hq + 0.5 * Dissipator(0.5 * (Y + im * Z))(1), TS.GaussianState(State{Mixed}(qs, "FullyMixed"); axes = :X))
+    x = steady_state(-im * hq + 0.5 * Dissipator(0.5 * (Y + im * Z))(1), TS.ExactState(State{Mixed}(qs, "FullyMixed")))
+    @test near(r.state, x.state, [X(1), Z(1) * Z(2), X(3)]; atol = 1e-9)
+    # refused as not linear in the Majoranas of the backend, with the message naming what is
+    for (sys, st, L) in ((System([Qubit(), Fermion(), Fermion()]), ["Up", "Occ", "Emp"], Dissipator(C)(2)),
+                         (System([Fermion(), Qubit(), Fermion()]), ["Occ", "Up", "Emp"], Dissipator(Sm)(2)))
+        @test_throws "fermions placed before any qubit" evolve(L, 0.1, TS.GaussianState(State{Mixed}(sys, st)); nsteps = 1)
+    end
+    @test_throws "along :Z" evolve(Dissipator(Sm)(1), 0.1, TS.GaussianState(State{Mixed}(qs, "FullyMixed"); axes = :X); nsteps = 1)
+    # the advice on the axes compiles as the mixed state does: not the axes already in use
+    q2 = TS.GaussianState(State{Mixed}(System(2, Qubit()), "FullyMixed"))
+    err = try
+        evolve(-im * Z(1) * Z(2) + Dissipator(Sm)(1), 0.1, q2; nsteps = 1)
+    catch e
+        e
+    end
+    @test err isa ArgumentError && !occursin("1 => :Z, 2 => :Z", sprint(showerror, err))
+    # thermalize: from a later step the trace enters log_trace; a negative β; a covariance that is not a state
+    hf = hop - 0.2 * N(4)
+    g = TS.GaussianState(State{Mixed}(fs, ["Occ", "FullyMixed", "Emp", "FullyMixed"]))
+    e = TS.ExactState(State{Mixed}(fs, ["Occ", "FullyMixed", "Emp", "FullyMixed"]))
+    a, b = thermalize(hf, 1.0, 3 * g; nsteps = 1, step = 2), thermalize(hf, 1.0, 3 * e; nsteps = 1, step = 2)
+    @test a.log_trace ≈ b.log_trace atol = 1e-9
+    a, b = thermalize(hf, -1.2, g; nsteps = 2), thermalize(hf, -1.2, e; nsteps = 2)
+    @test a.log_trace ≈ b.log_trace atol = 1e-9
+    @test near(a.state, b.state, fobs; atol = 1e-9)
+    bad = evolve(-im * hop - 0.6 * Dissipator(C)(2), 2.0, TS.GaussianState(State{Mixed}(fs, "FullyMixed")); nsteps = 2)
+    @test_throws "not that of a state" thermalize(hf, 1.0, bad; nsteps = 1)
+    @test_throws "finite beta" thermalize(hf, Inf, g; nsteps = 1)
+end
