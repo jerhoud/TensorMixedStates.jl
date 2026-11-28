@@ -297,7 +297,10 @@ The phases and the measurements reach the state through the methods you give:
   both: a method naming one of them only would be ambiguous with that of another package. A
   state already of the type asked is truncated by `truncate(state::MyState; limits)` when
   `ConvertState` or `LoadState` are given limits, which a backend that approximates nothing
-  defines as leaving the state as it is, and without which such limits are refused;
+  defines as leaving the state as it is, and without which such limits are refused.
+  `backend = Backend(MyState; options...)` gives the keywords `options` to
+  `MyState(state::State; limits, options...)`, a keyword it does not take being refused when the
+  phase is made;
 - `TensorMixedStates.as_representation(R, state::MyState; limits)` takes the state to the
   representation `R` for `CreateState` and `ConvertState`, a pure state mixed, a mixed one
   refused for `Pure`;
@@ -329,6 +332,10 @@ The phases and the measurements reach the state through the methods you give:
   the first step only as a mixed state is, to ``e^{-\beta H/2}\psi`` normalized, `log_trace`
   being the logarithm of the squared norm of ``e^{-\beta H/2}\psi``, and the phase adds to the
   weight the trace before the first step and `log_trace`;
+- `entanglement_spectrum(state::MyState, cut)` gives the spectrum across a cut, and
+  `TensorMixedStates.spectrum_head(state::MyState, cut, n)` its `n` largest values for
+  `EntanglementSpectrum(cut, n)`, the first `n` of the whole spectrum unless the backend finds
+  them without the others, as `GaussianState` does;
 - `TensorMixedStates.write_state(group, state)` and
   `TensorMixedStates.read_state(::Type{MyState}, group, sites)` save the state and read it back,
   for `save_state`, `load_state`, `SaveState`, `LoadState` and the checkpoints: the first writes
