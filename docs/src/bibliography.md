@@ -125,6 +125,12 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   [arXiv:0801.1257](https://arxiv.org/abs/0801.1257): the jumps of the last site of a spin chain,
   a linear operator behind the parity of all modes, which has the dissipator of the linear
   operator (below eq. (55)), accepted on the mixed states of `GaussianState`.
+- D. Karevski and T. Platini, *Quantum Nonequilibrium Steady States Induced by Repeated
+  Interactions*, Phys. Rev. Lett. 102, 207207 (2009),
+  [doi:10.1103/PhysRevLett.102.207207](https://doi.org/10.1103/PhysRevLett.102.207207),
+  [arXiv:0904.3527](https://arxiv.org/abs/0904.3527): the exact steady state of the XX chain driven
+  at its ends, a flat profile inside, which the example of `GaussianState` in the manual shows and
+  its tests check.
 - J. Surace and L. Tagliacozzo, *Fermionic Gaussian states: an introduction to numerical
   approaches*, SciPost Phys. Lect. Notes 54 (2022),
   [doi:10.21468/SciPostPhysLectNotes.54](https://doi.org/10.21468/SciPostPhysLectNotes.54),

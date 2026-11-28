@@ -630,7 +630,7 @@ A whole program runs on it with `SimData(backend = ExactState)`: each `CreateSta
 state an `ExactState`, which the phases and the measurements then act on as on a `State`, and
 the log notes the options of a phase that only an MPS uses. One phase does it with
 `backend = ExactState` in `CreateState`, `ConvertState` or `LoadState`, and
-`ConvertState{R}(backend = State)` comes back to an MPS. Outside a simulation,
+`ConvertState{R}(backend = State)` comes back to an MPS. `Backend(ExactState; max_dense = …)` gives the backend its options. Outside a simulation,
 `ExactState{R}(system, states)` takes the descriptions of `State{R}`, and `ExactState(ψ)` and
 `State(e)` convert a state either way:
 
@@ -672,6 +672,67 @@ and a computation holds several copies: a search by Lanczos or Arnoldi keeps up 
 hundred vectors of the size of the state, an evolution or a thermalization about thirty, so that
 the steady state of 12 qubits may take some 27 GB. Nothing bounds it by default; the keyword
 `max_dense` of `ExactState(ψ)`, `mix` and the like protects a call.
+
+## [Gaussian states](@id manual-gaussian-states)
+
+`GaussianState{R}` holds a state of free fermions exactly, by the covariance of its Majorana
+operators, ``M_{ab} = -\frac{i}{2}\langle[\gamma_a, \gamma_b]\rangle``, whose size grows as the
+square of the number of modes. It reaches hundreds of sites without truncation, where it checks the
+MPS algorithms or studies free models as they are: quenches, transport between baths, monitored
+chains. Qubits are free fermions through the Jordan-Wigner transformation, and a system may mix
+fermions, electrons and qubits.
+
+!!! warning "Experimental"
+    `GaussianState` and `Backend` are experimental: they may change in a version 2.x.
+
+It starts from a product state: `GaussianState{R}(system, states)` takes the descriptions of
+`State{R}`, `GaussianState(ψ)` converts a product `State`, and `SimData(backend = GaussianState)`
+runs a whole program on it, as for an `ExactState`. It does exactly:
+
+- for a pure state or a trajectory, the evolution under ``-iH`` or ``-iH(t)`` with ``H`` quadratic,
+  the gates ``e^A`` with ``A`` quadratic, `ground_state` and `thermalize` of a quadratic ``H``;
+- any operator, which makes the state a superposition of Gaussian states, up to `max_terms`
+  components (64 by default), as a ``Z`` of a qubit in the middle of a chain;
+- the measurements of any operator, the entropies, `sample` and the projections;
+- for a trajectory, the dissipators whose effective operator ``-iH - \frac{1}{2}\sum L^\dagger L``
+  is quadratic, with jumps that keep it Gaussian: gates, projectors on occupations and linear
+  operators;
+- for a mixed state, of one component, the evolution under a Lindbladian of quadratic ``H`` and
+  linear jumps, its `steady_state`, `thermalize`, the channels ``e^L`` such as
+  `amplitude_damping_channel`, and the linear operators.
+
+The steady state of a chain of 100 free fermions between two baths:
+
+```@example manual
+mychain = System(100, Fermion())
+myhop = sum(dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j) for j in 1:99)
+mybaths = 0.3 * Dissipator(C)(1) + 0.7 * Dissipator(dag(C))(1) +
+          0.9 * Dissipator(C)(100) + 0.1 * Dissipator(dag(C))(100)
+mysteady = steady_state(-im * myhop + mybaths, GaussianState{Mixed}(mychain, "FullyMixed")).state
+[expect(mysteady, N(j)) for j in (1, 2, 50, 99, 100)]
+```
+
+Inside the chain the density is flat, at the average 0.4 of the fillings the two baths impose, as
+in the exact solution of this chain (Karevski and Platini, see the [Bibliography](bibliography.md)).
+
+The qubits are numbered for Jordan-Wigner in the order of the sites, the fermions of a system first:
+a term of qubits is accepted when it is quadratic in their Majoranas, along the axis `:Z` by default
+``Z_j`` and ``X_jX_{j+1} + Y_jY_{j+1}``. `axes = :X`, or a vector of one Pauli per site, chooses the
+axis along which a qubit is occupied, which makes ``X_j`` and ``Z_jZ_{j+1}`` quadratic. What is not
+Gaussian is refused with a message saying what to write instead, and the axes to give when other ones
+would make it quadratic; in a simulation, at the start of the phase, before its first step. The
+options go to the backend with `Backend(GaussianState; axes = :X, max_terms = 128)`.
+
+The functions of a `State` take it, with these differences:
+
+- `limits`, `mpo_limits` and `algo` are accepted and have no use;
+- `maxlinkdim` is that of an MPS holding the whole space, a `Float64` beyond `typemax(Int)`;
+- `entanglement_entropy` and `entanglement_spectrum` of a pure state come from the covariance, and
+  `EntanglementSpectrum(cut, n)` takes the `n` largest values at any size; those of the operator
+  space of a mixed state are refused, `von_neumann_entropy` of a part is not;
+- `⊗`, `inner`, `fidelity`, `partial_trace` and `permute_sites` are refused with a message;
+- `State(g)` converts it through its vector, up to 16 modes, or its density matrix, up to
+  `TensorMixedStates.dense_elements[]` elements.
 
 ## Accuracy
 
