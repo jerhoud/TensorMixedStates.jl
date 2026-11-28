@@ -295,7 +295,9 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
             return nothing
         end
     end
-    if f isa Type && f <: AbstractState && isempty(argtypes) && !isempty(kwargs)
+    # a State takes no options of a backend, and the call of an ExactState or a GaussianState with a
+    # representation reaches State{R}(; rng)
+    if f isa Type && f <: AbstractState && !(f <: State) && isempty(argtypes) && !isempty(kwargs)
         print(io, "\nthe options of a backend are written Backend($(nameof(f)); …), as backend = " *
                   "Backend($(nameof(f)); $(join(("$k = …" for k in keyword_names(kwargs)), ", ")))")
         return nothing

@@ -57,6 +57,9 @@ ExactState{R}(args...; max_dense::Union{Nothing, Int} = nothing,
               rng::AbstractRNG = Random.default_rng()) where {R <: PM} =
     ExactState(State{R}(args...; rng); max_dense)
 
+ExactState{R}(state::State{R}; max_dense::Union{Nothing, Int} = nothing,
+              limits::Limits = Limits()) where {R <: PM} = ExactState(state; max_dense, limits)
+
 # the limits, of the conversion between types of states, without use; a trajectory keeps its
 # trace, its weight
 ExactState(state::State{R}; max_dense::Union{Nothing, Int} = nothing,

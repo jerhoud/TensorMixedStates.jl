@@ -171,11 +171,14 @@ GaussianState{R}(args...; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
                  rng::AbstractRNG = Random.default_rng()) where {R <: PM} =
     GaussianState(State{R}(args...; rng); axes, max_terms)
 
-GaussianState(::System, ::AbstractVecOrMat{<:Number}) =
-    error("GaussianState starts from a product State, as GaussianState{Pure}(system, states): deciding whether " *
-          "an array is Gaussian would need a tolerance, hold it as ExactState(system, x)")
+GaussianState{R}(state::State{R}; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
+                 limits::Limits = Limits()) where {R <: PM} = GaussianState(state; axes, max_terms, limits)
 
-purity(::GaussianState{Pure}) = 1.
+GaussianState(::System, ::AbstractVecOrMat{<:Number}) =
+    error("GaussianState starts from a product State, as GaussianState{Pure}(system, states): hold an array " *
+          "as ExactState(system, x)")
+
+purity(::GaussianState{<:Ket}) = 1.
 
 # Tr ρ² = Π_k (1 + μ_k²)/2 for the eigenvalues ±iμ_k of the covariance M of the modes
 function purity(state::GaussianState{Mixed})
@@ -606,8 +609,8 @@ end
 # the positions of the side of the cut with fewer modes, whose spectrum has fewer values and the same nonzero ones
 function smaller_side(state::GaussianState, cut::Int)
     n = length(state.system.sites)
-    count(ks) = sum((length(state.layout.majoranas[k]) for k in ks); init = 0)
-    return count(1:cut) <= count(cut+1:n) ? collect(1:cut) : collect(cut+1:n)
+    modes(ks) = sum((length(state.layout.majoranas[k]) for k in ks); init = 0)
+    return modes(1:cut) <= modes(cut+1:n) ? collect(1:cut) : collect(cut+1:n)
 end
 
 cut_mode_spectrum(state::GaussianState, cut::Int) = mode_spectrum(state, smaller_side(state, cut))
@@ -624,7 +627,11 @@ function entanglement_spectrum(state::GaussianState{<:Ket}, cut::Int)
     check_cut(length(state.system.sites), cut)
     ν = cut_mode_spectrum(state, cut)
     if isnothing(ν)
-        λ = eigvals(Hermitian(reduced_density_matrix(state, smaller_side(state, cut))))
+        side = smaller_side(state, cut)
+        d = prod(float(dim(state.system[k])) for k in side)
+        check_elements(d^2, "the reduced density matrix of a state whose reduced state is not Gaussian",
+                       dense_bound(state); settable = false)
+        λ = eigvals(Hermitian(reduced_density_matrix(state, side; max_dense = nothing)))
         return sort(λ; rev = true) / sum(λ)
     end
     check_elements(2.0^length(ν), "the entanglement spectrum", dense_bound(state); settable = false,

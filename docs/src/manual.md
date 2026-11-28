@@ -727,9 +727,11 @@ The functions of a `State` take it, with these differences:
 
 - `limits`, `mpo_limits` and `algo` are accepted and have no use;
 - `maxlinkdim` is that of an MPS holding the whole space, a `Float64` beyond `typemax(Int)`;
-- `entanglement_entropy` and `entanglement_spectrum` of a pure state come from the covariance, and
-  `EntanglementSpectrum(cut, n)` takes the `n` largest values at any size; those of the operator
-  space of a mixed state are refused, `von_neumann_entropy` of a part is not;
+- `entanglement_entropy` and `entanglement_spectrum` of a pure state come from the covariance when
+  the reduced state is Gaussian, a definite parity, and fermions or qubits only at an end of the
+  chain, `EntanglementSpectrum(cut, n)` taking then the `n` largest values at any size; otherwise
+  from the dense reduced density matrix; those of the operator space of a mixed state are refused,
+  `von_neumann_entropy` of a part is not;
 - `⊗`, `inner`, `fidelity`, `partial_trace` and `permute_sites` are refused with a message;
 - `State(g)` converts it through its vector, up to 16 modes, or its density matrix, up to
   `TensorMixedStates.dense_elements[]` elements.

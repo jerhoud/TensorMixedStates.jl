@@ -1476,6 +1476,9 @@ end
     L = -im * (dag(C)(2) * C(3) + dag(C)(3) * C(2)) + 0.3 * Dissipator(C)(2)
     @test purity(evolve(L, 0.7, m; nsteps = 2)) ≈ purity(evolve(L, 0.7, e; nsteps = 10)) atol = 1e-10
     @test purity(g) == 1 && hermiticity(m) == 1 && dag(m) === m && hermitianize(m) === m
+    t = GaussianState{Trajectory}(fs, "Occ")
+    @test purity(t) == 1 && only(values(Dict(measure(t, [Purity])))) == 1
+    @test GaussianState{Pure}(State{Pure}(fs, "Occ")) isa GaussianState{Pure}
     @test TS.trace(normalize(apply(N(2), m))) ≈ 1
     @test_throws "meaningless" dag(g)
     @test_throws "product State" GaussianState(fs, [1.0; zeros(15)])
@@ -1520,5 +1523,12 @@ end
     h = TS.spectrum_head(big, 100, 20)
     @test length(h) == 20 && issorted(h; rev = true) && h[1] ≈ maximum(h) && sum(h) <= 1 + 1e-12
     @test_throws "EntanglementSpectrum(cut, n)" entanglement_spectrum(big, 100)
+    # the n largest values at a size whose whole spectrum is built, with pairing
+    pairing = prod(exp(-0.2im * j * (dag(C) ⊗ C + dag(dag(C) ⊗ C) + 0.4 * (C ⊗ C + dag(C ⊗ C))))(j, j + 1) for j in 1:19)
+    g20 = apply(pairing, GaussianState{Pure}(System(20, Fermion()), [isodd(j) ? "Occ" : "Emp" for j in 1:20]))
+    @test TS.spectrum_head(g20, 10, 100) ≈ entanglement_spectrum(g20, 10)[1:100] atol = 1e-15
+    # a reduced state that is not Gaussian, too large for the dense: refused with the bound to raise
+    x60 = apply(exp(-0.3im * (X ⊗ X + Y ⊗ Y))(30, 31), GaussianState{Pure}(System(60, Qubit()), "X+"))
+    @test_throws "dense_elements" TS.spectrum_head(x60, 30, 4)
     @test only(values(Dict(measure(g, [EntanglementSpectrum(1, 4)])))) ≈ [entanglement_spectrum(g, 1); 0; 0]
 end

@@ -166,6 +166,14 @@ function random_of(::Type{T}, ::Type{R}, args...; rng::AbstractRNG) where {T, R}
     return random_state(T{R}, args...; rng)
 end
 
+function random_of(b::Backend{T}, ::Type{R}, args...; rng::AbstractRNG) where {T, R}
+    if !isempty(b.options)
+        error("random_state draws a $(nameof(T)) without the options of $b: draw it with backend = State " *
+              "and convert it with ConvertState(backend = $b)")
+    end
+    return random_of(T, R, args...; rng)
+end
+
 function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     rng = sim.rng
     n = phase.randomize
@@ -181,6 +189,12 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
             error("CreateState cannot randomize a state into a mixed state: give its local " *
                   "states, whose purification it is drawn from")
         end
+        # the backend of the run only a default, a state given of its type is kept without its options
+        if isnothing(phase.backend) && backend isa Backend && phase.state isa backend_type(backend)
+            log_message(sim, "The state given is kept: the options of $backend apply to the states " *
+                             "the run creates")
+            backend = backend_type(backend)
+        end
         # the backend first, then the representation, as ConvertState does
         st = as_representation(R, as_backend(backend, phase.state))
         if n ≠ 0 && !applicable(random_state, st, n)
@@ -191,11 +205,10 @@ function run_phase(phase::CreateState{R}, sim::Simulation, ::Int) where R
     elseif isnothing(phase.system)
         error("CreateState needs a system or a State")
     elseif n == 0
-        State{R}(phase.system, phase.state; rng)
+        as_backend(backend, State{R}(phase.system, phase.state; rng))
     else
         random_of(backend, R, phase.system, phase.state, n; rng)
     end
-    state = as_backend(backend, state)
     log_message(sim, "Created $state")
     log_ignored(sim, state, phase, (:randomize,))
     return with_state(sim, phase.on, state)

@@ -300,7 +300,7 @@ The phases and the measurements reach the state through the methods you give:
   defines as leaving the state as it is, and without which such limits are refused.
   `backend = Backend(MyState; options...)` gives the keywords `options` to
   `MyState(state::State; limits, options...)`, a keyword it does not take being refused when the
-  phase is made;
+  `Backend` is made;
 - `TensorMixedStates.as_representation(R, state::MyState; limits)` takes the state to the
   representation `R` for `CreateState` and `ConvertState`, a pure state mixed, a mixed one
   refused for `Pure`;

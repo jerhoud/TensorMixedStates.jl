@@ -85,6 +85,10 @@ end
 
 check_backend(backend::Backend) = backend
 
+# the type of states of the backend
+backend_type(::Backend{T}) where T = T
+backend_type(T::Type) = T
+
 function show(io::IO, b::Backend{T}) where T
     print(io, "Backend(", nameof(T))
     if !isempty(b.options)

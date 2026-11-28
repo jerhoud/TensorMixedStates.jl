@@ -201,4 +201,7 @@ end
     # written as a call of the type of states, which takes none without a state
     @test occursin("backend = Backend(GaussianState; axes = …)", message(() -> GaussianState(axes = :X)))
     @test occursin("Backend(ExactState; max_dense = …)", message(() -> ExactState(max_dense = 4)))
+    # not for a State, which takes no options of a backend, nor through State{R}(; rng)
+    @test !occursin("Backend(State", message(() -> GaussianState{Pure}(axes = :X)))
+    @test !occursin("Backend(State", message(() -> State(maxdim = 4)))
 end

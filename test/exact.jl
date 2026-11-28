@@ -789,6 +789,24 @@ end
             CreateState{Pure}(sys, "Up"; backend = TMS.GaussianState),
             ConvertState{Pure}(backend = Backend(TMS.GaussianState; axes = :X))]))
         @test repr(Backend(TMS.GaussianState; axes = :X)) == "Backend(GaussianState; axes = :X)"
+        # a State given converted once with the options; a state given of the type of the backend of the run kept,
+        # refused with options asked by the phase; randomize with a backend, refused with options it cannot take
+        sim = runTMS(SimData(name = "bs", phases = [CreateState(ψ; backend = Backend(TMS.ExactState; max_dense = 64))]))
+        @test sim.state isa TMS.ExactState{Pure} && sim.state.state ≈ e.state
+        sim = runTMS(SimData(name = "bx", phases = [
+            CreateState(State{Pure}(sys, "X+"); backend = Backend(TMS.GaussianState; axes = :X))]))
+        @test all(==(:X), values(sim.state.axes))
+        sim = runTMS(SimData(name = "bk", backend = Backend(TMS.ExactState; max_dense = 64), phases = [
+            CreateState(TMS.ExactState{Pure}(sys, "Up"))]))
+        @test sim.state isa TMS.ExactState{Pure} && occursin("The state given is kept", read("bk/log", String))
+        @test_throws "already a ExactState" runTMS(SimData(name = "bp", phases = [
+            CreateState(TMS.ExactState{Pure}(sys, "Up"); backend = Backend(TMS.ExactState; max_dense = 64))]))
+        sim = runTMS(SimData(name = "br", seed = 1, backend = Backend(TMS.ExactState), phases = [
+            CreateState(type = Pure, system = sys, randomize = 2)]))
+        @test sim.state isa TMS.ExactState{Pure} && norm(sim.state) ≈ 1
+        @test_throws "without the options" runTMS(SimData(name = "bq", backend = Backend(TMS.ExactState; max_dense = 64),
+                                                          phases = [CreateState(type = Pure, system = sys, randomize = 2)]))
+        @test TMS.ExactState{Pure}(ψ).state ≈ e.state
         @test_throws "no option maxdense" Backend(TMS.ExactState; maxdense = 64)
         @test_throws "given to the phase" Backend(TMS.ExactState; limits = Limits())
         @test_throws "without its representation" Backend(TMS.ExactState{Pure}; max_dense = 64)
