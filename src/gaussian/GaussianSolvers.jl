@@ -1024,8 +1024,12 @@ function applied_poly(state::GaussianState{<:Ket}, p::MajoranaPoly; cause::Strin
     end
     K = ncomponents(state) * length(p)
     if K > state.max_terms
+        # the projectors of a dephasing are the usual cause in a trajectory
+        jumps = state isa GaussianState{Trajectory} ?
+                "; a dephasing keeps one component with unitary jumps, dephasing_dissipator(γ; jumps = :phases)" : ""
         throw(ArgumentError("$cause would give the state $K Gaussian components, above max_terms = " *
-                            "$(state.max_terms): raise it with GaussianState(…; max_terms)"))
+                            "$(state.max_terms): raise it with Backend(GaussianState; max_terms) or " *
+                            "GaussianState(…; max_terms)" * jumps))
     end
     s = as_sum(state)
     fix!(s)

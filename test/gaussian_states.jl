@@ -1532,3 +1532,13 @@ end
     @test_throws "dense_elements" TS.spectrum_head(x60, 30, 4)
     @test only(values(Dict(measure(g, [EntanglementSpectrum(1, 4)])))) ≈ [entanglement_spectrum(g, 1); 0; 0]
 end
+
+@testset "refusals that say what to do" begin
+    # a mixed state of parity coherences sent to trajectories; components beyond max_terms in a trajectory, the
+    # projectors of a dephasing, sent to its unitary jumps (both reported from the runs of ising_quench, 2026-11-28)
+    qs = System(4, Qubit())
+    @test_throws "draw trajectories" GaussianState{Mixed}(qs, "Dn"; axes = :X)
+    t = apply((Id + Z)(1) / 2, GaussianState{Trajectory}(qs, "X+"; axes = :X, max_terms = 2))
+    @test_throws "jumps = :phases" apply((Id + Z)(2) / 2, t)
+    @test_throws "Backend(GaussianState; max_terms)" apply((Id + Z)(2) / 2, GaussianState{Pure}(qs, "X+"; axes = :X, max_terms = 1))
+end

@@ -120,7 +120,7 @@ function superposed(state::GaussianState{R}, s::GaussianSum; trace::Union{Nothin
     end
     if K > state.max_terms
         throw(ArgumentError("the state would have $K Gaussian components, above max_terms = $(state.max_terms): " *
-                            "raise it with GaussianState(…; max_terms)"))
+                            "raise it with Backend(GaussianState; max_terms) or GaussianState(…; max_terms)"))
     end
     # computed only when not given, K² overlaps; zero when the components cancel to rounding beside the
     # scale of their coefficients, as the null state an operator annihilating the state leaves
@@ -244,7 +244,8 @@ function site_covariance(layout::MajoranaLayout, k::Int, ρ::AbstractMatrix)
     γs, P = layout.majoranas[k], layout.parity[k]
     if norm(ρ * P - P * ρ) > 1e-13 * norm(ρ)
         throw(ArgumentError("the Gaussian backend holds mixed states that commute with the parity: site $k has " *
-                            "coherences between even and odd occupations"))
+                            "coherences between even and odd occupations; draw trajectories, State{Trajectory}, " *
+                            "or give axes along which it has none"))
     end
     q = length(γs)
     m = zeros(q, q)
