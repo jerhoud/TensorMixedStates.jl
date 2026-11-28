@@ -47,6 +47,15 @@ maxlinkdim(::ExactState)
 Vector(::ExactState{Pure})
 ```
 
+## Gaussian states
+
+```@docs
+GaussianState
+State(::GaussianState{<:TensorMixedStates.Ket})
+maxlinkdim(::GaussianState)
+entanglement_spectrum(::GaussianState{<:TensorMixedStates.Ket}, ::Int)
+```
+
 ## Prepared states
 
 Besides the product states the local states give, TMS builds states with an exact MPS of small
