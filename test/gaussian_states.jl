@@ -1442,3 +1442,19 @@ end
     end
     @test err isa ArgumentError && !occursin("size of rounding", sprint(showerror, err))
 end
+
+@testset "refusals before the first step of a phase" begin
+    # an evolver that is not Gaussian is refused when the phase starts, by prepare_phase, before any step is made
+    # or measured
+    in_tmp() do
+        phases = [CreateState{Pure}(System(4, Qubit()), "Up"),
+                  Evolve(evolver = -im * Z(1) * Z(2), duration = 0.4, time_step = 0.2, measurements = ["z.dat" => [Z]])]
+        err = try
+            runTMS(SimData(; name = "p", backend = GaussianState, phases))
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("quadratic", sprint(showerror, err))
+        @test !isfile("p/z.dat") || all(l -> startswith(l, "#"), readlines("p/z.dat"))
+    end
+end
