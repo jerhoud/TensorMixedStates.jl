@@ -58,6 +58,17 @@ if get(ENV, "TMS_SKIP_PRECOMPILE_WORKLOAD", "false") ≠ "true"
                 ρf = evolve(lindblad + Dissipator(C)(1), 0.1, weaken(ρf); nsteps = 1,
                             limits = lim)
                 measure(ρf, Measure(N, Purity, Trace, EntanglementEntropy(1)); time = 0.)
+                # the Gaussian backend: a pure state of fermions, a mixed one of qubits driven at
+                # both ends, and its steady state
+                gp = GaussianState{Pure}(System(4, Fermion()), alternating)
+                gp = apply(exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(2, 3), gp)
+                gp = evolve(-im * hopping, 0.1, gp; nsteps = 1)
+                measure(gp, Measure(N, EntanglementEntropy(2)); time = 0.)
+                xy = sum(X(i) * X(i + 1) + Y(i) * Y(i + 1) for i in 1:3)
+                driven = -im * xy + Dissipator(Sm)(1) + Dissipator(Sp)(4)
+                gm = evolve(driven, 0.1, GaussianState{Mixed}(system, "FullyMixed"); nsteps = 1)
+                steady_state(driven, gm)
+                measure(gm, Measure(Z, Z(1) * Z(2)); time = 0.)
                 # a trajectory drawn from a mixed description, its jumps and a channel drawn
                 t = State{Trajectory}(system, ["Up", "FullyMixed", [0.7 0.2; 0.2 0.3], "Dn"];
                                       rng = Xoshiro(2))
