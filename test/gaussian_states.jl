@@ -1484,10 +1484,41 @@ end
     @test_throws "fidelities" fidelity(m, m)
     @test_throws "reduced_density_matrix" partial_trace(m; keep = [1])
     @test_throws "order wanted" permute_sites(g, [2, 1, 3, 4])
-    @test_throws "entanglement_entropy" entanglement_spectrum(g, 2)
+    @test_throws "operator space entanglement spectrum" entanglement_spectrum(m, 2)
     # the link dimension of the whole space, as ExactState, an Int, then an exact Float64, Inf beyond 2^1023
     @test maxlinkdim(g) === 4 === maxlinkdim(ExactState{Pure}(fs, "Occ")) && maxlinkdim(m) === 16
     @test maxlinkdim(GaussianState{Pure}(System(1, Fermion()), "Occ")) === 1
     @test maxlinkdim(GaussianState{Pure}(System(200, Qubit()), "Up")) === exp2(100)
     @test maxlinkdim(GaussianState{Mixed}(System(1100, Qubit()), "Up")) === Inf
+end
+
+@testset "entanglement spectrum" begin
+    # products of (1 ± ν)/2 on the smaller side, against ExactState: fermions with pairing, qubits, qubits of no
+    # definite parity (through reduced_density_matrix); the n largest values without the others, at L = 200 where
+    # the whole spectrum is refused; the measurement padded with zeros
+    TS = TensorMixedStates
+    fs = System(6, Fermion())
+    qs = System(6, Qubit())
+    fg = prod(exp(-0.3im * j * (dag(C) ⊗ C + dag(dag(C) ⊗ C) + 0.5 * (C ⊗ C + dag(C ⊗ C))))(j, j + 1) for j in 1:5)
+    qg = prod(exp(-0.3im * j * (X ⊗ X + 0.6 * Y ⊗ Y))(j, j + 1) for j in 1:5)
+    fst = ["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"]
+    for (g, e) in ((apply(fg, GaussianState{Pure}(fs, fst)), apply(fg, ExactState{Pure}(fs, fst))),
+                   (apply(qg, GaussianState{Pure}(qs, ["Up", "Dn", "Up", "Dn", "Up", "Up"])),
+                    apply(qg, ExactState{Pure}(qs, ["Up", "Dn", "Up", "Dn", "Up", "Up"]))),
+                   (apply(qg, GaussianState{Pure}(qs, "X+")), apply(qg, ExactState{Pure}(qs, "X+"))))
+        for cut in (1, 2, 4, 5)
+            a, b = entanglement_spectrum(g, cut), entanglement_spectrum(e, cut)
+            @test length(a) == length(b)
+            @test a ≈ b atol = 1e-14
+        end
+    end
+    g = apply(fg, GaussianState{Pure}(fs, fst))
+    @test TS.spectrum_head(g, 3, 5) ≈ entanglement_spectrum(g, 3)[1:5] atol = 1e-15
+    L = 200
+    big = apply(prod(exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(j, j + 1) for j in 1:L-1),
+                GaussianState{Pure}(System(L, Fermion()), [isodd(j) ? "Occ" : "Emp" for j in 1:L]))
+    h = TS.spectrum_head(big, 100, 20)
+    @test length(h) == 20 && issorted(h; rev = true) && h[1] ≈ maximum(h) && sum(h) <= 1 + 1e-12
+    @test_throws "EntanglementSpectrum(cut, n)" entanglement_spectrum(big, 100)
+    @test only(values(Dict(measure(g, [EntanglementSpectrum(1, 4)])))) ≈ [entanglement_spectrum(g, 1); 0; 0]
 end

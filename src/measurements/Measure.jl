@@ -376,10 +376,16 @@ EntanglementSpectrum(cut::Int, n::Int) =
     StateMeasurement("EntanglementSpectrum($cut,$n)", function (state)
         check_positions(state, [cut], "EntanglementSpectrum")
         return function (st)
-            sp = entanglement_spectrum(st, cut)
-            return [ sp[1:min(length(sp), n)] ; zeros(max(0, n - length(sp))) ]
+            sp = spectrum_head(st, cut, n)
+            return [ sp ; zeros(max(0, n - length(sp))) ]
         end
     end)
+
+# the first n values of the entanglement spectrum, which a state of one's own may find without the others
+function spectrum_head(state::AbstractState, cut::Int, n::Int)
+    sp = entanglement_spectrum(state, cut)
+    return sp[1:min(length(sp), n)]
+end
 
 """
     reference_on(state, ref, what)

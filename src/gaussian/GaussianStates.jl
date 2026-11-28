@@ -205,9 +205,9 @@ partial_trace(::GaussianState; kwargs...) =
 permute_sites(::GaussianState, ::AbstractVector{<:Integer}; kwargs...) =
     error("the Gaussian backend does not permute sites, their order being that of Jordan-Wigner: create the " *
           "state with its sites in the order wanted")
-entanglement_spectrum(::GaussianState, ::Int) =
-    error("the Gaussian backend does not compute entanglement spectra yet: entanglement_entropy(state, cut) " *
-          "gives the entropy")
+entanglement_spectrum(::GaussianState{Mixed}, ::Int) =
+    throw(ArgumentError("the Gaussian backend does not compute the operator space entanglement spectrum of a " *
+                        "mixed state; von_neumann_entropy gives the entropy of a part"))
 """
     maxlinkdim(::GaussianState)
 
@@ -578,18 +578,89 @@ reduced state is then the Gaussian one of their modes); otherwise from `reduced_
 function von_neumann_entropy(state::GaussianState, positions::AbstractVector{Int};
                              max_dense::Union{Nothing, Int} = dense_bound(state))
     check_positions(state, positions, "von_neumann_entropy")
+    ν = mode_spectrum(state, positions)
+    if isnothing(ν)
+        return invoke(von_neumann_entropy, Tuple{AbstractState, AbstractVector{Int}}, state, positions; max_dense)
+    end
+    ps = (1 .+ ν) ./ 2
+    shannon_entropy(vcat(ps, 1 .- ps))
+end
+
+# the ν ≥ 0 of the eigenvalues ±iν of the covariance of the modes of the sites at `positions`, when their reduced
+# state is the Gaussian one of these modes: a definite parity, and fermionic sites, or qubits only, the first or
+# the last ones; nothing otherwise
+function mode_spectrum(state::GaussianState, positions::AbstractVector{Int})
     layout, order = state.layout, state.layout.order
     kept = sort(unique(positions); by = k -> layout.first[k])
     fermions = all(!isnothing(fermion_species(state.system[k])) for k in order)
     qubits = all(isnothing(fermion_species(state.system[k])) for k in order)
     ends = kept == order[1:length(kept)] || kept == order[end-length(kept)+1:end]
     if !(definite(state) && (fermions || (qubits && ends)))
-        return invoke(von_neumann_entropy, Tuple{AbstractState, AbstractVector{Int}}, state, positions; max_dense)
+        return nothing
     end
     majoranas = reduce(vcat, [layout.first[k] .+ (0:length(layout.majoranas[k])-1) .+ 2 for k in kept]; init = Int[])
     ν = eigvals(Hermitian(im * state.cov[majoranas, majoranas]))
-    ps = (1 .+ ν[length(ν)÷2+1:end]) ./ 2
-    shannon_entropy(vcat(ps, 1 .- ps))
+    return ν[length(ν)÷2+1:end]
+end
+
+# the positions of the side of the cut with fewer modes, whose spectrum has fewer values and the same nonzero ones
+function smaller_side(state::GaussianState, cut::Int)
+    n = length(state.system.sites)
+    count(ks) = sum((length(state.layout.majoranas[k]) for k in ks); init = 0)
+    return count(1:cut) <= count(cut+1:n) ? collect(1:cut) : collect(cut+1:n)
+end
+
+cut_mode_spectrum(state::GaussianState, cut::Int) = mode_spectrum(state, smaller_side(state, cut))
+
+"""
+    entanglement_spectrum(state::GaussianState, cut)
+
+as for a `State`, of a pure state: the products of (1 ± ν)/2 over the modes of the side of the cut with fewer of
+them, ±iν the eigenvalues of their covariance, when their reduced state is Gaussian (see `von_neumann_entropy`),
+otherwise the eigenvalues of `reduced_density_matrix`; refused beyond `TensorMixedStates.dense_elements[]`
+values, where `EntanglementSpectrum(cut, n)` measures the n largest.
+"""
+function entanglement_spectrum(state::GaussianState{<:Ket}, cut::Int)
+    check_cut(length(state.system.sites), cut)
+    ν = cut_mode_spectrum(state, cut)
+    if isnothing(ν)
+        λ = eigvals(Hermitian(reduced_density_matrix(state, smaller_side(state, cut))))
+        return sort(λ; rev = true) / sum(λ)
+    end
+    check_elements(2.0^length(ν), "the entanglement spectrum", dense_bound(state); settable = false,
+                   hint = "EntanglementSpectrum(cut, n) measures the n largest values")
+    sp = [1.0]
+    for x in ν
+        sp = vcat(sp .* (1 + x) / 2, sp .* (1 - x) / 2)
+    end
+    sort!(sp; rev = true)
+    return sp / sum(sp)
+end
+
+# the n largest products: Π (1 + ν)/2 times the products of the ratios r = (1 - ν)/(1 + ν) ≤ 1 over subsets, taken
+# in decreasing order from the ratios sorted down, each subset (p, i), its last ratio r_i times p, followed by its
+# extension (p r_i, i + 1) and its shift (p, i + 1)
+function spectrum_head(state::GaussianState{<:Ket}, cut::Int, n::Int)
+    check_cut(length(state.system.sites), cut)
+    ν = cut_mode_spectrum(state, cut)
+    if isnothing(ν) || 2.0^length(ν) <= n
+        sp = entanglement_spectrum(state, cut)
+        return sp[1:min(length(sp), n)]
+    end
+    top = prod((1 .+ ν) ./ 2)
+    r = sort((1 .- ν) ./ (1 .+ ν); rev = true)
+    values = [top]
+    candidates = [(1.0, 1)]
+    while length(values) < n
+        j = argmax([p * r[i] for (p, i) in candidates])
+        p, i = candidates[j]
+        deleteat!(candidates, j)
+        push!(values, top * p * r[i])
+        if i < length(r)
+            push!(candidates, (p * r[i], i + 1), (p, i + 1))
+        end
+    end
+    return values
 end
 
 function entanglement_entropy(state::GaussianState{<:Ket}, cut::Int)
