@@ -9,6 +9,7 @@ export GaussianState
 
 """
     GaussianState(state::State{R}; axes = :Z, max_terms = 64, limits = Limits())
+    GaussianState{R}(system, states; axes = :Z, max_terms = 64, rng)
 
 the product state `state`, pure, a trajectory or mixed (`R = Pure`, `Trajectory` or `Mixed`), held exactly as a
 fermionic Gaussian state, on fermionic sites and sites of dimension 2 (qubits); `limits` is without
@@ -164,6 +165,64 @@ function GaussianState(state::State{Mixed}; axes = Dict{Int, Symbol}(), max_term
         M[js, js] = site_covariance(layout, k, ρ / tr(ρ))
     end
     GaussianState{Mixed}(system, axes, layout, M - transpose(M), nothing, nothing, t, max_terms)
+end
+
+GaussianState{R}(args...; axes = Dict{Int, Symbol}(), max_terms::Int = 64,
+                 rng::AbstractRNG = Random.default_rng()) where {R <: PM} =
+    GaussianState(State{R}(args...; rng); axes, max_terms)
+
+GaussianState(::System, ::AbstractVecOrMat{<:Number}) =
+    error("GaussianState starts from a product State, as GaussianState{Pure}(system, states): deciding whether " *
+          "an array is Gaussian would need a tolerance, hold it as ExactState(system, x)")
+
+purity(::GaussianState{Pure}) = 1.
+
+# Tr ρ² = Π_k (1 + μ_k²)/2 for the eigenvalues ±iμ_k of the covariance M of the modes
+function purity(state::GaussianState{Mixed})
+    nonzero_trace(state, "purity")
+    M = state.cov[3:end, 3:end]
+    return exp(logdet(Symmetric((I - M * M) / 2)) / 2)
+end
+
+# a mixed Gaussian state is Hermitian by construction
+hermiticity(::GaussianState{<:PM}) = 1.
+hermitianize(state::GaussianState; limits::Limits = Limits()) = state
+dag(::GaussianState{<:Ket}) = error("dag is meaningless on pure representations")
+dag(state::GaussianState{Mixed}) = state
+
+⊗(::GaussianState, ::GaussianState) =
+    error("the Gaussian backend does not make the product of two states yet: make that of the States they " *
+          "come from, GaussianState(a ⊗ b)")
+inner(::GaussianState, ::GaussianState) =
+    error("the Gaussian backend does not compute inner products yet: convert the states with State on a " *
+          "small system")
+fidelity(::GaussianState, ::GaussianState) =
+    error("the Gaussian backend does not compute fidelities yet: convert the states with State on a small " *
+          "system")
+partial_trace(::GaussianState; kwargs...) =
+    error("the Gaussian backend does not trace sites out yet: reduced_density_matrix(state, positions) gives " *
+          "the density matrix of a few")
+permute_sites(::GaussianState, ::AbstractVector{<:Integer}; kwargs...) =
+    error("the Gaussian backend does not permute sites, their order being that of Jordan-Wigner: create the " *
+          "state with its sites in the order wanted")
+entanglement_spectrum(::GaussianState, ::Int) =
+    error("the Gaussian backend does not compute entanglement spectra yet: entanglement_entropy(state, cut) " *
+          "gives the entropy")
+"""
+    maxlinkdim(::GaussianState)
+
+the largest link dimension of an MPS of the system of the state, without truncation, that of the whole
+space it holds, as for an `ExactState`: an `Int`, a `Float64` beyond `typemax(Int)`, exact since the
+dimensions of its sites are powers of 2, `Inf` beyond 2^1023
+"""
+function maxlinkdim(state::GaussianState)
+    ds = [ representation(state) === Mixed ? dim(s)^2 : dim(s) for s in state.system.sites ]
+    if !all(ispow2, ds)
+        error("a GaussianState has sites of dimensions $ds, not powers of 2: please report it")
+    end
+    ks = trailing_zeros.(ds)
+    k = maximum((min(sum(ks[1:j]), sum(ks[j+1:end])) for j in 1:length(ks)-1); init = 0)
+    return k < 63 ? 2^k : exp2(k)
 end
 
 # the density matrix of site k of the mixed product `state`, not normalised, from its tensor: the other sites

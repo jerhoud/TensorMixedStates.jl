@@ -1458,3 +1458,36 @@ end
         @test !isfile("p/z.dat") || all(l -> startswith(l, "#"), readlines("p/z.dat"))
     end
 end
+
+@testset "forms shared with the other backends" begin
+    # created from a description as ExactState; purity against ExactState{Mixed}, after a gate and a Lindbladian;
+    # Hermitian by construction, normalize; what it does not do refused with a message, not a MethodError
+    TS = TensorMixedStates
+    fs = System(4, Fermion())
+    g = GaussianState{Pure}(fs, ["Occ", "Emp", "Occ", "Emp"])
+    @test g isa GaussianState{Pure} && TS.trace(g) ≈ 1
+    gx = GaussianState{Mixed}(System(3, Qubit()), "X+"; axes = :X, max_terms = 8)
+    @test all(==(:X), values(gx.axes)) && gx.max_terms == 8
+    gate = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2)
+    st = ["Occ", "Emp", "FullyMixed", "Emp"]
+    m = apply(gate, GaussianState{Mixed}(fs, st))
+    e = apply(gate, ExactState{Mixed}(fs, st))
+    @test purity(m) ≈ purity(e) atol = 1e-14
+    L = -im * (dag(C)(2) * C(3) + dag(C)(3) * C(2)) + 0.3 * Dissipator(C)(2)
+    @test purity(evolve(L, 0.7, m; nsteps = 2)) ≈ purity(evolve(L, 0.7, e; nsteps = 10)) atol = 1e-10
+    @test purity(g) == 1 && hermiticity(m) == 1 && dag(m) === m && hermitianize(m) === m
+    @test TS.trace(normalize(apply(N(2), m))) ≈ 1
+    @test_throws "meaningless" dag(g)
+    @test_throws "product State" GaussianState(fs, [1.0; zeros(15)])
+    @test_throws "product of two states" g ⊗ g
+    @test_throws "inner products" inner(g, g)
+    @test_throws "fidelities" fidelity(m, m)
+    @test_throws "reduced_density_matrix" partial_trace(m; keep = [1])
+    @test_throws "order wanted" permute_sites(g, [2, 1, 3, 4])
+    @test_throws "entanglement_entropy" entanglement_spectrum(g, 2)
+    # the link dimension of the whole space, as ExactState, an Int, then an exact Float64, Inf beyond 2^1023
+    @test maxlinkdim(g) === 4 === maxlinkdim(ExactState{Pure}(fs, "Occ")) && maxlinkdim(m) === 16
+    @test maxlinkdim(GaussianState{Pure}(System(1, Fermion()), "Occ")) === 1
+    @test maxlinkdim(GaussianState{Pure}(System(200, Qubit()), "Up")) === exp2(100)
+    @test maxlinkdim(GaussianState{Mixed}(System(1100, Qubit()), "Up")) === Inf
+end

@@ -196,3 +196,9 @@ end
     out = read(cmd, String)
     @test occursin("data_to_frame needs the DataFrames package: run using DataFrames", out)
 end
+
+@testset "Options of a backend" begin
+    # written as a call of the type of states, which takes none without a state
+    @test occursin("backend = Backend(GaussianState; axes = …)", message(() -> GaussianState(axes = :X)))
+    @test occursin("Backend(ExactState; max_dense = …)", message(() -> ExactState(max_dense = 4)))
+end

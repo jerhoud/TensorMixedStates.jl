@@ -1115,10 +1115,12 @@ function projected_parities(parities, occupations, K::Int = 1)
     parities
 end
 
-function normalized(state::GaussianState)
-    nonzero_trace(state, "project_on")
+function normalized(state::GaussianState, what::String = "project_on")
+    nonzero_trace(state, what)
     isnothing(state.sum) ? single(state, state.cov; trace = 1.0) : scaled(state, 1 / sqrt(state.trace))
 end
+
+normalize(state::GaussianState) = normalized(state, "normalize")
 
 """
     project_on(state::GaussianState, p; limits)

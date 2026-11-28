@@ -295,6 +295,11 @@ function method_hint(io::IO, e::MethodError, argtypes, kwargs)
             return nothing
         end
     end
+    if f isa Type && f <: AbstractState && isempty(argtypes) && !isempty(kwargs)
+        print(io, "\nthe options of a backend are written Backend($(nameof(f)); …), as backend = " *
+                  "Backend($(nameof(f)); $(join(("$k = …" for k in keyword_names(kwargs)), ", ")))")
+        return nothing
+    end
     if f isa Type && f <: AbstractPhase && !isempty(kwargs)
         fields = fieldnames(Base.unwrap_unionall(f))
         unknown = [ k for k in keyword_names(kwargs) if k ∉ fields ]
