@@ -16,11 +16,11 @@ trajectory is of one component and its jumps keep it Gaussian: gates exp(A) of q
 occupations, linear operators (`C`, `dag(C)`, `Sp`, `Sm`). A mixed state is on each site a Gaussian state
 of its modes, which commutes with their parity (`"FullyMixed"`, mixtures of occupations; on a site of
 one mode any state that commutes with its parity), of one component; it takes Gaussian unitaries, products
-of Majoranas, projectors on occupations and `C`, `dag(C)` of a mode, see `apply`, and evolves under a constant
-Lindbladian, -iH with H quadratic and dissipators of operators linear in its Majoranas (`C`, `dag(C)` of fermions
-placed before any qubit, `Sm` and `Sp` of the first or the last qubit of a system of qubits along `:Z`),
-exactly, with its `steady_state`, and under -iH(t) without dissipators as a pure state does; `thermalize`
-takes it to e^{-βH/2} ρ e^{-βH/2}, exactly.
+of Majoranas, projectors on occupations, linear operators and channels exp(L), see `apply`, converts to a
+`State` through its density matrix, and evolves under a constant Lindbladian, -iH with H quadratic and
+dissipators of operators linear in its Majoranas (`C`, `dag(C)` of fermions placed before any qubit, `Sm` and
+`Sp` of the first or the last qubit of a system of qubits along `:Z`), exactly, with its `steady_state`, and
+under -iH(t) without dissipators as a pure state does; `thermalize` takes it to e^{-βH/2} ρ e^{-βH/2}, exactly.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis
@@ -607,7 +607,13 @@ function physical_matrix(state::GaussianState{Mixed})
     system, layout = state.system, state.layout
     dims = [dim(s) for s in system.sites]
     n, m = length(dims), layout.count ÷ 2
-    ρ = fock_density(state.cov[3:end, 3:end])
+    # the ancilla held empty by every operation, up to rounding (4.5e-16 measured after a purification)
+    M = state.cov
+    if abs(M[1, 2] - 1) > 1e-10 || maximum(abs, M[1:2, 3:end]; init = 0.0) > 1e-10
+        error("the ancilla of this mixed Gaussian state is not empty, which no operation should leave: " *
+              "please report it")
+    end
+    ρ = fock_density(M[3:end, 3:end])
     place = Vector{CartesianIndex{n}}(undef, 2^m)
     for i in 1:2^m
         x = [((i - 1) >> (m - j)) & 1 == 1 for j in 1:m]

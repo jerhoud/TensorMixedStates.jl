@@ -773,8 +773,7 @@ function mixed_channel(a::IndexedOp{IsChannel}, state::GaussianState{Mixed})
                             "channels exp(L) of a generator L (amplitude_damping_channel), as evolve does, and " *
                             "$(obs_name(a)) is neither: draw it on trajectories, CreateState{Trajectory}"))
     end
-    pre = LyapunovEvolver(lindblad_form(state, [L])..., Dict{Float64, Tuple{Matrix{Float64}, Matrix{Float64}, Int}}())
-    evolve_step(Tdvp(), pre, state, 0.0, 1.0, 1, Limits())
+    evolve_step(Tdvp(), prepared_evolver(state, [L]), state, 0.0, 1.0, 1, Limits())
 end
 
 function apply(a::IndexedOp{IsChannel}, state::GaussianState{Pure}; limits::Limits = Limits())
@@ -867,8 +866,12 @@ function mixed_applied(state::GaussianState{Mixed}, kind::Symbol, data)
                       trace = abs2(z) * x.trace)
     elseif kind == :linear
         # L = Σ_a u_a γ_a applied to a purification |Ψ⟩ of ρ, a pure Gaussian state, which L|Ψ⟩ is too: its first
-        # half is L ρ L†, its squared norm their trace, for any u
+        # half is L ρ L†, its squared norm their trace; u on the ancilla mixes an even and an odd part of the operator,
+        # L ρ L† then not commuting with the parity
         β, u, _ = data
+        if any(!iszero, u[1:min(2, end)])
+            throw(ArgumentError(mixed_odd_what))
+        end
         n = size(state.cov, 1)
         M, w = linear_applied(purified_covariance(state.cov), vcat(u, zeros(2n - length(u))))
         if isnothing(M)

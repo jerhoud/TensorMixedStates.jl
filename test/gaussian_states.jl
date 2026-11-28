@@ -1178,9 +1178,9 @@ end
 end
 
 @testset "linear operators on mixed states" begin
-    # L ρ L† for any linear L, by a purification of ρ, against ExactState{Mixed}: not isotropic, isotropic, on one
-    # site, mixing Majoranas of several sites, Sm + Sp of a qubit behind its string; zero when L annihilates ρ;
-    # a cubic operator refused
+    # L ρ L† for any linear L on the Majoranas of the system, by a purification of ρ, against ExactState{Mixed}: not
+    # isotropic, isotropic, on one site, mixing Majoranas of several sites, Sm + Sp of a qubit behind its string;
+    # zero when L annihilates ρ; a cubic operator refused
     TS = TensorMixedStates
     exact(g) = TS.ExactState(State(g)).state
     fs = System(4, Fermion())
@@ -1199,6 +1199,13 @@ end
     @test exact(apply((Sm + 0.5 * Sp)(3), gq)) ≈ apply((Sm + 0.5 * Sp)(3), eq).state atol = 1e-13
     @test TS.trace(apply(C(2) + 0.5 * dag(C)(1), TS.GaussianState(State{Mixed}(fs, ["Occ", "Emp", "Occ", "Emp"])))) == 0
     @test_throws "not this operator" apply(C(1) + C(2) * N(3), g)
+    # an operator mixing an even and an odd part, L ρ L† not commuting with the parity; a state whose ancilla is not
+    # empty not converted
+    @test_throws "odd in the Majoranas" apply((X + Z)(1), gq)
+    @test_throws "odd in the Majoranas" apply((Y + 0.5 * Z)(1), gq)
+    c = copy(gq.cov)
+    c[1, 3], c[3, 1] = 0.5, -0.5
+    @test_throws "ancilla" State(TS.single(gq, c))
 end
 
 @testset "mixed states under Lindbladians" begin
