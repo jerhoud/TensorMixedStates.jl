@@ -8,6 +8,13 @@ This file starts with the release in preparation. For what came before, see the
 archived as the [codebase release](https://doi.org/10.21468/SciPostPhysCodeb.72-r1.28) of
 the reference article.
 
+## [Unreleased]
+
+### Added
+
+- `GaussianState`, experimental: free fermions and qubits held exactly as fermionic Gaussian states, pure, trajectories or mixed, at hundreds of sites, by `GaussianState{R}(system, states)` or `SimData(backend = GaussianState)`.
+- `Backend(T; options...)`, experimental: a backend with the options of its constructor, as `Backend(GaussianState; axes = :X)` or `Backend(ExactState; max_dense = 4096)`, for `SimData`, `CreateState`, `ConvertState` and `LoadState`.
+
 ## [2.3.0] - 2026-11-26
 
 ### Added
