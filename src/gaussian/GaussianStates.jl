@@ -503,6 +503,33 @@ end
 # measured on what conserves nothing, as on a State, an operator of no definite flux too
 expect_value(state::GaussianState, a::IndexedOp{IsOperator}) = poly_value(state, cached_polynomial(state, a))
 
+# expect2 through the polynomials of the operators of one site, each lowered once, the polynomial of a product being
+# the product of theirs on the states the backend holds (the ancilla multiplies, the reduction to even states keeps
+# their action): 2L lowerings rather than L² for a pair, the values of the monomials shared by all pairs
+function expect2_computed(state::GaussianState, pairs::Vector{<:Tuple{SimpleOp, SimpleOp}};
+                          sites::AbstractVector{Int} = 1:length(state))
+    sys = state.system
+    n = length(sys)
+    for i in sites
+        check_index(sys, i, "expect2")
+    end
+    m = 2 + state.layout.count
+    poly(o, i) = state_polynomial(state, lower(weaken(sys, ()), o(i)))
+    cache = Dict{Vector{Int}, ComplexF64}()
+    return map(pairs) do (o1, o2)
+        r = Matrix{Union{Missing, Number}}(missing, n, n)
+        on1 = intersect(sites, defined_sites(sys, o1))
+        on2 = intersect(sites, defined_sites(sys, o2))
+        p1 = Dict(i => poly(o1, i) for i in on1)
+        p2 = Dict(j => poly(o2, j) for j in on2)
+        for i in on1, j in on2
+            p = p1[i] * p2[j]
+            r[i, j] = poly_value(state, even_states(state) ? on_even(p, m) : p, cache)
+        end
+        return map(identity, r)
+    end
+end
+
 # the polynomial of the operator a on the layout of the state, kept by the identity of both: the rates of the jumps
 # of a trajectory, measured at each step, are lowered once (72 % of a monitored trajectory went to lowering them
 # again, profile P11); emptied beyond 1000 operators, which a program building new ones in a loop would reach;

@@ -1542,3 +1542,27 @@ end
     @test_throws "jumps = :phases" apply((Id + Z)(2) / 2, t)
     @test_throws "Backend(GaussianState; max_terms)" apply((Id + Z)(2) / 2, GaussianState{Pure}(qs, "X+"; axes = :X, max_terms = 1))
 end
+
+@testset "correlations of pairs through the polynomials of one site" begin
+    # expect2 multiplying the polynomials of the operators of one site, against the path lowering each pair and against
+    # ExactState: a ring trajectory of two components along :X, fermions with pairing, a mixed state, a part of the sites
+    TS = TensorMixedStates
+    generic(st, pairs; kw...) = invoke(TS.expect2_computed, Tuple{TS.AbstractState, typeof(pairs)}, st, pairs; kw...)
+    near(a, b; atol) = all(isapprox(x, y; atol) for (u, v) in zip(a, b) for (x, y) in zip(u, v) if !ismissing(x))
+    L = 6
+    ising = sum(Z(i) * Z(mod1(i + 1, L)) for i in 1:L)
+    ev = -im * (ising - sum(X(i) for i in 1:L)) + sum(Dissipator(sqrt(0.05) * Z)(i) for i in 1:L)
+    qp = [(X, X), (Y, Y), (Z, Z), (X, Z), (Sp, Sm)]
+    t = evolve(ev, 1.6, GaussianState{Trajectory}(System(L, Qubit()), "Dn"; axes = :X); nsteps = 8, rng = Random.Xoshiro(3))
+    @test TS.ncomponents(t) == 2
+    @test near(TS.expect2_computed(t, qp), generic(t, qp); atol = 1e-13)
+    @test near(TS.expect2_computed(t, [(Z, Z)]; sites = 2:5), generic(t, [(Z, Z)]; sites = 2:5); atol = 1e-13)
+    fs = System(6, Fermion())
+    fg = prod(exp(-0.3im * j * (dag(C) ⊗ C + dag(dag(C) ⊗ C) + 0.5 * (C ⊗ C + dag(C ⊗ C))))(j, j + 1) for j in 1:5)
+    fp = [(dag(C), C), (C, C), (N, N), (C, dag(C))]
+    for st in (["Occ", "Emp", "Occ", "Emp", "Occ", "Emp"], ["Occ", "FullyMixed", "Occ", "Emp", "FullyMixed", "Emp"])
+        R = st[2] == "FullyMixed" ? Mixed : Pure
+        @test near(TS.expect2_computed(apply(fg, GaussianState{R}(fs, st)), fp),
+                   TS.expect2_computed(apply(fg, ExactState{R}(fs, st)), fp); atol = 1e-13)
+    end
+end
