@@ -731,7 +731,8 @@ Majoranas, has each of its monomials applied exactly to each component, which mu
 number, refused beyond `max_terms`. A trajectory draws the Kraus operators of a channel, and takes
 the weight an operator keeps of it, as for a State. A mixed state ρ becomes O ρ O† for O a gate exp(A)
 without odd term, a product of Majoranas, a projector on occupations, `C` or `dag(C)` of a mode, or a
-channel of one Kraus operator among them; other operators are refused.
+channel of one Kraus operator among them; a channel exp(L) of a generator L (`amplitude_damping_channel`) is
+its evolution under L over a time 1, exactly, as `evolve` does; other operators and channels are refused.
 """
 apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Limits = Limits()) = gaussian_applied(op, state)
 
@@ -746,12 +747,33 @@ ket_applied(a::IndexedOp{IsOperator}, state::GaussianState{Trajectory}; limits::
 
 apply(op::IndexedOp{IsOperator}, state::GaussianState{Mixed}; limits::Limits = Limits()) = gaussian_applied(op, state)
 
-function apply(a::IndexedOp{IsChannel}, state::GaussianState{Mixed}; limits::Limits = Limits())
-    if !is_pure(a)
-        throw(ArgumentError("the Gaussian backend does not apply to a mixed state a channel of several Kraus " *
-                            "operators yet: draw it on trajectories, CreateState{Trajectory}"))
+apply(a::IndexedOp{IsChannel}, state::GaussianState{Mixed}; limits::Limits = Limits()) = mixed_channel(a, state)
+
+# the channel a on a mixed state, taken apart as `drawn` does: one Kraus operator applied as an operator, a product
+# factor by factor from the right, a placed product, power or tensor product by `placed_structure`, a coefficient
+# on the trace, and exp(L) of a generator L as the evolution under L over a time 1, by the equation of Lyapunov;
+# a sum of channels or a channel given by several Kraus operators refused, their mixtures not Gaussian
+function mixed_channel(a::IndexedOp{IsChannel}, state::GaussianState{Mixed})
+    if is_pure(a)
+        return gaussian_applied(kraus(a), state)
+    elseif a isa ScalarOp
+        return density_scaled(mixed_channel(a.arg, state), a.coef)
+    elseif a isa ProdOp
+        for f in reverse(channel_factors(a))
+            state = f isa IndexedOp{IsOperator} ? gaussian_applied(f, state) : mixed_channel(f, state)
+        end
+        return state
+    elseif a isa AtIndex && a.op isa Union{ProdOp, IntPowOp, TensorOp}
+        return mixed_channel(placed_structure(a), state)
     end
-    gaussian_applied(kraus(a), state)
+    L = a isa AtIndex ? gate_generator(a) : nothing
+    if isnothing(L)
+        throw(ArgumentError("the Gaussian backend applies to a mixed state channels of one Kraus operator and " *
+                            "channels exp(L) of a generator L (amplitude_damping_channel), as evolve does, and " *
+                            "$(obs_name(a)) is neither: draw it on trajectories, CreateState{Trajectory}"))
+    end
+    pre = LyapunovEvolver(lindblad_form(state, [L])..., Dict{Float64, Tuple{Matrix{Float64}, Matrix{Float64}, Int}}())
+    evolve_step(Tdvp(), pre, state, 0.0, 1.0, 1, Limits())
 end
 
 function apply(a::IndexedOp{IsChannel}, state::GaussianState{Pure}; limits::Limits = Limits())

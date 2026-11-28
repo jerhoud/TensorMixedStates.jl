@@ -1105,7 +1105,7 @@ end
     @test_throws "not this operator" apply(T(2), gq)
     @test_throws "not anti-Hermitian" apply(exp(0.5 * N)(2), gf)
     @test_throws "not Gaussian on a mixed state" TS.project_on(gq, (Id(1) + X(1)) / 2)
-    @test_throws "several Kraus" apply(depolarizing_channel(0.2)(1), gq)
+    @test_throws "is neither" apply(depolarizing_channel(0.2)(1), gq)
     @test_throws "one Gaussian component" TS.as_representation(Mixed, apply(T(2), TS.GaussianState(State{Pure}(qs, "X+"))))
     @test_throws "not known" TS.as_representation(Mixed, TS.GaussianState(State{Pure}(qs, "X+")))
     # the parity of a pure state lost by a gate coupling the ancilla, found again by a projection on its sector
@@ -1148,6 +1148,33 @@ end
     @test TS.trace(g) < 0.9
     @test exact(g) ≈ e.state atol = 1e-10
     @test_throws "raise TensorMixedStates.dense_elements[]" State(TS.GaussianState(State{Mixed}(System(13, Qubit()), "FullyMixed")))
+end
+
+@testset "channels on mixed states" begin
+    # exp(L) of a generator as the evolution under L over a time 1, against ExactState{Mixed}: amplitude damping of a
+    # fermion, of the first and the last qubit, exp written by hand with a Hamiltonian part, a power, a product, a
+    # coefficient; the channels of several Kraus operators refused, and exp(L) of a non Gaussian L
+    TS = TensorMixedStates
+    exact(g) = TS.ExactState(State(g)).state
+    fs = System(4, Fermion())
+    qs = System(4, Qubit())
+    gate = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2)
+    st = ["Occ", "Emp", "FullyMixed", "Occ"]
+    g = apply(gate, TS.GaussianState(State{Mixed}(fs, st)))
+    e = apply(gate, TS.ExactState(State{Mixed}(fs, st)))
+    for ch in (amplitude_damping_channel(0.3, C)(1), exp(-0.3im * N + 0.5 * Dissipator(C) + 0.2 * Dissipator(dag(C)))(2),
+               (amplitude_damping_channel(0.1, C)^2)(1), amplitude_damping_channel(0.2, C)(1) * amplitude_damping_channel(0.4, dag(C))(2),
+               0.5 * amplitude_damping_channel(0.3, C)(1))
+        @test exact(apply(ch, g)) ≈ apply(ch, e).state atol = 1e-13
+    end
+    gq = apply(exp(-0.3im * (X ⊗ X + 0.6 * Y ⊗ Y))(2, 3), TS.GaussianState(State{Mixed}(qs, ["Up", "FullyMixed", "Dn", "Up"])))
+    eq = apply(exp(-0.3im * (X ⊗ X + 0.6 * Y ⊗ Y))(2, 3), TS.ExactState(State{Mixed}(qs, ["Up", "FullyMixed", "Dn", "Up"])))
+    ch = amplitude_damping_channel(0.2)(1) * amplitude_damping_channel(0.2)(4) * amplitude_damping_channel(0.3, Sm)(4)
+    @test exact(apply(ch, gq)) ≈ apply(ch, eq).state atol = 1e-13
+    @test_throws "is neither" apply(depolarizing_channel(0.2)(1), gq)
+    @test_throws "is neither" apply(dephasing_channel(0.1)(1), gq)
+    @test_throws "is neither" apply(amplitude_damping_channel(1.0)(1), gq)
+    @test_throws "not one: draw trajectories" apply(amplitude_damping_channel(0.2)(2), gq)
 end
 
 @testset "mixed states under Lindbladians" begin
