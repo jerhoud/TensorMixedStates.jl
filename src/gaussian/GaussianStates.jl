@@ -5,6 +5,8 @@
 import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, relink!, norm2, apply_monomial,
                          cross_term, describe, overlap, fock_state, logpfaffian, expect_monomial, fock_density
 
+export GaussianState
+
 """
     GaussianState(state::State{R}; axes = :Z, max_terms = 64, limits = Limits())
 
@@ -21,6 +23,7 @@ of Majoranas, projectors on occupations, linear operators and channels exp(L), s
 dissipators of operators linear in its Majoranas (`C`, `dag(C)` of fermions placed before any qubit, `Sm` and
 `Sp` of the first or the last qubit of a system of qubits along `:Z`), exactly, with its `steady_state`, and
 under -iH(t) without dissipators as a pure state does; `thermalize` takes it to e^{-βH/2} ρ e^{-βH/2}, exactly.
+Experimental: it may change in a version 2.x.
 
 - `axes`: the Pauli `:X`, `:Y` or `:Z` along which the qubits are occupied, one for all, a vector of
   one per site (`nothing` on the others) or a `Dict` from sites to Paulis
