@@ -89,8 +89,9 @@ mutable struct GaussianSum
     refodd::PureGaussian
     u::Vector{ComplexF64}
     links::Vector{LogComplex}
-    # the rotation since the anchor, applied by fix!
+    # the rotation since the anchor, applied by fix!, and whether there is one
     R::Matrix{Float64}
+    rotated::Bool
 end
 
 function GaussianSum(comps::AbstractVector{PureGaussian}, coefs::AbstractVector, rng)
@@ -114,7 +115,7 @@ function GaussianSum(comps::AbstractVector{PureGaussian}, coefs::AbstractVector,
     u = im .* F.cov[:, 1]
     u[1] = 1
     s = GaussianSum(collect(comps), LogComplex.(coefs), F, apply_monomial([1], F), u, LogComplex[],
-                    Matrix{Float64}(I, 2n, 2n))
+                    Matrix{Float64}(I, 2n, 2n), false)
     relink!(s)
     s
 end
@@ -125,7 +126,7 @@ reference(s::GaussianSum, g::PureGaussian) = iseven(count(g.x)) ? s.ref : s.refo
 
 # the links of the components to the references, after the components changed
 function relink!(s::GaussianSum)
-    if s.R != I
+    if s.rotated
         throw(ArgumentError("relink! needs a GaussianSum brought up to date by fix!"))
     end
     s.links = [overlap(reference(s, g), g) for g in s.comps]
@@ -143,6 +144,7 @@ applies the Gaussian unitary of rotation `R`, of determinant 1 as those of `prop
 """
 function evolve!(s::GaussianSum, R::AbstractMatrix{<:Real})
     s.R = R * s.R
+    s.rotated = true
     s
 end
 
@@ -161,7 +163,7 @@ end
 the components of `s` brought up to date with their phases, which become the new anchor.
 """
 function fix!(s::GaussianSum)
-    if s.R == I
+    if !s.rotated
         return s
     end
     R = s.R
@@ -176,6 +178,7 @@ function fix!(s::GaussianSum)
     s.ref, s.refodd, s.u = F, Fo, w
     s.comps = [align(rotate(g, R), reference(s, g), Int[], l.phase) for (g, l) in zip(s.comps, s.links)]
     s.R = Matrix{Float64}(I, size(R))
+    s.rotated = false
     s
 end
 
