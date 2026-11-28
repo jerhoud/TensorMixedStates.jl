@@ -23,7 +23,7 @@ const EXAMPLES = [
     "high_level" => ["dmrg", "gates", "precession", "ising_quench", "complete_graph_tdvp",
                      "fermion_chain_conserved", "excited_states", "measured_trajectory",
                      "thermal_phase", "two_time_correlations", "disorder_average",
-                     "damped_trajectories", "unravellings", "exact_check"],
+                     "damped_trajectories", "unravellings", "exact_check", "boundary_driven"],
     "low_level" => ["spin_one_chain", "free_fermions", "domain_wall_quench",
                     "driven_damped_qubits", "thermal_state", "noisy_ghz", "entanglement",
                     "strong_then_weak"],

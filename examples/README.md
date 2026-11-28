@@ -49,6 +49,8 @@ Three folders, from the shortest scripts to those of the article:
     averages with different spreads;
   - `exact_check.jl`: one program run on `ExactState` and on MPS of growing link dimensions, the
     error of the truncation read against the exact run.
+  - `boundary_driven.jl`: the steady state of 100 free fermions between two baths, exact on
+    `GaussianState`, checked against its closed form.
 - [`article`](article): the six examples of the article describing TMS, at the sizes it
   published, hours of computation each, see its [README](article/README.md).
 
