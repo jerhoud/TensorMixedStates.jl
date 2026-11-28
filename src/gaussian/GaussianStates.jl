@@ -3,7 +3,7 @@
 # A state of one component, whose phase is not observable, keeps its covariance only.
 
 import .GaussianKernels: GaussianSum, PureGaussian, LogComplex, evolve!, fix!, relink!, norm2, apply_monomial,
-                         cross_term, describe, overlap, fock_state, logpfaffian, expect_monomial
+                         cross_term, describe, overlap, fock_state, logpfaffian, expect_monomial, fock_density
 
 """
     GaussianState(state::State{R}; axes = :Z, max_terms = 64, limits = Limits())
@@ -600,11 +600,44 @@ function physical_vector(state::GaussianState{<:Ket})
     in_kron(a)
 end
 
+# the density matrix of a mixed state in the basis of TMS, in the order of kron: that of its modes
+# (`fock_density`, the empty ancilla left out), its indices carried to the occupations of the sites as in
+# `physical_vector`, then to the bases of the sites on both sides
+function physical_matrix(state::GaussianState{Mixed})
+    system, layout = state.system, state.layout
+    dims = [dim(s) for s in system.sites]
+    n, m = length(dims), layout.count ÷ 2
+    ρ = fock_density(state.cov[3:end, 3:end])
+    place = Vector{CartesianIndex{n}}(undef, 2^m)
+    for i in 1:2^m
+        x = [((i - 1) >> (m - j)) & 1 == 1 for j in 1:m]
+        occupations = zeros(Int, n)
+        pos = 1
+        for k in layout.order
+            q = length(layout.majoranas[k]) ÷ 2
+            occupations[k] = sum(x[pos + r - 1] << (r - 1) for r in 1:q) + 1
+            pos += q
+        end
+        place[i] = CartesianIndex(occupations...)
+    end
+    a = zeros(ComplexF64, dims..., dims...)
+    for i in 1:2^m, j in 1:2^m
+        a[place[i], place[j]] = ρ[i, j]
+    end
+    for k in 1:n
+        B = occupation_basis(layout, k)
+        a = on_axis(on_axis(a, k, B), n + k, conj(B))
+    end
+    reshape(permutedims(a, [n:-1:1; 2n:-1:n+1]), prod(dims), prod(dims))
+end
+
 """
     State(state::GaussianState; limits)
 
 the state as an MPS, through its dense vector, from an overlap for each Fock state of its modes:
-refused beyond 16 modes, where it would take minutes.
+refused beyond 16 modes, where it would take minutes; a mixed state through its dense density
+matrix, refused beyond `TensorMixedStates.dense_elements[]` elements, 4^m for m modes (2^24 at
+first, 12 modes).
 """
 function State(state::GaussianState{R}; limits::Limits = Limits()) where {R <: Ket}
     m = state.layout.count ÷ 2
@@ -616,9 +649,11 @@ function State(state::GaussianState{R}; limits::Limits = Limits()) where {R <: K
     State(ExactState{R}(state.system, sqrt(state.trace) * ψ / norm(ψ), Val(:raw)); limits)
 end
 
-State(::GaussianState{Mixed}; limits::Limits = Limits()) =
-    throw(ArgumentError("the Gaussian backend does not convert a mixed state to a State yet: build it as a " *
-                        "State{Mixed} from the start"))
+function State(state::GaussianState{Mixed}; limits::Limits = Limits())
+    d = prod(float(dim(s)) for s in state.system.sites)
+    check_elements(d^2, "the density matrix of the state", dense_bound(state); settable = false)
+    State(ExactState{Mixed}(state.system, state.trace * physical_matrix(state), Val(:raw)); limits)
+end
 
 # one component: its covariance; several: for each, its covariance, its support, its amplitude and
 # its coefficient, the numbers as their logarithm and phase

@@ -1117,9 +1117,37 @@ end
     @test_throws "trajectory of a mixed state" TS.as_representation(Trajectory, gq)
     @test mix(gq) === gq
     @test_throws "operator space" entanglement_entropy(gq, 2)
-    @test_throws "does not convert" State(gq)
     @test_throws "real number" 2im * gq
     @test_throws "searches a pure state" ground_state(Z(1), gq)
+end
+
+@testset "mixed states to State" begin
+    # through the dense density matrix, against ExactState{Mixed}: products, after gates (sites of several modes,
+    # qubits along :X), after a Lindbladian with jumps of the last qubit, of trace below 1;
+    # refused beyond dense_elements[]
+    TS = TensorMixedStates
+    applied(gates, st) = foldl((x, a) -> apply(a, x), gates; init = st)
+    exact(g) = TS.ExactState(State(g)).state
+    fs = System(4, Fermion())
+    qs = System(4, Qubit())
+    sys = System([Fermion(), Electron(), Qubit(), Fermion()])
+    st = ["FullyMixed", "FullyMixed", "Dn", "Occ"]
+    @test exact(TS.GaussianState(State{Mixed}(sys, st))) ≈ TS.ExactState(State{Mixed}(sys, st)).state atol = 1e-14
+    gates = [exp(-0.3im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 4), exp(-0.2im * (dag(Cup) ⊗ C + dag(dag(Cup) ⊗ C)))(2, 4)]
+    @test exact(applied(gates, TS.GaussianState(State{Mixed}(sys, st)))) ≈
+          applied(gates, TS.ExactState(State{Mixed}(sys, st))).state atol = 1e-12
+    sx = ["X+", "FullyMixed", "X-", "X+"]
+    gx = [exp(-0.3im * (Y ⊗ Y + 0.5 * Z ⊗ Z))(2, 3), exp(-0.4im * X)(1)]
+    @test exact(applied(gx, TS.GaussianState(State{Mixed}(qs, sx); axes = :X))) ≈
+          applied(gx, TS.ExactState(State{Mixed}(qs, sx))).state atol = 1e-12
+    xy = sum(X(j) * X(j + 1) + 0.6 * Y(j) * Y(j + 1) for j in 1:3) + 0.4 * sum(Z(j) for j in 1:4)
+    L = -im * xy + 0.6 * Dissipator(Sm)(1) + 0.5 * Dissipator(Sp)(4) + 0.4 * Dissipator(Sm + 0.5im * Sp)(4)
+    sq = ["Up", "FullyMixed", "Dn", "Up"]
+    g = apply(N(3), evolve(L, 1.0, TS.GaussianState(State{Mixed}(qs, sq)); nsteps = 4))
+    e = apply(N(3), evolve(L, 1.0, TS.ExactState(State{Mixed}(qs, sq)); nsteps = 10))
+    @test TS.trace(g) < 0.9
+    @test exact(g) ≈ e.state atol = 1e-10
+    @test_throws "raise TensorMixedStates.dense_elements[]" State(TS.GaussianState(State{Mixed}(System(13, Qubit()), "FullyMixed")))
 end
 
 @testset "mixed states under Lindbladians" begin

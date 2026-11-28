@@ -13,7 +13,7 @@ export LogComplex, logpfaffian, fock_covariance, majorana_on_fock, PureGaussian,
        transition_matrix, propagator, unitary_expectation, rotate, GaussianSum, evolve!, evolve_branches!, fix!,
        project, project!, norm2, quadratic_ground_state, MajoranaPoly, degree,
        quadratic_form, nonunitary_step, nonunitary_pieces, linear_applied, linear_annihilates,
-       lyapunov_propagator, lyapunov_pieces, purified_covariance
+       lyapunov_propagator, lyapunov_pieces, purified_covariance, fock_density
 
 include("Numbers.jl")
 include("Fock.jl")
