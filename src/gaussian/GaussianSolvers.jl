@@ -730,9 +730,10 @@ Circuits, `exp` written by the user), turns every component; any other operator,
 Majoranas, has each of its monomials applied exactly to each component, which multiplies their
 number, refused beyond `max_terms`. A trajectory draws the Kraus operators of a channel, and takes
 the weight an operator keeps of it, as for a State. A mixed state ρ becomes O ρ O† for O a gate exp(A)
-without odd term, a product of Majoranas, a projector on occupations, `C` or `dag(C)` of a mode, or a
-channel of one Kraus operator among them; a channel exp(L) of a generator L (`amplitude_damping_channel`) is
-its evolution under L over a time 1, exactly, as `evolve` does; other operators and channels are refused.
+without odd term, a product of Majoranas, a projector on occupations, a linear operator (`C`, `dag(C)` and
+their combinations, `Sm`, `Sp` of a qubit), or a channel of one Kraus operator among them; a channel exp(L) of
+a generator L (`amplitude_damping_channel`) is its evolution under L over a time 1, exactly, as `evolve` does;
+other operators and channels are refused.
 """
 apply(op::IndexedOp{IsOperator}, state::GaussianState{Pure}; limits::Limits = Limits()) = gaussian_applied(op, state)
 
@@ -839,8 +840,8 @@ function gaussian_applied(op::IndexedOp{IsOperator}, state::GaussianState)
 end
 
 # O ρ O† for the operator O of `kind` and `data` (`operator_kind`): Gaussian unitaries, products of Majoranas,
-# projectors on occupations and c(β) c_j, c(β) c_j†, their Majoranas on the ancilla dropped, the ancilla of
-# a mixed state held empty; refused otherwise
+# projectors on occupations and linear operators c(β) Σ_a u_a γ_a, their Majoranas on the ancilla dropped, the
+# ancilla of a mixed state held empty; refused otherwise
 function mixed_applied(state::GaussianState{Mixed}, kind::Symbol, data)
     physical(α) = filter(>(2), α)
     if kind == :gate
@@ -864,38 +865,34 @@ function mixed_applied(state::GaussianState{Mixed}, kind::Symbol, data)
         x = projected(state, [j => occupied]; null = true)
         return single(x, flipped_covariance(flipped_covariance(x.cov, [2j - 1]), physical(β));
                       trace = abs2(z) * x.trace)
+    elseif kind == :linear
+        # L = Σ_a u_a γ_a applied to a purification |Ψ⟩ of ρ, a pure Gaussian state, which L|Ψ⟩ is too: its first
+        # half is L ρ L†, its squared norm their trace, for any u
+        β, u, _ = data
+        n = size(state.cov, 1)
+        M, w = linear_applied(purified_covariance(state.cov), vcat(u, zeros(2n - length(u))))
+        if isnothing(M)
+            return scaled(state, 0)
+        end
+        return single(state, flipped_covariance(M[1:n, 1:n], physical(β)); trace = w * state.trace)
     end
     throw(ArgumentError("the Gaussian backend applies to a mixed state Gaussian unitaries, products of " *
-                        "Majoranas, projectors on occupations and c, c† of a mode, not this operator." *
+                        "Majoranas, projectors on occupations and linear operators, not this operator." *
                         mixed_rounding_hint(kind, data, size(state.cov, 1))))
 end
 
 # the rounding hint of a refusal of `mixed_applied`, for the message only: when the operator, without its
-# monomials of 1e-12 of the largest or less, would be one monomial, a projector or c, c† of a mode
+# monomials of 1e-12 of the largest or less, would be one monomial, a projector or a linear operator
 function mixed_rounding_hint(kind::Symbol, data, m::Int)
-    if kind == :linear
-        return rounding_hint(mode_deviation(data[2]), norm(data[2]))
-    elseif kind != :poly
+    if kind != :poly
         return ""
     end
     scale = maximum(abs, values(data.terms))
     small(c) = abs(c) <= 1e-12 * scale
     kept = MajoranaPoly(Dict(α => c for (α, c) in data.terms if !small(c)))
     removed = maximum((abs(c) for c in values(data.terms) if small(c)); init = 0.0)
-    linear = monomial_linear(kept, m)
-    taken = length(kept) == 1 || !isnothing(occupation_projector(kept)) ||
-            (!isnothing(linear) && mode_deviation(last(linear)) <= 1e-12 * norm(last(linear)))
+    taken = length(kept) == 1 || !isnothing(occupation_projector(kept)) || !isnothing(monomial_linear(kept, m))
     taken && removed > 0 ? rounding_hint(removed, scale) : ""
-end
-
-# how far the coefficients u of a linear operator are from those of c or c† of one mode, z(γ_a ± iγ_{a+1})
-function mode_deviation(u::AbstractVector)
-    best = Inf
-    for a in 1:2:length(u)-1
-        rest = norm(u[setdiff(eachindex(u), (a, a + 1))])
-        best = min(best, rest + min(abs(u[a + 1] - im * u[a]), abs(u[a + 1] + im * u[a])))
-    end
-    best
 end
 
 # how the Gaussian backend applies the operator s exactly to a state of one component: (:gate, generator) for

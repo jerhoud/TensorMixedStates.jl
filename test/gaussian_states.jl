@@ -1177,6 +1177,30 @@ end
     @test_throws "not one: draw trajectories" apply(amplitude_damping_channel(0.2)(2), gq)
 end
 
+@testset "linear operators on mixed states" begin
+    # L ρ L† for any linear L, by a purification of ρ, against ExactState{Mixed}: not isotropic, isotropic, on one
+    # site, mixing Majoranas of several sites, Sm + Sp of a qubit behind its string; zero when L annihilates ρ;
+    # a cubic operator refused
+    TS = TensorMixedStates
+    exact(g) = TS.ExactState(State(g)).state
+    fs = System(4, Fermion())
+    qs = System(4, Qubit())
+    gate = exp(-0.4im * (dag(C) ⊗ C + dag(dag(C) ⊗ C)))(1, 2) * exp(-0.3im * (dag(C) ⊗ dag(C) + dag(dag(C) ⊗ dag(C))))(2, 3)
+    st = ["Occ", "Emp", "FullyMixed", "Occ"]
+    g = apply(gate, TS.GaussianState(State{Mixed}(fs, st)))
+    e = apply(gate, TS.ExactState(State{Mixed}(fs, st)))
+    for L in (C(1) + 0.5 * dag(C)(2), C(1) + 0.3im * C(3), (C + 0.4 * dag(C))(2),
+              (C + dag(C))(1) + 0.7im * (C - dag(C))(4) + 0.2 * C(3))
+        @test exact(apply(L, g)) ≈ apply(L, e).state atol = 1e-13
+    end
+    gate = exp(-0.3im * (X ⊗ X + 0.6 * Y ⊗ Y))(2, 3)
+    gq = apply(gate, TS.GaussianState(State{Mixed}(qs, ["Up", "FullyMixed", "Dn", "Up"])))
+    eq = apply(gate, TS.ExactState(State{Mixed}(qs, ["Up", "FullyMixed", "Dn", "Up"])))
+    @test exact(apply((Sm + 0.5 * Sp)(3), gq)) ≈ apply((Sm + 0.5 * Sp)(3), eq).state atol = 1e-13
+    @test TS.trace(apply(C(2) + 0.5 * dag(C)(1), TS.GaussianState(State{Mixed}(fs, ["Occ", "Emp", "Occ", "Emp"])))) == 0
+    @test_throws "not this operator" apply(C(1) + C(2) * N(3), g)
+end
+
 @testset "mixed states under Lindbladians" begin
     # the covariance under -iH and dissipators of linear operators, an equation of Lyapunov, against ExactState{Mixed}:
     # losses and gains of fermions, a Majorana as jump, an Electron, losses of the first qubit, jumps of the last qubit
