@@ -119,6 +119,12 @@ The articles the methods of TMS come from, each with what it gives TMS. To cite 
   measuring it (eq. (22)), its evolution under a Lindbladian of quadratic H and linear jumps,
   an equation of Lyapunov (eq. (32)), and its steady state (eq. (33)), used for the mixed states
   of `GaussianState`.
+- T. Prosen, *Third quantization: a general method to solve master equations for quadratic open
+  Fermi systems*, New J. Phys. 10, 043026 (2008),
+  [doi:10.1088/1367-2630/10/4/043026](https://doi.org/10.1088/1367-2630/10/4/043026),
+  [arXiv:0801.1257](https://arxiv.org/abs/0801.1257): the jumps of the last site of a spin chain,
+  a linear operator behind the parity of all modes, which has the dissipator of the linear
+  operator (below eq. (55)), accepted on the mixed states of `GaussianState`.
 - J. Surace and L. Tagliacozzo, *Fermionic Gaussian states: an introduction to numerical
   approaches*, SciPost Phys. Lect. Notes 54 (2022),
   [doi:10.21468/SciPostPhysLectNotes.54](https://doi.org/10.21468/SciPostPhysLectNotes.54),

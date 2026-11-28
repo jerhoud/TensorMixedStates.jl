@@ -1124,8 +1124,9 @@ end
 
 @testset "mixed states under Lindbladians" begin
     # the covariance under -iH and dissipators of linear operators, an equation of Lyapunov, against ExactState{Mixed}:
-    # losses and gains of fermions, a Majorana as jump, an Electron, losses of the first qubit; steps short and long;
-    # steady states; the dissipators that are not Gaussian on a mixed state refused
+    # losses and gains of fermions, a Majorana as jump, an Electron, losses of the first qubit, jumps of the last qubit
+    # (linear behind the parity of all modes); steps short and long; steady states; the dissipators that are not
+    # Gaussian on a mixed state refused
     TS = TensorMixedStates
     fs = System(4, Fermion())
     qs = System(4, Qubit())
@@ -1141,6 +1142,8 @@ end
              (fs, "FullyMixed", -im * hop + 0.7 * Dissipator(C)(2) + 0.2 * Dissipator(dag(C))(2), fobs),
              (fs, "Occ", -im * hop + 0.4 * Dissipator(C + dag(C))(2) + 0.3 * Dissipator(C)(1), fobs),
              (qs, ["Up", "Dn", "FullyMixed", "Dn"], -im * xy + 0.6 * Dissipator(Sm)(1) + 0.2 * Dissipator(Sp)(1), qobs),
+             (qs, ["Up", "FullyMixed", "Dn", "Up"], -im * xy + 0.6 * Dissipator(Sm)(1) + 0.2 * Dissipator(Sp)(1) +
+              0.5 * Dissipator(Sp)(4) + 0.4 * Dissipator(Sm + 0.5im * Sp)(4), qobs),
              (es, ["UpDn", "FullyMixed", "Emp"], -im * he + 0.5 * Dissipator(Cdn)(1) + 0.4 * Dissipator(C)(3) +
               0.1 * Dissipator(dag(Cup))(1), eobs)]
     near(g, e, obs; atol) = all(abs(TS.expect_value(g, o) - TS.expect_value(e, o)) <= atol for o in obs)
@@ -1169,6 +1172,7 @@ end
     gf = TS.GaussianState(State{Mixed}(fs, "FullyMixed"))
     @test_throws "not one: draw trajectories" evolve(-im * xy + Dissipator(Z)(2), 1.0, gq; nsteps = 1)
     @test_throws "not one: draw trajectories" evolve(-im * xy + Dissipator(Sm)(2), 1.0, gq; nsteps = 1)
+    @test_throws "not one: draw trajectories" evolve(-im * xy + Dissipator(Sm(1) + Sm(4)), 1.0, gq; nsteps = 1)
     @test_throws "not one: draw trajectories" evolve(-im * hop + Dissipator(N)(2), 1.0, gf; nsteps = 1)
     @test_throws "odd in the Majoranas" evolve(-im * (xy + X(1)), 1.0, gq; nsteps = 1)
     @test_throws "without terms depending on time" evolve([-im * xy + Dissipator(Sm)(1), -im * Z(2) => t -> cos(t)], 1.0, gq; nsteps = 1)
@@ -1178,6 +1182,28 @@ end
     f2 = System(2, Fermion())
     @test_throws "no unique steady state" steady_state(-im * (N(1) + N(2)) + Dissipator(C)(1),
                                                        TS.GaussianState(State{Mixed}(f2, "Occ")))
+end
+
+@testset "steady state of the boundary-driven XX chain" begin
+    # against the closed form of free fermions driven at the ends, c₁, c₁† of rates a1, b1 and c_L, c_L† of rates aL,
+    # bL, hopping t (as Karevski and Platini 2009, derived here from dC/dt = i[hᵀ, C] - ½{D, C} + P): density flat
+    # inside, ⟨c_k† c_{k+1}⟩ = iy, the rest zero; fermions, and qubits (Sm creates, hopping ±t after Jordan-Wigner)
+    TS = TensorMixedStates
+    L, t, a1, b1, aL, bL = 8, -0.6, 2.0, 0.5, 0.2, 1.3
+    ν1, νL, g1, gL = b1 / (a1 + b1), bL / (aL + bL), (a1 + b1) / (2t), (aL + bL) / (2t)
+    y = (νL - ν1) / (g1 + 1 / g1 + gL + 1 / gL)
+    n = [ν1 + y / g1; fill(ν1 + y * (1 / g1 + g1), L - 2); νL - y / gL]
+    hop = sum(t * (dag(C)(j) * C(j + 1) + dag(C)(j + 1) * C(j)) for j in 1:L-1) + 0.4 * sum(N(j) for j in 1:L)
+    f = steady_state(-im * hop + a1 * Dissipator(C)(1) + b1 * Dissipator(dag(C))(1) + aL * Dissipator(C)(L) +
+                     bL * Dissipator(dag(C))(L), TS.GaussianState(State{Mixed}(System(L, Fermion()), "FullyMixed"))).state
+    @test all(abs(TS.expect_value(f, N(k)) - n[k]) < 1e-12 for k in 1:L)
+    @test all(abs(TS.expect_value(f, dag(C)(k) * C(k + 1)) - im * y) < 1e-12 for k in 1:L-1)
+    @test all(abs(TS.expect_value(f, dag(C)(k) * C(k + 2))) < 1e-12 for k in 1:L-2)
+    xx = sum((t / 2) * (X(j) * X(j + 1) + Y(j) * Y(j + 1)) for j in 1:L-1) - 0.2 * sum(Z(j) for j in 1:L)
+    q = steady_state(-im * xx + a1 * Dissipator(Sp)(1) + b1 * Dissipator(Sm)(1) + aL * Dissipator(Sp)(L) +
+                     bL * Dissipator(Sm)(L), TS.GaussianState(State{Mixed}(System(L, Qubit()), "FullyMixed"))).state
+    @test all(abs((1 - TS.expect_value(q, Z(k))) / 2 - n[k]) < 1e-12 for k in 1:L)
+    @test all(abs(abs(TS.expect_value(q, Sm(k) * Sp(k + 1))) - abs(y)) < 1e-12 for k in 1:L-1)
 end
 
 @testset "thermalize of mixed states" begin
@@ -1252,11 +1278,17 @@ end
     r = steady_state(-im * hq + 0.5 * Dissipator(0.5 * (Y + im * Z))(1), TS.GaussianState(State{Mixed}(qs, "FullyMixed"); axes = :X))
     x = steady_state(-im * hq + 0.5 * Dissipator(0.5 * (Y + im * Z))(1), TS.ExactState(State{Mixed}(qs, "FullyMixed")))
     @test near(r.state, x.state, [X(1), Z(1) * Z(2), X(3)]; atol = 1e-9)
-    # refused as not linear in the Majoranas of the backend, with the message naming what is
+    # refused as not linear in the Majoranas of the backend, with the message naming what is; a qubit between
+    # fermions is the last of the modes (blocks in order of first appearance), its jumps linear behind the parity
     for (sys, st, L) in ((System([Qubit(), Fermion(), Fermion()]), ["Up", "Occ", "Emp"], Dissipator(C)(2)),
-                         (System([Fermion(), Qubit(), Fermion()]), ["Occ", "Up", "Emp"], Dissipator(Sm)(2)))
+                         (System([Fermion(), Qubit(), Fermion(), Qubit()]), ["Occ", "Up", "Emp", "Up"], Dissipator(Sm)(2)))
         @test_throws "fermions placed before any qubit" evolve(L, 0.1, TS.GaussianState(State{Mixed}(sys, st)); nsteps = 1)
     end
+    fqf = System([Fermion(), Qubit(), Fermion()])
+    L = -im * (dag(C)(1) * C(3) + dag(C)(3) * C(1) + 0.3 * Z(2)) + Dissipator(Sm)(2) + 0.4 * Dissipator(Sp)(2)
+    g = evolve(L, 1.0, TS.GaussianState(State{Mixed}(fqf, ["Occ", "Up", "FullyMixed"])); nsteps = 2)
+    e = evolve(L, 1.0, TS.ExactState(State{Mixed}(fqf, ["Occ", "Up", "FullyMixed"])); nsteps = 10)
+    @test near(g, e, [N(1), N(3), Z(2), dag(C)(1) * C(3), Z(2) * N(1)]; atol = 1e-10)
     @test_throws "along :Z" evolve(Dissipator(Sm)(1), 0.1, TS.GaussianState(State{Mixed}(qs, "FullyMixed"); axes = :X); nsteps = 1)
     # the advice on the axes compiles as the mixed state does: not the axes already in use
     q2 = TS.GaussianState(State{Mixed}(System(2, Qubit()), "FullyMixed"))

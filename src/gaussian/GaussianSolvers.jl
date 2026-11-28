@@ -200,19 +200,27 @@ function lindblad_form(state::GaussianState{Mixed}, ops)
 end
 
 # the coefficients u of the operator j = Σ_a u_a γ_a of a dissipator on a mixed state, read on its polynomial
-# Σ_a i u_a γ₁γ_a; refused when j is not linear in the Majoranas of the backend, as σ⁻ behind the parity of the
-# modes before it in the layout, its dissipator not Gaussian on a mixed state
+# Σ_a i u_a γ₁γ_a, or those of P j, P the parity of the modes: a mixed state commutes with P, so P j has the
+# dissipator of j (Prosen 2008, below eq. (55)), as σ⁻ of the last qubit, behind the parity of the modes before it;
+# refused otherwise, as σ⁻ of another qubit, whose dissipator is not Gaussian on a mixed state
 function mixed_jump(state::GaussianState{Mixed}, j, x)
-    u = zeros(ComplexF64, 2 + state.layout.count)
+    n = 2 + state.layout.count
+    u = zeros(ComplexF64, n)
     p = state_polynomial(state, lower(weaken(state.system, ()), j))
     linear(α) = length(α) == 2 && α[1] == 1 && α[2] >= 3
     if !all(linear, keys(p.terms))
-        bad = maximum(abs(c) for (α, c) in p.terms if !linear(α))
-        throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators of operators linear " *
-                            "in its Majoranas (C and dag(C) of fermions placed before any qubit, Sm and Sp of " *
-                            "the first qubit of a system of qubits along :Z), and $(obs_name(x)) is not one: " *
-                            "draw trajectories, as State{Trajectory}(system, \"FullyMixed\")." *
-                            rounding_hint(bad, maximum(abs, values(p.terms)))))
+        # P up to a phase, which does not change a dissipator
+        q = p * MajoranaPoly(collect(3:n) => 1)
+        if !all(linear, keys(q.terms))
+            bad = maximum(abs(c) for (α, c) in p.terms if !linear(α))
+            throw(ArgumentError("the Gaussian backend evolves a mixed state under dissipators of operators " *
+                                "linear in its Majoranas, possibly behind the parity of all modes (C and dag(C) " *
+                                "of fermions placed before any qubit, Sm and Sp of the first or the last qubit " *
+                                "of a system of qubits along :Z), and $(obs_name(x)) is not one: draw " *
+                                "trajectories, as State{Trajectory}(system, \"FullyMixed\")." *
+                                rounding_hint(bad, maximum(abs, values(p.terms)))))
+        end
+        p = q
     end
     for (α, c) in p.terms
         u[α[2]] = -im * c
