@@ -24,8 +24,8 @@ a phase that loads a state from an HDF5 file written by `SaveState` or `save_sta
   another simulation saved is found under `../othername/`
 - `statename`: the name of the state in the file
 - `limits`: the truncation of the state once loaded, see `Limits`
-- `backend`: the type of states to take the state to, `State` (MPS) or `ExactState` (default
-  `nothing`, the type of the file kept)
+- `backend`: the type of states to take the state to, `State` (MPS), `ExactState`, `GaussianState`,
+  or one with options, see `Backend` (default `nothing`, the type of the file kept)
 - `on`: the name the state takes in the simulation, `:state` for the current state, another
   for a reference state, `c.ref` to the measurements, see `Fidelity`
 
@@ -45,7 +45,7 @@ none; loaded under another name, it carries none.
     file::String
     statename::String = "state"
     limits::Limits = Limits()
-    backend::Union{Nothing, Type} = nothing
+    backend::Union{Nothing, Type, Backend} = nothing
     on::Symbol = :state
     LoadState(name, time_start, final_measurements, file, statename, limits, backend, on) =
         new(name, time_start, final_measurements, file, statename, limits, check_backend(backend),

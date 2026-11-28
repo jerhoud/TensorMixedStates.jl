@@ -26,8 +26,8 @@ a phase that creates the state of the simulation.
   give, a trajectory drawn from that purification by measuring its ancillas, or without `state`
   any state of the system; an `ExactState` is drawn as
   `random_state(ExactState{R}, …)` draws it, whatever the link dimension
-- `backend`: the type of states holding the state, `State` (MPS) or `ExactState`, by default that
-  of the simulation, see `SimData`
+- `backend`: the type of states holding the state, `State` (MPS), `ExactState`, `GaussianState`, or
+  one with options, see `Backend`, by default that of the simulation, see `SimData`
 - `on`: the name the state created takes, see `CopyState` (default `:state`)
 
 # Examples
@@ -46,7 +46,7 @@ struct CreateState{R <: PM} <: AbstractPhase
     system::Union{Nothing, System}
     state
     randomize::Int
-    backend::Union{Nothing, Type}
+    backend::Union{Nothing, Type, Backend}
     on::Symbol
 end
 
@@ -127,6 +127,16 @@ as_backend(::Type{T}, state::State; limits::Limits = Limits()) where {T <: Abstr
     same_representation(T, T(state; limits), state)
 as_backend(::Type{T}, state::AbstractState; limits::Limits = Limits()) where {T <: AbstractState} =
     same_representation(T, T(State(state); limits), state)
+
+# with options, a backend creates its states from a State, a state already of its type refused
+function as_backend(b::Backend{T}, state::AbstractState; limits::Limits = Limits()) where T
+    if isempty(b.options)
+        return as_backend(T, state; limits)
+    elseif state isa T
+        error("the state is already a $(nameof(T)): the options of $b apply when it is created from a State")
+    end
+    return same_representation(T, T(state isa State ? state : State(state); limits, b.options...), state)
+end
 
 # the state `new` that the backend `T` made of `state`, refused in another representation
 function same_representation(T::Type, new::AbstractState, state::AbstractState)

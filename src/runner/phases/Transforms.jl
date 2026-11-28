@@ -16,8 +16,8 @@ takes the state to that type of states first, then to `R`. `ToMixed` is `Convert
   `TensorMixedStates.AbstractPhase`
 - `limits`: the truncation of the state converted, see `Limits`, applied once, by the last step
   that approximates
-- `backend`: the type of states to take the state to, `State` (MPS) or `ExactState` (default
-  `nothing`, the type of the state kept)
+- `backend`: the type of states to take the state to, `State` (MPS), `ExactState`, `GaussianState`,
+  or one with options, see `Backend` (default `nothing`, the type of the state kept)
 - `on`: the name of the state the phase acts on, see `CopyState` (default `:state`)
 
 # Examples
@@ -31,7 +31,7 @@ struct ConvertState{R <: PM} <: AbstractPhase
     time_start::Union{Nothing, Number}
     final_measurements
     limits::Limits
-    backend::Union{Nothing, Type}
+    backend::Union{Nothing, Type, Backend}
     on::Symbol
     function ConvertState{R}(name, time_start, final_measurements, limits, backend,
                              on) where {R <: PM}

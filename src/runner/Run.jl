@@ -201,9 +201,9 @@ the description of a simulation, which `runTMS` runs.
   above, drawn at random by default and written in the file `stamp`, so that a run can be made
   again
 - `backend`: the type of states `CreateState` makes when its own `backend` is not given, `State`
-  (MPS) by default or `ExactState`, so that the phases of a program need no change to run on
-  another backend, `LoadState` keeping the type of its file and a phase the backend cannot run
-  raising an error
+  (MPS) by default, `ExactState`, `GaussianState`, or one with options, see `Backend`, so that the
+  phases of a program need no change to run on another backend, `LoadState` keeping the type of its
+  file and a phase the backend cannot run raising an error
 - `samples`: the number of samples of a simulation whose last phase is `Realizations`, which
   draws the disorder of each, or which makes trajectories, each sample running the phases from
   the first `CreateState{Trajectory}` or `ConvertState{Trajectory}` on, the final measurements
@@ -243,7 +243,7 @@ struct SimData
     final_measurements
     format::String
     seed::Union{Nothing, Integer}
-    backend::Type
+    backend::Union{Type, Backend}
     samples::Union{Nothing, Int}
     tol::Vector{Pair{Any, @NamedTuple{atol::Float64, rtol::Float64}}}
     min_samples::Int
@@ -1203,7 +1203,7 @@ function run_in(work::Function, sd::SimData, dir::String, settings; claim = noth
         log_line(run, (resume ? "\n" : "") * "Run on $(gethostname()), $(Dates.now()), Julia " *
                       "$VERSION, TensorMixedStates $(pkgversion(TensorMixedStates))")
         if sd.backend !== State
-            log_line(run, "States created as $(nameof(sd.backend)) by default")
+            log_line(run, "States created as $(backend_name(sd.backend)) by default")
         end
         averaged = on_kets(sd)
         if !isempty(averaged)

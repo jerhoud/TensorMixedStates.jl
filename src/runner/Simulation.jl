@@ -2,7 +2,7 @@
 # the destinations of the run, log_message, which writes to its log, and the logger sending the
 # warnings of the package there.
 
-export Simulation, output, log_message, stopped
+export Simulation, output, log_message, stopped, Backend
 
 """
     simulation_files
@@ -40,14 +40,15 @@ const reserved_values = (:state, :time, :step, :rng, :data)
     check_backend(backend)
 
 `backend`, refused unless it is a type of states named without its representation, as
-`ExactState`
+`ExactState`, or a `Backend`
 """
 function check_backend(backend)
     t = backend isa Type ? Base.unwrap_unionall(backend) : nothing
     # the type as given, its parameters bound: Julia 1.14 no longer takes State{R}, R free, as a
     # subtype of AbstractState
     if !(t isa DataType && backend <: AbstractState && !isabstracttype(t))
-        error("a backend is a type of states, as State or ExactState, not $(repr(backend))")
+        error("a backend is a type of states, as State or ExactState, or Backend(T; options...), " *
+              "not $(repr(backend))")
     elseif backend isa DataType && backend.name.wrapper !== backend
         error("a backend is named without its representation: backend = $(nameof(backend))")
     end
@@ -55,6 +56,46 @@ function check_backend(backend)
 end
 
 check_backend(::Nothing) = nothing
+
+"""
+    Backend(T; options...)
+
+the backend `T`, a type of states as `ExactState` or `GaussianState`, whose states the phases create
+from a `State` as `T(state; options...)`; `backend = T` takes its defaults. Converting a state already
+of type `T` with options is refused. Experimental: it may change in a version 2.x.
+
+# Examples
+
+    SimData(name = "xy", backend = Backend(GaussianState; axes = :X), phases = [...])
+"""
+struct Backend{T}
+    options::NamedTuple
+    function Backend(T::Type; options...)
+        check_backend(T)
+        o = NamedTuple(options)
+        if haskey(o, :limits)
+            error("the limits of a conversion are given to the phase, not to Backend")
+        elseif !isempty(o) && !any(R -> hasmethod(T, Tuple{State{R}}, keys(o)), (Pure, Mixed, Trajectory))
+            error("$(nameof(T)) takes no option $(join(keys(o), ", ")) when created from a State, see its " *
+                  "documentation")
+        end
+        return new{T}(o)
+    end
+end
+
+check_backend(backend::Backend) = backend
+
+function show(io::IO, b::Backend{T}) where T
+    print(io, "Backend(", nameof(T))
+    if !isempty(b.options)
+        print(io, "; ", join(("$k = $(repr(v))" for (k, v) in pairs(b.options)), ", "))
+    end
+    print(io, ")")
+end
+
+# the backend as the log names it
+backend_name(T::Type) = string(nameof(T))
+backend_name(b::Backend) = sprint(show, b)
 
 """
     RunData(dir, outputs, log, redirect, checkpointer, provided, backend)
@@ -77,7 +118,7 @@ mutable struct RunData
     redirect::Union{Nothing, IO}
     checkpointer::Checkpointer
     provided::Vector{Symbol}
-    backend::Type
+    backend::Union{Type, Backend}
     phase::Int
     phase_time::Number
     step_start::Float64

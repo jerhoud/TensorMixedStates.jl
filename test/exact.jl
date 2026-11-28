@@ -771,6 +771,27 @@ end
         @test_throws "cannot be made pure" runTMS(SimData(name = "p", phases = [
             CreateState{Mixed}(sys, "Up"; backend = TMS.ExactState),
             ConvertState{Pure}(backend = State)]))
+        # a backend with options, given to its constructor from a State, for the run or a phase; without options
+        # its defaults; options refused on a state already of its type, unknown or limits refused at once
+        sim = runTMS(SimData(name = "bo", backend = Backend(TMS.ExactState; max_dense = 64), phases = [
+            CreateState{Pure}(sys, "+")]))
+        @test sim.state isa TMS.ExactState{Pure} && sim.state.state ≈ e.state
+        @test occursin("States created as Backend(ExactState; max_dense = 64) by default", read("bo/log", String))
+        @test_throws "max_dense = 8" runTMS(SimData(name = "bd", phases = [
+            CreateState{Mixed}(sys, "+"; backend = Backend(TMS.ExactState; max_dense = 8))]))
+        sim = runTMS(SimData(name = "bg", phases = [
+            CreateState{Pure}(sys, "X+"; backend = Backend(TMS.GaussianState; axes = :X, max_terms = 8))]))
+        @test sim.state isa TMS.GaussianState{Pure} && all(==(:X), values(sim.state.axes)) &&
+              sim.state.max_terms == 8
+        sim = runTMS(SimData(name = "bn", phases = [CreateState(ψ; backend = Backend(TMS.ExactState))]))
+        @test sim.state isa TMS.ExactState{Pure}
+        @test_throws "already a GaussianState" runTMS(SimData(name = "ba", phases = [
+            CreateState{Pure}(sys, "Up"; backend = TMS.GaussianState),
+            ConvertState{Pure}(backend = Backend(TMS.GaussianState; axes = :X))]))
+        @test repr(Backend(TMS.GaussianState; axes = :X)) == "Backend(GaussianState; axes = :X)"
+        @test_throws "no option maxdense" Backend(TMS.ExactState; maxdense = 64)
+        @test_throws "given to the phase" Backend(TMS.ExactState; limits = Limits())
+        @test_throws "without its representation" Backend(TMS.ExactState{Pure}; max_dense = 64)
     end
 end
 
