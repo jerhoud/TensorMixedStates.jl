@@ -40,6 +40,7 @@ t = State{Trajectory}(sys, "FullyMixed"; rng)      # one quantum trajectory, a p
 ψ2 = ψ ⊗ State{Pure}(System(2, Qubit()), "Up")     # on sys ⊗ System(2, Qubit()), 12 sites
 ψ3 = permute_sites(ψ2, p)                          # site k moved to position p[k]
 e = ExactState{Pure}(System(4, Qubit()), "Up")     # held whole, without truncation; ExactState(ψ)
+g = GaussianState{Pure}(System(100, Fermion()), "Occ")  # free fermions or qubits, exact at any size
 ```
 
 A local state is a name of the site (`"Up"`, `"Dn"`, `"+"`, `"0"`, `"1"` on a qubit), a vector,
@@ -138,6 +139,7 @@ runTMS(SimData(
     name = "quench",                      # the directory of its files
     seed = 1,                             # the random draws, reproducible
     # backend = ExactState,               # the same program on exact states, for a small check
+    # backend = Backend(GaussianState; axes = :X), # free models exactly, a backend with options
     phases = [
         CreateState{Pure}(10, Qubit(), "Up"),
         GroundState(hamiltonian = ham, algo = Dmrg(nsweeps = 10), limits = lim),

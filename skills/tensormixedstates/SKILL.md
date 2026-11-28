@@ -43,6 +43,11 @@ compiles for a few seconds.
    scale, a few sweeps, and a small system whose exact result you can compute by dense
    diagonalization, to check the script: `matrix(H, sys)` is the dense matrix of an operator,
    Jordan-Wigner strings included, and `Vector(ψ)` the vector of a pure state.
+   A free model, quadratic in fermions (hopping, pairing, the XX or transverse Ising chain of
+   qubits), has its exact result at any size: run the same program with
+   `SimData(backend = GaussianState)`, or `Backend(GaussianState; axes = :X)` for a qubit chain
+   whose quadratic terms are `Z Z` and `X`; it refuses what is not Gaussian with a message saying
+   what to write instead.
 3. Converge: double `maxdim`, halve the time step, add sweeps, until the digits you report do
    not move. Measure `MaxLinkdim`: once it reaches `maxdim`, the truncation limits the result.
 4. Report the result with the parameters, the checks it passed and the digits they support.
